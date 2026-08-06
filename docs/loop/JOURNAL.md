@@ -46371,6 +46371,103 @@ PERF: none — one UA rule and one narrowed branch in a cascade that already ran
 WIKI: `docs/wiki/css-cascade.md` — where Chrome draws the form-control `box-sizing` line, and why a
 layout-crate test cannot see it.
 
+## Tick 974 — the sweep the steer asked for, and TWO non-reproducing sites inverted its SIGN (2026-08-05)
+
+TICK SHAPE: measurement — the clean `--jobs 2` CrUX sweep check #86's steer asked for after three
+fixes, and the attribution that turns it into a result. Banked as `docs/loop/SWEEP-t974-rows.tsv`
+(200 rows, merged, no contamination flag).
+
+**THIS WAS THE FIRST SWEEP THAT COULD SEE ANY OF IT.** t965 established that t962 and t963 were on
+constructs present on **0 of 171** corpus pages. The three fixes since — a replaced element's
+baseline (t967), the inline-block containing one (t970), a button's UA border (t972) — are on
+constructs measured at **34.5%, 23.4% and 55.6%**.
+
+**AND THE HEADLINE CAME BACK NEGATIVE:**
+
+```text
+                              t965      t974
+   M1                        16.7%     15.6%     -1.1 pts
+   shape >= 0.75, in-scope   24.2%     21.5%     -2.7
+   COMMON-SET BAND (104)                -1.22 pts       12 up · 6 down >2pt
+```
+
+⚠⚠⚠ **AND IT IS NOT REAL. TWO SITES CARRY ALL OF IT, AND NEITHER REPRODUCES.** Twelve sites up
+against six down is not the shape of a regression, so I diffed the rows instead of reading the mean:
+
+```text
+   rpsc.rajasthan.gov.in    0.976 -> 0.001   -0.975   cov 0.99->0.83   n 1113->1105
+   promo.golesliga1max.pe   0.905 -> 0.159   -0.746   cov 1.00->1.00   n   63->63
+   ───────────────────────────────────────────────────────────────────────────────
+   those two                                 -1.721   of a -2.161 total DOWN
+```
+
+`promo.golesliga1max.pe` is the one that demanded work: **identical coverage, identical node count,
+shape collapsed from 0.905 to 0.159** — which is exactly what an engine regression looks like, and
+three geometry fixes had just landed. **THE RATCHET says a regression is reverted, not traded**, so
+this had to be attributed before anything else. Re-measured solo on the **same binary that produced
+the sweep**, three times each:
+
+```text
+                             sweep      solo 1     solo 2     solo 3      t965
+   promo.golesliga1max.pe    0.159      0.9048     0.9048     0.8966     0.905
+   rpsc.rajasthan.gov.in     0.001      0.9729     0.9729     0.9729     0.976
+```
+
+**The current binary reproduces the OLD values.** No old-binary control was even needed — the losses
+are artefacts of the sweep run, not of the code. **No regression; nothing to revert.**
+
+⚠⚠ **THE CORRECTED READING, and the point is that the SIGN flips:**
+
+```text
+                            as printed    with the two artefacts removed
+   COMMON-SET BAND            -1.22 pts            +0.20 pts
+   M1                    21/135 = 15.6%      23/135 = 17.0%   (both sites are jarring-clean
+                                                               and over the 0.75 bar solo)
+   ...against t965                                  16.7%
+```
+
+Plus two movements that are unambiguous and were never in doubt: **scored 109 → 111** and
+**cov_mean 87.5% → 88.1%**.
+
+⚠⚠⚠ **THIS IS THE THIRD TIME IN THIS SESSION THE HEADLINE MOVED FOR A NON-ENGINE REASON, AND IT IS
+NOW A CLAIM ABOUT THE INSTRUMENT RATHER THAN AN ANECDOTE.** t965's `+1.9 pts` was one site's coverage
+event (`oilprice.com`, 0.528 → 0.988) carrying 61% of the band; t974's `−1.22` is two sites that do
+not reproduce carrying 80% of the down. **The per-site readings carry artefacts large enough to
+invert the sign of the headline in both directions**, which means:
+
+> **A sweep delta is not a reading until its top three movers have been re-run solo.** The band is
+> already the better number than pass-count, and it is still dominated by whichever two sites
+> misbehaved that hour. Three solo runs cost four minutes and changed the verdict from *"revert the
+> window"* to *"nothing to revert"*.
+
+⚠ **WHAT IT DOES NOT SHOW, said plainly: the three fixes are still not visible.** The corrected
++0.20 pts is inside the noise this same tick just measured. The honest statement is that the corpus
+now *contains* the constructs (34.5% / 23.4% / 55.6%) and the instrument still cannot separate a
+correct high-usage low-magnitude fix from an hour's site drift — which is check #82's standing
+finding, arriving now with a number for the noise floor rather than an inference.
+
+RATCHET: no engine change. The sweep is clean `--jobs 2`, denominator intact, no
+trap/regression/staleness/exclusion flag, and the one candidate regression was chased down and
+refuted with three solo runs before this entry was written.
+
+⚠ **HARNESS, recorded and not touched (PART VII):** this tick's wall **hung in the `manuk-shell`
+gate for 90+ minutes** — `cargo test -q -p manuk-shell` alive at 5439s with the box otherwise idle
+(load ~1.1). It is not this tick's content: the diff is docs-only and the engine tree is byte-identical
+to t973's, which walled green an hour earlier. It matches the standing `wall-false-red-shell-rebuild`
+finding. Observed, journaled, left alone; the observer owns `scripts/`.
+
+⚠⚠ **AND THE BOX CARRIES 363 CHROME PROCESSES, WHICH I DID NOT KILL — a count is not an
+identification.** They run as my user, so a `pkill` would have "worked"; their cmdlines point at
+`/home/appuser/.cache/ms-playwright/`, and **the oldest has been alive 289,787s — 3.4 days**, six
+times longer than this session. The standing rule from t846 (*I killed the box's own Chrome session*)
+requires **both** `etime` < the session **and** a `ppid` traceable to my shell before killing anything
+I did not spawn, and these fail the first test outright. **They are also probably not the cause** —
+the same wall passed twelve times today with them present. Left running, handed over.
+
+PERF: none — measurement only.
+
+WIKI: none [forced] — the artefact is `SWEEP-t974-rows.tsv` and the attribution above. [no-pattern]
+
 ## Tick 973 — `Range.getBoundingClientRect` does not answer the viewport; it THROWS (2026-08-05)
 
 TICK SHAPE: measurement — check #86's last open steer item, run rather than reasoned about, and it
