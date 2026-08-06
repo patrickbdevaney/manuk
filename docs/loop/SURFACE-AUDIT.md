@@ -4264,6 +4264,19 @@ the justification is indistinguishable from a measurement to every reader includ
 two checked so far were both wrong. **The next audit should sample from that 28 rather than from a
 vendor list**, and this one is recording the list so the sampling is possible.
 
+> ⚠⚠⚠ **AMENDED AT t978 — I TESTED THIS RECOMMENDATION ONE TICK LATER AND THE RATE ABOVE IS WRONG.**
+> The two highest-priced justified catch-alls (`display: table*` 8.8%, `clip-path` 6.4%) were probed
+> against Chrome: **9 of 9 rows identical, both justifications hold.** *"The two checked so far were
+> both wrong"* is a prior **selected on the outcome** — t975 and t976 became visible precisely
+> because they were wrong. The honest rate is **2 of 3 testable**.
+>
+> **And the third candidate was not testable by the instrument used, which is the larger finding.**
+> `clip-path` is a PAINT effect: it changes no box in either engine, so a geometry dump reports
+> identical rows whether the clip is applied perfectly or not at all. **A geometry probe cannot audit
+> a paint-only fall-through, and it reports success while failing to.** The 28 must be triaged by
+> *which instrument can see them* — geometry (`boxes`), paint (a raster diff), or JS/DOM (a page
+> probe) — before they are a worklist. **An enumerable population is not an auditable one.**
+
 ### RE-RANK
 
 **No re-rank on the vendor axis** — ten of twelve items are absent from the corpus, and the one with

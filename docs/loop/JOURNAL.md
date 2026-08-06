@@ -46371,6 +46371,56 @@ PERF: none — one UA rule and one narrowed branch in a cascade that already ran
 WIKI: `docs/wiki/css-cascade.md` — where Chrome draws the form-control `box-sizing` line, and why a
 layout-crate test cannot see it.
 
+## Tick 978 — I tested my own audit's recommendation and its hit rate was wrong (2026-08-06)
+
+TICK SHAPE: measurement — audit #38 ended one tick ago by naming its own next step (*"sample from the
+28 justified catch-alls rather than from a vendor list"*) on the strength of a 2-for-2 record. This
+tick took that sample.
+
+⚠⚠⚠ **THE SAMPLE CAME BACK CLEAN, AND THE AUDIT'S PRIOR WAS WRONG.** Two candidates picked by corpus
+price rather than by how suspicious the comment read — `display: table*` at **8.8%** and `clip-path`
+at **6.4%**, the two highest-priced justified catch-alls in the engine:
+
+```text
+                                      Chrome        ours
+     display:table > table-cell     [  0, 236]   [  0, 236]   ✓
+     table-cell explicit widths     [  0, 282, 150]  [same]   ✓
+     display:list-item              [ 40, 328]   [ 40, 328]   ✓
+     display:flow-root + float      [  0, 374]   [  0, 374]   ✓   (wrapper 40 in both)
+     clip-path: inset / circle / polygon / path() / border-box   5/5 identical
+```
+
+**9 of 9.** Both justifications hold. `clip-path`'s catch-all says only `path()`/`shape()`/`none`/
+geometry-box/`url()` fall through — and `path()`/`url()` is **0 of 171** on the corpus, so the
+fall-through is unreachable in practice. The display keyword list turns out to carry every table
+variant, `flow-root`, `list-item`, `contents` and `none`.
+
+⚠⚠ **SO THE HONEST RATE IS 2 OF 3 TESTABLE, NOT 2 OF 2** — and audit #38, written one tick ago on my
+own evidence, overstated it. **A prior built from the two cases that made you notice the pattern is
+selected on the outcome**: t975 and t976 became visible *because* they were wrong. The 28 are still a
+better-than-nothing population, and they are not the 100% the audit implied.
+
+⚠⚠⚠ **AND THE THIRD CANDIDATE IS NOT TESTABLE BY THIS INSTRUMENT AT ALL, WHICH IS THE FINDING WORTH
+KEEPING.** `clip-path` is a **paint** effect: it changes no box in either engine, so `boxes`
+— a geometry dump — reports 5/5 identical whether the clip is applied perfectly or **not at all**.
+Those five rows prove that clip-path does not disturb geometry, and nothing else. I nearly banked
+them as five passes.
+
+> **A geometry probe cannot audit a paint-only fall-through, and it will report success while doing
+> it.** The 28 need triage by *which instrument can see them* before they are a worklist: geometry
+> catch-alls are testable with `boxes`, paint ones need a raster diff, and JS/DOM ones need a page
+> probe. An enumerable population is not the same as an auditable one.
+
+**Recorded against audit #38 rather than left standing** — the audit's method (a code-shaped axis)
+survives this and is still the best one it has found; its *rate* does not.
+
+RATCHET: no engine change — measurement only. Every gate green from t977.
+
+PERF: none.
+
+WIKI: none [forced] — the finding is about instrument reach and belongs with the audit it corrects.
+[no-pattern]
+
 ## Tick 977 — the surface audit finds its best axis INSIDE the engine (2026-08-06)
 
 TICK SHAPE: measurement — the cadence surface audit (due every 10 ticks, last at 966), banked as
