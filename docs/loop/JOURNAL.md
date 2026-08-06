@@ -46371,6 +46371,66 @@ PERF: none — one UA rule and one narrowed branch in a cascade that already ran
 WIKI: `docs/wiki/css-cascade.md` — where Chrome draws the form-control `box-sizing` line, and why a
 layout-crate test cannot see it.
 
+## Tick 976 — a defaulted parameter no caller overrides is an unimplemented property (2026-08-06)
+
+TICK SHAPE: pattern-class — CSS transforms, continuing t975's named residue. `transform:` is
+**34.5%** of the burndown corpus.
+
+⚠⚠⚠ **`transform-origin` WAS UNIMPLEMENTED WHILE LOOKING IMPLEMENTED.** `resolve_transform` has taken
+an `origin` parameter since it was written, and its own doc says *"`origin` (the transform-origin,
+default the box center)"* — but **all three call sites passed `(x + w/2, y + h/2)`**, hard-coded, and
+nothing ever passed anything else:
+
+```text
+   let origin = (rect.x + border_box_w / 2.0, rect.y + border_box_h / 2.0);
+   let origin = (bx + border_box_w / 2.0, by + border_box_h / 2.0);
+   let origin = (abs_x + p.slot.width / 2.0, abs_y + p.slot.height / 2.0);
+```
+
+> **A defaulted parameter that no caller ever overrides is indistinguishable from an unimplemented
+> property until something measures it.** The seam was built, documented and correct; the property
+> behind it did not exist. Grep finds the name, the doc explains the semantics, and the behaviour is
+> a constant.
+
+**Chrome-measured, a `scale(2)` on a 100×40 box** — the left edge is the discriminator, because about
+the centre it goes to −50, about `0 0` it stays at 0, and about `100% 100%` it goes to −100:
+
+```text
+                                            Chrome        before        after
+     transform-origin: 0 0                 [   0, 220]   [ -50, 200]   [   0, 220]
+     transform-origin: 100% 100%           [-100, 810]   [ -50, 830]   [-100, 810]
+     (default, no origin declared)         [ -50, 130]   [ -50, 130]   [ -50, 130]   control
+   ── the whole 22-row transform battery ──                            21/22 exact
+```
+
+The one remaining row is `x15` (a rotate on an inline-block, 2.3px), which was already off before
+this tick and is unrelated to the origin.
+
+RED-PROVEN: **hard-code the centre again** → `#o01` reads −50 against Chrome's 0, the original defect.
+
+⚠⚠ **AND A RED-PROOF THAT DID *NOT* FIRE, WHICH IS THE MORE USEFUL RESULT.** I wrote our own
+keyword handling so that `top`/`bottom` name the **Y axis wherever they appear** — `top left` must
+equal `left top`, and reading the two words positionally silently swaps that pair. Mutating that
+logic to be positional left the gate **green**: on the shipping path **Stylo resolves the keywords**
+and our parser is the MinimalCascade fallback, which this gate does not exercise. **Rather than
+delete the row or claim a proof I do not have, the assertion now says so in its own message.** This is
+the second time in two ticks the two-cascades split has decided where a fix belongs (t975 fixed the
+wrong file first), so both paths carry the property and the gate records which one it proves.
+
+⚠ **A PROCESS SLIP, recorded because it cost fifteen minutes and could have cost a tick.** Reverting
+RED-proof B with `git checkout -- engine/css/src/lib.rs` discarded **the whole tick's work in that
+file** — the `ComputedStyle` field, its default, its diff entry and the parse arm — not just the
+two-line mutation. The build caught it immediately (`no field transform_origin`), which is the only
+reason it was cheap. **A RED proof must be reverted by restoring the file I copied, never by
+`git checkout` on a file this tick is also editing.**
+
+RATCHET: `manuk-css` 28/28 + 2, `manuk-layout` 125/125, every `engine/page/tests` gate mentioning
+`transform` green as a set, and the default-origin row plus all 3D rows from t975 byte-identical.
+
+PERF: none — one `Dim::resolve` per transformed box, replacing a division.
+
+WIKI: `docs/wiki/css-cascade.md` — extends t975's section with the defaulted-parameter finding.
+
 ## Tick 975 — `translate3d` was on the floor, and the comment above the bug was its alibi (2026-08-05)
 
 TICK SHAPE: pattern-class — CSS transforms, which t965's corpus instrument ranks **fifth at 34.5%**

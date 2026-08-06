@@ -11,12 +11,12 @@
 
 | | value | over |
 |---|---|---|
-| ticks landed | **694** | ticks 1–974 |
-| median tick cycle | **26m** | 693 intervals |
+| ticks landed | **695** | ticks 1–975 |
+| median tick cycle | **26m** | 694 intervals |
 | median, last 10 | **39m** | 10 intervals |
 | fastest / slowest | 5s / 5.4d | |
-| **ticks per hour** | **1.12** | 619.0h elapsed |
-| median verify wall | **63s** | 633 ticks |
+| **ticks per hour** | **1.12** | 619.9h elapsed |
+| median verify wall | **63s** | 634 ticks |
 | wall trend | 39s → 63s — getting slower ⚠️ | first 3 vs last 3 |
 
 The **cycle** is the real unit: implement → debug → verify wall → land. The wall is only part of
@@ -31,7 +31,7 @@ it, and a wall that grows taxes every future tick, so it is tracked separately f
 * **✅ rows in the capability ledger**: 144 → **488**
 * **Bar 0 — oracle hangs**: 0 of 265 sites
 
-**335 of 694 ticks** (48%) moved a
+**336 of 695 ticks** (48%) moved a
 user-visible capability. The rest were instruments, infrastructure and corrections — and the
 ledger says the corrections were not overhead: three of its top three priorities were phantoms,
 and finding that out redirected everything after it.
@@ -90,7 +90,7 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 
 ## What a capability costs
 
-* **335** capability ticks, median cycle **26m**
+* **336** capability ticks, median cycle **26m**
 * median diff per tick: **+258 / −34** lines across 8 files
 
 ## Every tick
@@ -791,5 +791,6 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 | **971** | 2026-08-05 17:51 | 53m | measurement | 63s | +282/−34 | 408 | 81 | 56.0% · | the constitution check, and the window in which I corrected myself three times (2026-08-05 |
 | **972** | 2026-08-05 18:15 | 24m | pattern-class | 63s | +106/−32 | 408 | 81 | 56.0% · | a button's UA border is 2px, and the audit's font-size claim was wrong (2026-08-05) |
 | **974** | 2026-08-06 00:04 | 5.8h | measurement | 63s | +413/−34 | 409 | 81 | 56.0% · | the sweep the steer asked for, and TWO non-reproducing sites inverted its SIGN (2026-08-05 |
+| **975** | 2026-08-06 00:55 | 51m | pattern-class | 63s | +253/−38 | 409 | 81 | 56.0% · | `translate3d` was on the floor, and the comment above the bug was its alibi (2026-08-05) |
 
 *`·` after a WPT figure means **carried forward**, not measured this tick.*

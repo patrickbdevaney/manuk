@@ -918,6 +918,23 @@ pub fn layout_document(
 }
 
 /// Is `node` a block-level box in its parent's formatting context?
+/// **The point a `transform` is applied ABOUT** — `transform-origin`, resolved against the border
+/// box and offset to absolute coordinates.
+///
+/// ⚠ This existed as three copies of `(x + w/2, y + h/2)` — the box CENTRE, hard-coded — while
+/// `resolve_transform`'s own doc said *"`origin` (the transform-origin, default the box center)"*.
+/// The parameter was there and nothing ever passed anything but the default, so an author writing
+/// `transform-origin: 0 0` got a transform about the centre: Chrome puts a `scale(2)` box at
+/// [0, 220] and we put it at [−50, 200]; at `100% 100%` Chrome gives [−100, 810] and we gave
+/// [−50, 830]. **A defaulted parameter that no caller overrides is indistinguishable from an
+/// unimplemented property until something measures it.**
+fn transform_origin_of(s: &ComputedStyle, x: f32, y: f32, w: f32, h: f32) -> (f32, f32) {
+    (
+        x + s.transform_origin.0.resolve(w, w / 2.0),
+        y + s.transform_origin.1.resolve(h, h / 2.0),
+    )
+}
+
 /// Compose a `transform` function list into an **absolute** affine matrix applied around
 /// `origin` (the transform-origin, default the box center). `w`/`h` resolve `translate` `%`.
 fn resolve_transform(
@@ -3350,7 +3367,7 @@ impl Ctx<'_> {
         // rotate/skew map each box to its transformed bounding box (matching
         // getBoundingClientRect), which the CPU raster then paints upright.
         if !s.transform.is_empty() {
-            let origin = (rect.x + border_box_w / 2.0, rect.y + border_box_h / 2.0);
+            let origin = transform_origin_of(&s, rect.x, rect.y, border_box_w, border_box_h);
             let m = resolve_transform(&s.transform, border_box_w, border_box_h, origin);
             boxx.transform_affine(&m);
         }
@@ -5808,7 +5825,7 @@ impl Ctx<'_> {
         }
         // `transform` applies to absolutely-positioned boxes too (around the box center).
         if !s.transform.is_empty() {
-            let origin = (bx + border_box_w / 2.0, by + border_box_h / 2.0);
+            let origin = transform_origin_of(&s, bx, by, border_box_w, border_box_h);
             let m = resolve_transform(&s.transform, border_box_w, border_box_h, origin);
             boxx.transform_affine(&m);
         }
@@ -6129,7 +6146,7 @@ impl Ctx<'_> {
             let mut boxx = boxx;
             let s = self.style_of(p.dom);
             if !s.transform.is_empty() {
-                let origin = (abs_x + p.slot.width / 2.0, abs_y + p.slot.height / 2.0);
+                let origin = transform_origin_of(s, abs_x, abs_y, p.slot.width, p.slot.height);
                 let m = resolve_transform(&s.transform, p.slot.width, p.slot.height, origin);
                 boxx.transform_affine(&m);
             }

@@ -1994,3 +1994,37 @@ rather than as the arm that hid this.
 `origin: 0 0` gives Chrome [0, 220] against our [−50, 200], and `100% 100%` gives [−100, 810] against
 [−50, 830]. `layout/lib.rs:922` already takes an `origin` parameter and is only ever handed the
 centre.
+
+### …and its sibling: a DEFAULTED PARAMETER no caller overrides (t976)
+
+t975's `_` arm hid a dropped function. The same family's other half hid a whole property behind a
+parameter that was never passed:
+
+```rust
+   /// Compose a `transform` … applied around `origin` (the transform-origin, default the box center).
+   fn resolve_transform(fns: &[TransformFn], w: f32, h: f32, origin: (f32, f32)) -> [f32; 6]
+   // ...and all THREE call sites:
+   let origin = (rect.x + border_box_w / 2.0, rect.y + border_box_h / 2.0);
+```
+
+> **A defaulted parameter that no caller ever overrides is indistinguishable from an unimplemented
+> property until something measures it.** The seam is built, the doc explains the semantics, grep
+> finds the name — and the behaviour is a constant.
+
+Chrome-measured, `scale(2)` on a 100×40 box (the left edge is the discriminator):
+
+```text
+                                    Chrome        before        after
+   transform-origin: 0 0           [   0, 220]   [ -50, 200]   [   0, 220]
+   transform-origin: 100% 100%     [-100, 810]   [ -50, 830]   [-100, 810]
+   (no origin declared)            [ -50, 130]   [ -50, 130]   unmoved  <- CONTROL
+```
+
+⚠⚠ **`top`/`bottom` name the Y AXIS WHEREVER THEY APPEAR** — `top left` is as valid as `left top`,
+and reading the two words positionally silently swaps that pair. Our parser handles it; **the gate
+does not prove it**, because on the shipping path Stylo resolves the keywords and our copy is the
+MinimalCascade fallback. The assertion says so rather than claiming a proof it does not have — the
+second tick running where [[live-cascade-is-stylo-not-minimal]] decided where a fix belongs.
+
+⚠ **Revert a RED proof by restoring the file you copied, never with `git checkout` on a file the tick
+is also editing** — it discards the whole tick's work in that file, not the mutation.

@@ -693,3 +693,4 @@ tick	sha	epoch	iso	delta_s	shape	wall_s	files	added	deleted	gates	claims	wpt_pas
 971	6b72be28	1785966692	2026-08-05T17:51:32-04:00	3207	measurement	63	7	282	34	408	81	3896	6960	0	488	0	the constitution check, and the window in which I corrected myself three times (2026-08-05)
 972	ce6d686e	1785968106	2026-08-05T18:15:06-04:00	1414	pattern-class	63	4	106	32	408	81	3896	6960	0	488	0	a button's UA border is 2px, and the audit's font-size claim was wrong (2026-08-05)
 974	99dc2abb	1785989086	2026-08-06T00:04:46-04:00	20980	measurement	63	10	413	34	409	81	3896	6960	0	488	0	the sweep the steer asked for, and TWO non-reproducing sites inverted its SIGN (2026-08-05)
+975	0851e6f8	1785992121	2026-08-06T00:55:21-04:00	3035	pattern-class	63	11	253	38	409	81	3896	6960	0	488	0	`translate3d` was on the floor, and the comment above the bug was its alibi (2026-08-05)

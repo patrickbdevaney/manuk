@@ -60,6 +60,11 @@ body{margin:0;font-family:sans-serif;font-size:16px}
 <div class="w"><div class="b" id="y08" style="transform:rotate3d(1,0,0,45deg)">bx</div></div>
 <div class="w"><div class="b" id="c01" style="transform:translate(20px,10px)">bx</div></div>
 <div class="w"><div class="b" id="c02" style="transform:scale(2)">bx</div></div>
+<div class="w"><div class="b" id="o01" style="transform:scale(2);transform-origin:0 0">bx</div></div>
+<div class="w"><div class="b" id="o02" style="transform:scale(2);transform-origin:100% 100%">bx</div></div>
+<div class="w"><div class="b" id="o03" style="transform:scale(2);transform-origin:left top">bx</div></div>
+<div class="w"><div class="b" id="o04" style="transform:scale(2);transform-origin:top left">bx</div></div>
+<div class="w"><div class="b" id="o05" style="transform:scale(2);transform-origin:0">bx</div></div>
 </body></html>"##;
 
 fn rect_of(page: &manuk_page::Page, sel: &str) -> manuk_layout::Rect {
@@ -152,5 +157,41 @@ fn g_transform_3d() {
         (dx("#c01") - 20.0).abs() < 1.1 && (sz("#c02").0 - 200.0).abs() < 1.1,
         "G_TRANSFORM_3D: the plain 2D `translate` and `scale` controls moved — this change is \
          additive to the 3D spellings and must leave the 2D ones byte-identical."
+    );
+
+    // ── `transform-origin` (t976): the POINT the matrix is applied about. `resolve_transform` has
+    //    taken an `origin` parameter since it was written and three call sites all passed the box
+    //    CENTRE, so the property was unimplemented while looking implemented. A `scale(2)` on a
+    //    100-wide box: about the centre the left edge goes to -50, about `0 0` it stays at 0, and
+    //    about `100% 100%` it goes to -100. Chrome-measured.
+    assert!(
+        (dx("#o01") - 0.0).abs() < 1.1,
+        "G_TRANSFORM_3D: `transform-origin: 0 0` with `scale(2)` puts the left edge at {} where \
+         Chrome gives 0. Reading -50 means the origin was the box CENTRE — the hard-coded default \
+         that three call sites passed and no caller ever overrode.",
+        dx("#o01")
+    );
+    assert!(
+        (dx("#o02") - -100.0).abs() < 1.1,
+        "G_TRANSFORM_3D: `transform-origin: 100% 100%` puts the left edge at {} where Chrome gives \
+         -100. This row is the one that separates 'the origin is honoured' from 'the origin is \
+         clamped to a corner' — reading -50 is the centre, reading 0 is the wrong corner.",
+        dx("#o02")
+    );
+    assert!(
+        (dx("#o03") - 0.0).abs() < 1.1 && (dx("#o04") - 0.0).abs() < 1.1,
+        "G_TRANSFORM_3D: `left top` gives {} and `top left` gives {} — both must be 0. `top` and \
+         `bottom` name the Y axis WHEREVER they appear, so reading the two words positionally \
+         silently swaps this pair. NOTE: on the shipping path Stylo resolves these keywords, so \
+         this row asserts the RESULT and does not exercise our own keyword parser — the \
+         MinimalCascade copy of that logic is unproven by this gate and is named as such.",
+        dx("#o03"),
+        dx("#o04")
+    );
+    assert!(
+        (dx("#o05") - 0.0).abs() < 1.1,
+        "G_TRANSFORM_3D: a ONE-value `transform-origin: 0` gives {} and must be 0 — one value sets \
+         x and leaves y at 50%.",
+        dx("#o05")
     );
 }

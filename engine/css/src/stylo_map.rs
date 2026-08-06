@@ -995,6 +995,16 @@ pub fn to_computed_style(cv: &ComputedValues) -> ComputedStyle {
         s.transform = ops;
     }
 
+    // `transform-origin`: the point the matrix above is applied ABOUT. Recovered from Stylo's own
+    // computed value — the engine hard-coded the box centre at three call sites, so an author who
+    // wrote `transform-origin: 0 0` got a transform about the centre and a box in the wrong place
+    // (Chrome [0, 220] against our [-50, 200] on a `scale(2)`). The z component is dropped: it only
+    // matters under a perspective context, which this 2D pipeline does not model.
+    {
+        let o = cv.clone_transform_origin();
+        s.transform_origin = (lp_to_dim(&o.horizontal), lp_to_dim(&o.vertical));
+    }
+
     // Grid tracks + item placement.
     s.grid_template_columns = template_to_tracks(&cv.clone_grid_template_columns());
     s.grid_template_rows = template_to_tracks(&cv.clone_grid_template_rows());

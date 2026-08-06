@@ -1033,6 +1033,10 @@ pub struct ComputedStyle {
     pub word_spacing: f32,
     /// `tab-size` — the distance between tab stops in a preserved-whitespace run. Inherited.
     pub tab_size: TabSize,
+    /// `transform-origin` — the point a `transform` is applied ABOUT, as `(x, y)` resolved against
+    /// the border box. Initial `50% 50%` (the centre), which is what the engine hard-coded at three
+    /// call sites before this existed. NOT inherited.
+    pub transform_origin: (Dim, Dim),
     pub margin: Sides<Dim>,
     pub padding: Sides<Dim>,
     pub border_width: Sides<f32>,
@@ -1304,6 +1308,7 @@ impl ComputedStyle {
             letter_spacing: 0.0,
             word_spacing: 0.0,
             tab_size: TabSize::default(),
+            transform_origin: (Dim::Percent(50.0), Dim::Percent(50.0)),
             margin: Sides::all(Dim::Px(0.0)),
             padding: Sides::all(Dim::Px(0.0)),
             border_width: Sides::all(0.0),
@@ -1543,6 +1548,7 @@ pub fn diff_style(old: &ComputedStyle, new: &ComputedStyle) -> RestyleDamage {
         || old.letter_spacing != new.letter_spacing
         || old.word_spacing != new.word_spacing
         || old.tab_size != new.tab_size
+        || old.transform_origin != new.transform_origin
         || old.float != new.float
         || old.clear != new.clear
         || old.position != new.position
@@ -4366,6 +4372,51 @@ fn apply_declaration(s: &mut ComputedStyle, d: &Declaration, parent_fs: f32) {
                     _ => TabSize::default(),
                 }
             }
+        }
+        // `transform-origin: <x> <y>` — the point a transform is applied about, for the
+        // **MinimalCascade** (JS-less / headless fallback) path; the shipping cascade takes Stylo's
+        // own computed value in `stylo_map.rs`. Kept in step with it deliberately: t975 found the
+        // same property fixed in one path and not the other, and the two answering differently is
+        // its own class of bug.
+        //
+        // ⚠ `top`/`bottom` name the Y axis WHEREVER they appear, so `top left` is as valid as
+        // `left top`; reading the two words positionally silently swaps that pair. A third (z)
+        // component is accepted and ignored — it only matters under a perspective context.
+        "transform-origin" => {
+            let t = v.trim().to_ascii_lowercase();
+            let kw = |w: &str| -> Option<Dim> {
+                match w {
+                    "left" | "top" => Some(Dim::Percent(0.0)),
+                    "center" => Some(Dim::Percent(50.0)),
+                    "right" | "bottom" => Some(Dim::Percent(100.0)),
+                    _ => None,
+                }
+            };
+            let axis_of = |w: &str| match w {
+                "left" | "right" => Some(0usize),
+                "top" | "bottom" => Some(1usize),
+                _ => None,
+            };
+            let mut xy: [Option<Dim>; 2] = [None, None];
+            let mut next = 0usize;
+            for w in t.split_whitespace().take(3) {
+                // `parse_dim` answers `Auto` for anything it cannot read, and `transform-origin`
+                // never takes `auto` — so `Auto` here means "not a length", not a value.
+                let val = kw(w).or_else(|| match values::parse_dim(w, s.font_size) {
+                    Dim::Auto => None,
+                    d => Some(d),
+                });
+                let Some(val) = val else { continue };
+                let slot = axis_of(w).unwrap_or_else(|| next.min(1));
+                if xy[slot].is_none() {
+                    xy[slot] = Some(val);
+                }
+                next = slot + 1;
+            }
+            s.transform_origin = (
+                xy[0].unwrap_or(Dim::Percent(50.0)),
+                xy[1].unwrap_or(Dim::Percent(50.0)),
+            );
         }
         "width" => {
             // Intrinsic sizing keywords collapse to `Dim::Auto` for length resolution, but tag which
