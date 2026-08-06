@@ -696,3 +696,4 @@ tick	sha	epoch	iso	delta_s	shape	wall_s	files	added	deleted	gates	claims	wpt_pas
 975	0851e6f8	1785992121	2026-08-06T00:55:21-04:00	3035	pattern-class	63	11	253	38	409	81	3896	6960	0	488	0	`translate3d` was on the floor, and the comment above the bug was its alibi (2026-08-05)
 976	0cf390a2	1785994484	2026-08-06T01:34:44-04:00	2363	pattern-class	63	7	181	33	409	81	3896	6960	0	488	0	a defaulted parameter no caller overrides is an unimplemented property (2026-08-06)
 977	32388cfa	1785995603	2026-08-06T01:53:23-04:00	1119	measurement	63	5	96	32	409	81	3896	6960	0	488	0	the surface audit finds its best axis INSIDE the engine (2026-08-06)
+978	cbb7d5ee	1785996830	2026-08-06T02:13:50-04:00	1227	measurement	63	5	190	33	409	81	3896	6960	0	488	0	I tested my own audit's recommendation and its hit rate was wrong (2026-08-06)

@@ -46371,6 +46371,65 @@ PERF: none — one UA rule and one narrowed branch in a cascade that already ran
 WIKI: `docs/wiki/css-cascade.md` — where Chrome draws the form-control `box-sizing` line, and why a
 layout-crate test cannot see it.
 
+## Tick 979 — the constitution check, and the rule that cut both ways in one session (2026-08-06)
+
+TICK SHAPE: measurement — the cadence re-read of `CONSTITUTION.MD` (due every 8 ticks, last at 971),
+banked as check #87.
+
+**GATE.** All three of this window's fixes were selected by **measured corpus frequency** — a button's
+UA border (`<button>` 55.6%), the dropped 3D transform spellings and `transform-origin` (`transform:`
+34.5%) — which is what #86 established as the loop's first real answer to VI.3's *usage-weight* term.
+
+⚠⚠ **THE VENDOR AXIS IS CLOSED, AND IT ANSWERED THE SAME WAY FOUR TIMES.** Audit #38 took WebKit, the
+last engine not yet asked, and **ten of twelve Safari 26.x features price at ≤0.6% on the corpus that
+scores us** — the same result Interop 2026 gave at #37. Three measurements of the same structural
+fact is enough; it should stop being re-derived. What replaced it is **code-shaped**, and t975/t976
+are why: each found a whole capability behind a construct that *reads as a decision*.
+
+⚠⚠⚠ **AND I5 IS THE THROUGH-LINE OF THE WHOLE SESSION — FIVE OF MY OWN PUBLISHED CLAIMS CORRECTED BY
+MY OWN LATER MEASUREMENT, EACH AMENDED IN THE FILE THAT MADE THEM:**
+
+```text
+   t963's predicted "~6px scrollbar term"  -> t964: it does not exist
+   audit #37's form-control attribution    -> t967: it is the inline <svg>
+   t968's "a missing input, not a guard"   -> t970: already in the walk, and its
+                                                    price for the half-fix was wrong
+   t959's "Range gBCR returns 1200"        -> t973: it is absent and THROWS
+   audit #38's "2 for 2" catch-all rate    -> t978: 9 of 9 clean, 2 of 3 testable
+```
+
+**That is the difference between a loop that corrects and one that accretes** — every amendment went
+into the gate doc, the audit or the journal entry that carried the wrong claim, not only into a later
+entry where a reader would never find it.
+
+⚠⚠ **PART VII — ONE EDGE CALL, DECLARED, AND THE RULE CUT BOTH WAYS IN THE SAME HOUR.** The wall hung
+in the `manuk-shell` gate for **three hours** on t974 with the box idle. I did not touch `scripts/`.
+I **did** terminate the hung `tick.sh` and its children **by PID**, after verifying by `ppid` chain
+that all three traced to this session's own `claude` process — t846's rule requires *both* `etime` <
+session and `ppid` traceable, and both held. Re-running the identical command landed the tick in nine
+minutes. **Killing a process I spawned is not editing the harness**, and it is flagged here so the
+observer can read the line more narrowly if they disagree. In the same hour I **declined** to kill
+363 Chrome processes because the oldest was **3.4 days** old and failed the etime test outright.
+A rule that only ever licenses action is a preference; this one refused me once and permitted me once.
+
+PART VI: **no correction, deliberately.** #86 corrected the H0.1 row eight ticks ago. This window found
+**transforms** — a family that row does not mention and which is neither block arithmetic, inline
+composition, tables nor scroll containers. **One data point is not a re-partition**, and a fourth
+amendment in four checks would be churn.
+
+THE STEER (full text in check #87): **`justify-self` in a grid is unimplemented** (x=0 against
+Chrome's 140, measured t977, priced 1.8% — the vendor axis's only measured lead in four audits) ·
+**triage the 28 justified catch-alls BY INSTRUMENT** before calling them a worklist · **find the
+SHARED mechanism across the observer's 14 near-bar sites** — nothing this window targeted them, and
+per-site work is what *site reductions do not yield* warns against · sweep after 2–3 fixes and read
+the band with its top three movers re-run solo.
+
+RATCHET: no engine change — measurement only. Every gate green from t978.
+
+PERF: none.
+
+WIKI: none [forced] — the artefact is `docs/loop/CONSTITUTION-CHECK.md` check #87. [no-pattern]
+
 ## Tick 978 — I tested my own audit's recommendation and its hit rate was wrong (2026-08-06)
 
 TICK SHAPE: measurement — audit #38 ended one tick ago by naming its own next step (*"sample from the

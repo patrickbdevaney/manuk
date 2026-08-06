@@ -5788,3 +5788,100 @@ The t953 footer mechanism reserved at #84 is still open; this correction does no
    t959, never investigated. `Range.prototype` has 27 methods and neither `getBoundingClientRect` nor
    `getClientRects` is among them, so something else is answering. Every editor and text-selection UI
    calls it.
+
+## Check #87 — tick 979 (2026-08-06)
+
+**Horizon:** H0 as re-scoped by **PART VII**, instrumented as **M1 on the in-scope CrUX corpus**.
+Latest banked: **15.6% (21/135) as printed, 17.0% corrected** — t974 established that two sites which
+do not reproduce solo carried 80% of that sweep's downward movement. Check #83's ceiling finding is
+untouched.
+
+### → Gate, or scoreboard?
+
+**Gate.** Ticks 972–978: three capability fixes, one sweep, two audits, two measurement ticks. All
+three fixes were **selected by measured corpus frequency**, which is what #86 established as the
+loop's first real answer to VI.3's *usage-weight* term:
+
+```text
+   t972  a button's UA border is 2px, not 1px      <button>  55.6% of the corpus
+   t975  translate3d / scale3d / rotate3d / matrix3d dropped   transform: 34.5%
+   t976  transform-origin unimplemented behind a defaulted parameter
+```
+
+⚠ **Unpriced, as always, and now with a number for what "unpriced" costs.** No sweep since t974. But
+t974 also measured the noise floor honestly for the first time — a single sweep's top two movers can
+carry 80% of its delta and invert its sign — so "the next sweep will tell us" is a weaker promise than
+this loop has been making. **The band is the number; the top three movers must be re-run solo before
+it is a reading.**
+
+### → Is `orient`'s ranking still the north star?
+
+**Yes, and this window found the axis that vendor lists cannot reach.** Audit #38 closed the vendor
+set (Interop, Chrome frontier, Servo, WebKit) and the fourth returned the same structural answer as
+the second and third: **ten of twelve Safari 26.x features price at ≤0.6% on the corpus that scores
+us.** That is now measured three times and should stop being re-derived.
+
+What replaced it is **code-shaped**: t975 and t976 each found a *whole capability* behind a construct
+that reads as a decision — a `_ => {}` with a justifying comment, and a documented parameter that
+every call site handed a constant. Neither is findable from a vendor list, from Baseline, or from the
+corpus: **the property parses, the name greps, the doc explains it.**
+
+⚠⚠ **And t978 corrected the rate one tick after t977 claimed it.** The audit said the 28 justified
+catch-alls were 2-for-2; sampling the two highest-priced ones (`display: table*` 8.8%, `clip-path`
+6.4%) returned **9 of 9 clean**. *A prior built from the two cases that made you notice the pattern is
+selected on the outcome.* The honest rate is 2 of 3 testable — **and the third was not testable by
+the instrument used**, because `clip-path` is a paint effect and a geometry dump reports identical
+rows whether the clip is applied perfectly or not at all. **An enumerable population is not an
+auditable one; triage by which instrument can see it first.**
+
+### → Is any invariant being bent?
+
+**No, and I5 is again the through-line: five published claims of my own were corrected by my own
+later measurement this session.** Listed because the count is the point:
+
+```text
+   t963's predicted "~6px scrollbar term"  -> t964: it does not exist
+   audit #37's form-control attribution    -> t967: it is the inline <svg>
+   t968's "missing input, not a guard"     -> t970: already in the walk; and its
+                                                    price for the half-fix was wrong
+   t959's "Range gBCR returns 1200"        -> t973: it is absent and THROWS
+   audit #38's "2 for 2" catch-all rate    -> t978: 9 of 9 clean, 2 of 3 testable
+```
+
+**Every one was amended in place**, in the file that made the claim, not only in a later journal
+entry. That is the difference between a loop that corrects and a loop that accretes.
+
+⚠⚠ **PART VII — one edge call, declared.** The wall hung in the `manuk-shell` gate for **three
+hours** on t974 with the box otherwise idle. I did not touch `scripts/`. I **did** terminate the hung
+`tick.sh` and its children **by PID**, after verifying by `ppid` chain that all three traced to this
+session's own `claude` process — the t846 rule's *both* tests (etime < session **and** ppid traceable)
+were satisfied. Re-running the identical command on the freed box landed the tick in nine minutes.
+**Killing a process I spawned is not editing the harness**, and I am flagging it here so the observer
+can read the line more narrowly if they disagree. In the same hour I **declined** to kill 363 Chrome
+processes because the oldest was 3.4 days old and failed the etime test outright — the rule cut both
+ways in one session, which is the best evidence it is a rule and not a preference.
+
+### → PART VI correction
+
+⚠ **None this check, and deliberately.** #86 corrected VI.2's H0.1 row eight ticks ago (flex cleared;
+the residue is inline composition; the corpus re-ranks tables below form controls). This window found
+**transforms** — a family that row does not mention and that is neither block arithmetic, inline
+composition, tables, nor scroll containers. **One data point is not a re-partition**, and a fourth
+amendment in four checks would be churn. The next correction should be written when a second
+non-layout-math family lands, at which point the row's categories are wrong rather than incomplete.
+
+### Steer
+
+1. **`justify-self` in a grid is unimplemented** — `justify-self: end` in a 200px track puts the item
+   at x=0 where Chrome puts it at 140. Measured t977, priced at **1.8%**. `align-self` is exact in
+   both flex and grid, so this is the inline axis alone: small, precise, and the vendor axis's only
+   measured lead in four audits.
+2. **Triage the 28 justified catch-alls BY INSTRUMENT** before treating them as a worklist —
+   geometry (`boxes`), paint (a raster diff we do not have), JS/DOM (a page probe). t978 showed the
+   list is enumerable and not yet auditable.
+3. **The observer's `near-bar.sh` ranks 14 sites one fix from crossing.** Nothing this window
+   targeted them; the honest reason is that a shared mechanism across several of them has not been
+   found, and per-site work is what `site reductions do not yield` warns against. Finding that shared
+   mechanism is the highest-value open question on the M1 axis.
+4. **Sweep after the next two or three fixes**, and read the common-set band with its top three
+   movers re-run solo.
