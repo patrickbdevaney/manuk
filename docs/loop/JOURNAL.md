@@ -46371,6 +46371,88 @@ PERF: none — one UA rule and one narrowed branch in a cascade that already ran
 WIKI: `docs/wiki/css-cascade.md` — where Chrome draws the form-control `box-sizing` line, and why a
 layout-crate test cannot see it.
 
+## Tick 995 — the highest-weight area in the corpus, and the numbers that do not reconcile (2026-08-07)
+
+TICK SHAPE: measurement — a nineteen-row battery on form controls and replaced elements. **The
+highest-frequency area there is** (`<button>` 55.6% of the corpus, `<input>` 51.5%, `<svg>` 34.5%) and
+no battery had covered it.
+
+```text
+   EXACT (10): <button> unstyled · <button> with w/h · <button> label centring · <button> as a
+               FLEX ITEM · inline <svg> with w/h attrs · <svg> with ONLY a viewBox (a RATIO,
+               never a size — it fills, 400x200) · <img> with w/h attrs and no src · <label> as
+               an ordinary inline · an inline-block control · the <button>'s inner label
+   DIVERGING (9, in FIVE mechanisms)
+```
+
+⚠⚠ **`<button>` IS EXACT ON ALL FOUR OF ITS ROWS** — t972's 2px-outset UA border landed and holds,
+including as a flex item and for its label's centring. That is a banked confirmation of a fix from 23
+ticks ago on the single most common control on the web, and it cost nothing to obtain here.
+
+```text
+                                     Chrome              ours
+   <input> unstyled              [0, 3, 201, 19]    [0, 0, 201, 17]
+   <input size=5>                [0, 3,  81, 19]    [0, 0,  81, 17]
+   <input> border-box width:100  [0, 3, 100, 19]    [0, 0, 100, 17]
+   checkbox                      [0, 4,  13, 13]    [0, 2,  15, 15]
+   radio                         [0, 4,  13, 13]    [0, 2,  15, 15]
+   <select> unstyled             [0, 3,  52, 19]    [0, 4,  49, 17]
+   <textarea> unstyled           [0, 0, 178, 32]    [0, 0, 178, 34]
+   <textarea rows=2 cols=10>     [0, 0,  98, 32]    [0, 0,  98, 34]
+   <fieldset>                    [0, 0, 400, 50]    [0, 0, 400, 24]
+```
+
+⚠⚠⚠ **THE OBVIOUS DIAGNOSIS IS AVAILABLE AND WRONG, AND THE FIXTURE SAYS SO.** t972 fixed `<button>`
+by correcting a 1px UA border to Chrome's 2px, and memory carries that as the shape to look for. But
+**`<input>`'s WIDTH is exact on all three rows and only its HEIGHT is short.** A border error is
+symmetric; this is not one. Had the battery measured only heights — which is what a "2px short" memory
+invites — I would have shipped the button fix again into a defect that is not it.
+
+⚠⚠⚠ **AND CHROME'S OWN UA NUMBERS DO NOT RECONCILE WITH CHROME'S OWN BOXES.** I read
+`getComputedStyle` on each unstyled control rather than inferring, and banked the table in the wiki
+because it is expensive to obtain. It does not add up:
+
+```text
+   <input>   computed:  content 15 + padding 1x2 + border 2x2  =  21     MEASURED  19
+             computed:  width 197 + padding 4 + border 4       = 205     MEASURED 201
+```
+
+> **A native control's USED border is the platform THEME's, not the UA sheet's.** So a fix driven
+> from `getComputedStyle` alone would be built on numbers Chrome itself does not lay out with — which
+> is the same class as t930's `--hide-scrollbars` artefact and t978's untestable `clip-path`: *the
+> instrument you reach for first is measuring something adjacent to the thing you need.* The measured
+> boxes are the ground truth; the UA table is context, not a specification.
+
+**THE FIVE MECHANISMS, SEPARATED** so the next tick picks one rather than a symptom: `<input>` height
+and baseline · checkbox/radio drawn 15×15 against 13×13 · `<select>` narrow AND short · `<textarea>`
+2px tall with width exact · `<fieldset>` at 24 against **50**, rendered as a plain block with no UA
+border or padding at all and with its `<legend>` (which sits *on* the border) a second mechanism
+inside the first.
+
+**Only `<fieldset>` is plainly a UA-sheet gap of the kind t991 fixed.** The other four are
+native-control metrics whose used values are theme-derived, and at hour twenty-one that is a place to
+measure carefully and not to guess. Second measurement tick of the window, for the same reason as
+t993 — and t994 is the evidence that reason pays: **the defect t993 named took ten minutes to find the
+next tick, because the characterising table was the search key.**
+
+BATTERY LEDGER, six batteries across the window:
+
+```text
+   flex/grid sizing      20 rows  18 exact   2 defects  BOTH BUILT      (t984, t985)
+   positioned/overflow   16 rows  13 exact   2 defects  BOTH BUILT      (t986, t987)  +1 artefact
+   text/inline metrics   20 rows  19 exact   1 defect   BUILT           (t988)
+   tables                16 rows  11 exact   4 mechs    ALL FOUR BUILT  (t989-992)
+   borders/backgrounds   16 rows  14 exact   2 defects  ONE BUILT       (t994); collapse named
+   form controls         19 rows  10 exact   5 mechs    NAMED           (this tick)
+   -----------------------------------------------------------------------------------
+                        107 rows  85 exact  16 defects  10 built in 10 ticks
+```
+
+PERF: none — measurement only.
+
+WIKI: `docs/wiki/box-layout.md` — "The form-controls / replaced-elements battery — the highest-weight
+area in the corpus". [no-pattern]
+
 ## Tick 994 — the conditional that guarded a per-axis rule by one axis (2026-08-07)
 
 TICK SHAPE: primitive — an inline element's box when its frame is on the inline axis only. **The

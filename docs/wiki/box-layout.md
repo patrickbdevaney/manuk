@@ -5926,3 +5926,71 @@ Both are recorded with numbers and fixtures (`/tmp/bc.html`, `/tmp/ib.html`) rat
 collapse is a multi-tick algorithm, and the inline one sits in the hot path of every page's line
 layout. **Naming them precisely is the deliverable of a measurement tick; guessing at either is what
 the ratchet forbids.**
+
+## The form-controls / replaced-elements battery — the highest-weight area in the corpus (t995)
+
+`<button>` is on **55.6%** of the corpus, `<input>` **51.5%**, `<svg>` **34.5%** — by frequency this is
+the most valuable area there is, and no battery had covered it. Nineteen rows.
+
+```text
+  EXACT (10): <button> unstyled · <button> with w/h · <button> label centring · <button> as a
+              FLEX ITEM · inline <svg> with w/h attrs · <svg> with only a viewBox (a RATIO, never
+              a size — it fills, 400×200) · <img> with w/h attrs and no src · <label> as an
+              ordinary inline · an inline-block control · the <button>'s inner label
+  DIVERGING (9, in five mechanisms)
+```
+
+**`<button>` is exact on all four of its rows** — t972's 2px-outset UA border landed and holds,
+including as a flex item and for its label's centring. The divergences are everything else.
+
+```text
+                                    Chrome              ours
+  <input> unstyled              [0, 3, 201, 19]    [0, 0, 201, 17]
+  <input size=5>                [0, 3,  81, 19]    [0, 0,  81, 17]
+  <input> border-box width:100  [0, 3, 100, 19]    [0, 0, 100, 17]
+  checkbox                      [0, 4,  13, 13]    [0, 2,  15, 15]
+  radio                         [0, 4,  13, 13]    [0, 2,  15, 15]
+  <select> unstyled             [0, 3,  52, 19]    [0, 4,  49, 17]
+  <textarea> unstyled           [0, 0, 178, 32]    [0, 0, 178, 34]
+  <textarea rows=2 cols=10>     [0, 0,  98, 32]    [0, 0,  98, 34]
+  <fieldset>                    [0, 0, 400, 50]    [0, 0, 400, 24]
+```
+
+⚠ **`<input>`'s WIDTH is exact on all three rows and only its HEIGHT is short** (17 against 19), which
+rules out a symmetric border error — the shape t972 fixed on `<button>`. Whatever this is, it is not
+that, and assuming it was would have been the obvious wrong move.
+
+### Chrome's UA numbers, read rather than inferred
+
+Expensive to obtain and worth keeping, from `getComputedStyle` on each unstyled control:
+
+```text
+            font                 border          padding      box-sizing  computed h/w
+  input     13.333px Arial       2px inset       1px 2px      content     15 / 197
+  select    13.333px Arial       1px solid       0            border      19 / 37
+  textarea  13.333px monospace   1px solid       2px 2px      content     30 / 176
+  checkbox  13.333px Arial       0 none          0            border      13 / 13
+  button    13.333px Arial       2px outset      1px 6px      border      21 / 33.78
+  fieldset  16px monospace       2px groove      5.6px 12px   content     46 / (fills)
+  legend    16px monospace       0 none          0 2px        content     24 / 9.64
+```
+
+⚠⚠ **These computed values do NOT reconcile arithmetically with the measured boxes**, and that is
+itself the finding: `<input>` computes `content 15 + padding 2 + border 4 = 21` and *measures* 19;
+its width computes `197 + 4 + 4 = 205` and measures 201. **A native control's USED border is the
+platform theme's, not the UA sheet's** — so a fix driven from `getComputedStyle` alone would be built
+on numbers Chrome itself does not lay out with. The measured boxes above are the ground truth; the UA
+table is context, not a specification.
+
+### The five mechanisms, separated
+
+1. **`<input>` height and baseline** — 2px short, 3px high, on all three rows including `border-box`.
+2. **checkbox / radio** — we draw 15×15, Chrome 13×13, and ours sits 2px higher.
+3. **`<select>`** — 3px narrow *and* 2px short, and the only row where our y is *lower* than Chrome's.
+4. **`<textarea>`** — 2px too tall, on both the default and the `rows`/`cols` row, with width exact.
+5. **`<fieldset>`** — 24 against 50: we render it as a plain block with **no UA border or padding at
+   all**, and its `<legend>` (which sits *on* the border) is a second mechanism inside the first.
+
+Of these, only `<fieldset>` is plainly a UA-sheet gap of the kind t991 fixed; the other four are
+native-control metrics where the used values are theme-derived. **Recorded with numbers rather than
+guessed at** — see the tick-995 journal entry for why that is the deliverable.

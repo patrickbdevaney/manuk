@@ -298,6 +298,9 @@
   - L5866 · The borders/backgrounds battery — 14 of 16 exact, and two defects with their rules derived (t993)
   - L5883 · 1. border-collapse: collapse — the rule, derived
   - L5905 · 2. An inline with a frame on the INLINE AXIS ONLY takes the line box vertically
+  - L5930 · The form-controls / replaced-elements battery — the highest-weight area in the corpus (t995)
+  - L5963 · Chrome's UA numbers, read rather than inferred
+  - L5985 · The five mechanisms, separated
 
 ## browser-capabilities.md
 `docs/wiki/browser-capabilities.md`
@@ -1672,4 +1675,4 @@
   - L124 · Rank mechanisms by FLIP RATE, not failing-subtest count — CSS layout is a multi-assertion slog
 
 ---
-1579 sections across 22 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+1582 sections across 22 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
