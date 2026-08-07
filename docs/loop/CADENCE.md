@@ -11,12 +11,12 @@
 
 | | value | over |
 |---|---|---|
-| ticks landed | **703** | ticks 1–985 |
-| median tick cycle | **26m** | 702 intervals |
-| median, last 10 | **54m** | 10 intervals |
+| ticks landed | **704** | ticks 1–987 |
+| median tick cycle | **26m** | 703 intervals |
+| median, last 10 | **52m** | 10 intervals |
 | fastest / slowest | 5s / 5.4d | |
-| **ticks per hour** | **1.10** | 638.7h elapsed |
-| median verify wall | **63s** | 642 ticks |
+| **ticks per hour** | **1.10** | 639.6h elapsed |
+| median verify wall | **63s** | 643 ticks |
 | wall trend | 39s → 63s — getting slower ⚠️ | first 3 vs last 3 |
 
 The **cycle** is the real unit: implement → debug → verify wall → land. The wall is only part of
@@ -28,10 +28,10 @@ it, and a wall that grows taxes every future tick, so it is tracked separately f
 
 * **capabilities asserted** (`G_CAPABILITY`): 48 → **81**
 * **live gates**: 27 → **416**
-* **✅ rows in the capability ledger**: 144 → **494**
+* **✅ rows in the capability ledger**: 144 → **495**
 * **Bar 0 — oracle hangs**: 0 of 265 sites
 
-**338 of 703 ticks** (48%) moved a
+**339 of 704 ticks** (48%) moved a
 user-visible capability. The rest were instruments, infrastructure and corrections — and the
 ledger says the corrections were not overhead: three of its top three priorities were phantoms,
 and finding that out redirected everything after it.
@@ -90,7 +90,7 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 
 ## What a capability costs
 
-* **338** capability ticks, median cycle **26m**
+* **339** capability ticks, median cycle **26m**
 * median diff per tick: **+258 / −34** lines across 8 files
 
 ## Every tick
@@ -800,5 +800,6 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 | **983** | 2026-08-06 17:42 | 2.5h | primitive | 63s | +496/−42 | 414 | 81 | 56.0% · | a grid container's height is its TRACKS, and the residue that came from measuring the cont |
 | **984** | 2026-08-06 18:46 | 64m | primitive | 63s | +502/−60 | 415 | 81 | 56.0% · | `fit-content` was implemented on one path and given up on in the other, and the row that c |
 | **985** | 2026-08-06 19:43 | 57m | primitive | 63s | +419/−43 | 416 | 81 | 56.0% · | a percentage gap had nowhere to be STORED, and the RED proof that aimed at the wrong casca |
+| **987** | 2026-08-06 20:37 | 54m | pattern-class | 63s | +617/−42 | 416 | 81 | 56.0% · | the negative half is the whole difficulty, and both cadence audits (2026-08-06) |
 
 *`·` after a WPT figure means **carried forward**, not measured this tick.*

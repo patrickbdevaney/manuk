@@ -5630,3 +5630,36 @@ through the other walk, so the two halves are separately provable); restoring `f
 fails only the fixed rows; narrowing the predicate to `transform` fails only the filter row. An
 old-binary A/B on four anchor sites in the same hour was **byte-identical** — 87.4% mean shape and all
 four jarring invariants unchanged on both binaries.
+
+### `will-change`, `contain` and `perspective` — the negative half is the whole difficulty (t987)
+
+t986 left these three out because they had **no `ComputedStyle` field at all**. They now reach layout
+as one `bool` — one bit is all layout needs, and carrying a `will-change` string list on every
+`ComputedStyle` is the per-node allocation the custom-property field already documents as a measured
+mistake. The interesting part is not which values set it but **which do not**:
+
+```text
+  will-change: transform / filter / perspective     containing block      [ 20,  20]
+  will-change: top, transform  (one qualifying)     containing block      [ 20,  20]
+  contain: layout / paint / strict / content        containing block      [ 20,  20]
+  perspective: 100px                                containing block      [ 20,  20]
+ ── NEGATIVE, and each one is a trap ──
+  will-change: opacity                              NOT                   [ 20,-364]
+  contain: style                                    NOT                   [ 20,-1132]
+  contain: size                                     NOT                   [ 20,-1260]
+```
+
+**A predicate written as `!will_change.is_empty() || !contain.is_empty()` — the obvious version —
+passes every positive row and is wrong about all three negatives.** `will-change: opacity` creates a
+*stacking context*, which is a different thing the same property also does; `contain: style` and
+`contain: size` are containment of other kinds. All four negative rows are Chrome-measured, not
+reasoned from the grammar, and that naive predicate is the most useful RED recipe in the gate.
+
+On the Stylo path the keyword list is not re-derived: `WillChangeBits::FIXPOS_CB_NON_SVG` is literally
+*"a property that creates a containing block for fixed-position descendants will change"*, so the
+engine that already computed the answer is asked for it. **Re-deriving it by hand is exactly how the
+`opacity` case gets shipped wrong.**
+
+⚠ The cost of the boolean, stated so it is not rediscovered: `getComputedStyle().willChange` cannot be
+served from it. We do not publish that property today, and the day we do it needs the list, not the
+flag.

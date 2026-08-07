@@ -46371,6 +46371,116 @@ PERF: none — one UA rule and one narrowed branch in a cascade that already ran
 WIKI: `docs/wiki/css-cascade.md` — where Chrome draws the form-control `box-sizing` line, and why a
 layout-crate test cannot see it.
 
+## Tick 987 — the negative half is the whole difficulty, and both cadence audits (2026-08-06)
+
+TICK SHAPE: pattern-class — containing-block creation by `will-change` / `contain` / `perspective`,
+plus the two cadence artefacts that came due on this tick (surface audit #39, constitution check #88).
+
+⚠⚠⚠ **THE POSITIVE ROWS COULD NOT HAVE CAUGHT A WRONG FIX; THE NEGATIVE ONES DID.** t986 left these
+three properties out because they had **no `ComputedStyle` field at all** — the t985 "nowhere to
+live" shape one level up. Adding the field is the small half. The measurement is the real one:
+
+```text
+   will-change: transform / filter / perspective     containing block      [ 20,  20]
+   will-change: top, transform  (one qualifying)     containing block      [ 20,  20]
+   contain: layout / paint / strict / content        containing block      [ 20,  20]
+   perspective: 100px                                containing block      [ 20,  20]
+   contain: layout, with an ABSOLUTE child           containing block      [ 20,  20]
+  -- NEGATIVE, Chrome-measured, and each one a trap --
+   will-change: opacity                              NOT                   [ 20, -364]
+   contain: style                                    NOT                   [ 20,-1132]
+   contain: size                                     NOT                   [ 20,-1260]
+   nothing at all                                    NOT                   [ 20,-1644]
+```
+
+> **A predicate written as `!will_change.is_empty() || !contain.is_empty()` — the obvious version,
+> the one you write from the property NAMES — passes all ten positive rows and is wrong about all
+> three negatives.** RED-proven exactly that way. `will-change: opacity` creates a *stacking context*,
+> which is a different thing the same property also does; `contain: style` and `contain: size` are
+> containment of other kinds entirely. **Write the negative rows first**: they are the only rows that
+> can distinguish the right predicate from the plausible one.
+
+⚠⚠ **THE STYLO PATH DOES NOT RE-DERIVE THE KEYWORD LIST, AND THAT IS THE DESIGN DECISION.**
+`WillChangeBits::FIXPOS_CB_NON_SVG` is literally *"a property that creates a containing block for
+fixed-position descendants will change"* — Stylo has already done the hard half. Asking the engine
+that computed the answer costs one `intersects()`; re-deriving the list by hand is precisely how the
+`opacity` case gets shipped wrong, and the minimal cascade (which *must* re-derive it, having no
+Stylo) carries the negative half explicitly in its own unit test for that reason.
+
+⚠ **WHY A `bool` AND NOT THE VALUES.** One bit is all layout needs, and a per-node `will-change`
+string list is the allocation `custom_properties` already documents as a measured mistake (1.44M
+entries per cascade on wix.com). The cost is stated in the field's doc rather than left to be
+rediscovered: **`getComputedStyle().willChange` cannot be served from this flag.** We do not publish
+that property today; the day we do, it needs the list.
+
+⚠ `transform`/`filter`/`backdrop-filter` are deliberately NOT folded into the boolean — they have
+their own fields and layout reads them directly. Mirroring them in would be two sources of one truth.
+
+RATCHET: `manuk-css` **32/32** + 2 doc-tests, `manuk-layout` 125/125, `g_transform_containing_block`
+extended from 6 rows to 20 and green.
+
+---
+
+**SURFACE AUDIT @ 987 — banked as #39. THE AXIS IS A FIXTURE, AND IT PRICES ITS OWN NEGATIVE SPACE.**
+
+#38 closed the vendor set (Interop, Chrome frontier, Servo, WebKit) and said the answer "should stop
+being re-derived". #39 takes that literally: **no sources searched.** The axis is instead the two
+property batteries this window built.
+
+```text
+   battery              rows   exact   diverging   real defects   instrument artefacts
+   flex/grid sizing       20      18           2              2                      0
+   positioned/overflow    16      13           3              2                      1
+   ---------------------------------------------------------------------------------
+                          36      31           5              4                      1
+```
+
+⚠⚠⚠ **Four real defects, none predicted — and 31 cleared constructs banked at the same cost.** Every
+previous audit in that ledger produced a *worklist*. This one produces a worklist **and a cleared
+field**, and only the second kind ever shrinks. Corpus weight of what it found: `transform` 34.5%,
+`display:grid` 18.7% — one to two orders above the ≤0.6% that ten of twelve Safari 26.x features
+price at.
+
+⚠⚠ **One of the five divergences was NOT a defect, and the pattern ledger caught it.**
+`overflow-y:scroll` read 285 against Chrome's 300 — the reference runs `--hide-scrollbars` while our
+gutter model is correct, recorded since t930 as *"never fix the engine for it"*. It presented as a
+clean, plausible 15px divergence **inside an otherwise-correct batch**, which is the one place a false
+finding looks most convincing.
+
+**What the four defects have in common: none is a missing arm, and every one greps as covered.**
+`grep -rn "fit-content" engine/` returns eleven hits and reads as coverage;
+`grep -rn "will-change" engine/` returned nothing and reads as an absence. **Neither grep finds the
+defect. A fixture finds both.**
+
+---
+
+**CONSTITUTION CHECK @ 987 — banked as #88.** Gate, not scoreboard: seven capability fixes and one
+wall audit across 980–987, every one gated and RED-proven.
+
+⚠⚠⚠ **I5 held four times, and TWICE it corrected a claim I had written into a gate's own
+documentation** — t983's `content_box_height` recipe (equal by construction) and t985's shorthand-swap
+recipe (aimed at the cascade Stylo pre-empts). **Run every RED recipe you write, and when one comes
+back green, find out WHY before deleting it.** Both times the *why* was worth more than the recipe.
+
+⚠⚠ **PART VI CORRECTION — the amendment #87 deferred for want of a second data point.** VI.2's H0.1
+row partitions the residual layout mass into *tables · inline composition · scroll containers*. #87
+found transforms and declined to re-partition on one point. This window found **three more families
+outside that partition** — container-level Box Alignment, containing-block *selection*, and intrinsic
+sizing inside a formatting context. **Four, not one: the row's categories are now wrong rather than
+incomplete.** The residue is not box *types* that opt out of block sizing; it is **properties and
+rules that never reached the formatting context at all** — a different partition with a different
+search strategy. And every one of the seven defects this window was **wrong only where the property
+was DECLARED**, which is exactly the class a divergence sweep structurally cannot rank.
+
+PART VII held. The wall audit's finding (`unattributed_seconds` is a constant by construction) was
+handed over, not fixed.
+
+PERF: one boolean on `ComputedStyle`, three `matches!` arms in the minimal cascade, and one
+`intersects()` on the Stylo path — all per-node work that already ran.
+
+WIKI: `docs/wiki/box-layout.md` — "`will-change`, `contain` and `perspective` — the negative half is
+the whole difficulty".
+
 ## Tick 986 — a transformed ancestor is a containing block, and the old test was the WRONG TEST (2026-08-06)
 
 TICK SHAPE: primitive — containing-block selection for out-of-flow boxes. Found by the **second**

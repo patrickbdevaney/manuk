@@ -5505,7 +5505,14 @@ impl Ctx<'_> {
     /// one level up — not an unhandled value but a value with nowhere to live. `will-change:
     /// transform` was measured Chrome-exact at `[20, 20]` and reads `[0, -1328]` here.
     fn establishes_out_of_flow_cb(s: &ComputedStyle) -> bool {
-        !s.transform.is_empty() || !s.filter.is_empty() || !s.backdrop_filter.is_empty()
+        !s.transform.is_empty()
+            || !s.filter.is_empty()
+            || !s.backdrop_filter.is_empty()
+            // `will-change` / `contain: layout|paint|strict|content` / `perspective`. These three
+            // reach layout as ONE bit because that is all layout needs; the cascade owns which
+            // values set it, including the negative half (`will-change: opacity`, `contain: style`,
+            // `contain: size` do NOT — all three Chrome-measured).
+            || s.establishes_containing_block
     }
 
     /// The containing block for a `position: fixed` box: the **viewport**, unless an ancestor

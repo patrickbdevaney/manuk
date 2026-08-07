@@ -37,12 +37,36 @@
 //! containing block, so the box escaped to the viewport — the ancestor was *right there* and failed
 //! a test that had nothing to do with the rule being applied.
 //!
-//! ⚠ **NAMED, MEASURED, NOT BUILT — and it is the t985 shape one level up.** `will-change`,
-//! `contain` and `perspective` obey this rule too. They are not unhandled values: they have **no
-//! `ComputedStyle` field at all**, so there is nowhere for the information to live and the fix is a
-//! cascade addition rather than a layout one. `will-change: transform` — the commonest of the three
-//! by far, since it is the standard compositing hint — was measured Chrome-exact at `[20, 20]` and
-//! reads `[20, -364]` here. Fixture `/tmp/tcb.html` row `a4` discriminates it.
+//! ## The other three, and the negative half that is the whole difficulty (t987)
+//!
+//! `will-change`, `contain` and `perspective` obey this rule too, and t986 left them out because
+//! they had **no `ComputedStyle` field at all**. They now reach layout as one `bool`, because one
+//! bit is all layout needs — and the interesting part is not which values set it but **which do
+//! not**:
+//!
+//! ```text
+//!   will-change: transform / filter / perspective     containing block      [ 20,  20]
+//!   will-change: top, transform  (one qualifying)     containing block      [ 20,  20]
+//!   contain: layout / paint / strict / content        containing block      [ 20,  20]
+//!   perspective: 100px                                containing block      [ 20,  20]
+//!   contain: layout, with an ABSOLUTE child           containing block      [ 20,  20]
+//!  ── NEGATIVE, and each one is a trap ──
+//!   will-change: opacity                              NOT                   [ 20,-364]
+//!   contain: style                                    NOT                   [ 20,-1132]
+//!   contain: size                                     NOT                   [ 20,-1260]
+//!   nothing at all                                    NOT                   [ 20,-1644]
+//! ```
+//!
+//! **A predicate written as "any `will-change`" or "any `contain`" passes every positive row above
+//! and is wrong about all three negatives.** `will-change: opacity` creates a *stacking context* —
+//! which is a different thing that the same property also does — and `contain: style` / `contain:
+//! size` are containment of other kinds entirely. All four negative rows are Chrome-measured, not
+//! reasoned from the grammar.
+//!
+//! On the Stylo path none of that list is re-derived: `WillChangeBits::FIXPOS_CB_NON_SVG` is
+//! literally *"a property that creates a containing block for fixed-position descendants will
+//! change"*, so the engine that already computed the answer is asked for it. Re-deriving the keyword
+//! list by hand is exactly how the `opacity` case gets shipped wrong.
 //!
 //! ## How this goes RED
 //!
@@ -55,6 +79,10 @@
 //! - **Return the ancestor's BORDER box instead of its padding box** → all rows still pass on this
 //!   fixture (no borders); the `padding_box_of` helper is shared with the `absolute` walk precisely
 //!   so the two cannot drift, and `g_abs_padding_box`-style bordered cases cover it.
+//! - **Write the t987 predicate as `!will_change.is_empty() || !contain.is_empty()`** — the obvious
+//!   version — → **all ten positive rows pass** and `will-change: opacity` reads [20, 20] against a
+//!   viewport-relative answer. That is the single most useful RED in this file: it is what the fix
+//!   looks like if you write it from the property NAMES instead of from their VALUES.
 
 use manuk_text::FontContext;
 
@@ -71,6 +99,20 @@ body{font:16px/1 monospace}
 <div class="w" id="c5" style="transform:translateX(10px)"><div style="margin-left:40px"><div class="b" id="a5" style="position:fixed;left:20px;top:20px"></div></div></div>
 <div class="w" id="c6" style="position:relative"><div class="b" id="a6" style="position:absolute;left:20px;top:20px"></div></div>
 <div class="w" id="c7" style="transform:translateX(10px)"><div class="b" id="a7"></div></div>
+<div class="w" id="w1" style="will-change:transform"><div class="b" id="b1" style="position:fixed;left:20px;top:20px"></div></div>
+<div class="w" id="w2" style="will-change:filter"><div class="b" id="b2" style="position:fixed;left:20px;top:20px"></div></div>
+<div class="w" id="w3" style="will-change:perspective"><div class="b" id="b3" style="position:fixed;left:20px;top:20px"></div></div>
+<div class="w" id="w4" style="will-change:top,transform"><div class="b" id="b4" style="position:fixed;left:20px;top:20px"></div></div>
+<div class="w" id="w5" style="contain:layout"><div class="b" id="b5" style="position:fixed;left:20px;top:20px"></div></div>
+<div class="w" id="w6" style="contain:paint"><div class="b" id="b6" style="position:fixed;left:20px;top:20px"></div></div>
+<div class="w" id="w7" style="contain:strict"><div class="b" id="b7" style="position:fixed;left:20px;top:20px"></div></div>
+<div class="w" id="w8" style="contain:content"><div class="b" id="b8" style="position:fixed;left:20px;top:20px"></div></div>
+<div class="w" id="w9" style="perspective:100px"><div class="b" id="b9" style="position:fixed;left:20px;top:20px"></div></div>
+<div class="w" id="w10" style="contain:layout"><div class="b" id="b10" style="position:absolute;left:20px;top:20px"></div></div>
+<div class="w" id="n1" style="will-change:opacity"><div class="b" id="m1" style="position:fixed;left:20px;top:20px"></div></div>
+<div class="w" id="n2" style="contain:style"><div class="b" id="m2" style="position:fixed;left:20px;top:20px"></div></div>
+<div class="w" id="n3" style="contain:size"><div class="b" id="m3" style="position:fixed;left:20px;top:20px"></div></div>
+<div class="w" id="n4"><div class="b" id="m4" style="position:fixed;left:20px;top:20px"></div></div>
 </body></html>"##;
 
 fn rect_of(page: &manuk_page::Page, sel: &str) -> manuk_layout::Rect {
@@ -155,4 +197,59 @@ fn g_transform_containing_block() {
          relative to it, not {inflow:?} — the transform is already baked into the subtree's \
          coordinates and must not be counted twice."
     );
+
+    // ── THE OTHER THREE PROPERTIES (t987): `will-change`, `contain`, `perspective`. Same rule,
+    //    reaching layout as one `bool` because one bit is all layout needs.
+    for (i, decl) in [
+        "will-change:transform",
+        "will-change:filter",
+        "will-change:perspective",
+        "will-change:top,transform (one qualifying feature in a list)",
+        "contain:layout",
+        "contain:paint",
+        "contain:strict",
+        "contain:content",
+        "perspective:100px",
+        "contain:layout, with an ABSOLUTE child rather than a fixed one",
+    ]
+    .iter()
+    .enumerate()
+    {
+        let (b, w) = (format!("#b{}", i + 1), format!("#w{}", i + 1));
+        assert!(
+            near(off(&b, &w)),
+            "G_TRANSFORM_CONTAINING_BLOCK: `{decl}` makes the ancestor the containing block, so the \
+             out-of-flow child belongs at [20, 20] from it; got {:?}. These three properties reach \
+             layout as one bit on `ComputedStyle`; a reading of [20, -something] means the bit \
+             never arrived.",
+            off(&b, &w)
+        );
+    }
+
+    // ── THE NEGATIVE HALF, which is the whole difficulty. A predicate written as "any
+    //    `will-change`" or "any `contain`" passes all ten rows above and is wrong about all four of
+    //    these. Every one is Chrome-measured, not reasoned from the grammar.
+    for (i, (decl, why)) in [
+        (
+            "will-change: opacity",
+            "creates a STACKING CONTEXT — a different thing the same property also does — and NOT a              containing block",
+        ),
+        ("contain: style", "is style containment, an unrelated kind"),
+        ("contain: size", "is size containment, likewise"),
+        (
+            "no such property at all",
+            "is the base case, and the row that fails if the bit defaulted to true",
+        ),
+    ]
+    .iter()
+    .enumerate()
+    {
+        let (m, n) = (format!("#m{}", i + 1), format!("#n{}", i + 1));
+        assert!(
+            !near(off(&m, &n)),
+            "G_TRANSFORM_CONTAINING_BLOCK: `{decl}` {why}, so the fixed child must fall through to \
+             the VIEWPORT and NOT sit at [20, 20] from its wrapper; got {:?}.",
+            off(&m, &n)
+        );
+    }
 }

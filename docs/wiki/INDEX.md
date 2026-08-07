@@ -281,6 +281,7 @@
   - L5606 · The absolute row shows the old test was the *wrong test*
   - L5613 · One predicate, not a transform special case
   - L5619 · Named, measured, not built — the t985 shape one level up
+  - L5634 · will-change, contain and perspective — the negative half is the whole difficulty (t987)
 
 ## browser-capabilities.md
 `docs/wiki/browser-capabilities.md`
@@ -1651,4 +1652,4 @@
   - L124 · Rank mechanisms by FLIP RATE, not failing-subtest count — CSS layout is a multi-assertion slog
 
 ---
-1558 sections across 22 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+1559 sections across 22 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.

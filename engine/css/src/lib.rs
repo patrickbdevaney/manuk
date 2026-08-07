@@ -1313,6 +1313,21 @@ pub struct ComputedStyle {
     /// `grid-auto-rows: 80px 20px` makes the implicit rows 80, 20, 80, 20… Empty = `auto`.
     pub grid_auto_rows: Vec<TrackSize>,
     pub grid_auto_columns: Vec<TrackSize>,
+    /// Does a **non-`position`** property on this element make it the containing block for its
+    /// out-of-flow (`absolute` / `fixed`) descendants?
+    ///
+    /// ⚠ This covers `will-change` (when it names a property that would create one), `contain`
+    /// (`layout` / `paint` / `strict` / `content`) and `perspective`. **`transform`, `filter` and
+    /// `backdrop-filter` are deliberately NOT folded in here** — they have their own fields and
+    /// layout reads them directly, so mirroring them into a boolean would be two sources of one
+    /// truth and the classic way they drift apart.
+    ///
+    /// It is a `bool` rather than the property values because that is *all layout needs*, and the
+    /// alternative — carrying a `will-change` string list on every `ComputedStyle` — is the
+    /// per-node allocation the custom-property field already documents as a measured mistake.
+    /// ⚠ The cost of the boolean is that `getComputedStyle().willChange` cannot be served from it;
+    /// we do not publish that property today, and the day we do it needs the list, not this flag.
+    pub establishes_containing_block: bool,
     /// `grid-auto-flow` (container) — which axis auto-placement advances along, and whether it
     /// back-fills holes (`dense`).
     pub grid_auto_flow: GridAutoFlow,
@@ -1459,6 +1474,7 @@ impl ComputedStyle {
             grid_auto_rows: Vec::new(),
             grid_auto_columns: Vec::new(),
             grid_auto_flow: GridAutoFlow::Row,
+            establishes_containing_block: false,
             grid_column: (GridLine::Auto, GridLine::Auto),
             grid_row: (GridLine::Auto, GridLine::Auto),
             grid_template_areas: Vec::new(),
@@ -4763,6 +4779,39 @@ fn apply_declaration(s: &mut ComputedStyle, d: &Declaration, parent_fs: f32) {
         "grid-template-rows" => s.grid_template_rows = parse_track_list(v, s.font_size),
         "grid-auto-rows" => s.grid_auto_rows = parse_auto_track_list(v, s.font_size),
         "grid-auto-columns" => s.grid_auto_columns = parse_auto_track_list(v, s.font_size),
+        // `will-change` / `contain` / `perspective` — the three ways to become a containing block
+        // for out-of-flow descendants WITHOUT being positioned and without a transform. Only the
+        // one bit layout needs is kept; see the field's own doc for why it is not the value list.
+        //
+        // ⚠ The negative half is measured, not assumed: `will-change: opacity` does NOT create one
+        // (Chrome puts the fixed child back on the viewport, -364 from the wrapper), and neither do
+        // `contain: style` or `contain: size`. A predicate written as "any will-change" or "any
+        // contain" would pass every positive row in the fixture and be wrong about all three.
+        "will-change" => {
+            s.establishes_containing_block |= v.split(',').any(|f| {
+                matches!(
+                    f.trim().to_ascii_lowercase().as_str(),
+                    "transform"
+                        | "perspective"
+                        | "filter"
+                        | "backdrop-filter"
+                        | "rotate"
+                        | "scale"
+                        | "translate"
+                )
+            });
+        }
+        "contain" => {
+            s.establishes_containing_block |= v.split_ascii_whitespace().any(|f| {
+                matches!(
+                    f.trim().to_ascii_lowercase().as_str(),
+                    "layout" | "paint" | "strict" | "content"
+                )
+            });
+        }
+        "perspective" => {
+            s.establishes_containing_block |= v.trim().to_ascii_lowercase() != "none";
+        }
         "grid-auto-flow" => {
             if let Some(f) = parse_grid_auto_flow(v) {
                 s.grid_auto_flow = f;
@@ -6363,6 +6412,60 @@ mod tests {
             one("align-content: normal").align_content,
             JustifyContent::Normal
         );
+    }
+
+    /// `will-change` / `contain` / `perspective` as containing-block creators, on the minimal
+    /// (JS-less) cascade. The Stylo path is gated by `G_TRANSFORM_CONTAINING_BLOCK`; this is the
+    /// fallback, and it carries the NEGATIVE half explicitly because that is the half a predicate
+    /// written from the property NAME rather than from its VALUES gets wrong.
+    #[test]
+    fn will_change_contain_and_perspective_create_a_containing_block_only_for_the_right_values() {
+        let cb = |decl: &str| {
+            let (dom, map) = styled(&format!("span {{ {decl} }}"));
+            let n = query_selector_all(&dom, dom.root(), "span")[0];
+            map.get(&n)
+                .cloned()
+                .unwrap_or_else(ComputedStyle::initial)
+                .establishes_containing_block
+        };
+
+        for decl in [
+            "will-change: transform",
+            "will-change: filter",
+            "will-change: perspective",
+            "will-change: backdrop-filter",
+            "will-change: top, transform",
+            "will-change: TRANSFORM",
+            "contain: layout",
+            "contain: paint",
+            "contain: strict",
+            "contain: content",
+            "contain: size layout",
+            "perspective: 100px",
+        ] {
+            assert!(cb(decl), "`{decl}` must create a containing block");
+        }
+
+        // ⚠ THE NEGATIVE HALF, and every one of these is Chrome-measured rather than reasoned from
+        // the grammar. `will-change: opacity` creates a STACKING CONTEXT — a different thing the
+        // same property also does — and `contain: style`/`size` are containment of other kinds.
+        // A predicate written as "any will-change" or "any contain" passes all twelve rows above
+        // and is wrong about all of these.
+        for decl in [
+            "will-change: opacity",
+            "will-change: auto",
+            "will-change: scroll-position",
+            "will-change: z-index",
+            "contain: style",
+            "contain: size",
+            "contain: none",
+            "perspective: none",
+        ] {
+            assert!(!cb(decl), "`{decl}` must NOT create a containing block");
+        }
+
+        // And the base case: nothing declared.
+        assert!(!ComputedStyle::initial().establishes_containing_block);
     }
 
     /// `gap` on the **minimal (JS-less) cascade**, which is where the shorthand's own expansion

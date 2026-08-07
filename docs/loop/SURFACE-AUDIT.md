@@ -4285,3 +4285,96 @@ a named, enumerable population with a 2-for-2 hit rate, which is a better prior 
 audit has checked. `justify-self` in grid is recorded as the vendor axis's one measured lead (1.8%).
 
 Map now **478 rows** (+2: `align-self` gated by probe, `justify-self` grid partial with its number).
+
+## Audit #39 — tick 987 (2026-08-06) — the axis is a FIXTURE, and it prices its own negative space
+
+**Sources, searched rather than recalled:** none. **That is the finding.** #34 took Interop/Baseline,
+#35 the Chrome frontier, #36 Servo, #37 the corpus as a population, #38 WebKit — closing the vendor
+set. Three of those five returned the same structural answer (the developer frontier is not where
+this corpus lives), and #38 said it "should stop being re-derived". This audit takes the loop at its
+word and asks a different question: **not *what has the industry shipped* but *what does OUR engine
+do to the CSS it already claims to support*.**
+
+### THE AXIS — a twenty-row property battery against headless Chrome, one run
+
+t984 built one fixture covering twenty flex/grid features that had no gate: `place-self`, `order`, the
+`gap` / `flex-flow` / `flex` / `grid` shorthands, `span`, `grid-template-areas`, `min-content`,
+`fit-content`, percentage gaps, baseline self-alignment, `space-evenly`, `inline-grid`,
+`aspect-ratio`, `min-height:0`, `flex-basis:content`, `margin:auto`. t986 built a second, sixteen rows
+of positioned/overflow/stacking geometry. Both were diffed against Chrome in a single run each.
+
+```text
+   battery              rows   exact   diverging   real defects   instrument artefacts
+   flex/grid sizing       20      18           2              2                      0
+   positioned/overflow    16      13           3              2                      1
+   ─────────────────────────────────────────────────────────────────────────────────
+                          36      31           5              4                      1
+```
+
+**Four real defects from two fixtures, and none of them was predicted.** All four landed as ticks
+985–987: `width: fit-content` given up on inside flex/grid, a percentage `gap` with nowhere to be
+stored, a transformed ancestor not acting as a containing block, and `will-change`/`contain`/
+`perspective` likewise.
+
+### WHY THIS AXIS BEATS THE VENDOR ONES, stated as a measurement and not a preference
+
+A vendor list ranks *the frontier*. #37 and #38 measured what that costs here: ten of twelve Safari
+26.x features and Interop 2026's twenty focus areas price at **≤0.6% of the corpus**. The battery
+axis has the opposite property — every row is a construct the engine **already claims**, so a
+divergence is by construction a broken promise rather than an unbuilt feature. Corpus weight of the
+four found: `transform` **34.5%**, `display:grid` **18.7%**, `width:fit-content` (the `w-fit` idiom)
+and percentage gaps unmeasured but structurally inside those two populations.
+
+⚠⚠⚠ **AND IT PRICES ITS OWN NEGATIVE SPACE, WHICH NO OTHER AXIS THIS LEDGER HAS TRIED DOES.** The
+31 exact rows are 31 constructs nobody now has to re-check, banked at the same cost as the 5. Every
+previous audit produced a *worklist*; this one produces a worklist **and a cleared field**. That is
+the difference between "here is what to look at" and "here is what is already right", and only the
+second one ever shrinks.
+
+### THE ROW THAT PAID FOR THE PATTERN LEDGER
+
+One of the three positioned-battery divergences was **not a defect**:
+
+```text
+   overflow-y:scroll content width      Chrome 300      ours 285
+```
+
+The reference runs `--hide-scrollbars`; our scrollbar model correctly reserves the 15px Chrome would
+also reserve if it had one. Recorded in `WEB-PATTERNS.md` since t930 as *"an INSTRUMENT bug; never fix
+the engine for it"* — and it presented here as a clean, plausible 15px divergence **in a fixture built
+for something else entirely**. A fresh reading would have filed it. **The ledger caught a false
+finding in the one place a false finding looks most convincing: inside an otherwise-correct batch.**
+
+### WHAT THE FOUR DEFECTS HAVE IN COMMON, and it is a shape worth naming
+
+None of them is a missing arm. Every one is a construct that **greps as covered**:
+
+```text
+   fit-content   the keyword parses, maps out of Stylo, and the BLOCK path consumes it in SIX
+                 places — the taffy path had `FitContent => return None`
+   gap %         the value arrives from Stylo intact and is narrowed to 0.0 on the NEXT LINE,
+                 because the field is an `f32` and cannot hold a percentage
+   transform CB  `abs_containing_block` asked `position != Static`, got a truthful answer, and
+                 acted correctly on it — the QUESTION was wrong
+   will-change   no `ComputedStyle` field at all: not an unhandled value, a value with nowhere
+                 to live
+```
+
+**Two of the four are "the value has nowhere to live" and one is "the right code asked the wrong
+question".** A `grep -rn "will-change" engine/` returns nothing and reads as an absence; a
+`grep -rn "fit-content" engine/` returns *eleven* hits and reads as coverage. **Neither grep finds
+the defect. A fixture finds both.**
+
+### STEER
+
+1. **Run a battery per area, not per property.** Two fixtures, ~40 minutes of authoring, four landed
+   defects and 31 cleared constructs. The families still unbatteried: **text/inline metrics**
+   (`letter-spacing`, `word-spacing`, `text-transform`, `word-break`, `overflow-wrap`, `text-indent`,
+   `white-space` variants), **backgrounds/borders** (`background-size` keywords, `border-image`,
+   multi-layer backgrounds, `border-radius` with two-value corners), and **tables** — which VI.2 has
+   named as residue mass since check #82 and which no battery has yet touched.
+2. **Write the negative rows first.** t987's `will-change` predicate would have shipped wrong from
+   the property names alone; the four Chrome-measured NEGATIVE rows (`will-change: opacity`,
+   `contain: style`, `contain: size`, nothing-declared) are what made it right, and the naive
+   predicate passes all ten positive rows.
+3. **Stop re-deriving the vendor answer.** Three axes, one conclusion, now four audits old.

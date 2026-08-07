@@ -5885,3 +5885,109 @@ non-layout-math family lands, at which point the row's categories are wrong rath
    mechanism is the highest-value open question on the M1 axis.
 4. **Sweep after the next two or three fixes**, and read the common-set band with its top three
    movers re-run solo.
+
+## Check #88 — tick 987 (2026-08-06)
+
+**Horizon:** H0 as re-scoped by **PART VII**, instrumented as **M1 on the in-scope CrUX corpus**.
+Latest banked remains **15.6% printed / 17.0% corrected** (t974). Check #83's ceiling finding is
+untouched. **No sweep this window, and this check says something new about why that is now a smaller
+problem than it was.**
+
+### → Gate, or scoreboard?
+
+**Gate.** Ticks 980–987: seven capability fixes and one wall audit, no measurement ticks at all — and
+the selection mechanism changed underneath them. #86 established corpus frequency as the loop's first
+real answer to VI.3's *usage-weight* term. This window found a second, and it is complementary rather
+than competing:
+
+```text
+   t980-982   three Box-Alignment longhands absent at all three layers, each sitting
+              directly beside a COMPLETE TWIN in the same struct literal
+   t983       a grid container's height taken from its children, not its tracks
+   t984-987   four defects from TWO twenty-row property batteries vs headless Chrome
+```
+
+**The first three were found by following a recurrence; the last four by a fixture that had no
+hypothesis at all.** Audit #39 records the arithmetic: 36 rows, 31 exact, 5 diverging, 4 real defects,
+1 instrument artefact — and the 31 exact rows are the part no other axis this ledger has tried
+produces. **A worklist that does not also shrink is not a burndown.**
+
+### → Is `orient`'s ranking still the north star?
+
+**Yes, and the vendor axis is now closed by its own evidence.** #38 said the fourth vendor list
+"should stop being re-derived"; #39 took that literally and searched no sources. The corpus weight of
+what the batteries found — `transform` 34.5%, `display:grid` 18.7% — is one to two orders above the
+≤0.6% that ten of twelve Safari 26.x features price at. That is not an argument against vendor lists;
+it is a measurement of which axis this corpus rewards.
+
+### → Is any invariant being bent?
+
+**No. I5 held four times this window, and twice it corrected a claim I had already written into a
+gate's own documentation.**
+
+```text
+   t983  "swap `content_box_height()` for `size.height` -> #p reads 140"    DOES NOT FIRE
+         (`TaffyDom::build` zeroes the root's frame; the two are equal by construction)
+   t985  "swap the `gap` shorthand's halves -> the shorthand row fails"     DOES NOT FIRE
+         (the gate loads a page, so it runs STYLO, which expands the shorthand first)
+   t984  the gate's "before" column for two rows was wrong until RED-1 measured it
+   t986  the `overflow-y:scroll` divergence was the known instrument artefact, not a defect
+```
+
+⚠⚠⚠ **The rule this produces is sharper than "verify your claims", because both false recipes were
+written by someone who had just done the work and both looked obviously true: RUN EVERY RED RECIPE
+YOU WRITE, AND WHEN ONE COMES BACK GREEN, FIND OUT WHY BEFORE DELETING IT.** Both times the *why* was
+worth more than the recipe — one exposed a structural fact about the tree (the root's frame is
+zeroed, so the defensive spelling is defensive and not load-bearing), the other relocated a proof to
+the cascade that can actually run it. **A "how to break it" list containing a step that cannot break
+it is worse than a shorter list**, because the next reader trusts it and proves nothing.
+
+⚠⚠ **And a second-order one, from t984.** The row that caught the `fit-content` ordering bug
+**already passed before the fix** — `fit-content; max-width:20px` was right *by accident* (the box
+stretched to its track and `max-width` clamped it) and my first implementation broke it. **A row that
+already passes is not a row you can leave out of a fixture.** t982 produced the same rule from the
+opposite direction: a fixture whose rows agree with Chrome *under the wrong model* cannot fail.
+Together: **ask what the WRONG model predicts for every row.**
+
+⚠ **PART VII held, with one item worth declaring.** The wall-time audit (#36, due since t962) found
+that `verify.sh`'s `unattributed_seconds` is a **constant** — `_PREWARM_END=$SECONDS` is assigned at
+line 102 and `_PREWARM_END=0` executes at line 163, sixty-one lines later, clobbering it — so the
+receipt reports `total − build` on every run ever recorded, and the histogram accounts for **43%** of
+the wall. I did not touch `scripts/`. The finding closes a question t981's self-audit asked and could
+not answer: it reasoned from `unattributed = everything` as if it were a measurement. **A diagnostic
+that returns a constant is worse than an absent one.** One line, handed to the observer, and on with
+browser work.
+
+### → PART VI correction
+
+⚠⚠ **YES — and it is the amendment #87 deliberately deferred, now that the second data point has
+landed.** VI.2's H0.1 row partitions the residual layout mass into *tables · inline composition ·
+scroll containers*, narrowed there by check #82's negative result on composed block width. #87 found
+**transforms** and declined to re-partition on one point. This window found **three more families
+outside that partition**: container-level Box Alignment (t981–982), containing-block *selection*
+(t986–987), and intrinsic sizing inside a formatting context (t984). That is four, not one.
+
+**The row's categories are now wrong rather than incomplete.** The residue is not a list of box
+*types* that opt out of ordinary block sizing; it is a list of **properties and rules that never
+reached the formatting context at all** — a different partition with a different search strategy.
+Recorded here as the correction; VI.2's row should read *"the residue is in property→layout
+plumbing and containing-block selection, not in block sizing arithmetic; batteries find it, sweeps
+cannot rank it"*, because every one of the seven defects this window was **wrong only where the
+property was DECLARED**, and a divergence sweep structurally cannot rank a property whose initial
+value is correct.
+
+### Steer
+
+1. **Battery the three unbatteried families** named in audit #39 — text/inline metrics,
+   backgrounds/borders, and **tables**, which VI.2 has carried as residue mass since check #82 and
+   which no fixture has yet touched. Two fixtures bought four defects and 31 cleared constructs.
+2. **Write the negative rows first.** t987's predicate would have shipped wrong from the property
+   names alone; the naive version passes all ten positive rows.
+3. **The anchor panel is a REGRESSION detector, not a progress meter.** Three old-binary A/Bs this
+   window (t983, t986, t987-adjacent) each said *"nothing broke"* and none said *"something
+   improved"* — which is what a four-site panel is for. Stop reading a flat panel as a flat result;
+   read it as a clean one, and price movement on the sweep.
+4. **The two "nowhere to live" defects are a class, not a coincidence.** `gap`'s `f32` and
+   `will-change`'s absent field are the same shape: a value that cannot be represented reads as
+   `0`/`false` and greps as handled. Worth a deliberate pass over `ComputedStyle` for other fields
+   too narrow for their property's value space.

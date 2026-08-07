@@ -888,6 +888,29 @@ pub fn to_computed_style(cv: &ComputedValues) -> ComputedStyle {
         s.column_gap = gap_dim(cv.clone_column_gap());
     }
 
+    // ── `will-change` / `contain` / `perspective` — a containing block for out-of-flow descendants
+    //    without being positioned and without a transform (CSS Transforms §3, CSS Contain §).
+    //
+    // Stylo has already done the hard half: `WillChangeBits::FIXPOS_CB_NON_SVG` is precisely
+    // *"a property that creates a containing block for fixed-position descendants will change"*,
+    // so the keyword list does not have to be re-derived here — and re-deriving it is how the
+    // `opacity` case would have been got wrong, since `will-change: opacity` creates a stacking
+    // context but NOT a containing block (Chrome-measured).
+    {
+        use stylo::values::specified::box_::{Contain, WillChangeBits};
+        let wc = cv.clone_will_change();
+        let contain = cv.clone_contain();
+        s.establishes_containing_block = wc.bits.intersects(
+            WillChangeBits::TRANSFORM
+                | WillChangeBits::PERSPECTIVE
+                | WillChangeBits::FIXPOS_CB_NON_SVG,
+        ) || contain.intersects(Contain::LAYOUT | Contain::PAINT)
+            || !matches!(
+                cv.clone_perspective(),
+                stylo::values::generics::box_::GenericPerspective::None
+            );
+    }
+
     // box-sizing.
     s.box_sizing = match cv.clone_box_sizing() {
         stylo::properties::longhands::box_sizing::computed_value::T::BorderBox => {
