@@ -4742,8 +4742,32 @@ impl Ctx<'_> {
                 let last = (p.row + p.rowspan - 1).min(nrows.saturating_sub(1));
                 let spanned: f32 = (p.row..=last).map(|r| row_h[r]).sum::<f32>()
                     + spacing_v * (p.rowspan - 1) as f32;
-                if *bh > spanned {
-                    row_h[last] += *bh - spanned;
+                // ⚠⚠⚠ **A ROWSPAN CELL'S EXCESS IS SHARED BY THE ROWS IT SPANS, PROPORTIONALLY TO
+                // THEIR NATURAL HEIGHTS — it was all dumped on the LAST one.** Chrome-measured, a
+                // `rowspan=2` cell 100 tall over rows of natural height 40 and 24: the 36px excess
+                // splits 22.5 / 13.5 and the rows come out **63 / 38**, not 40 / 84. Every row the
+                // cell spans grows, so everything *inside* the other cells of those rows moves too —
+                // which is why a rowspan in a real table (an invoice's line-item block, a schedule's
+                // merged slot, a spec table's grouped column) displaced its whole neighbourhood.
+                //
+                // Proportional, not even: the rows that were already taller take more, which is what
+                // keeps a tall row from being visually swamped by a short one. Even distribution is
+                // only the fallback for rows that are ALL zero-height, where "proportional" has no
+                // meaning — and it is also what proportional degenerates to when the rows are equal,
+                // which is why the equal-rows case cannot tell the two rules apart.
+                let deficit = *bh - spanned;
+                if deficit > 0.0 {
+                    let total: f32 = (p.row..=last).map(|r| row_h[r]).sum();
+                    if total > 0.0 {
+                        for r in p.row..=last {
+                            row_h[r] += deficit * row_h[r] / total;
+                        }
+                    } else {
+                        let n = (last - p.row + 1) as f32;
+                        for r in p.row..=last {
+                            row_h[r] += deficit / n;
+                        }
+                    }
                 }
             }
         }

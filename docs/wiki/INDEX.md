@@ -286,6 +286,9 @@
   - L5684 · The trap, and it cost a build to find
   - L5696 · The shift goes to the CONTENT, and the gate could not tell until a control was added
   - L5705 · Named, measured, not built — three more table defects from the same battery
+  - L5724 · A rowspan cell's excess is SHARED by the rows it spans (t990)
+  - L5744 · Proportional, not even — and only one row in the fixture can tell
+  - L5755 · Why it is not a one-cell error
 
 ## browser-capabilities.md
 `docs/wiki/browser-capabilities.md`
@@ -1659,4 +1662,4 @@
   - L124 · Rank mechanisms by FLIP RATE, not failing-subtest count — CSS layout is a multi-assertion slog
 
 ---
-1566 sections across 22 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+1569 sections across 22 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.

@@ -46371,6 +46371,79 @@ PERF: none — one UA rule and one narrowed branch in a cascade that already ran
 WIKI: `docs/wiki/css-cascade.md` — where Chrome draws the form-control `box-sizing` line, and why a
 layout-crate test cannot see it.
 
+## Tick 990 — the residue VI.2 has named since check #82, and the one row that decides the rule (2026-08-06)
+
+TICK SHAPE: primitive — `rowspan` row-height distribution. The second defect out of t989's table
+battery, and **the specific thing `CONSTITUTION.MD` VI.2 has carried as *"t933 row-height
+distribution"* since check #82** — named for eight checks, never measured until t989 and never built
+until now.
+
+⚠⚠⚠ **THE WHOLE EXCESS WENT TO THE LAST SPANNED ROW.** One line:
+
+```rust
+   if *bh > spanned { row_h[last] += *bh - spanned; }
+```
+
+Chrome shares it across **every** spanned row, proportionally to their natural heights.
+
+```text
+                                                        Chrome     before     after
+   rowspan=2 60px over two 24px rows          row 1       [30]       [24]      [30]
+                                              row 2       [30]       [36]      [30]
+   rowspan=2 100px over rows of 40 and 24     row 1       [63]       [40]      [63]
+                                              row 2       [38]       [84]      [38]
+   rowspan=3 90px over three 24px rows        each        [30]    [24/24/42]   [30]
+  -- CONTROLS, neither of which moved --
+   rowspan=2 30px over rows of 40 and 24 (cell SHORTER)  [40]/[24]     unchanged
+   the same two rows with NO rowspan at all              [40]/[24]     unchanged
+```
+
+⚠⚠⚠ **PROPORTIONAL OR EVEN IS DECIDED BY EXACTLY ONE ROW OF THE FIXTURE, AND THE BATTERY THAT FOUND
+THE DEFECT DID NOT CONTAIN IT.** 36px of excess over rows of 40 and 24 splits **22.5 / 13.5** → 63 /
+38; an even split gives 58 / 42. Every *equal*-rows case — which is what t989's battery used, and what
+anyone writing a rowspan fixture writes first — **degenerates to the same answer under both rules**.
+
+> **The rows that discriminate are rarely the rows that made you look.** That is now three ticks in a
+> row saying it from three directions: t988's `text-align` rows (a property I had not thought to
+> combine with the one under test), t989's cell-box control (a *kind* of measurement the gate did not
+> take), and this tick's unequal-rows case (a *value* the discovering fixture happened not to use).
+> The generalisation: after a fixture finds a defect, **ask what OTHER rule would produce the same
+> rows**, and add the row that separates them — before writing the fix, not after.
+
+Even distribution survives as the fallback for rows that are all zero-height, where "proportional"
+has no meaning and the divisor would be zero — stated in the code rather than left as an accident of
+the arithmetic.
+
+⚠⚠ **AND IT IS NOT A ONE-CELL ERROR.** Every spanned row grows, so everything inside the *other*
+cells of those rows moves with it. A rowspan in a real table — an invoice's line-item block, a
+schedule's merged slot, a spec table's grouped first column — displaced its whole neighbourhood, and
+the further down the table it sat the more it displaced. That is why it reads as a `dy` cascade on a
+scored site rather than as one wrong box.
+
+RED-PROVEN THREE WAYS, each hitting exactly its own rows:
+
+```text
+   restore `row_h[last] += deficit`  -> the equal case reads 24/36; both controls pass
+   distribute EVENLY                 -> ONLY the unequal case fails, 58/42 against 63/38
+   drop the `deficit > 0` guard      -> ONLY the SHORTER-cell control fails, at 18.75/11.25 —
+                                        a negative deficit shrinks rows a rowspan cell has no
+                                        right to shrink
+```
+
+**BATTERY STATUS after two ticks on it:** t989's sixteen-row table fixture had five divergences in
+four mechanisms; two are now closed (`vertical-align` in a cell, rowspan distribution) and two remain
+named with numbers — `<caption>` reserves no space and does not widen the table, and a `<thead>`
+written after a `<tbody>` renders in source order instead of first.
+
+RATCHET: `manuk-layout` 125/125, and the table/layout gate set green as a set —
+`g_rowspan_distribution` (new), `g_table_cell_valign`, `g_text_indent_edges`,
+`g_transform_containing_block`.
+
+PERF: one pass over a rowspan cell's spanned rows, replacing a single addition — bounded by the
+rowspan, which is a small integer.
+
+WIKI: `docs/wiki/box-layout.md` — "A rowspan cell's excess is SHARED by the rows it spans".
+
 ## Tick 989 — the tables battery, and a RED proof that revealed the GATE was blind (2026-08-06)
 
 TICK SHAPE: primitive — `vertical-align` on a table cell. **The fourth discovery battery, and the

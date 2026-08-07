@@ -704,3 +704,4 @@ tick	sha	epoch	iso	delta_s	shape	wall_s	files	added	deleted	gates	claims	wpt_pas
 985	cf180e00	1786059827	2026-08-06T19:43:47-04:00	3436	primitive	63	9	419	43	416	81	3896	6960	0	494	0	a percentage gap had nowhere to be STORED, and the RED proof that aimed at the wrong cascade (2026-08-06)
 987	44630eab	1786067399	2026-08-06T21:49:59-04:00	7572	pattern-class	63	9	389	54	417	81	3896	6960	0	496	0	the negative half is the whole difficulty, and both cadence audits (2026-08-06)
 988	06bb7f80	1786071510	2026-08-06T22:58:30-04:00	4111	primitive	63	9	398	40	418	81	3896	6960	0	497	0	a wrap-point error that does not change the line COUNT, and the property I did not think to combine it with (2026-08-06)
+989	972a075f	1786074935	2026-08-06T23:55:35-04:00	3425	primitive	63	9	331	35	419	81	3896	6960	0	498	0	the tables battery, and a RED proof that revealed the GATE was blind (2026-08-06)

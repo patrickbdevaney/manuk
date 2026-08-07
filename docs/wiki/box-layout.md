@@ -5720,3 +5720,48 @@ The rowspan one is what `CONSTITUTION.MD` VI.2 has carried as *"t933 row-height 
 check #82 — and this is the first fixture to put a number on it.
 
 Gated by `G_TABLE_CELL_VALIGN`.
+
+## A rowspan cell's excess is SHARED by the rows it spans (t990)
+
+A `rowspan` cell taller than the rows it covers has excess height to place. That excess was added
+entirely to the **last** spanned row — `row_h[last] += *bh - spanned`. Chrome shares it across every
+spanned row, **proportionally to their natural heights**. This is the defect `CONSTITUTION.MD` VI.2
+has carried as *"t933 row-height distribution"* since check #82, and t989's table battery is the first
+fixture to put numbers on it.
+
+```text
+                                                        Chrome     before     after
+  rowspan=2 60px over two 24px rows          row 1       [30]       [24]      [30]
+                                             row 2       [30]       [36]      [30]
+  rowspan=2 100px over rows of 40 and 24     row 1       [63]       [40]      [63]
+                                             row 2       [38]       [84]      [38]
+  rowspan=3 90px over three 24px rows        each        [30]    [24/24/42]   [30]
+ ── controls ──
+  rowspan=2 30px over rows of 40 and 24 (cell SHORTER)  [40]/[24]      unchanged
+  the same two rows with NO rowspan at all              [40]/[24]      unchanged
+```
+
+### Proportional, not even — and only one row in the fixture can tell
+
+36px of excess over rows of 40 and 24 splits **22.5 / 13.5** → 63 / 38. Even distribution gives
+58 / 42. Every other row in the fixture has *equal* natural heights, where the two rules **degenerate
+to the same answer** — so the unequal-rows case is the entire discriminator, and a fixture built from
+equal rows would have shipped either rule. Even distribution survives only as the fallback for rows
+that are all zero-height, where "proportional" has no meaning and the divisor would be zero.
+
+> The same lesson as t990's sibling ticks, in a third costume: **the rows that discriminate are rarely
+> the rows that made you look.** The battery that found this used equal rows.
+
+### Why it is not a one-cell error
+
+Every spanned row grows, so **everything inside the other cells of those rows moves too**. A rowspan
+in a real table — an invoice's line-item block, a schedule's merged slot, a spec table's grouped
+column — displaced its whole neighbourhood, and the further down the table it sat the more it moved.
+
+Gated by `G_ROWSPAN_DISTRIBUTION`. RED-proven three ways, each hitting exactly its own rows: the
+original dumps 24/36 on the equal case; an even split fails **only** the unequal case at 58/42;
+dropping the `deficit > 0` guard shrinks the rows a shorter rowspan cell has no right to shrink
+(18.75/11.25).
+
+⚠ Still open from the same battery: `<caption>` reserves no space and does not widen the table, and a
+`<thead>` written after a `<tbody>` renders in source order instead of first.
