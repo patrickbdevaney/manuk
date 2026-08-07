@@ -322,6 +322,8 @@
   - L6338 · The two shorthand rules are opposite, and one fixture cannot tell them apart
   - L6349 · The composition order is fixed, whatever order the declarations came in
   - L6360 · ⚠ A rotation about x or y is NOT beyond a 2D pipeline — measured
+  - L6377 · A rotation about x or y is a SCALE on the other axis, and a gate asserted otherwise for 150 ticks
+  - L6404 · ⚠⚠⚠ The gate asserted the reasoned number, so fixing the bug looked like a regression
 
 ## browser-capabilities.md
 `docs/wiki/browser-capabilities.md`
@@ -1697,4 +1699,4 @@
   - L124 · Rank mechanisms by FLIP RATE, not failing-subtest count — CSS layout is a multi-assertion slog
 
 ---
-1604 sections across 22 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+1606 sections across 22 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.

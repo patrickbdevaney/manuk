@@ -6373,3 +6373,45 @@ axis, and Chrome reports it in `getBoundingClientRect`.
 Banked, not built: it is a different rule from the properties above — it belongs equally to
 `rotateX()`, `rotateY()` and `rotate3d()` — and two RED proofs in one tick make neither of them a
 proof.
+
+## A rotation about x or y is a SCALE on the other axis, and a gate asserted otherwise for 150 ticks
+
+`stylo_map.rs` and `parse_transform` both carried this note, and both dropped every such rotation:
+
+> *"`rotate3d` is taken **only about the z axis** — a rotation about x or y foreshortens, which a 2D
+> pipeline cannot express, and inventing one would be a wrong answer of the right type."*
+
+With no `perspective` in force that is measurably false. The orthographic projection of a rotation
+about x or y **is exactly** a scale by `cos θ` on the perpendicular axis, and Chrome reports it in
+`getBoundingClientRect`:
+
+```text
+   a 100x40 box                     Chrome            before          cos θ x the axis
+     rotateX(45deg)               100 x 28.28       100 x 40        40 x cos45  = 28.28
+     rotateY(45deg)                70.71 x 40       100 x 40       100 x cos45  = 70.71
+     rotate3d(0,1,0,60deg)          50 x 40         100 x 40       100 x cos60  = 50
+     rotateX(90deg)               100 x 0           100 x 40        40 x cos90  = 0
+     rotateX(120deg)              100 x 20 (y=-20)  100 x 40        40 x cos120 = -20
+   ── still excluded, and now the exclusion is MEASURED ──
+     rotate3d(1,1,0,45deg)         91.21 x 48.79    100 x 40        not a scale on either axis
+```
+
+**`rotateX(120deg)` is the row that makes the rule precise.** Past 90° `cos` is negative, the box
+flips through its origin, and Chrome reports the flipped position — which `Scale(1, cos θ)` gives for
+free, because a box's rect comes from mapping its corners. A rule written as `abs(cos θ)` passes
+every row under 90° and is wrong above it.
+
+### ⚠⚠⚠ The gate asserted the reasoned number, so fixing the bug looked like a regression
+
+`g_transform_3d.rs` — the gate written to kill exactly this class of `_ => {}` omission — asserted
+`#y08` (`rotate3d(1,0,0,45deg)`) at **100 x 40** and said in its own message *"Chrome leaves the box
+100 x 40 in this 2D projection."* Nobody had asked Chrome. The number came from the same reasoning as
+the arm the gate was written to kill.
+
+> **A gate whose reference value is reasoned rather than measured does not merely fail to catch the
+> bug. It pins the engine to it, and turns the fix into a red wall.**
+
+That is the generalisable half of this tick, and it is why every row added here carries the headless
+Chrome measurement that produced it — including the exclusion row, which asserts that a genuinely
+mixed axis is left alone *because 91.21 × 48.79 is not a scale on either axis*, not because a comment
+says 3D is hard.

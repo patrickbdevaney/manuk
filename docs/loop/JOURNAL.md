@@ -46371,6 +46371,73 @@ PERF: none — one UA rule and one narrowed branch in a cascade that already ran
 WIKI: `docs/wiki/css-cascade.md` — where Chrome draws the form-control `box-sizing` line, and why a
 layout-crate test cannot see it.
 
+## Tick 1007 — the gate asserted the reasoned number, so fixing the bug looked like a regression (2026-08-07)
+
+TICK SHAPE: primitive — the x/y-axis rotation t1006 measured and banked, built. **And the tick's
+larger finding is not the geometry: a gate written to kill a class of `_ => {}` omission was
+asserting a Chrome value nobody had measured, derived from the very reasoning it existed to refute.**
+
+⚠⚠⚠ **A ROTATION ABOUT X OR Y IS A SCALE ON THE OTHER AXIS, EXACTLY.** Both cascades dropped every
+such rotation, each carrying the note *"a rotation about x or y foreshortens, which a 2D pipeline
+cannot express, and inventing one would be a wrong answer of the right type."* With no `perspective`
+in force the orthographic projection **is** a scale by `cos θ` on the perpendicular axis, and Chrome
+reports it (headless, 1200px, a 100x40 box):
+
+```text
+                                    Chrome            before          after
+   rotateX(45deg)                 100 x 28.28       100 x 40        100 x 28
+   rotateY(45deg)                  70.71 x 40       100 x 40         71 x 40
+   rotate3d(0,1,0,60deg)            50 x 40         100 x 40         50 x 40
+   rotateX(90deg)                 100 x 0           100 x 40        100 x 0
+   rotateX(120deg)                100 x 20 (y=-20)  100 x 40        100 x 20 (y=-20)
+   rotate: x 45deg   (property)   100 x 28.28       100 x 40        100 x 28
+   ── the EXCLUSION, kept, and now measured rather than reasoned ──
+   rotate3d(1,1,0,45deg)           91.21 x 48.79    100 x 40        unchanged
+```
+
+⚠⚠ **`rotateX(120deg)` IS THE ROW THAT MAKES THE RULE PRECISE.** Past 90° `cos` is negative, the box
+flips through its origin, and Chrome reports the flipped position — which `Scale(1, cos θ)` gives for
+free because a box's rect comes from mapping its corners. **A rule written as `abs(cos θ)` passes
+every row under 90° and is wrong above it**, and nothing under 90° can tell the two apart.
+
+⚠⚠⚠ **THE FINDING THAT OUTRANKS THE FIX: `G_TRANSFORM_3D` ASSERTED `#y08` AT 100 x 40 AND SAID
+"CHROME LEAVES THE BOX 100 x 40 IN THIS 2D PROJECTION". CHROME GIVES 100 x 28.28.** That gate was
+written to kill a `_ => {}` arm whose comment had stopped being re-checked — and it took the number
+for its own exclusion row **from the same reasoning**, never measuring it. The consequence is worse
+than a missing gate:
+
+> **A gate whose reference value is reasoned rather than measured does not merely fail to catch the
+> bug — it PINS the engine to it, and turns the fix into a red wall.** Correcting the engine made
+> `g_transform_3d` go RED, and the only honest reading of that red is that the gate was wrong.
+
+This is the ratchet's own hazard, from the inside: *"never retune a ratchet gate to land your own
+tick"* is the rule, and the discriminator is that the new number comes from a **measurement of the
+reference**, printed in this tick, not from the fix. Every row added carries the headless-Chrome
+value that produced it, the exclusion row included.
+
+⚠⚠ **AND THE FIRST PATCH SILENTLY DID NOTHING, WHICH THE FIXTURE CAUGHT AND THE COMPILER COULD
+NOT.** The scripted edit that adds the `TOp::RotateX`/`RotateY` arms asserted its second replacement
+and threw **before writing the file**, so the run reported the arms as applied and the tree still had
+none of them. `cargo check` was clean, `g_transform_individual` was green (the *property* path went
+through `clone_rotate` and did work), and only re-measuring the fixture showed `transform:
+rotateX(45deg)` still at 100 x 40. **The standing rule — assert EVERY replacement in a scripted edit
+— is not enough on its own: assert them, and then RE-MEASURE, because a partially-applied patch is
+indistinguishable from a working one to everything except the thing being measured.**
+
+RATCHET: `manuk-layout` 127/127, `manuk-css` 32/32, `G_TRANSFORM` / `G_TRANSFORM_3D` /
+`G_TRANSFORM_INDIVIDUAL` / `G_TRANSFORM_CONTAINING_BLOCK` all green. `g_transform_3d`'s `#y08`
+EXPECTATION changed, deliberately and with the measurement that justifies it; no other gate moved.
+
+GATE: four new rows in `G_TRANSFORM_3D` (`rotateX(45deg)`, `rotateY(45deg)` as its mirror,
+`rotateX(120deg)` for the negative-cos flip, and `rotate3d(1,1,0,45deg)` asserting the exclusion),
+plus the corrected `#y08`. **RED-PROVEN by running it**: returning `None` from `axis_rotation_2d`'s
+x and y arms puts `#y08` back to `100 x 40` — the value the gate itself asserted until this tick.
+
+PERF: none — one `cos` per axis-rotation, on boxes that carry one.
+
+WIKI: `docs/wiki/box-layout.md` — "A rotation about x or y is a SCALE on the other axis, and a gate
+asserted otherwise for 150 ticks".
+
 ## Tick 1006 — the three properties that were absent, and the order no declaration decides (2026-08-07)
 
 TICK SHAPE: primitive — the second defect the t1005 transform battery found, built. **18 further

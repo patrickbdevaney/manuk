@@ -27,9 +27,16 @@
 //!
 //! With no `perspective` in force, `z` contributes nothing to the on-screen position, so the x/y
 //! terms of each 3D function **are** its rendered effect: this is an exact projection, not an
-//! approximation. `rotate3d` is taken **only about the z axis** for the opposite reason — a rotation
-//! about x or y foreshortens, which a 2D pipeline cannot express, and inventing one would be a wrong
-//! answer of the right type.
+//! approximation.
+//!
+//! ⚠⚠⚠ **THIS FILE USED TO SAY A ROTATION ABOUT X OR Y "FORESHORTENS, WHICH A 2D PIPELINE CANNOT
+//! EXPRESS", AND ASSERTED A CHROME VALUE TO MATCH. BOTH WERE WRONG (corrected t1007).** The
+//! projection is exactly a scale by `cos θ` on the perpendicular axis, and Chrome reports it:
+//! `rotate3d(1,0,0,45deg)` on this 100x40 box is **100 x 28.28**, not 100 x 40. `#y08` asserted the
+//! reasoned number, so it did not merely fail to catch the defect — **it made fixing the defect look
+//! like a regression.** Only a genuinely MIXED axis is still dropped, and that exclusion is measured
+//! rather than reasoned: `rotate3d(1,1,0,45deg)` is 91.21 x 48.79, which is not a scale on either
+//! axis.
 //!
 //! ⚠ The same omission existed in the `MinimalCascade` parser (`parse_transform`'s `_ => {}`) and is
 //! fixed there too, so the JS-less / headless fallback path agrees with the shipping one.
@@ -38,8 +45,10 @@
 //!
 //! - **Restore `_ => {}` in `stylo_map.rs`** (drop the four 3D arms) → every 3D row returns to its
 //!   untransformed position: `#y01` reads x=0 against Chrome's 20. The original defect.
-//! - **Map `Rotate3D` unconditionally** (ignore the axis check) → `#y08`, a rotation about the X
-//!   axis, becomes a z-rotation: 99x99 where Chrome leaves the box 100x40.
+//! - **Map `Rotate3D` unconditionally as a z-rotation** (ignore the axis) → `#y08`, a rotation about
+//!   the X axis, becomes 99x99 where Chrome gives 100 x 28.28.
+//! - **Drop the x/y axes again** (`if x==0 && y==0 && z!=0`) → `#y08` reads 100 x 40, the value this
+//!   gate itself asserted until t1007.
 //! - **Take `m11,m12,m13,m14…` from `Matrix3D`** instead of the 2D projection's
 //!   `m11 m12 m21 m22 m41 m42` → `#y05` loses its translation and reads x=0.
 
@@ -58,6 +67,10 @@ body{margin:0;font-family:sans-serif;font-size:16px}
 <div class="w"><div class="b" id="y06" style="transform:translateZ(50px)">bx</div></div>
 <div class="w"><div class="b" id="y07" style="transform:translate3d(20px,10px,0) scale(2)">bx</div></div>
 <div class="w"><div class="b" id="y08" style="transform:rotate3d(1,0,0,45deg)">bx</div></div>
+<div class="w"><div class="b" id="y09" style="transform:rotateX(45deg)">bx</div></div>
+<div class="w"><div class="b" id="y10" style="transform:rotateY(45deg)">bx</div></div>
+<div class="w"><div class="b" id="y11" style="transform:rotateX(120deg)">bx</div></div>
+<div class="w"><div class="b" id="y12" style="transform:rotate3d(1,1,0,45deg)">bx</div></div>
 <div class="w"><div class="b" id="c01" style="transform:translate(20px,10px)">bx</div></div>
 <div class="w"><div class="b" id="c02" style="transform:scale(2)">bx</div></div>
 <div class="w"><div class="b" id="o01" style="transform:scale(2);transform-origin:0 0">bx</div></div>
@@ -129,14 +142,49 @@ fn g_transform_3d() {
         dx("#y07")
     );
 
-    // ── THE AXIS CHECK, which is the one place this must NOT act.
+    // ── THE AXIS CHECK. ⚠⚠⚠ **THIS ROW ASSERTED A CHROME VALUE THAT WAS NEVER MEASURED, AND IT
+    //    PINNED THE ENGINE TO A DEFECT FOR AS LONG AS IT STOOD (corrected t1007).**
+    //
+    //    It read `100 x 40` and said *"Chrome leaves the box 100 x 40 in this 2D projection"*.
+    //    Chrome, measured headless at 1200px on this exact box: **100 x 28.28**, because an X
+    //    rotation projects to `scaleY(cos θ)` — `40 * cos45 = 28.28`. The number came from the same
+    //    reasoning as the `_ => {}` arm the gate was written to kill: *a 2D pipeline cannot express
+    //    foreshortening*. It can; nobody had asked Chrome.
+    //
+    //    That is the failure mode this gate exists to prevent, one level up: a gate whose reference
+    //    value is reasoned rather than measured does not merely fail to catch the bug — it makes
+    //    fixing the bug look like a regression.
     let (w8, h8) = sz("#y08");
     assert!(
-        (w8 - 100.0).abs() < 1.1 && (h8 - 40.0).abs() < 1.1,
+        (w8 - 100.0).abs() < 1.1 && (h8 - 28.28).abs() < 1.1,
         "G_TRANSFORM_3D: `rotate3d(1,0,0,45deg)` — a rotation about the X axis — gives {w8} x {h8} \
-         and Chrome leaves the box 100 x 40 in this 2D projection. Reading 99 x 99 means the axis \
-         check was dropped and an X rotation was treated as a Z rotation, which is a wrong answer \
-         of the right type."
+         where Chrome gives 100 x 28.28 (40 * cos45). Reading 100 x 40 means the rotation was \
+         DROPPED; reading 99 x 99 means the axis check was dropped and an X rotation was treated as \
+         a Z rotation."
+    );
+
+    // ── THE X/Y AXIS FAMILY, all four Chrome-measured on this 100x40 box (headless, 1200px).
+    //    Sizes only: the projection is origin-independent, and asserting w x h keeps these rows
+    //    free of the wrapper geometry the x-rows above depend on.
+    let (w9, h9) = sz("#y09");
+    assert!(
+        (w9 - 100.0).abs() < 1.1 && (h9 - 28.28).abs() < 1.1,
+        "G_TRANSFORM_3D: `rotateX(45deg)` gives {w9} x {h9} where Chrome gives 100 x 28.28          (40 * cos45). Reading 100 x 40 means the function was dropped — it used to fall into          `parse_transform`'s `_` arm and `stylo_map`'s, with no arm of its own at all."
+    );
+    let (w10, h10) = sz("#y10");
+    assert!(
+        (w10 - 70.71).abs() < 1.1 && (h10 - 40.0).abs() < 1.1,
+        "G_TRANSFORM_3D: `rotateY(45deg)` gives {w10} x {h10} where Chrome gives 70.71 x 40          (100 * cos45) — the MIRROR of the row above, and the row that stops `cos` being applied          to the wrong axis."
+    );
+    let (w11, h11) = sz("#y11");
+    assert!(
+        (w11 - 100.0).abs() < 1.1 && (h11 - 20.0).abs() < 1.1,
+        "G_TRANSFORM_3D: `rotateX(120deg)` gives {w11} x {h11} where Chrome gives 100 x 20.          PAST 90 DEGREES `cos` IS NEGATIVE and the box flips through its origin — a rule written          as `abs(cos)` passes every row under 90 and is wrong here."
+    );
+    let (w12, h12) = sz("#y12");
+    assert!(
+        (w12 - 100.0).abs() < 1.1 && (h12 - 40.0).abs() < 1.1,
+        "G_TRANSFORM_3D: `rotate3d(1,1,0,45deg)` gives {w12} x {h12}. This row asserts the          EXCLUSION, and it is measured, not reasoned: Chrome gives 91.21 x 48.79, which is not a          scale on either axis, so an affine 2D map cannot hold it and we leave the box alone. If          this row ever reads 100 x 28.28 the mixed axis is being treated as a pure one."
     );
 
     // ── THE CONTROLS: already correct before this change, and they must not move.

@@ -1323,7 +1323,9 @@ pub struct ComputedStyle {
     /// and `getComputedStyle(el).transform` must keep reporting the `transform` property alone.
     /// [`ComputedStyle::effective_transform`] is what layout asks for.
     pub translate: Option<(Dim, Dim)>,
-    pub rotate: Option<f32>,
+    /// The RESOLVED 2D operation, not a bare angle: a rotation about x or y projects to a scale on
+    /// the other axis (see [`axis_rotation_2d`]), so the field has to be able to hold either.
+    pub rotate: Option<TransformFn>,
     pub scale: Option<(f32, f32)>,
     /// `vertical-align` — cross-axis alignment of an inline-level box on its line.
     pub vertical_align: VerticalAlign,
@@ -1395,8 +1397,8 @@ impl ComputedStyle {
         if let Some((x, y)) = self.translate {
             out.push(TransformFn::Translate(x, y));
         }
-        if let Some(a) = self.rotate {
-            out.push(TransformFn::Rotate(a));
+        if let Some(r) = self.rotate {
+            out.push(r);
         }
         if let Some((x, y)) = self.scale {
             out.push(TransformFn::Scale(x, y));
@@ -4917,22 +4919,23 @@ fn apply_declaration(s: &mut ComputedStyle, d: &Declaration, parent_fs: f32) {
                 None
             } else {
                 let parts: Vec<&str> = t.split_ascii_whitespace().collect();
-                match parts.as_slice() {
-                    [a] => parse_angle_rad(a),
-                    ["z", a] => parse_angle_rad(a),
-                    ["x", _] | ["y", _] => None,
-                    [x, y, z, a] => {
-                        let (x, y, z) = (
+                let axis_angle = match parts.as_slice() {
+                    // A bare angle is a rotation about z.
+                    [a] => parse_angle_rad(a).map(|r| (0.0, 0.0, 1.0, r)),
+                    ["x", a] => parse_angle_rad(a).map(|r| (1.0, 0.0, 0.0, r)),
+                    ["y", a] => parse_angle_rad(a).map(|r| (0.0, 1.0, 0.0, r)),
+                    ["z", a] => parse_angle_rad(a).map(|r| (0.0, 0.0, 1.0, r)),
+                    [x, y, z, a] => parse_angle_rad(a).map(|r| {
+                        (
                             x.parse::<f32>().unwrap_or(0.0),
                             y.parse::<f32>().unwrap_or(0.0),
                             z.parse::<f32>().unwrap_or(0.0),
-                        );
-                        (x == 0.0 && y == 0.0 && z != 0.0)
-                            .then(|| parse_angle_rad(a))
-                            .flatten()
-                    }
+                            r,
+                        )
+                    }),
                     _ => None,
-                }
+                };
+                axis_angle.and_then(|(x, y, z, r)| axis_rotation_2d(x, y, z, r))
             };
         }
         "scale" => {
@@ -6036,17 +6039,38 @@ fn parse_transform(v: &str, fs: f32) -> Vec<TransformFn> {
             "rotatez" => out.push(TransformFn::Rotate(
                 nums.first().and_then(|s| angle(s)).unwrap_or(0.0),
             )),
+            // `rotateX`/`rotateY` project to a SCALE on the other axis, exactly — see
+            // `axis_rotation_2d`. They used to fall into `_ => {}` and be dropped.
+            "rotatex" => {
+                if let Some(t) = nums
+                    .first()
+                    .and_then(|s| angle(s))
+                    .and_then(|a| axis_rotation_2d(1.0, 0.0, 0.0, a))
+                {
+                    out.push(t);
+                }
+            }
+            "rotatey" => {
+                if let Some(t) = nums
+                    .first()
+                    .and_then(|s| angle(s))
+                    .and_then(|a| axis_rotation_2d(0.0, 1.0, 0.0, a))
+                {
+                    out.push(t);
+                }
+            }
             "rotate3d" => {
-                // Only the z-axis case has a 2D meaning — see the note above.
                 let (x, y, z) = (
                     f(0).unwrap_or(0.0),
                     f(1).unwrap_or(0.0),
                     f(2).unwrap_or(0.0),
                 );
-                if x == 0.0 && y == 0.0 && z != 0.0 {
-                    out.push(TransformFn::Rotate(
-                        nums.get(3).and_then(|s| angle(s)).unwrap_or(0.0),
-                    ));
+                if let Some(t) = nums
+                    .get(3)
+                    .and_then(|s| angle(s))
+                    .and_then(|a| axis_rotation_2d(x, y, z, a))
+                {
+                    out.push(t);
                 }
             }
             // `matrix3d` is a 4×4 in column-major order; its 2D projection takes the four linear
@@ -6064,6 +6088,43 @@ fn parse_transform(v: &str, fs: f32) -> Vec<TransformFn> {
         rest = &rest[open + close + 1..];
     }
     out
+}
+
+/// ⚠⚠⚠ **A ROTATION ABOUT X OR Y IS A SCALE ON THE OTHER AXIS, AND THIS REPO SAID IT WAS
+/// INEXPRESSIBLE.**
+///
+/// `stylo_map.rs` and `parse_transform` both carried the note *"a rotation about x or y foreshortens,
+/// which a 2D pipeline cannot express, and inventing one would be a wrong answer of the right type"*,
+/// and dropped every such rotation on the floor. Measured against Chrome (headless, a 100×40 box,
+/// `transform-origin: 0 0`), it is not inexpressible — with no `perspective` in force the
+/// orthographic projection of the rotation **is exactly** a scale by `cos θ` on the perpendicular
+/// axis:
+///
+/// ```text
+///                              Chrome              ours (before)      cos θ x the axis
+///   rotateX(45deg)           100 x 28.28          100 x 40           40 x cos45  = 28.28
+///   rotateY(45deg)            70.71 x 40          100 x 40          100 x cos45  = 70.71
+///   rotate3d(0,1,0,60deg)      50 x 40            100 x 40          100 x cos60  = 50
+///   rotateX(90deg)           100 x 0              100 x 40           40 x cos90  = 0
+///   rotateX(120deg)          100 x 20  (y = -20)  100 x 40           40 x cos120 = -20
+/// ```
+///
+/// `rotateX(120deg)` is the row that makes it precise: `cos` is NEGATIVE past 90°, the box flips
+/// through its origin, and Chrome reports the flipped position — which a `Scale(1, cos θ)` gives for
+/// free because the box's rect comes from mapping its corners. A rule written as `abs(cos θ)` would
+/// pass every row below 90° and be wrong above it.
+///
+/// **A rotation about a genuinely mixed axis is still `None`** and that part of the old note stands:
+/// `rotate3d(1,1,0,45deg)` measures 91.21 × 48.79, which is not a scale on either axis. The
+/// difference is that the exclusion is now the narrow case rather than the whole family.
+pub(crate) fn axis_rotation_2d(x: f32, y: f32, z: f32, rad: f32) -> Option<TransformFn> {
+    match (x != 0.0, y != 0.0, z != 0.0) {
+        (false, false, true) => Some(TransformFn::Rotate(rad)),
+        (true, false, false) => Some(TransformFn::Scale(1.0, rad.cos())),
+        (false, true, false) => Some(TransformFn::Scale(rad.cos(), 1.0)),
+        // Either no axis at all, or two — the genuinely 3D case, which an affine 2D map cannot hold.
+        _ => None,
+    }
 }
 
 /// Parse an `<angle>` (`deg`/`rad`/`grad`/`turn`, default deg) to radians.

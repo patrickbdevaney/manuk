@@ -11,12 +11,12 @@
 
 | | value | over |
 |---|---|---|
-| ticks landed | **721** | ticks 1–1006 |
-| median tick cycle | **27m** | 720 intervals |
-| median, last 10 | **88m** | 10 intervals |
+| ticks landed | **722** | ticks 1–1007 |
+| median tick cycle | **27m** | 721 intervals |
+| median, last 10 | **48m** | 10 intervals |
 | fastest / slowest | 5s / 5.4d | |
-| **ticks per hour** | **1.09** | 662.1h elapsed |
-| median verify wall | **63s** | 660 ticks |
+| **ticks per hour** | **1.09** | 662.7h elapsed |
+| median verify wall | **63s** | 661 ticks |
 | wall trend | 39s → 13m — getting slower ⚠️ | first 3 vs last 3 |
 
 The **cycle** is the real unit: implement → debug → verify wall → land. The wall is only part of
@@ -28,10 +28,10 @@ it, and a wall that grows taxes every future tick, so it is tracked separately f
 
 * **capabilities asserted** (`G_CAPABILITY`): 48 → **81**
 * **live gates**: 27 → **428**
-* **✅ rows in the capability ledger**: 144 → **509**
+* **✅ rows in the capability ledger**: 144 → **510**
 * **Bar 0 — oracle hangs**: 0 of 265 sites
 
-**341 of 721 ticks** (47%) moved a
+**341 of 722 ticks** (47%) moved a
 user-visible capability. The rest were instruments, infrastructure and corrections — and the
 ledger says the corrections were not overhead: three of its top three priorities were phantoms,
 and finding that out redirected everything after it.
@@ -818,5 +818,6 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 | **1004** | 2026-08-07 18:00 | 2.8h | measurement | 63s | +267/−33 | 427 | 81 | 56.0% · | the sweep and the battery are the same instrument pointed at two questions (2026-08-07) |
 | **1005** | 2026-08-07 18:35 | 34m | primitive | 13m | +397/−12 | 427 | 81 | 56.0% · | the matrix reached the subtree it was applied to, and an abspos child is not in it (2026-0 |
 | **1006** | 2026-08-07 19:09 | 34m | primitive | 13m | +617/−10 | 428 | 81 | 56.0% · | the three properties that were absent, and the order no declaration decides (2026-08-07) |
+| **1007** | 2026-08-07 19:44 | 35m | primitive | 13m | +274/−37 | 428 | 81 | 56.0% · | the gate asserted the reasoned number, so fixing the bug looked like a regression (2026-08 |
 
 *`·` after a WPT figure means **carried forward**, not measured this tick.*

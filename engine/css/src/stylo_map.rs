@@ -1033,9 +1033,25 @@ pub fn to_computed_style(cv: &ComputedValues) -> ComputedStyle {
                     ops.push(crate::TransformFn::Translate(lp_to_dim(x), lp_to_dim(y)))
                 }
                 TOp::Scale3D(x, y, _z) => ops.push(crate::TransformFn::Scale(*x, *y)),
+                // ⚠⚠⚠ A rotation about x or y is NOT inexpressible in 2D — the note above said it
+                // was, and Chrome disagrees: with no `perspective` in force the projection is
+                // exactly a scale by `cos θ` on the perpendicular axis (`rotateX(45deg)` on a
+                // 100x40 box measures 100 x 28.28, not 100 x 40). `axis_rotation_2d` owns that
+                // rule; only a genuinely MIXED axis is still dropped, and that exclusion is
+                // measured too (`rotate3d(1,1,0,45deg)` is 91.21 x 48.79, not a scale on either).
                 TOp::Rotate3D(x, y, z, a) => {
-                    if *x == 0.0 && *y == 0.0 && *z != 0.0 {
-                        ops.push(crate::TransformFn::Rotate(a.radians()))
+                    if let Some(t) = crate::axis_rotation_2d(*x, *y, *z, a.radians()) {
+                        ops.push(t)
+                    }
+                }
+                TOp::RotateX(a) => {
+                    if let Some(t) = crate::axis_rotation_2d(1.0, 0.0, 0.0, a.radians()) {
+                        ops.push(t)
+                    }
+                }
+                TOp::RotateY(a) => {
+                    if let Some(t) = crate::axis_rotation_2d(0.0, 1.0, 0.0, a.radians()) {
+                        ops.push(t)
                     }
                 }
                 TOp::Matrix3D(m) => ops.push(crate::TransformFn::Matrix([
@@ -1067,8 +1083,8 @@ pub fn to_computed_style(cv: &ComputedValues) -> ComputedStyle {
         };
         s.rotate = match cv.clone_rotate() {
             Rotate::None => None,
-            Rotate::Rotate(a) => Some(a.radians()),
-            Rotate::Rotate3D(x, y, z, a) => (x == 0.0 && y == 0.0 && z != 0.0).then(|| a.radians()),
+            Rotate::Rotate(a) => Some(crate::TransformFn::Rotate(a.radians())),
+            Rotate::Rotate3D(x, y, z, a) => crate::axis_rotation_2d(x, y, z, a.radians()),
         };
         s.scale = match cv.clone_scale() {
             Scale::None => None,
