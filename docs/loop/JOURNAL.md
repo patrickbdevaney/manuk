@@ -46371,6 +46371,94 @@ PERF: none — one UA rule and one narrowed branch in a cascade that already ran
 WIKI: `docs/wiki/css-cascade.md` — where Chrome draws the form-control `box-sizing` line, and why a
 layout-crate test cannot see it.
 
+## Tick 988 — a wrap-point error that does not change the line COUNT, and the property I did not think to combine it with (2026-08-06)
+
+TICK SHAPE: primitive — `text-indent` and the first line box's edges. **The third discovery battery**,
+and the first taken straight off check #88's own steer list (text/inline metrics).
+
+⚠⚠⚠ **TWENTY ROWS OF TEXT METRICS, NINETEEN EXACT.** `letter-spacing` (both signs), `word-spacing`,
+`text-transform` (uppercase and capitalize — both of which change the MEASURED text), `word-break:
+break-all`, `overflow-wrap: break-word` and the un-broken control, `white-space` nowrap/pre/pre-wrap,
+`text-align` right and centre, unitless and percentage `line-height` (including the inheritance
+difference between them), `vertical-align: super`, compounding `em` font sizes, and a hanging indent.
+**Nineteen Chrome-exact.** That is a large cleared field for one fixture, and it is the third battery
+in a row to price its own negative space.
+
+**The twentieth was `text-indent`, and what the battery could see of it was almost nothing.**
+
+⚠⚠⚠ **THE DEFECT WAS A WRAP POINT THAT DID NOT CHANGE THE LINE COUNT, WHICH IS INVISIBLE TO HEIGHT,
+WIDTH AND TEXT CONTENT AT ONCE.** `text-indent: 20px` in an 80px box: Chrome breaks `aa bb / cc`, we
+broke `aa / bb cc`. **Two lines either way.** The block's height matched. The container's width
+matched. Every character was present and in order. The battery could see it only as a 20px difference
+in the *union* of an inline box's fragments — a number with no obvious meaning — and it took a
+dedicated probe with **a marker on the second line** to say what had actually happened.
+
+> Put a marker on the second line. A break moving by one word is a re-flow of everything below it on
+> a text-dense page, and it presents to every instrument this loop owns as *nothing*.
+
+**THE MECHANISM, and it is arithmetic:** `line_avail` was reduced by the indent **and** the first
+fragment's `x` was set to `text_indent`, while `line_left` never moved. So the wrap test
+`pen + space + advance > line_avail`, with `pen` already carrying the indent, **charged it twice** —
+predicted exactly: 80px box, indent 20, available 60, `aa bb` = 48.75 which fits 80 but not 60.
+
+⚠⚠⚠ **AND THE ROWS THAT PROVE THE MODEL WERE ROWS I HAD NOT THOUGHT TO WRITE.** Two models explain
+the break-point symptom equally well, and a fix could have been written either way and passed:
+
+```text
+   "the indent is a leading space"           centre at (400-29)/2      = 186    WRONG
+   "the start edge moves IN, the end edge does NOT"
+                                             centre at 20 + (380-29)/2 = 196    Chrome
+                                             right  at 20 + (380-29)   = 371    Chrome
+```
+
+I only measured those because the fix I had designed touched `line_left`, and touching `line_left`
+made me ask what alignment does with it. **Both alignment rows were ALSO wrong before the tick**
+(186 and 351 against 196 and 371) — two defects I would have shipped past, in a property the battery
+had already flagged.
+
+> **Two models that agree on the symptom you noticed are separated by the property you did not think
+> to combine it with.** The generalisation of t987's "write the negative rows first": the rows that
+> discriminate are rarely the rows that made you look.
+
+RED-PROVEN THREE WAYS, each read off the WHOLE fixture rather than the gate's first failing
+assertion:
+
+```text
+   restore the original (line_left unmoved, pen starts at the indent)
+                                          -> #a1 29 · #a2 186 · #a3 351; ALL SIX controls pass
+   move `line_left` but leave `line_avail = w`
+                                          -> #a1 78 · #a2 206 · #a3 391; all six controls pass
+   clamp a negative indent at 0 "to be safe"
+                                          -> ONLY #a7 fails, at 0 against -9999
+```
+
+⚠⚠ **I MISPREDICTED THE SECOND ONE, AND THE FOURTH DOES NOT FIRE AT ALL.** I wrote that recipe #2
+would fail the alignment rows and *pass* the break-point row; the alignment numbers were exactly
+right (206, 391) and the break-point row fails too, because an un-narrowed 80px band fits all of
+`aa bb cc` on the indented line. And a fourth recipe — *apply the indent to every line rather than
+the first* — **passes every row**, for a structural reason worth keeping: wrapped lines never reach
+the `cur.is_empty()` block that reads `first_line`, because the break branch sets `line_left` and
+`line_avail` directly. **The "first line only" behaviour is enforced by the break path, not by the
+`first_line` test I was trying to break.**
+
+That is now **three false RED predictions in six ticks** (t983, t985, t988) — every one written by
+someone who had just done the work, every one obvious-looking, every one refuted in under five
+minutes by running it. Check #88 already made the rule; this tick is its third data point and the
+first where the *why* was a fact about control flow rather than about the cascade.
+
+**BLAST RADIUS:** this touches the line-box arithmetic on every page. `manuk-layout` 125/125; the
+inline/text gate set green; the 20-row battery re-ran with **all twenty exact**; and an old-binary
+A/B on the four-site anchor panel was **byte-identical** — 87.4% mean shape on both, all four jarring
+invariants unchanged. Fourth such report this window.
+
+RATCHET: `manuk-layout` 125/125, `g_text_indent_edges` (new), `g_text_align_justify`,
+`g_inline_box_geometry`, `g_inline_box_leading`, `g_inline_block_baseline` green as a set.
+
+PERF: none — one addition moved from the fragment's `x` to the line's `line_left`.
+
+WIKI: `docs/wiki/text-layout.md` — "`text-indent` moves the line's START edge; it was charged as a
+leading fragment".
+
 ## Tick 987 — the negative half is the whole difficulty, and both cadence audits (2026-08-06)
 
 TICK SHAPE: pattern-class — containing-block creation by `will-change` / `contain` / `perspective`,

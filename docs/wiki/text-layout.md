@@ -2361,3 +2361,56 @@ pre-existing UA control-height difference (our controls are 22 where Chrome give
 contract every inline item goes through — after reading `last_line_baseline` alone.** Reading one
 function further, to where atomics rejoin the tree, showed they were already in the walk. **A
 deferral is a prediction about work not yet done, and this one was tested and was half right.**
+
+## `text-indent` moves the line's START edge; it was charged as a leading fragment (t988)
+
+`text-indent` shifts the first line box's inline-**start** edge. Its **end** edge is the container's,
+so the line is `indent` px narrower *and* begins `indent` px further in. The line layout reduced
+`line_avail` by the indent **and** started the first fragment's `x` at `text_indent`, while
+`line_left` never moved — so the wrap test `pen + space + advance > line_avail`, with `pen` already
+carrying the indent, **charged it twice**, and alignment was computed against a band whose left edge
+was in the wrong place.
+
+```text
+                                                        Chrome     before      after
+  text-indent:20px in an 80px box, marker on LINE 2      [  0]      [ 29]      [  0]
+  text-indent:20px + text-align:center, 400px box        [196]      [186]      [196]
+  text-indent:20px + text-align:right,  400px box        [371]      [351]      [371]
+ ── controls ──
+  marker on LINE 1 · nested marker · 10% of 400 · -9999px · align with no indent   unchanged
+```
+
+### The break-point symptom is invisible to every obvious instrument
+
+With `text-indent: 20px` in an 80px box, Chrome breaks `aa bb / cc` and we broke `aa / bb cc`: **two
+lines either way**, so the block's height matches, the container's width matches, and every character
+is present. Only the x of a marker on the *second* line reveals it. The twenty-row text battery that
+found this could see it only as a 20px width difference on an inline box's union — the union of the
+fragments — and a dedicated probe was needed to say what had actually happened.
+
+> **A wrap-point error that does not change the line COUNT is invisible to height, width and text
+> content at once.** Put a marker on the second line.
+
+### The alignment rows are the evidence the model is right, not a bonus
+
+Two models explain the break-point symptom equally well, and only one survives being combined with
+`text-align`:
+
+```text
+  "the indent is a leading space"      -> centre at (400−29)/2      = 186     WRONG
+  "start edge moves in, end edge does not"
+                                       -> centre at 20 + (380−29)/2 = 196     Chrome
+                                       -> right  at 20 + (380−29)   = 371     Chrome
+```
+
+A fix aimed only at the break point could have been written either way and passed. **Two models that
+agree on the symptom you noticed are separated by the property you did not think to combine it with.**
+
+A negative indent still widens the line and carries it off-screen (`text-indent: -9999px`, the
+image-replacement idiom), because both terms flip sign together — clamping the indent at zero "to be
+safe" fails that control and nothing else.
+
+Gated by `G_TEXT_INDENT_EDGES`. RED-proven three ways, each read off the whole fixture. ⚠ A fourth —
+applying the indent to *every* line — **does not fire**, and the reason is structural: wrapped lines
+never reach the `cur.is_empty()` block that reads `first_line`, because the break branch sets
+`line_left`/`line_avail` directly. The "first line only" behaviour is enforced by the break path.

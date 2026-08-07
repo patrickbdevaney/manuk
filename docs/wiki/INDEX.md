@@ -1625,6 +1625,9 @@
   - L2172 · A list-box <select> is sized by ROWS, and the row is NOT a line box (t958, t963)
   - L2253 · A replaced element's baseline is its bottom margin edge, and <img> was right by ACCIDENT (t967)
   - L2309 · …and the OTHER half: the line box that CONTAINS the icon (t968 specified, t970 LANDED)
+  - L2365 · text-indent moves the line's START edge; it was charged as a leading fragment (t988)
+  - L2383 · The break-point symptom is invisible to every obvious instrument
+  - L2394 · The alignment rows are the evidence the model is right, not a bonus
 
 ## The wasm demo — running the engine inside someone else's browser
 `docs/wiki/wasm-demo.md`
@@ -1652,4 +1655,4 @@
   - L124 · Rank mechanisms by FLIP RATE, not failing-subtest count — CSS layout is a multi-assertion slog
 
 ---
-1559 sections across 22 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+1562 sections across 22 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.

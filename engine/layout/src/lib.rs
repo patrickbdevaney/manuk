@@ -7342,18 +7342,16 @@ impl Ctx<'_> {
                 let est_h = style.line_height.max(lm.ascent + lm.descent);
                 if cur.is_empty() {
                     let (l, w) = open_band(&mut y, est_h);
-                    line_left = l;
-                    line_avail = w - if first_line { text_indent } else { 0.0 };
+                    let indent = if first_line { text_indent } else { 0.0 };
+                    // ⚠⚠⚠ **BOTH EDGES MOVE, AND ONLY ONE OF THEM USED TO.** `text-indent` shifts the
+                    // first line box's inline-START edge; its END edge is the container's, so the
+                    // line is `indent` px narrower AND begins `indent` px further in. Reducing
+                    // `line_avail` alone while ALSO starting the pen at `text_indent` charged the
+                    // indent twice — see the text branch below for the measured consequence.
+                    line_left = l + indent;
+                    line_avail = w - indent;
                 }
-                let x = if cur.is_empty() {
-                    if first_line {
-                        text_indent
-                    } else {
-                        0.0
-                    }
-                } else {
-                    pen
-                };
+                let x = if cur.is_empty() { 0.0 } else { pen };
                 // `tab-size: 0` advances nothing — Chrome-measured, and it is also what keeps this
                 // from dividing by zero.
                 let adv = if stop > 0.0 {
@@ -7668,10 +7666,23 @@ impl Ctx<'_> {
 
             if cur.is_empty() {
                 let (l, w) = open_band(&mut y, est_h);
-                line_left = l;
-                // The first line's usable width is reduced by the indent (a negative indent widens
-                // it, so the image-replacement line never wraps and sits off-screen).
-                line_avail = w - if first_line { text_indent } else { 0.0 };
+                let indent = if first_line { text_indent } else { 0.0 };
+                // ⚠⚠⚠ **THE INDENT MOVES THE LINE'S START EDGE; IT IS NOT A LEADING FRAGMENT.**
+                // `line_avail` was reduced by the indent AND the first fragment's `x` was set to
+                // `text_indent`, so the wrap test — `pen + space + advance > line_avail`, with `pen`
+                // already carrying the indent — charged it TWICE. Chrome-measured, `text-indent:20px`
+                // in an 80px box: Chrome breaks `aa bb / cc` and we broke `aa / bb cc`, which the
+                // block's HEIGHT cannot see (two lines either way) and only a marker's x reveals.
+                //
+                // Moving `line_left` instead fixes the alignment interaction in the same stroke, and
+                // that is not a bonus — it is the evidence the model is right. Chrome, 400px box:
+                // `text-indent:20px; text-align:center` puts a 29px word at 196 = 20 + (380−29)/2,
+                // and `text-align:right` at 371 = 20 + (380−29). Both fall out of "start edge moves
+                // in, end edge does not"; neither falls out of "the indent is a leading space".
+                // A negative indent (`text-indent:-9999px`, the image-replacement idiom) still
+                // widens the line and moves it off-screen, because both terms flip sign together.
+                line_left = l + indent;
+                line_avail = w - indent;
             }
 
             // A break before this item is forbidden when both it and the previous item are
@@ -7700,12 +7711,9 @@ impl Ctx<'_> {
                 pen = advance;
             } else {
                 let x = if cur.is_empty() {
-                    // First fragment on the line: the first line begins at the indent, later lines at 0.
-                    if first_line {
-                        text_indent
-                    } else {
-                        0.0
-                    }
+                    // First fragment on the line, at the line's own start — the indent is already in
+                    // `line_left` and must not be added a second time here.
+                    0.0
                 } else {
                     pen + space_w
                 };
