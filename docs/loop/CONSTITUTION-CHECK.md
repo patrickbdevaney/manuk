@@ -5991,3 +5991,100 @@ value is correct.
    `will-change`'s absent field are the same shape: a value that cannot be represented reads as
    `0`/`false` and greps as handled. Worth a deliberate pass over `ComputedStyle` for other fields
    too narrow for their property's value space.
+
+## Check #89 — tick 996 (2026-08-07)
+
+**Horizon:** H0 as re-scoped by **PART VII**, instrumented as **M1 on the in-scope CrUX corpus**.
+Latest banked remains **15.6% printed / 17.0% corrected** (t974) — **no sweep in sixteen ticks**, and
+this check has to say something about that rather than note it again.
+
+### → Gate, or scoreboard?
+
+**Gate, and the strongest run of it this ledger records.** Ticks 988–996: seven capability fixes, two
+measurement ticks, one refusal. Every fix RED-proven, every one gated, zero regressions traded.
+
+⚠⚠⚠ **THE SELECTION MECHANISM IS NOW A METHOD, AND IT HAS A LEDGER.** Six property batteries across
+the window:
+
+```text
+   flex/grid sizing      20 rows  18 exact   2 defects  both built      (t984, t985)
+   positioned/overflow   16 rows  13 exact   2 defects  both built      (t986, t987)  +1 artefact
+   text/inline metrics   20 rows  19 exact   1 defect   built           (t988)
+   tables                16 rows  11 exact   4 mechs    ALL FOUR built  (t989-992)
+   borders/backgrounds   16 rows  14 exact   2 defects  one built       (t994)
+   form controls         19 rows  10 exact   5 mechs    named           (t995)
+   -----------------------------------------------------------------------------------
+                        107 rows  85 exact  16 defects  10 built in 10 ticks
+```
+
+**Eighty-five cleared constructs is the number no previous axis in this ledger produced at all.** A
+vendor list, a corpus frequency ranking and a divergence sweep each yield a *worklist*; only a battery
+also yields a *cleared field*, and only a cleared field shrinks. VI.3's `usage-weight × failing-breadth`
+is served better by this than by anything #34–#38 tried, because a battery measures breadth directly
+instead of proxying it.
+
+⚠⚠ **AND ONE BATTERY WAS TAKEN TO ZERO.** The sixteen-row table fixture found five divergences in four
+mechanisms and t989–992 closed all four. **Tables were VI.2's named residue since check #82 and no
+fixture had ever touched them** — the row said "rank there" for seven checks and nobody had, because
+"tables" is a subsystem and not a lever until a fixture turns it into eleven numbers.
+
+### → Is `orient`'s ranking still the north star?
+
+**Yes, and #39 retired the vendor axis by its own evidence rather than by preference.** It searched no
+sources. Corpus weight of what the batteries found — `transform` 34.5%, `display:grid` 18.7%,
+`<button>` 55.6%, `<input>` 51.5% — is one to two orders above the ≤0.6% that ten of twelve Safari
+26.x features price at.
+
+### → Is any invariant being bent?
+
+**No, and I5 has never been under this much pressure.** Six RED recipes came back GREEN this window,
+every one written by someone who had just done the work:
+
+```text
+   t983  equal by construction (`build` zeroes the root's frame)
+   t985  aimed at the cascade STYLO PRE-EMPTS — a page gate cannot reach the minimal cascade
+   t988  wrapped lines take a branch that resets `line_left`/`line_avail` before `first_line` is read
+   t989  THE GATE WAS BLIND — every row measured a span inside a cell, which moves under either rule
+   t991  two elements cannot distinguish a stable sort from an unstable one
+   t994  every framed row in the fixture has a LEFT edge, so `pad_r` is reasoned, not measured
+```
+
+⚠⚠⚠ **t989's is the class that matters: a blind gate keeps passing.** The control that separated the
+two rules had to be *added after the RED refused to fire* — the passing run said nothing, and only the
+attempt to break it revealed that the gate could not tell the fix from its opposite.
+
+⚠⚠ **PART VII held under a genuine temptation, and the refusal is tick 996.** The `<fieldset>` UA
+border corrects one row by 4px and breaks another by 2px, because Chrome lets a `<legend>` replace the
+top border and we have no such rule — the content position had been *right by accident*, two errors
+cancelling. **A fix that improves the mean and regresses a measured row is a trade.** Built, measured,
+reverted, and the measurement table banked so the next attempt starts from it.
+
+### → PART VI correction
+
+⚠⚠ **YES — VI.2's H0.1 row needs its SECOND amendment in two checks, and this one is about method
+rather than partition.** #88 corrected *where* the residue is (properties and rules that never reached
+the formatting context, not box types that opt out of block sizing). This check corrects *how to find
+it*: the row still implies a sweep-ranked burndown, and **sixteen of sixteen defects this window were
+found by a fixture and none by a sweep.** Every one was wrong only where its property was DECLARED,
+which a divergence sweep structurally cannot rank. The row should name the battery as the discovery
+instrument for layout breadth, with the sweep retained as the *pricing* instrument it actually is.
+
+⚠ **And a standing hazard the batteries surfaced twice:** the instrument you reach for first is often
+measuring something adjacent. t986's `overflow-y:scroll` divergence was the known `--hide-scrollbars`
+artefact (the pattern ledger caught it inside an otherwise-correct batch); t995's `getComputedStyle`
+UA numbers **do not reconcile with Chrome's own boxes**, because a native control's used border is the
+platform theme's. Both were caught before they cost a tick, by the ledger and by arithmetic
+respectively.
+
+### Steer
+
+1. **Battery the areas still uncovered** — overflow/scroll containers, `position: sticky`, stacking
+   and `z-index`. Six batteries cost about four hours of authoring and produced ten landed fixes.
+2. **`* { margin: 0 }` does not reset a UA `margin-inline`** (t996). Logical and physical shorthands
+   are not resolving as one property group. Every CSS reset on the web opens with those two lines;
+   this is a cascade defect with a far wider blast radius than the fieldset that exposed it, and it
+   should be probed before it is assumed narrow.
+3. **RUN A SWEEP.** Sixteen ticks unmeasured, ten of them geometry fixes on 18–55% corpus-weight
+   constructs. Five old-binary A/Bs each said "nothing broke" and none said "something improved" —
+   which is what a four-site panel is for, and it is not a substitute for the corpus. The window's
+   claim is that a battery finds what a sweep cannot rank; the sweep is how that claim gets priced.

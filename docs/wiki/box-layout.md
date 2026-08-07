@@ -5994,3 +5994,44 @@ table is context, not a specification.
 Of these, only `<fieldset>` is plainly a UA-sheet gap of the kind t991 fixed; the other four are
 native-control metrics where the used values are theme-derived. **Recorded with numbers rather than
 guessed at** — see the tick-995 journal entry for why that is the deliverable.
+
+### `<fieldset>`'s UA border cannot land without the `<legend>` rule (t996, refused)
+
+The fieldset row of t995's battery looked like the one clean UA-sheet gap in it, and it is — but
+building it in isolation is a **trade**, and the ratchet refuses trades. Recorded so it is not
+re-attempted from scratch.
+
+`<fieldset>` carried `display: block` and nothing else: no border, no padding, no margin. Adding
+Chrome's UA rules —
+
+```css
+fieldset { margin: 0 2px; border: 2px groove; padding: 0.35em 0.75em 0.625em; min-width: min-content }
+legend  { display: block; padding-inline: 2px }
+```
+
+— measured as follows (author `*{margin:0;padding:0}` applied, so only the border is in play):
+
+```text
+                                     Chrome        before      with the UA rules
+  fieldset, NO legend                [400, 14]    [400, 10]      [400, 14]   FIXED
+    its child                        [2, 2]       [0, 0]         [2, 2]      FIXED
+  authored border:5px                [400, 20]    [400, 20]      [400, 20]   unchanged
+  fieldset WITH a legend             [400, 36]    [400, 34]      [400, 38]
+    the <legend> box                 [2, 0, 10, 24] [_, 2, _, 19] [_, 2, _, 24]  better
+    the content below it             [2, 24]      [2, 24]        [2, 26]     WORSE
+```
+
+**The last row is why it was reverted.** Chrome lets a `<legend>` *replace* the top border it sits on:
+the legend is at y=0 and the content starts immediately below the legend, not below border+legend. We
+have no such rule, so adding the border pushes the content down by exactly the border width — and the
+content position had been **right by accident**, because *no border* and *no legend rule* were two
+errors that cancelled.
+
+> A fix that corrects one row by 4px and breaks another by 2px is not a partial win; it is a trade.
+> **The fieldset border and the legend-replaces-the-top-border rule are one tick, not two.**
+
+⚠ A second finding from the attempt, worth more than the attempt: **`margin-inline: 2px` in the UA
+sheet was NOT reset by the author's `* { margin: 0 }`**, while Chrome's is. The logical and physical
+shorthands did not resolve as one property group in the cascade, so the UA's logical margin survived
+an author reset that should have removed it. Written physically (`margin: 0 2px`) it behaves. That is
+a cascade defect with a far wider blast radius than fieldsets, and it is worth its own probe.

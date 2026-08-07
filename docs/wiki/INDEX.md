@@ -301,6 +301,7 @@
   - L5930 · The form-controls / replaced-elements battery — the highest-weight area in the corpus (t995)
   - L5963 · Chrome's UA numbers, read rather than inferred
   - L5985 · The five mechanisms, separated
+  - L5998 · <fieldset>'s UA border cannot land without the <legend> rule (t996, refused)
 
 ## browser-capabilities.md
 `docs/wiki/browser-capabilities.md`
@@ -1675,4 +1676,4 @@
   - L124 · Rank mechanisms by FLIP RATE, not failing-subtest count — CSS layout is a multi-assertion slog
 
 ---
-1582 sections across 22 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+1583 sections across 22 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.

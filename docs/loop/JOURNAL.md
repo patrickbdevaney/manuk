@@ -46371,6 +46371,63 @@ PERF: none — one UA rule and one narrowed branch in a cascade that already ran
 WIKI: `docs/wiki/css-cascade.md` — where Chrome draws the form-control `box-sizing` line, and why a
 layout-crate test cannot see it.
 
+## Tick 996 — the fix I built, measured, and refused (2026-08-07)
+
+TICK SHAPE: measurement — `<fieldset>`'s missing UA box, built and **reverted**. The tick is the
+refusal and the two things the attempt measured on its way out.
+
+⚠⚠⚠ **I BUILT IT, MEASURED IT, AND IT WAS A TRADE.** t995 named `<fieldset>` as the one plainly
+fixable mechanism in the form-controls battery — it carried `display: block` and nothing else, so the
+box every settings page, checkout form and filter panel draws its group outline with simply was not
+there (400×10 against Chrome's 400×14). Adding Chrome's UA rules fixed exactly that, and broke
+something else:
+
+```text
+                                      Chrome        before      with the UA rules
+   fieldset, NO legend                [400, 14]    [400, 10]      [400, 14]   FIXED
+     its child                        [2, 2]       [0, 0]         [2, 2]      FIXED
+   authored border:5px                [400, 20]    [400, 20]      [400, 20]   unchanged
+   fieldset WITH a legend             [400, 36]    [400, 34]      [400, 38]
+     the <legend> box                 [_, 0, 24]   [_, 2, 19]     [_, 2, 24]  better
+     the content below it             [2, 24]      [2, 24]        [2, 26]     WORSE
+```
+
+**Chrome lets a `<legend>` REPLACE the top border it sits on** — the legend is at y=0 and the content
+starts immediately below the *legend*, not below border+legend. We have no such rule, so adding the
+border pushes the content down by exactly the border width. And the content position had been **right
+by accident**: *no border* and *no legend rule* were two errors that cancelled.
+
+> A fix that corrects one row by 4px and breaks another by 2px is not a partial win, it is a trade,
+> and the ratchet refuses trades. **The fieldset border and the legend rule are one tick, not two** —
+> which is a scoping fact I could only learn by building the smaller half and measuring it.
+
+⚠⚠⚠ **AND THE ATTEMPT FOUND SOMETHING WORTH MORE THAN THE ATTEMPT.** My first draft wrote the UA
+margin logically:
+
+```css
+   fieldset { margin-inline: 2px; … }      /* author sheet also has  * { margin: 0 } */
+```
+
+and the fieldset came out at **x=2, width 396** where Chrome has x=0, width 400 — **the author's
+`* { margin: 0 }` did not reset it.** Chrome's does. The logical and physical shorthands are not
+resolving as one property group in our cascade, so a UA logical declaration survives an author
+physical reset that should remove it. Written physically (`margin: 0 2px`) it behaves.
+
+**That is a cascade defect with a far wider blast radius than fieldsets** — `* { margin: 0 }` and
+`* { padding: 0 }` are the first two lines of every CSS reset on the web, and any UA or author rule
+written in logical properties is currently immune to them. It is named here with the reproduction and
+is worth its own probe; it was found only because a UA rule was being written from scratch, which is
+not something this loop does often.
+
+**NOTHING LANDED IN THE ENGINE THIS TICK, AND THAT IS THE RESULT.** The tree is at HEAD; the finding,
+the measurement table and the cascade lead are in the wiki so the next attempt starts from them rather
+than rebuilding the refused half.
+
+PERF: none.
+
+WIKI: `docs/wiki/box-layout.md` — "`<fieldset>`'s UA border cannot land without the `<legend>` rule".
+[no-pattern]
+
 ## Tick 995 — the highest-weight area in the corpus, and the numbers that do not reconcile (2026-08-07)
 
 TICK SHAPE: measurement — a nineteen-row battery on form controls and replaced elements. **The
