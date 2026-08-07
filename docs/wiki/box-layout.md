@@ -6263,3 +6263,61 @@ A *block* before the float means there is no pending line, so the float stays wh
 a real float already occupies `x = 0..40` on that line, the second float goes **beside** it rather
 than below. Without those, *"place every float at the top of its container"* passes everything else:
 the new top is a **starting point for the band search, not a replacement for it**.
+
+## The matrix reaches the subtree it was applied to, and an abspos child is not in it
+
+`layout_block` bakes a `transform` into the box's own fragment tree — `boxx.transform_affine(&m)`
+walks the box and everything under it, so an in-flow or `position: relative` child of a
+`transform: scale(2)` container comes out exactly right, at double the offset and double the size.
+An **absolutely positioned** child is not under it. It is laid out later, in the global positioned
+pass, against a containing-block rect read out of the *already transformed* fragment tree — and
+`left: 20px` still means twenty **untransformed** pixels.
+
+So the ancestor's transform reached an abspos descendant as a **displacement of the containing
+block's origin, and nothing else**:
+
+```text
+   a 40x20 box at left:20px top:10px, in a 200x60 container         Chrome         before
+     container transform: translateX(25px)                        [ 45, 280]     [ 45, 280]   ✓
+     container transform: scale(2), origin 0 0                    [ 40, 560]     [ 20, 550]
+                                                                   80x40          40x20
+     container transform: rotate(90deg), origin 0 0               [-30, 830]     [-40, 820]
+     an IN-FLOW child of that same scaled container               [ 40, 630]     [ 40, 630]   ✓
+     a RELATIVE child of that same scaled container               [ 40, 740]     [ 40, 740]   ✓
+```
+
+**A pure translation came out right by accident** — displacing the containing block's origin *is*
+what a translation does to its children — which is why the defect survived every fixture that
+reached for `translateX` first. And the in-flow / relative rows are what make this a
+**containing-block** defect rather than a transform defect: the same container, the same matrix,
+correct for every child that happens to live inside the subtree the matrix was applied to.
+
+### The fix, and why it needs a second map rather than an inverse
+
+Two things are recorded the moment a transform is applied, before it is baked in:
+
+- **the matrix**, keyed by the transformed element. Composed outermost-first up the DOM it is the
+  map from the innermost untransformed space to the page. Outermost-first because layout unwinds
+  bottom-up: an inner element's matrix is expressed in its *parent's* untransformed space.
+- **the pre-transform border box** of every box in the subtree that could be a containing block
+  (`position != static`, or a grouping property). First write wins, and inner transforms are applied
+  first, so the entry is always innermost-local — the space the chain above is expressed in.
+
+The positioned pass then resolves the containing block in that pre-transform space, lays the box out
+there, and applies the chain to the finished box. The static position needs no adjustment and that
+is not a coincidence: it is recorded during flow, *before* the transform is baked in, so it was
+already in pre-transform space and was previously being combined with a post-transform containing
+block.
+
+**Why not invert the stored rect instead of recording a second map.** The containing block is often a
+`position: relative` element *inside* the transformed box rather than the transformed box itself, so
+its rect must be recovered too — and a stored rect is an **axis-aligned bounding box**. Inverting it
+is exact for translate and scale and silently inflates for a rotation, which is the failure that
+would only show up on the sites that rotate.
+
+**The reach.** `position: absolute` is on 76% of the burndown's corpus and `transform:` on 65.5%, and
+the intersection is the standard idiom, not an edge case: a hover-zoom card with an absolutely-placed
+badge, a carousel track with positioned arrows, a modal centred with `translate(-50%,-50%)` carrying
+a positioned close button. The error is unbounded — the child keeps its untransformed size, so it
+both moves and mis-sizes — which is an `overlap` and `reading_order` divergence rather than a small
+`dy`.

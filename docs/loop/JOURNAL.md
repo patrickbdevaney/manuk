@@ -46371,6 +46371,110 @@ PERF: none — one UA rule and one narrowed branch in a cascade that already ran
 WIKI: `docs/wiki/css-cascade.md` — where Chrome draws the form-control `box-sizing` line, and why a
 layout-crate test cannot see it.
 
+## Tick 1005 — the matrix reached the subtree it was applied to, and an abspos child is not in it (2026-08-07)
+
+TICK SHAPE: primitive — the transform battery, and the one defect in it. **53 rows across two arms,
+23 exact on the first and 22 controls exact on the second; the battery named TWO independent
+defects and this tick builds the larger one.**
+
+⚠⚠⚠ **AN ABSOLUTELY-POSITIONED CHILD OF A TRANSFORMED CONTAINER KEPT ITS UNTRANSFORMED PLACE AND
+ITS UNTRANSFORMED SIZE.** `layout_block` bakes a `transform` into the box's own fragment tree, so an
+in-flow child of a `scale(2)` container has always been exactly right. An out-of-flow box is not in
+that tree: it is laid out later, in the global positioned pass, against a containing-block rect read
+from the **already-transformed** fragment tree — while `left: 20px` still means twenty
+*untransformed* pixels. Chrome-measured, a 40x20 box at `left:20px; top:10px` in a 200x60 container,
+the one variable being the container's transform:
+
+```text
+                                              Chrome            before            after
+   #q4  translateX(25px)                    [ 45, 280 40x20]  [ 45, 280 40x20]  unchanged
+   #q7  scale(2), origin 0 0                [ 40, 560 80x40]  [ 20, 550 40x20]  [ 40, 560 80x40]
+   #q10 rotate(90deg), origin 0 0           [-30, 830 20x40]  [-40, 820 40x20]  [-30, 830 20x40]
+   #q13 the same, two transforms deep       [ 60,1100 80x40]  [ 30,1090 40x20]  [ 60,1100 80x40]
+   #q8  IN-FLOW child of the scaled box     [ 40, 630 80x40]  [ 40, 630 80x40]  unchanged
+   #q9  RELATIVE child of the scaled box    [ 40, 740 80x40]  [ 40, 740 80x40]  unchanged
+```
+
+⚠⚠⚠ **`#q4`, `#q8` AND `#q9` ARE THE ROWS THAT DECIDE WHAT TO FIX, AND TWO OF THEM PASS FOR THE
+SAME REASON THE DEFECT EXISTS.** A *pure translation* came out right the whole time — displacing the
+containing block's origin **is** what a translation does to its children, so the one transform a
+fixture reaches for first is the one transform this bug cannot express. And the in-flow and
+`position:relative` children of the very same scaled container were right too, because they ARE in
+the subtree the matrix was applied to. Without those three rows the obvious diagnosis is *"scale on a
+container is broken"* — which is false, and would have sent the tick at `resolve_transform`. **This
+is the fifth window running in which the row that named the branch was not one of the rows that made
+me look** (t1000's `#d5`, and the standing rule: measure the mirror before writing the fix).
+
+**MECHANISM.** Two things are now recorded at the moment a transform is applied, before it is baked
+in: the **matrix**, keyed by the transformed element (composed outermost-first up the DOM, because
+layout unwinds bottom-up so an inner matrix is expressed in its parent's untransformed space), and
+the **pre-transform border box** of every box in the subtree that could be a containing block. The
+positioned pass resolves the containing block in that pre-transform space, lays the box out there,
+and applies the chain to the finished box. ⚠ The static position needed no adjustment, and that is
+not luck: it is recorded during flow, *before* the transform is baked in, so it was already
+pre-transform and was previously being combined with a post-transform containing block.
+
+⚠⚠ **WHY A SECOND MAP AND NOT AN INVERSE.** The containing block is often a `position:relative`
+element *inside* the transformed box rather than the transformed box itself, so its rect has to be
+recovered too — and a stored rect is an **axis-aligned bounding box**. Inverting it is exact for
+translate and scale and silently INFLATES for a rotation, i.e. it would work on every fixture that
+does not rotate and be wrong on the sites that do.
+
+⚠⚠ **DEFECT 2, MEASURED AND NOT BUILT: THE INDIVIDUAL TRANSFORM PROPERTIES DO NOT EXIST.**
+`translate: 30px 15px`, `rotate: 90deg` and `scale: 2` (CSS Transforms 2, and the properties every
+animation library now writes because they compose without clobbering `transform`) are parsed by
+neither cascade — `engine/css/src/lib.rs` matches only `"transform"`, and the three names appear
+solely as *values* inside `will-change`. Measured against Chrome: `#d3` `[50,2005]` vs ours
+`[20,1990]`; `#d4` `rotate:90deg` `[30,2070] 20x40` vs `[20,2080] 40x20`; `#d5` `scale:2`
+`[0,2160] 80x40` vs `[20,2170] 40x20` — the property is not merely wrong, it is **absent**, so the
+element sits untransformed. Priced on the burndown corpus with linked stylesheets: **33/171 = 19.3%**
+of sites declare at least one (`rotate:` 12.9%, `scale:` 8.8%, `translate:` 3.5%). Not built here
+because it is a cascade primitive on both paths and mixing two RED proofs in one tick makes neither
+of them a proof.
+
+⚠⚠ **AND THE BATTERY CLEARED 60 ROWS OF THE MECHANISM I EXPECTED TO FIND THE DEFECT IN.** t997 named
+`reading_order` as M1's binding conjunct and the ledger says a reading-order symptom is a **width**
+upstream, so the first two arms went at shrink-to-fit: 26 rows with font-INDEPENDENT content atoms
+(inline-block / float / abspos / inline-flex / inline-grid / table, with padding, border, `min-width`,
+`max-width`, `50%`, an over-wide child, and `white-space: nowrap`) — **26 of 26 exact**; 20 rows of
+the same shapes driven by TEXT — **20 of 20 exact**; and 14 rows sitting ON the line-break boundary,
+where an 80-character monospace line fits at 771px and does not at 770px — **14 of 14 exact, both
+sides of the boundary**. So the accumulated-advance drift that would launder a width error into a
+`dy` is measurably not happening on these rows, and the width upstream is somewhere else.
+
+⚠ **AND ONE INSTRUMENT LIMIT, FOUND WHILE READING A SUSPICIOUS COLUMN OF INTEGERS.** Every width our
+side reported was a whole number against Chrome's `77.06`, `250.45`, `346.78` — which looked like an
+engine rounding the intrinsic width to the pixel grid, and is not: `main.rs:2283` prints
+`r.width.round()`. **The reduction instrument quantizes to 1px while the corpus scorer does not**, so
+a sub-pixel divergence can move `shape` and be invisible in the reduction that chases it. Recorded
+rather than fixed, because the three arms above bound how much it can be hiding: whatever the
+sub-pixel error is, it does not change a break decision at the boundary.
+
+⚠ **A PROCESS FAILURE, RECORDED: I RAN TWO `tick.sh` INSTANCES AT ONCE.** A `ps | grep | head -3`
+whose output was consumed by this session's own multi-kilobyte command line showed no `tick.sh`, and
+I concluded a wall that was still running had died and launched a second. Both reached the gates;
+the first landed t1004, the second hit `commit refused` on the index lock and its 808s contended
+wall is now `LAST_WALL_TIME`. **A grep for a process whose name appears in your own command line
+answers about your command line** — the same shape as the standing pgrep-self-match rule, one step
+sideways. Check `git log`, not `ps`.
+
+RATCHET: `manuk-layout` 126/126 (125 before this tick's gate). Nothing traded.
+
+GATE: `an_abspos_box_under_a_transformed_containing_block_is_transformed_with_it` — five rows, three
+of them controls asserted FIRST. **RED-PROVEN, and the recipe I wrote from the code was FALSE and is
+recorded as such**: *"delete the `b.transform_affine(&m)`"* takes the CONTROL down first (`#q4` reads
+`(-5, 10)`), because with the containing block moved back to pre-transform space and no matrix
+applied the accidental translation is gone too. The two halves are one change and only revert
+together; forcing `chain = None` gives `#q7 = (20, 10, 40x20)` against Chrome's `(40, 20, 80x40)`
+with `#q4`/`#q8`/`#q9` still green.
+
+PERF: one `HashMap` insert per transformed element plus a subtree walk that records ONLY boxes which
+could be a containing block (`position != static` or a grouping property). Pages with no transform
+pay one `is_empty()` check in the positioned pass.
+
+WIKI: `docs/wiki/box-layout.md` — "The matrix reaches the subtree it was applied to, and an abspos
+child is not in it".
+
 ## Tick 1004 — the sweep and the battery are the same instrument pointed at two questions (2026-08-07)
 
 TICK SHAPE: measurement — the constitution check, due at 1004 (last 996). Banked as **check #90**.

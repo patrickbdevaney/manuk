@@ -822,6 +822,33 @@ struct Ctx<'a> {
     /// happened, and the float's `.sr-only` stayed at its provisional origin. A counter cannot be
     /// fooled by an overwrite.
     static_pos_writes: std::cell::Cell<u64>,
+    /// ⚠⚠⚠ **A TRANSFORMED BOX IS THE CONTAINING BLOCK OF ITS ABSPOS DESCENDANTS, AND THE MATRIX
+    /// NEVER REACHED THEM.**
+    ///
+    /// `layout_block` bakes a `transform` into the box's own **in-flow** subtree, which is why an
+    /// in-flow or `position:relative` child of a `scale(2)` container comes out exactly right. An
+    /// out-of-flow box is not in that subtree: it is laid out later, in the global positioned pass,
+    /// against a containing-block rect read from the **already-transformed** fragment tree. So the
+    /// ancestor's transform reached it as a *displacement of the containing block's origin* and
+    /// nothing else — which is right for a translation, by accident, and wrong for everything else.
+    ///
+    /// These two maps are what the positioned pass needs to place such a box correctly:
+    ///
+    /// * `transform_matrix` — the absolute affine each transformed element applies, keyed by that
+    ///   element. Composed outermost-first up the DOM, it is the map from the innermost
+    ///   untransformed space to the page.
+    /// * `pre_transform_rect` — every node's border box **as it was before** the nearest transformed
+    ///   ancestor's matrix was applied. Written first-wins, and transforms are applied innermost
+    ///   first (layout unwinds bottom-up), so the entry is always the innermost local space — which
+    ///   is the space the matrix chain above is expressed in.
+    ///
+    /// The containing block can be a `position:relative` element *inside* the transformed box rather
+    /// than the transformed box itself, which is why this records the whole subtree and not just the
+    /// transformed element: inverting the stored (already-transformed) rect is exact only for
+    /// axis-aligned matrices, and a rotation's stored rect is an axis-aligned *bounding* box, so the
+    /// inverse would silently inflate it.
+    transform_matrix: RefCell<HashMap<NodeId, [f32; 6]>>,
+    pre_transform_rect: RefCell<HashMap<NodeId, Rect>>,
 }
 
 /// Lay out a whole document into a fragment tree, given a viewport width in px.
@@ -854,6 +881,8 @@ pub fn layout_document(
         static_pos: RefCell::new(HashMap::new()),
         atomic_static_origin: RefCell::new(HashMap::new()),
         static_pos_writes: std::cell::Cell::new(0),
+        transform_matrix: RefCell::new(HashMap::new()),
+        pre_transform_rect: RefCell::new(HashMap::new()),
     };
     let root_el = dom
         .find_first("body")
@@ -3529,6 +3558,7 @@ impl Ctx<'_> {
         if !s.transform.is_empty() {
             let origin = transform_origin_of(&s, rect.x, rect.y, border_box_w, border_box_h);
             let m = resolve_transform(&s.transform, border_box_w, border_box_h, origin);
+            self.record_transform(node, &m, &boxx);
             boxx.transform_affine(&m);
         }
 
@@ -5886,7 +5916,7 @@ impl Ctx<'_> {
             //    the static half discarded.
             let x_static = s.inset.left.is_auto() && s.inset.right.is_auto();
             let y_static = s.inset.top.is_auto() && s.inset.bottom.is_auto();
-            let mut cb = if s.position == Position::Fixed {
+            let (mut cb, cb_node) = if s.position == Position::Fixed {
                 // ⚠ NOT unconditionally the viewport. A grouping-property ancestor (`transform`,
                 // `filter`, `backdrop-filter`) is a containing block for `fixed` too — which is the
                 // whole reason `position: fixed` inside a transformed wrapper scrolls with the page
@@ -5896,6 +5926,40 @@ impl Ctx<'_> {
             } else {
                 self.abs_containing_block(node, &rects, viewport)
             };
+            // ⚠⚠⚠ **THE CONTAINING BLOCK RECT CAME OUT OF THE TRANSFORMED FRAGMENT TREE, AND THE
+            // BOX MUST BE LAID OUT IN THE SPACE THE INSETS ARE WRITTEN IN.**
+            //
+            // `rects` is built after `layout_block` has baked every transform into its subtree, so
+            // the containing block of an abspos box under a `transform`ed ancestor arrives here
+            // already scaled/rotated — while `left: 20px` still means twenty *untransformed* pixels.
+            // Resolving one against the other applied the ancestor's transform as a displacement of
+            // the origin and nothing more: right for a translation, and wrong for every other
+            // matrix. Chrome-measured, a 40x20 box at `left:20px; top:10px` inside a 200x60
+            // container:
+            //
+            // ```text
+            //                                        Chrome            before
+            //   ancestor translateX(25px)          [45, 280 40x20]   [45, 280 40x20]   ✓ (by accident)
+            //   ancestor scale(2), origin 0 0      [40, 560 80x40]   [20, 550 40x20]
+            //   ancestor rotate(90deg)             [-30,830 20x40]   [-40, 820 40x20]
+            //   the same, two transforms deep      [60,1100 80x40]   [30,1090 40x20]
+            // ```
+            //
+            // The in-flow and `position:relative` children of those same containers were correct
+            // throughout — they are inside the subtree the matrix was applied to. **The mirror is
+            // what makes this a containing-block defect rather than a transform defect.**
+            //
+            // So: take the containing block in its PRE-transform space, lay the box out there (the
+            // static position is recorded during flow and is already in that space, so the two now
+            // agree — they did not before), and apply the ancestor chain to the finished box.
+            let chain = cb_node.and_then(|n| self.transform_chain(n));
+            if chain.is_some() {
+                if let Some(n) = cb_node {
+                    if let Some(pre) = self.pre_transform_rect.borrow().get(&n) {
+                        cb = padding_box_of(*pre, self.style_of(n));
+                    }
+                }
+            }
             // Anchor the containing block at the static position on each axis that asks for it, so
             // `layout_abs` resolves the box in the right place instead of at the containing block's
             // origin (which would put every dropdown in the top-left corner) — and, before any of
@@ -5918,7 +5982,10 @@ impl Ctx<'_> {
                     continue;
                 }
             }
-            let b = self.layout_abs(node, cb);
+            let mut b = self.layout_abs(node, cb);
+            if let Some(m) = chain {
+                b.transform_affine(&m);
+            }
             // ⚠⚠⚠ **THE WHOLE SUBTREE, NOT JUST THIS BOX.** `rects` was built from the IN-FLOW
             // fragment tree, so nothing inside an out-of-flow subtree has an entry in it — and
             // `abs_containing_block` reads `position != Static` and then requires a rect, walking
@@ -6072,22 +6139,73 @@ impl Ctx<'_> {
     /// The containing block for a `position: fixed` box: the **viewport**, unless an ancestor
     /// carries a grouping property — in which case that ancestor's padding box wins, and the box
     /// scrolls with it instead of staying pinned to the screen.
+    /// The composed matrix that maps `node`'s **innermost untransformed space** onto the page, or
+    /// `None` when no ancestor (nor `node` itself) carries a transform.
+    ///
+    /// Outermost-first: layout applies an inner transform before an outer one (it unwinds
+    /// bottom-up), so an inner element's recorded matrix is expressed in its *parent's* untransformed
+    /// space and the outer matrix must be applied to the result.
+    fn transform_chain(&self, node: NodeId) -> Option<[f32; 6]> {
+        let map = self.transform_matrix.borrow();
+        if map.is_empty() {
+            return None;
+        }
+        let mut chain: Vec<[f32; 6]> = Vec::new();
+        let mut cur = Some(node);
+        while let Some(n) = cur {
+            if let Some(m) = map.get(&n) {
+                chain.push(*m);
+            }
+            cur = self.dom.parent(n);
+        }
+        if chain.is_empty() {
+            return None;
+        }
+        // `chain` is innermost-first; fold from the outermost end so the product reads
+        // `M_outer · … · M_inner`.
+        let mut out = [1.0, 0.0, 0.0, 1.0, 0.0, 0.0];
+        for m in chain.iter().rev() {
+            out = affine_mul(&out, m);
+        }
+        Some(out)
+    }
+
+    /// Record what the positioned pass needs before a transform is baked into `boxx`'s subtree:
+    /// the matrix (keyed by the transformed element) and every descendant's pre-transform border
+    /// box. First write wins, so a nested transform's inner record survives the outer one.
+    fn record_transform(&self, node: NodeId, m: &[f32; 6], boxx: &LayoutBox) {
+        self.transform_matrix.borrow_mut().insert(node, *m);
+        let mut pre = self.pre_transform_rect.borrow_mut();
+        boxx.walk(&mut |b| {
+            if let Some(n) = b.node {
+                // Only a box that can BE a containing block is ever looked up here, so recording
+                // every node would be a map the size of the subtree for a handful of reads. The
+                // transformed element itself always qualifies (a transform establishes a containing
+                // block for its out-of-flow descendants), which is the common case by far.
+                let s = self.style_of(n);
+                if s.position != Position::Static || Self::establishes_out_of_flow_cb(s) {
+                    pre.entry(n).or_insert(b.rect);
+                }
+            }
+        });
+    }
+
     fn fixed_containing_block(
         &self,
         node: NodeId,
         rects: &HashMap<NodeId, Rect>,
         viewport: Rect,
-    ) -> Rect {
+    ) -> (Rect, Option<NodeId>) {
         let mut cur = self.dom.parent(node);
         while let Some(anc) = cur {
             if self.dom.is_element(anc) && Self::establishes_out_of_flow_cb(self.style_of(anc)) {
                 if let Some(r) = rects.get(&anc) {
-                    return padding_box_of(*r, self.style_of(anc));
+                    return (padding_box_of(*r, self.style_of(anc)), Some(anc));
                 }
             }
             cur = self.dom.parent(anc);
         }
-        viewport
+        (viewport, None)
     }
 
     fn abs_containing_block(
@@ -6095,7 +6213,7 @@ impl Ctx<'_> {
         node: NodeId,
         rects: &HashMap<NodeId, Rect>,
         viewport: Rect,
-    ) -> Rect {
+    ) -> (Rect, Option<NodeId>) {
         let mut cur = self.dom.parent(node);
         while let Some(anc) = cur {
             if self.dom.is_element(anc) {
@@ -6105,13 +6223,13 @@ impl Ctx<'_> {
                 // straight past a `transform`ed `static` wrapper to whatever lay outside it.
                 if s.position != Position::Static || Self::establishes_out_of_flow_cb(s) {
                     if let Some(r) = rects.get(&anc) {
-                        return padding_box_of(*r, s);
+                        return (padding_box_of(*r, s), Some(anc));
                     }
                 }
             }
             cur = self.dom.parent(anc);
         }
-        viewport
+        (viewport, None)
     }
 
     /// Lay out one `absolute`/`fixed` box against containing block `cb`.
@@ -6433,6 +6551,7 @@ impl Ctx<'_> {
         if !s.transform.is_empty() {
             let origin = transform_origin_of(&s, bx, by, border_box_w, border_box_h);
             let m = resolve_transform(&s.transform, border_box_w, border_box_h, origin);
+            self.record_transform(node, &m, &boxx);
             boxx.transform_affine(&m);
         }
         boxx
@@ -6767,6 +6886,7 @@ impl Ctx<'_> {
             if !s.transform.is_empty() {
                 let origin = transform_origin_of(s, abs_x, abs_y, p.slot.width, p.slot.height);
                 let m = resolve_transform(&s.transform, p.slot.width, p.slot.height, origin);
+                self.record_transform(p.dom, &m, &boxx);
                 boxx.transform_affine(&m);
             }
             (boxx, p.slot.y + p.slot.height)
@@ -10988,6 +11108,106 @@ mod tests {
             l2.y >= l1.y + l1.height - 1.0,
             "the second row is below the first"
         );
+    }
+
+    /// **AN ABSPOS BOX INSIDE A TRANSFORMED CONTAINING BLOCK GETS THE MATRIX, NOT JUST THE OFFSET.**
+    ///
+    /// `layout_block` bakes a `transform` into the box's own in-flow subtree, so an in-flow or
+    /// `position:relative` child of a `scale(2)` container has always been exactly right. An
+    /// out-of-flow box is laid out later, against a containing-block rect read from the
+    /// already-transformed fragment tree — so the ancestor's matrix reached it as a displacement of
+    /// the containing block's ORIGIN and nothing else. That is right for a translation and wrong for
+    /// every other matrix, which is why it survived: `translateX` is the transform a fixture reaches
+    /// for first.
+    ///
+    /// Chrome-measured (headless 1200px), a 40×20 box at `left:20px; top:10px` inside a 200×60
+    /// container, the one variable being the container's transform:
+    ///
+    /// ```text
+    ///                                            Chrome           before           after
+    ///   #q4  translateX(25px)                  [ 45, 280 40x20] [ 45, 280 40x20] unchanged ✓
+    ///   #q7  scale(2), origin 0 0              [ 40, 560 80x40] [ 20, 550 40x20] [ 40, 560 80x40]
+    ///   #q10 rotate(90deg), origin 0 0         [-30, 830 20x40] [-40, 820 40x20] [-30, 830 20x40]
+    ///   #q13 the same, two transforms deep     [ 60,1100 80x40] [ 30,1090 40x20] [ 60,1100 80x40]
+    ///   #q8  IN-FLOW child of the scaled box   [ 40, 630 80x40] [ 40, 630 80x40] unchanged ✓
+    ///   #q9  RELATIVE child of the scaled box  [ 40, 740 80x40] [ 40, 740 80x40] unchanged ✓
+    /// ```
+    ///
+    /// ⚠ **`#q8`/`#q9` are the rows that make this a CONTAINING-BLOCK defect rather than a transform
+    /// defect** — the same container, the same matrix, correct throughout for the children that are
+    /// inside the subtree it was applied to. Without them the obvious diagnosis is *"scale on a
+    /// container is broken"*, which is false and would have sent the fix at `resolve_transform`.
+    ///
+    /// **RED recipe, RUN and not reasoned:** force `chain = None` in the positioned pass — both
+    /// halves off — and `#q7` reads `(20, 10, 40x20)` against Chrome's `(40, 20, 80x40)`, while
+    /// `#q4`, `#q8` and `#q9`, asserted FIRST below, still pass. That is the pre-fix behaviour
+    /// exactly.
+    ///
+    /// ⚠ **The recipe I wrote from the code first was WRONG, and it is recorded because the class
+    /// recurs (t999, t1000).** *"Delete the `b.transform_affine(&m)` and #q7 goes red"* — it does
+    /// not: it takes the CONTROL down first (`#q4` → `(-5, 10)`), because with the containing block
+    /// moved back to pre-transform space and no matrix applied, the translation that used to arrive
+    /// by accident is gone too. **The two halves are one change and only revert together.**
+    #[test]
+    fn an_abspos_box_under_a_transformed_containing_block_is_transformed_with_it() {
+        let css = "\
+            * { margin:0; padding:0 }
+            .c { width:200px; height:60px; position:relative; margin-bottom:30px }
+            .abs { position:absolute; left:20px; top:10px; width:40px; height:20px }
+            .flow { margin:10px 0 0 20px; width:40px; height:20px }
+            .rel { position:relative; left:20px; top:10px; width:40px; height:20px }
+            #r4 { transform:translateX(25px) }
+            #r7, #r8, #r9 { transform:scale(2); transform-origin:0 0 }
+            #r10 { transform:rotate(90deg); transform-origin:0 0 }";
+        let html = "<body>\
+            <div class=c id=r4><div class=abs id=q4></div></div>\
+            <div class=c id=r7><div class=abs id=q7></div></div>\
+            <div class=c id=r8><div class=flow id=q8></div></div>\
+            <div class=c id=r9><div class=rel id=q9></div></div>\
+            <div class=c id=r10><div class=abs id=q10></div></div>\
+            </body>";
+        let (dom, root) = layout_html(html, css, 1200.0);
+        let rects = root.node_rects(&dom);
+        let get = |id: &str| {
+            let n = dom
+                .descendants(dom.root())
+                .find(|&n| dom.element(n).and_then(|e| e.attr("id")) == Some(id))
+                .unwrap_or_else(|| panic!("no #{id}"));
+            *rects.get(&n).unwrap_or_else(|| panic!("no rect for #{id}"))
+        };
+        // Each row's own container top, so the assertions are container-relative and a change in
+        // any earlier row cannot cascade into a later one's expected value.
+        let rel = |id: &str, cid: &str| {
+            let (r, c) = (get(id), get(cid));
+            (r.x - c.x, r.y - c.y, r.width, r.height)
+        };
+        let close = |got: (f32, f32, f32, f32), want: (f32, f32, f32, f32), id: &str| {
+            let d = [
+                got.0 - want.0,
+                got.1 - want.1,
+                got.2 - want.2,
+                got.3 - want.3,
+            ];
+            assert!(
+                d.iter().all(|v| v.abs() < 0.51),
+                "#{id}: got {got:?}, Chrome gives {want:?}"
+            );
+        };
+
+        // ── THE CONTROLS FIRST. A fix that breaks any of these is a different rule.
+        // A translation on the containing block: correct before this change, and by accident.
+        close(rel("q4", "r4"), (20.0, 10.0, 40.0, 20.0), "q4");
+        // An IN-FLOW child of the scaled container — inside the subtree the matrix was applied to.
+        close(rel("q8", "r8"), (40.0, 0.0, 80.0, 40.0), "q8");
+        // A `position:relative` child of the same scaled container.
+        close(rel("q9", "r9"), (40.0, 20.0, 80.0, 40.0), "q9");
+
+        // ── THE DEFECT. `scale(2)` about the container's top-left doubles the abspos child's
+        // offset AND its size; before this change it stayed at its untransformed 20,10 40x20.
+        close(rel("q7", "r7"), (40.0, 20.0, 80.0, 40.0), "q7");
+        // `rotate(90deg)` about the top-left: the child's axis-aligned box swaps its axes.
+        // Chrome [-30, 830] against the container's [-60, 810] is (30, 20) 20x40.
+        close(rel("q10", "r10"), (30.0, 20.0, 20.0, 40.0), "q10");
     }
 
     #[test]

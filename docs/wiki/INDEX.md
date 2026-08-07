@@ -316,6 +316,8 @@
   - L6236 · The last row is the finding, and the spec sentence does not mention it
   - L6251 · Where the decision lives is a real choice
   - L6260 · The two rows that stop it degenerating
+  - L6267 · The matrix reaches the subtree it was applied to, and an abspos child is not in it
+  - L6295 · The fix, and why it needs a second map rather than an inverse
 
 ## browser-capabilities.md
 `docs/wiki/browser-capabilities.md`
@@ -1691,4 +1693,4 @@
   - L124 · Rank mechanisms by FLIP RATE, not failing-subtest count — CSS layout is a multi-assertion slog
 
 ---
-1598 sections across 22 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+1600 sections across 22 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
