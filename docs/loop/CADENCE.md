@@ -11,12 +11,12 @@
 
 | | value | over |
 |---|---|---|
-| ticks landed | **704** | ticks 1–987 |
-| median tick cycle | **26m** | 703 intervals |
-| median, last 10 | **54m** | 10 intervals |
+| ticks landed | **705** | ticks 1–988 |
+| median tick cycle | **26m** | 704 intervals |
+| median, last 10 | **61m** | 10 intervals |
 | fastest / slowest | 5s / 5.4d | |
-| **ticks per hour** | **1.10** | 640.8h elapsed |
-| median verify wall | **63s** | 643 ticks |
+| **ticks per hour** | **1.10** | 641.9h elapsed |
+| median verify wall | **63s** | 644 ticks |
 | wall trend | 39s → 63s — getting slower ⚠️ | first 3 vs last 3 |
 
 The **cycle** is the real unit: implement → debug → verify wall → land. The wall is only part of
@@ -27,11 +27,11 @@ it, and a wall that grows taxes every future tick, so it is tracked separately f
 ### Near — the daily driver (doc / app / platform web)
 
 * **capabilities asserted** (`G_CAPABILITY`): 48 → **81**
-* **live gates**: 27 → **417**
-* **✅ rows in the capability ledger**: 144 → **496**
+* **live gates**: 27 → **418**
+* **✅ rows in the capability ledger**: 144 → **497**
 * **Bar 0 — oracle hangs**: 0 of 265 sites
 
-**339 of 704 ticks** (48%) moved a
+**339 of 705 ticks** (48%) moved a
 user-visible capability. The rest were instruments, infrastructure and corrections — and the
 ledger says the corrections were not overhead: three of its top three priorities were phantoms,
 and finding that out redirected everything after it.
@@ -91,7 +91,7 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 ## What a capability costs
 
 * **339** capability ticks, median cycle **26m**
-* median diff per tick: **+258 / −34** lines across 8 files
+* median diff per tick: **+259 / −34** lines across 8 files
 
 ## Every tick
 
@@ -801,5 +801,6 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 | **984** | 2026-08-06 18:46 | 64m | primitive | 63s | +502/−60 | 415 | 81 | 56.0% · | `fit-content` was implemented on one path and given up on in the other, and the row that c |
 | **985** | 2026-08-06 19:43 | 57m | primitive | 63s | +419/−43 | 416 | 81 | 56.0% · | a percentage gap had nowhere to be STORED, and the RED proof that aimed at the wrong casca |
 | **987** | 2026-08-06 21:49 | 2.1h | pattern-class | 63s | +389/−54 | 417 | 81 | 56.0% · | the negative half is the whole difficulty, and both cadence audits (2026-08-06) |
+| **988** | 2026-08-06 22:58 | 69m | primitive | 63s | +398/−40 | 418 | 81 | 56.0% · | a wrap-point error that does not change the line COUNT, and the property I did not think t |
 
 *`·` after a WPT figure means **carried forward**, not measured this tick.*

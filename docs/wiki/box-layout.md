@@ -5663,3 +5663,60 @@ engine that already computed the answer is asked for it. **Re-deriving it by han
 ⚠ The cost of the boolean, stated so it is not rediscovered: `getComputedStyle().willChange` cannot be
 served from it. We do not publish that property today, and the day we do it needs the list, not the
 flag.
+
+## A cell is STRETCHED to its row, and stretching a box does not move what is in it (t989)
+
+A table cell is laid out at its own content height and then stretched to the row's height. That
+stretch is a single assignment to `rect.height`, and it does not move the cell's children — so
+**every cell was top-aligned**, whatever `vertical-align` said. On a table cell that property is the
+pre-flexbox vertical-centring idiom and is still everywhere: toolbars, data grids, icon+label rows,
+and the whole `display: table` / `display: table-cell` centring pattern.
+
+```text
+                                                       Chrome     before      after
+  vertical-align:middle, 19px word in a 60px cell        [20]       [ 2]       [20]
+  vertical-align:bottom, same cell                       [38]       [ 2]       [38]
+ ── controls, none of which moved ──
+  vertical-align not declared (top / baseline)           [ 2]       [ 2]   unchanged
+  the CELL BOX of a row sized by its tallest cell        [ 0]       [ 0]   unchanged
+```
+
+### The trap, and it cost a build to find
+
+The obvious implementation reads the free space as `row_height − cell_box_height`. That is **zero for
+exactly the cells that have the most free space**: a cell with `height: 60px` around a 24px line
+reports a *border-box* height of 60, because the explicit height was already applied when the cell was
+laid out. The free space has to be measured against the cell's **natural content height**, which
+`layout_cell` now returns alongside the border-box height.
+
+> A first version compiled, ran, and moved nothing, because it asked the box how tall it was instead
+> of asking the content. **`height` on a box you have already sized tells you what you asked for, not
+> what is inside it.**
+
+### The shift goes to the CONTENT, and the gate could not tell until a control was added
+
+The subtree is translated and the box's own origin restored, so the cell's background, borders and hit
+rect keep the row's geometry. The RED recipe for that — *shift the cell instead* — **came back green**:
+every row in the first draft measured a `<span>` inside the cell, which moves under either rule. The
+control that separates them (the cell box of a cell that actually shifts) had to be added *after* the
+RED refused to fire. **A gate whose rows all measure the same thing cannot tell two rules apart, and
+the RED proof is what reveals that — not the passing run.**
+
+### Named, measured, not built — three more table defects from the same battery
+
+The sixteen-row table battery found **five** divergences in **four** mechanisms. The other three
+(fixture `/tmp/tbl.html`):
+
+```text
+  ROWSPAN row-height distribution   a 60px rowspan=2 cell must give 30/30 to its two rows; we
+                                    give 24/36 — the overflow all lands on the LAST row
+  CAPTION                           `<caption>` reserves no space and does not widen the table:
+                                    the first cell belongs at y=20 and 29 wide, reads y=0 and 10
+  THEAD ORDERING                    a `<thead>` written AFTER a `<tbody>` must still render FIRST;
+                                    we render in source order
+```
+
+The rowspan one is what `CONSTITUTION.MD` VI.2 has carried as *"t933 row-height distribution"* since
+check #82 — and this is the first fixture to put a number on it.
+
+Gated by `G_TABLE_CELL_VALIGN`.

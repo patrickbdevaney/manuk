@@ -46371,6 +46371,84 @@ PERF: none — one UA rule and one narrowed branch in a cascade that already ran
 WIKI: `docs/wiki/css-cascade.md` — where Chrome draws the form-control `box-sizing` line, and why a
 layout-crate test cannot see it.
 
+## Tick 989 — the tables battery, and a RED proof that revealed the GATE was blind (2026-08-06)
+
+TICK SHAPE: primitive — `vertical-align` on a table cell. **The fourth discovery battery, and the
+last family on check #88's steer list** — the one `CONSTITUTION.MD` VI.2 has carried as residue mass
+since check #82 and that no fixture had ever touched.
+
+⚠⚠⚠ **SIXTEEN ROWS OF TABLE LAYOUT: ELEVEN EXACT, FIVE DIVERGING, AND THEY ARE FOUR DISTINCT
+MECHANISMS.** The richest yield of the four batteries, exactly where VI.2 said to look:
+
+```text
+   EXACT (11): auto column sizing · table-layout:fixed · colspan · border-spacing ·
+               border-collapse · implied tbody/tr · row height = tallest cell · width:50% ·
+               table is shrink-to-fit · display:table on plain divs · a plain-block control
+   DIVERGING (5, four mechanisms):
+     vertical-align:middle / bottom in a cell     y=2 against Chrome's 20 and 38   <- THIS TICK
+     rowspan row-height distribution              24/36 against Chrome's 30/30
+     caption                                      reserves no space, does not widen the table
+     thead written AFTER tbody                    renders in source order, not first
+```
+
+**One tick, one mechanism** — the other three are named with their numbers in the gate and the wiki so
+the next one starts from a measurement rather than a hunt. The rowspan row is VI.2's *"t933
+row-height distribution"*, and this is the first fixture to put a number on it.
+
+⚠⚠⚠ **A CELL IS STRETCHED TO ITS ROW, AND STRETCHING A BOX DOES NOT MOVE WHAT IS IN IT.** The cell is
+laid out at its own content height and then stretched by a single assignment to `rect.height`. So
+every cell was top-aligned whatever `vertical-align` said — and on a table cell that property is the
+pre-flexbox vertical-centring idiom, still everywhere in toolbars, data grids, icon+label rows and
+the whole `display: table-cell` centring pattern.
+
+⚠⚠⚠ **THE TRAP, AND IT COST A BUILD.** The obvious implementation reads the free space as
+`row_height − cell_box_height`. That is **zero for exactly the cells that have the most free space**:
+a cell with `height: 60px` around a 24px line reports a *border-box* height of 60, because the
+explicit height was already applied when the cell was laid out.
+
+> A first version compiled, ran, and moved nothing — the fixture came back byte-identical. It asked
+> the box how tall it was instead of asking the content. **`height` on a box you have already sized
+> tells you what you ASKED FOR, not what is inside it.** `layout_cell` now returns the natural
+> content height alongside the border-box one, and the difference between those two numbers is the
+> entire fix.
+
+⚠⚠⚠ **AND THE BEST FINDING OF THE TICK CAME FROM A RED PROOF THAT REFUSED TO FIRE.** The recipe
+*"apply the shift to the cell instead of its content"* came back **green**. The reason is not a fixture
+gap in the ordinary sense — it is that **every row in the gate measured the same kind of thing**: a
+`<span>` inside a cell, which moves under either rule. The control that separates them — the CELL
+BOX of a cell that actually shifts, which must keep the row's origin so its background, borders and
+hit rect stay on the row — **had to be added after the RED refused to fire**, and with it the recipe
+fails at y=18 against 0.
+
+> **A gate whose rows all measure the same thing cannot tell two rules apart, and the passing run
+> never says so. The RED proof is what says so.** This is the fourth false RED prediction in seven
+> ticks (t983, t985, t988, t989) and the first where the answer was *"the gate is blind"* rather than
+> *"the claim was wrong"* — which makes it the most valuable of the four, because a blind gate keeps
+> passing.
+
+```text
+   delete the `shift` block                       -> both defect rows read 2; all controls pass
+   free space from `cbox.rect.height`             -> both defect rows read 2 AND THE CODE LOOKS
+                                                     RIGHT — the first version of this fix
+   shift the CELL instead of its content          -> GREEN until the cell-box control existed;
+                                                     now fails at y=18 against 0
+```
+
+⚠ `baseline` is the CSS initial value for a cell and aligns the first lines of a row's cells with
+each other. It is approximated as `top` — what it degrades to for a single-line row, and what this
+code already did — and that approximation is **named** in the gate rather than shipped as though it
+were an implementation.
+
+RATCHET: `manuk-layout` 125/125, `manuk-css` 32/32 + 2 doc-tests, and the layout gate set green as a
+set — `g_table_cell_valign` (new), `g_text_indent_edges`, `g_transform_containing_block`,
+`g_percentage_gap`, `g_fit_content_width`.
+
+PERF: none — one subtraction and one conditional translate per cell, in a loop that already walked
+every cell to position it.
+
+WIKI: `docs/wiki/box-layout.md` — "A cell is STRETCHED to its row, and stretching a box does not move
+what is in it".
+
 ## Tick 988 — a wrap-point error that does not change the line COUNT, and the property I did not think to combine it with (2026-08-06)
 
 TICK SHAPE: primitive — `text-indent` and the first line box's edges. **The third discovery battery**,

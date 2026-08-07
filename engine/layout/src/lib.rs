@@ -4705,7 +4705,7 @@ impl Ctx<'_> {
 
         // Lay out each placed cell; record its natural height. Single-row cells set their
         // row's height; rowspan cells' overflow is added to their last spanned row.
-        let mut laid: Vec<(usize, LayoutBox, f32)> = Vec::new();
+        let mut laid: Vec<(usize, LayoutBox, f32, f32, f32)> = Vec::new();
         let mut row_h = vec![0.0f32; nrows.max(1)];
         // ── **AN RTL TABLE'S COLUMN AXIS RUNS RIGHT-TO-LEFT.** `direction` on the table box orders the
         // COLUMNS, not just the text inside them (CSS 2.1 §17.5.3: the column axis follows the inline
@@ -4729,13 +4729,14 @@ impl Ctx<'_> {
             } else {
                 cx0
             };
-            let (cbox, bh) = self.layout_cell(p.cell, cx, 0.0, span_w(p.col, p.colspan));
+            let (cbox, bh, natural_ch, frame_v) =
+                self.layout_cell(p.cell, cx, 0.0, span_w(p.col, p.colspan));
             if p.rowspan == 1 {
                 row_h[p.row] = row_h[p.row].max(bh);
             }
-            laid.push((pi, cbox, bh));
+            laid.push((pi, cbox, bh, natural_ch, frame_v));
         }
-        for (pi, _, bh) in &laid {
+        for (pi, _, bh, _, _) in &laid {
             let p = &placed[*pi];
             if p.rowspan > 1 {
                 let last = (p.row + p.rowspan - 1).min(nrows.saturating_sub(1));
@@ -4820,12 +4821,42 @@ impl Ctx<'_> {
         }
         // Position each cell at its start row and stretch it over its spanned rows.
         let mut row_cells: Vec<Vec<LayoutBox>> = vec![Vec::new(); nrows.max(1)];
-        for (pi, mut cbox, _) in laid {
+        for (pi, mut cbox, _, natural_ch, frame_v) in laid {
             let p = &placed[pi];
             let last = (p.row + p.rowspan - 1).min(nrows.saturating_sub(1));
             let dy = row_y[p.row] - cbox.rect.y;
             cbox.translate(0.0, dy);
-            cbox.rect.height = (row_y[last] + row_h[last]) - row_y[p.row];
+            // ⚠⚠⚠ **`vertical-align` ON A TABLE CELL ALIGNS ITS CONTENT IN THE ROW'S HEIGHT, AND
+            // THE CELL WAS ALWAYS TOP-ALIGNED.** A cell is laid out at its own content height and
+            // then STRETCHED to the row — the line below does exactly that — and stretching a box
+            // does not move what is inside it. So `vertical-align: middle`, which on a table cell is
+            // the pre-flexbox vertical-centring idiom and is still everywhere, put its content flush
+            // against the top: Chrome-measured, a 19px word in a 60px cell belongs at y=20 (middle)
+            // or y=38 (bottom) and sat at y=2 in both.
+            //
+            // The shift is applied to the cell's CONTENT, not to the cell: translate the whole
+            // subtree and then restore the box's own origin, so the cell's background, borders and
+            // hit rect keep the row's geometry while its children move within it.
+            let cell_h = (row_y[last] + row_h[last]) - row_y[p.row];
+            // The free space is measured against the cell's NATURAL content height, not against its
+            // box height — a cell with `height: 60px` around a 24px line reports a 60px box and has
+            // 36px of free space, and reading the box back would say it has none.
+            let free = (cell_h - frame_v - natural_ch).max(0.0);
+            // `baseline` is the CSS initial value for a cell and aligns the first lines of the row's
+            // cells with each other; we approximate it as `top`, which is what it degrades to for a
+            // single-line row and what this code already did. `top` and every inline-only keyword
+            // (`sub`/`super`/`text-*`/lengths) are not cell alignments at all and stay at the top.
+            let shift = match self.style_of(p.cell).vertical_align {
+                manuk_css::VerticalAlign::Middle => free * 0.5,
+                manuk_css::VerticalAlign::Bottom => free,
+                _ => 0.0,
+            };
+            if shift > 0.0 {
+                let keep_y = cbox.rect.y;
+                cbox.translate(0.0, shift);
+                cbox.rect.y = keep_y;
+            }
+            cbox.rect.height = cell_h;
             row_cells[p.row].push(cbox);
         }
         let mut row_boxes = Vec::new();
@@ -5182,7 +5213,7 @@ impl Ctx<'_> {
 
     /// Lay out one table cell as a block-level BFC at `(x, y)` with column width
     /// `col_w`. Returns the cell box and its border-box height.
-    fn layout_cell(&self, cell: NodeId, x: f32, y: f32, col_w: f32) -> (LayoutBox, f32) {
+    fn layout_cell(&self, cell: NodeId, x: f32, y: f32, col_w: f32) -> (LayoutBox, f32, f32, f32) {
         let s = self.style_of(cell).clone();
         let (pl, pr) = (
             s.padding.left.resolve(col_w, 0.0),
@@ -5206,6 +5237,11 @@ impl Ctx<'_> {
             other => other.resolve(0.0, ch).max(ch),
         };
         let border_box_h = bt + pt + content_height + pb + bb;
+        // ⚠ `ch` (the NATURAL content height) is returned alongside the border-box height, and the
+        // difference between them is the whole reason: a cell with `height: 60px` reports a
+        // border-box height of 60 while its content is 24 tall, and `vertical-align` aligns the
+        // CONTENT inside the cell. Reading the box height back at the placement site says "there is
+        // no free space" for exactly the cells that have the most.
         (
             LayoutBox {
                 rect: Rect {
@@ -5238,6 +5274,8 @@ impl Ctx<'_> {
                 content,
             },
             border_box_h,
+            ch,
+            bt + pt + pb + bb,
         )
     }
 

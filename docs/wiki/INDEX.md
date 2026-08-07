@@ -282,6 +282,10 @@
   - L5613 · One predicate, not a transform special case
   - L5619 · Named, measured, not built — the t985 shape one level up
   - L5634 · will-change, contain and perspective — the negative half is the whole difficulty (t987)
+  - L5667 · A cell is STRETCHED to its row, and stretching a box does not move what is in it (t989)
+  - L5684 · The trap, and it cost a build to find
+  - L5696 · The shift goes to the CONTENT, and the gate could not tell until a control was added
+  - L5705 · Named, measured, not built — three more table defects from the same battery
 
 ## browser-capabilities.md
 `docs/wiki/browser-capabilities.md`
@@ -1655,4 +1659,4 @@
   - L124 · Rank mechanisms by FLIP RATE, not failing-subtest count — CSS layout is a multi-assertion slog
 
 ---
-1562 sections across 22 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+1566 sections across 22 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
