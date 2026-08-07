@@ -712,3 +712,4 @@ tick	sha	epoch	iso	delta_s	shape	wall_s	files	added	deleted	gates	claims	wpt_pas
 994	6f5a9a2b	1786089280	2026-08-07T03:54:40-04:00	1226	primitive	63	7	188	33	422	81	3896	6960	0	502	0	the conditional that guarded a per-axis rule by one axis (2026-08-07)
 996	6bf83557	1786098528	2026-08-07T06:28:48-04:00	9248	measurement	63	7	328	32	422	81	3896	6960	0	502	0	the fix I built, measured, and refused (2026-08-07)
 998	7f2085e9	1786107445	2026-08-07T08:57:25-04:00	8917	capability	63	2	31	30	423	81	3896	6960	0	503	0	the reset lost to the thing it exists to remove (2026-08-07)
+999	ddae0491	1786110922	2026-08-07T09:55:22-04:00	3477	primitive	63	11	700	50	424	81	3896	6960	0	504	0	conflict resolution has no geometric effect, so the multi-tick algorithm was one tick (2026-08-07)

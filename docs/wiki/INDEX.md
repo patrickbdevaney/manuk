@@ -302,6 +302,9 @@
   - L5963 · Chrome's UA numbers, read rather than inferred
   - L5985 · The five mechanisms, separated
   - L5998 · <fieldset>'s UA border cannot land without the <legend> rule (t996, refused)
+  - L6039 · The collapsing border model, and why its conflict resolution is geometrically inert
+  - L6073 · A grid line is PER-LINE, not per-segment — and one row of fifteen can tell
+  - L6082 · Conflict resolution cannot move a box, and that is the whole reason this is small
 
 ## browser-capabilities.md
 `docs/wiki/browser-capabilities.md`
@@ -1677,4 +1680,4 @@
   - L124 · Rank mechanisms by FLIP RATE, not failing-subtest count — CSS layout is a multi-assertion slog
 
 ---
-1584 sections across 22 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+1587 sections across 22 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.

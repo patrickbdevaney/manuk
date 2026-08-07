@@ -4608,8 +4608,6 @@ impl Ctx<'_> {
 
         let border_x = x + ml;
         let border_y = y + collapse_margins(prev_margin, mt);
-        let content_x = border_x + bl + pl;
-        let content_y = border_y + bt + pt;
 
         // `border-collapse` drops the inter-cell spacing (cells share borders).
         let spacing = if s.border_collapse {
@@ -4668,6 +4666,102 @@ impl Ctx<'_> {
             }
         }
 
+        // ── ⚠⚠⚠ **`border-collapse: collapse` — THE CELLS SHARE THEIR BORDERS WITH EACH OTHER AND
+        //    WITH THE TABLE, AND THE SHARED WIDTH IS THE `max` OF THE ONES THAT MEET.** We gave every
+        //    cell its full border on all four sides and shared nothing, so a collapsed table was
+        //    `(n+1) × border` too wide and **every column after the first was displaced
+        //    cumulatively** — the shape exactly matching the worst `reading_order` sites, which are
+        //    `<td>` x-divergences.
+        //
+        //    The model, derived from Chrome across 15 tables (`docs/wiki/box-layout.md`):
+        //
+        //    1. Each **grid line** — `ncols + 1` vertical, `nrows + 1` horizontal — has ONE width,
+        //       the `max` of every border that meets it: the cells on either side of it, plus the
+        //       table's own border at the two outer lines.
+        //    2. Each side of the line takes **half**. So a cell's used border is its line's width
+        //       halved, and the table's own used border is its outer line halved.
+        //    3. The table's **`padding` is ignored** (CSS 2.1 §17.6.2, and measured: `#t12` with
+        //       `padding: 30px` comes out byte-identical to the same table with none).
+        //
+        //    ⚠⚠⚠ **A GRID LINE IS PER-LINE, NOT PER-SEGMENT, AND THAT IS THE ROW THAT DECIDES IT.**
+        //    In `#t13` the middle vertical line is 20px in row 1 and 2px in row 2; Chrome gives BOTH
+        //    rows the 20px line (`d13` is inset 10 though its own border is 2), because a column has
+        //    to be rectangular. A per-segment reading passes every uniform table and gets `#t11`,
+        //    `#t13` and every real table with a heavier header row wrong.
+        //
+        //    ⚠⚠⚠ **AND CONFLICT RESOLUTION HAS NO GEOMETRIC EFFECT, WHICH IS WHY THIS IS ONE TICK
+        //    AND NOT THE MULTI-TICK ALGORITHM t993 PRICED IT AS.** CSS 2.1 §17.6.2.1 resolves a
+        //    collapsing conflict by `hidden` → **wider** → style priority → origin. Width is
+        //    consulted BEFORE style, so style can only ever break a *width tie* — and two borders of
+        //    equal width occupy equal space whichever one wins. Measured: `#t10`, 2px `solid` against
+        //    6px `double`, gives the 6px geometry with no style rule implemented at all.
+        //
+        //    ⚠ **THE ONE EXCEPTION IS `hidden`, AND IT IS NOT BUILT** — it must force its line to
+        //    zero even against a wider neighbour (`#t8`: a 10px solid cell beside a 10px `hidden` one
+        //    is 15 wide, not 20). `manuk_css::BorderStyle` has no `Hidden` variant *and is stored
+        //    uniform for all four sides*, so the fix is a cascade change rather than a layout one and
+        //    is named here rather than guessed at. `none` needs nothing: its computed width is
+        //    already 0, so it loses the `max` on its own.
+        //
+        //    ⚠ The whole mechanism hangs off ONE flag, deliberately: `collapse = false` restores the
+        //    pre-fix engine exactly, which is what makes `G_BORDER_COLLAPSE`'s RED reproducible in
+        //    one edit rather than four that have to agree with each other.
+        let collapse = s.border_collapse;
+        let nrows_grid = rows.len();
+        let (vline, hline) = if collapse {
+            let mut v = vec![0.0f32; ncols + 1];
+            let mut h = vec![0.0f32; nrows_grid + 1];
+            v[0] = v[0].max(bl);
+            v[ncols] = v[ncols].max(br);
+            h[0] = h[0].max(bt);
+            h[nrows_grid] = h[nrows_grid].max(bb);
+            for p in &placed {
+                let cs = self.style_of(p.cell);
+                v[p.col] = v[p.col].max(cs.border_width.left);
+                let ce = (p.col + p.colspan).min(ncols);
+                v[ce] = v[ce].max(cs.border_width.right);
+                h[p.row] = h[p.row].max(cs.border_width.top);
+                let re = (p.row + p.rowspan).min(nrows_grid);
+                h[re] = h[re].max(cs.border_width.bottom);
+            }
+            (v, h)
+        } else {
+            (Vec::new(), Vec::new())
+        };
+        // The used frame of the TABLE box itself: the outer half of each outer grid line, and no
+        // padding at all. Everything downstream — `content_x`, the column offsets, the table's own
+        // border box — reads these and needs no further collapse awareness.
+        let (bl, br, bt, bb, pl, pr, pt, pb) = if collapse {
+            (
+                vline[0] / 2.0,
+                vline[ncols] / 2.0,
+                hline[0] / 2.0,
+                hline[nrows_grid] / 2.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+            )
+        } else {
+            (bl, br, bt, bb, pl, pr, pt, pb)
+        };
+        let content_x = border_x + bl + pl;
+        let content_y = border_y + bt + pt;
+        /// The four used border widths a cell takes in the collapsing model — half of each of the
+        /// grid lines it sits between. `None` is the separated model, where a cell simply keeps its
+        /// own borders.
+        type CollapsedSides = Option<(f32, f32, f32, f32)>;
+        let collapsed_sides = |p: &PlacedCell| -> CollapsedSides {
+            collapse.then(|| {
+                (
+                    vline[p.col] / 2.0,
+                    vline[(p.col + p.colspan).min(ncols)] / 2.0,
+                    hline[p.row] / 2.0,
+                    hline[(p.row + p.rowspan).min(nrows_grid)] / 2.0,
+                )
+            })
+        };
+
         // Column widths.
         let spacing_total = spacing * (ncols as f32 + 1.0);
         let table_specified = match s.width {
@@ -4683,7 +4777,15 @@ impl Ctx<'_> {
         } else if s.table_layout == manuk_css::TableLayout::Fixed {
             self.fixed_col_widths(&cell_grid, ncols, avail_cols)
         } else {
-            self.auto_col_widths(&placed, ncols, avail_cols, table_specified.is_some())
+            // The intrinsic widths must be measured with the SAME frame the cell will be laid out
+            // with, or the column comes out sized for a border the cell no longer has.
+            self.auto_col_widths(
+                &placed,
+                ncols,
+                avail_cols,
+                table_specified.is_some(),
+                collapse.then_some(&vline[..]),
+            )
         };
         let cols_used: f32 = widths.iter().sum();
         let mut content_w = cols_used + spacing_total;
@@ -4776,8 +4878,13 @@ impl Ctx<'_> {
             } else {
                 cx0
             };
-            let (cbox, bh, natural_ch, frame_v) =
-                self.layout_cell(p.cell, cx, 0.0, span_w(p.col, p.colspan));
+            let (cbox, bh, natural_ch, frame_v) = self.layout_cell(
+                p.cell,
+                cx,
+                0.0,
+                span_w(p.col, p.colspan),
+                collapsed_sides(p),
+            );
             if p.rowspan == 1 {
                 row_h[p.row] = row_h[p.row].max(bh);
             }
@@ -5014,7 +5121,12 @@ impl Ctx<'_> {
                 height: border_box_h,
             },
             background: s.background_color,
-            border: border_of(&s),
+            // Same as the cells: in the collapsing model the table occupies only the OUTER half of
+            // its outer grid lines, so it must paint only that half.
+            border: border_of(&s).map(|b| Border {
+                widths: [bt, br, bb, bl],
+                ..b
+            }),
             radius: s.border_radius,
             shadows: s.box_shadows.clone(),
             filters: s.filter.clone(),
@@ -5210,12 +5322,15 @@ impl Ctx<'_> {
     }
 
     /// A cell's intrinsic `(min-content, max-content)` border-box widths.
-    fn cell_intrinsic(&self, cell: NodeId) -> (f32, f32) {
+    ///
+    /// `border_lr` replaces the cell's own left+right border width with the pair of collapsed
+    /// half-lines it will actually be laid out with (`border-collapse: collapse`); `None` is the
+    /// separated model, where the cell keeps its own.
+    fn cell_intrinsic(&self, cell: NodeId, border_lr: Option<f32>) -> (f32, f32) {
         let s = self.style_of(cell);
         let frame = s.padding.left.resolve(0.0, 0.0)
             + s.padding.right.resolve(0.0, 0.0)
-            + s.border_width.left
-            + s.border_width.right;
+            + border_lr.unwrap_or(s.border_width.left + s.border_width.right);
         // If the cell has a definite width, both intrinsics collapse to it.
         if let Dim::Px(w) = s.width {
             return (w + frame, w + frame);
@@ -5240,15 +5355,22 @@ impl Ctx<'_> {
         ncols: usize,
         avail: f32,
         table_has_width: bool,
+        vline: Option<&[f32]>,
     ) -> Vec<f32> {
         let mut col_min = vec![0.0f32; ncols];
         let mut col_max = vec![0.0f32; ncols];
+        // In the collapsing model a cell's horizontal frame is the two grid lines it sits between,
+        // halved — not its own borders. Measuring the intrinsics with the cell's own borders sizes
+        // every column for a frame the cell will never have.
+        let border_lr = |p: &PlacedCell| -> Option<f32> {
+            vline.map(|v| v[p.col] / 2.0 + v[(p.col + p.colspan).min(ncols)] / 2.0)
+        };
         // Single-column cells set their column's intrinsics directly. Cells are read from the
         // PLACED grid, not from each row's raw child order: with a `colspan`, the two disagree, and
         // attributing a spanning cell's width to the wrong column corrupts every column after it.
         // Hacker News' subtext row (`<td colspan="2">` then the metadata cell) did exactly that.
         for p in placed.iter().filter(|p| p.colspan == 1 && p.col < ncols) {
-            let (mn, mx) = self.cell_intrinsic(p.cell);
+            let (mn, mx) = self.cell_intrinsic(p.cell, border_lr(p));
             col_min[p.col] = col_min[p.col].max(mn);
             col_max[p.col] = col_max[p.col].max(mx);
         }
@@ -5260,7 +5382,7 @@ impl Ctx<'_> {
                 continue;
             }
             let span = (end - p.col) as f32;
-            let (mn, mx) = self.cell_intrinsic(p.cell);
+            let (mn, mx) = self.cell_intrinsic(p.cell, border_lr(p));
             let have_min: f32 = col_min[p.col..end].iter().sum();
             let have_max: f32 = col_max[p.col..end].iter().sum();
             if mn > have_min {
@@ -5335,7 +5457,19 @@ impl Ctx<'_> {
 
     /// Lay out one table cell as a block-level BFC at `(x, y)` with column width
     /// `col_w`. Returns the cell box and its border-box height.
-    fn layout_cell(&self, cell: NodeId, x: f32, y: f32, col_w: f32) -> (LayoutBox, f32, f32, f32) {
+    ///
+    /// `collapsed` is the `(left, right, top, bottom)` the cell takes in the **collapsing** model —
+    /// half of each grid line it sits between. It replaces the cell's own borders for layout *and*
+    /// for paint: a cell that occupies 5px of a shared 10px line must not draw the full 10, or the
+    /// border overhangs a box the layout no longer reserves space for.
+    fn layout_cell(
+        &self,
+        cell: NodeId,
+        x: f32,
+        y: f32,
+        col_w: f32,
+        collapsed: Option<(f32, f32, f32, f32)>,
+    ) -> (LayoutBox, f32, f32, f32) {
         let s = self.style_of(cell).clone();
         let (pl, pr) = (
             s.padding.left.resolve(col_w, 0.0),
@@ -5345,8 +5479,12 @@ impl Ctx<'_> {
             s.padding.top.resolve(col_w, 0.0),
             s.padding.bottom.resolve(col_w, 0.0),
         );
-        let (bl, br) = (s.border_width.left, s.border_width.right);
-        let (bt, bb) = (s.border_width.top, s.border_width.bottom);
+        let (bl, br, bt, bb) = collapsed.unwrap_or((
+            s.border_width.left,
+            s.border_width.right,
+            s.border_width.top,
+            s.border_width.bottom,
+        ));
 
         let content_w = (col_w - pl - pr - bl - br).max(0.0);
         let content_x = x + bl + pl;
@@ -5373,7 +5511,10 @@ impl Ctx<'_> {
                     height: border_box_h,
                 },
                 background: s.background_color,
-                border: border_of(&s),
+                border: border_of(&s).map(|b| Border {
+                    widths: [bt, br, bb, bl],
+                    ..b
+                }),
                 radius: s.border_radius,
                 shadows: s.box_shadows.clone(),
                 filters: s.filter.clone(),

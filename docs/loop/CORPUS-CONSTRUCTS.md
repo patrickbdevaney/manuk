@@ -139,3 +139,28 @@ not get run.
 > A zero is not a reason to abandon the work — I4 ranks the real web and the surface audit is the
 > instrument for that — but it *is* a reason to stop expecting the metric to show it, and to say so
 > in the tick rather than in the next sweep's post-mortem.
+
+## `border-collapse` (tick 999) — and the row that shows why a raw declaration count misleads
+
+356 sites fetched with their linked stylesheets (the corrected recipe, not HTML alone):
+
+```text
+   border-collapse: collapse declared in the CSS   204/356   57.3%
+   a <table> in the served HTML                     25/356    7.0%
+   BOTH — where the defect can actually bite        20/356    5.6%
+   any `border-style: hidden` anywhere               3/356    0.8%
+```
+
+⚠⚠⚠ **57.3% is the number a careless tick would publish, and it is the wrong one.**
+`border-collapse` is in every CSS reset and every framework, so it is declared almost everywhere —
+and it is **inert** unless the page also has a table. The honest figure is the *intersection*.
+
+> **The rule this row adds: grep for the CONSTRUCT, not for the DECLARATION.** A property that is
+> universally declared and conditionally applicable prices at its condition, not at its declaration.
+> The same trap is waiting for `border-spacing`, `table-layout`, `caption-side`, `list-style`,
+> `quotes`, `counter-reset` and every other property a reset sets pre-emptively on a selector that
+> most pages never instantiate.
+
+⚠ **5.6% is a floor twice over**: it counts only tables in the *served* HTML, so a JS-built table is
+invisible to the grep; and co-occurrence is not confirmed divergence — the reset and the table must
+also meet on the same element for the defect to be observable.

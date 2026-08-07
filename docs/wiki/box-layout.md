@@ -6035,3 +6035,67 @@ sheet was NOT reset by the author's `* { margin: 0 }`**, while Chrome's is. The 
 shorthands did not resolve as one property group in the cascade, so the UA's logical margin survived
 an author reset that should have removed it. Written physically (`margin: 0 2px`) it behaves. That is
 a cascade defect with a far wider blast radius than fieldsets, and it is worth its own probe.
+
+## The collapsing border model, and why its conflict resolution is geometrically inert
+
+`border-collapse: collapse` is in the CSS of **57.3% of the CrUX corpus** (204 of 356 sites, fetched
+with their linked stylesheets) — every reset and every framework sets it. It is *inert* without a
+table, though, and only **5.6%** (20 of 356) have both, which is the honest population. Quoting the
+57.3% would be the same error as pricing a property by how often it is *declared* rather than how
+often it *applies*.
+
+**The model. Every clause was measured against
+`google-chrome-stable --headless=new --hide-scrollbars --window-size=1200,800` over 15 tables, and
+every clause has a row that fails without it.**
+
+1. Each **grid line** — `ncols + 1` vertical and `nrows + 1` horizontal — carries ONE width: the
+   `max` of every border that meets it. The cells on either side contribute, and so does the table's
+   own border at the two outer lines.
+2. Each side of a line takes **half**, kept fractional. A 1px line puts the cell at `x = 0.5` with
+   width 11; rounding the half per side gives 10 or 12 and Chrome gives 11.
+3. The table's **`padding` is ignored** (CSS 2.1 §17.6.2 — and measured: `padding: 30px` on a
+   collapsed table is byte-identical to none). A **cell's** padding is kept.
+
+```text
+                                                       Chrome         ours before
+   two cells, uniform 10px                a1          [ 5,  5,20,30]  [ 0,  0,30,40]
+                                          the table   [ 0,  0,50,40]  [ 0,  0,60,40]
+   a 4px cell beside a 20px one           a2          [ 2, 50,22,40]  [ 0, 40,18,60]
+   table border 10 + cells 2              a3          [ 5,105,16,30]  [10,110,14,24]
+   1px borders (odd halves)               a15         [ 1,299,11,21]  [ 0,362,12,22]
+```
+
+The **unequal** row is what proves it is max-then-halve and not anything else: `max(4, 20) = 20`,
+half 10, so cell 1 is `2 + 10 + 10 = 22`. The **table-border** row is what proves the table is just
+another participant in the outer line: `max(10, 2) = 10`, the table takes the outer half and the
+*cell* takes the inner one, so the cell starts 5 in and not 10.
+
+### A grid line is PER-LINE, not per-segment — and one row of fifteen can tell
+
+Give the middle vertical line 20px in row 1 and 2px in row 2. Chrome gives **both** rows the 20px
+line: row 2's cell is inset 10 though its own border is 2, because a column has to be rectangular.
+
+> A per-segment reading — collapse each cell against its immediate neighbour — passes every uniform
+> table and gets wrong every real table with a heavier header row. **A fixture of uniform tables
+> cannot contain the row that decides the rule**, so it has to be written on purpose.
+
+### Conflict resolution cannot move a box, and that is the whole reason this is small
+
+CSS 2.1 §17.6.2.1 resolves a collapsing conflict in this order:
+
+```text
+   hidden  ->  WIDER  ->  style priority (double > solid > dashed > dotted > ...)  ->  origin
+```
+
+**Width is consulted before style.** So style priority can only ever break a *width tie* — and two
+borders of the same width occupy the same space whichever one wins. Measured: 2px `solid` against
+6px `double` lays out with the 6px geometry, with no style-priority rule implemented at all.
+
+> When a spec orders its tie-breakers, ask which term the OUTPUT you care about is a function of.
+> The "other half" of this algorithm is a function of *style*; geometry is a function of *width*.
+
+**The one exception is `hidden`**, which must force its line to zero even against a wider neighbour:
+a 10px solid cell beside a 10px `hidden` one is **15 wide, not 20**. `manuk_css::BorderStyle` has no
+`Hidden` variant and stores one style for all four sides, so honouring it is a cascade change rather
+than a layout one. It is 0.8% of the corpus by a deliberately generous grep. `none` needs no rule at
+all — its computed width is already 0, so it loses the `max` on its own.

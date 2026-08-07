@@ -46371,6 +46371,128 @@ PERF: none — one UA rule and one narrowed branch in a cascade that already ran
 WIKI: `docs/wiki/css-cascade.md` — where Chrome draws the form-control `box-sizing` line, and why a
 layout-crate test cannot see it.
 
+## Tick 999 — conflict resolution has no geometric effect, so the multi-tick algorithm was one tick (2026-08-07)
+
+TICK SHAPE: primitive — `border-collapse: collapse`, the defect t993 measured, derived the rule for,
+and deliberately refused to build. **48 of 51 rows Chrome-exact, and the three that are not are all
+one construct, named in advance.**
+
+⚠⚠⚠ **WE GAVE EVERY CELL ITS FULL BORDER ON ALL FOUR SIDES AND SHARED NOTHING.** A collapsed table
+was `(n + 1) x border` too wide and **every column after the first was displaced cumulatively** —
+which is the exact shape of the worst `reading_order` sites in the CrUX sample, where the divergences
+are `<td>` x-positions. Measured against Chrome
+(`google-chrome-stable --headless=new --hide-scrollbars --window-size=1200,800`), 15 tables:
+
+```text
+                                                       Chrome        before        after
+   #t1  two cells, uniform 10px          a1           [ 5,  5,20,30] [0,  0,30,40] [ 5,  5,20,30]
+                                         table        [ 0,  0,50,40] [0,  0,60,40] [ 0,  0,50,40]
+   #t2  a 4px cell beside a 20px one     a2           [ 2, 50,22,40] [0, 40,18,60] [ 2, 50,22,40]
+   #t3  table border 10 + cells 2        a3           [ 5,105,16,30] [10,110,14,24][ 5,105,16,30]
+   #t13 middle line 20px in row 1 only   d13          [22,192,30,31] [14,264,50,24][22,192,30,31]
+   #t15 1px borders (ODD halves)         a15          [ 1,299,11,21] [ 0,362,12,22][ 1,299,11,21]
+   #t4  the SEPARATED model (CONTROL)    a4           [ 0,140,14,24] [ 0,144,14,24][ 0,140,14,24]
+```
+
+⚠ Every `before` above is a RUN of the pre-fix engine (`let collapse = false;`), not an inference —
+the first three tables were measured before the fix and the rest by re-flipping the flag afterwards.
+The control's `y` moves by 4 in the `before` column and its `x`/`w`/`h` do not: the separated table
+sits below three collapsed ones that were each too tall, so it is *carried*, not changed. That
+distinction is the whole reason the gate asserts `y` relative to each table's own box.
+
+**The model, and every clause of it has a row that fails without it:**
+
+1. Each **grid line** — `ncols + 1` vertical, `nrows + 1` horizontal — has ONE width, the `max` of
+   every border meeting it: the cells on either side, plus the table's own border at the outer two.
+2. Each side of the line takes **half**, exactly — `#t15`'s 1px lines land on 0.5 and Chrome agrees.
+   Rounding the half to a whole pixel gives 10 or 12 where Chrome gives 11.
+3. The table's **`padding` is ignored** — `#t12` with `padding: 30px` is byte-identical to the same
+   table with none. Cell padding is kept (`#t14`).
+
+⚠⚠⚠ **A GRID LINE IS PER-LINE, NOT PER-SEGMENT, AND ONLY ONE ROW OF FIFTEEN CAN TELL.** In `#t13`
+the middle vertical line is 20px in row 1 and 2px in row 2. Chrome gives **both** rows the 20px line:
+`d13` is inset 10 though its own border is 2, because a column has to be rectangular. A per-segment
+reading — collapse each cell against its immediate neighbour — passes every uniform table, passes
+`#t1`/`#t2`/`#t3`/`#t7`/`#t10`/`#t15`, and gets wrong every real table with a heavier header row.
+**A fixture of uniform tables cannot contain the row that decides the rule**, which is why the
+per-row-varying table had to be written on purpose rather than found.
+
+⚠⚠⚠ **AND THE REASON t993 PRICED THIS AS MULTI-TICK DOES NOT SURVIVE MEASUREMENT.** It wrote:
+*"conflict resolution (style priority, cell vs row vs table) is the other half and these rows do not
+exercise it."* CSS 2.1 §17.6.2.1 resolves a collapsing conflict in this order: `hidden` -> **wider**
+-> style priority -> origin. **Width is consulted BEFORE style, so style can only ever break a width
+TIE — and two borders of equal width occupy equal space whichever one wins.** Conflict resolution is
+therefore *geometrically inert*, and the one row that proves it is `#t10`: 2px `solid` against 6px
+`double` gives the 6px geometry with no style-priority rule implemented at all.
+
+> **A deferral is a claim, and it can be wrong in the direction that costs you the tick.** t993 was
+> right to refuse a fix it did not understand; the estimate attached to the refusal was a guess, and
+> six ticks of an eight-row fixture is what it took to find out. The generalisable form: **when a
+> spec orders its tie-breakers, check which term the OUTPUT you care about is a function of** — this
+> whole "other half" is a function of *style*, and geometry is a function of *width*.
+
+⚠⚠ **THE ONE EXCEPTION IS `hidden`, AND IT IS NAMED RATHER THAN GUESSED AT.** `hidden` must force
+its line to zero even against a wider neighbour: Chrome gives a 10px solid cell beside a 10px
+`hidden` one a width of **15, not 20** (`#t8`, the only diverging table of the fifteen — all 3 of the
+51 failing rows). `manuk_css::BorderStyle` has no `Hidden` variant **and stores one style for all
+four sides**, so honouring it is a cascade change, not a layout one. Building only the half a uniform
+field can express would make `border-left-style: hidden` *silently wrong* instead of *uniformly
+unsupported* — the half-installed-API failure this loop has already paid for once. `none` needs
+nothing: its computed width is already 0, so it loses the `max` on its own (`#t7`, exact).
+
+⚠⚠ **PRICED ON THE CORPUS, AND THE HEADLINE NUMBER IS THE WRONG ONE TO QUOTE.** 356 sites fetched
+with their linked stylesheets (t998's corrected recipe — HTML alone undercounts CSS ~3x):
+
+```text
+   border-collapse: collapse in the CSS      204/356   57.3%   <- nearly universal, and MISLEADING
+   a <table> in the served HTML               25/356    7.0%
+   BOTH — the population where it can bite    20/356    5.6%
+   any `border-style: hidden` anywhere         3/356    0.8%   <- the residue's whole population
+```
+
+**57.3% is the number a careless tick would publish.** `border-collapse` is in every reset and every
+CSS framework, so it is present almost everywhere — and it is *inert* unless the page also has a
+table. The honest figure is the intersection, **5.6%**, and it is a floor twice over: it counts only
+tables in the served HTML (a JS-built table is invisible to a grep) and co-occurrence is not
+confirmed divergence. Set against it, the residue is 0.8% by the same generous grep.
+
+⚠ **AND t993'S WARNING ABOUT CHROME'S OUTER WIDTH DID NOT REPRODUCE.** It recorded a 1px quirk in
+Chrome's collapsed-table box (49 where the arithmetic says 50) and advised a gate assert the CELLS
+and not the table. Across all 15 tables here the outer width reconciles **exactly** — `#t1` is the
+same shape it described and measures 50 — provided the halves are kept fractional rather than
+rounded per side. I have not reproduced their fixture, so this is "not reproduced", not "wrong"; the
+gate asserts table boxes as well as cells, and if the quirk is real it will surface there.
+
+MECHANISM: `layout_table` computes `vline`/`hline` from the placement grid (which is styles-only, so
+it is available before any sizing), and everything downstream reads the result: the table's own used
+frame becomes the outer halves with zero padding, `cell_intrinsic` measures each column with the
+frame the cell will actually be laid out with, and `layout_cell` takes the four halves for layout
+**and for paint** — a cell occupying 5px of a shared 10px line must not draw the full 10.
+
+RATCHET: `manuk-layout` 125/125, and all 14 table gates green (`g_anonymous_table_row`,
+`g_caption_paint`, `g_orphan_table_cell`, `g_row_group_order`, `g_rowless_table`,
+`g_rowspan_distribution`, `g_table_border_spacing_ua_default`, `g_table_caption`,
+`g_table_cell_valign`, `g_table_dom`, `g_table_height_is_a_minimum`,
+`g_table_row_height_distribution`, `g_table_write`).
+
+GATE: `G_BORDER_COLLAPSE` — 21 claims over 11 tables, including the separated-model control and the
+per-line discriminator. **RED-PROVEN, and the proof needed a refactor to be honest.** The whole
+mechanism hangs off one flag: `let collapse = false;` restores the pre-fix engine exactly and gives
+`#a1 is (x, width) (0, 30), Chrome gives (5, 20)`. ⚠ My FIRST revert — `None` for the cell sides
+only, leaving the table frame and column intrinsics collapsed — **went red on the table HEIGHT and
+left `#a1` at the correct `(5, 20)`**, so the recipe I had already written into the gate header was
+false. Four places had to agree; folding them onto one flag before recording the proof is the only
+reason the header now says what actually happens. ⚠ The control rows `#a4`/`#b4` are asserted BEFORE
+the collapse rows and keep passing under the revert, which is what makes them a control.
+
+PERF: none measurable, and computed rather than asserted. The added work is `2(ncols + nrows + 2)`
+`f32::max` calls per collapsed table, over a `placed` vector the function had already built for
+placement; the separated model takes an `if` and allocates nothing (`Vec::new()` twice). No new
+tree walk, no extra layout pass. F1/F2 green on the wall.
+
+WIKI: `docs/wiki/box-layout.md` — "The collapsing border model, and why its conflict resolution is
+geometrically inert".
+
 ## Tick 998 — the reset lost to the thing it exists to remove (2026-08-07)
 
 TICK SHAPE: capability — check #89's steer item **#2**, the cascade lead t996 found while writing a UA
