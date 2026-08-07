@@ -11,12 +11,12 @@
 
 | | value | over |
 |---|---|---|
-| ticks landed | **706** | ticks 1–989 |
-| median tick cycle | **26m** | 705 intervals |
-| median, last 10 | **61m** | 10 intervals |
+| ticks landed | **707** | ticks 1–990 |
+| median tick cycle | **26m** | 706 intervals |
+| median, last 10 | **63m** | 10 intervals |
 | fastest / slowest | 5s / 5.4d | |
-| **ticks per hour** | **1.10** | 642.9h elapsed |
-| median verify wall | **63s** | 645 ticks |
+| **ticks per hour** | **1.10** | 643.9h elapsed |
+| median verify wall | **63s** | 646 ticks |
 | wall trend | 39s → 63s — getting slower ⚠️ | first 3 vs last 3 |
 
 The **cycle** is the real unit: implement → debug → verify wall → land. The wall is only part of
@@ -27,11 +27,11 @@ it, and a wall that grows taxes every future tick, so it is tracked separately f
 ### Near — the daily driver (doc / app / platform web)
 
 * **capabilities asserted** (`G_CAPABILITY`): 48 → **81**
-* **live gates**: 27 → **419**
-* **✅ rows in the capability ledger**: 144 → **498**
+* **live gates**: 27 → **420**
+* **✅ rows in the capability ledger**: 144 → **499**
 * **Bar 0 — oracle hangs**: 0 of 265 sites
 
-**339 of 706 ticks** (48%) moved a
+**339 of 707 ticks** (48%) moved a
 user-visible capability. The rest were instruments, infrastructure and corrections — and the
 ledger says the corrections were not overhead: three of its top three priorities were phantoms,
 and finding that out redirected everything after it.
@@ -803,5 +803,6 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 | **987** | 2026-08-06 21:49 | 2.1h | pattern-class | 63s | +389/−54 | 417 | 81 | 56.0% · | the negative half is the whole difficulty, and both cadence audits (2026-08-06) |
 | **988** | 2026-08-06 22:58 | 69m | primitive | 63s | +398/−40 | 418 | 81 | 56.0% · | a wrap-point error that does not change the line COUNT, and the property I did not think t |
 | **989** | 2026-08-06 23:55 | 57m | primitive | 63s | +331/−35 | 419 | 81 | 56.0% · | the tables battery, and a RED proof that revealed the GATE was blind (2026-08-06) |
+| **990** | 2026-08-07 00:58 | 63m | primitive | 63s | +415/−46 | 420 | 81 | 56.0% · | the residue VI.2 has named since check #82, and the one row that decides the rule (2026-08 |
 
 *`·` after a WPT figure means **carried forward**, not measured this tick.*

@@ -289,6 +289,9 @@
   - L5724 · A rowspan cell's excess is SHARED by the rows it spans (t990)
   - L5744 · Proportional, not even — and only one row in the fixture can tell
   - L5755 · Why it is not a one-cell error
+  - L5769 · <tfoot> written first rendered first, and the UA sheet is where we lost the distinction (t991)
+  - L5797 · The fix is not where the symptom is
+  - L5812 · Why the sort must be stable
 
 ## browser-capabilities.md
 `docs/wiki/browser-capabilities.md`
@@ -1662,4 +1665,4 @@
   - L124 · Rank mechanisms by FLIP RATE, not failing-subtest count — CSS layout is a multi-assertion slog
 
 ---
-1569 sections across 22 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+1572 sections across 22 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.

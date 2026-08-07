@@ -2731,6 +2731,8 @@ impl Ctx<'_> {
                             | Display::TableCell
                             | Display::TableRow
                             | Display::TableRowGroup
+                            | Display::TableHeaderGroup
+                            | Display::TableFooterGroup
                     ) =>
                 {
                     self.shrink_to_fit(node, (cw - extra).max(0.0))
@@ -5063,6 +5065,10 @@ impl Ctx<'_> {
         // what the consumer's `Option<NodeId>` already wanted: no style lookup, so no background of
         // its own, and no node on the emitted `LayoutBox`.
         let mut anon: Vec<NodeId> = Vec::new();
+        // Rows are collected with a GROUP RANK (0 header · 1 body · 2 footer) and stable-sorted by
+        // it at the end. A bare `<tr>` or a stray `table-cell` is body-level, exactly as the implied
+        // `<tbody>` an HTML parser would wrap it in.
+        let mut ranked: Vec<(u8, Option<NodeId>, Vec<NodeId>)> = Vec::new();
         for child in self.dom.children(table) {
             if !is_rendered(self.dom, self.styles, child) || !self.dom.is_element(child) {
                 continue;
@@ -5071,20 +5077,36 @@ impl Ctx<'_> {
                 Display::TableCell => anon.push(child),
                 Display::TableRow => {
                     if !anon.is_empty() {
-                        rows.push((None, std::mem::take(&mut anon)));
+                        ranked.push((1, None, std::mem::take(&mut anon)));
                     }
-                    rows.push((Some(child), self.collect_cells(child)));
+                    ranked.push((1, Some(child), self.collect_cells(child)));
                 }
-                Display::TableRowGroup => {
+                Display::TableRowGroup | Display::TableHeaderGroup | Display::TableFooterGroup => {
                     if !anon.is_empty() {
-                        rows.push((None, std::mem::take(&mut anon)));
+                        ranked.push((1, None, std::mem::take(&mut anon)));
                     }
+                    // ⚠⚠⚠ **CSS TABLES LAYS ROW GROUPS OUT header -> body -> footer REGARDLESS OF
+                    // SOURCE ORDER, and this walked the DOM.** `<tfoot>` written BEFORE `<tbody>` is
+                    // the classic HTML4 idiom — it exists so a long table's footer reaches the
+                    // parser early — and it is still everywhere in legacy markup, invoices and
+                    // report templates. Rendered in source order it puts the totals row at the TOP
+                    // of the table: not a geometry error, a READING-ORDER one, which is the I3 class
+                    // rather than the shape class.
+                    //
+                    // Recorded into a rank rather than sorted in place, because groups of the SAME
+                    // kind must keep their source order relative to each other (two `<tbody>`s are
+                    // ordered by the document, and a stable sort on the rank is what preserves that).
+                    let rank = match self.style_of(child).display {
+                        Display::TableHeaderGroup => 0u8,
+                        Display::TableFooterGroup => 2,
+                        _ => 1,
+                    };
                     for gr in self.dom.children(child) {
                         if is_rendered(self.dom, self.styles, gr)
                             && self.dom.is_element(gr)
                             && self.style_of(gr).display == Display::TableRow
                         {
-                            rows.push((Some(gr), self.collect_cells(gr)));
+                            ranked.push((rank, Some(gr), self.collect_cells(gr)));
                         }
                     }
                 }
@@ -5095,8 +5117,13 @@ impl Ctx<'_> {
             }
         }
         if !anon.is_empty() {
-            rows.push((None, anon));
+            ranked.push((1, None, anon));
         }
+        // STABLE sort: groups of the same kind keep their source order relative to each other, which
+        // is what makes two `<tbody>`s stay in document order while a `<tfoot>` written first moves
+        // to the end.
+        ranked.sort_by_key(|(rank, _, _)| *rank);
+        rows.extend(ranked.into_iter().map(|(_, n, cells)| (n, cells)));
         rows
     }
 
@@ -6779,6 +6806,8 @@ impl Ctx<'_> {
                             | Display::TableCell
                             | Display::TableRow
                             | Display::TableRowGroup
+                            | Display::TableHeaderGroup
+                            | Display::TableFooterGroup
                     )
                 ) || is_atomic_inline_replaced(self.dom, self.styles, node)
                 {

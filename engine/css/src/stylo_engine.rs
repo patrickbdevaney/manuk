@@ -407,7 +407,14 @@ abbr[title] { text-decoration: underline; }
    Chrome-exact when an author SET it (`border-spacing:10px` matched to the pixel) — only the
    default was absent, which is why nothing caught it. */
 table { display: table; border-spacing: 2px; }
-thead, tbody, tfoot { display: table-row-group; }
+tbody { display: table-row-group; }
+/* ⚠ `thead`/`tfoot` are NOT `table-row-group`, and folding them in was the whole defect: CSS Tables
+   lays row groups out header -> body -> footer regardless of source order, so a `<tfoot>` written
+   before its `<tbody>` — the classic HTML4 idiom, still everywhere in legacy markup — rendered at
+   the TOP of the table. The UA sheet is where Chrome makes the distinction and it is where we lost
+   it. */
+thead { display: table-header-group; }
+tfoot { display: table-footer-group; }
 tr { display: table-row; }
 td, th { display: table-cell; padding: 1px; }
 caption { display: table-caption; }

@@ -217,6 +217,10 @@ fn map_display(d: StyloDisplay) -> Display {
         Display::Table
     } else if d == StyloDisplay::TableRowGroup {
         Display::TableRowGroup
+    } else if d == StyloDisplay::TableHeaderGroup {
+        Display::TableHeaderGroup
+    } else if d == StyloDisplay::TableFooterGroup {
+        Display::TableFooterGroup
     } else if d == StyloDisplay::TableRow {
         Display::TableRow
     } else if d == StyloDisplay::TableCell {

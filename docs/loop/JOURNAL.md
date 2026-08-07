@@ -46371,6 +46371,102 @@ PERF: none — one UA rule and one narrowed branch in a cascade that already ran
 WIKI: `docs/wiki/css-cascade.md` — where Chrome draws the form-control `box-sizing` line, and why a
 layout-crate test cannot see it.
 
+## Tick 991 — the fold that read as a simplification, and the self-audit (2026-08-07)
+
+TICK SHAPE: pattern-class — table row-group ordering. The third of four mechanisms out of t989's
+table battery, plus the **self-audit** that came due on this tick (last at 981; the pre-flight hook
+blocks past it).
+
+⚠⚠⚠ **OUR UA SHEET SAID `thead, tbody, tfoot { display: table-row-group }` — ONE VALUE FOR THREE
+GROUPS.** CSS Tables lays row groups out **header → body → footer regardless of source order**, and
+that rule discards the only thing that distinguishes them. So `<tfoot>` written before `<tbody>`
+rendered at the **top** of the table.
+
+**That idiom is not exotic.** `<tfoot>` before `<tbody>` is the classic HTML4 pattern — it exists so a
+long table's footer reaches the parser before its thousand body rows — and it is still everywhere in
+legacy markup, invoice templates and report generators.
+
+```text
+                                                     Chrome     before      after
+   <tfoot> before <tbody>          foot / body       [24/0]     [0/24]     [24/0]
+   <thead> after  <tbody>          head / body       [0/24]     [24/0]     [0/24]
+   all three scrambled             head/body/foot  [0/24/48] [48/24/0]  [0/24/48]
+  -- CONTROLS, neither of which moved --
+   the usual thead/tbody/tfoot order                [0/24/48]         unchanged
+   TWO <tbody>s keep their source order                [0/24]         unchanged
+```
+
+⚠⚠⚠ **A TOTALS ROW AT THE TOP OF AN INVOICE IS A READING-ORDER ERROR, NOT A GEOMETRY ONE.** Every
+number is present, every box is correctly sized, and the table means something else. That puts it in
+the **I3** class rather than the shape class — and a `dy`-ranked burndown cannot tell the two apart,
+which is the same blind spot check #72 named about `node_rects` and the loop keeps re-meeting.
+
+⚠⚠⚠ **THE FIX IS NOT WHERE THE SYMPTOM IS, AND I TRIED THE WRONG PLACE FIRST.** The layout code
+walked the DOM in order, so I added a group rank there — and it did nothing, because **every group
+arrived carrying the same `display` value**. The distinction is made in the UA sheet; Chrome makes it
+there too. Two new `Display` variants exist so the value can *survive* the cascade, and the layout
+rank reads them.
+
+> The symptom was in layout. The lost information was three layers up, in a stylesheet, in a rule
+> that looked like a tidy abbreviation of three identical declarations. **A fold that discards a
+> distinction reads as a simplification right up until something needs the distinction** — and it
+> greps as coverage, because the property is there and its value is legal.
+
+RED-PROVEN THREE WAYS, and the first two prove the pipe **from both ends**:
+
+```text
+   restore the folded UA rule        -> the 3 scrambled rows fail WITH THE LAYOUT RANK INTACT.
+                                        The layout fix alone is INERT — which is the single most
+                                        useful thing this gate records.
+   drop the `sort_by_key`            -> the same 3 rows fail WITH THE UA DISTINCTION INTACT
+   invert the rank (foot 0, head 2)  -> the scrambled rows invert; both controls still pass
+```
+
+⚠ A fourth — `sort_unstable_by_key` — does **not** go red: with two elements the two sorts cannot
+differ. The two-`<tbody>` control exists for a future three-bucket rewrite, and that is recorded as a
+NON-red rather than claimed as a proof. Fifth non-firing recipe of the window, and the second where
+the honest answer is *"this control is for a change that has not happened yet"*.
+
+**BATTERY STATUS:** t989's sixteen-row table fixture had five divergences in four mechanisms. Three
+are now closed (`vertical-align` in a cell t989, rowspan distribution t990, row-group order t991).
+**One remains: `<caption>` reserves no space and does not widen the table.**
+
+---
+
+**SELF-AUDIT @ 991 (due since 981) — one prescribed-but-not-executed item, the same one, and audit
+#36 has now made it un-actionable on my side rather than merely unactioned.**
+
+```text
+  ✗ verify wall: 1986s EXCEEDS the 300s target (Part 21.2 item 1)
+  ✓ every gate declares how to break it · falsify.sh present
+  ✓ process-defect ledger 49 · cluster registry 392 · pattern ledger 1006 rows
+  ✓ enforcement mechanical not remembered · journal has no gaps · STATUS.md generated
+```
+
+```text
+   receipt:  seconds 1986 · build 69 · load1 5.05 · prewarm_launch_seconds 0
+   sections: P 242 · T 125 · B 69 · G6 21 · D 7 · G1 6   =  475s of 1986  (24%)
+```
+
+⚠⚠ **The attributed fraction has fallen from 43% (t983) to 24%, and the missing seconds are the same
+seconds.** Wall audit #36 established why the receipt cannot localise them: `_PREWARM_END=$SECONDS`
+is assigned at `verify.sh:102` and `_PREWARM_END=0` executes at line 163, so `unattributed_seconds`
+degenerates to `total − build` on every run ever recorded. Every remedy this audit names —
+mold/lld, cargo-nextest, workspace-hack — is a **build-time** remedy against a **69-second** build.
+
+**So the item is not "unactioned", it is un-actionable from here**: `scripts/` is observer-owned
+(PART VII) and the one change that would make the number diagnosable is a one-line ordering fix in a
+file I must not touch. It was handed over in #36 with the line number. Recorded again rather than
+re-derived, and on with browser work — which is the scope rule's prescription, not a shrug.
+
+RATCHET: `manuk-css` 32/32 + 2 doc-tests, `manuk-layout` 125/125, `g_row_group_order` (new) plus the
+table gate set green as a set — `g_rowspan_distribution`, `g_table_cell_valign`.
+
+PERF: one `u8` per row and one stable sort over a table's row list, which is a handful of entries.
+
+WIKI: `docs/wiki/box-layout.md` — "`<tfoot>` written first rendered first, and the UA sheet is where
+we lost the distinction".
+
 ## Tick 990 — the residue VI.2 has named since check #82, and the one row that decides the rule (2026-08-06)
 
 TICK SHAPE: primitive — `rowspan` row-height distribution. The second defect out of t989's table

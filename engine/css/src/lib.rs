@@ -86,6 +86,15 @@ pub enum Display {
     /// block-level everywhere `Block` is, and listed in `establishes_bfc`.
     FlowRoot,
     TableRowGroup,
+    /// `display: table-header-group` (`<thead>`) and `table-footer-group` (`<tfoot>`).
+    ///
+    /// ⚠ These used to fold into `TableRowGroup`, and the fold was not a simplification — it
+    /// discarded the ONLY thing that distinguishes them. CSS Tables lays row groups out as
+    /// **header → body → footer regardless of source order**, so `<tfoot>` written before `<tbody>`
+    /// (the classic HTML4 idiom, and still everywhere in legacy markup) rendered at the TOP of the
+    /// table. Three variants because the ORDER is the semantics.
+    TableHeaderGroup,
+    TableFooterGroup,
     TableRow,
     TableCell,
     TableCaption,
@@ -3840,7 +3849,9 @@ fn apply_ua_defaults(s: &mut ComputedStyle, el: &ElementData) {
         // rather than by coincidence.
         "sup" | "sub" => (Inline, 0.0, 400, 0.8333),
         "table" => (Table, 0.0, 400, 1.0),
-        "thead" | "tbody" | "tfoot" => (TableRowGroup, 0.0, 400, 1.0),
+        "thead" => (TableHeaderGroup, 0.0, 400, 1.0),
+        "tfoot" => (TableFooterGroup, 0.0, 400, 1.0),
+        "tbody" => (TableRowGroup, 0.0, 400, 1.0),
         "tr" => (TableRow, 0.0, 400, 1.0),
         "td" => (TableCell, 0.0, 400, 1.0),
         "th" => (TableCell, 0.0, 700, 1.0),
@@ -4202,9 +4213,9 @@ fn apply_declaration(s: &mut ComputedStyle, d: &Declaration, parent_fs: f32) {
                 "inline-flex" => Some((Display::InlineFlex, None)),
                 "inline-grid" => Some((Display::InlineGrid, None)),
                 "table" | "inline-table" => Some((Display::Table, None)),
-                "table-row-group" | "table-header-group" | "table-footer-group" => {
-                    Some((Display::TableRowGroup, None))
-                }
+                "table-row-group" => Some((Display::TableRowGroup, None)),
+                "table-header-group" => Some((Display::TableHeaderGroup, None)),
+                "table-footer-group" => Some((Display::TableFooterGroup, None)),
                 "table-row" => Some((Display::TableRow, None)),
                 "table-cell" => Some((Display::TableCell, None)),
                 "table-caption" => Some((Display::TableCaption, None)),

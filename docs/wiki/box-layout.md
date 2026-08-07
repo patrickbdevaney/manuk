@@ -5765,3 +5765,55 @@ dropping the `deficit > 0` guard shrinks the rows a shorter rowspan cell has no 
 
 ⚠ Still open from the same battery: `<caption>` reserves no space and does not widen the table, and a
 `<thead>` written after a `<tbody>` renders in source order instead of first.
+
+## `<tfoot>` written first rendered first, and the UA sheet is where we lost the distinction (t991)
+
+CSS Tables lays row groups out **header → body → footer, regardless of source order**. Our UA sheet
+said:
+
+```css
+thead, tbody, tfoot { display: table-row-group; }
+```
+
+— one value for three groups, which **discards the only thing that distinguishes them**. So
+`<tfoot>` written before `<tbody>` rendered at the *top* of the table.
+
+That idiom is not exotic: putting `<tfoot>` before `<tbody>` is the classic HTML4 pattern — it exists
+so a long table's footer reaches the parser before its thousand body rows — and it is still
+everywhere in legacy markup, invoice templates and report generators. **A totals row at the top of an
+invoice is not a geometry error, it is a reading-order one**: every number present, correctly sized,
+and meaning something else. That is the I3 class, not the shape class.
+
+```text
+                                                    Chrome     before      after
+  <tfoot> before <tbody>           foot / body       [24/0]     [0/24]     [24/0]
+  <thead> after  <tbody>           head / body       [0/24]     [24/0]     [0/24]
+  all three scrambled              head/body/foot  [0/24/48] [48/24/0]  [0/24/48]
+ ── controls ──
+  the usual thead/tbody/tfoot order                 [0/24/48]         unchanged
+  TWO <tbody>s keep their source order                 [0/24]         unchanged
+```
+
+### The fix is not where the symptom is
+
+The layout code walked the DOM in order, and adding a rank there is the obvious fix — but it **could
+not work**, because every group arrived carrying the same `display` value. The distinction is made in
+the UA sheet, and Chrome makes it there too. Two new `Display` variants (`TableHeaderGroup`,
+`TableFooterGroup`) exist so the value can *survive* the cascade; the layout rank reads them.
+
+> The symptom was in layout. The lost information was three layers up, in a stylesheet, in a rule
+> that looked like a tidy abbreviation of three identical declarations. **A fold that discards a
+> distinction reads as a simplification right up until something needs the distinction.**
+
+The two RED recipes prove the pipe from both ends: restoring the folded UA rule fails the three
+scrambled rows *with the layout rank still in place* (the layout fix alone is inert), and dropping the
+sort fails the same rows *with the UA distinction still in place*.
+
+### Why the sort must be stable
+
+Groups of the same kind keep their document order — two `<tbody>`s are ordered by the source. A
+stable sort on the rank preserves that, and the two-`<tbody>` control is the only row that can see it.
+⚠ Swapping in `sort_unstable_by_key` does **not** go red today (two elements cannot differ); the
+control exists for a future three-bucket rewrite, and that is recorded rather than claimed as a proof.
+
+Gated by `G_ROW_GROUP_ORDER`.

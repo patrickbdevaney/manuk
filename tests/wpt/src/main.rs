@@ -2910,6 +2910,8 @@ fn css_display_name(d: manuk_css::Display) -> &'static str {
         D::FlowRoot => "flow-root",
         D::Table => "table",
         D::TableRow => "table-row",
+        D::TableHeaderGroup => "table-header-group",
+        D::TableFooterGroup => "table-footer-group",
         D::TableRowGroup => "table-row-group",
         D::TableCell => "table-cell",
         D::TableCaption => "table-caption",

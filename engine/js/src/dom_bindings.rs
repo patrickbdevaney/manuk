@@ -1401,6 +1401,8 @@ fn computed_style_js(cs: &manuk_css::ComputedStyle, rect: Option<[f32; 4]>) -> S
         Display::Table => "table",
         Display::TableRow => "table-row",
         Display::TableRowGroup => "table-row-group",
+        Display::TableHeaderGroup => "table-header-group",
+        Display::TableFooterGroup => "table-footer-group",
         Display::TableCell => "table-cell",
         Display::TableCaption => "table-caption",
         Display::TableColumn => "table-column",
@@ -7827,7 +7829,16 @@ fn inner_text_is_block(d: manuk_css::Display) -> bool {
     use manuk_css::Display::*;
     matches!(
         d,
-        Block | Flex | Grid | Table | TableRowGroup | TableRow | TableCell | TableCaption
+        Block
+            | Flex
+            | Grid
+            | Table
+            | TableRowGroup
+            | TableHeaderGroup
+            | TableFooterGroup
+            | TableRow
+            | TableCell
+            | TableCaption
     )
 }
 
