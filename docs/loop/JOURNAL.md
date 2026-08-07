@@ -46371,6 +46371,102 @@ PERF: none — one UA rule and one narrowed branch in a cascade that already ran
 WIKI: `docs/wiki/css-cascade.md` — where Chrome draws the form-control `box-sizing` line, and why a
 layout-crate test cannot see it.
 
+## Tick 1004 — the sweep and the battery are the same instrument pointed at two questions (2026-08-07)
+
+TICK SHAPE: measurement — the constitution check, due at 1004 (last 996). Banked as **check #90**.
+
+⚠⚠⚠ **THE OPEN TENSION FROM CHECK #89 RESOLVES, AND NOT BY ONE SIDE WINNING.** #89 said *"a battery
+finds what a sweep cannot rank"*, which read as the battery superseding the sweep. This window is the
+demonstration that they answer **different questions**:
+
+```text
+   the SWEEP (t997) said     WHERE   `reading_order` is the binding conjunct — non-clean on 65 of 123
+   the BATTERY said          WHAT    a collapsed table is (n+1)x border too wide, cumulatively
+                                     a left float never wraps and walks off its container
+                                     a float after text lands one line-height too low
+```
+
+**All three of this window's defects are `reading_order` mechanisms** — boxes displaced along the
+inline axis, each dragging everything after it. The sweep could not have named any of them (it ranks
+*divergence*, and these are wrong only where the construct is **declared**); the battery could not
+have said to look at tables and floats before anything else. VI.3's `usage-weight × failing-breadth`
+is served by the pair and by neither alone.
+
+⚠⚠ **AND THE METHOD FOR CHOOSING THE NEXT BATTERY WAS ITSELF INCOMPLETE.** #89's steer named
+overflow/scroll, `position: sticky` and stacking as the uncovered areas. **Floats were on nobody's
+list** and yielded three defects in three ticks at 60.4% declared corpus weight. What actually chose
+them was one grep of the fetched corpus. The rule that replaces "which areas feel uncovered" is:
+**grep the corpus, rank, battery the top unbatteried one** — four minutes, and it produces a
+different answer.
+
+⚠⚠⚠ **I5 UNDER A NEW KIND OF PRESSURE, AND IT IS WORSE THAN #89's.** #89 catalogued six RED recipes
+that came back GREEN — honest failures of a proof that was *run*. This window produced two RED
+recipes I wrote into a gate header **before running them**, and both were **false**:
+
+```text
+   t999   "reverting the cell sides reproduces it"    -> #a1 stayed CORRECT; only the HEIGHT moved
+   t1000  "a left_offset fit bound re-breaks the      -> it does not; the whole gate passes
+           Bootstrap negative-margin row"
+```
+
+Both were caught in their own tick and corrected, and t1000's is recorded as an explicit **non-RED**
+with the discriminating row named as unwritten. The constitutional form:
+
+> **A plausible-wrong-fix claim is a measurement like any other, and a RED recipe written from the
+> code rather than from a run is a hypothesis wearing a receipt's clothes.** I5 protects against the
+> engine lying; nothing protects against the gate *header* lying except running it.
+
+⚠⚠ **THE SAME CLASS BIT THE REGRESSION SWEEP THREE TIMES IN TWENTY MINUTES** — a RED proof, a `fmt`,
+and a second sweep left alive, all writing to the tree a 425-gate sweep was measuring. **A background
+regression sweep owns the working tree for its whole run.** Two contention false-REDs
+(`g_text_tracks`, `g_clipboard_image`), both passing standalone.
+
+⚠⚠ **PART VI CORRECTION — VI.2's H0.1 row must now name FLOATS.** It names *tables, inline
+composition and scroll containers* as where the residual mass lives, from check #82's negative result
+about composed block width. Floats are absent from it entirely, and this window found three
+independent float defects in three ticks, every one an inline-axis displacement of exactly the kind
+`reading_order` counts. Proposed reading: *tables, inline composition, **floats/clear**, and scroll
+containers*, the last keeping its "instrument question, not an engine one" caveat.
+
+⚠ **AND ONE STANDING LEDGER CLAIM IS MEASURED FALSE** — wall audit #34's *"the growth is MINE"*, as
+t1003 established. Recorded in #90 so the next check does not inherit it again.
+
+**STEER (in #90, and it is the tick-1005 plan):** (1) **RUN A SWEEP** — five geometry fixes have
+landed since t997 on 25.9% / 5.6% / 7.9–60.4% constructs, and all five aim at the conjunct t997 named
+as binding, so this is the first window where a sweep *should* show something; if it does not, that
+is a finding about M1's resolution and it outranks the next fix. (2) Battery `position: sticky`
+(41.6%), stacking/`z-index`, multi-column (57.3%) — **corpus-grep first**, in that order rather than
+the order they feel uncovered. (3) Two rule-derived unbuilt defects are cheap and on the board:
+clearance absorbing the top margin, and `border-style: hidden` in a collapsed table.
+
+⚠⚠ **HARNESS (observer's, not touched — reported per PART VII, because the number is new).** Two
+walls went RED on this tick without an engine cause: eleven gates printed `BUILD FAILED for gate
+<x> — this is NOT a verdict about the engine`. **Measured, not guessed: a COLD `target/debug` for
+this wall is ~105 GB**, and `disk-hygiene.sh`'s own log records the trough —
+
+```text
+   17:27  ▶ /home is 87% full (39G free)     build is LIVE
+   17:37  ▶ /home is 97% full (9.6G free)    target/debug — CRITICAL: full purge to avert ENOSPC
+          ▶ now 115G free (was 9.6G)         <- the build's own inputs, deleted mid-build
+```
+
+So the cold wall and the disk guard are in a **deadlock**: the build needs ~105 GB, the purge fires
+at 97%, and each purge guarantees the next wall is cold again. **This is not the orphan test-binary
+bloat the ledger names** — hygiene's own line says `290 test binaries across 146 stems is 2.0 per
+stem, i.e. exactly the two live feature variants`, so there is nothing stale to reclaim; the working
+set simply is that big, and `[profile.dev] debug = 1` (tick 264) already removed the DWARF that used
+to dominate it. Agent-side workaround, no `scripts/` touched: **16.5 GB of gitignored reference
+checkouts (`WebKit/`, `chromium/`, `firefox/` — none is a path dependency) relocated to
+`/var/tmp/manuk-refs/`**, which puts the trough at ~93% instead of 97% and lets a cold wall finish.
+**Free headroom BEFORE the wall, never after it goes red.**
+
+RATCHET: nothing changed — no engine code in this tick.
+
+PERF: none — measurement only.
+
+WIKI: none — the constitution check's home is `docs/loop/CONSTITUTION-CHECK.md`, and its findings are
+about the loop rather than a browser mechanism. [no-pattern]
+
 ## Tick 1003 — the wall audit, and the confession I was about to repeat is FALSE (2026-08-07)
 
 TICK SHAPE: measurement — the wall-time audit, due at 1003 (last 983). It **reports, it does not

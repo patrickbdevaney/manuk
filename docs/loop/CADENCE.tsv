@@ -717,3 +717,4 @@ tick	sha	epoch	iso	delta_s	shape	wall_s	files	added	deleted	gates	claims	wpt_pas
 1001	11346a3f	1786120376	2026-08-07T12:32:56-04:00	7119	primitive	63	10	624	36	426	81	3896	6960	0	506	0	the two shortcuts fail in opposite directions, which is what makes it a proof (2026-08-07)
 1002	4e8af6e9	1786128418	2026-08-07T14:46:58-04:00	8042	primitive	63	10	501	36	427	81	3896	6960	0	507	0	a rule quoted from the spec is half a rule until the row where it must NOT apply (2026-08-07)
 1003	a2174296	1786130018	2026-08-07T15:13:38-04:00	1600	measurement	63	5	192	33	427	81	3896	6960	0	507	0	the wall audit, and the confession I was about to repeat is FALSE (2026-08-07)
+1004	1918bd53	1786140047	2026-08-07T18:00:47-04:00	10029	measurement	63	5	267	33	427	81	3896	6960	0	507	0	the sweep and the battery are the same instrument pointed at two questions (2026-08-07)

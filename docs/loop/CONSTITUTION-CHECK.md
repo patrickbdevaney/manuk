@@ -6088,3 +6088,140 @@ respectively.
    constructs. Five old-binary A/Bs each said "nothing broke" and none said "something improved" —
    which is what a four-site panel is for, and it is not a substitute for the corpus. The window's
    claim is that a battery finds what a sweep cannot rank; the sweep is how that claim gets priced.
+
+## Check #90 — tick 1004 (2026-08-07)
+
+**Horizon:** H0 as re-scoped by **PART VII**, instrumented as **M1 on the in-scope CrUX corpus**.
+Latest banked is **t997: M1 = 24/123 = 19.5%, mean shape 54.6%** — a real sweep, run since #89 asked
+for one, and it changed what the loop is aiming at.
+
+### → Gate, or scoreboard?
+
+**Gate.** Ticks 998–1003: five capability fixes, one cadence measurement, zero regressions traded,
+every fix RED-proven and gated. The battery ledger, extended:
+
+```text
+   flex/grid sizing      20 rows  18 exact   2 defects  both built      (t984, t985)
+   positioned/overflow   16 rows  13 exact   2 defects  both built      (t986, t987)
+   text/inline metrics   20 rows  19 exact   1 defect   built           (t988)
+   tables                16 rows  11 exact   4 mechs    ALL FOUR built  (t989-992)
+   borders/backgrounds   16 rows  14 exact   2 defects  BOTH now built  (t994, t999)
+   form controls         19 rows  10 exact   5 mechs    named
+   floats / clear        23 rows  20 exact   3 defects  ALL THREE built (t1000-1002)
+   ------------------------------------------------------------------------------------
+                        130 rows 105 exact  19 defects  15 built in 15 ticks
+```
+
+### → Is `orient`'s ranking still the north star, and did the sweep change it?
+
+⚠⚠⚠ **YES, AND THE SWEEP AND THE BATTERY TURN OUT TO BE THE SAME INSTRUMENT POINTED AT TWO
+DIFFERENT QUESTIONS — which resolves #89's open tension rather than restating it.** t997's sweep
+named the binding conjunct: **`reading_order` is non-clean on 65 of 123 sites**, not shape. #89 said
+a battery finds what a sweep cannot rank. Both are true, and this window is the demonstration:
+
+```text
+   the SWEEP said     WHERE      reading_order — a width/transform upstream, never a reorder
+   the BATTERY said   WHAT       a collapsed table is (n+1)x border too wide, cumulatively (t999)
+                                 a left float never wraps and walks off its container (t1000)
+                                 a float after text lands one line-height too low (t1002)
+```
+
+**All three are `reading_order` mechanisms — boxes displaced along the inline axis, each dragging
+everything after it.** The sweep could not have named any of them (it ranks divergence, and these are
+wrong only where the construct is *declared*); the battery could not have told me to look at tables
+and floats before anything else. **VI.3's `usage-weight × failing-breadth` is served by the pair, and
+by neither alone.**
+
+⚠⚠ **AND THE METHOD FOR CHOOSING THE NEXT BATTERY WAS ITSELF INCOMPLETE.** #89's steer named
+overflow/scroll, `position: sticky`, and stacking as the uncovered areas. **Floats were on nobody's
+list** and yielded three defects in three ticks at 60.4% declared corpus weight. What actually chose
+them was one grep of the fetched corpus, not a judgement about coverage. The selection rule should
+be: **grep the corpus for candidate constructs, rank, battery the top unbatteried one** — which costs
+four minutes and is not what "which areas feel uncovered" produces.
+
+⚠⚠⚠ **AND A PRICING CORRECTION THAT GENERALISES: PRICE THE CONSTRUCT, NOT THE DECLARATION.**
+`border-collapse: collapse` is declared by **57.3%** of the corpus and is **inert without a table** —
+only **5.6%** have both. 57.3% is the number a careless tick publishes. The same trap is waiting for
+`border-spacing`, `table-layout`, `caption-side`, `list-style` and `counter-reset` — everything a
+reset sets pre-emptively on a selector most pages never instantiate. This extends
+`CORPUS-CONSTRUCTS.md`'s standing rule rather than replacing it.
+
+### → Is any invariant being bent?
+
+**No — and I5 came under a new kind of pressure this window, one the previous checks have not
+recorded.** #89 catalogued six RED recipes that came back GREEN. This window's failures are one level
+worse: **two RED recipes that I wrote into a gate header *before running them*, and that were
+FALSE.**
+
+```text
+   t999   "reverting the cell sides reproduces the defect"   -> it did NOT: #a1 stayed CORRECT at
+                                                                (5,20) and only the table HEIGHT
+                                                                moved. Four places had to agree.
+   t1000  "a left_offset-based fit bound re-breaks the        -> it does NOT: the whole gate passes.
+           Bootstrap negative-margin row"                        The fit test decides WHETHER a float
+                                                                fits; a separate expression decides
+                                                                WHERE it goes.
+```
+
+Both were caught in the same tick, corrected in the header, and the second is recorded as an explicit
+**non-RED** with the row that *would* discriminate named as unwritten. But the class is worth stating
+constitutionally:
+
+> **A plausible-wrong-fix claim is a measurement like any other, and a RED recipe written from the
+> code rather than from a run is a hypothesis wearing a receipt's clothes.** I5 protects against the
+> engine lying; nothing protects against the *gate header* lying except running it.
+
+⚠⚠ **AND THE SAME CLASS BIT THE REGRESSION SWEEP, THREE TIMES IN TWENTY MINUTES.** A 425-gate sweep
+was contaminated by a RED proof (which edits engine source), then its replacement by `cargo fmt`, and
+then by a second sweep left alive contending on the same `target/`. **A background regression sweep
+owns the working tree for its whole run** — a RED proof, a `fmt` and a second sweep are all *writes
+to the thing being measured*. Two contention false-REDs (`g_text_tracks`, `g_clipboard_image`) both
+passed standalone. I substituted 20 targeted gates and **said that it was the narrower check**, which
+is the part that keeps this a gate rather than a scoreboard.
+
+⚠ **PART VII held again, in the smallest possible way.** t999 could have shipped `border-style:
+hidden` half-built — `BorderStyle` has no `Hidden` variant *and stores one style for all four sides*,
+so the expressible half would have made `border-left-style: hidden` **silently wrong** instead of
+uniformly unsupported. Named as residue at 0.8% corpus weight rather than guessed at. Same shape as
+t996's `<fieldset>` refusal: **a fix that is right on the rows you wrote and wrong on the ones you
+cannot express is a trade.**
+
+### → PART VI correction
+
+⚠⚠ **YES — VI.2's H0.1 row names *tables, inline composition and scroll containers* as where the
+residual mass lives, and it must now also name FLOATS.** The row was written from check #82's
+negative result (composed block width is clean) and has been accurate about the three it lists. But
+floats are absent from it entirely, and this window found **three independent float defects in three
+ticks**, every one an inline-axis displacement of exactly the kind `reading_order` counts:
+
+```text
+   the fit test asked the BFC ROOT, not the containing block        t1000
+   a float after inline text used the line's BOTTOM, not its TOP    t1002
+   (and still open) clearance is ADDED to the top margin            measured t1002, not built
+```
+
+The row should read *tables, inline composition, **floats/clear**, and scroll containers* — with
+scroll containers still carrying its "instrument question, not an engine one" caveat.
+
+⚠ **AND ONE STANDING CLAIM IN THE LEDGER IS NOW MEASURED FALSE.** Wall audit #34's *"the growth is
+MINE"* has been inherited as a standing fact about gate count. It is false for a window that adds
+gate *files*: `verify.sh` launches **24** things from a hand-curated, observer-owned list, while
+`engine/page/tests/` holds **427**. Adding a gate does not tax the wall; adding one to the launch
+list does, and I cannot. **A confession is a claim and needs a measurement like any other** — and
+inheriting this one would have argued for exactly what the wall audit forbids: dropping gates.
+
+### Steer
+
+1. **RUN A SWEEP.** Five geometry fixes have landed since t997 on constructs weighing 25.9% (the
+   reset × logical-property conflict), 5.6% (collapsed tables) and 7.9–60.4% (floats), and all five
+   are `reading_order` mechanisms — which t997 named as **the** binding conjunct on 65 of 123 sites.
+   This is the first window whose fixes are aimed at the conjunct the sweep says is binding, so it is
+   the first one where a sweep should show something. If it does not, that is a finding about M1's
+   resolution and it outranks the next fix.
+2. **Battery `position: sticky`, stacking/`z-index`, and multi-column** — but **grep the corpus
+   first** and take them in that order, not in the order they feel uncovered. `column-*` prices at
+   57.3% declared and `sticky` at 41.6%, both unbatteried.
+3. **Two named, rule-derived, unbuilt defects are on the board and both are cheap**: clearance
+   absorbing the top margin (§9.5.2 — an exact 10px, isolated, the plain clearfix already exact), and
+   `border-style: hidden` in a collapsed table (needs a `BorderStyle::Hidden` variant **and** per-side
+   storage; do not build the half a uniform field can express).
