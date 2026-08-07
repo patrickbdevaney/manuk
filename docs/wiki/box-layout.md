@@ -6143,3 +6143,70 @@ are already Chrome-correct. The defect then had to be found by going *back* to t
 asking why the two engines leaked differently.
 
 **Both versions were needed.** The isolated one is the battery; the leaky one is the discovery.
+
+## A self-collapsing box, and the two shortcuts that fail in opposite directions
+
+CSS 2.1 §8.3.1 has three margin collapses. Parent↔first-child and parent↔last-child were built here
+long ago. The third — a box collapsing **through itself** — was not, so every empty block contributed
+two margins where Chrome contributes one, and pushed everything after it down.
+
+```text
+   <div>x</div>   <div style="margin:10px 0 30px"></div>   <div>R</div>
+
+                                     Chrome   before   after
+     the empty box's own edge          30       30       30     <- never moved
+     the block after it                50       60       50
+```
+
+Only what comes *after* an empty box changes. The box's own border edge is still placed after its
+(collapsed) top margin — so the fix rewrites the two values the parent stacks with, and leaves the
+box alone: `flow_bottom` goes back to the position the caller handed in, and the whole run of margins
+becomes one.
+
+### One ratio cannot distinguish three rules
+
+| rule | `10 / 30` (Chrome 30) | `40 / 5` (Chrome 40) |
+|---|---|---|
+| collapse (`max`) | 30 ✓ | 40 ✓ |
+| "only the bottom margin" | 30 ✓ | 5 ✗ |
+| "only the top margin" | 10 ✗ | 40 ✓ |
+
+**Both ratios have to be in the fixture**, or two of the three rules survive it. And it is
+`collapse_margins`, not `max`: two negatives take the **min** (`-10 / -30` measures **-30**, where
+`max` gives -10 and the sum gives -40).
+
+### The recursive clause, and why the flat approximations come in mirror pairs
+
+> *"...and it does not contain a line box, and **all of its in-flow children's margins (if any)
+> collapse**."*
+
+```text
+   shortcut 1  "no in-flow children"   -> an empty block wrapping an empty block
+                                          Chrome 50,  shortcut 60        WRONG
+   shortcut 2  "contains no line box"  -> `height: 0` wrapping a block WITH TEXT
+                                          Chrome 60,  shortcut 30        WRONG
+```
+
+Shortcut 1 was implemented first and the fixture caught it at 14/15. Shortcut 2 is what came to mind
+next, and it would have been **a different bug of the same size** — the row that kills it exists only
+because shortcut 1 had already been wrong once.
+
+> **When a spec clause is recursive, its flat approximations come in mirror-image pairs, and each one
+> passes the rows that made you look.** Reaching for the second approximation after the first fails
+> feels like converging and is sampling. Two rows that fail opposite shortcuts are a proof: any rule
+> passing both is doing the recursion.
+
+### The clauses, each with a measured row
+
+```text
+   collapses through:  plain empty · height:0 · only child is a FLOAT · only child is abspos ·
+                       only child is another EMPTY block · three deep · height:0 around an empty
+                       block · two empty SIBLINGS · whitespace-only text · clear:both with no float
+   does NOT:           border 1px · padding-top 1px · min-height 1px · overflow:hidden ·
+                       display:flow-root · height:20px · has text · height:0 around real text
+```
+
+`overflow: hidden` and `display: flow-root` are what stop a height check from standing in for the
+concept — both produce a **zero-height** box that must not collapse. The whitespace row decides
+whether the fix works on real markup at all: pretty-printed HTML puts a newline inside every "empty"
+element, and counting that as content makes the whole thing inert.

@@ -2231,6 +2231,72 @@ impl Ctx<'_> {
         mt // no in-flow children
     }
 
+    /// **Does this box's own top margin collapse with its own bottom margin?** — CSS 2.1 §8.3.1's
+    /// self-collapsing test, quoted because every clause of it is load-bearing and each has a
+    /// measured row:
+    ///
+    /// > *"A box's own margins collapse if the `min-height` property is zero, and it has neither top
+    /// > or bottom borders nor top or bottom padding, and it has a `height` of either 0 or `auto`,
+    /// > and it does not contain a line box, and **all of its in-flow children's margins (if any)
+    /// > collapse**."*
+    ///
+    /// ⚠⚠⚠ **THE LAST CLAUSE IS RECURSIVE, AND "no in-flow children" IS NOT A LEGAL SIMPLIFICATION
+    /// OF IT.** I wrote that shortcut first and it failed three measured rows: an empty block
+    /// wrapping an empty block (Chrome collapses — 50, the shortcut gives 60), the same three deep,
+    /// and a `height: 0` block wrapping an empty one. **Nor is the opposite shortcut "contains no
+    /// line box" legal**, which is what I reached for next: a `height: 0` block wrapping a block
+    /// *with text* contains no line box **itself** and must NOT collapse (Chrome 60), because its
+    /// child's margins do not collapse. The two shortcuts fail in opposite directions and only the
+    /// recursion satisfies both.
+    ///
+    /// Floats and absolutely-positioned children are **not in flow**, so a box whose only child is
+    /// one still collapses (measured for both). Whitespace-only text generates no box — the same
+    /// rule `flush_inline_run` applies — which matters because pretty-printed HTML puts a newline
+    /// inside every "empty" element. An **inline-level** in-flow child does make a line box, so it
+    /// stops the collapse.
+    ///
+    /// Depth-bounded like the two spine walks, against a hostile tree.
+    fn margins_collapse_through(&self, node: NodeId, cw: f32, depth: u32) -> bool {
+        if depth > 64 {
+            return false;
+        }
+        let s = self.style_of(node);
+        // Border, padding, `overflow`/BFC and block-ness in one pair of predicates — the same ones
+        // the parent↔child collapses use, so the three cases cannot drift apart.
+        if !top_margin_collapses(self.dom, self.styles, node, s, cw)
+            || !bottom_margin_collapses(self.dom, self.styles, node, s, cw)
+        {
+            return false;
+        }
+        // "a `height` of either 0 or `auto`". A percentage height against an auto-height parent
+        // behaves as `auto` and resolves to 0 here, which is the same answer either way.
+        if !matches!(s.height, Dim::Auto) && s.height.resolve(0.0, 0.0) != 0.0 {
+            return false;
+        }
+        if s.min_height_keyword.is_some() || s.min_height.resolve(cw, 0.0) != 0.0 {
+            return false;
+        }
+        for k in rendered_children(self.dom, self.styles, node) {
+            if let NodeData::Text(t) = self.dom.data(k) {
+                if t.trim().is_empty() {
+                    continue;
+                }
+                return false; // real text is a line box
+            }
+            let ks = self.style_of(k);
+            if is_float(ks) || is_out_of_flow_positioned(ks) {
+                continue; // out of flow: not an in-flow child for §8.3.1's purposes
+            }
+            if !is_block_level(self.dom, self.styles, k) {
+                return false; // an inline-level in-flow child makes a line box
+            }
+            if !self.margins_collapse_through(k, cw, depth + 1) {
+                return false;
+            }
+        }
+        true
+    }
+
     /// The mirror of [`collapse_through_top`] for the **bottom** edge (CSS2 §8.3.1): `node`'s own
     /// bottom margin, joined with its last in-flow block child's collapse-through bottom margin when
     /// `node` is an auto-height block with no bottom border/padding, `overflow:visible`, and no BFC.
@@ -3348,6 +3414,56 @@ impl Ctx<'_> {
         // In-flow bottom is fixed before any relative shift, so siblings stack
         // against the box's *normal-flow* position (CSS2 §9.4.3).
         let flow_bottom = border_y + border_box_h;
+
+        // ── ⚠⚠⚠ **A SELF-COLLAPSING BOX: ITS OWN TOP AND BOTTOM MARGINS COLLAPSE WITH EACH OTHER
+        //    (CSS 2.1 §8.3.1), AND WE APPLIED BOTH.** The parent↔first-child and parent↔last-child
+        //    collapses above have been built for a long time; the box that collapses *through
+        //    itself* — the empty one — was not, so it contributed two margins where Chrome
+        //    contributes one.
+        //
+        //    `<div class="clearfix"></div>` and every spacer/wrapper div is exactly this shape, and
+        //    the error is a pure `dy` that cascades down **everything after it** rather than
+        //    misplacing one box. Measured against Chrome, a `margin: 10px 0 30px` empty block
+        //    between two others:
+        //
+        //    ```text
+        //                                                    Chrome   before   after
+        //      the empty box's own border edge                 30       30       30
+        //      the NEXT block                                  50       60       50
+        //    ```
+        //
+        //    The box's own position does not move — only what comes after it. So `boxx` is
+        //    untouched and this rewrites just the two values the parent stacks with: `flow_bottom`
+        //    goes back to `y` (the position *before* the collapsed top margin was applied, which is
+        //    exactly what the caller handed us) and the whole run of margins becomes one.
+        //
+        //    ⚠⚠⚠ **`max` IS FORCED BY TWO ROWS AND NEITHER CAN DO IT ALONE.** With `10px` over
+        //    `30px` the answer is 30, and *"an empty box contributes only its bottom margin"* gets
+        //    that right; with `40px` over `5px` the answer is 40, and that rule gives 5. The mirror
+        //    rule — *"only its top margin"* — fails the first and passes the second. **Only the pair
+        //    forces `collapse_margins`**, and a fixture with one ratio in it cannot tell.
+        //    `collapse_margins` and not `max` because the sign rules still apply: `-10px` over
+        //    `-30px` measures **-30** (Chrome), which is `min`, not `max` and not the sum.
+        //
+        //    ⚠⚠ **`border_box_h == 0` is doing more work than it looks and that is deliberate.** It
+        //    subsumes the spec's separate clauses for zero border, zero padding and zero
+        //    `min-height` — any of them non-zero makes the box taller than nothing — each of which
+        //    has its own row and all of which were already correct. What it does NOT subsume is
+        //    `overflow`/BFC (`overflow: hidden` and `display: flow-root` both give a zero-height box
+        //    that must NOT collapse through, measured) — hence the two predicates — and it does not
+        //    subsume the recursive last clause: a `height: 0` box *with* content must not collapse
+        //    through, and `margins_collapse_through` — whose header records both shortcuts I tried
+        //    and the rows that killed each — is what decides that.
+        let self_collapsing =
+            !taffy_item && border_box_h == 0.0 && self.margins_collapse_through(node, cw, 0);
+        let (flow_bottom, effective_mb) = if self_collapsing {
+            (
+                y,
+                collapse_margins(collapse_margins(prev_margin, effective_mt), effective_mb),
+            )
+        } else {
+            (flow_bottom, effective_mb)
+        };
 
         let marker = self.list_marker(node, &s, content_x, content_y);
         let mut boxx = LayoutBox {

@@ -714,3 +714,4 @@ tick	sha	epoch	iso	delta_s	shape	wall_s	files	added	deleted	gates	claims	wpt_pas
 998	7f2085e9	1786107445	2026-08-07T08:57:25-04:00	8917	capability	63	2	31	30	423	81	3896	6960	0	503	0	the reset lost to the thing it exists to remove (2026-08-07)
 999	ddae0491	1786110922	2026-08-07T09:55:22-04:00	3477	primitive	63	11	700	50	424	81	3896	6960	0	504	0	conflict resolution has no geometric effect, so the multi-tick algorithm was one tick (2026-08-07)
 1000	1dae2182	1786113257	2026-08-07T10:34:17-04:00	2335	primitive	63	10	450	36	425	81	3896	6960	0	505	0	the fit test asked the wrong box, and the RIGHT floats were correct all along (2026-08-07)
+1001	11346a3f	1786120376	2026-08-07T12:32:56-04:00	7119	primitive	63	10	624	36	426	81	3896	6960	0	506	0	the two shortcuts fail in opposite directions, which is what makes it a proof (2026-08-07)

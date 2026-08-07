@@ -46371,6 +46371,128 @@ PERF: none — one UA rule and one narrowed branch in a cascade that already ran
 WIKI: `docs/wiki/css-cascade.md` — where Chrome draws the form-control `box-sizing` line, and why a
 layout-crate test cannot see it.
 
+## Tick 1001 — the two shortcuts fail in opposite directions, which is what makes it a proof (2026-08-07)
+
+TICK SHAPE: primitive — the empty-block margin collapse t1000 measured and banked. **21 of 21 rows
+Chrome-exact, and the interesting part is that I implemented the condition WRONG TWICE before the
+fixture forced the spec's actual wording.**
+
+⚠⚠⚠ **AN EMPTY BLOCK'S OWN TOP AND BOTTOM MARGINS COLLAPSE WITH EACH OTHER (CSS 2.1 §8.3.1), AND WE
+APPLIED BOTH.** The parent-first-child and parent-last-child collapses have been built here for a
+long time; the box that collapses *through itself* was not, so every empty block pushed everything
+after it down by an extra margin.
+
+```text
+   <div>x</div>   <div style="margin:10px 0 30px"></div>   <div>R</div>
+
+                                     Chrome   before   after
+     the empty box's own edge          30       30       30     <- never moved
+     the block after it                50       60       50
+```
+
+`<div class="clearfix"></div>` and every spacer/wrapper div is exactly this shape, and the error is a
+pure `dy` that cascades over **the whole rest of the page** rather than misplacing one box — which is
+the top-ranked shape mechanism in the burndown.
+
+⚠⚠⚠ **THE TWO RATIOS, AND WHY ONE CANNOT DECIDE ANYTHING.** With `10px` over `30px` the answer is 30,
+and the rule *"an empty box contributes only its BOTTOM margin"* gets that right. With `40px` over
+`5px` the answer is 40, and that rule gives 5. The mirror — *"only its TOP margin"* — fails the first
+and passes the second. **Only the pair forces a collapse at all**, and a fixture carrying one ratio
+cannot tell three rules apart. And it is `collapse_margins`, not `max`: `-10px` over `-30px` measures
+**-30**, where `max` gives -10 and the sum gives -40.
+
+⚠⚠⚠ **I IMPLEMENTED THE LAST CLAUSE WRONG TWICE, AND THE TWO WRONG VERSIONS FAIL IN OPPOSITE
+DIRECTIONS.** The spec says *"...and it does not contain a line box, and **all of its in-flow
+children's margins (if any) collapse**."*
+
+```text
+   shortcut 1  "no in-flow children"    -> an empty block wrapping an empty block does NOT collapse
+                                           Chrome: 50   shortcut: 60          WRONG
+   shortcut 2  "contains no line box"   -> `height:0` wrapping a block WITH TEXT DOES collapse
+                                           Chrome: 60   shortcut: 30          WRONG
+```
+
+Shortcut 1 is what I wrote first; the fixture caught it at 14/15 and I reached for shortcut 2, which
+would have been **a different bug of the same size** — and the row that kills it (`height: 0` around
+real text) is one I only wrote because shortcut 1 had already been wrong once. **Two shortcuts that
+fail in opposite directions are a proof: any rule passing both rows is doing the recursion.** Both
+rows are in the gate, with that written down beside them.
+
+> The generalisable form, and it is the third time this window: **when a spec clause is recursive,
+> the flat approximations of it come in mirror-image pairs, and each one passes the rows that made
+> you look.** Reaching for the second approximation after the first fails is the trap — it feels like
+> converging and it is sampling.
+
+⚠⚠ **THE CONDITION, CLAUSE BY CLAUSE — 15 rows, each varying ONE thing**, all Chrome-measured:
+
+```text
+   collapses through:  plain empty · height:0 · only child is a FLOAT · only child is abspos ·
+                       only child is another EMPTY block · three deep · height:0 around an empty
+                       block · two empty SIBLINGS · whitespace-only text · clear:both with no float
+   does NOT:           border 1px · padding-top 1px · min-height 1px · overflow:hidden ·
+                       display:flow-root · height:20px · has text · height:0 around real text
+```
+
+`overflow: hidden` and `display: flow-root` are the two rows that stop a height check from standing
+in for the concept: both produce a **zero-height** box that must not collapse. The whitespace row is
+the one that decides whether the fix works on real markup at all — pretty-printed HTML puts a newline
+inside every "empty" element, and counting that as content makes the whole fix inert.
+
+RATCHET: `manuk-layout` 125/125, and **all 425 page gates run individually — 425 green.**
+⚠ `g_text_tracks` failed inside that parallel sweep and **passes standalone**, which is the
+contention false-RED this loop has recorded before; re-run before believing a RED from a batch.
+
+⚠⚠ **AND I READ A STALE BINARY FOR ONE MEASUREMENT.** Verifying the gate's fixture against Chrome
+right after the RED proof gave 9/21 — I had restored the source and **not rebuilt**, so
+`target/release/manuk-wpt` was still the RED build. Caught in one step by the numbers being exactly
+the *before* column, but it is the same class as the debug-binary sweep: **check which binary
+produced a surprising reading before you check the code.** After the rebuild: **21/21.**
+
+GATE: `G_MARGIN_COLLAPSE_THROUGH` — 21 claims on one fixture, every row re-measured against Chrome as
+a whole page (21/21). **RED-PROVEN**: forcing `self_collapsing = false` gives `#m3 y=36` against
+Chrome's 28 and `#m5 y=72` against 64, and every "does NOT collapse" row keeps passing under the
+revert, which is what makes them controls.
+
+⚠ BANKED FOR THE NEXT TICK, MEASURED AND NOT BUILT: **a float that follows inline text on the same
+line is placed at that line box's BOTTOM instead of its TOP.** CSS 2.1 §9.5 rule 6 — *"the outer top
+of a floating box may not be higher than the top of any line-box containing a box generated by an
+element earlier in the source document"* — is a bound on the line's TOP. Isolated, four rows:
+
+```text
+                                                        Chrome   ours
+   float FIRST, then text                                 0        0     ok
+   text, then the float (one line)                        0       20     BAD
+   a <p> block, then the float                           52       52     ok
+   text wrapping to TWO lines, then the float            20       40     BAD
+```
+
+`<img class="alignright">` inside a paragraph — the WordPress/CMS idiom — is exactly this, and it
+comes out one line-height too low, which drags the whole float band with it. It is also what makes
+four rows of the `clear` fixture unreadable, so those are deliberately NOT in this gate.
+
+PERF: none measurable. `margins_collapse_through` runs only for a box whose border-box height already
+came out **exactly zero**, which on a real page is the empty divs and nothing else; it is depth-bounded
+at 64 and walks only that subtree, which is empty by construction in every case where it returns
+true. F1/F2 green on the wall.
+
+SELF-AUDIT (due at 1001, run): **one prescribed-but-not-executed item, and it is the same one.**
+*"verify wall: 1190s EXCEEDS the 300s target — Part 21.2 item 1 has regressed."* Everything else is
+green: 28 gates declare how to break themselves, `G_CONTAIN` is self-proving, the 49-entry
+process-defect ledger names a mechanism per defect, the enforcement chain is mechanical, and the
+pattern ledger (1015 rows) moves with the engine.
+
+⚠ **The wall figure the audit reads is the FULL verify total, not the `63s` the ratchet prints** —
+those are two different numbers and only one of them is in the mark. t941 already concluded that
+**the agent is the reason the wall grew**, which is the honest reading here too: this window alone
+added `G_BORDER_COLLAPSE`, `G_FLOAT_WRAP_CONTAINING_BLOCK` and `G_MARGIN_COLLAPSE_THROUGH` to a set
+of 425. Wall optimisation is observer-owned and must not be touched from here; the **wall-time audit
+is due at tick 1003** and is the right place for it, so it is recorded and left rather than
+front-run. `LAST_AUDIT_TICK` set to 1001 by hand (it is the one cadence field that does not derive
+from a ledger header).
+
+WIKI: `docs/wiki/box-layout.md` — "A self-collapsing box, and the two shortcuts that fail in opposite
+directions".
+
 ## Tick 1000 — the fit test asked the wrong box, and the RIGHT floats were correct all along (2026-08-07)
 
 TICK SHAPE: primitive — the floats/clear discovery battery, and the one defect in it. **23 rows, and

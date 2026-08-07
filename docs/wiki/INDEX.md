@@ -308,6 +308,10 @@
   - L6103 · A float's fit test is against its containing block, and the mirror is what names the branch
   - L6123 · The mirror row is the finding
   - L6137 · A float fixture whose rows are not isolated is measuring the wrapper
+  - L6147 · A self-collapsing box, and the two shortcuts that fail in opposite directions
+  - L6166 · One ratio cannot distinguish three rules
+  - L6178 · The recursive clause, and why the flat approximations come in mirror pairs
+  - L6199 · The clauses, each with a measured row
 
 ## browser-capabilities.md
 `docs/wiki/browser-capabilities.md`
@@ -1683,4 +1687,4 @@
   - L124 · Rank mechanisms by FLIP RATE, not failing-subtest count — CSS layout is a multi-assertion slog
 
 ---
-1590 sections across 22 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+1594 sections across 22 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
