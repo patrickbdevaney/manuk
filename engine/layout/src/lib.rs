@@ -4686,7 +4686,52 @@ impl Ctx<'_> {
             self.auto_col_widths(&placed, ncols, avail_cols, table_specified.is_some())
         };
         let cols_used: f32 = widths.iter().sum();
-        let content_w = cols_used + spacing_total;
+        let mut content_w = cols_used + spacing_total;
+
+        // ── **`<caption>` — the box we rendered as NOTHING.** It was skipped with the column groups
+        //    in `collect_table_rows` and never laid out at all: the text did not appear, the rows
+        //    did not move down for it, and the table did not widen for it. Three defects in one
+        //    dropped child, and the first of them is a MISSING_BOX rather than a geometry error.
+        let captions: Vec<NodeId> = self
+            .dom
+            .children(node)
+            .into_iter()
+            .filter(|&c| {
+                self.dom.is_element(c)
+                    && is_rendered(self.dom, self.styles, c)
+                    && self.style_of(c).display == Display::TableCaption
+            })
+            .collect();
+        // ⚠ **A CAPTION WIDENS ITS TABLE, which is the part that is not obvious.** The table's used
+        // width is at least the caption's MIN-content width — Chrome-measured: a one-cell table whose
+        // cell holds `x` (10px) with the caption `a very long caption` comes out **67** wide, the
+        // longest word, and the column takes the extra. So the surplus is distributed over the
+        // columns exactly as a rowspan's surplus is distributed over its rows (t990), on the other
+        // axis. It is min-content and not max-content because the caption is allowed to WRAP: at 67
+        // that caption is three lines tall, and Chrome keeps it three lines rather than widening the
+        // table to fit it on one.
+        let mut widths = widths;
+        if !captions.is_empty() {
+            let cap_min = captions
+                .iter()
+                .map(|&c| self.min_content_width(c))
+                .fold(0.0f32, f32::max);
+            let deficit = cap_min - content_w;
+            if deficit > 0.0 && !widths.is_empty() {
+                let total: f32 = widths.iter().sum();
+                if total > 0.0 {
+                    for w in widths.iter_mut() {
+                        *w += deficit * *w / total;
+                    }
+                } else {
+                    let n = widths.len() as f32;
+                    for w in widths.iter_mut() {
+                        *w += deficit / n;
+                    }
+                }
+                content_w = widths.iter().sum::<f32>() + spacing_total;
+            }
+        }
 
         // Column x offsets (separated model insets each column by `spacing`).
         let mut col_x = Vec::with_capacity(ncols);
@@ -4838,9 +4883,33 @@ impl Ctx<'_> {
                 // inventing one would be a rule this fixture cannot defend.
             }
         }
+        // ── Lay the CAPTION out as a block across the table's content width, above the rows.
+        //    `caption-side` is not modelled (no `ComputedStyle` field), so this is always the
+        //    initial value `top` — which is what a `<caption>` written anywhere in the table gets,
+        //    including after the rows. ⚠ `caption-side: bottom` is Chrome-measured and NOT built:
+        //    it belongs below the row area (a 20px caption under a 30px row sits at y=30) and is a
+        //    cascade addition, not a layout one.
+        let mut caption_boxes: Vec<LayoutBox> = Vec::new();
+        let mut caption_h = 0.0f32;
+        for &cap in &captions {
+            let mut floats = FloatContext::new(content_x, content_x + content_w);
+            let r = self.layout_block(
+                cap,
+                content_w,
+                None,
+                content_x,
+                content_y + caption_h,
+                0.0,
+                &mut floats,
+            );
+            caption_h = (r.flow_bottom - content_y).max(caption_h);
+            caption_boxes.push(r.boxx);
+        }
+
         // Row y positions.
-        let mut row_y = vec![content_y + spacing_v; nrows.max(1)];
-        let mut yy = content_y + spacing_v;
+        let rows_top = content_y + caption_h;
+        let mut row_y = vec![rows_top + spacing_v; nrows.max(1)];
+        let mut yy = rows_top + spacing_v;
         for r in 0..nrows {
             row_y[r] = yy;
             yy += row_h[r] + spacing_v;
@@ -4965,7 +5034,9 @@ impl Ctx<'_> {
             marker: None,
             opacity: s.opacity,
             node: Some(node),
-            content: BoxContent::Block(row_boxes),
+            // The caption boxes come FIRST in the table's children — they paint above the rows
+            // and, more importantly, they read first in the semantic order the agent surface walks.
+            content: BoxContent::Block(caption_boxes.into_iter().chain(row_boxes).collect()),
         };
         // **Auto margins centre a table.** `layout_block` does this; `layout_table` did not, so
         // every `<center><table>` and `<table align="center">` on the legacy web — Hacker News

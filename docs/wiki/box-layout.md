@@ -5817,3 +5817,48 @@ stable sort on the rank preserves that, and the two-`<tbody>` control is the onl
 control exists for a future three-bucket rewrite, and that is recorded rather than claimed as a proof.
 
 Gated by `G_ROW_GROUP_ORDER`.
+
+## `<caption>` — the box we rendered as NOTHING, and the width interaction that is not obvious (t992)
+
+`<caption>` was skipped alongside the column groups in `collect_table_rows` and never laid out.
+**Three defects in one dropped child**, and they are not the same kind: the text did not appear (a
+MISSING_BOX, not a geometry error), the rows did not move down for it, and the table did not widen
+for it.
+
+```text
+                                                    Chrome     before      after
+  caption 20px tall, one-cell table  caption box    [0, h20]   ABSENT    [0, h20]
+                                     the cell       [y=20]     [y= 0]    [y=20]
+  caption `a very long caption`      table width    [   67]    [   10]   [   67]
+                                     the cell       [y=72]     [y= 0]    [y=72]
+  caption written AFTER the rows     caption box    [y= 0]     ABSENT    [y= 0]
+ ── control: no caption                              unchanged
+```
+
+### A caption WIDENS its table — to its MIN-content width
+
+The table's used width is at least the caption's **min-content** width, and the surplus is
+distributed over the columns exactly as a rowspan's surplus is distributed over its rows (t990), on
+the other axis. Chrome-measured: a one-cell table whose cell holds `x` (10px) with the caption *"a
+very long caption"* comes out **67** wide — the longest word — and the column takes the extra.
+
+**Min-content and not max-content, because the caption may wrap.** At 67 that caption is three lines
+tall and Chrome keeps it three lines rather than widening the table to fit it on one. A max-content
+floor gives 183 and a one-line caption: a wrong answer of the right shape, and **the row that
+distinguishes them is the caption's HEIGHT, not its width.**
+
+### The caption is FIRST among the table's children
+
+It paints above the rows and, more importantly, **reads first in the semantic order the agent surface
+walks**. A caption is a table's accessible name; emitting it after the rows puts the label after the
+data for every consumer of the a11y tree — the I3 surface, not the paint one. ⚠ Reordering it does
+**not** fail this gate, whose assertions are geometric; recorded as a NON-red because the gate that
+could see it is an a11y-order gate.
+
+⚠ **`caption-side: bottom` is measured and NOT built** — a 20px caption under a 30px row belongs at
+y=30 — because there is no `caption_side` field on `ComputedStyle`. The t985/t987 "nowhere to live"
+shape again, and a cascade addition rather than a layout one.
+
+Gated by `G_TABLE_CAPTION`. **With this, the whole sixteen-row table battery of t989 is Chrome-exact:
+four mechanisms found, four closed** (cell `vertical-align` t989 · rowspan distribution t990 ·
+row-group order t991 · caption t992).

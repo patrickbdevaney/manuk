@@ -46371,6 +46371,82 @@ PERF: none — one UA rule and one narrowed branch in a cascade that already ran
 WIKI: `docs/wiki/css-cascade.md` — where Chrome draws the form-control `box-sizing` line, and why a
 layout-crate test cannot see it.
 
+## Tick 992 — the box we rendered as NOTHING, and the battery closes (2026-08-07)
+
+TICK SHAPE: primitive — `<table><caption>`. **The fourth and last mechanism out of t989's table
+battery.**
+
+⚠⚠⚠ **THE WHOLE SIXTEEN-ROW TABLE BATTERY IS NOW CHROME-EXACT. FOUR MECHANISMS FOUND, FOUR CLOSED**
+— cell `vertical-align` (t989), rowspan row-height distribution (t990), row-group order (t991),
+caption (t992). That is the first time in this loop's history that a discovery fixture has been taken
+to zero, and it took four ticks from a fixture that cost forty minutes to write.
+
+⚠⚠⚠ **THREE DEFECTS IN ONE DROPPED CHILD, AND THEY ARE NOT THE SAME KIND.** `<caption>` was skipped
+alongside the column groups in `collect_table_rows` and never laid out at all:
+
+```text
+   1. the caption's text did not appear          a MISSING_BOX, not a geometry error
+   2. the rows did not move down for it          every row sat where the caption belonged
+   3. the table did not widen for it             a width defect nothing else would have found
+```
+
+**A single `_ => {}` produced one of each of the three failure classes this project tracks.** That is
+worth saying plainly because the burndown ranks them separately and would have chased them
+separately.
+
+```text
+                                                     Chrome     before      after
+   caption 20px, one-cell table   caption box       [0, h20]    ABSENT    [0, h20]
+                                  the cell          [y=20]      [y= 0]    [y=20]
+   caption `a very long caption`  table width       [   67]     [   10]   [   67]
+                                  the cell          [y=72]      [y= 0]    [y=72]
+   caption written AFTER the rows caption box       [y= 0]      ABSENT    [y= 0]
+  -- CONTROL: no caption --                          unchanged
+```
+
+⚠⚠⚠ **A CAPTION WIDENS ITS TABLE, TO ITS MIN-CONTENT WIDTH, AND THE ROW THAT PROVES IT IS THE
+CAPTION'S HEIGHT.** A one-cell table holding `x` (10px) with the caption *"a very long caption"* is
+**67** wide in Chrome — the longest word — and the column takes the extra, distributed exactly as
+t990 distributes a rowspan's surplus over its rows, on the other axis.
+
+> Min-content, not max-content, **because the caption is allowed to wrap**. At 67 it is three lines
+> tall and Chrome keeps it three lines rather than widening the table to fit it on one. The
+> max-content version gives 183 and one line — *a wrong answer of the right shape*, and the width
+> alone cannot tell the two apart. **The discriminating number is the caption's HEIGHT.** That is the
+> window's recurring lesson landing for the fifth time, and this time the discriminator was not even
+> the same quantity as the defect.
+
+⚠⚠ **THE CAPTION IS EMITTED FIRST AMONG THE TABLE'S CHILDREN, AND THE REASON IS I3 RATHER THAN
+PAINT.** A caption is a table's accessible NAME. Emitting it after the rows puts the label after the
+data for every consumer of the a11y tree — and I checked whether this gate can see that: **it cannot**,
+because its assertions are geometric. Recorded as a NON-red rather than left as an untested claim;
+the gate that could see it is an a11y-order gate and does not exist.
+
+⚠ **`caption-side: bottom` is Chrome-measured and NOT built** — a 20px caption under a 30px row
+belongs at y=30 — because there is no `caption_side` field on `ComputedStyle`. The t985/t987 "nowhere
+to live" shape for the third time this window, and a cascade addition rather than a layout one.
+
+RED-PROVEN, each on exactly its own rows:
+
+```text
+   restore the `_ => {}` skip              -> the caption box does not exist and every cell reads
+                                              y=0; the control passes
+   lay the caption out, do not offset rows -> the caption exists and every cell STILL reads y=0 —
+                                              the version that looks right in a screenshot
+   `max_content_width` for the floor       -> the wide row reads w=183 and y=24 (one line) against
+                                              67 and 72; every narrow row still passes
+```
+
+RATCHET: `manuk-layout` 125/125, `manuk-css` 32/32 + 2 doc-tests, and the table gate set green as a
+set — `g_table_caption` (new), `g_row_group_order`, `g_rowspan_distribution`, `g_table_cell_valign`,
+plus `g_text_indent_edges`.
+
+PERF: one filtered pass over a table's direct children, and a block layout per caption — on tables
+that have one. A table without a caption pays one `Vec` that comes back empty.
+
+WIKI: `docs/wiki/box-layout.md` — "`<caption>` — the box we rendered as NOTHING, and the width
+interaction that is not obvious".
+
 ## Tick 991 — the fold that read as a simplification, and the self-audit (2026-08-07)
 
 TICK SHAPE: pattern-class — table row-group ordering. The third of four mechanisms out of t989's
