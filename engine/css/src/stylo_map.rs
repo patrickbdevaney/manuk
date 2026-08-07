@@ -1047,6 +1047,35 @@ pub fn to_computed_style(cv: &ComputedValues) -> ComputedStyle {
         s.transform = ops;
     }
 
+    // ⚠⚠⚠ **`translate` / `rotate` / `scale` — THE INDIVIDUAL TRANSFORM PROPERTIES, AND THIS PATH
+    // IS THE ONE THAT DECIDES REAL PAGES.** They are properties of their own (CSS Transforms 2) so
+    // that setting one does not clobber the others, which is why every animation library now writes
+    // them — and neither cascade read them, so the element sat UNTRANSFORMED. Measured against
+    // Chrome on a 40x20 box: `translate:30px 15px` belongs at [50, 2005] and sat at [20, 1990];
+    // `rotate:90deg` belongs at [30, 2070] 20x40 and sat at [20, 2080] 40x20; `scale:2` belongs at
+    // [0, 2160] 80x40 and sat at [20, 2170] 40x20. Priced at 33/171 = **19.3%** of the burndown
+    // corpus, fetched with their linked stylesheets.
+    //
+    // The composition order is fixed by the spec and applied in `effective_transform`, not here:
+    // translate, then rotate, then scale, then the `transform` list, whatever order they cascaded
+    // in. Only the z rotation has a 2D effect, the same exact-projection rule `rotate3d` gets above.
+    {
+        use stylo::values::generics::transform::{Rotate, Scale, Translate};
+        s.translate = match cv.clone_translate() {
+            Translate::None => None,
+            Translate::Translate(x, y, _z) => Some((lp_to_dim(&x), lp_to_dim(&y))),
+        };
+        s.rotate = match cv.clone_rotate() {
+            Rotate::None => None,
+            Rotate::Rotate(a) => Some(a.radians()),
+            Rotate::Rotate3D(x, y, z, a) => (x == 0.0 && y == 0.0 && z != 0.0).then(|| a.radians()),
+        };
+        s.scale = match cv.clone_scale() {
+            Scale::None => None,
+            Scale::Scale(x, y, _z) => Some((x, y)),
+        };
+    }
+
     // `transform-origin`: the point the matrix above is applied ABOUT. Recovered from Stylo's own
     // computed value — the engine hard-coded the box centre at three call sites, so an author who
     // wrote `transform-origin: 0 0` got a transform about the centre and a box in the wrong place

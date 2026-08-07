@@ -6321,3 +6321,55 @@ badge, a carousel track with positioned arrows, a modal centred with `translate(
 a positioned close button. The error is unbounded — the child keeps its untransformed size, so it
 both moves and mis-sizes — which is an `overlap` and `reading_order` divergence rather than a small
 `dy`.
+
+## `translate` / `rotate` / `scale` are PROPERTIES, and the order is the spec's not the author's
+
+CSS Transforms 2 splits the three commonest transform functions into properties of their own. The
+point is composability: `el.style.translate = '30px 15px'` leaves a `rotate` the stylesheet set
+alone, where `el.style.transform = 'translate(30px,15px)'` destroys it. That is why every animation
+library now writes them, and why they show up in **19.3%** of the burndown corpus (171 sites fetched
+with their linked stylesheets: `rotate:` 12.9%, `scale:` 8.8%, `translate:` 3.5%).
+
+Both of this engine's cascades matched only `"transform"`. The three names appeared *only* as
+**values** inside `will-change`, which is what made the gap read as handled. So the properties were
+**absent** rather than wrong, and the element sat at its untransformed position and its
+untransformed size — the largest error a transform property can produce.
+
+### The two shorthand rules are opposite, and one fixture cannot tell them apart
+
+```text
+   translate: 30px     ->  translate(30px, 0)    y stays 0
+   scale: 2            ->  scale(2, 2)           UNIFORM
+```
+
+Either rule, applied to both, passes half the rows. A percentage `translate` resolves against the
+element's **own border box**, exactly as the function does: `translate: 50% 100%` on a 40×20 box is
+`(20px, 20px)`.
+
+### The composition order is fixed, whatever order the declarations came in
+
+§3: the matrix is **`translate`, then `rotate`, then `scale`, then the `transform` list**. So
+`translate:30px 0; rotate:90deg` and `rotate:90deg; translate:30px 0` are the *same* transform, and
+Chrome gives both `(30,10) 20x40`. That single rule is the reason these are four fields composed at
+use (`ComputedStyle::effective_transform`) rather than one `Vec` appended to at parse time: a Vec
+built during the cascade can only ever record declaration order.
+
+`effective_transform` returns `Cow::Borrowed(&self.transform)` when none of the three is set, so the
+overwhelming majority of boxes allocate nothing.
+
+### ⚠ A rotation about x or y is NOT beyond a 2D pipeline — measured
+
+`g_transform_3d.rs` carries the claim that a rotation about the x or y axis *"foreshortens, which a
+2D pipeline cannot express, and inventing one would be a wrong answer of the right type."* With no
+`perspective` in force that is measurably false: the projection is exactly a scale on the other
+axis, and Chrome reports it in `getBoundingClientRect`.
+
+```text
+   a 40x20 box                        Chrome            ours
+     rotate: x 45deg                40   x 14.14      40 x 20      (14.14 = 20 * cos45)
+     rotate: y 45deg                28.28 x 20        40 x 20      (28.28 = 40 * cos45)
+```
+
+Banked, not built: it is a different rule from the properties above — it belongs equally to
+`rotateX()`, `rotateY()` and `rotate3d()` — and two RED proofs in one tick make neither of them a
+proof.

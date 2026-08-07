@@ -46371,6 +46371,93 @@ PERF: none — one UA rule and one narrowed branch in a cascade that already ran
 WIKI: `docs/wiki/css-cascade.md` — where Chrome draws the form-control `box-sizing` line, and why a
 layout-crate test cannot see it.
 
+## Tick 1006 — the three properties that were absent, and the order no declaration decides (2026-08-07)
+
+TICK SHAPE: primitive — the second defect the t1005 transform battery found, built. **18 further
+rows, and the fixture corrected me twice: once on a shorthand rule and once on a claim this repo
+already carries about what a 2D pipeline can express.**
+
+⚠⚠⚠ **`translate`, `rotate` AND `scale` ARE PROPERTIES, AND NEITHER CASCADE HAD THEM.** CSS
+Transforms 2 splits the three commonest transform functions into properties of their own so setting
+one does not clobber the others — `el.style.translate = '30px 15px'` leaves a `rotate` the
+stylesheet set alone, where `el.style.transform = ...` destroys it, which is why every animation
+library now writes them. This engine matched only `"transform"`; the three names appeared **only as
+values inside `will-change`**, which is exactly what made the gap read as handled. So they were
+**absent** rather than wrong, and the element sat at its untransformed position AND its
+untransformed size:
+
+```text
+   a 40x20 abspos box at left:20px top:10px, transform-origin 0 0,
+   as an offset from its own 200x60 container      Chrome            before            after
+     translate: 30px                             (50,10) 40x20    (20,10) 40x20    Chrome-exact
+     scale: 2                                    (20,10) 80x40    (20,10) 40x20    Chrome-exact
+     rotate: z 90deg                             ( 0,10) 20x40    (20,10) 40x20    Chrome-exact
+     translate: 50% 100%                         (40,30) 40x20    (20,10) 40x20    Chrome-exact
+     all three together                          ( 0,20) 40x80    (20,10) 40x20    Chrome-exact
+```
+
+Priced BEFORE building, per the standing rule: **33/171 = 19.3%** of the burndown corpus declares at
+least one, over sites fetched *with their linked stylesheets* (`rotate:` 12.9%, `scale:` 8.8%,
+`translate:` 3.5%).
+
+⚠⚠⚠ **THE TWO SHORTHAND RULES ARE OPPOSITE, AND I HAD WRITTEN ONE OF THEM WRONG.** A one-value
+`translate: 30px` leaves **y at 0**; a one-value `scale: 2` is **UNIFORM**. Either rule applied to
+both passes half the rows and looks like a working implementation. The fixture carries both because
+one of them alone cannot discriminate — the same shape as t1001's two ratios.
+
+⚠⚠⚠ **THE COMPOSITION ORDER IS THE SPEC'S, NOT THE DECLARATIONS', AND THAT ONE RULE DECIDED THE
+DATA STRUCTURE.** §3 fixes it as **translate → rotate → scale → the `transform` list**, whatever
+order the declarations appeared in. So `translate:30px 0; rotate:90deg` and `rotate:90deg;
+translate:30px 0` are the SAME transform, and every pair is written both ways round in the fixture
+with an `assert_eq!` between them. **A `Vec` appended to during the cascade can only ever record
+declaration order**, so these are four fields composed at use (`ComputedStyle::effective_transform`,
+which returns `Cow::Borrowed(&self.transform)` when none of the three is set, so pages that do not
+use them allocate nothing). Chrome agrees to the pixel on all six order rows.
+
+⚠⚠ **BOTH CASCADES, BECAUSE THE TWIN-PATH FAILURE HAS FIRED THREE TIMES HERE.** t851 caught two
+hand-maintained UA sheets concealing each other's gaps; this is the same shape one property family
+over. `stylo_map.rs` reads `clone_translate/clone_rotate/clone_scale`, `parse_decl` parses the three
+properties, and there are **two gates**: `G_TRANSFORM_INDIVIDUAL` on the shipping path and
+`the_individual_transform_properties_compose_in_the_specs_order` in `manuk-layout` (which is what
+the wall actually runs), each RED-proven on its own path.
+
+⚠⚠⚠ **AND THE FIXTURE OVERTURNED A CLAIM THIS REPO ALREADY CARRIES.** I wrote `rotate: x 45deg` and
+`rotate: y 45deg` as NEGATIVE rows — *"no 2D effect, the box must not move"* — quoting
+`g_transform_3d.rs`'s own note that a rotation about x or y *"foreshortens, which a 2D pipeline
+cannot express, and inventing one would be a wrong answer of the right type."* Chrome:
+
+```text
+   a 40x20 box                Chrome           ours
+     rotate: x 45deg        40 x 14.14       40 x 20      14.14 = 20 * cos45
+     rotate: y 45deg        28.28 x 20       40 x 20      28.28 = 40 * cos45
+```
+
+**With no `perspective` in force the projection is exactly a scale on the other axis** — as
+expressible in 2D as `translate3d`'s x/y terms were, and by the same argument that tick used to
+build them. So the note is measured false, and the general form is worth keeping: **a limitation
+recorded as a decision stops being re-checked, which is the same trap `_ => {}` set for the 3D
+family in the first place.** Banked and NOT built: it belongs equally to `rotateX()`, `rotateY()`
+and `rotate3d()`, so it is a different rule, and two RED proofs in one tick make neither a proof.
+
+RATCHET: `manuk-layout` 127/127, `manuk-css` 32/32, `G_TRANSFORM_INDIVIDUAL` green. The t1005 gate
+and the 26-row containing-block battery re-measured unchanged. Nothing traded.
+
+GATE: two, one per cascade, **both RED-proven by running the revert, not by reading the code**:
+returning `None` from the three `stylo_map` arms collapses every `#s*`/`#o*` row to `(20,10) 40x20`
+with the `none` control still green; deleting the three `parse_decl` arms does the same on the
+minimal path. ⚠ **And a third RED recipe I wrote from the code was WRONG again** — *"emit
+declaration order and `#o2` fails while `#o1` passes"*: run, it is `#o1` that fails `(0,40)` against
+Chrome's `(30,10)`, because both rows carry both properties and a wrong order moves the pair
+together. That is the second window running in which a gate header's RED claim was false until it
+was run; it is recorded in the gate rather than smoothed over.
+
+PERF: none measurable. `effective_transform` borrows when the three are unset, which is every box on
+every page that does not use them; the three parse arms are three more `match` arms on a string
+already being matched.
+
+WIKI: `docs/wiki/box-layout.md` — "`translate` / `rotate` / `scale` are PROPERTIES, and the order is
+the spec's not the author's".
+
 ## Tick 1005 — the matrix reached the subtree it was applied to, and an abspos child is not in it (2026-08-07)
 
 TICK SHAPE: primitive — the transform battery, and the one defect in it. **53 rows across two arms,

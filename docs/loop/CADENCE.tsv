@@ -719,3 +719,4 @@ tick	sha	epoch	iso	delta_s	shape	wall_s	files	added	deleted	gates	claims	wpt_pas
 1003	a2174296	1786130018	2026-08-07T15:13:38-04:00	1600	measurement	63	5	192	33	427	81	3896	6960	0	507	0	the wall audit, and the confession I was about to repeat is FALSE (2026-08-07)
 1004	1918bd53	1786140047	2026-08-07T18:00:47-04:00	10029	measurement	63	5	267	33	427	81	3896	6960	0	507	0	the sweep and the battery are the same instrument pointed at two questions (2026-08-07)
 1005	8c22a5ed	1786142109	2026-08-07T18:35:09-04:00	2062	primitive	808	6	397	12	427	81	3896	6960	0	508	0	the matrix reached the subtree it was applied to, and an abspos child is not in it (2026-08-07)
+1006	49d25631	1786144140	2026-08-07T19:09:00-04:00	2031	primitive	808	9	617	10	428	81	3896	6960	0	509	0	the three properties that were absent, and the order no declaration decides (2026-08-07)

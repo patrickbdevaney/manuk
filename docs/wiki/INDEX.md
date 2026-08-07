@@ -318,6 +318,10 @@
   - L6260 · The two rows that stop it degenerating
   - L6267 · The matrix reaches the subtree it was applied to, and an abspos child is not in it
   - L6295 · The fix, and why it needs a second map rather than an inverse
+  - L6325 · translate / rotate / scale are PROPERTIES, and the order is the spec's not the author's
+  - L6338 · The two shorthand rules are opposite, and one fixture cannot tell them apart
+  - L6349 · The composition order is fixed, whatever order the declarations came in
+  - L6360 · ⚠ A rotation about x or y is NOT beyond a 2D pipeline — measured
 
 ## browser-capabilities.md
 `docs/wiki/browser-capabilities.md`
@@ -1693,4 +1697,4 @@
   - L124 · Rank mechanisms by FLIP RATE, not failing-subtest count — CSS layout is a multi-assertion slog
 
 ---
-1600 sections across 22 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+1604 sections across 22 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.

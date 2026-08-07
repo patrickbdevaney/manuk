@@ -1308,6 +1308,23 @@ pub struct ComputedStyle {
     /// matrix), resolved to an affine matrix at layout time (translate `%` is the box's own
     /// size). Empty = `none`.
     pub transform: Vec<TransformFn>,
+    /// ⚠⚠⚠ **`translate` / `rotate` / `scale` — the INDIVIDUAL transform properties, and neither
+    /// cascade parsed them.** CSS Transforms 2 splits the three commonest transform functions into
+    /// properties of their own so an author (and every animation library) can set one without
+    /// clobbering the others — `element.style.translate = '30px 15px'` does not destroy a `rotate`
+    /// the stylesheet set. This engine matched only `"transform"`, so all three were **absent**
+    /// rather than wrong, and the element sat untransformed. **19.3% of the burndown corpus declares
+    /// at least one** (`rotate:` 12.9%, `scale:` 8.8%, `translate:` 3.5%, 171 sites fetched with
+    /// their linked stylesheets).
+    ///
+    /// Kept as their own fields rather than folded into `transform`, for two reasons: the spec fixes
+    /// the composition order (**translate, then rotate, then scale, then the `transform` list**)
+    /// regardless of declaration order, which a single Vec appended to at parse time cannot honour;
+    /// and `getComputedStyle(el).transform` must keep reporting the `transform` property alone.
+    /// [`ComputedStyle::effective_transform`] is what layout asks for.
+    pub translate: Option<(Dim, Dim)>,
+    pub rotate: Option<f32>,
+    pub scale: Option<(f32, f32)>,
     /// `vertical-align` — cross-axis alignment of an inline-level box on its line.
     pub vertical_align: VerticalAlign,
     /// `grid-template-columns` / `-rows` (container). Empty = none. A [`TrackComponent`] rather than
@@ -1363,6 +1380,41 @@ pub struct ComputedStyle {
 }
 
 impl ComputedStyle {
+    /// **The transform layout must actually apply**, in the order CSS Transforms 2 §3 fixes:
+    /// `translate`, then `rotate`, then `scale`, then the `transform` list — **whatever order the
+    /// declarations appeared in**. That ordering rule is the whole reason these are four fields and
+    /// not one appended Vec.
+    ///
+    /// Returns a borrow of `transform` in the overwhelmingly common case (no individual property
+    /// set), so the pages that do not use them allocate nothing.
+    pub fn effective_transform(&self) -> std::borrow::Cow<'_, [TransformFn]> {
+        if self.translate.is_none() && self.rotate.is_none() && self.scale.is_none() {
+            return std::borrow::Cow::Borrowed(&self.transform);
+        }
+        let mut out = Vec::with_capacity(self.transform.len() + 3);
+        if let Some((x, y)) = self.translate {
+            out.push(TransformFn::Translate(x, y));
+        }
+        if let Some(a) = self.rotate {
+            out.push(TransformFn::Rotate(a));
+        }
+        if let Some((x, y)) = self.scale {
+            out.push(TransformFn::Scale(x, y));
+        }
+        out.extend_from_slice(&self.transform);
+        std::borrow::Cow::Owned(out)
+    }
+
+    /// Does this box carry a transform at all — from `transform` or from any of the three
+    /// individual properties? The grouping-property question (`does it establish a containing block
+    /// for out-of-flow descendants`) is asked of all four, not just the list.
+    pub fn has_transform(&self) -> bool {
+        !self.transform.is_empty()
+            || self.translate.is_some()
+            || self.rotate.is_some()
+            || self.scale.is_some()
+    }
+
     /// The CSS initial values, used as the root's starting point and for
     /// non-inherited resets.
     pub fn initial() -> Self {
@@ -1477,6 +1529,9 @@ impl ComputedStyle {
             align_self: None,
             justify_self: None,
             transform: Vec::new(),
+            translate: None,
+            rotate: None,
+            scale: None,
             vertical_align: VerticalAlign::Baseline,
             grid_template_columns: Vec::new(),
             grid_template_rows: Vec::new(),
@@ -4835,6 +4890,74 @@ fn apply_declaration(s: &mut ComputedStyle, d: &Declaration, parent_fs: f32) {
         "grid-row-start" => s.grid_row.0 = parse_grid_line(v),
         "grid-row-end" => s.grid_row.1 = parse_grid_line(v),
         "transform" => s.transform = parse_transform(v, s.font_size),
+        // The individual transform properties. `none` is the initial value and must CLEAR a value
+        // an earlier rule set, so each arm assigns rather than only assigning on success.
+        "translate" => {
+            s.translate = (v.trim().to_ascii_lowercase() != "none").then(|| {
+                let mut p = v.split_ascii_whitespace();
+                let x = p
+                    .next()
+                    .map(|t| values::parse_dim(t, s.font_size))
+                    .unwrap_or(Dim::Px(0.0));
+                // A one-value `translate` leaves y at 0 — NOT at x. `translate: 30px` is
+                // `translate(30px, 0)`, the same shorthand rule the function has.
+                let y = p
+                    .next()
+                    .map(|t| values::parse_dim(t, s.font_size))
+                    .unwrap_or(Dim::Px(0.0));
+                (x, y)
+            })
+        }
+        "rotate" => {
+            // `rotate: x|y|z <angle>` and `rotate: <x> <y> <z> <angle>` are the 3D spellings; only
+            // a rotation about z has a 2D effect, and taking the angle off `z 45deg` while ignoring
+            // `x 45deg` is the same exact-projection rule `stylo_map` applies to `rotate3d`.
+            let t = v.trim().to_ascii_lowercase();
+            s.rotate = if t == "none" || t.is_empty() {
+                None
+            } else {
+                let parts: Vec<&str> = t.split_ascii_whitespace().collect();
+                match parts.as_slice() {
+                    [a] => parse_angle_rad(a),
+                    ["z", a] => parse_angle_rad(a),
+                    ["x", _] | ["y", _] => None,
+                    [x, y, z, a] => {
+                        let (x, y, z) = (
+                            x.parse::<f32>().unwrap_or(0.0),
+                            y.parse::<f32>().unwrap_or(0.0),
+                            z.parse::<f32>().unwrap_or(0.0),
+                        );
+                        (x == 0.0 && y == 0.0 && z != 0.0)
+                            .then(|| parse_angle_rad(a))
+                            .flatten()
+                    }
+                    _ => None,
+                }
+            };
+        }
+        "scale" => {
+            let t = v.trim().to_ascii_lowercase();
+            s.scale = if t == "none" || t.is_empty() {
+                None
+            } else {
+                let n: Vec<f32> = t
+                    .split_ascii_whitespace()
+                    .map(|p| {
+                        p.strip_suffix('%')
+                            .and_then(|q| q.parse::<f32>().ok().map(|v| v / 100.0))
+                            .or_else(|| p.parse::<f32>().ok())
+                            .unwrap_or(1.0)
+                    })
+                    .collect();
+                match n.as_slice() {
+                    // A one-value `scale` is UNIFORM — the opposite of `translate`'s rule, which is
+                    // why both are written out here rather than shared.
+                    [x] => Some((*x, *x)),
+                    [x, y] | [x, y, _] => Some((*x, *y)),
+                    _ => None,
+                }
+            };
+        }
         "vertical-align" => {
             s.vertical_align = match v.trim() {
                 "top" => VerticalAlign::Top,

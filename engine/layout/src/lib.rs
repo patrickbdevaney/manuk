@@ -3555,9 +3555,10 @@ impl Ctx<'_> {
         // baked into the subtree's coordinates. Exact for translate/scale (axis-aligned);
         // rotate/skew map each box to its transformed bounding box (matching
         // getBoundingClientRect), which the CPU raster then paints upright.
-        if !s.transform.is_empty() {
+        let xf = s.effective_transform();
+        if !xf.is_empty() {
             let origin = transform_origin_of(&s, rect.x, rect.y, border_box_w, border_box_h);
-            let m = resolve_transform(&s.transform, border_box_w, border_box_h, origin);
+            let m = resolve_transform(&xf, border_box_w, border_box_h, origin);
             self.record_transform(node, &m, &boxx);
             boxx.transform_affine(&m);
         }
@@ -6126,7 +6127,7 @@ impl Ctx<'_> {
     /// one level up — not an unhandled value but a value with nowhere to live. `will-change:
     /// transform` was measured Chrome-exact at `[20, 20]` and reads `[0, -1328]` here.
     fn establishes_out_of_flow_cb(s: &ComputedStyle) -> bool {
-        !s.transform.is_empty()
+        s.has_transform()
             || !s.filter.is_empty()
             || !s.backdrop_filter.is_empty()
             // `will-change` / `contain: layout|paint|strict|content` / `perspective`. These three
@@ -6548,9 +6549,10 @@ impl Ctx<'_> {
             }
         }
         // `transform` applies to absolutely-positioned boxes too (around the box center).
-        if !s.transform.is_empty() {
+        let xf = s.effective_transform();
+        if !xf.is_empty() {
             let origin = transform_origin_of(&s, bx, by, border_box_w, border_box_h);
-            let m = resolve_transform(&s.transform, border_box_w, border_box_h, origin);
+            let m = resolve_transform(&xf, border_box_w, border_box_h, origin);
             self.record_transform(node, &m, &boxx);
             boxx.transform_affine(&m);
         }
@@ -6883,9 +6885,10 @@ impl Ctx<'_> {
             // header and the footer, because the translate that hides it never applied.
             let mut boxx = boxx;
             let s = self.style_of(p.dom);
-            if !s.transform.is_empty() {
+            let xf = s.effective_transform();
+            if !xf.is_empty() {
                 let origin = transform_origin_of(s, abs_x, abs_y, p.slot.width, p.slot.height);
-                let m = resolve_transform(&s.transform, p.slot.width, p.slot.height, origin);
+                let m = resolve_transform(&xf, p.slot.width, p.slot.height, origin);
                 self.record_transform(p.dom, &m, &boxx);
                 boxx.transform_affine(&m);
             }
@@ -11208,6 +11211,84 @@ mod tests {
         // `rotate(90deg)` about the top-left: the child's axis-aligned box swaps its axes.
         // Chrome [-30, 830] against the container's [-60, 810] is (30, 20) 20x40.
         close(rel("q10", "r10"), (30.0, 20.0, 20.0, 40.0), "q10");
+    }
+
+    /// **THE INDIVIDUAL TRANSFORM PROPERTIES, ON THE MINIMAL CASCADE — the twin of
+    /// `G_TRANSFORM_INDIVIDUAL`, which gates the shipping (Stylo) one.**
+    ///
+    /// Two hand-maintained cascades have concealed each other's gaps three times in this repo
+    /// (t851, and the UA-sheet lockstep gate that came out of it). `translate` / `rotate` / `scale`
+    /// were missing from BOTH, so a gate on one path alone would let the other rot. This one runs in
+    /// the wall (`manuk-layout` crate tests); the page-level gate runs the shipping path.
+    ///
+    /// Chrome-measured, a 40×20 abspos box at `left:20px top:10px`, `transform-origin: 0 0`, as an
+    /// offset from its own 200×60 container:
+    ///
+    /// ```text
+    ///                                      Chrome           before
+    ///   translate: 30px                  (50,10) 40x20    (20,10) 40x20   <- y stays 0
+    ///   scale: 2                         (20,10) 80x40    (20,10) 40x20   <- one value is UNIFORM
+    ///   rotate: 90deg                    ( 0,10) 20x40    (20,10) 40x20
+    ///   translate:30px 0; rotate:90deg   (30,10) 20x40    (20,10) 40x20
+    /// ```
+    ///
+    /// **RED recipe (run):** delete the `"translate" | "rotate" | "scale"` arms in
+    /// `engine/css/src/lib.rs` and every row collapses to its untransformed `(20,10) 40x20`, with
+    /// the `none` control still green.
+    #[test]
+    fn the_individual_transform_properties_compose_in_the_specs_order() {
+        let css = "\
+            * { margin:0; padding:0 }
+            .c { width:200px; height:60px; position:relative; margin-bottom:30px }
+            .b { position:absolute; left:20px; top:10px; width:40px; height:20px;
+                 transform-origin:0 0 }
+            #s1 { translate: 30px }
+            #s2 { scale: 2 }
+            #s6 { rotate: 90deg }
+            #o1 { translate: 30px 0; rotate: 90deg }
+            #z2 { translate: none; rotate: none; scale: none }";
+        let html = "<body>\
+            <div class=c id=p1><div class=b id=z1></div></div>\
+            <div class=c id=p2><div class=b id=z2></div></div>\
+            <div class=c id=p5><div class=b id=s1></div></div>\
+            <div class=c id=p6><div class=b id=s2></div></div>\
+            <div class=c id=p10><div class=b id=s6></div></div>\
+            <div class=c id=p12><div class=b id=o1></div></div>\
+            </body>";
+        let (dom, root) = layout_html(html, css, 1200.0);
+        let rects = root.node_rects(&dom);
+        let get = |id: &str| {
+            let n = dom
+                .descendants(dom.root())
+                .find(|&n| dom.element(n).and_then(|e| e.attr("id")) == Some(id))
+                .unwrap_or_else(|| panic!("no #{id}"));
+            *rects.get(&n).unwrap_or_else(|| panic!("no rect for #{id}"))
+        };
+        let row = |b: &str, c: &str| {
+            let (r, p) = (get(b), get(c));
+            (r.x - p.x, r.y - p.y, r.width, r.height)
+        };
+        let close = |got: (f32, f32, f32, f32), want: (f32, f32, f32, f32), id: &str| {
+            let d = [
+                got.0 - want.0,
+                got.1 - want.1,
+                got.2 - want.2,
+                got.3 - want.3,
+            ];
+            assert!(
+                d.iter().all(|v| v.abs() < 1.1),
+                "#{id}: got {got:?}, Chrome gives {want:?}"
+            );
+        };
+        // Controls first: nothing set, and `none` set explicitly (which must CLEAR, not be ignored).
+        close(row("z1", "p1"), (20.0, 10.0, 40.0, 20.0), "z1");
+        close(row("z2", "p2"), (20.0, 10.0, 40.0, 20.0), "z2");
+        // The two shorthand rules are OPPOSITE — one fixture carrying only one of them cannot tell.
+        close(row("s1", "p5"), (50.0, 10.0, 40.0, 20.0), "s1");
+        close(row("s2", "p6"), (20.0, 10.0, 80.0, 40.0), "s2");
+        close(row("s6", "p10"), (0.0, 10.0, 20.0, 40.0), "s6");
+        // And the composition order.
+        close(row("o1", "p12"), (30.0, 10.0, 20.0, 40.0), "o1");
     }
 
     #[test]
