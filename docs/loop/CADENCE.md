@@ -15,7 +15,7 @@
 | median tick cycle | **26m** | 712 intervals |
 | median, last 10 | **65m** | 10 intervals |
 | fastest / slowest | 5s / 5.4d | |
-| **ticks per hour** | **1.09** | 651.0h elapsed |
+| **ticks per hour** | **1.09** | 651.9h elapsed |
 | median verify wall | **63s** | 652 ticks |
 | wall trend | 39s → 63s — getting slower ⚠️ | first 3 vs last 3 |
 
@@ -809,6 +809,6 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 | **993** | 2026-08-07 03:34 | 54m | measurement | 63s | +319/−44 | 422 | 81 | 56.0% · | the last battery on the list, and a tick that deliberately does NOT fix what it found (202 |
 | **994** | 2026-08-07 03:54 | 20m | primitive | 63s | +188/−33 | 422 | 81 | 56.0% · | the conditional that guarded a per-axis rule by one axis (2026-08-07) |
 | **996** | 2026-08-07 06:28 | 2.6h | measurement | 63s | +328/−32 | 422 | 81 | 56.0% · | the fix I built, measured, and refused (2026-08-07) |
-| **998** | 2026-08-07 08:05 | 1.6h | capability | 63s | +685/−52 | 423 | 81 | 56.0% · | the reset lost to the thing it exists to remove (2026-08-07) |
+| **998** | 2026-08-07 08:57 | 2.5h | capability | 63s | +31/−30 | 423 | 81 | 56.0% · | the reset lost to the thing it exists to remove (2026-08-07) |
 
 *`·` after a WPT figure means **carried forward**, not measured this tick.*
