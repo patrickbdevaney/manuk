@@ -11,12 +11,12 @@
 
 | | value | over |
 |---|---|---|
-| ticks landed | **712** | ticks 1–996 |
-| median tick cycle | **26m** | 711 intervals |
-| median, last 10 | **60m** | 10 intervals |
+| ticks landed | **713** | ticks 1–998 |
+| median tick cycle | **26m** | 712 intervals |
+| median, last 10 | **65m** | 10 intervals |
 | fastest / slowest | 5s / 5.4d | |
-| **ticks per hour** | **1.09** | 649.4h elapsed |
-| median verify wall | **63s** | 651 ticks |
+| **ticks per hour** | **1.09** | 651.0h elapsed |
+| median verify wall | **63s** | 652 ticks |
 | wall trend | 39s → 63s — getting slower ⚠️ | first 3 vs last 3 |
 
 The **cycle** is the real unit: implement → debug → verify wall → land. The wall is only part of
@@ -27,11 +27,11 @@ it, and a wall that grows taxes every future tick, so it is tracked separately f
 ### Near — the daily driver (doc / app / platform web)
 
 * **capabilities asserted** (`G_CAPABILITY`): 48 → **81**
-* **live gates**: 27 → **422**
-* **✅ rows in the capability ledger**: 144 → **502**
+* **live gates**: 27 → **423**
+* **✅ rows in the capability ledger**: 144 → **503**
 * **Bar 0 — oracle hangs**: 0 of 265 sites
 
-**340 of 712 ticks** (48%) moved a
+**341 of 713 ticks** (48%) moved a
 user-visible capability. The rest were instruments, infrastructure and corrections — and the
 ledger says the corrections were not overhead: three of its top three priorities were phantoms,
 and finding that out redirected everything after it.
@@ -90,7 +90,7 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 
 ## What a capability costs
 
-* **340** capability ticks, median cycle **26m**
+* **341** capability ticks, median cycle **26m**
 * median diff per tick: **+259 / −34** lines across 8 files
 
 ## Every tick
@@ -809,5 +809,6 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 | **993** | 2026-08-07 03:34 | 54m | measurement | 63s | +319/−44 | 422 | 81 | 56.0% · | the last battery on the list, and a tick that deliberately does NOT fix what it found (202 |
 | **994** | 2026-08-07 03:54 | 20m | primitive | 63s | +188/−33 | 422 | 81 | 56.0% · | the conditional that guarded a per-axis rule by one axis (2026-08-07) |
 | **996** | 2026-08-07 06:28 | 2.6h | measurement | 63s | +328/−32 | 422 | 81 | 56.0% · | the fix I built, measured, and refused (2026-08-07) |
+| **998** | 2026-08-07 08:05 | 1.6h | capability | 63s | +685/−52 | 423 | 81 | 56.0% · | the reset lost to the thing it exists to remove (2026-08-07) |
 
 *`·` after a WPT figure means **carried forward**, not measured this tick.*

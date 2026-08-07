@@ -46371,6 +46371,164 @@ PERF: none — one UA rule and one narrowed branch in a cascade that already ran
 WIKI: `docs/wiki/css-cascade.md` — where Chrome draws the form-control `box-sizing` line, and why a
 layout-crate test cannot see it.
 
+## Tick 998 — the reset lost to the thing it exists to remove (2026-08-07)
+
+TICK SHAPE: capability — check #89's steer item **#2**, the cascade lead t996 found while writing a UA
+rule and refused to fold into the fieldset tick. It is a general cascade defect, and it is larger than
+the finding that surfaced it.
+
+⚠⚠⚠ **A LOGICAL AND A PHYSICAL DECLARATION FOR THE SAME SIDE WERE RESOLVED BACKWARDS — THE
+LOWEST-PRIORITY ONE WON, 7 CONFLICTS OF 7.** `margin-left` and `margin-inline-start` are separate
+`LonghandId`s that resolve to the same physical side, and CSS Logical Properties §Cascading says they
+cascade *together*: the declaration that wins on (origin, layer, specificity, order) sets the side,
+whichever way it is spelled. Measured against Chrome with `margin-left` read out of
+`getComputedStyle` (`/tmp/logical3.html`, both engines, same bytes):
+
+```text
+                                                                  Chrome   before   after
+   #r1 { margin-inline: 20px }  #r1 { margin: 0 }                 ml=0     ml=20    0
+   #r2 { margin: 0 }  #r2 { margin-inline: 20px }                 ml=20    ml=0     20
+   #r3 { margin-inline-start: 20px }  #r3 { margin-left: 5px }    ml=5     ml=20    5
+   #r4 { margin-left: 5px }  #r4 { margin-inline-start: 20px }    ml=20    ml=5     20
+   #r5.t { margin-left: 5px }  #r5 { margin-inline-start: 20px }  ml=5     ml=20    5
+   #r6.t { margin-inline-start: 20px }  #r6 { margin-left: 5px }  ml=20    ml=5     20
+   #r7 sheet A logical,  sheet B `margin-left: 0`                 ml=0     ml=20    0
+   #r8 physical alone (control)                                   ml=20    ml=20    20
+   #r9 logical alone   (control)                                  ml=20    ml=20    20
+```
+
+**Both controls were green throughout**, so nothing here is about whether the logical properties are
+implemented — they are, and they were. It is purely which of two applicable declarations wins.
+
+> **`* { margin: 0 }` and `* { padding: 0 }` are the first two lines of every CSS reset on the web,
+> and any rule spelled logically was immune to them.** The reset lost to exactly the thing it exists
+> to remove, on a left-to-right page, with no vertical writing mode anywhere. Every RTL-aware design
+> system emits `margin-inline-*` on LTR pages too, because that is what the shorthand compiles to.
+
+⚠⚠⚠ **THE MECHANISM, AND WHY IT COULD ONLY EVER SHOW UP HERE.** `stylo_engine.rs` merges every
+winning rule's declarations into ONE `PropertyDeclarationBlock` and hands it to
+`Stylist::compute_for_declarations`. Two facts about that entry point are in neither its name nor its
+signature:
+
+```text
+  stylist.rs  compute_for_declarations   -> block.declaration_importance_iter()   FORWARD
+        (the rule-tree path uses DeclarationIterator::next, which is next_back() — the opposite)
+  properties/cascade.rs  apply_one_longhand -> `if self.seen.contains(longhand_id) { return }`
+        and `seen` is keyed on the id AFTER  to_physical(writing_mode)
+```
+
+So the block must be handed over **highest priority first**, and ours was built ascending. That was
+right for every property whose two declarations share a `LonghandId` — **purely because
+`PropertyDeclarationBlock::push` de-duplicates on `id()` and moves the newcomer to the end**,
+collapsing them to one declaration. A logical/physical pair has two *different* ids, so `push`
+collapsed nothing, both survived into the block, and forward-first-seen-wins handed the win to
+whichever had been pushed first: the loser.
+
+**Ascending order was never correct — it was undetectable.** The only case that can expose it is the
+one case `push` cannot collapse. That is why sixty ticks of cascade work never saw it, and why it took
+someone writing a UA rule in logical properties from scratch to trip over it.
+
+`merge_ascending` now builds the block descending, `!important` first, de-duplicated on `id()` keeping
+the highest-priority occurrence. **No writing-mode logic on our side**: Stylo already applies
+writing-mode and direction as prioritary properties before it maps anything, so `to_physical` sees the
+final value. Two declarations for the same physical side can no longer both be in the block, so
+`push`'s own de-duplication never fires and the order is exactly the order chosen.
+
+⚠⚠ **BOTH RED RECIPES WERE RUN, AND THE SECOND ONE IS THE GATE'S REASON FOR EXISTING.**
+
+```text
+  revert to the ascending push                 -> r1 fails (expected 0, got 20); controls green
+  "a physical declaration always beats a
+   logical one" — the plausible wrong fix      -> r1 and r3 PASS, r2 fails (expected 20, got 0)
+```
+
+The wrong fix passes every row written from the reset direction. **The mirror rows — where the
+LOGICAL declaration is the one that must win — are the half of the gate that refutes it**, and a gate
+written only from the direction that made me look would have banked a different bug of the same size.
+`r5`/`r6` add the third axis: in both, the winner is declared FIRST and wins on *specificity*, so
+"reverse the push order" is also insufficient on its own.
+
+Landed as `G_CASCADE_LOGICAL_PHYSICAL` (11 claims: 2 controls, 2 reset rows, 2 mirror rows, 2
+specificity rows, and `padding` / `block-size` / `inset-inline-start` so the finding is not
+margin-only). Fixtures 1 and 3 went **11/21 → 21/21** and **2/9 → 9/9** exact against Chrome; fixture
+2's `block-size: 40px` losing to a lower-specificity `height: 12px` also closed.
+
+⚠⚠⚠ **PRICED ON THE CORPUS — AND THE LOWER BOUND `CORPUS-CONSTRUCTS.md` HONESTLY DECLARES TURNS OUT
+TO BE A 3× UNDERCOUNT.** That file says plainly that its CSS rows are floors, because its recipe greps
+only the HTML `curl` returns. It has never had the multiplier. Fetching each site's linked stylesheets
+as well costs one more `xargs` stage and removes the caveat entirely. Both numbers, same 170-site
+population:
+
+```text
+   grep the HTML only                     23/171  13.5%   <- CORPUS-CONSTRUCTS.md's method
+   grep the HTML *and its stylesheets*    69/170  40.6%   <- carry a logical property
+                                          95/170  55.9%   carry a universal margin/padding reset
+                                          44/170  25.9%   carry BOTH — the conflict's population
+```
+
+⚠ **25.9% is a CO-OCCURRENCE, not a confirmed divergence.** For the defect to bite, the reset and the
+logical declaration must reach the same element *and* the reset must be the one that should win. The
+honest bound is `0 ≤ affected ≤ 44`; what is measured is that the construct pair is present on a
+quarter of the corpus, against the ≤0.6% that the Interop-style vendor axis prices at.
+
+⚠⚠ **AND IT INTERSECTS t997's NAMED COHORT ON FOUR SITES, NOT SIX.** t997 named six near-bar sites
+blocked by `reading_order` alone. I fetched each one's HTML and stylesheets:
+
+```text
+   payb.jp             reset + 5x margin-inline-start, 4x margin-inline-end, 3x margin-block
+   rockstaractu.com    reset + 3x margin-inline-start, 3x margin-inline-end
+   www.jatekshop.eu    reset, NO logical property
+   gismart.com         reset, NO logical property
+   www.netvasco.com.br reset, NO logical property
+   www.5movierulz.discount   neither
+```
+
+**So this is not the `reading_order` mechanism for four of the six**, and I am not claiming it is.
+`www.ebay.com` (0.715) and `www.ikea.com` (0.704) are also in the 44, which makes four near-bar sites
+in total. The next sweep prices it; this tick does not get to.
+
+⚠⚠⚠ **AND THE SURFACE AUDIT WAS DUE, SO IT RAN — AND IT FOUND THAT THE MAP HAD NO ROW FOR THIS
+FAMILY.** Banked as audit **#40**. `grep -ic "logical propert" docs/loop/CONSTELLATION.tsv` over 478
+rows returns **0**. The map names `zoom`, `attr()`, style queries, view transitions, anchor
+positioning, WebTransport, Service Worker, WebGPU, `revert-rule`, `subgrid`, `tab-size`,
+`text-align: match-parent` — and had **nothing** for logical properties, in any of the six classes.
+Not scored optimistically, not `unknown`: **absent**. So no instrument the loop owns could have
+surfaced it, which is exactly the failure mode the audit exists to catch and the first time it has
+caught it this cleanly.
+
+**The generalisation, because one instance is an anecdote.** Every row on the map is a capability
+someone could NAME. A property *family* that is uniformly implemented has no obvious row to write, so
+it gets none — and a defect in how the family **interacts with the cascade** is then invisible to a
+capability-shaped map. The class to keep asking about is **two individually-present things meeting**:
+`!important` × origin (added as `missing` this audit), shorthand × longhand ordering inside one block,
+custom property × fallback × `revert`, `all: unset` against a UA sheet.
+
+⚠⚠ **AND THE SEARCH CHANGED THE FIX, WHICH IS NOT WHAT I EXPECTED FROM A CADENCE CHORE.**
+css-logical-1 §Cascading: *"all properties cascade using the writing mode specified on the element,
+not on its parent"*, with inheritance running logical-to-logical. My first design resolved
+logical→physical **inside our merge, from `parent_cv`'s writing mode** — that is not "more code for the
+same answer", **it is the wrong answer**, and only the spec text said so. Delegating to Stylo (which
+applies `writing-mode`/`direction` as prioritary properties *before* `to_physical`) is both smaller and
+correct. Also found: `revert`/`revert-layer` with logical properties is an **open CSSWG issue**
+(w3c/csswg-drafts#7054), so the residue I named has an unsettled spec target and is recorded with that
+reason rather than as a schedule. Interop 2026's 20 focus areas all already have rows and still price
+at ≈0 here (two audits running); Ladybird at ~95% WPT names *"some modern CSS layouts"* in its hard
+tail, which **confirms CO-#1 rather than re-ranking it**.
+
+PERF: **strictly fewer clones than before, and the first draft was strictly more — I caught my own
+regression by pricing the claim instead of asserting it.** The draft collected
+`Vec<(PropertyDeclaration, Importance)>` and then cloned again into the block: **two clones per
+declaration on the cascade's hot path, for every element on every page**, where the old ascending push
+did one. I had already written *"PERF: none measurable"* in this entry before checking, which is the
+exact shape the reliability doctrine calls a truth asserted rather than computed. `merge_ascending` now
+takes `&[(&PropertyDeclaration, Importance)]`, so it is **one clone per SURVIVING declaration** — a
+loser is never cloned at all — plus one bitset `contains`, and it no longer pays `push`'s linear
+scan-and-remove on every override. The 21/21 and 9/9 Chrome-exact readings are byte-identical before
+and after the refinement. F1/F2 green on the wall.
+
+WIKI: `docs/wiki/css-cascade.md` — "`compute_for_declarations` is first-seen-wins, and it maps
+logical to physical as it goes".
+
 ## Tick 997 — the sweep that prices sixteen ticks, and it names a conjunct rather than a property (2026-08-07)
 
 TICK SHAPE: measurement — a clean `--jobs 2` sweep of the 200-site CrUX corpus, banked as

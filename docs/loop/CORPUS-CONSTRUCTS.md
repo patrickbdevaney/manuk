@@ -75,6 +75,41 @@ block — every external stylesheet is invisible to it. **46.2% for flex is a fl
 comparison between a markup row and a CSS row is therefore unsound in one direction only, and the
 conclusions below are stated between markup rows or between CSS rows.
 
+### ⚠⚠⚠ The multiplier on that floor is ~3×, measured (tick 998) — and it is removable
+
+The caveat above was stated qualitatively for 33 ticks. Tick 998 needed a CSS-property number it could
+defend, fetched **each site's linked stylesheets as well**, and measured both ways on the same
+170-site population:
+
+```text
+   logical properties (margin-inline / inline-size / inset-block / …)
+        HTML only ................  23/171   13.5%   <- this file's recipe
+        HTML + its stylesheets ...  69/170   40.6%   <- the real level
+   a universal `* { margin|padding: 0 }` reset
+        HTML + its stylesheets ...  95/170   55.9%
+   BOTH on the same site
+        HTML + its stylesheets ...  44/170   25.9%
+```
+
+**A CSS row read off this file should be multiplied by roughly three before it is compared to
+anything.** Better: stop needing the multiplier. The stylesheet stage is one extra `xargs` pass over
+the same URL list and costs ~7 minutes; the marginal cost over the HTML-only crawl is the CSS fetch,
+not a new instrument:
+
+```bash
+# after the HTML crawl above, per site: resolve <link rel=stylesheet> hrefs and fetch up to 8
+grep -oiE '<link[^>]+stylesheet[^>]*>' index.html \
+  | grep -oiE 'href=("[^"]*"|[^ >]+)' | sed -E 's/^href=//; s/"//g' | head -8
+# resolve http* | //host | /path | relative against the page URL, then curl each into the site's dir
+# and grep the site DIRECTORY (index.html + *.css), counting each site once
+```
+
+⚠ **What the 25.9% is and is not.** It is a **co-occurrence** — the construct pair is present on the
+site — not a confirmed divergence. For a logical/physical cascade conflict to bite, both declarations
+must reach the same element and the reset must be the one that should win. The honest bound on affected
+sites is `0 ≤ n ≤ 44`. Presence remains the right first filter and the wrong final ranking, exactly as
+the paragraph below says for markup.
+
 It also measures **presence, not weight**: a page with one `<button>` and a page whose whole layout is
 buttons both count once. Presence is the right first filter (it answers *"can this fix ever
 appear?"*) and the wrong final ranking.

@@ -4378,3 +4378,100 @@ the defect. A fixture finds both.**
    `contain: style`, `contain: size`, nothing-declared) are what made it right, and the naive
    predicate passes all ten positive rows.
 3. **Stop re-deriving the vendor answer.** Three axes, one conclusion, now four audits old.
+
+## Audit #40 — tick 998 (2026-08-07) — the map had NO ROW for the family that was carrying an inverted cascade
+
+**Sources searched today** (not from memory — the protocol's first requirement):
+
+```text
+  https://www.w3.org/TR/css-logical-1/                     css-logical-1 §Cascading, §Inheritance
+  https://github.com/w3c/csswg-drafts/issues/7054          `revert`/`revert-layer` with logical properties (OPEN)
+  https://webkit.org/blog/17818/announcing-interop-2026/   Interop 2026 focus areas
+  https://web.dev/blog/interop-2026                        …and the vendor-side framing
+  https://github.com/web-platform-tests/interop/blob/main/2026/README.md
+  https://web.dev/blog/baseline-digest-may-2026            Baseline, May 2026
+  https://ladybird.org/                                    + coverage of Ladybird's 2026 WPT position
+```
+
+### ⚠⚠⚠ WHAT WE HAD BEEN WRONG ABOUT — and it is the audit's own failure mode, not a mis-score
+
+`grep -ic "logical propert" docs/loop/CONSTELLATION.tsv` over 478 rows returned **0**.
+
+The map names `zoom`, `attr()`, style queries, view transitions, anchor positioning, WebTransport,
+Service Worker, WebGPU, `revert-rule`, `subgrid`, `text-wrap: balance`, `tab-size`,
+`text-align: match-parent` — a long, specific, well-maintained frontier. It had **no row at all for
+the logical-property family**, in any of the six classes.
+
+> **This is the shape the audit exists to catch, and it is the first time it has caught it this
+> cleanly.** The family was not scored optimistically. It was not `unknown`. It was **absent** — so no
+> instrument the loop owns could have surfaced it, including this one, until something outside the
+> ranking walked into it. Tick 996 walked into it while writing a `<fieldset>` UA rule in logical
+> properties and finding that `* { margin: 0 }` did not reset it.
+
+And what was behind the missing row was not a missing feature — the logical longhands all parse, map
+and reach layout — but a **cascade inversion, 7 conflicts of 7, on 25.9% of the corpus**:
+`PropertyDeclarationBlock::push` de-duplicates on `id()`, which collapses same-longhand pairs and made
+an ascending merge look correct for sixty ticks; a logical/physical pair is the one case it cannot
+collapse. Full mechanism in `docs/wiki/css-cascade.md` and the ledger row.
+
+**The generalisation, because one instance is an anecdote:** every row on the map is a capability
+someone could NAME. A property *family* that is uniformly implemented has no obvious row to write, so
+it gets none — and a defect in how the family **interacts with the cascade** is then invisible to a
+capability-shaped map. Three rows added below; the class to keep asking about is **interactions
+between two things that are each individually present.**
+
+### ADDED to CONSTELLATION.tsv (3 rows)
+
+```text
+  css  logical properties CASCADE AS ONE GROUP with their physical counterparts   gated   G_CASCADE_LOGICAL_PHYSICAL
+  css  the mapping uses the writing mode ON THE ELEMENT, not the parent's        gated   G_CASCADE_LOGICAL_PHYSICAL
+  css  UA `!important` outranks author `!important`                              missing  -
+```
+
+⚠ **The second row is satisfied BY DELEGATION, and finding that out changed the fix.** css-logical-1
+§Cascading: *"all properties cascade using the writing mode specified on the element, not on its
+parent"* — with inheritance running logical-to-logical, so an LTR parent's `margin-inline-start`
+inherits into an RTL child's `margin-inline-start` even though those are opposite physical sides. The
+implementation t998 first considered was to resolve logical→physical **inside our merge**, from
+`parent_cv`'s writing mode. That is not "more code for the same result" — **it is the wrong result**,
+and the search is what said so. Stylo applies `writing-mode`/`direction` as *prioritary* properties
+before `to_physical()`, so delegating the mapping is both smaller and correct.
+
+⚠ **The third row is a residue named with a reason to leave it.** `revert` / `revert-layer` semantics
+*with* logical properties are an **open CSSWG issue** (#7054, still open in 2026). Implementing our
+guess at an unsettled spec is the kind of work that has to be undone; the row records the gap and the
+reason rather than pretending it is scheduled.
+
+### RECONCILED — Interop 2026 and Baseline, against the corpus
+
+Interop 2026's **20 focus areas**: Anchor Positioning, advanced `attr()`, View Transitions (now
+including cross-document), WebRTC (carried over from 2025), WebTransport (HTTP/3), the `zoom` CSS
+property, container **style queries**; investigations cover accessibility, mobile, WebVTT, JPEG XL.
+**Every one already has a row.** `zoom` is `partial` (`G_ZOOM_AND_PROBE_PINS`), `attr()` is `partial`,
+container queries *including style queries* is `gated`. Audit #39's finding stands unchanged and is now
+two audits old: **the vendor axis prices at ≈0 on this corpus** — and Baseline's May-2026 digest
+confirms why, since container style queries only reached Baseline Newly Available in **May 2026** and
+still only accept custom properties in every shipping engine.
+
+**Ladybird**: 90% of WPT in October 2025, ~95% now; their named hard tail is WebRTC, WebAuthn, Service
+Worker, WebGPU, media codecs, WASM-heavy sites, *"some modern CSS layouts"*. Three of those six are
+already settled decisions here (WebRTC out of scope, WebAuthn built, EME out of scope), Service Worker
+is PLATFORM MAP item 3 and unbuilt, and the sixth — *modern CSS layout* — is where this loop already
+is. ⚠ **No re-rank.** An independent engine at 95% WPT naming CSS layout in its hard tail is a
+confirmation of CO-#1, not a redirection of it.
+
+### STEER
+
+1. **Ask the map for INTERACTIONS, not only capabilities.** The next audit should try the same grep on
+   other uniformly-implemented families and look for the interaction row that is missing:
+   `!important` × origin (already added as `missing` this audit), shorthand × longhand ordering within
+   one block, custom property × fallback × `revert`, and `all: unset` against a UA sheet. Each of those
+   is *"two present things meeting"*, which is the shape that has no natural row.
+2. **The 25.9% figure came from fetching stylesheets, and `CORPUS-CONSTRUCTS.md` was reading 13.5%.**
+   That file declares its CSS rows to be floors; it now carries the multiplier (~3×) and the extra
+   `xargs` stage that removes it. **Re-run the corpus construct ranking WITH stylesheets before the
+   next time it is used to rank anything** — every CSS row in it is currently a third of its real value,
+   which is enough to reorder the list.
+3. **Nothing found today re-ranks the board.** Said plainly rather than padded: two audits running, the
+   external axis has confirmed CO-#1 instead of moving it. The finding that mattered came from *inside*
+   the work, and the audit's contribution was to explain why the map could not have produced it.

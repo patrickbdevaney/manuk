@@ -43,7 +43,9 @@ use stylo::font_metrics::FontMetrics;
 use stylo::media_queries::{MediaList, MediaType};
 use stylo::properties::declaration_block::parse_style_attribute;
 use stylo::properties::style_structs::Font;
-use stylo::properties::{ComputedValues, PropertyDeclarationBlock};
+use stylo::properties::{
+    ComputedValues, Importance, PropertyDeclaration, PropertyDeclarationBlock,
+};
 use stylo::queries::values::PrefersColorScheme;
 use stylo::servo_arc::Arc as ServoArc;
 use stylo::shared_lock::{SharedRwLock, SharedRwLockReadGuard, StylesheetGuards};
@@ -2263,13 +2265,13 @@ fn cascade_pseudo(
     // `(spec, order)` alone let the UA sheet's type selectors beat an author reset's `*`; sorting
     // without the layer term let a layer beat the unlayered rules it exists to lose to.
     winners.sort_by_key(|(rank, layer, spec, ord, _)| (*rank, *layer, *spec, *ord));
-    let mut merged = PropertyDeclarationBlock::new();
+    let mut ascending: Vec<(&PropertyDeclaration, Importance)> = Vec::new();
     for (_, _, _, _, block) in &winners {
         for (decl, importance) in block.read_with(guard).declaration_importance_iter() {
-            merged.push(decl.clone(), importance);
+            ascending.push((decl, importance));
         }
     }
-    let arc = ServoArc::new(lock.wrap(merged));
+    let arc = ServoArc::new(lock.wrap(merge_ascending(&ascending)));
     let cv = stylist.compute_for_declarations::<StyloElement>(guards, parent_cv, arc);
     let mut cs = to_computed_style(&cv);
     // Only a pseudo with `content` generates a box at all.
@@ -2300,6 +2302,70 @@ fn cascade_pseudo(
     };
     cs.content = Some(text);
     Some(cs)
+}
+
+/// Build the single `PropertyDeclarationBlock` that `Stylist::compute_for_declarations` will
+/// cascade, from every winning declaration in **ascending** cascade priority.
+///
+/// ⚠⚠⚠ **`compute_for_declarations` is FIRST-SEEN-WINS, and it resolves logical properties to
+/// physical ones as it goes.** Both halves of that sentence are load-bearing and neither is in its
+/// signature:
+///
+/// - It calls `properties::apply_declarations` with `block.declaration_importance_iter()` —
+///   **forward**, not the `next_back()` walk the rule-tree path uses (`stylist.rs`
+///   `compute_for_declarations`; `properties/cascade.rs` `DeclarationIterator::next`).
+/// - `Cascade::apply_one_longhand` returns early on `self.seen.contains(longhand_id)`, and `seen` is
+///   keyed on the id **after** `to_physical(writing_mode)` (`properties/cascade.rs`
+///   `apply_non_prioritary_properties`).
+///
+/// So the block must be handed over **highest priority first**. Pushing in ascending order — which
+/// is what this function replaced — was right for every property whose two declarations share a
+/// `LonghandId`, purely because `PropertyDeclarationBlock::push` de-duplicates on `id()` and appends
+/// the newcomer at the end, collapsing them to one. It was **inverted** for the one case `push`
+/// cannot collapse: a **logical** and a **physical** declaration of the same side. `margin-left` and
+/// `margin-inline-start` are different `LonghandId`s, so both survived into the block, and
+/// first-seen-wins then handed the win to the **lower**-priority one. Measured, 7 conflicts of 7:
+///
+/// ```text
+///     #r1 { margin-inline: 20px }  #r1 { margin: 0 }        Chrome ml=0    ours ml=20
+///     #r2 { margin: 0 }  #r2 { margin-inline: 20px }        Chrome ml=20   ours ml=0
+///     #r5.t { margin-left: 5px }  #r5 { margin-inline-start: 20px }
+///                                                           Chrome ml=5    ours ml=20
+/// ```
+///
+/// `* { margin: 0 }` and `* { padding: 0 }` open every CSS reset on the web, and any rule spelled
+/// logically was immune to them — the reset lost to the thing it exists to remove.
+///
+/// Two declarations of the same physical side cannot both be in the block after this, so `push`'s
+/// own de-duplication never fires and the block's order is exactly the order chosen here.
+///
+/// **`!important` first, then normal**, each descending — because every declaration handed to
+/// `compute_for_declarations` carries the *same* `CascadePriority`, so Stylo cannot rank importance
+/// for us. That reproduces the previous behaviour exactly (`push` refused to let a normal
+/// declaration displace an important one). ⚠ It also preserves the pre-existing residue that
+/// UA-`!important` does **not** outrank author-`!important`: our `origin_rank` orders normal
+/// declarations correctly, and inverting it for the important pass is a separate, named fix.
+/// ⚠ **The input BORROWS its declarations, and that is a perf property, not a style choice.** The
+/// first draft collected `Vec<(PropertyDeclaration, Importance)>` and then cloned again into the
+/// block — **two clones per declaration on the cascade's hot path**, where the old code did one, for
+/// every element on every page. Borrowing makes it **one clone per SURVIVING declaration**, so a
+/// losing declaration is never cloned at all: strictly fewer clones than the ascending push it
+/// replaced, which also paid `push`'s linear scan-and-remove on every override.
+fn merge_ascending(ascending: &[(&PropertyDeclaration, Importance)]) -> PropertyDeclarationBlock {
+    let mut merged = PropertyDeclarationBlock::new();
+    for important_pass in [true, false] {
+        for (decl, importance) in ascending.iter().rev() {
+            if importance.important() != important_pass {
+                continue;
+            }
+            // Keep the FIRST occurrence in this (descending) order — the highest-priority one.
+            if merged.contains(decl.id()) {
+                continue;
+            }
+            merged.push((*decl).clone(), *importance);
+        }
+    }
+    merged
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -2378,28 +2444,38 @@ fn cascade_one_element(
     // without the layer term let a layer beat the unlayered rules it exists to lose to.
     winners.sort_by_key(|(rank, layer, spec, ord, _)| (*rank, *layer, *spec, *ord));
 
-    // Merge winning declarations (ascending priority: later overrides earlier).
-    let mut merged = PropertyDeclarationBlock::new();
+    // **The inline `style=` attribute needs the quirks verdict as much as a stylesheet does**, and it
+    // is a SEPARATE parse: `StyloStylesheet::from_str` handles `<style>`/linked CSS, this handles the
+    // attribute. Wiring only the first left `style="width: 100"` still dropped on a quirks page while
+    // the same rule in a `<style>` block worked — and legacy markup, which is exactly the markup that
+    // lands in quirks mode, is overwhelmingly inline-styled. `el.dom` is already in scope, so this is
+    // a field read rather than another parameter.
+    //
+    // ⚠ Parsed HERE rather than inside the `if let` below because `ascending` BORROWS its
+    // declarations (see `merge_ascending`), so this block must outlive the merge.
+    let inline_block = el
+        .dom
+        .element(node)
+        .and_then(|e| e.attr("style"))
+        .map(|inline| {
+            parse_style_attribute(inline, url_data, None, qm_of(el.dom), CssRuleType::Style)
+        });
+
+    // Collect the winning declarations in ASCENDING cascade priority. `merge_ascending` turns this
+    // into the block shape `compute_for_declarations` actually contracts for — see its doc comment.
+    let mut ascending: Vec<(&PropertyDeclaration, Importance)> = Vec::new();
     for (_, _, _, _, block) in &winners {
         for (decl, importance) in block.read_with(guard).declaration_importance_iter() {
-            merged.push(decl.clone(), importance);
+            ascending.push((decl, importance));
         }
     }
     // Inline `style=` wins over all matched rules — append its declarations last.
-    if let Some(inline) = el.dom.element(node).and_then(|e| e.attr("style")) {
-        // **The inline `style=` attribute needs the quirks verdict as much as a stylesheet does**, and
-        // it is a SEPARATE parse: `StyloStylesheet::from_str` handles `<style>`/linked CSS, this
-        // handles the attribute. Wiring only the first left `style="width: 100"` still dropped on a
-        // quirks page while the same rule in a `<style>` block worked — and legacy markup, which is
-        // exactly the markup that lands in quirks mode, is overwhelmingly inline-styled. `el.dom` is
-        // already in scope, so this is a field read rather than another parameter.
-        let block =
-            parse_style_attribute(inline, url_data, None, qm_of(el.dom), CssRuleType::Style);
+    if let Some(block) = &inline_block {
         for (decl, importance) in block.declaration_importance_iter() {
-            merged.push(decl.clone(), importance);
+            ascending.push((decl, importance));
         }
     }
-    let merged_arc = ServoArc::new(lock.wrap(merged));
+    let merged_arc = ServoArc::new(lock.wrap(merge_ascending(&ascending)));
 
     // Inherit from the nearest element ancestor's ComputedValues (already computed, since
     // we cascade in preorder); the root inherits from the device defaults.

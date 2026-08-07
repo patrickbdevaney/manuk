@@ -2028,3 +2028,56 @@ second tick running where [[live-cascade-is-stylo-not-minimal]] decided where a 
 
 ⚠ **Revert a RED proof by restoring the file you copied, never with `git checkout` on a file the tick
 is also editing** — it discards the whole tick's work in that file, not the mutation.
+
+## `compute_for_declarations` is FIRST-SEEN-WINS, and it maps logical to physical as it goes (t998)
+
+`stylo_engine.rs` matches rules itself, then merges every winner's declarations into **one**
+`PropertyDeclarationBlock` and hands it to `Stylist::compute_for_declarations`. Two properties of that
+entry point are load-bearing and neither is in its name or its signature:
+
+```text
+  stylist.rs      compute_for_declarations
+        -> properties::apply_declarations(.., block.declaration_importance_iter(), ..)   FORWARD
+           (the rule-tree path uses DeclarationIterator::next, which calls next_back() — the OPPOSITE
+            direction. Reading only the rule-tree path tells you the wrong contract.)
+
+  properties/cascade.rs   Cascade::apply_one_longhand
+        -> `if self.seen.contains(longhand_id) { return; }`
+           ...and `seen` is keyed on the id AFTER `to_physical(writing_mode)`
+           (apply_non_prioritary_properties does the mapping just before the call)
+```
+
+**So the block must be built highest-priority-FIRST.** For sixty ticks ours was built ascending, and
+that was invisible, because `PropertyDeclarationBlock::push` de-duplicates on `id()` and moves the
+newcomer to the end of the block: two declarations of the same longhand collapse to one, so the
+direction of the walk cannot matter. Every ordinary property was therefore correct *by a property of
+`push`*, not by the merge being right.
+
+**The one case `push` cannot collapse is a logical/physical pair.** `margin-left` and
+`margin-inline-start` are different `LonghandId`s, so both survive into the block, and forward
+first-seen-wins hands the win to whichever was pushed first — the LOWEST-priority declaration.
+Measured 7 of 7 against Chrome; `* { margin: 0 }` did not reset a UA or author `margin-inline`.
+
+The fix is one function, `merge_ascending`:
+
+- iterate the ascending list **in reverse**, `!important` pass first, then normal;
+- skip any declaration whose `id()` is already in the block — keeping the FIRST occurrence in that
+  descending order is keeping the highest-priority one;
+- push the survivors.
+
+**No writing-mode logic on our side, deliberately.** `writing-mode` and `direction` are prioritary
+properties that Stylo applies *before* `apply_non_prioritary_properties`, so `to_physical` already sees
+the final value. A merge that resolved logical→physical itself would need to re-derive the writing mode
+from the parent plus the element's own declarations — a second source of truth for a mapping Stylo
+already owns.
+
+⚠ **Two residues named rather than fixed.** Every declaration handed to `compute_for_declarations`
+carries the *same* `CascadePriority`, so (a) importance ordering is ours to do, which is why the
+important pass exists, and (b) **UA-`!important` still does not outrank author-`!important`** — the
+important pass is ordered by our `origin_rank` ascending like the normal one. That inversion predates
+this tick and is unchanged by it; `revert` / `revert-layer` are degenerate for the same reason.
+
+⚠⚠ **The general lesson, and it is the third time in this file.** *Read what the function DOES with
+the thing you hand it, not what the function is called.* `compute_for_declarations` sounds like "give
+me a block, get a style"; its contract is "give me a block **in descending cascade priority**, get a
+style", and that sentence exists nowhere but in the body of two other files.

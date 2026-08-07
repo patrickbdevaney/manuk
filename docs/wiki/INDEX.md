@@ -614,6 +614,7 @@
   - L1937 · A layout-crate test cannot see the shipping cascade
   - L1948 · A _ arm with a REASON above it is the hardest kind to audit (t975)
   - L1998 · …and its sibling: a DEFAULTED PARAMETER no caller overrides (t976)
+  - L2032 · compute_for_declarations is FIRST-SEEN-WINS, and it maps logical to physical as it goes (t998)
 
 ## `<dialog>`, `popover`, and the top layer (ticks 194-195)
 `docs/wiki/dialog-and-top-layer.md`
@@ -1676,4 +1677,4 @@
   - L124 · Rank mechanisms by FLIP RATE, not failing-subtest count — CSS layout is a multi-assertion slog
 
 ---
-1583 sections across 22 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+1584 sections across 22 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
