@@ -13,9 +13,9 @@
 |---|---|---|
 | ticks landed | **712** | ticks 1–996 |
 | median tick cycle | **26m** | 711 intervals |
-| median, last 10 | **57m** | 10 intervals |
+| median, last 10 | **60m** | 10 intervals |
 | fastest / slowest | 5s / 5.4d | |
-| **ticks per hour** | **1.10** | 647.7h elapsed |
+| **ticks per hour** | **1.09** | 649.4h elapsed |
 | median verify wall | **63s** | 651 ticks |
 | wall trend | 39s → 63s — getting slower ⚠️ | first 3 vs last 3 |
 
@@ -808,6 +808,6 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 | **992** | 2026-08-07 02:40 | 36m | primitive | 63s | +196/−33 | 421 | 81 | 56.0% · | the box we rendered as NOTHING, and the battery closes (2026-08-07) |
 | **993** | 2026-08-07 03:34 | 54m | measurement | 63s | +319/−44 | 422 | 81 | 56.0% · | the last battery on the list, and a tick that deliberately does NOT fix what it found (202 |
 | **994** | 2026-08-07 03:54 | 20m | primitive | 63s | +188/−33 | 422 | 81 | 56.0% · | the conditional that guarded a per-axis rule by one axis (2026-08-07) |
-| **996** | 2026-08-07 04:45 | 51m | measurement | 63s | +231/−34 | 422 | 81 | 56.0% · | the fix I built, measured, and refused (2026-08-07) |
+| **996** | 2026-08-07 06:28 | 2.6h | measurement | 63s | +328/−32 | 422 | 81 | 56.0% · | the fix I built, measured, and refused (2026-08-07) |
 
 *`·` after a WPT figure means **carried forward**, not measured this tick.*

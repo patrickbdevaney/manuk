@@ -46371,6 +46371,98 @@ PERF: none — one UA rule and one narrowed branch in a cascade that already ran
 WIKI: `docs/wiki/css-cascade.md` — where Chrome draws the form-control `box-sizing` line, and why a
 layout-crate test cannot see it.
 
+## Tick 997 — the sweep that prices sixteen ticks, and it names a conjunct rather than a property (2026-08-07)
+
+TICK SHAPE: measurement — a clean `--jobs 2` sweep of the 200-site CrUX corpus, banked as
+`docs/loop/SWEEP-t997-rows.tsv`. **Check #89's own steer item #3**, which called this the loop's
+largest unpaid debt after sixteen unmeasured ticks.
+
+```text
+   200 sites · 123 with a shape value · 109 scored cleanly
+   mean shape over scored                              54.6%
+   M1  (shape >= 0.75 AND jarring-clean)     24 of 123  =  19.5%
+   near-bar (shape 0.65-0.75)                       23 sites
+```
+
+⚠⚠ **I AM NOT CLAIMING A DELTA, AND THAT IS DELIBERATE.** The last banked point is t974's 15.6%
+printed / 17.0% corrected, on a different scored denominator. t974 is also the tick that established
+this loop's hardest measurement rule — **a sweep delta is not a reading until its top movers have
+been re-run solo**, after a −1.22 inverted to +0.20 on re-measurement. One sweep against a differently
+denominated sweep is exactly the comparison that rule forbids. **19.5% of 123 scored is the reading.**
+
+⚠⚠⚠ **THE RESULT IS NOT A PROPERTY — IT IS A CONJUNCT, AND IT OVERTURNS THE STANDING STEER FOR THIS
+COHORT.**
+
+```text
+   what blocks the 99 scored sites that miss M1:
+        68   BOTH conjuncts
+        23   shape only
+         8   jarring only
+
+   jarring dimensions, over the 123 scored:
+        reading_order   non-clean on  65      <- the largest by a wide margin
+        overlap         non-clean on  51
+        h_overflow      non-clean on  40
+        dead_target     non-clean on  11
+```
+
+And the cohort that decides the next ten crossings:
+
+```text
+   NEAR-BAR (shape 0.65-0.75), 23 sites — the top of the marginal-crossing rank
+      0.744  sestra.cc                 h_overflow, reading_order
+      0.743  payb.jp                   reading_order
+      0.743  www.5movierulz.discount   reading_order
+      0.742  rockstaractu.com          reading_order
+      0.740  www.jatekshop.eu          reading_order
+      0.740  gismart.com               reading_order
+      0.735  www.bilibili.com          h_overflow, overlap, reading_order
+      0.733  www.netvasco.com.br       reading_order
+      0.731  www.freesupertips.com     h_overflow, overlap, reading_order
+      0.725  777juegos.com             h_overflow, dead_target
+      0.720  neutypechic.com           h_overflow, overlap, reading_order
+      0.716  aksesjambi.com            overlap, reading_order, dead_target
+      0.715  www.ebay.com              overlap, reading_order
+      0.713  pt88.app                  overlap, reading_order
+      0.704  www.ikea.com              overlap, reading_order
+      0.696  7info.ru                  overlap, reading_order
+```
+
+⚠⚠⚠ **EVERY ONE OF THE TOP SIXTEEN NEAR-BAR SITES IS BLOCKED BY A JARRING DIMENSION, AND FOURTEEN OF
+THE SIXTEEN BY `reading_order`. NOT ONE OF THEM IS JARRING-CLEAN.** The standing steer — *"a +0.06
+shape nudge on the jarring-clean near-bar cohort = 6 M1 crossings; shape-nudge is ~6x more
+M1-productive"* — assumes a jarring-clean near-bar cohort exists. **On this corpus it is empty at the
+top.** Nudging shape on any of these sites buys nothing: they would cross the first conjunct and still
+fail the second.
+
+> **M1 is a conjunction, and the binding conjunct has changed.** Six of the sixteen fail on
+> `reading_order` ALONE — six sites one dimension away from crossing, four of them already above 0.74.
+> That is the highest-value cohort this loop has had a number for, and it is not a shape target.
+
+⚠⚠ **AND THE PATTERN LEDGER ALREADY SAYS WHAT `reading_order` IS.** t871-874: *"a reading-order/overlap
+symptom is a WIDTH or TRANSFORM upstream, never a reorder."* So the lever is not a reordering pass —
+it is finding which width or transform mechanism displaces content on `payb.jp`, `rockstaractu.com`,
+`www.jatekshop.eu`, `gismart.com`, `www.netvasco.com.br` and `www.5movierulz.discount`, whose ONLY
+blocker it is. Six named sites, one named class, one conjunct.
+
+⚠ **DENOMINATOR HONESTY, restated because it governs what the 19.5% means.** 77 of 200 sites carry no
+shape value at all, and the reasons are overwhelmingly not ours: **34 bot-wall-403 · 15 unreachable ·
+7 probe-blocked · 5 http-404 · 4 bot-wall-200 · 3 empty-202** — that is 68 sites the corpus or the
+network refused us, against **2 crashed · 2 oracle-module-shell · 2 shell-only · 5 timeout-150s**.
+Check #83's ceiling finding stands unchanged and this sweep re-confirms its shape: the unscored mass
+is the ORACLE's and the ORIGIN's, not the engine's.
+
+**WHAT THIS SAYS ABOUT THE SIXTEEN TICKS IT WAS RUN TO PRICE.** Ten geometry fixes landed on
+constructs weighing 18-55% of the corpus, and five old-binary A/Bs each said *"nothing broke"*. This
+sweep does not attribute a rise to them and cannot: it has no matched predecessor. **What it does is
+end the blindness** — the next sweep has this one to diff against, on the same denominator, which is
+the thing sixteen ticks of work did not have and now does.
+
+PERF: none — measurement only. The sweep ran `--jobs 2` on an otherwise quiet box, per the cadence
+rule that a `--jobs 8` row is triage and only a `--jobs 2` row is bankable.
+
+WIKI: none — the artefact is `docs/loop/SWEEP-t997-rows.tsv` and the cohort above. [no-pattern]
+
 ## Tick 996 — the fix I built, measured, and refused (2026-08-07)
 
 TICK SHAPE: measurement — `<fieldset>`'s missing UA box, built and **reverted**. The tick is the
