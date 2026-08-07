@@ -2414,3 +2414,46 @@ Gated by `G_TEXT_INDENT_EDGES`. RED-proven three ways, each read off the whole f
 applying the indent to *every* line — **does not fire**, and the reason is structural: wrapped lines
 never reach the `cur.is_empty()` block that reads `first_line`, because the break branch sets
 `line_left`/`line_avail` directly. The "first line only" behaviour is enforced by the break path.
+
+## A HORIZONTAL-only frame left the inline's box on the LINE, not on its content (t994)
+
+t851 established that a non-replaced inline's box is its own **content area**, resolved per axis. That
+held for a bare inline and for one with an all-sides border. It did **not** hold for a frame on the
+inline axis only — which is the overwhelmingly common inline decoration: `<code>`, `<kbd>`, a padded
+`<a>` chip or pill, a badge span, a syntax-highlighted token.
+
+```text
+                                         Chrome            before            after
+  <span>y</span>                     [10,  2, 10, 19]  [10,  2, 10, 19]   unchanged
+  <span background>y</span>          [10,  2, 10, 19]  [10,  2, 10, 19]   unchanged
+  <span border-left:12px>y</span>    [10,  2, 22, 19]  [10,  0, 22, 21]  [10, 2, 22, 19]
+  <span padding-left:12px>y</span>   [10,  2, 22, 19]  [10,  0, 22, 21]  [10, 2, 22, 19]
+  <span border:12px>y</span>         [10,-10, 34, 43]  [10,-10, 34, 43]   unchanged
+```
+
+**The inline axis was right in every row** — the frame advanced the pen correctly, `width` is 22
+before and after. Only the *vertical* report went wrong, and only when the vertical frame was zero:
+`collect_inline_node` computed it behind `if pad_t > 0.0 || pad_b > 0.0`, so a horizontal-only frame
+emitted an edge spacer carrying **no vertical report at all**. That spacer fell back to the line box,
+and an inline's box is the union of its fragments — so a line-box spacer (0..21) unioned with the
+element's own word (2..21) came out **0..21**: two pixels of half-leading too high and two too tall,
+on a box whose background is painted.
+
+> **A conditional that guards a computation by the axis it happens to be about is how a per-axis rule
+> loses one axis.** The vertical report was written *for* vertical padding, so it was gated *on*
+> vertical padding — and the box it produces is the right answer for any framed inline, because with
+> zero vertical padding its two terms simply add nothing.
+
+The all-sides case was already right — `border: 12px` has a non-zero `pad_t` and took the same branch
+— which is what made this narrow, and why a fixture built from `padding: 10px 20px` (the row that
+motivated the original code) could not see it.
+
+Gated by `G_INLINE_FRAME_BOX`. RED-proven two ways: restoring the vertical-only condition returns the
+two horizontal-only rows to height 21 with the other three passing, and using the line height rather
+than `ascent + descent` for the report gives all three framed rows height 24. ⚠ Dropping `pad_r` from
+the new condition does **not** go red, because every framed row in the fixture has a LEFT edge —
+recorded as a NON-red: that half of the condition is reasoned, not measured.
+
+An old-binary A/B on the four-site anchor panel was byte-identical (87.4% mean shape, all four jarring
+invariants unchanged), and the 20-row text battery and 16-row borders battery both re-ran with no new
+divergence.

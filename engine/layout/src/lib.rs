@@ -6998,16 +6998,39 @@ impl Ctx<'_> {
                 //    content top, which is what `report_ascent` carries.
                 let pad_t = s.padding.top.resolve(cw, 0.0) + s.border_width.top;
                 let pad_b = s.padding.bottom.resolve(cw, 0.0) + s.border_width.bottom;
-                let (v_ascent, v_height) = if pad_t > 0.0 || pad_b > 0.0 {
-                    let ts = text_style(&s, self.fonts);
-                    let lm = self.fonts.line_metrics(ts.font_key, ts.font_size);
-                    (
-                        Some(lm.ascent.round() + pad_t),
-                        lm.ascent.round() + lm.descent.round() + pad_t + pad_b,
-                    )
-                } else {
-                    (None, 0.0)
-                };
+                // ⚠⚠⚠ **ANY frame, not just a VERTICAL one.** This tested `pad_t || pad_b`, so an
+                // inline with a HORIZONTAL-only frame — `<code>`, `<kbd>`, a padded `<a>` chip, a
+                // syntax-highlighted span, which is the overwhelmingly common inline decoration —
+                // emitted a spacer carrying NO vertical report. The spacer then fell back to the
+                // LINE BOX, and the element's box is the union of its fragments, so the union of a
+                // line-box spacer (0..21) with its own word (2..21) came out 0..21: **2px of
+                // half-leading too high and 2px too tall**, on a box whose background is painted.
+                //
+                // Chrome-measured, `16px/1.5 monospace`:
+                //
+                // ```text
+                //   <span>y</span>                    [10, 2, 10, 19]   ✓ already (t851)
+                //   <span border-left:12px>y</span>   [10, 2, 22, 19]   read [10, 0, 22, 21]
+                //   <span padding-left:12px>y</span>  [10, 2, 22, 19]   read [10, 0, 22, 21]
+                //   <span border:12px>y</span>        [10,-10, 34, 43]  ✓ already
+                // ```
+                //
+                // With zero vertical padding the two terms below add nothing, so the report IS the
+                // content area — which is what a framed inline's box should be on the block axis
+                // either way (t851's per-axis rule). The all-sides case is unchanged because its
+                // `pad_t`/`pad_b` already made this branch fire; an inline with NO frame at all is
+                // unchanged because it emits no spacer.
+                let (v_ascent, v_height) =
+                    if pad_t > 0.0 || pad_b > 0.0 || pad_l > 0.0 || pad_r > 0.0 {
+                        let ts = text_style(&s, self.fonts);
+                        let lm = self.fonts.line_metrics(ts.font_key, ts.font_size);
+                        (
+                            Some(lm.ascent.round() + pad_t),
+                            lm.ascent.round() + lm.descent.round() + pad_t + pad_b,
+                        )
+                    } else {
+                        (None, 0.0)
+                    };
                 // `|| v_ascent.is_some()`: `padding: 10px 0` has NO horizontal edge, so without this
                 // there is no spacer at all and nothing carries the vertical report — the box stays
                 // 17 where Chrome says 37. `holds_line` still keys on the HORIZONTAL edge only,

@@ -46371,6 +46371,83 @@ PERF: none — one UA rule and one narrowed branch in a cascade that already ran
 WIKI: `docs/wiki/css-cascade.md` — where Chrome draws the form-control `box-sizing` line, and why a
 layout-crate test cannot see it.
 
+## Tick 994 — the conditional that guarded a per-axis rule by one axis (2026-08-07)
+
+TICK SHAPE: primitive — an inline element's box when its frame is on the inline axis only. **The
+first of t993's two named defects, built the tick after it was named** — which is the measurement
+tick's whole justification arriving one tick later.
+
+⚠⚠⚠ **I COULD NOT FIND THIS MECHANISM AT HOUR EIGHTEEN AND FOUND IT IN TEN MINUTES AT HOUR NINETEEN,
+BECAUSE t993 HAD ALREADY WRITTEN DOWN WHICH ROWS WERE WRONG AND WHICH WERE RIGHT.** The characterising
+table *was* the search key: a bare inline ✓, a background-only inline ✓, an all-sides border ✓, and
+only the horizontal-only frame ✗. That pattern points at exactly one thing — a branch taken when the
+vertical frame is non-zero — and `collect_inline_node` had it:
+
+```rust
+   let (v_ascent, v_height) = if pad_t > 0.0 || pad_b > 0.0 { … } else { (None, 0.0) };
+```
+
+**A horizontal-only frame emitted an edge spacer carrying no vertical report at all.** The spacer fell
+back to the LINE BOX, and an inline's box is the UNION of its fragments — so a line-box spacer
+(0..21) unioned with the element's own word (2..21) came out **0..21**: two pixels of half-leading
+too high and two too tall, on a box whose background is painted.
+
+```text
+                                          Chrome            before            after
+   <span>y</span>                     [10,  2, 10, 19]  [10,  2, 10, 19]   unchanged
+   <span background>y</span>          [10,  2, 10, 19]  [10,  2, 10, 19]   unchanged
+   <span border-left:12px>y</span>    [10,  2, 22, 19]  [10,  0, 22, 21]  [10, 2, 22, 19]
+   <span padding-left:12px>y</span>   [10,  2, 22, 19]  [10,  0, 22, 21]  [10, 2, 22, 19]
+   <span border:12px>y</span>         [10,-10, 34, 43]  [10,-10, 34, 43]   unchanged
+```
+
+⚠⚠⚠ **THE INLINE AXIS WAS RIGHT IN EVERY ROW.** `width` is 22 before and after — the frame advanced
+the pen correctly the whole time. Only the block axis was wrong, and only in the one case where the
+guard's own condition was false.
+
+> **A conditional that guards a computation by the axis it happens to be about is how a per-axis rule
+> loses one axis.** The vertical report was written *for* vertical padding, so it was gated *on*
+> vertical padding — and the box it produces is the correct answer for **any** framed inline, because
+> with zero vertical padding its two terms simply add nothing. The guard was not protecting anything;
+> it was describing the case that had been in front of its author.
+
+⚠⚠ **AND IT IS WHY THE ORIGINAL FIXTURE COULD NOT SEE IT.** The comment above that branch quotes the
+rows that motivated it — `padding: 10px 20px`, `border: 5px`, `padding: 0 20px`. The third of those is
+horizontal-only and is listed as *"17 — horizontal only, unchanged"*, which is **the right answer for
+the LINE but not for the BOX**, and the fixture measured a case where the two agree. The window's
+recurring lesson, for the sixth time: **the rows that discriminate are rarely the rows that made you
+look** — and here they were in the same comment, one line apart.
+
+RED-PROVEN TWO WAYS, each read off the whole fixture:
+
+```text
+   restore `if pad_t > 0.0 || pad_b > 0.0`   -> the two horizontal-only rows read height 21;
+                                                the other THREE pass — and three of five rows in
+                                                this gate are controls for exactly that
+   report the LINE HEIGHT, not ascent+descent -> all three framed rows read height 24; the two
+                                                bare rows still pass
+```
+
+⚠ A third — dropping `pad_r` from the widened condition — does **not** go red, because every framed
+row in the fixture has a LEFT edge. Recorded as a NON-red with the honest statement: **that half of
+the condition is reasoned, not measured.** `padding-right` alone is as much a frame as
+`padding-left`, and the row that would prove it is not written.
+
+**BLAST RADIUS:** every framed inline on every page. `manuk-layout` 125/125; the inline gate set
+green; the 20-row text battery re-ran with all twenty exact; the 16-row borders battery went from
+14/16 to **15/16** (only `border-collapse` remains); and an old-binary A/B on the four-site anchor
+panel was **byte-identical** — 87.4% mean shape on both, all four jarring invariants unchanged. Fifth
+such report this window.
+
+RATCHET: `manuk-layout` 125/125, `manuk-css` 32/32 + 2 doc-tests, `g_inline_frame_box` (new) plus
+`g_inline_box_geometry`, `g_inline_box_leading`, `g_inline_vertical_padding`, `g_text_indent_edges`,
+`g_table_caption`, `g_row_group_order` green as a set.
+
+PERF: none — two extra `f32` comparisons in a condition that already ran per inline element.
+
+WIKI: `docs/wiki/text-layout.md` — "A HORIZONTAL-only frame left the inline's box on the LINE, not on
+its content".
+
 ## Tick 993 — the last battery on the list, and a tick that deliberately does NOT fix what it found (2026-08-07)
 
 TICK SHAPE: measurement — the borders/backgrounds property battery, the last family on audit #39's

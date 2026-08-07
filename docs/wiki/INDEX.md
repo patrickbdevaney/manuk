@@ -1644,6 +1644,7 @@
   - L2365 · text-indent moves the line's START edge; it was charged as a leading fragment (t988)
   - L2383 · The break-point symptom is invisible to every obvious instrument
   - L2394 · The alignment rows are the evidence the model is right, not a bonus
+  - L2418 · A HORIZONTAL-only frame left the inline's box on the LINE, not on its content (t994)
 
 ## The wasm demo — running the engine inside someone else's browser
 `docs/wiki/wasm-demo.md`
@@ -1671,4 +1672,4 @@
   - L124 · Rank mechanisms by FLIP RATE, not failing-subtest count — CSS layout is a multi-assertion slog
 
 ---
-1578 sections across 22 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+1579 sections across 22 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
