@@ -1269,3 +1269,63 @@ same as finding it lean: there is no admissible trim to propose against seconds 
 one actionable item this audit produces is the one-line ordering fix above, and it is not mine to
 make. The trend across the last four samples — 78s (t962) · 369s (t941) · 1118s (t981) · 1216s (t983)
 — reads as growth only if the bistability is ignored; `load1` should be read beside every one of them.
+
+## Audit #37 — tick 1003 (2026-08-07) — 1332s, and the confession I was about to repeat is FALSE
+
+```text
+   G3  (affordance / full shell suite)   114s     9%
+   T   (crate tests)                      91s     7%
+   B   (build)                            69s     5%
+   G6 · D · G1 · P · F · …                36s     3%
+   ────────────────────────────────────────────────
+   attributed                            310s    23%
+   UNATTRIBUTED                         1022s    77%
+```
+
+⚠ The `_PREWARM_END=0` defect audit #36 localised is **unchanged** and now hides an even larger share
+(77%, up from 57%). Still one line, still `scripts/`, still not mine. Reported, not touched.
+
+⚠⚠⚠ **MEASURED RATHER THAN INFERRED — the biggest hidden term is LINK TIME, and it is per-gate.**
+`touch engine/layout/src/lib.rs`, then build exactly the 19 `manuk-page` gate binaries `verify.sh`
+launches:
+
+```text
+   relink of the wall's 19 manuk-page gate binaries after ONE engine/layout edit    100s
+   → ~5.3s per gate binary, each ~125 MB (SpiderMonkey statically linked into every one)
+   → 24 linked test executables on disk total 3.0 GB
+```
+
+Paid on **every tick that touches a shared crate** — which is every layout tick.
+
+⚠⚠⚠ **AND THE FINDING I DID NOT EXPECT: THIS WINDOW'S FIVE NEW GATES COST THE WALL NOTHING.** Audit
+#34 concluded *"the growth is MINE"*, and I came into this one ready to write it again with five more
+gates as the evidence. One grep refutes it:
+
+```text
+   g_cascade_logical_physical · g_border_collapse · g_float_wrap_containing_block
+   g_margin_collapse_through · g_float_after_inline_text        — none launched by the wall
+```
+
+`verify.sh` launches **24** things, 19 of them `manuk-page` gates, from a hand-curated list that has
+not changed. A new gate file is compiled only when someone asks for it. **Adding a gate does not tax
+the wall; adding a gate TO THE LAUNCH LIST does — and that list is observer-owned.**
+
+> **A confession is a claim and it needs a measurement like any other.** #34's sentence was true when
+> written; inheriting it as a standing fact about a window where it is false would have argued for
+> precisely the thing this audit forbids — dropping gates.
+
+⚠⚠ **427 gate files, 19 in the wall.** The standing `gates-not-in-the-wall` fact, and it cuts both
+ways: the wall is cheap *because* it is narrow, and 408 gates are regression-checked only when
+something runs them. Enlarging the list is seconds-for-coverage, which only the owner may price.
+
+**The four questions:** (1) REDUNDANCY — ~1.5s of SpiderMonkey startup × 19 ≈ 29s, recoverable with a
+shared test binary (`cargo-nextest`) without making any gate less independently failable; harness.
+(2) PARALLELISM — the 24 launches are concurrent, `F`/`F4` deliberately serial; nothing accidentally
+serialised. (3) CACHING — incrementals on a ramdisk, fetches snapshot-cached; the uncached cost is the
+**link**, and the rigor-preserving fix is a faster linker (mold/lld), not a smaller check. (4) SCOPE —
+gates already build one crate's test target, not the workspace.
+
+**NOTHING TRIMMED, AND THAT IS THE RESULT.** Every optimisation the numbers point at lives in
+`scripts/` or the workspace build profile. The one an engine tick could make — fewer, larger test
+binaries — is blocked by its own measured constraint: **one `#[test]` per JS gate, because more than
+one per binary SIGSEGVs** on SpiderMonkey teardown.

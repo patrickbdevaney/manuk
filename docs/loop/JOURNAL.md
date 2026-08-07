@@ -46371,6 +46371,104 @@ PERF: none — one UA rule and one narrowed branch in a cascade that already ran
 WIKI: `docs/wiki/css-cascade.md` — where Chrome draws the form-control `box-sizing` line, and why a
 layout-crate test cannot see it.
 
+## Tick 1003 — the wall audit, and the confession I was about to repeat is FALSE (2026-08-07)
+
+TICK SHAPE: measurement — the wall-time audit, due at 1003 (last 983). It **reports, it does not
+delete**; coverage is sacred and cutting a gate to buy seconds is refused by construction.
+
+⚠⚠⚠ **FINDING 1 — THE INSTRUMENT SEES 310s OF 1332s. TWENTY-THREE PER CENT.** The section histogram
+is the thing that is supposed to say where the wall goes, and three-quarters of the wall is not in it:
+
+```text
+   G3  (affordance / full shell suite)   114s     9%
+   T   (crate tests)                      91s     7%
+   B   (build)                            69s     5%
+   G6 · D · G1 · P · F · …                36s     3%
+   ────────────────────────────────────────────────
+   attributed                            310s    23%
+   UNATTRIBUTED                         1022s    77%
+```
+
+This mechanism is already recorded (t983: `_PREWARM_END=0` clobbers the earlier assignment, so
+`unattributed_seconds` is a constant rather than a measurement). It is **harness-owned**, so this
+audit names it and stops. But it has to be said out loud at the top rather than buried: **the four
+questions this audit is supposed to ask — redundancy, parallelism, caching, scope — are all being
+asked about the 23% that happens to be visible.**
+
+⚠⚠⚠ **FINDING 2, MEASURED RATHER THAN INFERRED — 100s TO RELINK, AND IT IS PER-GATE.** I timed the
+thing the histogram cannot see: `touch engine/layout/src/lib.rs`, then build exactly the 19
+`manuk-page` gate binaries `verify.sh` launches.
+
+```text
+   relink of the wall's 19 manuk-page gate binaries after ONE engine/layout edit    100s
+   → ~5.3s per gate binary, and each is ~125 MB
+   → 24 linked test executables on disk total 3.0 GB
+```
+
+Each gate is a **separate executable with SpiderMonkey statically linked into it**. So the wall's
+dominant hidden term is *link time × number of gates in the launch list*, and it is paid on **every
+tick that touches a shared crate** — which is every layout tick, i.e. all five of this window's.
+
+⚠⚠⚠ **FINDING 3 — AND IT IS THE ONE I DID NOT EXPECT: THIS WINDOW'S GATES COST THE WALL NOTHING.**
+t941 concluded *"I am the reason the wall grew"*, and I came into this audit ready to write that again
+with five more gates as the evidence. It is **false for this window**, and the check is one grep:
+
+```text
+   g_cascade_logical_physical        not launched by the wall
+   g_border_collapse                 not launched by the wall
+   g_float_wrap_containing_block     not launched by the wall
+   g_margin_collapse_through         not launched by the wall
+   g_float_after_inline_text         not launched by the wall
+```
+
+`verify.sh` launches **24** things, of which 19 are `manuk-page` gates, and that list is hand-curated
+and has not changed. A new gate file in `engine/page/tests/` is compiled only when someone asks for
+it. **Adding a gate does not tax the wall; adding a gate TO THE LAUNCH LIST does** — and the launch
+list is observer-owned, so I could not have done it even by accident.
+
+> **A confession is a claim and it needs a measurement like any other.** "I am the reason it grew" was
+> true when it was written and I was about to inherit it as a standing fact about a window where it
+> is not. The self-audit's *"wall 1190s exceeds the 300s target"* row is real; **attributing it to
+> this window's five gates would have been wrong**, and would have argued for exactly the thing this
+> audit forbids — dropping gates.
+
+⚠⚠ **THE 425-vs-24 GAP IS A SEPARATE, PRE-EXISTING FACT and this audit does not resolve it.**
+`engine/page/tests/` holds **427** gate files and the wall runs 19 of them. That is the standing
+`gates-not-in-the-wall` finding, several years of ticks old, and it cuts **both** ways: the wall is
+cheap because it is narrow, and 408 gates are regression-checked only when something runs them. This
+tick does not touch it — the launch list is `scripts/`, and enlarging it is precisely the trade
+(seconds for coverage) that only the owner may price.
+
+**THE FOUR QUESTIONS, ANSWERED ON WHAT IS VISIBLE:**
+
+1. **REDUNDANCY** — every JS gate stands up its own SpiderMonkey runtime, ~1.5s × 19 ≈ **29s**, and a
+   shared test binary (`cargo-nextest`) would recover most of it while keeping each gate independently
+   failable. Named by the self-audit already; **harness**.
+2. **PARALLELISM** — the 24 launches are concurrent, the perf floors deliberately are not (a benchmark
+   sharing the machine is not a benchmark). Nothing has gone accidentally serial. **No finding.**
+3. **CACHING** — incrementals are on a ramdisk, live fetches are snapshot-cached. The uncached cost is
+   the **link**, and the rigor-preserving fix is a faster linker (mold/lld), not a smaller check.
+   **Harness.**
+4. **SCOPE** — the gates already build one crate's test target rather than the workspace. **No
+   finding.**
+
+**NOTHING TRIMMED, AND THAT IS THE RESULT.** Every admissible optimisation the numbers point at —
+mold/lld, nextest, the launch list — lives in `scripts/` or the workspace build profile, which are
+observer-owned per the standing scope rule. The one thing an engine tick could do (fewer, larger test
+binaries) is blocked by a measured constraint of its own: **one `#[test]` per JS gate, because more
+than one in a binary SIGSEGVs** on SpiderMonkey teardown.
+
+⚠ Also standing, and reported for the third tick running rather than acted on: the ratchet's *"the
+sweep is 534h old"* warning stats `docs/loop/WPT-AREAS.tsv` (last written 2026-07-16), **not** the
+fidelity sweep — `docs/loop/SWEEP-t997-rows.tsv` is hours old. It fires every tick regardless.
+
+RATCHET: nothing changed — no engine code in this tick. `LAST_WALL_AUDIT` set to 1003 by hand.
+
+PERF: this tick IS the perf tick, and it trimmed nothing on purpose.
+
+WIKI: none — the finding is a ledger entry about the wall, not a browser mechanism, and
+`docs/loop/WALL-AUDIT.md` is where the numbers belong. [no-pattern]
+
 ## Tick 1002 — a rule quoted from the spec is half a rule until the row where it must NOT apply (2026-08-07)
 
 TICK SHAPE: primitive — the float placement t1001 measured and banked, and **the fix I wrote from the

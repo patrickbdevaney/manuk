@@ -11,12 +11,12 @@
 
 | | value | over |
 |---|---|---|
-| ticks landed | **717** | ticks 1–1002 |
-| median tick cycle | **26m** | 716 intervals |
-| median, last 10 | **62m** | 10 intervals |
+| ticks landed | **718** | ticks 1–1003 |
+| median tick cycle | **26m** | 717 intervals |
+| median, last 10 | **56m** | 10 intervals |
 | fastest / slowest | 5s / 5.4d | |
-| **ticks per hour** | **1.09** | 657.7h elapsed |
-| median verify wall | **63s** | 656 ticks |
+| **ticks per hour** | **1.09** | 658.2h elapsed |
+| median verify wall | **63s** | 657 ticks |
 | wall trend | 39s → 63s — getting slower ⚠️ | first 3 vs last 3 |
 
 The **cycle** is the real unit: implement → debug → verify wall → land. The wall is only part of
@@ -31,7 +31,7 @@ it, and a wall that grows taxes every future tick, so it is tracked separately f
 * **✅ rows in the capability ledger**: 144 → **507**
 * **Bar 0 — oracle hangs**: 0 of 265 sites
 
-**341 of 717 ticks** (48%) moved a
+**341 of 718 ticks** (47%) moved a
 user-visible capability. The rest were instruments, infrastructure and corrections — and the
 ledger says the corrections were not overhead: three of its top three priorities were phantoms,
 and finding that out redirected everything after it.
@@ -814,5 +814,6 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 | **1000** | 2026-08-07 10:34 | 39m | primitive | 63s | +450/−36 | 425 | 81 | 56.0% · | the fit test asked the wrong box, and the RIGHT floats were correct all along (2026-08-07) |
 | **1001** | 2026-08-07 12:32 | 2.0h | primitive | 63s | +624/−36 | 426 | 81 | 56.0% · | the two shortcuts fail in opposite directions, which is what makes it a proof (2026-08-07) |
 | **1002** | 2026-08-07 14:46 | 2.2h | primitive | 63s | +501/−36 | 427 | 81 | 56.0% · | a rule quoted from the spec is half a rule until the row where it must NOT apply (2026-08- |
+| **1003** | 2026-08-07 15:13 | 27m | measurement | 63s | +192/−33 | 427 | 81 | 56.0% · | the wall audit, and the confession I was about to repeat is FALSE (2026-08-07) |
 
 *`·` after a WPT figure means **carried forward**, not measured this tick.*
