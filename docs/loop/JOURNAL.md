@@ -46371,6 +46371,115 @@ PERF: none — one UA rule and one narrowed branch in a cascade that already ran
 WIKI: `docs/wiki/css-cascade.md` — where Chrome draws the form-control `box-sizing` line, and why a
 layout-crate test cannot see it.
 
+## Tick 1000 — the fit test asked the wrong box, and the RIGHT floats were correct all along (2026-08-07)
+
+TICK SHAPE: primitive — the floats/clear discovery battery, and the one defect in it. **23 rows, and
+the battery found TWO independent defects; this tick builds one and banks the other with its rule.**
+
+⚠⚠⚠ **A LEFT FLOAT THAT NO LONGER FITS WAS PLACED OUTSIDE ITS OWN CONTAINER, AND THEN KEPT GOING.**
+Four 50px `float: left` boxes fill a 200px block. The fifth was asked *"do you fit in 1200?"* — the
+body's width — and placed at **x = 200**. Then the sixth at 250, the seventh at 300: a float row that
+never wraps and walks off the right edge for as long as the markup goes on. Measured against Chrome,
+five 50px left floats in a 200px block, **the one variable being whether that block is a BFC**:
+
+```text
+                                                   Chrome      before      after
+   #a5  overflow: hidden   — a BFC                [  0, 30]   [  0, 30]   [  0, 30]
+   #b5  overflow: visible  — NOT a BFC            [  0, 30]   [200,  0]   [  0, 30]
+   #c5  ...one plain block deeper, still not      [  0, 30]   [200,  0]   [  0, 30]
+   #d5  the same non-BFC block, RIGHT floats      [150, 30]   [150, 30]   [150, 30]
+```
+
+**MECHANISM.** `FloatContext`'s edges belong to the nearest **block formatting context**, and floats
+correctly share one across nested plain blocks — that is what makes a float escape its parent. But
+CSS 2.1 §9.5.1 rules 1 and 2 pin a float to *its own containing block*, and while `place()`'s
+*position* expressions already used `cb_left`/`cb_right` (t792 put them there), the test for whether
+it **fits** still called `self.available()`, which folds in the context's edges. The two agree only
+when the containing block **is** the BFC root — the case a fixture reaches for first, and the case
+the real web almost never is: `<div class="sidebar"><div class="widget"><img class="alignleft">` is
+three plain blocks deep and not one of them is a BFC.
+
+⚠⚠⚠ **`#d5` IS THE ROW THAT NAMES THE BRANCH, AND WITHOUT IT THE DIAGNOSIS IS WRONG.** Right floats
+wrapped correctly in the very same non-BFC container the whole time. So this is **not** *"we do not
+wrap floats"* and **not** *"a non-BFC block loses its width"* — both of which fit `#b5` and `#c5`
+perfectly, and both of which would have sent the tick at a different function. A right float is
+placed at `cb_right - w`, which lands it *inside* the container, so `right_offset` picks it up and
+collapses the available width to zero on its own: **the containing block's edge reached that test by
+accident, and only on one side.** A left float has nothing on its right to bound it, so the context's
+far edge stood in, and it was 1000px too generous.
+
+> **The two rows that made me look were `#b5` and `#c5`; the row that decided what to fix was `#d5`.**
+> That is the fifth time this window, and the general form is now worth stating as a rule: when a
+> defect has an obvious mirror (left/right, top/bottom, row/column), **measure the mirror before
+> writing the fix** — if it passes, the defect is a branch and not the algorithm.
+
+⚠⚠ **AND MY FIRST FIXTURE MEASURED FLOAT LEAKAGE INSTEAD, WHICH IS THE BATTERY'S OWN FAILURE MODE.**
+The 20 rows I wrote first used plain `<div>` wrappers, so every float escaped into the body's context
+and polluted every row below it: 13 of 62 rows "diverged" and the diff was unreadable. Making each
+wrapper a BFC gave **74/74 exact** — and the defect then had to be found by going *back* to the
+leaky version and asking why. **One variable per case is not a style rule about fixtures; a float
+fixture whose rows are not isolated is measuring the wrapper.** The isolated battery is what proves
+the other 22 float behaviours are already Chrome-exact, and the leaky one is what surfaced this.
+
+⚠⚠⚠ **DEFECT 2, MEASURED AND NOT BUILT: AN EMPTY BLOCK'S MARGINS DO NOT COLLAPSE THROUGH IT.** Found
+while chasing a constant 8px offset in the battery's absolute `y`, and it has **nothing to do with
+floats** — the reduction has none:
+
+```text
+   <div class=b>aa</div>   <div class=b></div>   <div class=b>bb</div>     .b { margin-bottom: 8px }
+
+                          Chrome    ours
+     #m1 (has text)       y=  0     y=  0
+     #m2 (EMPTY, h=0)     y= 28     y= 28
+     #m3 (has text)       y= 28     y= 36     <- 8px too low
+     #m4 (h:0 but HAS content)  and #m5 after it: Chrome +8, ours +8   — CORRECT, and the control
+```
+
+**The rule (CSS 2.1 §8.3.1):** a box that establishes no BFC, has no in-flow children, and zero or
+auto height has its own top and bottom margins **collapse through** — one margin, not two, and the
+following box starts at the empty box's own `y`. `#m4` is the control that makes this precise rather
+than "empty divs are wrong": it has `height: 0` but *does* have content, so it does **not** collapse
+through, and we get it right. `<div class="clearfix"></div>` and every spacer/wrapper div is the
+common shape, and the error is a pure `dy` that cascades down everything after it — the #1 shape
+mechanism the burndown names. **Not built this tick, because margin collapsing is its own primitive
+and mixing two RED proofs in one tick makes neither of them a proof.**
+
+⚠ **PRICED, with t999's rule applied.** 356 corpus sites fetched with their linked stylesheets:
+`float: left|right` is **declared** by 215/356 = 60.4%, and the demonstrably **applied** form —
+`style="float:..."` or a float utility class in the served HTML — is 28/356 = **7.9%**. The truth is
+between: most float usage goes through semantic class names (`.sidebar`, `.logo`, `.entry-image`)
+that no grep can attribute. So 7.9% is a floor and 60.4% a ceiling, and neither is *the* number.
+`clear` is declared by 52.0%.
+
+RATCHET: `manuk-layout` 125/125, and the three existing float gates green
+(`g_bfc_specified_width_float_band`, `g_float_containing_block`, `g_ratio_inset_float`).
+
+GATE: `G_FLOAT_WRAP_CONTAINING_BLOCK` — 10 claims, and every number in the fixture re-measured
+against Chrome as a whole page (22 of 22 exact, including the two rows I had written from reasoning
+rather than measurement: the over-wide float `#e1` and the Bootstrap negative-margin `#f1x`).
+**RED-PROVEN**: restoring `self.available(y, h)` and the BFC-width `full` gives `#b5 is at (200, 0),
+Chrome gives (0, 30)`, with the controls `#a4`/`#a5` — asserted first — still passing.
+
+⚠⚠ **AND A NON-RED, RECORDED RATHER THAN CLAIMED.** I wrote into the gate header that a fit bound
+written as `self.left_offset(y, h).max(cb_left)` would silently re-break the Bootstrap row. **Then I
+ran it, and the whole gate passes.** The fit test decides only *whether* a float fits in a band;
+*where* it lands is a separate expression, so a 15px-conservative bound changes nothing there. The
+header now says so, and says which row would catch the difference (a negative-margin container whose
+float fits by less than the margin) and that it is not written. **A plausible-wrong-fix claim is a
+measurement like any other, and I have now published one false one and caught it in the same tick.**
+
+⚠ HARNESS (one line, per scope — observer-owned, not touched): the *"the sweep is 529h old"* warning
+`scripts/ratchet.sh:89` prints stats `docs/loop/WPT-AREAS.tsv`, last written **2026-07-16**. The
+fidelity sweep it reads as stale is `docs/loop/SWEEP-t997-rows.tsv`, **four hours old**. The warning
+is pointed at a retired WPT tally, so it fires on every tick regardless.
+
+PERF: none — the same two `Vec` scans per band as before (`left_float_edge`/`right_float_edge` were
+already computed on this path); `available()` is no longer called here, so it is one scan pair fewer.
+F1/F2 green on the wall.
+
+WIKI: `docs/wiki/box-layout.md` — "A float's fit test is against its containing block, and the
+mirror is what names the branch".
+
 ## Tick 999 — conflict resolution has no geometric effect, so the multi-tick algorithm was one tick (2026-08-07)
 
 TICK SHAPE: primitive — `border-collapse: collapse`, the defect t993 measured, derived the rule for,

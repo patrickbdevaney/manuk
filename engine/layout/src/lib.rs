@@ -1668,13 +1668,55 @@ impl FloatContext {
         cb_left: f32,
         cb_right: f32,
     ) -> Rect {
-        let full = self.right_edge - self.left_edge;
+        // ⚠⚠⚠ **THE FIT TEST IS AGAINST THE CONTAINING BLOCK, NOT AGAINST THIS CONTEXT — AND IT WAS
+        // AGAINST THE CONTEXT.** The two paragraphs below already say the containing block is what
+        // pins a float's *position*; the test for whether it FITS was still asking the BFC root.
+        //
+        // `available()` folds in `self.left_edge`/`self.right_edge`, which belong to the nearest BFC
+        // — and a plain nested block does NOT create one, so for `<div style="width:200px">` inside
+        // the body those edges are the body's. Four 50px left floats fill the 200px block, and the
+        // fifth was asked *"do you fit in 1200?"* and placed at **x = 200**, outside its own
+        // container. Then the sixth at 250, the seventh at 300 — a float row that never wraps and
+        // walks off the right edge for as long as the markup goes on.
+        //
+        // Measured, five 50px `float:left` boxes in a 200px block, the ONE variable being whether
+        // the block is a BFC:
+        //
+        // ```text
+        //                                     Chrome        before         after
+        //   overflow:hidden  (a BFC)  #a5     [  0, 30]     [  0, 30]      [  0, 30]
+        //   overflow:visible (NOT)    #b5     [  0, 30]     [200,  0]      [  0, 30]
+        //   …one level deeper, still not     [  0, 30]     [200,  0]      [  0, 30]
+        //   the same block, RIGHT floats     [150, 30]     [150, 30]      [150, 30]
+        // ```
+        //
+        // ⚠⚠⚠ **THE RIGHT-FLOAT ROW IS THE ONE THAT NAMES THE BRANCH.** Right floats wrapped
+        // correctly in the very same non-BFC container throughout, so this is not "we do not wrap
+        // floats" and not "a non-BFC block loses its width". A right float is placed at
+        // `cb_right - w`, which lands it *inside* the container, so `right_offset` sees it and
+        // collapses `avail` to zero on its own — the containing block's edge reaches the test by
+        // accident. A left float has nothing on its right to bound it, so the context's far edge
+        // stands in, and it is 1000px too generous. **Without that row the obvious fix is "clamp
+        // avail to the container", which is right, and the obvious DIAGNOSIS is "floats never
+        // wrap", which is wrong and would have sent the tick at the wrong function.**
+        //
+        // The bounds below mirror the placement expressions exactly — same `map_or`, same clamp —
+        // so "where it would go" and "does it fit there" can no longer disagree. In particular
+        // `cb_left` is used raw rather than through `left_offset`, which is what keeps the
+        // negative-margin Bootstrap row (`.row { margin: 0 -15px }`) at x = -15.
+        let full = (cb_right - cb_left).max(0.0);
         let mut y = top;
         loop {
-            let (l, avail) = self.available(y, h);
-            let _ = l;
             let (left_float_edge, right_float_edge) =
                 (self.left_float_edge(y, h), self.right_float_edge(y, h));
+            let fit_l = left_float_edge.map_or(cb_left, |e| e.max(cb_left));
+            let fit_r = right_float_edge.map_or(cb_right, |e| e.min(cb_right));
+            let avail = (fit_r - fit_l).max(0.0);
+            // `avail >= full` is the escape for a float WIDER than its own containing block: it can
+            // never fit anywhere, so it is placed in the first empty band rather than dropping for
+            // ever. `full` is the containing block's width for the same reason `avail` is measured
+            // against its edges — comparing a container-sized gap to a BFC-sized one made the
+            // escape unreachable for every nested block.
             if w <= avail || avail >= full {
                 // ⚠ **THE CONTAINING BLOCK IS THE ORIGIN; THE FLOATS ARE THE OBSTACLE.** Taking
                 // `left_offset` here — which folds in this CONTEXT's left edge — makes the BFC's

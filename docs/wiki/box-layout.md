@@ -6099,3 +6099,47 @@ a 10px solid cell beside a 10px `hidden` one is **15 wide, not 20**. `manuk_css:
 `Hidden` variant and stores one style for all four sides, so honouring it is a cascade change rather
 than a layout one. It is 0.8% of the corpus by a deliberately generous grep. `none` needs no rule at
 all — its computed width is already 0, so it loses the `max` on its own.
+
+## A float's fit test is against its containing block, and the mirror is what names the branch
+
+`FloatContext`'s `left_edge`/`right_edge` belong to the nearest **block formatting context**. Floats
+correctly share one across nested plain blocks — that is what makes a float escape its parent. But
+CSS 2.1 §9.5.1 rules 1 and 2 pin a float to **its own containing block**, and those are different
+boxes for every nested plain `<div>`, which is to say almost every element on the web.
+
+`place()`'s *position* expressions already used `cb_left`/`cb_right`. The test for whether the float
+**fits** still called `available()`, which folds the context's edges in. Result: four 50px left
+floats fill a 200px block, and the fifth was asked *"do you fit in 1200?"* and placed at **x = 200**,
+outside its own container — then the sixth at 250, the seventh at 300.
+
+```text
+   five 50px float:left in a 200px block          Chrome      before      after
+     overflow: hidden   — a BFC                  [  0, 30]   [  0, 30]   [  0, 30]
+     overflow: visible  — NOT a BFC              [  0, 30]   [200,  0]   [  0, 30]
+     ...one plain block deeper, still not        [  0, 30]   [200,  0]   [  0, 30]
+     the same non-BFC block, RIGHT floats        [150, 30]   [150, 30]   [150, 30]
+```
+
+### The mirror row is the finding
+
+**Right floats wrapped correctly in the very same non-BFC container the whole time.** A right float
+is placed at `cb_right - w`, which lands it *inside* the container, so `right_offset` picks it up and
+collapses the available width to zero on its own — the containing block's edge reached that test *by
+accident*, and only on one side. A left float has nothing on its right to bound it, so the context's
+far edge stood in.
+
+> Two diagnoses fit the left-float rows perfectly and are both wrong: *"we do not wrap floats"* and
+> *"a non-BFC block loses its width"*. The right-float row kills both in one line.
+>
+> **When a defect has an obvious mirror — left/right, top/bottom, row/column — measure the mirror
+> before writing the fix. If the mirror passes, what you have is a branch, not the algorithm.**
+
+### A float fixture whose rows are not isolated is measuring the wrapper
+
+The first 20-row battery used plain `<div>` wrappers, so every float escaped into the body's context
+and polluted every row after it: 13 of 62 rows "diverged" and the diff was unreadable. Making each
+wrapper a BFC gave **74/74 exact** — which is the result that proves the other 22 float behaviours
+are already Chrome-correct. The defect then had to be found by going *back* to the leaky version and
+asking why the two engines leaked differently.
+
+**Both versions were needed.** The isolated one is the battery; the leaky one is the discovery.

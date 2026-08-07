@@ -305,6 +305,9 @@
   - L6039 · The collapsing border model, and why its conflict resolution is geometrically inert
   - L6073 · A grid line is PER-LINE, not per-segment — and one row of fifteen can tell
   - L6082 · Conflict resolution cannot move a box, and that is the whole reason this is small
+  - L6103 · A float's fit test is against its containing block, and the mirror is what names the branch
+  - L6123 · The mirror row is the finding
+  - L6137 · A float fixture whose rows are not isolated is measuring the wrapper
 
 ## browser-capabilities.md
 `docs/wiki/browser-capabilities.md`
@@ -1680,4 +1683,4 @@
   - L124 · Rank mechanisms by FLIP RATE, not failing-subtest count — CSS layout is a multi-assertion slog
 
 ---
-1587 sections across 22 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+1590 sections across 22 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
