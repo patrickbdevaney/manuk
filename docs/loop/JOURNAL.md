@@ -46371,6 +46371,99 @@ PERF: none — one UA rule and one narrowed branch in a cascade that already ran
 WIKI: `docs/wiki/css-cascade.md` — where Chrome draws the form-control `box-sizing` line, and why a
 layout-crate test cannot see it.
 
+## Tick 993 — the last battery on the list, and a tick that deliberately does NOT fix what it found (2026-08-07)
+
+TICK SHAPE: measurement — the borders/backgrounds property battery, the last family on audit #39's
+steer list. **Sixteen rows, fourteen exact, two diverging — and neither is built.** That is the whole
+tick, and the reason is the point of it.
+
+⚠⚠⚠ **FOURTEEN CLEARED CONSTRUCTS, BANKED.** Every row was chosen so a *geometry* reading can see it;
+a paint-only difference is invisible to `boxes` and is deliberately out of scope, which is audit #38's
+own finding about `clip-path` applied in advance rather than rediscovered.
+
+```text
+   EXACT (14): border-width 4-value shorthand · `border:10px` with NO style (no border at all) ·
+               `border:10px none` · border-radius (no geometry) · `border:10%` INVALID ·
+               outline takes no space · a cell border in the SEPARATE model ·
+               background-clip/origin are paint-only · border-inline logical shorthand ·
+               the no-border control · border-box (the border eats the CONTENT — the inner
+               child reads [10,10,80,5]) · content-box (the border grows the box) ·
+               border-image (no geometry) · an inline border ADVANCES THE PEN correctly
+```
+
+⚠⚠⚠ **DEFECT 1 — `border-collapse: collapse`, AND I DERIVED THE RULE BEFORE DECIDING NOT TO BUILD
+IT.** Every CSS reset sets this and nearly every real data table uses it.
+
+```text
+   two cells, uniform 10px       Chrome  [5,5,20,34] [25,5,20,34]   ours [0,0,30,44] [30,0,30,44]
+   a 4px cell beside a 20px one  Chrome  [2,10,22,44] [24,10,30,44]
+   table border 10 + cell 2      Chrome  [5,5,20,34]
+   CONTROL, the separate model   Chrome  [2,2,30,44] [34,2,30,44]   ours EXACT
+```
+
+**The rule: each edge's collapsed width is the `max` of the borders that meet at it, and each cell's
+border box extends HALF of that on each side.** The unequal row is what proves it is max-then-halve
+and not anything else — `max(4,20) = 20`, half 10, so cell 1 is `2 + 10 + 10 = 22` wide. We give every
+cell its full border on all four sides and share nothing, so a collapsed table is `(n+1) × border` too
+wide and **every column after the first is displaced cumulatively**.
+
+⚠⚠ **And a warning for whoever builds it, which the fixture produced for free: Chrome's collapsed
+table's OUTER width has a 1px quirk** — 49 where the arithmetic says 50, 63 where it says 64, while
+the same fixture's cell rows are all exact and the `border:10px` table case reports a clean 30. **A
+gate here must assert the CELLS, not the table box**, or it will chase a rounding artefact of the
+reference. That is the t930 scrollbar lesson in a new place, found before it cost a tick.
+
+⚠⚠⚠ **DEFECT 2 — an inline with a frame on the INLINE AXIS ONLY, and t851 already fixed the general
+case.**
+
+```text
+                                        Chrome              ours
+   <span>y</span>                       [10, 2, 10, 19]    [10, 2, 10, 19]   ok  (t851)
+   <span background>                    [10, 2, 10, 19]    [10, 2, 10, 19]   ok
+   <span border-left:12px>              [10, 2, 22, 19]    [10, 0, 22, 21]   BAD
+   <span padding-left:12px>             [10, 2, 22, 19]    [10, 0, 22, 21]   BAD
+   <span border:12px>  (ALL sides)      [10,-10, 34, 43]   [10,-10, 34, 43]  ok
+```
+
+**The inline axis is right in every row.** Only the block axis goes wrong, and only when the VERTICAL
+frame is zero: the box top becomes the line box's top rather than the content area's — 2px of
+half-leading high, 2px over in height. An all-sides border is correct, which is what makes this a
+narrow path rather than the general case, and `<code>`, `<kbd>`, padded `<a>` chips and
+syntax-highlighted spans are all exactly the horizontal-only shape.
+
+⚠⚠⚠ **WHY THIS TICK FIXES NEITHER, SAID PLAINLY RATHER THAN DRESSED UP.** Collapse is a multi-tick
+algorithm — the geometry above is only half of it; conflict resolution (style priority, cell vs row vs
+table) is the other half and these rows do not exercise it. The inline one sits in the hot path of
+every page's line layout, and I can characterise it exactly without yet knowing *which* branch
+produces the line-box top.
+
+> **A fix I do not understand is a trade, and the ratchet refuses trades.** Twelve ticks landed this
+> window on the same method, and the method's discipline is what made them land: measure, derive the
+> rule, prove the RED, build. Skipping the third step at hour eighteen because the first two went well
+> is how a window that has been clean ends by putting a regression into inline layout.
+
+So both are recorded with numbers, derived rules, and fixtures (`/tmp/bc.html`, `/tmp/ib.html`).
+**Naming them precisely IS the deliverable of a measurement tick.** The next session starts from a
+rule, not a hunt — which is exactly what t989's battery did for t990/t991/t992, and those three
+landed in three ticks because of it.
+
+**BATTERY STATUS across the window's four batteries:**
+
+```text
+   flex/grid sizing     20 rows   18 exact   2 defects   BOTH BUILT (t984, t985)
+   positioned/overflow  16 rows   13 exact   2 defects + 1 instrument artefact   BOTH BUILT (t986, t987)
+   text/inline metrics  20 rows   19 exact   1 defect    BUILT (t988)
+   tables               16 rows   11 exact   4 mechanisms  ALL FOUR BUILT (t989-992)
+   borders/backgrounds  16 rows   14 exact   2 defects   NAMED, not built (this tick)
+   ------------------------------------------------------------------------------
+                        88 rows   75 exact   11 defects  9 built in 9 ticks
+```
+
+PERF: none — measurement only.
+
+WIKI: `docs/wiki/box-layout.md` — "The borders/backgrounds battery — 14 of 16 exact, and two defects
+with their rules derived". [no-pattern]
+
 ## Tick 992 — the box we rendered as NOTHING, and the battery closes (2026-08-07)
 
 TICK SHAPE: primitive — `<table><caption>`. **The fourth and last mechanism out of t989's table

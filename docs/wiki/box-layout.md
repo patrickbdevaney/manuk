@@ -5862,3 +5862,67 @@ shape again, and a cascade addition rather than a layout one.
 Gated by `G_TABLE_CAPTION`. **With this, the whole sixteen-row table battery of t989 is Chrome-exact:
 four mechanisms found, four closed** (cell `vertical-align` t989 · rowspan distribution t990 ·
 row-group order t991 · caption t992).
+
+## The borders/backgrounds battery — 14 of 16 exact, and two defects with their rules derived (t993)
+
+The last family on audit #39's steer list. Sixteen rows, every one chosen so that a *geometry* reading
+can see it — a paint-only difference is invisible to `boxes` and is deliberately out of scope (we have
+no raster diff, which audit #38 already named as the reason `clip-path` was untestable).
+
+```text
+  EXACT (14): border-width 4-value shorthand · `border:10px` with no style (NO border) ·
+              `border:10px none` · border-radius (no geometry) · `border:10%` INVALID ·
+              outline takes no space · a cell border in the SEPARATE model ·
+              background-clip/origin are paint-only · border-inline logical shorthand ·
+              no-border control · border-box (the border eats the CONTENT, inner child at 10,10) ·
+              content-box (the border grows the box) · border-image (no geometry) ·
+              an inline border ADVANCES THE PEN correctly
+  DIVERGING (2)
+```
+
+### 1. `border-collapse: collapse` — the rule, derived
+
+Every CSS reset and nearly every real data table sets this. **Each edge's collapsed width is the
+`max` of the borders that meet at it, and each cell's border box extends HALF of that on each side.**
+Chrome-measured, and the unequal case is what proves it is `max`-then-halve rather than anything else:
+
+```text
+   two cells, uniform 10px      cell 1 [5,5,20,34]    cell 2 [25,5,20,34]
+     ours                              [0,0,30,44]           [30,0,30,44]
+   4px cell beside a 20px cell  cell 1 [2,10,22,44]   cell 2 [24,10,30,44]
+     -> shared edge = max(4,20) = 20, half = 10; cell 1 = 2 + 10 + 10 = 22 wide
+   table border 10 + cell border 2     cell   [5,5,20,34]   outer edge = max(10,2) = 10
+   CONTROL, the separate model         cell 1 [2,2,30,44]   cell 2 [34,2,30,44]   ours EXACT
+```
+
+We give every cell its full border on all four sides and share nothing, so a collapsed table is
+`(n+1) × border` too wide and every column after the first is displaced cumulatively. ⚠ The full
+algorithm also has *conflict resolution* (style priority, cell vs row vs table) that these rows do not
+exercise; the geometry half above is what they pin. ⚠ Chrome's own collapsed-table *outer* width has a
+1px quirk (49 where 50 is the arithmetic, 63 where 64 is) — a gate should assert the CELLS, not the
+table box.
+
+### 2. An inline with a frame on the INLINE AXIS ONLY takes the line box vertically
+
+t851 established that a non-replaced inline's box is its own content area, resolved **per axis**, and
+that holds — until the inline carries a horizontal-only frame:
+
+```text
+                                       Chrome              ours
+  <span>y</span>                       [10, 2, 10, 19]    [10, 2, 10, 19]   ✓ (t851)
+  <span style=background>              [10, 2, 10, 19]    [10, 2, 10, 19]   ✓
+  <span style=border-left:12px>        [10, 2, 22, 19]    [10, 0, 22, 21]   ✗
+  <span style=padding-left:12px>       [10, 2, 22, 19]    [10, 0, 22, 21]   ✗
+  <span style=border:12px>             [10,-10, 34, 43]   [10,-10, 34, 43]  ✓
+```
+
+**The inline axis is right in every row** — the frame advances the pen correctly. Only the block axis
+goes wrong, and only when the *vertical* frame is zero: the box top becomes the line box's top rather
+than the content area's, 2px of half-leading high, and the height 2px over. An all-sides border is
+correct, which is what makes this a narrow path rather than the general case — and `<code>`, `<kbd>`,
+padded `<a>` chips and syntax-highlighted spans are all exactly the horizontal-only shape.
+
+Both are recorded with numbers and fixtures (`/tmp/bc.html`, `/tmp/ib.html`) rather than built:
+collapse is a multi-tick algorithm, and the inline one sits in the hot path of every page's line
+layout. **Naming them precisely is the deliverable of a measurement tick; guessing at either is what
+the ratchet forbids.**

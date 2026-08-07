@@ -11,12 +11,12 @@
 
 | | value | over |
 |---|---|---|
-| ticks landed | **708** | ticks 1–991 |
-| median tick cycle | **26m** | 707 intervals |
+| ticks landed | **709** | ticks 1–992 |
+| median tick cycle | **26m** | 708 intervals |
 | median, last 10 | **65m** | 10 intervals |
 | fastest / slowest | 5s / 5.4d | |
-| **ticks per hour** | **1.10** | 645.0h elapsed |
-| median verify wall | **63s** | 647 ticks |
+| **ticks per hour** | **1.10** | 645.6h elapsed |
+| median verify wall | **63s** | 648 ticks |
 | wall trend | 39s → 63s — getting slower ⚠️ | first 3 vs last 3 |
 
 The **cycle** is the real unit: implement → debug → verify wall → land. The wall is only part of
@@ -31,7 +31,7 @@ it, and a wall that grows taxes every future tick, so it is tracked separately f
 * **✅ rows in the capability ledger**: 144 → **500**
 * **Bar 0 — oracle hangs**: 0 of 265 sites
 
-**340 of 708 ticks** (48%) moved a
+**340 of 709 ticks** (48%) moved a
 user-visible capability. The rest were instruments, infrastructure and corrections — and the
 ledger says the corrections were not overhead: three of its top three priorities were phantoms,
 and finding that out redirected everything after it.
@@ -805,5 +805,6 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 | **989** | 2026-08-06 23:55 | 57m | primitive | 63s | +331/−35 | 419 | 81 | 56.0% · | the tables battery, and a RED proof that revealed the GATE was blind (2026-08-06) |
 | **990** | 2026-08-07 00:58 | 63m | primitive | 63s | +415/−46 | 420 | 81 | 56.0% · | the residue VI.2 has named since check #82, and the one row that decides the rule (2026-08 |
 | **991** | 2026-08-07 02:04 | 66m | pattern-class | 63s | +388/−38 | 421 | 81 | 56.0% · | the fold that read as a simplification, and the self-audit (2026-08-07) |
+| **992** | 2026-08-07 02:40 | 36m | primitive | 63s | +196/−33 | 421 | 81 | 56.0% · | the box we rendered as NOTHING, and the battery closes (2026-08-07) |
 
 *`·` after a WPT figure means **carried forward**, not measured this tick.*
