@@ -11,12 +11,12 @@
 
 | | value | over |
 |---|---|---|
-| ticks landed | **716** | ticks 1–1001 |
-| median tick cycle | **26m** | 715 intervals |
-| median, last 10 | **61m** | 10 intervals |
+| ticks landed | **717** | ticks 1–1002 |
+| median tick cycle | **26m** | 716 intervals |
+| median, last 10 | **62m** | 10 intervals |
 | fastest / slowest | 5s / 5.4d | |
-| **ticks per hour** | **1.09** | 655.5h elapsed |
-| median verify wall | **63s** | 655 ticks |
+| **ticks per hour** | **1.09** | 657.7h elapsed |
+| median verify wall | **63s** | 656 ticks |
 | wall trend | 39s → 63s — getting slower ⚠️ | first 3 vs last 3 |
 
 The **cycle** is the real unit: implement → debug → verify wall → land. The wall is only part of
@@ -27,11 +27,11 @@ it, and a wall that grows taxes every future tick, so it is tracked separately f
 ### Near — the daily driver (doc / app / platform web)
 
 * **capabilities asserted** (`G_CAPABILITY`): 48 → **81**
-* **live gates**: 27 → **426**
-* **✅ rows in the capability ledger**: 144 → **506**
+* **live gates**: 27 → **427**
+* **✅ rows in the capability ledger**: 144 → **507**
 * **Bar 0 — oracle hangs**: 0 of 265 sites
 
-**341 of 716 ticks** (48%) moved a
+**341 of 717 ticks** (48%) moved a
 user-visible capability. The rest were instruments, infrastructure and corrections — and the
 ledger says the corrections were not overhead: three of its top three priorities were phantoms,
 and finding that out redirected everything after it.
@@ -813,5 +813,6 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 | **999** | 2026-08-07 09:55 | 58m | primitive | 63s | +700/−50 | 424 | 81 | 56.0% · | conflict resolution has no geometric effect, so the multi-tick algorithm was one tick (202 |
 | **1000** | 2026-08-07 10:34 | 39m | primitive | 63s | +450/−36 | 425 | 81 | 56.0% · | the fit test asked the wrong box, and the RIGHT floats were correct all along (2026-08-07) |
 | **1001** | 2026-08-07 12:32 | 2.0h | primitive | 63s | +624/−36 | 426 | 81 | 56.0% · | the two shortcuts fail in opposite directions, which is what makes it a proof (2026-08-07) |
+| **1002** | 2026-08-07 14:46 | 2.2h | primitive | 63s | +501/−36 | 427 | 81 | 56.0% · | a rule quoted from the spec is half a rule until the row where it must NOT apply (2026-08- |
 
 *`·` after a WPT figure means **carried forward**, not measured this tick.*

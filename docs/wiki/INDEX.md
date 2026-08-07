@@ -312,6 +312,10 @@
   - L6166 · One ratio cannot distinguish three rules
   - L6178 · The recursive clause, and why the flat approximations come in mirror pairs
   - L6199 · The clauses, each with a measured row
+  - L6214 · Rule 6 is a bound, not a placement
+  - L6236 · The last row is the finding, and the spec sentence does not mention it
+  - L6251 · Where the decision lives is a real choice
+  - L6260 · The two rows that stop it degenerating
 
 ## browser-capabilities.md
 `docs/wiki/browser-capabilities.md`
@@ -1687,4 +1691,4 @@
   - L124 · Rank mechanisms by FLIP RATE, not failing-subtest count — CSS layout is a multi-assertion slog
 
 ---
-1594 sections across 22 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+1598 sections across 22 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
