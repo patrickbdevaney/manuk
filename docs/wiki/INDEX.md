@@ -683,6 +683,11 @@
   - L2130 · The same shape again, one rule down
   - L2140 · The one control whose border we draw and Chrome does not
   - L2149 · How this was found, and what it says about method
+  - L2168 · The baseline of a text field, and a term that cancelled (tick 1044)
+  - L2173 · The defect is a DOMAIN error, not a missing rule
+  - L2194 · The model, and the ladder that fixes it
+  - L2214 · ⚠⚠⚠ The falsification pass deleted a term, again
+  - L2243 · Where a baseline actually shows up
 
 ## `<dialog>`, `popover`, and the top layer (ticks 194-195)
 `docs/wiki/dialog-and-top-layer.md`
@@ -1747,4 +1752,4 @@
   - L124 · Rank mechanisms by FLIP RATE, not failing-subtest count — CSS layout is a multi-assertion slog
 
 ---
-1654 sections across 22 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+1659 sections across 22 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.

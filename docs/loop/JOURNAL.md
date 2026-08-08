@@ -46371,6 +46371,127 @@ PERF: none — one UA rule and one narrowed branch in a cascade that already ran
 WIKI: `docs/wiki/css-cascade.md` — where Chrome draws the form-control `box-sizing` line, and why a
 layout-crate test cannot see it.
 
+## Tick 1044 — the search found no line because the DOM has none, and a term that cancelled (2026-08-08)
+
+TICK SHAPE: primitive — the residue t1043 banked, closed. **Every remaining `<input>` divergence
+across three form-control batteries was a `dy`, and they were ONE mechanism.**
+
+⚠⚠⚠ **IT IS A DOMAIN ERROR, NOT A MISSING RULE — AND WE ALREADY PASSED THE ROW THAT PROVES IT.**
+CSS 2.1 §10.8.1 gives an `inline-block` its last in-flow line box's baseline, falling back to the
+bottom margin edge when it has none. **Both halves are implemented and both are correct.** An
+`<input>`'s text lives in an inner editor that has no box in our tree, so the search found no line,
+took the fallback, and put every default text field 3px high in every line of text it appears in —
+51.5% of the burndown corpus.
+
+```text
+   <input style="width:50px;padding:0;border:0">                    Chrome dy 3   ours dy 0
+   <span style="display:inline-block;width:50px;height:15px;
+         font:13.333px Arial">Ay</span>                             Chrome dy 3   ours dy 3  ✓
+```
+
+**Identical box, identical font, identical Chrome answer — and the second row was already exact.**
+`<button>Ay</button>` was exact for the mirror-image reason: its label *is* a DOM text node. The fix
+is four lines, and it adds no rule.
+
+⚠⚠ **THE LADDER, AND THE RUNG THE OBVIOUS FIXTURE WOULD HAVE BEEN.** One text box of the control's
+own font, **centred in the content box**:
+
+```text
+   content h      6      10      15      20      30      (strut baseline 15.0)
+   Chrome dy     7.5     5.5     3.0     0.5     0.0
+   baseline      7.5     9.5    12.0    14.5    19.5   = (h - 15)/2 + 12
+   before        9.0     5.0     0.0     0.0     0.0   = the bottom margin edge
+```
+
+**Top-aligning gives a constant 12 and matches only the middle rung** — the row a natural-height
+field produces, and therefore the only row a fixture written from the obvious case would hold. The
+**content** box and not the border box, proven three ways (`height:0;padding:5px`,
+`height:0;border:5px`, `height:4px;padding:3px` are all `dy 5.5` in Chrome), because the *obvious*
+frame row — `padding:5px` at natural height — pins at `dy 0` under both models and discriminates
+nothing.
+
+⚠⚠⚠ **THE FALSIFICATION PASS DELETED A TERM. AGAIN.** The first version centred a full LINE BOX
+(`ts.line_height`) and then placed the baseline within it at `ascent + half_leading` — deliberately
+mirroring `close_line`, with a comment saying so. Mutating the half-leading term away left the gate
+**GREEN**, which under t834's rule makes it unreachable code to delete or make falsifiable, not to
+admire. The algebra says why:
+
+```text
+   (h - L)/2 + a + (L - a - d)/2   ==   (h - a - d)/2 + a       for every L
+```
+
+`line-height` cancels. **And Chrome says it is not merely inert but wrong to be there:**
+
+```text
+   <input style="height:0;padding:0;border:0">        Chrome dy 10.5
+   …the same with line-height:30px                    Chrome dy 11.0
+   …the same with line-height:6px                     Chrome dy 10.5
+```
+
+24px of extra leading moves the baseline by half a pixel of rounding. Chrome centres the inner
+editor's **text** — `ascent + descent` — not a leaded line. The two-term version made the right
+numeric prediction while asserting something false about the mechanism, which is exactly the class
+t817 named: *a wrong fix is caught by the next gate, a wrong LABEL is caught by nothing.*
+
+> **A MUTATION THAT LEAVES THE GATE GREEN IS NOT A WEAK GATE — IT IS A SENTENCE IN THE CODE THAT
+> NOTHING IS TESTING, AND HALF THE TIME THE REASON NOTHING CAN TEST IT IS THAT IT DOES NOT MEAN
+> ANYTHING.** The first mutation pass ran four and reddened two. The two greens were not gate gaps
+> to paper over: one (`content` vs `border` box) needed a row I had not thought to write, and the
+> other was a term that should not exist.
+
+GATE: G_FORM's baseline half — `manuk-page`, real `node_rects`, **RED-proven six ways** (delete the
+rule · top-align · border box · widen to every input type · centre `line_height` · drop the ascent),
+in the wall's EXISTING launch entry and the existing `#[test]`, so it costs no new page and no
+second SpiderMonkey context.
+
+⚠⚠ **THE LOAD-BEARING GATE ROW IS NOT THE CONTROL'S OWN BOX.** A baseline belongs to the LINE: a
+30px-tall field pushes the **text beside it** down 4.5px in Chrome, while the field's own `dy` is `0`
+under both the right model and the wrong one. Asserting only the input would pass with the line still
+wrong — and that displacement of a neighbour is precisely what `jarring_reading_order` counts, which
+is the conjunct M1 is actually gated on (t1031).
+
+PRICED — 10 sites against the t1043 binary, same hour: **7 byte-identical**, and the three that moved
+are the sites already known to move on their own. `otomoto.pl`'s solo bands **overlap** across the two
+binaries — t1043 `[0.752, 0.791]`, t1044 `[0.762, 0.799]`, three runs each — so the single cut's
+0.7478 was an outlier below both and not a regression. `sports.yahoo` and `unoeste` are inside the
+ranges measured for them earlier this session. **Zero attributable regressions; the attributable
+result is the fixture count.** Across six batteries **130 of 150 → 139 of 150**, and t1042's
+independent `<svg>` battery is **unmoved at 29/29**, which is the control that says this did not
+reach the general atomic-inline path.
+
+RATCHET: `manuk-layout` 131/131, `manuk-css` 32/32, `manuk-paint` 22/22, `manuk-dom` 11/11, G_FORM
+green.
+
+RESIDUE, measured rather than guessed, and each is a DIFFERENT rule — which is why none of them is in
+this tick: **(1)** `<select>` wants content height **17** at the control font against our 15, plus
+Chrome's UA `align-items: center` (`select height:30px` is `dy 0` in Chrome and `dy 3` here, because
+we pin its option text to the top). **(2)** An **empty** `<button>` takes its content-box BOTTOM as
+its baseline — `dy 12` on `<button></button>`, whose content box is 0 tall at offset 3 — not this
+centred line. **(3)** Unrelated and found by the same battery: `<input type=range|color|image>` render
+as an **8x6 stub** — no widget at all — against Chrome's 129x16, 50x27 and 20x20, and `type=image` is
+a replaced element that is not treated as one. `type=file` is 77x19 against 253x21 and `type=date`
+205x21 against 125.33x21.33.
+
+WALL AUDIT (due at 1044, banked as #39 in `docs/loop/WALL-AUDIT.md`): ⚠⚠⚠ **THE 944s WALL IS MINE,
+NOT A GATE'S, AND NOBODY HAD EVER PRICED THE OLD-BINARY CONTROL'S WALL COST.** t1042 read `total
+102s` and t1043 read `total 974s` with nothing added to the wall between them — what happened between
+them was t1043's pricing run, which reverts `engine/css`, rebuilds release, measures, restores and
+rebuilds again. `manuk-css` is upstream of every `manuk-page` gate binary, so both rebuilds invalidate
+~25 mozjs links. Measured: `cargo test --no-run -p manuk-page --features stylo,spidermonkey` is
+**604.25s** cold and **0.82s** on the identical second run — so **604 of the 944 is one cold relink,
+the cache is healthy, and nothing is deleting the working set** (the board's twice-test, passed). The
+remedy is free and was already written down in `tick-landing-mechanics` step 1 and I did not apply it:
+**pre-warm out of band AFTER the control restores the tree and BEFORE `tick.sh`**, and the seconds
+happen off the measured path. The transferable form: *an old-binary control costs the NEXT wall, not
+its own tick — roughly 20 minutes, invisible at the moment you decide to run it — so batch it, one
+control can price several ticks.* Nothing trimmed; the wall's standing cost is unchanged since #38 and
+the parity budget is still 31 of 32.
+
+PERF: one `Option` chain per atomic inline, evaluated only when the §10.8.1 search already returned
+`None`, and short-circuited on the tag name.
+
+WIKI: `docs/wiki/css-cascade.md` — "The baseline of a text field, and a term that cancelled".
+
 ## Tick 1043 — two constants that are equal at exactly one point, and every measurement was at that point (2026-08-08)
 
 TICK SHAPE: primitive — a property-family battery on the corpus's **#1 and #2 constructs**

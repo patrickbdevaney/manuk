@@ -1396,3 +1396,81 @@ tag: free, eight at a time.
 **NOTHING TRIMMED, AND THAT IS AGAIN THE RESULT.** At 29% of the Tier-0 budget the wall is not the
 constraint on anything, and every optimisation the numbers point at lives in `scripts/` or the build
 profile.
+
+---
+
+## Audit #39 — tick 1044 (2026-08-08), wall total **944s** — and the 944 is MINE, not a gate's
+
+⚠⚠⚠ **THE HEADLINE NUMBER IS A COLD RELINK CAUSED BY THE OLD-BINARY CONTROL PROTOCOL, AND NOBODY HAD
+EVER PRICED THAT.** Two walls, same session, same box, ten ticks apart in wall terms but ninety
+minutes apart in clock terms:
+
+```text
+   tick 1042    gate 101s · build  1s · total  102s
+   tick 1043    gate 944s · build 30s · total  974s
+```
+
+Nothing was added to the wall between them. What happened between them is the **t1043 pricing run**:
+the old-binary control (t799's rule, and the one this loop trusts most) requires reverting
+`engine/css`, rebuilding release, measuring, restoring, and rebuilding release again. `manuk-css` is
+upstream of `manuk-layout`, `manuk-page` and `manuk-wpt`, so both rebuilds invalidate **every
+`manuk-page` gate binary** — about 25 of them, each a ~350MB mozjs link.
+
+**Measured directly, the twice-test on the settled tree:**
+
+```text
+   cargo test --no-run -p manuk-page --features stylo,spidermonkey    run1  604.25s
+   …the identical command again                                       run2    0.82s
+```
+
+**604s of the 944 is one cold relink of the gate binaries, and the cache is healthy** — run 2 is
+instant, so nothing is deleting the working set (the board's own twice-test, and it passes). This is
+*not* the t846 wall-self-purge class and it is not standing bloat: it is a **one-shot cost the agent
+imported into the wall by doing an out-of-band rebuild and then landing immediately.**
+
+### The fix is free, it is entirely agent-side, and it is already written down
+
+`memory/tick-landing-mechanics.md` step 1 says *"pre-warm out of band"* before landing a tick that
+touches `engine/page`/`engine/js`. **The rule generalises and I did not apply it:** after the
+old-binary control restores the tree, run
+
+```bash
+cargo test --no-run -q -p manuk-page --features stylo,spidermonkey
+```
+
+**before** `tick.sh`, and the 604s happens outside the wall instead of inside it. The wall then reads
+its real number. Nothing about the gates changes; the seconds move off the measured path because they
+never belonged on it.
+
+> **AN OLD-BINARY CONTROL COSTS THE *NEXT* WALL, NOT ITS OWN TICK.** The protocol is two release
+> rebuilds plus one cold gate relink — roughly 20 minutes — and all of it is invisible at the moment
+> you decide to run the control. Price it into the decision: it is still worth paying (it changed the
+> verdict three times, and twice more this session), but **batch it** — one control run can price
+> several ticks' worth of fixes, and one cold relink then serves all of them.
+
+### The four questions
+
+**(1) REDUNDANCY** — unchanged from #37/#38: ~1.5s of SpiderMonkey startup × 19 launched `manuk-page`
+gates ≈ 29s, recoverable with a shared test binary. Still `scripts/` + the build profile, still **not
+mine to take.** ⚠ Note this window's own datum makes the case sharper: the same 25-binary set is what
+costs 604s to relink, so a shared binary would cut both the startup tax *and* the relink tax.
+
+**(2) PARALLELISM** — nothing newly serialised. `P` at 235s and `T` at 45s are the two real
+in-wall costs; `F`/`F4` remain deliberately serial.
+
+**(3) CACHING** — the finding above IS this question's answer for this window: the uncached cost is
+the link, exactly as #37 and #38 said, and this is the first audit to catch the loop *creating* a
+cold link for itself rather than inheriting one.
+
+**(4) SCOPE** — unchanged; gates build one crate's test target.
+
+### The parity budget, carried forward
+
+#38 established that a parity fixture is **free until it crosses a multiple of eight** (`CHROME_JOBS
+= 8`), with one free slot at 31 of 32. **Still 31 — nothing was added to `tests/wpt/corpus/` this
+window.** t1043 and t1044 both put their new assertions into `engine/page/tests/g_form.rs`, an
+already-launched gate, which is the other zero-cost place.
+
+**NOTHING TRIMMED, AND NOTHING NEEDED TRIMMING.** The wall's standing cost is unchanged since #38;
+the entire delta this window was self-inflicted, one-shot, and has a free agent-side remedy that is
+now written down.

@@ -2164,3 +2164,94 @@ exact**. What the batteries also established, which no amount of reasoning would
 ⚠ **`<select>`'s intrinsic content height is 17px at the control font and ours is 15**, and its
 `font-size:20px` box is 26 against our 27. Unrelated to anything here, 11.1% of the corpus, banked
 rather than guessed at.
+
+## The baseline of a text field, and a term that cancelled (tick 1044)
+
+The residue t1043 named, closed. **Every remaining `<input>` divergence in three form-control
+batteries was a `dy`, and they were one mechanism.**
+
+### The defect is a DOMAIN error, not a missing rule
+
+CSS 2.1 §10.8.1 says an `inline-block`'s baseline is its **last in-flow line box's**, falling back to
+the **bottom margin edge** when it has none. We implement both halves correctly. But an `<input>`'s
+text lives in an inner editor that has no box in our tree, so the search found no line, took the
+fallback, and put every default text field **3px high in every line of text it appears in** — on
+51.5% of the burndown corpus.
+
+**The control was already in the fixture, and it is the same box with the text put back:**
+
+```text
+   <input style="width:50px;padding:0;border:0">                        Chrome dy 3   ours dy 0
+   <span style="display:inline-block;width:50px;height:15px;
+         font:13.333px Arial">Ay</span>                                 Chrome dy 3   ours dy 3
+```
+
+Identical geometry, identical font, identical Chrome answer — and we were **already exact on the
+second row**. `<button>Ay</button>` was exact for the mirror-image reason: its label *is* a DOM text
+node. So this is not a new baseline rule; it is the rule we have, reaching a line the DOM does not
+contain, and the fix is four lines.
+
+### The model, and the ladder that fixes it
+
+One text box of the control's own font, **centred in the content box**:
+
+```text
+   content h      6      10      15      20      30      (strut baseline 15.0)
+   Chrome dy     7.5     5.5     3.0     0.5     0.0
+   baseline      7.5     9.5    12.0    14.5    19.5   = (h - 15)/2 + 12
+   before        9.0     5.0     0.0     0.0     0.0   = the bottom margin edge
+```
+
+Top-aligning gives a constant 12 and matches **only the middle rung** — which is the row a
+natural-height field produces, and therefore the only row a fixture written from the obvious case
+would have contained.
+
+⚠ The **content** box, not the border box, proven three ways — `height:0;padding:5px`,
+`height:0;border:5px` and `height:4px;padding:3px` are all `dy 5.5` in Chrome. Those rows exist
+because a `padding:5px` field at natural height pins at `dy 0` under *either* model, so the obvious
+frame row cannot tell them apart.
+
+### ⚠⚠⚠ The falsification pass deleted a term, again
+
+The first version centred a full **line box** (`ts.line_height`) and then placed the baseline within
+it at `ascent + half_leading`. Mutating the half-leading term away left the gate **green** — t834's
+rule says that makes it unreachable code to be deleted or made falsifiable, not admired. The algebra
+says why:
+
+```text
+   (h - L)/2 + a + (L - a - d)/2   ==   (h - a - d)/2 + a       for every L
+```
+
+`line-height` cancels. And Chrome says it is not merely inert but *wrong* to be there:
+
+```text
+   <input style="height:0;padding:0;border:0">        Chrome dy 10.5
+   …the same with line-height:30px                    Chrome dy 11.0
+   …the same with line-height:6px                     Chrome dy 10.5
+```
+
+**24px of extra leading moves the baseline by half a pixel of rounding.** Chrome centres the inner
+editor's *text* — `ascent + descent` — not a leaded line. Writing `a + d` rather than `line_height`
+is now a claim the code makes and a fixture can refute; the two-term version made the same
+prediction while asserting something false about the mechanism.
+
+> **A mutation that leaves the gate green is not a weak gate — it is a sentence in the code that
+> nothing is testing, and half the time the reason nothing can test it is that it does not mean
+> anything.** Six mutations, six reds, after the pass removed a term and added the row that catches
+> its replacement.
+
+### Where a baseline actually shows up
+
+The load-bearing gate row is not the control's own box. A baseline is a property of the **line**, so a
+30px-tall field pushes the **text beside it** down 4.5px in Chrome — and the field's own `dy` is `0`
+under both the right model and the wrong one. Asserting only the control would pass with the line
+still wrong, which is precisely how a mis-baselined control feeds `reading_order`: it displaces its
+neighbours, not itself.
+
+⚠ **Named, measured, not fixed here.** `<select>` needs its own tick and now has numbers: intrinsic
+content height **17** against our 15, and Chrome's UA `align-items: center` puts its option text in
+the middle of a tall box where ours pins it to the top (`select height:30px` is `dy 0` in Chrome and
+`dy 3` here). An **empty** `<button>` takes its content-box *bottom* as its baseline (`dy 12` on
+`<button></button>`), a third rule again. And `<input type=range|color|image>` render as an **8x6
+stub** — no widget at all — against Chrome's 129x16, 50x27 and 20x20; `type=image` is a replaced
+element and is not treated as one.

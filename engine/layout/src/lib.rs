@@ -7601,6 +7601,51 @@ impl Ctx<'_> {
                     {
                         last_line_baseline(&r.boxx, self.dom)
                             .map(|b| r.margin_top + (b - r.boxx.rect.y))
+                            // ── **AN `<input>`'S TEXT IS NOT IN THE DOM, SO THE §10.8.1 SEARCH
+                            //    FINDS NO LINE AND FALLS BACK TO THE BOTTOM MARGIN EDGE — AND THAT
+                            //    IS THE WHOLE DEFECT** (t1044). A text field has an inner editor
+                            //    with a real line in it; we have no box for it, so the search
+                            //    returned `None` for the one element class whose baseline it was
+                            //    most needed for.
+                            //
+                            //    ⚠⚠⚠ **The control that names it was already in the fixture, and it
+                            //    is the same box with the text put back:**
+                            //
+                            //    ```text
+                            //      <input style="width:50px;padding:0;border:0">        Chrome dy 3
+                            //      <span style="display:inline-block;width:50px;
+                            //            height:15px;font:13.333px Arial">Ay</span>     Chrome dy 3
+                            //    ```
+                            //
+                            //    Identical box, identical font, identical answer — and we were
+                            //    **already exact on the second row**. So this is not a new baseline
+                            //    rule: it is the rule we have, applied to a line the DOM does not
+                            //    contain. `<button>Ay</button>` is exact for the same reason in
+                            //    reverse — its label IS a DOM text node.
+                            //
+                            //    The model is one line of the control's own font, **vertically
+                            //    centred in the content box**. Chrome-measured, one bitmap of a
+                            //    ladder with the height as the only variable (strut baseline 15.0):
+                            //
+                            //    ```text
+                            //      content h     6     10     15     20     30
+                            //      Chrome dy    7.5    5.5    3.0    0.5    0.0
+                            //      baseline     7.5    9.5   12.0   14.5   19.5  = (h-15)/2 + 12
+                            //      before       9.0    5.0    0.0    0.0    0.0  = the bottom edge
+                            //    ```
+                            //
+                            //    …and the two rows that make it a *box* rule rather than a height
+                            //    one: `padding:5px` and `border:4px` both put the baseline past the
+                            //    strut, so Chrome pins the box at `dy 0` — which we already matched
+                            //    and must keep matching, and which is why the offset is measured
+                            //    from the CONTENT top and not the border box's.
+                            //
+                            //    ⚠ **`<button>` is deliberately NOT here.** With a label it already
+                            //    works; EMPTY, Chrome's baseline is its content-box BOTTOM (`3.0` on
+                            //    `<button></button>`, whose content box is 0 tall at offset 3), not
+                            //    this centred line — a third rule, measured, and left to its own
+                            //    tick rather than guessed at from this one.
+                            .or_else(|| self.form_control_inner_baseline(node, &s, &r, cw))
                     } else {
                         None
                     };
@@ -7900,6 +7945,76 @@ impl Ctx<'_> {
     /// with `floats`, so text flows around floats (CSS2 §9.5). Returns fragments with
     /// absolute positions and the total inline block height.
     ///
+    /// **THE BASELINE OF A TEXT-BEARING FORM CONTROL, WHOSE TEXT IS NOT IN THE DOM** (t1044).
+    ///
+    /// `Some` only for an `<input>` that renders a value or a label — everything except the types
+    /// whose widget has no text line at all. Those keep CSS 2.1 §10.8.1's fallback (the bottom
+    /// margin edge), which is already Chrome-exact for them: a checkbox measures `dy 3` here and in
+    /// Chrome, and that number is its 3px UA margin, not a baseline this could improve.
+    ///
+    /// The value is the control's own **text box** — its font's `ascent + descent`, resolved through
+    /// `text_style` so the family list and font size resolve exactly as the strut's do — laid
+    /// **centred in the content box** and measured down from the MARGIN box top, which is the
+    /// contract `atomic_baseline` documents.
+    ///
+    /// ⚠ Centred, not top-aligned, and the ladder is what says so: at content heights 6/10/15/20/30
+    /// Chrome's baselines are 7.5/9.5/12/14.5/19.5, i.e. `(h - 15)/2 + 12` exactly. Top-aligning
+    /// would give a constant 12 and match only the middle row — **the row the natural-height field
+    /// produces, which is the only row anybody would have written a fixture for.**
+    ///
+    /// ⚠⚠⚠ **`line-height` PLAYS NO PART, AND THE FIRST VERSION OF THIS FUNCTION HAD IT IN TWICE
+    /// WHERE IT CANCELLED.** It centred a full LINE BOX (`ts.line_height`) and then placed the
+    /// baseline within it at `ascent + half_leading` — and
+    /// `(h - L)/2 + a + (L - a - d)/2 = (h - a - d)/2 + a` for every `L`. The falsification pass is
+    /// what caught it: mutating the half-leading term away left the gate **green**, which under
+    /// t834's rule means the term is unreachable code and must be deleted or made falsifiable, not
+    /// admired. Deleted — and Chrome agrees it is not merely inert but *wrong* to be there:
+    ///
+    /// ```text
+    ///   <input style="height:0;padding:0;border:0">                    Chrome dy 10.5
+    ///   …the same with line-height:30px                                Chrome dy 11.0
+    ///   …the same with line-height:6px                                 Chrome dy 10.5
+    /// ```
+    ///
+    /// A 24px change in leading moves the baseline by half a pixel of rounding. Chrome centres the
+    /// inner editor's **text**, not a leaded line — so writing `a + d` rather than `line_height` is
+    /// a claim this measured, and a mutation to `ts.line_height` now sends that row to `dy 18`.
+    fn form_control_inner_baseline(
+        &self,
+        node: NodeId,
+        s: &ComputedStyle,
+        r: &BlockResult,
+        cw: f32,
+    ) -> Option<f32> {
+        if self.dom.tag_name(node) != Some("input") {
+            return None;
+        }
+        let ty = self
+            .dom
+            .element(node)
+            .and_then(|e| e.attr("type"))
+            .unwrap_or("text")
+            .to_ascii_lowercase();
+        // The widgets with no inner text line: a tick box, a swatch, a slider, a file picker's
+        // button-plus-label composite. `image` is a replaced element wearing an `<input>`'s tag.
+        if matches!(
+            ty.as_str(),
+            "checkbox" | "radio" | "hidden" | "image" | "file" | "range" | "color"
+        ) {
+            return None;
+        }
+        let ts = text_style(s, self.fonts);
+        let lm = self.fonts.line_metrics(ts.font_key, ts.font_size);
+        // `.round()` on each, because that is what `close_line` does to the strut before folding it,
+        // and a synthetic line that rounds differently from a real one would sit a pixel off on some
+        // faces and agree on the one I happened to test.
+        let (a, d) = (lm.ascent.round(), lm.descent.round());
+        let frame_t = s.border_width.top + s.padding.top.resolve(cw, 0.0);
+        let frame_b = s.border_width.bottom + s.padding.bottom.resolve(cw, 0.0);
+        let content_h = (r.boxx.rect.height - frame_t - frame_b).max(0.0);
+        Some(r.margin_top + frame_t + (content_h - (a + d)) / 2.0 + a)
+    }
+
     /// Approximation (documented): a line's float band is queried using the *first*
     /// word's line height as the height estimate — exact for uniform-size text, an
     /// approximation when a taller inline box lands mid-line.
