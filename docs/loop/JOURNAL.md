@@ -46371,6 +46371,88 @@ PERF: none — one UA rule and one narrowed branch in a cascade that already ran
 WIKI: `docs/wiki/css-cascade.md` — where Chrome draws the form-control `box-sizing` line, and why a
 layout-crate test cannot see it.
 
+## Tick 1030 — 21 of the 30 ratchet invariants have been re-banking a 23-day-old number (2026-08-08)
+
+TICK SHAPE: measurement — the cadence re-read of `CONSTITUTION.MD` (due every 8; last at 1021),
+banked as check #94 in `docs/loop/CONSTITUTION-CHECK.md`.
+
+⚠⚠⚠ **FINDING 1 — THE RATCHET IS THE FIRST PRINCIPLE, AND MOST OF IT CANNOT GO RED.**
+`docs/loop/WPT-AREAS.tsv` — the file `scripts/ratchet.sh` reads every WPT invariant from — is dated
+**2026-07-16**, and `tick.sh` has been printing *"the sweep is 549h old"* directly above a green
+`THE RATCHET HOLDS`. Checked from git rather than from the warning, six consecutive commits:
+
+```text
+   WPT:dom 2899 · html/dom 55783 · css/selectors 784 · css-flexbox 223 · … · TOTAL 422865
+   ^ byte-identical in 6 of 6.  The only mark that moved in the window: MEASURED 467 -> 471.
+```
+
+**21 of 30 invariants print `(=)` every tick because they are comparing an unchanged file against
+itself.** That is the class `falsify.sh` was built to hunt — *a gate that cannot go red* — aimed at
+the mechanism `CLAUDE.md` calls the first principle.
+
+⚠ **Stated at its true size, not its scariest size, because the scary version is wrong.** This is not
+an open hole with nothing behind it: the wall's real gates catch layout and capability regressions —
+92→97 parity probes, `manuk-layout` 130/130, F1/F2, the launched `G_*` set — and one of them caught a
+regression *inside* t1027, in the tick that caused it. What the WPT half of the ratchet supplies is
+**redundant reassurance that reads as coverage**, and that is worse than an absence, because an
+absence gets looked for.
+
+⚠⚠ **AND IT IS NOT MINE TO FIX.** `scripts/ratchet.sh` and `scripts/wpt-sweep.sh` are observer-owned
+under PART VII, so it is filed for the observer exactly as check #93 filed the self-audit
+falsifiability proposal — named, not attempted, not quietly dropped. ⚠⚠ **The reconciliation that
+makes the finding trustworthy is the one mark that DID move:** `MEASURED 467 → 471` is exactly the
+four `missing`-with-a-verdict rows audit #43 added (the other six went in as `unknown`, which is not
+a verdict). The instrument is alive; its input is frozen.
+
+⚠⚠⚠ **FINDING 2 — GATE WORK, UNMEASURED, AND I MUST NOT SAY MORE THAN THAT.** Three of the eight
+ticks in this window changed engine source and all three are on the M1 leg — t1026 (the dimension
+attribute is a cascade origin), t1027 (two post-cascade passes, `<iframe>` in both), t1029
+(`overflow: clip` is not a formatting context). **All three landed after the last sweep**, so their
+corpus evidence is not small — it does not exist.
+
+> This is check #72's finding 2 with the sign flipped: there, four Chrome-exact primitives moved the
+> corpus by +2 elements and the loop wrote *"zero movement"*. Here the number has not been taken at
+> all. **`unmeasured` and `zero` are the two readings this loop has conflated before**, and the only
+> thing that separates them is a sweep.
+
+**M1 OF RECORD IS NOW 17.6%** (31/131 in-scope, sweep t1023) — *lower* than the 19.7% check #93
+carried, and **not a regression**: t1023 is the re-baseline check #93's own steer demanded, taken
+after t1016 (a `--window-size` is not a viewport) and t1020 (the reference declared no pointing
+device) changed what the reference renders. The −2.1 is a change of instrument.
+
+⚠⚠ **FINDING 3 — THE RANKING RULE'S FAILURE MODE, CAUGHT IN THE ACT.** *Grep the corpus, rank,
+battery the top unbatteried area* is now **7 for 7**. But audit #43's two loudest numbers —
+`animation-delay` 36.8% and `text-decoration-style` 22.2% — are **both unrankable**: one has no
+steady state, the other moves no box. **A corpus frequency is an INPUT to `usage-weight ×
+failing-breadth`, not the product**, and the loop has now twice been one step from ranking on the
+wrong factor. Promoted from the audit log into the constitution so it is not re-derived.
+
+PART VI CORRECTED, in the document: VI.3's banked figure updated to t1023 **and labelled a
+re-baseline** so the next reader cannot diff it against t1008; and H0.1's residue list gains a new
+named place — **the UA STYLESHEET**, with audit #43's method attached (*every part of the platform
+the reference can be asked to ENUMERATE should be enumerated once*) and its clearing-pass caveat
+(the grep flagged 37 elements, a fixture cleared 29).
+
+COMPLIANCE: **PART VII held** — eight ticks, zero edits under `scripts/`, and the one finding that
+lands there is filed rather than fixed. **I5 held** — three fixes, three green walls, nothing traded,
+and t1027's gate caught a regression that same tick had *caused* and repaired it in place.
+
+THE STEER (full text in check #94): **run the fidelity sweep next tick** — label it a burndown point
+against t1023 (the reference has not moved since, so unlike t1023 it *is* a delta), and per t974 no
+top mover is a reading until it is re-run solo. Then audit #43's ranked remainder: the `iframe` UA
+border **with** `frameborder="0"` as a paired hint, `<small>`'s `font-size`, and a probe of
+`font-feature-settings`.
+
+RATCHET: no engine code changed. Nothing traded.
+
+GATE: none — measurement tick. The falsifiable artefact is the six-commit `RATCHET.tsv` diff above,
+reproducible with `git show <sha>:docs/loop/RATCHET.tsv`.
+
+PERF: none.
+
+WIKI: none — this tick's artefacts are `docs/loop/CONSTITUTION-CHECK.md` check #94 and the two PART
+VI corrections in `CONSTITUTION.MD`, which are the wiki for the loop's own governance. [no-pattern]
+
 ## Tick 1029 — `clip` is the overflow value that does NOT make a formatting context, and the comment said otherwise (2026-08-08)
 
 TICK SHAPE: primitive — audit #43's #1 re-ranked item, built. **One predicate, two independent

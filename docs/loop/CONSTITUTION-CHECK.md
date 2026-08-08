@@ -6541,3 +6541,114 @@ producer. `scripts/fidelity-progress.sh:88-95` says `if(r==""){ scored++; … m1
 the producer's definition from their agreement — the exact inversion of the standing rule **READ THE
 PRODUCER, NOT ONLY THE CONSUMER**, which this loop banked at t920 and which I re-derived the
 expensive way.
+
+## Check #94 — tick 1030 (2026-08-08)
+
+**Horizon:** H0 as re-scoped by **PART VII**, instrumented as **M1 on the in-scope CrUX corpus**
+(`shape ≥ 0.75` AND jarring-clean, bot-walls excluded per `DAILY-DRIVER-CERTIFICATION.md` §3).
+**Gate:** *"reliably renders and runs the representative real internet"* — explicitly **not** a WPT
+percentage (PART VII retires that whole class of number).
+
+**Latest banked: t1023 — M1 17.6% (23.7% shape-only, 32.1% jarring-clean, shape_mean 59.5%,
+cov_mean 87.1%), 131 in-scope of 200.** ⚠ This is **lower** than the 19.7% check #93 carried, and the
+drop is not a regression: t1023 is the **re-baseline** check #93's own steer #1 demanded, taken after
+the reference changed underneath the metric twice (t1016's viewport, t1020's pointing device). It is
+not comparable to t1008 and must not be read as one.
+
+### → Gate, or scoreboard?
+
+⚠⚠⚠ **GATE — AND THE HONEST ANSWER IS "GATE WORK, UNMEASURED."** Three of the eight ticks in this
+window changed engine source, and all three are on the M1 leg:
+
+```text
+   t1022  measurement    the retraction of check #93's central claim
+   t1023  measurement    the re-baseline sweep
+   t1024  measurement    wall-time audit          <- harness cadence
+   t1025  measurement    the inline-<svg> battery
+   t1026  PRIMITIVE      the dimension attribute is a cascade ORIGIN
+   t1027  PRIMITIVE      TWO post-cascade passes; <iframe> was in both
+   t1028  measurement    surface audit #43        <- harness cadence
+   t1029  PRIMITIVE      overflow:clip is not a formatting context
+```
+
+**All three fixes landed AFTER the last sweep**, so not one of them has been priced on the corpus.
+Their local evidence is strong — Chrome-exact rows, controls, and disjoint RED proofs — and their
+*corpus* evidence is zero. That is the same shape as check #72's finding 2 (*"four Chrome-exact
+primitives moved the corpus by +2 elements and the loop reported it as zero movement"*), except this
+time the number does not exist at all rather than being small.
+
+⚠ **The corollary I am NOT allowed to draw from that**: this does not mean the three fixes bought
+nothing. It means **the loop is currently unable to say**, and *"unmeasured"* and *"zero"* are the two
+readings that have been conflated here before. **A sweep is owed and it is the next tick.**
+
+### → Is any invariant being bent?
+
+⚠⚠⚠ **NO INVARIANT IS BENT, BUT THE MECHANISM THAT ENFORCES THEM IS PARTLY VACUOUS, AND IT IS
+CHECKABLE FROM GIT.** `docs/loop/WPT-AREAS.tsv` — the file `scripts/ratchet.sh` reads every WPT
+invariant from — is dated **2026-07-16**, and `tick.sh` has been printing *"the sweep is 549h old"*
+next to a green ratchet. Across the last six commits, every WPT mark is **byte-identical**:
+
+```text
+   WPT:dom 2899 · html/dom 55783 · css/selectors 784 · css-flexbox 223 · css-grid 150 · … · TOTAL 422865
+   ^ unchanged in 6/6 commits.  The only mark that moved: MEASURED 467 -> 471.
+```
+
+**21 of the 30 ratchet invariants have been re-banking an unchanged 23-day-old measurement every
+tick.** They print `(=)` and they *cannot go red* — the exact class `falsify.sh` exists to hunt,
+pointed at the mechanism `CLAUDE.md` calls the first principle.
+
+⚠ **Stated at its true size, not its scariest size.** This is not an open hole with nothing behind it:
+the wall's real gates — 92→97 parity probes, `manuk-layout` 130/130, the 19 launched `G_*` gates,
+F1/F2 — do catch layout and capability regressions, and they caught one *inside* t1027. What the WPT
+half of the ratchet provides is **redundant reassurance that reads as coverage**, which is worse than
+an absence because nothing goes looking for it.
+
+⚠⚠ **AND IT IS NOT MINE TO FIX. `scripts/ratchet.sh` and `scripts/wpt-sweep.sh` are observer-owned
+under PART VII**, so this is filed for the observer exactly as check #93 filed the self-audit
+falsifiability proposal, rather than quietly dropped. The agent-side half that IS in scope — keeping
+the *fidelity* sweep current, which the agent does own — is the next tick.
+
+**I5 held.** Nothing was traded: three fixes, three green walls, and t1027's own gate caught a
+regression that fix had *caused* (`replaced_default_size` did not list `iframe`, so a flex-item
+iframe measured 0×360) and it was repaired in the same tick rather than banked.
+
+**PART VII held.** Eight ticks, zero edits under `scripts/`. Both audits due in the window ran, and
+the one finding that lands in `scripts/` is named above and left there.
+
+### → Is `orient`'s ranking still the north star?
+
+**Yes, and the battery-selection rule is now 7 for 7** — *grep the corpus, rank, battery the top
+unbatteried area* produced `<svg>` (t1025), `<iframe>` (t1027) and, through audit #43's new
+enumeration half, `overflow: clip` (t1029). ⚠⚠ **But audit #43 also caught the rule's failure mode
+in the act, and it belongs in this document rather than only in the audit log**: the two loudest
+corpus numbers it produced were `animation-delay` (36.8%) and `text-decoration-style` (22.2%), and
+**both are unrankable** — one has no steady state, the other moves no box. A corpus frequency is an
+input to `usage-weight × failing-breadth`; it is not the product, and the loop has now twice been one
+step from ranking on the wrong factor.
+
+### → PART VI correction, applied to the document
+
+**VI.3's banked figure is updated to the t1023 re-baseline, and labelled as one** so the next reader
+cannot diff it against t1008. **A NEW ROW is added to H0.1's residue list: the UA STYLESHEET.**
+Audit #43 established that it is (a) enumerable — the reference recites its own copy on request —
+(b) previously unaudited across 42 audits, and (c) carrying 8 real gaps of which one (`<small>`,
+8.8%) has corpus weight. It sits beside tables / inline composition / floats / transformed
+containing blocks / scroll containers as a named place the residue lives.
+
+⚠ **And the standing rule audit #43 produced is promoted here, because it is a method and not a
+finding:** *every part of the platform the reference can be asked to **enumerate** should be
+enumerated once.* Three of the classes in this row's history — the mis-provisioned reference, the UA
+sheet, the interaction media features — were each found by tripping over them, and each was one
+question to Chrome away.
+
+### STEER (the tick-1031 plan)
+
+1. **RUN THE FIDELITY SWEEP. It is the next tick, not a later one.** Three unmeasured geometry fixes
+   and a re-baseline that is six ticks old. ⚠ Label it a **burndown point against t1023** — the
+   reference has not moved since, so unlike t1023 it *is* a delta — and per t974, **no top mover is a
+   reading until it is re-run solo.**
+2. Then the ranked remainder from audit #43, in order: the `iframe` UA border **with**
+   `frameborder="0"` as a paired presentational hint (29.2%, and it regresses 10 sites without the
+   pair) · `<small>`'s `font-size: smaller` (8.8%) · probe `font-feature-settings` (16.4%, unprobed).
+3. **Do not rank `animation-delay` or `text-decoration-style` on their corpus numbers** without a
+   probe first — standing, and now constitutional.
