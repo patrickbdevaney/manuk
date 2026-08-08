@@ -6464,3 +6464,80 @@ gate at a time.
    the last two are replaced-element *sizing*, which is the width mechanism that launders into `dy`.
 3. **Do not build `hyphens: auto`** (standing, from #92) — and now the general form is in the
    constitution, so the next surface audit cannot re-rank it from a corpus number alone.
+
+## Check #93 — CORRECTION, tick 1022 (2026-08-08)
+
+⚠⚠⚠ **THE CENTRAL CLAIM OF CHECK #93 IS WITHDRAWN. IT IS WRONG, AND THE TRUE ANSWER IS BETTER FOR
+THE INSTRUMENT AND WORSE FOR THE NUMBER THAT WAS PUBLISHED.**
+
+Check #93 said the prose figures `24/123 = 19.5%` and `27/113 = 23.9%` *"match neither the banked
+in-scope counts nor the scored sets, and this check could not derive them from the rows at all"*, and
+concluded that *"a metric whose denominator cannot be reproduced from its own tick's artefacts is not
+a measurement."* **They are derivable, in one line, and the line is `shape_n > 0`:**
+
+```text
+   in-scope rows with shape_n > 0        t997 123      t1008 113     <- the prose's denominator
+   M1 over exactly that set              t997  24      t1008  27     <- the prose's numerator
+                                              19.5%          23.9%   <- reproduced to the digit
+```
+
+I did not withdraw this because a check re-read it. I withdrew it because the **next tick's own steer
+sent me back to the rows**, and the first thing I tested was the operationalisation I had guessed at:
+I had read *"scored"* as *"the reason column is empty"*, which is `109 / 99`, and never tested the
+other obvious reading. **The claim "I could not derive it" was a statement about my search, published
+as a statement about the artefact.**
+
+### What is actually true, and it is a sharper finding than the false one
+
+The 4.2-point gap is **two effects, and both run the same way**:
+
+```text
+   ledger f15   24 / 122   19.7%     numerator over reason=="" rows, denominator = in-scope
+   prose        27 / 113   23.9%     both over shape_n > 0
+                 ^     ^
+                 |     +---  9 in-scope sites that yielded NOTHING, dropped from the denominator
+                 +---------  3 sites admitted to the numerator; here is what they are:
+```
+
+```text
+   app.ordertime.com       shape 1.000   from ONE element    coverage 0.040   tree-divergence-31
+   allticketscol.com       shape 1.000   from ONE element                     oracle-module-shell-1
+   awlyaa.education.dz     shape 0.833   from SIX elements                    shell-only-6
+```
+
+> **shape = 1.000 over one element is not a page that renders correctly; it is a page that was not
+> measured.** This is `100% of nothing is 100%` (t650) in the denominator instead of the numerator,
+> and it is why `fidelity-progress.sh` counts the numerator over `reason == ""`: **the instrument
+> already refuses to score these sites, and the prose re-admitted them by re-deriving the metric from
+> the raw rows without the refusal.**
+
+So the ordering is the reverse of what check #93 asserted:
+
+```text
+   19.7%   ledger f15      HONEST — vacuous passes refused, zero-yield sites counted as fails
+   22.1%   "domain-matched" WRONG — admits the three one-element passes (check #93's own suggestion)
+   23.9%   prose            WRONG TWICE — admits them AND drops the nine zero-yield sites
+```
+
+⚠ **Check #93's conclusion survives; its argument does not.** `FIDELITY-PROGRESS.tsv` field 15 **is**
+the M1 of record, and the `CONSTITUTION.MD` VI.3 edit made at tick 1021 stands **unchanged** — but it
+now rests on a reason (it is the only cut that refuses both a vacuous pass and a silent drop) instead
+of on a false claim about reproducibility. ⚠⚠ **A correct conclusion reached by a wrong argument is
+the most expensive kind of right answer**, because nothing downstream ever re-examines it.
+
+⚠⚠⚠ **AND THE PROCEDURAL LESSON, WHICH IS THE ONE TO KEEP.** Check #93 recomputed a metric
+independently, matched the ledger on six numbers across two sweeps, and treated that agreement as
+proof its *classifier* was the instrument's. It was — for **excluded** and **in-scope**. It was not
+for **scored**, and nothing in the six matching numbers could have told me: `scored` is the one field
+I did not cross-check, because it was not in the ratio I cared about.
+
+> **Six agreeing numbers do not validate a seventh definition.** An independent derivation is only
+> independent where it was actually checked, and the field you did not check is where the difference
+> lives — because if it agreed, you would not be looking at two numbers.
+
+**The mechanism that would have caught it in the first tick, and it is one command:** `grep` the
+producer. `scripts/fidelity-progress.sh:88-95` says `if(r==""){ scored++; … m1++ }` above
+`m1pct = m1/inscope` in plain sight. Check #93 read the CONSUMERS (the ledger, the rows) and inferred
+the producer's definition from their agreement — the exact inversion of the standing rule **READ THE
+PRODUCER, NOT ONLY THE CONSUMER**, which this loop banked at t920 and which I re-derived the
+expensive way.

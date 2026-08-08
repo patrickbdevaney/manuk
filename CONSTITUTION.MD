@@ -235,24 +235,46 @@ replaced. The instrument that governs the loop today is:
 > shape_mean 60.4%, cov_mean 86.9% — sweep **t1008**, re-derived from `SWEEP-t1008-rows.tsv` at
 > check #93 and reproducing `FIDELITY-PROGRESS.tsv` field-for-field.
 
-**⚠⚠⚠ AND THE DENOMINATOR IS PART OF THE NUMBER — THREE ARE IN CIRCULATION AND THE LOOP'S PROSE HAS
-QUOTED THE MOST FLATTERING ONE (check #93, tick 1021).** Recomputing M1 from the sweeps' own row files
-reproduces the ledger exactly for both of the last two sweeps — `t997 21/131 = 16.0%`,
-`t1008 24/122 = 19.7%` — while the tick that banked them **published `24 = 19.5% → 27 = 23.9%` in
-prose**, and check #91 then quoted that prose as the horizon's latest banked number. The direction and
-rough size agree, which is why eight ticks passed without anyone noticing; the **level is 4.2 points
-optimistic**, and the level is the only thing the 95% bar can be measured against.
+**⚠⚠⚠ AND THE DENOMINATOR IS PART OF THE NUMBER — THREE CUTS ARE IN CIRCULATION AND THE LOOP'S PROSE
+HAS QUOTED THE MOST FLATTERING ONE (check #93, tick 1021; ARGUMENT CORRECTED at tick 1022, conclusion
+unchanged).** t1008 banked `24/122 = 19.7%` in the ledger and **published `27/113 = 23.9%` in prose**,
+which check #91 then carried forward as the horizon's latest number. The gap is **4.2 points on the
+level**, and the level is the only thing a 95% bar can be measured against. It is **two effects, both
+running the same way**:
 
-> **A metric whose denominator cannot be reproduced from its own tick's artefacts is not a
-> measurement.** `113` and `123` match neither the banked in-scope count (122, 131) nor the scored
-> set (99, 109), and check #93 could not derive them from the rows.
+```text
+   ledger f15   24 / 122   19.7%    numerator over reason=="" rows, denominator = in-scope
+   prose        27 / 113   23.9%    both over shape_n > 0
+                 ^     ^
+                 |     +--  9 in-scope sites that yielded NOTHING, dropped from the denominator
+                 +--------  3 sites admitted to the numerator, and this is all they are:
+                            app.ordertime.com    shape 1.000 from ONE element, coverage 0.040
+                            allticketscol.com    shape 1.000 from ONE element
+                            awlyaa.education.dz  shape 0.833 from SIX
+```
+
+> **shape = 1.000 over one element is not a page that renders correctly; it is a page that was not
+> measured.** `100% of nothing is 100%` (t650), arriving through the denominator instead of the
+> numerator. `fidelity-progress.sh` counts the numerator over `reason == ""` precisely because the
+> instrument has already refused to score those sites — and a re-derivation from the raw rows
+> re-admits them unless it re-applies the refusal.
 
 **Binding, so this cannot recur:** the M1 number of record is **`FIDELITY-PROGRESS.tsv` field 15
-(`m1_pass_pct`) = shape ≥ 0.75 AND jarring-clean, over the IN-SCOPE count (field 11)** — the strictest
-of the three, and the one `DAILY-DRIVER-CERTIFICATION.md` §4 and the Phase-0 exit both name. A tick may
-publish any other cut it finds useful **as long as it is labelled with its denominator and does not
-appear as "M1"**. No decision turns on the 4.2 points: both readings are far from 95%, and VI.2's
-ceiling finding is untouched. What turns on it is whether the scoreboard is honest, which is I5.
+(`m1_pass_pct`) = shape ≥ 0.75 AND jarring-clean, numerator over scored rows, denominator = IN-SCOPE
+(field 11)** — the only cut that refuses **both** a vacuous pass and a silent drop, and the one
+`DAILY-DRIVER-CERTIFICATION.md` §4 and the Phase-0 exit both name. A tick may publish any other cut it
+finds useful **as long as it is labelled with its denominator and does not appear as "M1"**. No
+decision turns on the 4.2 points: both readings are far from 95%, and VI.2's ceiling finding is
+untouched. What turns on it is whether the scoreboard is honest, which is I5.
+
+⚠ **And how tick 1021 got the right answer from a wrong argument, recorded because the failure is
+generic.** It claimed `113`/`123` could not be derived from the rows at all. They can, in one line —
+`shape_n > 0`. The recomputation had matched the ledger on **six** numbers across two sweeps and
+treated that as proof its whole classifier was the instrument's; it was, for *excluded* and
+*in-scope*, and was not for *scored* — **the one field not in the ratio, and therefore the one never
+cross-checked. Six agreeing numbers do not validate a seventh definition.** The producer says it in
+plain sight (`scripts/fidelity-progress.sh:88-95`), which makes this the standing rule **READ THE
+PRODUCER, NOT ONLY THE CONSUMER**, re-derived the expensive way.
 
 `RATCHET.tsv`'s WPT marks are kept as what they are — **a regression ratchet, not a ranking.** A
 window that leaves every WPT mark byte-identical while moving M1 is the *expected* shape of on-mandate

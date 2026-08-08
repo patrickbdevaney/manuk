@@ -46371,6 +46371,89 @@ PERF: none — one UA rule and one narrowed branch in a cascade that already ran
 WIKI: `docs/wiki/css-cascade.md` — where Chrome draws the form-control `box-sizing` line, and why a
 layout-crate test cannot see it.
 
+## Tick 1022 — I withdraw last tick's headline; the true answer is better for the instrument (2026-08-08)
+
+TICK SHAPE: measurement — the retraction of check #93's central claim, and the sharper finding that
+replaces it. **Tick 1021 published "a metric whose denominator cannot be reproduced from its own
+tick's artefacts is not a measurement." It can be reproduced, in one line, and I did not test the
+line.**
+
+⚠⚠⚠ **WITHDRAWN: `24/123` AND `27/113` ARE DERIVABLE, AND THE PREDICATE IS `shape_n > 0`.**
+
+```text
+   in-scope rows with shape_n > 0     t997 123     t1008 113    <- the prose's denominator
+   M1 over exactly that set           t997  24     t1008  27    <- the prose's numerator
+                                           19.5%         23.9%  <- reproduced to the digit
+```
+
+I had read *"scored"* as *"the reason column is empty"* — `109 / 99` — and never tested the other
+obvious reading. **"I could not derive it" was a statement about my search, published as a statement
+about the artefact.**
+
+⚠⚠⚠ **AND THE TRUE FINDING IS SHARPER THAN THE FALSE ONE, BECAUSE THE 4.2 POINTS ARE TWO EFFECTS AND
+BOTH RUN THE SAME WAY.**
+
+```text
+   ledger f15   24 / 122   19.7%    numerator over reason=="" rows, denominator = in-scope
+   prose        27 / 113   23.9%    both over shape_n > 0
+                 ^     ^
+                 |     +--  9 in-scope sites that yielded NOTHING, dropped from the denominator
+                 +--------  3 sites admitted to the numerator, and this is all they are:
+
+   app.ordertime.com       shape 1.000   from ONE element    coverage 0.040   tree-divergence-31
+   allticketscol.com       shape 1.000   from ONE element                     oracle-module-shell-1
+   awlyaa.education.dz     shape 0.833   from SIX elements                    shell-only-6
+```
+
+> **shape = 1.000 over one element is not a page that renders correctly; it is a page that was not
+> measured.** This is `100% of nothing is 100%` (t650) arriving through the denominator instead of the
+> numerator. `fidelity-progress.sh` counts its numerator over `reason == ""` *because the instrument
+> has already refused to score those sites* — and a re-derivation from the raw rows silently
+> re-admits them unless it re-applies the refusal. So the honest ordering is the reverse of what I
+> published:
+
+```text
+   19.7%   ledger f15       HONEST — vacuous passes refused, zero-yield sites counted as fails
+   22.1%   "domain-matched" WRONG — admits the three one-element passes (my own tick-1021 suggestion)
+   23.9%   prose            WRONG TWICE — admits them AND drops the nine zero-yield sites
+```
+
+⚠⚠ **CHECK #93'S CONCLUSION SURVIVES; ITS ARGUMENT DOES NOT.** `FIDELITY-PROGRESS.tsv` field 15 **is**
+the M1 of record and the `CONSTITUTION.MD` VI.3 edit made at tick 1021 stands — but it now rests on a
+reason (it is the only cut that refuses **both** a vacuous pass and a silent drop) instead of on a
+false claim about reproducibility. **A correct conclusion reached by a wrong argument is the most
+expensive kind of right answer**, because nothing downstream ever re-examines it.
+
+⚠⚠⚠ **THE PROCEDURAL LESSON, WHICH IS THE ONE TO KEEP.** Tick 1021 recomputed M1 independently,
+matched the ledger on **six** numbers across two sweeps, and treated that agreement as proof that its
+whole classifier was the instrument's. It was — for `excluded` and `in-scope`. It was not for
+`scored`, and nothing in the six matching numbers could have said so:
+
+> **Six agreeing numbers do not validate a seventh definition.** An independent derivation is only
+> independent where it was actually checked, and the field you did not check is exactly where the
+> difference lives — because if it agreed, there would not be two numbers to explain.
+
+**And it was one command away the whole time.** `scripts/fidelity-progress.sh:88-95` reads
+`if(r==""){ scored++; … m1++ }` directly above `m1pct = m1/inscope`. Tick 1021 read the CONSUMERS
+(the ledger, the rows) and inferred the producer's definition from their agreement — the exact
+inversion of **READ THE PRODUCER, NOT ONLY THE CONSUMER**, banked at t920 and re-derived here the
+expensive way.
+
+RATCHET: nothing changed — no engine or instrument code in this tick. The withdrawn claim was prose,
+and no gate, threshold or banked number was ever computed from it.
+
+GATE: none. ⚠ What made the correction possible is not a gate but a **habit that the tick-1022 steer
+happened to enforce**: the steer said go back to the rows for a re-baseline sweep, so the first thing
+I touched was the operationalisation I had guessed at. A finding that is never revisited is never
+corrected — which is the argument for the standing cadence audits, and it is the second time in three
+ticks that one of them has caught the loop's own arithmetic.
+
+PERF: none — measurement only.
+
+WIKI: none — the artefacts are the check #93 CORRECTION block in `docs/loop/CONSTITUTION-CHECK.md`
+and the rewritten VI.3 paragraph in `CONSTITUTION.MD`, which are the governance record itself.
+[no-pattern]
+
 ## Tick 1021 — the scoreboard was reading 4.2 points high, and its own row files said so (2026-08-08)
 
 TICK SHAPE: measurement — the two cadence audits that came due together: the **self-audit** (last at
