@@ -747,3 +747,4 @@ tick	sha	epoch	iso	delta_s	shape	wall_s	files	added	deleted	gates	claims	wpt_pas
 1033	bb8ce5ac	1786191072	2026-08-08T08:11:12-04:00	944	measurement	808	5	145	32	428	81	3896	6960	0	517	0	41 rows say `reading_order` is not a row-construction defect, and that is the result (2026-08-08)
 1034	fc1fa391	1786193156	2026-08-08T08:45:56-04:00	2084	primitive	808	11	273	33	428	81	3896	6960	0	518	0	I tried to blame the instrument and the instrument came back clean (2026-08-08)
 1035	0e2e833b	1786193488	2026-08-08T08:51:28-04:00	332	primitive	808	5	129	32	428	81	3896	6960	0	518	0	an atomic inline is placed by its LINE BOX, and §10.3.3 was displacing it by exactly `leftover` (2026-08-08)
+1037	de00c04e	1786195912	2026-08-08T09:31:52-04:00	2424	primitive	808	10	239	37	428	81	3896	6960	0	519	0	the border 10 sites were passing without, and the rule that had to land in the same tick (2026-08-08)

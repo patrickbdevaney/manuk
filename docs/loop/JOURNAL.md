@@ -46371,6 +46371,95 @@ PERF: none — one UA rule and one narrowed branch in a cascade that already ran
 WIKI: `docs/wiki/css-cascade.md` — where Chrome draws the form-control `box-sizing` line, and why a
 layout-crate test cannot see it.
 
+## Tick 1037 — the border 10 sites were passing without, and the rule that had to land in the same tick (2026-08-08)
+
+TICK SHAPE: primitive — audit #43's #1 ranked item, built. **A four-pixel fix on 29.2% of the corpus,
+and the interesting half is the rule that stops it being a regression.**
+
+⚠⚠⚠ **`<iframe>` IS THE ONLY REPLACED ELEMENT WITH A UA BORDER, AND WE HAD NO RULE AT ALL.** Asked of
+Chrome directly rather than recalled — `getComputedStyle` over every HTML element, the enumeration
+half of surface audit #43 — so this is measured, not remembered:
+
+```text
+   <iframe>                    border = 2px inset    304x154        ours  300x150
+   <iframe frameborder="0">    border = 0px INSET    300x150        ours  300x150   <- passed BY ACCIDENT
+   <iframe frameborder="1">    border = 2px inset    304x154        ours  300x150
+   <iframe frameborder="no">   border = 0px inset    300x150
+```
+
+Every unstyled iframe was **4px small on both axes**, and every box below it slid up by 4.
+
+⚠⚠⚠ **THE SECOND RULE IS THE TICK. THE FIRST ONE ALONE IS A REGRESSION ON TEN SITES.** t1027 measured
+that **10 of the 50 corpus sites carrying an iframe write `frameborder="0"`**, and they were matching
+Chrome **because we had no border to remove** — the agreement-by-accident this window keeps finding.
+Landing `iframe { border: 2px inset }` on its own would have traded ten working sites for the rest,
+which is precisely the trade THE RATCHET refuses. Both rules land together or neither does.
+
+⚠⚠ **`border-width: 0`, NOT `border: none`, AND CHROME'S OWN NUMBERS DECIDE IT.** Under
+`frameborder="0"` Chrome reports `border = 0px **inset**` — the width goes to zero and **the style
+survives**. `border: none` would compute the style away too and disagree on a property a page can read
+back. The distinction is invisible in the geometry and visible in `getComputedStyle`, which is exactly
+the kind of thing that is only ever found by asking the reference instead of matching a rect.
+
+⚠⚠ **AND IT IS A UA ATTRIBUTE SELECTOR RATHER THAN A PRESENTATIONAL HINT — DELIBERATELY, BECAUSE
+t1026 WROTE DOWN WHY.** Chrome maps `frameborder` as a hint on `border-width`; our hint block is
+**prepended below the UA sheet** (t1026 recorded this as *"deliberate and conservative … if one ever
+appears the UA value is the one a page cannot have asked for"*). Adding a UA `border` to `iframe`
+**is** that day arriving: a hint would now LOSE to the rule above it. Same origin plus higher
+specificity reproduces Chrome's four computed values exactly with no cascade surgery.
+
+> **The latent tie t1026 named became real the moment this tick added the rule it was waiting for.**
+> The note cost nothing to write and saved this tick from shipping a `frameborder` that silently did
+> nothing. *ASK WHAT TIE YOUR FIX BREAKS* — and t1026 had already asked it.
+
+RATCHET: parity **106/106 across 32 pages** (was 103/103), `manuk-layout` **130/130**, `manuk-css`
+**52/52**. The iframe battery goes **20/23 → 21/23**. Nothing traded.
+
+GATE: `tests/wpt/corpus/box-model.html`, 2 probes → 5, **still page 32 of 32, so it costs the wall
+nothing** — the fourth tick this window to use that free slot. RED-proven twice, disjoint on own
+geometry:
+
+```text
+   A  delete `iframe { border: 2px inset }`      p-ifb-bare 300x150 vs 304x154 · p-ifb-one same
+   B  delete the `frameborder` rule              p-ifb-zero 304x154 vs 300x150
+```
+
+⚠ **`p-ifb-one` (`frameborder="1"`, which must KEEP the border) is what stops the fixture being
+satisfied by honouring ANY `frameborder` attribute**, and `p-ifb-zero` is the ten-site regression
+guard. Neither is decoration; without them the gate passes for two different wrong engines.
+
+⚠ **STILL OPEN on `<iframe>`, unchanged and re-stated so it is not lost**: a percentage height
+(`height:50%` in a definite-height parent) does not resolve — 300×150 here, 300×100 in Chrome — and it
+is not iframe-specific (t1027 measured it on `<canvas>` and `<img>` too).
+
+⚠⚠⚠ **THE WALL WENT RED, AND THE GATE WAS THE THING THAT WAS WRONG.** `G_IFRAME` asserted a sized
+iframe lays out at **400x200** and an unsized one at **300x150** — and `node_rects` reports the
+**BORDER box**. Those are **content**-box numbers. They were right for exactly as long as we had no
+border at all, so **the first tick to make us more correct turned that gate into a red wall.**
+
+⚠ **The replacement values are MEASURED, and that ordering is the whole discipline** — this loop has
+banked *a gate whose Chrome number was REASONED, not measured, turns the FIX into a red wall*, and
+the temptation here is to "obviously" add 4 and move on:
+
+```text
+   headless Chrome, getBoundingClientRect, same markup
+     <iframe width=400 height=200>   border-box 404x204   computed w/h 400px/200px
+     <iframe>                        border-box 304x154   computed w/h 300px/150px
+     both: border-top-width 2px, box-sizing content-box
+```
+
+The **content** box is unchanged at 400x200 and 300x150 — the dimension attribute and the default
+object size both still do exactly what the gate was written to protect — and the +4 per axis is the
+border it had never accounted for. ⚠⚠ **The assertion stays an exact equality**, so the bug it was
+born for (an iframe at ZERO width, 23% of the web) still fails it. A gate corrected to a measured
+reference is not a gate relaxed to fit a tick, and the difference is whether the new number came from
+the reference or from the diff.
+
+PERF: one UA rule and one attribute-selector rule; `RuleIndex` already keys attribute selectors.
+F1/F2 green on the wall.
+
+WIKI: `docs/wiki/box-layout.md` — "The iframe border, and the ten sites that were passing without it".
+
 ## Tick 1036 — the seventh refutation, and the rule that says stop (2026-08-08)
 
 TICK SHAPE: measurement — one more `reading_order` mechanism cleared, and **the decision to abandon

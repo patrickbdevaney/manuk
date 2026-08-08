@@ -7,4 +7,20 @@
   <div id="p-content-box" style="box-sizing:content-box;width:100px;height:40px;padding:20px;border:5px solid #333;background:#8ab"></div>
   <!-- border-box: total width stays 150, content shrinks -->
   <div id="p-border-box" style="box-sizing:border-box;width:150px;height:80px;padding:20px;border:5px solid #333;background:#b8a;margin-top:10px"></div>
+
+  <!-- ── t1037: `<iframe>` is the ONLY replaced element with a UA border — `2px inset`, asked of
+       Chrome directly (surface audit #43). Without it every unstyled iframe is 4px small on BOTH
+       axes, on the 29.2% of the corpus that ships one.
+
+       `p-ifb-zero` is NOT decoration: 10 of the 50 corpus iframe sites write `frameborder="0"`, and
+       before this tick they passed BY ACCIDENT — we matched Chrome because we had no border to
+       remove. Landing the border without this row REGRESSES all ten.
+
+       `p-ifb-one` is the row that stops the fixture being satisfied by honouring ANY `frameborder`
+       attribute: `frameborder="1"` must KEEP the border. And the rule is `border-width:0`, not
+       `border:none`, because Chrome leaves the computed style at `inset` and only zeroes the
+       width — a page can read that back. -->
+  <iframe id="p-ifb-bare"></iframe>
+  <iframe id="p-ifb-zero" frameborder="0"></iframe>
+  <iframe id="p-ifb-one" frameborder="1"></iframe>
 </body></html>

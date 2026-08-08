@@ -243,6 +243,32 @@ option, optgroup { display: none; }
    proportional to the control and lands on every form on the web that styles its body text.
    ⚠ Still UA-origin, so an author's OWN `line-height` on the control wins — asserted in the gate
    (`line-height:2` on a textarea is 98 in both engines, before and after). */
+/* ── **`iframe { border: 2px inset }` — CHROME'S UA SHEET, AND WE HAD NO RULE AT ALL** (t1037).
+   Asked of Chrome directly rather than recalled (`getComputedStyle` over every HTML element, surface
+   audit #43): `<iframe>` is the ONLY replaced element carrying a UA border, and without it every
+   unstyled iframe is 4px small on BOTH axes — `304x154` in Chrome against our `300x150` — on the
+   29.2% of the corpus that ships one.
+
+   ⚠⚠⚠ **THE SECOND RULE IS NOT OPTIONAL AND THE FIRST MUST NOT LAND WITHOUT IT.** 10 of those 50
+   corpus sites write `frameborder="0"`, and they were passing BY ACCIDENT — we matched Chrome there
+   because we had no border to remove. Adding the border alone would REGRESS every one of them, which
+   is the exact shape of a fix that trades one class of the web for another.
+
+   ⚠⚠ **`border-width: 0`, NOT `border: none`, and Chrome's own numbers are why.** Measured:
+
+     <iframe>                     border = 2px inset   304x154
+     <iframe frameborder="0">     border = 0px INSET   300x150   <- the STYLE survives
+     <iframe frameborder="1">     border = 2px inset   304x154
+     <iframe frameborder="no">    border = 0px inset   300x150
+
+   The style stays `inset` and only the width goes to zero — the signature of a hint on
+   `border-width`. `border: none` would compute the style away too and disagree with Chrome on a
+   property a page can read back. Written as a UA attribute selector rather than a presentational
+   hint deliberately: t1026 recorded that our hint block is prepended BELOW the UA sheet, so a hint
+   would LOSE to the rule above it. Same origin, higher specificity, no cascade surgery. */
+iframe { border: 2px inset; }
+iframe[frameborder="0"], iframe[frameborder="no"] { border-width: 0; }
+
 input, select, textarea, button {
   font-family: Arial, sans-serif;
   font-size: 13.333px;

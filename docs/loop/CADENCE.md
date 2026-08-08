@@ -11,12 +11,12 @@
 
 | | value | over |
 |---|---|---|
-| ticks landed | **748** | ticks 1–1035 |
-| median tick cycle | **26m** | 747 intervals |
-| median, last 10 | **25m** | 10 intervals |
+| ticks landed | **749** | ticks 1–1037 |
+| median tick cycle | **27m** | 748 intervals |
+| median, last 10 | **38m** | 10 intervals |
 | fastest / slowest | 5s / 5.4d | |
-| **ticks per hour** | **1.11** | 675.8h elapsed |
-| median verify wall | **63s** | 687 ticks |
+| **ticks per hour** | **1.11** | 676.5h elapsed |
+| median verify wall | **63s** | 688 ticks |
 | wall trend | 39s → 13m — getting slower ⚠️ | first 3 vs last 3 |
 
 The **cycle** is the real unit: implement → debug → verify wall → land. The wall is only part of
@@ -28,10 +28,10 @@ it, and a wall that grows taxes every future tick, so it is tracked separately f
 
 * **capabilities asserted** (`G_CAPABILITY`): 48 → **81**
 * **live gates**: 27 → **428**
-* **✅ rows in the capability ledger**: 144 → **518**
+* **✅ rows in the capability ledger**: 144 → **519**
 * **Bar 0 — oracle hangs**: 0 of 265 sites
 
-**341 of 748 ticks** (46%) moved a
+**341 of 749 ticks** (46%) moved a
 user-visible capability. The rest were instruments, infrastructure and corrections — and the
 ledger says the corrections were not overhead: three of its top three priorities were phantoms,
 and finding that out redirected everything after it.
@@ -90,7 +90,7 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 
 ## What a capability costs
 
-* **341** capability ticks, median cycle **26m**
+* **341** capability ticks, median cycle **27m**
 * median diff per tick: **+258 / −34** lines across 8 files
 
 ## Every tick
@@ -845,5 +845,6 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 | **1033** | 2026-08-08 08:11 | 16m | measurement | 13m | +145/−32 | 428 | 81 | 56.0% · | 41 rows say `reading_order` is not a row-construction defect, and that is the result (2026 |
 | **1034** | 2026-08-08 08:45 | 35m | primitive | 13m | +273/−33 | 428 | 81 | 56.0% · | I tried to blame the instrument and the instrument came back clean (2026-08-08) |
 | **1035** | 2026-08-08 08:51 | 6m | primitive | 13m | +129/−32 | 428 | 81 | 56.0% · | an atomic inline is placed by its LINE BOX, and §10.3.3 was displacing it by exactly `left |
+| **1037** | 2026-08-08 09:31 | 40m | primitive | 13m | +239/−37 | 428 | 81 | 56.0% · | the border 10 sites were passing without, and the rule that had to land in the same tick ( |
 
 *`·` after a WPT figure means **carried forward**, not measured this tick.*

@@ -6808,3 +6808,47 @@ of `<a>` siblings gave 24 on-screen inversions — is unchanged at 24. **A fix c
 Chrome-exact, gated and twice RED-proven and still not be the cause of the thing you were chasing.**
 What it buys is elimination: the RTL inline-block family is no longer a candidate explanation for
 that lead.
+
+## The iframe border, and the ten sites that were passing without it (t1037)
+
+`<iframe>` is the **only** replaced element Chrome gives a UA border, and we had no rule at all.
+Asked of Chrome directly (`getComputedStyle` over every HTML element — the enumeration half of
+surface audit #43), not recalled:
+
+```text
+   <iframe>                    border = 2px inset    304x154      ours 300x150
+   <iframe frameborder="0">    border = 0px INSET    300x150      ours 300x150   <- passed BY ACCIDENT
+   <iframe frameborder="1">    border = 2px inset    304x154      ours 300x150
+   <iframe frameborder="no">   border = 0px inset    300x150
+```
+
+### The second rule is the tick
+
+**10 of the 50 corpus sites carrying an iframe write `frameborder="0"`**, and they matched Chrome
+*because we had no border to remove*. Landing `iframe { border: 2px inset }` alone would have traded
+ten working sites for the rest — the trade THE RATCHET refuses. Both rules land together or neither.
+
+### `border-width: 0`, not `border: none`
+
+Under `frameborder="0"` Chrome reports `border = 0px **inset**`: the width goes to zero and the style
+survives. `border: none` would compute the style away too and disagree on a property a page can read
+back. **The distinction is invisible in the geometry and visible in `getComputedStyle`** — only ever
+found by asking the reference rather than matching a rect.
+
+### Why a UA attribute selector and not a presentational hint
+
+Chrome maps `frameborder` as a hint on `border-width`. Ours cannot: t1026 recorded that the hint block
+is **prepended below the UA sheet**, noting *"if one ever [declares one] the UA value is the one a page
+cannot have asked for."* Adding a UA `border` to `iframe` **is** that day. A hint would now lose to the
+rule above it, so the rule is written as `iframe[frameborder="0"], iframe[frameborder="no"] {
+border-width: 0 }` — same origin, higher specificity, Chrome's four computed values reproduced exactly,
+no cascade surgery.
+
+> **The latent tie t1026 named became real the moment this tick added the rule it was waiting for.**
+> The note cost nothing to write and saved this tick from shipping a `frameborder` that silently did
+> nothing.
+
+Gated by `box-model.html` (2 probes → 5, still page 32 of 32). RED-proven twice on disjoint own
+geometry: deleting the border rule kills `p-ifb-bare` and `p-ifb-one`; deleting the `frameborder` rule
+kills `p-ifb-zero`. ⚠ `p-ifb-one` (`frameborder="1"` must KEEP the border) stops the gate being
+satisfied by honouring *any* `frameborder` attribute; `p-ifb-zero` is the ten-site regression guard.

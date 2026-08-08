@@ -43,18 +43,39 @@ fn iframes_have_a_box_show_their_document_and_do_not_block_paint() {
     let rects = page.node_rects();
     let rect_of = |n| *rects.get(&n).expect("the iframe must have a layout box");
 
+    // ⚠⚠⚠ **THESE ARE BORDER-BOX NUMBERS AND THEY INCLUDE THE UA BORDER (t1037).** `node_rects`
+    // reports the BORDER box, and `iframe { border: 2px inset }` is Chrome's UA rule — the only
+    // replaced element that has one. This gate asserted `400x200` / `300x150`, which are the
+    // **content**-box sizes; they were right only for as long as we had no border at all, and the
+    // moment the UA rule landed this gate went red against a fix that had made us MORE correct.
+    //
+    // ⚠ **The replacement numbers are MEASURED, not derived** — the failure mode here is a gate
+    // whose reference value was reasoned, which turns the next correct fix into a red wall:
+    //
+    // ```text
+    //   headless Chrome, getBoundingClientRect on the same markup
+    //     <iframe width=400 height=200>   border-box 404x204   computed w/h 400px/200px
+    //     <iframe>                        border-box 304x154   computed w/h 300px/150px
+    //     both: border-top-width 2px, box-sizing content-box
+    // ```
+    //
+    // The content box is unchanged at 400x200 and 300x150, which is what the dimension attribute
+    // and the default object size actually set; the +4 on each axis is the border this gate had
+    // never accounted for.
     let s = rect_of(sized);
     assert!(
-        s.width == 400.0 && s.height == 200.0,
-        "G_IFRAME: a sized iframe laid out at {}x{}, expected 400x200",
+        s.width == 404.0 && s.height == 204.0,
+        "G_IFRAME: a sized iframe laid out at {}x{}, expected Chrome's border box 404x204 \
+         (content 400x200 from the dimension attributes + 2px UA border on each edge)",
         s.width,
         s.height
     );
 
     let u = rect_of(no_size);
     assert!(
-        u.width == 300.0 && u.height == 150.0,
-        "G_IFRAME: an UNSIZED iframe laid out at {}x{}, expected the spec default 300x150.\n  \
+        u.width == 304.0 && u.height == 154.0,
+        "G_IFRAME: an UNSIZED iframe laid out at {}x{}, expected Chrome's border box 304x154 \
+         (the 300x150 default object size + the 2px UA border).\n  \
          An iframe has no intrinsic size to fall back on, so with no default it collapses to nothing \
          and the embed is invisible before any question of its content arises. `iframe` was in no \
          replaced-element list at all, which is why it was ZERO WIDTH on 23% of the web.",
