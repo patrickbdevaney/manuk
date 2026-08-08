@@ -1329,3 +1329,70 @@ gates already build one crate's test target, not the workspace.
 `scripts/` or the workspace build profile. The one an engine tick could make — fewer, larger test
 binaries — is blocked by its own measured constraint: **one `#[test]` per JS gate, because more than
 one per binary SIGSEGVs** on SpiderMonkey teardown.
+
+## Audit #38 — tick 1024 (2026-08-08), wall total **87s**
+
+```text
+   32s  T                 37%    (the cargo-test bucket)
+   20s  G6                23%    clickability
+    6s  G1                 7%    real-site fidelity
+    6s  D                  7%
+    5s  P                  6%    parity, 31 pages vs headless Chrome
+    3s  F                  3%    perf floors (deliberately serial)
+    1s  F4 · 1s B          2%
+   ────────────────────────────
+   74s attributed · 13s (15%) unattributed
+```
+
+⚠⚠⚠ **THE HEADLINE IS THE ONE THIS LEDGER HAS BEEN WAITING FOR: 87s AGAINST A 300s TIER-0 TARGET — 29%
+OF BUDGET — AND THE UNATTRIBUTED SHARE IS 15%, DOWN FROM 77% AT AUDIT #37.** ⚠ **Stated as a
+measurement, not a fix I can claim**: audit #37's 77% was dominated by the `_PREWARM_END=0` defect it
+localised to one line of `scripts/`, and this audit does not establish whether that line changed or
+whether this run was simply warm where #37's was cold. Both walls in this session read `gate 87s ·
+build 1s` — a **build of 1s** says warm, and #37's 1330s total says cold. **The honest reading is that
+the two audits measured different thermal states, and the 15% is a WARM-wall number that must not be
+diffed against a cold one.** That is the same class as the sweep denominators (t1022): a comparison is
+only a comparison when both sides were produced the same way.
+
+### The four questions
+
+**(1) REDUNDANCY** — unchanged from #37: ~1.5s of SpiderMonkey startup × 19 launched `manuk-page`
+gates ≈ 29s, recoverable with a shared test binary without making any gate less independently
+failable. Still `scripts/` + the build profile. Still **not mine to take.**
+
+**(2) PARALLELISM** — nothing newly serialised. `F`/`F4` are deliberately serial (a benchmark sharing
+the machine is not a benchmark); the 24 launches remain concurrent.
+
+**(3) CACHING** — unchanged: the uncached cost is the **link**, and the rigor-preserving fix is a
+faster linker, not a smaller check.
+
+**(4) SCOPE** — unchanged; gates build one crate's test target.
+
+### ⚠⚠ The one thing this window ADDED to the wall, and it was priced rather than assumed
+
+Tick 1020 added `tests/wpt/corpus/media-interaction.html` — a fifth parity page-worth of probes, and
+the first thing this loop has put **into** the wall in some time. Measured directly, two runs each
+side, same box, same minute:
+
+```text
+   parity WITH  media-interaction (31 pages)    3.94s · 3.84s
+   parity WITHOUT it              (30 pages)    3.80s · 3.89s
+```
+
+**Zero, and the ranges overlap.** ⚠ That is not luck and it is worth writing down as a rule, because
+it tells the loop how much more of this it can afford: `parity.rs` bounds Chrome at **`CHROME_JOBS =
+8` in flight**, so 30 pages and 31 pages are both **four launch rounds** (8+8+8+6 vs 8+8+8+7).
+
+> **A parity fixture is FREE until it crosses a multiple of eight.** The marginal cost of the next
+> page is zero up to 32; the 33rd buys a whole extra Chrome round. So the rigor-preserving way to add
+> real-site coverage to the wall is to **fill the current round before opening a new one** — and the
+> loop currently has **one free slot** (31 of 32).
+
+This is the counterpart to #37's finding that *adding a gate does not tax the wall; adding it to the
+launch list does*. Parity has no launch list — every `.html` in `tests/wpt/corpus/` is swept — so it
+is the **one place an agent tick can add wall coverage without the observer**, and now it has a price
+tag: free, eight at a time.
+
+**NOTHING TRIMMED, AND THAT IS AGAIN THE RESULT.** At 29% of the Tier-0 budget the wall is not the
+constraint on anything, and every optimisation the numbers point at lives in `scripts/` or the build
+profile.

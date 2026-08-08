@@ -46371,6 +46371,69 @@ PERF: none — one UA rule and one narrowed branch in a cascade that already ran
 WIKI: `docs/wiki/css-cascade.md` — where Chrome draws the form-control `box-sizing` line, and why a
 layout-crate test cannot see it.
 
+## Tick 1024 — the wall audit, and a parity fixture is free until it crosses a multiple of eight (2026-08-08)
+
+TICK SHAPE: measurement — the wall-time audit (cadence: every 20; last at 1003; `tick.sh` refuses to
+land past it), banked as audit #38 in `docs/loop/WALL-AUDIT.md`.
+
+```text
+   32s  T   37%     20s  G6  23%     6s  G1  7%     6s  D  7%     5s  P  6%     3s  F  3%
+   ────────────────────────────────────────────────────────────────────────────────────────
+   87s total · 74s attributed · 13s (15%) unattributed · TIER-0 TARGET 300s
+```
+
+⚠ **THE 15% UNATTRIBUTED IS NOT A WIN I CAN CLAIM, AND SAYING SO IS THE POINT.** Audit #37 read
+**77%** unattributed of a **1330s** total, dominated by the `_PREWARM_END=0` defect it localised to
+one line of `scripts/`. This audit does not establish whether that line changed. What it does
+establish is that both walls this session reported `build 1s` — **warm** — where #37's 1330s is a
+cold-wall number. **The two audits measured different thermal states, and a 77% → 15% "improvement"
+across them is not a comparison.** Same class as t1022's sweep denominators: a comparison is only a
+comparison when both sides were produced the same way.
+
+⚠⚠⚠ **AND THE FINDING THAT IS ACTUALLY ACTIONABLE, BECAUSE IT PRICES THE ONE THING I ADDED.** Tick
+1020 put `tests/wpt/corpus/media-interaction.html` into the wall — five probes, the first thing this
+loop has added to the wall in a while. Measured rather than assumed, two runs each side, same box,
+same minute:
+
+```text
+   parity WITH  media-interaction (31 pages)    3.94s · 3.84s
+   parity WITHOUT it              (30 pages)    3.80s · 3.89s
+```
+
+**Zero, and the ranges overlap.** That is not luck: `parity.rs` bounds Chrome at `CHROME_JOBS = 8` in
+flight, so 30 and 31 pages are both **four launch rounds** (8+8+8+6 against 8+8+8+7).
+
+> **A parity fixture is FREE until it crosses a multiple of eight.** The marginal page costs nothing
+> up to 32; the 33rd buys a whole extra Chrome round. The rigor-preserving way to add real coverage to
+> the wall is therefore to **fill the current round before opening a new one** — and there is
+> currently **one free slot (31 of 32)**.
+
+⚠⚠ **This is the counterpart to audit #37's rule, and it matters more than it looks.** #37 established
+that *adding a gate does not tax the wall; adding it to `verify.sh`'s launch list does* — and that
+list is observer-owned, so 408 of 427 gate files sit outside the wall and the agent cannot change it.
+**Parity has no launch list**: every `.html` in `tests/wpt/corpus/` is swept. So it is the one place an
+agent tick can add wall-enforced coverage without the observer, and it now has a price tag: **free,
+eight at a time.**
+
+THE FOUR QUESTIONS, answered: **redundancy** — ~1.5s SpiderMonkey startup × 19 gates ≈ 29s, still
+recoverable only in `scripts/` or the build profile; **parallelism** — nothing newly serialised, `F`/`F4`
+deliberately serial; **caching** — the uncached cost is the link, and the fix is a faster linker, not a
+smaller check; **scope** — gates already build one crate's test target.
+
+**NOTHING TRIMMED, AND THAT IS THE RESULT.** At 29% of the Tier-0 budget the wall is not the
+constraint on anything.
+
+RATCHET: nothing changed — no code in this tick. `media-interaction.html` was moved out and back to
+run the A/B and `git status` confirms the corpus is byte-identical to HEAD.
+
+GATE: none — this is the cadence audit itself. ⚠ Its own falsifiable content is the A/B above: an
+audit that asserted "the fixture I added is cheap" without running both arms would be the confession-
+as-claim failure #37 named.
+
+PERF: none — measurement only.
+
+WIKI: none — the artefact is `docs/loop/WALL-AUDIT.md` audit #38. [no-pattern]
+
 ## Tick 1023 — the re-baseline, and the flat band was PREDICTED seven ticks before it was measured (2026-08-08)
 
 TICK SHAPE: measurement — a clean `--jobs 2` release sweep of the 200-site CrUX corpus, banked as
