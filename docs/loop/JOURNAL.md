@@ -46371,6 +46371,65 @@ PERF: none — one UA rule and one narrowed branch in a cascade that already ran
 WIKI: `docs/wiki/css-cascade.md` — where Chrome draws the form-control `box-sizing` line, and why a
 layout-crate test cannot see it.
 
+## Tick 1012 — the check that PROPOSES a correction and never applies it (2026-08-07)
+
+TICK SHAPE: measurement — the constitution check, due at 1012 (last 1004). Banked as **check #91**.
+
+⚠⚠⚠ **GATE, AND FOR THE FIRST TIME THE ANSWER COMES WITH A MATCHED NUMBER RATHER THAN AN ARGUMENT.**
+Every previous window closed with some version of *"the fixes are Chrome-exact and the metric did not
+move"*. t1008's common set — 108 sites scored in BOTH sweeps, same corpus, same binary class — moved
+**+2.01 points with M1 +2**, and `reading_order` non-clean fell 48 → 40. The question check #83 left
+open, *can M1 see engine work at all*, now has a **yes** attached to a number.
+
+⚠⚠⚠ **AND THE PROCEDURAL FINDING IS THE ONE WORTH KEEPING: CHECK #90 PROPOSED A CORRECTION TO PART
+VI AND NOTHING APPLIED IT.** Step 3 of this instrument's own protocol says *"CORRECT PART VI"*. Check
+#90 wrote *"Proposed reading: tables, inline composition, **floats/clear**, and scroll containers"*
+into its log — and eight ticks later `CONSTITUTION.MD` still said *tables, inline composition and
+scroll containers*, while the loop had shipped three float defects against that row.
+
+> **A correction recorded in the log of the instrument is not a correction to the document the
+> instrument exists to keep true.** It is *"a comment cannot go red"*, one level up: the proposal
+> reads as a decision, and nothing checks whether it landed.
+
+So this check **edits `CONSTITUTION.MD`**, and H0.1's residue row now names two more categories:
+
+```text
+   BEFORE  tables · inline composition · scroll containers
+   AFTER   tables · inline composition · FLOATS AND CLEAR (#90, t1000-1002, 60.4% weight)
+           · OUT-OF-FLOW BOXES UNDER A TRANSFORMED CONTAINING BLOCK (#91, t1005)
+           · scroll containers
+```
+
+⚠⚠ **AND THE SECOND CATEGORY IS ONE NO EARLIER NEGATIVE RESULT COULD HAVE FOUND.** Check #82
+narrowed this row with a 25-case composed-width fixture that came back 24/25 exact, and every battery
+from t984 to t1002 used **in-flow** boxes. An out-of-flow box is not in the subtree a transform is
+baked into, so it was **structurally outside every one of those fixtures** — which is why a category
+at `position:absolute` 76% × `transform:` 65.5% survived nine batteries. *A negative result is only
+as wide as the box types its fixture instantiates.*
+
+⚠⚠ **I5 UNDER A THIRD KIND OF PRESSURE, AND IT IS THE ONE THAT PINS THE ENGINE TO A BUG.** #89
+catalogued RED recipes that came back green; #90, recipes written before running; #91 is
+`g_transform_3d.rs` asserting a **reference** value that was reasoned rather than measured — 100×40
+where Chrome gives 100×28.28 — so correcting the engine turned the gate red. **The self-audit cannot
+see this class**: its falsifiability check asks whether a gate *declares* how to break it, and all
+three gates do go red when mutated, just for the wrong reason or against the wrong number.
+
+**STEER (in #91, and it is the tick-1013 plan):** (1) **back to capability** — five measurement ticks
+in a row, each justified and the balance now owed; the corpus-grep-ranked unbatteried areas are
+`display:inline-block` + `vertical-align` (74.3% / 71.9%) and `white-space:nowrap` +
+`text-overflow:ellipsis` (72.5% / 60.2%), both width mechanisms feeding `reading_order`. (2)
+`bhramarah.in`'s `reading_order` 18 → 40 is still open, and its next step is a **synthetic**
+reproduction rather than a cut from a page scoring 33.4% with 1,380 misplaced elements. (3) **Do not
+build `hyphens: auto`** — recorded so the next surface audit cannot re-rank it from the corpus number
+alone.
+
+RATCHET: nothing changed — no engine code. `CONSTITUTION.MD` PART VI H0.1 is edited, deliberately and
+with the evidence, per step 3 of the check's own protocol.
+
+PERF: none — measurement only.
+
+WIKI: none — the check's home is `docs/loop/CONSTITUTION-CHECK.md`. [no-pattern]
+
 ## Tick 1011 — the self-audit, and the one thing it cannot see is the thing this window kept finding (2026-08-07)
 
 TICK SHAPE: measurement — the self-audit, due every 10 ticks (last at 1001). **61 checks green, one

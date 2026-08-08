@@ -6225,3 +6225,120 @@ inheriting this one would have argued for exactly what the wall audit forbids: d
    absorbing the top margin (§9.5.2 — an exact 10px, isolated, the plain clearfix already exact), and
    `border-style: hidden` in a collapsed table (needs a `BorderStyle::Hidden` variant **and** per-side
    storage; do not build the half a uniform field can express).
+
+## Check #91 — tick 1012 (2026-08-07)
+
+**Horizon:** H0 as re-scoped by **PART VII**, instrumented as **M1 on the in-scope CrUX corpus**.
+Latest banked: **t1008 — M1 27/113 = 23.9%, mean shape 58.1%**, and for the first time a
+**matched-predecessor comparison** rather than a standalone reading.
+
+### → Gate, or scoreboard?
+
+**GATE, and this is the first check that can say so with a MATCHED number rather than an argument.**
+
+```text
+   the COMMON SET — 108 sites scored in BOTH t997 and t1008, same corpus, same binary class
+     band            56.63%  ->  58.64%      +2.01 pts
+     M1                 24   ->     26        +2 sites
+     reading_order non-clean, over the scored set    48  ->  40
+```
+
+Every previous window closed with some version of *"the fixes are Chrome-exact and the metric did
+not move"*. This one has eight geometry fixes and a band that moved in the direction they aim, on a
+denominator that did not change under them. ⚠ It still attributes nothing to any single fix — t974's
+rule stands — but the standing question *"can M1 see engine work at all?"*, open since check #83,
+now has a **yes** attached to a number.
+
+⚠⚠ **AND THE TWO LOUDEST FALLERS WERE ARTEFACTS, WHICH IS THE THIRD TIME THAT RULE HAS PAID.**
+`merchant.upi9.pro` read 0.5000 in the sweep and **0.872340 twice** solo — byte-identical to t997;
+`mobcup.fm` 0.7931 and **1.000000 twice**. The honest correction is *upward* (+2.55), and t1008
+published **+2.01** anyway, because substituting re-measurements into a sweep is exactly the freedom
+that lets a number be steered.
+
+⚠⚠⚠ **AND THE OLD-BINARY CONTROL SETTLED THE ONLY REMAINING REGRESSION CLAIM (t1009).**
+`www.livescore.cz` reads **0.4261 on the t997 binary rebuilt tonight** and 0.4261 on the new one —
+the whole 0.070 "fall" is the site. `bhramarah.in` is 88% site drift, leaving **seven tenths of a
+point** attributable across one site of 108. **Fourth time this control has changed a verdict, and it
+has never once confirmed the naive reading.**
+
+### → PART VI, corrected in the document and not only proposed
+
+**H0.1's residue row now names FLOATS and OUT-OF-FLOW-UNDER-TRANSFORM**, and the edit is applied to
+`CONSTITUTION.MD` this tick.
+
+⚠⚠⚠ **THE PROCEDURAL FINDING THAT MADE THAT NECESSARY: check #90 PROPOSED adding floats to that row
+and nothing applied it.** Step 3 of the check's own protocol says *"CORRECT PART VI"*, and the last
+check wrote *"Proposed reading: …"* into the log instead. Eight ticks later the constitution still
+said *tables, inline composition and scroll containers*, while the loop had shipped three float
+defects against it. **A correction recorded in the log of the instrument is not a correction to the
+document the instrument exists to keep true** — and this is the same failure shape as
+*"a comment cannot go red"*, one level up. From here the check EDITS `CONSTITUTION.MD`; the log
+records what was edited and why.
+
+**The new category, and why no earlier negative result could have found it.** Check #82 narrowed the
+residue with a 25-case composed-width fixture that came back 24/25 exact, and every battery from t984
+to t1002 used **in-flow** boxes. An out-of-flow box is not in the subtree a transform is baked into,
+so it was structurally outside every one of those fixtures. t1005 measured it: a `scale(2)` container
+left its abspos child at the untransformed place *and* the untransformed size, while the in-flow and
+`position:relative` children of the same container were exactly right the whole time.
+
+### → Is `orient`'s ranking still the north star?
+
+**Yes, and this window sharpened the rule rather than bending it.** Two additions, both from ticks
+that did NOT build anything:
+
+1. **PRICE THE ORACLE'S ABILITY TO SEE IT, NOT ONLY THE CONSTRUCT (t1010).** Surface audit #41 found
+   `hyphens: auto` had no map row and priced it at 8.8% of the corpus — a well-ranked tick. One
+   fixture, run before any code: **headless Chrome lays `hyphens:auto` out identically to
+   `hyphens:none`** (60×40 at a 60px column, `en` and `de`), because its hyphenation dictionaries are
+   a separately-provisioned component. We do not hyphenate either, so we agree **by accident**, and
+   building it correctly would have moved every box below the paragraph and *lowered* the score.
+   The general class is larger than `--hide-scrollbars`: **any capability whose reference behaviour
+   is provisioned separately from the browser binary is invisible to a headless oracle, and the
+   invisibility looks exactly like agreement.**
+2. **The battery-selection rule from #90 held** — grep the corpus, rank, battery the top unbatteried
+   one — and produced transforms (65.5%) after floats (60.4%).
+
+### → Is any invariant being bent?
+
+**No, and I5 came under a THIRD kind of pressure — the one that pins the engine to a bug.**
+
+```text
+   #89  six RED recipes that came back GREEN                 — honest failures of a proof that was RUN
+   #90  two RED recipes written into a header BEFORE running — hypotheses wearing a receipt's clothes
+   #91  a gate asserting a REFERENCE value that was reasoned rather than measured
+```
+
+`g_transform_3d.rs` — written to kill a `_ => {}` arm whose comment had stopped being re-checked —
+took the number for its own exclusion row **from the same reasoning**, asserting `rotate3d(1,0,0,45deg)`
+at 100×40 and stating *"Chrome leaves the box 100 x 40 in this 2D projection."* Chrome gives
+**100 × 28.28**.
+
+> **A gate whose reference value is reasoned rather than measured does not merely fail to catch the
+> bug. It PINS the engine to it, and correcting the engine turns the gate red.** The discriminator
+> against retuning-to-land-your-own-tick is that the new number comes from a fresh measurement of the
+> REFERENCE, printed in the tick. Exclusion rows are where this hides best: nobody expects to have to
+> measure a non-effect.
+
+⚠ **And the self-audit cannot see it (t1011).** Its falsifiability section checks that every gate
+*declares how to break it* — 16/16 green — and cannot check whether the declaration is TRUE. All
+three gates above DO go red when mutated; they go red for the wrong reason, or against the wrong
+number. **Proposed prescribed-list change: `declares how to break it` → `declares how to break it,
+AND the declaration was RUN`.** Left as a proposal deliberately: changing what the self-audit checks
+is a change to the instrument that judges the loop, and per the finding above a proposal that is only
+logged does not land — so it is named here as **the next tick that touches the harness-adjacent
+instrument the agent DOES own**, not as a note.
+
+### STEER (the tick-1013 plan)
+
+1. **Back to capability on the render leg** — five measurement ticks in a row is the cadence the
+   board warns about, and they were each justified (sweep → control → oracle-blindness → self-audit →
+   this), but the balance is now owed. The corpus-grep-ranked unbatteried areas are
+   **`display:inline-block` + `vertical-align` (74.3% / 71.9%)** and **`white-space:nowrap` +
+   `text-overflow:ellipsis` (72.5% / 60.2%)** — both width mechanisms, both feeding `reading_order`.
+2. **`bhramarah.in`'s `reading_order` 18 → 40 is still open and still un-reduced.** It was looked at
+   and put down (t1010): shape 33.4% with 1,380 misplaced elements is not a reduction target. The
+   honest next step is a *synthetic* reproduction — an abspos box under a transform we get wrong —
+   not a cut from that page.
+3. **Do not build `hyphens: auto`.** Recorded here so the next surface audit cannot re-rank it from
+   the corpus number alone.
