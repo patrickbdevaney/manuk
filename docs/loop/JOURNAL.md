@@ -46371,6 +46371,76 @@ PERF: none — one UA rule and one narrowed branch in a cascade that already ran
 WIKI: `docs/wiki/css-cascade.md` — where Chrome draws the form-control `box-sizing` line, and why a
 layout-crate test cannot see it.
 
+## Tick 1009 — the old-binary control, and 88% of the fall belongs to the site (2026-08-07)
+
+TICK SHAPE: measurement — the OLD-BINARY CONTROL t1008 named as its own residue, run before anything
+else, exactly as that entry promised. **The t997 tree (`427f8f99`) rebuilt and the two reproducing
+fallers re-measured with BOTH binaries in the same hour.**
+
+⚠⚠⚠ **THE CONTROL CLEARS ONE SITE ENTIRELY AND SHRINKS THE OTHER BY A FACTOR OF EIGHT.**
+
+```text
+                        t997 sweep   OLD binary, NOW (x2)   NEW binary, NOW (x2)   engine's share
+   www.livescore.cz       0.4955     0.426089 / 0.426809    0.426092 / 0.427020      0.000
+   bhramarah.in           0.3958     0.343908 / 0.343908    0.336698 / 0.336698     -0.0072
+```
+
+**`www.livescore.cz` is not a regression at all.** The old binary, built from the t997 tree and run
+tonight, reads **0.4261** — the same as the new one to three decimals. The entire 0.070 "fall" is the
+site having changed in the fifteen hours between the two sweeps. Nothing is attributable to this
+loop.
+
+**`bhramarah.in` is 88% site drift and 12% ours.** The site moved 0.3958 → 0.3439 on the *unchanged*
+binary; the engine accounts for **0.3439 → 0.3367, seven tenths of a point** on one site of 108.
+
+⚠⚠ **AND THE RESIDUAL IS NOT THE SHAPE NUMBER — IT IS THE JARRING COLUMN, WHICH MOVED THE WRONG
+WAY.** A −0.007 shape delta is inside what this instrument can resolve on a live site; the counts
+are not:
+
+```text
+   bhramarah.in       reading_order   overlap
+     OLD binary, now        18          26
+     NEW binary, now        40          33
+```
+
+`reading_order` **more than doubled on this one site** while falling 48 → 40 across the scored
+corpus. That is a redistribution worth naming rather than averaging away: this window's fixes move
+absolutely-positioned boxes under transformed containing blocks, and a box that was previously left
+at its untransformed position can now land somewhere that *counts* as out of reading order while
+being geometrically right — or the page has a transform we now apply and should not. **Both readings
+are testable and neither is tested here.** Named as the open item with its next step: reduce
+`bhramarah.in` to a fixture and put the disagreeing box's id in it, per the standing rule that a
+divergence without an id on the box is a story.
+
+⚠ **WHAT THE CONTROL COST, AND WHY IT IS STILL THE CHEAPEST INSTRUMENT HERE.** Two release builds
+(~3 minutes each) and four solo measurements. Against that: it converted *"two sites regressed"* —
+which under the RATCHET is a revert-or-explain obligation on eight landed fixes — into *"one site
+did not move and the other moved seven tenths of a point"*. **This is the fourth time the old-binary
+control has changed a verdict** (t799-807, t846-852, t974, and now), and it has never once confirmed
+the naive reading.
+
+⚠ **A SECOND, INDEPENDENT DERIVATION AGREES WITH t1008's DIRECTION.** `fidelity-progress.sh` appended
+its own row from the same rows file, on its own definitions (a different scored denominator and
+tolerance):
+
+```text
+   t997    scored 109   shape>=0.75  29 = 14.5%   shape_mean 57.1%
+   t1008   scored  99   shape>=0.75  34 = 17.0%   shape_mean 60.4%
+```
+
++2.5 points on its `shape>=0.75` and +3.3 on its mean, against the +2.01 common-set band t1008
+published. **Two derivations that do not share a denominator agreeing on the sign and roughly on the
+size is worth more than either number alone** — this loop's own rule from t745-751, applied in the
+direction it was written for.
+
+RATCHET: nothing changed — no engine code in this tick. The `RATCHET.tsv` / `FIDELITY-PROGRESS.tsv` /
+`DEATH-TAIL.tsv` rows in this commit are t1008's own post-push ledger output, carried here because
+they were written after that tick's commit.
+
+PERF: none — measurement only.
+
+WIKI: none — the artefact is the control table above; its home is this entry. [no-pattern]
+
 ## Tick 1008 — the sweep that prices eight geometry fixes, against a matched predecessor (2026-08-07)
 
 TICK SHAPE: measurement — a clean `--jobs 2` sweep of the 200-site CrUX corpus, banked as

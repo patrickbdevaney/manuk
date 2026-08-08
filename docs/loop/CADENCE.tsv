@@ -722,3 +722,4 @@ tick	sha	epoch	iso	delta_s	shape	wall_s	files	added	deleted	gates	claims	wpt_pas
 1006	49d25631	1786144140	2026-08-07T19:09:00-04:00	2031	primitive	808	9	617	10	428	81	3896	6960	0	509	0	the three properties that were absent, and the order no declaration decides (2026-08-07)
 1007	770df783	1786146240	2026-08-07T19:44:00-04:00	2100	primitive	808	8	274	37	428	81	3896	6960	0	510	0	the gate asserted the reasoned number, so fixing the bug looked like a regression (2026-08-07)
 1008	ac2b9644	1786151695	2026-08-07T21:14:55-04:00	5455	measurement	808	5	383	3	428	81	3896	6960	0	510	0	the sweep that prices eight geometry fixes, against a matched predecessor (2026-08-07)
+1009	190b51f1	1786153778	2026-08-07T21:49:38-04:00	2083	measurement	808	6	105	32	428	81	3896	6960	0	510	0	the old-binary control, and 88% of the fall belongs to the site (2026-08-07)
