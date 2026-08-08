@@ -11,12 +11,12 @@
 
 | | value | over |
 |---|---|---|
-| ticks landed | **740** | ticks 1–1025 |
-| median tick cycle | **26m** | 739 intervals |
-| median, last 10 | **14m** | 10 intervals |
+| ticks landed | **741** | ticks 1–1027 |
+| median tick cycle | **27m** | 740 intervals |
+| median, last 10 | **21m** | 10 intervals |
 | fastest / slowest | 5s / 5.4d | |
-| **ticks per hour** | **1.10** | 670.9h elapsed |
-| median verify wall | **63s** | 679 ticks |
+| **ticks per hour** | **1.10** | 671.9h elapsed |
+| median verify wall | **63s** | 680 ticks |
 | wall trend | 39s → 13m — getting slower ⚠️ | first 3 vs last 3 |
 
 The **cycle** is the real unit: implement → debug → verify wall → land. The wall is only part of
@@ -28,10 +28,10 @@ it, and a wall that grows taxes every future tick, so it is tracked separately f
 
 * **capabilities asserted** (`G_CAPABILITY`): 48 → **81**
 * **live gates**: 27 → **428**
-* **✅ rows in the capability ledger**: 144 → **515**
+* **✅ rows in the capability ledger**: 144 → **516**
 * **Bar 0 — oracle hangs**: 0 of 265 sites
 
-**341 of 740 ticks** (46%) moved a
+**341 of 741 ticks** (46%) moved a
 user-visible capability. The rest were instruments, infrastructure and corrections — and the
 ledger says the corrections were not overhead: three of its top three priorities were phantoms,
 and finding that out redirected everything after it.
@@ -90,7 +90,7 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 
 ## What a capability costs
 
-* **341** capability ticks, median cycle **26m**
+* **341** capability ticks, median cycle **27m**
 * median diff per tick: **+259 / −34** lines across 8 files
 
 ## Every tick
@@ -837,5 +837,6 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 | **1023** | 2026-08-08 02:54 | 5m | measurement | 13m | +164/−33 | 428 | 81 | 56.0% · | the re-baseline, and the flat band was PREDICTED seven ticks before it was measured (2026- |
 | **1024** | 2026-08-08 03:04 | 9m | measurement | 13m | +247/−33 | 428 | 81 | 56.0% · | the wall audit, and a parity fixture is free until it crosses a multiple of eight (2026-08 |
 | **1025** | 2026-08-08 03:58 | 54m | measurement | 13m | +289/−63 | 428 | 81 | 56.0% · | the presentation attribute sits ABOVE author CSS, and 42.4% of the corpus writes the rule  |
+| **1027** | 2026-08-08 04:55 | 57m | primitive | 13m | +437/−79 | 428 | 81 | 56.0% · | there were TWO of them, and `<iframe>` was in both lists (2026-08-08) |
 
 *`·` after a WPT figure means **carried forward**, not measured this tick.*

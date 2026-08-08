@@ -332,6 +332,12 @@
   - L6540 · Price
   - L6553 · The second defect, from the same battery
   - L6564 · The fix — and t1025 named the wrong place, which is worth more than the fix
+  - L6609 · The default object size is a USED value, and writing it as a COMPUTED one switches off every rule that asks whether the size is auto (t1027)
+  - L6614 · There were TWO post-cascade dimension passes
+  - L6631 · And the second deletion is the same error one step worse
+  - L6658 · The lesson worth carrying, in two halves
+  - L6671 · Gated, red-proven, and free
+  - L6694 · Still open on <iframe>, measured here
 
 ## browser-capabilities.md
 `docs/wiki/browser-capabilities.md`
@@ -1717,4 +1723,4 @@
   - L124 · Rank mechanisms by FLIP RATE, not failing-subtest count — CSS layout is a multi-assertion slog
 
 ---
-1624 sections across 22 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+1630 sections across 22 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.

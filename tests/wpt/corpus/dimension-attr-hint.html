@@ -10,11 +10,30 @@
 
    `#p-attr` and `#p-spec` are the controls that stop this from being satisfied by simply IGNORING
    the attributes: the hint must still size an element nobody styled, and must still lose to a
-   height the author DID specify. */
+   height the author DID specify.
+
+   ── t1027: THE SAME RULE, FOR THE TAGS THE FIRST FIX MISSED ──────────────────────────────────
+   There were TWO post-cascade dimension passes and `iframe` was in both lists, so t1027 measured
+   `<iframe width=200 height=100 style="height:auto">` at 200x100 against Chrome's 200x150 — i.e.
+   the tick above changed nothing for iframe. `#p-if-hauto` is that row; `#p-tbl-css` is its twin
+   for the OTHER list (`table`/`td`/`th`/`col`/`colgroup`/`hr`/`pre`), where an author `width` must
+   now beat `width="85%"`. `#p-tbl-hint` is the control that keeps Hacker News working.
+
+   The `#p-if-*` rows also carry the second half of that tick: 300x150 is the DEFAULT OBJECT SIZE,
+   a USED value, and it used to be written into an iframe's COMPUTED style — which made `auto`
+   definite and silently switched off flex stretch and `aspect-ratio` for this one tag.
+   `#p-if-flexstart` is the row to read carefully: it PASSED before the fix and after it, because a
+   box that can never stretch also never stretches when told not to. It is only a control next to
+   `#p-if-flex`. */
 *{margin:0;padding:0;box-sizing:content-box}
 .w{width:400px}
+.r{width:400px;height:200px}
+.f{display:flex;width:400px;height:360px}
+.fstart{align-items:flex-start}
 img{background:#cfc;display:block}
+iframe{border:0}
 #p-sheet{max-width:100%;height:auto}
+#p-tbl-css{width:120px}
 </style></head><body>
 <div class=w><img id="p-attr" width="100" height="40" src="data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIxMDAiIGhlaWdodD0iNDAiPjxyZWN0IHdpZHRoPSIxMDAiIGhlaWdodD0iNDAiIGZpbGw9InJlZCIvPjwvc3ZnPg=="></div>
 <div class=w><img id="p-spec" width="100" height="40" style="width:200px" src="data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIxMDAiIGhlaWdodD0iNDAiPjxyZWN0IHdpZHRoPSIxMDAiIGhlaWdodD0iNDAiIGZpbGw9InJlZCIvPjwvc3ZnPg=="></div>
@@ -22,4 +41,13 @@ img{background:#cfc;display:block}
 <div class=w><img id="p-sheet" width="800" height="320" src="data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSI4MDAiIGhlaWdodD0iMzIwIj48cmVjdCB3aWR0aD0iODAwIiBoZWlnaHQ9IjMyMCIgZmlsbD0iYmx1ZSIvPjwvc3ZnPg=="></div>
 <div class=w><canvas id="p-canvas" width="100" height="40" style="width:200px;height:auto"></canvas></div>
 <div class=w><svg id="p-svg" width="100" height="40" style="width:200px;height:auto"></svg></div>
+<div class=r><iframe id="p-if-attr" width="200" height="100"></iframe></div>
+<div class=r><iframe id="p-if-hauto" width="200" height="100" style="height:auto"></iframe></div>
+<div class=r><iframe id="p-if-default"></iframe></div>
+<div class=r><iframe id="p-if-ratio" style="width:200px;aspect-ratio:2/1;height:auto"></iframe></div>
+<div class=f><iframe id="p-if-flex"></iframe></div>
+<div class="f fstart"><iframe id="p-if-flexstart"></iframe></div>
+<div class=r><table id="p-tbl-hint" width="85%"><tr><td>a</td></tr></table></div>
+<div class=r><table id="p-tbl-css" width="85%"><tr><td>a</td></tr></table></div>
+<div class=r><table id="p-tbl-auto" width="85%" style="width:auto"><tr><td>a</td></tr></table></div>
 </body></html>

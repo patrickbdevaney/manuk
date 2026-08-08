@@ -1040,24 +1040,28 @@ fn apply_presentational_hints(dom: &Dom, node: NodeId, s: &mut crate::ComputedSt
     if let Some(c) = el.attr("text").and_then(crate::values::parse_color) {
         s.color = c;
     }
-    // **Presentational sizing.** `width`/`height` attributes are not decoration; on `<table>`,
-    // `<td>` and `<img>` they are the layout. Hacker News is `<table width="85%">` — ignore it and
-    // the table shrink-to-fits to its text instead of spanning the page.
-    if matches!(
-        tag,
-        "table" | "td" | "th" | "col" | "colgroup" | "iframe" | "hr" | "pre"
-    ) {
-        if s.width == crate::Dim::Auto {
-            if let Some(w) = el.attr("width").and_then(crate::parse_dimension_attr_dim) {
-                s.width = w;
-            }
-        }
-        if s.height == crate::Dim::Auto {
-            if let Some(h) = el.attr("height").and_then(crate::parse_dimension_attr_dim) {
-                s.height = h;
-            }
-        }
-    }
+    // ⚠⚠⚠ **THE SECOND COPY OF THE POST-CASCADE DIMENSION PASS LIVED HERE, AND `iframe` WAS IN
+    // BOTH LISTS — SO t1026's FIX CHANGED NOTHING FOR `<iframe>`.** The block read
+    //
+    // ```rust
+    //   if matches!(tag, "table"|"td"|"th"|"col"|"colgroup"|"iframe"|"hr"|"pre") {
+    //       if s.width  == Dim::Auto { s.width  = el.attr("width")…; }
+    //       if s.height == Dim::Auto { s.height = el.attr("height")…; }
+    //   }
+    // ```
+    //
+    // Same shape, same defect, one tag overlapping the set t1026 moved to a real cascade origin —
+    // and the overlap is what made the previous tick a no-op where it mattered most:
+    // `<iframe width=200 height=100 style="height:auto">` is Chrome **200×150** and was **200×100**
+    // here *after* the origin was fixed, because this pass ran afterwards and overwrote the author's
+    // `auto` all over again. **`one rule, N implementations` is how this project loses a fix**, and
+    // the way to find the second implementation was to measure the tag the first fix claimed to
+    // cover rather than to re-read the diff.
+    //
+    // The tags are now merged into `presentational_hint_block`'s list, so there is ONE producer of
+    // dimension-attribute declarations at ONE origin. `<table width="85%">` (Hacker News's whole
+    // identity) keeps working — a hint still fills a genuinely absent width; what it can no longer
+    // do is beat a width the author wrote.
     // `<table cellspacing>` / `<table cellpadding>` — the separated-borders model's two knobs.
     if tag == "table" {
         if let Some(sp) = el.attr("cellspacing").and_then(crate::parse_dimension_attr) {
@@ -1259,19 +1263,36 @@ fn apply_presentational_hints(dom: &Dom, node: NodeId, s: &mut crate::ComputedSt
                 }
             }
         }
-        // **An unsized `<iframe>` is 300x150.** That is the spec's default, and it is not arbitrary
-        // trivia: an iframe has no intrinsic size to fall back on, so with no default it collapses to
-        // nothing and the embed is invisible *before* any question of content arises. `iframe` was not
-        // in this list at all, which is why it laid out at ZERO WIDTH — 23% of sites, and the box was
-        // gone before we ever got as far as failing to fetch its document.
-        if tag == "iframe" {
-            if s.width == crate::Dim::Auto {
-                s.width = crate::Dim::Px(300.0);
-            }
-            if s.height == crate::Dim::Auto {
-                s.height = crate::Dim::Px(150.0);
-            }
-        }
+        // ⚠⚠⚠ **THE `<iframe>` 300×150 DEFAULT USED TO BE WRITTEN HERE, AS A COMPUTED VALUE, AND
+        // THAT IS THE SAME ERROR CLASS t1026 DELETED ONE LINE UP — one step worse.** The block read
+        //
+        // ```rust
+        //   if tag == "iframe" {
+        //       if s.width  == Dim::Auto { s.width  = Dim::Px(300.0); }
+        //       if s.height == Dim::Auto { s.height = Dim::Px(150.0); }
+        //   }
+        // ```
+        //
+        // The 300×150 is right (CSS-Images §4.4, the default object size) and its *place* was
+        // wrong: it is a **USED value**, resolved when the box is laid out, not a computed one. By
+        // turning `auto` into a definite length in the cascade it deleted the one fact every
+        // downstream layout rule asks for, so four independent rules silently stopped applying to
+        // `<iframe>` and to nothing else. Measured against Chrome (t1027 battery, 800px viewport):
+        //
+        // ```text
+        //   flex item, align-items:stretch           chrome 300x360   was 300x150
+        //   flex COLUMN item (cross axis is width)   chrome 400x150   was 300x150
+        //   width:200px; aspect-ratio:2/1            chrome 200x100   was 200x150
+        //   align-items:flex-start  (the CONTROL)    chrome 300x150       300x150  <- agreed by ACCIDENT
+        // ```
+        //
+        // The control is the part worth keeping: a fixture that only asserts *"stretch does not
+        // apply here"* passes for a box that can never stretch at all, so the negative row proved
+        // nothing until the positive row next to it started failing.
+        //
+        // `layout::default_object_tag` already lists `iframe` and already writes 300 / 150 at used
+        // size for `<svg>`, `<canvas>` and `<video>` — the machinery was there and iframe was the
+        // one tag routed around it.
     }
 }
 
@@ -2388,9 +2409,25 @@ fn presentational_hint_block(
     url_data: &UrlExtraData,
 ) -> Option<PropertyDeclarationBlock> {
     let tag = el.dom.tag_name(node)?;
+    // The replaced set, plus the table/legacy set that `apply_presentational_hints` used to size
+    // in a second post-cascade pass of its own (t1027). ONE producer, ONE origin: HTML maps
+    // `width`/`height` on all of these to the dimension properties as a presentational hint.
     if !matches!(
         tag,
-        "img" | "canvas" | "video" | "svg" | "object" | "embed" | "iframe"
+        "img"
+            | "canvas"
+            | "video"
+            | "svg"
+            | "object"
+            | "embed"
+            | "iframe"
+            | "table"
+            | "td"
+            | "th"
+            | "col"
+            | "colgroup"
+            | "hr"
+            | "pre"
     ) {
         return None;
     }

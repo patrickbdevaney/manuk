@@ -4764,11 +4764,26 @@ impl Ctx<'_> {
         // not-yet-decoded image falls through to the broken-image path exactly as before. What it
         // gains is the case where we DO know the size — which, once the bytes have arrived, is
         // every image on the page.
+        // ⚠⚠ **`iframe` WAS MISSING FROM THIS LIST AND NOTHING NOTICED FOR AS LONG AS THE CASCADE
+        // WAS LYING FOR IT.** While `apply_presentational_hints` wrote a definite `300×150` into an
+        // iframe's COMPUTED style (deleted t1027), every consumer — including this seam — read a
+        // `Dim::Px` and never had to ask what an auto-sized iframe's content size is. The moment the
+        // computed value became honest `auto`, this seam answered *"no intrinsic size"* and a flex
+        // item `<iframe>` measured **0×360** against Chrome's 300×360.
+        //
+        // That is the general shape and it is worth naming: **a wrong value upstream can be the only
+        // thing keeping a missing case downstream from ever being reached.** Deleting the lie is
+        // what exposes the gap, so the gap arrives as a *regression in the same tick* rather than as
+        // a pre-existing bug — and `p-flexitem` in the gate is the row that caught it.
+        //
+        // `iframe` belongs here on the merits: Chrome reports `width:300px; height:150px` for an
+        // unsized `<iframe>` (asked directly via `getComputedStyle`, t1027), and it has no intrinsic
+        // ratio, which is exactly the `_ => 300.0` / `_ => 150.0` arms below.
         let is_img = self.dom.tag_name(node) == Some("img");
         if !is_img
             && !matches!(
                 self.dom.tag_name(node),
-                Some("svg" | "canvas" | "video" | "object" | "embed")
+                Some("svg" | "canvas" | "video" | "object" | "embed" | "iframe")
             )
         {
             return None;

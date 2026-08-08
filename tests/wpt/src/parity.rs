@@ -145,7 +145,16 @@ impl ParityReport {
                 let mut bad: Vec<&ProbeDelta> =
                     page.probes.iter().filter(|p| !p.within(self.tol)).collect();
                 bad.sort_by_key(|p| std::cmp::Reverse(p.max_delta));
-                for p in bad.iter().take(4) {
+                // The wall wants the worst few; a DISCOVERY BATTERY wants every row, because a
+                // 20-row fixture with one variable per row is unreadable through a cap of 4 — you
+                // see the loudest divergence and none of the controls that make it attributable.
+                // `MANUK_PARITY_SHOW=all` (or a count) opens it; the wall's output is unchanged.
+                let show = match std::env::var("MANUK_PARITY_SHOW").ok().as_deref() {
+                    Some("all") => usize::MAX,
+                    Some(n) => n.parse().unwrap_or(4),
+                    None => 4,
+                };
+                for p in bad.iter().take(show) {
                     let _ = writeln!(
                         s,
                         "         {:<16} manuk={:<20} chrome={:<20} Δ={}",

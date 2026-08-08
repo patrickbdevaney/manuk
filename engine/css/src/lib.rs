@@ -4162,17 +4162,11 @@ fn apply_ua_defaults(s: &mut ComputedStyle, el: &ElementData) {
                 }
             }
         }
-        // An unsized `<iframe>` is 300x150 — the spec's default. It has no intrinsic size to fall back
-        // on, so without this it collapses to nothing and the embed is invisible before any question of
-        // its content arises. See the twin of this block in `stylo_engine`.
-        if tag == "iframe" {
-            if s.width == Dim::Auto {
-                s.width = Dim::Px(300.0);
-            }
-            if s.height == Dim::Auto {
-                s.height = Dim::Px(150.0);
-            }
-        }
+        // ⚠ The `<iframe>` 300×150 default was written here as a COMPUTED value and is gone for the
+        // reason spelled out at its twin in `stylo_engine`: 300×150 is the **default object size**,
+        // a used value, and forcing `auto` into a definite length here deleted the fact flex
+        // stretch and `aspect-ratio` both read. `layout`'s `default_object_tag` already lists
+        // `iframe`. Removed in both cascades together so the two do not drift.
     }
 }
 

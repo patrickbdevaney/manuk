@@ -6605,3 +6605,95 @@ that stop the gate being satisfied by simply ignoring the attributes.
 **RED-proven twice, because the two mutations mean different things:** deleting the hint entirely
 gives `1/6`, and putting it back *above* author CSS — the old origin — also gives `1/6`. The first
 says the hint is load-bearing; only the second says the ORIGIN is.
+
+## The default object size is a USED value, and writing it as a COMPUTED one switches off every rule that asks whether the size is auto (t1027)
+
+The section above is tick 1026. This one is tick 1027, and its first finding is that **tick 1026 did
+not do what tick 1026 says it did** — for one of the seven tags it names.
+
+### There were TWO post-cascade dimension passes
+
+```text
+   engine/css/src/stylo_engine.rs:1206   img canvas video svg object embed iframe   <- t1026 fixed this
+   engine/css/src/stylo_engine.rs:1046   table td th col colgroup iframe hr pre     <- this one survived
+```
+
+Both were `if s.width == Dim::Auto { s.width = attr }` after the cascade had finished; `iframe` was
+in **both** lists, so `<iframe width=200 height=100 style="height:auto">` measured **200×100**
+against Chrome's **200×150** *after* the origin was supposedly fixed. Both tag sets now feed the one
+`presentational_hint_block`, so there is a single producer of dimension-attribute declarations at a
+single origin.
+
+> **`one rule, N implementations` is how this project loses a fix.** The way to find the second
+> implementation was not to re-read the diff — the diff is correct and complete for what it touches.
+> It was to **measure the tag the previous tick claimed to cover.**
+
+### And the second deletion is the same error one step worse
+
+```rust
+   if tag == "iframe" {
+       if s.width  == Dim::Auto { s.width  = Dim::Px(300.0); }
+       if s.height == Dim::Auto { s.height = Dim::Px(150.0); }
+   }
+```
+
+**The 300×150 is right; its PLACE was wrong.** It is the default object size (CSS-Images §4.4) — a
+**used** value, resolved when the box is laid out — and `layout::default_object_tag` already lists
+`iframe` and already writes it for `<svg>`/`<canvas>`/`<video>`. Written into the *computed* style it
+turned `auto` into a definite length, which is the one fact four independent layout rules read:
+
+```text
+                                              chrome     before     after
+   flex item, align-items:stretch            300x360    300x150    300x360
+   flex COLUMN item (cross axis is width)    400x150    300x150    400x150
+   width:200px + aspect-ratio:2/1 + h:auto   200x100    200x150    200x100
+   attrs + height:auto                       200x150    200x100    200x150
+   align-items:flex-start   (the CONTROL)    300x150    300x150    300x150
+```
+
+The generalisation battery is what identifies the cause: `<div>`, `<svg>`, `<canvas>`, `<img>`,
+`<input>`, `<select>` and `<button>` **all already stretched**. `<iframe>` was the only tag with this
+defect, which is what rules out the flex algorithm and names the cascade.
+
+### The lesson worth carrying, in two halves
+
+**A control is only a control next to a positive row that fails.** `align-items:flex-start` on an
+iframe passed before the fix and after it — a box that can never stretch also never stretches when
+told not to. Same for `frameborder="0"`: we match Chrome there because we have **no border to
+remove** (see the open item below), not because we implement it.
+
+**A wrong value upstream can be the only thing keeping a missing case downstream from ever being
+reached.** With the computed lie deleted, a flex-item `<iframe>` measured **0×360**:
+`layout::replaced_default_size` — the seam that reports a replaced element's intrinsic size to taffy
+— did not list `iframe` either, and had never needed to. Deleting the lie is what exposes the gap,
+and the gap then arrives as a red row in the same tick rather than as a bug found later.
+
+### Gated, red-proven, and free
+
+`tests/wpt/corpus/dimension-attr-hint.html` goes from 6 probes to 15 and stays **page 32 of 32** — a
+parity fixture is free until the page count crosses a multiple of eight (audit #38), so the way to
+add wall-enforced coverage without cost is to add probes to a page that already exists.
+
+Two mutations, two disjoint failing pairs, five rows green under both:
+
+```text
+   restore the post-cascade dimension pass   p-tbl-auto  340x22 vs 11x22 · p-if-hauto  200x100 vs 200x150
+   restore the computed 300x150 override     p-if-flex   300x150 vs 300x360 · p-if-ratio 200x150 vs 200x100
+```
+
+⚠ **`p-tbl-auto` exists because the first table row was not a test.** `<table width="85%">` under an
+author `width:120px` stayed **green** under the mutation — the old pass only fired on `Dim::Auto`, and
+`120px` is not auto. The discriminating row is an author who writes `width:auto`: Chrome shrink-to-fits
+to 11px and the old code gave 340px. **A row that passes under the mutation is a control, whatever it
+was meant to be.**
+
+⚠ Every new row sits in a fixed-height container. In the first cut, mutation A failed seven probes,
+five of them purely on `y`, because one 50px error cascaded down the page — the same trap as t1025's
+43-row SVG battery.
+
+### Still open on `<iframe>`, measured here
+
+`iframe { border: 2px inset }` is Chrome's UA rule (asked via `getComputedStyle`, not recalled) and
+it is the **only** replaced element with one — so every unstyled iframe is 4px small in both axes.
+⚠ It cannot land alone: `frameborder="0"` must become a presentational hint in the same tick, or the
+10 of 50 corpus iframe sites that use it regress.

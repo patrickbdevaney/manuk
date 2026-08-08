@@ -739,3 +739,4 @@ tick	sha	epoch	iso	delta_s	shape	wall_s	files	added	deleted	gates	claims	wpt_pas
 1023	e0745595	1786172093	2026-08-08T02:54:53-04:00	280	measurement	808	5	164	33	428	81	3896	6960	0	514	0	the re-baseline, and the flat band was PREDICTED seven ticks before it was measured (2026-08-08)
 1024	cc3dfac6	1786172656	2026-08-08T03:04:16-04:00	563	measurement	808	7	247	33	428	81	3896	6960	0	514	0	the wall audit, and a parity fixture is free until it crosses a multiple of eight (2026-08-08)
 1025	c7ab35b2	1786175904	2026-08-08T03:58:24-04:00	3248	measurement	808	10	289	63	428	81	3896	6960	0	515	0	the presentation attribute sits ABOVE author CSS, and 42.4% of the corpus writes the rule it overrides (2026-08-08)
+1027	5ff78e6f	1786179321	2026-08-08T04:55:21-04:00	3417	primitive	808	12	437	79	428	81	3896	6960	0	516	0	there were TWO of them, and `<iframe>` was in both lists (2026-08-08)

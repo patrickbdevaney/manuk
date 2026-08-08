@@ -46371,6 +46371,181 @@ PERF: none — one UA rule and one narrowed branch in a cascade that already ran
 WIKI: `docs/wiki/css-cascade.md` — where Chrome draws the form-control `box-sizing` line, and why a
 layout-crate test cannot see it.
 
+## Tick 1027 — there were TWO of them, and `<iframe>` was in both lists (2026-08-08)
+
+TICK SHAPE: primitive — the `<iframe>` sizing battery (check #93's next ranked area, **30.4%** of the
+corpus), the four defects it found, and the two deletions that close them. **And the first thing it
+found was that tick 1026 did not do what tick 1026 says it did.**
+
+⚠⚠⚠ **t1026 MOVED THE DIMENSION ATTRIBUTE TO A REAL CASCADE ORIGIN. THERE WAS A SECOND PASS DOING
+THE SAME THING, AND `iframe` WAS IN BOTH TAG LISTS — SO FOR `<iframe>` LAST TICK CHANGED NOTHING.**
+
+```text
+   engine/css/src/stylo_engine.rs:1206   img canvas video svg object embed iframe   <- t1026 fixed this one
+   engine/css/src/stylo_engine.rs:1046   table td th col colgroup iframe hr pre     <- and this one survived
+```
+
+Both read `if s.width == Dim::Auto { s.width = attr }` after the cascade had finished. t1026's own
+write-up names the defect exactly — *"a post-cascade pass has no origin, so it necessarily runs ABOVE
+author CSS"* — and then left a second copy of it four hundred lines up the same file, still holding
+one of the seven tags the fix was about.
+
+> **`one rule, N implementations` is how this project loses a fix** (t720). The way to find the
+> second implementation was **not** to re-read the diff — the diff is correct and complete for what
+> it touches. It was to **measure the tag the previous tick claimed to cover**, which is what a
+> battery does and what a code review does not.
+
+⚠⚠ **AND THE SECOND DELETION IS THE SAME ERROR ONE STEP WORSE.** Beside it sat
+
+```rust
+   if tag == "iframe" {
+       if s.width  == Dim::Auto { s.width  = Dim::Px(300.0); }
+       if s.height == Dim::Auto { s.height = Dim::Px(150.0); }
+   }
+```
+
+**The 300×150 is right and its PLACE was wrong.** It is the *default object size* (CSS-Images §4.4),
+a **used** value resolved when the box is laid out — and `layout::default_object_tag` already lists
+`iframe` and already writes it for `<svg>`/`<canvas>`/`<video>`. Writing it into the *computed* style
+turned `auto` into a definite length, which deleted the one fact four independent layout rules ask
+for. Four rules silently stopped applying, to this one tag, and to nothing else.
+
+⚠⚠⚠ **THE BATTERY — 20 rows, one variable each, a control arm per rule** (800px viewport, `±1px`):
+
+```text
+                                                          chrome     before     after
+   a  bare <iframe>                          CONTROL     304x154    300x150    300x150   OPEN (border)
+   b  border:0                               CONTROL     300x150    300x150    300x150   ok
+   c  width/height attrs                     CONTROL     200x100    200x100    200x100   ok
+   d  width="50%"                            CONTROL     200x100    200x100    200x100   ok
+   e  CSS width+height                       CONTROL     250x120    250x120    250x120   ok
+   f  attrs + CSS width                      CONTROL     250x100    250x100    250x100   ok
+   g  attrs + height:auto                                200x150    200x100    200x150   FIXED
+   h  width:100%                             CONTROL     400x150    400x150    400x150   ok
+   i  width:200px + aspect-ratio:2/1 + h:auto             200x100    200x150    200x100   FIXED
+   j  flex item, align-items:stretch                      300x360    300x150    300x360   FIXED
+   k  flex COLUMN item (cross axis is width)              400x150    300x150    400x150   FIXED
+   l  flex item, align-items:flex-start      CONTROL     300x150    300x150    300x150   ok
+   m  min-width over a smaller width         CONTROL     250x150    250x150    250x150   ok
+   n  width="600" + max-width:100%           CONTROL     400x150    400x150    400x150   ok
+   o  width=600 height=300 + max-width:100%  CONTROL     400x300    400x300    400x300   ok
+   p  frameborder="0"                        CONTROL     300x150    300x150    300x150   ok*
+   q  srcdoc                                 CONTROL     300x150    300x150    300x150   ok
+   r  height:50% in a 200px parent                        300x100    300x150    300x150   OPEN
+```
+
+⚠ **ROW `l` IS THE ROW TO READ CAREFULLY, AND IT IS WHY THE NEGATIVE ROWS ARE WRITTEN FIRST.** It
+asserts *"`align-items:flex-start` does not stretch"* and it **passed before the fix and after it** —
+because a box that can never stretch also never stretches when told not to. **A control is only a
+control next to a positive row that fails**; on its own it was agreement by accident, and so was
+row `p` (we match `frameborder="0"` because we have no border to remove — see row `a`).
+
+⚠⚠⚠ **THE GENERALISATION BATTERY, WHICH IS WHERE THE TICK EARNED ITS PRICE** — the same one-variable
+row across the replaced set, because t1025's lesson is that these are rarely about the tag that made
+you look:
+
+```text
+   flex item, cross size auto            chrome      before     after
+     <div>                    CONTROL   100x360    100x360    100x360   ok
+     <iframe>                            300x360    300x150    300x360   FIXED
+     <svg>                    CONTROL   300x360    300x360    300x360   ok
+     <canvas>                            720x360    300x360    300x360   OPEN  (main size from the ratio)
+     <img>                               900x360    100x360    100x360   OPEN  (same)
+     <textarea>                          178x360    178x34     178x34    OPEN  (does not stretch at all)
+```
+
+**`<iframe>` was the only tag with the defect this tick fixes** — everything else already stretched,
+which is what identifies the computed-value override as the cause rather than the flex algorithm.
+The three OPEN rows are three *different* mechanisms, newly measured, named below, not fixed here.
+
+⚠⚠ **A REGRESSION THIS TICK CAUSED, CAUGHT BY ITS OWN GATE, AND FIXED IN THE SAME TICK.** With the
+computed lie deleted, a flex-item `<iframe>` measured **0×360** against Chrome's 300×360:
+`layout::replaced_default_size` — the seam that tells taffy a replaced element's intrinsic size —
+**did not list `iframe` either**, and had never needed to, because the cascade had always handed it a
+definite `Dim::Px`.
+
+> **A wrong value upstream can be the only thing keeping a missing case downstream from ever being
+> reached.** Deleting the lie is what exposes the gap — which is the good outcome, because it arrives
+> as a red row in the same tick instead of as a bug someone finds later.
+
+⚠⚠⚠ **PRICED ON THE CORPUS THAT SCORES US, STYLESHEET-INCLUSIVE** (the 200-site CrUX trend corpus,
+171 with a real body, plus 144 of their stylesheets):
+
+```text
+   an <iframe> in the served HTML                          50/171   29.2%
+   an <iframe> carrying a dimension ATTRIBUTE              28/171   16.4%
+   an iframe RULE declaring width/height (HTML + CSS)      19/171   11.1%
+   BOTH on the same site -- where the ORIGIN can bite       9/171    5.3%   <- the honest one
+   an iframe with NO dimension attribute anywhere          22/171   12.9%   <- the default-object-size path
+   an iframe rule declaring aspect-ratio                    1/171    0.6%
+   a <table> carrying width=  /  a <td> carrying width=     2 / 0            1.2% / 0.0%
+```
+
+⚠ **5.3% is the weak co-occurrence form and I am ranking on it anyway, downward.** The rule and the
+attribute are not proven to reach the same element, the stylesheet fetch is capped at six sheets per
+site, and a JS-inserted embed is invisible to a grep — so it is a floor twice over and an upper bound
+once. ⚠⚠ **And the `aspect-ratio` row at 0.6% is worth saying out loud: it is a CORRECTNESS row, not
+a lever.** The 12.9% default-object-size path is the half that carries weight, and the table half —
+which the merge also repaired — is **1.2%**, i.e. this corpus is not Hacker News.
+
+RATCHET: parity **92/92 across 32 pages** (was 83/83 across 31 before t1026, 91/91 at this tick's
+first green), `manuk-layout` **130/130**, `manuk-css` **52/52**. Nothing traded.
+
+GATE: `tests/wpt/corpus/dimension-attr-hint.html`, extended from 6 probes to 15 — **and it is still
+page 32 of 32, so it costs the wall nothing.** Audit #38 measured that parity bounds Chrome at 8 in
+flight, so a fixture is free until the page count crosses a multiple of eight; the free way to add
+wall-enforced coverage is therefore to **add probes to a page that already exists**, which is what
+this did rather than opening a fifth Chrome round for one claim.
+
+⚠⚠ **RED-PROVEN TWICE, AND THE TWO MUTATIONS FAIL DISJOINT PAIRS — WHICH IS THE POINT.**
+
+```text
+   mutation A: restore the post-cascade dimension pass   13/15   p-tbl-auto  340x22 vs 11x22
+                                                                 p-if-hauto  200x100 vs 200x150
+   mutation B: restore the computed 300x150 override     13/15   p-if-flex   300x150 vs 300x360
+                                                                 p-if-ratio  200x150 vs 200x100
+```
+
+Two deletions, two claims, two disjoint failing pairs, and five rows green under both — so neither
+half is resting on the other's evidence. ⚠ **The first cut of the fixture could not show this**: with
+the rows in auto-height wrappers, mutation A failed **seven** probes, five of them purely on `y`
+because one 50px error cascaded down the page. Same trap as t1025's 43-row SVG battery. Every new row
+now sits in a fixed-height container, so a wrong box stays inside its own row.
+
+⚠ **`p-tbl-auto` exists because my first table row was not a test.** I wrote `<table width="85%">`
+under an author `width:120px` and called it the origin claim; mutation A left it **green**, because
+the old pass only fired on `Dim::Auto` and `120px` is not auto. The discriminating row is an author
+who writes `width:auto` — Chrome shrink-to-fits to **11px** and the old code gave **340px**, a 329px
+error. **A row that passes under the mutation is a control, whatever I meant it to be.**
+
+STILL OPEN, measured here, each a different mechanism and none of them iframe-specific:
+
+1. **`iframe { border: 2px inset }` — Chrome's UA sheet, and we have none.** Asked Chrome directly
+   (`getComputedStyle`, not recall): `border=2px inset`, and it is the ONLY replaced element with
+   one. Every unstyled iframe is 4px small in both axes. ⚠ It cannot land alone: `frameborder="0"`
+   must become a presentational hint in the same tick or 10 of the 50 iframe sites REGRESS. Next.
+2. **A percentage height on an atomic-inline replaced element does not resolve** — `height:50%` in a
+   200px parent is 150 here and 100 in Chrome, on `<iframe>`, `<canvas>` and `<img>` alike.
+3. **The transferred MAIN size from an intrinsic ratio after a stretched cross size** — a flex-item
+   `<img>` stretched to 360 tall is 900 wide in Chrome and 100 here.
+4. **`<textarea>` is not stretched as a flex item at all** — the same shape this tick fixed for
+   `<iframe>`, in a tag this tick did not touch. Worth checking whether it has its own lie upstream.
+5. `<embed>` with no `type`/`src` generates a 200×150 box; Chrome generates none.
+6. ⚠ **INSTRUMENT, not engine:** a `display:none` probe reads `(absent)` for us and `[0,0 0×0]` for
+   Chrome, and `parity` scores that MISSING. The two answers mean the same thing. A `display:none`
+   negative row cannot be expressed through this probe, so one was not shipped in the gate.
+
+INSTRUMENT: `parity`'s failure list was capped at **4 rows** ("the worst few offenders"), which is
+right for the wall and unreadable for a 20-row battery — you see the loudest divergence and none of
+the controls that make it attributable. `MANUK_PARITY_SHOW=all` opens it; the wall's output is
+byte-unchanged.
+
+PERF: none. Two branches deleted from the cascade's per-element path and two tags added to match
+arms; F1/F2 green on the wall.
+
+WIKI: `docs/wiki/box-layout.md` — "The default object size is a USED value, and writing it as a
+COMPUTED one switches off every rule that asks whether the size is auto".
+
 ## Tick 1026 — the hint is a declaration now, and last tick's fix would have changed nothing (2026-08-08)
 
 TICK SHAPE: primitive — the defect t1025 measured and priced at **42.4%** of the corpus, built. **And
