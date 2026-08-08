@@ -46371,6 +46371,69 @@ PERF: none — one UA rule and one narrowed branch in a cascade that already ran
 WIKI: `docs/wiki/css-cascade.md` — where Chrome draws the form-control `box-sizing` line, and why a
 layout-crate test cannot see it.
 
+## Tick 1010 — the property the audit ranked yesterday is invisible to the oracle (2026-08-07)
+
+TICK SHAPE: measurement — the `hyphens: auto` fixture surface audit #41 asked for, run **before** any
+code. **It priced the capability at ZERO on this instrument and stopped a tick that would have
+LOWERED the score.**
+
+⚠⚠⚠ **HEADLESS CHROME DOES NOT HYPHENATE ON THIS BOX, SO `hyphens: auto` IS UNMEASURABLE BY THE
+ORACLE — AND BUILDING IT WOULD MAKE US DIVERGE.** Chrome 145, headless, the same invocation the
+fidelity sweep uses:
+
+```text
+   a 60px column, sans-serif 16px/20px          Chrome
+     "hyphenation established"  (no property)   60 x 40
+     the same, hyphens: auto, lang="en"         60 x 40    <- IDENTICAL
+     the same, -webkit-hyphens: auto            60 x 40    <- IDENTICAL
+     "Silbentrennung …", hyphens:auto, lang=de  60 x 40    <- IDENTICAL
+
+   a 90px column, three-line prose
+     no property / none / manual / auto         90 x 60    <- ALL FOUR IDENTICAL
+     hyphens: manual with soft hyphens          90 x 40    <- soft hyphens DO break
+```
+
+**Chrome's hyphenation dictionaries are a separately-provisioned component**, and a headless profile
+does not have them. So `auto` degrades to `none` in the reference — in English *and* German, at a
+column width where hyphenation would obviously help. Soft hyphens still break, which is what proves
+the fixture is measuring line-breaking at all rather than nothing.
+
+**We do not hyphenate either, so we AGREE with the reference today by accident.** Implementing
+`hyphens: auto` correctly would put a hyphen where Chrome puts none, change the line count, and move
+every box below it — **a fix that is right for a human and a regression on every number this loop
+owns.**
+
+⚠⚠ **THIS IS THE `--hide-scrollbars` LESSON IN A SECOND SUBJECT, AND IT GENERALISES FURTHER THAN
+EITHER.** That one was *"our model is right and the reference runs with a flag that hides it"*. This
+one is *"the reference is missing a COMPONENT"*, which is a larger class: **any capability whose
+reference behaviour is provisioned separately from the browser binary — hyphenation dictionaries,
+system fonts, DRM modules, codec packs — is invisible to a headless oracle, and the invisibility
+looks exactly like agreement.** The map now carries `hyphens: auto` as `unmeasurable`, with the
+measurement and with the condition that re-opens it.
+
+⚠⚠⚠ **AND THE ORDER OF OPERATIONS IS THE POINT.** Surface audit #41 found this property yesterday,
+priced it at **8.8% of the corpus**, and named it *"a fixture, and it is cheap"* — a well-ranked,
+well-motivated tick. **One fixture, run before a line of code, turned it into a tick that must NOT be
+built.** Building first and discovering this in the next sweep would have cost a build, a wall, a
+sweep and a revert, and the revert would have looked like a regression. *Price the construct before
+building it* is a rule this loop already has; **`price the ORACLE's ability to see it` is the half
+that was missing**, and it belongs beside it.
+
+⚠ **THE OTHER OPEN ITEM WAS LOOKED AT AND PUT BACK DOWN, WHICH IS ALSO A RESULT.** t1009 named
+`bhramarah.in`'s `reading_order` 18 → 40 as the residue to reduce. Measured this tick: that page
+scores **shape 33.4% with 1,380 misplaced elements and 59 missing** on a 95.9% coverage. A page
+failing that broadly is not a reduction target — any fixture cut from it would be measuring four
+mechanisms at once, which is the battery's own named failure mode. **Recorded as still open and
+explicitly NOT worked**, rather than a token attempt that produces an unattributable fixture.
+
+RATCHET: nothing changed — no engine code in this tick. `CONSTELLATION.tsv` gains a status change
+(`unknown` → `unmeasurable`) and the measurement that justifies it.
+
+PERF: none — measurement only.
+
+WIKI: none — the artefact is the `CONSTELLATION.tsv` row and this entry; the finding is about the
+instrument, not about a browser mechanism. [no-pattern]
+
 ## Tick 1009 — the old-binary control, and 88% of the fall belongs to the site (2026-08-07)
 
 TICK SHAPE: measurement — the OLD-BINARY CONTROL t1008 named as its own residue, run before anything
