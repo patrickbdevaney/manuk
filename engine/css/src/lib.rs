@@ -994,6 +994,25 @@ pub struct ComputedStyle {
     /// 150px column — the right width and its full natural height, stretched to twice its correct
     /// size. Every responsive image on the web was wrong.
     pub aspect_ratio: Option<f32>,
+    /// **Was this axis filled in from the element's NATURAL size rather than specified?**
+    ///
+    /// `apply_natural_size` writes a decoded image's (or a `<canvas>`'s) own pixel size into
+    /// `width`/`height` when — and only when — the axis is `auto`. After it runs, a `Dim::Px` no
+    /// longer says where the number came from, and **the difference is observable**. Chrome, on one
+    /// bitmap and one clamp, with only the dimension attributes differing:
+    ///
+    /// ```text
+    ///   <img              style="max-height:30px">   1000x266 bitmap   112.78 x 30   ratio TRANSFERS
+    ///   <img w=1000 h=266 style="max-height:30px">   same bitmap       1000   x 30   it does NOT
+    /// ```
+    ///
+    /// A natural axis behaves as `auto` — the ratio may rewrite it. A *specified* axis (author CSS
+    /// or a dimension attribute, which is a presentational hint for the same property) is a value
+    /// the page asked for, and no clamp on the other axis may overwrite it. Without this flag the
+    /// two are one state and one of the rows above must be wrong.
+    pub width_is_natural: bool,
+    /// The block-axis twin of `width_is_natural` — see there.
+    pub height_is_natural: bool,
     pub background_repeat: BackgroundRepeat,
     /// `text-decoration-line` (INHERITED in effect: a decoration set on a block draws through its
     /// inline descendants).
@@ -1468,6 +1487,8 @@ impl ComputedStyle {
             object_fit: ObjectFit::Fill,
             object_position: ObjectPosition::default(),
             aspect_ratio: None,
+            width_is_natural: false,
+            height_is_natural: false,
             background_repeat: BackgroundRepeat::Repeat,
             text_decoration: TextDecoration::default(),
             list_style_type: ListStyleType::Disc,
@@ -4120,12 +4141,15 @@ fn apply_ua_defaults(s: &mut ComputedStyle, el: &ElementData) {
         // would beat the author's `width: stretch` and keep hugging its 40px. The flags tell "no
         // width specified" apart from "a width specified that resolves later". Twin of the guard in
         // `stylo_engine::apply_presentational_hints`.
-        if !s.width_stretch && s.width_keyword.is_none() {
+        // ⚠ `canvas` is excluded: its attributes are the output BITMAP (the natural size), not the
+        // CSS dimension properties. Twin of the exclusion in
+        // `stylo_engine::presentational_hint_block` — the ratio half below still applies to it.
+        if tag != "canvas" && !s.width_stretch && s.width_keyword.is_none() {
             if let Some(w) = el.attr("width").and_then(parse_dimension_attr) {
                 s.width = Dim::Px(w);
             }
         }
-        if !s.height_stretch && !s.height_intrinsic {
+        if tag != "canvas" && !s.height_stretch && !s.height_intrinsic {
             if let Some(h) = el.attr("height").and_then(parse_dimension_attr) {
                 s.height = Dim::Px(h);
             }
@@ -4152,6 +4176,19 @@ fn apply_ua_defaults(s: &mut ComputedStyle, el: &ElementData) {
                 }
             }
         }
+        // A `<canvas>`'s attributes are its NATURAL size (the output bitmap), not the CSS dimension
+        // properties — which is why they are excluded from the fill above. Twin of the block in
+        // `stylo_engine::apply_presentational_hints`; `fill_natural_size` is the shared producer.
+        if tag == "canvas" {
+            if let (Some(w), Some(h)) = (
+                el.attr("width").and_then(parse_dimension_attr),
+                el.attr("height").and_then(parse_dimension_attr),
+            ) {
+                if w > 0.0 && h > 0.0 {
+                    fill_natural_size(s, w, h);
+                }
+            }
+        }
         if s.aspect_ratio.is_none() && !matches!(tag, "iframe" | "embed" | "object") {
             if let (Some(w), Some(h)) = (
                 el.attr("width").and_then(parse_dimension_attr),
@@ -4172,6 +4209,35 @@ fn apply_ua_defaults(s: &mut ComputedStyle, el: &ElementData) {
 
 /// Parse an HTML presentational length attribute (`width="272"` or `width="272px"`) into
 /// pixels. Percentages and other units are ignored (returns `None`).
+/// **Fill a replaced element's NATURAL size into the axes nobody specified**, and mark them.
+///
+/// The one producer of `width_is_natural` / `height_is_natural` — a decoded bitmap's own pixel size
+/// (`manuk-page`) and a `<canvas>`'s dimension attributes (the cascade) are the same thing wearing
+/// two hats, and the rule that consumes the mark (CSS's ratio transfer) must not be able to tell
+/// them apart.
+///
+/// ⚠ **A height is left `auto` whenever a ratio exists, and that is not an omission.** The used
+/// height of a replaced element with a ratio comes from its *used* width — which is not known here,
+/// because it has not been clamped yet. Writing the natural height in would pin it to the
+/// pre-clamp value, which is exactly the squashed-image bug: `<canvas width="800" height="400">`
+/// under `max-width:100%` in a 400px column is 400x200 in Chrome, and 400x400 if this fills the
+/// height.
+pub fn fill_natural_size(s: &mut ComputedStyle, nw: f32, nh: f32) {
+    if nw > 0.0 && nh > 0.0 {
+        s.aspect_ratio = Some(nw / nh);
+    }
+    let width_absent = s.width == Dim::Auto && !s.width_stretch && s.width_keyword.is_none();
+    if width_absent && (s.height == Dim::Auto || s.aspect_ratio.is_none()) {
+        s.width = Dim::Px(nw);
+        s.width_is_natural = true;
+    }
+    if s.height == Dim::Auto && !s.height_stretch && !s.height_intrinsic && s.aspect_ratio.is_none()
+    {
+        s.height = Dim::Px(nh);
+        s.height_is_natural = true;
+    }
+}
+
 /// An HTML presentational dimension attribute (`width="85%"`, `height="50"`) as a CSS `Dim`.
 /// Percentages are the point: `<table width="85%">` is how a large part of the legacy web —
 /// Hacker News included — sizes its layout, and treating it as "absent" shrink-to-fits the table.

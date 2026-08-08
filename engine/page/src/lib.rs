@@ -807,18 +807,11 @@ fn apply_natural_sizes(
     }
 }
 
+/// A decoded bitmap's own pixel size, through the one producer that also marks the axes it filled —
+/// `manuk_css::fill_natural_size`. A `<canvas>`'s dimension attributes reach the same function from
+/// the cascade; see there for why the marks exist and why a ratio leaves the height `auto`.
 fn apply_natural_size(style: &mut manuk_css::ComputedStyle, img: &manuk_paint::DecodedImage) {
-    if img.width > 0 && img.height > 0 {
-        style.aspect_ratio = Some(img.width as f32 / img.height as f32);
-    }
-    if style.width == manuk_css::Dim::Auto && style.height == manuk_css::Dim::Auto {
-        style.width = manuk_css::Dim::Px(img.width as f32);
-    } else if style.width == manuk_css::Dim::Auto && style.aspect_ratio.is_none() {
-        style.width = manuk_css::Dim::Px(img.width as f32);
-    }
-    if style.height == manuk_css::Dim::Auto && style.aspect_ratio.is_none() {
-        style.height = manuk_css::Dim::Px(img.height as f32);
-    }
+    manuk_css::fill_natural_size(style, img.width as f32, img.height as f32);
 }
 
 /// Decode every `<img src="data:...">` in the tree and give it its natural size, **before the first

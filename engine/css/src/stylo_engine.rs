@@ -1312,6 +1312,31 @@ fn apply_presentational_hints(dom: &Dom, node: NodeId, s: &mut crate::ComputedSt
                 }
             }
         }
+        // ── **A `<canvas>`'s dimension attributes are its NATURAL SIZE, not its CSS width/height.**
+        //
+        // Every other tag in the presentational-hint set maps `width`/`height` to the dimension
+        // *properties*; `canvas` maps them to the output BITMAP (HTML §"the canvas element"), which
+        // is the element's natural size. It is a real distinction and Chrome shows it on one row:
+        //
+        // ```text
+        //   <canvas w=40 h=20 style="width:100px">   100 x 50   ← the auto height follows the ratio
+        //   <svg    w=40 h=20 style="width:100px">   100 x 20   ← the attribute IS the height
+        // ```
+        //
+        // So it is filled HERE, as a natural size — into an `auto` axis only, marked
+        // `*_is_natural` — and NOT in `presentational_hint_block`, which is the CSS-property
+        // mapping. The mark is what lets a clamp on the other axis rewrite this number when a
+        // specified one may not; see `ComputedStyle::width_is_natural`.
+        if tag == "canvas" {
+            if let (Some(crate::Dim::Px(w)), Some(crate::Dim::Px(h))) = (
+                el.attr("width").and_then(crate::parse_dimension_attr_dim),
+                el.attr("height").and_then(crate::parse_dimension_attr_dim),
+            ) {
+                if w > 0.0 && h > 0.0 {
+                    crate::fill_natural_size(s, w, h);
+                }
+            }
+        }
         // `viewBox` gives an `<svg>` an intrinsic RATIO (SVG2) even with no dimension attributes
         // at all — the icon/logo idiom. Measured Chrome (tick 391): `<svg viewBox="0 0 24 24">`
         // in a 400px block is 400×400 — auto width fills the containing block, height follows the
@@ -2477,10 +2502,13 @@ fn presentational_hint_block(
     // The replaced set, plus the table/legacy set that `apply_presentational_hints` used to size
     // in a second post-cascade pass of its own (t1027). ONE producer, ONE origin: HTML maps
     // `width`/`height` on all of these to the dimension properties as a presentational hint.
+    // ⚠ **`canvas` IS DELIBERATELY NOT HERE.** Its `width`/`height` attributes size the output
+    // BITMAP — the element's natural size — and not the CSS dimension properties, which is the one
+    // place HTML's dimension attributes do something else. It sat in this list and was invisible
+    // because a second defect cancelled it exactly (see `apply_natural_sizes` in `manuk-page`).
     if !matches!(
         tag,
         "img"
-            | "canvas"
             | "video"
             | "svg"
             | "object"

@@ -3260,17 +3260,36 @@ impl Ctx<'_> {
         let natural_content_h = content_height;
         let mut content_height = match (own_definite_h, s.aspect_ratio) {
             (None, Some(r)) if r > 0.0 => width / r,
-            // **CSS2.1 §10.4 constraint violation: the clamp transfers through the ratio.** A
-            // replaced element whose width was cut down by `max-width` (or pushed up by
-            // `min-width`) does not keep its specified height — the used height is recomputed from
-            // the used width so the ratio survives. This is the case a specified height alone would
-            // otherwise win, and it is exactly the shape of the responsive web: `<img width="800"
-            // height="400">` (the attributes are there to reserve the box before the bitmap
-            // arrives) under the universal `img { max-width: 100% }` reset, in a 400px column.
-            // Without the transfer the box is 400x400 and the picture renders squashed to half its
-            // width at full height; with it, 400x200.
+            // ⚠⚠⚠ **THE CLAMP TRANSFERS THROUGH THE RATIO ONLY INTO AN AXIS NOBODY SPECIFIED, AND
+            // THE COMMENT THAT USED TO BE HERE ASSERTED THE OPPOSITE WITH A CHROME NUMBER THAT IS
+            // NOT CHROME'S.** It claimed `<img width="800" height="400">` under `max-width:100%` in
+            // a 400px column is 400x200 in Chrome — CSS2.1 §10.4's constraint-violation table, which
+            // recomputes *both* axes from the tentative used width. Measured (t1042), headless
+            // Chrome on that exact markup:
+            //
+            // ```text
+            //   <img w=800 h=400 style="max-width:100%">              400 x 400   ← NOT 400x200
+            //   <img w=800 h=400 style="max-width:100%;height:auto">  400 x 200
+            //   <img            style="max-width:100%">  (800x400)    400 x 200
+            // ```
+            //
+            // §10.4's table was superseded for replaced elements by CSS-Sizing: a ratio fills an
+            // axis that is `auto`, and a clamp on one axis never overwrites a value the page asked
+            // for on the other. **The `height:auto` in every responsive-image reset is not
+            // decoration — it is the thing that makes the transfer legal**, and that is why the
+            // reset is always written with it.
+            //
+            // `height_is_natural` is the third state the old code could not see: a bitmap's own
+            // height, written into `height` by `apply_natural_size`, is a `Dim::Px` that still
+            // behaves as `auto` here. One bitmap, one clamp, attributes the only difference:
+            //
+            // ```text
+            //   <img              style="max-height:30px">   112.78 x 30   transfers (natural)
+            //   <img w=1000 h=266 style="max-height:30px">   1000   x 30   does not (specified)
+            // ```
             (Some(_), Some(r))
                 if r > 0.0
+                    && s.height_is_natural
                     && inline_constraint_violated
                     && is_replaced_element(self.dom.tag_name(node)) =>
             {
@@ -3437,7 +3456,15 @@ impl Ctx<'_> {
             // The auto-margin centring is re-run below for the same reason it exists at all —
             // §10.4 says the §10.3.3 rules are applied *again* with the constraint as the computed
             // width, and §10.3.3 is where a pair of `auto` margins splits the remainder.
-            if content_height != unclamped_height && is_replaced_element(self.dom.tag_name(node)) {
+            //
+            // ⚠ **…and it transfers only into a width nobody specified** — the same correction the
+            // inline→block half above carries, applied to its mirror. `<svg width="1000"
+            // height="266" style="max-width:100%;max-height:30px">` is 400x30 in Chrome (both axes
+            // clamped, neither derived) where the same element WITHOUT the attributes is 112.78x30.
+            if content_height != unclamped_height
+                && is_replaced_element(self.dom.tag_name(node))
+                && (s.width == Dim::Auto || s.width_is_natural)
+            {
                 if let Some(r) = s.aspect_ratio {
                     if r > 0.0 {
                         let mut w = content_height * r;
@@ -4293,9 +4320,13 @@ impl Ctx<'_> {
             // `.logo a img { float:left }` measured `101x0` against Chrome's `101x32`, with the
             // otherwise-identical unfloated image in the same document already Chrome-exact.
             (Dim::Auto, Some(r)) if r > 0.0 => width / r,
-            // The §10.4 transfer, inline → block: the width was clamped, so the height follows it.
+            // The transfer, inline → block: the width was clamped, so the height follows it —
+            // **but only into a height nobody specified.** See the `layout_block` twin, which
+            // carries the Chrome measurements; a second implementation of a rule does not inherit
+            // the first one's fixes, and this is that sentence in its usual direction.
             (_, Some(r))
                 if r > 0.0
+                    && s.height_is_natural
                     && inline_constraint_violated
                     && is_replaced_element(self.dom.tag_name(node)) =>
             {
@@ -4341,7 +4372,10 @@ impl Ctx<'_> {
         // pull the width back through the ratio, or the picture renders stretched at its old width.
         // This is `.help img { max-height:14px; max-width:14px }` over an `<img height="16">` — the
         // shape that made `app.ordertime.com` measure `0x16` where Chrome measures **14x14**.
-        if content_height != unclamped_height {
+        // ⚠ …**into a width nobody specified**, same correction as the `layout_block` twin. The
+        // `app.ordertime.com` case above still transfers: that `<img height="16">` has no width
+        // attribute and no CSS width, so its width is exactly the derived one this rule owns.
+        if content_height != unclamped_height && (s.width == Dim::Auto || s.width_is_natural) {
             if let Some(r) = s.aspect_ratio {
                 if r > 0.0 && is_replaced_element(self.dom.tag_name(node)) {
                     width = (content_height * r).min(max_w).max(min_w);
@@ -6493,7 +6527,11 @@ impl Ctx<'_> {
         // And §10.4 the other way, block → inline — the half t833 added to `layout_block`. Safe to
         // move the width after `layout_children` ONLY under the replaced guard, since a replaced box
         // has no children that were laid out against the old width.
-        if content_height != unclamped_h && is_replaced_element(self.dom.tag_name(node)) {
+        // ⚠ …and only into a width nobody specified — the third copy of the t1042 correction.
+        if content_height != unclamped_h
+            && is_replaced_element(self.dom.tag_name(node))
+            && (s.width == Dim::Auto || s.width_is_natural)
+        {
             if let Some(r) = s.aspect_ratio {
                 if r > 0.0 {
                     let w = ((content_height + bs_extra_h) * r - bs_extra_w).max(0.0);
@@ -11041,6 +11079,99 @@ mod tests {
         );
     }
 
+    /// **THE INTRINSIC RATIO FILLS AN AXIS NOBODY SPECIFIED, AND ONLY THAT AXIS** (t1042).
+    ///
+    /// The whole rule in one pair, and the pair is the point: same element, same clamp, the
+    /// dimension attributes are the only difference between the two rows.
+    ///
+    /// ```text
+    ///                                                        Chrome    before    after
+    ///   <svg              style="max-height:30px">  (vb 40/20)  60x30     60x30     60x30  control
+    ///   <svg w=40 h=20    style="max-height:10px">              40x10     20x10     40x10   ✗→✓
+    ///   <svg w=40 h=20    style="max-width:20px">               20x20     20x10     20x20   ✗→✓
+    ///   <svg w=40 h=20    style="max-width:20px;height:auto">   20x10     20x10     20x10  control
+    ///   <svg w=40 h=20    style="min-width:80px">               80x20     80x40     80x20   ✗→✓
+    /// ```
+    ///
+    /// ⚠ **The two control rows are what make this falsifiable in the OTHER direction.** Delete the
+    /// transfer instead of guarding it and they go 400x30 and 20x20 — so a mutation either way is
+    /// caught, which is what a guard added to an existing rule has to prove before it is worth
+    /// banking. Every number above was read off headless Chrome, including the one I first wrote
+    /// down wrong (see the `ctl` row).
+    ///
+    /// The `<svg>` tag is deliberate: its `width`/`height` attributes are SVG2 geometry properties
+    /// mapping to the CSS dimension properties, so this measures the specified-vs-derived question
+    /// with no bitmap in play. `<canvas>` answers the same question from the other side — its
+    /// attributes are the natural size — and is covered by
+    /// `dimension_attributes_give_a_replaced_element_its_ratio_before_it_loads`.
+    #[test]
+    fn the_ratio_transfer_never_overwrites_a_specified_axis() {
+        let (dom, root) = layout_html(
+            "<body style='margin:0'>\
+               <div class=c><svg id=ctl viewBox='0 0 40 20' style='max-height:30px'></svg></div>\
+               <div class=c><svg id=mh width=40 height=20 style='max-height:10px'></svg></div>\
+               <div class=c><svg id=mw width=40 height=20 style='max-width:20px'></svg></div>\
+               <div class=c><svg id=au width=40 height=20 style='max-width:20px;height:auto'></svg></div>\
+               <div class=c><svg id=mn width=40 height=20 style='min-width:80px'></svg></div>\
+             </body>",
+            ".c{width:400px}",
+            1200.0,
+        );
+        let rects = root.node_rects(&dom);
+        let g = |id: &str| {
+            let n = dom
+                .descendants(dom.root())
+                .find(|&n| dom.element(n).and_then(|e| e.attr("id")) == Some(id))
+                .expect("id");
+            (rects[&n].width, rects[&n].height)
+        };
+        for (id, want, why) in [
+            (
+                // ⚠ I asserted 40x20 here from the shape of the markup and Chrome said **60x30**:
+                // a `viewBox` is a RATIO and never a SIZE, so this box fills its 400px column,
+                // takes 200 of height, is clamped to 30, and pulls its width back to 60. Both axes
+                // derived, nothing specified — which makes it the row that goes red if the
+                // transfer is deleted rather than guarded, and a better control than the one I
+                // meant to write.
+                "ctl",
+                (60.0, 30.0),
+                "a viewBox ratio with BOTH axes auto: the transfer runs in both directions",
+            ),
+            (
+                "mh",
+                (40.0, 10.0),
+                "max-height clamps the height; the width is the `width` ATTRIBUTE and is not the \
+                 ratio's to rewrite (20x10 = the block→inline transfer ran anyway)",
+            ),
+            (
+                "mw",
+                (20.0, 20.0),
+                "max-width clamps the width; the height is specified (20x10 = the inline→block \
+                 transfer ran anyway)",
+            ),
+            (
+                "au",
+                (20.0, 10.0),
+                "CONTROL — `height:auto` is what makes the transfer legal, and it is why every \
+                 responsive-image reset on the web is written with it (20x20 = the guard is too \
+                 broad and the transfer never fires)",
+            ),
+            (
+                "mn",
+                (80.0, 20.0),
+                "min-width is the same clamp upward, and the specified height still stands",
+            ),
+        ] {
+            let (gw, gh) = g(id);
+            assert!(
+                (gw - want.0).abs() < 1.0 && (gh - want.1).abs() < 1.0,
+                "#{id}: Chrome measures {}x{}, got {gw}x{gh} — {why}",
+                want.0,
+                want.1
+            );
+        }
+    }
+
     /// Regression: **a percentage width on a flex item must not be resolved twice.**
     ///
     /// `extract_placed` hands taffy's assigned width to `layout_block` as its `cw`, and `cw` means
@@ -12352,10 +12483,16 @@ mod tests {
             (rects[&n].width, rects[&n].height)
         };
         for (id, want) in [
+            // The two rows that guard the ratio reaching this path at all: without it both are
+            // `x0` tall, which is the defect this test was written for.
             ("w", (320.0, 85.0)),
-            ("h", (113.0, 30.0)),
-            ("both", (113.0, 30.0)),
             ("mw", (1500.0, 399.0)),
+            // ⚠⚠ **RE-MEASURED t1042** — see the twin correction in
+            // `a_max_height_on_a_replaced_element_pulls_its_width_back_through_the_ratio`. The
+            // width is `width:1000px`, specified, so a `max-height` clamp clamps the height and
+            // nothing else. Chrome: 1000x30 and 320x30, not 113x30 twice.
+            ("h", (1000.0, 30.0)),
+            ("both", (320.0, 30.0)),
         ] {
             let (gw, gh) = g(id);
             assert!(
@@ -12418,12 +12555,28 @@ mod tests {
             (rects[&n].x, rects[&n].width, rects[&n].height)
         };
         for (id, want) in [
-            ("both", (0.0, 113.0, 30.0)),
-            // The control: `max-width` alone was ALREADY Chrome-exact (the inline→block transfer),
-            // and a fix to the other half must not touch it.
+            // ⚠⚠ **RE-MEASURED t1042, AND THREE OF THESE FOUR NUMBERS WERE WRONG.** They were
+            // derived from CSS2.1 §10.4's constraint-violation table (which recomputes BOTH axes)
+            // rather than read off headless Chrome, which is the failure mode check #90 named. The
+            // width here is `width:1000px` — SPECIFIED — so a `max-height` clamp may not rewrite
+            // it; §10.4's table was superseded for replaced elements by CSS-Sizing, where the ratio
+            // fills an `auto` axis only. Chrome, same markup, same hour:
+            //
+            // ```text
+            //                                    was banked   Chrome measures
+            //   max-width:100% + max-height        113x30        320x30
+            //   max-height:30px alone              113x30       1000x30
+            //   …+ display:block; margin:0 auto  113x30 @104   320x30 @0
+            // ```
+            ("both", (0.0, 320.0, 30.0)),
+            // The control, and the only row that was right: `max-width` alone clamps the width and
+            // the AUTO height follows it. This is the row that still fails if the transfer is
+            // deleted outright, which is what keeps this gate falsifiable in both directions —
+            // 320x266 without it.
             ("w", (0.0, 320.0, 85.0)),
-            ("h", (0.0, 113.0, 30.0)),
-            ("c", (104.0, 113.0, 30.0)),
+            ("h", (0.0, 1000.0, 30.0)),
+            // The auto-margin split has nothing left to share: the used width now fills the box.
+            ("c", (0.0, 320.0, 30.0)),
         ] {
             let (gx, gw, gh) = g(id);
             assert!(

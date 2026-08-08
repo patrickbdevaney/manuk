@@ -352,6 +352,10 @@
   - L6874 · <legend>: two attempts, nothing landed
   - L6895 · The gate proves the ratio, not a number
   - L6902 · reading_order is a long tail, and one site's outlier was a quadratic artefact (t1041)
+  - L6934 · The intrinsic ratio fills an axis nobody specified, and CSS2.1 §10.4's table is not what Chrome does (t1042)
+  - L6961 · The third state: natural is not specified, and a Dim::Px cannot tell you which
+  - L6976 · <canvas> is the one tag whose dimension attributes are not the dimension properties
+  - L6993 · How it was found, and the part of the method that did the work
 
 ## browser-capabilities.md
 `docs/wiki/browser-capabilities.md`
@@ -1737,4 +1741,4 @@
   - L124 · Rank mechanisms by FLIP RATE, not failing-subtest count — CSS layout is a multi-assertion slog
 
 ---
-1644 sections across 22 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+1648 sections across 22 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.

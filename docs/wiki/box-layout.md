@@ -6930,3 +6930,76 @@ container**, so ranking sites by raw `reading_order` put the least representativ
 
 ⚠ This does not mean stop: t1034 measured 85% of inversions between real on-screen boxes, so they are
 defects a user could see. It means **hunting a shared mechanism across a long tail cannot work.**
+
+## The intrinsic ratio fills an axis nobody specified, and CSS2.1 §10.4's table is not what Chrome does (t1042)
+
+A replaced element with an intrinsic aspect ratio has two sources for each axis: what the page said,
+and what the ratio implies. CSS2.1 §10.4 gives a **constraint-violation table** that, when a clamp
+moves one axis, recomputes the *other* from the tentative used size — both axes, unconditionally.
+Three places in this engine implemented that table, and one of them carried a code comment asserting
+a Chrome measurement to back it up.
+
+**Headless Chrome does not do that, and the comment's number was reasoned rather than read.**
+
+```text
+   <img width="800" height="400" style="max-width:100%">   in a 400px column
+        §10.4's table  →  400 x 200        the comment claimed this was Chrome
+        Chrome         →  400 x 400
+   …the same with height:auto              →  400 x 200    both models agree
+```
+
+§10.4's table was superseded for replaced elements by CSS-Sizing. The rule Chrome implements is:
+
+> **The intrinsic ratio fills an axis that is `auto`. A clamp on one axis never overwrites a value
+> the page specified on the other.**
+
+This is why every responsive-image reset on the web is written `max-width:100%; height:auto` and not
+`max-width:100%` alone — **the `height:auto` is not decoration, it is the thing that makes the
+transfer legal.** An author who omits it gets the full declared height in Chrome, and got a
+ratio-scaled one here.
+
+### The third state: `natural` is not `specified`, and a `Dim::Px` cannot tell you which
+
+The guard is not "is this axis `auto`", because by layout time it may not be. `apply_natural_size`
+writes a decoded bitmap's own pixel size into an `auto` axis, and what it leaves behind is a
+`Dim::Px` indistinguishable from one the page asked for. **The difference is observable on one
+bitmap and one clamp, with the dimension attributes as the only variable:**
+
+```text
+   <img              style="max-height:30px">    1000x266 bitmap    112.78 x 30    transfers
+   <img w=1000 h=266 style="max-height:30px">    same bitmap        1000   x 30    does not
+```
+
+So `ComputedStyle` carries `width_is_natural` / `height_is_natural`, set by the one producer
+(`manuk_css::fill_natural_size`), and the transfer fires into an axis that is `auto` **or** natural.
+
+### `<canvas>` is the one tag whose dimension attributes are not the dimension properties
+
+Every other member of the presentational-hint set maps `width`/`height` to the CSS properties.
+`<canvas>` maps them to the **output bitmap** — the element's natural size — and it was in that set.
+
+```text
+   <canvas w=40 h=20 style="width:100px">    100 x 50    the auto height follows the natural ratio
+   <svg    w=40 h=20 style="width:100px">    100 x 20    the attribute IS the height property
+```
+
+⚠⚠⚠ **AND IT READ AS CORRECT, BECAUSE THE TWO DEFECTS CANCELLED EXACTLY.** With canvas wrongly
+pinned to a specified height *and* the transfer wrongly overwriting specified axes, `<canvas w=40
+h=20 style="max-width:20px">` came out 20x10 — Chrome's answer, by two errors. Fixing either one
+alone regresses it. This is the third time this project has found a cancelling pair, and the tell is
+the same every time: **the row that passes under both the right model and the wrong one is not
+evidence, and only a row where the two models predict different numbers is.**
+
+### How it was found, and the part of the method that did the work
+
+A property-family battery on inline `<svg>` — the corpus's fifth-ranked construct at 34.5%
+(`CORPUS-CONSTRUCTS.md`), and one with no differential reading. 29 rows, **one** diverged. Chasing
+that single row through four more batteries (103 rows total) turned it into a rule, and the rows that
+settled it were never the row that made me look: the `<svg>` that started it is not in the corpus's
+top three, and the decisive pair was two `<img>`s differing only by their attributes.
+
+⚠ Every number in the gate was read off headless Chrome, **including the one written down wrong**:
+the control row was asserted at 40x20 from the shape of the markup and Chrome said 60x30, because a
+`viewBox` is a ratio and never a size. It is a better control for it — both of its axes are derived,
+so it goes red if the transfer is *deleted* rather than guarded, which is what makes
+`the_ratio_transfer_never_overwrites_a_specified_axis` falsifiable in both directions.

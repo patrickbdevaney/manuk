@@ -46371,6 +46371,111 @@ PERF: none — one UA rule and one narrowed branch in a cascade that already ran
 WIKI: `docs/wiki/css-cascade.md` — where Chrome draws the form-control `box-sizing` line, and why a
 layout-crate test cannot see it.
 
+## Tick 1042 — the ratio may fill an axis, never overwrite one — and two defects that cancelled exactly (2026-08-08)
+
+TICK SHAPE: primitive — a property-family battery on inline `<svg>` (the corpus's 5th-ranked
+construct at 34.5%, and one with **no differential reading in this session**), the single divergence
+it found chased to a rule, and the rule landed across four layout sites with a RED-proven gate.
+
+**THE RESULT: 103 Chrome-diffed rows across seven fixtures go 86 exact → 103 exact. 17 divergences,
+one rule.**
+
+⚠⚠⚠ **THE RULE, AND THE COMMENT IN OUR OWN SOURCE THAT ASSERTED THE OPPOSITE WITH A CHROME NUMBER
+THAT IS NOT CHROME'S.** `layout_block` carried a measurement table backing CSS2.1 §10.4's
+constraint-violation rule — when a clamp moves one axis, recompute the other from the ratio,
+unconditionally. Measured this tick on that comment's own markup:
+
+```text
+   <img width="800" height="400" style="max-width:100%">  in a 400px column
+        the comment / §10.4's table   →   400 x 200
+        headless Chrome               →   400 x 400
+   …the same with height:auto         →   400 x 200   ← both models agree, and this is the row
+                                                         every responsive reset actually ships
+```
+
+§10.4's table was superseded for replaced elements by CSS-Sizing. **The ratio fills an axis that is
+`auto`; a clamp on one axis never overwrites a value the page specified on the other.** The
+`height:auto` in `img { max-width:100%; height:auto }` is not decoration — it is the thing that makes
+the transfer legal, and an author who omits it got a ratio-scaled height here and the full declared
+one in Chrome.
+
+⚠⚠⚠ **THE THIRD STATE: `natural` IS NOT `specified`, AND A `Dim::Px` CANNOT TELL YOU WHICH.** The
+guard cannot be "is this axis `auto`", because by layout time it may not be — `apply_natural_size`
+writes a decoded bitmap's own size into an `auto` axis and leaves a `Dim::Px` behind. One bitmap, one
+clamp, the dimension attributes the only variable:
+
+```text
+   <img              style="max-height:30px">   1000x266 bitmap   112.78 x 30   TRANSFERS
+   <img w=1000 h=266 style="max-height:30px">   same bitmap       1000   x 30   DOES NOT
+```
+
+That pair is what forced the design: `ComputedStyle` now carries `width_is_natural` /
+`height_is_natural`, written by one producer (`manuk_css::fill_natural_size`, which both the decoded-
+image path and the cascade route through), and the transfer fires into an axis that is `auto` **or**
+natural.
+
+⚠⚠⚠ **AND `<canvas>` WAS WRONG IN THE OPPOSITE DIRECTION, SO THE TWO DEFECTS CANCELLED EXACTLY.**
+`<canvas>` is the one tag whose `width`/`height` attributes are **not** the CSS dimension properties
+— they size the output bitmap, i.e. its natural size — and it sat in the presentational-hint set with
+`<img>`/`<svg>`/`<video>`:
+
+```text
+   <canvas w=40 h=20 style="width:100px">    Chrome 100 x 50    the auto height follows the ratio
+   <svg    w=40 h=20 style="width:100px">    Chrome 100 x 20    the attribute IS the height
+
+   <canvas w=40 h=20 style="max-width:20px">  Chrome 20x10 · ours 20x10  ← PASSED, by TWO errors
+```
+
+Canvas pinned to a specified height, plus a transfer that overwrote specified axes, produced Chrome's
+answer. **Fixing either alone regresses that row** — the third cancelling pair this project has
+found, and the tell is always the same: *a row that passes under both the right model and the wrong
+one is not evidence.* Both landed together.
+
+⚠⚠ **THREE BANKED GATE NUMBERS WERE REASONED, NOT MEASURED, AND THE FIX TURNED THEM INTO A RED
+WALL.** `a_max_height_on_a_replaced_element_pulls_its_width_back_through_the_ratio` and
+`an_abspos_replaced_element_takes_its_height_from_its_ratio` assert on `img{aspect-ratio:1000/266;
+width:1000px}` — a **specified** width. Re-measured, same markup, same hour:
+
+```text
+                                        was banked    Chrome
+   max-width:100% + max-height:30px       113x30      320x30
+   max-height:30px alone                  113x30     1000x30
+   …+ display:block; margin:0 auto      113x30 @104  320x30 @0
+   max-width:100% alone                   320x85      320x85   ← the one row that was right
+```
+
+Corrected to the reference, not to the diff — the check-#90 distinction, and the `max-width`-alone
+control is untouched and still red-proves the transfer exists.
+
+GATE: `the_ratio_transfer_never_overwrites_a_specified_axis` — 5 Chrome-measured rows, **RED-proven
+three ways**: drop the height guard → `#mw` 20x10; drop the width guard → `#mh` 20x10; delete the
+transfer outright instead of guarding it → `#ctl` 400x30. The two control rows are what catch the
+third mutation, which is what a guard *added to an existing rule* has to prove before it is worth
+banking.
+
+⚠ **I ASSERTED THE CONTROL ROW AT 40x20 FROM THE SHAPE OF THE MARKUP AND CHROME SAID 60x30** — a
+`viewBox` is a RATIO and never a SIZE (the t741 lesson, re-earned), so that box fills its column,
+takes 200 of height, clamps to 30 and pulls its width back to 60. Both axes derived, which makes it a
+*better* control than the one I meant to write. The number in the gate is Chrome's.
+
+METHOD, because it is the tick's transferable half: **the rows that discriminate were not the rows
+that made me look** — for the seventh time this window. The battery was built on `<svg>` and the pair
+that settled the design was two `<img>`s; the row that started it (`max-width` on an `<svg>` with
+both attributes) is not in the corpus's top constructs at all.
+
+RATCHET: `manuk-layout` **131/131** (130 + the new gate), `manuk-css` 32/32. Marginal cut on the five
+named sites: `otomoto` 0.7517→0.7605, `m.youm7` 0.7949→0.8229, `simplepdf` and `rockstaractu`
+byte-unchanged. `sports.yahoo.com` hit `tree-divergence-1820` in the cut and **three solo runs
+attributed it to the site, not the tick** — 2 of 3 score 0.865363 identically and the third
+reproduces the divergence, so it is intermittent and independent of this change. ⚠ The deltas span
+ten ticks and sit inside the documented per-site drift band; **the attributable result is the fixture
+count, not the corpus one.**
+
+PERF: none — no new work, two `bool` reads added to guards that already ran.
+
+WIKI: `docs/wiki/box-layout.md` — "The intrinsic ratio fills an axis nobody specified, and CSS2.1
+§10.4's table is not what Chrome does".
+
 ## Tick 1041 — `reading_order` is a LONG TAIL of two-sibling inversions, not a few broken rows (2026-08-08)
 
 TICK SHAPE: primitive (instrument) — a report-only partition that answers the question the counts
