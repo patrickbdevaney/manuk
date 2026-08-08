@@ -46371,6 +46371,77 @@ PERF: none — one UA rule and one narrowed branch in a cascade that already ran
 WIKI: `docs/wiki/css-cascade.md` — where Chrome draws the form-control `box-sizing` line, and why a
 layout-crate test cannot see it.
 
+## Tick 1040 — the marginal cut, and `reading_order` did not move by a single count on any of six sites (2026-08-08)
+
+TICK SHAPE: measurement — check #95's steer #1 built and run: **a cheap per-tick attribution to
+replace the hour-long sweep the loop cannot afford every tick.**
+
+⚠⚠⚠ **THE INSTRUMENT, AND IT NEEDED NO CODE.** Check #95 named the problem structurally: a sweep is
+~63 minutes and a tick is ~20–40, so *"unmeasured" is the steady state of this loop, not an
+exception*. The answer is not a faster sweep — it is a **smaller denominator chosen for
+discrimination rather than coverage**: the six sites t1032 identified as one conjunct away from M1.
+Six sites plus an old-binary control is **~12 minutes**, and unlike the sweep's common-set band it is
+attributed by construction.
+
+⚠⚠⚠ **THE RESULT, OLD BINARY (t1028) AGAINST HEAD, SAME HOUR** — four fixes landed in between
+(`overflow:clip` t1029, RTL atomic inline t1035, the iframe border t1037, six UA declarations t1038):
+
+```text
+                            shape          h_overflow      reading_order
+   site                   old  ->  new     old -> new       old -> new
+   sports.yahoo.com      0.865   0.865      0      0          6     6      unmoved
+   rockstaractu.com      0.885   0.885      0      0         13    13      unmoved
+   m.youm7.com           0.794   0.802      2  ->  0         24    24      ENGINE
+   www.otomoto.pl        0.734   0.792      4  ->  0         11    11      ENGINE  +0.058
+   www.kuechenmomente.de 0.751   0.751     11     11          5     5      unmoved
+   simplepdf.com         0.795   0.795      5      5          0     0      unmoved
+```
+
+**Real attributed engine movement on 2 of 6, and `h_overflow` went to ZERO on both** — `otomoto.pl`
+gained **+0.058 shape** and lost all four of its horizontal-overflow elements; `m.youm7.com` lost both
+of its. That is this window's work, isolated from site drift by the control, and it is the first
+per-tick attribution this loop has ever had.
+
+⚠⚠⚠ **AND THE FINDING THAT MATTERS IS THE COLUMN THAT DID NOT MOVE. `reading_order` IS IDENTICAL — TO
+THE COUNT — ON ALL SIX SITES.** 6, 13, 24, 11, 5, 0 before and after. Four fixes, ~112 refutation
+probes, two batteries and an instrument partition across this window and the last, and **the conjunct
+M1 is actually gated on has not moved by one.**
+
+> t1031 established that M1 is gated on `reading_order` and that shape work does not reach it. This
+> tick is the **controlled** version of that statement: it is no longer an inference from a flat
+> headline, it is six sites measured twice on two binaries in one hour. **The loop is producing real,
+> Chrome-exact, gated capability on a conjunct that is not the binding one**, and both halves of that
+> sentence are now measured rather than argued.
+
+⚠ **What this does NOT say.** Not that the four fixes were worthless — `otomoto.pl` moved +0.058 and
+two sites lost every h-overflow element, which is real rendering correctness on real pages. Not that
+`reading_order` is unfixable — t1034 measured 85% of its inversions between genuine on-screen boxes.
+It says the loop's **aim** has been off the binding conjunct for a whole window, and that the cheap
+instrument to notice that now exists and costs twelve minutes.
+
+⚠⚠ **THE INSTRUMENT IS THE DELIVERABLE AND IT IS REPRODUCIBLE IN ONE COMMAND**, which is why no code
+was written:
+
+```text
+   MANUK_RO_PARTITION=1 manuk-wpt fidelity --urls <the six> --rows-out /tmp/marg-new.tsv
+   git checkout <pre-window sha> -- engine/css/src/{stylo_engine,lib}.rs engine/layout/src/lib.rs
+   cargo build --release -p manuk-wpt && …--rows-out /tmp/marg-old.tsv
+   git checkout HEAD -- <the same three files>
+```
+
+⚠ The site list is **not fixed forever** — it is *"the sites one conjunct from crossing"*, which
+changes as sites cross. Re-cut it from each sweep's row file rather than carrying it as a constant,
+or it becomes the thing it was built to replace: a number about a population that has moved on.
+
+RATCHET: measurement only, no engine code changed; the three engine files were checked out and
+restored, and `git status` was verified clean before the tick. Nothing traded.
+
+GATE: none — the artefact is the table above, reproducible by the four commands.
+
+PERF: none.
+
+WIKI: none — an instrument and a measurement. [no-pattern]
+
 ## Tick 1039 — 16.4% of the corpus declares it and it moves nothing; the two things that DO move are declared by nobody (2026-08-08)
 
 TICK SHAPE: measurement — audit #43's last unprobed ranked item, **probed before building, and the
