@@ -46371,6 +46371,74 @@ PERF: none — one UA rule and one narrowed branch in a cascade that already ran
 WIKI: `docs/wiki/css-cascade.md` — where Chrome draws the form-control `box-sizing` line, and why a
 layout-crate test cannot see it.
 
+## Tick 1033 — 41 rows say `reading_order` is not a row-construction defect, and that is the result (2026-08-08)
+
+TICK SHAPE: measurement — the row-forming battery t1032 named, plus its wrap-boundary follow-on.
+**Both came back completely clean, and the negative is the deliverable.**
+
+⚠⚠⚠ **41 OF 41 PROBES CHROME-EXACT ACROSS 18 CONSTRUCTS.** t1032 established that every
+`reading_order` inversion on the four marginal sites is a **sibling ROW** we stack or swap, so the
+battery went at row FORMATION — the property family, not a fifth site reduction (t930-932's rule):
+
+```text
+   row-order       24/24    float pair (left / right / with an <img>) · inline-block row ·
+                            flex row (button+nav, the sports.yahoo shape) · flex `order` ·
+                            wrapping flex · abspos inside a row · TRANSFORMED row ·
+                            grid row · grid explicit `grid-column` placement · block CONTROL
+
+   wrap-boundary   17/17    an inline-block pair EXACTLY filling the line (1px of width error
+                            flips the wrap) · one px over, which MUST wrap in both · a 50%+50%
+                            pair · 50%+padding in content-box (the classic overflow) · the same
+                            in border-box · flex-wrap at the exact boundary · 33.333/33.333/33.334
+                            fractional widths (LayoutUnit territory) · the WHITESPACE GAP between
+                            two inline-blocks, which is a real space and eats the line
+```
+
+**Every construct that can build a row, and every way an off-by-one width can flip which line a
+sibling lands on, is already correct.** ⚠ The wrap-boundary page is the sharper half: it was written
+on the theory that `reading_order` is not an *ordering* symptom at all but a **wrap-point** one — a
+pair inverts because one sibling wrapped to the next line in one engine and not the other, which is
+what t871-874's *"a reading-order symptom is a WIDTH upstream, never a reorder"* predicts. **The
+theory is good and the arithmetic under it is not broken**, which are two different findings and only
+the second is measured here.
+
+⚠⚠ **THIS IS t932's NEGATIVE, EXTENDED TO THE CONJUNCT THAT ACTUALLY BINDS.** Check #82 recorded that
+the residual mass is *not* in composed block-level width arithmetic (24 of 25 exact). That was about
+`shape`. This says the same thing about `reading_order`, which t1031 proved is the conjunct M1 is
+actually gated on — so the constitution's H0.1 residue list can now exclude row construction on both
+legs rather than only one.
+
+⚠⚠⚠ **WHAT THAT LEAVES, STATED AS A NARROWING AND NOT AS A GUESS.** Three ticks have now produced
+four refuted mechanisms — `<ins>` slots (7/7), RTL order (13/13), row formation (24/24), wrap
+boundaries (17/17) — **61 probes, zero divergences.** The inversions are real and reproducible on the
+sites, so the cause is upstream of every construct a static fixture can express. The candidates left
+are the ones a fixture *cannot* reach: a subresource that resolved to a different size, a script that
+laid the row out itself, or a box whose SIZE is wrong for reasons already on the residue list —
+**not** the row logic that arranges it.
+
+**So the next probe must come from the DATA, not from a fifth family**: dump both engines' rects for
+one *named* inverted pair (`rockstaractu …/ul/li[3]/div[1]/div[1] ⇄ div[2]`) and read what actually
+differs, rather than proposing another mechanism to eliminate. **Four eliminations in three ticks is a
+good rate and it is not convergence** — each one costs a tick, and the pairs have been sitting in
+`stderr` the whole time with their exact selector paths.
+
+⚠ **AND THE HONEST RISK, NAMED NOW RATHER THAN AFTER ANOTHER THREE TICKS:** if the inversions are
+driven by ads, scripts and images rather than by layout, then `reading_order` — the conjunct 10 of 12
+marginal sites fail on — may be **substantially an instrument property of measuring live commercial
+pages**, in the family check #83 already priced at 87% of M1's remaining distance. That would be a
+finding about the metric, not a defect to fix, and it is cheaper to test than to keep eliminating.
+
+RATCHET: measurement only, no engine code changed. Nothing traded.
+
+GATE: none. Both fixtures are kept in `tests/wpt/probes/` (not swept by `parity`, so the wall stays
+at 32 pages and costs nothing), and each carries its controls — the block-stack row that must never
+invert, and the one-px-over row that must wrap in both engines. **A 41/41 with no control is a probe
+that cannot discriminate; these can.**
+
+PERF: none.
+
+WIKI: none — four refuted mechanisms and a narrowing, not a mechanism. [no-pattern]
+
 ## Tick 1032 — the four sites M1 is waiting on, and two hypotheses killed in four minutes (2026-08-08)
 
 TICK SHAPE: measurement — localising `reading_order`, the conjunct t1031 proved is binding, down to a

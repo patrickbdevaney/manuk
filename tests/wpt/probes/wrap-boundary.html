@@ -1,0 +1,26 @@
+<!doctype html><html><head><meta charset=utf-8><style>
+*{margin:0;padding:0;font:16px/20px monospace}
+.r{width:200px;height:120px}
+.f{display:flex;flex-wrap:wrap;width:200px;height:120px}
+.c{background:#ccf}
+</style></head><body>
+<!-- inline-block pair EXACTLY filling the line: 1px of width error flips the wrap -->
+<div class=r><span id="p-e-a" class=c style="display:inline-block;width:100px;height:30px"></span><span id="p-e-b" class=c style="display:inline-block;width:100px;height:30px"></span></div>
+<!-- one px over: MUST wrap in both -->
+<div class=r><span id="p-o-a" class=c style="display:inline-block;width:100px;height:30px"></span><span id="p-o-b" class=c style="display:inline-block;width:101px;height:30px"></span></div>
+<!-- percentage pair summing to exactly 100% -->
+<div class=r><span id="p-p-a" class=c style="display:inline-block;width:50%;height:30px"></span><span id="p-p-b" class=c style="display:inline-block;width:50%;height:30px"></span></div>
+<!-- percentage + padding, content-box: the classic overflow -->
+<div class=r><span id="p-pp-a" class=c style="display:inline-block;width:50%;padding:0 4px;height:30px"></span><span id="p-pp-b" class=c style="display:inline-block;width:50%;height:30px"></span></div>
+<!-- border-box percentage pair -->
+<div class=r><span id="p-bb-a" class=c style="display:inline-block;box-sizing:border-box;width:50%;padding:0 4px;height:30px"></span><span id="p-bb-b" class=c style="display:inline-block;box-sizing:border-box;width:50%;height:30px"></span></div>
+<!-- flex-wrap at the exact boundary -->
+<div class=f><div id="p-fe-a" class=c style="width:100px;height:30px"></div><div id="p-fe-b" class=c style="width:100px;height:30px"></div></div>
+<!-- flex-wrap with a fractional width (LayoutUnit territory) -->
+<div class=f><div id="p-ff-a" class=c style="width:33.333%;height:30px"></div><div id="p-ff-b" class=c style="width:33.333%;height:30px"></div><div id="p-ff-c" class=c style="width:33.334%;height:30px"></div></div>
+<!-- inline-block with a text gap: the whitespace between them is a real space -->
+<div class=r>
+  <span id="p-ws-a" class=c style="display:inline-block;width:98px;height:30px"></span>
+  <span id="p-ws-b" class=c style="display:inline-block;width:98px;height:30px"></span>
+</div>
+</body></html>

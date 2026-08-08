@@ -1,0 +1,37 @@
+<!doctype html><html><head><meta charset=utf-8><style>
+*{margin:0;padding:0;font:16px/20px monospace}
+.r{width:400px;height:120px}
+.fr{display:flex;width:400px;height:120px}
+.fw{display:flex;flex-wrap:wrap;width:200px;height:120px}
+.g{display:grid;grid-template-columns:1fr 1fr;width:400px;height:120px}
+.c{background:#ccf}
+</style></head><body>
+
+<!-- float pair: the card thumb/text idiom -->
+<div class=r><div id="p-flt-a" class=c style="float:left;width:100px;height:60px"></div><div id="p-flt-b" class=c style="height:30px"></div></div>
+<div class=r><img id="p-fltimg-a" style="float:left;width:100px;height:60px" src="data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIxMDAiIGhlaWdodD0iNjAiPjwvc3ZnPg=="><div id="p-fltimg-b" class=c style="height:30px"></div></div>
+<div class=r><div id="p-fltr-a" class=c style="float:right;width:100px;height:60px"></div><div id="p-fltr-b" class=c style="height:30px"></div></div>
+
+<!-- inline-block row -->
+<div class=r><span id="p-ib-a" class=c style="display:inline-block;width:100px;height:40px"></span><span id="p-ib-b" class=c style="display:inline-block;width:100px;height:40px"></span></div>
+
+<!-- flex row: control + nav idiom -->
+<div class=fr><button id="p-fx-a" style="width:80px">b</button><nav id="p-fx-b" class=c style="width:120px"></nav></div>
+<div class=fr><div id="p-fxo-a" class=c style="width:80px;order:2"></div><nav id="p-fxo-b" class=c style="width:120px;order:1"></nav></div>
+
+<!-- wrapping flex row -->
+<div class=fw><div id="p-fw-a" class=c style="width:120px;height:30px"></div><div id="p-fw-b" class=c style="width:120px;height:30px"></div></div>
+
+<!-- abspos inside a row -->
+<div class=r style="position:relative"><div id="p-ap-a" class=c style="position:absolute;left:200px;top:0;width:80px;height:30px"></div><div id="p-ap-b" class=c style="width:80px;height:30px"></div></div>
+
+<!-- transformed row -->
+<div class=r><div id="p-tf-a" class=c style="width:80px;height:30px;transform:translateX(200px)"></div><div id="p-tf-b" class=c style="width:80px;height:30px"></div></div>
+
+<!-- grid row + explicit placement -->
+<div class=g><div id="p-gr-a" class=c style="height:30px"></div><div id="p-gr-b" class=c style="height:30px"></div></div>
+<div class=g><div id="p-gro-a" class=c style="height:30px;grid-column:2"></div><div id="p-gro-b" class=c style="height:30px;grid-column:1"></div></div>
+
+<!-- CONTROL: plain block stack, must never invert -->
+<div class=r><div id="p-blk-a" class=c style="height:30px"></div><div id="p-blk-b" class=c style="height:30px"></div></div>
+</body></html>
