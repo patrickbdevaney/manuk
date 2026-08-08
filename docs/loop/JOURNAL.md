@@ -46371,6 +46371,60 @@ PERF: none — one UA rule and one narrowed branch in a cascade that already ran
 WIKI: `docs/wiki/css-cascade.md` — where Chrome draws the form-control `box-sizing` line, and why a
 layout-crate test cannot see it.
 
+## Tick 1015 — the one place two properties differ, and we had erased it (2026-08-07)
+
+TICK SHAPE: primitive — the second defect t1014's battery measured and banked, built. **The whole
+fix is one condition, and the flag it needs was already in the tree.**
+
+⚠⚠⚠ **`overflow-wrap: break-word` AND `overflow-wrap: anywhere` DIFFER IN EXACTLY ONE PLACE — THE
+INTRINSIC SIZE.** CSS Text §5.3: the soft wrap opportunities `anywhere` introduces **count** when the
+min-content contribution is computed; the ones `break-word` introduces do **not** — it only permits
+the break once the line is being laid out and would otherwise overflow. We had both in the same
+`matches!` arm. Chrome-measured, a 30-character unbreakable token as the only flex item of a 200px
+row (the flex path is what makes it visible, because an item's automatic minimum IS its min-content
+size):
+
+```text
+                                Chrome     before     after
+   (no property)                288.98      289        289    <- CONTROL
+   word-break: break-all        200         200        200    <- CONTROL
+   overflow-wrap: anywhere      200         200        200    <- CONTROL
+   overflow-wrap: break-word    288.98      200        289
+```
+
+⚠⚠ **THREE OF THE FOUR ROWS WERE ALREADY EXACT, AND THAT IS WHAT MAKES THIS A DISTINCTION TO DRAW
+RATHER THAN A FEATURE TO ADD.** `break-all` and `anywhere` both reduce min-content and both were
+right; the no-property control overflows and was right. Only the one property whose rule is *"break,
+but do not tell the intrinsic size about it"* was wrong — and it is the spelling every CSS reset
+ships: **48.5% of the burndown corpus against 11.7% for `anywhere`.**
+
+⚠⚠ **AND WE WERE WRONG IN THE SHRINKING DIRECTION, WHICH IS THE QUIET ONE.** The item came out
+*narrower* than Chrome's — 200 against 288.98 — so an overflow the author deliberately kept was
+**hidden** rather than shown. A divergence that makes a page look tidier than the reference is the
+kind no eyeball review ever flags, and it is only visible to a number.
+
+**MECHANISM, and the pleasing part is that the tree already had what it needed.**
+`Ctx::intrinsic_probe` is set for the duration of a min-content/max-content measurement (it exists so
+`text-align` does not justify against a probe width). So the rule is one clause: `break-word` grants
+its break opportunity **only while that flag is false**, while `anywhere` and `break-all` grant it
+unconditionally. No new plumbing, no second flag threaded through the inline items.
+
+RATCHET: `manuk-layout` 130/130 (129 before this tick's gate). Nothing traded. The t1014 gate
+(`a_non_visible_overflow_zeroes_a_flex_items_automatic_minimum`) is green, and the 16-row battery is
+now **16 of 16 exact**.
+
+GATE: `break_word_does_not_reduce_min_content_but_anywhere_does` — four rows, three of them controls,
+and the assertions written as **relationships** (`w4 == the unbroken width`) rather than absolutes,
+because the `MinimalCascade` these tests run resolves a different default font than the shipping path
+and an absolute would be asserting the font. **RED-PROVEN by running it**: putting `BreakWord` back
+in the same `matches!` as `Anywhere` gives 200 against the unbroken 266.95, with all three controls
+green.
+
+PERF: none — one boolean read on a `Cell` per text node.
+
+WIKI: `docs/wiki/box-layout.md` — the `break-word` / `anywhere` section of "A non-visible overflow
+zeroes the automatic minimum size", promoted from *banked* to *built*.
+
 ## Tick 1014 — the escape hatch 69% of the corpus uses, and we ignored it (2026-08-07)
 
 TICK SHAPE: primitive — the `white-space` / intrinsic-size battery (check #91's second ranked area),

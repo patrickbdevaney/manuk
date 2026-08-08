@@ -11,12 +11,12 @@
 
 | | value | over |
 |---|---|---|
-| ticks landed | **729** | ticks 1–1014 |
-| median tick cycle | **27m** | 728 intervals |
-| median, last 10 | **31m** | 10 intervals |
+| ticks landed | **730** | ticks 1–1015 |
+| median tick cycle | **27m** | 729 intervals |
+| median, last 10 | **27m** | 10 intervals |
 | fastest / slowest | 5s / 5.4d | |
-| **ticks per hour** | **1.09** | 665.9h elapsed |
-| median verify wall | **63s** | 668 ticks |
+| **ticks per hour** | **1.09** | 666.4h elapsed |
+| median verify wall | **63s** | 669 ticks |
 | wall trend | 39s → 13m — getting slower ⚠️ | first 3 vs last 3 |
 
 The **cycle** is the real unit: implement → debug → verify wall → land. The wall is only part of
@@ -28,10 +28,10 @@ it, and a wall that grows taxes every future tick, so it is tracked separately f
 
 * **capabilities asserted** (`G_CAPABILITY`): 48 → **81**
 * **live gates**: 27 → **428**
-* **✅ rows in the capability ledger**: 144 → **512**
+* **✅ rows in the capability ledger**: 144 → **513**
 * **Bar 0 — oracle hangs**: 0 of 265 sites
 
-**341 of 729 ticks** (47%) moved a
+**341 of 730 ticks** (47%) moved a
 user-visible capability. The rest were instruments, infrastructure and corrections — and the
 ledger says the corrections were not overhead: three of its top three priorities were phantoms,
 and finding that out redirected everything after it.
@@ -826,5 +826,6 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 | **1012** | 2026-08-07 22:06 | 4m | measurement | 13m | +180/−4 | 428 | 81 | 56.0% · | the check that PROPOSES a correction and never applies it (2026-08-07) |
 | **1013** | 2026-08-07 22:31 | 25m | primitive | 13m | +243/−9 | 428 | 81 | 56.0% · | the same property twice, and a comment saying they could not diverge (2026-08-07) |
 | **1014** | 2026-08-07 22:59 | 28m | primitive | 13m | +259/−5 | 428 | 81 | 56.0% · | the escape hatch 69% of the corpus uses, and we ignored it (2026-08-07) |
+| **1015** | 2026-08-07 23:25 | 26m | primitive | 13m | +180/−11 | 428 | 81 | 56.0% · | the one place two properties differ, and we had erased it (2026-08-07) |
 
 *`·` after a WPT figure means **carried forward**, not measured this tick.*

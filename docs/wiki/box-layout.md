@@ -6464,7 +6464,15 @@ distinction the spec draws:
 ```
 
 `anywhere` **does** affect the intrinsic min-content size; `break-word` **does not** — it only
-permits the break when the line is actually being laid out. We treat the two identically. Priced at
-**48.5%** of the corpus (`overflow-wrap|word-wrap: break-word`) against 11.7% for `anywhere`. Not
-built in the same tick as the rule above, because two RED proofs in one tick make neither of them a
-proof.
+permits the break when the line is actually being laid out and would otherwise overflow. Priced at
+**48.5%** of the corpus (`overflow-wrap|word-wrap: break-word`) against 11.7% for `anywhere`.
+
+**BUILT at t1015.** The distinction is one condition, and the place to put it is the one the engine
+already had: `Ctx::intrinsic_probe` is set for the duration of a min-content/max-content measurement,
+so `break-word` grants a break opportunity **only while that flag is false**. `anywhere` and
+`word-break: break-all` grant it unconditionally.
+
+⚠ **We were wrong in the SHRINKING direction, which is the quiet one.** The item came out *narrower*
+than Chrome's, so an overflow the author deliberately kept was hidden rather than shown — a
+divergence that makes a page look tidier than the reference and is therefore the kind an eyeball
+review never flags.

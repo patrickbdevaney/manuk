@@ -7158,10 +7158,33 @@ impl Ctx<'_> {
                 // `overflow-wrap:break-word` / `word-break:break-all` permit char-level breaking of
                 // an over-long token so it does not overflow its column. Carried on each word; the
                 // actual split (against the live line width) happens in the inline placement pass.
-                let break_word = matches!(
-                    cs.overflow_wrap,
-                    manuk_css::OverflowWrap::BreakWord | manuk_css::OverflowWrap::Anywhere
-                ) || cs.word_break == manuk_css::WordBreak::BreakAll;
+                // ⚠⚠⚠ **`break-word` AND `anywhere` DIFFER IN EXACTLY ONE PLACE — THE INTRINSIC
+                // SIZE — AND WE HAD ERASED THE DISTINCTION.** CSS Text §5.3: `overflow-wrap:
+                // anywhere` affects the **min-content contribution** (soft wrap opportunities
+                // introduced by it COUNT when the intrinsic minimum is computed), while
+                // `break-word` does not — it only permits the break once the line is actually
+                // being laid out and would otherwise overflow. `word-break: break-all` behaves like
+                // `anywhere` for this purpose. Chrome-measured, a 30-character unbreakable token in
+                // a 200px flex row:
+                //
+                // ```text
+                //                                    Chrome     before     after
+                //   (no property)                    288.98      289        289    <- control
+                //   word-break: break-all            200         200        200    <- control
+                //   overflow-wrap: anywhere          200         200        200    <- control
+                //   overflow-wrap: break-word        288.98      200        289
+                // ```
+                //
+                // ⚠ **We were wrong in the SHRINKING direction, which is the quiet one**: the item
+                // came out narrower than Chrome's, so the overflow the author deliberately kept was
+                // hidden rather than exposed. Three of the four rows were already exact, which is
+                // what makes this a distinction rather than a missing feature. `break-word` is the
+                // spelling every reset ships — 48.5% of the burndown corpus against 11.7% for
+                // `anywhere`.
+                let break_word = cs.word_break == manuk_css::WordBreak::BreakAll
+                    || cs.overflow_wrap == manuk_css::OverflowWrap::Anywhere
+                    || (cs.overflow_wrap == manuk_css::OverflowWrap::BreakWord
+                        && !self.intrinsic_probe.get());
                 // `pre-wrap` PRESERVES every space (unlike `pre-line`, which collapses runs): each
                 // maximal whitespace run becomes its own measured token, so N spaces stay N spaces
                 // and leading indentation survives, while a soft wrap can still fall between tokens.
@@ -11486,6 +11509,90 @@ mod tests {
              minimum is still min-content and the row overflows its container — which is the \
              h_overflow the burndown counts.",
             w("w3")
+        );
+    }
+
+    /// **`overflow-wrap: break-word` AND `anywhere` DIFFER IN EXACTLY ONE PLACE — THE INTRINSIC
+    /// SIZE — and we had erased the distinction.**
+    ///
+    /// CSS Text §5.3: the soft wrap opportunities `anywhere` introduces **count** when the
+    /// min-content contribution is computed; the ones `break-word` introduces do **not** — it only
+    /// permits the break once the line is being laid out and would otherwise overflow.
+    /// `word-break: break-all` behaves like `anywhere` here.
+    ///
+    /// Chrome-measured (headless, 1200px), a 30-character unbreakable token as the only flex item
+    /// of a 200px row — the flex path is what makes the difference visible, because an item's
+    /// automatic minimum IS its min-content size:
+    ///
+    /// ```text
+    ///                                Chrome     before     after
+    ///   (no property)                288.98      289        289    <- CONTROL
+    ///   word-break: break-all        200         200        200    <- CONTROL
+    ///   overflow-wrap: anywhere      200         200        200    <- CONTROL
+    ///   overflow-wrap: break-word    288.98      200        289
+    /// ```
+    ///
+    /// ⚠ **We were wrong in the SHRINKING direction**, which is the quiet one: the item came out
+    /// narrower than Chrome's, so an overflow the author deliberately kept was hidden instead of
+    /// shown. And three of the four rows were already exact — which is what makes this a
+    /// distinction to draw rather than a feature to add.
+    ///
+    /// **RED recipe (run):** put `BreakWord` back in the same `matches!` as `Anywhere` and the
+    /// `break-word` row returns to the container width while all three controls stay green.
+    #[test]
+    fn break_word_does_not_reduce_min_content_but_anywhere_does() {
+        let css = "\
+            * { margin:0; padding:0 }
+            body { font: 16px/20px monospace }
+            .c { width:200px }
+            .f { display:flex }";
+        let html = "<body>\
+            <div class=c id=p1><div class=f><div id=w1>aaaaaaaaaaaaaaaaaaaaaaaaaaaaaa</div></div></div>\
+            <div class=c id=p2><div class=f><div id=w2 style='word-break:break-all'>aaaaaaaaaaaaaaaaaaaaaaaaaaaaaa</div></div></div>\
+            <div class=c id=p3><div class=f><div id=w3 style='overflow-wrap:anywhere'>aaaaaaaaaaaaaaaaaaaaaaaaaaaaaa</div></div></div>\
+            <div class=c id=p4><div class=f><div id=w4 style='overflow-wrap:break-word'>aaaaaaaaaaaaaaaaaaaaaaaaaaaaaa</div></div></div>\
+            </body>";
+        let (dom, root) = layout_html(html, css, 1200.0);
+        let rects = root.node_rects(&dom);
+        let w = |id: &str| {
+            let n = dom
+                .descendants(dom.root())
+                .find(|&n| dom.element(n).and_then(|e| e.attr("id")) == Some(id))
+                .unwrap_or_else(|| panic!("no #{id}"));
+            rects
+                .get(&n)
+                .unwrap_or_else(|| panic!("no rect for #{id}"))
+                .width
+        };
+        // ⚠ Relationships, not absolutes: the MinimalCascade these tests run resolves a different
+        // default font from the shipping path, so the token's max-content is 288.98 under Chrome's
+        // monospace and a different number here. The RULE is which of the four shrink.
+        let unbroken = w("w1");
+        assert!(
+            unbroken > 200.5,
+            "an unbreakable token with no break property overflows its 200px row (Chrome 288.98); \
+             got {unbroken}"
+        );
+
+        // ── CONTROLS: the two that DO reduce the min-content contribution.
+        assert!(
+            (w("w2") - 200.0).abs() < 1.1,
+            "`word-break: break-all` reduces min-content, so the item shrinks to 200; got {}",
+            w("w2")
+        );
+        assert!(
+            (w("w3") - 200.0).abs() < 1.1,
+            "`overflow-wrap: anywhere` reduces min-content too; got {}",
+            w("w3")
+        );
+
+        // ── THE DEFECT: the one that must NOT.
+        assert!(
+            (w("w4") - unbroken).abs() < 1.1,
+            "`overflow-wrap: break-word` must NOT reduce the min-content contribution — the item \
+             stays at its unbroken width ({unbroken}, Chrome 288.98) and overflows. Got {}, i.e. \
+             the same answer as `anywhere`, which erases the one place the two properties differ.",
+            w("w4")
         );
     }
 
