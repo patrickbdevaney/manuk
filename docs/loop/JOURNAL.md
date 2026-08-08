@@ -46371,6 +46371,61 @@ PERF: none — one UA rule and one narrowed branch in a cascade that already ran
 WIKI: `docs/wiki/css-cascade.md` — where Chrome draws the form-control `box-sizing` line, and why a
 layout-crate test cannot see it.
 
+## Tick 1017 — one axis had a caller and the other did not (2026-08-07)
+
+TICK SHAPE: primitive — the engine half of t1016's pair, built. **`vh` resolved against 720 on every
+page this engine has ever rendered, and the control row is what names why.**
+
+⚠⚠⚠ **`manuk_css::values::set_viewport` HAD NO CALLER IN THE TREE.** `VP_H` is a per-process global
+with a 720 default; `cascade_styles` calls `set_viewport_width`, whose own doc says it *"preserves the
+last-known height"* — and nothing has ever supplied one. Measured against Chrome, with t1016's
+instrument correction in place so both sides now mean the same thing by "800":
+
+```text
+                      Chrome    before    after
+   height: 10vh         80        72        80
+   min-height: 50vh    400       360       400
+   width:  25vw        300       300       300     <- CONTROL, right the whole time
+```
+
+⚠⚠⚠ **THE `vw` ROW IS WHAT MAKES THE DIAGNOSIS PRECISE, AND WITHOUT IT THE FIX GOES TO THE WRONG
+PLACE.** `width: 25vw` was correct throughout, because `set_viewport_width` *does* have a caller. So
+this is **not** *"viewport units are unimplemented"* and **not** *"the unit parser is wrong"* — both
+of which fit the two failing rows perfectly and would have sent the tick at
+`values::parse_dim`. It is *"one of the two axes has a caller and the other does not."* **Seventh
+window running in which the row that named the branch was not one of the rows that made me look**,
+and the first in which the branch is an absent function call rather than a wrong expression.
+
+**MECHANISM.** The height is set **once**, at the top of the binary's `run()`, from the same
+`--width`/`--height` flags every subcommand parses with the same defaults — rather than at each of
+the six sites that re-parse them. The global is per-process; one authoritative write is easier to
+reason about than six that must agree, and it covers `boxes`, `fidelity`, `parity` and `interact`
+together.
+
+⚠⚠ **AND THE PAIR IS WHY NEITHER HALF WAS EVER VISIBLE.** t1016 measured the other side: Chrome's
+`--window-size` is a *window* size, 87px taller than the viewport it produces, so the reference
+resolved `100vh` to **713** against our **720**. One percent apart, on 73.1% of the corpus, for the
+life of the instrument. Each fix alone makes the divergence WORSE — instrument-only 7px → 80px,
+engine-only 7px → 87px — so neither could have been found by watching the score, and only the pair
+is correct.
+
+RATCHET: parity **72/72** (re-run; the gate most sensitive to a viewport change, unmoved), the
+16-row replaced/aspect-ratio/viewport battery now **16 of 16 exact**, `manuk-layout` 130/130,
+`manuk-wpt` lib 98/98, and G1's headline page at coverage 100.0% / shape 79.3% against its 0.75
+floor. Nothing traded.
+
+GATE: the battery is the gate here and it lives in the wall through `parity` — a dedicated unit test
+would have to assert against `VP_H`, which is the thing being set, and would pass whatever value the
+call site chose. **What makes this falsifiable is that removing the `set_viewport` call returns
+`height: 10vh` to 72 against Chrome's 80 while `width: 25vw` stays at 300** — the control that does
+not move is the proof the change is the one described, and it is recorded here and in the wiki rather
+than as an assertion that could only ever restate the code.
+
+PERF: one atomic store per process.
+
+WIKI: `docs/wiki/conformance-and-oracles.md` — "`--window-size` is a WINDOW size, and two defects
+were hiding each other behind it", now carrying both halves and the control row.
+
 ## Tick 1016 — two defects of the same size in opposite directions read as agreement (2026-08-07)
 
 TICK SHAPE: primitive — two batteries (lists 25 rows, replaced/aspect-ratio/viewport 16 rows) and the

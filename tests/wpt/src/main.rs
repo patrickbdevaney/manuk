@@ -61,6 +61,44 @@ fn run() {
 
     let args: Vec<String> = std::env::args().skip(1).collect();
 
+    // ⚠⚠⚠ **`vh` RESOLVED AGAINST 720 ON EVERY PAGE THIS BINARY HAS EVER RENDERED, BECAUSE NOTHING
+    // EVER SET A VIEWPORT HEIGHT.**
+    //
+    // `manuk_css::values::VP_H` is a global with a 720 default, and `set_viewport` — the only
+    // function that writes it — **had no caller in the tree**. `cascade_styles` calls
+    // `set_viewport_width`, whose own doc says it *"preserves the last-known height"*, and no
+    // caller ever supplied one. So every `100vh` hero, every `min-height: 100vh` shell and every
+    // `height: 50vh` panel was 720-based while the page was being laid out at `--height`.
+    //
+    // Measured against Chrome (whose own `--window-size` offset t1016 corrected, so both sides now
+    // mean the same thing by "800"):
+    //
+    // ```text
+    //                      Chrome    before    after
+    //   height: 10vh         80        72        80
+    //   min-height: 50vh    400       360       400
+    //   width:  25vw        300       300       300     <- the inline axis was already right,
+    //                                                      because `set_viewport_width` HAS a caller
+    // ```
+    //
+    // ⚠ **The width row is the control, and it is what names the defect precisely**: this is not
+    // "viewport units are unimplemented", it is "one of the two axes has a caller and the other does
+    // not". Priced at **73.1%** of the burndown corpus for `vh`/`vw` and **36.3%** for
+    // `min-height: 100vh`.
+    //
+    // Set ONCE here, from the same `--width`/`--height` flags every subcommand parses with the same
+    // defaults, rather than at each of the six sites that re-parse them: the global is per-process,
+    // and a single authoritative write is easier to reason about than six that must agree.
+    {
+        let vw: f32 = flag(&args, "--width")
+            .and_then(|s| s.parse().ok())
+            .unwrap_or(1200.0);
+        let vh: f32 = flag(&args, "--height")
+            .and_then(|s| s.parse().ok())
+            .unwrap_or(800.0);
+        manuk_css::values::set_viewport(vw, vh);
+    }
+
     // `manuk-wpt wpt <subset>` — the UPSTREAM testharness.js suite. See `harness.rs`.
     if args.first().map(String::as_str) == Some("wpt") {
         run_wpt_cmd(&args[1..], &fonts);

@@ -3236,3 +3236,22 @@ them.
 > instrument cannot tell that from correctness.** The only thing that separates them is asking a
 > third party — here, `document.documentElement.clientHeight` and the spec — what the answer should
 > be, rather than asking the two implementations whether they match.
+
+**Both halves are now built** (instrument t1016, engine t1017), and the pair measures exactly:
+
+```text
+                      Chrome    before    after
+   height: 10vh         80        72        80
+   min-height: 50vh    400       360       400
+   width:  25vw        300       300       300     <- the CONTROL, and it names the defect
+```
+
+⚠ **The width row is what makes this precise.** It was right the whole time, because
+`set_viewport_width` *does* have a caller — so the defect is not *"viewport units are
+unimplemented"*, it is *"one of the two axes has a caller and the other does not"*. A fixture with
+only `vh` rows would have supported the wrong diagnosis and sent the fix at the unit parser.
+
+The height is set **once**, in the binary's `main`, from the same `--width`/`--height` flags every
+subcommand parses with the same defaults — rather than at each of the six sites that re-parse them.
+The global is per-process; one authoritative write is easier to reason about than six that must
+agree.
