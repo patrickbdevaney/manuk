@@ -46371,6 +46371,96 @@ PERF: none — one UA rule and one narrowed branch in a cascade that already ran
 WIKI: `docs/wiki/css-cascade.md` — where Chrome draws the form-control `box-sizing` line, and why a
 layout-crate test cannot see it.
 
+## Tick 1046 — a comma is a legal URL character, and two instrument traps caught before they were published (2026-08-08)
+
+TICK SHAPE: primitive — a battery on `<picture>`/`srcset` (**26.5% of the burndown corpus**, the
+highest-frequency construct with no differential reading). **Two of its three findings were the
+INSTRUMENT, caught before publication; the third is a real defect on 4 named corpus sites.**
+
+⚠⚠⚠ **THE FIX: `parse_srcset` SPLIT ON COMMAS, AND ITS OWN COMMENT JUSTIFIED IT WITH A PREMISE THE
+CORPUS REFUTES.** The comment read: *"a comma inside a URL is vanishingly rare compared to a missing
+space after one, so candidates are split on commas."* Measured against the corpus the burndown scores
+— one grep, no build:
+
+```text
+   pages with a real body ..................... 170
+   ships a `srcset` ...........................  40   23.5%
+   …with a COMMA inside a candidate URL .......   4   ← one site in TEN that uses the attribute
+      www.kuechenmomente.de · www.kroftools.com · xhdesign.today · www.timeline.com
+```
+
+Two ordinary shapes produce it and neither is exotic: **an image CDN's transform segment**
+(`/upload/w_400,h_300,c_fill/hero.jpg 400w`) and **every `data:` URI in existence**. And a shredded
+candidate is **not a smaller image** — the fragments are not URLs, so the list yields nothing and the
+element renders a **broken-image placeholder**. `www.kuechenmomente.de` is a site this loop already
+tracks (t1041's `reading_order` table).
+
+HTML's scan is two-phase and that is exactly what disambiguates the comma: **the URL runs to the next
+WHITESPACE** (an interior comma is part of it) and only a *trailing* comma ends the candidate; **the
+descriptor then runs to the next COMMA**. Leniency is unchanged where it was right — a malformed
+descriptor still drops its candidate and not the list.
+
+GATE: `srcset_candidates_survive_a_comma_inside_a_url` — 7 rows, **RED-proven two ways** (make the
+URL stop at a comma; make the descriptor stop at whitespace). **Four of the seven rows are CONTROLS**
+— plain lists, `x` descriptors, a trailing comma, and `a.png,b.png` staying ONE url as Chrome treats
+it — because a fix that broke ordinary lists to rescue the comma case would be a trade, not a fix.
+⚠ A third mutation (`trim_matches` for `trim_end_matches`) stays **green** and the comment now says
+why instead of leaving it looking tested: a LEADING comma can never reach that line, the
+inter-candidate skip consumes commas before the URL scan starts, so the two forms are *provably*
+equivalent. **Stating an equivalence beats shipping a distinction nothing can test** (the t1044 rule,
+applied to its opposite case).
+
+⚠⚠⚠ **INSTRUMENT TRAP 1 — CHROME'S `--dump-dom` DOES NOT WAIT FOR NETWORK IMAGES, AND I ALMOST
+PUBLISHED "srcset IS UNIMPLEMENTED" FROM IT.** Served the same battery over real HTTP; **every image
+came back 0x0 in the reference, including the negative rows** — a plain `<img src="a.png">`.
+`--virtual-time-budget=5000` fixed it *once* and then the **identical command returned 0x0 again**.
+That is t1018's second fact exactly: not a mis-provisioned reference to work around, but **no steady
+state — the reading is not repeatable, so it is not a reading.** The `data:` battery is the one that
+reproduces (bytes are present synchronously, no load race) and its Chrome numbers matched the one
+good HTTP run on every row.
+
+> **THE CAVEAT THIS CREATES, AND IT IS BIGGER THAN THIS TICK.** Any battery run through
+> `/tmp/bdiff.sh` whose subject is an image **loaded over the network** has been comparing against a
+> reference that may not have loaded it. Every battery this session was `data:`-URI or CSS-only, so
+> they stand — but the method needs a load-settled reference before it is pointed at images again.
+
+⚠⚠⚠ **INSTRUMENT TRAP 2 — THE BATTERY COULD NOT TEST ITS OWN SUBJECT, BY CONSTRUCTION.** Having
+retreated to `data:` URIs, **every `srcset` row was doomed before it ran**: a `data:` URI contains a
+comma, and the parser split on commas. The battery's 16 "srcset is ignored" rows were measuring the
+bug that made the battery invalid. **A fixture that cannot express its subject reports the subject as
+broken** — the sharpest version yet of *the first run of a new instrument measures the instrument*.
+
+⚠⚠ **AND A FIX WAS WRITTEN, PROVEN NOT TO MOVE ANYTHING, AND REVERTED.** `select_image_url`'s own doc
+says *"One function because there are two callers … Two independent selections is the two-cascades
+trap in a different organ"* — and `decode_inline_images` is a **third** caller reading `attr("src")`
+directly. Routing it through the selector is right by that contract, compiles, and **changed not one
+row of the battery**, so I could not make it fail. t834's rule decides it: *a copy of a rule added
+for symmetry is unreachable code guarded by a test that cannot fail.* **Reverted, not shipped** — and
+recorded here so the next tick knows the call site is still there and why it was left.
+
+⚠ **AND THE TICK IT DISPLACED WAS PRICED FIRST.** `<input type=image>` renders an **8x6 stub**
+against Chrome's 20x20/40x25/1x1 (8 measured rows, `/tmp/bat-img.html`) — Chrome-exact, RED-provable,
+and **0 of 170 corpus pages**, so it is structurally unable to move M1. Named, measured, and not
+taken over a 26.5% construct: the t962 rule, applied in advance rather than in a post-mortem.
+
+RATCHET: `manuk-page` lib 26/26, `manuk-layout` 131/131, `manuk-css` 32/32, `manuk-paint` 22/22,
+`manuk-dom` 11/11, G_FORM green. No corpus pricing run: the change is inside a parser that the four
+affected sites' `srcset` attributes reach, and the burndown's per-site band (~0.04) is far wider than
+one image's contribution — **the fixture count and the corpus grep are the honest result**, not a
+sweep delta.
+
+RESIDUE, precisely stated: **whether `srcset`/`<picture>` selection works on the network path is
+UNKNOWN and needs a load-settled reference to answer** — that is the instrument to build before the
+26.5% question can be re-opened. Also open from this battery, pending that instrument: Chrome picks
+the **2x** candidate at `devicePixelRatio: 1` on every `x`-descriptor row (reproduced on two
+instruments, DPR read back as 1), which contradicts the obvious reading of the selection algorithm
+and must be confirmed against a non-headless Chrome before any engine change chases it.
+
+PERF: none — the same single pass over the attribute, without the intermediate `split` allocation.
+
+WIKI: `docs/wiki/networking.md` — "A comma is a legal URL character, and the reference does not wait
+for images".
+
 ## Tick 1045 — a construct cleared at 30 of 30, and the third one-point constant this session (2026-08-08)
 
 TICK SHAPE: primitive — two batteries on two unmeasured constructs. **One came back completely clean,

@@ -1876,3 +1876,71 @@ move. Tick 682's retraction established that within one sweep the oracle was sta
 sweeps it is not. A site that is unstable on both sides cannot settle a question about our render.
 
 [[reliability-doctrine]] [[conformance-and-oracles]]
+
+## A comma is a legal URL character, and the reference does not wait for images (tick 1046)
+
+### The defect: `srcset` split on commas
+
+`parse_srcset` split candidates on `,` and justified it in its own comment — *"a comma inside a URL is
+vanishingly rare compared to a missing space after one."* One grep over the burndown corpus, no build:
+
+```text
+   pages with a real body ..................... 170
+   ships a `srcset` ...........................  40   23.5%
+   …with a COMMA inside a candidate URL .......   4   ← one site in TEN that uses the attribute
+      www.kuechenmomente.de · www.kroftools.com · xhdesign.today · www.timeline.com
+```
+
+Two ordinary shapes produce it: **an image CDN's transform segment**
+(`/upload/w_400,h_300,c_fill/hero.jpg 400w` — Cloudinary's standard form) and **every `data:` URI in
+existence**. A shredded candidate is not a smaller image: the fragments are not URLs, the list yields
+nothing, and the element renders a **broken-image placeholder**.
+
+HTML's scan is two-phase, and that is what disambiguates the comma:
+
+- **the URL runs to the next WHITESPACE** — an interior comma is simply part of it — and only a
+  *trailing* comma ends the candidate (the spec's signal for "no descriptor");
+- **the descriptor then runs to the next COMMA**, not to whitespace.
+
+`a.png,b.png` therefore stays **one** URL, which is what Chrome does too, and is asserted as a control.
+
+### ⚠⚠⚠ Instrument trap 1: `--dump-dom` does not wait for network images
+
+Served the same battery over real HTTP and **every image came back `0x0` in the reference — including
+the negative rows**, a plain `<img src="a.png">`. `--virtual-time-budget=5000` fixed it once and the
+**identical command returned `0x0` again**. That is not a mis-provisioned reference to work around; it
+is **no steady state**, and a reading that does not repeat is not a reading.
+
+> **The caveat this creates is bigger than the tick.** Any battery whose subject is an image *loaded
+> over the network* has been compared against a reference that may not have loaded it. `data:`-URI and
+> CSS-only batteries are unaffected (the bytes are present synchronously). **Build a load-settled
+> reference before pointing the method at images again.**
+
+### ⚠⚠⚠ Instrument trap 2: the battery could not express its own subject
+
+Having retreated to `data:` URIs to dodge trap 1, **every `srcset` row was doomed before it ran** — a
+`data:` URI contains a comma, and the parser split on commas. The battery's sixteen "srcset is
+ignored" rows were measuring the very bug that made the battery invalid.
+
+**A fixture that cannot express its subject reports the subject as broken.** This is the sharpest
+instance yet of *the first run of a new instrument measures the instrument*, and the tell was that the
+**negative rows disagreed with the positive ones for the same reason** — `<img src="data:…">` worked
+while `<img srcset="data:…">` did not, on the same bytes.
+
+### And a fix that could not be made to fail was reverted
+
+`select_image_url`'s doc says *"One function because there are two callers … Two independent
+selections is the two-cascades trap in a different organ"* — and `decode_inline_images` is a **third**
+caller reading `attr("src")` directly. Routing it through the selector is right by that contract,
+compiles, and **changed not one row**. t834 decides it: *a copy of a rule added for symmetry is
+unreachable code guarded by a test that cannot fail.* Reverted, and recorded so the next tick knows
+the call site is still there and why it was left.
+
+### Open, and it needs an instrument before it needs an engine change
+
+Whether `srcset`/`<picture>` selection works on the **network** path is **unknown** — that is the
+26.5%-of-corpus question, and it cannot be answered until the reference settles its loads. Pending
+that: Chrome picks the **2x** candidate at `devicePixelRatio: 1` on every `x`-descriptor row
+(reproduced on two instruments, DPR read back as `1`), which contradicts the obvious reading of the
+selection algorithm and **must be confirmed against a non-headless Chrome before any engine change
+chases it**.

@@ -1522,6 +1522,12 @@
   - L1817 · Gating a transport setting honestly
   - L1832 · A reload inherited the previous load's failures, for the life of the process (tick 683)
   - L1864 · What it did NOT fix, stated plainly
+  - L1880 · A comma is a legal URL character, and the reference does not wait for images (tick 1046)
+  - L1882 · The defect: srcset split on commas
+  - L1907 · ⚠⚠⚠ Instrument trap 1: --dump-dom does not wait for network images
+  - L1919 · ⚠⚠⚠ Instrument trap 2: the battery could not express its own subject
+  - L1930 · And a fix that could not be made to fail was reverted
+  - L1939 · Open, and it needs an instrument before it needs an engine change
 
 ## PERFORMANCE — what is actually slow, and why
 `docs/wiki/performance.md`
@@ -1756,4 +1762,4 @@
   - L124 · Rank mechanisms by FLIP RATE, not failing-subtest count — CSS layout is a multi-assertion slog
 
 ---
-1663 sections across 22 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+1669 sections across 22 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.

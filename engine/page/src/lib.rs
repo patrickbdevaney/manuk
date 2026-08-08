@@ -1004,29 +1004,80 @@ struct Candidate<'a> {
     density: f32,
 }
 
-/// Parse a `srcset` attribute into candidates.
+/// Parse a `srcset` attribute into candidates — **HTML's own two-phase scan, because a comma is a
+/// legal URL character and the naive split shreds 10% of the corpus's `srcset` sites** (t1046).
 ///
-/// Deliberately lenient in the way the spec is: a comma inside a URL is vanishingly rare compared to
-/// a missing space after one, so candidates are split on commas and each is then split on whitespace.
-/// A malformed descriptor drops that candidate rather than the whole list — dropping the list is how
-/// this attribute silently costs a page its images.
+/// The comment this replaces read: *"a comma inside a URL is vanishingly rare compared to a missing
+/// space after one, so candidates are split on commas"*. **Measured against the burndown corpus, that
+/// premise is false**: 40 of 170 pages ship a `srcset`, and **4 of them carry a comma inside a
+/// candidate URL** — one site in ten that uses the attribute at all, and `www.kuechenmomente.de` is
+/// one the loop already tracks. Two shapes produce it and both are ordinary:
+///
+/// ```text
+///   an image CDN's transform segment   /upload/w_400,h_300,c_fill/hero.jpg 400w
+///   any `data:` URI at all             data:image/png;base64,iVBORw0K… 1x
+/// ```
+///
+/// A shredded candidate is not a smaller image — the fragments are not URLs, so the list yields
+/// nothing and **the element renders a broken-image placeholder**.
+///
+/// The spec's rule is a two-phase scan, and it is what makes a comma unambiguous: **a URL runs to
+/// the next whitespace** (so an interior comma is simply part of it), and only a *trailing* comma
+/// ends the candidate; the **descriptor then runs to the next comma**. Leniency is unchanged where
+/// it was right: a malformed descriptor drops that candidate rather than the whole list, because
+/// dropping the list is how this attribute silently costs a page its images.
 fn parse_srcset(srcset: &str) -> Vec<Candidate<'_>> {
     let mut out = Vec::new();
-    for part in srcset.split(',') {
-        let mut it = part.split_ascii_whitespace();
-        let Some(url) = it.next() else { continue };
+    let b = srcset.as_bytes();
+    let n = b.len();
+    let ws = |c: u8| c.is_ascii_whitespace();
+    let mut i = 0usize;
+    while i < n {
+        // Between candidates: any run of whitespace and commas.
+        while i < n && (ws(b[i]) || b[i] == b',') {
+            i += 1;
+        }
+        if i >= n {
+            break;
+        }
+        // ── PHASE 1: the URL runs to the next WHITESPACE. An interior comma belongs to it.
+        let start = i;
+        while i < n && !ws(b[i]) {
+            i += 1;
+        }
+        let raw = &srcset[start..i];
+        // …and only a TRAILING comma ends the candidate, which is the spec's signal for "no
+        // descriptor". `a.png,b.png` stays one URL, exactly as Chrome treats it.
+        // ⚠ `trim_end_matches` and `trim_matches` are provably equivalent here — a LEADING comma
+        // can never reach this line, because the inter-candidate skip above consumes commas before
+        // the URL scan starts. Stated rather than left as a mutation that cannot go red: the
+        // end-only form is the one that says what the spec means.
+        let url = raw.trim_end_matches(',');
+        let ended_by_comma = url.len() != raw.len();
         if url.is_empty() {
             continue;
         }
         let mut width = None;
         let mut density = 1.0f32;
-        if let Some(desc) = it.next() {
-            if let Some(w) = desc.strip_suffix('w').and_then(|n| n.parse::<f32>().ok()) {
-                width = Some(w);
-            } else if let Some(x) = desc.strip_suffix('x').and_then(|n| n.parse::<f32>().ok()) {
-                density = x;
-            } else {
-                continue; // an unparseable descriptor drops the candidate, not the list
+        if !ended_by_comma {
+            // ── PHASE 2: the descriptor runs to the next COMMA (not to whitespace — `100w` and a
+            //    stray token must not be read as two candidates).
+            while i < n && ws(b[i]) {
+                i += 1;
+            }
+            let dstart = i;
+            while i < n && b[i] != b',' {
+                i += 1;
+            }
+            let desc = srcset[dstart..i].trim();
+            if let Some(tok) = desc.split_ascii_whitespace().next() {
+                if let Some(w) = tok.strip_suffix('w').and_then(|v| v.parse::<f32>().ok()) {
+                    width = Some(w);
+                } else if let Some(x) = tok.strip_suffix('x').and_then(|v| v.parse::<f32>().ok()) {
+                    density = x;
+                } else {
+                    continue; // an unparseable descriptor drops the candidate, not the list
+                }
             }
         }
         out.push(Candidate {
@@ -9984,6 +10035,78 @@ mod js_interactive_tests {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// **A COMMA IS A LEGAL URL CHARACTER, AND SPLITTING `srcset` ON COMMAS SHREDS ONE SITE IN TEN
+    /// THAT USES THE ATTRIBUTE** (t1046).
+    ///
+    /// The parser this replaces split on `,` and justified it in its own comment: *"a comma inside a
+    /// URL is vanishingly rare compared to a missing space after one."* **Measured against the
+    /// burndown corpus that premise is false** — 40 of 170 pages ship a `srcset` and **4 of them
+    /// carry a comma inside a candidate URL** (`www.kuechenmomente.de`, `www.kroftools.com`,
+    /// `xhdesign.today`, `www.timeline.com`). Two ordinary shapes produce it: an image CDN's
+    /// transform segment (`/upload/w_400,h_300,c_fill/hero.jpg`) and **every `data:` URI in
+    /// existence**. A shredded candidate is not a smaller image: the fragments are not URLs, the
+    /// list yields nothing, and the element renders a broken-image placeholder.
+    ///
+    /// HTML's scan is two-phase, and that is exactly what disambiguates the comma: **the URL runs to
+    /// the next WHITESPACE** (an interior comma is part of it) and only a *trailing* comma ends the
+    /// candidate; **the descriptor then runs to the next COMMA**.
+    ///
+    /// **How it goes RED:** restore `for part in srcset.split(',')` — rows 3, 4 and 5 collapse (the
+    /// CDN and `data:` URLs split into non-URL fragments, and the `data:` row yields two bogus
+    /// candidates instead of one real one). Rows 1, 2, 6 and 7 are the CONTROLS: they are what the
+    /// old parser got right, and a fix that broke ordinary lists to rescue the comma case would be
+    /// a trade, not a fix.
+    #[test]
+    fn srcset_candidates_survive_a_comma_inside_a_url() {
+        let cases: &[(&str, &[(&str, Option<f32>, f32)])] = &[
+            // ── CONTROLS: what the old parser already got right and must keep getting right.
+            ("a.png", &[("a.png", None, 1.0)]),
+            (
+                "a.png 1x, b.png 2x",
+                &[("a.png", None, 1.0), ("b.png", None, 2.0)],
+            ),
+            // ── THE DEFECT: a comma inside the URL.
+            (
+                "/up/w_400,h_300,c_fill/h.jpg 400w, /up/w_800,h_600,c_fill/h.jpg 800w",
+                &[
+                    ("/up/w_400,h_300,c_fill/h.jpg", Some(400.0), 1.0),
+                    ("/up/w_800,h_600,c_fill/h.jpg", Some(800.0), 1.0),
+                ],
+            ),
+            (
+                "/up/w_400,h_300/h.jpg",
+                &[("/up/w_400,h_300/h.jpg", None, 1.0)],
+            ),
+            (
+                "data:image/png;base64,iVBORw0K 1x, b.png 2x",
+                &[
+                    ("data:image/png;base64,iVBORw0K", None, 1.0),
+                    ("b.png", None, 2.0),
+                ],
+            ),
+            // ── CONTROL: a trailing comma still ends a candidate with no descriptor, and a URL
+            //    with an INTERIOR comma and no whitespace stays ONE url (Chrome agrees).
+            (
+                "a.png, b.png",
+                &[("a.png", None, 1.0), ("b.png", None, 1.0)],
+            ),
+            ("a.png,b.png", &[("a.png,b.png", None, 1.0)]),
+        ];
+        for (input, want) in cases {
+            let got = parse_srcset(input);
+            let got: Vec<(&str, Option<f32>, f32)> =
+                got.iter().map(|c| (c.url, c.width, c.density)).collect();
+            let want: Vec<(&str, Option<f32>, f32)> = want.to_vec();
+            assert_eq!(
+                got, want,
+                "srcset {input:?}\n  A comma is a legal URL character. HTML scans the URL to the \
+                 next WHITESPACE and the descriptor to the next COMMA; splitting on commas turns \
+                 one CDN or `data:` candidate into fragments that are not URLs, and the element \
+                 renders a broken-image placeholder rather than a wrong-sized one."
+            );
+        }
+    }
 
     #[test]
     fn static_import_scanner_finds_specifiers_and_skips_the_rest() {
