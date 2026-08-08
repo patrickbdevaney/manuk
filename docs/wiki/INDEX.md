@@ -326,6 +326,12 @@
   - L6404 · ⚠⚠⚠ The gate asserted the reasoned number, so fixing the bug looked like a regression
   - L6419 · A non-visible overflow zeroes the automatic minimum size — the flex web's escape hatch
   - L6453 · ⚠ Banked, measured and NOT built: overflow-wrap: break-word must not reduce min-content
+  - L6480 · The dimension attribute is a presentational HINT, and ours sat above the author's cascade (t1025)
+  - L6488 · The one line
+  - L6506 · The battery, with a control per rule
+  - L6540 · Price
+  - L6553 · The second defect, from the same battery
+  - L6564 · The fix, and why it is the borrowed engine's own mechanism
 
 ## browser-capabilities.md
 `docs/wiki/browser-capabilities.md`
@@ -1711,4 +1717,4 @@
   - L124 · Rank mechanisms by FLIP RATE, not failing-subtest count — CSS layout is a multi-assertion slog
 
 ---
-1618 sections across 22 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+1624 sections across 22 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.

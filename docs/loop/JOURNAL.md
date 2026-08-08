@@ -46371,6 +46371,111 @@ PERF: none — one UA rule and one narrowed branch in a cascade that already ran
 WIKI: `docs/wiki/css-cascade.md` — where Chrome draws the form-control `box-sizing` line, and why a
 layout-crate test cannot see it.
 
+## Tick 1025 — the presentation attribute sits ABOVE author CSS, and 42.4% of the corpus writes the rule it overrides (2026-08-08)
+
+TICK SHAPE: measurement — the inline-`<svg>` sizing battery (check #93's ranked area, **34.5%** of the
+corpus), the two defects it found, and the generalisation battery that showed **neither of them is
+about SVG**.
+
+⚠⚠⚠ **`<img width="100" height="40" style="width:100%;height:auto">` IS 400×160 IN CHROME AND
+400×40 HERE.** That is not an edge case — it is *the* responsive-image idiom, the one every CLS guide,
+CMS and framework emits: dimension attributes to reserve the aspect ratio, `height:auto` in CSS to let
+it scale. We render it **four times too short**, and every box below it slides up by 120px.
+
+The 43-row SVG battery came back 20/43, but 22 of the 23 divergences were **one 40px `y` cascade** from
+the first bad row — so the battery was re-cut as ten rows with **one variable each and a control arm
+per rule**, which is what makes the following attributable:
+
+```text
+                                                                  chrome     ours
+   a  attrs only                                    CONTROL       100x40    100x40   ok
+   b  attrs + CSS width, height SPECIFIED           CONTROL       200x40    200x40   ok
+   c  attrs + CSS width + height:auto                             200x80    200x40   DIVERGES
+   d  viewBox only + CSS width + height:auto        CONTROL       200x100   200x100  ok
+   e  attrs AND viewBox + height:auto                             200x80    200x40   DIVERGES
+   f  attrs + max-width clamp, height SPECIFIED                   100x80    100x40   DIVERGES
+   g  attrs + max-width clamp + height:auto         CONTROL       100x40    100x40   ok
+   h  no ratio at all + height:auto                 CONTROL       200x150   200x150  ok
+   i  attrs + CSS height, width SPECIFIED           CONTROL       100x200   100x200  ok
+   j  attrs + CSS height + width:auto                             500x200   100x200  DIVERGES
+```
+
+⚠⚠⚠ **DEFECT 1 — WE APPLY THE DIMENSION ATTRIBUTE ON TOP OF THE AUTHOR'S CASCADE, AND HTML SAYS IT
+GOES UNDERNEATH.** `engine/css/src/stylo_engine.rs:1216-1226`:
+
+```rust
+   if s.height == Dim::Auto && !s.height_stretch && !s.height_intrinsic {
+       if let Some(h) = el.attr("height")... { s.height = h; }
+   }
+```
+
+**A post-cascade pass cannot tell `auto` that nobody set from `auto` the author asked for**, so
+`height:auto` is silently overwritten by `height="40"`. Presentational hints are a cascade ORIGIN
+BELOW author CSS; ours effectively sit above it. Rows **c**, **e** and **j** are all this one line
+(j is its `width` twin), and row **d** is the control that proves the machinery downstream is fine:
+with no attributes, the `viewBox` ratio path produces Chrome's exact 200×100.
+
+⚠⚠ **AND IT IS NOT AN SVG BUG — THAT IS WHAT MAKES IT WORTH ITS PRICE.** A third battery ran the same
+one-variable row against three tags:
+
+```text
+   img     width:100% + height:auto     chrome 400x160    ours 400x40     <- THE responsive idiom
+   canvas  width:200px + height:auto    chrome 200x80     ours 200x40
+   svg     width:200px + height:auto    chrome 200x80     ours 200x40
+   img     CSS width, height SPECIFIED  chrome 200x40     ours 200x40     CONTROL ok
+```
+
+⚠⚠⚠ **PRICED, STYLESHEET-INCLUSIVE, ON THE CORPUS THAT SCORES US** (170 sites with a real body, 551
+stylesheets):
+
+```text
+   max-width:100% AND height:auto in the SAME RULE     72/170   42.4%   <- the reset, one element
+   height:auto anywhere + a dimension-attributed
+      replaced element on the same site                84/170   49.4%   <- co-occurrence
+```
+
+⚠ **42.4% is the honest one and 49.4% is not.** The same-rule number means both declarations reach
+the same element by construction; the co-occurrence number is the weaker form CORPUS-CONSTRUCTS warns
+about, where the bound is `0 ≤ n ≤ 84`. Ranked on the former.
+
+⚠⚠ **DEFECT 2, INDEPENDENT AND LEFT OPEN WITH ITS RULE WRITTEN DOWN.** Row **f** —
+`<svg width="200" height="80" style="max-width:100px">` — is Chrome **100×80** and ours **100×40**:
+when `max-width` clamps the used width, we rescale the other axis from the intrinsic ratio *even
+though the height is specified*. CSS 2.1 §10.4 recomputes the other axis only when it is `auto`, and
+row **g** is the control that proves it (same markup plus `height:auto` → both engines 100×40).
+**The two defects have exactly the knowledge the other lacks**: the max-width path owns an attribute
+ratio the `height:auto` path never builds, and applies it under a condition the spec does not allow.
+
+**THE FIX, NAMED WITH ITS MECHANISM AND DELIBERATELY NOT BUILT IN THIS TICK.** Stylo already has the
+correct hook and we stubbed it out — `engine/css/src/stylo_traits.rs:449`:
+
+```rust
+   fn synthesize_presentational_hints_for_legacy_attributes<V>(...) {
+       // Presentational hints (e.g. <img width>) are handled by our own UA pass.
+   }
+```
+
+Stylo's own `rule_collector.rs:209` calls it on the generic (non-Gecko) path, and
+`ApplicableDeclarationBlock::from_declarations(.., CascadeLevel::PresHints, ..)` is the constructor
+that puts a declaration at the right origin. **This is option 1 on the BORROWED-ENGINE ladder — use
+the dependency's own mechanism — not a hand-rolled supplement**, and it deletes the post-cascade block
+rather than patching it. It is a change to the cascade for **every element carrying a dimension
+attribute** (images, canvas, svg, iframe, table cells), which is a larger blast radius than the
+discovery that motivates it, so it goes as its own tick with its own RED proof — the same split t1016
+made for the same reason.
+
+RATCHET: nothing changed — no code in this tick. Stated plainly: **no fix landed, and the defect is
+still there.**
+
+GATE: none yet; the gate ships with the fix. ⚠ The batteries above are the falsifiable artefact and
+they are reproducible from the journal: every divergent row is paired with a control that passes, so
+none of the four rests on a single reading.
+
+PERF: none — measurement only.
+
+WIKI: `docs/wiki/box-layout.md` — "The dimension attribute is a presentational HINT, and ours sat
+above the author's cascade".
+
 ## Tick 1024 — the wall audit, and a parity fixture is free until it crosses a multiple of eight (2026-08-08)
 
 TICK SHAPE: measurement — the wall-time audit (cadence: every 20; last at 1003; `tick.sh` refuses to

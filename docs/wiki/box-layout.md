@@ -6476,3 +6476,104 @@ so `break-word` grants a break opportunity **only while that flag is false**. `a
 than Chrome's, so an overflow the author deliberately kept was hidden rather than shown — a
 divergence that makes a page look tidier than the reference and is therefore the kind an eyeball
 review never flags.
+
+## The dimension attribute is a presentational HINT, and ours sat above the author's cascade (t1025)
+
+`<img width="100" height="40" style="width:100%;height:auto">` in a 400px block is **400×160** in
+Chrome and **400×40** here. That is not an edge case — it is *the* responsive-image idiom, the one
+every CLS guide, CMS and framework emits: dimension attributes to reserve the aspect ratio,
+`height:auto` in CSS to let it scale. We render it four times too short and every box below it slides
+up by 120px.
+
+### The one line
+
+`engine/css/src/stylo_engine.rs:1216-1226`, a pass that runs *after* the cascade:
+
+```rust
+   if s.height == Dim::Auto && !s.height_stretch && !s.height_intrinsic {
+       if let Some(h) = el.attr("height")... { s.height = h; }
+   }
+```
+
+> **A post-cascade pass cannot tell `auto` that nobody set from `auto` the author asked for.** The
+> HTML dimension attributes are presentational hints — a cascade ORIGIN *below* author CSS. Applying
+> them afterwards puts them *above* it, and the only declarations that can lose are the ones that
+> compute to the same value as the default.
+
+That last clause is why it hid so long: the hint is only wrong when the author explicitly writes the
+initial value, and `height: auto` is the one case where a whole ecosystem does exactly that.
+
+### The battery, with a control per rule
+
+Rewriting a 43-row SVG battery as ten rows with one variable each is what made it attributable — the
+first cut had 23 divergences, 22 of which were one 40px `y` cascade from the first bad row.
+
+```text
+                                                                  chrome     ours
+   a  attrs only                                    CONTROL       100x40    100x40   ok
+   b  attrs + CSS width, height SPECIFIED           CONTROL       200x40    200x40   ok
+   c  attrs + CSS width + height:auto                             200x80    200x40   DIVERGES
+   d  viewBox only + CSS width + height:auto        CONTROL       200x100   200x100  ok
+   e  attrs AND viewBox + height:auto                             200x80    200x40   DIVERGES
+   f  attrs + max-width clamp, height SPECIFIED                   100x80    100x40   DIVERGES
+   g  attrs + max-width clamp + height:auto         CONTROL       100x40    100x40   ok
+   h  no ratio at all + height:auto                 CONTROL       200x150   200x150  ok
+   i  attrs + CSS height, width SPECIFIED           CONTROL       100x200   100x200  ok
+   j  attrs + CSS height + width:auto                             500x200   100x200  DIVERGES
+```
+
+Row **d** is the load-bearing control: with no attributes at all, the `viewBox` ratio path produces
+Chrome's exact 200×100. **The ratio machinery downstream is correct; only its input is being
+clobbered.** Rows **c**, **e** and **j** are the single line above (j is its `width` twin), and
+`e` additionally pins the precedence — the ATTRIBUTE ratio (100:40) wins over the `viewBox` ratio
+(100:50), which is what the cascade already implements.
+
+⚠ **And it is not an SVG bug.** The same one-variable row against three tags:
+
+```text
+   img     width:100% + height:auto     chrome 400x160    ours 400x40
+   canvas  width:200px + height:auto    chrome 200x80     ours 200x40
+   svg     width:200px + height:auto    chrome 200x80     ours 200x40
+   img     CSS width, height SPECIFIED  chrome 200x40     ours 200x40   CONTROL ok
+```
+
+### Price
+
+Stylesheet-inclusive over the 170 corpus sites with a real body (551 stylesheets):
+
+```text
+   max-width:100% AND height:auto in the SAME RULE     72/170   42.4%
+   height:auto anywhere + a dimension-attributed
+      replaced element on the same site                84/170   49.4%
+```
+
+⚠ **42.4% is the honest number.** Same-rule means both declarations reach the same element by
+construction; the co-occurrence figure is the weaker form whose real bound is `0 ≤ n ≤ 84`.
+
+### The second defect, from the same battery
+
+Row **f** — `<svg width="200" height="80" style="max-width:100px">` — is Chrome **100×80**, ours
+**100×40**: when `max-width` clamps the used width we rescale the other axis from the intrinsic ratio
+*even though the height is specified*. CSS 2.1 §10.4 recomputes the other axis only when it is `auto`,
+and row **g** is the control (same markup plus `height:auto` → both engines 100×40).
+
+> **The two defects hold exactly the knowledge the other lacks.** The max-width path owns an attribute
+> ratio the `height:auto` path never builds, and applies it under a condition the spec forbids. Two
+> code paths, one rule, and each implemented the half the other was missing.
+
+### The fix, and why it is the borrowed engine's own mechanism
+
+Stylo already has the hook, and we stubbed it out — `engine/css/src/stylo_traits.rs:449`:
+
+```rust
+   fn synthesize_presentational_hints_for_legacy_attributes<V>(...) {
+       // Presentational hints (e.g. <img width>) are handled by our own UA pass.
+   }
+```
+
+Stylo's `rule_collector.rs:209` calls it on the generic (non-Gecko) path, and
+`ApplicableDeclarationBlock::from_declarations(.., CascadeLevel::PresHints, ..)` places a declaration
+at the correct origin. **This is option 1 on the BORROWED-ENGINE ladder — use the dependency's own
+mechanism — not a hand-rolled supplement**, and it *deletes* the post-cascade block rather than
+patching it. It changes the cascade for every element carrying a dimension attribute, so it lands as
+its own tick with its own RED proof.
