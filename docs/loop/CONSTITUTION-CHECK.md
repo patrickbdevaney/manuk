@@ -6652,3 +6652,94 @@ question to Chrome away.
    pair) · `<small>`'s `font-size: smaller` (8.8%) · probe `font-feature-settings` (16.4%, unprobed).
 3. **Do not rank `animation-delay` or `text-decoration-style` on their corpus numbers** without a
    probe first — standing, and now constitutional.
+
+## Check #95 — tick 1039 (2026-08-08)
+
+**Horizon:** H0 as re-scoped by **PART VII**, instrumented as **M1 on the in-scope CrUX corpus**.
+**Latest banked: t1031 — M1 17.6% (23/131)**, shape≥0.75 26.7%, jarring-clean 33.6%, shape_mean 60.7%.
+
+### → Gate, or scoreboard?
+
+**GATE. Six capability fixes in the nine ticks since check #94, every one on the render leg:**
+`overflow: clip` is not a formatting context (t1029) · the RTL atomic-inline displacement (t1035) ·
+the `iframe` UA border + `frameborder` pair (t1037) · six UA-sheet declarations (t1038), plus t1026
+and t1027 inside the previous window. Parity went **83/83 → 113/113 probes across an unchanged 32
+pages.**
+
+⚠⚠⚠ **AND CHECK #94's FINDING 2 HAS ALREADY RECURRED, ONE WINDOW LATER, WHICH MAKES IT STRUCTURAL
+RATHER THAN A LAPSE.** #94 said *"three landed geometry fixes, none priced on the corpus."* This
+window landed **four more** after sweep t1031, and they are unpriced for the same reason. The
+diagnosis is not carelessness:
+
+```text
+   a fidelity sweep   ~63 min wall, 200 sites, --jobs 2
+   a tick             ~20-40 min including the wall
+```
+
+**The measurement cadence and the tick cadence are mismatched by roughly 2×.** Sweeping every tick is
+not possible; sweeping every N ticks leaves N ticks unattributed *by construction*. **"Unmeasured" is
+therefore the STEADY STATE of this loop, not an exception to it**, and every write-up that says *"no
+corpus movement"* is describing the schedule as much as the engine.
+
+> This does not license shipping unmeasured. It says the loop needs **a cheap per-tick attribution
+> that is not the full sweep** — the *marginal* cut is the obvious candidate, since t1032 showed four
+> named sites carry the next four M1 crossings and re-running four sites costs minutes, not an hour.
+> Filed as the concrete proposal this check produces.
+
+### → Is `orient`'s ranking still the north star?
+
+**Yes, and VI.3's mechanism needs a correction that this window earned three times over.** VI.3 binds
+the loop to `usage-weight × failing-breadth`, and **the usage-weight term is measured by a corpus
+grep**. Three distinct mechanisms have now been caught inflating that grep, none deflating it:
+
+```text
+   an unanchored property grep matching a CLASS NAME   `hover` — inflated by half        audit #43
+   a CO-OCCURRENCE standing in for same-element use    42.4% vs 49.4%                    t1025
+   a legacy NO-OP VALUE standing in for the capability `zoom: 1` — inflated 9x           audit #44
+```
+
+**`zoom` reads 28.1% and is 2.3%.** Ranking it on the headline would have bought a subsystem to serve
+four sites. ⚠ **A frequency is not a measurement until its VALUES have been looked at, not just its
+property name** — and this window found the same thing from the other direction, when
+`font-feature-settings` at **16.4%** produced **zero** measurable divergence on any of its five tags
+(t1039), because the effect lives in the *font's* feature table, which the fixture did not control.
+
+**Applied to PART VI**, since #91's rule says applied-not-proposed.
+
+### → Is any invariant being bent?
+
+**No, and the one interesting case is a gate that was itself wrong.** t1037's `iframe` border turned
+`G_IFRAME` red: the gate asserted `400x200` / `300x150`, which are **content**-box numbers, while
+`node_rects` reports the **border** box — right only for as long as we had no border. **The first
+tick to make us more correct turned that gate into a red wall**, exactly the failure mode check #90
+recorded (*a gate whose Chrome number was REASONED turns the FIX into a red wall*).
+
+⚠ **The correction was measured, not derived** — headless Chrome reported `404x204` / `304x154` and
+those are the values in the gate; nobody added 4. And the assertion stays an exact equality, so the
+zero-width bug it was born for still fails it. **A gate corrected to a measured reference is not a
+gate relaxed to fit a tick, and the difference is whether the new number came from the reference or
+from the diff.**
+
+⚠⚠ **PART VII held under a full window**: twelve ticks, zero edits under `scripts/`. The
+`WPT-AREAS.tsv` staleness named in #94 is **unchanged** — `tick.sh` printed *"the sweep is 554h old"*
+above a green ratchet again — and remains filed for the observer rather than touched.
+
+### → A method result worth promoting, because it is now the loop's dominant output
+
+**Seven mechanisms were REFUTED for one lead across t1032–t1036 — roughly 112 probes, zero
+divergences — before t1035 found a real defect that then did not explain the lead either.** The
+refutations are not waste: each one permanently removes a family from the search. But the rate says
+something, and t1036 acted on it: *PROPERTY-FAMILY sweeps yield, SITE REDUCTIONS do not*, and five
+clean batteries in a row is the method reporting that the frame is wrong, not bad luck. **The loop
+correctly abandoned its biggest single number rather than keep spending ticks on it**, which is the
+behaviour `SINGLE_SITE_TICKS` exists to produce and the first time this check has seen it happen
+without prompting.
+
+### STEER (the tick-1040 plan)
+
+1. **Build the MARGINAL cut** — re-run only the four sites t1032 named, per tick, as the cheap
+   attribution the sweep cannot provide. This is the concrete answer to the cadence mismatch above.
+2. **A sweep is owed again** (five fixes deep). Label it a burndown point against t1031 — the
+   reference has not moved.
+3. **Do not rank on a raw corpus frequency.** Decompose its VALUES first; three mechanisms have now
+   inflated one, and all three were invisible in the number.

@@ -4768,3 +4768,68 @@ ask it — Chrome's UA sheet, its `hover`/`pointer` answer (t1020), its viewport
 element of the platform that the reference can be asked to ENUMERATE should be enumerated once,
 because a gap in an enumerable surface is otherwise found only by tripping over it** — which is
 exactly how `iframe`'s border was found, one tick before this audit.
+
+## Audit #44 — tick 1039 (2026-08-08) — a THIRD engine, thinner yield, and a 9× inflation hiding in a legacy no-op
+
+**SOURCES (searched, not recalled):**
+
+- `https://webkit.org/blog/18178/webkit-features-for-safari-26-6/` and Safari Technology Preview
+  247–249 — **a third independent engine, never used by this loop.** #42 used Ladybird, #43 used
+  Servo; taking WebKit tests whether the *method* keeps producing or whether the first two sources
+  were the yield.
+
+### → The method's third run, and the honest answer is DIMINISHING
+
+Fifteen greps over WebKit's named list. `position-area` / `anchor-name` / `anchor-center` (CSS anchor
+positioning) have **no row**; `ic` unit has no row; `compileStreaming` options and
+`iceTransportPolicy` have no row (WebRTC is an explicit non-goal). Priced:
+
+```text
+   CSS anchor positioning (position-area / anchor-name / anchor())    3/171   1.8%
+   the `ic` length unit                                               7/171   4.1%   ⚠ grep unreliable
+   Service Worker registration                                       10/171   5.8%   (XL, already deferred)
+```
+
+⚠⚠ **Nothing here outranks anything.** And the reason is worth recording as a property of the
+SOURCE rather than of the platform: **Safari 26.6 and STP 247–249 are overwhelmingly BUG FIXES**
+(*"CSS math functions produced an incorrect signed zero"*, *"a nested clip-path ignored css zoom"*,
+*"grid items with a computed preferred size that behaves as auto did not correctly compute their
+minimum content contribution"*). A fix list names things the engine **already had**; a feature list
+names things it just got. **#42's and #43's yield came from release notes that enumerate FEATURES,
+and this one does not** — so the rule from #42 (*"an independent engine's release notes beat Interop
+for unknown-unknowns"*) needs the qualifier: **it depends on the document type, not the vendor.**
+
+### → THE FINDING, and it is about a number the map already carries
+
+`CSS zoom` **already has a map row**, cited as an Interop 2026 focus area. Pricing it against the
+corpus produced **28.1%**, which would make it one of the highest-weight unbuilt rows on the board.
+It decomposes:
+
+```text
+   `zoom` declared anywhere                     48/171   28.1%
+     ├─ `zoom: 1` — the legacy IE hasLayout hack 35/171   20.5%   <- a NO-OP
+     └─ `zoom` with a real value                 4/171    2.3%   <- the actual capability
+```
+
+⚠⚠⚠ **A LEGACY NO-OP INFLATED A CORPUS FREQUENCY BY NINE TIMES.** `zoom: 1` was written to trigger
+IE's `hasLayout` and does nothing in any engine shipping today; it survives in resets and vendor CSS
+by the ton. Ranking `zoom` on 28.1% would have bought a subsystem to serve **4 sites**.
+
+> **This is the third distinct way a corpus grep has lied to this loop, and they now form a set:**
+> an unanchored property grep matching a *class name* (`hover`, #43 — inflated by half); a
+> *co-occurrence* standing in for same-element application (t1025, `42.4%` vs `49.4%`); and now a
+> **legacy no-op value** standing in for the live capability. All three inflate, none deflate, and
+> all three are invisible in the number itself. **A frequency is not a measurement until its
+> VALUES have been looked at, not just its property name.**
+
+### → Reconciled, applied
+
+`CONSTELLATION.tsv` gains anchor positioning (`unknown`, 1.8%) and the `ic` unit (`unknown`, with its
+grep flagged unreliable). The existing `CSS zoom` row is **corrected in place** to carry 2.3% and the
+`zoom: 1` decomposition, so the next reader cannot re-derive 28.1% and rank on it.
+
+### → Is any invariant being bent?
+
+**No.** Twelve ticks this window, zero edits under `scripts/`. ⚠ The `WPT-AREAS.tsv` staleness named
+in check #94 is unchanged and remains observer-owned — `tick.sh` printed *"the sweep is 554h old"*
+above a green ratchet again this window.

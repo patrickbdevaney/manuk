@@ -11,12 +11,12 @@
 
 | | value | over |
 |---|---|---|
-| ticks landed | **749** | ticks 1–1037 |
-| median tick cycle | **27m** | 748 intervals |
-| median, last 10 | **38m** | 10 intervals |
+| ticks landed | **750** | ticks 1–1038 |
+| median tick cycle | **26m** | 749 intervals |
+| median, last 10 | **25m** | 10 intervals |
 | fastest / slowest | 5s / 5.4d | |
-| **ticks per hour** | **1.10** | 677.2h elapsed |
-| median verify wall | **63s** | 688 ticks |
+| **ticks per hour** | **1.11** | 677.3h elapsed |
+| median verify wall | **63s** | 689 ticks |
 | wall trend | 39s → 13m — getting slower ⚠️ | first 3 vs last 3 |
 
 The **cycle** is the real unit: implement → debug → verify wall → land. The wall is only part of
@@ -31,7 +31,7 @@ it, and a wall that grows taxes every future tick, so it is tracked separately f
 * **✅ rows in the capability ledger**: 144 → **520**
 * **Bar 0 — oracle hangs**: 0 of 265 sites
 
-**341 of 749 ticks** (46%) moved a
+**341 of 750 ticks** (45%) moved a
 user-visible capability. The rest were instruments, infrastructure and corrections — and the
 ledger says the corrections were not overhead: three of its top three priorities were phantoms,
 and finding that out redirected everything after it.
@@ -90,7 +90,7 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 
 ## What a capability costs
 
-* **341** capability ticks, median cycle **27m**
+* **341** capability ticks, median cycle **26m**
 * median diff per tick: **+258 / −34** lines across 8 files
 
 ## Every tick
@@ -846,5 +846,6 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 | **1034** | 2026-08-08 08:45 | 35m | primitive | 13m | +273/−33 | 428 | 81 | 56.0% · | I tried to blame the instrument and the instrument came back clean (2026-08-08) |
 | **1035** | 2026-08-08 08:51 | 6m | primitive | 13m | +129/−32 | 428 | 81 | 56.0% · | an atomic inline is placed by its LINE BOX, and §10.3.3 was displacing it by exactly `left |
 | **1037** | 2026-08-08 10:14 | 83m | primitive | 13m | +235/−33 | 428 | 81 | 56.0% · | the border 10 sites were passing without, and the rule that had to land in the same tick ( |
+| **1038** | 2026-08-08 10:22 | 8m | primitive | 13m | +329/−36 | 428 | 81 | 56.0% · | six UA declarations, and two the enumeration was RIGHT about and I could not copy (2026-08 |
 
 *`·` after a WPT figure means **carried forward**, not measured this tick.*

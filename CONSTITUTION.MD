@@ -218,7 +218,16 @@ Consequences, binding on the loop:
    cascade, …) and `html/*` beyond `html/dom` (semantics, canvas, browsers) are unmeasured. Open them
    before ranking, per the existing blindspot discipline — a ranking inside the wrong frame is confident
    and wrong.
-3. **`orient` ranks by usage-weighted breadth**, degrading the exotic tail per I4. The encoding tail is
+3. **`orient` ranks by usage-weighted breadth**, degrading the exotic tail per I4. ⚠⚠⚠ **AND THE
+   USAGE-WEIGHT TERM IS MEASURED BY A CORPUS GREP, WHICH HAS NOW BEEN CAUGHT INFLATING THREE
+   DIFFERENT WAYS AND DEFLATING NONE** (check #95, tick 1039): an **unanchored property grep**
+   matching a *class name* (`hover`, audit #43 — inflated by half); a **co-occurrence** standing in
+   for same-element application (t1025, 42.4% vs 49.4%); and a **legacy no-op VALUE** standing in for
+   the live capability (`zoom: 1`, audit #44 — 28.1% against a real 2.3%, a 9× inflation that would
+   have bought a subsystem to serve four sites). The mirror case is `font-feature-settings` (t1039):
+   **16.4% declared, zero measurable divergence on any of its five tags**, because the effect lives in
+   the *font's* feature table — data the fixture did not control. **A frequency is not a measurement
+   until its VALUES have been looked at, not just its property name.** The encoding tail is
    **done for H0 purposes**; further encoding depth is anti-Pareto and constitutionally out of scope.
 
 **⚠️ CORRECTED (check #73, tick 860) — VI.3's OWN NUMBER IS NOW STALE, AND PART VII RETIRED THE WHOLE

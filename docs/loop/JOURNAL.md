@@ -46371,6 +46371,115 @@ PERF: none — one UA rule and one narrowed branch in a cascade that already ran
 WIKI: `docs/wiki/css-cascade.md` — where Chrome draws the form-control `box-sizing` line, and why a
 layout-crate test cannot see it.
 
+## Tick 1039 — 16.4% of the corpus declares it and it moves nothing; the two things that DO move are declared by nobody (2026-08-08)
+
+TICK SHAPE: measurement — audit #43's last unprobed ranked item, **probed before building, and the
+answer is DO NOT BUILD IT.**
+
+⚠⚠⚠ **WE IMPLEMENT NONE OF THE FONT-FEATURE MACHINERY, AND THE BOGUS-TAG CONTROL IS WHAT PROVES IT.**
+Eleven rows, **identical text on every one**, so any width difference is the feature and nothing else:
+
+```text
+                                                   ours     chrome
+   (no feature settings)                CONTROL     147      147
+   font-feature-settings:'liga' 0                   147      147
+   font-feature-settings:'dlig' 1                   147      147
+   font-feature-settings:'tnum' 1                   147      147
+   font-feature-settings:'onum' 1                   147      147
+   font-feature-settings:'smcp' 1                   147      147
+   font-variant-numeric: tabular-nums               147      147
+   font-variant-ligatures: none                     147      147
+   font-feature-settings:'zzzz' 1       CONTROL     147      147
+   ───────────────────────────────────────────────────────────────
+   font-feature-settings:'kern' 0                   147      149   ← +2
+   font-variant-caps: small-caps                    147      157   ← +10
+```
+
+**Every one of our rows equals the bogus-tag control**, which is the direct proof that the machinery
+is inert here rather than coincidentally agreeing. ⚠ **The first cut of this fixture varied the TEXT
+between rows** (`"…0123 fi fl ffi"` on some, `"0123456789"` on others), which made half the
+comparisons meaningless — caught and rewritten before any conclusion was drawn. *One variable per
+row* is not a style rule; a fixture that varies two says nothing about either.
+
+⚠⚠⚠ **AND THE RANKING INVERTS COMPLETELY WHEN THE TWO MOVERS ARE PRICED.**
+
+```text
+   font-feature-settings (any tag)         28/171   16.4%   <- the ranked item; moves NOTHING
+   'kern' specifically  (moved +2px)        0/171    0.0%   <- declared by NOBODY
+   small-caps anywhere  (moved +10px)       3/171    1.8%
+```
+
+**The 16.4% that put this on the board is carried entirely by tags that produce no measurable
+divergence, and the two constructs that do diverge are declared on 0% and 1.8% of the corpus.** So the
+item is not buildable *and* not rankable, and the reason is not that the feature is small.
+
+⚠⚠⚠ **A THIRD KIND OF UNMEASURABLE, AND IT IS THE FINDING WORTH KEEPING.** The loop already carries
+two (audit #42, t1010):
+
+```text
+   hyphens: auto      the REFERENCE IS MIS-PROVISIONED   building it makes us DIVERGE
+   scroll-behavior    the PROPERTY HAS NO STEADY STATE   building it is INVISIBLE
+   font-feature-*     THE EFFECT LIVES IN DATA THE FIXTURE DOES NOT CONTROL  ← new
+```
+
+`font-feature-settings` is an **OpenType passthrough**: its effect exists only if the *font's* feature
+table has the tag. The default serif has none of `liga`/`dlig`/`tnum`/`onum`/`smcp`, so **both engines
+correctly do nothing** and the probe measures the font rather than the engine. ⚠ **This is not
+"unpriceable, give up"** — it is *"the fixture needs a feature-bearing webfont before this question
+can be asked"*, which is a different and cheaper next step than implementing OpenType shaping.
+
+⚠⚠ **AND THE ASYMMETRY CHROME SHOWS IS SPEC-CORRECT, WHICH IS HOW I KNOW THE READING IS RIGHT.**
+`font-feature-settings:'smcp'` moves nothing in Chrome while `font-variant-caps: small-caps` moves
+**10px** — on the same font, the same text. The high-level property has **synthesis fallback**; the
+low-level tag is raw passthrough with none. A reading that had them both moving, or both static,
+would have been the font talking. This one has the shape the spec predicts.
+
+**THE STEER, and it demotes the item that sent me here.** `font-feature-settings` comes off the ranked
+list until a fixture ships a font that actually carries the tags. `font-variant-caps: small-caps` is
+the only measurable member at 1.8% — real, synthesizable, and too small to outrank what is left.
+
+⚠⚠⚠ **SECOND HALF — THE SURFACE AUDIT CAME DUE MID-TICK AND FOUND A 9× INFLATION IN A NUMBER THE MAP
+ALREADY CARRIES.** Banked as audit #44. Source: **WebKit's Safari 26.6 + STP 247–249 — a THIRD
+independent engine**, after Ladybird (#42) and Servo (#43), to test whether the *method* keeps
+producing.
+
+`CSS zoom` already has a map row citing it as an Interop 2026 focus area. Priced against the corpus
+it reads **28.1%**, which would make it one of the highest-weight unbuilt rows on the board:
+
+```text
+   `zoom` declared anywhere                     48/171   28.1%
+     ├─ `zoom: 1` — the legacy IE hasLayout hack 35/171   20.5%   <- a NO-OP in every shipping engine
+     └─ `zoom` with a real value                 4/171    2.3%   <- the actual capability
+```
+
+**Ranking `zoom` on 28.1% would have bought a subsystem to serve four sites.**
+
+> **Three distinct ways a corpus grep has now lied to this loop, and they form a set:** an unanchored
+> property grep matching a *class name* (`hover`, #43, inflated by half); a *co-occurrence* standing
+> in for same-element application (t1025, 42.4% vs 49.4%); and a **legacy no-op VALUE** standing in
+> for the live capability. All three inflate, none deflate, all three are invisible in the number.
+> **A frequency is not a measurement until its VALUES have been looked at, not just its property
+> name** — which is exactly what this tick's other half did for `font-feature-settings`, arriving at
+> the same conclusion from the other direction.
+
+⚠ **And an honest note about the source, because it qualifies #42's rule.** WebKit's yield was
+**thin**, and the reason is the document type: Safari 26.6 and STP 247–249 are overwhelmingly **bug
+fixes** (*"CSS math functions produced an incorrect signed zero"*, *"a nested clip-path ignored css
+zoom"*). **A fix list names what an engine already had; a feature list names what it just got.**
+#42's *"independent engine release notes beat Interop"* holds — but it is about the **document type,
+not the vendor**. New rows: anchor positioning (1.8%) and the `ic` unit (4.1%, grep flagged
+unreliable). Nothing outranks anything.
+
+RATCHET: measurement only, no engine code changed. Nothing traded.
+
+GATE: none — this tick's conclusion is *do not build*, and a gate for absent behaviour would be the
+vacuous kind. `tests/wpt/probes/font-features.html` is kept with both controls so the next attempt
+starts from the corrected fixture rather than the first one.
+
+PERF: none.
+
+WIKI: none — a probe result and a demotion. [no-pattern]
+
 ## Tick 1038 — six UA declarations, and two the enumeration was RIGHT about and I could not copy (2026-08-08)
 
 TICK SHAPE: primitive — audit #43's remaining UA-sheet gaps, built. **And the two rows I could NOT
