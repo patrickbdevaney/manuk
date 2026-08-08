@@ -6852,3 +6852,49 @@ Gated by `box-model.html` (2 probes → 5, still page 32 of 32). RED-proven twic
 geometry: deleting the border rule kills `p-ifb-bare` and `p-ifb-one`; deleting the `frameborder` rule
 kills `p-ifb-zero`. ⚠ `p-ifb-one` (`frameborder="1"` must KEEP the border) stops the gate being
 satisfied by honouring *any* `frameborder` attribute; `p-ifb-zero` is the ten-site regression guard.
+
+## An enumerated computed value is a fact about the reference, not always a rule you can copy (t1038)
+
+Surface audit #43 established a method: **ask the reference to recite its own UA sheet** —
+`getComputedStyle` over every HTML element, diffed against a `<span>`. Its second outing found the
+method's own failure mode.
+
+**Six declarations copied cleanly**: `small`/`big` `font-size`, `audio { display: none }`,
+`hgroup, search { display: block }`, `nobr { white-space: nowrap }`. `<small>` alone is **8.8% of the
+corpus** — every legal line, caption, byline and footnote was rendering at the parent's size.
+
+⚠ **`smaller` is a RATIO, not a size**, which the nesting row is what proves:
+
+```text
+   parent 16px   <small> 13.3333px          <big> 19.2px
+   parent 16px   <small><small> 11.1111px   <- 13.3333 / 1.2, it COMPOUNDS
+   parent 10px   <small>  8.33333px         parent 32px  <small> 26.6667px
+```
+
+### `<legend>`: two attempts, nothing landed
+
+The enumeration reported `display=block paddingLeft=2px paddingRight=2px`:
+
+```text
+   attempt 1  `display: block`         ours 400x20 vs chrome 29x20   <- 371px REGRESSION
+   attempt 2  the 2px padding alone    ours  29x19 — INERT, x still 0 vs chrome's 2
+```
+
+A legend inside a `<fieldset>` shrinks to fit **whatever its computed `display` says**, so the
+declaration does not reproduce the value; and Chrome's legend sits at `x=2` because of the
+**fieldset's border**, not its own padding.
+
+> **The value may be produced by machinery the declaration does not carry.** Enumerating the
+> reference tells you *what is true there*; it does not tell you *which rule makes it true here*.
+
+⚠ The second attempt is the more instructive half: **an inert rule is worse than no rule**, because it
+reads as coverage in the sheet and in every audit that greps it. Deleted rather than kept "because it
+is not wrong". `<ruby>` is absent by the same discipline — Chrome computes `display: ruby`, a layout
+mode this engine does not implement, and the declaration would claim what the layout cannot honour.
+
+### The gate proves the ratio, not a number
+
+`inline-flow.html` (10 probes → 17, still page 32 of 32). RED-proven twice: replacing
+`font-size: smaller` with a **constant** `13.3333px` passes `p-ua-small` and fails `p-ua-small2`;
+deleting the `hgroup, search` rule fails those two. **A gate that asserted one `<small>` would have
+been satisfied by a constant** — the nested row is what makes it a test of the mechanism.

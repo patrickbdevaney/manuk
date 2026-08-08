@@ -266,6 +266,45 @@ option, optgroup { display: none; }
    property a page can read back. Written as a UA attribute selector rather than a presentational
    hint deliberately: t1026 recorded that our hint block is prepended BELOW the UA sheet, so a hint
    would LOSE to the rule above it. Same origin, higher specificity, no cascade surgery. */
+/* ── **`small` / `big` — the relative font-size keywords, and `<small>` is 8.8% of the corpus**
+   (t1038, from surface audit #43's UA-sheet enumeration). We had no rule for either, so a legal
+   line, a caption, a byline and a footnote all rendered at the PARENT's size — the wrong height and
+   the wrong width, on every one of them.
+
+   Chrome-measured (`getComputedStyle`, not recalled), and the nesting row is what shows it is a
+   RATIO and not a constant:
+
+     parent 16px   <small> 13.3333px    <big> 19.2px
+     parent 16px   <small><small> 11.1111px      <- 13.3333 / 1.2, so it compounds
+     parent 10px   <small>  8.33333px
+     parent 32px   <small> 26.6667px
+
+   i.e. exactly the CSS relative-size step of 1.2 in this range. */
+/* ── **THE REST OF surface audit #43's UA-SHEET ENUMERATION** (t1038). Each value is Chrome's own,
+   read back with `getComputedStyle` over every HTML element, and each has its own probe row in
+   `tests/wpt/corpus/ua-defaults.html`. They are ONE mechanism — a missing UA declaration — and each
+   was invisible until the reference was asked to recite its own sheet.
+   ⚠ `<ruby>` is deliberately ABSENT: Chrome computes `display: ruby`, which is a layout mode this
+   engine does not implement, and writing the declaration would claim a capability the layout cannot
+   honour. Named here rather than left looking overlooked. */
+audio { display: none; }
+hgroup, search { display: block; }
+nobr { white-space: nowrap; }
+/* ⚠⚠⚠ `<legend>` IS DELIBERATELY ABSENT, AND IT COST TWO ATTEMPTS TO EARN THAT.
+   Audit #43's enumeration reported `display=block paddingLeft=2px paddingRight=2px`.
+   · Applying `display: block` literally made ours FILL the fieldset — **400x20 against Chrome's
+     29x20**, a 371px regression measured on the very battery that proposed it. A legend inside a
+     `<fieldset>` is a special box that shrinks to fit whatever its computed `display` says.
+   · The 2px padding alone was then **INERT**: the box stayed 29x19 and the residual 2px of `x` did
+     not move, because Chrome's legend sits at `x=2` from the **FIELDSET's border**, not from any
+     padding of its own. A rule that changes nothing is worse than no rule — it reads as coverage.
+   **An enumerated computed value is a FACT about the reference, not always a RULE you can copy**:
+   the value may be produced by machinery the declaration does not carry. The residual is a fieldset
+   question worth 0.6% of the corpus, and it is named here rather than papered over. */
+
+small { font-size: smaller; }
+big { font-size: larger; }
+
 iframe { border: 2px inset; }
 iframe[frameborder="0"], iframe[frameborder="no"] { border-width: 0; }
 

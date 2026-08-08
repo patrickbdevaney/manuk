@@ -348,6 +348,9 @@
   - L6825 · The second rule is the tick
   - L6831 · border-width: 0, not border: none
   - L6838 · Why a UA attribute selector and not a presentational hint
+  - L6856 · An enumerated computed value is a fact about the reference, not always a rule you can copy (t1038)
+  - L6874 · <legend>: two attempts, nothing landed
+  - L6895 · The gate proves the ratio, not a number
 
 ## browser-capabilities.md
 `docs/wiki/browser-capabilities.md`
@@ -1733,4 +1736,4 @@
   - L124 · Rank mechanisms by FLIP RATE, not failing-subtest count — CSS layout is a multi-assertion slog
 
 ---
-1640 sections across 22 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+1643 sections across 22 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.

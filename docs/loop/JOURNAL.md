@@ -46371,6 +46371,79 @@ PERF: none — one UA rule and one narrowed branch in a cascade that already ran
 WIKI: `docs/wiki/css-cascade.md` — where Chrome draws the form-control `box-sizing` line, and why a
 layout-crate test cannot see it.
 
+## Tick 1038 — six UA declarations, and two the enumeration was RIGHT about and I could not copy (2026-08-08)
+
+TICK SHAPE: primitive — audit #43's remaining UA-sheet gaps, built. **And the two rows I could NOT
+land are worth more than the six I could.**
+
+⚠⚠⚠ **`<small>` IS 8.8% OF THE CORPUS AND WE HAD NO RULE FOR IT** — every legal line, caption, byline
+and footnote rendered at the **parent's** size. Chrome-measured, and the nesting row is the one that
+matters:
+
+```text
+   parent 16px   <small> 13.3333px          <big> 19.2px
+   parent 16px   <small><small> 11.1111px   <- 13.3333 / 1.2, so it COMPOUNDS
+   parent 10px   <small>  8.33333px
+   parent 32px   <small> 26.6667px
+```
+
+**`smaller` is a RATIO, not a size**, and that is exactly what the gate is built to hold.
+
+**LANDED, six declarations, one mechanism** (a missing UA rule), each with its own probe row:
+`small`/`big` font-size · `audio { display: none }` · `hgroup, search { display: block }` ·
+`nobr { white-space: nowrap }`.
+
+⚠⚠⚠ **`<legend>` COST TWO ATTEMPTS AND LANDED NOTHING, WHICH IS THE FINDING.** The enumeration
+reported `display=block paddingLeft=2px paddingRight=2px`. Applying it:
+
+```text
+   attempt 1  `display: block`            ours 400x20  vs chrome 29x20   <- 371px REGRESSION
+   attempt 2  the 2px padding alone       ours  29x19  — INERT, x still 0 vs chrome's 2
+```
+
+A legend inside a `<fieldset>` is a special box that **shrinks to fit whatever its computed `display`
+says**, so the declaration alone does not reproduce the value; and Chrome's legend sits at `x=2`
+because of the **FIELDSET's border**, not any padding of its own.
+
+> **AN ENUMERATED COMPUTED VALUE IS A FACT ABOUT THE REFERENCE, NOT ALWAYS A RULE YOU CAN COPY.** The
+> value may be produced by machinery the declaration does not carry. This is the enumeration method's
+> own failure mode, found on its second outing, and it is the caveat that belongs next to audit #43's
+> *"enumerate every surface the reference can recite"*.
+
+⚠ **The second attempt is the more instructive half: an INERT rule is worse than no rule**, because it
+reads as coverage in the sheet and in every audit that greps it. It was deleted rather than kept
+"because it is not wrong". `<ruby>` is likewise absent by decision — Chrome computes `display: ruby`,
+a layout mode this engine does not implement, and writing the declaration would claim a capability
+the layout cannot honour.
+
+⚠⚠ **AND ONE ROW WAS REMOVED FROM THE BATTERY RATHER THAN THE ENGINE.** With `audio { display:none }`
+landed, the probe reads `(absent)` for us and `[0,0 0×0]` for Chrome and scores it MISSING — the same
+instrument limitation t1027 recorded for `p-none`. **The fix is correct and the probe cannot express
+it**, so the row is gone from the battery with its reason, not silently passing.
+
+RATCHET: parity **113/113 across 32 pages** (was 106/106), `manuk-layout` **130/130**, `manuk-css`
+**52/52**. The UA battery goes **13/21 → 17/19**. Nothing traded.
+
+GATE: `tests/wpt/corpus/inline-flow.html`, 10 probes → 17, **still page 32 of 32 — free**, the fifth
+tick this window in that slot. RED-proven twice, disjoint:
+
+```text
+   A  `small { font-size: 13.3333px }` — a CONSTANT instead of the ratio
+        -> p-ua-small2 fails (88x15 vs 74x13), p-ua-small PASSES
+   B  delete `hgroup, search { display: block }`
+        -> p-ua-hgroup and p-ua-search fail (10x19 vs 400x20)
+```
+
+⚠ **Mutation A is the sharper kind and it is why the nested row exists**: a fixed 13px passes the
+first row and fails only the second, so the fixture proves the RATIO rather than a number. A gate
+that asserted one `<small>` would have been satisfied by a constant.
+
+PERF: six UA declarations on tags that are rare-to-common; the cascade already walks the sheet.
+F1/F2 green.
+
+WIKI: `docs/wiki/box-layout.md` — "An enumerated computed value is a fact about the reference, not
+always a rule you can copy".
+
 ## Tick 1037 — the border 10 sites were passing without, and the rule that had to land in the same tick (2026-08-08)
 
 TICK SHAPE: primitive — audit #43's #1 ranked item, built. **A four-pixel fix on 29.2% of the corpus,

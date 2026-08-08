@@ -33,4 +33,18 @@
   <div style="width:400px;height:40px" dir="ltr">
     <div id="p-ltr-blk" style="width:100px;height:20px;background:#333"></div>
   </div>
+
+  <!-- ── t1038: UA-sheet declarations audit #43 found by asking Chrome to recite its own sheet.
+       `<small>` is 8.8% of the corpus — every legal line, caption, byline and footnote was rendering
+       at the PARENT's size. The nesting row is the one that matters: `smaller` is a RATIO (÷1.2), so
+       `<small><small>` compounds to 11.1111px from 16px, and a fixed 13px constant would pass the
+       first row and fail this one. `p-ua-base` is the control that must NOT move. -->
+  <div style="width:400px;height:120px;font:16px/20px monospace">
+    <div><small id="p-ua-small">Hamburgefon</small></div>
+    <div><small><small id="p-ua-small2">Hamburgefon</small></small></div>
+    <div><big id="p-ua-big">Hamburgefon</big></div>
+    <div><span id="p-ua-base">Hamburgefon</span></div>
+  </div>
+  <div style="width:100px;height:60px;font:16px/20px monospace"><nobr id="p-ua-nobr">Hamburgefon Hamburgefon</nobr></div>
+  <div style="width:400px;height:60px;font:16px/20px monospace"><hgroup id="p-ua-hgroup">x</hgroup><search id="p-ua-search">x</search></div>
 </body></html>
