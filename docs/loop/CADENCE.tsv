@@ -744,3 +744,4 @@ tick	sha	epoch	iso	delta_s	shape	wall_s	files	added	deleted	gates	claims	wpt_pas
 1029	a7f9a5a0	1786182716	2026-08-08T05:51:56-04:00	302	primitive	808	6	243	37	428	81	3896	6960	0	517	0	`clip` is the overflow value that does NOT make a formatting context, and the comment said otherwise (2026-08-08)
 1031	2dba0a72	1786189884	2026-08-08T07:51:24-04:00	7168	measurement	808	6	143	32	428	81	3896	6960	0	517	0	both conjuncts went up and M1 did not move, and the control killed half the gain (2026-08-08)
 1032	9662fe04	1786190128	2026-08-08T07:55:28-04:00	244	measurement	808	6	164	32	428	81	3896	6960	0	517	0	the four sites M1 is waiting on, and two hypotheses killed in four minutes (2026-08-08)
+1033	bb8ce5ac	1786191072	2026-08-08T08:11:12-04:00	944	measurement	808	5	145	32	428	81	3896	6960	0	517	0	41 rows say `reading_order` is not a row-construction defect, and that is the result (2026-08-08)

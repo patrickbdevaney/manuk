@@ -46371,6 +46371,83 @@ PERF: none — one UA rule and one narrowed branch in a cascade that already ran
 WIKI: `docs/wiki/css-cascade.md` — where Chrome draws the form-control `box-sizing` line, and why a
 layout-crate test cannot see it.
 
+## Tick 1034 — I tried to blame the instrument and the instrument came back clean (2026-08-08)
+
+TICK SHAPE: primitive (instrument) — the measurement t1033 named as *"cheaper to test than to keep
+eliminating"*, built as a **report-only** partition. **It refutes t1033's own risk, which is the most
+useful thing it could have done.**
+
+⚠⚠⚠ **THE HYPOTHESIS, AND IT WAS MINE.** t1033 closed by naming a risk: after four refuted
+mechanisms and 61 clean probes, `reading_order` might be *"substantially an instrument property of
+measuring live commercial pages"* rather than a defect. t1033's oracle dump had the shape that
+suggested it — a nav dropdown parked at `x = -199385, 225×0` in Chrome and `x = -199294, 225×0` here.
+**Both engines agree it is hidden; they disagree by 91px about WHERE off-screen it is**, and
+`jarring_reading_order` compares every sibling pair by rect with no notion of whether either box is
+on the page at all. A metric named *jarring* — *"what a USER PERCEIVES"* — counting that is wrong.
+
+⚠⚠⚠ **AND THE ANSWER IS NO. 41 OF 48 INVERSIONS ARE BETWEEN REAL, ON-SCREEN, NON-DEGENERATE BOXES.**
+
+```text
+   site                 inversions   on-screen   zero-area box   parked off-screen
+   rockstaractu.com          13           6            7                 0
+   sports.yahoo.com          11          11            0                 0
+   m.youm7.com               24          24            0                 0
+   ───────────────────────────────────────────────────────────────────────────────
+   total                     48          41 (85%)      7 (15%)           0
+```
+
+**The off-screen dropdown was real and unrepresentative** — the `parked` column is zero across every
+site, and the zero-area column is one site's local quirk. `reading_order` is an **engine target**, and
+the four marginal sites are not waiting on an instrument fix. ⚠ **That is the useful direction to be
+wrong in**: a confirmed instrument artefact would have retired the conjunct and quietly capped M1;
+the refutation says the remaining engine work is real and worth doing.
+
+⚠⚠⚠ **THE ZERO-AREA COUNTING IS A GENUINE (SMALL) INSTRUMENT DEFECT, AND I AM DELIBERATELY NOT
+FIXING IT.** A box with zero area cannot be read, so counting an inversion that involves one is
+indefensible on the invariant's own terms. Three reasons it stays, in the order that decides it:
+
+1. **It cannot change a single verdict.** Filtering takes rockstaractu 13 → 6, and jarring-clean is
+   **TOL 2** — 6 is still a fail. No site's M1 status moves, on this sweep or any of the four
+   marginal sites. **A metric change that moves no verdict is not worth the second reason.**
+2. **It would break comparability, which is worth more than 7 counts on one site.** t1023 had to be
+   labelled a **re-baseline** because the reference moved underneath the metric twice, and check #93
+   spent a whole finding on three denominators in circulation for one number. Changing
+   `reading_order`'s definition now would make the next sweep non-comparable to t1031 **in exchange
+   for nothing measurable**.
+3. **It is the exact shape of "retune the instrument to land your own tick"** — a standing refusal
+   here. That the change happens to be principled is not sufficient; that it is free and buys nothing
+   is what settles it.
+
+**So: REPORT FIRST, FILTER LATER AND DELIBERATELY.** The partition is behind `MANUK_RO_PARTITION=1`,
+off by default, and the row schema, the sweep output and every banked number are **byte-unchanged** —
+no re-baseline is owed.
+
+⚠ **THE ONE THING THIS DOES CHANGE ABOUT THE WORKLIST.** rockstaractu.com's *honest* inversion count
+is **6, not 13** — it is a less broken page than the sweep says, and t1032 ranked it second of four on
+a number that is half noise. `m.youm7.com` (24, all on-screen) and `sports.yahoo.com` (11, all
+on-screen) are the sites with the most real signal, and `m.youm7`'s 24 being one footer row of `<a>`
+siblings — with RTL already refuted at 13/13 — is now the sharpest single lead the loop has.
+
+⚠⚠ **AND A PROCESS NOTE, BECAUSE IT COST TWO ROUND TRIPS AND THE LOOP HAS BANKED IT BEFORE.** Two
+scripted edits threw on their assertions and **wrote nothing** — once because an anchor matched a doc
+comment that also follows `jarring_overlap`, once because both functions share a six-line prologue
+verbatim. The file was left untouched both times and the build then failed loudly on a half-applied
+third edit. **`scripted-edit-silent-noop` is why every replacement is asserted**; without the asserts
+this would have been a partially-edited file that compiled.
+
+RATCHET: `manuk-wpt` lib tests green, parity 97/97 across 32 pages, no engine crate touched. The
+default output of every instrument is byte-identical. Nothing traded.
+
+GATE: none new — the diagnostic is off by default and gates nothing. Its falsifiable content is the
+table above, reproducible with
+`MANUK_RO_PARTITION=1 manuk-wpt fidelity --urls <sites> 2>&1 >/dev/null | grep RO-PARTITION`.
+
+PERF: two closures and three counters inside a loop that already runs per inverted pair — bounded by
+the inversion count, not by the pair count.
+
+WIKI: none — this tick's content is a refuted hypothesis about the instrument and a deliberate
+decision NOT to change it. [no-pattern]
+
 ## Tick 1033 — 41 rows say `reading_order` is not a row-construction defect, and that is the result (2026-08-08)
 
 TICK SHAPE: measurement — the row-forming battery t1032 named, plus its wrap-boundary follow-on.

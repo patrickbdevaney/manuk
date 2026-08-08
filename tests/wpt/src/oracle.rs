@@ -890,6 +890,8 @@ pub fn jarring_reading_order(
     };
 
     let (mut count, mut skipped) = (0usize, 0usize);
+    // t1034 diagnostic partition of `count` — see the block below. NOT part of the invariant.
+    let (mut zero_area, mut parked, mut onscreen) = (0usize, 0usize, 0usize);
     let mut examples: Vec<String> = Vec::new();
     for (_, ids) in groups {
         if ids.len() < 2 {
@@ -906,6 +908,34 @@ pub fn jarring_reading_order(
                 // Both engines must be sure, and they must disagree — that is an inversion we caused.
                 if co != 0 && mo != 0 && co != mo {
                     count += 1;
+                    // ── **DIAGNOSTIC ONLY (t1034). This does NOT filter — it COUNTS.**
+                    //
+                    // This invariant is named `jarring`: it claims to measure what a USER
+                    // PERCEIVES as out of sequence. It compares every sibling pair by rect with no
+                    // notion of whether either box is on the page at all, and t1033's oracle dump
+                    // found the shape that matters — a nav dropdown parked at
+                    // `x = -199385, 225x0` in Chrome and `x = -199294, 225x0` here. Both engines
+                    // agree it is hidden; they disagree by 91px about WHERE off-screen it is, and
+                    // that lands in the count as an inversion a user could see.
+                    //
+                    // **A box with zero area cannot be read, and a box parked entirely left of the
+                    // viewport is not in the reading order at all.** Whether that is a large share
+                    // of the count or a rounding error decides whether `reading_order` — the
+                    // conjunct t1031 proved M1 is gated on — is an engine target or an instrument
+                    // property, so it is MEASURED before anything is changed. **Report first,
+                    // filter later and deliberately**, so this can never be a threshold tuned to
+                    // move a number.
+                    let degenerate = |r: &[i64; 4]| r[2] <= 0 || r[3] <= 0;
+                    let offscreen = |r: &[i64; 4]| r[0] + r[2] <= 0;
+                    let (ca, cb) = (&chrome[ids[i]].rect, &chrome[ids[j]].rect);
+                    let (ma, mb) = (&manuk[ids[i]].rect, &manuk[ids[j]].rect);
+                    if degenerate(ca) || degenerate(cb) || degenerate(ma) || degenerate(mb) {
+                        zero_area += 1;
+                    } else if offscreen(ca) || offscreen(cb) || offscreen(ma) || offscreen(mb) {
+                        parked += 1;
+                    } else {
+                        onscreen += 1;
+                    }
                     if examples.len() < 3 {
                         let (lo, hi) = if ids[i] <= ids[j] {
                             (ids[i], ids[j])
@@ -919,6 +949,11 @@ pub fn jarring_reading_order(
         }
     }
     examples.sort();
+    if count > 0 && std::env::var("MANUK_RO_PARTITION").is_ok() {
+        eprintln!(
+            "  RO-PARTITION: {count} inversion(s) = {onscreen} on-screen \u{00b7} {zero_area} involve a ZERO-AREA box \u{00b7} {parked} involve a box parked entirely LEFT of the viewport"
+        );
+    }
     (count, skipped, examples)
 }
 
