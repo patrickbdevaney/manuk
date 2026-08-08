@@ -756,3 +756,4 @@ tick	sha	epoch	iso	delta_s	shape	wall_s	files	added	deleted	gates	claims	wpt_pas
 1044	03516b3c	1786213044	2026-08-08T14:17:24-04:00	3230	primitive	808	10	559	34	428	81	3896	6960	0	523	0	the search found no line because the DOM has none, and a term that cancelled (2026-08-08)
 1045	fe267bfc	1786214932	2026-08-08T14:48:52-04:00	1888	primitive	808	9	297	34	428	81	3896	6960	0	525	0	a construct cleared at 30 of 30, and the third one-point constant this session (2026-08-08)
 1046	4ec08a6c	1786217694	2026-08-08T15:34:54-04:00	2762	primitive	808	8	337	48	428	81	3896	6960	0	526	0	a comma is a legal URL character, and two instrument traps caught before they were published (2026-08-08)
+1047	87c88c93	1786218053	2026-08-08T15:40:53-04:00	359	measurement	808	5	349	33	428	81	3896	6960	0	526	0	the constitution check, and a "vanishingly rare" that is 30% of the corpus (2026-08-08)

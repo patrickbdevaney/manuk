@@ -46371,6 +46371,94 @@ PERF: none — one UA rule and one narrowed branch in a cascade that already ran
 WIKI: `docs/wiki/css-cascade.md` — where Chrome draws the form-control `box-sizing` line, and why a
 layout-crate test cannot see it.
 
+## Tick 1047 — the constitution check, and a "vanishingly rare" that is 30% of the corpus (2026-08-08)
+
+TICK SHAPE: measurement — the cadence re-read of `CONSTITUTION.MD` (due every 8 ticks; last at 1039),
+banked as check #96 in `docs/loop/CONSTITUTION-CHECK.md`. **Its own steer #2 was run inside the tick
+rather than filed, and yielded on the second claim checked.**
+
+⚠⚠⚠ **FINDING 1 — VI.3's USAGE-WEIGHT TERM HAS A FOURTH INFLATION MODE, AND IT IS NOT A GREP AT ALL:
+AN UNMEASURED FREQUENCY ASSERTION WRITTEN INTO THE ENGINE'S OWN SOURCE.** Check #95 named three modes,
+every one an error *in a measurement*. `parse_srcset`'s comment — *"a comma inside a URL is vanishingly
+rare compared to a missing space after one, so candidates are split on commas"* — is a **frequency
+claim about the web that decided an algorithm and had never been measured.** The corpus says 4 of the
+40 `srcset` sites carry one (t1046).
+
+> **THE RULE: GREP THE CORPUS AGAINST A COMMENT'S PREMISE, NOT ONLY AGAINST A CONSTRUCT.** The
+> existing discipline says *measure the frequency before building for it*; its blind spot is the
+> frequency claim already **spent** — baked into a decision, wearing the voice of the code, never
+> re-derived. Those are enumerable: the sentences in our own source that say *rare*, *vanishingly*,
+> *no real site*, *most pages never*.
+
+⚠⚠⚠ **AND THE SWEEP FOUND FOUR LIVE CLAIMS AND REFUTED THE SECOND ONE CHECKED BY TWO ORDERS OF
+JUDGEMENT.** `engine/layout/src/lib.rs`'s block-in-inline approximation (CSS2 §9.2.1.1) licenses
+itself with: *"differs from the spec only in where the inline's own background paints … invisible
+unless a block-containing inline is **itself styled**, which is vanishingly rare."* Measured on the
+same 170 pages:
+
+```text
+   a BLOCK-IN-INLINE anywhere ......................  71   41.8%
+   …where the INLINE IS ITSELF STYLED (class/style)   51   30.0%      ← "vanishingly rare"
+      1,925 elements — meet.google.com 288 · bbs.ruliweb.com 268 · id.vk.ru 247 ·
+      www.fragrantica.com 154 · sports.yahoo.com 121
+```
+
+It is `<a class="card"><div>…</div></a>` — the whole-tile-is-a-link pattern behind every card grid,
+product tile and article teaser on the web. ⚠ **Stated with the discipline check #95 demands, because
+this is a FREQUENCY and not yet a MEASUREMENT** (t1039's `font-feature-settings` lesson): the gated
+divergence is a **paint** difference, so it is unlikely to move `shape`, and the next question is
+whether it is observable at all on one of the five named sites. What is settled is that *"vanishingly
+rare"* was never true, and an approximation whose licence rests on that word has been shipping on
+**thirty percent of the corpus** with nobody having looked. Two claims remain unchecked and are named
+in the check; the fourth cites the 265-site diff and is therefore already measured — the shape the
+other three should be converted into.
+
+⚠⚠⚠ **FINDING 2 — THE MIS-PROVISIONED REFERENCE (check #93) HAS A FOURTH SUBJECT AND NEEDS A THIRD
+BRANCH.** #93's rule is binary: *can the reference be provisioned?* — fix the harness, or accept the
+accidental agreement. t1046's is neither: `--dump-dom` returns every image `0x0` over HTTP **including
+the negative rows**, `--virtual-time-budget` fixed it once, and the identical command failed again.
+The reference *can* be provisioned and **does not stay provisioned** — so the answer is **do not
+publish the reading**, and t1018's *no steady state* arrives inside #93's class rather than beside it.
+Standing cost: **the 26.5% `<picture>`/`srcset` question is OPEN and blocked on an instrument.**
+
+⚠⚠⚠ **FINDING 3 — A NEW NAMED CLASS FOR VI.2, THREE INSTANCES IN ONE WINDOW: THE CONSTANT FITTED AT
+THE ONE POINT EVERY FIXTURE USES.** t1043's border/intercept pair (equal at `fs = 13.333` and nowhere
+else), t1044's leading term that algebraically cancelled, t1045's `<select>`/`<textarea>` ratios. The
+mechanism is structural: the UA control font *is* 13.333px, so every form-control fixture lands on the
+single point where a wrong constant and the right one agree. And the corollary that closes t1038's
+correctly-refused trade: **a correctly-refused trade is an unfinished fix, and its shape names the
+missing half** — the question is never whether to take it, but what second change makes it not a trade.
+Detection rule, one fixture row, paid three times: **vary the parameter you held fixed.**
+
+**FINDING 4 — the falsification pass ran BEFORE publication three times and changed the outcome twice**
+(t1044 deleted a term, t1046 reverted a whole fix, t1045 documented an equivalence). The three are the
+three correct responses to a green mutation: **write the missing row · delete the code · state the
+equivalence.**
+
+⚠⚠ **FINDING 5 — THE WINDOW'S LARGEST COMPLIANCE GAP: M1 HAS NOT BEEN MEASURED, AND CHECK #94 SAID SO
+SIX TICKS AGO.** The instrument of record is still **17.6% (31/131), sweep t1023**; `tick.sh` prints
+*"the sweep is 559h old"* on every landing. Each tick priced itself honestly on a 10-site old-binary
+cut with 3-run bands — which is how two apparent regressions were refuted — but that is not the
+corpus-level number the horizon is scored on, and check #72's distinction stands: *"unmeasured"* and
+*"bought nothing"* are two readings and only a sweep separates them. **The next non-fix tick is the
+sweep.**
+
+**FINDING 6** — VI.2 gains a measured NEGATIVE (`var()` clean at 30/30, 31.6% of the corpus) and a new
+family member (form controls: `<button>` 55.6% and `<input>` 51.5%, the #1 and #2 constructs, four
+defects in three ticks — and `<button>` was already right at 48 of 55 rows, so usage weight ranked
+where to look and had nothing to say about which of the two was broken).
+
+COMPLIANCE: **PART VII held** — five ticks, zero `scripts/` files touched, every tick on component 1.
+**THE RATCHET held** — zero regressions traded, two apparent single-site losses refuted by 3-run bands
+before being believed, one fix reverted rather than shipped unfalsifiable. **I2 held.** Wall audit #39
+ran on cadence and found the standing cost unchanged since #38; its finding was agent behaviour (an
+old-binary control costs the NEXT wall) and the remedy is free.
+
+PERF: none — measurement only.
+
+WIKI: none — this tick's artefact is `docs/loop/CONSTITUTION-CHECK.md` check #96, which is the wiki
+for the loop's own governance. [no-pattern]
+
 ## Tick 1046 — a comma is a legal URL character, and two instrument traps caught before they were published (2026-08-08)
 
 TICK SHAPE: primitive — a battery on `<picture>`/`srcset` (**26.5% of the burndown corpus**, the

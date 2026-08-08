@@ -6743,3 +6743,230 @@ without prompting.
    reference has not moved.
 3. **Do not rank on a raw corpus frequency.** Decompose its VALUES first; three mechanisms have now
    inflated one, and all three were invisible in the number.
+
+## Check #96 — tick 1047 (2026-08-08)
+
+Cadence re-read of `CONSTITUTION.MD` (due every 8 ticks; last at 1039). Window under review: **t1040–
+t1046** — one instrument partition, four geometry/parser fixes, one cleared construct, one wall audit.
+
+---
+
+### FINDING 1 — ⚠⚠⚠ VI.3's usage-weight term has been caught inflating a FOURTH way, and this one is not a grep at all: **an unmeasured frequency ASSERTION written into the engine's own source.**
+
+Check #95 named three inflation modes, all of them errors *in a measurement* (an unanchored property
+grep, a co-occurrence, a legacy no-op value). t1046 adds a mode that no discipline about greps can
+catch, because there is no grep:
+
+```rust
+// engine/page/src/lib.rs, parse_srcset, written long before this window
+/// Deliberately lenient in the way the spec is: a comma inside a URL is VANISHINGLY RARE compared to
+/// a missing space after one, so candidates are split on commas …
+```
+
+That sentence is a **frequency claim about the web**, it decided an algorithm, and **nobody had ever
+measured it.** One grep over the corpus the burndown scores, three minutes, no build:
+
+```text
+   pages with a real body ..................... 170
+   ships a `srcset` ...........................  40   23.5%
+   …with a COMMA inside a candidate URL .......   4   ← one site in TEN that uses the attribute
+```
+
+Two ordinary shapes produce it — an image CDN's transform segment
+(`/upload/w_400,h_300,c_fill/hero.jpg 400w`) and **every `data:` URI in existence** — and a shredded
+candidate is not a smaller image but a **broken-image placeholder**. One of the four,
+`www.kuechenmomente.de`, is a site this loop already tracks by name.
+
+> **THE RULE THIS ADDS TO VI.3: GREP THE CORPUS AGAINST A COMMENT'S PREMISE, NOT ONLY AGAINST A
+> CONSTRUCT.** The existing discipline says *measure the frequency before building for it*. Its blind
+> spot is the frequency claim that was already **spent** — baked into a decision, wearing the voice of
+> the code, and never re-derived. Those are enumerable: they are the sentences in our own source that
+> say *rare*, *common*, *vanishingly*, *most pages*. That grep has not been run, and it is one command.
+
+#### ⚠⚠⚠ …and steer #2 was RUN IN THIS TICK rather than filed, and it yielded on the first try.
+
+The grep is one command over `engine/` — the spent-frequency vocabulary (*vanishingly*, *rare in
+practice*, *no real site*, *almost never*, *most pages never*). It returns **four live claims**, and
+the second one checked is **refuted by a factor nobody would call a rounding error**:
+
+```rust
+// engine/layout/src/lib.rs — block-in-inline (CSS2 §9.2.1.1), on the approximation we ship
+//   "…differs from the spec only in where the INLINE'S OWN background paints (spec: on each split
+//    fragment; here: behind the blockified box) — invisible unless a block-containing inline is
+//    ITSELF STYLED, which is vanishingly rare."
+```
+
+Measured against the same 170 pages:
+
+```text
+   a BLOCK-IN-INLINE anywhere ......................  71   41.8%
+   …where the INLINE IS ITSELF STYLED (class/style)   51   30.0%      ← "vanishingly rare"
+      1,925 such elements — meet.google.com 288 · bbs.ruliweb.com 268 · id.vk.ru 247 ·
+      www.fragrantica.com 154 · sports.yahoo.com 121
+```
+
+It is not an exotic construct: it is **`<a class="card"><div>…</div></a>`**, the whole-tile-is-a-link
+pattern behind every card grid, product tile and article teaser on the modern web.
+
+⚠ **Stated with the discipline check #95 demands of it, because this is a FREQUENCY and not yet a
+MEASUREMENT** (the `font-feature-settings` lesson, t1039): 30.0% is how often the *condition the
+comment names* occurs, and the divergence it gates is a **paint** difference — where the inline's own
+background lands — not a geometry one. So it is unlikely to move M1, which is `shape`, and **the next
+question is whether the stated difference is observable at all**, on one of the five named sites. What
+is settled is that *"vanishingly rare"* was never true, and an approximation whose licence rests on
+that word has been shipping on **thirty percent of the corpus** with nobody having looked.
+
+**Two claims remain unchecked and are named so they are not lost:** a namespaced `attr()` in `content`
+(`stylo_engine.rs:2477`) and a selector branch that walks left past the anchor (`css/src/lib.rs:2256`).
+The fourth — *"no real site inserts a node before itself"* (`dom/src/lib.rs:1204`) — **cites the
+265-site diff and is therefore already measured**, which is exactly the shape the other three should
+be converted into.
+
+---
+
+### FINDING 2 — ⚠⚠⚠ The MIS-PROVISIONED REFERENCE (check #93) has a fourth subject and needs a **third** branch in its decision rule: *not repeatable*.
+
+Check #93 named the class with three subjects and a binary rule — **can the reference be provisioned?**
+If yes, fix the harness (`--hide-scrollbars`, `--window-size`, the interaction media features); if no,
+accept the accidental agreement and do not "correct" the engine into being wrong for real users
+(`hyphens: auto`). t1046 found a fourth subject that the rule cannot classify:
+
+```text
+   the same battery, served over real HTTP, `--dump-dom`
+     every image 0x0 in the reference — INCLUDING the negative rows (<img src="a.png">)
+   …with --virtual-time-budget=5000                    correct, once
+   …the IDENTICAL command again                        every image 0x0 again
+```
+
+The reference *can* be provisioned — and **does not stay provisioned**. That is neither branch. The
+answer is not "fix the harness" and not "accept the divergence" but **do not publish the reading**,
+and it is t1018's second fact (*no steady state → build the instrument*) arriving inside check #93's
+class rather than beside it.
+
+**The standing cost, stated so it is not re-discovered:** every battery whose subject is an image
+**loaded over the network** has been compared against a reference that may not have loaded it.
+`data:`-URI and CSS-only batteries are unaffected, which is every battery this window ran — but the
+method needs a load-settled reference before it is pointed at images again, and **the 26.5%-of-corpus
+`<picture>`/`srcset` question is therefore OPEN and blocked on an instrument, not on engine work.**
+
+---
+
+### FINDING 3 — ⚠⚠⚠ A new named class for VI.2, with three instances in one window: **THE CONSTANT FITTED AT THE ONE POINT EVERY FIXTURE USES.**
+
+Distinct from every entry already in VI.2's residual-mass list, and it produced three defects in four
+ticks:
+
+```text
+   t1043   a text field's border + intrinsic-width intercept
+           ours 2.925·fs + 6   ·   Chrome 2.75·fs + 8   ·   EQUAL at fs = 13.333, and nowhere else
+   t1044   the baseline's leading term, which CANCELLED:
+           (h−L)/2 + a + (L−a−d)/2  ==  (h−a−d)/2 + a   for every L
+   t1045   <select>/<textarea> intrinsic heights — a ratio whose own comment calls it
+           "Chrome's own ratio at the control font"
+```
+
+**The mechanism is structural, not careless.** The UA control font is `13.333px`, so *every*
+form-control fixture anybody writes lands on the single point where a wrong constant and the right one
+agree. t1038 measured the border as wrong, measured the default width as already exact, and
+**correctly refused the trade** — the refusal was right and the residue it left had a shape:
+
+> **A CORRECTLY-REFUSED TRADE IS AN UNFINISHED FIX, AND ITS SHAPE NAMES THE MISSING HALF.** When a
+> past tick says *"measured, not taken — it would be a trade,"* the question for the next tick is not
+> whether to take it but **what second change makes it not a trade.**
+
+And the detection rule, which cost one fixture row and paid three times: **vary the parameter you held
+fixed.** `<input style="font-size:20px">` is 303 in Chrome and 305 under the old pair; measuring the
+same markup more carefully would never have found it.
+
+---
+
+### FINDING 4 — The falsification discipline ran BEFORE publication three times and **changed the outcome twice.** This is the window's best compliance news and it is worth stating as a mechanism.
+
+I5 and t834 require every half of a fix to be separately falsifiable. Run as a pass rather than a
+formality, it did not merely confirm:
+
+- **t1044** — four mutations, two red. One green needed a fixture row I had not thought to write
+  (content-box vs border-box: the *obvious* frame row pins at `dy 0` under both models); **the other
+  was a term that should not exist**, and deleting it made the code both simpler and *more* correct
+  about the mechanism.
+- **t1046** — a fix that was right by `select_image_url`'s own documented contract (a **third** caller
+  reading `attr("src")` directly), compiled, and **moved not one row**. It was **reverted, not
+  shipped.**
+- **t1045** — a mutation left green was documented as a *provable equivalence* (a leading comma cannot
+  reach that line) rather than left looking tested.
+
+> **A MUTATION THAT LEAVES THE GATE GREEN IS NOT A WEAK GATE — IT IS A SENTENCE NOTHING IS TESTING,
+> AND HALF THE TIME NOTHING CAN TEST IT BECAUSE IT DOES NOT MEAN ANYTHING.** The three outcomes are
+> the three correct responses: **write the missing row · delete the code · state the equivalence.**
+
+---
+
+### FINDING 5 — ⚠⚠ The window's largest compliance gap: **M1 HAS NOT BEEN MEASURED, AND CHECK #94 SAID SO SIX TICKS EARLIER.**
+
+VI.3's instrument of record is `FIDELITY-PROGRESS.tsv` field 15. Its last banked value is **17.6%
+(31/131), sweep t1023**. Check #94 flagged it as *"six ticks stale against three landed geometry
+fixes."* It is now **stale against roughly a dozen**, `tick.sh` prints *"the sweep is 559h old — a
+capability tick must measure THIS tree"* on every landing, and this window added five more fixes
+without one.
+
+**What the window did instead is defensible and is not a substitute.** Every tick priced itself on a
+10-site panel against an old binary rebuilt in the same hour, with 3-run bands per site — which is how
+t1043's apparent `paypal` regression was shown to be that site's own band (modal `0.649813` on
+*both* binaries) and t1044's `otomoto` movement was shown to be noise (bands `[0.752,0.791]` vs
+`[0.762,0.799]`). That is honest attribution, and it is **not** the corpus-level number the horizon is
+scored on. Check #72's distinction stands: *"unmeasured"* and *"bought nothing"* are two different
+readings and only a sweep separates them.
+
+⚠ Recorded rather than resolved because the sweep is **the agent's job and off the tick path**, and
+this window's ticks each ran a 10-site cut plus, twice, a full old-binary rebuild — see the wall audit
+below for what that cost. **The next non-fix tick should be the sweep.**
+
+---
+
+### FINDING 6 — VI.2 gains a measured NEGATIVE and two positives, all from batteries.
+
+- ⚠ **`var()` is CLEAN — 30 of 30** (t1045). CSS custom properties are **31.6%** of the corpus and had
+  only ever had CSSOM attention; a 30-row geometry battery is Chrome-exact on every row including
+  guaranteed-invalid resolving to the *inherited* value, `--x: ;`, `--x: initial`, case-sensitivity,
+  var-of-var and var-in-`min()`. **A cleared construct is a result and belongs in the ledger**, because
+  the next tick will otherwise look there.
+- **Form controls are a new member of VI.2's "opts out of ordinary block sizing" family** —
+  `<button>` **55.6%** and `<input>` **51.5%** are the corpus's #1 and #2 constructs, they beat
+  `<table>` eight to one, and they had **no differential reading**. Four defects in three ticks. ⚠ And
+  the ordering lesson: **`<button>` was already right (48 of 55 rows) and `<input>` was not** — usage
+  weight ranked where to look and had nothing to say about which of the two was broken.
+- **Still open, with numbers:** `<select>`'s intrinsic height ladder · an empty `<button>`'s baseline
+  (its content-box *bottom*) · `<input type=range|color|image>` as an **8x6 stub** (priced at **0 of
+  170** corpus pages and declined *in advance* rather than in a post-mortem — VI.3's rule applied
+  forward).
+
+---
+
+### COMPLIANCE
+
+- **PART VII held.** Five ticks, zero `scripts/` files touched. Every tick served component **1**
+  (daily-driver rendering parity); none served a deferred horizon.
+- **THE RATCHET held.** Zero regressions traded. Two apparent single-site losses were refuted by
+  3-run bands before being believed (t1043 `paypal`, t1044 `otomoto`), and one fix was **reverted**
+  rather than shipped unfalsifiable (t1046).
+- **I2 held** — no sanctioned dependency patched; the `srcset` fix is our own parser.
+- **Wall audit #39 (due at 1044) ran** and found the wall's standing cost unchanged since #38. Its
+  finding is agent behaviour, not harness bloat: **an old-binary control costs the NEXT wall, not its
+  own tick** — 604s of cold gate relink, remedied for free by pre-warming out of band, which took
+  t1044/t1045 from 974s back to 138s/141s. ⚠ And it recurred at t1046 because the pre-warm was run in
+  the *foreground* and the harness SIGTERMs at ten minutes: **background the pre-warm and `tick.sh`
+  both.**
+
+### THE STEER (for the next window)
+
+1. **RUN THE SWEEP.** It is the window's only real compliance gap and it is six ticks past when check
+   #94 asked for it.
+2. **Finish the spent-frequency sweep.** Run in this tick, it found **four** live claims and refuted
+   the second one checked at **30.0% of the corpus** (block-in-inline with a styled inline). Two are
+   still unchecked — a namespaced `attr()` in `content`, and a selector branch walking left past the
+   anchor — and the block-in-inline one now needs its *observability* measured, not just its
+   frequency (t1039's rule).
+3. **Build the load-settled reference** before re-opening `<picture>`/`srcset` (26.5%). Engine work
+   there is blocked on an instrument, and saying so beats grinding.
+4. **Vary the parameter you held fixed** on the remaining form-control ladder before writing any
+   constant into it — Finding 3, applied to its own residue.
