@@ -46371,6 +46371,105 @@ PERF: none — one UA rule and one narrowed branch in a cascade that already ran
 WIKI: `docs/wiki/css-cascade.md` — where Chrome draws the form-control `box-sizing` line, and why a
 layout-crate test cannot see it.
 
+## Tick 1049 — M1 has been the SAME 23 SITES for three sweeps while shape climbed 31→37 (2026-08-08)
+
+TICK SHAPE: measurement — the clean `--jobs 2` CrUX sweep, 200 sites, banked as
+`SWEEP-t1049-rows.tsv`. Owed since t1031 (18 ticks, 561h on `tick.sh`'s own counter) and named as
+*"the next non-fix tick"* by check #96's FINDING 5. **A hypothesis was written before any row
+existed; it was right on three terms of four, and being right is again not the useful part.**
+
+```text
+                              t1023      t1031      t1049
+   M1 (shape>=0.75 AND clean)  17.6%      17.6%      17.8%     23 · 23 · 23 sites
+     shape >= 0.75             23.7%      26.7%      28.7%     31 -> 35 -> 37
+     jarring-clean             32.1%      33.6%      34.1%     42 -> 44 -> 44
+   shape_mean                  59.5%      60.7%      60.3%
+   scored / in-scope          107/131    107/131    108/129
+   COMMON-SET BAND (t1031→t1049)                    +0.10 pts over 102 sites (11 up, 7 down >2pt)
+```
+
+⚠⚠⚠ **THE HEADLINE IS NOT "FLAT", IT IS "FLAT AT THE SAME 23 SITES WHILE ITS FIRST CONJUNCT ROSE
+19%".** Across three sweeps and **26 ticks**, `shape>=0.75` went 31 → 35 → 37 — a real, measured,
+monotone climb — and M1 did not move by one site. The conjuncts are not merely uncorrelated; they are
+**decoupling**, and the loop has spent that whole window buying the one that is no longer binding.
+t1031 said this in one sweep and could be read as noise. Three sweeps is a trend.
+
+⚠⚠⚠ **AND THE BINDING CONJUNCT IS THE SAME ONE, WITH THE SAME RANK, HARDER.** Of the sites that now
+clear the shape bar and still fail M1, the counts over the failing conjuncts:
+
+```text
+   reading_order   binds 12      (t1031: 10 of 12 — now 12 of 14)
+   h_overflow      binds  6
+   overlap         binds  4
+   dead_target     binds  0
+```
+
+```text
+   sip777man.site         0.943   ovlp 4 · r_ord 12
+   sestra.cc              0.899   h_ovf 9 · r_ord 4
+   rockstaractu.com       0.885   r_ord 13
+   m.youm7.com            0.821   r_ord 24        <- 17 of these are ONE 25-sibling group (t1041)
+   www.tz.de              0.815   h_ovf 3 · r_ord 4
+   simplepdf.com          0.795   h_ovf 5              <- h_overflow ALONE
+   gismart.com            0.779   r_ord 4
+   www.puentedemando.com  0.779   h_ovf 5 · ovlp 10 · r_ord 10
+   www.freesupertips.com  0.779   r_ord 4
+   www.otomoto.pl         0.774   r_ord 11
+   beb88run.xyz           0.764   ovlp 13 · r_ord 15
+   seduniaselat.com       0.758   h_ovf 4              <- h_overflow ALONE
+   pt88.app               0.755   ovlp 6 · r_ord 7
+   www.kuechenmomente.de  0.750   h_ovf 11 · r_ord 5
+```
+
+⚠⚠⚠ **THE STEER, AND IT IS `h_overflow` RATHER THAN `reading_order`, WHICH IS NOT WHAT THE RAW COUNT
+SAYS.** `reading_order` binds twice as many sites, and t1041 measured *why* chasing it directly has
+failed for a whole window: it is a **long tail of independent two-sibling inversions with no shared
+container**, so no single fix collapses a count. `h_overflow` is the opposite shape on every axis
+that matters:
+
+- it is a **direct measurement of a width error**, not a step function over one;
+- the board's own analysis says a container-width error **launders into `dy`** (a box a few px too
+  wide re-wraps its prose → wrong line count → whole-subtree height cascade), and t871-874
+  independently established that a `reading_order` symptom is *"a WIDTH or TRANSFORM upstream, never
+  a reorder"* — so the two conjuncts have **one suspected upstream** and only one of them names it;
+- **two sites bind on `h_overflow` ALONE** — `simplepdf.com` (5) and `seduniaselat.com` (4) — which
+  makes them single-conjunct, single-mechanism targets with nothing to disentangle;
+- and it is ranked: kuechenmomente 11 · sestra 9 · simplepdf 5 · puentedemando 5 · seduniaselat 4 ·
+  tz.de 3.
+
+> **When two conjuncts are both binding and one of them is a long tail, work the one that names a
+> MECHANISM even if it binds fewer sites.** A count ranks where to look; it does not say which of two
+> symptoms has a cause you can find.
+
+**THE HYPOTHESIS, scored honestly.** Predicted before the rows existed: M1 flat ±1 site ✓ ·
+`shape>=0.75` up 1-4 sites ✓ (+2) · scored/in-scope flat ✓ (107→108) · `shape_mean` up 0-1.5 pts ✗
+(it fell 0.4). The miss is the informative one: **the window's fixes raised the number of sites over
+the bar without raising the average**, which is the signature of low-magnitude fixes landing on sites
+already near the bar — exactly what t1043/1044/1045 were, by their own description.
+
+⚠ **NO MOVER IS CLAIMED, SO NONE NEEDED RE-RUNNING.** The common-set band is **+0.10 pts** with 11
+sites up and 7 down beyond 2 points — inside the corpus's own drift (t654: a live site's shape varies
+3.7 pts on one unchanged tree). There is no delta here large enough to attribute, which is itself the
+result and is why no old-binary control was run for this tick: **a control exists to attribute a
+movement, and there is no movement to attribute.**
+
+⚠ SCORABILITY: 108/129 in-scope sites render = **83.7%**, the cap M1 cannot exceed. The 21 unscored
+are render-fail 2 · shell-only 7 · thin-overlap 3 · timeout 4 · css-starved 1 · other 4 — down from
+t777's 48 and no longer the larger half of the gap. **The binding constraint has genuinely moved from
+scorability to the jarring conjunct**, which is the first time that has been true.
+
+RATCHET: measurement only, no engine crate touched; every banked invariant re-banked unchanged.
+
+GATE: none new — a sweep gates nothing, and its falsifiable content is
+`SWEEP-t1049-rows.tsv` plus `scripts/fidelity-progress.sh`, which recomputes every number above from
+the row file.
+
+PERF: none — measurement only.
+
+WIKI: none — the artefact is `docs/loop/SWEEP-t1049-rows.tsv` and the FIDELITY-PROGRESS row; the
+mechanism claim it steers toward is not measured yet and writing it up now would be the
+frequency-claim error check #96 just named. [no-pattern]
+
 ## Tick 1048 — the box model an inline never had, and the fix that refunded the margin it deleted (2026-08-08)
 
 TICK SHAPE: primitive — a 49-row battery on **block-in-inline**, the construct t1047 measured at
