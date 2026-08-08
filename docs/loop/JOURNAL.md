@@ -46371,6 +46371,71 @@ PERF: none — one UA rule and one narrowed branch in a cascade that already ran
 WIKI: `docs/wiki/css-cascade.md` — where Chrome draws the form-control `box-sizing` line, and why a
 layout-crate test cannot see it.
 
+## Tick 1011 — the self-audit, and the one thing it cannot see is the thing this window kept finding (2026-08-07)
+
+TICK SHAPE: measurement — the self-audit, due every 10 ticks (last at 1001). **61 checks green, one
+red, and the red is this entry not existing yet.**
+
+```text
+   Tier 0                 3/3    wall 73s, 265-site oracle frame, the SPA miner asserted in G2
+   Gates                 12/12   every named gate stands up, and the two RETIRED ones say why
+   Falsifiability        16/16   every gate declares how to break it (Part 33)
+   Process defects        1/1    49 recorded, each naming the MECHANISM that closes it
+   Enforcement           10/10   hook wired + executable, receipt written, cadences mechanical
+   Pattern ledger         3/3    1,019 rows, moving with the engine
+   Journal                0/1    tick 1011 — this entry
+```
+
+⚠⚠⚠ **AND THE HONEST FINDING IS WHAT THE AUDIT CANNOT ASK, BECAUSE THIS WINDOW PRODUCED TWO
+INSTANCES OF IT IN FOUR TICKS.** The falsifiability section checks that *every gate declares how to
+break it* — sixteen green. It cannot check whether the declaration is **true**, and this window
+caught three that were not:
+
+```text
+   t1005   "delete the transform_affine and #q7 goes red"        -> it takes the CONTROL down first
+   t1006   "emit declaration order and #o2 fails, #o1 passes"    -> it is #o1 that fails
+   t1007   G_TRANSFORM_3D's #y08 asserted 100 x 40 as CHROME'S   -> Chrome gives 100 x 28.28
+```
+
+The first two are RED recipes written from the code and not run. **The third is worse in kind**: a
+gate asserting a *reference* value that was reasoned rather than measured, which does not merely fail
+to catch a defect — **it pins the engine to it and turns the fix into a red wall.** `falsify.sh`
+mutation-tests the wall against itself and would not have found any of the three, because all three
+gates DO go red when mutated; they go red for the wrong reason, or against the wrong number.
+
+> **The audit's `declares how to break it` check should become `declares how to break it, and the
+> declaration was RUN`.** The mechanical form is available and cheap: a gate header's RED recipe is
+> a claim with a date, and the honest ones this window carry the run's actual output. Proposed for
+> the next audit's prescribed list rather than smuggled in here, because changing what the self-audit
+> checks is a change to the instrument that judges the loop, and it deserves its own tick.
+
+⚠⚠ **THE WINDOW, 1004-1011, AS THE AUDIT SEES IT.** Four capability ticks, four measurement ticks,
+zero regressions traded, and the one thing that looked like a regression was measured to be the
+web moving underneath us:
+
+```text
+   1004  measurement   constitution check #90
+   1005  capability    an abspos box under a transformed containing block gets the MATRIX
+   1006  capability    translate / rotate / scale as PROPERTIES, both cascades
+   1007  capability    a rotation about x or y is a SCALE on the other axis (+ the false gate value)
+   1008  measurement   the matched sweep: common-set band +2.01 pts, M1 +2  (+ surface audit #41)
+   1009  measurement   the old-binary control: 88% of the fall belongs to the SITE
+   1010  measurement   `hyphens: auto` is UNMEASURABLE by the oracle — a tick NOT built
+   1011  measurement   this audit
+```
+
+⚠ **A HARNESS NOTE, REPORTED NOT TOUCHED (PART VII).** The wall's cold `target/debug` is ~105 GB and
+`disk-hygiene.sh` purges it at 97%, so a cold wall and the disk guard deadlock — each purge guarantees
+the next wall is cold. Worked around agent-side by relocating 16.5 GB of gitignored reference
+checkouts (`WebKit/`, `chromium/`, `firefox/`, none a path dependency) to `/var/tmp/manuk-refs/`,
+which put the trough at ~93%. Full detail in t1004's entry.
+
+RATCHET: nothing changed — no engine code in this tick.
+
+PERF: none — measurement only.
+
+WIKI: none — the artefact is the audit output and this entry. [no-pattern]
+
 ## Tick 1010 — the property the audit ranked yesterday is invisible to the oracle (2026-08-07)
 
 TICK SHAPE: measurement — the `hyphens: auto` fixture surface audit #41 asked for, run **before** any
