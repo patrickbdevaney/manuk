@@ -46371,6 +46371,85 @@ PERF: none — one UA rule and one narrowed branch in a cascade that already ran
 WIKI: `docs/wiki/css-cascade.md` — where Chrome draws the form-control `box-sizing` line, and why a
 layout-crate test cannot see it.
 
+## Tick 1036 — the seventh refutation, and the rule that says stop (2026-08-08)
+
+TICK SHAPE: measurement — one more `reading_order` mechanism cleared, and **the decision to abandon
+this lead as a SITE REDUCTION**, which is the actual deliverable.
+
+⚠⚠ **THE PROXIMATE CAUSE ON `m.youm7.com`, READ FROM OUR OWN TREE.** `boxes --fetch --why` on the
+footer row that produces all 24 inversions:
+
+```text
+   footer > div > div          Block        [105 14385 990x162]   3 element kids
+     a  (1 of 3)               InlineBlock  [105 14385 990x48]
+     a  (2 of 3)               InlineBlock  [105 14439 990x48]
+     a  (3 of 3)               InlineBlock  [105 14493 990x48]
+```
+
+**Three `inline-block` anchors, each 990px wide — the full container — so they STACK instead of
+forming a row.** An `inline-block` with `width: auto` must shrink-to-fit (CSS 2.1 §10.3.9). That is a
+clean, specific hypothesis and it is the best one this lead has produced.
+
+⚠⚠⚠ **AND IT IS WRONG TOO. SHRINK-TO-FIT IS 12/12 CHROME-EXACT.** Every form the site could be using:
+
+```text
+   inline-block, auto width, TEXT content                    ok
+   inline-block, auto width, an <img> child (the youm7 shape) ok
+   inline-block, auto width, a BROKEN <img>                   ok
+   inline-block, auto width, a BLOCK child                    ok
+   inline-block, auto width, an EMPTY child                   ok
+   inline-block, EXPLICIT width                     CONTROL   ok
+```
+
+⚠ **The control row is the one that shows why this needed testing at all**: every previous battery —
+t1032's `row-order`, t1033's `wrap-boundary`, and the `inline-flow` gate — gave its inline-blocks an
+**explicit width**, so shrink-to-fit had never once been exercised. It was a real gap in the coverage
+and it is now closed, with a clean result.
+
+⚠⚠⚠ **SEVEN MECHANISMS REFUTED FOR ONE LEAD, ~112 PROBES, ZERO DIVERGENCES. THAT IS THE FINDING, AND
+THE RULE SAYS STOP.**
+
+```text
+   <ins> ad slots            7/7      t1032
+   RTL plain-inline order   13/13     t1032
+   row formation            24/24     t1033
+   wrap boundaries          17/17     t1033
+   the instrument itself    41/48 on-screen (85%)   t1034
+   RTL inline-block         FOUND AND FIXED — and m.youm7 did not move   t1035
+   inline-block shrink-to-fit 12/12   this tick
+```
+
+> **t930-932 is explicit: PROPERTY-FAMILY sweeps yield, SITE REDUCTIONS do not.** The first two ticks
+> here were property-family work and they produced a real fix (t1035). The last two have been a
+> reduction of `m.youm7.com`, and a reduction is what this has become — I have been generating
+> hypotheses *from one page's markup* and testing them against a corpus of one. **Five clean batteries
+> in a row is not bad luck; it is the method telling me the frame is wrong.**
+
+⚠ **WHAT I AM NOT CONCLUDING.** Not *"reading_order is unfixable"* — t1034 measured that 85% of
+inversions are between real on-screen boxes, so it remains a genuine engine target. Not *"the 990px is
+correct"* — it is still the proximate cause on that page and it is still unexplained. The claim is
+narrower and it is about method: **this lead is no longer being worked by the technique that finds
+things here**, and continuing to spend ticks on it because it is the biggest single number is the
+same pull `SINGLE_SITE_TICKS` exists to catch.
+
+**THE STEER, back to ranked property families** — audit #43's remainder, which has been sitting
+priced and untouched for five ticks:
+
+```text
+   1.  iframe UA border 2px inset + `frameborder="0"` as a PAIRED hint   29.2%  (10 sites regress without the pair)
+   2.  font-feature-settings — UNPROBED, shaping changes advances        16.4%
+   3.  <small> / <big> font-size: smaller|larger                          8.8%
+```
+
+RATCHET: measurement only, no engine code changed. Nothing traded.
+
+GATE: none. `tests/wpt/probes/shrink-to-fit.html` joins the refutation set, with its explicit-width
+control so the 12/12 means the probe can discriminate.
+
+PERF: none.
+
+WIKI: none — a refutation and a decision to stop. [no-pattern]
+
 ## Tick 1035 — an atomic inline is placed by its LINE BOX, and §10.3.3 was displacing it by exactly `leftover` (2026-08-08)
 
 TICK SHAPE: primitive — a real, Chrome-exact, RED-proven RTL fix. ⚠⚠⚠ **AND IT DID NOT MOVE THE SITE

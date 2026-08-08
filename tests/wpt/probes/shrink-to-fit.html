@@ -1,0 +1,17 @@
+<!doctype html><html><head><meta charset=utf-8><style>
+*{margin:0;padding:0;font:16px/20px monospace}
+.w{width:400px;height:60px}
+</style></head><body>
+<!-- inline-block, width:AUTO, text content -->
+<div class=w><a id="p-t1" style="display:inline-block;background:#ccf">AA</a><a id="p-t2" style="display:inline-block;background:#cfc">BB</a></div>
+<!-- inline-block, width:auto, an IMG child (the youm7 shape) -->
+<div class=w><a id="p-i1" style="display:inline-block;background:#ccf"><img style="width:48px;height:48px" src="data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSI0OCIgaGVpZ2h0PSI0OCI+PC9zdmc+"></a><a id="p-i2" style="display:inline-block;background:#cfc"><img style="width:48px;height:48px" src="data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSI0OCIgaGVpZ2h0PSI0OCI+PC9zdmc+"></a></div>
+<!-- an IMG that has NOT loaded (no data uri) -->
+<div class=w><a id="p-b1" style="display:inline-block;background:#ccf"><img style="width:48px;height:48px" src="https://example.invalid/x.png"></a><a id="p-b2" style="display:inline-block;background:#cfc"><img style="width:48px;height:48px" src="https://example.invalid/y.png"></a></div>
+<!-- inline-block wrapping a BLOCK child (the case that can look like a block) -->
+<div class=w><a id="p-d1" style="display:inline-block;background:#ccf"><div style="width:48px;height:20px"></div></a><a id="p-d2" style="display:inline-block;background:#cfc"><div style="width:48px;height:20px"></div></a></div>
+<!-- inline-block with an EMPTY child -->
+<div class=w><a id="p-e1" style="display:inline-block;background:#ccf"><span></span></a><a id="p-e2" style="display:inline-block;background:#cfc"><span></span></a></div>
+<!-- CONTROL: explicit width, which every previous battery used -->
+<div class=w><a id="p-c1" style="display:inline-block;width:48px;height:20px;background:#ccf"></a><a id="p-c2" style="display:inline-block;width:48px;height:20px;background:#cfc"></a></div>
+</body></html>
