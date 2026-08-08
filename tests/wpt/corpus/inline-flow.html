@@ -10,4 +10,27 @@
   <span id="p-ib3" class="ib" style="background:#ab8"></span>
   <!-- A block after inline content clears to the next line. -->
   <div id="p-below" style="width:120px;height:25px;background:#333"></div>
+
+  <!-- ── t1035: AN ATOMIC INLINE IS PLACED BY ITS LINE BOX, NOT BY CSS 2.1 §10.3.3.
+       §10.3.3's over-constrained rule ("under `rtl`, `margin-left` is ignored") is written for a
+       BLOCK-LEVEL box. `inline-block` was reaching it and taking `ml = leftover` ON TOP OF the line
+       box's own correct RTL placement, so the box was displaced by exactly
+       `containing-block width − box width` — 380px here, which is what identified the arm.
+
+       `p-rtl-blk` is the CONTROL that keeps §10.3.3 itself working: a real block-level box under
+       `rtl` must still go flush RIGHT. Without it this fixture is satisfied by deleting the rule
+       outright, which would put every Arabic sidebar and card back on the wrong side.
+       `p-ltr-*` are the mirror controls — the same markup under `ltr` must not move at all. -->
+  <div style="width:400px;height:40px" dir="rtl">
+    <span id="p-rtl-ib1" class="ib" style="background:#8ab"></span><span id="p-rtl-ib2" class="ib" style="background:#b8a"></span>
+  </div>
+  <div style="width:400px;height:40px" dir="rtl">
+    <div id="p-rtl-blk" style="width:100px;height:20px;background:#333"></div>
+  </div>
+  <div style="width:400px;height:40px" dir="ltr">
+    <span id="p-ltr-ib1" class="ib" style="background:#8ab"></span><span id="p-ltr-ib2" class="ib" style="background:#b8a"></span>
+  </div>
+  <div style="width:400px;height:40px" dir="ltr">
+    <div id="p-ltr-blk" style="width:100px;height:20px;background:#333"></div>
+  </div>
 </body></html>

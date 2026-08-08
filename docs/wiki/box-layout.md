@@ -6754,3 +6754,57 @@ regression that would read as a pass.
 the fix correctly stopped containing escaped into the *next* row and contaminated both controls, so
 mutation A failed five probes instead of three. **Row isolation is not fixture polish — it is what
 makes a RED proof attributable**, and this is the third consecutive tick where a battery needed it.
+
+## An atomic inline is placed by its LINE BOX, and §10.3.3 was adding `leftover` on top of it (t1035)
+
+Under `direction: rtl`, an `inline-block` was displaced by **exactly the containing block's width
+minus its own**:
+
+```text
+   <html dir="rtl">, a 20x20 inline-block in a 400px row
+                    chrome        ours
+     first  box   x = 780      x = 1160     delta 380
+     second box   x = 760      x = 1140     delta 380        380 == 400 − 20
+```
+
+**The 380 identified the arm, not a search**: it is literally `leftover` in `layout_block`'s CSS 2.1
+§10.3.3 branch — *"if the `direction` of the containing block is `rtl`, the specified value of
+`margin-left` is ignored"* — which sets `ml = leftover - mr`. §10.3.3 is for a **block-level** box.
+An `inline-block` is an **atomic inline**: §10.3.9 sizes it and its **line box** places it. It was
+taking `ml = leftover` on top of the line box's already-correct RTL placement, and the two stack.
+
+⚠ **The guard was one class short and the comment explaining why was already there.** The arm already
+excluded replaced elements, with a note saying an atomic inline *"belongs to its LINE BOX, not to
+this equation"* — added because the corpus punished an earlier draft. The right reason sat next to a
+guard implementing half of it.
+
+### The variable is `inline-block`, not inheritance
+
+RTL had already been refuted at 13/13 (t1032), so the first hypothesis was `dir` on `<html>` vs on
+the row. The isolation battery says otherwise:
+
+```text
+   dir on <html>,     inline-block   FAILS  1160 vs 780
+   dir on the ROW,    inline-block   FAILS  1160 vs 780   <- identical
+   direction:rtl CSS, inline-block   FAILS  1160 vs 780   <- identical
+   dir on <html>,     plain inline   ok
+   dir=ltr,           inline-block   ok     CONTROL
+   dir on <html>,     block child    ok     CONTROL (§10.3.3 itself still works)
+```
+
+t1032's 13/13 was not wrong — its rows used *plain inline* anchors, which still pass. **The row that
+discriminates was not the row that made you look.**
+
+### Gated, and the control is the load-bearing half
+
+`tests/wpt/corpus/inline-flow.html` (4 probes → 10, still page 32 of 32, so free). RED-proven twice
+with disjoint sets: deleting the atomic-inline guard kills `p-rtl-ib1/2`; deleting `parent_is_rtl`
+kills the LTR mirrors **and** `p-rtl-blk`. ⚠ `p-rtl-blk` is why the fixture cannot be satisfied by
+deleting §10.3.3 outright — which would put every Arabic sidebar and fixed-width panel back on the
+wrong side, a much larger regression than the one being fixed.
+
+⚠⚠ **It did not move the site that motivated it.** `m.youm7.com` — the Arabic page whose footer row
+of `<a>` siblings gave 24 on-screen inversions — is unchanged at 24. **A fix can be real, spec-cited,
+Chrome-exact, gated and twice RED-proven and still not be the cause of the thing you were chasing.**
+What it buys is elimination: the RTL inline-block family is no longer a candidate explanation for
+that lead.

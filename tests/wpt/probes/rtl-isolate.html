@@ -1,0 +1,20 @@
+<!doctype html><html dir="rtl"><head><meta charset=utf-8><style>
+*{margin:0;padding:0;font:16px/20px monospace}
+.r{width:400px;height:50px}
+.ib{background:#ccf;width:20px;height:20px;display:inline-block}
+</style></head><body>
+<!-- A: dir on <html>, INLINE-BLOCK children -->
+<div class=r><a id="p-A-1" class=ib></a><a id="p-A-2" class=ib></a></div>
+<!-- B: dir on <html>, PLAIN INLINE children (text) -->
+<div class=r><a id="p-B-1">AA</a><a id="p-B-2">BB</a></div>
+<!-- C: dir on the ROW (overriding the inherited rtl with the same value), inline-block -->
+<div class=r dir="rtl"><a id="p-C-1" class=ib></a><a id="p-C-2" class=ib></a></div>
+<!-- D: dir on the ROW via CSS `direction`, inline-block -->
+<div class=r style="direction:rtl"><a id="p-D-1" class=ib></a><a id="p-D-2" class=ib></a></div>
+<!-- E: CONTROL — dir=ltr row, inline-block: must be left-aligned -->
+<div class=r dir="ltr"><a id="p-E-1" class=ib></a><a id="p-E-2" class=ib></a></div>
+<!-- F: the row DIV itself under inherited rtl — where is the block box? -->
+<div class=r style="background:#eee"><span id="p-F-1" class=ib></span></div>
+<!-- G: a plain block child under inherited rtl -->
+<div class=r><div id="p-G-1" style="width:100px;height:20px;background:#cfc"></div></div>
+</body></html>

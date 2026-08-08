@@ -46371,6 +46371,105 @@ PERF: none — one UA rule and one narrowed branch in a cascade that already ran
 WIKI: `docs/wiki/css-cascade.md` — where Chrome draws the form-control `box-sizing` line, and why a
 layout-crate test cannot see it.
 
+## Tick 1035 — an atomic inline is placed by its LINE BOX, and §10.3.3 was displacing it by exactly `leftover` (2026-08-08)
+
+TICK SHAPE: primitive — a real, Chrome-exact, RED-proven RTL fix. ⚠⚠⚠ **AND IT DID NOT MOVE THE SITE
+THAT LED ME TO IT. That is the headline, not a footnote.**
+
+⚠⚠⚠ **THE DEFECT.** Under `direction: rtl`, an `inline-block` was displaced by **exactly the
+containing block's width minus its own**:
+
+```text
+   <html dir="rtl">, a 20x20 inline-block in a 400px row
+                                     chrome        ours
+     first  box                    x = 780      x = 1160     delta 380
+     second box                    x = 760      x = 1140     delta 380
+                                                             380 == 400 − 20
+```
+
+**The 380 is what identified the arm, not a search.** It is literally `leftover` in
+`layout_block`'s CSS 2.1 §10.3.3 branch — *"if the `direction` of the containing block is `rtl`, the
+specified value of `margin-left` is ignored"* — which sets `ml = leftover - mr`. §10.3.3 is written
+for a **block-level** box; an `inline-block` is an **atomic inline**, sized by §10.3.9 and positioned
+by its **line box**. It was taking `ml = leftover` *on top of* the line box's own already-correct RTL
+placement, and the two additions stack.
+
+⚠⚠ **THE GUARD WAS ONE CLASS SHORT AND THE COMMENT EXPLAINING WHY WAS ALREADY THERE.** The arm
+already excluded replaced elements, with a note saying an atomic inline *"belongs to its LINE BOX,
+not to this equation"* — added because the corpus punished the first draft (3 elements broken, 0
+fixed). **The right reason was written down next to a guard that implemented half of it.** Third tick
+this window on that exact shape (t1026's two copies, t1027's two lists, and now this).
+
+⚠⚠⚠ **ISOLATED TO ONE VARIABLE, WHICH IS WHAT MAKES IT ATTRIBUTABLE — AND IT IS NOT THE VARIABLE I
+FIRST GUESSED.** t1032 had already refuted RTL at 13/13, so my first hypothesis here was
+**inheritance** — `dir` on `<html>` versus on the row. The isolation battery says no:
+
+```text
+   A  dir on <html>,      inline-block      FAILS   1160 vs 780
+   C  dir on the ROW,     inline-block      FAILS   1160 vs 780   <- identical
+   D  direction:rtl CSS,  inline-block      FAILS   1160 vs 780   <- identical
+   B  dir on <html>,      plain inline      ok
+   E  dir=ltr,            inline-block      ok      CONTROL
+   G  dir on <html>,      block child       ok      CONTROL (§10.3.3 itself still works)
+```
+
+**A, C and D are byte-identical, so inheritance is not the variable — `display:inline-block` is.**
+t1032's 13/13 was not wrong; its rows used *plain inline* anchors, which is row B, and row B passes
+in both. **The row that discriminates was not the row that made me look**, for the sixth time.
+
+RATCHET: parity **103/103 across 32 pages** (was 97/97), `manuk-layout` **130/130**. Nothing traded.
+
+GATE: `tests/wpt/corpus/inline-flow.html`, 4 probes → 10, **still page 32 of 32, so it costs the wall
+nothing.** RED-proven twice with disjoint sets:
+
+```text
+   A  delete the atomic-inline guard    8/10   p-rtl-ib1 · p-rtl-ib2
+   B  delete `parent_is_rtl`            3/10   p-ltr-blk · p-ltr-ib1 · p-ltr-ib2 · p-below · p-rtl-blk
+```
+
+⚠ **Mutation B is the one that matters**: `p-rtl-blk` keeps §10.3.3 itself alive, so the fixture
+**cannot** be satisfied by deleting the rule outright — which would put every Arabic sidebar, card
+and fixed-width panel back on the wrong side, a far larger regression than the one being fixed.
+
+⚠⚠⚠ **PRICED HONESTLY, AND THE HONEST NUMBER IS SMALL IN THIS CORPUS.**
+
+```text
+   dir="rtl" on <html> — the whole-document form      3/171    1.8%
+   any RTL declaration (HTML + 416 stylesheets)      55/171   32.2%   <- NOT a usable number
+   display:inline-block declared                    125/171   73.1%
+```
+
+⚠ **The 32.2% is the weak form and I am not ranking on it.** A stylesheet that ships `[dir=rtl]`
+rules is supporting a locale it is not currently rendering in, so most of those 55 sites are LTR
+pages carrying RTL CSS. **1.8% is the number**, and it under-states the real web rather than the
+corpus: this corpus samples the Arabic/Hebrew/Persian/Urdu web thinly, and for those pages an
+icon/nav/footer row of `inline-block` anchors is the universal idiom.
+
+⚠⚠⚠ **AND THE PART I MUST NOT BURY: `m.youm7.com` IS STILL AT 24 INVERSIONS.** The Arabic site whose
+footer row of `<a>` siblings produced the sharpest lead the loop had — 24 on-screen inversions,
+`C(7,2)=21` fitting a row read backwards — is **unmoved**:
+
+```text
+   m.youm7   before  shape 0.795  reading_order 24
+             after   shape 0.801  reading_order 24     <- shape delta is noise, RO is IDENTICAL
+```
+
+> **A fix can be real, spec-cited, Chrome-exact, gated and RED-proven twice, and still not be the
+> cause of the thing that made you look for it.** Those footer anchors are not `inline-block`, or not
+> under a `direction` this arm sees. The lead is still open and it is now *better* posed: the RTL
+> inline-block family is eliminated as its explanation, which is the fifth mechanism this window has
+> refuted for it.
+
+⚠ **I am recording this as a capability win with zero corpus movement rather than as either half
+alone.** Check #72's rule: *"the honest report is 'the instrument cannot price this', not 'this bought
+nothing'"* — and here the instrument CAN price it, at 1.8%, and it did not move the one site in that
+1.8% band that I checked. Both facts go in.
+
+PERF: one `matches!` on an enum inside a branch already gated by three conditions. F1/F2 green.
+
+WIKI: `docs/wiki/box-layout.md` — "An atomic inline is placed by its line box, and §10.3.3 was adding
+`leftover` on top of it".
+
 ## Tick 1034 — I tried to blame the instrument and the instrument came back clean (2026-08-08)
 
 TICK SHAPE: primitive (instrument) — the measurement t1033 named as *"cheaper to test than to keep

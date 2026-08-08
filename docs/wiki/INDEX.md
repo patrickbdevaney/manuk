@@ -341,6 +341,9 @@
   - L6701 · overflow: clip is the one non-visible overflow that is NOT a formatting context, and the comment said the opposite (t1029)
   - L6722 · The fix is one predicate, because the old shape was one rule, N implementations
   - L6739 · The controls are the half that needed proving
+  - L6758 · An atomic inline is placed by its LINE BOX, and §10.3.3 was adding leftover on top of it (t1035)
+  - L6781 · The variable is inline-block, not inheritance
+  - L6798 · Gated, and the control is the load-bearing half
 
 ## browser-capabilities.md
 `docs/wiki/browser-capabilities.md`
@@ -1726,4 +1729,4 @@
   - L124 · Rank mechanisms by FLIP RATE, not failing-subtest count — CSS layout is a multi-assertion slog
 
 ---
-1633 sections across 22 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+1636 sections across 22 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.

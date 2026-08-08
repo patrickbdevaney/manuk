@@ -3098,8 +3098,33 @@ impl Ctx<'_> {
                 //    elements there (deterministic, −0.00656 twice) while fixing NOTHING on the same
                 //    page. **Zero fixed and three broken is not a small win with a cost, it is the
                 //    wrong rule applied to the wrong box class.**
+                //    ⚠⚠⚠ **AND NOT AN ATOMIC INLINE EITHER — THE GUARD ABOVE WAS ONE CLASS SHORT,
+                //    AND THE COMMENT THAT EXPLAINS IT WAS ALREADY WRITTEN.** §10.3.3 is for a
+                //    **block-level** box in normal flow. An `inline-block` (or `inline-flex` /
+                //    `inline-grid`) is an ATOMIC INLINE: §10.3.9 sizes it and its **line box**
+                //    places it, exactly as the replaced-element note above says. It was reaching
+                //    this arm and taking `ml = leftover`, *on top of* the line box's own correct
+                //    RTL placement — so the box was displaced by precisely `containing-block width
+                //    − box width`. Measured under `<html dir="rtl">`, a 20×20 `inline-block` in a
+                //    400px row:
+                //
+                //    ```text
+                //      chrome  x=780, 760      ours  x=1160, 1140      delta 380 == 400 − 20
+                //    ```
+                //
+                //    The 380 is not a coincidence and it is what identified the arm: it IS
+                //    `leftover`. ⚠ The replaced-element exclusion was added because the corpus
+                //    punished the first draft (3 elements broken, 0 fixed); this is the same
+                //    exclusion for the same reason on the sibling box class, and the reason it
+                //    survived is that it only shows under `direction: rtl` — 7.0% of the corpus,
+                //    and 100% of the Arabic/Hebrew/Persian/Urdu web, where an icon/nav/footer row
+                //    of `inline-block` anchors is the universal idiom.
                 (false, false)
                     if !is_replaced_element(self.dom.tag_name(node))
+                        && !matches!(
+                            s.display,
+                            Display::InlineBlock | Display::InlineFlex | Display::InlineGrid
+                        )
                         && self.parent_is_rtl(node) =>
                 {
                     ml = (leftover - mr).max(0.0)
