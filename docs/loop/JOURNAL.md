@@ -46371,6 +46371,117 @@ PERF: none — one UA rule and one narrowed branch in a cascade that already ran
 WIKI: `docs/wiki/css-cascade.md` — where Chrome draws the form-control `box-sizing` line, and why a
 layout-crate test cannot see it.
 
+## Tick 1008 — the sweep that prices eight geometry fixes, against a matched predecessor (2026-08-07)
+
+TICK SHAPE: measurement — a clean `--jobs 2` sweep of the 200-site CrUX corpus, banked as
+`docs/loop/SWEEP-t1008-rows.tsv`. **The first sweep this loop has run with a MATCHED predecessor on
+the same denominator** (`SWEEP-t997-rows.tsv`), which is the comparison t974's rule was written to
+make possible and t997 explicitly refused to fake.
+
+**THE HYPOTHESIS, written before the run.** Eight geometry fixes have landed since t997 — four float
+and table mechanisms (t999-t1002) and four transform/containing-block ones (t1005-t1007). t997 named
+`reading_order` as M1's binding conjunct, non-clean on 65 of 123 scored sites, and the ledger says a
+reading-order symptom is a **width or transform upstream, never a reorder**. Every one of this
+window's fixes is an inline-axis displacement of exactly that kind, and the transform ones are the
+first to touch the *transform* half of that rule rather than the width half. **So if M1 has the
+resolution to show engine work at all, this is the window it should show it in. If it does not, that
+is a finding about the metric and it outranks the next fix** — which is the same wording t1004's
+steer used, and it is being honoured rather than quietly dropped.
+
+⚠ **What this sweep can and cannot say.** It shares t997's corpus, binary class (release,
+`--jobs 2`, quiet box) and denominator, so a band comparison is legitimate. It still cannot attribute
+a rise to any single fix — and per t974's standing rule, **no delta is a reading until its top three
+movers have been re-run solo**.
+
+⚠⚠⚠ **RESULT: THE FIRST CLEAN, MATCHED, POSITIVE BAND MOVEMENT THIS LOOP HAS RECORDED.**
+
+```text
+                                  t997        t1008
+   sites swept                     200          200
+   scored                          123          113
+   M1 (shape>=0.75 AND clean)   24 = 19.5%   27 = 23.9%
+   mean shape over scored          54.6%        58.1%
+   reading_order non-clean          48           40
+
+   THE HONEST NUMBER — the COMMON SET, 108 sites scored in BOTH sweeps:
+     band          56.63%  ->  58.64%      +2.01 pts
+     M1               24   ->     26       +2 sites
+```
+
+⚠⚠ **THE HEADLINE 23.9% IS PARTLY A DENOMINATOR, AND THE COMMON-SET BAND IS NOT.** Scorability fell
+123 -> 113, and the sites that dropped out were overwhelmingly the LOW-shape ones (0.104, 0.143,
+0.182, 0.271, …), so the mean over "scored" is flattered by their absence. The cause is not ours and
+the reason column says so: **`unreachable` went 15 -> 26** — DNS/TLS/connect failures — while
+`crashed` went **2 -> 1** and `css-starved` stayed at one. Eleven of the fifteen newly-unscored sites
+are `unreachable`. **Read the common-set band; the percentage of a shrinking denominator is the
+number a careless tick publishes.**
+
+⚠⚠⚠ **AND THE TWO LOUDEST FALLERS ARE THE SWEEP MEASURING ITSELF — t842's rule, fired again, on the
+first sweep since it was written.**
+
+```text
+                        t997      t1008 sweep     SOLO, twice, same binary/hour
+   merchant.upi9.pro   0.8723       0.5000        0.872340   0.872340
+   mobcup.fm           1.0000       0.7931        1.000000   1.000000
+```
+
+Both return to their t997 values **to six decimals** when re-run alone. They contributed the two
+largest negative terms in the band, so the honest correction is *upward*: substituting the solo
+readings gives **+2.55 pts**. I am publishing **+2.01** — the uncorrected common-set figure — because
+substituting re-measurements into a sweep is exactly the freedom that lets a number be steered, and
+the conservative one is the one that survives.
+
+**THE RISERS REPRODUCE, and they are where the window's work landed.**
+
+```text
+                          t997     t1008 sweep    SOLO x2            the jarring column
+   hnhbkis.edu.in        0.4231      0.9177    0.9274 / 0.9316      ro 0, ovl 0 throughout
+   www.alphanews.live    0.2101      0.7010    0.7010 / 0.7010      ovl 7
+   www.fragrantica.com   0.4149      0.7212    0.7172 / 0.7198      **overlap 101 -> 28**
+   www.paypal.com        0.4457      0.6479         —               ro 23->19, ovl 38->33
+```
+
+`fragrantica`'s **overlap 101 -> 28** is the shape this window's fixes predict: overlap and
+`reading_order` are what an abspos box placed at the wrong position AND the wrong size produces, and
+t1005/t1007 are precisely that. `reading_order` non-clean fell 48 -> 40 across the scored set.
+
+⚠⚠ **TWO SITES FELL AND REPRODUCED, AND I CANNOT ATTRIBUTE THEM WITHOUT THE OLD BINARY.**
+`bhramarah.in` 0.3958 -> 0.3367 solo (ro 25->40, ovl 19->33) and `www.livescore.cz` 0.4955 -> 0.4261
+solo. Both are live sites, and this loop's own measured error bar for a live site is ~3.7 points on
+an unchanged tree — so a 6-7 point fall is outside it and is **not dismissible as noise**. The
+control that decides it is the OLD-BINARY one (rebuild the t997 tree, re-measure in the same hour),
+which has changed the verdict three times before and has not been run here. **Named as the tick's
+residue rather than argued away: it is the first thing the next tick does.**
+
+RESULT, stated as a single sentence: **eight geometry fixes moved a matched 108-site band +2.01
+points and M1 +2 sites, the two loudest fallers were artefacts, and two real-looking fallers are
+un-attributed pending an old-binary control.**
+
+⚠⚠ **AND THE SURFACE AUDIT CAME DUE MID-TICK (#41, cadence 10, last at 998) AND FOUND ONE THING
+THE MAP HAD NEVER HEARD OF.** All **twenty** Interop 2026 focus areas and all four investigation
+efforts already have a `CONSTELLATION.tsv` row — the first time in forty audits that the vendors'
+own agreed list contains nothing new to us. Which is precisely the condition this instrument warns
+about, so the search continued into the 2026 Baseline digests:
+
+```text
+   hyphens: auto        NO ROW (grep -ic hyphen = 1, and that one is a soft-hyphen comment in the
+                        line breaker; `engine/css` does not parse the property at all)
+                        priced the same hour: 15/171 = 8.8% of the CrUX corpus, HTML + stylesheets
+   font-family: math    NO ROW — added, and explicitly NOT ranked: 0/171, `<math>` 0/171
+```
+
+**`hyphens: auto` is a LINE-COUNT property**: it changes where prose breaks, therefore how many lines
+a paragraph occupies, therefore the y of everything below it — **the dy cascade this very burndown
+ranks first**, arriving through a property the map could not see. Added as `unknown` rather than
+`missing`, because what our breaker already does may match Chrome on most content and the honest next
+step is a fixture. ⚠ The method that found it is a **grep of the map per named feature** (22 greps,
+two minutes, falsifiable), not "read the map and ask what looks absent" — which is the question that
+has been wrong six times.
+
+PERF: none — measurement only. `--jobs 2`, release binary, quiet box, 200/200 sites, ~65 minutes.
+
+WIKI: none — the artefact is `docs/loop/SWEEP-t1008-rows.tsv`. [no-pattern]
+
 ## Tick 1007 — the gate asserted the reasoned number, so fixing the bug looked like a regression (2026-08-07)
 
 TICK SHAPE: primitive — the x/y-axis rotation t1006 measured and banked, built. **And the tick's

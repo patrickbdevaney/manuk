@@ -4475,3 +4475,69 @@ confirmation of CO-#1, not a redirection of it.
 3. **Nothing found today re-ranks the board.** Said plainly rather than padded: two audits running, the
    external axis has confirmed CO-#1 instead of moving it. The finding that mattered came from *inside*
    the work, and the audit's contribution was to explain why the map could not have produced it.
+
+## Audit #41 — tick 1008 (2026-08-07)
+
+**SOURCES (searched, not recalled):**
+
+- `https://github.com/web-platform-tests/interop/blob/main/2026/README.md` — the twenty Interop 2026
+  focus areas and its four investigation efforts, read as a list rather than summarised.
+- `https://webkit.org/blog/17818/announcing-interop-2026/` · `https://web.dev/blog/interop-2026`
+- `https://web.dev/blog/baseline-digest-may-2026` (and the Jan/Apr digests) — what became Baseline
+  Newly available in 2026.
+
+### → Interop 2026, reconciled row by row: the map already had all twenty
+
+```text
+   container style queries · anchor positioning · attr() · contrast-color() · CSS zoom ·
+   custom highlights · dialogs and popovers · fetch uploads and ranges · IndexedDB · JSPI ·
+   media pseudo-classes · Navigation API · scoped custom element registries ·
+   scroll-driven animations · scroll snap · shape() · view transitions · web compat ·
+   WebRTC · WebTransport        →  every one has at least one CONSTELLATION.tsv row
+   investigations: accessibility testing · JPEG XL · mobile testing · WebVTT  →  all present
+```
+
+**That is a real result and it is the first time it has happened**: forty audits in, the vendors'
+own agreed priority list contains nothing this map has never heard of. It is also exactly the
+condition this instrument warns about — *"an audit that finds nothing is a suspicious audit"* — so
+the search did not stop there.
+
+### → What the Baseline digests found, and one of the two matters
+
+⚠⚠⚠ **`hyphens: auto` HAD NO ROW, AND IT IS A LINE-COUNT PROPERTY.** `grep -ic hyphen` over 485 rows
+returned **1**, and that one is a *soft-hyphen* comment inside the line breaker. `engine/css` does
+not parse the property at all. This is not a paint-level nicety: `hyphens: auto` changes **where
+prose breaks**, therefore how many lines a paragraph occupies, therefore the y of everything below
+it — **the dy cascade the burndown names as mechanism #1**, arriving through a property the map could
+not see.
+
+Priced the same hour, HTML + linked stylesheets over the corpus that produces M1:
+
+```text
+   hyphens: auto declared        15/171   8.8%
+   font-family: math             0/171    0.0%
+   <math> in the served HTML     0/171    0.0%
+```
+
+Added as `unknown`, not `missing`: what our line breaker does when the property is absent may already
+match Chrome on most content, and the honest next step is a fixture, not an assumption.
+
+**`font-family: math` / MathML** added too, and **explicitly not ranked** — 0 of 171. Recorded so
+the map is honest about the surface rather than about the corpus.
+
+### → What this audit did NOT do
+
+**No re-rank.** Twenty-for-twenty on Interop and one 8.8% property found is a confirmation of CO-#1
+(the render leg), not a redirection of it. Said plainly rather than padded.
+
+### STEER
+
+1. **`hyphens: auto` is a fixture, and it is cheap.** One 20-row battery against Chrome: `auto` vs
+   `manual` vs `none`, with and without `lang`, at widths that force a hyphenation opportunity. It
+   sits directly on the mechanism the burndown ranks first, and the map could not have produced it —
+   which is the entire argument for this instrument.
+2. **The previous audit's steer — "ask the map for INTERACTIONS, not only capabilities" — is still
+   open** and was not worked this time. Carry it.
+3. ⚠ **The reconciliation method that worked here is a GREP OF THE MAP PER NAMED FEATURE**, not
+   reading the map and asking what is missing. Twenty-two greps took two minutes and are falsifiable;
+   "does anything look absent" is the question that has been wrong six times.

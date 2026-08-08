@@ -1,0 +1,201 @@
+#name	coverage	shape	h_overflow	overlap	reading_order	dead_target	shape_n	reason	instrument
+comix.to	1.000000	0.333333	0	0	0	0	3	oracle-module-shell-3	46cdbdef
+www.naukri.com	0.280702	0.312500	0	1	1	0	16		46cdbdef
+www.ebay.com	0.782700	0.723270	0	15	2	0	1113		46cdbdef
+fdown.net	-	-	0	0	0	0	0	bot-wall-403	46cdbdef
+www.ikea.com	0.935806	0.733232	0	5	22	0	656		46cdbdef
+www.otomoto.pl	0.967652	0.799427	0	1	11	0	1047		46cdbdef
+aternos.org	-	-	0	0	0	0	0	bot-wall-403	46cdbdef
+www.bilibili.com	0.776316	0.728814	6	10	2	0	590		46cdbdef
+meet.google.com	0.487434	0.133366	135	14	41	0	2017		46cdbdef
+www.amazon.com.be	-	-	0	0	0	0	0	empty-202	46cdbdef
+client.dkitrxmdwoqruvsi.net	-	-	0	0	0	0	0	http-404	46cdbdef
+people.com	-	-	0	0	0	0	0	bot-wall-403	46cdbdef
+cibnext.icici.bank.in	-	-	0	0	0	0	0	http-404	46cdbdef
+255md.com	1.000000	0.906977	0	0	0	0	43		46cdbdef
+www.marktplaats.nl	1.000000	0.961728	2	0	0	0	810		46cdbdef
+awlyaa.education.dz	1.000000	0.833333	0	0	0	0	6	shell-only-6	46cdbdef
+www.repubblica.it	0.994003	0.407994	337	36	0	0	2652		46cdbdef
+mobcup.fm	0.852941	0.793103	0	0	0	0	29		46cdbdef
+momon-ga.com	1.000000	0.562937	0	0	0	0	572		46cdbdef
+esaj.tjsp.jus.br	1.000000	0.500000	0	0	0	0	4	shell-only-4	46cdbdef
+www.mobile.bg	0.832936	0.381089	0	0	21	1	349		46cdbdef
+tracker.shadowfax.in	-	-	0	0	0	0	0	probe-blocked	46cdbdef
+www.kicktipp.com	0.989583	0.926316	0	0	0	0	95		46cdbdef
+alastonsuomi.com	-	-	0	0	0	0	0	unreachable	46cdbdef
+altogel.fit	-	-	0	0	0	0	0	unreachable	46cdbdef
+www.tz.de	0.951904	0.830000	3	1	4	0	1900		46cdbdef
+sports.yahoo.com	0.272727	0.000000	0	0	0	0	3	tree-divergence-1685	46cdbdef
+gw.geneanet.org	-	-	0	0	0	0	0	bot-wall-403	46cdbdef
+www.bolde.com	-	-	0	0	0	0	0	bot-wall-403	46cdbdef
+dashboard.twitch.tv	0.181818	0.500000	0	0	0	0	2	tree-divergence-58	46cdbdef
+mkp.gem.gov.in	-	-	0	0	0	0	0	unreachable	46cdbdef
+celeb.gate.cc	0.989691	0.760417	0	0	0	0	480		46cdbdef
+www.fragrantica.com	1.000000	0.721163	0	28	0	0	2991		46cdbdef
+www.blick.ch	-	-	0	0	0	0	0	bot-wall-403	46cdbdef
+www.hemnet.se	-	-	0	0	0	0	0	bot-wall-403	46cdbdef
+fr.bongacams.com	-	-	0	0	0	0	0	bot-wall-403	46cdbdef
+www.mobile.ir	0.999155	0.632826	15	8	0	1	1182		46cdbdef
+www.alphanews.live	0.990792	0.701009	20	7	5	0	3766		46cdbdef
+patrickmorin.com	0.985714	0.543478	0	0	5	0	138		46cdbdef
+www.nautica.com	-	-	0	0	0	0	0	bot-wall-403	46cdbdef
+app.ordertime.com	0.040000	1.000000	0	0	0	0	1	tree-divergence-31	46cdbdef
+mexcbt.ed-cl.com	0.925926	0.000000	0	2	1	0	25		46cdbdef
+ticket.jfa.jp	1.000000	0.690570	2	2	2	0	1018		46cdbdef
+house.udn.com	-	-	0	0	0	0	0	timeout-150s	46cdbdef
+pogoda.by	0.519608	0.792453	0	0	0	0	53		46cdbdef
+d2rwkn96gppqo1.cloudfront.net	0.555556	0.000000	0	0	0	0	5	oracle-module-shell-9	46cdbdef
+www.trivago.de	-	-	0	0	0	0	0	css-starved-2	46cdbdef
+www.trivago.jp	0.956210	0.111862	26	14	13	0	1332		46cdbdef
+www.monopolybingogame.com	0.535714	0.266667	0	0	0	0	15		46cdbdef
+www.mundotoro.com	-	-	0	0	0	0	0	bot-wall-403	46cdbdef
+www.puentedemando.com	0.980903	0.823009	5	6	10	1	1130		46cdbdef
+donate.onenation.org.au	-	-	0	0	0	0	0	bot-wall-403	46cdbdef
+forums.moneysavingexpert.com	1.000000	0.222222	0	0	0	0	9	oracle-module-shell-9	46cdbdef
+v8m5e6.com	-	-	0	0	0	0	0	bot-wall-200	46cdbdef
+aims.ucc-caloocan.edu.ph	-	-	0	0	0	0	0	unreachable	46cdbdef
+sparkivo.pro	-	-	0	0	0	0	0	unreachable	46cdbdef
+crm.majoo.id	0.716981	0.368421	0	0	0	0	38		46cdbdef
+www.smecel.com.br	1.000000	0.465116	0	1	0	0	43		46cdbdef
+lms12.tvu.ac.ir	-	-	0	0	0	0	0	unreachable	46cdbdef
+serennu.com	1.000000	0.393443	0	28	0	0	61		46cdbdef
+basescan.org	-	-	0	0	0	0	0	bot-wall-403	46cdbdef
+app.levelupxx69.online	-	-	0	0	0	0	0	bot-wall-403	46cdbdef
+www.unoeste.br	0.747845	0.804035	0	1	2	1	347		46cdbdef
+lp.rsaiben.com	-	-	0	0	0	0	0	http-404	46cdbdef
+dla7h4u1.com	-	-	0	0	0	0	0	bot-wall-200	46cdbdef
+www.villaggioposeidone.it	0.004338	0.000000	0	0	0	0	2	tree-divergence-604	46cdbdef
+admin.munchbakery.com	1.000000	0.931818	0	0	0	0	44		46cdbdef
+creaturecock.com	-	-	0	0	0	0	0	unreachable	46cdbdef
+www.dapam-sirius.fr	1.000000	0.933333	0	0	0	0	30		46cdbdef
+pivaldi.restoplace.ws	0.969231	0.693122	9	2	1	0	378		46cdbdef
+ebanking.bdm-sa.com	-	-	0	0	0	0	0	unreachable	46cdbdef
+beb88run.xyz	0.983857	0.730173	0	14	18	89	2194		46cdbdef
+zainascarfs.com	-	-	0	0	0	0	0	bot-wall-403	46cdbdef
+www.cuneocronaca.it	0.985589	0.345692	62	59	65	0	1915		46cdbdef
+ofero.id	0.770810	0.365385	15	25	42	0	676		46cdbdef
+probidas.lt	0.927476	0.302256	21	0	10	0	665		46cdbdef
+redinfor.com.pe	0.900000	0.805556	3	0	1	0	36		46cdbdef
+mydogcot.com	0.773694	0.337500	3	5	6	0	400		46cdbdef
+profissionaliza.cademi.com.br	1.000000	0.617647	0	0	0	0	34		46cdbdef
+www.timeline.com	0.978741	0.410192	454	1	18	0	1197		46cdbdef
+admin.zoomph.com	1.000000	0.588235	0	0	1	0	34		46cdbdef
+e8c76.com	-	-	0	0	0	0	0	bot-wall-200	46cdbdef
+pordentrodetudo.com.br	0.900889	0.179126	5	0	2	0	709		46cdbdef
+bhramarah.in	0.959198	0.292718	4	33	37	1	1387		46cdbdef
+dedebet252.com	-	-	0	0	0	0	0	bot-wall-403	46cdbdef
+aksesjambi.com	0.995501	0.829379	0	1	0	2	885		46cdbdef
+hipmiluwuutara.org	-	-	0	0	0	0	0	unreachable	46cdbdef
+seduniaselat.com	-	-	0	0	0	0	0	unreachable	46cdbdef
+www.wdimax.com	-	-	0	0	0	0	0	unreachable	46cdbdef
+gismart.com	-	-	0	0	0	0	0	unreachable	46cdbdef
+virtual.lapampa.edu.ar	-	-	0	0	0	0	0	unreachable	46cdbdef
+experiencia.pichincha.com	-	-	0	0	0	0	0	unreachable	46cdbdef
+bhfudbal.ba	-	-	0	0	0	0	0	unreachable	46cdbdef
+www.hdnails.it	-	-	0	0	0	0	0	unreachable	46cdbdef
+mayatoys.in	-	-	0	0	0	0	0	unreachable	46cdbdef
+redemoura.gupy.io	-	-	0	0	0	0	0	unreachable	46cdbdef
+neutypechic.com	-	-	0	0	0	0	0	unreachable	46cdbdef
+nysainfo.pl	-	-	0	0	0	0	0	unreachable	46cdbdef
+meuconsultordigital.com.br	-	-	0	0	0	0	0	unreachable	46cdbdef
+venus.zeronline.cloud	-	-	0	0	0	0	0	unreachable	46cdbdef
+service.smt.docomo.ne.jp	-	-	0	0	0	0	0	unreachable	46cdbdef
+www.mangago.me	-	-	0	0	0	0	0	bot-wall-403	46cdbdef
+www.agoda.com	0.077970	0.587302	0	0	0	0	63		46cdbdef
+bill.pitc.com.pk	-	-	0	0	0	0	0	unreachable	46cdbdef
+bbs.ruliweb.com	-	-	0	0	0	0	0	timeout-150s	46cdbdef
+mangaraw.ac	0.754538	0.545246	13	0	2	10	873		46cdbdef
+missav.live	-	-	0	0	0	0	0	bot-wall-403	46cdbdef
+vk.com	0.800000	0.250000	0	0	0	0	4	oracle-module-shell-5	46cdbdef
+tukrd.com	1.000000	0.973684	0	0	0	0	38		46cdbdef
+www.amazon.com.mx	-	-	0	0	0	0	0	empty-202	46cdbdef
+www.paypal.com	0.892977	0.647940	0	33	19	0	534		46cdbdef
+toyhou.se	-	-	0	0	0	0	0	bot-wall-403	46cdbdef
+linkmake.in	1.000000	0.756757	0	0	0	0	74		46cdbdef
+janitorai.com	-	-	0	0	0	0	0	bot-wall-403	46cdbdef
+stdn.iau.ir	-	-	0	0	0	0	0	bot-wall-403	46cdbdef
+desiviral.net	-	-	0	0	0	0	0	bot-wall-403	46cdbdef
+www.livescore.cz	0.999791	0.427290	0	0	0	0	4793		46cdbdef
+m.youm7.com	0.967095	0.791701	2	1	24	0	1205		46cdbdef
+www.5movierulz.discount	1.000000	0.694761	0	0	38	0	439		46cdbdef
+ww1.goojara.to	-	-	0	0	0	0	0	probe-blocked	46cdbdef
+merchant.upi9.pro	1.000000	0.500000	0	0	0	0	2	shell-only-2	46cdbdef
+chat.google.com	1.000000	0.932203	0	0	0	0	59		46cdbdef
+haraj.com.sa	-	-	0	0	0	0	0	probe-blocked	46cdbdef
+id.vk.ru	1.000000	0.149632	8	2	0	180	1223		46cdbdef
+videa.hu	0.649168	0.512821	0	0	41	22	507		46cdbdef
+coinmarketcap.com	-	-	0	0	0	0	0	timeout-150s	46cdbdef
+nitter.net	-	-	0	0	0	0	0	empty-200	46cdbdef
+rpsc.rajasthan.gov.in	0.993860	0.975287	0	0	0	0	1133		46cdbdef
+funinjeet.com	-	-	0	0	0	0	0	empty-202	46cdbdef
+pasarbokep.com	0.984190	0.678715	0	0	0	0	249		46cdbdef
+developers.google.com	0.844492	0.534527	0	19	5	0	391		46cdbdef
+oilprice.com	0.987768	0.639319	45	2	4	0	646		46cdbdef
+www.woolworths.com.au	-	-	0	0	0	0	0	crashed	46cdbdef
+www.netvasco.com.br	0.990083	0.732888	0	0	3	0	599		46cdbdef
+www.cbse.gov.in	1.000000	0.175439	0	0	0	0	57		46cdbdef
+ubys.bingol.edu.tr	0.988024	0.975758	0	0	0	0	165		46cdbdef
+hope.cap-systems.org	1.000000	0.000000	0	0	0	0	17		46cdbdef
+www.freesupertips.com	0.428439	0.676790	1	1	4	0	461		46cdbdef
+www.broshurko.bg	-	-	0	0	0	0	0	bot-wall-200	46cdbdef
+linxonline.co.pierce.wa.us	-	-	0	0	0	0	0	probe-blocked	46cdbdef
+lms.sltc.ac.lk	1.000000	0.911290	0	0	0	0	124		46cdbdef
+xhdesign.today	-	-	0	0	0	0	0	probe-blocked	46cdbdef
+www.crazyshop.pl	0.914118	0.641281	5	6	534	0	1405		46cdbdef
+www.friulioggi.it	-	-	0	0	0	0	0	timeout-150s	46cdbdef
+mirai-compass.net	-	-	0	0	0	0	0	http-404	46cdbdef
+www.trivago.be	0.951429	0.116366	26	8	12	0	1332		46cdbdef
+www.trivago.fr	0.956553	0.112435	26	10	13	0	1343		46cdbdef
+www.trivago.pl	0.956491	0.109620	26	10	13	0	1341		46cdbdef
+secure5.entertimeonline.com	1.000000	0.871795	0	0	0	0	39		46cdbdef
+www.aftenbladet.no	0.952607	0.368159	497	1	6	4	1005		46cdbdef
+www.jatekshop.eu	0.970514	0.741319	0	0	2	0	1152		46cdbdef
+cyoinatu-onna.com	0.967786	0.578612	0	0	0	0	1412		46cdbdef
+swiftspinus.com	-	-	0	0	0	0	0	timeout-150s	46cdbdef
+a1.ro	0.023392	0.500000	0	0	2	0	16		46cdbdef
+www.razaoautomovel.com	0.954853	0.657210	18	8	3	0	1269		46cdbdef
+acesso.pagbank.com.br	-	-	0	0	0	0	0	bot-wall-403	46cdbdef
+promo.golesliga1max.pe	1.000000	0.777778	0	0	0	0	63		46cdbdef
+www.radec.com.mx	-	-	0	0	0	0	0	bot-wall-403	46cdbdef
+possssno.sbs	1.000000	0.991304	0	0	0	0	575		46cdbdef
+www.heart.org	-	-	0	0	0	0	0	bot-wall-403	46cdbdef
+booking.directferries.com	0.100000	0.500000	0	0	0	0	2	thin-overlap-2	46cdbdef
+www.lyreco.com	1.000000	0.669683	0	3	1	0	442		46cdbdef
+secure.paymentech.com	-	-	0	0	0	0	0	timeout-150s	46cdbdef
+sip777man.site	0.494463	0.942291	1	6	16	0	1161		46cdbdef
+www.kantorsupersam.pl	-	-	0	0	0	0	0	unreachable	46cdbdef
+cloud.ssktco-op.com	-	-	0	0	0	0	0	unreachable	46cdbdef
+allticketscol.com	1.000000	1.000000	0	0	0	0	1	oracle-module-shell-1	46cdbdef
+payb.jp	0.781457	0.785714	0	0	261	0	826		46cdbdef
+packages.booking.com	-	-	0	0	0	0	0	bot-wall-403	46cdbdef
+www.taphouse23.com	0.423908	0.173407	75	110	119	0	1805		46cdbdef
+www.ta3lemkonline.com	0.987097	0.614379	0	0	378	0	459		46cdbdef
+www.datacareservices.com	-	-	0	0	0	0	0	probe-blocked	46cdbdef
+phone.uslowcosthousing.com	-	-	0	0	0	0	0	bot-wall-403	46cdbdef
+atendimentomondial.zendesk.com	-	-	0	0	0	0	0	bot-wall-403	46cdbdef
+morikoshi.net	0.988764	0.224432	14	1	131	0	1056		46cdbdef
+777juegos.com	0.941176	0.725000	11	0	0	1	80		46cdbdef
+ru.restaurantguru.com	0.982287	0.554098	1	6	150	0	610		46cdbdef
+simplepdf.com	0.800000	0.794872	5	0	0	0	156		46cdbdef
+www.library.chiyoda.tokyo.jp	1.000000	0.842105	0	0	0	0	380		46cdbdef
+7info.ru	-	-	0	0	0	0	0	timeout-150s	46cdbdef
+littlecaesarsbcs.libellum.com.mx	1.000000	0.935897	0	0	0	0	78		46cdbdef
+fr.download.it	-	-	0	0	0	0	0	bot-wall-403	46cdbdef
+cloud.email.cruzeirodosul.edu.br	-	-	0	0	0	0	0	http-404	46cdbdef
+portagelearning.edu	0.062893	0.000000	0	1	0	0	10		46cdbdef
+www.kuechenmomente.de	0.894366	0.722160	11	0	5	0	889		46cdbdef
+ab.asimakog.eu.org	-	-	0	0	0	0	0	bot-wall-403	46cdbdef
+www.kroftools.com	0.060150	0.425000	0	0	0	0	40		46cdbdef
+www.waitaly.net	-	-	0	0	0	0	0	bot-wall-403	46cdbdef
+123moviesfree.day	-	-	0	0	0	0	0	bot-wall-403	46cdbdef
+hnhbkis.edu.in	0.813380	0.917749	0	0	0	0	231		46cdbdef
+rockstaractu.com	0.921429	0.749354	0	0	14	0	774		46cdbdef
+pt88.app	0.333333	0.755319	2	6	7	0	94		46cdbdef
+sestra.cc	0.990676	0.917647	8	0	6	0	425		46cdbdef
+webfenix.movilidadbogota.gov.co	1.000000	0.222222	0	1	0	0	9	oracle-module-shell-9	46cdbdef
+ru4.bongacams-ru.com	1.000000	1.000000	0	0	0	0	39		46cdbdef
+www.arw.ro	-	-	0	0	0	0	0	bot-wall-403	46cdbdef
+ioi-russia.vdi.mipt.ru	1.000000	0.309524	0	0	0	0	420		46cdbdef
+nortenoticia.com.br	1.000000	0.450980	0	64	0	0	612		46cdbdef
+portal.ensuretyfinance.com	1.000000	0.863636	0	0	0	0	22		46cdbdef
+www.jazzguitar.be	-	-	0	0	0	0	0	bot-wall-403	46cdbdef
