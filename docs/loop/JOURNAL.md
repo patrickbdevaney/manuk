@@ -46371,6 +46371,77 @@ PERF: none — one UA rule and one narrowed branch in a cascade that already ran
 WIKI: `docs/wiki/css-cascade.md` — where Chrome draws the form-control `box-sizing` line, and why a
 layout-crate test cannot see it.
 
+## Tick 1021 — the scoreboard was reading 4.2 points high, and its own row files said so (2026-08-08)
+
+TICK SHAPE: measurement — the two cadence audits that came due together: the **self-audit** (last at
+1011; the hook blocks a commit past ten) and the **constitution re-read** (due at 1020), banked as
+check #93 in `docs/loop/CONSTITUTION-CHECK.md`.
+
+⚠⚠⚠ **M1 WAS RECOMPUTED FROM THE SWEEPS' OWN ROW FILES AND REPRODUCES THE LEDGER EXACTLY — AND
+REPRODUCES THE PROSE THAT QUOTED IT NEITHER IN THE NUMERATOR NOR THE DENOMINATOR.**
+
+```text
+                     recomputed from SWEEP-tNNN-rows.tsv     banked in FIDELITY-PROGRESS.tsv
+   t997              excl 69 · in-scope 131 · M1 21          16.0%        16.0%   ✓
+   t1008             excl 78 · in-scope 122 · M1 24          19.7%        19.7%   ✓
+
+   what tick 1008 published in prose, and check #91 then carried forward:
+                     M1 24 = 19.5%   ->   27 = 23.9%
+```
+
+`113` and `123` match neither the banked in-scope counts nor the scored sets (99, 109), and this tick
+could not derive them from the rows at all. The instrument is **coherent with itself**; the prose is
+the outlier, by **4.2 points on the level**.
+
+> **A metric whose denominator cannot be reproduced from its own tick's artefacts is not a
+> measurement.** Three denominators are in circulation for one metric, and the loop has been quoting
+> the most flattering while the Phase-0 exit bar is defined against the strictest.
+
+⚠⚠ **WHY EIGHT TICKS PASSED WITHOUT CATCHING IT.** The direction and rough size were right — `+3.7`
+banked against `+4.4` published — so every sanity check the loop actually runs (*did it move? in the
+direction the fixes aim?*) gave the same answer under both numbers. **What was wrong was the LEVEL,
+and the level is the only thing a 95% bar can be compared against.** Meta-instrument #3 again: not
+caught by a gate, caught by a number that did not add up.
+
+⚠ **And it is not an instrument bug, which is what makes it recur.** t1008's own entry warned *"THE
+HEADLINE 23.9% IS PARTLY A DENOMINATOR"*. Check #91 quoted the number without the caveat, and the
+caveat was where all the information was. **A soft number and its hedge travel separately; the number
+is what gets copied.**
+
+APPLIED TO `CONSTITUTION.MD`, not proposed — per check #91's own finding that a correction recorded in
+the instrument's log is not a correction to the document:
+
+1. **VI.3** now names `FIDELITY-PROGRESS.tsv` **field 15 over field 11** as the M1 of record, permits
+   any other cut **only if labelled with its denominator and not called M1**, and carries the corrected
+   t1008 pair in place of a t875 reading that had been stale for **133 ticks**.
+2. **VI.2's H0.1 residue row** promotes the scroll-container parenthetical to a named class — **the
+   MIS-PROVISIONED REFERENCE** — now that it has three subjects (`--hide-scrollbars`, `--window-size`,
+   the pointer family) and a decision rule: **can the reference be provisioned?** Three of four can;
+   `hyphens: auto` cannot, and building it correctly would *lower* the score because we agree with
+   Chrome by accident. ⚠ The corollary is why it is a standing cost and not three closed tickets:
+   **a mis-provisioned reference looks exactly like agreement**, so the class is never found by
+   ranking divergences — only by asking a third party (the page, or the spec) what the answer is.
+
+SELF-AUDIT: **green** — methodology and reality agree. 29 gates declare how to break them, the
+process-defect ledger (49) names a mechanism per defect, enforcement is mechanical, no journal gaps.
+⚠⚠ **The one open proposal is BLOCKED and recorded as blocked rather than dropped:** check #92 wanted
+the falsifiability check strengthened to *"declares how to break it, AND the declaration was RUN"* —
+that check lives in `scripts/self-audit.sh`, which is **observer-owned under PART VII**. Named for the
+observer; the agent-side half (making the declarations true, one gate at a time) is what t1007 and
+t1020 did.
+
+RATCHET: nothing changed — no engine or instrument code in this tick.
+
+GATE: none, and deliberately: this tick's output is two corrections to `CONSTITUTION.MD` and a
+recomputation. ⚠ The recomputation IS the falsifiable artefact — it is an independent derivation of
+the banked number from the raw rows, and it agrees on both sweeps to the tenth of a point. A check
+that only re-read the ledger could not have found what it found.
+
+PERF: none — measurement only.
+
+WIKI: none — this tick's artefacts are `docs/loop/CONSTITUTION-CHECK.md` check #93 and the two
+`CONSTITUTION.MD` edits it applied, which are the governance record itself. [no-pattern]
+
 ## Tick 1020 — the reference browser had no mouse, and 22.9% of the corpus asks (2026-08-08)
 
 TICK SHAPE: primitive — the `@media` discovery battery (the top unbatteried construct in the

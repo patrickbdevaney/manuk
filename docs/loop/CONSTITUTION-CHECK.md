@@ -6342,3 +6342,125 @@ instrument the agent DOES own**, not as a note.
    not a cut from that page.
 3. **Do not build `hyphens: auto`.** Recorded here so the next surface audit cannot re-rank it from
    the corpus number alone.
+
+## Check #93 — tick 1021 (2026-08-08)
+
+**Horizon:** H0 as re-scoped by **PART VII**, instrumented as **M1 on the in-scope CrUX corpus**.
+Latest banked: **t1008 — M1 24/122 = 19.7%**, shape_mean 60.4%, cov_mean 86.9%. ⚠ That is **not** the
+number check #91 carried, and finding 1 below is why.
+
+### → Gate, or scoreboard?
+
+⚠⚠⚠ **GATE — BUT THE SCOREBOARD WAS READING 4.2 POINTS HIGH, AND THE CHECK ITSELF PROPAGATED IT.**
+This check recomputed M1 from the sweeps' own row files, with the exclusion classifier derived from
+the artefacts rather than from memory, and it **reproduces `FIDELITY-PROGRESS.tsv` field-for-field on
+both of the last two sweeps**:
+
+```text
+                     recomputed from SWEEP-tNNN-rows.tsv     banked in the ledger
+   t997              excl 69 · in-scope 131 · M1 21          16.0%          16.0%   ✓
+   t1008             excl 78 · in-scope 122 · M1 24          19.7%          19.7%   ✓
+
+   what tick 1008 PUBLISHED in prose, and check #91 then quoted:
+                     M1 24 = 19.5%   ->   27 = 23.9%
+```
+
+**Neither the numerator nor the denominator survives.** `113` and `123` match neither the banked
+in-scope counts (122, 131) nor the scored sets (99, 109), and this check could not derive them from
+the rows at all. The instrument is coherent with itself; the **prose** is the outlier.
+
+> **A metric whose denominator cannot be reproduced from its own tick's artefacts is not a
+> measurement.** Three denominators are in circulation for one metric, and the loop has been quoting
+> the most flattering of the three while the Phase-0 exit bar is defined against the strictest.
+
+⚠⚠ **Why eight ticks passed without it being caught, stated because the mechanism is the lesson.**
+The direction and the rough size were right — `+3.7` banked against `+4.4` published — so every
+sanity check the loop actually performs (*did it move? in the direction the fixes aim?*) returned the
+same answer under both numbers. **What was wrong was the LEVEL, and the level is the only thing a
+95% bar can be compared against.** This is meta-instrument #3 (accounting reconciliation) paying out
+for the ninth time: it was not caught by a gate, it was caught by a number that did not add up.
+
+⚠ **And it is not a bug in the instrument, which is the part that makes it recur.** t1008's own entry
+warned *"THE HEADLINE 23.9% IS PARTLY A DENOMINATOR"* — the author knew the number was soft. Check
+#91 then quoted it without the caveat, and the caveat is where all the information was. **A soft
+number and its hedge travel separately; the number is what gets copied.**
+
+**Applied, not proposed** (per #91's own finding): `CONSTITUTION.MD` VI.3 now names
+`FIDELITY-PROGRESS.tsv` field 15 over field 11 as the M1 of record, permits any other cut **only if
+labelled with its denominator and not called M1**, and carries the corrected t1008 pair in place of a
+t875 reading that had been stale for 133 ticks.
+
+⚠ **No decision turns on the 4.2 points.** Both readings are far from 95%; VI.2's ceiling finding
+(82.2–87.4%, and 87% of the remaining distance is instrument) is untouched. What turns on it is
+whether the scoreboard is honest, which is I5 and is not negotiable.
+
+### → PART VI correction, applied to the document
+
+**The scroll-container parenthetical in H0.1's residue row is promoted to a NAMED CLASS: the
+MIS-PROVISIONED REFERENCE.** It had been carried as a one-off aside about `--hide-scrollbars`. It now
+has three subjects and a decision rule:
+
+```text
+   --hide-scrollbars   the gutter                                       harness
+   --window-size       a window size is not a viewport; 87px on EVERY   harness   (t1016)
+                       reference capture this project ever took
+   hover / pointer     the reference declares NO POINTING DEVICE;       harness   (t1020)
+                       22.9% of the corpus asks
+   hyphens: auto       dictionaries ship separately from the binary     DO NOT BUILD (t1010)
+```
+
+The discriminator is **whether the reference CAN be provisioned.** Three of the four can, one cannot —
+and for the one that cannot, building the capability correctly would have *lowered* the score, because
+we currently agree with Chrome **by accident**.
+
+⚠ **The corollary is what makes this a standing cost rather than three closed tickets:** each was
+invisible for its whole life because **a mis-provisioned reference looks exactly like agreement.**
+This category is therefore never found by ranking divergences — it is found by asking a **third
+party** (the page itself, or the spec) what the answer should be. t1016 found its pair that way
+(`document.documentElement.clientHeight`); t1020 found this one that way (`matchMedia`, asked
+directly, rather than inferred from a box that happened to match).
+
+### → Is `orient`'s ranking still the north star?
+
+**Yes, and the battery-selection rule from #90 kept producing.** *Grep the corpus, rank, battery the
+top unbatteried one* has now run five times without a miss, and this window it produced `@media` —
+**49.1%, the top unbatteried construct there was** — which came back **30 of 31 Chrome-exact**. A
+large cleared field is the expected and correct output of a well-ranked battery; the one divergence
+in it was the instrument's, which is a second kind of yield the rule was not designed for and gets
+anyway.
+
+⚠ **One sharpening, cheap and generic: a media-feature grep must be anchored on the opening paren.**
+`hover\s*:\s*hover` returned 47 of 170 sites; `\((any-)?hover\s*:\s*hover\)` returns 32. The
+difference is a CSS *class named `hover`* followed by the `:hover` pseudo-class — exactly what
+Tailwind emits. **A utility-class framework inflates an unanchored property grep by half**, and the
+corpus-frequency numbers this loop ranks by are all produced by exactly such greps.
+
+### → Is any invariant being bent?
+
+**No, and I5 held in the one place it mattered.** The `@media` battery's single divergence was the
+reference's, and the tick fixed the harness rather than the engine — the alternative would have been
+a 22.9%-of-corpus "improvement" purchased by making the shipping browser answer `hover: none` to
+every page that asks. That is the exact trade PART I refuses, and it would have shown up as progress.
+
+⚠ **PART VII held under no pressure this window** — the two audits due (self-audit, this check) both
+ran clean, and `scripts/` was not touched. ⚠⚠ **The one proposal check #92 left open is BLOCKED and
+is recorded as blocked rather than quietly dropped:** #92 proposed changing the self-audit's
+falsifiability check from *"declares how to break it"* to *"declares how to break it, AND the
+declaration was RUN"*. That check lives in `scripts/self-audit.sh`, which is **observer-owned under
+PART VII**. The agent cannot land it. It is named here for the observer, and the agent-side half that
+IS in scope — making the declarations themselves true — is what t1007 and t1020 have been doing one
+gate at a time.
+
+### STEER (the tick-1022 plan)
+
+1. **A FRESH SWEEP IS OWED AND IS NOW THE HIGHEST-VALUE MEASUREMENT.** t1008 is 13 ticks and ~10
+   landed geometry/instrument fixes old, and the reference has changed underneath it **twice**
+   (t1016's viewport, t1020's pointer device). ⚠ Sweeps before and after t1016/t1020 are **not
+   comparable on the affected sites** — 73.1% declare `vh`/`vw`, 22.9% an interaction query — so the
+   next sweep is not a burndown point against t1008 but a **re-baseline**, and must be labelled one
+   in the ledger rather than read as a delta.
+2. **Back to capability on the render leg after it.** The corpus-ranked unbatteried areas remaining
+   are `@font-face` (20.5% markup, ~3× as a CSS row), `<iframe>` (30.4%) and inline `<svg>` (34.5%) —
+   the last two are replaced-element *sizing*, which is the width mechanism that launders into `dy`.
+3. **Do not build `hyphens: auto`** (standing, from #92) — and now the general form is in the
+   constitution, so the next surface audit cannot re-rank it from a corpus number alone.
