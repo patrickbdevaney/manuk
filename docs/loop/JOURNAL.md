@@ -46371,6 +46371,76 @@ PERF: none — one UA rule and one narrowed branch in a cascade that already ran
 WIKI: `docs/wiki/css-cascade.md` — where Chrome draws the form-control `box-sizing` line, and why a
 layout-crate test cannot see it.
 
+## Tick 1018 — "unmeasurable" is two facts, and they lead to opposite decisions (2026-08-08)
+
+TICK SHAPE: measurement — surface audit #42 (due at 1018, last 1008), **and its own steer executed in
+the same tick instead of filed.**
+
+⚠⚠ **THE SOURCE THAT PRODUCED THE UNKNOWN-UNKNOWNS WAS NOT THE VENDORS' PRIORITY LIST.** #41 greped
+the map against all twenty Interop 2026 focus areas and found **twenty for twenty present** — which
+is what Interop is *for*: it names what four vendors already agree matters, i.e. by construction the
+part of the platform least likely to be missing from anybody's map. This audit read **an independent
+engine's month-by-month release notes** instead (Ladybird, July 2026) and greped once per named
+feature. Fourteen greps, two minutes, four rows the map had never heard of:
+
+```text
+   relative colors · @function · style queries · @container style() · Geolocation ·
+   contenteditable · undo · system-ui · if()                    -> all PRESENT
+   WebAudio · clipboard events · smooth scrolling · rich text    -> NO ROW
+```
+
+⚠⚠⚠ **`scroll-behavior: smooth` HAD NO ROW AND IS 23.4% OF THE CORPUS**; `scroll-margin` /
+`scroll-padding` came with it at **15.2%**. Neither is parsed by `engine/css` at all. `WebAudio`
+(0/171) and clipboard events (0.6%) are recorded for map honesty and **explicitly not ranked**.
+
+⚠⚠⚠ **AND THEN THE PROBE, RUN BEFORE ANY CODE, CAME BACK INVISIBLE — WHICH SPLITS "UNMEASURABLE"
+INTO TWO FACTS THAT LEAD TO OPPOSITE DECISIONS.** Chrome's own boxes, a 200×60 scroll container with
+three 40px children:
+
+```text
+                                              Chrome            ours
+   (no scroll property)                    200x60 / 200x40   identical
+   scroll-behavior: smooth                 200x60 / 200x40   identical
+   scroll-padding-top: 24px                200x60 / 200x40   identical
+   scroll-margin-top: 24px                 200x60 / 200x40   identical
+   scroll-snap-type + scroll-snap-align    200x60 / 200x40   identical
+```
+
+Ten of ten byte-identical **in both engines**. So:
+
+```text
+   hyphens: auto (t1010)   the REFERENCE IS MIS-PROVISIONED   building it makes us DIVERGE.
+                           Chrome would differ if it had        HARMFUL — and no amount of
+                           dictionaries; it does not.           instrumenting fixes it.
+   scroll-* (this tick)    the PROPERTY HAS NO STEADY STATE   building it is INVISIBLE.
+                           Chrome shows no difference either.   UNPRICEABLE by THIS instrument —
+                                                                which is exactly what a SCROLLING
+                                                                instrument would unlock, and it now
+                                                                has a number: 23.4% + 15.2%.
+```
+
+> **A capability the oracle cannot see is not one fact but two.** One says *do not build it*; the
+> other says *build the instrument first, and here is what it is worth*. t1010 found the first kind
+> and stated the rule generally; running the probe on a second subject is what showed the rule has
+> two branches.
+
+⚠ **A HARNESS NOTE (PART VII, reported not touched): t1017's first wall was a FALSE RED.** `F2` read
+**8.27x** against its 7.5x bar and the tick did not land. Cause measured, not assumed: two orphaned
+headless-Chrome processes (`ppid 1`, 3h44m old, carrying `chrome.rs`'s exact `base_flags` signature —
+an identification, not a count) were still burning CPU from this session's own sweep. Killed **by
+PID**, box left to settle for two minutes, wall re-run: **F2 6.60x, all gates green.** The change
+under test was one atomic store per process and could not have moved a scaling ratio — but the gate
+does not know that, and *"re-run on a quiet box"* is the standing answer rather than a note about
+tolerance.
+
+RATCHET: nothing changed — no engine code in this tick.
+
+PERF: none — measurement only.
+
+WIKI: none — the artefacts are `docs/loop/SURFACE-AUDIT.md` #42 and four `CONSTELLATION.tsv` rows,
+two of which the same tick re-priced from `unknown` to `unmeasurable` with the probe that did it.
+[no-pattern]
+
 ## Tick 1017 — one axis had a caller and the other did not (2026-08-07)
 
 TICK SHAPE: primitive — the engine half of t1016's pair, built. **`vh` resolved against 720 on every

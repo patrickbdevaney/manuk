@@ -4541,3 +4541,95 @@ the map is honest about the surface rather than about the corpus.
 3. ⚠ **The reconciliation method that worked here is a GREP OF THE MAP PER NAMED FEATURE**, not
    reading the map and asking what is missing. Twenty-two greps took two minutes and are falsifiable;
    "does anything look absent" is the question that has been wrong six times.
+
+## Audit #42 — tick 1018 (2026-08-08)
+
+**SOURCES (searched, not recalled):**
+
+- `https://ladybird.org/newsletter/2026-07-31/` — an independent engine's own month-by-month list of
+  what it just built, read as a list of NAMES rather than as a narrative.
+- Carried from #41: the Interop 2026 focus areas and the 2026 Baseline digests (re-greped, no change).
+
+### → The method from #41 held, and it found four more rows
+
+**Grep the map once per NAMED feature.** Fourteen greps over Ladybird's July list, two minutes:
+
+```text
+   relative colors · @function · style queries · @container style() · Geolocation ·
+   contenteditable · undo · system-ui · if()                        -> all PRESENT
+   WebAudio · clipboard events · smooth scrolling · rich text        -> NO ROW
+```
+
+⚠⚠⚠ **`scroll-behavior: smooth` had no row and is 23.4% of the corpus.** `grep -ic "smooth scroll"`
+over 487 rows returned **0**, and `engine/css` does not parse the property. It is the highest-weight
+thing this audit found, and it arrived through an independent engine's release notes rather than
+through anything the loop owns.
+
+⚠⚠ **AND `scroll-margin` / `scroll-padding` came with it, at 15.2%** — the pair that keeps an anchor
+target from landing underneath a sticky header. Also absent from the map and from the cascade.
+
+Priced the same hour, HTML + linked stylesheets over the corpus that produces M1:
+
+```text
+   scroll-behavior: smooth              40/171   23.4%
+   scroll-margin / scroll-padding       26/171   15.2%
+   AudioContext / webkitAudioContext     0/171    0.0%
+   a copy/cut/paste listener             1/171    0.6%
+   navigator.clipboard                   0/171    0.0%
+```
+
+### → The steer applies t1010's rule BEFORE the work, not after
+
+⚠⚠⚠ **`scroll-behavior: smooth` is a strong candidate to be UNMEASURABLE, and that must be probed
+before a line is written.** A scroll *animation* has no steady-state geometry, and this oracle
+compares a single settled snapshot — the same structural blindness that made `hyphens: auto` a tick
+that must not be built (t1010). **`scroll-margin`/`scroll-padding` is the opposite**: it changes the
+offset a scroll *settles* at, which is a real steady state — but only an instrument that scrolls can
+see it, and this one does not. So the honest ordering is:
+
+1. **Probe the oracle** on both, exactly as t1010 did: a fixture, Chrome, before any engine work.
+2. If `scroll-margin` is measurable only by a scrolling instrument, that is an INSTRUMENT tick with
+   a named consumer, not a capability tick — and it should be priced against the 15.2% it unlocks.
+3. `WebAudio` and clipboard events are recorded for map honesty and **explicitly not ranked** at
+   0.0% and 0.6%.
+
+### → What this audit did NOT do
+
+**No re-rank.** The two live rows are 23.4% and 15.2% against a render leg whose current work is at
+69% (flex overflow) and 48.5% (`break-word`), so they do not displace anything. And the same
+observation as #41 holds one level up: **an independent engine's release notes are a better source of
+unknown-unknowns than the vendors' priority list**, because Interop names what the four vendors
+already agree on — which is, by construction, the part of the platform least likely to be missing
+from anyone's map.
+
+### ⚠⚠⚠ ADDENDUM, same tick: the steer above was EXECUTED rather than filed
+
+Both findings were probed against the oracle before anything was written, and both came back
+**invisible**. Chrome's own boxes, a 200×60 scroll container with three 40px children:
+
+```text
+                                              Chrome            ours
+   (no scroll property)                    200x60 / 200x40   identical
+   scroll-behavior: smooth                 200x60 / 200x40   identical
+   scroll-padding-top: 24px                200x60 / 200x40   identical
+   scroll-margin-top: 24px (on the child)  200x60 / 200x40   identical
+   scroll-snap-type + scroll-snap-align    200x60 / 200x40   identical
+```
+
+Ten of ten rows byte-identical in BOTH engines. So this instrument cannot see any of the four
+properties, and we agree with the reference today for the same reason the reference agrees with
+itself: nothing has scrolled.
+
+⚠⚠⚠ **AND THAT SPLITS "UNMEASURABLE" INTO TWO KINDS, WHICH IS THE FINDING WORTH KEEPING.**
+
+```text
+   hyphens: auto     the REFERENCE IS MIS-PROVISIONED   -> building it makes us DIVERGE. Harmful.
+                     (Chrome would differ if it had dictionaries; it does not have them)
+   scroll-*          the PROPERTY HAS NO STEADY STATE   -> building it is INVISIBLE. Unpriceable.
+                     (Chrome shows no difference either, because nothing scrolled)
+```
+
+The first cannot be fixed by instrumenting harder — the reference itself is wrong for our purposes.
+The second is precisely what a **scrolling instrument** would unlock, and it now has a named consumer
+and a number: 23.4% + 15.2% of the corpus. **A capability the oracle cannot see is not one fact but
+two, and they lead to opposite decisions.**
