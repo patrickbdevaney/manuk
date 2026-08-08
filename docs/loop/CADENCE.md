@@ -13,9 +13,9 @@
 |---|---|---|
 | ticks landed | **758** | ticks 1–1047 |
 | median tick cycle | **27m** | 757 intervals |
-| median, last 10 | **39m** | 10 intervals |
+| median, last 10 | **50m** | 10 intervals |
 | fastest / slowest | 5s / 5.4d | |
-| **ticks per hour** | **1.11** | 682.6h elapsed |
+| **ticks per hour** | **1.11** | 684.3h elapsed |
 | median verify wall | **63s** | 697 ticks |
 | wall trend | 39s → 13m — getting slower ⚠️ | first 3 vs last 3 |
 
@@ -28,7 +28,7 @@ it, and a wall that grows taxes every future tick, so it is tracked separately f
 
 * **capabilities asserted** (`G_CAPABILITY`): 48 → **81**
 * **live gates**: 27 → **428**
-* **✅ rows in the capability ledger**: 144 → **526**
+* **✅ rows in the capability ledger**: 144 → **527**
 * **Bar 0 — oracle hangs**: 0 of 265 sites
 
 **341 of 758 ticks** (45%) moved a
@@ -854,6 +854,6 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 | **1044** | 2026-08-08 14:17 | 54m | primitive | 13m | +559/−34 | 428 | 81 | 56.0% · | the search found no line because the DOM has none, and a term that cancelled (2026-08-08) |
 | **1045** | 2026-08-08 14:48 | 31m | primitive | 13m | +297/−34 | 428 | 81 | 56.0% · | a construct cleared at 30 of 30, and the third one-point constant this session (2026-08-08 |
 | **1046** | 2026-08-08 15:34 | 46m | primitive | 13m | +337/−48 | 428 | 81 | 56.0% · | a comma is a legal URL character, and two instrument traps caught before they were publish |
-| **1047** | 2026-08-08 15:40 | 6m | measurement | 13m | +349/−33 | 428 | 81 | 56.0% · | the constitution check, and a "vanishingly rare" that is 30% of the corpus (2026-08-08) |
+| **1047** | 2026-08-08 17:23 | 1.8h | measurement | 13m | +489/−36 | 428 | 81 | 56.0% · | the constitution check, and a "vanishingly rare" that is 30% of the corpus (2026-08-08) |
 
 *`·` after a WPT figure means **carried forward**, not measured this tick.*

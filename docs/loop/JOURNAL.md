@@ -46371,6 +46371,143 @@ PERF: none — one UA rule and one narrowed branch in a cascade that already ran
 WIKI: `docs/wiki/css-cascade.md` — where Chrome draws the form-control `box-sizing` line, and why a
 layout-crate test cannot see it.
 
+## Tick 1048 — the box model an inline never had, and the fix that refunded the margin it deleted (2026-08-08)
+
+TICK SHAPE: primitive — a 49-row battery on **block-in-inline**, the construct t1047 measured at
+**30.0% of the corpus** against an engine comment calling it *"vanishingly rare"*. Six defects found,
+one landed Chrome-exact and RED-proven, five named with numbers. **Battery 31/49 → 36/49.**
+
+⚠⚠⚠ **THE DEFECT: A BLOCKIFIED INLINE HANDED ITS BLOCK CHILD A BOX MODEL CSS SAYS THE CHILD NEVER
+SEES.** §9.2.1.1 splits an inline around a block child into anonymous blocks; we approximate that by
+blockifying the inline, which gets the box *structure* right. But a non-replaced inline **ignores
+`width`/`height` outright** (§10.2, §10.5) and its padding/border/margin apply at the split edges of
+its own fragments — never to the child, which belongs to the containing block the inline was in.
+Blockifying made all of it real. Chrome, 1200px, 400px container, 30px block child; the row is the
+**child's** parent-relative `[dx dy w h]`, because that is what cascades:
+
+```text
+                                Chrome            before             after
+  <a width:100px>   <div>   [0  0 400x30]   [0 0 100x30]  ✗ 4x    [0  0 400x30]  ✓
+  <a height:100px>  <div>   [0  0 400x30]   h(a) = 100    ✗ 70    [0  0 400x30]  ✓
+  <a padding:10px>  <div>   [0 20 400x30]   [10 10 380x30] ✗      [0  0 400x30]  ~
+  <a padding:10px 0><div>   [0  0 400x30]   [0 10 400x30] ✗ 10    [0  0 400x30]  ✓
+  <a margin:10px>   <div>   [0 20 400x30]   [10 0 380x30] ✗       [0  0 400x30]  ~
+  <a border:5px>    <div>   [0 20 400x30]   [5 5 390x30]  ✗       [0  0 400x30]  ~
+  <a background>    <div>   [0  0 400x30]   [0 0 400x30]  ✓       [0  0 400x30]  ✓
+```
+
+The three `~` rows each **lose two errors and gain none**; their remaining `dy 20` is a separate,
+unbuilt box-tree change, named below with its discriminator.
+
+⚠⚠⚠ **AND THE ENGINE HAD ALREADY WRITTEN THE RULE DOWN — IN ONE FUNCTION, AND OBEYED IT THERE ONLY.**
+`collapses_as_block`'s doc comment says it exactly: *"the blockified inline stands in for the spec's
+ANONYMOUS BLOCK BOXES, and an anonymous block has no margin, border or padding of its own."* That
+sentence was written to fix the **margin-collapse** predicates. Width, height and the four min/max
+clamps were never told. The same box was an anonymous block for margin collapse and the author's own
+styled block for everything else — **one rule, two implementations** (t720-724), with the correct
+model already in the source, in prose, unenforced.
+
+⚠⚠⚠ **THE PART WORTH CARRYING: NEUTRALISING IT IN `layout_block` ALONE MADE A ROW WORSE, AND THE FIX
+REPRODUCED THE BUG IT WAS FIXING.** The first version zeroed the box model on `layout_block`'s style
+clone. The `margin:10px` row went from `dy 0` to **`dy -10`** — a *new* error on a row the fix was
+aimed at. The parent independently re-derives that same child's top margin through
+`collapse_through_top` to compute `hoist_top`, and that path reads `style_of` directly, so it hoisted
+the child by a margin the child had just deleted.
+
+> **A neutralised style must be reached through ONE accessor, because a box's margin is read by its
+> PARENT as well as by itself.** `block_box_style` is now the single reader — `layout_block`,
+> `collapse_through_top`, `collapse_through_bottom` — and it borrows on every path but the blockified
+> one. I wrote the two-implementations bug into the fix for the two-implementations bug, and the only
+> reason it did not ship is that the battery was re-run before the fix was believed.
+
+⚠⚠⚠ **THE FALSIFICATION PASS CHANGED THE GATE'S OWN DOCUMENTATION — THE OBVIOUS MUTATION LEAVES IT
+GREEN.** Three mutations, run before publication:
+
+```text
+  M1  block_box_style neutralises unconditionally      -> RED  (the three positive rows)
+  M2  neutralise every display:inline, not only
+      blockified ones                                  -> GREEN  <- the mutation I had WRITTEN
+                                                                    into the comment as the proof
+  M3  is_block_level blockifies every inline           -> RED  ("padded 384 vs plain 384")
+```
+
+M2 cannot fail because **`layout_block` is never called for an inline that was not blockified**, so
+it never reaches the control at all. The mutation that reaches the control lives one level up, in the
+predicate rather than the accessor. The comment asserting M2 was written from plausibility and was
+false; it now names M3. ⚠ **A falsification claim is a claim, and an unrun one is worth less than no
+claim, because it reads as proof.**
+
+GATE: `a_blockified_inline_gives_its_block_child_no_box_model` (manuk-layout), RED-proven both ways
+per the table above. ⚠ Its rows are asserted **against an unwrapped block in the same harness**, not
+against a literal 400 — the test page carries the UA `<body>` margin, so the containing block is
+384px at x=8 and an absolute number would have been asserting the harness. The first version did
+exactly that and failed for that reason.
+
+PRICED — 10 sites, both binaries, same hour, the old one rebuilt from HEAD:
+
+```text
+                        OLD        NEW      verdict
+  id.vk.ru            0.149632   0.149632   byte-identical
+  kuechenmomente.de   0.751406   0.751406   byte-identical
+  sports.yahoo.com    0.869097   0.869097   byte-identical
+  meet.google.com     0.132597   0.133467   +0.0009, below resolution
+  fragrantica.com     0.724415   0.710702   apparent -0.0137  -> REFUTED
+  repubblica.it       0.714892   0.710648   apparent -0.0042  -> REFUTED
+  unoeste.br          0.746439   0.743516   -0.0029, inside its known 5.5-pt spread
+  otomoto.pl          0.753346   0.766284   apparent +0.0129  -> NOT BANKED
+  rockstaractu.com    0.885161   0.892900   apparent +0.0077  -> NOT BANKED
+  bbs.ruliweb.com        -          -       timeout on both
+```
+
+**Both apparent losses die to a 3-run band, and so do both apparent gains** — the symmetric half of
+the rule, applied to my own favourable numbers:
+
+```text
+  fragrantica  OLD 0.7264 / 0.7097 / 0.7110      NEW 0.7094 / 0.7261 / 0.7261
+               -> the SAME interval, [0.7094, 0.7264], on both binaries
+  repubblica   OLD 0.714230 x3 (dead stable)     NEW 0.714230 / 0.714230 / 0.708802
+               -> the MODAL value is identical; the engine agrees 2 runs of 3
+  rockstaractu OLD 0.885161 (2 runs unmeasurable) NEW 0.892900 / 0.885161 / 0.885161
+               -> modal value identical on both
+  otomoto      OLD [0.7435, 0.7564]              NEW [0.7514, 0.7947]
+               -> overlapping, and the site's own coverage swings 0.9658-0.9877
+```
+
+**Zero attributable regressions, and no bankable corpus gain.** The result of this tick is the
+battery and the gate, not a shape number — and per check #72 that is *"unmeasured"*, not *"bought
+nothing"*: three of ten sites are byte-identical, so most of the panel does not even contain the
+construct in a scoring position.
+
+⚠ **AND A NON-CRASH THAT LOOKS EXACTLY LIKE A BAR-0 CRASH.** `fidelity --urls` on a panel returned
+**SIGSEGV / exit 139** and "dumped core". It is the tool's own deliberate-exit path: the site
+exhausted its 150s budget, the process exits without `JS_ShutDown()`, and SpiderMonkey's teardown
+faults on the way out — the log says so in as many words, three lines above the signal. `--jobs N`
+respawns and completes cleanly; `--urls` alone does not. Not filed as Bar 0.
+
+RESIDUE, all measured, none built:
+- **the leading anonymous block.** Chrome opens a line box for the inline's start fragment when that
+  fragment has *horizontal* padding/border/margin. `padding:10px 0` is exact and `padding:10px` is
+  not — the horizontal edge is the discriminator, which is the cheap test for whoever builds it.
+- **a split inline mid-line does not join the preceding run.** `<div>foo <a>bar<div/></a> qux</div>`
+  puts the block at `dy 40` against Chrome's `dy 20`.
+- **a float inside an inline loses its box entirely** — `<a><div style="float:left">` yields no box
+  where Chrome yields `[0 0 40x10]` and shifts the following text 40px right. This is the *same*
+  swallowing bug blockification was introduced to fix, surviving in the carve-out that (correctly)
+  refuses to blockify for a float.
+- **an inline's own rect excludes an inline child's padding** — `<a><span style="padding:4px">` is
+  `27.27x27` in Chrome and `27x19` here. Not a block-in-inline defect; found by the negative rows.
+
+RATCHET: manuk-layout **132/132** (131 + the new gate), manuk-css 32/32, manuk-paint 22/22,
+manuk-dom 11/11. Nothing traded.
+
+PERF: one `Display` comparison per block box on the common path, and a `ComputedStyle` clone only for
+a blockified inline — where `layout_block` already cloned unconditionally, so the blockified path is
+unchanged and every other path now clones **less** than before in `collapse_through_top`/`_bottom`
+(they took a borrow and still do).
+
+WIKI: `docs/wiki/box-layout.md` — "A blockified inline is an ANONYMOUS BLOCK, and the engine said so
+in one function and contradicted it in every other".
+
 ## Tick 1047 — the constitution check, and a "vanishingly rare" that is 30% of the corpus (2026-08-08)
 
 TICK SHAPE: measurement — the cadence re-read of `CONSTITUTION.MD` (due every 8 ticks; last at 1039),

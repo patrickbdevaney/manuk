@@ -356,6 +356,12 @@
   - L6961 · The third state: natural is not specified, and a Dim::Px cannot tell you which
   - L6976 · <canvas> is the one tag whose dimension attributes are not the dimension properties
   - L6993 · How it was found, and the part of the method that did the work
+  - L7007 · A blockified inline is an ANONYMOUS BLOCK, and the engine said so in one function and contradicted it in every other (t1048)
+  - L7033 · It was already written down as a rule, in one place, and obeyed there only
+  - L7042 · ⚠⚠⚠ Neutralising it in layout_block alone made a row WORSE, and that is the reusable part
+  - L7056 · The paint moves towards Chrome too, which is why this is not a trade
+  - L7063 · What is NOT built, with its numbers
+  - L7074 · The frequency claim that licensed it had never been measured
 
 ## browser-capabilities.md
 `docs/wiki/browser-capabilities.md`
@@ -1762,4 +1768,4 @@
   - L124 · Rank mechanisms by FLIP RATE, not failing-subtest count — CSS layout is a multi-assertion slog
 
 ---
-1669 sections across 22 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+1675 sections across 22 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.

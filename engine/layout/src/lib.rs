@@ -30,6 +30,7 @@
 //!   tokens (so `a<b>b</b>` gains a space it should not); Parley-grade segmentation
 //!   is the upgrade.
 
+use std::borrow::Cow;
 use std::cell::RefCell;
 use std::collections::{HashMap, HashSet};
 
@@ -2264,8 +2265,63 @@ impl Ctx<'_> {
     /// width). Percentage vertical margins deeper in the spine are resolved against this same width
     /// (an approximation — the exact value is each level's own content width); px/em margins, which
     /// are width-independent and dominate real pages, are exact.
-    fn collapse_through_top(&self, node: NodeId, cw: f32, depth: u32) -> f32 {
+    /// **The style a BLOCK BOX uses for its own box model** — identical to [`Self::style_of`] for
+    /// every real block, and the ANONYMOUS BLOCK's style for an inline that CSS2 §9.2.1.1 has split
+    /// around a block child.
+    ///
+    /// A non-replaced inline ignores `width`/`height` outright (CSS 2.1 §10.2, §10.5), and its
+    /// padding, border and margin apply at the split edges of its own fragments rather than to the
+    /// block-level child — which is laid out in the containing block the inline was in. Blockifying
+    /// the inline (see [`is_block_level`]) reproduces the right box *structure* and, without this,
+    /// handed the child a box model the spec says it never sees.
+    ///
+    /// ⚠ **Every reader of a block's own margins must come through here**, because the margin
+    /// escapes upward: `layout_block` sizes the box from this style while its PARENT independently
+    /// re-derives the same child's top margin through `collapse_through_top` to compute `hoist_top`.
+    /// Neutralising in only one of them deletes the margin in the child and refunds it in the
+    /// parent, which measured as a *new* 10px error on the row it was meant to fix.
+    ///
+    /// Borrowed on the overwhelmingly common path — the clone happens only for a blockified inline.
+    fn block_box_style(&self, node: NodeId) -> Cow<'_, ComputedStyle> {
         let s = self.style_of(node);
+        if s.display != Display::Inline || !is_block_level(self.dom, self.styles, node) {
+            return Cow::Borrowed(s);
+        }
+        let zero = manuk_css::Sides {
+            top: Dim::Px(0.0),
+            right: Dim::Px(0.0),
+            bottom: Dim::Px(0.0),
+            left: Dim::Px(0.0),
+        };
+        let mut s = s.clone();
+        s.width = Dim::Auto;
+        s.width_keyword = None;
+        s.width_stretch = false;
+        s.height = Dim::Auto;
+        s.height_intrinsic = false;
+        s.height_stretch = false;
+        s.min_width = Dim::Auto;
+        s.max_width = Dim::Auto;
+        s.min_height = Dim::Auto;
+        s.max_height = Dim::Auto;
+        s.min_width_keyword = None;
+        s.max_width_keyword = None;
+        s.min_height_keyword = None;
+        s.max_height_keyword = None;
+        s.margin = zero;
+        s.padding = zero;
+        s.border_width = manuk_css::Sides {
+            top: 0.0,
+            right: 0.0,
+            bottom: 0.0,
+            left: 0.0,
+        };
+        Cow::Owned(s)
+    }
+
+    fn collapse_through_top(&self, node: NodeId, cw: f32, depth: u32) -> f32 {
+        let s = self.block_box_style(node);
+        let s = &*s;
         let mt = s.margin.top.resolve(cw, 0.0);
         if depth > 64 || !top_margin_collapses(self.dom, self.styles, node, s, cw) {
             return mt;
@@ -2363,7 +2419,8 @@ impl Ctx<'_> {
     /// A definite-height box stops the through-collapse (its content box is fixed). Same left/right
     /// spine cost and depth bound as the top walk; same percentage-margin width approximation.
     fn collapse_through_bottom(&self, node: NodeId, cw: f32, depth: u32) -> f32 {
-        let s = self.style_of(node);
+        let s = self.block_box_style(node);
+        let s = &*s;
         let mb = s.margin.bottom.resolve(cw, 0.0);
         // A definite own height (explicit `px`, or `%`/`calc` — the latter would resolve against a
         // definite parent) separates the bottom margin from the last child's, so no through-collapse.
@@ -2748,7 +2805,66 @@ impl Ctx<'_> {
         prev_margin: f32,
         floats: &mut FloatContext,
     ) -> BlockResult {
-        let mut s = self.style_of(node).clone();
+        let mut s = self.block_box_style(node).into_owned();
+
+        // ⚠⚠⚠ **THE BLOCKIFIED INLINE IS AN ANONYMOUS BLOCK, AND AN ANONYMOUS BLOCK HAS NO BOX
+        //    MODEL OF ITS OWN — THE ENGINE ALREADY SAID SO IN ONE PLACE AND CONTRADICTED IT HERE.**
+        //
+        // `collapses_as_block`'s doc comment states the model exactly: *"the blockified inline
+        // stands in for the spec's ANONYMOUS BLOCK BOXES, and an anonymous block has no margin,
+        // border or padding of its own"*. That is the rule the margin-collapse predicates were
+        // fixed to obey. Width, height and the four min/max clamps were never told, so the SAME box
+        // was an anonymous block for margin collapse and the author's own styled block for
+        // everything else — one rule, two implementations, which is the class this project keeps
+        // finding.
+        //
+        // What CSS actually says is stronger and settles it without appeal to the anonymous box: a
+        // non-replaced INLINE ignores `width`/`height` outright (CSS 2.1 §10.2, §10.5) and its
+        // padding/border/margin apply **at the split edges of its fragments**, never to the
+        // block-level child, which is laid out in the *containing block* the inline was in
+        // (§9.2.1.1). Blockifying handed all of it to the child.
+        //
+        // ⚠ **THE CONSTRUCT IS 30.0% OF THE CORPUS** — 51 of 170 pages carry a block inside an
+        // inline that is *itself styled* (1,925 elements; meet.google.com 288, bbs.ruliweb.com 268,
+        // id.vk.ru 247, fragrantica 154, sports.yahoo 121). It is `<a class="card"><div>…</div></a>`,
+        // the whole-tile-is-a-link behind every card grid, product tile and article teaser. The
+        // comment that licensed the approximation called a styled one *"vanishingly rare"*; that
+        // sentence was a frequency claim about the web that had never been measured (t1047).
+        //
+        // Measured against headless Chrome, 1200px, `<div class=c style="width:400px">` as the
+        // container and a 30px-tall block child — parent-relative `[dx dy w h]` of the CHILD, which
+        // is what cascades down the page:
+        //
+        // ```text
+        //                                    Chrome            before             after
+        //   <a width:100px>   <div>      [0  0 400x30]   [0 0 100x30]  ✗ 4x   [0  0 400x30]  ✓
+        //   <a height:100px>  <div>      [0  0 400x30]   h(a) = 100    ✗ 70   [0  0 400x30]  ✓
+        //   <a padding:10px>  <div>      [0 20 400x30]   [10 10 380x30] ✗     [0  0 400x30]  ~
+        //   <a padding:10px 0><div>      [0  0 400x30]   [0 10 400x30] ✗ 10   [0  0 400x30]  ✓
+        //   <a margin:10px>   <div>      [0 20 400x30]   [10 0 380x30] ✗      [0  0 400x30]  ~
+        //   <a border:5px>    <div>      [0 20 400x30]   [5 5 390x30]  ✗      [0  0 400x30]  ~
+        //   <a background>    <div>      [0  0 400x30]   [0 0 400x30]  ✓      [0  0 400x30]  ✓
+        //   <span inline-blk> (no block) — NOT blockified, untouched              ✓ control
+        // ```
+        //
+        // The three `~` rows keep a `dy 20`: Chrome generates a LEADING ANONYMOUS BLOCK for the
+        // inline's start fragment when that fragment has horizontal padding/border/margin (it has
+        // real inline extent, so it opens a line box), and we generate none. That is a separate box
+        // -tree change, it is named in the journal with these numbers, and it is NOT built here —
+        // but every one of those rows still loses two errors and gains none.
+        //
+        // ⚠ **THE PAINT MOVES TOWARDS CHROME TOO, which is why this is not a trade.** Chrome paints
+        // a split inline's background/border on its *fragments*; with a block-only child those
+        // fragments are empty, so Chrome draws no box around the card. We were drawing a fully
+        // padded, fully bordered rectangle around it. Dropping it is not losing a border Chrome has
+        // — it is stopping one Chrome does not.
+        //
+        // ⚠⚠ **AND IT HAD TO BE ONE ACCESSOR, NOT A CLAUSE HERE.** Neutralising the clone inside
+        // this function alone made the `margin:10px` row WORSE, not better (`dy 0 → -10`): the
+        // PARENT computes `hoist_top` from `collapse_through_top`, which reads `style_of` directly,
+        // so it hoisted the child by a 10px margin this function had just deleted. The margin was
+        // spent in one place and refunded in another — the same two-implementations shape, one level
+        // up. [`Self::block_box_style`] is now the single reader for all three.
 
         // Tables size their own width (shrink-to-columns when auto), so they run a
         // dedicated formatter rather than the generic block width algorithm.
@@ -11427,6 +11543,120 @@ mod tests {
             r.height > 12.0,
             "6px padding top+bottom plus a line, got {}",
             r.height
+        );
+    }
+
+    /// **G_BII — a blockified inline is an ANONYMOUS BLOCK, so its own box model never reaches its
+    /// block child.** CSS 2.1 §10.2/§10.5: a non-replaced inline ignores `width`/`height`; §9.2.1.1:
+    /// its padding/border/margin apply at the split edges of its fragments, not to the block-level
+    /// child, which is laid out in the containing block the inline was in.
+    ///
+    /// This is `<a class="card"><div>…</div></a>` — the whole-tile-is-a-link — and t1047 measured a
+    /// styled block-in-inline on **51 of 170 corpus pages (30.0%)**, against an engine comment that
+    /// had called it *"vanishingly rare"*. Chrome numbers, 400px container, 30px-tall block child:
+    ///
+    /// ```text
+    ///                                   Chrome child      before this fix
+    ///   <span width:100px>  <div>    [0 0 400x30]      [0 0 100x30]    ← 4x too narrow
+    ///   <span height:100px> <div>    span h = 30       span h = 100
+    ///   <span padding:10px 0><div>   [0 0 400x30]      [0 10 400x30]
+    ///   <span padding:10px> TEXT     padding KEPT      padding kept    ← the control
+    /// ```
+    ///
+    /// ⚠ **The last row is the control and it is what makes this a rule rather than a hack.** It
+    /// carries the identical declaration on the identical element and has no block child, so it is
+    /// NOT blockified and its padding must survive.
+    ///
+    /// ⚠⚠ **RED-PROVEN, and the mutation that proves the control is NOT the obvious one.** Making
+    /// `block_box_style` neutralise unconditionally kills the three positive rows. The obvious
+    /// counter-mutation — neutralise *every* `display:inline` rather than only blockified ones —
+    /// leaves this test **GREEN**, because `layout_block` is never called for an inline that was not
+    /// blockified, so it cannot reach the control at all. The mutation that does reach it is one
+    /// level up, in [`is_block_level`]: make it blockify every inline and the control goes red with
+    /// `padded 384 vs plain 384`. Recorded because a falsification claim that is merely plausible is
+    /// the thing this gate exists to stop.
+    #[test]
+    fn a_blockified_inline_gives_its_block_child_no_box_model() {
+        let by_id = |dom: &Dom, root: &LayoutBox, id: &str| {
+            let n = dom
+                .descendants(dom.root())
+                .find(|&n| dom.element(n).and_then(|e| e.attr("id")) == Some(id))
+                .unwrap_or_else(|| panic!("#{id} exists"));
+            root.node_rects(dom)
+                .get(&n)
+                .copied()
+                .unwrap_or_else(|| panic!("#{id} produced a box"))
+        };
+
+        // ⚠ The REFERENCE is an unwrapped block in the same harness, not a literal 400 — the test
+        // page carries the UA `<body>` margin, so the containing block is 384px at x=8 and an
+        // absolute number here would be asserting the harness rather than the rule.
+        let refr = layout_html(r#"<div id="b">x</div>"#, "div{height:30px}", 400.0);
+        let want = by_id(&refr.0, &refr.1, "b");
+
+        // `width` on the inline is IGNORED — the child fills its containing block, unwrapped-wide.
+        let (dom, root) = layout_html(
+            r#"<span id="s" style="width:100px"><div id="b">x</div></span>"#,
+            "div{height:30px}",
+            400.0,
+        );
+        let b = by_id(&dom, &root, "b");
+        assert_eq!(
+            (b.x, b.width),
+            (want.x, want.width),
+            "an inline's `width` must not reach its block child; got x={} w={}, unwrapped is x={} w={}",
+            b.x,
+            b.width,
+            want.x,
+            want.width
+        );
+
+        // `height` on the inline is IGNORED — the blockified box hugs its 30px child.
+        let (dom, root) = layout_html(
+            r#"<span id="s" style="height:100px"><div id="b">x</div></span>"#,
+            "div{height:30px}",
+            400.0,
+        );
+        let s = by_id(&dom, &root, "s");
+        assert_eq!(
+            s.height, 30.0,
+            "an inline's `height` must not size the blockified box; got {}",
+            s.height
+        );
+
+        // Vertical padding on the inline has NO layout effect at all (§9.2.1.1).
+        let (dom, root) = layout_html(
+            r#"<span id="s" style="padding:10px 0"><div id="b">x</div></span>"#,
+            "div{height:30px}",
+            400.0,
+        );
+        let b = by_id(&dom, &root, "b");
+        assert_eq!(
+            (b.y, b.width),
+            (want.y, want.width),
+            "an inline's vertical padding must not displace or shrink its block child; got y={} w={}, unwrapped is y={} w={}",
+            b.y,
+            b.width,
+            want.y,
+            want.width
+        );
+
+        // ⚠ THE CONTROL — same declaration, NO block child, so nothing is blockified and the
+        // padding must still be there. Its box is 20px wider than the text it wraps.
+        let (dom, root) = layout_html(
+            r#"<div id="w"><span id="s" style="padding:0 10px">x</span></div>"#,
+            "",
+            400.0,
+        );
+        let bare = layout_html(r#"<div id="w"><span id="s">x</span></div>"#, "", 400.0);
+        let padded = by_id(&dom, &root, "s");
+        let plain = by_id(&bare.0, &bare.1, "s");
+        assert_eq!(
+            padded.width - plain.width,
+            20.0,
+            "a plain inline is NOT blockified and keeps its padding: padded {} vs plain {}",
+            padded.width,
+            plain.width
         );
     }
 

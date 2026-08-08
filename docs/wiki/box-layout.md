@@ -7003,3 +7003,80 @@ the control row was asserted at 40x20 from the shape of the markup and Chrome sa
 `viewBox` is a ratio and never a size. It is a better control for it — both of its axes are derived,
 so it goes red if the transfer is *deleted* rather than guarded, which is what makes
 `the_ratio_transfer_never_overwrites_a_specified_axis` falsifiable in both directions.
+
+## A blockified inline is an ANONYMOUS BLOCK, and the engine said so in one function and contradicted it in every other (t1048)
+
+CSS 2.1 §9.2.1.1 splits an inline box around a block-level child into anonymous block boxes. This
+engine approximates that by **blockifying** the inline (`is_block_level` → `inline_contains_block`),
+which reproduces the right box *structure* — and, until this tick, also handed the block child a box
+model the spec says it never sees.
+
+**What CSS actually says.** A non-replaced inline **ignores `width` and `height` outright** (§10.2,
+§10.5). Its padding, border and margin apply at the **split edges of its own fragments**, never to
+the block-level child — that child is laid out in the containing block the inline was in. Blockifying
+made every one of those properties real.
+
+Measured against headless Chrome, 1200px, `<div style="width:400px">` container, 30px block child.
+The row is the **child's** parent-relative `[dx dy w h]`, because that is what cascades down a page:
+
+```text
+                                Chrome            before             after
+  <a width:100px>   <div>   [0  0 400x30]   [0 0 100x30]  ✗ 4x    [0  0 400x30]  ✓
+  <a height:100px>  <div>   [0  0 400x30]   h(a) = 100    ✗ 70    [0  0 400x30]  ✓
+  <a padding:10px>  <div>   [0 20 400x30]   [10 10 380x30] ✗      [0  0 400x30]  ~
+  <a padding:10px 0><div>   [0  0 400x30]   [0 10 400x30] ✗ 10    [0  0 400x30]  ✓
+  <a margin:10px>   <div>   [0 20 400x30]   [10 0 380x30] ✗       [0  0 400x30]  ~
+  <a border:5px>    <div>   [0 20 400x30]   [5 5 390x30]  ✗       [0  0 400x30]  ~
+  <a background>    <div>   [0  0 400x30]   [0 0 400x30]  ✓       [0  0 400x30]  ✓
+```
+
+### It was already written down as a rule, in one place, and obeyed there only
+
+`collapses_as_block`'s own doc comment states the model exactly — *"the blockified inline stands in
+for the spec's ANONYMOUS BLOCK BOXES, and an anonymous block has no margin, border or padding of its
+own"* — and that sentence was written to fix the **margin-collapse** predicates. Width, height and
+the four min/max clamps were never told. The same box was an anonymous block for margin collapse and
+the author's own styled block for everything else: **one rule, two implementations**, the class this
+project keeps finding (t720-724).
+
+### ⚠⚠⚠ Neutralising it in `layout_block` alone made a row WORSE, and that is the reusable part
+
+The first version zeroed the box model on `layout_block`'s style clone. The `margin:10px` row went
+from `dy 0` to **`dy -10`** — a *new* error on the row the fix was aimed at. The parent independently
+re-derives the same child's top margin through `collapse_through_top` to compute `hoist_top`, and it
+reads `style_of` directly, so it hoisted the child by a margin the child had just deleted. **The
+margin was spent in one place and refunded in another** — the identical two-implementations shape,
+one level up, reproduced by the fix for it.
+
+> **A neutralised style must be reached through ONE accessor, because a box's margin is read by its
+> parent as well as by itself.** `block_box_style` is now the single reader; `layout_block`,
+> `collapse_through_top` and `collapse_through_bottom` all go through it, and it borrows on every
+> path but the blockified one.
+
+### The paint moves towards Chrome too, which is why this is not a trade
+
+Chrome paints a split inline's background and border on its **fragments**. With a block-only child
+those fragments are empty, so Chrome draws no box around the card. We were drawing a fully padded,
+fully bordered rectangle around it. Dropping it is not losing a border Chrome has — it is stopping
+one Chrome does not.
+
+### What is NOT built, with its numbers
+
+The three `~` rows keep a `dy 20`: Chrome generates a **leading anonymous block** for the inline's
+start fragment when that fragment has horizontal padding/border/margin (it then has real inline
+extent, so it opens a line box). We generate none. Note the discriminator — `padding:10px 0` is
+exact, `padding:10px` is not, so it is the *horizontal* edge that decides. Also open, from the same
+battery: an inline sitting mid-line before its own split does not join the preceding text run
+(`foo <a>bar<div/></a>` puts the block at `dy 40` against Chrome's 20), a **float inside an inline
+loses its box entirely**, and an inline's own rect excludes an inline child's padding (`27x27` in
+Chrome, `27x19` here).
+
+### The frequency claim that licensed it had never been measured
+
+The comment authorising the approximation said it was *"invisible unless a block-containing inline is
+itself styled, which is vanishingly rare."* Measured on the 170-page burndown corpus (t1047): a
+block-in-inline appears on **71 pages (41.8%)**, and the inline is **itself styled on 51 (30.0%)** —
+1,925 elements, led by meet.google.com 288, bbs.ruliweb.com 268, id.vk.ru 247, fragrantica 154,
+sports.yahoo 121. It is `<a class="card"><div>…</div></a>`, the whole-tile-is-a-link behind every
+card grid, product tile and article teaser on the web. **Grep the corpus against a comment's PREMISE,
+not only against a construct.**
