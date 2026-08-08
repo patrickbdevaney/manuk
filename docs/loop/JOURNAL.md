@@ -46371,6 +46371,103 @@ PERF: none — one UA rule and one narrowed branch in a cascade that already ran
 WIKI: `docs/wiki/css-cascade.md` — where Chrome draws the form-control `box-sizing` line, and why a
 layout-crate test cannot see it.
 
+## Tick 1031 — both conjuncts went up and M1 did not move, and the control killed half the gain (2026-08-08)
+
+TICK SHAPE: measurement — the fidelity sweep check #94's steer named as the next tick. 200 sites,
+`--jobs 2`, release binary, banked as `SWEEP-t1031-rows.tsv`.
+
+HYPOTHESIS (written before the numbers existed): the three geometry fixes that landed after t1023 —
+t1026, t1027, t1029 — are high-usage and low-magnitude, so **under a point, possibly zero crossings.**
+
+⚠⚠⚠ **THE HEADLINE: M1 IS FLAT AT 17.6% (23/131) WHILE BOTH OF ITS CONJUNCTS WENT UP.**
+
+```text
+                              t1023        t1031
+   M1 (shape>=0.75 AND clean)  17.6%   ->   17.6%    23/131   FLAT, zero crossings
+     shape >= 0.75             23.7%   ->   26.7%    31 -> 35 sites   (+4)
+     jarring-clean             32.1%   ->   33.6%    42 -> 44 sites   (+2)
+   shape_mean                  59.5%   ->   60.7%
+   scored 107/131 · excluded 69/200 — both unchanged
+```
+
+**That is not a coincidence and it is not noise — it is arithmetic, and the row files say so exactly.**
+All three sites that crossed the shape bar are **not jarring-clean**, so none of them could reach M1:
+
+```text
+   rockstaractu.com       shape 0.885   reading_order 13
+   www.kuechenmomente.de  shape 0.758   h_overflow 11 · reading_order 5
+   www.unoeste.br         shape 0.798   overlap 3 · reading_order 2 · dead_target 1
+```
+
+⚠⚠⚠ **AND THE GENERAL FORM, WHICH IS THE STEER: OF THE 35 SITES THAT NOW PASS SHAPE, 12 FAIL M1 ON
+JARRING ALONE, AND `reading_order` IS THE BINDING CONJUNCT ON 10 OF THE 12.** `h_overflow` binds 6,
+`overlap` 3. **The loop has been buying shape and M1 is gated on reading order** — which t997 already
+said (non-clean on 65/123) and which four ticks of shape work have now demonstrated the hard way.
+⚠ And `reading_order` is *not* a reorder bug: t871-874 established it is a **WIDTH or TRANSFORM
+upstream**. The next capability tick belongs there, not in another shape primitive.
+
+⚠⚠⚠ **THE OLD-BINARY CONTROL, SAME HOUR, AND IT KILLED HALF THE GAIN AND ALL OF THE LOSS.** Seven
+sites — every mover over ±0.04 — measured on a binary rebuilt from **dfcd6920 (t1025, before all
+three fixes)** and on HEAD within the same hour:
+
+```text
+                            t1023     OLD now    NEW now     attributed
+   www.repubblica.it        0.450      0.451      0.704      ENGINE  +0.253   <- the whole headline
+   rockstaractu.com         0.750      0.750      0.885      ENGINE  +0.135   <- a real crossing
+   www.kuechenmomente.de    0.721      0.721      0.767      ENGINE  +0.046   <- a real crossing
+   serennu.com              0.393      0.574      0.574      site drift, engine 0.000
+   www.unoeste.br           0.698      0.816      0.757      site drift; engine -0.059, see below
+   pt88.app                 0.745      0.755      0.755      site drift, engine 0.000
+   www.puentedemando.com    0.822      0.774      0.774      site drift, engine 0.000
+```
+
+> **Both of the sweep's apparent LOSSES are pure site drift with exactly zero engine component**, and
+> two of its five apparent gains are too. The sweep's `+1.06` common-set band is therefore **not**
+> an engine number: three sites carry the real movement and the rest is the corpus moving under us.
+
+⚠⚠ **AND THE ONE THAT LOOKED LIKE A REGRESSION IS NOT A RESULT.** `www.unoeste.br` read 0.059 lower
+on the new binary, which is the shape a real regression takes. Three solo runs on the **new binary
+alone**, same hour:
+
+```text
+   0.711 · 0.766 · 0.761      spread 5.5 points      coverage swings 0.76 - 0.89
+```
+
+**The site's own spread on one unchanged binary is larger than the delta**, and a 13-point coverage
+swing means it is not even serving the same document between loads. Per t654 a delta smaller than the
+spread is not a result; per t871-874 a single-site loss needs three runs before it is believed. It
+does not survive either test, and I am not banking it as a regression **or** dismissing it silently —
+it is recorded here as unmeasurable on this site.
+
+⚠ **THE HYPOTHESIS WAS RIGHT, AND BEING RIGHT IS NOT THE USEFUL PART.** "Under a point, possibly zero
+crossings" is what happened. What the tick actually bought is the *reason*: not *"the fixes were too
+small"* but **"the fixes were on the wrong conjunct"** — a different claim, with a different next
+action, and one that no amount of predicting the magnitude would have produced.
+
+⚠ **METHOD NOTE, because it is now three instruments deep.** The sweep's own summary printed
+*"BURNDOWN: pass-count +3.0 · band 1.06 UP — likely progress, but confirm with the old-binary
+control"*. It was right to hedge: the pass-count was real, the band was half real, and the two losses
+it flagged were entirely the corpus. **A sweep produces candidates; the control produces results.**
+
+RATCHET: measurement only, no engine code changed. M1 flat, both conjuncts up, `scored` and
+`excluded` byte-identical at 107 and 69 — nothing went backwards.
+
+GATE: none — the artefacts are `docs/loop/SWEEP-t1031-rows.tsv` and the banked
+`FIDELITY-PROGRESS.tsv` row, plus the seven-site control table above, which is reproducible by
+`git checkout dfcd6920 -- engine/css/src/{stylo_engine,lib}.rs engine/layout/src/lib.rs`.
+
+CADENCE, folded in rather than spent as its own tick: the **self-audit** came due at this tick
+(every 10; last at 1021) and ran **clean** — 21 gates declare how to break them, `G_CONTAIN` is
+self-proving, the process-defect ledger (49) has a mechanism per entry, and every enforcement hook is
+wired. ⚠ Its one standing known limit is unchanged and named rather than re-discovered: it checks
+that a gate *declares* how to break it, not that the declaration was ever **run** — check #92
+proposed tightening that and check #93 recorded it as BLOCKED, because `scripts/self-audit.sh` is
+observer-owned.
+
+PERF: none. Sweep wall ~63 min at `--jobs 2`, 200/200 sites merged.
+
+WIKI: none — this tick produces a measurement and a steer, not a mechanism. [no-pattern]
+
 ## Tick 1030 — 21 of the 30 ratchet invariants have been re-banking a 23-day-old number (2026-08-08)
 
 TICK SHAPE: measurement — the cadence re-read of `CONSTITUTION.MD` (due every 8; last at 1021),
