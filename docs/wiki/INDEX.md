@@ -331,7 +331,7 @@
   - L6506 · The battery, with a control per rule
   - L6540 · Price
   - L6553 · The second defect, from the same battery
-  - L6564 · The fix, and why it is the borrowed engine's own mechanism
+  - L6564 · The fix — and t1025 named the wrong place, which is worth more than the fix
 
 ## browser-capabilities.md
 `docs/wiki/browser-capabilities.md`

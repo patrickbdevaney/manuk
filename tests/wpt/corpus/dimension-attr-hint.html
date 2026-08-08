@@ -1,0 +1,25 @@
+<!doctype html><html><head><meta charset=utf-8><style>
+/* HTML's dimension attributes are a presentational HINT — a cascade origin BELOW every author
+   declaration. Ours used to be applied after the cascade had already finished, which is
+   structurally above it, so `height: auto` (the one case where an author explicitly writes the
+   initial value) was silently overwritten by `height="40"`.
+
+   `#p-sheet` is the row that matters: it writes the rule the way the WEB writes it — a stylesheet
+   rule, not an inline style — because a fix verified only against `style="..."` would pass while
+   the 42.4% of the corpus that ships `img { max-width:100%; height:auto }` stayed broken.
+
+   `#p-attr` and `#p-spec` are the controls that stop this from being satisfied by simply IGNORING
+   the attributes: the hint must still size an element nobody styled, and must still lose to a
+   height the author DID specify. */
+*{margin:0;padding:0;box-sizing:content-box}
+.w{width:400px}
+img{background:#cfc;display:block}
+#p-sheet{max-width:100%;height:auto}
+</style></head><body>
+<div class=w><img id="p-attr" width="100" height="40" src="data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIxMDAiIGhlaWdodD0iNDAiPjxyZWN0IHdpZHRoPSIxMDAiIGhlaWdodD0iNDAiIGZpbGw9InJlZCIvPjwvc3ZnPg=="></div>
+<div class=w><img id="p-spec" width="100" height="40" style="width:200px" src="data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIxMDAiIGhlaWdodD0iNDAiPjxyZWN0IHdpZHRoPSIxMDAiIGhlaWdodD0iNDAiIGZpbGw9InJlZCIvPjwvc3ZnPg=="></div>
+<div class=w><img id="p-inline" width="100" height="40" style="width:200px;height:auto" src="data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIxMDAiIGhlaWdodD0iNDAiPjxyZWN0IHdpZHRoPSIxMDAiIGhlaWdodD0iNDAiIGZpbGw9InJlZCIvPjwvc3ZnPg=="></div>
+<div class=w><img id="p-sheet" width="800" height="320" src="data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSI4MDAiIGhlaWdodD0iMzIwIj48cmVjdCB3aWR0aD0iODAwIiBoZWlnaHQ9IjMyMCIgZmlsbD0iYmx1ZSIvPjwvc3ZnPg=="></div>
+<div class=w><canvas id="p-canvas" width="100" height="40" style="width:200px;height:auto"></canvas></div>
+<div class=w><svg id="p-svg" width="100" height="40" style="width:200px;height:auto"></svg></div>
+</body></html>

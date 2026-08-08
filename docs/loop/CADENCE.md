@@ -11,12 +11,12 @@
 
 | | value | over |
 |---|---|---|
-| ticks landed | **739** | ticks 1–1024 |
-| median tick cycle | **26m** | 738 intervals |
+| ticks landed | **740** | ticks 1–1025 |
+| median tick cycle | **26m** | 739 intervals |
 | median, last 10 | **14m** | 10 intervals |
 | fastest / slowest | 5s / 5.4d | |
-| **ticks per hour** | **1.10** | 670.0h elapsed |
-| median verify wall | **63s** | 678 ticks |
+| **ticks per hour** | **1.10** | 670.9h elapsed |
+| median verify wall | **63s** | 679 ticks |
 | wall trend | 39s → 13m — getting slower ⚠️ | first 3 vs last 3 |
 
 The **cycle** is the real unit: implement → debug → verify wall → land. The wall is only part of
@@ -28,10 +28,10 @@ it, and a wall that grows taxes every future tick, so it is tracked separately f
 
 * **capabilities asserted** (`G_CAPABILITY`): 48 → **81**
 * **live gates**: 27 → **428**
-* **✅ rows in the capability ledger**: 144 → **514**
+* **✅ rows in the capability ledger**: 144 → **515**
 * **Bar 0 — oracle hangs**: 0 of 265 sites
 
-**341 of 739 ticks** (46%) moved a
+**341 of 740 ticks** (46%) moved a
 user-visible capability. The rest were instruments, infrastructure and corrections — and the
 ledger says the corrections were not overhead: three of its top three priorities were phantoms,
 and finding that out redirected everything after it.
@@ -836,5 +836,6 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 | **1022** | 2026-08-08 02:50 | 88m | measurement | 13m | +313/−32 | 428 | 81 | 56.0% · | I withdraw last tick's headline; the true answer is better for the instrument (2026-08-08) |
 | **1023** | 2026-08-08 02:54 | 5m | measurement | 13m | +164/−33 | 428 | 81 | 56.0% · | the re-baseline, and the flat band was PREDICTED seven ticks before it was measured (2026- |
 | **1024** | 2026-08-08 03:04 | 9m | measurement | 13m | +247/−33 | 428 | 81 | 56.0% · | the wall audit, and a parity fixture is free until it crosses a multiple of eight (2026-08 |
+| **1025** | 2026-08-08 03:58 | 54m | measurement | 13m | +289/−63 | 428 | 81 | 56.0% · | the presentation attribute sits ABOVE author CSS, and 42.4% of the corpus writes the rule  |
 
 *`·` after a WPT figure means **carried forward**, not measured this tick.*

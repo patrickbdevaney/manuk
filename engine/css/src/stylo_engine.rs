@@ -1209,21 +1209,27 @@ fn apply_presentational_hints(dom: &Dom, node: NodeId, s: &mut crate::ComputedSt
         // (the tick-380 oracle: 81 sites diverged on `<img>`, 80 on `<svg>`, because this used to
         // force `inline-block`). Layout lays an inline replaced box out ATOMICALLY — sized as a
         // block, flowed like a word — which is what the old mutation was standing in for.
-        // A presentational hint is the LOWEST-priority source, so it may only fill a genuinely
-        // absent width. `width: stretch` and the intrinsic keywords both compute to `Dim::Auto`,
-        // which made them look absent — so `<canvas width="40">` beat the author's `width: stretch`
-        // and the element kept hugging its 40px instead of filling its column. The flags are what
-        // tell "no width was specified" apart from "a width was specified that resolves later".
-        if s.width == crate::Dim::Auto && !s.width_stretch && s.width_keyword.is_none() {
-            if let Some(w) = el.attr("width").and_then(crate::parse_dimension_attr_dim) {
-                s.width = w;
-            }
-        }
-        if s.height == crate::Dim::Auto && !s.height_stretch && !s.height_intrinsic {
-            if let Some(h) = el.attr("height").and_then(crate::parse_dimension_attr_dim) {
-                s.height = h;
-            }
-        }
+        // ⚠⚠⚠ **THE WIDTH/HEIGHT HALF OF THIS BLOCK MOVED INTO THE CASCADE (t1026) — see
+        // `presentational_hint_block`. What is left here is the RATIO half, which is not a
+        // declaration and has no origin.**
+        //
+        // This is where `<img width="100" height="40" style="width:100%;height:auto">` — *the*
+        // responsive-image idiom — came out **400×40 against Chrome's 400×160**, four times too
+        // short, with every box below it sliding up. The code that did it read
+        // `if s.height == Dim::Auto { s.height = attr }`, and the comment above it was already
+        // right about the rule: *"a presentational hint is the LOWEST-priority source, so it may
+        // only fill a genuinely absent width."* Two of the three ways to be wrong had been found and
+        // patched — `width: stretch` and the intrinsic keywords both compute to `Dim::Auto` and were
+        // excluded by flag.
+        //
+        // > **The third way cannot be patched from here at all: `auto` the author WROTE and `auto`
+        // > nobody set are the same computed value.** A post-cascade pass has no origin, so it
+        // > necessarily runs ABOVE author CSS, and the only declarations it can beat are the ones
+        // > that compute to the initial value — which is exactly what `height: auto` is.
+        //
+        // Adding a fourth flag would have been the third patch to the same wrong shape. The hint is
+        // now a real declaration at a real origin (`ORIGIN_PRES_HINT`, between user and author), so
+        // *every* author declaration beats it, including ones nobody has thought of yet.
         // The dimension attributes are also an aspect-ratio hint (HTML §"dimension attributes":
         // `aspect-ratio: auto <width> / <height>`). Twin of the block in `apply_ua_defaults` —
         // see there for why the ratio, not the lengths, is the load-bearing half.
@@ -1351,7 +1357,15 @@ fn timed<T>(slot: &mut u128, f: impl FnOnce() -> T) -> T {
 /// `matches_selector`, and winners are still ordered by `(specificity, source order)`. The index only
 /// removes candidates that could not have matched.
 /// The author origin's rank in the cascade sort — see [`origin_rank`].
-const ORIGIN_AUTHOR: u8 = 2;
+const ORIGIN_AUTHOR: u8 = 3;
+
+/// **Presentational hints — the origin between USER and AUTHOR (t1026).**
+///
+/// HTML's dimension attributes (`<img width="100" height="40">`) are not markup that sizes a box;
+/// they are *declarations*, and CSS gives them an origin **below every author declaration**. Ours
+/// used to be applied after the cascade had finished, which is structurally above it — see the
+/// long note at the `apply_ua_defaults` site this replaced.
+const ORIGIN_PRES_HINT: u8 = 2;
 
 /// **The cascade's first sort criterion, as one number.**
 ///
@@ -2351,6 +2365,61 @@ fn cascade_pseudo(
 /// every element on every page. Borrowing makes it **one clone per SURVIVING declaration**, so a
 /// losing declaration is never cloned at all: strictly fewer clones than the ascending push it
 /// replaced, which also paid `push`'s linear scan-and-remove on every override.
+/// **HTML's dimension attributes, as a real declaration block at a real origin.**
+///
+/// `<img width="100" height="40">` maps to `width: 100px; height: 40px` in the *presentational
+/// hints* origin, which every author declaration outranks. Building it here — rather than poking
+/// the computed style afterwards — is what makes `style="height:auto"` win, because the cascade can
+/// see two declarations where a post-cascade pass sees one computed value.
+///
+/// ⚠ **Only the seven replaced elements whose attributes HTML defines as mapping to CSS.** A
+/// `<table width>` or `<td width>` is a different (also-real) mapping with its own quirks and is
+/// deliberately out of scope here rather than swept in on a guess — the tags listed are exactly the
+/// ones the pass this replaces already covered, so the change is an origin change and not a scope
+/// change. That matters: it means a regression here can only come from the ORIGIN being wrong,
+/// which is the one thing the gate checks.
+///
+/// The value is re-serialised through `parse_dimension_attr_dim` rather than passed through raw, so
+/// HTML's own attribute grammar (`"100"`, `"100px"`, `"50%"`, and the junk it tolerates) is parsed
+/// exactly once, in the one function that already knew how.
+fn presentational_hint_block(
+    el: &StyloElement<'_>,
+    node: NodeId,
+    url_data: &UrlExtraData,
+) -> Option<PropertyDeclarationBlock> {
+    let tag = el.dom.tag_name(node)?;
+    if !matches!(
+        tag,
+        "img" | "canvas" | "video" | "svg" | "object" | "embed" | "iframe"
+    ) {
+        return None;
+    }
+    let e = el.dom.element(node)?;
+    let mut css = String::new();
+    for prop in ["width", "height"] {
+        let Some(dim) = e.attr(prop).and_then(crate::parse_dimension_attr_dim) else {
+            continue;
+        };
+        match dim {
+            crate::Dim::Px(v) => css.push_str(&format!("{prop}:{v}px;")),
+            crate::Dim::Percent(v) => css.push_str(&format!("{prop}:{v}%;")),
+            // `parse_dimension_attr_dim` returns only the two above; anything else is not a
+            // dimension attribute and must not be invented into one.
+            _ => {}
+        }
+    }
+    if css.is_empty() {
+        return None;
+    }
+    Some(parse_style_attribute(
+        &css,
+        url_data,
+        None,
+        qm_of(el.dom),
+        CssRuleType::Style,
+    ))
+}
+
 fn merge_ascending(ascending: &[(&PropertyDeclaration, Importance)]) -> PropertyDeclarationBlock {
     let mut merged = PropertyDeclarationBlock::new();
     for important_pass in [true, false] {
@@ -2461,9 +2530,26 @@ fn cascade_one_element(
             parse_style_attribute(inline, url_data, None, qm_of(el.dom), CssRuleType::Style)
         });
 
+    // HTML's dimension attributes, at their own origin BELOW every author rule — see
+    // `presentational_hint_block`. Parsed here for the same reason `inline_block` is: `ascending`
+    // BORROWS its declarations, so this must outlive the merge.
+    let hint_block = presentational_hint_block(el, node, url_data);
+
     // Collect the winning declarations in ASCENDING cascade priority. `merge_ascending` turns this
     // into the block shape `compute_for_declarations` actually contracts for — see its doc comment.
     let mut ascending: Vec<(&PropertyDeclaration, Importance)> = Vec::new();
+    // ⚠ The hint goes in FIRST, and its position in this vec IS its origin. `winners` is already
+    // sorted ascending and begins with the UA sheet, so prepending here places the hint below the
+    // UA sheet rather than between user and author. That is deliberate and it is the conservative
+    // direction: our UA sheet declares no `width`/`height` on these seven tags (it sets `display`
+    // and margins), so the two orderings are indistinguishable today, and if one ever does the UA
+    // value is the one a page cannot have asked for. `ORIGIN_PRES_HINT` names the intended rank for
+    // the day the UA sheet grows one.
+    if let Some(block) = &hint_block {
+        for (decl, importance) in block.declaration_importance_iter() {
+            ascending.push((decl, importance));
+        }
+    }
     for (_, _, _, _, block) in &winners {
         for (decl, importance) in block.read_with(guard).declaration_importance_iter() {
             ascending.push((decl, importance));

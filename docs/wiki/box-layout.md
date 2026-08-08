@@ -6561,19 +6561,47 @@ and row **g** is the control (same markup plus `height:auto` → both engines 10
 > ratio the `height:auto` path never builds, and applies it under a condition the spec forbids. Two
 > code paths, one rule, and each implemented the half the other was missing.
 
-### The fix, and why it is the borrowed engine's own mechanism
+### The fix — and t1025 named the wrong place, which is worth more than the fix
 
-Stylo already has the hook, and we stubbed it out — `engine/css/src/stylo_traits.rs:449`:
+**⚠⚠⚠ CORRECTED at t1026.** Tick 1025 published the fix as *"implement the stub at
+`engine/css/src/stylo_traits.rs:449`, because Stylo's own `rule_collector.rs:209` calls it"*.
+`rule_collector.rs:209` does call it — **and our cascade never goes through `RuleCollector`.**
+`cascade_one_element` matches candidates with `matches_selector` itself and hands one merged block to
+`compute_for_declarations`. The hook is dead on our path, exactly like the `unimplemented!()` methods
+beside it: required so a concrete `E: TElement` can be named, never reached at runtime.
+**Implementing it would have changed nothing, and the tick would have "landed" with a green wall.**
 
-```rust
-   fn synthesize_presentational_hints_for_legacy_attributes<V>(...) {
-       // Presentational hints (e.g. <img width>) are handled by our own UA pass.
-   }
+> **Reading the dependency's source told me the caller exists; it could not tell me WE call it.** The
+> producer to read was not Stylo's — it was ours. This is `READ THE PRODUCER, NOT ONLY THE CONSUMER`
+> arriving one level up, and the stub's own comment (*"handled by our own UA pass"*) is what made it
+> plausible: it described the outcome and was silent about the hook being unreachable.
+
+The real fix is in the cascade we actually run — `engine/css/src/stylo_engine.rs`:
+
+- `presentational_hint_block` turns `width`/`height` attributes into a real
+  `PropertyDeclarationBlock`, re-serialised through `parse_dimension_attr_dim` so HTML's attribute
+  grammar is parsed exactly once, in the function that already knew how.
+- Its declarations are pushed into `ascending` **before** every matched rule, so first-seen-wins
+  hands the win to any author declaration. `ORIGIN_PRES_HINT` (between user and author) names the
+  intended rank.
+- The `if s.width == Dim::Auto { s.width = attr }` pair is **deleted**, not patched. It had already
+  been patched twice — `width_stretch`, then the intrinsic keywords — and a fourth flag would have
+  been the third patch to the same wrong shape.
+
+Result, and the controls are the point:
+
+```text
+   the 10-row isolation battery      6/10  ->  9/10 exact
+   img / canvas / svg generalisation  3/7  ->   7/7 exact
+   row f (the SECOND defect)                still open, by design
 ```
 
-Stylo's `rule_collector.rs:209` calls it on the generic (non-Gecko) path, and
-`ApplicableDeclarationBlock::from_declarations(.., CascadeLevel::PresHints, ..)` places a declaration
-at the correct origin. **This is option 1 on the BORROWED-ENGINE ladder — use the dependency's own
-mechanism — not a hand-rolled supplement**, and it *deletes* the post-cascade block rather than
-patching it. It changes the cascade for every element carrying a dimension attribute, so it lands as
-its own tick with its own RED proof.
+⚠ **Gated by `tests/wpt/corpus/dimension-attr-hint.html`, and its load-bearing row is `#p-sheet`** —
+which writes `img { max-width:100%; height:auto }` as a **stylesheet rule**, not an inline style.
+Every battery above used `style="..."`; a fix verified only that way would pass while the 42.4% of
+the corpus that ships the reset as a rule stayed broken. `#p-attr` and `#p-spec` are the controls
+that stop the gate being satisfied by simply ignoring the attributes.
+
+**RED-proven twice, because the two mutations mean different things:** deleting the hint entirely
+gives `1/6`, and putting it back *above* author CSS — the old origin — also gives `1/6`. The first
+says the hint is load-bearing; only the second says the ORIGIN is.

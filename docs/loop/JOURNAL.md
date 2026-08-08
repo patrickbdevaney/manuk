@@ -46371,6 +46371,81 @@ PERF: none — one UA rule and one narrowed branch in a cascade that already ran
 WIKI: `docs/wiki/css-cascade.md` — where Chrome draws the form-control `box-sizing` line, and why a
 layout-crate test cannot see it.
 
+## Tick 1026 — the hint is a declaration now, and last tick's fix would have changed nothing (2026-08-08)
+
+TICK SHAPE: primitive — the defect t1025 measured and priced at **42.4%** of the corpus, built. **And
+t1025's named fix was in the wrong place; finding that out is the more useful half.**
+
+⚠⚠⚠ **CORRECTED: `synthesize_presentational_hints_for_legacy_attributes` IS DEAD ON OUR PATH.**
+Tick 1025 published *"implement the stub at `engine/css/src/stylo_traits.rs:449`, because Stylo's own
+`rule_collector.rs:209` calls it."* `rule_collector.rs:209` does call it — **and our cascade never
+goes through `RuleCollector`.** `cascade_one_element` matches candidates with `matches_selector`
+itself and hands one merged block to `compute_for_declarations`. The hook is unreachable here,
+exactly like the `unimplemented!()` methods beside it: needed so a concrete `E: TElement` can be
+named, never called.
+
+> **Reading the dependency's source told me the caller exists; it could not tell me WE call it.** The
+> producer to read was not Stylo's, it was ours. `READ THE PRODUCER, NOT ONLY THE CONSUMER`, one
+> level up — and the stub's own comment (*"handled by our own UA pass"*) is what made the wrong
+> answer plausible: it described the outcome and was silent about the hook being unreachable. That
+> comment is now rewritten to say it is dead and where the hints really live, because a comment that
+> is true about the outcome and misleading about the mechanism is how a tick gets aimed wrong.
+
+⚠ **Had I built what t1025 named, the change would have compiled, the wall would have gone green, and
+nothing would have moved.** The battery is what would have caught it — which is the argument for
+re-running the discovery fixture as the acceptance test rather than trusting a mechanism story.
+
+⚠⚠⚠ **WHAT LANDED.** In the cascade we actually run (`engine/css/src/stylo_engine.rs`):
+
+- `presentational_hint_block` turns `width`/`height` attributes into a real
+  `PropertyDeclarationBlock`, re-serialised through `parse_dimension_attr_dim` so HTML's attribute
+  grammar is parsed once, in the function that already knew how.
+- Its declarations go into `ascending` **before** every matched rule, so `merge_ascending`'s
+  first-seen-wins hands the win to any author declaration. `ORIGIN_PRES_HINT` (2, between user and
+  author) names the intended rank; ⚠ the hint is prepended to the whole list rather than sorted into
+  `winners`, which places it below the UA sheet too — **deliberate and conservative**, recorded in
+  the code: our UA sheet declares no `width`/`height` on these seven tags, so the orderings are
+  indistinguishable today, and if one ever appears the UA value is the one a page cannot have asked
+  for.
+- The `if s.width == Dim::Auto { s.width = attr }` pair is **deleted, not patched.** It had already
+  been patched twice — `width_stretch`, then the intrinsic keywords — and the comment above it was
+  *already right about the rule*. A fourth flag would have been the third patch to the same wrong
+  shape, and the third way to be wrong is the one no flag can reach: **`auto` the author wrote and
+  `auto` nobody set are the same computed value.**
+
+```text
+   the 10-row isolation battery         6/10  ->  9/10 exact
+   img / canvas / svg generalisation     3/7  ->   7/7 exact
+   <img width=100 height=40 style="width:100%;height:auto">   400x40  ->  400x160  = Chrome
+   row f (max-width clamp vs a SPECIFIED height)      still open, by design
+```
+
+RATCHET: parity **83/83 across 32 pages** (was 77/77 across 31), `manuk-layout` **130/130**,
+`manuk-css` **52/52**, `manuk-wpt` lib **98/98**. Nothing traded.
+
+GATE: `tests/wpt/corpus/dimension-attr-hint.html`, six probes, in the wall through `parity`. ⚠⚠ **Its
+load-bearing row is `#p-sheet`, which writes `img { max-width:100%; height:auto }` as a STYLESHEET
+RULE rather than an inline style.** Every battery in t1025 used `style="..."`; **a fix verified only
+that way would pass while the 42.4% of the corpus that ships the reset as a rule stayed broken**, and
+I did not verify the rule form until the gate forced it. `#p-attr` and `#p-spec` are the controls
+that stop the gate being satisfied by ignoring the attributes altogether.
+
+⚠⚠ **RED-PROVEN TWICE, BECAUSE THE TWO MUTATIONS MEAN DIFFERENT THINGS.** Deleting the hint gives
+`dimension-attr-hint 1/6`; putting it back **above** author CSS — the old origin — also gives `1/6`.
+**The first says the hint is load-bearing. Only the second says the ORIGIN is**, and the origin is
+the whole claim of this tick.
+
+⚠ **AND IT SPENT AUDIT #38's FREE SLOT EXACTLY.** Yesterday's wall audit measured that a parity
+fixture is free until the page count crosses a multiple of eight and reported **one free slot (31 of
+32)**. This is page 32 — four rounds of eight, no new Chrome round. The next one costs.
+
+PERF: one extra `parse_style_attribute` per element that carries a dimension attribute — a small
+fraction of elements, and it replaces two attribute lookups plus two parses that ran on the same
+elements before. F1/F2 green on the wall.
+
+WIKI: `docs/wiki/box-layout.md` — the t1025 section's "The fix" is rewritten in place with the
+correction, since leaving a wrong mechanism in the wiki is worse than not having written it.
+
 ## Tick 1025 — the presentation attribute sits ABOVE author CSS, and 42.4% of the corpus writes the rule it overrides (2026-08-08)
 
 TICK SHAPE: measurement — the inline-`<svg>` sizing battery (check #93's ranked area, **34.5%** of the

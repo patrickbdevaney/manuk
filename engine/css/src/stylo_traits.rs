@@ -453,7 +453,17 @@ impl<'a> TElement for StyloElement<'a> {
     ) where
         V: selectors::sink::Push<stylo::applicable_declarations::ApplicableDeclarationBlock>,
     {
-        // Presentational hints (e.g. <img width>) are handled by our own UA pass.
+        // ⚠⚠ **DEAD ON OUR PATH, AND THE OLD COMMENT HERE COST A TICK BY NOT SAYING SO.** It read
+        // *"handled by our own UA pass"*, which is true of the OUTCOME and silent about the fact
+        // that this hook is never called at all: Stylo invokes it from `rule_collector.rs`, and our
+        // cascade does not use `RuleCollector` — `cascade_one_element` matches with
+        // `matches_selector` itself and hands one merged block to `compute_for_declarations`. Tick
+        // 1025 read Stylo's source, found the caller, and published "implement this stub" as the
+        // fix; implementing it would have changed nothing. Same class as every other
+        // `unimplemented!()` in this file — required to name a concrete `E`, unreachable at runtime.
+        //
+        // The hints are built in `stylo_engine::presentational_hint_block` and pushed into the
+        // ascending declaration list at `ORIGIN_PRES_HINT` (t1026).
     }
 
     fn local_name(

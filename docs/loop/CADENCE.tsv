@@ -738,3 +738,4 @@ tick	sha	epoch	iso	delta_s	shape	wall_s	files	added	deleted	gates	claims	wpt_pas
 1022	179d3412	1786171813	2026-08-08T02:50:13-04:00	5264	measurement	808	6	313	32	428	81	3896	6960	0	514	0	I withdraw last tick's headline; the true answer is better for the instrument (2026-08-08)
 1023	e0745595	1786172093	2026-08-08T02:54:53-04:00	280	measurement	808	5	164	33	428	81	3896	6960	0	514	0	the re-baseline, and the flat band was PREDICTED seven ticks before it was measured (2026-08-08)
 1024	cc3dfac6	1786172656	2026-08-08T03:04:16-04:00	563	measurement	808	7	247	33	428	81	3896	6960	0	514	0	the wall audit, and a parity fixture is free until it crosses a multiple of eight (2026-08-08)
+1025	c7ab35b2	1786175904	2026-08-08T03:58:24-04:00	3248	measurement	808	10	289	63	428	81	3896	6960	0	515	0	the presentation attribute sits ABOVE author CSS, and 42.4% of the corpus writes the rule it overrides (2026-08-08)
