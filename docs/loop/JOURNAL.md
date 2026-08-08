@@ -46371,6 +46371,70 @@ PERF: none — one UA rule and one narrowed branch in a cascade that already ran
 WIKI: `docs/wiki/css-cascade.md` — where Chrome draws the form-control `box-sizing` line, and why a
 layout-crate test cannot see it.
 
+## Tick 1041 — `reading_order` is a LONG TAIL of two-sibling inversions, not a few broken rows (2026-08-08)
+
+TICK SHAPE: primitive (instrument) — a report-only partition that answers the question the counts
+themselves raise. **My hypothesis was refuted on four sites out of five and confirmed on one, and the
+split is worth more than either answer alone.**
+
+⚠⚠⚠ **THE QUESTION.** `jarring_reading_order` counts **PAIRS**, so one mis-laid row of `n` siblings
+contributes `n(n-1)/2` by itself — a 7-anchor footer row is **21**. A site reported at
+`reading_order 24` could therefore be **one** broken container rather than 24 problems, and the number
+a tick would rank on cannot tell you which. Since `jarring-clean` is TOL 2, a single broken 3-sibling
+row already fails the conjunct. **If the counts were quadratic artefacts, the whole conjunct would be
+far more tractable than it looks.**
+
+⚠⚠⚠ **THEY ARE NOT. FOR FOUR SITES IN FIVE, EVERY INVERSION IS ITS OWN CONTAINER.**
+
+```text
+   site                   inversions   distinct containers   biggest contributes
+   rockstaractu.com           13              13             1  (a 2-sibling group)
+   www.otomoto.pl             11              11             1  (a 2-sibling group)
+   www.kuechenmomente.de       5               5             1  (a 2-sibling group)
+   sports.yahoo.com            1               1             1  (a 2-sibling group)
+   ─────────────────────────────────────────────────────────────────────────────
+   m.youm7.com                24               5            17  (a 25-SIBLING group)
+```
+
+**`reading_order 13` really is thirteen independent broken containers, each a two-element pair.** No
+single fix collapses those counts, because there is no shared container to fix — it is a **long tail
+of small, unrelated displacements**, which is precisely why this window's four Chrome-exact fixes
+moved it by exactly zero (t1040) and why seven refuted mechanisms (t1032–t1036) never found "the"
+cause. **There isn't one.**
+
+⚠⚠ **`m.youm7.com` IS THE EXCEPTION AND NOW EXPLAINS ITSELF.** 17 of its 24 come from a **single
+25-sibling group** — the footer row this loop spent two ticks reducing. Its outlier count, which is
+what made it *"the sharpest lead the loop has"* (t1034), is a **quadratic artefact of one container**,
+and ranking sites by raw `reading_order` put the least representative site at the top. ⚠ The
+hypothesis I built this for was right about exactly the site that motivated it and wrong about the
+population — **the sixth time this window that the row which made me look was not the row that
+discriminates.**
+
+> **THE REFRAME, AND IT IS THE TICK'S REAL OUTPUT.** `reading_order` is not a missing mechanism
+> waiting to be found. It is **distributed geometric inaccuracy crossing a binary threshold** — dozens
+> of independent two-box pairs each landing on the wrong side of a 2px tolerance. That is downstream
+> of the same `shape` work the loop has been doing all along, at a resolution `shape` does not score:
+> a pair can be within `shape` tolerance and still be ordered wrongly. **It is not a different
+> problem from shape; it is the same problem measured with a step function.**
+
+⚠ **WHAT THIS DOES NOT LICENSE.** Not *"stop working reading_order"* — t1034 measured 85% of
+inversions between real on-screen boxes, so they are real defects a user could see. It says the search
+strategy was wrong: **hunting a shared mechanism across a long tail cannot work**, and the tail is
+reached by continuing to tighten geometry generally, not by finding one more `overflow: clip`.
+
+RATCHET: `manuk-wpt` lib **98/98**, parity **113/113 across 32 pages**, no engine crate touched. The
+partition is behind the existing `MANUK_RO_PARTITION=1`, off by default — row schema, sweep output and
+every banked number byte-unchanged, so **no re-baseline is owed.**
+
+GATE: none new; a report-only diagnostic gates nothing, and saying so beats building theatre. Its
+falsifiable content is the table above, reproducible with
+`MANUK_RO_PARTITION=1 manuk-wpt fidelity --urls <sites> 2>&1 >/dev/null | grep RO-GROUPS`.
+
+PERF: one `Vec` push per *failing* container, bounded by the inversion count.
+
+WIKI: `docs/wiki/box-layout.md` — "`reading_order` is a long tail, and one site's outlier was a
+quadratic artefact".
+
 ## Tick 1040 — the marginal cut, and `reading_order` did not move by a single count on any of six sites (2026-08-08)
 
 TICK SHAPE: measurement — check #95's steer #1 built and run: **a cheap per-tick attribution to

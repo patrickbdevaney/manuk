@@ -6898,3 +6898,35 @@ mode this engine does not implement, and the declaration would claim what the la
 `font-size: smaller` with a **constant** `13.3333px` passes `p-ua-small` and fails `p-ua-small2`;
 deleting the `hgroup, search` rule fails those two. **A gate that asserted one `<small>` would have
 been satisfied by a constant** — the nested row is what makes it a test of the mechanism.
+
+## `reading_order` is a long tail, and one site's outlier was a quadratic artefact (t1041)
+
+`jarring_reading_order` counts **pairs**, so one mis-laid row of `n` siblings contributes `n(n-1)/2` —
+a 7-anchor footer row is 21. A site at `reading_order 24` might be **one** broken container. Since
+`jarring-clean` is TOL 2, a single broken 3-sibling row already fails the conjunct. Measured:
+
+```text
+   site                   inversions   distinct containers   biggest contributes
+   rockstaractu.com           13              13             1  (a 2-sibling group)
+   www.otomoto.pl             11              11             1  (a 2-sibling group)
+   www.kuechenmomente.de       5               5             1  (a 2-sibling group)
+   m.youm7.com                24               5            17  (a 25-SIBLING group)
+```
+
+**For four sites in five, every inversion is its own container** — `reading_order 13` really is
+thirteen independent two-element pairs. No single fix collapses that, because there is no shared
+container to fix.
+
+`m.youm7.com` is the exception and now explains itself: 17 of 24 from one 25-sibling footer row. Its
+outlier count — what made it *"the sharpest lead the loop has"* — is a **quadratic artefact of one
+container**, so ranking sites by raw `reading_order` put the least representative site at the top.
+
+> **The reframe:** `reading_order` is not a missing mechanism waiting to be found. It is **distributed
+> geometric inaccuracy crossing a binary threshold** — dozens of independent two-box pairs each landing
+> on the wrong side of a 2px tolerance. A pair can be inside `shape` tolerance and still be ordered
+> wrongly. **It is not a different problem from shape; it is the same problem measured with a step
+> function** — which is why four Chrome-exact fixes moved it by exactly zero (t1040) and seven refuted
+> mechanisms (t1032–t1036) never found "the" cause. There isn't one.
+
+⚠ This does not mean stop: t1034 measured 85% of inversions between real on-screen boxes, so they are
+defects a user could see. It means **hunting a shared mechanism across a long tail cannot work.**

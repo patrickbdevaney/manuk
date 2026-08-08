@@ -892,6 +892,16 @@ pub fn jarring_reading_order(
     let (mut count, mut skipped) = (0usize, 0usize);
     // t1034 diagnostic partition of `count` — see the block below. NOT part of the invariant.
     let (mut zero_area, mut parked, mut onscreen) = (0usize, 0usize, 0usize);
+    // ── **t1041: HOW MANY DISTINCT CONTAINERS IS THIS COUNT, AND HOW BIG IS THE BIGGEST?**
+    //
+    // This invariant counts PAIRS, so one mis-laid row of `n` siblings contributes `n(n-1)/2` all by
+    // itself — a 7-anchor footer row is **21**. A site reported at `reading_order 24` may therefore be
+    // ONE broken container, not 24 problems, and the number a tick would rank on says nothing about
+    // which. `jarring-clean` is TOL 2, so a single broken 3-sibling row already fails it.
+    //
+    // Report-only, behind the same env var as t1034's partition: the row schema and every banked
+    // number are untouched, so no re-baseline is owed.
+    let mut bad_groups: Vec<(usize, usize)> = Vec::new(); // (inversions, siblings) per parent
     let mut examples: Vec<String> = Vec::new();
     for (_, ids) in groups {
         if ids.len() < 2 {
@@ -901,6 +911,7 @@ pub fn jarring_reading_order(
             skipped += 1;
             continue;
         }
+        let group_start = count;
         for i in 0..ids.len() {
             for j in (i + 1)..ids.len() {
                 let co = order(&chrome[ids[i]].rect, &chrome[ids[j]].rect, tol);
@@ -947,11 +958,23 @@ pub fn jarring_reading_order(
                 }
             }
         }
+        if count > group_start {
+            bad_groups.push((count - group_start, ids.len()));
+        }
     }
     examples.sort();
     if count > 0 && std::env::var("MANUK_RO_PARTITION").is_ok() {
         eprintln!(
             "  RO-PARTITION: {count} inversion(s) = {onscreen} on-screen \u{00b7} {zero_area} involve a ZERO-AREA box \u{00b7} {parked} involve a box parked entirely LEFT of the viewport"
+        );
+        bad_groups.sort_by_key(|g| std::cmp::Reverse(g.0));
+        let biggest = bad_groups.first().copied().unwrap_or((0, 0));
+        let top3: usize = bad_groups.iter().take(3).map(|g| g.0).sum();
+        eprintln!(
+            "  RO-GROUPS: {} distinct container(s) \u{00b7} biggest contributes {} of {count} (a {}-sibling group) \u{00b7} top 3 = {top3}",
+            bad_groups.len(),
+            biggest.0,
+            biggest.1
         );
     }
     (count, skipped, examples)
