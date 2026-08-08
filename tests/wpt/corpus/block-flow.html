@@ -10,4 +10,28 @@
     <div id="p-inner" class="box" style="height:25px"></div>
   </div>
   <div id="p-c" class="box" style="width:80px;height:40px;background:#ab8"></div>
+
+  <!-- ── t1029: `overflow: clip` is the ONE overflow value that does NOT establish a block
+       formatting context. It is why the web reaches for it at all — `overflow-x: hidden` kills
+       `position: sticky` in an ancestor and `overflow-x: clip` does not — and 15.2% of the CrUX
+       trend corpus declares it (surface audit #43).
+
+       `p-hid-float` and `p-hid-margin` are the CONTROLS, and they are not optional: without them
+       this fixture is satisfied by an engine that has simply stopped establishing BFCs at all.
+       `p-clipx-float` is the axis form the web actually writes. -->
+  <div style="width:200px;height:80px;display:flow-root">
+    <div id="p-clip-float" style="overflow:clip"><div style="float:left;width:50px;height:60px"></div></div>
+  </div>
+  <div style="width:200px;height:80px;display:flow-root">
+    <div id="p-clipx-float" style="overflow-x:clip"><div style="float:left;width:50px;height:60px"></div></div>
+  </div>
+  <div style="width:200px;height:80px;display:flow-root">
+    <div id="p-hid-float" style="overflow:hidden"><div style="float:left;width:50px;height:60px"></div></div>
+  </div>
+  <div style="width:200px;height:80px;display:flow-root">
+    <div id="p-clip-margin" style="overflow:clip"><div style="margin-top:30px;height:10px"></div></div>
+  </div>
+  <div style="width:200px;height:80px;display:flow-root">
+    <div id="p-hid-margin" style="overflow:hidden"><div style="margin-top:30px;height:10px"></div></div>
+  </div>
 </body></html>

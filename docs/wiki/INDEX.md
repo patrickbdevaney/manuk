@@ -338,6 +338,9 @@
   - L6658 · The lesson worth carrying, in two halves
   - L6671 · Gated, red-proven, and free
   - L6694 · Still open on <iframe>, measured here
+  - L6701 · overflow: clip is the one non-visible overflow that is NOT a formatting context, and the comment said the opposite (t1029)
+  - L6722 · The fix is one predicate, because the old shape was one rule, N implementations
+  - L6739 · The controls are the half that needed proving
 
 ## browser-capabilities.md
 `docs/wiki/browser-capabilities.md`
@@ -1723,4 +1726,4 @@
   - L124 · Rank mechanisms by FLIP RATE, not failing-subtest count — CSS layout is a multi-assertion slog
 
 ---
-1630 sections across 22 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+1633 sections across 22 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.

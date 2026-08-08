@@ -46371,6 +46371,97 @@ PERF: none — one UA rule and one narrowed branch in a cascade that already ran
 WIKI: `docs/wiki/css-cascade.md` — where Chrome draws the form-control `box-sizing` line, and why a
 layout-crate test cannot see it.
 
+## Tick 1029 — `clip` is the overflow value that does NOT make a formatting context, and the comment said otherwise (2026-08-08)
+
+TICK SHAPE: primitive — audit #43's #1 re-ranked item, built. **One predicate, two independent
+geometric consequences, and the wrong answer was written down as a deliberate claim.**
+
+⚠⚠⚠ **THE DEFECT WAS A COMMENT THAT HAD NEVER BEEN MEASURED.** `engine/layout/src/lib.rs:1855`
+said, in as many words:
+
+> *"Chrome establishes a BFC for `overflow:clip` too, so any non-`visible` value counts."*
+
+It does not. `clip` is the **one** overflow value defined to clip *without* becoming a scroll
+container, and that is exactly why the web reaches for it: `overflow-x: hidden` kills
+`position: sticky` in an ancestor and `overflow-x: clip` does not. Measured, not recalled:
+
+```text
+                                                     chrome     before     after
+   clip box containing a 60px float                 200x0      200x60     200x0    FIXED
+   overflow-X:clip box containing a float           200x0      200x60     200x0    FIXED
+   clip box, child with margin-top:30px             200x10     200x40     200x10   FIXED
+   hidden box containing a float         CONTROL    100x60     contained in both   ok
+   hidden box, child with margin-top:30px CONTROL   200x40     200x40     200x40   ok
+   clip box clipping its own height      CONTROL    200x40     200x40     200x40   ok
+```
+
+> **A claim in a comment is a claim, and this one had been load-bearing for as long as the enum has
+> existed.** It reads as diligence — it names Chrome, it names a reason — and nothing in the file
+> distinguishes *"measured"* from *"reasoned, plausibly, once."* This is the same class as t1025's
+> stub comment, which was true about the outcome and silent about the mechanism.
+
+⚠⚠⚠ **AND THE FIX IS ONE PREDICATE BECAUSE THE OLD SHAPE WAS `one rule, N implementations` — the
+exact shape that cost tick 1027 a whole tick.** `establishes_bfc` asked
+`s.overflow != Overflow::Visible`; the two margin-collapse predicates *each* carried their own
+`s.overflow == Overflow::Visible` term **beside** a `!establishes_bfc(s)` term that already implied
+it. So `clip` had to be got right in three places or in none, and a fix to the BFC predicate alone
+would have left the margin half broken and looked complete.
+
+```rust
+   fn overflow_establishes_bfc(o: Overflow) -> bool {
+       !matches!(o, Overflow::Visible | Overflow::Clip)
+   }
+```
+
+The two redundant terms are **deleted**, not updated — three callers, one definition. ⚠ `s.overflow`
+is `overflow-x` when that is non-`visible`, else `overflow-y`, so the dominant real-world form —
+`overflow-x: clip` alone — reaches the predicate as `Clip`, and `p-clipx-float` is the row that
+proves it rather than assuming it.
+
+⚠⚠⚠ **PRICED, STYLESHEET-INCLUSIVE, ON THE CORPUS THAT SCORES US** (171 HTML + 416 stylesheets):
+
+```text
+   overflow(-x|-y): clip anywhere               25/171   14.6%
+   overflow-x: clip specifically                10/171    5.8%   <- the sticky-safe idiom
+   a float declared anywhere                   103/171   60.2%   <- where the containment half bites
+```
+
+⚠ **14.6% is where the property is DECLARED, not where the defect BITES**, and I am ranking on it
+downward for that reason: the error only shows where a float or a collapsing margin is actually
+inside the `clip` box. The 60.2% float number is the co-occurrence bound, not a second measurement —
+`0 ≤ n ≤ 25` still. What is not a floor: **both consequences fall out of one predicate**, which is
+what made this outrank the 29.2% `iframe` border audit #43 also surfaced.
+
+RATCHET: parity **97/97 across 32 pages** (was 92/92), `manuk-layout` **130/130**. Nothing traded.
+
+GATE: `tests/wpt/corpus/block-flow.html`, 5 probes → 10 — **and it is still page 32 of 32, so it
+costs the wall nothing**, the same free slot t1027 used. Floats and margin collapsing are already
+that fixture's subject, so the rows are at home rather than bolted on.
+
+⚠⚠ **RED-PROVEN TWICE, DISJOINT PAIRS, AND THE SECOND MUTATION IS THE ONE THAT MATTERS.**
+
+```text
+   A: put `clip` back in the BFC set      7/10   p-clip-float · p-clipx-float · p-clip-margin
+   B: take `hidden` OUT of the BFC set    8/10   p-hid-float · p-hid-margin
+```
+
+Mutation A says the `clip` rows are load-bearing. **Only mutation B says the CONTROLS are** — without
+them the fixture is satisfied by an engine that has simply stopped establishing block formatting
+contexts at all, which is a much larger regression than the one being fixed and would read as a pass.
+
+⚠ **The first cut of the fixture could not show this either.** With the rows in plain `width:200px`
+wrappers, mutation A failed **five** probes: the floats it correctly stopped containing escaped into
+the *next* row and contaminated both controls. Each row now sits in its own `display:flow-root`
+wrapper at a fixed height, so an escaped float is caught by the row it belongs to. Third tick running
+that a battery needed its rows isolated before its mutations meant anything (t1025, t1027, here) —
+**the isolation is not fixture polish, it is what makes a RED proof attributable.**
+
+PERF: none — a `matches!` arm added to a predicate, and two boolean terms deleted from the two hottest
+margin checks. F1/F2 green on the wall.
+
+WIKI: `docs/wiki/box-layout.md` — "`overflow: clip` is the one non-visible overflow that is not a
+formatting context, and the comment said the opposite".
+
 ## Tick 1028 — the reference will recite its own UA sheet, and nobody had ever asked (2026-08-08)
 
 TICK SHAPE: measurement — the surface audit (cadence: every 10; last at 1018; `tick.sh` refuses to

@@ -1849,10 +1849,10 @@ fn is_out_of_flow_positioned(s: &ComputedStyle) -> bool {
 /// box does not share its parent's float context — its own floats stay inside and it
 /// does not overlap outer floats, and it grows to contain its floats (§10.6.7).
 ///
-/// `overflow` other than `visible` is a BFC root (CSS2 §9.4.1 / Display §2.1): this is the
-/// modern clearfix — `overflow:hidden`/`auto`/`scroll` on a container makes it enclose its
-/// floated children rather than let them escape, and stops its own content from wrapping an
-/// outer float. Chrome establishes a BFC for `overflow:clip` too, so any non-`visible` value counts.
+/// `overflow` other than `visible` **and `clip`** is a BFC root (CSS2 §9.4.1 / Display §2.1): this
+/// is the modern clearfix — `overflow:hidden`/`auto`/`scroll` on a container makes it enclose its
+/// floated children rather than let them escape, and stops its own content from wrapping an outer
+/// float. See [`overflow_establishes_bfc`] for why `clip` is the exception, measured.
 /// Is this a **replaced** element — a box whose content comes from outside CSS (a bitmap, a video
 /// frame, a canvas surface) and which therefore has an intrinsic size and ratio of its own?
 ///
@@ -1929,13 +1929,41 @@ fn is_atomic_inline_replaced(dom: &Dom, styles: &StyleMap, node: NodeId) -> bool
         )
 }
 
+/// **Does this `overflow` value make its box a block formatting context root?**
+///
+/// ⚠⚠⚠ **`clip` DOES NOT, AND THE COMMENT ABOVE USED TO SAY IT DID.** The claim
+/// *"Chrome establishes a BFC for `overflow:clip` too, so any non-`visible` value counts"* was
+/// written from reasoning, never measured, and it is wrong. `clip` is the one overflow value defined
+/// to clip **without** becoming a scroll container — which is precisely why the web reaches for it:
+/// `overflow-x: hidden` kills `position: sticky` in an ancestor and `overflow-x: clip` does not.
+/// Measured against Chrome (audit #43, t1028):
+///
+/// ```text
+///                                                    chrome     before
+///   overflow:clip box containing a 60px float       200x0      200x60   <- must NOT contain it
+///   overflow:clip box, child with margin-top:30px   200x10     200x40   <- margin must escape
+///   overflow:hidden box containing a float  CONTROL 100x60     contained in both   ok
+/// ```
+///
+/// **One predicate, three callers, because the previous shape was `one rule, N implementations`** —
+/// the two margin-collapse predicates each carried their own `s.overflow == Overflow::Visible` term
+/// *beside* a `!establishes_bfc(s)` term that already implied it, so `clip` had to be got right in
+/// three places or in none. That is the shape that cost tick 1027 a whole tick to find, in the
+/// cascade, and it is the same shape here.
+///
+/// ⚠ `s.overflow` is `overflow-x` when that is non-`visible`, else `overflow-y`, so the dominant
+/// real-world form — `overflow-x: clip` alone — reaches this function as `Clip` and is covered.
+fn overflow_establishes_bfc(o: Overflow) -> bool {
+    !matches!(o, Overflow::Visible | Overflow::Clip)
+}
+
 fn establishes_bfc(s: &ComputedStyle) -> bool {
     // `flow-root` exists for EXACTLY this: a block box whose only distinguishing property is that it
     // establishes a BFC, so it contains its floats without `overflow:hidden`'s clipping.
     s.display == Display::FlowRoot
         || is_float(s)
         || is_out_of_flow_positioned(s)
-        || s.overflow != Overflow::Visible
+        || overflow_establishes_bfc(s.overflow)
         || matches!(
             s.display,
             Display::Flex
@@ -1997,7 +2025,10 @@ fn top_margin_collapses(
     cw: f32,
 ) -> bool {
     collapses_as_block(dom, styles, node, s)
-        && s.overflow == Overflow::Visible
+        // ⚠ NO separate `s.overflow == Visible` term. It was here beside `!establishes_bfc(s)`,
+        // which already implies it — a second implementation of one rule, and the place `clip`
+        // would have stayed broken after the BFC predicate was fixed. See
+        // `overflow_establishes_bfc`.
         && !establishes_bfc(s)
         && s.border_width.top == 0.0
         && s.padding.top.resolve(cw, 0.0) == 0.0
@@ -2013,7 +2044,7 @@ fn bottom_margin_collapses(
     cw: f32,
 ) -> bool {
     collapses_as_block(dom, styles, node, s)
-        && s.overflow == Overflow::Visible
+        // Mirror of `top_margin_collapses`: no separate overflow term, for the same reason.
         && !establishes_bfc(s)
         && s.border_width.bottom == 0.0
         && s.padding.bottom.resolve(cw, 0.0) == 0.0

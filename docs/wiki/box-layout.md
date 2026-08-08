@@ -6697,3 +6697,60 @@ five of them purely on `y`, because one 50px error cascaded down the page — th
 it is the **only** replaced element with one — so every unstyled iframe is 4px small in both axes.
 ⚠ It cannot land alone: `frameborder="0"` must become a presentational hint in the same tick, or the
 10 of 50 corpus iframe sites that use it regress.
+
+## `overflow: clip` is the one non-visible overflow that is NOT a formatting context, and the comment said the opposite (t1029)
+
+`engine/layout/src/lib.rs` carried this, as a deliberate claim:
+
+> *"Chrome establishes a BFC for `overflow:clip` too, so any non-`visible` value counts."*
+
+It is wrong. `clip` is the **one** overflow value defined to clip *without* becoming a scroll
+container — which is precisely why the web uses it: `overflow-x: hidden` kills `position: sticky` in
+an ancestor and `overflow-x: clip` does not. Measured against Chrome:
+
+```text
+                                                    chrome     before
+   clip box containing a 60px float                200x0      200x60   <- must NOT contain it
+   overflow-X:clip box containing a float          200x0      200x60
+   clip box, child with margin-top:30px            200x10     200x40   <- margin must escape
+   hidden box containing a float        CONTROL    100x60     contained in both   ok
+```
+
+> **A claim in a comment is a claim.** This one reads as diligence — it names Chrome and it gives a
+> reason — and nothing in the file distinguishes *measured* from *reasoned, plausibly, once*.
+
+### The fix is one predicate, because the old shape was `one rule, N implementations`
+
+`establishes_bfc` asked `s.overflow != Overflow::Visible`, and the two margin-collapse predicates
+*each* carried their own `s.overflow == Overflow::Visible` term **beside** a `!establishes_bfc(s)`
+term that already implied it. `clip` therefore had to be got right in three places or in none — and
+fixing only the BFC predicate would have left the margin half broken while looking complete.
+
+```rust
+fn overflow_establishes_bfc(o: Overflow) -> bool {
+    !matches!(o, Overflow::Visible | Overflow::Clip)
+}
+```
+
+Three callers, one definition; the two redundant terms are deleted rather than updated. `s.overflow`
+is `overflow-x` when that is non-`visible`, else `overflow-y`, so `overflow-x: clip` alone — the form
+the web actually writes — reaches the predicate as `Clip`.
+
+### The controls are the half that needed proving
+
+Gated by `tests/wpt/corpus/block-flow.html` (5 probes → 10, still page 32 of 32, so free).
+RED-proven twice with **disjoint** failing pairs:
+
+```text
+   put `clip` BACK in the BFC set     p-clip-float · p-clipx-float · p-clip-margin
+   take `hidden` OUT of the BFC set   p-hid-float · p-hid-margin
+```
+
+Mutation A says the `clip` rows are load-bearing. **Only mutation B says the controls are** — without
+them the fixture is satisfied by an engine that has stopped establishing BFCs at all, a far larger
+regression that would read as a pass.
+
+⚠ Each row sits in its own `display:flow-root` wrapper at a fixed height. In the first cut the floats
+the fix correctly stopped containing escaped into the *next* row and contaminated both controls, so
+mutation A failed five probes instead of three. **Row isolation is not fixture polish — it is what
+makes a RED proof attributable**, and this is the third consecutive tick where a battery needed it.
