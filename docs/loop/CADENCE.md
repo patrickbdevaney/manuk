@@ -11,12 +11,12 @@
 
 | | value | over |
 |---|---|---|
-| ticks landed | **733** | ticks 1–1018 |
-| median tick cycle | **27m** | 732 intervals |
-| median, last 10 | **21m** | 10 intervals |
+| ticks landed | **734** | ticks 1–1019 |
+| median tick cycle | **26m** | 733 intervals |
+| median, last 10 | **14m** | 10 intervals |
 | fastest / slowest | 5s / 5.4d | |
-| **ticks per hour** | **1.10** | 667.3h elapsed |
-| median verify wall | **63s** | 672 ticks |
+| **ticks per hour** | **1.10** | 667.5h elapsed |
+| median verify wall | **63s** | 673 ticks |
 | wall trend | 39s → 13m — getting slower ⚠️ | first 3 vs last 3 |
 
 The **cycle** is the real unit: implement → debug → verify wall → land. The wall is only part of
@@ -31,7 +31,7 @@ it, and a wall that grows taxes every future tick, so it is tracked separately f
 * **✅ rows in the capability ledger**: 144 → **514**
 * **Bar 0 — oracle hangs**: 0 of 265 sites
 
-**341 of 733 ticks** (47%) moved a
+**341 of 734 ticks** (46%) moved a
 user-visible capability. The rest were instruments, infrastructure and corrections — and the
 ledger says the corrections were not overhead: three of its top three priorities were phantoms,
 and finding that out redirected everything after it.
@@ -90,7 +90,7 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 
 ## What a capability costs
 
-* **341** capability ticks, median cycle **27m**
+* **341** capability ticks, median cycle **26m**
 * median diff per tick: **+259 / −34** lines across 8 files
 
 ## Every tick
@@ -830,5 +830,6 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 | **1016** | 2026-08-07 23:41 | 16m | primitive | 13m | +215/−3 | 428 | 81 | 56.0% · | two defects of the same size in opposite directions read as agreement (2026-08-07) |
 | **1017** | 2026-08-08 00:11 | 30m | primitive | 13m | +116/−3 | 428 | 81 | 56.0% · | one axis had a caller and the other did not (2026-08-07) |
 | **1018** | 2026-08-08 00:23 | 12m | measurement | 13m | +169/−3 | 428 | 81 | 56.0% · | "unmeasurable" is two facts, and they lead to opposite decisions (2026-08-08) |
+| **1019** | 2026-08-08 00:36 | 13m | primitive | 13m | +155/−5 | 428 | 81 | 56.0% · | the fix that only reached the instrument (2026-08-08) |
 
 *`·` after a WPT figure means **carried forward**, not measured this tick.*

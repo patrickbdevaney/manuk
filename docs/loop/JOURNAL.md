@@ -46371,6 +46371,46 @@ PERF: none — one UA rule and one narrowed branch in a cascade that already ran
 WIKI: `docs/wiki/css-cascade.md` — where Chrome draws the form-control `box-sizing` line, and why a
 layout-crate test cannot see it.
 
+## Tick 1019 — the fix that only reached the instrument (2026-08-08)
+
+TICK SHAPE: primitive — the third caller of the t1016/t1017 pair. **t1017 fixed the number the loop
+is SCORED on; the browser a person actually uses still resolved every `vh` against 720.**
+
+⚠⚠⚠ **`Gui::build_page` AND `build_page_contained` PUBLISHED NO VIEWPORT HEIGHT, SO A
+`min-height: 100vh` HERO WAS 720px TALL IN A 1080-TALL WINDOW AND 720px TALL IN A 600-TALL ONE.**
+`manuk_css::values::VP_H` is a per-process global with a 720 default; t1017 gave `manuk-wpt` a
+caller and the shell was left with none. **A fix that reaches the measurement path and not the
+shipping path moves the score and not the browser** — and this loop's whole premise is that those
+are the same thing.
+
+Published at the first point that knows the answer: the content viewport is `window − CHROME_TOP`,
+which `Page::load`'s width-only signature cannot see.
+
+⚠⚠ **AND THE ORDERING WAS WRONG IN A WAY THAT ONLY A RESIZE WOULD SHOW.** `self.viewport` was
+assigned *after* `build_page_contained` returned, so the height the cascade read was the previous
+window's — the first navigation after any resize would have laid every `100vh` box out against the
+size the window used to be. The other build site's own comments already say this class out loud
+(*"Set BEFORE the build"* for zoom, *"Identity BEFORE the build, not after it"* for `window.opener`),
+which is what made it recognisable: **the state a build reads has to be true before the build.**
+
+RATCHET: `manuk-shell` **75/75** (74 before this tick's gate). Nothing traded.
+
+GATE: `a_full_height_box_follows_the_window_and_not_the_720_default`. **RED-PROVEN by running it**:
+swapping `set_viewport` for `set_viewport_width` — i.e. publishing no height, which is exactly the
+defect — fails it, and the full suite passes with the height restored.
+
+⚠ **WHAT THE GATE CANNOT HOLD, NAMED RATHER THAN PAPERED OVER.** `Gui` needs a real window and
+cannot be constructed in a test, so **the call site itself is not asserted** — only the rule
+(`content_viewport`'s arithmetic, extracted as a free function for exactly this reason) and its
+consequence (a `100vh` box laid out against that viewport). ⚠⚠ **The `!= 720` assertion is the
+load-bearing one**: 720 is the value the defect produced, so a fixture that happened to choose a
+720px content height would pass while measuring nothing — the same failure the `vertical-align`
+battery hit two ticks ago, caught this time before it was written rather than after.
+
+PERF: one atomic store per navigation.
+
+WIKI: `docs/wiki/conformance-and-oracles.md` — "And the third caller: the SHELL had none either".
+
 ## Tick 1018 — "unmeasurable" is two facts, and they lead to opposite decisions (2026-08-08)
 
 TICK SHAPE: measurement — surface audit #42 (due at 1018, last 1008), **and its own steer executed in

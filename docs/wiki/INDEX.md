@@ -527,6 +527,7 @@
   - L3181 · And the skip reason had been true of the file and false of the test for the whole corpus
   - L3193 · --window-size is a WINDOW size, and two defects were hiding each other behind it
   - L3216 · ⚠⚠⚠ The reason this stayed invisible: the engine had the mirror-image bug
+  - L3259 · ⚠ And the third caller: the SHELL had none either (t1019)
 
 ## CSS AND THE CASCADE — Stylo realities and quirks actually encountered
 `docs/wiki/css-cascade.md`
@@ -1705,4 +1706,4 @@
   - L124 · Rank mechanisms by FLIP RATE, not failing-subtest count — CSS layout is a multi-assertion slog
 
 ---
-1612 sections across 22 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+1613 sections across 22 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.

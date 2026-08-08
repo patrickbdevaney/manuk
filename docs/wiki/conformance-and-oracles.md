@@ -3255,3 +3255,23 @@ The height is set **once**, in the binary's `main`, from the same `--width`/`--h
 subcommand parses with the same defaults — rather than at each of the six sites that re-parse them.
 The global is per-process; one authoritative write is easier to reason about than six that must
 agree.
+
+### ⚠ And the third caller: the SHELL had none either (t1019)
+
+t1017 gave `manuk-wpt` a viewport-height caller, which fixed the number the loop is scored on. The
+**shipping browser** still had none: `Gui::build_page` and `build_page_contained` call `Page::load`
+with a width, and nothing published a height — so a `min-height: 100vh` hero was **720px tall in a
+1080-tall window and 720px tall in a 600-tall one**.
+
+Published at the first point that knows the answer — the content viewport is
+`window − CHROME_TOP`, which `Page::load`'s width-only signature cannot see. ⚠ And the viewport is
+now sized **before** the build rather than after: the old ordering built the page, *then* assigned
+`self.viewport`, so the first navigation after a resize would have cascaded against the size the
+window used to be.
+
+⚠⚠ **What the gate can hold, and what it cannot.** `Gui` needs a real window and cannot be
+constructed in a test, so the call site itself is not asserted — the rule (`content_viewport`'s
+arithmetic) and its consequence (a `100vh` box laid out against it) are. The `!= 720` assertion is
+load-bearing: 720 is the value the defect produced, so a fixture that happened to pick a 720px
+content height would pass while measuring nothing.
+

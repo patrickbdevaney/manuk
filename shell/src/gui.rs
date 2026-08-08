@@ -1702,17 +1702,42 @@ impl App {
             Some(g) => (g.config.width, g.config.height),
             None => (self.width, 768),
         };
+        // ⚠ Sized BEFORE the build, not after it. `publish_viewport` reads `self.viewport.height`
+        // to give the cascade its `vh` basis, and the old ordering built the page against the
+        // PREVIOUS window's height — so the first navigation after a resize laid every `100vh` box
+        // out against the size the window used to be. Same class as the `self.zoom` and
+        // `seed_pending_identity` comments at the other build site: the state a build reads has to
+        // be true before the build, not after.
+        self.viewport = Viewport::new(w as f32, (h as f32 - CHROME_TOP).max(1.0));
         if let Some(page) = self.build_page_contained(&html, url, w) {
-            self.viewport = Viewport::new(w as f32, (h as f32 - CHROME_TOP).max(1.0));
             self.viewport.content_height = page.content_height;
             self.page = Some(page);
         }
         self.rerender();
     }
 
+    /// ⚠⚠⚠ **THE CONTENT VIEWPORT HEIGHT, PUBLISHED BEFORE THE CASCADE — WITHOUT THIS EVERY `vh`
+    /// IN THE SHIPPING BROWSER RESOLVES AGAINST 720 WHATEVER SIZE THE WINDOW IS.**
+    ///
+    /// `manuk_css::values::VP_H` is a per-process global with a 720 default, and `cascade_styles`
+    /// calls `set_viewport_width` — whose own doc says it *"preserves the last-known height"*. Tick
+    /// 1017 gave the measurement binary a caller; the SHELL, which is the browser a person actually
+    /// uses, still had none. A `min-height: 100vh` hero was 720px tall in a 1080-tall window and
+    /// 720px tall in a 600-tall one.
+    ///
+    /// Published HERE rather than inside `Page::load` because this is the first point that knows the
+    /// answer: the content viewport is the window minus the browser chrome, which `Page::load`'s
+    /// width-only signature cannot see. `vh`/`vw` is declared by **73.1%** of the burndown corpus
+    /// and `min-height: 100vh` by **36.3%**.
+    fn publish_viewport(&self, w: u32) {
+        let (vw, vh) = content_viewport(w as f32, self.viewport.height + CHROME_TOP);
+        manuk_css::values::set_viewport(vw, vh);
+    }
+
     fn build_page_contained(&self, html: &str, final_url: &str, w: u32) -> Option<Page> {
         let fonts = &self.fonts;
         let zoom = self.zoom;
+        self.publish_viewport(w);
         manuk_page::contained("navigation", || {
             let mut page = Page::load(html, final_url, fonts, w as f32);
             page.relayout_zoomed(fonts, w as f32, zoom);
@@ -1722,6 +1747,7 @@ impl App {
 
     /// Fallback for a plain (non-prefetched) document — self-contained HTML only, still no network.
     fn build_page(&self, html: &str, final_url: &str, w: u32) -> Page {
+        self.publish_viewport(w);
         let mut page = Page::load(html, final_url, &self.fonts, w as f32);
         page.relayout_zoomed(&self.fonts, w as f32, self.zoom);
         page
@@ -4487,9 +4513,72 @@ fn key_name_for_dispatch(key: &Key) -> Option<String> {
     Some(name.to_string())
 }
 
+/// The CONTENT viewport a `win_w` x `win_h` window gives the page: the window minus the browser
+/// chrome, floored at 1px so a degenerate window cannot produce a zero or negative `vh` basis.
+///
+/// A free function so the rule can be gated — `Gui` needs a real window and cannot be constructed in
+/// a test, so this is the largest piece of it a test can hold.
+pub(crate) fn content_viewport(win_w: f32, win_h: f32) -> (f32, f32) {
+    (win_w, (win_h - CHROME_TOP).max(1.0))
+}
+
 #[cfg(test)]
 mod tests {
-    use super::resolve_href;
+    use super::{content_viewport, resolve_href, CHROME_TOP};
+
+    /// **A `100vh` BOX MUST BE AS TALL AS THE WINDOW'S CONTENT AREA, NOT 720.**
+    ///
+    /// `manuk_css::values::VP_H` is a per-process global with a 720 default, and `set_viewport` —
+    /// its only writer — had no caller in the SHELL until t1019. `cascade_styles` calls
+    /// `set_viewport_width`, whose own doc says it *"preserves the last-known height"*. So every
+    /// `min-height: 100vh` hero in the shipping browser was 720px tall whatever size the window
+    /// was: 720 in a 1080-tall window, and 720 in a 600-tall one.
+    ///
+    /// ⚠ **What this gate can hold, and what it cannot.** `Gui` needs a real window, so the call
+    /// site itself is not asserted — named as the residue rather than papered over. What IS
+    /// asserted is the rule and its consequence: the chrome arithmetic, and that a page cascaded
+    /// against that viewport lays a `100vh` box out to exactly it. **The `!= 720` assertion is
+    /// load-bearing** — 720 is the value the defect produced, so a fixture that happened to pick a
+    /// 720px content height would pass while measuring nothing.
+    #[test]
+    fn a_full_height_box_follows_the_window_and_not_the_720_default() {
+        let (vw, vh) = content_viewport(1200.0, 900.0);
+        assert_eq!(vw, 1200.0);
+        assert!(
+            (vh - (900.0 - CHROME_TOP)).abs() < 0.01,
+            "content height {vh}"
+        );
+        assert!(
+            (vh - 720.0).abs() > 1.0,
+            "this fixture is only meaningful while the content height DIFFERS from the 720 \
+             default; got {vh}"
+        );
+
+        manuk_css::values::set_viewport(vw, vh);
+        let fonts = manuk_text::FontContext::new();
+        let page = manuk_page::Page::load(
+            "<body style='margin:0'><div id=h style='min-height:100vh'>x</div></body>",
+            "https://vh.test/",
+            &fonts,
+            vw,
+        );
+        let dom = page.dom();
+        let n = dom
+            .descendants(dom.root())
+            .find(|&n| dom.element(n).and_then(|e| e.attr("id")) == Some("h"))
+            .expect("no #h");
+        let h = page
+            .root_box
+            .node_rects(dom)
+            .get(&n)
+            .expect("no rect for #h")
+            .height;
+        assert!(
+            (h - vh).abs() < 1.1,
+            "`min-height: 100vh` is {h}px in a {vh}px content viewport. 720 means the cascade is \
+             still on the never-updated VP_H default and no height was published."
+        );
+    }
 
     #[test]
     fn resolve_href_handles_relative_absolute_and_skips() {
