@@ -528,6 +528,11 @@
   - L3193 · --window-size is a WINDOW size, and two defects were hiding each other behind it
   - L3216 · ⚠⚠⚠ The reason this stayed invisible: the engine had the mirror-image bug
   - L3259 · ⚠ And the third caller: the SHELL had none either (t1019)
+  - L3279 · The reference browser had no mouse, and 22.9% of the corpus asks (t1020)
+  - L3304 · The decision rule, now with three subjects and two branches
+  - L3330 · Pricing it, and the grep that lied by half
+  - L3347 · The gate, and why its negative probe is the load-bearing one
+  - L3359 · What the battery cleared, and the one row that discriminates
 
 ## CSS AND THE CASCADE — Stylo realities and quirks actually encountered
 `docs/wiki/css-cascade.md`
@@ -1706,4 +1711,4 @@
   - L124 · Rank mechanisms by FLIP RATE, not failing-subtest count — CSS layout is a multi-assertion slog
 
 ---
-1613 sections across 22 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+1618 sections across 22 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.

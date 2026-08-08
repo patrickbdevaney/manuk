@@ -1,0 +1,24 @@
+<!doctype html><html><head><meta charset=utf-8><style>
+/* The interaction media features, as a LAYOUT question — because that is the only question this
+   harness can ask, and it is the one that matters: a `@media (hover: hover)` block is how a design
+   system ships its desktop rules, so getting the answer wrong moves boxes, not just a matchMedia
+   return value.
+
+   The reference browser answered `hover: none` / `pointer: none` — a device that cannot point —
+   until `chrome.rs`'s POINTING_DEVICE flag provisioned it as the desktop machine it is standing in
+   for. The two NEGATIVE probes are what stop the correction from over-reaching: a reference talked
+   into `hover: hover` must not also still match `hover: none`. */
+*{margin:0;padding:0;box-sizing:content-box}
+div{width:100px;height:20px;background:#eef}
+@media (hover: hover)    { #p-hover{width:300px} }
+@media (pointer: fine)   { #p-pointer{width:300px} }
+@media (any-hover: hover){ #p-anyhover{width:300px} }
+@media (hover: none)     { #p-nohover{width:300px} }    /* must NOT apply */
+@media (pointer: coarse) { #p-coarse{width:300px} }     /* must NOT apply */
+</style></head><body>
+<div id="p-hover"></div>
+<div id="p-pointer"></div>
+<div id="p-anyhover"></div>
+<div id="p-nohover"></div>
+<div id="p-coarse"></div>
+</body></html>

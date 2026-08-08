@@ -732,4 +732,4 @@ tick	sha	epoch	iso	delta_s	shape	wall_s	files	added	deleted	gates	claims	wpt_pas
 1016	e184268f	1786160485	2026-08-07T23:41:25-04:00	964	primitive	808	5	215	3	428	81	3896	6960	0	513	0	two defects of the same size in opposite directions read as agreement (2026-08-07)
 1017	f9aa815c	1786162269	2026-08-08T00:11:09-04:00	1784	primitive	808	5	116	3	428	81	3896	6960	0	514	0	one axis had a caller and the other did not (2026-08-07)
 1018	d37744be	1786163014	2026-08-08T00:23:34-04:00	745	measurement	808	4	169	3	428	81	3896	6960	0	514	0	"unmeasurable" is two facts, and they lead to opposite decisions (2026-08-08)
-1019	662f22c0	1786163772	2026-08-08T00:36:12-04:00	758	primitive	808	5	155	5	428	81	3896	6960	0	514	0	the fix that only reached the instrument (2026-08-08)
+1019	b80fe9be	1786165816	2026-08-08T01:10:16-04:00	2802	primitive	808	8	297	33	428	81	3896	6960	0	514	0	the fix that only reached the instrument (2026-08-08)

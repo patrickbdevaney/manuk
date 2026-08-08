@@ -46371,6 +46371,97 @@ PERF: none — one UA rule and one narrowed branch in a cascade that already ran
 WIKI: `docs/wiki/css-cascade.md` — where Chrome draws the form-control `box-sizing` line, and why a
 layout-crate test cannot see it.
 
+## Tick 1020 — the reference browser had no mouse, and 22.9% of the corpus asks (2026-08-08)
+
+TICK SHAPE: primitive — the `@media` discovery battery (the top unbatteried construct in the
+corpus, 49.1%), and the one divergence in it. **31 rows, 30 Chrome-exact, and the thirty-first is
+the REFERENCE's answer, not ours.**
+
+⚠⚠⚠ **HEADLESS CHROME DECLARES ITSELF A DEVICE WITH NO POINTING DEVICE AT ALL, SO EVERY
+`@media (hover: hover)` BLOCK ON THE CORPUS WAS SCORED AGAINST A LAYOUT NO DESKTOP USER SEES.**
+Asked directly with `matchMedia` (Chrome 145, `--headless=new`):
+
+```text
+   (hover: hover)      false      (hover: none)        true
+   (any-hover: hover)  false      (any-hover: none)    true
+   (pointer: fine)     false      (pointer: none)      true
+   (any-pointer: fine) false      (any-pointer: none)  true
+```
+
+Not *coarse*, not *unknown* — **`none`**, the value reserved for a device that cannot point. Our
+engine answers `hover: hover` / `pointer: fine`, and it is **right**: this is a desktop browser with
+a mouse. So the divergence belongs to the instrument, and "fixing" the engine to match would have
+made the shipping browser wrong for every real user in order to move a number.
+
+⚠⚠⚠ **PRICED ON THE CORPUS THAT SCORES US, STYLESHEET-INCLUSIVE — 22.9%.** The CORPUS-CONSTRUCTS
+recipe extended to fetch each site's linked CSS (170 sites with a real body, 551 stylesheets):
+
+```text
+   (hover: hover)     32/170   18.8%
+   (pointer: fine)    24/170   14.1%
+   (hover: none)      13/170    7.6%     <- the reference was applying THIS branch
+   (pointer: coarse)   8/170    4.7%
+   ANY of the four    39/170   22.9%
+```
+
+⚠ **And the first regex over-counted, which is worth one line because the trap is generic.**
+`hover\s*:\s*hover` returned 47 sites — it matches a CSS *class named `hover`* followed by the
+`:hover` pseudo-class, which is exactly what Tailwind emits (`.hover\:bg-x:hover`). **A media-feature
+grep has to be anchored on the opening paren**, or a utility-class framework inflates it by half.
+
+⚠⚠ **THIS IS THE THIRD SUBJECT OF THE MIS-PROVISIONED-REFERENCE CLASS, AND THE FIRST ONE WHERE THE
+DECISION IS "BUILD IT".** `--hide-scrollbars` (t930s), `--window-size` (t1016), now the interaction
+family. t1018 split *"unmeasurable"* into two facts; this splits the *mis-provisioned* branch the
+same way, and the discriminator is **whether the reference CAN be provisioned**:
+
+```text
+   hyphens: auto (t1010)   Chrome's dictionaries are a SEPARATE COMPONENT   -> unfixable, do not build
+   the pointer family      Chrome has the capability, it is CONFIGURED off  -> one flag, fix the harness
+```
+
+`--blink-settings=primaryHoverType=2,availableHoverTypes=2,primaryPointerType=4,availablePointerTypes=4`
+provisions it. **Control arm, run before believing it**: asking instead for `HoverType=1,PointerType=2`
+yields `hover:none` / `pointer:coarse` — the flag is doing the work, not a coincidence of defaults.
+
+⚠ **THE OTHER THIRTY ROWS ARE A CLEAN NEGATIVE, AND THE NEGATIVES ARE HALF OF THEM.** Twelve rows
+that must NOT match (`print`, `min-width:1201px`, `max-width:1199px`, `min-height:801px`,
+`orientation:portrait`, `prefers-color-scheme:dark`, `min-resolution:2dppx`, `pointer:coarse`, an
+unknown feature `min-flubber`, `not screen`, an all-false comma list, a range `400px <= width <= 800px`)
+and eighteen that must (both inclusive `min-width`/`max-width` boundaries at exactly 1200,
+`screen and`, `only screen`, a comma list where one arm matches, `min-height`/`max-height`,
+`orientation:landscape`, range `width >= 600px`, an `and` pair, nested `@media`, `aspect-ratio: 3/2`,
+`min-resolution:1dppx`, `all`, and the `<style media>` **attribute** in both directions). Including
+the one row that discriminates a rule nothing else could: **`@media (min-width: 70em)` under
+`html{font-size:20px}` matches**, because a media-query `em` resolves against the INITIAL font size
+and never the root element's — 1120px, not 1400px.
+
+⚠ **AND THE ENGINE'S TWO IMPLEMENTATIONS OF THIS QUESTION AGREE**, which `engine/css/src/lib.rs:2889`
+warns in a comment they need not: the Stylo cascade and the JS `matchMedia` shim were run on the same
+five queries in one page and returned the same five answers. A page that gates behaviour on
+`matchMedia('(hover: hover)')` gets the same world its stylesheet did.
+
+RATCHET: parity **77/77 across 31 pages** (was 72/72 across 30 — the new fixture is +5 probes).
+Nothing traded; the only code outside the instrument is none.
+
+GATE: `tests/wpt/corpus/media-interaction.html`, five probes, which puts this in the wall for free —
+`parity` is already there, and it fails on `probes_passed < probes_run` with no retry. **RED-PROVEN by
+running it**: commenting `POINTING_DEVICE` out of `base_flags` gives `media-interaction 1/5`,
+`TOTAL 73/77`. Three probes fail because the reference stops matching `hover`/`pointer`, and
+**`p-nohover` fails in the OPPOSITE direction** — the reference starts matching `(hover: none)` while
+we do not. A fixture whose failures all point one way can be satisfied by one wrong constant; this
+one cannot.
+
+⚠ **WHAT THIS DOES NOT CLAIM.** The next sweep carries a reference that renders 22.9% of the corpus
+differently, and **the direction on M1 is not predictable** — a `(hover: hover)` block may grow a box
+or shrink it. No M1 movement is claimed here and none was measured: a paired live A/B is worth less
+than its own noise (one site spans 3.7 shape points unchanged), and the honest statement is that
+sweeps before and after this tick are **not comparable on the affected sites**, exactly as t1016's
+viewport correction was.
+
+PERF: none — one more flag on a command line the instrument already builds.
+
+WIKI: `docs/wiki/conformance-and-oracles.md` — "The reference browser had no mouse".
+
 ## Tick 1019 — the fix that only reached the instrument (2026-08-08)
 
 TICK SHAPE: primitive — the third caller of the t1016/t1017 pair. **t1017 fixed the number the loop

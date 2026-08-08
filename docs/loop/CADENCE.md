@@ -12,10 +12,10 @@
 | | value | over |
 |---|---|---|
 | ticks landed | **734** | ticks 1–1019 |
-| median tick cycle | **26m** | 733 intervals |
-| median, last 10 | **14m** | 10 intervals |
+| median tick cycle | **27m** | 733 intervals |
+| median, last 10 | **21m** | 10 intervals |
 | fastest / slowest | 5s / 5.4d | |
-| **ticks per hour** | **1.10** | 667.5h elapsed |
+| **ticks per hour** | **1.10** | 668.1h elapsed |
 | median verify wall | **63s** | 673 ticks |
 | wall trend | 39s → 13m — getting slower ⚠️ | first 3 vs last 3 |
 
@@ -90,7 +90,7 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 
 ## What a capability costs
 
-* **341** capability ticks, median cycle **26m**
+* **341** capability ticks, median cycle **27m**
 * median diff per tick: **+259 / −34** lines across 8 files
 
 ## Every tick
@@ -830,6 +830,6 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 | **1016** | 2026-08-07 23:41 | 16m | primitive | 13m | +215/−3 | 428 | 81 | 56.0% · | two defects of the same size in opposite directions read as agreement (2026-08-07) |
 | **1017** | 2026-08-08 00:11 | 30m | primitive | 13m | +116/−3 | 428 | 81 | 56.0% · | one axis had a caller and the other did not (2026-08-07) |
 | **1018** | 2026-08-08 00:23 | 12m | measurement | 13m | +169/−3 | 428 | 81 | 56.0% · | "unmeasurable" is two facts, and they lead to opposite decisions (2026-08-08) |
-| **1019** | 2026-08-08 00:36 | 13m | primitive | 13m | +155/−5 | 428 | 81 | 56.0% · | the fix that only reached the instrument (2026-08-08) |
+| **1019** | 2026-08-08 01:10 | 47m | primitive | 13m | +297/−33 | 428 | 81 | 56.0% · | the fix that only reached the instrument (2026-08-08) |
 
 *`·` after a WPT figure means **carried forward**, not measured this tick.*

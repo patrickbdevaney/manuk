@@ -1018,6 +1018,50 @@ document.getElementById('o').textContent='VP:'+document.documentElement.clientWi
     })
 }
 
+/// ⚠⚠⚠ **THE REFERENCE BROWSER DECLARES ITSELF A DEVICE WITH NO POINTING DEVICE AT ALL, SO EVERY
+/// `@media (hover: hover)` RULE ON THE CORPUS WAS SCORED AGAINST A LAYOUT NO DESKTOP USER SEES.**
+///
+/// Asked directly, with `matchMedia`, Chrome 145 `--headless=new` answers:
+///
+/// ```text
+///   (hover: hover)      false      (hover: none)        true
+///   (any-hover: hover)  false      (any-hover: none)    true
+///   (pointer: fine)     false      (pointer: none)      true
+///   (any-pointer: fine) false      (any-pointer: none)  true
+/// ```
+///
+/// Not "coarse", not "unknown" — **`none`**, the value reserved for a device that cannot point.
+/// Every other media feature this battery probed agrees with us exactly (`prefers-color-scheme`,
+/// `prefers-reduced-motion`, `scripting`, `display-mode`, `color`, `min-resolution`, `forced-colors`,
+/// `update`), which is what makes this one attributable rather than a general mismatch.
+///
+/// Our engine answers `hover: hover` / `pointer: fine`, and it is **right** — this is a desktop
+/// browser with a mouse. So the divergence is the reference's, and correcting the ENGINE to match
+/// would make the shipping browser wrong for every real user in order to make a number go up.
+///
+/// **This is the third subject of the mis-provisioned-reference class** (`--hide-scrollbars`,
+/// `--window-size`, now the interaction family) and it is the branch of t1010's rule that says
+/// *build it* rather than *do not build it*: `hyphens: auto` was unfixable because Chrome's
+/// dictionaries are a separate component, but a pointing device is one flag away.
+///
+/// **Set, not probed, and the difference from `viewport_chrome_offset` is deliberate**: the offset
+/// is a fact about the Chrome build that only measurement can supply, whereas this is a
+/// CONFIGURATION we are choosing — the value we want is fixed by what Manuk is (a desktop browser
+/// with a fine pointer), not by what Chrome happens to default to. What is falsifiable is whether
+/// the flag still *takes effect*, and the gate for that is the parity fixture
+/// `tests/wpt/corpus/media-interaction.html` — five probes that lay `hover`/`pointer` rules out
+/// through this very capture path, in the wall for free because `parity` already runs there.
+/// Commenting the flag out below gives `media-interaction 1/5`; `p-nohover` fails in the OPPOSITE
+/// direction, so the fixture cannot be satisfied by one wrong constant.
+///
+/// ⚠ Run the CONTROL ARM before believing a flag: asking instead for `HoverType=1,PointerType=2`
+/// yields `hover: none` / `pointer: coarse`, which is what proves the flag is doing the work rather
+/// than coinciding with a default.
+///
+/// The Blink enum values: `HoverType::kHoverHoverType == 2`, `PointerType::kPointerFine == 4`.
+const POINTING_DEVICE: &str = "--blink-settings=primaryHoverType=2,availableHoverTypes=2,\
+primaryPointerType=4,availablePointerTypes=4";
+
 /// The flags every headless invocation shares. `--hide-scrollbars` matters: a visible
 /// scrollbar would shrink the layout viewport and shift every box.
 fn base_flags(vw: u32, vh: u32) -> Vec<String> {
@@ -1033,6 +1077,7 @@ fn base_flags(vw: u32, vh: u32) -> Vec<String> {
         "--no-sandbox".into(),
         "--disable-extensions".into(),
         "--disable-lcd-text".into(),
+        POINTING_DEVICE.into(),
         format!("--window-size={vw},{vh}"),
         "--virtual-time-budget=2000".into(),
     ]

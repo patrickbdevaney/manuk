@@ -3275,3 +3275,101 @@ arithmetic) and its consequence (a `100vh` box laid out against it) are. The `!=
 load-bearing: 720 is the value the defect produced, so a fixture that happened to pick a 720px
 content height would pass while measuring nothing.
 
+
+## The reference browser had no mouse, and 22.9% of the corpus asks (t1020)
+
+The `@media` battery — 31 rows, the top unbatteried construct in the corpus at **49.1%** — came back
+**30 Chrome-exact**. The thirty-first was not ours.
+
+Asked directly with `matchMedia`, Chrome 145 `--headless=new` answers:
+
+```text
+   (hover: hover)      false      (hover: none)        true
+   (any-hover: hover)  false      (any-hover: none)    true
+   (pointer: fine)     false      (pointer: none)      true
+   (any-pointer: fine) false      (any-pointer: none)  true
+```
+
+Not *coarse*, not *unknown* — **`none`**, the value reserved for a device that cannot point. Every
+other feature in the battery agrees with us exactly (`prefers-color-scheme`, `prefers-reduced-motion`,
+`scripting`, `display-mode`, `color`, `min-resolution`, `forced-colors`, `update`), which is what makes
+this attributable rather than a general mismatch. Our engine says `hover: hover` / `pointer: fine`,
+and it is **right** — this is a desktop browser with a mouse.
+
+> **A reference that renders a branch of the stylesheet no user of the browser under test will ever
+> see is not a reference for that browser.** The correction belongs in the harness. Correcting the
+> ENGINE instead would have made the shipping browser wrong for every real user in order to move a
+> number, and it would have looked like progress.
+
+### The decision rule, now with three subjects and two branches
+
+`--hide-scrollbars`, `--window-size` (t1016) and this are one class: **the reference was not rendering
+the page we asked for, and the difference was charged to the engine.** t1010 and t1018 split
+*"the oracle cannot see it"* into two facts; the mis-provisioned branch splits the same way, and the
+discriminator is **whether the reference CAN be provisioned**:
+
+```text
+   hyphens: auto (t1010)   dictionaries are a SEPARATE COMPONENT of the browser  -> unfixable,
+                           Chrome would differ if it had them; it does not          do not build
+   the pointer family      Chrome HAS the capability, it is CONFIGURED off       -> one flag,
+                                                                                    fix the harness
+```
+
+`--blink-settings=primaryHoverType=2,availableHoverTypes=2,primaryPointerType=4,availablePointerTypes=4`
+(`HoverType::kHoverHoverType == 2`, `PointerType::kPointerFine == 4`). ⚠ **Run the control arm before
+believing a flag**: asking instead for `HoverType=1,PointerType=2` yields `hover:none` /
+`pointer:coarse`, which is what proves the flag is doing the work rather than coinciding with a
+default.
+
+⚠ **Set, not probed, and the difference from `viewport_chrome_offset` is deliberate.** The viewport
+offset is a fact about the Chrome build that only measurement can supply. This is a **configuration we
+are choosing**: the value we want is fixed by what Manuk *is*, not by what Chrome defaults to. What
+stays falsifiable is whether the flag still takes effect — which is what the gate asserts, by laying
+out a `@media (hover: hover)` rule through the real capture path.
+
+### Pricing it, and the grep that lied by half
+
+Stylesheet-inclusive over the corpus that produces M1 (170 sites with a real body, 551 stylesheets):
+
+```text
+   (hover: hover)     32/170   18.8%
+   (pointer: fine)    24/170   14.1%
+   (hover: none)      13/170    7.6%     <- the reference was applying THIS branch
+   (pointer: coarse)   8/170    4.7%
+   ANY of the four    39/170   22.9%
+```
+
+⚠ **`hover\s*:\s*hover` first returned 47 sites, and the over-count is generic.** It matches a CSS
+*class named `hover`* followed by the `:hover` pseudo-class — precisely what Tailwind emits
+(`.hover\:bg-x:hover`). **A media-feature grep must be anchored on the opening paren**, or a
+utility-class framework inflates it by half.
+
+### The gate, and why its negative probe is the load-bearing one
+
+`tests/wpt/corpus/media-interaction.html` — five probes, which puts this in the wall **for free**:
+`parity` already runs there and fails on `probes_passed < probes_run` with no retry. RED-proven by
+commenting the flag out: `media-interaction 1/5`, `TOTAL 73/77`. Three probes fail because the
+reference stops matching `hover`/`pointer`; **`p-nohover` fails in the OPPOSITE direction**, because
+the reference starts matching `(hover: none)` while we do not.
+
+> **A fixture whose failures all point one way can be satisfied by one wrong constant.** The negative
+> probe is what makes the correction falsifiable in both directions — the same reason t1016's `vw`
+> control row is what named its defect precisely.
+
+### What the battery cleared, and the one row that discriminates
+
+Twelve rows that must NOT match (`print`, `min-width:1201px`, `max-width:1199px`, `min-height:801px`,
+`orientation:portrait`, `prefers-color-scheme:dark`, `min-resolution:2dppx`, `pointer:coarse`, an
+unknown feature, `not screen`, an all-false comma list, a range `400px <= width <= 800px`) and
+eighteen that must (both inclusive boundaries at exactly 1200, `screen and`, `only screen`, a comma
+list with one matching arm, `min-height`/`max-height`, `orientation:landscape`, `width >= 600px`, an
+`and` pair, nested `@media`, `aspect-ratio: 3/2`, `min-resolution:1dppx`, `all`, and the
+`<style media>` **attribute** in both directions).
+
+The row that earns its place: **`@media (min-width: 70em)` under `html{font-size:20px}` matches** —
+a media-query `em` resolves against the **initial** font size and never the root element's, so it is
+1120px and not 1400px. Nothing else in the battery could tell those two implementations apart.
+
+⚠ And `engine/css/src/lib.rs:2889` warns that the Stylo cascade and the JS `matchMedia` shim need not
+agree on an identical query. Run on the same five queries in one page, they returned the same five
+answers.
