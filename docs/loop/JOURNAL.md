@@ -46371,6 +46371,108 @@ PERF: none — one UA rule and one narrowed branch in a cascade that already ran
 WIKI: `docs/wiki/css-cascade.md` — where Chrome draws the form-control `box-sizing` line, and why a
 layout-crate test cannot see it.
 
+## Tick 1028 — the reference will recite its own UA sheet, and nobody had ever asked (2026-08-08)
+
+TICK SHAPE: measurement — the surface audit (cadence: every 10; last at 1018; `tick.sh` refuses to
+land past it), banked as audit #43 in `docs/loop/SURFACE-AUDIT.md`.
+
+⚠⚠⚠ **FINDING 1 — THE UA STYLESHEET HAD NEVER BEEN AUDITED, AND LAST TICK FOUND ONE OF ITS GAPS BY
+ACCIDENT.** Every one of the 42 audits before this checked *capabilities*. Nobody checked the **UA
+sheet**, which is the most enumerable document in the engine — a finite list of elements, and the
+reference will recite its own copy on request. t1027 found `iframe { border: 2px inset }` missing
+while looking for something else, and **"found by accident" is the signature of a surface nothing is
+watching**.
+
+The instrument is one command: instantiate every HTML element on a page with no author CSS, ask
+Chrome for 31 UA-settable computed properties on each, diff each against a `<span>`. Output: exactly
+the declarations Chrome's UA sheet makes, on **83 of 102** elements.
+
+⚠⚠⚠ **AND THE MATCHER LIED FOR THE THIRD TIME IN THIS AUDIT'S HISTORY — CAUGHT BEFORE PUBLISHING
+THIS TIME, BY THE ENGINE.** Diffing those 83 against `UA_CSS`'s selectors said **37 elements our
+sheet never names**, including `div`, `li` and `section`. Those obviously render as blocks — the
+corpus works — because their default `display` lives in **Rust, not in the sheet**. Audits #33 and
+#34 each published a wrong number from this exact shape, and the fix is not a better regex:
+
+> **Grep the artefact, infer the engine — that is the same inversion of READ THE PRODUCER that has
+> now produced a wrong number three times in this file.** The clearing pass is a 21-row fixture
+> against Chrome, and it is not optional: acting on 37 would have meant writing UA rules for `div`.
+
+```text
+   CLEARED although the grep flagged them (the sheet is not the only producer):
+     em i cite dfn var (italic) · address figcaption summary output bdi · div li section header nav
+
+   REAL, engine-verified, with corpus weight:
+     <small>   144x19 vs 120x15   font-size: smaller     15/171   8.8%
+     <audio>   0x19   vs 0x0      display:none            2/171   1.2%
+     <search>  144x19 vs 400x20   display:block           1/171   0.6%
+     <legend>  x=0    vs x=2      2px inline padding      1/171   0.6%
+     <ruby> <hgroup> <nobr> <big>                         0/171   0.0%
+```
+
+**The honest headline: the UA sheet is in better shape than the grep said and worse than nothing** —
+8 real gaps, exactly ONE with corpus weight. **An audit that produces a scary list and then clears 29
+of its 37 rows is the audit working.**
+
+⚠⚠⚠ **FINDING 2 — THE RANKED ONE, AND IT IS A SINGLE PREDICATE.** Half one of the protocol (leave the
+frame) used **Servo 0.4.0's release notes — a source this loop has never used**. Audits #41 and #42
+both used Ladybird; taking a *second* independent engine tests whether #42's conclusion was about
+Ladybird or about the method. **It was about the method.** Thirty-five greps, ten with no row, priced
+over 171 HTML + 416 stylesheets:
+
+```text
+   animation-delay                63/171  36.8%   <- LOUDEST and NOT a lever, see below
+   text-decoration-style          38/171  22.2%   <- PAINT-only; M1 is blind to it
+   font-feature-settings          28/171  16.4%
+   overflow: clip                 26/171  15.2%   <- THE FINDING
+   input minlength / maxlength    17/171   9.9%
+```
+
+`overflow: clip` is in our enum, mapped out of Stylo, and **wrong**. An 8-row probe:
+
+```text
+                                                    chrome     ours
+   clip box containing a float                     200x0     200x60   <- must NOT contain it
+   clip box, child with margin-top:30px            200x10    200x40   <- margin must escape
+   hidden box containing a float        CONTROL    100x60    contained in both   ok
+   clip box clipping its own height     CONTROL    200x40    200x40              ok
+```
+
+**`overflow: clip` must not establish a block formatting context** — it is the one overflow value
+defined to clip *without* becoming a scroll container — and `layout::establishes_bfc:1938` asks
+`s.overflow != Overflow::Visible`, which lumps `Clip` in with `hidden`/`scroll`. **Two independent
+geometric consequences out of one predicate.**
+
+⚠⚠ **AND THE TWO LOUDEST NUMBERS ARE THE TWO I MUST NOT RANK ON.** `animation-delay` has no steady
+state (the `scroll-behavior: smooth` class, audit #42) and its 36.8% is a **soft** grep that admits
+the two-time `animation:` shorthand; `text-decoration-style` moves no box, so M1 is structurally
+blind to it while a human sees it on 22.2% of the corpus — the *"the instrument cannot price this"*
+class from check #72, which is not the same as *"this bought nothing"*.
+
+**RE-RANK, and it displaces what t1027 queued.** That tick named `iframe { border: 2px inset }` next
+at 29.2%. **`overflow: clip` outranks it**: 15.2% with two consequences from one predicate, against
+29.2% with a 4px one — and `clip` needs no paired change, where the iframe border cannot land unless
+`frameborder="0"` becomes a presentational hint in the same tick or 10 of 50 corpus iframe sites
+regress.
+
+MAP: `docs/loop/CONSTELLATION.tsv` **+10 rows** (491 → 501), four of them `missing` with a measured
+receipt rather than `unknown` — the audit's own ratchet rewards a bigger, uglier map, and these are
+bigger *and* verdicted.
+
+⚠ **A STANDING RULE, promoted from finding 1.** The reference will recite its own configuration if
+you ask it — its UA sheet, its `hover`/`pointer` answer (t1020), its viewport (t1016). **Every part
+of the platform the reference can be asked to ENUMERATE should be enumerated once**, because a gap in
+an enumerable surface is otherwise found only by tripping over it.
+
+RATCHET: no engine code changed. Nothing traded.
+
+GATE: none — measurement tick. The falsifiable artefacts are the three fixtures (UA defaults 13/21,
+`overflow: clip` 3/8, and the Chrome UA enumeration), each reproducible from this entry.
+
+PERF: none.
+
+WIKI: none — this tick's artefact is `docs/loop/SURFACE-AUDIT.md` audit #43, which is the wiki for
+the loop's own frame-checking. [no-pattern]
+
 ## Tick 1027 — there were TWO of them, and `<iframe>` was in both lists (2026-08-08)
 
 TICK SHAPE: primitive — the `<iframe>` sizing battery (check #93's next ranked area, **30.4%** of the

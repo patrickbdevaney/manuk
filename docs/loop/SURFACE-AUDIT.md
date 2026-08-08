@@ -4633,3 +4633,138 @@ The first cannot be fixed by instrumenting harder — the reference itself is wr
 The second is precisely what a **scrolling instrument** would unlock, and it now has a named consumer
 and a number: 23.4% + 15.2% of the corpus. **A capability the oracle cannot see is not one fact but
 two, and they lead to opposite decisions.**
+
+## Audit #43 — tick 1028 (2026-08-08) — a SECOND independent engine, and the UA SHEET had never been audited at all
+
+**SOURCES (searched, not recalled):**
+
+- `https://servo.org/blog/2026/07/31/june-in-servo/` — Servo 0.4.0's own named-feature list.
+  **A source this loop has never used.** #41 and #42 both used Ladybird; taking a *second*
+  independent engine tests whether #42's conclusion (*"an independent engine's release notes beat
+  Interop for unknown-unknowns"*) was about Ladybird or about the method. It was about the method.
+- `https://ladybird.org/newsletter/2026-07-31/` — re-checked; **no August issue exists yet**, so
+  #42's Ladybird pass is still the latest and was not re-greped.
+
+### → Half one: the map, greped once per NAMED feature (the #41/#42 method, third run)
+
+Thirty-five greps over Servo's list. Ten came back with **no row**, and pricing them on the corpus
+that produces M1 (171 HTML + 416 stylesheets over 120 sites) sorts them hard:
+
+```text
+   animation-delay (incl. the 2-time shorthand)   63/171   36.8%   <- see the caveat, it is not a lever
+   text-decoration-style: wavy|dotted|dashed      38/171   22.2%
+   font-feature-settings                          28/171   16.4%
+   overflow: clip                                 26/171   15.2%   <- THE FINDING, see half three
+   input minlength / maxlength                    17/171    9.9%
+   @media device-width / device-height            10/171    5.8%
+   closest-corner / farthest-corner                2/171    1.2%
+   FontFaceSet / document.fonts                    0/171    0.0%
+   console.dir                                     0/171    0.0%
+   webkitRelativePath                              0/171    0.0%
+```
+
+⚠⚠ **Two of the top three are UNPRICEABLE BY THIS ORACLE and must not be ranked on those numbers**,
+by the rule audit #42 established and t1010 before it:
+
+- **`animation-delay` has no steady state.** 36.8% is the loudest number on the page and it is the
+  same class as `scroll-behavior: smooth` — a single settled snapshot cannot see a time-varying
+  property. ⚠ The 36.8% is also a **soft** number: the regex admits the two-time `animation:`
+  shorthand, which over-counts. Neither half of that should reach a tick without a probe first.
+- **`text-decoration-style` is PAINT, not geometry.** A wavy underline moves no box, so M1 is
+  structurally blind to it while a human sees it on 22.2% of the corpus — the *"the instrument
+  cannot price this"* class from check #72, not the *"this bought nothing"* class.
+
+### → Half two: THE UA STYLESHEET HAD NEVER BEEN AUDITED, AND t1027 FOUND ONE OF ITS GAPS BY ACCIDENT
+
+Every audit so far has checked *capabilities*. Nobody checked the **UA stylesheet** — which is odd,
+because it is the most enumerable document in the engine: a finite list of elements, and the
+reference will recite its own copy on request. Tick 1027 found `iframe { border: 2px inset }`
+missing while looking for something else, and *"found by accident"* is the signature of a surface
+nothing is watching.
+
+**The instrument, and it is one command.** Instantiate every HTML element on a page with no author
+CSS, ask Chrome for the computed value of 31 UA-settable properties on each, and diff each element
+against a `<span>` — so the output is exactly *"the declarations Chrome's UA sheet makes"*, 83 of 102
+elements.
+
+⚠⚠⚠ **AND THE MATCHER LIED FOR THE THIRD TIME IN THIS AUDIT'S HISTORY — CAUGHT BEFORE PUBLISHING
+THIS TIME, BY THE ENGINE.** Diffing those 83 against `UA_CSS`'s selectors said **37 elements our
+sheet never names**, including `div`, `li` and `section` — which obviously render as blocks, because
+the corpus works. Their default `display` lives in **Rust, not in the sheet**. #33 and #34 each
+published a wrong number from exactly this shape (grep the artefact, infer the engine); the fix is
+not a better regex, it is **to ask the engine**. A 21-row fixture against Chrome:
+
+```text
+   CLEARED, though the grep flagged them (the sheet is not the only producer):
+     em · i · cite · dfn · var  (italic)    address · figcaption · summary · output · bdi
+     div · li · section · header · nav · article  (block)
+
+   REAL, engine-verified, with their corpus weight:
+     <small>    144x19 vs 120x15   font-size: smaller not applied      15/171   8.8%
+     <audio>    0x19   vs 0x0      display:none not applied             2/171   1.2%
+     <search>   144x19 vs 400x20   display:block not applied            1/171   0.6%
+     <legend>   x=0    vs x=2      2px inline padding missing           1/171   0.6%
+     <ruby>     48x19  vs 16x19    display:ruby not applied             0/171   0.0%
+     <hgroup>   144x19 vs 400x20   display:block not applied            0/171   0.0%
+     <nobr>     144x39 vs 299x19   white-space:nowrap not applied       0/171   0.0%
+     <big>      144x19 vs 173x23   font-size: larger not applied        0/171   0.0%
+```
+
+**The honest headline is that the UA sheet is in better shape than the grep suggested and worse than
+nothing**: 8 real gaps, of which exactly **one** (`<small>`, 8.8%) carries corpus weight and the rest
+are ≤1.2%. ⚠ **An audit that produced a big scary list and then cleared 29 of 37 rows is the audit
+working**, and it is the reason the clearing pass is not optional: acting on 37 would have meant
+writing UA rules for `div` and `li`.
+
+### → Half three: THE RANKED FINDING, and it is one predicate
+
+`overflow: clip` is on **15.2%** of the corpus and it is in our enum, mapped out of Stylo, and
+handled — so the map's *"no row"* was map-honesty, not a capability gap. It is also **wrong**, and an
+8-row probe says the error is a single line:
+
+```text
+                                                     chrome        ours
+   overflow:clip box containing a float             200x0        200x60   <- does NOT contain it
+   overflow:clip box, child with margin-top:30px    200x10       200x40   <- margin escapes
+   overflow:hidden containing a float  CONTROL      100x60       (both contain it)
+   overflow:clip clipping its own height CONTROL    200x40       200x40   ok
+```
+
+**`overflow: clip` must NOT establish a block formatting context.** It is the one overflow value
+defined to clip *without* becoming a scroll container, and `layout::establishes_bfc` asks
+`s.overflow != Overflow::Visible` — which lumps `Clip` in with `hidden`/`scroll`. So a `clip` box
+contains floats it should let escape and swallows margins that should collapse through it, and both
+consequences fall out of one predicate.
+
+⚠ **Its 15.2% is an upper bound on where it can BITE**, not a lower one: the defect only shows where
+a float or a collapsing margin is actually involved. That has to be measured on the fix, not
+asserted here.
+
+### → RE-RANK, and it does displace what was queued
+
+The tick-1027 write-up queued `iframe { border: 2px inset }` next (29.2% of sites carry an iframe).
+**`overflow: clip` outranks it** and the audit is why: 15.2% with **two independent geometric
+consequences from one predicate**, against 29.2% with a 4px one — and the `clip` fix needs no paired
+change to avoid regressing anything, where the iframe border cannot land without `frameborder="0"`
+becoming a hint in the same tick.
+
+```text
+   1. overflow: clip must not establish a BFC        15.2%   one predicate, two consequences
+   2. iframe UA border + frameborder hint            29.2%   4px, and it needs the paired hint
+   3. <small> font-size: smaller                      8.8%   one UA declaration
+   4. font-feature-settings                          16.4%   shaping -> advances -> geometry; unprobed
+   5. animation-delay / text-decoration-style        36.8% / 22.2%   PROBE FIRST; likely unpriceable
+```
+
+### → What this audit says about its own method
+
+**#42's conclusion generalised.** A second independent engine, never used before, produced a
+15.2% geometric defect that three years of Interop lists and every instrument this loop owns had not
+surfaced. The claim is now about the *method* and not about Ladybird: **release notes from an engine
+that is re-deriving the platform name the things a consensus list has already stopped mentioning.**
+
+**And a new standing rule, from half two.** The reference will recite its own configuration if you
+ask it — Chrome's UA sheet, its `hover`/`pointer` answer (t1020), its viewport (t1016). ⚠ **Every
+element of the platform that the reference can be asked to ENUMERATE should be enumerated once,
+because a gap in an enumerable surface is otherwise found only by tripping over it** — which is
+exactly how `iframe`'s border was found, one tick before this audit.
