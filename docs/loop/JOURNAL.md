@@ -46371,6 +46371,87 @@ PERF: none — one UA rule and one narrowed branch in a cascade that already ran
 WIKI: `docs/wiki/css-cascade.md` — where Chrome draws the form-control `box-sizing` line, and why a
 layout-crate test cannot see it.
 
+## Tick 1016 — two defects of the same size in opposite directions read as agreement (2026-08-07)
+
+TICK SHAPE: primitive — two batteries (lists 25 rows, replaced/aspect-ratio/viewport 16 rows) and the
+instrument defect the second one found. **41 rows, 39 exact, and the two failures turned out to be a
+pair of errors that had been cancelling each other for the life of the instrument.**
+
+⚠⚠⚠ **`--window-size` IS A WINDOW SIZE, NOT A VIEWPORT SIZE — A CONSTANT 87 PIXELS, ON EVERY
+REFERENCE CAPTURE THIS PROJECT HAS EVER TAKEN.** Chrome 145 `--headless=new`, asking the page itself:
+
+```text
+   --window-size=1200,600   ->  viewport 1200 x 513
+   --window-size=1200,800   ->  viewport 1200 x 713
+   --window-size=1200,1000  ->  viewport 1200 x 913
+   --window-size=800,800    ->  viewport  800 x 713
+```
+
+87px on the block axis, **zero** on the inline one. So the reference laid every page out in a viewport
+87px shorter than the one our engine was told to use, and every `vh` in the corpus was scored against
+a 12.2%-different height. `vh`/`vw` is declared by **73.1%** of the burndown corpus and
+`min-height: 100vh` by **36.3%**.
+
+**Fixed in the instrument, and measured rather than hard-coded**: the offset is a property of the
+Chrome build, so it is probed once per process with a one-line document, cached in a `OnceLock`, and
+`base_flags` asks for `window = requested_viewport + offset`. A failed probe returns `(0,0)` — exactly
+today's behaviour, so the instrument degrades to what it already did rather than to something new.
+
+⚠⚠⚠ **AND THE REASON IT STAYED INVISIBLE FOR SO LONG IS THAT THE ENGINE HAD THE MIRROR-IMAGE BUG.**
+`manuk_css::values::VP_H` — the viewport height every `vh` resolves against — defaults to **720** and
+**has no caller anywhere in the tree**. `cascade_styles` calls `set_viewport_width`, whose own doc
+says it *"preserves the last-known height"*, and nothing has ever set one.
+
+```text
+                          100vh resolves to
+   our engine                   720      (the never-updated default)
+   the reference                713      (800 asked for, 87 taken by the window)
+   what BOTH should say         800
+```
+
+**They agreed to within one percent, and each fix alone is WORSE than the pair.** Correct the
+instrument only and the divergence goes 7px → 80px; correct the engine only and it goes 7px → 87px.
+Neither ever showed up as a regression against the other.
+
+> **Two errors of similar size in opposite directions read as agreement, and a differential
+> instrument cannot tell that from correctness.** What separates them is asking a THIRD party — here
+> `document.documentElement.clientHeight`, and the spec — rather than asking the two implementations
+> whether they match. This is the sharpest form yet of the rule t1010 landed one week of ticks ago:
+> price the ORACLE's ability to see it, not only the construct.
+
+⚠⚠ **THE ENGINE HALF IS BANKED, NOT BUILT, AND THE ORDER IS NOT ARBITRARY.** Threading a real
+viewport height needs a call at every site that knows one (`boxes --height`, the fidelity capture, the
+shell) and will move every `@media (height)` query and every `vh` box in the tree — a second RED proof
+in the same tick, on a change whose blast radius is larger than this one's. It goes next, and it goes
+**after** the instrument, because the instrument correction is what makes its result readable at all.
+
+⚠ **THE LIST BATTERY IS A CLEAN NEGATIVE: 25 of 25 EXACT.** `<ul>`/`<ol>` UA margins and the 40px
+`padding-inline-start`, `list-style-position: inside`, `list-style: none`, `padding: 0`,
+`list-style-type: square`, an `<ol start="98">` whose markers cross into three digits, a nested list
+indenting twice, a `<li>` that is itself a flex container, `display: list-item` on a plain `<div>`,
+and a wrapping item whose second line aligns to the first line's text rather than the marker. Priced
+at **55.0%** markup weight — the highest-weight area this loop has cleared without finding anything.
+
+⚠ **AND THE REPLACED/ASPECT-RATIO ROWS ARE EXACT TOO** — an `<img>` sized from one dimension in
+either direction, both, neither, `max-width:100%`, `width:100%;height:auto`, `aspect-ratio` with a
+width, with a height, with both (ignored), alone, and inside a flex item, plus `object-fit`
+`cover`/`contain` leaving the box alone. Only the two viewport-unit rows failed.
+
+RATCHET: parity **72/72** re-run against the corrected reference viewport — the gate most sensitive to
+this change, and it did not move. `manuk-wpt` lib 98/98. `manuk-layout` 130/130. G1's headline page
+re-measured at coverage 100.0% / shape 79.3% against its 0.75 floor. Nothing traded.
+
+GATE: none added this tick, and that is deliberate rather than an omission — **a gate asserting the
+current viewport offset would assert a property of the Chrome BUILD, not of this browser**, and the
+next Chrome that changes its window chrome would turn it red for a reason that has nothing to do with
+us. The probe is self-correcting by construction; what makes it falsifiable is that a wrong offset
+moves `parity`, which is in the wall and was re-run above.
+
+PERF: one extra headless-Chrome launch per PROCESS (not per site) — ~0.3s on a 200-site sweep.
+
+WIKI: `docs/wiki/conformance-and-oracles.md` — "`--window-size` is a WINDOW size, and two defects were
+hiding each other behind it".
+
 ## Tick 1015 — the one place two properties differ, and we had erased it (2026-08-07)
 
 TICK SHAPE: primitive — the second defect t1014's battery measured and banked, built. **The whole

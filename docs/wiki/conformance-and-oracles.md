@@ -3189,3 +3189,50 @@ means "not ax-only", so a suite that grows a new dependency is skipped again rat
 reporting failures that are the harness's.
 
 [[browser-capabilities]] [[fidelity-instrument]]
+
+## `--window-size` is a WINDOW size, and two defects were hiding each other behind it
+
+Measured on Chrome 145 `--headless=new`, asking the page for `document.documentElement.clientHeight`:
+
+```text
+   --window-size=1200,600   ->  viewport 1200 x 513
+   --window-size=1200,800   ->  viewport 1200 x 713
+   --window-size=1200,1000  ->  viewport 1200 x 913
+   --window-size=800,800    ->  viewport  800 x 713
+```
+
+A **constant 87px** on the block axis and **zero** on the inline one. Every reference capture this
+project has ever taken laid the page out in a viewport 87px shorter than the one our engine was told
+to use — so every `vh` in the corpus was compared against a 12.2%-different height. `vh`/`vw` is
+declared by **73.1%** of the burndown corpus and `min-height: 100vh` — the full-bleed hero — by
+**36.3%**.
+
+The correction belongs in the instrument, and it is **measured rather than hard-coded**: the offset is
+a property of the Chrome build and platform, so `viewport_chrome_offset()` probes it once per process
+with a one-line document, caches it in a `OnceLock`, and `base_flags` asks for
+`window = requested_viewport + offset`. A failed probe returns `(0, 0)`, which is exactly today's
+behaviour — the instrument degrades to what it already did rather than to something new.
+
+### ⚠⚠⚠ The reason this stayed invisible: the engine had the mirror-image bug
+
+`manuk_css::values::VP_H` — the viewport height every `vh` resolves against — is a global that
+defaults to **720** and **has no caller**. `cascade_styles` calls `set_viewport_width` (which
+deliberately preserves "the last-known height"), and nothing ever sets that height. So:
+
+```text
+                          100vh resolves to
+   our engine                   720      (the never-updated default)
+   the reference                713      (800 asked for, 87 taken by the window frame)
+   what BOTH should say         800
+```
+
+**The two defects agreed to within one percent, and each one alone is worse than the pair.** Fix the
+instrument only and the divergence goes from 7px to 80px. Fix the engine only and it goes from 7px to
+87px. Neither shows up as a regression against the other, and the pair is the only correct state —
+which is why the sweep has never flagged viewport units despite three quarters of the corpus using
+them.
+
+> **Two errors of similar size in opposite directions read as agreement, and a differential
+> instrument cannot tell that from correctness.** The only thing that separates them is asking a
+> third party — here, `document.documentElement.clientHeight` and the spec — what the answer should
+> be, rather than asking the two implementations whether they match.

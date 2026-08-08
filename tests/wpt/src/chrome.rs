@@ -940,9 +940,91 @@ pub fn available() -> bool {
     chrome_bin().is_some()
 }
 
+/// ⚠⚠⚠ **`--window-size` IS A WINDOW SIZE, NOT A VIEWPORT SIZE, AND THE DIFFERENCE WAS 87 PIXELS
+/// OF UNCORRECTED ERROR AGAINST 73% OF THE CORPUS.**
+///
+/// Measured on this box (Chrome 145, `--headless=new`), asking the page for
+/// `document.documentElement.clientHeight`:
+///
+/// ```text
+///   --window-size=1200,600   ->  viewport 1200 x 513
+///   --window-size=1200,800   ->  viewport 1200 x 713
+///   --window-size=1200,1000  ->  viewport 1200 x 913
+///   --window-size=800,800    ->  viewport  800 x 713
+/// ```
+///
+/// A **constant 87px** on the block axis and **zero** on the inline one. So every reference capture
+/// laid the page out in a viewport 87px shorter than the one our engine was told to use, and every
+/// `vh` unit in the corpus was compared against a 12.2%-different height. `vh`/`vw` is declared by
+/// **73.1%** of the burndown corpus and `min-height: 100vh` — the full-bleed hero section — by
+/// **36.3%**: a hero measured 800 here and 713 there, and everything below it shifted by 87px.
+///
+/// This is the `--hide-scrollbars` lesson in a second subject: **the reference was not rendering the
+/// page we asked for, and the divergence was charged to the engine.** The fix belongs here, not in
+/// the engine.
+///
+/// **Measured, not hard-coded.** The offset is a property of the Chrome build and platform, so it is
+/// probed once per process with a one-line document and cached — one extra launch per sweep, not one
+/// per site. If the probe fails for any reason the offset is zero, which is exactly today's
+/// behaviour: the instrument degrades to what it already did rather than to something new.
+fn viewport_chrome_offset() -> (u32, u32) {
+    static OFFSET: std::sync::OnceLock<(u32, u32)> = std::sync::OnceLock::new();
+    *OFFSET.get_or_init(|| {
+        const PROBE_W: u32 = 1000;
+        const PROBE_H: u32 = 800;
+        let Some(chrome) = chrome_bin() else {
+            return (0, 0);
+        };
+        let tmp = std::env::temp_dir().join("manuk-viewport-probe.html");
+        let html = "<!doctype html><html><body><pre id=o></pre><script>\
+document.getElementById('o').textContent='VP:'+document.documentElement.clientWidth+'x'\
++document.documentElement.clientHeight;</script></body></html>";
+        if std::fs::write(&tmp, html).is_err() {
+            return (0, 0);
+        }
+        let out = Command::new(&chrome)
+            .args([
+                "--headless=new",
+                "--disable-gpu",
+                "--hide-scrollbars",
+                "--force-device-scale-factor=1",
+                "--no-sandbox",
+                &format!("--window-size={PROBE_W},{PROBE_H}"),
+                "--dump-dom",
+            ])
+            .arg(format!("file://{}", tmp.display()))
+            .output();
+        let _ = std::fs::remove_file(&tmp);
+        let Ok(out) = out else { return (0, 0) };
+        let text = String::from_utf8_lossy(&out.stdout);
+        let Some(i) = text.find("VP:") else {
+            return (0, 0);
+        };
+        let rest = &text[i + 3..];
+        let end = rest
+            .find(|c: char| !(c.is_ascii_digit() || c == 'x'))
+            .unwrap_or(rest.len());
+        let mut parts = rest[..end].split('x');
+        let (Some(w), Some(h)) = (
+            parts.next().and_then(|v| v.parse::<u32>().ok()),
+            parts.next().and_then(|v| v.parse::<u32>().ok()),
+        ) else {
+            return (0, 0);
+        };
+        // Only ever a POSITIVE correction: if a future Chrome reports a viewport LARGER than the
+        // window we asked for, that is not something to compensate by shrinking the window, and
+        // saturating here keeps the instrument from inventing a new distortion out of a surprise.
+        (PROBE_W.saturating_sub(w), PROBE_H.saturating_sub(h))
+    })
+}
+
 /// The flags every headless invocation shares. `--hide-scrollbars` matters: a visible
 /// scrollbar would shrink the layout viewport and shift every box.
 fn base_flags(vw: u32, vh: u32) -> Vec<String> {
+    // See `viewport_chrome_offset`: the requested LAYOUT viewport, expressed as the WINDOW size
+    // that produces it.
+    let (dw, dh) = viewport_chrome_offset();
+    let (vw, vh) = (vw + dw, vh + dh);
     vec![
         "--headless=new".into(),
         "--disable-gpu".into(),
