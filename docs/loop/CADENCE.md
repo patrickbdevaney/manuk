@@ -15,7 +15,7 @@
 | median tick cycle | **27m** | 743 intervals |
 | median, last 10 | **25m** | 10 intervals |
 | fastest / slowest | 5s / 5.4d | |
-| **ticks per hour** | **1.10** | 674.6h elapsed |
+| **ticks per hour** | **1.10** | 674.8h elapsed |
 | median verify wall | **63s** | 683 ticks |
 | wall trend | 39s → 13m — getting slower ⚠️ | first 3 vs last 3 |
 
@@ -91,7 +91,7 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 ## What a capability costs
 
 * **341** capability ticks, median cycle **27m**
-* median diff per tick: **+259 / −34** lines across 8 files
+* median diff per tick: **+258 / −34** lines across 8 files
 
 ## Every tick
 
@@ -840,6 +840,6 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 | **1027** | 2026-08-08 05:05 | 67m | primitive | 13m | +281/−33 | 428 | 81 | 56.0% · | there were TWO of them, and `<iframe>` was in both lists (2026-08-08) |
 | **1028** | 2026-08-08 05:46 | 41m | measurement | 13m | +249/−41 | 428 | 81 | 56.0% · | the reference will recite its own UA sheet, and nobody had ever asked (2026-08-08) |
 | **1029** | 2026-08-08 05:51 | 5m | primitive | 13m | +243/−37 | 428 | 81 | 56.0% · | `clip` is the overflow value that does NOT make a formatting context, and the comment said |
-| **1031** | 2026-08-08 07:37 | 1.8h | measurement | 13m | +334/−33 | 428 | 81 | 56.0% · | both conjuncts went up and M1 did not move, and the control killed half the gain (2026-08- |
+| **1031** | 2026-08-08 07:51 | 2.0h | measurement | 13m | +143/−32 | 428 | 81 | 56.0% · | both conjuncts went up and M1 did not move, and the control killed half the gain (2026-08- |
 
 *`·` after a WPT figure means **carried forward**, not measured this tick.*

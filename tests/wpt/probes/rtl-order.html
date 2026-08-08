@@ -1,0 +1,14 @@
+<!doctype html><html><head><meta charset=utf-8><style>
+*{margin:0;padding:0;font:16px/20px monospace}
+.w{width:400px;height:60px}
+.f{display:flex;width:400px;height:60px}
+</style></head><body>
+<div class=w dir=ltr><a id="p-ltr-a">AAA</a><a id="p-ltr-b">BBB</a></div>
+<div class=w dir=rtl><a id="p-rtl-a">AAA</a><a id="p-rtl-b">BBB</a></div>
+<div class=w style="direction:rtl"><a id="p-dir-a">AAA</a><a id="p-dir-b">BBB</a></div>
+<div class=f dir=rtl><div id="p-frtl-a" style="width:80px"></div><div id="p-frtl-b" style="width:80px"></div></div>
+<div class=f dir=ltr><div id="p-fltr-a" style="width:80px"></div><div id="p-fltr-b" style="width:80px"></div></div>
+<div class=w dir=rtl><div id="p-brtl-a" style="width:80px;height:10px"></div></div>
+<div class=w dir=rtl style="text-align:start"><span id="p-start">S</span></div>
+<div class=w dir=rtl><div id="p-blk" style="height:10px"></div></div>
+</body></html>

@@ -742,4 +742,4 @@ tick	sha	epoch	iso	delta_s	shape	wall_s	files	added	deleted	gates	claims	wpt_pas
 1027	403a4f30	1786179943	2026-08-08T05:05:43-04:00	4039	primitive	808	6	281	33	428	81	3896	6960	0	516	0	there were TWO of them, and `<iframe>` was in both lists (2026-08-08)
 1028	8cc88da7	1786182414	2026-08-08T05:46:54-04:00	2471	measurement	808	10	249	41	428	81	3896	6960	0	517	0	the reference will recite its own UA sheet, and nobody had ever asked (2026-08-08)
 1029	a7f9a5a0	1786182716	2026-08-08T05:51:56-04:00	302	primitive	808	6	243	37	428	81	3896	6960	0	517	0	`clip` is the overflow value that does NOT make a formatting context, and the comment said otherwise (2026-08-08)
-1031	f8c115b4	1786189058	2026-08-08T07:37:38-04:00	6342	measurement	808	7	334	33	428	81	3896	6960	0	517	0	both conjuncts went up and M1 did not move, and the control killed half the gain (2026-08-08)
+1031	2dba0a72	1786189884	2026-08-08T07:51:24-04:00	7168	measurement	808	6	143	32	428	81	3896	6960	0	517	0	both conjuncts went up and M1 did not move, and the control killed half the gain (2026-08-08)

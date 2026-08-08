@@ -46371,6 +46371,93 @@ PERF: none — one UA rule and one narrowed branch in a cascade that already ran
 WIKI: `docs/wiki/css-cascade.md` — where Chrome draws the form-control `box-sizing` line, and why a
 layout-crate test cannot see it.
 
+## Tick 1032 — the four sites M1 is waiting on, and two hypotheses killed in four minutes (2026-08-08)
+
+TICK SHAPE: measurement — localising `reading_order`, the conjunct t1031 proved is binding, down to a
+named worklist and two REFUTED mechanisms.
+
+⚠⚠⚠ **THE MARGINAL WORKLIST — FOUR SITES ARE ONE `reading_order` FIX FROM CROSSING M1.** Cut from
+`SWEEP-t1031-rows.tsv`: sites that already pass `shape ≥ 0.75` and fail M1 on `reading_order`
+**alone**, with every other jarring invariant inside TOL2:
+
+```text
+   sports.yahoo.com     shape 0.886  cov 1.00   reading_order  6
+   rockstaractu.com     shape 0.885  cov 0.92   reading_order 13
+   m.youm7.com          shape 0.795  cov 0.96   reading_order 24
+   www.otomoto.pl       shape 0.752  cov 0.97   reading_order 11
+   ── and the h_overflow twin, for contrast:
+   simplepdf.com        shape 0.795  cov 0.80   h_overflow     5
+```
+
+**That is +4 sites = M1 23 → 27 = 20.6%, +3.1 points, IF the four share a mechanism** — which is the
+open question this tick did not close and deliberately did not guess at.
+
+⚠⚠ **THE EXAMPLES WERE NEVER DISCARDED — I WAS THROWING THEM AWAY.** `jarring_reading_order` returns
+its inverted pairs, `fidelity`'s per-site path already prints them, and I had read three call sites
+concluding the instrument dropped them. It prints to **stderr**, and every command I had run said
+`2>/dev/null`. **The instrument change I was about to write was already built**, and what needed
+fixing was my invocation. Same family as t1025: I read the producer and drew a conclusion about a
+consumer I had not actually run.
+
+The pairs, which is what the tick is for:
+
+```text
+   rockstaractu   …/ul/li[3]/div[1]/div[1]  ⇄  …/ul/li[3]/div[1]/div[2]      (twice, two list blocks)
+   sports.yahoo   …/header/…/div[5]/div[1]  ⇄  …/header/…/div[5]/nav[1]
+                  …/header/…/div[6]/button  ⇄  …/header/…/div[6]/nav[1]
+   m.youm7        …/footer/div/div/a[1]     ⇄  a[2] , a[3] , …               (24 = one row of ~7 links)
+```
+
+**Every one is a two-or-more sibling ROW that we stack or swap** — a card's thumb/text pair, a
+header's control/nav pair, a footer's link row. Consistent with t871-874's rule that a reading-order
+symptom is a **width or transform upstream, never a reorder**.
+
+⚠⚠⚠ **TWO HYPOTHESES BUILT, PROBED AND KILLED, IN ABOUT FOUR MINUTES EACH. THIS IS THE POINT OF THE
+FIXTURE, AND THE NEGATIVES ARE THE DELIVERABLE.**
+
+**1. The AdSense `<ins>` slot.** `manuk-wpt oracle` on rockstaractu showed Chrome giving
+`<ins class="adsbygoogle">` **830×0** where we give **830×280**, twice — 560px, most of that page's
+whole-document vertical drift. A 7-row fixture (`<ins>` plain / block / `.adsbygoogle` /
+explicit height / `min-height` / `height:auto`, plus a `<div>` control):
+
+```text
+   ins-slot   7/7 probes within ±1px      REFUTED — <ins> is Chrome-exact in isolation
+```
+
+The 280px is the **page's own script**, not our layout. ⚠ Had I gone by the oracle's ranking alone
+this was a plausible tick, and it would have been a day spent on a box that is already correct.
+
+**2. RTL inline ordering.** `m.youm7.com` is Arabic and its 24 inversions are a single footer row of
+`<a>` siblings — `C(7,2) = 21`, which fits a whole row reading backwards. `dir=rtl` is 7.0% of the
+corpus, so this would have been a large, well-defined defect. A 13-probe fixture (inline `dir=rtl`,
+`direction:rtl`, RTL flex, LTR controls for each):
+
+```text
+   rtl-order  13/13 probes within ±1px    REFUTED — RTL inline AND flex order are Chrome-exact
+```
+
+> **Two mechanisms that each explained the data, both wrong, both eliminated for the price of eight
+> minutes and two files.** The field is narrower than it was and nothing was built on a story. ⚠ Per
+> the standing rule the NEGATIVE rows are what make these readable — each fixture carries its LTR /
+> `<div>` / explicit-height control, so *"7/7"* means the probe can discriminate and not that it is
+> blind.
+
+STILL OPEN, and stated as the next tick rather than guessed at: the four sites share a **sibling-row**
+shape but not yet a named mechanism, and one site's reduction cannot supply one — t930-932's rule is
+**PROPERTY-FAMILY sweeps yield, SITE REDUCTIONS do not**. The move is a `reading_order` battery over
+the *row-forming* families (float pairs, `inline-block` rows, flex rows that wrap, `position:absolute`
+inside a row, a transformed row) rather than a fifth reduction of a fifth site.
+
+RATCHET: measurement only, no engine code changed. Nothing traded.
+
+GATE: none. The artefacts are the two refutation fixtures and the worklist cut, all reproducible from
+`SWEEP-t1031-rows.tsv` and this entry.
+
+PERF: none.
+
+WIKI: none — two refuted hypotheses and a worklist, not a mechanism. The mechanism is still open and
+writing it up now would be the thing t1025 warned about. [no-pattern]
+
 ## Tick 1031 — both conjuncts went up and M1 did not move, and the control killed half the gain (2026-08-08)
 
 TICK SHAPE: measurement — the fidelity sweep check #94's steer named as the next tick. 200 sites,
