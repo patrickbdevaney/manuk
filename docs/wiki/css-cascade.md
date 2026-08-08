@@ -2081,3 +2081,86 @@ this tick and is unchanged by it; `revert` / `revert-layer` are degenerate for t
 the thing you hand it, not what the function is called.* `compute_for_declarations` sounds like "give
 me a block, get a style"; its contract is "give me a block **in descending cascade priority**, get a
 style", and that sentence exists nowhere but in the body of two other files.
+
+## A form control's UA box, and the two constants that cancelled (tick 1043)
+
+`<button>` and `<input>` are the **#1 and #2 constructs of the burndown corpus** — 55.6% and 51.5% of
+the 171 pages that produce M1 (`docs/loop/CORPUS-CONSTRUCTS.md`), beating `<table>` eight to one. A
+control that is the wrong size is therefore a `dx`/`dy` error on more of the corpus than any other
+single box, and it displaces everything laid out beside and below it.
+
+### What the reference actually says
+
+Chrome will recite its own UA sheet if you ask it (`getComputedStyle`, the tick-1028 method). Asked
+about every form tag at once, it answers:
+
+```text
+   input[type=text]   padding 1px 2px   border 2px inset   box-sizing content-box
+   input[checkbox]    padding 0         border 0           box-sizing BORDER-box   13x13
+                      margin 3px 3px 3px 4px
+   input[radio]       …the same, but    margin 3px 3px 0px 5px
+   select             padding 0         border 1px solid   box-sizing border-box
+   textarea           padding 2px       border 1px solid   box-sizing content-box
+   button             padding 1px 6px   border 2px outset  box-sizing border-box
+```
+
+Three of those were wrong here, and the interesting part is *why they were invisible*.
+
+### Two wrong constants that agree at exactly one point
+
+Our sheet paired a **1px** text-field border with an intrinsic-width intercept of **2.925**; Chrome
+pairs a **2px** border with **2.75**. A text field's border-box width is `fs·(size·0.6 + k) + 4 + 2·bw`,
+so the two models are:
+
+```text
+   ours    2.925·fs + 6          Chrome   2.75·fs + 8
+```
+
+**They are equal at `fs = 13.333` — the UA control font — and at no other font size.** Every row
+anybody had ever measured was taken at that font, so all four of them (`size=` 1, 5, 20, 40 →
+53/85/205/365) were exact under *both* models for the life of the sheet. Tick 1038 measured the
+border as wrong, measured the default width as already exact, and correctly declined to change one
+without the other, calling it a trade. It was a trade; what closes it is **re-deriving the intercept
+against the corrected border**, after which the same four rows are still exact and the height stops
+being 2px short at every size.
+
+> **A constant fitted at one point cannot tell you which of two models it fits.** The second point
+> costs one fixture row: `<input style="font-size:20px">` is 303px in Chrome, 305 under the old pair.
+
+### The same shape again, one rule down
+
+`<textarea>`'s UA padding is `2px` on all four sides — the `1px 2px` above belongs to `<input>`, and
+one shared rule had handed it to both. The missing 1px top and bottom was compensated by a `+ 2.0`
+addend in the `rows` height formula, whose own comment gave a plausible and wrong reason for it
+(*"Chrome's inner editor sits 1px clear … `getComputedStyle` must keep reporting `1px 2px`"* — Chrome
+reports `2px`). The two cancelled on **every** intrinsic row (`rows=1` → 21, default → 36, `rows=3` →
+51, all exact before and after), so only an author-specified height could see it:
+`<textarea style="width:100px;height:40px;border:0">` is 104x44 in Chrome and was 104x42 here.
+
+### The one control whose border we draw and Chrome does not
+
+Chrome declares `border: 0` on a checkbox and paints the widget natively (`appearance: auto`). We have
+no native control painter, so **our 1px border _is_ the checkbox** — which under `content-box` made
+Chrome's 13x13 into 15x15, and an author's own `width:30px` into 32. `box-sizing: border-box` keeps
+the border we need to draw and hands back Chrome's outer box. The other half is the **margin**
+(`3px 3px 3px 4px`, and `3px 3px 0 5px` for a radio): asymmetric, per-type, and ours were zero, so a
+row of controls accumulated the error rather than sharing one constant offset.
+
+### How this was found, and what it says about method
+
+A ~30-row differential battery per construct, all rows diffed against headless Chrome in one command,
+**negative rows written first**. Across three batteries, 101 Chrome-diffed rows went **69 exact → 87
+exact**. What the batteries also established, which no amount of reasoning would have:
+
+- **`<button>` was already right.** 48 of its 55 rows were exact before this tick — including
+  intrinsic sizing, `box-sizing`, both-axis content centring, flex-item behaviour and min/max clamps.
+  The corpus's #1 construct needed nothing; its #2 needed four fixes.
+- **Every remaining divergence is a `dy` and they are all one mechanism** — the *baseline* of a form
+  control. Chrome gives an `<input>` the baseline of its inner text (12.0px from the top of a 15px
+  content box); we use the bottom margin edge, which puts a default text field 3px high in every line
+  of text it sits in. Named, measured, and left for its own tick, because it is a different rule from
+  the box metrics above.
+
+⚠ **`<select>`'s intrinsic content height is 17px at the control font and ours is 15**, and its
+`font-size:20px` box is 26 against our 27. Unrelated to anything here, 11.1% of the corpus, banked
+rather than guessed at.

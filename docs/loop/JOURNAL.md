@@ -46371,6 +46371,131 @@ PERF: none — one UA rule and one narrowed branch in a cascade that already ran
 WIKI: `docs/wiki/css-cascade.md` — where Chrome draws the form-control `box-sizing` line, and why a
 layout-crate test cannot see it.
 
+## Tick 1043 — two constants that are equal at exactly one point, and every measurement was at that point (2026-08-08)
+
+TICK SHAPE: primitive — a property-family battery on the corpus's **#1 and #2 constructs**
+(`<button>` 55.6%, `<input>` 51.5%, `docs/loop/CORPUS-CONSTRUCTS.md`), which had **no differential
+reading in this session**, and the four coupled UA-metric defects it found landed with two RED-proven
+gates.
+
+**THE RESULT: 101 Chrome-diffed rows across three fixtures go 69 exact → 87 exact.**
+
+⚠⚠⚠ **TWO WRONG CONSTANTS THAT AGREE AT EXACTLY ONE FONT SIZE, AND EVERY ROW ANYBODY HAD MEASURED
+WAS AT THAT FONT SIZE.** A text field's border-box width here is `fs·(size·0.6 + k) + 4 + 2·bw`. Our
+sheet paired a **1px** border with `k = 2.925`; Chrome pairs **2px** with `k = 2.75`:
+
+```text
+   ours  2.925·fs + 6          Chrome  2.75·fs + 8          equal at fs = 13.333, and NOWHERE ELSE
+```
+
+`13.333px` is the UA control font, so all four banked rows were exact under **both** models:
+
+```text
+   size=          1      5     20     40      font-size:20px, size=20 → 303   size=5 → 123
+   Chrome        53     85    205    365                                303              123
+   before        53     85    205    365   ← exact                      305              125   ✗
+   after         53     85    205    365   ← exact                      303              123   ✓
+   height        21     21     21     21      before 19 everywhere, i.e. 2px short at every size
+```
+
+⚠⚠⚠ **t1038 MEASURED THIS AND DECLINED IT, AND IT WAS RIGHT TO.** Its comment reads: *"Chrome gives
+them `2px inset` too and ours are likewise 2px short in HEIGHT (19 against 21) — but their WIDTH is
+already exactly Chrome's 205. Widening the border without retuning that formula would trade an exact
+width for a corrected height, which is a trade, not a fix. Named, measured, not taken."* Every
+sentence of that is true. **What it did not do is re-derive the intercept against the corrected
+border** — and once that is done there is no trade: the same four rows stay exact and the height
+becomes right. A correctly-refused trade is a residue with a *shape*, and the shape names the missing
+half.
+
+> **A CONSTANT FITTED AT ONE POINT CANNOT TELL YOU WHICH OF TWO MODELS IT FITS.** The second point
+> costs one fixture row. I would not have found it by measuring the same markup more carefully; only
+> by measuring it at a font size nobody had used.
+
+⚠⚠⚠ **THE SAME SHAPE ONE RULE DOWN, AND THE COMMENT ON IT GAVE A PLAUSIBLE, WRONG REASON.**
+`<textarea>`'s UA padding is `2px` on all four sides — the `1px 2px` is `<input>`'s and one shared
+rule handed it to both. The missing 1px top and bottom was compensated by a `+ 2.0` addend in the
+`rows` height formula, whose own comment said the addend was deliberate *"rather than as UA padding
+on purpose — `getComputedStyle(el).padding` must keep reporting `1px 2px`, which is what the page can
+observe and what Chrome answers."* **Chrome answers `2px`.** The pair cancelled on every intrinsic
+row and only an author-specified height could see it:
+
+```text
+   <textarea>                                             182x36   before 182x36   CONTROL
+   <textarea rows=1> / rows=3                              21 / 51  both exact      CONTROL
+   <textarea style="width:100px;height:40px;border:0">    104x44   before 104x42     ✗→✓
+```
+
+⚠⚠ **THE ONE CONTROL WHOSE BORDER WE DRAW AND CHROME DOES NOT.** Chrome declares `border: 0` on a
+checkbox and paints the widget natively (`appearance: auto`); we have no native control painter, so
+**our 1px border _is_ the checkbox**, and under `content-box` it turned Chrome's 13x13 into 15x15 —
+an author's own `width:30px` into 32. `box-sizing: border-box` keeps the border we must draw and
+returns Chrome's outer box. The other half is the **margin** — `3px 3px 3px 4px`, and `3px 3px 0 5px`
+for a radio: asymmetric, per-type, ours zero. Measured on `xx<input type=checkbox>xx<input
+type=radio>xx`, Chrome puts the radio at `x=63.53`, which is the checkbox's own margins plus the
+radio's 5px left margin summed — **a row of controls accumulates this rather than sharing one
+constant offset**.
+
+⚠⚠ **THE CORPUS'S #1 CONSTRUCT NEEDED NOTHING AND ITS #2 NEEDED FOUR FIXES, WHICH IS NOT WHAT
+USAGE-WEIGHT ALONE PREDICTS.** `<button>` came in at **48 of 55 rows exact before this tick** —
+intrinsic sizing, `box-sizing`, both-axis content centring, flex-item behaviour, min/max clamps, the
+lot. Frequency ranked where to look and it was right to; it had nothing to say about which of the two
+things I found there was broken. *Frequency ranks where to LOOK, a probe says whether anything is
+THERE* — the t962 rule, and this is the cleanest instance of it yet, because both constructs were at
+the top of the same list.
+
+GATES, two, because the mechanism has two levels and the wall runs them in different places:
+`a_form_controls_ua_box_is_chromes_and_two_constants_used_to_cancel` (manuk-css, cascade level) is
+**RED-proven seven ways**, and the G_FORM geometry half (manuk-page, real `node_rects` on Chrome-
+measured markup) **five ways** — border 2→1px · intercept 2.75→2.925 · drop the checkbox
+`border-box` · drop its margin · restore the textarea addend / drop its padding, separately and
+together. ⚠ **The G_FORM half rides in the EXISTING `#[test]` and the EXISTING launch entry**: two
+SpiderMonkey contexts in one binary segfault nondeterministically (that file's own comment), and
+adding a gate to the wall's *launch list* is what taxes the wall (t998), not adding an assertion.
+⚠⚠ **The `<textarea>` 182x36 row is asserted as a CONTROL and documented as one** — mutating BOTH
+halves of the cancelling pair leaves it green and only the declaration assertion catches it, verified
+by running that exact mutation. A row that passes under both the right model and the wrong one is not
+evidence, and here it says so in its own failure message.
+
+PRICED — 10 sites, OLD binary rebuilt and re-measured in the SAME HOUR, `--jobs 2`:
+
+```text
+   site                          old        new       verdict
+   www.paypal.com             0.649813   0.649813    modal value IDENTICAL on both binaries
+   www.otomoto.pl             0.759312   h_ovf 3→0   the one attributable movement
+   sports.yahoo.com           0.000000   0.000000    0.000/0.856/0.865 intermittently on BOTH
+   kicktipp · profissionaliza · celeb.gate · ticket.jfa · redinfor   byte-identical
+   www.ikea.com · www.unoeste.br   moved on COVERAGE (0.657→0.965, 0.756→0.895) — a load-
+                                   completeness difference, not this fix. Flagged, not banked.
+```
+
+⚠⚠ **`paypal` LOOKED LIKE A −0.0056 REGRESSION IN THE FIRST CUT AND IS NOT ONE.** Three solo runs
+per binary: old `0.649813 / 0.646067 / 0.649813`, new `0.649813 / — / 0.649813`. The **modal value is
+the same number on both**, and the single cut had simply landed on the low end of the site's own
+band. ⚠ **`otomoto`'s SHAPE IS NOT A READING AND ITS COUNT IS**: three solo runs of the *unchanged
+new* binary give `0.751678 / 0.790831 / 0.788921` — a 0.039 spread on one tree — while `h_overflow`
+reads **0 in all three** against **3** pre-fix. Read the count.
+
+RATCHET: `manuk-css` 51/51 (with `--features stylo`; 32/32 without — ⚠ the wall runs the crate with
+NO features, which is why the geometry half is in `manuk-page` where it will actually execute),
+`manuk-layout` 131/131, `manuk-paint` 22/22, `manuk-dom` 11/11, G_FORM green.
+
+⚠ **A comment in this sheet cites `tests/wpt/corpus/ua-defaults.html` (t1038) and that file does not
+exist.** Noted, not fixed in this tick — a named artefact that is not on disk is the same class of
+claim as a vacuous gate, and it belongs to the audit that owns it.
+
+RESIDUE, measured rather than guessed at, and it is ONE mechanism: **every remaining divergence in
+all three batteries is a `dy`, and it is the BASELINE of a form control.** Chrome gives an `<input>`
+the baseline of its inner text — 12.0px from the top of a 15px content box, derived from the empty
+button row where the strut baseline reads exactly 15.0 on both engines — while we use the bottom
+margin edge, so a default text field sits **3px high in every line of text it appears in**. A
+`<select>` is wrong in the opposite direction (+3), which is what makes it a rule and not an offset.
+Separately: `<select>`'s intrinsic content height is 17px at the control font against our 15, and its
+`font-size:20px` box is 26 against our 27 — 11.1% of the corpus, unrelated to anything here.
+
+PERF: none — four declarations in a sheet that already parsed, and two constants.
+
+WIKI: `docs/wiki/css-cascade.md` — "A form control's UA box, and the two constants that cancelled".
+
 ## Tick 1042 — the ratio may fill an axis, never overwrite one — and two defects that cancelled exactly (2026-08-08)
 
 TICK SHAPE: primitive — a property-family battery on inline `<svg>` (the corpus's 5th-ranked

@@ -319,13 +319,61 @@ input, textarea, select {
   padding: 1px 2px;
   color: #000000;
 }
+/* ⚠⚠⚠ **A TEXT FIELD'S UA BORDER IS 2px, AND t1038 MEASURED THAT AND DECLINED IT — CORRECTLY, FOR
+   THE REASON IT GAVE, AND THE REASON HAS A SECOND HALF.** That tick found Chrome computes
+   `2px inset` here and that ours were 2px short in HEIGHT (19 against 21) — but it also found the
+   default WIDTH was already exactly Chrome's 205, and refused to trade an exact width for a
+   corrected height. **What it did not do is re-derive the intrinsic-width intercept against the
+   corrected border**, and once that is done there is no trade: the four `size=` rows it measured
+   stay exact and the height becomes right. Chrome, border box, control font:
+
+     size=      1      5     20     40         font-size: 20px, size=20 → 303   size=5 → 123
+     Chrome    53     85    205    365
+     before    53     85    205    365   ← exact, on 1px border + intercept 2.925
+     after     53     85    205    365   ← exact, on 2px border + intercept 2.75
+
+   The old pair was exact **only at the UA font size**, because `2.925·fs + 6` and `2.75·fs + 8`
+   cross at fs ≈ 13.3 and nowhere else — at `font-size: 20px` the old model gave 305 against
+   Chrome's 303. **Two wrong constants that agree at one point read as a calibrated formula**, and
+   the point they agree at is the only one anybody had measured. The height was 2px short at every
+   size, on 51.5% of the burndown corpus.
+
+   ⚠ `input[type=file]` is excluded and stays 1px: Chrome gives it `border: 0; padding: 0` and ours
+   gives it this sheet's border and a button-like padding, so it is wrong in a way this rule does
+   not address — widening it would be a bigger error, not a smaller one. 0 of 171 corpus pages.
+   ⚠ `inset` vs our `solid` is the bevel, i.e. paint; the box is what the siblings lay out against. */
+input:not([type=checkbox]):not([type=radio]):not([type=file]) { border-width: 2px; }
+/* ⚠⚠⚠ **A CHECKBOX IS `border-box`, AND IT IS THE ONE CONTROL WHOSE BORDER WE DRAW AND CHROME DOES
+   NOT.** Chrome computes `width: 13px; height: 13px; box-sizing: border-box; border: 0` and paints
+   the box natively (`appearance: auto`); we have no native control painter, so the 1px border above
+   IS our checkbox — which under `content-box` made every checkbox and radio on the web **15x15
+   against Chrome's 13x13**, and an author's own `width: 30px` came out 32. `border-box` keeps the
+   border we need to draw and hands back Chrome's outer box.
+
+   **And they carry a MARGIN, which is the half that moves the text beside them.** Chrome:
+   `checkbox 3px 3px 3px 4px` · `radio 3px 3px 0 5px` — asymmetric, per-type, and ours were zero, so
+   every "☐ Remember me" label sat 4px left and 3px high of where Chrome puts it. Measured on
+   `xx<input type=checkbox>xx<input type=radio>xx`: Chrome puts the radio at x=63.53, which is the
+   checkbox's own margins and the radio's 5px left margin summed — a row of controls accumulates
+   this, so it is a `dx` error that grows along the line rather than a constant offset. */
 input[type=checkbox], input[type=radio] {
   padding: 0;
+  box-sizing: border-box;
+  margin: 3px 3px 3px 4px;
   background-color: #ffffff;
 }
 /* `:checked` now matches (it did not, until this tick) — so a ticked box can finally LOOK ticked. */
 input[type=checkbox]:checked, input[type=radio]:checked { background-color: #1a73e8; }
-input[type=radio] { border-radius: 7px; }
+input[type=radio] { border-radius: 7px; margin: 3px 3px 0 5px; }
+/* **A `<textarea>`'s padding is `2px` ON ALL FOUR SIDES — the `1px 2px` above is the TEXT FIELD's.**
+   Chrome, asked to recite it (`getComputedStyle`), answers `2px` for textarea and `1px 2px` for
+   input; the shared rule gave both the input's. It was invisible on every intrinsic row because the
+   `rows` height formula below carried a `+ 2.0` addend measured to absorb exactly this — the fudge
+   and the missing padding cancelled, and only an AUTHOR-SPECIFIED height could show it:
+   `<textarea style="width:100px;height:40px;border:0">` is **104x44** in Chrome and was 104x42 here.
+   The addend is deleted in the same edit; a cancelling pair has to move together or one of the two
+   rows goes red. */
+textarea { padding: 2px; }
 /* ⚠⚠ **A BUTTON'S UA BORDER IS 2px, NOT 1px, AND IT IS 2px ON ALL FOUR SIDES OF THE COMMONEST
    ELEMENT ON THE WEB.** Chrome's UA sheet computes `border: 2px outset` here (read back through
    `getComputedStyle`, not guessed); we declared 1px, so every button on every page was **2px short
@@ -1191,10 +1239,18 @@ fn apply_presentational_hints(dom: &Dom, node: NodeId, s: &mut crate::ComputedSt
             //   size= 1   Chrome  53px border box        size=20   Chrome 205px
             //   size= 5   Chrome  85px                   size=40   Chrome 365px
             //
-            // The slope is exactly 8.0px/char and the intercept is 45px border box — 39px of content
-            // once this UA sheet's `padding:1px 2px` + `1px` border are removed. Blink derives that
-            // intercept from the face (`maxCharWidth - avgCharWidth`, plus room for the caret); we
-            // take the number it arrives at.
+            // The slope is exactly 8.0px/char and the intercept is 45px border box — **37px of
+            // content** once this UA sheet's `padding:1px 2px` + `2px` border are removed. Blink
+            // derives that intercept from the face (`maxCharWidth - avgCharWidth`, plus room for the
+            // caret); we take the number it arrives at.
+            //
+            // ⚠⚠⚠ **THE INTERCEPT IS 2.75, NOT 2.925, AND THE DIFFERENCE IS THE BORDER THIS SHEET
+            // USED TO GET WRONG (t1043).** `2.925·fs + 6` (1px border) and `2.75·fs + 8` (2px, which
+            // is Chrome's) are the same number at fs ≈ 13.3 and at no other font size — so every row
+            // ever measured here, all four of them at the UA font, agreed with both models. At
+            // `font-size: 20px` they part: Chrome 303, the old pair 305. **A constant fitted at one
+            // point cannot tell you which of two models it fits**, and the second point costs one
+            // fixture row. Both models re-checked at fs=20, size=5: Chrome 123, new 123, old 125.
             //
             // ⚠ **The comment this replaces asserted `size=20 → ~173px` was "the same approximation
             // Chrome's own default ends up at". Chrome ends up at 205.** Nobody had put the two side
@@ -1216,7 +1272,7 @@ fn apply_presentational_hints(dom: &Dom, node: NodeId, s: &mut crate::ComputedSt
                         .and_then(|v| v.trim().parse::<f32>().ok())
                         .filter(|n| *n > 0.0)
                         .unwrap_or(20.0);
-                    s.width = crate::Dim::Px(s.font_size * (cols * 0.6 + 2.925));
+                    s.width = crate::Dim::Px(s.font_size * (cols * 0.6 + 2.75));
                 }
             }
         }
@@ -1262,12 +1318,18 @@ fn apply_presentational_hints(dom: &Dom, node: NodeId, s: &mut crate::ComputedSt
             } else {
                 s.line_height
             };
-            // The `+ 2` is measured, not derived: Chrome's inner editor sits 1px clear of the top
-            // and bottom of the content box (`rows=1` → 21px border box, of which this sheet's
-            // padding+border account for 4 and one 15px line for 15). Written here rather than as UA
-            // padding on purpose — `getComputedStyle(el).padding` must keep reporting `1px 2px`,
-            // which is what the page can observe and what Chrome answers.
-            s.height = crate::Dim::Px(rows * lh + 2.0);
+            // ⚠⚠⚠ **THE `+ 2` THAT USED TO BE HERE WAS THE MISSING VERTICAL PADDING WEARING A
+            // HEIGHT'S CLOTHES, AND ITS OWN COMMENT NAMED THE WRONG REASON (t1043).** It read
+            // *"Chrome's inner editor sits 1px clear of the top and bottom … written here rather
+            // than as UA padding on purpose — `getComputedStyle(el).padding` must keep reporting
+            // `1px 2px`."* **Chrome answers `2px` for a `<textarea>`** — the `1px 2px` belongs to
+            // `<input>`, and the shared rule had handed it to both. So the addend was a
+            // compensation for a defect one rule above it: the two cancelled on every intrinsic row
+            // (`rows=1` → 21, none → 36, `rows=3` → 51, all still exact) and left the box 2px short
+            // the moment an author wrote their own height. `textarea { padding: 2px }` is now in the
+            // sheet and this addend is gone; **a cancelling pair moves together or one row goes
+            // red** — the third such pair this project has found.
+            s.height = crate::Dim::Px(rows * lh);
         }
     }
     if matches!(
@@ -3708,6 +3770,171 @@ mod tests {
             narrow[&inner].width,
             crate::Dim::Px(50.0),
             "@container(min-width:400) does not apply when the container is 300px"
+        );
+    }
+
+    /// **A FORM CONTROL'S UA BOX — AND THE TWO CONSTANTS THAT WERE WRONG IN OPPOSITE DIRECTIONS
+    /// AND CANCELLED** (t1043).
+    ///
+    /// Every number below was read off headless Chrome — the boxes with `getBoundingClientRect`,
+    /// the declarations with `getComputedStyle` (the t1028 method: ask the reference to recite its
+    /// own sheet rather than reason about it). The load-bearing assertions are the **border-box
+    /// totals**, not the individual declarations, because that is the level at which the defect was
+    /// invisible:
+    ///
+    /// ```text
+    ///                                             Chrome    before    after
+    ///   <input>                    border box     205x21    205x19    205x21
+    ///   <input style=font-size:20> border box     303x29    305x27    303x29   <- the second point
+    ///   <input size=1>                             53x21     53x19     53x21
+    ///   <textarea>                                182x36    182x36    182x36   CONTROL
+    ///   <input type=checkbox>                      13x13     15x15     13x13
+    /// ```
+    ///
+    /// ⚠⚠⚠ **`2.925·fs + 6` (a 1px border) and `2.75·fs + 8` (Chrome's 2px) ARE THE SAME NUMBER AT
+    /// `fs = 13.333` AND AT NO OTHER FONT SIZE** — which is why four measured rows, all taken at
+    /// the UA font, agreed with both models for many ticks and t1038 could correctly measure the
+    /// border as wrong and correctly decline to change it. **The `font-size: 20px` row is the whole
+    /// point of this test**: it is the second point that tells the two models apart, and it costs
+    /// one line.
+    ///
+    /// ⚠⚠ The same shape twice over: `<textarea>`'s missing 1px of vertical UA padding was
+    /// compensated by a `+ 2.0` addend in its `rows` height formula, so every intrinsic row was
+    /// exact and only an author-specified height could show it.
+    ///
+    /// **How it goes RED — five independent mutations, each hitting a different assertion:**
+    /// · `border-width: 2px` → `1px` in the sheet: the `fs20` and `size=1` heights.
+    /// · intercept `2.75` → `2.925`: the `fs20` WIDTH only (205 stays exact — that is the trap).
+    /// · drop `box-sizing: border-box` from checkbox/radio: the 13x13.
+    /// · drop their `margin`: the margin assertions.
+    /// · restore the `+ 2.0` addend, or drop `textarea { padding: 2px }`: the textarea control
+    ///   (they are a cancelling pair — mutating BOTH leaves it green, which is the state this tick
+    ///   found and is why the control is asserted as a TOTAL).
+    #[test]
+    fn a_form_controls_ua_box_is_chromes_and_two_constants_used_to_cancel() {
+        let dom = manuk_html::parse(
+            r#"<input id=d><input id=s1 size=1><input id=f20 style="font-size:20px">
+               <input id=cb type=checkbox><input id=rd type=radio>
+               <textarea id=ta></textarea><select id=se><option>a</option></select>"#,
+        );
+        let sheet = Stylesheet::parse("");
+        let map = cascade_via_stylo(&dom, std::slice::from_ref(&sheet), 1200.0, 900.0);
+        let id = |v: &str| {
+            dom.descendants(dom.root())
+                .find(|&n| dom.element(n).and_then(|e| e.attr("id")) == Some(v))
+                .unwrap()
+        };
+        let px = |d: crate::Dim| match d {
+            crate::Dim::Px(v) => v,
+            other => panic!("expected a used length, got {other:?}"),
+        };
+        // The border-box total the page and every sibling actually lay out against — the sum the
+        // two wrong constants used to reach by a different route.
+        //
+        // ⚠ A text field's HEIGHT is `auto` here on purpose: it comes from the line box at layout
+        // time, so only its `padding + border` contribution is the cascade's, and that is asserted
+        // directly below. **The width total carries the border too** (`content + 4 padding + 2·bw`),
+        // so the two-point width assertion below is what gates the border change, and it catches
+        // all three mutations independently — see the doc comment.
+        let bb = |n, horiz: bool| {
+            let s: &crate::ComputedStyle = &map[&n];
+            let own = px(if horiz { s.width } else { s.height });
+            if s.box_sizing == crate::BoxSizing::BorderBox {
+                return own;
+            }
+            let (p, b) = if horiz {
+                (
+                    px(s.padding.left) + px(s.padding.right),
+                    s.border_width.left + s.border_width.right,
+                )
+            } else {
+                (
+                    px(s.padding.top) + px(s.padding.bottom),
+                    s.border_width.top + s.border_width.bottom,
+                )
+            };
+            own + p + b
+        };
+        // ── the size ladder's WIDTH at two font sizes. One point cannot tell the models apart.
+        let dw = bb(id("d"), true);
+        assert!(
+            (dw - 205.0).abs() < 0.51,
+            "a default <input> is 205px wide in Chrome, got {dw}. ⚠ This row alone is NOT a proof: \
+             it is exactly the row the old `1px border + intercept 2.925` pair also got right."
+        );
+        let s1w = bb(id("s1"), true);
+        assert!(
+            (s1w - 53.0).abs() < 0.51,
+            "<input size=1> is 53px wide in Chrome, got {s1w}"
+        );
+        let f20w = bb(id("f20"), true);
+        assert!(
+            (f20w - 303.0).abs() < 0.51,
+            "⚠ THE SECOND POINT, and the load-bearing row: <input style='font-size:20px'> is 303px \
+             in Chrome, got {f20w}. The old intercept gives 305 here and 205 at the UA font, which \
+             is why it survived — a constant fitted at ONE point cannot tell you which model it \
+             fits. Border alone mutated reads 301; intercept alone 305; both 304.5."
+        );
+        let inp = &map[&id("d")];
+        assert_eq!(
+            (inp.border_width.top, inp.border_width.left),
+            (2.0, 2.0),
+            "Chrome computes `border: 2px inset` on a text field (getComputedStyle)"
+        );
+        assert_eq!(
+            (px(inp.padding.top), px(inp.padding.left)),
+            (1.0, 2.0),
+            "…and `padding: 1px 2px`, which is the TEXT FIELD's and not the textarea's"
+        );
+        // ── checkbox / radio: border-box, and the asymmetric per-type margin.
+        for (which, left, bottom) in [("cb", 4.0, 3.0), ("rd", 5.0, 0.0)] {
+            let n = id(which);
+            let s = &map[&n];
+            assert_eq!(
+                s.box_sizing,
+                crate::BoxSizing::BorderBox,
+                "{which}: Chrome computes `box-sizing: border-box` — 13px is the OUTER box, and \
+                 the 1px border we draw (Chrome paints natively and declares none) made it 15x15"
+            );
+            assert_eq!(
+                (bb(n, true), bb(n, false)),
+                (13.0, 13.0),
+                "{which}: Chrome measures a checkbox/radio at 13x13"
+            );
+            assert_eq!(
+                (
+                    px(s.margin.top),
+                    px(s.margin.right),
+                    px(s.margin.bottom),
+                    px(s.margin.left)
+                ),
+                (3.0, 3.0, bottom, left),
+                "{which}: Chrome's UA margin — asymmetric, and DIFFERENT between the two types. \
+                 It is what puts the label beside the box, and a row of controls accumulates it."
+            );
+        }
+        // ── the CONTROL, asserted as a TOTAL because its two errors cancelled.
+        let (taw, tah) = (bb(id("ta"), true), bb(id("ta"), false));
+        assert!(
+            (taw - 182.0).abs() < 0.51 && (tah - 36.0).abs() < 0.51,
+            "a default <textarea> is 182x36 in Chrome, got {taw}x{tah} — this stayed exact through \
+             the whole defect, because the missing 1px of vertical UA padding and the `+ 2.0` \
+             addend in the `rows` formula cancelled. Mutating BOTH back leaves this green: that is \
+             what makes it a control and not a proof."
+        );
+        let ta = &map[&id("ta")];
+        assert_eq!(
+            (px(ta.padding.top), px(ta.padding.left)),
+            (2.0, 2.0),
+            "Chrome answers `2px` on ALL FOUR sides for a <textarea> — the `1px 2px` above belongs \
+             to <input>, and one shared rule had handed it to both"
+        );
+        // A control that is NOT in this tick's scope, asserted so a future edit cannot quietly
+        // widen the `input` rule onto it: <select> keeps its 1px border.
+        assert_eq!(
+            map[&id("se")].border_width.top,
+            1.0,
+            "<select> keeps Chrome's 1px border — the 2px rule is the text field's alone"
         );
     }
 }

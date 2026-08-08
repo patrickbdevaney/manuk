@@ -4048,10 +4048,25 @@ fn apply_ua_defaults(s: &mut ComputedStyle, el: &ElementData) {
                 }
                 // Checkbox / radio: a small square. A checked one is filled so its state is
                 // visible (a full round/check mark needs border-radius/glyph rendering).
-                "checkbox" | "radio" => {
+                //
+                // **`border-box` and the per-type margin are Chrome's, and they are the geometry
+                // half — kept in lockstep with the `input[type=checkbox], input[type=radio]` rule in
+                // `stylo_engine.rs`, which is the SHIPPING cascade.** 13px is the OUTER box there,
+                // so under `content-box` the 1px border we draw (Chrome draws none — it paints the
+                // control natively) made it 15x15. The margins are `3px 3px 3px 4px` / `3px 3px 0
+                // 5px`, asymmetric and per-type, and they are what puts the label beside the box.
+                ty @ ("checkbox" | "radio") => {
+                    let radio = ty == "radio";
                     s.width = Dim::Px(13.0);
                     s.height = Dim::Px(13.0);
                     s.padding = Sides::all(Dim::Px(0.0));
+                    s.box_sizing = BoxSizing::BorderBox;
+                    s.margin = Sides {
+                        top: Dim::Px(3.0),
+                        right: Dim::Px(3.0),
+                        bottom: Dim::Px(if radio { 0.0 } else { 3.0 }),
+                        left: Dim::Px(if radio { 5.0 } else { 4.0 }),
+                    };
                     if el.attr("checked").is_some() {
                         s.background_color = Some(Rgba::new(60, 110, 220, 255));
                     }

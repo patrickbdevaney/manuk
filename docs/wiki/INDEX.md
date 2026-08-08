@@ -677,6 +677,12 @@
   - L1948 · A _ arm with a REASON above it is the hardest kind to audit (t975)
   - L1998 · …and its sibling: a DEFAULTED PARAMETER no caller overrides (t976)
   - L2032 · compute_for_declarations is FIRST-SEEN-WINS, and it maps logical to physical as it goes (t998)
+  - L2085 · A form control's UA box, and the two constants that cancelled (tick 1043)
+  - L2092 · What the reference actually says
+  - L2109 · Two wrong constants that agree at exactly one point
+  - L2130 · The same shape again, one rule down
+  - L2140 · The one control whose border we draw and Chrome does not
+  - L2149 · How this was found, and what it says about method
 
 ## `<dialog>`, `popover`, and the top layer (ticks 194-195)
 `docs/wiki/dialog-and-top-layer.md`
@@ -1741,4 +1747,4 @@
   - L124 · Rank mechanisms by FLIP RATE, not failing-subtest count — CSS layout is a multi-assertion slog
 
 ---
-1648 sections across 22 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+1654 sections across 22 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
