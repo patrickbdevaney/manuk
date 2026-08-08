@@ -46371,6 +46371,84 @@ PERF: none — one UA rule and one narrowed branch in a cascade that already ran
 WIKI: `docs/wiki/css-cascade.md` — where Chrome draws the form-control `box-sizing` line, and why a
 layout-crate test cannot see it.
 
+## Tick 1023 — the re-baseline, and the flat band was PREDICTED seven ticks before it was measured (2026-08-08)
+
+TICK SHAPE: measurement — a clean `--jobs 2` release sweep of the 200-site CrUX corpus, banked as
+`docs/loop/SWEEP-t1023-rows.tsv` and `FIDELITY-PROGRESS.tsv`. **It is a RE-BASELINE, not a burndown
+point, and the distinction is the whole reason it was run now.**
+
+⚠⚠⚠ **THE REFERENCE CHANGED TWICE SINCE t1008, SO NO SWEEP AFTER t1016 IS COMPARABLE TO ONE BEFORE
+IT ON THE AFFECTED SITES.** t1016/t1017 moved the viewport basis (`vh`/`vw` is declared by **73.1%**
+of this corpus) and t1020 gave the reference a pointing device (**22.9%** declare an interaction media
+query). A delta across that boundary is not a measurement of engine work, and this sweep exists to
+put a comparable anchor on the near side of it.
+
+```text
+                        t997        t1008       t1023
+   sites swept           200          200         200
+   excluded               69           78          69
+   IN-SCOPE              131          122         131
+   scored                109           99         107
+   M1 (f15)         21 = 16.0%   24 = 19.7%   23 = 17.6%
+   shape_mean          57.1%        60.4%       59.5%
+   cov_mean            86.9%        86.9%       87.1%
+```
+
+⚠⚠⚠ **THE HEADLINE COMPARISON IS THE ONE THAT MEANS LEAST, AND THE COMMON SET IS THE ONE THAT MEANS
+SOMETHING.** `17.6%` against `19.7%` is mostly the denominator — t1008 excluded **78** sites and this
+sweep and t997 both excluded **69**, so t1008 is the outlier and its smaller in-scope count flattered
+its own rate. On the **93 sites scored in BOTH t1008 and t1023**:
+
+```text
+   band (mean shape)   60.21%  ->  60.19%      -0.02 pts
+   coverage            87.76%  ->  88.09%      +0.33 pts
+   M1                     24   ->     22       -2 sites
+```
+
+⚠⚠⚠ **AND A FLAT BAND IS EXACTLY WHAT t1016 PREDICTED, IN WRITING, SEVEN TICKS BEFORE THIS SWEEP RAN.**
+Its finding was that our engine resolved `vh` against 720 and the reference against 713 — *"they agreed
+to within one percent, and each fix alone is WORSE than the pair"*. Both were corrected. **Two
+cancelling errors, both removed, leave the agreement where it was — and now for the right reason
+rather than by luck.** `-0.02 pts` is the shape that prediction has when it is right.
+
+> **This is the first time this loop has made a falsifiable prediction about the METRIC before a fix
+> and then measured it.** It is worth more than the number: a correction whose effect on the score was
+> predicted in advance is attributable in a way no post-hoc sweep delta has ever been. ⚠ It does not
+> decompose — the pointer correction landed in the same window and the band cannot say whether the two
+> corrections each moved something and cancelled, or neither moved anything. A third arm would be
+> needed and is not worth its cost.
+
+⚠⚠ **THE TOP-3-FALLER RULE PAID AGAIN — 2 OF THE 3 LOUDEST FALLS REFUTED SOLO, TWO RUNS EACH.**
+
+```text
+                       t1008    t1023 sweep    solo, twice, same hour
+   possssno.sbs         99.1        88.0        99.1  99.1     <- ARTEFACT, exactly t1008's value
+   www.unoeste.br       80.4        69.8        81.6  81.8     <- ARTEFACT, and ABOVE t1008
+   payb.jp              78.6        67.2        57.0  57.0     <- matches NEITHER; no steady state
+```
+
+`payb.jp` has been the loop's named unstable site since check #72 (0.678–0.826 on one binary); it now
+reads 57.0 twice, which widens its own range rather than settling it. **The honest correction to the
+band is upward and it is NOT applied** — substituting solo re-measurements into a sweep is exactly the
+freedom that lets a number be steered (t1008's own warning), so `-0.02` is published as measured, with
+its two loudest fallers named as refuted.
+
+⚠ **THE LARGEST REAL MOVEMENT IN THIS SWEEP IS SCORABILITY, AND IT IS NOT OURS.** `scored` 99 → 107
+and `excluded` 78 → 69 — but t997 also excluded 69, so this is t1008's bot-wall count regressing to
+the mean, not nine sites we fixed. The scorability ceiling stands at **107/131 = 81.7%**, which is
+VI.2's finding unchanged: the M1 bar of 95% is above what the instrument can produce.
+
+RATCHET: no code in this tick. The sweep is a read of the tree at HEAD.
+
+GATE: none — this tick's artefact is a banked measurement. ⚠ What makes it falsifiable is the solo
+re-run protocol above: three fallers, two runs each, published including the two that refuted the
+sweep's own reading.
+
+PERF: none. `--jobs 2`, release binary, 200/200 sites merged, ~63 minutes.
+
+WIKI: none — the artefacts are `docs/loop/SWEEP-t1023-rows.tsv` and the `FIDELITY-PROGRESS.tsv` row.
+[no-pattern]
+
 ## Tick 1022 — I withdraw last tick's headline; the true answer is better for the instrument (2026-08-08)
 
 TICK SHAPE: measurement — the retraction of check #93's central claim, and the sharper finding that
