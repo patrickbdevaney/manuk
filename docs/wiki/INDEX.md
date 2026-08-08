@@ -1672,6 +1672,8 @@
   - L2383 · The break-point symptom is invisible to every obvious instrument
   - L2394 · The alignment rows are the evidence the model is right, not a bonus
   - L2418 · A HORIZONTAL-only frame left the inline's box on the LINE, not on its content (t994)
+  - L2461 · The same property, two implementations, and a comment saying they could not diverge
+  - L2494 · ⚠ The fixture bug that made the first run report 20 of 20 exact
 
 ## The wasm demo — running the engine inside someone else's browser
 `docs/wiki/wasm-demo.md`
@@ -1699,4 +1701,4 @@
   - L124 · Rank mechanisms by FLIP RATE, not failing-subtest count — CSS layout is a multi-assertion slog
 
 ---
-1606 sections across 22 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+1608 sections across 22 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.

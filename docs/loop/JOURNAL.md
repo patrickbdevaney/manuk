@@ -46371,6 +46371,77 @@ PERF: none — one UA rule and one narrowed branch in a cascade that already ran
 WIKI: `docs/wiki/css-cascade.md` — where Chrome draws the form-control `box-sizing` line, and why a
 layout-crate test cannot see it.
 
+## Tick 1013 — the same property twice, and a comment saying they could not diverge (2026-08-07)
+
+TICK SHAPE: primitive — the inline-block / `vertical-align` battery check #91's steer ranked first
+(74.3% / 71.9% of the corpus, unbatteried), and the one defect in it. **20 rows, 18 exact, and the
+two that were not are the same defect.**
+
+⚠⚠⚠ **`vertical-align` IS IMPLEMENTED TWICE IN `close_line` — ONCE FOR TEXT, ONCE FOR ATOMIC BOXES —
+AND THE TWO HAD DRIFTED ON EXACTLY THE TWO KEYWORDS WHOSE CONSTANTS ARE HARDEST TO GUESS.**
+
+```text
+                    text arm (measured, 3 font sizes)     atomic arm (guessed)
+   sub                  parent_font x 0.25                    ascent x 0.15
+   super                parent_font x 0.375                   ascent x 0.35
+```
+
+A different constant, against a **different quantity**. Chrome-measured on a 40x20 inline-block on a
+`16px/20px monospace` line, as an offset from the same box's `baseline` placement:
+
+```text
+                 Chrome     before      after
+   sub          +4.19px    +2.00px    +4.00px
+   super        -6.33px    -5.00px    -6.00px
+```
+
+⚠⚠⚠ **AND `valign_text_shift`'s OWN DOC ASSERTED THEY COULD NOT.** It read *"the keyword constants
+are the ones the ATOMIC arms in `line_metrics` already use — deliberately shared, so the two
+implementations of `vertical-align` cannot drift apart."* **A comment asserting that two
+implementations cannot diverge is the same shape as a comment asserting a UA sheet is kept in
+lockstep: it cannot go red.** Third sighting of that shape here — the twin UA sheets (t851), the twin
+cascades (t1006), and now the twin `vertical-align` arms — and each time the comment is what stopped
+anyone measuring. The line is corrected in place and the gate is what says it now.
+
+⚠⚠⚠ **THE FIRST VERSION OF THIS FIXTURE REPORTED 20 OF 20 EXACT WHILE TESTING NOTHING.** Every row
+put a 40x20 inline-block on a line whose other content was 16px text — so the box was the **tallest
+thing on the line**, the line box grew to it, and `top`, `bottom`, `baseline`, `sub`, `super`,
+`middle`, `6px` and `50%` all placed it at the same `dy = 0`. Twenty green rows, zero alignment
+measured. Adding a 6x60 strut to every line turned eight of those rows into distinct answers and
+surfaced the defect immediately.
+
+> **A `vertical-align` fixture needs something TALLER than the box under test, or the line box hides
+> the property.** It is the same class as t1000's leaky float wrappers — a fixture whose rows cannot
+> disagree is a decoration — and it is the second time in fourteen ticks that the battery's first
+> run measured the fixture rather than the engine.
+
+⚠⚠ **THE OTHER EIGHTEEN ROWS ARE CLEARED, AND FOUR OF THEM ARE THE RULES THAT ARE EASY TO GET
+WRONG.** An inline-block's own baseline is its **last in-flow line box's**, except that
+`overflow: hidden` and `overflow: scroll` make it the **bottom margin edge** (§10.8.1's fallback) —
+both Chrome-exact here, as are `padding-bottom` (which moves it), `margin-bottom` (which does not),
+a block child, two lines, and an empty box. `middle`, `text-top`, `text-bottom`, `top`, `bottom`, a
+length and a percentage were all already exact.
+
+⚠ **PRICED BEFORE BUILDING, per the standing rule.** `vertical-align: sub|super` is declared by
+**22/171 = 12.9%** of the burndown corpus (HTML + linked stylesheets) and `<sup>`/`<sub>` markup
+appears in 4/171 = 2.3%; the union is 14.6%. The error is 1.3-2.2px per instance — under most
+tolerances and visible on every footnote marker, which is the *"high-usage, low-magnitude"* class
+check #72 named and VI.3 says usage-weight wins on.
+
+RATCHET: `manuk-layout` 128/128 (127 before this tick's gate). Nothing traded.
+
+GATE: `an_inline_blocks_sub_and_super_use_the_same_constants_as_text` — five rows, two of them
+line-relative controls asserted FIRST, and the sub/super assertions taken **relative to the baseline
+row** rather than absolutely, because the spec's offset is a function of the parent font size alone
+and an absolute `y` would bind the test to the strut's font metrics. **RED-PROVEN by running it**:
+restoring `ascent * 0.15` gives `sub = 2.100006` against Chrome's 4.19, with `top`, `bottom` and
+`baseline` still green.
+
+PERF: none — two match arms, same shape.
+
+WIKI: `docs/wiki/text-layout.md` — "The same property, two implementations, and a comment saying they
+could not diverge".
+
 ## Tick 1012 — the check that PROPOSES a correction and never applies it (2026-08-07)
 
 TICK SHAPE: measurement — the constitution check, due at 1012 (last 1004). Banked as **check #91**.

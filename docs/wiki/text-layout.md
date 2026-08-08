@@ -2457,3 +2457,47 @@ recorded as a NON-red: that half of the condition is reasoned, not measured.
 An old-binary A/B on the four-site anchor panel was byte-identical (87.4% mean shape, all four jarring
 invariants unchanged), and the 20-row text battery and 16-row borders battery both re-ran with no new
 divergence.
+
+## The same property, two implementations, and a comment saying they could not diverge
+
+`vertical-align` is implemented twice in `close_line`: once for TEXT fragments (`valign_text_shift`)
+and once for ATOMIC ones — inline-blocks, images, anything with a box of its own. The two arms must
+agree, because they answer the same question about the same line, and `valign_text_shift`'s own doc
+said they did:
+
+> *"The keyword constants are the ones the ATOMIC arms in `line_metrics` already use — deliberately
+> shared, so the two implementations of `vertical-align` cannot drift apart."*
+
+They had drifted, and in the two keywords whose constants are hardest to guess:
+
+```text
+                text arm (measured)        atomic arm (guessed)
+   sub          parent_font x 0.25         ascent x 0.15
+   super        parent_font x 0.375        ascent x 0.35
+```
+
+Different constants, against a *different quantity*. Chrome-measured on a 40×20 inline-block on a
+`16px/20px monospace` line, as an offset from the same box's `baseline` placement:
+
+```text
+                 Chrome     before      after
+   sub          +4.19px    +2.00px    +4.00px
+   super        -6.33px    -5.00px    -6.00px
+```
+
+The text arm's constants were measured at three font sizes and proven independent of `line-height`
+(t9xx); the atomic arm was never revisited. **A comment asserting that two implementations cannot
+diverge is the same shape as a comment asserting a UA sheet is kept in lockstep — it cannot go red**,
+and this project has now been bitten by that shape three times (the twin UA sheets at t851, the twin
+cascades at t1006, this).
+
+### ⚠ The fixture bug that made the first run report 20 of 20 exact
+
+A `vertical-align` fixture whose aligned box is the **tallest thing on its line** measures nothing:
+the line box grows to the box, and `top`, `bottom`, `baseline`, `sub` and `super` all put it in the
+same place. The first version of this battery returned twenty exact rows while testing no alignment
+at all. **The line needs something taller than the box under test** — here a 6×60 inline-block strut
+— and that strut is the difference between a fixture and a decoration.
+
+Priced on the burndown corpus, HTML + linked stylesheets: `vertical-align: sub|super` is declared by
+**22/171 = 12.9%**, and `<sup>`/`<sub>` markup appears in 4/171 = 2.3%; the union is 14.6%.

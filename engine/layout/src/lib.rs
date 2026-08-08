@@ -8778,8 +8778,27 @@ fn close_line(
                 VerticalAlign::Middle => (h / 2.0 + ascent * 0.25, h / 2.0 - ascent * 0.25),
                 VerticalAlign::TextTop => (ascent, h - ascent),
                 VerticalAlign::TextBottom => (h - descent, descent),
-                VerticalAlign::Sub => (h - ascent * 0.15, ascent * 0.15),
-                VerticalAlign::Super => (h + ascent * 0.35, -(ascent * 0.35)),
+                // ⚠⚠⚠ **THE TEXT ARM MEASURED THESE AND THE ATOMIC ARM KEPT THE GUESS — AND A
+                // COMMENT SAID THEY COULD NOT DRIFT APART.** `valign_text_shift`'s own doc reads
+                // *"the keyword constants are the ones the ATOMIC arms in `line_metrics` already
+                // use — deliberately shared, so the two implementations of `vertical-align` cannot
+                // drift apart"*, and they had: text uses `parent_font x 0.375 / 0.25` (measured
+                // against Chrome at three font sizes and proven independent of `line-height`),
+                // while this arm used `ascent x 0.35 / 0.15` — a different constant against a
+                // different quantity. Chrome-measured, a 40x20 inline-block on a 16px monospace
+                // line, as an offset from the same box's BASELINE position:
+                //
+                // ```text
+                //                Chrome      before (ascent x k)   after (parent_font x k)
+                //   sub          +4.19px         +2.0px                 +4.0px
+                //   super        -6.33px         -5.0px                 -6.0px
+                // ```
+                //
+                // Written as a shift from `bl` — the same shape as the `Length` arm below — so the
+                // atomic pair stays the exact inverse of `box_top`'s, which is the invariant this
+                // block's header states.
+                VerticalAlign::Sub => (bl - strut.3 * 0.25, h - bl + strut.3 * 0.25),
+                VerticalAlign::Super => (bl + strut.3 * 0.375, h - bl - strut.3 * 0.375),
                 // The atomic mirror of the text arms: the box is raised by the length (or by the
                 // fraction of the line-height), so it contributes that much more above the
                 // baseline and that much less below.
@@ -8904,8 +8923,10 @@ fn close_line(
                 VerticalAlign::Middle => baseline - xheight / 2.0 - h / 2.0,
                 VerticalAlign::TextTop => baseline - ascent,
                 VerticalAlign::TextBottom => baseline + descent - h,
-                VerticalAlign::Sub => baseline + ascent * 0.15 - h,
-                VerticalAlign::Super => baseline - ascent * 0.35 - h,
+                // The inverse of the pair in `line_metrics`, and now off the SAME measured
+                // constants the text arm uses (see the note there).
+                VerticalAlign::Sub => baseline - f.atomic_baseline + strut.3 * 0.25,
+                VerticalAlign::Super => baseline - f.atomic_baseline - strut.3 * 0.375,
                 // baseline: the box's OWN baseline sits on the line's baseline — its last in-flow
                 // line box's, or its bottom margin edge when §10.8.1's fallback applies. The pair
                 // above (`(bl, h - bl)`) is the inverse of this line; if the two ever disagree the
@@ -8968,8 +8989,16 @@ fn close_line(
 /// line with its text still on the baseline is a metric win bought with a visible regression.
 ///
 /// `a`/`d` are the FRAGMENT's own ascent/descent; `strut_a`/`strut_d` are the line's. The keyword
-/// constants are the ones the ATOMIC arms in `line_metrics` already use — deliberately shared, so
-/// the two implementations of `vertical-align` cannot drift apart. `Top`/`Bottom` are line-relative
+/// constants are the ones the ATOMIC arms in `line_metrics` use.
+///
+/// ⚠⚠⚠ **THIS LINE USED TO END "— deliberately shared, so the two implementations of
+/// `vertical-align` cannot drift apart", AND THEY HAD ALREADY DRIFTED (t1013).** `sub`/`super` here
+/// are `parent_font x 0.25 / 0.375`, measured against Chrome at three font sizes; the atomic arm
+/// carried `ascent x 0.15 / 0.35` — a different constant against a different quantity — so an
+/// inline-block `<sup>` sat 1.3px high and a `<sub>` 2.2px short of Chrome. **A comment asserting
+/// that two implementations cannot diverge is the same shape as a comment asserting a UA sheet is
+/// kept in lockstep: it cannot go red.** The pair is now genuinely shared and
+/// `an_inline_blocks_sub_and_super_use_the_same_constants_as_text` is what says so. `Top`/`Bottom` are line-relative
 /// rather than baseline-relative and are handled by the atomic path's `min_h_up`/`min_h_down`; for
 /// text they are treated as no shift, which is what they were before.
 fn valign_text_shift(
@@ -11289,6 +11318,93 @@ mod tests {
         close(row("s6", "p10"), (0.0, 10.0, 20.0, 40.0), "s6");
         // And the composition order.
         close(row("o1", "p12"), (30.0, 10.0, 20.0, 40.0), "o1");
+    }
+
+    /// **`vertical-align: sub` / `super` ON AN INLINE-BLOCK USED DIFFERENT CONSTANTS FROM THE SAME
+    /// PROPERTY ON TEXT — AND A COMMENT SAID THEY COULD NOT.**
+    ///
+    /// `valign_text_shift`'s own doc reads *"the keyword constants are the ones the ATOMIC arms in
+    /// `line_metrics` already use — deliberately shared, so the two implementations of
+    /// `vertical-align` cannot drift apart."* They had drifted: the text arm uses
+    /// `parent_font x 0.375 / 0.25` (measured against Chrome at three font sizes, and proven
+    /// independent of `line-height`), while the atomic arm used `ascent x 0.35 / 0.15` — a
+    /// different constant against a different quantity.
+    ///
+    /// Chrome-measured (headless, 1200px), a 40x20 inline-block on a `16px/20px monospace` line
+    /// held open to 60px by a taller inline-block, as an offset from the SAME box's `baseline`
+    /// position:
+    ///
+    /// ```text
+    ///                 Chrome     before      after
+    ///   sub          +4.19px    +2.00px    +4.00px
+    ///   super        -6.33px    -5.00px    -6.00px
+    /// ```
+    ///
+    /// ⚠ The assertions are **relative to the baseline row**, not absolute, because the offset the
+    /// spec defines is a function of the PARENT FONT SIZE and nothing else — asserting an absolute
+    /// `y` would bind the test to the strut's font metrics and make a font change look like a
+    /// regression.
+    ///
+    /// ⚠⚠ **The line needs something TALLER than the box or the fixture measures nothing.** Without
+    /// the 60px strut every `vertical-align` value puts a 20px box at the same place, because the
+    /// box is the tallest thing on the line — the first version of this fixture returned 20 of 20
+    /// "exact" while testing no alignment at all.
+    ///
+    /// **RED recipe (run):** restore `ascent * 0.15` / `ascent * 0.35` in either arm and `sub`
+    /// reads +2.0 against Chrome's +4.19 while `top`, `bottom` and `baseline` stay green.
+    #[test]
+    fn an_inline_blocks_sub_and_super_use_the_same_constants_as_text() {
+        let css = "\
+            * { margin:0; padding:0 }
+            body { font: 16px/20px monospace }
+            .c { width:400px; height:70px }
+            b { display:inline-block; width:40px; height:20px }
+            i { display:inline-block; width:6px; height:60px; vertical-align:baseline }";
+        let html = "<body>\
+            <div class=c id=p1><i></i>xx<b id=a1></b>xx</div>\
+            <div class=c id=p2><i></i>xx<b id=a2 style='vertical-align:sub'></b>xx</div>\
+            <div class=c id=p3><i></i>xx<b id=a3 style='vertical-align:super'></b>xx</div>\
+            <div class=c id=p4><i></i>xx<b id=a4 style='vertical-align:top'></b>xx</div>\
+            <div class=c id=p5><i></i>xx<b id=a5 style='vertical-align:bottom'></b>xx</div>\
+            </body>";
+        let (dom, root) = layout_html(html, css, 1200.0);
+        let rects = root.node_rects(&dom);
+        let get = |id: &str| {
+            let n = dom
+                .descendants(dom.root())
+                .find(|&n| dom.element(n).and_then(|e| e.attr("id")) == Some(id))
+                .unwrap_or_else(|| panic!("no #{id}"));
+            *rects.get(&n).unwrap_or_else(|| panic!("no rect for #{id}"))
+        };
+        let dy = |b: &str, c: &str| get(b).y - get(c).y;
+        let base = dy("a1", "p1");
+
+        // ── CONTROLS FIRST: the two line-relative keywords, which this change must not touch.
+        assert!(
+            dy("a4", "p4").abs() < 1.1,
+            "vertical-align: top puts the box at the LINE's top: {}",
+            dy("a4", "p4")
+        );
+        assert!(
+            (dy("a5", "p5") - 45.0).abs() < 1.1,
+            "vertical-align: bottom pins the line's bottom (Chrome 45): {}",
+            dy("a5", "p5")
+        );
+
+        // ── THE DEFECT: sub/super, as an offset from the same box's baseline placement.
+        let sub = dy("a2", "p2") - base;
+        let sup = dy("a3", "p3") - base;
+        assert!(
+            (sub - 4.19).abs() < 1.1,
+            "`vertical-align: sub` on an inline-block lowers it {sub}px below its baseline \
+             position; Chrome gives 4.19 (= parent font-size x 0.25). Reading 2.0 means the atomic \
+             arm is still on `ascent * 0.15` while the TEXT arm is on the measured constant."
+        );
+        assert!(
+            (sup + 6.33).abs() < 1.1,
+            "`vertical-align: super` raises it {sup}px; Chrome gives -6.33 (= parent font-size x \
+             0.375). Reading -5.0 means the atomic arm is still on `ascent * 0.35`."
+        );
     }
 
     #[test]

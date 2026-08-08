@@ -11,12 +11,12 @@
 
 | | value | over |
 |---|---|---|
-| ticks landed | **727** | ticks 1–1012 |
-| median tick cycle | **27m** | 726 intervals |
+| ticks landed | **728** | ticks 1–1013 |
+| median tick cycle | **27m** | 727 intervals |
 | median, last 10 | **34m** | 10 intervals |
 | fastest / slowest | 5s / 5.4d | |
-| **ticks per hour** | **1.09** | 665.1h elapsed |
-| median verify wall | **63s** | 666 ticks |
+| **ticks per hour** | **1.09** | 665.5h elapsed |
+| median verify wall | **63s** | 667 ticks |
 | wall trend | 39s → 13m — getting slower ⚠️ | first 3 vs last 3 |
 
 The **cycle** is the real unit: implement → debug → verify wall → land. The wall is only part of
@@ -28,10 +28,10 @@ it, and a wall that grows taxes every future tick, so it is tracked separately f
 
 * **capabilities asserted** (`G_CAPABILITY`): 48 → **81**
 * **live gates**: 27 → **428**
-* **✅ rows in the capability ledger**: 144 → **510**
+* **✅ rows in the capability ledger**: 144 → **511**
 * **Bar 0 — oracle hangs**: 0 of 265 sites
 
-**341 of 727 ticks** (47%) moved a
+**341 of 728 ticks** (47%) moved a
 user-visible capability. The rest were instruments, infrastructure and corrections — and the
 ledger says the corrections were not overhead: three of its top three priorities were phantoms,
 and finding that out redirected everything after it.
@@ -824,5 +824,6 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 | **1010** | 2026-08-07 21:59 | 10m | measurement | 13m | +66/−3 | 428 | 81 | 56.0% · | the property the audit ranked yesterday is invisible to the oracle (2026-08-07) |
 | **1011** | 2026-08-07 22:02 | 3m | measurement | 13m | +68/−3 | 428 | 81 | 56.0% · | the self-audit, and the one thing it cannot see is the thing this window kept finding (202 |
 | **1012** | 2026-08-07 22:06 | 4m | measurement | 13m | +180/−4 | 428 | 81 | 56.0% · | the check that PROPOSES a correction and never applies it (2026-08-07) |
+| **1013** | 2026-08-07 22:31 | 25m | primitive | 13m | +243/−9 | 428 | 81 | 56.0% · | the same property twice, and a comment saying they could not diverge (2026-08-07) |
 
 *`·` after a WPT figure means **carried forward**, not measured this tick.*
