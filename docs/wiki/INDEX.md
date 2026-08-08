@@ -324,6 +324,8 @@
   - L6360 · ⚠ A rotation about x or y is NOT beyond a 2D pipeline — measured
   - L6377 · A rotation about x or y is a SCALE on the other axis, and a gate asserted otherwise for 150 ticks
   - L6404 · ⚠⚠⚠ The gate asserted the reasoned number, so fixing the bug looked like a regression
+  - L6419 · A non-visible overflow zeroes the automatic minimum size — the flex web's escape hatch
+  - L6453 · ⚠ Banked, measured and NOT built: overflow-wrap: break-word must not reduce min-content
 
 ## browser-capabilities.md
 `docs/wiki/browser-capabilities.md`
@@ -1701,4 +1703,4 @@
   - L124 · Rank mechanisms by FLIP RATE, not failing-subtest count — CSS layout is a multi-assertion slog
 
 ---
-1608 sections across 22 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+1610 sections across 22 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.

@@ -11407,6 +11407,88 @@ mod tests {
         );
     }
 
+    /// **`overflow: hidden` ZEROES A FLEX ITEM'S AUTOMATIC MINIMUM SIZE — the most widely-used
+    /// escape hatch on the flex web, and we ignored it.**
+    ///
+    /// CSS Box Sizing §5.1 / Flexbox §4.5: `min-width: auto` on a flex item resolves to its
+    /// min-content size **only while the item's overflow in that axis is `visible`**. A non-visible
+    /// overflow resolves it to **zero** — which is exactly why `.item { overflow: hidden }` is the
+    /// canonical fix for *"my flex row will not shrink"*, and why it appears in every truncating
+    /// sidebar, breadcrumb, chat list and table-shaped flex row.
+    ///
+    /// Chrome-measured (headless, 1200px), a 200px flex row whose only item holds a 337px
+    /// `white-space: nowrap` string:
+    ///
+    /// ```text
+    ///                                        Chrome    before    after
+    ///   flex item, nowrap                    337.16     337       337     <- CONTROL
+    ///   flex item, nowrap, min-width: 0      200        200       200     <- CONTROL
+    ///   flex item, nowrap, overflow: hidden  200        337       200
+    /// ```
+    ///
+    /// ⚠ **`min-width: 0` was already right, and that mirror is what makes this a BRANCH rather
+    /// than the algorithm** — the author who writes the explicit zero has always been served; the
+    /// author who writes `overflow: hidden` was not, and that is the more common of the two
+    /// (**69.0%** of the burndown corpus declares both `display:flex` and an `overflow:hidden`,
+    /// against 46.2% for `min-width:0`).
+    ///
+    /// **RED recipe (run):** drop the `overflow_x != Visible` arm in `taffy_tree`'s `min_size` and
+    /// the `overflow:hidden` row returns to 337 against Chrome's 200, with both controls green.
+    #[test]
+    fn a_non_visible_overflow_zeroes_a_flex_items_automatic_minimum() {
+        let css = "\
+            * { margin:0; padding:0 }
+            body { font: 16px/20px monospace }
+            .c { width:200px }
+            .f { display:flex }";
+        let html = "<body>\
+            <div class=c id=p1><div class=f><div id=w1 style='white-space:nowrap'>aaaaaaaa bbbbbbbb cccccccc dddddddd</div></div></div>\
+            <div class=c id=p2><div class=f><div id=w2 style='white-space:nowrap;min-width:0'>aaaaaaaa bbbbbbbb cccccccc dddddddd</div></div></div>\
+            <div class=c id=p3><div class=f><div id=w3 style='white-space:nowrap;overflow:hidden'>aaaaaaaa bbbbbbbb cccccccc dddddddd</div></div></div>\
+            </body>";
+        let (dom, root) = layout_html(html, css, 1200.0);
+        let rects = root.node_rects(&dom);
+        let w = |id: &str| {
+            let n = dom
+                .descendants(dom.root())
+                .find(|&n| dom.element(n).and_then(|e| e.attr("id")) == Some(id))
+                .unwrap_or_else(|| panic!("no #{id}"));
+            rects
+                .get(&n)
+                .unwrap_or_else(|| panic!("no rect for #{id}"))
+                .width
+        };
+
+        // ── CONTROLS FIRST. The item that must NOT shrink, and the explicit zero that was always
+        //    handled — a fix that moves either of these is a different rule.
+        // ⚠ Asserted as "wider than its container", not as an absolute width: the MinimalCascade
+        // resolves a different default font from the shipping path, so the max-content of this
+        // string is 337.16 under Chrome's monospace and 290.9 here. The RULE is that the item does
+        // not shrink; binding the test to a font metric would make a font change look like a
+        // regression.
+        assert!(
+            w("w1") > 200.5,
+            "a nowrap flex item with `overflow: visible` keeps its min-content width and OVERFLOWS \
+             its 200px container (Chrome 337.16 on its own monospace); got {}",
+            w("w1")
+        );
+        assert!(
+            (w("w2") - 200.0).abs() < 1.1,
+            "`min-width: 0` lets the same item shrink to the line (Chrome 200); got {}",
+            w("w2")
+        );
+
+        // ── THE DEFECT.
+        assert!(
+            (w("w3") - 200.0).abs() < 1.1,
+            "`overflow: hidden` resolves the automatic minimum to ZERO, so the item shrinks to 200 \
+             exactly as `min-width: 0` does (Chrome 200); got {}. Reading 337 means the automatic \
+             minimum is still min-content and the row overflows its container — which is the \
+             h_overflow the burndown counts.",
+            w("w3")
+        );
+    }
+
     #[test]
     fn sticky_shift_pins_then_releases_at_container_bottom() {
         // A header at y=200, 40px tall, sticky top:0, in a container spanning 0..1000.

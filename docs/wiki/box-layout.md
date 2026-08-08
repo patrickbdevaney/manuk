@@ -6415,3 +6415,56 @@ That is the generalisable half of this tick, and it is why every row added here 
 Chrome measurement that produced it — including the exclusion row, which asserts that a genuinely
 mixed axis is left alone *because 91.21 × 48.79 is not a scale on either axis*, not because a comment
 says 3D is hard.
+
+## A non-visible overflow zeroes the automatic minimum size — the flex web's escape hatch
+
+CSS Box Sizing §5.1 and Flexbox §4.5: `min-width: auto` on a flex or grid item resolves to the
+item's **min-content size** — but only while that item's overflow **in that axis** is `visible`. A
+non-visible overflow (`hidden`, `scroll`, `auto`, `clip`) resolves it to **zero**.
+
+That exception is not a corner: it is *the* reason `.item { overflow: hidden }` is the canonical fix
+for "my flex row will not shrink", and it appears in every truncating sidebar, breadcrumb trail, chat
+list and table-shaped flex row on the web. Measured against Chrome, a 200px flex row whose only item
+holds a 337px `white-space: nowrap` string:
+
+```text
+                                          Chrome    before    after
+   flex item, nowrap                      337.16     337       337     <- CONTROL: must NOT shrink
+   flex item, nowrap, min-width: 0        200        200       200     <- CONTROL: already right
+   flex item, nowrap, overflow: hidden    200        337       200
+```
+
+⚠ **`min-width: 0` was already correct, and that mirror is what makes this a branch rather than the
+algorithm.** The author who writes the explicit zero has always been served; the author who writes
+`overflow: hidden` was not — and that is the more common of the two. Priced on the burndown corpus
+with linked stylesheets: **69.0%** of sites declare both `display:flex` and an `overflow:hidden`,
+against **46.2%** for `min-width:0`.
+
+The failure it produces is `h_overflow`, one of the four jarring dimensions M1 is a conjunction of
+and non-clean on 40 of 123 scored sites — an item that refuses to shrink pushes its row past the
+container and everything downstream of it sideways.
+
+**Applied per axis and to every box, not only to flex/grid items.** `overflow-x` governs the inline
+minimum and `overflow-y` the block one, because the property is per-axis. Applying it everywhere is
+safe rather than sloppy: a block box's automatic minimum is already zero, so the rule can only ever
+agree with it — and scoping it to "items" would need the parent's display, which is not available
+where the style is built.
+
+### ⚠ Banked, measured and NOT built: `overflow-wrap: break-word` must not reduce min-content
+
+The same battery found a second rule, in the same function's neighbourhood, and it is a real
+distinction the spec draws:
+
+```text
+   a 30-character unbreakable token in a 200px flex row      Chrome     ours
+     (no property)                                          288.98     289      ✓
+     word-break: break-all                                  200        200      ✓
+     overflow-wrap: anywhere                                200        200      ✓
+     overflow-wrap: break-word                              288.98     200      ✗
+```
+
+`anywhere` **does** affect the intrinsic min-content size; `break-word` **does not** — it only
+permits the break when the line is actually being laid out. We treat the two identically. Priced at
+**48.5%** of the corpus (`overflow-wrap|word-wrap: break-word`) against 11.7% for `anywhere`. Not
+built in the same tick as the rule above, because two RED proofs in one tick make neither of them a
+proof.

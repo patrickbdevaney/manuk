@@ -252,9 +252,48 @@ pub fn to_taffy_style(cs: &ComputedStyle, calc: &mut Vec<(f32, f32)>) -> Style {
             width: dimension(cs.width, calc),
             height: dimension(cs.height, calc),
         },
+        // ⚠⚠⚠ **A NON-`visible` OVERFLOW ZEROES THE AUTOMATIC MINIMUM SIZE, AND THAT IS THE MOST
+        // WIDELY-USED ESCAPE HATCH ON THE FLEX WEB.**
+        //
+        // CSS Box Sizing §5.1 / Flexbox §4.5: `min-width: auto` on a flex or grid item resolves to
+        // the item's min-content size — **but only while the item's overflow in that axis is
+        // `visible`**. `overflow: hidden` (or `scroll`/`auto`/`clip`) resolves it to **zero**, which
+        // is precisely why `.item { overflow: hidden }` is the canonical fix for "my flex row will
+        // not shrink" and appears in every truncating sidebar, breadcrumb, chat list and
+        // table-shaped flex row on the web. Measured against Chrome, a 200px flex row whose item
+        // holds a 337px `white-space: nowrap` string:
+        //
+        // ```text
+        //                                                Chrome     before     after
+        //   flex item, nowrap                            337.16     337        337     <- control
+        //   flex item, nowrap, min-width: 0              200        200        200     <- control
+        //   flex item, nowrap, overflow: hidden          200        337        200
+        // ```
+        //
+        // ⚠ **`min-width: 0` was already correct, and that mirror is what makes this a branch rather
+        // than the algorithm.** An author who writes the explicit zero got the right answer here for
+        // as long as taffy has been in the tree; the author who writes `overflow: hidden` — which is
+        // the more common of the two, 69.0% of the burndown corpus declares BOTH `display:flex` and
+        // an `overflow:hidden` against 46.2% for `min-width:0` — did not.
+        //
+        // Per-axis, because the property is: `overflow-x` governs the inline minimum and
+        // `overflow-y` the block one. Applying it to every box, not just flex/grid items, is safe:
+        // a block box's automatic minimum is already zero, so this can only ever agree with it.
         min_size: Size {
-            width: dimension(cs.min_width, calc),
-            height: dimension(cs.min_height, calc),
+            width: if cs.overflow_x != manuk_css::Overflow::Visible
+                && matches!(cs.min_width, manuk_css::Dim::Auto)
+            {
+                length(0.0)
+            } else {
+                dimension(cs.min_width, calc)
+            },
+            height: if cs.overflow_y != manuk_css::Overflow::Visible
+                && matches!(cs.min_height, manuk_css::Dim::Auto)
+            {
+                length(0.0)
+            } else {
+                dimension(cs.min_height, calc)
+            },
         },
         max_size: Size {
             width: dimension(cs.max_width, calc),

@@ -46371,6 +46371,82 @@ PERF: none — one UA rule and one narrowed branch in a cascade that already ran
 WIKI: `docs/wiki/css-cascade.md` — where Chrome draws the form-control `box-sizing` line, and why a
 layout-crate test cannot see it.
 
+## Tick 1014 — the escape hatch 69% of the corpus uses, and we ignored it (2026-08-07)
+
+TICK SHAPE: primitive — the `white-space` / intrinsic-size battery (check #91's second ranked area),
+and the larger of the two defects in it. **16 rows, 14 exact, and the two failures are both
+min-content-contribution rules inside a flex item — which is the `h_overflow` mechanism.**
+
+⚠⚠⚠ **`overflow: hidden` ZEROES A FLEX ITEM'S AUTOMATIC MINIMUM SIZE, AND WE APPLIED MIN-CONTENT
+REGARDLESS.** CSS Box Sizing §5.1 / Flexbox §4.5: `min-width: auto` resolves to the item's
+min-content size **only while its overflow in that axis is `visible`**; a non-visible overflow
+resolves it to **zero**. Chrome-measured, a 200px flex row whose only item holds a 337px
+`white-space: nowrap` string:
+
+```text
+                                          Chrome    before    after
+   flex item, nowrap                      337.16     337       337     <- CONTROL: must NOT shrink
+   flex item, nowrap, min-width: 0        200        200       200     <- CONTROL: already right
+   flex item, nowrap, overflow: hidden    200        337       200
+```
+
+**This is not a corner of the spec — it is the flex web's escape hatch.** `.item { overflow: hidden }`
+is *the* canonical fix for *"my flex row will not shrink"*, and it is in every truncating sidebar,
+breadcrumb, chat list and table-shaped flex row. Priced with linked stylesheets: **69.0% of the
+burndown corpus declares both `display:flex` and an `overflow:hidden`**, against 46.2% for
+`min-width:0` — the highest-weight construct pair this loop has measured.
+
+⚠⚠⚠ **AND `min-width: 0` WAS ALREADY RIGHT, WHICH IS WHAT MAKES IT A BRANCH AND NOT THE ALGORITHM.**
+The author who writes the explicit zero has been served the whole time; the author who writes
+`overflow: hidden` was not. Without that mirror row the diagnosis is *"flex items never shrink"* —
+false, and it would have sent the tick at taffy's flex algorithm instead of at four lines of style
+translation. **Sixth window running in which the row that named the branch was not one of the rows
+that made me look.**
+
+The failure it produces is `h_overflow`: one of the four jarring dimensions M1 is a **conjunction**
+of, non-clean on 40 of 123 scored sites at t997. An item that refuses to shrink pushes its row past
+the container and everything downstream sideways.
+
+⚠⚠ **DEFECT 2, MEASURED AND NOT BUILT: `overflow-wrap: break-word` MUST NOT REDUCE MIN-CONTENT.**
+The spec draws a real distinction and we erase it:
+
+```text
+   a 30-character unbreakable token in a 200px flex row      Chrome     ours
+     (no property)                                          288.98     289      exact
+     word-break: break-all                                  200        200      exact
+     overflow-wrap: anywhere                                200        200      exact
+     overflow-wrap: break-word                              288.98     200      WRONG
+```
+
+`anywhere` affects the intrinsic min-content size; `break-word` only permits the break **during line
+layout**. Two of the three neighbours are already exact, which is what makes this a distinction
+rather than a missing feature. Priced at **48.5%** (`overflow-wrap|word-wrap: break-word`) against
+11.7% for `anywhere` — the older spelling is the one every reset ships. Not built here: two RED
+proofs in one tick make neither of them a proof.
+
+⚠ **THE OTHER FOURTEEN ROWS ARE CLEARED, INCLUDING FOUR THAT ARE EASY TO GET WRONG**: a `nowrap`
+block keeps its container width and overflows (it does not grow); `white-space: pre` likewise;
+`pre-wrap` and `pre-line` wrap; a `nowrap` GRID item takes 177.06 and a `nowrap` table-cell 188.88,
+both exact; and an inline-block with `nowrap` shrink-to-fits to 163.77.
+
+⚠ **AND THE GATE'S CONTROL HAD TO BE RE-STATED AS A RELATIONSHIP, NOT A NUMBER.** Written first as
+`w1 > 300.0` from the Chrome measurement, it failed at **290.9** — because the `MinimalCascade` the
+layout unit tests run resolves a different default font than the shipping path, so the same string's
+max-content differs by 46px. The rule is *"the item does not shrink"*; binding the assertion to a
+font metric would have made a font change look like a regression. **A gate that asserts a
+Chrome-measured absolute on a path that does not use Chrome's font is asserting the font.**
+
+RATCHET: `manuk-layout` 129/129 (128 before this tick's gate). Nothing traded.
+
+GATE: `a_non_visible_overflow_zeroes_a_flex_items_automatic_minimum` — three rows, two of them
+controls asserted FIRST. **RED-PROVEN by running it**: dropping the `overflow_x != Visible` arm puts
+the `overflow:hidden` row back to its unshrunk width with both controls green.
+
+PERF: none — two conditionals in the style translation, evaluated once per box.
+
+WIKI: `docs/wiki/box-layout.md` — "A non-visible overflow zeroes the automatic minimum size — the
+flex web's escape hatch".
+
 ## Tick 1013 — the same property twice, and a comment saying they could not diverge (2026-08-07)
 
 TICK SHAPE: primitive — the inline-block / `vertical-align` battery check #91's steer ranked first
