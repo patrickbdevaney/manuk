@@ -46371,6 +46371,112 @@ PERF: none — one UA rule and one narrowed branch in a cascade that already ran
 WIKI: `docs/wiki/css-cascade.md` — where Chrome draws the form-control `box-sizing` line, and why a
 layout-crate test cannot see it.
 
+## Tick 1045 — a construct cleared at 30 of 30, and the third one-point constant this session (2026-08-08)
+
+TICK SHAPE: primitive — two batteries on two unmeasured constructs. **One came back completely clean,
+which is a result and is banked as one; the other found a 25px error, a fix, and a residual whose
+shape this session has now seen three times.**
+
+⚠⚠⚠ **`var()` IS CLEAN — 30 OF 30, AND THAT IS THE TICK'S FIRST OUTPUT.** CSS custom properties are
+**31.6% of the burndown corpus** (`CORPUS-CONSTRUCTS.md`, the #7 construct) and had never had a
+*geometry* differential — only CSSOM attention at t427. A 30-row battery in geometry-bearing
+positions, negative rows first, is Chrome-exact on every row, **including every case that would have
+been worth a tick on its own**:
+
+```text
+   substitution in width/height/padding/margin/border-width      ✓ 5 rows
+   var(--nope, 90px) fallback · var(--w, 90px) ignored fallback   ✓
+   GUARANTEED-INVALID: `width:100px; width:var(--nope)` → 400px   ✓  ← the inherited value, NOT
+                                                                     the earlier declaration and
+                                                                     NOT `auto`
+   var(--nope, 3px 9px) — a fallback that is not a length         ✓
+   inside calc() · calc(var * 2) · calc(var - var) · min(var, 40) ✓ 5 rows
+   a var whose value IS a var · a var in a shorthand              ✓
+   inheritance · scope · specificity · `--W` vs `--w` (CASE)      ✓ 5 rows
+   `--x: ;` (empty, valid, substitutes nothing) → falls back      ✓
+   `--x: initial` (guaranteed-invalid) → the fallback fires       ✓
+   var( --w ) with whitespace · var in font-size → em geometry    ✓
+```
+
+**A cleared construct is worth writing down precisely because the next tick will otherwise look
+here.** t962's rule says frequency ranks where to LOOK and a probe says whether anything is THERE;
+this is the probe saying no, at the #7 construct, for ~15 minutes and no build.
+
+⚠⚠⚠ **A `<select>`'S BOX IGNORES `line-height` AND AN `<input>`'S DOES NOT.** Chrome renders a
+dropdown with the native widget's own metrics, so leading declared on it never reaches its box.
+Measured, same declaration, same page, border and padding zeroed:
+
+```text
+   <select style="line-height:40px"><option>a</option></select>   Chrome 17   ours 40
+   <select>                              (the reference row)      Chrome 17   ours 15
+   <input  style="line-height:40px">                              Chrome 40   ours 40  ✓ CONTROL
+```
+
+**The `<input>` row is the control and it is the whole argument.** It carries the identical
+declaration, it was already exact, and it must stay exact — so the rule cannot be *"a form control
+ignores leading"*, which is what the select row alone would have supported. A global `line-height` on
+`body` is ordinary authoring, and against it **every dropdown on the page was a full line-height tall
+instead of one line**; here that is a 25px error on a 17px control.
+
+GATE: G_FORM section (6) — RED-proven both ways (delete the branch → 40 vs 15; widen it to every form
+control → the `<input>` control collapses to 15), in the wall's existing launch entry and existing
+`#[test]`. ⚠⚠ **The two select rows are asserted EQUAL TO EACH OTHER, not to 17**, and the gate says
+why in its own message: our plain `<select>` is 15 against Chrome's 17, so banking a number here
+would either assert one we do not produce or bank 15 and force a re-bank when the residual below
+lands — the t1007 failure mode exactly. **The relative claim is the one this tick proved, and it is
+Chrome-true independently of the residual.**
+
+⚠⚠⚠ **THE RESIDUAL IS A ONE-POINT CONSTANT, AND THAT IS THE THIRD TIME IN THIS SESSION.** The ladder,
+`border:0; padding:0`, so the box IS the content:
+
+```text
+   font-size      8      10    13.333    16      20    26.666     40
+   Chrome        11      13      17      19      24      32       46
+   ours           9      11      15      18      23      31       46
+   delta         +2      +2      +2      +1      +1      +1        0
+```
+
+Ours is the face's own `ascent + descent + lineGap`, which is right at 40 and drifts everywhere
+below. `<textarea>` shows the same shape — its `rows` formula carries a **`1.125` factor whose own
+comment admits it is "Chrome's own ratio at the control font"** — and it is exact at `rows=1` in the
+UA font (176x15) and 24-against-23 at `font-size: 20px`. **These are constants fitted at `fs =
+13.333` and nowhere else**, which is precisely what t1043 found for the text-field border/intercept
+pair and t1044 found for the cancelled leading term. Three times, three different constants, one
+shape:
+
+> **A CONSTANT FITTED AT THE ONE FONT SIZE EVERY FIXTURE USES IS INDISTINGUISHABLE FROM A MODEL.**
+> The UA control font is 13.333px, so every form-control fixture anybody writes lands on the single
+> point where a wrong constant and the right one agree. **Vary the font size** — it is one extra row,
+> and it has now paid three times.
+
+The real fix is named rather than guessed: `stylo_engine`'s comment says `line-height: normal` *"cannot
+be resolved here — the metrics live in the text layer, which this function has no handle on"*, so the
+ratios exist because the cascade cannot reach a `FontContext`. That is a plumbing tick, and shipping
+another fudge factor tuned to two points instead of one would be the same mistake with a smaller
+error bar. **Not taken.**
+
+PRICED — 10 sites against the t1044 binary, same hour: **6 byte-identical**, and all four movers are
+inside bands measured for those exact sites earlier in this session (`paypal` 0.6498 is its modal
+value on both binaries; `otomoto` 0.7746 is inside `[0.752, 0.799]`; `sports.yahoo` 0.8645 vs 0.8654;
+`unoeste` swings on coverage and has read 0.765/0.778/0.822). **Zero attributable regressions.**
+Batteries: `var()` **30/30**, B1 53/55, B2 24/27, the baseline ladder 17/20, and t1042's independent
+`<svg>` battery **unmoved at 29/29**.
+
+RATCHET: `manuk-layout` 131/131, `manuk-css` 32/32, `manuk-paint` 22/22, `manuk-dom` 11/11, G_FORM
+green.
+
+RESIDUE, carried forward with numbers: the intrinsic-height ladder above (needs a `FontContext` in
+the cascade, not another ratio) · `<select>` also wants Chrome's UA `align-items: center` (a tall
+select is `dy 0` in Chrome and `dy 3` here) and is ~4px narrow at every size · an EMPTY `<button>`
+takes its content-box BOTTOM as its baseline (`dy 12`) · `<input type=range|color|image>` render as
+an **8x6 stub** against Chrome's 129x16, 50x27 and 20x20, and `type=image` is a replaced element not
+treated as one.
+
+PERF: one tag comparison per form control that renders synthetic text.
+
+WIKI: `docs/wiki/css-cascade.md` — "A dropdown ignores its leading, and the constant that was fitted
+at one point".
+
 ## Tick 1044 — the search found no line because the DOM has none, and a term that cancelled (2026-08-08)
 
 TICK SHAPE: primitive — the residue t1043 banked, closed. **Every remaining `<input>` divergence

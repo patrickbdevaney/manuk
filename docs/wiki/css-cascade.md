@@ -2255,3 +2255,73 @@ the middle of a tall box where ours pins it to the top (`select height:30px` is 
 `<button></button>`), a third rule again. And `<input type=range|color|image>` render as an **8x6
 stub** — no widget at all — against Chrome's 129x16, 50x27 and 20x20; `type=image` is a replaced
 element and is not treated as one.
+
+## A dropdown ignores its leading, and the constant that was fitted at one point (tick 1045)
+
+Two batteries on two constructs that had never had a geometry differential. One came back completely
+clean; the other found a 25px error and a residual worth more than the fix.
+
+### `var()` is clean — 30 of 30
+
+CSS custom properties are **31.6% of the burndown corpus** (the #7 construct) and had only ever had
+CSSOM attention. A 30-row battery in geometry-bearing positions is Chrome-exact on every row,
+including every case that would have been worth its own tick:
+
+- substitution into `width`/`height`/`padding`/`margin`/`border-width`
+- `var(--nope, 90px)` fallback, and a present variable *ignoring* its fallback
+- **guaranteed-invalid**: `width:100px; width:var(--nope)` resolves to the **inherited** value
+  (400px here) — not the earlier declaration and not `auto`
+- a fallback that is not a length (`var(--nope, 3px 9px)`), and one that is a `calc()`
+- inside `calc()`, `min()`, a shorthand; a variable whose value is itself a `var()`
+- inheritance, scoping, specificity, and `--W` vs `--w` (custom properties are case-**sensitive**)
+- `--x: ;` (empty but valid — substitutes nothing, so the fallback fires) and `--x: initial`
+
+**A cleared construct is worth recording precisely because the next tick will otherwise look here.**
+Frequency ranks where to look; a probe says whether anything is there. This is the probe saying no,
+at the #7 construct, for fifteen minutes and no build.
+
+### A `<select>`'s box ignores `line-height`; an `<input>`'s does not
+
+Chrome draws a dropdown with the native widget's own metrics, so leading declared on it never reaches
+its box. Same declaration, same page, border and padding zeroed:
+
+```text
+   <select style="line-height:40px"><option>a</option></select>   Chrome 17   ours 40
+   <select>                              (the reference row)      Chrome 17   ours 15
+   <input  style="line-height:40px">                              Chrome 40   ours 40  ← CONTROL
+```
+
+**The `<input>` row is the whole argument.** It carries the identical declaration and was already
+exact, so the rule cannot be *"a form control ignores leading"* — which is what the select row alone
+would have supported. A global `line-height` on `body` is ordinary authoring, and against it every
+dropdown on the page was a full line-height tall instead of one line.
+
+⚠ The gate asserts the two select rows **equal to each other**, not to 17, because our plain
+`<select>` is 15 and Chrome's is 17. Banking a number would either assert one we do not produce or
+bank 15 and force a re-bank when the residual below lands — the t1007 failure mode, where a gate's
+reasoned reference value turns the next correct fix into a red wall.
+
+### ⚠⚠⚠ The residual: a constant fitted at the one font size every fixture uses
+
+`border:0; padding:0`, so the box *is* the content:
+
+```text
+   font-size      8      10    13.333    16      20    26.666     40
+   Chrome        11      13      17      19      24      32       46
+   ours           9      11      15      18      23      31       46
+```
+
+Ours is the face's own `ascent + descent + lineGap` — right at 40, drifting everywhere below.
+`<textarea>` has the same shape: its `rows` height formula carries a `1.125` factor whose own comment
+admits it is *"Chrome's own ratio at the control font"*, and it is exact at `rows=1` in the UA font
+and 24-against-23 at `font-size: 20px`.
+
+> **A CONSTANT FITTED AT THE ONE FONT SIZE EVERY FIXTURE USES IS INDISTINGUISHABLE FROM A MODEL.**
+> The UA control font is 13.333px, so *every* form-control fixture anybody writes lands on the single
+> point where a wrong constant and the right one agree. Vary the font size — one extra row.
+
+This is the **third** instance in one session: t1043's border/intercept pair (`2.925·fs + 6` and
+`2.75·fs + 8`, equal at 13.333 and nowhere else), t1044's cancelled leading term, and now this. The
+real fix is named rather than guessed: the ratios exist because `stylo_engine` cannot reach a
+`FontContext` to resolve `line-height: normal` — a plumbing tick. Shipping a fudge factor tuned to two
+points instead of one would be the same mistake with a smaller error bar.

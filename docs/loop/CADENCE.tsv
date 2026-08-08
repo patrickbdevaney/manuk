@@ -754,3 +754,4 @@ tick	sha	epoch	iso	delta_s	shape	wall_s	files	added	deleted	gates	claims	wpt_pas
 1042	4f970f16	1786205834	2026-08-08T12:17:14-04:00	4051	primitive	808	11	492	68	428	81	3896	6960	0	521	0	the ratio may fill an axis, never overwrite one — and two defects that cancelled exactly (2026-08-08)
 1043	f56dfdc2	1786209814	2026-08-08T13:23:34-04:00	3980	primitive	808	10	608	46	428	81	3896	6960	0	522	0	two constants that are equal at exactly one point, and every measurement was at that point (2026-08-08)
 1044	03516b3c	1786213044	2026-08-08T14:17:24-04:00	3230	primitive	808	10	559	34	428	81	3896	6960	0	523	0	the search found no line because the DOM has none, and a term that cancelled (2026-08-08)
+1045	fe267bfc	1786214932	2026-08-08T14:48:52-04:00	1888	primitive	808	9	297	34	428	81	3896	6960	0	525	0	a construct cleared at 30 of 30, and the third one-point constant this session (2026-08-08)

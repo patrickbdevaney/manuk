@@ -3689,7 +3689,38 @@ impl Ctx<'_> {
         // Form controls render their *value*/label as synthetic text (an `<input>` has no
         // child nodes; a `<button>` uses its real children so it is not handled here).
         if let Some(text) = form_control_text(self.dom, node) {
-            let style = text_style(self.style_of(node), self.fonts);
+            let mut style = text_style(self.style_of(node), self.fonts);
+            // ⚠⚠⚠ **A `<select>`'s BOX IGNORES `line-height`, AND AN `<input>`'s DOES NOT — WHICH IS
+            // WHAT MAKES THIS SELECT-SPECIFIC RATHER THAN A FORM-CONTROL RULE** (t1045). Chrome
+            // renders a dropdown with the native widget's own metrics, so leading declared on it
+            // never reaches its box; a text field is an ordinary block whose one line is leaded
+            // normally. Measured on the same declaration, same page, border and padding zeroed:
+            //
+            // ```text
+            //   <select style="line-height:40px"><option>a</option></select>   Chrome 17   ours 40
+            //   <select>                            (the reference row)        Chrome 17   ours 15
+            //   <input  style="line-height:40px">                              Chrome 40   ours 40  ✓
+            // ```
+            //
+            // **The `<input>` row is the control and it is the whole argument**: it carries the
+            // identical declaration, it was already exact, and it must stay exact — so the rule
+            // cannot be "a form control ignores leading", which is what the select row alone would
+            // have supported. A global `line-height` on `body` is ordinary authoring, and against
+            // it every dropdown on the page was a full line-height tall instead of one line.
+            //
+            // ⚠ **This does NOT claim our 15 is Chrome's 17** — it is not, and the gate says so by
+            // asserting the two select rows are EQUAL rather than banking a number. That residual
+            // is the intrinsic-height ladder (see the journal): our `line-height: normal` is a
+            // per-size constant fitted at the UA control font, and it drifts at every other size.
+            // Correcting it is a different fix, and a gate that pinned 15 here would have to be
+            // re-banked when it lands — the t1007 failure mode.
+            if self.dom.tag_name(node) == Some("select") {
+                let lm = self.fonts.line_metrics(style.font_key, style.font_size);
+                let h = lm.height();
+                if h > 0.0 {
+                    style.line_height = h;
+                }
+            }
             // ⚠ **A LIST-BOX `<select>` IS SIZED BY ITS ROW COUNT, NOT BY ITS TEXT.** Computed here
             // rather than after the inline pass because it must also override the empty-value
             // early-return below: a `<select multiple>` with no options is still four rows tall.

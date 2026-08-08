@@ -688,6 +688,10 @@
   - L2194 · The model, and the ladder that fixes it
   - L2214 · ⚠⚠⚠ The falsification pass deleted a term, again
   - L2243 · Where a baseline actually shows up
+  - L2259 · A dropdown ignores its leading, and the constant that was fitted at one point (tick 1045)
+  - L2264 · var() is clean — 30 of 30
+  - L2283 · A <select>'s box ignores line-height; an <input>'s does not
+  - L2304 · ⚠⚠⚠ The residual: a constant fitted at the one font size every fixture uses
 
 ## `<dialog>`, `popover`, and the top layer (ticks 194-195)
 `docs/wiki/dialog-and-top-layer.md`
@@ -1752,4 +1756,4 @@
   - L124 · Rank mechanisms by FLIP RATE, not failing-subtest count — CSS layout is a multi-assertion slog
 
 ---
-1659 sections across 22 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+1663 sections across 22 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.

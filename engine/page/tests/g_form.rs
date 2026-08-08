@@ -39,6 +39,7 @@ const HTML: &str = r#"<!doctype html><html><body>
     <div id="bl4" style="font:16px/20px monospace"><span id="bs4">xx</span><input id="bi4" style="width:50px;height:0;padding:5px;border:0"></div>
     <div id="bl5" style="font:16px/20px monospace"><span id="bs5">xx</span><input id="bi5" type="checkbox" style="margin:0"></div>
     <div id="bl6" style="font:16px/20px monospace"><span id="bs6">xx</span><input id="bi6" style="width:50px;height:0;padding:0;border:0;line-height:30px"></div>
+    <div id="lh"><select id="slref" style="border:0;padding:0"><option>a</option></select><select id="sllh" style="border:0;padding:0;line-height:40px"><option>a</option></select><input id="inref" style="border:0;padding:0"><input id="inlh" style="border:0;padding:0;line-height:40px"></div>
     <div id="out">-</div>
     <div id="fired">no</div>
     <script>
@@ -212,6 +213,54 @@ fn forms_serialize_correctly_and_submit_is_cancellable() {
     // `margin: 3px 3px 3px 4px`, so two adjacent boxes sit 13 + 3 + 4 = 20 apart. Ours were zero,
     // which is what put every "☐ Remember me" label 4px left of where Chrome puts it — and a row of
     // controls ACCUMULATES it rather than sharing one constant offset.
+    // ── (6) **A `<select>`'S BOX IGNORES `line-height` AND AN `<input>`'S DOES NOT** (t1045).
+    //        Chrome renders a dropdown with the native widget's own metrics, so leading declared on
+    //        it never reaches its box; a text field is an ordinary block whose one line is leaded
+    //        normally. A global `line-height` on `body` is ordinary authoring, and against it every
+    //        dropdown on the page was a full line-height tall instead of one line — here, 40px
+    //        against Chrome's 17.
+    //
+    // ```text
+    //   <select style="line-height:40px">   Chrome 17, and EQUAL to the plain <select>   was 40
+    //   <input  style="line-height:40px">   Chrome 40                                    already ✓
+    // ```
+    //
+    //        ⚠⚠⚠ **THE SELECT ROWS ARE ASSERTED AS EQUAL TO EACH OTHER, NOT TO 17.** Our plain
+    //        `<select>` is 15 and Chrome's is 17 — a separate, measured residual (our
+    //        `line-height: normal` for form controls is a ratio fitted at the UA control font and
+    //        drifts at every other size; see the journal's ladder). Banking 17 here would either
+    //        assert a number we do not produce, or bank 15 and force a re-bank when the ladder is
+    //        fixed — the t1007 failure mode, where a gate's reasoned reference value turns the next
+    //        correct fix into a red wall. The RELATIVE claim is the one this tick proved and it is
+    //        Chrome-true independently of the residual.
+    //
+    //        ⚠⚠ **THE `<input>` ROWS ARE THE CONTROL AND THEY ARE THE WHOLE ARGUMENT.** They carry
+    //        the identical declaration and are absolutely Chrome-exact (15 and 40) — so the rule
+    //        cannot be "a form control ignores leading", which is what the select row alone would
+    //        have supported. **How it goes RED:** delete the `select` branch in `layout_children`'s
+    //        form-control-text arm (the select rows part, 15 vs 40); widen it to every form control
+    //        (`#inlh` collapses to 15).
+    {
+        let h = |sel: &str| box_of(sel).1;
+        assert!(
+            (h("#sllh") - h("#slref")).abs() < 0.51,
+            "G_FORM: a <select> with `line-height:40px` is {}px tall and a plain one is {}px. \
+             Chrome measures BOTH at 17 — leading declared on a dropdown never reaches its box, \
+             because Chrome draws it with the native widget's metrics",
+            h("#sllh"),
+            h("#slref")
+        );
+        assert!(
+            (h("#inlh") - 40.0).abs() < 0.51 && (h("#inref") - 15.0).abs() < 0.51,
+            "G_FORM: CONTROL — an <input> with `line-height:40px` is {}px and a plain one {}px; \
+             Chrome measures 40 and 15. A text field is an ordinary block and DOES take its \
+             leading, which is what makes the select rule select-specific rather than a \
+             form-control one",
+            h("#inlh"),
+            h("#inref")
+        );
+    }
+
     let gap = box_of("#gcb2").2 - box_of("#gcb").2;
     assert!(
         (gap - 20.0).abs() < 0.51,
