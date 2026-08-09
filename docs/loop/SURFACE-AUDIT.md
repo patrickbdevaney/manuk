@@ -5008,3 +5008,110 @@ manufactured seventy of them.
    testharness runner already exists and scores it: **544/915 = 59.5%**. The accurate item is
    **BANK IT** — `wai-aria` and `accname` carry no ratchet row, so 371 failing subtests on the I3
    moat cannot regress because nothing marks them. Build no runner; add the rows.
+
+## Audit #47 — tick 1069 (2026-08-09) — the loop hand-built an oracle for an area that already had a 1,140-test one on disk
+
+### 1 · WHAT WAS MEASURED (every number below was run this audit, not recalled)
+
+The last five ticks (1065–1068) were all found by **one instrument**: a ~30-row HTML fixture, authored
+by the loop, diffed against headless Chrome on `(x, y, w, h)` through `manuk-wpt boxes --html`. It
+found nine defects and it is the most productive thing the loop owns. This audit asks the question
+that instrument cannot ask about itself: **what is it not looking at, and what is already on disk?**
+
+### 2 · ⚠⚠⚠ FINDING 1 — `css/CSS2` IS 9,221 TESTS ON DISK, HAS NEVER BEEN RUN, AND HAS NO RATCHET ROW
+
+```text
+   manuk-wpt ~/wpt/css/CSS2        1606 passed · 4040 FAILED · 3575 skipped   (9221 total)
+     …of which CSS2/tables           68 passed ·  175 FAILED ·  897 skipped   (1140 total)
+```
+
+**`CSS2/tables` is the literal subject of ticks 1065 and 1066**, where the loop hand-authored a
+41-case §17 fixture, discovered five defects and fixed four. A 1,140-test §17 conformance suite was
+sitting in the checkout the whole time and **was never consulted** — not to rank the work, not to
+check it afterwards. The 43 subdirectories are a §-by-§ map of CSS 2.1: `abspos`, `floats`,
+`normal-flow`, `visudet`, `visuren`, `tables`, `zindex`, `stacking-context`, `linebox`, `margin-padding-clear`.
+That is the enumeration t1054 spent a tick constructing by hand, as a directory listing.
+
+> **THE BATTERY AND THE SUITE ANSWER DIFFERENT QUESTIONS, AND THAT IS NOT A DEFENCE.** A suite gives
+> a NUMBER and a regression guard; a battery gives a MECHANISM. None of the five §17 defects would
+> have been *localised* by a pass count, so the battery was the right tool — **the finding is that
+> the loop never LOOKED**, and a 175-failure work-list for the exact area it was working sat unopened.
+
+### 3 · ⚠⚠⚠ FINDING 2 — EVERY BANKED `WPT:` NUMBER IS ONE LANE OF TWO, AND NOTHING SAYS WHICH
+
+The loop has two runners. `manuk-wpt <dir>` is the **reftest** (paint-diffing) runner; `manuk-wpt wpt
+<dir>` is the **testharness** runner — the distinction t1064 published as a correction. Run both
+against three directories the ratchet already tracks:
+
+```text
+                        RATCHET.tsv     testharness lane        reftest lane
+   css/css-backgrounds        3         27/86   = 31.4%      173 passed / 561 scored
+   css/css-position          63         99/311  = 31.8%        9 passed /  83 scored
+   css/css-display           10        124/151  = 82.1%       14 passed /  98 scored
+```
+
+**The banked number matches neither lane, in any of the three rows.** It may well come from a
+different invocation inside `scripts/wpt-sweep.sh` (harness-owned, not inspected here) — the point is
+that `RATCHET.tsv` records a bare integer with **no lane, no subset and no denominator**, so a reader
+cannot tell what moved when it moves. `WPT:TOTAL 422865` inherits all of it. This is #46's *"a total
+over WPT that is a total over a hand-picked subset"* one level deeper: not just which directories, but
+**which runner**.
+
+### 4 · ⚠⚠⚠ FINDING 3 — `TH_TIMEOUT` IS A SILENT DENOMINATOR CUT, WHICH IS THE ONE THING THE CERTIFICATION REDESIGN FORBIDS
+
+```text
+   css/css-backgrounds   FILES 121   TH_TIMEOUT 104      subtests 27/86
+   css/css-position      FILES 110   TH_TIMEOUT  39      subtests 99/311
+   css/css-display       FILES  31   TH_TIMEOUT  14      subtests 124/151
+```
+
+**104 of 121 files in `css-backgrounds` never completed**, and the 86-subtest denominator is what the
+remaining **17** reported — 121 files averaging five subtests would be ~600, so a timed-out file
+contributes zero to the numerator *and* zero to the denominator. `DAILY-DRIVER-CERTIFICATION.md` §2
+is explicit that *"a timeout/crash/bot-wall is a COUNTED FAIL … NEVER a silent drop (dropping the
+hard sites is what made every past reading optimistic)"*. That rule was written for the fidelity
+corpus and **the WPT lane does the exact thing it forbids**: `31.4%` is a score over the tests that
+finished, published as a score over the directory.
+
+### 5 · ⚠⚠ FINDING 4 — THE ONLY DISCOVERY INSTRUMENT THE LOOP USED FOR FIVE TICKS IS STRUCTURALLY BLIND TO PAINT
+
+`boxes --html` reports `(x, y, w, h)`. It cannot see colour, background rendering, border style,
+stacking order, or anything that requires a scroll or an interaction — and **`css/css-backgrounds` is
+the lowest-scoring directory on the whole lever board (3.5%)**. The loop has a paint-diffing
+instrument, it is the reftest runner, it is on disk, and **not one tick this session used it.** Five
+consecutive ticks in a row is exactly the clustering this instrument exists to notice: not that the
+work was wrong, but that the *method* selected the findings.
+
+⚠ And the same blindness explains a fixture failure this session: t1067's grid battery could not
+express `position: sticky` at all (no scroll), which is why sticky remains `gated` with no measurement
+behind it after four batteries in adjacent areas.
+
+### 6 · WHAT SURVIVES FROM #46, RE-CHECKED
+
+`svg` (108 failed), `mathml` (66 failed), `wai-aria` and `accname` (371 failed) remain unbanked. Add
+to them, measured this audit: **`html-aam` — 15 files, `253/335 = 75.5%`, 82 failures, no ratchet
+row, never mentioned in any prior audit.** And `css/CSS2`'s 4,040. **Total known-failing subtests
+outside the ratchet's protection: ~4,667.**
+
+### 7 · WHAT WE HAD BEEN WRONG ABOUT
+
+**That "the WPT checkout contains what the ratchet tracks" (#46) was the whole shape.** It is not: the
+checkout contains **six directories the ratchet does not track**, one of them larger than every css
+directory the ratchet does track, and it is the CSS 2.1 core suite. #46 counted directories against
+upstream and concluded the frame was closed; it never counted the directories *inside the frame that
+carry no row*. A closed loop was diagnosed correctly and its largest instance was missed.
+
+### THE STEER, in order
+
+1. ⚠⚠⚠ **Open `CSS2/tables`'s 175 failures against the t1065/t1066 tree.** It is a ready-made,
+   already-paid-for work-list for the exact area two ticks just landed in, and it will say which of
+   the four fixes moved conformance and which did not — the attribution neither tick could get.
+2. **State the LANE wherever a WPT number is published**, and give `RATCHET.tsv`'s `WPT:` rows a
+   denominator. Harness-owned (`wpt-sweep.sh`, `status-update.sh`) — flagged, not touched.
+3. **`TH_TIMEOUT` must be a counted FAIL**, not a silent drop, or every published WPT percentage is
+   optimistic by the fraction of the directory that hangs — 86% of it, in `css-backgrounds`.
+4. **Take one PAINT tick.** The reftest runner is a reference-diffing instrument the loop already
+   owns and has never used for discovery; `css/CSS2/backgrounds`, `zindex` and `stacking-context` are
+   its ranked entry points, and paint is where the geometry battery cannot follow.
+
+**Next audit due: tick 1079.**

@@ -46371,6 +46371,93 @@ PERF: none — one UA rule and one narrowed branch in a cascade that already ran
 WIKI: `docs/wiki/css-cascade.md` — where Chrome draws the form-control `box-sizing` line, and why a
 layout-crate test cannot see it.
 
+## Tick 1069 — the loop hand-built an oracle for an area that already had a 1,140-test one on disk (2026-08-09)
+
+TICK SHAPE: measurement — surface audit #47 (due every 10 ticks; last at 1060), banked in
+`docs/loop/SURFACE-AUDIT.md`. No engine crate touched. Every number below was **run this tick**.
+
+The last five ticks were all found by **one instrument**: a ~30-row fixture the loop authors itself,
+diffed against headless Chrome on `(x, y, w, h)` through `manuk-wpt boxes --html`. It found nine
+defects and it is the most productive thing here. This audit asks what that instrument cannot ask
+about itself.
+
+⚠⚠⚠ **FINDING 1 — `css/CSS2` IS 9,221 TESTS ON DISK, HAS NEVER BEEN RUN, AND HAS NO RATCHET ROW.**
+
+```text
+   manuk-wpt ~/wpt/css/CSS2      1606 passed · 4040 FAILED · 3575 skipped   (9221 total)
+     …of which CSS2/tables         68 passed ·  175 FAILED ·  897 skipped   (1140 total)
+```
+
+`CSS2/tables` is the **literal subject of ticks 1065 and 1066**, where I hand-authored a 41-case §17
+fixture, found five defects and fixed four. Its 43 subdirectories are a §-by-§ map of CSS 2.1 —
+`abspos`, `floats`, `normal-flow`, `visudet`, `visuren`, `tables`, `zindex`, `stacking-context`,
+`linebox` — which is **the enumeration t1054 spent a whole tick constructing by hand, available as a
+directory listing.**
+
+> **THE BATTERY AND THE SUITE ANSWER DIFFERENT QUESTIONS, AND THAT IS NOT A DEFENCE.** A suite gives
+> a number and a regression guard; a battery gives a mechanism, and none of the five §17 defects
+> would have been *localised* by a pass count. The battery was the right tool. **The finding is that
+> the loop never LOOKED** — a 175-failure work-list for the exact area it was working sat unopened,
+> and with it the attribution neither tick could get.
+
+⚠⚠⚠ **FINDING 2 — EVERY BANKED `WPT:` NUMBER IS ONE LANE OF TWO, AND NOTHING RECORDS WHICH.**
+
+```text
+                        RATCHET.tsv     testharness lane        reftest lane
+   css/css-backgrounds        3         27/86   = 31.4%      173 passed / 561 scored
+   css/css-position          63         99/311  = 31.8%        9 passed /  83 scored
+   css/css-display           10        124/151  = 82.1%       14 passed /  98 scored
+```
+
+The banked integer matches **neither lane, in any of the three rows**. It may come from a different
+invocation inside `wpt-sweep.sh` — harness-owned and not inspected. The point stands either way:
+`RATCHET.tsv` records a bare integer with no lane, no subset and no denominator, so a reader cannot
+tell what moved when it moves. This is #46's *"a total over a hand-picked subset"* one level deeper —
+not just which directories, but **which runner**, and t1064 has already been burned once by exactly
+that distinction.
+
+⚠⚠⚠ **FINDING 3 — `TH_TIMEOUT` IS A SILENT DENOMINATOR CUT, WHICH IS THE ONE THING THE CERTIFICATION
+REDESIGN EXPLICITLY FORBIDS.** `css-backgrounds`: **104 of 121 files never completed**, and the
+86-subtest denominator is what the remaining **17** reported. `DAILY-DRIVER-CERTIFICATION.md` §2 says
+*"a timeout/crash is a COUNTED FAIL … NEVER a silent drop (dropping the hard sites is what made every
+past reading optimistic)"* — written for the fidelity corpus, and the WPT lane does the exact thing
+it forbids. `31.4%` is a score over the tests that finished, published as a score over the directory.
+
+⚠⚠ **FINDING 4 — THE ONLY DISCOVERY INSTRUMENT USED FOR FIVE TICKS IS STRUCTURALLY BLIND TO PAINT.**
+`boxes --html` reports `(x, y, w, h)`: no colour, no background rendering, no border style, no
+stacking order, nothing needing a scroll or a click. **`css/css-backgrounds` is the lowest-scoring
+directory on the whole lever board.** The loop owns a paint-diffing instrument — the reftest runner —
+and not one tick this session used it. Five consecutive ticks clustered in one area is the shape this
+audit exists to notice: not that the work was wrong, but that **the method selected the findings.**
+⚠ The same blindness explains a live gap: t1067's grid battery could not express `position: sticky`
+at all (no scroll), which is why `sticky` is still `gated` with no measurement behind it after four
+batteries in adjacent areas.
+
+⚠ **WHAT SURVIVES FROM #46, RE-CHECKED, PLUS ONE NEW:** `svg` (108 failed), `mathml` (66),
+`wai-aria`+`accname` (371) are still unbanked, and **`html-aam` — 15 files, 253/335 = 75.5%, 82
+failures — has no ratchet row and appears in no prior audit.** With `css/CSS2`'s 4,040 that is
+**~4,667 known-failing subtests outside the ratchet's protection.**
+
+**WHAT WE HAD BEEN WRONG ABOUT.** #46 concluded *"the checkout contains what the ratchet tracks"* and
+called the frame closed. It is not: the checkout holds **six directories the ratchet does not track**,
+one of them larger than every `css/` directory it does — and it is the CSS 2.1 core suite. The closed
+loop was diagnosed correctly and its largest instance was missed, because #46 counted the checkout
+against **upstream** and never counted the directories *inside* it that carry no row.
+
+THE STEER (full text in audit #47): open `CSS2/tables`'s 175 failures against the t1065/t1066 tree —
+a paid-for work-list for the area two ticks just landed in · state the LANE wherever a WPT number is
+published and give the `WPT:` rows a denominator (harness-owned, flagged not touched) · `TH_TIMEOUT`
+must be a counted FAIL · **take one PAINT tick**, because the reftest runner is a reference-diffing
+instrument the loop already owns and has never used for discovery.
+
+RATCHET: measurement only, no engine crate touched. `manuk-layout` 149/149 unmoved. **Bar 0 clean on
+every run in this audit — `HANG/CRASH 0` across 9,221 CSS2 reftests and four testharness
+directories.**
+
+PERF: none — measurement only.
+
+WIKI: none — this tick's artefact is `docs/loop/SURFACE-AUDIT.md` audit #47. [no-pattern]
+
 ## Tick 1068 — transforms are clean at 26 of 27, and the failing row was the one I had labelled a NEGATIVE (2026-08-09)
 
 TICK SHAPE: primitive — a 27-case CSS transform GEOMETRY battery against headless Chrome on the
