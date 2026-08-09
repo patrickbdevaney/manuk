@@ -398,6 +398,10 @@
   - L7678 · The paired probe is what localised it, and it needed a THIRD arm
   - L7694 · The row that NAMES the bug rather than detecting it
   - L7706 · What the clean 123 rows are worth saying out loud
+  - L7715 · CSS transforms are clean at 26 of 27, and the failing row was labelled a NEGATIVE (t1068)
+  - L7732 · The one failure, and my fixture had it labelled backwards
+  - L7744 · The fourth site that had to apply the same rule — and the second absence in two ticks
+  - L7757 · ⚠⚠⚠ The gate's first version could not see the origin, and the mutation is what said so
 
 ## browser-capabilities.md
 `docs/wiki/browser-capabilities.md`
@@ -1814,4 +1818,4 @@
   - L124 · Rank mechanisms by FLIP RATE, not failing-subtest count — CSS layout is a multi-assertion slog
 
 ---
-1721 sections across 22 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+1725 sections across 22 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.

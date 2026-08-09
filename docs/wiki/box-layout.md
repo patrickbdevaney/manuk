@@ -7711,3 +7711,57 @@ every negative row (a grid item's `float` ignored, margins not collapsing, an ab
 flow) are all Chrome-exact. **The board's step 6 — *"Grid common-case (WIRE grid-template-areas: no
 taffy consumer!)"*, parked since t156 — is stale: `grid-area` places correctly and has for some
 time.** `css/css-grid` at 5.3% is measuring conformance breadth, not the common case the corpus uses.
+
+## CSS transforms are clean at 26 of 27, and the failing row was labelled a NEGATIVE (t1068)
+
+`transform:` is on **34.5% of the burndown corpus** and `css/css-transforms` sits at 16.2% WPT pass,
+with exactly one generic row on the map. A 27-case geometry battery against headless Chrome, on the
+shipping cascade, came back **26 exact on all four of (x, y, w, h)**:
+
+```text
+   translate / translateX % / translateY %      matrix()          translate3d (x,y with no perspective)
+   scale about the default CENTRE               scaleX            skewX (the sheared bounding box)
+   transform-origin: 0 0 / right bottom / 25% 75%                 rotate(90deg) on a non-square box
+   translateX(50px) scale(2)  vs  scale(2) translateX(50px)       — the LIST ORDER, both ways
+   a translated child under a translated parent (composition)     under a SCALED parent (multiplied)
+   translate:/scale: — the L2 INDIVIDUAL properties, and one BESIDE `transform` (transform last)
+   a transformed flex item · a % translate on a content-sized box · rotate(45deg)'s AABB
+   NEGATIVE: flow is unaffected · `transform: none` · a non-replaced INLINE is not transformable
+```
+
+### The one failure, and my fixture had it labelled backwards
+
+The row was written as a negative — *"a transform on a table-cell is ignored"* — and **Chrome refuted
+the label**: `display: table-cell; transform: translateX(100px)` belongs at x=100 and sat at 0. CSS
+Transforms §3 names the elements that are *not* transformable — non-replaced inline boxes,
+table-column and table-column-group boxes — and a table **cell** is not among them.
+
+> **A PREMISE WRITTEN INTO A FIXTURE IS STILL A PREMISE.** The row was included to prove the engine
+> *correctly* ignored something, and the engine was wrong in the opposite direction from the one the
+> fixture asserted. This is why a battery diffs against a reference rather than against expectations:
+> the label was mine, the numbers were Chrome's, and only the numbers were right.
+
+### The fourth site that had to apply the same rule — and the second absence in two ticks
+
+`layout_block`, `layout_abs` and the flex/grid placed path each end by baking
+`effective_transform()` into their box. A cell is built by `layout_cell` and placed by `layout_table`,
+and neither did. That is *one rule, N implementations* with N = 4 — and, exactly like t1067's
+baseline, **the missing implementation was an absence, not a wrong copy**: there is no bad code to
+grep for, only a consumer that never asks.
+
+⚠ It is applied at the **placement** site rather than at the end of `layout_cell`, because a cell is
+stretched to its row and vertically shifted *after* `layout_cell` returns — baking the matrix earlier
+would make the stretch operate in transformed coordinates. The transform is the last thing that
+happens to the box, which is what *"visual, does not affect flow"* means.
+
+### ⚠⚠⚠ The gate's first version could not see the origin, and the mutation is what said so
+
+Every row in the first gate was a pure **translation**, which is origin-independent. Zeroing both the
+transform-origin and the percentage basis — `resolve_transform(&xf, 0.0, 0.0, (0.0, 0.0))` — left it
+**GREEN**. Two rows fixed it: `scale(2)` on a 100×40 cell belongs at **x = −50** (the default origin
+is the box centre) and at **x = 0** with `transform-origin: 0 0`. The pair pins the origin; the width
+pins the basis.
+
+This is the second tick running where a mutation that stayed green was the finding rather than a
+failed proof — t1066's control had lost its separating power to a neighbouring fix, and this one
+never had any. **Run every mutation, including the ones you expect to fail.**

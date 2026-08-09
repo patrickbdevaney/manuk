@@ -5999,6 +5999,37 @@ impl Ctx<'_> {
                 cbox.rect.y = keep_y;
             }
             cbox.rect.height = cell_h;
+            // ── ⚠⚠⚠ **A `transform` ON A TABLE CELL WAS IGNORED, AND IT IS THE FOURTH SITE THAT HAD
+            //    TO APPLY THE SAME RULE.** `layout_block`, `layout_abs` and the flex/grid placed
+            //    path each end by baking `effective_transform()` into their box; a cell is built by
+            //    `layout_cell` and placed here, and neither did. CSS Transforms §3 names the
+            //    elements that are NOT transformable — non-replaced inline boxes, table-column and
+            //    table-column-group boxes — and a table CELL is not among them. Chrome-measured:
+            //    `display:table-cell; transform:translateX(100px)` belongs at x=100 and sat at 0.
+            //
+            //    ⚠ It is applied HERE and not at the end of `layout_cell` because the cell is
+            //    stretched to its row and vertically shifted AFTER `layout_cell` returns — baking
+            //    the matrix earlier would make the stretch operate in transformed coordinates. The
+            //    transform is the last thing that happens to the box, which is what "visual, does
+            //    not affect flow" means.
+            //
+            //    ⚠ The fixture that found this had the row LABELLED as a negative ("a transform on
+            //    a table-cell is ignored") and Chrome refuted the label. A premise written into a
+            //    fixture is still a premise.
+            let cs = self.style_of(p.cell).clone();
+            let xf = cs.effective_transform();
+            if !xf.is_empty() {
+                let origin = transform_origin_of(
+                    &cs,
+                    cbox.rect.x,
+                    cbox.rect.y,
+                    cbox.rect.width,
+                    cbox.rect.height,
+                );
+                let m = resolve_transform(&xf, cbox.rect.width, cbox.rect.height, origin);
+                self.record_transform(p.cell, &m, &cbox);
+                cbox.transform_affine(&m);
+            }
             row_cells[p.row].push(cbox);
         }
         let mut row_boxes = Vec::new();
@@ -15964,6 +15995,127 @@ mod tests {
         assert!(
             cells[2].height >= 30.0 - 0.5,
             "row 2 height driven by the 30px cell"
+        );
+    }
+
+    /// **A `transform` ON A TABLE CELL APPLIES** (CSS Transforms §3), and the elements that are NOT
+    /// transformable are non-replaced inline boxes and table-COLUMN / table-column-group boxes.
+    ///
+    /// Found by the t1068 transform battery as its only failing row of 27 — and the fixture had the
+    /// row labelled as a NEGATIVE ("a transform on a table-cell is ignored"). Chrome refuted the
+    /// label, which is why the inline arms below are here: they are the rows the spec really does
+    /// exclude, and without them "apply it to everything" would pass.
+    #[test]
+    fn a_transform_applies_to_a_table_cell_but_not_to_a_non_replaced_inline() {
+        let x_of = |html: &str, id: &str| -> f32 {
+            let (dom, root) = layout_html(
+                &format!("<body style='margin:0'>{html}</body>"),
+                "td{padding:0}",
+                400.0,
+            );
+            let mut x = f32::NAN;
+            root.walk(&mut |b| {
+                if let Some(n) = b.node {
+                    if dom.element(n).and_then(|e| e.attr("id")) == Some(id) {
+                        x = b.rect.x;
+                    }
+                }
+                // ⚠ **A non-replaced inline generates NO `LayoutBox`** — it is exactly the arm this
+                // gate needs to read, and reading only boxes returned `NaN` for it. Its geometry
+                // lives on the text fragments, whose `node` is the deepest element ancestor.
+                if let BoxContent::Inline(frags) = &b.content {
+                    for f in frags {
+                        if f.node
+                            .and_then(|n| dom.element(n))
+                            .and_then(|e| e.attr("id"))
+                            == Some(id)
+                        {
+                            x = f.x;
+                        }
+                    }
+                }
+            });
+            x
+        };
+        // The cell moves, and its CONTENT moves with it — a transform maps the whole subtree.
+        let x = x_of(
+            "<table style='border-spacing:0'><tr>\
+             <td id='c' style='transform:translateX(100px)'>c</td></tr></table>",
+            "c",
+        );
+        assert!(
+            (x - 100.0).abs() < 0.5,
+            "a table cell's transform must apply, got x={x}"
+        );
+        // ── CONTROL: the same cell with no transform, so the 100 above is the transform and not
+        //    some other displacement.
+        let x0 = x_of(
+            "<table style='border-spacing:0'><tr><td id='c'>c</td></tr></table>",
+            "c",
+        );
+        assert!(
+            (x0).abs() < 0.5,
+            "the untransformed cell must sit at 0, got {x0}"
+        );
+        // ── THE ORIGIN ROW, and it is here because the mutation demanded it. ⚠⚠⚠ Every row above
+        //    is a pure TRANSLATION, which is origin-independent — so zeroing the origin and the
+        //    percentage basis left this gate GREEN and the rows said nothing about either. A
+        //    `scale(2)` on a 100x40 cell belongs at x=-50 (Chrome-measured, default origin is the
+        //    box CENTRE) and at x=0 with `transform-origin: 0 0`; the two together pin the origin,
+        //    and the width pins the basis.
+        let rect_of = |html: &str, id: &str| -> (f32, f32) {
+            let (dom, root) = layout_html(
+                &format!("<body style='margin:0'>{html}</body>"),
+                "td{padding:0}",
+                400.0,
+            );
+            let mut r = (f32::NAN, f32::NAN);
+            root.walk(&mut |b| {
+                if let Some(n) = b.node {
+                    if dom.element(n).and_then(|e| e.attr("id")) == Some(id) {
+                        r = (b.rect.x, b.rect.width);
+                    }
+                }
+            });
+            r
+        };
+        let (x, w) = rect_of(
+            "<table style='border-spacing:0'><tr>\
+             <td id='c' style='width:100px;height:40px;transform:scale(2)'>c</td></tr></table>",
+            "c",
+        );
+        assert!(
+            (x + 50.0).abs() < 0.5 && (w - 200.0).abs() < 0.5,
+            "`scale(2)` on a cell scales about its CENTRE: expected x=-50 w=200, got x={x} w={w}"
+        );
+        let (x, w) = rect_of(
+            "<table style='border-spacing:0'><tr>\
+             <td id='c' style='width:100px;height:40px;transform:scale(2);transform-origin:0 0'>c</td>\
+             </tr></table>",
+            "c",
+        );
+        assert!(
+            x.abs() < 0.5 && (w - 200.0).abs() < 0.5,
+            "`transform-origin:0 0` moves the scale anchor to the corner: expected x=0 w=200, got x={x} w={w}"
+        );
+
+        // ── NEGATIVE: a non-replaced INLINE is not transformable and must NOT move…
+        let x = x_of(
+            "<div><span id='s' style='transform:translateX(100px)'>xx</span></div>",
+            "s",
+        );
+        assert!(
+            x.abs() < 0.5,
+            "a non-replaced inline is not transformable, got x={x}"
+        );
+        // …while its inline-BLOCK twin, byte-identical but for `display`, does.
+        let x = x_of(
+            "<div><span id='s' style='display:inline-block;transform:translateX(100px)'>xx</span></div>",
+            "s",
+        );
+        assert!(
+            (x - 100.0).abs() < 0.5,
+            "an inline-block IS transformable, got x={x}"
         );
     }
 

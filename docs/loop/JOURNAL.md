@@ -46371,6 +46371,71 @@ PERF: none — one UA rule and one narrowed branch in a cascade that already ran
 WIKI: `docs/wiki/css-cascade.md` — where Chrome draws the form-control `box-sizing` line, and why a
 layout-crate test cannot see it.
 
+## Tick 1068 — transforms are clean at 26 of 27, and the failing row was the one I had labelled a NEGATIVE (2026-08-09)
+
+TICK SHAPE: primitive — a 27-case CSS transform GEOMETRY battery against headless Chrome on the
+shipping cascade. `transform:` is on **34.5% of the burndown corpus**, `css/css-transforms` sits at
+16.2% WPT pass, and the map carried exactly one generic row (`CSS transforms (2D/3D)`, gated) with no
+measurement behind it. A transform error displaces a whole **subtree**, which is the largest-magnitude
+shape a single wrong number can produce.
+
+⚠⚠⚠ **26 OF 27 EXACT ON ALL FOUR OF (x, y, w, h).** translate and both percentage translates,
+`matrix()`, `translate3d`, scale about the default centre, `scaleX`, `skewX`, `transform-origin` as
+keywords *and* percentages, `rotate(90deg)` on a non-square box and `rotate(45deg)`'s axis-aligned
+bounding box, **the function list order both ways** (`translateX(50px) scale(2)` against the
+reverse), composition through a translated parent and through a *scaled* one, the CSS Transforms L2
+individual properties (`translate:` / `scale:`) including one sitting beside `transform`, a
+transformed flex item, a percentage translate on a content-sized box — and the negatives: flow
+unaffected, `transform: none`, and a non-replaced inline not transformable while its inline-block
+twin, byte-identical but for `display`, is.
+
+⚠⚠⚠ **THE ONE FAILURE WAS A ROW I HAD WRITTEN AS A NEGATIVE, AND CHROME REFUTED THE LABEL.** The
+fixture said *"a transform on a table-cell is ignored"*; Chrome puts `display:table-cell;
+transform:translateX(100px)` at **x=100** and we had it at **0**. CSS Transforms §3 names the
+non-transformable elements — non-replaced inline boxes, table-**column** and table-column-group boxes
+— and a table **cell** is not among them.
+
+> **A PREMISE WRITTEN INTO A FIXTURE IS STILL A PREMISE.** The row existed to prove the engine
+> *correctly* ignored something, and the engine turned out to be wrong in the opposite direction from
+> the one asserted. The label was mine; the numbers were Chrome's; only the numbers were right. This
+> is the value of diffing against a reference rather than against expectations, stated from the one
+> direction that is easy to miss — a battery can be wrong about what it is TESTING FOR, not only
+> about what it measures.
+
+⚠⚠ **THE FOURTH SITE THAT HAD TO APPLY THE SAME RULE, AND THE SECOND ABSENCE IN TWO TICKS.**
+`layout_block`, `layout_abs` and the flex/grid placed path each end by baking `effective_transform()`
+into their box; a cell is built by `layout_cell` and placed by `layout_table`, and neither did. *One
+rule, N implementations* reaches **N = 4** — and exactly like t1067's baseline, **the missing
+implementation was an absence rather than a wrong copy.** There is no bad code to grep for, only a
+consumer that never asks, and that is a different search from the one t1054's steer describes.
+
+⚠ It is applied at the **placement** site, not at the end of `layout_cell`: a cell is stretched to its
+row and vertically shifted after `layout_cell` returns, so baking the matrix earlier would make the
+stretch operate in transformed coordinates.
+
+⚠⚠⚠ **THE GATE'S FIRST VERSION COULD NOT SEE THE TRANSFORM-ORIGIN, AND THE MUTATION IS WHAT SAID
+SO.** Every row in it was a pure translation, which is origin-independent — so zeroing *both* the
+origin and the percentage basis (`resolve_transform(&xf, 0.0, 0.0, (0.0, 0.0))`) left the gate
+**GREEN**. Two rows fixed it: `scale(2)` on a 100×40 cell belongs at **x = −50** (the default origin
+is the box centre) and at **x = 0** with `transform-origin: 0 0`. The pair pins the origin and the
+width pins the basis, both Chrome-measured.
+
+> **THIS IS THE SECOND TICK RUNNING WHERE A MUTATION THAT STAYED GREEN WAS THE FINDING.** t1066's
+> control had *lost* its separating power to a neighbouring fix; this one never had any. The standing
+> form: **run every mutation, including the ones you expect to fail** — the informative outcome is
+> the one you did not predict, in either direction.
+
+RATCHET: `manuk-layout` 148/148 → **149/149**, no test changed. Six table page gates green. The
+battery is **27/27** on the shipping cascade after, and the t1065 §17 battery is unmoved at 127/132.
+**No corpus A/B, same reason and same words as t1065–t1067** — a same-hour old-binary control is a
+fifth release relink this session, and the honest report is *the corpus movement is unmeasured*, not
+*there was none*.
+
+PERF: none — one `is_empty()` check per placed cell on a path that already clones the cell's style.
+
+WIKI: docs/wiki/box-layout.md — "CSS transforms are clean at 26 of 27, and the failing row was
+labelled a NEGATIVE"
+
 ## Tick 1067 — grid is clean at 123 of 124, and the one row that failed was `baseline` meaning `end` (2026-08-09)
 
 TICK SHAPE: primitive — a 40-case CSS Grid battery against headless Chrome on the **shipping**
