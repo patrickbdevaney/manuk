@@ -2852,7 +2852,52 @@ impl Ctx<'_> {
                 before.insert(prev);
                 before.extend(self.dom.descendants(prev));
             }
+            // ⚠⚠⚠ **AN OUT-OF-FLOW BOX WITH NOTHING BEFORE IT USED TO BE ABANDONED HERE, AND THAT
+            // IS ONLY HARMLESS WHILE THE LINE STARTS AT THE CONTENT EDGE.** `continue` leaves the
+            // static position at the block-level default — the content box's left — which is right
+            // for `text-align: left` and wrong for every other value, because a centred or
+            // right-aligned line does not begin where the content box does.
+            //
+            // Measured against Chrome on a 400px block holding two 40px `inline-block`s, with the
+            // absolutely positioned box FIRST in source order (`text-align: center`):
+            //
+            // ```text
+            //                                        Chrome   before   after
+            //   abspos first on a CENTRED line         160        0      160
+            //   abspos BETWEEN two centred items       200      200      200   <- was already right
+            //   abspos LAST on a centred line          240      240      240   <- was already right
+            //   abspos first, text-align: left          40       40       40   <- must not move
+            // ```
+            //
+            // The middle two rows are why this survived: the common shape — a separator or badge
+            // *between* two things — has a preceding sibling, so it took the branch below and was
+            // correct. Only the box that opens the line fell through.
             if before.is_empty() {
+                // The start edge of the FIRST line box: the earliest `line_top`, and the leftmost
+                // x on it. That IS the static position of a box that precedes all in-flow content.
+                let mut first: Option<(f32, f32)> = None;
+                let mut open = |top: f32, left: f32| {
+                    let better = match first {
+                        None => true,
+                        Some((t, l)) => top < t - 0.5 || ((top - t).abs() <= 0.5 && left < l),
+                    };
+                    if better {
+                        first = Some((top, left));
+                    }
+                };
+                for f in frags {
+                    open(f.line_top, f.x);
+                }
+                for b in atomics {
+                    open(b.rect.y, b.rect.x);
+                }
+                // No in-flow content at all leaves the block-level default alone: there is no line
+                // box, so there is no line start to resolve against, and inventing one would be a
+                // guess rather than a measurement.
+                if let Some((top, left)) = first {
+                    self.static_pos.borrow_mut().insert(k, (left, top));
+                    self.static_pos_writes.set(self.static_pos_writes.get() + 1);
+                }
                 continue;
             }
             // The furthest-along point flow reached: latest line first, then rightmost on it. A

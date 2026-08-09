@@ -46371,6 +46371,91 @@ PERF: none — one UA rule and one narrowed branch in a cascade that already ran
 WIKI: `docs/wiki/css-cascade.md` — where Chrome draws the form-control `box-sizing` line, and why a
 layout-crate test cannot see it.
 
+## Tick 1081 — the battery refuted its own hypothesis, and the finding was its negative row (2026-08-09)
+
+TICK SHAPE: capability — the static position of an out-of-flow box that OPENS a line.
+`engine/layout`, one function. New gate `G_STATIC_POS_LINE_START`.
+
+Taken straight off t1080's steer: `reading_order` has been M1's top binding conjunct for three
+sweeps running (12 · 12 · 10 sites), and it is the only conjunct with that much history and no tick.
+`MANUK_RO_PARTITION=1` localised the cleanest subject in one command:
+
+```text
+   www.wdimax.com   12 inversion(s) = 12 ON-SCREEN · 0 zero-area · 0 parked off-viewport
+                    1 distinct container · biggest contributes 12 of 12 (a 7-sibling group)
+```
+
+Twelve of twelve in **one `<footer>`** — `<a>` links separated by
+
+```css
+   footer { text-align: center }
+   footer .line-between { display: inline-block; position: absolute; margin-top: 15.5px }
+```
+
+an insetless `position:absolute` box in a centred inline formatting context. A ten-row battery was
+built for that hypothesis, negative rows first, per t981-997.
+
+⚠⚠⚠ **NINE OF THE TEN ROWS ALREADY AGREED WITH CHROME TO THE PIXEL — INCLUDING ALL THREE THAT
+REPRODUCE THE FOOTER'S ACTUAL SHAPE.** Separator *between* two centred items: 200 vs 200. With the
+footer's own negative `margin-left`: 190 vs 190. Two separators, the real five-child shape: 180-229
+vs 180-229. **The hypothesis is refuted**, the site's 12 inversions are still unattributed, and that
+is the useful half — a battery built only to reproduce the site would have found nothing and reported
+the area clean.
+
+The one row that disagreed is the one nobody was looking at:
+
+```text
+                                     Chrome   before   after
+   abspos FIRST on a centred line      160        0      160    <- the only DIFF in ten rows
+   abspos BETWEEN two centred items    200      200      200
+   abspos LAST on a centred line       240      240      240
+   abspos first, text-align: left       40       40       40
+   abspos first, text-align: right     360      360      360
+   abspos first, text-align: justify    40       40       40
+   an EXPLICIT `left`                    5        5        5
+```
+
+`refine_inline_static_positions` resolves a static position by walking the in-flow siblings that
+**precede** the box, and when there are none it did `if before.is_empty() { continue; }` — leaving
+the block-level default, the content-box edge. ⚠ **That is only harmless while the line starts at the
+content edge**, and a centred or right-aligned line does not. It survived 1,080 ticks because the
+COMMON shape — a separator, badge or icon *between* two things — has a preceding sibling and took the
+working branch; only the box that opens the line fell through, and it fell through to a value that is
+correct for the default alignment. It now takes the FIRST line box's start edge, and a block with no
+in-flow content at all is left alone, because there is no line to resolve against and inventing one
+would be a guess.
+
+⚠⚠ **AND A GREEN MUTATION READ THE FIXTURE RATHER THAN THE CODE.** The gate's wrap row first used
+three equal 40px items in a 100px block: line one starts at `(100−80)/2 = 10`, line two at
+`(100−40)/2 = 30`, so the first-line answer and the leftmost-of-all-lines answer **coincided at 10**
+and the mutation written to break that row came back green. Widening the third item to 90px makes
+line two start at 5, the two answers differ, and the mutation goes red (5 against Chrome's
+re-measured 10). **A row whose two candidate answers are equal is not a row** — the same shape as
+t1057's vacuous control, one level down, in the fixture instead of the code.
+
+SELF-AUDIT (due this tick, #109): **methodology and reality agree** — every gate declares how to
+break it, the process-defect ledger (49) names a mechanism per entry rather than a lesson, the
+cluster registry is current, and the journal has an entry per tick with no gaps. Recorded here
+rather than as its own tick because it found nothing to steer; an audit that finds nothing is a
+suspicious audit, and the one thing it cannot see is what the SURFACE audit (#48, tick 1079) was
+built for — whether the map's frame is the right frame — which is why the two run on the same
+cadence and are not the same instrument.
+
+RATCHET: `manuk-layout` 151/151 unmoved, `manuk-page` gates green. `G_STATIC_POS_LINE_START` is
+RED-proven two ways — restore the `continue` (the centred row reports 0 while every other row still
+passes, which is the pair separating *"the centred static position is broken"* from *"the
+line-opening case is"*), and take the leftmost x over all lines instead of the first.
+
+NOT CLAIMED: this does not explain the footer that started the hunt, and `reading_order` is still
+M1's top binding conjunct. What it does is strike the centred-static-position hypothesis off rather
+than leave it open, which is what the next tick on this conjunct needs.
+
+PERF: none — the new branch runs only for an out-of-flow child with no preceding in-flow sibling, in
+place of a `continue`.
+
+WIKI: docs/wiki/box-layout.md — "An out-of-flow box that OPENS a line starts where the LINE starts
+(t1081)"
+
 ## Tick 1080 — 31 ticks moved the gate by ZERO, and two of the three biggest movers refuse to reproduce (2026-08-09)
 
 TICK SHAPE: measurement — the clean `--jobs 2` CrUX sweep, 200 sites, banked as

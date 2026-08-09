@@ -422,6 +422,10 @@
   - L8090 · Three parse defects fell out of the same scalar
   - L8100 · Measured — and three tests that were passing VACUOUSLY
   - L8130 · Two RED-proofs came back GREEN, which is the other finding
+  - L8140 · An out-of-flow box that OPENS a line starts where the LINE starts (t1081)
+  - L8167 · How it was found, which is the part worth keeping
+  - L8189 · And a green mutation read the fixture rather than the code
+  - L8198 · What is NOT claimed
 
 ## browser-capabilities.md
 `docs/wiki/browser-capabilities.md`
@@ -1848,4 +1852,4 @@
   - L124 · Rank mechanisms by FLIP RATE, not failing-subtest count — CSS layout is a multi-assertion slog
 
 ---
-1755 sections across 22 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+1759 sections across 22 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.

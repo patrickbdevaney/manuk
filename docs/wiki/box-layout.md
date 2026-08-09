@@ -8136,3 +8136,68 @@ nothing on a page. The reason is the standing one — **the shipping cascade is 
 border colour and border width outright; only the line STYLE is recovered from MinimalCascade. So
 the MinimalCascade half of this fix is covered by a `manuk-css` unit test instead, where it is
 observable, rather than by a page gate that would have passed either way.
+
+## An out-of-flow box that OPENS a line starts where the LINE starts (t1081)
+
+CSS 2.1 §10.3.7 / §10.6.4: a `position: absolute` box with `auto` insets sits at its **static
+position** — where it would have been had it stayed in the flow. `refine_inline_static_positions`
+resolves that by walking the in-flow siblings that *precede* the box and taking the furthest point
+flow reached. When there were none it did:
+
+```rust
+    if before.is_empty() { continue; }      // leaves the block-level default: the content edge
+```
+
+⚠⚠⚠ **which is only harmless while the line starts at the content edge**, and a centred or
+right-aligned line does not. Chrome-measured on a 400px block holding two 40px `inline-block`s:
+
+```text
+                                     Chrome   before   after
+   abspos FIRST on a centred line      160        0      160
+   abspos BETWEEN two centred items    200      200      200   <- was already right
+   abspos LAST on a centred line       240      240      240   <- was already right
+   abspos first, text-align: left       40       40       40   <- must not move
+   abspos first, text-align: right     360      360      360   <- must not move
+```
+
+**The middle rows are why it survived 1,080 ticks.** The common shape — a separator, badge or icon
+*between* two things — has a preceding sibling and took the working branch. Only the box that opens
+the line fell through, and it fell through to a value that is correct for the default alignment.
+
+### How it was found, which is the part worth keeping
+
+Not by looking at absolute positioning. Sweep t1080 named `reading_order` the top binding conjunct of
+M1 for the third sweep running, and `MANUK_RO_PARTITION=1` localised one site's 12 inversions to
+**one 7-sibling `<footer>`**: `<a>` links separated by
+
+```css
+    footer { text-align: center }
+    footer .line-between { display: inline-block; position: absolute; margin-top: 15.5px }
+```
+
+— an insetless abspos in a centred inline formatting context. A ten-row battery was built for exactly
+that hypothesis.
+
+⚠⚠ **The battery refuted its own hypothesis, and the finding is its NEGATIVE row.** Nine of ten rows
+already agreed with Chrome to the pixel, *including all three that reproduce the footer's actual
+shape* — separator between two items, with and without a negative `margin-left`. So the centred
+static position was not that site's defect at all. The one row that disagreed is the one nobody was
+looking at: the box that comes **first**. A battery that had only reproduced the site would have found
+nothing and reported the area clean — which is t981-997's rule holding again: *the rows that
+discriminate are rarely the rows that made you look.*
+
+### And a green mutation read the fixture rather than the code
+
+`G_STATIC_POS_LINE_START`'s wrap row first used three equal 40px items in a 100px block. That puts
+two on line one and one on line two — line one starts at `(100−80)/2 = 10`, line two at
+`(100−40)/2 = 30` — so the first-line answer and the leftmost-of-all-lines answer **coincided at 10**,
+and the mutation written to break it came back green. Widening the third item to 90px makes line two
+start at 5, the two answers differ, and the mutation goes red. **A row whose two candidate answers
+are equal is not a row.**
+
+### What is NOT claimed
+
+This does not explain the footer that started the hunt. Those 12 inversions remain unattributed, and
+`reading_order` remains the top binding conjunct of M1 — with the centred-static-position hypothesis
+now struck off rather than still open, which is the whole value of a battery that includes rows the
+site does not have.
