@@ -7519,3 +7519,79 @@ over-constrained; a lone `left` in an RTL container still shifts right. Flipping
 `direction` was RED-run and fails on *"a LONE inset is direction-free"* — a control, not the row that
 made you look. ⚠ The fifth control records that the RTL **static** position (350) is a separate,
 already-exact rule; without it, 300 and 370 look arbitrary instead of 350 ∓ the offset.
+
+## A column with a SPECIFIED width is CONSTRAINED — it does not absorb the table's surplus (t1065)
+
+CSS 2.1 §17 has never had a battery. `<table>` with real `<tr>` rows is on **7.0% of the burndown
+corpus** and the map carried exactly one row for it — `tables (colspan/rowspan)`, status `works`,
+never diffed against Chrome. A 41-case fixture, run through `manuk-wpt boxes --html` and headless
+Chrome, came back **85 of 132 rows** and named five distinct defects. This section is the one this
+tick closed; the other four are named at the end.
+
+`auto_col_widths` grew **every** column in proportion to its max-content, so a specified width was a
+*starting point for growth* rather than the answer:
+
+```text
+   400px table, one specified column + one auto      Chrome    before    after
+   <td style="width:100px">                            100       226      100
+   <td width="150">      (presentational attribute)    150       376      150
+   <td style="width:25%">                              100       200      100
+   <col style="width:100px">                           100       200      100
+   <colgroup><col 120><col 80>   (all constrained)  240/160   200/200  240/160
+   width:100px + TWO autos ("B" / "BBBBBBBB")   100/33/267  226/…    100/33/267
+```
+
+The rule, as Chrome implements §17.5.2.2: a column whose width is specified takes that width, and
+the table's surplus is shared over the columns that are **free** to take it, in proportion to their
+max-content. Only when every column is constrained does the surplus spread over all of them — which
+is also the no-specified-widths case, so the old path survives unchanged as the fallback.
+
+### `width: 50%` agreed with Chrome while being completely unimplemented
+
+Percentage cell widths were dropped on the floor. The fixture's first percentage row was `50%` in a
+400px table, and a *dropped* percentage leaves two equal auto columns — which in a 400px table are
+200/200, exactly what `50%` asks for. **Two errors cancelling, reading as agreement.** The `25%` row
+is the one that can tell, and it is 100/300 against our 200/200. Same shape as t1016's viewport
+pair and t1062's UA-default rows: a fixture whose parameter sits on the one point where right and
+wrong coincide measures nothing.
+
+### The three NEGATIVE rows are what separate this from "pin the column"
+
+Each goes red on a *different* wrong fix, and all three were RED-run:
+
+```text
+   two `width:300px` cells in a 200px table     Chrome 100/100   "pin it" gives 300/300
+   `width:5px` on a nowrap 96px word            Chrome  96.3     "pin it" gives 5
+   colspan=2 cell with `width:300px`            Chrome 200/200   spreading it gives 300/100
+```
+
+So a specified width raises the column's **max** and never its **min**; it loses outright to
+min-content; and it constrains a column only when a cell occupies that column *alone*. Dropping the
+`colspan == 1` filter also fixed a second defect on its way past — `cell_intrinsic` used to collapse
+*both* intrinsics onto a specified `width`, which is what let a spanning cell's width be spread over
+the columns it spans.
+
+### ⚠⚠⚠ The same fix was Chrome-exact in-crate and completely INERT on the shipping cascade
+
+The `<col>` rows read 240/160 under `MinimalCascade` and 200/200 under Stylo, from one binary. The
+shipping UA sheet (`stylo_engine::UA_CSS`) **had no `col`/`colgroup` rule at all**, so a `<col>`
+computed `display: inline` and layout — which matches on `Display::TableColumn` — never saw a column.
+`MinimalCascade`'s own UA table has had both since it was written.
+
+> **TWO CASCADES MEANS A UA RULE CAN EXIST IN ONE OF THEM, AND THE HALF THE PRODUCT SHIPS IS NOT THE
+> HALF THE IN-CRATE TEST RUNS.** The t1057-era warning was *"a fixture can report a layout bug the
+> product does not have"*; this is its mirror — **a fixture can report a layout FIX the product does
+> not have**, and only re-running through `manuk-wpt boxes --html` says which. It is also a
+> `getComputedStyle` divergence on its own: Chrome reports `table-column`.
+
+### Named, measured, not built — the four residues from the same battery
+
+All Chrome-measured, none fixed here, none of them this mechanism:
+
+```text
+   table-layout:fixed + width:auto      must fall back to AUTO layout; we stretch to the container
+                                        (86.7 wide in Chrome, 400 here — a whole table too wide)
+   min-width on a CELL                  never reaches column sizing (150 -> 10)
+   min-width / max-width on the TABLE    the table box's own clamps are not applied (250 -> 19,
+                                        and a max-width:200px table stays 400)
+```

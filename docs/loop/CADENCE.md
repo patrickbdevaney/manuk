@@ -13,9 +13,9 @@
 |---|---|---|
 | ticks landed | **774** | ticks 1–1064 |
 | median tick cycle | **27m** | 773 intervals |
-| median, last 10 | **51m** | 10 intervals |
+| median, last 10 | **57m** | 10 intervals |
 | fastest / slowest | 5s / 5.4d | |
-| **ticks per hour** | **1.11** | 697.8h elapsed |
+| **ticks per hour** | **1.11** | 698.6h elapsed |
 | median verify wall | **63s** | 713 ticks |
 | wall trend | 39s → 13m — getting slower ⚠️ | first 3 vs last 3 |
 
@@ -28,7 +28,7 @@ it, and a wall that grows taxes every future tick, so it is tracked separately f
 
 * **capabilities asserted** (`G_CAPABILITY`): 48 → **81**
 * **live gates**: 27 → **429**
-* **✅ rows in the capability ledger**: 144 → **536**
+* **✅ rows in the capability ledger**: 144 → **537**
 * **Bar 0 — oracle hangs**: 0 of 265 sites
 
 **342 of 774 ticks** (44%) moved a
@@ -870,6 +870,6 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 | **1061** | 2026-08-09 05:59 | 47m | capability | 13m | +409/−37 | 429 | 81 | 56.0% · | a fragment on an image URL meant NO IMAGE, and the tests that pointed at it still cannot s |
 | **1062** | 2026-08-09 06:25 | 26m | primitive | 13m | +390/−33 | 429 | 81 | 56.0% · | the battery that agreed with Chrome on 7 of 8 rows while the feature was completely unimpl |
 | **1063** | 2026-08-09 06:37 | 11m | measurement | 13m | +239/−33 | 429 | 81 | 56.0% · | the constitution check, and three of eight ticks found the INSTRUMENT rather than the engi |
-| **1064** | 2026-08-09 06:49 | 12m | measurement | 13m | +147/−48 | 429 | 81 | 56.0% · | CORRECTION: the accessibility surface is not unmeasurable, I ran the wrong runner (2026-08 |
+| **1064** | 2026-08-09 07:39 | 62m | measurement | 13m | +495/−42 | 429 | 81 | 56.0% · | CORRECTION: the accessibility surface is not unmeasurable, I ran the wrong runner (2026-08 |
 
 *`·` after a WPT figure means **carried forward**, not measured this tick.*

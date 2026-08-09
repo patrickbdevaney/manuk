@@ -46371,6 +46371,104 @@ PERF: none — one UA rule and one narrowed branch in a cascade that already ran
 WIKI: `docs/wiki/css-cascade.md` — where Chrome draws the form-control `box-sizing` line, and why a
 layout-crate test cannot see it.
 
+## Tick 1065 — CSS 2.1 §17 had never had a battery, and `width: 50%` agreed with Chrome while being unimplemented (2026-08-09)
+
+TICK SHAPE: primitive — a 41-case battery on **auto table layout (CSS 2.1 §17.5.2.2)**, taken
+because check #98's steer #3 is *"extend the spec-enumeration method — it is the only method still
+producing rows"*, and because `<table>` with real `<tr>` rows is **7.0% of the burndown corpus**
+while the map carried exactly one row for it: `tables (colspan/rowspan)`, status `works`, **never
+diffed against Chrome**.
+
+⚠⚠⚠ **85 OF 132 ROWS, AND FIVE DISTINCT DEFECTS.** `auto_col_widths` grew **every** column in
+proportion to its max-content, so a specified width was a *starting point for growth* rather than
+the answer — a container-WIDTH error, the class the burndown says launders into `dy`:
+
+```text
+   400px table, one specified column + one auto      Chrome    before    after
+   <td style="width:100px">                            100       226      100
+   <td width="150">      (presentational attribute)    150       376      150
+   <td style="width:25%">                              100       200      100
+   <col style="width:100px">                           100       200      100
+   <colgroup><col 120><col 80>   (all constrained)  240/160   200/200  240/160
+   width:100px + TWO autos ("B" / "BBBBBBBB")   100/33/267  226/…    100/33/267
+```
+
+The rule: a column whose width is specified takes that width, and the surplus is shared over the
+columns **free** to take it, in proportion to their max-content. Only when every column is
+constrained does it spread over all of them — which is also the no-specified-widths case, so the old
+path survives unchanged as the fallback and the CONTROL row proves it.
+
+⚠⚠⚠ **`width: 50%` AGREED WITH CHROME WHILE BEING COMPLETELY UNIMPLEMENTED, AND THAT ROW WAS IN THE
+FIRST FIXTURE.** Percentage cell widths were dropped on the floor. A dropped percentage leaves two
+equal auto columns, and two equal auto columns in a 400px table are 200/200 — **exactly what `50%`
+asks for**. The battery's first pass therefore scored that row GREEN. The `25%` row, added only
+because the discipline says a spec from one fixture is a hypothesis, reads 100/300 against our
+200/200. Two errors cancelling and reading as agreement, for the third time in this arc (t1016's
+viewport pair, t1062's UA defaults, this).
+
+> **VARY THE PARAMETER YOU HELD FIXED — AND `50%` OF A TWO-COLUMN TABLE IS EXACTLY THE HELD-FIXED
+> POINT.** t1042's lesson arrives here as a fixture-design rule: a percentage row whose value is
+> `100/n` in an n-column table cannot distinguish "implemented" from "dropped".
+
+⚠⚠⚠ **THE SAME FIX WAS CHROME-EXACT IN-CRATE AND COMPLETELY INERT ON THE SHIPPING CASCADE.** The
+`<col>` rows read **240/160 under `MinimalCascade` and 200/200 under Stylo, from one binary**. The
+shipping UA sheet (`stylo_engine::UA_CSS`) **had no `col`/`colgroup` rule at all**, so a `<col>`
+computed `display: inline` and layout — which matches on `Display::TableColumn` — never saw a
+column. `MinimalCascade`'s own UA table has had both since it was written.
+
+> **THE t1057 WARNING HAS A MIRROR.** *"A fixture can report a layout bug the product does not
+> have"* — and equally, **a fixture can report a layout FIX the product does not have.** Only
+> re-running through `manuk-wpt boxes --html` says which, and this tick's in-crate gate would have
+> banked a green that shipped nothing. It is also a `getComputedStyle` divergence on its own
+> (Chrome reports `table-column`), which is why the fix belongs in the UA sheet and not in a layout
+> special case.
+
+⚠⚠ **THE THREE NEGATIVE ROWS EACH GO RED ON A DIFFERENT WRONG FIX**, all three RED-run:
+
+```text
+   two `width:300px` cells in a 200px table     Chrome 100/100   "pin the column" -> 300/300
+   `width:5px` on a nowrap 96px word            Chrome  96.3     "pin the column" -> 5
+   colspan=2 cell with `width:300px`            Chrome 200/200   spreading it     -> 300/100
+```
+
+So a specified width raises the column's **max** and never its **min**, loses outright to
+min-content, and constrains a column only when a cell occupies it *alone*. The third row also fixed
+a second defect on its way past: `cell_intrinsic` collapsed **both** intrinsics onto a specified
+`width`, which is what let a spanning cell's width be spread over the columns it spans, and what made
+`width:5px` beat a 96px word. Two more RED-runs cover the positive half — disabling the `<col>` read,
+and disabling the free-column split — and the full layout suite is **146/146**, with all nine
+`g_table_*` page gates green.
+
+MEASURED, NOT BUILT — three rows added to `CONSTELLATION.tsv` as `unknown` with their Chrome numbers,
+because each is a different rule and folding them in would make none of them attributable:
+`table-layout:fixed` + `width:auto` must fall back to AUTO layout (we stretch to the container: 400
+where Chrome shrink-wraps to 86.7 — a whole table 4.6× too wide); a cell's `min-width` never reaches
+column sizing (150 → 10); and the table box's own `min-width`/`max-width` are not applied (a
+`max-width:200px` table stays 400). ⚠ The cell `min-width` row carries a distinction the build owes:
+Chrome grows a `min-width:300px` column *proportionally* to 387.5, where a specified `width:300px`
+would have stayed at 300 — `min-width` raises the intrinsics without constraining the column.
+
+WALL-TIME AUDIT re-run and its MARKER set, because t1064 published the audit and never set
+`LAST_WALL_AUDIT`, so the hook blocked this tick on an audit that had already been done. The reading is
+unchanged and so is its first finding — it reads the most recent verify receipt, and the most recent one
+is still t1064's **docs-only 89s** run, which skips the workspace build entirely. Ranking against that
+table optimises the cheap wall. The representative number remains this arc's capability walls at ~1030s,
+and every named remedy lives in `scripts/`, so per PART VII it is flagged and not touched.
+
+RATCHET: `manuk-layout` 145/145 → **146/146**, no test changed. Nine table page gates green.
+**No corpus A/B was run and the reason is stated rather than dressed up:** pricing it needs a
+same-hour old-binary control, which is a second release relink on top of the two this tick already
+paid, and the last seven Chrome-exact fixes each produced a headline that dissolved under solo
+re-run. The honest report is *the corpus movement is unmeasured*, not *there was none*.
+
+PERF: none in the common case — the specified-width pass is one pass over the placed cells. ⚠ One
+real cost: `cell_intrinsic` no longer short-circuits on `Dim::Px`, so a cell with a specified width
+now measures its content intrinsics like any other. That is unavoidable — the `width:5px` row proves
+min-content is needed even then — and it is the same work an auto cell already did.
+
+WIKI: docs/wiki/box-layout.md — "A column with a SPECIFIED width is CONSTRAINED — it does not absorb
+the table's surplus"
+
 ## Tick 1064 — CORRECTION: the accessibility surface is not unmeasurable, I ran the wrong runner (2026-08-09)
 
 TICK SHAPE: measurement — a correction, published one tick after the claim it withdraws. Surface

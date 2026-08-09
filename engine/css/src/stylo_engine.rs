@@ -533,6 +533,14 @@ tfoot { display: table-footer-group; }
 tr { display: table-row; }
 td, th { display: table-cell; padding: 1px; }
 caption { display: table-caption; }
+/* ⚠⚠⚠ **`col`/`colgroup` HAD NO RULE HERE AT ALL, SO ON THE SHIPPING CASCADE THEY COMPUTED
+   `inline`** — while `MinimalCascade`'s own UA table (`ua_defaults`) has had both since it was
+   written. The same fix in `auto_col_widths` therefore came out Chrome-exact under the in-crate
+   cascade (240/160) and completely inert under Stylo (200/200), because layout matches on
+   `Display::TableColumn` and the element never had it. Two cascades, one stale.
+   It is also a `getComputedStyle` divergence in its own right: Chrome reports `table-column`. */
+colgroup { display: table-column-group; }
+col { display: table-column; }
 /* `pre` preserves whitespace. Chrome's UA sheet says so; ours did not, so every code block on
    the web folded its newlines into spaces and rendered as one endless line. */
 /* Chrome's default MONOSPACE font size is 13px, not 16px — which is why `<code>` famously renders

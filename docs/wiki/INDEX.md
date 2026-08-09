@@ -385,6 +385,11 @@
   - L7466 · The negative arm is what makes §9.4.3 a different rule from margin
   - L7477 · Defect 1 — a float never received its offset
   - L7497 · Defect 2 — and this is the THIRD independent copy of the direction clause
+  - L7523 · A column with a SPECIFIED width is CONSTRAINED — it does not absorb the table's surplus (t1065)
+  - L7549 · width: 50% agreed with Chrome while being completely unimplemented
+  - L7558 · The three NEGATIVE rows are what separate this from "pin the column"
+  - L7574 · ⚠⚠⚠ The same fix was Chrome-exact in-crate and completely INERT on the shipping cascade
+  - L7587 · Named, measured, not built — the four residues from the same battery
 
 ## browser-capabilities.md
 `docs/wiki/browser-capabilities.md`
@@ -1801,4 +1806,4 @@
   - L124 · Rank mechanisms by FLIP RATE, not failing-subtest count — CSS layout is a multi-assertion slog
 
 ---
-1708 sections across 22 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+1713 sections across 22 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.

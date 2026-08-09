@@ -5652,6 +5652,7 @@ impl Ctx<'_> {
                 avail_cols,
                 table_specified.is_some(),
                 collapse.then_some(&vline[..]),
+                &self.column_hints(node, ncols),
             )
         };
         let cols_used: f32 = widths.iter().sum();
@@ -6195,15 +6196,101 @@ impl Ctx<'_> {
     /// `border_lr` replaces the cell's own left+right border width with the pair of collapsed
     /// half-lines it will actually be laid out with (`border-collapse: collapse`); `None` is the
     /// separated model, where the cell keeps its own.
-    fn cell_intrinsic(&self, cell: NodeId, border_lr: Option<f32>) -> (f32, f32) {
+    /// A cell's horizontal frame — the padding and border that sit outside its content box and so
+    /// belong to the COLUMN's width. `border_lr` is the collapsing model's two half grid lines;
+    /// `None` is the separated model, where the cell keeps its own borders.
+    ///
+    /// Shared by `cell_intrinsic` and the specified-width pass in `auto_col_widths`, because a
+    /// column sized from one and constrained by the other must measure the same frame both times.
+    fn cell_frame(&self, cell: NodeId, border_lr: Option<f32>) -> f32 {
         let s = self.style_of(cell);
-        let frame = s.padding.left.resolve(0.0, 0.0)
+        s.padding.left.resolve(0.0, 0.0)
             + s.padding.right.resolve(0.0, 0.0)
-            + border_lr.unwrap_or(s.border_width.left + s.border_width.right);
-        // If the cell has a definite width, both intrinsics collapse to it.
-        if let Dim::Px(w) = s.width {
-            return (w + frame, w + frame);
+            + border_lr.unwrap_or(s.border_width.left + s.border_width.right)
+    }
+
+    /// The per-column width hints from a table's `<col>` / `<colgroup>` children (CSS 2.1 §17.3),
+    /// in grid order. `None` is a column with no hint.
+    ///
+    /// ⚠ A `<colgroup>`'s own width applies to each column it spans, and a `<col>` inside it
+    /// overrides that — so a group is walked as its children when it has any, and as `span`
+    /// anonymous columns when it does not. The `width` ATTRIBUTE needs nothing here: `col` and
+    /// `colgroup` are already in the presentational-hint set, so it has computed into `width`
+    /// before layout ever sees it.
+    fn column_hints(&self, table: NodeId, ncols: usize) -> Vec<Option<Dim>> {
+        fn push(out: &mut Vec<Option<Dim>>, d: Dim, span: usize) {
+            for _ in 0..span {
+                out.push(match d {
+                    Dim::Auto => None,
+                    other => Some(other),
+                });
+            }
         }
+        let mut out: Vec<Option<Dim>> = Vec::new();
+        for child in self.dom.children(table) {
+            if !self.dom.is_element(child) || !is_rendered(self.dom, self.styles, child) {
+                continue;
+            }
+            match self.style_of(child).display {
+                Display::TableColumn => push(
+                    &mut out,
+                    self.style_of(child).width,
+                    self.cell_span(child, "span"),
+                ),
+                Display::TableColumnGroup => {
+                    let cols: Vec<NodeId> = self
+                        .dom
+                        .children(child)
+                        .into_iter()
+                        .filter(|&c| {
+                            self.dom.is_element(c)
+                                && is_rendered(self.dom, self.styles, c)
+                                && self.style_of(c).display == Display::TableColumn
+                        })
+                        .collect();
+                    if cols.is_empty() {
+                        push(
+                            &mut out,
+                            self.style_of(child).width,
+                            self.cell_span(child, "span"),
+                        );
+                    } else {
+                        let group_w = self.style_of(child).width;
+                        for c in cols {
+                            let w = match self.style_of(c).width {
+                                Dim::Auto => group_w,
+                                own => own,
+                            };
+                            push(&mut out, w, self.cell_span(c, "span"));
+                        }
+                    }
+                }
+                _ => {}
+            }
+            if out.len() >= ncols {
+                break;
+            }
+        }
+        out.resize(ncols, None);
+        out
+    }
+
+    fn cell_intrinsic(&self, cell: NodeId, border_lr: Option<f32>) -> (f32, f32) {
+        let frame = self.cell_frame(cell, border_lr);
+        // ⚠⚠⚠ **A CELL'S OWN `width` USED TO COLLAPSE BOTH INTRINSICS ONTO ITSELF, AND THAT IS TWO
+        // ERRORS.** A specified width is not the column's min-content — CSS 2.1 §17.5.2.2 keeps the
+        // two apart, and Chrome shows it on the row where they disagree: `width: 5px` on a
+        // `white-space: nowrap` cell holding a 96px word gives the column **96.3**, not 5, because
+        // the content cannot be squeezed below its minimum. Collapsing `min` onto 5 also collapsed
+        // `max`, so the column then GREW proportionally from 5 and landed at 137.
+        //
+        // The specified width belongs one level up, in `auto_col_widths`, where it is a
+        // *constraint on the column* rather than an intrinsic of the cell — and where `avail` is
+        // known, which is the only place a PERCENTAGE width can be resolved at all. This function
+        // now reports content intrinsics only, for every cell.
+        //
+        // ⚠ It also stops a `colspan` cell's width from being spread over the columns it spans:
+        // Chrome pins nothing there (`colspan=2` + `width:300px` in a 400px table is still 200/200).
         let mut fc_max = FloatContext::new(0.0, 1.0e6);
         let (cmax, _) = self.layout_children(cell, 0.0, 0.0, 1.0e6, None, &mut fc_max);
         let max = content_right_extent(&cmax, self.fonts, 0.0, &|n| self.px_right_insets(n));
@@ -6225,6 +6312,7 @@ impl Ctx<'_> {
         avail: f32,
         table_has_width: bool,
         vline: Option<&[f32]>,
+        col_hints: &[Option<Dim>],
     ) -> Vec<f32> {
         let mut col_min = vec![0.0f32; ncols];
         let mut col_max = vec![0.0f32; ncols];
@@ -6267,6 +6355,59 @@ impl Ctx<'_> {
                 }
             }
         }
+        // ── ⚠⚠⚠ **A COLUMN WITH A SPECIFIED WIDTH IS *CONSTRAINED*: IT TAKES THAT WIDTH AND DOES
+        //    NOT ABSORB THE TABLE'S SURPLUS.** Nothing here knew that. Every column grew in
+        //    proportion to its max-content, so `<td width="150">` in a 400px table came out **376**
+        //    — the specified width used as a *starting point* for growth instead of as the answer.
+        //
+        //    Chrome, one row per source of a specified width (all measured, `width: 400px` table):
+        //
+        //    ```text
+        //      <td style="width:100px">  + auto      100 / 300      the auto column takes the rest
+        //      <td width="150">          + auto      150 / 250      the presentational attribute
+        //      <td style="width:25%">    + auto      100 / 300      a PERCENTAGE — dropped entirely
+        //      <col style="width:100px"> + auto      100 / 300      the <col> hint — never read
+        //      <col 120> <col 80>                    240 / 160      ALL constrained -> proportional
+        //      <td style="width:100px"> + 2 auto     100/33.3/266.7 surplus splits by max-content
+        //    ```
+        //
+        //    ⚠⚠⚠ **`width: 50%` AGREED WITH CHROME WHILE BEING COMPLETELY UNIMPLEMENTED**, which is
+        //    why the fixture carries 25% as well: a dropped percentage left two equal auto columns,
+        //    and two equal auto columns in a 400px table are 200/200 — exactly what 50% asks for.
+        //    Two errors cancelling, and only the row where they cannot tells you anything.
+        //
+        //    ⚠ A specified width raises the column's **max** and never its **min**: an
+        //    over-constrained table shrinks it back toward its content (two `width:300px` cells in a
+        //    200px table are 100/100 in Chrome, not an overflow), and a specified width BELOW
+        //    min-content loses to min-content (`width:5px` on a nowrap 96px word gives 96.3).
+        //    Both are negative rows, and both are what separates this from "pin the column".
+        let mut col_spec: Vec<Option<f32>> = vec![None; ncols];
+        let resolve = |d: Dim| -> Option<f32> {
+            match d {
+                Dim::Auto => None,
+                other => Some(other.resolve(avail, 0.0).max(0.0)),
+            }
+        };
+        for (c, hint) in col_hints.iter().enumerate().take(ncols) {
+            col_spec[c] = hint.and_then(|d| resolve(d));
+        }
+        // Only a cell that occupies its column ALONE constrains it — a spanning cell's width says
+        // nothing about how the span divides (Chrome-measured: `colspan=2` + `width:300px` in a
+        // 400px table is still 200/200).
+        for p in placed.iter().filter(|p| p.colspan == 1 && p.col < ncols) {
+            let Some(w) = resolve(self.style_of(p.cell).width) else {
+                continue;
+            };
+            let w = w + self.cell_frame(p.cell, border_lr(p));
+            col_spec[p.col] = Some(col_spec[p.col].map_or(w, |e| e.max(w)));
+        }
+        for c in 0..ncols {
+            if let Some(w) = col_spec[c] {
+                col_max[c] = col_max[c].max(w).max(col_min[c]);
+                col_spec[c] = Some(col_max[c]);
+            }
+        }
+
         let sum_min: f32 = col_min.iter().sum();
         let sum_max: f32 = col_max.iter().sum();
 
@@ -6275,12 +6416,35 @@ impl Ctx<'_> {
             return col_max;
         }
         if sum_max <= avail {
-            // Definite, roomy table: grow columns proportionally to max-content.
+            // Definite, roomy table: the surplus goes to the columns that are free to take it, in
+            // proportion to their max-content. With every column constrained there is no such
+            // column, and the surplus is shared over all of them instead — which is also the
+            // no-specified-widths case, unchanged.
             if sum_max <= 0.0 {
                 return vec![avail / ncols as f32; ncols];
             }
             let extra = avail - sum_max;
-            return col_max.iter().map(|&m| m + extra * (m / sum_max)).collect();
+            let free_max: f32 = (0..ncols)
+                .filter(|&c| col_spec[c].is_none())
+                .map(|c| col_max[c])
+                .sum();
+            let nfree = (0..ncols).filter(|&c| col_spec[c].is_none()).count();
+            if nfree == 0 {
+                return col_max.iter().map(|&m| m + extra * (m / sum_max)).collect();
+            }
+            return (0..ncols)
+                .map(|c| {
+                    if col_spec[c].is_some() {
+                        col_max[c]
+                    } else if free_max > 0.0 {
+                        col_max[c] + extra * (col_max[c] / free_max)
+                    } else {
+                        // Every free column is zero-width: split the surplus evenly rather than
+                        // divide by zero and leave the table short of its own specified width.
+                        col_max[c] + extra / nfree as f32
+                    }
+                })
+                .collect();
         }
         if sum_min <= avail {
             // Between min and max: distribute the slack over (max - min).
@@ -15677,6 +15841,103 @@ mod tests {
         assert!(
             cells[2].height >= 30.0 - 0.5,
             "row 2 height driven by the 30px cell"
+        );
+    }
+
+    /// **A COLUMN WITH A SPECIFIED WIDTH IS CONSTRAINED: IT TAKES THAT WIDTH AND DOES NOT ABSORB
+    /// THE TABLE'S SURPLUS** (CSS 2.1 §17.5.2.2). Every row Chrome-measured; see `auto_col_widths`
+    /// for the fixture and the two errors that were cancelling each other on `width: 50%`.
+    ///
+    /// The three NEGATIVE rows are what separate this from "pin the column", and each one goes red
+    /// on a different wrong fix: a specified width raises the column's max and never its min, a
+    /// width below min-content loses to min-content, and a `colspan` cell's width pins nothing.
+    #[test]
+    fn a_specified_column_width_does_not_absorb_the_tables_surplus() {
+        let widths = |body: &str| -> Vec<f32> {
+            // `td { padding: 1px }` is the UA default (Chrome's too) and it is part of the
+            // COLUMN's width, not the cell's content width — zeroed here so every number below is
+            // the specified width itself rather than the specified width plus a frame.
+            let (dom, root) = layout_html(
+                &format!("<body style='margin:0'>{body}</body>"),
+                "td{padding:0}",
+                800.0,
+            );
+            cell_rects(&root, &dom).iter().map(|r| r.width).collect()
+        };
+        const T: &str = "<table style='border-spacing:0;width:400px'>";
+
+        // A cell's own width, as a length and as a PERCENTAGE. The percentage row is the one that
+        // agreed with Chrome while being unimplemented: at 50% a dropped percentage leaves two
+        // equal auto columns, which is the same 200/200 the declaration asks for.
+        for decl in ["width:100px", "width:25%"] {
+            let w = widths(&format!(
+                "{T}<tr><td style='{decl}'>A</td><td>B</td></tr></table>"
+            ));
+            assert_eq!(w.len(), 2);
+            assert!(
+                (w[0] - 100.0).abs() < 0.5 && (w[1] - 300.0).abs() < 0.5,
+                "`{decl}` + auto in a 400px table must be 100/300, got {w:?}"
+            );
+        }
+        // The `<col>` hint. It reaches layout only because `col`/`colgroup` carry their table
+        // displays on BOTH cascades — the same fix read 200/200 on the shipping one until the
+        // UA sheet was told what a `<col>` is.
+        let w = widths(&format!(
+            "{T}<colgroup><col style='width:100px'><col></colgroup><tr><td>A</td><td>B</td></tr></table>"
+        ));
+        assert!(
+            (w[0] - 100.0).abs() < 0.5 && (w[1] - 300.0).abs() < 0.5,
+            "a <col width> + an auto column must be 100/300, got {w:?}"
+        );
+        // EVERY column constrained: no column is free to take the surplus, so it is shared over
+        // all of them in proportion to their widths (Chrome: 120/80 -> 240/160).
+        let w = widths(&format!(
+            "{T}<colgroup><col style='width:120px'><col style='width:80px'></colgroup><tr><td>A</td><td>B</td></tr></table>"
+        ));
+        assert!(
+            (w[0] - 240.0).abs() < 0.5 && (w[1] - 160.0).abs() < 0.5,
+            "two constrained columns must share the surplus 240/160, got {w:?}"
+        );
+        // The surplus splits over the FREE columns in proportion to their max-content, so the
+        // content-heavy one takes more of it — with the constrained column untouched.
+        let w = widths(&format!(
+            "{T}<tr><td style='width:100px'>A</td><td>B</td><td>BBBBBBBB</td></tr></table>"
+        ));
+        assert!(
+            (w[0] - 100.0).abs() < 0.5 && w[2] > w[1] && (w[1] + w[2] - 300.0).abs() < 0.5,
+            "the surplus must go to the two auto columns, the wider one taking more: {w:?}"
+        );
+
+        // ── NEGATIVE 1: a specified width raises the column's MAX, never its MIN. Two 300px cells
+        //    in a 200px table shrink back to their content share rather than overflowing.
+        let w = widths(
+            "<table style='border-spacing:0;width:200px'>             <tr><td style='width:300px'>A</td><td style='width:300px'>B</td></tr></table>",
+        );
+        assert!(
+            (w[0] - 100.0).abs() < 0.5 && (w[1] - 100.0).abs() < 0.5,
+            "an over-constrained table must shrink its specified columns, got {w:?}"
+        );
+        // ── NEGATIVE 2: a specified width BELOW min-content loses to min-content.
+        let w = widths(&format!(
+            "{T}<tr><td style='width:5px;white-space:nowrap'>WWWWWWWWWW</td><td>B</td></tr></table>"
+        ));
+        assert!(
+            w[0] > 50.0 && (w[0] + w[1] - 400.0).abs() < 0.5,
+            "`width:5px` must lose to a nowrap word's min-content, got {w:?}"
+        );
+        // ── NEGATIVE 3: a `colspan` cell's width says nothing about how the span divides.
+        let w = widths(&format!(
+            "{T}<tr><td>A</td><td>B</td></tr><tr><td colspan='2' style='width:300px'>C</td></tr></table>"
+        ));
+        assert!(
+            (w[0] - 200.0).abs() < 0.5 && (w[1] - 200.0).abs() < 0.5,
+            "a colspan cell's width must pin neither column, got {w:?}"
+        );
+        // ── CONTROL: with no specified width anywhere the old proportional growth is unchanged.
+        let w = widths(&format!("{T}<tr><td>A</td><td>BBBBBBBB</td></tr></table>"));
+        assert!(
+            w[1] > w[0] && (w[0] + w[1] - 400.0).abs() < 0.5,
+            "an unconstrained table still grows proportionally to max-content, got {w:?}"
         );
     }
 
