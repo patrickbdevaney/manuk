@@ -7380,3 +7380,75 @@ look*.
 and the entry is a *block-level* child, which the guard's second bullet already stopped. The defect
 required the float to be a **direct** child of the atomic — which is exactly why every existing
 nested-float fixture, all of them `<a><img float>` shapes, missed it.
+
+## 24 transposed rows found nothing and the one divergent row found two defects (t1058)
+
+CSS 2.1 **§10.6.4** — the absolutely-positioned *height* constraint equation — was t1054's last
+unnamed §10 primitive, and t1054 said exactly why it mattered: the **width** half (§10.3.7) is gated
+and heavily measured, and the height half is quoted *inside an existing receipt*. **The code knew a
+rule the map could not carry a verdict about.**
+
+The battery pairs them: 25 height rows and 8 width rows, every case in a `position:relative; 400x400`
+containing block. Every mainstream row was already exact, and **24 of the pairs are exact transposes
+of each other.** That agreement is the point, not the reassurance — because the spec says they part
+company in exactly one place:
+
+```text
+   §10.3.7, the INLINE axis      TWO clauses read the CONTAINING BLOCK's `direction`
+   §10.6.4, the BLOCK axis       NONE do
+```
+
+Both defects live at that seam, and neither arm alone can reach either one.
+
+### Defect 1 — an over-constrained abspos ignores `left` in an RTL containing block
+
+§10.3.7: *"if the values are over-constrained, ignore the value for `left` (in case the `direction`
+property of the containing block is `rtl`) or `right` (in case `direction` is `ltr`)."* Chrome,
+`left:50; right:50; width:100` in a 400px containing block:
+
+```text
+                                             Chrome   before   after
+   CB rtl, box inherits rtl                    250       50     250
+   CB ltr, box direction:rtl                    50       50      50   <- CONTROL
+   CB rtl, box direction:ltr                   250       50     250
+   CB rtl, both margins auto, box FITS         150      150     150   <- CONTROL
+   CB rtl, both auto, width 500 (free < 0)    -100        0    -100
+   CB ltr, both auto, width 500 (free < 0)       0        0       0   <- CONTROL
+```
+
+⚠⚠ **The two `direction`-on-the-box rows are the control that names the subject.** The rule reads the
+*containing block's* `direction`, never the box's own; because `direction` inherits, the two agree
+everywhere except those rows — where they give opposite answers. The obvious fix (`s.direction`) is
+wrong, and it was RED-run: **it fails on the control and passes on the row that made you look.**
+
+⚠ `parent_is_rtl` already existed, written for §10.3.3's over-constrained rule for *in-flow* blocks,
+which is gated. The same rule one section over was LTR-only — *one rule, N implementations* — so the
+fix needed no new logic, only a second caller.
+
+### Defect 2 — found by a RED-proof that came back GREEN, and it is the bigger one
+
+The height battery had a row captioned *"the BLOCK axis ignores `direction`"*. Mutating the block axis
+to read `direction` **left the gate green** — because the row put `direction:rtl` on the abspos *box*,
+and the rule reads the *containing block*. The box's own value never reaches the code. **The row
+asserted nothing, while reading as though it asserted the tick's central claim.**
+
+Re-measured with `direction` on the CB:
+
+```text
+   top:0; bottom:0; height:500px; margin-block:auto, in a 400px CB
+                                             Chrome   before   after
+      CB direction:ltr                         -50        0     -50
+      CB direction:rtl                         -50        0     -50
+```
+
+§10.3.7 gives two auto margins equal values *"unless this would make them negative, in which case …
+set `margin-left` (rtl: `margin-right`) to zero"*. **§10.6.4's corresponding clause has no such
+exception** — equal values, full stop. The block arm was a copy of the inline one and carried the
+exception across, so an over-tall auto-margined box pinned to the top instead of overflowing equally
+at both ends. **Both directions were wrong, so this is not an RTL defect at all** — it is an ordinary
+one that the RTL row happened to be standing next to, and it reaches every LTR page.
+
+> **A MUTATION THAT LEAVES THE GATE GREEN IS NOT A FAILED RED-PROOF — IT IS A READING.** It says the
+> row does not test what its caption claims, and the caption is where you were about to bank a
+> conclusion. Run the RED pass before believing the fix (t1045) — and before believing the
+> MEASUREMENT.

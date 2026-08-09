@@ -378,6 +378,9 @@
   - L7316 · Why these two had no row, which is the transferable part
   - L7324 · The negative arm is what makes eleven positive rows mean anything
   - L7331 · The defect: a float inside an atomic inline was placed in TWO formatting contexts
+  - L7384 · 24 transposed rows found nothing and the one divergent row found two defects (t1058)
+  - L7403 · Defect 1 — an over-constrained abspos ignores left in an RTL containing block
+  - L7428 · Defect 2 — found by a RED-proof that came back GREEN, and it is the bigger one
 
 ## browser-capabilities.md
 `docs/wiki/browser-capabilities.md`
@@ -1784,4 +1787,4 @@
   - L124 · Rank mechanisms by FLIP RATE, not failing-subtest count — CSS layout is a multi-assertion slog
 
 ---
-1691 sections across 22 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+1694 sections across 22 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.

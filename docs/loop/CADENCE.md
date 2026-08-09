@@ -11,12 +11,12 @@
 
 | | value | over |
 |---|---|---|
-| ticks landed | **767** | ticks 1–1057 |
-| median tick cycle | **27m** | 766 intervals |
+| ticks landed | **768** | ticks 1–1058 |
+| median tick cycle | **27m** | 767 intervals |
 | median, last 10 | **67m** | 10 intervals |
 | fastest / slowest | 5s / 5.4d | |
-| **ticks per hour** | **1.11** | 692.6h elapsed |
-| median verify wall | **63s** | 706 ticks |
+| **ticks per hour** | **1.10** | 694.1h elapsed |
+| median verify wall | **63s** | 707 ticks |
 | wall trend | 39s → 13m — getting slower ⚠️ | first 3 vs last 3 |
 
 The **cycle** is the real unit: implement → debug → verify wall → land. The wall is only part of
@@ -28,10 +28,10 @@ it, and a wall that grows taxes every future tick, so it is tracked separately f
 
 * **capabilities asserted** (`G_CAPABILITY`): 48 → **81**
 * **live gates**: 27 → **428**
-* **✅ rows in the capability ledger**: 144 → **531**
+* **✅ rows in the capability ledger**: 144 → **532**
 * **Bar 0 — oracle hangs**: 0 of 265 sites
 
-**341 of 767 ticks** (44%) moved a
+**341 of 768 ticks** (44%) moved a
 user-visible capability. The rest were instruments, infrastructure and corrections — and the
 ledger says the corrections were not overhead: three of its top three priorities were phantoms,
 and finding that out redirected everything after it.
@@ -864,5 +864,6 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 | **1055** | 2026-08-08 23:05 | 60m | primitive | 13m | +445/−36 | 428 | 81 | 56.0% · | `position: fixed` is clean at 19 of 20, and the row that failed was not a `fixed` bug (202 |
 | **1056** | 2026-08-08 23:59 | 54m | primitive | 13m | +320/−69 | 428 | 81 | 56.0% · | the second copy was wrong on exactly one row of thirty-two, and only a PAIRED battery coul |
 | **1057** | 2026-08-09 01:39 | 1.7h | primitive | 13m | +646/−42 | 428 | 81 | 56.0% · | a block's auto height is clean at 28 of 28, and the fixture that cleared it found a float  |
+| **1058** | 2026-08-09 03:12 | 1.5h | primitive | 13m | +545/−42 | 428 | 81 | 56.0% · | the paired battery's 24 transposed rows found nothing, and the ONE row where the two axes  |
 
 *`·` after a WPT figure means **carried forward**, not measured this tick.*

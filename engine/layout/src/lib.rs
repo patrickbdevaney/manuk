@@ -6966,6 +6966,25 @@ impl Ctx<'_> {
         // exactly what `resolve(_, 0.0)` already gave us, so those paths are untouched. `!= Auto`
         // also excludes an intrinsic keyword (`fit-content`/`min`/`max`), which collapses to `Auto`
         // and must not be treated as a definite size here.
+        // ⚠⚠⚠ **CSS 2.1 §10.3.7's INLINE axis has TWO clauses that read the CONTAINING BLOCK's
+        // `direction`, and the block axis (§10.6.4) has NONE.** That asymmetry is the whole reason
+        // the two are not transposes of each other, and it is what a paired H/W battery exists to
+        // find. `parent_is_rtl` already existed for §10.3.3's in-flow over-constrained rule; this
+        // is the same rule one section over, and it was written LTR-only.
+        //
+        // ⚠⚠ **It is the CONTAINING BLOCK's direction, never the box's own, and the two rows that
+        // prove it disagree**: Chrome, `left:50;right:50;width:100` in a 400px CB —
+        //
+        // ```text
+        //                                          Chrome   before
+        //   CB rtl,  box inherits rtl                250       50    <- ignore `left`
+        //   CB ltr,  box direction:rtl                50       50    <- CONTROL: the BOX does not decide
+        //   CB rtl,  box direction:ltr               250       50    <- the CB does
+        //   CB rtl,  both margins auto (fits)        150      150    <- CONTROL: centring is direction-free
+        //   CB rtl,  both auto, width 500 (free<0)  -100        0    <- the OTHER rtl clause
+        //   CB ltr,  both auto, width 500 (free<0)     0        0    <- CONTROL
+        // ```
+        let cb_rtl = self.parent_is_rtl(node);
         if let (Some(l), Some(r)) = (left, right) {
             if s.width != Dim::Auto {
                 let free = cw - l - r - border_box_w;
@@ -6974,7 +6993,13 @@ impl Ctx<'_> {
                         ml = free / 2.0;
                         mr = free / 2.0;
                     }
-                    // Negative free space (ltr): pin the start margin, overflow past the end edge.
+                    // Negative free space: *"set margin-left (rtl: margin-right) to zero and solve
+                    // for the other"* — pin the START margin and overflow past the END edge, and
+                    // which edge is which is the containing block's `direction`.
+                    (true, true) if cb_rtl => {
+                        ml = free;
+                        mr = 0.0;
+                    }
                     (true, true) => {
                         ml = 0.0;
                         mr = free;
@@ -6991,13 +7016,28 @@ impl Ctx<'_> {
             if s.height != Dim::Auto {
                 let free = cb.height - t - b - border_box_h;
                 match (s.margin.top.is_auto(), s.margin.bottom.is_auto()) {
-                    (true, true) if free >= 0.0 => {
+                    // ⚠⚠⚠ **NO `if free >= 0.0` GUARD, AND THAT IS THE DIFFERENCE FROM THE INLINE
+                    // AXIS.** §10.3.7 says the two margins get equal values *"unless this would make
+                    // them negative, in which case … set margin-left (rtl: margin-right) to zero"*.
+                    // §10.6.4's corresponding clause is *"solve the equation under the extra
+                    // constraint that the two margins get equal values"* — **full stop, no negative
+                    // exception.** This arm was a copy of the inline one and carried the exception
+                    // across with it, so an over-tall auto-margined box pinned to the top instead of
+                    // overflowing equally at both ends. Chrome-measured, `top:0; bottom:0;
+                    // height:500px; margin-block:auto` in a 400px containing block:
+                    //
+                    // ```text
+                    //                       Chrome   before   after
+                    //   CB direction:ltr      -50        0      -50
+                    //   CB direction:rtl      -50        0      -50    <- direction-FREE, unlike the
+                    //                                                     inline axis's 0 vs -100
+                    // ```
+                    //
+                    // Both directions were wrong, so this is not an RTL defect — it is an ordinary
+                    // one that the RTL row happened to be standing next to.
+                    (true, true) => {
                         mt = free / 2.0;
                         mb = free / 2.0;
-                    }
-                    (true, true) => {
-                        mt = 0.0;
-                        mb = free;
                     }
                     // As the inline axis: only a start (top) auto margin repositions the box.
                     (true, false) => mt = free - mb,
@@ -7008,7 +7048,20 @@ impl Ctx<'_> {
 
         // Border-box top-left. `left`/`top` win; else offset from the far edge; else
         // the containing block's start edge (static-position approximation).
-        let bx = if let Some(l) = left {
+        //
+        // ⚠ **UNLESS THE INLINE AXIS IS OVER-CONSTRAINED IN AN RTL CONTAINING BLOCK**, which is
+        // §10.3.7's *"ignore the value for `left` (rtl) or `right` (ltr) and solve for it"*. Every
+        // other branch here is direction-free; this is the one clause that is not, and the LTR half
+        // of it is what "left wins" already encodes.
+        let ignore_left = cb_rtl
+            && left.is_some()
+            && right.is_some()
+            && s.width != Dim::Auto
+            && !s.margin.left.is_auto()
+            && !s.margin.right.is_auto();
+        let bx = if let (true, Some(r)) = (ignore_left, right) {
+            cb.x + cb.width - r - mr - border_box_w
+        } else if let Some(l) = left {
             cb.x + l + ml
         } else if let Some(r) = right {
             cb.x + cb.width - r - mr - border_box_w
@@ -10122,6 +10175,241 @@ mod tests {
         let fonts = FontContext::new();
         let root = layout_document(&dom, &styles, &fonts, width);
         (dom, root)
+    }
+
+    /// One row of the t1058 battery: an abspos `#x` styled with `st` inside a positioned container
+    /// styled with `cb`, returned parent-relative so the numbers compare directly with Chrome.
+    fn t1058_row(cb: &str, st: &str, text: &str) -> Rect {
+        let html = format!(
+            r#"<div id="cb" style="position:relative;{cb}"><div id="x" style="position:absolute;{st}">{text}</div></div>"#
+        );
+        let (dom, root) = layout_html(&html, "", 800.0);
+        let rects = root.node_rects(&dom);
+        let by_id = |id: &str| {
+            let n = dom
+                .descendants(dom.root())
+                .find(|&n| dom.element(n).and_then(|e| e.attr("id")) == Some(id))
+                .unwrap_or_else(|| panic!("#{id} exists"));
+            rects
+                .get(&n)
+                .copied()
+                .unwrap_or_else(|| panic!("#{id} produced a box"))
+        };
+        let (c, x) = (by_id("cb"), by_id("x"));
+        Rect {
+            x: x.x - c.x,
+            y: x.y - c.y,
+            width: x.width,
+            height: x.height,
+        }
+    }
+
+    /// **G_ABSPOS_HEIGHT — CSS 2.1 §10.6.4, the absolutely-positioned HEIGHT constraint equation.**
+    ///
+    /// t1054 filed this `unknown` for a precise reason: the **width** half of the same equation
+    /// (§10.3.7) is gated and measured, and the height half was quoted *inside an existing receipt*
+    /// — so **the code knew a rule the map could not carry a verdict about.** This is that verdict.
+    ///
+    /// 25 rows against headless Chrome in a `position:relative; 400x400` containing block, **every
+    /// one exact** — `top`/`bottom`/`height` in all their auto combinations, over-constraint,
+    /// `margin:auto` centring, padding and border under both `box-sizing`es, percentage insets and
+    /// heights, `min-height`/`max-height` clamps, negative free space, and an auto-height CB:
+    ///
+    /// ```text
+    ///                                                        Chrome   ours
+    ///   top:0 bottom:0                                        0/400   0/400
+    ///   top:50 bottom:50                                     50/300  50/300
+    ///   top:50 bottom:50 height:100   (over-constrained)     50/100  50/100  <- `bottom` ignored
+    ///   bottom:0 height:100                                 300/100 300/100
+    ///   top:0 bottom:0 height:100 margin-block:auto         150/100 150/100  <- centred
+    ///   …+ padding 10 / border 5 / margin 20                various  exact
+    ///   no insets at all (static position, shrink to text)     0/18    0/18
+    ///   height:50% · top:25% bottom:25%                      0/200 100/200
+    ///   min-height:450 · max-height:120                      0/450   0/120
+    ///   margin-top:500 in a 400 box  (free space NEGATIVE)   500/0   500/0
+    ///   an auto-height containing block                        0/0     0/0
+    /// ```
+    ///
+    /// ⚠⚠⚠ **AND THE POINT OF PAIRING IT WITH THE WIDTH ARM IS THE ROW WHERE THEY MUST DIVERGE.**
+    /// The two equations are transposes of each other in 24 of 25 rows — which is exactly what makes
+    /// a paired battery worth running, because §10.3.7's inline axis has **two clauses that read the
+    /// containing block's `direction`** and §10.6.4's block axis has **none**. The over-constrained
+    /// row is `bottom`-ignored under *both* directions, and its width twin is not. That divergence
+    /// is a real defect and it lives in the arm that was already GATED — see
+    /// [`over_constrained_abspos_ignores_left_in_an_rtl_containing_block`].
+    ///
+    /// > **A BATTERY THAT ONLY CONFIRMS THE SYMMETRY IT ASSUMED HAS NOT TESTED THE SYMMETRY.** The
+    /// > row that pays is the one where the spec says the two halves part company.
+    #[test]
+    fn the_abspos_height_constraint_equation_is_chrome_exact() {
+        let cb = "width:400px;height:400px";
+        for (st, want_y, want_h, why) in [
+            ("top:0;bottom:0;left:0;width:10px", 0.0, 400.0, "both insets, height auto: stretch"),
+            ("top:50px;bottom:50px;left:0;width:10px", 50.0, 300.0, "…inset on both sides"),
+            ("top:50px;bottom:50px;height:100px;left:0;width:10px", 50.0, 100.0, "OVER-CONSTRAINED: `bottom` is ignored"),
+            ("bottom:0;height:100px;left:0;width:10px", 300.0, 100.0, "`bottom` alone with a definite height"),
+            ("top:0;bottom:0;height:100px;margin-top:auto;margin-bottom:auto;left:0;width:10px", 150.0, 100.0, "auto block margins CENTRE the box"),
+            ("top:0;bottom:0;padding-top:10px;padding-bottom:10px;left:0;width:10px", 0.0, 400.0, "padding is absorbed by the equation"),
+            ("top:0;bottom:0;border-top:5px solid #000;border-bottom:5px solid #000;left:0;width:10px", 0.0, 400.0, "…and so is border"),
+            ("top:0;bottom:0;margin-top:20px;margin-bottom:20px;left:0;width:10px", 20.0, 360.0, "…and so are margins"),
+            ("top:0;height:50%;left:0;width:10px", 0.0, 200.0, "a percentage height resolves against the CB"),
+            ("top:0;bottom:0;box-sizing:border-box;padding-top:10px;padding-bottom:10px;left:0;width:10px", 0.0, 400.0, "border-box changes nothing when both insets are set"),
+            ("top:25%;bottom:25%;left:0;width:10px", 100.0, 200.0, "percentage INSETS resolve against the CB height"),
+            ("top:0;bottom:0;min-height:450px;left:0;width:10px", 0.0, 450.0, "min-height clamps UP past the CB"),
+            ("top:0;bottom:0;max-height:120px;left:0;width:10px", 0.0, 120.0, "max-height clamps DOWN"),
+            ("top:0;bottom:0;height:auto;margin-top:500px;left:0;width:10px", 500.0, 0.0, "NEGATIVE free space clamps the height to 0"),
+            ("top:0;bottom:0;margin-top:auto;margin-bottom:auto;left:0;width:10px", 0.0, 400.0, "auto margins with height:auto resolve to 0, not to centring"),
+            ("top:0;bottom:0;height:100px;margin-top:auto;margin-bottom:0;left:0;width:10px", 300.0, 100.0, "ONE auto margin takes all the slack"),
+            ("top:0;bottom:0;padding-top:10%;left:0;width:10px", 0.0, 400.0, "a percentage padding is still absorbed"),
+            ("top:0;bottom:0;height:100px;box-sizing:border-box;padding-top:20px;left:0;width:10px", 0.0, 100.0, "border-box + a definite height"),
+            ("top:10%;height:auto;bottom:10%;left:0;width:10px", 40.0, 320.0, "percentage insets with height auto"),
+        ] {
+            let r = t1058_row(cb, st, "");
+            assert_eq!((r.y, r.height), (want_y, want_h), "§10.6.4: {why} — {st}");
+        }
+        // The static-position rows need content to have a height at all.
+        assert_eq!(
+            (
+                t1058_row(cb, "left:0;width:10px", "x").y,
+                t1058_row(cb, "left:0;width:10px", "x").height
+            ),
+            (0.0, 18.0),
+            "§10.6.4: no insets — the static position, shrink-to-fit to the content"
+        );
+        assert_eq!(
+            t1058_row(cb, "bottom:0;left:0;width:10px", "x").y,
+            382.0,
+            "§10.6.4: `bottom` alone with an auto height puts the CONTENT box against the bottom"
+        );
+        // An auto-height containing block has height 0, so `top:0;bottom:0` resolves to 0.
+        assert_eq!(
+            t1058_row("width:400px", "top:0;bottom:0;left:0;width:10px", "").height,
+            0.0,
+            "§10.6.4: an auto-height CB gives the stretch equation a zero basis"
+        );
+
+        // ⚠⚠⚠ **THE ROWS THAT MUST BE READ IN AN *RTL CONTAINING BLOCK*, because that is the only
+        // way to assert that the block axis is direction-FREE.** An earlier draft of this battery
+        // put `direction:rtl` on the abspos BOX and claimed to be testing exactly this — and a
+        // mutation that made the block axis direction-dependent left the gate GREEN, because the
+        // rule reads the CONTAINING BLOCK and the box's own value never reaches it. The row was
+        // asserting nothing. These read the CB, and they are RED-provable.
+        for dir in ["rtl", "ltr"] {
+            let cb = format!("width:400px;height:400px;direction:{dir}");
+            assert_eq!(
+                (
+                    t1058_row(&cb, "top:50px;bottom:50px;height:100px;left:0;width:10px", "").y,
+                    t1058_row(&cb, "top:0;bottom:0;height:100px;margin-top:auto;margin-bottom:auto;left:0;width:10px", "").y,
+                ),
+                (50.0, 150.0),
+                "§10.6.4: over-constraint and centring are the SAME in a {dir} containing block — \
+                 the block axis never reads `direction`, unlike §10.3.7's inline axis"
+            );
+            // ⚠⚠ …and this is the clause the inline axis has and the block axis does NOT: with the
+            // free space NEGATIVE, two auto margins still split it EQUALLY. §10.3.7 pins to the
+            // start edge here (0 in ltr, −100 in rtl); §10.6.4 has no such exception, and Chrome
+            // reads −50 under BOTH directions.
+            assert_eq!(
+                t1058_row(&cb, "top:0;bottom:0;height:500px;margin-top:auto;margin-bottom:auto;left:0;width:10px", "").y,
+                -50.0,
+                "§10.6.4: NEGATIVE free space still splits the auto margins equally in a {dir} CB — \
+                 the inline axis's 'unless this would make them negative' clause does not exist here"
+            );
+        }
+    }
+
+    /// **G_ABSPOS_RTL_OVERCONSTRAINED — CSS 2.1 §10.3.7 ignores `left`, not `right`, in an RTL
+    /// containing block, and the rule was written LTR-only.**
+    ///
+    /// §10.3.7: *"If the values are over-constrained, ignore the value for `left` (in case the
+    /// `direction` property of the containing block is `rtl`) or `right` (in case `direction` is
+    /// `ltr`) and solve for that value."* And one clause earlier, for the both-margins-auto case:
+    /// *"unless this would make them negative, in which case when `direction` of the containing block
+    /// is `ltr` (`rtl`), set `margin-left` (`margin-right`) to zero and solve for the other."*
+    ///
+    /// **Two direction-dependent clauses in the inline axis; the block axis (§10.6.4) has none.**
+    /// That asymmetry is what a paired H/W battery is for: 24 of 25 rows are exact transposes, and
+    /// the row where the spec says they part company is the row that found this. Chrome-measured,
+    /// `left:50; right:50; width:100` in a 400px containing block:
+    ///
+    /// ```text
+    ///                                              Chrome   before   after
+    ///   CB rtl, box inherits rtl                     250       50     250
+    ///   CB ltr, box direction:rtl                     50       50      50   <- CONTROL
+    ///   CB rtl, box direction:ltr                    250       50     250
+    ///   CB rtl, both margins auto, box FITS          150      150     150   <- CONTROL
+    ///   CB rtl, both auto, width 500 (free < 0)     -100        0    -100
+    ///   CB ltr, both auto, width 500 (free < 0)        0        0       0   <- CONTROL
+    /// ```
+    ///
+    /// ⚠⚠⚠ **THE TWO `direction`-ON-THE-BOX ROWS ARE THE CONTROL THAT NAMES THE SUBJECT.** The rule
+    /// is defined against the **containing block's** `direction`, never the box's own, and because
+    /// `direction` inherits, the two agree everywhere except those two rows — where they give
+    /// *opposite* answers. Reading the first row alone would just as easily have been fixed by
+    /// consulting `s.direction`, which is wrong and which those two rows catch.
+    ///
+    /// ⚠⚠ **`parent_is_rtl` ALREADY EXISTED**, written for §10.3.3's over-constrained rule for
+    /// *in-flow* blocks — which is gated (`an over-constrained block in an RTL containing block is
+    /// flush RIGHT`). The same rule one section over was implemented LTR-only, so the engine knew
+    /// the rule and applied it in one of the two places it belongs. That is the loop's recurring
+    /// *one rule, N implementations* shape, and it is why the helper needed no new logic — only a
+    /// second caller.
+    ///
+    /// ⚠ The reach is every RTL page — Arabic, Hebrew, Persian, Urdu — and specifically every
+    /// modal, drawer, toast and dropdown pinned with both `left` and `right` plus an explicit
+    /// width, which is the ordinary way that idiom is written.
+    #[test]
+    fn over_constrained_abspos_ignores_left_in_an_rtl_containing_block() {
+        let over = "left:50px;right:50px;width:100px;top:0;height:10px";
+        assert_eq!(
+            t1058_row("width:400px;height:60px;direction:rtl", over, "").x,
+            250.0,
+            "§10.3.7: an RTL containing block ignores `left`, so the box lands against `right`"
+        );
+        // ⚠ THE CONTROLS THAT NAME THE SUBJECT — it is the CB's direction, not the box's.
+        assert_eq!(
+            t1058_row(
+                "width:400px;height:60px;direction:ltr",
+                &format!("{over};direction:rtl"),
+                ""
+            )
+            .x,
+            50.0,
+            "CONTROL: the BOX's own `direction` must NOT decide — an LTR CB still ignores `right`"
+        );
+        assert_eq!(
+            t1058_row(
+                "width:400px;height:60px;direction:rtl",
+                &format!("{over};direction:ltr"),
+                ""
+            )
+            .x,
+            250.0,
+            "…and an RTL CB decides even when the box itself is `direction:ltr`"
+        );
+        // The second direction-dependent clause: both margins auto with NEGATIVE free space.
+        let neg = "left:0;right:0;width:500px;top:0;height:10px;margin-left:auto;margin-right:auto";
+        assert_eq!(
+            (
+                t1058_row("width:400px;height:60px;direction:rtl", neg, "").x,
+                t1058_row("width:400px;height:60px;direction:ltr", neg, "").x,
+            ),
+            (-100.0, 0.0),
+            "§10.3.7: with free space negative, RTL zeroes `margin-right` and LTR zeroes `margin-left`"
+        );
+        // ⚠ CONTROL: auto margins that FIT centre the box, and that clause is direction-free. A fix
+        // that flipped the whole auto-margin arm on `direction` moves this row.
+        assert_eq!(
+            t1058_row("width:400px;height:60px;direction:rtl", "left:50px;right:50px;top:0;height:10px;margin-left:auto;margin-right:auto;width:100px", "").x,
+            150.0,
+            "CONTROL: centring is direction-free and must not move"
+        );
+        // ⚠ CONTROL: the LTR over-constrained row was already exact and is what "left wins" encodes.
+        assert_eq!(
+            t1058_row("width:400px;height:60px;direction:ltr", over, "").x,
+            50.0,
+            "CONTROL: an LTR containing block still ignores `right`"
+        );
     }
 
     /// One row of the t1057 battery: lay `inner` inside a 400px container and return the rect of

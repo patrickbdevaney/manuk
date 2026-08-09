@@ -46371,6 +46371,140 @@ PERF: none — one UA rule and one narrowed branch in a cascade that already ran
 WIKI: `docs/wiki/css-cascade.md` — where Chrome draws the form-control `box-sizing` line, and why a
 layout-crate test cannot see it.
 
+## Tick 1058 — the paired battery's 24 transposed rows found nothing, and the ONE row where the two axes must part company found two defects (2026-08-09)
+
+TICK SHAPE: primitive — a 42-row **paired** battery on CSS 2.1 **§10.6.4** (the absolutely-positioned
+HEIGHT constraint equation) against its gated twin **§10.3.7** (the WIDTH one). §10.6.4 was the next
+unknown on t1054's enumeration, and t1054 named exactly why it mattered: the width half is gated and
+the height half is *quoted inside an existing receipt* — **the code knew a rule the map could not
+carry a verdict about.**
+
+⚠⚠⚠ **EVERY MAINSTREAM ROW OF §10.6.4 WAS ALREADY EXACT, AND THAT IS WHY THE TICK ALMOST BANKED IT
+CLEAN.** The first 25 height rows all matched Chrome: every auto combination of
+`top`/`bottom`/`height`, over-constraint, `margin:auto` centring, padding and border under both
+`box-sizing`es, percentage insets and heights, `min-height`/`max-height` clamps, an auto-height
+containing block. So did all 8 width rows. **The two arms are exact transposes of each other in 24 of
+those pairs** — and that agreement is precisely what makes the pairing worth running rather than
+reassuring, because the spec says they are *not* transposes everywhere:
+
+```text
+   §10.3.7, the INLINE axis          TWO clauses read the CONTAINING BLOCK's `direction`
+   §10.6.4, the BLOCK axis           NONE do
+```
+
+**Both defects this tick are at that seam, and neither is reachable from either arm alone.**
+
+⚠⚠⚠ **DEFECT 1 — AN OVER-CONSTRAINED ABSPOS IGNORES `left`, NOT `right`, IN AN RTL CONTAINING
+BLOCK, AND THE RULE WAS WRITTEN LTR-ONLY.** §10.3.7: *"if the values are over-constrained, ignore the
+value for `left` (in case the `direction` property of the containing block is `rtl`) or `right` (in
+case `direction` is `ltr`)."* Chrome, `left:50; right:50; width:100` in a 400px containing block:
+
+```text
+                                             Chrome   before   after
+   CB rtl, box inherits rtl                    250       50     250
+   CB ltr, box direction:rtl                    50       50      50   <- CONTROL
+   CB rtl, box direction:ltr                   250       50     250
+   CB rtl, both margins auto, box FITS         150      150     150   <- CONTROL
+   CB rtl, both auto, width 500 (free < 0)    -100        0    -100
+   CB ltr, both auto, width 500 (free < 0)       0        0       0   <- CONTROL
+```
+
+⚠⚠ **THE TWO `direction`-ON-THE-BOX ROWS ARE THE CONTROL THAT NAMES THE SUBJECT.** The rule reads the
+**containing block's** `direction`, never the box's own, and because `direction` inherits the two
+agree everywhere except those rows — where they give *opposite* answers. The obvious fix,
+`s.direction`, is wrong, and **it was RED-run: it fails on the control and passes on the row that
+made me look.** ⚠ `parent_is_rtl` already existed, written for §10.3.3's over-constrained rule for
+*in-flow* blocks, which is gated. The same rule one section over was LTR-only — the loop's recurring
+*one rule, N implementations*, so the fix needed no new logic, only a second caller.
+
+⚠⚠⚠ **DEFECT 2 WAS FOUND BY A RED-PROOF THAT CAME BACK GREEN, AND IT IS THE BIGGER OF THE TWO.**
+The height battery had a row captioned *"the BLOCK axis ignores `direction`"*. Mutating the block
+axis to read `direction` **left the gate green** — because the row put `direction:rtl` on the abspos
+**box**, and the rule reads the **containing block**. The box's own value never reaches the code, so
+the row asserted nothing while reading as though it asserted the tick's central claim.
+
+Re-measuring it correctly — `direction` on the CB — found this:
+
+```text
+   top:0; bottom:0; height:500px; margin-block:auto, in a 400px CB
+                                             Chrome   before   after
+      CB direction:ltr                         -50        0     -50
+      CB direction:rtl                         -50        0     -50
+```
+
+§10.3.7 says two auto margins get equal values *"unless this would make them negative, in which case
+… set `margin-left` (rtl: `margin-right`) to zero"*. **§10.6.4's corresponding clause has no such
+exception** — equal values, full stop. The block arm was a copy of the inline one and carried the
+exception across, so an over-tall auto-margined box pinned to the top instead of overflowing equally
+at both ends. **Both directions were wrong, so this is not an RTL defect at all** — it is an ordinary
+one that the RTL row happened to be standing next to, and it reaches every LTR page.
+
+> **A MUTATION THAT LEAVES THE GATE GREEN IS NOT A FAILED RED-PROOF — IT IS A READING.** It says the
+> row does not test what its caption claims, and the row's caption is where you were about to bank a
+> conclusion. Here it converted a "clean at 25 of 25" into a second defect with wider reach than the
+> first. t1045's rule — *run the pass BEFORE believing the fix* — pays in the opposite direction too:
+> run it before believing the MEASUREMENT.
+
+GATES, four RED proofs: `over_constrained_abspos_ignores_left_in_an_rtl_containing_block` (red on
+*direction ignored*; red on *the box's own `direction`* — and that one fails on the CONTROL, not on
+the headline row) and `the_abspos_height_constraint_equation_is_chrome_exact` (red on *the block axis
+made direction-dependent*; red on *the inline negative-margin clause restored*).
+
+MAP: `§10.6.4` promoted `unknown → gated`; one new row for the RTL over-constrained rule.
+
+PRICED — 10 sites, both binaries, same hour (old = t1057's release binary at 01:38, preserved before
+anything rebuilt it; new at 01:59). **Six byte-identical**; all four movers re-run SOLO 3x on each
+binary, and at MATCHED element counts the two binaries agree **exactly**:
+
+```text
+   m.youm7.com     panel -0.0119   OLD 0.851639@1220 0.851882@1222 0.852365@1226
+     (RTL, Arabic)                 NEW 0.851882@1222 0.823723@1214 0.852365@1226
+                                   -> byte-identical at n=1222 and n=1226. The site's own
+                                      element count moves between fetches; the engine does not.
+   www.repubblica  panel -0.0074   OLD 0.700397@2520 0.699723@2531
+                                   NEW 0.700397@2520 0.699723@2531   <- identical, both n
+   www.tz.de       panel -0.0264   OLD 0.834486@1879 0.815090@1882
+                                   NEW 0.834486@1879 0.815090@1882   <- identical, both n
+   www.fragrantica panel +0.0208   OLD [0.7159, 0.7320] over 6 runs
+                                   NEW [0.7132, 0.7320] over 6 runs, same max 0.731993
+                                   -> overlapping bands. The +0.0208 does NOT survive; NOT banked.
+```
+
+**Zero attributable regressions, and the one apparent GAIN is refused too** — a +0.0208 that sits
+inside both binaries' own spread is the same non-result as a −0.0208, and the solo-rerun rule does
+not get to be applied only to numbers I dislike.
+
+⚠ **Why the panel is so much noisier than the engine here:** every one of the four movers changed its
+own `shape_n` between fetches. The panel diff reads a site's editorial churn as engine movement, and
+at these magnitudes that churn is an order of magnitude larger than anything this tick did.
+
+⚠⚠⚠ **BAR 0 SIGHTING, UNATTRIBUTED, NAMED RATHER THAN FOLDED IN.** One `fidelity` run on the NEW
+binary **segfaulted** on `www.fragrantica.com` (02:26). It is recorded here because Bar 0 outranks
+every visual number (Part 24.3), and it is NOT claimed as this tick's:
+
+```text
+   kernel:  manuk-wpt-NEW-t1058[1070585]: segfault at 0 ... error 6
+            -> a NULL-POINTER WRITE, not a wild address
+   addr2line at the faulting offset:  std::ctype<char>::do_widen(char) const
+            -> a C++ frame, not manuk_layout; this tick's diff is f32 arithmetic and an
+               existing DOM-parent walk, all safe Rust
+   reproduction:  0 of 6 further NEW runs on the same URL · 0 of 9 OLD runs
+```
+
+⚠ **And the honest limit of that reading: 1-in-9 against 0-in-9 does not clear the new binary**, it
+only fails to convict it. t846-852's rule is that a clean reading attributes nothing until the old
+binary has refused to reproduce it — here the old binary has not been given enough runs for its
+silence to mean anything about an event this rare. Filed as an open Bar 0 lead with the faulting
+frame recorded, which is the part a future tick needs.
+
+RATCHET: manuk-layout **140/140**, zero regressions.
+
+PERF: one `parent_is_rtl` walk per absolutely-positioned box — a walk to the nearest element
+ancestor, on a path that already reads that ancestor's rect.
+
+WIKI: `docs/wiki/box-layout.md` — "24 transposed rows found nothing and the one divergent row found
+two defects (t1058)".
+
 ## Tick 1057 — a block's auto height is clean at 28 of 28, and the fixture that cleared it found a float placed TWICE (2026-08-09)
 
 TICK SHAPE: primitive — a 28-row battery on CSS 2.1 **§10.6.3** (where a block's `height:auto` ends)
@@ -46474,7 +46608,10 @@ removed*, and it is the only test in the suite that goes red for it).
 
 MAP: `§10.6.3` promoted `unknown → gated`; **§10.6.7 promoted from a RECEIPT to a ROW** and gated —
 t1054 named it and left it, and prose in a receipt carries no verdict; one new row for the atomic-inline
-float. Enumeration unknowns 34 → 32.
+float. Enumeration unknowns **34 → 33** (one PROMOTED; the two added rows arrive already gated, so
+they raise MEASURED 477 → 480 without touching the unknown count). ⚠ CORRECTED after landing — this
+line first read `34 → 32`, which double-counted the promotion against the two additions. The
+ratchet's own readout is the number, and it says 33.
 
 PRICED — 10 sites, both binaries, same hour (old = HEAD's release binary, preserved at 23:58 before
 anything rebuilt it; new at 00:22). **Six byte-identical on shape**; the three movers were re-run SOLO
