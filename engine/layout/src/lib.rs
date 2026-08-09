@@ -7815,7 +7815,6 @@ impl Ctx<'_> {
                 // An inline element's horizontal padding + border occupies space in the flow
                 // and extends its geometry — emit edge spacers around its content.
                 let s = self.style_of(node);
-                let mark = out.len();
                 let pad_l = s.padding.left.resolve(cw, 0.0) + s.border_width.left;
                 let pad_r = s.padding.right.resolve(cw, 0.0) + s.border_width.right;
                 // ── **VERTICAL padding/border extend the inline BOX without touching the LINE**
@@ -7877,6 +7876,63 @@ impl Ctx<'_> {
                 // 17 where Chrome says 37. `holds_line` still keys on the HORIZONTAL edge only,
                 // because that is what the measurement says brings a line box into existence (see
                 // the `out.len() == mark` branch below): a vertical-only edge does not.
+                // ⚠⚠⚠ **CSS 2.1 §10.3.1 — `margin-left`/`margin-right` DO apply to a non-replaced
+                //    inline, and ours were dropped entirely.** Horizontal padding and border were
+                //    emitted as edge spacers above; the margin, which occupies flow width exactly
+                //    the same way, never was. So `<a style="margin:0 6px">` sat 6px left of where
+                //    Chrome puts it, everything after it on the line was 12px left, and the box that
+                //    CONTAINS such an inline came out 12px narrow.
+                //
+                // ⚠ **THIS IS THE CORPUS'S #1 CROSS-SITE WIDTH CLUSTER.** The t1049 sweep ranks
+                //    `geometry/mis-sized: width ~8px (<a>)` at **21 distinct sites, 244 hits**
+                //    (median 12px) — the largest width cluster in the corpus by site count — and a
+                //    `margin: 0 4px` on an inline is exactly 8px, a `margin: 0 6px` exactly 12px.
+                //    Chrome-measured, `16px/20px monospace` in a 400px box, parent-relative:
+                //
+                //    ```text
+                //                                              Chrome         before
+                //      <a style="margin:0 6px">LINK</a>      dx 15.64       dx 10.0
+                //      <a><span style="margin:0 4px">…       a  27.27 wide  19.0 wide
+                //                                            span dx 13.64  dx 10.0
+                //      <a><span style="padding:4px;border:2px;margin:0 3px">
+                //                                            a  37.27 wide  31.0 wide
+                //    ```
+                //
+                // ⚠ **`holds_line` is FALSE, and that is measured rather than reasoned.** The table
+                //    in the empty-inline branch below records Chrome's answer for exactly this case:
+                //    `<span style="margin-left:10px"></span>` alone leaves its `<div>` **0 tall**,
+                //    unlike a horizontal padding, which brings a line box into existence. A margin
+                //    occupies width without opening a line.
+                //
+                // ⚠ **`node: None`, because the rect is the BORDER box.** Giving the margin spacer
+                //    the element's node would extend `getBoundingClientRect` out to the margin edge —
+                //    a wrong answer of the right type, and the whole reason this is a second spacer
+                //    rather than a wider `pad_l`.
+                //
+                // Negative margins are legal here and are left signed on purpose: `margin-left:-4px`
+                // on an inline pulls the following content left, which is what a hand-tuned icon
+                // gutter or a `.nav > a + a { margin-left: -1px }` border-collapse idiom relies on.
+                let mar_l = s.margin.left.resolve(cw, 0.0);
+                let mar_r = s.margin.right.resolve(cw, 0.0);
+                if mar_l != 0.0 {
+                    out.push(InlineItem::Spacer {
+                        width: mar_l,
+                        node: None,
+                        space_before: pending_space.filter(|_| !*first),
+                        report_height: 0.0,
+                        report_ascent: None,
+                        holds_line: false,
+                        leading: 0.0,
+                        metrics: None,
+                    });
+                    *first = false;
+                    *pending_space = None;
+                }
+                // ⚠ The empty-inline branch below tests `out.len() == mark_content`, NOT `mark`: a
+                // margin spacer is not a contribution by the element, and testing against `mark`
+                // would let a margin-only inline skip the branch that gives it its box — which the
+                // branch's own comment names as the single largest source of missing elements.
+                let mark_content = out.len();
                 if pad_l > 0.0 || v_ascent.is_some() {
                     out.push(InlineItem::Spacer {
                         width: pad_l,
@@ -7963,7 +8019,7 @@ impl Ctx<'_> {
                 // this it has no geometry at all: `getBoundingClientRect` returns nothing, it can't
                 // be scrolled to, and it cannot be painted. On one Wikipedia article that is 1,079
                 // spans and 298 anchors — the single largest source of missing elements.
-                if out.len() == mark {
+                if out.len() == mark_content {
                     // …but it does NOT bring a line box into existence on its own (CSS2 §9.4.2), so
                     // `holds_line` is FALSE here — see `close_line`.
                     //
@@ -8065,7 +8121,10 @@ impl Ctx<'_> {
                 // Reaching here implies `pad_l == pad_t == pad_b == 0` — any of those would have
                 // emitted an edge spacer that already carries this node — so the reported box is the
                 // bare content area, with no padding term to add.
-                else if !out[mark..].iter().any(|it| it.owner() == Some(node)) {
+                else if !out[mark_content..]
+                    .iter()
+                    .any(|it| it.owner() == Some(node))
+                {
                     let ts = text_style(&s, self.fonts);
                     let lm = self.fonts.line_metrics(ts.font_key, ts.font_size);
                     let reporter = || InlineItem::Spacer {
@@ -8081,7 +8140,23 @@ impl Ctx<'_> {
                         metrics: None,
                     };
                     out.push(reporter());
-                    out.insert(mark, reporter());
+                    out.insert(mark_content, reporter());
+                }
+                // The right margin closes the element, AFTER both branches above have had their
+                // chance to give it a box — so a margin-only inline is still reported, and the
+                // reporter still lands inside the margins rather than outside them.
+                if mar_r != 0.0 {
+                    out.push(InlineItem::Spacer {
+                        width: mar_r,
+                        node: None,
+                        space_before: None,
+                        report_height: 0.0,
+                        report_ascent: None,
+                        holds_line: false,
+                        leading: 0.0,
+                        metrics: None,
+                    });
+                    *pending_space = None;
                 }
             }
             _ => {}
@@ -11657,6 +11732,98 @@ mod tests {
             "a plain inline is NOT blockified and keeps its padding: padded {} vs plain {}",
             padded.width,
             plain.width
+        );
+    }
+
+    /// **G_INLINE_MARGIN — `margin-left`/`margin-right` apply to a non-replaced inline (CSS 2.1
+    /// §10.3.1), and ours were dropped entirely.** Horizontal padding and border were emitted as
+    /// edge spacers; the margin, which occupies flow width identically, never was.
+    ///
+    /// This is the corpus's **#1 cross-site width cluster** — the t1049 sweep ranks
+    /// `geometry/mis-sized: width ~8px (<a>)` at 21 distinct sites / 244 hits, median 12px, and a
+    /// `margin: 0 4px` on an inline is exactly 8px while `margin: 0 6px` is exactly 12px. Chrome,
+    /// `16px/20px monospace`, 400px box, parent-relative:
+    ///
+    /// ```text
+    ///                                            Chrome        before
+    ///   <a style="margin:0 6px">LINK</a>       dx 15.64      dx 10.0
+    ///   <a><span style="margin:0 4px">IN       a 27.27 wide  19.0 wide
+    ///   <span style="margin-left:10px"></span> div 0 tall    0 tall   <- the CONTROL
+    /// ```
+    ///
+    /// ⚠ **The third row is the control, and it is measured rather than reasoned.** CSS 2.1 §9.4.2's
+    /// prose invites *"no inline elements with non-zero margins, padding or borders"*, but Chrome is
+    /// narrower than its own spec text: a horizontal PADDING brings a line box into existence and a
+    /// MARGIN does not. So the margin spacer carries `holds_line: false`, and if it is flipped true
+    /// this row goes from 0 to a full line.
+    ///
+    /// ⚠ The rect stays the BORDER box — a margin-carrying inline must not report its margin edge —
+    /// which is why the margin is a second, `node: None` spacer rather than a wider `pad_l`.
+    #[test]
+    fn horizontal_margin_on_an_inline_occupies_flow_width() {
+        let by_id = |dom: &Dom, root: &LayoutBox, id: &str| {
+            let n = dom
+                .descendants(dom.root())
+                .find(|&n| dom.element(n).and_then(|e| e.attr("id")) == Some(id))
+                .unwrap_or_else(|| panic!("#{id} exists"));
+            root.node_rects(dom)
+                .get(&n)
+                .copied()
+                .unwrap_or_else(|| panic!("#{id} produced a box"))
+        };
+
+        // The margin displaces the inline itself — 6px of it, against a marginless control.
+        let (dom, root) = layout_html(
+            r#"<div>x<a id="s" style="margin:0 6px">LINK</a>y</div>"#,
+            "",
+            400.0,
+        );
+        let bare = layout_html(r#"<div>x<a id="s">LINK</a>y</div>"#, "", 400.0);
+        let (marg, plain) = (by_id(&dom, &root, "s"), by_id(&bare.0, &bare.1, "s"));
+        assert_eq!(
+            marg.x - plain.x,
+            6.0,
+            "margin-left must move the inline: {} vs {}",
+            marg.x,
+            plain.x
+        );
+        assert_eq!(
+            marg.width, plain.width,
+            "…and must NOT be in its rect, which is the border box: {} vs {}",
+            marg.width, plain.width
+        );
+
+        // The margin widens the inline PARENT that contains it, by both edges.
+        let (dom, root) = layout_html(
+            r#"<div>x<a id="a"><span id="s" style="margin:0 4px">IN</span></a>y</div>"#,
+            "",
+            400.0,
+        );
+        let bare = layout_html(
+            r#"<div>x<a id="a"><span id="s">IN</span></a>y</div>"#,
+            "",
+            400.0,
+        );
+        let (wide, narrow) = (by_id(&dom, &root, "a"), by_id(&bare.0, &bare.1, "a"));
+        assert_eq!(
+            wide.width - narrow.width,
+            8.0,
+            "both margin edges are inside the parent inline's rect: {} vs {}",
+            wide.width,
+            narrow.width
+        );
+
+        // ⚠ THE CONTROL — a margin does NOT bring a line box into existence (Chrome-measured), so
+        // a div whose only content is a margin-carrying empty inline stays zero-height.
+        let (dom, root) = layout_html(
+            r#"<div id="w"><span style="margin-left:10px"></span></div>"#,
+            "",
+            400.0,
+        );
+        assert_eq!(
+            by_id(&dom, &root, "w").height,
+            0.0,
+            "a margin occupies width without opening a line (CSS2 §9.4.2, as Chrome implements it)"
         );
     }
 

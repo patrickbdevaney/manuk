@@ -4833,3 +4833,79 @@ grep flagged unreliable). The existing `CSS zoom` row is **corrected in place** 
 **No.** Twelve ticks this window, zero edits under `scripts/`. ⚠ The `WPT-AREAS.tsv` staleness named
 in check #94 is unchanged and remains observer-owned — `tick.sh` printed *"the sweep is 554h old"*
 above a green ratchet again this window.
+
+## Audit #45 — tick 1050 (2026-08-08) — the map is COMPLETE against the outside world, and has a hole exactly where this session worked
+
+**SOURCES (searched, not recalled):**
+
+- `https://github.com/web-platform-tests/interop/blob/main/2026/README.md` — the authoritative
+  Interop 2026 list: **20 focus areas + 4 investigation efforts**, agreed by Apple, Google, Igalia,
+  Microsoft and Mozilla. Fifteen of the twenty are new for 2026.
+- `https://webkit.org/blog/17818/announcing-interop-2026/` · `https://web.dev/blog/interop-2026`
+- `https://web.dev/baseline/2026` and the 2026 monthly Baseline digests
+- `https://ladybird.org/newsletter/2026-07-31/` (and 2026-01/05/06) — the independent-engine source
+  audits #42–#44 established; July 2026: Ladybird moved its style system and layout engine to Rust,
+  and its WPT gain has fallen to **+108 subtests in July** against +13,690 in January.
+
+### 1 · THE RECONCILIATION CAME BACK CLEAN, AND THAT IS THE FIRST TIME
+
+Every one of the **twenty** Interop 2026 focus areas has a named row in `CONSTELLATION.tsv`:
+
+```text
+   container style queries · anchor positioning · attr() · contrast-color() · zoom ·
+   custom highlights · dialogs+popovers · fetch uploads+ranges · IndexedDB · JSPI ·
+   media pseudo-classes · Navigation API · scoped custom element registries ·
+   scroll-driven animations · scroll snap · shape() · view transitions · web compat ·
+   WebRTC · WebTransport
+```
+
+…and so do all four investigation efforts (accessibility testing, JPEG XL, mobile testing, WebVTT),
+and the 2026 Baseline additions checked (`:active-view-transition`, `zstd` Content-Encoding,
+`shape()`, `contrast-color()`, Trusted Types). **Zero rows added from the world's own list.**
+
+⚠ Audits #42–#44 already showed this method yielding less each run (#44: *"the honest answer is
+DIMINISHING"*). #45 is the endpoint of that trend, and the useful reading is not *"the audit failed"*
+— it is that **the outside-in method has been exhausted**, because every source the world publishes
+is a list of FEATURES, and this engine's binding constraint stopped being feature coverage some time
+ago. The map is 288 gated / 124 missing / 45 partial / 31 unknown over 503 rows, and Interop's list
+adds nothing to any of those columns.
+
+### 2 · ⚠⚠⚠ SO I POINTED THE AUDIT INWARD, AND FOUND A HOLE UNDER THIS SESSION'S OWN FEET
+
+`block-in-inline` — CSS 2.1 §9.2.1.1 — has **zero rows on the map.** t1048 measured it on 30.0% of
+the corpus (51/170 pages, 1,925 elements), found six defects, fixed one Chrome-exact and gated it.
+The horizontal margin on an inline (§10.3.1) landed at t1050 against the corpus's **#1 cross-site
+width cluster** — 21 sites, 244 hits — and has no row either.
+
+**Both were found by a battery, not by the map, and neither could have been ranked from it.**
+
+### 3 · THE MECHANISM, WHICH IS THE AUDIT'S REAL OUTPUT
+
+Layout-primitive rows *do* exist — `an inline box's OWN leading` (227), `line box containing ONLY
+empty inlines` (419), `margins collapse THROUGH an empty block` (483), `a float FOLLOWING inline text`
+(484). Every one was added **after** a tick discovered it. Not one was on the map before the defect
+was found.
+
+> **The map is built from lists the world publishes, and nobody publishes a list of layout
+> primitives — so the CSS 2.1 box model's interior is the one region the map can only RECORD, never
+> RANK.** Every other class (APIs, formats, features, Interop areas) is enumerable from outside.
+
+And that is a false constraint, because **§9 and §10 are themselves an enumeration** — a numbered
+list of sections, each a primitive with a testable claim. The loop already knows this move under a
+different name: t1027-1031's rule is *"ENUMERATE every surface the reference can recite"*, applied to
+Chrome's UA sheet. The same move applied to the SPEC instead of the reference converts the main line
+from *find a defect, then file it* into a ranked worklist with a denominator.
+
+**THE STEER (the next non-fix tick, and it is cheap — no build):** walk CSS 2.1 §9 (visual formatting
+model) and §10 (details of visual formatting model), and add one `unknown` row per subsection this
+engine has never measured. The ratchet rewards this directly — the banked invariant is MEASURED, not
+`unknown` — and it gives the render burndown the one thing it has never had: **a list of layout
+primitives that exists before the bug does.**
+
+### 4 · CORRECTED / ADDED
+
+- **ADDED** `css · block-level box inside an INLINE (CSS 2.1 §9.2.1.1)` — `gated`, G_BII (t1048).
+- **ADDED** `css · horizontal margin on a non-replaced inline (CSS 2.1 §10.3.1)` — `gated` (t1050).
+- **CONFIRMED, not corrected**: row 419's measured table (`margin-left:10px` leaves its div 0 tall)
+  is what t1050's control was copied from, and it held — the map's own measurement was reused as a
+  gate two ticks later, which is the first time that has happened and is what the receipts are for.

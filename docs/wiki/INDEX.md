@@ -362,6 +362,10 @@
   - L7056 · The paint moves towards Chrome too, which is why this is not a trade
   - L7063 · What is NOT built, with its numbers
   - L7074 · The frequency claim that licensed it had never been measured
+  - L7084 · A horizontal margin on an inline occupies flow width, and ours were dropped entirely (t1050)
+  - L7101 · Three things the fix had to get right, each with its own red mutation
+  - L7117 · ⚠⚠⚠ The corpus claim this tick was about to publish, and did not
+  - L7143 · Residue, measured
 
 ## browser-capabilities.md
 `docs/wiki/browser-capabilities.md`
@@ -1768,4 +1772,4 @@
   - L124 · Rank mechanisms by FLIP RATE, not failing-subtest count — CSS layout is a multi-assertion slog
 
 ---
-1675 sections across 22 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+1679 sections across 22 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.

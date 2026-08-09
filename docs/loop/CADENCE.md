@@ -11,12 +11,12 @@
 
 | | value | over |
 |---|---|---|
-| ticks landed | **759** | ticks 1–1048 |
-| median tick cycle | **27m** | 758 intervals |
-| median, last 10 | **50m** | 10 intervals |
+| ticks landed | **760** | ticks 1–1050 |
+| median tick cycle | **27m** | 759 intervals |
+| median, last 10 | **60m** | 10 intervals |
 | fastest / slowest | 5s / 5.4d | |
-| **ticks per hour** | **1.11** | 685.6h elapsed |
-| median verify wall | **63s** | 698 ticks |
+| **ticks per hour** | **1.10** | 687.0h elapsed |
+| median verify wall | **63s** | 699 ticks |
 | wall trend | 39s → 13m — getting slower ⚠️ | first 3 vs last 3 |
 
 The **cycle** is the real unit: implement → debug → verify wall → land. The wall is only part of
@@ -28,10 +28,10 @@ it, and a wall that grows taxes every future tick, so it is tracked separately f
 
 * **capabilities asserted** (`G_CAPABILITY`): 48 → **81**
 * **live gates**: 27 → **428**
-* **✅ rows in the capability ledger**: 144 → **527**
+* **✅ rows in the capability ledger**: 144 → **528**
 * **Bar 0 — oracle hangs**: 0 of 265 sites
 
-**341 of 759 ticks** (45%) moved a
+**341 of 760 ticks** (45%) moved a
 user-visible capability. The rest were instruments, infrastructure and corrections — and the
 ledger says the corrections were not overhead: three of its top three priorities were phantoms,
 and finding that out redirected everything after it.
@@ -856,5 +856,6 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 | **1046** | 2026-08-08 15:34 | 46m | primitive | 13m | +337/−48 | 428 | 81 | 56.0% · | a comma is a legal URL character, and two instrument traps caught before they were publish |
 | **1047** | 2026-08-08 17:23 | 1.8h | measurement | 13m | +489/−36 | 428 | 81 | 56.0% · | the constitution check, and a "vanishingly rare" that is 30% of the corpus (2026-08-08) |
 | **1048** | 2026-08-08 18:38 | 74m | primitive | 13m | +335/−32 | 428 | 81 | 56.0% · | the box model an inline never had, and the fix that refunded the margin it deleted (2026-0 |
+| **1050** | 2026-08-08 20:04 | 87m | primitive | 13m | +454/−39 | 428 | 81 | 56.0% · | the margin an inline never got, and both of my favourable numbers died to the same three r |
 
 *`·` after a WPT figure means **carried forward**, not measured this tick.*

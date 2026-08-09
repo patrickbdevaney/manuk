@@ -7080,3 +7080,70 @@ block-in-inline appears on **71 pages (41.8%)**, and the inline is **itself styl
 sports.yahoo 121. It is `<a class="card"><div>…</div></a>`, the whole-tile-is-a-link behind every
 card grid, product tile and article teaser on the web. **Grep the corpus against a comment's PREMISE,
 not only against a construct.**
+
+## A horizontal margin on an inline occupies flow width, and ours were dropped entirely (t1050)
+
+CSS 2.1 §10.3.1: `margin-left` and `margin-right` **apply to a non-replaced inline** (only the
+vertical pair does not). The inline path emitted edge spacers for horizontal padding and border,
+which occupy flow width in exactly the same way, and never emitted one for the margin. Chrome,
+`16px/20px monospace`, 400px box, parent-relative:
+
+```text
+                                              Chrome         before      after
+  <a style="margin:0 6px">LINK</a>          dx 15.64       dx 10.0     dx 16.0   ✓
+  <a><span style="margin:0 4px">IN</span>   a  27.27 wide  19.0 wide   27.0      ✓
+    …the span itself                        dx 13.64       dx 10.0     dx 14.0   ✓
+  <a><span padding:4px;border:2px;margin:0 3px>
+                                            a  37.27 wide  31.0 wide   37.0      ✓
+  <span style="margin-left:10px"></span>    div 0 tall     0 tall      0 tall    ✓ CONTROL
+```
+
+### Three things the fix had to get right, each with its own red mutation
+
+- **The margin is a SEPARATE spacer with `node: None`.** Widening the existing `pad_l` spacer would
+  have been one line and would have put the margin inside `getBoundingClientRect` — the rect is the
+  **border** box. Mutating `node: None` → `Some(node)` turns the gate red.
+- **`holds_line: false`, and that is measured rather than reasoned.** CSS 2.1 §9.4.2's prose invites
+  *"no inline elements with non-zero margins, padding or borders"*, but Chrome is narrower than its
+  own spec text: a horizontal **padding** brings a line box into existence and a **margin does not**
+  (`<span style="margin-left:10px"></span>` alone leaves its `<div>` 0 tall). Flipping it true turns
+  the control red.
+- **The empty-inline branch tests `mark_content`, not `mark`.** That branch is what gives a
+  contribution-free inline its box, and its own comment calls it *"the single largest source of
+  missing elements"*. A margin spacer is not a contribution by the element, so a marker taken before
+  it would let a margin-only inline skip the branch and vanish from `node_rects`. The same marker
+  positions the two wrap-spanning reporters **inside** the margins.
+
+### ⚠⚠⚠ The corpus claim this tick was about to publish, and did not
+
+The t1049 sweep ranks `geometry/mis-sized: width ~8px (<a>)` at **21 distinct sites / 244 hits**
+(median 12px) — the largest width cluster in the corpus by site count — and `margin: 0 4px` on an
+inline is exactly 8px while `margin: 0 6px` is exactly 12px. That is a good hypothesis and it is
+still only a hypothesis.
+
+The same-hour A/B against the previous binary looked like it confirmed it: `puentedemando.com`
+h_overflow **10 → 6**, `otomoto.pl` **1 → 0**, and nothing rose. Three solo runs of
+`puentedemando.com` on **both** binaries:
+
+```text
+   OLD  h_overflow  6 · 6 · 6      shape 0.7801 · 0.8109 · 0.8127
+   NEW  h_overflow  6 · 5 · 6      shape 0.8127 · 0.8127 · 0.8109
+```
+
+**The 10 was the panel run, not the binary.** The old binary reads 6 three times solo; the reduction
+is at most one element and sits inside the run-to-run variation. The apparent loss on the same panel
+(`sestra.cc` −0.0098) dies to the same test — OLD `[0.9151, 0.9225]`, NEW `[0.9200, 0.9322]`, modal
+0.9225 on both.
+
+> **A panel row is not a reading until its movers are re-run SOLO, and the rule has to be applied to
+> the numbers you LIKE.** Both of this tick's favourable numbers and its one unfavourable number were
+> refuted by the same three runs. What survives is the battery: five rows Chrome-exact, three
+> mutations red.
+
+### Residue, measured
+
+Four battery rows still diverge, all one defect: **an inline's own rect does not grow to contain a
+child inline's VERTICAL padding or border.** `<a><span style="padding:4px">IN</span></a>` is
+`27.27×27` in Chrome and `27×19` here — the child is exact, the parent is not. Horizontal padding
+already reaches the parent (`padding:0 4px` is exact), and an `<a>` with its *own* vertical padding is
+exact too; it is only the child's block-axis frame that fails to propagate.

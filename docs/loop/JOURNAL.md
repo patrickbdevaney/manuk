@@ -46371,6 +46371,103 @@ PERF: none — one UA rule and one narrowed branch in a cascade that already ran
 WIKI: `docs/wiki/css-cascade.md` — where Chrome draws the form-control `box-sizing` line, and why a
 layout-crate test cannot see it.
 
+## Tick 1050 — the margin an inline never got, and both of my favourable numbers died to the same three runs (2026-08-08)
+
+TICK SHAPE: primitive — a 42-row battery on the **inline box's own geometry**, taken because t1049's
+own steer said to work `h_overflow`/width, and because the t1049 sweep's top cross-site WIDTH cluster
+is `geometry/mis-sized: width ~8px (<a>)` at **21 distinct sites / 244 hits**. Two defects found, one
+fixed Chrome-exact and RED-proven three ways. **Battery 33/42 → 38/42.**
+
+⚠⚠⚠ **THE DEFECT: CSS 2.1 §10.3.1 SAYS `margin-left`/`margin-right` APPLY TO A NON-REPLACED INLINE,
+AND OURS WERE DROPPED ENTIRELY.** The inline path emits edge spacers for horizontal padding and
+border — which occupy flow width in precisely the same way — and never emitted one for the margin.
+Chrome, `16px/20px monospace`, 400px box, parent-relative:
+
+```text
+                                              Chrome         before      after
+  <a style="margin:0 6px">LINK</a>          dx 15.64       dx 10.0     dx 16.0   ✓
+  <a><span style="margin:0 4px">IN</span>   a  27.27 wide  19.0 wide   27.0      ✓
+    …the span itself                        dx 13.64       dx 10.0     dx 14.0   ✓
+  <a><span padding:4px;border:2px;margin:0 3px>
+                                            a  37.27 wide  31.0 wide   37.0      ✓
+  <span style="margin-left:10px"></span>    div 0 tall     0 tall      0 tall    ✓ CONTROL
+```
+
+Every following box on the line was displaced by the dropped margin, and every inline that CONTAINED
+such a child came out that much narrow.
+
+⚠⚠⚠ **AND THEN THE CORPUS CLAIM DIED, AND IT WAS THE CLAIM I HAD ALREADY WRITTEN INTO THE COMMENT.**
+`margin: 0 4px` on an inline is exactly 8px and `margin: 0 6px` is exactly 12px, against a cluster
+whose band is `~8px` and whose median is `12px`, on `<a>`, at 21 sites. The same-hour A/B on a
+10-site panel read like a confirmation — `puentedemando.com` h_overflow **10 → 6**,
+`otomoto.pl` **1 → 0**, nothing rose. Three solo runs of the top mover on **both** binaries:
+
+```text
+   OLD  h_overflow  6 · 6 · 6      shape 0.7801 · 0.8109 · 0.8127
+   NEW  h_overflow  6 · 5 · 6      shape 0.8127 · 0.8127 · 0.8109
+```
+
+**The 10 belonged to the panel run, not to the binary.** The old binary reads 6 three times solo, so
+the reduction is at most one element and sits inside the run-to-run variation. The panel's one
+apparent LOSS dies to the identical test — `sestra.cc` OLD `[0.9151, 0.9225]` vs NEW
+`[0.9200, 0.9322]`, modal 0.9225 on both, and its `h_overflow` reads 9/8/8 against 8/8/9.
+
+> **A PANEL ROW IS NOT A READING UNTIL ITS MOVERS ARE RE-RUN SOLO — AND THE RULE HAS TO BE APPLIED
+> TO THE NUMBERS YOU LIKE.** This session has now used it three times: t1048 refuted two apparent
+> losses AND two apparent gains, t1049 had no delta large enough to attribute, and here it killed the
+> tick's own headline. The fix is right and its corpus claim is unproven, and those are two separate
+> sentences.
+
+**GATE**: `horizontal_margin_on_an_inline_occupies_flow_width` (manuk-layout). RED-proven **three
+ways**, one per claim it makes — this is the first gate this session where each mutation targets a
+different assertion rather than the same one:
+
+```text
+  M1  drop the margin spacer again                 -> RED   (the displacement row)
+  M2  give the spacer `node: Some(node)`           -> RED   (the rect is the BORDER box, not the
+                                                             margin box — the one-line "fix" I
+                                                             would have written first)
+  M3  `holds_line: true` on the margin spacer      -> RED   (the CONTROL: a margin does not open
+                                                             a line box)
+```
+
+⚠ **M3's control is measured, not reasoned, and the spec text would have got it wrong.** CSS 2.1
+§9.4.2 reads *"no inline elements with non-zero margins, padding or borders"*, which invites the
+general test; Chrome is narrower than its own prose — a horizontal **padding** brings a line box into
+existence and a **margin does not**. That table was already in the source from t868 and is what the
+control is copied from.
+
+⚠ **THE THIRD THING THE FIX HAD TO GET RIGHT WAS INVISIBLE FROM THE BATTERY.** The empty-inline
+branch — whose own comment calls it *"the single largest source of missing elements"* (1,079 spans
+and 298 anchors on one Wikipedia article) — fires on `out.len() == mark`. A margin spacer makes
+`out.len() != mark` while contributing nothing on the element's behalf, so a margin-only inline would
+have silently stopped producing a box. `mark_content` is now taken AFTER the left margin, and the
+same marker keeps the two wrap-spanning reporters INSIDE the margins rather than outside them. No
+battery row would have caught it; the branch's own comment did.
+
+PRICED — 10 sites, both binaries, same hour, plus the solo bands above: **3 byte-identical
+(rockstaractu, simplepdf, sports.yahoo), every mover refuted, zero attributable regressions, no
+bankable corpus movement.** `h_overflow` is unchanged on every site that binds on it —
+kuechenmomente 11, id.vk.ru 8, sestra 8, simplepdf 5, tz.de 3 — which is itself information: **the
+inline margin is not what those five sites overflow on**, and t1049's ranked worklist keeps all five.
+
+RESIDUE — the battery's other defect, four rows, measured and not built: **an inline's own rect does
+not grow to contain a child inline's VERTICAL padding or border.** `<a><span style="padding:4px">IN`
+is `27.27×27` in Chrome and `27×19` here; the child is exact and the parent is not. Horizontal
+padding already propagates (`padding:0 4px` is exact) and an `<a>` with its OWN vertical padding is
+exact, so it is specifically the child's block-axis frame. It is a reported-rect defect rather than a
+flow one — which makes it an **I3** (click-point) term more than a shape one, and it should be ranked
+there.
+
+RATCHET: manuk-layout **133/133**, manuk-css 32/32, manuk-paint 22/22, manuk-dom 11/11. Nothing
+traded.
+
+PERF: two `Dim::resolve` calls per inline ELEMENT (not per word), and at most two extra zero-cost
+spacers only when a margin is non-zero.
+
+WIKI: `docs/wiki/box-layout.md` — "A horizontal margin on an inline occupies flow width, and ours
+were dropped entirely".
+
 ## Tick 1049 — M1 has been the SAME 23 SITES for three sweeps while shape climbed 31→37 (2026-08-08)
 
 TICK SHAPE: measurement — the clean `--jobs 2` CrUX sweep, 200 sites, banked as
