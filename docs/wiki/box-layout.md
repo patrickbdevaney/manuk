@@ -7304,3 +7304,79 @@ three is testing none.
 `b11` still diverges and it is a different subsystem: an `inline-block` with `min-width:300px` beside
 a 300px float in a 400px container belongs on the **next line** (Chrome), and we place it at x=300
 where it overflows. That is line-breaking against a float exclusion, not shrink-to-fit.
+
+## A block's auto height is CLEAN at 28 of 28 — and the fixture that cleared it found a float placed twice (t1057)
+
+CSS 2.1 **§10.6.3** (*where does a block's `height: auto` end*) and **§10.6.7** (*which boxes grow to
+contain their floats*) were the next two unknowns on t1054's spec enumeration. Both are now measured
+against headless Chrome, one 400px container, `margin:0`, each case isolated behind a `clear:both` —
+**28 rows, every one exact.** The primitive is banked CLEAN; the tick's real product is what the
+battery caught on its way past.
+
+### Why these two had no row, which is the transferable part
+
+The loop had a gated, 21/21-measured row for the **exception** — margins collapsing *through* an empty
+block, §8.3.1 — and **no row for the rule it is an exception to**. Same shape one section down: the
+abspos *width* half is gated and the *height* half (§10.6.4) is quoted inside a receipt. A reactive map
+files what breaks, and the plain case does not break until it does; a defect in it would have been
+filed as a margin-collapse bug, or as an unattributed `dy`.
+
+### The negative arm is what makes eleven positive rows mean anything
+
+Eleven rows say *"the parent grows to 50"*. Without `float 50, plain block parent → 0` they are all
+equally satisfied by an engine that simply unions its floats into every parent — which is the common
+way to get §10.6.7 wrong. RED-proven by making every block contain its floats: only the negative row
+goes red.
+
+### The defect: a float inside an atomic inline was placed in TWO formatting contexts
+
+`collect_inline_floats` walks an inline subtree gathering floats that belong to the *containing block*.
+Its doc already carried the rule and the consequence of breaking it:
+
+> *"an atomic inline (`<img>`, `inline-block`) is a BFC root: its floats are its own and must not
+> escape into this block's float context"* … *"recursing into it here would place its floats **twice**,
+> in two different containing blocks."*
+
+The test was written into the **recursion** and not into the **entry**. Both call sites hand the
+function an inline-level child `k` and ask *"are there floats under it"*, and the loop begins by
+walking `node`'s children **before any test has been applied to `node` itself**. So it happily reported
+an inline-block's own float, and the caller placed it in the outer block's `FloatContext`. Our box tree
+(`+8` is the body margin):
+
+```text
+  div       [ 8  8 400x54]
+    div     [ 8  8  20x50]   <- the LEAKED copy, in the OUTER block's float context
+    div     [28  8 400x50]   <- the inline-block, pushed right by its own float
+      div   [28  8  20x50]   <- the correct copy, in its own BFC
+```
+
+A **left** float advances the outer line's cursor, so the inline-block *and everything after it on that
+line* shift right by the float's width. Chrome-measured, offsets within the container:
+
+```text
+                                                     Chrome   before   after
+  inline-block > float:left                             0       20       0
+  …the NEXT inline-block on the same line             100      120     100
+  inline-block > float:right                            0        0       0   <- CONTROL
+  inline-block > plain block                            0        0       0   <- CONTROL
+  inline-block > div > float:left      (one deeper)     0        0       0   <- CONTROL
+  a following BLOCK sibling                             0        0       0   <- CONTROL
+```
+
+> **A GUARD ON THE RECURSION IS NOT A GUARD ON THE FUNCTION.** If every caller enters at a node the
+> rule is about, the rule must be asked at the entry. The fix is one predicate
+> (`inline_is_float_transparent`) asked at both ends, rather than a condition spelled out at the point
+> of recursion only.
+
+⚠⚠ **The `float:right` row was passing for the WRONG REASON, and that is why the gate asserts the
+float's own width.** It leaks identically — it just does not move the *left* cursor, so its only
+symptom is the duplicate box. `node_rects` keys on `NodeId`, so two placements of one element come back
+as the **union** of their rects: a `width:20px` float measured **40**. Reading the right-float row as
+*"right floats are fine"* would have localised the defect to the left-float arm, which is not where it
+is — the seventh instance of the shape check #97 named, *the discriminator is not the row that made you
+look*.
+
+⚠ **And the one-level-deeper row is the other half of the control.** Wrap the float in a plain `<div>`
+and the entry is a *block-level* child, which the guard's second bullet already stopped. The defect
+required the float to be a **direct** child of the atomic — which is exactly why every existing
+nested-float fixture, all of them `<a><img float>` shapes, missed it.

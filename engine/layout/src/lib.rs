@@ -4942,7 +4942,52 @@ impl Ctx<'_> {
     ///   place its floats **twice**, in two different containing blocks;
     /// - an **atomic inline** (`<img>`, `inline-block`) is a BFC root: its floats are its own and
     ///   must not escape into this block's float context.
+    ///
+    /// ⚠⚠⚠ **AND THE THIRD STOP WAS WRITTEN INTO THE RECURSION BUT NOT INTO THE ENTRY, SO IT ONLY
+    /// EVER HELD ONE LEVEL DOWN.** Both call sites hand this function an *inline-level child* `k` and
+    /// ask "are there floats under it" — and the loop below starts by walking `node`'s children
+    /// **before any test has been applied to `node` itself**. So `collect_inline_floats(<the
+    /// inline-block>, …)` reported the inline-block's own float, and the caller then placed it in the
+    /// **outer** block's `FloatContext`. The float came out with a box in each context — the two
+    /// placements this doc's second bullet already forbids, arriving through the door it did not
+    /// guard. Measured, a 400px `inline-block` holding one `float:left` 20x50, our own box tree:
+    ///
+    /// ```text
+    ///   div       [ 8  8 400x54]
+    ///     div     [ 8  8  20x50]   <- the LEAKED copy, in the outer block's context
+    ///     div     [28  8 400x50]   <- the inline-block, pushed right by its own float
+    ///       div   [28  8  20x50]   <- the correct copy, in its own BFC
+    /// ```
+    ///
+    /// A **left** float advances the outer line's cursor, so the inline-block and everything after it
+    /// on that line shift right by the float's width. Chrome-measured, offsets within the container:
+    ///
+    /// ```text
+    ///                                                      Chrome   before   after
+    ///   inline-block > float:left                             0       20       0
+    ///   …the NEXT inline-block on the same line             100      120     100
+    ///   inline-block > float:right                            0        0       0   <- CONTROL
+    ///   inline-block > plain block                            0        0       0   <- CONTROL
+    ///   inline-block > div > float:left      (one deeper)     0        0       0   <- CONTROL
+    ///   a following BLOCK sibling                             0        0       0   <- CONTROL
+    /// ```
+    ///
+    /// ⚠⚠ **THE `float:right` ROW IS A CONTROL THAT WAS PASSING FOR THE WRONG REASON.** It leaks
+    /// identically — it just does not move the *left* cursor, so the only symptom is the duplicate
+    /// box. Reading it as "right floats are fine" would have localised the defect to the left-float
+    /// arm, which is not where it is. ⚠ The one-level-deeper row is a control for the same reason in
+    /// reverse: wrap the float in a plain `<div>` and the entry is a *block-level* child, which the
+    /// second bullet already stopped — **the defect needed the float to be a DIRECT child of the
+    /// atomic**, which is why every existing nested-float fixture missed it.
+    ///
+    /// The rule is now one predicate ([`Self::inline_is_float_transparent`]) asked at both ends,
+    /// rather than a condition spelled out at the point of recursion only.
     fn collect_inline_floats(&self, node: NodeId, out: &mut Vec<NodeId>) {
+        // THE ENTRY GUARD. `node` is an inline-level child chosen by the caller; it is transparent to
+        // its descendants' floats only under the same test the recursion below applies.
+        if self.dom.is_element(node) && !self.inline_is_float_transparent(node) {
+            return;
+        }
         for k in self.dom.flat_children(node) {
             if !self.dom.is_element(k) {
                 continue;
@@ -4957,13 +5002,23 @@ impl Ctx<'_> {
                 out.push(k);
                 continue;
             }
-            if st.display == Display::Inline
-                && !is_block_level(self.dom, self.styles, k)
-                && !is_atomic_inline_replaced(self.dom, self.styles, k)
-            {
-                self.collect_inline_floats(k, out);
-            }
+            self.collect_inline_floats(k, out);
         }
+    }
+
+    /// Is this inline-level box **transparent** to the floats inside it — i.e. do they belong to the
+    /// containing block's float context rather than to one of its own?
+    ///
+    /// Only a plain, non-replaced `display: inline` box is. A block-level box runs its own
+    /// `layout_children` (which places its floats), and an atomic inline is a BFC root. See
+    /// [`Self::collect_inline_floats`], whose entry and recursion both ask exactly this.
+    fn inline_is_float_transparent(&self, k: NodeId) -> bool {
+        let Some(st) = self.styles.get(&k) else {
+            return false;
+        };
+        st.display == Display::Inline
+            && !is_block_level(self.dom, self.styles, k)
+            && !is_atomic_inline_replaced(self.dom, self.styles, k)
     }
 
     fn kid_is_float(&self, k: NodeId) -> bool {
@@ -10067,6 +10122,334 @@ mod tests {
         let fonts = FontContext::new();
         let root = layout_document(&dom, &styles, &fonts, width);
         (dom, root)
+    }
+
+    /// One row of the t1057 battery: lay `inner` inside a 400px container and return the rect of
+    /// `#x`, with the container's own origin subtracted so the numbers are directly comparable to
+    /// Chrome's `getBoundingClientRect()` in a `margin:0` document.
+    fn t1057_row(inner: &str) -> Rect {
+        let html = format!(r#"<div id="cb" style="width:400px">{inner}</div>"#);
+        let (dom, root) = layout_html(&html, "", 800.0);
+        let rects = root.node_rects(&dom);
+        let by_id = |id: &str| {
+            let n = dom
+                .descendants(dom.root())
+                .find(|&n| dom.element(n).and_then(|e| e.attr("id")) == Some(id))
+                .unwrap_or_else(|| panic!("#{id} exists"));
+            rects
+                .get(&n)
+                .copied()
+                .unwrap_or_else(|| panic!("#{id} produced a box"))
+        };
+        let (cb, x) = (by_id("cb"), by_id("x"));
+        Rect {
+            x: x.x - cb.x,
+            y: x.y - cb.y,
+            width: x.width,
+            height: x.height,
+        }
+    }
+
+    /// **G_AUTO_HEIGHT — CSS 2.1 §10.6.3 and §10.6.7: where does a block's `height: auto` END?**
+    ///
+    /// t1054's §8/§9/§10 enumeration filed both as `unknown`, and the reason is the interesting part:
+    /// the loop had a gated, 21/21-measured row for the **exception** (margins collapsing *through* an
+    /// empty block, §8.3.1) and **no row for the rule it is an exception to**. A defect in the rule
+    /// would have been filed as a margin-collapse bug, or as an unattributed `dy`.
+    ///
+    /// This is that row. 28 rows against headless Chrome, one 400px container, `margin:0` document,
+    /// each case isolated behind a `clear:both` — **every one exact**, so the primitive is banked
+    /// CLEAN and `unknown → measured`. §10.6.3's clauses (does the last child's bottom margin collapse
+    /// out of the parent, and what stops it) and §10.6.7's (which boxes grow to contain their floats):
+    ///
+    /// ```text
+    ///                                                          Chrome   ours
+    ///   child 50                                                  50      50
+    ///   children 50 + 30                                          80      80
+    ///   child 50 + margin-bottom 20                               50      50   <- collapses OUT
+    ///     …parent padding-bottom 10                               80      80   <- padding stops it
+    ///     …parent border-bottom 5                                 75      75   <- border stops it
+    ///     …parent overflow:hidden                                 70      70   <- a BFC stops it
+    ///     …a following sibling instead                            80      80   <- so does content
+    ///     …one level deeper (grandchild's margin)                 50      50   <- collapses through
+    ///     …one level deeper, parent padding-bottom 10             80      80
+    ///   no children at all                                         0       0
+    ///   last child display:none                                   50      50
+    ///   only child position:absolute                               0       0   <- out of flow
+    ///   a specified height:200 / min-height:120                  200/120 200/120
+    ///
+    ///   float 50, plain block parent                               0       0   <- does NOT contain
+    ///   float 50, parent overflow:hidden / auto / flow-root       50      50   <- §10.6.7
+    ///   float 50, parent float / inline-block / absolute          50      50
+    ///   float 50 + margin-bottom 20, parent overflow:hidden       70      70   <- margin edge
+    ///   float 50 beside in-flow 30 / float 20 beside in-flow 80   50/80   50/80  <- the MAX
+    ///   float 50 + a clear:both last child, plain parent          50      50   <- the clearfix
+    ///   float:right 50, parent overflow:hidden                    50      50
+    /// ```
+    ///
+    /// ⚠⚠ **THE `float 50, plain block parent → 0` ROW IS THE ONE THAT MAKES THE REST MEAN
+    /// ANYTHING.** Eleven rows say "the parent grows to 50"; without the negative arm they are also
+    /// satisfied by an engine that simply unions its floats into every parent, which is the common
+    /// way to get float containment wrong. §10.6.7 is a rule about *which boxes*, and a battery with
+    /// no non-containing box in it cannot see that half of it.
+    #[test]
+    fn a_blocks_auto_height_ends_at_its_last_in_flow_childs_margin_edge() {
+        // ── CSS 2.1 §10.6.3 — the plain rule and the four things that stop the collapse.
+        for (inner, want, why) in [
+            (
+                r#"<div id="x"><div style="height:50px"></div></div>"#,
+                50.0,
+                "one in-flow child",
+            ),
+            (
+                r#"<div id="x"><div style="height:50px"></div><div style="height:30px"></div></div>"#,
+                80.0,
+                "two stacked children",
+            ),
+            (
+                r#"<div id="x"><div style="height:50px;margin-bottom:20px"></div></div>"#,
+                50.0,
+                "the last child's bottom margin collapses OUT of the parent",
+            ),
+            (
+                r#"<div id="x" style="padding-bottom:10px"><div style="height:50px;margin-bottom:20px"></div></div>"#,
+                80.0,
+                "padding-bottom stops the collapse",
+            ),
+            (
+                r#"<div id="x" style="border-bottom:5px solid #000"><div style="height:50px;margin-bottom:20px"></div></div>"#,
+                75.0,
+                "border-bottom stops the collapse",
+            ),
+            (
+                r#"<div id="x" style="overflow:hidden"><div style="height:50px;margin-bottom:20px"></div></div>"#,
+                70.0,
+                "a BFC stops the collapse",
+            ),
+            (
+                r#"<div id="x"><div style="height:50px;margin-bottom:20px"></div><div style="height:10px"></div></div>"#,
+                80.0,
+                "a following sibling stops it",
+            ),
+            (
+                r#"<div id="x"><div><div style="height:50px;margin-bottom:20px"></div></div></div>"#,
+                50.0,
+                "it collapses through TWO levels",
+            ),
+            (
+                r#"<div id="x" style="padding-bottom:10px"><div><div style="height:50px;margin-bottom:20px"></div></div></div>"#,
+                80.0,
+                "…and padding still stops it",
+            ),
+            (
+                r#"<div id="x"><div style="height:50px;margin-top:20px"></div></div>"#,
+                50.0,
+                "the TOP margin collapses out too",
+            ),
+            (r#"<div id="x"></div>"#, 0.0, "no children at all"),
+            (
+                r#"<div id="x"><div style="height:50px"></div><div style="height:30px;display:none"></div></div>"#,
+                50.0,
+                "display:none is not a last child",
+            ),
+            (
+                r#"<div id="x"><div style="position:absolute;height:70px;width:10px"></div></div>"#,
+                0.0,
+                "an out-of-flow child contributes NOTHING",
+            ),
+            (
+                r#"<div id="x" style="height:200px"><div style="height:50px"></div></div>"#,
+                200.0,
+                "a specified height wins",
+            ),
+            (
+                r#"<div id="x" style="min-height:120px"><div style="height:50px"></div></div>"#,
+                120.0,
+                "min-height wins",
+            ),
+        ] {
+            assert_eq!(t1057_row(inner).height, want, "§10.6.3: {why} — {inner}");
+        }
+
+        // ── CSS 2.1 §10.6.7 — and WHICH boxes grow to contain a float.
+        let f = r#"<div style="float:left;width:20px;height:50px"></div>"#;
+        // ⚠ THE NEGATIVE ARM FIRST: a plain block does NOT contain its floats. Every row below is
+        // also satisfied by an engine that unions floats into every parent; this one is not.
+        assert_eq!(
+            t1057_row(&format!(r#"<div id="x">{f}</div>"#)).height,
+            0.0,
+            "§10.6.7: a plain block does NOT grow to contain its float"
+        );
+        for (open, why) in [
+            (r#"<div id="x" style="overflow:hidden">"#, "overflow:hidden"),
+            (r#"<div id="x" style="overflow:auto">"#, "overflow:auto"),
+            (
+                r#"<div id="x" style="display:flow-root">"#,
+                "display:flow-root",
+            ),
+            (r#"<div id="x" style="float:left;width:400px">"#, "a float"),
+            (
+                r#"<div id="x" style="display:inline-block;width:400px">"#,
+                "an inline-block",
+            ),
+            (
+                r#"<div id="x" style="position:absolute;width:400px">"#,
+                "an abspos box",
+            ),
+        ] {
+            assert_eq!(
+                t1057_row(&format!("{open}{f}</div>")).height,
+                50.0,
+                "§10.6.7: {why} establishes a BFC and contains its float"
+            );
+        }
+        // The float's BOTTOM MARGIN EDGE, not its border edge.
+        assert_eq!(
+            t1057_row(r#"<div id="x" style="overflow:hidden"><div style="float:left;width:20px;height:50px;margin-bottom:20px"></div></div>"#).height,
+            70.0,
+            "§10.6.7: the float's bottom MARGIN edge is what the BFC root reaches"
+        );
+        // …and it is the MAX of the float and the in-flow content, read in both directions.
+        assert_eq!(
+            (
+                t1057_row(r#"<div id="x" style="overflow:hidden"><div style="float:left;width:20px;height:50px"></div><div style="height:30px"></div></div>"#).height,
+                t1057_row(r#"<div id="x" style="overflow:hidden"><div style="float:left;width:20px;height:20px"></div><div style="height:80px"></div></div>"#).height,
+            ),
+            (50.0, 80.0),
+            "§10.6.7: the height is the MAX of the float and the in-flow content"
+        );
+        // The clearfix: a plain block does not contain its float, but a clearing last child makes it.
+        assert_eq!(
+            t1057_row(r#"<div id="x"><div style="float:left;width:20px;height:50px"></div><div style="clear:both"></div></div>"#).height,
+            50.0,
+            "§10.6.7: a clear:both last child is what makes a PLAIN block reach its float"
+        );
+        assert_eq!(
+            t1057_row(r#"<div id="x" style="overflow:hidden"><div style="float:right;width:20px;height:50px"></div></div>"#).height,
+            50.0,
+            "§10.6.7: a RIGHT float is contained the same way"
+        );
+    }
+
+    /// **G_ATOMIC_FLOAT_ESCAPE — an atomic inline's float is its OWN, and it was being placed twice.**
+    ///
+    /// `collect_inline_floats`' own doc already carried the rule — *"an atomic inline (`<img>`,
+    /// `inline-block`) is a BFC root: its floats are its own and must not escape into this block's
+    /// float context"* — and lists the exact consequence of breaking it: *"recursing into it here
+    /// would place its floats twice, in two different containing blocks."* The test that enforces it
+    /// was written into the **recursion** and not into the **entry**, and both call sites hand the
+    /// function an inline-level child and ask *"are there floats under it"* — so
+    /// `collect_inline_floats(<the inline-block>, …)` walked the inline-block's children before any
+    /// test had been applied to the inline-block itself.
+    ///
+    /// Our own box tree, a 400px `inline-block` holding one `float:left` 20x50 (`+8` is the body
+    /// margin):
+    ///
+    /// ```text
+    ///   div       [ 8  8 400x54]
+    ///     div     [ 8  8  20x50]   <- the LEAKED copy, in the OUTER block's float context
+    ///     div     [28  8 400x50]   <- the inline-block, pushed right by its own float
+    ///       div   [28  8  20x50]   <- the correct copy, in its own BFC
+    /// ```
+    ///
+    /// A left float advances the outer line's cursor, so the inline-block **and everything after it
+    /// on that line** shift right by the float's width. Chrome-measured, offsets within the
+    /// container:
+    ///
+    /// ```text
+    ///                                                      Chrome   before   after
+    ///   inline-block > float:left                             0       20       0
+    ///   …the NEXT inline-block on the same line             100      120     100
+    ///   inline-block > float:right                            0        0       0   <- CONTROL
+    ///   inline-block > plain block                            0        0       0   <- CONTROL
+    ///   inline-block > div > float:left      (one deeper)     0        0       0   <- CONTROL
+    ///   a following BLOCK sibling                             0        0       0   <- CONTROL
+    /// ```
+    ///
+    /// ⚠⚠⚠ **THE `float:right` ROW WAS PASSING FOR THE WRONG REASON AND IS THE REASON THIS ASSERTS
+    /// THE FLOAT'S OWN WIDTH.** It leaks identically; it just does not move the *left* cursor, so its
+    /// only symptom is the duplicate box. `node_rects` keys on `NodeId`, so two placements of one
+    /// element come back as the **union** of their rects — a `width:20px` float measured **40**. That
+    /// is the assertion that sees the leak whichever way the float goes, and reading the `float:right`
+    /// row as "right floats are fine" would have localised the defect to the wrong arm.
+    ///
+    /// ⚠⚠ **THE ONE-LEVEL-DEEPER ROW IS THE OTHER HALF OF THE CONTROL.** Wrap the float in a plain
+    /// `<div>` and the entry is a *block-level* child, which the guard's second bullet already
+    /// stopped — **the defect required the float to be a DIRECT child of the atomic**, which is why
+    /// every existing nested-float fixture (all of them `<a><img float>` shapes) missed it.
+    #[test]
+    fn an_atomic_inlines_float_does_not_escape_into_its_containers_float_context() {
+        let f = r#"<div style="float:left;width:20px;height:50px"></div>"#;
+
+        // The float is placed ONCE. Two placements union in `node_rects` into a 40px-wide box.
+        assert_eq!(
+            t1057_row(r#"<div style="display:inline-block;width:400px"><div id="x" style="float:left;width:20px;height:50px"></div></div>"#).width,
+            20.0,
+            "the float inside an inline-block gets exactly ONE box, not one per formatting context"
+        );
+        // …so the inline-block is not pushed right by its own float.
+        assert_eq!(
+            t1057_row(&format!(
+                r#"<div id="x" style="display:inline-block;width:400px">{f}</div>"#
+            ))
+            .x,
+            0.0,
+            "an inline-block does not advance the outer line's cursor with its OWN float"
+        );
+        // …nor is the next atomic on the same line.
+        assert_eq!(
+            t1057_row(&format!(
+                r#"<div style="display:inline-block;width:100px">{f}</div><div id="x" style="display:inline-block;width:100px;height:50px"></div>"#
+            )).x,
+            100.0,
+            "the NEXT inline-block on the line sits at 100, not 120"
+        );
+
+        // ⚠ THE CONTROLS — each was already exact and a wrongly-scoped fix moves one of them.
+        assert_eq!(
+            t1057_row(&format!(r#"<div id="x" style="display:inline-block;width:400px"><div style="float:right;width:20px;height:50px"></div></div>"#)).x,
+            0.0,
+            "CONTROL: a right float never moved the left cursor — it only ever duplicated"
+        );
+        assert_eq!(
+            t1057_row(r#"<div id="x" style="display:inline-block;width:400px"><div style="width:20px;height:50px"></div></div>"#).x,
+            0.0,
+            "CONTROL: no float at all"
+        );
+        assert_eq!(
+            t1057_row(&format!(
+                r#"<div id="x" style="display:inline-block;width:400px"><div>{f}</div></div>"#
+            ))
+            .x,
+            0.0,
+            "CONTROL: one level deeper the float's entry is BLOCK-level, which was already stopped"
+        );
+        assert_eq!(
+            t1057_row(&format!(r#"<div style="display:inline-block;width:400px">{f}</div><div id="x" style="height:10px"></div>"#)).x,
+            0.0,
+            "CONTROL: a following BLOCK sibling is not shifted by a float in any case"
+        );
+        // ⚠ AND THE RULE THIS MUST NOT BREAK: a float in a plain `display:inline` DOES belong to the
+        // containing block, which is the whole point of the walk this guard sits at the top of.
+        // Chrome-measured, the float's own rect inside `<span>`: `[0, 0, 20x50]` — placed by the
+        // BLOCK, at the block's content origin, exactly as if the `<span>` were not there.
+        let through_inline = t1057_row(
+            r#"<span><div id="x" style="float:left;width:20px;height:50px"></div></span>"#,
+        );
+        assert_eq!(
+            (
+                through_inline.x,
+                through_inline.width,
+                through_inline.height
+            ),
+            (0.0, 20.0, 50.0),
+            "a plain inline is still TRANSPARENT: its float is placed by the containing BLOCK"
+        );
+        assert_eq!(
+            t1057_row(&format!(r#"<div id="x"><span>{f}</span></div>"#)).height,
+            0.0,
+            "…and that float is still the containing BLOCK's, so a plain parent does not contain it"
+        );
     }
 
     /// **EVERY LINE BOX STARTS WITH A STRUT, AND A BASELINE-ALIGNED ATOMIC SITS ON THE BASELINE.**

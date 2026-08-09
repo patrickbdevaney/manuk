@@ -374,6 +374,10 @@
   - L7261 · An intrinsic width keyword never reached a float, and the paired control is what proved it (t1056)
   - L7275 · The method: every row is a PAIR
   - L7302 · Residue, measured
+  - L7308 · A block's auto height is CLEAN at 28 of 28 — and the fixture that cleared it found a float placed twice (t1057)
+  - L7316 · Why these two had no row, which is the transferable part
+  - L7324 · The negative arm is what makes eleven positive rows mean anything
+  - L7331 · The defect: a float inside an atomic inline was placed in TWO formatting contexts
 
 ## browser-capabilities.md
 `docs/wiki/browser-capabilities.md`
@@ -1780,4 +1784,4 @@
   - L124 · Rank mechanisms by FLIP RATE, not failing-subtest count — CSS layout is a multi-assertion slog
 
 ---
-1687 sections across 22 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+1691 sections across 22 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.

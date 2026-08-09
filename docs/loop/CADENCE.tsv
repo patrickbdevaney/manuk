@@ -765,3 +765,4 @@ tick	sha	epoch	iso	delta_s	shape	wall_s	files	added	deleted	gates	claims	wpt_pas
 1054	25aa3dce	1786241141	2026-08-08T22:05:41-04:00	377	measurement	808	5	113	32	428	81	3896	6960	0	529	0	the spec IS the enumeration, and six primitives had no row at all (2026-08-08)
 1055	83512a17	1786244747	2026-08-08T23:05:47-04:00	3606	primitive	808	10	445	36	428	81	3896	6960	0	530	0	`position: fixed` is clean at 19 of 20, and the row that failed was not a `fixed` bug (2026-08-08)
 1056	cbd54b40	1786247997	2026-08-08T23:59:57-04:00	3250	primitive	808	9	320	69	428	81	3896	6960	0	531	0	the second copy was wrong on exactly one row of thirty-two, and only a PAIRED battery could say so (2026-08-08)
+1057	e5c4d0a4	1786253992	2026-08-09T01:39:52-04:00	5995	primitive	808	9	646	42	428	81	3896	6960	0	531	0	a block's auto height is clean at 28 of 28, and the fixture that cleared it found a float placed TWICE (2026-08-09)

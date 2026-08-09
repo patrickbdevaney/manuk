@@ -46371,6 +46371,144 @@ PERF: none — one UA rule and one narrowed branch in a cascade that already ran
 WIKI: `docs/wiki/css-cascade.md` — where Chrome draws the form-control `box-sizing` line, and why a
 layout-crate test cannot see it.
 
+## Tick 1057 — a block's auto height is clean at 28 of 28, and the fixture that cleared it found a float placed TWICE (2026-08-09)
+
+TICK SHAPE: primitive — a 28-row battery on CSS 2.1 **§10.6.3** (where a block's `height:auto` ends)
+and **§10.6.7** (which boxes grow to contain their floats), taken because check #97's Finding 1 is
+binding on the loop: *finish the §8/§9/§10 enumeration's remaining unknowns before opening a new
+area.* These were the next two, and §10.6.7 was one of the pair t1054 could only find **inside a
+receipt** — prose that cannot go red or green.
+
+⚠⚠⚠ **BOTH PRIMITIVES ARE CLEAN — 28 OF 28 EXACT — AND THE TICK'S PRODUCT IS WHAT THE FIXTURE
+CAUGHT ON ITS WAY PAST.** Headless Chrome, one 400px container, `margin:0`, every case isolated
+behind a `clear:both`:
+
+```text
+                                                         Chrome   ours
+   child 50 · children 50+30                                50/80  50/80
+   child 50 + margin-bottom 20                                50     50   <- collapses OUT
+     …parent padding-bottom 10 / border-bottom 5            80/75  80/75  <- each STOPS it
+     …parent overflow:hidden / a following sibling          70/80  70/80  <- so do these
+     …one level deeper, and the same with padding           50/80  50/80  <- collapses THROUGH
+   no children · display:none last · abspos-only child     0/50/0 0/50/0
+   height:200 · min-height:120                            200/120 200/120
+
+   float 50, PLAIN block parent                                0      0   <- does NOT contain
+   float 50, parent overflow:hidden|auto|flow-root             50     50   <- §10.6.7
+   float 50, parent float | inline-block | absolute            50     50
+   float 50 + margin-bottom 20, parent overflow:hidden         70     70   <- the MARGIN edge
+   float 50 vs in-flow 30 · float 20 vs in-flow 80          50/80  50/80   <- the MAX, both ways
+   float 50 + a clear:both last child, plain parent            50     50   <- the clearfix
+```
+
+⚠⚠ **THE ELEVEN POSITIVE ROWS MEAN NOTHING WITHOUT THE ONE NEGATIVE ONE.** *"The parent grows to
+50"* is equally satisfied by an engine that unions its floats into **every** parent — the common way
+to get §10.6.7 wrong — and only `float 50, plain block parent → 0` can tell the two apart. RED-proven
+by making every block contain its floats: that row goes red and its eleven neighbours do not.
+
+⚠⚠⚠ **AND WHY NEITHER HAD A ROW, WHICH IS THE TRANSFERABLE HALF.** The loop had a gated, 21/21
+row for the **exception** — margins collapsing *through* an empty block, §8.3.1 — and **none for the
+rule it is an exception to.** A reactive map files what breaks; the plain case does not break until it
+does, and a defect in it arrives filed as a margin-collapse bug or as an unattributed `dy`.
+
+⚠⚠⚠ **THE DEFECT: A FLOAT INSIDE AN ATOMIC INLINE WAS PLACED IN TWO FORMATTING CONTEXTS, AND THE
+FUNCTION'S OWN DOC PREDICTED THE EXACT SYMPTOM.** `collect_inline_floats` gathers the floats in an
+inline subtree that belong to the *containing block*. Its doc:
+
+> *"an atomic inline (`<img>`, `inline-block`) is a BFC root: its floats are its own and must not
+> escape into this block's float context"* … *"recursing into it here would place its floats
+> **twice**, in two different containing blocks."*
+
+The test was written into the **recursion** and not into the **entry**. Both call sites hand the
+function an inline-level child `k` and ask *"are there floats under it"* — and the loop starts by
+walking `node`'s children **before any test has been applied to `node` itself**. So
+`collect_inline_floats(<the inline-block>, …)` reported the inline-block's own float and the caller
+placed it in the OUTER block's `FloatContext`. Our box tree, `+8` is the body margin:
+
+```text
+   div       [ 8  8 400x54]
+     div     [ 8  8  20x50]   <- the LEAKED copy, in the OUTER block's float context
+     div     [28  8 400x50]   <- the inline-block, pushed right by its OWN float
+       div   [28  8  20x50]   <- the correct copy, in its own BFC
+```
+
+A **left** float advances the outer line's cursor, so the inline-block *and everything after it on
+that line* shift right by the float's width:
+
+```text
+                                                     Chrome   before   after
+   inline-block > float:left                             0       20       0
+   …the NEXT inline-block on the same line             100      120     100
+   inline-block > float:right                            0        0       0   <- CONTROL
+   inline-block > plain block                            0        0       0   <- CONTROL
+   inline-block > div > float:left      (one deeper)     0        0       0   <- CONTROL
+   a following BLOCK sibling                             0        0       0   <- CONTROL
+```
+
+> **A GUARD ON THE RECURSION IS NOT A GUARD ON THE FUNCTION.** When every caller enters at a node
+> the rule is *about*, the rule must be asked at the ENTRY. The fix is one predicate,
+> `inline_is_float_transparent`, asked at both ends — not a condition spelled out at the point of
+> recursion only. This is t1051's *"the second copy was a GATE, not a handler"* arriving from the
+> other side: there the rule was implemented twice, here it was implemented once and **applied one
+> level too late.**
+
+⚠⚠ **THE `float:right` ROW WAS PASSING FOR THE WRONG REASON, AND THAT IS WHY THE GATE ASSERTS THE
+FLOAT'S OWN WIDTH.** It leaks identically — it just does not move the *left* cursor, so its only
+symptom is the duplicate box. `node_rects` keys on `NodeId`, so two placements of one element come
+back as the **UNION** of their rects: a `width:20px` float measures **40**. That assertion sees the
+leak whichever way the float goes, and reading the right-float row as *"right floats are fine"* would
+have localised the defect to the left-float arm, which is not where it is. **Seventh instance of the
+shape check #97 named** — the discriminator is not the row that made you look.
+
+⚠ **The one-level-deeper row is the other half of the control.** Wrap the float in a plain `<div>`
+and the entry is a *block-level* child, which the guard's second bullet already stopped. The defect
+needed the float to be a **DIRECT** child of the atomic — which is exactly why every existing
+nested-float fixture, all of them `<a><img float>` shapes, missed it.
+
+GATES, both RED-proven, four mutations one per limb:
+`a_blocks_auto_height_ends_at_its_last_in_flow_childs_margin_edge` (§10.6.3 + §10.6.7; red on
+*no bottom-margin collapse-out*, red on *a BFC root stops containing floats*, red on *every block
+contains its floats* — that last one hits ONLY the negative row) and
+`an_atomic_inlines_float_does_not_escape_into_its_containers_float_context` (red on *entry guard
+removed*, and it is the only test in the suite that goes red for it).
+
+MAP: `§10.6.3` promoted `unknown → gated`; **§10.6.7 promoted from a RECEIPT to a ROW** and gated —
+t1054 named it and left it, and prose in a receipt carries no verdict; one new row for the atomic-inline
+float. Enumeration unknowns 34 → 32.
+
+PRICED — 10 sites, both binaries, same hour (old = HEAD's release binary, preserved at 23:58 before
+anything rebuilt it; new at 00:22). **Six byte-identical on shape**; the three movers were re-run SOLO
+3x on each binary and **all three refuted as losses**:
+
+```text
+   www.tz.de           panel  0.8275 -> 0.8181, cov -0.0481, shape_n 1959 -> 1880
+        OLD solo  0.7996 / 0.8209 / 0.8209        NEW solo  0.8209 x3
+        The OLD binary reproduces the "new" number EXACTLY, twice, on the same 1876
+        elements. The panel's 1959-element page is a different page — the site moved,
+        not the engine.
+   www.fragrantica.com panel  0.7294 -> 0.7260
+        OLD solo  [0.7093, 0.7143]                NEW solo  [0.7133, 0.7267]
+        The delta is inside BOTH bands, and NEW's band sits ABOVE OLD's. Not a loss —
+        and not banked as a gain either, because the bands overlap.
+   www.puentedemando   panel  0.7786 -> 0.7749
+        OLD solo  0.7784 / 0.7784 / 0.7405        NEW solo  0.8102 x3
+        ⚠ ATTRIBUTABLE GAIN, read at MATCHED element count: OLD's third run served the
+        same 1133-element page and scored 0.7405; NEW reads 0.8102 on that same page
+        three times. **+0.070 on identical content, and NEW is the more stable arm.**
+```
+
+**Zero attributable regressions.** ⚠ The headline panel diff would have reported three losses including
+a 4.8-point coverage collapse, and not one of them survived a solo re-run — the same rule that killed
+three favourable headlines at t1050, applied to numbers I did not like.
+
+RATCHET: manuk-layout **138/138**, zero regressions.
+
+PERF: one predicate call per inline-level child at a walk that already ran per child; the recursion
+lost an inlined three-term condition and gained the same test at the callee's entry.
+
+WIKI: `docs/wiki/box-layout.md` — "A block's auto height is CLEAN at 28 of 28 — and the fixture that
+cleared it found a float placed twice".
+
 ## Tick 1056 — the second copy was wrong on exactly one row of thirty-two, and only a PAIRED battery could say so (2026-08-08)
 
 TICK SHAPE: primitive — a 32-row **paired** battery on CSS 2.1 §10.3.5, float shrink-to-fit. Subject
