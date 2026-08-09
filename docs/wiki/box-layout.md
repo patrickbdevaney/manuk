@@ -7595,3 +7595,57 @@ All Chrome-measured, none fixed here, none of them this mechanism:
    min-width / max-width on the TABLE    the table box's own clamps are not applied (250 -> 19,
                                         and a max-width:200px table stays 400)
 ```
+
+## A table's own `min-width`/`max-width`, and why `table-layout: fixed` needs a definite width (t1066)
+
+Two of the four residues t1065's §17 battery measured and left. Both are decisions about the **table
+box's own width**, made in the same ten lines of `layout_table`, and both are Chrome-measured:
+
+```text
+                                          Chrome                 before          after
+   width:400px; max-width:200px      table 200, cols 100/100   400, 200/200   200, 100/100
+   min-width:250px  (width auto)     table 250, cols 125/125    19,  10/10    250, 125/125
+   width:200px; max-width:400px      table 200                 200            200   <- CONTROL
+   table-layout:fixed; width:auto    table  86.7               400            86.7
+```
+
+**Every other box in this engine gets its clamps from `layout_block`; a table takes its own path and
+never asked.** A `min-width: 250px` table rendering at 19px is not a near-miss — it is the table gone.
+
+### An auto table's clamp cannot be applied until its columns exist
+
+A table with `width: auto` sizes *to* its columns, so there is no width to clamp when the clamp is
+read. The sequence that matches Chrome: run the auto algorithm, sum the columns, clamp that; if the
+clamp bit, the table is now **definite** at the clamped width and the columns are redistributed over
+it. Without the second step `min-width: 250px` gives a 250px table with two 10px columns huddled in
+the corner — which is the RED-proof for it, and the reason the clamp is not simply `content_w.max()`
+at the end.
+
+### ⚠⚠⚠ The control for "`fixed` still wins" was VACUOUS, and the mutation is what said so
+
+`table-layout: fixed` is defined only for a table with a definite width (CSS 2.1 §17.5.2.1); with
+`width: auto` Chrome uses the automatic algorithm. The obvious over-fix is *never use the fixed
+algorithm at all*, so the gate carries a control against it — and the first version of that control
+was `width:100px` + a long auto column, asserted at 100/300.
+
+**Both algorithms give 100/300 on that markup**, because t1065 taught the auto one to honour a
+specified width. So the over-fix mutation left the gate **GREEN**, and the control proved nothing
+about which algorithm had run.
+
+> **A CONTROL AGAINST AN OVER-FIX MUST BE A ROW THE TWO CANDIDATE BEHAVIOURS ANSWER DIFFERENTLY —
+> AND WHEN THE ENGINE GETS BETTER, YESTERDAY'S DISCRIMINATOR CAN STOP DISCRIMINATING.** This one was
+> written one tick after the fix that made it vacuous. The mutation is the only thing that can tell
+> you, which is t1057's *"a green mutation is a reading about the ROW"* arriving through a new door:
+> not a mis-specified row, a row whose separating power was **removed by a neighbouring fix**.
+
+The replacement is a specified width the **content overruns** — fixed keeps the column at 100 and
+lets it overflow, auto raises it to min-content — plus its own auto twin asserted to differ:
+
+```text
+   width:100px + a nowrap 24-char word, 400px table    fixed 100/300   auto 231.2/168.8
+   content in a LATER row (fixed reads only the first)  fixed 200/200   auto 384/16
+```
+
+Both pairs are byte-exact against Chrome on the shipping cascade. The §17 battery now reads
+**127 of 132**, from 85 when it was first run; the five remaining rows are one residue — a cell's
+`min-width` never reaching column sizing.

@@ -5635,25 +5635,77 @@ impl Ctx<'_> {
             Dim::Auto => None,
             other => Some(other.resolve(cw, (cw - ml).max(0.0)).max(0.0)),
         };
+        // ── ⚠⚠⚠ **THE TABLE BOX'S OWN `min-width` / `max-width` WERE NOT APPLIED AT ALL.** Every
+        //    other box in this engine gets its clamps from `layout_block`; a table takes its own
+        //    path and never asked. Measured against headless Chrome:
+        //
+        //    ```text
+        //      width:400px; max-width:200px      Chrome  table 200, cols 100/100   ours 400, 200/200
+        //      min-width:250px  (width auto)     Chrome  table 250, cols 125/125   ours  19,  10/10
+        //      width:200px; max-width:400px      Chrome  table 200                 ours 200  <- CONTROL
+        //    ```
+        //
+        //    `max-width` on a data table is the ordinary way a wide table is kept inside its column,
+        //    and `min-width` is how a cramped one is held open — a 250px table rendering at 19px is
+        //    not a near-miss, it is the table gone.
+        let clamp_lo = match s.min_width {
+            Dim::Auto => 0.0,
+            other => other.resolve(cw, 0.0).max(0.0),
+        };
+        // `max-width: none` maps to `Dim::Auto` (no limit), which is why this is an Option and not
+        // an `f32::INFINITY` sentinel: `resolve` on `Auto` would answer 0 and clamp every table away.
+        let clamp_hi = match s.max_width {
+            Dim::Auto => None,
+            other => Some(other.resolve(cw, 0.0).max(0.0)),
+        };
+        let clamp = |w: f32| -> f32 { clamp_hi.map_or(w, |hi| w.min(hi)).max(clamp_lo) };
+        let table_specified = table_specified.map(clamp);
         let avail_content = table_specified.unwrap_or((cw - ml).max(0.0)) - pl - pr;
         let avail_cols = (avail_content - spacing_total).max(0.0);
 
+        // ⚠⚠⚠ **`table-layout: fixed` IS DEFINED ONLY FOR A TABLE WITH A DEFINITE WIDTH** (CSS 2.1
+        // §17.5.2.1: the used width is *"the greater of the table's containing block width and the
+        // sum of the column widths"* only once `width` is not `auto`). With `width: auto` Chrome
+        // uses the AUTOMATIC algorithm. We ran the fixed one against the container, so the table
+        // stretched to the full container width — **86.7 in Chrome against 400 here**, a whole table
+        // 4.6× too wide, on the one declaration authors reach for to make a table *behave*.
+        let use_fixed =
+            s.table_layout == manuk_css::TableLayout::Fixed && table_specified.is_some();
         let cell_grid: Vec<Vec<NodeId>> = rows.iter().map(|(_, cells)| cells.clone()).collect();
         let widths = if ncols == 0 {
             Vec::new()
-        } else if s.table_layout == manuk_css::TableLayout::Fixed {
+        } else if use_fixed {
             self.fixed_col_widths(&cell_grid, ncols, avail_cols)
         } else {
             // The intrinsic widths must be measured with the SAME frame the cell will be laid out
             // with, or the column comes out sized for a border the cell no longer has.
-            self.auto_col_widths(
+            let hints = self.column_hints(node, ncols);
+            let first = self.auto_col_widths(
                 &placed,
                 ncols,
                 avail_cols,
                 table_specified.is_some(),
                 collapse.then_some(&vline[..]),
-                &self.column_hints(node, ncols),
-            )
+                &hints,
+            );
+            // An AUTO-width table sizes to its columns, so its clamps cannot be applied before the
+            // columns exist. When one of them bites, the table becomes DEFINITE at the clamped
+            // width and the columns are redistributed over it — which is what turns `min-width:
+            // 250px` into 125/125 rather than a 250px table with two 10px columns in the corner.
+            let shrink = first.iter().sum::<f32>() + spacing_total;
+            let clamped = clamp(shrink);
+            if table_specified.is_none() && (clamped - shrink).abs() > 0.01 {
+                self.auto_col_widths(
+                    &placed,
+                    ncols,
+                    (clamped - spacing_total).max(0.0),
+                    true,
+                    collapse.then_some(&vline[..]),
+                    &hints,
+                )
+            } else {
+                first
+            }
         };
         let cols_used: f32 = widths.iter().sum();
         let mut content_w = cols_used + spacing_total;
@@ -15841,6 +15893,114 @@ mod tests {
         assert!(
             cells[2].height >= 30.0 - 0.5,
             "row 2 height driven by the 30px cell"
+        );
+    }
+
+    /// **A TABLE'S OWN `min-width`/`max-width` CLAMP IT, AND `table-layout: fixed` NEEDS A DEFINITE
+    /// WIDTH TO BE USED AT ALL** (CSS 2.1 §17.5.2 / §17.5.2.1). Both Chrome-measured; both found by
+    /// the t1065 §17 battery and filed as residue rather than folded into that tick.
+    ///
+    /// The load-bearing rows are the ones where the clamp must NOT fire and where `fixed` must still
+    /// win — a table that ignores its clamps and a table that always shrink-wraps are equally wrong.
+    #[test]
+    fn a_tables_own_width_clamps_apply_and_fixed_layout_needs_a_definite_width() {
+        let widths = |body: &str| -> (f32, Vec<f32>) {
+            let (dom, root) = layout_html(
+                &format!("<body style='margin:0'>{body}</body>"),
+                "td{padding:0}",
+                800.0,
+            );
+            let mut table = 0.0f32;
+            root.walk(&mut |b| {
+                if let Some(n) = b.node {
+                    if dom.element(n).map(|e| e.name == "table") == Some(true) {
+                        table = b.rect.width;
+                    }
+                }
+            });
+            (
+                table,
+                cell_rects(&root, &dom).iter().map(|r| r.width).collect(),
+            )
+        };
+        const CELLS: &str = "<tr><td>A</td><td>B</td></tr></table>";
+
+        // `max-width` beats a larger specified width, and the columns redistribute over the result.
+        let (t, w) = widths(&format!(
+            "<table style='border-spacing:0;width:400px;max-width:200px'>{CELLS}"
+        ));
+        assert!(
+            (t - 200.0).abs() < 0.5 && (w[0] - 100.0).abs() < 0.5 && (w[1] - 100.0).abs() < 0.5,
+            "max-width must clamp the table and its columns: table {t}, cols {w:?}"
+        );
+        // `min-width` on an AUTO-width table: the clamp cannot be applied until the columns exist,
+        // and once it bites the table is DEFINITE and the columns are redistributed over it.
+        let (t, w) = widths(&format!(
+            "<table style='border-spacing:0;min-width:250px'>{CELLS}"
+        ));
+        assert!(
+            (t - 250.0).abs() < 0.5 && (w[0] - 125.0).abs() < 0.5 && (w[1] - 125.0).abs() < 0.5,
+            "min-width must hold an auto table open and spread the surplus: table {t}, cols {w:?}"
+        );
+        // ── CONTROL: a max-width that does NOT bite changes nothing.
+        let (t, _) = widths(&format!(
+            "<table style='border-spacing:0;width:200px;max-width:400px'>{CELLS}"
+        ));
+        assert!(
+            (t - 200.0).abs() < 0.5,
+            "a non-binding max-width must leave the table alone, got {t}"
+        );
+
+        // `table-layout: fixed` with `width: auto` falls back to the AUTOMATIC algorithm, so the
+        // table shrink-wraps instead of stretching to its container.
+        let (t400, _) =
+            widths("<table style='border-spacing:0'><tr><td>A</td><td>BBBBBBBB</td></tr></table>");
+        let (t, _) = widths(
+            "<table style='border-spacing:0;table-layout:fixed'><tr><td>A</td><td>BBBBBBBB</td></tr></table>",
+        );
+        assert!(
+            (t - t400).abs() < 0.5 && t < 300.0,
+            "`table-layout:fixed` with width:auto must shrink-wrap like an auto table: {t} vs {t400}"
+        );
+        // ── CONTROL: with a definite width, `fixed` still WINS — and the row that says so has to
+        //    be one the two algorithms answer DIFFERENTLY. ⚠⚠⚠ The first version of this control
+        //    asserted `width:100px` + a long auto column, which BOTH algorithms give 100/300 since
+        //    t1065 taught the auto one to honour a specified width — so "never use fixed at all"
+        //    left the gate GREEN and the control asserted nothing. The discriminator is a specified
+        //    width the CONTENT would overrun: fixed keeps the column at 100 and lets it overflow,
+        //    auto raises it to min-content. Chrome, on byte-identical markup: fixed 100/300, auto
+        //    231.2/168.8.
+        const OVERRUN: &str = "<tr><td style='width:100px;white-space:nowrap'>WWWWWWWWWWWWWWWWWWWWWWWW</td><td>B</td></tr></table>";
+        let (t, wf) = widths(&format!(
+            "<table style='border-spacing:0;table-layout:fixed;width:400px'>{OVERRUN}"
+        ));
+        let (_, wa) = widths(&format!(
+            "<table style='border-spacing:0;width:400px'>{OVERRUN}"
+        ));
+        assert!(
+            (t - 400.0).abs() < 0.5 && (wf[0] - 100.0).abs() < 0.5 && (wf[1] - 300.0).abs() < 0.5,
+            "a definite-width fixed table ignores content that overruns its column: table {t}, cols {wf:?}"
+        );
+        assert!(
+            wa[0] > 150.0,
+            "the AUTO twin of that row must NOT be 100 — otherwise the control above proves nothing about which algorithm ran: {wa:?}"
+        );
+        // ── The other direction of the same discrimination: under `fixed` the CONTENT of a later
+        //    row cannot widen a column at all (Chrome 200/200), while under auto it does (384/16).
+        const LATE: &str = "<tr><td>A</td><td>B</td></tr><tr><td style='white-space:nowrap'>WWWWWWWWWWWWWWWWWWWWWWWW</td><td>D</td></tr></table>";
+        let (_, wf) = widths(&format!(
+            "<table style='border-spacing:0;table-layout:fixed;width:400px'>{LATE}"
+        ));
+        let (_, wa) = widths(&format!(
+            "<table style='border-spacing:0;width:400px'>{LATE}"
+        ));
+        assert!(
+            (wf[0] - 200.0).abs() < 0.5 && (wf[1] - 200.0).abs() < 0.5,
+            "a fixed table's columns are set by the FIRST row alone, got {wf:?}"
+        );
+        assert!(
+            wa[0] > 300.0 && wa[0] > wa[1],
+            "the auto twin must let the later row's content widen its column: {wa:?}"
         );
     }
 

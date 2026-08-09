@@ -1474,3 +1474,55 @@ already-launched gate, which is the other zero-cost place.
 **NOTHING TRIMMED, AND NOTHING NEEDED TRIMMING.** The wall's standing cost is unchanged since #38;
 the entire delta this window was self-inflicted, one-shot, and has a free agent-side remedy that is
 now written down.
+
+## Audit #40 — tick 1065 (2026-08-09), wall total **1048s** — and the audit that was RUN and never MARKED
+
+⚠⚠⚠ **THIS AUDIT WAS ALREADY DONE, AT TICK 1064, AND THE LOOP COULD NOT TELL.** t1064 ran
+`wall-audit.sh`, published its findings in the journal, and **never appended an entry here** — so
+`status-update.sh`, which derives `LAST_WALL_AUDIT` from the last `## Audit #N — tick M` heading in
+*this file*, kept reading **1044**, and the tick-1065 pre-flight blocked on an audit that had been
+performed an hour earlier. Setting the field by hand in `STATUS.md` does not survive: the file is
+generated, and the next `status-update.sh` reverts it.
+
+> **A CADENCE MARKER LIVES IN THE ARTEFACT, NOT IN THE STATUS FILE OR THE JOURNAL.** The journal is
+> where an audit is *narrated*; this file is where it is *recorded*, and only the record moves the
+> cadence. Publishing to the wrong one costs the next tick a blocked landing — which is exactly the
+> t1027 shape (*a fix can land in ONE of two copies and the diff looks complete*) applied to the
+> loop's own bookkeeping.
+
+### The reading, and its first finding is still about itself
+
+```text
+   44s  T     49%          the receipt this table was computed from is tick 1064's
+   11s  G6    12%          DOCS-ONLY 89s wall — it never built the workspace
+    7s  D      8%
+    6s  G1     7%
+    4s  P      4%
+```
+
+`wall-audit.sh` reads the most recent verify receipt, and t1064 was documentation only. **Ranking
+against that table optimises the cheap wall**, which is the finding t1064 already published and it is
+unchanged. The representative number is the capability wall: **this window's four are 1019s, 1042s,
+1051s and this tick's 1048s** — a ±1.5% band around ~1040s, against Part 21.2's 300s target.
+
+**(1) REDUNDANCY / (2) PARALLELISM / (3) CACHING / (4) SCOPE** — unchanged from #39. Every named
+remedy (mold/lld, cargo-nextest, workspace-hack, risk-based gate scheduling) lives in `scripts/`, so
+per PART VII it is flagged and not touched.
+
+### The parity budget, carried forward
+
+`CHROME_JOBS = 8`, one free slot at 31 of 32. **Still 31** — tick 1065's battery ran as a
+throwaway fixture through `manuk-wpt boxes --html` and its assertions landed in an in-crate
+`#[test]`, not in `tests/wpt/corpus/`, so it added nothing to the wall.
+
+### The agent-side lever, priced again
+
+t1065 paid **two release relinks of `manuk-wpt` at ~3m30s each** — one to measure the fix, one to
+re-measure it after the UA-sheet half. That is ~7 minutes no gate asked for, and the second was
+**not avoidable**: the first re-measure is what proved the layout fix was inert on the shipping
+cascade. ⚠ The avoidable version is the one #39 named — a relink to price a corpus A/B whose result
+is not in doubt. **t1065 declined that A/B and said so in its own write-up**, which is the lever
+being used rather than merely recorded.
+
+**NOTHING TRIMMED.** The wall's standing cost is unchanged; the delta this window was one blocked
+pre-flight caused by a marker written to the wrong file.

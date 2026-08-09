@@ -46371,6 +46371,82 @@ PERF: none — one UA rule and one narrowed branch in a cascade that already ran
 WIKI: `docs/wiki/css-cascade.md` — where Chrome draws the form-control `box-sizing` line, and why a
 layout-crate test cannot see it.
 
+## Tick 1066 — the control against the over-fix was VACUOUS, and only the mutation could say so (2026-08-09)
+
+TICK SHAPE: primitive — two of the four residues t1065's CSS 2.1 §17 battery measured and filed
+rather than folded in: the **table box's own `min-width`/`max-width`**, and **`table-layout: fixed`
+requiring a definite width to be used at all** (§17.5.2 / §17.5.2.1). Both are decisions about the
+table's own width, made in the same ten lines of `layout_table`, which is what makes them one tick.
+
+```text
+                                          Chrome                 before          after
+   width:400px; max-width:200px      table 200, cols 100/100   400, 200/200   200, 100/100
+   min-width:250px  (width auto)     table 250, cols 125/125    19,  10/10    250, 125/125
+   width:200px; max-width:400px      table 200                 200            200   <- CONTROL
+   table-layout:fixed; width:auto    table  86.7               400            86.7
+```
+
+⚠⚠ **EVERY OTHER BOX IN THIS ENGINE GETS ITS CLAMPS FROM `layout_block`; A TABLE TAKES ITS OWN PATH
+AND NEVER ASKED.** A `min-width: 250px` table rendering at 19px is not a near-miss, it is the table
+gone. ⚠ An auto-width table sizes *to* its columns, so its clamp cannot be read before they exist:
+run the auto algorithm, clamp the sum, and if the clamp bit the table is **definite** at that width
+and the columns are redistributed over it. Skipping the second step gives a 250px table with two
+10px columns huddled in the corner — which is that row's RED-proof.
+
+⚠⚠⚠ **THE CONTROL AGAINST THE OBVIOUS OVER-FIX WAS VACUOUS, AND THE FOURTH MUTATION IS THE ONLY
+THING THAT SAID SO.** `table-layout: fixed` is defined only for a definite-width table, so the
+over-fix is *never use the fixed algorithm at all* and the gate carries a control against it. The
+first version of that control was `width:100px` + a long auto column, asserted at 100/300 — and
+**both algorithms give 100/300 on that markup**, because t1065 taught the auto one to honour a
+specified width one tick ago. The mutation left the gate **GREEN**.
+
+> **A CONTROL AGAINST AN OVER-FIX MUST BE A ROW THE TWO CANDIDATE BEHAVIOURS ANSWER DIFFERENTLY, AND
+> A NEIGHBOURING FIX CAN REMOVE A CONTROL'S SEPARATING POWER.** This is t1057's *"a green mutation is
+> a reading about the ROW"* arriving through a new door: not a mis-specified row, a row that was
+> discriminating last week and stopped when the engine improved beside it. The four RED-proofs were
+> run in one batch precisely so the odd one out would show, and it did.
+
+The replacement is a specified width the **content overruns** — fixed keeps the column at 100 and
+lets it overflow, auto raises it to min-content — plus its own auto twin asserted to differ, and the
+mirror case where content in a LATER row cannot widen a fixed column:
+
+```text
+   width:100px + a nowrap 24-char word, 400px table    fixed 100/300   auto 231.2/168.8
+   content in a LATER row (fixed reads only the first)  fixed 200/200   auto 384/16
+```
+
+All sixteen rows of that fixture are **byte-exact against Chrome on the shipping cascade**, and all
+four mutations now bite: no clamps, a clamp without redistribution, fixed-without-a-definite-width,
+and fixed-never-used.
+
+**THE §17 BATTERY NOW READS 127 OF 132, FROM 85 WHEN IT WAS FIRST RUN.** The five rows still off are
+one residue with a row of its own: a cell's `min-width` never reaches column sizing. ⚠ It is filed
+`unknown` rather than built because the battery already measured the thing that makes it *not* the
+rule this tick and the last one landed — Chrome grows a `min-width:300px` column **proportionally**
+to 387.5 in a 400px table, where a specified `width:300px` stays at 300. `min-width` raises the
+column's intrinsics and leaves it **unconstrained**, and building it as a constraint is the plausible
+wrong fix that the measurement already refutes.
+
+RATCHET: `manuk-layout` 146/146 → **147/147**, no test changed. Ten `g_table_*` page gates green.
+**No corpus A/B, same reason as t1065 and stated the same way:** pricing it needs a same-hour
+old-binary control, a third release relink on top of this session's three, and the honest report is
+*the corpus movement is unmeasured*, not *there was none*.
+
+⚠ **A CADENCE MARKER LIVES IN THE ARTEFACT, NOT IN THE STATUS FILE.** t1064 ran the wall-time audit
+and published it in the journal without appending an entry to `docs/loop/WALL-AUDIT.md` — which is
+where `status-update.sh` derives `LAST_WALL_AUDIT` from — so t1065's pre-flight blocked on an audit
+that had already been done, and setting the field by hand in the generated `STATUS.md` did not
+survive the next regeneration. Recorded properly as **audit #40**, whose own first finding is
+unchanged: the audit reads the most recent verify receipt, and t1064's was a docs-only 89s run that
+never built the workspace, so its cost table describes the cheap wall. Representative capability
+walls this window: 1019s, 1042s, 1051s, 1048s.
+
+PERF: none — the clamp is two comparisons, and the redistribution re-runs the column algorithm only
+when a clamp actually bit on an auto-width table.
+
+WIKI: docs/wiki/box-layout.md — "A table's own min-width/max-width, and why table-layout: fixed needs
+a definite width"
+
 ## Tick 1065 — CSS 2.1 §17 had never had a battery, and `width: 50%` agreed with Chrome while being unimplemented (2026-08-09)
 
 TICK SHAPE: primitive — a 41-case battery on **auto table layout (CSS 2.1 §17.5.2.2)**, taken

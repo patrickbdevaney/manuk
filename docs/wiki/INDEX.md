@@ -390,6 +390,9 @@
   - L7558 · The three NEGATIVE rows are what separate this from "pin the column"
   - L7574 · ⚠⚠⚠ The same fix was Chrome-exact in-crate and completely INERT on the shipping cascade
   - L7587 · Named, measured, not built — the four residues from the same battery
+  - L7599 · A table's own min-width/max-width, and why table-layout: fixed needs a definite width (t1066)
+  - L7615 · An auto table's clamp cannot be applied until its columns exist
+  - L7624 · ⚠⚠⚠ The control for "fixed still wins" was VACUOUS, and the mutation is what said so
 
 ## browser-capabilities.md
 `docs/wiki/browser-capabilities.md`
@@ -1806,4 +1809,4 @@
   - L124 · Rank mechanisms by FLIP RATE, not failing-subtest count — CSS layout is a multi-assertion slog
 
 ---
-1713 sections across 22 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+1716 sections across 22 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
