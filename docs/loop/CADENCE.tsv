@@ -774,3 +774,4 @@ tick	sha	epoch	iso	delta_s	shape	wall_s	files	added	deleted	gates	claims	wpt_pas
 1063	da1241f1	1786271827	2026-08-09T06:37:07-04:00	678	measurement	808	5	239	33	429	81	3896	6960	0	536	0	the constitution check, and three of eight ticks found the INSTRUMENT rather than the engine (2026-08-09)
 1064	b0ccbf51	1786275567	2026-08-09T07:39:27-04:00	3740	measurement	808	10	495	42	429	81	3896	6960	0	537	0	CORRECTION: the accessibility surface is not unmeasurable, I ran the wrong runner (2026-08-09)
 1066	2c67d4b1	1786277423	2026-08-09T08:10:23-04:00	1856	primitive	808	10	388	40	429	81	3896	6960	0	538	0	the control against the over-fix was VACUOUS, and only the mutation could say so (2026-08-09)
+1067	527f174b	1786279522	2026-08-09T08:45:22-04:00	2099	primitive	808	10	460	65	429	81	3896	6960	0	539	0	grid is clean at 123 of 124, and the one row that failed was `baseline` meaning `end` (2026-08-09)

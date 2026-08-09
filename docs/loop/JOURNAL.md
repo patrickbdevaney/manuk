@@ -46371,6 +46371,82 @@ PERF: none — one UA rule and one narrowed branch in a cascade that already ran
 WIKI: `docs/wiki/css-cascade.md` — where Chrome draws the form-control `box-sizing` line, and why a
 layout-crate test cannot see it.
 
+## Tick 1067 — grid is clean at 123 of 124, and the one row that failed was `baseline` meaning `end` (2026-08-09)
+
+TICK SHAPE: primitive — a 40-case CSS Grid battery against headless Chrome on the **shipping**
+cascade, taken because `display: grid` is **18.7% of the burndown corpus** while `css/css-grid` sits
+at **5.3%** WPT pass, which is the largest apparent hole the board names. It is not a hole.
+
+⚠⚠⚠ **123 OF 124 EXACT ON ALL FOUR OF (x, y, w, h).** `grid-template-areas`, `repeat(auto-fill |
+auto-fit, minmax())`, negative line numbers, `dense` packing, `fit-content()`, percentage gaps,
+`place-items`, `minmax`, `min-content`/`max-content` tracks, implicit tracks from `grid-auto-*`,
+`order`, spans, `justify-content`/`align-content`, a nested grid — and every NEGATIVE row: a grid
+item's `float` ignored, adjacent items' margins **not** collapsing, an abspos child out of flow, no
+template at all giving one column. ⚠ **The board's step 6 is stale.** *"Grid common-case (WIRE
+grid-template-areas: no taffy consumer!)"*, parked since t156 as too big for one tick, describes work
+that is done: `grid-area` places correctly. A cleared construct is a result (t1042's `var()` 30/30),
+and 5.3% conformance breadth is not the same population as the common case the corpus uses.
+
+⚠⚠⚠ **THE ONE FAILING ROW IS THE TICK: `align-items: baseline` WAS SILENTLY `align-items: end`.**
+Every leaf in the taffy tree is Manuk-measured, `compute_leaf_layout` unconditionally returns
+`first_baselines: Point::NONE`, and taffy's own fallback is
+
+```rust
+   let inner_baseline = layout_output.first_baselines.y.unwrap_or(size.height);   // the BOTTOM EDGE
+```
+
+so a 16px item beside a 32px one sat at exactly `big_height − small_height` = **18** against Chrome's
+**15**, in *both* formatting contexts. The measure callback already lays the subtree out and named
+its result `_content` before discarding it — the baseline was one `find_map` away the whole time.
+Same shape as t1053's `solved_h` and the oracle's mechanism signature: **computed, then thrown away
+at the seam.**
+
+⚠⚠⚠ **THE PAIRED PROBE NEEDED A THIRD ARM, AND THAT ARM IS WHAT MADE IT A DIAGNOSIS.**
+
+```text
+   the same two boxes (32px beside 16px)      Chrome   before   after
+   grid, align-items:baseline                   15       18      14
+   flex, align-items:baseline                   15       18      14
+   inline-block (CSS 2.1 §10.8.1, no property)  15       14      14
+   table-cell, vertical-align:baseline           0        0       0   <- CONTROL: stretched
+```
+
+Two arms said *"grid is 3px off"*. The third turned it into **two implementations of *where is this
+box's baseline* disagreeing by 4px on identical content** — and `last_line_baseline` had the correct
+§10.8.1 search all along, so this is *one rule, N implementations* where the second implementation
+was **an absence rather than a wrong copy**. That is a different search: you cannot grep for the copy
+that is not there, only for the consumer that never asks.
+
+⚠⚠ **THE GATE'S LOAD-BEARING ROW NAMES THE BUG INSTEAD OF DETECTING IT.** It asserts `end` puts the
+item at exactly `big − small`, and that `baseline` sits **strictly above** `end`. Before the fix
+those two numbers were equal — 19 and 19 in the in-crate fixture — so a gate that only checked
+*"baseline is not start"* would have passed on the broken engine. Three RED-proofs, each failing a
+different assertion: report no baseline (the pre-fix engine), report the box bottom, report a wrong
+value. This is t1066's lesson applied *before* the mutation rather than after it.
+
+⚠ **THE RESIDUAL 1px IS NOT ALIGNMENT.** 14 against Chrome's 15, identically on all three arms: our
+32px monospace line box is 37 tall where Chrome's is 38, a `line-height: normal` font-metric
+difference at large sizes. Stating which of the two it is, is the difference between a closed defect
+and a reopened one.
+
+RATCHET: `manuk-layout` 147/147 → **148/148**, no test changed. Fourteen flex/grid/baseline page
+gates green. The §17 battery re-run on the same binary is unmoved at 127/132, and the grid battery is
+**124/124** after. **No corpus A/B, same reason as t1065 and t1066** — a same-hour old-binary control
+is a fourth release relink this session; the honest report is *the corpus movement is unmeasured*.
+
+⚠ **A SCRIPTED EDIT SILENTLY NO-OP'd AND THE BATTERY RAN 14 ROWS SHORT.** Extending the fixture's id
+list matched nothing (the pattern included a quote that was not at that boundary) and the script
+printed `ok` because it had no assert. Chrome came back with the same 88 lines as before and it read
+as *"the new rows agree too"*. Caught by the row COUNT, re-done with an assertion, and it is the
+exact failure `scripted-edit-silent-noop` is on the lesson list for — **assert every replacement**,
+including in a throwaway fixture script.
+
+PERF: none measurable — the baseline is read from a `BoxContent` the measure already built, and rides
+the existing `measure_cache` entry rather than adding a lookup.
+
+WIKI: docs/wiki/box-layout.md — "`align-items: baseline` was silently `align-items: end`, in BOTH
+flex and grid"
+
 ## Tick 1066 — the control against the over-fix was VACUOUS, and only the mutation could say so (2026-08-09)
 
 TICK SHAPE: primitive — two of the four residues t1065's CSS 2.1 §17 battery measured and filed

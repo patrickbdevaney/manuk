@@ -396,8 +396,10 @@ use taffy::{
 
 /// A callback that content-measures a Manuk-leaf DOM node (block/inline/table/float) for
 /// the taffy tree — `(dom_node, known_dims, available_space) -> size`.
+/// A Manuk-measured leaf's answer: its content size, and its FIRST-LINE BASELINE from that box's
+/// content-box top (`None` = it has no line box, and taffy's own bottom-edge fallback is correct).
 type MeasureFn<'m> =
-    dyn FnMut(DomNodeId, Size<Option<f32>>, Size<AvailableSpace>) -> Size<f32> + 'm;
+    dyn FnMut(DomNodeId, Size<Option<f32>>, Size<AvailableSpace>) -> (Size<f32>, Option<f32>) + 'm;
 
 /// A node placed by the unified taffy tree: its DOM node, its taffy-assigned rectangle
 /// (`slot`, relative to its parent's border box), whether it is a flex/grid **container**
@@ -537,6 +539,7 @@ impl<'m> TaffyDom<'m> {
                     height: AvailableSpace::MaxContent,
                 },
             )
+            .0
             .width
                 + frame
         };
@@ -731,12 +734,48 @@ impl<'m> TaffyDom<'m> {
             let style = self.nodes[idx].style.clone();
             let dom_node = self.nodes[idx].dom;
             let measure = &mut self.measure;
-            compute_leaf_layout(
+            let mut baseline: Option<f32> = None;
+            let out = compute_leaf_layout(
                 inputs,
                 &style,
                 |_, _| 0.0,
-                |known, avail| measure(dom_node, known, avail),
-            )
+                |known, avail| {
+                    let (size, b) = measure(dom_node, known, avail);
+                    baseline = b;
+                    size
+                },
+            );
+            // ── ⚠⚠⚠ **`compute_leaf_layout` ALWAYS REPORTS `first_baselines: Point::NONE`, AND
+            //    TAFFY'S FALLBACK FOR THAT IS THE BOX'S BOTTOM EDGE**
+            //    (`first_baselines.y.unwrap_or(size.height)`, `compute/flexbox.rs`). Every leaf in
+            //    this tree is Manuk-measured, so `align-items: baseline` was silently `end` in BOTH
+            //    formatting contexts — a 32px item beside a 16px one put the small item's top at
+            //    `big_height - small_height` instead of at the shared baseline, 18 against Chrome's
+            //    15. The error hides completely whenever the items are the same height, which is
+            //    most of them, which is why a 40-row grid battery found this one row and no other.
+            //
+            //    The measure returns the baseline from the leaf's CONTENT-box top and taffy's is
+            //    from the BORDER-box top, so the frame is added back here — the one thing that
+            //    cannot be read off the returned `LayoutOutput`.
+            let frame_top = taffy::ResolveOrZero::<Option<f32>, f32>::resolve_or_zero(
+                style.border.top,
+                None,
+                |_, _| 0.0,
+            ) + taffy::ResolveOrZero::<Option<f32>, f32>::resolve_or_zero(
+                style.padding.top,
+                None,
+                |_, _| 0.0,
+            );
+            match baseline {
+                Some(b) => LayoutOutput {
+                    first_baselines: taffy::Point {
+                        x: None,
+                        y: Some(b + frame_top),
+                    },
+                    ..out
+                },
+                None => out,
+            }
         }
     }
 }
@@ -1047,7 +1086,8 @@ pub fn solve_subtree<'m>(
     container: DomNodeId,
     container_width: f32,
     container_height: Option<f32>,
-    measure: impl FnMut(DomNodeId, Size<Option<f32>>, Size<AvailableSpace>) -> Size<f32> + 'm,
+    measure: impl FnMut(DomNodeId, Size<Option<f32>>, Size<AvailableSpace>) -> (Size<f32>, Option<f32>)
+        + 'm,
 ) -> (Vec<Placed>, f32) {
     let (mut tree, root) = TaffyDom::build(dom, styles, container, Box::new(measure));
     // Pin the root to the given content size (Manuk resolved width; height when definite).
@@ -1114,7 +1154,8 @@ pub fn max_content_width<'m>(
     dom: &Dom,
     styles: &StyleMap,
     container: DomNodeId,
-    measure: impl FnMut(DomNodeId, Size<Option<f32>>, Size<AvailableSpace>) -> Size<f32> + 'm,
+    measure: impl FnMut(DomNodeId, Size<Option<f32>>, Size<AvailableSpace>) -> (Size<f32>, Option<f32>)
+        + 'm,
 ) -> f32 {
     let (mut tree, root) = TaffyDom::build(dom, styles, container, Box::new(measure));
     let r: usize = root.into();
@@ -1191,9 +1232,14 @@ mod tests {
         styles.insert(sidebar, cs);
 
         let (placed, _solved_h) =
-            solve_subtree(&dom, &styles, container, 1000.0, None, |_n, _k, _a| Size {
-                width: 0.0,
-                height: 0.0,
+            solve_subtree(&dom, &styles, container, 1000.0, None, |_n, _k, _a| {
+                (
+                    Size {
+                        width: 0.0,
+                        height: 0.0,
+                    },
+                    None,
+                )
             });
         assert_eq!(placed.len(), 1);
         assert!(
@@ -1231,9 +1277,14 @@ mod tests {
 
         // Leaves measure to zero content (only grow matters here).
         let (placed, _solved_h) =
-            solve_subtree(&dom, &styles, container, 300.0, None, |_n, _k, _a| Size {
-                width: 0.0,
-                height: 0.0,
+            solve_subtree(&dom, &styles, container, 300.0, None, |_n, _k, _a| {
+                (
+                    Size {
+                        width: 0.0,
+                        height: 0.0,
+                    },
+                    None,
+                )
             });
         assert_eq!(placed.len(), 2);
         let s0 = placed[0].slot;
@@ -1293,9 +1344,14 @@ mod tests {
         }
 
         let (placed, _solved_h) =
-            solve_subtree(&dom, &styles, container, 600.0, None, |_n, _k, _a| Size {
-                width: 0.0,
-                height: 0.0,
+            solve_subtree(&dom, &styles, container, 600.0, None, |_n, _k, _a| {
+                (
+                    Size {
+                        width: 0.0,
+                        height: 0.0,
+                    },
+                    None,
+                )
             });
         assert_eq!(placed.len(), 3);
         let xs: Vec<f32> = placed.iter().map(|p| p.slot.x).collect();
@@ -1359,9 +1415,14 @@ mod tests {
 
         // Height `None` = the container's own height is indefinite, which is the whole point.
         let (placed, _solved_h) =
-            solve_subtree(&dom, &styles, container, 600.0, None, |_n, _k, _a| Size {
-                width: 0.0,
-                height: 0.0,
+            solve_subtree(&dom, &styles, container, 600.0, None, |_n, _k, _a| {
+                (
+                    Size {
+                        width: 0.0,
+                        height: 0.0,
+                    },
+                    None,
+                )
             });
         assert_eq!(placed.len(), 2);
         let (s0, s1) = (placed[0].slot, placed[1].slot);

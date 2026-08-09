@@ -768,7 +768,9 @@ struct Ctx<'a> {
     /// times (min-content, max-content, resolved) and each probe would otherwise re-lay-out
     /// the whole subtree — an O(n²) blow-up on nested flex/grid. Interior-mutable so
     /// `measure_intrinsic` (`&self`) can fill it.
-    measure_cache: RefCell<HashMap<(NodeId, u32), (f32, f32)>>,
+    /// `(width, height, first-line baseline)` — the baseline rides along because the measure
+    /// already lays the subtree out and used to DISCARD the content it came from.
+    measure_cache: RefCell<HashMap<(NodeId, u32), (f32, f32, Option<f32>)>>,
     /// **Set while an INTRINSIC width is being probed** — `min_content_width` and
     /// `max_content_width_uncached` lay the subtree out at an absurd available width (1.0 / 1e6) and
     /// measure how far its content reaches.
@@ -5262,11 +5264,16 @@ impl Ctx<'_> {
                         taffy::AvailableSpace::MinContent => Some(0.0),
                         taffy::AvailableSpace::MaxContent => None,
                     });
-                    let (w, h) = self.measure_intrinsic(dn, aw);
-                    taffy::Size {
-                        width: known.width.unwrap_or(w),
-                        height: known.height.unwrap_or(h),
-                    }
+                    let (w, h, _) = self.measure_intrinsic_baselined(dn, aw);
+                    (
+                        taffy::Size {
+                            width: known.width.unwrap_or(w),
+                            height: known.height.unwrap_or(h),
+                        },
+                        // A max-content probe never aligns anything; the baseline is dropped here
+                        // rather than plumbed through a path that has no consumer for it.
+                        None,
+                    )
                 },
             )
             .max(0.0);
@@ -5398,6 +5405,17 @@ impl Ctx<'_> {
     /// is what lets an `auto`-sized flex/grid item size to its content instead of collapsing
     /// to zero. Read-only (`&self`), so it can be called from the measure closure.
     fn measure_intrinsic(&self, node: NodeId, avail_width: Option<f32>) -> (f32, f32) {
+        let (w, h, _) = self.measure_intrinsic_baselined(node, avail_width);
+        (w, h)
+    }
+
+    /// [`Self::measure_intrinsic`] plus the item's FIRST-LINE BASELINE, which taffy needs for
+    /// `align-items: baseline` and which this function has always computed and thrown away.
+    fn measure_intrinsic_baselined(
+        &self,
+        node: NodeId,
+        avail_width: Option<f32>,
+    ) -> (f32, f32, Option<f32>) {
         let avail = avail_width.unwrap_or(1.0e6);
         // Memoize: taffy probes each item several times per solve, and each probe re-lays-out
         // the subtree. Round the available width to a px so repeated min/max-content probes
@@ -5423,14 +5441,16 @@ impl Ctx<'_> {
         //   grid  <svg viewBox="0 0 100 25"> 400×100   400×100  ← the grid path already stretched
         // ```
         if let Some(sz) = self.replaced_default_size(node, avail_width) {
+            // A replaced element's baseline is its bottom margin edge (CSS 2.1 §10.8.1), which is
+            // also taffy's own fallback — so `None` here is not an absence, it is the same answer.
+            let sz = (sz.0, sz.1, None);
             self.measure_cache.borrow_mut().insert(key, sz);
             return sz;
         }
         let width = self.shrink_to_fit(node, avail);
         let mut fc = FloatContext::new(0.0, width.max(1.0));
-        let (_content, height) =
-            self.layout_children(node, 0.0, 0.0, width.max(0.0), None, &mut fc);
-        let result = (width, height);
+        let (content, height) = self.layout_children(node, 0.0, 0.0, width.max(0.0), None, &mut fc);
+        let result = (width, height, first_line_baseline_of(&content, self.dom));
         // `MANUK_TRACE_INTRINSIC=<id>` prints what a flex/grid item told taffy it wanted to be.
         // Flex WRAPPING is decided by this number, so when a row breaks that Chrome keeps on one
         // line, this is the number that is wrong — and it is otherwise invisible in the output.
@@ -7585,11 +7605,14 @@ impl Ctx<'_> {
                     taffy::AvailableSpace::MinContent => Some(0.0),
                     taffy::AvailableSpace::MaxContent => None,
                 });
-                let (w, h) = self.measure_intrinsic(dn, aw);
-                taffy::Size {
-                    width: known.width.unwrap_or(w),
-                    height: known.height.unwrap_or(h),
-                }
+                let (w, h, base) = self.measure_intrinsic_baselined(dn, aw);
+                (
+                    taffy::Size {
+                        width: known.width.unwrap_or(w),
+                        height: known.height.unwrap_or(h),
+                    },
+                    base,
+                )
             },
         );
         // ── **AN RTL GRID'S COLUMN AXIS RUNS RIGHT-TO-LEFT, AND TAFFY CANNOT BE TOLD.** `direction`
@@ -10300,6 +10323,54 @@ impl InlineItem {
             | InlineItem::Tab { node, .. } => *node,
             InlineItem::Atomic { .. } | InlineItem::AbsPseudo { .. } => None,
         }
+    }
+}
+
+/// **The baseline of the FIRST in-flow line box inside `b`**, in `b`'s own coordinate space — the
+/// twin of [`last_line_baseline`], and the number a flex or grid item owes its container.
+///
+/// ⚠⚠⚠ **NOTHING COMPUTED THIS, SO `align-items: baseline` WAS SILENTLY `end`.** Taffy's leaves are
+/// Manuk-measured and `compute_leaf_layout` always reports `first_baselines: Point::NONE`; taffy's
+/// own fallback is `first_baselines.y.unwrap_or(size.height)` — **the box's bottom edge**. So every
+/// baseline-aligned flex and grid row aligned BOTTOMS instead, in both formatting contexts, and the
+/// error is invisible whenever the items happen to be the same height. Chrome, a 32px item beside a
+/// 16px one in a 400px container: the small item's top belongs at **15** and sat at **18**, which is
+/// exactly `big_height - small_height`.
+///
+/// FIRST and not LAST because CSS Box Alignment §9 aligns on the *first* baseline set; for a
+/// single-line item the two coincide, which is why the distinction only shows on a wrapped item.
+fn first_line_baseline(b: &LayoutBox, dom: &Dom) -> Option<f32> {
+    first_line_baseline_of(&b.content, dom)
+}
+
+/// [`first_line_baseline`] over a bare [`BoxContent`] — what `measure_intrinsic` has in hand before
+/// it discards it.
+fn first_line_baseline_of(c: &BoxContent, dom: &Dom) -> Option<f32> {
+    match c {
+        // Within one inline formatting context the FIRST line has the least baseline, so the min is
+        // the first line's — the mirror of `last_line_baseline`'s max, and it needs no ordering
+        // assumption about the fragment vector either.
+        BoxContent::Inline(frags) => frags
+            .iter()
+            .map(|f| f.baseline)
+            .fold(None, |acc: Option<f32>, x| {
+                Some(acc.map_or(x, |m| m.min(x)))
+            }),
+        // Front-first, and a replaced kid contributes its own bottom margin edge without being
+        // searched — both for the reasons `last_line_baseline` documents at length.
+        BoxContent::Block(kids) => kids.iter().find_map(|k| {
+            let replaced = k.node.is_some_and(|n| {
+                matches!(
+                    dom.tag_name(n),
+                    Some("img" | "canvas" | "video" | "svg" | "object" | "embed" | "iframe")
+                )
+            });
+            if replaced {
+                Some(k.rect.y + k.rect.height)
+            } else {
+                first_line_baseline(k, dom)
+            }
+        }),
     }
 }
 
@@ -15894,6 +15965,122 @@ mod tests {
             cells[2].height >= 30.0 - 0.5,
             "row 2 height driven by the 30px cell"
         );
+    }
+
+    /// **A FLEX OR GRID ITEM MUST TELL ITS CONTAINER WHERE ITS BASELINE IS**, or `align-items:
+    /// baseline` silently becomes `align-items: end` (CSS Box Alignment §9).
+    ///
+    /// Taffy's leaves are all Manuk-measured, `compute_leaf_layout` reports `first_baselines:
+    /// Point::NONE`, and taffy's fallback is the box's bottom edge — so both formatting contexts
+    /// aligned BOTTOMS. The `end` row below is what names the bug rather than merely detecting it:
+    /// before the fix, `baseline` and `end` were the same number.
+    #[test]
+    fn a_flex_or_grid_item_reports_its_baseline_so_alignment_is_not_bottom_alignment() {
+        // Two items, one at twice the font size. `y` of the SMALL one is the whole measurement.
+        let probe = |container: &str| -> (f32, f32, f32) {
+            let (dom, root) = layout_html(
+                &format!(
+                    "<body style='margin:0'><div style='{container}'>\
+                     <i id='big' style='font-size:32px'>a</i><i id='small'>b</i></div></body>"
+                ),
+                "i{font-style:normal;margin:0;padding:0}",
+                400.0,
+            );
+            let (mut big, mut small) = ((0.0f32, 0.0f32), (0.0f32, 0.0f32));
+            root.walk(&mut |b| {
+                if let Some(n) = b.node {
+                    match dom.element(n).and_then(|e| e.attr("id")) {
+                        Some("big") => big = (b.rect.y, b.rect.height),
+                        Some("small") => small = (b.rect.y, b.rect.height),
+                        _ => {}
+                    }
+                }
+            });
+            // (small's top relative to big's, big height, small height)
+            (small.0 - big.0, big.1, small.1)
+        };
+        const GRID: &str = "display:grid;grid-template-columns:1fr 1fr;";
+        const FLEX: &str = "display:flex;";
+
+        for (name, base) in [("grid", GRID), ("flex", FLEX)] {
+            let (y_base, bh, sh) = probe(&format!("{base}align-items:baseline"));
+            let (y_end, _, _) = probe(&format!("{base}align-items:end"));
+            let (y_start, _, _) = probe(&format!("{base}align-items:start"));
+            // ── The row that NAMES the bug: `baseline` and `end` must not be the same number.
+            //    They were, because taffy's missing-baseline fallback IS the bottom edge.
+            assert!(
+                (y_end - (bh - sh)).abs() < 0.5,
+                "{name}: `end` must put the small item's top at big-small = {}, got {y_end}",
+                bh - sh
+            );
+            assert!(
+                y_base < y_end - 1.0,
+                "{name}: `baseline` must sit ABOVE `end` — equal means the item reported no \
+                 baseline and taffy fell back to the bottom edge ({y_base} vs {y_end})"
+            );
+            // ── …and it is not `start` either: the small item IS pushed down.
+            assert!(
+                (y_start).abs() < 0.5 && y_base > 1.0,
+                "{name}: `baseline` must push the small item down from `start` ({y_start} / {y_base})"
+            );
+        }
+
+        // ── FLEX AND GRID MUST AGREE WITH EACH OTHER, and with the INLINE-BLOCK path, which had
+        //    the correct §10.8.1 baseline search all along and is what localised the defect: the
+        //    same two boxes read 14 through inline-block and 18 through taffy.
+        let (y_grid, ..) = probe(&format!("{GRID}align-items:baseline"));
+        let (y_flex, ..) = probe(&format!("{FLEX}align-items:baseline"));
+        assert!(
+            (y_grid - y_flex).abs() < 0.5,
+            "grid and flex must place a baseline-aligned item identically: {y_grid} vs {y_flex}"
+        );
+        let (dom, root) = layout_html(
+            "<body style='margin:0'><div><i id='big' style='display:inline-block;font-size:32px'>a</i>\
+             <i id='small' style='display:inline-block'>b</i></div></body>",
+            "i{font-style:normal;margin:0;padding:0}",
+            400.0,
+        );
+        let (mut big_y, mut small_y) = (0.0f32, 0.0f32);
+        root.walk(&mut |b| {
+            if let Some(n) = b.node {
+                match dom.element(n).and_then(|e| e.attr("id")) {
+                    Some("big") => big_y = b.rect.y,
+                    Some("small") => small_y = b.rect.y,
+                    _ => {}
+                }
+            }
+        });
+        assert!(
+            ((small_y - big_y) - y_grid).abs() < 1.0,
+            "the taffy baseline must agree with the inline-block one on the same two boxes: {} vs {y_grid}",
+            small_y - big_y
+        );
+
+        // ── CONTROL: equal font sizes have one baseline, so nothing moves in either context.
+        for base in [GRID, FLEX] {
+            let (dom, root) = layout_html(
+                &format!(
+                    "<body style='margin:0'><div style='{base}align-items:baseline'>\
+                     <i id='big'>a</i><i id='small'>b</i></div></body>"
+                ),
+                "i{font-style:normal;margin:0;padding:0}",
+                400.0,
+            );
+            let (mut a, mut b2) = (0.0f32, 0.0f32);
+            root.walk(&mut |bx| {
+                if let Some(n) = bx.node {
+                    match dom.element(n).and_then(|e| e.attr("id")) {
+                        Some("big") => a = bx.rect.y,
+                        Some("small") => b2 = bx.rect.y,
+                        _ => {}
+                    }
+                }
+            });
+            assert!(
+                (a - b2).abs() < 0.5,
+                "equal-size items share a baseline and must be flush: {a} vs {b2}"
+            );
+        }
     }
 
     /// **A TABLE'S OWN `min-width`/`max-width` CLAMP IT, AND `table-layout: fixed` NEEDS A DEFINITE

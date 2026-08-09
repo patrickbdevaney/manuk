@@ -7649,3 +7649,65 @@ lets it overflow, auto raises it to min-content — plus its own auto twin asser
 Both pairs are byte-exact against Chrome on the shipping cascade. The §17 battery now reads
 **127 of 132**, from 85 when it was first run; the five remaining rows are one residue — a cell's
 `min-width` never reaching column sizing.
+
+## `align-items: baseline` was silently `align-items: end`, in BOTH flex and grid (t1067)
+
+`display: grid` is **18.7% of the burndown corpus** and `css/css-grid` sits at **5.3%** WPT pass, so
+a grid battery looked like the biggest unmeasured lever on the board. A 40-case fixture — every
+common-case track function, placement, alignment and negative row — came back **123 of 124 exact on
+all four of (x, y, w, h)** against headless Chrome, on the shipping cascade.
+
+**The one row that failed is the tick.** `align-items: baseline` across a grid row put a 16px item's
+top at **18** where Chrome says **15**, and 18 is exactly `big_height - small_height`.
+
+### The mechanism, and it is one line of taffy's contract
+
+Every leaf in the taffy tree is Manuk-measured, and `compute_leaf_layout` unconditionally returns
+`first_baselines: Point::NONE`. Taffy's own fallback for a missing baseline is
+
+```rust
+let inner_baseline = layout_output.first_baselines.y.unwrap_or(size.height);   // compute/flexbox.rs
+```
+
+— **the box's bottom edge.** So a baseline-aligned row aligned bottoms, in *both* formatting
+contexts, and the two alignment values were the same number. The measure callback already lays the
+subtree out and named its result `_content` before discarding it; the baseline was one `find_map`
+away the whole time. It is the same shape as t1053's `solved_h` and the oracle's mechanism
+signature: **computed, then thrown away at the seam.**
+
+### The paired probe is what localised it, and it needed a THIRD arm
+
+```text
+   the same two boxes (32px beside 16px)      Chrome   before   after
+   grid, align-items:baseline                   15       18      14
+   flex, align-items:baseline                   15       18      14
+   inline-block (CSS 2.1 §10.8.1, no property)  15       14      14
+   table-cell, vertical-align:baseline           0        0       0   <- stretched, not aligned
+```
+
+The inline-block arm is what turned "grid is 3px off" into "**two implementations of *where is this
+box's baseline* disagree by 4px on identical content**". `last_line_baseline` had the correct §10.8.1
+search all along and the taffy seam had never been connected to it — so this is *one rule, N
+implementations* where the second implementation was **an absence**, not a wrong copy. The fourth arm
+is a control: a table cell is stretched, so it must NOT move, and it did not.
+
+### The row that NAMES the bug rather than detecting it
+
+The gate asserts `end` puts the small item at exactly `big − small`, and that `baseline` sits
+strictly **above** `end`. Before the fix those two numbers were equal (19 and 19 in the in-crate
+fixture) — so a gate that only checked "baseline is not start" would have passed on the broken
+engine. Three RED-proofs, each failing a different assertion: report no baseline (the pre-fix
+engine), report the box bottom, and report a wrong value.
+
+⚠ The residual 1px (14 against Chrome's 15) is **not** baseline alignment: our 32px monospace line
+box is 37 tall where Chrome's is 38, so it is a `line-height: normal` font-metric difference at large
+sizes, and it is present identically on all three arms.
+
+### What the clean 123 rows are worth saying out loud
+
+`grid-template-areas`, `repeat(auto-fill/auto-fit, minmax())`, negative line numbers, `dense`
+packing, `fit-content()`, percentage gaps, `place-items`, implicit tracks, `order`, nested grids and
+every negative row (a grid item's `float` ignored, margins not collapsing, an abspos child out of
+flow) are all Chrome-exact. **The board's step 6 — *"Grid common-case (WIRE grid-template-areas: no
+taffy consumer!)"*, parked since t156 — is stale: `grid-area` places correctly and has for some
+time.** `css/css-grid` at 5.3% is measuring conformance breadth, not the common case the corpus uses.

@@ -393,6 +393,11 @@
   - L7599 · A table's own min-width/max-width, and why table-layout: fixed needs a definite width (t1066)
   - L7615 · An auto table's clamp cannot be applied until its columns exist
   - L7624 · ⚠⚠⚠ The control for "fixed still wins" was VACUOUS, and the mutation is what said so
+  - L7653 · align-items: baseline was silently align-items: end, in BOTH flex and grid (t1067)
+  - L7663 · The mechanism, and it is one line of taffy's contract
+  - L7678 · The paired probe is what localised it, and it needed a THIRD arm
+  - L7694 · The row that NAMES the bug rather than detecting it
+  - L7706 · What the clean 123 rows are worth saying out loud
 
 ## browser-capabilities.md
 `docs/wiki/browser-capabilities.md`
@@ -1809,4 +1814,4 @@
   - L124 · Rank mechanisms by FLIP RATE, not failing-subtest count — CSS layout is a multi-assertion slog
 
 ---
-1716 sections across 22 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+1721 sections across 22 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
