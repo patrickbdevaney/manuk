@@ -46371,6 +46371,61 @@ PERF: none — one UA rule and one narrowed branch in a cascade that already ran
 WIKI: `docs/wiki/css-cascade.md` — where Chrome draws the form-control `box-sizing` line, and why a
 layout-crate test cannot see it.
 
+## Tick 1077 — 10.5% of the CSS 2.1 suite's remaining failures are ONE pseudo-element that has no row on the map (2026-08-09)
+
+TICK SHAPE: measurement — re-ranking the second-largest chapter of the now-honestly-measured
+`css/CSS2` (`selectors`, 380 failures). No engine crate touched.
+
+⚠⚠⚠ **THE RANKING IS NOT A RANKING, IT IS A NAME.**
+
+```text
+   339  first-letter-punctuation        8  first-letter-selector      3  first-letter-nested
+     9  first-line-pseudo               5  first-letter-quote         4  lang-selector
+```
+
+**~354 of the suite's 3,374 remaining failures — 10.5% — are one unimplemented pseudo-element**, and
+339 of those are the single rule that leading punctuation joins the first letter (§5.12.1), which the
+suite enumerates across Unicode punctuation classes. Measured on six paragraphs with quoted,
+parenthesised and guillemet openings, `p::first-letter { font-size: 32px }`:
+
+```text
+   Chrome   every paragraph 38 tall — the 32px letter raises the first line box
+   ours     every paragraph 19 tall — the rule matches nothing
+```
+
+`::first-letter` and `::first-line` are **not in the `Pseudo` enum, not parsed, not laid out** — zero
+occurrences in `engine/css` and `engine/layout`. A selector using one fails `parse_compound` and the
+rule is dropped, which is the safe failure and also a completely silent one.
+
+⚠⚠⚠ **AND THE MAP HAD NO ROW FOR IT AT ALL — not `missing`, not `unknown`, ABSENT.** So the loop
+could not say it was unbuilt; it could only fail to mention it. `::before` and `::after` are gated
+and heavily measured, and **the two other pseudo-elements CSS 2.1 defines, in the same chapter, were
+never named.** That is t1054's reactive-map hole exactly — *you get a row when something breaks, and
+nothing breaks in the common case until it does* — and it is the fourth "absence" this session after
+t1067's baseline, t1068's transform and t1070's anonymous cell, this one at **feature** scale rather
+than site scale.
+
+**NOT BUILT, and the reason is structural rather than budgetary.** `::before`/`::after` generate a box
+*around* content the box tree already knows how to hold. `::first-letter` and `::first-line` are the
+only CSS 2.1 pseudo-elements that must generate a box **inside an inline formatting context, over a
+range the LINE BREAKER discovers** — you cannot know what the first line holds until it is laid out,
+and giving the first letter a larger font changes the line's height, which changes what fits on it.
+That circularity *is* the feature, and it is t156's shape at the size where guessing is most
+expensive. The decomposition is in `docs/wiki/text-layout.md`, ordered by what the suite rewards:
+parse into `Pseudo` and cascade through the existing `PseudoIndex`; then the **range** rule (leading
+punctuation), which is the 339-test half; then box generation sized before the line is broken; and
+`::first-line` last, because it is 9 tests and needs a second pass.
+
+RATCHET: measurement only, no engine crate touched. `manuk-layout` 151/151, `manuk-css` 52/52
+unmoved. Two rows added to `CONSTELLATION.tsv` as `missing` with their numbers — **the `MEASURED`
+denominator rises, which is the enumeration working** (audit #45: *a bigger, uglier map is a GOOD
+tick; discovery is never punished, only rot is*).
+
+PERF: none — measurement only.
+
+WIKI: docs/wiki/text-layout.md — "`::first-letter` is absent, and it is 10.5% of the CSS 2.1 suite's
+remaining failures"
+
 ## Tick 1076 — the suite re-ranked once it was honest, and three hypotheses refuted (2026-08-09)
 
 TICK SHAPE: measurement — `css/CSS2` became measurable for the first time at t1075 (a fifth of its

@@ -1808,6 +1808,8 @@
   - L2418 · A HORIZONTAL-only frame left the inline's box on the LINE, not on its content (t994)
   - L2461 · The same property, two implementations, and a comment saying they could not diverge
   - L2494 · ⚠ The fixture bug that made the first run report 20 of 20 exact
+  - L2505 · ::first-letter is absent, and it is 10.5% of the CSS 2.1 suite's remaining failures (t1077)
+  - L2536 · Why it is a subsystem and not a tick
 
 ## The wasm demo — running the engine inside someone else's browser
 `docs/wiki/wasm-demo.md`
@@ -1835,4 +1837,4 @@
   - L124 · Rank mechanisms by FLIP RATE, not failing-subtest count — CSS layout is a multi-assertion slog
 
 ---
-1742 sections across 22 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+1744 sections across 22 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.

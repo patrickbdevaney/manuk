@@ -784,3 +784,4 @@ tick	sha	epoch	iso	delta_s	shape	wall_s	files	added	deleted	gates	claims	wpt_pas
 1074	a2b70b5a	1786287624	2026-08-09T11:00:24-04:00	2847	primitive	808	9	336	39	429	81	3896	6960	0	541	0	a cell's `vertical-align: baseline` was `top`, and the first battery could not see its own subject (2026-08-09)
 1075	180e5041	1786289194	2026-08-09T11:26:34-04:00	1570	primitive	808	9	241	34	429	81	3896	6960	0	542	0	an XHTML CDATA-wrapped stylesheet was dropped entirely, found by chasing ONE regressed reftest (2026-08-09)
 1076	5c9828ca	1786289548	2026-08-09T11:32:28-04:00	354	measurement	808	7	130	33	429	81	3896	6960	0	542	0	the suite re-ranked once it was honest, and three hypotheses refuted (2026-08-09)
+1077	ae1eea45	1786289794	2026-08-09T11:36:34-04:00	246	measurement	808	7	145	33	429	81	3896	6960	0	542	0	10.5% of the CSS 2.1 suite's remaining failures are ONE pseudo-element that has no row on the map (2026-08-09)

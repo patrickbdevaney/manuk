@@ -2501,3 +2501,55 @@ at all. **The line needs something taller than the box under test** — here a 6
 
 Priced on the burndown corpus, HTML + linked stylesheets: `vertical-align: sub|super` is declared by
 **22/171 = 12.9%**, and `<sup>`/`<sub>` markup appears in 4/171 = 2.3%; the union is 14.6%.
+
+## `::first-letter` is absent, and it is 10.5% of the CSS 2.1 suite's remaining failures (t1077)
+
+Re-ranking `css/CSS2`'s `selectors` chapter (380 failures) gives an answer that is not a ranking so
+much as a single name:
+
+```text
+   339  first-letter-punctuation        8  first-letter-selector      3  first-letter-nested
+     9  first-line-pseudo               5  first-letter-quote         4  lang-selector
+```
+
+**~354 of the suite's 3,374 remaining failures — 10.5% — are one unimplemented pseudo-element**, and
+339 of them are the single rule that leading punctuation joins the first letter (CSS 2.1 §5.12.1),
+which the suite enumerates across Unicode punctuation classes.
+
+Measured, `p::first-letter { font-size: 32px }` over six paragraphs including quoted, parenthesised
+and guillemet openings:
+
+```text
+   Chrome   every paragraph 38 tall — the 32px letter raises the first line box
+   ours     every paragraph 19 tall — the rule matches nothing
+```
+
+`::first-letter` and `::first-line` are **not in the `Pseudo` enum, not parsed, and not laid out** —
+`grep` finds zero occurrences in `engine/css` and `engine/layout`. A selector using one fails
+`parse_compound` and the rule is dropped, which is the safe failure and also a silent one.
+
+⚠ **And the map had no row for it at all** — not `missing`, not `unknown`, *absent*. So the loop could
+not say it was unbuilt, which is the same reactive-map hole t1054 found for the layout primitives:
+`::before`/`::after` are gated and heavily measured, and the two pseudo-elements CSS 2.1 defines
+*beside* them were never named.
+
+### Why it is a subsystem and not a tick
+
+`::before`/`::after` generate a box **around** content that the box tree already knows how to hold.
+`::first-letter` and `::first-line` are the only CSS 2.1 pseudo-elements that must generate a box
+**inside an inline formatting context, over a range the line breaker discovers** — you cannot know
+what the first line contains until you have laid it out, and styling the first letter with a larger
+font changes the line's height, which changes what fits on it. That circularity is the feature.
+
+The decomposition, in the order the suite rewards:
+
+1. **Parse** `::first-line` / `::first-letter` into `Pseudo`, and let the cascade produce a style for
+   them (the `PseudoIndex` that already serves `::before`/`::after` is the place).
+2. **`::first-letter`'s range**: the first typographic letter unit of the first formatted line, plus
+   any immediately *preceding* punctuation — `"`, `(`, `«`, `¡` — and, per CSS Text, any immediately
+   following punctuation. The 339-test family is this rule and nothing else, so it is the half that
+   pays.
+3. **Box generation**: an anonymous inline box over that range, carrying the pseudo's style, sized
+   before the line is broken so its font-size participates in the line box's height.
+4. **`::first-line`** last: it applies to a range the line breaker *produces*, so it needs a second
+   pass, and it is 9 tests rather than 339.
