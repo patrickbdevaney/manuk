@@ -4435,33 +4435,73 @@ impl Ctx<'_> {
 
         let non_content = ml + mr + pl + pr + bl + br;
         let avail = (cw - non_content).max(0.0);
-        let mut width = match s.width {
-            // A float shrink-to-fits on `auto` — that is the whole point of a float — so `stretch`
-            // is the only way to say "this floated card fills its column", and it is the difference
-            // between a full-width banner and one hugging its text.
-            Dim::Auto if s.width_stretch => avail,
-            Dim::Auto => self.shrink_to_fit(node, avail),
-            // ── **`box-sizing: border-box` — THE FLOAT PATH NEVER APPLIED IT.** A specified width on a
-            // border-box element is the BORDER box, so the content width is that minus padding and
-            // border; `layout_block` has done this since t~ (`bs_extra_w`), and this function, which is
-            // a separate width resolution, simply did not. `auto` is already a content width, so only
-            // the specified arm subtracts.
-            //
-            // Measured vs live Chromium on the exact corpus shape (`*{box-sizing:border-box}` +
-            // `.card{width:50%;float:left;padding:0 5px}` in a 704px container): Chrome **352** border
-            // box / **342** content, ours **362 / 352** — every float 10px too wide, and the control in
-            // the same fixture (the identical box WITHOUT `float`) was already Chrome-exact at 352/342.
-            //
-            // `*{box-sizing:border-box}` is in every CSS reset written since 2011, and a
-            // `width:%` + `padding` float is the pre-flexbox column — i.e. most of the WordPress web.
-            other => {
-                let w = other.resolve(cw, avail).max(0.0);
-                if s.box_sizing == BoxSizing::BorderBox {
-                    (w - (pl + pr + bl + br)).max(0.0)
-                } else {
-                    w
+        // The float copy of the t930 intrinsic-keyword clamp; see `layout_block`. **Hoisted above
+        // the width match and given an explicit BASIS**, because it is now used twice — by the
+        // `width` arm below, whose basis is the available CONTENT space, and by the min/max clamps,
+        // whose basis was `cw` before this and stays `cw` so a gated path does not move.
+        let kw_w = |k: IntrinsicSize, basis: f32| match k {
+            IntrinsicSize::MinContent => self.min_content_width(node),
+            IntrinsicSize::MaxContent => self.max_content_width(node),
+            IntrinsicSize::FitContent => self.shrink_to_fit(node, basis),
+        };
+        // ⚠⚠⚠ **AN INTRINSIC KEYWORD ON `width` NEVER REACHED A FLOAT, AND THE INLINE-BLOCK TWIN OF
+        //    THE SAME FORMULA HAS ALWAYS HANDLED IT.** `ComputedStyle::width` collapses a keyword to
+        //    `Dim::Auto` for length resolution and parks the keyword in the `width_keyword` sidecar
+        //    (its own doc says so). `layout_block` reads that sidecar; this function — CSS 2.1
+        //    §10.3.5, a **separate hand-rolled width resolution** its own doc already calls *"a
+        //    second copy"* — matched on `s.width` alone, so `width: min-content` on a float took the
+        //    `Dim::Auto` arm and got **fit-content**: the widest thing that fits, when the author
+        //    asked for the narrowest.
+        //
+        // ⚠ **FOUND BY A PAIRED BATTERY, and the pairing is what makes it a two-copies finding
+        //    rather than a float finding.** Every row is a `float` and an `inline-block` with
+        //    byte-identical content and box model — §10.3.5 and §10.3.9 are the same formula, and
+        //    §10.3.9 is gated. 32 rows, Chrome-measured, 400px container:
+        //
+        //    ```text
+        //                                        Chrome        float before   inline-block (control)
+        //      width:min-content "one two three"  48.17x60     125x20  ✗       48 ✓  (already right)
+        //      width:max-content                 125.23x20     125     ✓       125   ✓
+        //      width:fit-content                 125.23x20     125     ✓       125   ✓
+        //      auto · %, px, box-sizing, padding, border, margin, min/max-width clamps
+        //                                                     26 more rows exact on BOTH arms
+        //    ```
+        //
+        //    **The control arm is the whole argument**: one construct in the pair was right and the
+        //    other wrong on the identical declaration, which localises the defect to the copy rather
+        //    than to the formula. `max-content` and `fit-content` are exact on the float too — they
+        //    happen to agree with what the `Dim::Auto` arm already computed — so only `min-content`
+        //    is observably wrong, and a battery without it would have cleared this function.
+        let mut width = match s.width_keyword {
+            Some(k) => kw_w(k, avail),
+            None => match s.width {
+                // A float shrink-to-fits on `auto` — that is the whole point of a float — so `stretch`
+                // is the only way to say "this floated card fills its column", and it is the difference
+                // between a full-width banner and one hugging its text.
+                Dim::Auto if s.width_stretch => avail,
+                Dim::Auto => self.shrink_to_fit(node, avail),
+                // ── **`box-sizing: border-box` — THE FLOAT PATH NEVER APPLIED IT.** A specified width on a
+                // border-box element is the BORDER box, so the content width is that minus padding and
+                // border; `layout_block` has done this since t~ (`bs_extra_w`), and this function, which is
+                // a separate width resolution, simply did not. `auto` is already a content width, so only
+                // the specified arm subtracts.
+                //
+                // Measured vs live Chromium on the exact corpus shape (`*{box-sizing:border-box}` +
+                // `.card{width:50%;float:left;padding:0 5px}` in a 704px container): Chrome **352** border
+                // box / **342** content, ours **362 / 352** — every float 10px too wide, and the control in
+                // the same fixture (the identical box WITHOUT `float`) was already Chrome-exact at 352/342.
+                //
+                // `*{box-sizing:border-box}` is in every CSS reset written since 2011, and a
+                // `width:%` + `padding` float is the pre-flexbox column — i.e. most of the WordPress web.
+                other => {
+                    let w = other.resolve(cw, avail).max(0.0);
+                    if s.box_sizing == BoxSizing::BorderBox {
+                        (w - (pl + pr + bl + br)).max(0.0)
+                    } else {
+                        w
+                    }
                 }
-            }
+            },
         };
 
         // ── ⓵ **A FLOATED REPLACED ELEMENT DERIVES ITS AUTO WIDTH FROM ITS HEIGHT AND ITS RATIO**
@@ -4506,18 +4546,12 @@ impl Ctx<'_> {
         } else {
             0.0
         };
-        // The float copy of the t930 intrinsic-keyword clamp; see `layout_block`.
-        let kw_w = |k: IntrinsicSize| match k {
-            IntrinsicSize::MinContent => self.min_content_width(node),
-            IntrinsicSize::MaxContent => self.max_content_width(node),
-            IntrinsicSize::FitContent => self.shrink_to_fit(node, cw.max(0.0)),
-        };
         let min_w = match s.min_width_keyword {
-            Some(k) => kw_w(k).max(0.0),
+            Some(k) => kw_w(k, cw.max(0.0)).max(0.0),
             None => (s.min_width.resolve(cw, 0.0) - bs_extra_w).max(0.0),
         };
         let max_w = match s.max_width_keyword {
-            Some(k) => kw_w(k).max(0.0),
+            Some(k) => kw_w(k, cw.max(0.0)).max(0.0),
             None => match s.max_width {
                 Dim::Auto => f32::INFINITY,
                 other => (other.resolve(cw, f32::INFINITY) - bs_extra_w).max(0.0),
@@ -12171,6 +12205,90 @@ mod tests {
             cf.x,
             coff.x
         );
+    }
+
+    /// **G_FLOAT_INTRINSIC_WIDTH — an intrinsic keyword on `width` must reach a FLOAT, and only the
+    /// `inline-block` copy of the same formula had it.**
+    ///
+    /// `ComputedStyle::width` collapses `min-content`/`max-content`/`fit-content` to `Dim::Auto` and
+    /// parks the keyword in the `width_keyword` sidecar. `layout_block` reads that sidecar;
+    /// `layout_float` — CSS 2.1 §10.3.5, a separate hand-rolled width resolution whose own doc calls
+    /// it *"a second copy"* — matched on `s.width` alone, so `width: min-content` on a float took the
+    /// `Dim::Auto` arm and got **fit-content**: the widest thing that fits, when the author asked for
+    /// the narrowest.
+    ///
+    /// ⚠⚠⚠ **THE PAIRED CONTROL IS THE WHOLE ARGUMENT.** §10.3.5 (float) and §10.3.9 (inline-block)
+    /// are the same formula and §10.3.9 is gated, so every battery row was a PAIR with byte-identical
+    /// content. Chrome, 400px container, `"one two three"`:
+    ///
+    /// ```text
+    ///                            Chrome       float before    inline-block (control)
+    ///   width:min-content       48.17x60      125x20  ✗        48  ✓ already right
+    ///   width:max-content      125.23x20      125     ✓        125 ✓
+    ///   width:fit-content      125.23x20      125     ✓        125 ✓
+    /// ```
+    ///
+    /// One construct in the pair was right and the other wrong on the identical declaration, which
+    /// localises the defect to the COPY rather than to the formula. ⚠ `max-content` and `fit-content`
+    /// are exact on the float too — they happen to agree with what the `Dim::Auto` arm already
+    /// computed — so **only `min-content` is observably wrong, and a battery without that row would
+    /// have cleared this function.**
+    #[test]
+    fn an_intrinsic_width_keyword_reaches_a_float_and_its_inline_block_twin() {
+        let by_id = |dom: &Dom, root: &LayoutBox, id: &str| {
+            let n = dom
+                .descendants(dom.root())
+                .find(|&n| dom.element(n).and_then(|e| e.attr("id")) == Some(id))
+                .unwrap_or_else(|| panic!("#{id} exists"));
+            root.node_rects(dom)
+                .get(&n)
+                .copied()
+                .unwrap_or_else(|| panic!("#{id} produced a box"))
+        };
+        let run = |disp: &str, w: &str| {
+            let html = format!(
+                r#"<div style="width:400px"><div id="x" style="{disp};width:{w}">one two three</div></div>"#
+            );
+            let (dom, root) = layout_html(&html, "", 800.0);
+            by_id(&dom, &root, "x")
+        };
+
+        // min-content is the LONGEST WORD, and it must be the same for both members of the pair.
+        let (f_min, i_min) = (
+            run("float:left", "min-content"),
+            run("display:inline-block", "min-content"),
+        );
+        assert_eq!(
+            f_min.width, i_min.width,
+            "a float and an inline-block resolve the SAME §10.3.5/§10.3.9 formula: {} vs {}",
+            f_min.width, i_min.width
+        );
+        // …and it is genuinely the narrow answer, not fit-content wearing its name.
+        let f_max = run("float:left", "max-content");
+        assert!(
+            f_min.width < f_max.width * 0.6,
+            "min-content must be the LONGEST WORD, not the whole run: min {} vs max {}",
+            f_min.width,
+            f_max.width
+        );
+        // …which forces the box to wrap onto more lines than max-content does.
+        assert!(
+            f_min.height > f_max.height,
+            "a min-content float wraps: {} vs max-content {}",
+            f_min.height,
+            f_max.height
+        );
+
+        // ⚠ THE CONTROLS — the two keywords that were ALREADY exact on the float, because they agree
+        // with what the `Dim::Auto` arm computed. A fix that routes the sidecar wrongly moves these.
+        for kw in ["max-content", "fit-content"] {
+            let (f, i) = (run("float:left", kw), run("display:inline-block", kw));
+            assert_eq!(
+                f.width, i.width,
+                "`width: {kw}` was already exact on BOTH arms and must stay so: {} vs {}",
+                f.width, i.width
+            );
+        }
     }
 
     /// W1 regression: the modern web hides dropdowns/modals/tooltips with `visibility:hidden` and

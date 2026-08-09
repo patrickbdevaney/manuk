@@ -7257,3 +7257,50 @@ one call — already existed for the float path.
 
 23 of 23 after. RED-proven both ways: drop the translation → red; apply it with the wrong sign → the
 control goes red.
+
+## An intrinsic width keyword never reached a float, and the paired control is what proved it (t1056)
+
+CSS 2.1 §10.3.5 (floating non-replaced) and §10.3.9 (inline-block non-replaced) are **the same
+shrink-to-fit formula**, `min(max(min-content, available), max-content)`. §10.3.9 is gated. §10.3.5
+was one of the six primitives t1054's spec enumeration found with **no row on the map at all**, and
+`layout_float`'s own doc already warned why it deserved one: its sizing is *"a second, hand-rolled
+copy of `layout_block`'s (shrink-to-fit, box-sizing, aspect-ratio, min/max, each added one measured
+defect at a time)."*
+
+`ComputedStyle::width` collapses `min-content`/`max-content`/`fit-content` to `Dim::Auto` and parks
+the keyword in a `width_keyword` sidecar. `layout_block` reads the sidecar. `layout_float` matched on
+`s.width` alone, so a keyword took the `Dim::Auto` arm and got **fit-content** — the widest thing
+that fits, when the author asked for the narrowest.
+
+### The method: every row is a PAIR
+
+32 rows, each a `float` and an `inline-block` with byte-identical content and box model. Chrome,
+400px container, `"one two three"`:
+
+```text
+                          Chrome        float before    inline-block (control)
+  width:min-content      48.17x60       125x20   ✗       48   ✓ already right
+  width:max-content     125.23x20       125      ✓       125  ✓
+  width:fit-content     125.23x20       125      ✓       125  ✓
+  auto · % · px · box-sizing · padding · border · margin · min/max clamps
+                                     26 more rows exact on BOTH arms
+```
+
+**One construct in the pair was right and the other wrong on the identical declaration**, which
+localises the defect to the *copy* rather than to the formula — and that is a conclusion a
+single-construct battery cannot reach, however many rows it has.
+
+> **WHEN A FUNCTION'S OWN DOC SAYS IT IS A SECOND COPY, THE BATTERY THAT TESTS IT MUST BE PAIRED
+> WITH THE FIRST.** 29 of 32 before, 31 of 32 after.
+
+⚠ **And the row that found it was one row.** `max-content` and `fit-content` are exact on the float
+too — they happen to agree with whatever the `Dim::Auto` arm already computed — so **only
+`min-content` is observably wrong, and a battery without that single row would have cleared this
+function and banked it as correct.** The three keywords are one declaration family; testing two of
+three is testing none.
+
+### Residue, measured
+
+`b11` still diverges and it is a different subsystem: an `inline-block` with `min-width:300px` beside
+a 300px float in a 400px container belongs on the **next line** (Chrome), and we place it at x=300
+where it overflows. That is line-breaking against a float exclusion, not shrink-to-fit.

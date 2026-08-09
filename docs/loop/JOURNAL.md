@@ -46371,6 +46371,87 @@ PERF: none — one UA rule and one narrowed branch in a cascade that already ran
 WIKI: `docs/wiki/css-cascade.md` — where Chrome draws the form-control `box-sizing` line, and why a
 layout-crate test cannot see it.
 
+## Tick 1056 — the second copy was wrong on exactly one row of thirty-two, and only a PAIRED battery could say so (2026-08-08)
+
+TICK SHAPE: primitive — a 32-row **paired** battery on CSS 2.1 §10.3.5, float shrink-to-fit. Subject
+chosen by check #97's steer #1 (*finish the enumeration's unknowns before opening a new area*) and by
+t1054's own ranking: §10.3.5 was the unknown with the loudest warning attached to it.
+
+⚠⚠⚠ **THE WARNING WAS IN THE FUNCTION'S OWN DOC AND HAD BEEN THERE ALL ALONG.** `layout_float`'s
+comment: *"a second, hand-rolled copy of `layout_block`'s (shrink-to-fit, `box-sizing`,
+aspect-ratio, min/max, each added one measured defect at a time)."* t1054 filed §10.3.5 `unknown`
+partly for that sentence. It was right: `ComputedStyle::width` collapses an intrinsic keyword to
+`Dim::Auto` and parks it in the `width_keyword` **sidecar**; `layout_block` reads the sidecar and
+`layout_float` matched on `s.width` alone. So `width: min-content` on a float took the `Dim::Auto`
+arm and got **fit-content** — the widest thing that fits, when the author asked for the narrowest.
+
+⚠⚠⚠ **THE METHOD IS THE TRANSFERABLE PART: EVERY ROW WAS A PAIR.** §10.3.5 (float) and §10.3.9
+(inline-block) are the same formula and §10.3.9 is **gated**, so each row carried a float and an
+inline-block with byte-identical content and box model. Chrome, 400px container, `"one two three"`:
+
+```text
+                          Chrome        float before    inline-block (CONTROL)
+   width:min-content     48.17x60       125x20   ✗        48   ✓ already right
+   width:max-content    125.23x20       125      ✓        125  ✓
+   width:fit-content    125.23x20       125      ✓        125  ✓
+   auto · % · px · box-sizing · padding · border · margin · min/max clamps
+                                     26 more rows exact on BOTH arms
+```
+
+> **WHEN A FUNCTION'S OWN DOC SAYS IT IS A SECOND COPY, THE BATTERY THAT TESTS IT MUST BE PAIRED WITH
+> THE FIRST.** One member of the pair right and the other wrong **on the identical declaration**
+> localises the defect to the COPY rather than to the formula — and that is a conclusion a
+> single-construct battery cannot reach, however many rows it has. A float-only battery would have
+> read "min-content is 125" and had nothing to compare it to.
+
+**29 of 32 → 31 of 32.**
+
+⚠⚠⚠ **AND ONE ROW OF THIRTY-TWO FOUND IT.** `max-content` and `fit-content` are exact on the float
+**too** — not because they are handled, but because they happen to agree with whatever the
+`Dim::Auto` arm already computed. So only `min-content` is observably wrong, and **a battery that
+tested two of the three keywords would have cleared this function and banked it correct.** The three
+keywords are one declaration family; testing part of a family is testing none of it. That is the
+one-point-constant lesson (t1043/1045) in a new coordinate: not *vary the parameter you held fixed*,
+but *enumerate the family, because the members you skip are where the arm that is missing hides.*
+
+GATE: `an_intrinsic_width_keyword_reaches_a_float_and_its_inline_block_twin` (manuk-layout) — it
+asserts the PAIR agrees, that `min-content` is genuinely narrow (< 0.6 × max-content) and wraps to
+more lines, and it keeps `max-content`/`fit-content` as controls that were already exact. RED-proven
+both ways: stop reading the sidecar → red; route `MinContent` to `max_content_width` → red.
+
+⚠ **The shared helper was PARAMETERISED rather than duplicated.** `kw_w` already existed for the
+min/max clamps; it is hoisted above the width match and takes an explicit basis, so the width arm can
+use the available CONTENT space while the clamps keep `cw` — **the gated path does not move.** Adding
+a third copy of the keyword switch inside the function whose whole defect is being a second copy
+would have been the same mistake at a smaller scale.
+
+PRICED — 10 sites, both binaries, same hour. **Five byte-identical** (rockstaractu, seduniaselat,
+simplepdf, sports.yahoo, tz.de); the one meaningful loss refuted:
+
+```text
+   puentedemando.com  0.7792 -> 0.7388   -0.0404, and BELOW everything measured for this site
+        OLD 0.7775 / 0.7792 / 0.7405     NEW 0.777485 / 0.777485 / 0.777485
+        The NEW binary reads the SAME value three times and the panel's 0.7388 does not
+        reproduce at all — the new binary is more STABLE here than the old one, which is the
+        opposite of a regression.
+   otomoto.pl         +0.0411            inside its measured [0.7593, 0.7927] span; not banked.
+   sestra.cc          +0.0097            inside [0.9151, 0.9394]; not banked.
+```
+
+**Zero attributable regressions.**
+
+RESIDUE, measured and named: an `inline-block` with `min-width:300px` beside a 300px float in a 400px
+container belongs on the **next line** (Chrome) and we place it at x=300, overflowing. That is
+line-breaking against a float exclusion — a different subsystem from shrink-to-fit, and it is the
+battery's only remaining row.
+
+RATCHET: manuk-layout **136/136**, manuk-css 32/32, manuk-paint 22/22, manuk-dom 11/11.
+
+PERF: one `Option` match per float. `kw_w`'s hoist changes no arithmetic on the clamp path.
+
+WIKI: `docs/wiki/box-layout.md` — "An intrinsic width keyword never reached a float, and the paired
+control is what proved it".
+
 ## Tick 1055 — `position: fixed` is clean at 19 of 20, and the row that failed was not a `fixed` bug (2026-08-08)
 
 TICK SHAPE: primitive — a 23-row battery on `position: fixed`, taken because **t1054's own

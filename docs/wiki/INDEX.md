@@ -371,6 +371,9 @@
   - L7190 · ⚠⚠⚠ And recovering the box was a TRADE until a third change made it not one
   - L7206 · position: fixed is CLEAN at 19 of 20 — and the one row that failed was not a fixed bug (t1055)
   - L7227 · ⚠⚠⚠ The one divergence was fixed's only in the sense that it was where I was looking
+  - L7261 · An intrinsic width keyword never reached a float, and the paired control is what proved it (t1056)
+  - L7275 · The method: every row is a PAIR
+  - L7302 · Residue, measured
 
 ## browser-capabilities.md
 `docs/wiki/browser-capabilities.md`
@@ -1777,4 +1780,4 @@
   - L124 · Rank mechanisms by FLIP RATE, not failing-subtest count — CSS layout is a multi-assertion slog
 
 ---
-1684 sections across 22 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+1687 sections across 22 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.

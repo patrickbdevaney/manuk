@@ -11,12 +11,12 @@
 
 | | value | over |
 |---|---|---|
-| ticks landed | **765** | ticks 1–1055 |
-| median tick cycle | **27m** | 764 intervals |
-| median, last 10 | **53m** | 10 intervals |
+| ticks landed | **766** | ticks 1–1056 |
+| median tick cycle | **27m** | 765 intervals |
+| median, last 10 | **57m** | 10 intervals |
 | fastest / slowest | 5s / 5.4d | |
-| **ticks per hour** | **1.11** | 690.0h elapsed |
-| median verify wall | **63s** | 704 ticks |
+| **ticks per hour** | **1.11** | 690.9h elapsed |
+| median verify wall | **63s** | 705 ticks |
 | wall trend | 39s → 13m — getting slower ⚠️ | first 3 vs last 3 |
 
 The **cycle** is the real unit: implement → debug → verify wall → land. The wall is only part of
@@ -28,10 +28,10 @@ it, and a wall that grows taxes every future tick, so it is tracked separately f
 
 * **capabilities asserted** (`G_CAPABILITY`): 48 → **81**
 * **live gates**: 27 → **428**
-* **✅ rows in the capability ledger**: 144 → **530**
+* **✅ rows in the capability ledger**: 144 → **531**
 * **Bar 0 — oracle hangs**: 0 of 265 sites
 
-**341 of 765 ticks** (45%) moved a
+**341 of 766 ticks** (45%) moved a
 user-visible capability. The rest were instruments, infrastructure and corrections — and the
 ledger says the corrections were not overhead: three of its top three priorities were phantoms,
 and finding that out redirected everything after it.
@@ -862,5 +862,6 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 | **1053** | 2026-08-08 21:59 | 15m | measurement | 13m | +101/−32 | 428 | 81 | 56.0% · | the million is OURS, proved by elimination, and it moves the work-list (2026-08-08) |
 | **1054** | 2026-08-08 22:05 | 6m | measurement | 13m | +113/−32 | 428 | 81 | 56.0% · | the spec IS the enumeration, and six primitives had no row at all (2026-08-08) |
 | **1055** | 2026-08-08 23:05 | 60m | primitive | 13m | +445/−36 | 428 | 81 | 56.0% · | `position: fixed` is clean at 19 of 20, and the row that failed was not a `fixed` bug (202 |
+| **1056** | 2026-08-08 23:59 | 54m | primitive | 13m | +320/−69 | 428 | 81 | 56.0% · | the second copy was wrong on exactly one row of thirty-two, and only a PAIRED battery coul |
 
 *`·` after a WPT figure means **carried forward**, not measured this tick.*
