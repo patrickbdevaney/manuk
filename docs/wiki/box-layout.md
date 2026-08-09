@@ -8262,3 +8262,72 @@ guessed at.
 ⚠ Also measured and left alone: the inline-`<span>` row lands at 40 against Chrome's 39. The
 fragment's right edge is rounded up before the margin is added, so it is a sub-pixel rounding
 difference that predates this fix, not a new one.
+
+## The collapsed inter-word space counts, and the footer that started the hunt is now Chrome-exact (t1083)
+
+The third mechanism from the `reading_order` hunt, and the one that is actually on the page. Markup
+written over several lines —
+
+```html
+    <a>…</a>
+    <span class="line-between"></span>
+    <a>…</a>
+```
+
+— has a whitespace text node between every pair, and it collapses to **one space that the flow
+advances over**. The next in-flow box starts after it, so an out-of-flow box's static position starts
+after it too. `refine_inline_static_positions` reconstructs that position from the preceding
+fragments and boxes, and a collapsed space belongs to *neither*: it is not a fragment, and it is not
+inside anyone's rect.
+
+Chrome-measured on a faithful reproduction of `www.wdimax.com`'s footer, as offsets from the first
+link (the site's own CSS, its own `margin-right: 20px`, its own `margin-left: -10px`):
+
+```text
+              Chrome    t1081    t1082    t1083
+   a1             0        0        0        0
+   s1           +52      +44      +44      +52
+   a2           +62      +62      +62      +62     <- the LINKS were always exact
+   s2          +114     +106     +106     +114
+   a3          +124     +124     +124     +124
+   s3          +176     +168     +168     +176
+   a4          +186     +186     +186     +186
+```
+
+**Every offset now matches Chrome exactly.** The `<a>` offsets were right throughout, because an
+in-flow box advances over the space in the normal way — only the out-of-flow box, whose position is
+*reconstructed*, was missing it. `pre`/`pre-wrap` are excluded: there the whitespace is a real
+character with its own fragment and the existing walk already sees it.
+
+### Three mechanisms, and the conjunct that started it is still unattributed
+
+This closes a three-tick hunt that began with sweep t1080 naming `reading_order` M1's top binding
+conjunct for the third sweep running:
+
+```text
+   t1081   an out-of-flow box that OPENS a line takes the line's start edge
+   t1082   the static position is the preceding box's MARGIN edge, not its border edge
+   t1083   …and the collapsed inter-word space before it
+```
+
+All three are real, Chrome-verified and gated. **None of them moved `www.wdimax.com`'s
+`reading_order`, which is still 12 inversions in the same 7-sibling container.** t1082 moved that
+site's shape 0.886 → 0.966; t1083 moves nothing on it at all, because 8px is exactly the shape
+metric's own tolerance.
+
+⚠⚠⚠ **A conjunct that survives three Chrome-exact geometry fixes on its own top site is not
+describing geometry**, and the next tick on it should say what it IS describing before writing more
+layout code. The one datum already in hand: the footer holds 4 links and 3 absolutely positioned
+separators, and 4 × 3 = **12** — every in-flow ↔ out-of-flow pair in the container, and no others.
+`jarring_reading_order` compares every sibling pair by rect with no notion of whether a box is in the
+flow at all, and an out-of-flow box has no reading order relative to its in-flow siblings. That is a
+hypothesis, not a finding — the probe records `tag`, `display`, `rect` and `font` but **not
+`position`**, so it cannot currently be tested, and adding that field is the measurement the next
+tick owes.
+
+### A residue, measured rather than assumed
+
+With `white-space: pre`, the preserved newline puts the box on a **second line** — Chrome says x=0,
+we say x=40. That is a different defect (a preserved newline not breaking the line for an out-of-flow
+box's static position), it is measured here, and it is deliberately not asserted in the gate: a gate
+must not assert a number it knows is wrong.

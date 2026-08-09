@@ -53,6 +53,9 @@
 //! - Drop the `trailing_margin` term → `#after_margin` and `#footer_shape` fall 20px short while
 //!   `#after_margin_left` and `#after_padding` still pass, which is the pair that says the defect is
 //!   the MARGIN specifically and not "space after a box" generally.
+//! - Drop the `collapsed_space_before` term → `#after_space` falls to 40 against Chrome's 50, and
+//!   every margin row still passes: the space and the margin are two independent terms and the gate
+//!   can tell them apart.
 //!
 //! ONE `#[test]` per file — `PageContext` is per-process (see `g_caption_paint.rs`).
 
@@ -79,6 +82,8 @@ b { display: inline-block; width: 10px; height: 10px; position: absolute }
 <div style="text-align:left"><i style="margin-left:20px"></i><b id="after_margin_left"></b><i></i></div>
 <div style="text-align:left"><i style="padding-right:20px"></i><b id="after_padding"></b><i></i></div>
 <div style="text-align:center"><i style="margin-right:20px"></i><b id="footer_shape" style="margin-left:-10px"></b><i></i></div>
+<div style="text-align:left"><i></i>
+<b id="after_space"></b><i></i></div>
 </body></html>"##;
 
 #[test]
@@ -178,5 +183,16 @@ fn an_out_of_flow_box_that_opens_a_line_takes_the_lines_start_edge() {
         "the shape that found this (centred + margin-right + a negative margin-left on the \
          separator): Chrome says 200, it was 180 — got {}",
         x("footer_shape")
+    );
+
+    // ── ⚠ THE COLLAPSED INTER-WORD SPACE COUNTS (t1083). Markup written over several lines has a
+    //    whitespace text node between every pair of elements, and it collapses to one space that
+    //    the flow advances over — so the next in-flow box, and therefore the static position,
+    //    starts after it. `40 + one 16px monospace space` is 50 in Chrome; it was 40.
+    assert!(
+        (x("after_space") - 50.0).abs() < 1.5,
+        "a newline between the preceding element and the abspos box collapses to ONE SPACE the \
+         static position must advance over: Chrome says 50, it was 40 — got {}",
+        x("after_space")
     );
 }

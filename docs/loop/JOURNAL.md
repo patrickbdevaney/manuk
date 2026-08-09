@@ -46371,6 +46371,76 @@ PERF: none — one UA rule and one narrowed branch in a cascade that already ran
 WIKI: `docs/wiki/css-cascade.md` — where Chrome draws the form-control `box-sizing` line, and why a
 layout-crate test cannot see it.
 
+## Tick 1083 — the collapsed space, and a conjunct that survived three Chrome-exact fixes (2026-08-09)
+
+TICK SHAPE: capability — the collapsed inter-word space counts toward the static position.
+`engine/layout`, same function as t1081/t1082; `G_STATIC_POS_LINE_START` extended by one row.
+
+The third mechanism of the `reading_order` hunt and the one that is actually on the page. Markup
+written over several lines has a whitespace text node between every pair of elements, and it
+collapses to ONE SPACE the flow advances over. A collapsed space belongs to neither of the things
+`refine_inline_static_positions` walks: it is not a fragment, and it is not inside anyone's rect.
+
+Chrome-measured on a faithful reproduction of `www.wdimax.com`'s footer — the site's own CSS, its own
+`margin-right: 20px`, its own `margin-left: -10px` — as offsets from the first link:
+
+```text
+              Chrome    t1081    t1082    t1083
+   a1             0        0        0        0
+   s1           +52      +44      +44      +52
+   a2           +62      +62      +62      +62     <- the LINKS were always exact
+   s2          +114     +106     +106     +114
+   a3          +124     +124     +124     +124
+   s3          +176     +168     +168     +176
+   a4          +186     +186     +186     +186
+```
+
+**Every offset now matches Chrome exactly.** The `<a>` offsets were right throughout, because an
+in-flow box advances over the space normally; only the out-of-flow box, whose position is
+*reconstructed*, was missing it. `pre`/`pre-wrap` are excluded — there the whitespace is a real
+character with its own fragment and the existing walk already sees it.
+
+⚠⚠⚠ **AND THIS IS WHERE THE HUNT STOPS, BECAUSE THREE CHROME-EXACT FIXES DID NOT MOVE ITS SUBJECT.**
+
+```text
+   t1081   an out-of-flow box that OPENS a line takes the line's start edge     RO 12 -> 12
+   t1082   the static position is the preceding box's MARGIN edge               RO 12 -> 12   shape 0.886 -> 0.966
+   t1083   …and the collapsed inter-word space before it                        RO 12 -> 12   shape unmoved
+```
+
+All three are real, gated and Chrome-verified. `www.wdimax.com`'s `reading_order` is **still 12
+inversions in the same 7-sibling container**, and t1083 moves nothing on the live site at all —
+because 8px is exactly the shape metric's own tolerance, so the error it removes was already inside
+the band. **A conjunct that survives three Chrome-exact geometry fixes on its own top site is not
+describing geometry.**
+
+⚠⚠ **THE ARITHMETIC THAT SAYS WHAT TO MEASURE NEXT.** That footer holds 4 links and 3 absolutely
+positioned separators, and **4 × 3 = 12** — every in-flow ↔ out-of-flow pair in the container, and no
+others. `jarring_reading_order` compares every sibling pair by rect with **no notion of whether a box
+is in the flow at all**, and an out-of-flow box has no reading order relative to its in-flow
+siblings. That is a hypothesis and it is stated as one: the probe records `tag`, `display`, `rect`
+and `font` but **not `position`**, so it cannot be tested today. Adding that field — and then
+PARTITIONING the count the way t1034 partitioned zero-area and parked-off-viewport, report first and
+filter later — is the measurement the next tick on this conjunct owes. Writing more layout code
+before that would be the fourth guess in a row.
+
+RESIDUE, measured rather than assumed: with `white-space: pre` the preserved newline puts the box on
+a SECOND line — Chrome x=0, ours x=40. A different defect, measured here, and deliberately NOT
+asserted in the gate, because a gate must not assert a number it knows is wrong.
+
+RATCHET: `manuk-layout` 151/151 unmoved, `manuk-page` gates green. RED-proven by dropping the
+`collapsed_space_before` term — `#after_space` falls to 40 against Chrome's 50 while every margin row
+still passes, so the gate tells the space term and the margin term apart.
+
+OWED: a sweep. t1081-t1083 are three layout fixes priced only on one anchor site; the last sweep is
+t1080 and the next one prices all three together.
+
+PERF: one DOM sibling scan and at most one space measurement per out-of-flow child of a block that
+has one.
+
+WIKI: docs/wiki/box-layout.md — "The collapsed inter-word space counts, and the footer that started
+the hunt is now Chrome-exact (t1083)"
+
 ## Tick 1082 — three of the four ways to make space after a box were already right (2026-08-09)
 
 TICK SHAPE: capability — the static position is the preceding box's MARGIN edge, not its border

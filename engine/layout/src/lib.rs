@@ -2938,6 +2938,61 @@ impl Ctx<'_> {
                     .unwrap_or(0.0)
                     .max(0.0)
             };
+            // ⚠⚠⚠ **AND THE COLLAPSED INTER-WORD SPACE COUNTS TOO**, which is the third mechanism
+            // this hunt found and the one that is actually on the page. Markup written over several
+            // lines —
+            //
+            // ```html
+            //     <a>…</a>
+            //     <span class="line-between"></span>
+            //     <a>…</a>
+            // ```
+            //
+            // — has a whitespace text node between every pair, and it collapses to ONE SPACE that
+            // the flow advances over. The next in-flow box starts after it, so the static position
+            // is after it. Chrome-measured on a faithful reproduction of `www.wdimax.com`'s footer,
+            // as offsets from the first link:
+            //
+            // ```text
+            //             Chrome    before    after
+            //   a1            0         0        0
+            //   s1          +52       +44      +52     <- 8px, exactly one 14px monospace space
+            //   a2          +62       +62      +62     <- the LINKS were always right
+            //   s2         +114      +106     +114
+            //   a3         +124      +124     +124
+            // ```
+            //
+            // The `<a>` offsets were exact throughout, because an in-flow box advances over the
+            // space in the normal way; only the out-of-flow box, whose position is *reconstructed*
+            // here, was missing it. Whitespace that does NOT collapse (`white-space: pre*`) is left
+            // alone: there the space is a real character with its own fragment, and the walk above
+            // already sees it.
+            let collapsed_space_before = |k: NodeId, prev: Option<NodeId>| -> f32 {
+                let Some(prev) = prev else { return 0.0 };
+                let ws_between = self
+                    .dom
+                    .children(self.dom.parent(k).unwrap_or(k))
+                    .skip_while(|&c| c != prev)
+                    .take_while(|&c| c != k)
+                    .any(|c| matches!(self.dom.data(c), NodeData::Text(t) if t.trim().is_empty() && !t.is_empty()));
+                if !ws_between {
+                    return 0.0;
+                }
+                let cs = match self.styles.get(&prev) {
+                    Some(cs) => cs,
+                    None => return 0.0,
+                };
+                // `pre`/`pre-wrap` preserve the run as real characters with their own fragment,
+                // which the walk above already sees; `pre-line` collapses spaces like `normal`.
+                if matches!(
+                    cs.white_space,
+                    manuk_css::WhiteSpace::Pre | manuk_css::WhiteSpace::PreWrap
+                ) {
+                    return 0.0;
+                }
+                let st = text_style(cs, self.fonts);
+                self.fonts.measure(" ", st.font_key, st.font_size)
+            };
             for f in frags {
                 if f.node.is_some_and(|n| before.contains(&n)) {
                     take(f.line_top, f.x + f.width + trailing_margin(f.node));
@@ -2949,6 +3004,11 @@ impl Ctx<'_> {
                 }
             }
             if let Some((top, right)) = best {
+                let last_inflow = kids[..i]
+                    .iter()
+                    .rev()
+                    .find(|&&p| !self.kid_is_out_of_flow(p));
+                let right = right + collapsed_space_before(k, last_inflow.copied());
                 self.static_pos.borrow_mut().insert(k, (right, top));
                 self.static_pos_writes.set(self.static_pos_writes.get() + 1);
             }

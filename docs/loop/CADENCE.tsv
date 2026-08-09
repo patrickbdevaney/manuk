@@ -790,3 +790,4 @@ tick	sha	epoch	iso	delta_s	shape	wall_s	files	added	deleted	gates	claims	wpt_pas
 1080	9896e314	1786302450	2026-08-09T15:07:30-04:00	5201	measurement	808	7	337	32	431	81	3896	6960	0	544	0	31 ticks moved the gate by ZERO, and two of the three biggest movers refuse to reproduce (2026-08-09)
 1081	4eef0236	1786305338	2026-08-09T15:55:38-04:00	2888	capability	808	10	383	34	432	81	3896	6960	0	545	0	the battery refuted its own hypothesis, and the finding was its negative row (2026-08-09)
 1082	25c53d67	1786307012	2026-08-09T16:23:32-04:00	1674	capability	808	10	233	36	432	81	3896	6960	0	546	0	three of the four ways to make space after a box were already right (2026-08-09)
+1083	661c28c1	1786308711	2026-08-09T16:51:51-04:00	1699	capability	808	9	253	33	432	81	3896	6960	0	547	0	the collapsed space, and a conjunct that survived three Chrome-exact fixes (2026-08-09)
