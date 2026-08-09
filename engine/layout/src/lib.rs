@@ -303,6 +303,20 @@ pub struct LayoutBox {
     pub opacity: f32,
     /// The DOM node this box came from, if any (anonymous boxes are `None`).
     pub node: Option<NodeId>,
+    /// **This box is OUT OF FLOW** — a float (CSS 2.1 §9.5) or an absolutely/fixed positioned box.
+    ///
+    /// It exists for exactly one consumer: [`Self::node_rects`]'s lift, which propagates a box's
+    /// extent up to boxless ancestors so that `<a><img></a>` — an inline with no box and no text of
+    /// its own — still has geometry to be clicked. That lift is right for in-flow content and wrong
+    /// for out-of-flow content, because **an out-of-flow box is not part of its ancestor inline's
+    /// advance**: `<a><img style="float:left"></a>` is a zero-width inline at 49.64 in Chrome, not a
+    /// 50px-wide one at 0.
+    ///
+    /// A field rather than a style lookup because `node_rects` takes only `&Dom` — it has no
+    /// `StyleMap` — and widening a public signature used by `manuk-a11y` and `manuk-page` to carry
+    /// one bool is the larger change. The 20 construction sites are all in this file and the
+    /// compiler enumerates them, so this cannot be half-applied.
+    pub out_of_flow: bool,
     pub content: BoxContent,
 }
 
@@ -379,6 +393,7 @@ impl LayoutBox {
             marker: None,
             opacity: 1.0,
             node: Some(node),
+            out_of_flow: false,
             content: BoxContent::Block(vec![]),
         }
     }
@@ -524,9 +539,13 @@ impl LayoutBox {
         }
         let mut boxes: std::collections::HashMap<NodeId, Rect> = std::collections::HashMap::new();
         let mut frags: std::collections::HashMap<NodeId, Rect> = std::collections::HashMap::new();
+        let mut out_of_flow: std::collections::HashSet<NodeId> = std::collections::HashSet::new();
         self.walk(&mut |b| {
             if let Some(node) = b.node {
                 add(&mut boxes, node, b.rect);
+                if b.out_of_flow {
+                    out_of_flow.insert(node);
+                }
             }
             if let BoxContent::Inline(fs) = &b.content {
                 for f in fs {
@@ -601,7 +620,17 @@ impl LayoutBox {
         for (&owner, &r) in &frags {
             lift(owner, r, &mut out);
         }
+        // ⚠⚠⚠ **AN OUT-OF-FLOW BOX IS NOT PART OF ITS ANCESTOR INLINE'S ADVANCE.** The lift exists
+        // so that `<a><img></a>` — an inline with no box and no text of its own — still has geometry
+        // to be clicked, and for in-flow content that is exactly right. A FLOAT is removed from the
+        // inline formatting context (CSS 2.1 §9.5) and placed by the containing block, so folding it
+        // in makes `<a><img style="float:left"></a>` a 50px-wide inline at x=0 where Chrome reports a
+        // ZERO-width one at 49.64. Without this line, recovering the float's box (t1051) would have
+        // been a TRADE: twelve missing boxes gained and twelve inline rects lost.
         for (&node, &r) in &boxes {
+            if out_of_flow.contains(&node) {
+                continue;
+            }
             lift(node, r, &mut out);
         }
         out
@@ -942,6 +971,7 @@ pub fn layout_document(
             marker: None,
             opacity: 1.0,
             node: None,
+            out_of_flow: false,
             content: BoxContent::Block(vec![]),
         },
     }
@@ -3695,6 +3725,7 @@ impl Ctx<'_> {
 
         let marker = self.list_marker(node, &s, content_x, content_y);
         let mut boxx = LayoutBox {
+            out_of_flow: false,
             rect,
             background: s.background_color,
             border: border_of(&s),
@@ -3903,7 +3934,27 @@ impl Ctx<'_> {
             .iter()
             .any(|&k| is_block_level(self.dom, self.styles, k));
 
-        if !has_block && !kids.iter().any(|&k| self.kid_is_float(k)) {
+        // ⚠⚠⚠ **THE FLOAT GATE WAS WRITTEN TWICE AND BOTH COPIES ONLY LOOK AT DIRECT CHILDREN.**
+        // `kid_is_float` answers about *this block's own* children, so a float one inline down —
+        // `<a><img style="float:left"></a>`, `<p><span><img class="alignleft"></span>…` — leaves
+        // `has_block` false and this test false, and the block takes the pure-IFC branch below,
+        // **which never places a float at all**. The block child loop has the float arm; this branch
+        // was chosen precisely because we believed there was nothing to place.
+        //
+        // That is why the hoist in `layout_children` alone changed **not one row of the 27-row
+        // battery**: the fixtures are ordinary paragraphs whose only children are text and an
+        // `<a>`, so they never reached the loop that was fixed. One rule, two implementations —
+        // and the second one is a GATE rather than a handler, which is why it reads as an absence.
+        //
+        // So the condition below is the whole fix for the pure-IFC half: a block with a float
+        // anywhere in its inline descent is **not** a pure inline formatting context, and falls
+        // through to the loop that knows how to place one.
+        let nested_float = flow_kids.iter().any(|&k| {
+            let mut v = Vec::new();
+            self.collect_inline_floats(k, &mut v);
+            !v.is_empty()
+        });
+        if !has_block && !kids.iter().any(|&k| self.kid_is_float(k)) && !nested_float {
             // Pure inline formatting context (no floats to flow around).
             //
             // **Record the static position of the out-of-flow children before returning.** This
@@ -4009,6 +4060,7 @@ impl Ctx<'_> {
                     marker: None,
                     opacity: 1.0,
                     node: None,
+                    out_of_flow: false,
                     content: BoxContent::Inline(frags),
                 });
             }
@@ -4185,6 +4237,54 @@ impl Ctx<'_> {
                 boxes.push(r.boxx);
                 first_block = false;
             } else {
+                // ⚠⚠⚠ **A FLOAT NESTED INSIDE AN INLINE NEVER REACHED THE ARM ABOVE, SO IT LOST ITS
+                //    BOX ENTIRELY.** This loop walks DIRECT children, and `kid_is_float` therefore
+                //    only ever sees a float whose parent is this block. `<a><img class="alignleft">`,
+                //    `<p><span><img style="float:left"></span>…` and every wrapped pull-quote put the
+                //    float one level down, inside an inline — and the inline collector, which has no
+                //    float arm, swallowed it: **no box in `node_rects` at all**, and the line never
+                //    gave up the width, so every fragment on it started ~40px too far left.
+                //
+                //    CSS 2.1 §9.5: a float is **removed from the inline formatting context** and
+                //    placed by its CONTAINING BLOCK, which is this block, not the inline. So the
+                //    correct place for it is exactly the arm above — it just has to be reached.
+                //
+                //    Measured against headless Chrome, 1200px, a 400px container, a 40x10 float,
+                //    parent-relative `[dx dy w h]`. **27-row battery, and it read 4 of 27**; the
+                //    three exact rows were the negative arm (a float whose parent is the block):
+                //
+                //    ```text
+                //                                             Chrome            before
+                //      <div class=f></div>text        CONTROL  [ 0 0 40x10]   [ 0 0 40x10]  ✓
+                //      x<a><div class=f></div></a>y            [ 0 0 40x10]   NO BOX        ✗
+                //          …and the <a> itself                 dx 49.64       dx 10.0       ✗
+                //      x<a><span class=f></span></a>y          [ 0 0 40x10]   NO BOX        ✗
+                //      x<a><img style=float:left></a>y         [ 0 0 40x10]   NO BOX        ✗
+                //      x<a><div class=r></div></a>y   (right)  [360 0 40x10]  NO BOX        ✗
+                //      x<a><span><div class=f>…       (nested) [ 0 0 40x10]   NO BOX        ✗
+                //      x<a><div class=f></div><div class=f>    [ 0 0 40x10] +
+                //                                             [40 0 40x10]    NO BOX        ✗
+                //    ```
+                //
+                //    **Uniform across tag, `display`, direction and nesting depth — one mechanism**,
+                //    which is what identifies it as a missing dispatch rather than a sizing bug.
+                //
+                // ⚠ **The float is placed BEFORE the pending run is flushed, and NOT after.** The
+                //   direct-child arm above flushes first because its float follows the run in source
+                //   order; here the float belongs to an inline that has not been laid out yet, so
+                //   the whole run — including text that PRECEDES the float inside the same inline —
+                //   must wrap around it. Chrome agrees and the discriminator is in the battery:
+                //   `x<a>before<div class=f></div>after</a>y` puts the float at `[0 0 40x10]` and
+                //   moves the leading `x` to 49.64, i.e. the float is placed before ANY of the
+                //   line's text. Passing `None` for the last-line hint says the same thing — there
+                //   is no already-placed line content for it to fit beside.
+                let mut nested: Vec<NodeId> = Vec::new();
+                self.collect_inline_floats(k, &mut nested);
+                for f in nested {
+                    let fbox =
+                        self.layout_float(f, cw, cur_y + prev_margin.max(0.0), floats, cx, None);
+                    boxes.push(fbox);
+                }
                 inline_run.push(k);
             }
         }
@@ -4441,6 +4541,7 @@ impl Ctx<'_> {
             let margin_rect = floats.place(s.float, top, mbw, mbh, cb_left, cb_left + cw);
             b.shift_x(margin_rect.x + ml - b.rect.x);
             b.shift_y(margin_rect.y + mt - b.rect.y);
+            b.out_of_flow = true;
             return b;
         }
 
@@ -4542,6 +4643,7 @@ impl Ctx<'_> {
         let border_y = margin_rect.y + mt;
 
         let mut boxx = LayoutBox {
+            out_of_flow: false,
             rect: Rect {
                 x: border_x,
                 y: border_y,
@@ -4588,6 +4690,9 @@ impl Ctx<'_> {
         if static_moved {
             self.translate_static_positions(node, content_origin_x, content_origin_y);
         }
+        // Every exit from `layout_float` marks the box, because `node_rects`'s lift must not fold an
+        // out-of-flow box into an ancestor inline's advance — see `LayoutBox::out_of_flow`.
+        boxx.out_of_flow = true;
         boxx
     }
 
@@ -4758,6 +4863,45 @@ impl Ctx<'_> {
     /// `max_content_width_uncached` already documents this exact trap for `display:flex` ("a bare
     /// run inside `display:flex` reads back as `flex` here") and guards it with `is_element`. Same
     /// cascade quirk, same guard, four more call sites.
+    /// **Every float in `node`'s INLINE-ONLY descent** — the floats this block must place that
+    /// [`Self::kid_is_float`] cannot see, because that predicate is applied to direct children and
+    /// these live one or more inline boxes down.
+    ///
+    /// CSS 2.1 §9.5 removes a float from the inline formatting context and hands it to its
+    /// **containing block**, so `<a><img style="float:left"></a>` is the block's float, not the
+    /// `<a>`'s. The walk stops at anything that establishes or belongs to a different formatting
+    /// context, and each stop is load-bearing:
+    ///
+    /// - an **out-of-flow** child is not a float and is placed by the abspos pass;
+    /// - a **block-level** child (including an inline that §9.2.1.1 blockified) runs its own
+    ///   `layout_children`, which has the direct-child float arm — recursing into it here would
+    ///   place its floats **twice**, in two different containing blocks;
+    /// - an **atomic inline** (`<img>`, `inline-block`) is a BFC root: its floats are its own and
+    ///   must not escape into this block's float context.
+    fn collect_inline_floats(&self, node: NodeId, out: &mut Vec<NodeId>) {
+        for k in self.dom.flat_children(node) {
+            if !self.dom.is_element(k) {
+                continue;
+            }
+            let Some(st) = self.styles.get(&k) else {
+                continue;
+            };
+            if !is_rendered(self.dom, self.styles, k) || is_out_of_flow_positioned(st) {
+                continue;
+            }
+            if is_float(st) {
+                out.push(k);
+                continue;
+            }
+            if st.display == Display::Inline
+                && !is_block_level(self.dom, self.styles, k)
+                && !is_atomic_inline_replaced(self.dom, self.styles, k)
+            {
+                self.collect_inline_floats(k, out);
+            }
+        }
+    }
+
     fn kid_is_float(&self, k: NodeId) -> bool {
         self.dom.is_element(k) && is_float(self.style_of(k))
     }
@@ -5636,6 +5780,7 @@ impl Ctx<'_> {
                 marker: None,
                 opacity: rs.map(|s| s.opacity).unwrap_or(1.0),
                 node: rn,
+                out_of_flow: false,
                 content: BoxContent::Block(std::mem::take(&mut row_cells[r])),
             });
         }
@@ -5684,6 +5829,7 @@ impl Ctx<'_> {
             node: Some(node),
             // The caption boxes come FIRST in the table's children — they paint above the rows
             // and, more importantly, they read first in the semantic order the agent surface walks.
+            out_of_flow: false,
             content: BoxContent::Block(caption_boxes.into_iter().chain(row_boxes).collect()),
         };
         // **Auto margins centre a table.** `layout_block` does this; `layout_table` did not, so
@@ -6040,6 +6186,7 @@ impl Ctx<'_> {
         // no free space" for exactly the cells that have the most.
         (
             LayoutBox {
+                out_of_flow: false,
                 rect: Rect {
                     x,
                     y,
@@ -6327,6 +6474,7 @@ impl Ctx<'_> {
                         marker: None,
                         opacity: 1.0,
                         node: None,
+                        out_of_flow: false,
                         content: BoxContent::Inline(std::mem::take(frags)),
                     });
                 }
@@ -6757,6 +6905,7 @@ impl Ctx<'_> {
         };
 
         let mut boxx = LayoutBox {
+            out_of_flow: false,
             rect: Rect {
                 x: bx,
                 y: by,
@@ -6901,6 +7050,7 @@ impl Ctx<'_> {
             marker: None,
             opacity: 1.0,
             node: None,
+            out_of_flow: false,
             content: BoxContent::Inline(frags),
         });
         // Inline-block atomic boxes are already absolutely positioned; add them as siblings.
@@ -7112,6 +7262,7 @@ impl Ctx<'_> {
                 marker: None,
                 opacity: s.opacity,
                 node: Some(p.dom),
+                out_of_flow: false,
                 content: BoxContent::Block(children),
             };
             // ⚠⚠⚠ **`transform` — THE THIRD PLACE THIS RULE HAD TO BE WRITTEN, AND IT WAS MISSING.**
@@ -7161,6 +7312,7 @@ impl Ctx<'_> {
             let s = self.style_of(p.dom);
             let height = p.slot.height.max(h);
             let boxx = LayoutBox {
+                out_of_flow: false,
                 rect: Rect {
                     x: abs_x,
                     y: abs_y,
@@ -11824,6 +11976,91 @@ mod tests {
             by_id(&dom, &root, "w").height,
             0.0,
             "a margin occupies width without opening a line (CSS2 §9.4.2, as Chrome implements it)"
+        );
+    }
+
+    /// **G_FLOAT_IN_INLINE — a float nested inside an inline is placed by the CONTAINING BLOCK, and
+    /// it used to lose its box entirely.** CSS 2.1 §9.5 removes a float from the inline formatting
+    /// context; the two places that decide what a block does with floats both asked only about
+    /// DIRECT children, so `<a><img style="float:left"></a>` reached neither.
+    ///
+    /// A 27-row battery against headless Chrome read **4 of 27**, and the three exact rows were the
+    /// negative arm (a float whose parent IS the block). It was uniform across tag, `display`,
+    /// direction and nesting depth — one missing dispatch, not a sizing bug. 400px container, a
+    /// 40x10 float, parent-relative:
+    ///
+    /// ```text
+    ///                                          Chrome           before
+    ///   <div class=f></div>text      CONTROL   [  0 0 40x10]   [0 0 40x10]  ✓
+    ///   x<a><div class=f></div></a>y           [  0 0 40x10]   NO BOX AT ALL
+    ///       …and the <a> itself                dx 49.64        dx 10.0
+    ///   x<a><div class=r></div></a>y (right)   [360 0 40x10]   NO BOX AT ALL
+    /// ```
+    ///
+    /// ⚠⚠⚠ **THE THIRD ASSERTION IS WHAT KEPT THIS FROM BEING A TRADE.** Recovering the float's box
+    /// made `node_rects` fold it into its ancestor inline's advance — the `<a>` went from a 0-width
+    /// box at the wrong x to a **50px-wide** one, twelve rows gained and twelve lost. An out-of-flow
+    /// box is not part of an inline's advance, so the lift now skips it, and the `<a>` is zero-width
+    /// as Chrome says.
+    #[test]
+    fn a_float_inside_an_inline_is_placed_by_the_containing_block() {
+        let by_id = |dom: &Dom, root: &LayoutBox, id: &str| {
+            let n = dom
+                .descendants(dom.root())
+                .find(|&n| dom.element(n).and_then(|e| e.attr("id")) == Some(id))
+                .unwrap_or_else(|| panic!("#{id} exists"));
+            root.node_rects(dom)
+                .get(&n)
+                .copied()
+                .unwrap_or_else(|| panic!("#{id} produced a box"))
+        };
+        let css = "#f{float:left;width:40px;height:10px} #r{float:right;width:40px;height:10px}";
+
+        // ⚠ THE CONTROL — a float whose parent IS the block. It already worked and must not move.
+        let ctl = layout_html(r#"<div><div id="f"></div>text</div>"#, css, 400.0);
+        let want = by_id(&ctl.0, &ctl.1, "f");
+        assert_eq!(want.width, 40.0, "the control float has its box: {want:?}");
+
+        // The subject: the same float, one inline down. It must land where the control did.
+        let (dom, root) = layout_html(
+            r#"<div>x<a id="a"><div id="f"></div></a>y</div>"#,
+            css,
+            400.0,
+        );
+        let f = by_id(&dom, &root, "f");
+        assert_eq!(
+            (f.x, f.y, f.width, f.height),
+            (want.x, want.y, want.width, want.height),
+            "a float inside an inline is placed by its CONTAINING BLOCK, not swallowed: {f:?} vs the control {want:?}"
+        );
+
+        // …and `float:right` too, which is the row that proves it is a dispatch and not a constant.
+        let (dom, root) = layout_html(
+            r#"<div>x<a id="a"><div id="r"></div></a>y</div>"#,
+            css,
+            400.0,
+        );
+        let rf = by_id(&dom, &root, "r");
+        assert!(
+            rf.x + rf.width > 300.0 && rf.width == 40.0,
+            "a right float inside an inline goes to the container's RIGHT edge: {rf:?}"
+        );
+
+        // ⚠ THE THIRD CLAIM — the float must NOT be folded into its ancestor inline's advance.
+        // Without this the <a> becomes as wide as the float instead of zero-width.
+        let (dom, root) = layout_html(
+            r#"<div>x<a id="a"><div id="f"></div></a>y</div>"#,
+            css,
+            400.0,
+        );
+        let a = by_id(&dom, &root, "a");
+        assert_eq!(
+            a.width, 0.0,
+            "an out-of-flow box is not part of its ancestor inline's advance: the <a> is {a:?}"
+        );
+        assert!(
+            a.x >= 40.0,
+            "…and the inline starts AFTER the float it no longer contains: {a:?}"
         );
     }
 

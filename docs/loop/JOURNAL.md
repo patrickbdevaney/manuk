@@ -46371,6 +46371,119 @@ PERF: none — one UA rule and one narrowed branch in a cascade that already ran
 WIKI: `docs/wiki/css-cascade.md` — where Chrome draws the form-control `box-sizing` line, and why a
 layout-crate test cannot see it.
 
+## Tick 1051 — the fix that changed not one row, and the trade a third change undid (2026-08-08)
+
+TICK SHAPE: primitive — a 27-row battery on **a float inside an inline**, t1048's sharpest named
+residue and a MISSING-BOX class, which the board ranks as the hardest coverage killer. **4 of 27 →
+27 of 27.**
+
+⚠⚠⚠ **THE DEFECT: A FLOAT NESTED IN AN INLINE LOST ITS BOX ENTIRELY.** CSS 2.1 §9.5 removes a float
+from the inline formatting context and hands it to its **containing block**, so in
+`<a><img style="float:left"></a>` the float is the block's, not the `<a>`'s. Two places decide what a
+block does with floats and **both asked only about DIRECT children**, so it reached neither and the
+inline collector — which has no float arm — swallowed it. 400px container, 40×10 float,
+parent-relative:
+
+```text
+                                         Chrome           before      after
+  <div class=f></div>text      CONTROL   [  0 0 40x10]   [0 0 40x10]  exact
+  x<a><div class=f></div></a>y           [  0 0 40x10]   NO BOX       exact
+      …and the <a> itself                dx 49.64        dx 10.0      exact
+  x<a><span class=f></span></a>y         [  0 0 40x10]   NO BOX       exact
+  x<a><img style=float:left></a>y        [  0 0 40x10]   NO BOX       exact
+  x<a><div class=r></div></a>y (right)   [360 0 40x10]   NO BOX       exact
+  x<a><span><div class=f>…   (nested)    [  0 0 40x10]   NO BOX       exact
+  two floats in one inline               [0…] + [40…]    NO BOX       exact
+```
+
+**Uniform across tag, `display`, direction and nesting depth** — which is what identified it as a
+missing dispatch and not a sizing bug — and the three exact rows before the fix were the entire
+negative arm.
+
+⚠⚠⚠ **THE FIRST FIX WAS CORRECT AND CHANGED NOT ONE ROW OF THE 27, AND THAT IS THE TICK'S REUSABLE
+FINDING.** I added the hoist to the block child loop, rebuilt, and the battery came back
+**byte-identical**. The fixtures are ordinary paragraphs whose only children are text and an `<a>`, so
+they never reach that loop — they take the **pure-IFC fast path**, whose entry condition is
+`!has_block && !kids.iter().any(kid_is_float)`. That is the *second* copy of the same question, and
+it is a **GATE rather than a HANDLER**, which is why it reads as an absence rather than as wrong code:
+the block chose the branch that cannot place a float **because it believed there was none**.
+
+> **WHEN A FIX PROVABLY WORKS AND MOVES NOTHING, THE DISPATCH THAT WAS SUPPOSED TO REACH IT IS THE
+> BUG.** Byte-identical output is not a weak signal, it is a precise one, and it points UPSTREAM. This
+> is t1027's *"there were TWO of them"* with the second copy in the form a grep for the handler cannot
+> find — I grepped `is_float` and read all eleven call sites, and the one that mattered was the one
+> that returns EARLY.
+
+⚠⚠⚠ **AND THEN IT WAS A TRADE, AND I ALMOST BANKED IT.** With the float placed, the battery read
+**15 of 27**: every float box exact, and twelve *inline* rects newly wrong — `node_rects`'s lift
+folded the float into its ancestor inline's advance, so the `<a>` went from a zero-width box at the
+wrong x to a **50px-wide one**. Twelve gained, twelve lost. On the shape metric that is strictly
+worse (one error term per row becomes two); on the I3 click point it is slightly better. **Ambiguous
+is the case the ratchet exists for, and the answer is not to adjudicate it — it is to ask what second
+change makes it not a trade**, which t1043's corollary already said in as many words.
+
+The third change: **an out-of-flow box is not part of an inline's advance.** The lift exists so
+`<a><img></a>` still has geometry to be clicked, and that is right for in-flow content only.
+`LayoutBox` now carries `out_of_flow`, set at every exit from `layout_float`, and the lift skips it.
+27 of 27.
+
+⚠ **A FIELD ON A 20-SITE STRUCT, AND THE COMPILER IS WHY THAT WAS SAFE.** `node_rects` takes only
+`&Dom` — it has no `StyleMap` — and widening a public signature used by `manuk-a11y` and `manuk-page`
+is the larger change. All 20 `LayoutBox` literals are in one file, so adding a non-`Option` field
+makes each one a **compile error**: the tool enumerates the sites rather than a regex. My first pass
+was a heuristic text edit and it reached **8 of 20**; the compiler found the other 12. That is the
+scripted-edit failure mode this project has hit twice, caught by construction rather than by luck —
+and one of my own asserts fired on a mis-parsed line number, which is the second time this session an
+assertion in a scripted edit stopped a wrong write.
+
+GATE: `a_float_inside_an_inline_is_placed_by_the_containing_block` (manuk-layout), with a control (a
+float whose parent IS the block, which already worked and must not move) and RED-proven **three ways,
+one per change**:
+
+```text
+  M1  restore the pure-IFC gate's blindness              -> RED
+  M2  drop the hoist in the block child loop             -> RED
+  M3  let the lift fold out-of-flow boxes back in        -> RED
+```
+
+PRICED — 10 sites, both binaries, same hour. **Three byte-identical (simplepdf, tz.de,
+seduniaselat); every mover refuted:**
+
+```text
+   sports.yahoo.com   0.8947 -> 0.0000   looked like a total COLLAPSE
+        3 solo runs, BOTH binaries: 0.000000 / cov 0.2727 / reason `tree-divergence-1758`,
+        identical down to the divergence node count. The site collapsed on its own between the
+        panel and the band; the 0.8947 is the stale number, not the 0.
+   rockstaractu.com   0.8929 -> 0.8852   the only other loss
+        OLD 0.8698 / 0.8852 / 0.8852     NEW 0.8852 / 0.8852
+        modal value IDENTICAL; the panel's 0.8929 is a third value the site produces.
+   sestra.cc          0.9225 -> 0.9394   a gain, and NOT banked — one run is not a band, and its
+        measured interval from t1050 is [0.9151, 0.9322] on both binaries.
+```
+
+**Zero attributable regressions.** ⚠ And the `sports.yahoo` row is worth keeping as a specimen: a
+`0.8947 -> 0.0000` is the most alarming shape a price can take, it is exactly what a real Bar-0
+regression looks like, and three runs of the OLD binary settled it in four minutes. **The band is
+cheap and the panic is not.**
+
+RATCHET: manuk-layout **134/134**, manuk-css 32/32, manuk-paint 22/22, manuk-dom 11/11.
+
+PERF: one inline-subtree walk per pure-IFC block to answer the gate — same order as the inline
+collection that immediately follows it, and it short-circuits on the first float. One `bool` on
+`LayoutBox` and one `HashSet` insert per out-of-flow box in `node_rects`.
+
+SELF-AUDIT (cadence, due every 10; last at 1041) — **62 checks, one failure, and it is not mine to
+fix**: *"verify wall 980s EXCEEDS the 300s target — Part 21.2 item 1 has regressed."* `scripts/` is
+observer-owned under PART VII, so this is recorded and NOT acted on; the remedy the audit names
+(mold/lld, cargo-nextest, workspace-hack, risk-based gate scheduling) is entirely harness-side.
+⚠ Worth one line of attribution rather than a shrug: **three of this session's five ticks ran an
+old-binary control**, each of which is a full release relink, and t1046 already established that a
+control costs the NEXT wall. The agent-side half of the remedy is to BATCH the controls, which this
+session did not do.
+
+WIKI: `docs/wiki/box-layout.md` — "A float inside an inline is placed by the CONTAINING BLOCK — and
+the gate that decides was written twice".
+
 ## Tick 1050 — the margin an inline never got, and both of my favourable numbers died to the same three runs (2026-08-08)
 
 TICK SHAPE: primitive — a 42-row battery on the **inline box's own geometry**, taken because t1049's

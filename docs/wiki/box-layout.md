@@ -7147,3 +7147,58 @@ child inline's VERTICAL padding or border.** `<a><span style="padding:4px">IN</s
 `27.27×27` in Chrome and `27×19` here — the child is exact, the parent is not. Horizontal padding
 already reaches the parent (`padding:0 4px` is exact), and an `<a>` with its *own* vertical padding is
 exact too; it is only the child's block-axis frame that fails to propagate.
+
+## A float inside an inline is placed by the CONTAINING BLOCK — and the gate that decides was written twice (t1051)
+
+CSS 2.1 §9.5 removes a float from the inline formatting context and hands it to its **containing
+block**. So in `<a><img style="float:left"></a>` the float belongs to the block, not the `<a>`. Two
+places in this engine decide what a block does with floats, and **both asked only about direct
+children**, so a float one inline down reached neither and was swallowed: **no box in `node_rects` at
+all**, and the line never gave up the width.
+
+A 27-row battery against headless Chrome read **4 of 27** — and the three exact rows were the whole
+negative arm (a float whose parent *is* the block). 400px container, a 40×10 float, parent-relative:
+
+```text
+                                         Chrome           before        after
+  <div class=f></div>text      CONTROL   [  0 0 40x10]   [0 0 40x10]   exact
+  x<a><div class=f></div></a>y           [  0 0 40x10]   NO BOX        exact
+      …and the <a> itself                dx 49.64        dx 10.0       exact
+  x<a><span class=f></span></a>y         [  0 0 40x10]   NO BOX        exact
+  x<a><img style=float:left></a>y        [  0 0 40x10]   NO BOX        exact
+  x<a><div class=r></div></a>y  (right)  [360 0 40x10]   NO BOX        exact
+  x<a><span><div class=f>…    (nested)   [  0 0 40x10]   NO BOX        exact
+  two floats in one inline               [0…] + [40…]    NO BOX        exact
+```
+
+**27 of 27 after.** Uniform across tag, `display`, direction and nesting depth before the fix, which
+is what identified it as a missing *dispatch* rather than a sizing bug.
+
+### ⚠⚠⚠ The first fix changed NOT ONE ROW, and that is the finding
+
+Adding the hoist to the block child loop was correct and did nothing, because the fixtures are
+ordinary paragraphs whose only children are text and an `<a>` — they never reach that loop. They take
+the **pure-IFC fast path**, whose entry condition is
+`!has_block && !kids.iter().any(kid_is_float)`. That test is the *second* copy of the same question,
+and it is a **gate rather than a handler**, which is why it reads as an absence rather than as wrong
+code: the block was choosing the branch that cannot place floats *because it believed there were
+none*.
+
+> **When a fix provably works and moves nothing, the dispatch that was supposed to reach it is the
+> bug.** Byte-identical output is not a weak signal — it is a precise one, and it points upstream.
+
+### ⚠⚠⚠ And recovering the box was a TRADE until a third change made it not one
+
+With the float finally placed, `node_rects`'s lift folded it into its ancestor inline's advance: the
+`<a>` went from a zero-width box at the wrong x to a **50px-wide** one. Twelve rows gained, twelve
+lost — exactly the shape the ratchet refuses.
+
+The lift exists so `<a><img></a>` — an inline with no box and no text of its own — still has geometry
+to be clicked, and for in-flow content that is right. **An out-of-flow box is not part of an inline's
+advance.** `LayoutBox` now carries `out_of_flow`, set at every exit from `layout_float`, and the lift
+skips it. A field rather than a style lookup because `node_rects` takes only `&Dom`; the 20
+construction sites are all in one file and **the compiler enumerates them**, so unlike a scripted text
+edit this could not be half-applied — which is the failure mode this project has hit twice.
+
+Three changes, three claims, three red mutations: restore the pure-IFC gate → red; drop the hoist →
+red; let the lift fold out-of-flow boxes back in → red.
