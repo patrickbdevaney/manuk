@@ -724,6 +724,10 @@
   - L2329 · A negative length is a parse error, and the INSTRUMENT parsed it differently from the product (t1059)
   - L2345 · The third column is the point
   - L2364 · Two rows locate the fix, and neither is the row that made you look
+  - L2379 · The battery that agreed on 7 of 8 rows while the feature was unimplemented (t1062)
+  - L2386 · Why the first fixture could not see that
+  - L2414 · The live path was already right — the third instrument split of the session
+  - L2423 · Canonicalise, don't re-map
 
 ## `<dialog>`, `popover`, and the top layer (ticks 194-195)
 `docs/wiki/dialog-and-top-layer.md`
@@ -1797,4 +1801,4 @@
   - L124 · Rank mechanisms by FLIP RATE, not failing-subtest count — CSS layout is a multi-assertion slog
 
 ---
-1704 sections across 22 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+1708 sections across 22 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.

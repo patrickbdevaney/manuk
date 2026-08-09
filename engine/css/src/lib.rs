@@ -4303,6 +4303,97 @@ fn intrinsic_kw(v: &str) -> Option<IntrinsicSize> {
 /// max-width:fit-content(50px); max-height:fit-content(50px)">` reads back `0px` / `none` / `none`,
 /// i.e. the declaration was dropped. Accepting it here would have been a *more* permissive parser
 /// that renders a box Chrome does not.
+/// **CSS Display L3's TWO-VALUE `display`, rewritten to the legacy keyword it is a synonym for.**
+///
+/// `display: <display-outside> <display-inside>` (either order, plus an optional `list-item`) is not
+/// a new set of layout modes — it is the *existing* modes, spelled as the pair they always were.
+/// `inline flow-root` **is** `inline-block`; `block flow` **is** `block`. So this canonicalises and
+/// lets the single-keyword table do the mapping, rather than growing a second table that can drift.
+///
+/// ⚠⚠⚠ **THE FIRST BATTERY I WROTE FOR THIS AGREED WITH CHROME ON 7 OF 8 ROWS WHILE THE FEATURE WAS
+/// COMPLETELY UNIMPLEMENTED.** An unrecognised `display` is an invalid declaration and leaves the
+/// element at its *previous* value — so `display: block flow` on a `<div>` is 400px wide whether it
+/// parsed or not, and `block flex` on a `<div>` measured the same in a fixture that gave it an
+/// explicit width. **Every row has to be an element whose DEFAULT display differs from the one the
+/// pair asks for**, or the battery is measuring the UA stylesheet:
+///
+/// ```text
+///                                           Chrome    before    after
+///   <div  display:inline flow>x               8x17    400x18     8x17
+///   <span display:block flow>                400x20     0x0     400x20
+///   <span display:block flex>                400x20     0x0     400x20
+///   <div  display:inline flex>                50x20   400x20     50x20
+///   <div  display:inline grid>                50x20   400x20     50x20
+///   <span display:block flow-root>           400x50     0x0     400x50
+///   <div  display:inline flow-root>           50x20   400x20     50x20
+///   <div  display:block flow list-item>      400x20   400x20    400x20   <- agrees by ACCIDENT
+/// ```
+///
+/// ⚠⚠ **`display: inline table` is routed to the existing `inline-table` keyword rather than given a
+/// new mode**, which is the same discipline: giving the *pair* a behaviour the *keyword* does not
+/// have is how two spellings of one value drift apart. ⚠ A first draft of this comment claimed that
+/// left a measured 50x20-vs-400x20 gap against Chrome; **it does not, and the claim was written
+/// before the row was re-run.** `inline table` reads **50x20, Chrome-exact**, because the shared
+/// `Display::Table` already shrink-wraps. Whether `table` and `inline-table` diverge anywhere *else*
+/// is a separate question this battery does not ask and does not answer.
+fn two_value_display_to_legacy(v: &str) -> String {
+    let parts: Vec<&str> = v.split_ascii_whitespace().collect();
+    if parts.len() < 2 {
+        return v.to_string();
+    }
+    let (mut outside, mut inside, mut list_item) = (None, None, false);
+    for p in &parts {
+        match *p {
+            "block" | "inline" => {
+                if outside.replace(*p).is_some() {
+                    return v.to_string(); // two outsides — invalid
+                }
+            }
+            "flow" | "flow-root" | "table" | "flex" | "grid" | "ruby" => {
+                if inside.replace(*p).is_some() {
+                    return v.to_string();
+                }
+            }
+            "list-item" => {
+                if list_item {
+                    return v.to_string();
+                }
+                list_item = true;
+            }
+            // Anything else makes the whole declaration invalid; hand it back unchanged so the
+            // caller's `_ => None` arm rejects it and the previous value stands.
+            _ => return v.to_string(),
+        }
+    }
+    // `list-item` may only pair with `flow` / `flow-root`, and defaults to `block flow`.
+    if list_item && !matches!(inside, None | Some("flow") | Some("flow-root")) {
+        return v.to_string();
+    }
+    let outside = outside.unwrap_or("block");
+    let inside = inside.unwrap_or("flow");
+    // `list-item` is block-level and its marker is generated elsewhere — same answer the
+    // single-keyword arm gives, which is the point of routing through it.
+    if list_item {
+        return "list-item".to_string();
+    }
+    match (outside, inside) {
+        ("block", "flow") => "block",
+        ("block", "flow-root") => "flow-root",
+        ("inline", "flow") => "inline",
+        ("inline", "flow-root") => "inline-block",
+        ("block", "flex") => "flex",
+        ("inline", "flex") => "inline-flex",
+        ("block", "grid") => "grid",
+        ("inline", "grid") => "inline-grid",
+        ("block", "table") => "table",
+        ("inline", "table") => "inline-table",
+        // `ruby` has no single-keyword equivalent in this engine; leave it unrecognised rather
+        // than inventing one.
+        _ => return v.to_string(),
+    }
+    .to_string()
+}
+
 /// **A NEGATIVE LENGTH ON A SIZE PROPERTY IS A PARSE ERROR, NOT A ZERO.**
 ///
 /// `width`, `height` and the four min/max sizing properties take `<length-percentage [0,∞]>`. A
@@ -4367,6 +4458,13 @@ fn apply_declaration(s: &mut ComputedStyle, d: &Declaration, parent_fs: f32) {
             // CLEARED by any other recognised value, so a later `display:flex` that wins the cascade
             // also wins the recovery. An UNRECOGNISED value is an invalid declaration and leaves both
             // the display and the marker exactly as they were.
+            // ⚠⚠⚠ **CSS DISPLAY L3'S TWO-VALUE SYNTAX, CANONICALISED TO THE LEGACY KEYWORD RATHER
+            // THAN GIVEN ITS OWN MAPPING TABLE.** `display: inline flow-root` IS `inline-block`;
+            // they are two spellings of one computed value, and the moment this arm grows a second
+            // copy of the table below, the two spellings can drift apart. Rewriting the value and
+            // falling through is the whole implementation.
+            let v = &two_value_display_to_legacy(v);
+            let v: &str = v;
             let parsed = match v {
                 "-webkit-box" => Some((Display::Block, Some(Display::Block))),
                 "-webkit-inline-box" => Some((Display::InlineBlock, Some(Display::InlineBlock))),

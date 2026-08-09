@@ -10494,6 +10494,133 @@ mod tests {
         );
     }
 
+    /// **G_TWO_VALUE_DISPLAY — CSS Display L3's `display: <outside> <inside>`, which `MinimalCascade`
+    /// did not parse at all.**
+    ///
+    /// The two-value syntax is not a new set of layout modes — it is the existing ones spelled as the
+    /// pair they always were. `inline flow-root` **is** `inline-block`; `block flow` **is** `block`.
+    /// An unrecognised `display` is an invalid declaration, so every one of them was silently
+    /// dropped and the element kept its previous value.
+    ///
+    /// ⚠⚠⚠ **THE FIRST BATTERY AGREED WITH CHROME ON 7 OF 8 ROWS WHILE THE FEATURE WAS COMPLETELY
+    /// UNIMPLEMENTED**, because a dropped declaration leaves an element at its UA default — and a
+    /// `<div>` asked to be `block flow` is 400px wide whether the pair parsed or not. **Every row
+    /// here is an element whose DEFAULT display differs from the one the pair asks for**, which is
+    /// the only way the rows measure the parser rather than the UA stylesheet:
+    ///
+    /// ```text
+    ///                                           Chrome    before    after
+    ///   <div  display:inline flow>x               8x17    400x18     8x17
+    ///   <span display:block flow>                400x20     0x0     400x20
+    ///   <span display:block flex>                400x20     0x0     400x20
+    ///   <div  display:inline flex>                50x20   400x20     50x20
+    ///   <div  display:inline grid>                50x20   400x20     50x20
+    ///   <span display:block flow-root>           400x50     0x0     400x50
+    ///   <div  display:inline flow-root>           50x20   400x20     50x20
+    ///   <div  display:inline table>               50x20   400x20     50x20
+    ///   <div  display:block flow list-item>      400x20   400x20    400x20   <- agrees by ACCIDENT
+    /// ```
+    ///
+    /// ⚠⚠ **The `list-item` row is kept precisely BECAUSE it agrees either way.** It is the marker
+    /// for the whole class of rows this battery had to throw away, and deleting it would erase the
+    /// evidence of why the other eight are shaped the way they are.
+    ///
+    /// ⚠ **The live path was already Chrome-exact on all of these** — Stylo parses the syntax
+    /// natively — so this is `MinimalCascade` being brought up to the engine it ships beside, the
+    /// same split t1059 found on negative lengths. It matters because the `--no-default-features`
+    /// build ships `MinimalCascade`, and because **every layout battery in this loop is styled
+    /// through it**: a fixture written with two-value `display` would have measured the UA default
+    /// and reported a layout defect that does not exist.
+    #[test]
+    fn the_two_value_display_syntax_resolves_to_its_legacy_keyword() {
+        for (inner, want_w, want_h, why) in [
+            (
+                r#"<div id="x" style="display:inline flow">x</div>"#,
+                8.0,
+                17.0,
+                "`inline flow` on a BLOCK element is `inline`",
+            ),
+            (
+                r#"<span id="x" style="display:block flow;height:20px"></span>"#,
+                400.0,
+                20.0,
+                "`block flow` on an INLINE element is `block`",
+            ),
+            (
+                r#"<span id="x" style="display:block flex;height:20px"></span>"#,
+                400.0,
+                20.0,
+                "`block flex` is `flex`",
+            ),
+            (
+                r#"<div id="x" style="display:inline flex;height:20px"><div style="width:50px"></div></div>"#,
+                50.0,
+                20.0,
+                "`inline flex` is `inline-flex` — it SHRINKS",
+            ),
+            (
+                r#"<div id="x" style="display:inline grid;height:20px"><div style="width:50px"></div></div>"#,
+                50.0,
+                20.0,
+                "`inline grid` is `inline-grid`",
+            ),
+            (
+                r#"<span id="x" style="display:block flow-root"><div style="float:left;width:20px;height:50px"></div></span>"#,
+                400.0,
+                50.0,
+                "`block flow-root` is `flow-root` — it CONTAINS its float",
+            ),
+            (
+                r#"<div id="x" style="display:inline flow-root;height:20px"><div style="width:50px"></div></div>"#,
+                50.0,
+                20.0,
+                "`inline flow-root` is `inline-block`",
+            ),
+            (
+                r#"<div id="x" style="display:inline table;height:20px"><div style="width:50px"></div></div>"#,
+                50.0,
+                20.0,
+                "`inline table` is `inline-table`",
+            ),
+        ] {
+            let r = t1059_row("width:400px", inner);
+            assert_eq!(
+                (r.width, r.height),
+                (want_w, want_h),
+                "CSS Display L3: {why} — {inner}"
+            );
+        }
+
+        // ⚠⚠ THE ROW THAT AGREES EITHER WAY, KEPT ON PURPOSE. A `<div>` is already block-level, so
+        // `block flow list-item` measures the same whether the pair parsed or was dropped. It is the
+        // marker for the class of rows this battery had to discard, and it must keep passing.
+        assert_eq!(
+            t1059_row("width:400px", r#"<div id="x" style="display:block flow list-item;height:20px"></div>"#).width,
+            400.0,
+            "`block flow list-item` is block-level — and this row agrees under BOTH implementations, \
+             which is why it cannot be the only kind of row in the battery"
+        );
+
+        // ⚠ INVALID PAIRS must leave the previous value standing, not fall back to some default.
+        for bad in [
+            "display:block block;height:20px",
+            "display:flow flow;height:20px",
+            "display:inline nonsense;height:20px",
+            "display:inline flex list-item;height:20px",
+        ] {
+            let r = t1059_row(
+                "width:400px",
+                &format!(r#"<span id="x" style="{bad}"></span>"#),
+            );
+            assert_eq!(
+                (r.width, r.height),
+                (0.0, 0.0),
+                "an INVALID display pair is a dropped declaration — the <span> stays inline and \
+                 empty, it does not become a block: {bad}"
+            );
+        }
+    }
+
     /// One row of the t1059 battery: `inner` inside a containing block styled `cb`, returning `#x`'s
     /// rect relative to that containing block's border box.
     fn t1059_row(cb: &str, inner: &str) -> Rect {

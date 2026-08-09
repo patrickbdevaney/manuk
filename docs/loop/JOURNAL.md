@@ -46371,6 +46371,81 @@ PERF: none — one UA rule and one narrowed branch in a cascade that already ran
 WIKI: `docs/wiki/css-cascade.md` — where Chrome draws the form-control `box-sizing` line, and why a
 layout-crate test cannot see it.
 
+## Tick 1062 — the battery that agreed with Chrome on 7 of 8 rows while the feature was completely unimplemented (2026-08-09)
+
+TICK SHAPE: primitive — CSS Display L3's **two-value `display`** (`display: <outside> <inside>`),
+taken because check #97's Finding 1 names it: *"extend the same treatment to CSS Display L3 and CSS
+Position L3"*, and reconciling Display L3 against `CONSTELLATION.tsv` produced exactly one gap — the
+two-value syntax had **zero rows under any spelling**, while `contents`, `flow-root`, `list-item`,
+`none`, `inline-block`, `run-in`, the table displays and `sticky` all had one.
+
+⚠⚠⚠ **THE FIRST BATTERY AGREED WITH CHROME ON 7 OF 8 ROWS, AND THE FEATURE WAS NOT IMPLEMENTED AT
+ALL.** An unrecognised `display` is an **invalid declaration**, so the element keeps its previous
+value — which means a `<div>` asked to be `block flow` is 400px wide whether the pair parsed or not,
+and `block flex` on a `<div>` given an explicit width measures identically either way. The battery
+was reading the **UA stylesheet**, not the parser.
+
+Rebuilt so that **every row is an element whose default display differs from the one the pair asks
+for**, the same fixture becomes unambiguous:
+
+```text
+                                          Chrome    before    after
+   <div  display:inline flow>x              8x17    400x18     8x17
+   <span display:block flow>               400x20     0x0     400x20
+   <span display:block flex>               400x20     0x0     400x20
+   <div  display:inline flex>               50x20   400x20     50x20
+   <div  display:inline grid>               50x20   400x20     50x20
+   <span display:block flow-root>          400x50     0x0     400x50
+   <div  display:inline flow-root>          50x20   400x20     50x20
+   <div  display:inline table>              50x20   400x20     50x20
+   <div  display:block flow list-item>     400x20   400x20    400x20   <- agrees by ACCIDENT
+```
+
+**8 of 9 wrong, where the first fixture said 1 of 8.** ⚠⚠ The `list-item` row is **kept on purpose**:
+it is the marker for the whole class of rows the battery had to throw away, and deleting it would
+erase the evidence of why the other eight are shaped as they are.
+
+> **A ROW THAT AGREES BECAUSE THE ELEMENT ALREADY DEFAULTED TO THE ANSWER IS NOT A ROW.** This is the
+> one-point-constant trap (t1043/t1045) with the UA stylesheet as the constant, and it is the second
+> time in three ticks that the *fixture*, not the engine, was the thing that had to be fixed first.
+
+⚠⚠ **THE LIVE PATH WAS ALREADY CHROME-EXACT ON ALL NINE** — Stylo parses the syntax natively, and
+`boxes --html` on the same fixture returns Chrome's numbers before any change. This is
+`MinimalCascade` being brought up to the engine it ships beside: **the third instrument-vs-product
+split this session** (t1059 negative lengths, t1061 the reftest runner, this). It matters because the
+`--no-default-features` build **ships** `MinimalCascade`, and because **every layout battery in this
+loop is styled through it** — a future fixture written with two-value `display` would have measured
+the UA default and reported a layout defect that does not exist.
+
+⚠⚠ **THE FIX CANONICALISES RATHER THAN RE-MAPS.** `inline flow-root` *is* `inline-block`; they are
+two spellings of one computed value. `two_value_display_to_legacy` rewrites the pair to the legacy
+keyword and falls through to the existing table, so there is **one** mapping. A second table would be
+the session's recurring defect — *one rule, N implementations* — installed deliberately.
+
+⚠ **A CLAIM WAS CORRECTED BEFORE IT SHIPPED.** The doc first said routing `inline table` through
+`inline-table` left a measured 50x20-vs-400x20 gap against Chrome. Re-running the row shows **50x20,
+Chrome-exact** — the shared `Display::Table` already shrink-wraps. The claim had been written from
+reasoning rather than from the row, which is the thing this loop keeps catching; it is corrected in
+place and the residue is withdrawn.
+
+GATE: `the_two_value_display_syntax_resolves_to_its_legacy_keyword` (manuk-layout, 13 rows).
+Two RED proofs on different rows: *remove the canonicalisation* → the eight discriminating rows go
+red; *let a second `<outside>` keyword win instead of invalidating the pair* → only the
+`display:block block` INVALID row goes red.
+
+RATCHET: manuk-layout **145/145**, manuk-css 34/34, zero regressions.
+
+PERF: one `split_ascii_whitespace` on `display` declarations containing a space; single-keyword values
+return before allocating anything but the `to_string`.
+
+RESIDUE: `ruby` as an `<display-inside>` is left unrecognised rather than invented — this engine has
+no single-keyword `display: ruby` to route it to, and giving the pair a behaviour the keyword lacks is
+the drift this function is shaped to prevent. Whether `table` and `inline-table` diverge anywhere
+beyond this battery's shrink-wrap row is a separate question, unasked and unanswered here.
+
+WIKI: `docs/wiki/css-cascade.md` — "The battery that agreed on 7 of 8 rows while the feature was
+unimplemented (t1062)".
+
 ## Tick 1061 — a fragment on an image URL meant NO IMAGE, and the tests that pointed at it still cannot see the fix (2026-08-09)
 
 TICK SHAPE: capability — mined from surface audit #46's own finding that **1359 WPT tests sit on

@@ -2375,3 +2375,53 @@ half and inferring the max half would have cleared this.
 
 ⚠ `calc()` is deliberately not rejected — a negative *result* is legal at computed-value time and
 clamps to 0 at used-value time. It is a control, and the wrong fix that rejects it was RED-run.
+
+## The battery that agreed on 7 of 8 rows while the feature was unimplemented (t1062)
+
+CSS Display L3's two-value `display: <display-outside> <display-inside>` is not a new set of layout
+modes — it is the existing ones spelled as the pair they always were. `inline flow-root` **is**
+`inline-block`; `block flow` **is** `block`. `MinimalCascade` parsed only single keywords, so every
+two-value declaration was **invalid and dropped**, leaving the element at its previous value.
+
+### Why the first fixture could not see that
+
+A dropped declaration leaves an element at its UA default. So a `<div>` asked to be `block flow` is
+400px wide whether the pair parsed or not, and `block flex` on a `<div>` with an explicit width
+measures identically either way. **The battery was reading the UA stylesheet, not the parser** — and
+it agreed with Chrome on 7 of 8 rows.
+
+Rebuilt so every row is an element whose **default display differs from the one the pair asks for**:
+
+```text
+                                          Chrome    before    after
+   <div  display:inline flow>x              8x17    400x18     8x17
+   <span display:block flow>               400x20     0x0     400x20
+   <span display:block flex>               400x20     0x0     400x20
+   <div  display:inline flex>               50x20   400x20     50x20
+   <div  display:inline grid>               50x20   400x20     50x20
+   <span display:block flow-root>          400x50     0x0     400x50
+   <div  display:inline flow-root>          50x20   400x20     50x20
+   <div  display:inline table>              50x20   400x20     50x20
+   <div  display:block flow list-item>     400x20   400x20    400x20   <- agrees by ACCIDENT
+```
+
+8 of 9 wrong, where the first fixture said 1 of 8. The `list-item` row is **kept on purpose**: it is
+the marker for the class of rows the battery had to discard.
+
+> **A ROW THAT AGREES BECAUSE THE ELEMENT ALREADY DEFAULTED TO THE ANSWER IS NOT A ROW.** The
+> one-point-constant trap with the UA stylesheet as the constant.
+
+### The live path was already right — the third instrument split of the session
+
+Stylo parses the syntax natively, and `boxes --html` returns Chrome's numbers on the same fixture
+before any change. This is `MinimalCascade` being brought up to the engine it ships beside. It still
+matters: the `--no-default-features` build **ships** `MinimalCascade`, and **every layout battery in
+this loop is styled through it**, so a future fixture using two-value `display` would have measured
+the UA default and reported a layout defect that does not exist. (t1059 found the same split on
+negative lengths; t1061 found the reftest runner blind to a path the product has.)
+
+### Canonicalise, don't re-map
+
+`two_value_display_to_legacy` rewrites the pair to the legacy keyword and falls through to the
+existing single-keyword table, so there is **one** mapping. A second table is how two spellings of one
+computed value drift apart — *one rule, N implementations*, installed on purpose.
