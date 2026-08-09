@@ -46371,6 +46371,80 @@ PERF: none — one UA rule and one narrowed branch in a cascade that already ran
 WIKI: `docs/wiki/css-cascade.md` — where Chrome draws the form-control `box-sizing` line, and why a
 layout-crate test cannot see it.
 
+## Tick 1054 — the spec IS the enumeration, and six primitives had no row at all (2026-08-08)
+
+TICK SHAPE: measurement — surface audit #45's own steer, executed rather than filed: walk CSS 2.1
+§8/§9/§10 and reconcile each numbered primitive against `CONSTELLATION.tsv`. No build, no network.
+
+⚠⚠⚠ **THE PREMISE, from audit #45: the map is built from lists the world PUBLISHES, and nobody
+publishes a list of layout primitives.** Interop 2026's twenty focus areas added **zero** rows — the
+map is complete against the outside world — while `block-in-inline`, 30% of the corpus and six
+defects deep, had no row until t1048 put one there *after* the bug was found. Every layout row on
+this map was added reactively. **That is a false constraint, because §9 and §10 are themselves a
+numbered list**, and this tick spends 40 minutes turning it into one.
+
+**32 primitives enumerated. Six are not named ANYWHERE — not in a title, not in a receipt:**
+
+```text
+   §10.2    the `width` property on a block                      unknown
+   §10.3.5  shrink-to-fit width for a FLOAT                      unknown
+   §10.6.3  a block's auto height = last in-flow child's margin  unknown
+   §10.6.4  the abspos HEIGHT constraint equation                unknown
+   §9.6.1   `position: fixed` — CB is the VIEWPORT               unknown
+   §9.2.3   `display: run-in`                                    missing  (closed, see below)
+```
+
+⚠⚠⚠ **THREE OF THE SIX ARE THE PLAIN RULE UNDER AN EXCEPTION THE MAP ALREADY GATES.** Margin
+collapse-through is gated and measured 21/21 (t1001) and *"where does a block's auto height end"* has
+no row. The abspos WIDTH half is gated (static position, t849/t1017) and the HEIGHT half is not —
+and §10.6.4 is quoted inside an existing receipt, so **the code knows the rule and the map cannot
+carry a verdict about it.** `inline-block` shrink-to-fit is gated; the FLOAT arm of the identical
+formula is not, and `layout_float`'s own doc says its sizing is *"a second, hand-rolled copy"* of
+`layout_block`'s. **The loop has been filing exceptions and skipping rules**, which is exactly what a
+reactive map produces: you get a row when something breaks, and nothing breaks in the common case
+until it does.
+
+⚠⚠ **THE MOST SURPRISING ROW IS `position: fixed`.** Every sticky header that is not
+`position:sticky`, every cookie banner, chat widget and modal backdrop — and no row, in title or
+receipt. ⚠ That is **not** a claim it is broken. `unknown` means the loop has never measured it, and
+the entire value of this tick is that **absence-from-the-map and absence-from-the-engine are
+different facts that have been indistinguishable.**
+
+⚠⚠ **AND ONE IS CLOSED ON ARRIVAL, FILED `missing` RATHER THAN `unknown`, DELIBERATELY.**
+`display: run-in` was removed from Blink in 2015 and dropped from CSS Display L3. `unknown` is work
+**owed**; `missing` with a reason is work **refused**. An enumeration that files dead constructs as
+unknowns inflates its own denominator and then congratulates itself for burning it down — the t1030
+failure mode, one instrument over.
+
+⚠ **TWO MORE ARE NAMED ONLY IN A RECEIPT and are left alone this tick, with their names recorded:**
+§9.4.3 relative positioning and §10.6.7 (a BFC root's auto height contains its floats). Prose in a
+receipt cannot go red or green; promoting them is a row edit and belongs with whoever measures them.
+
+⚠⚠⚠ **THE METHOD NOTE, because the first pass was WRONG and I nearly published it.** A crude
+substring sweep reported **11** missing, including `§8.3.1 margin collapsing` — which is gated, heavily
+measured, and named in the row title `an empty block's margins collapse THROUGH it (CSS 2.1 §8.3.1)`.
+The key was `"margin collaps"` and the row says `"margins collapse"`. Adding a duplicate row for a
+gated capability is **worse than adding nothing**: it manufactures a false gap and the ratchet would
+have rewarded closing it. The second pass parses the TSV, searches the title and the full row
+separately, and reports both — and it is the disagreement between those two columns that found the
+receipt-only pair.
+
+> **AN ENUMERATION IS AN INSTRUMENT, AND AN INSTRUMENT BUILT FROM SUBSTRINGS OF PROSE IS CALIBRATED
+> BY THE PROSE IT WAS WRITTEN AGAINST.** Verify each MISS by hand before it becomes a row; a false
+> gap costs more than a missed one, because the loop will spend a tick closing it.
+
+RATCHET: measurement only, no engine crate touched. The ratchet's banked invariant is **MEASURED**
+(capabilities with a verdict), and `unknown` count rose 31 → 36 — **which is the enumeration working,
+not a regression**: audit #45's own words are *"a bigger, uglier map is a GOOD tick; discovery is
+never punished, only rot is."*
+
+GATE: none — a map edit gates nothing. Falsifiable content: the 32-row table, reproducible by
+re-running the reconciliation against `CONSTELLATION.tsv`.
+
+PERF: none.
+
+WIKI: none — the artefact is `docs/loop/CONSTELLATION.tsv` itself. [no-pattern]
+
 ## Tick 1053 — the million is OURS, proved by elimination, and it moves the work-list (2026-08-08)
 
 TICK SHAPE: measurement — close t1052's open lead by elimination rather than by reasoning, which is
