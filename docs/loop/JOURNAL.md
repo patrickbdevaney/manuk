@@ -46371,6 +46371,80 @@ PERF: none — one UA rule and one narrowed branch in a cascade that already ran
 WIKI: `docs/wiki/css-cascade.md` — where Chrome draws the form-control `box-sizing` line, and why a
 layout-crate test cannot see it.
 
+## Tick 1052 — the five sites `h_overflow` binds on overflow FIVE different ways, and one of them is a magic number (2026-08-08)
+
+TICK SHAPE: measurement — the diagnostic t1049's steer implied and t1050 proved was owed. t1049
+named `h_overflow` as the conjunct to attack and listed six sites; t1050 then landed a width fix and
+measured **`h_overflow` unchanged on every one of them**, which is a finding with an obvious next
+question nobody had asked: *what do those sites actually overflow on?* One run of the existing
+instrument, no build.
+
+⚠⚠⚠ **THE ANSWER IS THAT THERE IS NO SINGLE ANSWER, AND THE SHAPES ARE CHEAP TO TELL APART.**
+
+```text
+   site                  h_ovf   the elements that escape           right edge
+   kuechenmomente.de       11    <img> and a bare <div> under
+                                 <article>                          1000000     ⚠ see below
+   sestra.cc                8    header > nav > div, and a
+                                 <button> inside it                  1373, 1375
+   id.vk.ru                 8    div:nth-of-type(39) > a:10, a:11    2654, 2953
+   www.tz.de                5    footer > div > a:6, a:7             1254, 1304
+   simplepdf.com            3    nav > div > <ol>, and its <li>:1    1971, 1943
+```
+
+⚠⚠⚠ **FOUR OF THE FIVE ARE ONE SHAPE: A HORIZONTAL ROW OF LINKS THAT CHROME CONSTRAINS AND WE DO
+NOT.** `id.vk.ru`'s anchors march right in ~300px steps, `tz.de`'s footer anchors in ~50px steps,
+`simplepdf`'s breadcrumb `<ol>` runs 771px past the viewport with its first `<li>` almost as far, and
+`sestra`'s nav row is 173px over. In every case the *elements* are siblings in a row and the row does
+not wrap or shrink. **That is a single suspected mechanism across four sites** — and it is the shape
+the burndown calls a container-width error, which launders into `dy`.
+
+⚠⚠⚠ **AND THE FIFTH — THE LARGEST — IS NOT A LAYOUT ERROR AT ALL. IT IS `1000000`.** Two elements on
+`kuechenmomente.de` report a right edge of exactly **one million pixels**, and one of them is a bare
+`<div>`, not the `<img>`, so it is not an image-sizing quirk. That is a **sentinel in used geometry**
+— the "wrong answer of the right type" class this project rates most dangerous, because it is a
+finite number that every downstream consumer will happily arithmetic with.
+
+Two things were checked before publishing it, and both came back NEGATIVE, which is why this is filed
+as a lead rather than a diagnosis:
+
+```text
+   grep the ENGINE for 1000000 / 1_000_000 / 1e6 / f32::MAX   -> not in manuk-layout at all
+   grep the INSTRUMENT (tests/wpt) for a 1e6 clamp            -> absent
+   grep the SITE's own HTML for a 6-7 digit length            -> absent (281KB fetched)
+```
+
+So it is neither our constant nor the instrument's clamp nor a literal in the markup: it is either in
+the site's stylesheets or **synthesised by us from something unresolved**. ⚠ `f32::INFINITY` is the
+engine's own "indefinite" marker at nine sites in `layout_block`'s sizing, and an infinity that
+survives into a used width is exactly how a page ends up a million pixels wide — but that is a
+HYPOTHESIS, it has one candidate and I have not run the probe that distinguishes it, and naming it
+here as a finding is the error check #96 named two ticks ago.
+
+> **THE STEER, in order:** (1) resolve the `1000000` — it is one site's 11 hits but it is a *class*,
+> and a sentinel leak is worth more than a wrap bug; the distinguishing probe is to log the used width
+> at the `<article>` subtree, not to reason about it. (2) then the row-that-does-not-wrap, on
+> `simplepdf.com`'s `<ol>` first, because a breadcrumb list is the smallest possible reproduction of
+> the shape and simplepdf binds M1 on `h_overflow` **alone**.
+
+⚠ **WHAT THIS TICK CORRECTS ABOUT ITS OWN PREDECESSOR.** t1049 ranked `h_overflow` above
+`reading_order` partly because *"it is a direct measurement of a width error"* rather than a step
+function. That reasoning survives, but the implied hope — one width mechanism behind six sites —
+does not: it is at least two, and the bigger of the two is not a width algorithm at all. **A conjunct
+is not a mechanism**, which is the same lesson `reading_order` taught at t1041, arriving one metric
+over.
+
+RATCHET: measurement only; no engine crate touched, nothing banked moves.
+
+GATE: none — a diagnostic gates nothing. Its falsifiable content is the table above, reproducible
+with `manuk-wpt fidelity --urls-file <the five> --jobs 2` and reading the `H-OVERFLOW:` lines.
+
+PERF: none.
+
+WIKI: none — the numbers are a work-list, and the mechanism behind them is explicitly NOT established
+yet; writing a wiki page for an unproven cause is what this session has twice caught itself doing.
+[no-pattern]
+
 ## Tick 1051 — the fix that changed not one row, and the trade a third change undid (2026-08-08)
 
 TICK SHAPE: primitive — a 27-row battery on **a float inside an inline**, t1048's sharpest named
