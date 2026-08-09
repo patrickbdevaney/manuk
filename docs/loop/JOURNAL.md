@@ -46371,6 +46371,78 @@ PERF: none — one UA rule and one narrowed branch in a cascade that already ran
 WIKI: `docs/wiki/css-cascade.md` — where Chrome draws the form-control `box-sizing` line, and why a
 layout-crate test cannot see it.
 
+## Tick 1073 — the three missing paint layers, and the controlled proof that the suite cannot see them (2026-08-09)
+
+TICK SHAPE: primitive — t1072's decomposition executed: CSS 2.1 **§17.5.1**'s row-group, column and
+column-group paint layers, which did not exist.
+
+`collect_table_rows` now carries the row group it used to discard the moment its rows were flattened,
+and `layout_table` emits the three absent layers before its rows. All six are present, in spec order,
+at Chrome's geometry:
+
+```text
+   div <Table>                       [8 8 96×48]
+     div <TableColumnGroup> bg=#00f  [8 8 48×48]     <- new
+     div <TableColumn>      bg=#ff0  [8 8 48×48]     <- new
+     div.rg <TableRowGroup> bg=#f00  [8 8 96×48]     <- new
+     div.r  <TableRow>      bg=#0f0  [8 8 96×48]
+       div.c <TableCell>             [8 8 48×48]
+```
+
+Every layer is **background-only**, so the rows still own the cells and **no cell moves** — the
+gate's second negative row asserts exactly that, byte-for-byte against the same table without
+layers. A layer with nothing to paint is not emitted at all (an empty box is a node every walker
+visits for nothing, and it would inflate the element count the fidelity instrument reads) — the
+first negative row. **The order is the substance**: `BoxContent::Block` paints in vector order, so a
+group emitted after its rows covers the cells it exists to sit behind.
+
+⚠⚠⚠ **THE FIX WORKS AND MOVED THE SUITE BY ZERO TESTS, AND THAT IS A PRECISE SIGNAL RATHER THAN A
+DISAPPOINTMENT.** `CSS2/backgrounds` before: **125 passed, 211 failed, 290 skipped**. After: **125,
+211, 290** — byte-identical, with `background-color-applies-to-001/002/003` (row-group,
+header-group, footer-group) still failing. t1048's rule is that byte-identical output points
+UPSTREAM, so the blocker was isolated with three probes written into the suite's own directory:
+
+```text
+   _probe-a   a CSS black 96×96 rect   vs a CSS black 96×96 rect   PASS   <- the runner works
+   _probe-c   an <img black96x96.png>  vs the same <img> reference PASS   <- the image loads and paints
+   _probe-b   a CSS black 96×96 rect   vs the <img> reference      FAIL   <- the pair every test uses
+```
+
+**A CSS-painted black square and a decoded black PNG are not byte-identical in our raster**, the
+runner compares `test_px == ref_px` with zero tolerance and no support for WPT's `fuzzy` metadata,
+and every test in the six `*-applies-to-*` families compares exactly that pair. **No engine fix can
+move them.** The ~155 image-referenced failures in that directory are not a capability measurement.
+
+> **A SUITE CAN BE UNABLE TO SEE A FIX THAT IS CORRECT, AND THE CONTROLS ARE WHAT PROVE IT RATHER
+> THAN EXCUSE IT.** t1061 met this as *"a test that POINTS at a defect may be unable to SEE the
+> fix"*; this is the same finding with a controlled proof — one probe isolating the failing pair and
+> two isolating the parts that work. Without `_probe-a` and `_probe-c` the identical result would
+> read as *"our paint is broken"* or *"the runner is broken"*, and **both would have been wrong** —
+> which is precisely the inference the loop would otherwise have drawn from a zero delta.
+
+⚠ **THE CAPABILITY IS REAL AND THE SUITE'S SILENCE DOES NOT WITHDRAW IT.** A `<tbody>` background is
+drawn for the first time — the striped data table and the highlighted header band, on essentially
+every table on the web — RED-proven four ways: no layers at all, layers emitted after the rows,
+empty layers emitted, and a group spanning only its first row. Each fails a different assertion.
+The honest reading is that **this directory's number is a floor with a known, measured obstruction**,
+not that the layers were not missing.
+
+⚠ And it re-scopes t1072's own steer: the four verification targets that decomposition named
+(`background-color-applies-to-001/002/003/005/006`) **cannot serve as verification for anything**,
+because they fail on the reference pair regardless. The gate's box-tree assertions are the
+verification, and the suite is a ranker only — which is what audit #47 said about the division of
+labour, now demonstrated from the other side.
+
+RATCHET: `manuk-layout` 149/149 → **150/150**, no test changed. Nine `g_table_*` page gates green.
+`CSS2/backgrounds` unmoved at 125/211/290 and **not claimed as a gain**. ⚠ No corpus A/B, as with
+every capability tick this session; the corpus movement is unmeasured, not zero.
+
+PERF: negligible — one extra pass over the table's element children for columns, and one over its
+rows for groups, both emitting nothing when there is nothing to paint (the common case).
+
+WIKI: docs/wiki/box-layout.md — "The three missing paint layers, and the suite that could not see
+them"
+
 ## Tick 1072 — a table is painted in six layers and we paint three, found by an instrument the loop had never used (2026-08-09)
 
 TICK SHAPE: measurement — **the paint tick**, which surface audit #47 (steer #4) and constitution

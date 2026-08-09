@@ -408,6 +408,8 @@
   - L7849 · Two hypotheses measured and refuted before the third was believed
   - L7863 · ⚠⚠⚠ THE MECHANISM: THREE OF THE SIX TABLE PAINT LAYERS DO NOT EXIST
   - L7885 · The decomposition
+  - L7902 · The three missing paint layers, and the suite that could not see them (t1073)
+  - L7921 · ⚠⚠⚠ The fix works and moved the suite by ZERO tests, which is a precise signal
 
 ## browser-capabilities.md
 `docs/wiki/browser-capabilities.md`
@@ -1824,4 +1826,4 @@
   - L124 · Rank mechanisms by FLIP RATE, not failing-subtest count — CSS layout is a multi-assertion slog
 
 ---
-1731 sections across 22 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+1733 sections across 22 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.

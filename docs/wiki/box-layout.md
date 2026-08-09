@@ -7898,3 +7898,52 @@ Everything needed is already in `layout_table` when the row boxes are built:
 ⚠ The row-group box must be **background-only**: it takes no part in the column grid and must not
 change any cell's geometry, which is what makes this an additive paint change rather than a layout
 one — and what its regression test has to assert.
+
+## The three missing paint layers, and the suite that could not see them (t1073)
+
+t1072's decomposition, executed: `collect_table_rows` now carries the row group it used to discard,
+and `layout_table` emits the three absent layers of CSS 2.1 §17.5.1 before its rows. All six layers
+are present, in spec order, at Chrome's geometry:
+
+```text
+   div <Table>                       [8 8 96×48]
+     div <TableColumnGroup> bg=#00f  [8 8 48×48]     <- new
+     div <TableColumn>      bg=#ff0  [8 8 48×48]     <- new
+     div.rg <TableRowGroup> bg=#f00  [8 8 96×48]     <- new
+     div.r  <TableRow>      bg=#0f0  [8 8 96×48]
+       div.c <TableCell>             [8 8 48×48]
+```
+
+Every layer is **background-only** (`content: Block(vec![])`): the rows still own the cells, so no
+cell moves, which is the gate's second negative row. A layer with nothing to paint is not emitted at
+all — an empty box is a node every walker visits for nothing — which is the first.
+
+### ⚠⚠⚠ The fix works and moved the suite by ZERO tests, which is a precise signal
+
+`CSS2/backgrounds` before: **125 passed, 211 failed, 290 skipped**. After: **125, 211, 290** —
+byte-identical, and `background-color-applies-to-001/002/003` (row-group, header-group, footer-group)
+still fail. t1048's rule says byte-identical output points UPSTREAM, so the blocker was isolated with
+three probes placed in the suite's own directory:
+
+```text
+   _probe-a   a CSS black 96×96 rect   vs a CSS black 96×96 rect   PASS   <- the runner works
+   _probe-c   an <img black96x96.png>  vs the same <img> reference PASS   <- the image loads and paints
+   _probe-b   a CSS black 96×96 rect   vs the <img> reference      FAIL   <- the pair every test uses
+```
+
+**A CSS-painted black square and a decoded black PNG are not byte-identical in our raster**, and the
+runner compares `test_px == ref_px` with zero tolerance and no support for WPT's `fuzzy` metadata.
+Every test in the `*-applies-to-*` families compares exactly those two things — so **no engine fix
+can move them**, and the ~155 image-referenced failures in that directory are not a capability
+measurement.
+
+> **A SUITE CAN BE UNABLE TO SEE A FIX THAT IS CORRECT, AND THE CONTROLS ARE WHAT PROVE IT RATHER
+> THAN EXCUSE IT.** t1061 met this as *"a test that POINTS at a defect may be unable to SEE the
+> fix"*; here it has a controlled proof — one probe isolating the failing pair and two isolating the
+> parts that work. Without `_probe-a` and `_probe-c` the same result would read as *"our paint is
+> broken"* or *"the runner is broken"*, and both would be wrong.
+
+⚠ **The capability is real and the suite's silence does not withdraw it**: a `<tbody>` background is
+drawn for the first time, gated with four RED-proofs (no layers, layers after the rows, empty layers
+emitted, a group spanning only its first row). The right reading is that **this directory's number
+is a floor with a known, measured obstruction**, not that the layers were not missing.

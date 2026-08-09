@@ -11,12 +11,12 @@
 
 | | value | over |
 |---|---|---|
-| ticks landed | **781** | ticks 1–1072 |
-| median tick cycle | **27m** | 780 intervals |
-| median, last 10 | **19m** | 10 intervals |
+| ticks landed | **782** | ticks 1–1073 |
+| median tick cycle | **27m** | 781 intervals |
+| median, last 10 | **20m** | 10 intervals |
 | fastest / slowest | 5s / 5.4d | |
-| **ticks per hour** | **1.11** | 700.6h elapsed |
-| median verify wall | **63s** | 720 ticks |
+| **ticks per hour** | **1.11** | 701.2h elapsed |
+| median verify wall | **63s** | 721 ticks |
 | wall trend | 39s → 13m — getting slower ⚠️ | first 3 vs last 3 |
 
 The **cycle** is the real unit: implement → debug → verify wall → land. The wall is only part of
@@ -31,7 +31,7 @@ it, and a wall that grows taxes every future tick, so it is tracked separately f
 * **✅ rows in the capability ledger**: 144 → **540**
 * **Bar 0 — oracle hangs**: 0 of 265 sites
 
-**342 of 781 ticks** (44%) moved a
+**342 of 782 ticks** (44%) moved a
 user-visible capability. The rest were instruments, infrastructure and corrections — and the
 ledger says the corrections were not overhead: three of its top three priorities were phantoms,
 and finding that out redirected everything after it.
@@ -878,5 +878,6 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 | **1070** | 2026-08-09 09:27 | 6m | measurement | 13m | +177/−33 | 429 | 81 | 56.0% · | the suite ranked its own work-list, and the top cluster is a box we never generate (2026-0 |
 | **1071** | 2026-08-09 09:32 | 5m | measurement | 13m | +271/−36 | 429 | 81 | 56.0% · | three defects in four ticks were the ABSENCE of an implementation, and no code search find |
 | **1072** | 2026-08-09 09:40 | 8m | measurement | 13m | +187/−33 | 429 | 81 | 56.0% · | a table is painted in six layers and we paint three, found by an instrument the loop had n |
+| **1073** | 2026-08-09 10:12 | 33m | primitive | 13m | +459/−50 | 429 | 81 | 56.0% · | the three missing paint layers, and the controlled proof that the suite cannot see them (2 |
 
 *`·` after a WPT figure means **carried forward**, not measured this tick.*

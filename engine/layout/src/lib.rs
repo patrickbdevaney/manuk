@@ -430,6 +430,18 @@ impl LayoutBox {
 }
 
 /// A table cell placed on the row/column grid (CSS2 §17.5 colspan/rowspan).
+/// One row of a table's grid, with the ROW GROUP it came from.
+///
+/// The group used to be dropped the moment its rows were flattened. CSS 2.1 §17.5.1 paints a table
+/// in six layers — table, column groups, columns, **row groups**, rows, cells — and a layer with no
+/// box paints nothing, so a `<tbody>` background was never drawn. Carrying the group here is what
+/// lets `layout_table` emit that layer without a second walk that could disagree with this one.
+struct TableRowEntry {
+    group: Option<NodeId>,
+    node: Option<NodeId>,
+    cells: Vec<NodeId>,
+}
+
 struct PlacedCell {
     cell: NodeId,
     row: usize,
@@ -5517,7 +5529,8 @@ impl Ctx<'_> {
         let mut placed: Vec<PlacedCell> = Vec::new();
         let mut occ: Vec<Vec<bool>> = Vec::new();
         let mut ncols = 0usize;
-        for (r, (_rn, row)) in rows.iter().enumerate() {
+        for (r, entry) in rows.iter().enumerate() {
+            let row = &entry.cells;
             let mut col = 0usize;
             for &cell in row {
                 while occ
@@ -5691,7 +5704,7 @@ impl Ctx<'_> {
         // 4.6× too wide, on the one declaration authors reach for to make a table *behave*.
         let use_fixed =
             s.table_layout == manuk_css::TableLayout::Fixed && table_specified.is_some();
-        let cell_grid: Vec<Vec<NodeId>> = rows.iter().map(|(_, cells)| cells.clone()).collect();
+        let cell_grid: Vec<Vec<NodeId>> = rows.iter().map(|e| e.cells.clone()).collect();
         let widths = if ncols == 0 {
             Vec::new()
         } else if use_fixed {
@@ -5876,7 +5889,7 @@ impl Ctx<'_> {
         // nothing observable on its own, which is why it lands here rather than as its own tick.
         let row_min_specified: Vec<bool> = (0..nrows)
             .map(|r| {
-                let Some(Some(rn)) = rows.get(r).map(|(n, _)| *n) else {
+                let Some(Some(rn)) = rows.get(r).map(|e| e.node) else {
                     return false;
                 };
                 match self.style_of(rn).height {
@@ -6032,12 +6045,174 @@ impl Ctx<'_> {
             }
             row_cells[p.row].push(cbox);
         }
-        let mut row_boxes = Vec::new();
+        // ── ⚠⚠⚠ **CSS 2.1 §17.5.1 PAINTS A TABLE IN SIX LAYERS AND THIS ENGINE HAD THREE.**
+        //    Back to front: **table → column groups → columns → row groups → rows → cells.** The box
+        //    tree went straight from table to row, so three of the six layers had no box to paint
+        //    into and painted nothing:
+        //
+        //    ```text
+        //      background-color on <tbody>/<thead>/<tfoot>   never drawn  (the striped data table)
+        //      background-color on <colgroup>/<col>          never drawn  (the highlighted column)
+        //    ```
+        //
+        //    ⚠⚠ And a row group's GEOMETRY and its PAINT disagreed: `boxes` reported `<tbody>` at
+        //    `[0,24,100,48]`, Chrome-exact, while the paint tree had no box there at all — the rect
+        //    came from the node-rect map and the paint from the box tree, and only one of the two
+        //    existed. *Is it laid out* and *is it painted* are different questions.
+        //
+        //    ⚠⚠⚠ **THE ORDER IS THE WHOLE SUBSTANCE OF THE RULE.** These boxes are pushed BEFORE the
+        //    rows, because `BoxContent::Block` paints in vector order and a group emitted after its
+        //    rows would cover the cells it exists to sit behind. That is the invariant the gate has
+        //    to assert, and reversing it is its RED-proof.
+        //
+        //    ⚠ Every box here is **background-only** — `content: Block(vec![])`, no children. The
+        //    rows still own the cells, so nothing about the column grid or any cell's geometry
+        //    changes: this is an additive PAINT layer, which is what makes it separable from the
+        //    §17.5.2 sizing work that precedes it.
+        let mut layer_boxes: Vec<LayoutBox> = Vec::new();
+        let paint_layer = |rect: Rect, node: NodeId, styles: &StyleMap| -> Option<LayoutBox> {
+            let st = styles.get(&node)?;
+            // A layer with nothing to paint is not emitted at all: an empty box in the tree is a
+            // node the a11y/geometry walkers have to skip and the paint has to visit for nothing.
+            if st.background_color.is_none() && st.background_images.is_empty() {
+                return None;
+            }
+            Some(LayoutBox {
+                rect,
+                background: st.background_color,
+                border: None,
+                radius: st.border_radius,
+                shadows: Vec::new(),
+                filters: Vec::new(),
+                clip_path: st.clip_path.clone(),
+                blend: st.mix_blend_mode,
+                backdrop: Vec::new(),
+                hidden: st.visibility != manuk_css::Visibility::Visible,
+                mask_image: st.mask_image.clone(),
+                background_images: st.background_images.clone(),
+                background_size: st.background_size,
+                background_position: st.background_position,
+                object_fit: st.object_fit,
+                object_position: st.object_position,
+                background_repeat: st.background_repeat,
+                outline: None,
+                marker: None,
+                opacity: st.opacity,
+                node: Some(node),
+                out_of_flow: false,
+                content: BoxContent::Block(Vec::new()),
+            })
+        };
+        // Layer 2/3 — column groups, then columns. A column's box spans the table's whole row band,
+        // which is why it is built from `col_x`/`widths` and `row_y`/`row_h` rather than from any
+        // child: a `<col>` has no descendants and is not in the box tree at all.
+        if nrows > 0 && !widths.is_empty() {
+            let band_y = row_y[0];
+            let band_h = (row_y[nrows - 1] + row_h[nrows - 1]) - band_y;
+            let mut col_index = 0usize;
+            for child in self.dom.children(node) {
+                if !self.dom.is_element(child) || !is_rendered(self.dom, self.styles, child) {
+                    continue;
+                }
+                let d = self.style_of(child).display;
+                if d != Display::TableColumn && d != Display::TableColumnGroup {
+                    continue;
+                }
+                let cols: Vec<NodeId> = if d == Display::TableColumnGroup {
+                    self.dom
+                        .children(child)
+                        .into_iter()
+                        .filter(|&c| {
+                            self.dom.is_element(c)
+                                && is_rendered(self.dom, self.styles, c)
+                                && self.style_of(c).display == Display::TableColumn
+                        })
+                        .collect()
+                } else {
+                    Vec::new()
+                };
+                let span_of = |n: NodeId| self.cell_span(n, "span");
+                let start = col_index;
+                let count: usize = if d == Display::TableColumnGroup {
+                    if cols.is_empty() {
+                        span_of(child)
+                    } else {
+                        cols.iter().map(|&c| span_of(c)).sum()
+                    }
+                } else {
+                    span_of(child)
+                };
+                let band = |from: usize, n: usize| -> Option<Rect> {
+                    let end = (from + n).min(widths.len());
+                    if from >= end {
+                        return None;
+                    }
+                    let x = col_x[from];
+                    let w: f32 = widths[from..end].iter().sum::<f32>()
+                        + spacing * (end - from).saturating_sub(1) as f32;
+                    Some(Rect {
+                        x,
+                        y: band_y,
+                        width: w,
+                        height: band_h,
+                    })
+                };
+                // The GROUP paints first, then the columns inside it — §17.5.1's order again, one
+                // level down.
+                if let Some(r) = band(start, count) {
+                    if let Some(b) = paint_layer(r, child, self.styles) {
+                        layer_boxes.push(b);
+                    }
+                }
+                if d == Display::TableColumnGroup {
+                    let mut c = start;
+                    for &col in &cols {
+                        let n = span_of(col);
+                        if let Some(r) = band(c, n) {
+                            if let Some(b) = paint_layer(r, col, self.styles) {
+                                layer_boxes.push(b);
+                            }
+                        }
+                        c += n;
+                    }
+                }
+                col_index += count;
+            }
+        }
+        // Layer 4 — row groups. A group spans the y-range of its own rows, which is contiguous
+        // because `collect_table_rows` sorts by group rank with a STABLE sort.
+        {
+            let mut seen: Vec<NodeId> = Vec::new();
+            for r in 0..nrows {
+                let Some(g) = rows.get(r).and_then(|e| e.group) else {
+                    continue;
+                };
+                if seen.contains(&g) {
+                    continue;
+                }
+                seen.push(g);
+                let last = (r..nrows)
+                    .take_while(|&i| rows.get(i).and_then(|e| e.group) == Some(g))
+                    .last()
+                    .unwrap_or(r);
+                let rect = Rect {
+                    x: content_x,
+                    y: row_y[r],
+                    width: content_w,
+                    height: (row_y[last] + row_h[last]) - row_y[r],
+                };
+                if let Some(b) = paint_layer(rect, g, self.styles) {
+                    layer_boxes.push(b);
+                }
+            }
+        }
+
+        let mut row_boxes = layer_boxes;
         for r in 0..nrows {
             // `and_then`, not `map`: an ANONYMOUS row (a bare `table-cell` child of a `table`)
             // carries `None` because it has no DOM node — so it gets no style lookup, paints no
             // background of its own, and reports no node, which is what an anonymous box is.
-            let rn = rows.get(r).and_then(|(n, _)| *n);
+            let rn = rows.get(r).and_then(|e| e.node);
             let rs = rn.and_then(|n| self.styles.get(&n));
             row_boxes.push(LayoutBox {
                 rect: Rect {
@@ -6189,8 +6364,8 @@ impl Ctx<'_> {
     /// background and border paint and what `getBoundingClientRect` reports for a `<tr>`. Emitting
     /// an anonymous row box instead left every `<tr>` on the web without geometry — 31 of Hacker
     /// News' 119 identified elements.
-    fn collect_table_rows(&self, table: NodeId) -> Vec<(Option<NodeId>, Vec<NodeId>)> {
-        let mut rows = Vec::new();
+    fn collect_table_rows(&self, table: NodeId) -> Vec<TableRowEntry> {
+        let mut rows: Vec<TableRowEntry> = Vec::new();
         // **A `table-cell` whose parent is a `table` needs an ANONYMOUS ROW generated around it
         // (CSS 2.1 §17.2.1), and without one it was not merely mis-sized — it vanished.**
         //
@@ -6224,7 +6399,7 @@ impl Ctx<'_> {
         // Rows are collected with a GROUP RANK (0 header · 1 body · 2 footer) and stable-sorted by
         // it at the end. A bare `<tr>` or a stray `table-cell` is body-level, exactly as the implied
         // `<tbody>` an HTML parser would wrap it in.
-        let mut ranked: Vec<(u8, Option<NodeId>, Vec<NodeId>)> = Vec::new();
+        let mut ranked: Vec<(u8, Option<NodeId>, Option<NodeId>, Vec<NodeId>)> = Vec::new();
         for child in self.dom.children(table) {
             if !is_rendered(self.dom, self.styles, child) || !self.dom.is_element(child) {
                 continue;
@@ -6233,13 +6408,13 @@ impl Ctx<'_> {
                 Display::TableCell => anon.push(child),
                 Display::TableRow => {
                     if !anon.is_empty() {
-                        ranked.push((1, None, std::mem::take(&mut anon)));
+                        ranked.push((1, None, None, std::mem::take(&mut anon)));
                     }
-                    ranked.push((1, Some(child), self.collect_cells(child)));
+                    ranked.push((1, None, Some(child), self.collect_cells(child)));
                 }
                 Display::TableRowGroup | Display::TableHeaderGroup | Display::TableFooterGroup => {
                     if !anon.is_empty() {
-                        ranked.push((1, None, std::mem::take(&mut anon)));
+                        ranked.push((1, None, None, std::mem::take(&mut anon)));
                     }
                     // ⚠⚠⚠ **CSS TABLES LAYS ROW GROUPS OUT header -> body -> footer REGARDLESS OF
                     // SOURCE ORDER, and this walked the DOM.** `<tfoot>` written BEFORE `<tbody>` is
@@ -6262,7 +6437,9 @@ impl Ctx<'_> {
                             && self.dom.is_element(gr)
                             && self.style_of(gr).display == Display::TableRow
                         {
-                            ranked.push((rank, Some(gr), self.collect_cells(gr)));
+                            // The GROUP is carried, not discarded: CSS 2.1 §17.5.1 paints a row
+                            // group as its own layer and it needs a box of its own to paint into.
+                            ranked.push((rank, Some(child), Some(gr), self.collect_cells(gr)));
                         }
                     }
                 }
@@ -6273,13 +6450,17 @@ impl Ctx<'_> {
             }
         }
         if !anon.is_empty() {
-            ranked.push((1, None, anon));
+            ranked.push((1, None, None, anon));
         }
         // STABLE sort: groups of the same kind keep their source order relative to each other, which
         // is what makes two `<tbody>`s stay in document order while a `<tfoot>` written first moves
         // to the end.
-        ranked.sort_by_key(|(rank, _, _)| *rank);
-        rows.extend(ranked.into_iter().map(|(_, n, cells)| (n, cells)));
+        ranked.sort_by_key(|(rank, _, _, _)| *rank);
+        rows.extend(
+            ranked
+                .into_iter()
+                .map(|(_, group, node, cells)| TableRowEntry { group, node, cells }),
+        );
         rows
     }
 
@@ -15995,6 +16176,110 @@ mod tests {
         assert!(
             cells[2].height >= 30.0 - 0.5,
             "row 2 height driven by the 30px cell"
+        );
+    }
+
+    /// **A TABLE IS PAINTED IN SIX LAYERS AND THIS ENGINE HAD THREE** (CSS 2.1 §17.5.1): table →
+    /// column groups → columns → row groups → rows → cells. A row group generated no painted box at
+    /// all, so a `<tbody>` background was never drawn, and column/column-group had neither box nor
+    /// geometry.
+    ///
+    /// The load-bearing assertion is the ORDER: a layer emitted after its rows covers the cells it
+    /// exists to sit behind, and `BoxContent::Block` paints in vector order.
+    #[test]
+    fn a_table_paints_its_row_group_column_and_column_group_layers_behind_its_rows() {
+        // The painted box tree, flattened depth-first — which IS paint order.
+        let painted = |html: &str| -> Vec<(String, f32, f32, f32, f32, bool)> {
+            let (dom, root) = layout_html(
+                &format!("<body style='margin:0'>{html}</body>"),
+                "td{padding:0;width:50px;height:24px}",
+                400.0,
+            );
+            let mut out = Vec::new();
+            root.walk(&mut |b| {
+                if let Some(n) = b.node {
+                    if let Some(tag) = dom.tag_name(n) {
+                        out.push((
+                            tag.to_string(),
+                            b.rect.x,
+                            b.rect.y,
+                            b.rect.width,
+                            b.rect.height,
+                            b.background.is_some(),
+                        ));
+                    }
+                }
+            });
+            out
+        };
+        const T: &str = "<table style='border-spacing:0'>\
+             <colgroup style='background:#00f'><col style='background:#ff0'><col></colgroup>\
+             <tbody style='background:#f00'><tr><td>a</td><td>b</td></tr>\
+             <tr><td>c</td><td>d</td></tr></tbody></table>";
+        let p = painted(T);
+        let find = |tag: &str| p.iter().find(|r| r.0 == tag).cloned();
+
+        // Layer 4 — the row group spans BOTH its rows: two 24px rows from y=0.
+        let g = find("tbody").expect("a <tbody> with a background must paint a box");
+        assert!(
+            (g.1, g.2, g.3, g.4) == (0.0, 0.0, 100.0, 48.0) && g.5,
+            "the row-group layer must span its rows and carry the background, got {g:?}"
+        );
+        // Layers 2 and 3 — the column group spans both columns, the column spans one.
+        let cg = find("colgroup").expect("a <colgroup> with a background must paint a box");
+        assert!(
+            (cg.1, cg.2, cg.3, cg.4) == (0.0, 0.0, 100.0, 48.0) && cg.5,
+            "the column-group layer must span all its columns and the row band, got {cg:?}"
+        );
+        let c = find("col").expect("a <col> with a background must paint a box");
+        assert!(
+            (c.1, c.2, c.3, c.4) == (0.0, 0.0, 50.0, 48.0) && c.5,
+            "a column layer spans ONE column and the whole row band, got {c:?}"
+        );
+
+        // ── THE ORDER. Everything §17.5.1 puts behind the rows must appear BEFORE the first `tr`.
+        let pos = |tag: &str| p.iter().position(|r| r.0 == tag);
+        let (icg, ic, ig, itr, itd) = (
+            pos("colgroup").unwrap(),
+            pos("col").unwrap(),
+            pos("tbody").unwrap(),
+            pos("tr").unwrap(),
+            pos("td").unwrap(),
+        );
+        assert!(
+            icg < ic && ic < ig && ig < itr && itr < itd,
+            "§17.5.1 order is table -> column groups -> columns -> row groups -> rows -> cells, \
+             got colgroup={icg} col={ic} tbody={ig} tr={itr} td={itd}"
+        );
+
+        // ── NEGATIVE 1: a group or column with NOTHING to paint emits NO box. An empty box in the
+        //    tree is a node every walker has to visit for nothing, and it would also inflate the
+        //    element count the fidelity instrument reads.
+        let p2 = painted(
+            "<table style='border-spacing:0'><colgroup><col></colgroup>\
+             <tbody><tr><td>a</td></tr></tbody></table>",
+        );
+        assert!(
+            !p2.iter()
+                .any(|r| r.0 == "tbody" || r.0 == "colgroup" || r.0 == "col"),
+            "a layer with no background must not be emitted at all, got {p2:?}"
+        );
+        // ── NEGATIVE 2: the layers are BACKGROUND-ONLY and change no cell's geometry. The same
+        //    table with and without them must place its cells identically.
+        let cells_of = |v: &[(String, f32, f32, f32, f32, bool)]| -> Vec<(f32, f32, f32, f32)> {
+            v.iter()
+                .filter(|r| r.0 == "td")
+                .map(|r| (r.1, r.2, r.3, r.4))
+                .collect()
+        };
+        let plain = painted(
+            "<table style='border-spacing:0'><tbody><tr><td>a</td><td>b</td></tr>\
+             <tr><td>c</td><td>d</td></tr></tbody></table>",
+        );
+        assert_eq!(
+            cells_of(&p),
+            cells_of(&plain),
+            "the paint layers must not move a single cell"
         );
     }
 
