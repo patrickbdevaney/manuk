@@ -11,12 +11,12 @@
 
 | | value | over |
 |---|---|---|
-| ticks landed | **772** | ticks 1–1062 |
-| median tick cycle | **27m** | 771 intervals |
+| ticks landed | **773** | ticks 1–1063 |
+| median tick cycle | **27m** | 772 intervals |
 | median, last 10 | **51m** | 10 intervals |
 | fastest / slowest | 5s / 5.4d | |
-| **ticks per hour** | **1.11** | 697.4h elapsed |
-| median verify wall | **63s** | 711 ticks |
+| **ticks per hour** | **1.11** | 697.6h elapsed |
+| median verify wall | **63s** | 712 ticks |
 | wall trend | 39s → 13m — getting slower ⚠️ | first 3 vs last 3 |
 
 The **cycle** is the real unit: implement → debug → verify wall → land. The wall is only part of
@@ -31,7 +31,7 @@ it, and a wall that grows taxes every future tick, so it is tracked separately f
 * **✅ rows in the capability ledger**: 144 → **536**
 * **Bar 0 — oracle hangs**: 0 of 265 sites
 
-**342 of 772 ticks** (44%) moved a
+**342 of 773 ticks** (44%) moved a
 user-visible capability. The rest were instruments, infrastructure and corrections — and the
 ledger says the corrections were not overhead: three of its top three priorities were phantoms,
 and finding that out redirected everything after it.
@@ -869,5 +869,6 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 | **1060** | 2026-08-09 05:12 | 89m | primitive | 13m | +666/−48 | 428 | 81 | 56.0% · | the receipt that could not go red, and the two places §9.4.3 had to be applied twice (2026 |
 | **1061** | 2026-08-09 05:59 | 47m | capability | 13m | +409/−37 | 429 | 81 | 56.0% · | a fragment on an image URL meant NO IMAGE, and the tests that pointed at it still cannot s |
 | **1062** | 2026-08-09 06:25 | 26m | primitive | 13m | +390/−33 | 429 | 81 | 56.0% · | the battery that agreed with Chrome on 7 of 8 rows while the feature was completely unimpl |
+| **1063** | 2026-08-09 06:37 | 11m | measurement | 13m | +239/−33 | 429 | 81 | 56.0% · | the constitution check, and three of eight ticks found the INSTRUMENT rather than the engi |
 
 *`·` after a WPT figure means **carried forward**, not measured this tick.*

@@ -7112,3 +7112,145 @@ it against M1**, per VI.3's own instrument ceiling. (3) Batch the old-binary con
 lead with numbers: the `1000000` sentinel, whose probe is a build and not an argument.
 
 **Next check due: tick 1063.**
+
+## Check #98 — tick 1063
+
+**Horizon:** H0 — Pareto Web Parity. **Gate:** ~83% WPT across categories · oracle-verified · daily-drivable shell · every rendered construct queryable through the semantic API.
+
+**Gate or scoreboard?** **Gate.** Eight ticks (1056–1062), **seven Chrome-exact RED-proven capability
+fixes, zero regressions traded**, and check #97's binding recommendation — *finish the §8/§9/§10
+enumeration before opening a new area* — **executed in full and closed**: zero unknowns and zero
+receipt-only rows in that range, six of six discharged (`§9.6.1` clean, `§10.3.5` one defect,
+`§10.6.3`+`§10.6.7` clean plus one found beside them, `§10.6.4` clean plus two at the paired seam,
+`§10.2` clean plus one, `§9.4.3` two; `§9.2.3 run-in` refused as dead).
+
+---
+
+### ⚠⚠⚠ FINDING 1 — THREE OF EIGHT TICKS FOUND THE INSTRUMENT WRONG, NOT THE ENGINE, AND VI.3 PREDICTED THIS IN WRITING
+
+Not three unrelated surprises — one class, arriving three different ways in one window:
+
+```text
+  t1059  a negative `width` must be a PARSE ERROR      -> the LIVE Stylo path was ALREADY
+         (declaration dropped), we clamped to 0            Chrome-exact. MinimalCascade was wrong.
+  t1061  22 of svg/linking's 26 failures are one       -> the reftest runner never runs the
+         mechanism; the fix is real and RED-proven        background-image subresource pass, so
+         and the suite reads 4/26 BEFORE AND AFTER       the instrument cannot SEE the fix.
+  t1062  two-value `display` unparsed by Minimal       -> the LIVE path was ALREADY Chrome-exact
+         — and the first battery agreed 7 of 8            on all nine rows.
+```
+
+VI.3's H0.1 row already says the remaining M1 distance is *"87% instrument"* and that the loop *"must
+not grind engine ticks against"* it. This window is that sentence arriving from a direction the row
+did not name: **not the score's denominator, but the FIXTURE's cascade and the RUNNER's coverage.**
+`engine/layout`'s `layout_html` builds `MinimalCascade`, so **every layout battery this loop has ever
+run is styled by the cascade the product does not ship** — a fixture can report a layout defect that
+does not exist, and the hunt starts in `layout_block`.
+
+⚠ **This is not an argument for retiring `MinimalCascade`** — VI.1 already records the owner decision
+that it is *"the headless / JS-less fallback… not obviously worth retiring"*, and the
+`--no-default-features` build **ships** it, so both fixes are real capability. The finding is narrower
+and sharper: **before attributing a battery failure to layout, ask which cascade parsed the fixture**,
+and before crediting a WPT delta to a fix, confirm the runner exercises the path. Both checks are one
+command (`manuk-wpt boxes --html`, and tracing what the decoder actually receives).
+
+---
+
+### ⚠⚠⚠ FINDING 2 — A RED-PROOF THAT COMES BACK GREEN IS A READING, AND IT PAID TWICE
+
+t1045 established *run the RED pass before believing the fix*. This window found the other half:
+
+```text
+  t1058  mutate the block axis to read `direction`  -> gate stayed GREEN, because the row put
+         (the battery's own central claim)             `direction` on the BOX and the rule reads
+                                                        the CONTAINING BLOCK. The row asserted
+                                                        NOTHING. Re-measuring it correctly found a
+                                                        SECOND, larger defect (§10.6.4 has no
+                                                        "unless negative" clause — wrong under BOTH
+                                                        directions, so not an RTL bug at all).
+  t1061  delete the `w <= 0` guard                  -> gate stayed GREEN: for a negative extent,
+                                                        DISCARDING and CLAMPING coincide. Added the
+                                                        row that separates them.
+```
+
+> **A MUTATION THAT LEAVES THE GATE GREEN IS NOT A FAILED RED-PROOF — IT IS A READING ABOUT THE ROW,
+> AND THE ROW'S CAPTION IS WHERE YOU WERE ABOUT TO BANK A CONCLUSION.**
+
+And its cousin, t1062, is the same failure one level out: **a battery agreed with Chrome on 7 of 8
+rows while the feature was completely unimplemented**, because an invalid `display` leaves the
+element at its UA default — the fixture was measuring the UA stylesheet, not the parser. Rebuilt so
+every row is an element whose default differs from the target, it reads 8 of 9 wrong. **Three
+instances in one window of the fixture, not the engine, being the thing that had to be fixed first.**
+
+---
+
+### ⚠⚠ FINDING 3 — "ONE RULE, N IMPLEMENTATIONS" REACHED N = 3, AND ONLY THE ENUMERATION FOUND THE THIRD
+
+The over-constrained inline axis is direction-dependent in **§10.3.3** (in-flow blocks, gated long
+ago), **§10.3.7** (abspos, found t1058) and **§9.4.3** (relative offsets, found t1060). All three were
+written `left`-first. **The engine had the rule three times and got it right once**, and the third
+surfaced only because the enumeration kept walking *after* the second was fixed. The standing form of
+the lesson: when a duplicated rule is fixed, **grep the SPEC for its other sections, not just the
+codebase for its other copies.**
+
+Two more of the window's defects are the same shape at other scales — `layout_float` is a documented
+"second copy" of `layout_block` and was missing both an intrinsic width keyword (t1056) and the
+relative offset (t1060); and t1057's guard was written into a **recursion** while every caller enters
+at the node the rule is about.
+
+---
+
+### FINDING 4 — I4 AND I5 HELD UNDER A WINDOW WITH NO CORPUS MOVEMENT TO SHOW FOR IT
+
+**Seven Chrome-exact fixes and zero attributable corpus movement**, stated plainly in every tick
+rather than dressed up. Every mover on every panel was solo-re-run on both binaries, and **the rule
+was applied to the numbers the loop wanted**: t1058's `fragrantica +0.0208` and t1060's
+`crazyshop.pl +0.0477 at an identical element count` — the single most persuasive shape a panel diff
+can produce — both dissolved and **neither was banked**. t1059 went further and **declined to run an
+A/B at all**, because Stylo owns `width` on the shipping path so the result was determined in
+advance: *an A/B whose result is known before it runs is theatre, not evidence.*
+
+⚠ **PART VII held under a direct invitation to break it.** The self-audit's one open item is the
+verify wall at **994s against Part 21.2's 300s target**, and all four named remedies (mold/lld,
+cargo-nextest, workspace-hack, risk-based gate scheduling) live in `scripts/`. Recorded and left to
+the observer; not one harness file touched in eight ticks.
+
+⚠ **A published claim was withdrawn before it shipped** (t1062): the doc asserted a measured
+`inline table` gap against Chrome that re-running the row disproved. It had been written from
+reasoning rather than from the row.
+
+---
+
+### ⚠⚠⚠ FINDING 5 — SURFACE AUDIT #46 FOUND THE MAP AND THE CHECKOUT DRAWING EACH OTHER
+
+Interop 2026's 20 focus areas and 4 investigations **all already have rows — zero added, the third
+audit running**, confirming the outside-in axis is exhausted. The yield came from a different
+question: **the WPT checkout is a 23-directory partial clone containing exactly the areas the ratchet
+already tracks** (upstream `css/` has ~93 directories, ours has 16 — and `css-inline`, `css-box`,
+`css-align`, `css-tables`, the literal subject of this window, are not among them). `WPT:TOTAL
+422865` reads as a total over WPT and is a total over a hand-picked subset.
+
+And four directories **are** on disk with no ratchet row, measured for the first time: `svg`
+38p/**108 FAILED**, `mathml` 84p/**66 FAILED**, and `wai-aria` + `accname` at **0 passed, 0 failed,
+442/442 SKIPPED — the reftest runner cannot score the accessibility surface at all.** That is *no*
+score, not a low one, and per **I3** — the AX tree is *"the single most durable moat… never allowed
+to rot"* — it is the largest genuinely unmeasured surface the audit found.
+
+⚠ The audit also **nearly manufactured ~70 false gaps** from the directory-count delta; hand-checking
+each against the map (t1054's rule) left **two** real ones. A false gap costs more than a missed one.
+
+---
+
+**THE STEER, in order:**
+1. **The a11y conformance surface is unmeasurable by the current runner (442/442 skipped) and I3 makes
+   it constitutional.** Either the runner grows a testharness path (`manuk-wpt` is agent territory) or
+   the board stops implying WPT coverage says anything about a11y. This is the window's largest named
+   gap and it outranks more geometry.
+2. **State the WPT denominator wherever the total is published**, and bank `svg`/`mathml`'s 1359
+   on-disk tests so their 174 known failures cannot silently rot — harness-owned, flagged not touched.
+3. **Extend the spec-enumeration method to CSS Position L3** (Display L3 is done, t1062, one gap
+   found and closed). It is the only method still producing rows.
+4. **Ask which cascade parsed the fixture before blaming layout**, and confirm the runner exercises
+   the path before crediting a WPT delta. Both are one command; this window paid for both three times.
+
+**Next check due: tick 1071.**

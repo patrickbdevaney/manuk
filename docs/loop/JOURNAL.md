@@ -46371,6 +46371,69 @@ PERF: none — one UA rule and one narrowed branch in a cascade that already ran
 WIKI: `docs/wiki/css-cascade.md` — where Chrome draws the form-control `box-sizing` line, and why a
 layout-crate test cannot see it.
 
+## Tick 1063 — the constitution check, and three of eight ticks found the INSTRUMENT rather than the engine (2026-08-09)
+
+TICK SHAPE: measurement — the cadence re-read of `CONSTITUTION.MD` (due every 8 ticks; last at 1055),
+banked as check #98 in `docs/loop/CONSTITUTION-CHECK.md`. No build, no network.
+
+⚠⚠⚠ **FINDING 1 — THREE OF EIGHT TICKS FOUND THE INSTRUMENT WRONG, NOT THE ENGINE, AND VI.3 SAID SO
+IN WRITING.** t1059's negative-length parse error, t1061's `svg/linking` reading **4/26 before and
+after a real RED-proven fix**, and t1062's two-value `display` were all cases where **the shipping
+engine was already Chrome-exact** (Stylo) or **the runner could not see the path** (the reftest runner
+never fetches background images). VI.3's H0.1 row already says the remaining M1 distance is *"87%
+instrument"*; this window is that sentence arriving from a direction the row does not name — not the
+score's denominator but **the fixture's cascade and the runner's coverage**. `engine/layout`'s
+`layout_html` builds `MinimalCascade`, so **every layout battery this loop has ever run is styled by
+the cascade the product does not ship.** The narrow, actionable form: *ask which cascade parsed the
+fixture before blaming layout; confirm the runner exercises the path before crediting a WPT delta.*
+Both are one command, and this window paid for both three times.
+
+⚠⚠⚠ **FINDING 2 — A RED-PROOF THAT COMES BACK GREEN IS A READING, AND IT PAID TWICE.** t1045 gave
+the loop *run the RED pass before believing the fix*; this window found the other half. At t1058 a
+mutation of the battery's own central claim left the gate **green** — the row put `direction` on the
+BOX while the rule reads the CONTAINING BLOCK, so it asserted nothing — and re-measuring it correctly
+found a **second, larger defect** wrong under both directions. At t1061 deleting the `w <= 0` guard
+left the gate green because discarding and clamping coincide for a negative extent. And t1062 is the
+same failure one level out: **a battery agreed with Chrome on 7 of 8 rows while the feature was
+completely unimplemented**, because an invalid `display` leaves the element at its UA default.
+**Three instances in one window of the FIXTURE, not the engine, being the thing that had to be fixed
+first.**
+
+⚠⚠ **FINDING 3 — *ONE RULE, N IMPLEMENTATIONS* REACHED N = 3.** The over-constrained inline axis is
+direction-dependent in §10.3.3 (gated long ago), §10.3.7 (found t1058) and §9.4.3 (found t1060), all
+three written `left`-first. **The engine had the rule three times and got it right once**, and the
+third surfaced only because the enumeration kept walking *after* the second was fixed. Standing form:
+**grep the SPEC for a duplicated rule's other sections, not just the codebase for its other copies.**
+
+FINDING 4 — I4/I5 held under a window with no corpus movement to show for it: **seven Chrome-exact
+fixes, zero attributable movement**, stated plainly every time. The solo-rerun rule was applied to the
+numbers the loop *wanted* — t1058's `fragrantica +0.0208` and t1060's `crazyshop.pl +0.0477 at an
+identical element count` both dissolved and **neither was banked** — and t1059 declined to run an A/B
+at all, because Stylo owns `width` on the shipping path so the result was determined in advance.
+⚠ **PART VII held under direct invitation**: the self-audit's one open item is the wall at 994s
+against a 300s target, and all four named remedies live in `scripts/`. Not one harness file touched in
+eight ticks.
+
+⚠⚠⚠ **FINDING 5 — surface audit #46 found the map and the checkout drawing each other.** Interop
+2026's 20 focus areas and 4 investigations all already have rows (**zero added, third audit running**),
+while the WPT checkout turns out to be a **23-directory partial clone containing exactly the areas the
+ratchet tracks**. And `wai-aria` + `accname` read **0 passed, 0 failed, 442/442 SKIPPED** — the reftest
+runner cannot score the accessibility surface at all. Per **I3**, which calls the AX tree *"the single
+most durable moat… never allowed to rot"*, that is the largest genuinely unmeasured surface on the map.
+
+THE STEER (full text in check #98): (1) the a11y conformance surface is unmeasurable by the current
+runner and I3 makes it constitutional — that outranks more geometry; (2) state the WPT denominator
+wherever the total is published and bank `svg`/`mathml`'s 1359 on-disk tests (harness-owned, flagged);
+(3) extend the spec enumeration to CSS Position L3 — the only method still producing rows; (4) ask
+which cascade parsed the fixture before blaming layout.
+
+RATCHET: measurement only, no engine crate touched. manuk-layout 145/145 unmoved.
+
+PERF: none — measurement only.
+
+WIKI: none — this tick's artefact is `docs/loop/CONSTITUTION-CHECK.md` check #98, which is the wiki
+for the loop's own governance. [no-pattern]
+
 ## Tick 1062 — the battery that agreed with Chrome on 7 of 8 rows while the feature was completely unimplemented (2026-08-09)
 
 TICK SHAPE: primitive — CSS Display L3's **two-value `display`** (`display: <outside> <inside>`),
