@@ -11,12 +11,12 @@
 
 | | value | over |
 |---|---|---|
-| ticks landed | **787** | ticks 1–1078 |
-| median tick cycle | **27m** | 786 intervals |
-| median, last 10 | **7m** | 10 intervals |
+| ticks landed | **788** | ticks 1–1079 |
+| median tick cycle | **27m** | 787 intervals |
+| median, last 10 | **17m** | 10 intervals |
 | fastest / slowest | 5s / 5.4d | |
-| **ticks per hour** | **1.12** | 703.6h elapsed |
-| median verify wall | **63s** | 726 ticks |
+| **ticks per hour** | **1.12** | 704.6h elapsed |
+| median verify wall | **63s** | 727 ticks |
 | wall trend | 39s → 13m — getting slower ⚠️ | first 3 vs last 3 |
 
 The **cycle** is the real unit: implement → debug → verify wall → land. The wall is only part of
@@ -27,11 +27,11 @@ it, and a wall that grows taxes every future tick, so it is tracked separately f
 ### Near — the daily driver (doc / app / platform web)
 
 * **capabilities asserted** (`G_CAPABILITY`): 48 → **81**
-* **live gates**: 27 → **430**
-* **✅ rows in the capability ledger**: 144 → **543**
+* **live gates**: 27 → **431**
+* **✅ rows in the capability ledger**: 144 → **544**
 * **Bar 0 — oracle hangs**: 0 of 265 sites
 
-**343 of 787 ticks** (44%) moved a
+**344 of 788 ticks** (44%) moved a
 user-visible capability. The rest were instruments, infrastructure and corrections — and the
 ledger says the corrections were not overhead: three of its top three priorities were phantoms,
 and finding that out redirected everything after it.
@@ -90,7 +90,7 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 
 ## What a capability costs
 
-* **343** capability ticks, median cycle **27m**
+* **344** capability ticks, median cycle **27m**
 * median diff per tick: **+260 / −34** lines across 8 files
 
 ## Every tick
@@ -884,5 +884,6 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 | **1076** | 2026-08-09 11:32 | 6m | measurement | 13m | +130/−33 | 429 | 81 | 56.0% · | the suite re-ranked once it was honest, and three hypotheses refuted (2026-08-09) |
 | **1077** | 2026-08-09 11:36 | 4m | measurement | 13m | +145/−33 | 429 | 81 | 56.0% · | 10.5% of the CSS 2.1 suite's remaining failures are ONE pseudo-element that has no row on  |
 | **1078** | 2026-08-09 12:37 | 61m | capability | 13m | +708/−47 | 430 | 81 | 56.0% · | `::first-letter` was one arm of one `match` away, and UAX #14 owned 196 of the 339 (2026-0 |
+| **1079** | 2026-08-09 13:40 | 63m | capability | 13m | +959/−129 | 431 | 81 | 56.0% · | the border is stored UNIFORM, and the top edge being right is why nobody saw it (2026-08-0 |
 
 *`·` after a WPT figure means **carried forward**, not measured this tick.*

@@ -453,9 +453,12 @@ struct PlacedCell {
 /// A box's painted border: per-edge widths (top, right, bottom, left) and a single color.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct Border {
+    /// Top, right, bottom, left — and `colors`/`styles` are in the SAME order, because a border's
+    /// three properties are three parallel per-side arrays and pairing them by index is what makes
+    /// a wrong pairing impossible to write.
     pub widths: [f32; 4],
-    pub color: Rgba,
-    pub style: manuk_css::BorderStyle,
+    pub colors: [Rgba; 4],
+    pub styles: [manuk_css::BorderStyle; 4],
 }
 
 impl LayoutBox {
@@ -1060,10 +1063,12 @@ fn border_of(s: &ComputedStyle) -> Option<Border> {
     if w.top == 0.0 && w.right == 0.0 && w.bottom == 0.0 && w.left == 0.0 {
         None
     } else {
+        let c = s.border_color;
+        let st = s.border_style;
         Some(Border {
             widths: [w.top, w.right, w.bottom, w.left],
-            color: s.border_color,
-            style: s.border_style,
+            colors: [c.top, c.right, c.bottom, c.left],
+            styles: [st.top, st.right, st.bottom, st.left],
         })
     }
 }

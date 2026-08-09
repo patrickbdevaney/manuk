@@ -592,7 +592,15 @@ pub fn to_computed_style(cv: &ComputedValues) -> ComputedStyle {
             cv.clone_border_left_width().0.to_f32_px()
         },
     };
-    s.border_color = abs_to_rgba(&cv.clone_border_top_color().resolve_to_absolute(&current));
+    // ⚠ **All four sides, not `clone_border_top_color()` four times.** Reading only the top edge is
+    // what made every box on the web paint its four edges in one colour until t1079 — and because
+    // the top edge is right, nothing looked broken until a test distinguished the sides.
+    s.border_color = Sides {
+        top: abs_to_rgba(&cv.clone_border_top_color().resolve_to_absolute(&current)),
+        right: abs_to_rgba(&cv.clone_border_right_color().resolve_to_absolute(&current)),
+        bottom: abs_to_rgba(&cv.clone_border_bottom_color().resolve_to_absolute(&current)),
+        left: abs_to_rgba(&cv.clone_border_left_color().resolve_to_absolute(&current)),
+    };
 
     // `opacity` — own value; the *effective* (subtree-folded) value is computed by the caller.
     // (`visibility` is not exposed by Stylo's servo build, so it is recovered from MinimalCascade

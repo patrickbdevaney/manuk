@@ -448,9 +448,13 @@ pub struct BackgroundPosition {
     pub y: BgPos,
 }
 
-/// `border-style` — the LINE style of a border. Stored uniform (matching `border_color`, which is also
-/// uniform); per-side styles are a follow-on. `groove`/`ridge`/`inset`/`outset` collapse to `Solid`
-/// (their bevel shading is a paint refinement, and a solid line is the honest approximation).
+/// `border-style` — the LINE style of ONE side of a border. `groove`/`ridge`/`inset`/`outset`
+/// collapse to `Solid` (their bevel shading is a paint refinement, and a solid line is the honest
+/// approximation).
+///
+/// ⚠ Held per side in a [`Sides<BorderStyle>`] since t1079. It was a scalar for 1,078 ticks, beside
+/// a per-side `border_width`, so `border-bottom-style: dashed` painted solid whenever the top said
+/// solid — see the field's own note.
 #[derive(Clone, Copy, Debug, PartialEq, Default)]
 pub enum BorderStyle {
     #[default]
@@ -1100,9 +1104,19 @@ pub struct ComputedStyle {
     pub margin: Sides<Dim>,
     pub padding: Sides<Dim>,
     pub border_width: Sides<f32>,
-    pub border_color: Rgba,
-    /// `border-style` — the line style (solid/dashed/dotted/double), uniform like `border_color`.
-    pub border_style: BorderStyle,
+    /// `border-*-color`, **per side**.
+    ///
+    /// ⚠⚠⚠ **This was a single `Rgba` for 1,078 ticks, sitting beside a per-side `border_width`**,
+    /// and `stylo_map` filled it from `clone_border_top_color()` — so every box on the web painted
+    /// all four of its edges in its TOP edge's colour. The idioms that breaks are not exotic: the
+    /// `border-left: 3px solid <brand>` accent bar on a card or blockquote, the `border-bottom`
+    /// rule under a heading or active tab, and every table with a coloured horizontal rule. It was
+    /// found from the other end — CSS 2.1's `*-applies-to-NNN` family, 483 of the suite's 3,022
+    /// remaining failures, whose REFERENCE files distinguish a box's top edge from its bottom by
+    /// giving them different colours.
+    pub border_color: Sides<Rgba>,
+    /// `border-*-style`, per side, for the same reason and found by the same probe.
+    pub border_style: Sides<BorderStyle>,
     /// `border-radius` — a single uniform corner radius in px (per-corner radii are a follow-on).
     /// `0.0` = square corners.
     pub border_radius: f32,
@@ -1476,8 +1490,8 @@ impl ComputedStyle {
             margin: Sides::all(Dim::Px(0.0)),
             padding: Sides::all(Dim::Px(0.0)),
             border_width: Sides::all(0.0),
-            border_color: Rgba::BLACK,
-            border_style: BorderStyle::default(),
+            border_color: Sides::all(Rgba::BLACK),
+            border_style: Sides::all(BorderStyle::default()),
             border_radius: 0.0,
             visibility: Visibility::Visible,
             pointer_events: PointerEvents::Auto,
@@ -4033,7 +4047,7 @@ fn apply_ua_defaults(s: &mut ComputedStyle, el: &ElementData) {
     // gets a default width; buttons hug their label. This is what makes fields visible.
     if matches!(tag, "input" | "button" | "textarea" | "select") {
         s.border_width = Sides::all(1.0);
-        s.border_color = Rgba::new(118, 118, 118, 255);
+        s.border_color = Sides::all(Rgba::new(118, 118, 118, 255));
         s.padding = Sides {
             top: Dim::Px(2.0),
             bottom: Dim::Px(3.0),
@@ -5256,35 +5270,32 @@ fn apply_declaration(s: &mut ComputedStyle, d: &Declaration, parent_fs: f32) {
                 }
             };
         }
-        // The `border` family. Widths feed the box model; the color feeds paint; the line
-        // style is not tracked (only presence, since `none`/`hidden` zero the width).
+        // The `border` family. Widths feed the box model; the colour and the line style feed paint,
+        // and both are **per side** — a shorthand that names one side must not repaint the other
+        // three, which is exactly what it did until t1079.
         "border" => {
             let (w, c, st) = parse_border_shorthand(v, s.font_size);
             if let Some(w) = w {
                 s.border_width = Sides::all(w);
             }
             if let Some(c) = c {
-                s.border_color = c;
+                s.border_color = Sides::all(c);
             }
             if let Some(st) = st {
-                s.border_style = st;
+                s.border_style = Sides::all(st);
             }
         }
         "border-top" | "border-right" | "border-bottom" | "border-left" => {
             let (w, c, st) = parse_border_shorthand(v, s.font_size);
+            let side = d.name.as_str();
             if let Some(w) = w {
-                match d.name.as_str() {
-                    "border-top" => s.border_width.top = w,
-                    "border-right" => s.border_width.right = w,
-                    "border-bottom" => s.border_width.bottom = w,
-                    _ => s.border_width.left = w,
-                }
+                *side_mut(&mut s.border_width, side) = w;
             }
             if let Some(c) = c {
-                s.border_color = c;
+                *side_mut(&mut s.border_color, side) = c;
             }
             if let Some(st) = st {
-                s.border_style = st;
+                *side_mut(&mut s.border_style, side) = st;
             }
         }
         "border-radius" => {
@@ -5568,28 +5579,125 @@ fn apply_declaration(s: &mut ComputedStyle, d: &Declaration, parent_fs: f32) {
         "border-right-width" => s.border_width.right = border_len(v, s.font_size),
         "border-bottom-width" => s.border_width.bottom = border_len(v, s.font_size),
         "border-left-width" => s.border_width.left = border_len(v, s.font_size),
+        // `border-color` takes the CSS box-side shorthand's 1-4 value form, exactly as
+        // `border-width` does — `border-color: red blue` is red on the block axis and blue on the
+        // inline one, and collapsing it to the first token painted three sides the wrong colour.
         "border-color" => {
-            if let Some(c) = values::parse_color(v) {
-                s.border_color = c;
+            let toks: Vec<&str> = v.split_whitespace().collect();
+            if let Some(sides) = expand_box_sides(&toks, values::parse_color) {
+                s.border_color = sides;
             }
         }
-        "border-style"
-        | "border-top-style"
-        | "border-right-style"
-        | "border-bottom-style"
-        | "border-left-style" => {
-            // `none`/`hidden` remove the border; other styles keep whatever width is set. The style
-            // is stored uniform (like `border_color`): the FIRST style token of a multi-value
-            // `border-style: solid dashed` wins (per-side styles are a follow-on).
-            if let Some(first) = v.split_whitespace().next() {
-                if matches!(first, "none" | "hidden") {
-                    s.border_width = Sides::all(0.0);
-                } else if let Some(st) = border_style_of(first) {
-                    s.border_style = st;
+        "border-top-color" => set_side_color(&mut s.border_color.top, v),
+        "border-right-color" => set_side_color(&mut s.border_color.right, v),
+        "border-bottom-color" => set_side_color(&mut s.border_color.bottom, v),
+        "border-left-color" => set_side_color(&mut s.border_color.left, v),
+        // `none`/`hidden` remove THAT side's border; other styles keep whatever width is set.
+        //
+        // ⚠ **`border-left-style: none` used to zero all four widths.** The `Sides::all(0.0)` below
+        // was written when the style was a scalar, and it made a single-side reset delete the box's
+        // whole border — the shape `border: 1px solid; border-right-style: none` takes on every
+        // segmented control and button group on the web.
+        "border-style" => {
+            let toks: Vec<&str> = v.split_whitespace().collect();
+            if let Some(sides) = expand_sides_str(&toks) {
+                for (name, tok) in [
+                    ("border-top", sides.top),
+                    ("border-right", sides.right),
+                    ("border-bottom", sides.bottom),
+                    ("border-left", sides.left),
+                ] {
+                    set_side_style(s, name, tok);
                 }
             }
         }
+        "border-top-style" | "border-right-style" | "border-bottom-style" | "border-left-style" => {
+            if let Some(first) = v.split_whitespace().next() {
+                let side = d.name.as_str().trim_end_matches("-style");
+                set_side_style(s, side, first);
+            }
+        }
         _ => {}
+    }
+}
+
+/// One side of a [`Sides`], selected by the CSS property name that names it (`border-top`,
+/// `padding-left`, …). The name is matched on its LAST segment, so `border-top` and
+/// `border-top-style` both select `top`.
+fn side_mut<'a, T>(sides: &'a mut Sides<T>, prop: &str) -> &'a mut T {
+    if prop.contains("-right") {
+        &mut sides.right
+    } else if prop.contains("-bottom") {
+        &mut sides.bottom
+    } else if prop.contains("-left") {
+        &mut sides.left
+    } else {
+        &mut sides.top
+    }
+}
+
+/// **CSS's 1-to-4-value box-side shorthand** (`<all>` · `<block> <inline>` · `<top> <inline>
+/// <bottom>` · `<top> <right> <bottom> <left>`), applied to any parsed value type.
+///
+/// Returns `None` when the list is empty, over-long, or any token fails to parse — a partially
+/// understood `border-color: red notacolor` must leave the whole declaration alone rather than
+/// paint half of it, because a declaration with an invalid component is invalid as a whole
+/// (CSS Syntax); applying the parseable half is a silent, asymmetric render.
+fn expand_box_sides<T: Copy, F: Fn(&str) -> Option<T>>(toks: &[&str], f: F) -> Option<Sides<T>> {
+    let s = expand_sides_str(toks)?;
+    Some(Sides {
+        top: f(s.top)?,
+        right: f(s.right)?,
+        bottom: f(s.bottom)?,
+        left: f(s.left)?,
+    })
+}
+
+/// [`expand_box_sides`]'s positional half, before any value is parsed — kept separate because a
+/// `border-style` list is consumed as raw tokens (`none` is not a `BorderStyle`, it is a width of
+/// zero), and the 1-to-4 rule must not be written twice.
+fn expand_sides_str<'a>(toks: &[&'a str]) -> Option<Sides<&'a str>> {
+    Some(match toks {
+        [a] => Sides::all(*a),
+        [a, b] => Sides {
+            top: a,
+            bottom: a,
+            right: b,
+            left: b,
+        },
+        [a, b, c] => Sides {
+            top: a,
+            right: b,
+            left: b,
+            bottom: c,
+        },
+        [a, b, c, d] => Sides {
+            top: a,
+            right: b,
+            bottom: c,
+            left: d,
+        },
+        _ => return None,
+    })
+}
+
+/// `border-<side>-color: <color>` — a no-op on an unparseable value, which is what an invalid
+/// declaration must be.
+fn set_side_color(slot: &mut Rgba, v: &str) {
+    if let Some(c) = values::parse_color(v) {
+        *slot = c;
+    }
+}
+
+/// `border-<side>-style: <style>` on `side` (`border-top`, `border-right`, …).
+///
+/// `none`/`hidden` zero **that side's** width and nothing else — CSS 2.1 §8.5.3: a border with
+/// `border-style: none` has a used width of zero whatever `border-width` says.
+fn set_side_style(s: &mut ComputedStyle, side: &str, tok: &str) {
+    if matches!(tok, "none" | "hidden") {
+        *side_mut(&mut s.border_width, side) = 0.0;
+    } else if let Some(st) = border_style_of(tok) {
+        *side_mut(&mut s.border_style, side) = st;
     }
 }
 
@@ -7477,7 +7585,7 @@ mod shadow_scoping_tests {
             Sides::all(5.0),
             "border shorthand sets all widths"
         );
-        assert_eq!(s.border_color, Rgba::new(0x33, 0x33, 0x33, 255));
+        assert_eq!(s.border_color, Sides::all(Rgba::new(0x33, 0x33, 0x33, 255)));
         assert_eq!(s.box_sizing, BoxSizing::BorderBox);
 
         // Per-side + keyword widths; a visible style with no length defaults to medium (3px).
@@ -7506,6 +7614,65 @@ mod shadow_scoping_tests {
             map[&dom.find_first("p").unwrap()].box_sizing,
             BoxSizing::ContentBox
         );
+    }
+
+    /// **A border has FOUR colours and FOUR styles** (t1079).
+    ///
+    /// This lives here rather than only in `G_BORDER_SIDES` because the page gate cannot see it:
+    /// the shipping cascade is Stylo, which owns border colour and width outright, so a
+    /// MinimalCascade regression in either is invisible through `Page::load`. MinimalCascade is
+    /// still the cascade the layout batteries run on, and it is where the two shorthands and the
+    /// four longhands are parsed.
+    #[test]
+    fn border_colour_and_style_are_per_side() {
+        // The 1-to-4-value box-side shorthand: two values are block axis, then inline axis.
+        let (dom, map) = cascade_of(r#"<p style="border-color:red blue"></p>"#);
+        let s = &map[&dom.find_first("p").unwrap()];
+        assert_eq!(s.border_color.top, Rgba::new(255, 0, 0, 255));
+        assert_eq!(s.border_color.bottom, Rgba::new(255, 0, 0, 255));
+        assert_eq!(
+            s.border_color.left,
+            Rgba::new(0, 0, 255, 255),
+            "`border-color: red blue` used to collapse to its FIRST token"
+        );
+        assert_eq!(s.border_color.right, Rgba::new(0, 0, 255, 255));
+
+        // The four longhands — which had no arm at all before t1079.
+        let (dom, map) = cascade_of(
+            r#"<p style="border-top-color:red;border-right-color:lime;border-bottom-color:blue;border-left-color:black"></p>"#,
+        );
+        let s = &map[&dom.find_first("p").unwrap()];
+        assert_eq!(s.border_color.top, Rgba::new(255, 0, 0, 255));
+        assert_eq!(s.border_color.right, Rgba::new(0, 255, 0, 255));
+        assert_eq!(s.border_color.bottom, Rgba::new(0, 0, 255, 255));
+        assert_eq!(s.border_color.left, Rgba::new(0, 0, 0, 255));
+
+        // The per-side shorthand must not repaint the other three sides.
+        let (dom, map) =
+            cascade_of(r#"<p style="border:1px solid red;border-bottom:1px dashed blue"></p>"#);
+        let s = &map[&dom.find_first("p").unwrap()];
+        assert_eq!(s.border_color.top, Rgba::new(255, 0, 0, 255));
+        assert_eq!(s.border_color.bottom, Rgba::new(0, 0, 255, 255));
+        assert_eq!(s.border_style.top, BorderStyle::Solid);
+        assert_eq!(s.border_style.bottom, BorderStyle::Dashed);
+
+        // ⚠ `border-<side>-style: none` zeroes THAT side's width and no other. It used to zero all
+        // four, so `border: 1px solid; border-right-style: none` deleted the whole border — the
+        // shape every segmented control and button group is built from.
+        let (dom, map) = cascade_of(r#"<p style="border:10px solid;border-right-style:none"></p>"#);
+        let s = &map[&dom.find_first("p").unwrap()];
+        assert_eq!(s.border_width.right, 0.0);
+        assert_eq!(s.border_width.top, 10.0, "the other three edges SURVIVE it");
+        assert_eq!(s.border_width.bottom, 10.0);
+        assert_eq!(s.border_width.left, 10.0);
+
+        // …and the 1-to-4 form of `border-style` reaches all four sides, `none` included.
+        let (dom, map) =
+            cascade_of(r#"<p style="border:10px solid;border-style:dashed none"></p>"#);
+        let s = &map[&dom.find_first("p").unwrap()];
+        assert_eq!(s.border_style.top, BorderStyle::Dashed);
+        assert_eq!(s.border_width.left, 0.0);
+        assert_eq!(s.border_width.top, 10.0);
     }
 
     #[test]

@@ -6332,7 +6332,8 @@ impl Page {
                 if let Some(s) = styles.get(&node) {
                     b.background = s.background_color;
                     if let Some(border) = &mut b.border {
-                        border.color = s.border_color;
+                        let c = s.border_color;
+                        border.colors = [c.top, c.right, c.bottom, c.left];
                     }
                 }
             }

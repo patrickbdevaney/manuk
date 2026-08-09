@@ -957,11 +957,11 @@ fn extra_computed_props(cs: &manuk_css::ComputedStyle) -> Vec<(&'static str, Str
     // `BorderStyle` has no `none`/`hidden` variant: the cascade collapses both to a ZERO WIDTH
     // (`stylo_map` does exactly that), so the style keyword has to be recovered from the width or
     // every element on the page reports `solid` for a border it does not have.
-    let bstyle = |w: f32| {
+    let bstyle = |w: f32, st: BorderStyle| {
         if w <= 0.0 {
             "none"
         } else {
-            match cs.border_style {
+            match st {
                 BorderStyle::Solid => "solid",
                 BorderStyle::Dashed => "dashed",
                 BorderStyle::Dotted => "dotted",
@@ -997,14 +997,29 @@ fn extra_computed_props(cs: &manuk_css::ComputedStyle) -> Vec<(&'static str, Str
         ("border-right-width", px(cs.border_width.right)),
         ("border-bottom-width", px(cs.border_width.bottom)),
         ("border-left-width", px(cs.border_width.left)),
-        ("border-top-color", rgba_css(&cs.border_color)),
-        ("border-right-color", rgba_css(&cs.border_color)),
-        ("border-bottom-color", rgba_css(&cs.border_color)),
-        ("border-left-color", rgba_css(&cs.border_color)),
-        ("border-top-style", bstyle(cs.border_width.top).into()),
-        ("border-right-style", bstyle(cs.border_width.right).into()),
-        ("border-bottom-style", bstyle(cs.border_width.bottom).into()),
-        ("border-left-style", bstyle(cs.border_width.left).into()),
+        // Per SIDE since t1079 — these four used to be four copies of the top edge's colour, so
+        // `getComputedStyle(el).borderLeftColor` agreed with the paint only because the paint was
+        // wrong in the same way.
+        ("border-top-color", rgba_css(&cs.border_color.top)),
+        ("border-right-color", rgba_css(&cs.border_color.right)),
+        ("border-bottom-color", rgba_css(&cs.border_color.bottom)),
+        ("border-left-color", rgba_css(&cs.border_color.left)),
+        (
+            "border-top-style",
+            bstyle(cs.border_width.top, cs.border_style.top).into(),
+        ),
+        (
+            "border-right-style",
+            bstyle(cs.border_width.right, cs.border_style.right).into(),
+        ),
+        (
+            "border-bottom-style",
+            bstyle(cs.border_width.bottom, cs.border_style.bottom).into(),
+        ),
+        (
+            "border-left-style",
+            bstyle(cs.border_width.left, cs.border_style.left).into(),
+        ),
         ("outline-width", px(cs.outline_width)),
         ("outline-color", rgba_css(&cs.outline_color)),
         ("box-shadow", box_shadow_css(&cs.box_shadows)),

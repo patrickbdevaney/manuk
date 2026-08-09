@@ -46371,6 +46371,87 @@ PERF: none — one UA rule and one narrowed branch in a cascade that already ran
 WIKI: `docs/wiki/css-cascade.md` — where Chrome draws the form-control `box-sizing` line, and why a
 layout-crate test cannot see it.
 
+## Tick 1079 — the border is stored UNIFORM, and the top edge being right is why nobody saw it (2026-08-09)
+
+TICK SHAPE: capability — `border-*-color` and `border-*-style` become per-side. `engine/css`
+(storage + MinimalCascade parse + Stylo map), `engine/layout`, `engine/paint`, `engine/page`,
+`engine/js`. New gate `G_BORDER_SIDES`.
+
+⚠⚠⚠ **THE RANKING POINTED AT MARGINS AND POSITIONING, AND THE MECHANISM WAS BORDER PAINT.**
+Re-ranking `css/CSS2`'s 3,022 post-t1078 failures gave `margin-padding-clear` 394, `normal-flow`
+353, `positioning` 327 — three chapters with nothing obvious in common. What they share is the
+`*-applies-to-NNN` family (**483 failures, 16% of the whole remainder**), which enumerates one
+property across CSS 2.1's ~16 `display` values. The first one opened put the defect not in the test
+but in the **REFERENCE**:
+
+```html
+   margin-top-applies-to-012-ref.xht
+   div { border-top: blue solid 10px; border-bottom: orange solid 10px; height: 50px }
+```
+
+Chrome: blue bar, gap, ORANGE bar. Ours: blue bar, gap, **BLUE** bar. Probed directly:
+
+```text
+   border-top-color:blue right:red bottom:orange left:green   ->  all four painted BLUE
+   border-*-style: solid / dashed / dotted / double           ->  all four painted SOLID
+```
+
+`ComputedStyle` held `border_color: Rgba` and `border_style: BorderStyle` as **scalars, beside a
+per-side `border_width: Sides<f32>`**, and `stylo_map` filled the colour from
+`clone_border_top_color()`. ⚠⚠⚠ **The top edge was right, which is exactly why nothing looked
+broken** — a defect that is correct on the first thing anyone checks survives every screenshot and
+all 429 gates. It took a test that distinguishes the sides *on purpose* to see it.
+
+Three parse defects fell out of the same scalar: `border-color: red blue` collapsed to its first
+token (the 1-to-4-value box-side form was never expanded); the four `border-<side>-color` longhands
+had **no arm at all** in MinimalCascade, not mis-parsed but absent; and `border-left-style: none`
+zeroed **all four** widths, which is a whole-border delete on
+`border: 1px solid; border-right-style: none` — how every segmented control joins its cells.
+
+MEASURED, same corpus, deterministic offline reftest:
+
+```text
+   css/CSS2   2624 passed / 3022 failed   ->   3006 passed / 2640 failed   +382
+              385 new passes, 3 losses
+```
+
+⚠⚠⚠ **THE 3 LOSSES WERE PASSING VACUOUSLY, AND THE PROOF IS MECHANICAL RATHER THAN ARGUED.**
+`positioning/left-091`, `left-092` and `margin-padding-clear/margin-left-113` are all *"test passes
+if there is no red"* tests: a red border must be exactly covered by a black one. Each puts
+`border-left: <length> solid red` on a box whose other three sides are unset — so
+`clone_border_top_color()` returned **currentColor, i.e. black**, and we painted the red border
+black. There was no red because we could not draw red. Replacing `solid red` with `solid black` in
+`left-091` and rendering with the FIXED binary gives an image **byte-identical to the reference**
+(0 differing pixels), which is the whole proof.
+
+What they now expose is a separate pre-existing defect, named rather than absorbed: **our `ex` unit
+is ~10% short of Chrome's** while `em` is exact — `border-left: 6ex` is 60px here and 66px in Chrome
+on the same 20px monospace face; `6em` is 120px in both. That is why the inner black border no
+longer reaches across the outer red one. **A test that stops passing because the engine got MORE
+correct is a measurement improving, and it is reported as one** (t1075's 168 CDATA "losses" again).
+
+⚠⚠ **TWO RED-PROOFS CAME BACK GREEN, AND A GREEN MUTATION IS A READING** (t1057). `G_BORDER_SIDES`
+is RED-proven four ways — restore `[top; 4]` in `border_of`; restore `clone_border_top_color()` for
+all four in `stylo_map`; restore `Sides::all(st)` in `set_side_style`; restore `Sides::all(st)` in
+the `border-<side>` shorthand arm (that last pair is what tells a broken shorthand from broken
+storage). But restoring `s.border_color = Sides::all(c)` in MinimalCascade's `border-<side>` arm,
+and restoring `s.border_width = Sides::all(0.0)` in `set_side_style`, changed **nothing** on the
+page. The reason is the standing one: **the shipping cascade is Stylo**, which owns border colour
+and width outright, while only the line STYLE is recovered from MinimalCascade. So the
+MinimalCascade half of the fix is covered by a `manuk-css` unit test, where it IS observable, rather
+than by a page gate that would have passed either way.
+
+RATCHET: `manuk-layout` 151/151, `manuk-paint` 22/22, `manuk-css` 53/53 (one existing assertion
+retyped, one test added), `manuk-page` gates green. `Sides<T>` made the compiler enumerate all 17
+consumers — the t1048-1055 rule holding, since a regex over `border_color` would have missed the
+`Border` struct in `manuk-layout` and the four `getComputedStyle` rows in `manuk-js`.
+
+PERF: none — the same number of `Rect` display items for a uniform border; three extra `Sides`
+fields per `ComputedStyle`.
+
+WIKI: docs/wiki/box-layout.md — "A border has FOUR colours and FOUR styles, and ours had one of each
+(t1079)"
+
 ## Tick 1078 — `::first-letter` was one arm of one `match` away, and UAX #14 owned 196 of the 339 (2026-08-09)
 
 TICK SHAPE: capability — build the pseudo-element t1077 measured at 10.5% of the CSS 2.1 suite's

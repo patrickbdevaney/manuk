@@ -7414,3 +7414,91 @@ journal complete for the last five ticks, `SELF-AUDIT: methodology and reality a
    `css/css-backgrounds` is the lowest-scoring directory on the board.
 
 **Next check due: tick 1079.**
+
+## Check #100 — tick 1079 (2026-08-09)
+
+**HORIZON: H0. THE GATE, stated out loud, from PART VII rather than from memory:** *"reliably renders
+and runs the representative real internet"* — **not** a WPT percentage; *"83% and beyond is explicitly
+OUT OF SCOPE for v1."* The instrument is **M1 on the in-scope CrUX corpus** (`shape ≥ 0.75` **AND**
+jarring-clean, bot-walls excluded per `DAILY-DRIVER-CERTIFICATION.md` §3), banked in
+`FIDELITY-PROGRESS.tsv`.
+
+### 1 · GATE OR SCOREBOARD? — SCOREBOARD, and the honest form of that answer is more interesting than the verdict
+
+Every one of the last eight ticks (1072–1079) is `css/CSS2` suite work. The suite is **not the gate**.
+Its last banked gate reading is:
+
+```text
+   sweep t1049 (2026-08-08 18:29)   M1 17.8%   shape-pass 28.7%   shape_mean 60.3   cov_mean 85.7
+```
+
+**Thirty ticks have landed since anything measured the gate.** The lever board has said so twice in
+this session's own output (*"a capability tick must measure THIS tree"*), and the loop kept going.
+That is the drift, and it is named without excuse: a suite delta is cheap, same-hour, and
+deterministic; a sweep is expensive and slow; and the loop has been selecting for the measurement it
+can afford rather than the one that governs it. **That is exactly the failure tick 84 is the memorial
+for**, wearing a different suit — `css/CSS2` is a far better proxy than `encoding` ever was, but a
+better proxy is still a proxy.
+
+### 2 · …AND YET THE ARC IS NOT OFF-MANDATE, which is the part a simple verdict would get wrong
+
+VI.3 binds the loop to **usage-weight × failing-breadth**, and by that ranking the arc is defensible
+tick by tick even though its *selector* is a suite count:
+
+```text
+   t1079   border-*-color/style per side   every card accent bar, tab underline, table rule   REAL
+   t1078   ::first-letter                  drop caps — long-form editorial only               THIN
+   t1075   XHTML CDATA stylesheets         a fifth of the SUITE; a sliver of the real web     THIN
+   t1072-4 table paint layers §17.5.1      every striped/banded data table                    REAL
+```
+
+So the arc is producing genuine daily-driver capability *and* selecting it by a metric the
+constitution demotes. The correction is not "stop the arc" — it is **make the gate the acceptance
+test for the arc**, which is one sweep.
+
+### 3 · INVARIANTS
+
+- **I2 (never patch deps):** held. t1078 reached `PseudoElement::FirstLetter` by *asking Stylo's
+  existing parse a new question* — the cheapest possible form of the borrowed-engine rule, and worth
+  recording as the shape to look for first: the fork surface is still empty.
+- **I3 (semantic model in lockstep):** ⚠ **BENT, mildly, twice.** t1078 and t1079 are both paint/box
+  changes with no a11y-tree consequence — a first-letter run and a border colour do not change
+  `node_rects`. Stated rather than assumed: I re-checked that both flow through the same
+  `LayoutBox::node_rects` producer check #72 identified, and neither adds a rect. But t1079 *did*
+  change `getComputedStyle` (four border colour rows and four style rows), which IS semantic surface,
+  and it landed in the same tick — so I3 is satisfied, by accident of scope rather than by design.
+- **I4 / VI.3 (Pareto):** see §1. The lesson is binding; the loop's selector drifted from it.
+- **I5 (never trade a regression):** held, and tested hard this window. t1079 lost three CSS 2.1
+  tests and did **not** paper over them: they were proven to have been passing *vacuously* (a red
+  border painted black by `currentColor`) by rendering the test with `red`→`black` and getting a
+  byte-identical match to the reference. **A test that stops passing because the engine got more
+  correct is a measurement improving.**
+
+### 4 · PART VI CORRECTIONS
+
+- **VI.3's banked M1 line is stale**: it still cites *"sweep t1023, 17.6%"*. Ground truth is
+  **sweep t1049, M1 17.8%, shape-pass 28.7%, shape_mean 60.3**. Corrected here; the next sweep
+  supersedes it.
+- **VI.2's "aperture" clause needs one addition.** It says the aperture is the biggest lever and
+  names `css/*` and `html/*` as unmeasured. That is now largely wrong for the *upstream* directories
+  and exactly right for one: `css/CSS2` is 9,221 tests on disk and, at **3,006 passed / 2,640 failed /
+  3,575 skipped**, is the loop's single largest measured-and-failing surface. Surface audit #48
+  (this tick) adds the frame that explains why it keeps paying: **Interop 2026 and Baseline have now
+  returned ZERO new map rows twice running, while the two ticks either side of the audit each found
+  a CSS 2.1 feature absent at every layer.** A list of what is NEW cannot rank what is OLD AND
+  MISSING.
+
+### 5 · THE STEER — binding on the next tick
+
+1. ⚠⚠⚠ **RUN THE FIDELITY SWEEP.** Thirty ticks of unmeasured gate is the largest single piece of
+   drift on this board, and it is the agent's job (the observer never runs it — contention
+   false-REDs the perf gates). Everything below is ranked *by* its result and is provisional until
+   it exists.
+2. **Rank CSS 2.1 chapters by PASS RATE, not failure count** (surface audit #48): `visufx` 2.1% and
+   `linebox` 7.4% never appeared in three ticks of rankings because they are small, and a chapter at
+   2% is a missing primitive while a chapter at 45% is a tail.
+3. **`clip: rect()`** is probe-confirmed absent and is `visufx`'s whole work-list — one CSS 2.1
+   §11.1.2 primitive.
+4. **Price each CSS 2.1 candidate against the CORPUS before taking it** (`CORPUS-CONSTRUCTS.md`,
+   three minutes, no build), so the suite ranks *where to look* and the corpus decides *whether to
+   go*. That single step is what would have caught `::first-letter` as the thin one it was.

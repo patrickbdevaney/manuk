@@ -5115,3 +5115,117 @@ carry no row*. A closed loop was diagnosed correctly and its largest instance wa
    its ranked entry points, and paint is where the geometry battery cannot follow.
 
 **Next audit due: tick 1079.**
+
+---
+
+## Audit #48 — tick 1079 (2026-08-09). The world's list is fully covered, and that is the finding.
+
+**Sources read this audit (web, not memory):**
+
+- `https://github.com/web-platform-tests/interop/blob/main/2026/README.md` — the canonical list
+- `https://webkit.org/blog/17818/announcing-interop-2026/` · `https://web.dev/blog/interop-2026`
+- `https://web.dev/baseline/2026` and the 2026 Baseline monthly digests
+- `https://ladybird.org/newsletter/2026-06-30/` — the independent-engine reference point
+
+### 1 · RECONCILED: Interop 2026's twenty focus areas and four investigations, one by one
+
+Container style queries · CSS anchor positioning · CSS `attr()` · `contrast-color()` · CSS zoom ·
+custom highlights · dialogs and popovers · fetch uploads and ranges · IndexedDB · JSPI for Wasm ·
+media pseudo-classes · Navigation API · scoped custom element registries · scroll-driven animations ·
+scroll snap · CSS `shape()` · view transitions · web compat · WebRTC · WebTransport. Investigations:
+accessibility testing · JPEG XL · mobile testing · WebVTT. Baseline 2026 additions checked as well:
+`:active-view-transition`, `shape()`, `contrast-color()`, Trusted Types, zstd `Content-Encoding`.
+
+**Every one already has a row in `CONSTELLATION.tsv`. Zero rows added from the external lists.**
+
+### 2 · ⚠⚠⚠ FINDING 1 — THE EXTERNAL LISTS HAVE NOW ADDED NOTHING TWICE, WHILE THE LAST TWO TICKS BOTH FOUND TOTAL ABSENCES
+
+t1048-1055's audit recorded that Interop 2026 added 0 rows while `block-in-inline` — 30% of the
+corpus — had none. That was read then as one miss. It is a **pattern**, and this audit is where it
+gets named: the two capability ticks immediately preceding it each found a feature that was **not
+implemented at any layer**, and *neither could ever appear on an Interop, Baseline or "what's new"
+list*, because both are twenty-seven years old:
+
+```text
+   t1078   ::first-letter        CSS 2.1 §5.12.1   absent   10.5% of the CSS 2.1 suite's failures
+   t1079   border-*-color/style  CSS 2.1 §8.5      uniform  16% of them (via *-applies-to-NNN)
+```
+
+**A list of what is NEW cannot rank what is OLD AND MISSING.** The vendors' agenda is, by
+construction, a list of things all four engines already ship and disagree about at the edges. Ours is
+an engine that does not ship some of the middle. So the surface audit's Interop pass is now a
+*negative control* — useful for proving the map is not behind the world — and the discovery
+instrument is `~/wpt/css/CSS2`, the 9,221-test CSS 2.1 core suite.
+
+### 3 · THE HONEST CSS 2.1 NUMBER, which belongs on the map
+
+```text
+   css/CSS2   3006 passed · 2640 failed · 3575 skipped   (9,221 on disk)
+              32.6% of the directory · 53.2% of what the runner can run
+```
+
+⚠ The lane matters (audit #47's rule): this is the **reftest** runner, and 3,575 files are skipped —
+so `53.2%` is the score over what ran and `32.6%` is the score over the directory. Both are stated;
+neither is published alone.
+
+### 4 · FINDING 2 — THE WORST CHAPTER BY RATIO IS `visufx`, AND A PROBE NAMES ITS CAUSE
+
+Ranked by pass rate rather than by failure count, which is what the last three ticks' rankings were
+missing:
+
+```text
+   visufx              1 / 48     2.1%     <- worst
+   linebox            14 / 190    7.4%
+   bidi-text          17 / 105   16.2%
+   generated-content  45 / 190   23.7%
+   lists              37 / 82    45.1%
+   text              161 / 354   45.5%
+```
+
+A ranking is a place to look, not a diagnosis, so `visufx`'s three primitives were probed directly
+rather than inferred:
+
+```text
+   visibility: hidden / visible    correct
+   overflow: hidden                correct (clips 80px of content to 20px)
+   clip: rect(0,50px,20px,0)       NOT APPLIED — the full 100x40 box paints
+```
+
+**`clip` is unimplemented and has no row on the map.** Added as `missing`.
+
+### 5 · FINDING 3 — FOUR MORE CSS 2.1 SURFACES WITH NO ROW AT ALL
+
+Checked by grep against both the map and `engine/`:
+
+```text
+   empty-cells       no map row · ZERO occurrences in engine/       — a CSS 2.1 table property
+   caption-side      no map row · implemented in engine/layout      — claimed by nothing
+   quotes / open-quote / close-quote   no map row · no engine hits
+   the `ex` unit     no map row · ~10% short of Chrome (t1079)      — `em` is exact
+```
+
+`empty-cells` and `quotes` are the same shape as t1078 and t1079: **absent, old, and unnameable by
+any external list.**
+
+### 6 · WHAT WE HAD BEEN WRONG ABOUT
+
+**That the surface audit's job is to reconcile against the world's list.** It is not, or not only.
+Reconciling against Interop/Baseline is *cheap and has now returned nothing twice*, while the two
+ticks either side of this audit found absences worth 26% of a 9,221-test suite between them. The
+audit's real question is the one the loop's own instruments cannot ask: **which sections of the specs
+we claim to implement have never had a single test run against them?** For CSS 2.1 the answer is on
+disk and enumerable — 43 chapter directories — and it is the reason this arc keeps paying.
+
+### THE STEER, in order
+
+1. ⚠⚠⚠ **Rank the CSS 2.1 chapters by PASS RATE, not by failure count.** `visufx` (2.1%) and
+   `linebox` (7.4%) never appeared in any of the last three ticks' rankings because they are small;
+   a chapter at 2% is a missing primitive, a chapter at 45% is a tail.
+2. **Take `clip: rect()`** — one CSS 2.1 §11.1.2 primitive, probe-confirmed absent, and `visufx`'s
+   47 failures are its work-list.
+3. **`linebox` at 7.4% is the largest low-rate chapter (176 failures)** and sits directly on the
+   `vertical-align`/line-box arc t913–t935 built. Rank its failure names before assuming.
+4. Keep the Interop pass, but run it as the **negative control it has become** — a few minutes to
+   prove the map is not behind the world, not the audit's main body.
+
+**Next audit due: tick 1089.**

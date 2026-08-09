@@ -416,6 +416,12 @@
   - L7985 · ⚠⚠⚠ A mutation stayed GREEN again, and again it was the row's fault
   - L8000 · The CSS 2.1 suite, re-ranked once it was honestly measured — and three refuted hypotheses (t1076)
   - L8015 · Three hypotheses, each measured and refuted
+  - L8040 · A border has FOUR colours and FOUR styles, and ours had one of each (t1079)
+  - L8062 · It was found from the other end, by a ranking that pointed somewhere else
+  - L8083 · The web idioms it breaks
+  - L8090 · Three parse defects fell out of the same scalar
+  - L8100 · Measured — and three tests that were passing VACUOUSLY
+  - L8130 · Two RED-proofs came back GREEN, which is the other finding
 
 ## browser-capabilities.md
 `docs/wiki/browser-capabilities.md`
@@ -1842,4 +1848,4 @@
   - L124 · Rank mechanisms by FLIP RATE, not failing-subtest count — CSS layout is a multi-assertion slog
 
 ---
-1749 sections across 22 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+1755 sections across 22 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.

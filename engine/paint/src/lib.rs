@@ -648,9 +648,7 @@ impl DisplayList {
                 use manuk_css::BorderStyle as BS;
                 let r = b.rect;
                 let [t, rr, bb, l] = border.widths;
-                let c = border.color;
-                let style = border.style;
-                let mut rect = |x: f32, y: f32, w: f32, h: f32| {
+                let mut rect = |x: f32, y: f32, w: f32, h: f32, c: Rgba| {
                     if w > 0.0 && h > 0.0 {
                         items.push(DisplayItem::Rect {
                             rect: Rect {
@@ -667,49 +665,54 @@ impl DisplayList {
                 // the strip's short dimension; `len` its long one. Solid emits one rect (byte-identical
                 // to before); dashed/dotted emit segments along `len`; double splits `thick` into two
                 // lines with a gap.
-                let mut edge = |x: f32, y: f32, w: f32, h: f32, horizontal: bool| {
-                    if w <= 0.0 || h <= 0.0 {
-                        return;
-                    }
-                    let (thick, len) = if horizontal { (h, w) } else { (w, h) };
-                    match style {
-                        BS::Solid => rect(x, y, w, h),
-                        BS::Dashed | BS::Dotted => {
-                            let (dash, gap) = if matches!(style, BS::Dashed) {
-                                (3.0 * thick, 3.0 * thick)
-                            } else {
-                                (thick, thick) // dotted: square dots, one-thickness gap
-                            };
-                            let period = (dash + gap).max(0.5);
-                            let mut pos = 0.0;
-                            while pos < len {
-                                let seg = dash.min(len - pos);
-                                if horizontal {
-                                    rect(x + pos, y, seg, h);
+                // ⚠ `style` and `c` are now PARAMETERS, not captures. They used to be read once,
+                // from the top edge, and applied to all four — see `ComputedStyle::border_color`.
+                let mut edge =
+                    |x: f32, y: f32, w: f32, h: f32, horizontal: bool, c: Rgba, style: BS| {
+                        if w <= 0.0 || h <= 0.0 {
+                            return;
+                        }
+                        let (thick, len) = if horizontal { (h, w) } else { (w, h) };
+                        match style {
+                            BS::Solid => rect(x, y, w, h, c),
+                            BS::Dashed | BS::Dotted => {
+                                let (dash, gap) = if matches!(style, BS::Dashed) {
+                                    (3.0 * thick, 3.0 * thick)
                                 } else {
-                                    rect(x, y + pos, w, seg);
+                                    (thick, thick) // dotted: square dots, one-thickness gap
+                                };
+                                let period = (dash + gap).max(0.5);
+                                let mut pos = 0.0;
+                                while pos < len {
+                                    let seg = dash.min(len - pos);
+                                    if horizontal {
+                                        rect(x + pos, y, seg, h, c);
+                                    } else {
+                                        rect(x, y + pos, w, seg, c);
+                                    }
+                                    pos += period;
                                 }
-                                pos += period;
+                            }
+                            BS::Double => {
+                                // Two lines each ~1/3 of the thickness, at the outer edges. Below 3px the
+                                // thirds collapse and it reads as solid — the honest degradation.
+                                let unit = (thick / 3.0).floor().max(1.0);
+                                if horizontal {
+                                    rect(x, y, w, unit, c);
+                                    rect(x, y + h - unit, w, unit, c);
+                                } else {
+                                    rect(x, y, unit, h, c);
+                                    rect(x + w - unit, y, unit, h, c);
+                                }
                             }
                         }
-                        BS::Double => {
-                            // Two lines each ~1/3 of the thickness, at the outer edges. Below 3px the
-                            // thirds collapse and it reads as solid — the honest degradation.
-                            let unit = (thick / 3.0).floor().max(1.0);
-                            if horizontal {
-                                rect(x, y, w, unit);
-                                rect(x, y + h - unit, w, unit);
-                            } else {
-                                rect(x, y, unit, h);
-                                rect(x + w - unit, y, unit, h);
-                            }
-                        }
-                    }
-                };
-                edge(r.x, r.y, r.width, t, true); // top
-                edge(r.x, r.y + r.height - bb, r.width, bb, true); // bottom
-                edge(r.x, r.y, l, r.height, false); // left
-                edge(r.x + r.width - rr, r.y, rr, r.height, false); // right
+                    };
+                let [ct, cr, cb, cl] = border.colors;
+                let [st, sr, sb, sl] = border.styles;
+                edge(r.x, r.y, r.width, t, true, ct, st); // top
+                edge(r.x, r.y + r.height - bb, r.width, bb, true, cb, sb); // bottom
+                edge(r.x, r.y, l, r.height, false, cl, sl); // left
+                edge(r.x + r.width - rr, r.y, rr, r.height, false, cr, sr); // right
             }
             // **This blit is for REPLACED elements, and only for them.**
             //

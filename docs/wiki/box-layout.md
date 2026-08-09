@@ -8036,3 +8036,103 @@ three fewer wrong turns rather than from the ranking alone.
 XHTML, which is a parse error, which is *precisely why those files wrap their CSS in `<![CDATA[…]]>`
 in the first place*. The probe returned nothing from Chrome and the reading was discarded.
 **Instrumenting XHTML requires the same escaping the document itself needed.**
+
+## A border has FOUR colours and FOUR styles, and ours had one of each (t1079)
+
+`ComputedStyle` held
+
+```rust
+    pub border_width: Sides<f32>,     // per side
+    pub border_color: Rgba,           // ONE
+    pub border_style: BorderStyle,    // ONE
+```
+
+and `stylo_map` filled the colour with `clone_border_top_color()`. So **every box on the web painted
+all four of its edges in its top edge's colour and its top edge's line style**, for 1,078 ticks.
+
+```text
+   border-top-color:blue right:red bottom:orange left:green   ->  all four painted BLUE
+   border-*-style: solid / dashed / dotted / double           ->  all four painted SOLID
+```
+
+⚠⚠⚠ **The top edge was right, which is exactly why nothing looked broken.** A defect that is correct
+on the first thing anyone checks survives every casual look, every screenshot, and — as it turns out
+— every one of the 429 gates. It took a test that *distinguishes the sides on purpose* to see it.
+
+### It was found from the other end, by a ranking that pointed somewhere else
+
+After t1078, `css/CSS2`'s 3,022 remaining failures ranked `margin-padding-clear` (394),
+`normal-flow` (353), `positioning` (327) — three chapters with nothing obvious in common. What they
+share is the `*-applies-to-NNN` family, **483 failures, 16% of the whole remainder**, which
+enumerates one property across CSS 2.1's ~16 `display` values. Opening the first one found the
+defect was not in the test at all — it was in the **reference**:
+
+```html
+   margin-top-applies-to-012-ref.xht
+   div { border-top: blue solid 10px; border-bottom: orange solid 10px; height: 50px }
+```
+
+Chrome: blue bar, gap, **orange** bar. Ours: blue bar, gap, **blue** bar. The reference files tell a
+box's top edge from its bottom edge by giving them different colours, which is the one thing our
+engine could not express — so a family of tests about `padding-top` on a `table-caption` was failing
+for a reason that had nothing to do with padding, captions, or tables.
+
+**A ranking is a place to look, not a diagnosis** (t962-974's rule, holding again): the chapter
+names said "margins and positioning"; the mechanism was border paint.
+
+### The web idioms it breaks
+
+Not exotic ones. The `border-left: 3px solid <brand>` accent bar on a card, callout or blockquote;
+the `border-bottom` rule under a heading or an active tab; the coloured horizontal rules in a data
+table; the dashed-on-one-side drop zone; and `border: 1px solid; border-right-style: none`, which is
+how a segmented control or button group joins its cells.
+
+### Three parse defects fell out of the same scalar
+
+- **`border-color: red blue` collapsed to `red`.** The 1-to-4-value box-side shorthand was not
+  expanded, so two sides were wrong whenever an author used the short form that exists *precisely*
+  to set them differently.
+- **`border-top-color` and its three siblings had no arm at all** in MinimalCascade. Not
+  mis-parsed — absent.
+- ⚠ **`border-left-style: none` zeroed ALL FOUR widths.** `s.border_width = Sides::all(0.0)` was
+  right while the style was a scalar and is a whole-border delete once it is not.
+
+### Measured — and three tests that were passing VACUOUSLY
+
+```text
+   css/CSS2   2624 passed / 3022 failed   ->   3006 passed / 2640 failed    +382
+              385 new passes, 3 losses
+```
+
+The three losses are **not a regression**, and the proof is mechanical rather than argued.
+`positioning/left-091`, `left-092` and `margin-padding-clear/margin-left-113` are all "test passes if
+there is **no red**" tests: a red border must be exactly covered by a black one. Each puts
+`border-left: <length> solid red` on a box whose *other* three sides are unset — so
+`clone_border_top_color()` returned `currentColor`, i.e. **black**, and we painted the red border
+black. There was no red because we could not draw red.
+
+Replacing `solid red` with `solid black` in `left-091` and rendering with the fixed binary produces
+an image **byte-identical to the reference** — which is the whole proof: the test's entire
+discriminating power is the colour, and we were passing it by discarding the colour.
+
+⚠ What they now expose is a *different*, pre-existing defect, and it is named rather than absorbed:
+our `ex` unit resolves against the wrong x-height. Chrome and ours on the same 20px monospace face:
+
+```text
+   border-left: 6em    ours 120px   Chrome 120px    exact
+   border-left: 6ex    ours  60px   Chrome  66px    ~10% short
+```
+
+That is why the inner black border no longer reaches across the outer red one. **A test that stops
+passing because the engine got MORE correct is a measurement improving, and it must be reported as
+one and not quietly re-passed.** Same shape as t1075's 168 CDATA "losses".
+
+### Two RED-proofs came back GREEN, which is the other finding
+
+`G_BORDER_SIDES` is RED-proven four ways. Two further mutations came back **green**, and a green
+mutation is a reading (t1057): restoring `s.border_color = Sides::all(c)` in MinimalCascade's
+`border-<side>` arm, and restoring `s.border_width = Sides::all(0.0)` in `set_side_style`, change
+nothing on a page. The reason is the standing one — **the shipping cascade is Stylo**, and it owns
+border colour and border width outright; only the line STYLE is recovered from MinimalCascade. So
+the MinimalCascade half of this fix is covered by a `manuk-css` unit test instead, where it is
+observable, rather than by a page gate that would have passed either way.
