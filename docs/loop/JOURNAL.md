@@ -46371,6 +46371,74 @@ PERF: none — one UA rule and one narrowed branch in a cascade that already ran
 WIKI: `docs/wiki/css-cascade.md` — where Chrome draws the form-control `box-sizing` line, and why a
 layout-crate test cannot see it.
 
+## Tick 1053 — the million is OURS, proved by elimination, and it moves the work-list (2026-08-08)
+
+TICK SHAPE: measurement — close t1052's open lead by elimination rather than by reasoning, which is
+what its own steer demanded (*"log the used width, do not reason about it"* — this is the cheaper half
+of that: rule out every source that is not us, before building the log).
+
+⚠⚠⚠ **THE BOX, EXACTLY.** `--shape-dump` on `kuechenmomente.de` names it:
+
+```text
+   [0 0 1000000x126]   ×2
+   [0 0 1000000x248]
+   [499499 62 16x19]    <- a 1002-wide child CENTRED in one of them: (1000000-1002)/2 = 499499
+```
+
+Three boxes exactly **one million pixels** wide at `x = 0`, and a child centred inside one to the
+pixel. The centring is what rules out a garbage/uninitialised read: the number is being **used**, by
+a working centring calculation, as a real containing-block width.
+
+⚠⚠⚠ **AND IT IS OURS. THE ELIMINATION IS COMPLETE AND EACH STEP IS A GREP THAT CAME BACK EMPTY:**
+
+```text
+   manuk-layout, for 1000000 / 1_000_000 / 1e6 / f32::MAX      absent
+   tests/wpt (the instrument), for a 1e6 clamp                  absent
+   taffy 0.12.1, for a large "infinite available space" const   absent (it is a TAG, not a number)
+   the site's served HTML, 281KB, for a 6-8 digit length         absent
+   the site's stylesheet + its 137KB of inline <style>           absent
+   the served HTML for the literal `1000000` anywhere at all     absent — zero occurrences
+```
+
+**And the last step is the one that closes it, and it needs no grep at all: `h_overflow` counts only
+elements CHROME KEEPS INSIDE THE VIEWPORT.** By construction, Chrome renders these same three boxes
+under 1200px on the same page. If the width came from the site — a stylesheet, an inline style, a
+slider script — **Chrome would have it too.** It does not. So the million is synthesised on our side,
+and it is synthesised as an *arithmetic result*, because it appears as a literal nowhere in our source.
+
+⚠⚠⚠ **WHAT THIS DOES TO THE WORK-LIST, WHICH IS THE POINT OF SPENDING A TICK ON IT.** t1052 ranked
+the `1000000` first *because* a sentinel leak is a class rather than a site. That ranking survives
+and gets sharper: this is not a wrap bug, not a width algorithm, and **not shared with the other four
+h_overflow sites at all** — which means `kuechenmomente.de`, the corpus's #1 `h_overflow` site at 11
+hits, has been sitting at the top of a ranked list of *width* work while contributing nothing to that
+class. **The four remaining sites are the width work, and `simplepdf.com` is the smallest
+reproduction of it** (a breadcrumb `<ol>` 771px over, and M1 binds on `h_overflow` alone there).
+
+> **A COUNT PUT THE LEAST REPRESENTATIVE SITE AT THE TOP, FOR THE SECOND TIME IN THIRTEEN TICKS.**
+> t1041 found exactly this in `reading_order`: `m.youm7.com`'s outlier 24 was 17 hits from ONE
+> 25-sibling group, a quadratic artefact of a single container. Here 11 of `h_overflow`'s top count
+> are one non-layout mechanism. **Rank by count to decide where to LOOK; never let it decide what the
+> work IS.**
+
+⚠ **WHAT IS STILL OPEN, stated as a question and not as a hypothesis.** *Which* arithmetic produces
+exactly 1e6 is unknown. `f32::INFINITY` is this engine's "indefinite" marker at nine sizing sites and
+is the obvious suspect, but an infinity does not become 1,000,000 by any obvious route, and t1052
+already recorded that naming it would be the frequency-claim error. The distinguishing probe is a
+build: log the used width down that `<article>` subtree and find the first box that is a million.
+That is a tick, and this one deliberately stops at the elimination because the elimination is what
+re-ranked the list.
+
+RATCHET: measurement only, no engine crate touched.
+
+GATE: none. The falsifiable content is the six greps above and the shape-dump line
+`[0 0 1000000x126]`, reproducible with
+`manuk-wpt fidelity --urls https://www.kuechenmomente.de/ --shape-dump 60`.
+
+PERF: none.
+
+WIKI: none — still no established mechanism, and this tick's whole discipline is refusing to write one
+down. [no-pattern]
+
 ## Tick 1052 — the five sites `h_overflow` binds on overflow FIVE different ways, and one of them is a magic number (2026-08-08)
 
 TICK SHAPE: measurement — the diagnostic t1049's steer implied and t1050 proved was owed. t1049

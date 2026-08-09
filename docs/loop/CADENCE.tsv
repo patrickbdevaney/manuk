@@ -761,3 +761,4 @@ tick	sha	epoch	iso	delta_s	shape	wall_s	files	added	deleted	gates	claims	wpt_pas
 1050	ada11a2d	1786233889	2026-08-08T20:04:49-04:00	5191	primitive	808	10	454	39	428	81	3896	6960	0	528	0	the margin an inline never got, and both of my favourable numbers died to the same three runs (2026-08-08)
 1051	81b5ccb4	1786239116	2026-08-08T21:31:56-04:00	5227	primitive	808	9	447	36	428	81	3896	6960	0	529	0	the fix that changed not one row, and the trade a third change undid (2026-08-08)
 1052	554b5f19	1786239855	2026-08-08T21:44:15-04:00	739	measurement	808	4	107	32	428	81	3896	6960	0	529	0	the five sites `h_overflow` binds on overflow FIVE different ways, and one of them is a magic number (2026-08-08)
+1053	73abdecd	1786240764	2026-08-08T21:59:24-04:00	909	measurement	808	4	101	32	428	81	3896	6960	0	529	0	the million is OURS, proved by elimination, and it moves the work-list (2026-08-08)
