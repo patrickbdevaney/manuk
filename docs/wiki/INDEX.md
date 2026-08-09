@@ -381,6 +381,10 @@
   - L7384 · 24 transposed rows found nothing and the one divergent row found two defects (t1058)
   - L7403 · Defect 1 — an over-constrained abspos ignores left in an RTL containing block
   - L7428 · Defect 2 — found by a RED-proof that came back GREEN, and it is the bigger one
+  - L7456 · The receipt that could not go red, and the THIRD copy of the direction clause (t1060)
+  - L7466 · The negative arm is what makes §9.4.3 a different rule from margin
+  - L7477 · Defect 1 — a float never received its offset
+  - L7497 · Defect 2 — and this is the THIRD independent copy of the direction clause
 
 ## browser-capabilities.md
 `docs/wiki/browser-capabilities.md`
@@ -1790,4 +1794,4 @@
   - L124 · Rank mechanisms by FLIP RATE, not failing-subtest count — CSS layout is a multi-assertion slog
 
 ---
-1697 sections across 22 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+1701 sections across 22 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.

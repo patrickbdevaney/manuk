@@ -7452,3 +7452,70 @@ one that the RTL row happened to be standing next to, and it reaches every LTR p
 > row does not test what its caption claims, and the caption is where you were about to bank a
 > conclusion. Run the RED pass before believing the fix (t1045) — and before believing the
 > MEASUREMENT.
+
+## The receipt that could not go red, and the THIRD copy of the direction clause (t1060)
+
+CSS 2.1 **§9.4.3**, `position: relative`'s visual offset, was one of the two primitives t1054's
+enumeration found **named only inside a receipt**. Prose in a receipt cannot go red or green, so it
+carried no verdict. Twenty rows against headless Chrome; **seventeen were already exact**, and both
+defects are in places the rule had to be applied a *second* time.
+
+The rule itself is right: `left`/`top` win, a percentage `left` resolves against the containing
+block's **width** and a percentage `top` against its **height**, and the offset is purely visual.
+
+### The negative arm is what makes §9.4.3 a different rule from `margin`
+
+```text
+   the NEXT sibling is not pulled up                     y 10   <- FLOW UNCHANGED
+   an auto-height CB does not grow to contain top:100    h 10   <- FLOW UNCHANGED
+```
+
+The box still occupies its unshifted space. **A battery that only checks that the box moved passes on
+an implementation that moves the flow with it** — RED-proven by letting the offset into `flow_bottom`,
+which reddens exactly that row and nothing else.
+
+### Defect 1 — a float never received its offset
+
+`layout_block` applies §9.4.3 at the end of its own body. A float is placed and returned by
+`layout_float`, so `position:relative; float:left` — the nudged pull-quote, the badge over a
+thumbnail — did not move at all:
+
+```text
+                                          Chrome    before    after
+   float:left  (no offset)                 x 0       x 0       x 0    <- CONTROL
+   float:left  + left:20px                 x 20      x 0       x 20
+   float:left  + top:15px                  y 15      y 0       y 15
+   float:right + left:20px                 x 370     x 350     x 370
+   inline-block + left:20px                x 20      x 20      x 20   <- CONTROL
+```
+
+The `inline-block` control is what says this is the **float path** and not §9.4.3 generally — an
+atomic inline with the byte-identical declaration was always exact, because it goes through
+`layout_block`. The shift is applied *last*, after the float is registered in the `FloatContext`, so
+surrounding content still flows around the float's unshifted position.
+
+### Defect 2 — and this is the THIRD independent copy of the direction clause
+
+§9.4.3: *"if `direction` is `ltr`, `right` = −`left`; if `rtl`, `left` = −`right`."* `left` did not
+simply win.
+
+```text
+                                              Chrome   before   after
+   ltr, left:20 right:50  (over-constrained)     20      20      20   <- CONTROL
+   rtl, left:20 right:50  (over-constrained)    300     370     300
+   rtl, left:20 alone                           370     370     370   <- CONTROL
+   rtl, right:50 alone                          300     300     300   <- CONTROL
+   rtl, no offset (the STATIC position)         350     350     350   <- CONTROL
+```
+
+> **THREE SECTIONS, THREE IMPLEMENTATIONS, ALL THREE WRITTEN `left`-FIRST.** §10.3.3 (in-flow blocks)
+> was gated long ago; §10.3.7 (abspos) was found and gated at t1058; §9.4.3 is this one. The engine
+> did not have one direction-aware over-constraint rule with a bug — **it had the rule three times and
+> got it right once.** *One rule, N implementations* is usually found as two copies; here the count is
+> three, and the third surfaced only because the enumeration kept walking after the second was fixed.
+
+⚠⚠ **The single-inset controls bound the fix.** `direction` decides *only* when the pair is
+over-constrained; a lone `left` in an RTL container still shifts right. Flipping the whole axis on
+`direction` was RED-run and fails on *"a LONE inset is direction-free"* — a control, not the row that
+made you look. ⚠ The fifth control records that the RTL **static** position (350) is a separate,
+already-exact rule; without it, 300 and 370 look arbitrary instead of 350 ∓ the offset.

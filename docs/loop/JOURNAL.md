@@ -46371,6 +46371,139 @@ PERF: none — one UA rule and one narrowed branch in a cascade that already ran
 WIKI: `docs/wiki/css-cascade.md` — where Chrome draws the form-control `box-sizing` line, and why a
 layout-crate test cannot see it.
 
+## Tick 1060 — the receipt that could not go red, and the two places §9.4.3 had to be applied twice (2026-08-09)
+
+TICK SHAPE: primitive — a 20-row battery on CSS 2.1 **§9.4.3**, `position: relative`'s visual offset.
+t1054's enumeration found this one **named only inside a receipt**; t1057 promoted its companion
+§10.6.7 and left this as prose, and t1059's write-up named it as still owed. **Prose in a receipt
+cannot go red or green**, so this is the row.
+
+⚠⚠⚠ **SEVENTEEN OF TWENTY WERE ALREADY EXACT, AND THE TWO DEFECTS ARE BOTH PLACES THE RULE HAD TO BE
+APPLIED A SECOND TIME.** The rule itself is right: `left`/`top` win, a percentage `left` resolves
+against the containing block's **width** and a percentage `top` against its **height** (10% of a 60px
+box is 6, and that row is exact), and the offset is purely visual.
+
+```text
+                                                       Chrome   ours
+   left:20 top:10 · right:20 · left:-20                exact    exact
+   left:20 right:50   (LTR over-constrained -> left)      20      20
+   top:10 bottom:50   (block axis -> top)                 10      10
+   left:10% (CB WIDTH) · top:10% (CB HEIGHT)            40 / 6  40 / 6
+   the NEXT sibling is not pulled up                     y 10    y 10   <- FLOW UNCHANGED
+   an auto-height CB does not grow to contain top:100    h 10    h 10   <- FLOW UNCHANGED
+```
+
+⚠⚠ **THE LAST TWO ROWS ARE THE NEGATIVE ARM AND THEY ARE WHAT MAKE §9.4.3 A DIFFERENT RULE FROM
+`margin`.** The box still occupies its unshifted space. A battery that only checked *that the box
+moved* passes on an implementation that moves the flow with it — RED-proven by letting the offset
+into `flow_bottom`, which reddens exactly that row.
+
+⚠⚠⚠ **DEFECT 1 — A FLOAT NEVER RECEIVED ITS RELATIVE OFFSET, BECAUSE `layout_float` IS THE SECOND
+COPY.** `layout_block` applies §9.4.3 at the end of its own body; a float is placed and returned by
+`layout_float`, so `position:relative; float:left` did not move at all:
+
+```text
+                                          Chrome    before    after
+   float:left  (no offset)                 x 0       x 0       x 0    <- CONTROL
+   float:left  + left:20px                 x 20      x 0       x 20
+   float:left  + top:15px                  y 15      y 0       y 15
+   float:right + left:20px                 x 370     x 350     x 370
+   inline-block + left:20px                x 20      x 20      x 20   <- CONTROL
+```
+
+**The `inline-block` control is what says this is the FLOAT path and not §9.4.3 generally** — an
+atomic inline with the byte-identical declaration was always exact, because it goes through
+`layout_block`. Both axes and both float directions are affected, which identifies a missing
+*application* rather than a sign or an axis error. ⚠ The shift is applied LAST, after the float is
+placed and registered in the `FloatContext`, so surrounding content still flows around the float's
+**unshifted** position — the same visual-only rule the negative arm asserts.
+
+⚠⚠⚠ **DEFECT 2 — AN OVER-CONSTRAINED RELATIVE PAIR IS RESOLVED BY THE CONTAINING BLOCK'S
+`direction`, AND THIS IS THE THIRD INDEPENDENT COPY OF THAT CLAUSE.** §9.4.3: *"if `direction` is
+`ltr`, `right` = −`left`; if `rtl`, `left` = −`right`."* `left` did not simply win.
+
+```text
+                                              Chrome   before   after
+   ltr, left:20 right:50  (over-constrained)     20      20      20   <- CONTROL
+   rtl, left:20 right:50  (over-constrained)    300     370     300
+   rtl, left:20 alone                           370     370     370   <- CONTROL
+   rtl, right:50 alone                          300     300     300   <- CONTROL
+   rtl, no offset at all (the STATIC position)  350     350     350   <- CONTROL
+```
+
+> **THREE SECTIONS, THREE IMPLEMENTATIONS, AND ALL THREE WERE WRITTEN `left`-FIRST.** §10.3.3
+> (in-flow blocks) was gated long ago; §10.3.7 (abspos) was found and gated at **t1058**; §9.4.3 is
+> this one. The engine did not have one direction-aware over-constraint rule with a bug — it had the
+> rule three times and got it right once. *One rule, N implementations* is usually found as two
+> copies; here the count is three, and the only reason the third surfaced is that the enumeration
+> kept walking after the second was fixed.
+
+⚠⚠ **THE THREE SINGLE-INSET CONTROLS BOUND THE FIX AND ONE OF THEM CATCHES THE OVER-REACHING VERSION.**
+`direction` decides **only** when the pair is over-constrained; a lone `left` in an RTL container
+still shifts right. Flipping the whole axis on `direction` was RED-run and fails on
+*"a LONE inset is direction-free"* — a control, not the row that made me look. ⚠ The fifth control
+records that the RTL **static** position (350) is a separate and already-exact rule; without it, 300
+and 370 look like arbitrary numbers instead of 350 ∓ the offset.
+
+GATES, four RED proofs, each caught by a DIFFERENT row:
+`a_relative_offset_is_visual_and_resolves_per_axis` (red on *letting the offset into `flow_bottom`*)
+and `a_float_gets_its_relative_offset_and_an_rtl_pair_resolves_by_direction` (red on *the float shift
+removed*; red on *the direction clause removed*; red on *flipping the whole axis on `direction`* —
+caught by the lone-inset CONTROL).
+
+SURFACE AUDIT #46 rode along (due every 10 ticks; last at 1050) and its finding is an INSTRUMENT
+one. ⚠⚠⚠ **The WPT checkout is a 23-directory partial clone containing exactly the areas the ratchet
+already tracks** — upstream `css/` has ~93 directories, ours has 16, and `css-inline`, `css-box`,
+`css-align` and `css-tables` (the literal subject of the last twelve ticks) are not among them. The
+checkout was drawn from the map and the map from the checkout. `WPT:TOTAL 422865` reads as a total
+over WPT and is a total over 23 hand-picked directories; **flagged for the observer, not touched**
+(harness). ⚠⚠⚠ And four directories ARE on disk with no ratchet row — measured here for the first
+time: `svg` 38p/**108 FAILED**/623 skipped, `mathml` 84p/**66 FAILED**/440 skipped, and
+`wai-aria` + `accname` **0 passed, 0 failed, 442/442 SKIPPED — the reftest runner cannot score the
+accessibility surface at all.** That is no score, not a low one. ⚠ The audit also nearly manufactured
+~70 false gaps: hand-checking each absent directory against the map (t1054's rule) killed all but
+**two** real ones — CSS fragmentation and scroll anchoring — which are the only rows added.
+
+MAP: **§9.4.3 promoted from a RECEIPT to a ROW** and gated — the last of t1054's two receipt-only
+primitives, so the §8/§9/§10 enumeration is now fully discharged: **zero unknowns and zero
+receipt-only rows.** One new row for the relative-offset-on-a-float defect.
+
+PRICED — 10 sites, both binaries, same hour (old = t1059's release binary at 03:41, preserved before
+anything rebuilt it; new at 04:01). Five byte-identical. The panel showed **four gains and one loss**;
+all three movers re-run SOLO 3x on each binary, and **not one survives — including the gain I wanted**:
+
+```text
+   www.crazyshop.pl    panel +0.0477 at IDENTICAL n=1405 — the most convincing number of the run
+        OLD solo  0.620641 / 0.649822 / 0.649822        NEW solo  0.649110 / 0.649822 / 0.649822
+        Both binaries sit at 0.649822 most of the time. The panel's OLD 0.6021 is BELOW everything
+        either binary produced; the "gain" is one low OLD sample, not a change in the engine.
+   m.youm7.com (RTL)   panel +0.0128
+        OLD 0.850746 x3 @1206                            NEW 0.850746 @1206, 0.850993 @1208, 0.850746 @1206
+        Byte-identical at matched n. The RTL direction fix does not move this Arabic site.
+   www.fragrantica.com panel -0.0030
+        OLD [0.699832, 0.730318]                         NEW [0.726298, 0.727973]
+        NEW's band sits INSIDE OLD's. Not a loss.
+```
+
+**Zero attributable movement in EITHER direction, and that is the honest result of this tick.** The
+fix is Chrome-exact on 20 rows and RED-proven four ways; it simply does not bind on these ten sites.
+⚠ A `+0.0477` at an identical element count is the single most persuasive shape a panel diff can
+produce, and it still dissolved in three solo runs — which is the whole argument for the rule. Had it
+been banked, this tick would be reported as the session's biggest win on the strength of one
+anomalously low sample of the OLD binary.
+
+⚠ **NOT claimed: that the RTL half is unexercised on the web.** One Arabic site failing to move is
+evidence about `m.youm7.com`, not about RTL. What the panel can say is that this fix does not move
+this panel; the reach argument rests on the Chrome-exact rows, not on these ten numbers.
+
+RATCHET: manuk-layout **144/144**, zero regressions.
+
+PERF: one `parent_is_rtl` walk per relatively-positioned box, and only when BOTH inline insets are
+set — the walk is skipped entirely on the common single-inset and no-inset cases.
+
+WIKI: `docs/wiki/box-layout.md` — "The receipt that could not go red, and the third copy of the
+direction clause (t1060)".
+
 ## Tick 1059 — the last enumeration unknown was clean at 34 of 35, and the 35th was the INSTRUMENT parsing CSS differently from the product (2026-08-09)
 
 TICK SHAPE: primitive — a 35-row battery on CSS 2.1 **§10.2/§10.3.3**, the `width` property on a

@@ -4909,3 +4909,94 @@ primitives that exists before the bug does.**
 - **CONFIRMED, not corrected**: row 419's measured table (`margin-left:10px` leaves its div 0 tall)
   is what t1050's control was copied from, and it held — the map's own measurement was reused as a
   gate two ticks later, which is the first time that has happened and is what the receipts are for.
+
+## Audit #46 — tick 1060 (2026-08-09) — the CHECKOUT was drawn from the map and the map from the checkout, and 442 tests the runner CANNOT SCORE
+
+### 1 · SOURCES SEARCHED (not from memory)
+
+- Interop 2026 focus + investigation areas — fetched the **authoritative list** from
+  `github.com/web-platform-tests/interop/blob/main/2026/README.md` (20 focus areas, 4 investigations),
+  not a blog summary of it.
+- Ladybird 2026 status (alpha targeted 2026, ~90% WPT, Rust LibJS frontend landed Feb 2026).
+- `github.com/web-platform-tests/wpt/tree/master/css` — the upstream `css/` directory listing.
+
+### 2 · THE OUTSIDE-IN AXIS IS EXHAUSTED, CONFIRMED A THIRD TIME
+
+Every one of Interop 2026's **20 focus areas and all 4 investigation areas** already has at least one
+row on `CONSTELLATION.tsv` — container style queries, anchor positioning, `attr()`, `contrast-color()`,
+`zoom`, custom highlights, dialogs/popovers, fetch uploads+ranges, IndexedDB, JSPI, media
+pseudo-classes, Navigation API, scoped custom element registries, scroll-driven animations, scroll
+snap, `shape()`, view transitions, web compat, WebRTC, WebTransport, and accessibility testing / JPEG
+XL / mobile testing / WebVTT. **Zero rows added from the outside world, for the third audit running**
+(#44, #45, #46). Audit #45's conclusion stands: the yield has moved to enumerating *specs*, and t1054
+–t1060 discharged the CSS 2.1 §8/§9/§10 enumeration completely — **zero unknowns and zero
+receipt-only rows** in that range.
+
+### 3 · ⚠⚠⚠ THE FINDING: THE WPT CHECKOUT IS A PARTIAL CLONE CONTAINING EXACTLY WHAT THE RATCHET ALREADY TRACKS
+
+`RATCHET.tsv` banks 21 `WPT:` invariants and publishes `WPT:TOTAL 422865`. That total has a
+denominator nobody has ever stated:
+
+```text
+   upstream wpt/css/            ~93 directories
+   local    wpt/css/             16   (CSS2 + the exact 15 the ratchet tracks)
+   upstream wpt/ top level      ~90 directories
+   local    wpt/ top level       23
+```
+
+**The checkout contains the areas the loop decided to track, and the loop tracks the areas the
+checkout contains.** That is a closed loop, and it is precisely the shape this instrument exists to
+break: *"the loop becomes very good at ranking things inside a frame that may be the wrong frame."*
+`css-inline`, `css-box`, `css-align`, `css-tables`, `css-writing-modes`, `css-logical`, `css-break`,
+`css-multicol`, `css-lists` and `css-pseudo` are all absent from disk — and the first four are the
+literal subject of the last twelve ticks.
+
+### 4 · ⚠⚠⚠ AND 1359 TESTS ARE ALREADY ON DISK AND HAVE NEVER BEEN RUN — MEASURED THIS AUDIT
+
+Four directories are present locally and carry **no ratchet row at all**. Run against the current
+binary, this audit, for the first time:
+
+```text
+   svg        38 passed · 108 FAILED ·  623 skipped   (769)
+   mathml     84 passed ·  66 FAILED ·  440 skipped   (590)
+   wai-aria    0        ·   0        ·  264 skipped   (264)
+   accname     0        ·   0        ·  178 skipped   (178)
+```
+
+Two separate facts, and they must not be merged:
+
+- **174 known failures are UNBANKED.** A number the ratchet never marks cannot go backwards, so
+  `svg` and `mathml` are outside the ratchet's protection entirely — 1359 tests that can silently rot.
+- ⚠⚠⚠ **442 of them the reftest runner CANNOT SCORE AT ALL.** `wai-aria` and `accname` report
+  **0 passed, 0 failed, 100% skipped — every single test "needs JS/testharness."** This is not a low
+  score; it is **no score**, and it is the entire accessibility-conformance surface. The a11y moat was
+  measured at t861-870 by a *different* instrument (797/1250) precisely because this one is blind to
+  it, and nothing on the board records that the blindness is structural.
+
+### 5 · WHAT WE HAD BEEN WRONG ABOUT
+
+**That a directory-count gap is a capability gap.** The first pass of this audit read "16 of 93 css
+directories" and was about to add dozens of `unknown` rows. Hand-checking each one against the map —
+t1054's rule, *verify every MISS before it becomes a row* — killed almost all of them: multicol,
+tables, ruby, exclusions, paged media, writing-modes, counter-styles, MathML and SVG **all already
+have rows**. Only **two** survived. A false gap is worse than a missed one, and this audit nearly
+manufactured seventy of them.
+
+### 6 · CORRECTED / ADDED
+
+- **ADDED** `css · CSS fragmentation — break-before / break-inside / break-after` — `unknown`.
+- **ADDED** `css · scroll anchoring` — `unknown`.
+- **NOT ADDED, deliberately**: one row per absent WPT directory. The map is a map of *capabilities*,
+  and the absent directories overwhelmingly describe capabilities it already carries. The finding is
+  about the **instrument**, not the map, and is recorded as such.
+
+### 7 · THE STEER
+
+1. **The WPT denominator must be stated wherever the total is published.** `WPT:TOTAL 422865` reads
+   as a total over WPT and is a total over 23 hand-picked directories. This is harness territory
+   (`scripts/wpt-expand.sh`, `RATCHET.tsv` generation) — **flagged for the observer, not touched.**
+2. **`svg` and `mathml` are 1359 tests, on disk, unbanked, with 174 known failures.** Banking them
+   costs nothing to discover and immediately extends the ratchet's protection.
+3. ⚠ **The a11y conformance surface is STRUCTURALLY invisible to the reftest runner** (442/442
+   skipped). Either the runner grows a testharness path or the board must stop implying that WPT
+   coverage says anything about a11y. This is the largest *unmeasured* surface the audit found.

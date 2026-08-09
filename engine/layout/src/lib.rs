@@ -2803,6 +2803,52 @@ impl Ctx<'_> {
     ///
     /// The nearest element ancestor is the containing block for an in-flow block, which is the only
     /// caller. A text node or a missing style answers `false`, i.e. the LTR behaviour that shipped.
+    /// **CSS 2.1 §9.4.3 — the visual offset of a `position: relative` box.**
+    ///
+    /// `left`/`top` win over `right`/`bottom`, percentages resolve against the containing block —
+    /// **width for x, height for y** — and the offset is purely visual: the flow is unchanged, so an
+    /// auto-height container does not grow to contain a box shifted out of it.
+    ///
+    /// ⚠⚠⚠ **AND WHEN BOTH INLINE INSETS ARE SET THE PAIR IS OVER-CONSTRAINED, WHICH IS RESOLVED BY
+    /// THE CONTAINING BLOCK'S `direction`** — *"if `direction` is `ltr`, `right` = −`left`; if `rtl`,
+    /// `left` = −`right`"*. `left` did not simply win. That is the third place in this engine where
+    /// an over-constrained inline axis is direction-dependent — §10.3.3 (in-flow blocks, gated) and
+    /// §10.3.7 (abspos, gated at t1058) are the other two — and this one was written `left`-first.
+    /// Chrome, a 50px box in a 400px containing block:
+    ///
+    /// ```text
+    ///                                              Chrome   before   after
+    ///   ltr, left:20 right:50   (over-constrained)     20      20      20   <- CONTROL
+    ///   rtl, left:20 right:50   (over-constrained)    300     370     300
+    ///   rtl, left:20 alone                            370     370     370   <- CONTROL
+    ///   rtl, right:50 alone                           300     300     300   <- CONTROL
+    /// ```
+    ///
+    /// ⚠⚠ **The two single-inset RTL rows are the controls that bound the fix.** `direction` decides
+    /// only when the pair is over-constrained; a lone `left` in an RTL container still shifts right,
+    /// and a fix that flipped the whole axis on `direction` moves both of them. The RTL numbers also
+    /// carry the box's RTL *static* position (350) — measured separately and already exact — so the
+    /// row would otherwise conflate two rules.
+    fn relative_offset(&self, node: NodeId, s: &ComputedStyle, cw: f32, cb_h: f32) -> (f32, f32) {
+        let (has_l, has_r) = (!s.inset.left.is_auto(), !s.inset.right.is_auto());
+        let dx = match (has_l, has_r) {
+            // Over-constrained: the containing block's `direction` says which one is ignored.
+            (true, true) if self.parent_is_rtl(node) => -s.inset.right.resolve(cw, 0.0),
+            (true, _) => s.inset.left.resolve(cw, 0.0),
+            (false, true) => -s.inset.right.resolve(cw, 0.0),
+            (false, false) => 0.0,
+        };
+        // The block axis has no such clause — `top` wins outright, under either direction.
+        let dy = if !s.inset.top.is_auto() {
+            s.inset.top.resolve(cb_h, 0.0)
+        } else if !s.inset.bottom.is_auto() {
+            -s.inset.bottom.resolve(cb_h, 0.0)
+        } else {
+            0.0
+        };
+        (dx, dy)
+    }
+
     fn parent_is_rtl(&self, node: NodeId) -> bool {
         let mut cur = self.dom.parent(node);
         while let Some(a) = cur {
@@ -3761,20 +3807,7 @@ impl Ctx<'_> {
         // Before, y resolved against a hardcoded 0, so `top: 50%` never moved the box.
         if s.position == Position::Relative {
             let cb_h = pch.unwrap_or(0.0);
-            let dx = if !s.inset.left.is_auto() {
-                s.inset.left.resolve(cw, 0.0)
-            } else if !s.inset.right.is_auto() {
-                -s.inset.right.resolve(cw, 0.0)
-            } else {
-                0.0
-            };
-            let dy = if !s.inset.top.is_auto() {
-                s.inset.top.resolve(cb_h, 0.0)
-            } else if !s.inset.bottom.is_auto() {
-                -s.inset.bottom.resolve(cb_h, 0.0)
-            } else {
-                0.0
-            };
+            let (dx, dy) = self.relative_offset(node, &s, cw, cb_h);
             if dx != 0.0 || dy != 0.0 {
                 boxx.translate(dx, dy);
                 // ⚠⚠⚠ **THE SUBTREE'S STATIC POSITIONS MOVE WITH IT, AND THEY WERE LEFT BEHIND.**
@@ -4754,6 +4787,41 @@ impl Ctx<'_> {
         if static_moved {
             self.translate_static_positions(node, content_origin_x, content_origin_y);
         }
+
+        // ⚠⚠⚠ **A FLOAT NEVER RECEIVED ITS `position: relative` OFFSET, BECAUSE THE BLOCK PATH IS
+        // WHERE THAT LIVES AND THIS FUNCTION IS THE SECOND COPY.** `layout_block` applies §9.4.3 at
+        // the end of its own body; a float is placed here and returned here, so `position:relative;
+        // float:left` — the nudged pull-quote, the badge over a thumbnail, every `float` shifted a
+        // few pixels off its flow position — simply did not move. Chrome-measured, a 50px float in a
+        // 400px container, parent-relative:
+        //
+        // ```text
+        //                                          Chrome    before    after
+        //   float:left  (no offset)                 x 0       x 0       x 0    <- CONTROL
+        //   float:left  + left:20px                 x 20      x 0       x 20
+        //   float:left  + top:15px                  y 15      y 0       y 15
+        //   float:right + left:20px                 x 370     x 350     x 370
+        //   inline-block + left:20px                x 20      x 20      x 20   <- CONTROL
+        // ```
+        //
+        // ⚠⚠ **The `inline-block` control is what says this is the FLOAT path and not §9.4.3
+        // generally** — an atomic inline with the identical declaration was already exact, because it
+        // is laid out through `layout_block`. Both axes and both float directions are affected, which
+        // is what identifies a missing application rather than a sign or an axis error.
+        //
+        // ⚠ Applied LAST, after the float has been placed and registered in the `FloatContext`, so
+        // the offset stays purely visual: surrounding content flows around the float's *unshifted*
+        // position, which is what §9.4.3 requires.
+        if s.position == Position::Relative {
+            let (dx, dy) = self.relative_offset(node, &s, cw, 0.0);
+            if dx != 0.0 || dy != 0.0 {
+                boxx.translate(dx, dy);
+                if static_moved {
+                    self.translate_static_positions(node, dx, dy);
+                }
+            }
+        }
+
         // Every exit from `layout_float` marks the box, because `node_rects`'s lift must not fold an
         // out-of-flow box into an ancestor inline's advance — see `LayoutBox::out_of_flow`.
         boxx.out_of_flow = true;
@@ -10175,6 +10243,255 @@ mod tests {
         let fonts = FontContext::new();
         let root = layout_document(&dom, &styles, &fonts, width);
         (dom, root)
+    }
+
+    /// **G_RELATIVE_POSITION — CSS 2.1 §9.4.3, `position: relative`'s visual offset.**
+    ///
+    /// t1054's enumeration found this one *named only inside a receipt*, and t1057 promoted its
+    /// companion (§10.6.7) while leaving this as prose — **prose in a receipt cannot go red or
+    /// green.** This is the row. 20 cases against headless Chrome, a 50px box in a 400x60 relatively
+    /// positioned container; **17 were already exact**, and the two defects are both in places the
+    /// rule had to be applied a second time:
+    ///
+    /// ```text
+    ///                                                       Chrome   ours
+    ///   left:20 top:10 · right:20 · left:-20                exact    exact
+    ///   left:20 right:50   (LTR over-constrained -> left)      20      20
+    ///   top:10 bottom:50   (block axis -> top)                 10      10
+    ///   left:10%  (against the CB WIDTH)                       40      40
+    ///   top:10%   (against the CB HEIGHT)                       6       6
+    ///   the NEXT sibling is not pulled up                     y 10    y 10   <- flow unchanged
+    ///   an auto-height CB does not grow to contain top:100    h 10    h 10   <- flow unchanged
+    ///   inline-block + left:20                                 20      20    <- CONTROL
+    /// ```
+    ///
+    /// ⚠⚠ **The last two rows are the negative arm and they are what makes §9.4.3 a different rule
+    /// from `margin`.** The offset is *visual*: the box still occupies its unshifted space, so the
+    /// following sibling does not move and an auto-height container does not grow. A battery that
+    /// only checked that the box moved would pass on an implementation that changed the flow.
+    #[test]
+    fn a_relative_offset_is_visual_and_resolves_per_axis() {
+        let cb = "width:400px;height:60px;position:relative";
+        for (extra, inner, want_x, want_y, why) in [
+            (
+                "",
+                r#"<div id="x" style="position:relative;left:20px;top:10px;width:50px;height:10px"></div>"#,
+                20.0,
+                10.0,
+                "left/top shift the box",
+            ),
+            (
+                "",
+                r#"<div id="x" style="position:relative;right:20px;width:50px;height:10px"></div>"#,
+                -20.0,
+                0.0,
+                "`right` alone shifts the other way",
+            ),
+            (
+                "",
+                r#"<div id="x" style="position:relative;left:-20px;width:50px;height:10px"></div>"#,
+                -20.0,
+                0.0,
+                "a negative offset is legal here (unlike a size)",
+            ),
+            (
+                "",
+                r#"<div id="x" style="position:relative;left:20px;right:50px;width:50px;height:10px"></div>"#,
+                20.0,
+                0.0,
+                "LTR over-constrained: `left` wins",
+            ),
+            (
+                "",
+                r#"<div id="x" style="position:relative;top:10px;bottom:50px;width:50px;height:10px"></div>"#,
+                0.0,
+                10.0,
+                "the block axis: `top` wins",
+            ),
+            (
+                "",
+                r#"<div id="x" style="position:relative;left:10%;width:50px;height:10px"></div>"#,
+                40.0,
+                0.0,
+                "a percentage `left` resolves against the CB WIDTH",
+            ),
+            (
+                "",
+                r#"<div id="x" style="position:relative;top:10%;width:50px;height:10px"></div>"#,
+                0.0,
+                6.0,
+                "…and a percentage `top` against the CB HEIGHT",
+            ),
+            (
+                "",
+                r#"<div id="x" style="position:relative;left:20px;display:inline-block;width:50px;height:10px"></div>"#,
+                20.0,
+                4.0,
+                "CONTROL: an inline-block was always exact",
+            ),
+        ] {
+            let r = t1059_row(&format!("{cb};{extra}"), inner);
+            assert_eq!((r.x, r.y), (want_x, want_y), "§9.4.3: {why} — {inner}");
+        }
+
+        // ⚠⚠⚠ THE NEGATIVE ARM — the offset is VISUAL, so the FLOW is untouched.
+        assert_eq!(
+            t1059_row(cb, r#"<div style="position:relative;top:99px;width:50px;height:10px"></div><div id="x" style="width:50px;height:10px"></div>"#).y,
+            10.0,
+            "§9.4.3: the following sibling sits where it always did — the shifted box still occupies \
+             its own space"
+        );
+        assert_eq!(
+            t1059_row(
+                "width:400px",
+                r#"<div id="x" style="position:relative;top:100px;width:50px;height:10px"></div>"#
+            )
+            .y,
+            100.0,
+            "…the box itself does move"
+        );
+        {
+            // …and its auto-height container does NOT grow to contain it.
+            let html = r#"<div id="cb" style="width:400px"><div id="x" style="position:relative;top:100px;width:50px;height:10px"></div></div>"#;
+            let (dom, root) = layout_html(html, "", 800.0);
+            let rects = root.node_rects(&dom);
+            let cbn = dom
+                .descendants(dom.root())
+                .find(|&n| dom.element(n).and_then(|e| e.attr("id")) == Some("cb"))
+                .expect("#cb");
+            assert_eq!(
+                rects[&cbn].height, 10.0,
+                "§9.4.3: an auto-height container does NOT grow to contain a relatively shifted child"
+            );
+        }
+    }
+
+    /// **G_RELATIVE_ON_A_FLOAT — a float never received its `position: relative` offset, and an
+    /// over-constrained relative pair ignored the containing block's `direction`.**
+    ///
+    /// Two defects found by the §9.4.3 battery, each in a place the rule had to be applied a
+    /// **second** time.
+    ///
+    /// ⚠⚠⚠ **DEFECT 1 — `layout_block` applies §9.4.3 at the end of its body, and `layout_float` is
+    /// the second copy.** A float is placed and returned by `layout_float`, so `position:relative;
+    /// float:left` — the nudged pull-quote, the badge over a thumbnail, every float shifted a few
+    /// pixels off its flow position — simply did not move. Chrome, a 50px float in a 400px
+    /// container, parent-relative:
+    ///
+    /// ```text
+    ///                                          Chrome    before    after
+    ///   float:left  (no offset)                 x 0       x 0       x 0    <- CONTROL
+    ///   float:left  + left:20px                 x 20      x 0       x 20
+    ///   float:left  + top:15px                  y 15      y 0       y 15
+    ///   float:right + left:20px                 x 370     x 350     x 370
+    ///   inline-block + left:20px                x 20      x 20      x 20   <- CONTROL
+    /// ```
+    ///
+    /// **The `inline-block` control is what says this is the FLOAT path and not §9.4.3 generally** —
+    /// an atomic inline with the identical declaration was already exact, because it goes through
+    /// `layout_block`. Both axes and both float directions are affected, which identifies a missing
+    /// *application* rather than a sign or an axis error.
+    ///
+    /// ⚠⚠⚠ **DEFECT 2 — an over-constrained relative pair is resolved by the CONTAINING BLOCK's
+    /// `direction`**: *"if `direction` is `ltr`, `right` = −`left`; if `rtl`, `left` = −`right`."*
+    /// `left` did not simply win. This is the **third** place in this engine where an over-constrained
+    /// inline axis is direction-dependent — §10.3.3 (in-flow, gated) and §10.3.7 (abspos, gated at
+    /// t1058) are the others — and each was written independently, `left`-first:
+    ///
+    /// ```text
+    ///                                              Chrome   before   after
+    ///   ltr, left:20 right:50  (over-constrained)     20      20      20   <- CONTROL
+    ///   rtl, left:20 right:50  (over-constrained)    300     370     300
+    ///   rtl, left:20 alone                           370     370     370   <- CONTROL
+    ///   rtl, right:50 alone                          300     300     300   <- CONTROL
+    /// ```
+    ///
+    /// ⚠⚠ **The two single-inset RTL rows bound the fix.** `direction` decides only when the pair is
+    /// over-constrained; a lone `left` in an RTL container still shifts right. A fix that flipped the
+    /// whole axis on `direction` moves both, and they are the rows that catch it.
+    #[test]
+    fn a_float_gets_its_relative_offset_and_an_rtl_pair_resolves_by_direction() {
+        let cb = "width:400px;height:60px;position:relative";
+        // ⚠ CONTROL FIRST: a float with no offset must not move.
+        assert_eq!(
+            (
+                t1059_row(
+                    cb,
+                    r#"<div id="x" style="float:left;width:50px;height:10px"></div>"#
+                )
+                .x,
+                t1059_row(
+                    cb,
+                    r#"<div id="x" style="float:left;width:50px;height:10px"></div>"#
+                )
+                .y,
+            ),
+            (0.0, 0.0),
+            "CONTROL: an unoffset float is where it always was"
+        );
+        for (inner, want_x, want_y, why) in [
+            (
+                r#"<div id="x" style="position:relative;left:20px;float:left;width:50px;height:10px"></div>"#,
+                20.0,
+                0.0,
+                "a LEFT float takes its inline offset",
+            ),
+            (
+                r#"<div id="x" style="position:relative;top:15px;float:left;width:50px;height:10px"></div>"#,
+                0.0,
+                15.0,
+                "…and its BLOCK offset",
+            ),
+            (
+                r#"<div id="x" style="position:relative;left:20px;float:right;width:50px;height:10px"></div>"#,
+                370.0,
+                0.0,
+                "…and so does a RIGHT float",
+            ),
+        ] {
+            let r = t1059_row(cb, inner);
+            assert_eq!((r.x, r.y), (want_x, want_y), "§9.4.3 on a float: {why}");
+        }
+        // ⚠ CONTROL: the atomic inline with the identical declaration, which was ALWAYS exact and is
+        // what localises the defect to `layout_float` rather than to §9.4.3.
+        assert_eq!(
+            t1059_row(cb, r#"<div id="x" style="position:relative;left:20px;display:inline-block;width:50px;height:10px"></div>"#).x,
+            20.0,
+            "CONTROL: an inline-block goes through `layout_block` and was never wrong"
+        );
+
+        // ── DEFECT 2: the over-constrained pair, resolved by the CONTAINING BLOCK's direction.
+        let over = r#"<div id="x" style="position:relative;left:20px;right:50px;width:50px;height:10px"></div>"#;
+        assert_eq!(
+            t1059_row(&format!("{cb};direction:rtl"), over).x,
+            300.0,
+            "§9.4.3: an RTL containing block resolves the over-constrained pair with `right`"
+        );
+        // ⚠ THE CONTROLS THAT BOUND IT — `direction` decides ONLY when both insets are set.
+        assert_eq!(
+            t1059_row(&format!("{cb};direction:ltr"), over).x,
+            20.0,
+            "CONTROL: an LTR containing block still uses `left`"
+        );
+        assert_eq!(
+            (
+                t1059_row(&format!("{cb};direction:rtl"), r#"<div id="x" style="position:relative;left:20px;width:50px;height:10px"></div>"#).x,
+                t1059_row(&format!("{cb};direction:rtl"), r#"<div id="x" style="position:relative;right:50px;width:50px;height:10px"></div>"#).x,
+            ),
+            (370.0, 300.0),
+            "CONTROL: a LONE inset is direction-free — `left` still shifts right in an RTL container"
+        );
+        // ⚠ …and the RTL STATIC position (350) is a separate, already-exact rule; without this row
+        // the numbers above would conflate the two.
+        assert_eq!(
+            t1059_row(
+                &format!("{cb};direction:rtl"),
+                r#"<div id="x" style="width:50px;height:10px"></div>"#
+            )
+            .x,
+            350.0,
+            "CONTROL: the RTL static position was already exact — 300 and 370 are 350 ∓ the offset"
+        );
     }
 
     /// One row of the t1059 battery: `inner` inside a containing block styled `cb`, returning `#x`'s
