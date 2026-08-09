@@ -2553,3 +2553,126 @@ The decomposition, in the order the suite rewards:
    before the line is broken so its font-size participates in the line box's height.
 4. **`::first-line`** last: it applies to a range the line breaker *produces*, so it needs a second
    pass, and it is 9 tests rather than 339.
+
+## `::first-letter` is a RANGE over `InlineItem`s, and UAX #14 had already cut it in two (t1078)
+
+The tick after the one above. t1077 priced `::first-letter` as a subsystem and ordered the work
+parse → range → box generation → `::first-line`. Two of those four steps turned out to be already
+paid for, and the one that was not is the one nobody had ranked.
+
+**Step 1 was free, and the reason is worth saying out loud: the parse was never the problem.**
+Stylo's *servo* build has `PseudoElement::FirstLetter` (`servo/selector_parser.rs`, right beside a
+comment reading *"If/when :first-letter is added…"* that is now out of date), and the `selectors`
+crate's `is_css2_pseudo_element` accepts the CSS2 single-colon spelling `div:first-letter` that
+every one of the suite's tests uses. So the rule parsed, matched, and cascaded correctly for 1,077
+ticks — and was then thrown away, because `PseudoIndex::collect` asked `sel.pseudo_element()` a
+question with exactly two answers in it:
+
+```rust
+    Some(&Pe::Before) => Some(false),
+    Some(&Pe::After)  => Some(true),
+    _                 => None,          // <- ::first-letter fell in here, silently
+```
+
+⚠⚠⚠ **This is the "absence" shape again (t1071), at its cheapest**: the capability was one arm of one
+`match` away, and no code search for `first_letter` in `engine/css` could ever have found it,
+because the thing to search for was the *third bucket that does not exist*. Enumerate what the
+dependency can express, not what our own source mentions.
+
+**Step 3 was free too**, and for a reason the spec hands over: every one of the 339 punctuation
+tests pairs `div:first-letter { … }` with a reference file that writes the expected rendering **by
+hand, as a `<span>`**:
+
+```html
+    test:  <div>)T)est</div>
+    ref:   <div><span>)T)</span>est</div>
+```
+
+A first-letter box **is** an inline run with its own style. Building a distinct box type would have
+had to re-derive line metrics, baseline alignment and painting a second time and agree with the
+first to the pixel — which for a byte-exact reftest is not a simplification, it is the failure mode.
+Splitting the first `InlineItem::Word` puts test and reference on the *same code path*.
+
+### The step that was not free, and the row that found it
+
+Step 2, the range. §5.12.1 in the spec's own words:
+
+> Punctuation (i.e. characters defined in Unicode in the "open" (Ps), "close" (Pe), "initial" (Pi),
+> "final" (Pf) and "other" (Po) punctuation classes) that precedes or follows the first letter
+> should be included.
+
+Note what the five classes leave out: **`Pd` (the dashes) and `Pc` (`_`) are not on the list**, so an
+em dash is not skipped over as leading punctuation — it *becomes* the first letter. Guessing with
+`char::is_ascii_punctuation()` would have been right for `(` and wrong for `—`, `_` and every
+non-ASCII quote the suite enumerates, which is the axis these tests sweep.
+
+The first implementation resolved that range inside a single word. It passed `)Alpha`, `(Alpha`,
+`[Alpha`, `.Alpha` — and failed `}Bravo` and `!India`:
+
+```text
+    )Test    rows 31–63    the first letter is 36px         PASS
+    {Test    rows 31–60                                     PASS
+    ]Test    rows 31–60                                     PASS
+    }Test    rows 11–23    the whole div is 16px            FAIL
+    !Test    rows 11–21    the whole div is 16px            FAIL
+```
+
+⚠⚠⚠ **Same Unicode class, opposite result, is the signature of a SECOND mechanism.** `)` and `]` are
+UAX #14 line-break class **`CP`**, and `(`/`[`/`{` are **`OP`**; both forbid a break before the
+letter that follows. But `}` is **`CL`** and `!` is **`EX`**, which *permit* one — so
+`unicode-linebreak` had already handed layout **two words**, and the first held no letter at all.
+`first_letter_len("}")` is correctly `0`, and the code above it gave up.
+
+`)` and `}` are both `Pe`. Nothing about the CSS classes predicts the split; only the line breaker
+does. **196 of the 339 punctuation tests were on the wrong side of it** — more than half the prize
+sitting behind a mechanism that belongs to a different specification.
+
+So the range is resolved over the **concatenation of consecutive words that no white space
+separates**, then applied back across them: whole words inside the range are restyled, and the one
+word the range ends inside is split. Every word after the first also becomes `no_wrap`, because the
+whole point of the range is that `}` and the `T` the line breaker separated it from are one
+typographic unit and must not end up on two lines.
+
+### The negative row, which the suite provides
+
+CSS 2.1: the first letter must be the *first thing* on the first formatted line. Finding the first
+word by **searching** the item list happily steps over an `<img>` and reddens the `F` of
+`<div><img/>Filler Text</div>` — which `first-letter-selector-002` asserts must not happen, and
+which is the one test this tick briefly regressed. Searching became a **walk** that gives up at the
+first content-bearing non-word, stepping over only what occupies no line of its own: a `Spacer` (an
+inline's padding edge), an `AbsPseudo` (out of flow, zero advance), a `Tab`, and white space.
+
+### Measured
+
+Headless Chrome at 20px monospace (12px advance) with `div:first-letter { background: red }`, the
+range read straight off the screenshot as a character count:
+
+```text
+                     Chrome   ours
+   )A)lpha             3        3     leading AND trailing punctuation
+   }Bravo              2        2     the UAX #14 CL case
+   Charlie             1        1     the plain case
+   —Echo               1        1     Pd is not one of the five classes
+   «Golf               2        2     Pi
+   !India              2        2     Po, and the other UAX #14 case (EX)
+```
+
+```text
+   css/CSS2/selectors     85 passed / 380 failed   ->   436 passed / 29 failed
+   css/CSS2 (whole)     2272 passed / 3374 failed  ->  2624 passed / 3022 failed
+```
+
+Zero tests that passed before fail after. Gated by `G_FIRST_LETTER`, RED-proven four ways (drop the
+`Pe`/`Po` arms; resolve within one word; delete the replaced-element bail; drop the `PseudoIndex`
+bucket) — and the single-word mutation is the one that matters, because it leaves `)A)lpha` and
+`Charlie` **green** while `}Bravo` and `!India` go red. A gate that could not tell those apart would
+have banked half the feature as all of it.
+
+### What is left, named rather than discovered later
+
+Eight tests, three mechanisms: the letter inside a child `<span>` inherits from the *originating*
+element rather than from the span that holds it; `::before` content as the first letter; and
+propagation into the first in-flow **block** descendant (`<div id=x><div>Text</div></div>`).
+`::first-line` is untouched and is now the only CSS 2.1 pseudo-element with no implementation at
+all — and unlike `::first-letter` it cannot be reached by asking the existing parse a new question,
+because Stylo's servo build has no `FirstLine` variant to ask about.

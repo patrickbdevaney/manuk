@@ -1558,6 +1558,75 @@ fn apply_line_clamp(
     Some(drop_top - cy)
 }
 
+/// **How many BYTES of `s` the `::first-letter` pseudo-element covers** (CSS 2.1 §5.12.1), or `0`
+/// when `s` opens with nothing a first-letter box can be built from.
+///
+/// The rule the suite actually tests, in the spec's own words: *"Punctuation (i.e. characters
+/// defined in Unicode in the 'open' (Ps), 'close' (Pe), 'initial' (Pi), 'final' (Pf) and 'other'
+/// (Po) punctuation classes) that precedes or follows the first letter should be included."* So the
+/// scan is three phases — leading punctuation, exactly one letter, trailing punctuation — and the
+/// middle one is what makes `"…"` alone return 0: punctuation with no letter after it is not a
+/// first letter, it is the start of one that lives further along.
+///
+/// ⚠ **The classes are a NAMED FIVE, not "is this punctuation".** `Pd` (the dashes: `-`, `–`, `—`)
+/// and `Pc` (the connectors: `_`) are deliberately absent from the spec's list, so an em-dash is not
+/// skipped over — it *becomes* the first letter. Guessing with `char::is_ascii_punctuation()` would
+/// have been right for `(` and wrong for `—`, `_` and every non-ASCII quote the suite enumerates,
+/// which is exactly the axis these 339 tests sweep.
+///
+/// Combining marks (`Mn`/`Mc`/`Me`) ride along with the letter they modify — splitting a base
+/// character from its own diacritic would render two broken glyphs where the font expects one.
+fn first_letter_len(s: &str) -> usize {
+    use unicode_properties::{GeneralCategory as Gc, UnicodeGeneralCategory};
+    let is_edge_punct = |c: char| {
+        matches!(
+            c.general_category(),
+            Gc::OpenPunctuation
+                | Gc::ClosePunctuation
+                | Gc::InitialPunctuation
+                | Gc::FinalPunctuation
+                | Gc::OtherPunctuation
+        )
+    };
+    let is_mark = |c: char| {
+        matches!(
+            c.general_category(),
+            Gc::NonspacingMark | Gc::SpacingMark | Gc::EnclosingMark
+        )
+    };
+    let mut n = 0usize;
+    // 1. leading punctuation, then 2. the one letter it precedes.
+    loop {
+        let Some(c) = s[n..].chars().next() else {
+            return 0;
+        };
+        if is_edge_punct(c) {
+            n += c.len_utf8();
+            continue;
+        }
+        if c.is_whitespace() {
+            return 0;
+        }
+        n += c.len_utf8();
+        break;
+    }
+    // …and whatever combines with that letter.
+    while let Some(c) = s[n..].chars().next() {
+        if !is_mark(c) {
+            break;
+        }
+        n += c.len_utf8();
+    }
+    // 3. trailing punctuation.
+    while let Some(c) = s[n..].chars().next() {
+        if !is_edge_punct(c) {
+            break;
+        }
+        n += c.len_utf8();
+    }
+    n
+}
+
 fn text_style(cs: &ComputedStyle, fonts: &FontContext) -> TextStyle {
     let key = FontKey {
         family: fonts.resolve_family(&cs.font_family),
@@ -8248,7 +8317,165 @@ impl Ctx<'_> {
                 },
             });
         }
+        self.apply_first_letter(&mut out, owner);
         out
+    }
+
+    /// **CSS 2.1 §5.12.1 `::first-letter` — split the first word so its opening range carries the
+    /// pseudo's style.**
+    ///
+    /// ⚠⚠⚠ **The spec's own reference rendering for this pseudo is a `<span>`, and that is why the
+    /// implementation belongs HERE rather than in box generation.** Every one of the suite's 339
+    /// punctuation tests pairs `div:first-letter { … }` with a reference file that writes
+    /// `<div><span>)T)</span>est</div>` by hand — so a first-letter box *is* an inline run with its
+    /// own style, and producing one by splitting the first [`InlineItem::Word`] makes the test and
+    /// the reference travel the **same code path**, which is the only way a byte-exact reftest can
+    /// pass. Generating a distinct box type would have to re-derive line metrics, baseline
+    /// alignment and painting for a second time and agree with the first to the pixel.
+    ///
+    /// **The range rule is the feature, not the styling** (§5.12.1): punctuation in Unicode's `Ps`,
+    /// `Pe`, `Pi`, `Pf` and `Po` classes that *precedes or follows* the first letter is part of it —
+    /// `)T)est` has a three-character first letter. That single sentence is 339 of the chapter's
+    /// 358 failing tests, because the suite enumerates it across the punctuation classes.
+    ///
+    /// ⚠⚠⚠ **THE RANGE SPANS `InlineItem`s, AND ASSUMING IT DID NOT COST 196 OF THE 339.** The
+    /// first version resolved the range inside *one* word and passed `)Test`, `(Test`, `[Test`,
+    /// `.Test` — and failed `}Test` and `!Test`. Same Unicode class, opposite result, which is the
+    /// signature of a second mechanism: **UAX #14**. `)` and `]` are line-break class `CP` and `{`
+    /// `[` `(` are `OP`, and both forbid a break before the letter that follows — but `}` is `CL`
+    /// and `!` is `EX`, which *permit* one, so the line breaker had already handed those two to
+    /// layout as **two separate words** and the first word was pure punctuation with no letter in
+    /// it. The range therefore has to be resolved over the concatenation of consecutive words that
+    /// no white space separates, and applied back across them.
+    ///
+    /// ⚠ **Named residues, so the next tick knows which half exists.** The pseudo is cascaded with
+    /// the *originating element* as its inherited parent, so `<div><span>Text` inherits from the
+    /// `div` rather than from the `span` that actually holds the letter; the range stops at the
+    /// first white space, so `" ( T"` does not reach its letter; and `float`/`margin` on the pseudo
+    /// are carried in the style but not honoured by an inline run. `::first-line` is a different
+    /// mechanism entirely (the range is whatever the line breaker ends up putting on line one) and
+    /// is not built.
+    fn apply_first_letter(&self, out: &mut Vec<InlineItem>, owner: Option<NodeId>) {
+        let Some(fl) = owner
+            .and_then(|n| self.styles.get(&n))
+            .and_then(|s| s.first_letter.as_ref())
+        else {
+            return;
+        };
+        // ⚠⚠ **A REPLACED ELEMENT BEFORE THE TEXT CANCELS THE PSEUDO ENTIRELY**, and finding the
+        // first word by *searching* instead of by *walking* got this backwards — the search
+        // happily stepped over an `<img>` and reddened the "F" of `<div><img/>Filler Text</div>`,
+        // which is the one test in this chapter that asserts nothing happens
+        // (`first-letter-selector-002`). §5.12.1: the first letter must be the first thing on the
+        // first formatted line, and an image is content that precedes it.
+        //
+        // So this is a walk that gives up at the first content-bearing non-word. What it may step
+        // over is exactly what occupies no line of its own: a `Spacer` (an inline's padding edge,
+        // or an empty `<span>`), an `AbsPseudo` (out of flow, zero advance), and a word that is
+        // only white space.
+        let mut idx = None;
+        for (i, it) in out.iter().enumerate() {
+            match it {
+                InlineItem::Word { text, .. } if !text.trim().is_empty() => {
+                    idx = Some(i);
+                    break;
+                }
+                // A `Tab` is white space with an advance, not content: it may precede the letter
+                // exactly as a run of spaces may.
+                InlineItem::Word { .. }
+                | InlineItem::Spacer { .. }
+                | InlineItem::AbsPseudo { .. }
+                | InlineItem::Tab { .. } => {}
+                InlineItem::Atomic { .. } | InlineItem::Break { .. } => return,
+            }
+        }
+        let Some(idx) = idx else { return };
+        // The run the range may cover: consecutive words with no white space between them. It ends
+        // at the first item that is not a word, or at the first word the flow put a space before.
+        let mut concat = String::new();
+        let mut run_end = idx;
+        for (i, it) in out.iter().enumerate().skip(idx) {
+            let InlineItem::Word {
+                text, space_before, ..
+            } = it
+            else {
+                break;
+            };
+            if i > idx && *space_before {
+                break;
+            }
+            concat.push_str(text);
+            run_end = i + 1;
+        }
+        let n = first_letter_len(&concat);
+        if n == 0 {
+            return;
+        }
+        let head_style = text_style(fl, self.fonts);
+        // Restyle whole words while they fit inside the range, and remember the one word the range
+        // ends in the middle of. Splitting is deferred to after the walk so the indices stay valid.
+        let mut consumed = 0usize;
+        let mut split_at = None;
+        for i in idx..run_end {
+            let InlineItem::Word {
+                text,
+                style,
+                break_word,
+                no_wrap,
+                ..
+            } = &mut out[i]
+            else {
+                break;
+            };
+            // Every word after the first is now glued to the letter that precedes it: the whole
+            // point of the range is that `}` and the `T` the line breaker separated it from are ONE
+            // typographic unit, and a break between them would put a lone brace on its own line.
+            if i > idx {
+                *no_wrap = true;
+            }
+            let l = text.len();
+            if consumed + l <= n {
+                *style = head_style;
+                *break_word = false;
+                consumed += l;
+                if consumed == n {
+                    return;
+                }
+            } else {
+                split_at = Some((i, n - consumed));
+                break;
+            }
+        }
+        let Some((i, off)) = split_at else { return };
+        let (tail, style, node, break_word) = {
+            let InlineItem::Word {
+                text,
+                style,
+                node,
+                break_word,
+                ..
+            } = &mut out[i]
+            else {
+                return;
+            };
+            let saved = (text.split_off(off), *style, *node, *break_word);
+            *style = head_style;
+            *break_word = false;
+            saved
+        };
+        out.insert(
+            i + 1,
+            InlineItem::Word {
+                text: tail,
+                style,
+                space_before: false,
+                node,
+                // The remainder of the word the range cut into must not break away from it either —
+                // `)T)` never gets to end a line with `est` on the next one.
+                no_wrap: true,
+                break_word,
+            },
+        );
     }
 
     /// **The tab-stop interval in px for a run set in `style`.**

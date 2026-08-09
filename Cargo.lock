@@ -3296,6 +3296,7 @@ dependencies = [
  "taffy",
  "tracing",
  "unicode-linebreak",
+ "unicode-properties",
 ]
 
 [[package]]

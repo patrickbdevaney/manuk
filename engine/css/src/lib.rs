@@ -1031,6 +1031,15 @@ pub struct ComputedStyle {
     /// counters, dividers, clearfixes and a great deal of layout scaffolding.
     pub before: Option<Box<ComputedStyle>>,
     pub after: Option<Box<ComputedStyle>>,
+    /// The computed style of this element's `::first-letter` pseudo-element (CSS 2.1 §5.12.1).
+    ///
+    /// ⚠ **It is NOT generated content, and that is the whole difference from [`Self::before`].**
+    /// `::before`/`::after` invent a box around text the author wrote in `content`; `::first-letter`
+    /// re-styles a *range of text that is already in the DOM*, and the range is not known until the
+    /// inline items of the first line have been collected. So there is nothing to check `content`
+    /// for here — a `::first-letter` rule that sets only `color` still generates a box — and the
+    /// range is resolved in layout, where the words are.
+    pub first_letter: Option<Box<ComputedStyle>>,
     /// `outline` — the focus ring. Without it keyboard focus is invisible, which is not a cosmetic
     /// bug but an accessibility one.
     pub outline_width: f32,
@@ -1496,6 +1505,7 @@ impl ComputedStyle {
             content: None,
             before: None,
             after: None,
+            first_letter: None,
             outline_width: 0.0,
             outline_color: Rgba {
                 r: 0,

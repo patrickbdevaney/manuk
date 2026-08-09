@@ -1810,6 +1810,11 @@
   - L2494 · ⚠ The fixture bug that made the first run report 20 of 20 exact
   - L2505 · ::first-letter is absent, and it is 10.5% of the CSS 2.1 suite's remaining failures (t1077)
   - L2536 · Why it is a subsystem and not a tick
+  - L2557 · ::first-letter is a RANGE over InlineItems, and UAX #14 had already cut it in two (t1078)
+  - L2596 · The step that was not free, and the row that found it
+  - L2636 · The negative row, which the suite provides
+  - L2645 · Measured
+  - L2671 · What is left, named rather than discovered later
 
 ## The wasm demo — running the engine inside someone else's browser
 `docs/wiki/wasm-demo.md`
@@ -1837,4 +1842,4 @@
   - L124 · Rank mechanisms by FLIP RATE, not failing-subtest count — CSS layout is a multi-assertion slog
 
 ---
-1744 sections across 22 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+1749 sections across 22 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.

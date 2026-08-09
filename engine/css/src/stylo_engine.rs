@@ -881,6 +881,22 @@ pub fn cascade_via_stylo_sized(
                     Pe::After,
                 )
                 .map(Box::new);
+                // `::first-letter` — NOT generated content: it re-styles the first typographic
+                // letter of the element's first line, and the range it covers is only knowable
+                // once the inline items exist, so the style is carried and layout resolves the
+                // range (CSS 2.1 §5.12.1).
+                cs.first_letter = cascade_pseudo(
+                    &stylist,
+                    &pseudo_index,
+                    &mut pseudo_caches,
+                    &lock,
+                    &guard,
+                    &guards,
+                    &el,
+                    &cv,
+                    Pe::FirstLetter,
+                )
+                .map(Box::new);
             });
         }
         map.insert(node, cs);
@@ -2225,6 +2241,12 @@ struct PseudoRule {
 struct PseudoIndex {
     before: Vec<PseudoRule>,
     after: Vec<PseudoRule>,
+    /// `::first-letter` — a THIRD bucket, and it is here rather than in its own index because the
+    /// collection walk is the expensive half and it is already paying for it. Stylo's *servo*
+    /// build has `PseudoElement::FirstLetter` and the selectors crate accepts the CSS2 single-colon
+    /// spelling (`p:first-letter`), so both spellings arrive here already parsed — the reason this
+    /// pseudo did nothing for 1077 ticks was that nobody ever asked `sel.pseudo_element()` about it.
+    first_letter: Vec<PseudoRule>,
 }
 
 impl PseudoIndex {
@@ -2237,6 +2259,7 @@ impl PseudoIndex {
         let mut idx = PseudoIndex {
             before: Vec::new(),
             after: Vec::new(),
+            first_letter: Vec::new(),
         };
         let mut order = 0usize;
         for sheet in sheets {
@@ -2266,23 +2289,19 @@ impl PseudoIndex {
                         // order this produces has to be the same one the per-element walk
                         // produced, or rules that tie on specificity would reorder.
                         let bucket = match sel.pseudo_element() {
-                            Some(&Pe::Before) => Some(false),
-                            Some(&Pe::After) => Some(true),
+                            Some(&Pe::Before) => Some(&mut self.before),
+                            Some(&Pe::After) => Some(&mut self.after),
+                            Some(&Pe::FirstLetter) => Some(&mut self.first_letter),
                             _ => None,
                         };
-                        if let Some(is_after) = bucket {
-                            let r = PseudoRule {
+                        if let Some(bucket) = bucket {
+                            bucket.push(PseudoRule {
                                 sel: sel.clone(),
                                 origin_rank,
                                 spec: sel.specificity(),
                                 order: *order,
                                 block: sr.block.clone(),
-                            };
-                            if is_after {
-                                self.after.push(r);
-                            } else {
-                                self.before.push(r);
-                            }
+                            });
                         }
                         *order += 1;
                     }
@@ -2322,7 +2341,8 @@ impl PseudoIndex {
         match want {
             Pe::Before => &self.before,
             Pe::After => &self.after,
-            // Only ::before/::after are generated here; anything else has no rules to offer.
+            Pe::FirstLetter => &self.first_letter,
+            // Only the three pseudos above are resolved here; anything else has no rules to offer.
             _ => &[],
         }
     }
@@ -2332,7 +2352,7 @@ impl PseudoIndex {
     /// The overwhelmingly common case on real pages is a handful; a fair number of documents have
     /// none, and those should not pay a per-element call at all.
     fn is_empty(&self) -> bool {
-        self.before.is_empty() && self.after.is_empty()
+        self.before.is_empty() && self.after.is_empty() && self.first_letter.is_empty()
     }
 }
 
@@ -2469,6 +2489,14 @@ fn cascade_pseudo(
     let arc = ServoArc::new(lock.wrap(merge_ascending(&ascending)));
     let cv = stylist.compute_for_declarations::<StyloElement>(guards, parent_cv, arc);
     let mut cs = to_computed_style(&cv);
+    // ⚠ **`::first-letter` returns HERE, before the `content` test below, and the early return IS
+    // the semantic difference.** Generated content only exists if `content` produced something;
+    // `::first-letter` re-styles text the author already wrote, so requiring `content` would have
+    // dropped every real rule on the web (`p:first-letter { font-size: 200% }` sets no `content`
+    // and never will). Everything after this point is the generated-content path.
+    if want == stylo::selector_parser::PseudoElement::FirstLetter {
+        return Some(cs);
+    }
     // Only a pseudo with `content` generates a box at all.
     use stylo::values::generics::counters::{Content, ContentItem};
     let text = match cv.get_counters().clone_content() {
