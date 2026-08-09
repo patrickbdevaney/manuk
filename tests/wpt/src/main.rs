@@ -1152,12 +1152,27 @@ fn run_fidelity_cmd(args: &[String], fonts: &FontContext) {
                                     format!("{fam}/{}", st.font_size.round() as i64)
                                 })
                                 .unwrap_or_default();
+                            // The computed `position`, in CSS's own spelling, so the two engines'
+                            // strings compare directly. See `Seen::position` for why the field
+                            // exists: a metric that could not be TESTED without it.
+                            let position = styles
+                                .get(&n)
+                                .map(|st| match st.position {
+                                    manuk_css::Position::Static => "static",
+                                    manuk_css::Position::Relative => "relative",
+                                    manuk_css::Position::Absolute => "absolute",
+                                    manuk_css::Position::Fixed => "fixed",
+                                    manuk_css::Position::Sticky => "sticky",
+                                })
+                                .unwrap_or("")
+                                .to_string();
                             mseen.insert(
                                 path,
                                 manuk_wpt::oracle::Seen {
                                     tag: tag.to_string(),
                                     display,
                                     font,
+                                    position,
                                     rect: [
                                         r.x.round() as i64,
                                         r.y.round() as i64,
@@ -2715,6 +2730,7 @@ fn run_oracle_cmd(args: &[String], fonts: &FontContext) {
                         display,
                         rect,
                         font: String::new(),
+                        position: String::new(),
                     },
                 )
             })
@@ -2804,6 +2820,7 @@ fn run_oracle_cmd(args: &[String], fonts: &FontContext) {
                         display,
                         rect,
                         font: String::new(),
+                        position: String::new(),
                     },
                 ))
             })

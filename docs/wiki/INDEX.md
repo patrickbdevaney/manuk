@@ -639,6 +639,8 @@
   - L3330 · Pricing it, and the grep that lied by half
   - L3347 · The gate, and why its negative probe is the load-bearing one
   - L3359 · What the battery cleared, and the one row that discriminates
+  - L3377 · The reading-order conjunct is geometry after all, and one site said otherwise (t1084)
+  - L3416 · The guard that was tolerant in exactly one direction
 
 ## CSS AND THE CASCADE — Stylo realities and quirks actually encountered
 `docs/wiki/css-cascade.md`
@@ -1858,4 +1860,4 @@
   - L124 · Rank mechanisms by FLIP RATE, not failing-subtest count — CSS layout is a multi-assertion slog
 
 ---
-1765 sections across 22 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+1767 sections across 22 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.

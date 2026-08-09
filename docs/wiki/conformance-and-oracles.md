@@ -3373,3 +3373,57 @@ a media-query `em` resolves against the **initial** font size and never the root
 ⚠ And `engine/css/src/lib.rs:2889` warns that the Stylo cascade and the JS `matchMedia` shim need not
 agree on an identical query. Run on the same five queries in one page, they returned the same five
 answers.
+
+## The reading-order conjunct is geometry after all, and one site said otherwise (t1084)
+
+t1083 ended a three-tick hunt with a hypothesis and refused to act on it: `www.wdimax.com`'s footer
+holds 4 links and 3 absolutely positioned separators, `4 × 3 = 12`, and its `reading_order` count is
+exactly 12 — every in-flow ↔ out-of-flow pair in the container and no others. `jarring_reading_order`
+compares every sibling pair by rect **with no notion of whether either box is in the flow**, and an
+out-of-flow box has no reading order relative to its in-flow siblings.
+
+That could not be tested: `Seen` carried `tag`, `display`, `rect` and `font` — not `position`. So the
+field was added to both probes and the count PARTITIONED rather than filtered, which is t1034's rule
+and is the rule precisely because this is the shape where a filter would be a threshold tuned to move
+a number. Chrome's own `position` string is the discriminator, so the classification is the reference
+engine's and not ours.
+
+```text
+   site                  inversions   mixed-flow    share
+   www.wdimax.com               12           12     100%
+   www.ikea.com                 22           17      77%   (the same 17 are already "parked")
+   rockstaractu.com             13            7      54%   (the same 7 are already "zero-area")
+   m.youm7.com                  24            0       0%
+   www.otomoto.pl               11            0       0%
+   www.taphouse23.com          123            0       0%
+   payb.jp                     264            0       0%
+   ─────────────────────────────────────────────────────
+   total                       469           36     7.7%
+```
+
+⚠⚠⚠ **CONFIRMED ON THE SITE IT CAME FROM AND REFUTED AS AN EXPLANATION.** 12 of 12 on the one site,
+and on the two others where it is large it is **entirely inside partitions that already exist** — the
+17 on `ikea.com` are the same 17 parked off-viewport, the 7 on `rockstaractu.com` are the same 7
+zero-area boxes. Net new signal after those: **zero**. The three sites carrying the actual mass —
+`payb.jp` 264, `taphouse23` 123, `youm7` 24 — have **no mixed-flow inversions at all.**
+
+**So the filter is not taken**, and the conclusion t1083 reached from one site is corrected here:
+`reading_order`'s bulk is in-flow against in-flow, which means it *is* a real engine target and
+`www.wdimax.com` was the atypical site the loop happened to open first. **Ranking by inversion COUNT
+would have picked `payb.jp` (264) and gone straight there; ranking by "cleanest to localise" picked
+the one site whose defect was an instrument artefact.**
+
+### The guard that was tolerant in exactly one direction
+
+Adding the field broke the instrument, and the failure did not look like a parser failure:
+
+```text
+   ⚠ www.wdimax.com UNMEASURABLE [oracle-module-shell-0]: the ORACLE rendered only 0 element(s)
+     — and this document is a `type="module"` SPA, so THE SHELL IS OUR SNAPSHOT
+```
+
+`parse_seen_probe_json` guarded with `if a.len() != 6 && a.len() != 7 { continue }`, whose own comment
+says *"an absent datum must not silently remove the element from the diff"* — and an 8-element array
+was dropped, every element, every page. **A guard written to be forward-tolerant was enumerating
+lengths instead of taking a minimum**, so it tolerated the past and was silently fatal to the future,
+and its symptom named a cause *on the page* for a defect in the reader. Now `if a.len() < 6`.

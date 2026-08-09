@@ -75,6 +75,18 @@ pub struct Seen {
     /// datum the next question needs.** Empty is a legitimate value — a non-text element has no font
     /// worth reporting — and an empty string prints as nothing rather than as a guess.
     pub font: String,
+    /// The computed `position` (`"static"`, `"relative"`, `"absolute"`, `"fixed"`, `"sticky"`), or
+    /// the empty string when the producer does not supply it.
+    ///
+    /// ⚠⚠⚠ **Added because a metric could not be TESTED without it (t1084).** `reading_order` has
+    /// been M1's top binding conjunct for three sweeps, and three Chrome-exact geometry fixes
+    /// (t1081-t1083) left its top site's count at exactly 12 — which is 4 links x 3 absolutely
+    /// positioned separators, i.e. every in-flow / out-of-flow pair in that container and no
+    /// others. `jarring_reading_order` compares every sibling pair by rect **with no notion of
+    /// whether either box is in the flow at all**, and an out-of-flow box has no reading order
+    /// relative to its in-flow siblings. That was a hypothesis nothing on the `Seen` struct could
+    /// test. Empty is a legitimate value and prints as nothing rather than as a guess.
+    pub position: String,
 }
 
 /// What the two engines disagreed about, for one element.
@@ -891,7 +903,8 @@ pub fn jarring_reading_order(
 
     let (mut count, mut skipped) = (0usize, 0usize);
     // t1034 diagnostic partition of `count` — see the block below. NOT part of the invariant.
-    let (mut zero_area, mut parked, mut onscreen) = (0usize, 0usize, 0usize);
+    let (mut zero_area, mut parked, mut onscreen, mut mixed_flow) =
+        (0usize, 0usize, 0usize, 0usize);
     // ── **t1041: HOW MANY DISTINCT CONTAINERS IS THIS COUNT, AND HOW BIG IS THE BIGGEST?**
     //
     // This invariant counts PAIRS, so one mis-laid row of `n` siblings contributes `n(n-1)/2` all by
@@ -940,6 +953,24 @@ pub fn jarring_reading_order(
                     let offscreen = |r: &[i64; 4]| r[0] + r[2] <= 0;
                     let (ca, cb) = (&chrome[ids[i]].rect, &chrome[ids[j]].rect);
                     let (ma, mb) = (&manuk[ids[i]].rect, &manuk[ids[j]].rect);
+                    // ⚠⚠⚠ **THE THIRD PARTITION, AND IT IS THE ONE THE LOOP OWES A DECISION ON
+                    // (t1084).** `reading_order` has been M1's top binding conjunct for three
+                    // sweeps, and three Chrome-exact geometry fixes (t1081-t1083) left its top
+                    // site's count at exactly **12** — which is 4 links x 3 absolutely positioned
+                    // separators, i.e. **every in-flow / out-of-flow pair in that container and no
+                    // others.** An out-of-flow box has no reading order relative to its in-flow
+                    // siblings: it is painted where its insets (or its static position) put it, and
+                    // a reader does not scan it in source sequence with the text around it.
+                    //
+                    // Counted, not filtered — t1034's rule, and it is the rule precisely because
+                    // this is the shape where a filter would be a threshold tuned to move a number.
+                    // Chrome's own `position` string is the discriminator, so the classification is
+                    // the reference engine's, not ours.
+                    let out_of_flow =
+                        |s: &Seen| matches!(s.position.as_str(), "absolute" | "fixed");
+                    if out_of_flow(&chrome[ids[i]]) != out_of_flow(&chrome[ids[j]]) {
+                        mixed_flow += 1;
+                    }
                     if degenerate(ca) || degenerate(cb) || degenerate(ma) || degenerate(mb) {
                         zero_area += 1;
                     } else if offscreen(ca) || offscreen(cb) || offscreen(ma) || offscreen(mb) {
@@ -965,7 +996,7 @@ pub fn jarring_reading_order(
     examples.sort();
     if count > 0 && std::env::var("MANUK_RO_PARTITION").is_ok() {
         eprintln!(
-            "  RO-PARTITION: {count} inversion(s) = {onscreen} on-screen \u{00b7} {zero_area} involve a ZERO-AREA box \u{00b7} {parked} involve a box parked entirely LEFT of the viewport"
+            "  RO-PARTITION: {count} inversion(s) = {onscreen} on-screen \u{00b7} {zero_area} involve a ZERO-AREA box \u{00b7} {parked} involve a box parked entirely LEFT of the viewport \u{00b7} {mixed_flow} pair an IN-FLOW box with an OUT-OF-FLOW one"
         );
         bad_groups.sort_by_key(|g| std::cmp::Reverse(g.0));
         let biggest = bad_groups.first().copied().unwrap_or((0, 0));
@@ -1086,6 +1117,7 @@ mod tests {
             display: "block".into(),
             rect,
             font: String::new(),
+            position: String::new(),
         }
     }
 
@@ -1095,6 +1127,7 @@ mod tests {
             display: "block".into(),
             rect,
             font: font.into(),
+            position: String::new(),
         }
     }
 
@@ -1883,6 +1916,7 @@ mod tests {
             display: "block".into(),
             rect: [0, 0, 10, 10],
             font: String::new(),
+            position: String::new(),
         };
         let chrome: HashMap<String, Seen> = (0..4)
             .map(|i| (format!("body[0]/div[{i}]"), seen("div")))

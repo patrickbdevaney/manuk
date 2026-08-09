@@ -46371,6 +46371,80 @@ PERF: none — one UA rule and one narrowed branch in a cascade that already ran
 WIKI: `docs/wiki/css-cascade.md` — where Chrome draws the form-control `box-sizing` line, and why a
 layout-crate test cannot see it.
 
+## Tick 1084 — the hypothesis was confirmed on its own site and refuted as an explanation (2026-08-09)
+
+TICK SHAPE: measurement — add `position` to the oracle probe and PARTITION `reading_order` by
+in-flow / out-of-flow. `tests/wpt` only (the fidelity instrument is agent territory); no engine
+crate touched.
+
+t1083 ended a three-tick hunt with a hypothesis and deliberately refused to act on it. This tick
+tests it, and the answer is both halves of an honest result.
+
+`www.wdimax.com`'s footer holds 4 links and 3 absolutely positioned separators; `4 × 3 = 12`, and its
+`reading_order` is exactly 12. `jarring_reading_order` compares every sibling pair by rect **with no
+notion of whether either box is in the flow at all**, and an out-of-flow box has no reading order
+relative to its in-flow siblings. `Seen` carried `tag`, `display`, `rect`, `font` — not `position` —
+so the claim was untestable. The field now exists on both probes, and the count is **partitioned, not
+filtered** (t1034's rule, and it is the rule precisely because this is the shape where a filter is a
+threshold tuned to move a number). **Chrome's own `position` string is the discriminator**, so the
+classification is the reference engine's, not ours.
+
+```text
+   site                  inversions   mixed-flow    share
+   www.wdimax.com               12           12     100%
+   www.ikea.com                 22           17      77%   (the same 17 are already "parked")
+   rockstaractu.com             13            7      54%   (the same 7 are already "zero-area")
+   m.youm7.com                  24            0       0%
+   www.otomoto.pl               11            0       0%
+   www.taphouse23.com          123            0       0%
+   payb.jp                     264            0       0%
+   ─────────────────────────────────────────────────────
+   total                       469           36     7.7%
+```
+
+⚠⚠⚠ **CONFIRMED ON THE SITE IT CAME FROM, REFUTED AS AN EXPLANATION.** 12 of 12 on the one site, and
+on the two others where it is large it lies **entirely inside partitions that already exist** — the
+17 on `ikea.com` are the same 17 parked off-viewport, the 7 on `rockstaractu.com` the same 7
+zero-area. Net new signal: **zero**. The three sites carrying the actual mass — `payb.jp` 264,
+`taphouse23` 123, `youm7` 24 — have no mixed-flow inversions at all. **The filter is not taken.**
+
+⚠⚠⚠ **AND THIS CORRECTS T1083'S OWN CONCLUSION, WHICH WAS DRAWN FROM ONE SITE.** t1083 wrote *"a
+conjunct that survives three Chrome-exact geometry fixes on its own top site is not describing
+geometry."* Measured across seven sites, `reading_order`'s bulk **is** in-flow against in-flow — so it
+IS a real engine target, and `www.wdimax.com` was the atypical site the loop happened to open first.
+The selection error is worth more than the correction: **ranking by inversion COUNT would have picked
+`payb.jp` (264) immediately; ranking by "cleanest to localise" picked the one site whose count was an
+instrument artefact** — and it was chosen precisely *because* 12 of 12 in one container looked like a
+clean single mechanism, which is exactly what an artefact looks like.
+
+⚠⚠ **THE FIELD BROKE THE INSTRUMENT, AND THE SYMPTOM NAMED A CAUSE ON THE PAGE.**
+
+```text
+   ⚠ www.wdimax.com UNMEASURABLE [oracle-module-shell-0]: the ORACLE rendered only 0 element(s)
+     — and this document is a `type="module"` SPA, so THE SHELL IS OUR SNAPSHOT
+```
+
+`parse_seen_probe_json` guarded with `if a.len() != 6 && a.len() != 7 { continue }` — beneath a
+comment reading *"an absent datum must not silently remove the element from the diff."* An 8-element
+array was dropped: every element, every page. **A guard written to be forward-tolerant was
+enumerating lengths instead of taking a MINIMUM**, so it tolerated the past and was silently fatal to
+the future, and the sweep blamed the document. Now `if a.len() < 6`. This is the reliability doctrine
+verbatim — a false-RED and an inaccurate instrument are one bug — and it is recorded because the next
+person to widen a probe tuple will meet it again.
+
+RATCHET: `manuk-wpt` 98/98, no engine crate touched. The row schema and every banked number are
+untouched — `position` is behind the same `MANUK_RO_PARTITION` reporting as t1034's partition, so no
+re-baseline is owed.
+
+THE STEER: take `payb.jp` (264 inversions, 138 on-screen, 0 mixed-flow, shape 0.658) or
+`www.taphouse23.com` (123 / 101 / 0, shape 0.170) — **rank the conjunct by its mass, not by how
+legible one container is.**
+
+PERF: one extra string per probed element on each side.
+
+WIKI: docs/wiki/conformance-and-oracles.md — "The reading-order conjunct is geometry after all, and
+one site said otherwise (t1084)"
+
 ## Tick 1083 — the collapsed space, and a conjunct that survived three Chrome-exact fixes (2026-08-09)
 
 TICK SHAPE: capability — the collapsed inter-word space counts toward the static position.

@@ -185,7 +185,7 @@ for(var k=0;k<lim;k++){var e=all[k];var t=e.tagName.toLowerCase();
   // exactly that — `[74x16] vs [76x18]` is unattributable without it (t563).
   var fam0=(cs0.fontFamily||'').split(',')[0].trim().replace(/^["']|["']$/g,'');
   var px0=Math.round(parseFloat(cs0.fontSize)||0);
-  out[pathOf(e)]=[t,cs0.display,Math.round(r.x+window.scrollX),Math.round(r.y+window.scrollY),Math.round(r.width),Math.round(r.height),fam0+'/'+px0];}
+  out[pathOf(e)]=[t,cs0.display,Math.round(r.x+window.scrollX),Math.round(r.y+window.scrollY),Math.round(r.width),Math.round(r.height),fam0+'/'+px0,cs0.position];}
 emit(out);}"#,
     probe_defer_tail!()
 );
@@ -299,7 +299,7 @@ pub fn oracle_probe(
     if (r.width === 0 && r.height === 0 && cs.display !== 'none') continue;
     out[pathOf(e)] = [t, cs.display,
                  Math.round(r.x + window.scrollX), Math.round(r.y + window.scrollY),
-                 Math.round(r.width), Math.round(r.height)];
+                 Math.round(r.width), Math.round(r.height), '', cs.position];
   }
   // Health of the ORACLE ITSELF, not of the diff: is what Chromium rendered a real document, or a
   // bot wall / error page / no-script shell? Answered by what Chromium DREW, not by how many
@@ -1241,10 +1241,18 @@ fn parse_seen_probe_json(dumped_dom: &str) -> Result<HashMap<String, crate::orac
     let mut map = HashMap::new();
     for (id, v) in raw {
         let Some(a) = v.as_array() else { continue };
-        // 7 since t563 (the computed font joined the tuple); 6 is still accepted so a cached probe
-        // output from before that change parses with an EMPTY font rather than being dropped — an
-        // absent datum must not silently remove the element from the diff.
-        if a.len() != 6 && a.len() != 7 {
+        // 6 (pre-t563) · 7 (the computed font joined the tuple) · 8 (the computed `position`, t1084).
+        // Older shapes stay accepted so a cached probe output parses with an EMPTY trailing field
+        // rather than being dropped — an absent datum must not silently remove the element.
+        //
+        // ⚠⚠⚠ **AND THE EXACT-LIST FORM OF THAT GUARD BROKE THE INSTRUMENT THE MOMENT THE TUPLE
+        // GREW.** t1084 added an 8th field to the probe and this line dropped **every element of
+        // every page** — and the failure did not look like a parser failure: the sweep reported
+        // `UNMEASURABLE [oracle-module-shell-0]: the ORACLE rendered only 0 element(s) — and this
+        // document is a type="module" SPA`, i.e. it named a *cause on the page* for a defect in the
+        // reader. A guard written to be forward-tolerant was enumerating lengths instead of taking
+        // a MINIMUM, so it was tolerant in exactly one direction and silently fatal in the other.
+        if a.len() < 6 {
             continue;
         }
         let (Some(tag), Some(display)) = (a[0].as_str(), a[1].as_str()) else {
@@ -1271,6 +1279,7 @@ fn parse_seen_probe_json(dumped_dom: &str) -> Result<HashMap<String, crate::orac
                 display: display.to_string(),
                 rect,
                 font: a.get(6).and_then(|f| f.as_str()).unwrap_or("").to_string(),
+                position: a.get(7).and_then(|f| f.as_str()).unwrap_or("").to_string(),
             },
         );
     }

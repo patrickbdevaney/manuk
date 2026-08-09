@@ -3728,6 +3728,7 @@ fn falsify_baseline() -> (
                     display: "block".to_string(),
                     rect: [0, y, 200, 30],
                     font: String::new(),
+                    position: String::new(),
                 },
             );
         }
