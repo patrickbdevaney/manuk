@@ -46371,6 +46371,107 @@ PERF: none — one UA rule and one narrowed branch in a cascade that already ran
 WIKI: `docs/wiki/css-cascade.md` — where Chrome draws the form-control `box-sizing` line, and why a
 layout-crate test cannot see it.
 
+## Tick 1080 — 31 ticks moved the gate by ZERO, and two of the three biggest movers refuse to reproduce (2026-08-09)
+
+TICK SHAPE: measurement — the clean `--jobs 2` CrUX sweep, 200 sites, banked as
+`SWEEP-t1080-rows.tsv` and `FIDELITY-PROGRESS.tsv`. No engine crate touched. Owed since t1049 and
+named by check #100 as the single binding piece of drift on the board.
+
+`--jobs 2` deliberately, because t1049 used `--jobs 2` and **the harness is part of the number**: the
+board asks for `--jobs 8` to halve the cycle, and raising it in the run that has to be diffable
+against t1049 would confound a contention timeout with a regression.
+
+```text
+                              t1023      t1031      t1049      t1080
+   M1 (shape>=0.75 AND clean)  17.6%      17.6%      17.8%      17.7%     23 · 23 · 23 · 23 sites
+     shape >= 0.75             23.7%      26.7%      28.7%      27.7%     31 · 35 · 37 · 36
+     jarring-clean             32.1%      33.6%      34.1%      33.1%     42 · 44 · 44 · 43
+   shape_mean                  59.5%      60.7%      60.3%      60.7%
+   scored / in-scope          107/131    107/131    108/129    106/130
+   COMMON-SET BAND (t1049→t1080)                               +0.46 pts over 103 sites (16 up · 11 down >2pt)
+```
+
+⚠⚠⚠ **THE HYPOTHESIS WAS RIGHT ON ALL THREE TERMS, INCLUDING THE ONE WRITTEN DOWN AS "MOST LIKELY TO
+BE WRONG", AND BEING RIGHT IS AGAIN NOT THE USEFUL PART.** It predicted M1 ≤ 1 site (moved 0), it
+predicted shape would rise (it did not — 37 → 36, inside the tool's own ±2-4 noise band), and it
+predicted the third possibility explicitly: *"the sweep may show these eight ticks as near-zero on
+both conjuncts, which would be a finding about the METRIC rather than about the ticks."* That is what
+happened. **M1 has now been the SAME 23 sites across FOUR sweeps and 57 ticks.**
+
+⚠⚠⚠ **AND THE −1 IS NOT A READING: TWO OF THE THREE BIGGEST DOWN-MOVERS REFUSE TO REPRODUCE SOLO.**
+The standing rule is that a sweep delta is not a reading until its top movers are re-run alone.
+Same hour, same binary, twice each:
+
+```text
+   site                t1049    t1080 (in sweep)   solo x2
+   sestra.cc           0.899    0.746              0.932 · 0.927   <- does NOT reproduce
+   mobcup.fm           1.000    0.793              1.000 · 1.000   <- does NOT reproduce
+   seduniaselat.com    0.758    0.639              0.645 · 0.610   reproduces
+   www.livescore.cz    0.415    1.000              1.000 · 1.000   reproduces
+   www.wdimax.com      0.615    0.886              0.886 · 0.886   reproduces
+   crm.majoo.id        0.342    0.514              0.605 · 0.579   reproduces (higher)
+```
+
+The rule was applied to the numbers I did not like **and** to the ones I did (t1048's discipline),
+and it only fired on the losses. `mobcup.fm` is the sharpest row: **1.000 solo, twice, against 0.793
+in the sweep — a 20-point swing on one unchanged tree** — and its sweep row is already
+**jarring-clean**, so it is an M1 PASS that the sweep counted as a fail. Correcting only the two
+non-reproducing sites puts shape-pass at 38 (above t1049's 37) and M1 at 24.
+
+**So the honest verdict is not "−1 site", it is "the instrument cannot resolve a change of this
+size".** t654-672 measured a live site's own spread at 3.7 points on an unchanged tree; this sweep
+has a single site moving 20. The pass-count is a **threshold over a noisy scalar**, and thresholds
+amplify noise instead of averaging it.
+
+⚠⚠ **THE ONE POSITIVE SIGNAL IS THE COMMON-SET BAND, +0.46 pts over the 103 sites scored in both**,
+and `fidelity-progress.sh` says in its own output that the band confounds engine movement with site
+drift and needs the old-binary control to separate them. Not run this tick: an old-binary control
+costs a 600s cold relink plus a second 90-minute sweep, and the band is smaller than the single-site
+spread just measured, so the control would be adjudicating a number the instrument cannot hold.
+**Stated as unresolved rather than resolved in our favour.**
+
+**THE BINDING CONJUNCT IS UNCHANGED AND ITS RANK IS UNCHANGED.** Of the 15 sites that clear the
+shape bar and still fail M1 (reconstructed from the row file — it reproduces the tool's shape-pass 36
+exactly and its M1 within 2, so the ORDERING is trustworthy and the absolute is not):
+
+```text
+   reading_order   binds 10      (t1049: 12)
+   h_overflow      binds  9      (t1049:  6)
+   overlap         binds  6
+   dead_target     binds  2
+```
+
+**SCORABILITY REGRESSED 108 → 106**, and the tool flags it rather than letting it flatter the mean.
+Five sites left the scored set (`7info.ru` and `www.kuechenmomente.de` unreachable, `videa.hu`
+timeout-150s, `app.ordertime.com` tree-divergence-31, `www.crazyshop.pl` css-starved-1) and three
+joined it (`redinfor.com.pe`, `ubys.bingol.edu.tr`, **`www.ebay.com`** — the site t777 named as the
+canonical booted-but-thin case at cov 0.16). Four of the five departures are network or timeout, not
+engine. The ceiling is **106/130 = 81.5%**, still the cap on M1.
+
+THE STEER, and it is a change of instrument rather than of area:
+
+1. ⚠⚠⚠ **Stop ranking on pass-count.** Four sweeps, 57 ticks, zero movement in a metric whose
+   single-site noise is 20 points. The COMMON-SET BAND is the burndown reading; the pass-count is a
+   headline that cannot resolve a tick.
+2. **Take `reading_order`.** It has been the top binding conjunct in three consecutive sweeps
+   (12 · 12 · 10) and t871-874 already named its mechanism class — *a reading-order symptom is a
+   WIDTH or TRANSFORM upstream, never a reorder*. It is the only conjunct with that much history and
+   no tick.
+3. **Price CSS 2.1 candidates against the corpus before taking them** (check #100 §5.4). This sweep
+   is the evidence for that rule: eight suite-ranked ticks, +734 suite tests, zero gate movement.
+
+RATCHET: measurement only, no engine crate touched; every banked invariant re-banked unchanged.
+
+GATE: none new — a sweep gates nothing. Its falsifiable content is `SWEEP-t1080-rows.tsv` plus
+`scripts/fidelity-progress.sh`, which recomputes every number above from the row file, and the six
+solo re-runs above, which anyone can repeat.
+
+PERF: none — measurement only.
+
+WIKI: none — the artefact is the row file and the FIDELITY-PROGRESS row. The mechanism this steers
+at (`reading_order`) is not measured yet, and writing it up now would be the frequency-claim error
+check #96 named. [no-pattern]
+
 ## Tick 1079 — the border is stored UNIFORM, and the top edge being right is why nobody saw it (2026-08-09)
 
 TICK SHAPE: capability — `border-*-color` and `border-*-style` become per-side. `engine/css`

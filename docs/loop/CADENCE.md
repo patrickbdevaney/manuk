@@ -11,12 +11,12 @@
 
 | | value | over |
 |---|---|---|
-| ticks landed | **788** | ticks 1–1079 |
-| median tick cycle | **27m** | 787 intervals |
-| median, last 10 | **17m** | 10 intervals |
+| ticks landed | **789** | ticks 1–1080 |
+| median tick cycle | **27m** | 788 intervals |
+| median, last 10 | **29m** | 10 intervals |
 | fastest / slowest | 5s / 5.4d | |
-| **ticks per hour** | **1.12** | 704.6h elapsed |
-| median verify wall | **63s** | 727 ticks |
+| **ticks per hour** | **1.12** | 706.1h elapsed |
+| median verify wall | **63s** | 728 ticks |
 | wall trend | 39s → 13m — getting slower ⚠️ | first 3 vs last 3 |
 
 The **cycle** is the real unit: implement → debug → verify wall → land. The wall is only part of
@@ -31,7 +31,7 @@ it, and a wall that grows taxes every future tick, so it is tracked separately f
 * **✅ rows in the capability ledger**: 144 → **544**
 * **Bar 0 — oracle hangs**: 0 of 265 sites
 
-**344 of 788 ticks** (44%) moved a
+**344 of 789 ticks** (44%) moved a
 user-visible capability. The rest were instruments, infrastructure and corrections — and the
 ledger says the corrections were not overhead: three of its top three priorities were phantoms,
 and finding that out redirected everything after it.
@@ -91,7 +91,7 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 ## What a capability costs
 
 * **344** capability ticks, median cycle **27m**
-* median diff per tick: **+260 / −34** lines across 8 files
+* median diff per tick: **+261 / −34** lines across 8 files
 
 ## Every tick
 
@@ -885,5 +885,6 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 | **1077** | 2026-08-09 11:36 | 4m | measurement | 13m | +145/−33 | 429 | 81 | 56.0% · | 10.5% of the CSS 2.1 suite's remaining failures are ONE pseudo-element that has no row on  |
 | **1078** | 2026-08-09 12:37 | 61m | capability | 13m | +708/−47 | 430 | 81 | 56.0% · | `::first-letter` was one arm of one `match` away, and UAX #14 owned 196 of the 339 (2026-0 |
 | **1079** | 2026-08-09 13:40 | 63m | capability | 13m | +959/−129 | 431 | 81 | 56.0% · | the border is stored UNIFORM, and the top edge being right is why nobody saw it (2026-08-0 |
+| **1080** | 2026-08-09 15:07 | 87m | measurement | 13m | +337/−32 | 431 | 81 | 56.0% · | 31 ticks moved the gate by ZERO, and two of the three biggest movers refuse to reproduce ( |
 
 *`·` after a WPT figure means **carried forward**, not measured this tick.*
