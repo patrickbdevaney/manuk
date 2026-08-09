@@ -4967,11 +4967,17 @@ Two separate facts, and they must not be merged:
 
 - **174 known failures are UNBANKED.** A number the ratchet never marks cannot go backwards, so
   `svg` and `mathml` are outside the ratchet's protection entirely — 1359 tests that can silently rot.
-- ⚠⚠⚠ **442 of them the reftest runner CANNOT SCORE AT ALL.** `wai-aria` and `accname` report
-  **0 passed, 0 failed, 100% skipped — every single test "needs JS/testharness."** This is not a low
-  score; it is **no score**, and it is the entire accessibility-conformance surface. The a11y moat was
-  measured at t861-870 by a *different* instrument (797/1250) precisely because this one is blind to
-  it, and nothing on the board records that the blindness is structural.
+- ⚠⚠⚠ **CORRECTED AT TICK 1064 — THIS ROW WAS WRONG AND IS WITHDRAWN.** It originally read *"442 of
+  them the reftest runner CANNOT SCORE AT ALL … this is not a low score, it is NO score."* That is
+  true of `manuk-wpt <dir>`, the **reftest** runner, and materially false about the loop:
+  `manuk-wpt wpt <dir>` is the **testharness** runner (`tests/wpt/src/harness.rs`, 672 lines) and
+  scores both directories fine — **`wai-aria` 238/434 = 54.8%, `accname` 306/481 = 63.6%, together
+  544/915 = 59.5%, HANG/CRASH 0.** The audit read `SKIP — needs JS/testharness` as a property of the
+  loop when it is a property of the subcommand chosen. **A SKIP IS A STATEMENT ABOUT THE RUNNER, NOT
+  ABOUT THE CAPABILITY.**
+- **What survives, narrower and better:** `wai-aria` and `accname` have **no `WPT:` row in
+  `RATCHET.tsv`**, so 915 subtests — **371 of them failing** — sit outside the ratchet and can rot
+  silently. That was the real finding; only the word *unmeasurable* was wrong.
 
 ### 5 · WHAT WE HAD BEEN WRONG ABOUT
 
@@ -4997,6 +5003,8 @@ manufactured seventy of them.
    (`scripts/wpt-expand.sh`, `RATCHET.tsv` generation) — **flagged for the observer, not touched.**
 2. **`svg` and `mathml` are 1359 tests, on disk, unbanked, with 174 known failures.** Banking them
    costs nothing to discover and immediately extends the ratchet's protection.
-3. ⚠ **The a11y conformance surface is STRUCTURALLY invisible to the reftest runner** (442/442
-   skipped). Either the runner grows a testharness path or the board must stop implying that WPT
-   coverage says anything about a11y. This is the largest *unmeasured* surface the audit found.
+3. ⚠ **CORRECTED AT TICK 1064.** This item read *"the a11y conformance surface is STRUCTURALLY
+   invisible to the reftest runner … the largest unmeasured surface the audit found."* The
+   testharness runner already exists and scores it: **544/915 = 59.5%**. The accurate item is
+   **BANK IT** — `wai-aria` and `accname` carry no ratchet row, so 371 failing subtests on the I3
+   moat cannot regress because nothing marks them. Build no runner; add the rows.

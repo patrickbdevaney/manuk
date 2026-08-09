@@ -46371,6 +46371,89 @@ PERF: none — one UA rule and one narrowed branch in a cascade that already ran
 WIKI: `docs/wiki/css-cascade.md` — where Chrome draws the form-control `box-sizing` line, and why a
 layout-crate test cannot see it.
 
+## Tick 1064 — CORRECTION: the accessibility surface is not unmeasurable, I ran the wrong runner (2026-08-09)
+
+TICK SHAPE: measurement — a correction, published one tick after the claim it withdraws. Surface
+audit #46 (t1060) and check #98's **top steer** (t1063) both rest on a reading that is wrong, and the
+error was mine and one command wide.
+
+⚠⚠⚠ **THE CLAIM, WITHDRAWN: "the reftest runner cannot score the accessibility surface at all —
+442/442 SKIPPED, that is NO score, not a low one."** True of `manuk-wpt <dir>`, which is the
+**reftest** runner, and materially false about the loop. `manuk-wpt wpt <dir>` is the **testharness**
+runner — 672 lines in `tests/wpt/src/harness.rs`, which serves the tree over HTTP, overrides
+`resources/testharnessreport.js` through WPT's own sanctioned vendor hook, and reads back what
+`testharness.js` concluded. Run through it, the same two directories score:
+
+```text
+                       reftest runner        testharness runner (`manuk-wpt wpt`)
+   wai-aria       0 pass 0 fail 264 SKIP      238 / 434  =  54.8%   ·  30 files
+   accname        0 pass 0 fail 178 SKIP      306 / 481  =  63.6%   ·  19 files
+                                              -------------------
+                                              544 / 915  =  59.5%   Bar 0: HANG/CRASH 0
+```
+
+**The accessibility conformance surface is measured at 59.5%**, and that number had never been
+published before this tick — which is the one thing the audit was right about, arrived at for the
+wrong reason.
+
+⚠⚠⚠ **THE MECHANISM OF THE ERROR, WHICH IS THE PART WORTH KEEPING.** The runner printed
+`SKIP — needs JS/testharness` 442 times, and I read a property of **the subcommand I had chosen** as
+a property of **the loop**. The skip message is accurate and says exactly what it means; it describes
+what a *reftest* runner does with a *testharness* test. Nothing lied. I asked the wrong instrument
+and generalised its answer.
+
+> **A SKIP IS A STATEMENT ABOUT THE RUNNER, NOT ABOUT THE CAPABILITY.** This is *"a count is not an
+> identification"* (t846) and *"CHECK WHICH BINARY produced a surprising reading"* (t887) in a third
+> coordinate: **check which RUNNER.** And it is the same session's own Finding 1 turned back on the
+> agent that wrote it — three ticks spent proving the instrument was wrong about the engine, and then
+> a claim published about the instrument without asking whether a second instrument existed.
+
+⚠⚠ **WHAT SURVIVES, and it is narrower and better.** Both directories have **no `WPT:` row in
+`RATCHET.tsv`**, so 915 subtests — **371 of them currently failing** — are outside the ratchet's
+protection and can rot silently. That was the audit's real finding and it stands unchanged; only the
+word *unmeasurable* was wrong. Likewise `svg` (769) and `mathml` (590) remain unbanked, and the WPT
+checkout is still a 23-directory partial clone containing exactly what the ratchet already tracks.
+
+⚠ **CHECK #98's TOP STEER IS WITHDRAWN.** *"The a11y conformance surface is unmeasurable by the
+current runner and I3 makes it constitutional — this outranks more geometry"* was the first item of
+four. It is replaced in place by the accurate version: **the surface is measured at 59.5% and
+unbanked**, so the work is to bank it, not to build a runner that already exists. Steers 2, 3 and 4
+are unaffected. ⚠ Under I3 the *substance* of the steer survives — 371 failing a11y subtests on the
+moat the constitution calls *"never allowed to rot"* is a real and large gap — but it is an ordinary
+engine backlog, not a blind spot in the instrument, and the difference decides what the next tick
+builds.
+
+CORRECTED IN PLACE, all three artefacts, because a wrong number left standing anywhere is the thing
+this loop punishes hardest: `docs/loop/SURFACE-AUDIT.md` audit #46 §4 and §7, and
+`docs/loop/CONSTITUTION-CHECK.md` check #98's Finding 5 and steer #1.
+
+WALL-TIME AUDIT rode along (due every 20 ticks; last at 1044) and its **first finding is about
+itself**: it reads the most recent verify receipt, and the most recent receipt was tick 1063 —
+**docs-only, 101s**, which skips the expensive path entirely. Its cost table (`T` 43s, `G6` 20s, `D`
+7s) therefore describes a run that never built the workspace, and ranking against it would optimise
+the cheap wall. **The representative number is this session's four capability walls: 1019s, 1042s,
+1051s, 1024s — a tight ±1.6% band around ~1030s, against Part 21.2's 300s target.**
+
+⚠ Every named remedy — mold/lld, cargo-nextest, workspace-hack, risk-based gate scheduling — lives in
+`scripts/`, so per PART VII it is **flagged and not touched**; this is the same item the self-audit
+raised at t1061 and it remains the observer's.
+
+⚠⚠ **What IS agent-side, and this session paid it four times:** check #97 already recorded that
+old-binary controls *"are the loop's own contribution to the wall and free to fix."* Pricing t1057,
+t1058, t1060 and t1062 each required a release relink of `manuk-wpt` at ~3m30s — **~14 minutes of
+wall this session that no gate asked for.** Within a tick they were single builds, so the t1050
+failure (five relinks in eight ticks) did not recur; across ticks they are still serial. The lever the
+agent owns is **fewer priced ticks, not faster builds** — t1059 already demonstrated it by declining
+an A/B whose result was determined in advance, and that tick's wall was the cheapest capability wall
+of the window.
+
+RATCHET: measurement only, no engine crate touched. manuk-layout 145/145 unmoved. **Bar 0 clean on
+both runs — `HANG/CRASH 0` across 49 files.**
+
+PERF: none — measurement only.
+
+WIKI: none — the artefacts are the corrected audit and check. [no-pattern]
+
 ## Tick 1063 — the constitution check, and three of eight ticks found the INSTRUMENT rather than the engine (2026-08-09)
 
 TICK SHAPE: measurement — the cadence re-read of `CONSTITUTION.MD` (due every 8 ticks; last at 1055),

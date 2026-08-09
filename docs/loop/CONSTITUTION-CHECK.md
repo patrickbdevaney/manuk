@@ -7231,10 +7231,15 @@ already tracks** (upstream `css/` has ~93 directories, ours has 16 — and `css-
 422865` reads as a total over WPT and is a total over a hand-picked subset.
 
 And four directories **are** on disk with no ratchet row, measured for the first time: `svg`
-38p/**108 FAILED**, `mathml` 84p/**66 FAILED**, and `wai-aria` + `accname` at **0 passed, 0 failed,
-442/442 SKIPPED — the reftest runner cannot score the accessibility surface at all.** That is *no*
-score, not a low one, and per **I3** — the AX tree is *"the single most durable moat… never allowed
-to rot"* — it is the largest genuinely unmeasured surface the audit found.
+38p/**108 FAILED**, `mathml` 84p/**66 FAILED**, and `wai-aria` + `accname`.
+
+⚠⚠⚠ **CORRECTED AT TICK 1064.** This paragraph originally said the last two read *"0 passed, 0
+failed, 442/442 SKIPPED — the reftest runner cannot score the accessibility surface at all."* That is
+true of the **reftest** runner and false about the loop: `manuk-wpt wpt <dir>` is the **testharness**
+runner and scores them **238/434 = 54.8%** and **306/481 = 63.6%** — together **544/915 = 59.5%**,
+HANG/CRASH 0. A `SKIP` is a statement about the runner, not about the capability. What survives is
+that all four directories are **unbanked**: 371 failing a11y subtests on the **I3** moat cannot
+regress, because nothing marks them.
 
 ⚠ The audit also **nearly manufactured ~70 false gaps** from the directory-count delta; hand-checking
 each against the map (t1054's rule) left **two** real ones. A false gap costs more than a missed one.
@@ -7242,10 +7247,12 @@ each against the map (t1054's rule) left **two** real ones. A false gap costs mo
 ---
 
 **THE STEER, in order:**
-1. **The a11y conformance surface is unmeasurable by the current runner (442/442 skipped) and I3 makes
-   it constitutional.** Either the runner grows a testharness path (`manuk-wpt` is agent territory) or
-   the board stops implying WPT coverage says anything about a11y. This is the window's largest named
-   gap and it outranks more geometry.
+1. ⚠⚠⚠ **WITHDRAWN AND REPLACED AT TICK 1064.** This read *"the a11y conformance surface is
+   unmeasurable by the current runner (442/442 skipped)… build a testharness path."* The testharness
+   runner already exists and measures it at **544/915 = 59.5%**. The accurate steer: **BANK
+   `wai-aria` and `accname`** so their 371 failing subtests fall under the ratchet, then work them as
+   an ordinary I3 backlog. The substance — a large gap on the moat the constitution says is *"never
+   allowed to rot"* — survives; the diagnosis of *why it was invisible* does not.
 2. **State the WPT denominator wherever the total is published**, and bank `svg`/`mathml`'s 1359
    on-disk tests so their 174 known failures cannot silently rot — harness-owned, flagged not touched.
 3. **Extend the spec-enumeration method to CSS Position L3** (Display L3 is done, t1062, one gap
