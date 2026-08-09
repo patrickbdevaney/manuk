@@ -426,6 +426,9 @@
   - L8167 · How it was found, which is the part worth keeping
   - L8189 · And a green mutation read the fixture rather than the code
   - L8198 · What is NOT claimed
+  - L8205 · The static position is the MARGIN edge, and three of the four ways to make space were already right (t1082)
+  - L8244 · What it did NOT fix, stated because the hunt was aimed at it
+  - L8253 · The named residue
 
 ## browser-capabilities.md
 `docs/wiki/browser-capabilities.md`
@@ -1852,4 +1855,4 @@
   - L124 · Rank mechanisms by FLIP RATE, not failing-subtest count — CSS layout is a multi-assertion slog
 
 ---
-1759 sections across 22 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+1762 sections across 22 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.

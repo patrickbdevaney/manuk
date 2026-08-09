@@ -8201,3 +8201,64 @@ This does not explain the footer that started the hunt. Those 12 inversions rema
 `reading_order` remains the top binding conjunct of M1 — with the centred-static-position hypothesis
 now struck off rather than still open, which is the whole value of a battery that includes rows the
 site does not have.
+
+## The static position is the MARGIN edge, and three of the four ways to make space were already right (t1082)
+
+Directly downstream of t1081: that tick's ten-row battery refuted its own hypothesis and left
+`www.wdimax.com`'s footer unattributed. A second battery, aimed at what the first one had held fixed
+— **the preceding box, not the abspos box** — found it in seven rows.
+
+`refine_inline_static_positions` walks the in-flow siblings that precede an out-of-flow box and takes
+`rect.x + rect.width`. **That is the border box.** CSS 2.1 §10.6.4's *"where the box would have been"*
+means where the NEXT in-flow box would start, and the next box starts after the previous one's
+`margin-right`.
+
+```text
+                                             Chrome   before   after
+   preceding inline-block, no margin            40       40       40
+   …with margin-right: 20px                     60       40       60
+   …with margin-LEFT: 20px                      60       60       60   <- already right
+   …with padding-right: 20px                    60       60       60   <- already right
+   preceding INLINE <span> w/ margin-right      39       20       39
+   centred + margin-right + a separator with
+     margin-left:-10px  (the real footer)      200      180      200
+   preceding BARE TEXT with a trailing space     29        0       29?  <- NOT FIXED, see below
+```
+
+⚠⚠⚠ **`margin-left` and `padding-right` are why this survived 1,081 ticks.** There are four ways to
+put space after an inline-level box, and three of them — the preceding box's left margin, its right
+padding, its border — are already **inside** `rect.x`/`rect.width`. Only `margin-right` lives outside
+the border box, and only it was dropped. An engineer checking "does space after a box push the static
+position?" had a 75% chance of checking a case that worked.
+
+**The real-site shape is the sixth row**, and it is what the page actually writes:
+
+```css
+   footer { text-align: center }
+   footer a:not(:last-child) { margin-right: 20px }
+   footer .line-between { display: inline-block; position: absolute; margin-left: -10px }
+```
+
+Measured on the live site, same binary, twice: **shape 0.886 → 0.966**.
+
+### What it did NOT fix, stated because the hunt was aimed at it
+
+`reading_order` on that site is **still 12 inversions in the same 7-sibling container**. The static
+positions are now Chrome-exact on every shape the footer contains, shape rose 8 points, and the
+inversion count did not move by one. So the conjunct that started this hunt is *still* unattributed
+after two batteries, and the honest summary is that two mechanisms were found and neither is the one
+being chased. That is worth more than a claim: it means the next tick on `reading_order` should stop
+assuming the cause is geometric and go read what the metric actually compares.
+
+### The named residue
+
+Row 7 — a preceding **bare text node** (`<div>ab <b></b>…`) — is a different mechanism and is not
+fixed. `before` collects sibling *node ids* and matches them against `TextFragment::node`, which
+carries the deepest **element** ancestor; a text node that is a direct child of the block matches
+nothing, so the walk sees no preceding content at all. Chrome puts the box at 29 (two monospace
+characters plus the collapsed trailing space); we put it at the line start. Named here rather than
+guessed at.
+
+⚠ Also measured and left alone: the inline-`<span>` row lands at 40 against Chrome's 39. The
+fragment's right edge is rounded up before the margin is added, so it is a sub-pixel rounding
+difference that predates this fix, not a new one.

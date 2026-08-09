@@ -50,6 +50,9 @@
 //!   position is broken" from "the line-opening case is".
 //! - Take the leftmost x over ALL lines instead of the first → `#first_wrap` reports 5 against
 //!   Chrome's 10, because its second line holds a wider item and therefore starts further left.
+//! - Drop the `trailing_margin` term → `#after_margin` and `#footer_shape` fall 20px short while
+//!   `#after_margin_left` and `#after_padding` still pass, which is the pair that says the defect is
+//!   the MARGIN specifically and not "space after a box" generally.
 //!
 //! ONE `#[test]` per file — `PageContext` is per-process (see `g_caption_paint.rs`).
 
@@ -72,6 +75,10 @@ b { display: inline-block; width: 10px; height: 10px; position: absolute }
 <div style="text-align:center"><i></i><i></i><b id="last"></b></div>
 <div style="text-align:center"><i></i><b id="explicit" style="left:5px"></b><i></i></div>
 <div style="text-align:center;height:80px;width:100px"><b id="first_wrap"></b><i></i><i></i><i style="width:90px"></i></div>
+<div style="text-align:left"><i style="margin-right:20px"></i><b id="after_margin"></b><i></i></div>
+<div style="text-align:left"><i style="margin-left:20px"></i><b id="after_margin_left"></b><i></i></div>
+<div style="text-align:left"><i style="padding-right:20px"></i><b id="after_padding"></b><i></i></div>
+<div style="text-align:center"><i style="margin-right:20px"></i><b id="footer_shape" style="margin-left:-10px"></b><i></i></div>
 </body></html>"##;
 
 #[test]
@@ -143,5 +150,33 @@ fn an_out_of_flow_box_that_opens_a_line_takes_the_lines_start_edge() {
         "the box opens the FIRST line, so it takes the first line's start (10, Chrome-measured), \
          not the leftmost start on any line (5) — got {}",
         x("first_wrap")
+    );
+
+    // ── ⚠ THE STATIC POSITION IS THE MARGIN EDGE, NOT THE BORDER EDGE (t1082). The walk took
+    //    `rect.x + rect.width`, which is the border box, so the one of the four ways to put space
+    //    after a box that lives OUTSIDE it was dropped. All four numbers are Chrome-measured.
+    assert!(
+        (x("after_margin") - 60.0).abs() < 1.0,
+        "a preceding inline-block's margin-right pushes the static position: 40 + 20 = 60 — got {}",
+        x("after_margin")
+    );
+    assert!(
+        (x("after_margin_left") - 60.0).abs() < 1.0,
+        "…and margin-LEFT was ALREADY right, because it is inside rect.x — got {}",
+        x("after_margin_left")
+    );
+    assert!(
+        (x("after_padding") - 60.0).abs() < 1.0,
+        "…as was padding-right, because it is inside rect.width. These two rows are why the \
+         margin case survived: three of the four ways to put space after a box worked — got {}",
+        x("after_padding")
+    );
+    // The real-site shape that found it: `footer a:not(:last-child){margin-right:20px}` with an
+    // insetless abspos separator carrying `margin-left:-10px`, inside a centred footer.
+    assert!(
+        (x("footer_shape") - 200.0).abs() < 1.0,
+        "the shape that found this (centred + margin-right + a negative margin-left on the \
+         separator): Chrome says 200, it was 180 — got {}",
+        x("footer_shape")
     );
 }

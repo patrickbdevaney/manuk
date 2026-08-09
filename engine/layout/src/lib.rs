@@ -2834,6 +2834,7 @@ impl Ctx<'_> {
         kids: &[NodeId],
         frags: &[TextFragment],
         atomics: &[LayoutBox],
+        cw: f32,
     ) {
         if !kids.iter().any(|&k| self.kid_is_out_of_flow(k)) {
             return;
@@ -2912,14 +2913,39 @@ impl Ctx<'_> {
                     best = Some((top, right));
                 }
             };
+            // ⚠⚠⚠ **THE STATIC POSITION IS THE MARGIN EDGE, NOT THE BORDER EDGE**, and this walk
+            // used `rect.x + rect.width` — which is the border box. §10.6.4's *"where the box would
+            // have been if it were the first in-flow child"* means where the NEXT in-flow box would
+            // start, and the next box starts after the previous one's `margin-right`.
+            //
+            // Chrome-measured, a 10px abspos box after a 40px `inline-block`:
+            //
+            // ```text
+            //                                            Chrome   before   after
+            //   preceding inline-block, no margin           40       40       40
+            //   …with margin-right: 20px                    60       40       60
+            //   …with margin-LEFT: 20px                     60       60       60   <- already right
+            //   …with padding-right: 20px                   60       60       60   <- already right
+            //   preceding INLINE <span> with margin-right   39       20       39
+            // ```
+            //
+            // The `margin-left` and `padding-right` rows are why this survived: both are already
+            // inside `rect.x`/`rect.width`, so three of the four ways to put space after a box were
+            // correct and only the one that lives OUTSIDE the border box was not.
+            let trailing_margin = |n: Option<NodeId>| -> f32 {
+                n.and_then(|n| self.styles.get(&n))
+                    .map(|s| s.margin.right.resolve(cw, 0.0))
+                    .unwrap_or(0.0)
+                    .max(0.0)
+            };
             for f in frags {
                 if f.node.is_some_and(|n| before.contains(&n)) {
-                    take(f.line_top, f.x + f.width);
+                    take(f.line_top, f.x + f.width + trailing_margin(f.node));
                 }
             }
             for b in atomics {
                 if b.node.is_some_and(|n| before.contains(&n)) {
-                    take(b.rect.y, b.rect.x + b.rect.width);
+                    take(b.rect.y, b.rect.x + b.rect.width + trailing_margin(b.node));
                 }
             }
             if let Some((top, right)) = best {
@@ -4198,7 +4224,7 @@ impl Ctx<'_> {
             //    Inert unless this block has an out-of-flow child, and skipped under an RTL base
             //    direction (see the helper).
             if bcs.direction != manuk_css::Direction::Rtl {
-                self.refine_inline_static_positions(&kids, &frags, &atomics);
+                self.refine_inline_static_positions(&kids, &frags, &atomics, cw);
             }
             // `text-overflow: ellipsis` truncates a clipped, non-wrapping single line with `…`. Only
             // fires on a box that clips (`overflow` ≠ visible) and doesn't wrap (`nowrap`/`pre`); a

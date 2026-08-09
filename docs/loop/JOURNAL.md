@@ -46371,6 +46371,75 @@ PERF: none — one UA rule and one narrowed branch in a cascade that already ran
 WIKI: `docs/wiki/css-cascade.md` — where Chrome draws the form-control `box-sizing` line, and why a
 layout-crate test cannot see it.
 
+## Tick 1082 — three of the four ways to make space after a box were already right (2026-08-09)
+
+TICK SHAPE: capability — the static position is the preceding box's MARGIN edge, not its border
+edge. `engine/layout`, one function; `G_STATIC_POS_LINE_START` extended by four rows.
+
+Directly downstream of t1081. That tick's battery refuted its own hypothesis and left
+`www.wdimax.com`'s footer unattributed, so this one aims at **what the first battery held fixed** —
+the PRECEDING box rather than the out-of-flow one. Seven rows, Chrome-measured:
+
+```text
+                                             Chrome   before   after
+   preceding inline-block, no margin            40       40       40
+   …with margin-right: 20px                     60       40       60
+   …with margin-LEFT: 20px                      60       60       60   <- already right
+   …with padding-right: 20px                    60       60       60   <- already right
+   preceding INLINE <span> w/ margin-right      39       20       40   (1px, pre-existing rounding)
+   centred + margin-right + separator with
+     margin-left:-10px   (the REAL footer)     200      180      200
+   preceding BARE TEXT with a trailing space     29        0        0   <- NOT FIXED, named below
+```
+
+⚠⚠⚠ **`margin-left` AND `padding-right` ARE WHY THIS SURVIVED 1,081 TICKS.** There are four ways to
+put space after an inline-level box, and three of them — the preceding box's left margin, its right
+padding, its border — are already **inside** `rect.x`/`rect.width`. Only `margin-right` lives outside
+the border box, and only it was dropped. Anyone checking *"does space after a box push the static
+position?"* had a **75% chance of checking a case that worked**. That is the same shape as t1042's
+constants-fitted-at-one-point and t1046's UA control font: **vary the parameter you held fixed.**
+
+The sixth row is what the site actually writes, and it is ordinary:
+
+```css
+   footer { text-align: center }
+   footer a:not(:last-child) { margin-right: 20px }
+   footer .line-between { display: inline-block; position: absolute; margin-left: -10px }
+```
+
+MEASURED on the live site, same binary, twice: **shape 0.886 → 0.966**. (Its 0.886 was itself
+solo-verified twice at t1080, so both ends of that delta reproduce.)
+
+⚠⚠⚠ **AND IT DID NOT FIX WHAT THE HUNT WAS AIMED AT.** `reading_order` on that site is **still 12
+inversions in the same 7-sibling container**. The static positions are now Chrome-exact on every
+shape the footer contains, shape rose 8 points, and the inversion count did not move by one. **Two
+batteries have now found two real mechanisms and neither is the one being chased.** The honest
+inference is not "keep going" — it is that the next tick on `reading_order` should stop assuming the
+cause is geometric and go read what the metric actually compares, because a conjunct that survives
+two Chrome-exact geometry fixes on its own top site is not describing geometry.
+
+RESIDUE, named rather than guessed at: a preceding **bare text node** (`<div>ab <b></b>…`) is
+invisible to the walk. `before` collects sibling node ids and matches them against
+`TextFragment::node`, which carries the deepest **element** ancestor — so a text node that is a
+direct child of the block matches nothing and the walk sees no preceding content at all. Chrome puts
+the box at 29; we put it at the line start. Separately, the inline-`<span>` row lands at 40 against
+Chrome's 39: the fragment's right edge is rounded up before the margin is added, which is a
+sub-pixel difference that predates this fix.
+
+RATCHET: `manuk-layout` 151/151 unmoved, `manuk-page` gates green. RED-proven by dropping the
+`trailing_margin` term — `#after_margin` and `#footer_shape` fall 20px short **while
+`#after_margin_left` and `#after_padding` still pass**, which is the pair that says the defect is the
+MARGIN specifically and not "space after a box" generally.
+
+OWED: a full sweep. This is a real single-site gain on an anchor site and the corpus-wide effect is
+unmeasured; the last sweep is t1080 and the next one prices this and t1081 together.
+
+PERF: one style lookup per preceding in-flow sibling, and only for a block that has an out-of-flow
+child at all.
+
+WIKI: docs/wiki/box-layout.md — "The static position is the MARGIN edge, and three of the four ways
+to make space were already right (t1082)"
+
 ## Tick 1081 — the battery refuted its own hypothesis, and the finding was its negative row (2026-08-09)
 
 TICK SHAPE: capability — the static position of an out-of-flow box that OPENS a line.

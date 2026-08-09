@@ -11,12 +11,12 @@
 
 | | value | over |
 |---|---|---|
-| ticks landed | **790** | ticks 1–1081 |
-| median tick cycle | **27m** | 789 intervals |
+| ticks landed | **791** | ticks 1–1082 |
+| median tick cycle | **27m** | 790 intervals |
 | median, last 10 | **40m** | 10 intervals |
 | fastest / slowest | 5s / 5.4d | |
-| **ticks per hour** | **1.12** | 706.9h elapsed |
-| median verify wall | **63s** | 729 ticks |
+| **ticks per hour** | **1.12** | 707.3h elapsed |
+| median verify wall | **63s** | 730 ticks |
 | wall trend | 39s → 13m — getting slower ⚠️ | first 3 vs last 3 |
 
 The **cycle** is the real unit: implement → debug → verify wall → land. The wall is only part of
@@ -28,10 +28,10 @@ it, and a wall that grows taxes every future tick, so it is tracked separately f
 
 * **capabilities asserted** (`G_CAPABILITY`): 48 → **81**
 * **live gates**: 27 → **432**
-* **✅ rows in the capability ledger**: 144 → **545**
+* **✅ rows in the capability ledger**: 144 → **546**
 * **Bar 0 — oracle hangs**: 0 of 265 sites
 
-**345 of 790 ticks** (44%) moved a
+**346 of 791 ticks** (44%) moved a
 user-visible capability. The rest were instruments, infrastructure and corrections — and the
 ledger says the corrections were not overhead: three of its top three priorities were phantoms,
 and finding that out redirected everything after it.
@@ -90,7 +90,7 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 
 ## What a capability costs
 
-* **345** capability ticks, median cycle **27m**
+* **346** capability ticks, median cycle **27m**
 * median diff per tick: **+261 / −34** lines across 8 files
 
 ## Every tick
@@ -887,5 +887,6 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 | **1079** | 2026-08-09 13:40 | 63m | capability | 13m | +959/−129 | 431 | 81 | 56.0% · | the border is stored UNIFORM, and the top edge being right is why nobody saw it (2026-08-0 |
 | **1080** | 2026-08-09 15:07 | 87m | measurement | 13m | +337/−32 | 431 | 81 | 56.0% · | 31 ticks moved the gate by ZERO, and two of the three biggest movers refuse to reproduce ( |
 | **1081** | 2026-08-09 15:55 | 48m | capability | 13m | +383/−34 | 432 | 81 | 56.0% · | the battery refuted its own hypothesis, and the finding was its negative row (2026-08-09) |
+| **1082** | 2026-08-09 16:23 | 28m | capability | 13m | +233/−36 | 432 | 81 | 56.0% · | three of the four ways to make space after a box were already right (2026-08-09) |
 
 *`·` after a WPT figure means **carried forward**, not measured this tick.*
