@@ -3479,9 +3479,11 @@ impl Ctx<'_> {
             && (s.width != Dim::Auto || s.width_keyword.is_some() || inline_constraint_violated)
         {
             let leftover = cw - (width + pl + pr + bl + br);
+            // ⚠ ARM ORDER IS THE SPEC'S STEP ORDER: the two RTL arms below must be tried BEFORE the
+            //   `auto` arms, because §10.3.3 zeroes an overflowing `auto` margin FIRST and only then
+            //   applies the direction clause. With the `auto` arms first — which is how this match
+            //   was written — an `auto` margin short-circuited the direction clause entirely.
             match (s.margin.left.is_auto(), s.margin.right.is_auto()) {
-                (true, true) => ml = (leftover / 2.0).max(0.0),
-                (true, false) => ml = (leftover - mr).max(0.0),
                 // ── **CSS 2.1 §10.3.3 — THE OVER-CONSTRAINED EQUATION IGNORES `margin-left` UNDER
                 //    `rtl`.** With a definite `width` and neither margin `auto`, the equation cannot
                 //    hold, and the spec says which term gives: *"if the `direction` property of the
@@ -3538,8 +3540,54 @@ impl Ctx<'_> {
                         )
                         && self.parent_is_rtl(node) =>
                 {
-                    ml = (leftover - mr).max(0.0)
+                    // ⚠⚠⚠ **THE IGNORED MARGIN IS RECOMPUTED, AND THE RESULT MAY BE NEGATIVE.**
+                    // `.max(0.0)` used to sit here, and it is right on the two `auto` arms above for
+                    // a different reason (§10.3.3 treats an OVERFLOWING auto margin as *zero*) — so
+                    // the clamp read as a shared safety rule and was in fact a rule about a
+                    // different clause. §10.3.3's over-constrained clause says `margin-left` is
+                    // *ignored*, i.e. re-derived from the equality with no floor: a box whose
+                    // `margin-right` exceeds the space simply hangs off the left of its containing
+                    // block, which is exactly how the CSS 2.1 suite's RTL tests draw a border on
+                    // top of another one. Chrome, a 100px block in a 400px RTL container:
+                    //
+                    // ```text
+                    //   margin-right   300    301     350     500
+                    //   Chrome           0     -1     -50    -200
+                    //   was              0      0       0       0     <- the clamp, at the crossing
+                    // ```
+                    ml = leftover - mr
                 }
+                // ⚠⚠⚠ **AN `auto` MARGIN THAT OVERFLOWS IS ZERO, AND THEN THE BOX IS
+                // OVER-CONSTRAINED LIKE ANY OTHER.** §10.3.3 is two steps and the match above only
+                // ever ran the second: *"if `width` is not `auto` and the non-auto parts are larger
+                // than the containing block, then any `auto` values for the margins are treated as
+                // zero"* — after which **nothing is auto**, so the direction clause applies and
+                // under `rtl` re-derives `margin-left`. Each arm reached the wrong answer by a
+                // different route, which is why no single row exposed all three. Chrome, RTL,
+                // container 400:
+                //
+                // ```text
+                //   ml:auto  mr:500px  w:100     Chrome -200   was 0    (auto→0, then ignored)
+                //   ml:auto  mr:auto   w:600     Chrome -200   was 0    (both→0, then ignored)
+                //   ml:500px mr:auto   w:100     Chrome  300   was 500  (mr→0, then ml ignored)
+                // ```
+                //
+                // The LTR mirror of all three is unchanged (0, 0, 500) — under `ltr` it is
+                // `margin-right` that is ignored, and `margin-right` does not move the box.
+                (ml_auto, mr_auto)
+                    if self.parent_is_rtl(node)
+                        && !is_replaced_element(self.dom.tag_name(node))
+                        && !matches!(
+                            s.display,
+                            Display::InlineBlock | Display::InlineFlex | Display::InlineGrid
+                        )
+                        && (if ml_auto { 0.0 } else { ml }) + (if mr_auto { 0.0 } else { mr })
+                            > leftover =>
+                {
+                    ml = leftover - if mr_auto { 0.0 } else { mr };
+                }
+                (true, true) => ml = (leftover / 2.0).max(0.0),
+                (true, false) => ml = (leftover - mr).max(0.0),
                 _ => {}
             }
         }

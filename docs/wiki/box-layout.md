@@ -8331,3 +8331,70 @@ With `white-space: pre`, the preserved newline puts the box on a **second line**
 we say x=40. That is a different defect (a preserved newline not breaking the line for an out-of-flow
 box's static position), it is measured here, and it is deliberately not asserted in the gate: a gate
 must not assert a number it knows is wrong.
+
+## §10.3.3 is TWO steps, and the clamp that was right on one clause was a floor on the other (t1087)
+
+CSS 2.1 §10.3.3 constrains a block-level non-replaced box in normal flow, and resolves a conflict in
+an **ordered pair of steps** that this engine collapsed into one `match`:
+
+1. *"If `width` is not `auto` and the non-auto parts are larger than the containing block, then any
+   `auto` values for `margin-left`/`margin-right` are treated as **zero**."*
+2. Then nothing is `auto`, the equation still cannot hold, and one term is **ignored** — re-derived
+   from the equality. `margin-right` under `ltr`, `margin-left` under `rtl`.
+
+Manuk ran only step 2, only on the arm where both margins were already non-`auto`, and floored the
+result at zero. **Three different wrong answers came out of one `match`, by three different routes**,
+which is why no single row exposed them. Chrome, a 100px block in a 400px RTL container:
+
+```text
+  declaration                             Chrome    was     the route
+  margin-right: 300px                          0      0     correct — this is the zero CROSSING
+  margin-right: 301px                         -1      0     the `.max(0.0)` floor
+  margin-right: 500px                       -200      0     the same floor
+  margin-left:auto;  margin-right:500px     -200      0     the auto arm ran INSTEAD of step 2
+  margin-left:auto;  margin-right:auto      -200      0     the centring arm did too (width 600)
+  margin-left:500px; margin-right:auto       300    500     no arm existed at all
+```
+
+⚠⚠⚠ **THE CLAMP WAS CORRECT ON ITS NEIGHBOURS FOR A DIFFERENT REASON, WHICH IS WHAT MADE IT LOOK
+LIKE A SHARED SAFETY RULE.** `.max(0.0)` on the two `auto` arms *is* step 1 — an overflowing `auto`
+margin is zero. The identical `.max(0.0)` on the over-constrained arm was a floor on step 2, which
+has none: a box whose `margin-right` exceeds the space simply hangs off the left of its containing
+block. One expression, two clauses, and only one of them wanted it. **Three ticks of RTL work walked
+past that line without reading it, because it looked like the same defensive idiom twice.**
+
+⚠⚠ **THE ARM ORDER IS THE SPEC'S STEP ORDER.** The `auto` arms were first, so an `auto` margin
+short-circuited the direction clause entirely. Putting the two RTL arms above them is not a
+refactor — it is what makes step 1 run before step 2, and it is separately RED-proven (hoisting the
+`auto` arms back fails `auto_start` while every non-`auto` row still passes).
+
+**How it was found — the suite ranked WHERE, a battery said WHAT.** `css/CSS2/margin-padding-clear`
+sat at 575 passed / 102 failed. Clustering the 102 by test family put `margin-right` at 20, and
+**19 of those 20 declare `direction: rtl`** — against a 2% failure rate among the 45 non-RTL tests in
+the same family. That is a 76% failure rate on a 25-file RTL population inside an otherwise-healthy
+directory, and it is visible in three minutes of `grep` with no build. A 23-row battery then took
+`margin-right-019.xht`'s shape apart and put the boundary at exactly `margin-right: 300px`.
+
+```text
+  css/CSS2/margin-padding-clear   575 / 102   ->   592 / 85     (+17 passed, -17 failed)
+```
+
+**OLD-BINARY CONTROL, same hour, four directories** — the change is guarded by `parent_is_rtl`, and
+this is what says so rather than the guard's own text:
+
+```text
+                          OLD     NEW
+  margin-padding-clear    575     592     +17
+  normal-flow             319     320      +1
+  positioning             187     187       0
+  floats                   23      23       0
+  bidi-text                17      17       0   <- 85 of its 145 files mention rtl
+```
+
+`bidi-text` is the control worth naming: it is the most RTL-dense directory in CSS 2.1 and it did not
+move by one test in either direction, which is the shape of a fix that is *narrow* rather than
+*lucky*.
+
+RESIDUE, measured and named: an **atomic inline** (`<img>`, `inline-block`) with a margin larger than
+its RTL container is still at 0 where Chrome says −200. That is the LINE BOX's placement, not
+§10.3.3 — the exclusions in this arm are correct and the defect is in `layout_inline`.

@@ -46371,6 +46371,111 @@ PERF: none — one UA rule and one narrowed branch in a cascade that already ran
 WIKI: `docs/wiki/css-cascade.md` — where Chrome draws the form-control `box-sizing` line, and why a
 layout-crate test cannot see it.
 
+## Tick 1087 — §10.3.3 is TWO steps, and the clamp that was right on one clause was a floor on the other (2026-08-09)
+
+TICK SHAPE: capability — one `match` in `engine/layout/src/lib.rs`, gated by a new
+`G_RTL_OVERCONSTRAINED_MARGIN`, with a four-directory old-binary control.
+
+**HOW THE SUBJECT WAS PICKED, because that is the reusable half.** `css/CSS2/margin-padding-clear`
+was at 575 passed / 102 failed. Clustering the 102 failures by test family — three minutes of `grep`,
+no build — put `margin-right` at 20, and:
+
+```text
+   margin-right family      67 tests   22 declare `direction: rtl`
+   of the 20 FAILURES       19 declare `direction: rtl`
+   the other 45 tests        1 fails
+```
+
+**A 76% failure rate on a 25-file RTL population inside an otherwise-healthy directory.** The suite
+ranked *where to look*; it did not say what was there. `margin-right-019.xht`'s shape — three nested
+`width:0` divs under `direction:rtl`, the innermost with `margin-right:-78pt` so its border lands on
+top of an outer one — went into a 23-row battery with the LTR mirror of every row first.
+
+**WHAT THE BATTERY FOUND, and it was not what the tests looked like.** 22 of 23 exact: the RTL
+over-constrained rule itself (`margin-left` ignored), negative margins, `auto` absorption, centring,
+the `dir` attribute spelling and an out-of-flow control were all Chrome-exact. One row diverged, and
+bisecting it put the boundary on an integer:
+
+```text
+   RTL, 100px block in a 400px container
+   margin-right      0     100     300     301     350     500
+   Chrome          300     200       0      -1     -50    -200
+   ours            300     200       0       0       0       0
+                                            ^ the crossing is EXACTLY where the resolved margin
+                                              would go negative
+```
+
+⚠⚠⚠ **`.max(0.0)`, AND IT WAS CORRECT ON ITS TWO NEIGHBOURS FOR A DIFFERENT REASON.** §10.3.3 is an
+ordered pair: (1) *"if `width` is not `auto` and the non-auto parts are larger than the containing
+block, any `auto` margins are treated as ZERO"*, then (2) with nothing `auto` left, one term is
+*ignored* and re-derived — `margin-right` under `ltr`, `margin-left` under `rtl`. The clamp on the
+two `auto` arms **is** step 1. The identical clamp on the over-constrained arm was a floor on step 2,
+which has none. **One expression, two clauses, and only one of them wanted it** — which is why three
+consecutive RTL ticks read that line and moved on: it looked like the same defensive idiom twice.
+
+⚠⚠⚠ **AND THE ARM ORDER WAS THE OTHER HALF OF THE SAME SENTENCE.** Widening the battery to the
+`auto` spellings produced two more wrong answers by two more routes:
+
+```text
+   RTL, container 400                        Chrome    was    the route it took
+   margin-left:auto;  margin-right:500px       -200      0    the auto arm ran INSTEAD of step 2
+   margin-left:auto;  margin-right:auto        -200      0    the centring arm did too (width 600)
+   margin-left:500px; margin-right:auto         300    500    no arm existed at all
+   ── the LTR mirror of all three                 0/0/500  unchanged, and must stay
+```
+
+The `auto` arms sat **above** the direction clause, so an `auto` margin short-circuited it entirely.
+Their order is the spec's step order, and moving them below is separately RED-proven.
+
+RESULT — three batteries, and every LTR row byte-identical:
+
+```text
+   over-constraint battery        22/23 -> 23/23
+   auto-margin battery             4/11 ->  9/11
+   zero-crossing battery           6/10 -> 10/10
+   t1086's 61-row RTL battery     59/61 -> 59/61   (untouched, as predicted)
+```
+
+RATCHET — **OLD-BINARY CONTROL, same hour, four directories**, because "it is guarded by
+`parent_is_rtl`" is an argument and this is a measurement:
+
+```text
+                           OLD     NEW
+   margin-padding-clear    575     592     +17
+   normal-flow             319     320      +1
+   positioning             187     187       0
+   floats                   23      23       0
+   bidi-text                17      17       0   <- 85 of its 145 files mention rtl
+```
+
+**+18 tests, zero regressions.** `bidi-text` is the control worth naming: the most RTL-dense
+directory in CSS 2.1 did not move by one test in either direction, which is the shape of a fix that
+is *narrow* rather than *lucky*.
+
+GATE: `engine/page/tests/g_rtl_overconstrained_margin.rs`, 18 Chrome-measured rows, RED-proven by
+**three mutations that were run rather than reasoned** — restoring the floor fails `neg_one` while
+`zero_crossing` still passes (the floor, not the formula); hoisting the `auto` arms fails
+`auto_start` while every non-`auto` row passes (the order, not the floor); dropping `parent_is_rtl`
+fails `ltr_neg` (the control arm has teeth). A fourth mutation is **not** listed as a proof, because
+this fixture has no `<img>` and no `inline-block` and it would be green by inspection — t1086 asserted
+a green mutation as a red one and this is the correction to that habit, one tick later.
+
+RESIDUE, measured and named: an **atomic inline** (`<img>`, `inline-block`) whose margin exceeds its
+RTL container is still at 0 where Chrome says −200. That is the LINE BOX's placement, not §10.3.3 —
+the replaced/atomic exclusions on this arm are correct and the defect is in `layout_inline`. It joins
+t1086's two: `float`/`clear: inline-start` direction-blind in `stylo_map.rs`, and
+`refine_inline_static_positions` skipped outright under RTL.
+
+THE STEER: the RTL vein is not exhausted and it is now cheap to mine — **grep a CSS 2.1 directory's
+failures for `direction: *rtl` before opening any of them.** `positioning` has 83 RTL files against
+324 failures and has never been partitioned that way; `bidi-text` is 17/105 with 85 RTL files and is
+the largest single unworked RTL mass in the suite.
+
+PERF: none — one `match` reordered, no new work per box.
+
+WIKI: docs/wiki/box-layout.md — "§10.3.3 is TWO steps, and the clamp that was right on one clause was
+a floor on the other (t1087)"
+
 ## Tick 1086 — `dir="rtl"` was a layout input and not a CASCADE input (2026-08-09)
 
 TICK SHAPE: capability — two UA rules in `engine/css/src/stylo_engine.rs`, gated by a new

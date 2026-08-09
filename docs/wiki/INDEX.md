@@ -432,6 +432,7 @@
   - L8266 · The collapsed inter-word space counts, and the footer that started the hunt is now Chrome-exact (t1083)
   - L8302 · Three mechanisms, and the conjunct that started it is still unattributed
   - L8328 · A residue, measured rather than assumed
+  - L8335 · §10.3.3 is TWO steps, and the clamp that was right on one clause was a floor on the other (t1087)
 
 ## browser-capabilities.md
 `docs/wiki/browser-capabilities.md`
@@ -1861,4 +1862,4 @@
   - L124 · Rank mechanisms by FLIP RATE, not failing-subtest count — CSS layout is a multi-assertion slog
 
 ---
-1768 sections across 22 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+1769 sections across 22 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
