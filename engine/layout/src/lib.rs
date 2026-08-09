@@ -10177,6 +10177,378 @@ mod tests {
         (dom, root)
     }
 
+    /// One row of the t1059 battery: `inner` inside a containing block styled `cb`, returning `#x`'s
+    /// rect relative to that containing block's border box.
+    fn t1059_row(cb: &str, inner: &str) -> Rect {
+        let html = format!(r#"<div id="cb" style="{cb}">{inner}</div>"#);
+        let (dom, root) = layout_html(&html, "", 800.0);
+        let rects = root.node_rects(&dom);
+        let by_id = |id: &str| {
+            let n = dom
+                .descendants(dom.root())
+                .find(|&n| dom.element(n).and_then(|e| e.attr("id")) == Some(id))
+                .unwrap_or_else(|| panic!("#{id} exists"));
+            rects
+                .get(&n)
+                .copied()
+                .unwrap_or_else(|| panic!("#{id} produced a box"))
+        };
+        let (c, x) = (by_id("cb"), by_id("x"));
+        Rect {
+            x: x.x - c.x,
+            y: x.y - c.y,
+            width: x.width,
+            height: x.height,
+        }
+    }
+
+    /// **G_WIDTH_PROPERTY — CSS 2.1 §10.2/§10.3.3, the `width` property on a block box.**
+    ///
+    /// The last unknown on t1054's §8/§9/§10 enumeration, and the map's own row said why it was
+    /// there: *"the single most-used length in CSS … every width defect this loop has found
+    /// (`box-sizing`, the over-constraint, the intrinsic ratio, the inline's ignored width) was filed
+    /// under its own symptom and the PROPERTY itself was never a capability with a verdict."*
+    ///
+    /// 35 rows against headless Chrome in a 400px containing block. **Thirty-four were already
+    /// exact** — `auto`, lengths, percentages, the auto-margin cases, the over-constraint under both
+    /// directions, both `box-sizing`es, `min`/`max` clamps, `calc`, a percentage against an
+    /// *indefinite* containing block, a percentage against a *padded* one, a nested percentage
+    /// chain, `display:table`, `display:list-item`, and overflow past the containing block:
+    ///
+    /// ```text
+    ///                                                  Chrome   ours
+    ///   auto · 200px · 50%                             400/200/200   exact
+    ///   auto + margins 20/20                              360        exact
+    ///   200px + margin:auto (centre)                   x=100         exact
+    ///   200px + margin-left:auto / margin-right:auto   x=200 / x=0   exact
+    ///   200px + margins 50/50   (OVER-CONSTRAINED)     x=50          exact
+    ///     …the same in an RTL containing block         x=150         exact
+    ///   200px + padding 20 + border 5, content-box        250        exact
+    ///     …the same with box-sizing:border-box            200        exact
+    ///   50% against a PADDED containing block             200        exact
+    ///     …the same containing block border-box           150        exact
+    ///   50% of 50% (a nested percentage chain)            100        exact
+    ///   50% against an INDEFINITE (shrink-to-fit) CB    57.77        exact
+    ///   calc(50% - 20px)                                  180        exact
+    ///   width:200px on a `display:inline`               37.36        exact  <- must be IGNORED
+    ///   600px in a 400px CB (overflow, no shrink)         600        exact
+    /// ```
+    ///
+    /// ⚠⚠ **The `display:inline` row and the indefinite-CB row are the two that say the rule does
+    /// NOT apply**, and a §10.2 battery without them measures only the half of the property that
+    /// works. The one row that failed is [`a_negative_size_is_a_parse_error_not_a_zero`].
+    #[test]
+    fn the_width_property_on_a_block_is_chrome_exact() {
+        let cb = "width:400px";
+        for (inner, want_x, want_w, why) in [
+            (
+                r#"<div id="x" style="height:5px"></div>"#,
+                0.0,
+                400.0,
+                "auto FILLS the containing block",
+            ),
+            (
+                r#"<div id="x" style="width:200px;height:5px"></div>"#,
+                0.0,
+                200.0,
+                "a length is used as-is",
+            ),
+            (
+                r#"<div id="x" style="width:50%;height:5px"></div>"#,
+                0.0,
+                200.0,
+                "a percentage resolves against the CB",
+            ),
+            (
+                r#"<div id="x" style="width:50%;margin-left:20px;height:5px"></div>"#,
+                20.0,
+                200.0,
+                "…and the margin does not change it",
+            ),
+            (
+                r#"<div id="x" style="margin-left:20px;margin-right:20px;height:5px"></div>"#,
+                20.0,
+                360.0,
+                "auto absorbs both margins",
+            ),
+            (
+                r#"<div id="x" style="width:200px;margin-left:auto;margin-right:auto;height:5px"></div>"#,
+                100.0,
+                200.0,
+                "two auto margins CENTRE",
+            ),
+            (
+                r#"<div id="x" style="width:200px;margin-left:auto;height:5px"></div>"#,
+                200.0,
+                200.0,
+                "one auto margin takes all the slack",
+            ),
+            (
+                r#"<div id="x" style="width:200px;margin-right:auto;height:5px"></div>"#,
+                0.0,
+                200.0,
+                "…on the other side it does not move the box",
+            ),
+            (
+                r#"<div id="x" style="width:200px;margin-left:50px;margin-right:50px;height:5px"></div>"#,
+                50.0,
+                200.0,
+                "OVER-CONSTRAINED: LTR ignores margin-right",
+            ),
+            (
+                r#"<div id="x" style="width:200px;padding:20px;border:5px solid #000;height:5px"></div>"#,
+                0.0,
+                250.0,
+                "content-box adds padding and border",
+            ),
+            (
+                r#"<div id="x" style="box-sizing:border-box;width:200px;padding:20px;border:5px solid #000;height:5px"></div>"#,
+                0.0,
+                200.0,
+                "border-box does not",
+            ),
+            (
+                r#"<div id="x" style="padding:20px;height:5px"></div>"#,
+                0.0,
+                400.0,
+                "auto + padding still fills",
+            ),
+            (
+                r#"<div id="x" style="box-sizing:border-box;padding:20px;height:5px"></div>"#,
+                0.0,
+                400.0,
+                "…under either box-sizing",
+            ),
+            (
+                r#"<div id="x" style="padding-left:10%;height:5px"></div>"#,
+                0.0,
+                400.0,
+                "a percentage padding is absorbed by auto",
+            ),
+            (
+                r#"<div id="x" style="width:200px;min-width:300px;height:5px"></div>"#,
+                0.0,
+                300.0,
+                "min-width clamps UP",
+            ),
+            (
+                r#"<div id="x" style="width:200px;max-width:100px;height:5px"></div>"#,
+                0.0,
+                100.0,
+                "max-width clamps DOWN",
+            ),
+            (
+                r#"<div style="float:left;width:80px;height:20px"></div><div id="x" style="height:5px"></div>"#,
+                0.0,
+                400.0,
+                "a float shortens LINE BOXES, never the block",
+            ),
+            (
+                r#"<div id="x" style="width:600px;height:5px"></div>"#,
+                0.0,
+                600.0,
+                "a too-wide box OVERFLOWS, it does not shrink",
+            ),
+            (
+                r#"<div id="x" style="width:auto;margin-left:500px;height:5px"></div>"#,
+                500.0,
+                0.0,
+                "auto goes to zero rather than negative",
+            ),
+            (
+                r#"<div style="width:50%"><div id="x" style="width:50%;height:5px"></div></div>"#,
+                0.0,
+                100.0,
+                "a nested percentage chain",
+            ),
+            (
+                r#"<div id="x" style="width:calc(50% - 20px);height:5px"></div>"#,
+                0.0,
+                180.0,
+                "calc mixes the two terms",
+            ),
+            (
+                r#"<div id="x" style="display:table;width:50%;height:5px"></div>"#,
+                0.0,
+                200.0,
+                "a table box takes `width` the same way",
+            ),
+            (
+                r#"<div id="x" style="display:list-item;width:50%;height:5px"></div>"#,
+                0.0,
+                200.0,
+                "…and so does a list item",
+            ),
+            (
+                r#"<div id="x" style="width:0;height:5px"></div>"#,
+                0.0,
+                0.0,
+                "zero is a legal width",
+            ),
+            (
+                r#"<div id="x" style="width:50%;margin-left:auto;margin-right:auto;box-sizing:border-box;padding:0 30px;height:5px"></div>"#,
+                100.0,
+                200.0,
+                "border-box + centring + padding compose",
+            ),
+            (
+                r#"<div id="x" style="width:auto;height:5px;border-left:7px solid #000;border-right:3px solid #000"></div>"#,
+                0.0,
+                400.0,
+                "asymmetric borders are absorbed by auto",
+            ),
+            (
+                r#"<div id="x" style="width:50%;height:5px;position:relative;left:10px"></div>"#,
+                10.0,
+                200.0,
+                "a relative offset moves the box, not its width",
+            ),
+        ] {
+            let r = t1059_row(cb, inner);
+            assert_eq!((r.x, r.width), (want_x, want_w), "§10.2: {why} — {inner}");
+        }
+
+        // ⚠ THE OVER-CONSTRAINED ROW IN AN RTL CONTAINING BLOCK — §10.3.3's direction clause, the
+        // in-flow twin of §10.3.7's (t1058). LTR drops `margin-right`, RTL drops `margin-left`.
+        assert_eq!(
+            t1059_row("width:400px;direction:rtl", r#"<div id="x" style="width:200px;margin-left:50px;margin-right:50px;height:5px"></div>"#).x,
+            150.0,
+            "§10.3.3: an RTL containing block drops `margin-left`, so the box sits at 400-50-200"
+        );
+        for (dir, want) in [("rtl", 200.0), ("ltr", 200.0)] {
+            assert_eq!(
+                t1059_row(&format!("width:400px;direction:{dir}"), r#"<div id="x" style="width:200px;margin-left:auto;height:5px"></div>"#).x,
+                want,
+                "…but a single auto margin is SOLVED FOR, not dropped, so it is direction-free ({dir})"
+            );
+        }
+
+        // ⚠⚠ A PERCENTAGE RESOLVES AGAINST THE CONTAINING BLOCK'S **CONTENT** WIDTH, which is what
+        // makes these two rows differ by exactly the padding.
+        assert_eq!(
+            (
+                t1059_row(
+                    "width:400px;padding:0 50px",
+                    r#"<div id="x" style="width:50%;height:5px"></div>"#
+                )
+                .width,
+                t1059_row(
+                    "width:400px;box-sizing:border-box;padding:0 50px",
+                    r#"<div id="x" style="width:50%;height:5px"></div>"#
+                )
+                .width,
+            ),
+            (200.0, 150.0),
+            "§10.2: a percentage width resolves against the CB's CONTENT box, so the CB's own \
+             box-sizing changes the answer"
+        );
+
+        // ⚠⚠⚠ THE TWO ROWS WHERE §10.2 MUST **NOT** APPLY. Without them this battery measures only
+        // the half of the property that works.
+        assert!(
+            (t1059_row(cb, r#"<span id="x" style="width:200px">inline</span>"#).width - 37.36)
+                .abs()
+                < 1.0,
+            "§10.2: `width` does NOT apply to a non-replaced inline — it must size to its glyphs"
+        );
+        assert!(
+            (t1059_row(cb, r#"<div style="float:left"><div id="x" style="width:50%;height:5px">wwwwwwwwww</div></div>"#).width - 57.77).abs() < 1.0,
+            "§10.2: against an INDEFINITE (shrink-to-fit) containing block a percentage resolves \
+             against the shrunk width, not the outer 400"
+        );
+    }
+
+    /// **G_NEGATIVE_SIZE — a negative length on a size property is a PARSE ERROR, not a zero.**
+    ///
+    /// `width`/`height` and the four min/max properties take `<length-percentage [0,∞]>`; a value
+    /// outside that range makes the **declaration invalid**, and an invalid declaration is *dropped*
+    /// — the cascade keeps whatever was already there. We clamped to zero instead, which is a
+    /// different observable. Chrome, 400px containing block:
+    ///
+    /// ```text
+    ///                                       Chrome   before
+    ///   width:-5px                            400        0
+    ///   width:200px; width:-5px               200        0    <- the DECISIVE row
+    ///   width:-5%                             400        0
+    ///   width:200px; max-width:-5px           200        0
+    ///   min-width:-5px; width:50px             50       50    <- CONTROL, agrees by ACCIDENT
+    ///   width:calc(50% - 300px)                 0        0    <- CONTROL: calc is not a parse error
+    /// ```
+    ///
+    /// ⚠⚠⚠ **`width:200px; width:-5px` is what locates the fix.** Reinterpreting a negative width as
+    /// `auto` down in layout answers 400 on the first row and **400 on the second**, where Chrome
+    /// says 200. Only declining to *apply* the declaration leaves the earlier one standing, so the
+    /// fix belongs at the point of application and nowhere else — and no row that tests a single
+    /// declaration in isolation can tell those two implementations apart.
+    ///
+    /// ⚠⚠ **`min-width` was already right FOR THE WRONG REASON: its initial value IS 0**, so
+    /// clamping a negative to zero and dropping the declaration agree at exactly one point.
+    /// `max-width` initialises to `none`, so the identical clamp takes the box to **zero width** —
+    /// a blank element. Checking the min half and inferring the max half would have cleared this,
+    /// which is the one-point-constant trap of t1043/t1045 in a new coordinate.
+    ///
+    /// ⚠ **`calc()` is deliberately not rejected** — a negative *result* is legal at computed-value
+    /// time and clamps to 0 at used-value time, so `calc(50% - 300px)` is 0 and not `auto`.
+    #[test]
+    fn a_negative_size_is_a_parse_error_not_a_zero() {
+        let cb = "width:400px";
+        for (inner, want, why) in [
+            (
+                r#"<div id="x" style="width:-5px;height:5px"></div>"#,
+                400.0,
+                "a negative length is dropped, so `width` stays auto",
+            ),
+            (
+                r#"<div id="x" style="width:-5%;height:5px"></div>"#,
+                400.0,
+                "…and so is a negative percentage",
+            ),
+            (
+                r#"<div id="x" style="width:200px;width:-5px;height:5px"></div>"#,
+                200.0,
+                "THE DECISIVE ROW: the EARLIER valid declaration survives",
+            ),
+            (
+                r#"<div id="x" style="width:200px;max-width:-5px;height:5px"></div>"#,
+                200.0,
+                "a negative max-width is dropped, not clamped to zero",
+            ),
+            (
+                r#"<div id="x" style="width:200px;min-width:-5px;height:5px"></div>"#,
+                200.0,
+                "…and a negative min-width likewise",
+            ),
+        ] {
+            assert_eq!(t1059_row(cb, inner).width, want, "{why} — {inner}");
+        }
+        // ⚠ CONTROL: `min-width` agrees under BOTH implementations because its initial value is 0.
+        assert_eq!(
+            t1059_row(cb, r#"<div id="x" style="min-width:-5px;width:50px;height:5px"></div>"#).width,
+            50.0,
+            "CONTROL: min-width was already exact — its initial value IS 0, so clamp and drop agree"
+        );
+        // ⚠ CONTROL: a negative CALC RESULT is legal and clamps to 0. Rejecting `Dim::Calc` as a
+        // parse error would answer 400 here.
+        assert_eq!(
+            t1059_row(cb, r#"<div id="x" style="width:calc(50% - 300px);height:5px"></div>"#).width,
+            0.0,
+            "CONTROL: calc is NOT a parse error — a negative result clamps to 0, it does not fall to auto"
+        );
+        // ⚠ CONTROL: the ordinary positive values must be unmoved by a rejection rule.
+        assert_eq!(
+            (
+                t1059_row(cb, r#"<div id="x" style="width:0;height:5px"></div>"#).width,
+                t1059_row(
+                    cb,
+                    r#"<div id="x" style="width:200px;max-width:100px;height:5px"></div>"#
+                )
+                .width,
+            ),
+            (0.0, 100.0),
+            "CONTROL: zero is legal and a positive max-width still clamps"
+        );
+    }
+
     /// One row of the t1058 battery: an abspos `#x` styled with `st` inside a positioned container
     /// styled with `cb`, returned parent-relative so the numbers compare directly with Chrome.
     fn t1058_row(cb: &str, st: &str, text: &str) -> Rect {

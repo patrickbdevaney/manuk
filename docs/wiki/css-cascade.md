@@ -2325,3 +2325,53 @@ This is the **third** instance in one session: t1043's border/intercept pair (`2
 real fix is named rather than guessed: the ratios exist because `stylo_engine` cannot reach a
 `FontContext` to resolve `line-height: normal` — a plumbing tick. Shipping a fudge factor tuned to two
 points instead of one would be the same mistake with a smaller error bar.
+
+## A negative length is a parse error, and the INSTRUMENT parsed it differently from the product (t1059)
+
+`width`, `height` and the four min/max sizing properties take `<length-percentage [0,∞]>`. A value
+outside that range makes the **declaration invalid**, and an invalid declaration is *dropped* — the
+cascade keeps whatever it already had. That is a different observable from clamping to zero:
+
+```text
+                                          Chrome   MinimalCascade   LIVE (Stylo)
+   width:-5px                               400          0              400  ✓
+   width:200px; width:-5px                  200          0              200  ✓   <- DECISIVE
+   width:-5%                                400          0              400  ✓
+   width:200px; max-width:-5px              200          0              200  ✓
+   min-width:-5px; width:50px                50         50               50  ✓   <- CONTROL
+   width:calc(50% - 300px)                    0          0                0  ✓   <- CONTROL
+```
+
+### The third column is the point
+
+Every layout battery in this loop is styled through `MinimalCascade` — it is what the layout crate's
+`layout_html` test helper builds. Running the same rows through the **live** binary's Stylo path,
+*before any fix*, returns Chrome's answers on all four failing rows. The shipping renderer was never
+wrong.
+
+> **THE INSTRUMENT THE LOOP MEASURES LAYOUT WITH PARSED CSS DIFFERENTLY FROM THE ENGINE IT SHIPS.** A
+> fixture row containing a negative length would have reported a layout defect the product does not
+> have, and the search would have started in `layout_block`. This is the *"instruments lie"* class
+> arriving through the one door nobody had checked — not the oracle, not the harness, not the score,
+> but **the cascade the fixtures are styled with.**
+
+It is still a real capability fix and precisely bounded: `engine/css`'s header says the
+`--no-default-features` build **ships** `MinimalCascade`, and the wall compiles and gates that build.
+So it lands on the headless engine and on the measuring instrument, and **moves the corpus by exactly
+zero, by construction** — the default build's width comes from Stylo via `stylo_map::size_to_dim`.
+No A/B was run: an A/B whose result is determined in advance is theatre, not evidence.
+
+### Two rows locate the fix, and neither is the row that made you look
+
+⚠⚠ **`width:200px; width:-5px`** is what puts the fix at the point of *application*. Reinterpreting a
+negative width as `auto` down in layout answers 400 on the first row and **400 on the second**, where
+Chrome says 200. Only declining to apply the declaration leaves the earlier one standing — and no row
+that tests a single declaration in isolation can tell those two implementations apart.
+
+⚠⚠ **`min-width` was already right for the wrong reason: its initial value *is* 0**, so clamping a
+negative to zero and dropping the declaration agree at exactly one point. `max-width` initialises to
+`none`, so the identical clamp takes the box to **zero width** — a blank element. Checking the min
+half and inferring the max half would have cleared this.
+
+⚠ `calc()` is deliberately not rejected — a negative *result* is legal at computed-value time and
+clamps to 0 at used-value time. It is a control, and the wrong fix that rejects it was RED-run.

@@ -717,6 +717,9 @@
   - L2264 · var() is clean — 30 of 30
   - L2283 · A <select>'s box ignores line-height; an <input>'s does not
   - L2304 · ⚠⚠⚠ The residual: a constant fitted at the one font size every fixture uses
+  - L2329 · A negative length is a parse error, and the INSTRUMENT parsed it differently from the product (t1059)
+  - L2345 · The third column is the point
+  - L2364 · Two rows locate the fix, and neither is the row that made you look
 
 ## `<dialog>`, `popover`, and the top layer (ticks 194-195)
 `docs/wiki/dialog-and-top-layer.md`
@@ -1787,4 +1790,4 @@
   - L124 · Rank mechanisms by FLIP RATE, not failing-subtest count — CSS layout is a multi-assertion slog
 
 ---
-1694 sections across 22 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+1697 sections across 22 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.

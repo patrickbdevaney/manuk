@@ -4303,6 +4303,39 @@ fn intrinsic_kw(v: &str) -> Option<IntrinsicSize> {
 /// max-width:fit-content(50px); max-height:fit-content(50px)">` reads back `0px` / `none` / `none`,
 /// i.e. the declaration was dropped. Accepting it here would have been a *more* permissive parser
 /// that renders a box Chrome does not.
+/// **A NEGATIVE LENGTH ON A SIZE PROPERTY IS A PARSE ERROR, NOT A ZERO.**
+///
+/// `width`, `height` and the four min/max sizing properties take `<length-percentage [0,∞]>`. A
+/// declaration outside that range is **invalid and dropped**, which is a different observable from
+/// clamping it: the cascade falls back to whatever was already there. Chrome, in a 400px container:
+///
+/// ```text
+///                                       Chrome   clamp-to-0 would give
+///   width:-5px                            400            0
+///   width:200px; width:-5px               200            0   <- the DECISIVE row
+///   width:-5%                             400            0
+///   width:200px; max-width:-5px           200            0
+///   min-width:-5px; width:50px             50           50   <- CONTROL, agrees by ACCIDENT
+///   width:calc(50% - 300px)                 0            0   <- CONTROL: calc is NOT a parse error
+/// ```
+///
+/// ⚠⚠⚠ **`width:200px; width:-5px` is what locates the fix.** Reinterpreting a negative width as
+/// `auto` down in layout would answer 400 on the first row and **400 on the second**, where Chrome
+/// says 200. Only *not applying the declaration* leaves the earlier one standing, so this belongs
+/// here — at the point of application — and nowhere else.
+///
+/// ⚠⚠ **`min-width` was already right, and for the wrong reason: its initial value IS 0**, so
+/// clamping a negative to zero and dropping the declaration agree at exactly one point. `max-width`
+/// initialises to `none`, so the same clamp takes the box to **zero width**. A battery that checked
+/// the min half and inferred the max half would have cleared this.
+///
+/// ⚠ **`calc()` is deliberately NOT rejected.** A negative *result* is allowed at computed-value
+/// time and clamped to 0 at used-value time — `width:calc(50% - 300px)` is 0 in Chrome, not `auto`.
+/// Rejecting `Dim::Calc` here would break that row, which is why it is in the battery as a control.
+fn is_negative_size(d: Dim) -> bool {
+    matches!(d, Dim::Px(v) | Dim::Percent(v) if v < 0.0)
+}
+
 fn intrinsic_kw_bare(v: &str) -> Option<IntrinsicSize> {
     match v.trim().to_ascii_lowercase().as_str() {
         "min-content" => Some(IntrinsicSize::MinContent),
@@ -4654,7 +4687,11 @@ fn apply_declaration(s: &mut ComputedStyle, d: &Declaration, parent_fs: f32) {
                 low.as_str(),
                 "stretch" | "-webkit-fill-available" | "-moz-available"
             );
-            s.width = values::parse_dim(v, s.font_size);
+            // A negative length/percentage makes the DECLARATION invalid — see `is_negative_size`.
+            let d = values::parse_dim(v, s.font_size);
+            if !is_negative_size(d) {
+                s.width = d;
+            }
         }
         "height" => {
             // Intrinsic sizing keywords collapse to `Dim::Auto` for length resolution, but flag
@@ -4671,27 +4708,42 @@ fn apply_declaration(s: &mut ComputedStyle, d: &Declaration, parent_fs: f32) {
                 low.as_str(),
                 "stretch" | "-webkit-fill-available" | "-moz-available"
             );
-            s.height = values::parse_dim(v, s.font_size);
+            let d = values::parse_dim(v, s.font_size);
+            if !is_negative_size(d) {
+                s.height = d;
+            }
         }
         // The four min/max sizing properties take the same intrinsic keywords `width`/`height` do,
         // and until t930 they were parsed with `parse_dim` alone — which answers `Dim::Auto` for a
         // keyword it does not know, i.e. **0 on a min and no-limit on a max**. Tag the keyword
         // beside the `Dim` exactly as the `width` arm above does, at parity with the stylo map.
         "min-width" => {
-            s.min_width_keyword = intrinsic_kw_bare(v);
-            s.min_width = values::parse_dim(v, s.font_size);
+            let d = values::parse_dim(v, s.font_size);
+            if !is_negative_size(d) {
+                s.min_width_keyword = intrinsic_kw_bare(v);
+                s.min_width = d;
+            }
         }
         "max-width" => {
-            s.max_width_keyword = intrinsic_kw_bare(v);
-            s.max_width = values::parse_dim(v, s.font_size);
+            let d = values::parse_dim(v, s.font_size);
+            if !is_negative_size(d) {
+                s.max_width_keyword = intrinsic_kw_bare(v);
+                s.max_width = d;
+            }
         }
         "min-height" => {
-            s.min_height_keyword = intrinsic_kw_bare(v);
-            s.min_height = values::parse_dim(v, s.font_size);
+            let d = values::parse_dim(v, s.font_size);
+            if !is_negative_size(d) {
+                s.min_height_keyword = intrinsic_kw_bare(v);
+                s.min_height = d;
+            }
         }
         "max-height" => {
-            s.max_height_keyword = intrinsic_kw_bare(v);
-            s.max_height = values::parse_dim(v, s.font_size);
+            let d = values::parse_dim(v, s.font_size);
+            if !is_negative_size(d) {
+                s.max_height_keyword = intrinsic_kw_bare(v);
+                s.max_height = d;
+            }
         }
         "margin" => set_shorthand(&mut s.margin, v, s.font_size, true),
         "margin-top" => s.margin.top = values::parse_dim(v, s.font_size),

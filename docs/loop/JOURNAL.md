@@ -46371,6 +46371,99 @@ PERF: none — one UA rule and one narrowed branch in a cascade that already ran
 WIKI: `docs/wiki/css-cascade.md` — where Chrome draws the form-control `box-sizing` line, and why a
 layout-crate test cannot see it.
 
+## Tick 1059 — the last enumeration unknown was clean at 34 of 35, and the 35th was the INSTRUMENT parsing CSS differently from the product (2026-08-09)
+
+TICK SHAPE: primitive — a 35-row battery on CSS 2.1 **§10.2/§10.3.3**, the `width` property on a
+block box. This is the **last unknown** on t1054's §8/§9/§10 enumeration, and check #97's Finding 1
+bound the loop to finish them before opening a new area. That instruction is now discharged.
+
+⚠⚠⚠ **THIRTY-FOUR OF THIRTY-FIVE WERE ALREADY EXACT, INCLUDING BOTH ROWS WHERE THE RULE MUST NOT
+APPLY.** `auto`, lengths, percentages, the auto-margin cases, the over-constraint under **both**
+directions, both `box-sizing`es, `min`/`max` clamps, `calc`, `display:table`, `display:list-item`,
+overflow past the containing block — and the two negatives that make the rest mean something:
+
+```text
+                                                    Chrome   ours
+   width:200px on a `display:inline`                 37.36   37.36   <- IGNORED, sizes to glyphs
+   50% against an INDEFINITE (shrink-to-fit) CB      57.77   57.77   <- not 50% of the outer 400
+   50% against a PADDED CB / that CB border-box     200/150 200/150  <- resolves against CONTENT
+```
+
+The map's own row predicted this shape: *"every width defect this loop has found (`box-sizing`, the
+over-constraint, the intrinsic ratio, the inline's ignored width) was filed under its own symptom and
+the PROPERTY itself was never a capability with a verdict."* The property is fine. **The verdict was
+the deliverable, and one row of thirty-five was not.**
+
+⚠⚠⚠ **THE 35TH ROW: A NEGATIVE LENGTH IS A PARSE ERROR, NOT A ZERO — AND THE SHIPPING ENGINE WAS
+ALREADY RIGHT.** `width`/`height` and the four min/max properties take `<length-percentage [0,∞]>`;
+a value outside that range makes the **declaration invalid**, and an invalid declaration is
+*dropped*, so the cascade keeps what it already had. We clamped to zero:
+
+```text
+                                          Chrome   MinimalCascade   LIVE (Stylo)
+   width:-5px                               400          0              400  ✓
+   width:200px; width:-5px                  200          0              200  ✓   <- DECISIVE
+   width:-5%                                400          0              400  ✓
+   width:200px; max-width:-5px              200          0              200  ✓
+   min-width:-5px; width:50px                50         50               50  ✓   <- CONTROL
+   width:calc(50% - 300px)                    0          0                0  ✓   <- CONTROL
+```
+
+⚠⚠⚠ **AND THAT THIRD COLUMN IS THE TICK.** The battery is run through `MinimalCascade`, because
+**every layout battery this loop has ever run is** — it is what `layout_html` builds. Running the
+same four rows through the *live* binary's Stylo path, **before any fix**, returns Chrome's answers
+on all four. So this was never a rendering defect in the product:
+
+> **THE INSTRUMENT THE LOOP MEASURES LAYOUT WITH PARSED CSS DIFFERENTLY FROM THE ENGINE IT SHIPS.**
+> A battery row containing a negative length would have reported a layout defect the product does not
+> have, and the loop would have gone looking for it in `layout_block`. This is the *"instruments
+> lie"* class arriving through the one door that had not been checked: not the oracle, not the
+> harness, not the score — **the cascade the fixtures are styled with.**
+
+It is still a real capability fix, and precisely bounded: `engine/css`'s own header says the
+**`--no-default-features` build SHIPS `MinimalCascade`**, and the wall compiles and gates that build.
+So the fix lands on the headless engine and on the loop's measuring instrument, and **it moves the
+corpus by exactly zero, by construction** — the default build's width comes from Stylo via
+`stylo_map`'s `size_to_dim`, which was never wrong. **No A/B was run, because an A/B whose result is
+determined in advance is theatre, not evidence.** The falsifiable claim is the third column above,
+measured with the live binary before the fix.
+
+⚠⚠ **`width:200px; width:-5px` IS WHAT LOCATES THE FIX, AND NO SINGLE-DECLARATION ROW COULD.**
+Reinterpreting a negative width as `auto` down in layout answers 400 on row 1 and **400 on row 2**,
+where Chrome says 200. Only declining to *apply* the declaration leaves the earlier one standing. That
+wrong fix was RED-run and fails on exactly that row.
+
+⚠⚠ **`min-width` WAS ALREADY RIGHT FOR THE WRONG REASON: ITS INITIAL VALUE *IS* 0**, so clamping a
+negative to zero and dropping the declaration agree at exactly one point. `max-width` initialises to
+`none`, so the identical clamp takes the box to **zero width** — a blank element. **A battery that
+checked the min half and inferred the max half would have cleared this**, which is t1043/t1045's
+one-point constant in a new coordinate.
+
+⚠ `calc()` is deliberately NOT rejected: a negative *result* is legal at computed-value time and
+clamps to 0 at used-value time, so `calc(50% - 300px)` is 0 and not `auto`. It is a control, and the
+wrong fix that rejects it was RED-run too.
+
+GATES, four RED proofs, each caught by a DIFFERENT row:
+`the_width_property_on_a_block_is_chrome_exact` (red on *drop §10.3.3's RTL over-constraint arm*) and
+`a_negative_size_is_a_parse_error_not_a_zero` (red on *clamp instead of reject*, caught by the plain
+row; red on *reject `calc` too*, caught by the calc CONTROL; red on *reinterpret as `auto`*, caught by
+the two-declaration DECISIVE row).
+
+MAP: `§10.2` promoted `unknown → gated` — **the §8/§9/§10 enumeration's unknowns are now ZERO**, six
+of six discharged across t1055–t1059 (`§9.6.1` clean, `§10.3.5` one defect, `§10.6.3`+`§10.6.7` clean
+plus one defect found beside them, `§10.6.4` clean plus two defects at the paired seam, `§10.2` clean
+plus one instrument defect; `§9.2.3 run-in` refused as dead). One new row for the negative-size parse
+error. Still owed and named rather than quietly dropped: **§9.4.3 relative positioning is named ONLY
+in a receipt** and has no row — t1054 flagged it, t1057 promoted its twin §10.6.7, and this one is
+still prose.
+
+RATCHET: manuk-layout **142/142**, manuk-css 34/34, zero regressions.
+
+PERF: one enum match per size declaration at parse time.
+
+WIKI: `docs/wiki/css-cascade.md` — "A negative length is a parse error, and the instrument parsed it
+differently from the product (t1059)".
+
 ## Tick 1058 — the paired battery's 24 transposed rows found nothing, and the ONE row where the two axes must part company found two defects (2026-08-09)
 
 TICK SHAPE: primitive — a 42-row **paired** battery on CSS 2.1 **§10.6.4** (the absolutely-positioned
