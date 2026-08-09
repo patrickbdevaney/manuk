@@ -2682,7 +2682,8 @@ impl Stylesheet {
     /// selectors/properties are ignored rather than aborting the sheet (CSS's
     /// forward-compatible error recovery).
     pub fn parse(src: &str) -> Stylesheet {
-        let src = strip_comments(src);
+        let src = strip_cdata(src);
+        let src = strip_comments(&src);
         let mut rules = Vec::new();
         let mut font_faces = Vec::new();
         parse_rules_into(&src, &[], &mut rules, &mut font_faces);
@@ -3054,6 +3055,35 @@ fn media_feature_matches(feature: &str) -> bool {
 /// Scanning for the delimiters as bytes is still correct and is kept: `/` and `*` are ASCII, and a
 /// UTF-8 continuation byte is always ≥ `0x80`, so no multi-byte character can contain either one.
 /// The only thing that had to change is what gets COPIED — the whole character, not one byte of it.
+/// Strip the XHTML `<![CDATA[ … ]]>` wrapper an inline `<style>` may carry.
+///
+/// ⚠⚠⚠ **A WRAPPED SHEET WAS DROPPED IN ITS ENTIRETY — every rule, not just the first.** In XHTML,
+/// `<style type="text/css"><![CDATA[ … ]]></style>` is the standard way to keep `<` and `&` out of
+/// the XML parser's way, and it is what the CSS 2.1 conformance suite is written in: **2,191 of its
+/// 10,501 files use it**, tests and references alike. Our parser met `<![CDATA[` where a selector
+/// belonged and bailed on the whole sheet, so those pages rendered completely unstyled.
+///
+/// Chrome-measured on a three-rule sheet: Chrome applies **all three** and we applied none. The
+/// numbers matter because they rule out the other plausible reading — CSS error recovery would drop
+/// only the first rule and keep the rest, and Chrome keeps the first one too.
+///
+/// ⚠ It is a WRAPPER, so only a leading `<![CDATA[` and a trailing `]]>` are removed, and only when
+/// they are the outermost non-whitespace tokens. A `]]>` sitting inside a string or a URL is content
+/// and is left alone; a sheet without the wrapper is returned untouched and pays one `trim_start`.
+fn strip_cdata(src: &str) -> String {
+    let t = src.trim_start();
+    let Some(rest) = t.strip_prefix("<![CDATA[") else {
+        return src.to_string();
+    };
+    // The closing marker is the LAST one, so a `]]>` earlier in the sheet cannot truncate it.
+    match rest.rfind("]]>") {
+        Some(i) => rest[..i].to_string(),
+        // An unterminated wrapper is still a wrapper: dropping the opener recovers every rule,
+        // which is strictly better than dropping the sheet.
+        None => rest.to_string(),
+    }
+}
+
 fn strip_comments(src: &str) -> String {
     let mut out = String::with_capacity(src.len());
     let b = src.as_bytes();
@@ -7581,6 +7611,55 @@ mod shadow_scoping_tests {
 #[cfg(test)]
 mod pseudo_tests {
     use super::*;
+    /// **AN XHTML `<style><![CDATA[ … ]]></style>` SHEET WAS DROPPED IN ITS ENTIRETY.**
+    ///
+    /// Every rule, not just the first — which is what separates this from ordinary CSS error
+    /// recovery, and what makes the page render completely unstyled rather than slightly wrong.
+    /// It is the standard XHTML idiom and **2,191 of the CSS 2.1 conformance suite's 10,501 files
+    /// use it**, tests and references alike; Chrome applies all three rules of the fixture below.
+    #[test]
+    fn a_cdata_wrapped_stylesheet_is_parsed_in_full() {
+        let wrapped = Stylesheet::parse(
+            "<![CDATA[\n#a { width: 100px }\n#b { width: 70px }\n#c { width: 40px }\n]]>",
+        );
+        let plain =
+            Stylesheet::parse("#a { width: 100px }\n#b { width: 70px }\n#c { width: 40px }");
+        // ⚠ THREE rules, not one: CSS error recovery would drop only the first and keep the rest,
+        // so a one-rule fixture cannot tell "the wrapper is stripped" from "the parser recovered".
+        assert_eq!(
+            wrapped.rules.len(),
+            3,
+            "a CDATA-wrapped sheet must parse every rule, got {}",
+            wrapped.rules.len()
+        );
+        assert_eq!(
+            wrapped.rules.len(),
+            plain.rules.len(),
+            "wrapped and unwrapped must agree"
+        );
+        // ── NEGATIVE 1: a sheet WITHOUT the wrapper is untouched (the common case).
+        assert_eq!(Stylesheet::parse("#a{color:red}").rules.len(), 1);
+        // ── NEGATIVE 2: `]]>` is only a terminator at the END. A sheet whose content contains one
+        //    inside a string must not be truncated at it.
+        let inner = Stylesheet::parse(
+            "<![CDATA[\n#a { content: \"]]>\" }\n#b { width: 1px }\n#c { width: 2px }\n]]>",
+        );
+        assert_eq!(
+            inner.rules.len(),
+            3,
+            "an inner `]]>` must not truncate the sheet, got {}",
+            inner.rules.len()
+        );
+        // ── NEGATIVE 3: an UNTERMINATED wrapper still yields its rules — dropping the opener alone
+        //    recovers everything, which is strictly better than dropping the sheet.
+        assert_eq!(
+            Stylesheet::parse("<![CDATA[\n#a { width: 1px }\n#b { width: 2px }")
+                .rules
+                .len(),
+            2
+        );
+    }
+
     #[test]
     fn before_is_cascaded() {
         let dom = manuk_html::parse(r#"<p id="p">body</p>"#);

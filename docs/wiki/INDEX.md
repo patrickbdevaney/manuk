@@ -757,6 +757,9 @@
   - L2386 · Why the first fixture could not see that
   - L2414 · The live path was already right — the third instrument split of the session
   - L2423 · Canonicalise, don't re-map
+  - L2429 · An XHTML <style><![CDATA[ … ]]></style> sheet was dropped in its entirety (t1075)
+  - L2443 · The two cascades lose different amounts, and only one of them loses everything
+  - L2460 · ⚠⚠⚠ The number, fully attributed — and 100% of the "losses" are the lie being deleted
 
 ## `<dialog>`, `popover`, and the top layer (ticks 194-195)
 `docs/wiki/dialog-and-top-layer.md`
@@ -1830,4 +1833,4 @@
   - L124 · Rank mechanisms by FLIP RATE, not failing-subtest count — CSS layout is a multi-assertion slog
 
 ---
-1737 sections across 22 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+1740 sections across 22 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.

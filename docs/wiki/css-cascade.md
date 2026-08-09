@@ -2425,3 +2425,57 @@ negative lengths; t1061 found the reftest runner blind to a path the product has
 `two_value_display_to_legacy` rewrites the pair to the legacy keyword and falls through to the
 existing single-keyword table, so there is **one** mapping. A second table is how two spellings of one
 computed value drift apart — *one rule, N implementations*, installed on purpose.
+
+## An XHTML `<style><![CDATA[ … ]]></style>` sheet was dropped in its entirety (t1075)
+
+Found while chasing a single regressed reftest. `CSS2/tables/row-visibility-002` passed before t1073's
+paint layers and failed after — and the cause was neither: **its reference rendered as nothing.**
+
+```text
+   the reference's <div>      expected 100×100 green     ours: 1184×0, unstyled
+```
+
+Its stylesheet is wrapped in `<![CDATA[ … ]]>`, the standard XHTML idiom for keeping `<` and `&`
+away from the XML parser. **2,191 of the CSS 2.1 suite's 10,501 files use it**, tests and references
+alike. The test had been passing because **both sides rendered blank**, and the moment the test side
+became correct the pair diverged.
+
+### The two cascades lose different amounts, and only one of them loses everything
+
+```text
+   MinimalCascade   `<![CDATA[` is a junk selector -> the FIRST rule is dropped, the rest parse
+   Stylo (shipping) the sheet is rejected WHOLESALE -> the page renders completely unstyled
+```
+
+Chrome, on a three-rule fixture: **all three apply.** Ours applied none on the shipping path. The
+fix is one function at `Stylesheet::parse`'s entry — strip a leading `<![CDATA[` and a trailing
+`]]>` — and it reaches both cascades because `Stylesheet` stores the stripped text as its `source`,
+which is exactly what `stylo_engine` re-parses.
+
+⚠ Only the **outermost** tokens are removed, and the closing marker is the **last** `]]>`, not the
+first: a `]]>` inside a string is content. An unterminated wrapper still yields its rules — dropping
+the opener alone recovers everything, which is strictly better than dropping the sheet. All three are
+negative rows in the gate, and all three are RED-proven.
+
+### ⚠⚠⚠ The number, fully attributed — and 100% of the "losses" are the lie being deleted
+
+`css/CSS2`, 9,221 reftests, before and after:
+
+```text
+   1606 passed · 4040 failed      ->      2272 passed · 3374 failed        net +666
+     gained 834 — 820 (98%) have CDATA in the test or its reference
+     lost   168 — 168 (100%) do
+```
+
+Every single one of the 168 losses is a CDATA file. They are tests that were passing **because both
+the test and its reference rendered unstyled**, and a blank page matches a blank page. Making the
+stylesheet work makes the reference correct, which reveals a divergence that was always there:
+`borders` 57, `backgrounds` 28, `tables` 18, `css1` 11, `normal-flow` 11.
+
+> **DELETING A LIE EXPOSES THE GAP IT HID** (t1027), and the 100% figure is what turns that from an
+> assertion into a measurement. A −168 that is 100% explained by the fix's own population is not a
+> regression; it is 168 defects that were invisible an hour ago, and they now have a work-list.
+
+⚠ No banked `WPT:` directory moves — `css-position` (99/311), `css-display` (124/151) and `css-text`
+(1235/2212) are identical before and after. `css/CSS2` has no ratchet row at all, which is surface
+audit #47's finding and the reason none of this was visible until it was looked for.

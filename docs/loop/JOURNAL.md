@@ -46371,6 +46371,74 @@ PERF: none — one UA rule and one narrowed branch in a cascade that already ran
 WIKI: `docs/wiki/css-cascade.md` — where Chrome draws the form-control `box-sizing` line, and why a
 layout-crate test cannot see it.
 
+## Tick 1075 — an XHTML CDATA-wrapped stylesheet was dropped entirely, found by chasing ONE regressed reftest (2026-08-09)
+
+TICK SHAPE: primitive — a CSS parser fix, arrived at from the opposite direction to every other tick
+this session: not from a battery or a ranking, but from **one test that went from PASS to FAIL** in
+t1074's suite diff, which the ratchet does not allow to stand.
+
+⚠⚠⚠ **THE REGRESSED TEST WAS NEITHER A REGRESSION NOR ABOUT ITS OWN SUBJECT.**
+`CSS2/tables/row-visibility-002` passed before t1073's paint layers and failed after. Mutating the
+layers off restored the PASS, so they were the proximate cause — and they were not the defect. Its
+**reference** rendered as nothing:
+
+```text
+   the reference's <div>      expected 100×100 green     ours: 1184×0, unstyled
+```
+
+The reference's stylesheet is wrapped in `<![CDATA[ … ]]>`, and we dropped it. **The test had been
+passing because both sides rendered blank**, and the moment the test side became correct the pair
+diverged. Two ticks of paint work were being scored against a reference that had no CSS.
+
+⚠⚠ **THE TWO CASCADES LOSE DIFFERENT AMOUNTS, AND ONLY THE SHIPPING ONE LOSES EVERYTHING.**
+
+```text
+   MinimalCascade   `<![CDATA[` is a junk selector -> the FIRST rule is dropped, the rest parse
+   Stylo (shipping) the sheet is rejected WHOLESALE -> the page renders completely unstyled
+```
+
+Chrome applies all three rules of the fixture; we applied none on the path the product ships. The fix
+is one function at `Stylesheet::parse`'s entry and it reaches **both** cascades, because `Stylesheet`
+stores the stripped text as its `source` and that is exactly what `stylo_engine` re-parses. ⚠ Only
+the outermost tokens are removed, the closing marker is the **last** `]]>` (an inner one is content),
+and an unterminated wrapper still yields its rules — three negative rows, three RED-proofs.
+
+⚠⚠⚠ **THE NUMBER, AND IT IS FULLY ATTRIBUTED.** `css/CSS2`, 9,221 reftests:
+
+```text
+   1606 passed · 4040 failed      ->      2272 passed · 3374 failed        net +666
+     gained 834 — 820 (98%) have CDATA in the test or its reference
+     lost   168 — 168 (100%) do
+```
+
+**Every single one of the 168 losses is a CDATA file.** They are tests that passed because a blank
+page matched a blank page; making the stylesheet work makes the *reference* correct and reveals a
+divergence that was always there — `borders` 57, `backgrounds` 28, `tables` 18, `css1` 11,
+`normal-flow` 11.
+
+> **DELETING A LIE EXPOSES THE GAP IT HID (t1027), AND THE 100% IS WHAT TURNS THAT FROM AN ASSERTION
+> INTO A MEASUREMENT.** A −168 whose population is *entirely* the fix's own is not a regression; it
+> is 168 defects that were invisible an hour ago and now have a work-list. The honest report is both
+> numbers and the attribution, not the net.
+
+⚠ **AND IT RE-READS THE WHOLE SESSION'S PAINT WORK.** 2,191 of the suite's 10,501 files are
+CDATA-wrapped, so **every reftest number this loop published before this tick — t1069's audit, t1070,
+t1072, t1073 — was measured against a suite in which a fifth of the files had no stylesheet.** None
+of those findings is withdrawn (the byte-exact comparison, the missing paint layers, the ranked
+clusters are all still true and still measured), but their denominators were softer than they read,
+and t1073's *"the fix moved nothing"* had a second cause underneath the one it named.
+
+RATCHET: `manuk-css` 51/51 → **52/52**, no test changed. **No banked `WPT:` directory moves** —
+`css-position` 99/311, `css-display` 124/151, `css-text` 1235/2212, identical before and after.
+`css/CSS2` has no ratchet row at all, which is surface audit #47's finding and the reason none of
+this was visible until someone looked.
+
+PERF: one `trim_start` and a `strip_prefix` per stylesheet; the un-wrapped common case allocates the
+same string it already did.
+
+WIKI: docs/wiki/css-cascade.md — "An XHTML `<style><![CDATA[ … ]]></style>` sheet was dropped in its
+entirety"
+
 ## Tick 1074 — a cell's `vertical-align: baseline` was `top`, and the first battery could not see its own subject (2026-08-09)
 
 TICK SHAPE: primitive — CSS 2.1 **§17.5.3**, the third-ranked `CSS2/tables` cluster (7 failures),
