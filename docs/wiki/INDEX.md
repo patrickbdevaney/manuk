@@ -410,6 +410,10 @@
   - L7885 · The decomposition
   - L7902 · The three missing paint layers, and the suite that could not see them (t1073)
   - L7921 · ⚠⚠⚠ The fix works and moved the suite by ZERO tests, which is a precise signal
+  - L7951 · A cell's vertical-align: baseline is the INITIAL value, and it was top (t1074)
+  - L7968 · ⚠⚠⚠ The first battery could not see its own subject, and reported 28/31
+  - L7977 · The shift must be resolved BEFORE the row heights
+  - L7985 · ⚠⚠⚠ A mutation stayed GREEN again, and again it was the row's fault
 
 ## browser-capabilities.md
 `docs/wiki/browser-capabilities.md`
@@ -1826,4 +1830,4 @@
   - L124 · Rank mechanisms by FLIP RATE, not failing-subtest count — CSS layout is a multi-assertion slog
 
 ---
-1733 sections across 22 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+1737 sections across 22 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.

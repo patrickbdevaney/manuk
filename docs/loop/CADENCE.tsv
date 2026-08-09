@@ -781,3 +781,4 @@ tick	sha	epoch	iso	delta_s	shape	wall_s	files	added	deleted	gates	claims	wpt_pas
 1071	8437f99e	1786282320	2026-08-09T09:32:00-04:00	300	measurement	808	6	271	36	429	81	3896	6960	0	540	0	three defects in four ticks were the ABSENCE of an implementation, and no code search finds one (2026-08-09)
 1072	10902374	1786282818	2026-08-09T09:40:18-04:00	498	measurement	808	8	187	33	429	81	3896	6960	0	540	0	a table is painted in six layers and we paint three, found by an instrument the loop had never used (2026-08-09)
 1073	82e7af67	1786284777	2026-08-09T10:12:57-04:00	1959	primitive	808	9	459	50	429	81	3896	6960	0	540	0	the three missing paint layers, and the controlled proof that the suite cannot see them (2026-08-09)
+1074	a2b70b5a	1786287624	2026-08-09T11:00:24-04:00	2847	primitive	808	9	336	39	429	81	3896	6960	0	541	0	a cell's `vertical-align: baseline` was `top`, and the first battery could not see its own subject (2026-08-09)

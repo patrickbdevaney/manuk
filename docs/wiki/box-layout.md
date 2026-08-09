@@ -7947,3 +7947,52 @@ measurement.
 drawn for the first time, gated with four RED-proofs (no layers, layers after the rows, empty layers
 emitted, a group spanning only its first row). The right reading is that **this directory's number
 is a floor with a known, measured obstruction**, not that the layers were not missing.
+
+## A cell's `vertical-align: baseline` is the INITIAL value, and it was `top` (t1074)
+
+`CSS2/tables` ranked it third (7 failures) and — applying t1073's lesson before choosing a target —
+**all seven references are CSS-based, so the suite can see a fix here.** `layout_table`'s own comment
+already confessed the defect: *"`baseline` is the CSS initial value for a cell … we approximate it as
+`top`"*. So every table mixing font sizes, or with one padded cell, sat with all its lines flush.
+
+Chrome-measured, **content position inside the cell**:
+
+```text
+                                          Chrome        before      after
+   32px cell beside a 16px one            y = 15          0          15
+   32px · 24px · 16px                     0 · 8 · 15   0 · 0 · 0   0 · 8 · 15
+   a cell with padding-top:20px           neighbour 20    0          20
+   a 2-line cell beside a 32px one        row 53 tall   row 38      row 53
+```
+
+### ⚠⚠⚠ The first battery could not see its own subject, and reported 28/31
+
+A cell BOX spans its row whatever its content does, so a box-geometry battery — the instrument every
+tick of this arc has used — is **structurally blind to alignment inside a cell**. It read 28 of 31
+and the one failure was a row *height*. Re-run with a marker element inside each cell, the same
+fixture reads **24 of 30** and every failure is the mechanism. t1046's rule is *a fixture that cannot
+express its subject reports the subject as BROKEN*; this is the worse half — **it reported it as
+WORKING**.
+
+### The shift must be resolved BEFORE the row heights
+
+A shifted cell needs the row to grow by its shift, and `row_h` is decided before placement. So the
+row's baseline (the max over its baseline-aligned cells) and each cell's shift are computed first,
+and the shift is folded into the height that cell demands. `first_line_baseline` is the function
+t1067 added for flex/grid items — the same rule, *where is this box's first baseline*, and this is
+**the consumer that now exists rather than a second copy of it**.
+
+### ⚠⚠⚠ A mutation stayed GREEN again, and again it was the row's fault
+
+"Do not grow the row" left the gate green: the row-growth assertion compared a **2-line shifted** row
+against a **1-line unshifted** one, and those differ by a whole line whether or not the shift is
+added. The discriminator is the *same* 32px cell in both, so the only difference is the extra line
+plus its shift. Third instance in this arc (t1066's decayed control, t1068's origin-blind rows, this)
+— **run every mutation, including the ones you expect to fail.**
+
+**Measured:** the battery is **30/30** Chrome-exact, and `CSS2/tables` goes **68 → 81 passed,
+175 → 162 failed**. Of the 14 tests gained, 7 are `table-vertical-align-baseline-001…007` — this
+fix — and 6 are `table-backgrounds-bc-*` / `table-{row,header,footer}-group-001`, which are **t1073's
+paint layers**: that tick reported "zero movement" because it re-ran `CSS2/backgrounds`, the directory
+its tests came from, and never re-ran `CSS2/tables`. ⚠ **A fix's population is not always the
+directory that found it.**

@@ -46371,6 +46371,68 @@ PERF: none — one UA rule and one narrowed branch in a cascade that already ran
 WIKI: `docs/wiki/css-cascade.md` — where Chrome draws the form-control `box-sizing` line, and why a
 layout-crate test cannot see it.
 
+## Tick 1074 — a cell's `vertical-align: baseline` was `top`, and the first battery could not see its own subject (2026-08-09)
+
+TICK SHAPE: primitive — CSS 2.1 **§17.5.3**, the third-ranked `CSS2/tables` cluster (7 failures),
+chosen by a check t1073 taught this loop to run first: **all seven of its references are CSS-based,
+so the suite can actually see a fix here.** `layout_table`'s own comment already confessed the
+defect — *"`baseline` is the CSS initial value for a cell … we approximate it as `top`"* — and
+because it is the INITIAL value, this is every table with mixed font sizes or one padded cell.
+
+```text
+                                          Chrome        before      after
+   32px cell beside a 16px one            y = 15          0          15
+   32px · 24px · 16px                     0 · 8 · 15   0 · 0 · 0   0 · 8 · 15
+   a cell with padding-top:20px           neighbour 20    0          20
+   a 2-line cell beside a 32px one        row 53 tall   row 38      row 53
+```
+
+⚠⚠⚠ **THE FIRST BATTERY COULD NOT SEE ITS OWN SUBJECT AND REPORTED 28 OF 31.** A cell BOX spans its
+row whatever its content does, so the box-geometry instrument **every tick of this arc has used** is
+structurally blind to alignment *inside* a cell. Its one failure was a row height. Re-run with a
+marker element inside each cell, the identical fixture reads **24 of 30** and every failure is the
+mechanism.
+
+> **t1046'S RULE IN ITS WORSE HALF.** *"A fixture that cannot express its subject reports the subject
+> as BROKEN"* — here it reported it as **WORKING**, which is the direction that gets published. The
+> instrument that found nine defects this arc has a shape it cannot see, and it took the suite
+> pointing at the row to notice.
+
+⚠⚠ **THE SHIFT IS RESOLVED BEFORE THE ROW HEIGHTS**, because a shifted cell needs the row to grow by
+its shift and `row_h` is decided before placement. The row's baseline is the max over its
+baseline-aligned cells, and each cell's shift is folded into the height it demands. ⚠
+`first_line_baseline` is the function **t1067 added for flex/grid items** — the same rule, *where is
+this box's first baseline* — and this is **the consumer that now exists rather than a second copy of
+it**, which is the good direction of *one rule, N implementations*.
+
+⚠⚠⚠ **A MUTATION STAYED GREEN AGAIN, AND AGAIN IT WAS THE ROW'S FAULT.** *"Do not grow the row"* left
+the gate green: the assertion compared a **2-line shifted** row against a **1-line unshifted** one,
+and those differ by a whole line whether or not the shift is added. The discriminator is the *same*
+32px cell in both. **Third instance this arc** — t1066's decayed control, t1068's origin-blind rows,
+this — and the standing rule earns its place: run every mutation, including the ones you expect to
+fail.
+
+⚠⚠⚠ **AND THE SUITE MOVED, WHICH IT HAD NOT DONE ALL SESSION.** `CSS2/tables`: **68 → 81 passed,
+175 → 162 failed.** Of the 14 tests gained, 7 are `table-vertical-align-baseline-001…007` — this fix
+— and **6 are t1073's paint layers** (`table-backgrounds-bc-colgroup/column/rowgroup`,
+`table-{row,header,footer}-group-001`). t1073 reported *"moved the suite by zero tests"* because it
+re-ran `CSS2/backgrounds`, the directory its failing tests came from, and **never re-ran
+`CSS2/tables`**.
+
+> **A FIX'S POPULATION IS NOT ALWAYS THE DIRECTORY THAT FOUND IT.** t1073's finding — that the
+> image-referenced tests cannot see any engine fix — was correct and is unchanged. What was wrong was
+> the sentence around it: the layers *did* move the suite, six tests, in a directory nobody re-ran.
+> **Corrected in place** in t1073's constellation row and in `WEB-PATTERNS.md`.
+
+RATCHET: `manuk-layout` 150/150 → **151/151**, no test changed. Eight `g_table_*` page gates green.
+3 RED-proofs, each failing a different assertion: baseline-as-top, shift-every-cell (the over-fix
+that breaks `vertical-align: top`), and do-not-grow-the-row.
+
+PERF: none — the baselines are read from the cell boxes the loop above already built.
+
+WIKI: docs/wiki/box-layout.md — "A cell's `vertical-align: baseline` is the INITIAL value, and it was
+`top`"
+
 ## Tick 1073 — the three missing paint layers, and the controlled proof that the suite cannot see them (2026-08-09)
 
 TICK SHAPE: primitive — t1072's decomposition executed: CSS 2.1 **§17.5.1**'s row-group, column and
@@ -46434,7 +46496,7 @@ verification, and the suite is a ranker only — which is what audit #47 said ab
 labour, now demonstrated from the other side.
 
 RATCHET: `manuk-layout` 149/149 → **150/150**, no test changed. Nine `g_table_*` page gates green.
-`CSS2/backgrounds` unmoved at 125/211/290 and **not claimed as a gain**. ⚠ No corpus A/B, as with
+`CSS2/backgrounds` unmoved at 125/211/290 and **not claimed as a gain**. ⚠ **CORRECTED AT t1074: these layers DID move the suite — six tests in `CSS2/tables`** (`table-backgrounds-bc-colgroup/column/rowgroup`, `table-{row,header,footer}-group-001`), a directory this tick never re-ran. The finding about image-referenced tests stands; the sentence *"moved the suite by zero tests"* was scoped to the wrong population. ⚠ No corpus A/B, as with
 every capability tick this session; the corpus movement is unmeasured, not zero.
 
 PERF: negligible — one extra pass over the table's element children for columns, and one over its

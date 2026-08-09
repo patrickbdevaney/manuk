@@ -5843,6 +5843,66 @@ impl Ctx<'_> {
             }
             laid.push((pi, cbox, bh, natural_ch, frame_v));
         }
+        // ── ⚠⚠⚠ **`vertical-align: baseline` IS THE INITIAL VALUE FOR A CELL, AND IT WAS
+        //    APPROXIMATED AS `top`** — this function's own comment said so. The cells of a row align
+        //    their FIRST LINE baselines with each other (CSS 2.1 §17.5.3), so a row mixing font
+        //    sizes, or one cell with `padding-top`, sat with every line flush to the top instead.
+        //    Chrome-measured, content position inside the cell:
+        //
+        //    ```text
+        //      32px cell beside a 16px one          the 16px content at y=15, ours 0
+        //      32px · 24px · 16px                   y = 0 · 8 · 15,       ours 0 · 0 · 0
+        //      a cell with padding-top:20px         its neighbour at y=20, ours 0
+        //      a 2-line cell beside a 32px one      the ROW is 53 tall,   ours 38
+        //    ```
+        //
+        //    ⚠ The last row is why this cannot be applied at placement time alone: a shifted cell
+        //    needs the row to GROW by its shift, and `row_h` is decided here. So the baselines are
+        //    resolved before the row heights and the shift is folded into the height the cell
+        //    demands.
+        //
+        //    ⚠ `first_line_baseline` is the function t1067 added for flex/grid items. The rule is
+        //    the same rule — *where is this box's first baseline* — and this is the consumer that
+        //    now exists rather than a second copy of it.
+        let cell_baseline: Vec<Option<f32>> = laid
+            .iter()
+            .map(|(pi, cbox, _, _, _)| {
+                let p = &placed[*pi];
+                // Only cells whose alignment IS baseline participate; `top`/`middle`/`bottom` are
+                // different rules and must not be dragged into this one. A cell with no line box at
+                // all (an empty cell) has no baseline to contribute and does not join the max.
+                if p.rowspan > 1
+                    || !matches!(
+                        self.style_of(p.cell).vertical_align,
+                        manuk_css::VerticalAlign::Baseline
+                    )
+                {
+                    return None;
+                }
+                first_line_baseline(cbox, self.dom)
+            })
+            .collect();
+        let mut row_baseline = vec![0.0f32; nrows.max(1)];
+        for (i, (pi, ..)) in laid.iter().enumerate() {
+            if let Some(b) = cell_baseline[i] {
+                let r = placed[*pi].row;
+                row_baseline[r] = row_baseline[r].max(b);
+            }
+        }
+        let baseline_shift: Vec<f32> = laid
+            .iter()
+            .enumerate()
+            .map(|(i, (pi, ..))| {
+                cell_baseline[i].map_or(0.0, |b| (row_baseline[placed[*pi].row] - b).max(0.0))
+            })
+            .collect();
+        // A shifted cell is that much taller: re-derive each single-row cell's demand.
+        for (i, (pi, _, bh, _, _)) in laid.iter().enumerate() {
+            let p = &placed[*pi];
+            if p.rowspan == 1 {
+                row_h[p.row] = row_h[p.row].max(bh + baseline_shift[i]);
+            }
+        }
         for (pi, _, bh, _, _) in &laid {
             let p = &placed[*pi];
             if p.rowspan > 1 {
@@ -5976,7 +6036,7 @@ impl Ctx<'_> {
         }
         // Position each cell at its start row and stretch it over its spanned rows.
         let mut row_cells: Vec<Vec<LayoutBox>> = vec![Vec::new(); nrows.max(1)];
-        for (pi, mut cbox, _, natural_ch, frame_v) in laid {
+        for (li, (pi, mut cbox, _, natural_ch, frame_v)) in laid.into_iter().enumerate() {
             let p = &placed[pi];
             let last = (p.row + p.rowspan - 1).min(nrows.saturating_sub(1));
             let dy = row_y[p.row] - cbox.rect.y;
@@ -6004,6 +6064,11 @@ impl Ctx<'_> {
             let shift = match self.style_of(p.cell).vertical_align {
                 manuk_css::VerticalAlign::Middle => free * 0.5,
                 manuk_css::VerticalAlign::Bottom => free,
+                // `baseline` — the initial value — is no longer the `top` this arm used to give it.
+                // The shift was resolved with the row's other cells before the row height was fixed;
+                // every other keyword (`sub`/`super`/`text-*`/lengths) is an INLINE alignment, is not
+                // a cell alignment at all, and still stays at the top.
+                manuk_css::VerticalAlign::Baseline => baseline_shift[li],
                 _ => 0.0,
             };
             if shift > 0.0 {
@@ -6074,7 +6139,17 @@ impl Ctx<'_> {
             let st = styles.get(&node)?;
             // A layer with nothing to paint is not emitted at all: an empty box in the tree is a
             // node the a11y/geometry walkers have to skip and the paint has to visit for nothing.
-            if st.background_color.is_none() && st.background_images.is_empty() {
+            //
+            // ⚠⚠⚠ **`visibility: collapse` / `hidden` MUST NOT EMIT EITHER, AND THIS IS A REGRESSION
+            // THE SUITE CAUGHT.** `CSS2/tables/row-visibility-002` passed before these layers
+            // existed — for the wrong reason, because a row group painted nothing at all — and
+            // failed the moment it painted correctly: `#rowgroup1 { background: red; visibility:
+            // collapse }` is exactly the case where a newly-correct layer draws something the page
+            // says is not there. A `hidden: true` box is skipped by the painter, but it is still a
+            // node every walker visits, and for a collapsed group the honest answer is no box.
+            if st.visibility != manuk_css::Visibility::Visible
+                || (st.background_color.is_none() && st.background_images.is_empty())
+            {
                 return None;
             }
             Some(LayoutBox {
@@ -6087,7 +6162,7 @@ impl Ctx<'_> {
                 clip_path: st.clip_path.clone(),
                 blend: st.mix_blend_mode,
                 backdrop: Vec::new(),
-                hidden: st.visibility != manuk_css::Visibility::Visible,
+                hidden: false,
                 mask_image: st.mask_image.clone(),
                 background_images: st.background_images.clone(),
                 background_size: st.background_size,
@@ -16176,6 +16251,110 @@ mod tests {
         assert!(
             cells[2].height >= 30.0 - 0.5,
             "row 2 height driven by the 30px cell"
+        );
+    }
+
+    /// **A CELL'S `vertical-align: baseline` ALIGNS THE FIRST LINES OF ITS ROW** (CSS 2.1 §17.5.3),
+    /// and it is the INITIAL value — so this was every table with mixed content, not a corner case.
+    /// `layout_table`'s own comment confessed it: *"we approximate it as `top`"*.
+    ///
+    /// Ranked #3 by `CSS2/tables` (7 failures) and picked because all seven references are
+    /// CSS-based, so the suite can actually see the fix — the check t1073 taught this loop to run
+    /// before choosing a target.
+    #[test]
+    fn a_table_cells_baseline_alignment_aligns_the_first_lines_of_its_row() {
+        // The CONTENT position inside each cell — a cell BOX spans its row whatever its content
+        // does, so a box-only battery cannot see this rule at all (it read 28/31 and called it fine).
+        let ys = |row: &str| -> (Vec<f32>, f32) {
+            let (dom, root) = layout_html(
+                &format!(
+                    "<body style='margin:0'><table style='border-spacing:0'><tr>{row}</tr></table></body>"
+                ),
+                "td{padding:0;vertical-align:baseline}b{font-weight:normal}",
+                400.0,
+            );
+            let mut out: Vec<(f32, f32)> = Vec::new();
+            let mut table_h = 0.0f32;
+            root.walk(&mut |b| {
+                if let Some(n) = b.node {
+                    if dom.tag_name(n) == Some("table") {
+                        table_h = b.rect.height;
+                    }
+                }
+                // ⚠ The markers are inline `<b>`s and generate NO `LayoutBox` — the same trap
+                // t1068's gate hit. An inline run's top is `baseline - content_ascent`, which is
+                // what `getBoundingClientRect` reports for it and what the Chrome battery measured.
+                if let BoxContent::Inline(frags) = &b.content {
+                    for f in frags {
+                        if let Some(id) = f
+                            .node
+                            .and_then(|n| dom.element(n))
+                            .and_then(|e| e.attr("id"))
+                        {
+                            if let Some(k) = id.strip_prefix('s') {
+                                out.push((
+                                    k.parse::<f32>().unwrap_or(0.0),
+                                    f.baseline - f.content_ascent,
+                                ));
+                            }
+                        }
+                    }
+                }
+            });
+            out.sort_by(|a, b| a.0.total_cmp(&b.0));
+            (out.into_iter().map(|(_, y)| y).collect(), table_h)
+        };
+
+        // A 32px cell beside a 16px one: the small content drops to the shared baseline.
+        let (y, _) =
+            ys("<td style='font-size:32px'><b id='s1'>A</b></td><td><b id='s2'>B</b></td>");
+        assert!(
+            y[0] == 0.0 && y[1] > 8.0,
+            "the smaller cell's first line must drop to the row's baseline, got {y:?}"
+        );
+        let shift = y[1];
+        // Three sizes: the shift is MONOTONIC in the gap, which no single pair can show.
+        let (y3, _) = ys("<td style='font-size:32px'><b id='s1'>A</b></td>\
+             <td style='font-size:24px'><b id='s2'>B</b></td><td><b id='s3'>C</b></td>");
+        assert!(
+            y3[0] == 0.0 && y3[1] > 0.0 && y3[2] > y3[1],
+            "a middle size must land between the two, got {y3:?}"
+        );
+        // `padding-top` moves a cell's baseline, so its NEIGHBOUR moves — the rule is about
+        // baselines, not font sizes, and this row is what says so.
+        let (yp, _) =
+            ys("<td style='padding-top:20px'><b id='s1'>A</b></td><td><b id='s2'>B</b></td>");
+        assert!(
+            (yp[1] - 20.0).abs() < 0.5,
+            "a cell's padding must push its neighbour's first line down 20, got {yp:?}"
+        );
+
+        // ── NEGATIVE 1: equal cells share one baseline, so nothing moves.
+        let (ye, _) = ys("<td><b id='s1'>A</b></td><td><b id='s2'>B</b></td>");
+        assert!(
+            ye[0] == 0.0 && ye[1] == 0.0,
+            "equal cells must not shift at all, got {ye:?}"
+        );
+        // ── NEGATIVE 2: `vertical-align: top` does NOT participate — a different rule, and the
+        //    over-fix is to shift every cell.
+        let (yt, _) = ys("<td style='font-size:32px'><b id='s1'>A</b></td>\
+             <td style='vertical-align:top'><b id='s2'>B</b></td>");
+        assert!(
+            yt[1] == 0.0,
+            "a `vertical-align:top` cell must stay at the top, got {yt:?}"
+        );
+        // ── NEGATIVE 3: the ROW GROWS by the shift, and the comparison has to be against the SAME
+        //    tall cell or it proves nothing. ⚠⚠⚠ The first version compared a 2-line shifted row
+        //    against a 1-line UNSHIFTED one and stayed GREEN under "do not grow the row" — the two
+        //    differ by a whole line whether or not the shift is added. The discriminator is the same
+        //    32px cell in both, so the only difference is the second line PLUS its shift.
+        let (_, h_one) =
+            ys("<td style='font-size:32px'><b id='s1'>A</b></td><td><b id='s2'>B</b></td>");
+        let (_, h_two) =
+            ys("<td style='font-size:32px'><b id='s1'>A</b></td><td><b id='s2'>B</b><br/>C</td>");
+        assert!(
+            h_two > h_one + shift,
+            "the row must grow by the shift AND the extra line: {h_two} vs {h_one} + {shift}"
         );
     }
 
