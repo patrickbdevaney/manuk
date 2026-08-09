@@ -11,12 +11,12 @@
 
 | | value | over |
 |---|---|---|
-| ticks landed | **779** | ticks 1–1070 |
-| median tick cycle | **27m** | 778 intervals |
-| median, last 10 | **30m** | 10 intervals |
+| ticks landed | **780** | ticks 1–1071 |
+| median tick cycle | **27m** | 779 intervals |
+| median, last 10 | **28m** | 10 intervals |
 | fastest / slowest | 5s / 5.4d | |
-| **ticks per hour** | **1.11** | 700.4h elapsed |
-| median verify wall | **63s** | 718 ticks |
+| **ticks per hour** | **1.11** | 700.5h elapsed |
+| median verify wall | **63s** | 719 ticks |
 | wall trend | 39s → 13m — getting slower ⚠️ | first 3 vs last 3 |
 
 The **cycle** is the real unit: implement → debug → verify wall → land. The wall is only part of
@@ -31,7 +31,7 @@ it, and a wall that grows taxes every future tick, so it is tracked separately f
 * **✅ rows in the capability ledger**: 144 → **540**
 * **Bar 0 — oracle hangs**: 0 of 265 sites
 
-**342 of 779 ticks** (44%) moved a
+**342 of 780 ticks** (44%) moved a
 user-visible capability. The rest were instruments, infrastructure and corrections — and the
 ledger says the corrections were not overhead: three of its top three priorities were phantoms,
 and finding that out redirected everything after it.
@@ -876,5 +876,6 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 | **1068** | 2026-08-09 09:14 | 29m | primitive | 13m | +312/−33 | 429 | 81 | 56.0% · | transforms are clean at 26 of 27, and the failing row was the one I had labelled a NEGATIV |
 | **1069** | 2026-08-09 09:21 | 6m | measurement | 13m | +228/−33 | 429 | 81 | 56.0% · | the loop hand-built an oracle for an area that already had a 1,140-test one on disk (2026- |
 | **1070** | 2026-08-09 09:27 | 6m | measurement | 13m | +177/−33 | 429 | 81 | 56.0% · | the suite ranked its own work-list, and the top cluster is a box we never generate (2026-0 |
+| **1071** | 2026-08-09 09:32 | 5m | measurement | 13m | +271/−36 | 429 | 81 | 56.0% · | three defects in four ticks were the ABSENCE of an implementation, and no code search find |
 
 *`·` after a WPT figure means **carried forward**, not measured this tick.*

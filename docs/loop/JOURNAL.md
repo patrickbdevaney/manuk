@@ -46371,6 +46371,87 @@ PERF: none — one UA rule and one narrowed branch in a cascade that already ran
 WIKI: `docs/wiki/css-cascade.md` — where Chrome draws the form-control `box-sizing` line, and why a
 layout-crate test cannot see it.
 
+## Tick 1071 — three defects in four ticks were the ABSENCE of an implementation, and no code search finds one (2026-08-09)
+
+TICK SHAPE: measurement — the cadence re-read of `CONSTITUTION.MD` (due every 8 ticks; last at 1063),
+banked as check #99 in `docs/loop/CONSTITUTION-CHECK.md`, with the **self-audit** (due every 10; last
+at 1061) run in the same tick. No engine crate touched.
+
+⚠⚠⚠ **FINDING 1 — *ONE RULE, N IMPLEMENTATIONS* CHANGED SHAPE: THIS WINDOW THE Nth IMPLEMENTATION
+WAS NOTHING AT ALL.**
+
+```text
+   t1067  a flex/grid leaf never REPORTS a baseline   -> taffy's fallback silently made it `end`
+   t1068  the cell path never APPLIES a transform     -> the 4th of four sites, the only silent one
+   t1070  a table never GENERATES an anonymous cell   -> §17.2.1's box, absent entirely
+```
+
+> **YOU CANNOT GREP FOR THE COPY THAT IS NOT THERE.** A duplicated rule is found by searching the
+> codebase for its other copies (t1054) or the spec for its other sections (check #98). An absent one
+> is found only by enumerating the rule's **consumers** — every path that could have asked and did
+> not. That is a THIRD search, and the loop paid for it three times in four ticks.
+
+⚠ All three were found by a **reference diff** and none by reading code — one failing row of a
+40-case grid battery, one of a 27-case transform battery, twelve of an 18-case table battery.
+**An absence has no symptom in the source.**
+
+⚠⚠⚠ **FINDING 2 — A MUTATION THAT STAYED GREEN WAS THE FINDING, TWICE, FOR DIFFERENT REASONS.**
+t1066's control against *"never use the fixed algorithm"* asserted a row **both** algorithms answer
+identically — because t1065's fix, one tick earlier, had removed its separating power. t1068's gate
+could not see the transform-origin at all, because every row in it was a pure translation. t1057 said
+*a green mutation is a reading about the ROW*; the addition is that **a control can DECAY**, so the
+rule is not "write good controls" but **run every mutation, including the ones you expect to fail.**
+
+⚠⚠⚠ **FINDING 3 — THE RATCHET'S HARDEST TEST WAS TAKEN AT t1070, AND THE TEMPTATION DESERVES ITS
+EXACT NAME.** The available shortcut would have moved **all twelve** battery rows and silently turned
+every 3-column row with two consecutive strays into a 4-column one. **The gain had a number and the
+cost had none** — it would have surfaced ticks later as unattributed corpus movement. Part 24 forbids
+the trade; what it cannot do is make the regression as visible as the gain. The refusal was only
+possible **because the mechanism was understood before the fix was attempted**.
+
+⚠⚠ **FINDING 4 — THE UNPRICED-FIX DEBT IS FOUR TICKS DEEP AND SHOULD BE SAID PLAINLY.** Four
+Chrome-exact fixes landed with no corpus A/B, each saying so in the same words. That is I5-compliant
+and honest, and it is still a debt: this window chose **breadth (four mechanisms) over attribution
+(zero)**, deliberately, and that choice is defensible only while the fixes are Chrome-exact and
+RED-proven — which all four were, with 12 mutations run across them.
+
+**FINDING 5 — PART VII HELD WHERE IT WOULD HAVE BEEN EASIEST TO BREAK.** t1065's pre-flight blocked
+on a wall audit that had already been run, because t1064 published it in the journal and never
+appended it to `WALL-AUDIT.md`, which is where `status-update.sh` reads the marker from — and
+hand-editing the generated `STATUS.md` did not survive regeneration. Fixed by writing to **the
+artefact the generator reads**, not by touching `status-update.sh`. Zero `scripts/` files modified in
+seven ticks.
+
+⚠⚠ **FINDING 6 — VI.3'S RANKING WAS BEING COMPUTED INSIDE A FRAME THE INSTRUMENT CHOSE**, which is
+audit #47 restated constitutionally: five consecutive ticks selected their subject with one
+self-authored geometry fixture, blind to paint and scroll, while a 9,221-test suite sat unread.
+t1070 showed the correction and its limit in one tick — the suite ranked in under a minute, and a
+battery was still needed to turn the rank into a mechanism.
+
+**MAP HONESTY — DRIFT DRIVEN 9 → 7, AND THE TWO THAT CLOSED WERE ALREADY GATED.** `align-self` and
+`justify-self` claimed a capability with `gate='-'` while `g_self_alignment.rs` had been asserting
+both against headless Chrome since t980 — including the `justify-self:end` row that gate was created
+by. **The drift was in the map's bookkeeping, not in the engine**, which is precisely the
+false-presence risk the check exists to catch: a row claiming a capability with no gate reads the same
+whether or not the capability is real. The remaining seven are genuinely ungated and are owed a
+measurement or `status=unmeasured`.
+
+**SELF-AUDIT ran clean in the same tick** — falsifiability declared for all 29 named gates, the
+49-entry process-defect ledger intact, enforcement mechanical, journal complete: *"methodology and
+reality agree."*
+
+THE STEER (full text in check #99): **enumerate a rule's CONSUMERS, not just its copies** · run every
+mutation and treat a green one as a reading · take the §17.2.1 decomposition as its own session and
+verify against the 56 reftests rather than a new fixture · **take one PAINT tick** — audit #47's
+steer #4, now overdue.
+
+RATCHET: measurement only, no engine crate touched. `manuk-layout` 149/149 unmoved.
+
+PERF: none — measurement only.
+
+WIKI: none — this tick's artefacts are `docs/loop/CONSTITUTION-CHECK.md` check #99 and the two
+reconciled `CONSTELLATION.tsv` rows. [no-pattern]
+
 ## Tick 1070 — the suite ranked its own work-list, and the top cluster is a box we never generate (2026-08-09)
 
 TICK SHAPE: measurement — surface audit #47's steer #1, executed the tick after it was written:

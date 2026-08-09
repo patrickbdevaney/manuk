@@ -778,3 +778,4 @@ tick	sha	epoch	iso	delta_s	shape	wall_s	files	added	deleted	gates	claims	wpt_pas
 1068	e4f1eb26	1786281288	2026-08-09T09:14:48-04:00	1766	primitive	808	9	312	33	429	81	3896	6960	0	540	0	transforms are clean at 26 of 27, and the failing row was the one I had labelled a NEGATIVE (2026-08-09)
 1069	093f7636	1786281675	2026-08-09T09:21:15-04:00	387	measurement	808	5	228	33	429	81	3896	6960	0	540	0	the loop hand-built an oracle for an area that already had a 1,140-test one on disk (2026-08-09)
 1070	66126f0d	1786282020	2026-08-09T09:27:00-04:00	345	measurement	808	7	177	33	429	81	3896	6960	0	540	0	the suite ranked its own work-list, and the top cluster is a box we never generate (2026-08-09)
+1071	8437f99e	1786282320	2026-08-09T09:32:00-04:00	300	measurement	808	6	271	36	429	81	3896	6960	0	540	0	three defects in four ticks were the ABSENCE of an implementation, and no code search finds one (2026-08-09)
