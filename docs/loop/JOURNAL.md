@@ -46371,6 +46371,83 @@ PERF: none — one UA rule and one narrowed branch in a cascade that already ran
 WIKI: `docs/wiki/css-cascade.md` — where Chrome draws the form-control `box-sizing` line, and why a
 layout-crate test cannot see it.
 
+## Tick 1072 — a table is painted in six layers and we paint three, found by an instrument the loop had never used (2026-08-09)
+
+TICK SHAPE: measurement — **the paint tick**, which surface audit #47 (steer #4) and constitution
+check #99 (steer #4) had both asked for and which was overdue by both counts. No engine crate
+touched. The point of it: the loop owns a reference-diffing PAINT instrument — the reftest runner —
+and had never once used it for discovery.
+
+⚠⚠⚠ **IT POINTS SOMEWHERE VERY SPECIFIC.** `css/CSS2/backgrounds` is **125 passed, 211 failed**, and
+the failures do not spread:
+
+```text
+   90  background-*                    24  background-root
+   12  background-repeat-applies-to    12  background-position-applies-to
+   12  background-color-applies-to     12  background-attachment-applies-to
+   12  background-applies-to           10  background-image-applies-to
+```
+
+**Six properties, twelve failures each, and the twelve are the same twelve element types.**
+
+⚠⚠ **TWO HYPOTHESES WERE MEASURED AND REFUTED BEFORE THE THIRD WAS BELIEVED**, which is the part of
+this tick worth keeping:
+
+1. **A wrong absolute-unit constant.** Every test in the family is `width: 1in` against a "96px
+   square" reference, so one bad conversion fails all of them at once — the single-shared-constant
+   shape the burndown explicitly predicts. Measured: `in / cm / mm / pt / pc / Q` are **all
+   Chrome-exact** (96 / 37.78 / 3.77 / 1.33 / 16 / 0.94). Refuted.
+2. **The reference draws an `<img>` and the test paints a rect.** True, and it exposed a real
+   instrument property — the runner compares `test_px == ref_px`, **byte-exact RGBA, zero tolerance,
+   and WPT's own `fuzzy` metadata is not read at all**. But split by reference kind,
+   image-referenced tests pass at **34.3%** and CSS-referenced at **44.0%**: a contributor, not the
+   cause. Refuted as the explanation and filed as its own instrument row.
+
+Layout was refuted too: `background-color-applies-to-004`'s table measures exactly **96×96**, the
+size its own reference draws.
+
+⚠⚠⚠ **THE MECHANISM: CSS 2.1 §17.5.1 PAINTS A TABLE IN SIX LAYERS AND THIS ENGINE HAS THREE.**
+Back to front the spec's order is **table → column groups → columns → row groups → rows → cells**.
+The box tree goes straight from table to row:
+
+```text
+   table <Table>       [0 0 100×72]
+     tr <TableRow>     [0 0 100×24]      <- no <TableRowGroup> between them
+       td <TableCell>  [0 0  50×24]
+```
+
+- **A row group generates no painted box**, so `background-color` on a `<tbody>`/`<thead>`/`<tfoot>`
+  — the zebra-striped table and the highlighted header band, on essentially every data table — is
+  never drawn.
+- **Column and column-group have neither a box nor geometry.** Chrome reports rects for both
+  (`<colgroup>` `[0,0,100,72]`, `<col>` `[0,0,50,72]`); we report nothing.
+
+⚠⚠ **AND THE ROW GROUP'S GEOMETRY AND ITS PAINT DISAGREE WITH EACH OTHER.** `boxes` reports
+`tbody [0,24,100,48]` — Chrome-exact — while the paint tree has no box there at all. The rect comes
+from the node-rect map and the paint from the box tree, and **for a row group only one of the two
+exists.**
+
+> **"IS IT LAID OUT?" AND "IS IT PAINTED?" ARE DIFFERENT QUESTIONS WITH DIFFERENT ANSWERS, AND THE
+> LOOP HAS ONLY EVER ASKED THE FIRST.** Every battery of the last eight ticks reads geometry. A
+> capability can be present on that instrument and absent on the other, and a row group is the proof:
+> Chrome-exact on the one the loop uses, missing entirely on the one it does not.
+
+**NOT BUILT THIS TICK, and the reason is the same as t1070's**: paint ORDER is the whole substance of
+§17.5.1 — the group and column boxes must precede the rows in the children vector or they cover the
+cells they exist to sit behind — and the row-group box must be background-only so it takes no part in
+the column grid. That is an additive paint change with a real ordering invariant, and it wants its
+own tick with its own RED-proof, not the tail of a measurement. The four-step decomposition is in
+`docs/wiki/box-layout.md`, and it verifies against `background-color-applies-to-001/002/003/005/006`
+— a pass/fail count the loop does not have to author.
+
+RATCHET: measurement only, no engine crate touched. `manuk-layout` 149/149 unmoved. Bar 0 clean
+across every run in this tick.
+
+PERF: none — measurement only.
+
+WIKI: docs/wiki/box-layout.md — "A table is painted in SIX layers and we paint three (CSS 2.1
+§17.5.1) — the paint tick"
+
 ## Tick 1071 — three defects in four ticks were the ABSENCE of an implementation, and no code search finds one (2026-08-09)
 
 TICK SHAPE: measurement — the cadence re-read of `CONSTITUTION.MD` (due every 8 ticks; last at 1063),

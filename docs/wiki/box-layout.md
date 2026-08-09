@@ -7829,3 +7829,72 @@ cell has none. The flex/grid path solved the same problem by making **the text n
    source, with whitespace-only runs generating nothing (the battery's negative row, already exact).
 4. Verify against the 56 `table-anonymous-objects` reftests, which is a pass/fail count this loop did
    not have to author.
+
+## A table is painted in SIX layers and we paint three (CSS 2.1 §17.5.1) — the paint tick (t1072)
+
+Surface audit #47's steer #4 and check #99's steer #4 said the same thing twice: **take one paint
+tick.** The loop owns a reference-diffing paint instrument — the reftest runner — and had never used
+it for discovery. `css/CSS2/backgrounds` is where it points: **125 passed, 211 failed**, and the
+failures cluster hard:
+
+```text
+   90  background-*                    24  background-root
+   12  background-repeat-applies-to    12  background-position-applies-to
+   12  background-color-applies-to     12  background-attachment-applies-to
+   12  background-applies-to           10  background-image-applies-to
+```
+
+**Six properties, twelve failures each, and the twelve are the same twelve element types.**
+
+### Two hypotheses measured and refuted before the third was believed
+
+1. **A wrong absolute-unit constant.** Every one of these tests is `width: 1in` against a
+   "96px square" reference, so one wrong conversion would fail all of them. Measured against Chrome:
+   `in / cm / mm / pt / pc / Q` are all exact (96 / 37.78 / 3.77 / 1.33 / 16 / 0.94). Refuted.
+2. **The reference is an `<img>` and the test is a painted rect.** True, and it matters: the runner
+   compares `test_px == ref_px` — **byte-exact RGBA, zero tolerance, no support for WPT's `fuzzy`
+   metadata** (`tests/wpt/src/reftest.rs:102`). But split by reference kind, image-referenced tests
+   pass at **34.3%** and CSS-referenced ones at **44.0%** — a contributor, not the cause. Refuted as
+   the explanation.
+
+The layout is not the problem either: `background-color-applies-to-004`'s table measures exactly
+**96×96**, the size its reference draws.
+
+### ⚠⚠⚠ THE MECHANISM: THREE OF THE SIX TABLE PAINT LAYERS DO NOT EXIST
+
+CSS 2.1 §17.5.1 paints a table in six layers, back to front: **table → column groups → columns →
+row groups → rows → cells.** The layout box tree has three of them:
+
+```text
+   table <Table>                    [0 0 100×72]
+     tr <TableRow>                  [0 0 100×24]        <- no <TableRowGroup> between them
+       td <TableCell>               [0 0  50×24]
+```
+
+- **A row group generates NO painted box.** `background-color` on a `<tbody>`, `<thead>` or
+  `<tfoot>` — the zebra-striped table, the highlighted header band — is never drawn.
+- **Column and column-group have neither a box NOR geometry.** Chrome reports rects for both
+  (`<colgroup>` `[0,0,100,72]`, `<col>` `[0,0,50,72]` on a 2×3 table); we report nothing at all.
+
+⚠⚠ **AND THE ROW GROUP'S GEOMETRY AND PAINT DISAGREE WITH EACH OTHER.** `boxes` reports
+`tb [0,24,100,48]` — Chrome-exact — while the paint tree has no box there. The rect comes from the
+node-rect map and the paint comes from the box tree, and **for a row group only one of the two
+exists.** A capability can be present on one instrument and absent on the other, which is why
+"is `<tbody>` laid out?" and "is `<tbody>` painted?" are different questions with different answers.
+
+### The decomposition
+
+Everything needed is already in `layout_table` when the row boxes are built:
+
+1. `collect_table_rows` flattens row groups and **discards the group node**; keep it (the rank tuple
+   already carries it) and emit one background-only box per group spanning its rows' y-range.
+2. Columns: `col_x` and `widths` are in hand; emit one box per column spanning the table's row height,
+   and one per column group spanning its columns.
+3. **Paint order is the whole point** — these boxes must precede the rows in the children vector, or
+   they cover the cells they are supposed to sit behind. §17.5.1's order IS the insertion order.
+4. Verify against `background-color-applies-to-001/002/003` (row-group, header-group, footer-group)
+   and `005/006` (column-group, column) rather than a new hand-authored fixture.
+
+⚠ The row-group box must be **background-only**: it takes no part in the column grid and must not
+change any cell's geometry, which is what makes this an additive paint change rather than a layout
+one — and what its regression test has to assert.

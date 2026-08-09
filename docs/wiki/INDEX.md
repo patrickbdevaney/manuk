@@ -404,6 +404,10 @@
   - L7757 · ⚠⚠⚠ The gate's first version could not see the origin, and the mutation is what said so
   - L7769 · Non-cell content inside a table is DROPPED — §17.2.1's anonymous cell was never generated (t1070)
   - L7806 · ⚠⚠⚠ Why it is NOT built in the tick that found it
+  - L7833 · A table is painted in SIX layers and we paint three (CSS 2.1 §17.5.1) — the paint tick (t1072)
+  - L7849 · Two hypotheses measured and refuted before the third was believed
+  - L7863 · ⚠⚠⚠ THE MECHANISM: THREE OF THE SIX TABLE PAINT LAYERS DO NOT EXIST
+  - L7885 · The decomposition
 
 ## browser-capabilities.md
 `docs/wiki/browser-capabilities.md`
@@ -1820,4 +1824,4 @@
   - L124 · Rank mechanisms by FLIP RATE, not failing-subtest count — CSS layout is a multi-assertion slog
 
 ---
-1727 sections across 22 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+1731 sections across 22 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
