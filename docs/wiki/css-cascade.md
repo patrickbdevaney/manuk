@@ -2479,3 +2479,74 @@ stylesheet work makes the reference correct, which reveals a divergence that was
 ⚠ No banked `WPT:` directory moves — `css-position` (99/311), `css-display` (124/151) and `css-text`
 (1235/2212) are identical before and after. `css/CSS2` has no ratchet row at all, which is surface
 audit #47's finding and the reason none of this was visible until it was looked for.
+
+## `dir="rtl"` was a layout input and not a CASCADE input, so every logical property resolved LTR (t1086)
+
+Stylo maps every **logical** property to a physical one *inside* `compute_for_declarations`, against
+its own `WritingMode` — the section above (t998) is about the ORDER that mapping runs in, and this is
+about its INPUT. Manuk implemented `dir="rtl"` in `MinimalCascade`'s presentational hints only, and
+then recovered the value onto the computed style **after** Stylo had finished:
+
+```rust
+    cs.direction = m.direction;   // stylo_engine.rs, the post-cascade recovery pass
+```
+
+That is enough for everything **we** resolve from `direction` — the bidi inline reorder, `text-align:
+start/end` — and it is not enough for the one thing **Stylo** resolves from it. With no `direction`
+declaration in any sheet, Stylo's writing mode was LTR on every element of every page.
+
+**The measurement is a two-column battery, and the second column is the finding.** The same eight
+logical properties, declared twice — once with the `dir` attribute, once with a `direction: rtl`
+declaration (28 rows, headless Chrome, a 100px block in a 400px container):
+
+```text
+  row                              dir="rtl" ATTRIBUTE        direction:rtl STYLESHEET
+  margin-inline-start:25px       Chrome 275  ours 300  ✗      Chrome 275  ours 275  ✓
+  margin-inline-end:25px         Chrome 300  ours 275  ✗      Chrome 300  ours 300  ✓
+  inset-inline-start:25px (abs)  Chrome 275  ours  25  ✗      Chrome 275  ours 275  ✓
+  margin-inline:25px 60px        Chrome 275  ours 240  ✗      Chrome 275  ours 275  ✓
+```
+
+⚠⚠⚠ **THE STYLESHEET COLUMN WAS ALREADY PERFECT.** Stylo's logical resolution works and always did;
+it was never told the direction. **A battery that tested only `direction: rtl` — the spelling a CSS
+test writes — would have reported the area clean**, and the spelling the RTL web actually uses is the
+attribute: `<html dir="rtl">` is how essentially every Arabic, Hebrew, Persian and Urdu site declares
+itself. The general form is worth keeping: *when one feature has two spellings and only one of them
+reaches a given subsystem, a fixture that picks the wrong spelling proves the opposite of the truth.*
+
+The fix is two UA rules, and both are RED-proven by a different row:
+
+```css
+[dir="ltr" i] { direction: ltr; }
+[dir="rtl" i] { direction: rtl; }
+```
+
+⚠⚠ **A CORRECT RTL IMPLEMENTATION IS WHAT HID IT.** A 61-row RTL battery run the same hour scored
+**58/61** — inline reorder, alignment, wrapping, Arabic text, mirrored margins and nested `dir`
+islands all Chrome-exact — because every one of those reads `ComputedStyle::direction`, which the
+recovery had already fixed. Only the properties Stylo itself must map were wrong, and nothing in the
+RTL area pointed at the cascade.
+
+⚠⚠ **THE ` i` FLAG IS DOCUMENTATION, NOT BEHAVIOUR — and only running the mutation says so.** Dropping
+it left the gate GREEN: `dir` is on HTML's list of attributes whose values selectors match ASCII
+case-insensitively, and Stylo implements the list. Verified from the other side on the same build so
+the green is not a blanket insensitivity of ours: `[data-x="abc"]` does **not** match `data-x="ABC"`,
+with Chrome agreeing on all six rows. The gate's write-up originally asserted the flag was
+load-bearing; the mutation refuted the author, not the code.
+
+**Priced against the corpus, honestly.** Of 182 cached corpus sites, 4 (2.2%) carry `dir="rtl"` and 90
+(49.5%) use a logical property; **1–2 do both**. The M1 anchor `m.youm7.com` moved by **zero** —
+shape 84.9%, reading-order 24, identical to the banked sweep row before and after. This is a
+high-usage, low-corpus-mass fix of exactly the kind [[constitution-check]] #72 names: the honest
+report is *"the instrument cannot price this"*, not *"this bought nothing"*.
+
+**Residue, measured and named, NOT fixed here.** Two further RTL defects the batteries found, each a
+different mechanism and each unaffected by this fix:
+
+- `float: inline-start` / `clear: inline-start` map to `Float::Left` unconditionally in
+  `stylo_map.rs` — direction-blind, and it fails in **both** columns above (300 vs 0), which is what
+  proves it independent of the `dir` attribute. Same shape as the `text-align: start/end` fix: the
+  value must stay logical through mapping and resolve once direction is known.
+- `refine_inline_static_positions` is skipped outright under an RTL base direction
+  (`if bcs.direction != Rtl` at its call site), so an insetless `position:absolute` box in an RTL
+  inline context takes the content box's LEFT edge. Chrome 300/380, ours 0/0.

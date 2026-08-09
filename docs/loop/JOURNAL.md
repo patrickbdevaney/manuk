@@ -46371,6 +46371,121 @@ PERF: none — one UA rule and one narrowed branch in a cascade that already ran
 WIKI: `docs/wiki/css-cascade.md` — where Chrome draws the form-control `box-sizing` line, and why a
 layout-crate test cannot see it.
 
+## Tick 1086 — `dir="rtl"` was a layout input and not a CASCADE input (2026-08-09)
+
+TICK SHAPE: capability — two UA rules in `engine/css/src/stylo_engine.rs`, gated by a new
+`G_DIR_ATTR_LOGICAL`. One mechanism; the two others the batteries found are named, measured and
+deliberately left.
+
+t1085's steer named `m.youm7.com` — shape 0.850, 24 `reading_order` inversions, 17 of them in one
+`<footer>` row of `<a>` links — and pointed at `refine_inline_static_positions`, which is skipped
+outright under an RTL base direction. That lead is **refuted** by the first thing that got built, and
+the tick is what the battery found instead.
+
+**BATTERY 1 — 61 rows of RTL inline layout, negative rows first, one `bdiff.sh` run against headless
+Chrome.** LTR controls on an RTL page; RTL rows of inline-blocks, of inline `<a>`s, with collapsed
+inter-element whitespace, wrapping onto two lines; `text-align` left/right/centre under RTL; Arabic
+text; mirrored margins and padding; a `dir=ltr` island nested inside RTL; and out-of-flow boxes.
+
+```text
+   EXACT: 58 of 61   diverging: d5a f1c f2c
+```
+
+⚠⚠⚠ **THE RTL IMPLEMENTATION IS CORRECT, AND THAT IS WHY THE DEFECT SURVIVED.** Every reorder,
+alignment, wrap and nesting row is Chrome-exact — because each of them reads
+`ComputedStyle::direction`, which a post-cascade recovery pass had already fixed. t1085's named lead
+(`refine_inline_static_positions` skipped under RTL) is **real** — it is `f1c`/`f2c` — but it is
+inert on `m.youm7.com`, whose 24 inversions are 0-mixed-flow (t1084 measured that) and therefore have
+no out-of-flow box in them at all. **A lead can be a true statement about the code and a false
+statement about the site**, and only the negative rows separate the two.
+
+**BATTERY 2 — THE MIRROR, and its second column is the whole finding.** `d5a` was
+`margin-inline-start` under RTL. Eight logical properties, each declared **twice** — once with the
+`dir` attribute, once with a `direction: rtl` declaration — 28 rows, 100px block in a 400px
+container:
+
+```text
+   row                              dir="rtl" ATTRIBUTE        direction:rtl STYLESHEET
+   margin-inline-start:25px       Chrome 275  ours 300  ✗      Chrome 275  ours 275  ✓
+   margin-inline-end:25px         Chrome 300  ours 275  ✗      Chrome 300  ours 300  ✓
+   inset-inline-start:25px (abs)  Chrome 275  ours  25  ✗      Chrome 275  ours 275  ✓
+   margin-inline:25px 60px        Chrome 275  ours 240  ✗      Chrome 275  ours 275  ✓
+   float:inline-start             Chrome 300  ours   0  ✗      Chrome 300  ours   0  ✗
+```
+
+⚠⚠⚠ **THE STYLESHEET COLUMN WAS ALREADY PERFECT.** Stylo maps every logical property to a physical
+one inside `compute_for_declarations`, against its own `WritingMode`. Manuk implemented `dir="rtl"`
+in `MinimalCascade`'s presentational hints **only**, and recovered it onto the computed style *after*
+Stylo had run (`cs.direction = m.direction`). That is enough for everything **we** resolve from
+direction and nothing that **Stylo** resolves from it: with no `direction` declaration in any sheet,
+Stylo's writing mode was LTR on every element of every page.
+
+⚠⚠⚠ **A BATTERY THAT TESTED ONLY `direction: rtl` WOULD HAVE REPORTED THE AREA CLEAN.** That is the
+spelling a CSS test writes; `<html dir="rtl">` is the spelling essentially every Arabic, Hebrew,
+Persian and Urdu site uses. The general form, and it is the reusable half of this tick: *when one
+feature has two spellings and only one of them reaches a given subsystem, a fixture that picks the
+wrong spelling proves the opposite of the truth.* The two-column shape is what caught it — neither
+column alone is a reading.
+
+THE FIX — two UA rules, each RED-proven by a **different** row:
+
+```css
+[dir="ltr" i] { direction: ltr; }
+[dir="rtl" i] { direction: rtl; }
+```
+
+RESULT — battery 2 **21/28 → 26/28**, battery 1 **58/61 → 59/61**, nothing that passed moved.
+
+⚠⚠ **A GREEN MUTATION, AND IT REFUTED THE AUTHOR RATHER THAN THE CODE.** Three mutations were run,
+not one:
+
+```text
+   drop the ` i` flag           GREEN  <- the gate's own write-up said this row would fail
+   delete [dir="rtl" i]         RED    attr_mis 275 -> 300
+   delete [dir="ltr" i]         RED    child_ltr  25 -> 0     (attr_then_style_ltr does NOT move —
+                                                               its author `direction:ltr` carries it)
+```
+
+`dir` is on HTML's list of attributes whose values selectors match ASCII-case-insensitively and Stylo
+implements the list, so the flag is documentation, not behaviour. Checked from the other side on the
+same build rather than reasoned: `[data-x="abc"]` does **not** match `data-x="ABC"` — 6 of 6 rows
+agreeing with Chrome — so the green is HTML's rule and not a blanket insensitivity of ours. Both the
+gate doc and the source comment were corrected to say so. **Two of the three mutations I asserted in
+writing were wrong in some part; running all three is the only reason that is known.**
+
+HONEST PRICE, and it is small. Of 182 cached corpus sites, **4 (2.2%) carry `dir="rtl"`** and 90
+(49.5%) use a logical property; **1–2 do both.** `m.youm7.com` moved by **ZERO** — shape 84.9%,
+reading-order 24, byte-identical to the banked `SWEEP-t1080` row on a fresh run this hour. CSS 2.1
+`bidi-text` is flat at **17/105**, exactly its banked number, which is the expected control: CSS 2.1
+predates logical properties, so the suite cannot see this fix in either direction. This is a
+high-usage, low-corpus-mass fix of the kind constitution check #72 named — the honest report is *"the
+instrument cannot price it"*, not *"it bought nothing"*.
+
+RATCHET: `manuk-css` 55/55, `G_DIR_ATTR_LOGICAL` green, `bidi-text` 17/105 unchanged, and the 58
+already-exact rows of battery 1 all still exact. No banked number moved down.
+
+RESIDUE, MEASURED AND NAMED, NOT FIXED — two further mechanisms, each proven independent of this one:
+
+1. **`float: inline-start` / `clear: inline-start` are direction-blind** (`stylo_map.rs:783,788` map
+   them to `Float::Left` unconditionally). They fail in **both** columns above, which is what proves
+   they are not the `dir` defect. Same shape as `text-align: start/end`: the value must stay logical
+   through mapping and resolve once direction is known, which needs logical variants on the enum —
+   safe, because the compiler then enumerates the consumers.
+2. **`refine_inline_static_positions` is skipped under RTL** (`lib.rs:4286`), so an insetless
+   `position:absolute` box in an RTL inline context takes the content box's LEFT edge: Chrome
+   300/380, ours 0/0. t1082 and t1083 both added terms inside that function which RTL has never seen.
+
+THE STEER: `m.youm7.com`'s 24 inversions are **not** RTL inline layout — battery 1 says that area is
+Chrome-exact — so the M1 anchor needs a different subject, and the fidelity run above names one out
+loud: the site's largest divergences are `geometry/mis-sized: height` (`~4096px` on one `<div>`,
+`~128px` on the footer) and whole subtrees where *"our tree has nothing below"*. Rank that, not the
+reorder.
+
+PERF: two UA selectors on a sheet the Stylist compiles once per document.
+
+WIKI: `docs/wiki/css-cascade.md` — "`dir=\"rtl\"` was a layout input and not a CASCADE input, so every
+logical property resolved LTR (t1086)"
+
 ## Tick 1085 — my own steer was wrong one tick after I wrote it, because M1 is a CONJUNCTION (2026-08-09)
 
 TICK SHAPE: measurement — re-rank the `reading_order` conjunct against the bar it is supposed to

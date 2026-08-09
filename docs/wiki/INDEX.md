@@ -780,6 +780,7 @@
   - L2429 · An XHTML <style><![CDATA[ … ]]></style> sheet was dropped in its entirety (t1075)
   - L2443 · The two cascades lose different amounts, and only one of them loses everything
   - L2460 · ⚠⚠⚠ The number, fully attributed — and 100% of the "losses" are the lie being deleted
+  - L2483 · dir="rtl" was a layout input and not a CASCADE input, so every logical property resolved LTR (t1086)
 
 ## `<dialog>`, `popover`, and the top layer (ticks 194-195)
 `docs/wiki/dialog-and-top-layer.md`
@@ -1860,4 +1861,4 @@
   - L124 · Rank mechanisms by FLIP RATE, not failing-subtest count — CSS layout is a multi-assertion slog
 
 ---
-1767 sections across 22 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+1768 sections across 22 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.

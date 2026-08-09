@@ -200,6 +200,37 @@ html, body, div, section, article, header, footer, nav, main, aside, figure,
 figcaption, address, p, blockquote, ul, ol, li, dd, dt, pre, hr, h1, h2, h3, h4, h5, h6,
 form, fieldset, table, caption, center, menu, dl { display: block; }
 center { text-align: center; }
+/* ⚠⚠⚠ **THE `dir` ATTRIBUTE IS A CASCADE INPUT, AND THIS SHEET DID NOT HAVE IT.** `dir="rtl"` was
+   implemented only in `MinimalCascade`'s presentational hints and then *recovered* onto the computed
+   style after Stylo had already run (`cs.direction = m.direction`, below). That is enough for the
+   things WE resolve from `direction` — inline reorder, `text-align: start/end` — and it is not enough
+   for the one thing STYLO resolves from it: every **logical** property is mapped to a physical one
+   inside `compute_for_declarations`, against Stylo's own `WritingMode`. With no `direction`
+   declaration in any sheet that writing mode was LTR on every element of every page, so
+   `margin-inline-start` on an RTL page resolved to `margin-LEFT`. Measured against Chrome, 28 rows,
+   `direction` set two ways (`/tmp/bat-rtl2.html`):
+
+     row                                   dir=rtl ATTRIBUTE            direction:rtl STYLESHEET
+     margin-inline-start:25px            Chrome 275   ours 300  ✗       Chrome 275   ours 275  ✓
+     margin-inline-end:25px              Chrome 300   ours 275  ✗       Chrome 300   ours 300  ✓
+     inset-inline-start:25px (abs)       Chrome 275   ours  25  ✗       Chrome 275   ours 275  ✓
+     margin-inline:25px 60px             Chrome 275   ours 240  ✗       Chrome 275   ours 275  ✓
+
+   **The stylesheet column is already perfect**, which is what makes the attribute column a missing
+   UA rule and not a missing feature — Stylo's logical resolution works, it was never told the
+   direction. And the attribute is not the rare spelling: `<html dir="rtl">` is how essentially every
+   Arabic/Hebrew/Persian/Urdu site declares itself, so the whole family was wrong on exactly the
+   pages that use it.
+
+   UA origin, so an author's own `direction` still wins (`dir="rtl" style="direction:ltr"` reads LTR,
+   and a `dir="ltr"` child undoes an RTL parent — both are rows in `G_DIR_ATTR_LOGICAL`, and each
+   rule is RED-proven by a different one). ⚠ The ` i` flag is **documentation, not behaviour**: the
+   gate stays green without it, because `dir` is on HTML's list of attributes whose values selectors
+   match ASCII-case-insensitively and Stylo implements the list. Measured rather than assumed — a
+   non-listed attribute is still case-SENSITIVE here (`[data-x="abc"]` does not match `data-x="ABC"`,
+   Chrome agreeing), so this is HTML's rule firing and not a blanket insensitivity of ours. */
+[dir="ltr" i] { direction: ltr; }
+[dir="rtl" i] { direction: rtl; }
 /* The elements that are never rendered. Ours was missing the *media* half of the list, and
    `<source>` is the one that matters: `<picture><source>` is how the entire modern web serves
    responsive images, and every one of them was getting a real box with real height. Wikipedia alone
