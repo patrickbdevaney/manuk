@@ -691,6 +691,91 @@ async fn fetch_masks_owned(
     (decoded, settled)
 }
 
+/// **A SPATIAL MEDIA FRAGMENT ON AN SVG URL — `#xywh=` (Media Fragments URI 1.0 §4.2, wired to
+/// SVG2 Linking §"Linking into SVG content").**
+///
+/// `url("sprite.svg#xywh=pixel:100,100,100,100")` does not merely scroll the image: the selected
+/// region **becomes** the image, natural size and all. That is what makes an SVG sprite sheet work —
+/// one file, one cell drawn 1:1 in a box the size of the cell — and it is the shape 19 of the 26
+/// `svg/linking` WPT reftests take.
+///
+/// Returns the region in the SVG's own pixel space, or `None` to mean *"no usable fragment — use
+/// the whole image"*. Grammar, measured against the WPT battery rather than inferred:
+///
+/// ```text
+///   #xywh=100,100,100,100                 pixel is the DEFAULT unit
+///   #xywh=pixel:100,100,100,100           …and may be named
+///   #xywh=percent:50,50,50,50             …or given as a % of the natural size
+///   #xywh=0,0,200,200   on a 100x100      CLAMPED to the image, not rejected
+///   #xywh=100,100,-100,100                INVALID (w<=0) -> ignored, whole image
+///   #xywh=0,0,100,100&xywh=100,100,100,100    `&`-separated; the LAST VALID one wins
+/// ```
+///
+/// ⚠⚠ **"Invalid" and "out of range" are different answers, and the battery separates them.** A
+/// non-positive width is a *syntax* failure and the fragment is discarded (the whole image is used);
+/// a region that merely extends past the edge is *clamped*. Treating the second as the first renders
+/// the whole sheet where Chrome renders one clamped cell, and both cases are one line apart.
+///
+/// ⚠ Only the **spatial** dimension is handled. `#t=` (temporal), `#track=` and `#id=` are not
+/// spatial selectors and are deliberately ignored here rather than guessed at.
+fn svg_media_fragment_rect(url: &str, nat_w: f32, nat_h: f32) -> Option<(f32, f32, f32, f32)> {
+    let frag = url.split_once('#')?.1;
+    if nat_w <= 0.0 || nat_h <= 0.0 {
+        return None;
+    }
+    // `&`-separated name/value pairs; the LAST syntactically valid `xywh` wins, and an invalid one
+    // does not invalidate an earlier valid one — it is simply not a candidate.
+    let mut best = None;
+    for pair in frag.split('&') {
+        let Some(v) = pair.strip_prefix("xywh=") else {
+            continue;
+        };
+        let (percent, nums) = match v.split_once(':') {
+            Some(("percent", rest)) => (true, rest),
+            Some(("pixel", rest)) => (false, rest),
+            // An unknown unit prefix is not a pixel value with a colon in it — it is invalid.
+            Some(_) => continue,
+            None => (false, v),
+        };
+        let parts: Vec<&str> = nums.split(',').collect();
+        if parts.len() != 4 {
+            continue;
+        }
+        let Ok(vals) = parts
+            .iter()
+            .map(|p| p.trim().parse::<f32>())
+            .collect::<Result<Vec<f32>, _>>()
+        else {
+            continue;
+        };
+        if vals.iter().any(|v| !v.is_finite()) {
+            continue;
+        }
+        let (mut x, mut y, mut w, mut h) = (vals[0], vals[1], vals[2], vals[3]);
+        if percent {
+            x = x / 100.0 * nat_w;
+            y = y / 100.0 * nat_h;
+            w = w / 100.0 * nat_w;
+            h = h / 100.0 * nat_h;
+        }
+        // A non-positive extent is invalid — discarded, NOT clamped.
+        if w <= 0.0 || h <= 0.0 {
+            continue;
+        }
+        best = Some((x, y, w, h));
+    }
+    let (x, y, w, h) = best?;
+    // …whereas overflowing the image IS clamped.
+    let x0 = x.max(0.0).min(nat_w);
+    let y0 = y.max(0.0).min(nat_h);
+    let x1 = (x + w).max(0.0).min(nat_w);
+    let y1 = (y + h).max(0.0).min(nat_h);
+    if x1 - x0 <= 0.0 || y1 - y0 <= 0.0 {
+        return None;
+    }
+    Some((x0, y0, x1 - x0, y1 - y0))
+}
+
 /// Rasterize an SVG document to a [`DecodedImage`] (non-premultiplied RGBA) at its
 /// intrinsic size via usvg + resvg. `None` if the bytes are not valid SVG.
 fn decode_svg(bytes: &[u8], url: &str) -> Option<manuk_paint::DecodedImage> {
@@ -703,14 +788,23 @@ fn decode_svg(bytes: &[u8], url: &str) -> Option<manuk_paint::DecodedImage> {
     }
     let tree = resvg::usvg::Tree::from_data(bytes, &resvg::usvg::Options::default()).ok()?;
     let size = tree.size();
-    let (w, h) = (size.width().ceil() as u32, size.height().ceil() as u32);
+    let (nat_w, nat_h) = (size.width(), size.height());
+    // ⚠⚠⚠ **THE URL'S FRAGMENT SELECTS A REGION OF THE IMAGE, AND IT ARRIVES HERE ALREADY** —
+    // `decode_svg` has taken the URL since it was written, to sniff `.svg`. A spatial media fragment
+    // (`#xywh=`) makes the SELECTED REGION the image: its natural size becomes the region's, which
+    // is why `sprite.svg#xywh=pixel:100,100,100,100` in a 100x100 box is a 1:1 draw of one sprite
+    // cell rather than a corner of the whole sheet. See [`svg_media_fragment_rect`].
+    let (crop_x, crop_y, w, h) = match svg_media_fragment_rect(url, nat_w, nat_h) {
+        Some((x, y, cw, ch)) => (x, y, cw.ceil() as u32, ch.ceil() as u32),
+        None => (0.0, 0.0, nat_w.ceil() as u32, nat_h.ceil() as u32),
+    };
     if w == 0 || h == 0 || w > 8192 || h > 8192 {
         return None;
     }
     let mut pixmap = resvg::tiny_skia::Pixmap::new(w, h)?;
     resvg::render(
         &tree,
-        resvg::tiny_skia::Transform::identity(),
+        resvg::tiny_skia::Transform::from_translate(-crop_x, -crop_y),
         &mut pixmap.as_mut(),
     );
     // resvg output is premultiplied; store straight-alpha RGBA for our blitter.
@@ -879,7 +973,15 @@ async fn fetch_image_bytes(url: &str) -> Option<Vec<u8>> {
         }
         return Some(resp.body.to_vec());
     }
-    let path = url.strip_prefix("file://").unwrap_or(url);
+    // ⚠⚠⚠ **A FRAGMENT IS NOT PART OF THE PATH, AND LEAVING IT ON MEANT THE IMAGE DID NOT LOAD AT
+    // ALL.** `url("icons.svg#icon-home")` — the SVG sprite idiom, a `<view>` reference, and every
+    // `#xywh=` media fragment — reached `std::fs::read` as the literal filename
+    // `icons.svg#icon-home`, which does not exist. Not a wrong crop: **no image**. The fragment
+    // identifies a part of the resource *after* it is retrieved (RFC 3986 §3.5) and is never sent
+    // to the transport; `decode_svg` reads it back off the original URL, which is why it is stripped
+    // here and not earlier.
+    let path = url.split('#').next().unwrap_or(url);
+    let path = path.strip_prefix("file://").unwrap_or(path);
     std::fs::read(path).ok()
 }
 

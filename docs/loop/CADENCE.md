@@ -11,12 +11,12 @@
 
 | | value | over |
 |---|---|---|
-| ticks landed | **770** | ticks 1–1060 |
-| median tick cycle | **27m** | 769 intervals |
-| median, last 10 | **57m** | 10 intervals |
+| ticks landed | **771** | ticks 1–1061 |
+| median tick cycle | **27m** | 770 intervals |
+| median, last 10 | **51m** | 10 intervals |
 | fastest / slowest | 5s / 5.4d | |
-| **ticks per hour** | **1.10** | 696.2h elapsed |
-| median verify wall | **63s** | 709 ticks |
+| **ticks per hour** | **1.10** | 696.9h elapsed |
+| median verify wall | **63s** | 710 ticks |
 | wall trend | 39s → 13m — getting slower ⚠️ | first 3 vs last 3 |
 
 The **cycle** is the real unit: implement → debug → verify wall → land. The wall is only part of
@@ -27,11 +27,11 @@ it, and a wall that grows taxes every future tick, so it is tracked separately f
 ### Near — the daily driver (doc / app / platform web)
 
 * **capabilities asserted** (`G_CAPABILITY`): 48 → **81**
-* **live gates**: 27 → **428**
-* **✅ rows in the capability ledger**: 144 → **534**
+* **live gates**: 27 → **429**
+* **✅ rows in the capability ledger**: 144 → **535**
 * **Bar 0 — oracle hangs**: 0 of 265 sites
 
-**341 of 770 ticks** (44%) moved a
+**342 of 771 ticks** (44%) moved a
 user-visible capability. The rest were instruments, infrastructure and corrections — and the
 ledger says the corrections were not overhead: three of its top three priorities were phantoms,
 and finding that out redirected everything after it.
@@ -90,7 +90,7 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 
 ## What a capability costs
 
-* **341** capability ticks, median cycle **27m**
+* **342** capability ticks, median cycle **27m**
 * median diff per tick: **+260 / −34** lines across 8 files
 
 ## Every tick
@@ -867,5 +867,6 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 | **1058** | 2026-08-09 03:12 | 1.5h | primitive | 13m | +545/−42 | 428 | 81 | 56.0% · | the paired battery's 24 transposed rows found nothing, and the ONE row where the two axes  |
 | **1059** | 2026-08-09 03:43 | 31m | primitive | 13m | +617/−44 | 428 | 81 | 56.0% · | the last enumeration unknown was clean at 34 of 35, and the 35th was the INSTRUMENT parsin |
 | **1060** | 2026-08-09 05:12 | 89m | primitive | 13m | +666/−48 | 428 | 81 | 56.0% · | the receipt that could not go red, and the two places §9.4.3 had to be applied twice (2026 |
+| **1061** | 2026-08-09 05:59 | 47m | capability | 13m | +409/−37 | 429 | 81 | 56.0% · | a fragment on an image URL meant NO IMAGE, and the tests that pointed at it still cannot s |
 
 *`·` after a WPT figure means **carried forward**, not measured this tick.*

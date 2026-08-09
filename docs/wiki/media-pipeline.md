@@ -1880,3 +1880,52 @@ Same seam, two more symphonia features (wav+pcm). The sniff nuance worth keeping
 NOT audio — AVI and WebP are RIFF too — so the 12-byte check requires the WAVE form type, and the
 gate asserts an AVI-shaped RIFF does NOT route to the audio probe. canPlayType audio/wav|x-wav|
 wave → 'probably'. RED: wav arm reverted → cpt-wav:false.
+
+## A fragment on an image URL meant NO IMAGE AT ALL (t1061)
+
+`background-image: url("icons.svg#icon-home")` is the SVG sprite idiom — one file, a fragment naming
+the piece you want. A fragment identifies a part of a resource **after** it has been retrieved
+(RFC 3986 §3.5) and is never handed to the transport. Ours went straight into `std::fs::read` as the
+literal filename `icons.svg#icon-home`, which does not exist.
+
+```text
+                                             Chrome    before      after
+   url(a.svg)                     no fragment  200x200   200x200    200x200   <- CONTROL
+   url(a.svg#icon-home)                        200x200   NO IMAGE   200x200
+   url(a.svg#xywh=100,100,100,100)             100x100   NO IMAGE   100x100
+   url(a.svg#xywh=pixel:100,100,100,100)       100x100   NO IMAGE   100x100
+   url(a.svg#xywh=percent:50,50,50,50)         100x100   NO IMAGE   100x100
+   url(a.svg#xywh=0,0,400,400)      clamped    200x200   NO IMAGE   200x200
+   url(a.svg#xywh=100,100,-100,100) invalid    200x200   NO IMAGE   200x200
+```
+
+**Seven of eight rows were NO IMAGE, not a wrong crop**, and the reach is every fragment — not only
+the spatial ones. The `http(s)` arm was already correct, because `manuk_net` parses with the `url`
+crate whose request target excludes the fragment; this was the `file` arm alone, which is why no page
+gate had caught it.
+
+The second half, once the bytes arrive: a spatial media fragment makes **the selected region the
+image**, natural size and all. That is what makes a sprite sheet draw one cell 1:1 instead of a
+corner of the whole sheet. `pixel:` is the default unit, `percent:` resolves against the natural
+size, an overflowing region is **clamped**, a non-positive extent is **discarded**, and `&`-separated
+pairs let the last *valid* one win.
+
+### The mutation that came back green
+
+The obvious assertion — *"a negative width yields the whole image"* — does **not** distinguish
+discarding an invalid fragment from clamping it: clamping a negative extent also collapses the region
+to nothing and falls back to the whole image. Deleting the `w <= 0` guard left the gate GREEN. The
+row that separates them is `#xywh=100,100,100,100&xywh=0,0,-50,50`: discard the invalid pair and the
+earlier **valid** one wins (100x100); accept it and it collapses (200x200).
+
+### The honest headline: the tests that aimed the tick cannot see the fix
+
+`svg/linking` is **4 passed / 26 failed before and after.** Tracing the URL that reaches the decoder
+during a reftest run prints exactly one line — `inline.svg` — because the reftest runner never runs
+the background-image subresource pass, so an external `background-image: url(*.svg)` is never fetched
+at all.
+
+> **THE TEST THAT POINTS AT A DEFECT IS NOT NECESSARILY A TEST THAT CAN SEE THE FIX.** t1059 was the
+> same lesson from the other side: there the instrument was *wrong* where the product was right, here
+> it is *blind* to a path the product has. Both times the check that settled it was the same — run
+> the fixture through the live path and look at what the code actually receives.

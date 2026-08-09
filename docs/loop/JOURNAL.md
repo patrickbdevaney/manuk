@@ -46371,6 +46371,91 @@ PERF: none — one UA rule and one narrowed branch in a cascade that already ran
 WIKI: `docs/wiki/css-cascade.md` — where Chrome draws the form-control `box-sizing` line, and why a
 layout-crate test cannot see it.
 
+## Tick 1061 — a fragment on an image URL meant NO IMAGE, and the tests that pointed at it still cannot see the fix (2026-08-09)
+
+TICK SHAPE: capability — mined from surface audit #46's own finding that **1359 WPT tests sit on
+disk and have never been run**. Clustering `svg`'s 108 failures by signature (the board's own
+*"FORECAST before building"* rule) put 26 in `svg/linking`, and **22 of those 26 are one mechanism**:
+a fragment identifier on an SVG reference.
+
+⚠⚠⚠ **AND THE MECHANISM TURNED OUT TO BE ONE LEVEL BELOW THE ONE THE TESTS NAME.** The tests are
+about `#xywh=` media fragments. The defect is that `fetch_image_bytes` handed the **whole URL,
+fragment included**, to `std::fs::read` — so `url("icons.svg#icon-home")` was read as the literal
+filename `icons.svg#icon-home`, which does not exist:
+
+```text
+                                             Chrome    before      after
+   url(a.svg)                     no fragment  200x200   200x200    200x200   <- CONTROL
+   url(a.svg#icon-home)                        200x200   NO IMAGE   200x200
+   url(a.svg#xywh=100,100,100,100)             100x100   NO IMAGE   100x100
+   url(a.svg#xywh=pixel:100,100,100,100)       100x100   NO IMAGE   100x100
+   url(a.svg#xywh=percent:50,50,50,50)         100x100   NO IMAGE   100x100
+   url(a.svg#xywh=0,0,400,400)      clamped    200x200   NO IMAGE   200x200
+   url(a.svg#xywh=100,100,-100,100) invalid    200x200   NO IMAGE   200x200
+   url(a.svg#xywh=0,0,50,50&xywh=100,100,100,100)        NO IMAGE   100x100
+```
+
+**Seven of eight rows were NO IMAGE, not a wrong crop** — and the reach is every fragment, not just
+the spatial ones: `#icon-home`, `#svgView(...)`, or a stale `#` left on a URL by a template. A
+fragment identifies a part of a resource *after* retrieval (RFC 3986 §3.5) and is never handed to the
+transport. The `http(s)` arm was already correct — `manuk_net` parses with the `url` crate, whose
+request target excludes the fragment — so this was the `file` arm alone, which is exactly why no page
+gate had ever caught it.
+
+The second half, now that the bytes arrive: `svg_media_fragment_rect` parses the spatial fragment and
+makes **the selected region the image**, natural size and all — which is what makes an SVG sprite
+sheet draw one cell 1:1 rather than a corner of the whole sheet.
+
+⚠⚠⚠ **A MUTATION CAME BACK GREEN AND ADDED A ROW — THE SECOND TIME THIS SESSION.** The obvious
+assertion, *"a negative width yields the whole image"*, does **not** distinguish *discarding* an
+invalid fragment from *clamping* it: clamping a negative extent also collapses the region to nothing
+and falls back to the whole image. Deleting the `w <= 0` guard left the gate green. The row that
+separates them is `#xywh=100,100,100,100&xywh=0,0,-50,50` — discard the invalid pair and the earlier
+**valid** one wins (100x100); accept it and it collapses (200x200). That row also proves the only
+other clause with no coverage: an invalid pair does not invalidate an earlier valid one.
+
+⚠⚠⚠ **AND THE HONEST HEADLINE: THE 22 WPT TESTS THAT AIMED THIS TICK DO NOT MOVE.**
+`svg/linking` is **4 passed / 26 failed before and after.** Tracing the URL that reaches the decoder
+during a reftest run prints exactly one line — `inline.svg` — because **the reftest runner never runs
+the background-image subresource pass at all**, so an external `background-image: url(*.svg)` is
+never fetched, with or without a fragment. The fix is real, gated and RED-proven on the page path
+(`fetch_and_apply_background_images` → `decode_bitmap` → `decode_svg`); the instrument that named the
+bug cannot see it.
+
+> **THE TEST THAT POINTS AT A DEFECT IS NOT NECESSARILY A TEST THAT CAN SEE THE FIX.** t1059 was the
+> same lesson from the other side — there the instrument was *wrong* where the product was right;
+> here the instrument is *blind* to a path the product has. Both times the check that settled it was
+> the same one: run the fixture through the live path and look at what the code actually receives.
+
+GATE: `a_fragment_on_an_image_url_is_stripped_before_the_fetch_and_applied_after_it`
+(`manuk-page`, 9 rows). Three RED proofs, each on a different row: *fragment left on the path* →
+seven rows go `NO-IMAGE` while the no-fragment CONTROL holds; *spatial fragment not applied* → the
+five crop rows go 200x200 while nothing goes `NO-IMAGE` (which is what proves the two halves are
+independent); *accept a non-positive extent* → `invalid-after-valid` alone goes red.
+
+SELF-AUDIT (due every 10 ticks; last at 1051) rode along and is CLEAN but for one item, which is
+**harness-owned and therefore untouched**: the verify wall is **994s against Part 21.2's 300s
+target** — mold/lld, cargo-nextest, workspace-hack and risk-based gate scheduling are the named
+remedies and all four live in `scripts/`. Recorded per PART VII rather than worked around; the
+observer owns it. Everything else the audit checks — 49 process defects each naming a closing
+MECHANISM, the 392-cluster registry, every G_* gate declaring how to break it, the 1044-row pattern
+ledger, journal continuity — is green.
+
+RATCHET: manuk-page gate added, manuk-layout 144/144 unmoved. No regression: the only behaviour
+change on a fragmentless URL is none — `plain` is byte-identical in every run above.
+
+PERF: one `split('#')` per image fetch, and one fragment parse per SVG decode.
+
+RESIDUE, measured and named rather than implied:
+1. **The reftest runner does not fetch background images** — that is what blocks the 19 `#xywh=`
+   reftests, and it is the next tick. `manuk-wpt` is agent territory; `scripts/` is not.
+2. `svg/linking`'s other 4 failures are `href` vs `xlink:href` precedence and `<view>`/`svgView()`
+   viewBox override — a different mechanism, untouched here.
+3. `svg`'s remaining clusters are largely **resvg/usvg** territory (`non-scaling-stroke` is 8 of the
+   18 `painting` failures), not ours; recorded so a later tick does not mistake them for engine work.
+
+WIKI: `docs/wiki/media-pipeline.md` — "A fragment on an image URL meant no image at all (t1061)".
+
 ## Tick 1060 — the receipt that could not go red, and the two places §9.4.3 had to be applied twice (2026-08-09)
 
 TICK SHAPE: primitive — a 20-row battery on CSS 2.1 **§9.4.3**, `position: relative`'s visual offset.

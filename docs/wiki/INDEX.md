@@ -1446,6 +1446,9 @@
   - L1852 · Tick 370 — the mixer: two playing elements, both audible
   - L1867 · Tick 375 — the mixer resamples
   - L1877 · Tick 369 — WAV rung
+  - L1884 · A fragment on an image URL meant NO IMAGE AT ALL (t1061)
+  - L1913 · The mutation that came back green
+  - L1921 · The honest headline: the tests that aimed the tick cannot see the fix
 
 ## NETWORKING — how real sites actually load
 `docs/wiki/networking.md`
@@ -1794,4 +1797,4 @@
   - L124 · Rank mechanisms by FLIP RATE, not failing-subtest count — CSS layout is a multi-assertion slog
 
 ---
-1701 sections across 22 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+1704 sections across 22 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
