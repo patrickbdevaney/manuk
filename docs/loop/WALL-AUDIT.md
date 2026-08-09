@@ -1526,3 +1526,59 @@ being used rather than merely recorded.
 
 **NOTHING TRIMMED.** The wall's standing cost is unchanged; the delta this window was one blocked
 pre-flight caused by a marker written to the wrong file.
+
+## Audit #41 — tick 1085 (2026-08-09), wall total **312s** — and the shape is back to normal
+
+```text
+   218s  P   parity (72/72 box probes vs headless Chrome)   70%
+    46s  T   crate tests                                    15%
+    21s  G6  clickability                                    7%
+    18s  B   build                                           6%
+     6s  G1                                                  2%
+     5s  D   disk hygiene                                     2%
+     3s  F   perf floors                                      1%
+     0s  every other gate
+```
+
+**312s against #40's 1048s and #39's 944s.** Both of those were named at the time as *not a gate's
+cost* — a cold relink and a purged `target/debug` — and this reading confirms it: nothing was trimmed
+in between, and the wall fell by 736s on its own. The standing shape is **P at ~70%**, exactly as #38
+recorded at 87s total. The wall is not drifting; it is being measured on hot and cold trees and
+reported as one number.
+
+### The one real cost, and it is bought honestly
+
+`P` launches headless Chrome over the 33-file `tests/wpt/corpus/` and diffs 72 box probes. That is
+the only gate in the wall that pays for a second browser, and it is the gate that would go red for
+the class of defect this whole session was about: **t1079's per-side border colour and t1081-t1083's
+static positions are all box geometry, and `P` is the only per-tick gate that compares box geometry
+against Chrome.** Its 218s is the price of the wall having a reference engine in it at all.
+
+⚠ **Nothing trimmed, and the reason is scope rather than absence of ideas.** The four admissible
+levers the audit names — shared test binary / nextest, parallelism, caching, narrower build scope —
+all live in `scripts/verify.sh`, which is **observer-owned** (PART VII). They are flagged here, not
+touched:
+
+1. `T` at 46s runs `cargo test` per crate; `cargo-nextest` shares the binary and parallelises harder.
+   The self-audit has named this before and it is still not wired.
+2. `P` re-runs `cargo run -q -p manuk-wpt --release` twice on a miss (`_parity_run` is called at
+   verify.sh:229 and again at :238). On a warm tree the second run is nearly free; on a cold one it
+   is a second relink. Whether the retry is load-bearing is an observer question.
+
+### The agent-side lever, priced for THIS window (ticks 1065-1085)
+
+The lever the agent actually owns is *how many release relinks a tick pays that no gate asked for*.
+This window, seven capability ticks were landed and the count is honest:
+
+- **t1078, t1079** each paid one relink of `manuk-wpt --release` to run the CSS 2.1 reftest suite.
+  Both were load-bearing: the suite is the measurement, and t1079's 3-test loss could not have been
+  proven vacuous without it.
+- **t1080** paid a 90-minute sweep. Owed since t1049 and demanded by check #100.
+- **t1081-t1084** each paid one relink. t1084's was unavoidable (a probe field change).
+- ⚠ **t1080's six SOLO re-runs cost ~8 minutes and changed the tick's verdict** — two of the three
+  biggest down-movers did not reproduce, so `-1 site` became *"the instrument cannot resolve a change
+  of this size"*. That is the cheapest minute-per-conclusion spent in the window and is the opposite
+  of waste.
+
+**NOTHING TRIMMED.** The wall is lean at 312s; the two levers that would make it leaner are in
+observer territory and are flagged above rather than taken.

@@ -46371,6 +46371,71 @@ PERF: none — one UA rule and one narrowed branch in a cascade that already ran
 WIKI: `docs/wiki/css-cascade.md` — where Chrome draws the form-control `box-sizing` line, and why a
 layout-crate test cannot see it.
 
+## Tick 1085 — my own steer was wrong one tick after I wrote it, because M1 is a CONJUNCTION (2026-08-09)
+
+TICK SHAPE: measurement — re-rank the `reading_order` conjunct against the bar it is supposed to
+cross. No crate touched; the artefact is this entry and the corrected steer.
+
+t1084 ended: *"take `payb.jp` (264 inversions) or `www.taphouse23.com` (123) — rank the conjunct by
+its MASS, not by how legible one container is."* That is wrong, and the arithmetic that says so was
+already in the row file I had open:
+
+```text
+   site                 shape      ro   h_ovf   overlap   crosses M1 if reading_order is fixed?
+   m.youm7.com          0.850      24       0         1   YES
+   rockstaractu.com     0.885      13       0         0   YES (but 7 of its 13 are already partitioned)
+   payb.jp              0.658     264       0         0   NO  — fails the SHAPE conjunct
+   www.taphouse23.com   0.170     125      75       110   NO  — fails shape, h-overflow AND overlap
+```
+
+⚠⚠⚠ **M1 IS `shape ≥ 0.75` **AND** jarring-clean, so mass on a site that fails shape anyway cannot
+cross it.** `payb.jp` could have its 264 inversions taken to zero and M1 would not move by one site.
+Ranking a conjunct by its raw count ranks the sites where the engine is *most* broken — which is
+exactly where the other conjunct is broken too. **The ranking that matters is mass among the sites
+that would CROSS**, and by that ranking the whole live subject is two sites.
+
+This is t1049's own finding — *"M1 is a CONJUNCTION and the loop has been buying the conjunct that is
+no longer binding"* — committed by me **one tick after writing the steer that contradicts it**, with
+the numbers in front of me. Recorded at length because the failure is not ignorance of the rule; it
+is that a big number is more legible than a conjunction, and legibility wins unless the arithmetic is
+written down.
+
+**THE SUBJECT, then, and the lead it comes with.** `m.youm7.com`: shape 0.850, 24 inversions, 0
+mixed-flow, **17 of 24 in ONE 25-sibling group** — a `<footer>/div/div` of `<a>` links. And:
+
+```text
+   m.youm7.com   <html dir="rtl">
+```
+
+**It is an RTL page, and the failing container is a row of inline links.** UAX #9 rule L2 reorders a
+line's inline BOXES, which this engine implements (t766) — but `refine_inline_static_positions` is
+skipped outright under an RTL base direction (`if bcs.direction != Rtl` at its call site), and t1082
+and t1083 both added terms *inside* the function that RTL therefore never sees. That is a named,
+testable lead and not a fix: whether the 17 inversions are the reorder itself or the skipped
+refinement is unmeasured, and guessing between them is what the last four ticks kept doing.
+
+WALL-TIME AUDIT (due this tick, #41): **wall total 312s**, against #40's 1048s and #39's 944s — both
+of which were named at the time as a cold relink and a purged `target/debug` rather than a gate's
+cost, and this reading confirms it: nothing was trimmed in between and the wall fell 736s on its own.
+The standing shape is `P` (parity vs headless Chrome) at **70%**, exactly as #38 recorded at 87s
+total, and it is the only per-tick gate with a reference engine in it — which is precisely the gate
+that would have gone red for t1079's border colours and t1081-t1083's static positions. **Nothing
+trimmed**: the four admissible levers all live in `scripts/verify.sh`, which is observer-owned, and
+are flagged in `WALL-AUDIT.md` rather than touched. The agent-side lever is priced for the whole
+window there too — and t1080's six solo re-runs (~8 minutes) are recorded as the window's best
+minutes, because they changed that tick's verdict.
+
+RATCHET: no crate touched; every banked invariant re-banked unchanged.
+
+GATE: none — a re-ranking gates nothing. Its falsifiable content is the table above, recomputed from
+`SWEEP-t1080-rows.tsv` by anyone in one command.
+
+PERF: none.
+
+WIKI: none — the correction belongs to the loop's own ranking discipline, and the mechanism it points
+at is unmeasured; writing it up now would be the frequency-claim error check #96 named.
+[no-pattern]
+
 ## Tick 1084 — the hypothesis was confirmed on its own site and refuted as an explanation (2026-08-09)
 
 TICK SHAPE: measurement — add `position` to the oracle probe and PARTITION `reading_order` by

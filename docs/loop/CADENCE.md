@@ -11,12 +11,12 @@
 
 | | value | over |
 |---|---|---|
-| ticks landed | **793** | ticks 1–1084 |
-| median tick cycle | **27m** | 792 intervals |
+| ticks landed | **794** | ticks 1–1085 |
+| median tick cycle | **27m** | 793 intervals |
 | median, last 10 | **29m** | 10 intervals |
 | fastest / slowest | 5s / 5.4d | |
-| **ticks per hour** | **1.12** | 708.3h elapsed |
-| median verify wall | **63s** | 732 ticks |
+| **ticks per hour** | **1.12** | 708.6h elapsed |
+| median verify wall | **63s** | 733 ticks |
 | wall trend | 39s → 13m — getting slower ⚠️ | first 3 vs last 3 |
 
 The **cycle** is the real unit: implement → debug → verify wall → land. The wall is only part of
@@ -31,7 +31,7 @@ it, and a wall that grows taxes every future tick, so it is tracked separately f
 * **✅ rows in the capability ledger**: 144 → **547**
 * **Bar 0 — oracle hangs**: 0 of 265 sites
 
-**347 of 793 ticks** (44%) moved a
+**347 of 794 ticks** (44%) moved a
 user-visible capability. The rest were instruments, infrastructure and corrections — and the
 ledger says the corrections were not overhead: three of its top three priorities were phantoms,
 and finding that out redirected everything after it.
@@ -890,5 +890,6 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 | **1082** | 2026-08-09 16:23 | 28m | capability | 13m | +233/−36 | 432 | 81 | 56.0% · | three of the four ways to make space after a box were already right (2026-08-09) |
 | **1083** | 2026-08-09 16:51 | 28m | capability | 13m | +253/−33 | 432 | 81 | 56.0% · | the collapsed space, and a conjunct that survived three Chrome-exact fixes (2026-08-09) |
 | **1084** | 2026-08-09 17:22 | 30m | measurement | 13m | +233/−41 | 432 | 81 | 56.0% · | the hypothesis was confirmed on its own site and refuted as an explanation (2026-08-09) |
+| **1085** | 2026-08-09 17:38 | 16m | measurement | 13m | +155/−33 | 432 | 81 | 56.0% · | my own steer was wrong one tick after I wrote it, because M1 is a CONJUNCTION (2026-08-09) |
 
 *`·` after a WPT figure means **carried forward**, not measured this tick.*
