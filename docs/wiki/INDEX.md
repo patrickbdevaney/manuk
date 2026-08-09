@@ -402,6 +402,8 @@
   - L7732 · The one failure, and my fixture had it labelled backwards
   - L7744 · The fourth site that had to apply the same rule — and the second absence in two ticks
   - L7757 · ⚠⚠⚠ The gate's first version could not see the origin, and the mutation is what said so
+  - L7769 · Non-cell content inside a table is DROPPED — §17.2.1's anonymous cell was never generated (t1070)
+  - L7806 · ⚠⚠⚠ Why it is NOT built in the tick that found it
 
 ## browser-capabilities.md
 `docs/wiki/browser-capabilities.md`
@@ -1818,4 +1820,4 @@
   - L124 · Rank mechanisms by FLIP RATE, not failing-subtest count — CSS layout is a multi-assertion slog
 
 ---
-1725 sections across 22 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+1727 sections across 22 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.

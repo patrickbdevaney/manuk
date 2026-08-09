@@ -46371,6 +46371,82 @@ PERF: none — one UA rule and one narrowed branch in a cascade that already ran
 WIKI: `docs/wiki/css-cascade.md` — where Chrome draws the form-control `box-sizing` line, and why a
 layout-crate test cannot see it.
 
+## Tick 1070 — the suite ranked its own work-list, and the top cluster is a box we never generate (2026-08-09)
+
+TICK SHAPE: measurement — surface audit #47's steer #1, executed the tick after it was written:
+*"open `CSS2/tables`'s 175 failures against the t1065/t1066 tree."* No engine crate touched.
+
+⚠⚠⚠ **THE RANKING IS NOT CLOSE, AND IT COST NOTHING TO OBTAIN.**
+
+```text
+   56  table-anonymous-objects        <- CSS 2.1 §17.2.1, more than the next four combined
+   11  caption-side-applies-to
+    7  table-vertical-align-baseline
+    7  fixed-table-layout
+    5  collapsing-border-model
+```
+
+Those 56 are paint-overlay reftests — a `display:table` built from `<span>`s composited against a
+real `<table>` — so they **rank but do not localise**, which is the division of labour audit #47
+named. An 18-case geometry battery does localise, and it reads **38 of 50 rows with all twelve
+failures on ONE mechanism**:
+
+```text
+                                                     Chrome            ours
+   text directly inside a table-row            row 57.8, cell at 38.5   row 19, cell at 0
+   a <div> child of a table-row                 the div at 0, w=60      NO BOX AT ALL
+   two consecutive inlines between two cells   ONE anon cell, 3 cols    both DROPPED, 2 cols
+   an inline sibling of a cell                  wrapped, w=19.3         NO BOX AT ALL
+```
+
+**Anything inside a table or a table-row that is not a `table-cell` is discarded.** §17.2.1 says it
+must be wrapped in an anonymous table-cell, with *consecutive* such siblings sharing **one** cell.
+This is a MISSING_BOX defect — the class the burndown ranks hardest, because a dropped box displaces
+its whole subtree — and the two code sites are exact: `collect_cells` filters a row's children to
+`display == TableCell`, and `collect_table_rows`'s `_ => {}` arm carries the comment *"caption /
+column / colgroup / stray content: skipped"*.
+
+⚠⚠⚠ **IT IS NOT BUILT IN THE TICK THAT FOUND IT, AND THE REASON IS THE RATCHET RATHER THAN THE
+DIFFICULTY.** The cell machinery is `NodeId`-keyed end to end — `PlacedCell { cell: NodeId }`,
+`layout_cell(cell)`, `cell_intrinsic(cell)`, the collapsing-border grid — and an anonymous cell has
+no node. The flex/grid path solved the same problem by making **the text node itself the item**, and
+that trick works here for a *single* stray child. It does not work for the rule as written: two
+consecutive strays share **one** cell, so a one-cell-per-stray shortcut turns a 3-column row into a
+4-column one.
+
+> **THAT IS A DIFFERENT WRONG ANSWER, NOT A PARTIAL RIGHT ONE.** It would move all twelve battery
+> rows — a visible, reportable gain — while silently rewriting the column grid of every table with a
+> stray child. An unbanked regression bought with a gain is the exact trade Part 24 forbids, and the
+> fact that the gain is measurable and the regression is not is what makes it tempting.
+
+⚠ **AND IT IS THE t156 SHAPE, WHICH THIS LOOP HAS PAID FOR TWICE** — *"too big for one atomic tick;
+it needs a dedicated decomposition session"*. So this tick delivers the decomposition instead of a
+half-landed refactor: lift a `layout_node_run(&[NodeId], …)` out of `layout_children` (which already
+builds an inline formatting context from a **slice**), widen `PlacedCell.cell` to a real-node-or-run
+source carrying `block_box_style`'s anonymous-box contract (t1048), group consecutive strays in
+`collect_cells` and the table arm, and verify against the 56 reftests — **a pass/fail count the loop
+does not have to author.** Full text in `docs/wiki/box-layout.md`.
+
+⚠ **THE AUDIT'S POINT, DEMONSTRATED IN ONE TICK RATHER THAN ARGUED.** The five ticks before it each
+found their subject by authoring a fixture; this one got a ranked, weighted, already-paid-for
+work-list out of a suite that has been on disk the whole time, in under a minute — and then still
+needed a hand-authored battery to turn a rank into a mechanism. **Neither instrument replaces the
+other, and the loop was using only one of them.**
+
+RESIDUE from the same battery, filed with its number: `getBoundingClientRect` on a
+`display:table-column` returns the COLUMN's area in Chrome (120×19) and no box here. Six rows of the
+battery are negative and all six are exact — whitespace between cells generating no cell, a
+`display:none` sibling generating nothing, a stray `<div>` between two `<tr>`s in a real `<table>`,
+and a bare cell after a real row starting a second row rather than merging.
+
+RATCHET: measurement only, no engine crate touched. `manuk-layout` 149/149 unmoved. Bar 0 clean —
+`HANG/CRASH 0` across the 1,140-test `CSS2/tables` run.
+
+PERF: none — measurement only.
+
+WIKI: docs/wiki/box-layout.md — "Non-cell content inside a table is DROPPED — §17.2.1's anonymous
+cell was never generated"
+
 ## Tick 1069 — the loop hand-built an oracle for an area that already had a 1,140-test one on disk (2026-08-09)
 
 TICK SHAPE: measurement — surface audit #47 (due every 10 ticks; last at 1060), banked in

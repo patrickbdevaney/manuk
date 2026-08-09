@@ -7765,3 +7765,67 @@ pins the basis.
 This is the second tick running where a mutation that stayed green was the finding rather than a
 failed proof — t1066's control had lost its separating power to a neighbouring fix, and this one
 never had any. **Run every mutation, including the ones you expect to fail.**
+
+## Non-cell content inside a table is DROPPED — §17.2.1's anonymous cell was never generated (t1070)
+
+Surface audit #47's steer #1 was *"open `CSS2/tables`'s 175 failures against the t1065/t1066 tree"*.
+The suite ranks its own work-list, and the ranking is not close:
+
+```text
+   56  table-anonymous-objects        <- CSS 2.1 §17.2.1
+   11  caption-side-applies-to
+    7  table-vertical-align-baseline
+    7  fixed-table-layout
+    5  collapsing-border-model
+```
+
+Those 56 are paint-overlay reftests (a `display:table` of `<span>`s composited against a real
+`<table>`), so they rank but do not localise. An 18-case geometry battery against headless Chrome
+does, and it reads **38 of 50 rows** with all twelve failures on **one mechanism**:
+
+```text
+                                                     Chrome            ours
+   text directly inside a table-row            row 57.8, cell at 38.5   row 19, cell at 0
+   a <div> child of a table-row                 the div at 0, w=60      NO BOX AT ALL
+   two consecutive inlines between two cells   ONE anon cell, 3 cols    both DROPPED, 2 cols
+   an inline sibling of a cell                  wrapped, w=19.3         NO BOX AT ALL
+```
+
+**Anything inside a table or a table-row that is not a `table-cell` is discarded**, and CSS 2.1
+§17.2.1 says it must be wrapped in an **anonymous table-cell** — with *consecutive* such siblings
+sharing **one** cell. This is a MISSING_BOX defect, the class the burndown ranks hardest because a
+dropped box displaces its whole subtree.
+
+The two code sites are exact and small:
+
+```text
+   collect_cells()              filters a row's children to `display == TableCell`  → strays vanish
+   collect_table_rows()  `_ => {}`  — "caption / column / colgroup / stray content: skipped"
+```
+
+### ⚠⚠⚠ Why it is NOT built in the tick that found it
+
+The cell machinery is **`NodeId`-keyed end to end** — `PlacedCell { cell: NodeId }`, `layout_cell(cell)`,
+`cell_intrinsic(cell)`, and the collapsing-border grid all index a real DOM node — and an anonymous
+cell has none. The flex/grid path solved the same problem by making **the text node itself the item**
+(`layout_children` special-cases a text node for exactly this), and that trick works here for a
+*single* stray child. It does **not** work for the rule as written: two consecutive strays share
+**one** cell, so a one-cell-per-stray shortcut turns a 3-column row into a 4-column one.
+
+> **THAT IS A DIFFERENT WRONG ANSWER, NOT A PARTIAL RIGHT ONE, AND THE RATCHET REFUSES IT.** It would
+> move the twelve battery rows and silently rewrite the column grid of every table with a stray child
+> — an unbanked regression bought with a visible gain, which is the trade Part 24 exists to forbid.
+
+**The decomposition, so the next session starts from it rather than from here:**
+
+1. `layout_children` already builds an inline formatting context from a **slice**
+   (`collect_inline_group(&[node], …)`). Lift a `layout_node_run(&[NodeId], …)` out of it that takes
+   the run instead of a parent — the inline-only case is nearly free; the case where the run contains
+   a block-level child needs the block arm over a list too.
+2. Widen `PlacedCell.cell` to a cell SOURCE — a real node or a run — and give the run the anonymous
+   box contract already written down in `block_box_style` (t1048): **no margin, border or padding of
+   its own**.
+3. `collect_cells` and `collect_table_rows`'s `_ => {}` then group consecutive strays into one
+   source, with whitespace-only runs generating nothing (the battery's negative row, already exact).
+4. Verify against the 56 `table-anonymous-objects` reftests, which is a pass/fail count this loop did
+   not have to author.
