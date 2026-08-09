@@ -46371,6 +46371,59 @@ PERF: none — one UA rule and one narrowed branch in a cascade that already ran
 WIKI: `docs/wiki/css-cascade.md` — where Chrome draws the form-control `box-sizing` line, and why a
 layout-crate test cannot see it.
 
+## Tick 1076 — the suite re-ranked once it was honest, and three hypotheses refuted (2026-08-09)
+
+TICK SHAPE: measurement — `css/CSS2` became measurable for the first time at t1075 (a fifth of its
+files had no stylesheet before), so every ranking taken from it prior to this tick was taken over a
+partly-blank suite. Re-ranked on the honest run. No engine crate touched.
+
+```text
+   394 margin-padding-clear     353 normal-flow      230 borders       176 linebox
+   380 selectors                327 positioning      193 text          174 backgrounds
+```
+
+⚠⚠ **THE TOP CHAPTER'S SHAPE ARGUES FOR ONE SHARED CAUSE**: `margin-right` 48, `padding-left` 44,
+`padding-top` 42, `padding-bottom` 42, `padding-right` 38, `margin-bottom` 35, `margin-left` 33 —
+~280 failures, evenly spread across seven properties that share nothing but a chapter. That is the
+`*-applies-to-*` shape t1072 met, and it is the reason this tick spent itself on elimination rather
+than on a fix.
+
+⚠⚠⚠ **THREE HYPOTHESES, EACH MEASURED AND REFUTED — WHICH IS THE TICK'S PRODUCT.**
+
+1. **Invalid negative lengths are accepted.** `padding-top-001` is literally `padding-top: -1px`, and
+   t1059 had already named negative lengths as an unfixed **parser** defect for `width` — so this was
+   the strong prior. A 15-row battery is **15/15 Chrome-exact**: every `padding-*: -1px`, the
+   `padding` shorthand, a valid declaration overridden by an invalid one, `width`, `height`,
+   `min-`/`max-width`, a negative `border-width`, `-5%`, and `calc(100px - 200px)`. Refuted, and the
+   cleared construct is worth as much as the ranking.
+2. **A border-painted band and a background-painted band differ.** The tests paint a 5px blue
+   `border-top` and the reference paints a 5px blue `background` — exactly the two-paint-paths shape
+   that t1073's `_probe-b` proved fatal for CSS-vs-IMAGE. Two probes in the suite's own directory,
+   background-vs-background and **border-vs-background**, both **PASS**. Refuted — and it sharpens
+   t1073's finding rather than repeating it: the byte-exact comparison is survivable between two CSS
+   paint paths and not between a CSS path and a decoded image.
+3. **The reference's `div + div` doesn't match.** Its orange band depends on the adjacent-sibling
+   combinator. Blue then orange, both 5px, geometry exact. Refuted.
+
+And the test's own geometry is exact: `div1` at y=50 h=5, `div2` at y=55 h=5, the two bands touching,
+in both engines. **The mechanism is not identified**, and saying so is the tick — the next session
+starts from three fewer wrong turns instead of from the ranking alone.
+
+⚠ **A CLOSING JOKE AT THIS LOOP'S EXPENSE, AND A REAL LESSON.** The final probe injected a `<script>`
+containing `i<ds.length` into an `.xht` to read the reference's boxes — **a raw `<` in XHTML, which
+is a parse error, which is precisely why those files wrap their CSS in `<![CDATA[…]]>` in the first
+place.** Chrome returned nothing and the reading was discarded rather than published. Instrumenting
+XHTML needs the same escaping the document needed, and the session that fixed CDATA handling tripped
+over the reason CDATA exists.
+
+RATCHET: measurement only, no engine crate touched. `manuk-layout` 151/151 and `manuk-css` 52/52
+unmoved. Bar 0 clean.
+
+PERF: none — measurement only.
+
+WIKI: docs/wiki/box-layout.md — "The CSS 2.1 suite, re-ranked once it was honestly measured — and
+three refuted hypotheses"
+
 ## Tick 1075 — an XHTML CDATA-wrapped stylesheet was dropped entirely, found by chasing ONE regressed reftest (2026-08-09)
 
 TICK SHAPE: primitive — a CSS parser fix, arrived at from the opposite direction to every other tick

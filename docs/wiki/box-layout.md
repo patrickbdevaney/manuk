@@ -7996,3 +7996,43 @@ fix — and 6 are `table-backgrounds-bc-*` / `table-{row,header,footer}-group-00
 paint layers**: that tick reported "zero movement" because it re-ran `CSS2/backgrounds`, the directory
 its tests came from, and never re-ran `CSS2/tables`. ⚠ **A fix's population is not always the
 directory that found it.**
+
+## The CSS 2.1 suite, re-ranked once it was honestly measured — and three refuted hypotheses (t1076)
+
+t1075 made `css/CSS2` measurable for the first time (a fifth of its files had no stylesheet before).
+Re-ranked on the honest run, the remaining 3,374 failures cluster by chapter:
+
+```text
+   394 margin-padding-clear     353 normal-flow      230 borders       176 linebox
+   380 selectors                327 positioning      193 text          174 backgrounds
+```
+
+and inside the top chapter the shape is strikingly uniform — `margin-right` 48, `padding-left` 44,
+`padding-top` 42, `padding-bottom` 42, `padding-right` 38, `margin-bottom` 35, `margin-left` 33 —
+~280 failures whose evenness argues for **one shared cause**, exactly like the `*-applies-to-*`
+family t1072 met.
+
+### Three hypotheses, each measured and refuted
+
+1. **Invalid negative lengths are accepted.** `padding-top-001` is literally `padding-top: -1px`, and
+   t1059 had already named negative lengths as an unfixed parser defect for `width`. A 15-row battery
+   (`padding-*: -1px`, `padding: -5px`, a valid declaration overridden by an invalid one, `width`,
+   `height`, `min-`/`max-width`, negative `border-width`, `-5%`, `calc(100px - 200px)`) is
+   **15/15 Chrome-exact.** Refuted.
+2. **A border-painted band and a background-painted band differ.** The tests paint a 5px blue
+   `border-top`; the reference paints a 5px blue `background`. Two probes placed in the suite's own
+   directory — background-vs-background and **border-vs-background** — both **PASS**. Refuted, and
+   it is the counterpart to t1073's `_probe-b`, where the analogous pair *did* fail: the CSS-vs-image
+   difference is real and the CSS-vs-CSS one is not.
+3. **The reference's `div + div` selector doesn't match.** Its orange band depends on the
+   adjacent-sibling combinator. Measured: blue then orange, both 5px, geometry exact. Refuted.
+
+The test's own geometry is exact too — `div1` at y=50 h=5, `div2` at y=55 h=5, the two bands
+touching, in both engines. **The mechanism is not yet identified**, and the next session starts from
+three fewer wrong turns rather than from the ranking alone.
+
+⚠ **A closing joke at the loop's expense, and it is a real lesson.** The last probe injected a
+`<script>` containing `i<ds.length` into an `.xht` file to read the reference's boxes — a raw `<` in
+XHTML, which is a parse error, which is *precisely why those files wrap their CSS in `<![CDATA[…]]>`
+in the first place*. The probe returned nothing from Chrome and the reading was discarded.
+**Instrumenting XHTML requires the same escaping the document itself needed.**

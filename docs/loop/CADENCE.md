@@ -11,12 +11,12 @@
 
 | | value | over |
 |---|---|---|
-| ticks landed | **784** | ticks 1–1075 |
-| median tick cycle | **27m** | 783 intervals |
-| median, last 10 | **28m** | 10 intervals |
+| ticks landed | **785** | ticks 1–1076 |
+| median tick cycle | **27m** | 784 intervals |
+| median, last 10 | **17m** | 10 intervals |
 | fastest / slowest | 5s / 5.4d | |
-| **ticks per hour** | **1.11** | 702.4h elapsed |
-| median verify wall | **63s** | 723 ticks |
+| **ticks per hour** | **1.12** | 702.5h elapsed |
+| median verify wall | **63s** | 724 ticks |
 | wall trend | 39s → 13m — getting slower ⚠️ | first 3 vs last 3 |
 
 The **cycle** is the real unit: implement → debug → verify wall → land. The wall is only part of
@@ -31,7 +31,7 @@ it, and a wall that grows taxes every future tick, so it is tracked separately f
 * **✅ rows in the capability ledger**: 144 → **542**
 * **Bar 0 — oracle hangs**: 0 of 265 sites
 
-**342 of 784 ticks** (44%) moved a
+**342 of 785 ticks** (44%) moved a
 user-visible capability. The rest were instruments, infrastructure and corrections — and the
 ledger says the corrections were not overhead: three of its top three priorities were phantoms,
 and finding that out redirected everything after it.
@@ -881,5 +881,6 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 | **1073** | 2026-08-09 10:12 | 33m | primitive | 13m | +459/−50 | 429 | 81 | 56.0% · | the three missing paint layers, and the controlled proof that the suite cannot see them (2 |
 | **1074** | 2026-08-09 11:00 | 47m | primitive | 13m | +336/−39 | 429 | 81 | 56.0% · | a cell's `vertical-align: baseline` was `top`, and the first battery could not see its own |
 | **1075** | 2026-08-09 11:26 | 26m | primitive | 13m | +241/−34 | 429 | 81 | 56.0% · | an XHTML CDATA-wrapped stylesheet was dropped entirely, found by chasing ONE regressed ref |
+| **1076** | 2026-08-09 11:32 | 6m | measurement | 13m | +130/−33 | 429 | 81 | 56.0% · | the suite re-ranked once it was honest, and three hypotheses refuted (2026-08-09) |
 
 *`·` after a WPT figure means **carried forward**, not measured this tick.*

@@ -414,6 +414,8 @@
   - L7968 · ⚠⚠⚠ The first battery could not see its own subject, and reported 28/31
   - L7977 · The shift must be resolved BEFORE the row heights
   - L7985 · ⚠⚠⚠ A mutation stayed GREEN again, and again it was the row's fault
+  - L8000 · The CSS 2.1 suite, re-ranked once it was honestly measured — and three refuted hypotheses (t1076)
+  - L8015 · Three hypotheses, each measured and refuted
 
 ## browser-capabilities.md
 `docs/wiki/browser-capabilities.md`
@@ -1833,4 +1835,4 @@
   - L124 · Rank mechanisms by FLIP RATE, not failing-subtest count — CSS layout is a multi-assertion slog
 
 ---
-1740 sections across 22 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+1742 sections across 22 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
