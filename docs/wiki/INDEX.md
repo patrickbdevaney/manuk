@@ -369,6 +369,8 @@
   - L7151 · A float inside an inline is placed by the CONTAINING BLOCK — and the gate that decides was written twice (t1051)
   - L7177 · ⚠⚠⚠ The first fix changed NOT ONE ROW, and that is the finding
   - L7190 · ⚠⚠⚠ And recovering the box was a TRADE until a third change made it not one
+  - L7206 · position: fixed is CLEAN at 19 of 20 — and the one row that failed was not a fixed bug (t1055)
+  - L7227 · ⚠⚠⚠ The one divergence was fixed's only in the sense that it was where I was looking
 
 ## browser-capabilities.md
 `docs/wiki/browser-capabilities.md`
@@ -1775,4 +1777,4 @@
   - L124 · Rank mechanisms by FLIP RATE, not failing-subtest count — CSS layout is a multi-assertion slog
 
 ---
-1682 sections across 22 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+1684 sections across 22 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.

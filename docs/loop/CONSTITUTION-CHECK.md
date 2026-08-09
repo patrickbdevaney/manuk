@@ -6970,3 +6970,145 @@ below for what that cost. **The next non-fix tick should be the sweep.**
    there is blocked on an instrument, and saying so beats grinding.
 4. **Vary the parameter you held fixed** on the remaining form-control ladder before writing any
    constant into it — Finding 3, applied to its own residue.
+
+---
+
+## Check #97 — tick 1055
+
+**Horizon:** H0 — Pareto Web Parity. **Gate:** ~83% WPT across categories · oracle-verified · daily-drivable shell · every rendered construct queryable through the semantic API.
+
+**Gate or scoreboard?** **Gate**, and unusually cleanly: eight ticks (1048–1055), five capability
+fixes all in the CSS 2.1 inline/box model, three measurements, **zero regressions traded**, and every
+fix Chrome-exact and RED-proven. Usage weights, measured not asserted: block-in-inline **30.0%** of
+the corpus, `position:fixed` **22.5%** (a floor), and the inline-margin fix lands on the sweep's **#1
+cross-site width cluster** (21 sites / 244 hits). This is I4's *usage-weighted breadth* being obeyed
+rather than cited.
+
+---
+
+### ⚠⚠⚠ FINDING 1 — VI.3's ENUMERATION RULE APPLIES TO THE SPEC, NOT ONLY TO THE REFERENCE, AND THE FIRST THING IT PRODUCED WAS A NEGATIVE
+
+VI.3 already carries the rule in its own words, promoted by check #94: **"EVERY PART OF THE PLATFORM
+THE REFERENCE CAN BE ASKED TO ENUMERATE SHOULD BE ENUMERATED ONCE."** It was written about Chrome's
+UA stylesheet — a surface the *reference* recites. Surface audit #45 (t1050) found the rule's blind
+spot by running the outside-in method to exhaustion: **all twenty Interop 2026 focus areas, all four
+investigations and the 2026 Baseline additions were already on the map — zero rows added** — while
+`block-in-inline`, 30% of the corpus and six defects deep, had **no row at all** until t1048 put one
+there *after* the bug was found.
+
+> **The world publishes lists of FEATURES. Nobody publishes a list of LAYOUT PRIMITIVES — so the CSS
+> 2.1 box model's interior is the one region the map could only RECORD, never RANK.** And that is a
+> false constraint, because **§9 and §10 are themselves a numbered list.** The enumeration rule's
+> subject is not "the reference" — it is "any authority that can recite its own surface", and the
+> SPEC is one.
+
+t1054 spent one tick, no build, on 32 primitives: **six were not named anywhere**, and **three of the
+six are the plain rule under an exception the map already gates** — margin collapse-*through* gated
+21/21 while "where does a block's auto height end" had no row; the abspos WIDTH half gated while the
+HEIGHT half (§10.6.4) is quoted *inside an existing receipt*, so the code knew a rule the map could
+not carry a verdict about. **The loop has been filing exceptions and skipping rules**, which is what
+a reactive map produces.
+
+**And the method paid for itself in one tick.** t1055 took the highest-usage of the six unknowns and
+the answer was **`position: fixed` is CLEAN, 19 of 20** — including all five grouping-property
+exception rows and a `transform:none` control. That is the cheapest possible outcome and it is the
+one audit #45 predicted: *"absence-from-the-map and absence-from-the-engine are different facts that
+have been indistinguishable."* **A cleared primitive is a result, and `unknown → measured` is the
+ratchet's own banked invariant.**
+
+**Recommendation, binding on the loop:** finish the §8/§9/§10 enumeration's five remaining unknowns
+before opening a new area, and extend the same treatment to CSS Display L3 and CSS Position L3. Rank
+inside a complete frame; a ranking inside the wrong frame is confident and wrong (VI.3 §2).
+
+---
+
+### ⚠⚠⚠ FINDING 2 — THE WINDOW'S DOMINANT FAILURE MODE WAS ONE SHAPE, IT APPEARED THREE TIMES IN EIGHT TICKS, AND A CONTROL ROW CAUGHT IT EVERY TIME
+
+Not three unrelated near-misses — one mechanism:
+
+```text
+  t1051  a fix that provably works and changes NOT ONE ROW      -> the DISPATCH is the bug, one
+         level up, and it was a GATE not a handler, so grepping
+         the handler (11 call sites, all read) could not find it
+  t1053  h_overflow's #1 site by COUNT (11 hits) is not a       -> a count ranks where to LOOK; it
+         width bug at all — it reports `right 1000000`             never says what the work IS
+  t1055  the divergence found while measuring `position:fixed`  -> `absolute` fails identically;
+         is not a `fixed` defect                                   two `left:0` controls proved it
+```
+
+**In every case the discriminator was a row that was not the row that made me look**, and in t1055 the
+cost of omitting it was concrete and nameable: the fix ships with a gate asserting `fixed`, and the
+far commoner `absolute` half goes on failing beside a green gate naming the wrong subject — **t1007's
+"a gate can PIN the engine to a bug", arriving from the other direction.** This is the seventh
+instance the journal has recorded of this shape. It is no longer a lesson; it is the standing cost of
+ranking by symptom, and the control arm is the only thing that has ever caught it.
+
+---
+
+### ⚠⚠⚠ FINDING 3 — M1 HAS BEEN THE SAME 23 SITES FOR THREE SWEEPS, AND VI.3 ALREADY SAYS THIS IS AN OWNER DECISION
+
+t1049's clean `--jobs 2` CrUX sweep:
+
+```text
+                          t1023    t1031    t1049
+   M1                     17.6%    17.6%    17.8%     23 · 23 · 23 sites
+     shape >= 0.75        23.7%    26.7%    28.7%     31 -> 35 -> 37
+   scored / in-scope     107/131  107/131  108/129    scorability 83.7%
+```
+
+**Twenty-six ticks. The first conjunct rose 19%. M1 did not move by one site.** The conjuncts are
+*decoupling*, and of the 14 sites that clear shape and fail M1, `reading_order` binds 12.
+
+⚠ **This is not new information to the constitution — VI.3's own H0.1 row says it in the
+imperative**, and it is worth quoting back because the loop has spent this whole window on the other
+side of it: *"the M1 ceiling is 82.2–87.4% against a stated bar of 95% … no amount of engine work
+closes it … re-stating the bar against the SCORABLE denominator, or accepting that 95% means
+something other than what it says — those are owner decisions, and the loop must not grind engine
+ticks against a remaining distance that is 87% instrument."*
+
+The window's engine work is **good work on the right primitives** — that is Finding 1 — and it is
+being scored against a metric whose binding conjunct it does not touch. **Both things are true and
+the loop must stop reporting the second as a surprise.** The steer is not to abandon geometry; it is
+that `reading_order` is a **long tail of independent two-sibling inversions with no shared container**
+(t1041), so it is reached by tightening geometry generally and never by hunting one more mechanism —
+which is exactly what this window did, correctly, and should continue to do **without expecting M1 to
+move**.
+
+---
+
+### FINDING 4 — A REFUSED TRADE WAS CONVERTED RATHER THAN TAKEN, WHICH IS THE RATCHET WORKING AS DESIGNED
+
+t1051's float fix recovered twelve missing boxes and made twelve inline rects worse — twelve gained,
+twelve lost, better on the I3 click point and worse on shape. **Ambiguous is precisely the case the
+ratchet exists for, and the answer was not to adjudicate it**: t1043's corollary (*"a correctly-refused
+trade is an unfinished fix, and its shape names the missing half"*) named the third change —
+`LayoutBox.out_of_flow`, because an out-of-flow box is not part of an inline's advance — and the
+battery went 15/27 → 27/27. **No trade was taken and none was refused; one was completed.**
+
+---
+
+### COMPLIANCE, recorded because two of these were under pressure
+
+- **PART VII held. Eight ticks, zero `scripts/` files touched** — while the verify wall ran
+  **980–1040s** against a 300s target and the t1051 self-audit failed on exactly that item. It was
+  recorded and handed to the observer. ⚠ **And the agent-side half was named rather than shrugged
+  at:** five of eight ticks ran an old-binary control, each a full release relink, and t1046 already
+  established that a control costs the NEXT wall. **They were not batched.** That is the loop's own
+  contribution to the wall and it is free to fix.
+- **THE RATCHET held.** Zero regressions traded across five engine ticks. Every apparent mover was
+  re-run solo on both binaries before being believed — including a `0.8947 → 0.0000` that has the
+  exact shape of a Bar-0 regression and was settled in four minutes (both binaries read
+  `0.000000 / cov 0.2727 / tree-divergence-1758` identically). ⚠ **And the rule was applied to the
+  favourable numbers too**, which killed t1050's own headline (`puentedemando` h_overflow 10→6; solo
+  OLD reads 6·6·6) and left the tick reporting a correct fix with an unproven corpus claim.
+- **I3 honoured explicitly.** t1050's residue — an inline's rect not containing a child inline's
+  vertical padding — was ranked as an **I3 click-point term rather than a shape one**, which is
+  check #72's finding applied at the point of filing instead of discovered two ticks later.
+- **I2 held.** No vendored dependency patched.
+
+**THE STEER, in order:** (1) finish the §8/§9/§10 enumeration's five remaining unknowns — the frame
+before the ranking. (2) Keep tightening geometry on measured-frequency primitives and **stop scoring
+it against M1**, per VI.3's own instrument ceiling. (3) Batch the old-binary controls. (4) The open
+lead with numbers: the `1000000` sentinel, whose probe is a build and not an argument.
+
+**Next check due: tick 1063.**

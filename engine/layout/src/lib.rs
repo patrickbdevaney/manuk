@@ -3777,6 +3777,36 @@ impl Ctx<'_> {
             };
             if dx != 0.0 || dy != 0.0 {
                 boxx.translate(dx, dy);
+                // ⚠⚠⚠ **THE SUBTREE'S STATIC POSITIONS MOVE WITH IT, AND THEY WERE LEFT BEHIND.**
+                //
+                // `boxx.translate` moves this box and its whole in-flow subtree; `static_pos` is a
+                // side map filled during flow and is not in `boxx`, so a `position:relative`
+                // ancestor's own offset never reached it. The containing block, by contrast, comes
+                // out of the POST-shift fragment tree — so the two were being read in **different
+                // coordinate spaces**, which is precisely the mismatch the abspos loop's own comment
+                // documents for `transform` (*"the static position is recorded during flow and is
+                // already in that space"*) and which was never true for `relative`.
+                //
+                // The effect: an out-of-flow child with an `auto` inset on one axis lands at the
+                // CONTAINING BLOCK's edge instead of where it belongs, displaced by exactly the
+                // ancestor's relative offset. Chrome-measured, a `position:relative; left:120px`
+                // container, the child's rect parent-relative:
+                //
+                // ```text
+                //                                              Chrome     before   after
+                //   <div rel left:120><abs top:5px>          dx    0     dx -120   dx 0  ✓
+                //   <div rel left:120><fixed top:200px>      dx    0     dx -120   dx 0  ✓
+                //   <div rel left:0  ><abs top:5px>          dx    0     dx    0   dx 0  ✓ CONTROL
+                //   <div rel left:0  ><fixed top:220px>      dx    0     dx    0   dx 0  ✓ CONTROL
+                // ```
+                //
+                // ⚠ **The two `left:0` rows are the controls and they are what identify the cause.**
+                // The defect was found while measuring `position: fixed`, and the obvious reading —
+                // *"fixed resolves against the viewport when it should use the static position"* —
+                // is wrong: `absolute` fails identically in the same container, and both are exact
+                // once the ancestor's offset is zero. It is not a `fixed` bug and not an `absolute`
+                // bug; it is one missing translation shared by both.
+                self.translate_static_positions(node, dx, dy);
             }
         }
 
@@ -12061,6 +12091,85 @@ mod tests {
         assert!(
             a.x >= 40.0,
             "…and the inline starts AFTER the float it no longer contains: {a:?}"
+        );
+    }
+
+    /// **G_STATIC_POS_UNDER_RELATIVE — a `position:relative` ancestor's own offset must move the
+    /// STATIC POSITIONS in its subtree, and it did not.**
+    ///
+    /// `boxx.translate` moves the box and its in-flow subtree; `static_pos` is a side map filled
+    /// during flow and is not in `boxx`. The containing block, meanwhile, comes out of the
+    /// POST-shift fragment tree — so an out-of-flow child with an `auto` inset on one axis was
+    /// resolved against a containing block in one coordinate space using a static position in
+    /// another, and landed displaced by exactly the ancestor's relative offset.
+    ///
+    /// Chrome-measured, a `position:relative; left:120px` container, the child parent-relative:
+    ///
+    /// ```text
+    ///                                          Chrome    before    after
+    ///   <div rel left:120><abs top:5px>       dx   0    dx -120    dx 0
+    ///   <div rel left:120><fixed top:200px>   dx   0    dx -120    dx 0
+    ///   <div rel left:0  ><abs top:5px>       dx   0    dx    0    dx 0   ← CONTROL
+    ///   <div rel left:0  ><fixed top:220px>   dx   0    dx    0    dx 0   ← CONTROL
+    /// ```
+    ///
+    /// ⚠⚠⚠ **The two `left:0` rows are the controls and they are what name the cause.** This was
+    /// found while measuring `position: fixed`, and the obvious reading — *"fixed resolves against
+    /// the viewport where it should use the static position"* — is **wrong**: `absolute` fails
+    /// identically in the same container, and both are exact the moment the ancestor's offset is
+    /// zero. It is one missing translation shared by both, not a defect in either.
+    #[test]
+    fn a_relative_ancestors_offset_moves_the_static_positions_in_its_subtree() {
+        let by_id = |dom: &Dom, root: &LayoutBox, id: &str| {
+            let n = dom
+                .descendants(dom.root())
+                .find(|&n| dom.element(n).and_then(|e| e.attr("id")) == Some(id))
+                .unwrap_or_else(|| panic!("#{id} exists"));
+            root.node_rects(dom)
+                .get(&n)
+                .copied()
+                .unwrap_or_else(|| panic!("#{id} produced a box"))
+        };
+        // `top` is set and `left`/`right` are auto, so x is the STATIC position on both children.
+        let html = r#"<div id="off" style="position:relative;left:120px;width:400px;height:60px">
+             <div id="a" style="position:absolute;top:5px;width:40px;height:10px"></div>
+             <div id="f" style="position:fixed;top:200px;width:40px;height:10px"></div></div>"#;
+        let (dom, root) = layout_html(html, "", 800.0);
+        let (off, a, f) = (
+            by_id(&dom, &root, "off"),
+            by_id(&dom, &root, "a"),
+            by_id(&dom, &root, "f"),
+        );
+        assert_eq!(
+            a.x - off.x,
+            0.0,
+            "an ABSPOS child's static x follows its relatively-offset ancestor: {} vs {}",
+            a.x,
+            off.x
+        );
+        assert_eq!(
+            f.x - off.x,
+            0.0,
+            "…and so does a FIXED child's, which is the same defect and not a `fixed` one: {} vs {}",
+            f.x,
+            off.x
+        );
+
+        // ⚠ THE CONTROL — the identical markup with NO offset. It was already exact and must stay
+        // exact; a fix that translated unconditionally, or by the wrong sign, moves it.
+        let ctl = layout_html(&html.replace("left:120px", "left:0"), "", 800.0);
+        let (coff, ca, cf) = (
+            by_id(&ctl.0, &ctl.1, "off"),
+            by_id(&ctl.0, &ctl.1, "a"),
+            by_id(&ctl.0, &ctl.1, "f"),
+        );
+        assert_eq!(
+            (ca.x - coff.x, cf.x - coff.x),
+            (0.0, 0.0),
+            "with a zero offset both children were ALREADY right: abs {} fixed {} vs {}",
+            ca.x,
+            cf.x,
+            coff.x
         );
     }
 

@@ -7202,3 +7202,58 @@ edit this could not be half-applied — which is the failure mode this project h
 
 Three changes, three claims, three red mutations: restore the pure-IFC gate → red; drop the hoist →
 red; let the lift fold out-of-flow boxes back in → red.
+
+## `position: fixed` is CLEAN at 19 of 20 — and the one row that failed was not a `fixed` bug (t1055)
+
+`position: fixed` appears in the served HTML of **42 of 187 corpus pages (22.5%, a floor —
+stylesheet-only rules are invisible to that grep and t998 measured the multiplier at ~3×)** and had
+never had a geometry differential. A 20-row battery says it is **exact**, including every row that
+would have been worth a tick on its own:
+
+```text
+   the containing block is the VIEWPORT, not the positioned ancestor      ✓
+   left / right / top insets · left+right stretch · width:50% · width:100% ✓ 5 rows
+   ⚠ THE EXCEPTION EVERY SITE HITS — a grouping-property ancestor becomes the CB:
+        transform · filter · perspective · will-change · contain:paint     ✓ 5 rows
+        transform:none (the control — must NOT become the CB)              ✓
+   margin:0 auto centring between left:0 and right:0                       ✓
+   shrink-to-fit width · overflow:hidden ancestor · a 20x20 clipping box   ✓ 3 rows
+```
+
+**A cleared construct is a result**, and this one is worth more than most: the transformed-ancestor
+exception is the single most surprising thing about `position: fixed`, five of its variants are
+exact, and `transform: none` correctly does *not* trigger it.
+
+### ⚠⚠⚠ The one divergence was `fixed`'s only in the sense that it was where I was looking
+
+`<div style="position:relative;left:120px"><div style="position:fixed;top:200px">` — no `left`, so x
+is the **static position**. Chrome puts it at the container's left edge; we put it at the viewport's,
+120px out. The obvious reading is *"fixed resolves against the viewport where it should use the
+static position"*. **It is wrong.** Three discriminator rows, one variable each:
+
+```text
+                                              Chrome    before    after
+   <div rel left:120><abs   top:5px>         dx   0    dx -120    dx 0
+   <div rel left:120><fixed top:200px>       dx   0    dx -120    dx 0
+   <div rel left:0  ><abs   top:5px>         dx   0    dx    0    dx 0   ← CONTROL
+   <div rel left:0  ><fixed top:220px>       dx   0    dx    0    dx 0   ← CONTROL
+```
+
+`position: absolute` fails **identically**, and both are exact the moment the ancestor's offset is
+zero. It is neither a `fixed` defect nor an `absolute` one: **`boxx.translate` moves the box and its
+in-flow subtree, and `static_pos` is a side map that is not in `boxx`**, so a `position:relative`
+ancestor's own offset never reached it — while the containing block comes out of the POST-shift
+fragment tree. The two were being read in different coordinate spaces.
+
+That mismatch is already documented in this file for `transform` (*"the static position is recorded
+during flow and is already in that space, so the two now agree — they did not before"*). The same
+sentence was never true for `relative`, and `translate_static_positions` — the helper that fixes it,
+one call — already existed for the float path.
+
+> **THE CONSTRUCT THAT MADE YOU LOOK IS NOT THE CONSTRUCT THAT IS BROKEN, AND ONE CONTROL ROW IS THE
+> DIFFERENCE.** Without the two `left:0` rows this would have shipped as a `position: fixed` fix,
+> with a gate asserting `fixed`, and the `absolute` half — the far more common one — would have gone
+> on failing next to a green gate that named the wrong subject.
+
+23 of 23 after. RED-proven both ways: drop the translation → red; apply it with the wrong sign → the
+control goes red.

@@ -46371,6 +46371,105 @@ PERF: none — one UA rule and one narrowed branch in a cascade that already ran
 WIKI: `docs/wiki/css-cascade.md` — where Chrome draws the form-control `box-sizing` line, and why a
 layout-crate test cannot see it.
 
+## Tick 1055 — `position: fixed` is clean at 19 of 20, and the row that failed was not a `fixed` bug (2026-08-08)
+
+TICK SHAPE: primitive — a 23-row battery on `position: fixed`, taken because **t1054's own
+enumeration produced it**: §9.6.1 was one of the six CSS 2.1 primitives with no row on the map at
+all, and it is the highest-usage of the six. `position:fixed` is in the served HTML of **42 of 187
+corpus pages (22.5%)** — a floor, since stylesheet-only rules are invisible to that grep and t998
+measured the multiplier at ~3×.
+
+⚠⚠⚠ **RESULT ONE: `position: fixed` IS CLEAN, 19 of 20, AND THAT IS THE TICK'S FIRST OUTPUT.**
+
+```text
+   the containing block is the VIEWPORT, not the positioned ancestor       ✓
+   left / right / top · left+right stretch · width:50% · width:100%        ✓ 5 rows
+   ⚠ THE EXCEPTION EVERY SITE HITS — a grouping-property ancestor becomes the CB:
+        transform · filter · perspective · will-change · contain:paint      ✓ 5 rows
+        transform:none — the control, which must NOT trigger it             ✓
+   margin:0 auto centring between left:0/right:0 · shrink-to-fit width      ✓
+   an overflow:hidden ancestor · a 20x20 clipping box (must not clip)       ✓ 2 rows
+```
+
+**The enumeration's first fruit is a NEGATIVE, and it is exactly what audit #45 predicted the map was
+for.** t1054 filed §9.6.1 `unknown` precisely because *"absence-from-the-map and absence-from-the-
+engine are different facts that have been indistinguishable"*. One battery, no build, and the answer
+is: present, and Chrome-exact on the five rows of the transformed-ancestor exception that are the
+whole reason this construct is famous.
+
+⚠⚠⚠ **RESULT TWO: THE ONE DIVERGENCE WAS `fixed`'S ONLY IN THE SENSE THAT IT WAS WHERE I WAS
+LOOKING.** `<div style="position:relative;left:120px"><div style="position:fixed;top:200px">` — no
+`left`, so x is the static position. Chrome puts it at the container's edge, we put it 120px left at
+the viewport's. The obvious reading is *"fixed resolves against the viewport where it should use the
+static position"*, it is a coherent story about the construct under test, and **it is wrong.** Three
+discriminator rows, one variable each:
+
+```text
+                                          Chrome    before    after
+   <div rel left:120><abs   top:5px>     dx   0    dx -120    dx 0
+   <div rel left:120><fixed top:200px>   dx   0    dx -120    dx 0
+   <div rel left:0  ><abs   top:5px>     dx   0    dx    0    dx 0   ← CONTROL
+   <div rel left:0  ><fixed top:220px>   dx   0    dx    0    dx 0   ← CONTROL
+```
+
+`position: absolute` fails **identically**, and both are exact the moment the ancestor's offset is
+zero. **`boxx.translate` moves the box and its in-flow subtree; `static_pos` is a side map that is
+not in `boxx`**, so a `position:relative` ancestor's own offset never reached it — while the
+containing block comes out of the POST-shift fragment tree. The two were read in different coordinate
+spaces. ⚠ That mismatch is **already documented in this engine for `transform`** (*"the static
+position is recorded during flow and is already in that space, so the two now agree — they did not
+before"*); the sentence was never true for `relative`, and `translate_static_positions` — the helper
+that fixes it in one call — already existed for the float path.
+
+> **THE CONSTRUCT THAT MADE YOU LOOK IS NOT THE CONSTRUCT THAT IS BROKEN, AND ONE CONTROL ROW IS THE
+> WHOLE DIFFERENCE.** Without the two `left:0` rows this ships as a `position: fixed` fix, with a gate
+> asserting `fixed`, and the `absolute` half — far the more common — goes on failing beside a green
+> gate that names the wrong subject. That is t1007's *"a gate can PIN the engine to a bug"* arriving
+> from the other direction, and it is the **seventh** time this window the row that made me look was
+> not the row that discriminates.
+
+**23 of 23 after.**
+
+GATE: `a_relative_ancestors_offset_moves_the_static_positions_in_its_subtree` (manuk-layout) — named
+for the CAUSE, not for `fixed`, and asserting BOTH children. RED-proven both ways: drop the
+translation → red; apply it with the wrong sign → the **control** goes red.
+
+PRICED — 10 sites, both binaries, same hour. **Five byte-identical** (rockstaractu, seduniaselat,
+simplepdf, kuechenmomente, tz.de); every mover refuted:
+
+```text
+   otomoto.pl   0.7956 -> 0.7471   the session's largest single delta, -0.0485
+        OLD 0.7889 / 0.7603 / 0.7908      NEW 0.7603 / 0.7593 / 0.7880
+        Overlapping bands, coverage byte-identical (0.967652) on all six runs, and the value
+        0.760267 appears on BOTH binaries EXACTLY. The panel's two readings are outside both
+        bands at both ends — the PANEL RUN is the outlier, not the binary.
+   sports.yahoo 0.8871 -> 0.0000   already settled at t1051: three solo runs of both binaries read
+        0.000000 / cov 0.2727 / tree-divergence-1758 identically. The site.
+   sestra.cc    +0.0149            a gain, NOT banked — inside its measured [0.9151, 0.9394] span.
+```
+
+**Zero attributable regressions.**
+
+RATCHET: manuk-layout **135/135**, manuk-css 32/32, manuk-paint 22/22, manuk-dom 11/11.
+
+PERF: one subtree walk over `static_pos` per relatively-offset element that actually has a non-zero
+offset — `translate_static_positions` returns immediately on `(0,0)`, so an unoffset
+`position:relative` (the overwhelming majority, used only to establish a containing block) costs
+nothing.
+
+CONSTITUTION CHECK (cadence, due every 8; last at 1047) — banked as **check #97**, run inside this
+tick rather than deferred. Four findings: **VI.3's enumeration rule applies to the SPEC, not only to
+the reference**, and its first fruit was this tick's negative · the window's dominant failure mode was
+ONE shape three times (*the row that made you look is not the row that discriminates*), caught by a
+control arm every time · **M1 has been the same 23 sites for three sweeps** and VI.3's own H0.1 row
+already says the remaining distance is 87% instrument and an OWNER decision, so the loop must stop
+reporting it as a surprise · and t1051's refused trade was **converted rather than taken**, which is
+the ratchet working as designed. Compliance: PART VII held under a 980-1040s wall and a self-audit
+failure naming it; the ratchet held with the solo-rerun rule applied to the FAVOURABLE numbers too.
+
+WIKI: `docs/wiki/box-layout.md` — "`position: fixed` is CLEAN at 19 of 20 — and the one row that
+failed was not a `fixed` bug".
+
 ## Tick 1054 — the spec IS the enumeration, and six primitives had no row at all (2026-08-08)
 
 TICK SHAPE: measurement — surface audit #45's own steer, executed rather than filed: walk CSS 2.1
