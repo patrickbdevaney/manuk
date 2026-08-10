@@ -46371,6 +46371,116 @@ PERF: none — one UA rule and one narrowed branch in a cascade that already ran
 WIKI: `docs/wiki/css-cascade.md` — where Chrome draws the form-control `box-sizing` line, and why a
 layout-crate test cannot see it.
 
+## Tick 1091 — the re-rank on a runner that can finally see, and what the CSS 2.1 tail is MADE OF (2026-08-10)
+
+TICK SHAPE: measurement — check #101 steer #2, *"re-rank CSS 2.1 by pass rate on the FIXED runner,
+and treat every chapter number in `SURFACE-AUDIT.md` #48 and check #100 §5 as retired until
+re-read"*. Unpaid since it was written, and it is now cheap for the first time: two instrument fixes
+(t1088 bitmaps, t1090 Ahem) moved the suite 3,029 → 3,790, so **every chapter ranking the loop has
+selected with was computed on a runner blind to a third of its own corpus.**
+
+HYPOTHESIS: the ranking that comes back will not be the one #48 published, and the difference will
+be systematic rather than noisy — the chapters that moved most are exactly the ones whose numbers
+were most wrong, so the previous ranking was **anti-correlated with truth** in its top half.
+
+⚠ THE SECOND HALF, AND IT IS THE PART THAT PAYS: a pass RATE ranks chapters, and a chapter is not a
+mechanism. The same run captures every `FAIL` and `SKIP` line, so the tail can be partitioned by
+**reason** — which is the method check #101 §3 promoted (*"partition a failure set by a property of
+the source"*), pointed at the runner's own output instead of at the corpus text.
+
+RESULT. **3,790 pass · 1,843 fail · 3,553 skip — 67.3% of reftests, on 9,186 files.** Banked as
+`docs/loop/CSS2-RANK-t1091.tsv` (35 chapters, pass rate ascending) and
+`docs/loop/CSS2-FAILFAMILY-t1091.tsv` (the 1,843 failures by test-name family).
+
+⚠⚠⚠ **THE BLIND RUNNER DID NOT MERELY GET THE NUMBERS WRONG — IT PUT THE WRONG ITEM AT THE TOP OF
+THE WORK-LIST, AND THE LOOP WAS CARRYING IT AS THE NEXT ARC.** Surface audit #48's headline, still
+sitting in the loop's own steer, was *"`::first-letter` is **10.5%** of all remaining CSS 2.1
+failures and had NO map row"*. Re-derived on the fixed runner:
+
+```text
+   ::first-letter        8 of 1,843 failures =  0.4%     ← the arc that was queued
+   content + counters  198 of 1,843 failures = 10.7%     ← the arc that had no row
+```
+
+**The share was real and it was attached to the wrong subsystem.** `content:` / `::before` /
+`::after` / `counter-increment` / `counter-reset` / `content: counter()` is ONE mechanism cluster and
+it is the largest in the tail — `content` 76 · `counter*` 73 · `before-content-display` 13 ·
+`after-content-display` 13 — while `generated-content` sits at **23.7% pass, 145 failures**. Nothing
+about `::first-letter` was ever measured; it was 10.5% of a failure set that was itself two-thirds
+instrument.
+
+⚠⚠ **AND THE SAME CORRECTION LANDS ON THE OTHER CARRIED ITEM.** `margin-padding-clear` was recorded
+as *"~280, one UNIDENTIFIED shared cause, three hypotheses already refuted"*. It is now **66
+failures at 90.3% pass** — the third-best-scoring chapter in the suite. Three hypotheses were
+refuted against a number that was ~4× too large, which is why none of them explained it.
+
+THE RANKED TAIL, by failing count (the artefact has all 35 chapters and 60 families):
+
+```text
+   CHAPTERS by pass rate          FAILURE FAMILIES by count
+   visufx            2.1%  (47)   content 76 · table-anonymous-objects 57 · clip 44
+   abspos            5.9%  (16)   line-height 40 · background 40 · at-charset 35
+   box              22.2%  ( 7)   min-height 33 · margin-collapse 33 · abs-replaced-width 33
+   generated-content 23.7% (145)  floats 25 · counter-increment 24 · background-root 23
+   visudet          28.6%  (25)   abs-replaced-height 23 · text-indent 21 · max-height 21
+   tables           30.5% (169)   height 19 · letter-spacing 18 · top 17 · border-*-width 34
+   floats           31.5%  (50)
+```
+
+THE SKIP PARTITION, because 3,553 skips are not one thing:
+
+```text
+   2,831  not a reftest (no rel=match/mismatch)   correct: testharness tests, and a SKIP is a
+                                                  statement about the RUNNER — they belong to
+                                                  `manuk-wpt wpt`, a different subcommand
+     461  needs JS/testharness                    correct and honest
+     254  reference unreadable                    ← the one that looked like a lever
+       7  unreadable
+```
+
+⚠⚠⚠ **AND HERE THIS TICK CAUGHT ITSELF COMMITTING, IN ITS OWN WRITE-UP, THE EXACT ERROR IT WAS
+WRITTEN TO REPORT.** The draft of this entry said: *"187 of the first 200 sampled point at
+`../../reference/`, WPT's shared reference directory — `resolve_sibling` resolves siblings, so a
+shared reference is skipped as if it had none. Bounded, ~254, and it is the next tick."* Every word
+of the mechanism was invented from the shape of the href. Checking each of the 254 against the
+filesystem instead:
+
+```text
+   239  the reference file is genuinely ABSENT from this checkout   (`wpt/css/reference/` is
+                                                                     not there — same as `wpt/fonts/`)
+    14  the file EXISTS and the runner could not resolve it         ← the only real bug
+     1  unparsed
+```
+
+**The lever is 14, not 254 — off by 17×** — and `resolve_sibling` is innocent of the case I accused
+it of: `Path::join` handles `../..` lexically and the OS resolves it, so `../../reference/x.xht`
+would have worked *if the directory existed*. The 14 are the server-root-absolute form
+(`href="/css/CSS2/…"`), where `dir.join("/abs")` **discards the base** and looks under the
+filesystem root.
+
+⚠⚠⚠ So the lesson this tick published about t1090 fired **against this tick, one paragraph after it
+was written**: *a lever priced by COUNTING a construct is not priced until you have read what the
+construct POINTS AT.* Three consecutive ticks have now produced a false lever from a uniform reason
+string — steer #3's 1,231 stylesheets (really one absent file), and now 254 unreadable references
+(really 14). The reason string is a property of the READER, and grouping by it groups causes
+together. **The check is one `[ -f ]` per row, and it costs seconds.**
+
+⚠ Two of the three are the same underlying fact and it should be said plainly rather than
+rediscovered a fourth time: **this WPT checkout is PARTIAL.** `wpt/fonts/` and `wpt/css/reference/`
+are both absent, and between them they account for 1,640 stylesheet links and 239 skips. That is a
+provisioning fact about the corpus, not a defect in the engine or the runner.
+
+RATCHET: nothing touched. Every number here is re-measured on this hour's binary; the two it
+retires are retired by re-measurement, not by argument.
+
+GATE: none — a re-rank gates nothing. Its falsifiable content is the two banked TSVs, reproducible
+in one command.
+
+PERF: none.
+
+WIKI: `docs/wiki/conformance-and-oracles.md` — "A BLIND INSTRUMENT MIS-RANKS THE WORK-LIST, NOT JUST
+THE SCORE (t1091)" [no-pattern]
+
 ## Tick 1090 — the suite's MEASURING INSTRUMENT was not installed, and steer #3 named the wrong lever (2026-08-10)
 
 TICK SHAPE: capability — the reftest runner (`tests/wpt`, agent territory) installs the Ahem face,

@@ -3428,6 +3428,63 @@ was dropped, every element, every page. **A guard written to be forward-tolerant
 lengths instead of taking a minimum**, so it tolerated the past and was silently fatal to the future,
 and its symptom named a cause *on the page* for a defect in the reader. Now `if a.len() < 6`.
 
+## A BLIND INSTRUMENT MIS-RANKS THE WORK-LIST, NOT JUST THE SCORE (t1091)
+
+Two instrument fixes — t1088's bitmap references and t1090's Ahem face — took `css/CSS2` from 3,029
+to **3,790 passing (67.3% of 5,633 reftests)**. The interesting part is not the score. It is what the
+re-rank did to the *ordering*, because the loop selects work from the ordering.
+
+The carried headline was *"`::first-letter` is **10.5%** of all remaining CSS 2.1 failures and has no
+map row"*, and it was queued as the next arc. Re-derived on the fixed runner:
+
+```text
+   ::first-letter        8 of 1,843 failures =  0.4%     ← the arc that was queued
+   content + counters  198 of 1,843 failures = 10.7%     ← the arc that had no row
+```
+
+**The share was real and it was attached to the wrong subsystem.** A blind instrument does not add
+noise evenly; it deletes whole classes of pass, and the classes it deletes are correlated with the
+mechanism, so the surviving failure set is a *biased sample* that names the wrong cause with
+confidence. `margin-padding-clear` shows the same thing at the other end: carried as *"~280, one
+unidentified shared cause, three hypotheses already refuted"*, it is now **66 failures at 90.3%
+pass**. Three hypotheses were refuted against a number ~4× too large — which is exactly why none of
+them explained it.
+
+> **Re-derive the RANKING after an instrument fix, not just the score.** A score that moves tells you
+> the fix worked. A ranking that moves tells you which of your queued ticks were selected by the
+> defect.
+
+### ⚠⚠⚠ A REASON STRING IS A PROPERTY OF THE READER — grouping by it groups CAUSES together
+
+Skips partition by the runner's own reason strings, and one group looked like the next lever:
+
+```text
+   2,831  not a reftest (no rel=match/mismatch)   correct — testharness tests, a DIFFERENT runner
+     461  needs JS/testharness                    correct and honest
+     254  reference unreadable                    ← "bounded, ~254, the next tick"
+```
+
+That reading was written down and it was wrong. Checking each of the 254 against the filesystem
+rather than inferring the mechanism from the shape of the `href`:
+
+```text
+   239  the reference is genuinely ABSENT from this checkout  (`wpt/css/reference/` is not there)
+    14  the file EXISTS and the runner could not resolve it   ← the only real bug
+```
+
+**The lever is 14, not 254 — off by 17×.** And the accused code was innocent: `Path::join` handles
+`../..` lexically, so `../../reference/x.xht` resolves fine *when the directory exists*. The 14 are
+the server-root-absolute form, `href="/css/CSS2/…"`, where `dir.join("/abs")` discards the base.
+
+This is the **third consecutive** false lever produced by counting rows that share a reason string —
+1,231 external stylesheets (really one absent file), 254 unreadable references (really 14). Both
+collapse into one provisioning fact: **the WPT checkout is PARTIAL** — `wpt/fonts/` and
+`wpt/css/reference/` are both missing, and between them they explain 1,640 stylesheet links and 239
+skips. Neither is a defect in the engine or the runner.
+
+> **One `[ -f ]` per row, before the row becomes a plan.** A uniform reason string is evidence that
+> one *reader* took one branch — never that one *cause* was present.
+
 ## AHEM IS THE SUITE'S RULER — 1,090 CSS 2.1 reftests (17.4%) measure with a font that was not installed (t1090)
 
 A CSS 2.1 test does not compare two renderings of prose. It lays text out in **Ahem** — a face whose

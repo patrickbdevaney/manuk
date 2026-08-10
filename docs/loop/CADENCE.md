@@ -11,12 +11,12 @@
 
 | | value | over |
 |---|---|---|
-| ticks landed | **798** | ticks 1–1090 |
-| median tick cycle | **27m** | 797 intervals |
-| median, last 10 | **52m** | 10 intervals |
+| ticks landed | **799** | ticks 1–1091 |
+| median tick cycle | **27m** | 798 intervals |
+| median, last 10 | **39m** | 10 intervals |
 | fastest / slowest | 5s / 5.4d | |
-| **ticks per hour** | **1.12** | 714.0h elapsed |
-| median verify wall | **63s** | 737 ticks |
+| **ticks per hour** | **1.12** | 714.4h elapsed |
+| median verify wall | **63s** | 738 ticks |
 | wall trend | 39s → 13m — getting slower ⚠️ | first 3 vs last 3 |
 
 The **cycle** is the real unit: implement → debug → verify wall → land. The wall is only part of
@@ -31,7 +31,7 @@ it, and a wall that grows taxes every future tick, so it is tracked separately f
 * **✅ rows in the capability ledger**: 144 → **549**
 * **Bar 0 — oracle hangs**: 0 of 265 sites
 
-**349 of 798 ticks** (44%) moved a
+**349 of 799 ticks** (44%) moved a
 user-visible capability. The rest were instruments, infrastructure and corrections — and the
 ledger says the corrections were not overhead: three of its top three priorities were phantoms,
 and finding that out redirected everything after it.
@@ -895,5 +895,6 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 | **1088** | 2026-08-09 20:39 | 55m | measurement | 13m | +475/−42 | 434 | 81 | 56.0% · | a reference is a DOCUMENT, and 1,230 CSS 2.1 reftests were unpassable by construction (202 |
 | **1089** | 2026-08-09 22:32 | 1.9h | measurement | 13m | +395/−33 | 434 | 81 | 56.0% · | every COUNT held or rose and three of four headline percentages FELL (2026-08-10) |
 | **1090** | 2026-08-09 23:02 | 30m | capability | 13m | +327/−5 | 434 | 81 | 56.0% · | the suite's MEASURING INSTRUMENT was not installed, and steer #3 named the wrong lever (20 |
+| **1091** | 2026-08-09 23:25 | 23m | measurement | 13m | +276/−10 | 434 | 81 | 56.0% · | the re-rank on a runner that can finally see, and what the CSS 2.1 tail is MADE OF (2026-0 |
 
 *`·` after a WPT figure means **carried forward**, not measured this tick.*
