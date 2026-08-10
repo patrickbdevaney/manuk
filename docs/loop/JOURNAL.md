@@ -46371,6 +46371,126 @@ PERF: none — one UA rule and one narrowed branch in a cascade that already ran
 WIKI: `docs/wiki/css-cascade.md` — where Chrome draws the form-control `box-sizing` line, and why a
 layout-crate test cannot see it.
 
+## Tick 1090 — the suite's MEASURING INSTRUMENT was not installed, and steer #3 named the wrong lever (2026-08-10)
+
+TICK SHAPE: capability — the reftest runner (`tests/wpt`, agent territory) installs the Ahem face,
+which is what the CSS 2.1 suite measures WITH.
+
+HYPOTHESIS, and it starts by refuting the steer that sent me here. Check #101 steer #3 said *"the
+reftest runner still fetches no external stylesheets — cheap to price the same way"*, and surface
+audit #49 priced it at **1,231 of 6,263 refs (19.7%), the next lever, the same size as the one just
+fixed**. Pricing it a third way — by what the links POINT AT rather than by how many there are —
+says the steer would have moved ZERO:
+
+```text
+   1,707 CSS2 files carry rel="stylesheet"
+   1,640 of them (96%) point at ONE file:  /fonts/ahem.css
+   …and ~/wpt/fonts/ DOES NOT EXIST on this checkout, so there is nothing to fetch.
+```
+
+⚠⚠⚠ **THE LEVER IS NOT THE STYLESHEET, IT IS THE FONT.** `/fonts/ahem.css` is a two-line
+`@font-face` for **Ahem** — the CSS test suite's own measuring instrument, a face whose every glyph
+is exactly 1em × 1em with an 0.8em ascent, so a test can assert a pixel geometry instead of
+comparing two renderings of prose. `fc-list | grep -i ahem` is EMPTY on this box. The suite's own
+declaration of the dependency is a `<meta name="flags" content="ahem">`, which partitions the corpus
+without opening a single file:
+
+```text
+   1,406 css/CSS2 files declare  flags: ahem
+   1,090 of those are REFTESTS   = 17.4% of the suite's 6,263
+     786 …whose reference does NOT use Ahem   → unpassable by construction, one-directional
+     295 …whose reference DOES use Ahem       → both sides in the fallback face TODAY
+```
+
+⚠⚠ **THE 295 ARE t1088's `backgrounds` TRAP, NAMED IN ADVANCE THIS TIME.** Where both sides render
+in the wrong font, being wrong twice is a CANCELLATION that can read as agreement — t1088 watched
+`backgrounds` go 184 → 123 on exactly that shape and only caught it because it measured
+per-directory. So the prediction is split, and both halves are load-bearing: the Ahem-heavy
+directories must RISE, and if any directory FALLS, that fall is the 295 losing a cancellation and is
+a truer number than the one it replaces.
+
+BASELINE, banked before the fix (this binary, this hour), with the ahem-flagged count per directory:
+
+```text
+   linebox               51   (163 ahem)     margin-padding-clear  603   (126)
+   text                 161   (352)          normal-flow           465   (108)
+   tables                71   ( 94)          positioning           314   ( 63)
+   borders              349   ( 54)          bidi-text              17   ( 54)
+   css1                  46   (103)          floats-clear           79   ( 27)
+   CONTROLS — near-zero ahem:  floats 23 (0)   box-display 60 (4)   backgrounds 220 (10)
+```
+
+The controls are the falsifier: a font that is genuinely the suite's ruler moves the ruler-using
+directories and leaves `floats` alone. If `floats` moves, the fix is doing something else.
+
+THE FIX is one call in `run_reftests`: decode the repo's 1,624-byte `Ahem.woff2` fixture — already
+vendored for `manuk-page`'s webfont gates — and `register_font` it, which enters it in `fontdb`
+under its own internal family name exactly as `fc-cache` would have. **Scoped to the reftest runner
+on purpose; a test font must never reach a real page, so it is not in `FontContext::new`.**
+
+RESULT — **all 41 measurable `css/CSS2` directories, old binary and new, same hour, per-TEST state
+diff rather than net deltas** (banked: `docs/loop/CSS2-AHEM-t1090.tsv`):
+
+```text
+   TOTAL          3,458 → 3,790      +336 GAINED, 4 LOST
+   text            161 → 252  +91    linebox        51 → 117  +66
+   css1             46 →  88  +42    bidi-text      17 →  58  +41
+   fonts            85 → 111  +28    normal-flow   465 → 479  +16 (2 lost)
+   floats-clear     79 →  94  +15    positioning   314 → 329  +15
+   margin-pad-clear 603 → 611  +8    ui             37 →  42   +5
+   CONTROLS, near-zero ahem:  floats +0 · backgrounds +0 · selectors +0 · lists +0 · zindex +0
+```
+
+⚠⚠ **`borders` HAS 54 AHEM-FLAGGED REFTESTS AND MOVED BY ZERO — AND THAT IS NOT A CANCELLATION.**
+Net-zero on a directory with that many flagged files is the exact shape t1088 got burned by, so it
+was diffed per-test rather than believed: **0 gained, 0 lost, and the same 36 of its 54 flagged
+tests pass on both binaries.** A border drawn round a box does not depend on the metrics of the text
+inside it; the flag is declared and the geometry under test is font-independent. A net delta could
+not have said that — only the state diff could.
+
+⚠⚠⚠ **THE FOUR LOSSES ARE THE CANCELLATION FIRING, AND EACH ONE NAMES A REAL DEFECT THE FALLBACK
+FACE WAS HIDING.** Not one is a regression; all four are tests that were passing by *not performing
+the behaviour they test*, and both mechanisms are now on the board:
+
+```text
+  normal-flow/min-height-104, -106   `overflow:auto; width:200px; font:100px/1 Ahem` on "XXX".
+      In the fallback face XXX is ~167px — UNDER 200, so nothing overflowed, no scrollbar was
+      needed, and the red box was covered. In Ahem it is EXACTLY 300px, the test finally asks its
+      question, and we do not subtract the horizontal scrollbar's height from the containing
+      block.  → the honest failure of a test that had never run.
+
+  fonts/font-family-013, fonts-013   `font-family: "Ahem", "Arial"` over `Ţ ę ş ţ` — characters
+      chosen BECAUSE Ahem does not contain them. The assertion is PER-CHARACTER FALLBACK: it must
+      look identical to plain Arial. With no Ahem installed the first family was skipped whole and
+      it passed for free. With Ahem installed we select Ahem and do not fall through per glyph.
+```
+
+⚠⚠⚠ **AND THE STEER THAT SENT ME HERE WOULD HAVE MOVED ZERO.** Steer #3 and surface audit #49 both
+priced *"external stylesheets, 1,231 refs, 19.7%, the next lever, the same size as the one just
+fixed"* — and the size was right while the mechanism was wrong. 96% of those links are one URL,
+`/fonts/ahem.css`, and **`wpt/fonts/` is not in this checkout**, so a runner that fetched external
+stylesheets perfectly would have fetched a 404 and the tick would have read as a refuted hypothesis.
+The general form, which is the part worth keeping: **a lever priced by COUNTING the construct is not
+priced until you have read what the construct POINTS AT.** t1088 counted `<img>` and was right
+because the PNGs were on disk; #49 counted `<link>` and was wrong for want of one `ls`.
+
+RATCHET: no engine crate touched — the change is `tests/wpt`, the instrument. Every one of the 41
+directories is at or above its previous value on the banked net, and the four individual losses are
+each shown to be an accidental pass, named, and carried forward as work. `cargo test -p manuk-wpt`
+100/100.
+
+GATE: **G_REFTEST_INSTALLS_AHEM** — a mini-suite written to disk in the CSS 2.1 house style
+(`font: 100px/1 Ahem` on `X` must paint the solid 100×100 em box its reference draws with
+`background-color`) and run through `run_reftests` itself, because the defect being gated is a
+MISSING CALL and a gate that does not exercise the call site cannot see it. RED-proven by deleting
+`install_ahem(fonts)` from `run_reftests`: `0 passed, 1 failed`. On the fallback face the same
+document inks ~3% of that box.
+
+PERF: none — one 1,624-byte decode per reftest RUN, not per file.
+
+WIKI: `docs/wiki/conformance-and-oracles.md` — "AHEM IS THE SUITE'S RULER — 1,090 CSS 2.1 reftests
+(17.4%) measure with a font that was not installed (t1090)"
+
 ## Tick 1089 — every COUNT held or rose and three of four headline percentages FELL (2026-08-10)
 
 TICK SHAPE: measurement — the sweep check #101 made binding (steer #1) plus surface audit #49 (due).

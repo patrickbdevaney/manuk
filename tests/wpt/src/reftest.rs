@@ -50,8 +50,61 @@ pub fn render_page_rgba(html: &str, url: &str, fonts: &FontContext, w: u32, h: u
         .to_vec()
 }
 
+/// The WPT Ahem face, WOFF2-compressed — the same 1,624-byte fixture `manuk-page`'s webfont gates
+/// serve over HTTP. See [`install_ahem`] for why a reftest run cannot mean anything without it.
+const AHEM_WOFF2: &[u8] = include_bytes!(concat!(
+    env!("CARGO_MANIFEST_DIR"),
+    "/../../engine/text/tests/fixtures/Ahem.woff2"
+));
+
+/// ⚠⚠⚠ **AHEM IS THE SUITE'S RULER, AND IT WAS NOT INSTALLED.**
+///
+/// A CSS 2.1 test does not compare two renderings of prose — it lays text out in **Ahem**, a face
+/// whose every glyph is exactly `1em × 1em` with an `0.8em` ascent and `0.2em` descent, so a line
+/// box's geometry becomes an arithmetic fact the reference can draw with a `background-color`
+/// block. `linebox/line-height-102.xht` is the house style entire: `font: 20px/1 Ahem`,
+/// `width: 1em`, and *"the 2 vertical black stripes have the same height"*.
+///
+/// Substitute any other face and the test measures that face's metrics instead, so it can only
+/// fail. The suite declares the dependency itself — `<meta name="flags" content="ahem">` — and:
+///
+/// ```text
+///   1,406 css/CSS2 files declare  flags: ahem
+///   1,090 of those are REFTESTS   = 17.4% of the suite's 6,263
+///     786 …whose reference does NOT use Ahem   → unpassable by construction
+///     295 …whose reference DOES use Ahem       → both sides wrong TODAY (see below)
+/// ```
+///
+/// ⚠⚠ **THE 295 ARE t1088's `backgrounds` TRAP.** Where the reference uses Ahem too, both sides
+/// rendering in the fallback face is a *cancellation* that can read as agreement, and installing
+/// the ruler can take such a test from an accidental pass to an honest fail. That is a truer
+/// number, not a regression — but it is only visible if the run is read per-directory, which is
+/// why the tick that added this banked all twelve.
+///
+/// ⚠⚠⚠ **AND IT IS NOT A MISSING `@font-face` FETCH.** 1,640 of the suite's 1,707
+/// `rel="stylesheet"` links point at `/fonts/ahem.css`, so *"the runner fetches no external
+/// stylesheets"* looks like the mechanism — and it is not, because **`wpt/fonts/` is not in this
+/// checkout at all**. There is nothing at that URL to fetch. WPT's own runner requirement is that
+/// **Ahem be installed on the host**, and [`FontContext::register_font`] is that: the face enters
+/// `fontdb` under its own internal family name, exactly as `fc-cache` would have put it there.
+///
+/// Scoped to the reftest runner on purpose. A test font must never reach a real page, so this is
+/// **not** in `FontContext::new`.
+fn install_ahem(fonts: &FontContext) {
+    match manuk_text::decode_woff2(AHEM_WOFF2) {
+        Some(sfnt) => fonts.register_font(sfnt),
+        // Loud, because every ahem-flagged test would otherwise fail for a reason the report cannot
+        // name — which is the state this function exists to end.
+        None => eprintln!(
+            "⚠ Ahem.woff2 did not decode — every `flags: ahem` test (17.4% of css/CSS2) will \
+             measure the fallback face and fail"
+        ),
+    }
+}
+
 /// Run every reftest under `wpt_dir/subdir`, returning a [`Report`].
 pub fn run_reftests(wpt_dir: &Path, subdir: &str, fonts: &FontContext) -> Report {
+    install_ahem(fonts);
     let mut report = Report::default();
     let root = wpt_dir.join(subdir);
     let mut files = Vec::new();
@@ -311,6 +364,54 @@ mod tests {
             at(10, 30),
             (0, 0, 255),
             "…and an `<img>`, which is how 1,230 CSS 2.1 references draw their expected result"
+        );
+    }
+
+    /// # G_REFTEST_INSTALLS_AHEM — the suite's RULER, in the suite's own house style
+    ///
+    /// A CSS 2.1 test states its expected geometry by laying text out in **Ahem**, whose every
+    /// glyph is exactly `1em × 1em`, and drawing the same rectangle in the reference with a
+    /// `background-color`. This is that pattern in miniature: `font: 100px/1 Ahem` and the letter
+    /// `X` must paint **a solid 100×100 square**, byte-identical to a reference `<div>` of that
+    /// size and colour. No other face can land there by accident — measured on the fallback, the
+    /// same document inks about 3% of that box.
+    ///
+    /// It runs through [`run_reftests`] rather than [`render`] on purpose: the defect being gated
+    /// is a **missing call**, so the gate has to exercise the call site. **To watch it go RED:
+    /// delete `install_ahem(fonts)` from [`run_reftests`]** — the `X` renders in the fallback face
+    /// and the mini-suite reports `0 passed, 1 failed`.
+    ///
+    /// **1,090 of `css/CSS2`'s 6,263 reftests (17.4%) declare `flags: ahem`**, and `fc-list` has no
+    /// Ahem on this host.
+    #[test]
+    fn a_reftest_run_installs_the_ahem_face_the_suite_measures_with() {
+        let root = std::env::temp_dir().join("manuk-reftest-ahem");
+        let suite = root.join("mini");
+        let _ = std::fs::remove_dir_all(&root);
+        std::fs::create_dir_all(&suite).expect("temp suite dir");
+        std::fs::write(
+            suite.join("ahem-em-box.html"),
+            r#"<!doctype html><html><head><meta name="flags" content="ahem">
+<link rel="match" href="ahem-em-box-ref.html"></head>
+<body style="margin:0"><div style="font:100px/1 Ahem;color:rgb(0,0,255)">X</div></body></html>"#,
+        )
+        .expect("write test");
+        std::fs::write(
+            suite.join("ahem-em-box-ref.html"),
+            r#"<!doctype html><html><body style="margin:0">
+<div style="width:100px;height:100px;background:rgb(0,0,255)"></div></body></html>"#,
+        )
+        .expect("write reference");
+
+        let fonts = FontContext::new();
+        let report = run_reftests(&root, "mini", &fonts);
+        assert!(
+            report.all_passed(),
+            "a `font: 100px/1 Ahem` X must paint the solid 100x100 em box its reference draws with \
+             `background-color` — that equivalence IS the CSS 2.1 house style, and it is how 1,090 \
+             reftests (17.4% of css/CSS2) state their expected geometry. Without the face installed \
+             the fallback glyph inks ~3% of the box.\n{}",
+            report.summary()
         );
     }
 }

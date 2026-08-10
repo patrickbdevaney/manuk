@@ -3428,6 +3428,61 @@ was dropped, every element, every page. **A guard written to be forward-tolerant
 lengths instead of taking a minimum**, so it tolerated the past and was silently fatal to the future,
 and its symptom named a cause *on the page* for a defect in the reader. Now `if a.len() < 6`.
 
+## AHEM IS THE SUITE'S RULER — 1,090 CSS 2.1 reftests (17.4%) measure with a font that was not installed (t1090)
+
+A CSS 2.1 test does not compare two renderings of prose. It lays text out in **Ahem** — a face whose
+every glyph is exactly `1em × 1em`, with an `0.8em` ascent and `0.2em` descent — so that a line box's
+geometry becomes an *arithmetic fact*, and the reference can then draw the same rectangle with a
+`background-color`. `linebox/line-height-102.xht` is the house style entire: `font: 20px/1 Ahem`,
+`width: 1em`, *"the 2 vertical black stripes have the same height"*. Substitute any other face and the
+test measures that face's metrics instead, so it can only fail.
+
+The suite declares the dependency itself, which makes the corpus partitionable without opening a file:
+
+```text
+   1,406 css/CSS2 files declare  <meta name="flags" content="ahem">
+   1,090 of those are REFTESTS   = 17.4% of the suite's 6,263
+     786 …whose reference does NOT use Ahem   → unpassable by construction
+     295 …whose reference DOES use Ahem       → both sides in the fallback face
+```
+
+`fc-list | grep -i ahem` was **empty**. Installing the vendored `Ahem.woff2` into the reftest runner's
+`FontContext` — `register_font`, so it enters `fontdb` under its own internal family name exactly as
+`fc-cache` would have — took all 41 measurable directories from **3,458 to 3,790**: 336 gained, 4 lost.
+
+### ⚠⚠⚠ It is NOT a missing external-stylesheet fetch, and counting the construct said it was
+
+1,640 of the suite's 1,707 `rel="stylesheet"` links point at one URL, `/fonts/ahem.css`. That makes
+*"the runner fetches no external stylesheets"* look exactly like the mechanism, and it was priced at
+19.7% on that basis — **the right size and the wrong lever**, because `wpt/fonts/` is not in the
+checkout at all. A runner that fetched external stylesheets flawlessly would have fetched a 404.
+
+> **A lever priced by COUNTING a construct is not priced until you have read what the construct POINTS
+> AT.** t1088 counted `<img>` and was right because the PNGs were on disk. The follow-up counted
+> `<link>` and was wrong for want of one `ls`.
+
+WPT's own runner contract is not *"fetch this stylesheet"* — it is **"Ahem must be installed on the
+host."** Provisioning the host is the fix; the stylesheet is a symptom of it.
+
+### ⚠⚠ A net-zero directory is not evidence of anything — diff the STATE, not the count
+
+`borders` has 54 ahem-flagged reftests and moved by **exactly zero**, which is the shape t1088 got
+burned by (`backgrounds` 184 → 123, two blank renders cancelling into an apparent agreement). Diffed
+per-test instead of believed: **0 gained, 0 lost**, the same 36 of 54 passing on both binaries. A
+border drawn round a box does not depend on the metrics of the text inside it — the flag is declared
+and the geometry under test is font-independent. **No net delta can distinguish "inert" from "36 in,
+36 out."** Only the per-test state diff can, and it costs one `comm`.
+
+### The 4 losses were each an accidental pass, and each named a real defect
+
+Installing a correct instrument can take a test from passing to failing, and when it does, **the new
+number is the true one**. Both mechanisms here were invisible while the ruler was missing:
+
+| Test | Why it passed before | The defect it now names |
+|---|---|---|
+| `normal-flow/min-height-104`, `-106` | `overflow:auto; width:200px` on `XXX` — in the fallback face that string is ~167px, **under** 200, so nothing overflowed and no scrollbar was needed | In Ahem it is exactly 300px. We do not subtract the horizontal scrollbar's height from the containing block. |
+| `fonts/font-family-013`, `fonts-013` | `font-family: "Ahem", "Arial"` over `Ţ ę ş ţ` — glyphs Ahem deliberately lacks. With no Ahem, the first family was skipped whole | **Per-character fallback**: a selected face missing a glyph must fall through to the next family. We keep the face. |
+
 ## A REFERENCE IS A DOCUMENT — 1,230 CSS 2.1 reftests were unpassable by construction (t1088)
 
 The reftest runner rendered both sides with the **sync** `Page::load`, which parses and lays out and

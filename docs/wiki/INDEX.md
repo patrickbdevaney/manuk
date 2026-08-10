@@ -642,8 +642,12 @@
   - L3359 · What the battery cleared, and the one row that discriminates
   - L3377 · The reading-order conjunct is geometry after all, and one site said otherwise (t1084)
   - L3416 · The guard that was tolerant in exactly one direction
-  - L3431 · A REFERENCE IS A DOCUMENT — 1,230 CSS 2.1 reftests were unpassable by construction (t1088)
-  - L3495 · The struct field that broke this crate's tests for the SECOND time
+  - L3431 · AHEM IS THE SUITE'S RULER — 1,090 CSS 2.1 reftests (17.4%) measure with a font that was not installed (t1090)
+  - L3453 · ⚠⚠⚠ It is NOT a missing external-stylesheet fetch, and counting the construct said it was
+  - L3467 · ⚠⚠ A net-zero directory is not evidence of anything — diff the STATE, not the count
+  - L3476 · The 4 losses were each an accidental pass, and each named a real defect
+  - L3486 · A REFERENCE IS A DOCUMENT — 1,230 CSS 2.1 reftests were unpassable by construction (t1088)
+  - L3550 · The struct field that broke this crate's tests for the SECOND time
 
 ## CSS AND THE CASCADE — Stylo realities and quirks actually encountered
 `docs/wiki/css-cascade.md`
@@ -1864,4 +1868,4 @@
   - L124 · Rank mechanisms by FLIP RATE, not failing-subtest count — CSS layout is a multi-assertion slog
 
 ---
-1771 sections across 22 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+1775 sections across 22 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
