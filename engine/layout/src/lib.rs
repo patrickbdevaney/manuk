@@ -5570,9 +5570,64 @@ impl Ctx<'_> {
         self.dom.is_element(k) && is_out_of_flow_positioned(self.style_of(k))
     }
 
+    /// **The CONTENT width a DEFINITE `width` declaration fixes, if there is one.**
+    ///
+    /// ⚠⚠⚠ **A box with a definite preferred size contributes exactly that size to BOTH its
+    /// intrinsic widths** (CSS Sizing §5.1) — content gets no vote, and content wider than it simply
+    /// overflows. `min_content_width` and `max_content_width_uncached` both lay the subtree out and
+    /// measure how far the CHILDREN reach, and neither asked the box itself, so `width:24px` on a
+    /// box containing a 10px glyph reported **10** for both.
+    ///
+    /// It stays invisible until the intrinsic width is what gets USED. Two conditions, both
+    /// required — Chrome-measured, `.icon{width:24px;height:24px}`:
+    ///
+    /// ```text
+    ///                                                          Chrome   before
+    ///   inline-block > flex > span[flex:1] + i.icon             24      10   ✗
+    ///   inline-block > flex > span         + i.icon   CONTROL   24      24   ✓
+    ///   width:300px  > flex > span[flex:1] + i.icon   CONTROL   24      24   ✓
+    /// ```
+    ///
+    /// With a definite container the used width comes from taffy's own `size.width`; with a growable
+    /// sibling and a shrink-to-fit container taffy asks for the CONTRIBUTION instead, and that is
+    /// this number. *"Text grows, icon stays fixed"* in an auto-width container is every toolbar,
+    /// nav bar, search field and card header on the web, and `display:flex` is 46% of the corpus.
+    ///
+    /// Only `Dim::Px` qualifies: a PERCENTAGE against an indefinite constraint is not definite and
+    /// must fall through to the content measurement, and so must a `calc()` with a percentage term.
+    /// The result is a CONTENT width because that is what every caller consumes (`shrink_to_fit`
+    /// hands it straight to `layout_children`), so a `border-box` width has its own padding and
+    /// border removed — the same `bs_extra` term `layout_block` adds in the other direction.
+    fn definite_content_width(&self, node: NodeId) -> Option<f32> {
+        if !self.dom.is_element(node) {
+            return None;
+        }
+        let s = self.style_of(node);
+        let Dim::Px(w) = s.width else { return None };
+        let frame = if s.box_sizing == BoxSizing::BorderBox {
+            s.padding.left.resolve(0.0, 0.0)
+                + s.padding.right.resolve(0.0, 0.0)
+                + s.border_width.left
+                + s.border_width.right
+        } else {
+            0.0
+        };
+        Some((w - frame).max(0.0))
+    }
+
     fn min_content_width(&self, node: NodeId) -> f32 {
         if let Some(&c) = self.min_content_cache.borrow().get(&node) {
             return c;
+        }
+        // ⚠ **BOTH contributions, or neither.** CSS Sizing §5.1 makes a definite `width` the box's
+        // min-content contribution as well as its max-content one, and fixing only max-content
+        // changes NOTHING where it matters: `shrink_to_fit` returns
+        // `pref.min(avail.max(min_content))`, so a min-content of 9.6 pulls a 24px item straight
+        // back down the moment a growable sibling squeezes it. The `MANUK_TRACE_INTRINSIC` output
+        // is what said so — `avail=24 -> 24` (fixed) sitting next to `avail=0 -> 9.6` (not).
+        if let Some(w) = self.definite_content_width(node) {
+            self.min_content_cache.borrow_mut().insert(node, w);
+            return w;
         }
         let mut fc = FloatContext::new(0.0, 1.0);
         let _probe = IntrinsicProbe::enter(self);
@@ -5710,6 +5765,37 @@ impl Ctx<'_> {
     }
 
     fn max_content_width_uncached(&self, node: NodeId) -> f32 {
+        // ⚠⚠⚠ **A BOX WITH A DEFINITE `width` CONTRIBUTES EXACTLY THAT WIDTH — CONTENT GETS NO
+        //    VOTE** (CSS Sizing §5.1: the intrinsic contributions of a box with a definite preferred
+        //    size are that size). This function lays the subtree out and measures how far the
+        //    CHILDREN reach, and it never asked the box itself, so `width:24px` on a box containing
+        //    a 10px glyph reported **10**.
+        //
+        //    It stayed invisible because it only bites where the intrinsic width is what gets USED.
+        //    Two conditions, both required — Chrome-measured, `.icon{width:24px;height:24px}`:
+        //
+        //    ```text
+        //                                                          Chrome   before
+        //      inline-block > flex > span[flex:1] + i.icon           24      10   ✗
+        //      inline-block > flex > span         + i.icon  CONTROL  24      24   ✓
+        //      width:300px  > flex > span[flex:1] + i.icon  CONTROL  24      24   ✓
+        //    ```
+        //
+        //    With a definite container the item's used width comes from taffy's own `size.width`;
+        //    with a growable sibling and a shrink-to-fit container taffy asks for the max-content
+        //    CONTRIBUTION instead, and that is this number. *"Text grows, icon stays fixed"* inside
+        //    an auto-width container is every toolbar, nav bar, search field and card header on the
+        //    web, and `display:flex` is 46% of the burndown corpus.
+        //
+        //    Only `Dim::Px` short-circuits: a PERCENTAGE against an indefinite constraint is not
+        //    definite and must still fall through to the content measurement, and so must `calc()`
+        //    with a percentage term. The value returned is a CONTENT width, because that is what
+        //    every caller of this function consumes (`shrink_to_fit` hands it straight to
+        //    `layout_children`), so a `border-box` width has its own padding and border removed —
+        //    the same `bs_extra` term `layout_block` adds in the other direction.
+        if let Some(w) = self.definite_content_width(node) {
+            return w;
+        }
         // An anonymous flex/grid item is a text run; it is never a flex container, whatever the
         // cascade stored on the text node. Under the Stylo cascade a text node carries a CLONE of
         // its parent's style, so a bare run inside `display:flex` reads back as `flex` here — and
@@ -18916,6 +19002,94 @@ mod tests {
             (suppressed - bare).abs() < 0.01,
             "an inline with no ::after rule must be unchanged: {suppressed} vs {bare}"
         );
+    }
+
+    /// ⚠⚠⚠ **A BOX WITH A DEFINITE `width` CONTRIBUTES EXACTLY THAT WIDTH TO BOTH ITS INTRINSIC
+    /// SIZES** (CSS Sizing §5.1) — and both intrinsic functions measured the CHILDREN instead.
+    ///
+    /// Two conditions are needed to see it, which is why it survived: the container must be
+    /// shrink-to-fit (so the used width comes from a CONTRIBUTION rather than from taffy's
+    /// `size.width`) **and** a sibling must be growable (so taffy asks). Chrome-measured,
+    /// `16px/1 monospace`, `.icon{width:24px;height:24px}` containing a 10px glyph:
+    ///
+    /// ```text
+    ///                                                          Chrome   before   after
+    ///   inline-block > flex > span[flex:1]      + i.icon         24      10       24
+    ///   inline-block > flex > span[flex:1 1 auto] + i.icon       24      10       24
+    ///   inline-block > flex > span[flex-grow:1] + i.icon         24      10       24
+    ///   inline-block > flex > span              + i.icon  CTRL   24      24       24
+    ///   width:300px  > flex > span[flex:1]      + i.icon  CTRL   24      24       24
+    /// ```
+    ///
+    /// ⚠ **Fixing max-content alone changes NOTHING**, which is the trap: `shrink_to_fit` returns
+    /// `pref.min(avail.max(min_content))`, so a min-content of 9.6 pulls the 24px item straight back
+    /// down. `MANUK_TRACE_INTRINSIC` is what said so — `avail=24 -> 24` next to `avail=0 -> 9.6`.
+    ///
+    /// *"Text grows, icon stays fixed"* in an auto-width container is every toolbar, nav bar, search
+    /// field, card header and chip row on the web; `display:flex` is 46% of the burndown corpus.
+    /// `css/CSS2` 3900 → 3902, +2 / −0.
+    #[test]
+    fn a_definite_width_is_the_boxs_intrinsic_contribution() {
+        let css = r#"body{margin:0;font-size:16px;line-height:1}
+                     .ib{display:inline-block} .row{display:flex}
+                     .icon{width:24px;height:24px}
+                     .bb{width:24px;height:24px;box-sizing:border-box;padding:4px;border:2px solid}
+                     .pct{width:50%;height:24px}"#;
+        let w = |html: &str, id: &str| -> f32 {
+            let (dom, root) = layout_html(html, css, 600.0);
+            let n = dom
+                .descendants(dom.root())
+                .find(|&n| dom.element(n).and_then(|e| e.attr("id")) == Some(id))
+                .unwrap_or_else(|| panic!("#{id} must exist"));
+            root.node_rects(&dom)
+                .get(&n)
+                .unwrap_or_else(|| panic!("no rect for #{id}"))
+                .width
+        };
+        // THE THREE SUBJECT ROWS — a shrink-to-fit flex container with a growable sibling.
+        for grow in ["flex:1", "flex:1 1 auto", "flex-grow:1"] {
+            let html = format!(
+                "<div class=ib><div class=row><span style='{grow}'>alpha</span>                 <i class=icon id=t>@</i></div></div>"
+            );
+            let got = w(&html, "t");
+            assert!(
+                (got - 24.0).abs() < 0.01,
+                "a definite width must survive a growable sibling in a shrink-to-fit flex                  container ({grow}): expected 24, got {got}"
+            );
+        }
+        // CONTROL 1 — no growable sibling. Already correct before the fix, and it must stay so:
+        // this is what stops the fix from being "always report 24 for everything".
+        assert!(
+            (w(
+                "<div class=ib><div class=row><span>alpha</span><i class=icon id=t>@</i></div></div>",
+                "t"
+            ) - 24.0)
+                .abs()
+                < 0.01,
+            "control: no growable sibling"
+        );
+        // CONTROL 2 — a DEFINITE container. The used width comes from taffy's own `size.width`
+        // here, never from a contribution, so this row was right before and must stay right.
+        assert!(
+            (w(
+                "<div style='width:300px'><div class=row><span style='flex:1'>alpha</span>                 <i class=icon id=t>@</i></div></div>",
+                "t"
+            ) - 24.0)
+                .abs()
+                < 0.01,
+            "control: definite container"
+        );
+        // ⚠⚠⚠ **TWO MORE ROWS WERE WRITTEN HERE AND DELETED, BECAUSE THE MUTATION SAID THEY
+        //    TESTED NOTHING.** A `box-sizing:border-box` row (declared 24 = content 12 + padding 8 +
+        //    border 4) stayed GREEN with the frame subtraction removed, and a `width:50%` row
+        //    (a percentage must NOT short-circuit) stayed GREEN with percentages treated as
+        //    definite. Both for the same reason: `layout_html`'s `MinimalCascade` does not carry
+        //    the properties they turn on, and `shrink_to_fit`'s `pref.min(avail.max(min_content))`
+        //    squeezes the percentage row back to its glyph either way. **A row that cannot go red
+        //    is not coverage**, and leaving them would have made this gate look twice as strong as
+        //    it is. Both behaviours are real and both are asserted where they CAN be — the
+        //    border-box frame by `css/CSS2` (3900 → 3902, +2/−0 across this change) and the
+        //    percentage rule by `definite_content_width`'s own `Dim::Px`-only match.
     }
 
     /// ⚠⚠⚠ **GENERATED CONTENT IS TEXT, SO ITS WHITE SPACE COLLAPSES LIKE TEXT'S — AND AN EMPTY

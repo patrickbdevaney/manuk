@@ -3143,3 +3143,57 @@ Flex is delegated to **Taffy**, so the defect is in what we hand it: the measure
 `layout_flex_or_grid` maps `AvailableSpace::MaxContent → None` for the known width and then measures
 the item, and it is that measurement — not Taffy's distribution — that must still honour the item's
 own `width`. The next tick has the five rows above as its gate.
+
+## A definite `width` IS the box's intrinsic contribution — both of them (t1114)
+
+t1113 localised the rule; this is the fix. `min_content_width` and `max_content_width_uncached` both
+lay the subtree out and measure how far the **children** reach, and neither asked the box itself — so
+`width:24px` on a box containing a 10px glyph reported **10** for both. CSS Sizing §5.1: a box with a
+definite preferred size contributes exactly that size, and content wider than it simply overflows.
+
+```text
+                                                         Chrome   before   after
+   inline-block > flex > span[flex:1]        + i.icon      24      10       24
+   inline-block > flex > span[flex:1 1 auto] + i.icon      24      10       24
+   inline-block > flex > span[flex-grow:1]   + i.icon      24      10       24
+   inline-block > flex > span                + i.icon CTRL 24      24       24
+   width:300px  > flex > span[flex:1]        + i.icon CTRL 24      24       24
+```
+
+⚠⚠⚠ **FIXING MAX-CONTENT ALONE CHANGES NOTHING, AND THAT IS THE TRAP.** `shrink_to_fit` returns
+`pref.min(avail.max(min_content))`, so a min-content of 9.6 pulls the 24px item straight back down
+the moment a growable sibling squeezes it. Both halves, or neither — and the engine's own
+`MANUK_TRACE_INTRINSIC` is what said so, printing `avail=24 -> 24.0` (fixed) directly above
+`avail=0 -> 9.6` (not).
+
+Only `Dim::Px` qualifies. A percentage against an indefinite constraint is not definite and must fall
+through to the content measurement; so must a `calc()` with a percentage term. The value returned is
+a CONTENT width, because that is what every caller consumes — `shrink_to_fit` hands it straight to
+`layout_children` — so a `border-box` width has its own padding and border removed.
+
+### What it is worth, stated exactly
+
+```text
+   css/CSS2 per-TEST state diff   3900 → 3902   +2 GAINED, 0 LOST
+       bidi-text/direction-applies-to-015 · tables/anonymous-table-box-width-001
+   manuk-layout                   158/158
+   four-site panel, TWO interleaved runs of each binary:  every column IDENTICAL
+```
+
+**The corpus movement is zero and is reported as zero.** `www.marktplaats.nl` and `hnhbkis.edu.in`
+are still `h_overflow 2`; wikipedia and news.ycombinator are byte-identical across both binaries and
+both rounds. The fix is right by spec and moves the suite; it does not move these four sites, and
+check #104's finding — a construct's frequency is not its leverage — applies to this one too.
+
+⚠ **The residue, measured:** the flex CONTAINER's own max-content is still short by the fixed item.
+Our shrink-to-fit `inline-block > flex > span[flex:1] + i.icon` comes out **48** where Chrome says
+**72** — the items are now each exact and their sum is not. That is Taffy's contribution handling for
+a `flex-basis: 0` item, one level up from this fix, and it is the next brick.
+
+### Two more gate rows were written and deleted
+
+A `box-sizing:border-box` row and a `width:50%` negative both stayed **GREEN** under mutations that
+should have killed them: `layout_html`'s `MinimalCascade` does not carry the properties they turn on,
+and `shrink_to_fit`'s `min` squeezes the percentage row back to its glyph either way. **A row that
+cannot go red is not coverage.** Third time this session that running every mutation caught a fake
+assertion — the rule earns its keep.

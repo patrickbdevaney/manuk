@@ -1890,6 +1890,9 @@
   - L3076 · MANUK_HOVF_TRACE — the overflow is reported on the symptom, and the defect is an ancestor (t1112)
   - L3110 · A flex item loses its specified width when the container is shrink-to-fit AND a sibling grows (t1113)
   - L3136 · Reach, and where the code is
+  - L3147 · A definite width IS the box's intrinsic contribution — both of them (t1114)
+  - L3174 · What it is worth, stated exactly
+  - L3193 · Two more gate rows were written and deleted
 
 ## The wasm demo — running the engine inside someone else's browser
 `docs/wiki/wasm-demo.md`
@@ -1917,4 +1920,4 @@
   - L124 · Rank mechanisms by FLIP RATE, not failing-subtest count — CSS layout is a multi-assertion slog
 
 ---
-1824 sections across 22 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+1827 sections across 22 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.

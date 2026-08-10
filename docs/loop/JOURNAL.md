@@ -46371,6 +46371,71 @@ PERF: none — one UA rule and one narrowed branch in a cascade that already ran
 WIKI: `docs/wiki/css-cascade.md` — where Chrome draws the form-control `box-sizing` line, and why a
 layout-crate test cannot see it.
 
+## Tick 1114 — a definite width IS the box's intrinsic contribution, and one half of it fixes nothing (2026-08-10)
+
+TICK SHAPE: capability — t1113's handoff, built against the five-row gate it left. `min_content_width`
+and `max_content_width_uncached` both lay the subtree out and measure how far the **children** reach,
+and neither asked the box itself, so `width:24px` on a box containing a 10px glyph reported **10**
+for both. CSS Sizing §5.1: a box with a definite preferred size contributes exactly that size, and
+content wider than it overflows.
+
+```text
+                                                          Chrome   before   after
+   inline-block > flex > span[flex:1]        + i.icon       24      10       24
+   inline-block > flex > span[flex:1 1 auto] + i.icon       24      10       24
+   inline-block > flex > span[flex-grow:1]   + i.icon       24      10       24
+   inline-block > flex > span                + i.icon CTRL  24      24       24
+   width:300px  > flex > span[flex:1]        + i.icon CTRL  24      24       24
+```
+
+⚠⚠⚠ **FIXING MAX-CONTENT ALONE CHANGES NOTHING, AND THAT IS THE TRAP THIS TICK NEARLY FELL INTO.**
+The first cut patched only `max_content_width_uncached`, rebuilt, and the five rows read **exactly as
+before**. `shrink_to_fit` returns `pref.min(avail.max(min_content))`, so a min-content of 9.6 pulls
+the 24px item straight back down the moment a growable sibling squeezes it. **The engine's own
+`MANUK_TRACE_INTRINSIC` is what found it**, printing `avail=24 -> 24.0` (fixed) directly above
+`avail=0 -> 9.6` (not) — an instrument that already existed, for exactly this, and that a guess would
+have taken another tick to get round to. Both halves, or neither.
+
+RESULT, and the corpus number is stated as it came out:
+
+```text
+   css/CSS2 per-TEST state diff   3900 → 3902   +2 GAINED, 0 LOST
+       bidi-text/direction-applies-to-015 · tables/anonymous-table-box-width-001
+   manuk-layout                   158/158
+   four-site panel, TWO interleaved runs of EACH binary:  every column IDENTICAL
+```
+
+**The corpus movement is ZERO and is reported as zero.** `www.marktplaats.nl` and `hnhbkis.edu.in`
+are still `h_overflow 2`; wikipedia and news.ycombinator are byte-identical across both binaries and
+both rounds. Check #104's finding — *a construct's frequency is not its leverage* — applies to this
+fix as much as to t1107's, and `display:flex` at 46% of the corpus did not make it move.
+
+⚠⚠ **THE RESIDUE IS MEASURED, NOT ASSUMED.** The flex CONTAINER's own max-content is still short by
+the fixed item: our `inline-block > flex > span[flex:1] + i.icon` comes out **48** where Chrome says
+**72**. The items are each exact now and their sum is not — that is Taffy's contribution handling for
+a `flex-basis: 0` item, one level up, and it is the next brick.
+
+⚠⚠⚠ **AND TWO GATE ROWS WERE WRITTEN AND DELETED BECAUSE THE MUTATION SAID THEY TESTED NOTHING** — a
+`box-sizing:border-box` row stayed GREEN with the frame subtraction removed, and a `width:50%`
+negative stayed GREEN with percentages treated as definite. `layout_html`'s `MinimalCascade` does not
+carry the properties they turn on, and `shrink_to_fit`'s `min` squeezes the percentage row back to
+its glyph either way. **A row that cannot go red is not coverage**, and leaving them would have made
+this gate look twice as strong as it is. **Third time this session** that running every mutation
+caught a fake assertion (t1110's NBSP row, and this pair).
+
+RATCHET: held. Suite 158/158, `css/CSS2` +2/−0 per-test, four sites byte-identical on two rounds each.
+
+GATE: `a_definite_width_is_the_boxs_intrinsic_contribution` — three subject rows and two controls,
+every one of which is proven to discriminate. **RED-proven twice, once per half**: remove the
+min-content short-circuit → *"expected 24, got 16.25"*; remove the max-content one → the same row,
+the same way, which is the point — either half alone leaves the defect intact.
+
+PERF: none — the new path is a `HashMap` lookup and an early return that REPLACES a full subtree
+layout for every box with a definite width, so if anything it removes work.
+
+WIKI: `docs/wiki/text-layout.md` — "A definite `width` IS the box's intrinsic contribution — both of
+them", plus a `WEB-PATTERNS.md` row for the auto-width toolbar idiom.
+
 ## Tick 1113 — a flex item loses its width when the container is shrink-to-fit AND a sibling grows (2026-08-10)
 
 TICK SHAPE: measurement — following t1112's trace toward `www.marktplaats.nl`'s `<i>` at width
