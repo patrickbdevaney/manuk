@@ -1722,6 +1722,23 @@ impl ComputedStyle {
         }
     }
 
+    /// **The style `getComputedStyle(el, '::before')` must report when the pseudo generates NO
+    /// box** — inherited properties from the originating element, everything else initial.
+    ///
+    /// Chrome never answers that call with `null` and never answers it with the *element's* style:
+    /// on a `<div style="width:200px">` with no `::before` rule at all it reports
+    /// `content:none · display:inline · width:auto`, and it reports the div's colour and font-size
+    /// because those inherit. Handing back the element's own style instead would report
+    /// `display:block · width:200px` — **a wrong answer of the right type**, which is the shape
+    /// this project has already paid for twice (t733, t1096).
+    ///
+    /// It is `inherit_from` under a name that says what it is for: the cascade drops a pseudo with
+    /// no `content` (it generates no box, so layout has nothing to do), and this is what the CSSOM
+    /// still owes a caller in that case.
+    pub fn absent_pseudo_of(origin: &ComputedStyle) -> Self {
+        Self::inherit_from(origin)
+    }
+
     /// Produce a child's starting style: inherited properties flow down, everything
     /// else resets to initial. (CSS inheritance model.)
     fn inherit_from(parent: &ComputedStyle) -> Self {

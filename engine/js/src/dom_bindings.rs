@@ -944,7 +944,59 @@ fn grid_line_css(l: &manuk_css::GridLine) -> String {
     }
 }
 
-fn extra_computed_props(cs: &manuk_css::ComputedStyle) -> Vec<(&'static str, String)> {
+/// A CSS `<string>`, serialised the way `getComputedStyle` reports one: double-quoted, with `"` and
+/// `\` escaped. Chrome-measured on `content: "q\"uo\\te"`, which reads back as `"q\"uo\\te"`.
+fn css_string_literal(s: &str) -> String {
+    let mut out = String::with_capacity(s.len() + 2);
+    out.push('"');
+    for ch in s.chars() {
+        if ch == '"' || ch == '\\' {
+            out.push('\\');
+        }
+        out.push(ch);
+    }
+    out.push('"');
+    out
+}
+
+/// `content` — and **the absent value is not one value, it is two**, which is the whole reason this
+/// takes a flag instead of reading `cs.content` alone.
+///
+/// The initial value is `normal`, and CSS says `normal` **computes to `none` on `::before` and
+/// `::after`** (and only there). Chrome, asked to recite it rather than recalled:
+///
+/// ```text
+///   getComputedStyle(div).content                 "normal"
+///   getComputedStyle(div, '::before').content     "none"      <- no rule at all
+///   getComputedStyle(div, '::first-line').content "normal"    <- still normal, NOT none
+///   content: "a" counter(c) "b"                   "\"a\" counter(c) \"b\""   terms joined by ONE space
+/// ```
+///
+/// ⚠ Two named limitations, recorded rather than approximated. `ContentPart` has no image term, so
+/// `content: url(...)` reports `none` where Chrome reports `url("…")`; and `Counter` keeps only the
+/// counter's NAME, so `counter(c, upper-roman)` reports `counter(c)`. Both are absences in the
+/// cascade's model, not in this serialiser, and inventing a string here would hide them.
+fn content_css(cs: &manuk_css::ComputedStyle, absent_is_none: bool) -> String {
+    let Some(parts) = cs.content.as_ref() else {
+        return if absent_is_none { "none" } else { "normal" }.to_string();
+    };
+    if parts.is_empty() {
+        return "none".to_string();
+    }
+    parts
+        .iter()
+        .map(|p| match p {
+            manuk_css::ContentPart::Text(t) => css_string_literal(t),
+            manuk_css::ContentPart::Counter(n) => format!("counter({n})"),
+        })
+        .collect::<Vec<_>>()
+        .join(" ")
+}
+
+fn extra_computed_props(
+    cs: &manuk_css::ComputedStyle,
+    content_absent_is_none: bool,
+) -> Vec<(&'static str, String)> {
     use manuk_css::*;
     let px = |v: f32| {
         let r = (v * 1e4).round() / 1e4;
@@ -1349,6 +1401,12 @@ fn extra_computed_props(cs: &manuk_css::ComputedStyle) -> Vec<(&'static str, Str
         // resolve to the USED value exactly as those do (t897) — via the same `used_dim_css`, so the
         // two spellings of one box can never disagree. `rect` is not available in this function, so
         // they are emitted beside `width`/`height` in `computed_style_js` instead of here.
+        //
+        // `content` — `undefined` until t1101, on the ELEMENT as well as the pseudo. Every
+        // responsive framework that hides a breakpoint name in `body::before { content: "sm" }`
+        // and reads it back with `getComputedStyle(body, '::before').content` was reading
+        // `undefined`, and `undefined.replace(/"/g,'')` is a TypeError that kills the frame.
+        ("content", content_css(cs, content_absent_is_none)),
     ]
 }
 
@@ -1394,7 +1452,11 @@ fn camel(name: &str) -> String {
     out
 }
 
-fn computed_style_js(cs: &manuk_css::ComputedStyle, rect: Option<[f32; 4]>) -> String {
+fn computed_style_js(
+    cs: &manuk_css::ComputedStyle,
+    rect: Option<[f32; 4]>,
+    content_absent_is_none: bool,
+) -> String {
     use manuk_css::{
         AlignItems, BoxSizing, Display, FlexDirection, FlexWrap, JustifyContent, Overflow,
         Position, TextAlign, Visibility, WhiteSpace,
@@ -1634,7 +1696,7 @@ fn computed_style_js(cs: &manuk_css::ComputedStyle, rect: Option<[f32; 4]>) -> S
             "clip-path",
             "mix-blend-mode",
         ];
-        let extra = extra_computed_props(cs);
+        let extra = extra_computed_props(cs, content_absent_is_none);
         let mut arr = String::from("[");
         for (i, n) in STD.iter().enumerate() {
             if i > 0 {
@@ -1799,7 +1861,7 @@ fn computed_style_js(cs: &manuk_css::ComputedStyle, rect: Option<[f32; 4]>) -> S
         // legacy CSSOM spelling every framework still reads.
         {
             let mut out = String::new();
-            for (name, val) in extra_computed_props(cs) {
+            for (name, val) in extra_computed_props(cs, content_absent_is_none) {
                 out.push_str(&camel(name));
                 out.push(':');
                 out.push_str(&js_string_literal(&val));
@@ -1833,14 +1895,160 @@ fn computed_style_js(cs: &manuk_css::ComputedStyle, rect: Option<[f32; 4]>) -> S
     )
 }
 
-/// `getComputedStyle(element)` → a snapshot style object (camelCase props + a
-/// `getPropertyValue("kebab-case")` accessor). Reads the pre-script computed styles.
+/// What `getComputedStyle`'s **second argument** names.
+#[derive(PartialEq, Debug)]
+enum PseudoReq {
+    /// No pseudo-element was requested — report the element's own style.
+    Element,
+    /// A pseudo-element this engine cascades a style for.
+    Before,
+    After,
+    FirstLetter,
+    /// A real pseudo-element name that this engine does not cascade (`::marker`, `::placeholder`,
+    /// `::selection`, …). Chrome answers with a full declaration, so we answer with the inherited
+    /// placeholder rather than with the element's own box — see [`PseudoReq::Unknown`] for why the
+    /// two are not the same fallback.
+    Uncascaded,
+    /// Syntactically a pseudo-element request, but not a pseudo-element that exists. Chrome returns
+    /// an **empty** `CSSStyleDeclaration` (`length === 0`, every property `""`), not the element's
+    /// style and not `null`.
+    Unknown,
+}
+
+/// **Decided exactly as Chrome decides it, and every row below was MEASURED rather than recalled** —
+/// the rules are not the ones the spec text suggests and three of them are quirks:
+///
+/// ```text
+///   '::before'  ':before'  'before'  '::BeFoRe'   → the PSEUDO
+///   ':BEFORE'   '::bogus'  '::'  '::before '      → an EMPTY declaration (length 0)
+///   'Before'    'bogus'    '::part(x)'  0  {}     → the ELEMENT's own style
+///   ' ::before'                                    → the ELEMENT (no trimming, either side)
+/// ```
+///
+/// The three that a reasonable implementation gets wrong: the `::`-prefixed form is ASCII
+/// case-INsensitive while the one-colon legacy form is case-SENSITIVE; a bare name is accepted only
+/// as an exact lowercase legacy name and is otherwise **ignored** rather than rejected; and a
+/// FUNCTIONAL pseudo (`::part(x)`, `::slotted(x)`) also falls back to the element instead of going
+/// empty. Guessing any of the three produces a plausible object with the wrong contents.
+fn parse_pseudo_elt(arg: Option<&str>) -> PseudoReq {
+    // The legacy CSS2 single-colon spelling, which is also the only bare spelling Chrome honours.
+    fn legacy(name: &str) -> Option<PseudoReq> {
+        match name {
+            "before" => Some(PseudoReq::Before),
+            "after" => Some(PseudoReq::After),
+            "first-letter" => Some(PseudoReq::FirstLetter),
+            "first-line" => Some(PseudoReq::Uncascaded),
+            _ => None,
+        }
+    }
+    let Some(s) = arg.filter(|s| !s.is_empty()) else {
+        return PseudoReq::Element;
+    };
+    if let Some(rest) = s.strip_prefix("::") {
+        // A functional pseudo is not a request for a pseudo-element's style here — Chrome hands
+        // back the element's, which is the one row that keeps `Unknown` from being "anything odd".
+        if rest.contains('(') {
+            return PseudoReq::Element;
+        }
+        let n = rest.to_ascii_lowercase();
+        return match legacy(&n) {
+            Some(p) => p,
+            None => match n.as_str() {
+                "marker"
+                | "placeholder"
+                | "selection"
+                | "backdrop"
+                | "file-selector-button"
+                | "-webkit-scrollbar"
+                | "-webkit-input-placeholder"
+                | "grammar-error"
+                | "spelling-error"
+                | "target-text"
+                | "highlight" => PseudoReq::Uncascaded,
+                _ => PseudoReq::Unknown,
+            },
+        };
+    }
+    if let Some(rest) = s.strip_prefix(':') {
+        // Case-SENSITIVE here: Chrome answers `:BEFORE` with an empty declaration while `::BEFORE`
+        // gets the pseudo. Lower-casing this arm would be a silent divergence nothing would catch.
+        return legacy(rest).unwrap_or(PseudoReq::Unknown);
+    }
+    legacy(s).unwrap_or(PseudoReq::Element)
+}
+
+/// An **empty `CSSStyleDeclaration`** — what Chrome returns for `getComputedStyle(el, '::bogus')`.
+///
+/// Every property reads `""`, not `undefined`: the whole reason this project keeps re-fixing
+/// `getComputedStyle` is that `undefined` is not a missing value, it is a **TypeError one method
+/// call later** (`cs.content.replace(…)`). The proxy is what makes that true for all ~413 names
+/// without materialising them; non-string keys fall through so `String(cs)` and iteration protocols
+/// still behave.
+const EMPTY_DECLARATION_JS: &str =
+    "(new Proxy({getPropertyValue:function(){return '';}, length:0, \
+     item:function(){return '';}, getPropertyPriority:function(){return '';}}, \
+     {get:function(t,k){ if(k in t) return t[k]; return typeof k==='string' ? '' : undefined; }}))";
+
+/// `getComputedStyle(element)` / `getComputedStyle(element, '::before')` → a snapshot style object
+/// (camelCase props + a `getPropertyValue("kebab-case")` accessor). Reads the pre-script computed
+/// styles.
+///
+/// ⚠⚠⚠ **The second argument was IGNORED until t1101, which is worse than not supporting it.**
+/// `getComputedStyle(el, '::before')` handed back the *element's* style — so `content` was
+/// `undefined`, `display` was the div's `block`, and `width` was the div's `200px`. Every one of
+/// those is a **wrong answer of the right type**: the caller gets a real object with real-looking
+/// strings and no way to tell it was answered about a different box. The idiom that pays for it is
+/// everywhere — Bootstrap/Foundation-era responsive code hides the active breakpoint in
+/// `body::before { content: "sm" }` and reads it back through exactly this call.
 unsafe fn window_get_computed_style(cx: *mut RawJSContext, argc: u32, vp: *mut Value) -> bool {
     let node = arg_object(vp, argc, 0).and_then(|o| node_and_dom(o).map(|(_, n)| n));
+    // `null`/`undefined` mean "no pseudo"; everything else is ToString-coerced, exactly as Chrome
+    // does (`getComputedStyle(el, 0)` reports the element).
+    let pseudo = parse_pseudo_elt(arg_string_nullable(cx, vp, argc, 1).as_deref());
+    if pseudo == PseudoReq::Unknown {
+        match eval_in_current_global(cx, EMPTY_DECLARATION_JS) {
+            Some(v) => *vp = v,
+            None => *vp = NullValue(),
+        }
+        return true;
+    }
     // The rect is needed because a PERCENTAGE translate resolves against the element's own border box.
     let js = node.and_then(|n| {
         let rect = layout_rect(n);
-        with_style(n, |cs| computed_style_js(cs, rect))
+        with_style(n, |cs| match &pseudo {
+            PseudoReq::Element => computed_style_js(cs, rect, false),
+            // ⚠ `rect: None` for every pseudo, and that is the HONEST answer rather than a
+            // shortcut: a generated box has no `NodeId`, so `layout_rect` has nothing to look it
+            // up by. It costs one row against Chrome — an auto-sized BLOCK pseudo reports `auto`
+            // where Chrome reports the used px — and it is exact everywhere else, because Chrome
+            // itself reports `auto` for an inline pseudo (measured) and a specified `width:50px`
+            // falls through `used_dim_css` to the computed value on both engines.
+            //
+            // `content: normal` computes to `none` on `::before`/`::after` and ONLY there — hence
+            // the flag rather than a blanket "is this a pseudo".
+            PseudoReq::Before => match cs.before.as_deref() {
+                Some(p) => computed_style_js(p, None, true),
+                None => {
+                    computed_style_js(&manuk_css::ComputedStyle::absent_pseudo_of(cs), None, true)
+                }
+            },
+            PseudoReq::After => match cs.after.as_deref() {
+                Some(p) => computed_style_js(p, None, true),
+                None => {
+                    computed_style_js(&manuk_css::ComputedStyle::absent_pseudo_of(cs), None, true)
+                }
+            },
+            PseudoReq::FirstLetter => match cs.first_letter.as_deref() {
+                Some(p) => computed_style_js(p, None, false),
+                None => {
+                    computed_style_js(&manuk_css::ComputedStyle::absent_pseudo_of(cs), None, false)
+                }
+            },
+            PseudoReq::Uncascaded => {
+                computed_style_js(&manuk_css::ComputedStyle::absent_pseudo_of(cs), None, false)
+            }
+            PseudoReq::Unknown => unreachable!("handled above"),
+        })
     });
     // The no-style fallback still honours the CSSOM contract: getPropertyValue exists and
     // returns '' — a bare `({})` turns `getComputedStyle(x).getPropertyValue(y).trim()` into

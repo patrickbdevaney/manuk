@@ -798,6 +798,11 @@
   - L2523 · The two cascades lose different amounts, and only one of them loses everything
   - L2540 · ⚠⚠⚠ The number, fully attributed — and 100% of the "losses" are the lie being deleted
   - L2563 · dir="rtl" was a layout input and not a CASCADE input, so every logical property resolved LTR (t1086)
+  - L2634 · getComputedStyle(el, '::before') was answered about the ELEMENT (t1101)
+  - L2653 · What reads it, and what the undefined costs
+  - L2670 · The parse surface has three quirks, and all three were MEASURED, not derived
+  - L2692 · normal computes to none on ::before/::after, and ONLY there
+  - L2707 · Named limitations, recorded rather than approximated
 
 ## `<dialog>`, `popover`, and the top layer (ticks 194-195)
 `docs/wiki/dialog-and-top-layer.md`
@@ -1881,4 +1886,4 @@
   - L124 · Rank mechanisms by FLIP RATE, not failing-subtest count — CSS layout is a multi-assertion slog
 
 ---
-1788 sections across 22 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+1793 sections across 22 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.

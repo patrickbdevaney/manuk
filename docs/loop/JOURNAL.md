@@ -46371,6 +46371,107 @@ PERF: none — one UA rule and one narrowed branch in a cascade that already ran
 WIKI: `docs/wiki/css-cascade.md` — where Chrome draws the form-control `box-sizing` line, and why a
 layout-crate test cannot see it.
 
+## Tick 1101 — the second argument of `getComputedStyle` was read and DISCARDED (2026-08-10)
+
+TICK SHAPE: capability — surface audit #50's re-rank named the fidelity probe's blindness to
+pseudo-elements as the #1 lever, and `getComputedStyle(e, '::before')` is the API BOTH sides of that
+diff would have to call. Brick 1 is the API itself, because the probe cannot be taught to read
+something the engine answers wrongly. Brick 2 (teaching the probe) is deliberately NOT in this tick:
+it alters the headline metric, and it must not be landed in the same commit as the thing that makes
+it move.
+
+⚠⚠⚠ **THE ARGUMENT WAS PARSED OUT OF THE CALL AND THEN IGNORED, WHICH IS WORSE THAN NOT SUPPORTING
+IT.** `window_get_computed_style` read argument 0 and never looked at argument 1, so a page asking
+about a generated box was answered about the originating element:
+
+```text
+     <div id=x style="width:200px">          Chrome            what we returned
+       #x::before { content: "sm" }
+     ─────────────────────────────────────────────────────────────────────────
+       cs.content                            "sm"              undefined
+       cs.display                            inline            block     ← the DIV's
+       cs.width                              auto              200px     ← the DIV's
+```
+
+Every value present, plausible, and about a different box — **a wrong answer of the right type**,
+which nothing downstream can detect. `content` was absent from `getComputedStyle` on **elements**
+too (`"normal"` in Chrome), so the `undefined` half was broken with or without the second argument.
+
+**What it costs is a throw-class killer, not a cosmetic readback.** The breakpoint-detection idiom
+predates `matchMedia` in JS and still ships in Bootstrap-era and Foundation-era code and every
+hand-rolled copy of it: `body::before { content: "sm" }` read back as
+`getComputedStyle(document.body, '::before').content.replace(/["']/g, '')`. Against `undefined` that
+is a **TypeError at boot** — the class the board ranks above shape work — and on the branch where a
+page merely reads `block` instead of `none` it silently selects the wrong layout.
+
+⚠⚠ **THE PARSE SURFACE HAS THREE QUIRKS AND ALL THREE WERE MEASURED, NOT DERIVED.** Three batteries
+against Chrome (`::`/`:`/bare × known/unknown/miscased, plus non-string arguments), negative rows
+first. The spec text predicts none of them and each has a plausible wrong implementation:
+
+```text
+   '::before'  ':before'  'before'  '::BeFoRe'   → the PSEUDO
+   ':BEFORE'   '::bogus'  '::'  '::before '      → an EMPTY declaration (length 0, every prop '')
+   'Before'    'bogus'    '::part(x)'  0  {}     → the ELEMENT's own style
+   ' ::before'                                    → the ELEMENT (no trimming, either side)
+```
+
+1. The `::` form is ASCII case-**insensitive**; the one-colon legacy form is case-**sensitive**.
+   Lower-casing both arms is the obvious implementation and it diverges on exactly one row.
+2. A **bare** name is honoured only as an exact lowercase legacy name and is otherwise *ignored*
+   (element), not *rejected* (empty) — `bogus` and `::bogus` take opposite branches.
+3. A **functional** pseudo (`::part(x)`, `::slotted(x)`) also falls back to the element.
+
+And `normal` **computes to `none` on `::before`/`::after` and only there** — `::first-line` still
+reports `normal` — so the serialiser takes a flag instead of reading `cs.content` alone. A pseudo
+with no declarations is answered from a new `ComputedStyle::absent_pseudo_of` (`inherit_from` the
+originating element), never from the element's own style: Chrome reports the div's colour and
+font-size there because those inherit, and `display:inline · width:auto` because those do not.
+
+⚠ **FIVE LIMITATIONS ARE NAMED RATHER THAN APPROXIMATED**, and the first one is the same structural
+fact as audit #50's: **a generated box has no `NodeId`**, so `layout_rect` cannot find it and every
+pseudo serialises with `rect: None`. It costs exactly one row — an auto-sized BLOCK pseudo reports
+`auto` where Chrome reports the used px — and is exact everywhere else, because Chrome itself
+reports `auto` for an inline pseudo and a specified `width:50px` falls through `used_dim_css` to the
+computed value on both engines. The other four (adjacent string terms concatenate; no image term in
+`ContentPart`; `counter()` loses its list-style argument; a contentless pseudo is dropped by the
+cascade) are in the content model, not this seam. The adjacent-strings row is deliberately **not**
+asserted in the gate: asserting the current answer would pin the engine to it.
+
+RATCHET: 12 neighbouring CSSOM/computed-style gates re-run green
+(`g_computed_completeness`, `g_computed_style`, `g_computed_style_publishes_the_cascade`,
+`g_computed_custom_properties`, `g_computed_visual_effects`, `g_cssom_enumeration`,
+`g_intrinsic_min_max_cssom`, `g_overflow_cssom`, `g_probe_capabilities`, `g_capability`,
+`g_css_before_lifecycle`, `g_get_property_value`). The one-argument call is byte-identical except
+for the new `content` property; `getComputedStyle(el).length` goes 123 → 124 by construction, from
+the one derived list.
+
+GATE: **G_COMPUTED_PSEUDO** —
+`get_computed_style_reports_the_pseudo_element_not_the_originating_element`, 23 rows, negative rows
+first. **RED-proven twice.** (1) Returning `PseudoReq::Element` unconditionally — the pre-t1101
+behaviour — reproduces the defect exactly: `absent-display=block`, `absent-width=200px`,
+`blk-width=400px`, `hid-display=block`, and every `content` back to `normal`. (2) Lower-casing the
+one-colon arm flips `badcase` from `0` to `124`, i.e. the quirk row is load-bearing and not
+decoration.
+
+⚠ HARNESS (one line, per PART VII — not acted on): `scripts/verify.sh` names its manuk-page gates
+individually, so this gate is not in the wall's 19-of-104 launch list. Observer's call.
+
+SELF-AUDIT (due this tick — `TICK - LAST_AUDIT >= 10` blocks in tick.sh's pre-flight, one tick
+earlier than the hook does): `./scripts/self-audit.sh` clean. Every gate declares how to break it,
+49 process defects each name a closing mechanism, the cluster registry and pattern ledger both move
+with the engine. `LAST_AUDIT_TICK` → 1101.
+
+PERF: none — one `Option<String>` read and a small match per `getComputedStyle` call; the pseudo
+path serialises the same object the element path already did.
+
+WIKI: `docs/wiki/css-cascade.md` — "`getComputedStyle(el, '::before')` was answered about the
+ELEMENT", with the measured parse table and the five named limitations.
+
+PATTERN: a new `WEB-PATTERNS.md` row — *reading a pseudo-element's computed style*. The exemption
+was the wrong answer here and the hook was right to refuse it: this is not a bug fix, it is a class
+of page (breakpoint-detecting responsive shells, CSS-in-JS assertions on generated content) that
+could not run.
+
 ## Tick 1100 — a leading `/` is the SERVER root, and 14 references were looked for under `/` (2026-08-10)
 
 TICK SHAPE: capability — the small certain half of t1091's 254-skip partition, taken deliberately

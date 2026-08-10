@@ -2630,3 +2630,103 @@ different mechanism and each unaffected by this fix:
 - `refine_inline_static_positions` is skipped outright under an RTL base direction
   (`if bcs.direction != Rtl` at its call site), so an insetless `position:absolute` box in an RTL
   inline context takes the content box's LEFT edge. Chrome 300/380, ours 0/0.
+
+## `getComputedStyle(el, '::before')` was answered about the ELEMENT (t1101)
+
+The CSSOM's second argument was **read and discarded**. `getComputedStyle(div, '::before')` returned
+the *div's* style object, and that is strictly worse than not supporting the argument at all:
+
+```text
+     <div id=x style="width:200px">          Chrome            what we returned
+       #x::before { content: "sm" }
+     ─────────────────────────────────────────────────────────────────────────
+       cs.content                            "sm"              undefined
+       cs.display                            inline            block     ← the DIV's
+       cs.width                              auto              200px     ← the DIV's
+```
+
+Every value is present, plausible and about **a different box**. A caller cannot detect it. This is
+the *wrong answer of the right type* — the same shape as t733 and as t1096's `S0.`/`S1.`, and the
+reason the fix is gated on a row (`absent-display=inline`) whose whole job is to be `block` when the
+bug is back.
+
+### What reads it, and what the `undefined` costs
+
+The breakpoint-detection idiom, which predates `matchMedia` in JS and still ships in Bootstrap-era
+and Foundation-era code and in every hand-rolled copy of it:
+
+```css
+  body::before { content: "sm"; display: none }
+  @media (min-width: 768px) { body::before { content: "md" } }
+```
+```js
+  var bp = getComputedStyle(document.body, '::before').content.replace(/["']/g, '');
+```
+
+`undefined.replace(…)` is a **TypeError**, so the frame dies at boot — a throw-class killer, which
+the board ranks above shape work. `content` was absent from `getComputedStyle` on **elements** too,
+so this half was broken with or without the second argument.
+
+### The parse surface has three quirks, and all three were MEASURED, not derived
+
+Three batteries against Chrome (`::`/`:`/bare × known/unknown/miscased, plus non-string arguments).
+The spec text does not predict any of these, and each has a plausible wrong answer:
+
+```text
+   '::before'  ':before'  'before'  '::BeFoRe'   → the PSEUDO
+   ':BEFORE'   '::bogus'  '::'  '::before '      → an EMPTY declaration (length 0, every prop '')
+   'Before'    'bogus'    '::part(x)'  0  {}     → the ELEMENT's own style
+   ' ::before'                                    → the ELEMENT (no trimming, either side)
+```
+
+1. The `::` form is ASCII **case-insensitive**; the one-colon legacy form is case-**sensitive**.
+   Lower-casing both arms is the obvious implementation and diverges on `:BEFORE`.
+2. A **bare** name is honoured only as an exact lowercase legacy name and is otherwise *ignored*
+   (element), not *rejected* (empty) — so `bogus` and `::bogus` take opposite branches.
+3. A **functional** pseudo (`::part(x)`, `::slotted(x)`) also falls back to the element.
+
+An unknown pseudo-element returns an **empty `CSSStyleDeclaration`**, and every property on it reads
+`''` — a string, not `undefined`, for exactly the TypeError reason above. Ours is a `Proxy` so all
+~124 published names answer without materialising them.
+
+### `normal` computes to `none` on ::before/::after, and ONLY there
+
+Chrome, asked to recite it rather than recalled:
+
+```text
+   getComputedStyle(div).content                  "normal"
+   getComputedStyle(div, '::before').content      "none"     ← no rule at all
+   getComputedStyle(div, '::first-line').content  "normal"   ← still normal
+```
+
+So the serialiser takes a flag rather than reading `cs.content` alone. And a pseudo with **no
+declarations** is answered from `ComputedStyle::absent_pseudo_of` (= `inherit_from` the originating
+element), never from the element's own style: Chrome reports the div's colour and font-size there,
+because those inherit, and reports `display:inline · width:auto`, because those do not.
+
+### Named limitations, recorded rather than approximated
+
+- **A generated box has no `NodeId`**, so `layout_rect` cannot find it and every pseudo is serialised
+  with `rect: None`. It costs exactly one row: an auto-sized **block** pseudo reports `auto` where
+  Chrome reports the used px. Everywhere else it is exact — Chrome itself reports `auto` for an
+  *inline* pseudo, and a specified `width:50px` falls through `used_dim_css` to the computed value on
+  both engines. (This is the same structural fact as the fidelity probe's blindness to pseudos,
+  surface audit #50: *no DOM node, no rect, no key*.)
+- Two **adjacent string terms** (`content: "a" "b"`) are concatenated by the content parser into one
+  part, so they read back `"ab"` where Chrome says `"a" "b"`. `content: "a" counter(x)` is exact.
+  The rendering is identical; the fix is in the parser, not this seam, and asserting the current
+  answer in the gate would pin the engine to it.
+- `ContentPart` has no image term (`content: url(…)` reports `none`) and `Counter` keeps only the
+  counter's name (`counter(c, upper-roman)` reports `counter(c)`).
+- A pseudo with declarations but **no `content`** (`::before { color: red }`) is dropped by the
+  cascade — it generates no box — so we report the inherited colour where Chrome reports `red`.
+- `::first-line`, `::marker`, `::placeholder`, `::selection`, `::backdrop` are recognised as real
+  pseudo-element names and answered with the inherited placeholder, which is Chrome's answer for the
+  overwhelmingly common case of no author rule. `::before`, `::after` and `::first-letter` come from
+  the real cascade.
+
+**GATE** `G_COMPUTED_PSEUDO` — `get_computed_style_reports_the_pseudo_element_not_the_originating_element`,
+23 rows, negative rows first. RED-proven twice: returning `PseudoReq::Element` unconditionally (the
+pre-t1101 behaviour) reproduces the defect exactly — `absent-display=block`, `absent-width=200px`,
+`blk-width=400px`, every `content` back to `normal` — and lower-casing the one-colon arm flips
+`badcase` from `0` to `124`.
