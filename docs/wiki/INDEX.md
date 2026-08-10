@@ -1873,6 +1873,9 @@
   - L2703 · What it costs, and how it reaches a table
   - L2719 · The fix is known, was measured, and is REFUSED — the residue is a second defect
   - L2744 · The 36 containers are NOT the break rule — three hypotheses, three fixtures, three negatives (t1106)
+  - L2783 · Generated content on a NESTED INLINE element was dropped entirely — half the corpus declares one (t1107)
+  - L2807 · The measurement, both engines, 16px/1 monospace in a 300px box
+  - L2840 · What it bought, and the one place it cost
 
 ## The wasm demo — running the engine inside someone else's browser
 `docs/wiki/wasm-demo.md`
@@ -1900,4 +1903,4 @@
   - L124 · Rank mechanisms by FLIP RATE, not failing-subtest count — CSS layout is a multi-assertion slog
 
 ---
-1807 sections across 22 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+1810 sections across 22 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.

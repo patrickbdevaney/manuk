@@ -2779,3 +2779,88 @@ placement loop tests `pen + space_w + advance > line_avail`? They are laid ADJAC
 (`li2.x == li1.width` exactly), so no space item separates them in our stream — while the synthetic
 fixture produces the gap correctly. The difference is on the real page: `.hlist` adds
 `li::after { content: " · " }` between every pair, and removing that is the first bisection step.
+
+## Generated content on a NESTED INLINE element was dropped entirely — half the corpus declares one (t1107)
+
+The question the previous entry left open answers itself: **`li::after { content: " · " }` was not
+rendering at all.** Two adjacent `<li>` shared a line with no gap because there was nothing between
+them — the separator, and with it the only white space on the line, never entered the flow.
+
+`::before` / `::after` could only be materialised from `collect_inline_group`'s `owner` — *the
+element whose inline formatting context the run **is***. A pseudo on anything nested INSIDE that
+context rendered nowhere, and nested inline elements are where the web actually hangs them:
+
+```text
+   q::before / q::after                 quotation marks
+   a[href]::after                       the print stylesheet's URL
+   abbr[title]::after                   the expansion
+   label::before                        the custom checkbox / radio (every design system)
+   .breadcrumb > li + li::before        the separator idiom this whole arc started from
+   .hlist li::after                     every Wikipedia navbox
+```
+
+**85 of 169 corpus pages (50%) declare a `::before`/`::after` whose selector's subject is an
+inline-by-default element**, against 130 of 169 (77%) that declare one at all. Measured with the
+HTML + linked-stylesheet crawl of `docs/loop/CORPUS-CONSTRUCTS.md` (the join key computed once, as
+that file's own warning demands).
+
+### The measurement, both engines, `16px/1 monospace` in a 300px box
+
+`span::after { content: " | " }`, **no white space between the tags** — the `.hlist` markup:
+
+```text
+                                                        Chrome    before    after
+  <div><span>alpha</span><span>bravo</span>   ::after    77.08     48.00     76.80  ✓
+  <ul><li display:inline>  (the .hlist idiom) ::after    77.08     48.00     76.80  ✓
+  <div><span>alpha</span></div>, span alone   ::before   67.44     48.00     76.80  ~
+  <div>alpha</div>, pseudo on the DIV         CONTROL    ok        ok        ok     ✓
+  narrow 100px, 4 inline <li> with separators           100x64    100x32    100x64  ✓
+  the same 4 <li>, no pseudo at all           CONTROL   100x16    100x32    100x32  ✗
+```
+
+**The width is billed to the ELEMENT, not merely painted on the line** — Chrome makes the `<li>`
+itself wider by its separator, which is what turns this from missing ink into a `shape` term. On
+Wikipedia's `.hlist` sidebar our `li1` read 130px against Chrome's 139, and 9px is exactly one
+`" · "` at 14px.
+
+⚠ **Row 3 is named, not asserted.** At a line edge Chrome collapses the separator's outer
+collapsible space away and we do not, because generated content is emitted as ONE unbreakable word
+with its spaces baked in. That is a ≤1-space error on the last item of a line. Splitting the outer
+spaces out into real `space_before` / `pending_space` fixes it and *breaks the mid-line rows*, because
+Chrome bills a trailing collapsible space INTO the preceding inline's rect and our fragments cannot
+represent that. Exact on the common case beat approximate on both.
+
+⚠⚠ **Row 6 is a SECOND, INDEPENDENT DEFECT the fix makes louder, and it is the next brick.**
+`<li>alpha</li><li>bravo</li>` with no white space anywhere has **no soft wrap opportunity**, and
+Chrome duly puts all four on one line and overflows. We break anyway: the placement loop's only
+break guard is `breakable = !(no_wrap && prev_no_wrap)`, which never asks whether a SPACE is
+present. This is the exact twin of t1105 — that entry found we refuse a break where one exists; this
+one finds we take a break where none does — and the two are one rule with one missing term.
+
+### What it bought, and the one place it cost
+
+Old binary and new, same hour, `--rows-out` per site:
+
+```text
+                     coverage       shape            h_ovf  overlap  r-order  dead_target
+  en.wikipedia.org   .991406→.991404  .660888→.723163  365→395  52→63   70→76   80→0
+  www.a11yproject    .964602 (same)   .394495→.412844    1→1    0→0      1→1     0→0
+  doc.rust-lang.org  byte-identical on every column
+  news.ycombinator   byte-identical on every column
+
+  css/CSS2, per-TEST state diff      3863 → 3890      +27 GAINED, 0 LOST
+      generated-content +21 · tables/table-anonymous-objects +4 · selectors/first-letter-quote +1
+      · syntax/case-sensitive +1
+  manuk-layout                       155/155
+```
+
+**`dead_target` 80 → 0 is the largest single term.** Those were links whose entire visible content
+was a pseudo: with the content absent the box was degenerate and the agent had nothing to click.
+This is an I3 win, not a rendering one, and the render metric could not have found it.
+
+The three jarring counters rise on wikipedia and the rise is **attributed, not shrugged at**: the
+sweep's own second h-overflow exemplar is `…/td/table/tbody/tr/td/div/ul/li:nth-of-type(11)`, an
+inline `<li>` in a nested navbox — the t1105 container, now carrying the separator text it was
+missing, on a line the sibling-`nowrap` rule still refuses to break. No certificate term regresses
+and one improves (dead-target clean 3/4 → 4/4); every counter that rises was already unclean on that
+site. The residue is row 6's rule and t1105's, which are the same rule.

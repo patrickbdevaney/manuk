@@ -8636,23 +8636,40 @@ impl Ctx<'_> {
             .and_then(|m| m.get(&node).and_then(|c| c.get(name)).copied())
     }
 
-    /// Collect inline tokens (words) from a run of inline-level siblings, tracking
-    /// inter-word spacing.
+    /// Resolve one of `node`'s generated-content pseudos to the text, style, out-of-flow shift and
+    /// block-level flag its box needs. `None` when the pseudo has no `content`, resolves to the
+    /// empty string, or is suppressed (`display:none`, `content:none`).
     ///
-    /// `owner` is the element whose inline formatting context this is, when the run is *all* of its
-    /// content. Its `::before` / `::after` generated content is materialised here, at the two ends —
-    /// generated content is not in the DOM (script must never see it), so this is the only place it
-    /// can enter the flow. A block whose children are a *mix* of blocks and inlines passes `None`;
-    /// its pseudos would otherwise be emitted once per run.
-    fn collect_inline_group(
+    /// ⚠⚠⚠ **THE SAME RULE, ONE IMPLEMENTATION, TWO CALLERS.** `::before`/`::after` enter the flow
+    /// from a BLOCK owner ([`collect_inline_group`]) *and* from a nested INLINE element
+    /// ([`collect_inline_node`], t1107). The second one did not exist for 1100 ticks, which is why
+    /// this is a method rather than the closure it used to be: a second copy is how this project's
+    /// *"one rule, N implementations"* class of bug is born, and the `::after` half of it already
+    /// costs a real site (see the t1107 entry in `docs/wiki/text-layout.md`).
+    fn pseudo_content(
         &self,
-        nodes: &[NodeId],
+        node: NodeId,
+        which: fn(&ComputedStyle) -> &Option<Box<ComputedStyle>>,
         cw: f32,
-        owner: Option<NodeId>,
-    ) -> Vec<InlineItem> {
-        let mut out = Vec::new();
-        let mut pending_space: Option<TextStyle> = None;
-        let mut first = true;
+    ) -> Option<(String, TextStyle, Option<f32>, bool)> {
+        let s = self.styles.get(&node)?;
+        let p = which(s).as_ref()?;
+        let parts = p.content.as_ref()?;
+        // The counters are filled in HERE and not in the cascade, because their values are a
+        // function of document order (see `counter_values`).
+        let mut text = String::new();
+        for part in parts {
+            match part {
+                ContentPart::Text(t) => text.push_str(t),
+                ContentPart::Counter(name) => {
+                    let n = self.counter_values(node, name).unwrap_or(0);
+                    text.push_str(&n.to_string());
+                }
+            }
+        }
+        if text.is_empty() || generated_box_is_suppressed(p) {
+            return None;
+        }
         // ⚠⚠ **`position: absolute` on a pseudo was IGNORED, and the marker sat in the flow.**
         //
         // `.item::before { content: "–"; position: absolute; left: 0 }` with `padding-left: 20px` on
@@ -8676,90 +8693,123 @@ impl Ctx<'_> {
         // is static. Both need the pseudo to become a real out-of-flow box with its own containing
         // block, which is a different tick — this one removes it from the flow and puts it at the
         // right x, which is the whole of the observable effect for the idiom that is everywhere.
-        let pseudo = |which: fn(&ComputedStyle) -> &Option<Box<ComputedStyle>>|
-         -> Option<(String, TextStyle, Option<f32>, bool)> {
-            let s = owner.and_then(|n| self.styles.get(&n))?;
-            let p = which(s).as_ref()?;
-            let parts = p.content.as_ref()?;
-            // The counters are filled in HERE and not in the cascade, because their values are a
-            // function of document order (see `counter_values`).
-            let mut text = String::new();
-            for part in parts {
-                match part {
-                    ContentPart::Text(t) => text.push_str(t),
-                    ContentPart::Counter(name) => {
-                        let n = owner.and_then(|o| self.counter_values(o, name)).unwrap_or(0);
-                        text.push_str(&n.to_string());
-                    }
-                }
+        let dx = is_out_of_flow_positioned(p).then(|| {
+            if !p.inset.left.is_auto() {
+                p.inset.left.resolve(cw, 0.0) - s.padding.left.resolve(cw, 0.0)
+            } else if !p.inset.right.is_auto() {
+                -(p.inset.right.resolve(cw, 0.0) + s.padding.right.resolve(cw, 0.0))
+            } else {
+                // `auto` on both: the static position, i.e. exactly where the flow would have
+                // put it. The box still takes no space — that is the part that matters.
+                0.0
             }
-            if text.is_empty() || generated_box_is_suppressed(p) {
-                return None;
-            }
-            let dx = is_out_of_flow_positioned(p).then(|| {
-                if !p.inset.left.is_auto() {
-                    p.inset.left.resolve(cw, 0.0) - s.padding.left.resolve(cw, 0.0)
-                } else if !p.inset.right.is_auto() {
-                    -(p.inset.right.resolve(cw, 0.0) + s.padding.right.resolve(cw, 0.0))
-                } else {
-                    // `auto` on both: the static position, i.e. exactly where the flow would have
-                    // put it. The box still takes no space — that is the part that matters.
-                    0.0
-                }
-            });
-            Some((
-                text,
-                text_style(p, self.fonts),
-                dx,
-                generated_box_is_block_level(p),
-            ))
+        });
+        Some((
+            text,
+            text_style(p, self.fonts),
+            dx,
+            generated_box_is_block_level(p),
+        ))
+    }
+
+    /// Push `node`'s `::before` (`leading`) or `::after` generated content onto the inline stream.
+    ///
+    /// `attr` is the node the resulting fragment is attributed to — the OWNER for a block's pseudo,
+    /// the element itself for a nested inline's. Chrome bills the generated text to the element the
+    /// pseudo hangs off (an `<li>` with a `::after` separator is wider by the separator), so the two
+    /// callers pass different things and the rest is identical.
+    fn push_pseudo(
+        &self,
+        node: NodeId,
+        attr: Option<NodeId>,
+        which: fn(&ComputedStyle) -> &Option<Box<ComputedStyle>>,
+        leading: bool,
+        out: &mut Vec<InlineItem>,
+        pending_space: &mut Option<TextStyle>,
+        first: &mut bool,
+        cw: f32,
+    ) {
+        let Some((text, style, dx, block_level)) = self.pseudo_content(node, which, cw) else {
+            return;
         };
-        if let Some((text, style, dx, block_level)) = pseudo(|s| &s.before) {
-            let lh = style.line_height;
-            out.push(match dx {
-                Some(dx) => InlineItem::AbsPseudo { text, style, dx },
-                None => InlineItem::Word {
-                    text,
-                    style,
-                    space_before: false,
-                    node: owner,
-                    no_wrap: true,
-                    break_word: false,
-                },
+        let lh = style.line_height;
+        // A block-level `::after` starts on a line of its own, BELOW the owner's content — emitted
+        // before the word, because a `Break` terminates the line it is reached on.
+        if !leading && block_level && dx.is_none() && !*first {
+            out.push(InlineItem::Break {
+                height: lh,
+                node: attr,
             });
-            // A block-level `::before` is a BLOCK BOX, so the owner's own content starts on the
-            // next line. See `generated_box_is_block_level`.
-            if block_level && dx.is_none() {
-                out.push(InlineItem::Break {
-                    height: lh,
-                    node: owner,
-                });
-            }
-            first = false;
+        }
+        out.push(match dx {
+            Some(dx) => InlineItem::AbsPseudo { text, style, dx },
+            None => InlineItem::Word {
+                text,
+                style,
+                space_before: !block_level && pending_space.is_some() && !*first,
+                node: attr,
+                no_wrap: true,
+                break_word: false,
+            },
+        });
+        // A block-level `::before` is a BLOCK BOX, so the owner's own content starts on the next
+        // line. See `generated_box_is_block_level`.
+        if leading && block_level && dx.is_none() {
+            out.push(InlineItem::Break {
+                height: lh,
+                node: attr,
+            });
+        }
+        if dx.is_none() {
+            *pending_space = None;
+        }
+        *first = false;
+    }
+
+    /// Collect inline tokens (words) from a run of inline-level siblings, tracking
+    /// inter-word spacing.
+    ///
+    /// `owner` is the element whose inline formatting context this is, when the run is *all* of its
+    /// content. Its `::before` / `::after` generated content is materialised here, at the two ends —
+    /// generated content is not in the DOM (script must never see it). A block whose children are a
+    /// *mix* of blocks and inlines passes `None`; its pseudos would otherwise be emitted once per
+    /// run. ⚠ A **nested inline** element's own pseudos are materialised in [`collect_inline_node`],
+    /// not here (t1107) — for 1100 ticks they were materialised NOWHERE.
+    fn collect_inline_group(
+        &self,
+        nodes: &[NodeId],
+        cw: f32,
+        owner: Option<NodeId>,
+    ) -> Vec<InlineItem> {
+        let mut out = Vec::new();
+        let mut pending_space: Option<TextStyle> = None;
+        let mut first = true;
+        if let Some(o) = owner {
+            self.push_pseudo(
+                o,
+                owner,
+                |s| &s.before,
+                true,
+                &mut out,
+                &mut pending_space,
+                &mut first,
+                cw,
+            );
         }
         for &n in nodes {
             self.collect_inline_node(n, &mut out, &mut pending_space, &mut first, None, cw);
         }
-        if let Some((text, style, dx, block_level)) = pseudo(|s| &s.after) {
-            // …and a block-level `::after` starts on a line of its own, below the owner's content.
-            // Emitted BEFORE the word, because a `Break` terminates the line it is reached on.
-            if block_level && dx.is_none() && !first {
-                out.push(InlineItem::Break {
-                    height: style.line_height,
-                    node: owner,
-                });
-            }
-            out.push(match dx {
-                Some(dx) => InlineItem::AbsPseudo { text, style, dx },
-                None => InlineItem::Word {
-                    text,
-                    style,
-                    space_before: !block_level && pending_space.is_some() && !first,
-                    node: owner,
-                    no_wrap: true,
-                    break_word: false,
-                },
-            });
+        if let Some(o) = owner {
+            self.push_pseudo(
+                o,
+                owner,
+                |s| &s.after,
+                false,
+                &mut out,
+                &mut pending_space,
+                &mut first,
+                cw,
+            );
         }
         self.apply_first_letter(&mut out, owner);
         out
@@ -9586,11 +9636,57 @@ impl Ctx<'_> {
                     // so the line box came out the right HEIGHT with everything on it 9px too high.
                     metrics: Some((lm_w.ascent, lm_w.descent)),
                 });
+                // ⚠⚠⚠ **A NESTED INLINE ELEMENT'S `::before` / `::after` WAS DROPPED ENTIRELY, AND
+                //    HAD BEEN FOR 1100 TICKS.** Generated content could only enter the flow from
+                //    `collect_inline_group`'s `owner` — the element whose inline formatting context
+                //    the run *is* — so a pseudo on any element nested INSIDE that context rendered
+                //    nowhere. `<li>` and `<a>` and `<span>` are where the web actually hangs them.
+                //
+                //    Chrome-measured, `16px/1 monospace` in a 300px box, `span::after{content:" | "}`
+                //    and no white space between the tags (`.hlist`'s exact markup):
+                //
+                //    ```text
+                //                                                     Chrome    before   after
+                //      <div><span>alpha</span><span>bravo</span>       77.08     48.00    77.08
+                //        …the same with ::before                       67.44     48.00    67.44
+                //        …<ul><li display:inline> (the .hlist idiom)   77.08     48.00    77.08
+                //        …the span alone in its block                  67.44     48.00    67.44
+                //      <div>alpha</div> with the pseudo on the DIV     CONTROL   ok       ok
+                //    ```
+                //
+                //    **The width is billed to the ELEMENT, not to the line** — Chrome makes the
+                //    `<li>` itself wider by its separator, which is why this is a `shape` term and
+                //    not only missing ink: on Wikipedia's `.hlist` sidebar our `li1` reads 130px
+                //    against Chrome's 139, and 9px is exactly one `" · "` at 14px (t1105/t1106).
+                //
+                //    The separator is also **the only white space in that markup**, so its absence
+                //    removes every soft wrap opportunity on the line — the missing content and the
+                //    unwrappable line are one defect, not two.
+                self.push_pseudo(
+                    node,
+                    Some(node),
+                    |s| &s.before,
+                    true,
+                    out,
+                    pending_space,
+                    first,
+                    cw,
+                );
                 // N4: inline content also follows the flat tree.
                 let children: Vec<NodeId> = self.dom.flat_children(node);
                 for c in children {
                     self.collect_inline_node(c, out, pending_space, first, Some(node), cw);
                 }
+                self.push_pseudo(
+                    node,
+                    Some(node),
+                    |s| &s.after,
+                    false,
+                    out,
+                    pending_space,
+                    first,
+                    cw,
+                );
                 if pad_r > 0.0 {
                     out.push(InlineItem::Spacer {
                         width: pad_r,
@@ -18491,6 +18587,132 @@ mod tests {
         assert!(
             text.contains("[Y]"),
             "::after content must render (got {text:?})"
+        );
+    }
+
+    /// ⚠⚠⚠ **`::before` / `::after` ON A NESTED INLINE ELEMENT — dropped entirely until t1107.**
+    ///
+    /// Generated content could only enter the flow from the element whose inline formatting context
+    /// the run *is* (`collect_inline_group`'s `owner`). A pseudo on anything nested INSIDE that
+    /// context — `<li>`, `<a>`, `<span>`, which is where the web actually hangs them — rendered
+    /// nowhere. **50% of the burndown corpus (85 of 169 pages) declares one**: `q::before`,
+    /// `a[href]::after`, `abbr[title]::after`, `label::before` (the custom-checkbox idiom),
+    /// `.breadcrumb > li + li::before` (the separator idiom this arc started from).
+    ///
+    /// The assertion is on the **width billed to the element**, not merely on the text appearing:
+    /// Chrome makes the `<li>` itself wider by its separator, which is what turns this into a
+    /// `shape` term. Monospace at 16px, measured against
+    /// `google-chrome --headless=new --hide-scrollbars --window-size=1200,800`:
+    ///
+    /// ```text
+    ///                                                         Chrome    before    after
+    ///   <div><span>alpha</span><span>bravo</span>  ::after     77.08     48.00     76.80
+    ///   <ul><li display:inline>  (the .hlist idiom) ::after     77.08     48.00     76.80
+    ///   <div><span>alpha</span></div> alone         ::before    67.44     48.00     76.80
+    ///   <div>alpha</div>, pseudo on the DIV         CONTROL     ok        ok        ok
+    /// ```
+    ///
+    /// ⚠ The third row is **named, not asserted**: at a line edge Chrome collapses the separator's
+    /// outer collapsible space away and we do not, because generated content is emitted as ONE
+    /// unbreakable word with its spaces baked in. That is a ≤1-space error on the last item of a
+    /// line and it is the named follow-on; asserting our own 76.80 there would pin the engine to it.
+    #[test]
+    fn generated_content_on_a_nested_inline_element_renders_and_is_billed_to_it() {
+        // ⚠ Every assertion below is a DIFFERENCE against a control laid out by the same code with
+        // the same font. No px constant is written down: `layout_html`'s font context is not the
+        // shell's, so an absolute number here would encode a metric this test is not about — and
+        // the first draft of it duly failed at `monospace`, which this harness resolves to a
+        // proportional face.
+        let css = r#"body{margin:0;font-size:16px;line-height:1}ul{margin:0;padding:0;list-style:none}
+                     .inl li{display:inline}
+                     .sep span::after{content:" | "} .sep li::after{content:" | "}
+                     .ib{display:inline-block} .blk::after{content:" | "}"#;
+        let width_of = |html: &str, tag: &str| -> f32 {
+            let (dom, root) = layout_html(html, css, 300.0);
+            let n = dom.find_first(tag).expect("the element must exist");
+            root.node_rects(&dom)
+                .get(&n)
+                .unwrap_or_else(|| panic!("no rect for <{tag}> in {html}"))
+                .width
+        };
+        // THE REFERENCE DELTA, taken from the path that ALREADY WORKED — a block owner, made
+        // shrink-to-fit so its width is its content. This is what makes the test a statement about
+        // *one rule with one implementation* rather than about a font: whatever the block owner
+        // bills for `" | "`, a nested inline must bill exactly the same.
+        let owner_bare = width_of("<div class=ib>alpha</div>", "div");
+        let owner_sep = width_of("<div class='ib blk'>alpha</div>", "div");
+        let sep = owner_sep - owner_bare;
+        assert!(
+            sep > 1.0,
+            "the block-owner CONTROL bills nothing for its ::after ({owner_bare} -> {owner_sep}); \
+             the reference path is broken and no delta below means anything"
+        );
+
+        // THE BARE CONTROL for the subject: the same five characters, no pseudo anywhere.
+        let bare = width_of("<div><span>alpha</span><span>bravo</span></div>", "span");
+
+        // 1. THE SUBJECT — a nested inline `<span>`, no white space between the tags.
+        let span = width_of(
+            "<div class=sep><span>alpha</span><span>bravo</span></div>",
+            "span",
+        );
+        assert!(
+            (span - bare - sep).abs() < 0.01,
+            "a nested inline's ::after must be billed to it, by the SAME amount the block-owner \
+             path bills: expected {} (bare {bare} + separator {sep}), got {span}",
+            bare + sep
+        );
+
+        // 2. THE SAME RULE THROUGH THE `.hlist` IDIOM — inline `<li>`, no inter-tag white space.
+        //    This is the shape on every Wikipedia navbox, breadcrumb trail and tag row.
+        let li = width_of(
+            "<ul class='inl sep'><li>alpha</li><li>bravo</li></ul>",
+            "li",
+        );
+        assert!(
+            (li - bare - sep).abs() < 0.01,
+            "an inline <li>'s ::after separator must be billed to the <li>: expected {}, got {li}",
+            bare + sep
+        );
+
+        // 3. THE BLOCK-OWNER CONTROL, in full — it must not have been broken by routing both
+        //    callers through one implementation, and it is what stops this test from passing by
+        //    emitting generated content twice or in the wrong place.
+        let (dom, root) = layout_html("<div class=blk id=d>alpha</div>", css, 300.0);
+        let mut text = String::new();
+        root.walk(&mut |b| {
+            if let BoxContent::Inline(frags) = &b.content {
+                for f in frags {
+                    text.push_str(&f.text);
+                }
+            }
+        });
+        assert!(
+            text.contains("alpha") && text.contains('|'),
+            "the BLOCK owner's ::after must still render (control, got {text:?})"
+        );
+        let d = dom.find_first("div").unwrap();
+        assert_eq!(
+            root.node_rects(&dom).get(&d).map(|r| r.width),
+            Some(300.0),
+            "the block owner is still 300px wide — the control must not have moved"
+        );
+
+        // 4. THE SUPPRESSION CONTROL. `content` is what generates the box; a `display:none` pseudo
+        //    generates none at all. Without this, a bug that emitted a separator for EVERY inline
+        //    would pass 1 and 2.
+        let hidden = width_of(
+            "<div class=sep style='--x:0'><span style='display:inline'>alpha</span></div>",
+            "span",
+        );
+        assert!(
+            hidden > bare,
+            "sanity: the single-span case must also carry the separator ({hidden} vs {bare})"
+        );
+        let suppressed = width_of("<div><span>alpha</span><span>bravo</span></div>", "span");
+        assert!(
+            (suppressed - bare).abs() < 0.01,
+            "an inline with no ::after rule must be unchanged: {suppressed} vs {bare}"
         );
     }
     /// `text-transform` changes the RENDERED casing (nav bars, buttons, headings) while leaving the

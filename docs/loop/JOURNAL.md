@@ -46371,6 +46371,106 @@ PERF: none — one UA rule and one narrowed branch in a cascade that already ran
 WIKI: `docs/wiki/css-cascade.md` — where Chrome draws the form-control `box-sizing` line, and why a
 layout-crate test cannot see it.
 
+## Tick 1107 — the separator was not there, and half the corpus declares one (2026-08-10)
+
+TICK SHAPE: capability — t1106's named next brick was *"bisect the real `.hlist` container's CSS;
+`li::after { content: \" \u00b7 \" }` is the first thing to remove."* It did not need removing.
+**It was never there.** `::before`/`::after` on a NESTED INLINE element was dropped entirely, and had
+been for 1100 ticks.
+
+⚠⚠⚠ **GENERATED CONTENT COULD ONLY ENTER THE FLOW FROM THE ELEMENT WHOSE INLINE FORMATTING
+CONTEXT THE RUN *IS*.** `collect_inline_group` materialises `owner`'s pseudos at the two ends and its
+own comment says that is *"the only place [generated content] can enter the flow"* — which was true,
+and was the bug. `collect_inline_node`'s inline-element branch recursed into children and never asked
+the element for its own. So a pseudo on anything nested inside the context rendered NOWHERE, and
+nested inline elements are exactly where the web hangs them: `q::before`, `a[href]::after`,
+`abbr[title]::after`, `label::before` (the custom-checkbox idiom), `.breadcrumb > li + li::before`,
+`.hlist li::after`.
+
+**Priced on the corpus that scores M1 before building anything** (HTML + linked stylesheets, 169
+pages with a real body, the join key computed once as `CORPUS-CONSTRUCTS.md` demands):
+
+```text
+   ::before/::after declared at all ................ 130/169   77%
+   ...whose selector SUBJECT is an inline element ... 85/169   50%   <- rendered nowhere
+```
+
+**THE MEASUREMENT, both engines, `16px/1 monospace` in a 300px box**, `span::after{content:" | "}`
+with no white space between the tags — the `.hlist` markup:
+
+```text
+                                                       Chrome   before    after
+  <div><span>alpha</span><span>bravo</span>  ::after    77.08    48.00    76.80  ✓
+  <ul><li display:inline> (the .hlist idiom) ::after    77.08    48.00    76.80  ✓
+  <div><span>alpha</span></div>, span alone  ::before   67.44    48.00    76.80  ~
+  <div>alpha</div>, pseudo on the DIV        CONTROL    ok       ok       ok     ✓
+  narrow 100px, 4 inline <li> with separators          100x64   100x32   100x64  ✓
+  the same 4 <li>, no pseudo at all          CONTROL   100x16   100x32   100x32  ✗
+```
+
+**The width is billed to the ELEMENT, not merely painted on the line.** Chrome makes the `<li>`
+itself wider by its separator, which is what makes this a `shape` term rather than missing ink — on
+Wikipedia's `.hlist` sidebar our `li1` read 130 against Chrome's 139, and 9px is exactly one
+`" · "` at 14px. The fix is one method (`push_pseudo`) called from BOTH sites rather than a second
+copy of the rule, because *one rule, N implementations* is this project's most-repeated defect and
+the pseudo path already had two hand-maintained ends.
+
+⚠⚠ **ROW 6 IS A SECOND, INDEPENDENT DEFECT AND THE FIX MAKES IT LOUDER — IT IS THE NEXT BRICK.**
+`<li>alpha</li><li>bravo</li>` with no white space anywhere has **no soft wrap opportunity**;
+Chrome puts all four on one line and overflows, and we break anyway. The placement loop's only guard
+is `breakable = !(no_wrap && prev_no_wrap)`, which never asks whether a SPACE is present. **This is
+the exact twin of t1105** — that tick found we refuse a break where one exists, this one finds we take
+a break where none does — and they are one rule with one missing term. t1105's refused candidate
+should be rebuilt as *"a break opportunity exists where a break opportunity exists"*, not as a
+loosening.
+
+⚠ Row 3 is NAMED, NOT ASSERTED: at a line edge Chrome collapses the separator's outer collapsible
+space and we do not, because generated content is one unbreakable word with its spaces baked in.
+Splitting those spaces out fixes row 3 and BREAKS rows 1-2, because Chrome bills a trailing
+collapsible space into the preceding inline's rect and our fragments cannot represent that. Exact on
+the common case beat approximate on both; the ~1-space residue is on the last item of a line only.
+
+RESULT — old binary and new, built from a stashed tree and run in the SAME HOUR, four-site panel:
+
+```text
+                      coverage         shape            h_ovf  overlap  r-order  dead_target
+   en.wikipedia.org  .991406→.991404  .660888→.723163  365→395  52→63   70→76    80→0
+   www.a11yproject   .964602 (same)   .394495→.412844    1→1    0→0     1→1     0→0
+   doc.rust-lang.org byte-identical on every column
+   news.ycombinator  byte-identical on every column
+   css/CSS2 per-TEST state diff        3863 → 3890      +27 GAINED, 0 LOST
+       generated-content +21 · tables/table-anonymous-objects +4 · first-letter-quote +1
+       · syntax/case-sensitive +1
+   manuk-layout                        155/155
+```
+
+**`dead_target` 80 → 0 is the largest single term and the render metric could not have found it.**
+Those are links whose entire visible content was a pseudo: with the content absent the box was
+degenerate and the agent had nothing to click. An I3 win, banked by a capability fix aimed at shape.
+
+RATCHET: **held, and the three counters that rise are ATTRIBUTED rather than shrugged at.**
+Wikipedia's h-overflow/overlap/reading-order rise 8-21% on a site already unclean on all three; the
+sweep's own second h-overflow exemplar is `…/td/table/tbody/tr/td/div/ul/li:nth-of-type(11)` — an
+inline `<li>` in a nested navbox, i.e. the t1105 container now carrying the separator text it was
+missing, on a line the sibling-`nowrap` rule still refuses to break. **No certificate term regresses
+and one improves** (dead-target clean 3/4 → 4/4), the per-test suite diff is +27/−0, and both other
+panel sites are byte-identical. This is not t1105's refused trade: there, overlap went 52→316 with
+no account of the redistribution.
+
+GATE: `generated_content_on_a_nested_inline_element_renders_and_is_billed_to_it`. RED-proven by
+deleting both new call sites — *"expected 52.195 (bare 39.148 + separator 13.047), got 39.148"*.
+Every assertion is a DIFFERENCE against a control laid out by the same code: the reference delta is
+what the **block-owner path already bills** for the same `content`, so the gate asserts *one rule,
+one implementation* rather than a font metric. Its first draft failed for exactly that reason — it
+wrote down monospace advances and `layout_html`'s font context resolves `monospace` to a proportional
+face. Four controls: the block owner still renders and is still 300px, an inline with no rule is
+byte-identical, and the reference delta must itself be non-zero.
+
+PERF: none. One `HashMap` lookup per inline element, on a path that already does several.
+
+WIKI: `docs/wiki/text-layout.md` — "Generated content on a NESTED INLINE element was dropped
+entirely — half the corpus declares one". [no-pattern]
+
 ## Tick 1106 — the 36 containers are NOT the break rule, and three fixtures say so (2026-08-10)
 
 TICK SHAPE: measurement — t1105's named next brick: take one of the 36 containers whose reading
