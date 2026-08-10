@@ -46371,6 +46371,62 @@ PERF: none — one UA rule and one narrowed branch in a cascade that already ran
 WIKI: `docs/wiki/css-cascade.md` — where Chrome draws the form-control `box-sizing` line, and why a
 layout-crate test cannot see it.
 
+## Tick 1093 — `display:none` on a pseudo was ignored, and it is how the responsive web turns things OFF (2026-08-10)
+
+TICK SHAPE: capability — t1092's own named residue (`-016` `display:none`, `-012` `table-column`,
+`-013` `table-column-group` all match the SAME "no box" reference and all still failed), taken
+because pricing it against the corpus put it above the rest of the generated-content cluster.
+
+⚠⚠⚠ **THE COMMONEST THING AUTHORS DO TO A PSEUDO IS SWITCH IT OFF AT A BREAKPOINT, AND WE RENDERED
+IT ANYWAY.** `@media (max-width:600px){ .card::after{ display:none } }` is how every responsive
+stylesheet retires a separator, chevron, ribbon or decorative rule. Priced on the corpus with the
+join key corrected in t1092: **80 of 170 fetched pages (47%)** declare a `::before`/`::after` with
+`display:none`.
+
+CHROME-EXACT, product path, two shrink-to-fit owners whose only difference is the pseudo's display:
+
+```text
+   #shown::before  { content:"AAAAAAAAAA" }                Chrome w=135   manuk w=135   ✓
+   #hidden::before { content:"AAAAAAAAAA"; display:none }  Chrome w= 39   manuk w=135   ✗
+```
+
+`39` is `"Text"` alone. **We lay the hidden content out and paint it** — not a geometry rounding
+error, ten visible characters that Chrome does not draw.
+
+⚠ Note the FIRST probe could not see it: with two full-width block owners every rect agreed, because
+a block box is 1200 wide whatever is inside it. The owner had to be made shrink-to-fit before the
+instrument could express the subject. *A fixture that cannot express its subject reports the subject
+as working* — the mirror of t1046, which reported it as broken.
+
+THE FIX is one predicate at the point the pseudo's text is extracted, and it covers three values
+because the SUITE says they are one case, not because they look alike: `-012` (`table-column`) and
+`-013` (`table-column-group`) match the **same reference as `-016` (`display:none`)** — a column box
+generates no content box.
+
+RESULT — all 41 directories, per-TEST state diff:
+
+```text
+   generated-content   61 → 67     +6 GAINED, 0 LOST      (exactly -012 / -013 / -016, both sides)
+   every other directory                BYTE-IDENTICAL
+   TOTAL             3,806 → 3,812
+```
+
+…and `#hidden` is now **39px**, Chrome's answer exactly, with t1092's `display:block` rows unmoved.
+
+RATCHET: 0 regressions across 5,633 reftests; `manuk-layout` 153/153.
+
+GATE: **G_GENERATED_BOX_SUPPRESSED** — the owner shrinks to its own text when its `::before` is
+`display:none`, and `table-column` / `table-column-group` give the identical width. RED-proven:
+forcing `generated_box_is_suppressed` to `false` fails it with *"Both 136.0625"*. The
+`inline-block` owner is load-bearing and is commented as such, because the block-owner version of
+this gate passes on the broken engine.
+
+PERF: none — one enum match on a path that already reads the pseudo's style, and it makes the work
+strictly smaller.
+
+WIKI: `docs/wiki/box-layout.md` — "A GENERATED BOX WHOSE `display` MAKES NO BOX MUST MAKE NO CONTENT
+— 47% of corpus pages switch a pseudo off at a breakpoint (t1093)"
+
 ## Tick 1092 — a generated box with a BLOCK display stayed on the line, and the idiom that made me look already worked (2026-08-10)
 
 TICK SHAPE: capability — the top of t1091's fresh ranking, `generated-content` (23.7% pass, 145

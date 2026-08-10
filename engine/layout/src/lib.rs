@@ -2004,6 +2004,40 @@ fn is_out_of_flow_positioned(s: &ComputedStyle) -> bool {
 /// ⚠ `table-column` / `table-column-group` are also absent. Their tests (`-012`, `-013`) match the
 /// SAME reference as `display: none` (`-016`) — a column box generates no content box at all — so
 /// blockifying them would be affirmatively wrong. All three still fail, for that separate reason.
+/// ⚠⚠⚠ **A GENERATED BOX WHOSE `display` GENERATES NO BOX MUST GENERATE NO CONTENT — AND
+/// SWITCHING A PSEUDO OFF AT A BREAKPOINT IS THE COMMONEST THING AUTHORS DO WITH ONE.**
+///
+/// `@media (max-width:600px){ .card::after{ display:none } }` is how every responsive stylesheet
+/// retires a separator, chevron, ribbon or decorative rule. It was ignored entirely: the pseudo's
+/// text was materialised regardless, so the content stayed **laid out and painted**. Priced on the
+/// burndown corpus: **80 of the 170 fetched pages (47%) declare a `::before`/`::after` with
+/// `display:none`.**
+///
+/// Chrome-exact, on two shrink-to-fit owners differing only in the pseudo's display:
+///
+/// ```text
+///   #shown::before  { content:"AAAAAAAAAA" }                Chrome w=135   ours 135   ✓
+///   #hidden::before { content:"AAAAAAAAAA"; display:none }  Chrome w= 39   ours 135   ✗
+/// ```
+///
+/// `39` is `"Text"` on its own — ten characters Chrome does not draw and we did.
+///
+/// ⚠ `table-column` and `table-column-group` are here for the same reason and it is the CSS 2.1
+/// suite that says so, not an analogy: `before/after-content-display-012` and `-013` match the
+/// **same reference as `-016` (`display:none`)**, because a column box generates no content box.
+/// One rule covers all three.
+///
+/// ⚠⚠ The first probe of this could not SEE it. With two full-width block owners every rect agreed,
+/// because a block box is 1200 wide whatever is inside it; the owners had to be made shrink-to-fit
+/// before the geometry could express the subject at all. *A fixture that cannot express its subject
+/// reports the subject as WORKING.*
+fn generated_box_is_suppressed(p: &ComputedStyle) -> bool {
+    matches!(
+        p.display,
+        Display::None | Display::TableColumn | Display::TableColumnGroup
+    )
+}
+
 fn generated_box_is_block_level(p: &ComputedStyle) -> bool {
     matches!(
         p.display,
@@ -8513,7 +8547,7 @@ impl Ctx<'_> {
             let s = owner.and_then(|n| self.styles.get(&n))?;
             let p = which(s).as_ref()?;
             let text = p.content.clone()?;
-            if text.is_empty() {
+            if text.is_empty() || generated_box_is_suppressed(p) {
                 return None;
             }
             let dx = is_out_of_flow_positioned(p).then(|| {
@@ -11337,6 +11371,58 @@ mod tests {
     ///
     /// To watch it go RED: make `generated_box_is_block_level` return `false` (the first row fails)
     /// or `true` (the second).
+    /// # G_GENERATED_BOX_SUPPRESSED — a pseudo switched OFF must generate nothing
+    ///
+    /// `@media (max-width:600px){ .card::after{ display:none } }` is how every responsive
+    /// stylesheet retires a separator, chevron, ribbon or decorative rule — **80 of the 170 fetched
+    /// burndown pages (47%) declare one** — and it was ignored: the pseudo's text stayed laid out
+    /// and painted. Chrome-exact on two shrink-to-fit owners differing only in the pseudo's display:
+    /// `#shown` 135px, `#hidden` **39px** (`"Text"` alone); we gave 135 for both.
+    ///
+    /// `css/CSS2/generated-content` 61 -> 67, +6 and 0 lost — exactly `-012` / `-013` / `-016`,
+    /// both sides, which all match the same "no box" reference.
+    ///
+    /// ⚠⚠ **The owner must be SHRINK-TO-FIT or this gate cannot see its own subject.** With a
+    /// full-width block owner both rects are the viewport width whatever is inside them, and the
+    /// first probe of this defect reported it as WORKING for exactly that reason.
+    ///
+    /// To watch it go RED: make `generated_box_is_suppressed` return `false`.
+    #[test]
+    fn a_generated_box_whose_display_makes_no_box_generates_no_content() {
+        let owner_width = |disp: &str| -> f32 {
+            // `inline-block` is load-bearing: a block owner is full-width and hides the defect.
+            let css = format!("#o::before {{ content: \"AAAAAAAAAA\"; display: {disp} }}");
+            let html = r#"<div id="o" style="display:inline-block;font-size:16px;line-height:20px">Text</div>"#;
+            let (dom, root) = layout_html(html, &css, 800.0);
+            let rects = root.node_rects(&dom);
+            let o = dom
+                .descendants(dom.root())
+                .find(|&n| dom.element(n).and_then(|e| e.attr("id")) == Some("o"))
+                .expect("#o");
+            rects[&o].width
+        };
+        let shown = owner_width("inline");
+        let hidden = owner_width("none");
+        assert!(
+            hidden < shown,
+            "a `display:none` ::before must generate NO box and NO content — the owner shrinks to \
+             its own text. Both {shown} means the pseudo was laid out and painted anyway, which is \
+             what every responsive breakpoint that retires a separator or chevron asks for."
+        );
+        assert_eq!(
+            owner_width("table-column"),
+            hidden,
+            "…and `table-column` / `table-column-group` generate no content box either — the CSS \
+             2.1 suite says so directly by matching -012/-013 to the SAME reference as -016 \
+             (`display:none`)."
+        );
+        assert_eq!(
+            owner_width("table-column-group"),
+            hidden,
+            "…both column values, or the rule is a special case for one spelling"
+        );
+    }
+
     #[test]
     fn a_generated_box_with_a_block_display_is_a_block_box() {
         let owner_height = |disp: &str| -> f32 {

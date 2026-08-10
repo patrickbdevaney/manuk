@@ -5,6 +5,42 @@ Manuk's flex and grid layout runs on a vendored **taffy 0.12** tree (`engine/lay
 lays out the flex/grid containers and their directly-nested flex/grid descendants. The mapping from
 Manuk's `ComputedStyle` to `taffy::Style` (`to_taffy_style`) is where the realities below live.
 
+## A GENERATED BOX WHOSE `display` MAKES NO BOX MUST MAKE NO CONTENT — 47% of corpus pages switch a pseudo off at a breakpoint (t1093)
+
+`@media (max-width:600px){ .card::after{ display:none } }` is how every responsive stylesheet
+retires a separator, chevron, ribbon or decorative rule. It was ignored entirely — the pseudo's text
+was materialised regardless, so the content stayed **laid out and painted**. Priced on the burndown
+corpus: **80 of the 170 fetched pages (47%)** declare a `::before`/`::after` with `display:none`,
+which puts it above the rest of the generated-content cluster on usage weight alone.
+
+Chrome-exact, on two shrink-to-fit owners differing only in the pseudo's display:
+
+```text
+   #shown::before  { content:"AAAAAAAAAA" }                Chrome w=135   ours 135  ✓
+   #hidden::before { content:"AAAAAAAAAA"; display:none }  Chrome w= 39   ours 135  ✗
+```
+
+`39` is `"Text"` on its own — ten characters Chrome does not draw and we did. One predicate at the
+point the pseudo's text is extracted; `css/CSS2/generated-content` **61 → 67, +6 and 0 lost**, other
+40 directories byte-identical.
+
+**`table-column` and `table-column-group` ride the same rule, and the SUITE is what says so** —
+`before/after-content-display-012` and `-013` match the *same reference* as `-016` (`display:none`),
+because a column box generates no content box. That is a spec fact read off the corpus rather than
+an analogy between value names, which matters: the neighbouring `inline-table` looks equally like
+`table` and belongs on the opposite side (see the §12.1 entry below).
+
+### ⚠⚠ The first probe reported the defect as WORKING, because the fixture could not express it
+
+With two **full-width block** owners every rect agreed — a block box is 1200 wide whatever is inside
+it, so the extra ten characters changed nothing measurable. The owners had to be made
+`inline-block` before the geometry could express the subject at all.
+
+> **A fixture that cannot express its subject reports the subject as WORKING** — the mirror of the
+> t1046 case, where one reported its subject as BROKEN. The gate therefore comments its
+> `inline-block` owner as load-bearing: the block-owner version of that test passes on the broken
+> engine.
+
 ## A GENERATED BOX HAS ITS OWN `display` (CSS 2.1 §12.1) — and the cascade conflating `table` with `inline-table` capped the fix (t1092)
 
 `collect_inline_group` materialises `::before` / `::after` as inline `Word`s. It never read the
