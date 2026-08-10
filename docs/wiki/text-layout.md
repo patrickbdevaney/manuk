@@ -2740,3 +2740,42 @@ The four-invariant aggregate is nearly flat (−364 +263 +113 = +12) and shape r
 refused: **a redistribution that cannot be accounted for is not evidence that it is safe.** The next
 brick is to take one of the 36 containers, diff our line breaks against Chrome's inside it, and land
 the break-opportunity change **with** that fix rather than before it.
+
+### The 36 containers are NOT the break rule — three hypotheses, three fixtures, three negatives (t1106)
+
+Taking one of the containers the candidate fix disturbed: Wikipedia's `.hlist` sidebar
+(`section[1]/table[3]/tr[10]/td[1]`), four `<li display:inline>` links in a `<ul>`. Asked of Chrome
+rather than assumed, **every one of them computes `white-space: normal`** — so the nowrap rule this
+whole arc began from does not apply to this container at all.
+
+```text
+                    Chrome                 ours
+   td            [0  0 319x65]          [0   0 311x45]
+   ul            [8  0 304x59]          [7   0 296x39]     ← one line shorter
+   li1           [83 1 139x16]          [0   1 130x16]
+   li2           [0 21 304x16]          [130 1 300x16]     ← ours on LINE 1, Chrome's on line 2
+   li3           [71 40 64x16]          [72  1 358x36]     ← ours spans two lines; a UNION rect
+```
+
+`li1 + li2` is **430px on one line in a 296px box.** The overlap and reading-order pairs are a
+*consequence* of that single over-full line, not of a break landing in the wrong place.
+
+Three plausible causes, each killed by a fixture:
+
+| Hypothesis | Fixture | Result |
+|---|---|---|
+| whitespace between inline `<li>`s is dropped | `<ul><li>a</li> <li>b</li></ul>` ± the space, ± a forced wrap | `ul` 300x19 / 300x19 / 300x38 — **Chrome-exact on all rows** |
+| `text-align:center` does not reach inline `<li>`s | centred `ul`/`div`, on the block and on the list | `li` x=102 w=48 — **Chrome-exact on all four rows** |
+| the break opportunity is still missing here | — | these `li` are `white-space: normal`; the rule cannot apply |
+
+⚠ **The centring row is worth keeping for the reason it was suspected.** Chrome's `li1` sits at x=83
+in a 304px `ul` and ours at x=0, which reads exactly like a missing `text-align: center` — and our
+engine centres the fixture to the pixel. **A 430px line in a 296px box has no centring to do.** The
+symptom named the wrong organ for the second time in this arc: t1103's route named *tables*, this one
+named *alignment*, and both were downstream of a wrap.
+
+**Still open, as a question:** why do a 130px item and a 300px item share a 296px line when the
+placement loop tests `pen + space_w + advance > line_avail`? They are laid ADJACENT
+(`li2.x == li1.width` exactly), so no space item separates them in our stream — while the synthetic
+fixture produces the gap correctly. The difference is on the real page: `.hlist` adds
+`li::after { content: " · " }` between every pair, and removing that is the first bisection step.

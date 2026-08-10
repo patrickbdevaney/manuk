@@ -46371,6 +46371,71 @@ PERF: none — one UA rule and one narrowed branch in a cascade that already ran
 WIKI: `docs/wiki/css-cascade.md` — where Chrome draws the form-control `box-sizing` line, and why a
 layout-crate test cannot see it.
 
+## Tick 1106 — the 36 containers are NOT the break rule, and three fixtures say so (2026-08-10)
+
+TICK SHAPE: measurement — t1105's named next brick: take one of the 36 containers whose reading
+order the candidate wrap fix disturbed, and find out *where* we break wrongly. **The answer is that
+we do not break wrongly.** The candidate remains reverted; the residue is a different, still-open
+defect, and this tick's value is that it is now bounded by three negative results instead of being
+"36 unexplained containers".
+
+**THE CONTAINER, CHARACTERISED — both engines, parent-relative, on the live page.** Wikipedia's
+`.hlist` sidebar (`section[1]/table[3]/tr[10]/td[1]`), four `<li display:inline>` links in a `<ul>`,
+`white-space: normal` on every one of them (asked of Chrome, not assumed — **the nowrap rule this
+whole arc started from is not what this container uses**):
+
+```text
+                    Chrome                 ours
+   td            [0  0 319x65]          [0   0 311x45]
+   ul            [8  0 304x59]          [7   0 296x39]     ← one line shorter
+   li1           [83 1 139x16]          [0   1 130x16]
+   li2           [0 21 304x16]          [130 1 300x16]     ← ours on LINE 1, Chrome's on line 2
+   li3           [71 40 64x16]          [72  1 358x36]     ← ours spans two lines; a UNION rect
+```
+
+`li1 + li2` is **430px laid on one line in a 296px box.** That is the whole defect at this site: the
+overlap and reading-order pairs are a *consequence* of one over-full line, not of a break that landed
+in the wrong place.
+
+⚠⚠⚠ **AND THREE PLAUSIBLE CAUSES WERE EACH KILLED BY A FIXTURE, WHICH IS WHY THIS IS A RESULT AND
+NOT A SHRUG.** Every one of them would have been a reasonable thing to go build:
+
+```text
+   whitespace BETWEEN inline <li>s is dropped      ul 300x19 / 300x19 / 300x38  = Chrome, all rows
+   text-align:center does not reach inline <li>s   li x=102 w=48                = Chrome, all four rows
+   the break OPPORTUNITY is still missing here     these li are white-space:normal — the rule
+                                                   cannot apply to them at all
+```
+
+The centring row is worth keeping for the reason it was suspected: Chrome's `li1` sits at x=83 in a
+304px `ul`, ours at x=0, which reads exactly like a missing `text-align: center`. It is not — our
+engine centres that fixture to the pixel. **A line that is 430px wide in a 296px box has no centring
+to do**, and the x=0 is the over-full line showing through. *The symptom named the wrong organ*
+(STATUS lesson 2), for the second time in this arc: t1103's route named tables, this one names
+alignment, and both were downstream of a wrap.
+
+**WHAT IS STILL OPEN, stated as a question and not a hypothesis:** why does a 130px item followed by
+a 300px item share a 296px line at all, when the placement loop's own test is
+`pen + space_w + advance > line_avail`? The two are laid ADJACENT (`li2.x == li1.width` exactly), so
+there is no space item between them in our item stream — yet the synthetic `<li>alpha</li>
+<li>beta</li>` fixture produces the gap correctly. The difference is on the real page, so the next
+step is to **bisect the real container's CSS**, not to write a fourth synthetic battery. `.hlist`
+adds `li::after { content: " · " }`, which puts generated content between every pair — that is the
+first thing to remove.
+
+RATCHET: held. The candidate wrap fix stays reverted for the second tick running, and this tick
+found nothing that changes that verdict. No crate touched; `git status` clean on `engine/`.
+
+GATE: none — three of this tick's four measurements are NEGATIVE results (the engine already agrees
+with Chrome), and a gate on behaviour that is already correct is the vacuous-gate failure this
+project has a standing rule against. The falsifiable content is the three fixtures, reproduced in
+the wiki, and the two-engine table above.
+
+PERF: none.
+
+WIKI: `docs/wiki/text-layout.md` — the t1105 entry now carries the container's two-engine numbers and
+the three cleared hypotheses. [no-pattern]
+
 ## Tick 1105 — the wikipedia blow-up is a MISSING BREAK OPPORTUNITY, and the fix is REFUSED (2026-08-10)
 
 TICK SHAPE: measurement — check #103's steer #1 (reduce wikipedia's nested-table blow-up from the

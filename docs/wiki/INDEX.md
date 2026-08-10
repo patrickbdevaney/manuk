@@ -1872,6 +1872,7 @@
   - L2680 · A soft wrap opportunity at a space belongs to the element that CONTAINS the space (t1105)
   - L2703 · What it costs, and how it reaches a table
   - L2719 · The fix is known, was measured, and is REFUSED — the residue is a second defect
+  - L2744 · The 36 containers are NOT the break rule — three hypotheses, three fixtures, three negatives (t1106)
 
 ## The wasm demo — running the engine inside someone else's browser
 `docs/wiki/wasm-demo.md`
@@ -1899,4 +1900,4 @@
   - L124 · Rank mechanisms by FLIP RATE, not failing-subtest count — CSS layout is a multi-assertion slog
 
 ---
-1806 sections across 22 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+1807 sections across 22 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
