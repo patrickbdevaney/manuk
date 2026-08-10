@@ -11,12 +11,12 @@
 
 | | value | over |
 |---|---|---|
-| ticks landed | **816** | ticks 1–1108 |
-| median tick cycle | **27m** | 815 intervals |
+| ticks landed | **817** | ticks 1–1109 |
+| median tick cycle | **27m** | 816 intervals |
 | median, last 10 | **42m** | 10 intervals |
 | fastest / slowest | 5s / 5.4d | |
-| **ticks per hour** | **1.12** | 725.9h elapsed |
-| median verify wall | **63s** | 755 ticks |
+| **ticks per hour** | **1.12** | 727.3h elapsed |
+| median verify wall | **63s** | 756 ticks |
 | wall trend | 39s → 13m — getting slower ⚠️ | first 3 vs last 3 |
 
 The **cycle** is the real unit: implement → debug → verify wall → land. The wall is only part of
@@ -31,7 +31,7 @@ it, and a wall that grows taxes every future tick, so it is tracked separately f
 * **✅ rows in the capability ledger**: 144 → **555**
 * **Bar 0 — oracle hangs**: 0 of 265 sites
 
-**358 of 816 ticks** (44%) moved a
+**358 of 817 ticks** (44%) moved a
 user-visible capability. The rest were instruments, infrastructure and corrections — and the
 ledger says the corrections were not overhead: three of its top three priorities were phantoms,
 and finding that out redirected everything after it.
@@ -91,7 +91,7 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 ## What a capability costs
 
 * **358** capability ticks, median cycle **27m**
-* median diff per tick: **+262 / −34** lines across 8 files
+* median diff per tick: **+263 / −34** lines across 8 files
 
 ## Every tick
 
@@ -913,5 +913,6 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 | **1106** | 2026-08-10 08:58 | 31m | measurement | 13m | +139/−33 | 437 | 81 | 56.0% · | the 36 containers are NOT the break rule, and three fixtures say so (2026-08-10) |
 | **1107** | 2026-08-10 09:47 | 49m | capability | 13m | +535/−124 | 437 | 81 | 56.0% · | the separator was not there, and half the corpus declares one (2026-08-10) |
 | **1108** | 2026-08-10 10:55 | 69m | capability | 13m | +646/−130 | 437 | 81 | 56.0% · | a break opportunity is a property of the GAP, and the breaker could not go back to one (20 |
+| **1109** | 2026-08-10 12:24 | 88m | measurement | 13m | +462/−32 | 437 | 81 | 56.0% · | the anchor moved 12.7 points and the corpus moved zero (2026-08-10) |
 
 *`·` after a WPT figure means **carried forward**, not measured this tick.*

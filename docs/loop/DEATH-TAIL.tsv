@@ -33,3 +33,4 @@ from_tick	to_tick	dticks	from_m1cnt	to_m1cnt	m1_crossings	m1_cross_per_tick	from
 1049	1080	31	23	23	+0	+0.000	108	106	-0.065	crux
 1080	1089	9	23	23	+0	+0.000	106	110	+0.444	crux
 1089	1099	10	23	23	+0	+0.000	110	107	-0.300	crux
+1099	1109	10	23	23	+0	+0.000	107	110	+0.300	crux

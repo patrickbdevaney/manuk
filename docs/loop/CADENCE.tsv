@@ -815,3 +815,4 @@ tick	sha	epoch	iso	delta_s	shape	wall_s	files	added	deleted	gates	claims	wpt_pas
 1106	78565a5d	1786366705	2026-08-10T08:58:25-04:00	1867	measurement	808	6	139	33	437	81	3896	6960	0	555	0	the 36 containers are NOT the break rule, and three fixtures say so (2026-08-10)
 1107	42edb612	1786369622	2026-08-10T09:47:02-04:00	2917	capability	808	7	535	124	437	81	3896	6960	0	555	0	the separator was not there, and half the corpus declares one (2026-08-10)
 1108	bf36eea0	1786373749	2026-08-10T10:55:49-04:00	4127	capability	808	7	646	130	437	81	3896	6960	0	555	0	a break opportunity is a property of the GAP, and the breaker could not go back to one (2026-08-10)
+1109	0d862304	1786379042	2026-08-10T12:24:02-04:00	5293	measurement	808	10	462	32	437	81	3896	6960	0	555	0	the anchor moved 12.7 points and the corpus moved zero (2026-08-10)

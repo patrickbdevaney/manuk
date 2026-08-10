@@ -46371,6 +46371,94 @@ PERF: none — one UA rule and one narrowed branch in a cascade that already ran
 WIKI: `docs/wiki/css-cascade.md` — where Chrome draws the form-control `box-sizing` line, and why a
 layout-crate test cannot see it.
 
+## Tick 1109 — the anchor moved 12.7 points and the corpus moved zero (2026-08-10)
+
+TICK SHAPE: measurement — the board's own IMMEDIATE #1, flagged **602 hours stale** with ten ticks
+landed against an unmeasured headline: a full 200-site sweep of the CrUX trend corpus against the
+t1108 tree. Banked at `docs/loop/SWEEP-t1109-rows.tsv`; `scripts/fidelity-progress.sh` recorded the
+row.
+
+```text
+   scored 110 of 133 in-scope (82.7% scorability ceiling · 67 excluded bot-wall/unreachable)
+   mean coverage 86.8%   mean shape 60.6%
+   shape >= 0.75 ..................  39/133  29.3%   (t1099: 37/133  27.8%)
+   M1 = shape>=0.75 AND jarring-clean  23/133  17.3%   (t1099: 17.3%)
+   COMMON-SET BAND, 104 sites scored in BOTH  ....  -0.12 pts   (73 flat · 14 up · 17 down)
+```
+
+⚠⚠⚠ **THE ANCHOR IS NOT THE CORPUS.** t1107 and t1108 moved `en.wikipedia.org` **0.6609 → 0.7876,
++12.7 pts**, and killed its entire 394-element horizontal overflow. The corpus moved **−0.12 pts**,
+with 73 of 104 common sites byte-flat. M1 is 17.3% before and after. **This is reported before any
+comfortable reading of it**, because the two ticks it prices are mine and the pass-count did rise
+(+1.5 pts, inside its own ±2-4 site noise).
+
+It is not evidence the ticks were wrong: `css/CSS2` moved **+36 with 0 lost** across the two, both
+fixes are Chrome-exact on their own subjects, and 19 of 20 battery rows agree. It is the standing
+lesson firing at CORPUS scale: **usage weight ranks where to LOOK; only a probe says whether anything
+is THERE.** t1107 priced `::before`/`::after` on an inline element at 50% of corpus pages, and on most
+of those the pseudo is a quote mark or an icon adding a few px of ink — not a separator inside a
+width-constrained container that changes how a line breaks. The 50% was real and the leverage was not
+where the count said.
+
+⚠⚠⚠ **AND THE ORACLE'S OWN RANKING IS NOT THE WORK-LIST — DECOMPOSING M1'S CONJUNCTION IS.** The
+mechanism oracle reports 219 distinct causes over 1,965 divergences and its TOP cause explains **5
+sites**; nothing covers 5% of the corpus, which reads like a death tail and is not one. Splitting M1
+into its two legs finds the concentration the cause-ranking cannot see:
+
+```text
+   of the 110 scored sites
+     M1 PASS (shape ok AND jarring-clean) ..........  20
+     shape ok, blocked ONLY by jarring .............  19   <- the cheapest tier
+     jarring-clean, blocked only by shape ..........  13
+     neither .......................................  58
+   blocking those 19:  reading_order 16 · h_overflow 11 · overlap 11 · dead_target 1
+   shape near-miss (0.65-0.75), one tier under the bar ....  19 sites
+```
+
+**THREE SITES ARE ONE DEFECT FROM M1** — `sports.yahoo.com` (shape 0.881, ONE reading-order pair),
+`hnhbkis.edu.in` (0.932, TWO h-overflow elements), `www.marktplaats.nl` (0.962, TWO h-overflow
+elements) — and seven are blocked by six or fewer jarring pairs each. That is 17.3% → 22.6% from
+defects each small enough to reduce to one container. **That is the next work-list, in that order.**
+
+⚠⚠ **THE OPEN CONTROL, NAMED RATHER THAN ASSUMED AWAY.** Four sites lost `overlap`-clean over the
+window (`desiviral.net`, `mayatoys.in`, `pordentrodetudo.com.br`, `sestra.cc`) and two lost
+`h-overflow`-clean (`mayatoys.in` 0→77, `www.repubblica.it` 0→320). The window is **ten ticks and
+eight hours of live-site drift**, so none of it is attributable: only an OLD-BINARY run on those six
+sites in the same hour decides whether any of it is ours, and that is the first thing t1110 does.
+`mayatoys.in` is ambiguous in both directions — it also gained **+0.436 shape**, the signature of a
+site that went from barely-rendering to mostly-rendering and collected new invariant hits on the way.
+
+⚠⚠⚠ **AND THE SURFACE AUDIT CAME DUE MID-TICK AND FOUND THE EMBARRASSING KIND OF GAP: THE ARC THIS
+LOOP HAS BEEN WORKING FOR FOUR TICKS HAD NO MAP ROW.** Banked as audit #51. Interop 2026's 20 focus
+areas added **zero** rows for the second audit running — every one already had a row — while
+`white-space`, `wrap opportunity` and `soft hyphen` had **zero rows each**, and `UAX` had one, from
+tick 225. The map held `hyphens: auto` (unmeasurable) and `CJK line breaking` (gated) with nothing
+between them, so the mechanism underneath both was invisible to every instrument that reads the map.
+
+**This is the map-drawn-from-memory failure running in the OTHER direction.** The audit exists to
+catch what the world has and we lack; this time it caught **three capabilities we BUILT and never
+claimed**, sitting beside two we lack and could not see. Seven rows added; the two new `missing` ones
+are `soft hyphen U+00AD is a HYPHENATION opportunity` (t1108 battery row e3: Chrome 3 lines, ours 2)
+and the generated-content line-edge space. ⚠ **`break_segments` is a HAND-ROLLED opportunity finder
+and the map called its result "CJK line breaking, gated"** — Ladybird shipped real UAX #14 in 2026
+and named CJK and long words as what it fixed, which is the same pair our tick-225 probe checked.
+Four of the five classes we can measure are Chrome-exact; the classes a hand-rolled finder does not
+know are invisible until a site hits one. Map drift back at its pre-existing 7; MEASURED 515/551.
+
+RATCHET: held — no crate touched, `git status` clean on `engine/`. The sweep is a reading, and the one
+number it produces that could be read as a regression (four overlap-clean sites) is explicitly NOT
+claimed as one until the control runs.
+
+GATE: none — a measurement tick. The falsifiable content is the banked per-site rows, which any later
+sweep diffs against, and the three named sites, each of which is a single testable prediction: fix one
+defect and the site's M1 flips.
+
+PERF: none.
+
+WIKI: `docs/loop/PHASE0-RENDER-BURNDOWN.md` §8 — "the corpus is FLAT, and the remaining gap has a
+SHARP work-list", with the M1-conjunction decomposition and the named seven-site queue; plus
+`docs/loop/SURFACE-AUDIT.md` #51. [no-pattern]
+
 ## Tick 1108 — a break opportunity is a property of the GAP, and the breaker could not go back to one (2026-08-10)
 
 TICK SHAPE: capability — t1107's named next brick, and it turned out to be t1105's refused fix as

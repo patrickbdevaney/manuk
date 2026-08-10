@@ -5366,3 +5366,68 @@ honest options, in order:
 2. Record TEXT in the probe, which closes blind spot (3) and would have caught the counter defect.
 3. Keep the CSS 2.1 suite as the ranking instrument for anything M1 cannot express, and stop
    treating a flat M1 as a verdict on work M1 has no term for.
+
+## Audit #51 (tick 1109, 2026-08-10) — the arc the loop has been working for four ticks had NO MAP ROW
+
+**Sources, read this session, not from memory:**
+
+- `https://github.com/web-platform-tests/interop/blob/main/2026/README.md` — the 20 focus areas and
+  4 investigation efforts, verbatim
+- `https://ladybird.org/newsletter/2026-07-31/` and `/2026-02-28/` — what an independent engine
+  found hard in 2026, and in what order
+- `https://www.unicode.org/reports/tr14/` (UAX #14) and
+  `https://www.unicode.org/L2/L2019/19041-linebrk-soft-hyphen.html` — the soft-hyphen tailoring
+
+### What the world named that we did not
+
+**Interop 2026 added ZERO rows again** — all 20 focus areas (container style queries, anchor
+positioning, `attr()`, `contrast-color()`, `zoom`, custom highlights, dialogs/popovers, fetch
+uploads+ranges, IndexedDB, JSPI, media pseudo-classes, Navigation API, scoped custom element
+registries, scroll-driven animations, scroll snap, `shape()`, view transitions, web compat, WebRTC,
+WebTransport) already have rows. That is the second consecutive audit where the reference list is
+fully covered, which is itself the warning: **the reference list is not where our gaps are.**
+
+⚠⚠⚠ **THE FINDING, AND IT IS THE EMBARRASSING KIND. Ticks 1105–1108 were spent entirely on the
+soft-wrap-opportunity rule — the largest single shape movement the anchor site has ever had — and the
+capability map had NO ROW for any of it.** `white-space`: zero rows. `wrap opportunity`: zero rows.
+`soft hyphen`: zero rows. `UAX`: one row, and it was `CJK line breaking` from tick 225. The map had
+`hyphens: auto` (unmeasurable) and `CJK line breaking` (gated) and nothing between them, so the
+mechanism underneath both was invisible to every instrument that reads the map.
+
+**This is the map-drawn-from-memory failure running in the OTHER direction.** The audit exists to
+catch capabilities the world has and we lack; this time it caught **three capabilities we BUILT and
+never claimed**, sitting beside two we lack and could not see. A map that cannot see the work in
+flight ranks the next tick against a frame that is missing its own main line.
+
+### Added (7 rows)
+
+```text
+   gated    a soft wrap opportunity belongs to the element CONTAINING the space (CSS Text §3)
+   gated    NO break opportunity where there is no white space (adjacent inline siblings)
+   gated    a greedy line breaker must REWIND to the last break opportunity
+   gated    `::before`/`::after` on a NESTED INLINE element
+   partial  UAX #14 line breaking — the Unicode algorithm rather than a hand-rolled split
+   missing  soft hyphen U+00AD is a HYPHENATION opportunity (break AND render a visible hyphen)
+   missing  a collapsible space at the end of a line is removed — for GENERATED CONTENT
+```
+
+Map drift is back at its pre-existing 7 (the new `partial` row was re-stated as `missing` rather than
+left as a bare assertion). MEASURED 515 of 551; `unknown` still 36.
+
+### What we had been wrong about
+
+**`break_segments` is a hand-rolled line-break opportunity finder and the map called the result
+"CJK line breaking, gated".** Ladybird shipped the real UAX #14 in 2026 and named CJK and long words
+as what it fixed — the same two things our tick-225 probe checked. Four of the five classes we can
+currently measure are Chrome-exact (CJK, hyphen, `<wbr>`, `overflow-wrap:break-word`); the fifth,
+soft hyphen, is not, and we only know that because t1108's battery happened to include a row for it.
+**The classes a hand-rolled finder does not know are invisible until a site hits one**, which is
+exactly the shape of an unknown unknown, and the row now says so instead of claiming a gate.
+
+### The re-rank
+
+It does not displace the t1109 sweep's work-list — three sites are one defect from M1 and that is
+still the cheapest tier. But the two new `missing` rows are both **line-count** defects, and a wrong
+line count is the burndown's own named mechanism #1 (a whole-subtree `dy` cascade below it), so they
+belong in the same queue rather than in a text-rendering backlog: the generated-content one is
+already the named next brick, and it is now on the map where the next audit can see it.

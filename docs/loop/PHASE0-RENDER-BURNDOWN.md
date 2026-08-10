@@ -222,3 +222,69 @@ along, and it is now attached to named sites with per-element evidence instead o
 **Next render tick starts here**: determine why the `secure5` `<article>` resolves `width:auto` to the
 containing block instead of shrink-to-fit (float / inline-block / abspos / flex-item / `fit-content`),
 fix that one primitive, and prove it on all four near-bar sites before claiming a crossing.
+
+---
+
+## 8. The t1109 sweep — the corpus is FLAT, and the remaining gap has a SHARP work-list
+
+**200-site CrUX trend corpus, run against the tree at t1108** (`docs/loop/SWEEP-t1109-rows.tsv`). The
+board had flagged the sweep 602 hours stale, with ten ticks landed against an unmeasured headline.
+
+```text
+   scored 110 of 133 in-scope (82.7% scorability ceiling · 67 excluded bot-wall/unreachable)
+   mean coverage 86.8%   mean shape 60.6%
+   shape >= 0.75 ..................  39/133  29.3%   (t1099: 37/133  27.8%)
+   M1 = shape>=0.75 AND jarring-clean  23/133  17.3%   (t1099: 17.3%)
+   COMMON-SET BAND over the 104 sites scored in BOTH  ....  -0.12 pts
+```
+
+⚠⚠⚠ **THE ANCHOR IS NOT THE CORPUS, AND THE GAP BETWEEN THEM IS THE FINDING.** t1107 and t1108 moved
+`en.wikipedia.org` **0.6609 → 0.7876 (+12.7 pts)** and killed its entire 394-element horizontal
+overflow. The corpus moved **−0.12 pts**, with **73 of 104 sites byte-flat**, 14 up and 17 down. The
+pass-count rose +1.5 pts, which is inside its own ±2–4 site noise.
+
+That is not an argument that the ticks were wrong — `css/CSS2` moved +36 with 0 lost across the two,
+and both fixes are Chrome-exact on their own subjects. It is the standing lesson firing at corpus
+scale: **usage weight ranks where to LOOK; only a probe says whether anything is THERE.** t1107 priced
+`::before`/`::after` on an inline element at 50% of corpus pages and the corpus still did not move,
+because on most of those pages the pseudo is a quote mark or an icon that adds a few px of ink, not a
+separator inside a width-constrained container that changes how a line breaks.
+
+### 8.1 The ranked work-list, and it is much sharper than "219 root causes"
+
+The mechanism oracle reports 219 distinct causes over 1,965 divergences and its top cause explains
+**5 sites** — no single mechanism covers 5% of the scored corpus. Decomposing **M1's conjunction**
+instead is far more actionable:
+
+```text
+   of the 110 scored sites
+     M1 PASS (shape ok AND jarring-clean) ..........  20
+     shape ok, blocked ONLY by jarring .............  19   <- the cheapest tier
+     jarring-clean, blocked only by shape ..........  13
+     neither .......................................  58
+   which invariant blocks those 19:  reading_order 16 · h_overflow 11 · overlap 11 · dead_target 1
+   shape near-miss (0.65 - 0.75, one tier below the bar)  19 sites
+```
+
+**THREE SITES ARE ONE DEFECT AWAY FROM M1**, and they are named:
+
+```text
+     sports.yahoo.com     shape 0.881    ONE reading-order pair
+     hnhbkis.edu.in       shape 0.932    TWO h-overflow elements
+     www.marktplaats.nl   shape 0.962    TWO h-overflow elements
+     ...then aksesjambi.com (4), redinfor.com.pe (4), simplepdf.com (5), freesupertips (6)
+```
+
+Seven sites are blocked by six or fewer jarring pairs each. That is +7 M1 sites — 17.3% → 22.6% —
+from defects small enough that each one is a single reducible container, which is the shape of work
+this loop is good at. **Take them in that order.**
+
+### 8.2 The open control
+
+Four sites lost `overlap`-clean across the window (`desiviral.net`, `mayatoys.in`,
+`pordentrodetudo.com.br`, `sestra.cc`) and two lost `h-overflow`-clean (`mayatoys.in` 0→77,
+`www.repubblica.it` 0→320). The window spans **ten ticks and eight hours of live-site drift**, so
+none of it is attributable yet: an OLD-BINARY run on those six sites, in the same hour, is what
+decides whether any of it is ours. `mayatoys.in` is the ambiguous one in both directions — it also
+gained **+0.436 shape**, which is the signature of a site that went from barely-rendering to mostly-
+rendering and picked up new invariant hits on the way.
