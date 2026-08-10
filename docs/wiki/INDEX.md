@@ -1881,6 +1881,10 @@
   - L2914 · Restricting the opportunities exposed a forward-only greedy breaker
   - L2936 · Three details the restriction made load-bearing
   - L2946 · What it bought
+  - L2974 · Generated content is TEXT, so its white space collapses — and an empty block-level generated box is not an inline word (t1110)
+  - L2996 · Two bugs in the fix, both caught by the suite and neither by reasoning
+  - L3008 · The gate had a VACUOUS ROW and the mutation is what found it
+  - L3015 · What it is worth, measured honestly
 
 ## The wasm demo — running the engine inside someone else's browser
 `docs/wiki/wasm-demo.md`
@@ -1908,4 +1912,4 @@
   - L124 · Rank mechanisms by FLIP RATE, not failing-subtest count — CSS layout is a multi-assertion slog
 
 ---
-1815 sections across 22 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+1819 sections across 22 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.

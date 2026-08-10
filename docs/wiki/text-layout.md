@@ -2970,3 +2970,58 @@ content is one word with its spaces baked in. That is t1107's named row-3 residu
 corpus price on it: it re-groups items near a line edge, and `node_rects` reports a multi-line inline
 as a UNION rect, so a re-grouping reads as a sibling collision. **Collapsing a generated separator's
 outer spaces at a line edge is the next brick.**
+
+## Generated content is TEXT, so its white space collapses — and an empty block-level generated box is not an inline word (t1110)
+
+t1107 let a nested inline's `::before`/`::after` into the flow and billed its `content` string
+verbatim. Two things that could not matter while the content rendered nowhere immediately did.
+Chrome-measured, `<div><span>alpha</span>bravo</div>` at `16px/1 monospace`:
+
+```text
+                                                          Chrome   t1108   after
+   span::after{content:" "}                                 57.81   58      58    ✓
+   span::after{content:"  "}            two spaces          57.81   67      58    ← collapse
+   span::after{content:" ";display:table}   the CLEARFIX    48.17   58      48    ← empty box
+   span::after{content:" "} + white-space:pre               57.81   58      58    ✓
+   no pseudo                            CONTROL             48.17   48      48    ✓
+   span::after{content:" "} + a source space after it       57.81   58      58    ✓
+   <div>a<span class=cf></span>b</div>   the span's width     0      19       0   ← empty box
+```
+
+`content:" "; display:table` is **Bootstrap's clearfix**. Every `.cf` / `.clearfix` inline was
+carrying ~19px of phantom width, which displaces its siblings and reads out as overlap. The
+float-containment half of the idiom is untouched: it is read from the block's own `::after`, not
+from the inline path.
+
+### Two bugs in the fix, both caught by the suite and neither by reasoning
+
+- **Rust's `char::is_whitespace` is true for U+00A0** and CSS's collapsible set is space, tab and
+  newline. The first collapse used `split_whitespace()` and silently ate the trailing `\A0` out of
+  `content: "Filler text\A0"` — `css/CSS2/generated-content/before-content-display-005` and `-007`
+  both went red.
+- **`Display::Table` cannot be added to `generated_box_is_block_level`**, because `engine/css` maps
+  *both* `table` and `inline-table` to that one variant. Adding it gained `-006` and lost `-007` — a
+  wash that trades a right answer for a wrong one. The clearfix suppression tests `display` itself
+  instead, which needs no such distinction because its content is empty. **The cascade conflation is
+  the real defect and is now on the map.**
+
+### The gate had a VACUOUS ROW and the mutation is what found it
+
+The first NBSP assertion was *"`content:"x\A0"` bills more than bare"* — and collapsing an NBSP to a
+plain space bills **exactly the same width**, so the mutation that swapped in Rust's whitespace set
+left the row GREEN. A run of **two** NBSPs is the discriminator: two characters under the CSS set,
+one under Rust's. *Run every mutation; a green one is the finding.*
+
+### What it is worth, measured honestly
+
+```text
+   css/CSS2 per-TEST state diff     3899 → 3900      +1 GAINED, 0 LOST
+   manuk-layout                     157/157
+   en.wikipedia.org                 byte-identical to t1108 (n 4844, shape 0.7876, overlap 95)
+   sestra.cc                        inside its own run-to-run band (overlap 15,15 vs 14,15)
+```
+
+⚠ **A single A/B run said +5.7 shape on wikipedia and −10 overlap on sestra.cc. Interleaved repeat
+runs of BOTH binaries say both are ZERO.** The wikipedia "gain" came with the population moving
+4844 → 4498, which is the tell; re-running the two binaries alternately produced byte-identical rows
+for both. Two favourable headlines, killed by the rule that is supposed to kill them.

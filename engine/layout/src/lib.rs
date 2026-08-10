@@ -2149,6 +2149,13 @@ fn generated_box_is_block_level(p: &ComputedStyle) -> bool {
             | Display::FlowRoot
             | Display::Flex
             | Display::Grid
+            // ⚠⚠ **`Display::Table` IS DELIBERATELY ABSENT, AND THAT IS A CASCADE BUG SHOWING
+            // THROUGH, NOT A LAYOUT DECISION.** `engine/css` maps BOTH `table` and `inline-table`
+            // to `Display::Table` (one rule, two values), so listing it here makes an
+            // `inline-table` pseudo block-level too — measured: `css/CSS2/generated-content`
+            // `before/after-content-display-006` GAIN and `-007` LOSE, a wash that trades a right
+            // answer for a wrong one. The clearfix case is handled by its own `display` test in
+            // `push_pseudo`, which needs no such distinction because its content is empty.
             | Display::TableRowGroup
             | Display::TableHeaderGroup
             | Display::TableFooterGroup
@@ -8672,6 +8679,7 @@ impl Ctx<'_> {
         if text.is_empty() || generated_box_is_suppressed(p) {
             return None;
         }
+        let mut text = text;
         // ⚠⚠ **`position: absolute` on a pseudo was IGNORED, and the marker sat in the flow.**
         //
         // `.item::before { content: "–"; position: absolute; left: 0 }` with `padding-left: 20px` on
@@ -8706,6 +8714,33 @@ impl Ctx<'_> {
                 0.0
             }
         });
+        // ⚠⚠ **GENERATED CONTENT IS TEXT, SO ITS WHITE SPACE COLLAPSES LIKE TEXT'S**
+        // (CSS Text §4.1.1). `content: "  "` is ONE space, not two — Chrome bills 57.81 for
+        // `<span>alpha</span>` with either `content:" "` or `content:"  "`, and we billed 67 for
+        // the second. Runs collapse; the outer ones survive, because they are what makes the
+        // separator a break opportunity (t1108) and they are billed into the element's rect.
+        // ⚠⚠⚠ **COLLAPSE WITH THE CSS WHITE-SPACE SET, NOT THE LANGUAGE'S.** Rust's
+        // `char::is_whitespace` is true for U+00A0 NO-BREAK SPACE; CSS's collapsible set is space,
+        // tab and newline, and a NBSP is a rendered character that must survive. The first cut of
+        // this used `split_whitespace()` and silently ate the trailing `\A0` out of
+        // `content: "Filler text\A0"` — which is what `css/CSS2/generated-content`
+        // `before-content-display-005` and `-007` are made of, and both went red.
+        if !matches!(p.white_space, WhiteSpace::Pre | WhiteSpace::PreWrap) {
+            let mut out = String::with_capacity(text.len());
+            let mut in_ws = false;
+            for ch in text.chars() {
+                if is_css_white_space(ch) {
+                    if !in_ws {
+                        out.push(' ');
+                    }
+                    in_ws = true;
+                } else {
+                    out.push(ch);
+                    in_ws = false;
+                }
+            }
+            text = out;
+        }
         Some((
             text,
             text_style(p, self.fonts),
@@ -8734,6 +8769,22 @@ impl Ctx<'_> {
         let Some((text, style, dx, block_level)) = self.pseudo_content(node, which, cw) else {
             return;
         };
+        // ⚠⚠⚠ **A BLOCK-LEVEL GENERATED BOX WHOSE CONTENT COLLAPSES TO NOTHING IS AN EMPTY BLOCK
+        //    BOX — IT CONTRIBUTES NO LINE.** `content:" "; display:table` is Bootstrap's clearfix,
+        //    and the space inside a block box collapses away exactly as it would in any block.
+        //    Emitting it as a word plus a `Break` gave `<div class=cf>alpha</div>` THREE line boxes
+        //    where Chrome gives one (300x48 against 300x16). The float-containment half of the
+        //    idiom is not lost — that is handled where the block's own `::after` is read, not here.
+        if dx.is_none()
+            && text.chars().all(is_css_white_space)
+            && self
+                .styles
+                .get(&node)
+                .and_then(|st| which(st).as_ref())
+                .is_some_and(|p| generated_box_is_block_level(p) || p.display == Display::Table)
+        {
+            return;
+        }
         let lh = style.line_height;
         // A block-level `::after` starts on a line of its own, BELOW the owner's content — emitted
         // before the word, because a `Break` terminates the line it is reached on.
@@ -18864,6 +18915,122 @@ mod tests {
         assert!(
             (suppressed - bare).abs() < 0.01,
             "an inline with no ::after rule must be unchanged: {suppressed} vs {bare}"
+        );
+    }
+
+    /// ⚠⚠⚠ **GENERATED CONTENT IS TEXT, SO ITS WHITE SPACE COLLAPSES LIKE TEXT'S — AND AN EMPTY
+    /// BLOCK-LEVEL GENERATED BOX IS NOT AN INLINE WORD AT ALL.**
+    ///
+    /// t1107 let a nested inline's pseudo into the flow and billed its content verbatim. Two things
+    /// that had never mattered while the content rendered nowhere immediately did:
+    ///
+    /// ```text
+    ///    <div><span>alpha</span>bravo</div>, 16px/1 monospace     Chrome   t1108   after
+    ///      span::after{content:" "}                                57.81   58      58    ok
+    ///      span::after{content:"  "}          two spaces           57.81   67      58    <-
+    ///      span::after{content:" ";display:table}   the CLEARFIX   48.17   58      48    <-
+    ///      span::after{content:" "} + white-space:pre              57.81   58      58    ok
+    ///      no pseudo                          CONTROL              48.17   48      48    ok
+    ///      span::after{content:" "} + a source space after         57.81   58      58    ok
+    ///    <div>a<span class=cf></span>b</div>  the span's own width   0     19       0    <-
+    /// ```
+    ///
+    /// `content:" "; display:table` is **Bootstrap's clearfix**, so the third row is on a large
+    /// share of the web: every `.cf`/`.clearfix` inline was carrying ~19px of phantom width, which
+    /// displaces its siblings and reads out as overlap. The float-containment half of the idiom is
+    /// untouched — it is read from the block's own `::after`, not from here.
+    ///
+    /// ⚠ Two bugs in the FIX, both caught by `css/CSS2` and neither by reasoning: Rust's
+    /// `char::is_whitespace` is true for **U+00A0**, so the first collapse silently ate the trailing
+    /// `\A0` out of `content:"Filler text\A0"` (`before-content-display-005`/`-007` went red); and
+    /// adding `Display::Table` to `generated_box_is_block_level` made **`inline-table`** block-level
+    /// too, because the cascade maps both spellings to one variant (`-006` gained, `-007` lost — a
+    /// wash that trades a right answer for a wrong one).
+    #[test]
+    fn generated_content_collapses_its_white_space_and_an_empty_block_box_bills_nothing() {
+        let css = r#"body{margin:0;font-size:16px;line-height:1}
+                     .one span::after{content:" "}
+                     .two span::after{content:"  "}
+                     .tbl span::after{content:" ";display:table}
+                     .nb1 span::after{content:"x x"}
+                     .nb2 span::after{content:"x  x"}
+                     .pre span::after{content:" "} .pre span{white-space:pre}"#;
+        let w = |html: &str| -> f32 {
+            let (dom, root) = layout_html(html, css, 300.0);
+            let n = dom.find_first("span").expect("the span must exist");
+            root.node_rects(&dom)
+                .get(&n)
+                .unwrap_or_else(|| panic!("no rect for the span in {html}"))
+                .width
+        };
+        let body = |cls: &str| format!("<div class={cls}><span>alpha</span>bravo</div>");
+
+        // THE CONTROL and THE RULER: no pseudo, then exactly one generated space.
+        let bare = w(&body("none"));
+        let one = w(&body("one"));
+        let space = one - bare;
+        assert!(
+            space > 1.0,
+            "the ruler is degenerate — one generated space bills {space} ({bare} -> {one})"
+        );
+
+        // 1. A RUN OF WHITE SPACE COLLAPSES TO ONE SPACE (CSS Text §4.1.1).
+        assert!(
+            (w(&body("two")) - one).abs() < 0.01,
+            "`content:\"  \"` must bill the SAME as `content:\" \"`: {} vs {one}",
+            w(&body("two"))
+        );
+
+        // 2. AN EMPTY BLOCK-LEVEL GENERATED BOX IS NOT AN INLINE WORD — the clearfix.
+        assert!(
+            (w(&body("tbl")) - bare).abs() < 0.01,
+            "`content:\" \";display:table` is an empty BLOCK box and must bill nothing: {} vs \
+             bare {bare}",
+            w(&body("tbl"))
+        );
+
+        // 3. …and the same span with NOTHING but the clearfix pseudo has width ZERO, which is what
+        //    Chrome reports and what stops the phantom width displacing its siblings.
+        let (dom, root) = layout_html(
+            "<div>a<span class=q></span>b</div>",
+            "body{margin:0;font-size:16px}.q::before,.q::after{content:\" \";display:table}",
+            300.0,
+        );
+        let q = dom.find_first("span").unwrap();
+        let qw = root
+            .node_rects(&dom)
+            .get(&q)
+            .map(|r| r.width)
+            .unwrap_or(-1.0);
+        assert!(
+            (0.0..0.01).contains(&qw),
+            "a span whose only content is a clearfix pseudo must be 0 wide (got {qw}) — and it must \
+             still HAVE a rect, so it does not fall out of the scored population"
+        );
+
+        // 4. THE NEGATIVE CONTROL THAT COST TWO REFTESTS: U+00A0 is NOT collapsible white space.
+        //
+        //    ⚠⚠⚠ **THE FIRST VERSION OF THIS ROW WAS VACUOUS AND THE MUTATION PROVED IT.** It
+        //    asserted that `content:"x\a0"` bills more than bare — and collapsing the NBSP to a
+        //    plain space bills EXACTLY THE SAME WIDTH, so swapping in Rust's `char::is_whitespace`
+        //    (which is true for U+00A0) left the row GREEN. A run of TWO is the discriminator: two
+        //    NBSPs are two characters under the CSS set and collapse to ONE under Rust's, so the
+        //    subject must come out strictly wider than the single-NBSP control.
+        let two_nb = w(&body("nb2"));
+        let one_nb = w(&body("nb1"));
+        assert!(
+            two_nb - one_nb > 1.0,
+            "U+00A0 is NOT collapsible white space — two of them must be wider than one \
+             (two {two_nb}, one {one_nb}); collapsing them is the bug that ate the trailing \
+             `\\A0` out of css/CSS2 before-content-display-005/-007"
+        );
+
+        // 5. THE PRESERVING CONTROL: `white-space:pre` on the owner does not collapse, and a single
+        //    space is a single space either way — so this row must equal row `one`.
+        assert!(
+            (w(&body("pre")) - one).abs() < 0.01,
+            "a preserved single space bills the same as a collapsed one: {} vs {one}",
+            w(&body("pre"))
         );
     }
 

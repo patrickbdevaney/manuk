@@ -5367,7 +5367,7 @@ honest options, in order:
 3. Keep the CSS 2.1 suite as the ranking instrument for anything M1 cannot express, and stop
    treating a flat M1 as a verdict on work M1 has no term for.
 
-## Audit #51 (tick 1109, 2026-08-10) — the arc the loop has been working for four ticks had NO MAP ROW
+## Audit #51 — tick 1109 (2026-08-10) — the arc the loop has been working for four ticks had NO MAP ROW
 
 **Sources, read this session, not from memory:**
 

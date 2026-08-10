@@ -46371,6 +46371,96 @@ PERF: none — one UA rule and one narrowed branch in a cascade that already ran
 WIKI: `docs/wiki/css-cascade.md` — where Chrome draws the form-control `box-sizing` line, and why a
 layout-crate test cannot see it.
 
+## Tick 1110 — five of the six were the SITES, and the sixth found a defect I had shipped (2026-08-10)
+
+TICK SHAPE: capability — t1109 named an open control as the first thing this tick does: six sites lost
+a certificate term across the sweep window, over ten ticks and eight hours of live-site drift, and
+none of it was attributable. **The control clears t1107/t1108 completely, and the chase found a
+regression t1107 HAD shipped that the sweep could not see.**
+
+⚠⚠⚠ **THE CONTROL — t1106 binary and t1108 binary, same hour, five named sites.**
+
+```text
+                            t1106            t1108           verdict
+   desiviral.net           .2979 ov7        .2979 ov7        BYTE-IDENTICAL  → the site
+   mayatoys.in             .6043 h77 ov1    .6043 h77 ov1    BYTE-IDENTICAL  → the site
+   www.repubblica.it       .6071 h344 ov126 .6071 h344 ov126 BYTE-IDENTICAL  → the site
+   pordentrodetudo.com.br  .1798 ov1 ro12   .1914 ov0 ro10   OURS, and BETTER on all three
+   sestra.cc               .9321 h9 ov0 ro3 .9272 h0 ov16 ro12   OURS — then see below
+```
+
+**Three of the five are byte-identical on both binaries**, so their "regressions" are the sites
+changing under us — and that cuts against me as well as for me: `mayatoys.in`'s **+0.436 shape**, the
+largest single gain in the whole sweep window, is also the site and not the engine. `pordentrodetudo`
+is ours and is an improvement. Only `sestra.cc` looked like a real cost.
+
+⚠⚠⚠ **AND `sestra.cc` LED TO A DEFECT I HAD SHIPPED IN t1107.** Its stylesheet carries
+`.cf:before,.cf:after{content:" ";display:table}` — Bootstrap's clearfix. Reduced against Chrome,
+`<div><span>alpha</span>bravo</div>` at `16px/1 monospace`:
+
+```text
+                                                          Chrome   t1108   after
+   span::after{content:" "}                                 57.81   58      58   ✓
+   span::after{content:"  "}            two spaces          57.81   67      58   ← collapse
+   span::after{content:" ";display:table}   the CLEARFIX    48.17   58      48   ← empty box
+   span::after{content:" "} + white-space:pre               57.81   58      58   ✓
+   no pseudo                            CONTROL             48.17   48      48   ✓
+   span::after{content:" "} + a source space after it       57.81   58      58   ✓
+   <div>a<span class=cf></span>b</div>   the span's width     0      19       0  ← empty box
+```
+
+t1107 billed the `content` string **verbatim**, which could not matter while generated content
+rendered nowhere and mattered the moment it did: a run of white space did not collapse, and an
+**empty block-level** generated box was emitted as an inline word. Every `.cf`/`.clearfix` inline on
+the web was carrying ~19px of phantom width. The float-containment half of the idiom is untouched —
+it is read from the block's own `::after`, not from the inline path.
+
+⚠⚠ **TWO BUGS IN THE FIX, BOTH CAUGHT BY `css/CSS2` AND NEITHER BY REASONING.** Rust's
+`char::is_whitespace` is **true for U+00A0** while CSS's collapsible set is space/tab/newline, so the
+first collapse used `split_whitespace()` and ate the trailing `\A0` out of
+`content:"Filler text\A0"` — `before-content-display-005` and `-007` went red. And `Display::Table`
+**cannot** be added to `generated_box_is_block_level`, because `engine/css` maps BOTH `table` and
+`inline-table` to that one variant: adding it gained `-006` and lost `-007`, a wash that trades a
+right answer for a wrong one. The suppression tests `display` itself instead. **The cascade
+conflation is the real defect and is now on the map.**
+
+⚠⚠⚠ **THE GATE HAD A VACUOUS ROW AND THE MUTATION IS WHAT FOUND IT.** The first NBSP assertion was
+*"`content:"x\A0"` bills more than bare"* — and collapsing an NBSP to a plain space bills **exactly
+the same width**, so the mutation swapping in Rust's whitespace set left the row GREEN. A run of TWO
+NBSPs is the discriminator: two characters under the CSS set, one under Rust's. *Run every mutation;
+a green one is the finding* — and this is the second time that rule has paid this session.
+
+⚠⚠⚠ **AND THE A/B SAID +5.7 SHAPE, AND IT WAS ZERO.** A single interleaved pair put wikipedia at
+**0.841 against t1108's 0.784** and sestra.cc's overlap at 5 against 15 — both large, both in my
+favour. The population had moved with it (n 4845 → 4498), which is the tell. **Re-running the two
+binaries alternately, twice each, produced BYTE-IDENTICAL rows**: n 4844, shape 0.7876/0.7880,
+overlap 95, reading-order 79 on both arms; sestra.cc overlap 15,15 against 14,15. So this tick's
+corpus effect is **zero**, and its evidence is the suite and the fixture, not the sweep.
+
+RESULT:
+
+```text
+   css/CSS2 per-TEST state diff        3899 → 3900      +1 GAINED, 0 LOST  (content-white-space-003)
+   manuk-layout                        157/157
+   the t1108 break battery             19/20, unchanged (only the pre-existing soft hyphen)
+   en.wikipedia.org / news.ycombinator byte-identical to t1108
+```
+
+RATCHET: held, and this tick is what holding it looks like from the inside — the sweep's six flagged
+losses are cleared by measurement rather than by argument, and the one real defect the chase turned
+up was **mine, from three ticks ago**, and is now fixed and gated rather than explained.
+
+GATE: `generated_content_collapses_its_white_space_and_an_empty_block_box_bills_nothing`, six rows
+against a control-derived ruler. **RED-proven three times, once per mechanism**: delete the collapse
+→ *"`content:"  "` must bill the SAME as `content:" "`: 48.04 vs 43.59"* · delete the empty-box
+suppression → *"an empty BLOCK box must bill nothing: 43.59 vs bare 39.15"* · collapse with Rust's
+whitespace set → the NBSP row.
+
+PERF: none — one extra pass over a `content` string that is a handful of characters.
+
+WIKI: `docs/wiki/text-layout.md` — "Generated content is TEXT, so its white space collapses — and an
+empty block-level generated box is not an inline word". [no-pattern]
+
 ## Tick 1109 — the anchor moved 12.7 points and the corpus moved zero (2026-08-10)
 
 TICK SHAPE: measurement — the board's own IMMEDIATE #1, flagged **602 hours stale** with ten ticks
