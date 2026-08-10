@@ -46371,6 +46371,97 @@ PERF: none — one UA rule and one narrowed branch in a cascade that already ran
 WIKI: `docs/wiki/css-cascade.md` — where Chrome draws the form-control `box-sizing` line, and why a
 layout-crate test cannot see it.
 
+## Tick 1105 — the wikipedia blow-up is a MISSING BREAK OPPORTUNITY, and the fix is REFUSED (2026-08-10)
+
+TICK SHAPE: measurement — check #103's steer #1 (reduce wikipedia's nested-table blow-up from the
+real subtree) plus the wall-time audit due this tick. The subject was found; **the candidate fix was
+built, measured, and then REVERTED under the ratchet.** That refusal is this tick's main content.
+
+⚠⚠⚠ **THE MECHANISM, REDUCED TO SIX ROWS: A SOFT WRAP OPPORTUNITY AT A SPACE IS GOVERNED BY THE
+ELEMENT THAT CONTAINS THE SPACE, AND WE ASKED THE WORDS ON EITHER SIDE OF IT.** The route in was the
+`<td>` at 4430px against Chrome's 397 — but the innermost cell told the real story: **4274×28 in
+ours against Chrome's 241×532.** 28px is ONE LINE. The cell was not mis-sized; its content never
+wrapped, so its min-content became its whole unwrapped width and no ancestor could shrink it.
+
+```text
+   width:300px container, monospace 16px                        Chrome      ours
+   r1  <div> <span nowrap>…</span> <span nowrap>…</span> ×5     300x38     300x19   ✗
+   r2  <div> <span>…</span> ×5                       CONTROL    300x38     300x38   ✓
+   r3  same as r1 with display:inline-block                     300x38     300x19   ✗
+   r4  <div nowrap> <span>…</span> ×3                CONTROL    300x19     300x19   ✓
+   r5  <ul><li display:inline nowrap> (no inter-tag ws)         300x19     300x19   ✓
+   r6  the r1 shape inside a <td>                               296x40     407x21   ✗
+```
+
+`layout_inline` asked `!(no_wrap && prev_no_wrap)`. That is right *within* one element and wrong the
+moment two `nowrap` elements are **siblings**: each is its own nowrap run, and the white space
+between them belongs to their **parent** (CSS Text §3). r4 is why this is a fix and not a loosening —
+a container that is itself `nowrap` must still refuse every break, and it does, because its spaces
+are inside it. This is the `.hlist` idiom on every Wikipedia navbox, and every breadcrumb trail, tag
+row, chip list and wrapping toolbar whose ITEMS are individually `nowrap`.
+
+⚠⚠ **THE PREVIOUS TICK'S HYPOTHESIS WAS REFUTED AND THAT IS WHY THIS ONE FOUND IT.** t1103's route
+assumed an auto table never clamped to its available width; a 4-row fixture came out byte-exact
+against Chrome, and a 16-row battery over everything that could make a cell unshrinkable cleared all
+of it. Neither battery contained *nowrap on inline CHILDREN* — the shape only appeared once the
+innermost cell's `28px` height was read as "one line" instead of as a size error. **Read the height,
+not just the width.**
+
+⚠⚠⚠ **THE FIX WORKS, AND IT IS REFUSED. THE RATCHET IS NOT A PREFERENCE.** The change (thread the
+space's own `white-space` through the inline items; break when the SPACE is not nowrap) was built,
+compiles, and turns all six fixture rows Chrome-exact. Then:
+
+```text
+   manuk-layout                  154/154
+   css/CSS2  per-test state diff  +2 GAINED / 0 LOST   (one of them is white-space-007)
+   en.wikipedia.org/wiki/CSS      cov 0.991404 → 0.991406   n 4844 → 4845   (population intact)
+       shape          0.664740 → 0.674097     +0.94 pts
+       h_overflow          364 → 0            ← the ENTIRE horizontal overflow, gone
+       overlap              52 → 316          ✗
+       reading_order        70 → 183          ✗
+       dead_target          80 → 80
+   doc.rust-lang.org / a11yproject   byte-identical on every column
+```
+
+**Two jarring dimensions tripled, and it is not one artefact.** `MANUK_RO_PARTITION` says the 183
+inversions are **36 distinct containers**, biggest 34, top three 73 — a distributed disagreement, not
+a single mis-laid row (the invariant counts pairs, so one bad 26-sibling row would have been ~325 and
+would have been the whole story). So enabling the break opportunity is **necessary and not
+sufficient**: once the content wraps, *where* we break has to agree with Chrome, and on 36 containers
+it does not.
+
+The aggregate across the four invariants is nearly flat (−364 +263 +113 = **+12**) and shape rises,
+which is the argument for landing it. It is refused anyway, and the reason is the one the ratchet
+exists for: **a redistribution I cannot account for is not a measurement that it is safe.** I do not
+know what those 36 containers are. Landing a change that triples two invariants on the loop's
+most-studied anchor, on the strength of an aggregate that happens to cancel, is precisely the trade
+the constitution forbids. The candidate is fully described here and in the wiki; redoing it is an
+hour, and the next brick is named.
+
+**NEXT BRICK, precisely:** take one of the 36 containers, diff our line breaks against Chrome's
+inside it, and fix *where* we break. The break-opportunity change lands **with** that, not before it.
+
+WALL AUDIT (due this tick — every 20, last 1085): **the wall is lean and nothing was trimmed.** Warm
+total **95s** against a 300s re-measure trigger — `T` (crate tests) 43s / 45%, `G6` 20s / 21%, then
+P·G1·D at 5s each. No gate is redundant with another, nothing is accidentally serial, nothing is
+recomputed. ⚠ The honest finding is that **the loop's biggest wall cost this window was not the wall**:
+the old-binary control protocol (`git stash` → `cargo build --release` → measure → restore) is ~3
+minutes of cold relink *per arm*, and this window paid it five times across t1102/t1103/t1105. That
+is not bloat — it is the price of attribution, and t1102 proved it changes verdicts — but it is now
+the dominant per-tick cost and a banked-binary cache would pay for itself. Noted for the observer;
+`scripts/` is not mine to touch. `LAST_WALL_AUDIT` → 1105.
+
+RATCHET: **held, by refusing this tick's own fix.** No crate changed. `git status` clean on `engine/`.
+
+GATE: none, deliberately. A gate asserting the CURRENT behaviour would pin the engine to the bug, and
+the gate for the correct behaviour cannot land until the fix does. The falsifiable content is the
+six-row fixture, reproduced verbatim in the wiki, and the A/B table above.
+
+PERF: none.
+
+WIKI: `docs/wiki/text-layout.md` — "A soft wrap opportunity at a space belongs to the element that
+CONTAINS the space", with the six rows, the refused A/B and the 36-container residue. [no-pattern]
+
 ## Tick 1104 — the constitution check, and the loop has been differencing against remembered constants (2026-08-10)
 
 TICK SHAPE: measurement — the cadence re-read of `CONSTITUTION.MD` (due every 8 ticks; last at

@@ -1869,6 +1869,9 @@
   - L2636 · The negative row, which the suite provides
   - L2645 · Measured
   - L2671 · What is left, named rather than discovered later
+  - L2680 · A soft wrap opportunity at a space belongs to the element that CONTAINS the space (t1105)
+  - L2703 · What it costs, and how it reaches a table
+  - L2719 · The fix is known, was measured, and is REFUSED — the residue is a second defect
 
 ## The wasm demo — running the engine inside someone else's browser
 `docs/wiki/wasm-demo.md`
@@ -1896,4 +1899,4 @@
   - L124 · Rank mechanisms by FLIP RATE, not failing-subtest count — CSS layout is a multi-assertion slog
 
 ---
-1803 sections across 22 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+1806 sections across 22 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.

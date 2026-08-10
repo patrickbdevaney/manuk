@@ -1582,3 +1582,47 @@ This window, seven capability ticks were landed and the count is honest:
 
 **NOTHING TRIMMED.** The wall is lean at 312s; the two levers that would make it leaner are in
 observer territory and are flagged above rather than taken.
+
+## Audit #42 — tick 1105 (2026-08-10), wall total **95s** — the wall is lean, and the loop's biggest cost is not the wall
+
+```text
+    43s  T   crate tests                                    45%
+    20s  G6  clickability                                    21%
+     5s  P   parity (72/72 box probes vs headless Chrome)     5%
+     5s  G1                                                   5%
+     5s  D   disk hygiene                                     5%
+     2s  F   perf floors                                      2%
+     1s  F4 · 1s B · 0s every other gate
+```
+
+**95s against a 300s re-measure trigger, and 312s at audit #41.** `P` — the standing #1 at ~70% in
+audits #38 and #41 — reads 5s here, which is the same fact those audits recorded from the other side:
+**this wall is HOT and those were COLD.** The wall is not drifting; it is being measured on hot and
+cold trees and reported as one number. Nothing was trimmed, and nothing should have been.
+
+Each of the four admissible questions, answered:
+
+1. **Redundancy** — no two gates stand up a SpiderMonkey runtime for overlapping assertions. `T` is
+   43s because it is *all* the crate suites (manuk-layout alone is ~22s of real reftests); it is not
+   a gate that could share a runtime with another.
+2. **Parallelism** — the gates launch concurrently; the perf floors are serial on purpose (a
+   benchmark sharing the machine is not a benchmark). Nothing has become accidentally serial.
+3. **Caching** — incrementals are RAM-resident, live fetches are snapshot-cached. No recomputation
+   found.
+4. **Scope** — no gate builds materially more than it asserts on.
+
+### ⚠ The real finding: the dominant per-tick cost this window was the OLD-BINARY CONTROL, not the wall
+
+The attribution protocol — `git stash` → `cargo build --release` → measure → restore → rebuild — costs
+**~3 minutes of cold relink per arm**, and this window paid it **five times** across t1102, t1103 and
+t1105. That is not bloat and it must not be cut: t1102 proved it *changes verdicts* (a two-tick
+regression candidate exonerated to six decimals), and t1103 proved a banked journal number is not a
+substitute (a real +1 read as +5). But it is now larger than the wall it runs beside.
+
+**A banked-binary cache would pay for itself immediately** — keep the last N release `manuk-wpt`
+binaries keyed by tree hash, so an A/B against a recent commit is a lookup rather than a relink.
+`$HOME/manuk-builds` is already referenced by `disk-hygiene.sh` (`KEEP_BUILDS`) and is currently
+**absent**, so the mechanism is half-present. Recorded for the observer; `scripts/` is not the agent's
+to touch (PART VII).
+
+**Nothing trimmed. An audit that finds the wall already lean is a fine result, and this is one.**

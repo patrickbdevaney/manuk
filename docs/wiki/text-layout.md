@@ -2676,3 +2676,67 @@ propagation into the first in-flow **block** descendant (`<div id=x><div>Text</d
 `::first-line` is untouched and is now the only CSS 2.1 pseudo-element with no implementation at
 all — and unlike `::first-letter` it cannot be reached by asking the existing parse a new question,
 because Stylo's servo build has no `FirstLine` variant to ask about.
+
+## A soft wrap opportunity at a space belongs to the element that CONTAINS the space (t1105)
+
+`layout_inline` decided a break with `!(no_wrap && prev_no_wrap)` — *"forbid a break when the tokens
+on both sides are `nowrap`"*. That is right **within** one element and wrong the moment two `nowrap`
+elements are **siblings**: each is its own nowrap run, and the white space between them belongs to
+their **parent**. CSS Text §3 governs a soft wrap opportunity by the white-space of the element
+containing the space, not by the tokens flanking it.
+
+Six rows, Chrome-measured, in a 300px container at 16px monospace:
+
+```text
+   r1  <div> <span nowrap>…</span> <span nowrap>…</span> ×5     Chrome 300x38   ours 300x19   ✗
+   r2  <div> <span>…</span> ×5                       CONTROL    Chrome 300x38   ours 300x38   ✓
+   r3  r1 with display:inline-block on the spans                Chrome 300x38   ours 300x19   ✗
+   r4  <div nowrap> <span>…</span> ×3                CONTROL    Chrome 300x19   ours 300x19   ✓
+   r5  <ul><li display:inline nowrap> (no inter-tag ws)         Chrome 300x19   ours 300x19   ✓
+   r6  the r1 shape inside a <td>                               Chrome 296x40   ours 407x21   ✗
+```
+
+**r4 is what makes this a fix and not a loosening**: a container that is *itself* `nowrap` must still
+refuse every break, and it does — its spaces are inside it. r5 is an accidental control worth keeping:
+with no white space between the `</li><li>` there is no break opportunity for either engine.
+
+### What it costs, and how it reaches a table
+
+`.hlist` is on every Wikipedia navbox; the same shape is every breadcrumb trail, tag row, chip list
+and wrapping toolbar whose ITEMS are individually `nowrap`. The damage is not the line — it is the
+**intrinsic size**. Content that never wraps makes a cell's min-content its whole unwrapped width,
+and no ancestor can shrink below that:
+
+```text
+   the innermost <td>      Chrome  241 x 532        ours  4274 x 28     ← 28px is ONE LINE
+   its wrapping table              395 x 846              4428 x 209
+   the outer cell                  397 x 848              4430 x 211
+```
+
+⚠ **Read the height, not just the width.** Two ticks looked at `4430 vs 397` as a *table-width* bug
+and refuted two table hypotheses against Chrome-exact fixtures. The `28` is what identified it.
+
+### The fix is known, was measured, and is REFUSED — the residue is a second defect
+
+Threading the space's own `white-space` through the inline items and breaking when the SPACE is not
+nowrap turns all six rows Chrome-exact, keeps `manuk-layout` at 154/154, and moves `css/CSS2`
+**+2 / −0** (one of the two is `white-space-007`). On wikipedia, with the population intact
+(coverage 0.991404 → 0.991406, n 4844 → 4845):
+
+```text
+   shape          0.664740 → 0.674097     +0.94
+   h_overflow          364 → 0            the entire horizontal overflow
+   overlap              52 → 316          ✗
+   reading_order        70 → 183          ✗
+```
+
+**And the residue is distributed, which is why it is not landed.** `MANUK_RO_PARTITION` reports the
+183 inversions as **36 distinct containers** (biggest 34, top three 73) — not one mis-laid row, which
+would have been ~325 pairs from a single 26-sibling group and would have been the whole story. So the
+break *opportunity* is necessary and **not sufficient**: once content wraps, *where* we break must
+agree with Chrome, and on 36 containers it does not.
+
+The four-invariant aggregate is nearly flat (−364 +263 +113 = +12) and shape rises. It is still
+refused: **a redistribution that cannot be accounted for is not evidence that it is safe.** The next
+brick is to take one of the 36 containers, diff our line breaks against Chrome's inside it, and land
+the break-opportunity change **with** that fix rather than before it.

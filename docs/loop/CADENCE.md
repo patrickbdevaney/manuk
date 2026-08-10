@@ -11,12 +11,12 @@
 
 | | value | over |
 |---|---|---|
-| ticks landed | **812** | ticks 1–1104 |
-| median tick cycle | **27m** | 811 intervals |
-| median, last 10 | **39m** | 10 intervals |
+| ticks landed | **813** | ticks 1–1105 |
+| median tick cycle | **27m** | 812 intervals |
+| median, last 10 | **40m** | 10 intervals |
 | fastest / slowest | 5s / 5.4d | |
-| **ticks per hour** | **1.12** | 722.8h elapsed |
-| median verify wall | **63s** | 751 ticks |
+| **ticks per hour** | **1.12** | 723.4h elapsed |
+| median verify wall | **63s** | 752 ticks |
 | wall trend | 39s → 13m — getting slower ⚠️ | first 3 vs last 3 |
 
 The **cycle** is the real unit: implement → debug → verify wall → land. The wall is only part of
@@ -31,7 +31,7 @@ it, and a wall that grows taxes every future tick, so it is tracked separately f
 * **✅ rows in the capability ledger**: 144 → **555**
 * **Bar 0 — oracle hangs**: 0 of 265 sites
 
-**356 of 812 ticks** (44%) moved a
+**356 of 813 ticks** (44%) moved a
 user-visible capability. The rest were instruments, infrastructure and corrections — and the
 ledger says the corrections were not overhead: three of its top three priorities were phantoms,
 and finding that out redirected everything after it.
@@ -909,5 +909,6 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 | **1102** | 2026-08-10 06:36 | 42m | measurement | 13m | +536/−33 | 436 | 81 | 56.0% · | the one drop t1099 could not refute, put to the OLD-BINARY control (2026-08-10) |
 | **1103** | 2026-08-10 07:38 | 62m | capability | 13m | +394/−42 | 437 | 81 | 56.0% · | the monospace default size was a UA DECLARATION on five tags, and wrong in BOTH directions |
 | **1104** | 2026-08-10 07:48 | 10m | measurement | 13m | +238/−34 | 437 | 81 | 56.0% · | the constitution check, and the loop has been differencing against remembered constants (2 |
+| **1105** | 2026-08-10 08:27 | 39m | measurement | 13m | +237/−34 | 437 | 81 | 56.0% · | the wikipedia blow-up is a MISSING BREAK OPPORTUNITY, and the fix is REFUSED (2026-08-10) |
 
 *`·` after a WPT figure means **carried forward**, not measured this tick.*
