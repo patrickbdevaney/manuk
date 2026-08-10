@@ -46371,6 +46371,101 @@ PERF: none — one UA rule and one narrowed branch in a cascade that already ran
 WIKI: `docs/wiki/css-cascade.md` — where Chrome draws the form-control `box-sizing` line, and why a
 layout-crate test cannot see it.
 
+## Tick 1102 — the one drop t1099 could not refute, put to the OLD-BINARY control (2026-08-10)
+
+TICK SHAPE: measurement — the experiment t1099 named as the next tick and t1100 deliberately did not
+take. `www.timeline.com` fell 0.4102 → 0.3179 between the t1089 and t1099 sweeps and **reproduced on
+a solo re-run** (0.3180), while its two biggest sibling drops (paypal, mangaraw) were both refuted as
+churn. It is the window's only unrefuted regression candidate, and the RATCHET outranks every
+capability tick until it is settled.
+
+HYPOTHESIS UNDER TEST: t1092 (`a generated box has its OWN display`) is the only one of the window's
+four fixes that can reach this site — it carries 8 block-level pseudos, no `display:none` pseudos and
+no counters. If the pre-window binary scores it ~0.41 in the SAME HOUR, the window regressed it and
+the fix is reverted or re-scoped. If the pre-window binary also scores ~0.32, the drop is the site or
+the instrument and the window is clean.
+
+⚠ The control is the whole point: a −9.2 pt single-site move sits against a **±3.7 pt spread t654
+measured on an UNCHANGED tree**, and a live site moves on its own (t799-807 changed the verdict three
+times). A clean reading attributes nothing until the old binary has refused to reproduce it.
+
+⚠⚠⚠ **RESULT — THE OLD BINARY REPRODUCES THE t1099 ROW TO SIX DECIMALS, INCLUDING EVERY JARRING
+COUNT. THE ENGINE IS EXONERATED.** `engine/` at `e527bb8b`, rebuilt release, three runs each arm,
+same hour:
+
+```text
+                          coverage    shape     h_ovf  ovl  ro  n      instrument
+   t1089 (banked)         0.978741   0.410192    454    1   18  1197    85ca9328
+   t1099 (banked)         0.848733   0.317919    399    1   18  1038    85ca9328
+   HEAD today       ×3    0.848733   0.317919    399    1   18  1038    85ca9328
+   OLD BINARY today ×3    0.848733   0.317919    399    1   18  1038    85ca9328
+```
+
+⚠⚠⚠ **AND THE REASON WAS TWO COLUMNS TO THE LEFT OF THE NUMBER EVERYONE WAS READING.** `coverage`
+fell 13 points and `shape_n` fell by **159 elements**. `shape` is a mean over the elements BOTH
+engines rendered, so the two readings are means over **different samples of a page that itself
+changed**. Subtracting them measures the site's news cycle. It was in the banked TSV at t1099 and
+nothing looked at it.
+
+⚠⚠⚠ **A SOLO RE-RUN IS STRUCTURALLY BLIND TO THIS, WHICH IS WHY IT NEEDED A MECHANISM AND NOT MORE
+DISCIPLINE.** Re-running the site today measures TODAY'S population twice and agrees with itself
+perfectly — exactly what t1099 did, three times, before writing `REPRODUCES`. The solo re-run is the
+right instrument for **churn** (one binary, one hour, two different answers) and cannot see
+**drift** (one page replaced by another). Those are two failure modes and the loop owned one probe.
+
+⚠⚠ **IT IS NOT ONE SITE — IT IS EVERY HEADLINE MOVER IN THE DIFF.** Of 115 sites in both sweeps, 25
+moved >2 shape points; **6 are population changes, and those 6 are all five of the largest losses
+and the largest gain**:
+
+```text
+   sports.yahoo.com    -0.856   n 1693 → 3      cov 0.991 → 0.273
+   www.timeline.com    -0.092   n 1197 → 1038   cov 0.979 → 0.849
+   www.paypal.com      -0.090   n  534 → 429    cov 0.893 → 0.717
+   mangaraw.ac         -0.067   n  733 → 873    cov 0.836 → 0.755
+   pogoda.by           -0.057   n   71 → 53     cov 0.696 → 0.510
+   www.aftenbladet.no  +0.131   n  999 → 622    cov 0.951 → 0.924
+```
+
+⚠⚠⚠ **AND WHAT SURVIVES THE PARTITION ANSWERS t1099's HEADLINE.** The 19 attributable movers are
+**7 losses and 12 gains, net +0.830 shape points, worst single loss −0.041** — inside the ±3.7-point
+spread t654 measured on an UNCHANGED tree. On the sites where the comparison is legitimate at all,
+the window moved shape **UP**. *"+825 suite tests, +0 M1"* was read off a diff whose six loudest
+rows were never the engine's to answer for. That does not make M1 move — the M1 gate is a
+per-site threshold and none of these crossed it — but it retires the inference the loop was drifting
+toward, that six engine ticks had bought nothing.
+
+**THE MECHANISM, because a lesson is not a mechanism.** `fidelity::sweep_diff` partitions every
+per-site delta into instrument-changed / population-changed / ATTRIBUTABLE, and
+`manuk-wpt sweep-diff OLD.tsv NEW.tsv` prints the three groups with the attributable one LAST, so it
+is what the reader is left holding. The unattributable rows are printed, never dropped — a silent
+exclusion reads as "everything was included".
+
+⚠ **THE THRESHOLDS ARE NOT FITTED AT ONE POINT** (t1042-1045's standing trap). Varying them 6× on
+`dn` and 5× on `dcov` moves the partition by at most one site and catches all five top losses in 11
+of 12 cells; the chosen `0.10 / 0.05` sits in the middle of that plateau, not on an edge.
+
+⚠ **A LATENT TIE WAS FOUND WHILE GATING IT — the t853 shape again.** Two fixture sites with equal
+deltas came out of a `HashMap`, so the report's row order depended on hash iteration: the test
+passed run alone and failed in the suite. Sorting now breaks ties on the site name, so two runs of
+the same two files print the same rows in the same order.
+
+RATCHET: the accusation against t1092 is **withdrawn on evidence**, not on argument. No revert is
+owed. `cargo test -p manuk-wpt` 102/102 (was 101). No engine crate touched — `engine/` was checked
+out and restored, and `git status` is clean on it.
+
+GATE: **G_SWEEP_DIFF_POPULATION** — `a_shape_delta_across_a_changed_population_is_not_attributable`,
+built on the REAL t1089/t1099 rows plus three negative rows (a control with the same drop and an
+intact population must read ATTRIBUTABLE; a site in only one file must not be reported; an unscored
+`-` row must not be read as 0.0 and manufacture a −100-point regression out of a bot wall).
+RED-proven on **both** classifier arms: disabling the population test flips timeline to
+`Comparable`, disabling the instrument test flips `oldprobe` to `Comparable`.
+
+PERF: none — arithmetic over two text files, no engine, no network.
+
+WIKI: `docs/wiki/fidelity-instrument.md` — "A shape delta is not a shape delta until both readings
+scored the same POPULATION", with the four-way table, the sensitivity grid and the churn-vs-drift
+distinction. [no-pattern]
+
 ## Tick 1101 — the second argument of `getComputedStyle` was read and DISCARDED (2026-08-10)
 
 TICK SHAPE: capability — surface audit #50's re-rank named the fidelity probe's blindness to

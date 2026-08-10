@@ -2464,6 +2464,208 @@ pub fn report(rows: &[Fidelity], floor: f64) -> bool {
     all_ok
 }
 
+// ─────────────────────────────────────────────────────────────────────────────────────────────────
+// SWEEP-TO-SWEEP ATTRIBUTION
+// ─────────────────────────────────────────────────────────────────────────────────────────────────
+
+/// Whether two banked readings of one site are **draws from the same experiment**, and therefore
+/// whether the shape delta between them says anything about the engine.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum DeltaVerdict {
+    /// Same instrument, same population. A shape delta here is ATTRIBUTABLE — it is the only cell
+    /// where the old-binary control is worth paying for.
+    Comparable,
+    /// **The scored set moved.** `shape` is a mean over the elements BOTH engines rendered, so if
+    /// that set changed size the two numbers are means of different populations and their
+    /// difference is not a measurement of anything.
+    PopulationChanged,
+    /// Two different probe versions. Already the rule `shape_spreads` enforces for error bars
+    /// (t676); it applies to a between-sweep delta for exactly the same reason.
+    InstrumentChanged,
+}
+
+/// One site's movement between two banked sweeps.
+#[derive(Clone, Debug)]
+pub struct SiteDelta {
+    pub name: String,
+    pub shape_a: f64,
+    pub shape_b: f64,
+    pub cov_a: f64,
+    pub cov_b: f64,
+    pub n_a: usize,
+    pub n_b: usize,
+    pub verdict: DeltaVerdict,
+}
+
+impl SiteDelta {
+    pub fn d_shape(&self) -> f64 {
+        self.shape_b - self.shape_a
+    }
+}
+
+/// **A shape delta is not a shape delta until both readings scored the SAME POPULATION** (t1102).
+///
+/// `www.timeline.com` fell 0.4102 → 0.3179 between the t1089 and t1099 sweeps, reproduced on a solo
+/// re-run, and was carried for two ticks as the window's one unrefuted regression candidate. The
+/// old-binary control settled it — the **pre-t1092 engine, rebuilt and run in the same hour, emits
+/// the t1099 row to six decimals** — and the reason was in the file the whole time, two columns to
+/// the left of the number everyone was reading:
+///
+/// ```text
+///                        coverage    shape    shape_n     instrument
+///     t1089               0.978741   0.410192    1197      85ca9328
+///     t1099               0.848733   0.317919    1038      85ca9328
+///     OLD BINARY, today   0.848733   0.317919    1038      85ca9328   <- byte-identical
+/// ```
+///
+/// 159 elements left the scored set and coverage fell 13 points. The two `shape` numbers are means
+/// over different samples of a page that itself changed, and subtracting them measures the site's
+/// news cycle.
+///
+/// ⚠⚠⚠ **A SOLO RE-RUN CANNOT SEE THIS**, which is why the rule needs a mechanism and not more
+/// discipline: re-running the site today measures today's population twice and agrees with itself
+/// perfectly. The t1099 protocol did exactly that, three times, and concluded "REPRODUCES".
+///
+/// **It is not one site.** Of the 25 sites whose shape moved more than 2 points between those two
+/// sweeps, 6 flag here — and those 6 include **all five of the largest losses** (sports.yahoo
+/// −0.856, timeline −0.092, paypal −0.090, mangaraw −0.067, pogoda −0.057) **and the largest gain**
+/// (aftenbladet +0.131). Every headline mover in that diff was a population change.
+///
+/// **The thresholds are not fitted at one point** — the standing trap (t1042-1045). Varying them
+/// over a 6× range on `dn` and 5× on `dcov` moves the partition by at most one site and catches all
+/// five top losses in 11 of 12 cells:
+///
+/// ```text
+///     dn \ dcov     0.02      0.05      0.10
+///        0.05      9 (5/5)   8 (5/5)   8 (5/5)
+///        0.10      7 (5/5)   6 (5/5)   6 (5/5)     <- chosen
+///        0.20      7 (5/5)   6 (5/5)   5 (4/5)
+///        0.30      7 (5/5)   6 (5/5)   5 (4/5)
+/// ```
+///
+/// A site present in only one of the two files is **not** returned: it is not a delta, it is a
+/// scorability change, and reporting it as a movement is how a dropped hard site flatters a mean
+/// (the `DENOMINATOR-TRAP` the sweep already warns about, one level down).
+pub fn sweep_diff(a_text: &str, b_text: &str) -> Vec<SiteDelta> {
+    /// The scored population is allowed to breathe this much before the two readings stop being
+    /// comparable. `dn` is a FRACTION of the earlier sample; `dcov` is in coverage points.
+    const MAX_DN_FRAC: f64 = 0.10;
+    const MAX_DCOV: f64 = 0.05;
+
+    // (coverage, shape, shape_n, instrument), last-wins per site — the same rule `rows_from_tsv`
+    // uses, so a resumed sweep reads the same here as it does in the certificate.
+    fn index(text: &str) -> std::collections::HashMap<String, (f64, f64, usize, String)> {
+        let mut out = std::collections::HashMap::new();
+        for line in text.lines() {
+            let line = line.trim_end();
+            if line.is_empty() || line.starts_with('#') {
+                continue;
+            }
+            let f: Vec<&str> = line.split('\t').collect();
+            if f.len() < 8 {
+                continue;
+            }
+            // An UNSCORED row has no shape. It is not a zero and it is not a delta endpoint —
+            // reading `-` as 0.0 would manufacture a −100-point regression out of a bot wall.
+            let (Some(cov), Some(shape)) = (f[1].parse::<f64>().ok(), f[2].parse::<f64>().ok())
+            else {
+                continue;
+            };
+            let n = f[7].parse::<usize>().unwrap_or(0);
+            let tag = f.get(9).copied().unwrap_or("").to_string();
+            out.insert(f[0].to_string(), (cov, shape, n, tag));
+        }
+        out
+    }
+    let (ia, ib) = (index(a_text), index(b_text));
+    let mut out: Vec<SiteDelta> = ia
+        .iter()
+        .filter_map(|(name, a)| {
+            let b = ib.get(name)?;
+            let d_n_frac = (b.2 as f64 - a.2 as f64).abs() / (a.2.max(1) as f64);
+            let verdict = if a.3 != b.3 {
+                DeltaVerdict::InstrumentChanged
+            } else if d_n_frac > MAX_DN_FRAC || (b.0 - a.0).abs() > MAX_DCOV {
+                DeltaVerdict::PopulationChanged
+            } else {
+                DeltaVerdict::Comparable
+            };
+            Some(SiteDelta {
+                name: name.clone(),
+                shape_a: a.1,
+                shape_b: b.1,
+                cov_a: a.0,
+                cov_b: b.0,
+                n_a: a.2,
+                n_b: b.2,
+                verdict,
+            })
+        })
+        .collect();
+    // Biggest LOSS first: the row most likely to be a regression is the row to read first — and,
+    // as t1102 found, the row most likely to be a population change as well.
+    //
+    // ⚠ The name is a TIE-BREAK, not decoration. Ties are ordinary here (two sites can move by the
+    // same amount) and the input is a `HashMap`, so without it the report's row order comes out of
+    // hash iteration — a diff that prints its rows in a different order on two runs of the same two
+    // files is not a diff anyone can read. This project has been bitten by a latent tie before
+    // (t853: `hit_test` resolving an exact tie by pre-order and getting the wrong node).
+    out.sort_by(|x, y| {
+        x.d_shape()
+            .total_cmp(&y.d_shape())
+            .then_with(|| x.name.cmp(&y.name))
+    });
+    out
+}
+
+/// Print [`sweep_diff`] as the three partitions, ATTRIBUTABLE last so it is what the reader is left
+/// holding. The unattributable rows are printed rather than dropped: a silent exclusion reads as
+/// "everything was included", which is the truncation this project has a standing rule against.
+pub fn sweep_diff_report(a_text: &str, b_text: &str, a_name: &str, b_name: &str) {
+    let rows = sweep_diff(a_text, b_text);
+    let moved: Vec<&SiteDelta> = rows.iter().filter(|r| r.d_shape().abs() > 0.02).collect();
+    println!("\n=== SWEEP DIFF  {a_name} → {b_name} ===\n");
+    println!(
+        "  {} sites in both files · {} moved more than 2 shape points\n",
+        rows.len(),
+        moved.len()
+    );
+    for (title, want) in [
+        (
+            "NOT ATTRIBUTABLE — the INSTRUMENT changed (two probe versions are two experiments)",
+            DeltaVerdict::InstrumentChanged,
+        ),
+        (
+            "NOT ATTRIBUTABLE — the POPULATION changed (shape is a mean over a DIFFERENT sample)",
+            DeltaVerdict::PopulationChanged,
+        ),
+        (
+            "ATTRIBUTABLE — same instrument, same population. THESE are worth an old-binary control",
+            DeltaVerdict::Comparable,
+        ),
+    ] {
+        let sel: Vec<&&SiteDelta> = moved.iter().filter(|r| r.verdict == want).collect();
+        println!("  {title}  [{}]", sel.len());
+        if sel.is_empty() {
+            println!("      (none)");
+        }
+        for r in sel {
+            println!(
+                "      {:38}  shape {:+.3}  ({:.3} → {:.3})   n {:>5} → {:<5}  cov {:.3} → {:.3}",
+                &r.name[..r.name.len().min(38)],
+                r.d_shape(),
+                r.shape_a,
+                r.shape_b,
+                r.n_a,
+                r.n_b,
+                r.cov_a,
+                r.cov_b
+            );
+        }
+        println!();
+    }
+}
+
 #[cfg(test)]
 mod shape_tests {
     use super::{certificate, shape_misses, shape_stats, Fidelity};
@@ -4845,5 +5047,85 @@ mod bank_guard_tests {
             "the explicit override applies"
         );
         assert!(may_bank_a_sweep(false, false, false));
+    }
+}
+
+#[cfg(test)]
+mod sweep_diff_tests {
+    use super::{sweep_diff, DeltaVerdict};
+
+    /// **G_SWEEP_DIFF_POPULATION — a shape delta across a changed POPULATION is not attributable.**
+    ///
+    /// The rows are the real ones. `www.timeline.com` is verbatim from `SWEEP-t1089-rows.tsv` and
+    /// `SWEEP-t1099-rows.tsv`, and the t1099 row is byte-identical to what the **pre-t1092 binary
+    /// emits today** — which is the measurement that proves the −9.2 points were never the engine's.
+    /// A control site is carried alongside with the SAME shape drop and a stable population, because
+    /// a classifier that flags everything is as useless as one that flags nothing.
+    #[test]
+    fn a_shape_delta_across_a_changed_population_is_not_attributable() {
+        const HDR: &str = "#name\tcoverage\tshape\th_overflow\toverlap\treading_order\tdead_target\tshape_n\treason\tinstrument\n";
+        // t1089: coverage .979, n 1197.
+        let a = format!(
+            "{HDR}\
+             www.timeline.com\t0.978741\t0.410192\t454\t1\t18\t0\t1197\t\t85ca9328\n\
+             control.example\t0.900000\t0.410192\t10\t0\t0\t0\t1000\t\t85ca9328\n\
+             oldprobe.example\t0.900000\t0.410192\t10\t0\t0\t0\t1000\t\tdeadbeef\n\
+             botwall.example\t-\t-\t0\t0\t0\t0\t0\tbotwall\t85ca9328\n"
+        );
+        // t1099: SAME instrument, 159 elements gone, coverage 13 points down.
+        let b = format!(
+            "{HDR}\
+             www.timeline.com\t0.848733\t0.317919\t399\t1\t18\t0\t1038\t\t85ca9328\n\
+             control.example\t0.895000\t0.320192\t10\t0\t0\t0\t990\t\t85ca9328\n\
+             oldprobe.example\t0.900000\t0.330192\t10\t0\t0\t0\t1000\t\t85ca9328\n\
+             newsite.example\t0.500000\t0.500000\t0\t0\t0\t0\t100\t\t85ca9328\n"
+        );
+        let rows = sweep_diff(&a, &b);
+
+        let find = |n: &str| {
+            rows.iter()
+                .find(|r| r.name == n)
+                .unwrap_or_else(|| panic!("{n} missing from the diff"))
+        };
+
+        assert_eq!(
+            find("www.timeline.com").verdict,
+            DeltaVerdict::PopulationChanged,
+            "159 of 1197 elements left the scored set and coverage fell 13 points — the two `shape` \
+             means are over different samples. Carrying this as a regression cost two ticks and an \
+             old-binary rebuild before the columns two to the left were read"
+        );
+        assert_eq!(
+            find("control.example").verdict,
+            DeltaVerdict::Comparable,
+            "THE ROW THAT KEEPS THIS HONEST: a -9.0 point drop of the same size, with the \
+             population intact, IS attributable. A classifier that flags every mover has not \
+             discriminated anything"
+        );
+        assert_eq!(
+            find("oldprobe.example").verdict,
+            DeltaVerdict::InstrumentChanged,
+            "two probe versions are two experiments — the rule `shape_spreads` has enforced for \
+             error bars since t676, applied to a between-sweep delta for the same reason"
+        );
+
+        // A site in only ONE file is a SCORABILITY change, not a movement. Reporting it as a delta
+        // is how a dropped hard site flatters a mean.
+        assert!(
+            !rows.iter().any(|r| r.name == "newsite.example"),
+            "a site absent from the earlier sweep has no delta to report"
+        );
+        assert!(
+            !rows.iter().any(|r| r.name == "botwall.example"),
+            "an UNSCORED row has no shape. Reading `-` as 0.0 manufactures a -100-point regression \
+             out of a bot wall"
+        );
+
+        // Biggest loss first — the reader must meet the worst row before forming an opinion.
+        assert_eq!(
+            rows.first().map(|r| r.name.as_str()),
+            Some("www.timeline.com"),
+            "rows are ordered by shape delta, most negative first"
+        );
     }
 }

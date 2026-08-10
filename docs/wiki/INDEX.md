@@ -1004,6 +1004,10 @@
   - L975 · What was kept anyway
   - L984 · The mechanism works, and does not work at sweep scale (t929)
   - L1005 · The analysis parser was mis-associating names
+  - L1018 · A shape delta is not a shape delta until both readings scored the same POPULATION (t1102)
+  - L1041 · The reason was two columns to the left of the number everyone was reading
+  - L1054 · It is not one site — it is every headline mover in the diff
+  - L1074 · The mechanism, because a lesson is not a mechanism
 
 ## FRAMEWORKS — React, Svelte, Next, jQuery: what actually breaks
 `docs/wiki/frameworks.md`
@@ -1886,4 +1890,4 @@
   - L124 · Rank mechanisms by FLIP RATE, not failing-subtest count — CSS layout is a multi-assertion slog
 
 ---
-1793 sections across 22 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+1797 sections across 22 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.

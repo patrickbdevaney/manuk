@@ -1014,3 +1014,93 @@ specific site through that parser needs re-deriving.
 > **A parser that mis-associates names produces a table that is right in aggregate and wrong in every
 > row** — the same shape as the instrument defects this loop hunts, in throwaway analysis code nobody
 > gates, and it survived three ticks because the aggregate kept agreeing with itself.
+
+## A shape delta is not a shape delta until both readings scored the same POPULATION (t1102)
+
+`www.timeline.com` fell **0.4102 → 0.3179** between the t1089 and t1099 sweeps, **reproduced** on a
+solo re-run (0.3180), and was carried for two ticks as the window's one unrefuted regression
+candidate — the only thing standing between four Chrome-exact generated-content fixes and a clean
+ratchet.
+
+**The old-binary control settled it, and the answer was byte-identical.** `engine/` checked out at
+`e527bb8b` (the commit before t1092, the only fix of the four that can reach a site with 8
+block-level pseudos, no `display:none` pseudos and no counters), rebuilt release, run in the same
+hour, three times each arm:
+
+```text
+                          coverage    shape     h_ovf  ovl  ro  n      instrument
+   t1089 (banked)         0.978741   0.410192    454    1   18  1197    85ca9328
+   t1099 (banked)         0.848733   0.317919    399    1   18  1038    85ca9328
+   HEAD today   ×3        0.848733   0.317919    399    1   18  1038    85ca9328
+   OLD BINARY today ×3    0.848733   0.317919    399    1   18  1038    85ca9328
+```
+
+Six decimals, every jarring count, on a binary that predates the change being accused. **The engine
+is not what moved.**
+
+### The reason was two columns to the left of the number everyone was reading
+
+`coverage` fell 13 points and `shape_n` fell by 159 elements. `shape` is a mean over the elements
+**both** engines rendered, so the two numbers are means over different samples of a page that itself
+changed. Subtracting them measures the site's news cycle.
+
+⚠⚠⚠ **A SOLO RE-RUN CANNOT SEE THIS.** Re-running the site today measures *today's* population
+twice and agrees with itself perfectly — which is exactly what the t1099 protocol did, three times,
+before concluding `REPRODUCES`. The solo re-run is the right tool for **churn** (a site that gives a
+different answer to the same binary in the same hour) and is structurally blind to **drift** (a site
+that gives a stable answer to a different page). Those are two failure modes and the loop had one
+instrument.
+
+### It is not one site — it is every headline mover in the diff
+
+Of the 115 sites in both sweeps, 25 moved more than 2 shape points. Six flag as population changes,
+and those six are **all five of the largest losses and the largest gain**:
+
+```text
+   sports.yahoo.com    -0.856   n 1693 → 3      cov 0.991 → 0.273
+   www.timeline.com    -0.092   n 1197 → 1038   cov 0.979 → 0.849
+   www.paypal.com      -0.090   n  534 → 429    cov 0.893 → 0.717
+   mangaraw.ac         -0.067   n  733 → 873    cov 0.836 → 0.755
+   pogoda.by           -0.057   n   71 → 53     cov 0.696 → 0.510
+   www.aftenbladet.no  +0.131   n  999 → 622    cov 0.951 → 0.924
+```
+
+**And what is left once they are removed answers t1099's headline.** The 19 attributable movers are
+**7 losses and 12 gains, net +0.830 shape points, worst single loss −0.041** — inside the ±3.7-point
+spread t654 measured on an unchanged tree. On the sites where the comparison is legitimate at all,
+the window moved shape **up**; the "flat metric" was a diff dominated by six rows that were never
+the engine's to answer for.
+
+### The mechanism, because a lesson is not a mechanism
+
+`fidelity::sweep_diff` partitions every per-site delta into **instrument-changed** /
+**population-changed** / **ATTRIBUTABLE**, and `manuk-wpt sweep-diff OLD.tsv NEW.tsv` prints the
+three groups with the attributable one last. Thresholds: `|Δn| > 10%` of the earlier sample, or
+`|Δcoverage| > 5` points, or a different `instrument` tag (the rule `shape_spreads` has enforced for
+error bars since t676, applied between sweeps for the same reason).
+
+⚠ **The thresholds are not fitted at one point** (the t1042-1045 trap). Varying them over 6× on
+`dn` and 5× on `dcov` moves the partition by at most one site and catches all five top losses in 11
+of 12 cells:
+
+```text
+     dn \ dcov     0.02      0.05      0.10
+        0.05      9 (5/5)   8 (5/5)   8 (5/5)
+        0.10      7 (5/5)   6 (5/5)   6 (5/5)     <- chosen
+        0.20      7 (5/5)   6 (5/5)   5 (4/5)
+        0.30      7 (5/5)   6 (5/5)   5 (4/5)
+```
+
+Two rows keep it from being a classifier that flags everything: a **control** site with a −9.0-point
+drop and an intact population must come back ATTRIBUTABLE, and a site present in only one file must
+not be reported at all (that is a scorability change, and printing it as a movement is how a dropped
+hard site flatters a mean).
+
+**GATE** `G_SWEEP_DIFF_POPULATION` —
+`a_shape_delta_across_a_changed_population_is_not_attributable`, on the real t1089/t1099 rows.
+RED-proven on both arms: disabling the population test flips timeline to `Comparable`; disabling the
+instrument test flips `oldprobe` to `Comparable`.
+
+⚠ A **latent tie** was found while gating it, the t853 shape again: two sites with equal deltas came
+out of a `HashMap`, so the report's row order depended on hash iteration and the test passed alone
+and failed in the suite. The sort now breaks ties on the site name.

@@ -808,3 +808,4 @@ tick	sha	epoch	iso	delta_s	shape	wall_s	files	added	deleted	gates	claims	wpt_pas
 1099	74d6ad4f	1786351787	2026-08-10T04:49:47-04:00	6963	measurement	808	6	377	3	435	81	3896	6960	0	553	0	+825 suite tests moved the M1 gate by ZERO, for the fourth sweep running (2026-08-10)
 1100	3e106a1b	1786353109	2026-08-10T05:11:49-04:00	1322	capability	808	5	126	12	435	81	3896	6960	0	553	0	a leading `/` is the SERVER root, and 14 references were looked for under `/` (2026-08-10)
 1101	6433ff25	1786355678	2026-08-10T05:54:38-04:00	2569	capability	808	8	659	11	436	81	3896	6960	0	554	0	the second argument of `getComputedStyle` was read and DISCARDED (2026-08-10)
+1102	aea28de8	1786358186	2026-08-10T06:36:26-04:00	2508	measurement	808	8	536	33	436	81	3896	6960	0	554	0	the one drop t1099 could not refute, put to the OLD-BINARY control (2026-08-10)

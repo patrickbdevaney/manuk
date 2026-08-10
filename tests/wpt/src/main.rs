@@ -163,6 +163,37 @@ fn run() {
         return;
     }
 
+    // `manuk-wpt sweep-diff OLD.tsv NEW.tsv` — WHICH per-site movements between two banked sweeps
+    // are the ENGINE's, and which are not the engine's to answer for.
+    //
+    // Arithmetic over two files: no engine, no network. It exists because the loop spent two ticks
+    // and an old-binary rebuild on `www.timeline.com`'s −9.2 points before anyone read the two
+    // columns to the left of `shape` (t1102) — and because a SOLO RE-RUN, the protocol that was
+    // used instead, cannot see a population change: it measures today's population twice and
+    // agrees with itself.
+    if args.first().map(String::as_str) == Some("sweep-diff") {
+        let (Some(a), Some(b)) = (args.get(1), args.get(2)) else {
+            eprintln!(
+                "usage: manuk-wpt sweep-diff OLD-rows.tsv NEW-rows.tsv\n  \
+                 partitions every per-site shape delta into instrument-changed / \
+                 population-changed / ATTRIBUTABLE"
+            );
+            std::process::exit(2);
+        };
+        match (std::fs::read_to_string(a), std::fs::read_to_string(b)) {
+            (Ok(ta), Ok(tb)) => manuk_wpt::fidelity::sweep_diff_report(&ta, &tb, a, b),
+            (r1, r2) => {
+                for (p, r) in [(a, r1), (b, r2)] {
+                    if let Err(e) = r {
+                        eprintln!("✗ cannot read {p}: {e}");
+                    }
+                }
+                std::process::exit(2);
+            }
+        }
+        return;
+    }
+
     // `manuk-wpt test262` — the ECMAScript conformance suite against the engine we ship. See
     // `test262.rs` for the probity rules and the runner's stated limits.
     if args.first().map(String::as_str) == Some("test262") {
