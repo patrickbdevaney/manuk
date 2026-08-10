@@ -11,12 +11,12 @@
 
 | | value | over |
 |---|---|---|
-| ticks landed | **818** | ticks 1–1110 |
-| median tick cycle | **27m** | 817 intervals |
-| median, last 10 | **46m** | 10 intervals |
+| ticks landed | **819** | ticks 1–1111 |
+| median tick cycle | **27m** | 818 intervals |
+| median, last 10 | **45m** | 10 intervals |
 | fastest / slowest | 5s / 5.4d | |
-| **ticks per hour** | **1.12** | 728.8h elapsed |
-| median verify wall | **63s** | 757 ticks |
+| **ticks per hour** | **1.12** | 729.5h elapsed |
+| median verify wall | **63s** | 758 ticks |
 | wall trend | 39s → 13m — getting slower ⚠️ | first 3 vs last 3 |
 
 The **cycle** is the real unit: implement → debug → verify wall → land. The wall is only part of
@@ -31,7 +31,7 @@ it, and a wall that grows taxes every future tick, so it is tracked separately f
 * **✅ rows in the capability ledger**: 144 → **556**
 * **Bar 0 — oracle hangs**: 0 of 265 sites
 
-**359 of 818 ticks** (44%) moved a
+**359 of 819 ticks** (44%) moved a
 user-visible capability. The rest were instruments, infrastructure and corrections — and the
 ledger says the corrections were not overhead: three of its top three priorities were phantoms,
 and finding that out redirected everything after it.
@@ -91,7 +91,7 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 ## What a capability costs
 
 * **359** capability ticks, median cycle **27m**
-* median diff per tick: **+264 / −34** lines across 8 files
+* median diff per tick: **+263 / −34** lines across 8 files
 
 ## Every tick
 
@@ -915,5 +915,6 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 | **1108** | 2026-08-10 10:55 | 69m | capability | 13m | +646/−130 | 437 | 81 | 56.0% · | a break opportunity is a property of the GAP, and the breaker could not go back to one (20 |
 | **1109** | 2026-08-10 12:24 | 88m | measurement | 13m | +462/−32 | 437 | 81 | 56.0% · | the anchor moved 12.7 points and the corpus moved zero (2026-08-10) |
 | **1110** | 2026-08-10 13:50 | 86m | capability | 13m | +355/−35 | 437 | 81 | 56.0% · | five of the six were the SITES, and the sixth found a defect I had shipped (2026-08-10) |
+| **1111** | 2026-08-10 14:31 | 41m | measurement | 13m | +155/−34 | 437 | 81 | 56.0% · | the cheapest site on the work-list evaporated, and three hypotheses died (2026-08-10) |
 
 *`·` after a WPT figure means **carried forward**, not measured this tick.*

@@ -46371,6 +46371,77 @@ PERF: none — one UA rule and one narrowed branch in a cascade that already ran
 WIKI: `docs/wiki/css-cascade.md` — where Chrome draws the form-control `box-sizing` line, and why a
 layout-crate test cannot see it.
 
+## Tick 1111 — the cheapest site on the work-list evaporated, and three hypotheses died (2026-08-10)
+
+TICK SHAPE: measurement — the board's NEW top steer (observer, `scripts/progress-metric.sh`, landed
+mid-session) says to rank work by the continuous gauge and its decomposition, working whichever
+factor is lower. Run on the t1109 sweep:
+
+```text
+   scorability 83.3%   ·   mean site quality 0.5413   ⇒ CORPUS fidelity 0.4511
+   shape-only 29.5%    ·   jarring-clean 25.0%   ·   M1 conjunction 15.2%
+```
+
+**Quality (0.54) is far below scorability (0.83), and within it jarring-clean (25.0%) is below
+shape-only (29.5%)** — so the gauge and t1109's own decomposition agree on the same target, and the
+tick took t1109's named three cheapest sites.
+
+⚠⚠⚠ **THE CHEAPEST ONE EVAPORATED. A SWEEP'S WORK-LIST HAS A SHELF LIFE.** `sports.yahoo.com` was
+ONE reading-order pair from M1 when the sweep ran; two ticks later it does not score at all
+(`tree-divergence-1738`). The other two are stable across THREE sweeps and are the real targets:
+
+```text
+   hnhbkis.edu.in       shape 0.932   h_overflow 2    t1089 / t1099 / t1109 all identical
+   www.marktplaats.nl   shape 0.962   h_overflow 2    t1089 / t1099 / t1109 all identical
+   exemplars:  …/div[4]/div[1] + its <img>  right 1221 > vw 1200
+               …/form/…/i                   right 500083 > vw 1200
+```
+
+⚠⚠⚠ **`500083` NAMES ITS OWN MECHANISM AND THEN REFUSES IT.** `shrink_to_fit` measures at a **1e6**
+available width, where a centring context puts an ordinary box at x≈500,000 — the extent code
+already discards that artifact twice (`FILL_SENTINEL`, `SLACK`). Three routes for it to reach a real
+box's POSITION were tested, and all three are dead:
+
+1. **An abspos child of a shrink-to-fit box taking its static position from the probe** — twelve
+   rows over four containers (flex+centre, inline-block, flex+text-align:centre, plain block), each
+   with a `position:relative` wrapper and an inset-less absolute `<i>`: **byte-identical to Chrome on
+   all twelve.** The idiom the site actually uses already works.
+2. **`static_pos` written during an intrinsic probe** — it **is**, and that is a real finding: I
+   replaced the write with a `panic!` and the existing gate
+   `an_out_of_flow_childs_static_position_survives_its_containers_translate` fired, so the pollution
+   path is **live, not dead code**. The real pass overwrites it there, and adding the guard leaves
+   `www.marktplaats.nl` **byte-identical** — same shape, same `h_overflow` 2.
+3. So the guard was **REVERTED.** It is principled, costs nothing and keeps the suite at 157/157 —
+   and no fixture and no site can be made to go red without it. A change that cannot be shown to
+   change anything is not bankable here, and I would refuse this evidence for a loss.
+
+**STILL OPEN, as a question:** a real box on that page sits at x≈500,000 and neither the static-
+position table nor the extent heuristics put it there. The next probe must find WHICH box carries
+the offset — the `<i>`'s own rect, an ancestor's, or a fragment's — before a fourth mechanism is
+guessed at.
+
+SELF-AUDIT (due this tick — every 10, last 1101): **methodology and reality agree** — every gate
+declares how to break it, the process-defect ledger names a MECHANISM per entry (49), enforcement is
+mechanical rather than remembered, and the journal has no gaps. ⚠ *An audit that finds nothing is a
+suspicious audit*, so the honest addition is the thing the mechanical check cannot see: **this window
+the method caught THREE favourable headlines that were false** — t1110's +5.7-shape wikipedia A/B
+(interleaved repeats: zero), t1110's −10-overlap sestra.cc (inside its own band), and t1109's
++0.436-shape `mayatoys.in`, which an old-binary control attributed to the SITE. None of those was
+caught by a gate; all three were caught by the solo-rerun and old-binary rules, which live in
+`METHODOLOGY.md` and are enforced by nothing but this. `LAST_AUDIT_TICK` → 1111.
+
+RATCHET: held. `engine/` reverted to HEAD; `git status` clean on every crate. The tick's product is
+three refutations and one live-but-latent hazard, each with the receipt that produced it.
+
+GATE: none, deliberately. Two of the three results are the engine already agreeing with Chrome, and
+the third is a code path that is live but has no wrong answer to assert against — both are the
+vacuous-gate failure this project has a standing rule about.
+
+PERF: none.
+
+WIKI: `docs/wiki/text-layout.md` — "The two sites nearest the M1 bar, and three hypotheses that
+died". [no-pattern]
+
 ## Tick 1110 — five of the six were the SITES, and the sixth found a defect I had shipped (2026-08-10)
 
 TICK SHAPE: capability — t1109 named an open control as the first thing this tick does: six sites lost

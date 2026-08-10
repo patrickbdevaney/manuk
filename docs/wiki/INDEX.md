@@ -1885,6 +1885,8 @@
   - L2996 · Two bugs in the fix, both caught by the suite and neither by reasoning
   - L3008 · The gate had a VACUOUS ROW and the mutation is what found it
   - L3015 · What it is worth, measured honestly
+  - L3029 · The two sites nearest the M1 bar, and three hypotheses that died (t1111)
+  - L3045 · The exemplars, and what they are not
 
 ## The wasm demo — running the engine inside someone else's browser
 `docs/wiki/wasm-demo.md`
@@ -1912,4 +1914,4 @@
   - L124 · Rank mechanisms by FLIP RATE, not failing-subtest count — CSS layout is a multi-assertion slog
 
 ---
-1819 sections across 22 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+1821 sections across 22 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.

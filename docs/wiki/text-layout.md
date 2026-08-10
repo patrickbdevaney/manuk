@@ -3025,3 +3025,50 @@ one under Rust's. *Run every mutation; a green one is the finding.*
 runs of BOTH binaries say both are ZERO.** The wikipedia "gain" came with the population moving
 4844 → 4498, which is the tell; re-running the two binaries alternately produced byte-identical rows
 for both. Two favourable headlines, killed by the rule that is supposed to kill them.
+
+## The two sites nearest the M1 bar, and three hypotheses that died (t1111)
+
+The t1109 sweep's cheapest tier is *"shape already ≥0.75, blocked ONLY by jarring"*, and its three
+cheapest members were `sports.yahoo.com` (ONE reading-order pair), `hnhbkis.edu.in` and
+`www.marktplaats.nl` (TWO h-overflow elements each). Re-measured against the live sites:
+
+```text
+   sports.yahoo.com     UNSCORED  tree-divergence-1738   ← the work-list item EVAPORATED
+   hnhbkis.edu.in       shape 0.932   h_overflow 2       stable across t1089 / t1099 / t1109
+   www.marktplaats.nl   shape 0.962   h_overflow 2       stable across t1089 / t1099 / t1109
+```
+
+⚠ **A sweep's work-list has a SHELF LIFE.** `sports.yahoo.com` was one reading-order pair from M1
+when the sweep ran and is not scorable at all two ticks later. Re-measure a named site before
+spending a tick on it.
+
+### The exemplars, and what they are not
+
+```text
+   hnhbkis.edu.in    …/div[4]/div[1] and its <img>   right 1221 > vw 1200   (21px)
+   www.marktplaats.nl  …/form/…/i                    right 500083 > vw 1200
+```
+
+`500083` is the tell: `shrink_to_fit` measures a subtree at a **1e6** available width, and a centring
+context puts an ordinary box at x≈500,000 there. The extent code already discards that artifact in
+two places (`FILL_SENTINEL`, `SLACK`). So the hypothesis was that the same artifact reaches a real
+box's POSITION. Three ways for that to happen were tested and all three are dead:
+
+1. **An `position:absolute` child of a shrink-to-fit box takes its static position from the probe.**
+   Twelve rows, four containers (flex + `justify-content:center`, inline-block, flex + `text-align:
+   center`, plain block), each with a `position:relative` wrapper and an inset-less absolute `<i>`:
+   **byte-identical to Chrome on all twelve.** The idiom the site actually uses already works.
+2. **`static_pos` is written during an intrinsic probe.** It *is* — proved by replacing the write
+   with a `panic!` and watching the existing gate
+   `an_out_of_flow_childs_static_position_survives_its_containers_translate` fire. So the pollution
+   path is **live, not dead code**. But the real pass overwrites it there, and guarding the write
+   (`if self.intrinsic_probe.get() { return }`) leaves `www.marktplaats.nl` **byte-identical** —
+   same shape, same h_overflow 2. Not the mechanism.
+3. …and because it is not the mechanism, the guard was **reverted**. It is principled and the suite
+   stays green at 157/157, but no fixture and no site can be made to go red without it, and a change
+   that cannot be shown to change anything is not bankable here.
+
+**What is still open:** a real box on that page is positioned at x≈500,000, and neither the abspos
+static-position table nor the extent heuristics put it there. The next probe should find *which* box
+carries the offset — the `<i>`'s own rect, an ancestor's, or a fragment's — before another mechanism
+is guessed at.
