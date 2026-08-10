@@ -777,6 +777,78 @@ where
         }
     }
     examples.sort();
+    // ⚠⚠⚠ **`MANUK_HOVF_TRACE=1` — WHICH ANCESTOR FIRST DIVERGES.** An overflow is reported on the
+    // element whose right edge escapes, and that element is almost never where the defect is: a box
+    // is pushed out by something ABOVE it. t1111 spent a tick guessing three mechanisms for
+    // `www.marktplaats.nl`'s `<i>` at **right 500083** and refuted all three, because the exemplar
+    // line names the SYMPTOM's path and nothing else. The keys here are `/`-separated paths, so the
+    // ancestor chain is just the prefix set — printing both engines' rects down that chain shows the
+    // first row where we part company, which IS the defect's address.
+    //
+    // Off by default and read-only: it prints, it never filters, and the count is computed before it.
+    if count > 0 && std::env::var("MANUK_HOVF_TRACE").is_ok() {
+        let mut bad: Vec<&K> = manuk
+            .iter()
+            .filter(|(id, m)| {
+                edge(m) > vw + tol && chrome.get(*id).is_some_and(|c| edge(c) <= vw + tol)
+            })
+            .map(|(id, _)| id)
+            .collect();
+        bad.sort_by_key(|id| id.to_string());
+        for id in bad.iter().take(4) {
+            let path = id.to_string();
+            eprintln!("  HOVF-TRACE {path}");
+            // Every prefix that ends at a path separator, shortest first, plus the element itself.
+            let mut cuts: Vec<usize> = path
+                .char_indices()
+                .filter(|(_, c)| *c == '/')
+                .map(|(i, _)| i)
+                .collect();
+            cuts.push(path.len());
+            let mut prev_dx: Option<i64> = None;
+            for cut in cuts {
+                let anc = &path[..cut];
+                let (Some(c), Some(m)) = (
+                    chrome
+                        .iter()
+                        .find(|(k, _)| k.to_string() == anc)
+                        .map(|(_, v)| v),
+                    manuk
+                        .iter()
+                        .find(|(k, _)| k.to_string() == anc)
+                        .map(|(_, v)| v),
+                ) else {
+                    continue;
+                };
+                let dx = m[0] - c[0];
+                let dw = m[2] - c[2];
+                // The FIRST row where our x or width parts from Chrome's by more than the tolerance
+                // is the one to read; everything below it is downstream of that.
+                let mark = if prev_dx.is_none_or(|p| (dx - p).abs() > tol)
+                    && (dx.abs() > tol || dw.abs() > tol)
+                {
+                    "  <-- FIRST DIVERGENCE"
+                } else {
+                    ""
+                };
+                eprintln!(
+                    "      chrome [{} {} {} {}]  ours [{} {} {} {}]  dx {dx:+} dw {dw:+}{mark}  {}",
+                    c[0],
+                    c[1],
+                    c[2],
+                    c[3],
+                    m[0],
+                    m[1],
+                    m[2],
+                    m[3],
+                    anc.rsplit('/').next().unwrap_or(anc)
+                );
+                if dx.abs() > tol || dw.abs() > tol {
+                    prev_dx = Some(dx);
+                }
+            }
+        }
+    }
     (count, examples)
 }
 

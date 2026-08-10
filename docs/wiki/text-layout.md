@@ -3072,3 +3072,37 @@ box's POSITION. Three ways for that to happen were tested and all three are dead
 static-position table nor the extent heuristics put it there. The next probe should find *which* box
 carries the offset — the `<i>`'s own rect, an ancestor's, or a fragment's — before another mechanism
 is guessed at.
+
+## `MANUK_HOVF_TRACE` — the overflow is reported on the symptom, and the defect is an ancestor (t1112)
+
+t1111 spent a whole tick guessing three mechanisms for `www.marktplaats.nl`'s `<i>` at **right
+500083** and refuted all three, because the exemplar line names the SYMPTOM's path and nothing else.
+A box is pushed out by something *above* it, and the instrument's keys are `/`-separated paths — so
+the ancestor chain is just the prefix set, and printing both engines' rects down that chain shows the
+first row where they part company. That row is the defect's address.
+
+`MANUK_HOVF_TRACE=1` on the fidelity sweep, off by default, print-only (the count is computed before
+it and never filtered). It localised both of the corpus's nearest-to-M1 sites on the first run:
+
+```text
+   www.marktplaats.nl — every ancestor within tolerance, then:
+      chrome [658 93   24 24]   ours [651 93 499432 24]   dx -7  dw +499408   <-- i
+   hnhbkis.edu.in — every ancestor EXACT (dx 0, dw 0), then:
+      chrome [882 1254 198 288] ours [741 1254 480 288]   dx -141 dw +282     <-- div
+      chrome [882 1300 198 196] ours [741 1254 480 474]                       <-- its <img>
+```
+
+**Two different defects, each now one element wide instead of a fourteen-element path.**
+
+- `marktplaats`: the `<i>`'s **own width is 499,432** — a `shrink_to_fit` measuring width (1e6, of
+  which centring slack is ~500,000) reaching an element's USED WIDTH. Its position is fine; every
+  ancestor is fine. This is a font-icon `<i>` in a search form.
+- `hnhbkis`: a `<div>` **480px wide inside a 230px-wide parent**, with its `<img>` at the image's
+  natural 480×474 where Chrome gives 198×196. Every single ancestor is byte-exact, which is what
+  makes it a one-box defect rather than a cascade.
+
+⚠ **And the obvious reading of the second one is already refuted.** The idiom is Tailwind's
+`class="w-full h-full object-cover"`, and reduced — a 480×474 image inside a `230×431` card with
+`padding:16px` and a `height:288px` inner box — **our engine is Chrome-exact at 198×288**, both for
+the plain case and with `position:absolute; inset:0`. Whatever makes the live page take the natural
+size, it is not that rule failing generically.

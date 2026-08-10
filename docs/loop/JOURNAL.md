@@ -46371,6 +46371,76 @@ PERF: none — one UA rule and one narrowed branch in a cascade that already ran
 WIKI: `docs/wiki/css-cascade.md` — where Chrome draws the form-control `box-sizing` line, and why a
 layout-crate test cannot see it.
 
+## Tick 1112 — the overflow is reported on the symptom, and the defect is an ancestor (2026-08-10)
+
+TICK SHAPE: capability (instrument) — t1111's named next step, verbatim: *"find WHICH box carries the
+offset before another mechanism is guessed at."* It took a tick to refute three hypotheses about
+`www.marktplaats.nl`'s `<i>` at right 500083, and the reason is structural: **the h-overflow
+exemplar names the SYMPTOM's path and nothing else**, while a box is pushed out by something above
+it. The instrument's keys are `/`-separated paths, so the ancestor chain is already there for free.
+
+`MANUK_HOVF_TRACE=1` prints both engines' rects down the ancestor chain of each offending element and
+marks the first row where they part. Off by default, print-only, count computed before it. **It
+localised both of the corpus's nearest-to-M1 sites on the first run**, from a fourteen-element path
+to one element each:
+
+```text
+   www.marktplaats.nl — every ancestor within tolerance, then:
+      chrome [658 93   24 24]   ours [651 93 499432 24]   dx -7   dw +499408   <-- <i>
+   hnhbkis.edu.in — every ancestor EXACT (dx 0, dw 0), then:
+      chrome [882 1254 198 288] ours [741 1254 480 288]   dx -141 dw +282      <-- <div>
+      chrome [882 1300 198 196] ours [741 1254 480 474]                        <-- its <img>
+```
+
+⚠⚠⚠ **THE `<i>`'s OWN WIDTH IS 499,432.** Its position is right, every ancestor is right; a
+`shrink_to_fit` measuring width (1e6, of which the centring slack is ~500,000) is reaching an
+element's **USED WIDTH**. t1111 chased it through the static-position table and the extent
+heuristics, and it was in neither — because it is not a POSITION artifact at all, which is exactly
+what the trace says in one line and what the exemplar could never have said.
+
+⚠⚠ **AND THE OTHER ONE IS A `<div>` 480px WIDE INSIDE A 230px PARENT, WITH EVERY ANCESTOR
+BYTE-EXACT** — a one-box defect, not a cascade. Its `<img>` takes the image's natural 480×474 where
+Chrome gives 198×196.
+
+⚠ **The obvious reading of the second is already refuted, in this tick, before anyone spends the
+next one on it.** The idiom is Tailwind's `class="w-full h-full object-cover"`, and reduced — a
+480×474 image in a `230×431` card with `padding:16px` and a `height:288px` inner box — **our engine
+is Chrome-exact at 198×288**, both plain and with `position:absolute; inset:0`. Whatever makes the
+live page take the natural size, it is not that rule failing generically.
+
+CONSTITUTION CHECK (due this tick — every 8, last 1104), banked as check #104. Three findings, and
+the first corrects VI.3 itself. ⚠⚠⚠ **THE CORPUS GREP HAS A FOURTH INFLATION MODE.** VI.3 lists three
+ways the usage-weight term inflates and concludes *"a frequency is not a measurement until its VALUES
+have been looked at."* **t1107 looked at the values and was still wrong by the whole distance**: it
+priced inline-subject pseudos at 50% of corpus pages by the exact method VI.3 asks for, the construct
+and its values were real, and the corpus moved −0.12 points with 73 of 104 sites byte-flat. The mode
+is not a counting error — **a construct's FREQUENCY is not its LEVERAGE**: `q::before` renders a
+quote mark and changes no geometry, `.hlist li::after` is the only white space on its line and
+decides where it breaks, and the grep counts both as one page because they ARE one construct. The
+rule needs the clause **× GEOMETRIC LEVERAGE**, testable before building: *does a probe of this
+construct, on a page that declares it, move a BOX?* ⚠⚠ **I5 SAYS THE ORACLE IS INFRASTRUCTURE AND
+THE LOOP HAD BEEN TREATING ITS OUTPUT AS FIXED** — this tick is the fourth in the pattern (t1088,
+t1090, t1101, t1112), each of which bought more than the engine tick it displaced: **when a diagnosis
+costs more than one tick, the next tick is the instrument, not a fourth hypothesis.** ⚠ **I3 scored
+the window's largest single term** (`dead_target 80 → 0`) **and still has no ranker** — check #72
+named that fix sixty ticks ago; `dead_target` is already in every sweep row and nothing reads it as
+an I3 signal. `LAST_CONSTITUTION_CHECK` → 1112.
+
+RATCHET: held. `engine/` untouched — the change is `tests/wpt/src/oracle.rs`, which the board names
+agent territory. `manuk-wpt` 102/102 + 7 + 1, and the h-overflow COUNT is computed before the trace
+and is not filtered by it, so the invariant's existing gate
+(`jarring_h_overflow_blames_only_our_own_spill`) still bounds it.
+
+GATE: none, deliberately. The addition is a print-only path that changes no verdict; the number it
+sits beside is already gated, and asserting an `eprintln!` would be the vacuous gate this project has
+a standing rule against. The falsifiable content is the two localisations above — each is a
+prediction that fixing that ONE element clears the site's h-overflow, which the next tick tests.
+
+PERF: none — the trace allocates only when the env var is set.
+
+WIKI: `docs/wiki/text-layout.md` — "`MANUK_HOVF_TRACE` — the overflow is reported on the symptom, and
+the defect is an ancestor". [no-pattern]
+
 ## Tick 1111 — the cheapest site on the work-list evaporated, and three hypotheses died (2026-08-10)
 
 TICK SHAPE: measurement — the board's NEW top steer (observer, `scripts/progress-metric.sh`, landed

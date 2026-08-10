@@ -7503,6 +7503,83 @@ test for the arc**, which is one sweep.
    three minutes, no build), so the suite ranks *where to look* and the corpus decides *whether to
    go*. That single step is what would have caught `::first-letter` as the thin one it was.
 
+## Check #104 — tick 1112 (2026-08-10)
+
+Re-read of `CONSTITUTION.MD` PART I and VI.3, anchored to the eleven ticks since check #103. Three
+findings, and the first one is a correction to VI.3 itself.
+
+### FINDING 1 — ⚠⚠⚠ THE CORPUS GREP HAS A **FOURTH** INFLATION MODE, AND THIS SESSION PAID FOR IT
+
+VI.3 binds the loop to `usage-weight × failing-breadth` and already lists three ways the usage-weight
+term has been caught inflating: an unanchored grep matching a class name (`hover`), a co-occurrence
+standing in for same-element application, and a legacy no-op VALUE standing in for the live
+capability (`zoom: 1`, a 9× inflation). Its conclusion is *"a frequency is not a measurement until its
+VALUES have been looked at, not just its property name."*
+
+**t1107 looked at the values and was still wrong by the whole distance.** It priced
+`::before`/`::after` whose selector subject is an inline element at **85 of 169 corpus pages (50%)**,
+fetching each page's stylesheets and joining them with a single-computed key — the method VI.3 asks
+for, executed correctly. The construct was real, the values were real (`q::before`, `a[href]::after`,
+`label::before`, `.hlist li::after`), the fix was Chrome-exact and moved `css/CSS2` +21 in its own
+directory. **The corpus moved −0.12 points, with 73 of 104 sites byte-flat** (t1109).
+
+The fourth mode is not a counting error at all:
+
+> **A construct's FREQUENCY is not its LEVERAGE.** `q::before` renders a quotation mark and changes
+> no geometry. `.hlist li::after` is the only white space on its line and decides where the line
+> breaks. The grep counts both as one page, and it is right to — the two are the same construct. What
+> differs is whether the construct sits somewhere its width can change a LINE.
+
+So VI.3's rule needs one more clause, and it is the clause the burndown's own mechanism ranking
+already implies: **rank by usage-weight × failing-breadth × GEOMETRIC LEVERAGE**, where leverage is
+whether the construct can change a line count or a box size — because that is what the metric this
+loop is scored on can see. Stated as a test the next tick can apply before building: *does a probe of
+this construct, on a page that declares it, move a BOX?* t1107 had that probe available (the anchor
+site's `li1` read 130 against Chrome's 139) and generalised from it to 50% of the corpus. **One site's
+leverage is not the corpus's.**
+
+⚠ This is NOT an argument that t1107/t1108 were wrong ticks. `css/CSS2` +36 with 0 lost across the
+two, 19 of 20 battery rows Chrome-exact, wikipedia +12.7 shape and its entire 394-element horizontal
+overflow gone. It is an argument that **the loop cannot predict corpus movement from a frequency**,
+and should stop implying it can in its own write-ups.
+
+### FINDING 2 — I5 SAYS THE ORACLE IS INFRASTRUCTURE, AND THE LOOP HAD BEEN TREATING ITS OUTPUT AS FIXED
+
+I5: *"the differential oracle is the discovery engine … maintained as first-class infrastructure."*
+`www.marktplaats.nl` reported an element at `right 500083` in the t1089, t1099 and t1109 sweeps —
+three sweeps, identical, for over a month. t1111 spent an entire tick guessing three mechanisms from
+that one line and refuted all three. t1112 added **sixty lines** that walk the ancestor chain the
+instrument's own keys already encode, and localised it on the first run: the `<i>`'s **own width is
+499,432**, every ancestor exact — not a position artifact at all, which is the class t1111 had been
+searching.
+
+The pattern is now four for four: **t1088** (the probe could not see its own corpus), **t1090** (the
+suite's ruler was not installed), **t1101** (the second argument of `getComputedStyle` was discarded),
+**t1112** (the exemplar names the symptom). Each bought more than the engine tick it displaced. The
+steer: **when a diagnosis costs more than one tick, the next tick is the instrument, not a fourth
+hypothesis.**
+
+### FINDING 3 — I3 SCORED THE LARGEST TERM OF THE WINDOW AND STILL HAS NO RANKER
+
+I3 makes the semantic model load-bearing at every horizon. t1107's largest single measured term was
+`dead_target 80 → 0` on the anchor — eighty links whose entire visible content was a pseudo, so the
+box was degenerate and the agent had nothing to click. **It was found by a render tick, aimed at
+shape, and priced by a metric with no term for it.** Check #72 (t852) raised exactly this and named
+the fix as *"rank it as I3, landing it with an agent-side click-point assertion in the same tick."*
+Sixty ticks later there is still no I3 ranker, and the win was again an accident. Recorded rather
+than re-derived; the cheap version is that `dead_target` is ALREADY in every sweep row and nothing
+reads it as an I3 signal.
+
+### COMPLIANCE
+
+**I5 held under pressure and cost me three headlines.** Five of six flagged sweep losses were the
+SITES (old-binary control, t1110); a +5.7-point wikipedia A/B and a −10-overlap sestra.cc were both
+ZERO under interleaved repeat runs; `mayatoys.in`'s +0.436 shape, the window's largest gain, belongs
+to the site. **PART VII held**: `scripts/` untouched across eleven ticks including two blocked
+commits. **The ratchet held twice by refusal** — t1111 reverted a principled, suite-green guard that
+nothing could be made to go red without, and this window landed no change whose evidence was a single
+run.
+
 ## Check #103 — tick 1104 (2026-08-10)
 
 HORIZON H0, re-scoped by **PART VII**: the four v1 components. Its gate is not a WPT number —

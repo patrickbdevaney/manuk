@@ -1887,6 +1887,7 @@
   - L3015 · What it is worth, measured honestly
   - L3029 · The two sites nearest the M1 bar, and three hypotheses that died (t1111)
   - L3045 · The exemplars, and what they are not
+  - L3076 · MANUK_HOVF_TRACE — the overflow is reported on the symptom, and the defect is an ancestor (t1112)
 
 ## The wasm demo — running the engine inside someone else's browser
 `docs/wiki/wasm-demo.md`
@@ -1914,4 +1915,4 @@
   - L124 · Rank mechanisms by FLIP RATE, not failing-subtest count — CSS layout is a multi-assertion slog
 
 ---
-1821 sections across 22 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+1822 sections across 22 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
