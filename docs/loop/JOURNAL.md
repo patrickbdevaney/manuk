@@ -46371,6 +46371,69 @@ PERF: none — one UA rule and one narrowed branch in a cascade that already ran
 WIKI: `docs/wiki/css-cascade.md` — where Chrome draws the form-control `box-sizing` line, and why a
 layout-crate test cannot see it.
 
+## Tick 1095 — counters are lost at a `_ => {}`, not at layout, and that changes what the arc IS (2026-08-10)
+
+TICK SHAPE: measurement — the decomposition t1094's own steer demanded before starting the #1 lever
+(*"needs counter scoping, nesting and `counters()` separators: a tree-walk, not a predicate…
+decompose first"*). Reading the code first turned out to change the shape of the work, which is the
+entire justification for the step.
+
+CHROME-EXACT, product path, three `<h2>` under `counter-reset:sec` with
+`h2::before{content:"S" counter(sec) ". "}`:
+
+```text
+                     Chrome    manuk    delta
+   #a (S1. Alpha)       87       77      -10
+   #b (S2. Beta)        77       67      -10
+   #c (S3. Gamma)       87       77      -10
+```
+
+**Exactly one monospace character short, every time** — we render `S. Alpha`, Chrome renders
+`S1. Alpha`.
+
+⚠⚠⚠ **AND THAT UNIFORM ONE-CHARACTER DELTA IS THE FINDING, BECAUSE IT SAYS THE CONTENT LIST ALREADY
+WORKS.** If `content` were unparsed we would render the literal text `counter(sec)` and be *wider*
+than Chrome, not narrower; if the declaration were dropped we would render nothing at all. Narrow by
+exactly the counter's own width means **the string parts are concatenated correctly and only the
+counter TERM evaporates.** It evaporates at one line:
+
+```rust
+   // engine/css/src/stylo_engine.rs — the pseudo's content flattening
+   ContentItem::String(sv) => out.push_str(sv),
+   ContentItem::Attr(a)    => { … }          // t409
+   _ => {}                                   // ← Counter / Counters, silently
+```
+
+**Stylo parses counters perfectly well; we throw them away, and we do it in the CASCADE.** So the
+arc is not *"implement `content` parsing"* — it is three named bricks, and the first is the one
+nobody would have predicted:
+
+1. ⚠ **`cs.content` is `Option<String>`, and a string cannot hold a counter.** The flattening
+   happens at cascade time, where the counter's value **is not yet knowable** — it depends on
+   document order. So the type has to carry unresolved terms, in **BOTH cascades** (Stylo and
+   MinimalCascade — the two-copies rule), before any counter logic can exist at all. This is the
+   real blocker and it is a type change, not an algorithm.
+2. `counter-reset` / `counter-increment` are in the property-name list
+   (`stylo_engine.rs:2982-2983`) and are **never mapped onto `ComputedStyle`** — parse-only, exactly
+   as `g_zoom_and_probe_pins.rs:27` has said all along.
+3. only then the document-order walk (scoping, nesting, `counters()` separators) — the part that was
+   assumed to be the whole job.
+
+⚠⚠ **THE ASSUMPTION THE DECOMPOSITION KILLED:** t1094 priced this as *"a tree-walk with real
+semantics"*, i.e. brick 3, and would have started there. Brick 3 cannot be written first — with
+`content` flattened to a `String` there is nothing left for a walk to resolve. **A subsystem's
+first brick is not always its subject**, and one `grep` for the drop site said so in three minutes.
+
+RATCHET: nothing touched.
+
+GATE: none — a decomposition gates nothing. Its falsifiable content is the three-row Chrome table
+above (reproducible with `boxes --html`) and the named `_ => {}`.
+
+PERF: none.
+
+WIKI: `docs/wiki/css-cascade.md` — "CSS COUNTERS ARE LOST AT A `_ => {}` IN THE CASCADE, NOT AT
+LAYOUT (t1095)" [no-pattern]
+
 ## Tick 1094 — the corpus prices the pseudo family, and two of the seven were ALREADY DONE (2026-08-10)
 
 TICK SHAPE: measurement — CONSTITUTION VI.3 ranks work by *usage-weight × failing-breadth*, and this

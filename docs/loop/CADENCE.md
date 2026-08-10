@@ -11,12 +11,12 @@
 
 | | value | over |
 |---|---|---|
-| ticks landed | **802** | ticks 1–1094 |
-| median tick cycle | **27m** | 801 intervals |
+| ticks landed | **803** | ticks 1–1095 |
+| median tick cycle | **27m** | 802 intervals |
 | median, last 10 | **40m** | 10 intervals |
 | fastest / slowest | 5s / 5.4d | |
-| **ticks per hour** | **1.12** | 715.7h elapsed |
-| median verify wall | **63s** | 741 ticks |
+| **ticks per hour** | **1.12** | 715.8h elapsed |
+| median verify wall | **63s** | 742 ticks |
 | wall trend | 39s → 13m — getting slower ⚠️ | first 3 vs last 3 |
 
 The **cycle** is the real unit: implement → debug → verify wall → land. The wall is only part of
@@ -31,7 +31,7 @@ it, and a wall that grows taxes every future tick, so it is tracked separately f
 * **✅ rows in the capability ledger**: 144 → **551**
 * **Bar 0 — oracle hangs**: 0 of 265 sites
 
-**351 of 802 ticks** (44%) moved a
+**351 of 803 ticks** (44%) moved a
 user-visible capability. The rest were instruments, infrastructure and corrections — and the
 ledger says the corrections were not overhead: three of its top three priorities were phantoms,
 and finding that out redirected everything after it.
@@ -899,5 +899,6 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 | **1092** | 2026-08-10 00:15 | 50m | capability | 13m | +679/−409 | 434 | 81 | 56.0% · | a generated box with a BLOCK display stayed on the line, and the idiom that made me look a |
 | **1093** | 2026-08-10 00:38 | 23m | capability | 13m | +589/−408 | 434 | 81 | 56.0% · | `display:none` on a pseudo was ignored, and it is how the responsive web turns things OFF  |
 | **1094** | 2026-08-10 00:47 | 9m | measurement | 13m | +82/−2 | 434 | 81 | 56.0% · | the corpus prices the pseudo family, and two of the seven were ALREADY DONE (2026-08-10) |
+| **1095** | 2026-08-10 00:53 | 6m | measurement | 13m | +248/−139 | 434 | 81 | 56.0% · | counters are lost at a `_ => {}`, not at layout, and that changes what the arc IS (2026-08 |
 
 *`·` after a WPT figure means **carried forward**, not measured this tick.*

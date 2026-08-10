@@ -801,3 +801,4 @@ tick	sha	epoch	iso	delta_s	shape	wall_s	files	added	deleted	gates	claims	wpt_pas
 1092	bda9adad	1786335314	2026-08-10T00:15:14-04:00	2977	capability	808	6	679	409	434	81	3896	6960	0	550	0	a generated box with a BLOCK display stayed on the line, and the idiom that made me look already worked (2026-08-10)
 1093	578021d1	1786336690	2026-08-10T00:38:10-04:00	1376	capability	808	6	589	408	434	81	3896	6960	0	551	0	`display:none` on a pseudo was ignored, and it is how the responsive web turns things OFF (2026-08-10)
 1094	441d171d	1786337259	2026-08-10T00:47:39-04:00	569	measurement	808	4	82	2	434	81	3896	6960	0	551	0	the corpus prices the pseudo family, and two of the seven were ALREADY DONE (2026-08-10)
+1095	96faae1a	1786337637	2026-08-10T00:53:57-04:00	378	measurement	808	4	248	139	434	81	3896	6960	0	551	0	counters are lost at a `_ => {}`, not at layout, and that changes what the arc IS (2026-08-10)

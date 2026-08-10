@@ -1,5 +1,49 @@
 # CSS AND THE CASCADE — Stylo realities and quirks actually encountered
 
+## CSS COUNTERS ARE LOST AT A `_ => {}` IN THE CASCADE, NOT AT LAYOUT (t1095)
+
+Three `<h2>` under `counter-reset:sec`, with `h2::before{content:"S" counter(sec) ". "}`, measured
+against Chrome in the product path:
+
+```text
+                     Chrome    manuk    delta
+   #a (S1. Alpha)       87       77      -10        exactly one monospace character
+   #b (S2. Beta)        77       67      -10
+   #c (S3. Gamma)       87       77      -10
+```
+
+**The uniform one-character deficit is the diagnosis, not the symptom.** If `content` were unparsed
+we would draw the literal text `counter(sec)` and be *wider* than Chrome; if the declaration were
+dropped we would draw nothing. Narrow by exactly the counter's own width means the content LIST is
+already assembled correctly and only the counter TERM evaporates — at one line:
+
+```rust
+   // engine/css/src/stylo_engine.rs — flattening a pseudo's content
+   ContentItem::String(sv) => out.push_str(sv),
+   ContentItem::Attr(a)    => { … }          // t409
+   _ => {}                                   // ← Counter / Counters, silently
+```
+
+Stylo parses counters perfectly well. We discard them, **in the cascade**.
+
+### The decomposition, and its first brick is not its subject
+
+1. **`cs.content` is `Option<String>`, and a string cannot hold a counter.** The flattening runs at
+   cascade time, where the value is *not yet knowable* — it depends on document order. The type must
+   carry unresolved terms, in **both cascades** (Stylo and MinimalCascade). This is the blocker, and
+   it is a type change rather than an algorithm.
+2. `counter-reset` / `counter-increment` sit in the property-name list (`stylo_engine.rs:2982-2983`)
+   and are **never mapped onto `ComputedStyle`** — parse-only.
+3. *Then* the document-order walk: scoping, nesting, `counters()` separators.
+
+> **A subsystem's first brick is not always its subject.** This was priced as "a tree-walk with real
+> semantics" and would have been started at step 3 — which cannot be written first, because with
+> `content` already flattened to a `String` there is nothing left for a walk to resolve. One `grep`
+> for the drop site said so in three minutes.
+
+Worth 73 of the 1,843 remaining CSS 2.1 failures and 15% of the burndown corpus's pages
+(`docs/loop/CORPUS-PSEUDO-t1094.tsv`).
+
 ## Stylo's *servo* build hardcodes `parse_has() -> false`
 
 A selector containing `:has()` therefore **fails to parse**, and CSS error-recovery **discards the
