@@ -1,5 +1,48 @@
 # DOM SEMANTICS — spec behaviour, mutation, and tree edge cases
 
+## I3 IS SATISFIED FOR FREE WHEN A FIX MOVES A BOX, AND NOT AT ALL WHEN IT ADDS TEXT (t1097)
+
+Generated content is **not in the DOM by construction** — script must never see it — and
+`manuk-layout` materialises it straight into inline items. The accessibility tree is built from the
+DOM:
+
+```text
+   engine/a11y/src/lib.rs   references to ComputedStyle / manuk_css:   ZERO
+   accessible_name(dom: &Dom, node, role)  →  dom.text_content(n)
+   build_tree_with_geometry(dom, rects, z_index)   — geometry is threaded, style is not
+```
+
+So there is **no path** by which a `::before` reaches an accessible name. This is not a bug in the
+name computation: the input never arrives.
+
+accname §4.3 step 2F folds `::before`/`::after` content into name-from-content, and Chrome does it.
+`button::before{content:"★ "}` is announced *"★ Save"*; ours is *"Save"*. It is worst where the
+pseudo carries the **only** text — `a::after{content:" (opens in a new tab)"}`, a `counter(sec)`
+section number, an icon-font glyph that IS the label. `accname/name` is 300/464 (64.7%), 15 of its
+files exercising pseudo content.
+
+### Why four consecutive constitution checks recorded I3 as "satisfied by accident of scope"
+
+Element geometry flows through **one shared producer**, `LayoutBox::node_rects`, which feeds the AX
+tree's `bbox` and therefore the agent's click point. Any fix that moves a box moves the semantic
+model with it, for free — which is why checks #72, #100, #101 and #102 each found I3 intact without
+anyone having threaded anything.
+
+> **The shared producer is geometric.** A fix that changes what the page *says* rather than where it
+> *sits* has to be threaded to the AX tree deliberately, and nothing in the loop notices when it is
+> not — the accident looks exactly like the property until a text-adding tick arrives.
+
+t1092, t1093 and t1096 (generated-box `display`, `display:none`, CSS counters) are three such ticks
+in one window, all landed with no semantic-model exposure at all.
+
+**The fix shape, priced:** `build_tree_with_*` already layers optional maps — `rects`, then
+`z_index`, then `visibility`. Generated text is a fourth of exactly that shape,
+`HashMap<NodeId, (String, String)>` for before/after, produced where layout already resolves the
+counters. The layering pattern exists; nothing about this is architectural.
+
+**The gate that would have caught it does not exist**: *an accessible name must include its
+`::before`/`::after` content.* There is no such assertion anywhere in the tree.
+
 ## Inserting a node BEFORE ITSELF is a move, not a no-op — and getting it wrong is a hang
 
 **DOM spec, "pre-insert", step 2:** *"If referenceChild is node, then set referenceChild to node's next

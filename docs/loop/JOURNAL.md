@@ -46371,6 +46371,63 @@ PERF: none — one UA rule and one narrowed branch in a cascade that already ran
 WIKI: `docs/wiki/css-cascade.md` — where Chrome draws the form-control `box-sizing` line, and why a
 layout-crate test cannot see it.
 
+## Tick 1097 — I3 was BENT, and the check that asked found it against this window's own ticks (2026-08-10)
+
+TICK SHAPE: measurement — check #102 steer #2, made binding one tick ago: *"is generated content in
+the AX tree? One probe, no build. If it is not, three of this window's four capability ticks shipped
+without their semantic-model exposure and I3 was bent, not satisfied."*
+
+**IT IS NOT, AND I3 WAS BENT.** The answer needs no probe because the absence is structural and a
+`grep` settles it:
+
+```text
+   engine/a11y/src/lib.rs   references to ComputedStyle / manuk_css:   ZERO
+   accessible_name(dom: &Dom, node, role)  →  dom.text_content(n)
+   build_tree_with_geometry(dom, rects, z_index)   — geometry is threaded, style is not
+```
+
+Generated content is **not in the DOM by construction** — that is the point of it, and `manuk-layout`
+materialises it straight into inline items. So there is **no path** by which a `::before` can reach
+an accessible name. Not a bug in the name computation: the input never arrives.
+
+⚠⚠⚠ **THE SPEC IS EXPLICIT AND SO IS THE COST.** accname §4.3 step 2F folds CSS `::before`/`::after`
+content into the name-from-content computation, and Chrome does it. A button styled
+`button::before{content:"★ "}` is announced *"★ Save"*; ours is *"Save"*. The failure is worse where
+the pseudo carries the ONLY text — `a::after{content:" (opens in a new tab)"}`, the numbering
+`counter(sec)` this window just built, an icon-font glyph that IS the label. **`accname/name` is
+300/464 (64.7%) and 15 of its files exercise pseudo content.**
+
+⚠⚠⚠ **AND THE INDICTMENT IS OF THIS WINDOW.** t1092, t1093 and t1096 are all generated content —
+three of four capability ticks — and every one of them shipped a rendering change with **no
+semantic-model exposure at all**. I3 says *"every renderer subsystem lands with its semantic-model
+exposure or it is not done."* Checks #72, #100, #101 and #102 each recorded I3 as *"satisfied by
+accident of scope"* because geometry flows through the shared `LayoutBox::node_rects` producer. **The
+accident held for four checks and this window is where it stopped holding**, precisely because these
+ticks added content rather than moving boxes — and `node_rects` carries rects, not text.
+
+The mechanism the accident depended on is now stated so it is not mistaken for a property again:
+
+> **I3 is satisfied for free whenever a fix moves a BOX, and not at all when a fix adds TEXT.** The
+> shared producer is geometric. Anything that changes what the page *says* rather than where it
+> *sits* has to be threaded to the AX tree deliberately.
+
+THE FIX SHAPE, priced but not built (this is a measurement tick and a capability fix inside it would
+make neither attributable): `build_tree_with_*` already layers optional maps — `rects`, then
+`z_index`, then `visibility`. Generated text is a fourth of exactly that shape,
+`HashMap<NodeId, (String, String)>` for before/after, produced where layout already resolves the
+counters. **The layering pattern exists; nothing about this is architectural.**
+
+RATCHET: nothing touched.
+
+GATE: none — this tick's content is a NEGATIVE finding about a gate that does not exist. Naming the
+gate that would have caught it is the deliverable: **an accessible name must include its
+`::before`/`::after` content**, and there is no such assertion anywhere in the tree.
+
+PERF: none.
+
+WIKI: `docs/wiki/dom-semantics.md` — "I3 IS SATISFIED FOR FREE WHEN A FIX MOVES A BOX, AND NOT AT ALL
+WHEN IT ADDS TEXT (t1097)" [no-pattern]
+
 ## Tick 1096 — CSS counters, built brick-1-first because t1095 said the subject was not the blocker (2026-08-10)
 
 TICK SHAPE: capability — the #1 lever off t1091's re-rank (73 of 1,843 remaining CSS 2.1 failures,
