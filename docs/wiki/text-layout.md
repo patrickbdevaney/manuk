@@ -3106,3 +3106,40 @@ it and never filtered). It localised both of the corpus's nearest-to-M1 sites on
 `padding:16px` and a `height:288px` inner box — **our engine is Chrome-exact at 198×288**, both for
 the plain case and with `position:absolute; inset:0`. Whatever makes the live page take the natural
 size, it is not that rule failing generically.
+
+## A flex item loses its specified `width` when the container is shrink-to-fit AND a sibling grows (t1113)
+
+Following t1112's trace to `www.marktplaats.nl`'s `<i>`, the chase found a different, much more
+common defect on the way. Two conditions, both required, Chrome-measured at `16px/1 monospace` with
+`.icon{width:24px;height:24px}`:
+
+```text
+                                                             Chrome   ours
+   r1  inline-block > flex > span[flex:1] + i.icon             24      10   ✗
+   r2  inline-block > flex > span          + i.icon  CONTROL   24      24   ✓
+   r3  …span[flex:1 1 auto] + i.icon                           24      10   ✗
+   r4  …span[flex-grow:1]   + i.icon                           24      10   ✗
+   r5  width:300px  > flex > span[flex:1] + i.icon   CONTROL   24      24   ✓
+```
+
+**The rule: when a flex container is shrink-to-fit and ANY item is growable, the OTHER items lose
+their specified `width` and fall back to their content size.** `10` is the width of the `@` glyph.
+r2 and r5 are what make it a two-condition rule rather than a general flex bug — remove either the
+growable sibling or the indefinite container and the row is exact.
+
+⚠ **And it is not `<i>`, not inline-block, and not flex generally** — three earlier fixtures cleared
+all of those. Eight rows of `display:inline-block; width:24px` on `<i>`/`<span>`/`<em>`/`<b>`, empty
+and non-empty, inline and in a class: **Chrome-exact on all eight.** Six rows of a `width:24px` flex
+item in a definite-width row, with and without a `flex:1` sibling, as `<i>`/`<span>`/`<div>` and
+inline-block: **Chrome-exact on all six.** The defect needs the *combination*.
+
+### Reach, and where the code is
+
+`display:flex` is **46% of the burndown corpus** (a floor — it greps inline CSS only), and
+"text grows, icon stays fixed" inside an auto-width container is the shape of every toolbar, nav bar,
+search field, card header and chip row on the modern web.
+
+Flex is delegated to **Taffy**, so the defect is in what we hand it: the measure closure at
+`layout_flex_or_grid` maps `AvailableSpace::MaxContent → None` for the known width and then measures
+the item, and it is that measurement — not Taffy's distribution — that must still honour the item's
+own `width`. The next tick has the five rows above as its gate.

@@ -819,3 +819,4 @@ tick	sha	epoch	iso	delta_s	shape	wall_s	files	added	deleted	gates	claims	wpt_pas
 1110	5326ca60	1786384221	2026-08-10T13:50:21-04:00	5179	capability	808	10	355	35	437	81	3896	6960	0	556	0	five of the six were the SITES, and the sixth found a defect I had shipped (2026-08-10)
 1111	7ca4a8f9	1786386692	2026-08-10T14:31:32-04:00	2471	measurement	808	6	155	34	437	81	3896	6960	0	556	0	the cheapest site on the work-list evaporated, and three hypotheses died (2026-08-10)
 1112	2ad447cd	1786388123	2026-08-10T14:55:23-04:00	1431	capability	808	8	289	34	437	81	3896	6960	0	556	0	the overflow is reported on the symptom, and the defect is an ancestor (2026-08-10)
+1113	8d5ce069	1786388758	2026-08-10T15:05:58-04:00	635	measurement	808	6	127	33	437	81	3896	6960	0	556	0	a flex item loses its width when the container is shrink-to-fit AND a sibling grows (2026-08-10)

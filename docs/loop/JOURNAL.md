@@ -46371,6 +46371,60 @@ PERF: none — one UA rule and one narrowed branch in a cascade that already ran
 WIKI: `docs/wiki/css-cascade.md` — where Chrome draws the form-control `box-sizing` line, and why a
 layout-crate test cannot see it.
 
+## Tick 1113 — a flex item loses its width when the container is shrink-to-fit AND a sibling grows (2026-08-10)
+
+TICK SHAPE: measurement — following t1112's trace toward `www.marktplaats.nl`'s `<i>` at width
+499,432. The first hypothesis (a flex container measured at 1e6 distributing ~500,000 to an item) is
+NOT confirmed, and the fixture built to test it found a **different and far more common defect** on
+the way.
+
+⚠⚠⚠ **TWO CONDITIONS, BOTH REQUIRED.** `16px/1 monospace`, `.icon{width:24px;height:24px}`:
+
+```text
+                                                              Chrome   ours
+   r1  inline-block > flex > span[flex:1] + i.icon              24      10   ✗
+   r2  inline-block > flex > span          + i.icon   CONTROL   24      24   ✓
+   r3  …span[flex:1 1 auto] + i.icon                            24      10   ✗
+   r4  …span[flex-grow:1]   + i.icon                            24      10   ✗
+   r5  width:300px  > flex > span[flex:1] + i.icon    CONTROL   24      24   ✓
+```
+
+**When a flex container is shrink-to-fit and ANY item is growable, the OTHER items lose their
+specified `width` and fall back to content size** — `10` is the `@` glyph. r2 and r5 are what make
+this a two-condition rule instead of a general flex bug: remove either the growable sibling or the
+indefinite container and the row is exact.
+
+⚠⚠ **THREE FIXTURES CLEARED THE OBVIOUS CULPRITS FIRST, WHICH IS WHY THE RULE IS THIS SHARP.** Eight
+rows of `display:inline-block;width:24px` on `<i>`/`<span>`/`<em>`/`<b>`, empty and not, inline style
+and class: **Chrome-exact on all eight** — it is not the tag and not inline-block. Six rows of a
+`width:24px` flex item in a DEFINITE-width row, with and without a `flex:1` sibling, as
+`<i>`/`<span>`/`<div>`: **Chrome-exact on all six** — it is not flex generally. And twelve rows of an
+inset-less `position:absolute` child inside four shrink-to-fit containers (t1111): exact. The defect
+needs the *combination*, and four negative fixtures are what say so.
+
+**REACH:** `display:flex` is **46% of the burndown corpus** (a floor — that grep sees inline CSS
+only), and *"text grows, icon stays fixed"* inside an auto-width container is every toolbar, nav bar,
+search field, card header and chip row on the modern web.
+
+**WHERE IT IS:** flex is delegated to **Taffy**, so this is in what we hand it — the measure closure
+in `layout_flex_or_grid` maps `AvailableSpace::MaxContent → None` for the known width and then
+measures the item, and it is that measurement, not Taffy's distribution, that must still honour the
+item's own `width`. **Deliberately not started this tick**: the board's standing warning is to take a
+CSS-layout lever only when it is a single bounded mechanism and to stay out of flex distribution
+math, and a half-verified change to the Taffy boundary is worse than a precise handoff. The five rows
+above are the next tick's gate, already written.
+
+RATCHET: held. No crate touched; `git status` clean on `engine/`.
+
+GATE: none — a measurement tick, and the behaviour it names is still broken, so a gate would either
+pin the engine to the bug or assert a fix that has not landed. The falsifiable content is the five
+rows and their two controls.
+
+PERF: none.
+
+WIKI: `docs/wiki/text-layout.md` — "A flex item loses its specified `width` when the container is
+shrink-to-fit AND a sibling grows". [no-pattern]
+
 ## Tick 1112 — the overflow is reported on the symptom, and the defect is an ancestor (2026-08-10)
 
 TICK SHAPE: capability (instrument) — t1111's named next step, verbatim: *"find WHICH box carries the
