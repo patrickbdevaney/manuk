@@ -46371,6 +46371,59 @@ PERF: none — one UA rule and one narrowed branch in a cascade that already ran
 WIKI: `docs/wiki/css-cascade.md` — where Chrome draws the form-control `box-sizing` line, and why a
 layout-crate test cannot see it.
 
+## Tick 1094 — the corpus prices the pseudo family, and two of the seven were ALREADY DONE (2026-08-10)
+
+TICK SHAPE: measurement — CONSTITUTION VI.3 ranks work by *usage-weight × failing-breadth*, and this
+window produced the first term for a whole family against the corpus that actually scores the loop.
+`CORPUS-CONSTRUCTS.md` was measured at t965 and has no row for any of it. Banked as
+`docs/loop/CORPUS-PSEUDO-t1094.tsv`.
+
+```text
+   pages   %    construct                                        state after t1090-1093
+   116/170 68%  ::before/::after with a BLOCK-LEVEL display      ✅ t1092  (+16, 0 lost)
+    80/170 47%  ::before/::after with display:none               ✅ t1093  (+6,  0 lost)
+    62/170 36%  clip: rect()  — the sr-only idiom                ⚠ paint-only, see below
+    51/170 30%  the clearfix idiom (::after display + clear)     ✅ ALREADY WORKED (t1092 probe)
+    43/170 25%  content: attr()                                  ✅ t409
+    26/170 15%  CSS counters                                     ❌ PARSE-ONLY — 73 suite failures
+    23/170 14%  ::first-letter                                   ✅ 8 suite failures (0.4%)
+```
+
+⚠⚠⚠ **TWO OF THE SEVEN WERE ALREADY DONE, AND BOTH WERE FOUND BY PROBING BEFORE BUILDING RATHER
+THAN AFTER.** Clearfix at 30% was the idiom this arc was *selected on* and it already worked;
+`content: attr()` at 25% landed at t409. Together that is 55%-of-corpus worth of "lever" that a
+usage-weight ranking alone would have queued. **Usage weight ranks where to LOOK; only a probe says
+whether anything is THERE** — the rule from t962-974, paying twice in one window.
+
+⚠⚠ **`clip: rect()` IS 36% OF PAGES AND THE FIDELITY ORACLE CANNOT SEE IT — IN EITHER ENGINE.**
+`clip` is paint-time, not layout: on a 200×100 absolute box with `clip:rect(0,50px,40px,0)` Chrome
+and we BOTH report `200×100`, and the sr-only idiom is already invisible from
+`width:1px;height:1px;overflow:hidden` without any clipping at all. So its 44 suite failures are
+real and its M1 weight is **structurally zero** — the box-diffing oracle has no term for a
+paint-only property. Recorded as the honest reason a 36% construct is NOT the next lever, and as a
+standing gap in what M1 can express.
+
+⚠ **THE RANKING IS NOW COUNTERS, AND IT IS SUBSYSTEM-SCOPE — NAMED, NOT STARTED.** `counter-reset`
+/ `counter-increment` are parse-only (`content: counter(x)` renders nothing; `engine/page`'s own
+`g_zoom_and_probe_pins.rs:27` has said so since it was written), 15% of pages, and **73 of the
+1,843 remaining CSS 2.1 failures** — the largest single mechanism left. It needs counter scoping,
+nesting and `counters()` separators: a tree-walk with real semantics, not a predicate. Starting it
+at the end of a window, against a ~900s wall, is the shape that burned 2h on grid at t156 and 86
+minutes at t159. It is the first thing the next window should take, with the pricing already paid.
+
+RATCHET: nothing touched.
+
+GATE: none — a pricing gates nothing. Its falsifiable content is
+`docs/loop/CORPUS-PSEUDO-t1094.tsv` and the one-command method in `CORPUS-CONSTRUCTS.md`, ⚠ **with
+the join-key trap now written down there**: `echo "$u" | md5sum` appends a NEWLINE, so a page→
+stylesheet join that hashes the bare URL on the other side silently drops ~95% of stylesheets and
+undercounts by 5×. It read 12% for a construct that is at 68%.
+
+PERF: none.
+
+WIKI: none [forced] — the artefact is the banked TSV and the corrected method note in
+`CORPUS-CONSTRUCTS.md`. [no-pattern]
+
 ## Tick 1093 — `display:none` on a pseudo was ignored, and it is how the responsive web turns things OFF (2026-08-10)
 
 TICK SHAPE: capability — t1092's own named residue (`-016` `display:none`, `-012` `table-column`,

@@ -1,0 +1,8 @@
+construct	pages	pages_total	pct
+::before/::after with a BLOCK-LEVEL display	116	170	68
+::before/::after with display:none	80	170	47
+clip: rect() (the sr-only idiom)	62	170	36
+the clearfix idiom (::after display+clear)	51	170	30
+content: attr()	43	170	25
+CSS counters (counter-reset/increment/counter())	26	170	15
+::first-letter	23	170	14
