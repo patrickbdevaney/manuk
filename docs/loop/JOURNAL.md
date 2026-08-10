@@ -46371,6 +46371,108 @@ PERF: none — one UA rule and one narrowed branch in a cascade that already ran
 WIKI: `docs/wiki/css-cascade.md` — where Chrome draws the form-control `box-sizing` line, and why a
 layout-crate test cannot see it.
 
+## Tick 1099 — +825 suite tests moved the M1 gate by ZERO, for the fourth sweep running (2026-08-10)
+
+TICK SHAPE: measurement — check #102 steer #1, and the third consecutive check to ask for it. A
+clean `--jobs 2` sweep of all 200 CrUX-trend sites, banked as `docs/loop/SWEEP-t1099-rows.tsv`.
+
+**THE HEADLINE, and it is the one the window did not want:**
+
+```text
+                                   t1049   t1080   t1089   t1099
+   M1 (shape>=0.75 AND jarring-clean)  23      23      23      23    ← FLAT, FOURTH SWEEP
+   …as a percentage                  17.8    17.7    17.2    17.3
+   shape >= 0.75 (count)               37      36      38      37
+   jarring-clean (count)               44      43      44      44
+   scored                             108     106     110     107
+   IN-SCOPE                           129     130     134     133
+   shape_mean                        60.3    60.7    60.9    61.6
+```
+
+⚠⚠⚠ **SIX ENGINE TICKS AND +825 CSS 2.1 TESTS BOUGHT ZERO M1 SITES.** This window took `css/CSS2`
+from **3,029 to 3,854** — the largest suite movement in the loop's history — through four
+Chrome-exact capability fixes, and the gate the loop is scored on did not move by one site. That is
+t1049's finding holding for the **fourth** time, and it has stopped being a curiosity: **the suite
+and the corpus metric have decoupled, and the decoupling is now large enough to be the subject.**
+The trap-free reading agrees it was not nothing — **COMMON-SET BAND +0.61 pts** over the 101 sites
+scored in both sweeps (12 up, 11 down by >2pt) — but a band that size is inside the noise this
+instrument has been measured to carry.
+
+**BAR 0 IS CLEAN, AND IT TOOK THE SOLO-RERUN RULE TO SAY SO.** Three sites came back `crashed`,
+which outranks every visual divergence and would have forced a revert:
+
+```text
+   pivaldi.restoplace.ws          sweep crashed → solo 69.8%   (its t1089 value, to the digit)
+   www.library.chiyoda.tokyo.jp   sweep crashed → solo 86.6%   (ABOVE its t1089 77.9%)
+   portagelearning.edu            sweep crashed → solo  0.0%   (its t1089 value)
+```
+
+**Not one reproduced.** Three "crashes" that were the harness. The same rule applied to the three
+biggest shape drops splits them the same way as t1089 — two of three are the instrument:
+
+```text
+   www.timeline.com   0.4102 → 0.3179   solo 0.3180   REPRODUCES
+   www.paypal.com     0.6498 → 0.5594   solo 0.6500   CHURN
+   mangaraw.ac        0.6112 → 0.5441   solo 0.6080   CHURN
+```
+
+⚠⚠ **THE ONE THAT REPRODUCES IS ATTRIBUTABLE IN PRINCIPLE TO t1092, AND I AM NOT CLAIMING IT EITHER
+WAY.** `timeline.com` carries **8 block-level pseudos** and no `display:none` pseudos and no
+counters, so t1092's change is the only one of this window's four that can reach it. That makes the
+hypothesis *testable*, which is exactly why it must not be asserted: a −9.2 pt single-site move sits
+against a **±3.7 pt spread t654 measured on an UNCHANGED tree**, and two of its three sibling drops
+were just proven to be churn. **The verdict needs a same-hour OLD-BINARY control and nothing else
+will do** — that is the rule that has changed the answer three times in this loop, and skipping it
+to declare either "clean" or "regression" would be the failure it exists to prevent. It is named as
+the next tick rather than guessed at here.
+
+⚠ The instrument's own two warnings fired and both are correct: `SCORABILITY-REGRESSED` (scored
+110 → 107) and `DENOMINATOR-TRAP` (shape_mean 60.9 → 61.6 rose *while* scored fell — a hard site
+dropping out flatters the mean). Of the 8 sites that stopped being scored, 5 are timeouts/crashes
+the solo re-runs refute and one is `sports.yahoo.com`, whose 0.856 at t1089 was itself the
+composition artefact that tick flagged (`n 3 → 1693`).
+
+SURFACE AUDIT #50 (due this tick) took the paradox as its subject and found the map wrong, not the
+work. **The fidelity probe enumerates `document.querySelectorAll('*')` — and a pseudo-element has
+no DOM node.** `::before`/`::after` are absent from BOTH sides of the diff, so for generated content
+the probe cannot report whether the box exists, where it is, or what it says:
+
+```js
+   var all = document.querySelectorAll('*');          // tests/wpt/src/chrome.rs
+   out[pathOf(e)] = [t, cs.display, x, y, w, h, '', cs.position];
+```
+
+⚠⚠⚠ **THREE OF THIS WINDOW'S FOUR CAPABILITY FIXES ARE GENERATED CONTENT** (t1092, t1093, t1096).
+**M1 has no term in which any of them can appear.** Only the second-order displacement of DOM
+siblings survives, and `shape` scores against a *shared ancestor*, which normalises much of a
+uniform subtree shift away. So this is not a flat metric — it is a metric that was never pointed at
+the work, and *"+825 suite tests, +0 M1"* is what that looks like from the outside.
+
+⚠⚠ **AND IT IS THE SAME STRUCTURAL FACT AS t1097's** — generated content is not in the DOM, and the
+AX tree is built from the DOM. One fact, **three** consumers (the AX tree, the fidelity probe, the
+oracle's cluster ranking), noticed in only the first. *When a structural absence bites one consumer,
+enumerate the others before assuming it is local.* M1's blind spots are now three: paint-only
+properties (audit #49), generated content, and **TEXT** — the probe records geometry and never a
+string, which is exactly why t1096 could ship `S0.` where Chrome renders `S1.` and pass a
+width-based "Chrome-exact" check.
+
+The audit's re-rank: **teach the probe pseudo-elements.** `getComputedStyle(e, '::before')` is
+available on both engines and the probe already calls `getComputedStyle(e)` per node — the same
+shape as t1088 and t1090, each of which bought hundreds of tests by making an instrument able to see
+its own corpus.
+
+RATCHET: no crate touched. Bar 0 clean on re-measurement. The one unrefuted drop is recorded as
+UNATTRIBUTED with the experiment that would settle it named.
+
+GATE: none — a sweep gates nothing. Its falsifiable content is `SWEEP-t1099-rows.tsv`, 200 rows,
+diffable against t1089 in one command.
+
+PERF: none.
+
+WIKI: none [forced] — the artefacts are the banked sweep and `FIDELITY-PROGRESS.tsv`; the durable
+lesson (a suite and a corpus metric can decouple by 825 tests) belongs to the loop's measurement
+discipline and goes to the next constitution check. [no-pattern]
+
 ## Tick 1098 — I3 discharged, and the AX tree immediately caught a bug the pixel probe could not (2026-08-10)
 
 TICK SHAPE: capability — building what t1097 proved missing and priced: generated content threaded

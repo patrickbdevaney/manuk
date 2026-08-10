@@ -5297,3 +5297,72 @@ with the numbers above:
 questions on the instruments, not only on the platform. Three of the loop's largest single findings —
 the mis-provisioned reference (#93), the unrun subcommand (t1057), and t1088's undressed reference —
 were defects in apparatus that a capability map is structurally unable to represent.
+
+## Audit #50 — tick 1099 (2026-08-10). THE METRIC CANNOT SEE A THIRD OF THE WINDOW'S WORK, BY CONSTRUCTION
+
+This audit had an obvious subject handed to it: the window closed with **`css/CSS2` 3,029 → 3,854
+(+825, the largest suite movement in the loop's history)** and **M1 flat at 23 sites for the fourth
+sweep running**. Either the fixes were worthless or the map is wrong about what M1 measures. The
+map, as usual.
+
+### The finding: the fidelity probe enumerates `querySelectorAll('*')`
+
+```js
+   // tests/wpt/src/chrome.rs — the structural probe, run identically on BOTH engines
+   var all = document.querySelectorAll('*');
+   …
+   out[pathOf(e)] = [t, cs.display, x, y, w, h, '', cs.position];
+```
+
+**A pseudo-element has no DOM node.** `::before` and `::after` are not in `querySelectorAll('*')`,
+they have no `pathOf`, and they are therefore absent from *both* sides of the diff. So for
+generated content the probe cannot report:
+
+- whether the box exists at all,
+- where it is or how big it is,
+- what it says.
+
+⚠⚠⚠ **THREE OF THIS WINDOW'S FOUR CAPABILITY FIXES ARE GENERATED CONTENT** — t1092 (block-level
+`display`), t1093 (`display:none`), t1096 (counters). Every one is Chrome-exact on its own probe and
+gained suite tests with zero losses, and **M1 has no term in which any of them can appear.** That is
+not a flat metric; it is a metric that was never pointed at them.
+
+### What it CAN see, and why that is weak rather than zero
+
+The second-order effect survives: a block-level `::before` makes its owner a line taller, which
+pushes DOM siblings down, and siblings *are* enumerated. But `shape` scores each element within 8px
+**against a shared ancestor**, so a uniform downward shift of a subtree is substantially normalised
+away, and what remains often sits inside tolerance. The direct effect is unscoreable and the
+indirect one is attenuated by the metric's own design. **A fix can be right, Chrome-exact, and
+worth 825 suite tests while M1 is entitled to read exactly zero.**
+
+### Corrections to the map
+
+1. **M1's blind spots are now THREE, and the map records one.** The known one is paint-only
+   properties (`clip`, filters, blend modes — audit #49's `clip` row, 36% of pages). Add:
+   **(2) generated content, in its entirety**, and **(3) TEXT — the probe records `tag, display, x,
+   y, w, h, position` and never a string**, which is why t1096 could ship counters that rendered
+   `S0.` where Chrome renders `S1.` and pass a "Chrome-exact" width check.
+2. **The suite and the corpus metric measure disjoint things more than the loop assumed.** They
+   have now disagreed by 825 tests in one window. Neither is wrong; the map was wrong to treat M1 as
+   a superset.
+3. ⚠ **This is the same structural fact that made the ACCESSIBILITY tree blind** (t1097: generated
+   content is not in the DOM, and the AX tree is built from the DOM). One fact, three consumers —
+   the AX tree, the fidelity probe, and the oracle's cluster ranking — and it was only ever noticed
+   in the first. *When a structural absence bites one consumer, enumerate the others before
+   assuming it is local.*
+
+### The re-rank this forces
+
+**Do not read "M1 flat" as "generated content was not worth doing"** — the corpus says 68% of pages
+carry a block-level pseudo and 47% a `display:none` one, and the metric cannot price either. The
+honest options, in order:
+
+1. **Teach the probe pseudo-elements.** `getComputedStyle(e, '::before').content` is available on
+   both engines and the probe already calls `getComputedStyle(e)` for every node. This is a small
+   change to an instrument the loop owns, and it converts an entire invisible class into a scored
+   one — the same shape as t1088 and t1090, which each bought hundreds of tests by making the
+   instrument able to see its own corpus.
+2. Record TEXT in the probe, which closes blind spot (3) and would have caught the counter defect.
+3. Keep the CSS 2.1 suite as the ranking instrument for anything M1 cannot express, and stop
+   treating a flat M1 as a verdict on work M1 has no term for.
