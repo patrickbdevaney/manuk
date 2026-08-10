@@ -46371,6 +46371,47 @@ PERF: none — one UA rule and one narrowed branch in a cascade that already ran
 WIKI: `docs/wiki/css-cascade.md` — where Chrome draws the form-control `box-sizing` line, and why a
 layout-crate test cannot see it.
 
+## Tick 1118 — a jarring count of 1 does not mean the page is nearly right (2026-08-10)
+
+TICK SHAPE: measurement — refreshing the near-M1 work-list against the t1117 sweep (t1111's lesson:
+a sweep's work-list has a shelf life) and tracing its cheapest row before spending a tick on it.
+
+The tier's new head is `simplepdf.com` — shape 0.865, `h_overflow` **1**, everything else clean, and
+better than it was (h5 at t1109). `MANUK_HOVF_TRACE`, the instrument t1112 built for exactly this:
+
+```text
+   HOVF-TRACE main/div:nth-of-type(1)
+       chrome [0   0 1200 1596]   ours [0   177 1200 10614]     body
+       chrome [0 120 1200  846]   ours [0   177 1200  9812]     main
+       chrome [217 120 766 846]   ours [-22 3316 1244 1106]  <-- FIRST DIVERGENCE
+```
+
+⚠⚠⚠ **THE OVERFLOW IS REAL AND SMALL, AND THE PAGE IS 6.6× TOO TALL.** 10,614px against Chrome's
+1,596. The flagged column is 1244 wide against a centred 766, and our `x = -22` is exactly that width
+centred — so the CENTRING is right and the WIDTH is not — but a site can be one *counted* pair from
+M1 and nowhere near it.
+
+**Why the count says otherwise, and neither invariant is broken:** `h_overflow` counts only elements
+whose right edge escapes the VIEWPORT while Chrome keeps them in, so a page six times too tall has no
+horizontal component to report; and `shape` is parent-relative, so a subtree that is uniformly wrong
+scores well against its own parent. Both are doing what they were designed to do, and the
+CONJUNCTION of them is what I read as "nearly there".
+
+**The correction to §8.1, banked in the burndown:** the tier is a place to LOOK, not a queue to work
+in order. Trace the top rows first — one env var and one sweep run separates *"one small defect"*
+from *"one symptom of a page-scale divergence"* in a single line. `hnhbkis.edu.in` and
+`www.marktplaats.nl` stay the genuine one-element rows; t1112 traced both and every ancestor was
+exact, which is the shape a real one-defect site has.
+
+RATCHET: held. No crate touched; `git status` clean on `engine/`.
+
+GATE: none — a measurement tick, and its subject is how to read a work-list rather than a behaviour.
+
+PERF: none.
+
+WIKI: `docs/loop/PHASE0-RENDER-BURNDOWN.md` §8.3 — "a jarring count of 1 does not mean the page is
+nearly right". [no-pattern]
+
 ## Tick 1117 — the jarring leg moved, and the mean that rose with it is a trap the reader caught (2026-08-10)
 
 TICK SHAPE: measurement — a fresh 200-site sweep of the CrUX trend corpus, pricing the three layout

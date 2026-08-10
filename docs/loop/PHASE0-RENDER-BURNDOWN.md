@@ -288,3 +288,32 @@ none of it is attributable yet: an OLD-BINARY run on those six sites, in the sam
 decides whether any of it is ours. `mayatoys.in` is the ambiguous one in both directions — it also
 gained **+0.436 shape**, which is the signature of a site that went from barely-rendering to mostly-
 rendering and picked up new invariant hits on the way.
+
+
+### 8.3 ⚠ A JARRING COUNT OF 1 DOES NOT MEAN THE PAGE IS NEARLY RIGHT (t1118)
+
+The §8.1 work-list ranks the "shape ok, blocked only by jarring" tier by the **number** of jarring
+pairs, and the cheapest row on the t1117 sweep was `simplepdf.com` — shape 0.865, `h_overflow` **1**,
+everything else clean. `MANUK_HOVF_TRACE` on it:
+
+```text
+   HOVF-TRACE main/div:nth-of-type(1)
+       chrome [0   0 1200 1596]   ours [0   177 1200 10614]     body
+       chrome [0 120 1200  846]   ours [0   177 1200  9812]     main
+       chrome [217 120 766 846]   ours [-22 3316 1244 1106]  <-- FIRST DIVERGENCE
+```
+
+The overflow is real and small — 1244 against a centred 766, and our `x = -22` is that width centred
+correctly, so the CENTRING is right and the WIDTH is not. But read the first two rows: **our page is
+10,614px tall against Chrome's 1,596 — 6.6×** — and the column starts at y=3316 where Chrome puts it
+at 120. A site can be one *counted* pair from M1 and nowhere near it.
+
+**Why the count says otherwise:** `h_overflow` counts only elements whose right edge escapes the
+VIEWPORT while Chrome keeps them in. A page that is six times too tall has no horizontal component
+to report, and `shape` is parent-relative, so a subtree that is uniformly wrong scores well against
+its own parent. The two invariants are doing exactly what they were designed to do.
+
+**So the tier is a place to LOOK, not a queue to work in order.** Trace the top rows before picking
+one — the trace is one env var and one sweep run, and it separates "one small defect" from "one
+symptom of a page-scale divergence" in a single line. `hnhbkis.edu.in` and `www.marktplaats.nl`
+remain the genuine one-element rows (t1112 traced both; every ancestor exact).
