@@ -7503,6 +7503,140 @@ test for the arc**, which is one sweep.
    three minutes, no build), so the suite ranks *where to look* and the corpus decides *whether to
    go*. That single step is what would have caught `::first-letter` as the thin one it was.
 
+## Check #103 — tick 1104 (2026-08-10)
+
+HORIZON H0, re-scoped by **PART VII**: the four v1 components. Its gate is not a WPT number —
+*"reliably renders and runs the representative real internet"*, plus the agentic surface, Bar-0
+containment, and no pathological resource use. The measurable stand-in the loop is scored on is
+**M1** (`shape ≥ 0.75` AND jarring-clean) on the in-scope CrUX corpus.
+
+### 1 · GATE OR SCOREBOARD? — **gate, and one of the three ticks was spent making the gate READABLE**
+
+Ticks 1097–1103. Read honestly, the window splits three ways and not the usual two:
+
+```text
+   t1097  I3 was BENT, and the check that asked found it          measurement (forced by I3)
+   t1098  generated content reaches the AX tree                   CAPABILITY — I3, discharged
+   t1099  +825 suite tests moved M1 by ZERO, fourth sweep         measurement (forced by check #102)
+   t1100  a leading `/` is the SERVER root                        instrument (reftest resolution)
+   t1101  getComputedStyle(el,'::before') was DISCARDED           CAPABILITY — and it is an I3 tick
+   t1102  a shape delta needs the same POPULATION                 instrument — and it is a RATCHET tick
+   t1103  the monospace default size follows the FAMILY           CAPABILITY — +8.70 shape, attributable
+```
+
+**t1101 is not merely I3-compliant, it is I3 itself.** I3 names four things — *DOM, computed style,
+layout geometry, and a first-class accessibility tree*. `getComputedStyle` **is** the computed-style
+half of the semantic model, and its second argument was read and discarded, so every query about a
+generated box was answered about a different box. That is the invariant's own surface returning a
+wrong answer of the right type, and it had been doing so for the life of the API.
+
+**t1103 is the clearest gate move of the window**: `doc.rust-lang.org/book` shape **0.791 → 0.878**,
+three deterministic draws per arm, same instrument tag, same coverage, **same 713-element sample**.
+More than twice the ±3.7-point spread t654 measured on an unchanged tree.
+
+**And I3 was free on the two box-moving ticks, by the rule t1098 established** — a fix that moves a
+BOX reaches the AX tree through `node_rects`, a shared producer; a fix that adds TEXT does not. t1103
+moves boxes (free); t1101 adds neither box nor text and is itself a semantic-model surface. Stated
+rather than assumed, because "it passes because a shared producer carries it" stops being true the
+moment a tick touches the producer (check #72's finding).
+
+### 2 · ⚠⚠⚠ THE WINDOW'S GOVERNING FINDING: THE LOOP'S OWN BANKED NUMBERS ARE BEING USED AS CONTROLS, AND A BANKED NUMBER HAS A HARNESS TOO
+
+Two independent instances, four ticks apart, and neither was noticed by any gate:
+
+```text
+   t1102   www.timeline.com  -9.2 shape pts, "REPRODUCES" on a solo re-run, carried for TWO ticks
+           as the window's one unrefuted regression candidate.
+           → the OLD binary (pre-t1092), rebuilt, run in the same hour, emits the t1099 row to
+             SIX DECIMALS. The engine never moved. Coverage had fallen 13 points and the scored
+             sample by 159 elements: two means over different samples of a page that changed.
+
+   t1103   css/CSS2 read 3,863 against the 3,858 t1100 banked — apparently +5.
+           → the OLD binary scores 3,862 TODAY. The honest delta is +1 / −0 over a per-test state
+             diff of all 5,660 rows.
+```
+
+**One rule, two victims: *every number has a harness, and a banked number's harness is the tree that
+produced it.*** Lesson 4 in STATUS.md has fired three times about the *measurement's* harness. This
+is the same rule one level out — the **BASELINE's** harness — and the loop has been differencing
+against journal entries as if they were re-measurable constants. *Diff the state, not the net*
+(t1089) applies to the baseline as much as to the delta.
+
+⚠⚠⚠ **AND THE t1102 HALF GENERALISES INTO A NAMED INSTRUMENT CLASS, WHICH IS WHY IT IS IN THIS CHECK
+AND NOT ONLY IN THE JOURNAL.** Of the 25 sites that moved more than 2 shape points between the t1089
+and t1099 sweeps, **6 are population changes — and those 6 are all five of the largest losses AND the
+largest gain**:
+
+```text
+   sports.yahoo.com  -0.856   n 1693 → 3      cov 0.991 → 0.273
+   www.timeline.com  -0.092   n 1197 → 1038   cov 0.979 → 0.849
+   www.paypal.com    -0.090   n  534 → 429    cov 0.893 → 0.717
+   mangaraw.ac       -0.067   n  733 → 873    cov 0.836 → 0.755
+   pogoda.by         -0.057   n   71 →  53    cov 0.696 → 0.510
+   www.aftenbladet.no +0.131  n  999 → 622    cov 0.951 → 0.924
+```
+
+**What survives the partition answers t1099's headline.** The 19 attributable movers are 7 losses and
+12 gains, **net +0.830 shape points, worst single loss −0.041** — inside the measured noise band. On
+the sites where the comparison is legitimate at all, the window moved shape **UP**. The famous
+*"+825 suite tests, +0 M1"* was read off a diff whose six loudest rows were never the engine's to
+answer for. It remains true that M1 did not move (M1 is a per-site threshold and none of these
+crossed it) — but the **inference** the loop was drifting toward, that six engine ticks bought
+nothing, is refuted.
+
+⚠⚠ **A SOLO RE-RUN IS STRUCTURALLY BLIND TO THIS.** It measures today's population twice and agrees
+with itself perfectly — which is exactly what t1099 did, three times, before writing `REPRODUCES`.
+The solo re-run is the right instrument for **churn** (one binary, one hour, two answers) and cannot
+see **drift** (one page replaced by another). Those are two failure modes and the loop owned one
+probe. It now owns two: `fidelity::sweep_diff` / `manuk-wpt sweep-diff`, gated by
+`G_SWEEP_DIFF_POPULATION`, RED-proven on both classifier arms, with thresholds varied 6×/5× to show
+they are not fitted at one point.
+
+### 3 · INVARIANTS — one is worth recording as a POSITIVE, and none is bent
+
+- **I2 (sanctioned deps, never patched internally).** t1103 is the cleanest instance of the
+  *borrowed-engine ladder* landing at **option 1** in a long time. The monospace default size looked
+  like a Stylo behaviour; it is a **hook we already implement and had stubbed**
+  (`Device::base_size_for_generic` returned `16.0` and ignored its argument). One match arm, no
+  vendored fork, and the UA sheet **lost** a rule rather than gaining one. **The fork surface is
+  still empty.** Recording the positive because the ladder is usually invoked to justify a delta;
+  here it correctly *avoided* one.
+- **I3.** Discharged and then extended — see §1.
+- **I4 (Pareto discipline).** t1103 was ranked by corpus usage (`<code>` inside a page that sets its
+  own font-size = every documentation site, wiki and spec page) and **explicitly declined** the
+  bigger-looking number: wikipedia's nested table at 4430px vs Chrome's 397 is 2,254 of 4,843 shape
+  misses on that anchor and was left open rather than half-fixed. That is the invariant working.
+- **I5 (the oracle is the discovery engine).** The route into t1103 was `--shape-dump` on an anchor →
+  a 4-row fixture that **refuted** the obvious hypothesis in two minutes → a 16-row battery. The
+  subject was not what made me look, for the fourth time this arc.
+
+### 4 · CORRECTION TO PART VI
+
+`VI.2`'s layout row already carries the named instrument classes (the mis-provisioned reference; the
+82–87% scorability ceiling). **Add a fourth, from t1102: the POPULATION-CHANGED between-sweep
+delta.** It is distinct from the ceiling — the ceiling is about which sites can be scored *at all*,
+this is about whether two scores of the *same* site are draws from the same experiment — and it is
+the one that corrupts the loop's reading of its own SLOPE rather than its level. The correction is
+written into VI.2 in this tick.
+
+### 5 · THE STEER — three, in order
+
+1. **WIKIPEDIA'S NESTED-TABLE BLOW-UP IS THE NAMED NEXT LEVER, AND IT MUST BE REDUCED FROM THE REAL
+   SUBTREE, NOT A SYNTHETIC ONE.** 4430px against Chrome's 397; 2,254 of 4,843 shape misses and 363
+   h-overflow on one anchor — the largest single identified shape term the loop has. ⚠ The synthetic
+   fixture came out **byte-exact against Chrome**, and *that is the finding*: the mechanism is not in
+   the shape of the construct, so the next attempt must carry the real markup in. A second synthetic
+   battery would refute nothing new.
+2. **RUN A CLEAN `--jobs 2` SWEEP AND DIFF IT WITH `sweep-diff`.** It will be the first sweep diff
+   the loop can actually read, and the first honest reading of whether t1101/t1103 move the corpus.
+   ⚠ It will also correctly report **INSTRUMENT-CHANGED** for nothing and **POPULATION-CHANGED** for
+   whatever has drifted since t1099 — expect the attributable set to be much smaller than the row
+   count, and rank on it rather than on the raw diff.
+3. **NEVER DIFF AGAINST A JOURNAL NUMBER AGAIN.** A control is a binary you rebuilt and ran in the
+   same hour, or it is not a control. This cost a false `+5` in t1103 and would have cost a false
+   regression in t1102 had the control not been run. If the rebuild is too expensive to pay for,
+   the honest report is *"unmeasured"*, not a difference against a remembered constant.
+
 ## Check #102 — tick 1096 (2026-08-10)
 
 HORIZON H0, and its gate: ~83% WPT across categories, oracle-verified on four corpora, a

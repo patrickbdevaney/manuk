@@ -810,3 +810,4 @@ tick	sha	epoch	iso	delta_s	shape	wall_s	files	added	deleted	gates	claims	wpt_pas
 1101	6433ff25	1786355678	2026-08-10T05:54:38-04:00	2569	capability	808	8	659	11	436	81	3896	6960	0	554	0	the second argument of `getComputedStyle` was read and DISCARDED (2026-08-10)
 1102	aea28de8	1786358186	2026-08-10T06:36:26-04:00	2508	measurement	808	8	536	33	436	81	3896	6960	0	554	0	the one drop t1099 could not refute, put to the OLD-BINARY control (2026-08-10)
 1103	f1c67f72	1786361927	2026-08-10T07:38:47-04:00	3741	capability	808	9	394	42	437	81	3896	6960	0	555	0	the monospace default size was a UA DECLARATION on five tags, and wrong in BOTH directions (2026-08-10)
+1104	c3dd6f3a	1786362498	2026-08-10T07:48:18-04:00	571	measurement	808	6	238	34	437	81	3896	6960	0	555	0	the constitution check, and the loop has been differencing against remembered constants (2026-08-10)

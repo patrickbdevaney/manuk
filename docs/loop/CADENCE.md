@@ -11,12 +11,12 @@
 
 | | value | over |
 |---|---|---|
-| ticks landed | **811** | ticks 1–1103 |
-| median tick cycle | **27m** | 810 intervals |
+| ticks landed | **812** | ticks 1–1104 |
+| median tick cycle | **27m** | 811 intervals |
 | median, last 10 | **39m** | 10 intervals |
 | fastest / slowest | 5s / 5.4d | |
-| **ticks per hour** | **1.12** | 722.6h elapsed |
-| median verify wall | **63s** | 750 ticks |
+| **ticks per hour** | **1.12** | 722.8h elapsed |
+| median verify wall | **63s** | 751 ticks |
 | wall trend | 39s → 13m — getting slower ⚠️ | first 3 vs last 3 |
 
 The **cycle** is the real unit: implement → debug → verify wall → land. The wall is only part of
@@ -31,7 +31,7 @@ it, and a wall that grows taxes every future tick, so it is tracked separately f
 * **✅ rows in the capability ledger**: 144 → **555**
 * **Bar 0 — oracle hangs**: 0 of 265 sites
 
-**356 of 811 ticks** (44%) moved a
+**356 of 812 ticks** (44%) moved a
 user-visible capability. The rest were instruments, infrastructure and corrections — and the
 ledger says the corrections were not overhead: three of its top three priorities were phantoms,
 and finding that out redirected everything after it.
@@ -91,7 +91,7 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 ## What a capability costs
 
 * **356** capability ticks, median cycle **27m**
-* median diff per tick: **+263 / −34** lines across 8 files
+* median diff per tick: **+262 / −34** lines across 8 files
 
 ## Every tick
 
@@ -908,5 +908,6 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 | **1101** | 2026-08-10 05:54 | 43m | capability | 13m | +659/−11 | 436 | 81 | 56.0% · | the second argument of `getComputedStyle` was read and DISCARDED (2026-08-10) |
 | **1102** | 2026-08-10 06:36 | 42m | measurement | 13m | +536/−33 | 436 | 81 | 56.0% · | the one drop t1099 could not refute, put to the OLD-BINARY control (2026-08-10) |
 | **1103** | 2026-08-10 07:38 | 62m | capability | 13m | +394/−42 | 437 | 81 | 56.0% · | the monospace default size was a UA DECLARATION on five tags, and wrong in BOTH directions |
+| **1104** | 2026-08-10 07:48 | 10m | measurement | 13m | +238/−34 | 437 | 81 | 56.0% · | the constitution check, and the loop has been differencing against remembered constants (2 |
 
 *`·` after a WPT figure means **carried forward**, not measured this tick.*

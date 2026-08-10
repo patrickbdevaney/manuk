@@ -46371,6 +46371,75 @@ PERF: none — one UA rule and one narrowed branch in a cascade that already ran
 WIKI: `docs/wiki/css-cascade.md` — where Chrome draws the form-control `box-sizing` line, and why a
 layout-crate test cannot see it.
 
+## Tick 1104 — the constitution check, and the loop has been differencing against remembered constants (2026-08-10)
+
+TICK SHAPE: measurement — the cadence re-read of `CONSTITUTION.MD` (due every 8 ticks; last at
+1096), banked as check #103 in `docs/loop/CONSTITUTION-CHECK.md`, with the required correction
+written into PART VI.
+
+⚠⚠⚠ **FINDING 1 — THE LOOP'S OWN BANKED NUMBERS ARE BEING USED AS CONTROLS, AND A BANKED NUMBER HAS
+A HARNESS TOO.** Two independent instances four ticks apart, neither caught by any gate:
+
+```text
+   t1102   timeline.com -9.2 shape pts, "REPRODUCES" on a solo re-run, carried for TWO ticks as the
+           window's one unrefuted regression candidate → the OLD binary (pre-t1092), rebuilt and run
+           in the same hour, emits the t1099 row to SIX DECIMALS. Coverage had fallen 13 points and
+           the scored sample by 159 elements.
+   t1103   css/CSS2 read 3,863 against the 3,858 t1100 banked — apparently +5 → the old binary
+           scores 3,862 TODAY. Honest delta +1/−0 over a 5,660-row per-test state diff.
+```
+
+STATUS.md's lesson 4 — *every number has a harness* — has fired three times about the MEASUREMENT's
+harness. This is the same rule one level out: **a banked number's harness is the tree that produced
+it**, and the loop has been differencing against journal entries as though they were re-measurable
+constants. *Diff the state, not the net* applies to the BASELINE as much as to the delta.
+
+⚠⚠⚠ **FINDING 2 — A FOURTH NAMED INSTRUMENT CLASS, AND IT CORRUPTS THE SLOPE RATHER THAN THE
+LEVEL.** VI.2 already carried the mis-provisioned reference and the 82–87% scorability ceiling. t1102
+adds the **population-changed between-sweep delta**: of 25 sites moving >2 shape points between the
+t1089 and t1099 sweeps, **6 are population changes and those 6 are all five largest losses and the
+largest gain**. Remove them and the window's 19 attributable movers are 7 losses / 12 gains, **net
++0.830, worst loss −0.041** — inside the noise band. *"+825 suite tests, +0 M1"* was read off a diff
+dominated by rows the engine never touched. M1 genuinely did not move (it is a per-site threshold and
+none crossed it), but the inference the loop was drifting toward — that six engine ticks bought
+nothing — is refuted. **A solo re-run is structurally blind to it**: churn and drift are two failure
+modes and the loop owned one probe.
+
+⚠⚠ **FINDING 3 — I2 IS WORTH RECORDING AS A POSITIVE, WHICH IS UNUSUAL.** The borrowed-engine ladder
+is normally invoked to justify a delta. t1103 landed at **option 1** and avoided one: the monospace
+default size looked like Stylo behaviour and was a **hook we already implement and had stubbed**.
+One match arm, no vendored fork, and the UA sheet LOST a rule. **The fork surface is still empty.**
+
+COMPLIANCE: **I3 is discharged and then extended** — t1101's `getComputedStyle(el,'::before')` is not
+merely I3-compliant, it *is* I3: the invariant names *DOM, computed style, layout geometry, and the
+AX tree*, and the computed-style half was answering every question about a generated box with a
+different box's answer. I3 was free on the two box-moving ticks by t1098's rule (a fix that moves a
+BOX reaches the AX tree through the shared `node_rects` producer; one that adds TEXT does not) —
+stated rather than assumed, because that accident stops protecting us the moment a tick touches the
+producer. **I4 held under temptation**: t1103 declined wikipedia's 2,254-miss nested table, the
+bigger-looking number, and shipped the usage-ranked one instead. **I5 produced the tick**: shape-dump
+→ a fixture that REFUTED the obvious hypothesis in two minutes → a 16-row battery whose one diverging
+row was about a different subsystem entirely.
+
+THE STEER (full text in check #103): **(1)** wikipedia's nested-table blow-up is the named next
+lever and must be reduced **from the real subtree** — the synthetic fixture came out byte-exact
+against Chrome, and that is the finding, so a second synthetic battery would refute nothing new.
+**(2)** run a clean `--jobs 2` sweep and diff it with `sweep-diff` — the first sweep diff the loop
+can actually read; rank on the ATTRIBUTABLE partition, not the raw row count. **(3)** never diff
+against a journal number again: a control is a binary you rebuilt and ran in the same hour, or the
+honest report is *"unmeasured"*.
+
+RATCHET: no crate touched. Documentation and governance only.
+
+GATE: none — a constitution check gates nothing. Its falsifiable content is check #103 and the PART
+VI correction, both of which a later tick can contradict with a measurement.
+
+PERF: none — measurement only.
+
+WIKI: none [forced] — this tick's artefacts ARE the loop's governing documents (`CONSTITUTION.MD`
+PART VI and `CONSTITUTION-CHECK.md` #103); a `docs/wiki` topic file would be a second copy of them
+that drifts. [no-pattern]
+
 ## Tick 1103 — the monospace default size was a UA DECLARATION on five tags, and wrong in BOTH directions (2026-08-10)
 
 TICK SHAPE: capability — a shape/geometry primitive on the CO-#1 line, found by a 16-row discovery
