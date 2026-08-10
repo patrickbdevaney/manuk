@@ -46371,6 +46371,58 @@ PERF: none — one UA rule and one narrowed branch in a cascade that already ran
 WIKI: `docs/wiki/css-cascade.md` — where Chrome draws the form-control `box-sizing` line, and why a
 layout-crate test cannot see it.
 
+## Tick 1117 — the jarring leg moved, and the mean that rose with it is a trap the reader caught (2026-08-10)
+
+TICK SHAPE: measurement — a fresh 200-site sweep of the CrUX trend corpus, pricing the three layout
+fixes landed since t1109 (t1110, t1114, t1116) which had gone corpus-unmeasured. Banked at
+`docs/loop/SWEEP-t1117-rows.tsv`.
+
+```text
+                                    t1109        t1117
+   M1 GATE (shape>=0.75 AND clean)  23/133 17.3%  25/133 18.8%   +2 sites
+     ├─ shape >= 0.75               39/133 29.3%  39/133 29.3%   FLAT
+     └─ jarring-clean               44/133 33.1%  47/133 35.3%   +3 sites
+   scored (scorability)             110           108            −2
+   COMMON-SET BAND, 103 sites       —             +0.02 pts      (14 up · 12 down)
+```
+
+**The movement is on the JARRING leg and shape is flat** — which is what t1109's decomposition and
+the observer's new gauge both said to work, and what t1108, t1114 and t1116 all aimed at. ⚠ **It is
+also inside the noise the reader itself declares** (*"PASS-COUNT = NOISY ±2-4 sites"*), and the
+common-set band is +0.02, so the direction agrees with the work and the magnitude is **not a claim**.
+
+⚠⚠⚠ **AND THE HEADLINE THAT LOOKS BEST IS THE ONE THE INSTRUMENT REFUSED.** `shape_mean` rose
+60.6% → 62.0% and `cov_mean` 86.8% → 87.8%, and `fidelity-progress.sh` printed its own
+`DENOMINATOR-TRAP` line: the mean rose while `scored` FELL 110 → 108, so a hard site dropped out of
+the denominator and **the gain is not real.** Recorded here rather than quoted as progress — this is
+the fourth favourable number this session that a rule killed, and the first one a script caught
+before I could.
+
+⚠⚠ **A `crashed` ROW APPEARED, AND A CRASH IS BAR 0 — SO IT WAS PUT TO THE OLD BINARY BEFORE
+ANYTHING ELSE.** Two of the seven scorability losses are engine-shaped rather than network-shaped:
+
+```text
+   www.freesupertips.com             SCORED → crashed        t1106: SCORED    t1116: SCORED
+   webfenix.movilidadbogota.gov.co   SCORED → render-failed  t1106: render-failed  t1116: render-failed
+```
+
+**Neither is ours.** The crash does not reproduce on EITHER binary — it was transient inside the
+sweep — and the render-failure reproduces identically on a binary from **ten ticks ago**. The other
+five losses are `timeout-150s` / `unreachable` / `shell-only`, and five sites moved the other way
+(`7info.ru`, `app.ordertime.com`, `mobcup.fm`, `nortenoticia.com.br`, `ru.restaurantguru.com`), which
+is what a live corpus churning looks like.
+
+RATCHET: held, and Bar 0 is clear on the evidence rather than on the absence of a report. No crate
+touched; `git status` clean on `engine/`.
+
+GATE: none — a measurement tick. The falsifiable content is the banked per-site rows and the two
+old-binary controls above.
+
+PERF: none.
+
+WIKI: `docs/loop/PHASE0-RENDER-BURNDOWN.md` §8 is the standing home for this reading; the numbers
+here supersede its t1109 table on the two legs and leave its named work-list unchanged. [no-pattern]
+
 ## Tick 1116 — a filled flex box answers for itself, and the frame it stops walking has to come back on (2026-08-10)
 
 TICK SHAPE: capability — t1115's named brick, built against the gate it left. A block measures its

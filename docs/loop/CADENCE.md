@@ -11,12 +11,12 @@
 
 | | value | over |
 |---|---|---|
-| ticks landed | **824** | ticks 1–1116 |
-| median tick cycle | **27m** | 823 intervals |
-| median, last 10 | **51m** | 10 intervals |
+| ticks landed | **825** | ticks 1–1117 |
+| median tick cycle | **27m** | 824 intervals |
+| median, last 10 | **54m** | 10 intervals |
 | fastest / slowest | 5s / 5.4d | |
-| **ticks per hour** | **1.12** | 732.3h elapsed |
-| median verify wall | **63s** | 763 ticks |
+| **ticks per hour** | **1.12** | 733.7h elapsed |
+| median verify wall | **63s** | 764 ticks |
 | wall trend | 39s → 13m — getting slower ⚠️ | first 3 vs last 3 |
 
 The **cycle** is the real unit: implement → debug → verify wall → land. The wall is only part of
@@ -31,7 +31,7 @@ it, and a wall that grows taxes every future tick, so it is tracked separately f
 * **✅ rows in the capability ledger**: 144 → **558**
 * **Bar 0 — oracle hangs**: 0 of 265 sites
 
-**362 of 824 ticks** (44%) moved a
+**362 of 825 ticks** (44%) moved a
 user-visible capability. The rest were instruments, infrastructure and corrections — and the
 ledger says the corrections were not overhead: three of its top three priorities were phantoms,
 and finding that out redirected everything after it.
@@ -921,5 +921,6 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 | **1114** | 2026-08-10 16:00 | 55m | capability | 13m | +331/−33 | 437 | 81 | 56.0% · | a definite width IS the box's intrinsic contribution, and one half of it fixes nothing (20 |
 | **1115** | 2026-08-10 16:31 | 31m | measurement | 13m | +122/−33 | 437 | 81 | 56.0% · | the flex child fills the measuring width, and the slack heuristic throws away its items (2 |
 | **1116** | 2026-08-10 17:24 | 53m | capability | 13m | +311/−41 | 437 | 81 | 56.0% · | a filled flex box answers for itself, and the frame it stops walking has to come back on ( |
+| **1117** | 2026-08-10 18:47 | 84m | measurement | 13m | +288/−32 | 437 | 81 | 56.0% · | the jarring leg moved, and the mean that rose with it is a trap the reader caught (2026-08 |
 
 *`·` after a WPT figure means **carried forward**, not measured this tick.*
