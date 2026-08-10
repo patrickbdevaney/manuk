@@ -919,9 +919,18 @@ fn normalize(s: &str) -> String {
 ///    an associated `<label for=…>`
 /// 4. subtree text, but **only** for roles with "name from content"
 /// 5. `title` attribute
+/// ⚠⚠⚠ **THE RENDERED TEXT OF EACH `::before` / `::after`, KEYED BY ITS OWNER (t1097).**
+///
+/// Generated content is **not in the DOM by construction** — script must never see it — so this
+/// tree, which is built from the DOM, could not reach it by any path and every pseudo was silently
+/// missing from the accessible name. accname §4.3 step 2F requires it. Produced by
+/// `manuk_layout::generated_text`, which resolves counters through the **same walk layout paints
+/// with**, so the announced number and the painted number cannot drift apart.
+pub type GeneratedText = HashMap<NodeId, (String, String)>;
+
 pub fn accessible_name(dom: &Dom, node: NodeId, role: &Role) -> String {
     let index = id_index(dom);
-    accessible_name_with(dom, node, role, &index)
+    accessible_name_with(dom, node, role, &index, &GeneratedText::new())
 }
 
 fn accessible_name_with(
@@ -929,6 +938,7 @@ fn accessible_name_with(
     node: NodeId,
     role: &Role,
     index: &HashMap<String, NodeId>,
+    generated: &GeneratedText,
 ) -> String {
     let Some(el) = dom.element(node) else {
         return String::new();
@@ -999,7 +1009,16 @@ fn accessible_name_with(
 
     // 4. name from content (only for roles that allow it)
     if role.name_from_content() {
-        let text = normalize(&dom.text_content(node));
+        // ⚠⚠⚠ accname §4.3 step 2F: the `::before` and `::after` text is PART OF THE CONTENT, in
+        // that order around it. `button::before{content:"★ "}` is announced "★ Save"; ours said
+        // "Save" until t1098, and where the pseudo carries the ONLY text — an
+        // `a::after{content:" (opens in a new tab)"}`, a `counter(sec)` section number, an icon
+        // glyph that IS the label — its absence was the whole name.
+        let (b, a) = generated
+            .get(&node)
+            .map(|(b, a)| (b.as_str(), a.as_str()))
+            .unwrap_or(("", ""));
+        let text = normalize(&format!("{b}{}{a}", dom.text_content(node)));
         if !text.is_empty() {
             return text;
         }
@@ -1096,9 +1115,40 @@ pub fn build_tree_full(
     invisible: &HashSet<NodeId>,
     non_hittable: &HashSet<NodeId>,
 ) -> A11yNode {
+    build_tree_generated(
+        dom,
+        rects,
+        z_index,
+        invisible,
+        non_hittable,
+        &GeneratedText::new(),
+    )
+}
+
+/// As [`build_tree_full`], plus the rendered `::before` / `::after` text per owner — see
+/// [`GeneratedText`]. This is the I3 seam: a renderer change that adds CONTENT (rather than moving
+/// a box) reaches the semantic model only through here, because the shared `node_rects` producer
+/// every other subsystem rides carries geometry and nothing else (t1097).
+pub fn build_tree_generated(
+    dom: &Dom,
+    rects: &HashMap<NodeId, Rect>,
+    z_index: &ZIndex,
+    invisible: &HashSet<NodeId>,
+    non_hittable: &HashSet<NodeId>,
+    generated: &GeneratedText,
+) -> A11yNode {
     let index = id_index(dom);
     let root = dom.root();
-    let children = build_children(dom, root, &index, rects, z_index, invisible, non_hittable);
+    let children = build_children(
+        dom,
+        root,
+        &index,
+        rects,
+        z_index,
+        invisible,
+        non_hittable,
+        generated,
+    );
     A11yNode {
         node: root,
         role: Role::Document,
@@ -1145,7 +1195,32 @@ pub fn build_tree_full_with_focus(
     invisible: &HashSet<NodeId>,
     non_hittable: &HashSet<NodeId>,
 ) -> A11yNode {
-    let mut tree = build_tree_full(dom, rects, z_index, invisible, non_hittable);
+    build_tree_generated_with_focus(
+        dom,
+        rects,
+        z_index,
+        focused,
+        invisible,
+        non_hittable,
+        &GeneratedText::new(),
+    )
+}
+
+/// ⚠⚠ **THE SECOND COPY, and it is here because a fix that lands in ONE of two copies looks
+/// complete in the diff.** `Page` builds its AX tree through two entry points — with and without a
+/// known focus — and threading [`GeneratedText`] into only the first would leave every
+/// focus-carrying caller (the shell, the agent's observation channel) announcing pseudo-less names
+/// while the tests on the other path passed.
+pub fn build_tree_generated_with_focus(
+    dom: &Dom,
+    rects: &HashMap<NodeId, Rect>,
+    z_index: &ZIndex,
+    focused: Option<NodeId>,
+    invisible: &HashSet<NodeId>,
+    non_hittable: &HashSet<NodeId>,
+    generated: &GeneratedText,
+) -> A11yNode {
+    let mut tree = build_tree_generated(dom, rects, z_index, invisible, non_hittable, generated);
     if let Some(f) = focused {
         mark_focused(&mut tree, f);
     }
@@ -1169,6 +1244,7 @@ fn build_children(
     z_index: &ZIndex,
     invisible: &HashSet<NodeId>,
     non_hittable: &HashSet<NodeId>,
+    generated: &GeneratedText,
 ) -> Vec<A11yNode> {
     let mut out = Vec::new();
     // N3/N4 — the FLAT tree: a shadow host exposes its shadow content, and a `<slot>`
@@ -1193,6 +1269,7 @@ fn build_children(
                 z_index,
                 invisible,
                 non_hittable,
+                generated,
             ));
             continue;
         }
@@ -1207,12 +1284,13 @@ fn build_children(
                 z_index,
                 invisible,
                 non_hittable,
+                generated,
             ));
             continue;
         }
         match role_of(dom, child) {
             Some(role) => {
-                let name = accessible_name_with(dom, child, &role, index);
+                let name = accessible_name_with(dom, child, &role, index, generated);
                 let state = state_of(dom, child, &role);
                 out.push(A11yNode {
                     node: child,
@@ -1231,6 +1309,7 @@ fn build_children(
                         z_index,
                         invisible,
                         non_hittable,
+                        generated,
                     ),
                 });
             }
@@ -1243,6 +1322,7 @@ fn build_children(
                 z_index,
                 invisible,
                 non_hittable,
+                generated,
             )),
         }
     }
@@ -1745,6 +1825,68 @@ mod tests {
         assert_eq!(name(kids[2]), "Close dialog");
         // whitespace normalized
         assert_eq!(name(kids[3]), "Read the docs");
+    }
+
+    /// # G_AX_GENERATED_NAME — accname §4.3 step 2F: the pseudo text IS part of the name
+    ///
+    /// Generated content is **not in the DOM by construction**, and this tree is built from the
+    /// DOM, so a `::before` could not reach `accessible_name` by any path (t1097). The result was
+    /// silent and worst where the pseudo carries the ONLY text:
+    ///
+    /// ```text
+    ///   button::before{content:"★ "}                   Chrome "★ Save"        ours "Save"
+    ///   a::after{content:" (opens in a new tab)"}      Chrome "Docs (…)"       ours "Docs"
+    /// ```
+    ///
+    /// ⚠⚠ **THE ORDER IS THE ASSERTION.** `before` precedes the content and `after` follows it —
+    /// an implementation that concatenated them in either fixed order, or appended both, passes a
+    /// "does the text appear" check and announces nonsense.
+    ///
+    /// ⚠ **And the negative arm: an owner with no generated content must be UNCHANGED.** This
+    /// threading touches the name of every node in the tree; the common case is no pseudo at all.
+    ///
+    /// To watch it go RED: pass `&GeneratedText::new()` from `build_tree_generated`, or swap the
+    /// `{b}{}{a}` order in the name-from-content branch.
+    #[test]
+    fn an_accessible_name_includes_its_before_and_after_content_in_order() {
+        let dom = dom_with(|d, body| {
+            let btn = d.create_element("button");
+            let t = d.create_text("Save");
+            d.append_child(btn, t);
+            d.append_child(body, btn);
+
+            let plain = d.create_element("button");
+            let pt = d.create_text("Plain");
+            d.append_child(plain, pt);
+            d.append_child(body, plain);
+        });
+        let body = dom
+            .children(dom.children(dom.root()).next().unwrap())
+            .next()
+            .unwrap();
+        let kids: Vec<NodeId> = dom.children(body).collect();
+
+        let mut generated = GeneratedText::new();
+        generated.insert(kids[0], ("* ".to_string(), " (2)".to_string()));
+
+        let name = |n: NodeId, g: &GeneratedText| {
+            let r = role_of(&dom, n).unwrap();
+            let index = id_index(&dom);
+            accessible_name_with(&dom, n, &r, &index, g)
+        };
+        assert_eq!(
+            name(kids[0], &generated),
+            "* Save (2)",
+            "accname §4.3 step 2F: ::before precedes the content and ::after follows it. Bare \
+             \"Save\" means the pseudo text never reached the tree — which it could not, until the \
+             producer was threaded (t1098); a different ORDER means it reached it wrongly."
+        );
+        assert_eq!(
+            name(kids[1], &generated),
+            "Plain",
+            "…and the negative arm: an owner with NO generated content is untouched. This \
+             threading runs for every node in the tree and the common case is no pseudo at all."
+        );
     }
 
     #[test]

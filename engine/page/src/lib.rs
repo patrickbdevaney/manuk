@@ -6596,12 +6596,18 @@ impl Page {
             .collect();
         // Pass the effective z-index per node so hit-testing is occlusion-aware (a
         // high-`z` overlay wins a click over content beneath it).
-        manuk_a11y::build_tree_full(
+        // ⚠⚠⚠ **I3 (t1097/t1098): generated content reaches the semantic model ONLY here.** A
+        // `::before` is not in the DOM by construction, so the AX tree — built from the DOM — could
+        // not see it by any path, and every pseudo was missing from `accessible_name`. Every other
+        // renderer subsystem gets its semantic exposure free from the shared `node_rects` producer,
+        // but that producer carries GEOMETRY: a fix that adds TEXT has to be threaded deliberately.
+        manuk_a11y::build_tree_generated(
             &self.dom,
             &rects,
             &self.z_index_map(),
             &self.invisible_nodes(),
             &self.non_hittable_nodes(),
+            &manuk_layout::generated_text(&self.dom, &self.styles),
         )
     }
 
@@ -6628,13 +6634,14 @@ impl Page {
                 )
             })
             .collect();
-        manuk_a11y::build_tree_full_with_focus(
+        manuk_a11y::build_tree_generated_with_focus(
             &self.dom,
             &rects,
             &self.z_index_map(),
             focused,
             &self.invisible_nodes(),
             &self.non_hittable_nodes(),
+            &manuk_layout::generated_text(&self.dom, &self.styles),
         )
     }
 

@@ -46371,6 +46371,76 @@ PERF: none — one UA rule and one narrowed branch in a cascade that already ran
 WIKI: `docs/wiki/css-cascade.md` — where Chrome draws the form-control `box-sizing` line, and why a
 layout-crate test cannot see it.
 
+## Tick 1098 — I3 discharged, and the AX tree immediately caught a bug the pixel probe could not (2026-08-10)
+
+TICK SHAPE: capability — building what t1097 proved missing and priced: generated content threaded
+into the accessibility tree, so a `::before` reaches `accessible_name`.
+
+⚠⚠⚠ **AND THE FIRST THING THE NEW INSTRUMENT DID WAS FALSIFY t1096's HEADLINE CLAIM.** The
+end-to-end test read `S0. Alpha` where Chrome says `S1.`. **Element-level `counter-increment` was
+never mapped at all** — t1096 set `counter_reset`/`counter_increment` inside the *pseudo* mapper,
+which early-returns unless the pseudo has `content`, so an ordinary element carrying
+`counter-increment: sec` contributed nothing and every counter sat at its reset value.
+
+```text
+                    Chrome     t1096 shipped     t1098
+   the painted box    87            87             87      ← IDENTICAL, and that is the problem
+   the announced text "S1."       "S0."          "S1."
+```
+
+**t1096's "Chrome-exact 87 / 77 / 87" was true and did not mean what it said.** In a monospace
+fixture `S0.` and `S1.` are the same number of characters, so a *width* probe matched Chrome exactly
+while every counter read zero. Fixed here in `stylo_map` (the element mapper, where it belonged):
+`css/CSS2` **3,843 → 3,854, +11 in `lists`, 0 lost.**
+
+> **A fixture measures what it measures.** t1046 recorded that a fixture which cannot express its
+> subject reports it BROKEN; t1093 recorded the mirror, reporting it WORKING. This is the third
+> face and the nastiest: a fixture that expresses the subject *approximately* reports a wrong
+> answer as EXACT. The AX tree is the first instrument in this loop that reads the string instead of
+> measuring it, and it found the defect on its first run.
+
+THE I3 WORK ITSELF:
+
+- `manuk_layout::counter_snapshots` extracted as a free function so the AX tree and the PAINTER
+  resolve counters through **one** walk — a second copy would let the announced section number
+  drift from the printed one, which no pixel test can see.
+- `manuk_layout::generated_text(dom, styles)` — the producer. Suppressed pseudos are excluded on the
+  same rule the painter drops them by (t1093): announcing content that is not rendered would make
+  the tree *more* wrong than the empty map it replaced.
+- `manuk_a11y::build_tree_generated{,_with_focus}` + accname §4.3 step 2F in name-from-content.
+
+⚠⚠ **THE SECOND COPY WAS REAL AND I NEARLY SHIPPED ONE HALF.** `Page` builds its AX tree through
+**two** entry points — with and without a known focus — and the first wiring touched only
+`a11y_tree`. `a11y_tree_with_focus` is what the shell and the agent's observation channel use, so
+the diff would have looked complete while every focus-carrying caller announced pseudo-less names.
+
+⚠⚠ **A MUTATION CAME BACK GREEN AGAIN, ONE TICK AFTER t1096's DID.** Replacing the producer with
+`&Default::default()` compiles and leaves all 19 `manuk-a11y` tests passing — that unit test injects
+its own map, so it proves the CONSUMER (ordering, the negative arm) and is structurally blind to the
+wiring. Hence `g_ax_generated_name.rs`, which rides the real cascade and layout. **Two halves, two
+tests, and the green mutation is what proved the second one was needed.**
+
+⚠ **AND I WIPED MY OWN WORK MID-TICK.** Reverting mutation 2 with `git checkout -- engine/page/src/lib.rs`
+deleted the producer wiring along with the mutation, and the next run failed for a reason that
+looked like a defect in the fix. That is the `probe-harness-git-checkout-wipes-tick` hazard, this
+time self-inflicted: **a mutation applied by hand must be reverted by hand.**
+
+RATCHET: `css/CSS2` 3,843 → 3,854, 0 lost; `manuk-a11y` 19/19, `manuk-layout` 154/154, `manuk-css`
+53/53 under `stylo`.
+
+GATE: **G_AX_GENERATED_NAME**, in two parts — the unit test (order: `before` precedes content,
+`after` follows; and an owner with no pseudo is untouched), RED-proven by swapping the order; and
+`engine/page/tests/g_ax_generated_name.rs` end-to-end through `Page`, which asserts the star, the
+link suffix, `S1.` (the same-walk claim) and that a `display:none` pseudo is NOT announced.
+⚠ **The wall runs no a11y page gate** (`grep -c a11y scripts/verify.sh` is 0), so the end-to-end half
+is not in the tick path. `scripts/` is observer-owned — filed here as a request, as check #101 §5.4
+filed the CSS 2.1 build.
+
+PERF: one extra document walk per AX tree build, over the same map layout already walks, allocating
+only for nodes that have a pseudo.
+
+WIKI: `docs/wiki/dom-semantics.md` — the t1097 entry now carries the landing and the falsification.
+
 ## Tick 1097 — I3 was BENT, and the check that asked found it against this window's own ticks (2026-08-10)
 
 TICK SHAPE: measurement — check #102 steer #2, made binding one tick ago: *"is generated content in

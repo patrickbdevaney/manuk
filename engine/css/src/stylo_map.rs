@@ -399,12 +399,37 @@ fn grid_line_to_ours(l: &stylo::values::computed::GridLine) -> crate::GridLine {
 
 /// Map a Stylo `ComputedValues` onto our `ComputedStyle`, starting from initial and
 /// overriding every property we model.
+/// Stylo's `counter-reset` / `counter-increment` lists → `(name, value)` pairs. Both `Deref` to
+/// `[CounterPair<i32>]`, and the two differ only in their implied integer, which Stylo has already
+/// applied. `reversed(name)` is dropped — a Lists Level 3 addition with no consumer here, and a
+/// silently wrong direction would be worse than the absent feature.
+fn counter_pairs(
+    list: &[stylo::values::generics::counters::CounterPair<i32>],
+) -> Vec<(String, i32)> {
+    list.iter()
+        .filter(|p| !p.is_reversed)
+        .map(|p| (p.name.0.to_string(), p.value))
+        .collect()
+}
+
 pub fn to_computed_style(cv: &ComputedValues) -> ComputedStyle {
     let mut s = ComputedStyle::initial();
 
     // Color / background (currentColor resolved against the element's color).
     let current = cv.clone_color();
     s.color = abs_to_rgba(&current);
+    // ⚠⚠⚠ **CSS 2.1 §12.4 — THE ELEMENT'S OWN COUNTER OPERATIONS, AND THEY LIVE HERE AND NOT WITH
+    // `content`.** t1096 mapped `counter-reset`/`counter-increment` inside the PSEUDO mapper, which
+    // early-returns unless the pseudo has `content` — so an ordinary element carrying
+    // `counter-increment: sec` contributed nothing and every counter stayed at its reset value.
+    //
+    // ⚠⚠ **AND THE WIDTH PROBE THAT "VERIFIED" t1096 COULD NOT SEE IT:** in a monospace fixture
+    // `S0.` and `S1.` are the same number of characters, so `87 / 77 / 87` matched Chrome exactly
+    // while every counter read 0. It was caught by the ACCESSIBILITY tree (t1098), which reads the
+    // string rather than measuring it — the first instrument in the loop that could tell those two
+    // renderings apart.
+    s.counter_reset = counter_pairs(&cv.get_counters().clone_counter_reset());
+    s.counter_increment = counter_pairs(&cv.get_counters().clone_counter_increment());
     let bg = cv.clone_background_color().resolve_to_absolute(&current);
     s.background_color = (bg.alpha > 0.0).then(|| abs_to_rgba(&bg));
 

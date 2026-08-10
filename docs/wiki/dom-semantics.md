@@ -40,6 +40,40 @@ in one window, all landed with no semantic-model exposure at all.
 `HashMap<NodeId, (String, String)>` for before/after, produced where layout already resolves the
 counters. The layering pattern exists; nothing about this is architectural.
 
+### LANDED at t1098 — and the AX tree immediately falsified a claim the pixel probe had certified
+
+`manuk_layout::generated_text(dom, styles)` produces the rendered pseudo text; `manuk_a11y::
+build_tree_generated{,_with_focus}` consumes it; name-from-content becomes `before + content +
+after` per accname §4.3 step 2F. Counters resolve through `manuk_layout::counter_snapshots` — the
+**same walk the painter uses**, extracted to a free function precisely so the announced section
+number cannot drift from the printed one.
+
+⚠⚠⚠ **The first thing it did was catch a real bug in the tick before it.** The end-to-end test read
+`S0. Alpha` where Chrome says `S1.`: element-level `counter-increment` had never been mapped, because
+t1096 set it inside the *pseudo* mapper, which early-returns unless the pseudo has `content`.
+
+```text
+                    Chrome     t1096 shipped     t1098
+   the painted box    87            87             87      ← IDENTICAL, and that is the problem
+   the announced text "S1."       "S0."          "S1."
+```
+
+> **A fixture measures what it measures.** In a monospace fixture `S0.` and `S1.` are the same number
+> of characters, so t1096's "Chrome-exact 87 / 77 / 87" was true and did not mean what it said. The
+> AX tree is the first instrument in this loop that reads the STRING rather than measuring it.
+> `css/CSS2` 3,843 → 3,854 once the element mapper was fixed.
+
+**Two entry points, and one of them is the one that matters.** `Page` builds its AX tree with and
+without a known focus; `a11y_tree_with_focus` is what the shell and the agent's observation channel
+use. Wiring only `a11y_tree` looks complete in the diff and leaves every focus-carrying caller
+announcing pseudo-less names.
+
+**Two tests, because a mutation came back green.** Replacing the producer with `&Default::default()`
+compiles and leaves all 19 `manuk-a11y` tests passing — the unit test injects its own map, so it
+proves the consumer and is structurally blind to the wiring. `engine/page/tests/g_ax_generated_name.rs`
+rides the real cascade and layout. ⚠ The wall runs **no** a11y page gate, so that half is not in the
+tick path.
+
 **The gate that would have caught it does not exist**: *an accessible name must include its
 `::before`/`::after` content.* There is no such assertion anywhere in the tree.
 

@@ -910,6 +910,106 @@ struct Ctx<'a> {
 /// "dozens".
 pub static LAYOUTS: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);
 
+/// ⚠⚠⚠ **CSS 2.1 §12.4 — A COUNTER'S VALUE IS A FUNCTION OF DOCUMENT ORDER, WHICH IS WHY IT CANNOT
+/// BE RESOLVED IN THE CASCADE.** `counter-reset` and `counter-increment` are read off each element
+/// as the document is walked front to back; `counter(name)` in a pseudo's `content` then reads the
+/// value *at that element*, after its own reset and increment. None of that is knowable when the
+/// element's style is computed on its own — which is why `ComputedStyle::content` had to stop being
+/// a `String` (t1095).
+///
+/// **Reset before increment, on the same element**, and that order is the spec's: an element
+/// carrying both starts the counter and then steps it, so `counter-reset:c; counter-increment:c`
+/// reads 1 rather than 0.
+///
+/// ⚠ **Deliberately FLAT, and named so the next reader knows which half exists.** A real
+/// implementation scopes a reset to the element's subtree and its following siblings, so a nested
+/// list restarts at each level and `counters(c, ".")` can print `2.1.3`. This keeps one global map,
+/// which is exact for the shapes counters are actually written in — section, figure and table
+/// numbering, ordered steps, breadcrumbs — and wrong for nesting.
+///
+/// ⚠ **Snapshots ONLY where a pseudo names a counter.** The whole map per node would be
+/// O(nodes × counters) on a page that never asks; a page with no counters stores nothing at all.
+///
+/// A free function rather than a method because **two consumers need it and one of them is not
+/// layout**: the accessibility tree has to resolve the same text (t1097 — I3), and a second copy of
+/// this walk is exactly the two-copies defect this codebase keeps catching.
+pub fn counter_snapshots(dom: &Dom, styles: &StyleMap) -> HashMap<NodeId, HashMap<String, i32>> {
+    let mut live: HashMap<String, i32> = HashMap::new();
+    let mut out: HashMap<NodeId, HashMap<String, i32>> = HashMap::new();
+    for n in dom.descendants(dom.root()) {
+        let Some(st) = styles.get(&n) else {
+            continue;
+        };
+        for (nm, v) in &st.counter_reset {
+            live.insert(nm.clone(), *v);
+        }
+        for (nm, v) in &st.counter_increment {
+            *live.entry(nm.clone()).or_insert(0) += *v;
+        }
+        let wants = [&st.before, &st.after].into_iter().flatten().any(|p| {
+            p.content
+                .as_ref()
+                .is_some_and(|parts| parts.iter().any(|c| matches!(c, ContentPart::Counter(_))))
+        });
+        if wants {
+            out.insert(n, live.clone());
+        }
+    }
+    out
+}
+
+/// ⚠⚠⚠ **THE RENDERED TEXT OF EVERY `::before` / `::after`, FOR THE ACCESSIBILITY TREE (t1097).**
+///
+/// Generated content is **not in the DOM by construction** — script must never see it — so the AX
+/// tree, which is built from the DOM, could not reach it by any path and every pseudo was silently
+/// missing from `accessible_name`. accname §4.3 step 2F requires it: `button::before{content:"★ "}`
+/// is announced *"★ Save"*, and where the pseudo carries the ONLY text
+/// (`a::after{content:" (opens in a new tab)"}`, a `counter(sec)` section number, an icon glyph
+/// that IS the label) its absence is the whole name.
+///
+/// This is the producer side. It resolves counters through the SAME [`counter_snapshots`] walk
+/// layout uses, so the announced number and the painted number cannot drift apart.
+///
+/// ⚠ Suppressed pseudos are excluded on the same rule the painter uses
+/// ([`generated_box_is_suppressed`]): a `display:none` `::after` is not announced, because it is
+/// not there. Returning it would make the AX tree *more* wrong than the empty map it replaces.
+pub fn generated_text(dom: &Dom, styles: &StyleMap) -> HashMap<NodeId, (String, String)> {
+    let counters = counter_snapshots(dom, styles);
+    let mut out = HashMap::new();
+    for n in dom.descendants(dom.root()) {
+        let Some(st) = styles.get(&n) else {
+            continue;
+        };
+        let render = |p: &Option<Box<ComputedStyle>>| -> String {
+            let Some(p) = p.as_ref() else {
+                return String::new();
+            };
+            if generated_box_is_suppressed(p) {
+                return String::new();
+            }
+            let Some(parts) = p.content.as_ref() else {
+                return String::new();
+            };
+            let mut t = String::new();
+            for part in parts {
+                match part {
+                    ContentPart::Text(s) => t.push_str(s),
+                    ContentPart::Counter(name) => {
+                        let v = counters.get(&n).and_then(|c| c.get(name)).copied();
+                        t.push_str(&v.unwrap_or(0).to_string());
+                    }
+                }
+            }
+            t
+        };
+        let (b, a) = (render(&st.before), render(&st.after));
+        if !b.is_empty() || !a.is_empty() {
+            out.insert(n, (b, a));
+        }
+    }
+    out
+}
+
 pub fn layout_document(
     dom: &Dom,
     styles: &StyleMap,
@@ -8528,30 +8628,7 @@ impl Ctx<'_> {
     /// stores nothing at all.
     fn counter_values(&self, node: NodeId, name: &str) -> Option<i32> {
         if self.counters.borrow().is_none() {
-            let mut live: HashMap<String, i32> = HashMap::new();
-            let mut out: HashMap<NodeId, HashMap<String, i32>> = HashMap::new();
-            for n in self.dom.descendants(self.dom.root()) {
-                let Some(st) = self.styles.get(&n) else {
-                    continue;
-                };
-                for (nm, v) in &st.counter_reset {
-                    live.insert(nm.clone(), *v);
-                }
-                for (nm, v) in &st.counter_increment {
-                    *live.entry(nm.clone()).or_insert(0) += *v;
-                }
-                // Snapshot ONLY where a pseudo actually names a counter — the whole map per node
-                // would be O(nodes x counters) on a page that never asks.
-                let wants = [&st.before, &st.after].into_iter().flatten().any(|p| {
-                    p.content.as_ref().is_some_and(|parts| {
-                        parts.iter().any(|c| matches!(c, ContentPart::Counter(_)))
-                    })
-                });
-                if wants {
-                    out.insert(n, live.clone());
-                }
-            }
-            *self.counters.borrow_mut() = Some(out);
+            *self.counters.borrow_mut() = Some(counter_snapshots(self.dom, self.styles));
         }
         self.counters
             .borrow()

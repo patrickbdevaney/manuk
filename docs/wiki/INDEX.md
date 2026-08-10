@@ -819,128 +819,129 @@
 
   - L3 · I3 IS SATISFIED FOR FREE WHEN A FIX MOVES A BOX, AND NOT AT ALL WHEN IT ADDS TEXT (t1097)
   - L24 · Why four consecutive constitution checks recorded I3 as "satisfied by accident of scope"
-  - L46 · Inserting a node BEFORE ITSELF is a move, not a no-op — and getting it wrong is a hang
-  - L68 · An INCOMPLETE family of methods is worse than an absent one
-  - L81 · The document lifecycle: readyState, DOMContentLoaded, load
-  - L106 · CharacterData offsets are UTF-16 CODE UNITS — not bytes, not chars
-  - L116 · A native can throw a real DOMException
-  - L123 · A CONSTANT is an infinite loop for any code that waits for it to change
-  - L131 · textContent = '' must create NOTHING — "string replace all" puts the empty case FIRST
-  - L164 · What made it survive: the idiom next to it was already right
-  - L170 · The coercions, measured rather than assumed
-  - L182 · The FLAT TREE and the node tree are different trees, and every renderer must walk the flat one
-  - L199 · html5ever ALREADY implements Declarative Shadow DOM — the hook just defaults to false
-  - L211 · A DocumentFragment's defining property is what happens when you INSERT it
-  - L225 · Comment nodes are load-bearing INFRASTRUCTURE, not annotations
-  - L237 · textContent is a node-tree API, so any "visible text" built on it is wrong
-  - L244 · …and then a break OPPORTUNITY was read as a space (tick 577)
-  - L282 · innerText is the RENDERED text, and the binding CAN compute it — it holds the styles already
-  - L308 · Generational NodeId buys use-after-free safety while staying a bare integer for JS
-  - L323 · document.readyState is the most-checked property on the web, and undefined makes half of it work BY ACCIDENT
-  - L337 · The "detached document" checks frameworks use are string/identity comparisons that undefined fails silently
-  - L349 · Registering a DOM property twice lets the later registration silently win
-  - L355 · Two form-encoding details servers actually branch on
-  - L366 · A HANDLE FROM ANOTHER DOCUMENT IS A DEAD BROWSER, not a wrong answer
-  - L387 · A detached DOCUMENT is how every sanitizer works — and the moment it exists, you need cycle checks
-  - L408 · A DOM that never throws turns a loud caller bug into a silent leak
-  - L422 · <body onload> is window.onload, and it must fire EXACTLY once — dispatch OR explicit, never both
-  - L453 · offsetWidth/Height/Top/Left, client*, scroll{Width,Height} are integers — scrollTop/Left are not
-  - L467 · classList is an ordered SET, and a no-op operation must not rewrite the attribute
-  - L491 · Range.createContextualFragment is the fragment parser you already have, wearing a Range
-  - L510 · Publish what the cascade HOLDS, and nothing it does not — the whole-object diff
-  - L522 · The split is the deliverable
-  - L536 · The logical properties are exact aliases, and that is a STATEMENT about this engine
-  - L542 · grid-template-columns is the instructive OMISSION
-  - L551 · Two spellings of one box must go through one serialiser
-  - L560 · word-spacing does NOT share letter-spacing's rule, and a lumped comment hid that
-  - L567 · getComputedStyle(el).width is the *RESOLVED* value — the USED size in px, not the specified one
-  - L596 · The box reported is the one the element's own box-sizing names
-  - L608 · Two guards, and "always report the rect" breaks both
-  - L615 · One case is deliberately NOT resolved, and it is named rather than approximated
-  - L624 · The reconciliation clause, because two readings of one box must not drift
-  - L630 · getComputedStyle must expose the properties the cascade ALREADY computed — undefined is a bug, not a value
-  - L645 · isConnected / toggleAttribute / webkitMatchesSelector — the ergonomics frameworks call hourly
-  - L655 · The Node interface CONSTANTS were absent — and n.nodeType === Node.ELEMENT_NODE silently ran false
-  - L666 · DOMException legacy codes + Event phase constants — the same undefined-comparison trap as Node constants
-  - L675 · The reflection GAP was the GLOBAL attributes — one "*" row beat 400 per-attribute edits (+18k)
-  - L688 · enterKeyHint/inputMode were keyed under a tag named "undefinedelement" — a global that reached NO element (tick 490)
-  - L700 · A getter-only attribute fallback silently drops the setter — and double-defining a native one CRASHES
-  - L711 · HTML attribute qualified names are ASCII-lowercased — the root of the reflection value-mismatch mass
-  - L733 · The HTMLDocument named collections — document.forms/images/links/scripts/embeds/anchors + getElementsByName
-  - L751 · lookupNamespaceURI / isDefaultNamespace — the "locate a namespace" algorithm
-  - L775 · nodeName is per node type, and case-sensitive outside the HTML namespace
-  - L787 · moveBefore — the atomic move, and why it is stricter than insertBefore
-  - L819 · ProcessingInstruction — a whole missing node type, found by histogramming failure *messages*
-  - L852 · The typed Event hierarchy — flat members over a real instanceof chain
-  - L876 · Constructable node interfaces — when iface()'s inert constructor is the wrong default
-  - L896 · Text.splitText() and wholeText — the split and its inverse
-  - L908 · getElementsByTagNameNS — match on (namespace, localName), and None means XHTML
-  - L935 · DOM validation errors must be REAL DOMExceptions, not decorated Errors (tick 127, +420 dom)
-  - L975 · Node.lookupPrefix and the DocumentType namespace-lookup surface (tick 128, +20 dom)
-  - L1005 · HTMLCollection is a WebIDL legacy platform object, not a plain indexed proxy (tick 129)
-  - L1047 · form.elements is a live HTMLFormControlsCollection, and a radio group is a RadioNodeList (tick 433)
-  - L1080 · control.labels and label.control link a form field to its <label>s (tick 434)
-  - L1098 · The <table> DOM: table.rows is a live HTMLCollection in LOGICAL order (tick 435)
-  - L1117 · The <table> write API: insertRow/insertCell materialise structure (tick 436)
-  - L1135 · element.form resolves the form owner (tick 437)
-  - L1149 · DOMStringMap (dataset) and NamedNodeMap (attributes) enumerate their names (tick 130)
-  - L1170 · HTMLCollection iterable surface + numeric namedItem (tick 131)
-  - L1188 · getElementsByClassName splits on ASCII whitespace, not Unicode (tick 132)
-  - L1209 · A document from DOMImplementation is a REAL Document (tick 134)
-  - L1249 · The CharacterData abstract base interface (tick 133)
-  - L1266 · createDocumentType name validation + per-document .implementation (tick 135)
-  - L1299 · CharacterData offsets are unsigned long = ToUint32, not clamp-to-0 (tick 136)
-  - L1333 · <details>/<summary> — the disclosure widget is entirely the UA's job (tick 216)
-  - L1365 · The bug underneath it — remove_attr never marked the tree dirty
-  - L1382 · A missing property is not neutral — it picks a side, and document.hidden picked the wrong one
-  - L1408 · Whose fact is it? The host owns visibility, the same way it owns the lifecycle
-  - L1420 · Two answers to the same question must agree — permissions.query vs Notification.permission
-  - L1449 · The Sanitizer API — Element.setHTML / setHTMLUnsafe (tick 288)
-  - L1473 · The teeth G_SANITIZER uses
-  - L1481 · The config's first brick — removeElements (tick 545)
-  - L1510 · Element.checkVisibility() — is it actually rendered? (tick 291)
-  - L1527 · The teeth G_CHECK_VISIBILITY uses
-  - L1537 · <template>.content is the parser's fragment, not the element's direct children (tick 425)
-  - L1554 · The <select> write API — add / remove(index) + HTMLOptionsCollection (tick 438)
-  - L1570 · option.text + the Option() constructor's defaultSelected argument (tick 439)
-  - L1585 · textarea.value is its text content, not a value attribute (tick 440)
-  - L1601 · select.length is the option count and resizes the list (tick 441)
-  - L1613 · select.options.length is a LIVE writable accessor — the collection clear-idiom (tick 459)
-  - L1638 · input.valueAsNumber + stepUp/stepDown for numeric inputs (tick 442)
-  - L1649 · input.valueAsDate + valueAsNumber for date/time/month inputs (tick 443)
-  - L1660 · progress.position + output.value (tick 444)
-  - L1670 · the .text property for a/script/title (tick 445)
-  - L1678 · datetime-local + week typed values (tick 446)
-  - L1691 · <a>/<area> URL-decomposition setters (tick 447)
-  - L1705 · <img>.currentSrc reports the URL we actually load, honestly (tick 493)
-  - L1721 · document.activeElement defaults to <body>, not null (tick 494)
-  - L1734 · The same defect, three consumers, found by looking for it (tick 578)
-  - L1765 · The image an <img> wants is chosen, not read (tick 582)
-  - L1784 · One hardcoded namespace in a four-line function disabled the parser's whole foreign-content mode (tick 603)
-  - L1807 · The claim that matters is not "is it right" but "do the two ways agree"
-  - L1824 · getBBox() is USER SPACE, and that is the whole reason it exists (tick 604)
-  - L1847 · <text> and <path> report zero size on purpose
-  - L1858 · A getter-only accessor is a TypeError, not a gap — and one site turns it into a white screen (tick 612)
-  - L1873 · The failure www.welt.de builds on top of it
-  - L1891 · The population, measured rather than assumed
-  - L1904 · The rest of the class, from the same sweep
-  - L1918 · The setter itself
-  - L1937 · window.<id> IS the element — named access on the Window object was absent (tick 677)
-  - L1943 · What it cost, measured on a HEAD-20 site
-  - L1970 · The mechanism, and the three ways it could have been subtly wrong
-  - L1995 · What it bought, stated honestly
-  - L2011 · The second document — a document method that belongs to the singleton (tick 776)
-  - L2034 · ⚠ The gate that owns this ground passes, and the reason is worth more than the fix
-  - L2058 · The trap: a this-blind promotion is WORSE than the throw
-  - L2072 · One source, two eval sites
-  - L2087 · A DOM node must NAME its interface — [object Object] is a wrong answer of the right type (tick 862)
-  - L2111 · Why nine sweeps did not find it
-  - L2121 · The fix is ONE accessor at the ROOT of the chain, not WebIDL's shape
-  - L2136 · The table is taught by the iface() calls, not written twice
-  - L2144 · The named limits
-  - L2164 · A <template>'s innerHTML is its CONTENTS — and a lazy fragment is what made one ordering work
-  - L2209 · The parser was right and every COPY was wrong — namespaces across clone_into and clone_node
-  - L2232 · What it costs — measured, because the obvious answer is wrong
+  - L43 · LANDED at t1098 — and the AX tree immediately falsified a claim the pixel probe had certified
+  - L80 · Inserting a node BEFORE ITSELF is a move, not a no-op — and getting it wrong is a hang
+  - L102 · An INCOMPLETE family of methods is worse than an absent one
+  - L115 · The document lifecycle: readyState, DOMContentLoaded, load
+  - L140 · CharacterData offsets are UTF-16 CODE UNITS — not bytes, not chars
+  - L150 · A native can throw a real DOMException
+  - L157 · A CONSTANT is an infinite loop for any code that waits for it to change
+  - L165 · textContent = '' must create NOTHING — "string replace all" puts the empty case FIRST
+  - L198 · What made it survive: the idiom next to it was already right
+  - L204 · The coercions, measured rather than assumed
+  - L216 · The FLAT TREE and the node tree are different trees, and every renderer must walk the flat one
+  - L233 · html5ever ALREADY implements Declarative Shadow DOM — the hook just defaults to false
+  - L245 · A DocumentFragment's defining property is what happens when you INSERT it
+  - L259 · Comment nodes are load-bearing INFRASTRUCTURE, not annotations
+  - L271 · textContent is a node-tree API, so any "visible text" built on it is wrong
+  - L278 · …and then a break OPPORTUNITY was read as a space (tick 577)
+  - L316 · innerText is the RENDERED text, and the binding CAN compute it — it holds the styles already
+  - L342 · Generational NodeId buys use-after-free safety while staying a bare integer for JS
+  - L357 · document.readyState is the most-checked property on the web, and undefined makes half of it work BY ACCIDENT
+  - L371 · The "detached document" checks frameworks use are string/identity comparisons that undefined fails silently
+  - L383 · Registering a DOM property twice lets the later registration silently win
+  - L389 · Two form-encoding details servers actually branch on
+  - L400 · A HANDLE FROM ANOTHER DOCUMENT IS A DEAD BROWSER, not a wrong answer
+  - L421 · A detached DOCUMENT is how every sanitizer works — and the moment it exists, you need cycle checks
+  - L442 · A DOM that never throws turns a loud caller bug into a silent leak
+  - L456 · <body onload> is window.onload, and it must fire EXACTLY once — dispatch OR explicit, never both
+  - L487 · offsetWidth/Height/Top/Left, client*, scroll{Width,Height} are integers — scrollTop/Left are not
+  - L501 · classList is an ordered SET, and a no-op operation must not rewrite the attribute
+  - L525 · Range.createContextualFragment is the fragment parser you already have, wearing a Range
+  - L544 · Publish what the cascade HOLDS, and nothing it does not — the whole-object diff
+  - L556 · The split is the deliverable
+  - L570 · The logical properties are exact aliases, and that is a STATEMENT about this engine
+  - L576 · grid-template-columns is the instructive OMISSION
+  - L585 · Two spellings of one box must go through one serialiser
+  - L594 · word-spacing does NOT share letter-spacing's rule, and a lumped comment hid that
+  - L601 · getComputedStyle(el).width is the *RESOLVED* value — the USED size in px, not the specified one
+  - L630 · The box reported is the one the element's own box-sizing names
+  - L642 · Two guards, and "always report the rect" breaks both
+  - L649 · One case is deliberately NOT resolved, and it is named rather than approximated
+  - L658 · The reconciliation clause, because two readings of one box must not drift
+  - L664 · getComputedStyle must expose the properties the cascade ALREADY computed — undefined is a bug, not a value
+  - L679 · isConnected / toggleAttribute / webkitMatchesSelector — the ergonomics frameworks call hourly
+  - L689 · The Node interface CONSTANTS were absent — and n.nodeType === Node.ELEMENT_NODE silently ran false
+  - L700 · DOMException legacy codes + Event phase constants — the same undefined-comparison trap as Node constants
+  - L709 · The reflection GAP was the GLOBAL attributes — one "*" row beat 400 per-attribute edits (+18k)
+  - L722 · enterKeyHint/inputMode were keyed under a tag named "undefinedelement" — a global that reached NO element (tick 490)
+  - L734 · A getter-only attribute fallback silently drops the setter — and double-defining a native one CRASHES
+  - L745 · HTML attribute qualified names are ASCII-lowercased — the root of the reflection value-mismatch mass
+  - L767 · The HTMLDocument named collections — document.forms/images/links/scripts/embeds/anchors + getElementsByName
+  - L785 · lookupNamespaceURI / isDefaultNamespace — the "locate a namespace" algorithm
+  - L809 · nodeName is per node type, and case-sensitive outside the HTML namespace
+  - L821 · moveBefore — the atomic move, and why it is stricter than insertBefore
+  - L853 · ProcessingInstruction — a whole missing node type, found by histogramming failure *messages*
+  - L886 · The typed Event hierarchy — flat members over a real instanceof chain
+  - L910 · Constructable node interfaces — when iface()'s inert constructor is the wrong default
+  - L930 · Text.splitText() and wholeText — the split and its inverse
+  - L942 · getElementsByTagNameNS — match on (namespace, localName), and None means XHTML
+  - L969 · DOM validation errors must be REAL DOMExceptions, not decorated Errors (tick 127, +420 dom)
+  - L1009 · Node.lookupPrefix and the DocumentType namespace-lookup surface (tick 128, +20 dom)
+  - L1039 · HTMLCollection is a WebIDL legacy platform object, not a plain indexed proxy (tick 129)
+  - L1081 · form.elements is a live HTMLFormControlsCollection, and a radio group is a RadioNodeList (tick 433)
+  - L1114 · control.labels and label.control link a form field to its <label>s (tick 434)
+  - L1132 · The <table> DOM: table.rows is a live HTMLCollection in LOGICAL order (tick 435)
+  - L1151 · The <table> write API: insertRow/insertCell materialise structure (tick 436)
+  - L1169 · element.form resolves the form owner (tick 437)
+  - L1183 · DOMStringMap (dataset) and NamedNodeMap (attributes) enumerate their names (tick 130)
+  - L1204 · HTMLCollection iterable surface + numeric namedItem (tick 131)
+  - L1222 · getElementsByClassName splits on ASCII whitespace, not Unicode (tick 132)
+  - L1243 · A document from DOMImplementation is a REAL Document (tick 134)
+  - L1283 · The CharacterData abstract base interface (tick 133)
+  - L1300 · createDocumentType name validation + per-document .implementation (tick 135)
+  - L1333 · CharacterData offsets are unsigned long = ToUint32, not clamp-to-0 (tick 136)
+  - L1367 · <details>/<summary> — the disclosure widget is entirely the UA's job (tick 216)
+  - L1399 · The bug underneath it — remove_attr never marked the tree dirty
+  - L1416 · A missing property is not neutral — it picks a side, and document.hidden picked the wrong one
+  - L1442 · Whose fact is it? The host owns visibility, the same way it owns the lifecycle
+  - L1454 · Two answers to the same question must agree — permissions.query vs Notification.permission
+  - L1483 · The Sanitizer API — Element.setHTML / setHTMLUnsafe (tick 288)
+  - L1507 · The teeth G_SANITIZER uses
+  - L1515 · The config's first brick — removeElements (tick 545)
+  - L1544 · Element.checkVisibility() — is it actually rendered? (tick 291)
+  - L1561 · The teeth G_CHECK_VISIBILITY uses
+  - L1571 · <template>.content is the parser's fragment, not the element's direct children (tick 425)
+  - L1588 · The <select> write API — add / remove(index) + HTMLOptionsCollection (tick 438)
+  - L1604 · option.text + the Option() constructor's defaultSelected argument (tick 439)
+  - L1619 · textarea.value is its text content, not a value attribute (tick 440)
+  - L1635 · select.length is the option count and resizes the list (tick 441)
+  - L1647 · select.options.length is a LIVE writable accessor — the collection clear-idiom (tick 459)
+  - L1672 · input.valueAsNumber + stepUp/stepDown for numeric inputs (tick 442)
+  - L1683 · input.valueAsDate + valueAsNumber for date/time/month inputs (tick 443)
+  - L1694 · progress.position + output.value (tick 444)
+  - L1704 · the .text property for a/script/title (tick 445)
+  - L1712 · datetime-local + week typed values (tick 446)
+  - L1725 · <a>/<area> URL-decomposition setters (tick 447)
+  - L1739 · <img>.currentSrc reports the URL we actually load, honestly (tick 493)
+  - L1755 · document.activeElement defaults to <body>, not null (tick 494)
+  - L1768 · The same defect, three consumers, found by looking for it (tick 578)
+  - L1799 · The image an <img> wants is chosen, not read (tick 582)
+  - L1818 · One hardcoded namespace in a four-line function disabled the parser's whole foreign-content mode (tick 603)
+  - L1841 · The claim that matters is not "is it right" but "do the two ways agree"
+  - L1858 · getBBox() is USER SPACE, and that is the whole reason it exists (tick 604)
+  - L1881 · <text> and <path> report zero size on purpose
+  - L1892 · A getter-only accessor is a TypeError, not a gap — and one site turns it into a white screen (tick 612)
+  - L1907 · The failure www.welt.de builds on top of it
+  - L1925 · The population, measured rather than assumed
+  - L1938 · The rest of the class, from the same sweep
+  - L1952 · The setter itself
+  - L1971 · window.<id> IS the element — named access on the Window object was absent (tick 677)
+  - L1977 · What it cost, measured on a HEAD-20 site
+  - L2004 · The mechanism, and the three ways it could have been subtly wrong
+  - L2029 · What it bought, stated honestly
+  - L2045 · The second document — a document method that belongs to the singleton (tick 776)
+  - L2068 · ⚠ The gate that owns this ground passes, and the reason is worth more than the fix
+  - L2092 · The trap: a this-blind promotion is WORSE than the throw
+  - L2106 · One source, two eval sites
+  - L2121 · A DOM node must NAME its interface — [object Object] is a wrong answer of the right type (tick 862)
+  - L2145 · Why nine sweeps did not find it
+  - L2155 · The fix is ONE accessor at the ROOT of the chain, not WebIDL's shape
+  - L2170 · The table is taught by the iface() calls, not written twice
+  - L2178 · The named limits
+  - L2198 · A <template>'s innerHTML is its CONTENTS — and a lazy fragment is what made one ordering work
+  - L2243 · The parser was right and every COPY was wrong — namespaces across clone_into and clone_node
+  - L2266 · What it costs — measured, because the obvious answer is wrong
 
 ## THE FIDELITY INSTRUMENT — what it can and cannot see
 `docs/wiki/fidelity-instrument.md`
@@ -1880,4 +1881,4 @@
   - L124 · Rank mechanisms by FLIP RATE, not failing-subtest count — CSS layout is a multi-assertion slog
 
 ---
-1787 sections across 22 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+1788 sections across 22 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
