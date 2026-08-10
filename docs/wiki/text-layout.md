@@ -3197,3 +3197,41 @@ should have killed them: `layout_html`'s `MinimalCascade` does not carry the pro
 and `shrink_to_fit`'s `min` squeezes the percentage row back to its glyph either way. **A row that
 cannot go red is not coverage.** Third time this session that running every mutation caught a fake
 assertion — the rule earns its keep.
+
+## A flex child FILLS the 1e6 measuring width, and the slack heuristic then throws away its items (t1115)
+
+t1114 left the flex container's own max-content short by exactly the fixed item — 48 where Chrome
+says 72. One variable separates the rows, Chrome-measured, `16px/1 monospace`, `.icon{width:24px}`
+inside `inline-block > flex`:
+
+```text
+                                          Chrome   ours
+   span[flex:1]        + i.icon             72      48   ✗
+   span[flex:1 1 auto] + i.icon             72      48   ✗
+   span                + i.icon   CONTROL   72      72   ✓
+   span[flex:0 1 auto] + i.icon   CONTROL   72      72   ✓
+```
+
+**`flex-grow` is the single discriminator** — and the mechanism is not in the flex algorithm at all.
+The engine's own `MANUK_TRACE_INTRINSIC=k1`:
+
+```text
+   [max-content] #k1 pref=48.2
+       child Some("div") [0 0 1000000x24]
+```
+
+The inline-block measures its max-content by laying its subtree out at **1e6**. The flex row, being
+block-level, FILLS that width; the `flex:1` span grows to a million pixels and the 24px icon is
+carried out to x≈999,976. `content_right_extent` then does exactly what it was built to do — discard
+a box that filled the measuring width, and discard an offset larger than `SLACK` — and recurses into
+the inline text, finding the span's 48.2 and never seeing the icon at all. **Every step is the
+heuristic working as designed; the composition loses a real item.**
+
+A non-growing item cannot scatter, which is why the two controls are exact and why `flex-grow` looks
+like the cause.
+
+**The fix is to stop measuring an exploded layout**: a flex/grid child that filled the measuring
+width should be asked for its OWN max-content — `max_content_width_uncached` already has that branch
+(it delegates to taffy) and reaches it only when the node ITSELF is flex/grid, never when a child is.
+⚠ Note the branch that *does* exist is not reached at all here: instrumenting
+`taffy_tree::max_content_width` printed nothing on these fixtures.

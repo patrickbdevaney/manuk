@@ -46371,6 +46371,55 @@ PERF: none — one UA rule and one narrowed branch in a cascade that already ran
 WIKI: `docs/wiki/css-cascade.md` — where Chrome draws the form-control `box-sizing` line, and why a
 layout-crate test cannot see it.
 
+## Tick 1115 — the flex child fills the measuring width, and the slack heuristic throws away its items (2026-08-10)
+
+TICK SHAPE: measurement — t1114's named residue: the flex CONTAINER's own max-content is short by
+exactly the fixed item, 48 against Chrome's 72. One variable separates the rows:
+
+```text
+   inline-block > flex >                     Chrome   ours
+     span[flex:1]        + i.icon              72      48   ✗
+     span[flex:1 1 auto] + i.icon              72      48   ✗
+     span                + i.icon   CONTROL    72      72   ✓
+     span[flex:0 1 auto] + i.icon   CONTROL    72      72   ✓
+```
+
+⚠⚠⚠ **`flex-grow` IS THE SINGLE DISCRIMINATOR — AND THE MECHANISM IS NOT IN THE FLEX ALGORITHM.**
+The first hypothesis was taffy's max-content handling of a `flex-basis:0` item, and the fix written
+for it (zero the growth factors in the probe tree — growing distributes FREE SPACE and a container
+sized TO its content has none) **changed nothing**. Instrumenting `taffy_tree::max_content_width`
+explained why: **it is never called on these fixtures.** The engine's own trace found the real path
+in one line:
+
+```text
+   [max-content] #k1 pref=48.2
+       child Some("div") [0 0 1000000x24]
+```
+
+The inline-block measures its max-content by laying the subtree out at **1e6**. The flex row is
+block-level, so it FILLS that width; the `flex:1` span grows to a million pixels and the 24px icon is
+carried out to x≈999,976. `content_right_extent` then does exactly what it was built to do — discard
+a box that filled the measuring width, discard an offset beyond `SLACK` — and recurses into the
+inline text, finding the span's 48.2 and never seeing the icon. **Every step is a heuristic working
+as designed, and the composition loses a real item.** A non-growing item cannot scatter, which is why
+the two controls are exact and why `flex-grow` looks like the cause.
+
+**NEXT BRICK, precisely:** stop measuring an exploded layout. A flex/grid child that FILLED the
+measuring width should be asked for its own max-content — the branch exists in
+`max_content_width_uncached` and is reached only when the node ITSELF is flex/grid, never when a
+child is. The four rows above are the gate, with `flex:0 1 auto` and the bare span as controls.
+
+RATCHET: held. The candidate fix was built, measured, and **reverted** — it moved nothing, and this
+loop does not bank a change it cannot show changes something. `git status` clean on `engine/`.
+
+GATE: none — the behaviour is still wrong, so a gate would pin the engine to the bug. The falsifiable
+content is the four rows and the trace line.
+
+PERF: none.
+
+WIKI: `docs/wiki/text-layout.md` — "A flex child FILLS the 1e6 measuring width, and the slack
+heuristic then throws away its items". [no-pattern]
+
 ## Tick 1114 — a definite width IS the box's intrinsic contribution, and one half of it fixes nothing (2026-08-10)
 
 TICK SHAPE: capability — t1113's handoff, built against the five-row gate it left. `min_content_width`

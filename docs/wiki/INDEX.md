@@ -1893,6 +1893,7 @@
   - L3147 · A definite width IS the box's intrinsic contribution — both of them (t1114)
   - L3174 · What it is worth, stated exactly
   - L3193 · Two more gate rows were written and deleted
+  - L3201 · A flex child FILLS the 1e6 measuring width, and the slack heuristic then throws away its items (t1115)
 
 ## The wasm demo — running the engine inside someone else's browser
 `docs/wiki/wasm-demo.md`
@@ -1920,4 +1921,4 @@
   - L124 · Rank mechanisms by FLIP RATE, not failing-subtest count — CSS layout is a multi-assertion slog
 
 ---
-1827 sections across 22 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+1828 sections across 22 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
