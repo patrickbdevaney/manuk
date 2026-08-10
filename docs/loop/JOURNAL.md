@@ -46371,6 +46371,96 @@ PERF: none — one UA rule and one narrowed branch in a cascade that already ran
 WIKI: `docs/wiki/css-cascade.md` — where Chrome draws the form-control `box-sizing` line, and why a
 layout-crate test cannot see it.
 
+## Tick 1089 — every COUNT held or rose and three of four headline percentages FELL (2026-08-10)
+
+TICK SHAPE: measurement — the sweep check #101 made binding (steer #1) plus surface audit #49 (due).
+A clean `--jobs 2` sweep of all 200 CrUX-trend sites, banked as `docs/loop/SWEEP-t1089-rows.tsv`. No
+crate touched.
+
+**THE HEADLINE, and the arithmetic under it is the finding:**
+
+```text
+                               t1049     t1080     t1089
+   M1 (shape≥0.75 AND jarring-clean)   17.8%     17.7%     17.2%    ← FELL
+   …the M1 SITE COUNT                     23        23        23    ← FLAT, exactly
+   shape ≥ 0.75 (count)                   37        36        38    ← +2
+   jarring-clean (count)                  44        43        44    ← +1
+   scored                                108       106       110    ← +4
+   IN-SCOPE (the denominator)            129       130       134    ← +4
+   shape_mean                           60.3      60.7      60.9
+   cov_mean                             85.7      86.5      86.5
+```
+
+⚠⚠⚠ **THE DENOMINATOR TRAP, FIRING IN THE DIRECTION NOBODY WATCHES FOR.** `ops-check` warns about a
+*shrinking* denominator flattering us. This is the mirror: four sites that were EXCLUDED at t1080
+(bot-wall / unreachable) answered this time, so in-scope went 130 → 134, and **M1's percentage fell
+0.5 points on an unchanged numerator of 23.** `17.7% × 130 = 23.0` and `17.2% × 134 = 23.0`. Every
+underlying count held or rose; three of the four headline percentages fell. **Reporting the
+percentage alone would have said the engine went backwards in a window where nothing did.**
+
+⚠⚠ **AND THE HONEST HALF: M1 IS FLAT AT 23 SITES FOR THE THIRD SWEEP RUNNING** — t1049, t1080, t1089,
+across ~40 ticks including five Chrome-exact capability fixes. The `shape≥0.75` count moved 37 → 36 →
+38 and `jarring-clean` 44 → 43 → 44; the CONJUNCTION of the two has not moved at all. That is t1049's
+finding holding for the third time and it is the number that governs: **the two conjuncts keep moving
+in different sites.**
+
+The trap-free reading agrees and is small: **COMMON-SET BAND +0.24 pts** over the 103 sites scored in
+both sweeps (13 up, 5 down by >2pt). Scorability ceiling **110/134 = 82.1%**, unscored worklist
+render-fail 1 · shell-only 7 · thin-overlap 2 · timeout 6 · css-starved 3 · other 5.
+
+**THE SOLO-RERUN RULE, APPLIED TO THE DROPS FIRST AND THEN TO THE GAINS.** Three drops had an
+identical element count on both sides, which is the shape that looks deterministic:
+
+```text
+   site                shape t1080 → t1089     solo re-run, same hour     verdict
+   serennu.com           0.5738 → 0.3934         0.5738 (×2)              CHURN — the sweep is wrong
+   www.lyreco.com        0.6697 → 0.6561         0.6697                   CHURN
+   possssno.sbs          0.9913 → 0.9565         0.9565 (×2)              REPRODUCES
+```
+
+⚠⚠⚠ **AND THE ONE THAT REPRODUCED WAS THEN REFUTED BY THE OLD BINARY.** A tree built from
+`53ff1ea7` (t1085 — i.e. this session's two engine ticks reverted, t1081-1083 left in) and run in the
+SAME HOUR:
+
+```text
+   possssno.sbs   OLD (pre-t1086)  95.7% / 95.7%      NEW  95.7%      identical
+   serennu.com    OLD              57.4%              NEW  57.4%      identical
+```
+
+**Zero regression attributable to t1086 or t1087.** The site's −3.48 pts against t1080 is either
+t1081-1083 (banked and measured at the time) or the site's own drift, and it is inside the ±3.7-pt
+single-site spread t654 measured on an UNCHANGED tree. Recorded in full because two of the three
+"deterministic-looking" drops were the instrument and the third was not ours — the third consecutive
+sweep where that is the outcome.
+
+⚠ The largest GAIN is composition, not engine, and saying so is the same rule pointed the other way:
+`sports.yahoo.com` **0.000 → 0.856** is `n 3 → 1693` — the site rendered this time and did not before.
+`www.wdimax.com` **0.886 → 0.966** at an identical `n 377` is real and is t1082's, already banked.
+
+SURFACE AUDIT #49 (due this tick) is banked in `docs/loop/SURFACE-AUDIT.md`. Its finding: **the map
+has 545 rows about the ENGINE and none about the INSTRUMENTS**, which is why nothing could have
+surfaced t1088's 19.6% blind reference. Audited against WPT's own published reftest contract and
+priced against the corpus: external stylesheets **1,231 of 6,263 refs (19.7%)** — the next lever, the
+same size as the one just fixed; web fonts **10 files (0.2%)** — the documented requirement ranks
+LAST here, which is why you price before you build; `reftest-wait` 49 files. Interop 2026 returned
+**zero** new rows for the third audit running, and that has stopped being a discovery source.
+
+CONSTITUTION CHECK #101 landed with t1088 and its steer #1 was this sweep. Steer #2 — re-rank CSS 2.1
+by pass rate on the FIXED runner — is the next tick and is now the best-evidenced lever on the board.
+
+RATCHET: no crate touched. Every banked number re-measured rather than asserted; nothing is below its
+previous value once the denominator is held constant, and the one site that fell is refuted by a
+same-hour old binary.
+
+GATE: none — a sweep gates nothing. Its falsifiable content is `SWEEP-t1089-rows.tsv`, 200 rows,
+diffable against t1080 by anyone in one command.
+
+PERF: none.
+
+WIKI: none [forced] — the artefacts are the banked sweep, `FIDELITY-PROGRESS.tsv` and surface audit
+#49; the one durable lesson (the denominator trap firing upward) belongs to the loop's own
+measurement discipline and is recorded in the audit, not in a browser-mechanism topic. [no-pattern]
+
 ## Tick 1088 — a reference is a DOCUMENT, and 1,230 CSS 2.1 reftests were unpassable by construction (2026-08-09)
 
 TICK SHAPE: measurement — the reftest runner (`tests/wpt`, agent territory) now loads the bitmap

@@ -5229,3 +5229,71 @@ disk and enumerable — 43 chapter directories — and it is the reason this arc
    prove the map is not behind the world, not the audit's main body.
 
 **Next audit due: tick 1089.**
+
+## Audit #49 — tick 1089 (2026-08-10). The map has 545 rows about the ENGINE and none about the INSTRUMENTS
+
+SOURCES (searched, not recalled):
+- `https://web-platform-tests.org/writing-tests/reftests.html` — WPT's own definition of what a
+  reftest runner must do before it screenshots.
+- `https://webkit.org/blog/17818/announcing-interop-2026/` · `https://web.dev/blog/interop-2026` ·
+  `https://www.igalia.com/news/interop-2026.html` — Interop 2026: 19 focus areas, 3 cleanup, 4
+  investigation; the four carrying 20% of the score are **advanced `attr()`**, **IndexedDB
+  `getAllRecords()`**, **WebTransport** and **Wasm JSPI**; Anchor Positioning and **cross-document**
+  View Transitions are the headline additions.
+- `https://ladybird.org/newsletter/2026-05-31/` — Ladybird 2,067,263 → 2,075,546 WPT subtests in May
+  2026 (+8,283/month), the independent-engine reference rate.
+
+### 1 · Interop 2026 returns ZERO new rows for the THIRD audit running, and that is now a result
+
+Every one of the six named areas above already has a row in `CONSTELLATION.tsv` (anchor 12 matches,
+`attr(` 4, `getAllRecords` 1, WebTransport 1, JSPI 1, view transitions 3). Audits #47 and #48 said the
+same. **A list of what is NEW cannot rank what is OLD AND MISSING** — recorded again, and this audit
+stops treating Interop as a discovery source. It is a *coverage check*, and it passes.
+
+### 2 · ⚠⚠⚠ WHAT WE HAD BEEN WRONG ABOUT: the map describes the ENGINE and nothing describes the INSTRUMENTS
+
+`CONSTELLATION.tsv` has **545 rows**, every one a browser capability. t1088 found that the reftest
+runner had been rendering **19.6% of `css/CSS2`'s references undressed** — 1,230 of 6,263 references
+are drawn out of `<img>` swatches and it fetched no subresources — and **no row in the map could ever
+have surfaced that**, because the map has no notion of an instrument having capabilities. The audit
+that would have caught it is the one nobody runs: *point the audit at the measuring apparatus.*
+
+So this audit does that, against WPT's own documented contract for a reftest runner, and prices each
+gap against the corpus instead of asserting it:
+
+```text
+   WPT says a reftest screenshots after…        ours                         css/CSS2 weight
+   the `load` event has fired                   no JS at all (skipped)       49 files use reftest-wait
+   WEB FONTS are loaded                         not fetched                  10 files (0.2%)  ← THIN
+   pending paints complete                      synchronous raster           n/a
+   …in an 800×600 window incl. scrollbars       VW=800 VH=600                ✅ matches
+   (implied) the document's subresources        <img> + background-image ✅   1,230 refs (19.6%)  ← FIXED t1088
+                                                external stylesheets ✗       1,231 (19.7%)  ← THE NEXT ONE
+```
+
+⚠⚠ **The `@font-face` row is the reason to price before building.** WPT's documentation names web
+fonts as an explicit screenshot precondition, so a reader of the spec would rank it high; in this
+chapter it is **10 files of 6,263** and ranks dead last. The externally-sourced requirement and the
+corpus disagree, and the corpus wins (VI.3). ⚠ It will NOT rank last in `css/css-fonts`, which is
+unmeasured — that is a separate question and is flagged, not answered.
+
+⚠⚠⚠ **AND THE NEXT LEVER IS ALREADY SIZED: external stylesheets, 1,231 of 6,263 (19.7%)** — the same
+order of magnitude as the `<img>` blind spot, the same shape (a document whose meaning is in a file
+the runner never fetched), and t1088 deliberately did not bundle it so that its own +429 would stay
+attributable.
+
+### 3 · ADDED to the map
+
+`CONSTELLATION.tsv` is a browser-capability ledger and these are not browser capabilities, so they are
+NOT forced into it. They belong to the conformance runner and are recorded here as its work-list,
+with the numbers above:
+
+1. `reftest: external stylesheets` — status `missing`, 19.7% of `css/CSS2` reftests.
+2. `reftest: web fonts` — status `missing`, 0.2% here, unmeasured in `css/css-fonts`.
+3. `reftest: reftest-wait / load event` — status `missing`, 49 files; needs the JS path the runner
+   currently uses to SKIP a test outright.
+
+⚠ **The standing correction this audit leaves behind:** every future audit must spend one of its
+questions on the instruments, not only on the platform. Three of the loop's largest single findings —
+the mis-provisioned reference (#93), the unrun subcommand (t1057), and t1088's undressed reference —
+were defects in apparatus that a capability map is structurally unable to represent.

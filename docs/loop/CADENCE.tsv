@@ -795,3 +795,4 @@ tick	sha	epoch	iso	delta_s	shape	wall_s	files	added	deleted	gates	claims	wpt_pas
 1085	7eba9be4	1786315383	2026-08-09T18:43:03-04:00	4845	measurement	808	9	470	33	433	81	3896	6960	0	548	0	my own steer was wrong one tick after I wrote it, because M1 is a CONJUNCTION (2026-08-09)
 1086	5d6cea68	1786319019	2026-08-09T19:43:39-04:00	3636	capability	808	9	484	36	434	81	3896	6960	0	549	0	`dir="rtl"` was a layout input and not a CASCADE input (2026-08-09)
 1088	e595f247	1786322342	2026-08-09T20:39:02-04:00	3323	measurement	808	9	475	42	434	81	3896	6960	0	549	0	a reference is a DOCUMENT, and 1,230 CSS 2.1 reftests were unpassable by construction (2026-08-09)
+1089	adaa14c1	1786329159	2026-08-09T22:32:39-04:00	6817	measurement	808	8	395	33	434	81	3896	6960	0	549	0	every COUNT held or rose and three of four headline percentages FELL (2026-08-10)
