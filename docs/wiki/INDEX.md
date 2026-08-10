@@ -803,6 +803,12 @@
   - L2670 · The parse surface has three quirks, and all three were MEASURED, not derived
   - L2692 · normal computes to none on ::before/::after, and ONLY there
   - L2707 · Named limitations, recorded rather than approximated
+  - L2734 · The monospace default size is a property of the FAMILY, not of five tag names (t1103)
+  - L2757 · Wrong in both directions at once, and the tag list is why
+  - L2769 · The fix is option 1 on the borrowed-engine ladder — a hook we already implement, stubbed
+  - L2777 · What it is worth, measured
+  - L2799 · Residue, named: reading_order 4 → 5 on that page, deterministic, and ours
+  - L2811 · The route in, recorded because the subject was not what made me look
 
 ## `<dialog>`, `popover`, and the top layer (ticks 194-195)
 `docs/wiki/dialog-and-top-layer.md`
@@ -1890,4 +1896,4 @@
   - L124 · Rank mechanisms by FLIP RATE, not failing-subtest count — CSS layout is a multi-assertion slog
 
 ---
-1797 sections across 22 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+1803 sections across 22 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.

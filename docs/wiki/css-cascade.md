@@ -2730,3 +2730,95 @@ because those inherit, and reports `display:inline · width:auto`, because those
 pre-t1101 behaviour) reproduces the defect exactly — `absent-display=block`, `absent-width=200px`,
 `blk-width=400px`, every `content` back to `normal` — and lower-casing the one-colon arm flips
 `badcase` from `0` to `124`.
+
+## The monospace default size is a property of the FAMILY, not of five tag names (t1103)
+
+`font-size: medium` — the initial value — resolves against a **per-generic** base size: 16px for the
+variable-width default, **13px when the computed generic family is monospace**. That is why `<code>`
+famously renders smaller than the prose around it.
+
+The engine wrote that rule as a UA **declaration**:
+
+```css
+  pre, code, kbd, samp, tt { font-size: 13px; }
+```
+
+and the comment directly above it stated the real rule correctly while the code underneath said
+something else. Chrome, asked to recite it rather than recalled:
+
+```text
+                                                     Chrome         ours, before
+   <code> in  body { font: 16px monospace }        16px  38.53      13px  31    TOO SMALL
+   <code> in  div  { font-size: 20px }             20px  48.17      13px  31    TOO SMALL
+   <code> at the default size                      13px  31.31      13px  31    control ✓
+   <span style="font-family:monospace"> default    13px  31.31      16px  39    TOO BIG
+```
+
+### Wrong in both directions at once, and the tag list is why
+
+A UA declaration **beats inheritance** by construction. So it pinned every `<code>` and `<pre>` to
+13px across the huge majority of the web that sets a body font-size — documentation, wikis, blogs,
+every site with a design system. And because it keys on the TAG it *missed* the element that
+actually asks for monospace.
+
+**The tag list is a constant fitted at one point** (the standing t1042-1045 trap): it agrees with
+Chrome on exactly the row where nobody has set a font size — which is the row every fixture ever
+written for it used. Varying the parameter that was held fixed (the ancestor's font-size) is what
+made both errors visible in one battery.
+
+### The fix is option 1 on the borrowed-engine ladder — a hook we already implement, stubbed
+
+Stylo calls `Device::base_size_for_generic(generic)` from
+`specified::FontSize::to_computed_value`. Our `StubFontMetrics` returned `16.0` and ignored the
+argument. Returning **13px for `GenericFontFamily::Monospace`** makes Stylo do the whole rule,
+including the half no UA declaration can express: *only while the size is still `medium`*. No fork,
+no vendored patch, one match arm, and the UA sheet **loses** a rule rather than gaining one.
+
+### What it is worth, measured
+
+Product path (`boxes --html`, Stylo cascade): 4 of 4 rows Chrome-exact, and a 16-row table/intrinsic
+battery went **15/16 → 16/16**.
+
+`css/CSS2`: **+1 gained, 0 lost**, by a per-test state diff of all 5,660 rows against a same-hour
+control binary. ⚠ The net against the *journal's* last banked number said **+5** — the old binary
+actually scores 3,862, not the 3,858 recorded. *Diff the state, not the net* applies to the
+BASELINE as much as to the delta.
+
+The suite is not where this fix lives; a documentation page is. Same-hour A/B, three draws per arm,
+both deterministic:
+
+```text
+   doc.rust-lang.org/book   cov 0.960916  shape 0.791024  n 713   OLD
+                            cov 0.960916  shape 0.877980  n 713   NEW    +8.70 points
+   html.spec.whatwg.org     72.2% → 72.2%      martinfowler.com   77.8% → 77.8%
+```
+
+Same instrument tag, same coverage, same 713-element sample — **ATTRIBUTABLE** by `sweep_diff`'s own
+classifier (t1102), and more than twice the ±3.7-point spread t654 measured on an unchanged tree.
+
+### Residue, named: reading_order 4 → 5 on that page, deterministic, and ours
+
+Three draws per arm, no churn. It is not called noise here. The site is **not jarring-clean in
+either arm** (TOL 2, and 4 and 5 are both non-zero), so no M1 site and no gate verdict moves; the two
+pairs the report names are inline `<code>` siblings inside one `<p>`, the class whose line-breaking
+this fix necessarily changes; and shape rose **+8.70 on the identical sample**, which a fix that
+misplaced boxes could not do. The likeliest reading is the recurring one — **a correct fix makes a
+pre-existing divergence measurable** — a pair previously *"too close to call"* at both engines'
+tolerance and now a decided disagreement. That is a hypothesis. The experiment that settles it is
+*dump all five pairs*; the report truncates its examples at two, which is a small instrument gap
+recorded here rather than fixed.
+
+### The route in, recorded because the subject was not what made me look
+
+Wikipedia's dominant term is a nested table at **4430px where Chrome says 397** — 2,254 of 4,843
+shape misses and 363 h-overflow on one anchor. The obvious hypothesis (an auto table never clamped
+to its available width) was **refuted by a 4-row fixture in two minutes**: plain nested tables come
+out byte-exact against Chrome. The battery then widened to 16 rows over everything that could make a
+cell's min-content unshrinkable, and the one row that diverged was not about tables at all.
+**Wikipedia's nested-table blow-up is still open and still unexplained.**
+
+**GATE** `G_MONOSPACE_BASE_SIZE` — `the_monospace_default_size_follows_the_family_not_the_tag`, the
+four measured rows with the two negative ones FIRST. RED-proven twice, and each arm fails a
+*different* pair of rows: returning `16.0` for `Monospace` fails the two default-size rows;
+restoring the UA declaration fails the two inherited-size rows. Either half alone leaves the other
+direction broken, which is what makes both arms necessary.

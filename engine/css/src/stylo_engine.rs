@@ -148,8 +148,41 @@ impl FontMetricsProvider for StubFontMetrics {
             ..FontMetrics::default()
         }
     }
-    fn base_size_for_generic(&self, _generic: GenericFontFamily) -> Length {
-        Length::new(16.0)
+    /// ⚠⚠⚠ **THE MONOSPACE DEFAULT SIZE IS A PROPERTY OF THE COMPUTED FAMILY, NOT OF FIVE TAG
+    /// NAMES — and this hook is the ONE place the rule belongs.**
+    ///
+    /// `font-size: medium` (the initial value) resolves against a **per-generic** base size: 16px
+    /// for the variable-width default and **13px when the computed generic family is monospace**.
+    /// That is why `<code>` famously renders smaller than the prose around it. Stylo calls exactly
+    /// this hook from `specified::FontSize::to_computed_value`, so implementing it correctly makes
+    /// the engine get the hard half — *"only when the size is still `medium`"* — for free.
+    ///
+    /// The rule was previously written as a UA **declaration**, `pre, code, kbd, samp, tt
+    /// { font-size: 13px }`, and that is wrong in **both directions at once**. Chrome, asked to
+    /// recite it rather than recalled:
+    ///
+    /// ```text
+    ///                                                       Chrome        ours (UA declaration)
+    ///   <code> in  body { font: 16px monospace }           16px  38.53      13px  31   TOO SMALL
+    ///   <code> in  div  { font-size: 20px }                20px  48.17      13px  31   TOO SMALL
+    ///   <code> at the default size                         13px  31.31      13px  31   control ✓
+    ///   <span style="font-family:monospace"> at default    13px  31.31      16px  39   TOO BIG
+    /// ```
+    ///
+    /// A UA declaration **beats inheritance** by construction, so it pinned every `<code>` and
+    /// `<pre>` to 13px on the huge majority of the web that sets a body font-size — documentation,
+    /// wikis, blogs, every site with a design system. And because it keys on the TAG, it missed the
+    /// element that actually asks for monospace. The tag list was a *constant fitted at one point*:
+    /// it agrees with Chrome on exactly the row where nobody has set a font size.
+    ///
+    /// ⚠ 13px, not 13.333px: that is the fixed-font default, measured off Chrome on this box
+    /// (`getComputedStyle(code).fontSize === "13px"`), and it is a different constant from the
+    /// 13.333px UA *form-control* font this project already carries.
+    fn base_size_for_generic(&self, generic: GenericFontFamily) -> Length {
+        match generic {
+            GenericFontFamily::Monospace => Length::new(13.0),
+            _ => Length::new(16.0),
+        }
     }
 }
 
@@ -574,13 +607,17 @@ colgroup { display: table-column-group; }
 col { display: table-column; }
 /* `pre` preserves whitespace. Chrome's UA sheet says so; ours did not, so every code block on
    the web folded its newlines into spaces and rendered as one endless line. */
-/* Chrome's default MONOSPACE font size is 13px, not 16px — which is why `<code>` famously renders
-   smaller than the prose around it. `font-size: medium` resolves against the monospace default when
-   the family is monospace. We rendered monospace at 16px, so every code block and every inline
-   `<code>` on the web was 23% too large, and every documentation site's layout was pushed down by
-   it. (Found by the differential oracle on its first run: our <pre> was 57px where Chromium's was
-   45px.) */
-pre, code, kbd, samp, tt { font-size: 13px; }
+/* ⚠⚠⚠ `pre, code, kbd, samp, tt { font-size: 13px }` LIVED HERE AND WAS WRONG IN BOTH DIRECTIONS.
+   The rule the comment described — "`font-size: medium` resolves against the monospace default when
+   the family is monospace" — is a property of the computed FAMILY, and writing it as a UA
+   DECLARATION on five tags says something different: a declaration beats inheritance, so it pinned
+   every `<code>` to 13px on the majority of the web that sets a body font-size (Chrome gives 20px
+   inside `font-size:20px`; we gave 13px), while `<span style="font-family:monospace">` — the
+   element that actually asks for monospace — got 16px where Chrome gives 13px. It agreed with
+   Chrome on exactly one row: the one where nobody has set a font size.
+   It now lives in `StubFontMetrics::base_size_for_generic`, the hook Stylo calls from
+   `font-size: medium`'s own computation, which is also the only place that knows whether the size
+   is still `medium`. See that function for the four measured rows. */
 pre { font-family: monospace; white-space: pre; }
 textarea { white-space: pre-wrap; }
 code, kbd, samp { font-family: monospace; }
