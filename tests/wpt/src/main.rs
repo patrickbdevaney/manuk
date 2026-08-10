@@ -4353,7 +4353,14 @@ mod path_key_tests {
             // compiled since. It is the `paint-enum-field-breaks-wpt-bench` shape exactly — a struct
             // field added, one test constructor missed, and the breakage invisible because the wall
             // does not build this crate's tests. Empty is the legitimate "no font worth reporting".
+            // ⚠⚠⚠ **AND IT HAPPENED AGAIN AT t1084** — `position` was added to partition
+            // `reading_order` by in-flow / out-of-flow, these same three constructors were missed,
+            // and `cargo test -p manuk-wpt` stopped compiling for a SECOND time, silently, for the
+            // same reason: nothing in the wall builds this crate's tests, so the compiler's own
+            // enumeration of the field's sites is never run. The comment above predicted the repeat
+            // and did not prevent it; what would is a build of these tests in the wall.
             font: String::new(),
+            position: String::new(),
         };
         let mut m = std::collections::HashMap::new();
         m.insert(
@@ -4417,6 +4424,7 @@ mod path_key_tests {
             display: "block".into(),
             rect: [0, 0, 100, 20],
             font: String::new(),
+            position: String::new(),
         };
         // Same document, same geometry. Chrome's <body> carries a class signature; ours does not —
         // which is exactly what a script that sets a class on <body> produces.
@@ -4443,9 +4451,19 @@ mod path_key_tests {
             3,
             "unstripped, one differing ancestor sig must lose the WHOLE subtree — got {raw:?}"
         );
+        // ⚠⚠⚠ **THIS ASSERTION READ `"missing"` UNTIL t1088, AND IT WAS THE VOCABULARY OF A TICK
+        //     THAT ENDED AT t951.** `diff_page` gained the `unaligned` kind precisely for this
+        //     shape — *"the two trees are NUMBERED differently, and calling that an absence is a
+        //     lie"* — and `oracle.rs`'s own tests have asserted it ever since. This copy could not
+        //     be corrected with them because it **had not compiled since t563**, so it went on
+        //     asserting the label the classification was invented to replace. A test that does not
+        //     build does not merely stop testing: it PRESERVES the vocabulary of the day it broke,
+        //     and reads as a contradiction the moment it comes back.
         assert!(
-            raw.iter().all(|d| d.kind == "missing"),
-            "and it must lose them as `missing`, which is what put `missing box` at the top of the              priority ledger — got {:?}",
+            raw.iter().all(|d| d.kind == "unaligned"),
+            "and it must lose the whole subtree — as `unaligned`, which is the honest name for keys \
+             that do not line up (t951) and what `missing box` at the top of the priority ledger \
+             turned out to be — got {:?}",
             raw.iter().map(|d| d.kind.clone()).collect::<Vec<_>>()
         );
 
@@ -4480,6 +4498,7 @@ mod path_key_tests {
             display: "block".into(),
             rect: [0, 0, 1, 1],
             font: String::new(),
+            position: String::new(),
         };
         // Each component's last 9 bytes straddle a multi-byte char, which is what panicked.
         let mojibake = "body:nth-of-type(2)/div.\u{fffd}\u{fffd}\u{fffd}\u{fffd}x:nth-of-type(3)";

@@ -46371,6 +46371,121 @@ PERF: none — one UA rule and one narrowed branch in a cascade that already ran
 WIKI: `docs/wiki/css-cascade.md` — where Chrome draws the form-control `box-sizing` line, and why a
 layout-crate test cannot see it.
 
+## Tick 1088 — a reference is a DOCUMENT, and 1,230 CSS 2.1 reftests were unpassable by construction (2026-08-09)
+
+TICK SHAPE: measurement — the reftest runner (`tests/wpt`, agent territory) now loads the bitmap
+subresources its documents reference. No engine crate touched; the engine's answers did not change,
+only whether the instrument could see them.
+
+**THE TICK STARTED AS AN RTL FIX AND ENDED AS AN INSTRUMENT FIX, on the strength of one number.**
+Following t1087's own steer — *"grep a CSS 2.1 directory's failures for `direction: rtl` before
+opening any of them"* — `css/CSS2/positioning` partitioned 75 RTL / 249 non-RTL over 324 failures,
+and inside it:
+
+```text
+   right-*  tests with `direction: rtl`     50
+   …of which FAIL                           50      <- 100%, and zero passing
+```
+
+A 100% failure rate reads as an absent primitive, which is what the previous two ticks had been
+finding. It was not. Before writing a battery, the test and its reference were rendered and the
+pixel row where the borders belong was read on both:
+
+```text
+   reference, the runner's own path   …white white white white white…
+   reference, subresources loaded     …blue blue blue orange orange…
+   the TEST, either way               …blue blue blue orange orange…   <- the engine was always right
+```
+
+⚠⚠⚠ **THE CSS 2.1 SUITE DRAWS ITS EXPECTED RESULT OUT OF PNG SWATCHES**, and the runner's `render`
+used the SYNC `Page::load`, which fetches no subresources. So the reference painted blank boxes and
+the comparison could only say *"render differs"*.
+
+```text
+   css/CSS2 reftests                                     6,263
+   …whose REFERENCE contains an <img>                    1,230   (19.6%)
+   normal-flow 276 · backgrounds 236 · positioning 220 · borders 130 · linebox 111 ·
+   floats-clear 90 · bidi-text 48 · css1 39 · and a tail
+```
+
+⚠⚠⚠ **LOADING `<img>` ALONE IS NOT HALF A FIX — IT IS A DIFFERENT BIAS, AND THE FIRST BUILD PROVED
+IT.** `backgrounds` went **184 → 123 (−61)** on the `<img>`-only build: its *tests* draw with
+`background-image` and its *references* draw with `<img>`, so both being blank was a **cancellation
+that read as agreement**. Adding `fetch_and_apply_background_images` took it to 220. `positioning`
+shows the same effect mirrored — 339 with `<img>` only, 314 with both. **The intermediate headline
+was +345 and it was wrong; the honest one is +429 and it is smaller.** Only running every affected
+directory on both builds says which.
+
+OLD-INSTRUMENT CONTROL, same hour, nine directories:
+
+```text
+                           OLD    <img> only   BOTH        net
+   positioning             187        339       314      +127
+   normal-flow             320        465       465      +145
+   backgrounds             184        123       220       +36
+   borders                 324        345       349       +25
+   floats-clear             31         78        79       +48
+   linebox                  14         51        51       +37
+   margin-padding-clear    592        596       603       +11
+   floats                   23         23        23         0
+   bidi-text                17         17        17         0
+   ──────────────────────────────────────────────────────────────
+                                                         +429
+```
+
+⚠⚠ **`bidi-text` IS FLAT AT 17 WITH 48 IMAGE-BASED REFERENCES, AND THAT IS THE HONEST HALF.** An
+unloaded PNG was masking real failures, not inventing them: where the engine genuinely cannot draw a
+chapter, dressing the reference changes nothing. `floats` likewise. A directory that does NOT move is
+the control that separates a measurement fix from a scoring trick, and two of the nine did not move.
+
+⚠ **ONE more phase and no more.** `Page::load` stays — no JS (scripted tests are already skipped) and
+**no external stylesheets**, which is a second, separate absence with its own number. Bundling it
+would have made this +429 unattributable.
+
+⚠⚠⚠ **AND THE CRATE'S OWN TESTS HAD NOT COMPILED SINCE t563 — FOR THE SECOND TIME, FOR THE SAME
+REASON.** `cargo test -p manuk-wpt --bin manuk-wpt` broke when `font` was added to `Seen` and three
+test constructors were missed; the comment on that constructor **says so and predicts the repeat**.
+It repeated at **t1084**, when `position` was added for the `reading_order` partition. Nothing in the
+wall builds this crate's tests, so the compiler's own enumeration of a field's sites never runs.
+
+Making it compile produced a finding immediately: `a_differing_ancestor_class_signature_…` asserted
+`kind == "missing"` and the answer is now `"unaligned"` — the classification introduced at **t951**
+for *"the two trees are NUMBERED differently, and calling that an absence is a lie"*. `oracle.rs`'s
+own tests were updated then; this copy could not be, because it did not build. **A test that does not
+compile does not merely stop testing: it preserves the vocabulary of the day it broke, and reads as a
+contradiction the moment it returns.** All 7 now pass, for the first time in 525 ticks.
+
+CONSTITUTION CHECK #101 (due this tick, last at 1079) is banked in
+`docs/loop/CONSTITUTION-CHECK.md`, and this tick is its subject: **the instrument the last fifteen
+ticks selected work with was blind on a fifth of itself**, so surface audit #48's chapter ranking and
+check #100's own steer built on it are numbers about the runner (`linebox` was cited as *"a missing
+primitive at 7.4%"*; it is 20.3%). The check also records this as the **fourth member of the
+mis-provisioned-reference class** check #93 named — and the first one that is OURS rather than
+Chrome's flags — and escalates I3 from an observation to a named debt, satisfied by accident of a
+shared `node_rects` producer for the third consecutive check.
+
+RATCHET: `manuk-wpt` 99 lib + 7 bin + 1 = **107/107** (was 99, with 8 uncompilable). No engine crate
+touched, so no engine number can move; nine reftest directories measured on both instruments and
+**none is below its old value**.
+
+GATE: `reftest::tests::a_reftest_render_loads_the_bitmaps_its_document_references` — writes a real
+1×1 PNG to disk (a `data:` URI would pass without the `file://` fetch path working at all), renders a
+document that references it BOTH ways, and asserts one pixel of each. RED-proven by two mutations,
+both RUN: dropping `fetch_and_apply_background_images` reads white at the background pixel, dropping
+`fetch_and_apply_images` reads white at the `<img>` pixel.
+
+THE STEER: **re-rank every CSS 2.1 chapter, because the ranking the loop has been working from was
+computed on a blind instrument.** `linebox` at 14/251 was surface audit #48's "missing primitive at
+7.4%" and is 51 now; `positioning` was 187 and is 314. Any chapter whose pass rate was read before
+this tick is a number about the runner. ⚠ And the second-order lever is named and unmeasured: the
+runner still fetches **no external stylesheets**, which is the same class of blindness one layer up.
+
+PERF: one tokio runtime per RUN (not per file) plus a bounded subresource fetch per document; the
+10s timeout never fires on `file://`.
+
+WIKI: docs/wiki/conformance-and-oracles.md — "A REFERENCE IS A DOCUMENT — 1,230 CSS 2.1 reftests were
+unpassable by construction (t1088)"
+
 ## Tick 1087 — §10.3.3 is TWO steps, and the clamp that was right on one clause was a floor on the other (2026-08-09)
 
 TICK SHAPE: capability — one `match` in `engine/layout/src/lib.rs`, gated by a new

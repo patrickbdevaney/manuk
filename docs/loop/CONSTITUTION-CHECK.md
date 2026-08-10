@@ -7502,3 +7502,112 @@ test for the arc**, which is one sweep.
 4. **Price each CSS 2.1 candidate against the CORPUS before taking it** (`CORPUS-CONSTRUCTS.md`,
    three minutes, no build), so the suite ranks *where to look* and the corpus decides *whether to
    go*. That single step is what would have caught `::first-letter` as the thin one it was.
+
+## Check #101 — tick 1088 (2026-08-09)
+
+**HORIZON: H0. THE GATE, from PART VII rather than memory:** *"reliably renders and runs the
+representative real internet"* — **not** a WPT percentage. The instrument is **M1 on the in-scope
+CrUX corpus** (`shape ≥ 0.75` **AND** jarring-clean, bot-walls excluded per
+`DAILY-DRIVER-CERTIFICATION.md` §3), banked in `FIDELITY-PROGRESS.tsv`.
+
+### 1 · GATE OR SCOREBOARD? — scoreboard again, but check #100's steer WAS obeyed, once
+
+Check #100 (tick 1079) ended: *"make the gate the acceptance test for the arc, which is one sweep."*
+**t1080 ran it** — `SWEEP-t1080-rows.tsv`, and its own title is the finding (*"31 ticks moved the
+gate by ZERO"*). That is compliance, recorded because a check that only ever reports drift teaches
+the loop nothing about what obedience looks like.
+
+Since then: **eight ticks, no sweep.** t1081–1083 static positions, t1084–1085 measurement, t1086–1087
+RTL, t1088 the instrument. The lever board has printed *"a capability tick must measure THIS tree"*
+on every one of them. The pattern is stable and worth naming precisely rather than re-confessing:
+**the loop reliably runs the sweep in the tick immediately after a constitution check and not
+again** — i.e. the cadence gate is doing the work the selector should. That is a design observation,
+not an excuse: the honest reading is that the sweep's cost (~2h, serial, and it cannot overlap a
+tick because contention false-REDs the perf gates) makes it structurally unaffordable at the loop's
+current tick rate, so it will keep being paid only when something forces it.
+
+### 2 · ⚠⚠⚠ THE INSTRUMENT THE LAST FIFTEEN TICKS SELECTED WITH WAS BLIND ON A FIFTH OF ITSELF
+
+This is the finding of the window and it invalidates a steer that is currently binding. t1088:
+**1,230 of `css/CSS2`'s 6,263 reftests (19.6%) have a reference built out of `<img>` swatches**, and
+the runner rendered both sides with the sync `Page::load`, which fetches no subresources. Those
+references painted blank boxes. Nine directories, old instrument vs new, same hour:
+
+```text
+   positioning 187→314 · normal-flow 320→465 · backgrounds 184→220 · borders 324→349
+   floats-clear 31→79 · linebox 14→51 · margin-padding-clear 592→603 · floats 23 (=) · bidi-text 17 (=)
+```
+
+**Surface audit #48's chapter ranking, and check #100's own §5 steer built on it, are numbers about
+the runner.** `linebox` was cited as *"a missing primitive at 7.4%"*; it is **20.3%**. Any CSS 2.1
+chapter pass-rate read before this tick must be re-read before it ranks anything.
+
+⚠ **AND THIS IS THE FOURTH MEMBER OF THE CLASS CHECK #93 NAMED — the MIS-PROVISIONED REFERENCE.**
+`--hide-scrollbars` (the gutter), `--window-size` (t1016), the interaction media features (t1020),
+and now **the reftest reference rendered undressed**. Identical shape every time: *the reference was
+not the document we asked for, and the difference was charged to the engine.* The new member changes
+the class's boundary, and PART VI should record it: the first three were **Chrome's provisioning**
+and this one is **ours**, inside `tests/wpt`. The decision rule check #93 gives (*"which way to go
+depends on whether the reference CAN be provisioned"*) answers instantly here — it is our code — but
+the *detection* rule needs widening: this was found by rendering the reference on its own and looking
+at one pixel row, which nothing in the loop routinely does.
+
+⚠⚠ **The half that keeps it honest: `bidi-text` is FLAT at 17 with 48 image-based references, and so
+is `floats`.** An unloaded PNG was masking real failures, not inventing them. Two directories not
+moving is what separates a measurement fix from a scoring trick.
+
+### 3 · I5 — THE DISCOVERY ENGINE THIS WINDOW WAS NEITHER THE ORACLE NOR THE LOG
+
+Check #51 corrected I5 once already (*"the primary discovery engine is now the INSTRUMENTED LOG"*).
+This window it was a **third thing, and it should be written down**: `grep` over the *test corpus's
+own source text*, partitioning failures by a predicate.
+
+```text
+   t1087   19 of margin-padding-clear's 20 `margin-right` failures declare `direction: rtl`
+           (76% of its 25 RTL files) against 1 of 45 non-RTL          → 3 minutes, no build, one tick
+   t1088   1,230 of 6,263 references contain `<img>`                  → 3 minutes, no build, one tick
+```
+
+Both cost minutes and each produced a landed tick. The oracle ranks *sites*, the log gives *depth*,
+and this gives **partitions of a failure set by a property of the source** — which is the only one of
+the three that can say *"these 50 failures are one thing"* before any of them is opened. Add it to
+VI.2's method list rather than leaving it as two anecdotes.
+
+### 4 · INVARIANTS
+
+- **I2 (never patch deps):** held. t1086 reached Stylo's logical→physical resolution by **giving it a
+  declaration it never had** (two UA rules), not by touching it — the same cheapest-form shape check
+  #100 recorded for `PseudoElement::FirstLetter`. The fork surface is still empty.
+- **I3 (semantic model in lockstep):** ⚠⚠ **satisfied, and for the THIRD consecutive check by
+  ACCIDENT OF SCOPE.** t1086 and t1087 both move element geometry, and geometry IS the semantic model
+  — they flow through the shared `LayoutBox::node_rects` producer, so the agent's click points move
+  with the boxes for free. Checks #72 and #100 said the same thing. **A property satisfied three
+  times running by an accident is a latent violation waiting for the tick that touches the producer**,
+  and t1085's own residue (`node_rects`'s `lift` giving an icon-wrapping `<span>` the icon's 4px box)
+  is exactly that tick, still unwritten. Escalated here from an observation to a named debt.
+- **I4 / VI.3 (Pareto):** ⚠ **an honest tension, stated for the owner rather than resolved by the
+  loop.** The RTL arc (t1086/t1087) is **thin on the corpus** — 4 of 182 cached sites carry
+  `dir="rtl"`, and 1–2 combine it with logical properties — and it is **100% of the Arabic, Hebrew,
+  Persian and Urdu web**, which is on the order of 700M readers. I4 says *"representative real-web
+  breadth weighted by actual usage"*. If "usage" is the CrUX-sampled corpus we hold, this arc is
+  tail. If it is global usage, the corpus is the thing that is unrepresentative. **The loop cannot
+  decide that and must not decide it silently**; it is recorded here so the next corpus revision
+  answers it deliberately. (Note the arc was not selected on that basis — it was selected by a suite
+  partition, and it paid in suite tests.)
+- **I5:** see §3. **I1, I6, I7, I8:** untouched this window.
+
+### 5 · THE STEER — binding on the next tick
+
+1. ⚠⚠⚠ **RUN THE FIDELITY SWEEP.** Eight ticks, and check #100 asked for exactly this. It is the
+   acceptance test for two RTL fixes and one instrument fix that have only suite evidence.
+2. **RE-RANK CSS 2.1 BY PASS RATE ON THE FIXED RUNNER**, and treat every chapter number in
+   `SURFACE-AUDIT.md` #48 and check #100 §5 as retired until re-read. One command, and it decides
+   the next several ticks.
+3. **THE REFTEST RUNNER STILL FETCHES NO EXTERNAL STYLESHEETS** — the same blindness one layer up,
+   named and unmeasured, and cheap to price the same way (`grep -l 'rel="stylesheet"'` over the
+   references).
+4. **Build the CSS 2.1 tests into the wall, or accept that this crate's tests will break a third
+   time.** They did not compile from t563 to t1088 — twice, for the identical reason (a field added
+   to `Seen`, three test constructors missed), and the comment on the constructor predicted the
+   repeat and did not prevent it. A prediction in a comment is not a gate. `scripts/` is
+   observer-owned, so this is a request, filed here and in the journal.

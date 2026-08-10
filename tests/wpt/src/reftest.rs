@@ -58,13 +58,21 @@ pub fn run_reftests(wpt_dir: &Path, subdir: &str, fonts: &FontContext) -> Report
     collect_html(&root, &mut files);
     files.sort();
 
+    // ONE runtime for the whole run — `render` needs an async context to fetch the `<img>`
+    // resources a reference is built from (see there), and building a multi-thread runtime per
+    // file would cost more than the raster.
+    let rt = tokio::runtime::Builder::new_multi_thread()
+        .enable_all()
+        .build()
+        .expect("tokio runtime for reftest subresource loading");
+
     for path in files {
         let name = path
             .strip_prefix(wpt_dir)
             .unwrap_or(&path)
             .to_string_lossy()
             .into_owned();
-        match run_one(&path, fonts) {
+        match run_one(&path, fonts, &rt) {
             RefOutcome::Pass => report.push(&name, Ok(())),
             RefOutcome::Fail(why) => report.push(&name, Err::<(), String>(why)),
             RefOutcome::Skip(why) => report.skip(&name, &why),
@@ -79,7 +87,7 @@ enum RefOutcome {
     Skip(String),
 }
 
-fn run_one(test: &Path, fonts: &FontContext) -> RefOutcome {
+fn run_one(test: &Path, fonts: &FontContext, rt: &tokio::runtime::Runtime) -> RefOutcome {
     let Ok(content) = std::fs::read_to_string(test) else {
         return RefOutcome::Skip("unreadable".into());
     };
@@ -97,8 +105,8 @@ fn run_one(test: &Path, fonts: &FontContext) -> RefOutcome {
         return RefOutcome::Skip("reference unreadable".into());
     };
 
-    let test_px = render(&content, test, fonts);
-    let ref_px = render(&ref_content, &ref_path, fonts);
+    let test_px = render(&content, test, fonts, rt);
+    let ref_px = render(&ref_content, &ref_path, fonts, rt);
     let equal = test_px == ref_px;
     let pass = if kind == RefKind::Mismatch {
         !equal
@@ -120,9 +128,43 @@ fn run_one(test: &Path, fonts: &FontContext) -> RefOutcome {
     }
 }
 
-fn render(html: &str, path: &Path, fonts: &FontContext) -> Vec<u8> {
+/// ⚠⚠⚠ **A REFERENCE IS A DOCUMENT, AND 1,230 OF THEM ARE BUILT OUT OF `<img>`.** This used to be
+/// `Page::load(…).paint(…)` — the SYNC path, which parses and lays out but fetches **no
+/// subresources**. The CSS 2.1 suite's house style is to draw the expected result with coloured
+/// swatch PNGs (`support/blue15x15.png`, `support/swatch-orange.png`), so those references painted
+/// two blank boxes while the test painted the real thing, and the comparison could only ever say
+/// *"render differs"*. Measured on `css/CSS2/positioning/right-004.xht`, the pixel row where the
+/// borders belong:
+///
+/// ```text
+///   reference, sync path    …white white white white white…       <- the swatches never loaded
+///   reference, with images  …blue blue blue orange orange…
+///   the TEST, either way    …blue blue blue orange orange…        <- the engine was always right
+/// ```
+///
+/// **All 50 RTL `right-*` tests failed, and so did every other one in the family** — a 100% failure
+/// rate that reads exactly like a broken engine primitive and was an unloaded PNG. The scale:
+/// **1,230 of `css/CSS2`'s 6,263 reftests (19.6%) have a reference containing `<img>`**, spread
+/// across `normal-flow` 276, `backgrounds` 236, `positioning` 220, `borders` 130, `linebox` 111,
+/// `floats-clear` 90 and `bidi-text` 48. Every one of them was unpassable by construction.
+///
+/// ⚠ **ONE phase is added and no more.** `Page::load` stays: no JS (scripted tests are skipped
+/// above), and **no external stylesheets** — that is a second, separate absence with its own
+/// number, and bundling it here would make this measurement unattributable.
+///
+/// ⚠ The `timeout` bounds a test that points at the network. Local `file://` reads complete in
+/// microseconds, so it never fires on the corpus; it exists so one stray absolute URL cannot hang a
+/// 6,000-file run, and a fetch it cancels leaves the page exactly as the old sync path rendered it.
+fn render(html: &str, path: &Path, fonts: &FontContext, rt: &tokio::runtime::Runtime) -> Vec<u8> {
     let url = format!("file://{}", path.display());
-    let page = Page::load(html, &url, fonts, VW as f32);
+    let mut page = Page::load(html, &url, fonts, VW as f32);
+    rt.block_on(async {
+        let _ = tokio::time::timeout(std::time::Duration::from_secs(10), async {
+            page.fetch_and_apply_images(fonts, VW as f32).await;
+            page.fetch_and_apply_background_images().await;
+        })
+        .await;
+    });
     let canvas = page.paint(fonts, VW, VH);
     canvas.rgba_bytes().to_vec()
 }
@@ -204,5 +246,71 @@ mod tests {
             "different renders → nonzero delta"
         );
         assert_eq!(pixel_delta(&a, &[]), 1.0, "size mismatch → full delta");
+    }
+
+    /// # G_REFTEST_LOADS_BITMAPS — a reference is a DOCUMENT, and 1,230 of them are drawn with PNGs
+    ///
+    /// The CSS 2.1 suite's house style is to draw the expected result out of coloured swatch images
+    /// (`support/blue15x15.png`, `support/swatch-orange.png`) — as an `<img>` in the reference and,
+    /// in the `backgrounds` chapter, as a `background-image` in the test. [`render`] used the SYNC
+    /// `Page::load`, which fetches no subresources, so those documents painted blank boxes and the
+    /// comparison could only ever say *"render differs"*. **1,230 of `css/CSS2`'s 6,263 reftests
+    /// (19.6%) have a reference containing `<img>`** and every one was unpassable by construction.
+    ///
+    /// ⚠⚠⚠ **BOTH KINDS OR NEITHER.** Loading `<img>` alone is not half a fix, it is a DIFFERENT
+    /// bias: `backgrounds` went **184 → 123** on that intermediate build, because its tests draw
+    /// with `background-image` while its references draw with `<img>`, and both being blank was a
+    /// *cancellation* that read as agreement. Loading both took it to **220**. `positioning` shows
+    /// the same effect mirrored (339 on the `<img>`-only build, 314 with both, against 187 before).
+    /// This test therefore asserts **one pixel of each kind**, and either half alone fails it.
+    ///
+    /// To watch it go RED: delete either `fetch_and_apply_images` or
+    /// `fetch_and_apply_background_images` from [`render`] — the corresponding pixel reads white.
+    #[test]
+    fn a_reftest_render_loads_the_bitmaps_its_document_references() {
+        // A 1×1 blue PNG, written to disk so this exercises the real `file://` fetch the corpus
+        // needs — a `data:` URI would pass without the fetch path working at all.
+        const BLUE_PNG: [u8; 69] = [
+            0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0x00, 0x00, 0x00, 0x0d, 0x49, 0x48,
+            0x44, 0x52, 0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x01, 0x08, 0x02, 0x00, 0x00,
+            0x00, 0x90, 0x77, 0x53, 0xde, 0x00, 0x00, 0x00, 0x0c, 0x49, 0x44, 0x41, 0x54, 0x78,
+            0x9c, 0x63, 0x60, 0x60, 0xf8, 0x0f, 0x00, 0x01, 0x03, 0x01, 0x00, 0x08, 0x89, 0xc2,
+            0xec, 0x00, 0x00, 0x00, 0x00, 0x49, 0x45, 0x4e, 0x44, 0xae, 0x42, 0x60, 0x82,
+        ];
+        let dir = std::env::temp_dir().join("manuk-reftest-bitmaps");
+        std::fs::create_dir_all(&dir).expect("temp dir");
+        std::fs::write(dir.join("blue.png"), BLUE_PNG).expect("write png");
+        let doc = dir.join("doc.html");
+        std::fs::write(
+            &doc,
+            r#"<!doctype html><html><body style="margin:0">
+<div style="width:20px;height:20px;background-image:url(blue.png)"></div>
+<img src="blue.png" width="20" height="20" style="display:block">
+</body></html>"#,
+        )
+        .expect("write doc");
+
+        let fonts = FontContext::new();
+        let rt = tokio::runtime::Builder::new_multi_thread()
+            .enable_all()
+            .build()
+            .expect("runtime");
+        let html = std::fs::read_to_string(&doc).expect("read doc");
+        let px = render(&html, &doc, &fonts, &rt);
+        let at = |x: u32, y: u32| -> (u8, u8, u8) {
+            let i = ((y * VW + x) * 4) as usize;
+            (px[i], px[i + 1], px[i + 2])
+        };
+        assert_eq!(
+            at(10, 10),
+            (0, 0, 255),
+            "a `background-image: url(...)` must be fetched and painted — this is the half whose \
+             absence took `css/CSS2/backgrounds` DOWN 61 tests when only `<img>` was loaded"
+        );
+        assert_eq!(
+            at(10, 30),
+            (0, 0, 255),
+            "…and an `<img>`, which is how 1,230 CSS 2.1 references draw their expected result"
+        );
     }
 }

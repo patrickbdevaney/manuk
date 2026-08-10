@@ -3427,3 +3427,82 @@ says *"an absent datum must not silently remove the element from the diff"* — 
 was dropped, every element, every page. **A guard written to be forward-tolerant was enumerating
 lengths instead of taking a minimum**, so it tolerated the past and was silently fatal to the future,
 and its symptom named a cause *on the page* for a defect in the reader. Now `if a.len() < 6`.
+
+## A REFERENCE IS A DOCUMENT — 1,230 CSS 2.1 reftests were unpassable by construction (t1088)
+
+The reftest runner rendered both sides with the **sync** `Page::load`, which parses and lays out and
+fetches **no subresources**. The CSS 2.1 suite's house style — Microsoft's and Gérard Talbot's, which
+is most of the corpus — is to draw the *expected result* out of coloured swatch PNGs:
+
+```xml
+  <div><img src="support/blue15x15.png"  width="5" height="96" />
+       <img src="support/swatch-orange.png" width="5" height="96" /></div>
+```
+
+So the reference painted two blank boxes while the test painted the real borders, and the comparison
+could only ever say *"render differs"*. Measured on `positioning/right-004.xht`, the pixel row where
+the borders belong:
+
+```text
+  reference, sync path      …white white white white white…    <- the swatches never loaded
+  reference, with images    …blue blue blue orange orange…
+  the TEST, either way      …blue blue blue orange orange…     <- the engine was always right
+```
+
+**Scale: 1,230 of `css/CSS2`'s 6,263 reftests (19.6%) have a reference containing `<img>`** —
+`normal-flow` 276, `backgrounds` 236, `positioning` 220, `borders` 130, `linebox` 111,
+`floats-clear` 90, `bidi-text` 48, `css1` 39, and a tail. Every one of them was unpassable.
+
+⚠⚠⚠ **AND IT LOOKED EXACTLY LIKE A BROKEN ENGINE PRIMITIVE.** All 50 RTL `right-*` tests failed —
+0 passing — which is the signature of an absent feature, and it is what the tick was chasing when it
+opened them. **A 100% failure rate is evidence about the INSTRUMENT at least as often as about the
+engine**, and the cheapest way to tell is to render the reference on its own and look at it.
+
+⚠⚠⚠ **LOADING `<img>` ALONE IS NOT HALF A FIX — IT IS A DIFFERENT BIAS.** On that intermediate
+build, `css/CSS2/backgrounds` went **184 → 123 (−61)**: its *tests* draw with `background-image` and
+its *references* draw with `<img>`, so both being blank was a **cancellation that read as agreement**
+(the `two-errors-cancel-and-read-as-agreement` shape, in the instrument this time). Loading both
+bitmap kinds took it to **220**. `positioning` shows the same effect mirrored — 339 on the
+`<img>`-only build, 314 with both, against 187 before. **Only running every affected directory on
+both builds finds this; the headline (+345 on the intermediate) was larger and wrong.**
+
+OLD-INSTRUMENT CONTROL, same hour, nine directories:
+
+```text
+                          OLD    <img> only   BOTH        net
+  positioning             187        339       314      +127
+  normal-flow             320        465       465      +145
+  backgrounds             184        123       220       +36
+  borders                 324        345       349       +25
+  floats-clear             31         78        79       +48
+  linebox                  14         51        51       +37
+  margin-padding-clear    592        596       603       +11
+  floats                   23         23        23         0
+  bidi-text                17         17        17         0
+  ─────────────────────────────────────────────────────────────
+                                                        +429
+```
+
+⚠ **`bidi-text` is flat at 17 despite 48 image-based references, and that is the honest half.** An
+unloaded PNG was masking real failures, not inventing them: where the engine genuinely cannot draw
+the chapter, dressing the reference changes nothing. A directory that does not move is the control
+that says this is a measurement fix and not a scoring trick.
+
+⚠ **ONE more phase and no more.** `Page::load` stays — no JS (scripted tests are skipped) and **no
+external stylesheets**, which is a second, separate absence with its own number. Bundling it would
+have made the +429 unattributable.
+
+### The struct field that broke this crate's tests for the SECOND time
+
+`cargo test -p manuk-wpt --bin manuk-wpt` had not compiled since **t563**, when `font` was added to
+`Seen` and three test constructors were missed — and the comment sitting on that constructor *says
+so*, and predicts the repeat. It repeated at **t1084**, when `position` was added for the
+`reading_order` partition. Both were invisible because nothing in the wall builds this crate's tests,
+so the compiler's own enumeration of a field's sites is never run.
+
+Making it compile immediately produced a finding: `a_differing_ancestor_class_signature_must_not_
+book_the_whole_subtree_as_missing` asserted `kind == "missing"`, and the answer is now `"unaligned"`
+— the classification introduced at **t951** precisely for *"the two trees are NUMBERED differently,
+and calling that an absence is a lie"*. `oracle.rs`'s own tests were updated then; this copy could
+not be, because it did not build. **A test that does not compile does not merely stop testing: it
+preserves the vocabulary of the day it broke, and reads as a contradiction the moment it returns.**
