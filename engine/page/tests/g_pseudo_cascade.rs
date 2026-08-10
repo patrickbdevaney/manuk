@@ -90,13 +90,13 @@ const HTML: &str = r##"<!doctype html>
 fn before_of(page: &manuk_page::Page, sel: &str) -> Option<String> {
     let root = page.dom().root();
     let n = *query_selector_all(page.dom(), root, sel).first()?;
-    page.styles_of(n)?.before.as_ref()?.content.clone()
+    page.styles_of(n)?.before.as_ref()?.content_text()
 }
 
 fn after_of(page: &manuk_page::Page, sel: &str) -> Option<String> {
     let root = page.dom().root();
     let n = *query_selector_all(page.dom(), root, sel).first()?;
-    page.styles_of(n)?.after.as_ref()?.content.clone()
+    page.styles_of(n)?.after.as_ref()?.content_text()
 }
 
 #[test]

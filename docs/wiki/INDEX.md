@@ -660,142 +660,144 @@
 
   - L3 · CSS COUNTERS ARE LOST AT A _ => {} IN THE CASCADE, NOT AT LAYOUT (t1095)
   - L29 · The decomposition, and its first brick is not its subject
-  - L47 · Stylo's *servo* build hardcodes parse_has() -> false
-  - L70 · An optimisation that makes a data structure smaller must be asked WHAT IT DROPPED
-  - L85 · The attribute-selector case flag was STRIPPED, not APPLIED — and the namespace prefix leaked into the name
-  - L111 · <body>'s background propagates to the CANVAS
-  - L117 · visibility and opacity interact with animation
-  - L125 · Stylo's grid_enabled() reads layout.grid.enabled, which is OFF by default under servo
-  - L131 · user-select is behind the SHARED layout.unimplemented pref, not a per-property one (tick 464)
-  - L148 · color-scheme rides the same pref and has a REAL paint tooth: the dark canvas default (tick 465)
-  - L164 · Skipping @supports renders the FALLBACK branch of every progressively-enhanced site
-  - L178 · @media is a rule CONTAINER — a cascade that only matches top-level CssRule::Style applies zero responsive rules at ANY width
-  - L187 · match_non_ts_pseudo_class returning false for everything freezes the entire no-JS-menu web SHUT
-  - L199 · :muted is querySelector-only, and that is a *build* fence (tick 344)
-  - L211 · Stylo's COMPUTED values are not its RESOLVED values — border-width and outline-width are traps
-  - L225 · Presentational hints are still load-bearing, and Stylo will NOT synthesize them
-  - L236 · Icons on the modern web are an empty element with a background-color shaped by a mask-image
-  - L240 · inline-flex is a distinct display value, not block-level flex
-  - L246 · The global hidden attribute needed its OWN rule — input[type=hidden] never covered it (tick 489)
-  - L266 · A background-image is a DECORATION; an <img> is a REPLACED ELEMENT whose bitmap IS the box
-  - L275 · An unmodelled pseudo-element silently mis-styles its SUBJECT
-  - L282 · content: attr(name) drew an EMPTY box until the extraction loop stopped keeping only strings
-  - L302 · The display divergence number is ~25% representational NOISE
-  - L313 · MinimalCascade's deficits are architectural, and a hybrid front-end matcher was REJECTED
-  - L330 · var() and @media evaluation effectively exist ONLY inside full Stylo
-  - L338 · grid-template-areas was entirely unparsed — and BOTH underlying engines already supported it
-  - L344 · Stylo's DOM trait wall is 126+ methods and compiles only as ONE indivisible unit
-  - L356 · Full-page zoom scales ABSOLUTE lengths only
-  - L364 · Selector identifiers decode CSS escapes — take_ident used to stop at the backslash (tick 137)
-  - L391 · Quirks mode: the verdict travels ON the Dom, not through signatures (tick 242)
-  - L412 · Stylo already implements the quirks — we were only failing to tell it which mode we were in
-  - L425 · Reporting and rendering are ONE capability
-  - L434 · LimitedQuirks folds to false, deliberately
-  - L442 · Gate note
-  - L450 · The half-fix trap: a custom rule index must be keyed the way it is queried (tick 243)
-  - L470 · :hover is a cascade INPUT, and the two relayout paths each miss it differently
-  - L483 · :hover matches ANCESTORS, and that half is the mechanism
-  - L496 · The trap: neither existing relayout recascades a state change, and they fail oppositely
-  - L516 · The general form, worth carrying past this pseudo-class
-  - L527 · Focus was a DEAD-END WIRE, and :focus / :focus-within / :focus-visible are three questions
-  - L546 · They are not one feature with three names
-  - L565 · The two cascades drifted again — UA block margins (tick 268)
-  - L585 · Where it was
-  - L598 · The numbers were measured, not recalled
-  - L609 · The rule that makes it a fix rather than a trade
-  - L625 · @media was skipped, and it took a dozen properties with it (tick 273)
-  - L632 · The bug and the test that covered it were about disjoint property sets
-  - L663 · What it cost
-  - L678 · The fix, and why it evaluates at cascade time
-  - L699 · Still skipped: @supports and @layer
-  - L706 · One evaluator for @media and matchMedia (tick 275)
-  - L734 · @supports / @layer, and answering a capability question honestly (tick 276)
-  - L767 · CSS.supports() — one question must not have two answers (tick 282)
-  - L786 · The fix is a different door to the same evaluator
-  - L807 · Two things measured and pinned
-  - L822 · Container queries (tick 379): the sized re-pass and the source supplement
-  - L868 · field-sizing: content — a recovered property that must beat the hints (tick 388)
-  - L884 · text-align: start/end are LOGICAL — resolve them against direction, or the RTL web left-aligns (tick 414)
-  - L904 · Computed custom properties reach getComputedStyle from Stylo (tick 427)
-  - L927 · :open is taught to BOTH selector engines (tick 429)
-  - L938 · CSSStyleDeclaration: array-like + !important priority (tick 432)
-  - L952 · contrast-color() is a one-pref win: the resolution path was already wired (tick 466)
-  - L963 · scrollbar-color/scrollbar-width are engine="gecko" — recovered from MinimalCascade, NOT a pref flip (tick 469)
-  - L989 · RuleIndex was applied to ONE of the two matchers, and the other kept the O(elements × rules) defect for its whole life (tick 572)
-  - L1036 · The loop that reads linear and is quadratic: property_at(i) over a chained map (tick 573)
-  - L1066 · Custom properties are copy-on-write with a PARENT CHAIN, and the chain yields shadowed names twice (tick 573)
-  - L1095 · Our matcher merged winners by (specificity, order) — the cascade's FIRST sort was missing (tick 575)
-  - L1143 · @supports answered "does it PARSE", and one shared pref made 31 unread properties parseable (tick 576)
-  - L1180 · Composition is the whole difficulty, and it is delegated rather than re-implemented
-  - L1204 · CSS Color 4 — oklch(), lab(), color() and color-mix() all work, and nobody had asked (tick 579)
-  - L1241 · The :has() supplement re-filtered the stylesheets for every element (tick 580)
-  - L1253 · The measurement, and the first attempt varied the wrong n
-  - L1276 · The hoist's real hazard is ORDERING, and the gate that caught it caught itself first
-  - L1289 · The SECOND category of @supports lie: parsed natively, never rendered (tick 591)
-  - L1312 · Why filter is the costliest member, and worse than t576's cases
-  - L1328 · The lesson, which this session paid for four times
-  - L1336 · undefined from getComputedStyle is not a missing feature — it is a thrown exception in the caller (tick 596)
-  - L1368 · 86 of 95 — the throw-class defect was never four properties wide (tick 597)
-  - L1380 · One list, three consumers — the structural half
-  - L1391 · Two serializations the obvious implementation gets wrong
-  - L1409 · A FALSE NO costs a page its enhancement, exactly as a false yes costs it its fallback (tick 601)
-  - L1444 · The stylesheets were on this machine the whole time (tick 654)
-  - L1451 · 1. The load deadline threw away sheets it had already downloaded
-  - L1483 · 2. One re-cascade rule, nine implementations, eight of them wrong
-  - L1514 · The instrument note: read the ORACLE's column, not the score
-  - L1529 · The CSSOM as a view over the element's text (tick 665)
-  - L1539 · Why the deferral was priced wrong
-  - L1554 · The two things that are easy to get wrong
-  - L1564 · Scope, stated rather than implied
-  - L1570 · The gate asserts a BOX, and caught its own fixture
-  - L1585 · What it did and did not buy
-  - L1596 · The catch-all that answers inline (tick 699)
-  - L1625 · flow-root is a gecko-gated CONSTANT, not a gecko-gated FEATURE
-  - L1647 · A presentational hint cannot be guarded on "the property is still at its initial value"
-  - L1700 · An unresolved & is not a no-op — it is a selector for the ROOT (tick 757)
-  - L1715 · Why it looked like it worked
-  - L1733 · The fix, and why substitution rather than a scope
-  - L1757 · The rule
-  - L1766 · The servo build REJECTS -webkit-box, and the clamp it gates was already built (tick 763)
-  - L1818 · The cascade never saw a decoded stylesheet — out.push(b[i] as char)
-  - L1839 · What it cost
-  - L1851 · The fix, and what deliberately did not change
-  - L1858 · ⚠ Why it survived the entire project, which is the part worth keeping
-  - L1867 · And the headline metric could not see it either
-  - L1876 · A nested @media lost its declarations, and only its declarations (t785)
-  - L1917 · A layer exists to LOSE, and ours won (t790)
-  - L1950 · Where Chrome draws the form-control box-sizing line (t851)
-  - L1969 · Both UA sheets were wrong, in OPPOSITE directions
-  - L1981 · A layout-crate test cannot see the shipping cascade
-  - L1992 · A _ arm with a REASON above it is the hardest kind to audit (t975)
-  - L2042 · …and its sibling: a DEFAULTED PARAMETER no caller overrides (t976)
-  - L2076 · compute_for_declarations is FIRST-SEEN-WINS, and it maps logical to physical as it goes (t998)
-  - L2129 · A form control's UA box, and the two constants that cancelled (tick 1043)
-  - L2136 · What the reference actually says
-  - L2153 · Two wrong constants that agree at exactly one point
-  - L2174 · The same shape again, one rule down
-  - L2184 · The one control whose border we draw and Chrome does not
-  - L2193 · How this was found, and what it says about method
-  - L2212 · The baseline of a text field, and a term that cancelled (tick 1044)
-  - L2217 · The defect is a DOMAIN error, not a missing rule
-  - L2238 · The model, and the ladder that fixes it
-  - L2258 · ⚠⚠⚠ The falsification pass deleted a term, again
-  - L2287 · Where a baseline actually shows up
-  - L2303 · A dropdown ignores its leading, and the constant that was fitted at one point (tick 1045)
-  - L2308 · var() is clean — 30 of 30
-  - L2327 · A <select>'s box ignores line-height; an <input>'s does not
-  - L2348 · ⚠⚠⚠ The residual: a constant fitted at the one font size every fixture uses
-  - L2373 · A negative length is a parse error, and the INSTRUMENT parsed it differently from the product (t1059)
-  - L2389 · The third column is the point
-  - L2408 · Two rows locate the fix, and neither is the row that made you look
-  - L2423 · The battery that agreed on 7 of 8 rows while the feature was unimplemented (t1062)
-  - L2430 · Why the first fixture could not see that
-  - L2458 · The live path was already right — the third instrument split of the session
-  - L2467 · Canonicalise, don't re-map
-  - L2473 · An XHTML <style><![CDATA[ … ]]></style> sheet was dropped in its entirety (t1075)
-  - L2487 · The two cascades lose different amounts, and only one of them loses everything
-  - L2504 · ⚠⚠⚠ The number, fully attributed — and 100% of the "losses" are the lie being deleted
-  - L2527 · dir="rtl" was a layout input and not a CASCADE input, so every logical property resolved LTR (t1086)
+  - L47 · LANDED at t1096, brick-1-first — and 28 of the 31 gains were in a chapter I was not aiming at
+  - L65 · ⚠⚠⚠ A mutation came back GREEN: the layout-crate gate is blind to the SHIPPING cascade
+  - L83 · Stylo's *servo* build hardcodes parse_has() -> false
+  - L106 · An optimisation that makes a data structure smaller must be asked WHAT IT DROPPED
+  - L121 · The attribute-selector case flag was STRIPPED, not APPLIED — and the namespace prefix leaked into the name
+  - L147 · <body>'s background propagates to the CANVAS
+  - L153 · visibility and opacity interact with animation
+  - L161 · Stylo's grid_enabled() reads layout.grid.enabled, which is OFF by default under servo
+  - L167 · user-select is behind the SHARED layout.unimplemented pref, not a per-property one (tick 464)
+  - L184 · color-scheme rides the same pref and has a REAL paint tooth: the dark canvas default (tick 465)
+  - L200 · Skipping @supports renders the FALLBACK branch of every progressively-enhanced site
+  - L214 · @media is a rule CONTAINER — a cascade that only matches top-level CssRule::Style applies zero responsive rules at ANY width
+  - L223 · match_non_ts_pseudo_class returning false for everything freezes the entire no-JS-menu web SHUT
+  - L235 · :muted is querySelector-only, and that is a *build* fence (tick 344)
+  - L247 · Stylo's COMPUTED values are not its RESOLVED values — border-width and outline-width are traps
+  - L261 · Presentational hints are still load-bearing, and Stylo will NOT synthesize them
+  - L272 · Icons on the modern web are an empty element with a background-color shaped by a mask-image
+  - L276 · inline-flex is a distinct display value, not block-level flex
+  - L282 · The global hidden attribute needed its OWN rule — input[type=hidden] never covered it (tick 489)
+  - L302 · A background-image is a DECORATION; an <img> is a REPLACED ELEMENT whose bitmap IS the box
+  - L311 · An unmodelled pseudo-element silently mis-styles its SUBJECT
+  - L318 · content: attr(name) drew an EMPTY box until the extraction loop stopped keeping only strings
+  - L338 · The display divergence number is ~25% representational NOISE
+  - L349 · MinimalCascade's deficits are architectural, and a hybrid front-end matcher was REJECTED
+  - L366 · var() and @media evaluation effectively exist ONLY inside full Stylo
+  - L374 · grid-template-areas was entirely unparsed — and BOTH underlying engines already supported it
+  - L380 · Stylo's DOM trait wall is 126+ methods and compiles only as ONE indivisible unit
+  - L392 · Full-page zoom scales ABSOLUTE lengths only
+  - L400 · Selector identifiers decode CSS escapes — take_ident used to stop at the backslash (tick 137)
+  - L427 · Quirks mode: the verdict travels ON the Dom, not through signatures (tick 242)
+  - L448 · Stylo already implements the quirks — we were only failing to tell it which mode we were in
+  - L461 · Reporting and rendering are ONE capability
+  - L470 · LimitedQuirks folds to false, deliberately
+  - L478 · Gate note
+  - L486 · The half-fix trap: a custom rule index must be keyed the way it is queried (tick 243)
+  - L506 · :hover is a cascade INPUT, and the two relayout paths each miss it differently
+  - L519 · :hover matches ANCESTORS, and that half is the mechanism
+  - L532 · The trap: neither existing relayout recascades a state change, and they fail oppositely
+  - L552 · The general form, worth carrying past this pseudo-class
+  - L563 · Focus was a DEAD-END WIRE, and :focus / :focus-within / :focus-visible are three questions
+  - L582 · They are not one feature with three names
+  - L601 · The two cascades drifted again — UA block margins (tick 268)
+  - L621 · Where it was
+  - L634 · The numbers were measured, not recalled
+  - L645 · The rule that makes it a fix rather than a trade
+  - L661 · @media was skipped, and it took a dozen properties with it (tick 273)
+  - L668 · The bug and the test that covered it were about disjoint property sets
+  - L699 · What it cost
+  - L714 · The fix, and why it evaluates at cascade time
+  - L735 · Still skipped: @supports and @layer
+  - L742 · One evaluator for @media and matchMedia (tick 275)
+  - L770 · @supports / @layer, and answering a capability question honestly (tick 276)
+  - L803 · CSS.supports() — one question must not have two answers (tick 282)
+  - L822 · The fix is a different door to the same evaluator
+  - L843 · Two things measured and pinned
+  - L858 · Container queries (tick 379): the sized re-pass and the source supplement
+  - L904 · field-sizing: content — a recovered property that must beat the hints (tick 388)
+  - L920 · text-align: start/end are LOGICAL — resolve them against direction, or the RTL web left-aligns (tick 414)
+  - L940 · Computed custom properties reach getComputedStyle from Stylo (tick 427)
+  - L963 · :open is taught to BOTH selector engines (tick 429)
+  - L974 · CSSStyleDeclaration: array-like + !important priority (tick 432)
+  - L988 · contrast-color() is a one-pref win: the resolution path was already wired (tick 466)
+  - L999 · scrollbar-color/scrollbar-width are engine="gecko" — recovered from MinimalCascade, NOT a pref flip (tick 469)
+  - L1025 · RuleIndex was applied to ONE of the two matchers, and the other kept the O(elements × rules) defect for its whole life (tick 572)
+  - L1072 · The loop that reads linear and is quadratic: property_at(i) over a chained map (tick 573)
+  - L1102 · Custom properties are copy-on-write with a PARENT CHAIN, and the chain yields shadowed names twice (tick 573)
+  - L1131 · Our matcher merged winners by (specificity, order) — the cascade's FIRST sort was missing (tick 575)
+  - L1179 · @supports answered "does it PARSE", and one shared pref made 31 unread properties parseable (tick 576)
+  - L1216 · Composition is the whole difficulty, and it is delegated rather than re-implemented
+  - L1240 · CSS Color 4 — oklch(), lab(), color() and color-mix() all work, and nobody had asked (tick 579)
+  - L1277 · The :has() supplement re-filtered the stylesheets for every element (tick 580)
+  - L1289 · The measurement, and the first attempt varied the wrong n
+  - L1312 · The hoist's real hazard is ORDERING, and the gate that caught it caught itself first
+  - L1325 · The SECOND category of @supports lie: parsed natively, never rendered (tick 591)
+  - L1348 · Why filter is the costliest member, and worse than t576's cases
+  - L1364 · The lesson, which this session paid for four times
+  - L1372 · undefined from getComputedStyle is not a missing feature — it is a thrown exception in the caller (tick 596)
+  - L1404 · 86 of 95 — the throw-class defect was never four properties wide (tick 597)
+  - L1416 · One list, three consumers — the structural half
+  - L1427 · Two serializations the obvious implementation gets wrong
+  - L1445 · A FALSE NO costs a page its enhancement, exactly as a false yes costs it its fallback (tick 601)
+  - L1480 · The stylesheets were on this machine the whole time (tick 654)
+  - L1487 · 1. The load deadline threw away sheets it had already downloaded
+  - L1519 · 2. One re-cascade rule, nine implementations, eight of them wrong
+  - L1550 · The instrument note: read the ORACLE's column, not the score
+  - L1565 · The CSSOM as a view over the element's text (tick 665)
+  - L1575 · Why the deferral was priced wrong
+  - L1590 · The two things that are easy to get wrong
+  - L1600 · Scope, stated rather than implied
+  - L1606 · The gate asserts a BOX, and caught its own fixture
+  - L1621 · What it did and did not buy
+  - L1632 · The catch-all that answers inline (tick 699)
+  - L1661 · flow-root is a gecko-gated CONSTANT, not a gecko-gated FEATURE
+  - L1683 · A presentational hint cannot be guarded on "the property is still at its initial value"
+  - L1736 · An unresolved & is not a no-op — it is a selector for the ROOT (tick 757)
+  - L1751 · Why it looked like it worked
+  - L1769 · The fix, and why substitution rather than a scope
+  - L1793 · The rule
+  - L1802 · The servo build REJECTS -webkit-box, and the clamp it gates was already built (tick 763)
+  - L1854 · The cascade never saw a decoded stylesheet — out.push(b[i] as char)
+  - L1875 · What it cost
+  - L1887 · The fix, and what deliberately did not change
+  - L1894 · ⚠ Why it survived the entire project, which is the part worth keeping
+  - L1903 · And the headline metric could not see it either
+  - L1912 · A nested @media lost its declarations, and only its declarations (t785)
+  - L1953 · A layer exists to LOSE, and ours won (t790)
+  - L1986 · Where Chrome draws the form-control box-sizing line (t851)
+  - L2005 · Both UA sheets were wrong, in OPPOSITE directions
+  - L2017 · A layout-crate test cannot see the shipping cascade
+  - L2028 · A _ arm with a REASON above it is the hardest kind to audit (t975)
+  - L2078 · …and its sibling: a DEFAULTED PARAMETER no caller overrides (t976)
+  - L2112 · compute_for_declarations is FIRST-SEEN-WINS, and it maps logical to physical as it goes (t998)
+  - L2165 · A form control's UA box, and the two constants that cancelled (tick 1043)
+  - L2172 · What the reference actually says
+  - L2189 · Two wrong constants that agree at exactly one point
+  - L2210 · The same shape again, one rule down
+  - L2220 · The one control whose border we draw and Chrome does not
+  - L2229 · How this was found, and what it says about method
+  - L2248 · The baseline of a text field, and a term that cancelled (tick 1044)
+  - L2253 · The defect is a DOMAIN error, not a missing rule
+  - L2274 · The model, and the ladder that fixes it
+  - L2294 · ⚠⚠⚠ The falsification pass deleted a term, again
+  - L2323 · Where a baseline actually shows up
+  - L2339 · A dropdown ignores its leading, and the constant that was fitted at one point (tick 1045)
+  - L2344 · var() is clean — 30 of 30
+  - L2363 · A <select>'s box ignores line-height; an <input>'s does not
+  - L2384 · ⚠⚠⚠ The residual: a constant fitted at the one font size every fixture uses
+  - L2409 · A negative length is a parse error, and the INSTRUMENT parsed it differently from the product (t1059)
+  - L2425 · The third column is the point
+  - L2444 · Two rows locate the fix, and neither is the row that made you look
+  - L2459 · The battery that agreed on 7 of 8 rows while the feature was unimplemented (t1062)
+  - L2466 · Why the first fixture could not see that
+  - L2494 · The live path was already right — the third instrument split of the session
+  - L2503 · Canonicalise, don't re-map
+  - L2509 · An XHTML <style><![CDATA[ … ]]></style> sheet was dropped in its entirety (t1075)
+  - L2523 · The two cascades lose different amounts, and only one of them loses everything
+  - L2540 · ⚠⚠⚠ The number, fully attributed — and 100% of the "losses" are the lie being deleted
+  - L2563 · dir="rtl" was a layout input and not a CASCADE input, so every logical property resolved LTR (t1086)
 
 ## `<dialog>`, `popover`, and the top layer (ticks 194-195)
 `docs/wiki/dialog-and-top-layer.md`
@@ -1876,4 +1878,4 @@
   - L124 · Rank mechanisms by FLIP RATE, not failing-subtest count — CSS layout is a multi-assertion slog
 
 ---
-1783 sections across 22 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+1785 sections across 22 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.

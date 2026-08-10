@@ -802,3 +802,4 @@ tick	sha	epoch	iso	delta_s	shape	wall_s	files	added	deleted	gates	claims	wpt_pas
 1093	578021d1	1786336690	2026-08-10T00:38:10-04:00	1376	capability	808	6	589	408	434	81	3896	6960	0	551	0	`display:none` on a pseudo was ignored, and it is how the responsive web turns things OFF (2026-08-10)
 1094	441d171d	1786337259	2026-08-10T00:47:39-04:00	569	measurement	808	4	82	2	434	81	3896	6960	0	551	0	the corpus prices the pseudo family, and two of the seven were ALREADY DONE (2026-08-10)
 1095	96faae1a	1786337637	2026-08-10T00:53:57-04:00	378	measurement	808	4	248	139	434	81	3896	6960	0	551	0	counters are lost at a `_ => {}`, not at layout, and that changes what the arc IS (2026-08-10)
+1096	1eec6bca	1786342066	2026-08-10T02:07:46-04:00	4429	capability	808	10	721	159	434	81	3896	6960	0	552	0	CSS counters, built brick-1-first because t1095 said the subject was not the blocker (2026-08-10)

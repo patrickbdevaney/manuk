@@ -972,6 +972,108 @@ pub enum GenericFamily {
     Monospace,
 }
 
+/// Split a `content` value into its terms, resolving nothing that needs the document.
+///
+/// The tokenizer is deliberately small and string-aware: quotes may contain commas, parentheses and
+/// whitespace, so it cannot be a `split_whitespace`. Anything that is neither a quoted string nor a
+/// `counter(...)` is skipped — `attr()` is handled by the Stylo path, which has the element.
+pub fn parse_content_parts(v: &str) -> Vec<ContentPart> {
+    let mut out = Vec::new();
+    let b: Vec<char> = v.chars().collect();
+    let mut i = 0usize;
+    while i < b.len() {
+        let c = b[i];
+        if c == '"' || c == '\'' {
+            let quote = c;
+            let mut lit = String::new();
+            i += 1;
+            while i < b.len() && b[i] != quote {
+                lit.push(b[i]);
+                i += 1;
+            }
+            i += 1; // the closing quote
+            out.push(ContentPart::Text(decode_css_escapes(&lit)));
+        } else if b[i..].starts_with(&['c', 'o', 'u', 'n', 't', 'e', 'r']) {
+            // `counter(` or `counters(` — take the name, ignore a style/separator argument.
+            let Some(open) = b[i..].iter().position(|&x| x == '(') else {
+                break;
+            };
+            let Some(close) = b[i + open..].iter().position(|&x| x == ')') else {
+                break;
+            };
+            let inner: String = b[i + open + 1..i + open + close].iter().collect();
+            let name = inner
+                .split(',')
+                .next()
+                .unwrap_or("")
+                .trim()
+                .trim_matches('"')
+                .trim_matches('\'')
+                .to_string();
+            if !name.is_empty() {
+                out.push(ContentPart::Counter(name));
+            }
+            i += open + close + 1;
+        } else {
+            i += 1;
+        }
+    }
+    // A bare unquoted value (the old lenient behaviour) rather than nothing at all.
+    if out.is_empty() {
+        let inner = v.trim().trim_matches('"').trim_matches('\'');
+        if !inner.is_empty() {
+            out.push(ContentPart::Text(decode_css_escapes(inner)));
+        }
+    }
+    out
+}
+
+/// `counter-reset` / `counter-increment`: a list of `<name> [<integer>]` pairs. `dflt` is the
+/// implied integer — **0 for reset and 1 for increment**, which is the difference between the two
+/// properties and the only difference.
+pub fn parse_counter_list(v: &str, dflt: i32) -> Vec<(String, i32)> {
+    let mut out: Vec<(String, i32)> = Vec::new();
+    for tok in v.split_whitespace() {
+        if tok.eq_ignore_ascii_case("none") {
+            return Vec::new();
+        }
+        match tok.parse::<i32>() {
+            Ok(n) => {
+                if let Some(last) = out.last_mut() {
+                    last.1 = n;
+                }
+            }
+            Err(_) => out.push((tok.to_string(), dflt)),
+        }
+    }
+    out
+}
+
+/// One term of a `content` value on a `::before`/`::after`.
+///
+/// `content` is a LIST — `content: "S" counter(sec) ". "` is three terms — and the list has to
+/// survive the cascade unflattened because [`ContentPart::Counter`]'s value is a function of
+/// document order, which the cascade does not know. See [`ComputedStyle::content`].
+#[derive(Debug, Clone, PartialEq)]
+pub enum ContentPart {
+    /// A literal string, or an `attr()` already resolved against the element (that one CAN be
+    /// resolved in the cascade — the attribute is right there on the element).
+    Text(String),
+    /// `counter(name)` / `counter(name, <list-style-type>)` — resolved by layout's document-order
+    /// walk, never here.
+    Counter(String),
+}
+
+impl ContentPart {
+    /// The literal text of this term, or `None` for a term whose value layout has to supply.
+    pub fn as_text(&self) -> Option<&str> {
+        match self {
+            ContentPart::Text(t) => Some(t),
+            ContentPart::Counter(_) => None,
+        }
+    }
+}
+
 /// The fully-resolved style of one element, as consumed by layout and paint.
 #[derive(Clone, Debug, PartialEq)]
 pub struct ComputedStyle {
@@ -1026,7 +1128,20 @@ pub struct ComputedStyle {
     /// `list-style-position: inside` puts the marker in the principal box's content flow.
     pub list_style_inside: bool,
     /// `content` — only meaningful on a `::before`/`::after` pseudo-element.
-    pub content: Option<String>,
+    ///
+    /// ⚠⚠⚠ **THE COUNTER TERMS SURVIVE HERE UNRESOLVED, AND THAT IS THE WHOLE POINT OF THE TYPE.**
+    /// This used to be an `Option<String>`, flattened in the cascade — and a string cannot hold a
+    /// counter, because a counter's value depends on **document order** and is not knowable when
+    /// the element's style is computed. So `content: "S" counter(sec) ". "` came out as `"S. "`:
+    /// the strings concatenated correctly and the counter silently evaporated at a `_ => {}`
+    /// (t1095). Keeping the list unflattened lets layout's document-order walk fill the counters in.
+    ///
+    /// Use [`ComputedStyle::content_text`] where the counter-free text is what is wanted.
+    pub content: Option<Vec<ContentPart>>,
+    /// `counter-reset: name [n]` — sets the counter to `n` (default 0) at this element.
+    pub counter_reset: Vec<(String, i32)>,
+    /// `counter-increment: name [n]` — adds `n` (default 1) at this element, AFTER any reset.
+    pub counter_increment: Vec<(String, i32)>,
     /// The computed style of this element's `::before` / `::after` pseudo-elements, when they have
     /// `content`. Generated content is not in the DOM (script must never see it), so it rides on
     /// the element's style and is materialised as inline items at layout time.
@@ -1424,6 +1539,17 @@ pub struct ComputedStyle {
 }
 
 impl ComputedStyle {
+    /// The counter-free text of a pseudo's `content`, for callers that only want the string.
+    ///
+    /// ⚠ Returns the terms it CAN resolve and skips the counters, because a counter's value is not
+    /// knowable here — see [`ComputedStyle::content`]. A caller that needs the rendered text must
+    /// go through layout, which is the only place document order exists.
+    pub fn content_text(&self) -> Option<String> {
+        self.content
+            .as_ref()
+            .map(|parts| parts.iter().filter_map(|p| p.as_text()).collect())
+    }
+
     /// **The transform layout must actually apply**, in the order CSS Transforms 2 §3 fixes:
     /// `translate`, then `rotate`, then `scale`, then the `transform` list — **whatever order the
     /// declarations appeared in**. That ordering rule is the whole reason these are four fields and
@@ -1517,6 +1643,8 @@ impl ComputedStyle {
             list_style_type: ListStyleType::Disc,
             list_style_inside: false,
             content: None,
+            counter_reset: Vec::new(),
+            counter_increment: Vec::new(),
             before: None,
             after: None,
             first_letter: None,
@@ -5530,11 +5658,11 @@ fn apply_declaration(s: &mut ComputedStyle, d: &Declaration, parent_fs: f32) {
             s.content = if t.eq_ignore_ascii_case("none") || t.eq_ignore_ascii_case("normal") {
                 None
             } else {
-                // A quoted string; escapes like "\f101" (icon fonts) decode to the code point.
-                let inner = t.trim_matches('"').trim_matches('\'');
-                Some(decode_css_escapes(inner))
+                Some(parse_content_parts(t))
             };
         }
+        "counter-reset" => s.counter_reset = parse_counter_list(v, 0),
+        "counter-increment" => s.counter_increment = parse_counter_list(v, 1),
         "list-style-type" => s.list_style_type = parse_list_style_type(v),
         "list-style-position" => s.list_style_inside = v.trim().eq_ignore_ascii_case("inside"),
         "list-style" => {
@@ -7848,7 +7976,12 @@ mod pseudo_tests {
             .unwrap();
         let s = &styles[&p];
         assert!(s.before.is_some(), "::before must cascade");
-        assert_eq!(s.before.as_ref().unwrap().content.as_deref(), Some("[X] "));
+        assert_eq!(
+            s.before.as_ref().unwrap().content.as_deref(),
+            Some(&[ContentPart::Text("[X] ".into())][..]),
+            "a counter-free `content` is ONE Text part — the list type exists for counters, and a \
+             value without one must not fragment"
+        );
     }
 
     /// **`@import` URLs must be extracted, because an unfetched import drops a whole stylesheet.**

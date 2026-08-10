@@ -35,8 +35,8 @@ use std::cell::RefCell;
 use std::collections::{HashMap, HashSet};
 
 use manuk_css::{
-    BoxSizing, Clear, ComputedStyle, Dim, Display, Float, IntrinsicSize, Overflow, Position, Rgba,
-    StyleMap, TextAlign, VerticalAlign, WhiteSpace,
+    BoxSizing, Clear, ComputedStyle, ContentPart, Dim, Display, Float, IntrinsicSize, Overflow,
+    Position, Rgba, StyleMap, TextAlign, VerticalAlign, WhiteSpace,
 };
 use manuk_dom::{Dom, NodeData, NodeId};
 use manuk_text::{FontContext, FontFamily, FontKey};
@@ -786,6 +786,9 @@ struct Ctx<'a> {
     /// `(width, height, first-line baseline)` — the baseline rides along because the measure
     /// already lays the subtree out and used to DISCARD the content it came from.
     measure_cache: RefCell<HashMap<(NodeId, u32), (f32, f32, Option<f32>)>>,
+    /// **CSS 2.1 §12.4 counter values, per node that actually needs one** — computed once, lazily,
+    /// by a single document-order walk. See [`Ctx::counter_values`].
+    counters: RefCell<Option<HashMap<NodeId, HashMap<String, i32>>>>,
     /// **Set while an INTRINSIC width is being probed** — `min_content_width` and
     /// `max_content_width_uncached` lay the subtree out at an absurd available width (1.0 / 1e6) and
     /// measure how far its content reaches.
@@ -919,6 +922,7 @@ pub fn layout_document(
         styles,
         fonts,
         measure_cache: RefCell::new(HashMap::new()),
+        counters: RefCell::new(None),
         intrinsic_probe: std::cell::Cell::new(false),
         fallback_style: ComputedStyle::initial(),
         min_content_cache: RefCell::new(HashMap::new()),
@@ -8502,6 +8506,59 @@ impl Ctx<'_> {
         }
     }
 
+    /// ⚠⚠⚠ **CSS 2.1 §12.4 — A COUNTER'S VALUE IS A FUNCTION OF DOCUMENT ORDER, WHICH IS WHY IT
+    /// CANNOT BE RESOLVED IN THE CASCADE.** `counter-reset` and `counter-increment` are read off
+    /// each element as the document is walked front to back; `counter(name)` in a pseudo's
+    /// `content` then reads the value *at that element*, after its own reset and increment. Nothing
+    /// about that is knowable when the element's style is computed on its own — which is exactly
+    /// why `ComputedStyle::content` had to stop being a `String` (t1095).
+    ///
+    /// **Reset before increment, on the same element**, and that order is the spec's: an element
+    /// carrying both starts the counter and then steps it, so `counter-reset:c; counter-increment:c`
+    /// reads 1 rather than 0.
+    ///
+    /// ⚠ **Deliberately FLAT, and named so the next reader knows which half exists.** A real
+    /// implementation scopes a reset to the element's subtree and its following siblings, so a
+    /// nested list restarts at each level and `counters(c, ".")` can print `2.1.3`. This keeps one
+    /// global map, which is exact for the shapes counters are actually written in — section
+    /// numbering, figure/table numbering, ordered steps, breadcrumbs — and wrong for nesting.
+    /// `counters()` (the plural, self-nesting form) is parsed to its name and prints the flat value.
+    ///
+    /// One walk per layout, memoised, and **only for the nodes that ask**: a page with no counters
+    /// stores nothing at all.
+    fn counter_values(&self, node: NodeId, name: &str) -> Option<i32> {
+        if self.counters.borrow().is_none() {
+            let mut live: HashMap<String, i32> = HashMap::new();
+            let mut out: HashMap<NodeId, HashMap<String, i32>> = HashMap::new();
+            for n in self.dom.descendants(self.dom.root()) {
+                let Some(st) = self.styles.get(&n) else {
+                    continue;
+                };
+                for (nm, v) in &st.counter_reset {
+                    live.insert(nm.clone(), *v);
+                }
+                for (nm, v) in &st.counter_increment {
+                    *live.entry(nm.clone()).or_insert(0) += *v;
+                }
+                // Snapshot ONLY where a pseudo actually names a counter — the whole map per node
+                // would be O(nodes x counters) on a page that never asks.
+                let wants = [&st.before, &st.after].into_iter().flatten().any(|p| {
+                    p.content.as_ref().is_some_and(|parts| {
+                        parts.iter().any(|c| matches!(c, ContentPart::Counter(_)))
+                    })
+                });
+                if wants {
+                    out.insert(n, live.clone());
+                }
+            }
+            *self.counters.borrow_mut() = Some(out);
+        }
+        self.counters
+            .borrow()
+            .as_ref()
+            .and_then(|m| m.get(&node).and_then(|c| c.get(name)).copied())
+    }
+
     /// Collect inline tokens (words) from a run of inline-level siblings, tracking
     /// inter-word spacing.
     ///
@@ -8546,7 +8603,19 @@ impl Ctx<'_> {
          -> Option<(String, TextStyle, Option<f32>, bool)> {
             let s = owner.and_then(|n| self.styles.get(&n))?;
             let p = which(s).as_ref()?;
-            let text = p.content.clone()?;
+            let parts = p.content.as_ref()?;
+            // The counters are filled in HERE and not in the cascade, because their values are a
+            // function of document order (see `counter_values`).
+            let mut text = String::new();
+            for part in parts {
+                match part {
+                    ContentPart::Text(t) => text.push_str(t),
+                    ContentPart::Counter(name) => {
+                        let n = owner.and_then(|o| self.counter_values(o, name)).unwrap_or(0);
+                        text.push_str(&n.to_string());
+                    }
+                }
+            }
             if text.is_empty() || generated_box_is_suppressed(p) {
                 return None;
             }
@@ -11371,6 +11440,79 @@ mod tests {
     ///
     /// To watch it go RED: make `generated_box_is_block_level` return `false` (the first row fails)
     /// or `true` (the second).
+    /// # G_CSS_COUNTERS — CSS 2.1 §12.4, and the value is a function of DOCUMENT ORDER
+    ///
+    /// `counter-reset` / `counter-increment` were **parse-only** and `content: counter(x)` rendered
+    /// nothing: the terms were dropped at a `_ => {}` in the cascade (t1095), so `"S" counter(sec)
+    /// ". "` came out `"S. "` — the strings correct and the number gone. Chrome-exact on three
+    /// `<h2>` under `counter-reset:sec` at 16px/20px monospace: `87 / 77 / 87` (`S1.` `S2.` `S3.`),
+    /// where we gave `77 / 67 / 77`, each exactly one character short.
+    ///
+    /// `css/CSS2` **3,812 → 3,843, +31 and 0 lost** — `lists` +28 (chapter 12 is where the suite
+    /// files its counter tests) and `generated-content` +3.
+    ///
+    /// ⚠⚠ **THE THIRD ROW IS THE ONE THAT TESTS THE ORDER**, and it is the reason this is a walk
+    /// rather than a lookup: a counter is not a property of the element, it is a property of
+    /// everything before it. A fix that read `counter-increment` locally would pass rows one and
+    /// two and give `1` for all three.
+    ///
+    /// ⚠ **AND THE FOURTH IS THE SPEC'S OWN ORDER OF OPERATIONS**: reset then increment on the SAME
+    /// element reads `1`, not `0`.
+    ///
+    /// ⚠⚠⚠ **THIS GATE IS BLIND TO THE SHIPPING CASCADE, AND THAT WAS FOUND BY A MUTATION COMING
+    /// BACK GREEN.** Deleting the `ContentPart::Counter` arm from `stylo_engine`'s content mapping
+    /// leaves this test PASSING — a layout-crate battery is styled by `MinimalCascade`, while the
+    /// product ships Stylo. So the two halves are proven by two different instruments and both were
+    /// run:
+    ///
+    /// ```text
+    ///   the WALK + MinimalCascade parse   this test          increment-before-reset -> RED
+    ///   the STYLO content mapping         boxes --html       drop the arm -> 77/67/77, was 87/77/87
+    /// ```
+    ///
+    /// To watch it go RED: apply increment before reset. To watch the OTHER half go red, drop the
+    /// `ContentPart::Counter` arm and re-run `manuk-wpt boxes --html` — not this test.
+    #[test]
+    fn a_counter_is_resolved_from_document_order_not_from_the_element() {
+        let seen = |css: &str, html: &str| -> Vec<String> {
+            let (dom, root) = layout_html(html, css, 800.0);
+            let mut out = Vec::new();
+            fn walk(b: &LayoutBox, out: &mut Vec<String>) {
+                match &b.content {
+                    BoxContent::Inline(frags) => out.extend(frags.iter().map(|f| f.text.clone())),
+                    BoxContent::Block(kids) => kids.iter().for_each(|k| walk(k, out)),
+                }
+            }
+            let _ = &dom;
+            walk(&root, &mut out);
+            out
+        };
+        let texts = seen(
+            "h2::before{content:\"S\" counter(sec) \". \"} h2{counter-increment:sec}",
+            r#"<div style="counter-reset:sec"><h2>A</h2><h2>B</h2><h2>C</h2></div>"#,
+        )
+        .join("|");
+        for want in ["S1.", "S2.", "S3."] {
+            assert!(
+                texts.contains(want),
+                "§12.4: a counter's value comes from EVERY element before it in document order, so \
+                 the three headings must read S1./S2./S3. — got {texts:?}. A fix that read \
+                 `counter-increment` off the element alone gives 1 three times, and dropping the \
+                 counter term gives `S.` (which is what shipped until t1096)."
+            );
+        }
+        let both = seen(
+            "p::before{content:counter(c)} p{counter-reset:c;counter-increment:c}",
+            r#"<div><p>x</p></div>"#,
+        )
+        .join("|");
+        assert!(
+            both.contains('1'),
+            "§12.4: reset runs BEFORE increment on the same element, so a `counter-reset:c` plus \
+             `counter-increment:c` reads 1 and not 0 — got {both:?}"
+        );
+    }
+
     /// # G_GENERATED_BOX_SUPPRESSED — a pseudo switched OFF must generate nothing
     ///
     /// `@media (max-width:600px){ .card::after{ display:none } }` is how every responsive

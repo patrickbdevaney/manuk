@@ -46371,6 +46371,86 @@ PERF: none — one UA rule and one narrowed branch in a cascade that already ran
 WIKI: `docs/wiki/css-cascade.md` — where Chrome draws the form-control `box-sizing` line, and why a
 layout-crate test cannot see it.
 
+## Tick 1096 — CSS counters, built brick-1-first because t1095 said the subject was not the blocker (2026-08-10)
+
+TICK SHAPE: capability — the #1 lever off t1091's re-rank (73 of 1,843 remaining CSS 2.1 failures,
+15% of corpus pages), built in the order t1095's decomposition prescribed rather than the order it
+was priced in.
+
+THE THREE BRICKS, all landed together because brick 3 is small once bricks 1-2 exist:
+
+1. **`ComputedStyle::content` is now `Option<Vec<ContentPart>>`.** A `String` cannot hold a counter —
+   the value depends on document order and is unknowable when the element's style is computed. Seven
+   consumer sites, all compiler-enumerated.
+2. `counter-reset` / `counter-increment` map onto `ComputedStyle` in **both** cascades — they had
+   been in Stylo's property-name list and nowhere else since they were added.
+3. `Ctx::counter_values` — one memoised document-order walk, reset then increment, snapshotting
+   **only at nodes whose pseudo actually names a counter** (a page with no counters stores nothing).
+
+CHROME-EXACT, product path, three `<h2>` under `counter-reset:sec` with
+`h2::before{content:"S" counter(sec) ". "}`:
+
+```text
+                    Chrome    before    after
+   #a (S1. Alpha)      87        77       87
+   #b (S2. Beta)       77        67       77
+   #c (S3. Gamma)      87        77       87
+```
+
+RESULT — all 41 directories, per-TEST state diff:
+
+```text
+   lists               37 → 65     +28      ← chapter 12 IS "generated content, numbering and LISTS"
+   generated-content   67 → 70      +3
+   every other directory                BYTE-IDENTICAL
+   TOTAL            3,812 → 3,843    +31 GAINED, 0 LOST
+```
+
+⚠ **28 OF THE 31 LANDED IN A DIRECTORY I WAS NOT AIMING AT, AND THE CHAPTER RANKING IS WHY.**
+`CSS2-RANK-t1091.tsv` puts `lists` at 45.1% and I read past it; `CSS2-FAILFAMILY-t1091.tsv` had
+`counter-increment 24` and `counter-reset 16` sitting in plain sight. The gained files are literally
+named `lists/counter-increment-005…`. **The by-CHAPTER ranking hid what the by-FAMILY ranking
+showed** — CSS 2.1 files counters under Lists — which is the argument for having banked both.
+
+⚠⚠⚠ **A MUTATION CAME BACK GREEN AND THAT IS THE OTHER FINDING: THE NEW GATE IS BLIND TO THE
+SHIPPING CASCADE.** Deleting the `ContentPart::Counter` arm from `stylo_engine` left the
+layout-crate test **passing** — a layout battery is styled by `MinimalCascade` while the product
+ships Stylo (the t1057 rule, firing again on a gate written after it). So the two halves are proven
+by two different instruments and **both mutations were run**:
+
+```text
+   the WALK + MinimalCascade parse   the #[test]        increment-before-reset  → RED ("got 0|x")
+   the STYLO content mapping         boxes --html       drop the arm            → 77/67/77
+```
+
+Recorded at the gate itself, because a reader who mutates only the obvious line will conclude the
+gate is vacuous when it is half-blind — a different and more dangerous thing.
+
+⚠ **DELIBERATELY FLAT, AND NAMED.** One global counter map: exact for section numbering, figure and
+table numbering, ordered steps and breadcrumbs — the shapes counters are actually written in — and
+wrong for nesting, so `counters(c, ".")` prints the flat value rather than `2.1.3`. Scoping a reset
+to its subtree and following siblings is the next brick, not this one.
+
+⚠⚠ **AND `cargo check --workspace` PASSED WHILE A GATE TEST DID NOT COMPILE.** `check` does not
+build **test targets**, so `g_pseudo_cascade.rs`'s two `content.clone()` calls survived a clean
+workspace check and only fell over inside the wall. The fix is the `ComputedStyle::content_text()`
+helper this type change should have shipped with in the first place — the counter-free text, for
+callers that only want the string. ⚠ Building every test target to find the rest is not free: it
+took `/home` from 54% to **100% (213M free)** and the harness's own hygiene had to purge
+`target/debug` to recover, which costs the next wall a cold rebuild. *The type change was safe
+because the compiler enumerates the sites — but only for the targets you actually compile.*
+
+RATCHET: 0 regressions across 5,633 reftests; `manuk-layout` 154/154, `manuk-css` 53/53 under
+`stylo`, `g_pseudo_cascade` green.
+
+GATE: **G_CSS_COUNTERS** — three headings must read `S1./S2./S3.` (a counter is a property of
+everything *before* an element, so a fix reading `counter-increment` locally gives 1 three times),
+and reset-then-increment on one element reads 1 not 0.
+
+PERF: one walk per layout, memoised, and it allocates nothing on a page without counters.
+
+WIKI: `docs/wiki/css-cascade.md` — the t1095 entry now carries the landing.
+
 ## Tick 1095 — counters are lost at a `_ => {}`, not at layout, and that changes what the arc IS (2026-08-10)
 
 TICK SHAPE: measurement — the decomposition t1094's own steer demanded before starting the #1 lever

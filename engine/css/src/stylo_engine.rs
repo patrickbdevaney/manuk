@@ -2530,12 +2530,23 @@ fn cascade_pseudo(
     }
     // Only a pseudo with `content` generates a box at all.
     use stylo::values::generics::counters::{Content, ContentItem};
-    let text = match cv.get_counters().clone_content() {
+    let parts = match cv.get_counters().clone_content() {
         Content::Items(items) => {
-            let mut out = String::new();
+            let mut out: Vec<crate::ContentPart> = Vec::new();
+            // Adjacent literal text coalesces, so `"S" counter(x) ". "` is three parts and not five
+            // — the counter is the ONLY thing that has to stay separate.
+            let mut push_text = |out: &mut Vec<crate::ContentPart>, t: &str| {
+                if t.is_empty() {
+                    return;
+                }
+                match out.last_mut() {
+                    Some(crate::ContentPart::Text(prev)) => prev.push_str(t),
+                    _ => out.push(crate::ContentPart::Text(t.to_string())),
+                }
+            };
             for it in items.items.iter() {
                 match it {
-                    ContentItem::String(sv) => out.push_str(sv),
+                    ContentItem::String(sv) => push_text(&mut out, sv),
                     // `content: attr(name)` — the element's attribute value, or the EMPTY string
                     // when the attribute is absent (CSS2.1). Pushing nothing on a miss is exactly
                     // that: `a::after{content:" ("attr(href)")"}` still renders the parentheses,
@@ -2544,8 +2555,18 @@ fn cascade_pseudo(
                     // name here, and a namespaced `attr()` in `content` is vanishingly rare.
                     ContentItem::Attr(a) => {
                         if let Some(v) = el.attr(&a.attribute) {
-                            out.push_str(v);
+                            push_text(&mut out, v);
                         }
+                    }
+                    // ⚠⚠⚠ **THIS ARM USED TO BE THE `_ => {}` THAT ATE EVERY CSS COUNTER (t1095).**
+                    // Stylo parses `counter(sec)` perfectly well; we dropped it, and because the
+                    // string terms around it survived, the symptom was a pseudo exactly one
+                    // counter-width too narrow — `"S. "` where Chrome draws `"S1. "`. The value
+                    // cannot be resolved HERE: it is a function of document order, which the
+                    // cascade does not know. So the term travels unresolved and layout's walk
+                    // fills it in.
+                    ContentItem::Counter(name, _style) => {
+                        out.push(crate::ContentPart::Counter(name.0.to_string()))
                     }
                     _ => {}
                 }
@@ -2554,8 +2575,25 @@ fn cascade_pseudo(
         }
         _ => return None,
     };
-    cs.content = Some(text);
+    cs.counter_reset = counter_pairs(&cv.get_counters().clone_counter_reset());
+    cs.counter_increment = counter_pairs(&cv.get_counters().clone_counter_increment());
+    cs.content = Some(parts);
     Some(cs)
+}
+
+/// Stylo's `counter-reset` / `counter-increment` lists → `(name, value)` pairs.
+///
+/// Both properties `Deref` to `[CounterPair<i32>]`, and the two differ ONLY in their implied
+/// integer (0 vs 1) — which Stylo has already applied during parsing, so one mapper serves both.
+/// `reversed(name)` is dropped: it is a CSS Lists Level 3 addition with no consumer here yet, and a
+/// silently wrong direction would be worse than the absent feature.
+fn counter_pairs(
+    list: &[stylo::values::generics::counters::CounterPair<i32>],
+) -> Vec<(String, i32)> {
+    list.iter()
+        .filter(|p| !p.is_reversed)
+        .map(|p| (p.name.0.to_string(), p.value))
+        .collect()
 }
 
 /// Build the single `PropertyDeclarationBlock` that `Stylist::compute_for_declarations` will
@@ -3625,13 +3663,13 @@ mod tests {
             .unwrap();
         let s = &map[&a];
         assert_eq!(
-            s.after.as_ref().and_then(|p| p.content.as_deref()),
-            Some(" (/x)"),
+            s.after.as_ref().and_then(|p| p.content_text()),
+            Some(" (/x)".to_string()),
             "content:attr(href) with surrounding strings must resolve the href"
         );
         assert_eq!(
-            s.before.as_ref().and_then(|p| p.content.as_deref()),
-            Some("hi"),
+            s.before.as_ref().and_then(|p| p.content_text()),
+            Some("hi".to_string()),
             "content:attr(data-tip) must resolve the data attribute"
         );
     }

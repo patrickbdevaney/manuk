@@ -7503,6 +7503,136 @@ test for the arc**, which is one sweep.
    three minutes, no build), so the suite ranks *where to look* and the corpus decides *whether to
    go*. That single step is what would have caught `::first-letter` as the thin one it was.
 
+## Check #102 — tick 1096 (2026-08-10)
+
+HORIZON H0, and its gate: ~83% WPT across categories, oracle-verified on four corpora, a
+daily-drivable shell, semantic-API coverage of every rendered construct.
+
+### 1 · GATE OR SCOREBOARD? — **gate, for the first window in a while, and by a measurable margin**
+
+Eight ticks (1089–1096). `css/CSS2` went **3,029 → 3,843** (+814, +26.9%) and **every point of it was
+re-measured old-binary-vs-new in the same hour, per-TEST, with the losses named**:
+
+```text
+   t1090  Ahem installed              +336 / −4      the suite's ruler was not on the host
+   t1092  generated box display       +16  / −0      §12.1
+   t1093  generated box suppressed    +6   / −0      display:none on a pseudo
+   t1096  CSS counters                +31  / −0      §12.4
+   t1089/1091/1094/1095               measurement — a sweep, a re-rank, a pricing, a decomposition
+```
+
+That is a *category* answer, not a scoreboard one: three of those are constructs the open web uses on
+47–68% of the corpus's own pages. **Four of the eight ticks were measurement**, which is high, and
+each was forced: the sweep by check #101 steer #1, the re-rank by steer #2, the pricing by VI.3's
+first term never having been computed for the family, the decomposition by the loop's own rule about
+subsystem-scope levers. None of them was chosen instead of building.
+
+### 2 · ⚠⚠⚠ THE WINDOW'S GOVERNING FINDING: A BLIND INSTRUMENT MIS-RANKS THE WORK-LIST, NOT JUST THE SCORE
+
+Check #101 §2 said *"any CSS 2.1 chapter pass-rate read before this tick must be re-read"*. That was
+too weak. Re-read on the fixed runner, the **ordering** inverted at the top:
+
+```text
+   ::first-letter        8 of 1,843 failures =  0.4%     ← surface audit #48 had this QUEUED at 10.5%
+   content + counters  198 of 1,843 failures = 10.7%     ← had no row at all
+```
+
+The 10.5% was real and **attached to the wrong subsystem**. A blind instrument does not add noise
+evenly: it deletes whole classes of PASS, the deleted classes correlate with the mechanism, and the
+surviving failure set is a *biased sample that names the wrong cause with confidence*.
+`margin-padding-clear` is the same error at the other end — carried as "~280, one unidentified shared
+cause, three hypotheses refuted", it is **66 at 90.3% pass**; the hypotheses were refuted against a
+number 4× too large, which is exactly why none of them explained it. **PART VI should record the
+general rule: after an instrument fix, re-derive the RANKING, not just the score.**
+
+### 3 · ⚠⚠⚠ THREE FALSE LEVERS IN THREE TICKS, ALL THE SAME SHAPE — and one of them was mine, one tick after I published the lesson
+
+Check #101 steer #3 asked for external stylesheets, priced at *"1,231 refs, 19.7%, the same size as
+the one just fixed"*. The size was right; the mechanism was not. **96% of those links are one URL and
+the file is not in the checkout.**
+
+```text
+   1,231 external stylesheets  →  1,640 of 1,707 point at /fonts/ahem.css, and wpt/fonts/ is ABSENT
+     254 "reference unreadable" →  239 are an absent wpt/css/reference/; only 14 are a real bug (17×)
+   1,885 occurrences of a construct → the corpus join undercounted 5× on a newline in a hash key
+```
+
+The middle row was **written into t1091's own journal entry as a confident diagnosis of
+`resolve_sibling`, one paragraph after that entry published the rule against exactly this**, and was
+caught only because the tick was re-read before landing. It is recorded rather than quietly fixed
+because the failure is *in the loop's method*, not in the engine.
+
+> **A lever priced by COUNTING a construct is not priced until you have read what the construct POINTS
+> AT.** A uniform reason string is a property of the READER; grouping by it groups causes together.
+> The check is one `[ -f ]` per row.
+
+And the underlying fact, so it is not rediscovered a fourth time: **this WPT checkout is PARTIAL** —
+`wpt/fonts/` and `wpt/css/reference/` are both missing.
+
+### 4 · ORIENT'S RANKING (§VI.3) — the first term finally EXISTS, and it changed two decisions
+
+VI.3 binds the loop to *usage-weight × failing-breadth*, and `CORPUS-CONSTRUCTS.md` had no row for
+the pseudo family. t1094 computed it (`CORPUS-PSEUDO-t1094.tsv`, 170 pages) and it did real work in
+both directions:
+
+- it **promoted** `display:none`-on-a-pseudo (47%) above the rest of the cluster — t1093;
+- it **demoted** `clip: rect()` despite 36% of pages and 44 suite failures, because `clip` is
+  **paint-time** and both engines report the same box: its M1 weight is *structurally zero*. ⚠ That is
+  a gap in what the metric can express, not in the engine, and PART VI should say so — **the
+  box-diffing oracle has no term for a paint-only property.**
+
+⚠⚠ **And the harder half: usage weight ranks where to LOOK, never whether anything is THERE.** Two of
+the family's seven constructs were already implemented — clearfix at 30% (the idiom the whole arc was
+*selected* on) and `content: attr()` at 25%. **55%-of-corpus worth of "lever" that ranking alone would
+have queued**, found by probing before building, twice in one window.
+
+### 5 · INVARIANTS
+
+- **I2 (never patch deps):** held. Stylo parses counters correctly and always did; the defect was
+  ours, in the mapping. The fork surface is still empty.
+- **I3 (semantic model in lockstep):** ⚠ **satisfied, and for the FOURTH consecutive check by accident
+  of scope.** t1092/1093/1096 all change generated content, which flows through the shared
+  `LayoutBox::node_rects` producer, so the agent's click points move with the boxes for free. Checks
+  #72, #100 and #101 said this. ⚠⚠ **But this window adds a NEW I3 question nobody has asked: is
+  generated content IN THE AX TREE AT ALL?** A `::before` that renders `"S1. "` is content a screen
+  reader announces and an agent may need to read, and it is not in the DOM by construction. **Named
+  here as an open invariant question, not a claim in either direction.**
+- **I5:** the discovery engine this window was §3's method — partitioning a failure set by a property
+  of the source — plus the per-TEST state diff. **Four separate conclusions were killed by re-reading
+  rather than re-reasoning**, including two of my own.
+- **THE RATCHET:** absolute and load-bearing once. t1092's first version scored **+18 with two
+  regressions**; the value was dropped for **+16 with zero**. *Net 61 either way* — which is why a net
+  is not a verdict, and why every tick this window diffed STATE.
+
+### 6 · PART VI CORRECTIONS
+
+1. **After an instrument fix, re-derive the RANKING, not just the score** (§2).
+2. **A lever priced by counting a construct is not priced until you have read what it points at** (§3).
+3. **The WPT checkout is partial** — `wpt/fonts/`, `wpt/css/reference/`.
+4. **M1 has no term for a paint-only property** (§4) — `clip`, and by extension filters, blend modes
+   and anything else that changes pixels without moving a box.
+5. **Diff the STATE, not the net** — a net cannot separate inert from 36-in-36-out, nor a gain from a
+   trade.
+6. **Bank BOTH rankings, by chapter and by failure-family** — they fail differently, and t1096 put 28
+   of its 31 gains in a chapter the chapter-ranking had hidden.
+
+### 7 · THE STEER — binding on the next tick
+
+1. ⚠⚠⚠ **RUN THE FIDELITY SWEEP.** Four engine ticks have landed since t1089's sweep and the M1 gate
+   is unmeasured on all of them. This is the third check running to say it, and the honest reason it
+   keeps slipping is that the sweep costs ~2h and cannot overlap a tick — but t1089's own finding
+   (three of four headline percentages fell while every count rose) is exactly what an unmeasured
+   window hides.
+2. **ANSWER THE I3 QUESTION IN §5** — is generated content in the AX tree? One probe, no build. If it
+   is not, three of this window's four capability ticks shipped without their semantic-model exposure
+   and I3 was bent, not satisfied.
+3. **Counters brick 4 — SCOPING** (`counters(c, ".")` prints the flat value today), and the
+   `InlineTable` cascade split that capped t1092 at +16.
+4. **Per-character fallback through the AUTHOR's font-family list.** `resolve_face` jumps from the
+   primary straight to a hard-coded `FALLBACK_FAMILIES` and never consults the rest of the author's
+   list — surfaced by t1090 as an accidental pass turning honest, and it is a real defect on every
+   mixed-script page.
+
 ## Check #101 — tick 1088 (2026-08-09)
 
 **HORIZON: H0. THE GATE, from PART VII rather than memory:** *"reliably renders and runs the

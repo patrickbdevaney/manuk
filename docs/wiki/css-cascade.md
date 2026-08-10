@@ -44,6 +44,42 @@ Stylo parses counters perfectly well. We discard them, **in the cascade**.
 Worth 73 of the 1,843 remaining CSS 2.1 failures and 15% of the burndown corpus's pages
 (`docs/loop/CORPUS-PSEUDO-t1094.tsv`).
 
+### LANDED at t1096, brick-1-first — and 28 of the 31 gains were in a chapter I was not aiming at
+
+`content` became `Option<Vec<ContentPart>>` (7 consumer sites, compiler-enumerated), both cascades
+gained `counter_reset` / `counter_increment`, and `Ctx::counter_values` does one memoised
+document-order walk — reset then increment — snapshotting only at nodes whose pseudo names a
+counter. Chrome-exact: `87 / 77 / 87` where we gave `77 / 67 / 77`. `css/CSS2` **3,812 → 3,843, +31
+and 0 lost**.
+
+```text
+   lists               37 → 65   +28    ← chapter 12 IS "generated content, numbering and LISTS"
+   generated-content   67 → 70    +3
+```
+
+**The by-CHAPTER ranking hid what the by-FAMILY ranking showed.** `CSS2-RANK-t1091.tsv` puts `lists`
+at 45.1% and it reads like a list-marker chapter; `CSS2-FAILFAMILY-t1091.tsv` had
+`counter-increment 24` and `counter-reset 16` in plain sight, and the gained files are named
+`lists/counter-increment-005…`. Bank both rankings — they fail differently.
+
+### ⚠⚠⚠ A mutation came back GREEN: the layout-crate gate is blind to the SHIPPING cascade
+
+Deleting the `ContentPart::Counter` arm from `stylo_engine` left the new `#[test]` **passing**, because
+a layout battery is styled by `MinimalCascade` while the product ships Stylo. The two halves need two
+instruments, and both mutations were run:
+
+```text
+   the WALK + MinimalCascade parse   the #[test]      increment-before-reset → RED ("got 0|x")
+   the STYLO content mapping         boxes --html     drop the arm           → 77/67/77
+```
+
+> A half-blind gate is more dangerous than a vacuous one: mutate the obvious line, watch it stay
+> green, and conclude the gate tests nothing — when in fact it tests the *other* half perfectly.
+
+**Deliberately flat**: one global counter map, exact for section/figure/table numbering, ordered
+steps and breadcrumbs, and wrong for nesting — `counters(c, ".")` prints the flat value, not
+`2.1.3`. Scoping a reset to its subtree and following siblings is the next brick.
+
 ## Stylo's *servo* build hardcodes `parse_has() -> false`
 
 A selector containing `:has()` therefore **fails to parse**, and CSS error-recovery **discards the
