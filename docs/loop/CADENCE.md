@@ -11,12 +11,12 @@
 
 | | value | over |
 |---|---|---|
-| ticks landed | **823** | ticks 1–1115 |
-| median tick cycle | **27m** | 822 intervals |
-| median, last 10 | **45m** | 10 intervals |
+| ticks landed | **824** | ticks 1–1116 |
+| median tick cycle | **27m** | 823 intervals |
+| median, last 10 | **51m** | 10 intervals |
 | fastest / slowest | 5s / 5.4d | |
-| **ticks per hour** | **1.12** | 731.5h elapsed |
-| median verify wall | **63s** | 762 ticks |
+| **ticks per hour** | **1.12** | 732.3h elapsed |
+| median verify wall | **63s** | 763 ticks |
 | wall trend | 39s → 13m — getting slower ⚠️ | first 3 vs last 3 |
 
 The **cycle** is the real unit: implement → debug → verify wall → land. The wall is only part of
@@ -28,10 +28,10 @@ it, and a wall that grows taxes every future tick, so it is tracked separately f
 
 * **capabilities asserted** (`G_CAPABILITY`): 48 → **81**
 * **live gates**: 27 → **437**
-* **✅ rows in the capability ledger**: 144 → **557**
+* **✅ rows in the capability ledger**: 144 → **558**
 * **Bar 0 — oracle hangs**: 0 of 265 sites
 
-**361 of 823 ticks** (44%) moved a
+**362 of 824 ticks** (44%) moved a
 user-visible capability. The rest were instruments, infrastructure and corrections — and the
 ledger says the corrections were not overhead: three of its top three priorities were phantoms,
 and finding that out redirected everything after it.
@@ -90,8 +90,8 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 
 ## What a capability costs
 
-* **361** capability ticks, median cycle **27m**
-* median diff per tick: **+263 / −34** lines across 8 files
+* **362** capability ticks, median cycle **27m**
+* median diff per tick: **+264 / −34** lines across 8 files
 
 ## Every tick
 
@@ -920,5 +920,6 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 | **1113** | 2026-08-10 15:05 | 11m | measurement | 13m | +127/−33 | 437 | 81 | 56.0% · | a flex item loses its width when the container is shrink-to-fit AND a sibling grows (2026- |
 | **1114** | 2026-08-10 16:00 | 55m | capability | 13m | +331/−33 | 437 | 81 | 56.0% · | a definite width IS the box's intrinsic contribution, and one half of it fixes nothing (20 |
 | **1115** | 2026-08-10 16:31 | 31m | measurement | 13m | +122/−33 | 437 | 81 | 56.0% · | the flex child fills the measuring width, and the slack heuristic throws away its items (2 |
+| **1116** | 2026-08-10 17:24 | 53m | capability | 13m | +311/−41 | 437 | 81 | 56.0% · | a filled flex box answers for itself, and the frame it stops walking has to come back on ( |
 
 *`·` after a WPT figure means **carried forward**, not measured this tick.*

@@ -46371,6 +46371,66 @@ PERF: none — one UA rule and one narrowed branch in a cascade that already ran
 WIKI: `docs/wiki/css-cascade.md` — where Chrome draws the form-control `box-sizing` line, and why a
 layout-crate test cannot see it.
 
+## Tick 1116 — a filled flex box answers for itself, and the frame it stops walking has to come back on (2026-08-10)
+
+TICK SHAPE: capability — t1115's named brick, built against the gate it left. A block measures its
+max-content by laying the subtree out at 1e6; a flex row FILLS that width, its `flex:1` item eats the
+million pixels, and its fixed siblings ride out to x≈999,976 where `content_right_extent`'s own SLACK
+rule discards them. **So stop walking it.** The function gains a `flex_max_content` callback: a box
+that filled the measuring width and is a flex/grid container reports its OWN max-content.
+
+```text
+                                                    Chrome    before   after
+   span[flex:1]        + i.icon                      72.17     48       72
+   span[flex:1 1 auto] + i.icon                      72.17     48       72
+   span                + i.icon           CONTROL    72.17     72       72
+   span[flex:0 1 auto] + i.icon           CONTROL    72.17     72       72
+   the flex row with `padding: 0 10px`               92.17     48       92
+   the flex row with `border-left:3;border-right:7`  82.17     48       82
+   span[flex:1] + TWO fixed icons                    96.17     48       96
+```
+
+⚠⚠ **THE FRAME ROWS ARE THE HALF I GOT WRONG FIRST, AND THEY ARE IN THE GATE FOR THAT REASON.** The
+answer is a CONTENT width and `rect.x` is the BORDER-box edge, so the box's own padding and border
+have to come back on — the LEFT half especially, because that is exactly the half which normally
+arrives through the descendants we have just stopped walking. The first cut read **82 against
+Chrome's 92.17** on `padding: 0 10px` and 3 short on `border-left: 3px`, and only a fixture with
+asymmetric border (3 left, 7 right) can tell "left is missing" from "the total is wrong".
+
+⚠ **The first hypothesis of the previous tick stayed dead.** t1115 suspected taffy's handling of a
+`flex-basis:0` item and its candidate fix moved nothing; this tick did not revisit it, because t1115
+had already proved `taffy_tree::max_content_width` is **never called** on these fixtures. The branch
+that delegates to taffy exists and is reached only when the node ITSELF is flex/grid — which is what
+this callback finally makes true for a CHILD.
+
+RESULT:
+
+```text
+   css/CSS2 per-TEST state diff   3902 → 3902   0 changed
+   manuk-layout                   159/159
+   panel, TWO interleaved runs of EACH binary:
+     hnhbkis.edu.in    shape 0.9274 → 0.9316   +0.42 pts, BOTH runs of both arms, same n=234
+     en.wikipedia.org  0.7877/0.7880 → 0.7870/0.7909   bands overlap — no signal, reported as none
+     news.ycombinator.com / www.marktplaats.nl         byte-identical
+```
+
+**One site moves reproducibly and small, nothing regresses, and the wikipedia pair is called a
+non-signal rather than a gain** — its two runs straddle the base pair in both directions, which is
+what a band looks like and what three headlines this session have already been killed by.
+
+RATCHET: held. Suite 159/159, `css/CSS2` unchanged per-test, no jarring counter moved on any panel
+site.
+
+GATE: `a_filled_flex_box_answers_for_its_own_max_content` — seven rows against a MEASURED ruler (the
+same row with no growable item), including the two frame rows and a two-icon row that a fix
+recovering only the last item would fail. **RED-proven twice**: restore the walk → *"expected
+63.16, got 39.16"*; drop the frame → *"expected 83.16, got 63.16"*.
+
+PERF: none, and probably negative — the callback REPLACES a walk of a flex subtree with one memoised
+`max_content_width`, which `max_content_cache` then serves for free.
+
+WIKI: `docs/wiki/text-layout.md` — "The fix: a filled flex box answers for itself".
+
 ## Tick 1115 — the flex child fills the measuring width, and the slack heuristic throws away its items (2026-08-10)
 
 TICK SHAPE: measurement — t1114's named residue: the flex CONTAINER's own max-content is short by

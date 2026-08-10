@@ -3235,3 +3235,36 @@ width should be asked for its OWN max-content — `max_content_width_uncached` a
 (it delegates to taffy) and reaches it only when the node ITSELF is flex/grid, never when a child is.
 ⚠ Note the branch that *does* exist is not reached at all here: instrumenting
 `taffy_tree::max_content_width` printed nothing on these fixtures.
+
+### The fix: a filled flex box answers for itself (t1116)
+
+Stop walking it. `content_right_extent` gains a `flex_max_content` callback: a box that filled the
+measuring width AND is a flex/grid container reports its own max-content instead of having its
+scattered children summed.
+
+```text
+                                                    Chrome    before   after
+   span[flex:1]        + i.icon                      72.17     48       72
+   span[flex:1 1 auto] + i.icon                      72.17     48       72
+   span                + i.icon           CONTROL    72.17     72       72
+   span[flex:0 1 auto] + i.icon           CONTROL    72.17     72       72
+   the flex row with `padding: 0 10px`               92.17     48       92
+   the flex row with `border-left:3;border-right:7`  82.17     48       82
+   span[flex:1] + TWO fixed icons                    96.17     48       96
+```
+
+⚠ **The padding and border rows are not decoration.** The answer is a CONTENT width and `rect.x` is
+the BORDER-box edge, so the box's own frame has to come back on — and the LEFT half especially,
+because that is the half which normally arrives through the descendants we have just stopped walking.
+The first cut came out 10 short on `padding: 0 10px` and 3 short on `border-left: 3px`.
+
+```text
+   css/CSS2 per-TEST state diff   3902 → 3902   0 changed
+   manuk-layout                   159/159
+   panel, TWO interleaved runs of each binary:
+     hnhbkis.edu.in    shape 0.9274 → 0.9316   (+0.42 pts, both runs, same n=234)
+     en.wikipedia.org  0.7877/0.7880 → 0.7870/0.7909   — bands overlap, no signal
+     news.ycombinator / www.marktplaats            byte-identical
+```
+
+One site moves reproducibly and small; nothing regresses. Stated as measured.

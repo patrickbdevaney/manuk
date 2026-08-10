@@ -2388,6 +2388,15 @@ fn content_right_extent(
     // same asymmetry one level deeper. Percentage/auto insets resolve to 0 for an intrinsic measure;
     // negative margins do not pull the border-box edge in, so this is clamped ≥ 0.
     right_insets: &dyn Fn(Option<NodeId>) -> (f32, f32),
+    // ⚠⚠⚠ **A FLEX/GRID BOX THAT FILLED THE MEASURING WIDTH MUST BE ASKED, NOT WALKED.** Returns
+    // `Some(max_content)` for such a box and `None` for everything else. See the `FILL_SENTINEL`
+    // branch in `visit`: skipping a filled box and recursing into its children is right for a BLOCK,
+    // whose children stay at the left edge, and catastrophic for a FLEX row, whose growable item
+    // eats the million pixels and carries its fixed siblings out to x≈999,976 — where the same
+    // function's own SLACK rule discards them. Measured, `inline-block > flex > span[flex:1] +
+    // i[width:24px]`: **48 against Chrome's 72**, the icon lost entirely. Every step is a heuristic
+    // working as designed; the composition drops a real item.
+    flex_max_content: &dyn Fn(Option<NodeId>) -> Option<f32>,
 ) -> f32 {
     // `shrink_to_fit` lays the subtree out at a very large available width (1e6) to read its
     // *max-content* width. Two artifacts of that absurd width must be discarded, or the measurement
@@ -2457,6 +2466,7 @@ fn content_right_extent(
         max_r: &mut f32,
         rel: &dyn Fn(f32) -> f32,
         ins: &dyn Fn(Option<NodeId>) -> (f32, f32),
+        fmc: &dyn Fn(Option<NodeId>) -> Option<f32>,
         // The right-edge insets of every FILLED ancestor between this box and the box being
         // measured. See the `else` branch: a skipped box's right insets are real content extent
         // that nothing else in this walk can account for.
@@ -2464,6 +2474,16 @@ fn content_right_extent(
     ) {
         let (mr, pbr) = ins(b.node);
         let mut pending_kids = pending;
+        // A filled FLEX/GRID box answers for itself; its laid-out children are an artifact of the
+        // measuring width and must not be walked (see `flex_max_content`).
+        if b.rect.width >= FILL_SENTINEL {
+            if let Some(w) = fmc(b.node) {
+                // `w` is already the box's BORDER-box contribution (frame included); `rect.x`
+                // carries its left margin, so only the right margin is still outstanding.
+                *max_r = max_r.max(rel(b.rect.x) + w + mr + pending);
+                return;
+            }
+        }
         if b.rect.width < FILL_SENTINEL {
             // `rect.x` includes the LEFT margin; add the RIGHT margin for a full margin-box extent.
             *max_r = max_r.max(rel(b.rect.x) + b.rect.width + mr + pending);
@@ -2484,7 +2504,7 @@ fn content_right_extent(
         match &b.content {
             BoxContent::Block(kids) => {
                 for k in kids {
-                    visit(k, fonts, max_r, rel, ins, pending_kids);
+                    visit(k, fonts, max_r, rel, ins, fmc, pending_kids);
                 }
             }
             BoxContent::Inline(frags) => {
@@ -2495,7 +2515,15 @@ fn content_right_extent(
     match content {
         BoxContent::Block(kids) => {
             for k in kids {
-                visit(k, fonts, &mut max_r, &rel, right_insets, 0.0);
+                visit(
+                    k,
+                    fonts,
+                    &mut max_r,
+                    &rel,
+                    right_insets,
+                    flex_max_content,
+                    0.0,
+                );
             }
         }
         BoxContent::Inline(frags) => {
@@ -5615,6 +5643,38 @@ impl Ctx<'_> {
         Some((w - frame).max(0.0))
     }
 
+    /// **The max-content width of a FLEX/GRID box that filled the measuring width**, or `None` for
+    /// anything else — the callback [`content_right_extent`] uses instead of walking such a box's
+    /// children. See its `flex_max_content` parameter for why walking them loses a real item.
+    ///
+    /// ⚠ Guarded against re-entering the box currently being measured: the caller is inside a 1e6
+    /// layout of an ANCESTOR, and this asks taffy for the flex box's own preferred width, which is a
+    /// separate solve over the same subtree. `max_content_cache` makes the repeat free.
+    fn flex_container_max_content(&self, node: Option<NodeId>) -> Option<f32> {
+        let n = node?;
+        if !self.dom.is_element(n) {
+            return None;
+        }
+        matches!(
+            self.style_of(n).display,
+            Display::Flex | Display::Grid | Display::InlineFlex | Display::InlineGrid
+        )
+        .then(|| {
+            // `max_content_width` is a CONTENT width and `rect.x` is the BORDER-box left edge, so
+            // the box's own frame has to come back on. Only the LEFT half needs saying out loud:
+            // for a box we WALK, the left padding/border is baked into where its descendants were
+            // laid out and arrives for free in their `x` — and this box is precisely the one we do
+            // not walk. Measured against Chrome, `inline-block > flex[padding:0 10px]`: 82 against
+            // 92.17 without it, and `border-left:3px` came out 3 short the same way.
+            let st = self.style_of(n);
+            let frame = st.padding.left.resolve(0.0, 0.0)
+                + st.padding.right.resolve(0.0, 0.0)
+                + st.border_width.left
+                + st.border_width.right;
+            self.max_content_width(n) + frame
+        })
+    }
+
     fn min_content_width(&self, node: NodeId) -> f32 {
         if let Some(&c) = self.min_content_cache.borrow().get(&node) {
             return c;
@@ -5635,8 +5695,13 @@ impl Ctx<'_> {
         // Ceil to the LayoutUnit grid for the same reason max-content does: a box given exactly its
         // min-content width must still fit its longest unbreakable run.
         let w = taffy_tree::ceil_to_layout_unit(
-            content_right_extent(&content, self.fonts, 0.0, &|n| self.px_right_insets(n))
-                + self.native_widget_width(node),
+            content_right_extent(
+                &content,
+                self.fonts,
+                0.0,
+                &|n| self.px_right_insets(n),
+                &|n| self.flex_container_max_content(n),
+            ) + self.native_widget_width(node),
         );
         self.min_content_cache.borrow_mut().insert(node, w);
         w
@@ -5841,8 +5906,13 @@ impl Ctx<'_> {
         // The widget strip rides on BOTH intrinsic widths, or a select would hug its text at
         // max-content and reserve at min-content — the box would change size with the space around
         // it, which is not what a reserved widget is.
-        let pref = content_right_extent(&content, self.fonts, 0.0, &|n| self.px_right_insets(n))
-            + self.native_widget_width(node);
+        let pref = content_right_extent(
+            &content,
+            self.fonts,
+            0.0,
+            &|n| self.px_right_insets(n),
+            &|n| self.flex_container_max_content(n),
+        ) + self.native_widget_width(node);
         // See `MANUK_TRACE_INTRINSIC` in `measure_intrinsic`: max-content is the OTHER place an
         // intrinsic width is decided (inline-block / inline-flex / float / abs), and a box that
         // fills when it should hug is nearly always this number.
@@ -7196,10 +7266,16 @@ impl Ctx<'_> {
         // Chrome pins nothing there (`colspan=2` + `width:300px` in a 400px table is still 200/200).
         let mut fc_max = FloatContext::new(0.0, 1.0e6);
         let (cmax, _) = self.layout_children(cell, 0.0, 0.0, 1.0e6, None, &mut fc_max);
-        let max = content_right_extent(&cmax, self.fonts, 0.0, &|n| self.px_right_insets(n));
+        let max =
+            content_right_extent(&cmax, self.fonts, 0.0, &|n| self.px_right_insets(n), &|n| {
+                self.flex_container_max_content(n)
+            });
         let mut fc_min = FloatContext::new(0.0, 0.0);
         let (cmin, _) = self.layout_children(cell, 0.0, 0.0, 0.0, None, &mut fc_min);
-        let min = content_right_extent(&cmin, self.fonts, 0.0, &|n| self.px_right_insets(n));
+        let min =
+            content_right_extent(&cmin, self.fonts, 0.0, &|n| self.px_right_insets(n), &|n| {
+                self.flex_container_max_content(n)
+            });
         (
             taffy_tree::ceil_to_layout_unit(min + frame),
             taffy_tree::ceil_to_layout_unit(max + frame),
@@ -19001,6 +19077,104 @@ mod tests {
         assert!(
             (suppressed - bare).abs() < 0.01,
             "an inline with no ::after rule must be unchanged: {suppressed} vs {bare}"
+        );
+    }
+
+    /// ⚠⚠⚠ **A FLEX BOX THAT FILLED THE MEASURING WIDTH MUST BE ASKED, NOT WALKED.**
+    ///
+    /// A block measures its max-content by laying the subtree out at **1e6**. A flex row is
+    /// block-level, so it FILLS that width; a `flex:1` item eats the million pixels and carries its
+    /// fixed siblings out to x≈999,976 — where `content_right_extent`'s own SLACK rule discards
+    /// them. Every step is a heuristic working as designed and the composition loses a real item.
+    /// Chrome-measured, `16px/1 monospace`, `.icon{width:24px}` inside `inline-block > flex`:
+    ///
+    /// ```text
+    ///                                                    Chrome    before   after
+    ///   span[flex:1]        + i.icon                      72.17     48       72
+    ///   span[flex:1 1 auto] + i.icon                      72.17     48       72
+    ///   span                + i.icon           CONTROL    72.17     72       72
+    ///   span[flex:0 1 auto] + i.icon           CONTROL    72.17     72       72
+    ///   the flex row with `padding: 0 10px`               92.17     48       92
+    ///   the flex row with `border-left:3;border-right:7`  82.17     48       82
+    ///   span[flex:1] + TWO fixed icons                    96.17     48       96
+    /// ```
+    ///
+    /// ⚠ The padding and border rows are not decoration: the answer is a CONTENT width and `rect.x`
+    /// is the BORDER-box edge, so the box's own frame has to come back on. For a box we WALK, the
+    /// left half arrives for free in its descendants' `x` — and this is precisely the box we do not
+    /// walk, so the first cut came out 10 short on padding and 3 short on border-left.
+    #[test]
+    fn a_filled_flex_box_answers_for_its_own_max_content() {
+        let css = r#"body{margin:0;font-size:16px;line-height:1}
+                     .ib{display:inline-block} .row{display:flex} .icon{width:24px;height:24px}"#;
+        let w = |inner: &str| -> f32 {
+            let html = format!("<div class=ib id=k>{inner}</div>");
+            let (dom, root) = layout_html(&html, css, 800.0);
+            let n = dom
+                .descendants(dom.root())
+                .find(|&n| dom.element(n).and_then(|e| e.attr("id")) == Some("k"))
+                .expect("#k exists");
+            root.node_rects(&dom).get(&n).expect("#k has a rect").width
+        };
+        // THE RULER: the same row with no growable item. Already correct before the fix — it is the
+        // number every subject row must reach, and it is measured, not written down.
+        let want = w("<div class=row><span>alpha</span><i class=icon>@</i></div>");
+        assert!(
+            want > 30.0,
+            "the control row is degenerate ({want}); nothing below it means anything"
+        );
+
+        // 1. THE SUBJECTS — a growable sibling must not erase the fixed one.
+        for grow in ["flex:1", "flex:1 1 auto", "flex-grow:1"] {
+            let got = w(&format!(
+                "<div class=row><span style='{grow}'>alpha</span><i class=icon>@</i></div>"
+            ));
+            assert!(
+                (got - want).abs() < 0.01,
+                "a growable item must not erase its fixed sibling from the container's max-content \
+                 ({grow}): expected {want}, got {got}"
+            );
+        }
+        // 2. CONTROL — an explicitly NON-growing item, which never scattered and was always right.
+        assert!(
+            (w("<div class=row><span style='flex:0 1 auto'>alpha</span><i class=icon>@</i></div>")
+                - want)
+                .abs()
+                < 0.01,
+            "control: flex:0 1 auto"
+        );
+        // 3. THE FRAME ROWS. The answer is a CONTENT width against a BORDER-box edge, so the box's
+        //    own padding and border must come back on — the left half especially, because it is the
+        //    half that normally arrives through the descendants we are no longer walking.
+        let pad = w(
+            "<div class=row style='padding:0 10px'><span style='flex:1'>alpha</span>\
+             <i class=icon>@</i></div>",
+        );
+        assert!(
+            (pad - want - 20.0).abs() < 0.01,
+            "the flex box's own horizontal padding is part of its contribution: expected {}, got \
+             {pad}",
+            want + 20.0
+        );
+        let bor = w(
+            "<div class=row style='border-left:3px solid;border-right:7px solid'>\
+             <span style='flex:1'>alpha</span><i class=icon>@</i></div>",
+        );
+        assert!(
+            (bor - want - 10.0).abs() < 0.01,
+            "…and so is its border: expected {}, got {bor}",
+            want + 10.0
+        );
+        // 4. TWO fixed items — the loss was per-item, so one that recovers only the last would pass
+        //    every row above and fail this one.
+        let two = w(
+            "<div class=row><span style='flex:1'>alpha</span><i class=icon></i>\
+             <i class=icon>@</i></div>",
+        );
+        assert!(
+            (two - want - 24.0).abs() < 0.01,
+            "every fixed item counts, not just the last: expected {}, got {two}",
+            want + 24.0
         );
     }
 

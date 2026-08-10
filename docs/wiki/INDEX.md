@@ -1894,6 +1894,7 @@
   - L3174 · What it is worth, stated exactly
   - L3193 · Two more gate rows were written and deleted
   - L3201 · A flex child FILLS the 1e6 measuring width, and the slack heuristic then throws away its items (t1115)
+  - L3239 · The fix: a filled flex box answers for itself (t1116)
 
 ## The wasm demo — running the engine inside someone else's browser
 `docs/wiki/wasm-demo.md`
@@ -1921,4 +1922,4 @@
   - L124 · Rank mechanisms by FLIP RATE, not failing-subtest count — CSS layout is a multi-assertion slog
 
 ---
-1828 sections across 22 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+1829 sections across 22 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
