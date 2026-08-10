@@ -11,12 +11,12 @@
 
 | | value | over |
 |---|---|---|
-| ticks landed | **807** | ticks 1–1099 |
-| median tick cycle | **27m** | 806 intervals |
-| median, last 10 | **26m** | 10 intervals |
+| ticks landed | **808** | ticks 1–1100 |
+| median tick cycle | **27m** | 807 intervals |
+| median, last 10 | **23m** | 10 intervals |
 | fastest / slowest | 5s / 5.4d | |
-| **ticks per hour** | **1.12** | 719.8h elapsed |
-| median verify wall | **63s** | 746 ticks |
+| **ticks per hour** | **1.12** | 720.1h elapsed |
+| median verify wall | **63s** | 747 ticks |
 | wall trend | 39s → 13m — getting slower ⚠️ | first 3 vs last 3 |
 
 The **cycle** is the real unit: implement → debug → verify wall → land. The wall is only part of
@@ -31,7 +31,7 @@ it, and a wall that grows taxes every future tick, so it is tracked separately f
 * **✅ rows in the capability ledger**: 144 → **553**
 * **Bar 0 — oracle hangs**: 0 of 265 sites
 
-**353 of 807 ticks** (44%) moved a
+**354 of 808 ticks** (44%) moved a
 user-visible capability. The rest were instruments, infrastructure and corrections — and the
 ledger says the corrections were not overhead: three of its top three priorities were phantoms,
 and finding that out redirected everything after it.
@@ -90,7 +90,7 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 
 ## What a capability costs
 
-* **353** capability ticks, median cycle **27m**
+* **354** capability ticks, median cycle **27m**
 * median diff per tick: **+262 / −34** lines across 8 files
 
 ## Every tick
@@ -904,5 +904,6 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 | **1097** | 2026-08-10 02:17 | 10m | measurement | 13m | +227/−125 | 434 | 81 | 56.0% · | I3 was BENT, and the check that asked found it against this window's own ticks (2026-08-10 |
 | **1098** | 2026-08-10 02:53 | 36m | capability | 13m | +598/−156 | 435 | 81 | 56.0% · | I3 discharged, and the AX tree immediately caught a bug the pixel probe could not (2026-08 |
 | **1099** | 2026-08-10 04:49 | 1.9h | measurement | 13m | +377/−3 | 435 | 81 | 56.0% · | +825 suite tests moved the M1 gate by ZERO, for the fourth sweep running (2026-08-10) |
+| **1100** | 2026-08-10 05:11 | 22m | capability | 13m | +126/−12 | 435 | 81 | 56.0% · | a leading `/` is the SERVER root, and 14 references were looked for under `/` (2026-08-10) |
 
 *`·` after a WPT figure means **carried forward**, not measured this tick.*

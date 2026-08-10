@@ -648,12 +648,12 @@
   - L3416 · The guard that was tolerant in exactly one direction
   - L3431 · A BLIND INSTRUMENT MIS-RANKS THE WORK-LIST, NOT JUST THE SCORE (t1091)
   - L3457 · ⚠⚠⚠ A REASON STRING IS A PROPERTY OF THE READER — grouping by it groups CAUSES together
-  - L3488 · AHEM IS THE SUITE'S RULER — 1,090 CSS 2.1 reftests (17.4%) measure with a font that was not installed (t1090)
-  - L3510 · ⚠⚠⚠ It is NOT a missing external-stylesheet fetch, and counting the construct said it was
-  - L3524 · ⚠⚠ A net-zero directory is not evidence of anything — diff the STATE, not the count
-  - L3533 · The 4 losses were each an accidental pass, and each named a real defect
-  - L3543 · A REFERENCE IS A DOCUMENT — 1,230 CSS 2.1 reftests were unpassable by construction (t1088)
-  - L3607 · The struct field that broke this crate's tests for the SECOND time
+  - L3496 · AHEM IS THE SUITE'S RULER — 1,090 CSS 2.1 reftests (17.4%) measure with a font that was not installed (t1090)
+  - L3518 · ⚠⚠⚠ It is NOT a missing external-stylesheet fetch, and counting the construct said it was
+  - L3532 · ⚠⚠ A net-zero directory is not evidence of anything — diff the STATE, not the count
+  - L3541 · The 4 losses were each an accidental pass, and each named a real defect
+  - L3551 · A REFERENCE IS A DOCUMENT — 1,230 CSS 2.1 reftests were unpassable by construction (t1088)
+  - L3615 · The struct field that broke this crate's tests for the SECOND time
 
 ## CSS AND THE CASCADE — Stylo realities and quirks actually encountered
 `docs/wiki/css-cascade.md`

@@ -3485,6 +3485,14 @@ skips. Neither is a defect in the engine or the runner.
 > **One `[ -f ]` per row, before the row becomes a plan.** A uniform reason string is evidence that
 > one *reader* took one branch — never that one *cause* was present.
 
+**LANDED at t1100 — the 14, and only the 14.** WPT serves its corpus over HTTP, so a leading `/` is
+the *server* root; on disk that is the checkout root, and `Path::join` with an absolute argument
+discards the base. `css/CSS2` **3,854 → 3,858** and `reference unreadable` **254 → 240**. Four of the
+fourteen pass and ten now fail for real reasons — the honest shape of an instrument fix, and why the
+headline is +4 rather than +14. The gate asserts the `..` form is **left alone**, because that was
+the half accused at t1091 and found innocent: rewriting a path that was already right is how a fix
+for one cause breaks the other.
+
 ## AHEM IS THE SUITE'S RULER — 1,090 CSS 2.1 reftests (17.4%) measure with a font that was not installed (t1090)
 
 A CSS 2.1 test does not compare two renderings of prose. It lays text out in **Ahem** — a face whose

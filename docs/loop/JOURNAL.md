@@ -46371,6 +46371,44 @@ PERF: none — one UA rule and one narrowed branch in a cascade that already ran
 WIKI: `docs/wiki/css-cascade.md` — where Chrome draws the form-control `box-sizing` line, and why a
 layout-crate test cannot see it.
 
+## Tick 1100 — a leading `/` is the SERVER root, and 14 references were looked for under `/` (2026-08-10)
+
+TICK SHAPE: capability — the small certain half of t1091's 254-skip partition, taken deliberately
+instead of the audit's #1 (teaching the probe pseudo-elements), which alters the headline metric and
+should not be built at the tail of a long window by the same agent whose four fixes it would make
+scoreable.
+
+WPT serves its corpus over HTTP, so `<link rel="match" href="/css/CSS2/x.xht">` means the **server**
+root — on disk, the checkout root. `Path::join` with an absolute argument **discards the base
+entirely**, so those references resolved to `/css/CSS2/x.xht` at the FILESYSTEM root, did not exist,
+and the tests were skipped as *"reference unreadable"* with their reference sitting in the checkout.
+
+```text
+   css/CSS2                 3,854 → 3,858     +4 gained, 0 lost   (lists +3, fonts +1)
+   "reference unreadable"     254 →   240     the 14, exactly
+```
+
+**Four of the fourteen pass; ten now fail for real reasons.** That is the honest shape of an
+instrument fix and the reason the headline is +4 rather than +14.
+
+⚠⚠ **THE RELATIVE CASE IS THE OTHER HALF AND IT MUST NOT CHANGE — it was ACCUSED at t1091 and is
+innocent.** `../../reference/x.xht` resolves fine: `Path::join` handles `..` lexically and the OS
+resolves it. The remaining **239** skips are a genuinely absent `wpt/css/reference/` — this checkout
+is partial, as `wpt/fonts/` was at t1090. An implementation that "fixed both" would rewrite a path
+that was already correct, so the gate asserts the `..` form is left alone.
+
+RATCHET: 0 regressions across the suite; `cargo test -p manuk-wpt` 101/101.
+
+GATE: **G_REFTEST_ROOT_ABSOLUTE_REF** — three rows: root-absolute resolves against the checkout, an
+ordinary sibling is untouched, and `..` is left alone. RED-proven by deleting the `strip_prefix('/')`
+arm: `css/CSS2/lists` goes `79 passed / 8 failed / 206 skipped` back to `76 / 6 / 211` — five tests
+fall out of measurement entirely, which is the shape the defect had.
+
+PERF: none — one `strip_prefix` per reftest.
+
+WIKI: `docs/wiki/conformance-and-oracles.md` — the t1091 entry now carries the landing and names
+which half was real. [no-pattern]
+
 ## Tick 1099 — +825 suite tests moved the M1 gate by ZERO, for the fourth sweep running (2026-08-10)
 
 TICK SHAPE: measurement — check #102 steer #1, and the third consecutive check to ask for it. A

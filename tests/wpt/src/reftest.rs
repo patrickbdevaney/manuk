@@ -125,7 +125,7 @@ pub fn run_reftests(wpt_dir: &Path, subdir: &str, fonts: &FontContext) -> Report
             .unwrap_or(&path)
             .to_string_lossy()
             .into_owned();
-        match run_one(&path, fonts, &rt) {
+        match run_one(&path, fonts, &rt, wpt_dir) {
             RefOutcome::Pass => report.push(&name, Ok(())),
             RefOutcome::Fail(why) => report.push(&name, Err::<(), String>(why)),
             RefOutcome::Skip(why) => report.skip(&name, &why),
@@ -140,7 +140,12 @@ enum RefOutcome {
     Skip(String),
 }
 
-fn run_one(test: &Path, fonts: &FontContext, rt: &tokio::runtime::Runtime) -> RefOutcome {
+fn run_one(
+    test: &Path,
+    fonts: &FontContext,
+    rt: &tokio::runtime::Runtime,
+    wpt_root: &Path,
+) -> RefOutcome {
     let Ok(content) = std::fs::read_to_string(test) else {
         return RefOutcome::Skip("unreadable".into());
     };
@@ -151,7 +156,7 @@ fn run_one(test: &Path, fonts: &FontContext, rt: &tokio::runtime::Runtime) -> Re
     let Some((kind, href)) = find_ref_link(&content) else {
         return RefOutcome::Skip("not a reftest (no rel=match/mismatch)".into());
     };
-    let Some(ref_path) = resolve_sibling(test, &href) else {
+    let Some(ref_path) = resolve_sibling(test, &href, wpt_root) else {
         return RefOutcome::Skip("reference path unresolved".into());
     };
     let Ok(ref_content) = std::fs::read_to_string(&ref_path) else {
@@ -251,13 +256,32 @@ fn find_ref_link(html: &str) -> Option<(RefKind, String)> {
     None
 }
 
-fn resolve_sibling(test: &Path, href: &str) -> Option<PathBuf> {
+/// Resolve a `rel=match` href to a path on disk.
+///
+/// ⚠⚠⚠ **A SERVER-ROOT-ABSOLUTE HREF IS NOT A SIBLING, AND `Path::join` SILENTLY AGREED.**
+/// `dir.join("/css/CSS2/x.xht")` **discards the base entirely** and yields `/css/CSS2/x.xht` at the
+/// FILESYSTEM root, which does not exist — so 14 reftests were skipped as *"reference unreadable"*
+/// while their reference sat in the checkout. WPT serves its corpus over HTTP, where a leading `/`
+/// means the *server* root; on disk that is the WPT checkout root, which is why this needs
+/// `wpt_root` and could not be fixed inside a function that only knew the test's directory.
+///
+/// ⚠⚠ **THE NUMBER IS 14, NOT 254, AND THE DIFFERENCE IS THE WHOLE LESSON OF t1091.** All 254
+/// skips share the reason string `reference unreadable`, which reads like one bug; **239 of them
+/// are a genuinely absent `wpt/css/reference/`** (this checkout is partial — `wpt/fonts/` is
+/// missing too) and only these 14 are ours. A reason string is a property of the READER, and
+/// grouping by it groups causes together; the check is one `[ -f ]` per row.
+fn resolve_sibling(test: &Path, href: &str, wpt_root: &Path) -> Option<PathBuf> {
     if href.contains("://") {
         return None; // absolute/external reference — out of scope for now
     }
     let dir = test.parent()?;
     // Strip any query/fragment; join relative.
     let clean = href.split(['?', '#']).next().unwrap_or(href);
+    if let Some(rooted) = clean.strip_prefix('/') {
+        // `..` inside the corpus is fine — `Path::join` handles it lexically and the OS resolves it;
+        // what is NOT fine is letting a leading `/` escape to the filesystem root.
+        return Some(wpt_root.join(rooted));
+    }
     Some(dir.join(clean))
 }
 
@@ -364,6 +388,50 @@ mod tests {
             at(10, 30),
             (0, 0, 255),
             "…and an `<img>`, which is how 1,230 CSS 2.1 references draw their expected result"
+        );
+    }
+
+    /// # G_REFTEST_ROOT_ABSOLUTE_REF — a leading `/` is the SERVER root, not the filesystem root
+    ///
+    /// WPT serves its corpus over HTTP, so `<link rel="match" href="/css/CSS2/x.xht">` means the
+    /// *server* root — on disk, the checkout root. `Path::join` with an absolute argument
+    /// **discards the base entirely**, so those references resolved to `/css/CSS2/x.xht` at the
+    /// filesystem root, did not exist, and 14 reftests were skipped as *"reference unreadable"*
+    /// while their reference sat in the checkout. `css/CSS2` 3,854 → 3,858, and
+    /// `reference unreadable` 254 → 240.
+    ///
+    /// ⚠⚠ **THE RELATIVE CASE IS THE OTHER HALF AND IT MUST NOT CHANGE.** `../../reference/x.xht`
+    /// was ACCUSED of this bug at t1091 and is innocent: `Path::join` handles `..` lexically and
+    /// the OS resolves it. Those 239 skips are a genuinely absent `wpt/css/reference/` — this
+    /// checkout is partial. An implementation that "fixed" both would rewrite a path that was
+    /// already right.
+    ///
+    /// To watch it go RED: delete the `strip_prefix('/')` arm — `css/CSS2/lists` goes
+    /// `79 passed / 8 failed / 206 skipped` back to `76 / 6 / 211`.
+    #[test]
+    fn a_root_absolute_reference_resolves_against_the_wpt_root() {
+        let root = Path::new("/wpt");
+        let test = Path::new("/wpt/css/CSS2/abspos/t.xht");
+        assert_eq!(
+            resolve_sibling(test, "/css/CSS2/reference/ref.xht", root),
+            Some(PathBuf::from("/wpt/css/CSS2/reference/ref.xht")),
+            "a leading `/` is the SERVER root — WPT serves the corpus over HTTP — so it resolves \
+             against the checkout, not against `/`. `Path::join` discards the base for an absolute \
+             argument, which is how 14 reftests were skipped with their reference on disk."
+        );
+        assert_eq!(
+            resolve_sibling(test, "sib-ref.xht", root),
+            Some(PathBuf::from("/wpt/css/CSS2/abspos/sib-ref.xht")),
+            "…and the ordinary sibling case is untouched"
+        );
+        assert_eq!(
+            resolve_sibling(test, "../../reference/ref.xht", root),
+            Some(PathBuf::from(
+                "/wpt/css/CSS2/abspos/../../reference/ref.xht"
+            )),
+            "…and `..` is left alone: it was ACCUSED of this bug at t1091 and is innocent — \
+             `Path::join` handles it lexically and the OS resolves it. Those 239 skips are an \
+             absent `wpt/css/reference/`, i.e. a partial checkout, not a path bug."
         );
     }
 
