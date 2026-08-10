@@ -5,6 +5,52 @@ Manuk's flex and grid layout runs on a vendored **taffy 0.12** tree (`engine/lay
 lays out the flex/grid containers and their directly-nested flex/grid descendants. The mapping from
 Manuk's `ComputedStyle` to `taffy::Style` (`to_taffy_style`) is where the realities below live.
 
+## A GENERATED BOX HAS ITS OWN `display` (CSS 2.1 §12.1) — and the cascade conflating `table` with `inline-table` capped the fix (t1092)
+
+`collect_inline_group` materialises `::before` / `::after` as inline `Word`s. It never read the
+pseudo's own `display`, so **every block-level value was ignored** and a `display:block` generated
+box stayed on its owner's line. The CSS 2.1 suite states the rule in its own assert — *"generated
+content can have their own display value explicitly set, in which case they behave as if they were
+real elements inserted just inside their associated element"* — and then partitions the defect for
+you across 13 variants per side:
+
+```text
+   before/after-content-display-001 (inline), -005 (inline-block), -007, -018      PASSED
+   -002 (block) · -003 (list-item) · -006 (table) · -008..-017                     ALL 26 FAILED
+```
+
+Chrome-exact, product path, `#blk::before { content:"Filler text "; display:block }` at 16px/20px:
+Chrome gives the owner **1200×40** and we gave **1200×20** — a whole line short, everything below it
+20px out. Fixed by emitting the existing `InlineItem::Break` (the `<br>` / `pre` primitive) after a
+block-level `::before` and before a block-level `::after`. `generated-content` **45 → 61, +16 and 0
+lost**, with the other 40 CSS2 directories byte-identical.
+
+**§12.1's restriction is what keeps this ONE rule instead of thirteen.** For a pseudo, the table
+values are not table boxes — they compute to `block`. So the only question the layout crate has to
+answer is *"is the generated box block-level?"*, and `table-row-group`, `table-caption` and the rest
+ride in without any table machinery. `display: list-item` needs no arm either: the cascade already
+maps it to `Display::Block`.
+
+### ⚠⚠⚠ The first version scored +18 and was REFUSED — two of the 18 were paid for with two regressions
+
+Including `Display::Table` made `-006` (`table`) pass **and `-007` (`inline-table`) fail**, both
+sides. §12.1 sends those two values to opposite sides — `table` blockifies, `inline-table` stays on
+the line — and `engine/css` maps `"table" | "inline-table"` onto a **single** `Display::Table`, so
+nothing in the layout crate can tell them apart. The value was dropped: `-006` stays failing and the
+honest score is **+16 with zero losses** rather than +18 with two.
+
+> **The net was 61 either way. That is precisely why a net is not a verdict** — only the per-test
+> state diff distinguishes "+16, nothing lost" from "+18, two traded away".
+
+The real fix is one level up: give the cascade a distinct `InlineTable`. It is recorded at
+`generated_box_is_block_level` rather than only here, because from inside that function the omission
+looks like an oversight — a later reader would "complete the list" and silently re-break `-007`.
+
+⚠ `table-column` / `table-column-group` are excluded too, for a different reason: their tests
+(`-012`, `-013`) match the **same reference as `display:none`** (`-016`), because a column box
+generates no content box at all. All three still fail, and that is a separate defect — we render the
+content of a `display:none` pseudo.
+
 ## A mixed `calc()` must NOT collapse to one term — taffy has calc plumbing; wire it (tick 139)
 
 `Dim::Calc { px, pct }` is Manuk's reduced linear form of a `calc()`: the used length is

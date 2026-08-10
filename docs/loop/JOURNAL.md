@@ -46371,6 +46371,90 @@ PERF: none — one UA rule and one narrowed branch in a cascade that already ran
 WIKI: `docs/wiki/css-cascade.md` — where Chrome draws the form-control `box-sizing` line, and why a
 layout-crate test cannot see it.
 
+## Tick 1092 — a generated box with a BLOCK display stayed on the line, and the idiom that made me look already worked (2026-08-10)
+
+TICK SHAPE: capability — the top of t1091's fresh ranking, `generated-content` (23.7% pass, 145
+failures, the largest mechanism cluster in the CSS 2.1 tail at 10.7%).
+
+THE PARTITION THAT LOCATES IT — the runner's own pass/fail split across the 13 `display` variants
+each side, which says the defect exactly:
+
+```text
+   before/after-content-display-001 (inline), -005, -007, -018      PASS
+   -002 (block) · -003 (list-item) · -006 (table) · -008..-017      FAIL, all 26
+```
+
+`display: inline` on generated content works and **every block-level value is ignored** — and all of
+them match the SAME reference as `-002`, because CSS 2.1 §12.1 blockifies the table values for a
+pseudo. One mechanism, 26 tests. `collect_inline_group` materialises `::before`/`::after` as inline
+`Word`s and nothing consults the pseudo's own `display`.
+
+CHROME-EXACT, in the product path (`boxes --html`, Stylo cascade — not a layout-crate fixture):
+
+```text
+   #blk { }  #blk::before { content:"Filler text "; display:block }   at 16px/20px monospace
+                          Chrome            manuk
+      #blk                1200 x 40        1200 x 20     ← a whole line short
+      the box below it    y = 60           y = 40
+```
+
+⚠⚠⚠ **AND THE IDIOM THAT SENT ME HERE ALREADY WORKS — SAID FIRST, BECAUSE IT IS THE HALF THAT WOULD
+HAVE INFLATED THE CLAIM.** The lever was picked on the clearfix idiom,
+`.cf::after{content:"";display:block;clear:both}`, priced at **51 of 170 corpus pages (30%)**.
+Probed before building: `#nocf` is height 0 (correct — a block container does not contain its
+floats) and `#cf` is height **80, already right**. Clearfix is not broken. The corpus-weighted claim
+for this tick is therefore the **non-empty** generated block, not the clearfix third of it.
+
+⚠⚠ **AND THE PRICING ITSELF MIS-READ ONCE, BY 5×, ON A JOIN KEY.** The first site-level pass said
+*21 of 170 pages (12%)* and would have retired the lever as tail. The page→stylesheet join hashed
+the URL two ways — the fetch loop used `echo "$u" | md5sum`, which appends a **newline**, and the
+analysis hashed the bare string — so 363 of 384 stylesheets silently failed to join and the
+construct was looked for in the HTML alone. Corrected: **116 of 170 pages (68%)** declare a
+generated box with a block-level display, 1,885 occurrences across 133 of 373 stylesheets. *A join
+key computed two ways is two keys, and the failure mode is a QUIET undercount that reads as a
+negative result.*
+
+THE FIX reads the pseudo's own `display` and emits an `InlineItem::Break` — the forced-break
+primitive `<br>` and `pre` already use — after a block-level `::before` and before a block-level
+`::after`. §12.1's restriction is what keeps it ONE rule instead of thirteen: for a pseudo, the
+table values are not table boxes, they compute to `block`, so the only question is *"is the
+generated box block-level?"*.
+
+RESULT — all 41 directories, per-TEST state diff against the t1090 binary:
+
+```text
+   generated-content   45 → 61     +16 GAINED, 0 LOST
+   every other directory                BYTE-IDENTICAL
+   TOTAL             3,790 → 3,806
+```
+
+Chrome-exact after, on the same product-path probe: owner `1200×40`, the box below at `y=60`, both
+matching Chrome exactly, and the clearfix control still `80` unchanged.
+
+⚠⚠⚠ **THE FIRST VERSION SCORED +18 AND WAS REFUSED, BECAUSE TWO OF THE 18 WERE PAID FOR WITH TWO
+REGRESSIONS.** Including `Display::Table` made `-006` (`display:table`) pass **and `-007`
+(`display:inline-table`) fail**, both sides: §12.1 sends those two values to opposite sides, and
+`engine/css` maps `"table" | "inline-table"` onto **one** `Display::Table`, so nothing in the layout
+crate can tell them apart. The ratchet is absolute, so the value was dropped, `-006` stays failing,
+and the honest score is **+16 with zero losses** rather than +18 with two. *The net was identical
+either way — 61 both times — which is exactly why a net is not a verdict.* The real fix is one level
+up (a distinct `InlineTable` in the cascade) and is recorded at the function, because the loss is
+invisible from there and a later reader would "fix the omission" and silently re-break `-007`.
+
+RATCHET: 0 regressions across 5,633 reftests; `manuk-layout` 152/152, `manuk-css` 34/34.
+
+GATE: **G_GENERATED_BOX_DISPLAY** in `manuk-layout` (which the wall's crate-test stage already
+runs), two arms: a `display:block` `::before` makes its owner two line boxes tall, and — the
+negative arm — a `display:inline` one still shares the line. RED-proven BOTH WAYS: forcing
+`generated_box_is_block_level` to `false` fails the first, to `true` fails the second. A fix that
+simply broke every pseudo onto its own line would satisfy the positive row and destroy the
+commonest use of the feature.
+
+PERF: none — one enum match per pseudo, on a path that already builds the pseudo's text style.
+
+WIKI: `docs/wiki/layout-and-boxes.md` — "A GENERATED BOX HAS ITS OWN `display` (CSS 2.1 §12.1) —
+and the cascade conflating `table` with `inline-table` capped the fix (t1092)"
+
 ## Tick 1091 — the re-rank on a runner that can finally see, and what the CSS 2.1 tail is MADE OF (2026-08-10)
 
 TICK SHAPE: measurement — check #101 steer #2, *"re-rank CSS 2.1 by pass rate on the FIXED runner,

@@ -1964,6 +1964,64 @@ fn is_out_of_flow_positioned(s: &ComputedStyle) -> bool {
     matches!(s.position, Position::Absolute | Position::Fixed)
 }
 
+/// ⚠⚠⚠ **CSS 2.1 §12.1 — A GENERATED BOX HAS ITS OWN `display`, AND EVERY BLOCK-LEVEL VALUE
+/// BLOCKIFIES.** *"Generated content can have their own display value explicitly set, in which case
+/// they behave as if they were real elements inserted just inside their associated element"* — the
+/// suite's own assert text, and it was not honoured at all: `collect_inline_group` materialised
+/// `::before`/`::after` as inline `Word`s and never read the pseudo's `display`.
+///
+/// The suite says exactly which values, because it tests all thirteen per side and **twelve of them
+/// share ONE reference** with `display:block`:
+///
+/// ```text
+///   before/after-content-display-001 (inline), -005, -007, -018        already passed
+///   -002 (block) · -003 (list-item) · -006 (table) · -008..-017        all 26 failed
+/// ```
+///
+/// §12.1's restriction is what makes that one rule rather than twelve: for a `::before`/`::after`,
+/// the table values are **not** table boxes — they compute to `block`. So the question this answers
+/// is only *"is the generated box block-level?"*, and the answer covers `table-row-group`,
+/// `table-caption` and the rest without any table machinery.
+///
+/// Measured against Chrome on `#blk::before { content:"Filler text "; display:block }` at
+/// 16px/20px: Chrome gives the owner **1200×40** and we gave **1200×20** — a whole line short, with
+/// everything below it 20px high.
+///
+/// ⚠ **`inline-block` is deliberately NOT here, and its test already passed.** An inline-block
+/// generated box stays *on* the line; it is atomic, not block-level, and `-005` passes today.
+/// Adding it would break a passing test to satisfy a pattern.
+///
+/// ⚠⚠⚠ **`table` IS ABSENT, AND IT COST THIS FIX TWO OF ITS OWN GAINS — because the CASCADE
+/// CONFLATES IT WITH `inline-table`.** `engine/css` maps `"table" | "inline-table"` to the single
+/// `Display::Table`, and §12.1 sends the two to opposite sides: `table` blockifies, `inline-table`
+/// stays on the line. Including `Display::Table` here made `-006` (table) pass **and `-007`
+/// (inline-table) fail**, both sides, and a regression is never traded for a capability. So the
+/// value is excluded, `-006` stays failing, and the real fix is one level up: **give the cascade a
+/// distinct `InlineTable`.** Named here because the loss is invisible from this function — nothing
+/// in this file can tell the two apart, and a later reader would "fix the omission" and silently
+/// re-break `-007`.
+///
+/// ⚠ `table-column` / `table-column-group` are also absent. Their tests (`-012`, `-013`) match the
+/// SAME reference as `display: none` (`-016`) — a column box generates no content box at all — so
+/// blockifying them would be affirmatively wrong. All three still fail, for that separate reason.
+fn generated_box_is_block_level(p: &ComputedStyle) -> bool {
+    matches!(
+        p.display,
+        Display::Block
+            | Display::FlowRoot
+            | Display::Flex
+            | Display::Grid
+            | Display::TableRowGroup
+            | Display::TableHeaderGroup
+            | Display::TableFooterGroup
+            | Display::TableRow
+            | Display::TableCell
+            | Display::TableCaption
+    )
+    // `display: list-item` needs no arm: the cascade already maps it to `Display::Block`
+    // (`engine/css`), which is why `-003` rides in on the same rule.
+}
+
 /// Does this element establish a new block formatting context (CSS2 §9.4.1)? Such a
 /// box does not share its parent's float context — its own floats stay inside and it
 /// does not overlap outer floats, and it grows to contain its floats (§10.6.7).
@@ -8451,7 +8509,7 @@ impl Ctx<'_> {
         // block, which is a different tick — this one removes it from the flow and puts it at the
         // right x, which is the whole of the observable effect for the idiom that is everywhere.
         let pseudo = |which: fn(&ComputedStyle) -> &Option<Box<ComputedStyle>>|
-         -> Option<(String, TextStyle, Option<f32>)> {
+         -> Option<(String, TextStyle, Option<f32>, bool)> {
             let s = owner.and_then(|n| self.styles.get(&n))?;
             let p = which(s).as_ref()?;
             let text = p.content.clone()?;
@@ -8469,9 +8527,15 @@ impl Ctx<'_> {
                     0.0
                 }
             });
-            Some((text, text_style(p, self.fonts), dx))
+            Some((
+                text,
+                text_style(p, self.fonts),
+                dx,
+                generated_box_is_block_level(p),
+            ))
         };
-        if let Some((text, style, dx)) = pseudo(|s| &s.before) {
+        if let Some((text, style, dx, block_level)) = pseudo(|s| &s.before) {
+            let lh = style.line_height;
             out.push(match dx {
                 Some(dx) => InlineItem::AbsPseudo { text, style, dx },
                 None => InlineItem::Word {
@@ -8483,18 +8547,34 @@ impl Ctx<'_> {
                     break_word: false,
                 },
             });
+            // A block-level `::before` is a BLOCK BOX, so the owner's own content starts on the
+            // next line. See `generated_box_is_block_level`.
+            if block_level && dx.is_none() {
+                out.push(InlineItem::Break {
+                    height: lh,
+                    node: owner,
+                });
+            }
             first = false;
         }
         for &n in nodes {
             self.collect_inline_node(n, &mut out, &mut pending_space, &mut first, None, cw);
         }
-        if let Some((text, style, dx)) = pseudo(|s| &s.after) {
+        if let Some((text, style, dx, block_level)) = pseudo(|s| &s.after) {
+            // …and a block-level `::after` starts on a line of its own, below the owner's content.
+            // Emitted BEFORE the word, because a `Break` terminates the line it is reached on.
+            if block_level && dx.is_none() && !first {
+                out.push(InlineItem::Break {
+                    height: style.line_height,
+                    node: owner,
+                });
+            }
             out.push(match dx {
                 Some(dx) => InlineItem::AbsPseudo { text, style, dx },
                 None => InlineItem::Word {
                     text,
                     style,
-                    space_before: pending_space.is_some() && !first,
+                    space_before: !block_level && pending_space.is_some() && !first,
                     node: owner,
                     no_wrap: true,
                     break_word: false,
@@ -11228,6 +11308,63 @@ mod tests {
         let fonts = FontContext::new();
         let root = layout_document(&dom, &styles, &fonts, width);
         (dom, root)
+    }
+
+    /// # G_GENERATED_BOX_DISPLAY — CSS 2.1 §12.1: a generated box has its own `display`
+    ///
+    /// *"Generated content can have their own display value explicitly set, in which case they
+    /// behave as if they were real elements inserted just inside their associated element"* — the
+    /// suite's own assert, and it was ignored entirely: `collect_inline_group` materialised
+    /// `::before`/`::after` as inline `Word`s and never read the pseudo's `display`, so a
+    /// `display:block` generated box stayed on its owner's line.
+    ///
+    /// Chrome-exact, measured in the PRODUCT path (`boxes --html`, Stylo cascade — not this
+    /// harness) on `#blk::before {{ content:"Filler text "; display:block }}` at 16px/20px:
+    ///
+    /// ```text
+    ///                        Chrome        before        after
+    ///   the owner          1200 x 40     1200 x 20     1200 x 40
+    ///   the box below it     y = 60        y = 40        y = 60
+    /// ```
+    ///
+    /// **`css/CSS2/generated-content` 45 -> 61 on the full suite, +16 and 0 lost**, with the other
+    /// 40 directories byte-identical.
+    ///
+    /// ⚠⚠ **THE NEGATIVE ROW IS THE ONE THAT MAKES THIS A RULE ABOUT `display`.** An `inline`
+    /// pseudo must still share the owner's line — that case already worked, and a fix that simply
+    /// broke every pseudo onto its own line would satisfy the positive row and destroy the
+    /// commonest use of the feature (icons, bullets, quotes). Both arms, or neither.
+    ///
+    /// To watch it go RED: make `generated_box_is_block_level` return `false` (the first row fails)
+    /// or `true` (the second).
+    #[test]
+    fn a_generated_box_with_a_block_display_is_a_block_box() {
+        let owner_height = |disp: &str| -> f32 {
+            let css = format!("#o::before {{ content: \"Filler text \"; display: {disp} }}");
+            let html = r#"<div id="o" style="font-size:16px;line-height:20px">Filler text</div>"#;
+            let (dom, root) = layout_html(html, &css, 800.0);
+            let rects = root.node_rects(&dom);
+            let o = dom
+                .descendants(dom.root())
+                .find(|&n| dom.element(n).and_then(|e| e.attr("id")) == Some("o"))
+                .expect("#o");
+            rects[&o].height
+        };
+        assert_eq!(
+            owner_height("block"),
+            40.0,
+            "§12.1: a `display:block` ::before is a BLOCK box, so the owner's own text starts on \
+             the next line and the owner is TWO line boxes tall. 20px means the generated content \
+             was materialised as an inline word and its `display` was never read — which is what \
+             failed all 26 of the suite's before/after-content-display block-level variants."
+        );
+        assert_eq!(
+            owner_height("inline"),
+            20.0,
+            "…and the NEGATIVE arm: an `inline` ::before shares the owner's line, which is the \
+             commonest use of the feature (icons, bullets, quotes). A fix that broke every pseudo \
+             onto its own line would pass the row above and destroy this one."
+        );
     }
 
     /// **G_RELATIVE_POSITION — CSS 2.1 §9.4.3, `position: relative`'s visual offset.**
