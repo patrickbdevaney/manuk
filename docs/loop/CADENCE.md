@@ -11,12 +11,12 @@
 
 | | value | over |
 |---|---|---|
-| ticks landed | **815** | ticks 1–1107 |
-| median tick cycle | **27m** | 814 intervals |
-| median, last 10 | **40m** | 10 intervals |
+| ticks landed | **816** | ticks 1–1108 |
+| median tick cycle | **27m** | 815 intervals |
+| median, last 10 | **42m** | 10 intervals |
 | fastest / slowest | 5s / 5.4d | |
-| **ticks per hour** | **1.12** | 724.7h elapsed |
-| median verify wall | **63s** | 754 ticks |
+| **ticks per hour** | **1.12** | 725.9h elapsed |
+| median verify wall | **63s** | 755 ticks |
 | wall trend | 39s → 13m — getting slower ⚠️ | first 3 vs last 3 |
 
 The **cycle** is the real unit: implement → debug → verify wall → land. The wall is only part of
@@ -31,7 +31,7 @@ it, and a wall that grows taxes every future tick, so it is tracked separately f
 * **✅ rows in the capability ledger**: 144 → **555**
 * **Bar 0 — oracle hangs**: 0 of 265 sites
 
-**357 of 815 ticks** (44%) moved a
+**358 of 816 ticks** (44%) moved a
 user-visible capability. The rest were instruments, infrastructure and corrections — and the
 ledger says the corrections were not overhead: three of its top three priorities were phantoms,
 and finding that out redirected everything after it.
@@ -90,7 +90,7 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 
 ## What a capability costs
 
-* **357** capability ticks, median cycle **27m**
+* **358** capability ticks, median cycle **27m**
 * median diff per tick: **+262 / −34** lines across 8 files
 
 ## Every tick
@@ -912,5 +912,6 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 | **1105** | 2026-08-10 08:27 | 39m | measurement | 13m | +237/−34 | 437 | 81 | 56.0% · | the wikipedia blow-up is a MISSING BREAK OPPORTUNITY, and the fix is REFUSED (2026-08-10) |
 | **1106** | 2026-08-10 08:58 | 31m | measurement | 13m | +139/−33 | 437 | 81 | 56.0% · | the 36 containers are NOT the break rule, and three fixtures say so (2026-08-10) |
 | **1107** | 2026-08-10 09:47 | 49m | capability | 13m | +535/−124 | 437 | 81 | 56.0% · | the separator was not there, and half the corpus declares one (2026-08-10) |
+| **1108** | 2026-08-10 10:55 | 69m | capability | 13m | +646/−130 | 437 | 81 | 56.0% · | a break opportunity is a property of the GAP, and the breaker could not go back to one (20 |
 
 *`·` after a WPT figure means **carried forward**, not measured this tick.*

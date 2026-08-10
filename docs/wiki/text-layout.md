@@ -2864,3 +2864,109 @@ inline `<li>` in a nested navbox — the t1105 container, now carrying the separ
 missing, on a line the sibling-`nowrap` rule still refuses to break. No certificate term regresses
 and one improves (dead-target clean 3/4 → 4/4); every counter that rises was already unclean on that
 site. The residue is row 6's rule and t1105's, which are the same rule.
+
+## A soft wrap opportunity is a property of the GAP — and the breaker had to be able to go back to one (t1108)
+
+The placement loop decided breakability from the items *flanking* a position:
+
+```rust
+let breakable = !(no_wrap && prev_no_wrap);   // "forbid a break when both sides are nowrap"
+```
+
+That never asks whether there is a space at the position at all, and it was wrong in **both**
+directions at once. Two ticks found the two halves separately — t1105 found we *refuse* a break where
+one exists, t1107's battery found we *take* a break where none does — and they are one rule with one
+missing term.
+
+### The battery: 20 rows, both engines, `16px/1 monospace`
+
+```text
+                                                             Chrome   before   after
+  A. IS THERE AN OPPORTUNITY AT ALL
+   a1  100px <span>alpha</span><span>bravo</span>… no ws     1 line   2        1  ✓
+   a2  CONTROL the same WITH source white space              3        3        3
+   a3  CONTROL one unbreakable token                         1        1        1
+   a4  100px alpha<span>bravo</span>delta          no ws     1        2        1  ✓
+  B. WHOSE `white-space` GOVERNS
+   b1  300px <span nowrap>a</span> <span nowrap>b</span> ×4  2        1        2  ✓
+   b2  CONTROL the container is itself nowrap                1        1        1
+   b3  CONTROL plain spans, spaces between                   2        2        2
+   b4  CONTROL a space INSIDE a nowrap span                  1        1        1
+   b5  CONTROL nowrap span, then ordinary text               2        2        2
+  C. ATOMIC INLINES — an opportunity with no space, and we already agreed
+   c1  adjacent inline-blocks, no ws                         2        2        2
+   c2  CONTROL the same with ws                              3        3        3
+   c3  adjacent <img>, no ws                                 2        2        2
+   c4  CONTROL the same with ws                              2        2        2
+  D. GENERATED CONTENT (t1107)
+   d1  100px inline <li> ::after{content:" | "}              4        4        4
+   d2  CONTROL ::after{content:"|"} — content, no space      1        4        1  ✓
+  E. THE OTHER OPPORTUNITIES — measured so the restriction cannot silently kill them
+   e1  hyphens                                               4        4        4
+   e2  CJK                                                   4        4        4
+   e3  soft hyphen U+00AD                                    3        2        2  ✗ (pre-existing)
+   e4  <wbr>                                                 2        2        2
+   e5  overflow-wrap:break-word                              2        2        2
+```
+
+19 of 20 exact. `e3` was already failing and is unrelated: we do not break at U+00AD at all.
+
+### Restricting the opportunities exposed a forward-only greedy breaker
+
+While *every* position was breakable, the first item that did not fit was itself a legal break, so a
+forward-only loop was exactly right. The moment `break_before` says *"there is no white space here"*,
+the item that overflows is routinely **not** a legal break and the line must be cut **behind** it.
+`css/CSS2` named this in seven tests, every one of which had been passing on that accident:
+
+```text
+  text/white-space-004 · -processing-013 · -052   `XX  XX` at pre-wrap in 5em — the opportunity is
+                                                  the preserved space run, the overflow arrives one
+                                                  token later
+  css1/c5502-imrgn-r-000 · c5504 · c5507 · c5509  `x <span style=margin-right:4em>x</span>x` — the
+                                                  only space is before the span and the overflow
+                                                  arrives at the final `x`, three items on
+```
+
+So the loop records `last_brk`, the index in the current line of the last legal cut, and on an
+overflow at a non-breakable item it splits the line there, closes the head and re-lays the tail on a
+fresh band. Every tail fragment moves by the same delta — the x of the first one — because nothing
+has been committed to them yet: `close_line` has not run, so there is no alignment, justification or
+atomic translation to undo.
+
+### Three details the restriction made load-bearing
+
+- **The opportunity is AFTER a preserved space run, not before it.** Putting it before cuts
+  `XX  XX` in a 5em box into `XX` / `  XX`, an 80px second line where Chrome gives 40.
+- **An inline element's edge spacer consumes the space's WIDTH and must not consume the
+  OPPORTUNITY** — the position moves in front of the element's first word, it does not vanish.
+  Clearing both cost the four `css1` inline margin/padding reftests.
+- **`<wbr>` had to start saying what it is.** A zero-width soft wrap opportunity worked by accident
+  while every position was one.
+
+### What it bought
+
+Old binary and new, same hour, four-site panel:
+
+```text
+                     coverage         shape            h_ovf   overlap  r-order  dead
+  en.wikipedia.org  .991402→.991404  .722899→.787572  394→0    63→95    76→79    0→0
+  news.ycombinator  1.000000 (same)  .772388→.797264    0→0     0→0      0→0     0→0
+  www.a11yproject   byte-identical on every column
+  doc.rust-lang.org byte-identical on every column
+
+  css/CSS2, per-TEST state diff       3890 → 3899      +9 GAINED, 0 LOST
+  manuk-layout                        156/156
+```
+
+**`shape ≥ 0.75` goes from 1 of 4 sites to 3 of 4** — wikipedia 0.7876 and news.ycombinator 0.7973
+both cross the certificate bar — and **wikipedia's entire horizontal overflow, 394 elements, is
+gone**. Together with t1107 the anchor's shape has moved 0.6609 → 0.7876 in two ticks.
+
+⚠ **The `overlap` rise is attributed, not shrugged at.** The sweep's own exemplar is two `<li>` of
+one navbox `<ul>` — the `.hlist` container this arc has been working. On a controlled wrapping hlist
+both engines put every item on the same line as each other; what differs is that each **line-end item
+is exactly one collapsible space too wide** (67 vs Chrome's 58 at 16px monospace), because generated
+content is one word with its spaces baked in. That is t1107's named row-3 residue, and it now has a
+corpus price on it: it re-groups items near a line edge, and `node_rects` reports a multi-line inline
+as a UNION rect, so a re-grouping reads as a sibling collision. **Collapsing a generated separator's
+outer spaces at a line edge is the next brick.**

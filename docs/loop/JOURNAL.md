@@ -46371,6 +46371,104 @@ PERF: none — one UA rule and one narrowed branch in a cascade that already ran
 WIKI: `docs/wiki/css-cascade.md` — where Chrome draws the form-control `box-sizing` line, and why a
 layout-crate test cannot see it.
 
+## Tick 1108 — a break opportunity is a property of the GAP, and the breaker could not go back to one (2026-08-10)
+
+TICK SHAPE: capability — t1107's named next brick, and it turned out to be t1105's refused fix as
+well. `layout_inline` decided breakability from the items FLANKING a position —
+`!(no_wrap && prev_no_wrap)` — which never asks whether there is a space there at all. **It was wrong
+in both directions at once**, and the two halves had been found by two separate ticks under two
+different subjects: t1105 found we REFUSE a break where one exists, t1107's battery found we TAKE one
+where none does. One rule, one missing term.
+
+⚠⚠⚠ **THE 20-ROW BATTERY, BOTH ENGINES, `16px/1 monospace` — 19 EXACT AFTER, 15 BEFORE.** Five
+negative/control families, and the controls are what make it a rule rather than a loosening:
+
+```text
+                                                             Chrome   before   after
+   a1  100px <span>alpha</span><span>bravo</span>… no ws     1 line   2        1  ✓
+   a4  100px alpha<span>bravo</span>delta          no ws     1        2        1  ✓
+   b1  300px <span nowrap>a</span> <span nowrap>b</span> ×4  2        1        2  ✓
+   d2  100px inline <li> ::after{content:"|"}                1        4        1  ✓
+   CONTROLS, unchanged — each a different way to say NO
+     a2/c2  the same lists WITH source white space           3        3        3
+     a3     one unbreakable token                            1        1        1
+     b2     a container that is ITSELF nowrap                1        1        1
+     b4     a space INSIDE a nowrap span                     1        1        1
+     c1/c3  adjacent inline-blocks / adjacent <img>, no ws   2        2        2
+     e1/e2/e4/e5  hyphen · CJK · <wbr> · break-word          4/4/2/2  same     same
+     e3     soft hyphen U+00AD                               3        2        2  ✗ pre-existing
+```
+
+⚠⚠⚠ **RESTRICTING THE OPPORTUNITIES EXPOSED A FORWARD-ONLY GREEDY BREAKER, AND `css/CSS2` NAMED IT
+IN SEVEN TESTS.** While every position was breakable the first item that did not fit was itself a
+legal break, so a forward-only loop was exactly right; the moment there is no white space at the
+overflowing item, the line has to be cut BEHIND it. Every one of these had been passing on that
+accident, and the first cut of the rule lost all seven:
+
+```text
+   text/white-space-004 · -processing-013 · -052   `XX  XX` at pre-wrap in 5em
+   css1/c5502-imrgn-r-000 · c5504 · c5507 · c5509  `x <span style=margin-right:4em>x</span>x`
+```
+
+**And the bisection is what proved it was ONE mechanism and not two.** Running the restrictive half
+alone lost the same seven — so the losses did not belong to the permissive half at all, and no amount
+of tuning the rule would have found it. The loop now records `last_brk`, splits the line there on an
+overflow it cannot break at, and re-lays the tail on a fresh band; every tail fragment moves by the
+same delta because `close_line` has not run on them, so there is no alignment, justification or
+atomic translation to undo.
+
+⚠⚠ **THREE DETAILS THE RESTRICTION MADE LOAD-BEARING, each found by a named RED test and not by
+reasoning:** the opportunity is AFTER a preserved space run and not before it (`XX` / `  XX` is an
+80px line where Chrome gives 40) · an inline element's edge spacer consumes the space's WIDTH and
+must NOT consume the OPPORTUNITY, which moves in front of the element's first word · `<wbr>` had to
+start saying what it is, having worked by accident while every position was an opportunity.
+
+RESULT — old binary and new, built from a stashed tree and run in the SAME HOUR:
+
+```text
+                      coverage         shape            h_ovf   overlap  r-order  dead
+   en.wikipedia.org  .991402→.991404  .722899→.787572  394→0    63→95    76→79    0→0
+   news.ycombinator  1.000000 (same)  .772388→.797264    0→0     0→0      0→0     0→0
+   www.a11yproject   byte-identical on every column
+   doc.rust-lang.org byte-identical on every column
+   css/CSS2 per-TEST state diff        3890 → 3899      +9 GAINED, 0 LOST
+       css1/c5502-imrgn-r-002 · c5504 · c5507 · c5509 · linebox/inline-formatting-context-012
+       · linebox/vertical-align-103 · -104 · text/text-align-white-space-001 · text/white-space-007
+   manuk-layout                        156/156
+```
+
+⚠⚠⚠ **`shape ≥ 0.75` GOES FROM 1 OF 4 SITES TO 3 OF 4** — wikipedia 0.7876 and news.ycombinator
+0.7973 both cross the certificate bar — **and wikipedia's ENTIRE horizontal overflow, 394 elements,
+is gone.** With t1107 the anchor has moved 0.6609 → 0.7876 in two ticks.
+
+RATCHET: held. **This is the change t1105 refused, and the reason it is landable now is that it is
+complete.** t1105's half-rule bought shape +0.94 and paid overlap 52→316 (6×) with no account of the
+redistribution; the whole rule buys shape +6.47 and pays overlap +32 (1.5×) with an account. The
+`overlap` rise is ATTRIBUTED: the sweep's own exemplar is two `<li>` of one navbox `<ul>`, and on a
+controlled wrapping `.hlist` both engines put every item on the same line as each other — what
+differs is that each LINE-END item is exactly one collapsible space too wide (67 against Chrome's 58
+at 16px monospace), because generated content is one word with its spaces baked in. That is t1107's
+row-3 residue, deliberately not asserted then, and it now has a price: it re-groups items near a line
+edge, and `node_rects` reports a multi-line inline as a UNION rect, so a re-grouping reads as a
+sibling collision. No certificate term regresses; two improve.
+
+**NEXT BRICK, precisely:** collapse a generated separator's OUTER spaces at a line edge without
+losing the mid-line width Chrome bills into the preceding inline's rect.
+
+GATE: `a_line_breaks_only_where_a_break_opportunity_exists`, 13 assertions over the battery's
+discriminating rows and its controls, all in units read off a control rather than in px.
+**RED-proven three times, once per mechanism, each with a DIFFERENT assertion firing:** restore
+`!(no_wrap && prev_no_wrap)` → *"adjacent inline siblings … have NO soft wrap opportunity"* · delete
+the rewind → *"the line must be cut at the last opportunity BEHIND the item that overflows"* · make
+the gap unconditionally breakable → *"a container that is ITSELF nowrap owns its spaces"*.
+
+PERF: none measurable — one `Option<usize>` on the line-breaking loop and one branch per item; the
+rewind path runs only on an overflow that cannot break, and `close_line` is called the same number of
+times either way.
+
+WIKI: `docs/wiki/text-layout.md` — "A soft wrap opportunity is a property of the GAP — and the
+breaker had to be able to go back to one". [no-pattern]
+
 ## Tick 1107 — the separator was not there, and half the corpus declares one (2026-08-10)
 
 TICK SHAPE: capability — t1106's named next brick was *"bisect the real `.hlist` container's CSS;

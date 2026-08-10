@@ -1876,6 +1876,11 @@
   - L2783 · Generated content on a NESTED INLINE element was dropped entirely — half the corpus declares one (t1107)
   - L2807 · The measurement, both engines, 16px/1 monospace in a 300px box
   - L2840 · What it bought, and the one place it cost
+  - L2868 · A soft wrap opportunity is a property of the GAP — and the breaker had to be able to go back to one (t1108)
+  - L2881 · The battery: 20 rows, both engines, 16px/1 monospace
+  - L2914 · Restricting the opportunities exposed a forward-only greedy breaker
+  - L2936 · Three details the restriction made load-bearing
+  - L2946 · What it bought
 
 ## The wasm demo — running the engine inside someone else's browser
 `docs/wiki/wasm-demo.md`
@@ -1903,4 +1908,4 @@
   - L124 · Rank mechanisms by FLIP RATE, not failing-subtest count — CSS layout is a multi-assertion slog
 
 ---
-1810 sections across 22 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+1815 sections across 22 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.

@@ -4414,6 +4414,8 @@ impl Ctx<'_> {
                 text,
                 style,
                 space_before: false,
+                // The marker is the only item on its line; nothing precedes it to break at.
+                break_before: false,
                 node: Some(node),
                 no_wrap: true,
                 break_word: false,
@@ -8725,7 +8727,7 @@ impl Ctx<'_> {
         which: fn(&ComputedStyle) -> &Option<Box<ComputedStyle>>,
         leading: bool,
         out: &mut Vec<InlineItem>,
-        pending_space: &mut Option<TextStyle>,
+        gap: &mut PendingGap,
         first: &mut bool,
         cw: f32,
     ) {
@@ -8741,12 +8743,22 @@ impl Ctx<'_> {
                 node: attr,
             });
         }
+        // ⚠⚠ **THE SEPARATOR'S OWN SPACES ARE THE ONLY BREAK OPPORTUNITIES ON A `.hlist` LINE.**
+        // The generated text is emitted as ONE unbreakable word with its spaces baked in, because
+        // Chrome bills a trailing collapsible space into the preceding inline's rect and our
+        // fragments cannot represent that (t1107). But an opportunity is not a fragment: a leading
+        // space in `content: " | "` makes a break legal BEFORE the separator, and a trailing one
+        // makes it legal after — Chrome puts `alpha |` on the line and breaks at the trailing space.
+        // Reading them off the string is what keeps the width exact AND the wrapping right.
+        let lead_ws = text.starts_with(is_css_white_space);
+        let trail_ws = text.chars().next_back().is_some_and(is_css_white_space);
         out.push(match dx {
             Some(dx) => InlineItem::AbsPseudo { text, style, dx },
             None => InlineItem::Word {
                 text,
                 style,
-                space_before: !block_level && pending_space.is_some() && !*first,
+                space_before: !block_level && gap.space.is_some() && !*first,
+                break_before: !block_level && !*first && (gap.brk || lead_ws),
                 node: attr,
                 no_wrap: true,
                 break_word: false,
@@ -8761,7 +8773,10 @@ impl Ctx<'_> {
             });
         }
         if dx.is_none() {
-            *pending_space = None;
+            gap.clear();
+            // …and a trailing space in the generated text hands the NEXT item a break opportunity
+            // without handing it a space to measure: the space is already inside this word's width.
+            gap.brk = trail_ws;
         }
         *first = false;
     }
@@ -8782,7 +8797,7 @@ impl Ctx<'_> {
         owner: Option<NodeId>,
     ) -> Vec<InlineItem> {
         let mut out = Vec::new();
-        let mut pending_space: Option<TextStyle> = None;
+        let mut gap = PendingGap::default();
         let mut first = true;
         if let Some(o) = owner {
             self.push_pseudo(
@@ -8791,13 +8806,13 @@ impl Ctx<'_> {
                 |s| &s.before,
                 true,
                 &mut out,
-                &mut pending_space,
+                &mut gap,
                 &mut first,
                 cw,
             );
         }
         for &n in nodes {
-            self.collect_inline_node(n, &mut out, &mut pending_space, &mut first, None, cw);
+            self.collect_inline_node(n, &mut out, &mut gap, &mut first, None, cw);
         }
         if let Some(o) = owner {
             self.push_pseudo(
@@ -8806,7 +8821,7 @@ impl Ctx<'_> {
                 |s| &s.after,
                 false,
                 &mut out,
-                &mut pending_space,
+                &mut gap,
                 &mut first,
                 cw,
             );
@@ -8963,9 +8978,10 @@ impl Ctx<'_> {
                 text: tail,
                 style,
                 space_before: false,
-                node,
                 // The remainder of the word the range cut into must not break away from it either —
                 // `)T)` never gets to end a line with `est` on the next one.
+                break_before: false,
+                node,
                 no_wrap: true,
                 break_word,
             },
@@ -9018,6 +9034,12 @@ impl Ctx<'_> {
                     text: seg.to_string(),
                     style,
                     space_before: false,
+                    // ⚠ **THE OPPORTUNITY IS AFTER A PRESERVED SPACE RUN, NOT BEFORE IT** (CSS Text
+                    // §5.1: a preserved space hangs at the end of the line and the break falls after
+                    // it). Putting it before cuts `XX  XX` in a 5em box into `XX` / `  XX` — an 80px
+                    // second line where Chrome gives 40 — and `css/CSS2/text/white-space-004`,
+                    // `-processing-013` and `-052` all say so. The caller sets `gap.brk` after this.
+                    break_before: false,
                     node,
                     no_wrap,
                     break_word: false,
@@ -9034,7 +9056,7 @@ impl Ctx<'_> {
         &self,
         node: NodeId,
         out: &mut Vec<InlineItem>,
-        pending_space: &mut Option<TextStyle>,
+        gap: &mut PendingGap,
         first: &mut bool,
         owner: Option<NodeId>,
         cw: f32,
@@ -9093,7 +9115,7 @@ impl Ctx<'_> {
                                 height: style.line_height,
                                 node: owner,
                             });
-                            *pending_space = None;
+                            gap.clear();
                             *first = true;
                         }
                         let mut run = String::new();
@@ -9116,12 +9138,16 @@ impl Ctx<'_> {
                                             false,
                                             first,
                                         );
+                                        // …and the break opportunity a preserved run creates lands
+                                        // on whatever comes NEXT. `pre-wrap` only; the `pre` branch
+                                        // leaves `gap.brk` false and never wraps.
+                                        gap.brk = true;
                                     } else {
                                         push_word(
                                             out,
                                             &mut run,
                                             style,
-                                            pending_space,
+                                            gap,
                                             first,
                                             owner,
                                             false,
@@ -9152,7 +9178,7 @@ impl Ctx<'_> {
                                 height: style.line_height,
                                 node: owner,
                             });
-                            *pending_space = None;
+                            gap.clear();
                             *first = true;
                         }
                         let mut buf = String::new();
@@ -9160,32 +9186,18 @@ impl Ctx<'_> {
                             if is_css_white_space(ch) {
                                 if !buf.is_empty() {
                                     push_word(
-                                        out,
-                                        &mut buf,
-                                        style,
-                                        pending_space,
-                                        first,
-                                        owner,
-                                        false,
-                                        break_word,
+                                        out, &mut buf, style, gap, first, owner, false, break_word,
                                     );
                                 }
-                                *pending_space = Some(style);
+                                // `pre-line` collapses runs of spaces and still wraps, so the
+                                // opportunity is unconditional here.
+                                gap.set(style, true);
                             } else {
                                 buf.push(ch);
                             }
                         }
                         if !buf.is_empty() {
-                            push_word(
-                                out,
-                                &mut buf,
-                                style,
-                                pending_space,
-                                first,
-                                owner,
-                                false,
-                                break_word,
-                            );
+                            push_word(out, &mut buf, style, gap, first, owner, false, break_word);
                         }
                     }
                     return;
@@ -9199,7 +9211,7 @@ impl Ctx<'_> {
                                 height: style.line_height,
                                 node: owner,
                             });
-                            *pending_space = None;
+                            gap.clear();
                             *first = true;
                         }
                         if line.is_empty() {
@@ -9224,33 +9236,17 @@ impl Ctx<'_> {
                 for ch in t.chars() {
                     if is_css_white_space(ch) {
                         if !buf.is_empty() {
-                            push_word(
-                                out,
-                                &mut buf,
-                                style,
-                                pending_space,
-                                first,
-                                owner,
-                                no_wrap,
-                                break_word,
-                            );
+                            push_word(out, &mut buf, style, gap, first, owner, no_wrap, break_word);
                         }
-                        *pending_space = Some(style);
+                        // CSS Text §3: the opportunity belongs to the element that
+                        // CONTAINS the space — this text node — not to the words flanking it.
+                        gap.set(style, !no_wrap);
                     } else {
                         buf.push(ch);
                     }
                 }
                 if !buf.is_empty() {
-                    push_word(
-                        out,
-                        &mut buf,
-                        style,
-                        pending_space,
-                        first,
-                        owner,
-                        no_wrap,
-                        break_word,
-                    );
+                    push_word(out, &mut buf, style, gap, first, owner, no_wrap, break_word);
                 }
             }
             NodeData::Element(_) => {
@@ -9269,9 +9265,16 @@ impl Ctx<'_> {
                         height: lh,
                         node: Some(node),
                     });
-                    *pending_space = None;
+                    gap.clear();
                     *first = true;
                     return;
+                }
+                // ⚠ **`<wbr>` IS A ZERO-WIDTH SOFT WRAP OPPORTUNITY AND NOTHING ELSE** (HTML
+                // §4.5.29). It has no text and no width, so while every position was breakable it
+                // worked by accident; now that the opportunity has to be stated, it has to state it.
+                // It still goes on to emit its box below — `<wbr>` has geometry in Chrome too.
+                if self.dom.tag_name(node) == Some("wbr") {
+                    gap.brk = true;
                 }
                 // An `inline-block` (or inline-flex/grid) is an *atomic* inline box: lay it
                 // out as a block right here and flow it like a word, rather than recursing
@@ -9440,7 +9443,7 @@ impl Ctx<'_> {
                         advance,
                         height,
                         baseline: own_baseline,
-                        space_before: pending_space.filter(|_| !*first),
+                        space_before: gap.space.filter(|_| !*first),
                         valign: s.vertical_align,
                         // `white-space` is INHERITED, so the atomic's own computed style already
                         // carries the containing block's `nowrap` — same source the text path at
@@ -9448,7 +9451,7 @@ impl Ctx<'_> {
                         no_wrap: matches!(s.white_space, WhiteSpace::NoWrap | WhiteSpace::Pre),
                     });
                     *first = false;
-                    *pending_space = None;
+                    gap.clear();
                     return;
                 }
                 // An inline element's horizontal padding + border occupies space in the flow
@@ -9557,7 +9560,9 @@ impl Ctx<'_> {
                     out.push(InlineItem::Spacer {
                         width: mar_l,
                         node: None,
-                        space_before: pending_space.filter(|_| !*first),
+                        space_before: gap.space.filter(|_| !*first),
+                        // The element's LEADING edge inherits the position's own opportunity.
+                        break_before: gap.brk && !*first,
                         report_height: 0.0,
                         report_ascent: None,
                         holds_line: false,
@@ -9565,7 +9570,13 @@ impl Ctx<'_> {
                         metrics: None,
                     });
                     *first = false;
-                    *pending_space = None;
+                    // ⚠⚠ **THE EDGE SPACER CONSUMES THE SPACE AND MUST NOT CONSUME THE
+                    //    OPPORTUNITY.** The space's WIDTH is now this spacer's to measure, but the
+                    //    soft wrap opportunity it created still belongs to the position — and the
+                    //    position is now in front of this element's first word. Clearing both here
+                    //    swallowed the break entirely and cost `css/CSS2/css1` five inline
+                    //    margin/padding reftests: the line simply overflowed with nowhere to break.
+                    gap.space = None;
                 }
                 // ⚠ The empty-inline branch below tests `out.len() == mark_content`, NOT `mark`: a
                 // margin spacer is not a contribution by the element, and testing against `mark`
@@ -9576,7 +9587,9 @@ impl Ctx<'_> {
                     out.push(InlineItem::Spacer {
                         width: pad_l,
                         node: Some(node),
-                        space_before: pending_space.filter(|_| !*first),
+                        space_before: gap.space.filter(|_| !*first),
+                        // The element's LEADING edge inherits the position's own opportunity.
+                        break_before: gap.brk && !*first,
                         report_height: v_height,
                         report_ascent: v_ascent,
                         holds_line: pad_l > 0.0,
@@ -9584,7 +9597,13 @@ impl Ctx<'_> {
                         metrics: None,
                     });
                     *first = false;
-                    *pending_space = None;
+                    // ⚠⚠ **THE EDGE SPACER CONSUMES THE SPACE AND MUST NOT CONSUME THE
+                    //    OPPORTUNITY.** The space's WIDTH is now this spacer's to measure, but the
+                    //    soft wrap opportunity it created still belongs to the position — and the
+                    //    position is now in front of this element's first word. Clearing both here
+                    //    swallowed the break entirely and cost `css/CSS2/css1` five inline
+                    //    margin/padding reftests: the line simply overflowed with nowhere to break.
+                    gap.space = None;
                 }
                 // ── **CSS 2.1 §10.8 IS UNCONDITIONAL: *EVERY* INLINE BOX CONTRIBUTES ITS LEADING**,
                 // whether or not it directly contains text. Ours contributed only through the
@@ -9618,6 +9637,7 @@ impl Ctx<'_> {
                     width: 0.0,
                     node: None,
                     space_before: None,
+                    break_before: gap.brk,
                     report_height: 0.0,
                     report_ascent: None,
                     holds_line: false,
@@ -9662,43 +9682,26 @@ impl Ctx<'_> {
                 //    The separator is also **the only white space in that markup**, so its absence
                 //    removes every soft wrap opportunity on the line — the missing content and the
                 //    unwrappable line are one defect, not two.
-                self.push_pseudo(
-                    node,
-                    Some(node),
-                    |s| &s.before,
-                    true,
-                    out,
-                    pending_space,
-                    first,
-                    cw,
-                );
+                self.push_pseudo(node, Some(node), |s| &s.before, true, out, gap, first, cw);
                 // N4: inline content also follows the flat tree.
                 let children: Vec<NodeId> = self.dom.flat_children(node);
                 for c in children {
-                    self.collect_inline_node(c, out, pending_space, first, Some(node), cw);
+                    self.collect_inline_node(c, out, gap, first, Some(node), cw);
                 }
-                self.push_pseudo(
-                    node,
-                    Some(node),
-                    |s| &s.after,
-                    false,
-                    out,
-                    pending_space,
-                    first,
-                    cw,
-                );
+                self.push_pseudo(node, Some(node), |s| &s.after, false, out, gap, first, cw);
                 if pad_r > 0.0 {
                     out.push(InlineItem::Spacer {
                         width: pad_r,
                         node: Some(node),
                         space_before: None,
+                        break_before: gap.brk,
                         report_height: v_height,
                         report_ascent: v_ascent,
                         holds_line: true,
                         leading: if v_ascent.is_some() { 0.0 } else { v_height },
                         metrics: None,
                     });
-                    *pending_space = None;
+                    gap.clear();
                 }
                 // An inline element that contributed NOTHING to the flow is still a box. Without
                 // this it has no geometry at all: `getBoundingClientRect` returns nothing, it can't
@@ -9761,6 +9764,7 @@ impl Ctx<'_> {
                         width: 0.0,
                         node: Some(node),
                         space_before: None,
+                        break_before: gap.brk,
                         report_height: lm.ascent.round() + lm.descent.round(),
                         report_ascent: Some(lm.ascent.round()),
                         holds_line: false,
@@ -9816,6 +9820,7 @@ impl Ctx<'_> {
                         width: 0.0,
                         node: Some(node),
                         space_before: None,
+                        break_before: gap.brk,
                         report_height: lm.ascent.round() + lm.descent.round(),
                         report_ascent: Some(lm.ascent.round()),
                         holds_line: false,
@@ -9835,13 +9840,14 @@ impl Ctx<'_> {
                         width: mar_r,
                         node: None,
                         space_before: None,
+                        break_before: gap.brk,
                         report_height: 0.0,
                         report_ascent: None,
                         holds_line: false,
                         leading: 0.0,
                         metrics: None,
                     });
-                    *pending_space = None;
+                    gap.clear();
                 }
             }
             _ => {}
@@ -9943,6 +9949,7 @@ impl Ctx<'_> {
                     text,
                     style,
                     space_before,
+                    break_before,
                     node,
                     no_wrap,
                     break_word,
@@ -9965,6 +9972,9 @@ impl Ctx<'_> {
                                 text: std::mem::take(&mut chunk),
                                 style,
                                 space_before: first_chunk && space_before,
+                                // Every chunk after the first IS the break this splitter exists to
+                                // create; the first inherits the original word's opportunity.
+                                break_before: !first_chunk || break_before,
                                 node,
                                 no_wrap: false,
                                 break_word: false,
@@ -9980,6 +9990,7 @@ impl Ctx<'_> {
                             text: chunk,
                             style,
                             space_before: first_chunk && space_before,
+                            break_before: !first_chunk || break_before,
                             node,
                             no_wrap: false,
                             break_word: false,
@@ -10061,6 +10072,10 @@ impl Ctx<'_> {
         let mut y = cy;
         let mut cur: Vec<LineFrag> = Vec::new();
         let mut pen = 0.0f32;
+        // Index into `cur` of the last position on this line where a break was legal — the cut
+        // point when an item that is NOT a legal break turns out not to fit. `None` on a fresh
+        // line: a line's first fragment can never be moved off it.
+        let mut last_brk: Option<usize> = None;
         let mut line_left = cx;
         let mut line_avail = cw;
         // `text-indent` shifts the inline-start of the FIRST line box only. `first_line` flips false
@@ -10244,17 +10259,23 @@ impl Ctx<'_> {
             }
             // Per-item main-axis advance, leading space, cross-axis height, and the LineFrag
             // builder (positioned once the line's x is known).
-            let (advance, space_w, est_h, no_wrap, make_frag): (
+            // ⚠ `brk` is `Some(_)` only for the item kinds that KNOW whether a break may fall
+            // before them (see `InlineItem::Word::break_before`). `None` means *"use the legacy
+            // rule"*, and every other kind still does — an atomic inline, a replaced element and a
+            // padding edge were all measured against Chrome and already agreed.
+            let (advance, space_w, est_h, no_wrap, brk, make_frag): (
                 f32,
                 f32,
                 f32,
                 bool,
+                Option<bool>,
                 Box<dyn FnOnce(f32) -> LineFrag>,
             ) = match item {
                 InlineItem::Word {
                     text,
                     style,
                     space_before,
+                    break_before,
                     node,
                     no_wrap,
                     break_word: _,
@@ -10305,6 +10326,7 @@ impl Ctx<'_> {
                         space_w,
                         est_h,
                         no_wrap,
+                        Some(break_before),
                         Box::new(move |x: f32| LineFrag {
                             x,
                             width: word_w,
@@ -10337,6 +10359,7 @@ impl Ctx<'_> {
                         0.0,
                         0.0,
                         true,
+                        None,
                         Box::new(move |x: f32| LineFrag {
                             x: x + dx,
                             width: w,
@@ -10405,6 +10428,7 @@ impl Ctx<'_> {
                         space_w,
                         height,
                         no_wrap,
+                        None,
                         Box::new(move |x: f32| LineFrag {
                             x,
                             width: advance,
@@ -10443,6 +10467,7 @@ impl Ctx<'_> {
                     width,
                     node,
                     space_before,
+                    break_before,
                     report_height,
                     report_ascent,
                     holds_line,
@@ -10468,6 +10493,7 @@ impl Ctx<'_> {
                         space_w,
                         0.0,
                         true, // padding never introduces a break within its element
+                        Some(break_before),
                         Box::new(move |x: f32| LineFrag {
                             x,
                             width,
@@ -10543,8 +10569,10 @@ impl Ctx<'_> {
 
             // A break before this item is forbidden when both it and the previous item are
             // `nowrap` (the break would fall *within* a nowrap run — CSS `white-space`).
-            let breakable = !(no_wrap && prev_no_wrap);
-            if !cur.is_empty() && breakable && pen + space_w + advance > line_avail {
+            let breakable = brk.unwrap_or(!(no_wrap && prev_no_wrap));
+            let overflows = !cur.is_empty() && pen + space_w + advance > line_avail;
+            let mut place_x: Option<f32> = None;
+            if overflows && breakable {
                 // Close the current line, then open a fresh band for this item.
                 y = close_line(
                     &mut frags,
@@ -10563,19 +10591,85 @@ impl Ctx<'_> {
                 let (l, w) = open_band(&mut y, est_h);
                 line_left = l;
                 line_avail = w;
-                cur.push(make_frag(0.0));
-                pen = advance;
-            } else {
-                let x = if cur.is_empty() {
+                last_brk = None;
+                place_x = Some(0.0);
+            } else if overflows {
+                // ⚠⚠⚠ **THE BREAK BELONGS TO THE LAST OPPORTUNITY, NOT TO THE ITEM THAT NOTICED THE
+                //    OVERFLOW — AND UNTIL THE OPPORTUNITIES WERE RESTRICTED, THOSE WERE THE SAME
+                //    THING.** While every position was breakable, a forward-only greedy breaker was
+                //    exactly right: the first item that did not fit was itself a legal break. The
+                //    moment `break_before` says *"there is no white space here"*, the item that
+                //    overflows is routinely NOT a legal break and the line has to be cut behind it.
+                //
+                //    `css/CSS2` named this precisely — seven tests, one mechanism, and each of them
+                //    had been passing on the accident above:
+                //
+                //    ```text
+                //      text/white-space-004         `XX  XX` at pre-wrap in 5em: the opportunity is
+                //      text/white-space-processing-013   the preserved space run, and the overflow is
+                //      text/white-space-processing-052   detected one token LATER
+                //      css1/c5502-imrgn-r-000       `x <span style=margin-right:4em>x</span>x`: the
+                //      css1/c5504-imrgn-l-000       only space is before the span, and the overflow
+                //      css1/c5507-ipadn-r-000       arrives at the final `x`, three items on
+                //      css1/c5509-ipadn-l-000
+                //    ```
+                //
+                //    So: split the line at the last recorded opportunity, close the head, and re-lay
+                //    the tail on the fresh band. Every tail fragment moves by the SAME delta — the
+                //    x of the first one — because they were placed contiguously; `close_line` has
+                //    not run on them yet, so no alignment, justification or atomic translation has
+                //    been committed and there is nothing else to undo.
+                if let Some(k) = last_brk.filter(|&k| k > 0 && k < cur.len()) {
+                    let tail: Vec<LineFrag> = cur.split_off(k);
+                    y = close_line(
+                        &mut frags,
+                        &mut atomic_boxes,
+                        &mut cur,
+                        y,
+                        line_left,
+                        line_avail,
+                        align,
+                        self.fonts,
+                        strut,
+                        true,
+                        base_rtl,
+                    );
+                    first_line = false;
+                    // The band must clear the TAIL's own height as well as this item's — the tail is
+                    // what is being moved onto it.
+                    let band_h = tail
+                        .iter()
+                        .map(|f| (f.ascent + f.descent).max(f.style.line_height))
+                        .fold(est_h, f32::max);
+                    let (l, w) = open_band(&mut y, band_h);
+                    line_left = l;
+                    line_avail = w;
+                    let dx = tail[0].x;
+                    for mut f in tail {
+                        f.x -= dx;
+                        pen = f.x + f.width;
+                        cur.push(f);
+                    }
+                    last_brk = None;
+                    place_x = Some(pen + space_w);
+                }
+            }
+            let x = place_x.unwrap_or_else(|| {
+                if cur.is_empty() {
                     // First fragment on the line, at the line's own start — the indent is already in
                     // `line_left` and must not be added a second time here.
                     0.0
                 } else {
+                    if breakable {
+                        // Remember where this line could have been cut, in case a later item
+                        // overflows at a position where it cannot be.
+                        last_brk = Some(cur.len());
+                    }
                     pen + space_w
-                };
-                cur.push(make_frag(x));
-                pen = x + advance;
-            }
+                }
+            });
+            cur.push(make_frag(x));
+            pen = x + advance;
             prev_no_wrap = no_wrap;
         }
         if !cur.is_empty() {
@@ -11217,6 +11311,15 @@ enum InlineItem {
         text: String,
         style: TextStyle,
         space_before: bool,
+        /// ⚠⚠⚠ **WHETHER A LINE MAY BREAK BEFORE THIS WORD — a fact about the GAP, not about the
+        /// words on either side of it.** The placement loop used to decide with
+        /// `!(no_wrap && prev_no_wrap)`, which never asks whether there is a space at the position
+        /// at all, and got it wrong in both directions at once (see [`PendingGap`]).
+        ///
+        /// It is NOT the same as `space_before`: a sub-token produced by [`break_segments`] (after a
+        /// hyphen, between two CJK characters, at a `<wbr>`) is a genuine opportunity with no space,
+        /// and the word after a `::after` separator that ends in white space is another.
+        break_before: bool,
         /// Deepest element ancestor of this word's text node.
         node: Option<NodeId>,
         /// `white-space:nowrap` — no line break may occur before this word within its run.
@@ -11275,6 +11378,12 @@ enum InlineItem {
         /// Same as [`InlineItem::Atomic`]'s: the preceding white space's own style, so its width is
         /// measured in the font that owns it rather than a fixed default.
         space_before: Option<TextStyle>,
+        /// **Whether a line may break before this edge** — see [`InlineItem::Word::break_before`].
+        /// An inline element's margin/padding edge is a break opportunity exactly when the position
+        /// it sits at is one, and no more: without this, `<span>a</span><span>b</span>` with no white
+        /// space between the tags was still cut at the span boundary, because the edge spacers fell
+        /// through to the legacy `!(no_wrap && prev_no_wrap)` rule and answered *yes* to everything.
+        break_before: bool,
         report_height: f32,
         /// ⚠⚠ **How far ABOVE the baseline this spacer's reported rect starts** — `None` means
         /// "from the line top", which is what every spacer used to do.
@@ -11540,11 +11649,49 @@ fn break_segments(word: &str) -> Vec<String> {
 }
 
 #[allow(clippy::too_many_arguments)]
+/// **What the inline collector is carrying across the gap between two items.**
+///
+/// ⚠⚠⚠ **A COLLAPSIBLE SPACE AND A SOFT WRAP OPPORTUNITY ARE TWO FACTS, AND THE LOOP CARRIED ONE.**
+/// The collector tracked only the space's *style* (so the gap could be MEASURED in the right font)
+/// and the placement loop decided breakability from the items on either side — `!(no_wrap &&
+/// prev_no_wrap)` — which never asks whether there is a space there at all. Both halves were wrong,
+/// in opposite directions, and each was found by a separate tick:
+///
+/// ```text
+///   <li>alpha</li><li>bravo</li>  no white space anywhere    Chrome 1 line     we broke (t1108)
+///   <span nowrap>a</span> <span nowrap>b</span>              Chrome 2 lines    we did not (t1105)
+/// ```
+///
+/// CSS Text §3 governs the opportunity by the element that CONTAINS the space, so `brk` is set from
+/// the white-space of the text node the space came from — never from the tokens flanking it. Keeping
+/// the two fields in one value is the point: they are set and cleared at thirteen sites, and a
+/// parallel `bool` would have drifted apart at one of them.
+#[derive(Default, Clone, Copy)]
+struct PendingGap {
+    /// The style a collapsible space must be measured in, when one is pending.
+    space: Option<TextStyle>,
+    /// Whether a soft wrap opportunity exists here (CSS Text §5.1).
+    brk: bool,
+}
+
+impl PendingGap {
+    /// A collapsible space, and whether a line may break at it.
+    fn set(&mut self, space: TextStyle, breakable: bool) {
+        self.space = Some(space);
+        self.brk = breakable;
+    }
+    /// No space and no opportunity — the two always die together.
+    fn clear(&mut self) {
+        self.space = None;
+        self.brk = false;
+    }
+}
+
 fn push_word(
     out: &mut Vec<InlineItem>,
     buf: &mut String,
     style: TextStyle,
-    pending_space: &mut Option<TextStyle>,
+    gap: &mut PendingGap,
     first: &mut bool,
     node: Option<NodeId>,
     no_wrap: bool,
@@ -11562,14 +11709,18 @@ fn push_word(
             text: seg,
             style,
             // Only the first sub-token inherits the preceding space; the rest are contiguous.
-            space_before: i == 0 && pending_space.is_some() && !*first,
+            space_before: i == 0 && gap.space.is_some() && !*first,
+            // …but every sub-token AFTER the first is a break opportunity in its own right —
+            // that is what `break_segments` split on. The first one may break only if the gap
+            // before it says so.
+            break_before: if i == 0 { gap.brk && !*first } else { true },
             node,
             no_wrap,
             break_word,
         });
         *first = false;
     }
-    *pending_space = None;
+    gap.clear();
 }
 
 #[cfg(test)]
@@ -18713,6 +18864,161 @@ mod tests {
         assert!(
             (suppressed - bare).abs() < 0.01,
             "an inline with no ::after rule must be unchanged: {suppressed} vs {bare}"
+        );
+    }
+
+    /// ⚠⚠⚠ **A SOFT WRAP OPPORTUNITY IS A PROPERTY OF THE GAP, AND THE LINE BREAKER HAD TO BE ABLE
+    /// TO GO BACK TO ONE.**
+    ///
+    /// The placement loop decided breakability from the items flanking a position —
+    /// `!(no_wrap && prev_no_wrap)` — which never asks whether there is a space there at all, and
+    /// was wrong in **both** directions at once. Chrome-measured, `16px/1 monospace`:
+    ///
+    /// ```text
+    ///                                                          Chrome  before  after
+    ///   100px  <span>alpha</span><span>bravo</span>…  no ws     1 line  2       1
+    ///   100px  alpha<span>bravo</span>delta           no ws     1 line  2       1
+    ///   300px  <span nowrap>a</span> <span nowrap>b</span> ×4   2 lines 1       2
+    ///   100px  <li display:inline> ::after{content:"|"}         1 line  4       1
+    ///   CONTROLS — unchanged, and each one is a different way to say no:
+    ///     the same lists WITH source white space                3 lines 3       3
+    ///     a container that is itself `nowrap`                    1 line  1       1
+    ///     a space INSIDE a `nowrap` span                         1 line  1       1
+    ///     one unbreakable token                                  1 line  1       1
+    ///     adjacent inline-blocks / adjacent <img>, no ws         2 lines 2       2
+    ///     hyphens · CJK · <wbr> · overflow-wrap:break-word      4/4/2/2 same    same
+    /// ```
+    ///
+    /// **Restricting the opportunities exposed a forward-only greedy breaker.** While every position
+    /// was breakable, the first item that did not fit was itself a legal break; once it is not, the
+    /// line has to be cut *behind* it. `css/CSS2` named that in seven tests
+    /// (`text/white-space-004`, `-processing-013`, `-052`, `css1/c5502-imrgn-r-000`, `c5504`,
+    /// `c5507`, `c5509`) — every one of them had been passing on the accident.
+    ///
+    /// Net on the suite: **`css/CSS2` 3890 → 3899, +9 gained and 0 lost**, per-test state diff.
+    #[test]
+    fn a_line_breaks_only_where_a_break_opportunity_exists() {
+        let css = r#"body{margin:0;font-size:16px;line-height:1}
+                     ul{margin:0;padding:0;list-style:none}
+                     li{display:inline}
+                     .nw{white-space:nowrap}
+                     .sep li::after{content:"|"}"#;
+        // Everything is stated in units read off a CONTROL, never in px: this harness's font
+        // context is not the shell's (see the t1107 gate, whose first draft died of exactly that).
+        let measure = |html: &str, width: f32| -> (f32, f32) {
+            let (dom, root) = layout_html(html, css, width);
+            let n = dom
+                .find_first("div")
+                .or_else(|| dom.find_first("ul"))
+                .unwrap();
+            let r = *root
+                .node_rects(&dom)
+                .get(&n)
+                .expect("the block must have a rect");
+            (r.width, r.height)
+        };
+        // One word on one line — the ruler for every row below.
+        let (_, line_h) = measure("<div><span>alpha</span></div>", 1000.0);
+        let word = {
+            let (dom, root) = layout_html("<div><span>alpha</span></div>", css, 1000.0);
+            let n = dom.find_first("span").unwrap();
+            root.node_rects(&dom).get(&n).unwrap().width
+        };
+        assert!(
+            line_h > 4.0 && word > 4.0,
+            "the ruler is degenerate (line {line_h}, word {word}); no row below means anything"
+        );
+        // Wide enough for two words and not three — the width at which the rows discriminate.
+        let narrow = word * 2.2;
+        let lines = |html: &str, w: f32| -> f32 { (measure(html, w).1 / line_h).round() };
+
+        // ── 1. NO WHITE SPACE, NO OPPORTUNITY. Chrome puts all three on one line and overflows.
+        assert_eq!(
+            lines(
+                "<div><span>alpha</span><span>bravo</span><span>delta</span></div>",
+                narrow
+            ),
+            1.0,
+            "adjacent inline siblings with no white space between the tags have NO soft wrap \
+             opportunity — the line overflows, it does not break"
+        );
+        assert_eq!(
+            lines("<div>alpha<span>bravo</span>delta</div>", narrow),
+            1.0,
+            "…and the same holds when the neighbours are bare text nodes"
+        );
+        assert_eq!(
+            lines(
+                "<ul class=sep><li>alpha</li><li>bravo</li><li>delta</li></ul>",
+                narrow
+            ),
+            1.0,
+            "a generated separator with no white space IN it adds content, not an opportunity"
+        );
+
+        // ── 2. THE CONTROL, and it is what stops row 1 passing by never breaking at all.
+        assert!(
+            lines(
+                "<div><span>alpha</span> <span>bravo</span> <span>delta</span></div>",
+                narrow
+            ) > 1.0,
+            "source white space between the same three spans MUST still break"
+        );
+
+        // ── 3. THE SPACE'S OWN `white-space` GOVERNS, NOT THE WORDS FLANKING IT (CSS Text §3).
+        let nowrap_sibs = "<div><span class=nw>alphaalpha</span> <span class=nw>bravobravo</span> \
+                           <span class=nw>deltadelta</span></div>";
+        assert!(
+            lines(nowrap_sibs, narrow) > 1.0,
+            "two `nowrap` siblings are two separate nowrap runs; the space BETWEEN them belongs to \
+             the parent and is a real break opportunity"
+        );
+        // …and the two ways of saying no, which are what make it a rule rather than a loosening.
+        assert_eq!(
+            lines(
+                "<div class=nw><span>alphaalpha</span> <span>bravobravo</span> \
+                 <span>deltadelta</span></div>",
+                narrow
+            ),
+            1.0,
+            "a container that is ITSELF nowrap owns its spaces and must refuse every break"
+        );
+        assert_eq!(
+            lines("<div><span class=nw>alpha bravo delta</span></div>", narrow),
+            1.0,
+            "a space INSIDE a nowrap span is not an opportunity either"
+        );
+
+        // ── 4. THE REWIND. The only opportunity is the first space; the overflow is not detected
+        //    until two items later, so a forward-only breaker cannot use it.
+        let mr = format!("{}px", word * 4.0);
+        let rewind = format!("<div>x <span style='margin-right:{mr}'>x</span>x</div>");
+        assert_eq!(
+            lines(&rewind, word * 3.0),
+            2.0,
+            "the line must be cut at the last opportunity BEHIND the item that overflows"
+        );
+
+        // ── 5. THE OPPORTUNITIES THAT ARE NOT SPACES must survive the restriction.
+        assert!(
+            lines("<div>alpha-bravo-delta-gamma</div>", narrow) > 1.0,
+            "a hyphen is a break opportunity with no space in sight"
+        );
+        assert!(
+            lines("<div>alpha<wbr>bravo<wbr>delta<wbr>gamma</div>", narrow) > 1.0,
+            "<wbr> is a zero-width break opportunity and nothing else"
+        );
+        assert!(
+            lines(
+                "<div style='overflow-wrap:break-word'>alphabravodeltagamma</div>",
+                narrow
+            ) > 1.0,
+            "overflow-wrap:break-word breaks a token that has no opportunity at all"
+        );
+        assert_eq!(
+            lines("<div>alphabravodeltagamma</div>", narrow),
+            1.0,
+            "…and without it the same token does not break (the control for the row above)"
         );
     }
     /// `text-transform` changes the RENDERED casing (nav bars, buttons, headings) while leaving the
