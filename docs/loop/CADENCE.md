@@ -11,12 +11,12 @@
 
 | | value | over |
 |---|---|---|
-| ticks landed | **827** | ticks 1–1119 |
-| median tick cycle | **27m** | 826 intervals |
+| ticks landed | **828** | ticks 1–1120 |
+| median tick cycle | **27m** | 827 intervals |
 | median, last 10 | **47m** | 10 intervals |
 | fastest / slowest | 5s / 5.4d | |
-| **ticks per hour** | **1.12** | 736.0h elapsed |
-| median verify wall | **63s** | 766 ticks |
+| **ticks per hour** | **1.12** | 737.3h elapsed |
+| median verify wall | **63s** | 767 ticks |
 | wall trend | 39s → 13m — getting slower ⚠️ | first 3 vs last 3 |
 
 The **cycle** is the real unit: implement → debug → verify wall → land. The wall is only part of
@@ -28,10 +28,10 @@ it, and a wall that grows taxes every future tick, so it is tracked separately f
 
 * **capabilities asserted** (`G_CAPABILITY`): 48 → **81**
 * **live gates**: 27 → **437**
-* **✅ rows in the capability ledger**: 144 → **559**
+* **✅ rows in the capability ledger**: 144 → **560**
 * **Bar 0 — oracle hangs**: 0 of 265 sites
 
-**363 of 827 ticks** (44%) moved a
+**364 of 828 ticks** (44%) moved a
 user-visible capability. The rest were instruments, infrastructure and corrections — and the
 ledger says the corrections were not overhead: three of its top three priorities were phantoms,
 and finding that out redirected everything after it.
@@ -90,7 +90,7 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 
 ## What a capability costs
 
-* **363** capability ticks, median cycle **27m**
+* **364** capability ticks, median cycle **27m**
 * median diff per tick: **+264 / −34** lines across 8 files
 
 ## Every tick
@@ -924,5 +924,6 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 | **1117** | 2026-08-10 18:47 | 84m | measurement | 13m | +288/−32 | 437 | 81 | 56.0% · | the jarring leg moved, and the mean that rose with it is a trap the reader caught (2026-08 |
 | **1118** | 2026-08-10 18:58 | 10m | measurement | 13m | +103/−32 | 437 | 81 | 56.0% · | a jarring count of 1 does not mean the page is nearly right (2026-08-10) |
 | **1119** | 2026-08-10 21:04 | 2.1h | capability | 13m | +481/−34 | 437 | 81 | 56.0% · | the 499,432px element was never a used width; it was two boxes and a union (2026-08-10) |
+| **1120** | 2026-08-10 22:21 | 76m | capability | 13m | +442/−35 | 437 | 81 | 56.0% · | a first-write-wins cache that a THROWAWAY pass can reach is permanently poisoned (2026-08- |
 
 *`·` after a WPT figure means **carried forward**, not measured this tick.*

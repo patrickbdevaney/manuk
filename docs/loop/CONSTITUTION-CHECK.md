@@ -7503,6 +7503,123 @@ test for the arc**, which is one sweep.
    three minutes, no build), so the suite ranks *where to look* and the corpus decides *whether to
    go*. That single step is what would have caught `::first-letter` as the thin one it was.
 
+## Check #105 — tick 1120 (2026-08-10)
+
+HORIZON H0, re-scoped by **PART VII**: the four v1 components. Its gate is not a WPT number —
+*"reliably renders and runs the representative real internet"*, plus the agentic surface, Bar-0
+containment, and no pathological resource use. The measurable stand-in is **M1** (`shape ≥ 0.75` AND
+jarring-clean) on the in-scope CrUX corpus.
+
+### 1 · GATE OR SCOREBOARD? — gate, and for the first time in five windows a NAMED site crossed it
+
+Ticks 1113–1120. `www.marktplaats.nl` — one of the three sites the burndown's §8.1 named as *"one
+defect away from M1"* — now satisfies all four jarring invariants AND `shape ≥ 0.75`, measured
+against the old binary rebuilt and run in the same hour (h-overflow `0/1 clean → 1/1 clean`, shape
+0.964 → 0.967, reproduced twice). That is an exit-gate condition, not a scoreboard number.
+
+⚠ **And it is ONE site of ~133, corpus-unmeasured.** The sweep is **612 hours stale**; the board's own
+cadence rule says a batch of this size is past due. The honest sentence is *"one named crossing,
+corpus unknown"*, and the steer below makes the sweep binding.
+
+### 2 · ⚠⚠⚠ SIX OF THE LAST EIGHT TICKS ARE ONE DEFECT CLASS, AND PART VI HAS NO ROW FOR IT
+
+Read as a list, this window looks like six unrelated layout fixes. Read by MECHANISM it is one:
+
+```text
+   t1113  a flex item loses its width when the container is shrink-to-fit AND a sibling grows
+   t1114  a definite width IS the box's intrinsic contribution — the measure never asked the box
+   t1115  a flex child FILLS the 1e6 measuring width, and the slack heuristic throws its items away
+   t1116  a filled flex box answers for itself, and the frame it stops walking has to come back on
+   t1119  an abspos flex child is emitted twice — the second copy laid out at the measuring width
+   t1120  an intrinsic measurement writes 1e6 coordinates into a first-write-wins cache
+```
+
+**Every one is the intrinsic-measurement pass leaking into used geometry.** PART VI's H0.1 row
+enumerates where the residual layout mass lives and every entry is a BOX TYPE — tables, inline
+composition, floats and `clear`, out-of-flow under a transformed containing block, scroll containers,
+the UA sheet. This window says the productive category is not a box type at all: **it is a PASS.**
+The 1e6 probe is a second, unaudited layout of the whole subtree whose outputs are supposed to be
+discarded, and it has now been caught writing to the used width (t1113–t1116), to the box tree
+(t1119) and to a cache (t1120). PART VI is corrected below to carry it as its own row.
+
+**The decision rule that falls out, and it is cheap:** for any memo, cache or side-table in layout,
+ask *which passes can WRITE to it* — `static_pos`, `pre_transform_rect`, `transform_matrix`,
+`measure_cache`, `taffy_item_width`. A throwaway pass is not a read-only guest. Two of those five
+have now been caught (t1119 wrote a static position from a probe and had to move the write to
+`extract_placed`; t1120 is `pre_transform_rect`), which makes this a two-of-five hit rate on a
+question nobody had asked, not a hunch.
+
+### 3 · I5 — THE DISCOVERY LADDER GREW A THIRD RUNG, AND THE DECISIVE STEP WAS THREE LINES OF SCRATCH
+
+I5 names the differential oracle as the discovery engine; check #51 corrected it to *"the instrumented
+log"*, check #104 to *"a grep over the test corpus"*. This window it was a **box-tree dump**: t1119's
+whole finding is `root.walk(|b| if b.node == i { eprintln!(...) })` printing TWO boxes where the
+oracle, the trace and two ticks of hypotheses had all reported one element with an impossible width.
+
+```text
+   the oracle    ranks SITES                    "marktplaats has 2 h-overflow elements"
+   HOVF-TRACE    localises to an ELEMENT        "the <i>, every ancestor exact"       (t1112)
+   the box dump  says what the ENGINE EMITTED   "there are two boxes and node_rects unions them"
+```
+
+⚠⚠ **`node_rects` UNIONS, so a double-emitted element reports a size no code ever computed.** t1111
+and t1112 both searched for the code that computed 499,432 and there is none. The rung is worth
+adding to VI.2's method list precisely because the two rungs above it were CORRECT and still pointed
+at nothing: a metric derived from the box tree can only be interrogated in the box tree.
+
+### 4 · INVARIANTS
+
+- **I3 (semantic model in lockstep): SATISFIED CAUSALLY THIS TIME, after three checks of "by accident
+  of scope."** Checks #72, #100 and #104 each recorded that geometry ticks satisfy I3 for free because
+  they flow through the shared `LayoutBox::node_rects` producer. t1119 is the tick that stops being an
+  accident: the DEFECT WAS IN THE PRODUCER. A double-emitted element's `node_rects` entry is the union
+  of its two boxes, so the a11y bbox — and therefore the agent's click point, which is that bbox's
+  centre — was a 499,432px-wide rectangle spanning half a million pixels of empty page. That is an
+  actuation defect of exactly the kind check #72 said would appear *"the moment a fix touches the
+  producer itself"*. It appeared, it was fixed, and I3 was the reason it mattered rather than a
+  side-effect. **The named debt from #72 — that `node_rects`'s `lift` gives an icon-wrapping `<span>`
+  the icon's 4px box — is still unwritten.**
+- **I4 / VI.3 (usage-weighted breadth):** ⚠ **both ticks were SITE reductions, which the loop's own
+  standing lesson says do not yield — and both generalised.** The reason is worth keeping: the
+  selection was a site, but the LOCALISATION named a mechanism (*"an abspos child of a flex container"*,
+  *"a first-write-wins cache reachable from a probe"*), and a mechanism can be priced by grep where a
+  site cannot. The refinement to the lesson: **a site reduction yields iff its trace terminates in a
+  construct the corpus can be grepped for.** Neither grep was run this window; that is a debt, not a
+  finding, and `position:absolute` (76% of the corpus) × `display:flex` (46%) is where it would start.
+- **I2 (never patch deps):** held. Taffy is untouched; t1119 changes which nodes we *hand* it and
+  which of its answers we consume. The fork surface is still empty.
+- **THE RATCHET** did visible work rather than being asserted: three candidate scopes for t1119 were
+  each measured and REFUSED because they traded reftests away (`+5 −1`, `+5 −3`, `+5 −1`), and the
+  scope that landed is the only one with a zero in the loss column. A net-positive trade is still a
+  trade. **DIFF THE STATE, NOT THE NET** paid for itself twice in one tick.
+- **I1, I6, I7, I8:** untouched this window.
+
+### 5 · PART VI CORRECTION
+
+H0.1's list of where the residual layout mass lives gains a row that is a PASS rather than a box type:
+
+> **the INTRINSIC MEASUREMENT PASS itself** (added check #105, tick 1120). The 1e6 probe is a full
+> second layout of the subtree whose outputs are contractually discarded, and six of ticks 1113–1120
+> found it leaking instead — into a used width, into the emitted box tree, and into a first-write-wins
+> cache. It is not a box type and no box-type fixture reaches it: every battery that found the other
+> categories used a single layout of an in-flow subtree. The audit question is *which passes can write
+> to this side-table*, and the side-tables are enumerable (`static_pos`, `pre_transform_rect`,
+> `transform_matrix`, `measure_cache`, `taffy_item_width`).
+
+### 6 · THE STEER — binding on the next tick
+
+1. ⚠⚠⚠ **RUN THE CORPUS SWEEP.** 612 hours stale, eight ticks unpriced, and one named M1 crossing
+   that only a sweep can turn into a corpus number. Check #104's steer asked for this too. It is the
+   acceptance test for t1113–t1120 and it decides the next several ticks; run `progress-metric.sh`
+   on it per the board's top steer and read the DECOMPOSITION, not the conjunction.
+2. **Audit the remaining three side-tables** against §2's question before the next probe-adjacent
+   fix — `transform_matrix` is written by the same guarded call and is now safe, `measure_cache` is
+   keyed by (node, width) and is probably fine, `taffy_item_width` and `static_pos` are not audited.
+3. **Grep the corpus for `position:absolute` inside `display:flex`** — the price of t1119, unmeasured,
+   and the first honest test of §4's refinement to the site-reduction lesson.
+4. `hnhbkis.edu.in`, the other named one-element site, did not complete a fidelity run inside the cap
+   twice this tick. Carry it into the sweep rather than re-attempting it solo.
+
 ## Check #104 — tick 1112 (2026-08-10)
 
 Re-read of `CONSTITUTION.MD` PART I and VI.3, anchored to the eleven ticks since check #103. Three

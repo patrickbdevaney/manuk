@@ -46371,6 +46371,86 @@ PERF: none — one UA rule and one narrowed branch in a cascade that already ran
 WIKI: `docs/wiki/css-cascade.md` — where Chrome draws the form-control `box-sizing` line, and why a
 layout-crate test cannot see it.
 
+## Tick 1120 — a first-write-wins cache that a THROWAWAY pass can reach is permanently poisoned (2026-08-10)
+
+TICK SHAPE: capability (layout) — t1119's named residue, traced rather than guessed: after the
+double-box fix, `www.marktplaats.nl`'s chevron was still at x=500,059 while `rects` held the right
+answer (431.53) for its containing block the whole time.
+
+⚠⚠⚠ **`record_transform` RECORDS FIRST-WRITE-WINS, AND AN INTRINSIC MEASUREMENT GETS THERE FIRST.**
+A probe lays a subtree out at a **1e6** available width and throws the boxes away — but its entries
+in `pre_transform_rect` are the FIRST ones, so the real layout's write is discarded, forever. And
+`position_absolutes` PREFERS that map over `rects` for any box whose containing-block chain carries a
+transform, precisely so it can undo an ancestor's matrix. So the box is placed in measuring space:
+
+```text
+   .hz-Custom-dropdown-container      rects[cb]  [   431.53 87 256.17 35]   <- correct, all along
+                                        pre[cb]  [499831.53 87 256.17 35]   <- a 1e6 probe, first
+   the chevron it places                            ours 500,058.72             Chrome 658
+```
+
+`margin: 0 auto` is what makes the numbers so large and it is not exotic: at a 1e6 available width a
+centred box sits at x≈499,900, so **every centred wrapper inside a shrink-to-fit subtree poisons the
+entry for anything positioned against it.** The general form is worth more than the fix: **a
+first-write-wins cache that a throwaway pass can reach is not stale, it is permanently wrong** — and
+it fails silently, because the authoritative map next to it has the right answer.
+
+⚠⚠⚠ **THE FIX IS TWO HALVES AND I ONLY BELIEVED THE SECOND ONE AFTER AN ARM SAID SO.** Guarding
+`record_transform` on `intrinsic_probe` is half. The other half is that `measure_intrinsic_baselined`
+— the FLEX/GRID ITEM measure, and the one that actually runs at `avail = 1e6` — **never raised the
+flag at all**, while `min_content_width` and `max_content_width_uncached` both did. Three arms on the
+live page, same hour:
+
+```text
+   HEAD (t1119)                                     chevron x = 500,059     Chrome 658
+   probe flag in measure_intrinsic_baselined ONLY   chevron x = 500,059     (no movement at all)
+   record_transform guard ONLY                      chevron x =     557     (~100px short)
+   BOTH                                             chevron x =     659     ✓
+```
+
+⚠⚠ **A GREEN MUTATION WAS THE FINDING TWICE THIS TICK.** The first fixture — a transform on the
+containing block itself — came back GREEN under the mutation, i.e. it never reproduced the defect at
+all; the transformed box has to be laid out INSIDE the probe, which needs a shrink-to-fit ancestor
+AND a centred wrapper. The second fixture reproduces it exactly (`500074` → `174`). And the
+`measure_intrinsic_baselined` half is **NOT unit-gated** — two attempts at a row that exercises it
+both came back green, so its evidence is the live-page arm above and it is labelled as such rather
+than left to look covered. Naming an ungated half is cheaper than a gate that asserts nothing.
+
+MEASURED, the subject and a control, same hour, old binary rebuilt from the stashed tree:
+
+```text
+                             OLD (t1119)                    NEW (t1120)
+   www.marktplaats.nl        h-overflow 0/1 clean           1/1 CLEAN     shape 0.964 -> 0.967
+   news.ycombinator.com      79.5%, all four clean          79.5%, all four clean   (byte-identical)
+   css/css-flexbox           306                            306    pass-SET +0 / -0
+   css/css-grid              208                            208    pass-SET +0 / -0
+   css/css-position · sizing 10 · 54                        10 · 54
+```
+
+**`www.marktplaats.nl` now satisfies all four jarring invariants AND shape ≥ 0.75** — it is one of
+the three sites §8.1 of the burndown named as one defect from M1, and the defect was two, and both
+are closed. Corpus-wide movement is unmeasured by design: the sweep is 612h stale and is its own
+tick, which the board's cadence rule already asks for next.
+
+RATCHET: held. `manuk-layout` 161/161; four layout suites' pass-SETS diffed, not their totals.
+
+GATE: `an_intrinsic_probe_does_not_poison_the_pre_transform_rect_cache` — four rows, of which the
+no-transform CONTROL was never broken and the `translateX(30px)` / `scale(2)` rows exist so the fix
+cannot be *"ignore transforms during measurement"*: the transform must still apply, and the scaled
+child must still scale about its container (asserted RELATIVE, because that container is itself 100px
+off Chrome for an unrelated `margin:auto`+`scale` reason this tick does not touch). RED-proven by
+deleting the `intrinsic_probe` early-return: the first row returns to `500074`.
+
+PERF: one `Cell<bool>` read per transformed box, and one fewer map write per probe.
+
+⚠ RESIDUE: 659 against Chrome's 658 and 948 against 945 — 1px and 3px, inside the invariant's
+tolerance and no longer a placement defect. `hnhbkis.edu.in`, the other named one-element site, is
+unmeasured this tick (its fidelity run did not complete inside the cap twice); it is the first row of
+the next measurement tick, with the corpus sweep.
+
+WIKI: `docs/wiki/box-layout.md` — "A first-write-wins cache that a throwaway pass can reach is
+permanently poisoned".
+
 ## Tick 1119 — the 499,432px element was never a used width; it was two boxes and a union (2026-08-10)
 
 TICK SHAPE: capability (layout) — t1112's localisation, taken at its word and then refuted. The

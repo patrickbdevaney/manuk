@@ -8550,3 +8550,57 @@ x=500,059 and it is a DIFFERENT defect, one layer up: `pre_transform_rect` is wr
 by `record_transform`, the INTRINSIC measurement at 1e6 writes first, and `position_absolutes` prefers
 that map over `rects` whenever the containing-block chain carries a transform. `rects` had the right
 answer (431.53) the whole time. That is the next tick.
+
+## A first-write-wins cache that a THROWAWAY pass can reach is permanently poisoned (t1120)
+
+`record_transform` stores every transformed box's PRE-transform rect with `.or_insert(...)`, and
+first-write-wins is right for the reason its comment gives: a nested transform's inner record must
+survive the outer walk. What the comment does not say is which passes can write.
+
+An **intrinsic measurement** lays a subtree out at a **1e6** available width and throws the boxes
+away. Its entries are the FIRST ones, so the real layout's write is discarded — forever, not until
+the next layout. `position_absolutes` then prefers that map over `rects` for any box whose
+containing-block chain carries a transform (it needs the pre-transform space to resolve insets in),
+so the box is placed in measuring coordinates while the authoritative map sits beside it holding the
+right answer:
+
+```text
+   www.marktplaats.nl, .hz-Custom-dropdown-container
+      rects[cb]                  [   431.53 87 256.17 35]     <- the final tree
+      pre_transform_rect[cb]     [499831.53 87 256.17 35]     <- a 1e6 probe, written first
+   the chevron positioned against it     ours x = 500,058.72       Chrome x = 658
+```
+
+**`margin: 0 auto` is what makes the numbers so large, and it is not exotic** — at a 1e6 available
+width a centred box sits at x≈499,900, so every centred wrapper inside a shrink-to-fit subtree
+poisons the entry for anything positioned against it.
+
+**The fix is two halves, and the second is not the obvious one.** Guarding `record_transform` on
+`Ctx::intrinsic_probe` is the first. The second is that `measure_intrinsic_baselined` — the flex/grid
+ITEM measure, the path that actually runs at `avail = 1e6` — **never raised that flag**, while
+`min_content_width` and `max_content_width_uncached` both did. Three arms on the live page, same
+hour, tell the whole story and no smaller version of the fix works:
+
+```text
+   HEAD                                             chevron x = 500,059    Chrome 658
+   probe flag in measure_intrinsic_baselined ONLY   chevron x = 500,059    (no movement)
+   record_transform guard ONLY                      chevron x =     557    (~100px short)
+   BOTH                                             chevron x =     659    ✓
+```
+
+Result: `www.marktplaats.nl` h-overflow **2 elements → 0**, shape 0.964 → 0.967, and the site now
+satisfies all four jarring invariants AND shape ≥ 0.75. `news.ycombinator.com` byte-identical on both
+binaries; `css-flexbox` 306, `css-grid` 208, `css-position` 10, `css-sizing` 54 with pass-SETS
+diffed (+0 / −0).
+
+⚠⚠ **A GREEN MUTATION WAS THE FINDING TWICE.** The first fixture put the transform on the containing
+block itself and came back green under the mutation — it never reproduced the defect, because the
+transformed box has to be laid out INSIDE the probe (shrink-to-fit ancestor *and* a centred wrapper).
+The second fixture reproduces it exactly and is the gate. The
+`measure_intrinsic_baselined` half is **not unit-gated** — two attempts at a row that reaches it both
+came back green — so its evidence is the live-page arm above, labelled rather than left to look
+covered.
+
+**The general rule, which outlives this fix:** ask of every memo/cache in layout *which passes can
+write to it*. A throwaway measurement pass is not a reader-only guest; if it can write, and the
+policy is first-write-wins, the cache records the measurement rather than the page.

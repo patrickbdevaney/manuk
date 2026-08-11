@@ -6075,6 +6075,12 @@ impl Ctx<'_> {
         }
         let width = self.shrink_to_fit(node, avail);
         let mut fc = FloatContext::new(0.0, width.max(1.0));
+        // ⚠⚠ **THIS IS AN INTRINSIC MEASUREMENT AND IT WAS THE ONE THAT DID NOT SAY SO.**
+        // `min_content_width` and `max_content_width_uncached` both raise the flag; this path — the
+        // flex/grid item measure, and the one that actually runs at `avail = 1e6` — never did, so
+        // every consumer of `Ctx::intrinsic_probe` was blind to the largest of the three probes.
+        // See `record_transform` for what that cost.
+        let _probe = IntrinsicProbe::enter(self);
         let (content, height) = self.layout_children(node, 0.0, 0.0, width.max(0.0), None, &mut fc);
         let result = (width, height, first_line_baseline_of(&content, self.dom));
         // `MANUK_TRACE_INTRINSIC=<id>` prints what a flex/grid item told taffy it wanted to be.
@@ -7904,7 +7910,29 @@ impl Ctx<'_> {
     /// Record what the positioned pass needs before a transform is baked into `boxx`'s subtree:
     /// the matrix (keyed by the transformed element) and every descendant's pre-transform border
     /// box. First write wins, so a nested transform's inner record survives the outer one.
+    ///
+    /// ⚠⚠⚠ **AND FIRST-WRITE-WINS IS WHY AN INTRINSIC MEASUREMENT MUST NOT WRITE HERE AT ALL.** A
+    /// probe lays the subtree out at a **1e6** available width and throws the boxes away — but the
+    /// entries it left behind are the FIRST ones, so they are never replaced by the real layout's,
+    /// and `position_absolutes` prefers this map over `rects` for any box whose containing-block
+    /// chain carries a transform. **A first-write-wins cache a throwaway pass can reach is a
+    /// permanently poisoned cache**, and it poisons exactly the box a `transform`ed ancestor was
+    /// supposed to help place. Traced on `www.marktplaats.nl`, both search-form dropdowns:
+    ///
+    /// ```text
+    ///   the containing block, .hz-Custom-dropdown-container
+    ///     rects[cb]              [ 431.53 87 256.17 35]     <- the final tree, correct
+    ///     pre_transform_rect[cb] [499831.53 87 256.17 35]   <- a 1e6 probe, written first
+    ///   the chevron it places        ours x = 500,058.72        Chrome x = 658
+    /// ```
+    ///
+    /// The `transform_matrix` half needs the same guard for the same reason and one more: a matrix
+    /// is resolved against its box's `transform-origin`, so a percentage origin measured at x≈500,000
+    /// is a different matrix, not merely a stale one.
     fn record_transform(&self, node: NodeId, m: &[f32; 6], boxx: &LayoutBox) {
+        if self.intrinsic_probe.get() {
+            return;
+        }
         self.transform_matrix.borrow_mut().insert(node, *m);
         let mut pre = self.pre_transform_rect.borrow_mut();
         boxx.walk(&mut |b| {
@@ -14054,6 +14082,131 @@ mod tests {
             },
             (2.0, 996.0),
             "left+right+auto width fills the padding box (Chrome [2 996])"
+        );
+    }
+
+    /// # G_PRETRANSFORM_PROBE — an INTRINSIC MEASUREMENT must not write to a first-write-wins cache
+    ///
+    /// ⚠⚠⚠ **A FIRST-WRITE-WINS CACHE THAT A THROWAWAY PASS CAN REACH IS A PERMANENTLY POISONED
+    /// CACHE.** `record_transform` records each transformed box's PRE-transform rect with
+    /// `.or_insert(...)` — first write wins, so a nested transform's inner record survives the outer
+    /// one, which is correct. But an intrinsic measurement lays the subtree out at a **1e6**
+    /// available width and throws the boxes away, and its entries are the FIRST ones. The real
+    /// layout's write is then discarded, forever. `position_absolutes` prefers that map over `rects`
+    /// for any box whose containing-block chain carries a transform, so the box is placed in
+    /// measuring space:
+    ///
+    /// ```text
+    ///   .w{display:flex} > .outer{display:inline-block} > .t{width:200;margin:0 auto;
+    ///      position:relative;transform:…} > i{position:absolute;right:2px;width:24px}
+    ///
+    ///                                        Chrome     before          after
+    ///     transform: translateX(0px)        [174 24]   [500074 24]     [174 24]
+    ///     NO transform          CONTROL     [174 24]   [   174 24]     [174 24]   ✓ never broken
+    ///     transform: translateX(30px)       [204 24]   [500104 24]     [204 24]
+    ///     transform: scale(2)               relative   [1000048 48]    [+348 48]
+    ///                                       y = 0      y = −120        y = 0
+    /// ```
+    ///
+    /// `margin: 0 auto` is what makes the numbers so large and is not exotic: at a 1e6 available
+    /// width a centred box sits at x≈499,900, so **every** centred wrapper inside a shrink-to-fit
+    /// subtree poisons the entry for anything positioned against it. On `www.marktplaats.nl` that is
+    /// both search-form dropdowns — `rects` held the right answer (`431.53`) while the map handed the
+    /// positioned pass `499832.53`, and the chevron landed at **x = 500,059** against Chrome's 658.
+    ///
+    /// ⚠⚠ **THE NO-TRANSFORM ROW IS THE ONE THAT MAKES THIS A CACHE DEFECT**: the identical box
+    /// without a `transform` was always exact, because nothing consults the poisoned map for it. And
+    /// the `translateX(30px)` / `scale(2)` rows are what stop the fix from being "ignore transforms
+    /// during measurement" — the transform must still APPLY, and the scaled row's child must still be
+    /// scaled about the same origin (asserted RELATIVE to its own container, which is 100px off
+    /// Chrome for an unrelated `margin:auto` + `scale` reason that this tick does not touch).
+    ///
+    /// To watch it go RED: delete the `intrinsic_probe` early-return in `record_transform` — the
+    /// first row returns to `500074`. Deleting the `IntrinsicProbe::enter` in
+    /// `measure_intrinsic_baselined` is the OTHER half and the same RED: measured as its own arm on
+    /// the live page, that guard alone leaves the chevron at 500,059, so neither half is redundant.
+    #[test]
+    fn an_intrinsic_probe_does_not_poison_the_pre_transform_rect_cache() {
+        let case = |xf: &str| {
+            let html =
+                r#"<div id="w"><div id="outer"><div id="t"><i id="i"></i></div></div></div>"#;
+            let css = format!(
+                "body{{margin:0}} #w{{display:flex;width:800px}} #outer{{display:inline-block}} \
+                 #t{{width:200px;height:40px;margin:0 auto;position:relative;transform:{xf}}} \
+                 #i{{position:absolute;right:2px;top:0;width:24px;height:24px}}"
+            );
+            let (dom, root) = layout_html(html, &css, 1000.0);
+            let rects = root.node_rects(&dom);
+            (rects[&by_id(&dom, "i")], rects[&by_id(&dom, "t")])
+        };
+
+        // ⚠⚠ THE SECOND CASE, and it exists because the first one could not see the other half of
+        // the guard. `min_content_width` / `max_content_width_uncached` already raised the probe
+        // flag; `measure_intrinsic_baselined` — the FLEX/GRID ITEM measure, the one that actually
+        // runs at `avail = 1e6` — did not, and a `width:100%` box inside it resolves against that
+        // 1e6. Removing only that half leaves the live page's chevron at 557 against Chrome's 658,
+        // so this row is what makes the RED-proof cover both halves.
+        let deep = |xf: &str| {
+            let html = r#"<div id="w"><div id="o"><div id="f"><div id="t"><i id="i"></i></div></div></div></div>"#;
+            let css = format!(
+                "body{{margin:0}} #w{{display:flex;width:800px}} #o{{display:inline-flex}} \
+                 #f{{width:100%}} \
+                 #t{{width:200px;height:40px;margin:0 auto;position:relative;transform:{xf}}} \
+                 #i{{position:absolute;right:2px;top:0;width:24px;height:24px}}"
+            );
+            let (dom, root) = layout_html(html, &css, 1000.0);
+            let rects = root.node_rects(&dom);
+            (rects[&by_id(&dom, "i")], rects[&by_id(&dom, "t")])
+        };
+
+        // The subject: an identity transform is enough, because it is the CHAIN that redirects the
+        // positioned pass to the cache, not the matrix.
+        let (i, _) = case("translateX(0px)");
+        assert_eq!(
+            (i.x, i.y, i.width),
+            (174.0, 0.0, 24.0),
+            "a transformed containing block must be read at its FINAL position (Chrome [174 0 24]); \
+             got {i:?} — an intrinsic probe wrote the 1e6 rect into pre_transform_rect first"
+        );
+
+        // CONTROL: the same box with no transform never consulted the cache and was always right.
+        let (i, _) = case("none");
+        assert_eq!(
+            (i.x, i.width),
+            (174.0, 24.0),
+            "the no-transform control must not move"
+        );
+
+        // The transform must still APPLY — a guard that skipped transforms would pass row 1.
+        let (i, _) = case("translateX(30px)");
+        assert_eq!(
+            (i.x, i.width),
+            (204.0, 24.0),
+            "translateX(30px) must still move the abspos child (Chrome [204 24]); got {i:?}"
+        );
+
+        // …and still SCALE, about its container's origin. Asserted relative to the container: the
+        // absolute x carries an unrelated `margin:auto`+`scale` offset this tick does not touch.
+        let (i, t) = case("scale(2)");
+        assert_eq!(
+            (i.x - t.x, i.y - t.y, i.width),
+            (348.0, 0.0, 48.0),
+            "scale(2) must scale the abspos child about its container (174*2 = 348 from t.x, 24*2 \
+             wide); got i={i:?} t={t:?}"
+        );
+
+        let (i, t) = deep("translateX(0px)");
+        assert_eq!(
+            (i.x - t.x, i.width),
+            (174.0, 24.0),
+            "a `width:100%` box inside a FLEX ITEM measure resolves against the 1e6 probe width; the \
+             abspos child must still sit 174px into its container, got i={i:?} t={t:?}"
+        );
+        let (i, t) = deep("none");
+        assert_eq!(
+            (i.x - t.x, i.width),
+            (174.0, 24.0),
+            "the no-transform control of the deep case must not move"
         );
     }
 
