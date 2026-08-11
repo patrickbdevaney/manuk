@@ -57,33 +57,41 @@ pub struct LineMetrics {
 }
 
 impl LineMetrics {
-    /// Total line box height for `line-height: normal` — **`ascent + descent + gap`, ROUNDED TO A
-    /// WHOLE PIXEL**, because that is the number Chrome lays out with.
+    /// Total line box height for `line-height: normal` — **each of `ascent`, `descent` and `gap`
+    /// ROUNDED TO A WHOLE PIXEL AND THEN SUMMED**, because that is the number Chrome lays out with.
     ///
     /// A line box is not a place to be more precise than the engine you are being compared
     /// against. Keeping the sum fractional made every line ~0.4px taller than Chrome's: invisible
     /// on one line, and **cumulative down the document**, which is exactly the FID-SWEEP near-miss
     /// signature (`mdx=0` with `mdy` growing with content density — wikipedia 45px over ~110 line
-    /// boxes).
+    /// boxes). That much was right the first time; WHERE the rounding goes was not.
     ///
-    /// Verified against real Chrome on three faces. Three is the point: one face cannot distinguish
-    /// this rule from rounding the parts separately.
+    /// ⚠⚠⚠ **THIS RULE WAS FITTED AT ONE FONT SIZE AND ITS COUNTER-EXAMPLE DROPPED A TERM.** The
+    /// version above this one computed `(ascent + descent + gap).round()` and its doc argued the
+    /// point explicitly — *"rounding each term first gives 14 + 3 = 17 for Liberation where Chrome
+    /// says 18"*. **14 + 3 omits the gap**, and `round(0.523) = 1` puts it back: 14 + 3 + 1 = 18,
+    /// the same answer, which is why 16px could not tell the two rules apart. Neither could the
+    /// three FACES the doc leaned on — *"three is the point"* — because they were all measured at
+    /// one size. **Varying the face does not separate these rules; varying the SIZE does.**
+    ///
+    /// A 36-size ladder against real Chrome, Liberation Sans, `line-height: normal`, one line:
     ///
     /// ```text
-    ///                   ascent  descent    gap     sum    → us   Chrome
-    /// Liberation Sans   14.484    3.391  0.523  18.398      18     18
-    /// DejaVu Sans       14.854    3.773  0      18.627      19     19
-    /// Noto Sans         17.104    4.688  0      21.792      22     22
+    ///                8   11   16   22   24   26   36   38   40   44   46   56   72   96  128
+    ///   Chrome       9   12   18   26   28   31   42   43   45   50   54   65   82  110  147
+    ///   round(sum)   9   13   18   25   28   30   41   44   46   51   53   64   83  110  147
+    ///   round parts  9   12   18   26   28   31   42   43   45   50   54   65   82  110  147
     /// ```
     ///
-    /// **Round the SUM, not the parts.** Rounding each term first gives 14+3=17 for Liberation
-    /// where Chrome says 18 — a rule that looks equally plausible written down and is wrong on the
-    /// very first face. That mistake was made here and caught only by re-measuring after the edit.
+    /// **15 of 15, and the old rule misses 10 of them — in BOTH directions**, which is the tell
+    /// that it was a rounding-mode error rather than a wrong constant. 30 of the 36 sizes agreed
+    /// before, and every disagreement was ±1: a scatter, not a drift, and therefore invisible to
+    /// any ranking that looks for a shared constant.
     ///
     /// Advance WIDTHS are never rounded: Chrome positions glyphs subpixel horizontally, and the
     /// sweep already measures our horizontal placement as exact (`mdx=0`).
     pub fn height(&self) -> f32 {
-        (self.ascent + self.descent + self.line_gap).round()
+        self.ascent.round() + self.descent.round() + self.line_gap.round()
     }
 
     /// The CSS **content area** of an inline box (CSS 2.1 §10.6.1) — `round(ascent) + round(descent)`,
@@ -1242,6 +1250,95 @@ pub fn cap_height_px(families: &[String], bold: bool, italic: bool, size_px: f32
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// **`line-height: normal` rounds the PARTS, not the SUM — and the old rule was fitted at one
+    /// font size while its counter-example dropped a term.**
+    ///
+    /// `(a + d + g).round()` and `a.round() + d.round() + g.round()` agree at 16px for Liberation
+    /// Sans (18 either way, because `round(0.523) = 1` restores exactly what the doc's *"14 + 3 =
+    /// 17"* argument had left out), and they agree on the other two faces the old doc leaned on —
+    /// all three of which were measured at that same 16px. **Varying the FACE does not separate
+    /// these rules. Varying the SIZE does.**
+    ///
+    /// Chrome (`--headless=new --hide-scrollbars`), Liberation Sans, one line, `line-height:normal`:
+    ///
+    /// ```text
+    ///                8   11   16   22   24   26   36   38   40   44   46   56   72   96  128
+    ///   Chrome       9   12   18   26   28   31   42   43   45   50   54   65   82  110  147
+    ///   before       9   13   18   25   28   30   41   44   46   51   53   64   83  110  147
+    ///   after        9   12   18   26   28   31   42   43   45   50   54   65   82  110  147
+    /// ```
+    ///
+    /// A 44-row ladder (36 sizes plus serif and monospace at four sizes each) reads **44/44 after
+    /// and 30/44 before**, with every miss ±1 in BOTH directions — a rounding-mode error, not a
+    /// wrong constant, which is why no "one shared constant snaps many boxes into tolerance" search
+    /// could ever have found it.
+    ///
+    /// This test asserts the ARITHMETIC rather than a font's numbers, so it does not depend on which
+    /// faces the host has installed — the metric values are the ones the ladder above was measured
+    /// against.
+    ///
+    /// RED, run: restore `(ascent + descent + line_gap).round()` in [`LineMetrics::height`].
+    #[test]
+    fn line_height_normal_rounds_each_metric_and_then_sums() {
+        // Liberation Sans's per-em metrics, scaled — the face the Chrome ladder was taken on.
+        let (a, d, g) = (14.484f32 / 16.0, 3.391f32 / 16.0, 0.523f32 / 16.0);
+        let at = |size: f32| LineMetrics {
+            ascent: a * size,
+            descent: d * size,
+            line_gap: g * size,
+        };
+        // (size, what Chrome lays out with)
+        let chrome = [
+            (8.0, 9.0),
+            (11.0, 12.0),
+            (16.0, 18.0),
+            (22.0, 26.0),
+            (24.0, 28.0),
+            (26.0, 31.0),
+            (36.0, 42.0),
+            (38.0, 43.0),
+            (40.0, 45.0),
+            (44.0, 50.0),
+            (46.0, 54.0),
+            (56.0, 65.0),
+            (72.0, 82.0),
+            (96.0, 110.0),
+            (128.0, 147.0),
+        ];
+        let mut separated = 0;
+        for (size, want) in chrome {
+            let lm = at(size);
+            assert_eq!(
+                lm.height(),
+                want,
+                "`line-height: normal` at {size}px must be {want} (Chrome);                  a={:.3} d={:.3} g={:.3}",
+                lm.ascent,
+                lm.descent,
+                lm.line_gap
+            );
+            // How many of these rows can tell the two rounding rules apart at all.
+            if (lm.ascent + lm.descent + lm.line_gap).round() != want {
+                separated += 1;
+            }
+        }
+        // ⚠ The guard against re-fitting this at one point: if a future edit narrows the ladder to
+        //   sizes where both rules agree, the test still passes and proves nothing. 16px, 24px,
+        //   96px and 128px are exactly such rows, and they are kept as CONTROLS — but at least ten
+        //   rows must actively separate the two rules or this test has stopped testing.
+        assert!(
+            separated >= 10,
+            "only {separated} of these sizes distinguish `round(parts)` from `round(sum)` — the              ladder has lost its discriminating power and must be widened, not trusted"
+        );
+        // The line GAP is a term in its own right, and dropping it is the exact mistake the old
+        // doc's counter-example made: 14 + 3 is 17, and Chrome says 18.
+        let lib16 = at(16.0);
+        assert_eq!(
+            lib16.ascent.round() + lib16.descent.round(),
+            17.0,
+            "without the gap the 16px row is 17 — which is why the old doc concluded that rounding              the parts was wrong, at the one size where it could not tell"
+        );
+    }
 
     #[test]
     fn context_loads_and_measures() {

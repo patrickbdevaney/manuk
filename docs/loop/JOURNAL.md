@@ -46371,6 +46371,76 @@ PERF: none — one UA rule and one narrowed branch in a cascade that already ran
 WIKI: `docs/wiki/css-cascade.md` — where Chrome draws the form-control `box-sizing` line, and why a
 layout-crate test cannot see it.
 
+## Tick 1138 — `line-height: normal` rounds the PARTS, and the old rule was fitted at ONE SIZE (2026-08-11)
+
+TICK SHAPE: capability (text metrics) — t1137's named residue, taken with a 32-row mixed-size battery
+that immediately said the residue was not what t1137 called it.
+
+⚠⚠⚠ **THE SUBJECT WAS "A MIXED-FONT-SIZE LINE IS 1px TOO TALL" AND THE CONTROL ROW KILLED IT IN THE
+FIRST THREE LINES.** `c40` — a SINGLE-size 40px line, no mixing anywhere — reads 46 against Chrome's
+45. Mixing was never involved: every failing row in the battery simply *contained 40px text*, and
+`m32`/`m24`/`m20`/`m17` (all genuinely mixed) were exact. **A battery whose first three rows are
+controls costs nothing and retires the hypothesis before the tick starts.**
+
+⚠⚠⚠ **AND THE LADDER GAVE THE RULE OUTRIGHT.** 36 font sizes at `line-height: normal`, one line:
+
+```text
+                8   11   16   22   24   26   36   38   40   44   46   56   72   96  128
+   Chrome       9   12   18   26   28   31   42   43   45   50   54   65   82  110  147
+   before       9   13   18   25   28   30   41   44   46   51   53   64   83  110  147
+   after        9   12   18   26   28   31   42   43   45   50   54   65   82  110  147
+```
+
+`LineMetrics::height()` computed `(ascent + descent + gap).round()`. Chrome computes
+`ascent.round() + descent.round() + gap.round()`. The full 44-row ladder (36 sizes plus serif and
+monospace at four sizes each) goes **30/44 → 44/44**, and the serif and monospace rows are the
+independent confirmation — different metric tables, not re-fitted.
+
+⚠⚠⚠ **THE OLD RULE WAS FITTED AT ONE SIZE AND ITS COUNTER-EXAMPLE DROPPED A TERM.** The previous
+doc argued the point explicitly: *"rounding each term first gives 14 + 3 = 17 for Liberation where
+Chrome says 18 — a rule that looks equally plausible written down and is wrong on the very first
+face."* **14 + 3 omits the GAP**, and `round(0.523) = 1` puts it back: 14 + 3 + 1 = 18, the same
+answer. At 16px the two rules cannot be told apart. The doc also leaned on breadth — *"verified
+against real Chrome on three faces. Three is the point: one face cannot distinguish this rule from
+rounding the parts separately"* — and all three faces were measured **at 16px**. **Varying the FACE
+does not separate these rules; varying the SIZE does.** t1042-1046's class exactly, with the held
+parameter being font size and the justifying counter-example missing a term.
+
+⚠⚠ **AND IT IS WHY NO RANKING FOUND IT IN 800 TICKS.** Every miss is **±1 in BOTH directions** — +1
+at 11, −1 at 22, −1 at 26, −1 at 36, +1 at 38, +1 at 40, +1 at 44, −1 at 46, −1 at 56, +1 at 72 —
+with 30 of 36 sizes already exact. That is a rounding-mode SCATTER, not a drift. Every search this
+loop has run for the placement near-miss looks for *one shared constant that snaps many boxes into
+tolerance at once* (the t267 lever, restated on the board ever since), and a defect whose sign
+alternates with the fractional part of a scaled metric is invisible to it — **it cancels in any
+mean**, which is also why the corpus band could never have surfaced it.
+
+⚠⚠ **THE CSS 2.1 SUITE IS BYTE-IDENTICAL ACROSS THIS FIX** — 3973 passed / 1687 failed on both
+binaries, and the pass SETS are identical, because its reftests use Ahem or run at 16px, the one size
+where both rules agree. **A suite reporting zero is not saying the fix is worth zero; it is saying
+the suite does not exercise the parameter.** t852's finding, at a new place.
+
+RATCHET: same-hour HEAD-binary control, pass-SET diff: `css/CSS2` **3973 → 3973, ZERO gains, ZERO
+losses**. `manuk-layout` 169/169, `manuk-text` 9/9. **Seven batteries, 256 rows, 4 differ**:
+`lhnormal` 44/44 · `lines` 30/30 · `lines2` 19/19 · `lines3` **18/23 → 23/23** (this closed t1137's
+named residue) · `tblbr` 4/4 · `tcell` 45/45 · `tcell2` 58/59 · `mixed` 29/32. **All four remaining
+rows are sub-pixel ADVANCE WIDTHS** (`dw ≤ 0.5px`, `dx ≤ 0.91px` on `<sup>`/`<small>`/17px text) plus
+one `display:none` element the instrument reports as a 0x0 rect and we correctly give no box —
+horizontal advance is deliberately never rounded (`height`'s own doc), so that class is out of scope
+and named, not fixed.
+
+GATE: `line_height_normal_rounds_each_metric_and_then_sums` — asserts the ARITHMETIC rather than a
+host font's numbers, so it does not depend on which faces are installed. ⚠ It additionally requires
+that **at least ten of its rows actively separate the two rounding rules**, so a later edit that
+narrows the ladder back toward sizes where both agree FAILS rather than silently passing — the guard
+against this constant being re-fitted at one point a third time. RED-proven twice: restoring
+`round(sum)` fails at 11px, and dropping the gap term fails at 16px (the old doc's own mistake, now a
+red test).
+
+PERF: none — two extra `round()` calls in a function that is already called per fragment.
+
+WIKI: `docs/wiki/text-layout.md` — "`line-height: normal` rounds the PARTS, not the SUM — a constant
+fitted at one SIZE"
+
 ## Tick 1137 — a `<br>` is a BREAK, not an inline box on the line it ends (2026-08-11)
 
 TICK SHAPE: capability (layout) — check #107's fourth steer, taken with a 30-row ladder and then

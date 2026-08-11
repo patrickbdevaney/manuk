@@ -3472,3 +3472,57 @@ t1134's four residual rows too) · `tcell2` 58/59 · `lines3` 18/23.
 style="font-size:40px">x</span>two` is 46 against Chrome's 45, with the span at `dy 1` against 0.
 Untouched by this tick and identical before it; the fold of independently-rounded ascents is the
 place to look.
+
+## `line-height: normal` rounds the PARTS, not the SUM — a constant fitted at one SIZE (t1138)
+
+The rule was `(ascent + descent + gap).round()`. It is `ascent.round() + descent.round() +
+gap.round()`. Chrome, Liberation Sans, one line, `line-height: normal`:
+
+```text
+             8   11   16   22   24   26   36   38   40   44   46   56   72   96  128
+  Chrome     9   12   18   26   28   31   42   43   45   50   54   65   82  110  147
+  before     9   13   18   25   28   30   41   44   46   51   53   64   83  110  147
+  after      9   12   18   26   28   31   42   43   45   50   54   65   82  110  147
+```
+
+A 44-row ladder — 36 sizes plus serif and monospace at four sizes each — reads **44/44 after and
+30/44 before**. The serif and monospace rows are the independent confirmation: different metric
+tables, not re-fitted.
+
+### Why it survived, and what the old doc got wrong
+
+The old `height()` argued the point explicitly: *"rounding each term first gives 14 + 3 = 17 for
+Liberation where Chrome says 18 — a rule that looks equally plausible written down and is wrong on
+the very first face."* **14 + 3 omits the gap.** `round(0.523) = 1` puts it back, and 14 + 3 + 1 = 18
+— the same answer. At 16px the two rules cannot be told apart, and 16px is where the whole comparison
+was made.
+
+The doc also leaned on breadth: *"verified against real Chrome on three faces. Three is the point:
+one face cannot distinguish this rule from rounding the parts separately."* Three faces, **all at
+16px**. Varying the face does not separate these rules. Varying the SIZE does. This is the
+constants-fitted-at-one-point class (t1042-1046) with the parameter held fixed being the font size,
+and the counter-example that justified the wrong branch having a term missing.
+
+### Why no ranking could have found it
+
+Every miss is **±1, in both directions** — +1 at 11, −1 at 22, −1 at 26, −1 at 36, +1 at 38, +1 at
+40, +1 at 44, −1 at 46, −1 at 56, +1 at 72 — and 30 of 36 sizes agreed. That is a rounding-mode
+**scatter**, not a drift. Every search this project has run for the placement near-miss has looked for
+*one shared constant that snaps many boxes into tolerance at once* (the t267 lever, restated on the
+board ever since); a defect whose sign alternates with the fractional part of a scaled metric is
+invisible to it, and it cancels in any mean.
+
+⚠ **The CSS 2.1 suite cannot see this fix at all.** `css/CSS2` is byte-identical across the change —
+3973 passed, 1687 failed, and the pass SETS are identical — because its reftests use Ahem or run at
+16px, the one size where both rules agree. A suite that reports zero is not saying the fix is worth
+zero; it is saying the suite does not exercise the parameter. Priced the other way, `line-height:
+normal` at a heading size is on every page that has an `<h1>`.
+
+### The gate guards against being re-fitted
+
+`line_height_normal_rounds_each_metric_and_then_sums` asserts the arithmetic (not a host font's
+numbers, so it does not depend on which faces are installed) and additionally requires that **at
+least ten of its rows actively separate the two rounding rules** — if a later edit narrows the ladder
+back toward sizes where both agree, the test fails rather than silently passing. 16, 24, 96 and 128
+are kept as the rows where they agree, as controls. RED-proven twice: restoring `round(sum)` fails at
+11px, and dropping the gap term fails at 16px — the old doc's own mistake, now a red test.

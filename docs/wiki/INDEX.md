@@ -1925,6 +1925,10 @@
   - L3433 · And its own rect is the font's CONTENT AREA
   - L3446 · The gate that was pinning the engine to the bug
   - L3456 · ⚠ A GREEN mutation, recorded rather than acted on
+  - L3476 · line-height: normal rounds the PARTS, not the SUM — a constant fitted at one SIZE (t1138)
+  - L3492 · Why it survived, and what the old doc got wrong
+  - L3506 · Why no ranking could have found it
+  - L3521 · The gate guards against being re-fitted
 
 ## The wasm demo — running the engine inside someone else's browser
 `docs/wiki/wasm-demo.md`
@@ -1952,4 +1956,4 @@
   - L124 · Rank mechanisms by FLIP RATE, not failing-subtest count — CSS layout is a multi-assertion slog
 
 ---
-1859 sections across 22 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+1863 sections across 22 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
