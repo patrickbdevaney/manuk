@@ -46371,6 +46371,50 @@ PERF: none — one UA rule and one narrowed branch in a cascade that already ran
 WIKI: `docs/wiki/css-cascade.md` — where Chrome draws the form-control `box-sizing` line, and why a
 layout-crate test cannot see it.
 
+## Tick 1129 — the map's grammar is NOUNS, and two of this arc's three defect classes are VERBS (2026-08-11)
+
+TICK SHAPE: measurement — the cadence surface audit (every 10 ticks, last at 1119), banked as audit
+#53, with the map queried by `awk` rather than recalled.
+
+⚠⚠⚠ **AUDIT #52 FOUND THE MAP CANNOT SAY "A INSIDE B". IT ALSO CANNOT SAY "DURING PASS P" — AND THE
+TWO HIGHEST-YIELD FIXES OF THE LAST TEN TICKS WERE BOTH THE SECOND KIND.**
+
+```text
+   rows matching  provisional|inner layout|re-origin  ......  0
+   rows matching  intrinsic  ..............................  8, every one a FEATURE
+                  (contain-intrinsic-size, replaced intrinsic sizing, <select>'s arrow, …)
+```
+
+t1124 — *"a box laid out at a provisional origin must re-origin all THREE of its outputs"* — bought
+two M1 crossings from a class with **zero** rows. t1120 — *"an intrinsic measurement must not write
+to anything the real layout reads"* — was six ticks of one class whose only row an audit wrote after
+the fact. **A map that names only features ranks the next tick in a frame where the last two winners
+were invisible.** The `class` column has 18 values and all are subsystems; nothing in the schema
+forbids a row whose subject is a pass or a cache — #52's `instrument` rows proved that by existing.
+The gap is habit, not structure. Three rows added, one of them stated `partial` because three of the
+five writable side-tables have not been audited against its own question.
+
+⚠⚠ **AND THE AUDIT REFUSED ITS OWN BEST-LOOKING NUMBER.** The current work-list's dominant cause on
+`www.jatekshop.eu` is `mis-sized: width ~8px (<a>)`, 50 hits, median 10px — link text ten pixels too
+narrow, fifty times on one page, against a map that carries `text shaping (swash)` as one row,
+`gated`, *"all text"*. I counted that cause across the t1127 sweep log and got 13 lines, then checked
+what the log contains: root causes are printed per-site for a handful of sites, **not corpus-wide**.
+**A count off an instrument's log is a count of the LOG** — the same shape as t1089's "1,231
+stylesheets = one absent file". No row added; the frequency is unmeasured and is named as such.
+
+The standing recommendation the audit does leave: **decompose the shaping row.** One `gated` line over
+the single largest surface in the engine, with no sub-rows for advance accuracy or letter/word
+spacing, sits next to a `font-feature-settings` row that says *"shaping changes advances, which
+changes every width downstream"* — two rows contradicting each other in tone, neither wrong.
+
+RATCHET: held — measurement only, `engine/` untouched.
+
+GATE: none; the artefact is audit #53 and three map rows.
+
+PERF: none.
+
+WIKI: `docs/loop/SURFACE-AUDIT.md` audit #53 — the map's own audit is its wiki page. [no-pattern]
+
 ## Tick 1128 — the constitution check, and the out-of-flow reading-order class is CLOSED (2026-08-11)
 
 TICK SHAPE: measurement — the cadence re-read of `CONSTITUTION.MD` (every 8 ticks, last at 1120),

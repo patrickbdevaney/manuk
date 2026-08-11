@@ -5495,3 +5495,71 @@ Two are added here. **A class with one row is not a covered class; it is a close
 the layout content, so `class` no longer partitions anything and a per-class count says nothing about
 coverage. Recorded, not fixed — renaming 230 rows is its own tick and would rewrite history that the
 receipts still refer to.
+
+## Audit #53 — tick 1129 (2026-08-11) — the map's grammar is NOUNS, and two of this arc's three defect classes are VERBS
+
+**Sources, read this session, not from memory:**
+
+- The map itself, queried rather than recalled: `awk -F'\t'` over `docs/loop/CONSTELLATION.tsv` for
+  the three classes ticks 1119–1128 actually worked
+- `CONSTITUTION.MD` PART VI as amended by checks #105 and #106 — both added clauses this window, and
+  neither had a map row to point at
+- The t1127 sweep's own root-cause output and the `MANUK_RO_PARTITION` runs behind check #106's steer
+
+### The finding: audit #52 found the map cannot say "A inside B"; it also cannot say "during pass P"
+
+#52 caught that every row is a noun, so an INTERACTION between two present features (abspos × flex)
+had no cell. This window produced two more classes, and neither is an interaction — they are **phases
+of the layout algorithm**:
+
+```text
+   rows matching  provisional|inner layout|re-origin  .............  0
+   rows matching  intrinsic  ...............................  8, and every one is a FEATURE
+                  (contain-intrinsic-size, replaced intrinsic sizing, <select>'s arrow, …)
+   the one exception, added by check #105 four ticks ago:
+     instrument   `pre_transform_rect` is a FIRST-WRITE-WINS cache an intrinsic MEASURING pass can reach
+```
+
+⚠⚠⚠ **THE TWO HIGHEST-YIELD FIXES OF THE LAST TEN TICKS WERE BOTH VERBS.** t1124 —
+*"a box laid out at a PROVISIONAL origin must re-origin all THREE of its outputs"* — bought two M1
+crossings, and the class had **zero** rows. t1120 — *"an intrinsic measurement must not write to
+anything the real layout reads"* — was six ticks of one class, and the only row it had was the one an
+audit wrote after the fact. A map that can only name features ranks the next tick against a frame in
+which the last two winners were invisible.
+
+**The cheap generalisation, and it is testable:** the map's `class` column has 18 values and every one
+is a SUBSYSTEM (`css`, `layout`, `dom`, `render`, …). Nothing in the schema forbids a row whose
+subject is a pass, a cache, or an invariant of the pipeline — #52's `instrument` rows proved that by
+existing. The gap is habit, not structure.
+
+### Added (3 rows)
+
+```text
+   gated    a box laid out at a PROVISIONAL origin must re-origin ALL THREE of its outputs —
+            boxes, fragments, and static positions          (t1124, two M1 crossings)
+   partial  an INTRINSIC MEASUREMENT is a throwaway pass and must not write to anything the
+            real layout reads                                (t1120; 3 of 5 side-tables unaudited)
+   works    a `--jobs 2` sweep row is bankable for the DENOMINATOR and is NOT evidence about
+            any single site                                  (check #106; five refuted readings)
+```
+
+MEASURED 525 of 561; `unknown` still 36 — none resolved this audit, and the `partial` row is stated
+as partial rather than claimed, because three of the five writable side-tables have not been audited
+against its own question.
+
+### What we had been wrong about
+
+**`text shaping (swash)` is one row, `gated`, and its `what_breaks_without_it` is "all text".** The
+current work-list's dominant root cause on `www.jatekshop.eu` is `mis-sized: width ~8px (<a>)` at 50
+hits with a median of 10px — link text ~10px too narrow, fifty times on one page. That is not a
+refutation of the row (the shaper runs, and one site is not the corpus), but it is the map at its
+least useful: a one-line `gated` claim over the single largest surface in the engine, with no
+sub-rows for advance accuracy, letter/word-spacing, or the `font-feature-settings` interaction the
+map ALREADY carries as a separate row saying *"shaping changes advances, which changes every width
+downstream."* **Two rows contradict each other in tone and neither is wrong; the honest fix is to
+decompose the shaping row**, which is its own tick and is filed here rather than done in an audit.
+
+⚠ **NOT claimed, and the discipline is the point:** I counted mis-sized-width causes in the t1127
+sweep log and got 13 lines, then checked what that log actually contains — root causes are printed
+per-site for a handful of sites, not corpus-wide. **A count off an instrument's log is a count of the
+LOG.** The corpus-wide frequency of this class is unmeasured, so the row above is not added.

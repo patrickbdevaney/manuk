@@ -11,12 +11,12 @@
 
 | | value | over |
 |---|---|---|
-| ticks landed | **836** | ticks 1–1128 |
-| median tick cycle | **28m** | 835 intervals |
-| median, last 10 | **45m** | 10 intervals |
+| ticks landed | **837** | ticks 1–1129 |
+| median tick cycle | **28m** | 836 intervals |
+| median, last 10 | **42m** | 10 intervals |
 | fastest / slowest | 5s / 5.4d | |
-| **ticks per hour** | **1.12** | 743.4h elapsed |
-| median verify wall | **63s** | 775 ticks |
+| **ticks per hour** | **1.12** | 743.6h elapsed |
+| median verify wall | **63s** | 776 ticks |
 | wall trend | 39s → 13m — getting slower ⚠️ | first 3 vs last 3 |
 
 The **cycle** is the real unit: implement → debug → verify wall → land. The wall is only part of
@@ -31,7 +31,7 @@ it, and a wall that grows taxes every future tick, so it is tracked separately f
 * **✅ rows in the capability ledger**: 144 → **562**
 * **Bar 0 — oracle hangs**: 0 of 265 sites
 
-**368 of 836 ticks** (44%) moved a
+**368 of 837 ticks** (44%) moved a
 user-visible capability. The rest were instruments, infrastructure and corrections — and the
 ledger says the corrections were not overhead: three of its top three priorities were phantoms,
 and finding that out redirected everything after it.
@@ -933,5 +933,6 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 | **1126** | 2026-08-11 02:53 | 32m | capability | 13m | +220/−45 | 437 | 81 | 56.0% · | the grid exclusion was one word too wide, and the spec had the discriminator (2026-08-11) |
 | **1127** | 2026-08-11 04:18 | 86m | measurement | 13m | +350/−32 | 437 | 81 | 56.0% · | the M1 count is flat and the MEMBERSHIP is +2 engine / −2 refuted (2026-08-11) |
 | **1128** | 2026-08-11 04:27 | 9m | measurement | 13m | +192/−34 | 437 | 81 | 56.0% · | the constitution check, and the out-of-flow reading-order class is CLOSED (2026-08-11) |
+| **1129** | 2026-08-11 04:36 | 9m | measurement | 13m | +149/−33 | 437 | 81 | 56.0% · | the map's grammar is NOUNS, and two of this arc's three defect classes are VERBS (2026-08- |
 
 *`·` after a WPT figure means **carried forward**, not measured this tick.*
