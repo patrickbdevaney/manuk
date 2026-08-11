@@ -46371,6 +46371,62 @@ PERF: none — one UA rule and one narrowed branch in a cascade that already ran
 WIKI: `docs/wiki/css-cascade.md` — where Chrome draws the form-control `box-sizing` line, and why a
 layout-crate test cannot see it.
 
+## Tick 1141 — the self-audit, and the wall is BIMODAL by a factor of ten (2026-08-11)
+
+TICK SHAPE: measurement — the cadence self-audit (`scripts/self-audit.sh`, due every 10 ticks; last
+at 1131, and the pre-commit hook BLOCKS past it).
+
+**Result: 1 prescribed-but-not-executed item of 60-odd checks.** Everything else green — 30 gates
+declare how to break themselves, the falsify harness exists, the process-defect ledger (49 entries)
+names a MECHANISM per defect, the cluster registry, the generated STATUS, the hook wiring, journal
+continuity, and the pattern ledger (1078 rows) all hold.
+
+⚠⚠⚠ **THE ONE FAILURE IS TIER-0 AND IT IS HARNESS-OWNED, SO THIS TICK MEASURES IT AND HANDS IT
+OVER.** `verify wall: 1221s EXCEEDS the 300s target — Part 21.2 item 1 has regressed.` PART VII is
+absolute: `scripts/` is the observer's, and *"if a harness problem blocks you, write one line in the
+journal and CONTINUE with browser work."* So instead of a fix, a measurement the observer can act on
+— **seven walls from this session, and they are bimodal with a clean discriminator:**
+
+```text
+   tick   what changed        gate      build     total
+   1134   engine (re-run)     119s        1s       120s   <- gate binaries already warm
+   1135   docs only           108s        1s       109s
+   1136   docs only           115s        1s       116s
+   1137   engine             1151s       29s      1180s
+   1138   engine             1158s       30s      1188s
+   1139   docs only           115s        1s       116s
+   1140   engine             1221s       30s      1251s
+```
+
+**The discriminator is whether `engine/` changed, and the cost is not the workspace build** — that is
+`30s` in every engine row. It is the **gate phase**, 115s → ~1200s, i.e. the recompilation of the
+gate test binaries. t1134's own second run is the control that proves it: an engine tick whose gate
+binaries were already warm from a prior green wall came in at **120s**, indistinguishable from a
+docs-only tick. The self-audit's own suggested levers (mold/lld, cargo-nextest, workspace-hack,
+risk-based gate scheduling) all sit on that phase. **Observer: the 10× is the gate-binary rebuild,
+not the gates.**
+
+⚠ **AND THE AGENT-SIDE HALF OF THE QUESTION, ANSWERED RATHER THAN ASSUMED: my ticks did not tax the
+wall.** The standing rule is that adding a gate to `verify.sh`'s LAUNCH LIST is what taxes it. The
+five gates landed this window (`a_misparented_table_cell_run_becomes_one_anonymous_table`,
+`box_sizing_border_box_applies_to_a_table_cell`, `a_br_does_not_grow_the_line_it_ends`,
+`line_height_normal_rounds_each_metric_and_then_sums`,
+`word_break_keep_all_suppresses_only_the_letter_unit_opportunities`) are all `#[test]`s inside crates
+the wall ALREADY runs — no new binary, no new launch-list entry. `manuk-layout` went **166 → 170
+tests and 28.24s → 26.61s**. Zero tax, measured, not asserted.
+
+⚠ Recorded so it is not re-derived: the 1221s figure the audit prints is a real reading of a real
+wall, not a contended one — three engine ticks in a row landed within 6% of each other (1180 / 1188 /
+1251) on a box with no sweep running. The number is stable, which is what makes it a target rather
+than noise.
+
+RATCHET: held trivially — nothing landed in `engine/`. `LAST_AUDIT_TICK` set to 1141.
+
+PERF: none — measurement only, and the one perf finding is handed to the observer rather than acted
+on.
+
+WIKI: none — this tick's artefact is the audit run itself and the wall table above. [no-pattern]
+
 ## Tick 1140 — the map's steer, obeyed: UAX #14 is 26/27 done, and the 27th was `keep-all` (2026-08-11)
 
 TICK SHAPE: capability (layout) — the first tick taken under audit #54's own steer, *grep
