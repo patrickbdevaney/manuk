@@ -46371,6 +46371,86 @@ PERF: none — one UA rule and one narrowed branch in a cascade that already ran
 WIKI: `docs/wiki/css-cascade.md` — where Chrome draws the form-control `box-sizing` line, and why a
 layout-crate test cannot see it.
 
+## Tick 1151 — the box was right and the FACE was wrong, and the instrument cannot see a face (2026-08-11)
+
+TICK SHAPE: measurement (probe before build) — t1150's trace made a prediction: `www.jatekshop.eu`'s
+single reading-order inversion is ONE flex box 15px too tall (`91x79` against Chrome's `91x64`), and
+everything else on the page is byte-exact for nine ancestors. This tick tested it. **The prediction
+about WHICH box was right and the prediction about WHY was wrong**, and the residue is a class, not
+a site.
+
+⚠⚠⚠ **THE CONSTRUCT IS CHROME-EXACT IN OUR ENGINE, AT THE SITE'S OWN DIMENSIONS, ON ALL FOUR
+BOXES.** Reduced from the page's real declarations — a 714px 4-column grid, `gap:10px`,
+`.usp-box{display:flex;align-items:center;padding:10px}`, `.usp-content{display:flex;
+flex-direction:column;justify-content:center;flex-grow:1}`, `.usp-title{font-size:14px;
+font-weight:bold;margin-bottom:2px;line-height:1.2}`, `.usp-text{font-size:12px;line-height:1.2}`,
+and the four Hungarian strings copied out of the snapshot:
+
+```text
+                       CHROME        OURS
+   usp-content #1     91 x 79      91 x 79
+   usp-content #2     92 x 81      92 x 81
+   usp-content #3     91 x 81      91 x 81
+   usp-content #4     91 x 79      91 x 79      <- the site's divergent box
+```
+
+**Byte-identical on every row, and OUR number on the live page is the 79 this reduction produces on
+BOTH engines.** So nothing in the flex column, the grid track, the margins or the line-height is
+wrong: the only way Chrome reaches **64** on the real page is with a NARROWER FACE — `64 = 34 + 2 +
+28.8` is `.usp-text` on TWO lines where ours takes THREE. The 15px is one wrapped line, and the
+wrap point is a text-advance question.
+
+⚠⚠ **AND THE OBVIOUS FONT HYPOTHESES ARE ALL REFUTED, EACH CHROME-EXACT.** The site declares
+`@font-face{font-family:fira_sansbook; src:url(../ext/fonts/…eot); src:url(…eot?#iefix)
+format("embedded-opentype"), url(…woff2) format("woff2"), …}` — the "bulletproof" idiom, which
+carries two independent things this engine had never been asked about:
+
+```text
+                                                     CHROME     OURS
+   a bare .eot `src` FOLLOWED by a second `src`      100 x 20   100 x 20   <- Ahem loads, .eot skipped
+     with the real format() list
+   a PARENT-relative url(../ext/fonts/x.woff2)       100 x 20   100 x 20   <- resolved vs the SHEET
+     from a sheet in a subdirectory
+   an unresolvable family (control)                   72 x 20    72 x 20   <- both fall back alike
+```
+
+Three refutations, three green mutations. `parse_font_face_block` collects the urls from **every**
+`src` declaration in order and `manuk-page` tries each in turn, so the undecodable `.eot` costs
+nothing; and a `../` url resolves against the stylesheet's base, not the document's.
+
+⚠⚠⚠ **THE RESIDUE IS A NAMED INSTRUMENT GAP, AND IT EXPLAINS MORE THAN THIS SITE. `Seen.font`
+CARRIES THE *COMPUTED FAMILY*, NOT THE *USED FACE*.** Its own doc says it exists so that
+*"a 2px height divergence reads as `Chromium used Face A at 13px, we used Face B at 14px`"* — but
+both sides are populated from the computed style, so when neither engine can load a webfont and each
+falls back to a different local face, the diff prints:
+
+```text
+   www.kuechenmomente.de   [597 2639  90x18] {Raleway/18}  vs  [590 2653 103x26] {Raleway/18}
+                                                                     ^ 14% wider, 44% taller
+   www.lyreco.com          h3 [127 205 747x42]             vs  h3 [127 184 759x84]
+                                                                     ^ 12px wider AND two extra lines
+```
+
+**Agreement, in the exact column built to detect disagreement.** A box that is simultaneously WIDER
+and TALLER cannot be a placement error — wider fits more per line — so it is a face or a size, and
+the instrument is structurally unable to say which. This is check #93's mis-provisioned-reference
+class in a new place, and it is the fourth member: the datum that would attribute it is being
+reported from the wrong side of the pipeline.
+
+**THE NEXT TICK, named with its test:** make `Seen.font` report the **used face** — Chrome's side via
+`document.fonts.check()` / a per-element measurement, ours via what `swash` actually selected — and
+re-read the three sites above. If the faces differ, this whole cohort is one provisioning or
+font-loading bug and not N layout bugs; if they agree, it is a shaping-metric bug and a different
+arc. Either answer is worth more than another site.
+
+RATCHET: held trivially — nothing landed in `engine/`. The artefacts are the four-row reduction, the
+three refutations, and the instrument gap above.
+
+PERF: none — measurement only.
+
+WIKI: `docs/wiki/text-layout.md` — "A box that is WIDER *and* TALLER is a FACE, and the diff reports
+the computed family" [no-pattern]
+
 ## Tick 1150 — the reading-order exemplar names the PAIR, and the defect is one box (2026-08-11)
 
 TICK SHAPE: capability (instrument) — the board's top steer says work whichever gauge factor is

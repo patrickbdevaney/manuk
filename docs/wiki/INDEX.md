@@ -1944,6 +1944,7 @@
   - L3577 · A data: URI contains a SEMICOLON, and the declaration splitter cut every one in half (t1143)
   - L3603 · The control row is what named the organ, and the first probe got it backwards
   - L3612 · Priced before building
+  - L3634 · A box that is WIDER *and* TALLER is a FACE, and the diff reports the computed family (t1151)
 
 ## The wasm demo — running the engine inside someone else's browser
 `docs/wiki/wasm-demo.md`
@@ -1971,4 +1972,4 @@
   - L124 · Rank mechanisms by FLIP RATE, not failing-subtest count — CSS layout is a multi-assertion slog
 
 ---
-1878 sections across 22 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+1879 sections across 22 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.

@@ -3630,3 +3630,33 @@ not a separator. The over-fix — never splitting on `;` — is a RED-proven mut
 losses** — the suite has no `data:`-URI `@font-face` test. Thirteen batteries, 347 rows, 8 differ,
 all pre-existing (sub-pixel advance widths, one `display:none` instrument row, and the `@media
 (scripting)` / `ex`-vs-monospace rows t1142 priced and deferred).
+
+## A box that is WIDER *and* TALLER is a FACE, and the diff reports the computed family (t1151)
+
+A placement error makes a box *move*. A sizing error makes it wrong on one axis. **A box that is
+wider and taller at the same time is neither** — extra width fits MORE text per line, so it cannot
+also produce extra lines unless the glyphs themselves are wider. That signature means a different
+**face** (or a different used size), and it is the cheapest discriminator available in a box dump:
+
+```text
+  www.kuechenmomente.de   chrome [90x18] {Raleway/18}   ours [103x26] {Raleway/18}   +14% w, +44% h
+  www.lyreco.com          chrome h3 [747x42]            ours h3 [759x84]             +12px, +2 lines
+  www.jatekshop.eu        chrome [91x64]                ours [91x79]                 +1 wrapped line
+```
+
+⚠ **`Seen.font` cannot confirm it.** The field was added (t562) precisely so a 2px divergence could
+read as *"Chromium used Face A at 13px, we used Face B at 14px"* — but **both sides are populated
+from the COMPUTED style**, i.e. the family the cascade asked for. When neither engine can load a
+webfont and each falls back to a different local face, the column prints `{Raleway/18}` on both
+sides: **agreement, in the exact column built to detect disagreement.**
+
+Refuted while looking for the cause, so nobody re-derives them — all three Chrome-exact:
+
+| idiom | verdict |
+|---|---|
+| the "bulletproof" `@font-face`: a bare `.eot` `src`, then a second `src` with the real `format()` list | ✅ `parse_font_face_block` collects urls from *every* `src` in order; `manuk-page` tries each in turn, so an undecodable `.eot` costs nothing |
+| a PARENT-relative `url(../ext/fonts/x.woff2)` from a sheet in a subdirectory | ✅ resolved against the **stylesheet's** base, not the document's |
+| an unresolvable family | ✅ both engines fall back alike on a *local* stack |
+
+So before spending a tick on a wider-and-taller box: the layout is probably right. Ask which face
+actually rasterized it, and note that today nothing in the pipeline can answer that.
