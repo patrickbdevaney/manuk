@@ -1907,6 +1907,9 @@
   - L3305 · It is one rule with two implementations, and both had it
   - L3322 · The non-visible clause is NOT gated on being atomic, and a WPT test says so
   - L3332 · What it does NOT buy, and why that is the interesting half
+  - L3342 · line-height: 0 is a value, and the strut's two halves cancel (t1132)
+  - L3375 · Two things this fixture says that the failing row alone does not
+  - L3394 · The suite counts drift across hours, and only a same-hour set diff attributes
 
 ## The wasm demo — running the engine inside someone else's browser
 `docs/wiki/wasm-demo.md`
@@ -1934,4 +1937,4 @@
   - L124 · Rank mechanisms by FLIP RATE, not failing-subtest count — CSS layout is a multi-assertion slog
 
 ---
-1841 sections across 22 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+1844 sections across 22 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.

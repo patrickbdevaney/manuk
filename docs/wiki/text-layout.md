@@ -3338,3 +3338,63 @@ the two dominant icon idioms both dodge it: an `<svg>` icon is replaced and alre
 bottom-margin-edge branch, and an `<i class="fa">` carries a generated glyph, which is a text
 fragment. What is left — CSS-background icon spans, spacers, empty chips — is real, is Chrome-exact
 now, and is below what the shape metric resolves.
+
+## `line-height: 0` is a value, and the strut's two halves cancel (t1132)
+
+A line box's STRUT is the containing block's own font metrics folded into every line the block
+produces. It contributes `ascent + half_leading` above the baseline and `line_height - ascent -
+half_leading` below it, where `half_leading = floor((line_height - (ascent + descent)) / 2)`.
+
+At `line-height: 0` that half-leading is **negative**, and the two halves cancel to exactly zero.
+That is not a degenerate case — it is the entire point of the idiom. `line-height: 0` is the
+standard reset for the whitespace between `inline-block`s, and the standard wrapper for an icon or
+a sprite: **109 of the 373 stylesheets the burndown corpus loads declare it.**
+
+`line_metrics` computed the first half that way and the second half through a guard:
+
+```rust
+let above = strut.ascent.round() + hl_s;
+let below = if strut.line_height > 0.0 { strut.line_height - strut.ascent.round() - hl_s }
+            else                       { strut.descent.round() };   // <- the defect
+```
+
+So a declared `line-height: 0` fell into the `else` and handed back the **raw font descent** — a
+descender the `above` line had already subtracted. Every line under such a container was ~3px too
+tall, and a text-only one 8px too tall.
+
+```text
+                                                    Chrome    before    after
+   line-height:0, text only                           0         8         0
+   line-height:0, one 100x20 inline-block            20        23        20
+   ...the same plus text on the line                 20        23        20
+   ...the same with a 60px-tall atomic               60        63        60
+   ...with an <img> in place of the atomic           20        23        20
+   line-height 10/16/20/30/40px               CTRL  10/16/20/30/40 — exact BEFORE and after
+```
+
+### Two things this fixture says that the failing row alone does not
+
+**The ladder is why this is one clause and not a re-derivation.** Five non-zero line-heights were
+already Chrome-exact, and every single failure was the `line-height: 0` row of its family. The
+number being wrong makes the half-leading arithmetic the obvious suspect — and a change there would
+have moved all six rows of every family.
+
+**The `else` was never guarding what it looked like it was guarding.** It reads as a guard for a
+MISSING strut (a caller with no block style in hand). A missing strut is `(0, 0, 0, 0)`, and both
+forms compute `0` for it. The only input that reached the branch was a *declared* zero.
+
+And the tell was ten lines away the whole time: the **text-fragment** arm of the same function has
+never carried the guard (`below.max(line_height - a - hl - sh)`). One rule, two implementations, and
+the special case on only one of them — the same shape as t1131 one function over.
+
+`css/CSS2` **3907 → 3948, +41 and 0 lost** (36 in `linebox/`, three `normal-flow/inline-*-height`,
+two `margin-collapse`, one `floats-placement`); `css-flexbox` 309 → 311; grid / position / sizing /
+text / display pass-sets identical.
+
+### The suite counts drift across hours, and only a same-hour set diff attributes
+
+t1131 banked `flexbox 310 / grid 211`. The same committed source, rebuilt an hour later, reads
+`309 / 210` — while each binary is internally stable (two runs, byte-identical pass sets). So the
+reftest suite carries a ~1-test across-hour drift that a within-hour repeat cannot see. Comparing
+today's count against a number in an old journal entry can manufacture a ±1 that is not yours;
+comparing two same-hour pass SETS cannot.

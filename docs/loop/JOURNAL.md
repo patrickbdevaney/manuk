@@ -46371,6 +46371,88 @@ PERF: none — one UA rule and one narrowed branch in a cascade that already ran
 WIKI: `docs/wiki/css-cascade.md` — where Chrome draws the form-control `box-sizing` line, and why a
 layout-crate test cannot see it.
 
+## Tick 1132 — `line-height: 0` is a VALUE, and only the strut arm treated it as an absence (2026-08-11)
+
+TICK SHAPE: capability (layout) — t1131's named residue, taken with a 29-row ladder rather than with
+the one row that showed it.
+
+⚠⚠⚠ **THE LADDER IS THE FINDING: FIVE NON-ZERO LINE-HEIGHTS WERE ALREADY CHROME-EXACT AND ONLY ZERO
+WAS WRONG.** `/tmp/fx/strut.html` walks `line-height` 0/10/16/20/30/40 three ways — text only, one
+100x20 `inline-block`, and both on the same line — plus the six `vertical-align` keywords, a 60px
+atomic, `font-size:0`, and an `<img>` as the replaced twin. 24 of 29 rows Chrome-exact before the
+change, and **every one of the five failures was the `line-height:0` row of its family**:
+
+```text
+                                                    Chrome    before    after
+   line-height:0, text only                           0         8         0
+   line-height:0, one 100x20 inline-block            20        23        20
+   ...the same plus text on the line                 20        23        20
+   ...the same with a 60px-tall atomic               60        63        60
+   ...with an <img> in place of the atomic           20        23        20
+   line-height 10/16/20/30/40px               CTRL  10/16/20/30/40 — exact BEFORE and after
+   font-size:0 · v-align top/bottom/text-*    CTRL   exact before and after
+```
+
+That ladder is what makes this **one clause** rather than a re-derivation. The number is wrong, so
+the obvious suspect is the half-leading arithmetic — and a fix there would have moved all six rows.
+
+⚠⚠⚠ **THE STRUT'S TWO HALVES ARE MEANT TO CANCEL AT ZERO, AND A GUARD STOPPED THEM.** `line_metrics`
+computed `above = ascent + half_leading` and then `below = if line_height > 0.0 { line_height -
+ascent - half_leading } else { the RAW font descent }`. At `line-height: 0` the half-leading is
+NEGATIVE — that is the entire point of the idiom — so `above` had already subtracted 10px and
+`below` handed back an unsubtracted 4. **The text-fragment arm ten lines further down has never had
+that guard** (`below.max(line_height - a - hl - sh)`), which is the tell: one rule, two
+implementations, and the special case lived on exactly one of them. The `else` branch reads like a
+guard for a MISSING strut, and a missing strut is `(0,0,0,0)`, which computes 0 either way — so it
+was never protecting the case it looked like it was protecting.
+
+⚠⚠ **AND IT IS NOT A CORNER CASE: 109 of the 373 stylesheets the burndown corpus loads declare
+`line-height: 0`.** It is the standard reset for the whitespace between `inline-block`s and the
+standard icon/sprite wrapper. (Page-level frequency is not computable from the snapshot on disk —
+the CSS-to-page join key was never banked, and CORPUS-CONSTRUCTS.md's own warning is that the
+HTML-only read is a 5x undercount. The stylesheet count is a floor, stated as one.)
+
+RATCHET: held, and this is the largest suite movement of the arc. Same-hour, both binaries built
+from their own trees, pass-SETS diffed:
+
+```text
+   css/CSS2         3907 -> 3948   +41, 0 lost   (36 in linebox/, 3 normal-flow/inline-*-height,
+                                                  2 margin-collapse, 1 floats-placement)
+   css-flexbox       309 -> 311    +2, 0 lost
+   css-grid 210 · css-position 10 · css-sizing 54 · css-text 457 · css-display 31   pass-SETS identical
+   manuk-layout     166/166
+```
+
+⚠ **A NOTE ON THE COUNTS, because two of them disagree with tick 1131's own write-up.** t1131 banked
+`flexbox 310 / grid 211`; the SAME committed source rebuilt this hour reads `309 / 210`, and each
+binary is internally stable — two runs of each produce byte-identical pass sets. So the reftest
+suite carries a ~1-test ACROSS-HOUR drift that a within-hour repeat cannot see, and the +2 above is
+a same-hour set diff, not a headline subtraction. **Only a same-hour pass-SET diff attributes**;
+comparing today's count against a number in an old journal entry does not.
+
+⚠⚠ **AND THE CORPUS STILL DOES NOT MOVE: 44 of 47 sites byte-identical, and the other three are the
+SITES.** 14 CrUX-trend rows plus three anchors byte-identical, then 30 more rows: 27 same, 3 DIFF —
+and all three DIFFs are refuted by the solo-rerun rule. `vk.com` gives a fresh digest on *every*
+run of *both* binaries; `people.com` reads same then DIFF; `www.mobile.bg` reads DIFF then same.
+**An md5 of a whole box dump is not a usable A/B instrument on a drifting site** — it is maximally
+sensitive to one changed advert — and treating those three as movement would have manufactured a
+result in the direction I wanted. A construct in 29% of the corpus's stylesheets, a +41 suite
+movement, and zero attributable corpus rows: the same shape as t1131, and the honest reading is the
+one t852 already recorded — the shape metric resolves neither a 3px line box nor an 8px one, and
+*the instrument cannot price this* is not *this bought nothing*.
+
+RESIDUE: the same battery still reads `vertical-align: middle` **+1**, and it is a font-metric
+constant rather than a rule — CSS defines `middle` against the parent's **x-height** and ours
+approximates it as half the ascent (7.4 against the face's real 8.4 at 16px). It needs the x-height
+out of the font, which `line_metrics` does not currently carry, and that is its own tick.
+
+GATE: `line_height_zero_is_a_value_and_the_struts_two_halves_cancel`, with the whole ladder as
+CONTROLS. RED-proven by restoring the guard — the text-only row returns to 8.
+
+PERF: none — one branch removed from a per-line computation.
+
+WIKI: `docs/wiki/text-layout.md` — "`line-height: 0` is a value, and the strut's two halves cancel".
+
 ## Tick 1131 — an atomic inline IS a line box, and the bare ones were invisible to the search (2026-08-11)
 
 TICK SHAPE: capability (layout) — t1130 named `fit-content` for a non-stretched flex item as the next

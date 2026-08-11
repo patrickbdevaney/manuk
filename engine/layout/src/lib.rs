@@ -11408,11 +11408,32 @@ fn close_line(
     let half_leading = |a: f32, d: f32, lh: f32| ((lh - (a + d)) / 2.0).floor();
     let hl_s = half_leading(strut.0.round(), strut.1.round(), strut.2);
     let mut above = strut.0.round() + hl_s;
-    let mut below = if strut.2 > 0.0 {
-        strut.2 - strut.0.round() - hl_s
-    } else {
-        strut.1.round()
-    };
+    // ⚠⚠⚠ **`line-height: 0` IS A VALUE, NOT AN ABSENCE — AND THE GUARD THAT TREATED IT AS ONE WAS
+    // ON THE STRUT ARM ONLY** (t1132). This used to read `if strut.2 > 0.0 { … } else {
+    // strut.1.round() }`, so a declared `line-height: 0` fell through to the RAW font descent while
+    // the half-leading above had already been applied — the strut kept a descender it had just
+    // subtracted. The text-fragment arm below has never had that guard (`below.max(line_height - a
+    // - hl - sh)`), which is the tell: one rule, two implementations, and only one of them carried
+    // the special case.
+    //
+    // With `line-height: 0` at 16px the half-leading is NEGATIVE and the strut's two halves cancel
+    // exactly, which is the whole point of the idiom — it is the standard reset for the whitespace
+    // between `inline-block`s and the standard icon/sprite wrapper, and it appears in **109 of the
+    // 373 stylesheets** the burndown corpus loads. Chrome-measured, a 300px `<div>`:
+    //
+    // ```text
+    //                                              Chrome    before    after
+    //   line-height:0, text only                      0         8         0
+    //   line-height:0, one 100x20 inline-block       20        23        20
+    //   …the same plus text on the line              20        23        20
+    //   …the same with a 60px-tall atomic            60        63        60
+    //   …with an <img> instead of the atomic         20        23        20
+    //   line-height:10/16/20/30/40px          CTRL  10/16/20/30/40, exact before and after
+    // ```
+    //
+    // A zero strut (a caller with no block style in hand, `strut == (0,0,0,0)`) is unaffected: both
+    // forms compute 0.
+    let mut below = strut.2 - strut.0.round() - hl_s;
     // A floor on the line box, applied AFTER the baseline-relative maxima. `vertical-align: top` and
     // `bottom` are aligned to the LINE BOX's own edges, which do not exist until everything else has
     // been placed, so per the spec they come last and can only make the line taller. **Which END they
@@ -13834,6 +13855,99 @@ mod tests {
     ///
     /// ⚠ The *heights* alone cannot gate this: `top` and `bottom` produce the same 40px line box and
     /// differ only in where the text inside it sits. The assertions are on POSITIONS.
+    /// # G_LINE_HEIGHT_ZERO — `line-height: 0` is a VALUE, and the strut arm treated it as an absence
+    ///
+    /// The strut's two halves are `ascent + half_leading` above the baseline and `line_height -
+    /// ascent - half_leading` below it, and at `line-height: 0` the half-leading is NEGATIVE and the
+    /// two cancel exactly — a zero-tall strut, which is the entire point of the idiom. `line_metrics`
+    /// computed the first half that way and the second half through a guard: `if line_height > 0.0 {
+    /// … } else { the RAW font descent }`. So a declared `line-height: 0` kept a descender the
+    /// half-leading above it had already subtracted. **The text-fragment arm ten lines below has
+    /// never carried that guard**, which is the tell — one rule, two implementations, and the
+    /// special case lived on only one of them.
+    ///
+    /// Chrome-measured through the PRODUCT path (`boxes --html`, Stylo), a 300px `<div>` at 16px:
+    ///
+    /// ```text
+    ///                                                    Chrome    before    after
+    ///   line-height:0, text only                           0         8         0
+    ///   line-height:0, one 100x20 inline-block            20        23        20
+    ///   ...the same plus text on the same line            20        23        20
+    ///   ...the same with a 60px-tall atomic               60        63        60
+    ///   ...with an <img> in place of the atomic           20        23        20
+    ///   line-height:10 / 16 / 20 / 30 / 40px       CTRL  10/16/20/30/40, exact before AND after
+    ///   font-size:0                                CTRL   20        20        20
+    /// ```
+    ///
+    /// ⚠⚠ **THE LADDER IS THE CONTROL SET AND IT IS WHY THIS IS ONE CLAUSE AND NOT A RE-DERIVATION.**
+    /// Five non-zero line-heights were already Chrome-exact before the change and are exact after it;
+    /// only the zero row moved. A fix that touched the half-leading arithmetic itself — the obvious
+    /// place to look, since the number is wrong — would have moved all six.
+    ///
+    /// `line-height: 0` is the standard reset for the whitespace between `inline-block`s and the
+    /// standard icon/sprite wrapper: **109 of the 373 stylesheets** the burndown corpus loads
+    /// declare it. `css/CSS2` **3907 → 3948, +41 and 0 lost** — 36 of them in `linebox/`, plus
+    /// `normal-flow/inline-block-*-height` and two `margin-collapse` rows; `css-flexbox` 309 → 311.
+    ///
+    /// To watch it go RED: restore the `if strut.2 > 0.0 { … } else { strut.1.round() }` guard.
+    #[test]
+    fn line_height_zero_is_a_value_and_the_struts_two_halves_cancel() {
+        let css = "body{margin:0}.u{display:inline-block;width:100px;height:20px}";
+        let h = |style: &str, inner: &str| -> f32 {
+            let html = format!(r#"<div id="w" style="width:300px;{style}">{inner}</div>"#);
+            let (dom, root) = layout_html(&html, css, 1000.0);
+            root.node_rects(&dom)[&by_id(&dom, "w")].height.round()
+        };
+        let atomic = r#"<span class="u"></span>"#;
+
+        assert_eq!(
+            h("line-height:0", "Ay"),
+            0.0,
+            "at line-height:0 the strut's half-leading is negative and its two halves cancel, so a              text-only line is ZERO tall (Chrome 0, ours was 8)"
+        );
+        assert_eq!(
+            h("line-height:0", atomic),
+            20.0,
+            "the atomic is then the only thing holding the line open (Chrome 20, ours was 23)"
+        );
+        assert_eq!(
+            h("line-height:0", &format!("{atomic}Ay")),
+            20.0,
+            "and text beside it does not add a descender either (Chrome 20, ours was 23)"
+        );
+        assert_eq!(
+            h(
+                "line-height:0",
+                r#"<span class="u" style="height:60px"></span>"#
+            ),
+            60.0,
+            "the error was a constant 3px, not a proportion (Chrome 60, ours was 63)"
+        );
+
+        // ── THE LADDER. Every non-zero line-height was already exact and must stay exact: this is
+        // one clause of one branch, not a re-derivation of the half-leading.
+        for (lh, want) in [
+            (10.0, 20.0),
+            (16.0, 23.0),
+            (20.0, 25.0),
+            (30.0, 30.0),
+            (40.0, 40.0),
+        ] {
+            assert_eq!(
+                h(&format!("line-height:{lh}px"), atomic),
+                want,
+                "CONTROL: line-height:{lh}px was Chrome-exact before the change"
+            );
+        }
+        for (lh, want) in [(10.0, 10.0), (20.0, 20.0), (40.0, 40.0)] {
+            assert_eq!(
+                h(&format!("line-height:{lh}px"), "Ay"),
+                want,
+                "CONTROL: a plain text line at line-height:{lh}px is the commonest line on the web"
+            );
+        }
+    }
+
     #[test]
     fn the_half_leading_belongs_to_each_inline_box_not_to_the_line() {
         let html = r#"<div id="w1" style="line-height:60px"><img width="40" height="40" src="x.png"><span id="s1">Hg</span></div>
