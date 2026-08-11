@@ -46371,6 +46371,83 @@ PERF: none — one UA rule and one narrowed branch in a cascade that already ran
 WIKI: `docs/wiki/css-cascade.md` — where Chrome draws the form-control `box-sizing` line, and why a
 layout-crate test cannot see it.
 
+## Tick 1143 — a `data:` URI contains a SEMICOLON, and the declaration splitter cut every one in half (2026-08-11)
+
+TICK SHAPE: capability (CSS parse) — audit #54's steer a third time, on the highest-leverage
+`partial` row left: `doc | web fonts (@font-face, WOFF2)`. A web font changes every advance, which
+changes every wrap point, which changes every line count — the largest geometric lever named anywhere
+on the map.
+
+⚠⚠⚠ **THE FIRST PROBE CONCLUDED "WEB FONTS DO NOT LOAD" AND WAS BACKWARDS.** Its only web font was a
+`data:` URI, and every row came back byte-identical to the monospace fallback — which is very nearly
+what the `partial` row already said, so it read as confirmation. Adding a `url(go.ttf)` arm inverted
+it in one run:
+
+```text
+                                            chrome    before   after
+   src: url(go.ttf)                  CTRL    126.56     127      127
+   src: url("go.ttf")                CTRL    126.56     127      127
+   src: url(data:font/ttf;base64,…)          126.56     145      127
+   font-family: monospace            CTRL    144.5      145      145
+   font-family: NoSuchFace,monospace CTRL    144.5      145      145
+```
+
+**Web fonts have always loaded; only the `data:` form failed.** A fixture that cannot express the
+negative case reports the wrong subject as broken — t1042's `data:`-URI trap, one punctuation mark
+over, and this time it would have been written up as a whole missing subsystem.
+
+⚠⚠⚠ **THE CAUSE IS ONE LINE AND IT IS NOT IN THE FONT CODE.** `parse_declarations` was
+`text.split(';')`, and a `data:` URI carries a semicolon:
+
+```text
+   src: url(data:font/ttf;base64,AAAA…) format("truetype")
+        └───────── fragment 1 ────────┘└──────── fragment 2 ────────┘
+```
+
+Fragment 1 has an unterminated `url(`, so `parse_font_face_block` finds no source and **drops the
+whole `@font-face`**; fragment 2 is not a declaration at all. ⚠ And it is LIVE on the shipping path
+even though Stylo cascades: **face harvesting runs through manuk-css's own parser**
+(`Stylesheet::parse(&css).font_faces()`) whichever engine computes the styles. That is exactly why
+the measured symptom is a font and not a background — and it is the inverse of t1142's `@media
+(scripting)` finding, where our own evaluator was the DEAD one.
+
+⚠⚠ **PRICED BEFORE BUILDING** (check #105 §4, and it is what made this worth taking over the two
+other candidates):
+
+```text
+   data: payload in an @font-face src ...... 17 of the 166 @font-face pages  (10%)
+   ;-bearing data: URI in any CSS url() .... 89 of 761 corpus files          (11.7%)
+     of which data:image/svg+xml; ........... 1053 occurrences
+```
+
+⚠ The `background-image` half of that population is **NOT** affected on the live path — Stylo parses
+declarations correctly and only face harvesting comes through this parser. Stated rather than
+claimed: the font half is measured, and the rest is the reason to fix the SPLITTER properly instead
+of special-casing `src`.
+
+The splitter now tracks `(`/`)` depth and `"`/`'` quoting, so a `;` inside a function or a string is
+not a separator.
+
+RATCHET: **same-hour HEAD-binary control, pass-SET diff** — `css/CSS2` **3973 → 3973, ZERO gains,
+ZERO losses** (the suite has no `data:`-URI `@font-face` test — the third tick running where the
+suite's zero means *it does not exercise the parameter*). `manuk-css` 34 → 35 tests, all green.
+**Thirteen batteries, 347 rows, 8 differ, every one pre-existing**: sub-pixel ADVANCE widths (which
+the monospace controls carry too), one `display:none` element the instrument reports as a 0×0 rect,
+and the `@media (scripting)` / `ex`-vs-monospace rows t1142 priced and deferred. The web-font battery
+went **2/11 → 9/11**, the two residuals being its own monospace controls.
+
+GATE: `a_semicolon_inside_a_url_does_not_split_the_declaration` — RED-proven twice: restoring
+`text.split(';')` drops the `data:` face, and the over-fix (never splitting on `;`) collapses
+`color: red; background: blue url(a.png); margin: 0` from three declarations to one. Two further
+controls pin a `;` inside a quoted string and `!important`.
+
+PERF: one char-loop instead of `split(';')` over a declaration block, at parse time only.
+
+MAP: `doc | web fonts (@font-face, WOFF2)` `partial` → `gated`.
+
+WIKI: `docs/wiki/text-layout.md` — "A `data:` URI contains a SEMICOLON, and the declaration splitter
+cut every one in half"
+
 ## Tick 1142 — the eight gate-less map rows, PROBED — and `loading` was on the wrong two elements (2026-08-11)
 
 TICK SHAPE: capability (JS reflection) — audit #54's steer taken a second time, this time on the

@@ -3800,9 +3800,88 @@ fn consume_escaped_code_point(
     }
 }
 
+/// **Split a declaration block on `;` — but NOT on a `;` inside `url()`, a function, or a string.**
+///
+/// ⚠⚠⚠ **A `data:` URI CONTAINS A SEMICOLON, AND THE NAIVE `text.split(';')` CUT EVERY ONE IN
+/// HALF.** `src: url(data:font/ttf;base64,AAAA…) format("truetype")` becomes the two fragments
+/// `src: url(data:font/ttf` and `base64,AAAA…) format("truetype")`; the first has an unterminated
+/// `url(` so [`parse_font_face_block`] finds no source and **drops the whole `@font-face`**, and the
+/// second is not a declaration at all.
+///
+/// Measured against Chrome on a `file://` fixture, one 147KB TrueType face declared three ways and
+/// used at `font-family: <face>, monospace` so a failure falls back visibly:
+///
+/// ```text
+///                                          chrome    before   after
+///   src: url(go.ttf)                CTRL    126.56     127      127
+///   src: url("go.ttf")              CTRL    126.56     127      127
+///   src: url(data:font/ttf;base64,…)        126.56     145      127
+///   font-family: monospace          CTRL    144.5      145      145
+///   font-family: NoSuchFace,monospace CTRL  144.5      145      145
+/// ```
+///
+/// **The two `file://` rows are what identify the mechanism.** A web font declared with an ordinary
+/// URL has always loaded, so the row this defect lives in was carried as *"web fonts — partial"* and
+/// a probe that used only a `data:` URI would have concluded that web fonts do not work at all. The
+/// discriminator is the pair, and the residual 0.44px on the working rows is the ordinary sub-pixel
+/// advance gap the monospace control shows too.
+///
+/// Priced on the burndown corpus: a `data:` payload appears in an `@font-face` `src` on **17 of the
+/// 166 pages that use `@font-face` at all (10%)**, and a `;`-bearing `data:` URI appears inside some
+/// CSS `url()` on **89 of 761 files** — 1053 of those are `data:image/svg+xml;`, the icons, chevrons
+/// and checkmarks a modern stylesheet inlines.
+///
+/// ⚠ The shipping cascade is Stylo, which parses declarations correctly, so the BACKGROUND-image
+/// half of that population is not affected on the live path. The `@font-face` half is: face
+/// harvesting runs through *this* parser (`Stylesheet::parse(&css).font_faces()`) whichever engine
+/// computes the styles, which is exactly why the measured failure is a font and not a background.
+///
+/// Nesting depth is tracked over `(`/`)` and quotes over `"`/`'`, because a `;` can also appear
+/// inside a quoted string (`content: "a;b"`) and inside `calc()`-shaped functions that carry one.
+fn split_declarations(text: &str) -> Vec<String> {
+    let mut out = Vec::new();
+    let mut cur = String::new();
+    let mut depth = 0usize;
+    let mut quote: Option<char> = None;
+    let mut prev_escape = false;
+    for c in text.chars() {
+        match quote {
+            Some(q) => {
+                cur.push(c);
+                if prev_escape {
+                    prev_escape = false;
+                } else if c == '\\' {
+                    prev_escape = true;
+                } else if c == q {
+                    quote = None;
+                }
+            }
+            None => match c {
+                '"' | '\'' => {
+                    quote = Some(c);
+                    cur.push(c);
+                }
+                '(' => {
+                    depth += 1;
+                    cur.push(c);
+                }
+                ')' => {
+                    depth = depth.saturating_sub(1);
+                    cur.push(c);
+                }
+                ';' if depth == 0 => out.push(std::mem::take(&mut cur)),
+                _ => cur.push(c),
+            },
+        }
+    }
+    out.push(cur);
+    out
+}
+
 fn parse_declarations(text: &str) -> Vec<Declaration> {
     let mut decls = Vec::new();
-    for chunk in text.split(';') {
+    for chunk in split_declarations(text) {
+        let chunk = chunk.as_str();
         let chunk = chunk.trim();
         if chunk.is_empty() {
             continue;
@@ -8055,5 +8134,72 @@ mod pseudo_tests {
             !sheet.rules.is_empty(),
             "the imports must not eat the rest of the sheet"
         );
+    }
+
+    /// **A `data:` URI contains a SEMICOLON, and the declaration splitter cut every one in half.**
+    ///
+    /// `src: url(data:font/ttf;base64,AAAA) format("truetype")` split into `src: url(data:font/ttf`
+    /// and `base64,AAAA) format("truetype")`. The first has an unterminated `url(`, so
+    /// `parse_font_face_block` finds no source and **drops the whole `@font-face`** — and face
+    /// harvesting runs through this parser whichever engine computes the styles, so the failure is
+    /// live on the shipping (Stylo) path.
+    ///
+    /// Chrome-measured on a `file://` fixture, one 147KB TrueType face declared three ways, used as
+    /// `font-family: <face>, monospace` so a failure falls back visibly:
+    ///
+    /// ```text
+    ///                                          chrome    before   after
+    ///   src: url(go.ttf)                CTRL    126.56     127      127
+    ///   src: url(data:font/ttf;base64,…)        126.56     145      127
+    ///   font-family: monospace          CTRL    144.5      145      145
+    /// ```
+    ///
+    /// ⚠ **The `url(go.ttf)` control is what names the organ.** An ordinary web font has always
+    /// loaded, so a probe whose only web font was a `data:` URI would have concluded that web fonts
+    /// do not work at all — the map row was `partial` and that is very nearly what it says.
+    ///
+    /// Priced on the corpus: a `data:` payload in an `@font-face` `src` on **17 of the 166 pages
+    /// using `@font-face` (10%)**, and a `;`-bearing `data:` URI inside some CSS `url()` on **89 of
+    /// 761 files**.
+    ///
+    /// RED, run: restore `text.split(';')` in `parse_declarations` — the `data:` face yields no
+    /// `srcs` and the whole rule is dropped.
+    #[test]
+    fn a_semicolon_inside_a_url_does_not_split_the_declaration() {
+        // The subject: a `data:` URI's `;base64,` must not end the declaration.
+        let ff = parse_font_face_block(
+            r#"font-family:"Probe"; src: url(data:font/ttf;base64,AAECAwQ=) format("truetype");"#,
+        )
+        .expect("the @font-face must survive its own data: URI");
+        assert_eq!(ff.family, "probe");
+        assert_eq!(
+            ff.srcs,
+            vec!["data:font/ttf;base64,AAECAwQ=".to_string()],
+            "the src is the WHOLE data URI, semicolon and all"
+        );
+
+        // ── CONTROL 1: an ordinary URL was always fine and must stay byte-identical.
+        let plain =
+            parse_font_face_block(r#"font-family:"P"; src: url(go.ttf) format("truetype");"#)
+                .expect("plain url");
+        assert_eq!(plain.srcs, vec!["go.ttf".to_string()]);
+
+        // ── CONTROL 2: a real `;` between declarations still separates them. This is the over-fix
+        //    boundary — a splitter that stopped honouring `;` entirely would pass every row above.
+        let d = parse_declarations("color: red; background: blue url(a.png); margin: 0");
+        assert_eq!(d.len(), 3, "three declarations, got {d:?}");
+        assert_eq!(d[0].name, "color");
+        assert_eq!(d[1].value, "blue url(a.png)");
+        assert_eq!(d[2].name, "margin");
+
+        // ── CONTROL 3: a `;` inside a QUOTED string is not a separator either.
+        let q = parse_declarations(r#"content: "a;b"; color: red"#);
+        assert_eq!(q.len(), 2, "a quoted semicolon must not split, got {q:?}");
+        assert_eq!(q[0].value, r#""a;b""#);
+
+        // ── CONTROL 4: `!important` and trailing/empty chunks still behave.
+        let i = parse_declarations("color: red !important;;");
+        assert_eq!(i.len(), 1);
+        assert!(i[0].important);
     }
 }

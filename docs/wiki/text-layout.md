@@ -3573,3 +3573,60 @@ row from 40 to 20.
 losses** — the suite has no `keep-all` reftest, which is precisely why the row sat `partial` with a
 gate that could not see it. Ten batteries, 304 rows, 4 differ (three sub-pixel advance widths, one
 `display:none` instrument row).
+
+## A `data:` URI contains a SEMICOLON, and the declaration splitter cut every one in half (t1143)
+
+`parse_declarations` was `text.split(';')`. A `data:` URI carries one:
+
+```text
+  src: url(data:font/ttf;base64,AAAA…) format("truetype")
+       └────────── fragment 1 ──────┘└──────── fragment 2 ────────┘
+```
+
+Fragment 1 has an unterminated `url(`, so `parse_font_face_block` finds no source and **drops the
+whole `@font-face`**; fragment 2 is not a declaration at all. Face harvesting runs through this
+parser *whichever engine computes the styles*, so the failure is live on the shipping Stylo path —
+which is why the measured symptom is a font and not a background.
+
+Chrome-measured on a `file://` fixture, one 147KB TrueType face declared three ways and used as
+`font-family: <face>, monospace` so a failure falls back visibly:
+
+```text
+                                         chrome    before   after
+  src: url(go.ttf)                CTRL    126.56     127      127
+  src: url("go.ttf")              CTRL    126.56     127      127
+  src: url(data:font/ttf;base64,…)        126.56     145      127
+  font-family: monospace          CTRL    144.5      145      145
+  font-family: NoSuchFace,monospace CTRL  144.5      145      145
+```
+
+### The control row is what named the organ, and the first probe got it backwards
+
+The first battery declared its web font ONLY as a `data:` URI. Every `ProbeGo` row came back
+byte-identical to the monospace fallback, and the honest-looking conclusion was *"web fonts do not
+load"* — which is very nearly what the map's `partial` row already said. Adding the `url(go.ttf)`
+arm inverted it in one run: **web fonts have always loaded; only the `data:` form fails.** A fixture
+that cannot express the negative case reports the wrong subject as broken — the same shape as t1042's
+`data:`-URI trap, one punctuation mark over.
+
+### Priced before building
+
+```text
+  data: payload in an @font-face src ...... 17 of the 166 @font-face pages  (10%)
+  ;-bearing data: URI in any CSS url() .... 89 of 761 corpus files          (11.7%)
+    of which data:image/svg+xml; ........... 1053 occurrences
+```
+
+⚠ The `background-image` half of that population is **not** affected on the live path: Stylo parses
+declarations correctly, and only face harvesting comes through this parser. The claim is the font
+half, which is measured; the rest is the reason to fix the splitter properly rather than special-case
+`src`.
+
+The splitter now tracks `(`/`)` depth and `"`/`'` quoting, so a `;` inside a function or a string is
+not a separator. The over-fix — never splitting on `;` — is a RED-proven mutation: it collapses
+`color: red; background: blue url(a.png); margin: 0` from three declarations to one.
+
+**Same-hour HEAD-binary control, pass-SET diff:** `css/CSS2` **3973 → 3973, zero gains, zero
+losses** — the suite has no `data:`-URI `@font-face` test. Thirteen batteries, 347 rows, 8 differ,
+all pre-existing (sub-pixel advance widths, one `display:none` instrument row, and the `@media
+(scripting)` / `ex`-vs-monospace rows t1142 priced and deferred).
