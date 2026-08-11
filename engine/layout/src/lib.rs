@@ -10779,6 +10779,47 @@ impl Ctx<'_> {
                 (lm.ascent, lm.descent, ts.line_height, ts.font_size)
             })
             .unwrap_or((0.0, 0.0, 0.0, 0.0));
+        // ⚠⚠⚠ **A `<br>` IS A BREAK, NOT AN INLINE BOX ON THE LINE IT ENDS — AND IT WAS BOTH.** Its
+        // fragment carried `ascent = descent = 0` with `style.line_height` set to the `<br>`
+        // ELEMENT's own line-height, which sends it down `close_line`'s metric-less arm
+        // (`min_h_down = min_h_down.max(f.style.line_height)`) — a FLOOR on the line box. So a
+        // `<br>` could make the line it terminates taller than its own content, and it did:
+        //
+        // ```text
+        //                                          chrome    before    after
+        //   One<br>two                              36        37        36
+        //   One<br style="line-height:40px">two      36        58        36
+        //   One<br style="font-size:40px">two        36        66        36
+        //   One<br style="line-height:0">two   CTRL  36        36        36
+        //   a wrapped 2-line run               CTRL  36        36        36
+        //   One<span style="line-height:40px">x</span>two  CTRL  40  40  40
+        // ```
+        //
+        // **Chrome answers 36 to every `<br>` row and 40 to the `<span>` row**, which is the whole
+        // rule: an inline box's `line-height` grows its line and a break's does not. The plain row's
+        // `+1` and the styled rows' `+22`/`+30` are one mechanism at three magnitudes — and the
+        // wrapped control is what proves the strut and the metrics were never the problem, because
+        // the same two lines produced by WRAPPING were exact throughout.
+        //
+        // ⚠ **And its OWN reported rect is the FONT'S CONTENT AREA, not a line-height-tall box.**
+        // Chrome reports `0 x 17` for a `<br>` at 16px/normal in every one of those rows — including
+        // `line-height:40px` and `font-size:40px`, and including `dy 6` inside a 30px line, where the
+        // 17 sits at the half-leading. We reported `0 x 19 / 40 / 48 / 30` at `dy 0`.
+        //
+        // Both fall out of ONE correction: the `<br>` fragment is a **zero-width copy of the STRUT**
+        // — the containing block's font metrics and line-height — rather than a box built from the
+        // `<br>` element's own style. The strut is already folded into every line, so the copy
+        // cannot grow one; and having real `ascent`/`descent` puts it on `close_line`'s text arm,
+        // which is what gives it a content area at the right offset. `getBoundingClientRect` on a
+        // `<br>` is how caret and editor libraries find line ends (tick 380), so the box stays.
+        //
+        // ⚠ A caller with no block style in hand (`strut_style: None`) keeps the old hard-coded
+        // fragment exactly, so no call site changes meaning by accident.
+        let br_style = strut_style.map(|bcs| {
+            let ts = text_style(bcs, self.fonts);
+            let lm = self.fonts.line_metrics(ts.font_key, ts.font_size);
+            (ts, lm.ascent, lm.descent)
+        });
         let items = self.break_overwide_words(items, cw);
         // Usable (left_x, width) at vertical `y` for a line of height `h`: the float
         // exclusions intersected with this container's content box, dropping past
@@ -10829,31 +10870,41 @@ impl Ctx<'_> {
                     let (l, w) = open_band(&mut y, height);
                     line_left = l;
                     line_avail = w;
-                    let key = FontKey {
-                        family: FontFamily::SansSerif,
-                        bold: false,
-                        italic: false,
+                    // A zero-width copy of the STRUT — see `br_style` above. The `None` arm is
+                    // the old hard-coded fragment, byte-identical.
+                    let (bstyle, basc, bdesc) = match &br_style {
+                        Some((ts, a, d)) => (ts.clone(), *a, *d),
+                        None => (
+                            TextStyle {
+                                // A synthetic empty fragment — no text, so no order to get wrong.
+                                rtl: false,
+                                font_key: FontKey {
+                                    family: FontFamily::SansSerif,
+                                    bold: false,
+                                    italic: false,
+                                },
+                                font_size: 16.0,
+                                color: Rgba::BLACK,
+                                line_height: height,
+                                decoration: Default::default(),
+                                letter_spacing: 0.0,
+                                word_spacing: 0.0,
+                                shadow: None,
+                            },
+                            0.0,
+                            0.0,
+                        ),
                     };
+                    let breport = (basc <= 0.0 && bdesc <= 0.0).then_some(height);
                     cur.push(LineFrag {
                         x: 0.0,
                         width: 0.0,
                         text: String::new(),
-                        style: TextStyle {
-                            // A synthetic empty fragment — no text, so no order to get wrong.
-                            rtl: false,
-                            font_key: key,
-                            font_size: 16.0,
-                            color: Rgba::BLACK,
-                            line_height: height,
-                            decoration: Default::default(),
-                            letter_spacing: 0.0,
-                            word_spacing: 0.0,
-                            shadow: None,
-                        },
-                        ascent: 0.0,
-                        descent: 0.0,
+                        style: bstyle,
+                        ascent: basc,
+                        descent: bdesc,
                         node,
-                        report_h: Some(height),
+                        report_h: breport,
                         report_ascent: None,
                         atomic: None,
                         atomic_h: 0.0,
@@ -10870,30 +10921,38 @@ impl Ctx<'_> {
                     // geometry — `getBoundingClientRect` on a `<br>` is how editors and caret
                     // libraries find line ends. `<br>` ONLY: a preserved newline in `pre` also
                     // arrives as a Break carrying its text's owner, which already has geometry.
-                    let key = FontKey {
-                        family: FontFamily::SansSerif,
-                        bold: false,
-                        italic: false,
+                    let (bstyle, basc, bdesc) = match &br_style {
+                        Some((ts, a, d)) => (ts.clone(), *a, *d),
+                        None => (
+                            TextStyle {
+                                rtl: false,
+                                font_key: FontKey {
+                                    family: FontFamily::SansSerif,
+                                    bold: false,
+                                    italic: false,
+                                },
+                                font_size: 16.0,
+                                color: Rgba::BLACK,
+                                line_height: height,
+                                decoration: Default::default(),
+                                letter_spacing: 0.0,
+                                word_spacing: 0.0,
+                                shadow: None,
+                            },
+                            0.0,
+                            0.0,
+                        ),
                     };
+                    let breport = (basc <= 0.0 && bdesc <= 0.0).then_some(height);
                     cur.push(LineFrag {
                         x: pen,
                         width: 0.0,
                         text: String::new(),
-                        style: TextStyle {
-                            rtl: false,
-                            font_key: key,
-                            font_size: 16.0,
-                            color: Rgba::BLACK,
-                            line_height: height,
-                            decoration: Default::default(),
-                            letter_spacing: 0.0,
-                            word_spacing: 0.0,
-                            shadow: None,
-                        },
-                        ascent: 0.0,
-                        descent: 0.0,
+                        style: bstyle,
+                        ascent: basc,
+                        descent: bdesc,
                         node,
-                        report_h: Some(height),
+                        report_h: breport,
                         report_ascent: None,
                         atomic: None,
                         atomic_h: 0.0,
@@ -19001,18 +19060,46 @@ mod tests {
             yt[1] == 0.0,
             "a `vertical-align:top` cell must stay at the top, got {yt:?}"
         );
-        // ── NEGATIVE 3: the ROW GROWS by the shift, and the comparison has to be against the SAME
-        //    tall cell or it proves nothing. ⚠⚠⚠ The first version compared a 2-line shifted row
-        //    against a 1-line UNSHIFTED one and stayed GREEN under "do not grow the row" — the two
-        //    differ by a whole line whether or not the shift is added. The discriminator is the same
-        //    32px cell in both, so the only difference is the second line PLUS its shift.
+        // ── NEGATIVE 3: the ROW GROWS with the extra line, and the comparison has to be against
+        //    the SAME tall cell or it proves nothing. ⚠⚠⚠ The first version compared a 2-line
+        //    shifted row against a 1-line UNSHIFTED one and stayed GREEN under "do not grow the
+        //    row" — the two differ by a whole line whether or not the shift is added. The
+        //    discriminator is the same 32px cell in both, so the only difference is the added line.
+        //
+        // ⚠⚠⚠ **AND THIS ARM USED TO ASSERT A REASONED NUMBER THAT CHROME CONTRADICTS — it read
+        //    `h_two > h_one + shift`, i.e. *"the row grows by the shift AND a whole extra line."*
+        //    That is not what happens, because the second line drops into space the baseline shift
+        //    has ALREADY opened under the 32px cell.** Measured on this gate's own markup
+        //    (`--headless=new`, `border-collapse:collapse;border-spacing:0`, `td{padding:0}`):
+        //
+        // ```text
+        //                                          chrome   before   after
+        //   one line beside the 32px cell            37       37       37
+        //   two lines  (<b>B</b><br>C)               51       52       51
+        //   three lines                              69       69       69
+        // ```
+        //
+        //    The inequality was satisfied only by t1137's `<br>` defect inflating the two-line row
+        //    to 52 — a gate PINNING the engine to a bug (t1004), and it went red the moment the
+        //    `<br>` stopped flooring its line. Replaced with the measured pair: the row grows, and
+        //    the THIRD line — which lands below the shift, where nothing absorbs it — adds exactly
+        //    one full 16px line. Both halves stay RED-provable.
         let (_, h_one) =
             ys("<td style='font-size:32px'><b id='s1'>A</b></td><td><b id='s2'>B</b></td>");
         let (_, h_two) =
             ys("<td style='font-size:32px'><b id='s1'>A</b></td><td><b id='s2'>B</b><br/>C</td>");
+        let (_, h_three) = ys(
+            "<td style='font-size:32px'><b id='s1'>A</b></td><td><b id='s2'>B</b><br/>C<br/>D</td>",
+        );
         assert!(
-            h_two > h_one + shift,
-            "the row must grow by the shift AND the extra line: {h_two} vs {h_one} + {shift}"
+            h_two > h_one && (h_two - 51.0).abs() < 0.5,
+            "the row must grow with the extra line and Chrome says 51: {h_two} vs {h_one} \
+             (shift {shift})"
+        );
+        assert!(
+            (h_three - h_two - 18.0).abs() < 0.5,
+            "the THIRD line lands below the shift, so it adds a FULL 16px line — Chrome 69 after \
+             51: {h_three} vs {h_two}"
         );
     }
 
@@ -22233,6 +22320,119 @@ mod tests {
             "CONTROL: #p is h{} and MUST be h0 — it is a plain block, and only `flow-root` (or a \
              BFC root) contains floats.",
             r("p").height
+        );
+    }
+
+    /// **A `<br>` is a BREAK, not an inline box on the line it ends — and it was BOTH.**
+    ///
+    /// Its fragment carried `ascent = descent = 0` with `style.line_height` set to the `<br>`
+    /// ELEMENT's own line-height, which sends it down `close_line`'s metric-less arm
+    /// (`min_h_down = min_h_down.max(f.style.line_height)`) — a FLOOR on the line box. So a `<br>`
+    /// made the line it terminates taller than its own content, at three magnitudes:
+    ///
+    /// ```text
+    ///                                                 chrome   before   after
+    ///   One<br>two                                      36       37       36
+    ///   One<br style="line-height:40px">two             36       58       36
+    ///   One<br style="font-size:40px">two               36       66       36
+    ///   4 lines / 8 lines (<br>)                      72/144   76/152   72/144
+    ///   One<br style="line-height:0">two         CTRL   36       36       36
+    ///   the same two lines by WRAPPING           CTRL   36       36       36
+    ///   One<span style="line-height:40px">x</span>two CTRL 40     40       40
+    ///   white-space:pre newline                  CTRL   36       36       36
+    /// ```
+    ///
+    /// **Chrome answers 36 to every `<br>` row and 40 to the `<span>` row**, which is the whole
+    /// rule: an inline box's `line-height` grows its line and a break's does not. ⚠ **The WRAPPED
+    /// control is what proves the strut and the font metrics were never the problem** — the same
+    /// two lines produced by wrapping were exact throughout, so a battery that only walked the
+    /// `<br>` ladder would have blamed `line-height: normal`.
+    ///
+    /// ⚠ And a `<br>`'s own reported rect is the FONT's CONTENT AREA: Chrome says `0 x 17` at
+    /// 16px/normal in every row above, including `line-height:40px` and `font-size:40px`, and at
+    /// `dy 6` inside a 30px line, where the 17 sits at the half-leading. `getBoundingClientRect` on
+    /// a `<br>` is how caret and editor libraries find line ends (t380), so the box stays.
+    ///
+    /// RED, run: give the `<br>` fragment back its own `line_height` (`style.line_height = height`
+    /// with `ascent`/`descent` 0) — the plain row returns to 37 and the styled rows to 58/66.
+    #[test]
+    fn a_br_does_not_grow_the_line_it_ends() {
+        let (dom, root) = layout_html(
+            "<body style='margin:0'>\
+               <div class=w id=n2>One<br>two</div>\
+               <div class=w id=n4>One<br>two<br>three<br>four</div>\
+               <div class=w id=b40>One<br id=r40 style='line-height:40px'>two</div>\
+               <div class=w id=bf40>One<br style='font-size:40px'>two</div>\
+               <div class=w id=wrap>aaaaaaaaaaaaaaaaaaaaaaaaaa bbbbbbbbbbbbbbbbbbbbbbbbbb</div>\
+               <div class=w id=sp>One<span style='line-height:40px'>x</span>two</div>\
+               <div class=w id=mt>One<span style='line-height:40px'></span>two</div>\
+             </body>",
+            "body{font:16px/normal sans-serif} .w{width:200px}",
+            1200.0,
+        );
+        let rects = root.node_rects(&dom);
+        let r = |id: &str| {
+            let n = dom
+                .descendants(dom.root())
+                .find(|&n| dom.element(n).and_then(|e| e.attr("id")) == Some(id))
+                .unwrap_or_else(|| panic!("no #{id}"));
+            rects[&n]
+        };
+        // The line the `<br>` ends is the same height as one produced by WRAPPING.
+        let wrap = r("wrap").height;
+        assert!(
+            (wrap - 36.0).abs() < 0.5,
+            "CONTROL: two WRAPPED lines are h{wrap} and Chrome says 36 — if this row moved, the \
+             strut or the font metrics changed and the rest of this test proves nothing"
+        );
+        for (id, want) in [("n2", 36.0), ("n4", 72.0)] {
+            let h = r(id).height;
+            assert!(
+                (h - want) < 0.5 && (h - want) > -0.5,
+                "#{id} is h{h} and Chrome says {want} — a `<br>` line is exactly a wrapped line"
+            );
+        }
+        // The two magnitudes that make it a rule rather than a rounding error.
+        for id in ["b40", "bf40"] {
+            let h = r(id).height;
+            assert!(
+                (h - 36.0).abs() < 0.5,
+                "#{id} is h{h} and Chrome says 36 — a `<br>`'s OWN `line-height`/`font-size` does \
+                 not reach the line it ends; it is a break, not a box on that line"
+            );
+        }
+        // ── CONTROL: a real inline box's `line-height` DOES grow its line.
+        let sp = r("sp").height;
+        assert!(
+            (sp - 40.0).abs() < 0.5,
+            "CONTROL: #sp is h{sp} and Chrome says 40 — a `<span style=line-height:40px>` is an \
+             inline BOX on the line and must still raise it"
+        );
+        // ── An EMPTY inline carrying a `line-height` — the same 40 as its text-bearing twin, and
+        //    the row that says the fix is about BREAKS and not about zero-width fragments.
+        //
+        // ⚠⚠⚠ **IT IS NOT AN OVER-FIX BOUNDARY, AND A GREEN MUTATION IS WHY I KNOW.** Deleting
+        //    `close_line`'s metric-less arm outright (`min_h_down = min_h_down.max(...)`) leaves
+        //    this row, this whole test, and all 169 `manuk-layout` tests **GREEN** — twice, once
+        //    with a text-bearing control and once with this empty one. So an empty inline's 40 does
+        //    NOT come from that arm (its reporter fragment carries real metrics), and after this
+        //    tick the `<br>` was very likely the arm's only real occupant. **That is a note for a
+        //    later tick, not a deletion in this one**: "no test covers it" is how a real behaviour
+        //    gets removed. What is asserted here is only what was measured — Chrome says 40.
+        let mt = r("mt").height;
+        assert!(
+            (mt - 40.0).abs() < 0.5,
+            "CONTROL: #mt is h{mt} and Chrome says 40 — an EMPTY `<span style=line-height:40px>` \
+             has no metrics and still floors the line; only a BREAK does not"
+        );
+        // ── The `<br>`'s own rect is the font's CONTENT area, not a line-height-tall box.
+        let br = r("r40");
+        assert!(
+            (br.height - 17.0).abs() < 0.5 && br.width.abs() < 0.5,
+            "the `<br>` itself reports {}x{} and Chrome says 0x17 — the content area of the \
+             containing block's font, not its own 40px line-height",
+            br.width,
+            br.height
         );
     }
 

@@ -46371,6 +46371,86 @@ PERF: none — one UA rule and one narrowed branch in a cascade that already ran
 WIKI: `docs/wiki/css-cascade.md` — where Chrome draws the form-control `box-sizing` line, and why a
 layout-crate test cannot see it.
 
+## Tick 1137 — a `<br>` is a BREAK, not an inline box on the line it ends (2026-08-11)
+
+TICK SHAPE: capability (layout) — check #107's fourth steer, taken with a 30-row ladder and then
+re-taken with a 19-row one when the ladder named the wrong organ.
+
+⚠⚠⚠ **THE LADDER SAID `line-height: normal` AND THE WRAPPED CONTROL SAID `<br>`.** Walking the line
+count at `16px/normal` gives 18 · 37 · 56 · 76 · 152 against Chrome's 18 · 36 · 54 · 72 · 144, and
+the font-size ladder agrees — 10px, 13.333px, 14px, 20px, 24px and 32px are ALL +1 at two lines.
+Every one of those readings points at the strut. **The strut was never wrong**, and the row that says
+so is the same two lines produced by WRAPPING instead of by `<br>`: **exact, at every count, before
+and after.** A battery that walks only the construct that showed the symptom names the wrong organ.
+
+⚠⚠⚠ **AND THE SECOND BATTERY TURNED A 1px ROUNDING INTO A 30px RULE.** A `<br>` fragment carried
+`ascent = descent = 0` with `style.line_height` set to the `<br>` ELEMENT's own line-height, which
+sends it down `close_line`'s metric-less arm — `min_h_down = min_h_down.max(f.style.line_height)`, a
+**FLOOR on the line box**:
+
+```text
+                                                chrome   before   after
+   One<br>two                                     36       37       36
+   One<br style="line-height:40px">two            36       58       36
+   One<br style="font-size:40px">two              36       66       36
+   4 lines / 8 lines by <br>                    72/144   76/152   72/144
+   One<br style="line-height:0">two        CTRL   36       36       36
+   the same two lines by WRAPPING          CTRL   36       36       36
+   One<span style="line-height:40px">x</span>two CTRL 40    40       40
+   white-space:pre newline                 CTRL   36       36       36
+```
+
+**Chrome answers 36 to every `<br>` row and 40 to the `<span>` row** — an inline box's `line-height`
+grows its line and a break's does not. The plain row's `+1` and the styled rows' `+22`/`+30` are one
+mechanism at three magnitudes.
+
+⚠⚠ **Its own rect is the FONT'S CONTENT AREA too.** Chrome reports `0 x 17` for a `<br>` at
+16px/normal in every row above — including `line-height:40px` and `font-size:40px` — and at `dy 6`
+inside a 30px line, where the 17 sits at the half-leading. We reported `0 x 19 / 40 / 48 / 30` at
+`dy 0`. Both defects fall out of ONE correction: the `<br>` fragment is a **zero-width copy of the
+STRUT** rather than a box built from the `<br>`'s own style. The strut is already folded into every
+line so the copy cannot grow one, and real `ascent`/`descent` puts it on the text arm, which is what
+gives it a content area at the right offset. The box stays (t380: `getBoundingClientRect` on a `<br>`
+is how caret and editor libraries find line ends).
+
+⚠⚠⚠ **A GATE WAS PINNING THE ENGINE TO THE BUG, AND IT WENT RED THE MOMENT THE BUG WAS FIXED.**
+`a_table_cells_baseline_alignment_aligns_the_first_lines_of_its_row` asserted `h_two > h_one + shift`
+— *"the row grows by the baseline shift AND a whole extra line"* — which is REASONED, not measured,
+and wrong: the second line drops into space the shift has already opened under the tall cell. Chrome,
+on the gate's own markup: **37 / 51 / 69** for one, two and three lines. The inequality held only
+because the `<br>` inflated the two-line row to 52. Exactly t1004's shape, and the rule
+(*never retune a gate to land your own tick*) is honoured by REPLACING a reasoned number with a
+measured one, not by loosening a bar: the new pair asserts Chrome's 51 and that the THIRD line — which
+lands below the shift, where nothing absorbs it — adds exactly one full 16px line.
+
+⚠⚠ **A GREEN MUTATION IS THE FINDING, AND IT IS RECORDED RATHER THAN ACTED ON.** Deleting
+`close_line`'s metric-less arm outright leaves the new gate and all 169 `manuk-layout` tests GREEN —
+tried twice, once with a text-bearing control and once with an empty-inline one. So an empty
+`<span style="line-height:40px">`'s 40 does NOT come from that arm, and after this tick the `<br>` was
+very likely its only real occupant. **Named for a later tick, not deleted here**: *"no test covers
+it"* is how a real behaviour gets removed. The control's comment now says what it is (a measured
+Chrome row) instead of claiming a boundary it does not test.
+
+RATCHET: **same-hour HEAD-binary control with a pass-SET diff** — `css/CSS2` **3963 → 3973 (+10),
+failed 1697 → 1687, ZERO losses**: `white-space-processing-016/017/018`, `white-space-008`,
+`block-in-inline-first-line-001`, `table-anonymous-objects-212` and four `*-applies-to` rows.
+`manuk-layout` 168/168 → 169/169. **Six batteries, 180 rows**: `lines` 30/30 · `lines2` 19/19 ·
+`tblbr` 4/4 · `tcell` **41/45 → 45/45** (the `<br>` fix closed t1134's four residual rows too) ·
+`tcell2` 58/59 (the one is a `display:none` element, which Chrome reports as a 0x0 rect and we
+correctly emit no box for) · `lines3` 18/23.
+
+⚠ RESIDUE, named rather than folded in: a MIXED-FONT-SIZE line is still 1px too tall —
+`One<span style="font-size:40px">x</span>two` is 46 against Chrome's 45, span at `dy 1` against 0.
+Identical before this tick. The fold of independently-rounded ascents is where to look.
+
+GATE: `a_br_does_not_grow_the_line_it_ends` — RED-proven by restoring the `<br>`'s own `line_height`
+with zero metrics (the plain row returns to 37.2 and the styled rows to 58/66).
+
+PERF: none. One extra `text_style` + `line_metrics` per inline formatting context that contains a
+break, computed once outside the item loop.
+
+WIKI: `docs/wiki/text-layout.md` — "A `<br>` is a BREAK, not an inline box on the line it ends"
+
 ## Tick 1136 — the constitution check, and the sweep's error is a BIAS not a lottery (2026-08-11)
 
 TICK SHAPE: measurement — the cadence re-read of `CONSTITUTION.MD` (due every 8 ticks; last at 1128),

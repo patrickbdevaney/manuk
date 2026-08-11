@@ -3398,3 +3398,77 @@ t1131 banked `flexbox 310 / grid 211`. The same committed source, rebuilt an hou
 reftest suite carries a ~1-test across-hour drift that a within-hour repeat cannot see. Comparing
 today's count against a number in an old journal entry can manufacture a ±1 that is not yours;
 comparing two same-hour pass SETS cannot.
+
+## A `<br>` is a BREAK, not an inline box on the line it ends (t1137)
+
+Its fragment carried `ascent = descent = 0` with `style.line_height` set to the `<br>` **element's
+own** line-height, which sends it down `close_line`'s metric-less arm —
+`min_h_down = min_h_down.max(f.style.line_height)`, a **floor on the line box**. So a `<br>` made the
+line it terminates taller than that line's own content, at three magnitudes:
+
+```text
+                                                chrome   before   after
+  One<br>two                                      36       37       36
+  One<br style="line-height:40px">two             36       58       36
+  One<br style="font-size:40px">two               36       66       36
+  4 lines / 8 lines by <br>                     72/144   76/152   72/144
+  One<br style="line-height:0">two         CTRL   36       36       36
+  the same two lines by WRAPPING           CTRL   36       36       36
+  One<span style="line-height:40px">x</span>two CTRL 40     40       40
+  white-space:pre newline                  CTRL   36       36       36
+```
+
+**Chrome answers 36 to every `<br>` row and 40 to the `<span>` row.** That is the whole rule: an
+inline box's `line-height` grows its line, and a break's does not.
+
+### The wrapped control is what identifies the mechanism
+
+The `<br>` ladder alone (18 · 37 · 56 · 76 · 152 against Chrome's 18 · 36 · 54 · 72 · 144) reads as a
+`line-height: normal` constant that is ~1px too big, and the font-size ladder agrees — 10px, 13.333px,
+14px, 20px, 24px and 32px were all +1 at two lines. **Every one of those readings points at the
+strut, and the strut was never wrong.** The row that says so is the same two lines produced by
+WRAPPING instead: exact, at every count, before and after. A battery that walks only the construct
+that showed the symptom will name the wrong organ.
+
+### And its own rect is the font's CONTENT AREA
+
+Chrome reports `0 × 17` for a `<br>` at 16px/normal in every row above — including
+`line-height:40px` and `font-size:40px` — and at `dy 6` inside a 30px line, where the 17 sits at the
+half-leading. We reported `0 × 19 / 40 / 48 / 30` at `dy 0`.
+
+Both defects fall out of one correction: the `<br>` fragment is a **zero-width copy of the STRUT**
+(the containing block's font metrics and line-height) rather than a box built from the `<br>`'s own
+style. The strut is already folded into every line, so the copy cannot grow one; and having real
+`ascent`/`descent` puts it on `close_line`'s text arm, which is what gives it a content area at the
+right offset. The box stays — `getBoundingClientRect` on a `<br>` is how caret and editor libraries
+find line ends (t380).
+
+### The gate that was pinning the engine to the bug
+
+`a_table_cells_baseline_alignment_aligns_the_first_lines_of_its_row` asserted
+`h_two > h_one + shift` — *"the row grows by the baseline shift AND a whole extra line."* That is
+**reasoned, not measured**, and it is wrong: the second line drops into space the baseline shift has
+already opened under the tall cell. Chrome, on the gate's own markup: **37 · 51 · 69** for one, two
+and three lines. The inequality was satisfied only by the `<br>` inflation (52), and it went red the
+moment the defect was fixed — t1004's shape exactly. Replaced with the measured pair: the row grows,
+and the THIRD line (which lands below the shift, where nothing absorbs it) adds exactly one full line.
+
+### ⚠ A GREEN mutation, recorded rather than acted on
+
+Deleting `close_line`'s metric-less arm outright leaves this gate — and all 169 `manuk-layout`
+tests — **green**, with a text-bearing control and again with an empty-inline one. An empty
+`<span style="line-height:40px">`'s 40 does not come from that arm (its reporter fragment carries real
+metrics), so after this tick the `<br>` was very likely the arm's only real occupant. That is a note
+for a later tick, not a deletion in this one: *"no test covers it"* is how a real behaviour gets
+removed.
+
+**Same-hour HEAD-binary control, pass-SET diff:** `css/CSS2` **3963 → 3973 (+10), zero losses** —
+`white-space-processing-016/017/018`, `white-space-008`, `block-in-inline-first-line-001`,
+`table-anonymous-objects-212`, and four `*-applies-to-017/008/015` rows. Six batteries, 180 rows:
+`lines` 30/30 · `lines2` 19/19 · `tblbr` 4/4 · `tcell` 45/45 (was 41/45 — the `<br>` fix closed
+t1134's four residual rows too) · `tcell2` 58/59 · `lines3` 18/23.
+
+⚠ **Residue, named:** a MIXED-FONT-SIZE line is still 1px too tall — `One<span
+style="font-size:40px">x</span>two` is 46 against Chrome's 45, with the span at `dy 1` against 0.
+Untouched by this tick and identical before it; the fold of independently-rounded ascents is the
+place to look.

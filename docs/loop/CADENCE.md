@@ -11,12 +11,12 @@
 
 | | value | over |
 |---|---|---|
-| ticks landed | **843** | ticks 1–1135 |
-| median tick cycle | **28m** | 842 intervals |
-| median, last 10 | **35m** | 10 intervals |
+| ticks landed | **844** | ticks 1–1136 |
+| median tick cycle | **28m** | 843 intervals |
+| median, last 10 | **42m** | 10 intervals |
 | fastest / slowest | 5s / 5.4d | |
-| **ticks per hour** | **1.12** | 749.9h elapsed |
-| median verify wall | **63s** | 782 ticks |
+| **ticks per hour** | **1.12** | 750.7h elapsed |
+| median verify wall | **63s** | 783 ticks |
 | wall trend | 39s → 13m — getting slower ⚠️ | first 3 vs last 3 |
 
 The **cycle** is the real unit: implement → debug → verify wall → land. The wall is only part of
@@ -28,10 +28,10 @@ it, and a wall that grows taxes every future tick, so it is tracked separately f
 
 * **capabilities asserted** (`G_CAPABILITY`): 48 → **81**
 * **live gates**: 27 → **437**
-* **✅ rows in the capability ledger**: 144 → **565**
+* **✅ rows in the capability ledger**: 144 → **566**
 * **Bar 0 — oracle hangs**: 0 of 265 sites
 
-**372 of 843 ticks** (44%) moved a
+**372 of 844 ticks** (44%) moved a
 user-visible capability. The rest were instruments, infrastructure and corrections — and the
 ledger says the corrections were not overhead: three of its top three priorities were phantoms,
 and finding that out redirected everything after it.
@@ -91,7 +91,7 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 ## What a capability costs
 
 * **372** capability ticks, median cycle **28m**
-* median diff per tick: **+263 / −34** lines across 8 files
+* median diff per tick: **+264 / −34** lines across 8 files
 
 ## Every tick
 
@@ -940,5 +940,6 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 | **1133** | 2026-08-11 07:55 | 19m | measurement | 13m | +165/−33 | 437 | 81 | 56.0% · | the orphan `table-cell` is a RUN, not a box, and the narrow fix is a trade (2026-08-11) |
 | **1134** | 2026-08-11 10:52 | 2.9h | capability | 13m | +399/−33 | 437 | 81 | 56.0% · | the run is generated, and the GATE above the handler made the first version a NO-OP (2026- |
 | **1135** | 2026-08-11 10:58 | 6m | measurement | 13m | +196/−33 | 437 | 81 | 56.0% · | the band's whole negative mass is the SWEEP, and a shape score has no sample size (2026-08 |
+| **1136** | 2026-08-11 11:44 | 46m | measurement | 13m | +438/−77 | 437 | 81 | 56.0% · | the constitution check, and the sweep's error is a BIAS not a lottery (2026-08-11) |
 
 *`·` after a WPT figure means **carried forward**, not measured this tick.*

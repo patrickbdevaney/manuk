@@ -1920,6 +1920,11 @@
   - L3342 · line-height: 0 is a value, and the strut's two halves cancel (t1132)
   - L3375 · Two things this fixture says that the failing row alone does not
   - L3394 · The suite counts drift across hours, and only a same-hour set diff attributes
+  - L3402 · A <br> is a BREAK, not an inline box on the line it ends (t1137)
+  - L3424 · The wrapped control is what identifies the mechanism
+  - L3433 · And its own rect is the font's CONTENT AREA
+  - L3446 · The gate that was pinning the engine to the bug
+  - L3456 · ⚠ A GREEN mutation, recorded rather than acted on
 
 ## The wasm demo — running the engine inside someone else's browser
 `docs/wiki/wasm-demo.md`
@@ -1947,4 +1952,4 @@
   - L124 · Rank mechanisms by FLIP RATE, not failing-subtest count — CSS layout is a multi-assertion slog
 
 ---
-1854 sections across 22 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+1859 sections across 22 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
