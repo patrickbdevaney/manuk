@@ -46371,6 +46371,50 @@ PERF: none — one UA rule and one narrowed branch in a cascade that already ran
 WIKI: `docs/wiki/css-cascade.md` — where Chrome draws the form-control `box-sizing` line, and why a
 layout-crate test cannot see it.
 
+## Tick 1128 — the constitution check, and the out-of-flow reading-order class is CLOSED (2026-08-11)
+
+TICK SHAPE: measurement — the cadence re-read of `CONSTITUTION.MD` (every 8 ticks, last at 1120),
+banked as check #106 in `docs/loop/CONSTITUTION-CHECK.md`, plus the partition run that gives its
+steer a work-list.
+
+⚠⚠⚠ **FINDING 1 — TWICE IN THREE TICKS THE BOUNDARY WAS THE DEFECT, NOT THE RULE.** t1119 shipped a
+correct rule with two exclusions, each drawn by measuring which reftests failed and putting the line
+just inside them. One was **another tick's bug** (t1124's provisional static position; t1125 deleted
+the boundary for +3/−0). The other was **a word too wide** — it said *"the container is a grid"*
+where Grid §9 says *"has a DEFINITE grid position"*; t1126 narrowed it for +3/−0. **A scope narrowed
+around a failing test is not a scope; it is a note that something under it is broken, written where
+nobody re-reads it** — and it hid a defect worth two M1 crossings.
+
+⚠⚠⚠ **FINDING 2 — THE SWEEP IS NOT EVIDENCE ABOUT A SITE, MEASURED FIVE TIMES.** Across the t1121
+and t1127 sweeps, five distinct per-site readings failed to reproduce on either binary in the same
+hour, including a `crashed`. The sweep's per-site noise floor is larger than most per-site deltas it
+reports. Its DENOMINATOR is sound and the membership diff is what it is for; a row is a question.
+
+⚠⚠ **FINDING 3 — I4/VI.3's high-usage/low-magnitude case, for the THIRD recorded time.** Four
+Chrome-exact fixes, `css-flexbox` +5, `css-grid` +3, zero regressions, two confirmed M1 crossings —
+corpus pass count zero. The corpus grep put this window's construct at 69% of pages and the leverage
+was two sites.
+
+**THE PARTITION THAT GIVES THE STEER ITS WORK-LIST, run this tick:** every remaining reading-order
+site now reports **0 in-flow/out-of-flow pairs** — t1124 took that whole class, and the counts moved
+with it (`www.ikea.com` 22 → 5, `rockstaractu.com` 12 → 5). What is left is **2-sibling in-flow
+inversions scattered across distinct containers** (ikea: 5 inversions in 5 containers; lyreco and
+jatekshop: exactly one pair each). Per the standing lesson that a reading-order symptom is a WIDTH
+upstream, **the tail is near-miss geometry and must be worked as geometry, not as ordering** — which
+retires "reading_order is the dominant blocker" as a work-list heading one sweep after §9.2 wrote it.
+
+PART VI gains two clauses, both about how the loop READS its instrument rather than what it builds:
+the `--jobs 2` evidence rule, and the scope-around-a-failure rule. `LAST_CONSTITUTION_CHECK` → 1128.
+
+RATCHET: held — measurement only, `engine/` untouched.
+
+GATE: none; the artefact is check #106 and the PART VI correction.
+
+PERF: none.
+
+WIKI: `docs/loop/CONSTITUTION-CHECK.md` check #106 — the loop's own governance is its wiki page.
+[no-pattern]
+
 ## Tick 1127 — the M1 count is flat and the MEMBERSHIP is +2 engine / −2 refuted (2026-08-11)
 
 TICK SHAPE: measurement — the cadence sweep pricing the four engine fixes landed since t1121 (t1122

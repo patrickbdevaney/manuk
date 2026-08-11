@@ -7503,6 +7503,119 @@ test for the arc**, which is one sweep.
    three minutes, no build), so the suite ranks *where to look* and the corpus decides *whether to
    go*. That single step is what would have caught `::first-letter` as the thin one it was.
 
+## Check #106 — tick 1128 (2026-08-11)
+
+HORIZON H0, re-scoped by **PART VII**: the four v1 components. Its gate is *"reliably renders and
+runs the representative real internet"*, and the measurable stand-in is **M1** (`shape ≥ 0.75` AND
+jarring-clean) on the in-scope CrUX corpus.
+
+### 1 · GATE OR SCOREBOARD? — gate, and the gate's own COUNT says otherwise
+
+Ticks 1121–1127. Four Chrome-exact, RED-proven engine fixes; `css-flexbox` **304 → 309** and
+`css-grid` **208 → 211** with pass-SETS diffed and **zero regressions**; and on the corpus, M1's count
+is **flat at 24**. The membership is not:
+
+```text
+   GAINED M1   www.wdimax.com          reading_order 12 → 0    t1124, predicted
+               www.kuechenmomente.de   reading_order  5 → 0    t1124, unpredicted
+   LOST M1     app.ordertime.com       stopped RENDERING (cov 1.000 → 0.040)
+               gismart.com             REFUTED — the OLD binary reproduces it (2×2, same hour)
+```
+
+**+2 attributable, both losses not ours.** The correct report of this window is a membership list,
+and the percentage is the misleading form of the same data.
+
+### 2 · ⚠⚠⚠ TWICE IN THREE TICKS THE BOUNDARY WAS THE DEFECT, NOT THE RULE
+
+t1119 shipped a correct rule with two exclusions, each drawn by measuring which reftests failed and
+putting the line just inside them:
+
+```text
+   exclusion              why it existed              what it actually was
+   inset-less children    including them lost ONE     ANOTHER TICK'S BUG — t1124 fixed the static
+                          reftest                     position recorded in provisional space, and
+                                                      t1125 deleted the boundary for +3/−0
+   "the container is a    including grid traded 3     A WORD TOO WIDE — Grid §9 splits on "has a
+    grid"                 reftests                    DEFINITE grid position", not on the formatting
+                                                      context; t1126 narrowed it for +3/−0
+```
+
+**A scope narrowed around a FAILING TEST is not a scope — it is a note that something under it is
+broken, written where nobody re-reads it.** It cost two ticks of coverage and it hid a defect
+(t1124's) that was worth two M1 crossings on its own. The rule to carry: **a scope should be a
+sentence from the SPEC with a measurement attached, not a measurement with a sentence attached** — and
+the cheap way to find out which one you wrote is to re-read the spec paragraph *after* the tests go
+green. Both exclusions passed that re-read only once someone did it.
+
+### 3 · I5 — THE SWEEP IS NOT EVIDENCE ABOUT A SITE, AND THAT IS NOW MEASURED FIVE TIMES
+
+I5 makes the differential oracle the discovery engine. Across the t1121 and t1127 sweeps, **five
+distinct per-site readings did not reproduce on either binary in the same hour**:
+
+```text
+   t1121   serennu.com        0.574 → 0.393     solo: 0.574 on BOTH binaries
+           possssno.sbs       0.991 → 0.911     solo: 0.991 on BOTH binaries
+   t1127   probidas.lt        scored → CRASHED  solo: renders, 29.9%, on BOTH binaries
+           gismart.com        h_ovf 0 → 6       OLD binary: 5 on one of its own two runs, 0 on the other
+           app.ordertime.com  cov 1.000 → 0.040 (an origin/tree divergence, not geometry)
+```
+
+**The sweep's per-site noise floor is larger than most per-site deltas it reports.** That does not
+demote the sweep — its DENOMINATOR is sound and the membership diff above is exactly what it is for —
+but it retires a habit: *a sweep row is a question, never a finding.* The two mechanisms that ARE
+evidence are the membership diff (which sites crossed) and a same-hour old-binary control (whether a
+named site's change is ours). Both are cheap; neither was standard practice before this window.
+
+⚠ **And `crashed` gets checked FIRST.** Bar 0 outranks every visual divergence (Part 24.3), so
+`probidas.lt` was A/B'd before anything else in the tick was written. It cost four minutes and it is
+the correct order every time.
+
+### 4 · INVARIANTS
+
+- **I4 / VI.3 (usage-weighted breadth):** ⚠⚠ **the high-usage/low-magnitude case, recorded for the
+  THIRD time** (check #72, check #105 §1, here). Four correct fixes to constructs that are on most of
+  the corpus moved the pass count by zero, because the gate prices a fix by whether it crosses a
+  per-site threshold. The corpus grep this window put `display:flex` × `position:absolute` at
+  **118 of 170 pages (69%)** — and the leverage was two sites. Frequency still is not leverage.
+- **I3 (semantic model in lockstep):** satisfied, and this window it was CAUSAL twice. t1119's
+  double box made `node_rects` — and therefore the AX bbox and the agent's click point — the union of
+  two boxes; t1124's provisional static position put every out-of-flow affordance inside a drawer or
+  fixed toolbar at the page origin, which is an actuation surface before it is a visual one.
+- **I2 (never patch deps):** held. taffy is untouched; every fix this window changes what we hand it
+  or which of its answers we consume. t1123 refused to work around it by re-deriving a flex line's
+  main-axis distribution and said so.
+- **THE RATCHET:** tested three times and held three times — t1119 refused three net-positive scopes,
+  t1123 reverted a fix that moved no measured row, t1127 attributed both candidate regressions before
+  claiming the window.
+- **I1, I6, I7, I8:** untouched.
+
+### 5 · PART VI CORRECTION
+
+Two clauses for H0.1, both about how the loop READS its instrument rather than what it builds:
+
+> **A `--jobs 2` sweep row is bankable for the DENOMINATOR and is not evidence about any single
+> site** (added check #106): five per-site readings across two sweeps failed to reproduce on either
+> binary in the same hour, including one `crashed`. Rank on the M1 MEMBERSHIP diff; attribute with a
+> same-hour old-binary control; treat a per-site delta as a question.
+>
+> **A scope drawn around a failing test is a note to come back** (added check #106): both of t1119's
+> exclusions were boundaries around other defects, and deleting them cost nothing and bought six
+> reftests once those defects were named.
+
+### 6 · THE STEER — binding on the next tick
+
+1. **The out-of-flow reading-order class is CLOSED and the tail changed shape.** Every remaining
+   reading-order site now partitions as **0 in-flow/out-of-flow pairs** — t1124 took the whole class.
+   `www.ikea.com` went 22 → 5, `rockstaractu.com` 12 → 5, and what is left everywhere is **2-sibling
+   in-flow inversions scattered across distinct containers** (ikea: 5 inversions, 5 containers). Per
+   the standing lesson that a reading-order symptom is a WIDTH upstream, that tail is near-miss
+   geometry and should be worked as geometry, not as ordering.
+2. **The two genuine one-pair rows are `www.lyreco.com` and `www.jatekshop.eu`** (1 inversion, 1
+   container, shape 0.756 / 0.772). Trace before picking — §8.3.
+3. **`hnhbkis.edu.in` is still the named replaced-element residue** (2 h-overflow, shape 0.927), and
+   t1123 left the option set: thread the known cross size into `replaced_default_size`.
+4. The definite-placement grid area (t1126's residue) is the other named seam.
+
 ## Check #105 — tick 1120 (2026-08-10)
 
 HORIZON H0, re-scoped by **PART VII**: the four v1 components. Its gate is not a WPT number —
