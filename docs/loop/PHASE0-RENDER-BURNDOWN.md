@@ -340,3 +340,74 @@ byte-identical). Two follow-ons are named with their addresses:
    corpus's nearest-to-M1 site.
 2. **An abspos child with definite GRID placement is positioned against its grid area** (Grid §9),
    which `abs_containing_block` cannot express; that is why the fix stops at flex.
+
+## 9. The t1121 sweep — the gate MOVED, and both of its losses were the sweep
+
+**200-site CrUX trend corpus, release binary, `--jobs 2`, run against the tree at t1120**
+(`docs/loop/SWEEP-t1121-rows.tsv`). 614 hours stale when it started; eight ticks unpriced.
+
+```text
+   scored 110 of 132 in-scope (83.3% scorability · 68 excluded bot-wall/unreachable)
+   mean coverage 87.2%   mean shape 62.5%
+   shape >= 0.75 ...................  44/132  33.3%   (t1117: 29.3%)
+   jarring-clean ...................  53/132  40.2%   (t1117: 35.3%)
+   M1 = shape>=0.75 AND jarring-clean 29/132  22.0%   (t1117: 18.8% · t1109: 17.3%)
+   COMMON-SET BAND over the 104 scored in BOTH ...... +0.54 pts (16 up · 7 down)
+   CORPUS fidelity gauge ............................ 0.4738
+```
+
+**The pass count and the drift-robust band moved the same way for the first time in this arc.** Read
+with the ledger's own error bar (`PASS-COUNT = NOISY ±2-4 sites`, and +3.2 points is 4 sites): the
+claim is *"both signals agree on the direction"*, not *"+3.2"*.
+
+`www.marktplaats.nl` crossed exactly as t1120 predicted from a single-site A/B — `h_overflow` **2 → 0**,
+shape 0.9617 → 0.9667, all four invariants clean.
+
+### 9.1 Both attributable LOSSES were the sweep, not the engine
+
+`manuk-wpt sweep-diff` partitions the 104 common sites into **0 instrument-changed · 7
+population-changed · 21 attributable** (14 up, 7 down). Its two largest losses, run SOLO in the same
+hour against the exact binary the t1117 sweep measured (the t1118 tree — t1117 and t1118 were both
+measurement ticks):
+
+```text
+                        sweep t1117   sweep t1121   SOLO old   SOLO new
+     serennu.com           0.574         0.393        0.574      0.574     byte-identical
+     possssno.sbs          0.991         0.911        0.991      0.991     byte-identical
+```
+
+⚠⚠⚠ **Neither reproduces on either binary, and both solo runs return the OLD sweep's value.** The two
+engines agree; the sweep disagrees with itself. This is a shading the rule did not have: these are
+not site drift (the solo runs are stable to three decimals), they are the **sweep's own conditions** —
+two concurrent Chrome+manuk pairs against a 12s load budget — costing a site part of its render on one
+run and not the next. A `--jobs 2` row is bankable for the DENOMINATOR and still noisy PER SITE, so a
+per-site loss on a sweep row is a question, never a finding.
+
+### 9.2 The refreshed work-list (shape OK, blocked ONLY by jarring — 20 sites)
+
+⚠ Read §8.3 first: the tier is a place to LOOK, not a queue. Trace before picking.
+
+```text
+   www.lyreco.com          shape 0.756   1   reading-order 1
+   www.jatekshop.eu        shape 0.771   1   reading-order 1
+   simplepdf.com           shape 0.865   1   h-overflow 1     <- t1118 traced: page is 6.6x too tall
+   aksesjambi.com          shape 0.890   2   overlap 2
+   hnhbkis.edu.in          shape 0.932   2   h-overflow 2     <- t1112 traced: ONE <div>, ancestors exact
+   redinfor.com.pe         shape 0.861   4   h-overflow 3 · order 1
+   www.kuechenmomente.de   shape 0.786   5   reading-order 5
+   www.freesupertips.com   shape 0.769   6   h-ovf 1 · overlap 1 · order 4
+   www.tz.de               shape 0.850   8   h-ovf 3 · overlap 1 · order 4
+   rockstaractu.com        shape 0.897  12   reading-order 12
+   www.wdimax.com          shape 0.966  12   reading-order 12
+   www.otomoto.pl          shape 0.756  13   h-ovf 1 · overlap 1 · order 11
+   www.ikea.com            shape 0.758  22   reading-order 22
+```
+
+**`hnhbkis.edu.in` is the one row on this tier that is BOTH cheap and already traced** — t1112 found a
+single `<div>` 480px wide inside a 230px parent with every ancestor byte-exact, and refuted the obvious
+Tailwind `object-cover` reading in the same tick. It is the next engine target.
+
+⚠ **And the tier's composition has changed shape: `reading_order` is now the dominant blocker** (five
+of the top thirteen rows are reading-order-only, including three sites whose ONLY defect is 12–22
+reorder pairs at shape ≥ 0.90). That is a different mechanism family from the width/overflow arc the
+last eight ticks worked, and it is where the next *family* sweep should look.

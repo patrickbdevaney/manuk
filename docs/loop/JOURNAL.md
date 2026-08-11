@@ -46371,6 +46371,87 @@ PERF: none — one UA rule and one narrowed branch in a cascade that already ran
 WIKI: `docs/wiki/css-cascade.md` — where Chrome draws the form-control `box-sizing` line, and why a
 layout-crate test cannot see it.
 
+## Tick 1121 — the sweep priced eight ticks, and both of its losses were the sweep (2026-08-10)
+
+TICK SHAPE: measurement — check #105's binding steer, verbatim: *"RUN THE CORPUS SWEEP."* 614 hours
+stale, eight ticks unpriced, one named M1 crossing that only a corpus run can turn into a number.
+200-site CrUX trend corpus, release binary, `--jobs 2`, banked at `docs/loop/SWEEP-t1121-rows.tsv`.
+
+```text
+   scored 110 of 132 in-scope (83.3% scorability · 68 excluded bot-wall/unreachable)
+   mean coverage 87.2%   mean shape 62.5%
+   shape >= 0.75 ...................  44/132  33.3%   (t1117: 29.3%)
+   jarring-clean ...................  53/132  40.2%   (t1117: 35.3%)
+   M1 = shape>=0.75 AND jarring-clean 29/132  22.0%   (t1117: 18.8%  ·  t1109: 17.3%)
+   COMMON-SET BAND over the 104 sites scored in BOTH .... +0.54 pts (16 up · 7 down)
+   CORPUS fidelity gauge (progress-metric.sh) .......... 0.4738
+```
+
+**The largest M1 movement the loop has recorded: +3.2 points, and the flat gate the board has been
+steering around for four sweeps moved.** Read with its own error bar — the ledger prints
+`PASS-COUNT = NOISY ±2-4 sites` and 3.2 points is 4 sites, so the honest claim is *"the pass count
+and the drift-robust band moved the same way, for the first time in this arc"*, not *"+3.2"*.
+
+⚠⚠⚠ **THE PREDICTED CROSSING IS IN THE ROWS.** t1120 claimed `www.marktplaats.nl` would cross, from a
+same-hour two-binary A/B on one site. The corpus run, independently:
+
+```text
+                       coverage   shape      h_ovf  overlap  order  dead
+   t1117               1.000000   0.961728     2       0       0      0
+   t1121               1.000000   0.966667     0       0       0      0   <- M1 PASS
+```
+
+`hnhbkis.edu.in` is unmoved (2 h-overflow, shape 0.932) exactly as expected — nothing this window
+touched it — and it is now the cheapest named row on the §8.1 tier.
+
+⚠⚠⚠ **AND BOTH ATTRIBUTABLE LOSSES WERE THE SWEEP, NOT THE ENGINE — THE SOLO-RERUN RULE FIRES FOR
+THE SIXTH AND SEVENTH TIME.** `manuk-wpt sweep-diff` partitions the 104 common sites into 0
+instrument-changed, 7 population-changed and 21 attributable (14 up, 7 down). Its two largest losses,
+run SOLO in the same hour against the binary the t1117 sweep itself measured (`/tmp/manuk-wpt.old`,
+the t1118 tree — t1117 and t1118 were both measurement ticks, so it is the exact old binary):
+
+```text
+                        sweep t1117   sweep t1121   SOLO old   SOLO new
+     serennu.com           0.574         0.393        0.574      0.574     byte-identical
+     possssno.sbs          0.991         0.911        0.991      0.991     byte-identical
+```
+
+**Neither loss reproduces on either binary, and both solo runs return the OLD sweep's value** — so
+the two engines agree and the sweep disagrees with itself. That is a new shading on the rule: these
+are not site drift (the solo runs are stable), they are the SWEEP's own conditions — two concurrent
+Chrome+manuk pairs and a 12s load budget — costing a site part of its render on one run and not the
+next. A `--jobs 2` row is bankable for the DENOMINATOR and still noisy per-site.
+
+⚠⚠ **THE CORPUS-GREP JOIN TRAP FIRED AGAIN, ON THE VERY NEXT USE OF THE METHOD.** Check #105's steer
+#3 asked for the price of t1119's construct. Grepping the cached page snapshots alone gives
+**46 of 170 pages (27%)**; joining each page's stylesheets — the key is
+`echo "$absolute_href" | md5sum | cut -c1-12`, WITH the newline, and my first attempt hashed the page
+instead and joined **zero** files — gives **118 of 170 (69%)**, a 2.6× undercount that reads as a
+plausible negative. `CORPUS-CONSTRUCTS.md` documents this exact failure at t1092 and it still cost two
+attempts. **A join key computed two ways is two keys, and the check is not "does the number look
+sane", it is "how many rows joined".** (69% is a FLOOR besides: only 425 of 1,026 stylesheet fetches
+are present in the cache.) ⚠ And per t1112's clause, 69% is a frequency, not a leverage — it ranks
+where to look, and the two ticks it priced were already justified by their own Chrome-exact rows.
+
+RATCHET: held. Measurement only; `engine/` untouched (`git status` clean on it).
+
+GATE: none — the artefacts ARE the tick: `SWEEP-t1121-rows.tsv`, the `FIDELITY-PROGRESS.tsv` row, and
+the two solo controls above. The existing `G_SWEEP_DIFF_POPULATION` gate is what made the 7
+population-changed rows separable from the 21 attributable ones.
+
+PERF: none.
+
+SELF-AUDIT (due this tick, last 1111): 1 prescribed-but-not-executed item, and it is **harness-owned
+and therefore not mine to close** — *"verify wall: 965s EXCEEDS the 300s target"*. Filed here per
+PART VII rather than acted on; `scripts/` is the observer's. The banked mark in `STATUS.md` reads
+808s and the wall's own advisory calls it STALE, so the 965s is a receipt from a colder tree than the
+one the last three ticks verified. Every other prescribed item passes (49 process defects each naming
+a closing MECHANISM, 392 clusters, 1,070 pattern rows, the receipt/journal/cadence hooks all wired).
+`LAST_AUDIT_TICK` → 1121.
+
+WIKI: `docs/loop/PHASE0-RENDER-BURNDOWN.md` §9 — the t1121 sweep, its work-list, and the two losses
+that were the sweep. [no-pattern]
+
 ## Tick 1120 — a first-write-wins cache that a THROWAWAY pass can reach is permanently poisoned (2026-08-10)
 
 TICK SHAPE: capability (layout) — t1119's named residue, traced rather than guessed: after the
