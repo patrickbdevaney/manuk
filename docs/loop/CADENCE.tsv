@@ -825,3 +825,4 @@ tick	sha	epoch	iso	delta_s	shape	wall_s	files	added	deleted	gates	claims	wpt_pas
 1116	0956855f	1786397049	2026-08-10T17:24:09-04:00	3177	capability	808	8	311	41	437	81	3896	6960	0	558	0	a filled flex box answers for itself, and the frame it stops walking has to come back on (2026-08-10)
 1117	8b661d5b	1786402077	2026-08-10T18:47:57-04:00	5028	measurement	808	7	288	32	437	81	3896	6960	0	558	0	the jarring leg moved, and the mean that rose with it is a trap the reader caught (2026-08-10)
 1118	bd20119a	1786402700	2026-08-10T18:58:20-04:00	623	measurement	808	5	103	32	437	81	3896	6960	0	558	0	a jarring count of 1 does not mean the page is nearly right (2026-08-10)
+1119	d2b2e02b	1786410291	2026-08-10T21:04:51-04:00	7591	capability	808	11	481	34	437	81	3896	6960	0	559	0	the 499,432px element was never a used width; it was two boxes and a union (2026-08-10)

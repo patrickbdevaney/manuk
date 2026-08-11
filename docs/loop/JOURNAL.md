@@ -46371,6 +46371,94 @@ PERF: none — one UA rule and one narrowed branch in a cascade that already ran
 WIKI: `docs/wiki/css-cascade.md` — where Chrome draws the form-control `box-sizing` line, and why a
 layout-crate test cannot see it.
 
+## Tick 1119 — the 499,432px element was never a used width; it was two boxes and a union (2026-08-10)
+
+TICK SHAPE: capability (layout) — t1112's localisation, taken at its word and then refuted. The
+trace said `www.marktplaats.nl`'s search-form chevron has *"its OWN width of 499,432, position right,
+every ancestor right"*. It has no such width. It has TWO boxes, and `node_rects` reports their union.
+
+⚠⚠⚠ **AN OUT-OF-FLOW CHILD OF A FLEX CONTAINER WAS EMITTED TWICE, AND THE BLOCK PATH HAS HAD THE
+FILTER ALL ALONG.** Flexbox §4.1: an absolutely-positioned child does not participate in flex layout;
+`position_absolutes` owns it and resolves its insets against the container's **padding** box.
+`layout_children` states that rule for the block path (`!self.kid_is_out_of_flow(k)` at
+`engine/layout/src/lib.rs:4494`) and **`layout_flex_or_grid` returns ten lines above it**, so the
+child was also laid out as a taffy item — against the CONTENT box, because `TaffyDom::build` zeroes
+the root's padding so Manuk can apply the frame itself. *One rule, N implementations*, and the Nth is
+an absence: reached by enumerating the CONSUMERS of the rule, not by grepping the copy that is there.
+
+The union takes the right edge of the correct copy and the left edge of the wrong one, so the size
+error reads as *"the anchored side's padding"* and hides in plain sight. Chrome-measured through the
+PRODUCT path (`boxes --html`, Stylo), a 20-row battery plus an 11-row follow-up:
+
+```text
+   .c{display:flex;position:relative;padding:0 8px} > i{position:absolute;right:2px;width:24px}
+                                              Chrome      before      after
+     padding:0 8px                           [974  24]   [966  32]   [974  24]
+     padding:0 20px                          [974  24]   [954  44]   [974  24]
+     padding-left:30 padding-right:5         [974  24]   [969  29]   [974  24]
+     padding:8px 8px 0 8px  (HEIGHT arm)      24 tall     32 tall     24 tall
+     align-items:center; right:0             [576  18]   [576   0]   [576  18]
+     the container is position:static        [1174 24]   [966 232]   [1174 24]
+     display:block                CONTROL    [974  24]   [974  24]   [974  24]
+```
+
+**And the shrink-to-fit rows are where it stops being cosmetic**: an `inline-flex` container is
+measured at a **1e6** available width, the duplicate lands near x=500,000, and the union is a box
+**499,432px wide**. Three ticks (t1111 chasing the static-position table, t1112 building the trace,
+this one) were spent on a number that no line of code ever computed.
+
+⚠⚠⚠ **THE FIRST FIX WAS WRONG AND THE SUITE SAID SO IN ONE RUN: deleting the item lost the
+ALIGNMENT.** Removing abspos children from `taffy_tree::flex_items` turned **27
+`css/css-grid/abspos` reftests RED**. With every inset `auto` the box sits at its static position,
+and for a flex/grid container that is *"as if it were the sole item"* — `align-items` /
+`justify-content` / `align-self`, and for grid the child's own grid area. Taffy already computes it.
+So the item STAYS and only its BOX is dropped; taffy's slot becomes the recorded static position,
+and it has to be recorded at `extract_placed` rather than at `layout_flex_or_grid`, because a nested
+flex container never re-enters the latter and the INTRINSIC measurements would be the last writer.
+
+⚠⚠ **TWO EXCLUSIONS, EACH A MEASUREMENT AND NOT A HEDGE — I5 REFUSED THREE WIDER SCOPES THAT ALL
+LOOKED BETTER ON THE NET.** Every wider version traded a reftest away, and a trade is refused:
+
+```text
+   scope                                   css-flexbox      css-grid       verdict
+   HEAD                                     304              208
+   every abspos child of flex AND grid      309 (+5 −1)      203 (+6 −3)   4 traded   ✗
+   every abspos child of FLEX only          308 (+5 −1)      208           1 traded   ✗
+   inset-bearing abspos child of FLEX       306 (+2 −0)      208           TAKEN      ✓
+```
+
+**DIFF THE STATE, NOT THE NET** paid for itself twice here: the first scope is +4 on the net and
+loses four tests, and the second is +4 on the net and loses one. GRID is out because Grid §9 gives a
+definite-placement abspos child a containing block that is its **grid area**, which
+`abs_containing_block` cannot express — for grid the taffy box is currently the right one. A child
+static on BOTH axes is out because there is no inset to resolve and dropping it loses
+`position-absolute-containing-block-002` (a centred container that is itself `position:fixed`, so the
+flow inside it runs at a provisional origin). ⚠ In that case the static position must not be RECORDED
+either: `position_absolutes` drops a box it cannot place, and that drop is what leaves taffy's copy
+as the only one — recording it "harmlessly" re-admits the second box and costs three more reftests.
+
+RATCHET: held, and this is the tick where it did work. `css/css-flexbox` **304 → 306, +2 and 0
+LOST**; `css-grid` 208, `css-position` 10, `css-sizing` 54 all byte-identical — old binary rebuilt
+from a stashed tree and run in the same hour, pass-SETS diffed, not totals. `manuk-layout` 160/160.
+
+GATE: `an_out_of_flow_child_of_a_flex_container_is_placed_once_against_the_padding_box`
+(`engine/layout`) — the padding-box row, the untouched in-flow sibling, the inset-less row that must
+still EXIST, and the `left+right+auto` row that must still stretch to 996. RED-proven by making
+`placed_static_position_only` return `false`: the child returns to `[966 32]`.
+
+PERF: none — one predicate per placed flex/grid child, and one fewer box for the abspos ones.
+
+⚠⚠ RESIDUE, NAMED WITH ITS ADDRESS BECAUSE THE INSTRUMENT ALREADY FOUND IT: marktplaats's chevron is
+STILL at x=500,059 and it is a different defect one layer up. `pre_transform_rect` is written
+first-write-wins by `record_transform`; the intrinsic measurement at 1e6 writes FIRST, and
+`position_absolutes` prefers that map over `rects` whenever the containing-block chain carries a
+transform. `rects` held the right answer (431.53) the whole time. **A first-write-wins cache that a
+MEASURING pass can reach is a permanently poisoned cache** — that is the next tick, and the grid-area
+containing block is the one after it.
+
+WIKI: `docs/wiki/box-layout.md` — "An out-of-flow child of a flex container was given TWO boxes, and
+the reported rect was their union".
+
 ## Tick 1118 — a jarring count of 1 does not mean the page is nearly right (2026-08-10)
 
 TICK SHAPE: measurement — refreshing the near-M1 work-list against the t1117 sweep (t1111's lesson:

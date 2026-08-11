@@ -317,3 +317,26 @@ its own parent. The two invariants are doing exactly what they were designed to 
 one — the trace is one env var and one sweep run, and it separates "one small defect" from "one
 symptom of a page-scale divergence" in a single line. `hnhbkis.edu.in` and `www.marktplaats.nl`
 remain the genuine one-element rows (t1112 traced both; every ancestor exact).
+
+### 8.4 The 499,432px `<i>` was TWO BOXES, and the corpus lesson is about the METRIC (t1119)
+
+t1112 localised `www.marktplaats.nl` to one `<i>` and wrote *"its OWN width is 499,432"*. It has no
+such width. An out-of-flow child of a flex container was emitted twice — once by `position_absolutes`
+(correct, padding box) and once as a taffy item (content box, and during a shrink-to-fit measurement
+that item is laid out at a 1e6 available width) — and `LayoutBox::node_rects` reports the UNION.
+
+⚠⚠⚠ **`node_rects` UNIONS, SO ANY DOUBLE-EMITTED ELEMENT REPORTS A SIZE NO CODE EVER COMPUTED.**
+Every "impossible" width in this burndown's h-overflow column should be checked against that before a
+mechanism is guessed at: the exemplar's *number* can be an artefact of the box tree having two
+entries, not of a wrong calculation. The instrument was honest; the reading of it was not.
+
+The fix is landed and scoped (`css/css-flexbox` 304 → 306, +2 / −0; grid, position and sizing
+byte-identical). Two follow-ons are named with their addresses:
+
+1. **`pre_transform_rect` is a first-write-wins cache a MEASURING pass can reach.** The intrinsic
+   layout at 1e6 writes first, and `position_absolutes` prefers that map over `rects` whenever the
+   containing-block chain carries a transform — so marktplaats's chevron is still at x=500,059 while
+   `rects` held 431.53 all along. This is the remaining half of both h-overflow elements on the
+   corpus's nearest-to-M1 site.
+2. **An abspos child with definite GRID placement is positioned against its grid area** (Grid §9),
+   which `abs_containing_block` cannot express; that is why the fix stops at flex.

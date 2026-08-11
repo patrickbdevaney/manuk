@@ -8546,8 +8546,10 @@ impl Ctx<'_> {
         for p in placed.iter_mut() {
             self.mirror_rtl_grid_descendants(p);
         }
+        let is_grid = self.is_grid_container(node);
         let boxes: Vec<LayoutBox> = placed
             .iter()
+            .filter(|p| !self.placed_static_position_only(p, is_grid, cx + p.slot.x, cy + p.slot.y))
             .map(|p| self.extract_placed(p, cx, cy).0)
             .collect();
         // ⚠⚠⚠ **THE CONTAINER'S HEIGHT IS THE FORMATTING CONTEXT'S ANSWER, NOT ITS CHILDREN'S
@@ -8567,6 +8569,88 @@ impl Ctx<'_> {
         // formatting context computed and the call site then discarded. The `max(0)` is the only
         // guard: an empty container short-circuits above and never reaches here.
         (BoxContent::Block(boxes), solved_h.max(0.0))
+    }
+
+    /// **An out-of-flow child of a flex/grid container: taffy's slot is its STATIC POSITION, and
+    /// nothing else.** `true` when this placed node must not become a box here.
+    ///
+    /// ⚠⚠⚠ **THE BOX WAS BEING EMITTED TWICE.** Flexbox §4.1 and Grid §9 take an abspos child out
+    /// of the formatting context; `position_absolutes` owns it, and resolves its insets against the
+    /// container's **padding** box. This path emitted a second box from taffy's slot — resolved
+    /// against the container's CONTENT box, because `TaffyDom::build` zeroes the root's padding —
+    /// and `node_rects` reports the UNION of an element's boxes, so the result had the right edge
+    /// of the correct copy and the left edge of the wrong one.
+    ///
+    /// ⚠⚠ **But the slot is not worthless, and deleting the item outright was the WRONG fix — it is
+    /// where the alignment lives.** Taking abspos children out of `taffy_tree::flex_items` entirely
+    /// (tried, measured) turned **27 `css/css-grid/abspos` reftests RED**: with every inset `auto`
+    /// the box sits at its static position, and for a flex/grid container that position is *"as if
+    /// it were the sole item"* — `align-items` / `justify-content` / `align-self`, and for grid the
+    /// child's own grid area. Taffy already computes exactly that. So the item STAYS and only its
+    /// BOX is dropped.
+    ///
+    /// It also has to be recorded HERE. A flex container nested inside another is solved in the same
+    /// taffy tree and never re-enters `layout_flex_or_grid`, so recording the static position where
+    /// the formatting context is solved leaves the INTRINSIC measurements as the last writer — on
+    /// `www.marktplaats.nl` that design put the search-form chevron at **x = 500,059**, the centre
+    /// of a 1e6 measuring line.
+    ///
+    /// ⚠⚠⚠ **THE TWO EXCLUSIONS BELOW ARE MEASUREMENTS, NOT HEDGES** — each was applied, run against
+    /// the four layout suites, and kept because the wider version traded a reftest away:
+    ///
+    /// ```text
+    ///   scope                                     css-flexbox     css-grid   verdict
+    ///   HEAD                                       304                208
+    ///   every abspos child of flex AND grid        309 (+5 −1)        203 (+6 −3)   4 traded ✗
+    ///   every abspos child of FLEX only            308 (+5 −1)        208           1 traded ✗
+    ///   inset-bearing abspos child of FLEX         306 (+2 −0)        208           TAKEN ✓
+    /// ```
+    ///
+    /// **GRID is excluded** because Grid §9 gives an abspos child with *definite grid placement* a
+    /// containing block that is its **grid area**, and `abs_containing_block` can only produce the
+    /// container's padding box — so for grid the taffy box is currently the RIGHT one. The grid half
+    /// needs the grid area plumbed into the positioned pass, and that is its own tick.
+    fn placed_static_position_only(
+        &self,
+        p: &taffy_tree::Placed,
+        container_is_grid: bool,
+        abs_x: f32,
+        abs_y: f32,
+    ) -> bool {
+        if container_is_grid || !self.kid_is_out_of_flow(p.dom) {
+            return false;
+        }
+        // ⚠⚠ **A BOX AT ITS STATIC POSITION ON BOTH AXES KEEPS TAFFY'S SLOT, and that is the second
+        // measured boundary.** With every inset `auto` there is nothing for the padding box to
+        // resolve, so the only question left is the ALIGNMENT — and the slot recorded one line above
+        // is the answer to it. Dropping the box here as well loses
+        // `css/css-flexbox/abspos/position-absolute-containing-block-002` (an `align-items:center;
+        // justify-content:center` container that is itself `position:fixed`, so the flow inside it
+        // runs at a provisional origin and the static position we recorded is in that space, not the
+        // page's — the same untranslated-inner-layout class `translate_static_positions` exists for).
+        //
+        // ⚠ And the static position must NOT be recorded in that case either: `position_absolutes`
+        // drops a box it cannot place, and that drop is what leaves taffy's copy as the only one.
+        // Recording it here "harmlessly" re-admits the second box and costs three more reftests.
+        let s = self.style_of(p.dom);
+        if s.inset.left.is_auto()
+            && s.inset.right.is_auto()
+            && s.inset.top.is_auto()
+            && s.inset.bottom.is_auto()
+        {
+            return false;
+        }
+        self.static_pos.borrow_mut().insert(p.dom, (abs_x, abs_y));
+        self.static_pos_writes.set(self.static_pos_writes.get() + 1);
+        true
+    }
+
+    /// Does `node` establish a GRID formatting context? (`placed_static_position_only`'s scope.)
+    fn is_grid_container(&self, node: NodeId) -> bool {
+        matches!(
+            self.style_of(node).display,
+            manuk_css::Display::Grid | manuk_css::Display::InlineGrid
+        )
     }
 
     /// Is this node a GRID container whose inline axis runs right-to-left?
@@ -8617,6 +8701,14 @@ impl Ctx<'_> {
             let children: Vec<LayoutBox> = p
                 .children
                 .iter()
+                .filter(|c| {
+                    !self.placed_static_position_only(
+                        c,
+                        self.is_grid_container(p.dom),
+                        abs_x + c.slot.x,
+                        abs_y + c.slot.y,
+                    )
+                })
                 .map(|c| self.extract_placed(c, abs_x, abs_y).0)
                 .collect();
             let s = self.style_of(p.dom);
@@ -13860,6 +13952,108 @@ mod tests {
         assert!(
             (box_h - 500.0).abs() < 1.0,
             "max-height:100% against an indefinite parent is `none`; box should stay 500px, got {box_h}"
+        );
+    }
+
+    /// # G_ABS_IN_FLEX — an inset-bearing out-of-flow child of a FLEX container gets ONE box, from
+    /// the positioned pass
+    ///
+    /// ⚠⚠⚠ **IT WAS EMITTED TWICE.** Flexbox §4.1: *"an absolutely-positioned child of a flex
+    /// container does not participate in flex layout"* — its box belongs to `position_absolutes`,
+    /// which resolves the insets against the container's **padding** box. `layout_children` states
+    /// that rule for the block path (`!self.kid_is_out_of_flow(k)`) and the flex/grid path **returns
+    /// two lines above it**, so the child was laid out a second time as a taffy item — against the
+    /// container's CONTENT box, because `TaffyDom::build` zeroes the root's padding. `node_rects`
+    /// reports the UNION of an element's boxes, so the two copies became one box carrying the right
+    /// edge of the correct one and the left edge of the wrong one.
+    ///
+    /// Measured through the PRODUCT path (`boxes --html`, Stylo — not this harness) on a 20-row
+    /// battery, `.c{position:relative;height:40px}` in a 1000px row, the child
+    /// `{position:absolute;width:24px;height:24px;top:0}`:
+    ///
+    /// ```text
+    ///                                                       Chrome        before        after
+    ///   display:block   padding:0 8px   right:2   CONTROL  [974  24]    [974  24]    [974  24]  ✓
+    ///   display:flex    padding:0 8px   right:2            [974  24]    [966  32]    [974  24]
+    ///   display:flex    padding:0       right:2   CONTROL  [974  24]    [974  24]    [974  24]  ✓
+    ///   display:flex    padding:0 20px  right:2            [974  24]    [954  44]    [974  24]
+    ///   display:flex    padding:0 8px   left:2             [  2  24]    [  2  32]    [  2  24]
+    ///   display:inline-flex             right:2            [  4  24]    [ -4  32]    [  4  24]
+    ///   display:flex    align-items:center  right:0        [576  18]    [576   0]    [576  18]
+    ///   the container is position:static                   [1174 24]    [966 232]    [1174 24]
+    ///   display:flex    padding:0 8px   left:2 right:2     [  2 996]    [  2 996]    [  2 996]  ✓
+    ///   display:grid    padding:0 8px   right:2   OUT OF   [974  24]    [966  32]    [966  32]  —
+    ///                                             SCOPE, see `placed_static_position_only`
+    /// ```
+    ///
+    /// The size leak reads as *"the anchored side's padding"* only because the union is taken against
+    /// a right edge that was already correct; with `padding-left:30px;padding-right:5px` the width
+    /// came out 29, and with `padding:8px 8px 0 8px` the HEIGHT came out 32. **The shrink-to-fit rows
+    /// are where it stops being cosmetic**: an `inline-flex` container is measured by laying its
+    /// subtree out at a 1e6 available width, so the duplicate lands near x=500,000 and the union is a
+    /// box **499,432px wide** — `www.marktplaats.nl`'s search-form chevron, the h-overflow the
+    /// burndown has carried since t1111.
+    ///
+    /// `css/css-flexbox` **304 → 306, +2 and 0 lost**; `css-grid` / `css-position` / `css-sizing`
+    /// byte-identical (208 / 10 / 54), old binary rebuilt and run in the same hour.
+    ///
+    /// ⚠⚠ **THE NEGATIVE ROWS ARE WHAT MAKE THIS A RULE ABOUT OUT-OF-FLOW BOXES.** The in-flow
+    /// sibling must not move, the inset-less child must still EXIST at its static position, and the
+    /// `left:2;right:2;width:auto` child must still stretch to 996 — dropping every child would
+    /// satisfy the positive row and destroy all three.
+    ///
+    /// To watch it go RED: make `placed_static_position_only` return `false` — the child comes back
+    /// at `[966 32]`, the union of the two copies.
+    #[test]
+    fn an_out_of_flow_child_of_a_flex_container_is_placed_once_against_the_padding_box() {
+        let common = "body{margin:0} .c{position:relative;height:40px;padding:0 8px} \
+                      .i{position:absolute;top:0;width:24px;height:24px}";
+        let case = |extra: &str, inset: &str| {
+            let html = format!(
+                r#"<div class="c" id="c" style="{extra}"><span id="s">lbl</span><i class="i" id="i" style="{inset}"></i></div>"#
+            );
+            let (dom, root) = layout_html(&html, common, 1000.0);
+            let rects = root.node_rects(&dom);
+            let i = rects[&by_id(&dom, "i")];
+            (i.x, i.width, rects[&by_id(&dom, "s")].x)
+        };
+
+        // The block container is the control: this path always had the filter and must not move.
+        assert_eq!(case("display:block", "right:2px").0, 974.0, "block control");
+
+        // GRID is deliberately absent, and the absence is a measurement — see
+        // `placed_static_position_only`: an abspos child with definite grid placement is positioned
+        // against its GRID AREA, which the positioned pass cannot yet express, so grid keeps
+        // taffy's box. Asserting grid's current numbers here would pin the engine to that gap.
+        let (x, w, sx) = case("display:flex", "right:2px");
+        assert_eq!(
+            (x, w),
+            (974.0, 24.0),
+            "a right-anchored abspos child resolves against the flex container's PADDING box and is \
+             emitted ONCE (Chrome [974 24]); got [{x} {w}]"
+        );
+        // The in-flow sibling is untouched — only out-of-flow boxes are dropped here.
+        assert_eq!(sx, 8.0, "the in-flow item must stay at the content origin");
+
+        // No inset at all: taffy's slot IS the answer (it carries the alignment), and the box must
+        // still exist — this is the boundary `placed_static_position_only` declines to cross.
+        assert_eq!(
+            {
+                let (x, w, _) = case("display:flex", "");
+                (x, w)
+            },
+            (8.0, 24.0),
+            "an inset-less abspos child sits at its static position (Chrome [8 24])"
+        );
+
+        // Over-constrained on the inline axis with `width:auto`: still stretched, still one box.
+        assert_eq!(
+            {
+                let (x, w, _) = case("display:flex", "left:2px;right:2px;width:auto");
+                (x, w)
+            },
+            (2.0, 996.0),
+            "left+right+auto width fills the padding box (Chrome [2 996])"
         );
     }
 

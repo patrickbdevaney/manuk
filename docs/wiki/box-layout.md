@@ -8480,3 +8480,73 @@ move by one test in either direction, which is the shape of a fix that is *narro
 RESIDUE, measured and named: an **atomic inline** (`<img>`, `inline-block`) with a margin larger than
 its RTL container is still at 0 where Chrome says −200. That is the LINE BOX's placement, not
 §10.3.3 — the exclusions in this arm are correct and the defect is in `layout_inline`.
+
+## An out-of-flow child of a flex container was given TWO boxes, and the reported rect was their union (t1119)
+
+Flexbox §4.1: *"an absolutely-positioned child of a flex container does not participate in flex
+layout."* Its box belongs to `position_absolutes`, which resolves the insets against the container's
+**padding** box. `layout_children` states that rule for the block path (`!kid_is_out_of_flow(k)`)
+and **the flex/grid path returns two lines above it**, so the child was laid out a second time as a
+taffy item — against the container's CONTENT box, because `TaffyDom::build` zeroes the root's
+padding so Manuk's block layout can apply the frame itself.
+
+`LayoutBox::node_rects` reports the UNION of an element's boxes. So the element's rect took the
+right edge of the correct copy and the left edge of the wrong one, and the *size* leak reads as
+"the anchored side's padding":
+
+```text
+   .c{display:flex;position:relative;padding:0 8px}  >  i{position:absolute;right:2px;width:24px}
+
+                                                Chrome        before        after
+     padding:0 8px                             [974  24]    [966  32]    [974  24]
+     padding:0 20px                            [974  24]    [954  44]    [974  24]
+     padding-left:30px; padding-right:5px      [974  24]    [969  29]    [974  24]
+     padding:8px 8px 0 8px  (the HEIGHT arm)   [ 24 tall]   [ 32 tall]   [ 24 tall]
+     display:block          CONTROL            [974  24]    [974  24]    [974  24]
+```
+
+⚠⚠⚠ **THE SHRINK-TO-FIT ROWS ARE WHERE IT STOPS BEING COSMETIC.** An `inline-flex` container is
+measured by laying its subtree out at a **1e6** available width, so the duplicate lands near
+x=500,000 and the union is a box **499,432px wide**. That is `www.marktplaats.nl`'s search-form
+chevron — the h-overflow the burndown has carried since t1111 and t1112 localised to a single `<i>`
+whose *"own width is 499,432"*. It was never a used width at all; it was two boxes and a union.
+
+⚠⚠ **THE SLOT IS NOT WORTHLESS, AND DELETING THE ITEM OUTRIGHT WAS THE WRONG FIX.** Removing abspos
+children from `taffy_tree::flex_items` turned **27 `css/css-grid/abspos` reftests RED**: with every
+inset `auto` the box sits at its *static position*, which for a flex/grid container is *"as if it
+were the sole item"* — `align-items` / `justify-content` / `align-self`, and for grid the child's own
+grid area. Taffy already computes exactly that. So the item stays and only its BOX is dropped
+(`Ctx::placed_static_position_only`), and taffy's slot becomes the recorded static position.
+
+**Two exclusions, each a measurement rather than a hedge** — every wider scope traded a reftest away,
+and the ratchet refuses a trade:
+
+```text
+   scope                                   css-flexbox      css-grid       verdict
+   HEAD                                     304              208
+   every abspos child of flex AND grid      309 (+5 −1)      203 (+6 −3)   4 traded   ✗
+   every abspos child of FLEX only          308 (+5 −1)      208           1 traded   ✗
+   inset-bearing abspos child of FLEX       306 (+2 −0)      208           TAKEN      ✓
+```
+
+- **GRID is out of scope** because Grid §9 gives an abspos child with *definite grid placement* a
+  containing block that is its **grid area**, and `abs_containing_block` can only produce the
+  container's padding box. For grid the taffy box is currently the RIGHT one.
+- **A child at its static position on BOTH axes is out of scope** because there is no inset for the
+  padding box to resolve, and dropping its box loses
+  `css/css-flexbox/abspos/position-absolute-containing-block-002` — a centred container that is
+  itself `position:fixed`, so the flow inside it runs at a provisional origin and the static position
+  recorded here is in that space rather than the page's. ⚠ The static position must not be *recorded*
+  in that case either: `position_absolutes` DROPS a box it cannot place, and that drop is what leaves
+  taffy's copy as the only one. Recording it "harmlessly" re-admits the second box and costs three
+  more reftests.
+
+`css-position` (10) and `css-sizing` (54) are byte-identical, old binary rebuilt and run in the same
+hour. Gated by `an_out_of_flow_child_of_a_flex_container_is_placed_once_against_the_padding_box`,
+RED-proven by making `placed_static_position_only` return `false` (the child returns to `[966 32]`).
+
+**RESIDUE, named because the trace already found it.** `www.marktplaats.nl`'s chevron is still at
+x=500,059 and it is a DIFFERENT defect, one layer up: `pre_transform_rect` is written first-write-wins
+by `record_transform`, the INTRINSIC measurement at 1e6 writes first, and `position_absolutes` prefers
+that map over `rects` whenever the containing-block chain carries a transform. `rects` had the right
+answer (431.53) the whole time. That is the next tick.

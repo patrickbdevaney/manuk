@@ -5431,3 +5431,67 @@ still the cheapest tier. But the two new `missing` rows are both **line-count** 
 line count is the burndown's own named mechanism #1 (a whole-subtree `dy` cascade below it), so they
 belong in the same queue rather than in a text-rendering backlog: the generated-content one is
 already the named next brick, and it is now on the map where the next audit can see it.
+
+## Audit #52 — tick 1119 (2026-08-10) — the map enumerates FEATURES, and the defect lived at an INTERSECTION
+
+**Sources, read this session, not from memory:**
+
+- `~/wpt/css/css-flexbox/abspos/` and `~/wpt/css/css-grid/abspos/` — the two directories the suite
+  devotes to this intersection, read as a work-list and then RUN (the pass-sets, not the totals)
+- CSS Flexbox §4.1 *"absolutely-positioned children"* and CSS Grid §9 *"absolute positioning"*, via
+  the `rel=help` links the failing tests carry
+- The map itself, queried rather than recalled: `awk -F'\t'` over `docs/loop/CONSTELLATION.tsv`
+
+### The finding: 8 abspos rows, 34 flex/grid rows, and ZERO at their intersection
+
+```text
+   rows matching  absolut|abspos|out-of-flow|static position  .....  8
+   rows matching  flex|grid  ..........................................  34
+   rows matching  BOTH  ................................................  0
+```
+
+⚠⚠⚠ **THE MAP IS A LIST OF FEATURES AND THE WEB IS A LIST OF COMBINATIONS.** Tick 1119's defect —
+an out-of-flow child of a flex container emitted TWICE, reported as one box 499,432px wide — is not
+a missing feature. Both features are present, gated, and correct on their own; the *interaction*
+between them had never been named, so no instrument that reads this map could rank it, and the two
+ticks before it (1111, 1112) searched inside the wrong frame because the frame had no cell for it.
+
+This is the same failure mode as audit #51 in a new direction. #51 caught three capabilities we had
+BUILT and never claimed. This one catches a capability nobody could have claimed or disclaimed,
+because the map has no way to express *"A inside B"*. Every row is a noun.
+
+**The cheap test, and it should become part of this audit's procedure:** take the two highest-mass
+rows the loop is actively working (`CSS Flexbox layout`, and this window the abspos family) and grep
+for rows matching both. A zero is not proof of a defect — but it is proof that if there is one, the
+map cannot see it. Three of the last four layout ticks have been at such an intersection
+(`transform` × table cell, `direction:rtl` × grid axis, `position:absolute` × flex).
+
+### Added (5 rows)
+
+```text
+   gated    an out-of-flow child of a FLEX container takes no part in flex layout, and its insets
+            resolve against the container's PADDING box (Flexbox §4.1)
+   partial  the STATIC POSITION of such a child is "as if it were the sole item" — the container's
+            alignment decides it (partial: a container at a PROVISIONAL origin records inner space)
+   missing  an out-of-flow child with DEFINITE GRID PLACEMENT is positioned against its GRID AREA
+            (Grid §9) — the named reason tick 1119's fix stops at flex
+   works    `LayoutBox::node_rects` reports the UNION of an element's boxes, so a DOUBLE-EMITTED
+            element reports geometry no code ever computed
+   missing  `pre_transform_rect` is a FIRST-WRITE-WINS cache that an intrinsic MEASURING pass reaches
+```
+
+MEASURED 523 of 558; `unknown` still 36 (no row was resolved *away* this audit — two were added
+already-`missing`, which is the honest direction).
+
+### What we had been wrong about
+
+**The `instrument` class had ONE row, ten ticks after audit #49 named its absence.** #49's finding
+was *"545 rows about the ENGINE and none about the INSTRUMENTS"*; one row was added and the class
+stopped growing, while the loop went on to spend t1112 building `MANUK_HOVF_TRACE` and t1119
+discovering that `node_rects` unions duplicates — both facts about instruments, neither on the map.
+Two are added here. **A class with one row is not a covered class; it is a closed ticket.**
+
+**And the taxonomy itself has drifted:** `layout` holds 3 rows while `css` (125) and `doc` (104) carry
+the layout content, so `class` no longer partitions anything and a per-class count says nothing about
+coverage. Recorded, not fixed — renaming 230 rows is its own tick and would rewrite history that the
+receipts still refer to.
