@@ -227,7 +227,22 @@ Consequences, binding on the loop:
    have bought a subsystem to serve four sites). The mirror case is `font-feature-settings` (t1039):
    **16.4% declared, zero measurable divergence on any of its five tags**, because the effect lives in
    the *font's* feature table — data the fixture did not control. **A frequency is not a measurement
-   until its VALUES have been looked at, not just its property name.** The encoding tail is
+   until its VALUES have been looked at, not just its property name.** ⚠⚠⚠ **AND A FIFTH MODE, ADDED
+   BY CHECK #108 (tick 1144), WHICH IS ABOUT THE ORGAN THE FIX MOVES RATHER THAN ABOUT THE GREP'S
+   ARITHMETIC — THE PRICE QUOTED TO A METRIC THAT CANNOT SEE IT.** t1143 priced its `data:`-URI
+   `@font-face` fix at **17 of 166 `@font-face` pages (10.3%)** and the arithmetic reproduces exactly;
+   asking WHICH FACES those seventeen are gives **fourteen icon fonts** (`swiper-icons` ×10, `VideoJS`,
+   `agGridAlpine`, `JudgemeStar`, `social-likes`) consumed through `content:` on a **pseudo-element**,
+   and **two** real text faces. A dropped icon face changes which glyph is painted inside a fixed-size
+   button; it does not move an element box, and the structural probe **enumerates DOM nodes — a
+   pseudo-element has no node** (t1094). Against M1 the honest price is **2 of 166 = 1.2%**, an
+   **8.5×** inflation, and `CORPUS-CONSTRUCTS.md` had already banked the deflating rule in its own
+   read-me (*"`clip: rect()` is 36% of pages and M1 is structurally blind to it — a high usage-weight
+   number does not imply a scoreable one"*) where nothing read it. ⚠ Ten of the seventeen are also the
+   SAME vendor stylesheet, so the count is not seventeen independent observations. **The step is one
+   clause longer than "price it against the corpus": price it, then ask WHICH ORGAN the fix moves and
+   whether the metric you quoted the price to can see that organ.** Five modes now, all inflating,
+   against one under-count (the t1092 join key) — that is a bias, not a set of accidents. The encoding tail is
    **done for H0 purposes**; further encoding depth is anti-Pareto and constitutionally out of scope.
 
 **⚠️ CORRECTED (check #73, tick 860) — VI.3's OWN NUMBER IS NOW STALE, AND PART VII RETIRED THE WHOLE

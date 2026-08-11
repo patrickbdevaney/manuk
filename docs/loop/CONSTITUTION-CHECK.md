@@ -7503,6 +7503,155 @@ test for the arc**, which is one sweep.
    three minutes, no build), so the suite ranks *where to look* and the corpus decides *whether to
    go*. That single step is what would have caught `::first-letter` as the thin one it was.
 
+## Check #108 — tick 1144 (2026-08-11)
+
+Re-read of `CONSTITUTION.MD` PART I (I1-I8), PART VI.2/VI.3 and PART VII, anchored to the seven ticks
+since check #107 (t1137-t1143). **Three findings. The first is a MEASUREMENT taken inside this check —
+it re-prices the window's largest stated corpus number and the honest figure is 8.5× smaller.**
+
+### FINDING 1 — ⚠⚠⚠ THE WINDOW RANKED ON THE CORPUS GREP, AND THE GREP'S PRICE WAS QUOTED AGAINST A METRIC THAT CANNOT SEE 15 OF ITS 17 ROWS
+
+Two of the window's five capability ticks were decided by an explicit corpus price, and t1143's is the
+largest number the window published:
+
+```text
+   t1142   loading="lazy"                       49 of 385 pages   12.7%   TAKEN
+           the `ex` unit vs mono                 5 of 373                 deferred
+           @media (scripting)                    1 of 373                 REFUSED
+   t1143   data: payload in an @font-face src   17 of 166 pages   10.3%   TAKEN
+```
+
+The `17 / 166` reproduces exactly off the cached corpus (`/tmp/corpsnap` 385 + `/tmp/corpcss` 373, the
+same snapshot `CORPUS-CONSTRUCTS.md` prescribes), so the arithmetic is right. **What was never asked is
+WHICH FACES those seventeen are.** One command, no build:
+
+```text
+   swiper-icons ....... 10 files      Swiper's carousel-arrow icon font
+   VideoJS ............  1            player-control icons
+   agGridAlpine .......  1            ag-Grid's icon set
+   JudgemeStar ........  1            review-star icons
+   social-likes .......  1            share-button icons
+   ──────────────────── 14 of 17 are ICON fonts, consumed through `content:` on a PSEUDO-ELEMENT
+   Inter ..............  1            a real text face
+   Jura ...............  1            a real text face
+   ──────────────────── 2 of 17 can move a line box
+```
+
+⚠⚠⚠ **THE LOOP HAS BANKED THE DEFLATING RULE TWICE AND DID NOT RUN IT.** `CORPUS-CONSTRUCTS.md` says
+it in its own read-me section — *"`clip: rect()` is 36% of pages and M1 is structurally blind to it …
+a high usage-weight number does not imply a scoreable one"* — and t1094 banked the mechanism that makes
+it true here: **the structural probe enumerates DOM nodes, and a pseudo-element has no node.** A
+dropped icon face changes which glyph is painted inside a fixed-size button; it does not move an
+element box, and the instrument that would be asked to price it scores element boxes. So the tick's own
+stated weight of **10.3%** is, against M1, **1.2% (2 of 166)**.
+
+⚠⚠ **AND TEN OF THE SEVENTEEN ARE ONE VENDOR BUNDLE.** `swiper-icons` is the same Swiper stylesheet
+shipped by ten different origins. Seventeen files is not seventeen independent observations — the
+t1089-1100 finding (*counting rows that share a string breeds false levers*) at a new place, and it
+compounds with the first half: the ten are all icon rows.
+
+⚠ **This does NOT retire t1143.** A declaration splitter that cuts every `data:` URI in half is a
+parser defect on its own terms, its RED-proof is two-sided, and the wider `;`-bearing-`data:`-in-`url()`
+figure (89 of 761 files) is the real correctness story. What is wrong is the **PRICE**, and the price is
+what VI.3 ranks on. This is a **fifth** distinct way the corpus grep has been caught inflating —
+after the unanchored property grep, the co-occurrence, the legacy no-op VALUE, and frequency-is-not-
+leverage — and, like all four before it, it inflates. The grep has now been caught over-stating five
+times and under-stating **once** (the t1092 join key), which is a bias, not a set of accidents.
+
+**The rule this yields, and it is one clause longer than "price it against the corpus":** *price it
+against the corpus, then ask WHICH ORGAN the fix moves and whether the metric you quoted the price to
+can see that organ.* Paint is not geometry; a pseudo-element is not a node.
+
+### FINDING 2 — ⚠⚠⚠ FOUR OF FIVE CAPABILITY TICKS HAD NO EXTERNAL INSTRUMENT, AND THE ONE QUEUED ITEM THAT DOES WAS NAMED "THE NEXT TICK" SEVEN TICKS AGO
+
+The window's whole external evidence, from the journal's own RATCHET lines:
+
+```text
+   t1137  <br> is a break              css/CSS2  3963 -> 3973   +10 / -0
+   t1138  line-height:normal rounding  css/CSS2  3973 -> 3973     0 / 0    "uses Ahem or runs at 16px"
+   t1140  word-break: keep-all         css/CSS2  3973 -> 3973     0 / 0    "no keep-all reftest at all"
+   t1142  `loading` reflection         (no suite — JS)
+   t1143  the declaration splitter     css/CSS2  3973 -> 3973     0 / 0    "no data:-URI @font-face test"
+```
+
+Each zero is correctly read by its own tick as *"the suite does not exercise the parameter"* — that
+reading is right and is now three-for-three. **The property nobody has stated is what the run of them
+means: after t1137, the only evidence any of these fixes has is a battery the tick itself authored.**
+
+⚠ The batteries are **Chrome-referenced**, so they are not self-confirming on VALUES — t1138's control
+row killing its own hypothesis in three lines is the proof that this half works. They are self-selected
+on **POPULATION**, and population is precisely what the corpus sweep supplies. So the window measured
+*breadth* four times (26/27, 44/44, 6 of 8 rows already correct, 9/11) and measured *weight* zero times
+— while VI.3 binds the loop to `usage-weight × failing-breadth`. **Finding 1 is what that costs.**
+
+⚠⚠ **AND THE QUEUED ITEM WITH EXTERNAL EVIDENCE WAS SKIPPED FOR SEVEN TICKS.** Check #107's steer §3
+named the CSS 2.1 §17.2.1 anonymous **CELL** rule *"the named next tick"* and listed its RED-proof —
+six existing reftests (`table-anonymous-objects-197..200`, `normal-flow/table-in-inline-001`,
+`visuren/table-pseudo-in-part3-1`). It is the one candidate on the board whose acceptance test is
+**not written by the tick that takes it**, and t1134's sibling rule paid `+15 / −0` in that exact
+family. Steer §4 (the `<br>` two-line run) was taken and paid; §1 and §2 are rules about reading a
+sweep and **no sweep has run since t1135**, eight ticks ago, against a cadence rule of five to six.
+
+### FINDING 3 — ⚠⚠ I3 IS SATISFIED FOR THE FIFTH CONSECUTIVE CHECK BY ACCIDENT OF SCOPE, AND THE NAMED DEBT IS NOW FIVE CHECKS OLD
+
+Checks #72, #100, #101 and #107 each wrote this sentence. This window earns it again and by a wider
+margin: **t1138 changes the height of every `line-height: normal` line box in the engine**, which flows
+through `LayoutBox::node_rects` → `manuk_a11y::build_tree_with_rects` → `A11yNode.bbox` → the agent's
+click point, so every click point in the engine moved by up to a pixel and **nothing asserted it**. It
+is right — the shared producer is why — but it is a property of the architecture, not of a check that
+was run.
+
+⚠ The named debt is unchanged and still unwritten: `node_rects`'s `lift` gives an icon-wrapping
+`<span>` the icon's 4px box instead of its own 17px line box (Chrome `[11,0,8,17]` vs ours
+`[11,10,8,4]`), so the agent's click point is computed 3.5px low. First named at t851/check #72,
+**293 ticks ago**. ⚠⚠ And Finding 1 has just made it larger than it looked: the corpus's icon-font
+population is not small, and an icon-wrapping `<span>` is exactly the element those fourteen
+`swiper-icons`/`VideoJS`/`agGridAlpine` stylesheets build. **Ranked on M1 it is a rounding-scale shape
+term; ranked on I3 — which PART VII item 2 calls the differentiator that earns the most polish — it is
+a mis-actuation surface on the commonest button idiom on the corpus.** Two orderings, and VI.3 says
+usage-weight wins where they disagree.
+
+### 4 · INVARIANTS
+
+- **I2 (never patch deps):** ⚠ held, and **tested explicitly for the first time in several windows**.
+  t1142 met a real Stylo wall — the `scripting` media feature exists only under `gecko/media_features.rs`
+  and the servo build does not implement it — and **refused both the patch and the workaround**, the
+  latter on I4 grounds (1 of 373 stylesheets). The refusal is recorded with both halves so the wall is
+  not re-derived. That is I2 and I4 agreeing, and it is the cleanest invariant application this window.
+- **I3:** see Finding 3. Fifth consecutive by accident.
+- **I4 / VI.3 (Pareto):** ⚠⚠ **the discipline was applied and the instrument it was applied with was
+  wrong by 8.5× — see Finding 1.** The direction is right: t1142 refused a 1/373 construct outright and
+  deferred a 5/373 one, which is I4 working. The defect is in the term, not the rule.
+- **I5 (the differential oracle is the discovery engine):** ⚠⚠ **the oracle has not been run in eight
+  ticks.** Both instruments the loop owns — the CSS 2.1 suite and the corpus sweep — were silent or
+  unrun for four of the window's five capability ticks. I5 does not say *own* a discovery engine; it
+  says it *is* the discovery engine, maintained as first-class infrastructure.
+  ⚠ The **same-hour HEAD-binary pass-SET control** ran on all four suite readings, which is check
+  #103's rule honoured without exception. Zero losses banked across the window (`+10 / −0`, then three
+  `0 / 0`). No regression was traded for a capability.
+- **PART VII:** held. All five capability ticks are component 1 (daily-driver rendering parity) or the
+  reflection surface that feeds it; nothing touched a deferred species. t1141 met a Tier-0 harness
+  failure (`verify wall: 1221s`), **measured it into a bimodal table the observer can act on, and did
+  not edit `scripts/`** — the rule working as written.
+- **I1, I6, I7, I8:** untouched this window.
+
+### 5 · THE STEER — binding on the next tick
+
+1. ⚠⚠⚠ **RUN THE SWEEP. It is the next tick.** Eight ticks unmeasured against a five-to-six cadence;
+   five landed engine changes with no corpus price; and check #107's two top steer items are rules
+   about reading a sweep that has not been run since they were written. Finding 1 says the loop is
+   currently ranking on the one instrument it has caught lying five times, with the one that would
+   correct it switched off.
+2. ⚠⚠⚠ **WHEN THE SUITE READS ZERO TWICE RUNNING, TAKE THE FIX THE SUITE CAN SEE.** The §17.2.1
+   anonymous CELL rule is still the named next engine tick and still has its six-reftest RED-proof.
+   Prefer a candidate whose acceptance test the tick does not author.
+3. ⚠⚠ **PRICE, THEN ASK WHICH ORGAN.** Extend the `CORPUS-CONSTRUCTS.md` step by one question: *does
+   the metric I quoted this price to score the thing this fix changes?* Paint is not geometry, and a
+   pseudo-element has no node. On this window that one question moves 10.3% to 1.2%.
+4. ⚠⚠ **THE `node_rects` LIFT IS FIVE CHECKS OLD AND FINDING 1 JUST RE-RANKED IT UPWARD.** Land it as
+   an **I3** tick with an agent-side click-point assertion in the same tick — not as a shape term. It is
+   the icon-button idiom, and PART VII item 2 says that surface earns the most polish.
+
 ## Check #107 — tick 1136 (2026-08-11)
 
 Re-read of `CONSTITUTION.MD` PART I (I1-I8), PART VI.2/VI.3 and PART VII, anchored to the eight ticks

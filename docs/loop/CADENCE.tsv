@@ -849,3 +849,4 @@ tick	sha	epoch	iso	delta_s	shape	wall_s	files	added	deleted	gates	claims	wpt_pas
 1140	f4848c3f	1786468190	2026-08-11T13:09:50-04:00	273	capability	808	4	90	33	437	81	3896	6960	0	568	0	the map's steer, obeyed: UAX #14 is 26/27 done, and the 27th was `keep-all` (2026-08-11)
 1141	203a2aa1	1786470368	2026-08-11T13:46:08-04:00	2178	measurement	808	10	206	40	437	81	3896	6960	0	569	0	the self-audit, and the wall is BIMODAL by a factor of ten (2026-08-11)
 1142	b228b1db	1786472924	2026-08-11T14:28:44-04:00	2556	capability	808	9	320	35	437	81	3896	6960	0	570	0	the eight gate-less map rows, PROBED — and `loading` was on the wrong two elements (2026-08-11)
+1144	a881c936	1786473701	2026-08-11T14:41:41-04:00	777	measurement	808	6	274	34	437	81	3896	6960	0	570	0	the constitution check, and the window's biggest price was 8.5× too high (2026-08-11)

@@ -46371,6 +46371,81 @@ PERF: none — one UA rule and one narrowed branch in a cascade that already ran
 WIKI: `docs/wiki/css-cascade.md` — where Chrome draws the form-control `box-sizing` line, and why a
 layout-crate test cannot see it.
 
+## Tick 1144 — the constitution check, and the window's biggest price was 8.5× too high (2026-08-11)
+
+TICK SHAPE: measurement — the cadence re-read of `CONSTITUTION.MD` (due every 8 ticks; last at 1136),
+banked as check #108 in `docs/loop/CONSTITUTION-CHECK.md`, covering t1137-t1143.
+
+⚠⚠⚠ **FINDING 1 IS A MEASUREMENT, NOT AN OBSERVATION — AND IT RE-PRICES THE WINDOW'S LARGEST NUMBER.**
+t1143 priced its `data:`-URI `@font-face` fix at **17 of 166 `@font-face` pages (10.3%)** and the
+arithmetic reproduces exactly off the cached corpus. **What was never asked is WHICH FACES those
+seventeen are.** One command, no build:
+
+```text
+   swiper-icons ....... 10 files      Swiper's carousel-arrow icon font
+   VideoJS ............  1            player-control icons
+   agGridAlpine .......  1            ag-Grid's icon set
+   JudgemeStar ........  1            review-star icons
+   social-likes .......  1            share-button icons
+   ──────────────────── 14 of 17 are ICON fonts, consumed through `content:` on a PSEUDO-ELEMENT
+   Inter ..............  1            a real text face
+   Jura ...............  1            a real text face
+   ──────────────────── 2 of 17 can move a line box   ->   1.2%, not 10.3%
+```
+
+A dropped icon face changes which glyph is painted inside a fixed-size button; it does not move an
+element box, and **the structural probe enumerates DOM nodes — a pseudo-element has no node** (t1094).
+⚠⚠ **THE LOOP HAD BANKED THE DEFLATING RULE TWICE AND DID NOT RUN IT** — `CORPUS-CONSTRUCTS.md`'s own
+read-me says *"`clip: rect()` is 36% of pages and M1 is structurally blind to it; a high usage-weight
+number does not imply a scoreable one."* ⚠ Ten of the seventeen are also the SAME vendor stylesheet, so
+seventeen files is not seventeen independent observations (t1089-1100, at a new place). **This does not
+retire t1143** — a splitter that cuts every `data:` URI in half is a parser defect on its own terms and
+its RED-proof is two-sided. What is wrong is the PRICE, and VI.3 ranks on the price. Recorded in
+`CONSTITUTION.MD` VI.3 as the **fifth** inflation mode of the corpus grep; all five inflate, against one
+under-count.
+
+⚠⚠⚠ **FINDING 2 — FOUR OF FIVE CAPABILITY TICKS HAD NO EXTERNAL INSTRUMENT.** `css/CSS2` read
+`3963 → 3973 (+10)` at t1137 and then **3973 → 3973 three times running** (t1138, t1140, t1143), each
+correctly read by its own tick as *"the suite does not exercise the parameter."* The property nobody
+stated is what the RUN of them means: after t1137 the only evidence any of these fixes has is a battery
+the tick itself authored. Those batteries are **Chrome-referenced**, so they are not self-confirming on
+VALUES — t1138's control row killing its own hypothesis in three lines is the proof that half works —
+but they are self-selected on **POPULATION**, and population is what the sweep supplies. The window
+measured *breadth* four times and *weight* zero times, while VI.3 binds the loop to
+`usage-weight × failing-breadth`. Finding 1 is what that costs. ⚠⚠ And check #107's §3 —
+the CSS 2.1 §17.2.1 anonymous **CELL** rule, *"the named next tick"*, with a six-reftest RED-proof it
+does not have to author — has now been skipped for seven ticks. **No sweep since t1135, eight ticks,
+against a five-to-six cadence.**
+
+⚠⚠ **FINDING 3 — I3 SATISFIED BY ACCIDENT FOR THE FIFTH CONSECUTIVE CHECK, AND FINDING 1 RE-RANKED THE
+DEBT UPWARD.** t1138 changed the height of every `line-height: normal` line box in the engine, so every
+agent click point moved by up to a pixel through the shared `node_rects` producer and nothing asserted
+it. The named debt is 293 ticks old: `node_rects`'s `lift` gives an icon-wrapping `<span>` the icon's
+4px box rather than its own 17px line box, so the click point lands 3.5px low — **and an icon-wrapping
+`<span>` is exactly what those fourteen icon-font stylesheets build.** Ranked on M1 that is a
+rounding-scale shape term; ranked on I3, which PART VII item 2 calls the differentiator that earns the
+most polish, it is a mis-actuation surface on the commonest button idiom on the corpus.
+
+COMPLIANCE: **I2 tested explicitly and held** — t1142 hit a real Stylo wall (the `scripting` media
+feature exists only under `gecko/media_features.rs`) and refused both the patch and the workaround, the
+latter on I4 grounds at 1 of 373. **I5 held on control discipline** (same-hour HEAD-binary pass-SET diff
+on all four suite readings, `+10/−0` then three `0/0`, zero regressions traded) **and is strained on
+its own terms** — the discovery engine has not been run in eight ticks. **PART VII held**: t1141 met a
+Tier-0 harness failure (`verify wall: 1221s`), measured it into a bimodal table for the observer, and
+did not edit `scripts/`.
+
+THE STEER (full text in check #108): **run the sweep — it is the next tick** · when the suite reads
+zero twice running, take the fix the suite CAN see (§17.2.1 anonymous cells) · price against the
+corpus, then ask WHICH ORGAN the fix moves and whether the metric you quoted the price to can see that
+organ · land the `node_rects` lift as an I3 tick with a click-point assertion.
+
+RATCHET: held trivially — nothing landed in `engine/`.
+
+PERF: none — measurement only.
+
+WIKI: none — this tick's artefacts are `docs/loop/CONSTITUTION-CHECK.md` check #108 and the VI.3
+amendment, which are the wiki for the loop's own governance. [no-pattern]
+
 ## Tick 1143 — a `data:` URI contains a SEMICOLON, and the declaration splitter cut every one in half (2026-08-11)
 
 TICK SHAPE: capability (CSS parse) — audit #54's steer a third time, on the highest-leverage
