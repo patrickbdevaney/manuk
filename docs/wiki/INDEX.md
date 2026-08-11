@@ -447,6 +447,10 @@
   - L8771 · A stretched cross size outranks a NATURAL main size, and the fix is a pair (t1130)
   - L8812 · An orphan table-cell is a RUN, not a box (t1133)
   - L8839 · The rows that decide how to fix it are the ones with more than one cell
+  - L8862 · The run is generated, and the GATE above the handler is what made the first version a no-op (t1134)
+  - L8891 · The gate above the handler
+  - L8909 · box-sizing: border-box on a cell, exposed by routing orphans through layout_cell
+  - L8918 · The scope, and it names an unbuilt RULE rather than a failing test
 
 ## browser-capabilities.md
 `docs/wiki/browser-capabilities.md`
@@ -1939,4 +1943,4 @@
   - L124 · Rank mechanisms by FLIP RATE, not failing-subtest count — CSS layout is a multi-assertion slog
 
 ---
-1846 sections across 22 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+1850 sections across 22 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.

@@ -8858,3 +8858,78 @@ The work is box GENERATION, not table arithmetic — `layout_table` already size
 the row. Group the run, wrap it once, and pick block-level vs `inline-table` from the parent; the
 `display:inline` parent row is the discriminator, and it already matches (an inline-table IS atomic,
 so both engines read 24).
+
+## The run is generated, and the GATE above the handler is what made the first version a no-op (t1134)
+
+t1133's spec, built. `Ctx::anonymous_table_runs` groups a maximal run of consecutive misparented
+table-internal siblings into ONE anonymous table; `layout_table` was split so its 900 lines of
+arithmetic run over a table box with **no DOM node** (`layout_table_box(node: Option<NodeId>, …)`),
+and `collect_table_rows` now takes a CHILD LIST rather than a table node so the run can be handed to
+it directly. The anonymous table's style is `ComputedStyle::anonymous_from(parent)` — inheritable
+properties down, everything else initial, which is what stops it inheriting the container's `width`
+and painting its background twice.
+
+**Measured against Chrome** (`--headless=new --hide-scrollbars`, 400px block, `16px/normal
+sans-serif`, parent-relative), 45-row battery:
+
+```text
+                                         chrome     before     after
+   one cell, height:20px     wrapper     20         24         20
+   ...height:8px             wrapper      8         18          8
+   ...height:auto, EMPTY     wrapper      0         18          0
+   two cells, 20px and 30px  both        30         20 / 30    30
+   three cells, one wraps    all         36         18/37/18   36
+   text, cell, text          wrapper     56         24         56
+   a bare table-row's width:100px         0        100          0
+   a cell in `display:inline`  CTRL      24         24         24
+   a real <td> in a real <table> CTRL    20         20         20
+
+   28 of 45 rows differed -> 4, and the 4 are one PRE-EXISTING defect: a `<br>`-broken
+   two-line run measures 37 where Chrome says 36, in a REAL <table> as well (the control row).
+```
+
+### The gate above the handler
+
+The first version of this fix changed **not one row of the battery** — byte-identical output, which
+points upstream every time. The arm was in the block-container loop; the fixtures never reached it.
+`layout_children` has a pure-IFC fast path guarded by `has_block`, and `is_block_level` answers about
+a *child's own* `display` — a misparented cell's display is `table-cell`, so a block whose only
+children are cells took the fast path and the new arm never ran. The anonymous table is BLOCK-level,
+so its presence is itself a `has_block` term:
+
+```rust
+let has_block = !anon_tables.is_empty()
+    || flow_kids.iter().any(|&k| is_block_level(self.dom, self.styles, k));
+```
+
+This is the third sighting of the same shape in this file, and the comment ten lines below it
+describes the second one (the float gate, t1048-1052): **one rule, two implementations, and the
+second one is a GATE rather than a handler — which is why it reads as an absence.**
+
+### `box-sizing: border-box` on a cell, exposed by routing orphans through `layout_cell`
+
+`auto_col_widths` added the cell's frame to a specified `width` and `layout_cell` added it to a
+specified `height`, both unconditionally. Under `border-box` the declared length already contains
+the frame, so a padded cell that opted in came out one frame too large on both axes — `100x20`
+declared, `110x30` drawn. True of a real `<td>` for exactly as long; it only became visible when
+orphan cells stopped taking `layout_block` (which has always been right) and started taking
+`layout_cell`.
+
+### The scope, and it names an unbuilt RULE rather than a failing test
+
+§17.2.1 has three generation rules and this tick builds two: the anonymous **table** and its
+anonymous **row**. The third — *"if a child C of a `table-row` is not a `table-cell`, generate an
+anonymous `table-cell` around C and all consecutive non-cell siblings"* — is not built, because a
+cell with no element cannot be handed to `layout_cell`, which reads its style and children from a
+`NodeId`. `collect_cells` therefore drops such content, and wrapping a mixed row would turn a
+*misplaced* box into a *missing* one.
+
+Measured, not reasoned: with no guard, `css/CSS2` went **+15 / −6**, and the six were
+`table-anonymous-objects-197..200` (a row holding `<span cell>a</span> bc <span cell>d</span>` lost
+the ` bc `) plus the two *blocks inside inlines* tests. `Ctx::table_run_drops_content` refuses the
+wrap for exactly those rows, and the six reftests are the RED-proof for the tick that builds
+anonymous cells.
+
+**Same-hour old-binary control, pass-SET diff:** `css/CSS2` **3948 → 3963 (+15), zero losses**.
+`manuk-layout` 168/168. The headline `+15` and the set diff agree, which is the check t1131 taught —
+an aggregate can hide a −1 behind a +1.

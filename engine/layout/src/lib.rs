@@ -2251,6 +2251,38 @@ fn is_atomic_inline_replaced(dom: &Dom, styles: &StyleMap, node: NodeId) -> bool
         )
 }
 
+/// **Is `d` a TABLE-INTERNAL display** — a box CSS 2.1 §17.2.1 refuses to let stand on its own?
+///
+/// `table-caption`, `table-column` and `table-column-group` are deliberately out: a caption is
+/// laid out by [`Ctx::layout_table_box`] from the table's own children, and a column box generates
+/// no content box at all (see [`generated_box_is_suppressed`]).
+fn is_table_internal(d: Display) -> bool {
+    matches!(
+        d,
+        Display::TableCell
+            | Display::TableRow
+            | Display::TableRowGroup
+            | Display::TableHeaderGroup
+            | Display::TableFooterGroup
+    )
+}
+
+/// **May a box with display `d` legitimately PARENT a table-internal box?**
+///
+/// The negative of this is what makes a table-internal box *misparented*. `Display::Table` covers
+/// `inline-table` too (the cascade maps both to one value), which is right here: both parent their
+/// own rows and cells, and [`Ctx::layout_table`] handles them identically.
+fn parents_table_internals(d: Display) -> bool {
+    matches!(
+        d,
+        Display::Table
+            | Display::TableRow
+            | Display::TableRowGroup
+            | Display::TableHeaderGroup
+            | Display::TableFooterGroup
+    )
+}
+
 /// **Is `node` laid out as an ATOMIC INLINE — a box that IS a line-box participant rather than a
 /// producer of line boxes?**
 ///
@@ -3451,7 +3483,10 @@ impl Ctx<'_> {
         // ⚠ THE REACH is the pre-flexbox layout vocabulary: `display:table; margin:0 auto` to
         // shrink-wrap and centre, and `display:inline-table` — still everywhere in the CrUX tail.
         if s.display == Display::Table {
-            if self.collect_table_rows(node).is_empty() {
+            if self
+                .collect_table_rows(self.dom.children(node).collect())
+                .is_empty()
+            {
                 if s.width == Dim::Auto && s.width_keyword.is_none() && !s.width_stretch {
                     s.width_keyword = Some(IntrinsicSize::FitContent);
                 }
@@ -4523,9 +4558,22 @@ impl Ctx<'_> {
             .copied()
             .filter(|&k| !self.kid_is_float(k) && !self.kid_is_out_of_flow(k))
             .collect();
-        let has_block = flow_kids
-            .iter()
-            .any(|&k| is_block_level(self.dom, self.styles, k));
+        // CSS 2.1 §17.2.1 — the runs of misparented table-internal siblings this container must
+        // wrap in an anonymous table. Computed once over the whole child list because a run is a
+        // property of the SEQUENCE, not of any one child; the block loop below emits the table when
+        // it reaches the run's head and skips its remaining members.
+        let (anon_tables, anon_tail) = self.anonymous_table_runs(node, &kids);
+        // ⚠⚠⚠ **AND THE GATE BELOW HAS TO KNOW, WHICH IS THE TRAP THE COMMENT UNDER IT DESCRIBES.**
+        // The anonymous table is BLOCK-LEVEL, so a container holding one is not a pure inline
+        // formatting context — but `is_block_level` answers about a *child's own* `display`, and a
+        // misparented `table-cell`'s display is `table-cell`. Without this term the first version of
+        // this fix changed **not one row of the 45-row battery**: every fixture's cells are the
+        // block's only children, so it took the pure-IFC branch and the new arm never ran. Same
+        // shape as the float gate below — one rule, two implementations, the second a GATE.
+        let has_block = !anon_tables.is_empty()
+            || flow_kids
+                .iter()
+                .any(|&k| is_block_level(self.dom, self.styles, k));
 
         // ⚠⚠⚠ **THE FLOAT GATE WAS WRITTEN TWICE AND BOTH COPIES ONLY LOOK AT DIRECT CHILDREN.**
         // `kid_is_float` answers about *this block's own* children, so a float one inline down —
@@ -4789,6 +4837,69 @@ impl Ctx<'_> {
                     .insert(k, (cx, cur_y + prev_margin.max(0.0)));
                 self.static_pos_writes.set(self.static_pos_writes.get() + 1);
                 continue;
+            } else if anon_tail.contains(&k) {
+                // A later member of a run whose anonymous table was already emitted at its head.
+                continue;
+            } else if let Some(run) = anon_tables.get(&k) {
+                // ⚠⚠⚠ **CSS 2.1 §17.2.1 — AN ORPHANED `table-cell` IS PUT INTO AN ANONYMOUS TABLE,
+                //    AND WE MADE IT AN ATOMIC INLINE INSTEAD.** An atomic sits ON a line box, so the
+                //    containing block paid for a line: every wrapper came out the strut's descender
+                //    too tall (4px at 16px/normal, 10px on an 8px cell), the cell was pushed down by
+                //    that descender, and a bare `table-row`'s declared `width` was honoured when a
+                //    row is sized by its table. Worse, sibling cells were *accidentally* adjacent —
+                //    right answer, wrong reason — so the idiom the construct exists for,
+                //    equal-height columns, produced independently-sized baseline-aligned boxes.
+                //
+                //    Chrome-measured (`--headless=new`, 400px block, `16px/normal sans-serif`,
+                //    parent-relative), the rows that decide it:
+                //
+                //    ```text
+                //                                             chrome      before      after
+                //      one cell, height:20px      wrapper      20          24          20
+                //      ...height:8px              wrapper       8          18           8
+                //      ...height:auto, EMPTY      wrapper       0          18           0
+                //      two cells, 20px and 30px   both          30          20 / 30     30
+                //      three cells, one wraps     all           36          18/37/18    36
+                //      text, cell, text           wrapper      56          24          56
+                //      a cell in a `display:inline` parent  CTRL 24        24          24
+                //      a real <td> in a real <table>        CTRL 20        20          20
+                //    ```
+                //
+                // ⚠ **The last two rows are the control arm and they are why the table is generated
+                //   HERE and not in `is_atomic_inline`.** §17.2.1 generates a *block-level* table
+                //   when the misparented box's parent is a block container and an `inline-table`
+                //   when it is an inline box — and an inline-table IS atomic, which is why the
+                //   `display:inline` row already read 24 in both engines. This arm only runs for a
+                //   block container's own children, so the inline case keeps the atomic path it
+                //   was already right about.
+                let s = {
+                    let mut ts = manuk_css::ComputedStyle::anonymous_from(&run_bcs);
+                    ts.display = Display::Table;
+                    ts
+                };
+                let rows = self.collect_table_rows(run.clone());
+                if rows.is_empty() {
+                    continue;
+                }
+                (cur_y, prev_margin) = self.flush_inline_run(
+                    &mut inline_run,
+                    &mut boxes,
+                    cx,
+                    cur_y,
+                    prev_margin,
+                    cw,
+                    floats,
+                    &run_bcs,
+                );
+                // §9.5: a table is placed BESIDE a float rather than under it, exactly as the
+                // `ks.display == Display::Table` arm below does for a real one.
+                let (kid_cx, kid_cw) =
+                    self.bfc_float_band(&s, cx, cw, cur_y + prev_margin.max(0.0), floats);
+                let r = self.layout_table_box(None, &s, rows, kid_cw, kid_cx, cur_y, prev_margin);
+                cur_y = r.flow_bottom;
+                prev_margin = r.margin_bottom;
+                boxes.push(r.boxx);
+                first_block = false;
             } else if is_block_level(self.dom, self.styles, k) {
                 (cur_y, prev_margin) = self.flush_inline_run(
                     &mut inline_run,
@@ -5161,7 +5272,11 @@ impl Ctx<'_> {
         // Run the real table formatter at a provisional origin, then place its margin box.
         // Same rowless exception as `layout_block`: a floated `display:table` with no rows is a
         // shrink-to-fit block, and routing it into the table formatter yields a 0x0 float.
-        if s.display == Display::Table && !self.collect_table_rows(node).is_empty() {
+        if s.display == Display::Table
+            && !self
+                .collect_table_rows(self.dom.children(node).collect())
+                .is_empty()
+        {
             let r = self.layout_table(node, cw, 0.0, 0.0, 0.0);
             let mut b = r.boxx;
             let (mbw, mbh) = (ml + b.rect.width + mr, mt + b.rect.height + mb);
@@ -5626,6 +5741,138 @@ impl Ctx<'_> {
     /// See [`Self::kid_is_float`] — a text node is never absolutely or fixed positioned.
     fn kid_is_out_of_flow(&self, k: NodeId) -> bool {
         self.dom.is_element(k) && is_out_of_flow_positioned(self.style_of(k))
+    }
+
+    /// **Group `kids` into the maximal RUNS of consecutive misparented table-internal siblings that
+    /// CSS 2.1 §17.2.1 wraps in ONE anonymous table each** — returning `(run keyed by its FIRST
+    /// node, the set of every LATER member)` so the caller's single pass can emit the table when it
+    /// reaches the head and skip the rest.
+    ///
+    /// ⚠⚠⚠ **A RUN, not a box, and that distinction is the whole rule.** Wrapping each misparented
+    /// cell in its own table gets the wrapper height right and turns the idiom the construct exists
+    /// FOR — equal-height columns — into a stack of independently-sized boxes. Measured against
+    /// Chrome, three `display:table-cell` siblings one of which wraps to two lines:
+    ///
+    /// ```text
+    ///   Chrome           all three 36 tall at dy 0, side by side
+    ///   run-of-1 (wrong) 18 @ dy19 · 37 @ dy0 · 18 @ dy19    <- three separate tables
+    /// ```
+    ///
+    /// ⚠ **Whitespace between two cells does not break the run**, which is not a nicety: source
+    /// markup puts a newline between sibling `<div class="cell">`s, so a rule that broke on any
+    /// text node would fire on hand-written HTML and not on minified HTML. Anything else in flow
+    /// does break it — a real block between two cells makes two tables, in document order.
+    ///
+    /// ⚠ Floats and out-of-flow boxes neither join nor break a run: they are removed from the flow
+    /// (§9.5, §9.3) and the loop's own arms place them. A run is about *in-flow* siblings.
+    fn anonymous_table_runs(
+        &self,
+        parent: NodeId,
+        kids: &[NodeId],
+    ) -> (HashMap<NodeId, Vec<NodeId>>, HashSet<NodeId>) {
+        let mut heads: HashMap<NodeId, Vec<NodeId>> = HashMap::new();
+        let mut tail: HashSet<NodeId> = HashSet::new();
+        // A real table (or row / row group) parents its own internals — `collect_table_rows` owns
+        // those, and generating a second table inside one would be the §17.2.1 fixup applied to
+        // boxes that are not misparented at all.
+        if parents_table_internals(self.style_of(parent).display) {
+            return (heads, tail);
+        }
+        // `layout_children` is the hottest function in the engine and runs three times per
+        // intrinsic measure, so the overwhelmingly common answer — no table-internal child at all —
+        // is settled by one cheap scan before any of the float / out-of-flow predicates below run.
+        if !kids
+            .iter()
+            .any(|&k| self.dom.is_element(k) && is_table_internal(self.style_of(k).display))
+        {
+            return (heads, tail);
+        }
+        let mut run: Vec<NodeId> = Vec::new();
+        let mut flush = |run: &mut Vec<NodeId>,
+                         heads: &mut HashMap<NodeId, Vec<NodeId>>,
+                         tail: &mut HashSet<NodeId>| {
+            if run.is_empty() {
+                return;
+            }
+            // ⚠⚠⚠ **REFUSED WHEN THE WRAP WOULD DROP CONTENT — see [`Ctx::table_run_drops_content`].**
+            // Generating the table is only an improvement while every box inside the run survives
+            // it, and §17.2.1's *anonymous CELL* rule is not built yet. Measured on `css/CSS2`: with
+            // no such guard, six reftests that were passing went RED — `table-anonymous-objects-197`
+            // through `-200` and the two `blocks inside inlines` tests — because a `table-row`
+            // holding `<span cell>a</span> bc <span cell>d</span>` lost the ` bc `.
+            if !self.table_run_drops_content(run) {
+                let head = run[0];
+                tail.extend(run[1..].iter().copied());
+                heads.insert(head, std::mem::take(run));
+            }
+            run.clear();
+        };
+        for &k in kids {
+            if !is_rendered(self.dom, self.styles, k) {
+                continue; // `display:none` is not a box, so it cannot break a run
+            }
+            if self.dom.is_element(k) {
+                if self.kid_is_float(k) || self.kid_is_out_of_flow(k) {
+                    continue;
+                }
+                if is_table_internal(self.style_of(k).display) {
+                    run.push(k);
+                    continue;
+                }
+            } else if matches!(self.dom.data(k), NodeData::Text(t) if t.trim().is_empty()) {
+                continue;
+            }
+            flush(&mut run, &mut heads, &mut tail);
+        }
+        flush(&mut run, &mut heads, &mut tail);
+        (heads, tail)
+    }
+
+    /// **Would wrapping `run` in an anonymous table LOSE a box that is drawn today?**
+    ///
+    /// CSS 2.1 §17.2.1 has three generation rules and this tick builds one of them: the anonymous
+    /// **table** (and its anonymous **row**) around misparented table-internal siblings. The rule
+    /// it does NOT build is the anonymous **cell** — *"if a child C of a `table-row` box is not a
+    /// `table-cell`, generate an anonymous `table-cell` around C and all consecutive non-cell
+    /// siblings"* — because a cell with no element cannot be handed to [`Ctx::layout_cell`], which
+    /// takes a `NodeId` for its style and its children.
+    ///
+    /// So a row whose children are not all cells has content [`Ctx::collect_cells`] silently drops.
+    /// Before this tick that row was an atomic inline and its children were laid out as ordinary
+    /// inline content — wrong geometry, but *present*. Wrapping it turns a misplaced box into a
+    /// MISSING one, and a regression is never traded for a capability (I5).
+    ///
+    /// ⚠ This is scoped by MECHANISM, not around a failing test: the predicate names exactly the
+    /// unbuilt rule, and it stops firing the moment anonymous cells exist. Six `css/CSS2` reftests
+    /// mark the boundary and become the RED-proof for that tick.
+    fn table_run_drops_content(&self, run: &[NodeId]) -> bool {
+        // A row keeps everything only if every in-flow child of it is a `table-cell`.
+        let row_is_all_cells = |row: NodeId| -> bool {
+            self.dom.children(row).all(|c| {
+                if !is_rendered(self.dom, self.styles, c) {
+                    return true;
+                }
+                if !self.dom.is_element(c) {
+                    return matches!(self.dom.data(c), NodeData::Text(t) if t.trim().is_empty());
+                }
+                self.style_of(c).display == Display::TableCell
+            })
+        };
+        run.iter().any(|&k| match self.style_of(k).display {
+            // A cell is a block container: its own children are laid out by `layout_children`
+            // exactly as they are today, so nothing can be dropped.
+            Display::TableCell => false,
+            Display::TableRow => !row_is_all_cells(k),
+            _ => !self.dom.children(k).all(|c| {
+                if !is_rendered(self.dom, self.styles, c) {
+                    return true;
+                }
+                if !self.dom.is_element(c) {
+                    return matches!(self.dom.data(c), NodeData::Text(t) if t.trim().is_empty());
+                }
+                self.style_of(c).display == Display::TableRow && row_is_all_cells(c)
+            }),
+        })
     }
 
     /// **The CONTENT width a DEFINITE `width` declaration fixes, if there is one.**
@@ -6145,6 +6392,32 @@ impl Ctx<'_> {
     /// `TableRow`/`TableRowGroup`→rows and `TableCell`→cells are recognized).
     fn layout_table(&self, node: NodeId, cw: f32, x: f32, y: f32, prev_margin: f32) -> BlockResult {
         let s = self.style_of(node).clone();
+        let rows = self.collect_table_rows(self.dom.children(node).collect());
+        self.layout_table_box(Some(node), &s, rows, cw, x, y, prev_margin)
+    }
+
+    /// The table algorithm itself, over a table box that **may have no DOM element**.
+    ///
+    /// `node` is `None` for the ANONYMOUS table CSS 2.1 §17.2.1 generates around a run of
+    /// misparented table-internal boxes (see [`Ctx::anonymous_table_runs`]). Everything the
+    /// algorithm needs from the element — its style and its rows — is passed in; the three things
+    /// that can only come from an element (`<col>` width hints, `<caption>` children, the column
+    /// paint layer) are simply absent, which is correct: an anonymous table has no such children.
+    ///
+    /// ⚠ Split out rather than duplicated. A second copy of 900 lines of table arithmetic is the
+    /// "one rule, N implementations" shape this project has paid for repeatedly (t720-724, t1027,
+    /// t1131) — a fix lands in one copy and the diff looks complete.
+    #[allow(clippy::too_many_arguments)]
+    fn layout_table_box(
+        &self,
+        node: Option<NodeId>,
+        s: &manuk_css::ComputedStyle,
+        rows: Vec<TableRowEntry>,
+        cw: f32,
+        x: f32,
+        y: f32,
+        prev_margin: f32,
+    ) -> BlockResult {
         let ml = s.margin.left.resolve(cw, 0.0);
         let mt = s.margin.top.resolve(cw, 0.0);
         let mb = s.margin.bottom.resolve(cw, 0.0);
@@ -6175,7 +6448,6 @@ impl Ctx<'_> {
         } else {
             s.border_spacing_v
         };
-        let rows = self.collect_table_rows(node);
 
         // Placement grid: each cell claims the next free slot in its row, spanning
         // colspan columns × rowspan rows and marking those slots occupied (so cells below a
@@ -6366,7 +6638,11 @@ impl Ctx<'_> {
         } else {
             // The intrinsic widths must be measured with the SAME frame the cell will be laid out
             // with, or the column comes out sized for a border the cell no longer has.
-            let hints = self.column_hints(node, ncols);
+            // An anonymous table has no `<col>`/`<colgroup>` children to hint with.
+            let hints = match node {
+                Some(n) => self.column_hints(n, ncols),
+                None => vec![None; ncols],
+            };
             let first = self.auto_col_widths(
                 &placed,
                 ncols,
@@ -6401,9 +6677,9 @@ impl Ctx<'_> {
         //    in `collect_table_rows` and never laid out at all: the text did not appear, the rows
         //    did not move down for it, and the table did not widen for it. Three defects in one
         //    dropped child, and the first of them is a MISSING_BOX rather than a geometry error.
-        let captions: Vec<NodeId> = self
-            .dom
-            .children(node)
+        let captions: Vec<NodeId> = node
+            .map(|n| self.dom.children(n).collect::<Vec<_>>())
+            .unwrap_or_default()
             .into_iter()
             .filter(|&c| {
                 self.dom.is_element(c)
@@ -6839,7 +7115,10 @@ impl Ctx<'_> {
             let band_y = row_y[0];
             let band_h = (row_y[nrows - 1] + row_h[nrows - 1]) - band_y;
             let mut col_index = 0usize;
-            for child in self.dom.children(node) {
+            for child in node
+                .map(|n| self.dom.children(n).collect::<Vec<_>>())
+                .unwrap_or_default()
+            {
                 if !self.dom.is_element(child) || !is_rendered(self.dom, self.styles, child) {
                     continue;
                 }
@@ -7021,7 +7300,9 @@ impl Ctx<'_> {
                 .then_some((s.outline_width, s.outline_color)),
             marker: None,
             opacity: s.opacity,
-            node: Some(node),
+            // `None` for the anonymous table §17.2.1 generates: it has no DOM identity, so it
+            // reports no node to the geometry/a11y walkers, exactly as its anonymous rows do.
+            node,
             // The caption boxes come FIRST in the table's children — they paint above the rows
             // and, more importantly, they read first in the semantic order the agent surface walks.
             out_of_flow: false,
@@ -7093,7 +7374,11 @@ impl Ctx<'_> {
     /// background and border paint and what `getBoundingClientRect` reports for a `<tr>`. Emitting
     /// an anonymous row box instead left every `<tr>` on the web without geometry — 31 of Hacker
     /// News' 119 identified elements.
-    fn collect_table_rows(&self, table: NodeId) -> Vec<TableRowEntry> {
+    ///
+    /// Takes the CHILD LIST rather than the table node, because the anonymous table CSS 2.1
+    /// §17.2.1 generates has no node — its "children" are the run of misparented siblings the
+    /// container handed it. The grouping rules below are identical either way.
+    fn collect_table_rows(&self, children: Vec<NodeId>) -> Vec<TableRowEntry> {
         let mut rows: Vec<TableRowEntry> = Vec::new();
         // **A `table-cell` whose parent is a `table` needs an ANONYMOUS ROW generated around it
         // (CSS 2.1 §17.2.1), and without one it was not merely mis-sized — it vanished.**
@@ -7129,7 +7414,7 @@ impl Ctx<'_> {
         // it at the end. A bare `<tr>` or a stray `table-cell` is body-level, exactly as the implied
         // `<tbody>` an HTML parser would wrap it in.
         let mut ranked: Vec<(u8, Option<NodeId>, Option<NodeId>, Vec<NodeId>)> = Vec::new();
-        for child in self.dom.children(table) {
+        for child in children {
             if !is_rendered(self.dom, self.styles, child) || !self.dom.is_element(child) {
                 continue;
             }
@@ -7417,7 +7702,17 @@ impl Ctx<'_> {
             let Some(w) = resolve(self.style_of(p.cell).width) else {
                 continue;
             };
-            let w = w + self.cell_frame(p.cell, border_lr(p));
+            // ⚠⚠ **`box-sizing: border-box` MEANS THE DECLARATION ALREADY CONTAINS THE FRAME**, and
+            // adding it again made every bordered/padded cell that opts in one frame too wide.
+            // Reached from the anonymous-table path (t1134) and true of a real `<td>` for exactly
+            // as long: the column constraint is a BORDER-BOX width, and the two `box-sizing`
+            // values differ only in whether the specified length is already one.
+            let frame = self.cell_frame(p.cell, border_lr(p));
+            let w = if self.style_of(p.cell).box_sizing == BoxSizing::BorderBox {
+                w.max(frame)
+            } else {
+                w + frame
+            };
             col_spec[p.col] = Some(col_spec[p.col].map_or(w, |e| e.max(w)));
         }
         for c in 0..ncols {
@@ -7546,7 +7841,18 @@ impl Ctx<'_> {
             self.layout_children(cell, content_x, content_y, content_w, None, &mut floats);
         let content_height = match s.height {
             Dim::Auto => ch,
-            other => other.resolve(0.0, ch).max(ch),
+            // The `box-sizing` half is the same rule the column widths take, on the other axis:
+            // under `border-box` the declared length already contains the frame, so the frame is
+            // subtracted out rather than added on top.
+            other => {
+                let h = other.resolve(0.0, ch);
+                let h = if s.box_sizing == BoxSizing::BorderBox {
+                    (h - (bt + pt + pb + bb)).max(0.0)
+                } else {
+                    h
+                };
+                h.max(ch)
+            }
         };
         let border_box_h = bt + pt + content_height + pb + bb;
         // ⚠ `ch` (the NATURAL content height) is returned alongside the border-box height, and the
@@ -21927,6 +22233,186 @@ mod tests {
             "CONTROL: #p is h{} and MUST be h0 — it is a plain block, and only `flow-root` (or a \
              BFC root) contains floats.",
             r("p").height
+        );
+    }
+
+    /// **CSS 2.1 §17.2.1 — a misparented `table-cell` is put into an anonymous TABLE, and a RUN of
+    /// them into ONE of them.**
+    ///
+    /// The construct is the pre-flexbox equal-height-columns / vertical-centring idiom
+    /// (`display:table-cell` with no `display:table` parent), and it appears in 54 of the 373
+    /// stylesheets the burndown corpus loads. We made each such cell an ATOMIC INLINE instead: it
+    /// sat on a line box, so the containing block paid for a line (the strut's descender, 4px at
+    /// 16px/normal) and sibling cells were only *accidentally* adjacent — an inline formatting
+    /// context puts atomics side by side, so the right answer came out for the wrong reason and the
+    /// heights, which are the entire point of the idiom, did not.
+    ///
+    /// Chrome-measured (`--headless=new --hide-scrollbars`, 400px block, `16px/normal sans-serif`,
+    /// parent-relative `[dx dy w h]`):
+    ///
+    /// ```text
+    ///                                              chrome     before      after
+    ///   one cell, height:20px       wrapper        20         24          20
+    ///   two cells, 20px and 30px    both           30         20 / 30     30
+    ///   three cells, one wraps      all            36         18/37/18    36
+    ///   text, cell, text            wrapper        56         24          56
+    ///   a cell in a `display:inline` parent  CTRL  24         24          24
+    ///   a real <td> in a real <table>        CTRL  20         20          20
+    /// ```
+    ///
+    /// RED, run: delete the `!anon_tables.is_empty() ||` term from `has_block` in
+    /// `layout_children` — every fixture here is a block whose ONLY children are cells, so it takes
+    /// the pure-IFC branch, the new arm never runs, and all four assertions below fail at once.
+    /// (That gate, not the arm, is what made the first version of this fix a byte-identical no-op.)
+    #[test]
+    fn a_misparented_table_cell_run_becomes_one_anonymous_table() {
+        let (dom, root) = layout_html(
+            "<body style='margin:0'>\
+               <div class=w id=w1><span class=c id=c1 style='height:20px'></span></div>\
+               <div class=w id=w2><span class=c id=c2a style='height:20px'></span>\
+                                  <span class=c id=c2b style='height:30px;width:60px'></span></div>\
+               <div class=w id=w3><span class=c id=c3a style='width:120px'>One</span>\
+                                  <span class=c id=c3b style='width:120px'>Two<br>lines</span></div>\
+               <div class=w id=w4>Ay<span class=c id=c4 style='height:20px'></span>Ay</div>\
+               <div class=w id=w5><span style='display:inline'>\
+                                    <span class=c id=c5 style='height:20px'></span></span></div>\
+               <div class=w id=w6><table style='border-collapse:collapse;border-spacing:0'><tr>\
+                                    <td class=c id=c6 style='height:20px;padding:0'>x</td></tr></table></div>\
+             </body>",
+            "body{font:16px/normal sans-serif} .w{width:400px} \
+             .c{display:table-cell;width:100px}",
+            1200.0,
+        );
+        let rects = root.node_rects(&dom);
+        let r = |id: &str| {
+            let n = dom
+                .descendants(dom.root())
+                .find(|&n| dom.element(n).and_then(|e| e.attr("id")) == Some(id))
+                .unwrap_or_else(|| panic!("no #{id}"));
+            rects[&n]
+        };
+
+        // (1) The wrapper is the CELL's height, not a line box: no strut descender is paid.
+        assert!(
+            (r("w1").height - 20.0).abs() < 0.5,
+            "#w1 is h{} and Chrome says 20 — an orphan `table-cell` goes into an anonymous \
+             block-level TABLE, not onto a line box (a line adds the strut's 4px descender).",
+            r("w1").height
+        );
+
+        // (2) ONE table over the RUN: both cells take the row's height. This is the assertion a
+        //     per-cell table cannot satisfy — it is what makes the rule about a run and not a box.
+        let (a, b) = (r("c2a"), r("c2b"));
+        assert!(
+            (a.height - 30.0).abs() < 0.5 && (b.height - 30.0).abs() < 0.5,
+            "#c2a/#c2b are h{}/h{} and Chrome says 30/30 — two consecutive misparented cells share \
+             ONE anonymous table row, so the shorter stretches to the row.",
+            a.height,
+            b.height
+        );
+        assert!(
+            a.y == b.y && (b.x - a.x - 100.0).abs() < 0.5,
+            "the two cells are side by side at the same top: a{:?} b{:?}",
+            (a.x, a.y),
+            (b.x, b.y)
+        );
+
+        // (3) The same over CONTENT-sized cells — the equal-height-columns idiom itself.
+        let (t, s) = (r("c3b"), r("c3a"));
+        assert!(
+            (s.height - t.height).abs() < 0.5 && s.y == t.y,
+            "#c3a is h{} and #c3b h{} — a one-line cell beside a two-line cell must be stretched to \
+             the row, which is what `display:table-cell` is FOR.",
+            s.height,
+            t.height
+        );
+
+        // (4) A block-level anonymous table BREAKS the line it is in.
+        assert!(
+            r("w4").height > 40.0,
+            "#w4 is h{} and Chrome says 56 — the anonymous table is BLOCK-level, so the text before \
+             and after it are separate anonymous blocks, not fragments on one line.",
+            r("w4").height
+        );
+
+        // (5) CONTROL — a cell whose parent is an INLINE box generates an `inline-table`, which IS
+        //     atomic: this row was already Chrome-exact at 24 and must stay there. It is why the
+        //     table is generated in the block-container loop and not in `is_atomic_inline`.
+        assert!(
+            (r("w5").height - 24.0).abs() < 0.5,
+            "CONTROL: #w5 is h{} and Chrome says 24 — inside a `display:inline` parent §17.2.1 \
+             generates an INLINE-table, which stays on the line and keeps the strut descender.",
+            r("w5").height
+        );
+
+        // (6) CONTROL — a real `<td>` in a real `<table>` is untouched by the fixup.
+        assert!(
+            (r("w6").height - 20.0).abs() < 0.5 && (r("c6").height - 20.0).abs() < 0.5,
+            "CONTROL: a real <td> in a real <table> is h{}/{} and must stay 20/20 — it is not \
+             misparented, so no anonymous table is generated around it.",
+            r("w6").height,
+            r("c6").height
+        );
+    }
+
+    /// **`box-sizing: border-box` on a table cell — the declared length ALREADY contains the frame.**
+    ///
+    /// Both axes added the frame on top instead, so every bordered or padded cell that opts in came
+    /// out one frame too large. Invisible until t1134 routed orphan `table-cell`s through
+    /// `layout_cell` (they used to take `layout_block`, which has always been right), but the defect
+    /// is a real `<td>`'s too — which is what the second pair below asserts.
+    ///
+    /// Chrome-measured, `width:100px;height:20px;padding:5px;box-sizing:border-box`:
+    ///
+    /// ```text
+    ///                                    chrome    before    after
+    ///   an orphan table-cell             100x20    110x30    100x20
+    ///   a real <td>, same declaration    100x20    110x30    100x20
+    ///   a real <td>, NO box-sizing CTRL  110x30    110x30    110x30
+    /// ```
+    ///
+    /// RED, run: drop either `BoxSizing::BorderBox` arm — `auto_col_widths`' (width) or
+    /// `layout_cell`'s (height) — and the matching dimension goes back to 110 or 30.
+    #[test]
+    fn box_sizing_border_box_applies_to_a_table_cell() {
+        let (dom, root) = layout_html(
+            "<body style='margin:0'>\
+               <div style='width:400px'><span id=anon class=bb style='display:table-cell'></span></div>\
+               <div style='width:400px'><table style='border-collapse:collapse;border-spacing:0'>\
+                 <tr><td id=real class=bb></td></tr></table></div>\
+               <div style='width:400px'><table style='border-collapse:collapse;border-spacing:0'>\
+                 <tr><td id=ctrl style='width:100px;height:20px;padding:5px'></td></tr></table></div>\
+             </body>",
+            "body{font:16px/normal sans-serif} \
+             .bb{width:100px;height:20px;padding:5px;box-sizing:border-box}",
+            1200.0,
+        );
+        let rects = root.node_rects(&dom);
+        let r = |id: &str| {
+            let n = dom
+                .descendants(dom.root())
+                .find(|&n| dom.element(n).and_then(|e| e.attr("id")) == Some(id))
+                .unwrap_or_else(|| panic!("no #{id}"));
+            rects[&n]
+        };
+        for id in ["anon", "real"] {
+            let b = r(id);
+            assert!(
+                (b.width - 100.0).abs() < 0.5 && (b.height - 20.0).abs() < 0.5,
+                "#{id} is {}x{} and Chrome says 100x20 — under `border-box` the declared 100/20 \
+                 already contains the 10px of padding on each axis.",
+                b.width,
+                b.height
+            );
+        }
+        // CONTROL — the same declaration WITHOUT `box-sizing` still grows by the padding.
+        let c = r("ctrl");
+        assert!(
+            (c.width - 110.0).abs() < 0.5 && (c.height - 30.0).abs() < 0.5,
+            "CONTROL: #ctrl is {}x{} and must stay 110x30 — `content-box` is the initial value and \
+             its frame is added OUTSIDE the declared length.",
+            c.width,
+            c.height
         );
     }
 }

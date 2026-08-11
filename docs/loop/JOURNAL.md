@@ -46371,6 +46371,102 @@ PERF: none — one UA rule and one narrowed branch in a cascade that already ran
 WIKI: `docs/wiki/css-cascade.md` — where Chrome draws the form-control `box-sizing` line, and why a
 layout-crate test cannot see it.
 
+## Tick 1134 — the run is generated, and the GATE above the handler made the first version a NO-OP (2026-08-11)
+
+TICK SHAPE: capability (layout) — t1133's spec built: CSS 2.1 §17.2.1 anonymous TABLE generation
+around a maximal run of misparented table-internal siblings.
+
+⚠⚠⚠ **THE FIRST VERSION WAS COMPLETE, CORRECT, AND CHANGED NOT ONE ROW OF THE 45-ROW BATTERY.**
+Byte-identical output points UPSTREAM (t1048-1052), and it did again: the new arm lives in
+`layout_children`'s block-container loop, and `layout_children` has a pure-IFC fast path guarded by
+`has_block`. `is_block_level` answers about a child's OWN `display`, and a misparented cell's display
+is `table-cell` — so a block whose only children are cells (which is every fixture, and every real
+instance of the idiom) took the fast path and the handler never ran. The anonymous table is
+BLOCK-level, so its existence is itself a `has_block` term:
+
+```rust
+  let has_block = !anon_tables.is_empty()
+      || flow_kids.iter().any(|&k| is_block_level(self.dom, self.styles, k));
+```
+
+**Third sighting of this shape in this one function**, and the comment ten lines below the fix
+describes the second (the float gate, t1052): *one rule, two implementations, and the second one is a
+GATE rather than a handler — which is why it reads as an absence.*
+
+⚠⚠⚠ **MEASURED, 45-row battery vs Chrome** (`--headless=new --hide-scrollbars`, 400px block,
+`16px/normal sans-serif`, parent-relative), plus a 59-row second battery for the run-separation and
+control surface:
+
+```text
+                                         chrome     before     after
+   one cell, height:20px     wrapper     20         24         20
+   ...height:8px             wrapper      8         18          8
+   ...height:auto, EMPTY     wrapper      0         18          0
+   two cells, 20px and 30px  both        30         20 / 30    30
+   three cells, one wraps    all         36         18/37/18   36
+   text, cell, text          wrapper     56         24         56
+   a bare table-row's width:100px         0        100          0
+   a cell in `display:inline`  CTRL      24         24         24
+   a real <td> in a real <table> CTRL    20         20         20
+
+   28 of 45 rows differed -> 4.
+```
+
+⚠ **THE FOUR RESIDUAL ROWS ARE ONE PRE-EXISTING DEFECT AND THE CONTROL PROVES IT**: a
+`<br>`-broken two-line run measures **37** where Chrome says 36 — in a REAL `<table>` too
+(battery 2 `t20`), so it is not attributable to this tick. Named, not folded in.
+
+Battery 2's control arm, all Chrome-exact after: whitespace between cells does NOT break a run ·
+`display:none` between them does NOT · a real block DOES (two tables, stacked) · non-whitespace text
+DOES · the centring idiom (`vertical-align:middle`, 60px cell beside a 3-line cell) · an orphan
+`table-row`'s own `width` ignored · an orphan `table-row-group` · margins on a cell ignored · a
+floated cell (§9.7 blockifies) · an absolute cell · a cell in a flex container · a cell under a real
+`display:table` parent.
+
+⚠⚠ **`box-sizing: border-box` ON A CELL WAS WRONG ON BOTH AXES, AND ROUTING ORPHANS THROUGH
+`layout_cell` IS WHAT EXPOSED IT.** `auto_col_widths` added the cell's frame to a specified `width`
+and `layout_cell` added it to a specified `height`, unconditionally — so `100x20` declared with
+`padding:5px` drew `110x30`. Orphan cells used to take `layout_block`, which has always been right;
+a real `<td>` has carried the defect the whole time and is fixed here with it (battery 2 `c2`
+against the `c3` content-box control).
+
+⚠⚠ **THE SCOPE NAMES AN UNBUILT RULE, NOT A FAILING TEST** (the t1119 → t1125/t1126 lesson applied
+up front). §17.2.1 has three generation rules; this tick builds the anonymous TABLE and its anonymous
+ROW. The third — an anonymous CELL around a run of non-cell children of a row — is not built, because
+a cell with no element cannot be handed to `layout_cell`, which reads style and children from a
+`NodeId`. `collect_cells` drops such content, so wrapping a mixed row turns a MISPLACED box into a
+MISSING one. Measured rather than reasoned: with no guard, `css/CSS2` came in **+15 / −6**, the six
+being `table-anonymous-objects-197..200` (a row holding `<span cell>a</span> bc <span cell>d</span>`
+lost the ` bc `) and the two *blocks inside inlines* tests. `table_run_drops_content` refuses exactly
+those rows, and those six reftests ARE the RED-proof for the tick that builds anonymous cells.
+
+⚠⚠ Also refactor, not duplication: `layout_table` was split into `layout_table_box(node:
+Option<NodeId>, s, rows, …)` so one copy of the 900 lines of table arithmetic serves both a real
+`<table>` and an anonymous one — the `one rule, N implementations` shape this project has paid for at
+t720, t1027 and t1131. `collect_table_rows` now takes a CHILD LIST rather than a table node.
+
+RATCHET: **same-hour OLD-BINARY control with a pass-SET diff** — `css/CSS2` **3948 passed → 3963
+(+15), failed 1712 → 1697, ZERO losses**; the aggregate and the set diff agree (t1131's check: an
+aggregate can hide a −1 behind a +1). Both readings taken with a release binary built from the
+stashed tree in the same hour. `manuk-layout` 166/166 → 168/168. Built-in reftest suite 6428 passed.
+`css/CSS2/tables` 81/1140.
+
+GATE: `a_misparented_table_cell_run_becomes_one_anonymous_table` (RED-proven twice: deleting the
+`!anon_tables.is_empty()` term from `has_block` fails all four assertions; flushing the run after
+every cell — one table per cell instead of per RUN — fails the two equal-height assertions) and
+`box_sizing_border_box_applies_to_a_table_cell` (RED-proven by dropping either `BorderBox` arm).
+
+PERF: a cheap pre-scan settles the common case — `anonymous_table_runs` returns immediately when the
+parent is itself a table box, and otherwise after one `is_table_internal` pass over the children,
+before any float / out-of-flow predicate runs. `layout_children` is the hottest function in the
+engine and runs three times per intrinsic measure.
+
+CORPUS: `display:table-cell` appears in 54 of the 373 stylesheets the burndown corpus loads (14.5%) —
+the legacy vertical-centring and equal-height-column idiom (t1133's count, restated).
+
+WIKI: `docs/wiki/box-layout.md` — "The run is generated, and the GATE above the handler is what made
+the first version a no-op"
+
 ## Tick 1133 — the orphan `table-cell` is a RUN, not a box, and the narrow fix is a trade (2026-08-11)
 
 TICK SHAPE: measurement — t1131's third named residue (`a22`, a `display:table-cell` reading 24 tall
