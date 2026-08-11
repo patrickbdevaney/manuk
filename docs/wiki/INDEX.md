@@ -445,6 +445,8 @@
   - L8709 · The inset-less exclusion is retired — a scope drawn around a failure is a note to come back (t1125)
   - L8737 · The grid exclusion was one word too wide, and the spec had the discriminator (t1126)
   - L8771 · A stretched cross size outranks a NATURAL main size, and the fix is a pair (t1130)
+  - L8812 · An orphan table-cell is a RUN, not a box (t1133)
+  - L8839 · The rows that decide how to fix it are the ones with more than one cell
 
 ## browser-capabilities.md
 `docs/wiki/browser-capabilities.md`
@@ -1937,4 +1939,4 @@
   - L124 · Rank mechanisms by FLIP RATE, not failing-subtest count — CSS layout is a multi-assertion slog
 
 ---
-1844 sections across 22 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+1846 sections across 22 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.

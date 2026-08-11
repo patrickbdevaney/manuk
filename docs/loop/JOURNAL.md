@@ -46371,6 +46371,84 @@ PERF: none — one UA rule and one narrowed branch in a cascade that already ran
 WIKI: `docs/wiki/css-cascade.md` — where Chrome draws the form-control `box-sizing` line, and why a
 layout-crate test cannot see it.
 
+## Tick 1133 — the orphan `table-cell` is a RUN, not a box, and the narrow fix is a trade (2026-08-11)
+
+TICK SHAPE: measurement — t1131's third named residue (`a22`, a `display:table-cell` reading 24 tall
+against Chrome's 20) taken with a 24-row battery. The battery says the residue is the smallest visible
+end of a rule the engine does not implement at all, and that fixing the row that showed it would
+REGRESS the form the construct actually appears in. Nothing landed in `engine/`; the artefact is the
+measurement, the refusal, and the spec for the tick that does it properly.
+
+⚠⚠⚠ **EVERY CELL IS CHROME-EXACT AND EVERY WRAPPER IS WRONG** — which is the whole diagnosis, because
+it says the defect is not in sizing a cell but in what box the cell is put INTO. `/tmp/fx/tcell.html`,
+`16px/normal sans-serif`, the cell always `width:100px`:
+
+```text
+                                                     Chrome    ours     the cell itself
+   an orphan table-cell, height:20px      wrapper      20        24      100x20 EXACT
+   ...height:40px                                      40        44      100x40 EXACT
+   ...height:8px                                        8        18      100x8  EXACT
+   ...height:auto, EMPTY                                0        18      100x0  EXACT
+   ...height:20px + padding:5px                        30        34      110x30 EXACT
+   ...+ box-sizing:border-box                          20        24      100x20 EXACT
+   an orphan table-ROW, height:20px                    20        24      w=0 vs OUR 100  <-
+   a real <td> in a real <table>              CTRL     20        20      EXACT
+   display:table / inline-block / inline-flex / block  CTRL      all four EXACT
+```
+
+The constant is a strut descender and it is there because **we make an orphaned table-internal box an
+ATOMIC INLINE**, so it sits on a line box and the containing block pays for the line. CSS 2.1 §17.2.1
+generates an anonymous **`table`** — block-level — when the misparented box's parent is a block
+container, and an `inline-table` only when the parent is an inline box.
+
+⚠⚠⚠ **AND THE TWO ROWS THAT DECIDE THE TICK ARE THE ONES WITH MORE THAN ONE CELL.** §17.2.1 wraps a
+*maximal RUN* of consecutive misparented siblings in ONE anonymous table, with one anonymous row
+around the consecutive cells — which is the entire reason the idiom exists:
+
+```text
+                                         Chrome                         ours
+   two orphan cells, 20px and 30px   both 30 tall, side by side   20 @ dy26 and 30 @ dy16
+   THE IDIOM: three cells, one of                                 18 @ dy19 · 37 @ dy0 ·
+   which wraps to two lines          all three 36 tall at dy 0    18 @ dy19
+```
+
+**Equal-height columns is what `display:table-cell` is FOR**, and we produce three
+independently-sized baseline-aligned boxes. The cells happen to sit side by side today only because
+inline layout puts atomics side by side — the right answer for the wrong reason.
+
+⚠⚠ **SO THE NARROW FIX IS REFUSED, AND THE ARITHMETIC IS WHY.** Making an orphan cell block-level on
+its own closes seven rows above (`+7`) and turns both multi-cell rows from *accidentally adjacent* into
+*stacked* (`−2`, and they are the ones a real page contains). That is a trade, and I5 refuses trades —
+the same call t1119 made when every wider version of a scope cost a reftest. A 4px wrapper is not
+worth stacking the columns it was measuring.
+
+**THE SPEC FOR THE TICK THAT DOES IT** (written from the measurement, not from the spec text alone):
+group a maximal run of consecutive misparented `table-cell` siblings into ONE anonymous table box;
+wrap consecutive cells in one anonymous `table-row`; make that table box **block-level when the
+parent is a block container and `inline-table` when the parent is an inline box** — the `w16` row is
+the discriminator and we already match it (a cell inside a `display:inline` parent reads 24 in both,
+because an inline-table IS atomic). The existing `layout_table` already sizes a real row's cells to
+the row, so the work is box GENERATION, not table arithmetic.
+
+⚠ A second, independent defect the battery caught and this tick does not touch: a bare
+`display:table-row` takes its declared `width:100px` here and **0** in Chrome — a row box is sized by
+its table, and a width declaration on it is ignored.
+
+CORPUS: `display:table-cell` appears in **54 of the 373 stylesheets** the burndown corpus loads
+(14.5%); it is the legacy vertical-centring and equal-height-column idiom. (Page-level frequency is
+not computable from the snapshot on disk — the CSS-to-page join key was never banked; the stylesheet
+count is a floor, stated as one.)
+
+RATCHET: held trivially — nothing landed in `engine/`. `git status` on `engine/` is clean;
+`manuk-layout` 166/166 on the unchanged tree.
+
+GATE: none. Gating the current behaviour would PIN the engine to it (the standing rule from t1004),
+and the correct behaviour is not built yet.
+
+PERF: none.
+
+WIKI: `docs/wiki/box-layout.md` — "An orphan `table-cell` is a RUN, not a box". [no-pattern]
+
 ## Tick 1132 — `line-height: 0` is a VALUE, and only the strut arm treated it as an absence (2026-08-11)
 
 TICK SHAPE: capability (layout) — t1131's named residue, taken with a 29-row ladder rather than with

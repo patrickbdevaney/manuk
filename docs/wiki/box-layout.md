@@ -8808,3 +8808,53 @@ it: **it is a good pointer and a bad goal.**
 `align-items:center` arm *without* `max-width:100%` and it read `[480 474]` — correctly, since
 nothing was clamping it. **A control copied from a battery must copy the battery's whole
 declaration**, or it asserts a number from a different fixture.
+
+## An orphan `table-cell` is a RUN, not a box (t1133)
+
+`display: table-cell` written without a `display: table` parent is the legacy vertical-centring and
+equal-height-column idiom, and it is in **54 of the 373 stylesheets** the burndown corpus loads. CSS
+2.1 §17.2.1 says what the browser does with it: a *maximal run of consecutive misparented siblings*
+is wrapped in ONE anonymous table box, with an anonymous `table-row` around consecutive cells — and
+that table is **block-level when the parent is a block container**, `inline-table` only when the
+parent is an inline box.
+
+We wrap each such box in nothing and make it an ATOMIC INLINE. Measured against Chrome, `16px/normal
+sans-serif`, the cell always `width:100px`:
+
+```text
+                                                     Chrome    ours     the cell itself
+   an orphan table-cell, height:20px      wrapper      20        24      100x20 EXACT
+   ...height:8px                                        8        18      100x8  EXACT
+   ...height:auto, EMPTY                                0        18      100x0  EXACT
+   ...height:20px + padding:5px                        30        34      110x30 EXACT
+   an orphan table-ROW, height:20px                    20        24      w=0 vs OUR 100
+   a real <td> in a real <table>              CTRL     20        20      EXACT
+   display:table / inline-block / inline-flex / block  CTRL      all four EXACT
+```
+
+**Every cell is exact and every wrapper is wrong**, which is the diagnosis in one line: the defect is
+not in sizing a cell, it is in what box the cell is put into. The constant 4px is a strut descender —
+the price of being on a line box at all.
+
+### The rows that decide how to fix it are the ones with more than one cell
+
+```text
+                                         Chrome                         ours
+   two orphan cells, 20px and 30px   both 30 tall, side by side   20 @ dy26 and 30 @ dy16
+   three cells, one wrapping to      all three 36 tall at dy 0    18 @ dy19 · 37 @ dy0 ·
+   two lines (THE idiom)                                          18 @ dy19
+```
+
+Equal height is the entire point of the construct, and we produce three independently-sized
+baseline-aligned boxes. They sit side by side today only because inline layout puts atomics side by
+side — the right answer for the wrong reason.
+
+So **the narrow fix is a trade and is refused**: making an orphan cell block-level on its own closes
+seven single-cell rows and turns both multi-cell rows from accidentally-adjacent into stacked, and
+the multi-cell rows are the ones a real page contains. A 4px wrapper is not worth stacking the
+columns it was measuring.
+
+The work is box GENERATION, not table arithmetic — `layout_table` already sizes a real row's cells to
+the row. Group the run, wrap it once, and pick block-level vs `inline-table` from the parent; the
+`display:inline` parent row is the discriminator, and it already matches (an inline-table IS atomic,
+so both engines read 24).

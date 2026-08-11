@@ -11,12 +11,12 @@
 
 | | value | over |
 |---|---|---|
-| ticks landed | **840** | ticks 1–1132 |
-| median tick cycle | **28m** | 839 intervals |
-| median, last 10 | **42m** | 10 intervals |
+| ticks landed | **841** | ticks 1–1133 |
+| median tick cycle | **28m** | 840 intervals |
+| median, last 10 | **39m** | 10 intervals |
 | fastest / slowest | 5s / 5.4d | |
-| **ticks per hour** | **1.12** | 746.6h elapsed |
-| median verify wall | **63s** | 779 ticks |
+| **ticks per hour** | **1.12** | 746.9h elapsed |
+| median verify wall | **63s** | 780 ticks |
 | wall trend | 39s → 13m — getting slower ⚠️ | first 3 vs last 3 |
 
 The **cycle** is the real unit: implement → debug → verify wall → land. The wall is only part of
@@ -31,7 +31,7 @@ it, and a wall that grows taxes every future tick, so it is tracked separately f
 * **✅ rows in the capability ledger**: 144 → **564**
 * **Bar 0 — oracle hangs**: 0 of 265 sites
 
-**371 of 840 ticks** (44%) moved a
+**371 of 841 ticks** (44%) moved a
 user-visible capability. The rest were instruments, infrastructure and corrections — and the
 ledger says the corrections were not overhead: three of its top three priorities were phantoms,
 and finding that out redirected everything after it.
@@ -91,7 +91,7 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 ## What a capability costs
 
 * **371** capability ticks, median cycle **28m**
-* median diff per tick: **+264 / −34** lines across 8 files
+* median diff per tick: **+263 / −34** lines across 8 files
 
 ## Every tick
 
@@ -937,5 +937,6 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 | **1130** | 2026-08-11 05:13 | 38m | capability | 13m | +280/−37 | 437 | 81 | 56.0% · | the pair t1123 specified, and neither half does anything alone (2026-08-11) |
 | **1131** | 2026-08-11 06:27 | 73m | capability | 13m | +502/−85 | 437 | 81 | 56.0% · | an atomic inline IS a line box, and the bare ones were invisible to the search (2026-08-11 |
 | **1132** | 2026-08-11 07:36 | 69m | capability | 13m | +299/−38 | 437 | 81 | 56.0% · | `line-height: 0` is a VALUE, and only the strut arm treated it as an absence (2026-08-11) |
+| **1133** | 2026-08-11 07:55 | 19m | measurement | 13m | +165/−33 | 437 | 81 | 56.0% · | the orphan `table-cell` is a RUN, not a box, and the narrow fix is a trade (2026-08-11) |
 
 *`·` after a WPT figure means **carried forward**, not measured this tick.*
