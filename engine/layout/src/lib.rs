@@ -9840,6 +9840,9 @@ impl Ctx<'_> {
                 // what makes this a distinction rather than a missing feature. `break-word` is the
                 // spelling every reset ships — 48.5% of the burndown corpus against 11.7% for
                 // `anywhere`.
+                // CSS Text §5.1 — see `break_segments`. Read here beside `break_word` so the two
+                // opposing tailorings of the same property are decided in one place.
+                let keep_all = cs.word_break == manuk_css::WordBreak::KeepAll;
                 let break_word = cs.word_break == manuk_css::WordBreak::BreakAll
                     || cs.overflow_wrap == manuk_css::OverflowWrap::Anywhere
                     || (cs.overflow_wrap == manuk_css::OverflowWrap::BreakWord
@@ -9894,6 +9897,7 @@ impl Ctx<'_> {
                                             owner,
                                             false,
                                             break_word,
+                                            keep_all,
                                         );
                                     }
                                 }
@@ -9929,6 +9933,7 @@ impl Ctx<'_> {
                                 if !buf.is_empty() {
                                     push_word(
                                         out, &mut buf, style, gap, first, owner, false, break_word,
+                                        keep_all,
                                     );
                                 }
                                 // `pre-line` collapses runs of spaces and still wraps, so the
@@ -9939,7 +9944,10 @@ impl Ctx<'_> {
                             }
                         }
                         if !buf.is_empty() {
-                            push_word(out, &mut buf, style, gap, first, owner, false, break_word);
+                            push_word(
+                                out, &mut buf, style, gap, first, owner, false, break_word,
+                                keep_all,
+                            );
                         }
                     }
                     return;
@@ -9978,7 +9986,10 @@ impl Ctx<'_> {
                 for ch in t.chars() {
                     if is_css_white_space(ch) {
                         if !buf.is_empty() {
-                            push_word(out, &mut buf, style, gap, first, owner, no_wrap, break_word);
+                            push_word(
+                                out, &mut buf, style, gap, first, owner, no_wrap, break_word,
+                                keep_all,
+                            );
                         }
                         // CSS Text §3: the opportunity belongs to the element that
                         // CONTAINS the space — this text node — not to the words flanking it.
@@ -9988,7 +9999,9 @@ impl Ctx<'_> {
                     }
                 }
                 if !buf.is_empty() {
-                    push_word(out, &mut buf, style, gap, first, owner, no_wrap, break_word);
+                    push_word(
+                        out, &mut buf, style, gap, first, owner, no_wrap, break_word, keep_all,
+                    );
                 }
             }
             NodeData::Element(_) => {
@@ -12477,7 +12490,7 @@ fn last_line_baseline(b: &LayoutBox, dom: &Dom, styles: &StyleMap) -> Option<f32
 /// no internal opportunity returns unchanged, so plain English words are byte-identical to
 /// the old whitespace-only split (the common case, and why the parity gate is unmoved).
 /// Zero-width breaking spaces (U+200B), which exist only to mark an opportunity, are dropped.
-fn break_segments(word: &str) -> Vec<String> {
+fn break_segments(word: &str, keep_all: bool) -> Vec<String> {
     let mut segs = Vec::new();
     let mut start = 0;
     for (idx, _op) in unicode_linebreak::linebreaks(word) {
@@ -12485,6 +12498,45 @@ fn break_segments(word: &str) -> Vec<String> {
         // the outer whitespace loop; only split at *interior* opportunities.
         if idx >= word.len() {
             break;
+        }
+        // ── ⚠⚠⚠ **`word-break: keep-all` SUPPRESSES THE OPPORTUNITIES BETWEEN LETTER UNITS, AND
+        //    NOTHING ELSE** (CSS Text §5.1: *"implicit soft wrap opportunities between typographic
+        //    letter units — classes NU, AL, AI and ID — are suppressed"*). The value was parsed and
+        //    then thrown away, so it behaved as `normal`: invisible for Latin, which never breaks
+        //    mid-word anyway, and a whole rewrap for CJK, which breaks at every ideograph.
+        //
+        //    ⚠ **The suppression is NOT "never break inside a word", and the four control rows are
+        //    what say so.** Chrome, 120px box, `16px/20px`, the same text with and without the
+        //    property:
+        //
+        // ```text
+        //                                                     chrome   before   after
+        //   日本語のテキストが折り返される       keep-all        20       60       20
+        //   中文文本应该在任意字符处换行显示     keep-all        20       60       20
+        //   日本語text日本語text日本語           keep-all        20       40       20
+        //   한국어 텍스트는 어절 단위로…  CTRL  keep-all        60       60       60   <- SPACES break
+        //   alpha-bravo-charlie-delta      CTRL  keep-all        40       40       40   <- HYPHENS break
+        //   alphabravo<U+200B>charliedelta CTRL  keep-all        40       40       40   <- ZWSP breaks
+        //   alphabravo<wbr>charliedelta    CTRL  keep-all        40       40       40   <- <wbr> breaks
+        //   supercalifragilistic…          CTRL  keep-all        20       20       20   <- unchanged
+        // ```
+        //
+        //    So the predicate is on the two characters the opportunity sits BETWEEN, not on the
+        //    word: both must be letter units. A hyphen is not one (class BA/HY), which is why
+        //    `alpha-bravo` still breaks, and a zero-width space is not one either. The CJK↔Latin
+        //    boundary in row three IS one on both sides (ID and AL are both in the suppressed set),
+        //    and Chrome's 20 there is what pins that half of the rule.
+        //
+        //    ⚠ `overflow-wrap: break-word` / `anywhere` and `word-break: break-all` are unaffected:
+        //    they run through `break_word` on a different path, and all three still rewrap the
+        //    Japanese row to 60. A page that asks for the break still gets it.
+        if keep_all {
+            let before = word[..idx].chars().next_back();
+            let after = word[idx..].chars().next();
+            let letter_unit = |c: Option<char>| c.is_some_and(char::is_alphanumeric);
+            if letter_unit(before) && letter_unit(after) {
+                continue;
+            }
         }
         // ── **NO BREAK AFTER A SOLIDUS — Chrome does not take this opportunity, and URLs are where
         // it shows.** UAX #14 offers a break after `/` (class SY), and `unicode-linebreak` reports
@@ -12573,13 +12625,14 @@ fn push_word(
     node: Option<NodeId>,
     no_wrap: bool,
     break_word: bool,
+    keep_all: bool,
 ) {
     let text = std::mem::take(buf);
     // `nowrap`/`pre` forbid breaks inside the run, so never split those.
     let segs = if no_wrap {
         vec![text]
     } else {
-        break_segments(&text)
+        break_segments(&text, keep_all)
     };
     for (i, seg) in segs.into_iter().enumerate() {
         out.push(InlineItem::Word {
@@ -17601,13 +17654,13 @@ mod tests {
     /// ideograph; a zero-width space is a break point and is stripped from the output.
     #[test]
     fn break_segments_finds_intra_word_opportunities() {
-        assert_eq!(break_segments("plain"), vec!["plain"]);
-        assert_eq!(break_segments("well-known"), vec!["well-", "known"]);
-        assert_eq!(break_segments("a-b-c"), vec!["a-", "b-", "c"]);
+        assert_eq!(break_segments("plain", false), vec!["plain"]);
+        assert_eq!(break_segments("well-known", false), vec!["well-", "known"]);
+        assert_eq!(break_segments("a-b-c", false), vec!["a-", "b-", "c"]);
         // CJK: each ideograph is its own break segment.
-        assert_eq!(break_segments("日本語"), vec!["日", "本", "語"]);
+        assert_eq!(break_segments("日本語", false), vec!["日", "本", "語"]);
         // Zero-width space marks a break and is removed from the rendered text.
-        assert_eq!(break_segments("foo\u{200b}bar"), vec!["foo", "bar"]);
+        assert_eq!(break_segments("foo\u{200b}bar", false), vec!["foo", "bar"]);
     }
 
     /// `display:inline-block` flows atomically: sized boxes sit side by side on a line, and
@@ -22320,6 +22373,100 @@ mod tests {
             "CONTROL: #p is h{} and MUST be h0 — it is a plain block, and only `flow-root` (or a \
              BFC root) contains floats.",
             r("p").height
+        );
+    }
+
+    /// **`word-break: keep-all` suppresses the opportunities between LETTER UNITS, and nothing
+    /// else** (CSS Text §5.1).
+    ///
+    /// The value was parsed and then thrown away — `break_segments` had no access to the style — so
+    /// it behaved as `normal`: invisible for Latin, which never breaks mid-word anyway, and a whole
+    /// rewrap for CJK, which breaks at every ideograph. Chrome, 120px box, `16px/20px`, the same
+    /// text with and without the property:
+    ///
+    /// ```text
+    ///                                                     chrome   before   after
+    ///   日本語のテキストが折り返される       keep-all         20       60       20
+    ///   中文文本应该在任意字符处换行显示     keep-all         20       60       20
+    ///   日本語text日本語text日本語           keep-all         20       40       20
+    ///   한국어 텍스트는 어절 단위로…  CTRL  keep-all         60       60       60
+    ///   alpha-bravo-charlie-delta      CTRL  keep-all         40       40       40
+    ///   alphabravo<U+200B>charliedelta CTRL  keep-all         40       40       40
+    ///   supercalifragilistic…          CTRL  keep-all         20       20       20
+    /// ```
+    ///
+    /// ⚠ **The four control rows are what make this a predicate on two CHARACTERS rather than
+    /// "never break inside a word."** Spaces still break (Korean is written with them, which is what
+    /// the property is FOR), hyphens still break, and a zero-width space still breaks — none of
+    /// those is a letter unit. The CJK↔Latin boundary in row three IS a letter unit on both sides
+    /// (ID and AL are both in §5.1's suppressed set), and Chrome's 20 there is what pins that half.
+    ///
+    /// ⚠ The three escape hatches still win, which is the half that would make this a regression:
+    /// `word-break: break-all`, `overflow-wrap: break-word` and `overflow-wrap: anywhere` all take
+    /// the separate `break_word` path and rewrap the Japanese row to 60.
+    ///
+    /// RED, run: drop the `keep_all` guard in `break_segments` — the three CJK rows return to
+    /// 60/60/40.
+    #[test]
+    fn word_break_keep_all_suppresses_only_the_letter_unit_opportunities() {
+        let (dom, root) = layout_html(
+            "<body style='margin:0'>\
+               <div class=k id=ja>日本語のテキストが折り返される</div>\
+               <div class=k id=zh>中文文本应该在任意字符处换行显示</div>\
+               <div class=k id=mix>日本語text日本語text日本語</div>\
+               <div class=w id=ctl>日本語のテキストが折り返される</div>\
+               <div class=k id=ko>한국어 텍스트는 어절 단위로 줄바꿈됩니다</div>\
+               <div class=k id=hy>alpha-bravo-charlie-delta</div>\
+               <div class=k id=zwsp>alphabravo\u{200b}charliedelta\u{200b}echo</div>\
+               <div class=k id=esc style='word-break:break-all'>日本語のテキストが折り返される</div>\
+             </body>",
+            // ⚠ Explicit longhands, not the `font:` shorthand: this harness cascades with
+            //   `MinimalCascade`, and a shorthand it does not expand leaves the strut at a
+            //   different line-height than the live `boxes` path — the control row read 54 instead
+            //   of 60 and the failure looked like the subject rather than like the fixture.
+            "body{font-size:16px;line-height:20px;font-family:sans-serif} \
+             .w,.k{width:120px} .k{word-break:keep-all}",
+            1200.0,
+        );
+        let rects = root.node_rects(&dom);
+        let h = |id: &str| {
+            let n = dom
+                .descendants(dom.root())
+                .find(|&n| dom.element(n).and_then(|e| e.attr("id")) == Some(id))
+                .unwrap_or_else(|| panic!("no #{id}"));
+            rects[&n].height
+        };
+        // The CONTROL first: without the property the same text still wraps per ideograph. If this
+        // row moved, the suppression leaked out of `keep-all` and the rest proves nothing.
+        assert!(
+            (h("ctl") - 60.0).abs() < 0.5,
+            "CONTROL: #ctl is h{} and Chrome says 60 — `word-break: normal` must still break \
+             between ideographs",
+            h("ctl")
+        );
+        for (id, want) in [("ja", 20.0), ("zh", 20.0), ("mix", 20.0)] {
+            assert!(
+                (h(id) - want) < 0.5 && (h(id) - want) > -0.5,
+                "#{id} is h{} and Chrome says {want} — `keep-all` suppresses every opportunity \
+                 between two letter units, so the run overflows on one line",
+                h(id)
+            );
+        }
+        // ── The four rows that say it is NOT "never break inside a word".
+        for (id, want) in [("ko", 60.0), ("hy", 40.0), ("zwsp", 40.0)] {
+            assert!(
+                (h(id) - want) < 0.5 && (h(id) - want) > -0.5,
+                "CONTROL: #{id} is h{} and Chrome says {want} — a space, a hyphen and a \
+                 zero-width space are NOT letter units and still break under `keep-all`",
+                h(id)
+            );
+        }
+        // ── The escape hatch still wins.
+        assert!(
+            (h("esc") - 60.0).abs() < 0.5,
+            "CONTROL: #esc is h{} and Chrome says 60 — `break-all` takes the separate `break_word` \
+             path and must still rewrap",
+            h("esc")
         );
     }
 

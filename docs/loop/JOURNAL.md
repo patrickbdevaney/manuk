@@ -46371,6 +46371,69 @@ PERF: none — one UA rule and one narrowed branch in a cascade that already ran
 WIKI: `docs/wiki/css-cascade.md` — where Chrome draws the form-control `box-sizing` line, and why a
 layout-crate test cannot see it.
 
+## Tick 1140 — the map's steer, obeyed: UAX #14 is 26/27 done, and the 27th was `keep-all` (2026-08-11)
+
+TICK SHAPE: capability (layout) — the first tick taken under audit #54's own steer, *grep
+`CONSTELLATION.tsv` before a capability tick*, and taken as a PROBE before a build.
+
+⚠⚠⚠ **THE PROBE IS MOST OF THE TICK'S VALUE, AND IT IS A NEGATIVE RESULT.** The map's `partial` row
+reads *"UAX #14 line breaking — the Unicode algorithm rather than a simplification."* A 27-row
+battery at 120px — hyphen, non-breaking hyphen, em-dash, en-dash, solidus, URLs, grouped numbers and
+currency, version strings, `&nbsp;`, U+200B, CJK per ideograph, CJK brackets, sentence and bracket
+punctuation, `break-all`, `break-word`, `nowrap`, and the unbreakable-token overflow — reads
+**26/27 CHROME-EXACT**. The break-opportunity surface is done; the row had been carried as `partial`
+on a class that has been correct for a long time. **Three minutes and no build decided that.**
+
+⚠⚠⚠ **THE 27th WAS `word-break: keep-all`, PARSED AND THEN THROWN AWAY.** `break_segments` had no
+access to the style, so the value behaved as `normal` — invisible for Latin, which never breaks
+mid-word anyway, and a whole rewrap for CJK, which breaks at every ideograph:
+
+```text
+                                                    chrome   before   after
+   日本語のテキストが折り返される       keep-all         20       60       20
+   中文文本应该在任意字符处换行显示     keep-all         20       60       20
+   日本語text日本語text日本語           keep-all         20       40       20
+   한국어 텍스트는 어절 단위로…  CTRL  keep-all         60       60       60
+   alpha-bravo-charlie-delta      CTRL  keep-all         40       40       40
+   alphabravo<U+200B>charliedelta CTRL  keep-all         40       40       40
+   alphabravo<wbr>charliedelta    CTRL  keep-all         40       40       40
+   supercalifragilistic…          CTRL  keep-all         20       20       20
+   the same CJK row with break-all / break-word / anywhere        60 in both
+```
+
+⚠⚠ **THE CONTROL ROWS MAKE IT A PREDICATE ON TWO CHARACTERS, NOT ON A WORD.** CSS Text §5.1
+suppresses implicit opportunities *between typographic letter units* (classes NU, AL, AI, ID) — so
+spaces still break (**Korean is written with them, and that is what the property is FOR**), hyphens
+still break, and a zero-width space still breaks. The CJK↔Latin boundary in row three IS a letter
+unit on both sides, and Chrome's 20 there pins that half. The obvious reading — *"never break inside
+a word"* — is a RED-proven mutation: it takes the hyphen row from 40 to 20.
+
+⚠ **AND THE HARNESS ALMOST REPORTED THE FIXTURE AS THE SUBJECT.** The gate's control row read 54
+where the live path reads 60, because `layout_html` cascades with `MinimalCascade` and the `font:
+16px/20px sans-serif` SHORTHAND it does not expand left the strut at a different line-height. Written
+as longhands, and named in the test — t1057-1061's lesson (a battery that runs through a different
+cascade than the product is measuring a different engine), arriving as a false RED rather than a
+false green this time.
+
+RATCHET: **same-hour HEAD-binary control, pass-SET diff** — `css/CSS2` **3973 → 3973, ZERO gains,
+ZERO losses**. ⚠ The suite has **no `keep-all` reftest at all**, which is exactly why the map's row
+sat `partial` behind a gate that could not see this: the second tick running where the suite's zero
+means *"it does not exercise the parameter"* rather than *"the fix is worth zero"*. `manuk-layout`
+169/169 → 170/170. **Ten batteries, 304 rows, 4 differ** — three sub-pixel ADVANCE widths and one
+`display:none` element the instrument reports as a 0x0 rect and we correctly give no box.
+
+MAP: `css | UAX #14 line breaking` `partial` → `gated`, receipt recording the 26/27 probe and the one
+defect — the first row audit #54's steer has closed.
+
+GATE: `word_break_keep_all_suppresses_only_the_letter_unit_opportunities` — RED-proven twice
+(removing the guard returns the three CJK rows to 60/60/40; the over-fix takes the hyphen control
+from 40 to 20).
+
+PERF: one `chars().next_back()`/`next()` pair per break opportunity, and only when `keep-all` is set.
+
+WIKI: `docs/wiki/text-layout.md` — "UAX #14 is Chrome-exact on 26 of 27 rows — and the 27th was
+`word-break: keep-all`"
+
 ## Tick 1139 — the surface audit, and the map HAD both of this window's defects (2026-08-11)
 
 TICK SHAPE: measurement — the cadence audit of the MAP (due every 10 ticks; last at 1129), banked as

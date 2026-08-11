@@ -3526,3 +3526,50 @@ least ten of its rows actively separate the two rounding rules** — if a later 
 back toward sizes where both agree, the test fails rather than silently passing. 16, 24, 96 and 128
 are kept as the rows where they agree, as controls. RED-proven twice: restoring `round(sum)` fails at
 11px, and dropping the gap term fails at 16px — the old doc's own mistake, now a red test.
+
+## UAX #14 is Chrome-exact on 26 of 27 rows — and the 27th was `word-break: keep-all` (t1140)
+
+Taken as a PROBE first, because audit #54's steer is *"grep the map before a capability tick"* and the
+map's `partial` row said *"UAX #14 line breaking — the Unicode algorithm rather than a
+simplification."* A 27-row battery at a 120px width — hyphen / non-breaking hyphen / em-dash /
+en-dash, solidus, URLs, grouped numbers and currency, version strings, `&nbsp;`, U+200B, CJK per
+ideograph, CJK brackets, sentence and bracket punctuation, `word-break: break-all`,
+`overflow-wrap: break-word`, `white-space: nowrap`, and the unbreakable-token overflow — reads
+**26/27 Chrome-exact**.
+
+**That negative result is most of the tick's value.** The break-opportunity surface is done; the row
+was carried as `partial` on a class that has been correct for a long time.
+
+### The 27th
+
+`word-break: keep-all` was parsed into `WordBreak::KeepAll` and then thrown away —
+`break_segments` had no access to the style — so it behaved as `normal`. Invisible for Latin, which
+never breaks mid-word anyway, and a whole rewrap for CJK, which breaks at every ideograph.
+
+```text
+                                                    chrome   before   after
+  日本語のテキストが折り返される       keep-all         20       60       20
+  中文文本应该在任意字符处换行显示     keep-all         20       60       20
+  日本語text日本語text日本語           keep-all         20       40       20
+  한국어 텍스트는 어절 단위로…  CTRL  keep-all         60       60       60
+  alpha-bravo-charlie-delta      CTRL  keep-all         40       40       40
+  alphabravo<U+200B>charliedelta CTRL  keep-all         40       40       40
+  alphabravo<wbr>charliedelta    CTRL  keep-all         40       40       40
+  supercalifragilistic…          CTRL  keep-all         20       20       20
+  the same three CJK rows with break-all / break-word / anywhere  60 in both
+```
+
+CSS Text §5.1: *"implicit soft wrap opportunities between typographic letter units — classes NU, AL,
+AI and ID — are suppressed."* **The control rows are what make it a predicate on the two CHARACTERS
+the opportunity sits between, rather than "never break inside a word."** Spaces still break — Korean
+is written with them, and that is what the property is FOR. Hyphens still break (class BA/HY is not a
+letter unit). A zero-width space still breaks. And the CJK↔Latin boundary in row three *is* a letter
+unit on both sides, which is what Chrome's 20 there pins.
+
+The over-fix — suppressing every interior opportunity — is a RED-proven mutation: it takes the hyphen
+row from 40 to 20.
+
+**Same-hour HEAD-binary control, pass-SET diff:** `css/CSS2` **3973 → 3973, zero gains, zero
+losses** — the suite has no `keep-all` reftest, which is precisely why the row sat `partial` with a
+gate that could not see it. Ten batteries, 304 rows, 4 differ (three sub-pixel advance widths, one
+`display:none` instrument row).
