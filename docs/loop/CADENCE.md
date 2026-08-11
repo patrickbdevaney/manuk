@@ -13,9 +13,9 @@
 |---|---|---|
 | ticks landed | **855** | ticks 1–1148 |
 | median tick cycle | **28m** | 854 intervals |
-| median, last 10 | **25m** | 10 intervals |
+| median, last 10 | **37m** | 10 intervals |
 | fastest / slowest | 5s / 5.4d | |
-| **ticks per hour** | **1.13** | 756.1h elapsed |
+| **ticks per hour** | **1.13** | 757.2h elapsed |
 | median verify wall | **63s** | 794 ticks |
 | wall trend | 39s → 13m — getting slower ⚠️ | first 3 vs last 3 |
 
@@ -28,7 +28,7 @@ it, and a wall that grows taxes every future tick, so it is tracked separately f
 
 * **capabilities asserted** (`G_CAPABILITY`): 48 → **81**
 * **live gates**: 27 → **437**
-* **✅ rows in the capability ledger**: 144 → **570**
+* **✅ rows in the capability ledger**: 144 → **571**
 * **Bar 0 — oracle hangs**: 0 of 265 sites
 
 **377 of 855 ticks** (44%) moved a
@@ -91,7 +91,7 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 ## What a capability costs
 
 * **377** capability ticks, median cycle **28m**
-* median diff per tick: **+264 / −34** lines across 8 files
+* median diff per tick: **+265 / −34** lines across 8 files
 
 ## Every tick
 
@@ -951,6 +951,6 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 | **1145** | 2026-08-11 16:04 | 83m | measurement | 13m | +427/−33 | 437 | 81 | 56.0% · | the sweep check #108 demanded, and the prediction written before the number (2026-08-11) |
 | **1146** | 2026-08-11 16:45 | 41m | capability | 13m | +351/−60 | 437 | 81 | 56.0% · | CI had been RED for five ticks, and the gate asserted a FONT (2026-08-11) |
 | **1147** | 2026-08-11 16:59 | 14m | measurement | 13m | +144/−33 | 437 | 81 | 56.0% · | the "named next tick" REFUSED, and its RED-proof was already green (2026-08-11) |
-| **1148** | 2026-08-11 17:10 | 10m | measurement | 13m | +148/−33 | 437 | 81 | 56.0% · | a MISSING-BOX count is a DESCENDANT count, and the top site is a CONTENT bug (2026-08-11) |
+| **1148** | 2026-08-11 18:13 | 73m | measurement | 13m | +439/−40 | 437 | 81 | 56.0% · | a MISSING-BOX count is a DESCENDANT count, and the top site is a CONTENT bug (2026-08-11) |
 
 *`·` after a WPT figure means **carried forward**, not measured this tick.*

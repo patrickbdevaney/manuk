@@ -451,6 +451,7 @@
   - L8891 · The gate above the handler
   - L8909 · box-sizing: border-box on a cell, exposed by routing orphans through layout_cell
   - L8918 · The scope, and it names an unbuilt RULE rather than a failing test
+  - L8937 · A nested flex container is FIT-CONTENT wide, and taffy answers MAX-CONTENT (t1149)
 
 ## browser-capabilities.md
 `docs/wiki/browser-capabilities.md`
@@ -1969,4 +1970,4 @@
   - L124 · Rank mechanisms by FLIP RATE, not failing-subtest count — CSS layout is a multi-assertion slog
 
 ---
-1876 sections across 22 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+1877 sections across 22 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.

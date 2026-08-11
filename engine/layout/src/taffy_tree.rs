@@ -743,13 +743,92 @@ impl<'m> TaffyDom<'m> {
         }
     }
 
+    /// **A FLEX OR GRID CONTAINER BEING *SIZED* ANSWERS WITH ITS MAX-CONTENT WIDTH, AND THE
+    /// FIT-CONTENT CLAMP ABOVE IT IS NOBODY'S.**
+    ///
+    /// `determine_hypothetical_cross_size` hands a child the container's inner cross size as
+    /// `AvailableSpace::Definite` and takes whatever comes back (taffy 0.12.1
+    /// `compute/flexbox.rs:1403-1426`). For a Manuk-measured leaf that is correct — `shrink_to_fit`
+    /// applies `pref.min(avail.max(min_content))` on the way out. For a child that is ITSELF a flex
+    /// container, `determine_container_main_size` (`:955-981`) sums the items' **flex base sizes**
+    /// and returns that, with no clamp to the definite available space it was given, so the answer
+    /// comes back at max-content and the parent uses it verbatim as the hypothetical cross size.
+    ///
+    /// The visible result is `hnhbkis.edu.in`'s logo card: `<div class="h-72 flex items-center
+    /// justify-center"><img class="max-h-72 max-w-full"></div>` inside `flex flex-col items-center`
+    /// — the frame reported the image's natural **480px** inside a **230px** card, `align-items:
+    /// center` centred the overflow, and the box landed 125px off the left edge of its own parent
+    /// and 21px outside the viewport. Chrome-measured, on the reduction with the classes expanded:
+    ///
+    /// ```text
+    ///                                                       CHROME   BEFORE    AFTER
+    ///   col + items-center · frame · img max-w-full           230      480      230   <- the site
+    ///   col + items-center · frame · nowrap text (fits)       204      204      204   CTRL
+    ///   row parent        · frame · img max-w-full            230      480      230
+    ///   row parent        · frame flex-shrink:0 · plain img   480      480      480   CTRL
+    /// ```
+    ///
+    /// ⚠⚠⚠ **THE `flex-shrink: 0` CONTROL IS PRESERVED BY THE MIN-CONTENT TERM, NOT BY A SCOPE
+    /// TEST, AND THAT IS WHY THIS IS SAFE TO APPLY EVERYWHERE.** The clamp is the fit-content
+    /// formula in full — `min(max-content, max(min-content, available))` — so a container that
+    /// genuinely CANNOT be narrower than the space it was offered keeps its overflow: an image with
+    /// no `max-width` has a min-content of 480 and the `max()` returns 480 unchanged. Writing it as
+    /// a bare `min(width, available)` would pass three of those four rows and silently un-break the
+    /// web's most common overflow.
+    ///
+    /// ⚠ Inline axis only. A flex container's block size is its content height, not a fit-content
+    /// size, and the same clamp on the cross-block axis would flatten every column that is taller
+    /// than its offered space. ⚠ And only where the width is `auto` and unknown: with a definite
+    /// width there is nothing to fit, and in `PerformLayout` the size has already been decided by
+    /// the caller — re-clamping there would fight it.
+    ///
+    /// This is a **supplement, not a patch** (`STATUS.md`, option 3): the fork surface stays empty
+    /// and a taffy bump cannot silently revert it, because the gate above owns the numbers.
+    fn fit_content_inline(
+        &mut self,
+        node_id: TId,
+        inputs: LayoutInput,
+        width: f32,
+        mut run: impl FnMut(&mut Self, LayoutInput) -> LayoutOutput,
+    ) -> f32 {
+        let idx: usize = node_id.into();
+        if inputs.run_mode != taffy::RunMode::ComputeSize
+            || inputs.known_dimensions.width.is_some()
+            || !self.nodes[idx].style.size.width.is_auto()
+        {
+            return width;
+        }
+        let AvailableSpace::Definite(avail) = inputs.available_space.width else {
+            return width;
+        };
+        if !(width > avail) {
+            return width;
+        }
+        let min_content = run(
+            self,
+            LayoutInput {
+                available_space: Size {
+                    width: AvailableSpace::MinContent,
+                    ..inputs.available_space
+                },
+                ..inputs
+            },
+        )
+        .size
+        .width;
+        width.min(avail.max(min_content))
+    }
+
     fn dispatch(&mut self, node_id: TId, inputs: LayoutInput) -> LayoutOutput {
         let idx: usize = node_id.into();
         if self.nodes[idx].container {
-            match self.nodes[idx].style.display {
-                Display::Grid => compute_grid_layout(self, node_id, inputs),
-                _ => compute_flexbox_layout(self, node_id, inputs),
-            }
+            let run = |tree: &mut Self, inputs| match tree.nodes[idx].style.display {
+                Display::Grid => compute_grid_layout(tree, node_id, inputs),
+                _ => compute_flexbox_layout(tree, node_id, inputs),
+            };
+            let mut out = run(self, inputs);
+            out.size.width = self.fit_content_inline(node_id, inputs, out.size.width, run);
+            out
         } else {
             // Manuk-measured leaf: content-size via the callback into block/inline layout.
             let style = self.nodes[idx].style.clone();

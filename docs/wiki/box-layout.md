@@ -8933,3 +8933,44 @@ anonymous cells.
 **Same-hour old-binary control, pass-SET diff:** `css/CSS2` **3948 → 3963 (+15), zero losses**.
 `manuk-layout` 168/168. The headline `+15` and the set diff agree, which is the check t1131 taught —
 an aggregate can hide a −1 behind a +1.
+
+## A nested flex container is FIT-CONTENT wide, and taffy answers MAX-CONTENT (t1149)
+
+The **hypothetical cross size** of a flex item whose `align-self` is not `stretch` is a *fit-content*
+size — `min(max-content, max(min-content, available))` (CSS Flexbox §9.4, CSS Sizing §5.2). Two
+different things in this tree compute that, and only one of them was doing it:
+
+| the item is… | who sizes it | fit-content applied? |
+|---|---|---|
+| a block / inline / float / table box | our measure seam → `Ctx::shrink_to_fit` | ✅ `pref.min(avail.max(min_content))` |
+| **itself a flex or grid container** | taffy's own algorithm | ❌ returns max-content |
+
+taffy 0.12.1 `compute/flexbox.rs`: `determine_hypothetical_cross_size` (`:1403-1426`) hands the child
+`AvailableSpace::Definite(available)` and takes whatever comes back verbatim, while
+`determine_container_main_size` (`:955-981`) sums the items' **flex base sizes** and returns that with
+no clamp to the definite space it was just given. So the answer arrives at max-content and the parent
+believes it.
+
+**This needs a flex container inside a flex container to appear at all**, which is why every
+reduction without the wrapper measures green — and why the obvious hypothesis (*"the replaced
+element's `max-width` never reaches the measurer"*) survives an eyeball and dies to a mutation.
+
+`TaffyDom::fit_content_inline` wraps taffy's `ComputeSize` answer on the **inline axis only**. It
+needs an honest min-content to work, so it is one half of a pair; the other is
+`Ctx::clamp_replaced_intrinsic`, which applies a replaced element's own `max-width`/`max-height` to
+its intrinsic contribution — `<img style="max-width:100%">` has a min-content of **0**, because the
+box can shrink to nothing, and a percentage max resolves against `avail_width`, which carries the
+probe's identity (`Some(0.0)` = min-content, `None` = max-content). **Either half alone is inert.**
+
+The safety argument is the `flex-shrink:0` row, and it is structural rather than a scope test: the
+clamp is the *whole* formula, so a container that genuinely cannot be narrower than the space it was
+offered keeps its overflow (an unconstrained image has a min-content of 480 and the `max()` returns
+it unchanged). A bare `min(width, available)` passes the three positive rows and silently un-breaks
+the most common overflow on the web.
+
+⚠ Inline axis only. A flex container's block size is its content height, not a fit-content size; the
+same clamp on a cross-block axis would flatten every column taller than its offered space.
+
+This is a **supplement, not a fork** (`STATUS.md`, option 3) — the fork surface stays empty, and a
+taffy bump cannot silently revert it because
+`a_nested_flex_container_is_fit_content_not_max_content_wide` owns the four Chrome-measured numbers.

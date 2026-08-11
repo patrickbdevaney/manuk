@@ -46371,6 +46371,94 @@ PERF: none — one UA rule and one narrowed branch in a cascade that already ran
 WIKI: `docs/wiki/css-cascade.md` — where Chrome draws the form-control `box-sizing` line, and why a
 layout-crate test cannot see it.
 
+## Tick 1149 — a nested flex container answered MAX-CONTENT where the spec says FIT-CONTENT (2026-08-11)
+
+TICK SHAPE: capability (layout). HYPOTHESIS, written before the build: the burndown §9.2 names
+`hnhbkis.edu.in` as *"the one row on this tier that is BOTH cheap and already traced"* — t1112
+localised its h-overflow to ONE `<div>` 480px wide inside a 230px parent with every ancestor
+byte-exact. Predicted cause: a replaced element's own `max-width` never reaching the container that
+measures it. **That prediction was WRONG, and the way it was wrong is the tick's first finding.**
+
+RATCHET/BOARD: the board's top steer says work whichever of the gauge's two factors is lower —
+jarring-clean (25.0%) sits below shape-only (29.5%), and this site is jarring-blocked at
+shape 0.932 with `h_overflow 2`, i.e. a marginal M1 crossing rather than a breadth fix.
+
+⚠⚠⚠ **THE FIRST DRAFT OF THE GATE PASSED WITHOUT THE FIX.** `replaced_default_size` does answer with
+the natural size and does drop the element's own `max-*` — and clamping it there changes NOTHING
+observable. Instrumented at the seam, it already reports Chrome's numbers for
+`<img style="max-width:100%">`:
+
+```text
+   taffy asks MIN-content (avail = Some(0.0))  ->  0      Chrome 0
+   taffy asks MAX-content (avail = None)       ->  480    Chrome 480
+```
+
+and the isolating construct — the same image placed DIRECTLY in the flex column, no wrapper — is
+Chrome-exact on all four constraint rows at HEAD (`max-width:100%` 230 · `max-width:150px` 150 ·
+`max-height:288px` 292 · none 480). A clamp added there alone is a **green mutation** (t1107's rule),
+and it was severed and re-run to prove it.
+
+⚠⚠ **AND THE FIRST FIXTURE MEASURED A DIFFERENT ENGINE.** Written with a declared `width:480px`
+instead of a decoded bitmap's natural width, `to_taffy_style` hands taffy a DEFINITE main size, the
+measure seam is never asked at all, and all four rows read 480 — a real second gap, and not this one.
+`layout_html_with_natural` sets the same mark the page path sets; the earlier draft would have been
+"fixed" by code that never runs on the site. (t1042-1046: *a fixture that cannot express its subject
+reports it BROKEN* — here it reported a **different** thing broken, which is worse.)
+
+⚠⚠⚠ **THE DEFECT IS THAT A FLEX CONTAINER BEING *SIZED* RETURNS ITS MAX-CONTENT WIDTH, AND THE
+FIT-CONTENT CLAMP ABOVE IT IS NOBODY'S.** taffy 0.12.1 `compute/flexbox.rs`:
+
+```text
+   determine_hypothetical_cross_size  :1403-1426   hands the child Definite(available) and takes
+                                                   whatever comes back, verbatim
+   determine_container_main_size      :955-981     sums the items' FLEX BASE SIZES and returns that,
+                                                   with no clamp to the definite space it was given
+```
+
+A Manuk-measured leaf in the same position is already correct — `shrink_to_fit` applies
+`pref.min(avail.max(min_content))` on the way out — so **the bug needs a flex container INSIDE a flex
+container to appear at all**, which is exactly why every reduction without the wrapper came back
+green. The site's construct is Tailwind's card idiom: `<div class="h-72 flex items-center
+justify-center"><img class="max-h-72 max-w-full"></div>` inside `flex flex-col items-center`.
+
+**THE FIX IS A PAIR, AND EITHER HALF ALONE IS INERT.** `TaffyDom::fit_content_inline` applies the
+fit-content formula to a flex/grid container's `ComputeSize` answer on the INLINE axis only, and it
+needs an honest min-content to do it — which is the seam clamp. Severing either half returns the
+site's 480. Both severances are recorded in this tick and both went RED.
+
+Chrome-measured, 230px card, a real 480x474 PNG, classes expanded to declarations:
+
+```text
+                                                       CHROME   BEFORE    AFTER
+   col + items-center · frame · img max-w-full           230      480      230   <- the site
+   col + items-center · frame · nowrap text (fits)       204      204      204   CTRL
+   row parent        · frame · img max-w-full            230      480      230
+   row parent        · frame flex-shrink:0 · plain img   480      480      480   CTRL
+```
+
+⚠⚠⚠ **THE `flex-shrink:0` CONTROL IS PRESERVED BY THE MIN-CONTENT TERM, NOT BY A SCOPE TEST, AND
+THAT IS WHAT MAKES THE CLAMP SAFE TO APPLY EVERYWHERE.** The formula is fit-content in full —
+`min(max-content, max(min-content, available))` — so a container that genuinely cannot be narrower
+than the space it was offered keeps its overflow: an image with no `max-width` has a min-content of
+480 and the `max()` returns 480 unchanged. A bare `min(width, available)` passes three of those four
+rows and silently un-breaks the web's most common overflow. That row was measured in Chrome BEFORE
+the shape of the fix was chosen.
+
+I2 (never patch a dependency) held: this is option 3 from `STATUS.md`'s table — a supplement in our
+own tree wrapping taffy's answer, not a fork. The fork surface is still empty.
+
+RATCHET: `manuk-layout` 171/171, zero regressions.
+
+GATE: `a_nested_flex_container_is_fit_content_not_max_content_wide` — four Chrome-measured rows, two
+of them controls. RED-proven twice, once per half of the fix.
+
+PERF: one extra `MinContent` sizing pass per flex/grid container that BOTH is auto-width and exceeds
+a definite available width. Taffy's own per-node cache absorbs the repeat; the layout suite's
+wall-clock is unchanged (26.8s).
+
+WIKI: `docs/wiki/box-layout.md` — "A nested flex container is FIT-CONTENT wide, and taffy answers
+MAX-CONTENT"
+
 ## Tick 1148 — a MISSING-BOX count is a DESCENDANT count, and the top site is a CONTENT bug (2026-08-11)
 
 TICK SHAPE: measurement (probe before build) — t1147 named `missing box: <div>` (10 sites, 1435 hits)

@@ -6299,7 +6299,83 @@ impl Ctx<'_> {
             _ if is_img => return None,
             _ => 150.0,
         };
-        Some((width.max(0.0), height.max(0.0)))
+        let (width, height) =
+            self.clamp_replaced_intrinsic(node, width, height, ratio, avail_width);
+        Some((width, height))
+    }
+
+    /// **A REPLACED ELEMENT'S OWN MAX CONSTRAINTS ARE PART OF ITS INTRINSIC CONTRIBUTION.**
+    ///
+    /// [`Ctx::replaced_default_size`] and the aspect-ratio short-circuit in
+    /// [`Ctx::layout_flex_or_grid`]'s measure closure both answer *"how big does this replaced item
+    /// want to be?"* with the box's NATURAL size, and neither applied the element's own
+    /// `max-width` / `max-height`. So `<img class="max-w-full">` reported **480** as its MIN-content
+    /// contribution where Chrome's is **0** — the box can shrink to nothing — and every fit-content
+    /// clamp above it was floored at 480 by the `max(min-content, …)` term.
+    ///
+    /// ⚠ **`avail_width` carries the probe's identity, and that is what makes ONE expression give
+    /// Chrome's two different answers.** Taffy passes `Some(0.0)` for the MIN-content question and
+    /// `None` for MAX-content, so *"resolve a percentage max against the available width; with no
+    /// available width a percentage max is `none`"* (CSS Sizing §5.2 — an indefinite percentage is
+    /// not resolved against zero) yields min-content 0 and max-content 480 from the same code.
+    ///
+    /// ⚠ **The ratio transfer is one-way and Chrome-conditioned.** A clamp on one axis pulls the
+    /// other back through the ratio only when that other axis is `auto` or the bitmap's own natural
+    /// size — a DECLARED `width:480px` under `max-height:288px` stays 480 in Chrome and squashes.
+    /// This is `layout_float`'s rule, reached from the measure seam rather than duplicated.
+    ///
+    /// ⚠⚠ **ON ITS OWN THIS CHANGES NOTHING MEASURABLE** (verified by mutation, t1149): the
+    /// construct that isolates it — the same image directly in the flex column — is already
+    /// Chrome-exact on all four constraint rows. It is half of a pair, and the other half is
+    /// [`taffy_tree::TaffyDom::fit_content_inline`], which is what consumes an honest min-content.
+    fn clamp_replaced_intrinsic(
+        &self,
+        node: NodeId,
+        width: f32,
+        height: f32,
+        ratio: Option<f32>,
+        avail_width: Option<f32>,
+    ) -> (f32, f32) {
+        let s = self.style_of(node);
+        let pct_basis = avail_width.filter(|a| a.is_finite());
+        let max_len = |d: Dim, keyword_present: bool| -> f32 {
+            if keyword_present {
+                // `max-width: max-content` and friends are a content-derived clamp, and this seam
+                // IS the content measurement — clamping it by itself would be circular. Left
+                // uncapped deliberately rather than guessed at.
+                return f32::INFINITY;
+            }
+            match d {
+                Dim::Auto => f32::INFINITY,
+                Dim::Px(p) => p.max(0.0),
+                Dim::Percent(_) | Dim::Calc { .. } => match pct_basis {
+                    Some(b) => d.resolve(b, f32::INFINITY).max(0.0),
+                    // A `calc()` with no percentage term is a length and resolves either way.
+                    None if matches!(d, Dim::Calc { pct: 0.0, .. }) => d.resolve(0.0, 0.0).max(0.0),
+                    None => f32::INFINITY,
+                },
+            }
+        };
+        let max_w = max_len(s.max_width, s.max_width_keyword.is_some());
+        let max_h = max_len(s.max_height, s.max_height_keyword.is_some());
+        let (mut width, mut height) = (width.max(0.0), height.max(0.0));
+        let width_follows = matches!(s.width, Dim::Auto) || s.width_is_natural;
+        let height_follows = matches!(s.height, Dim::Auto) || s.height_is_natural;
+        if max_h.is_finite() && height > max_h {
+            let scale = if height > 0.0 { max_h / height } else { 0.0 };
+            height = max_h;
+            if ratio.is_some() && width_follows {
+                width *= scale;
+            }
+        }
+        if max_w.is_finite() && width > max_w {
+            let scale = if width > 0.0 { max_w / width } else { 0.0 };
+            width = max_w;
+            if ratio.is_some() && height_follows {
+                height *= scale;
+            }
+        }
+        (width.max(0.0), height.max(0.0))
     }
 
     /// The intrinsic **content** size `(width, height)` of `node` for taffy's flex/grid
@@ -8928,10 +9004,15 @@ impl Ctx<'_> {
                     // stretched cross size outranks it exactly as it outranks `auto`.
                     let st = self.style_of(dn);
                     if matches!(st.width, Dim::Auto) || st.width_is_natural {
+                        // ⚠ **AND THE ELEMENT'S OWN `max-*` CLAMPS THE ANSWER HERE TOO.** This
+                        // short-circuit is reached BEFORE `measure_intrinsic`, so a clamp that
+                        // lives only in `replaced_default_size` is invisible whenever a cross size
+                        // is known — which is most of the flex web.
+                        let (w, h) = self.clamp_replaced_intrinsic(dn, kh * r, kh, Some(r), aw);
                         return (
                             taffy::Size {
-                                width: kh * r,
-                                height: kh,
+                                width: w,
+                                height: h,
                             },
                             None,
                         );
@@ -18266,6 +18347,113 @@ mod tests {
             "an <img> with a definite width and NO ratio must never take the 300x150 default \
              object size — Chrome gives it a 34px alt line box, we give 0, and 150 is the \
              regression this pins; got height {h}"
+        );
+    }
+
+    /// **A NESTED FLEX CONTAINER REPORTED ITS MAX-CONTENT WIDTH AS ITS FIT-CONTENT SIZE.**
+    ///
+    /// `hnhbkis.edu.in`'s logo card — `<div class="h-72 flex items-center justify-center"><img
+    /// class="max-h-72 max-w-full"></div>` inside `flex flex-col items-center`, which is Tailwind's
+    /// card idiom and the shape of most of the logo/partner/badge strips on the web. The frame told
+    /// its parent it wanted the image's natural **480px** in a **230px** card, `align-items:center`
+    /// centred the overflow, and the box landed at **x = -125** relative to its own parent and 21px
+    /// outside the 1200px viewport. Every ancestor was byte-exact (t1112 traced it), so the whole
+    /// error is this one number.
+    ///
+    /// The mechanism is [`taffy_tree::TaffyDom::fit_content_inline`]: taffy's flex container returns
+    /// its max-content width when asked to size itself, even against a DEFINITE available space, and
+    /// the caller uses that verbatim. A Manuk-measured leaf in the same position is already correct,
+    /// which is why the bug needs a flex container INSIDE a flex container to appear at all.
+    ///
+    /// ⚠⚠⚠ **THE FIRST DRAFT OF THIS GATE PASSED WITHOUT THE FIX, AND THAT IS THE FINDING.** The
+    /// obvious hypothesis — *"`replaced_default_size` answers with the natural size and drops the
+    /// element's own `max-width`"* — is FALSE. Instrumented, the seam already reports min-content
+    /// **0** and max-content **480** for `<img style="max-width:100%">`, which are Chrome's numbers,
+    /// and the same image placed DIRECTLY in the column (no frame) is Chrome-exact on all four
+    /// constraint rows at HEAD. A clamp added there is a green mutation. The construct has to
+    /// contain the nested container or it measures a different engine.
+    ///
+    /// Chrome-measured, 230px card, a real 480×474 PNG, classes expanded to declarations:
+    ///
+    /// ```text
+    ///                                                       CHROME   BEFORE    AFTER
+    ///   col + items-center · frame · img max-w-full           230      480      230   <- the site
+    ///   col + items-center · frame · nowrap text (fits)       204      204      204   CTRL
+    ///   row parent        · frame · img max-w-full            230      480      230
+    ///   row parent        · frame flex-shrink:0 · plain img   480      480      480   CTRL
+    /// ```
+    ///
+    /// The last row is the one that decides the shape of the fix: an image with no `max-width` has a
+    /// min-content of 480, so the fit-content formula's `max(min-content, available)` keeps the
+    /// overflow. A bare `min(width, available)` passes rows 1–3 and breaks it.
+    #[test]
+    fn a_nested_flex_container_is_fit_content_not_max_content_wide() {
+        const CSS: &str = ".wrap{width:230px} \
+             .col{display:flex;flex-direction:column;align-items:center} \
+             .row{display:flex} \
+             .frame{display:flex;align-items:center;justify-content:center}";
+        for (label, html, extra, want, why) in [
+            (
+                "the site",
+                "<body style='margin:0'><div class=wrap><div class=col>\
+                   <div class=frame id=box><img id=logo style='max-width:100%'></div>\
+                 </div></div></body>",
+                "",
+                230.0,
+                "a percentage max-width makes the image's min-content contribution 0, so the \
+                 frame's fit-content is the 230px available",
+            ),
+            (
+                "row parent",
+                "<body style='margin:0'><div class=wrap><div class=row>\
+                   <div class=frame id=box><img id=logo style='max-width:100%'></div>\
+                 </div></div></body>",
+                "",
+                230.0,
+                "the same clamp, reached through a row parent's main axis rather than a column \
+                 parent's cross axis",
+            ),
+            (
+                "CONTROL: flex-shrink:0, no max-width",
+                "<body style='margin:0'><div class=wrap><div class=row>\
+                   <div class=frame id=box><img id=logo></div>\
+                 </div></div></body>",
+                "#box{flex-shrink:0}",
+                480.0,
+                "an unconstrained image has a min-content of 480, so fit-content KEEPS the \
+                 overflow — Chrome overflows here and a bare min(width, available) would not",
+            ),
+        ] {
+            let (dom, root) = layout_html_with_natural(
+                html,
+                &format!("{CSS} {extra}"),
+                1200.0,
+                "logo",
+                480.0,
+                474.0,
+            );
+            let got = root.node_rects(&dom)[&by_id(&dom, "box")].width;
+            assert!(
+                (got - want).abs() < 2.0,
+                "{label}: Chrome measures the frame {want}px wide — {why}; got {got}"
+            );
+        }
+
+        // ⚠ The text row is its own document because it has no natural-size element at all, and it
+        // is the row that proves the clamp is not simply capping every nested container at the
+        // available width: 204 < 230, so nothing may move.
+        let (dom, root) = layout_html(
+            "<body style='margin:0'><div class=wrap><div class=col>\
+               <div class=frame id=box><span style='white-space:nowrap'>wide unbreakable text \
+               here now</span></div></div></div></body>",
+            CSS,
+            1200.0,
+        );
+        let got = root.node_rects(&dom)[&by_id(&dom, "box")].width;
+        assert!(
+            got < 230.0,
+            "CONTROL: a nested flex container whose content already FITS must keep hugging its \
+             content (Chrome 204), not grow to the 230px available; got {got}"
         );
     }
 
