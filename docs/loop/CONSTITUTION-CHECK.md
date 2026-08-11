@@ -7503,6 +7503,111 @@ test for the arc**, which is one sweep.
    three minutes, no build), so the suite ranks *where to look* and the corpus decides *whether to
    go*. That single step is what would have caught `::first-letter` as the thin one it was.
 
+## Check #107 — tick 1136 (2026-08-11)
+
+Re-read of `CONSTITUTION.MD` PART I (I1-I8), PART VI.2/VI.3 and PART VII, anchored to the eight ticks
+since check #106 (t1129-t1135). **Three findings, and the first is an amendment to VI.2's own newest
+row — the one check #106 wrote.**
+
+### FINDING 1 — ⚠⚠⚠ CHECK #106's RULE IS RIGHT AND ITS SCOPE IS TOO NARROW: THE SWEEP DOES NOT ONLY MISREAD SINGLE SITES, IT READS ~4 POINTS LOW ON ALL OF THEM
+
+Check #106 added to VI.2: *"a `--jobs 2` sweep row is bankable for the DENOMINATOR and is not evidence
+about any single site,"* from five per-site readings that failed to reproduce. That framing makes the
+failure **sporadic** — some rows are unlucky. t1135 measured the population and it is not sporadic, it
+is a **bias**. Seven down-movers with BYTE-IDENTICAL node counts, re-run solo on the same binary and
+against the old binary, same hour:
+
+```text
+                          t1127swp  t1135swp   SOLO new   SOLO old
+   gismart.com              0.843     0.797      0.840      0.840
+   bhfudbal.ba              0.596     0.551      0.595      0.595
+   www.crazyshop.pl         0.658     0.618      0.655      0.658
+   www.puentedemando.com    0.822     0.792      0.759      0.757
+```
+
+The two binaries agree to three decimals on every row, and the solo column recovers the previous
+sweep's value — **in the same direction on every site at once.** So the amendment VI.2 needs is one
+clause wider than the one it has: *a `--jobs 2` number and a solo number are on **different scales**,
+and the loop has been diffing across them.* Every "the fix didn't reproduce corpus-wide" reading in
+this project's history was taken across that boundary. **This is I5 territory** — the differential
+oracle is the discovery engine, and a discovery engine with a systematic offset between its two
+operating modes mis-ranks the work-list, which is the fourth distinct way this instrument has been
+caught lying (mis-provisioned reference · population-changed delta · per-site churn · now scale).
+
+### FINDING 2 — ⚠⚠⚠ THE M1 GATE WEIGHTS SITES AND THE INSTRUMENT WEIGHTS NODES, AND NOTHING RECONCILES THEM
+
+`shape` is a mean over matched elements; the gate counts SITES. **14 of the 121 rows scored in both
+sweeps are computed over ≤10 nodes, and 12 of them are frozen** — identical shape, identical `n`,
+delta exactly `0.000`, sweep after sweep. `allticketscol.com` scores **1.000 on ONE node** and counts
+as a full shape-PASS in the M1 numerator; `house.udn.com` scores 0.000 on one node and counts as a
+fail. `merchant.upi9.pro` fell 47 nodes → 2 and reported exactly **0.500 — which is 1/2, from a sample
+of two** — worth −0.415 of the whole common-set band.
+
+This is the SAME class as check #103's population-changed delta and it is a different member of it:
+#103 is about a population that MOVED between two readings; this is about a population too small to
+carry a reading at all. VI.3's rule *"a frequency is not a measurement until its VALUES have been
+looked at"* has a twin here: **a mean is not a measurement until its N has been looked at.** The
+instrument already computes `shape_n` and writes it in the row; nothing reads it.
+
+⚠ Consequence for the stated bar, which is a re-statement of check #83's finding at a new place: the
+M1 numerator and denominator both contain rows that cannot move. That is not the 82.2-87.4% ceiling
+#83 named (that one is scorability); it is a second, smaller distortion inside the sites that DO
+score. Both are owner questions and the loop must not silently absorb either.
+
+### FINDING 3 — ⚠⚠ I5 HELD UNDER PRESSURE THREE TIMES THIS WINDOW, AND ONCE IT COST A LANDING
+
+I5 (*a regression is never traded for a capability*) was tested three times in eight ticks and held
+each time, but the interesting one is t1134. A complete §17.2.1 anonymous-table implementation came in
+at **css/CSS2 +15 / −6** on a pass-SET diff against a same-hour old binary. The +9 headline was
+green and the six losses were real: a `table-row` holding non-cell content lost that content, because
+§17.2.1's anonymous **CELL** rule is not built. The tick refused the wrap for exactly those rows and
+landed **+15 / −0**.
+
+⚠ **And the scope was written the way t1125/t1126 taught** — around an unbuilt RULE with the six
+reftests named as its RED-proof, not around the failing tests. That is the correction from check #105's
+*"a scope drawn around a failing test is a note to come back"* being applied BEFORE the note was
+needed rather than two ticks later, which is the first time this loop has done that.
+
+⚠ The other two: t1133 refused a narrow fix outright (it closed seven rows and stacked two), and
+t1134's own `box-sizing` repair was forced by the ratchet — routing orphan cells through `layout_cell`
+exposed a defect a real `<td>` had carried the whole time, and the fix had to land in the same tick
+because the battery row regressed.
+
+### 4 · INVARIANTS
+
+- **I2 (never patch deps):** held. Nothing this window touched Stylo, Taffy or mozjs; t1134's work is
+  entirely in `engine/layout` and one additive `pub fn` in `engine/css`.
+- **I3 (semantic model in lockstep):** ⚠⚠ **satisfied, and for the FOURTH consecutive check by
+  ACCIDENT OF SCOPE** — the identical sentence checks #72, #100 and #101 wrote. t1134 changes the BOX
+  TREE, which is closer to the producer than any of the previous windows: the anonymous table box
+  carries `node: None`, so it reports no rect and the cells keep theirs, and the click points move
+  with the boxes for free. **That is a design choice that happened to be right, not a check that was
+  run.** The named debt is unchanged and still unwritten: `node_rects`'s `lift` giving an
+  icon-wrapping `<span>` the icon's 4px box. Four checks is long enough; the next tick that touches
+  `node_rects` must land with an agent-side click-point assertion.
+- **I4 / VI.3 (Pareto):** held and, for once, measured before the build — `display:table-cell` was
+  priced at 54 of 373 corpus stylesheets (14.5%) BEFORE t1134 was taken, which is exactly the
+  "price it against the corpus first" step check #105 §4 asked for.
+- **I5:** see FINDING 3. **I1, I6, I7, I8:** untouched this window.
+
+### 5 · THE STEER — binding on the next tick
+
+1. ⚠⚠⚠ **READ `shape_n` BEFORE BELIEVING ANY PER-SITE DELTA**, and treat any row with `shape_n ≤ 10`
+   as unmeasured rather than as a score. This is one column that already exists in every sweep row
+   file, and it invalidates 14 of 121 rows' worth of band movement.
+2. ⚠⚠⚠ **NEVER DIFF A SWEEP NUMBER AGAINST A SOLO NUMBER.** They are ~4 points apart by construction.
+   A per-site A/B is solo-vs-solo or it is nothing.
+3. **The §17.2.1 anonymous CELL rule is the named next tick** and its RED-proof already exists:
+   `css/CSS2/tables/table-anonymous-objects-197..200` plus `normal-flow/table-in-inline-001` and
+   `visuren/table-pseudo-in-part3-1`. The blocker is structural, not algorithmic — `layout_cell` reads
+   its style and children from a `NodeId`, so it needs the same `Option<NodeId>` split `layout_table`
+   just took.
+4. **The `<br>`-broken two-line run reads 37 where Chrome says 36**, in a real `<table>` as well. It
+   is one pixel on every wrapped two-line run in the engine, which is the highest-frequency
+   lowest-magnitude defect currently named, and VI.3 says usage-weight wins where the two orderings
+   disagree. Hypothesis from source, unmeasured: `close_line` rounds `ascent` and `descent`
+   INDEPENDENTLY and sums the rounded values.
+
 ## Check #106 — tick 1128 (2026-08-11)
 
 HORIZON H0, re-scoped by **PART VII**: the four v1 components. Its gate is *"reliably renders and

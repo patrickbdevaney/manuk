@@ -46371,6 +46371,63 @@ PERF: none — one UA rule and one narrowed branch in a cascade that already ran
 WIKI: `docs/wiki/css-cascade.md` — where Chrome draws the form-control `box-sizing` line, and why a
 layout-crate test cannot see it.
 
+## Tick 1136 — the constitution check, and the sweep's error is a BIAS not a lottery (2026-08-11)
+
+TICK SHAPE: measurement — the cadence re-read of `CONSTITUTION.MD` (due every 8 ticks; last at 1128),
+banked as check #107 in `docs/loop/CONSTITUTION-CHECK.md`.
+
+⚠⚠⚠ **FINDING 1 — CHECK #106's OWN NEW VI.2 ROW IS TOO NARROW, AND THIS WINDOW AMENDS IT.** Check
+#106 wrote *"a `--jobs 2` sweep row is bankable for the DENOMINATOR and is not evidence about any
+single site"* from five readings that failed to reproduce — a framing in which the failure is
+SPORADIC. t1135 measured the population: seven down-movers with byte-identical node counts, both
+binaries agreeing to three decimals, and the solo column recovering the previous sweep's value **in
+the same direction on every site at once**. That is a BIAS of about 4 points, not a lottery. The
+clause VI.2 needs is one wider: **a sweep number and a solo number are on different scales, and this
+loop has been diffing across that boundary for its whole history.** Fourth distinct way the fidelity
+instrument has been caught lying (mis-provisioned reference · population-changed delta · per-site
+churn · now SCALE), and it is I5 territory: a discovery engine with a systematic offset between its
+two operating modes mis-ranks the work-list.
+
+⚠⚠⚠ **FINDING 2 — THE M1 GATE WEIGHTS SITES AND THE INSTRUMENT WEIGHTS NODES.** 14 of the 121 rows
+scored in both sweeps are computed over ≤10 nodes and 12 are FROZEN — identical shape, identical `n`,
+delta exactly 0.000 forever. `allticketscol.com` scores **1.000 on ONE node** and counts as a full
+shape-PASS in the M1 numerator; `house.udn.com` scores 0.000 on one node and counts as a fail.
+VI.3 already says *"a frequency is not a measurement until its VALUES have been looked at"*; this is
+its twin — **a mean is not a measurement until its N has been looked at.** `shape_n` is already in
+every row file and nothing reads it.
+
+⚠⚠ **FINDING 3 — I5 WAS TESTED THREE TIMES IN EIGHT TICKS AND HELD EACH TIME, AND ONCE IT COST A
+LANDING.** t1134's §17.2.1 implementation came in at **+15 / −6** on a pass-SET diff against a
+same-hour old binary; the +9 headline was green and the six losses were real. It landed **+15 / −0**
+by refusing the wrap for the rows §17.2.1's unbuilt anonymous-CELL rule would have emptied. ⚠ And the
+scope was written around the unbuilt RULE with the six reftests named as its RED-proof, not around the
+failing tests — check #105's lesson applied BEFORE the note was needed rather than two ticks later,
+which is the first time this loop has done that.
+
+COMPLIANCE: **I3 is satisfied for the FOURTH consecutive check by ACCIDENT OF SCOPE** — the identical
+sentence checks #72, #100 and #101 wrote. t1134 changes the BOX TREE itself, closer to the shared
+`node_rects` producer than any previous window; the anonymous table carries `node: None` so the cells
+keep their rects and the agent's click points move for free. That was a design choice that happened to
+be right, not a check that was run. Four checks is long enough: the next tick that touches
+`node_rects` lands with an agent-side click-point assertion. **I4 held and was measured BEFORE the
+build** — `display:table-cell` priced at 54 of 373 corpus stylesheets before t1134 was taken.
+**I2 held**: nothing touched Stylo/Taffy/mozjs. **PART VII held**: eight ticks, all four on component
+1 (daily-driver rendering parity), none on a deferred species.
+
+THE STEER (full text in check #107): read `shape_n` before believing any per-site delta and treat
+`shape_n ≤ 10` as UNMEASURED · never diff a sweep number against a solo number · the §17.2.1 anonymous
+CELL rule is the named next tick and its six-reftest RED-proof already exists · the `<br>`-broken
+two-line run reads 37 against Chrome's 36 in a real `<table>` too, which is one pixel on every wrapped
+two-line run in the engine and the highest-frequency defect currently named (hypothesis from source,
+UNMEASURED: `close_line` rounds `ascent` and `descent` independently and sums the rounded values).
+
+RATCHET: held trivially — nothing landed in `engine/`.
+
+PERF: none — measurement only.
+
+WIKI: none — this tick's artefact is `docs/loop/CONSTITUTION-CHECK.md` check #107, which is the wiki
+for the loop's own governance. [no-pattern]
+
 ## Tick 1135 — the band's whole negative mass is the SWEEP, and a shape score has no sample size (2026-08-11)
 
 TICK SHAPE: measurement — the cadence sweep pricing the seven ticks since t1127 (t1128-t1134).
