@@ -3268,3 +3268,73 @@ The first cut came out 10 short on `padding: 0 10px` and 3 short on `border-left
 ```
 
 One site moves reproducibly and small; nothing regresses. Stated as measured.
+
+## An atomic inline IS a line box, and the bare ones were invisible to the search (t1131)
+
+CSS 2.1 §10.8.1 gives an `inline-block` its baseline in one sentence: **the baseline of its last
+in-flow line box**, falling back to the **bottom margin edge** only when it has *no in-flow line
+boxes* or its `overflow` is not `visible`. Both clauses were implemented. The DOMAIN of the search
+was not.
+
+`last_line_baseline` walks a box's children back-to-front looking for something with a baseline. A
+replaced kid answers with its own bottom margin edge and is never searched (t967 — asking an `<img>`
+what is inside it is a question the spec never asks). Every other kid was recursed into. So a kid
+that was **itself an atomic inline holding no text** — an icon `<span>` sized entirely by CSS, an
+empty `inline-flex` chip, a `display:table-cell` spacer — recursed, found no text fragment, returned
+`None`, and the OUTER box concluded it had no line boxes at all and took the fallback.
+
+It is off by exactly one strut descender, and only on the line whose ONLY occupant is a box:
+
+```text
+   <div>                                              Chrome    before    after
+     <span display:inline-block 100x20>                 24        28        24
+     ...nested one level deeper again                   24        32        24
+     ...display:inline-flex / display:table-cell        24        28        24
+     ...the inner atomic at overflow:hidden             24        28        24
+     ...the inner atomic with margin-bottom:10px        34        44        34
+     the OUTER box at overflow:hidden           CTRL    28        28        28
+     TEXT beside the atomic on the same line    CTRL    24        24        24
+     an empty inline-block, nothing nested      CTRL    24        24        24
+```
+
+**The controls are the diagnosis.** A line carrying text found a fragment and was right; a *bare*
+atomic with nothing wrapping it took the fallback and was right by accident. Only the composition —
+a box inside a box — reaches the wrong branch, and that is why it survived: every simple form of it
+worked.
+
+### It is one rule with two implementations, and both had it
+
+`last_line_baseline` answers §10.8.1 for inline layout; `first_line_baseline` answers CSS Box
+Alignment §9 for a flex or grid item. A baseline-aligned flex item whose only content was a bare
+atomic put its sibling 4px low for the same reason. They now share `kid_own_baseline`, and the
+display list that decides *what is atomic* is shared with the box collector as `is_atomic_inline` —
+because the collector decides which children BECOME atomics and the search decides which children
+COUNT as lines, and if those two lists ever disagree the search walks straight past a line box that
+exists.
+
+The composition is worth stating because it looks like an inconsistency: computing a container's
+**first** baseline asks each atomic on that line for **its last** line box. Two different questions —
+*which line box is first* and *where that line box's baseline is* — and §10.8.1 answers only the
+second. Chrome-measured: beside a 30px-wide `inline-block` holding two lines of `16px/20px`
+monospace, a baseline-aligned sibling lands at `dy 21` (the atomic's second line, baseline 36), not
+at 16.
+
+### The non-`visible` clause is NOT gated on being atomic, and a WPT test says so
+
+The first version of this fix corrected the atomic arm alone and took `css/CSS2` from 3907 to
+**3906**. `css/CSS2/linebox/baseline-block-with-overflow-001` pairs an `overflow:hidden` **block**
+child against an `overflow:hidden` **inline-block** child and asserts they render identically —
+whichever it is, the search stops there and takes its bottom margin edge. Both arms had been wrong
+together, so the test passed on the cancellation; correcting one arm made the test's reference right
+and its subject stale. **A whole-suite pass-SET diff caught it and the headline count would not
+have**, because a −1 hides inside a 3,907 as easily as a +1 does.
+
+### What it does NOT buy, and why that is the interesting half
+
+Fourteen CrUX-trend sites are **byte-identical** across the fix (same hour, old binary rebuilt from
+the checked-out tree; the one apparent mover was the site drifting under two runs of the SAME
+binary). The reach is bounded by how often a line's only occupant is a **non-replaced** atomic, and
+the two dominant icon idioms both dodge it: an `<svg>` icon is replaced and already took the
+bottom-margin-edge branch, and an `<i class="fa">` carries a generated glyph, which is a text
+fragment. What is left — CSS-background icon spans, spacers, empty chips — is real, is Chrome-exact
+now, and is below what the shape metric resolves.

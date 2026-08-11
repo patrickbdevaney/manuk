@@ -46371,6 +46371,105 @@ PERF: none — one UA rule and one narrowed branch in a cascade that already ran
 WIKI: `docs/wiki/css-cascade.md` — where Chrome draws the form-control `box-sizing` line, and why a
 layout-crate test cannot see it.
 
+## Tick 1131 — an atomic inline IS a line box, and the bare ones were invisible to the search (2026-08-11)
+
+TICK SHAPE: capability (layout) — t1130 named `fit-content` for a non-stretched flex item as the next
+target and said to aim at the RULE rather than at `hnhbkis.edu.in`. A 23-row discovery battery says the
+rule is **already Chrome-exact** — and the negative rows it was built with found something else.
+
+⚠⚠⚠ **THE SUBJECT WAS ALREADY DONE, AND THE CONTROL ARMS ARE WHAT PAID.** `/tmp/fx/fitc.html` puts
+float / inline-block / abs-pos / `width:fit-content` / `max-content` / `min-content` shrink-to-fit
+beside a column flex with `align-items:center|flex-start|stretch`, a grid with `justify-items`, and a
+replaced item, all in the same 300px container with fixed-size inline-blocks as content so **no row
+depends on a font metric**. 23 of 23 widths Chrome-exact, every clamp and every deliberate overflow.
+What was NOT exact was a 4px block-position drift that first appears at the `inline-block` row — a
+divergence in the sizing battery's *scaffolding*, which is exactly t981's rule about which rows
+discriminate.
+
+⚠⚠⚠ **AN ATOMIC INLINE THAT HOLDS NO TEXT WAS NOT COUNTED AS A LINE BOX.** CSS 2.1 §10.8.1: an
+inline-block's baseline is its **last line box's**, falling back to the bottom margin edge only when
+it has *no in-flow line boxes* or a non-`visible` `overflow`. `last_line_baseline` walked the kids and
+recursed into any non-replaced one — so a kid that was itself an atomic inline **with no text inside
+it** recursed, found no fragment, answered `None`, and the OUTER box took the no-line-boxes fallback.
+One strut descender too tall, on every line whose only occupant is a box. Chrome-measured through the
+product path (`boxes --html`, Stylo) on a `<div>` around one `inline-block` around one empty 100x20
+atomic:
+
+```text
+                                                     Chrome    before    after
+   inner display:inline-block                          24        28        24
+   ...nested one level deeper again                    24        32        24
+   ...inner display:inline-flex                        24        28        24
+   ...inner display:table-cell                         24        28        24
+   ...inner overflow:hidden                            24        28        24
+   ...inner margin-bottom:10px                         34        44        34
+   OUTER overflow:hidden                       CTRL    28        28        28
+   TEXT on the line beside the atomic          CTRL    24        24        24
+   an empty inline-block, nothing nested       CTRL    24        24        24
+   an <img> / a float                          CTRL  24 / 20   24 / 20   24 / 20
+```
+
+**The two controls that were already exact are what identify it**: a line that also carries text found
+a text fragment and answered correctly, and a *bare* atomic took the fallback and was right by
+accident. The defect lives exactly on the line whose only occupant is a box.
+
+⚠⚠ **ONE RULE, TWO IMPLEMENTATIONS — and both walked past it** (t720's pattern). `last_line_baseline`
+answers §10.8.1 for inline layout; `first_line_baseline` answers Box Alignment §9 for a flex/grid
+item. A baseline-aligned flex item whose only content was a bare atomic put its sibling 4px low too.
+The discriminator row says the atomic contributes its **last** line even when the container is asked
+for its **first**: beside a 30px-wide `inline-block` holding two lines of `16px/20px` monospace, the
+sibling lands at `dy 21` (baseline 36), not at the first line's 16.
+
+⚠⚠⚠ **AND THE FIRST VERSION OF THE FIX COST A WPT TEST, BECAUSE TWO WRONGS HAD BEEN CANCELLING.**
+Fixing only the ATOMIC arm took `css/CSS2` from 3907 to **3906**: `linebox/
+baseline-block-with-overflow-001` pairs an `overflow:hidden` **block** child against an
+`overflow:hidden` **inline-block** child and asserts the two render identically. Both arms had been
+wrong together, so the test passed; correcting one made its reference right and its subject stale.
+The non-`visible` clause is not gated on being atomic — which is why the function is `kid_own_baseline`
+and not `atomic_own_baseline`, and why the whole-suite pass-SET diff, not the headline, is what caught
+it (t1016's class, found by a −1).
+
+RATCHET: held, and the regression was found and closed inside the tick. Same-hour OLD binary, rebuilt
+from the checked-out tree and run against the new one on the same clock:
+
+```text
+   css/CSS2       3907 -> 3907   pass-SETS diffed: 0 gained, 0 lost
+   css/CSS2/linebox    120       pass-SET identical
+   css-flexbox 310 · css-grid 211 · css-position 10 · css-sizing 54 · css-text 457 · css-display 31
+   manuk-layout   165/165        (164 + this tick's gate)
+```
+
+⚠⚠ **AND THE CORPUS DOES NOT PRICE IT: 14 CrUX-trend sites BYTE-IDENTICAL old vs new.** The one site
+that appeared to move (`ebay.com`) was refuted by the solo-rerun rule — the SAME binary gives two
+different digests on consecutive runs and both binaries agree within each run, so that was the site,
+not us. The reason is worth writing down rather than treating as a null result: **both dominant icon
+idioms already dodged this defect.** An `<svg>` icon is REPLACED and took the bottom-margin-edge
+branch t967 fixed; an `<i class="fa">` gets a generated glyph, which is a text fragment on the line.
+What is left is the CSS-sized `<span>`/spacer/empty-chip shape — real, Chrome-exact, and below what
+the shape metric can see, which is t852's finding restated: *the instrument cannot price this* is not
+*this bought nothing*.
+
+RESIDUE, measured and left named rather than folded in: the same battery still reads
+`vertical-align:middle` **+1** and `line-height:0` **+3** on a line carrying one atomic, and a
+`display:table-cell` box's OWN height is **+4** (its wrapper is now exact). Three separate mechanisms,
+none of them this one.
+
+GATE: `an_atomic_inline_is_a_line_box_even_when_it_holds_no_text`, RED-proven THREE ways, each run:
+returning `None` for a non-replaced atomic restores the defect exactly (+4); answering the bottom
+margin edge unconditionally fails the `nested twice` row instead (the middle box reports its own
+edge); and dropping the non-atomic half of the `scrolls` clause fails the block-vs-inline-block pair
+that WPT asserts.
+
+SELF-AUDIT (cadence, due at 1131): banked — 1 prescribed-but-not-executed item, and it is the
+HARNESS one: `verify wall 1176s exceeds the 300s target`. Part VII puts `scripts/` and the build
+tooling with the observer, so it is reported here and not touched; every other Tier-0, gate,
+enforcement, journal and pattern-ledger check is green. `LAST_AUDIT_TICK` set to 1131.
+
+PERF: none — the search visits the same boxes; it answers at the atomic instead of past it.
+
+WIKI: `docs/wiki/text-layout.md` — "An atomic inline IS a line box, and the bare ones were invisible
+to the search".
+
 ## Tick 1130 — the pair t1123 specified, and neither half does anything alone (2026-08-11)
 
 TICK SHAPE: capability (layout) — t1123 refuted two hypotheses for the replaced half of the

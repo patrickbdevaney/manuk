@@ -1903,6 +1903,10 @@
   - L3193 · Two more gate rows were written and deleted
   - L3201 · A flex child FILLS the 1e6 measuring width, and the slack heuristic then throws away its items (t1115)
   - L3239 · The fix: a filled flex box answers for itself (t1116)
+  - L3272 · An atomic inline IS a line box, and the bare ones were invisible to the search (t1131)
+  - L3305 · It is one rule with two implementations, and both had it
+  - L3322 · The non-visible clause is NOT gated on being atomic, and a WPT test says so
+  - L3332 · What it does NOT buy, and why that is the interesting half
 
 ## The wasm demo — running the engine inside someone else's browser
 `docs/wiki/wasm-demo.md`
@@ -1930,4 +1934,4 @@
   - L124 · Rank mechanisms by FLIP RATE, not failing-subtest count — CSS layout is a multi-assertion slog
 
 ---
-1837 sections across 22 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+1841 sections across 22 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.

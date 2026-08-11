@@ -2251,6 +2251,36 @@ fn is_atomic_inline_replaced(dom: &Dom, styles: &StyleMap, node: NodeId) -> bool
         )
 }
 
+/// **Is `node` laid out as an ATOMIC INLINE — a box that IS a line-box participant rather than a
+/// producer of line boxes?**
+///
+/// This is the domain of CSS 2.1 §10.8.1's baseline search, and it exists as one predicate because
+/// the search and the box collector must agree about it exactly. The collector in
+/// `collect_inline_items` decides which children become `InlineItem::Atomic`; `last_line_baseline`
+/// decides which children of a box are lines it may take a baseline FROM. When those two lists
+/// disagree the search walks straight past a line box that exists, finds nothing, and the caller
+/// takes the *"no in-flow line boxes"* fallback — which is the whole of t1131.
+///
+/// The replaced set is folded in via [`is_atomic_inline_replaced`]: a replaced element's computed
+/// display is `inline` and it is atomic anyway.
+fn is_atomic_inline(dom: &Dom, styles: &StyleMap, node: NodeId) -> bool {
+    matches!(
+        styles.get(&node).map(|s| s.display),
+        Some(
+            Display::InlineBlock
+                | Display::Flex
+                | Display::Grid
+                | Display::InlineFlex
+                | Display::InlineGrid
+                | Display::TableCell
+                | Display::TableRow
+                | Display::TableRowGroup
+                | Display::TableHeaderGroup
+                | Display::TableFooterGroup
+        )
+    ) || is_atomic_inline_replaced(dom, styles, node)
+}
+
 /// **Does this `overflow` value make its box a block formatting context root?**
 ///
 /// ⚠⚠⚠ **`clip` DOES NOT, AND THE COMMENT ABOVE USED TO SAY IT DID.** The claim
@@ -6082,7 +6112,11 @@ impl Ctx<'_> {
         // See `record_transform` for what that cost.
         let _probe = IntrinsicProbe::enter(self);
         let (content, height) = self.layout_children(node, 0.0, 0.0, width.max(0.0), None, &mut fc);
-        let result = (width, height, first_line_baseline_of(&content, self.dom));
+        let result = (
+            width,
+            height,
+            first_line_baseline_of(&content, self.dom, self.styles),
+        );
         // `MANUK_TRACE_INTRINSIC=<id>` prints what a flex/grid item told taffy it wanted to be.
         // Flex WRAPPING is decided by this number, so when a row breaks that Chrome keeps on one
         // line, this is the number that is wrong — and it is otherwise invisible in the output.
@@ -6499,7 +6533,7 @@ impl Ctx<'_> {
                 {
                     return None;
                 }
-                first_line_baseline(cbox, self.dom)
+                first_line_baseline(cbox, self.dom, self.styles)
             })
             .collect();
         let mut row_baseline = vec![0.0f32; nrows.max(1)];
@@ -9706,22 +9740,11 @@ impl Ctx<'_> {
                 // THE REACH is every `display:table-cell` used without a table wrapper — the
                 // legacy vertical-centring and equal-height-column idioms — and every cell is
                 // 3px short at the default metrics, with the error accumulating DOWN the page.
-                if matches!(
-                    disp,
-                    Some(
-                        Display::InlineBlock
-                            | Display::Flex
-                            | Display::Grid
-                            | Display::InlineFlex
-                            | Display::InlineGrid
-                            | Display::TableCell
-                            | Display::TableRow
-                            | Display::TableRowGroup
-                            | Display::TableHeaderGroup
-                            | Display::TableFooterGroup
-                    )
-                ) || is_atomic_inline_replaced(self.dom, self.styles, node)
-                {
+                //
+                // ⚠ The display list itself moved to [`is_atomic_inline`] — SHARED with §10.8.1's
+                // baseline search, which has to ask exactly this question about the boxes this
+                // branch produced. See there for why the two lists cannot be allowed to drift.
+                if is_atomic_inline(self.dom, self.styles, node) {
                     let s = self.style_of(node);
                     let ml = s.margin.left.resolve(cw, 0.0);
                     let mr = s.margin.right.resolve(cw, 0.0);
@@ -9790,7 +9813,7 @@ impl Ctx<'_> {
                         && matches!(s.overflow_x, Overflow::Visible)
                         && matches!(s.overflow_y, Overflow::Visible)
                     {
-                        last_line_baseline(&r.boxx, self.dom)
+                        last_line_baseline(&r.boxx, self.dom, self.styles)
                             .map(|b| r.margin_top + (b - r.boxx.rect.y))
                             // ── **AN `<input>`'S TEXT IS NOT IN THE DOM, SO THE §10.8.1 SEARCH
                             //    FINDS NO LINE AND FALLS BACK TO THE BOTTOM MARGIN EDGE — AND THAT
@@ -11904,13 +11927,13 @@ impl InlineItem {
 ///
 /// FIRST and not LAST because CSS Box Alignment §9 aligns on the *first* baseline set; for a
 /// single-line item the two coincide, which is why the distinction only shows on a wrapped item.
-fn first_line_baseline(b: &LayoutBox, dom: &Dom) -> Option<f32> {
-    first_line_baseline_of(&b.content, dom)
+fn first_line_baseline(b: &LayoutBox, dom: &Dom, styles: &StyleMap) -> Option<f32> {
+    first_line_baseline_of(&b.content, dom, styles)
 }
 
 /// [`first_line_baseline`] over a bare [`BoxContent`] — what `measure_intrinsic` has in hand before
 /// it discards it.
-fn first_line_baseline_of(c: &BoxContent, dom: &Dom) -> Option<f32> {
+fn first_line_baseline_of(c: &BoxContent, dom: &Dom, styles: &StyleMap) -> Option<f32> {
     match c {
         // Within one inline formatting context the FIRST line has the least baseline, so the min is
         // the first line's — the mirror of `last_line_baseline`'s max, and it needs no ordering
@@ -11921,22 +11944,87 @@ fn first_line_baseline_of(c: &BoxContent, dom: &Dom) -> Option<f32> {
             .fold(None, |acc: Option<f32>, x| {
                 Some(acc.map_or(x, |m| m.min(x)))
             }),
-        // Front-first, and a replaced kid contributes its own bottom margin edge without being
-        // searched — both for the reasons `last_line_baseline` documents at length.
-        BoxContent::Block(kids) => kids.iter().find_map(|k| {
-            let replaced = k.node.is_some_and(|n| {
-                matches!(
-                    dom.tag_name(n),
-                    Some("img" | "canvas" | "video" | "svg" | "object" | "embed" | "iframe")
-                )
-            });
-            if replaced {
-                Some(k.rect.y + k.rect.height)
-            } else {
-                first_line_baseline(k, dom)
-            }
-        }),
+        // Front-first, and an ATOMIC kid answers with its own §10.8.1 baseline without being
+        // searched as a container — both for the reasons `last_line_baseline` documents at length.
+        //
+        // ⚠ **`kid_own_baseline` is the LAST-line rule even here, and that is not an
+        // inconsistency.** Two different questions compose: *which line box is first* (this
+        // function) and *where the baseline of that line box is* (§10.8.1, applied to the atomic
+        // sitting on it). Chrome-measured, a baseline-aligned flex item whose only content is a
+        // 30px-wide `inline-block` holding two lines of `16px/20px` monospace: the sibling item's
+        // box lands at `dy 21`, which is the atomic's SECOND line (baseline 36), not its first
+        // (baseline 16).
+        BoxContent::Block(kids) => {
+            kids.iter()
+                .find_map(|k| match kid_own_baseline(k, dom, styles) {
+                    Some(b) => Some(b),
+                    None => first_line_baseline(k, dom, styles),
+                })
+        }
     }
+}
+
+/// **The §10.8.1 baseline of `k` when `k` is an ATOMIC INLINE, in `k`'s parent's coordinate space —
+/// or `None` when `k` is not atomic and is therefore an ordinary container to keep searching.**
+///
+/// ⚠⚠⚠ **AN ATOMIC KID NEVER ANSWERS `None`, AND THAT IS THE WHOLE POINT.** The search's caller
+/// falls back to the bottom margin edge of the OUTER box when nothing is found, so an atomic that
+/// declines to answer does not mean *"look at my earlier sibling"* — it means *"this box has no
+/// line boxes at all"*, which is false the moment an atomic is on the line. Before t1131 an
+/// atomic with no text inside it (an icon `<span>` sized by CSS, an empty `inline-flex` chip, a
+/// `display:table-cell` spacer) recursed, found no fragment, returned `None`, and the outer
+/// inline-block took the fallback — one strut descender too tall, on every line that carries one.
+/// Chrome-measured, a `<div>` around one `inline-block` around one empty 100x20 `inline-block`:
+///
+/// ```text
+///                                                       Chrome    before    after
+///   …<span display:inline-block 100x20>                   24        28        24
+///   …the same nested one level deeper                     24        32        24
+///   …the same with display:inline-flex                    24        28        24
+///   …the same with display:table-cell                     24        28        24
+///   …the inner atomic at overflow:hidden          CTRL    24        28        24
+///   …the inner atomic with margin-bottom:10px             34        44        34
+///   …with TEXT on the line beside the atomic      CTRL    24        24        24
+///   …an empty inline-block, nothing nested        CTRL    24        24        24
+/// ```
+///
+/// The two CONTROLS that were already exact are what identify it: a line that also carries text
+/// found a fragment and answered correctly, so the defect is confined to the line whose ONLY
+/// occupant is a box — which is precisely the icon/chip/badge shape.
+///
+/// **The fallback is the bottom MARGIN edge**, not the border box's: the `margin-bottom:10px` row
+/// above moves by exactly the margin. A percentage bottom margin resolves against 0 here — it would
+/// need the containing block's width, which this search does not have, and a percentage margin on
+/// an atomic inline is not a shape the corpus contains.
+fn kid_own_baseline(k: &LayoutBox, dom: &Dom, styles: &StyleMap) -> Option<f32> {
+    let node = k.node?;
+    let s = styles.get(&node);
+    // §10.8.1's two fallback clauses, applied to the KID ITSELF: a replaced element has no line
+    // boxes by definition, and a non-`visible` `overflow` opts out of the search. Both were already
+    // implemented one level up — this is the same rule asked of the right box.
+    let replaced = matches!(
+        dom.tag_name(node),
+        Some("img" | "canvas" | "video" | "svg" | "object" | "embed" | "iframe")
+    );
+    let scrolls = s.is_some_and(|s| {
+        !matches!(s.overflow_x, Overflow::Visible) || !matches!(s.overflow_y, Overflow::Visible)
+    });
+    // ⚠⚠⚠ **AND `scrolls` IS NOT GATED ON BEING ATOMIC — THAT CLAUSE COST A WPT TEST AND IS THE
+    // REASON THIS FUNCTION IS NOT NAMED `atomic_own_baseline`.** `css/CSS2/linebox/
+    // baseline-block-with-overflow-001` pairs an `overflow:hidden` BLOCK child against an
+    // `overflow:hidden` `inline-block` child and asserts the two render identically: whichever it
+    // is, the search stops at it and takes its bottom margin edge. Fixing only the atomic half made
+    // the test's reference correct and its subject stale, and the test went from PASS to FAIL —
+    // **a pair of wrongs that had been cancelling** (t1016's class), invisible until one was fixed.
+    if !replaced && !scrolls && !is_atomic_inline(dom, styles, node) {
+        return None;
+    }
+    let margin_bottom = s.map_or(0.0, |s| s.margin.bottom.resolve(0.0, 0.0));
+    let bottom_margin_edge = k.rect.y + k.rect.height + margin_bottom;
+    if replaced || scrolls {
+        return Some(bottom_margin_edge);
+    }
+    Some(last_line_baseline(k, dom, styles).unwrap_or(bottom_margin_edge))
 }
 
 /// **The baseline of the LAST in-flow line box inside `b`**, in `b`'s own coordinate space, or
@@ -11946,7 +12034,7 @@ fn first_line_baseline_of(c: &BoxContent, dom: &Dom) -> Option<f32> {
 /// recurses: the line may be several block levels down (`<div><p>text</p></div>` as an
 /// inline-block). A block whose subtree holds no text at all yields `None` and the caller falls back
 /// to the bottom margin edge, which is the same answer an empty inline-block has always got here.
-fn last_line_baseline(b: &LayoutBox, dom: &Dom) -> Option<f32> {
+fn last_line_baseline(b: &LayoutBox, dom: &Dom, styles: &StyleMap) -> Option<f32> {
     match &b.content {
         // Within one inline formatting context the LAST line has the greatest baseline, so the max
         // is the last line's — no ordering assumption about the fragment vector is needed.
@@ -11980,19 +12068,20 @@ fn last_line_baseline(b: &LayoutBox, dom: &Dom) -> Option<f32> {
         // line, so it contributes its own bottom edge and its subtree is never searched. That the
         // two symptoms differed by exactly the 10px this session kept seeing is what identified them
         // as one bug.
-        BoxContent::Block(kids) => kids.iter().rev().find_map(|k| {
-            let replaced = k.node.is_some_and(|n| {
-                matches!(
-                    dom.tag_name(n),
-                    Some("img" | "canvas" | "video" | "svg" | "object" | "embed" | "iframe")
-                )
-            });
-            if replaced {
-                Some(k.rect.y + k.rect.height)
-            } else {
-                last_line_baseline(k, dom)
-            }
-        }),
+        //
+        // ⚠⚠⚠ **AND THE REPLACED CASE WAS THE NARROW HALF OF THE RULE (t1131).** *Every* atomic
+        // inline is a line box, not only a replaced one, and the same `None` that stranded `<img>`
+        // stranded an empty `inline-block` / `inline-flex` / `table-cell` too. Both are now
+        // [`kid_own_baseline`], which is the same rule asked of the kid itself rather than of
+        // its insides, and the replaced rows above are unchanged by construction.
+        BoxContent::Block(kids) => {
+            kids.iter()
+                .rev()
+                .find_map(|k| match kid_own_baseline(k, dom, styles) {
+                    Some(b) => Some(b),
+                    None => last_line_baseline(k, dom, styles),
+                })
+        }
     }
 }
 
@@ -14517,6 +14606,159 @@ mod tests {
             case("width:400px;display:flex", "max-width:100%"),
             (400.0, 395.0),
             "an auto-height row has no cross size to transfer (Chrome 400x395)"
+        );
+    }
+
+    /// # G_ATOMIC_IS_A_LINE_BOX — CSS 2.1 §10.8.1, and its domain is EVERY atomic inline
+    ///
+    /// An `inline-block`'s baseline is *"the baseline of its last line box"*, falling back to the
+    /// bottom margin edge only when it has **no in-flow line boxes** or a non-`visible` `overflow`.
+    /// The search that implements it walked a box's children and recursed into any non-replaced
+    /// kid — so a kid that was itself an atomic inline **holding no text** (an icon `<span>` sized
+    /// by CSS, an empty `inline-flex` chip, a `display:table-cell` spacer) recursed, found no
+    /// fragment, returned `None`, and the OUTER box took the no-line-boxes fallback. One strut
+    /// descender too tall, on every line whose only occupant is a box.
+    ///
+    /// Chrome-measured through the PRODUCT path (`boxes --html`, Stylo) — a 300px `<div>` around
+    /// one `inline-block` around one empty 100×20 atomic, `16px/normal`:
+    ///
+    /// ```text
+    ///                                                     Chrome    before    after
+    ///   inner display:inline-block                          24        28        24
+    ///   …nested one level deeper again                      24        32        24
+    ///   …inner display:inline-flex                          24        28        24
+    ///   …inner display:table-cell                           24        28        24
+    ///   …inner overflow:hidden                              24        28        24
+    ///   …inner margin-bottom:10px                           34        44        34
+    ///   OUTER overflow:hidden                       CTRL    28        28        28
+    ///   TEXT on the line beside the atomic          CTRL    24        24        24
+    ///   an empty inline-block, nothing nested       CTRL    24        24        24
+    ///   an <img>, and a float                       CTRL    24 / 20   24 / 20   24 / 20
+    /// ```
+    ///
+    /// ⚠⚠⚠ **THE TWO CONTROLS THAT WERE ALREADY EXACT ARE WHAT IDENTIFY IT.** A line that also
+    /// carries text found a text fragment and answered correctly, and a *bare* atomic took the
+    /// fallback and was correct by accident — so the defect lives exactly on the line whose only
+    /// occupant is a box, which is the icon/chip/badge shape rather than an exotic one. A fix that
+    /// simply stopped recursing would satisfy the subject rows and break the OUTER-`overflow:hidden`
+    /// control, which is a different clause of the same sentence.
+    ///
+    /// ⚠⚠ **AND IT IS ONE RULE WITH TWO IMPLEMENTATIONS** (t720's pattern): `last_line_baseline`
+    /// answers §10.8.1 for inline layout and `first_line_baseline` answers CSS Box Alignment §9 for
+    /// a flex/grid item, and BOTH walked past a bare atomic. The `x1`/`x5` rows below are the flex
+    /// half — `x5` is the discriminator that says the atomic contributes its **last** line even when
+    /// the container is being asked for its **first**: a baseline-aligned sibling beside a 30px-wide
+    /// `inline-block` holding two lines of `16px/20px` monospace lands at `dy 21` (baseline 36), not
+    /// at the first line's 16.
+    ///
+    /// To watch it go RED, and both were run: making `kid_own_baseline` return `None` for a
+    /// non-replaced atomic restores the defect exactly (`inline-block: …` fails, +4), and making it
+    /// answer `Some(bottom_margin_edge)` unconditionally — never running the inner search — fails
+    /// the `nested twice` row instead, because the middle box then reports its own bottom edge.
+    #[test]
+    fn an_atomic_inline_is_a_line_box_even_when_it_holds_no_text() {
+        // Fixed-size inline-blocks rather than glyphs: `max-content` is arithmetic, so no row here
+        // depends on a font metric except the strut descender the rule is ABOUT.
+        let css = "body{margin:0}.u{display:inline-block;width:100px;height:20px}";
+        let h = |inner: &str| -> f32 {
+            let html = format!(r#"<div id="w" style="width:300px">{inner}</div>"#);
+            let (dom, root) = layout_html(&html, css, 1000.0);
+            root.node_rects(&dom)[&by_id(&dom, "w")].height.round()
+        };
+
+        // The bare atomic is the anchor: whatever the harness font makes the descender, every
+        // subject row must equal THIS, because wrapping a box in a box adds no line.
+        let bare = h(r#"<span class="u"></span>"#);
+        for (name, inner) in [
+            (
+                "inline-block",
+                r#"<div style="display:inline-block"><span class="u"></span></div>"#,
+            ),
+            (
+                "nested twice",
+                r#"<div style="display:inline-block"><span style="display:inline-block"><span class="u"></span></span></div>"#,
+            ),
+            (
+                "inline-flex",
+                r#"<div style="display:inline-block"><span style="display:inline-flex;width:100px;height:20px"></span></div>"#,
+            ),
+            (
+                "table-cell",
+                r#"<div style="display:inline-block"><span style="display:table-cell;width:100px;height:20px"></span></div>"#,
+            ),
+            (
+                "inner overflow:hidden",
+                r#"<div style="display:inline-block"><span class="u" style="overflow:hidden"></span></div>"#,
+            ),
+        ] {
+            assert_eq!(
+                h(inner),
+                bare,
+                "{name}: an atomic inline IS a line box, so wrapping one adds no descender \
+                 (Chrome 24 for every row)"
+            );
+        }
+
+        // The fallback is the bottom MARGIN edge, and this row is the only one that says so.
+        assert_eq!(
+            h(
+                r#"<div style="display:inline-block"><span class="u" style="margin-bottom:10px"></span></div>"#
+            ),
+            bare + 10.0,
+            "the no-line-boxes fallback is the bottom MARGIN edge (Chrome 34 against 24)"
+        );
+
+        // ⚠⚠⚠ **A NON-`visible` OVERFLOW STOPS THE SEARCH WHETHER OR NOT THE KID IS ATOMIC**, and
+        // this row is the one `css/CSS2/linebox/baseline-block-with-overflow-001` fails without:
+        // it pairs exactly these two children and asserts they render the same. Fixing only the
+        // atomic arm turned that test from PASS to FAIL, because both arms had been wrong together.
+        assert_eq!(
+            h(r#"<div style="display:inline-block"><div style="width:30px;height:30px;overflow:hidden"></div></div>"#),
+            h(r#"<div style="display:inline-block"><div style="display:inline-block;width:30px;height:30px;overflow:hidden"></div></div>"#),
+            "an overflow:hidden BLOCK child and an overflow:hidden inline-block child both stop the \
+             search at their own bottom margin edge (WPT baseline-block-with-overflow-001)"
+        );
+
+        // ── CONTROLS. The first is the OTHER clause of §10.8.1 and must NOT move.
+        assert_eq!(
+            h(r#"<div style="display:inline-block;overflow:hidden"><span class="u"></span></div>"#),
+            bare + (bare - 20.0),
+            "a non-visible overflow on the OUTER box opts it out of the search, so its bottom \
+             margin edge is the baseline and the line gains a second descender (Chrome 28)"
+        );
+        assert_eq!(
+            h(r#"<div style="display:inline-block"><span class="u"></span>x</div>"#),
+            bare,
+            "a line that also carries text was already exact and must stay so (Chrome 24)"
+        );
+        assert_eq!(
+            h(r#"<div style="display:inline-block"><img style="width:100px;height:20px"></div>"#),
+            bare,
+            "a replaced kid's baseline is its bottom margin edge — unchanged (Chrome 24)"
+        );
+        assert_eq!(
+            h(
+                r#"<div style="float:left;width:100px;height:20px"></div><div style="clear:both"></div>"#
+            ),
+            20.0,
+            "a float is not inline-level and brings no line box into existence (Chrome 20)"
+        );
+
+        // ── THE FLEX HALF: the same rule, the other implementation (`first_line_baseline`).
+        let dy = |item: &str| -> f32 {
+            let html = format!(
+                r#"<div style="width:300px;display:flex;align-items:baseline">{item}<div id="s">Ay</div></div>"#
+            );
+            let (dom, root) = layout_html(&html, css, 1000.0);
+            root.node_rects(&dom)[&by_id(&dom, "s")].y.round()
+        };
+        // The REFERENCE arm is the replaced kid, which took the bottom-margin-edge branch and was
+        // already exact — same box, same 100x20, and the two must agree.
+        assert_eq!(
+            dy(r#"<div><span class="u"></span></div>"#),
+            dy(r#"<div><img style="width:100px;height:20px"></div>"#),
+            "a flex item whose only content is a bare atomic aligns on THAT atomic's baseline, \
+             exactly as the replaced kid beside it already did (Chrome dy 6, ours was 10)"
         );
     }
 
