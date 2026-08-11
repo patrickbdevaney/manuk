@@ -11,12 +11,12 @@
 
 | | value | over |
 |---|---|---|
-| ticks landed | **830** | ticks 1–1122 |
-| median tick cycle | **28m** | 829 intervals |
+| ticks landed | **831** | ticks 1–1123 |
+| median tick cycle | **28m** | 830 intervals |
 | median, last 10 | **54m** | 10 intervals |
 | fastest / slowest | 5s / 5.4d | |
-| **ticks per hour** | **1.12** | 739.1h elapsed |
-| median verify wall | **63s** | 769 ticks |
+| **ticks per hour** | **1.12** | 739.9h elapsed |
+| median verify wall | **63s** | 770 ticks |
 | wall trend | 39s → 13m — getting slower ⚠️ | first 3 vs last 3 |
 
 The **cycle** is the real unit: implement → debug → verify wall → land. The wall is only part of
@@ -31,7 +31,7 @@ it, and a wall that grows taxes every future tick, so it is tracked separately f
 * **✅ rows in the capability ledger**: 144 → **561**
 * **Bar 0 — oracle hangs**: 0 of 265 sites
 
-**365 of 830 ticks** (44%) moved a
+**365 of 831 ticks** (44%) moved a
 user-visible capability. The rest were instruments, infrastructure and corrections — and the
 ledger says the corrections were not overhead: three of its top three priorities were phantoms,
 and finding that out redirected everything after it.
@@ -927,5 +927,6 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 | **1120** | 2026-08-10 22:21 | 76m | capability | 13m | +442/−35 | 437 | 81 | 56.0% · | a first-write-wins cache that a THROWAWAY pass can reach is permanently poisoned (2026-08- |
 | **1121** | 2026-08-10 23:36 | 75m | measurement | 13m | +389/−33 | 437 | 81 | 56.0% · | the sweep priced eight ticks, and both of its losses were the sweep (2026-08-10) |
 | **1122** | 2026-08-11 00:09 | 33m | capability | 13m | +230/−33 | 437 | 81 | 56.0% · | an `aspect-ratio` box in a flex row with a definite height was ZERO wide (2026-08-10) |
+| **1123** | 2026-08-11 00:58 | 49m | measurement | 13m | +118/−34 | 437 | 81 | 56.0% · | the obvious fix for the replaced half moves NOTHING, and the trace says why (2026-08-11) |
 
 *`·` after a WPT figure means **carried forward**, not measured this tick.*

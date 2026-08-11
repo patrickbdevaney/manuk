@@ -46371,6 +46371,60 @@ PERF: none — one UA rule and one narrowed branch in a cascade that already ran
 WIKI: `docs/wiki/css-cascade.md` — where Chrome draws the form-control `box-sizing` line, and why a
 layout-crate test cannot see it.
 
+## Tick 1123 — the obvious fix for the replaced half moves NOTHING, and the trace says why (2026-08-11)
+
+TICK SHAPE: measurement — t1122's named residue, instrumented rather than guessed at. An `<img>` in a
+`width:400px;height:288px` flex row reads **480×474** against Chrome's **292×288**, while a plain
+`aspect-ratio` box in the same row is now exact. Two hypotheses, both refuted by measurement, and the
+tick is the refutation plus the option set it leaves.
+
+⚠⚠⚠ **HYPOTHESIS 1 — "the ratio is missing" — REFUTED, AND THE COMMENT THAT ASSERTS IT IS TRUE ONLY
+LATER.** `taffy_tree::style_of`'s ratio comment says `cs.aspect_ratio` is *"an `aspect-ratio`
+declaration, or the natural ratio of a decoded image"*. Printing every measure of the `<img>`:
+
+```text
+   pass 1   w=Auto(nat false)  h=Auto(nat false)  ratio=None        known={None, Some(288)}
+   pass 2   w=Px(480)(nat TRUE) h=Auto            ratio=Some(1.0127) known={None, Some(474)}
+```
+
+**There are two layouts, and they disagree about what the element IS.** Before the image decodes it
+has no ratio at all — and the stretch is right there, `known.height = Some(288)`, unusable. After it
+decodes, `manuk_css::fill_natural_size` writes the natural width into `width` as `Dim::Px(480)` and
+marks it `width_is_natural`, and now `known.height = Some(474)`: **taffy is no longer stretching**,
+because a definite main size plus a ratio makes the cross size definite too, and `stretch` has
+nothing left to override. The 474 in that second line is the whole defect in one number.
+
+⚠⚠⚠ **HYPOTHESIS 2 — "a natural size is not a specified size, so don't hand it to taffy as one" —
+BUILT, MEASURED, AND IT MOVES NOTHING.** Dropping the `*_is_natural` axes to `Dimension::Auto` in
+`style_of` is the principled fix (the marks exist precisely because those values are an INTRINSIC
+size wearing a declared size's type) and every row of both batteries came back **byte-identical**:
+the measure seam still answers `replaced_default_size`, which reads the same `Dim::Px(480)` out of
+the STYLE, so taffy's base size is 480 whatever the style told it. **A fix that only changes what a
+dependency is TOLD, while the callback keeps telling it the old answer, is not a fix** — and by this
+project's own standard a change that moves no measured row is untested code, so it was reverted
+rather than landed. `git status` on `engine/` is clean.
+
+**What that leaves, stated so the next tick starts from the option set rather than from these two
+dead ends.** The remaining rule is CSS Sizing §4 + Flexbox §7.2 *"stretch the cross size, then
+re-derive the auto main size through the ratio"*, and taffy 0.12 does not do it for a leaf whose
+measure reports a definite content box. The options are (a) make `replaced_default_size` answer the
+CROSS-anchored size when the measure is handed a known cross — which needs the known size threaded
+into it, and it is currently style-only; (b) re-derive the main size in `extract_placed` after the
+solve, which puts us in the business of second-guessing the flex line's main-axis distribution; or
+(c) upstream. **(a) is the only one that is neither a fork nor a re-implementation**, and it is a
+seam change rather than a one-liner, which is why it is its own tick and not a fifth attempt today.
+
+RATCHET: held, and this tick is where it did the unglamorous half. Nothing landed in `engine/`;
+`manuk-layout` 162/162 on the reverted tree.
+
+GATE: none — a measurement tick whose artefact is two refutations and a named seam. Adding a gate for
+the still-wrong behaviour would pin the engine to it (the standing rule from t1004).
+
+PERF: none.
+
+WIKI: `docs/wiki/box-layout.md` — the replaced-half section of "A known cross size transfers through
+the aspect ratio", extended with the two-pass trace and the refuted fix. [no-pattern]
+
 ## Tick 1122 — an `aspect-ratio` box in a flex row with a definite height was ZERO wide (2026-08-10)
 
 TICK SHAPE: capability (layout) — the t1121 sweep's refreshed §9.2 work-list names `hnhbkis.edu.in`

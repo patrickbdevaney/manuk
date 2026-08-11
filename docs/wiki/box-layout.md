@@ -8637,3 +8637,31 @@ measured 480 as the item's flex base size *before* the cross axis is stretched, 
 re-applied. At measure time `known.height` is `None`, so this seam is structurally unable to see it —
 the fix belongs where the stretch is resolved. `hnhbkis.edu.in`'s card-media slot is the replaced
 half, so the site is not closed by this.
+
+### The replaced half: TWO layouts that disagree about what the element is (t1123)
+
+Instrumenting every flex measure of an `<img>` in a `width:400px; height:288px` row:
+
+```text
+   pass 1   w=Auto(nat false)   h=Auto   ratio=None          known={None, Some(288)}
+   pass 2   w=Px(480)(nat TRUE) h=Auto   ratio=Some(1.0127)  known={None, Some(474)}
+```
+
+**Before the image decodes it has no ratio at all** — and the stretch is right there,
+`known.height = Some(288)`, with nothing to transfer it through. **After it decodes**,
+`manuk_css::fill_natural_size` writes the natural width in as `Dim::Px(480)` and marks it
+`width_is_natural` — and `known.height` becomes **474**: taffy is no longer stretching, because a
+definite main size plus a ratio makes the cross size definite too. The 474 is the defect.
+
+⚠⚠ **The principled fix moves nothing, measured.** Dropping the `*_is_natural` axes to
+`Dimension::Auto` in `taffy_tree::style_of` (a natural size is an intrinsic size wearing a declared
+size's type — the marks exist for exactly this) left every row of both batteries byte-identical: the
+measure seam still answers `replaced_default_size`, which reads the same `Dim::Px(480)` out of the
+STYLE. **Changing what a dependency is TOLD while the callback keeps telling it the old answer is not
+a change.** Reverted rather than landed.
+
+The remaining rule is *"stretch the cross, then re-derive the auto main size through the ratio"*, and
+taffy 0.12 does not do it for a leaf whose measure reports a definite content box. Options: (a) thread
+the known cross size into `replaced_default_size` so it answers cross-anchored — the only one that is
+neither a fork nor a re-implementation; (b) re-derive in `extract_placed`, which means second-guessing
+the flex line's main-axis distribution; (c) upstream.
