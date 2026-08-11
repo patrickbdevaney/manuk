@@ -11,12 +11,12 @@
 
 | | value | over |
 |---|---|---|
-| ticks landed | **853** | ticks 1–1146 |
-| median tick cycle | **28m** | 852 intervals |
-| median, last 10 | **37m** | 10 intervals |
+| ticks landed | **854** | ticks 1–1147 |
+| median tick cycle | **28m** | 853 intervals |
+| median, last 10 | **36m** | 10 intervals |
 | fastest / slowest | 5s / 5.4d | |
-| **ticks per hour** | **1.13** | 755.7h elapsed |
-| median verify wall | **63s** | 792 ticks |
+| **ticks per hour** | **1.13** | 755.9h elapsed |
+| median verify wall | **63s** | 793 ticks |
 | wall trend | 39s → 13m — getting slower ⚠️ | first 3 vs last 3 |
 
 The **cycle** is the real unit: implement → debug → verify wall → land. The wall is only part of
@@ -31,7 +31,7 @@ it, and a wall that grows taxes every future tick, so it is tracked separately f
 * **✅ rows in the capability ledger**: 144 → **570**
 * **Bar 0 — oracle hangs**: 0 of 265 sites
 
-**377 of 853 ticks** (44%) moved a
+**377 of 854 ticks** (44%) moved a
 user-visible capability. The rest were instruments, infrastructure and corrections — and the
 ledger says the corrections were not overhead: three of its top three priorities were phantoms,
 and finding that out redirected everything after it.
@@ -91,7 +91,7 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 ## What a capability costs
 
 * **377** capability ticks, median cycle **28m**
-* median diff per tick: **+265 / −34** lines across 8 files
+* median diff per tick: **+264 / −34** lines across 8 files
 
 ## Every tick
 
@@ -950,5 +950,6 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 | **1144** | 2026-08-11 14:41 | 13m | measurement | 13m | +274/−34 | 437 | 81 | 56.0% · | the constitution check, and the window's biggest price was 8.5× too high (2026-08-11) |
 | **1145** | 2026-08-11 16:04 | 83m | measurement | 13m | +427/−33 | 437 | 81 | 56.0% · | the sweep check #108 demanded, and the prediction written before the number (2026-08-11) |
 | **1146** | 2026-08-11 16:45 | 41m | capability | 13m | +351/−60 | 437 | 81 | 56.0% · | CI had been RED for five ticks, and the gate asserted a FONT (2026-08-11) |
+| **1147** | 2026-08-11 16:59 | 14m | measurement | 13m | +144/−33 | 437 | 81 | 56.0% · | the "named next tick" REFUSED, and its RED-proof was already green (2026-08-11) |
 
 *`·` after a WPT figure means **carried forward**, not measured this tick.*

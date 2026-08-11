@@ -46371,6 +46371,82 @@ PERF: none — one UA rule and one narrowed branch in a cascade that already ran
 WIKI: `docs/wiki/css-cascade.md` — where Chrome draws the form-control `box-sizing` line, and why a
 layout-crate test cannot see it.
 
+## Tick 1147 — the "named next tick" REFUSED, and its RED-proof was already green (2026-08-11)
+
+TICK SHAPE: measurement (probe before build) — check #108's own steer §2 said *"when the suite reads
+zero twice running, take the fix the suite CAN see"* and named the CSS 2.1 §17.2.1 anonymous **CELL**
+rule. This tick took it, ran §3 (*price it, then ask which ORGAN*) first, and the price refused it.
+
+⚠⚠⚠ **THE SIX-REFTEST RED-PROOF THIS ITEM HAS CARRIED FOR EIGHT TICKS IS ALREADY GREEN.**
+
+```text
+   tables/table-anonymous-objects-197 .... PASS      normal-flow/table-in-inline-001 ..... PASS
+   tables/table-anonymous-objects-198 .... PASS      visuren/table-pseudo-in-part3-1 ..... PASS
+   tables/table-anonymous-objects-199 .... PASS
+   tables/table-anonymous-objects-200 .... PASS
+```
+
+Checks #107 §3 and #108 §2 both named those six as *"its RED-proof already exists."* They are not a
+RED-proof of the missing rule — they are the **boundary t1134's `table_run_drops_content` guard
+defends by DECLINING the wrap**. t1134 measured the whole feature at `+15 / −6` and landed `+15 / −0`
+by adding that guard, so today the guard costs exactly **zero suite tests**, and building the cell
+rule would convert six passes into six passes. **A RED-proof that is already green is not a RED-proof;
+it is a list of tests that would BREAK if the guard were removed carelessly.** Two consecutive
+constitution checks quoted it as the reason to take the tick, and neither ran it.
+
+⚠⚠⚠ **AND THE CORPUS AGREES WITH THE SUITE, ON BOTH HALVES OF THE CONSTRUCT.** The rule serves a row
+box holding in-flow content that is not a cell. Measured on the cached corpus, no build:
+
+```text
+   HTML half — pages with a <tr> at all .................  13 of 385   (414 <tr> elements)
+               pages with a <tr> holding NON-CELL content    2         (4 such rows)
+   CSS  half — stylesheets with display:table-row .......  45 of 373
+               ...that ALSO declare display:table-cell ...  39         cells are authored: no anon cell
+               ...with NO table-cell anywhere ............   6 of 373  (1.6%)  <- the real population
+```
+
+Two independent halves, ~1.6% each, agreeing. Against that: the fix is a structural `Option<NodeId>`
+split threaded through `layout_cell`, `collect_cells`, `cell_frame`, `cell_intrinsic`, the cell grid
+and a new list-taking entry to `layout_children` — the largest refactor currently on the board, for a
+construct on 4 rows of 2 pages.
+
+⚠⚠ **IT PASSES THE ORGAN TEST AND FAILS ON WEIGHT, WHICH IS THE DISTINCTION CHECK #108 EXISTS TO
+DRAW.** Unlike t1143's icon fonts, this rule moves **element boxes** — geometry — so M1 could see it.
+The refusal is not *"the metric is blind"*; it is VI.3's usage-weight term, measured, on the corpus
+that scores us. ⚠ Recorded so it is not proposed a **fourth** time: the rule is real CSS 2.1, our
+behaviour is non-conforming, and it is correctly filed as an accepted gap under I4's *"honest graceful
+degradation on the exotic tail."* Reopen it if a corpus revision moves the number.
+
+⚠⚠⚠ **THE METHOD TURNED ON ITS OWN STEER, AND THAT IS THE POINT.** Checks #107 and #108 are the
+loop's governing documents for this window and both were wrong about this item, for the reason #108
+itself named one tick earlier: a price was quoted (*"six reftests"*) and never checked against what it
+was a price OF. **The rule now has a third clause: price it · ask which ORGAN · and RUN THE RED-PROOF
+BEFORE CITING IT.** A steer is a hypothesis with a test attached, exactly like a reason string
+(check #73), and it took eight ticks to run this one.
+
+**THE REPLACEMENT, named from the t1145 sweep rather than left open.** Its ranked causes are almost
+entirely `<div>` width/height bands — the tag-ranking the board warns measures breadth, not crossings
+— with one row that is a different kind of thing:
+
+```text
+   10 site(s) · 1435 hit(s)   missing box: <div>      <- 10× the hits of any geometry band
+   12 site(s) ·  192 hit(s)   geometry/mis-sized: height ~128px (<div>)
+   11 site(s) ·  300 hit(s)   geometry/mis-sized: width  ~32px  (<div>)
+```
+
+**~143 dropped boxes per site on ten sites is concentrated, and it is UNPRICED** — nobody has asked
+*why* we emit no box where Chrome does on those ten. Per this tick's own finding the next step is a
+PROBE, not a build: name the ten, dump the box tree for one, and find whether it is one mechanism or
+ten. That is the next tick.
+
+RATCHET: held trivially — nothing landed in `engine/`. The six reftests and the two corpus halves are
+the artefacts.
+
+PERF: none — measurement only.
+
+WIKI: `docs/wiki/conformance-and-oracles.md` — "A RED-proof that is already green is not a RED-proof,
+and two constitution checks cited one for eight ticks"
+
 ## Tick 1146 — CI had been RED for five ticks, and the gate asserted a FONT (2026-08-11)
 
 TICK SHAPE: capability (layout gate reliability) — the board's own rule, *"CI runs asynchronously —

@@ -3688,3 +3688,36 @@ the rule, and the layout rows are kept only to prove the style *reaches* it.
 first completed run and four subsequent ticks landed on top of it. It stayed invisible because the
 repo runs two workflows and the run list shows a green `release` next to every red `CI` for the same
 commit — the eye reads the green one. *Read the workflow NAME, not the colour of the newest row.*
+
+## A RED-proof that is already green is not a RED-proof
+
+Constitution checks #107 and #108 both named the CSS 2.1 §17.2.1 anonymous **CELL** rule as *"the
+named next tick"* and both justified it the same way: *"its RED-proof already exists"* — six reftests,
+listed by name. At t1147 someone ran them.
+
+```text
+   tables/table-anonymous-objects-197..200   PASS
+   normal-flow/table-in-inline-001           PASS
+   visuren/table-pseudo-in-part3-1           PASS
+```
+
+All six pass, and they pass *because* the rule is unbuilt: t1134's `table_run_drops_content` guard
+declines to generate the anonymous table in exactly the cases that would break them. The six are the
+**boundary the guard defends**, not evidence of a defect. t1134 measured the whole feature at
+`+15 / −6` and landed `+15 / −0` by adding the guard, so the suite's verdict on the missing rule is
+**zero, and always was**.
+
+The corpus agreed independently, on both halves of the construct:
+
+```text
+   pages with a <tr> holding non-cell content ......  2 of 385  (4 rows)
+   stylesheets with display:table-row and NO cell ..  6 of 373  (1.6%)
+```
+
+⚠ **It passes the organ test and fails on weight** — the rule moves element boxes, so the metric
+*could* see it. That is the distinction worth keeping: *"the instrument is blind to this"* and *"the
+web barely does this"* are two different refusals, and only the second is an I4 judgement.
+
+> **A steer is a hypothesis with a test attached — the same standing rule as a reason string.** Two
+> governing documents carried this one for eight ticks, each citing the other's citation. The step is:
+> **price it · ask which ORGAN it moves · and RUN THE RED-PROOF BEFORE CITING IT.**
