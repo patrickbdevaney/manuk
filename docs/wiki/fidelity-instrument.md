@@ -1220,3 +1220,45 @@ same binary in the same hour:
 
 A reason string that asserts a cause is a hypothesis with a test attached (check #73). One member,
 one command, and a five-site "regression" stops being engine work.
+
+## A missing-box count is a DESCENDANT count — rank by truncation points, not by tag
+
+`MISSING_BOX` has been ranked by tag since t684 (`C3833 <div> 7544/32`). On the t1145 sweep's
+highest-deficit site (`taphouse23.com`, coverage 0.424, ~2453 missing) the instrument's own output
+says why that ranking is wrong. Every missing-box example carries the node **below which our tree
+stops**, and all fourteen printed for that site name just three:
+
+```text
+   12  body/div:nth(4)/div:nth(1)/div:nth(4)/div:nth(1)/div:nth(1)/div:nth(2)/div:nth(1)
+    1  body/div:nth(2)/…/ul:nth(1)/li:nth(5)
+    1  body/div:nth(2)/…/ul:nth(1)/li:nth(2)
+```
+
+One container that was never built contributes its **whole subtree** to the count, one row per
+descendant. The per-tag histogram is that subtree's inventory:
+
+```text
+   MISSING by tag: div×997  source×532  a×260  img×247  picture×245  li×121  ul×10  button×7
+```
+
+`picture×245`, `source×532` and `img×247` are the same 245 `<picture>` elements counted three times —
+a `<picture>` contains its `<source>`s and its `<img>`. **Ranking by tag ranks the contents of the
+largest missing container.** The parent is already printed in every example and nothing reads it.
+
+### And the deficit does not say which LEG it belongs to
+
+Chrome renders that page **~62,000px tall** (`[8 62022 200×200]` inside the missing subtree). That is
+t267's third population, named 880 ticks earlier: *"an offset of 6822px is not a layout error — it is
+CONTENT THAT NEVER RENDERED (lazy-load / IntersectionObserver / JS-driven expansion). Diagnose as a
+CONTENT problem, not a geometry one."* A coverage-deficit ranking built to find layout work put a
+content bug at #1.
+
+> **Split a coverage deficit by its truncation point before spending a tick on it.** A *content* stop
+> (hydration / IntersectionObserver) is the function leg; a *box-generation* stop is layout. On the
+> t1145 sweep, 16 of 105 scored sites are below 0.70 coverage — large enough to be a whole unbuilt
+> feed — while the 30 sites at 0.70–0.90 have deficits too small for that, which is where the layout
+> work more likely is.
+
+⚠ Corpus-wide rankings must come from the banked ROWS, not the log: the sweep log prints `e.g.` lines
+for **5** sites and a root-cause section for **2**, while its cluster lines claim up to `14 site(s)`.
+Re-derive from `(1 − coverage) × n/coverage` over `SWEEP-t<N>-rows.tsv`.

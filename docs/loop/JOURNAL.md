@@ -46371,6 +46371,76 @@ PERF: none — one UA rule and one narrowed branch in a cascade that already ran
 WIKI: `docs/wiki/css-cascade.md` — where Chrome draws the form-control `box-sizing` line, and why a
 layout-crate test cannot see it.
 
+## Tick 1148 — a MISSING-BOX count is a DESCENDANT count, and the top site is a CONTENT bug (2026-08-11)
+
+TICK SHAPE: measurement (probe before build) — t1147 named `missing box: <div>` (10 sites, 1435 hits)
+as the next lever. This tick probed it before building, and the cluster is not what its number says.
+
+⚠⚠⚠ **FIRST, THE RANKING ITSELF WAS A COUNT OF THE LOG.** The sweep log prints `e.g.` lines for
+**5 distinct sites** and a root-cause section for **2**, while its cluster lines claim up to
+`14 site(s)`. That is t1127/audit #53's finding at a new place, so the lever was re-derived from the
+banked ROWS instead — corpus-wide by construction, `(1 − coverage) × n/coverage`:
+
+```text
+     2453  cov=0.424  n=1805   www.taphouse23.com          scored sites .......... 105
+     2147  cov=0.481  n=1991   meet.google.com             cov_mean .............. 0.870
+     1257  cov=0.480  n=1161   sip777man.site              cov < 0.90 ............ 30
+     1021  cov=0.389  n=651    probidas.lt                 cov < 0.70 ............ 16
+     1010  cov=0.483  n=942    nysainfo.pl
+```
+
+**16 of 105 scored sites below 0.70 coverage is the honest missing-box population**, and it is a
+different list from the one the log names.
+
+⚠⚠⚠ **AND THE HEADLINE: 2453 MISSING BOXES ON THE TOP SITE ARE ONE UNBUILT SUBTREE.** Every
+missing-box example the instrument prints carries the node below which our tree stops. On
+`taphouse23.com`, all fourteen:
+
+```text
+   12  body/div:nth(4)/div:nth(1)/div:nth(4)/div:nth(1)/div:nth(1)/div:nth(2)/div:nth(1)
+    1  body/div:nth(2)/…/ul:nth(1)/li:nth(5)
+    1  body/div:nth(2)/…/ul:nth(1)/li:nth(2)
+```
+
+**Twelve of fourteen name the SAME parent.** One container that was never built contributes its
+entire subtree to the count, one row per descendant — and the per-tag histogram the board ranks on is
+that subtree's inventory, not six defects:
+
+```text
+   MISSING by tag: div×997  source×532  a×260  img×247  picture×245  li×121  ul×10  button×7
+```
+
+`picture×245` and `source×532` and `img×247` are the same 245 `<picture>` elements counted three
+times, because a `<picture>` contains its `<source>`s and its `<img>`. **Ranking MISSING_BOX by tag
+ranks the CONTENTS of the largest missing container**, and the board has ranked it that way since
+t684 (`C3833 <div> 7544/32`). This is the same class as t1147's already-green RED-proof and t1144's
+icon fonts: **the number was never a count of the thing it was used to rank.**
+
+⚠⚠ **AND THE TOP-RANKED SITE IS NOT LAYOUT WORK AT ALL.** Chrome's coordinates inside the missing
+subtree run to `[8 62022 200×200]` and `[8 57234 1184×17]` — it renders that page **~62,000px tall**
+and our tree stops at one node. That is exactly t267's third population, named 880 ticks ago and
+still true: *"an offset of 6822px is not a layout error — it is CONTENT THAT NEVER RENDERED
+(lazy-load / IntersectionObserver / JS-driven expansion), so our page is drastically shorter and
+everything below shifts. Diagnose as a CONTENT problem, not a geometry one."* **A coverage-deficit
+ranking built to find layout work put a content bug at #1**, which is the thing to know before
+spending a tick on it, and is why this was a probe.
+
+**THE STEER THIS LEAVES.** (1) A missing-box cluster must be ranked by **distinct truncation points**,
+not by hits or by tag — the instrument already prints the parent in every example and nothing reads
+it. (2) The `cov < 0.70` sixteen must be split by whether the truncation is a **content** stop
+(IntersectionObserver / hydration, → the function leg) or a **box-generation** stop (→ layout) before
+any of them is taken; on this evidence the top of the list is the former. (3) The genuine layout
+work is more likely in the `cov 0.70–0.90` thirty, where the deficit is too small to be a whole
+unbuilt feed.
+
+RATCHET: held trivially — nothing landed in `engine/`. Artefacts are the corpus-wide coverage ranking
+and the truncation-point count above.
+
+PERF: none — measurement only.
+
+WIKI: `docs/wiki/fidelity-instrument.md` — "A missing-box count is a DESCENDANT count: rank by
+distinct truncation points, not by tag"
+
 ## Tick 1147 — the "named next tick" REFUSED, and its RED-proof was already green (2026-08-11)
 
 TICK SHAPE: measurement (probe before build) — check #108's own steer §2 said *"when the suite reads
