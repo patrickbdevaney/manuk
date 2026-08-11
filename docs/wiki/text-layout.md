@@ -3723,3 +3723,25 @@ works. The missing descriptor is the one that says **which** face.
 Acceptance test, and it only exists because the face-advance probe landed first (t1153):
 `{Raleway/18}` advance **240 → 166**, `fira_sansbook/14` **140 → 129**, `Lyreco Renner/18`
 **184 → 174**, and the `-apple-system/10/102` control unmoved.
+
+#### What `unicode-range` fixed, and what it did not (t1155)
+
+Landed: the descriptor is parsed (explicit ranges, bare codepoints, and the `U+4??` **wildcard**,
+which is a range — reading it literally would silently restore the old behaviour for the faces that
+use the commonest short spelling), and `engine/page` **skips the fetch** for a block whose range
+covers none of the document's codepoints. `G_WEBFONT_UNICODE_RANGE` counts requests: **4 → 1**.
+
+⚠ **An unparseable component invalidates the whole descriptor** (CSS Fonts §4.5) → `None` → *"all
+codepoints"*. A range we cannot read makes a face a CANDIDATE; dropping just the bad component would
+narrow coverage on a guess and could hide the one face a page needs.
+
+⚠ **The skip happens AFTER `declare_webfont_family`.** CSS Fonts' shadowing rule is about the
+declaration (t561): the family is claimed by the document whether or not this subset is wanted, or a
+locally-installed same-named face would mask it. Only the fetch is skipped.
+
+**And the pre-registered acceptance test did not move:** `Raleway/18` is still 240 against Chrome's
+166, `fira_sansbook/14` 140 vs 129, `Lyreco Renner/18` 184 vs 174. A reduced four-subset family
+(Cyrillic first, Latin last) lays out in Ahem at exactly 100px **with the skip and without it** —
+`face_id`'s per-glyph fallback already reaches a face that has the glyphs. So on a page where the
+right face *arrives*, selection was never the failure, and the remaining question is whether it
+arrives at all: the fetch, its timing against the render deadline, or the format.

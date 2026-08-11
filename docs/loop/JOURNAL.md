@@ -46371,6 +46371,73 @@ PERF: none — one UA rule and one narrowed branch in a cascade that already ran
 WIKI: `docs/wiki/css-cascade.md` — where Chrome draws the form-control `box-sizing` line, and why a
 layout-crate test cannot see it.
 
+## Tick 1155 — `unicode-range` is parsed and 99 fetches stop, and the acceptance test did NOT move (2026-08-11)
+
+TICK SHAPE: capability (css + page) — t1154's build spec, steps 1 and 2. Step 3 (coverage-aware face
+SELECTION inside `FontContext`) is **not** built, and the pre-registered acceptance test says so.
+
+**WHAT LANDED, both halves RED-proven.**
+
+1. `manuk_css::FontFace` gains `unicode_range: Option<Vec<(u32,u32)>>`, parsed from the descriptor:
+   explicit ranges (`U+0460-052F`), bare codepoints (`U+20B4`), and the **wildcard** form (`U+4??`,
+   which is `U+400-4FF` — the commonest short spelling, and reading it literally would silently
+   restore the old behaviour for exactly the faces that use it). ⚠ **An unparseable component
+   invalidates the WHOLE descriptor** (CSS Fonts §4.5), which yields `None`, which means *"all
+   codepoints"* at the call site — a descriptor we cannot read makes a face a CANDIDATE rather than
+   excluding it. Dropping just the bad component would narrow coverage on a guess and could hide the
+   one face a page needs. RED-proven by severing the wildcard arm.
+2. `engine/page`'s webfont loader collects the document's own codepoints once, lazily, and **skips a
+   block whose range covers none of them — after `declare_webfont_family`, deliberately**: CSS
+   Fonts' shadowing rule is about the DECLARATION (t561), so the family stays claimed and only the
+   FETCH is skipped. `G_WEBFONT_UNICODE_RANGE` counts requests against a local server: **4 → 1**, and
+   RED-proven by deleting the skip.
+
+⚠⚠⚠ **AND THE PRE-REGISTERED ACCEPTANCE TEST DID NOT MOVE. RECORDED AS THE HEADLINE, NOT AS A
+FOOTNOTE.** t1154 registered it before building, which is the whole point of registering it:
+
+```text
+                          declared          CHROME   OURS(t1153)   OURS(now)   target
+   kuechenmomente.de      Raleway/18          166        240          240        166
+   jatekshop.eu           fira_sansbook/14    129        140          140        129
+   lyreco.com             Lyreco Renner/18    174        184          184        174
+   ───────────────────────────────────────────────────────────────────────────────────
+   kuechenmomente.de      -apple-system/10    102        102          102        102   CTRL
+```
+
+**Zero movement on all three.** So the missing descriptor was real, is now parsed, provably stops 99
+of 100 useless fetches — and is **not** what keeps those faces out of our layout. This is t1048's
+shape (*a fix that works and moves nothing means the DISPATCH is the bug*), and it is the finding.
+
+⚠⚠ **THE FIXTURE SAID SO BEFORE THE CORPUS DID, AND I ALMOST DID NOT ASK IT.** A reduced
+four-subset family — Cyrillic first, Latin last — lays out in Ahem at exactly 100px **with the skip
+and without it**: severed and measured. `face_id`'s per-glyph fallback already lands on a face that
+has the glyphs, so on a page where the right face ARRIVES, selection was never the failure. That is
+why `G_WEBFONT_UNICODE_RANGE` asserts the request COUNT and explicitly disclaims the selection
+claim — asserting selection there would have been a gate that passes for a reason it does not name,
+which is this project's most-repeated defect.
+
+**WHAT THAT NARROWS IT TO.** Refuted so far, each Chrome-exact or measured: the `src` list forms
+(t1151 ×3), face selection by weight/style (t1155's fixture), and now the missing `unicode-range`.
+What remains is **whether the face ARRIVES AT ALL on those pages** — the fetch itself, its timing
+against the render deadline, or the format. The advance is still the acceptance test and it is
+cheap to re-run; the next probe should count how many of a real page's webfont fetches complete
+before the boxes are measured, which is one instrument line away and is the same question
+`registered_webfont` already half-answers.
+
+RATCHET: held. `manuk-css` 36/36, `manuk-layout` 171/171, the new page gate green and RED-proven.
+Nothing regressed; the fetch reduction is strictly less work.
+
+GATE: `G_WEBFONT_UNICODE_RANGE` (request count 4 → 1, plus a layout assertion so the count cannot be
+satisfied by skipping everything) and
+`a_unicode_range_subset_is_parsed_including_its_wildcard_form` (six components, the wildcard, and the
+three ways a descriptor means "all codepoints" — absent, invalid, reversed).
+
+PERF: strictly negative work — up to 99 fewer font requests on a Google-Fonts page. Not measured on
+the wall, because the wall has no such page; the gate measures it directly instead.
+
+WIKI: `docs/wiki/text-layout.md` — the `unicode-range` section, updated with what the fix did and did
+not move.
+
 ## Tick 1154 — one hundred `@font-face` rules for one family, and `unicode-range` is not in the tree (2026-08-11)
 
 TICK SHAPE: measurement (probe before build) — t1153's named next step: *"the advance is now the

@@ -2610,6 +2610,24 @@ pub struct FontFace {
     pub family: String,
     /// `src` `url(...)` candidates, in order.
     pub srcs: Vec<String>,
+    /// **`unicode-range`, as inclusive codepoint spans — `None` means the spec's default `U+0-10FFFF`.**
+    ///
+    /// ⚠⚠⚠ **THIS IS THE DESCRIPTOR THAT SAYS *WHICH* FACE, AND WITHOUT IT A FAMILY IS A BAG.** The
+    /// inlined Google-Fonts block is the commonest webfont delivery on the web and it is subsetted by
+    /// codepoint: `www.kuechenmomente.de` ships **100 `@font-face` rules all named `Raleway`** —
+    /// weights {400,700} × styles {normal,italic} × ~13 subsets — with **Cyrillic and Vietnamese
+    /// first in source order** and Latin further down. Registered without their ranges they all land
+    /// in one family list where `FontContext::face_id` selects on weight and style alone, so a
+    /// Cyrillic subset and the Latin subset are indistinguishable and a face chosen for 400/normal
+    /// may have no Latin glyph to shape with. Measured (t1153): our `Raleway/18` advance was **240**
+    /// against Chrome's **166** — every text box on the page 45% too wide, re-wrapping prose and
+    /// arriving downstream as `dy`, where it was scored as *shape*.
+    ///
+    /// ⚠ **The performance half is the same field.** With no range there is no reason not to fetch
+    /// all hundred subsets; a page Chrome serves with ONE woff2 costs us a hundred requests against a
+    /// render deadline. `unicode-range` is how the right face is chosen *and* how the other
+    /// ninety-nine are never asked for.
+    pub unicode_range: Option<Vec<(u32, u32)>>,
 }
 
 /// One selector of one rule, with the scope + source order it was seen at.
@@ -2803,6 +2821,7 @@ impl Stylesheet {
 fn parse_font_face_block(block: &str) -> Option<FontFace> {
     let mut family = None;
     let mut srcs = Vec::new();
+    let mut unicode_range = None;
     for d in parse_declarations(block) {
         match d.name.as_str() {
             "font-family" => {
@@ -2828,11 +2847,65 @@ fn parse_font_face_block(block: &str) -> Option<FontFace> {
                     }
                 }
             }
+            "unicode-range" => unicode_range = parse_unicode_range(&d.value),
             _ => {}
         }
     }
     let family = family.filter(|f| !f.is_empty())?;
-    (!srcs.is_empty()).then_some(FontFace { family, srcs })
+    (!srcs.is_empty()).then_some(FontFace {
+        family,
+        srcs,
+        unicode_range,
+    })
+}
+
+/// Parse a `unicode-range` descriptor into inclusive codepoint spans.
+///
+/// Three forms, all of which the Google-Fonts block uses (CSS Fonts §4.5):
+///
+/// ```text
+///   U+0-7F                single span, hex, case-insensitive
+///   U+0460-052F           an explicit range
+///   U+4??                 a WILDCARD range — `?` spans 0..=F in that digit, so U+400-4FF
+/// ```
+///
+/// ⚠ **An unparseable component makes the WHOLE descriptor invalid** (CSS Fonts §4.5: the value is
+/// a comma-separated list and a syntax error invalidates the declaration), which returns `None` and
+/// therefore means *"all codepoints"* at the call site — the conservative direction. Dropping just
+/// the bad component would silently NARROW a face's coverage and could hide a face the page needs,
+/// which is the failure this whole field exists to prevent.
+fn parse_unicode_range(v: &str) -> Option<Vec<(u32, u32)>> {
+    let mut out = Vec::new();
+    for part in v.split(',') {
+        let p = part.trim();
+        let body = p
+            .strip_prefix("U+")
+            .or_else(|| p.strip_prefix("u+"))
+            .or_else(|| p.strip_prefix("U-"))
+            .or_else(|| p.strip_prefix("u-"))?;
+        if let Some((lo, hi)) = body.split_once('-') {
+            let lo = u32::from_str_radix(lo.trim(), 16).ok()?;
+            let hi = u32::from_str_radix(hi.trim(), 16).ok()?;
+            if lo > hi {
+                return None;
+            }
+            out.push((lo, hi));
+        } else if body.contains('?') {
+            // A wildcard is a range: every `?` is 0 at the low end and F at the high end. The digits
+            // before the first `?` must be literal hex, and a `?` may not be followed by a non-`?`.
+            let (head, tail) = body.split_at(body.find('?')?);
+            if tail.chars().any(|c| c != '?') || body.len() > 6 {
+                return None;
+            }
+            let lo = u32::from_str_radix(&format!("{head}{}", "0".repeat(tail.len())), 16).ok()?;
+            let hi = u32::from_str_radix(&format!("{head}{}", "F".repeat(tail.len())), 16).ok()?;
+            out.push((lo, hi));
+        } else {
+            let c = u32::from_str_radix(body.trim(), 16).ok()?;
+            out.push((c, c));
+        }
+    }
+    (!out.is_empty()).then_some(out)
 }
 
 /// Pull the URL out of an `@import` prelude: `url("a.css")`, `url(a.css)`, `'a.css'`, `"a.css"`,
@@ -8133,6 +8206,111 @@ mod pseudo_tests {
         assert!(
             !sheet.rules.is_empty(),
             "the imports must not eat the rest of the sheet"
+        );
+    }
+
+    /// **ONE HUNDRED `@font-face` RULES FOR ONE FAMILY, AND `unicode-range` TOLD THEM APART.**
+    ///
+    /// The inlined Google-Fonts block is the commonest webfont delivery on the web and it is
+    /// **subsetted by codepoint**. `www.kuechenmomente.de` ships 170 `@font-face` rules, **100 of
+    /// them named `Raleway`** — weights {400,700} × styles {normal,italic} × ~13 subsets — with the
+    /// **Cyrillic and Vietnamese blocks FIRST in source order** and Latin further down. The
+    /// descriptor was not parsed and had nowhere to live, so all hundred were fetched and registered
+    /// under one name, into a family list `FontContext::face_id` searches by weight and style alone.
+    /// A Cyrillic subset and the Latin subset are indistinguishable to that search.
+    ///
+    /// Measured (t1153, the face-advance probe, one fixed string in the element's own resolved font):
+    ///
+    /// ```text
+    ///                          declared          CHROME   OURS
+    ///   kuechenmomente.de      Raleway/18          166     240     +45%
+    ///   jatekshop.eu           fira_sansbook/14    129     140     +8.5%
+    ///   lyreco.com             Lyreco Renner/18    174     184     +5.7%
+    ///   ──────────────────────────────────────────────────────────────
+    ///   kuechenmomente.de      -apple-system/10    102     102      0    <- CONTROL, both fall back
+    /// ```
+    ///
+    /// Every text box on those pages was that much too wide, which re-wraps prose, changes the line
+    /// count, and arrives downstream as `dy` — where it was scored as *shape*, for hundreds of ticks.
+    ///
+    /// ⚠ **The wildcard row is not decoration.** `U+4??` is a RANGE (`U+400-4FF`), and reading it as
+    /// a literal would make the commonest short form of the descriptor unparseable — which, per the
+    /// invalid-value rule below, would silently restore the old behaviour for exactly the faces that
+    /// use it.
+    ///
+    /// ⚠⚠ **AN UNPARSEABLE COMPONENT INVALIDATES THE WHOLE DESCRIPTOR, AND THAT DIRECTION IS THE
+    /// SAFE ONE.** `None` means *"all codepoints"* at the call site, so a descriptor we cannot read
+    /// makes the face a candidate rather than excluding it. Dropping just the bad component would
+    /// NARROW a face's coverage on a guess and could hide the one face a page needs — the exact
+    /// failure this field exists to prevent.
+    #[test]
+    fn a_unicode_range_subset_is_parsed_including_its_wildcard_form() {
+        let ff = |css: &str| parse_font_face_block(css).expect("@font-face");
+
+        // The real Google-Fonts Cyrillic subset, byte-for-byte off kuechenmomente.de.
+        let cyr = ff(
+            "font-family:'Raleway'; font-style:italic; font-weight:400; \
+             src: url(x.woff2) format('woff2'); \
+             unicode-range: U+0460-052F, U+1C80-1C8A, U+20B4, U+2DE0-2DFF, U+A640-A69F, U+FE2E-FE2F;",
+        );
+        let r = cyr.unicode_range.expect("the Cyrillic subset has a range");
+        assert_eq!(r.len(), 6, "six components, one of them a bare codepoint");
+        assert!(r.contains(&(0x0460, 0x052F)), "an explicit range");
+        assert!(
+            r.contains(&(0x20B4, 0x20B4)),
+            "a BARE codepoint is a 1-wide range"
+        );
+        let covers = |r: &[(u32, u32)], c: char| {
+            r.iter()
+                .any(|&(lo, hi)| (c as u32) >= lo && (c as u32) <= hi)
+        };
+        assert!(
+            !covers(&r, 'a'),
+            "the Cyrillic-EXT subset must NOT claim Latin 'a'"
+        );
+        // ⚠ U+0450 is NOT in this subset and an earlier draft of this gate asserted it was: these
+        // ranges are Cyrillic **Extended**, and basic Cyrillic ships as its own `U+0400-045F` block.
+        // The mistake is left recorded because it is the same one the ENGINE makes — treating a
+        // family's subsets as interchangeable — one level up, in the test.
+        assert!(
+            !covers(&r, 'ѐ'),
+            "U+0450 is basic Cyrillic and lives in a DIFFERENT subset"
+        );
+        assert!(
+            covers(&r, '\u{0460}'),
+            "…and U+0460 is the first codepoint this one does claim"
+        );
+
+        // The wildcard form, which is a RANGE and not a literal.
+        let w = ff("font-family:W; src:url(x.woff2); unicode-range: U+4??;")
+            .unicode_range
+            .expect("a wildcard range");
+        assert_eq!(w, vec![(0x400, 0x4FF)], "U+4?? is U+400-4FF");
+
+        // A latin subset covers the text these pages are actually made of.
+        let lat =
+            ff("font-family:L; src:url(x.woff2); unicode-range: U+0000-00FF, U+0131, U+2000-206F;")
+                .unicode_range
+                .expect("a latin range");
+        assert!(covers(&lat, 'a') && covers(&lat, 'ü'), "latin-1 is covered");
+        assert!(!covers(&lat, 'ѐ'), "…and Cyrillic is not");
+
+        // ── ABSENCE and INVALIDITY both mean "all codepoints", and they must not be confused with
+        // an EMPTY range, which would mean "no codepoints" and would hide the face forever.
+        assert_eq!(
+            ff("font-family:N; src:url(x.woff2);").unicode_range,
+            None,
+            "no descriptor at all = the spec's default U+0-10FFFF, expressed as absence"
+        );
+        assert_eq!(
+            ff("font-family:B; src:url(x.woff2); unicode-range: U+0-FF, notahex;").unicode_range,
+            None,
+            "one bad component invalidates the WHOLE descriptor — the face stays a candidate"
+        );
+        assert_eq!(
+            ff("font-family:R; src:url(x.woff2); unicode-range: U+FF-00;").unicode_range,
+            None,
+            "a reversed range is invalid, not an empty set"
         );
     }
 

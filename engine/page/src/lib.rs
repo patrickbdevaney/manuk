@@ -7061,6 +7061,22 @@ impl Page {
         // `registered_webfont` records whether a face arrived that the document has NOT been laid
         // out with yet — see the relayout guard below.
         let mut registered_webfont = false;
+        // ⚠⚠⚠ **THE DOCUMENT'S OWN CODEPOINTS, COLLECTED ONCE — THE OTHER HALF OF `unicode-range`.**
+        //
+        // The inlined Google-Fonts block declares one `@font-face` PER SUBSET: `kuechenmomente.de`
+        // ships **100 of them, all named `Raleway`**, Cyrillic and Vietnamese first in source order.
+        // Registered blind they all land in one family list where `FontContext::face_id` selects on
+        // weight and style alone, so a Cyrillic subset and the Latin subset are indistinguishable —
+        // and our `Raleway/18` advance measured **240 against Chrome's 166** (t1153), every text box
+        // on the page 45% too wide, re-wrapping prose and arriving downstream as `dy`.
+        //
+        // Skipping a block the document cannot use is the SELECTION fix and the REQUEST-COUNT fix in
+        // one move: ninety-nine of those hundred are never fetched, on a page Chrome serves with one.
+        //
+        // Lazily built, because a page with no `@font-face` must not pay for it, and a `HashSet` of
+        // distinct scalars rather than of characters — a page has hundreds of distinct codepoints,
+        // not thousands.
+        let mut doc_codepoints: Option<std::collections::HashSet<u32>> = None;
         for s in &sources {
             // ⚠ **A RELATIVE `src` RESOLVES AGAINST THE STYLESHEET, NOT THE DOCUMENT** (CSS Values
             // §4.2). This loop is iterating `sources` and holds the sheet's own URL, and it used to
@@ -7085,6 +7101,28 @@ impl Page {
                 // martinfowler.com, where a failed webfont looked like a different font rather than
                 // like a failure.
                 fonts.declare_webfont_family(&ff.family);
+                // ⚠ **AFTER `declare_webfont_family`, DELIBERATELY.** CSS Fonts' shadowing rule is
+                // about the DECLARATION (t561, above): the family is claimed by this document
+                // whether or not this particular subset is one we need, and skipping the declaration
+                // would let a locally-installed same-named face mask the family. What is skipped is
+                // the FETCH.
+                if let Some(ranges) = &ff.unicode_range {
+                    let cps = doc_codepoints.get_or_insert_with(|| {
+                        let mut set = std::collections::HashSet::new();
+                        for n in self.dom.descendants(self.dom.root()) {
+                            if let manuk_dom::NodeData::Text(t) = self.dom.data(n) {
+                                set.extend(t.chars().map(|c| c as u32));
+                            }
+                        }
+                        set
+                    });
+                    if !cps
+                        .iter()
+                        .any(|c| ranges.iter().any(|&(lo, hi)| *c >= lo && *c <= hi))
+                    {
+                        continue;
+                    }
+                }
                 // **Idempotence is keyed on the SRC URL, not on the family.** This function runs
                 // again after EVERY round of dynamic scripts, so without a key the same font is
                 // re-fetched and re-registered each round — and because a new face forces a

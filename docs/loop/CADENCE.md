@@ -11,12 +11,12 @@
 
 | | value | over |
 |---|---|---|
-| ticks landed | **860** | ticks 1–1153 |
-| median tick cycle | **28m** | 859 intervals |
-| median, last 10 | **16m** | 10 intervals |
+| ticks landed | **861** | ticks 1–1154 |
+| median tick cycle | **28m** | 860 intervals |
+| median, last 10 | **22m** | 10 intervals |
 | fastest / slowest | 5s / 5.4d | |
-| **ticks per hour** | **1.13** | 758.2h elapsed |
-| median verify wall | **63s** | 799 ticks |
+| **ticks per hour** | **1.13** | 758.9h elapsed |
+| median verify wall | **63s** | 800 ticks |
 | wall trend | 39s → 13m — getting slower ⚠️ | first 3 vs last 3 |
 
 The **cycle** is the real unit: implement → debug → verify wall → land. The wall is only part of
@@ -27,11 +27,11 @@ it, and a wall that grows taxes every future tick, so it is tracked separately f
 ### Near — the daily driver (doc / app / platform web)
 
 * **capabilities asserted** (`G_CAPABILITY`): 48 → **81**
-* **live gates**: 27 → **437**
+* **live gates**: 27 → **438**
 * **✅ rows in the capability ledger**: 144 → **571**
 * **Bar 0 — oracle hangs**: 0 of 265 sites
 
-**380 of 860 ticks** (44%) moved a
+**380 of 861 ticks** (44%) moved a
 user-visible capability. The rest were instruments, infrastructure and corrections — and the
 ledger says the corrections were not overhead: three of its top three priorities were phantoms,
 and finding that out redirected everything after it.
@@ -957,5 +957,6 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 | **1151** | 2026-08-11 18:50 | 5m | measurement | 13m | +203/−34 | 437 | 81 | 56.0% · | the box was right and the FACE was wrong, and the instrument cannot see a face (2026-08-11 |
 | **1152** | 2026-08-11 19:08 | 18m | measurement | 13m | +217/−39 | 437 | 81 | 56.0% · | the self-audit and the constitution check, and one of eight ticks moved the gate (2026-08- |
 | **1153** | 2026-08-11 19:13 | 4m | capability | 13m | +131/−33 | 437 | 81 | 56.0% · | the faces DIFFER, and an unknown share of "shape" was a font that never loaded (2026-08-11 |
+| **1154** | 2026-08-11 19:54 | 41m | measurement | 13m | +479/−33 | 438 | 81 | 56.0% · | one hundred `@font-face` rules for one family, and `unicode-range` is not in the tree (202 |
 
 *`·` after a WPT figure means **carried forward**, not measured this tick.*
