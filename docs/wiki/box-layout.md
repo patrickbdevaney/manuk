@@ -8733,3 +8733,37 @@ crossing on its own. When a candidate scope loses a test, the honest options are
 of the rule* or *go find out why that test fails*; taking the first because the second is expensive is
 fine, but then the boundary needs a NAME and a re-check rather than a number. The grid exclusion has a
 name and still trades 3 today, so it stays.
+
+### The grid exclusion was one word too wide, and the spec had the discriminator (t1126)
+
+The exclusion was written as *"is the container a grid"*. Grid §9 does not say that:
+
+> *"If the element has a definite grid position … the containing block is the corresponding grid
+> area. Otherwise, the containing block is the padding edge of the grid container."*
+
+Only the **definite-placement** half needs a rect this pass cannot build; the other half is the same
+rule as flex, and `abs_containing_block` already returns exactly that box. The test is
+`grid_row`/`grid_column` being `auto` — read off the CHILD's style.
+
+```text
+                                        css-flexbox   css-grid    verdict
+   t1125                                 309           208
+     grid included wholesale (t1119)     309 (+0)      211 (+6 −3)   3 traded ✗
+     grid included when AUTO-PLACED      309 (+0)      211 (+3 −0)   TAKEN ✓
+```
+
+Same total, different set, zero regressions — and the three tests that made grid an exclusion are
+exactly the definite-placement ones, which is the confirmation that the spec's line is the real one.
+The 20-row abspos battery is now **19 of 19 Chrome-exact**; its last DIFF was the grid row the
+exclusion had made unreachable.
+
+⚠⚠⚠ **Two ticks running, the BOUNDARY was the defect and not the rule.** t1125 retired an exclusion
+that was describing another tick's bug; this one narrows an exclusion that named a formatting context
+where the spec names a placement mode. Both came from measuring which tests failed and drawing the
+line just inside them. **A scope should be a sentence from the spec with a measurement attached, not a
+measurement with a sentence attached** — and the cheap way to find out which you wrote is to re-read
+the spec paragraph after the tests go green.
+
+RESIDUE: a definite-placement grid child is still a two-box union (`[382 120 32 84]` against Chrome's
+`[390 180 24 24]`). It needs the grid AREA plumbed into `abs_containing_block`, and it is asserted
+nowhere on purpose.

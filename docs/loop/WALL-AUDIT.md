@@ -1626,3 +1626,51 @@ binaries keyed by tree hash, so an A/B against a recent commit is a lookup rathe
 to touch (PART VII).
 
 **Nothing trimmed. An audit that finds the wall already lean is a fine result, and this is one.**
+
+## Audit #43 — tick 1126 (2026-08-11), wall total **1204s** — and the instrument names 39% of it
+
+```text
+   270s  P   parity 72/72 vs headless Chrome   22%
+    79s  G3  affordance completeness            7%
+    69s  T   crate tests                        6%
+    28s  B   build                              2%
+    12s  G6 · 7s G1 · 6s D · 3s F · 1s F4 · 0s the rest
+   ────
+   ~730s UNATTRIBUTED — not in any section this audit prints
+```
+
+### ⚠⚠ THE FINDING IS THE MISSING 60%, NOT THE 270s
+
+Audit #42 measured **95s** twenty ticks ago and called the wall lean. It is 1204s today, and the
+sections this instrument enumerates account for **475s of it**. Whatever the other ~730s is, it is
+not a gate — it is almost certainly link/codegen, and this window measured that directly by accident:
+a release `manuk-wpt` relink after an `engine/layout` edit is **~3m15s–4m10s**, paid **eight times**
+across t1119–t1126.
+
+**Any optimisation ranked off the table above is ranked off a third of the number.** Measuring where
+the other 730s goes outranks trimming the 270s, and the cheapest way to do it is to time the wall's
+own phases rather than only its named gates.
+
+### The one rigor-preserving candidate the table DOES support
+
+**P — 72 fixtures, each launching a fresh headless Chrome.** The assertions are per-fixture; the
+browser start is not. Batching them behind one browser buys the same 72 assertions for fewer seconds
+and each can still fail independently for its own bug, which is exactly the admissible shape (#1
+REDUNDANCY: *"~1.5s of every JS gate is runtime startup"*, the same argument one process up). That is
+a tick in `tests/wpt` — agent territory — not a change to `scripts/`.
+
+### The audits' standing recommendation, unchanged and now overdue twice
+
+Audit #42's banked-binary cache (`$HOME/manuk-builds`, keyed by tree hash, already referenced by
+`disk-hygiene.sh`'s `KEEP_BUILDS` and still **absent**) would have removed **four** of this window's
+eight relinks: t1119 alone rebuilt the old tree twice to diff a pass-set, and t1124/t1125/t1126 each
+A/B'd against a binary that existed an hour earlier. Recorded again for the observer.
+
+1. **Redundancy** — unchanged; P is the standing candidate above.
+2. **Parallelism** — gates launch concurrently; the perf floors are deliberately serial. Nothing new
+   has become accidentally serial.
+3. **Caching** — the gap is the BUILD cache across A/B arms, not the gates' own caches.
+4. **Scope** — no gate builds materially more than it asserts on.
+
+**Nothing trimmed.** The honest headline is that this audit cannot see most of its own subject, and
+saying so is worth more than a percentage off the part it can.

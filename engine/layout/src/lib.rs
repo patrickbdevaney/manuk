@@ -8697,11 +8697,19 @@ impl Ctx<'_> {
     /// fixed that defect, three reftests came back for free and the boundary turned out to be
     /// describing someone else's bug. **A scope drawn around a failure is a note to come back.**
     ///
-    /// **GRID is still excluded** because Grid §9 gives an abspos child with *definite grid
-    /// placement* a containing block that is its **grid area**, and `abs_containing_block` can only
-    /// produce the container's padding box — so for grid the taffy box is currently the RIGHT one.
-    /// That one IS a property of the rule, and closing it means plumbing the grid area into the
-    /// positioned pass.
+    /// ⚠⚠⚠ **AND THE GRID EXCLUSION IS NARROWED TO WHAT THE SPEC ACTUALLY SAYS (t1126).** Grid §9
+    /// splits abspos children in two, and only one half was ever the problem:
+    ///
+    /// > *"If the element has a definite grid position … the containing block is the corresponding
+    /// > grid area. Otherwise, the containing block is the padding edge of the grid container."*
+    ///
+    /// The padding-edge half is the SAME rule as flex and `abs_containing_block` already produces
+    /// exactly that box; only the grid-area half needs a rect this pass cannot build. So the test is
+    /// `grid_row`/`grid_column` being `auto`, not "is the container a grid" — the spec's own
+    /// discriminator, read off the child's style. Measured: it converts the grid arm from a trade
+    /// into a gain, and the three tests that made grid an exclusion are all definite-placement
+    /// (`positioned-grid-items-010`, `orthogonal-positioned-grid-items-010`,
+    /// `positioned-grid-items-negative-indices-002`).
     fn placed_static_position_only(
         &self,
         p: &taffy_tree::Placed,
@@ -8709,8 +8717,21 @@ impl Ctx<'_> {
         abs_x: f32,
         abs_y: f32,
     ) -> bool {
-        if container_is_grid || !self.kid_is_out_of_flow(p.dom) {
+        if !self.kid_is_out_of_flow(p.dom) {
             return false;
+        }
+        // Grid §9: a DEFINITE grid position makes the grid AREA the containing block, and this pass
+        // cannot build that rect. Auto placement resolves against the container's padding edge —
+        // which is exactly what `abs_containing_block` returns, and exactly the flex rule.
+        if container_is_grid {
+            let s = self.style_of(p.dom);
+            let auto_placed = matches!(s.grid_row.0, manuk_css::GridLine::Auto)
+                && matches!(s.grid_row.1, manuk_css::GridLine::Auto)
+                && matches!(s.grid_column.0, manuk_css::GridLine::Auto)
+                && matches!(s.grid_column.1, manuk_css::GridLine::Auto);
+            if !auto_placed {
+                return false;
+            }
         }
         self.static_pos.borrow_mut().insert(p.dom, (abs_x, abs_y));
         self.static_pos_writes.set(self.static_pos_writes.get() + 1);
@@ -14093,10 +14114,22 @@ mod tests {
         // The block container is the control: this path always had the filter and must not move.
         assert_eq!(case("display:block", "right:2px").0, 974.0, "block control");
 
-        // GRID is deliberately absent, and the absence is a measurement — see
-        // `placed_static_position_only`: an abspos child with definite grid placement is positioned
-        // against its GRID AREA, which the positioned pass cannot yet express, so grid keeps
-        // taffy's box. Asserting grid's current numbers here would pin the engine to that gap.
+        // ⚠⚠ GRID joins on the AUTO-PLACED half only (t1126), which is Grid §9's own split: a
+        // DEFINITE grid position makes the grid AREA the containing block and this pass cannot build
+        // that rect, so those keep taffy's box. Its current numbers are NOT asserted anywhere —
+        // asserting a value we know to be wrong would pin the engine to the gap.
+        let (gx, gw, gsx) = case("display:grid", "right:2px");
+        assert_eq!(
+            (gx, gw),
+            (974.0, 24.0),
+            "an AUTO-PLACED abspos child of a grid container resolves against the container's \
+             PADDING edge, the same rule as flex (Grid §9); got [{gx} {gw}]"
+        );
+        assert_eq!(
+            gsx, 8.0,
+            "the grid container's in-flow item must stay at the content origin"
+        );
+
         let (x, w, sx) = case("display:flex", "right:2px");
         assert_eq!(
             (x, w),

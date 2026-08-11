@@ -46371,6 +46371,64 @@ PERF: none — one UA rule and one narrowed branch in a cascade that already ran
 WIKI: `docs/wiki/css-cascade.md` — where Chrome draws the form-control `box-sizing` line, and why a
 layout-crate test cannot see it.
 
+## Tick 1126 — the grid exclusion was one word too wide, and the spec had the discriminator (2026-08-11)
+
+TICK SHAPE: capability (layout) — t1125's remaining exclusion, re-read against the spec instead of
+against the reftests that produced it.
+
+t1119 excluded GRID from *"an out-of-flow child of a flex/grid container gets ONE box"* because
+including it traded three reftests. The exclusion was justified — but **it was written as "is the
+container a grid", and Grid §9 does not say that**:
+
+> *"If the element has a definite grid position … the containing block is the corresponding grid
+> area. Otherwise, the containing block is the padding edge of the grid container."*
+
+**Only the definite-placement half needs a rect this pass cannot build.** The other half is the same
+rule as flex, and `abs_containing_block` already returns exactly that box. So the test is
+`grid_row`/`grid_column` being `auto` — the spec's own discriminator, read off the CHILD's style —
+and the exclusion shrinks from a formatting context to a placement mode:
+
+```text
+                                        css-flexbox   css-grid    verdict
+   t1125                                 309           208
+     grid included wholesale (t1119)     309 (+0)      211 (+6 −3)   3 traded ✗
+     grid included when AUTO-PLACED      309 (+0)      211 (+3 −0)   TAKEN ✓
+```
+
+**Same total, different set, zero regressions** — and the three tests that made grid an exclusion in
+the first place are exactly the definite-placement ones (`positioned-grid-items-010`,
+`orthogonal-positioned-grid-items-010`, `positioned-grid-items-negative-indices-002`), which is the
+confirmation that the spec's line is the real one. Gained: `grid-gutters-014`,
+`column-grid-lanes-intrinsic-sizing-oof`, `row-grid-lanes-intrinsic-sizing-oof`.
+
+⚠⚠ **AND THE 20-ROW BATTERY IS NOW 19 OF 19 CHROME-EXACT.** Its one remaining DIFF since t1119 was
+the grid row — `[966 32]` against Chrome's `[974 24]`, the two-box union — and it was the row the
+exclusion had made unreachable. A second grid fixture confirms the split: an auto-placed
+`right:2px` child reads Chrome's `[390 0 24 24]` (was `[382 0 32 24]`), and a `grid-column:2;
+grid-row:2` child is unchanged at `[382 120 32 84]` against Chrome's `[390 180 24 24]` — still a
+union, still the named residue, and deliberately NOT asserted anywhere.
+
+⚠⚠⚠ **THIS IS THE SECOND TICK IN A ROW WHERE THE BOUNDARY, NOT THE RULE, WAS THE DEFECT.** t1125
+retired an exclusion that was describing another tick's bug; this one narrows an exclusion that was
+describing a formatting context when the spec describes a placement mode. Both were introduced by
+measuring which tests failed and drawing the line just inside them. **A scope should be a sentence
+from the spec with a measurement attached, not a measurement with a sentence attached** — and the
+cheapest way to find out which one you wrote is to go back and read the spec paragraph after the
+tests are green.
+
+RATCHET: held. `css-flexbox` 309, `css-grid` 208 → **211**, `css-position` 10, `css-sizing` 54 —
+pass-SETS diffed, +3 / −0. `manuk-layout` 163/163.
+
+GATE: the existing `an_out_of_flow_child_of_a_flex_container_is_placed_once_against_the_padding_box`
+gains a grid arm (auto-placed child at the padding edge; the in-flow sibling unmoved). The
+definite-placement case is still asserted NOWHERE — asserting a value known to be wrong pins the
+engine to it. RED-proven by disabling the grid arm: `[966 32]`.
+
+PERF: four `matches!` on a style already in hand, only for out-of-flow grid children.
+
+WIKI: `docs/wiki/box-layout.md` — the scope table, third revision: "the grid exclusion was one word
+too wide".
+
 ## Tick 1125 — a scope drawn around a failure is a note to come back, and this is the coming back (2026-08-11)
 
 TICK SHAPE: capability (layout) — t1124's named debt, and the cheapest kind of tick there is: no new
