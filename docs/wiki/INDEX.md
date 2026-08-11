@@ -439,6 +439,7 @@
   - L8417 · §10.3.3 is TWO steps, and the clamp that was right on one clause was a floor on the other (t1087)
   - L8484 · An out-of-flow child of a flex container was given TWO boxes, and the reported rect was their union (t1119)
   - L8554 · A first-write-wins cache that a THROWAWAY pass can reach is permanently poisoned (t1120)
+  - L8608 · A known cross size transfers through the aspect ratio, and stretch is how a cross size becomes known (t1122)
 
 ## browser-capabilities.md
 `docs/wiki/browser-capabilities.md`
@@ -1924,4 +1925,4 @@
   - L124 · Rank mechanisms by FLIP RATE, not failing-subtest count — CSS layout is a multi-assertion slog
 
 ---
-1831 sections across 22 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+1832 sections across 22 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.

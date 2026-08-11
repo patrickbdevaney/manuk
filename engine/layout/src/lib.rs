@@ -8540,6 +8540,40 @@ impl Ctx<'_> {
                     taffy::AvailableSpace::MinContent => Some(0.0),
                     taffy::AvailableSpace::MaxContent => None,
                 });
+                // ⚠⚠⚠ **A KNOWN CROSS SIZE TRANSFERS THROUGH THE ASPECT RATIO, AND `STRETCH` IS HOW
+                // A CROSS SIZE BECOMES KNOWN.** `align-items` defaults to `stretch`, so an item in a
+                // 288px-tall flex row is handed `known.height = 288` — and CSS Sizing §4 then makes
+                // its `auto` width `288 × ratio`, not whatever the content measures. The ratio is
+                // already handed to taffy (`taffy_tree::style_of`, for the case where the height is
+                // DECLARED); this is the same rule for the case where the height is STRETCHED, and
+                // it never reached the measure. Chrome-measured, a 480×474 image in a
+                // `width:400px;height:288px` flex row:
+                //
+                // ```text
+                //                                       Chrome      before      after
+                //   <img>                              [292 288]   [480 474]   [292 288]
+                //   <img max-width:100%>               [292 288]   [400 395]   [292 288]
+                //   <div style="aspect-ratio:480/474"> [292 288]   [  0 288]   [292 288]
+                //   <img width=480 height=474>  CTRL   [400 474]   [400 474]   [400 474]
+                //   the same row at height:auto CTRL   [400 395]   [400 395]   [400 395]
+                // ```
+                //
+                // The plain `aspect-ratio` div is the one that shows what the miss really is: with
+                // no content to measure it came out **ZERO wide** — laid out, present, invisible —
+                // which is the same sentence `taffy_tree::style_of`'s ratio comment already carries
+                // for the declared-height case.
+                let ratio = self.style_of(dn).aspect_ratio.filter(|r| *r > 0.0);
+                if let (None, Some(kh), Some(r)) = (known.width, known.height, ratio) {
+                    if matches!(self.style_of(dn).width, Dim::Auto) {
+                        return (
+                            taffy::Size {
+                                width: kh * r,
+                                height: kh,
+                            },
+                            None,
+                        );
+                    }
+                }
                 let (w, h, base) = self.measure_intrinsic_baselined(dn, aw);
                 (
                     taffy::Size {
@@ -14207,6 +14241,78 @@ mod tests {
             (i.x - t.x, i.width),
             (174.0, 24.0),
             "the no-transform control of the deep case must not move"
+        );
+    }
+
+    /// # G_STRETCHED_RATIO — a KNOWN cross size transfers through the aspect ratio
+    ///
+    /// ⚠⚠⚠ **AN `aspect-ratio` BOX IN A FLEX ROW WITH A DEFINITE HEIGHT CAME OUT ZERO WIDE** —
+    /// laid out, present in the tree, invisible. `align-items` defaults to `stretch`, so the item is
+    /// handed a definite cross size, and CSS Sizing §4 makes its `auto` main size `cross × ratio`.
+    /// The ratio already crosses into taffy (`taffy_tree::style_of`) for the case where the height is
+    /// **declared**; the case where it is **stretched** never reached the measure seam, which
+    /// answered with the content — and a box with no content measures zero.
+    ///
+    /// Chrome-measured through the PRODUCT path (`boxes --html`, Stylo) in a
+    /// `width:400px;height:288px` flex row, with a 480×474 subject:
+    ///
+    /// ```text
+    ///                                             Chrome      before      after
+    ///   <div style="aspect-ratio:480/474">       [292 288]   [  0 288]   [292 288]
+    ///   the same, plus max-width:100%            [292 288]   [  0 288]   [292 288]
+    ///   the row at height:auto          CONTROL  [400 395]   [400 395]   [400 395]
+    ///   <img width=480 height=474>      CONTROL  [400 474]   [400 474]   [400 474]
+    /// ```
+    ///
+    /// ⚠⚠ **THE CONTROLS ARE WHAT KEEP THIS FROM BEING "APPLY THE RATIO ALWAYS."** An `auto`-height
+    /// row has no cross size to transfer, and an item with a DECLARED width must keep it — a fix
+    /// that read the ratio unconditionally would break both, and both were measured, not assumed.
+    ///
+    /// ⚠⚠⚠ **RESIDUE, NAMED WITH ITS MECHANISM: a REPLACED item is still wrong** — a plain `<img>` in
+    /// the same row reads `480×474` (or `400×395` with `max-width:100%`) against Chrome's `292×288`.
+    /// It is a different sub-mechanism and not a smaller version of this one: an image HAS content, so
+    /// taffy takes the measured 480 as the item's flex base size *before* the cross axis is stretched,
+    /// and the ratio is never re-applied. This seam cannot see that — at measure time `known.height`
+    /// is `None` — so the fix belongs where the stretch is resolved, which is its own tick.
+    ///
+    /// To watch it go RED: delete the `known.height` + ratio branch in `layout_flex_or_grid`'s
+    /// measure closure — the first row returns to `0 × 288`.
+    #[test]
+    fn a_stretched_cross_size_transfers_through_the_aspect_ratio() {
+        let case = |row: &str, item: &str| {
+            let html = format!(
+                r#"<div id="r" style="{row}"><div id="d" style="aspect-ratio:480/474;{item}"></div></div>"#
+            );
+            let css = "body{margin:0}";
+            let (dom, root) = layout_html(&html, css, 1000.0);
+            let rects = root.node_rects(&dom);
+            let d = rects[&by_id(&dom, "d")];
+            (
+                (d.width * 100.0).round() / 100.0,
+                (d.height * 100.0).round() / 100.0,
+            )
+        };
+        let row = "width:400px;height:288px;display:flex";
+
+        let (w, h) = case(row, "");
+        assert!(
+            (w - 291.65).abs() < 1.0 && (h - 288.0).abs() < 0.01,
+            "a stretched flex item derives its auto main size from the ratio (Chrome 292x288); got {w}x{h}"
+        );
+
+        // CONTROL: no definite cross size, nothing to transfer — the item must NOT gain a width.
+        let (w, _) = case("width:400px;display:flex", "");
+        assert!(
+            w < 1.0,
+            "with an auto-height row there is no cross size to transfer; got width {w}"
+        );
+
+        // CONTROL: a DECLARED main size wins over the ratio transfer.
+        let (w, h) = case(row, "width:120px");
+        assert_eq!(
+            (w, h),
+            (120.0, 288.0),
+            "a declared width must survive the stretch (the ratio transfers only into an AUTO axis)"
         );
     }
 

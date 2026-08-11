@@ -828,3 +828,4 @@ tick	sha	epoch	iso	delta_s	shape	wall_s	files	added	deleted	gates	claims	wpt_pas
 1119	d2b2e02b	1786410291	2026-08-10T21:04:51-04:00	7591	capability	808	11	481	34	437	81	3896	6960	0	559	0	the 499,432px element was never a used width; it was two boxes and a union (2026-08-10)
 1120	3aab26f1	1786414865	2026-08-10T22:21:05-04:00	4574	capability	808	10	442	35	437	81	3896	6960	0	560	0	a first-write-wins cache that a THROWAWAY pass can reach is permanently poisoned (2026-08-10)
 1121	164287e1	1786419392	2026-08-10T23:36:32-04:00	4527	measurement	808	8	389	33	437	81	3896	6960	0	560	0	the sweep priced eight ticks, and both of its losses were the sweep (2026-08-10)
+1122	1028a8ff	1786421397	2026-08-11T00:09:57-04:00	2005	capability	808	8	230	33	437	81	3896	6960	0	561	0	an `aspect-ratio` box in a flex row with a definite height was ZERO wide (2026-08-10)

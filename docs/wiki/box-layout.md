@@ -8604,3 +8604,36 @@ covered.
 **The general rule, which outlives this fix:** ask of every memo/cache in layout *which passes can
 write to it*. A throwaway measurement pass is not a reader-only guest; if it can write, and the
 policy is first-write-wins, the cache records the measurement rather than the page.
+
+## A known cross size transfers through the aspect ratio, and `stretch` is how a cross size becomes known (t1122)
+
+CSS Sizing §4: a definite size in one axis transfers through an `aspect-ratio` into an `auto` size in
+the other. `taffy_tree::style_of` already hands taffy the ratio, and its comment records the fix for
+*"an image given only a `height`"* — the DECLARED case.
+
+**`align-items` defaults to `stretch`, so the cross size is known far more often than that.** An item
+in a `height:288px` flex row is handed a definite cross size whether or not the author wrote one, and
+the measure seam answered with the CONTENT instead of the transfer. A box with no content measures
+zero:
+
+```text
+   width:400px; height:288px; display:flex   >   a 480x474 subject
+                                              Chrome      before      after
+     <div style="aspect-ratio:480/474">      [292 288]   [  0 288]   [292 288]
+     the same, plus max-width:100%           [292 288]   [  0 288]   [292 288]
+     the row at height:auto         CONTROL  [400 395]   [400 395]   [400 395]
+     <img width=480 height=474>     CONTROL  [400 474]   [400 474]   [400 474]
+```
+
+A zero-width sliver — laid out, present in the tree, invisible.
+
+**The controls carry the rule.** An `auto`-height row has no cross size to transfer, so the item must
+STAY zero; a declared width must survive the stretch. A fix that applied the ratio unconditionally
+passes the subject and breaks both.
+
+⚠⚠⚠ **The REPLACED half is a different sub-mechanism and is NOT fixed.** A plain `<img>` in the same
+row still reads `480×474` against Chrome's `292×288`, because an image has content: taffy takes the
+measured 480 as the item's flex base size *before* the cross axis is stretched, and the ratio is never
+re-applied. At measure time `known.height` is `None`, so this seam is structurally unable to see it —
+the fix belongs where the stretch is resolved. `hnhbkis.edu.in`'s card-media slot is the replaced
+half, so the site is not closed by this.

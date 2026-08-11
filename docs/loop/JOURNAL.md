@@ -46371,6 +46371,61 @@ PERF: none — one UA rule and one narrowed branch in a cascade that already ran
 WIKI: `docs/wiki/css-cascade.md` — where Chrome draws the form-control `box-sizing` line, and why a
 layout-crate test cannot see it.
 
+## Tick 1122 — an `aspect-ratio` box in a flex row with a definite height was ZERO wide (2026-08-10)
+
+TICK SHAPE: capability (layout) — the t1121 sweep's refreshed §9.2 work-list names `hnhbkis.edu.in`
+as the cheapest already-traced row (2 h-overflow, shape 0.932, every ancestor byte-exact). Reducing
+its one divergent box found a defect one layer more general than the site.
+
+The site's idiom is Tailwind's card media slot — `flex flex-col items-center` around
+`<div class="h-72 flex items-center justify-center"><img class="max-h-72 max-w-full object-contain">`
+— and the slot comes out **480 wide inside a 230px card** against Chrome's 198. Reduced against
+Chrome in a `width:400px; height:288px` flex row with a 480×474 subject, the family splits in two and
+only one half is this tick:
+
+```text
+                                              Chrome      before      after
+   <div style="aspect-ratio:480/474">        [292 288]   [  0 288]   [292 288]   <- LANDED
+   the same, plus max-width:100%             [292 288]   [  0 288]   [292 288]   <- LANDED
+   <img src>                                 [292 288]   [480 474]   [480 474]   <- residue
+   <img max-width:100%>                      [292 288]   [400 395]   [400 395]   <- residue
+   the row at height:auto           CONTROL  [400 395]   [400 395]   [400 395]
+   <img width=480 height=474>       CONTROL  [400 474]   [400 474]   [400 474]
+```
+
+⚠⚠⚠ **`align-items` DEFAULTS TO `stretch`, SO A CROSS SIZE IS KNOWN FAR MORE OFTEN THAN THE
+DECLARED-HEIGHT CASE ANYONE BUILT FOR.** CSS Sizing §4 transfers a definite cross size through the
+ratio into an `auto` main size. `taffy_tree::style_of` already hands taffy the ratio, and its comment
+records the fix for *"an image given only a `height`"* — the DECLARED case. The STRETCHED case never
+reached the measure seam, which answered with the content, and **a box with no content measures
+zero**: an `aspect-ratio` div in a flex row rendered as a zero-width sliver. Present in the tree, laid
+out, invisible — the exact sentence that comment already carries, one case over.
+
+⚠⚠ **THE CONTROLS ARE WHAT MAKE THIS A RULE ABOUT A KNOWN CROSS SIZE** rather than "apply the ratio":
+an `auto`-height row has no cross size to transfer and the item must stay zero, and a DECLARED width
+must survive. Both measured, both in the gate, and a fix that read the ratio unconditionally fails
+both.
+
+⚠⚠⚠ **THE RESIDUE IS A DIFFERENT SUB-MECHANISM, NOT A SMALLER VERSION OF THIS ONE, AND SAYING SO IS
+THE POINT.** A plain `<img>` in the same row is still `480×474`. An image HAS content, so taffy takes
+the measured 480 as the item's flex BASE SIZE *before* the cross axis is stretched, and the ratio is
+never re-applied; at measure time `known.height` is `None`, so this seam is structurally unable to
+see it. The fix belongs where the stretch is resolved. Which means **`hnhbkis.edu.in` itself is NOT
+closed by this tick** — its subject is the replaced half. The reduction is banked, the site is not.
+
+RATCHET: held. `css/css-flexbox` 306, `css-grid` 208, `css-position` 10, `css-sizing` 54 — pass-SETS
+diffed against the t1120 binary, **+0 / −0** on both of the two that could move. `manuk-layout`
+162/162.
+
+GATE: `a_stretched_cross_size_transfers_through_the_aspect_ratio` — the subject plus the two controls
+above. RED-proven by disabling the branch: the first row returns to `0 × 288`.
+
+PERF: none — one style read per flex/grid measure, before the measure that would have run anyway (and
+it SKIPS that measure when it fires).
+
+WIKI: `docs/wiki/box-layout.md` — "A known cross size transfers through the aspect ratio, and
+`stretch` is how a cross size becomes known".
+
 ## Tick 1121 — the sweep priced eight ticks, and both of its losses were the sweep (2026-08-10)
 
 TICK SHAPE: measurement — check #105's binding steer, verbatim: *"RUN THE CORPUS SWEEP."* 614 hours
