@@ -8665,3 +8665,43 @@ taffy 0.12 does not do it for a leaf whose measure reports a definite content bo
 the known cross size into `replaced_default_size` so it answers cross-anchored — the only one that is
 neither a fork nor a re-implementation; (b) re-derive in `extract_placed`, which means second-guessing
 the flex line's main-axis distribution; (c) upstream.
+
+## An out-of-flow box's inner layout has a THIRD output, and it stayed at (0,0) (t1124)
+
+`layout_abs` lays its content out at a provisional `(0,0)` and re-origins it once the box is placed.
+It translates the BOXES and the FRAGMENTS. **`static_pos` is the third output of the same inner
+layout** and was left in provisional space — so an out-of-flow child whose insets are all `auto` (the
+commonest form: the box simply sits where it would have) was placed against the PAGE ORIGIN.
+
+`layout_float` learned exactly this and says so in its own comment. This is the same rule in the path
+that places every `absolute` and `fixed` box: *one rule, N implementations*, with N−1 done.
+
+```text
+   a 20x20 abspos child of a 200x100; padding:10px parent
+                                            Chrome      before      after
+     parent position:absolute              [310 210]   [  0   0]   [310 210]
+     parent position:absolute, after text  [310 810]   [  0   0]   [310 810]
+     parent position:fixed                 [310 703]   [  0   0]   [310 703]
+     the child has left:0; top:0  CONTROL  [300 400]   [300 400]   [300 400]
+     parent position:relative     CONTROL  [310 610]   [310 610]   [310 610]
+```
+
+**Not "slightly off" — the top-left corner of the page.** The reach is every dropdown, tooltip, badge
+and caret inside a drawer, modal, off-canvas menu or fixed toolbar: anything out-of-flow inside
+something out-of-flow.
+
+`www.wdimax.com` was the corpus's top `reading_order` site and its count had survived three
+Chrome-exact geometry fixes (t1081–t1083). It is a jQuery-`position:fixed` footer whose
+`.line-between{position:absolute;margin-top:15.5px}` separators were each **dy = 755 too high** — the
+footer's own placed y. Same-hour A/B: `reading_order` **12 → 0**, shape 0.966 → 0.976, an M1
+crossing. `rockstaractu.com` +0.8 shape; `news.ycombinator.com` byte-identical; `css-flexbox` 306 /
+`css-grid` 208 / `css-position` 10 / `css-sizing` 54 with pass-SETS diffed, +0/−0.
+
+⚠⚠ **The two controls are the rule's edges** — a child with a real inset never consults the static
+position, and a child of an in-flow parent was never in provisional space. A translation applied
+unconditionally breaks the second.
+
+⚠⚠ **It also retires a debt:** t1119 narrowed its scope *around* a lost reftest,
+`css/css-flexbox/abspos/position-absolute-containing-block-002` — a centred flex container that is
+itself `position:fixed`, i.e. this exact class. Narrowing around a defect rather than by a property
+leaves a scope that is smaller than the rule; re-widening it is now measurable in one run.

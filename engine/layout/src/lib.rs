@@ -8350,6 +8350,25 @@ impl Ctx<'_> {
         // content origin (the box rect is already placed).
         let ox = bx + bl + pl;
         let oy = by + bt + pt;
+        // ⚠⚠⚠ **AND `static_pos` IS THE THIRD OUTPUT OF THAT INNER LAYOUT, IN THE SAME PROVISIONAL
+        // SPACE.** `layout_float` learned this at t2905 and says so in its own comment; this path —
+        // the one that places every `position: absolute` and `position: fixed` box — translated the
+        // boxes and the fragments and left the static positions at the provisional origin. So an
+        // out-of-flow child of an out-of-flow box (insets all `auto`, which is the commonest form:
+        // the box just sits where it would have) was placed relative to (0,0) instead of relative to
+        // its parent's placed origin.
+        //
+        // Measured on `www.wdimax.com`, the corpus's top `reading_order` site and one whose count
+        // three Chrome-exact geometry fixes (t1081-t1083) could not move: a jQuery-fixed footer
+        // (`position:fixed; bottom:0`) whose separators are
+        // `.line-between{position:absolute;margin-top:15.5px}`. The `<a>` siblings are exact; every
+        // separator is **dy = 755 too high** — the footer's own placed y — which is 12 of its 12
+        // reading-order inversions, one container, every in-flow/out-of-flow pair in it.
+        //
+        // It is also why t1119 could not take its widest scope: the reftest it lost,
+        // `css/css-flexbox/abspos/position-absolute-containing-block-002`, is a centred flex
+        // container that is itself `position:fixed`.
+        self.translate_static_positions(node, ox, oy);
         match &mut boxx.content {
             BoxContent::Block(kids) => {
                 for k in kids {
@@ -14313,6 +14332,79 @@ mod tests {
             (w, h),
             (120.0, 288.0),
             "a declared width must survive the stretch (the ratio transfers only into an AUTO axis)"
+        );
+    }
+
+    /// # G_ABS_IN_ABS_STATIC_POS — an out-of-flow box's inner layout has a THIRD output
+    ///
+    /// ⚠⚠⚠ **AN INSETLESS `position:absolute` CHILD OF AN OUT-OF-FLOW PARENT WAS AT THE PAGE'S
+    /// TOP-LEFT CORNER.** `layout_abs` lays its content out at a provisional `(0,0)` and re-origins
+    /// it once the box is placed — it translates the BOXES and the FRAGMENTS. `static_pos` is the
+    /// third output of that same inner layout and was left in provisional space, so a child whose
+    /// insets are all `auto` (the commonest form: the box simply sits where it would have) was
+    /// placed against `(0,0)`.
+    ///
+    /// `layout_float` learned exactly this and says so in its own comment; this is the same rule in
+    /// the path that places every `absolute` and `fixed` box. Chrome-measured through the PRODUCT
+    /// path (`boxes --html`, Stylo), a 20×20 abspos child of a `200×100; padding:10px` parent:
+    ///
+    /// ```text
+    ///                                              Chrome      before      after
+    ///   parent position:absolute                 [310 210]   [  0   0]   [310 210]
+    ///   parent position:absolute, after text     [310 810]   [  0   0]   [310 810]
+    ///   parent position:fixed                    [310 703]   [  0   0]   [310 703]
+    ///   the child has left:0; top:0     CONTROL  [300 400]   [300 400]   [300 400]
+    ///   parent position:relative        CONTROL  [310 610]   [310 610]   [310 610]
+    /// ```
+    ///
+    /// **THE REACH** is every dropdown, tooltip, badge and caret inside a drawer, modal, off-canvas
+    /// menu or fixed toolbar — anything out-of-flow inside something out-of-flow. On
+    /// `www.wdimax.com` (the corpus's top `reading_order` site, and one whose count three
+    /// Chrome-exact geometry fixes at t1081-t1083 could not move) it is a jQuery-fixed footer whose
+    /// `.line-between{position:absolute;margin-top:15.5px}` separators were each **dy = 755 too
+    /// high** — the footer's own placed y. Same-hour A/B: `reading_order` **12 → 0**, shape
+    /// 0.966 → 0.976, the site's whole M1 blocker. `rockstaractu.com` +0.8 shape;
+    /// `news.ycombinator.com` byte-identical.
+    ///
+    /// ⚠⚠ **THE TWO CONTROLS ARE THE RULE'S EDGES.** A child with a REAL inset does not use the
+    /// static position at all and must not move; a child of an IN-FLOW parent was never in
+    /// provisional space and must not move either. A translation applied unconditionally breaks the
+    /// second.
+    ///
+    /// To watch it go RED: delete the `translate_static_positions` call in `layout_abs` — the first
+    /// row returns to `[0 0]`.
+    #[test]
+    fn an_out_of_flow_child_of_an_out_of_flow_box_is_placed_against_its_parents_origin() {
+        let html = r#"<div id="p" class="p"><i id="i"></i></div>"#;
+        let common = ".p{width:200px;height:100px;padding:10px} \
+                      #i{position:absolute;width:20px;height:20px}";
+        let case = |parent: &str, child: &str| {
+            let css = format!("body{{margin:0}} .p{{{parent}}} #i{{{child}}} {common}");
+            let (dom, root) = layout_html(html, &css, 1000.0);
+            let rects = root.node_rects(&dom);
+            let i = rects[&by_id(&dom, "i")];
+            (i.x, i.y)
+        };
+
+        assert_eq!(
+            case("position:absolute;left:300px;top:200px", ""),
+            (310.0, 210.0),
+            "an insetless abspos child sits at its static position INSIDE its abspos parent's \
+             content box (Chrome [310 210]), not at the page origin"
+        );
+
+        // CONTROL: a real inset never consults the static position, so it cannot have moved.
+        assert_eq!(
+            case("position:absolute;left:300px;top:200px", "left:0;top:0"),
+            (300.0, 200.0),
+            "a child with real insets resolves against the padding box and must not move"
+        );
+
+        // CONTROL: an IN-FLOW parent was never laid out at a provisional origin.
+        assert_eq!(
+            case("position:relative;left:300px;top:600px", ""),
+            (310.0, 610.0),
+            "a child of an in-flow parent must not move"
         );
     }
 

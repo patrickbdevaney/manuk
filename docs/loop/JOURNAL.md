@@ -46371,6 +46371,81 @@ PERF: none — one UA rule and one narrowed branch in a cascade that already ran
 WIKI: `docs/wiki/css-cascade.md` — where Chrome draws the form-control `box-sizing` line, and why a
 layout-crate test cannot see it.
 
+## Tick 1124 — an out-of-flow box's inner layout has a THIRD output, and it stayed at (0,0) (2026-08-11)
+
+TICK SHAPE: capability (layout) — the t1121 sweep's §9.2 finding that `reading_order` is now the
+dominant blocker (5 of the top 13 rows are reading-order-only). Took its cleanest row,
+`www.wdimax.com` — coverage 1.000, shape 0.966, twelve inversions and nothing else.
+
+`MANUK_RO_PARTITION` answered the ranking question in one line and it was not the answer the code's
+own t1084 comment expected:
+
+```text
+   RO-PARTITION: 12 inversion(s) = 12 on-screen · 0 zero-area · 0 parked off-screen
+                 · 12 pair an IN-FLOW box with an OUT-OF-FLOW one
+   RO-GROUPS:    1 distinct container · biggest contributes 12 of 12 (a 7-sibling group)
+```
+
+**One container, and the loop has been carrying an open question about whether that partition means
+the INVARIANT over-counts.** It does not. The rects say so:
+
+```text
+   footer/a:4/img     chrome [687 771 8x14]   ours [686 16 8x14]
+   footer/span:1      chrome [517 771 1x14]   ours [237 16 1x14]
+```
+
+⚠⚠⚠ **`layout_abs` LAYS ITS CONTENT OUT AT A PROVISIONAL (0,0) AND RE-ORIGINS THE BOXES AND THE
+FRAGMENTS — AND `static_pos` IS THE THIRD OUTPUT OF THE SAME INNER LAYOUT.** It was left in
+provisional space, so an out-of-flow child whose insets are all `auto` — the commonest form, where
+the box simply sits where it would have — was placed against the PAGE ORIGIN. `layout_float` learned
+exactly this and says so in its own comment (t2905); this is the same rule in the path that places
+every `absolute` and `fixed` box, and it is *one rule, N implementations* with N−1 done.
+
+Chrome-measured through the product path, a 20×20 abspos child of a `200×100; padding:10px` parent:
+
+```text
+                                             Chrome      before      after
+   parent position:absolute                [310 210]   [  0   0]   [310 210]
+   parent position:absolute, after text    [310 810]   [  0   0]   [310 810]
+   parent position:fixed                   [310 703]   [  0   0]   [310 703]
+   the child has left:0; top:0    CONTROL  [300 400]   [300 400]   [300 400]
+   parent position:relative       CONTROL  [310 610]   [310 610]   [310 610]
+```
+
+**Not "slightly off" — the top-left corner of the page.** The reach is every dropdown, tooltip, badge
+and caret inside a drawer, modal, off-canvas menu or fixed toolbar: anything out-of-flow inside
+something out-of-flow. On `wdimax` it is `.line-between{position:absolute;margin-top:15.5px}` inside a
+jQuery-`position:fixed` footer, each separator **dy = 755 too high** — the footer's own placed y.
+
+MEASURED, same hour, both binaries:
+
+```text
+                            OLD (t1122)                     NEW (t1124)
+   www.wdimax.com           reading_order 12, shape 0.966   0 CLEAN, shape 0.976   <- M1 crossing
+   rockstaractu.com         shape 0.897                     shape 0.905  (+0.8, RO still 12)
+   news.ycombinator.com     79.5%, all four clean           byte-identical
+   css-flexbox · css-grid   306 · 208                       306 · 208, pass-SETS +0/−0
+   css-position · sizing    10 · 54                         10 · 54
+```
+
+⚠⚠ **AND IT RETIRES A DEBT FROM TWO TICKS AGO.** t1119 could not take its widest scope because it
+lost `css/css-flexbox/abspos/position-absolute-containing-block-002` — a centred flex container that
+is itself `position:fixed`, i.e. this exact class. The scope was narrowed *around* a defect rather
+than by a property, and the defect has now been named and fixed; re-widening t1119 is a candidate for
+the next tick and is measurable in one run.
+
+RATCHET: held. `manuk-layout` 163/163; four suites' pass-SETS diffed.
+
+GATE: `an_out_of_flow_child_of_an_out_of_flow_box_is_placed_against_its_parents_origin` — three rows,
+two of them controls (a real inset never consults the static position; an in-flow parent was never in
+provisional space, and an unconditional translation breaks the second). RED-proven by deleting the
+call: the first row returns to `[0 0]`.
+
+PERF: one map walk over the abs box's descendants when a static position was written inside it;
+`translate_static_positions` returns immediately when the delta is zero.
+
+WIKI: `docs/wiki/box-layout.md` — "An out-of-flow box's inner layout has a THIRD output".
+
 ## Tick 1123 — the obvious fix for the replaced half moves NOTHING, and the trace says why (2026-08-11)
 
 TICK SHAPE: measurement — t1122's named residue, instrumented rather than guessed at. An `<img>` in a
