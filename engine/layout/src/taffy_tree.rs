@@ -248,9 +248,30 @@ pub fn to_taffy_style(cs: &ComputedStyle, calc: &mut Vec<(f32, f32)>) -> Style {
             top: lp_auto(cs.inset.top, calc),
             bottom: lp_auto(cs.inset.bottom, calc),
         },
+        // ⚠⚠⚠ **A NATURAL SIZE IS NOT A SPECIFIED SIZE.** `manuk_css::fill_natural_size` writes a
+        // decoded bitmap's own pixel size into `width`/`height` and MARKS the axes it filled — the
+        // marks exist because those two are an INTRINSIC size wearing a declared size's type. Handed
+        // to taffy as `Dimension::length` it is a definite main size, so `align-items: stretch` has
+        // nothing to override and an image keeps its natural box: a 480×474 image in a
+        // `height:288px` flex row came out **480×474**, overflowing, against Chrome's **292×288**.
+        //
+        // Dropping the marked axes to `auto` loses nothing: the measure seam still returns the
+        // natural box as the item's CONTENT size, so an auto-height row is unchanged. It only stops
+        // the natural box from outranking the formatting context. ⚠ On its own this changes NOTHING
+        // (measured, t1123) — the measure seam reads the same `Dim::Px` out of the STYLE and hands
+        // taffy the old answer anyway. It is half of a pair; the other half is the ratio transfer in
+        // `layout_flex_or_grid`'s measure closure.
         size: Size {
-            width: dimension(cs.width, calc),
-            height: dimension(cs.height, calc),
+            width: if cs.width_is_natural {
+                auto()
+            } else {
+                dimension(cs.width, calc)
+            },
+            height: if cs.height_is_natural {
+                auto()
+            } else {
+                dimension(cs.height, calc)
+            },
         },
         // ⚠⚠⚠ **A NON-`visible` OVERFLOW ZEROES THE AUTOMATIC MINIMUM SIZE, AND THAT IS THE MOST
         // WIDELY-USED ESCAPE HATCH ON THE FLEX WEB.**

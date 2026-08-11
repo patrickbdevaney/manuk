@@ -8583,7 +8583,11 @@ impl Ctx<'_> {
                 // for the declared-height case.
                 let ratio = self.style_of(dn).aspect_ratio.filter(|r| *r > 0.0);
                 if let (None, Some(kh), Some(r)) = (known.width, known.height, ratio) {
-                    if matches!(self.style_of(dn).width, Dim::Auto) {
+                    // ⚠ `width_is_natural` counts as AUTO here: a decoded bitmap's own pixel width
+                    // is an intrinsic size, not a declared one (see `taffy_tree::style_of`), and a
+                    // stretched cross size outranks it exactly as it outranks `auto`.
+                    let st = self.style_of(dn);
+                    if matches!(st.width, Dim::Auto) || st.width_is_natural {
                         return (
                             taffy::Size {
                                 width: kh * r,
@@ -14430,6 +14434,116 @@ mod tests {
             (310.0, 610.0),
             "a child of an in-flow parent must not move"
         );
+    }
+
+    /// # G_REPLACED_STRETCH — a stretched cross size outranks a NATURAL main size
+    ///
+    /// ⚠⚠⚠ **AN IMAGE IN A FIXED-HEIGHT FLEX ROW KEPT ITS OWN PIXEL SIZE AND OVERFLOWED.** t1122
+    /// landed the transfer for a box whose main size is `auto`; a decoded bitmap's is not `auto` —
+    /// `manuk_css::fill_natural_size` writes its pixel width into `width` as `Dim::Px` and MARKS the
+    /// axis (`width_is_natural`). Handed to taffy as a definite size, `align-items: stretch` (the
+    /// INITIAL value) had nothing to override, so a 480×474 image in a `width:400px; height:288px`
+    /// flex row came out **480×474** against Chrome's **292×288**: stretch the cross to 288, then
+    /// transfer through the ratio into the main axis (CSS Sizing §4, Flexbox §7.2).
+    ///
+    /// ⚠⚠ **THE FIX IS A PAIR AND NEITHER HALF DOES ANYTHING ALONE** — measured, t1123 reverted the
+    /// first half for exactly that reason:
+    ///
+    /// ```text
+    ///   taffy_tree::style_of drops the *_is_natural axes to auto     no change (t1123, reverted)
+    ///   the measure seam transfers a known cross through the ratio   no change for a replaced item
+    ///   BOTH                                                         Chrome-exact
+    /// ```
+    ///
+    /// Because the seam reads `Dim::Px` out of the STYLE, telling taffy `auto` while the callback
+    /// keeps answering 480 changes nothing; and transferring the cross never fires while taffy sees
+    /// a definite main size and therefore never stretches.
+    ///
+    /// Chrome-measured through the PRODUCT path (`boxes --html`, Stylo) on a 480×474 image:
+    ///
+    /// ```text
+    ///                                                    Chrome      before      after
+    ///   height:288px row, align-items default (stretch) [292 288]   [480 474]   [292 288]
+    ///   the same with max-width:100%                    [292 288]   [400 395]   [292 288]
+    ///   align-items:center      + max-width:100% CTRL  [400 395]   [400 395]   [400 395]
+    ///   align-items:flex-start/-end              CTRL  [400 395]   [400 395]   [400 395]
+    ///   the row at height:auto  + max-width:100% CTRL  [400 395]   [400 395]   [400 395]
+    /// ```
+    ///
+    /// `css/css-flexbox` **309 → 310**, +1 and 0 lost (`flex-svg-no-intrinsic-column-001`);
+    /// `css-grid` 211, `css-position` 10, `css-sizing` 54 with pass-SETS diffed.
+    ///
+    /// ⚠ **AND IT DOES NOT CLOSE `hnhbkis.edu.in`, the site that aimed the arc** — measured, same
+    /// hour, byte-identical. That card's media slot is `flex flex-col items-center`, so the item is
+    /// NOT stretched; it wants `fit-content` (min of max-content and the available space), which is
+    /// a third rule. Naming it here so the next reader does not re-derive the site from this fix.
+    ///
+    /// To watch it go RED: restore `dimension(cs.width, calc)` in `taffy_tree::style_of`, or drop
+    /// `|| st.width_is_natural` from the measure seam — either half alone returns `[480 474]`.
+    #[test]
+    fn a_stretched_cross_size_outranks_a_natural_main_size() {
+        let case = |row: &str, img: &str| {
+            let html = format!(r#"<div id="r" style="{row}"><img id="i" style="{img}"></div>"#);
+            let (dom, root) =
+                layout_html_with_natural(&html, "body{margin:0}", 1000.0, "i", 480.0, 474.0);
+            let rects = root.node_rects(&dom);
+            let i = rects[&by_id(&dom, "i")];
+            ((i.width).round(), (i.height).round())
+        };
+        let row = "width:400px;height:288px;display:flex";
+
+        assert_eq!(
+            case(row, ""),
+            (292.0, 288.0),
+            "a stretched replaced item takes the line's cross size and transfers it through the \
+             ratio (Chrome 292x288)"
+        );
+        assert_eq!(
+            case(row, "max-width:100%"),
+            (292.0, 288.0),
+            "the same with max-width:100% (Chrome 292x288)"
+        );
+
+        // CONTROLS: no stretch means no cross size to transfer, and the natural box must survive.
+        for align in ["center", "flex-start", "flex-end"] {
+            assert_eq!(
+                case(&format!("{row};align-items:{align}"), "max-width:100%"),
+                (400.0, 395.0),
+                "align-items:{align} does not stretch, so the item keeps its natural box clamped by \
+                 the row (Chrome 400x395)"
+            );
+        }
+        assert_eq!(
+            case("width:400px;display:flex", "max-width:100%"),
+            (400.0, 395.0),
+            "an auto-height row has no cross size to transfer (Chrome 400x395)"
+        );
+    }
+
+    /// `layout_html` plus a decoded bitmap's natural size on one element — the one thing a
+    /// stylesheet cannot express and the flex/grid stretch rule turns on. `fill_natural_size` is the
+    /// SAME producer the page path uses (`manuk_page::apply_natural_size`), so a test built this way
+    /// exercises the marks (`width_is_natural`) rather than a hand-set width that would be a
+    /// DECLARED size and a different case entirely.
+    fn layout_html_with_natural(
+        html: &str,
+        css: &str,
+        width: f32,
+        img_id: &str,
+        nw: f32,
+        nh: f32,
+    ) -> (Dom, LayoutBox) {
+        let dom = manuk_html::parse(html);
+        let sheets = vec![Stylesheet::parse(css)];
+        let mut styles = MinimalCascade.cascade(&dom, &sheets);
+        let node = dom
+            .descendants(dom.root())
+            .find(|&n| dom.element(n).and_then(|e| e.attr("id")) == Some(img_id))
+            .unwrap_or_else(|| panic!("id={img_id}"));
+        manuk_css::fill_natural_size(styles.get_mut(&node).expect("styled"), nw, nh);
+        let fonts = FontContext::new();
+        let root = layout_document(&dom, &styles, &fonts, width);
+        (dom, root)
     }
 
     fn by_id(dom: &Dom, id: &str) -> NodeId {

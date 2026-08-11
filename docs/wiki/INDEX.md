@@ -444,6 +444,7 @@
   - L8669 · An out-of-flow box's inner layout has a THIRD output, and it stayed at (0,0) (t1124)
   - L8709 · The inset-less exclusion is retired — a scope drawn around a failure is a note to come back (t1125)
   - L8737 · The grid exclusion was one word too wide, and the spec had the discriminator (t1126)
+  - L8771 · A stretched cross size outranks a NATURAL main size, and the fix is a pair (t1130)
 
 ## browser-capabilities.md
 `docs/wiki/browser-capabilities.md`
@@ -1929,4 +1930,4 @@
   - L124 · Rank mechanisms by FLIP RATE, not failing-subtest count — CSS layout is a multi-assertion slog
 
 ---
-1836 sections across 22 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+1837 sections across 22 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.

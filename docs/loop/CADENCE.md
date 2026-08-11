@@ -11,12 +11,12 @@
 
 | | value | over |
 |---|---|---|
-| ticks landed | **837** | ticks 1–1129 |
-| median tick cycle | **28m** | 836 intervals |
-| median, last 10 | **42m** | 10 intervals |
+| ticks landed | **838** | ticks 1–1130 |
+| median tick cycle | **28m** | 837 intervals |
+| median, last 10 | **39m** | 10 intervals |
 | fastest / slowest | 5s / 5.4d | |
-| **ticks per hour** | **1.12** | 743.6h elapsed |
-| median verify wall | **63s** | 776 ticks |
+| **ticks per hour** | **1.12** | 744.2h elapsed |
+| median verify wall | **63s** | 777 ticks |
 | wall trend | 39s → 13m — getting slower ⚠️ | first 3 vs last 3 |
 
 The **cycle** is the real unit: implement → debug → verify wall → land. The wall is only part of
@@ -31,7 +31,7 @@ it, and a wall that grows taxes every future tick, so it is tracked separately f
 * **✅ rows in the capability ledger**: 144 → **562**
 * **Bar 0 — oracle hangs**: 0 of 265 sites
 
-**368 of 837 ticks** (44%) moved a
+**369 of 838 ticks** (44%) moved a
 user-visible capability. The rest were instruments, infrastructure and corrections — and the
 ledger says the corrections were not overhead: three of its top three priorities were phantoms,
 and finding that out redirected everything after it.
@@ -90,7 +90,7 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 
 ## What a capability costs
 
-* **368** capability ticks, median cycle **28m**
+* **369** capability ticks, median cycle **28m**
 * median diff per tick: **+262 / −34** lines across 8 files
 
 ## Every tick
@@ -934,5 +934,6 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 | **1127** | 2026-08-11 04:18 | 86m | measurement | 13m | +350/−32 | 437 | 81 | 56.0% · | the M1 count is flat and the MEMBERSHIP is +2 engine / −2 refuted (2026-08-11) |
 | **1128** | 2026-08-11 04:27 | 9m | measurement | 13m | +192/−34 | 437 | 81 | 56.0% · | the constitution check, and the out-of-flow reading-order class is CLOSED (2026-08-11) |
 | **1129** | 2026-08-11 04:36 | 9m | measurement | 13m | +149/−33 | 437 | 81 | 56.0% · | the map's grammar is NOUNS, and two of this arc's three defect classes are VERBS (2026-08- |
+| **1130** | 2026-08-11 05:13 | 38m | capability | 13m | +280/−37 | 437 | 81 | 56.0% · | the pair t1123 specified, and neither half does anything alone (2026-08-11) |
 
 *`·` after a WPT figure means **carried forward**, not measured this tick.*

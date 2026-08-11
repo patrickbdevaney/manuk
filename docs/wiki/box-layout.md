@@ -8767,3 +8767,44 @@ the spec paragraph after the tests go green.
 RESIDUE: a definite-placement grid child is still a two-box union (`[382 120 32 84]` against Chrome's
 `[390 180 24 24]`). It needs the grid AREA plumbed into `abs_containing_block`, and it is asserted
 nowhere on purpose.
+
+## A stretched cross size outranks a NATURAL main size, and the fix is a pair (t1130)
+
+t1122 landed the aspect-ratio transfer for a box whose main size is `auto`. **A decoded bitmap's is
+not `auto`** — `manuk_css::fill_natural_size` writes its pixel width into `width` as `Dim::Px` and
+marks the axis (`width_is_natural`). Handed to taffy as a definite main size, `align-items: stretch`
+(the INITIAL value) has nothing to override, and an image in a fixed-height flex row keeps its own
+box and overflows.
+
+```text
+   taffy_tree::style_of drops the *_is_natural axes to auto     no change   (t1123, reverted)
+   the measure seam transfers a known cross through the ratio   no change   (t1122, for replaced)
+   BOTH                                                         Chrome-exact
+```
+
+**Neither half does anything alone.** The seam reads `Dim::Px` out of the STYLE, so telling taffy
+`auto` while the callback keeps answering 480 changes nothing; and the transfer never fires while
+taffy sees a definite main size and therefore never stretches. t1123 reverted the first half for
+exactly this reason and was right to — *a change that moves no measured row is untested code* — but
+the honest unit of work turned out to be the pair.
+
+```text
+   a 480x474 image                                 Chrome      before      after
+     height:288px row, align-items default        [292 288]   [480 474]   [292 288]
+     the same with max-width:100%                 [292 288]   [400 395]   [292 288]
+     align-items:center/flex-start/flex-end  CTRL [400 395]   [400 395]   [400 395]
+     the row at height:auto                  CTRL [400 395]   [400 395]   [400 395]
+```
+
+`css/css-flexbox` 309 → 310 (+1, 0 lost); grid/position/sizing unchanged with pass-SETS diffed.
+
+⚠⚠ **It does not close `hnhbkis.edu.in`, the site that aimed the arc** (measured, same hour,
+byte-identical). That card's media slot is `flex flex-col items-center`, so the item is not stretched
+— it wants **fit-content**, the min of its max-content and the available space, which is a third
+rule. Three ticks have aimed at that site and landed three different general fixes without closing
+it: **it is a good pointer and a bad goal.**
+
+⚠ The gate's controls needed a correction worth keeping: the first draft asserted `[400 395]` for the
+`align-items:center` arm *without* `max-width:100%` and it read `[480 474]` — correctly, since
+nothing was clamping it. **A control copied from a battery must copy the battery's whole
+declaration**, or it asserts a number from a different fixture.

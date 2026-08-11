@@ -836,3 +836,4 @@ tick	sha	epoch	iso	delta_s	shape	wall_s	files	added	deleted	gates	claims	wpt_pas
 1127	790347bf	1786436327	2026-08-11T04:18:47-04:00	5130	measurement	808	8	350	32	437	81	3896	6960	0	562	0	the M1 count is flat and the MEMBERSHIP is +2 engine / −2 refuted (2026-08-11)
 1128	b95c75da	1786436864	2026-08-11T04:27:44-04:00	537	measurement	808	6	192	34	437	81	3896	6960	0	562	0	the constitution check, and the out-of-flow reading-order class is CLOSED (2026-08-11)
 1129	ab6af72e	1786437377	2026-08-11T04:36:17-04:00	513	measurement	808	6	149	33	437	81	3896	6960	0	562	0	the map's grammar is NOUNS, and two of this arc's three defect classes are VERBS (2026-08-11)
+1130	d5a80bf2	1786439633	2026-08-11T05:13:53-04:00	2256	capability	808	9	280	37	437	81	3896	6960	0	562	0	the pair t1123 specified, and neither half does anything alone (2026-08-11)

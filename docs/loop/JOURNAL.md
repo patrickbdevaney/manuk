@@ -46371,6 +46371,71 @@ PERF: none — one UA rule and one narrowed branch in a cascade that already ran
 WIKI: `docs/wiki/css-cascade.md` — where Chrome draws the form-control `box-sizing` line, and why a
 layout-crate test cannot see it.
 
+## Tick 1130 — the pair t1123 specified, and neither half does anything alone (2026-08-11)
+
+TICK SHAPE: capability (layout) — t1123 refuted two hypotheses for the replaced half of the
+aspect-ratio transfer and left an option set. This is option (a), and it is the pair.
+
+⚠⚠⚠ **AN IMAGE IN A FIXED-HEIGHT FLEX ROW KEPT ITS OWN PIXEL SIZE AND OVERFLOWED.** t1122 landed the
+transfer for a box whose main size is `auto`. A decoded bitmap's is not `auto`:
+`manuk_css::fill_natural_size` writes its pixel width into `width` as `Dim::Px` and MARKS the axis
+(`width_is_natural`). Handed to taffy as a definite main size, `align-items: stretch` — the INITIAL
+value — has nothing to override.
+
+**And neither half of the fix does anything alone, which is why t1123 reverted the first one:**
+
+```text
+   taffy_tree::style_of drops the *_is_natural axes to auto     no change   (t1123, reverted)
+   the measure seam transfers a known cross through the ratio   no change   (t1122, for replaced)
+   BOTH                                                         Chrome-exact
+```
+
+The seam reads `Dim::Px` out of the STYLE, so telling taffy `auto` while the callback keeps answering
+480 changes nothing; and the transfer never fires while taffy sees a definite main size and therefore
+never stretches. **t1123's lesson stated forward: a fix that only changes what a dependency is TOLD,
+while the callback keeps telling it the old answer, is not a fix — and the converse is also true, so
+the honest unit of work was the pair, not either line.**
+
+Chrome-measured through the product path on a 480×474 image:
+
+```text
+                                                   Chrome      before      after
+   height:288px row, align-items default          [292 288]   [480 474]   [292 288]
+   the same with max-width:100%                   [292 288]   [400 395]   [292 288]
+   align-items:center / flex-start / flex-end CTRL[400 395]   [400 395]   [400 395]
+   the row at height:auto                     CTRL[400 395]   [400 395]   [400 395]
+```
+
+RATCHET: held. `css/css-flexbox` **309 → 310** (+1, `flex-svg-no-intrinsic-column-001`, 0 lost);
+`css-grid` 211, `css-position` 10, `css-sizing` 54 — pass-SETS diffed. `news.ycombinator.com`
+byte-identical, same hour. `manuk-layout` 164/164.
+
+⚠⚠ **AND IT DOES NOT CLOSE `hnhbkis.edu.in`, THE SITE THAT AIMED THE ARC — measured, same hour,
+byte-identical (shape 93.2%, h-overflow still 2).** That card's media slot is
+`flex flex-col items-center`, so the item is NOT stretched: it wants **fit-content** — the min of its
+max-content and the space available — which is a THIRD rule and not a smaller version of this one.
+Three ticks have now aimed at that site and landed three different general fixes without closing it;
+the site is a good pointer and a bad goal, and the next attempt should be aimed at `fit-content`
+directly rather than at the URL.
+
+GATE: `a_stretched_cross_size_outranks_a_natural_main_size`, with a new test helper
+(`layout_html_with_natural`) that applies a natural size through **the same producer the page path
+uses**, `manuk_css::fill_natural_size` — a hand-set `width` would be a DECLARED size and a different
+case. RED-proven TWICE, one mutation per half: restoring `dimension(cs.width)` in
+`taffy_tree::style_of`, or dropping `|| st.width_is_natural` from the measure seam, each returns
+`[480 474]`.
+
+⚠ The controls needed a correction that is worth recording: my first draft asserted `[400 395]` for
+the `align-items:center` arm without `max-width:100%`, and it read `[480 474]` — **correctly**, since
+nothing was clamping it. The battery I took the number from had `max-width:100%` on every image. **A
+control copied from a battery must copy the battery's whole declaration**, or it asserts a number
+from a different fixture.
+
+PERF: none.
+
+WIKI: `docs/wiki/box-layout.md` — "A stretched cross size outranks a NATURAL main size, and the fix
+is a pair".
+
 ## Tick 1129 — the map's grammar is NOUNS, and two of this arc's three defect classes are VERBS (2026-08-11)
 
 TICK SHAPE: measurement — the cadence surface audit (every 10 ticks, last at 1119), banked as audit
