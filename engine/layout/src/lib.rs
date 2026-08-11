@@ -8676,21 +8676,32 @@ impl Ctx<'_> {
     /// `www.marktplaats.nl` that design put the search-form chevron at **x = 500,059**, the centre
     /// of a 1e6 measuring line.
     ///
-    /// ⚠⚠⚠ **THE TWO EXCLUSIONS BELOW ARE MEASUREMENTS, NOT HEDGES** — each was applied, run against
-    /// the four layout suites, and kept because the wider version traded a reftest away:
+    /// ⚠⚠⚠ **THE EXCLUSION BELOW IS A MEASUREMENT, NOT A HEDGE** — every wider scope was applied and
+    /// run against the four layout suites, and the ratchet refuses a trade however good the net:
     ///
     /// ```text
-    ///   scope                                     css-flexbox     css-grid   verdict
-    ///   HEAD                                       304                208
-    ///   every abspos child of flex AND grid        309 (+5 −1)        203 (+6 −3)   4 traded ✗
-    ///   every abspos child of FLEX only            308 (+5 −1)        208           1 traded ✗
-    ///   inset-bearing abspos child of FLEX         306 (+2 −0)        208           TAKEN ✓
+    ///   scope                                     css-flexbox     css-grid    verdict
+    ///   t1119 HEAD                                 304                208
+    ///     every abspos child of flex AND grid      309 (+5 −1)        203 (+6 −3)   4 traded ✗
+    ///     every abspos child of FLEX only          308 (+5 −1)        208           1 traded ✗
+    ///     inset-bearing abspos child of FLEX       306 (+2 −0)        208           taken (t1119)
+    ///   t1124 fixed the class the middle row lost to (an abspos child of a `position:fixed`
+    ///   container: the static position was recorded in the parent's PROVISIONAL space)
+    ///     every abspos child of FLEX only          309 (+3 −0)        208           TAKEN ✓ (t1125)
+    ///     every abspos child of flex AND grid      309 (+3 −0)        211 (+6 −3)   3 traded ✗
     /// ```
     ///
-    /// **GRID is excluded** because Grid §9 gives an abspos child with *definite grid placement* a
-    /// containing block that is its **grid area**, and `abs_containing_block` can only produce the
-    /// container's padding box — so for grid the taffy box is currently the RIGHT one. The grid half
-    /// needs the grid area plumbed into the positioned pass, and that is its own tick.
+    /// ⚠⚠ **THE INSET-LESS EXCLUSION IS RETIRED, AND ITS RETIREMENT IS THE LESSON.** t1119 narrowed
+    /// the scope *around* the single reftest it lost rather than by a property of the rule, which
+    /// left a scope smaller than the rule and a defect alive underneath it. Once t1124 named and
+    /// fixed that defect, three reftests came back for free and the boundary turned out to be
+    /// describing someone else's bug. **A scope drawn around a failure is a note to come back.**
+    ///
+    /// **GRID is still excluded** because Grid §9 gives an abspos child with *definite grid
+    /// placement* a containing block that is its **grid area**, and `abs_containing_block` can only
+    /// produce the container's padding box — so for grid the taffy box is currently the RIGHT one.
+    /// That one IS a property of the rule, and closing it means plumbing the grid area into the
+    /// positioned pass.
     fn placed_static_position_only(
         &self,
         p: &taffy_tree::Placed,
@@ -8699,26 +8710,6 @@ impl Ctx<'_> {
         abs_y: f32,
     ) -> bool {
         if container_is_grid || !self.kid_is_out_of_flow(p.dom) {
-            return false;
-        }
-        // ⚠⚠ **A BOX AT ITS STATIC POSITION ON BOTH AXES KEEPS TAFFY'S SLOT, and that is the second
-        // measured boundary.** With every inset `auto` there is nothing for the padding box to
-        // resolve, so the only question left is the ALIGNMENT — and the slot recorded one line above
-        // is the answer to it. Dropping the box here as well loses
-        // `css/css-flexbox/abspos/position-absolute-containing-block-002` (an `align-items:center;
-        // justify-content:center` container that is itself `position:fixed`, so the flow inside it
-        // runs at a provisional origin and the static position we recorded is in that space, not the
-        // page's — the same untranslated-inner-layout class `translate_static_positions` exists for).
-        //
-        // ⚠ And the static position must NOT be recorded in that case either: `position_absolutes`
-        // drops a box it cannot place, and that drop is what leaves taffy's copy as the only one.
-        // Recording it here "harmlessly" re-admits the second box and costs three more reftests.
-        let s = self.style_of(p.dom);
-        if s.inset.left.is_auto()
-            && s.inset.right.is_auto()
-            && s.inset.top.is_auto()
-            && s.inset.bottom.is_auto()
-        {
             return false;
         }
         self.static_pos.borrow_mut().insert(p.dom, (abs_x, abs_y));

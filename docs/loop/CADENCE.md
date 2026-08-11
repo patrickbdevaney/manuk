@@ -11,12 +11,12 @@
 
 | | value | over |
 |---|---|---|
-| ticks landed | **832** | ticks 1–1124 |
-| median tick cycle | **28m** | 831 intervals |
+| ticks landed | **833** | ticks 1–1125 |
+| median tick cycle | **28m** | 832 intervals |
 | median, last 10 | **51m** | 10 intervals |
 | fastest / slowest | 5s / 5.4d | |
-| **ticks per hour** | **1.12** | 740.6h elapsed |
-| median verify wall | **63s** | 771 ticks |
+| **ticks per hour** | **1.12** | 741.3h elapsed |
+| median verify wall | **63s** | 772 ticks |
 | wall trend | 39s → 13m — getting slower ⚠️ | first 3 vs last 3 |
 
 The **cycle** is the real unit: implement → debug → verify wall → land. The wall is only part of
@@ -31,7 +31,7 @@ it, and a wall that grows taxes every future tick, so it is tracked separately f
 * **✅ rows in the capability ledger**: 144 → **562**
 * **Bar 0 — oracle hangs**: 0 of 265 sites
 
-**366 of 832 ticks** (44%) moved a
+**367 of 833 ticks** (44%) moved a
 user-visible capability. The rest were instruments, infrastructure and corrections — and the
 ledger says the corrections were not overhead: three of its top three priorities were phantoms,
 and finding that out redirected everything after it.
@@ -90,8 +90,8 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 
 ## What a capability costs
 
-* **366** capability ticks, median cycle **28m**
-* median diff per tick: **+264 / −34** lines across 8 files
+* **367** capability ticks, median cycle **28m**
+* median diff per tick: **+263 / −34** lines across 8 files
 
 ## Every tick
 
@@ -929,5 +929,6 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 | **1122** | 2026-08-11 00:09 | 33m | capability | 13m | +230/−33 | 437 | 81 | 56.0% · | an `aspect-ratio` box in a flex row with a definite height was ZERO wide (2026-08-10) |
 | **1123** | 2026-08-11 00:58 | 49m | measurement | 13m | +118/−34 | 437 | 81 | 56.0% · | the obvious fix for the replaced half moves NOTHING, and the trace says why (2026-08-11) |
 | **1124** | 2026-08-11 01:40 | 42m | capability | 13m | +243/−33 | 437 | 81 | 56.0% · | an out-of-flow box's inner layout has a THIRD output, and it stayed at (0,0) (2026-08-11) |
+| **1125** | 2026-08-11 02:21 | 41m | capability | 13m | +158/−65 | 437 | 81 | 56.0% · | a scope drawn around a failure is a note to come back, and this is the coming back (2026-0 |
 
 *`·` after a WPT figure means **carried forward**, not measured this tick.*

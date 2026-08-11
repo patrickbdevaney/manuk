@@ -8705,3 +8705,31 @@ unconditionally breaks the second.
 `css/css-flexbox/abspos/position-absolute-containing-block-002` — a centred flex container that is
 itself `position:fixed`, i.e. this exact class. Narrowing around a defect rather than by a property
 leaves a scope that is smaller than the rule; re-widening it is now measurable in one run.
+
+### The inset-less exclusion is retired — a scope drawn around a failure is a note to come back (t1125)
+
+t1119's rule shipped with two exclusions. GRID is a property of the rule (Grid §9 gives a
+definite-placement abspos child its **grid area** as containing block, which `abs_containing_block`
+cannot express). The other — excluding a child whose insets are all `auto` — was not a property of
+anything: it existed because including it lost exactly one reftest,
+`css/css-flexbox/abspos/position-absolute-containing-block-002`. t1124 found what that test was about
+(a centred flex container that is itself `position:fixed`, whose abspos child's static position was
+recorded in the parent's PROVISIONAL space) and fixed it.
+
+```text
+   scope                                     css-flexbox     css-grid      verdict
+   t1119 HEAD                                 304             208
+     abspos child of flex AND grid            309 (+5 −1)     203 (+6 −3)  4 traded ✗
+     abspos child of FLEX only                308 (+5 −1)     208          1 traded ✗
+     inset-bearing abspos child of FLEX       306 (+2 −0)     208          taken (t1119)
+   ── t1124 fixes the provisional static position ──
+     abspos child of FLEX only                309 (+3 −0)     208          TAKEN ✓ (t1125)
+     abspos child of flex AND grid            309 (+3 −0)     211 (+6 −3)  3 traded ✗
+```
+
+⚠⚠⚠ **A scope narrowed around a FAILING TEST is not a scope — it is a note that something under it is
+broken, written where nobody re-reads it.** It cost two ticks of coverage and hid a defect worth an M1
+crossing on its own. When a candidate scope loses a test, the honest options are *narrow by a PROPERTY
+of the rule* or *go find out why that test fails*; taking the first because the second is expensive is
+fine, but then the boundary needs a NAME and a re-check rather than a number. The grid exclusion has a
+name and still trades 3 today, so it stays.

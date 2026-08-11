@@ -442,6 +442,7 @@
   - L8608 · A known cross size transfers through the aspect ratio, and stretch is how a cross size becomes known (t1122)
   - L8641 · The replaced half: TWO layouts that disagree about what the element is (t1123)
   - L8669 · An out-of-flow box's inner layout has a THIRD output, and it stayed at (0,0) (t1124)
+  - L8709 · The inset-less exclusion is retired — a scope drawn around a failure is a note to come back (t1125)
 
 ## browser-capabilities.md
 `docs/wiki/browser-capabilities.md`
@@ -1927,4 +1928,4 @@
   - L124 · Rank mechanisms by FLIP RATE, not failing-subtest count — CSS layout is a multi-assertion slog
 
 ---
-1834 sections across 22 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+1835 sections across 22 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.

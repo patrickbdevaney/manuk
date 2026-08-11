@@ -831,3 +831,4 @@ tick	sha	epoch	iso	delta_s	shape	wall_s	files	added	deleted	gates	claims	wpt_pas
 1122	1028a8ff	1786421397	2026-08-11T00:09:57-04:00	2005	capability	808	8	230	33	437	81	3896	6960	0	561	0	an `aspect-ratio` box in a flex row with a definite height was ZERO wide (2026-08-10)
 1123	bdbbb174	1786424321	2026-08-11T00:58:41-04:00	2924	measurement	808	6	118	34	437	81	3896	6960	0	561	0	the obvious fix for the replaced half moves NOTHING, and the trace says why (2026-08-11)
 1124	46438a7c	1786426828	2026-08-11T01:40:28-04:00	2507	capability	808	8	243	33	437	81	3896	6960	0	562	0	an out-of-flow box's inner layout has a THIRD output, and it stayed at (0,0) (2026-08-11)
+1125	a2df7cda	1786429305	2026-08-11T02:21:45-04:00	2477	capability	808	8	158	65	437	81	3896	6960	0	562	0	a scope drawn around a failure is a note to come back, and this is the coming back (2026-08-11)

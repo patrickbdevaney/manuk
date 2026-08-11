@@ -46371,6 +46371,78 @@ PERF: none — one UA rule and one narrowed branch in a cascade that already ran
 WIKI: `docs/wiki/css-cascade.md` — where Chrome draws the form-control `box-sizing` line, and why a
 layout-crate test cannot see it.
 
+## Tick 1125 — a scope drawn around a failure is a note to come back, and this is the coming back (2026-08-11)
+
+TICK SHAPE: capability (layout) — t1124's named debt, and the cheapest kind of tick there is: no new
+code, one condition deleted, and the suites decide.
+
+t1119 landed *"an out-of-flow child of a flex container gets ONE box"* with two exclusions. One was a
+property of the rule (GRID gives a definite-placement child its **grid area** as containing block,
+which `abs_containing_block` cannot express). **The other was not a property of anything** — it
+excluded a child whose insets are all `auto`, purely because including it lost exactly one reftest,
+`css/css-flexbox/abspos/position-absolute-containing-block-002`. t1124 then found and fixed what that
+reftest was actually about: a centred flex container that is itself `position:fixed`, whose abspos
+child's static position was recorded in the parent's PROVISIONAL space.
+
+So the boundary was describing someone else's bug. Deleting it now:
+
+```text
+   scope                                     css-flexbox     css-grid      verdict
+   t1119 HEAD                                 304             208
+     abspos child of flex AND grid            309 (+5 −1)     203 (+6 −3)  4 traded ✗
+     abspos child of FLEX only                308 (+5 −1)     208          1 traded ✗
+     inset-bearing abspos child of FLEX       306 (+2 −0)     208          taken (t1119)
+   ── t1124 fixes the provisional static position ──
+     abspos child of FLEX only                309 (+3 −0)     208          TAKEN ✓
+     abspos child of flex AND grid            309 (+3 −0)     211 (+6 −3)  3 traded ✗
+```
+
+**+3 and 0 lost**, recovering `flexbox-abspos-child-001a`, `-001b` and `flexbox-paint-ordering-003`.
+`css-grid` 208, `css-position` 10, `css-sizing` 54, pass-SETS diffed. `manuk-layout` 163/163.
+
+⚠⚠⚠ **THE LESSON IS THE SHAPE OF THE FIRST SCOPE, NOT THE THREE TESTS.** A scope narrowed *around a
+failing test* is not a scope — it is a note that something under it is broken, written in a place
+nobody re-reads. It cost two ticks of coverage and it hid a defect that turned out to be worth an M1
+crossing on its own (t1124's `www.wdimax.com`). **When a candidate scope loses a test, the honest
+options are "narrow by a PROPERTY of the rule" or "go find out why that test fails" — and if you take
+the first because the second is expensive, the boundary needs a name and a re-check, not a number.**
+The grid exclusion has a name (Grid §9, the grid area) and re-running it today still trades 3, so it
+stays; the inset-less one never had one, and it is gone.
+
+RATCHET: held, and it is the reason the wider scope was refused twice before being taken. Re-ran the
+flex-AND-grid arm today too — still `+6 −3` on grid, still refused.
+
+GATE: unchanged — `an_out_of_flow_child_of_a_flex_container_is_placed_once_against_the_padding_box`
+already carries the inset-less row (it asserted the same `[8 24]` before and after, because the two
+copies coincided there; it now exercises the single-box path). RED-proven again by making
+`placed_static_position_only` return `false`: `[966 32]`.
+
+PERF: none — one fewer condition per placed out-of-flow flex child.
+
+WALL-TIME AUDIT (due this tick, last 1105), recorded rather than acted on. Total **1204s**, and the
+distribution is the finding:
+
+```text
+   270s  P   parity 72/72 vs headless Chrome   22%
+    79s  G3  affordance completeness            7%
+    69s  T   crate tests                        6%
+    28s  B   build                              2%
+    ~730s UNATTRIBUTED — the audit's own instrument does not name it
+```
+
+⚠⚠ **THE AUDIT NAMES 39% OF ITS OWN SUBJECT.** Sixty percent of the wall is not in any section it
+prints, which is almost certainly link/codegen (a release `manuk-wpt` relink alone is ~4 minutes on
+this tree, measured six times today). Any optimisation ranked off this table is ranked off a third of
+the number. **Measuring where the other 730s goes outranks trimming the 270s.** The one
+rigor-preserving candidate the table DOES support is P: 72 fixtures each launching a fresh headless
+Chrome, where the assertions are per-fixture but the browser start is not — batching them behind one
+browser buys the same 72 assertions for fewer seconds and each can still fail independently. That is
+a tick in `tests/wpt` (agent territory), not a change to `scripts/`, and it is not this tick.
+`LAST_WALL_AUDIT` → 1125.
+
+WIKI: `docs/wiki/box-layout.md` — the scope table in "An out-of-flow child of a flex container was
+given TWO boxes", updated with the retirement and its lesson.
+
 ## Tick 1124 — an out-of-flow box's inner layout has a THIRD output, and it stayed at (0,0) (2026-08-11)
 
 TICK SHAPE: capability (layout) — the t1121 sweep's §9.2 finding that `reading_order` is now the
