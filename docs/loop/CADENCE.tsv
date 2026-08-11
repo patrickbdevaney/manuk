@@ -844,3 +844,4 @@ tick	sha	epoch	iso	delta_s	shape	wall_s	files	added	deleted	gates	claims	wpt_pas
 1135	7ca6882a	1786460303	2026-08-11T10:58:23-04:00	334	measurement	808	5	196	33	437	81	3896	6960	0	565	0	the band's whole negative mass is the SWEEP, and a shape score has no sample size (2026-08-11)
 1136	95f1a89f	1786463065	2026-08-11T11:44:25-04:00	2762	measurement	808	8	438	77	437	81	3896	6960	0	566	0	the constitution check, and the sweep's error is a BIAS not a lottery (2026-08-11)
 1137	ac79aedd	1786465260	2026-08-11T12:21:00-04:00	2195	capability	808	8	273	46	437	81	3896	6960	0	567	0	a `<br>` is a BREAK, not an inline box on the line it ends (2026-08-11)
+1138	00446012	1786465648	2026-08-11T12:27:28-04:00	388	capability	808	6	168	35	437	81	3896	6960	0	567	0	`line-height: normal` rounds the PARTS, and the old rule was fitted at ONE SIZE (2026-08-11)

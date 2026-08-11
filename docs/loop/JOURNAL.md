@@ -46371,6 +46371,62 @@ PERF: none — one UA rule and one narrowed branch in a cascade that already ran
 WIKI: `docs/wiki/css-cascade.md` — where Chrome draws the form-control `box-sizing` line, and why a
 layout-crate test cannot see it.
 
+## Tick 1139 — the surface audit, and the map HAD both of this window's defects (2026-08-11)
+
+TICK SHAPE: measurement — the cadence audit of the MAP (due every 10 ticks; last at 1129), banked as
+audit #54 in `docs/loop/SURFACE-AUDIT.md`.
+
+⚠⚠⚠ **FINDING 1 — ROW 421 CARRIED t1137's DEFECT, WITH THE EXACT NUMBER, FOR 378 TICKS.**
+
+```text
+   doc   `<br>` line-box height          partial   gate: -
+         "a <div><br></div> is 18px in Chrome and 19px here — 1px per <br>,
+          which accumulates down a document that uses them"          ← TICK 759
+```
+
+That is precisely what t1137's battery re-measured from scratch two ticks ago. The map was **right,
+specific, and inert**. It also **understated the defect by a factor of thirty**: the cause is that a
+`<br>` was an inline BOX on the line it ends, so one carrying `line-height:40px` inflated its line by
+22px — a 1px row describing a 30px rule.
+
+⚠⚠⚠ **FINDING 2 — ROW 301 SAID `gated`, AND THE GATE PINNED THE WRONG RULE.** Its receipt's own
+reasoning is the defect: *"the rule is `round(ascent+descent+lineGap)`, verified on THREE faces
+because round-each-term agrees on two and is wrong on Liberation Sans, the one we ship."*
+Round-each-term is wrong on Liberation Sans **only if the gap term is dropped** — `14 + 3 = 17`, but
+`14 + 3 + round(0.523) = 18`, which is Chrome's answer. All three faces were measured at **16px**, the
+one size where the two rules cannot be told apart, and `G_LINE_BOX_ROUNDING`'s whole fixture is
+`font: 16px sans-serif` with the missing-gap counter-example written into its own RED-proof list.
+**A `gated` row was a FALSE GREEN for 557 ticks, and the gate is what kept it green.**
+
+⚠⚠ **THIS IS THE INVERSE OF AUDIT #53.** #53 found the map's grammar could not NAME two of that
+window's defect classes. This window it could name both, and naming them changed nothing. **No row
+was added this audit** — nothing was missing. The failure mode has moved from *"the frame is missing
+a cell"* to *"the cell exists and says something untrue with confidence."*
+
+THE STEER (full text in audit #54), two consequences, both cheap and both testable:
+
+1. ⚠⚠⚠ **GREP `CONSTELLATION.tsv` BEFORE A CAPABILITY TICK** — three minutes, no build, the same
+   discipline check #105 §4 already imposes on the CORPUS, applied to the MAP. On this window it
+   would have found row 421 and saved 378 ticks. The population it surfaces is **49 `partial` rows,
+   8 of them with no gate at all** — a work-list the loop already owns and has never read as one.
+2. ⚠⚠ **`gated` IS NOT A STATUS, IT IS A CLAIM ABOUT WHAT THE GATE VARIED.** 322 of 562 rows are
+   `gated`, each only as true as the parameter its gate held fixed. t1138's replacement gate carries
+   an explicit `separated >= 10` assertion — *at least ten rows must actively distinguish the two
+   rounding rules* — so narrowing it back toward the agreeing sizes FAILS rather than silently
+   passing. Filed as a proposal for the column, not applied to 322 rows inside an audit.
+
+EDITED (2 rows, none added): 421 `partial` → `gated` on `a_br_does_not_grow_the_line_it_ends`, with
+the 378-tick latency and the corrected magnitude recorded; 301's receipt CORRECTED — the banked t581
+rule was wrong and its own justification says why.
+
+RATCHET: held trivially — nothing landed in `engine/`. MEASURED 525 of 561; `unknown` still 36, none
+resolved this audit.
+
+PERF: none — measurement only.
+
+WIKI: none — this tick's artefact is `docs/loop/SURFACE-AUDIT.md` audit #54, which is the wiki for the
+loop's own map. [no-pattern]
+
 ## Tick 1138 — `line-height: normal` rounds the PARTS, and the old rule was fitted at ONE SIZE (2026-08-11)
 
 TICK SHAPE: capability (text metrics) — t1137's named residue, taken with a 32-row mixed-size battery

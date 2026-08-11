@@ -5563,3 +5563,79 @@ decompose the shaping row**, which is its own tick and is filed here rather than
 sweep log and got 13 lines, then checked what that log actually contains — root causes are printed
 per-site for a handful of sites, not corpus-wide. **A count off an instrument's log is a count of the
 LOG.** The corpus-wide frequency of this class is unmeasured, so the row above is not added.
+
+## Audit #54 — tick 1139 (2026-08-11) — the map HAD both of this window's defects: one unread for 378 ticks, one marked `gated` and WRONG
+
+**Sources, queried this session, not recalled:**
+
+- `docs/loop/CONSTELLATION.tsv`, queried by `awk -F'\t'` for the two subjects ticks 1137–1138 actually
+  fixed, plus a term census (`line-height` 8 rows · `line box` 13 · `rounding` 3 · `strut` 1 ·
+  `half-leading` 2 · `content area` 1 · `font metric` 1 · **`forced break` 0**)
+- `engine/page/tests/g_line_box_rounding.rs` read in full — the gate the map cites, not the claim
+- The t1137 / t1138 batteries (256 rows against live Chrome) and their same-hour pass-SET diffs
+
+### The finding, and it is the INVERSE of audit #53's
+
+#53 found the map's grammar could not NAME two of that window's defect classes. **This window it
+could name both — and naming them changed nothing, because one row was never read and the other was
+a false green.**
+
+```text
+  row 421  doc   `<br>` line-box height          partial   gate: -
+           "a <div><br></div> is 18px in Chrome and 19px here — 1px per <br>,
+            which accumulates down a document that uses them"      ← TICK 759
+
+  row 301  text  line-box height rounding (`line-height: normal`)  gated  G_LINE_BOX_ROUNDING
+           receipt: "the rule is round(ascent+descent+lineGap), verified on THREE faces
+            because round-each-term agrees on two and is wrong on Liberation Sans"  ← TICK 581
+```
+
+⚠⚠⚠ **ROW 421 CARRIED t1137's DEFECT, WITH THE EXACT NUMBER, FOR 378 TICKS.** *"18px in Chrome and
+19px here"* is precisely what the t1137 battery re-measured from scratch. `partial`, gate `-`, and
+nobody read it. The map was **right, specific, and inert.** It also **understated** the defect by a
+factor of thirty: the cause is that a `<br>` was an inline BOX on the line it ends, so a `<br>`
+carrying `line-height:40px` inflated its line by 22px and `font-size:40px` by 30px — a 1px row
+describing a 30px rule.
+
+⚠⚠⚠ **ROW 301 SAID `gated` AND THE GATE PINNED THE WRONG RULE.** The receipt's own reasoning is the
+defect: *"round-each-term … is wrong on Liberation Sans"* is true **only if the gap term is
+dropped** — `14 + 3 = 17`, but `14 + 3 + round(0.523) = 18`, which is Chrome's answer. All three
+faces were measured at **16px**, the one size where the two rules cannot be told apart, and
+`G_LINE_BOX_ROUNDING`'s whole fixture is `font: 16px sans-serif` with the missing-gap counter-example
+written into its RED-proof list. **A `gated` row was a FALSE GREEN for 557 ticks, and the gate was
+what kept it green.**
+
+### The two consequences, both cheap and both testable
+
+**1. GREP THE MAP BEFORE A CAPABILITY TICK.** Three minutes, no build — the discipline check #105 §4
+already imposes on the CORPUS, applied to the MAP. On this window it would have found row 421 and
+saved 378 ticks of not-knowing. The population it would surface is **49 `partial` rows, 8 of them
+with no gate at all** — a work-list the loop already owns and has never read as one.
+
+**2. `gated` IS NOT A STATUS, IT IS A CLAIM ABOUT WHAT THE GATE VARIED.** 322 of 562 rows are
+`gated`, and each is only as true as the parameter its gate held fixed. `G_LINE_BOX_ROUNDING` varied
+the FACE (Liberation / DejaVu / Noto) and fixed the SIZE; the defect lived in the size. t1138's
+replacement gate carries an explicit `separated >= 10` assertion — *at least ten of its rows must
+actively distinguish the two rounding rules* — so narrowing it back toward the agreeing sizes FAILS
+rather than silently passing. **That assertion is the pattern this column needs**, and it is filed
+here as a proposal rather than applied to 322 rows in an audit.
+
+### Edited (2 rows, no new rows)
+
+```text
+   421  partial → gated (`a_br_does_not_grow_the_line_it_ends`); receipt records the 378-tick
+        latency and corrects the magnitude from 1px to 30px
+   301  receipt CORRECTED — the banked t581 rule was wrong and its own justification says why;
+        the new rule and the anti-re-fitting assertion recorded
+```
+
+MEASURED 525 of 561; `unknown` still 36 — none resolved this audit. **No row was added**, which is
+itself the finding: nothing this window was missing from the map.
+
+### What we had been wrong about
+
+Every audit since #31 has treated a `gated` row as settled and spent its attention on `unknown` and
+`missing`. **The two defects this window fixed were both inside the `gated`/`partial` population**,
+and audit #53's own filed debt — *"decompose the shaping row"* — is the same shape a third time: one
+`gated` line over the largest surface in the engine. The map's failure mode has moved from *"the
+frame is missing a cell"* to *"the cell exists and says something untrue with confidence."*
