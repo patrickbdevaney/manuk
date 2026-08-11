@@ -411,3 +411,48 @@ Tailwind `object-cover` reading in the same tick. It is the next engine target.
 of the top thirteen rows are reading-order-only, including three sites whose ONLY defect is 12–22
 reorder pairs at shape ≥ 0.90). That is a different mechanism family from the width/overflow arc the
 last eight ticks worked, and it is where the next *family* sweep should look.
+
+## 10. The t1127 sweep — the count is flat, the MEMBERSHIP is +2 engine / −2 refuted
+
+```text
+   scored 108 of 133 in-scope (82.4%)          t1121: 110 of 132 (84.0%)
+   shape >= 0.75 ...........  42/133  31.6%    (t1121: 33.3%)
+   jarring-clean ...........  52/133  39.1%    (t1121: 40.2%)
+   M1 conjunction ..........  29/133  21.8%    (t1121: 22.0%)
+   COMMON-SET BAND over 106 ... +0.15 pts (10 up · 9 down)
+   corpus gauge ............... 0.4692         (t1121: 0.4738)
+```
+
+**The count says nothing moved. The membership says the opposite, and the membership is the true
+statement** — §8's standing rule (*diff the state, not the net*) applied to the gate itself:
+
+```text
+   GAINED M1   www.wdimax.com          reading_order 12 → 0     t1124 (predicted)
+               www.kuechenmomente.de   reading_order  5 → 0     t1124 (unpredicted, free)
+   LOST M1     app.ordertime.com       cov 1.000 → 0.040 · reason `tree-divergence-31`
+               gismart.com             h_overflow 0 → 6
+```
+
+Both losses are refuted by same-hour controls:
+
+- **`app.ordertime.com` did not lose shape — it stopped RENDERING.** A scorability dropout wearing an
+  M1 loss's clothes; the row's shape is still 1.000 over the 4% of the tree that appeared.
+- **`gismart.com`, 2 binaries × 2 runs:** the OLD binary (the exact tree the t1121 sweep measured)
+  produces h-overflow **5 on one of its own two runs and 0 on the other**, and all four runs read
+  shape **84.0%** against the sweeps' 0.872 / 0.843. The site is flaky; the t1121 row was the lucky
+  run.
+
+⚠⚠⚠ **`probidas.lt` came back `crashed` and was checked FIRST, because Bar 0 outranks every visual
+divergence.** Solo, same hour, both binaries render it at shape 29.9% with no crash. That is the
+**third** site this window where the sweep's own conditions produced a reading neither binary
+produces (§9.1 had two). The rule is now firm: **a `--jobs 2` row is bankable for the DENOMINATOR and
+is not evidence about any single site.** Every per-site delta the sweep flags is a question.
+
+### 10.1 What this says about pricing render work
+
+Four Chrome-exact, RED-proven fixes; `css-flexbox` 304 → 309, `css-grid` 208 → 211, zero regressions;
+two M1 crossings confirmed by an independent full corpus run. **The corpus-level pass count moved by
+zero.** This is the high-usage/low-magnitude case VI.3 and check #72 both named: the gate prices a fix
+by whether it crosses a per-site threshold, and most correct fixes do not cross one on most sites.
+Report *"+N attributable sites, count flat"*, never a percentage — and rank the next tick on the
+membership list, not on the headline.

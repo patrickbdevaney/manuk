@@ -11,12 +11,12 @@
 
 | | value | over |
 |---|---|---|
-| ticks landed | **834** | ticks 1–1126 |
-| median tick cycle | **28m** | 833 intervals |
+| ticks landed | **835** | ticks 1–1127 |
+| median tick cycle | **28m** | 834 intervals |
 | median, last 10 | **45m** | 10 intervals |
 | fastest / slowest | 5s / 5.4d | |
-| **ticks per hour** | **1.12** | 741.8h elapsed |
-| median verify wall | **63s** | 773 ticks |
+| **ticks per hour** | **1.12** | 743.3h elapsed |
+| median verify wall | **63s** | 774 ticks |
 | wall trend | 39s → 13m — getting slower ⚠️ | first 3 vs last 3 |
 
 The **cycle** is the real unit: implement → debug → verify wall → land. The wall is only part of
@@ -31,7 +31,7 @@ it, and a wall that grows taxes every future tick, so it is tracked separately f
 * **✅ rows in the capability ledger**: 144 → **562**
 * **Bar 0 — oracle hangs**: 0 of 265 sites
 
-**368 of 834 ticks** (44%) moved a
+**368 of 835 ticks** (44%) moved a
 user-visible capability. The rest were instruments, infrastructure and corrections — and the
 ledger says the corrections were not overhead: three of its top three priorities were phantoms,
 and finding that out redirected everything after it.
@@ -91,7 +91,7 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 ## What a capability costs
 
 * **368** capability ticks, median cycle **28m**
-* median diff per tick: **+262 / −34** lines across 8 files
+* median diff per tick: **+263 / −34** lines across 8 files
 
 ## Every tick
 
@@ -931,5 +931,6 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 | **1124** | 2026-08-11 01:40 | 42m | capability | 13m | +243/−33 | 437 | 81 | 56.0% · | an out-of-flow box's inner layout has a THIRD output, and it stayed at (0,0) (2026-08-11) |
 | **1125** | 2026-08-11 02:21 | 41m | capability | 13m | +158/−65 | 437 | 81 | 56.0% · | a scope drawn around a failure is a note to come back, and this is the coming back (2026-0 |
 | **1126** | 2026-08-11 02:53 | 32m | capability | 13m | +220/−45 | 437 | 81 | 56.0% · | the grid exclusion was one word too wide, and the spec had the discriminator (2026-08-11) |
+| **1127** | 2026-08-11 04:18 | 86m | measurement | 13m | +350/−32 | 437 | 81 | 56.0% · | the M1 count is flat and the MEMBERSHIP is +2 engine / −2 refuted (2026-08-11) |
 
 *`·` after a WPT figure means **carried forward**, not measured this tick.*

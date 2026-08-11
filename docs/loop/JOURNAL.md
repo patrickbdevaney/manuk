@@ -46371,6 +46371,75 @@ PERF: none — one UA rule and one narrowed branch in a cascade that already ran
 WIKI: `docs/wiki/css-cascade.md` — where Chrome draws the form-control `box-sizing` line, and why a
 layout-crate test cannot see it.
 
+## Tick 1127 — the M1 count is flat and the MEMBERSHIP is +2 engine / −2 refuted (2026-08-11)
+
+TICK SHAPE: measurement — the cadence sweep pricing the four engine fixes landed since t1121 (t1122
+aspect-ratio transfer, t1124 provisional static positions, t1125/t1126 the two scope retirements).
+200-site CrUX trend corpus, release binary, `--jobs 2`, banked at `docs/loop/SWEEP-t1127-rows.tsv`.
+
+```text
+   scored 108 of 133 in-scope (82.4% scorability · 67 excluded)   t1121: 110 of 132
+   shape >= 0.75 ................  42/133  31.6%   (t1121: 33.3%)
+   jarring-clean ................  52/133  39.1%   (t1121: 40.2%)
+   M1 conjunction ...............  29/133  21.8%   (t1121: 22.0%)
+   COMMON-SET BAND over 106 in both ... +0.15 pts (10 up · 9 down)
+   corpus gauge (progress-metric) ..... 0.4692   (t1121: 0.4738)
+```
+
+**Read as a headline that is "M1 flat, gauge down 0.005, four fixes unpriced." Read by MEMBERSHIP it
+is the opposite, and the membership is the true statement.**
+
+⚠⚠⚠ **DIFF THE STATE, NOT THE NET — the M1 count is 24 both times and NOT ONE OF THE FOUR CHANGES IS
+WHAT THE COUNT IMPLIES:**
+
+```text
+   GAINED M1   www.wdimax.com          reading_order 12 → 0    <- t1124, predicted at t1124
+               www.kuechenmomente.de   reading_order  5 → 0    <- t1124, unpredicted
+   LOST M1     app.ordertime.com       cov 1.000 → 0.040, reason `tree-divergence-31`
+               gismart.com             h_overflow 0 → 6
+```
+
+Both gains are t1124's provisional-static-position fix, and `kuechenmomente` was not claimed by it —
+it was simply the next reading-order-only row on §9.2's list and it fell out for free. **Both losses
+are refuted:**
+
+- `app.ordertime.com` did not lose shape; it stopped RENDERING (coverage 1.000 → 0.040, the oracle's
+  own `tree-divergence` reason). It is a scorability dropout wearing an M1 loss's clothes.
+- `gismart.com` h-overflow 0 → 6 is the shape of a real abspos regression, so it got the full
+  protocol — **2 binaries × 2 runs, same hour.** The OLD binary (the exact tree the t1121 sweep
+  measured) produces **h-overflow 5 on one of its own two runs and 0 on the other**, and all four
+  runs read shape **84.0%** against the sweeps' 0.872 and 0.843. The site is flaky and both engines
+  agree; the t1121 row was the lucky run.
+
+**So the engine's contribution this window is +2 M1 sites, and the gate reports zero.** The four
+scorability dropouts are the same story — `tree-divergence`, `http-405`, `timeout-150s`, and
+`crashed`.
+
+⚠⚠⚠ **AND `crashed` GOT CHECKED FIRST, BECAUSE BAR 0 OUTRANKS EVERYTHING.** `probidas.lt` came back
+`crashed` in the sweep, which would be a Bar 0 regression inside my own window. Solo, same hour:
+**both binaries render it, shape 29.9%, no crash, no panic.** Not ours, and not even reproducible —
+the third distinct site this window where the SWEEP's conditions produced a reading neither binary
+produces (t1121 had two). **A `--jobs 2` row is bankable for the denominator and is not evidence
+about one site.**
+
+⚠⚠ **THE STANDING TENSION, restated with this window's numbers.** Four Chrome-exact, RED-proven
+fixes; `css-flexbox` 304 → 309 and `css-grid` 208 → 211 with zero regressions; two named M1 crossings
+that a full corpus run independently confirms. The corpus-level pass count moved by **zero**. That is
+VI.3's high-usage/low-magnitude case again (check #72's finding, still true): the instrument prices a
+fix by whether it crosses a per-site threshold, and most correct fixes do not cross one on most
+sites. The honest report is *"+2 attributable sites, count flat, both losses refuted"* — not a
+percentage.
+
+RATCHET: held, and it was tested. Nothing in `engine/` this tick; the two candidate regressions were
+each attributed to something other than the engine before this entry was written.
+
+GATE: none — the artefacts are `SWEEP-t1127-rows.tsv`, the `FIDELITY-PROGRESS.tsv` row, the M1
+membership diff above, and three same-hour old-binary controls.
+
+PERF: none.
+
+WIKI: `docs/loop/PHASE0-RENDER-BURNDOWN.md` §10 — the t1127 sweep and the membership diff. [no-pattern]
+
 ## Tick 1126 — the grid exclusion was one word too wide, and the spec had the discriminator (2026-08-11)
 
 TICK SHAPE: capability (layout) — t1125's remaining exclusion, re-read against the spec instead of
