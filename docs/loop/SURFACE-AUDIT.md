@@ -5639,3 +5639,73 @@ Every audit since #31 has treated a `gated` row as settled and spent its attenti
 and audit #53's own filed debt — *"decompose the shaping row"* — is the same shape a third time: one
 `gated` line over the largest surface in the engine. The map's failure mode has moved from *"the
 frame is missing a cell"* to *"the cell exists and says something untrue with confidence."*
+
+## Audit #55 — tick 1150 (2026-08-11) — the world's own top-20 list finds NO hole in the map, and one row overclaims on an item that IS on it
+
+### Sources (read this audit, not recalled)
+
+- `github.com/web-platform-tests/interop` → `2026/README.md` — the authoritative Interop 2026 list:
+  **20 focus areas + 4 investigation efforts.**
+- webkit.org/blog/17818, web.dev/blog/interop-2026, hacks.mozilla.org (Launching Interop 2026),
+  igalia.com/news/interop-2026 — the four vendors' own framing.
+- ladybird.org newsletters, Jan–Jul 2026 — an independent engine's curve at this stage.
+
+### The reconciliation: 20 of 20, all with explicit verdicts
+
+Every Interop 2026 focus area already has a row, and none is `unknown`:
+
+```text
+  gated    IndexedDB · Navigation API · scroll snap · view transitions · WebVTT · dialogs+popovers
+  partial  CSS attr() · CSS zoom · media pseudo-classes · fetch uploads+ranges ·
+           cross-document view transitions
+  missing  anchor positioning · custom highlights · JSPI · scoped custom element registries ·
+           scroll-driven animations · CSS shape() · WebRTC · WebTransport · JPEG XL ·
+           container STYLE queries
+```
+
+**No row was added, and that is a real result rather than a shrug**: the loop's frame is not behind
+the world's own priority list, which is the specific failure this instrument exists to catch. It
+also re-confirms the standing scope calls — WebRTC, WebTransport/HTTP-3, JSPI and JPEG XL are all
+Interop 2026 focus areas and all four are *deliberately* on `docs/loop/DECISIONS.md`'s cut line, so
+their `missing` is a decision, not a blind spot.
+
+### ⚠⚠⚠ What we had been wrong about — and it is audit #54's finding, one row over
+
+`container queries (incl. style queries)` was marked **`gated`**, and its backing gate was
+`G_PROBE_CAPABILITIES` — a **presence probe**. Its own receipt contradicts its title:
+
+```text
+   RESIDUE: style()/scroll-state() queries follow size machinery; …
+```
+
+and a second row, `container STYLE queries (@container style(--x: y))`, says `missing`. Confirmed
+against source: `@container` **size** conditions are real (Stylo's `ContainerCondition::matches`
+driven through our `query_container_size`, `stylo_engine.rs:637`); there is **no `style()` support
+anywhere in `engine/`**. So the map carried two rows for one capability with opposite verdicts, and
+the one a reader hits first said `gated`. **Container style queries is focus area #1 of Interop
+2026** — the single item most likely to be looked up in this map this year.
+
+Row 98 retitled to `container SIZE queries (@container (min-width:...)) — style() NOT included, see
+its own row`. Status and receipt unchanged: they were already correct about what was built.
+
+### The debt this names, measured rather than asserted
+
+**Twenty-three rows cite `G_PROBE_CAPABILITIES` as their gate, and eleven of those are marked
+`gated` on it alone** — `WebAssembly`, `WebAssembly GC`, `Temporal`, `Intl`, `CJK line breaking`,
+`field-sizing`, `print / media queries`, `name-only container queries`, and the row corrected above.
+`G_PROBE_CAPABILITIES` answers *"is the symbol present / does it parse"*, not *"does it behave"*, so
+`gated` on it alone is a **stronger verdict than its receipt supports** — the same class audit #54
+named (*"`gated` is not a status, it is a claim about what the gate VARIED"*), now with a count.
+Filed as a work-list, not fixed in an audit: re-verdicting eleven rows is eleven probes.
+
+### The external calibration, and it is the one worth carrying
+
+Ladybird's WPT curve, month by month in 2026: **+63,726 (April) → +8,283 (May) → +3,366 (June) →
++108 (July)** — and the April figure is mostly an *import* (test262 landed upstream, ~52k of the
+63.7k). An independent engine of comparable maturity has a subtest curve that has gone
+**essentially flat inside four months**. That is the strongest outside evidence yet for the pivot
+this loop already made: **a WPT subtest count stops being a progress signal at exactly this stage**,
+which is why the board ranks on corpus fidelity and not on flips. Recorded because it is the kind of
+number that would otherwise be argued about from memory.
+
+MEASURED 525 of 561; `unknown` still 36 — none resolved. Rows added: 0. Rows corrected: 1.

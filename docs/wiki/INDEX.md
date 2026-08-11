@@ -1041,6 +1041,7 @@
   - L1209 · A timeout-150s is a claim about the CLOCK, and it is testable in one command
   - L1224 · A missing-box count is a DESCENDANT count — rank by truncation points, not by tag
   - L1248 · And the deficit does not say which LEG it belongs to
+  - L1266 · MANUK_RO_TRACE — an inversion is reported on the PAIR, and the defect is one box (t1150)
 
 ## FRAMEWORKS — React, Svelte, Next, jQuery: what actually breaks
 `docs/wiki/frameworks.md`
@@ -1970,4 +1971,4 @@
   - L124 · Rank mechanisms by FLIP RATE, not failing-subtest count — CSS layout is a multi-assertion slog
 
 ---
-1877 sections across 22 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+1878 sections across 22 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.

@@ -46371,6 +46371,105 @@ PERF: none — one UA rule and one narrowed branch in a cascade that already ran
 WIKI: `docs/wiki/css-cascade.md` — where Chrome draws the form-control `box-sizing` line, and why a
 layout-crate test cannot see it.
 
+## Tick 1150 — the reading-order exemplar names the PAIR, and the defect is one box (2026-08-11)
+
+TICK SHAPE: capability (instrument) — the board's top steer says work whichever gauge factor is
+lower, and jarring-clean (25.0%) is below shape-only (29.5%). Inside jarring, `reading_order` is now
+the dominant blocker: **five of the burndown §9.2 tier's thirteen rows**, and its top two sites are
+each ONE inversion from an M1 crossing. This tick priced that tier first and then built the
+instrument the next several ticks need.
+
+**THE TIER, RE-PRICED SOLO ON THE t1149 BINARY** (the same-hour control for last tick's fix):
+
+```text
+   www.lyreco.com        shape 0.758   reading_order 1                  <- 1 pair from M1
+   www.jatekshop.eu      shape 0.772   reading_order 1                  <- 1 pair from M1
+   aksesjambi.com        shape 0.902   overlap 1        (was overlap 2) <- t1149 moved it
+   redinfor.com.pe       shape 0.722   h_overflow 3
+   www.freesupertips.com shape 0.786   h-ovf 1 · overlap 1 · order 4
+```
+
+Both leaders partition identically and cleanly: `1 inversion = 1 on-screen · 0 zero-area · 0 parked
+off-screen · 0 in-flow/out-of-flow pairs`, in a **two-sibling group**. Nothing to filter, nothing to
+argue about — two real defects, one box each.
+
+⚠⚠⚠ **AND THERE WAS NO WAY TO SEE WHICH BOX.** The exemplar line prints two sibling PATHS and
+nothing else. This tick spent its first half doing what t1112 proved is unaffordable: re-fetching
+each page, hand-walking `nth-of-type` chains against a `curl` capture, and finding the DOM did not
+even resolve — because `boxes --fetch` renders the live URL and the oracle renders a snapshot, and a
+diff of two frames is not a diff (t830). **That is the same failure t1112 fixed for `h-overflow`,
+one invariant over.** The keys are `/`-separated paths, so the pair's rects and the moved box's
+ancestry are already in hand; nothing read them.
+
+`MANUK_RO_TRACE=1` prints, per inversion: both engines' rects for the pair with `position/display`,
+**which axis carried the swap**, and the ancestor chain of whichever box moved further, marked at
+the first row where it parts from Chrome. Off by default, print-only, and the count is computed
+before it — it can never filter a verdict. **It localised both leaders on the first run:**
+
+```text
+   www.jatekshop.eu — NINE ancestors byte-exact (dx 0 dy 0), then the last element:
+      chrome  div [966 662  91x64] flex     img [906 669 50x50]
+      ours    div [966 655  91x79] flex     img [906 669 50x50]
+      "INLINE in Chrome, BLOCK here - we broke one row into two"
+
+   www.lyreco.com — a right-floated div, and the h3 beside it:
+      chrome  div [886 187 187x63]          h3 [127 205 747x42]
+      ours    div [886 186 187x63]          h3 [127 184 759x84]
+      "BLOCK in Chrome, INLINE here - we collapsed two rows onto one"
+```
+
+**jatekshop is one flex box 15px too tall.** Its height 79 against Chrome's 64 is the entire error:
+the box is vertically centred in a 101px parent, so `644 + (101−64)/2 = 662` and
+`644 + (101−79)/2 = 655` — the 7px displacement is arithmetic, not a second defect. At 662 the div
+and the 50px image at 669 share a row and read left-to-right; at 655 they no longer do, and the
+order flips on the block axis.
+
+**lyreco is an `<h3>` that is 12px WIDER and TWICE AS TALL** (759×84 against 747×42 — four wrapped
+lines where Chrome takes two) beside a right-floated button, and it starts at its parent's top edge
+where Chrome puts it 18px down. Wider and taller at once is the signature of a text-metric or
+float-shortening error rather than a placement one, which is a different tick from jatekshop's.
+
+⚠ **THE AXIS LABEL IS THE POINT, NOT A DECORATION.** `order()` is vertical-first, so an inversion
+where the boxes swapped ROWS is a block-flow defect and one where they share a row is an
+inline/float/direction defect. Those are not the same tick, and the exemplar could not tell them
+apart — which is why `reading_order` has been ranked as one number for three sweeps while being at
+least two mechanisms.
+
+SURFACE AUDIT (due this tick — every 10, last 1139), banked as audit #55. ⚠⚠⚠ **THE WORLD'S OWN
+TOP-20 LIST FINDS NO HOLE IN THE MAP, AND ONE ROW OVERCLAIMS ON AN ITEM THAT IS ON IT.** All **20**
+Interop 2026 focus areas already have `CONSTELLATION.tsv` rows with explicit verdicts — zero
+`unknown`, zero added — and four of the ten `missing` (WebRTC · WebTransport/HTTP-3 · JSPI · JPEG XL)
+are on `DECISIONS.md`'s cut line, so their absence is a decision rather than a blind spot. The
+finding is audit #54's, one row over: `container queries (incl. style queries)` was marked **`gated`
+on `G_PROBE_CAPABILITIES`** — a PRESENCE probe — while its own receipt says
+*"RESIDUE: style()/scroll-state() queries follow size machinery"* and a second row says `missing`.
+Confirmed from source: `@container` SIZE conditions are real (`stylo_engine.rs:637`), and there is
+no `style()` support anywhere in `engine/`. **Container style queries is focus area #1 of Interop
+2026** — the row most likely to be read this year — and it read `gated`. Retitled; status and
+receipt were already honest. ⚠⚠ The debt it names, counted: **23 rows cite `G_PROBE_CAPABILITIES`
+and 11 are `gated` on it alone** (WebAssembly, WebAssembly GC, Temporal, Intl, CJK line breaking,
+field-sizing, print/media queries, …) — a verdict stronger than the receipt supports, filed as a
+work-list rather than re-verdicted inside an audit. ⚠ External calibration worth carrying:
+**Ladybird's monthly WPT gain in 2026 ran +63,726 → +8,283 → +3,366 → +108**, and April's figure is
+mostly the test262 *import* (~52k of 63.7k). An independent engine's subtest curve goes flat inside
+four months at this maturity — the strongest outside evidence yet for ranking on corpus fidelity
+rather than flips. `LAST_SURFACE_AUDIT` → 1150.
+
+RATCHET: held. `engine/` untouched — the change is `tests/wpt/src/oracle.rs`, which the board names
+agent territory, and it is print-only behind an env var. `manuk-wpt` lib tests green, and the
+invariant's own gate (`jarring_reading_order_blames_only_orders_chrome_disagrees_with`) is unmoved
+because the count is computed before the trace and is not filtered by it.
+
+GATE: none, deliberately — the addition changes no verdict, and asserting an `eprintln!` is the
+vacuous gate this project has a standing rule against. The falsifiable content is the two
+localisations above: each is a prediction that ONE named box is the whole inversion, which the next
+tick tests.
+
+PERF: none — the accumulator is `Vec::new()` and never pushed to unless the env var is set.
+
+WIKI: `docs/wiki/fidelity-instrument.md` — "`MANUK_RO_TRACE` — an inversion is reported on the PAIR,
+and the defect is one box" [no-pattern]
+
 ## Tick 1149 — a nested flex container answered MAX-CONTENT where the spec says FIT-CONTENT (2026-08-11)
 
 TICK SHAPE: capability (layout). HYPOTHESIS, written before the build: the burndown §9.2 names

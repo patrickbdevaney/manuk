@@ -988,6 +988,8 @@ pub fn jarring_reading_order(
     // number are untouched, so no re-baseline is owed.
     let mut bad_groups: Vec<(usize, usize)> = Vec::new(); // (inversions, siblings) per parent
     let mut examples: Vec<String> = Vec::new();
+    let trace_on = std::env::var("MANUK_RO_TRACE").is_ok();
+    let mut traced: Vec<(String, String, i8, i8)> = Vec::new();
     for (_, ids) in groups {
         if ids.len() < 2 {
             continue;
@@ -1058,6 +1060,9 @@ pub fn jarring_reading_order(
                         };
                         examples.push(format!("{lo} ⇄ {hi}"));
                     }
+                    if trace_on && traced.len() < RO_TRACE_MAX {
+                        traced.push((ids[i].to_string(), ids[j].to_string(), co, mo));
+                    }
                 }
             }
         }
@@ -1080,7 +1085,145 @@ pub fn jarring_reading_order(
             biggest.1
         );
     }
+    if trace_on {
+        ro_trace(chrome, manuk, &traced, tol);
+    }
     (count, skipped, examples)
+}
+
+/// How many inverted pairs [`ro_trace`] prints. Four, for the same reason `MANUK_HOVF_TRACE` prints
+/// four: the point is to name a MECHANISM, and a fifth instance of the same one is noise.
+const RO_TRACE_MAX: usize = 4;
+
+/// **`MANUK_RO_TRACE=1` — WHICH BOX MOVED, ON WHICH AXIS, AND WHERE THE TWO ENGINES PART.**
+///
+/// The reading-order exemplar names two sibling paths and **nothing else**, which is exactly the
+/// shape t1112 fixed for `h-overflow`: *an inversion is reported on the PAIR, and the defect is one
+/// of the two boxes being somewhere else.* At t1150 `reading_order` is the burndown tier's dominant
+/// blocker — five of its thirteen jarring-blocked rows — and its top two sites (`www.lyreco.com`
+/// shape 0.758, `www.jatekshop.eu` 0.771) are each **one on-screen inversion in a two-sibling
+/// group** away from an M1 crossing. A tick spent on either starts by rebuilding this walk by hand
+/// against a DIFFERENT frame (`boxes --fetch` renders the live URL; the oracle renders a `curl`
+/// capture), which is the diff-of-two-frames trap t830 paid for and t1150 re-paid before writing
+/// this.
+///
+/// So: both engines' rects for the pair, **which axis carries the swap**, and the ancestor chain of
+/// the box that moved, down to the first row where it parts from Chrome. Off by default,
+/// print-only, and the count is computed before it — it can never filter a verdict.
+fn ro_trace<K: std::fmt::Display + Eq + std::hash::Hash>(
+    chrome: &HashMap<K, Seen>,
+    manuk: &HashMap<K, Seen>,
+    traced: &[(String, String, i8, i8)],
+    tol: i64,
+) {
+    let find = |m: &HashMap<K, Seen>, want: &str| -> Option<Seen> {
+        m.iter()
+            .find(|(k, _)| k.to_string() == want)
+            .map(|(_, v)| v.clone())
+    };
+    let leaf = |p: &str| p.rsplit('/').next().unwrap_or(p).to_string();
+    for (a, b, co, mo) in traced {
+        let (Some(ca), Some(cb), Some(ma), Some(mb)) = (
+            find(chrome, a),
+            find(chrome, b),
+            find(manuk, a),
+            find(manuk, b),
+        ) else {
+            continue;
+        };
+        let parent = a.rfind('/').map(|c| &a[..c]).unwrap_or(a);
+        eprintln!("  RO-TRACE {parent}");
+        let one = |s: &Seen| {
+            format!(
+                "[{} {} {} {}] {}{}",
+                s.rect[0],
+                s.rect[1],
+                s.rect[2],
+                s.rect[3],
+                if s.position.is_empty() {
+                    "?"
+                } else {
+                    &s.position
+                },
+                if s.display.is_empty() {
+                    String::new()
+                } else {
+                    format!("/{}", s.display)
+                }
+            )
+        };
+        eprintln!(
+            "      chrome  {} {}   {} {}",
+            leaf(a),
+            one(&ca),
+            leaf(b),
+            one(&cb)
+        );
+        eprintln!(
+            "      ours    {} {}   {} {}",
+            leaf(a),
+            one(&ma),
+            leaf(b),
+            one(&mb)
+        );
+        // ⚠ **WHICH AXIS DECIDED IT IS THE WHOLE DIAGNOSIS.** `order()` is vertical-first, so a pair
+        // that reads differently because the boxes swapped ROWS is a block-flow defect, and one that
+        // reads differently while sharing a row is an inline / float / direction defect. Those are
+        // not the same tick, and the exemplar line cannot tell them apart.
+        let vertical =
+            |p: &Seen, q: &Seen| p.rect[1] + tol < q.rect[1] || q.rect[1] + tol < p.rect[1];
+        let axis = match (vertical(&ca, &cb), vertical(&ma, &mb)) {
+            (true, true) => "BLOCK axis in both engines - the two boxes swapped ROWS",
+            (true, false) => "BLOCK in Chrome, INLINE here - we collapsed two rows onto one",
+            (false, true) => "INLINE in Chrome, BLOCK here - we broke one row into two",
+            (false, false) => "INLINE axis in both engines - the two boxes swapped COLUMNS",
+        };
+        eprintln!(
+            "      chrome reads {} first, we read {} first  ({axis})",
+            if *co < 0 { leaf(a) } else { leaf(b) },
+            if *mo < 0 { leaf(a) } else { leaf(b) },
+        );
+        // The moved box is the one whose delta is larger; walk ITS ancestry, exactly as HOVF-TRACE
+        // does, because a box lands in the wrong row because of something ABOVE it.
+        let d = |c: &Seen, m: &Seen| (m.rect[0] - c.rect[0]).abs() + (m.rect[1] - c.rect[1]).abs();
+        let moved: &str = if d(&ca, &ma) >= d(&cb, &mb) { a } else { b };
+        let mut cuts: Vec<usize> = moved
+            .char_indices()
+            .filter(|(_, c)| *c == '/')
+            .map(|(i, _)| i)
+            .collect();
+        cuts.push(moved.len());
+        let mut prev: Option<(i64, i64)> = None;
+        for cut in cuts {
+            let anc = &moved[..cut];
+            let (Some(c), Some(m)) = (find(chrome, anc), find(manuk, anc)) else {
+                continue;
+            };
+            let (dx, dy) = (m.rect[0] - c.rect[0], m.rect[1] - c.rect[1]);
+            let mark = if prev.is_none_or(|(px, py)| (dx - px).abs() > tol || (dy - py).abs() > tol)
+                && (dx.abs() > tol || dy.abs() > tol)
+            {
+                "  <-- FIRST DIVERGENCE"
+            } else {
+                ""
+            };
+            eprintln!(
+                "        chrome [{} {} {} {}]  ours [{} {} {} {}]  dx {dx:+} dy {dy:+}{mark}  {}",
+                c.rect[0],
+                c.rect[1],
+                c.rect[2],
+                c.rect[3],
+                m.rect[0],
+                m.rect[1],
+                m.rect[2],
+                m.rect[3],
+                leaf(anc)
+            );
+            if dx.abs() > tol || dy.abs() > tol {
+                prev = Some((dx, dy));
+            }
+        }
+    }
 }
 
 /// The interactive tags a user is expected to be able to click, tab to, or type into. A control

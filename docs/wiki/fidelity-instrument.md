@@ -1262,3 +1262,45 @@ content bug at #1.
 ⚠ Corpus-wide rankings must come from the banked ROWS, not the log: the sweep log prints `e.g.` lines
 for **5** sites and a root-cause section for **2**, while its cluster lines claim up to `14 site(s)`.
 Re-derive from `(1 − coverage) × n/coverage` over `SWEEP-t<N>-rows.tsv`.
+
+## `MANUK_RO_TRACE` — an inversion is reported on the PAIR, and the defect is one box (t1150)
+
+`jarring_reading_order` counts sibling pairs the two engines order differently. Its exemplar line
+prints **two paths and nothing else**, so every tick aimed at the invariant began by re-fetching the
+page and hand-walking `nth-of-type` chains — against a *different frame*, because `boxes --fetch`
+renders the live URL while the oracle renders a `curl` snapshot. A diff of two frames is not a diff
+(t830), and on a CMS-driven page the hand-walk does not even resolve.
+
+Everything the next question needs is already in the map: the keys are `/`-separated paths, so the
+pair's rects, their `position`/`display`, and the whole ancestor chain are one lookup away.
+`MANUK_RO_TRACE=1` prints them:
+
+```text
+  RO-TRACE <parent path>
+      chrome  <A> [x y wxh] pos/disp   <B> [x y wxh] pos/disp
+      ours    <A> [x y wxh]            <B> [x y wxh]
+      chrome reads <A> first, we read <B> first   (<which axis carried the swap>)
+        chrome [...]  ours [...]  dx +0 dy +0   <ancestor>
+        ...                                     <-- FIRST DIVERGENCE
+```
+
+**The axis label is the diagnosis, not decoration.** `order()` is vertical-first, so:
+
+| axis line | what it means | which subsystem |
+|---|---|---|
+| BLOCK in both | the two boxes swapped rows | block flow / box heights |
+| BLOCK in Chrome, INLINE here | we collapsed two rows onto one | a box is too short, or a break was lost |
+| INLINE in Chrome, BLOCK here | we broke one row into two | a box is too tall, or a float/wrap fired |
+| INLINE in both | the boxes swapped columns | inline direction, float side, order |
+
+`reading_order` had been ranked as one number for three sweeps while being **at least two
+mechanisms**, and nothing in the output could separate them.
+
+Same design as `MANUK_HOVF_TRACE` (t1112) and for the same reason: off by default, print-only, the
+count computed *before* it, so it cannot filter a verdict. The pair to walk is chosen by whichever
+box moved further from Chrome — a box lands in the wrong row because of something above it, and the
+chain marks the first row where that starts.
+
+⚠ Read it with `MANUK_RO_PARTITION=1`, which answers a different question: *how many of these
+inversions involve a zero-area box, a box parked off-screen left, or an in-flow/out-of-flow pair* —
+i.e. whether the count is an engine target at all before you spend a tick on which box moved.
