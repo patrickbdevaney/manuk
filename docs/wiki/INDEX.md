@@ -1028,6 +1028,10 @@
   - L1041 · The reason was two columns to the left of the number everyone was reading
   - L1054 · It is not one site — it is every headline mover in the diff
   - L1074 · The mechanism, because a lesson is not a mechanism
+  - L1108 · The --jobs 2 sweep reads ~4 points LOW on shape, and a shape score carries no sample size (t1135)
+  - L1115 · Seven "regressions" with byte-identical node counts
+  - L1141 · A shape score has no sample size attached
+  - L1162 · Correcting only the losses is the trap
 
 ## FRAMEWORKS — React, Svelte, Next, jQuery: what actually breaks
 `docs/wiki/frameworks.md`
@@ -1943,4 +1947,4 @@
   - L124 · Rank mechanisms by FLIP RATE, not failing-subtest count — CSS layout is a multi-assertion slog
 
 ---
-1850 sections across 22 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+1854 sections across 22 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.

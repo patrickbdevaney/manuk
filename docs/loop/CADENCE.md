@@ -15,7 +15,7 @@
 | median tick cycle | **28m** | 841 intervals |
 | median, last 10 | **39m** | 10 intervals |
 | fastest / slowest | 5s / 5.4d | |
-| **ticks per hour** | **1.12** | 748.2h elapsed |
+| **ticks per hour** | **1.12** | 749.8h elapsed |
 | median verify wall | **63s** | 781 ticks |
 | wall trend | 39s → 13m — getting slower ⚠️ | first 3 vs last 3 |
 
@@ -938,6 +938,6 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 | **1131** | 2026-08-11 06:27 | 73m | capability | 13m | +502/−85 | 437 | 81 | 56.0% · | an atomic inline IS a line box, and the bare ones were invisible to the search (2026-08-11 |
 | **1132** | 2026-08-11 07:36 | 69m | capability | 13m | +299/−38 | 437 | 81 | 56.0% · | `line-height: 0` is a VALUE, and only the strut arm treated it as an absence (2026-08-11) |
 | **1133** | 2026-08-11 07:55 | 19m | measurement | 13m | +165/−33 | 437 | 81 | 56.0% · | the orphan `table-cell` is a RUN, not a box, and the narrow fix is a trade (2026-08-11) |
-| **1134** | 2026-08-11 09:13 | 78m | capability | 13m | +727/−50 | 437 | 81 | 56.0% · | the run is generated, and the GATE above the handler made the first version a NO-OP (2026- |
+| **1134** | 2026-08-11 10:52 | 2.9h | capability | 13m | +399/−33 | 437 | 81 | 56.0% · | the run is generated, and the GATE above the handler made the first version a NO-OP (2026- |
 
 *`·` after a WPT figure means **carried forward**, not measured this tick.*

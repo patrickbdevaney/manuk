@@ -46371,6 +46371,103 @@ PERF: none — one UA rule and one narrowed branch in a cascade that already ran
 WIKI: `docs/wiki/css-cascade.md` — where Chrome draws the form-control `box-sizing` line, and why a
 layout-crate test cannot see it.
 
+## Tick 1135 — the band's whole negative mass is the SWEEP, and a shape score has no sample size (2026-08-11)
+
+TICK SHAPE: measurement — the cadence sweep pricing the seven ticks since t1127 (t1128-t1134).
+200-site CrUX trend corpus, release binary, `--jobs 2`, banked at `docs/loop/SWEEP-t1135-rows.tsv`.
+
+```text
+   scored 110 of 132 in-scope (83.3% scorability · 68 excluded)   t1127: 108 of 133
+   shape >= 0.75 ................  42/132  31.8%   (t1127: 31.6%)
+   jarring-clean ................  52/132  39.4%   (t1127: 39.1%)
+   M1 conjunction ...............  29/132  22.0%   (t1127: 21.8%)
+   corpus gauge (progress-metric)     0.4678   (t1127: 0.4692)
+   COMMON-SET BAND ............... -0.24 pts (6 up · 13 down >2pt)
+```
+
+Read as a headline that is *"seven ticks, gauge down, band negative."* **Every part of the negative
+half is the instrument, and the two things it is are both new.**
+
+⚠⚠⚠ **SEVEN OF THE DOWN-MOVERS HAVE BYTE-IDENTICAL NODE COUNTS, AND BOTH BINARIES AGREE ON ALL OF
+THEM.** `gismart 281->281`, `bhfudbal 684->684`, `crazyshop 1405->1405`, `puentedemando 1132->1132`,
+`kuechenmomente 894->894` — the same node count before and after is what says the page did not
+change. Re-run SOLO on the same binary, and against the OLD binary (the t1133 tree), same hour:
+
+```text
+                          t1127swp  t1135swp   SOLO new   SOLO old
+   gismart.com              0.843     0.797      0.840      0.840
+   bhfudbal.ba              0.596     0.551      0.595      0.595
+   www.crazyshop.pl         0.658     0.618      0.655      0.658
+   www.puentedemando.com    0.822     0.792      0.759      0.757
+   developers.google.com    0.583     0.547      0.547      0.547   <- real SITE drift
+```
+
+**The two binaries agree to three decimals on every row**, so not one loss is attributable to the
+engine — and the SOLO column recovers the t1127 value on three of them. **The `--jobs 2` sweep reads
+~4 points LOW on shape against a solo run of the same binary**, in the same direction on every site
+at once, which is the shape of a systematic bias and not of noise. t771 banked that `--jobs 8` costs
+hard sites their SCORABILITY; this says `--jobs 2` has a quieter SHAPE cost as well. **A `--jobs 2`
+row stays bankable for the DENOMINATOR and is NOT comparable to a solo number** — the burndown's
+per-site values and any solo re-measure live on different scales, and this loop has been diffing
+across them.
+
+⚠⚠⚠ **A SHAPE SCORE CARRIES NO SAMPLE SIZE, AND 14 OF THE 121 COMMON ROWS ARE SCORED ON <=10
+NODES.** Twelve of them are FROZEN — identical shape, identical `n`, delta exactly `0.000`, sweep
+after sweep:
+
+```text
+   house.udn.com          n=1     shape 0.000    frozen
+   allticketscol.com      n=1     shape 1.000    frozen  <- a full shape-PASS on ONE node
+   dashboard.twitch.tv    n=2     shape 0.500    frozen
+   booking.directferries  n=2     shape 0.500    frozen
+   merchant.upi9.pro      n 47->2 shape 0.915 -> 0.500   <- 1 of 2, worth -0.415 in the band
+```
+
+`0.500` is not a fallback constant — it is **1/2, from a sample of TWO**. `merchant.upi9.pro` served
+a shell on the sweep's request, its sample fell 47 nodes -> 2, and the coin-flip was banked with the
+same authority as a 1724-node row: one row moving the common-set mean by 0.0035. Solo, the same
+binary returns **0.914894, byte-identical to t1127**. And `allticketscol.com` at `1.000` on ONE node
+counts in the M1 numerator. **The gate weights SITES and the instrument weights NODES, and nothing
+reconciles the two.**
+
+⚠⚠ **AND CORRECTING ONLY THE LOSSES IS THE TRAP I ALMOST TOOK.** Removing the two refuted losses
+flips the common-set mean from **-0.0024 to +0.0031**. Removing the small-`n` GAIN in the same breath
+(`experiencia.pichincha` +0.357 at n 7->4) puts it back to **-0.0002**. *Apply the solo-rerun rule to
+the numbers you like* (t1048-1052). The honest statement is that the band is FLAT.
+
+⚠⚠⚠ **TWO REAL GAINS, BOTH ATTRIBUTED BY A SAME-HOUR OLD-BINARY CONTROL — and the mean cannot see
+either:**
+
+```text
+   sports.yahoo.com   cov 0.273 -> 0.998   shape 0.000 -> 0.885    <- t1134
+        old binary: 0.000 / `tree-divergence` on THREE runs across 6h (t1127 sweep + solo now)
+        new binary: 0.885 (sweep) and 0.889 (solo)
+   serennu.com        cov 1.000 both       shape 0.393 -> 0.574    <- t1128-t1132, NOT t1134
+        the t1133-tree binary returns 0.573770, byte-identical to the new one
+```
+
+`sports.yahoo.com` is one of the board's own named jarring sites (`sports.yahoo O=13`). It does not
+cross M1 — `reading_order` is 10, so it is not jarring-clean — but it went from unscorable-thin to a
+0.998-coverage 0.885-shape page. ⚠ **THE MECHANISM IS NOT ESTABLISHED**, and it is named rather than
+assumed: the attribution is by BINARY (two binaries, same hour, opposite results, each reproduced),
+not by a traced code path. The external stylesheets were not read, so the claim *"t1134's anonymous
+tables fixed it"* is a hypothesis; what is measured is *"t1134's tree does, t1133's tree does not."*
+
+⚠ `meuconsultordigital.com.br` looked like a -0.353 collapse on one solo run. Full protocol — 2
+binaries x 2 runs — says the site is TWO-VALUED (0.3277 / 0.3573, coverage byte-identical 0.975258 and
+n=473 in all four) and **the NEW binary produces BOTH values**. A binary cannot have regressed to a
+value it also produces.
+
+RATCHET: measurement only; nothing landed in `engine/`. Scorability 82.4% -> 83.3%, M1 21.8% -> 22.0%,
+shape 31.6% -> 31.8% — all three up, all three inside the pass-count noise the ledger states.
+
+GATE: none — this tick's artefact is the sweep row file and the refutations.
+
+PERF: none.
+
+WIKI: `docs/wiki/fidelity-instrument.md` — "The `--jobs 2` sweep reads ~4 points LOW on shape, and a
+shape score carries no sample size" [no-pattern]
+
 ## Tick 1134 — the run is generated, and the GATE above the handler made the first version a NO-OP (2026-08-11)
 
 TICK SHAPE: capability (layout) — t1133's spec built: CSS 2.1 §17.2.1 anonymous TABLE generation

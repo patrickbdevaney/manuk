@@ -1104,3 +1104,64 @@ instrument test flips `oldprobe` to `Comparable`.
 ⚠ A **latent tie** was found while gating it, the t853 shape again: two sites with equal deltas came
 out of a `HashMap`, so the report's row order depended on hash iteration and the test passed alone
 and failed in the suite. The sort now breaks ties on the site name.
+
+## The `--jobs 2` sweep reads ~4 points LOW on shape, and a shape score carries no sample size (t1135)
+
+The cadence sweep pricing t1128–t1134 came back **flat with a negative band**: corpus gauge
+0.4692 → 0.4678, common-set mean Δshape −0.0026 over 107 rows, 14 down >2pt against 6 up. Read as a
+headline that is *"seven fixes, no movement, and a slight loss."* Every part of the negative half is
+the instrument.
+
+### Seven "regressions" with byte-identical node counts
+
+The down-movers are not small pages: `gismart 281→281`, `bhfudbal 684→684`, `crazyshop 1405→1405`,
+`puentedemando 1132→1132`, `kuechenmomente 894→894` — the **same node count before and after**, which
+is what says the page did not change. Re-run SOLO on the same binary, and against the OLD binary
+(the t1133 tree), all in the same hour:
+
+```text
+                          t1127swp  t1135swp   SOLO new   SOLO old
+   gismart.com              0.843     0.797      0.840      0.840
+   bhfudbal.ba              0.596     0.551      0.595      0.595
+   www.crazyshop.pl         0.658     0.618      0.655      0.658
+   www.puentedemando.com    0.822     0.792      0.759      0.757
+   developers.google.com    0.583     0.547      0.547      0.547   <- real SITE drift
+```
+
+**The two binaries agree to three decimals on every row**, so not one loss is attributable to the
+engine — and the solo column recovers the t1127 value on three of them. The sweep's own concurrency
+is depressing shape by ~4 points. t771 banked that `--jobs 8` costs hard sites their SCORABILITY to
+wall-clock timeout and that `--jobs 2` is bankable; this says `--jobs 2` has a **shape** cost too,
+smaller and quieter, and it lands in the same direction on every site at once — which is exactly the
+shape of a systematic bias rather than noise.
+
+**A `--jobs 2` row is bankable for the DENOMINATOR and is not comparable to a solo number.** The
+burndown's per-site values and any solo re-measure live on different scales.
+
+### A shape score has no sample size attached
+
+14 of the 121 rows scored in both sweeps are computed over **≤10 nodes**, and 12 of them are frozen:
+identical shape, identical `n`, Δ exactly `0.000`, sweep after sweep.
+
+```text
+   house.udn.com          n=1     shape 0.000    frozen
+   allticketscol.com      n=1     shape 1.000    frozen  <- a full shape-PASS on ONE node
+   dashboard.twitch.tv    n=2     shape 0.500    frozen
+   booking.directferries  n=2     shape 0.500    frozen
+   merchant.upi9.pro      n 47->2 shape 0.915 -> 0.500   <- 1 of 2, worth -0.415 in the band
+```
+
+`0.500` is not a fallback constant; it is **1/2, from a sample of two**. `merchant.upi9.pro` served a
+shell on the sweep's request, its sample fell from 47 nodes to 2, and the resulting coin-flip was
+banked with the same authority as a 1724-node row — a single row moving the whole common-set mean by
+0.0035. Solo, the same binary returns **0.914894, byte-identical to t1127**.
+
+And `allticketscol.com` at `1.000` on one node counts as a shape-pass in the M1 numerator. The gate
+weights sites, and the instrument weights nodes; nothing reconciles the two.
+
+### Correcting only the losses is the trap
+
+Removing the two refuted losses flips the mean from −0.0024 to +0.0031. Removing the small-`n`
+**gain** in the same breath (`experiencia.pichincha` +0.357 at n 7→4) puts it back to −0.0002.
+*Apply the solo-rerun rule to the numbers you like.* The honest statement is that the band is FLAT
+and that the window's real movement is two sites the mean cannot see.

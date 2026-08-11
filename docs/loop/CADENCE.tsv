@@ -840,4 +840,4 @@ tick	sha	epoch	iso	delta_s	shape	wall_s	files	added	deleted	gates	claims	wpt_pas
 1131	22068f97	1786444033	2026-08-11T06:27:13-04:00	4400	capability	808	8	502	85	437	81	3896	6960	0	563	0	an atomic inline IS a line box, and the bare ones were invisible to the search (2026-08-11)
 1132	1815747b	1786448189	2026-08-11T07:36:29-04:00	4156	capability	808	8	299	38	437	81	3896	6960	0	564	0	`line-height: 0` is a VALUE, and only the strut arm treated it as an absence (2026-08-11)
 1133	2a5072bf	1786449350	2026-08-11T07:55:50-04:00	1161	measurement	808	7	165	33	437	81	3896	6960	0	564	0	the orphan `table-cell` is a RUN, not a box, and the narrow fix is a trade (2026-08-11)
-1134	4ecdd72d	1786454011	2026-08-11T09:13:31-04:00	4661	capability	808	9	727	50	437	81	3896	6960	0	565	0	the run is generated, and the GATE above the handler made the first version a NO-OP (2026-08-11)
+1134	4837e1b7	1786459969	2026-08-11T10:52:49-04:00	10619	capability	808	9	399	33	437	81	3896	6960	0	565	0	the run is generated, and the GATE above the handler made the first version a NO-OP (2026-08-11)
