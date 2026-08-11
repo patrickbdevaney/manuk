@@ -35,6 +35,14 @@ fn file_url(path: &str) -> String {
     format!("file://{}", abs.display())
 }
 
+/// **THE STRING BOTH ENGINES MEASURE TO IDENTIFY THE USED FACE.** Fixed, ASCII, and deliberately
+/// mixed-width — a face difference has to show up as a different advance, and a string of one glyph
+/// class (all-`M`, all-digits) hides the tabular/monospaced cases where two faces agree on one
+/// width and on nothing else. It is measured in the ELEMENT'S OWN resolved font on each side, so
+/// the number attributes a metric divergence to a FACE without needing to name one — which is the
+/// channel `getComputedStyle` does not have and `canvas.measureText` does.
+const FACE_PROBE: &str = "Hamburgefonstiv 0123";
+
 fn main() {
     run();
     // SpiderMonkey's atexit handler segfaults if the process exits with a live JSContext —
@@ -1118,6 +1126,10 @@ fn run_fidelity_cmd(args: &[String], fonts: &FontContext) {
                     // both sides only carry what actually painted (SHAPE scores the intersection anyway).
                     let mut mseen: std::collections::HashMap<String, manuk_wpt::oracle::Seen> =
                         std::collections::HashMap::new();
+                    // (family stack, bold, italic, size bits) -> the probe string's advance. See the
+                    // `font` block below: one measure per distinct font on the page.
+                    let mut advcache: std::collections::HashMap<(String, bool, bool, u32), i64> =
+                        std::collections::HashMap::new();
                     for n in dom.descendants(dom.root()) {
                         if !dom.is_element(n) {
                             continue;
@@ -1172,6 +1184,20 @@ fn run_fidelity_cmd(args: &[String], fonts: &FontContext) {
                             // metric difference to a FACE needs a channel Chromium does not expose;
                             // pretending otherwise is what made the field misleading rather than merely
                             // limited.
+                            // ⚠⚠⚠ **AND THE THIRD TERM IS THE USED FACE, MEASURED.** The comment
+                            // above is right that no DOM API NAMES the face — and wrong that this
+                            // makes attribution impossible, which is the claim that left t563's
+                            // question open for 588 ticks. `canvas.measureText` on the other side
+                            // and `FontContext::measure` on this one both return the ADVANCE the
+                            // face actually used produces for one fixed probe string, in the
+                            // element's own resolved font. That does not name the face; it measures
+                            // it, and a metric divergence is exactly what needed attributing.
+                            //
+                            // The key is built the way `layout::text_style` builds it, not
+                            // approximated — the same `resolve_family`, the same 600 weight
+                            // threshold — so this number is the one the LAYOUT used, not a second
+                            // opinion about it. Cached per key: the probe is fixed, so it costs one
+                            // measure per distinct font on the page, not one per element.
                             let font = styles
                                 .get(&n)
                                 .map(|st| {
@@ -1180,12 +1206,35 @@ fn run_fidelity_cmd(args: &[String], fonts: &FontContext) {
                                         .first()
                                         .map(|f| f.trim().trim_matches(['"', '\'']).to_string())
                                         .unwrap_or_else(|| "?".to_string());
-                                    format!("{fam}/{}", st.font_size.round() as i64)
+                                    let px = st.font_size.round() as i64;
+                                    let bold = st.font_weight >= 600;
+                                    let ckey = (
+                                        st.font_family.join(","),
+                                        bold,
+                                        st.italic,
+                                        st.font_size.to_bits(),
+                                    );
+                                    let adv = match advcache.get(&ckey) {
+                                        Some(&a) => a,
+                                        None => {
+                                            let key = manuk_text::FontKey {
+                                                family: fonts.resolve_family(&st.font_family),
+                                                bold,
+                                                italic: st.italic,
+                                            };
+                                            let a = fonts
+                                                .measure(FACE_PROBE, key, st.font_size)
+                                                .round()
+                                                as i64;
+                                            advcache.insert(ckey, a);
+                                            a
+                                        }
+                                    };
+                                    format!("{fam}/{px}/{adv}")
                                 })
-                                .unwrap_or_default();
-                            // The computed `position`, in CSS's own spelling, so the two engines'
-                            // strings compare directly. See `Seen::position` for why the field
-                            // exists: a metric that could not be TESTED without it.
+                                .unwrap_or_default(); // The computed `position`, in CSS's own spelling, so the two engines'
+                                                      // strings compare directly. See `Seen::position` for why the field
+                                                      // exists: a metric that could not be TESTED without it.
                             let position = styles
                                 .get(&n)
                                 .map(|st| match st.position {

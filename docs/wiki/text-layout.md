@@ -3660,3 +3660,39 @@ Refuted while looking for the cause, so nobody re-derives them — all three Chr
 
 So before spending a tick on a wider-and-taller box: the layout is probably right. Ask which face
 actually rasterized it, and note that today nothing in the pipeline can answer that.
+
+### Measure the face, do not name it — `canvas.measureText` is the channel `getComputedStyle` lacks (t1153)
+
+The section above ends at *"nothing in the pipeline can answer which face rasterized this box."* It
+can now, and the fix is not a new API — it is asking a different question. **`getComputedStyle`
+cannot report the used face's NAME**, which is true and was recorded in `Seen.font`'s own comment for
+588 ticks. **It does not follow that the face cannot be MEASURED**: set `ctx.font` on a canvas from
+the element's own computed style and `measureText` returns the advance the *used* face produces.
+
+Both probes now emit `{family/px/ADVANCE}` for one fixed mixed-width ASCII string
+(`Hamburgefonstiv 0123`), measured in each element's own resolved font — Chrome's via canvas, ours
+via `FontContext::measure` with a `FontKey` built exactly as `layout::text_style` builds it, so the
+number is the one the layout used rather than a second opinion. Cached per distinct font, so it is
+one measure per face, not per element. A rejected canvas font string leaves `ctx.font` unchanged, so
+a sentinel round-trip reports `0` (absence) instead of the previous element's number.
+
+First reading, and it re-ranks a leg of the burndown:
+
+```text
+                          declared          CHROME   OURS    ours is
+  kuechenmomente.de       Raleway/18          166     240     +45%
+  jatekshop.eu            fira_sansbook/14    129     140     +8.5%
+  lyreco.com              Lyreco Renner/18    174     184     +5.7%
+  ───────────────────────────────────────────────────────────────────
+  kuechenmomente.de       -apple-system/10    102     102      0      <- CONTROL
+```
+
+**The control is the half that makes it a measurement.** `-apple-system` is unresolvable in both
+engines on Linux, both fall back alike, and the advance matches to the pixel — so the probe is
+comparable and the divergences above are real. Where the family is a **webfont**, Chrome has the
+face and we do not, every text box is that much wider, prose re-wraps, the line count changes, and
+the error arrives downstream as `dy` — scored as *shape*.
+
+⚠ Adding this moves `instrument_tag()` (it hashes the probes' own text), so rows banked after it
+cannot be silently diffed against older ones. Designed behaviour: a step change in the instrument is
+not an error bar on the subject.

@@ -174,6 +174,24 @@ function pathOf(e){var p=[];while(e&&e.nodeType===1&&e.parentElement){var t=e.ta
 function capture(){var out={};
 var all=document.querySelectorAll('*');
 var lim=Math.min(all.length,6000);
+// ⚠⚠⚠ THE USED FACE, MEASURED RATHER THAN NAMED. `getComputedStyle` cannot report which face
+// actually rasterized a box, and the field below used to say so and stop — which left the one
+// question it was built for (t563: "is [74x16] vs [76x18] a different FACE or a different rule?")
+// unanswerable, and t1151 found three sites where our box is WIDER *and* TALLER, a combination that
+// cannot be a placement error, while this column printed {Raleway/18} against {Raleway/18}. Canvas
+// IS the channel: `measureText` in the element's own resolved font returns the advance the USED
+// face produces. It does not name the face; it measures it, which is what attribution needs.
+// Cached per font string — the probe is fixed, so this is one measureText per distinct font, not
+// per element. A rejected font string leaves `ctx.font` unchanged, so the sentinel round-trip
+// reports 0 (ABSENCE) rather than the previous element's number.
+var __fcx=document.createElement('canvas').getContext('2d');var __fmc={};
+var __FPROBE='Hamburgefonstiv 0123';var __FSENT='7px monospace';
+function __adv(cs){
+  var f=(cs.fontStyle||'normal')+' '+(cs.fontWeight||'400')+' '+cs.fontSize+' '+cs.fontFamily;
+  if(__fmc[f]!==undefined)return __fmc[f];
+  __fcx.font=__FSENT; __fcx.font=f;
+  var w=(__fcx.font===__FSENT&&f!==__FSENT)?0:Math.round(__fcx.measureText(__FPROBE).width);
+  __fmc[f]=w; return w;}
 for(var k=0;k<lim;k++){var e=all[k];var t=e.tagName.toLowerCase();
   if(t==='script'||t==='style'||t==='head'||t==='meta'||t==='link'||t==='base'||t==='title'||t==='noscript'||t==='template'||t==='html')continue;
   if(e.id==='__PARITY__')continue;         // the probe must not measure its own sentinel
@@ -185,7 +203,7 @@ for(var k=0;k<lim;k++){var e=all[k];var t=e.tagName.toLowerCase();
   // exactly that — `[74x16] vs [76x18]` is unattributable without it (t563).
   var fam0=(cs0.fontFamily||'').split(',')[0].trim().replace(/^["']|["']$/g,'');
   var px0=Math.round(parseFloat(cs0.fontSize)||0);
-  out[pathOf(e)]=[t,cs0.display,Math.round(r.x+window.scrollX),Math.round(r.y+window.scrollY),Math.round(r.width),Math.round(r.height),fam0+'/'+px0,cs0.position];}
+  out[pathOf(e)]=[t,cs0.display,Math.round(r.x+window.scrollX),Math.round(r.y+window.scrollY),Math.round(r.width),Math.round(r.height),fam0+'/'+px0+'/'+__adv(cs0),cs0.position];}
 emit(out);}"#,
     probe_defer_tail!()
 );

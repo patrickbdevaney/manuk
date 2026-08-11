@@ -46371,6 +46371,79 @@ PERF: none — one UA rule and one narrowed branch in a cascade that already ran
 WIKI: `docs/wiki/css-cascade.md` — where Chrome draws the form-control `box-sizing` line, and why a
 layout-crate test cannot see it.
 
+## Tick 1153 — the faces DIFFER, and an unknown share of "shape" was a font that never loaded (2026-08-11)
+
+TICK SHAPE: capability (instrument) — check #109's steer §1, verbatim: *"report the USED face on both
+sides and re-read the three sites; same faces ⇒ a shaping-metric arc, different faces ⇒ a whole
+cohort currently ranked as N layout bugs is ONE provisioning or font-loading bug."* Built, run,
+answered.
+
+⚠⚠⚠ **THE ANSWER IS: DIFFERENT FACES, ON ALL THREE SITES, AND THE CONTROL AGREES EXACTLY.**
+
+```text
+                            declared          CHROME    OURS     ours is
+   www.kuechenmomente.de    Raleway/18          166      240      +45%
+   www.jatekshop.eu         fira_sansbook/14    129      140      +8.5%
+   www.lyreco.com           Lyreco Renner/18    174      184      +5.7%
+   ————————————————————————————————————————————————————————————————————
+   www.kuechenmomente.de    -apple-system/10    102      102       0     <- CONTROL
+```
+
+The control row is what makes this a measurement rather than an assertion: `-apple-system` is
+unresolvable in **both** engines on Linux, both fall back to the same local stack, and the advance
+matches to the pixel. Where the declared family is a **webfont**, ours is 5.7–45% wider. **Chrome
+loads those faces and we do not** — and every text box on those pages is consequently that much
+wide, which re-wraps prose, changes the line count, and cascades down the subtree as `dy`. It has
+been scored as `shape` for hundreds of ticks.
+
+⚠⚠⚠ **AND THE CHANNEL WAS SAID NOT TO EXIST, IN A COMMENT, FOR 588 TICKS.** `Seen.font`'s own
+doc-comment reads: *"`getComputedStyle` cannot report the face actually used, and no DOM API can …
+Attributing a metric difference to a FACE needs a channel Chromium does not expose."* Both halves of
+that are true about the face's **NAME** and false about its **METRICS**: `canvas.measureText`, with
+`ctx.font` set from the element's own computed style, returns the advance the used face actually
+produces. It does not name the face — **it measures it, which is what attribution needs.** t563 added
+the field to answer *"is `[74x16]` vs `[76x18]` a different FACE or a different rule?"* and the
+comment correctly recorded that it could not, then stopped one step short of the instrument that
+can.
+
+**WHAT LANDED.** Both probes now emit `{family/px/ADVANCE}`, where the advance is one fixed
+mixed-width ASCII string (`Hamburgefonstiv 0123`) measured **in the element's own resolved font**:
+Chrome's via a canvas, ours via `FontContext::measure` with a `FontKey` built exactly as
+`layout::text_style` builds it — the same `resolve_family`, the same 600 weight threshold — so the
+number is the one the LAYOUT used, not a second opinion about it. Cached per distinct font on each
+side, so it costs one measure per face, not one per element. A rejected canvas font string leaves
+`ctx.font` unchanged, so a sentinel round-trip reports **0 = absence** rather than the previous
+element's number.
+
+⚠ **THE INSTRUMENT TAG MOVES, AND THAT IS CORRECT.** `instrument_tag()` hashes the probes' own text,
+so every row banked from here carries a new generation and cannot be silently diffed against an
+older one. That is the mechanism working as designed (t674: *a step change in the instrument is not
+an error bar on the subject*), and it is the price of the reading.
+
+**WHAT THIS RE-RANKS, stated as a consequence rather than a number.** The burndown's shape leg has
+been ranked as layout math. On this evidence an unknown — and on `kuechenmomente` a dominant — share
+of it is a **font that never arrived**, and the three sites this was measured on were each picked
+for a different reason (a reading-order inversion, a coverage deficit, a near-bar shape row), which
+is the closest thing to a random sample the window produced. **The next tick is WHY**: three
+independent webfont mechanisms were already refuted Chrome-exact in t1151 (the bulletproof `src`
+list, parent-relative `url(../…)`, the fallback path), so the remaining candidates are the *delivery*
+of the face on the oracle's frame — a cross-origin sheet (`fonts.googleapis.com` for Raleway), a
+fetch that races the render deadline, or a format we decline. Each is testable against this number:
+**the advance is now the acceptance test**, and it goes to 166 or it did not work.
+
+RATCHET: held. `engine/` untouched — both probes are in `tests/wpt/`, which the board names agent
+territory. `manuk-wpt` 102/102.
+
+GATE: none new. The addition is a measurement channel, not a verdict, and the number it produces is
+the RED-proof for the tick that follows: `kuechenmomente`'s `Raleway/18` advance must move from 240
+to Chrome's 166.
+
+PERF: one `measureText` per distinct font per page on Chrome's side and one `FontContext::measure`
+on ours — both cached, both bounded by the number of distinct faces on a page (single digits).
+
+WIKI: `docs/wiki/text-layout.md` — "Measure the face, do not name it: `canvas.measureText` is the
+channel `getComputedStyle` does not have"
+
 ## Tick 1152 — the self-audit and the constitution check, and one of eight ticks moved the gate (2026-08-11)
 
 TICK SHAPE: measurement — both cadence instruments came due together (self-audit every 10, last
