@@ -11,12 +11,12 @@
 
 | | value | over |
 |---|---|---|
-| ticks landed | **857** | ticks 1–1150 |
-| median tick cycle | **28m** | 856 intervals |
+| ticks landed | **858** | ticks 1–1151 |
+| median tick cycle | **28m** | 857 intervals |
 | median, last 10 | **31m** | 10 intervals |
 | fastest / slowest | 5s / 5.4d | |
-| **ticks per hour** | **1.13** | 757.7h elapsed |
-| median verify wall | **63s** | 796 ticks |
+| **ticks per hour** | **1.13** | 757.8h elapsed |
+| median verify wall | **63s** | 797 ticks |
 | wall trend | 39s → 13m — getting slower ⚠️ | first 3 vs last 3 |
 
 The **cycle** is the real unit: implement → debug → verify wall → land. The wall is only part of
@@ -31,7 +31,7 @@ it, and a wall that grows taxes every future tick, so it is tracked separately f
 * **✅ rows in the capability ledger**: 144 → **571**
 * **Bar 0 — oracle hangs**: 0 of 265 sites
 
-**379 of 857 ticks** (44%) moved a
+**379 of 858 ticks** (44%) moved a
 user-visible capability. The rest were instruments, infrastructure and corrections — and the
 ledger says the corrections were not overhead: three of its top three priorities were phantoms,
 and finding that out redirected everything after it.
@@ -91,7 +91,7 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 ## What a capability costs
 
 * **379** capability ticks, median cycle **28m**
-* median diff per tick: **+265 / −34** lines across 8 files
+* median diff per tick: **+264 / −34** lines across 8 files
 
 ## Every tick
 
@@ -954,5 +954,6 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 | **1148** | 2026-08-11 18:13 | 73m | measurement | 13m | +439/−40 | 437 | 81 | 56.0% · | a MISSING-BOX count is a DESCENDANT count, and the top site is a CONTENT bug (2026-08-11) |
 | **1149** | 2026-08-11 18:39 | 27m | capability | 13m | +391/−35 | 437 | 81 | 56.0% · | a nested flex container answered MAX-CONTENT where the spec says FIT-CONTENT (2026-08-11) |
 | **1150** | 2026-08-11 18:46 | 6m | capability | 13m | +145/−33 | 437 | 81 | 56.0% · | the reading-order exemplar names the PAIR, and the defect is one box (2026-08-11) |
+| **1151** | 2026-08-11 18:50 | 5m | measurement | 13m | +203/−34 | 437 | 81 | 56.0% · | the box was right and the FACE was wrong, and the instrument cannot see a face (2026-08-11 |
 
 *`·` after a WPT figure means **carried forward**, not measured this tick.*

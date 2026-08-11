@@ -7503,6 +7503,107 @@ test for the arc**, which is one sweep.
    three minutes, no build), so the suite ranks *where to look* and the corpus decides *whether to
    go*. That single step is what would have caught `::first-letter` as the thin one it was.
 
+## Check #109 — tick 1152 (2026-08-11)
+
+**HORIZON: H0.** **GATE:** M1 v1 RENDER — `shape >= 0.75` on `>= 95%` of the in-scope corpus, then M2
+FUNCTION, then M3 v2 RE-CERT (`phase0-milestones.sh`, owner-locked). Steering gauge:
+`progress-metric.sh`, work whichever of scorability / pass-rate is lower.
+
+### 1 · GATE OR SCOREBOARD — one of eight, and the one is real
+
+```text
+   t1144  constitution check          scoreboard (governance)
+   t1145  the sweep                   scoreboard (measurement)
+   t1146  CI RED five ticks + layout  GATE (a gate that asserted a FONT, repaired)
+   t1147  the named next tick REFUSED scoreboard — and the refusal was correct
+   t1148  MISSING_BOX probe           scoreboard
+   t1149  nested flex fit-content     **GATE** — hnhbkis.edu.in h-overflow 2 -> 0, shape .932 -> .957
+   t1150  RO trace + surface audit    scoreboard (instrument) — but it LOCALISED two more gate rows
+   t1151  the FACE finding            scoreboard — and it retired a whole hypothesis class
+```
+
+**One of eight moved an exit-gate condition, and five of the other seven were instrument or
+refusal.** That ratio would be alarming under check #95's reading; it is not, and the reason is worth
+stating because it will recur: **three of those five ended by NAMING a gate row with its address**
+(t1148's truncation-point rule, t1150's two localisations, t1151's face discriminator), and t1149 —
+the one gate tick — was landed *from* t1112's trace, an instrument tick eight ticks earlier. The
+loop's own evidence is that an instrument tick pays for the gate tick that follows it. What would be
+alarming is an instrument tick that names nothing, and none of these did.
+
+### 2 · I2 — THE FIRST TIME THE LOOP HAS WRAPPED A DEPENDENCY'S *ANSWER*, AND IT IS NOT A PATCH
+
+t1149's `TaffyDom::fit_content_inline` clamps taffy's `ComputeSize` result for a flex/grid container
+to the fit-content formula. I2 says the sanctioned FFI set is *"adopted, tracked upstream, and never
+forked or patched"* — and this is neither: the taffy source is untouched, the crates.io dependency is
+unpinned, and the correction lives in our own `impl` of taffy's trait. It is exactly option 3 of
+`STATUS.md`'s escalation table (*a hand-rolled supplement for the specific gap*), and it satisfies
+that table's four conditions: named and minimal (one axis, one run-mode), justified by the spec
+rather than by taste (CSS Flexbox §9.4 / Sizing §5.2, with taffy's own `compute/flexbox.rs:955-981`
+cited), guarded by a gate that fails if a bump reverts it, and recorded. **The fork surface is still
+empty and must stay that way** — ⚠ the distinction to hold is that wrapping an ANSWER is sanctioned
+and editing an ALGORITHM is not, and the second is only one refactor away from the first.
+
+### 3 · I3 — SATISFIED BY ACCIDENT OF SCOPE FOR THE FOURTH CONSECUTIVE CHECK
+
+Checks #72, #100 and #104 each recorded that I3 held because `LayoutBox::node_rects` is a shared
+producer, not because anyone checked. t1149 moves element geometry and flows through the same
+producer, so the agent's click points moved with the boxes for free — a fourth time. **The debt
+#104 named is still unwritten** (`node_rects`'s `lift` giving an icon-wrapping `<span>` the icon's
+4px box). Four checks is no longer an observation; the next tick that touches the producer itself
+is where this stops being free, and that tick is now overdue rather than pending.
+
+### 4 · I4 / VI.3 — THE NORTH STAR GOT AN INDEPENDENT EXTERNAL CONFIRMATION
+
+VI.3 demoted `WPT:TOTAL` from a north star to a bookkeeping mark on this loop's own evidence (tick
+84's encoding spike). Surface audit #55 found the same conclusion reached from outside:
+**Ladybird's monthly WPT gain across 2026 ran +63,726 -> +8,283 -> +3,366 -> +108**, and April's
+figure is mostly the *import* of test262 upstream (~52k of the 63.7k). An independent engine of
+comparable maturity has a subtest curve that goes essentially flat inside four months. ⚠ Two things
+follow, and neither is "we were right": first, **a flat subtest curve is what this stage LOOKS like
+in a healthy engine**, so the loop must not read its own flat `WPT:TOTAL` as a stall; second, the
+corollary — an engine at this stage that is still *posting large WPT gains* is probably importing a
+suite, not shipping capability. Recorded in VI.3's terms because it is the kind of number that gets
+argued about from memory.
+
+**And VI.3's fifth inflation mode has a sixth sibling, from t1151: a hypothesis priced by ITS
+FREQUENCY ON THE WEB rather than by whether it is BROKEN HERE.** The "bulletproof" `@font-face`
+idiom (a bare `.eot` `src`, then a second `src` with the real `format()` list) is on a large share of
+the legacy web and was an excellent-sounding cause for three wider-than-Chrome sites. It is
+Chrome-exact in this engine, as is parent-relative `url(../…)` resolution against the sheet's base,
+as is the fallback path. **Three green mutations in one tick.** The grep's arithmetic was never the
+problem — the missing step is the same one #108 added for the ORGAN: *run the RED-proof before
+citing it* (#107's third clause), and for a hypothesis about a defect that means **reproduce the
+defect in a fixture before pricing the fix**.
+
+### 5 · PART VI CORRECTION
+
+VI.4's direct path is unchanged in ORDER and needs one correction in CONTENT. It reads the render
+gap as geometry. **This window produced the first well-evidenced case that a visible slice of it is
+not geometry at all**: `www.jatekshop.eu`'s construct is byte-exact in our engine at the site's own
+dimensions on all four boxes, and the live divergence is one wrapped line; `www.kuechenmomente.de`
+is 14% wider *and* 44% taller in the same box; `www.lyreco.com`'s `<h3>` is 12px wider *and* two
+lines taller. **A box that is wider AND taller cannot be a placement error** — extra width fits more
+per line — so this cohort is a FACE or a used SIZE, and `Seen.font` reports the **computed family**
+from both sides, which is why the column built to detect exactly this prints `{Raleway/18}` against
+`{Raleway/18}`. VI.4 should carry a fourth leg beside scorability / shape / jarring: **attribution —
+the diff must be able to say which face rasterized a box** — because until it can, an unknown share
+of "shape" is mis-filed.
+
+### 6 · THE STEER — binding on the next tick
+
+1. ⚠⚠⚠ **REPORT THE USED FACE ON BOTH SIDES, AND RE-READ THE THREE SITES.** This is the cheapest
+   fork in the road on the board: same faces ⇒ a shaping-metric arc; different faces ⇒ a whole cohort
+   currently ranked as N layout bugs is ONE provisioning or font-loading bug. Named with its test in
+   t1151 and it is the next tick.
+2. **Then take `www.lyreco.com` or `www.jatekshop.eu`** — both are one inversion from an M1 crossing
+   and both are now localised to a single box by `MANUK_RO_TRACE`. Do not re-derive the address.
+3. **The `node_rects` `lift` debt (I3, four checks old) is overdue**, and it is an I3 defect wearing
+   a shape number's clothes — check #72's original finding, still unbuilt.
+4. Standing, from #107/#108, now with a third clause of its own: **price it · ask which ORGAN · run
+   the RED-proof before citing it · and reproduce the DEFECT in a fixture before pricing the fix.**
+
+`LAST_CONSTITUTION_CHECK` -> 1152.
+
 ## Check #108 — tick 1144 (2026-08-11)
 
 Re-read of `CONSTITUTION.MD` PART I (I1-I8), PART VI.2/VI.3 and PART VII, anchored to the seven ticks

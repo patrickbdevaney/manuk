@@ -46371,6 +46371,73 @@ PERF: none — one UA rule and one narrowed branch in a cascade that already ran
 WIKI: `docs/wiki/css-cascade.md` — where Chrome draws the form-control `box-sizing` line, and why a
 layout-crate test cannot see it.
 
+## Tick 1152 — the self-audit and the constitution check, and one of eight ticks moved the gate (2026-08-11)
+
+TICK SHAPE: measurement — both cadence instruments came due together (self-audit every 10, last
+1141; constitution re-read every 8, last 1144). Banked as check #109 and a clean `self-audit.sh`.
+
+SELF-AUDIT: **methodology and reality agree** — every gate declares how to break it, the process
+ledger records 49 defects each naming its closing MECHANISM, the pattern ledger (1081 rows) moves
+with the engine, and enforcement is mechanical (receipt + hook + generated STATUS). Nothing
+prescribed-but-not-executed. `LAST_AUDIT_TICK` → 1152.
+
+⚠⚠⚠ **CHECK #109 FINDING 1 — ONE OF THE LAST EIGHT TICKS MOVED AN EXIT-GATE CONDITION, AND THAT IS
+THE RIGHT RATIO HERE.** t1149 alone (hnhbkis.edu.in h-overflow 2 → 0, shape 0.932 → 0.957); five of
+the other seven were instrument, measurement or refusal. The reason that is not drift is in the
+loop's own record: **three of the five ended by NAMING a gate row with its address** — t1148's
+truncation-point rule, t1150's two localisations, t1151's face discriminator — and t1149 itself was
+landed *from* t1112's trace, an instrument tick eight ticks earlier. An instrument tick pays for the
+gate tick after it; the alarming shape is an instrument tick that names nothing, and none of these
+did.
+
+⚠⚠⚠ **FINDING 2 — I2 HELD THROUGH THE FIRST TIME THE LOOP WRAPPED A DEPENDENCY'S *ANSWER*.**
+t1149's `fit_content_inline` corrects taffy's `ComputeSize` result from inside our own `impl` of
+taffy's trait: source untouched, dependency unpinned, no fork. That is `STATUS.md`'s option 3 and it
+meets all four of that table's conditions. ⚠ The distinction to hold, recorded because it is one
+refactor away from being lost: **wrapping an ANSWER is sanctioned; editing an ALGORITHM is not.**
+The fork surface is still empty.
+
+⚠⚠ **FINDING 3 — I3 IS SATISFIED BY ACCIDENT OF SCOPE FOR THE FOURTH CONSECUTIVE CHECK** (#72, #100,
+#104, now #109). t1149 moves geometry through the shared `node_rects` producer, so the agent's click
+points followed for free — again, without anyone checking. **The debt #104 named is still unwritten**
+(`node_rects`'s `lift` gives an icon-wrapping `<span>` the icon's 4px box instead of its 17px line
+box). Four checks makes it overdue, not pending.
+
+⚠⚠ **FINDING 4 — VI.3'S DEMOTION OF `WPT:TOTAL` GOT AN INDEPENDENT EXTERNAL CONFIRMATION, AND ITS
+COROLLARY IS THE USEFUL HALF.** Surface audit #55 (banked t1150) read Ladybird's 2026 newsletters:
+monthly WPT gain **+63,726 → +8,283 → +3,366 → +108**, with April's figure mostly the *import* of
+test262 upstream (~52k of 63.7k). An independent engine at comparable maturity goes flat inside four
+months. So: a flat subtest curve is what this stage LOOKS like in a healthy engine — the loop must
+not read its own flat total as a stall — and, the sharper corollary, **an engine at this stage still
+posting large WPT gains is probably importing a suite, not shipping capability.**
+
+⚠⚠⚠ **FINDING 5 — VI.3 GAINS A SIXTH INFLATION MODE, AND IT IS ABOUT HYPOTHESES RATHER THAN
+CONSTRUCTS: A CAUSE PRICED BY ITS FREQUENCY ON THE WEB RATHER THAN BY WHETHER IT IS BROKEN HERE.**
+t1151 priced the "bulletproof" `@font-face` idiom as the cause of three wider-than-Chrome sites — a
+genuinely ubiquitous construct — and it is Chrome-exact in this engine, as are parent-relative
+`url(../…)` resolution and the fallback path. **Three green mutations in one tick.** The rule the
+window adds: *reproduce the DEFECT in a fixture before pricing the FIX*, which is #107's
+run-the-RED-proof clause applied one level earlier.
+
+**PART VI CORRECTED.** VI.4 reads the render gap as geometry, and this window produced the first
+well-evidenced case that a visible slice of it is not: a box that is **wider AND taller** cannot be a
+placement error, and `Seen.font` reports the COMPUTED family from both sides, so the one column built
+to detect a face difference prints agreement. VI.4 should carry a fourth leg beside scorability /
+shape / jarring — **attribution**: until the diff can say which face rasterized a box, an unknown
+share of "shape" is mis-filed.
+
+THE STEER (full text in check #109): report the USED face on both sides and re-read the three sites
+— same faces means a shaping arc, different faces means one provisioning bug currently ranked as N
+layout bugs · then take `lyreco` or `jatekshop`, both one inversion from M1 and both already
+localised by `MANUK_RO_TRACE` · the `node_rects` `lift` debt is overdue.
+
+RATCHET: held trivially — nothing landed in `engine/`.
+
+PERF: none — measurement only.
+
+WIKI: none — this tick's artefacts are `docs/loop/CONSTITUTION-CHECK.md` check #109 and a clean
+self-audit, which are the wiki for the loop's own governance. [no-pattern]
+
 ## Tick 1151 — the box was right and the FACE was wrong, and the instrument cannot see a face (2026-08-11)
 
 TICK SHAPE: measurement (probe before build) — t1150's trace made a prediction: `www.jatekshop.eu`'s
