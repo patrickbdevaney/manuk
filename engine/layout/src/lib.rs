@@ -22405,10 +22405,69 @@ mod tests {
     /// `word-break: break-all`, `overflow-wrap: break-word` and `overflow-wrap: anywhere` all take
     /// the separate `break_word` path and rewrap the Japanese row to 60.
     ///
-    /// RED, run: drop the `keep_all` guard in `break_segments` — the three CJK rows return to
-    /// 60/60/40.
+    /// ⚠⚠⚠ **THE HEIGHTS IN THAT TABLE ARE CHROME'S AND THEY ARE NOT ASSERTABLE — A WRAPPED CJK
+    /// LINE COUNT IS A PROPERTY OF THE INSTALLED FACES, AND THIS GATE ASSERTED ONE.** The original
+    /// version pinned `#ctl` (the `word-break: normal` control) at exactly 60px — three 20px lines
+    /// — and it passed here and **failed on CI**, which has no CJK face and folds the run onto two
+    /// lines at 40px. That is the same defect `line_height_normal_rounds_each_metric_and_then_sums`
+    /// was written to avoid one tick earlier (*"asserts the ARITHMETIC rather than a host font's
+    /// numbers, so it does not depend on which faces are installed"*) and this gate did not take
+    /// the lesson. A gate that goes red on a machine whose fonts differ is a **false RED**, which
+    /// the reliability doctrine files as one bug with false-presence and re-implementation.
+    ///
+    /// So the rule is asserted where it LIVES — on `break_segments`, whose opportunities come from
+    /// the codepoints through UAX #14 and cannot depend on a font at all — and the layout rows are
+    /// kept, because they are the only thing proving `cs.word_break` actually reaches
+    /// `break_segments`, but reduced to the two things a font cannot change:
+    ///
+    /// * an unbreakable run occupies **exactly one line**, whatever its advance (the `keep-all`
+    ///   rows), and
+    /// * a run that still has an opportunity occupies **more than one** (every control row).
+    ///
+    /// ⚠ The CI failure itself is the evidence that the second half is safe: the runner wrapped
+    /// `#ctl` to 40px, so the string overflows 120px in that font too — the count differed, the
+    /// *wrapping* did not.
+    ///
+    /// RED, run twice: drop the `keep_all` guard in `break_segments` and the three CJK rows go from
+    /// one line to three (and the segment assertions below fail outright); suppress EVERY
+    /// opportunity under `keep-all` and the hyphen / ZWSP / space controls collapse to one line.
     #[test]
     fn word_break_keep_all_suppresses_only_the_letter_unit_opportunities() {
+        // ── THE RULE ITSELF, font-independent by construction: `break_segments` reads codepoints.
+        //    Both characters around an opportunity must be letter units for it to be suppressed.
+        assert_eq!(
+            break_segments("日本語", false),
+            vec!["日", "本", "語"],
+            "CONTROL: without `keep-all` an ideograph run breaks per ideograph (UAX #14 class ID)"
+        );
+        assert_eq!(
+            break_segments("日本語", true),
+            vec!["日本語"],
+            "`keep-all` suppresses the ID/ID opportunities — one segment"
+        );
+        assert_eq!(
+            break_segments("日本語text日本語", true),
+            vec!["日本語text日本語"],
+            "the CJK<->Latin boundary is a letter unit on BOTH sides (ID and AL), so `keep-all` \
+             suppresses it too — this is the half that makes it a predicate on two characters"
+        );
+        assert_eq!(
+            break_segments("alpha-bravo", true),
+            vec!["alpha-", "bravo"],
+            "CONTROL: a hyphen is class BA/HY, NOT a letter unit — `keep-all` must still break here, \
+             which is what makes this rule 'between letter units' and not 'never inside a word'"
+        );
+        assert_eq!(
+            break_segments("alpha\u{200b}bravo", true),
+            vec!["alpha", "bravo"],
+            "CONTROL: a zero-width space is not a letter unit either"
+        );
+        assert_eq!(
+            break_segments("supercalifragilistic", true),
+            vec!["supercalifragilistic"],
+            "CONTROL: an ordinary long Latin word has no interior opportunity with or without it"
+        );
+
         let (dom, root) = layout_html(
             "<body style='margin:0'>\
                <div class=k id=ja>日本語のテキストが折り返される</div>\
@@ -22436,38 +22495,54 @@ mod tests {
                 .unwrap_or_else(|| panic!("no #{id}"));
             rects[&n].height
         };
-        // The CONTROL first: without the property the same text still wraps per ideograph. If this
-        // row moved, the suppression leaked out of `keep-all` and the rest proves nothing.
-        assert!(
-            (h("ctl") - 60.0).abs() < 0.5,
-            "CONTROL: #ctl is h{} and Chrome says 60 — `word-break: normal` must still break \
-             between ideographs",
-            h("ctl")
-        );
-        for (id, want) in [("ja", 20.0), ("zh", 20.0), ("mix", 20.0)] {
+        // ── ONE LINE is the font-independent half: an unbreakable run occupies exactly one line
+        //    box whatever its advance, because there is nowhere to break it. `line-height: 20px`
+        //    is declared on the fixture, so the number is the DECLARED leading and not a metric.
+        let one_line = 20.0;
+        for id in ["ja", "zh", "mix"] {
             assert!(
-                (h(id) - want) < 0.5 && (h(id) - want) > -0.5,
-                "#{id} is h{} and Chrome says {want} — `keep-all` suppresses every opportunity \
-                 between two letter units, so the run overflows on one line",
+                (h(id) - one_line).abs() < 0.5,
+                "#{id} is h{} and must be exactly one {one_line}px line — `keep-all` suppresses \
+                 every opportunity between two letter units, so the run overflows on ONE line \
+                 rather than wrapping. (Chrome: 20, and this half is font-independent.)",
                 h(id)
             );
         }
-        // ── The four rows that say it is NOT "never break inside a word".
-        for (id, want) in [("ko", 60.0), ("hy", 40.0), ("zwsp", 40.0)] {
+        // ── MORE THAN ONE LINE is the other half, and it is all a font can be asked for: the count
+        //    depends on the face's advances (CI has no CJK font and reads 40 where this box reads
+        //    60), the fact that an opportunity was TAKEN does not.
+        for (id, why) in [
+            (
+                "ctl",
+                "`word-break: normal` must still break between ideographs — if this row collapsed \
+                 to one line the suppression leaked OUT of `keep-all` and nothing else here proves \
+                 anything",
+            ),
+            (
+                "ko",
+                "a SPACE is not a letter unit and still breaks under `keep-all` — Korean is written \
+                 with spaces, which is what the property is FOR",
+            ),
+            (
+                "hy",
+                "a HYPHEN is class BA/HY, not a letter unit, and still breaks under `keep-all`",
+            ),
+            (
+                "zwsp",
+                "a ZERO-WIDTH SPACE is not a letter unit and still breaks under `keep-all`",
+            ),
+            (
+                "esc",
+                "`word-break: break-all` takes the separate `break_word` path and must still rewrap \
+                 — a page that asks for the break still gets it",
+            ),
+        ] {
             assert!(
-                (h(id) - want) < 0.5 && (h(id) - want) > -0.5,
-                "CONTROL: #{id} is h{} and Chrome says {want} — a space, a hyphen and a \
-                 zero-width space are NOT letter units and still break under `keep-all`",
+                h(id) > one_line + 0.5,
+                "CONTROL: #{id} is h{} and must exceed one {one_line}px line — {why}",
                 h(id)
             );
         }
-        // ── The escape hatch still wins.
-        assert!(
-            (h("esc") - 60.0).abs() < 0.5,
-            "CONTROL: #esc is h{} and Chrome says 60 — `break-all` takes the separate `break_word` \
-             path and must still rewrap",
-            h("esc")
-        );
     }
 
     /// **A `<br>` is a BREAK, not an inline box on the line it ends — and it was BOTH.**

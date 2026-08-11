@@ -670,6 +670,7 @@
   - L3615 · The struct field that broke this crate's tests for the SECOND time
   - L3630 · A bucketed probe loses the distinction it was built to find (t1142)
   - L3642 · The readout trick this used
+  - L3653 · A gate that asserts a wrapped line COUNT asserts the installed fonts
 
 ## CSS AND THE CASCADE — Stylo realities and quirks actually encountered
 `docs/wiki/css-cascade.md`
@@ -1965,4 +1966,4 @@
   - L124 · Rank mechanisms by FLIP RATE, not failing-subtest count — CSS layout is a multi-assertion slog
 
 ---
-1872 sections across 22 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+1873 sections across 22 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.

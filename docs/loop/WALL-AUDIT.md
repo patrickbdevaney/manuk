@@ -1674,3 +1674,68 @@ A/B'd against a binary that existed an hour earlier. Recorded again for the obse
 
 **Nothing trimmed.** The honest headline is that this audit cannot see most of its own subject, and
 saying so is worth more than a percentage off the part it can.
+
+## Audit #44 — tick 1146 (2026-08-11), wall total **110s** — and audit #43's missing 730s is NAMED
+
+```text
+    55s  T   crate tests                       50%
+    19s  G6  interaction / hit-test            17%
+     7s  G1 · 6s D · 5s P · 3s F · 2s F4 · 2s B · 0s the rest
+```
+
+### ⚠⚠⚠ THE FIRST FINDING IS THAT THIS NUMBER AND AUDIT #43's ARE THE SAME WALL IN TWO MODES
+
+Audit #43 read **1204s** twenty ticks ago and this one reads **110s**, and nothing was trimmed in
+between. **The audit reads whichever mode the LAST wall happened to be in, and the two modes differ
+by more than 10×.** t1141 measured the discriminator directly, seven consecutive walls from one
+session:
+
+```text
+   tick   what changed        gate      build     total
+   1134   engine (re-run)     119s        1s       120s   <- gate binaries already warm
+   1135   docs only           108s        1s       109s
+   1136   docs only           115s        1s       116s
+   1137   engine             1151s       29s      1180s
+   1138   engine             1158s       30s      1188s
+   1139   docs only           115s        1s       116s
+   1140   engine             1221s       30s      1251s
+```
+
+**The discriminator is whether `engine/` changed**, and audit #43 sampled an engine tick while this
+one sampled a docs tick (t1145, the corpus sweep). Neither number is "the wall". A cadence audit that
+takes one sample of a bimodal quantity reports the mode it landed in, with no way to tell which — and
+both audits stated their figure as *the* wall total.
+
+### ⚠⚠ AND THAT TABLE CLOSES AUDIT #43's OPEN QUESTION
+
+#43's headline was *"~730s UNATTRIBUTED — not in any section this audit prints … almost certainly
+link/codegen"*, and it asked for the wall's own phases to be timed. They now have been:
+
+* the **workspace build is 30s** in every engine row — it is not the cost;
+* the **gate phase goes 115s → ~1200s**, which is the recompilation of the gate TEST BINARIES;
+* **t1134's own second run is the control** — an engine tick whose gate binaries were already warm
+  from a prior green wall came in at **120s**, indistinguishable from a docs-only tick.
+
+So the missing 60% is not a gate, not the workspace build, and not distributed: it is one phase, and
+it is a *rebuild*, which is why it vanishes on a warm re-run. **This is handed to the observer, not
+acted on** — `scripts/` is observer-owned per PART VII, and every lever on that phase (mold/lld,
+cargo-nextest, workspace-hack, risk-based gate scheduling, the banked-binary cache) lives there.
+
+### The rigor-preserving candidates, unchanged
+
+1. **Redundancy** — audit #43's standing candidate holds: **P** launches a fresh headless Chrome per
+   fixture and the assertions are per-fixture while the browser start is not. Batching them behind one
+   browser buys the same 72 assertions for fewer seconds, each still failing independently for its own
+   bug. That is a tick in `tests/wpt` (agent territory). ⚠ It reads **5s** in *this* sample and 270s in
+   #43's — the same mode artefact, and the reason to rank it off #43's number, not this one.
+2. **Parallelism** — gates launch concurrently; the perf floors are deliberately serial. Nothing has
+   become accidentally serial.
+3. **Caching** — the banked-binary cache (`$HOME/manuk-builds`, keyed by tree hash, referenced by
+   `disk-hygiene.sh`'s `KEEP_BUILDS` and still absent) is now recorded for the **third** consecutive
+   audit. This session alone would have used it twice (t1145's solo controls re-ran a binary that
+   already existed).
+4. **Scope** — no gate builds materially more than it asserts on.
+
+**Nothing trimmed, and the honest headline is a correction to the method rather than a percentage:**
+this audit's cadence samples one wall, the wall is bimodal by 10×, and the fix is to record the MODE
+alongside the total so #45 can be compared to #43 at all.

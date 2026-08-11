@@ -851,3 +851,4 @@ tick	sha	epoch	iso	delta_s	shape	wall_s	files	added	deleted	gates	claims	wpt_pas
 1142	b228b1db	1786472924	2026-08-11T14:28:44-04:00	2556	capability	808	9	320	35	437	81	3896	6960	0	570	0	the eight gate-less map rows, PROBED — and `loading` was on the wrong two elements (2026-08-11)
 1144	a881c936	1786473701	2026-08-11T14:41:41-04:00	777	measurement	808	6	274	34	437	81	3896	6960	0	570	0	the constitution check, and the window's biggest price was 8.5× too high (2026-08-11)
 1145	8f85efa5	1786478666	2026-08-11T16:04:26-04:00	4965	measurement	808	9	427	33	437	81	3896	6960	0	570	0	the sweep check #108 demanded, and the prediction written before the number (2026-08-11)
+1146	84337e26	1786481145	2026-08-11T16:45:45-04:00	2479	capability	808	8	351	60	437	81	3896	6960	0	570	0	CI had been RED for five ticks, and the gate asserted a FONT (2026-08-11)

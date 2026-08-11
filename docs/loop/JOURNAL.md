@@ -46371,6 +46371,116 @@ PERF: none — one UA rule and one narrowed branch in a cascade that already ran
 WIKI: `docs/wiki/css-cascade.md` — where Chrome draws the form-control `box-sizing` line, and why a
 layout-crate test cannot see it.
 
+## Tick 1146 — CI had been RED for five ticks, and the gate asserted a FONT (2026-08-11)
+
+TICK SHAPE: capability (layout gate reliability) — the board's own rule, *"CI runs asynchronously —
+read it at the START of the next tick"*, obeyed for the first time in five ticks, and it was carrying
+a real red.
+
+⚠⚠⚠ **CI HAS FAILED ON EVERY COMPLETED RUN SINCE t1140 LANDED, AND NO TICK READ IT.**
+
+```text
+   da920cc8  t1140  UAX #14 / word-break: keep-all      (both runs superseded)
+   6838d68b  t1141  the self-audit                       FAILURE  <- first completed run
+   34877ca2  t1142  `loading` reflection                 FAILURE
+   f56bb165  t1143  the declaration splitter             FAILURE
+   48c2b3ed  t1144  the constitution check               FAILURE
+```
+
+Five ticks, four of them landed on top of a red wall the loop was told to read. The `release`
+workflow was green throughout, which is how it stayed invisible: the run list shows a success next to
+every failure and they are two different workflows.
+
+⚠⚠⚠ **AND THE FAILURE IS t1140's OWN GATE ASSERTING A PROPERTY OF THE INSTALLED FONTS.**
+
+```text
+   CONTROL: #ctl is h40 and Chrome says 60 — `word-break: normal` must still break between ideographs
+```
+
+`#ctl` is the `word-break: normal` control: fourteen ideographs in a 120px box at `line-height:20px`.
+This machine has a CJK face and wraps it to **three** lines; the runner has none, its fallback
+advances are narrower, and it wraps to **two**. **The wrapping is identical; only the COUNT differs,
+and the gate asserted the count.** The three `keep-all` rows passed on CI untouched — because *"one
+line"* is font-independent and *"three lines"* is not, which is the diagnosis and its own control.
+
+⚠⚠ **THIS IS THE LESSON THE ADJACENT GATE TOOK ONE TICK EARLIER AND THIS ONE DID NOT.** t1138's
+`line_height_normal_rounds_each_metric_and_then_sums` says it in its own doc comment — *"asserts the
+ARITHMETIC rather than a host font's numbers, so it does not depend on which faces are installed"* —
+and t1140, two ticks later, pinned six absolute wrapped-line heights. A gate that reddens on a machine
+whose fonts differ is a **false RED**, which the reliability doctrine files as one bug with
+false-presence and re-implementation.
+
+**THE FIX PUTS THE RULE WHERE IT LIVES.** `break_segments(word, keep_all)` computes the opportunities
+from codepoints through UAX #14 and cannot depend on a font at all, so six `assert_eq!`s on its
+segments now carry the rule itself — including the two that make it a predicate on two characters
+rather than on a word (`日本語text日本語` → one segment; `alpha-bravo` → two). The layout rows are
+**kept, not deleted**, because they are the only thing proving `cs.word_break` reaches
+`break_segments` — reduced to the two things a font cannot change: an unbreakable run is **exactly one
+line**, and a run with an opportunity left is **more than one**. ⚠ The CI failure is itself the
+evidence that the second half is safe: the runner wrapped `#ctl` to 40px, so the string overflows
+120px in that font too.
+
+GATE: `word_break_keep_all_suppresses_only_the_letter_unit_opportunities`, rewritten. **RED-proven
+THREE times, and the third is the one that matters:**
+
+```text
+   1  drop the `keep_all` guard in `break_segments`   -> the ID/ID segment assertion fails
+   2  suppress EVERY opportunity under `keep-all`     -> the hyphen control fails (BA/HY is not a
+                                                         letter unit)
+   3  `let keep_all = false && cs.word_break == …`    -> #ja reads h60 against one 20px line
+```
+
+⚠ Mutation 3 leaves `break_segments` **correct** and severs only the wiring, so the six new segment
+assertions stay GREEN and the LAYOUT half has to catch it alone — it does. Without that proof the
+layout rows would be decoration, which is the green-mutation trap this loop has filed three times.
+
+⚠ The class was scanned rather than assumed: this is the **only** gate in `engine/` carrying a CJK
+literal in a laid-out fixture (`break_segments_finds_intra_word_opportunities` uses the same strings
+and was already font-independent). And CI is the detector that found it in one run — it had been
+reporting it correctly for five ticks with nobody reading.
+
+⚠⚠ **AND THE CADENCE WALL AUDIT CAME DUE IN THIS TICK AND FOUND THE SAME SHAPE ONE LAYER UP** (audit
+#44, `docs/loop/WALL-AUDIT.md`, due every 20, last at 1126). It reads **110s**; audit #43 read
+**1204s** twenty ticks ago and nothing was trimmed in between. **The audit samples whichever mode the
+last wall was in, and the wall is bimodal by 10× on one bit — whether `engine/` changed.** #43 landed
+on an engine tick, #44 on t1145's docs-only sweep tick, and both stated their figure as *the* wall
+total. ⚠ The same table also **closes #43's open question**: its *"~730s UNATTRIBUTED … almost
+certainly link/codegen"* is the **gate-binary rebuild** — the workspace build is 30s in every engine
+row, the gate phase goes 115s → ~1200s, and t1134's warm re-run at 120s is the control that proves
+it. Handed to the observer; every lever on that phase lives in `scripts/`.
+
+⚠⚠⚠ **AND THE PROCESS DEFECT THIS TICK PAID FOR, RECORDED BECAUSE IT IS A TRAP WITH A SIGN
+INVERSION: PRE-RUNNING `verify.sh` IS WHAT MADE THE RATCHET REFUSE.** The tick came back
+`✗ WALL 808s > 245s` and the obvious reading — *"the wall regressed"* — is wrong twice over. `808s`
+is a **stale** `LAST_WALL_TIME`: `status-update.sh` refuses to bank a new one unless the receipt shows
+`disk_pct < 93` **and** `load1 < 3.0`, and this box has sat at 93% disk with a baseline load of ~7.3
+(two orphaned `--user-data-dir=/tmp/com.google.Chrome.scoped_dir.*` renderers at 100% CPU, 13h and
+17h old, from fidelity runs that are long gone — **identified, and deliberately NOT killed**, per the
+t846 rule that a count is not an identification and the best move is to leave them for the observer).
+
+**But the stale figure had not been blocking anything all day** — `ratchet.sh:183` treats it as
+ADVISORY whenever the receipt does not match the CURRENT tree, which is the freshness breaker the
+observer added at t611 for exactly this deadlock. t1137, t1138, t1140 and t1143 all landed engine
+changes against the same 808s for that reason. **Then this tick pre-ran `verify.sh` to "refresh" the
+number — which produced a green receipt whose tree MATCHED, switched the breaker off, and promoted
+the stale 808 from advisory to blocking.** The lever-board's velocity rule (*"do NOT pre-run
+verify.sh as a green-check — tick.sh owns the single wall"*) is not only about paying for two walls;
+**pre-running it can turn a non-blocking advisory into a hard refusal.** The escape is to change the
+tree, which any real work does — this paragraph is what did it.
+
+⚠ The one thing the pre-run bought is worth keeping: at **113s (gate 113s · build 1s)** on a tree
+whose gate binaries were warm, it is an independent replication of t1134's control and of audit #44's
+finding above — the same engine tree costs 1243s cold and 113s warm, an **11× spread on one bit**.
+
+RATCHET: `manuk-layout` **170/170** on default features (CI's configuration, which is where this
+failed — the local wall runs `stylo,spidermonkey` and both pass). No behaviour changed: `break_segments`
+and the layout path are byte-identical, this tick is entirely inside the test module.
+
+PERF: none — test-only.
+
+WIKI: `docs/wiki/conformance-and-oracles.md` — "A gate that asserts a wrapped line COUNT asserts the
+installed fonts, and CI is the machine that proves it"
+
 ## Tick 1145 — the sweep check #108 demanded, and the prediction written before the number (2026-08-11)
 
 TICK SHAPE: measurement — the cadence sweep pricing the nine ticks since t1135 (t1136-t1144), which is

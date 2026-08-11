@@ -3649,3 +3649,42 @@ Chrome exactly like a geometry row. That is how eight map rows — CSS nesting p
 
 **Six of the eight were already correct.** A `partial` row with no gate is not a known gap; it is an
 unmeasured claim, and these were pessimistic.
+
+## A gate that asserts a wrapped line COUNT asserts the installed fonts
+
+t1140 landed `word_break_keep_all_suppresses_only_the_letter_unit_opportunities` with six absolute
+heights measured against Chrome on the dev box. It passed here and **failed on every CI run for the
+next five ticks**:
+
+```text
+   CONTROL: #ctl is h40 and Chrome says 60 — `word-break: normal` must still break between ideographs
+```
+
+`#ctl` is fourteen ideographs in a 120px box at `line-height: 20px`. This machine has a CJK face and
+wraps to **three** lines; the runner has none, falls back to narrower advances, and wraps to **two**.
+The wrapping is identical — only the count differs.
+
+**The diagnosis is inside the same test.** The three `keep-all` rows, which assert *one line*, passed
+on CI untouched. *One line* is a property of the break opportunities; *three lines* is a property of
+the advances. So:
+
+| assertion | depends on the font? |
+|---|---|
+| an unbreakable run occupies exactly one line | no — there is nowhere to break it |
+| a run with an opportunity left occupies more than one | no — the opportunity is a codepoint property |
+| a run occupies exactly N lines, N > 1 | **yes** — N is total advance ÷ container width |
+
+The rule itself belongs where it cannot be font-dependent at all. `break_segments(word, keep_all)`
+reads codepoints through UAX #14, so `assert_eq!(break_segments("日本語", true), vec!["日本語"])` is
+the rule, and the layout rows are kept only to prove the style *reaches* it.
+
+> **The mutation that matters is the one that severs the wiring.** Deleting the `keep_all` guard
+> fails the segment assertions; the over-fix fails the hyphen control; but
+> `let keep_all = false && cs.word_break == …` leaves `break_segments` **correct** and only
+> disconnects it — so the segment assertions stay green and the layout rows have to catch it alone.
+> Without running that third mutation, the layout half is decoration.
+
+⚠ **And the process half, which cost more than the defect.** CI reported this correctly from the
+first completed run and four subsequent ticks landed on top of it. It stayed invisible because the
+repo runs two workflows and the run list shows a green `release` next to every red `CI` for the same
+commit — the eye reads the green one. *Read the workflow NAME, not the colour of the newest row.*
