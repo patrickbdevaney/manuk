@@ -858,3 +858,4 @@ tick	sha	epoch	iso	delta_s	shape	wall_s	files	added	deleted	gates	claims	wpt_pas
 1150	09628df1	1786488362	2026-08-11T18:46:02-04:00	374	capability	808	6	145	33	437	81	3896	6960	0	571	0	the reading-order exemplar names the PAIR, and the defect is one box (2026-08-11)
 1151	86f2ff22	1786488655	2026-08-11T18:50:55-04:00	293	measurement	808	5	203	34	437	81	3896	6960	0	571	0	the box was right and the FACE was wrong, and the instrument cannot see a face (2026-08-11)
 1152	4c481fd3	1786489729	2026-08-11T19:08:49-04:00	1074	measurement	808	8	217	39	437	81	3896	6960	0	571	0	the self-audit and the constitution check, and one of eight ticks moved the gate (2026-08-11)
+1153	aef83bc5	1786489987	2026-08-11T19:13:07-04:00	258	capability	808	6	131	33	437	81	3896	6960	0	571	0	the faces DIFFER, and an unknown share of "shape" was a font that never loaded (2026-08-11)

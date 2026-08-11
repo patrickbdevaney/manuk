@@ -3696,3 +3696,30 @@ the error arrives downstream as `dy` — scored as *shape*.
 ⚠ Adding this moves `instrument_tag()` (it hashes the probes' own text), so rows banked after it
 cannot be silently diffed against older ones. Designed behaviour: a step change in the instrument is
 not an error bar on the subject.
+
+### One hundred `@font-face` rules for one family — `unicode-range` (t1154)
+
+The Google-Fonts CSS block, inlined, is the commonest webfont delivery on the web, and it is
+**subsetted by codepoint**. `www.kuechenmomente.de` ships **170 `@font-face` rules, 100 of them named
+`Raleway`** — weights {400, 700} × styles {normal, italic} × ~13 `unicode-range` subsets — with the
+Cyrillic and Vietnamese blocks *first* in source order and Latin further down.
+
+`unicode-range` has **zero occurrences in `engine/`**. `manuk_css::FontFace` is `{ family, srcs }`
+(`engine/css/src/lib.rs:2608`), so the loader walks all hundred blocks under one name and hands each
+arriving face to `FontContext::register_named_font`, where `face_id` selects on **weight and style
+only**. A Cyrillic subset and the Latin subset are indistinguishable to that search, and a face
+picked for weight 400 / normal may have no Latin glyphs to shape with — so the run falls back and
+every box on the page is measured in the wrong face.
+
+⚠ **The performance half is the same bug.** With no `unicode-range` there is no reason not to fetch
+all hundred subsets, so a page Chrome serves with *one* woff2 can cost a hundred requests against a
+render deadline. `unicode-range` is not only how the right face is chosen — it is how the other
+ninety-nine are never asked for.
+
+⚠ **This is NOT the `src` parsing.** The bulletproof `.eot`-first list, parent-relative
+`url(../…)` and the fallback path are each Chrome-exact (t1151). Fetching and registering a face
+works. The missing descriptor is the one that says **which** face.
+
+Acceptance test, and it only exists because the face-advance probe landed first (t1153):
+`{Raleway/18}` advance **240 → 166**, `fira_sansbook/14` **140 → 129**, `Lyreco Renner/18`
+**184 → 174**, and the `-apple-system/10/102` control unmoved.

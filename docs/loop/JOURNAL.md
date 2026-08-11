@@ -46371,6 +46371,75 @@ PERF: none — one UA rule and one narrowed branch in a cascade that already ran
 WIKI: `docs/wiki/css-cascade.md` — where Chrome draws the form-control `box-sizing` line, and why a
 layout-crate test cannot see it.
 
+## Tick 1154 — one hundred `@font-face` rules for one family, and `unicode-range` is not in the tree (2026-08-11)
+
+TICK SHAPE: measurement (probe before build) — t1153's named next step: *"the advance is now the
+acceptance test; the remaining candidates are the DELIVERY of the face."* Answered from the page's
+own bytes and from `grep`, in minutes, with no build.
+
+⚠⚠⚠ **`www.kuechenmomente.de` DECLARES 170 `@font-face` RULES, 100 OF THEM FOR "Raleway", AND EVERY
+ONE CARRIES A `unicode-range`.** This is the Google-Fonts CSS block, inlined — the single most common
+webfont delivery on the web — and it is **subsetted by codepoint**:
+
+```text
+   @font-face{font-family:'Raleway';font-style:italic;font-weight:400;font-display:swap;
+     src:url(…/raleway/1Ptsg8zYS_SKggPNyCg4QIFqPfE.woff2) format('woff2');
+     unicode-range:U+0460-052F,U+1C80-1C8A,U+20B4,U+2DE0-2DFF,U+A640-A69F,U+FE2E-FE2F}   <- CYRILLIC
+   … 99 more, same family, weights {400,700} x styles {normal,italic} x ~13 subsets
+```
+
+The first blocks in source order are **Cyrillic** and **Vietnamese**. The Latin subset is further
+down.
+
+⚠⚠⚠ **AND `unicode-range` HAS ZERO OCCURRENCES IN `engine/`.** Not partial, not approximated —
+`grep -rn "unicode-range\|unicode_range" engine/ --include=*.rs` returns nothing, and
+`manuk_css::FontFace` is `{ family, srcs }` with no third field to put it in
+(`engine/css/src/lib.rs:2608`). So `engine/page`'s loader walks 100 blocks that all claim the name
+`Raleway`, resolves each `src`, and hands every one that arrives to
+`FontContext::register_named_font(family, data)` — which loads them into one family's face list
+where `face_id` picks by **weight and style only**. A Cyrillic subset and the Latin subset are
+indistinguishable to that search, and a face chosen for weight 400 / normal has no Latin glyphs to
+shape with.
+
+**That is the whole of t1153's `Raleway/18 → 166 vs 240`**, and the same shape explains
+`fira_sansbook` (+8.5%) and `Lyreco Renner` (+5.7%) at smaller magnitudes, where the block is
+smaller and the odds of landing on a usable face are better.
+
+⚠⚠ **THE PERFORMANCE HALF IS THE SAME BUG AND POINTS THE SAME WAY.** Without `unicode-range` there is
+no reason NOT to fetch all hundred subsets, so a page that Chrome serves with **one** woff2 costs us
+up to a hundred requests — against a render deadline that the fidelity frame enforces. Even the
+faces that arrive may arrive after the boxes were measured. `unicode-range` is not only how the right
+face is chosen; it is how the other ninety-nine are never asked for.
+
+**THE BUILD SPEC, complete, so the next tick does not re-derive it:**
+
+1. `manuk_css::FontFace` gains `unicode_range: Option<Vec<RangeInclusive<u32>>>` (absent = "all",
+   per spec) plus the `font-weight` / `font-style` descriptors it also drops today — the three are
+   parsed in one place and `parse_font_face_block` already walks the declarations.
+2. `engine/page`'s loader **skips a block whose range covers none of the document's text** before it
+   fetches, which is the request-count fix and the selection fix in one move.
+3. `FontContext` must keep the range beside the registered face so `face_id` can prefer a face that
+   covers the run — the per-glyph fallback then stops firing on Latin text that a Latin subset was
+   available for.
+
+**ACCEPTANCE, pre-registered:** `www.kuechenmomente.de`'s `{Raleway/18/…}` advance goes from **240 to
+Chrome's 166**, `jatekshop` `fira_sansbook/14` from 140 to 129, `lyreco` `Lyreco Renner/18` from 184
+to 174 — and the `-apple-system/10/102` control must not move. That test exists because t1153 built
+it; before t1153 this fix would have been unmeasurable and would have been priced on a shape delta
+that could not see it.
+
+⚠ Recorded so the scope is not re-litigated: this is **not** the `@font-face` `src` parsing, which
+t1151 proved Chrome-exact on three independent idioms. Everything about fetching and registering a
+face works. What is missing is the descriptor that says **which** face.
+
+RATCHET: held trivially — nothing landed in `engine/`. The artefacts are the 100-face count, the
+zero-occurrence grep, and the build spec above.
+
+PERF: none — measurement only. (The build it specifies is a perf fix as well as a correctness one.)
+
+WIKI: `docs/wiki/text-layout.md` — "One hundred `@font-face` rules for one family: `unicode-range` is
+how the right face is chosen and the other ninety-nine are never fetched" [no-pattern]
+
 ## Tick 1153 — the faces DIFFER, and an unknown share of "shape" was a font that never loaded (2026-08-11)
 
 TICK SHAPE: capability (instrument) — check #109's steer §1, verbatim: *"report the USED face on both
