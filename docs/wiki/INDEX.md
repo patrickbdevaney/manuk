@@ -668,6 +668,8 @@
   - L3541 · The 4 losses were each an accidental pass, and each named a real defect
   - L3551 · A REFERENCE IS A DOCUMENT — 1,230 CSS 2.1 reftests were unpassable by construction (t1088)
   - L3615 · The struct field that broke this crate's tests for the SECOND time
+  - L3630 · A bucketed probe loses the distinction it was built to find (t1142)
+  - L3642 · The readout trick this used
 
 ## CSS AND THE CASCADE — Stylo realities and quirks actually encountered
 `docs/wiki/css-cascade.md`
@@ -1958,4 +1960,4 @@
   - L124 · Rank mechanisms by FLIP RATE, not failing-subtest count — CSS layout is a multi-assertion slog
 
 ---
-1865 sections across 22 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+1867 sections across 22 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.

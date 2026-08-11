@@ -46371,6 +46371,90 @@ PERF: none — one UA rule and one narrowed branch in a cascade that already ran
 WIKI: `docs/wiki/css-cascade.md` — where Chrome draws the form-control `box-sizing` line, and why a
 layout-crate test cannot see it.
 
+## Tick 1142 — the eight gate-less map rows, PROBED — and `loading` was on the wrong two elements (2026-08-11)
+
+TICK SHAPE: capability (JS reflection) — audit #54's steer taken a second time, this time on the
+sub-population it named: the **8 `partial` rows with no gate at all**. One battery, 25 rows, and the
+JS half read out as GEOMETRY (a probe sets an element's width from what the API returns) so the
+existing Chrome-diff instrument prices it with no new tooling.
+
+⚠⚠⚠ **SIX OF THE EIGHT WERE ALREADY CORRECT.** CSS nesting with `::before`/`::after` inside a nested
+rule (4/4) · CSS math `pow`/`sqrt`/`hypot`/`log`/`exp` (6/6) · the `<easing-function>` data type,
+`linear()`/`steps(jump-both)`/`cubic-bezier()` (4/4, the declaration is not dropped) ·
+`URL.canParse()` including the base-URL form · the `ch` unit · `HTMLIFrameElement.loading`'s
+missing-value default. **A `partial` row with no gate is not a known gap; it is an unmeasured claim**,
+and six of eight were pessimistic.
+
+⚠⚠⚠ **AND THE CORPUS RANKED THE THREE REAL DEFECTS, WHICH IS WHAT DECIDED THE TICK:**
+
+```text
+   @media (scripting)          1 of 373 stylesheets    <- REFUSED
+   the `ex` unit vs mono       5 of 373                <- deferred, named
+   loading="lazy"            49 of 385 pages (12.7%)   <- TAKEN
+```
+
+⚠⚠ **THE REFUSAL IS THE INTERESTING ONE, AND IT IS AN I2 WALL, NOT A COST JUDGEMENT.** We match
+neither `@media (scripting: enabled)` nor `(scripting: none)`, so a page whose layout lives inside
+that query renders unstyled — and **Stylo 0.19's servo build does not implement the `scripting` media
+feature at all** (it exists only under `gecko/media_features.rs`). An unknown feature evaluates false,
+which is exactly the measurement. I2 forbids patching the dependency, and the available workaround —
+rewriting `(scripting: enabled)` to a tautology in the pre-parse source pass — is real but buys **one
+site of 373**. VI.3 ranks by usage weight; refused, and both halves recorded so the next reader does
+not re-derive the Stylo gap. ⚠ Our own `MinimalCascade` evaluator DOES have the feature and its
+boolean form is wrong there too (`(scripting)` with no value compares `"" == "enabled"`) — a second
+implementation of a rule that is dead on the shipping path.
+
+⚠⚠⚠ **`loading` WAS ON `<video>`/`<audio>` AND MISSING FROM `<img>`/`<iframe>`.** The reflect table
+had it on the two elements the platform does NOT put it on, and not on the two it does — one of which
+carries the commonest lazy-loading idiom on the modern web. Measured against Chrome by reading the
+**returned string** rather than a pass/fail bucket, which is what resolved it:
+
+```text
+                                             chrome     before      after
+   <img loading="lazy">.loading               "lazy"     undefined   "lazy"
+   <iframe loading="lazy">.loading            "lazy"     undefined   "lazy"
+   <img>.loading            (no attribute)    "auto"     undefined   "auto"
+   <img loading="BOGUS">.loading              "auto"     undefined   "auto"
+   img.loading = "lazy"  ->  getAttribute     "lazy"     (no-op)     "lazy"
+   typeof <video>.loading                     undefined  string      undefined
+```
+
+⚠ **The first probe could not see this.** It bucketed into 90/60/30 for
+*correct / present-but-wrong / absent*, and BOTH engines answered 60 on the two default rows — so the
+disagreement read as agreement. Re-encoding the actual string as a width (`eager`→10, `lazy`→20,
+`auto`→30, `""`→40, absent→60) gave `chrome 30 / ours 60` and named it in one run. **A bucketed probe
+loses exactly the distinction it was built to find.**
+
+⚠⚠ **`auto` IS CHROME'S ANSWER AND NOT THE SPEC'S** (HTML gives `lazy`/`eager` with a missing-value
+default of `eager`; Chrome still ships the legacy third keyword and returns it for both the missing
+and the invalid value). The north star makes Chromium the capability target and a structural
+divergence from it the bug, so `auto` is implemented — and said out loud in the table's doc comment so
+a later reader does not "correct" it back and silently re-introduce the divergence.
+
+⚠⚠ **REMOVING `loading` FROM `<video>` IS A FIX, NOT A CAPABILITY LOSS.** `'loading' in video` is the
+shape of a real feature detect and we were answering it in the direction that makes a page take the
+unsupported branch — a FALSE PRESENCE, which the reliability doctrine names as one bug with false-RED
+and re-implementation.
+
+⚠ RESIDUE, measured and named rather than chased: `'loading' in video` still answers TRUE while
+`typeof video.loading` correctly answers `undefined` — the NAME survives on the prototype somewhere
+the reflect table does not reach. A control row confirms the `in` operator is not broken generally
+(`'zzzNotAThing' in video` is false in both engines, `'src' in video` true in both). The commoner
+detect form already matches; the residual is bounded and filed.
+
+RATCHET: `manuk-page --test g_reflect` green; `manuk-js` compiles; the two probe batteries go
+**6/6 and 12/12** (from 3 and 3 differing). No geometry touched.
+
+GATE: `g_reflect`'s `html_attributes_reflect_with_the_specs_type_coercion` extended with six claims
+(`imgLoad`, `ifrLoad`, `imgLoadDflt`, `imgLoadBad`, `imgLoadSet`, `vidLoad`) — one `#[test]` per JS
+gate, per the standing SIGSEGV rule. RED-proven twice: removing `loading` from `img` fails
+`imgLoad:lazy`, and putting it back on `video` fails `vidLoad:undefined`.
+
+PERF: none — two rows moved in a JSON table read once at install.
+
+WIKI: `docs/wiki/conformance-and-oracles.md` — "A bucketed probe loses the distinction it was built to
+find, and `loading` was on the wrong two elements"
+
 ## Tick 1141 — the self-audit, and the wall is BIMODAL by a factor of ten (2026-08-11)
 
 TICK SHAPE: measurement — the cadence self-audit (`scripts/self-audit.sh`, due every 10 ticks; last

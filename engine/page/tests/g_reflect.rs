@@ -28,6 +28,7 @@ const HTML: &str = r##"<!doctype html><html><body>
 <a id="a" href="x" target="_blank"></a>
 <input id="i" disabled maxlength="5">
 <img id="m" width="300" height="-5">
+<img id="lz" loading="lazy"><img id="bg" loading="BOGUS"><iframe id="fr" loading="lazy"></iframe>
 <table><tr><td id="t" colspan="0"></td></tr></table>
 <script>
   var R = [];
@@ -49,6 +50,19 @@ const HTML: &str = r##"<!doctype html><html><body>
   R.push('negFallback:' + m.height);                  // height="-5" is invalid → default 0, NOT clamped
   R.push('limited:' + t.colSpan);                     // colspan="0" is invalid → 1
   R.push('inert:' + String(document.createElement('div').disabled));
+
+  // ⚠⚠⚠ `loading` was on <video>/<audio> and MISSING from <img>/<iframe> — the two elements the
+  //     platform puts it on, and `loading="lazy"` is on 49 of 385 corpus pages (12.7%). Chrome
+  //     returns the legacy `auto` for both the missing and the invalid value, and `auto` is what is
+  //     implemented (the north star makes a structural divergence from Chromium the bug).
+  R.push('imgLoad:' + document.getElementById('lz').loading);       // "lazy"
+  R.push('ifrLoad:' + document.getElementById('fr').loading);       // "lazy"
+  R.push('imgLoadDflt:' + document.getElementById('m').loading);    // no attribute -> "auto"
+  R.push('imgLoadBad:' + document.getElementById('bg').loading);    // invalid      -> "auto"
+  document.getElementById('m').loading = 'lazy';
+  R.push('imgLoadSet:' + document.getElementById('m').getAttribute('loading'));
+  // …and it must stay INERT on the elements the platform does NOT put it on.
+  R.push('vidLoad:' + String(document.createElement('video').loading));
 
   document.getElementById('out').textContent = R.join(' ');
 </script></body></html>"##;
@@ -87,6 +101,20 @@ fn html_attributes_reflect_with_the_specs_type_coercion() {
         (
             "limited:1",
             "`limited unsigned long`: `colspan=\"0\"` is invalid, so `colSpan` reads back as **1**, not 0",
+        ),
+        ("imgLoad:lazy", "`<img loading=\"lazy\">.loading` — the commonest lazy-load idiom on the web, and the IDL attribute did not exist"),
+        ("ifrLoad:lazy", "…and the same on `<iframe>`, the other element the platform puts it on"),
+        (
+            "imgLoadDflt:auto",
+            "with no attribute Chrome returns the legacy `auto`, not the spec's `eager` — measured, \
+             and implemented because a structural divergence from Chromium is the bug",
+        ),
+        ("imgLoadBad:auto", "an invalid keyword falls back to the same value as a missing one"),
+        ("imgLoadSet:lazy", "and the IDL SET reaches the content attribute"),
+        (
+            "vidLoad:undefined",
+            "**`<video>` has no `loading` and we invented one** — a FALSE PRESENCE, which is the \
+             direction that makes a feature-detecting page take the unsupported branch",
         ),
         (
             "inert:undefined",

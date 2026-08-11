@@ -11,12 +11,12 @@
 
 | | value | over |
 |---|---|---|
-| ticks landed | **848** | ticks 1–1140 |
-| median tick cycle | **28m** | 847 intervals |
-| median, last 10 | **37m** | 10 intervals |
+| ticks landed | **849** | ticks 1–1141 |
+| median tick cycle | **28m** | 848 intervals |
+| median, last 10 | **36m** | 10 intervals |
 | fastest / slowest | 5s / 5.4d | |
-| **ticks per hour** | **1.13** | 752.1h elapsed |
-| median verify wall | **63s** | 787 ticks |
+| **ticks per hour** | **1.13** | 752.7h elapsed |
+| median verify wall | **63s** | 788 ticks |
 | wall trend | 39s → 13m — getting slower ⚠️ | first 3 vs last 3 |
 
 The **cycle** is the real unit: implement → debug → verify wall → land. The wall is only part of
@@ -28,10 +28,10 @@ it, and a wall that grows taxes every future tick, so it is tracked separately f
 
 * **capabilities asserted** (`G_CAPABILITY`): 48 → **81**
 * **live gates**: 27 → **437**
-* **✅ rows in the capability ledger**: 144 → **568**
+* **✅ rows in the capability ledger**: 144 → **569**
 * **Bar 0 — oracle hangs**: 0 of 265 sites
 
-**375 of 848 ticks** (44%) moved a
+**375 of 849 ticks** (44%) moved a
 user-visible capability. The rest were instruments, infrastructure and corrections — and the
 ledger says the corrections were not overhead: three of its top three priorities were phantoms,
 and finding that out redirected everything after it.
@@ -91,7 +91,7 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 ## What a capability costs
 
 * **375** capability ticks, median cycle **28m**
-* median diff per tick: **+264 / −34** lines across 8 files
+* median diff per tick: **+263 / −34** lines across 8 files
 
 ## Every tick
 
@@ -945,5 +945,6 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 | **1138** | 2026-08-11 12:27 | 6m | capability | 13m | +168/−35 | 437 | 81 | 56.0% · | `line-height: normal` rounds the PARTS, and the old rule was fitted at ONE SIZE (2026-08-1 |
 | **1139** | 2026-08-11 13:05 | 38m | measurement | 13m | +305/−44 | 437 | 81 | 56.0% · | the surface audit, and the map HAD both of this window's defects (2026-08-11) |
 | **1140** | 2026-08-11 13:09 | 5m | capability | 13m | +90/−33 | 437 | 81 | 56.0% · | the map's steer, obeyed: UAX #14 is 26/27 done, and the 27th was `keep-all` (2026-08-11) |
+| **1141** | 2026-08-11 13:46 | 36m | measurement | 13m | +206/−40 | 437 | 81 | 56.0% · | the self-audit, and the wall is BIMODAL by a factor of ten (2026-08-11) |
 
 *`·` after a WPT figure means **carried forward**, not measured this tick.*

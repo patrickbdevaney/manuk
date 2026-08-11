@@ -3626,3 +3626,26 @@ book_the_whole_subtree_as_missing` asserted `kind == "missing"`, and the answer 
 and calling that an absence is a lie"*. `oracle.rs`'s own tests were updated then; this copy could
 not be, because it did not build. **A test that does not compile does not merely stop testing: it
 preserves the vocabulary of the day it broke, and reads as a contradiction the moment it returns.**
+
+## A bucketed probe loses the distinction it was built to find (t1142)
+
+The probe encoded three outcomes as widths — 90 *correct*, 60 *present but wrong*, 30 *absent* — and
+ran the same fixture through Chrome and through us. On `<img>.loading` with no attribute **both
+engines answered 60**, so a real disagreement read as agreement. The second pass encoded the
+**returned string** instead (`eager`→10, `lazy`→20, `auto`→30, `""`→40, absent→60) and the row came
+back `chrome 30 / ours 60`: Chrome returns the legacy `auto`, we returned `undefined`.
+
+**A probe that maps many values onto one bucket can only find the disagreements that happen to land in
+different buckets.** The fix is free — report the value, not the verdict — and it is the same shape as
+`--dump-dom`'s trap: the instrument agreed with itself and not with the thing it was measuring.
+
+### The readout trick this used
+
+The JS half of a battery can be diffed by the ordinary box instrument with no new tooling: a
+`<script>` sets an element's `style.width` from what the API returns, and `cmp.sh` prices it against
+Chrome exactly like a geometry row. That is how eight map rows — CSS nesting pseudos, `pow`/`sqrt`/
+`hypot`/`log`/`exp`, `linear()`/`steps()`/`cubic-bezier()`, `@media (scripting)`, the `ex` unit,
+`URL.canParse()`, `HTMLIFrameElement.loading` — were measured in one 25-row fixture.
+
+**Six of the eight were already correct.** A `partial` row with no gate is not a known gap; it is an
+unmeasured claim, and these were pessimistic.
