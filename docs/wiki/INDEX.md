@@ -1034,6 +1034,8 @@
   - L1115 · Seven "regressions" with byte-identical node counts
   - L1141 · A shape score has no sample size attached
   - L1162 · Correcting only the losses is the trap
+  - L1169 · Scorability has a CHURN FLOOR, and the loop ranks its whole work-list on it
+  - L1209 · A timeout-150s is a claim about the CLOCK, and it is testable in one command
 
 ## FRAMEWORKS — React, Svelte, Next, jQuery: what actually breaks
 `docs/wiki/frameworks.md`
@@ -1963,4 +1965,4 @@
   - L124 · Rank mechanisms by FLIP RATE, not failing-subtest count — CSS layout is a multi-assertion slog
 
 ---
-1870 sections across 22 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+1872 sections across 22 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.

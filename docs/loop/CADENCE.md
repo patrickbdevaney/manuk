@@ -11,12 +11,12 @@
 
 | | value | over |
 |---|---|---|
-| ticks landed | **851** | ticks 1–1144 |
-| median tick cycle | **28m** | 850 intervals |
+| ticks landed | **852** | ticks 1–1145 |
+| median tick cycle | **28m** | 851 intervals |
 | median, last 10 | **36m** | 10 intervals |
 | fastest / slowest | 5s / 5.4d | |
-| **ticks per hour** | **1.13** | 753.6h elapsed |
-| median verify wall | **63s** | 790 ticks |
+| **ticks per hour** | **1.13** | 755.0h elapsed |
+| median verify wall | **63s** | 791 ticks |
 | wall trend | 39s → 13m — getting slower ⚠️ | first 3 vs last 3 |
 
 The **cycle** is the real unit: implement → debug → verify wall → land. The wall is only part of
@@ -31,7 +31,7 @@ it, and a wall that grows taxes every future tick, so it is tracked separately f
 * **✅ rows in the capability ledger**: 144 → **570**
 * **Bar 0 — oracle hangs**: 0 of 265 sites
 
-**376 of 851 ticks** (44%) moved a
+**376 of 852 ticks** (44%) moved a
 user-visible capability. The rest were instruments, infrastructure and corrections — and the
 ledger says the corrections were not overhead: three of its top three priorities were phantoms,
 and finding that out redirected everything after it.
@@ -948,5 +948,6 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 | **1141** | 2026-08-11 13:46 | 36m | measurement | 13m | +206/−40 | 437 | 81 | 56.0% · | the self-audit, and the wall is BIMODAL by a factor of ten (2026-08-11) |
 | **1142** | 2026-08-11 14:28 | 43m | capability | 13m | +320/−35 | 437 | 81 | 56.0% · | the eight gate-less map rows, PROBED — and `loading` was on the wrong two elements (2026-0 |
 | **1144** | 2026-08-11 14:41 | 13m | measurement | 13m | +274/−34 | 437 | 81 | 56.0% · | the constitution check, and the window's biggest price was 8.5× too high (2026-08-11) |
+| **1145** | 2026-08-11 16:04 | 83m | measurement | 13m | +427/−33 | 437 | 81 | 56.0% · | the sweep check #108 demanded, and the prediction written before the number (2026-08-11) |
 
 *`·` after a WPT figure means **carried forward**, not measured this tick.*

@@ -1165,3 +1165,58 @@ Removing the two refuted losses flips the mean from −0.0024 to +0.0031. Removi
 **gain** in the same breath (`experiencia.pichincha` +0.357 at n 7→4) puts it back to −0.0002.
 *Apply the solo-rerun rule to the numbers you like.* The honest statement is that the band is FLAT
 and that the window's real movement is two sites the mean cannot see.
+
+### Scorability has a CHURN FLOOR, and the loop ranks its whole work-list on it
+
+`scored / in-scope` is the number the board calls *"M1's hard ceiling"* — the term the throw-killer
+programme exists to move. Measured across the last eight banked sweeps, its sweep-to-sweep NET
+alternates in sign **every single time** while the GROSS is three-and-a-half times larger:
+
+```text
+   t1089->t1099  gained 6  lost 9   NET -3   GROSS 15
+   t1099->t1109  gained 6  lost 3   NET +3   GROSS  9
+   t1109->t1117  gained 5  lost 7   NET -2   GROSS 12
+   t1117->t1121  gained 6  lost 4   NET +2   GROSS 10
+   t1121->t1127  gained 2  lost 4   NET -2   GROSS  6
+   t1127->t1135  gained 3  lost 1   NET +2   GROSS  4
+   t1135->t1145  gained 2  lost 7   NET -5   GROSS  9
+```
+
+**Twenty-two rows flip `scored`↔`unscored` two or more times over those eight sweeps.** A quantity
+whose sign alternates and whose gross exceeds its net by 3.5× is not measuring a trend, and every
+scorability reading published since t1089 sits inside that band. The one movement in the whole record
+that clears it is t786's +15.5 points (the selector-path keying fix).
+
+**Some of the rows are deterministically bistable, not noisy.** `sports.yahoo.com` alternates with
+period two across six consecutive sweeps — and it reproduces SOLO, so it is neither contention nor
+the `--jobs 2` scale bias:
+
+```text
+   t1089  0.856 / n=1693   scored           t1127  0.000 / n=3   tree-divergence-1924
+   t1099  0.000 / n=3      tree-divergence  t1135  0.885 / n=1724 scored
+   t1109  0.881 / n=1637   scored           t1145  0.000 / n=3   tree-divergence-1714
+```
+
+That one row is worth an M1 site and ~0.9 shape points every other sweep, for free, and the loop has
+been attributing the swing to whatever landed in between. Check #103 saw one half of it and filed it
+as a population change; it is an oscillation.
+
+> **Read `NET` against `GROSS` before reading a scorability delta as progress.** A net of ±2 on a
+> gross of 10 is four sites disagreeing with four other sites. Rank on the MEMBERSHIP diff, name the
+> members, and run the solo control on one of them — that is what turned a "−5 scorability
+> regression" at t1145 into five wall-clock timeouts, a 403, and a bistable row.
+
+### A `timeout-150s` is a claim about the CLOCK, and it is testable in one command
+
+t1145 lost five sites to `timeout-150s` (up from 5 and 7 in the two prior sweeps to 12). Solo, on the
+same binary in the same hour:
+
+```text
+                        sweep             SOLO
+   www.ikea.com         timeout-150s      0.783742 / 652   <- byte-identical to t1135, ten hours earlier
+   redinfor.com.pe      render-failed     0.722222 / 36
+   www.ebay.com         timeout-150s      bot-wall-403     <- the origin refuses us; not a clock at all
+```
+
+A reason string that asserts a cause is a hypothesis with a test attached (check #73). One member,
+one command, and a five-site "regression" stops being engine work.

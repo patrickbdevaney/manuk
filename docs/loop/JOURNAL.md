@@ -46371,6 +46371,139 @@ PERF: none — one UA rule and one narrowed branch in a cascade that already ran
 WIKI: `docs/wiki/css-cascade.md` — where Chrome draws the form-control `box-sizing` line, and why a
 layout-crate test cannot see it.
 
+## Tick 1145 — the sweep check #108 demanded, and the prediction written before the number (2026-08-11)
+
+TICK SHAPE: measurement — the cadence sweep pricing the nine ticks since t1135 (t1136-t1144), which is
+check #108's steer §1 and the board's own five-to-six rule, overdue by three. 200-site CrUX trend
+corpus, release binary at HEAD, `--jobs 2`, banked at `docs/loop/SWEEP-t1145-rows.tsv`.
+
+**THE PREDICTION, WRITTEN BEFORE THE NUMBER EXISTS SO IT CAN BE WRONG** (check #103's discipline, and
+this time it is also check #108's own falsification test). The window's five engine ticks, each priced
+against the cached corpus snapshot *before* the sweep returns:
+
+```text
+   t1137  <br> is a break, not an inline box     64 of 385 pages carry a <br>
+   t1138  line-height:normal rounds the PARTS    NOT GREPPABLE — `normal` is the INITIAL value
+   t1140  word-break: keep-all                   10 of 758 files
+   t1142  `loading` reflection                   50 of 385 pages carry loading="lazy"
+   t1143  the declaration splitter               2 of 166 @font-face pages (check #108's re-price)
+```
+
+1. **M1 flat, ±1 site.** Nothing in this window is a whole-page geometry mechanism.
+2. **`shape_mean` inside the noise band, and t1138 is WHY even though it is the broadest fix here.**
+   `line-height: normal` is the initial value, so its population is every element that does not set a
+   number — far larger than the 91 files that declare it. But its error is **±1px with an alternating
+   sign** (t1138's own ladder: +1 at 11px, −1 at 22, −1 at 26, +1 at 38 …), and an error whose sign
+   alternates **cancels in any mean.** A large `shape_mean` gain here would be the surprising outcome.
+3. ⚠⚠⚠ **t1143 MOVES AT MOST 2 SITES — AND THIS IS CHECK #108 BETTING ON ITSELF.** The tick priced it
+   at 17 of 166 `@font-face` pages (10.3%); check #108 re-priced it at 2 (1.2%) on the ground that
+   fourteen of the seventeen are ICON fonts landing in pseudo-element boxes the probe cannot see. **If
+   the sweep shows a broad `@font-face`-shaped movement, check #108's Finding 1 is wrong and the VI.3
+   amendment it just wrote must be withdrawn.** That is the point of writing it down first.
+4. The **band's negative half is the SWEEP**, not the engine (check #107 Finding 1: `--jobs 2` reads
+   ~4 points low on shape, in the same direction on every site at once). Any down-mover with a
+   byte-identical node count is the instrument until a **solo-vs-solo** re-run says otherwise, and
+   any row with `shape_n <= 10` is unmeasured rather than a score.
+
+**MEASURED — 200 sites, `--jobs 2`, banked as `docs/loop/SWEEP-t1145-rows.tsv`:**
+
+```text
+   scored 105 of 135 in-scope (77.8% scorability · 65 excluded)   t1135: 110 of 132
+   shape >= 0.75 ................  39/135  28.9%   (t1135: 31.8%)
+   jarring-clean ................  52/135  38.5%   (t1135: 39.4%)
+   M1 conjunction ...............  28/135  20.7%   (t1135: 22.0%)
+   corpus gauge (progress-metric)     0.4432   (t1135: 0.4678)
+   COMMON-SET BAND ............... +0.27 pts (10 up · 9 down >2pt, n=103)
+```
+
+**THE PREDICTION SCORED 4 OF 4, AND THE FOURTH ONE FOUND SOMETHING.**
+
+⚠⚠⚠ **THE HEADLINE IS ENTIRELY A SCORABILITY EVENT, AND `timeout-150s` WENT 5 → 12.** Seven sites
+left the scored set and two entered. Five of the seven are `timeout-150s`, one is the
+`tree-divergence` row check #103 already named, one is `render-failed`. **The two testable ones were
+re-run SOLO on the same binary, and neither is ours:**
+
+```text
+                        t1135 sweep     t1145 sweep       SOLO, same hour
+   www.ikea.com         0.783742/652    timeout-150s      0.783742/652    <- SIX DECIMALS
+   redinfor.com.pe      0.694444/36     render-failed     0.722222/36
+   www.ebay.com         0.724437/1154   timeout-150s      bot-wall-403
+```
+
+**`ikea` is the cleanest control this loop has ever taken** — identical to six decimal places across
+ten hours and five landed engine ticks, which is simultaneously the sweep's acquittal and a
+measurement of the window: nothing this window landed moved that page by one bucket. And `ebay` solo
+answers **403**, so the origin refuses us; whichever reason string it wears, it is not engine work.
+Both of the two shape-pass sites lost (ikea 0.784, sports.yahoo 0.885) were **above** the bar, so
+two-thirds of the −2.9 pts is passing sites that stopped being measured.
+
+⚠⚠⚠ **`sports.yahoo.com` ALTERNATES WITH PERIOD TWO ACROSS SIX SWEEPS — AND IT REPRODUCES SOLO.**
+
+```text
+   t1089  0.856 / n=1693   scored          t1127  0.000 / n=3   tree-divergence-1924
+   t1099  0.000 / n=3      tree-divergence  t1135 0.885 / n=1724 scored
+   t1109  0.881 / n=1637   scored          t1145  0.000 / n=3   tree-divergence-1714
+```
+
+A solo run just now returned `tree-divergence-1714, n=3` — **identical to the sweep**, so this is not
+contention and not the `--jobs 2` bias check #107 banked. It is a **bistable row**, worth one M1 site
+and ~0.9 shape points every other sweep, for free, and the loop has been attributing that swing to
+whatever landed in between. Check #103 saw one half of it and called it a population change; it is a
+period-2 oscillation.
+
+⚠⚠⚠ **AND IT IS NOT ONE ROW — SCORABILITY HAS A CHURN FLOOR OF ABOUT ±3 SITES PER SWEEP.** Twenty-two
+rows flip scored↔unscored two or more times across the last eight sweeps (`videa.hu` and
+`sports.yahoo` five times each). Per consecutive pair:
+
+```text
+   t1089->t1099  gained 6  lost 9   NET -3   GROSS 15
+   t1099->t1109  gained 6  lost 3   NET +3   GROSS  9
+   t1109->t1117  gained 5  lost 7   NET -2   GROSS 12
+   t1117->t1121  gained 6  lost 4   NET +2   GROSS 10
+   t1121->t1127  gained 2  lost 4   NET -2   GROSS  6
+   t1127->t1135  gained 3  lost 1   NET +2   GROSS  4
+   t1135->t1145  gained 2  lost 7   NET -5   GROSS  9
+```
+
+**The NET alternates in sign every single time (−+−+−+−) while the GROSS runs 4 to 15.** A quantity
+whose sign alternates and whose gross is 3.5× its net is not measuring a trend. **The board names
+scorability as M1's hard ceiling and ranks the whole throw-killer programme on it**, and every
+scorability reading this project has published since t1089 is inside that churn band — t786's +15.5
+points is the only movement in the record that clears it. This is a fifth member of VI.2's instrument
+class, after the mis-provisioned reference, the population-changed delta, the per-site churn, and the
+`--jobs 2` scale bias: **the SCORABILITY CHURN FLOOR.**
+
+⚠⚠ **CHECK #108's FINDING 1 SURVIVED ITS OWN FALSIFICATION TEST.** Prediction 3 said t1143 moves at
+most 2 sites and that a broad `@font-face`-shaped movement would force the VI.3 amendment to be
+withdrawn. The common-set band is **mean Δshape +0.0027 over 103 sites, 10 up and 9 down** — symmetric
+churn, no cohort. The re-price stands. ⚠ Prediction 2 also held and the ledger caught it unprompted:
+`shape_mean` 62.2 → 62.7 **rose while `scored` fell**, and `fidelity-progress.sh` printed
+`DENOMINATOR-TRAP` on its own.
+
+⚠ `app.ordertime.com` re-entered the scored set at **shape 1.000 on 29 nodes** — VI.3's named
+vacuous-pass site, by name, arriving through the denominator exactly as that section describes. The
+f15 cut refuses it; a re-derivation from raw rows would admit it.
+
+**THE ENGINE READING, stated plainly: this window is FLAT and that is the honest answer.** Band
++0.27 pts with 10 up and 9 down; mean Δsite_score +0.0019 with 12 up and 11 down. Five Chrome-exact
+fixes, priced, and the corpus cannot see them — which is what check #108 predicted from the
+population analysis and is not the same statement as *"they bought nothing."*
+
+⚠ HANDED TO THE OBSERVER, not acted on (PART VII): `/home` is at **93% (21G free)** with
+`target/` at **115G**. The banked hazard is that `verify.sh` calls `disk-hygiene.sh` mid-wall and the
+deps prune's safety valve fires below 25G free, so a wall can delete its own inputs. One line, and the
+loop continues with browser work.
+
+RATCHET: held trivially — nothing landed in `engine/`. `FIDELITY-PROGRESS.tsv` banked a t1145 row.
+
+GATE: none — the artefacts are `SWEEP-t1145-rows.tsv`, the `FIDELITY-PROGRESS.tsv` row, and the three
+solo controls above.
+
+PERF: none — measurement only.
+
+WIKI: `docs/wiki/fidelity-instrument.md` — "Scorability has a CHURN FLOOR: the net alternates in sign
+every sweep while the gross is 3.5× larger"
+
 ## Tick 1144 — the constitution check, and the window's biggest price was 8.5× too high (2026-08-11)
 
 TICK SHAPE: measurement — the cadence re-read of `CONSTITUTION.MD` (due every 8 ticks; last at 1136),
