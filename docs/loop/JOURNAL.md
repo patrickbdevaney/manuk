@@ -46371,6 +46371,90 @@ PERF: none — one UA rule and one narrowed branch in a cascade that already ran
 WIKI: `docs/wiki/css-cascade.md` — where Chrome draws the form-control `box-sizing` line, and why a
 layout-crate test cannot see it.
 
+## Tick 1172 — css/css-grid, decomposed: 40% of the gap is ABSPOS, and `in el.style` is false for EVERY property (2026-08-12)
+
+TICK SHAPE: measurement (target selection). The refreshed board (t1168) and the fidelity checkpoint
+(t1170) now agree that `css/css-grid` is the place — 8,723 failing, the largest CSS surface AND the
+M1 body. **Before building anything, decompose it**, because the standing steer is *"PORT whole
+algorithms, don't reverse-engineer per-assertion"* and that is only actionable once you know which
+algorithm.
+
+**`css/css-grid` = 558/9281 over 643 files. The gap is 8,723 subtests, and it is NOT a death-tail —
+it is six clusters:**
+
+```text
+   cluster                                        files   missing   share of gap
+   abspos/ (excluding the orthogonal set)            41      1879      21.5%
+   abspos/orthogonal-positioned-grid-descendants     16      1600      18.3%   <- 0 passes, 16 files
+   alignment/                                       258      1295      14.8%
+   grid-definition/                                  45      1217      14.0%
+   grid-lanes/  (CSS Grid L3 "masonry")              97       763       8.7%
+   layout-algorithm/                                 31       516       5.9%
+   grid-layout-properties.html  (CSSOM, ONE file)     1       138       1.6%
+```
+
+⚠⚠⚠ **ABSPOS IS 40% OF THE ENTIRE GRID GAP — 3,479 subtests across 57 files — and the loop has never
+named it.** Every steer on record treats grid as *track sizing and alignment*; measured, the single
+largest mechanism is **absolutely-positioned children of a grid container**, and the
+`orthogonal-positioned-grid-descendants` set (16 files, 1,600 subtests) scores a flat **zero**. That
+is the shape of one absent mechanism, not a tail. **It is also the natural PORT target**: abspos
+placement against a grid's containing block is a bounded algorithm in both blitz and servo.
+
+⚠⚠ **`grid-lanes/` IS 8.7% AND IS CSS GRID LEVEL 3 (masonry).** It is genuinely new-proposal surface
+and belongs on the death-tail conversation, not in a burndown. Naming it so a future ranker does not
+count 763 subtests it should not be chasing.
+
+⚠⚠⚠ **AND THE ONE-FILE CLUSTER FOUND SOMETHING FAR BIGGER THAN GRID.** `grid-layout-properties.html`
+is 2/140 — a CSSOM test, not layout math. Probed directly:
+
+```text
+   'display' in el.style                              FALSE   <- and 27 other property names, 0/28
+   el.style.gridTemplateColumns = '1fr 2fr'; read back  "1fr 2fr"   ✓  set/get works
+   getComputedStyle(el).gridTemplateColumns            undefined
+```
+
+**Not one CSS property name answers `in` on `el.style` — not even `display`.** `el.style` is a
+`Proxy` whose `has` trap is `dash(prop) in parse()`, i.e. *"is this property currently SET in the
+style attribute"*. CSSOM says a `CSSStyleDeclaration` exposes an IDL attribute for **every supported
+property**, set or not. So `if ('gridTemplateColumns' in el.style)` — **the** CSS feature-detection
+idiom, the one Modernizr and every polyfill loader is built on — answers `false` for every feature we
+actually have. That is a capability we *possess* being reported as absent, which is the inverse of
+the usual failure and strictly worse: it makes pages take their fallback path against a working
+engine.
+
+⚠ **THE FIX IS NAMED AND NOT TAKEN, WITH ITS BLOCKER.** `has` must answer for the set of *supported*
+property names, and the engine's honest oracle for that is `stylo_engine::supports_condition` (what
+`@supports` and `CSS.supports` already use) — but it answers **one declaration at a time and is not
+enumerable**, so there is no list to hand the Proxy. Building that registry is the tick; guessing a
+list would re-create the `PARSE_ONLY_LONGHANDS` drift the same file already warns about.
+
+⚠ **AND THE `getComputedStyle` HALF MUST NOT BE "FIXED".** `grid-template-columns` is absent there
+**deliberately** (`extra_computed_props`, and the comment is explicit): Chrome reports the **used
+track sizes in px**, not the author's list, so emitting `1fr 2fr` would be *"a wrong answer of the
+RIGHT TYPE"* — this project's most-feared shape. Publishing it needs layout's resolved track list.
+Re-derived here rather than trusted, and left alone.
+
+**THE STEER FOR THE NEXT TICK:** grid **abspos**, ported rather than derived — it is 40% of the
+largest CSS surface, it scores zero on its clearest sub-cluster, and no steer on record has named it.
+The `in el.style` registry is the second, and it is broader than grid.
+
+**SELF-AUDIT (due at 1172, the hook blocks past it): CLEAN.** `scripts/self-audit.sh` reports
+*"methodology and reality agree"* — every gate declares how to break it, the process-defect ledger
+(49) names a mechanism per defect, the cluster registry (392) is the ledger, journal entries are
+present for the last five ticks, and the pattern ledger (**1,089 rows**, up from 1,085 at t1162 —
+this session added four) moves with the engine. ⚠ Recorded plainly because *"an audit that finds
+nothing is a suspicious audit"* is this repo's standing warning: the self-audit checks STRUCTURE, and
+the three instruments that found things this window (constitution check #111, surface audit #57, and
+this tick) all found them by looking at MEASUREMENTS. The structure is genuinely fine; that is not
+the same as the loop being fine, and #111 said so.
+
+RATCHET: held — no engine code changed in this tick.
+
+PERF: none — measurement only.
+
+WIKI: none [forced] — the artefact is this decomposition; the mechanisms it names get their wiki
+entries when they are built. [no-pattern]
+
 ## Tick 1171 — half of Interop 2026 is on our own death-tail, and my reconciliation lied twice (2026-08-12)
 
 TICK SHAPE: measurement — the cadence surface audit (due every 10 ticks; last at 1161), banked as

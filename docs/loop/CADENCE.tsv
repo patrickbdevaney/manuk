@@ -874,3 +874,4 @@ tick	sha	epoch	iso	delta_s	shape	wall_s	files	added	deleted	gates	claims	wpt_pas
 1169	a9546572	1786531054	2026-08-12T06:37:34-04:00	325	measurement	808	5	191	33	442	81	3896	6960	0	577	0	six ticks landed and the EXIT was never measured once (2026-08-12)
 1170	1c26fe30	1786535466	2026-08-12T07:51:06-04:00	4412	measurement	808	5	299	32	442	81	3896	6960	0	577	0	the checkpoint check #111 demanded: SCORABILITY moved, shape did not (2026-08-12)
 1171	4f4928ef	1786535827	2026-08-12T07:57:07-04:00	361	measurement	808	5	160	33	442	81	3896	6960	0	577	0	half of Interop 2026 is on our own death-tail, and my reconciliation lied twice (2026-08-12)
+1172	fcc48029	1786536336	2026-08-12T08:05:36-04:00	509	measurement	808	6	120	33	442	81	3896	6960	0	577	0	css/css-grid, decomposed: 40% of the gap is ABSPOS, and `in el.style` is false for EVERY property (2026-08-12)
