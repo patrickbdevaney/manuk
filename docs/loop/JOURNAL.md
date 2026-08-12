@@ -46371,6 +46371,73 @@ PERF: none — one UA rule and one narrowed branch in a cascade that already ran
 WIKI: `docs/wiki/css-cascade.md` — where Chrome draws the form-control `box-sizing` line, and why a
 layout-crate test cannot see it.
 
+## Tick 1173 — GRID's abspos static position is the PADDING box, and block and flex are the controls that prove it (2026-08-12)
+
+TICK SHAPE: measurement (layout diagnosis). t1172 named grid **abspos** as 40% of the largest CSS
+surface and the next target. Before porting anything, measure what we actually do — the standing rule
+that a spec rule is a hypothesis until the row where it must NOT apply has been run.
+
+**Fixture: a `position:relative` grid, `width:300px; padding:10px; border:5px`, three abspos children.**
+
+```text
+                                                   CHROME          MANUK
+   g   the container itself             CONTROL   0,0,330,160    0,0,330,160    ✓ exact
+   a   grid-column:2; grid-row:2
+       (definite placement, insets AUTO) CONTROL 115,65,0,0     115,65,0,0     ✓ exact
+   b   no placement, insets AUTO                    5,5,0,0       15,15,0,0    ✗ off by the PADDING
+   c   grid-column:1/3; grid-row:1; left:0;top:0
+       width:20; height:20                        15,15,20,20     5,5,30,30    ✗ wrong box AND size
+```
+
+**Rows `g` and `a` are the controls and they are exact** — the container is right, and definite grid
+placement with auto insets already resolves to the correct grid area. So neither the grid geometry
+nor the grid-area lookup is what is wrong, which is what makes the other two rows readable.
+
+⚠⚠⚠ **ROW `c` IS THE HALF THE CODE ALREADY NAMES AS OPEN**, and it is confirmed rather than
+discovered: `placed_static_position_only`'s comment quotes Grid §9 — *"If the element has a definite
+grid position … the containing block is the corresponding grid area"* — and says plainly that *"only
+the grid-area half needs a rect this pass cannot build"*. With insets present we resolve against the
+padding box (5,5) where the grid area is (15,15). ⚠ The **size** is wrong too (30×30 against a
+declared `width:20px; height:20px`), which the existing note does NOT cover and which is recorded
+here as a second, separate symptom of the same missing rect.
+
+⚠⚠⚠ **ROW `b` IS A NEW DEFECT, IN THE HALF THE CODE BELIEVES IS CORRECT — AND ONE CONTROL TABLE
+PROVES IT.** That same comment asserts *"the padding-edge half is the SAME rule as flex and
+`abs_containing_block` already produces exactly that box"*. It is **not** the same rule as flex.
+Measured in Chrome, an all-auto abspos child, varying ONLY the container's `display`:
+
+```text
+   container display    Chrome's static position     what that box IS
+   block                     15,15                   border(5) + padding(10)  = CONTENT box
+   flex                      15,145                  border(5) + padding(10)  = CONTENT box
+   grid                       5,265                  border(5)                = PADDING box   ← DIFFERS
+```
+
+**Grid disagrees with both of its controls, and our engine agrees with the controls.** We give 15,15
+for the grid case — the flex answer — because the static position comes from taffy's slot, and
+`TaffyDom::build` zeroes the root's padding so that slot is CONTENT-box relative. So the containing
+block is chosen correctly and the *static position inside it* is computed in the wrong box: the two
+halves of one rule, disagreeing.
+
+⚠⚠ **THIS IS WHY THE PRIOR SCOPE TABLES TRADED TESTS.** t1119/t1125/t1126 measured four different
+scopes for this exclusion and every wider one traded `css-grid` reftests away (`+6 −3` twice). A rule
+modelled on flex cannot be widened to grid without losing tests, because **grid's rule is genuinely a
+different rule** — and no fixture in that window varied the container's `display` with everything else
+held fixed. *A scope drawn around a failure is a note to come back* (t1126's own words); this is the
+row that says what to come back with.
+
+**NAMED, NOT TAKEN, AND THE REASON IS THE RATCHET.** The fix touches `placed_static_position_only`,
+whose scope has been settled four times by full `css-flexbox` + `css-grid` reftest runs; changing it
+without re-running both suites would be exactly the trade the ratchet exists to refuse. That is the
+next tick, and it now starts from a three-row control table instead of from a spec quotation.
+
+RATCHET: held — no engine code changed in this tick.
+
+PERF: none — measurement only.
+
+WIKI: none [forced] — the mechanism gets its `docs/wiki/box-layout.md` entry when it is built; this
+tick's artefact is the control table above. [no-pattern]
+
 ## Tick 1172 — css/css-grid, decomposed: 40% of the gap is ABSPOS, and `in el.style` is false for EVERY property (2026-08-12)
 
 TICK SHAPE: measurement (target selection). The refreshed board (t1168) and the fidelity checkpoint
