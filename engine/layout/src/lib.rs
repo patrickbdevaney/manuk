@@ -18529,6 +18529,31 @@ mod tests {
     /// Rows `d`, `f` and `g` are exact in all twelve contexts, which is what says the residue is
     /// about the *container* subject and not about the keywords.
     ///
+    /// ⚠⚠⚠ **THE RESIDUE'S MECHANISM IS NOW MEASURED, NOT SUSPECTED (tick 1162), AND OUR GRID IS NOT
+    /// THE THING THAT IS WRONG.** One control row decides it — put `justify-items: start` on the grid
+    /// parent and every residue cell becomes Chrome-exact:
+    ///
+    /// ```text
+    ///                                 width:min-content   width:auto
+    ///   grid parent, default              230.0  ✗          230.0  ✓
+    ///   grid parent, justify-items:start  110.0  ✓          110.0
+    ///   flex parent, default              110.0  ✓          110.0  ✓
+    /// ```
+    ///
+    /// A grid item's default `justify-items: stretch` fills the track **on the INLINE axis**, and it
+    /// is *right* to do that for `width:auto` — row `f` proves it, because Chrome also says 230
+    /// there. A flex row stretches only the **CROSS** axis, which is the whole reason the same
+    /// subjects are already exact under a flex parent and why this looked like a grid defect.
+    ///
+    /// **So the item only LOOKS `auto`.** `resolve_intrinsic_inline` declines to run for a node that
+    /// is itself a container (`if !container` at its call site), so the keyword sidecar never crosses
+    /// into taffy and `width: min-content` arrives indistinguishable from `width: auto` — whereupon
+    /// the grid correctly stretches something that should never have been stretchable. The fix is
+    /// therefore NOT in the grid: it is the root-suppression flag named in `taffy_tree.rs`, which
+    /// lets a container's own intrinsic width be measured without the nested build re-entering this
+    /// function on the same node. Recorded here so the next tick starts from a mechanism instead of
+    /// re-deriving one from fifteen cells.
+    ///
     /// The residue is asserted as an EXACT SET, so a new divergence is RED **and closing one is
     /// also RED** (edit the list, never widen it). To watch the whole table go RED: delete the
     /// `size > 0.0` early return in `manuk_text::FontContext::shape_run`.

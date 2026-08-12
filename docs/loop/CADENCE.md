@@ -11,12 +11,12 @@
 
 | | value | over |
 |---|---|---|
-| ticks landed | **865** | ticks 1–1161 |
-| median tick cycle | **28m** | 864 intervals |
-| median, last 10 | **22m** | 10 intervals |
+| ticks landed | **866** | ticks 1–1162 |
+| median tick cycle | **28m** | 865 intervals |
+| median, last 10 | **23m** | 10 intervals |
 | fastest / slowest | 5s / 5.4d | |
-| **ticks per hour** | **1.13** | 762.8h elapsed |
-| median verify wall | **63s** | 804 ticks |
+| **ticks per hour** | **1.13** | 763.3h elapsed |
+| median verify wall | **63s** | 805 ticks |
 | wall trend | 39s → 13m — getting slower ⚠️ | first 3 vs last 3 |
 
 The **cycle** is the real unit: implement → debug → verify wall → land. The wall is only part of
@@ -31,7 +31,7 @@ it, and a wall that grows taxes every future tick, so it is tracked separately f
 * **✅ rows in the capability ledger**: 144 → **573**
 * **Bar 0 — oracle hangs**: 0 of 265 sites
 
-**383 of 865 ticks** (44%) moved a
+**383 of 866 ticks** (44%) moved a
 user-visible capability. The rest were instruments, infrastructure and corrections — and the
 ledger says the corrections were not overhead: three of its top three priorities were phantoms,
 and finding that out redirected everything after it.
@@ -91,7 +91,7 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 ## What a capability costs
 
 * **383** capability ticks, median cycle **28m**
-* median diff per tick: **+265 / −34** lines across 8 files
+* median diff per tick: **+264 / −34** lines across 8 files
 
 ## Every tick
 
@@ -962,5 +962,6 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 | **1157** | 2026-08-11 20:44 | 34m | measurement | 13m | +124/−33 | 438 | 81 | 56.0% · | the port target is TWO ARMS of an eight-arm table, and eight rows are already exact (2026- |
 | **1159** | 2026-08-11 22:47 | 2.1h | capability | 13m | +852/−33 | 438 | 81 | 56.0% · | the conflict arms LANDED, and the sixth control was measured in the wrong context (2026-08 |
 | **1161** | 2026-08-11 23:52 | 64m | capability | 13m | +722/−52 | 438 | 81 | 56.0% · | the PRIMARY METRIC's own source was a month stale, and it was hiding a Bar 0 (2026-08-11) |
+| **1162** | 2026-08-12 00:20 | 28m | measurement | 13m | +155/−36 | 438 | 81 | 56.0% · | one CONTROL ROW says our grid is right and the KEYWORD never arrived (2026-08-11) |
 
 *`·` after a WPT figure means **carried forward**, not measured this tick.*

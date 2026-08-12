@@ -46371,6 +46371,61 @@ PERF: none — one UA rule and one narrowed branch in a cascade that already ran
 WIKI: `docs/wiki/css-cascade.md` — where Chrome draws the form-control `box-sizing` line, and why a
 layout-crate test cannot see it.
 
+## Tick 1162 — one CONTROL ROW says our grid is right and the KEYWORD never arrived (2026-08-11)
+
+TICK SHAPE: measurement (layout diagnosis) + the due self-audit. HYPOTHESIS, written before the
+work: t1160's 96-cell battery left **15 residue cells**, all of the form *"an intrinsic sizing
+keyword on a subject that is ITSELF a flex/grid container, inside a GRID parent"*, where we return
+the track width (230) instead of the keyword's answer. Predicted: a grid-item sizing defect.
+**That was wrong in the most useful way — the grid is correct and the input is not.**
+
+⚠⚠⚠ **ONE CONTROL ROW DECIDES IT, AND IT IS `justify-items: start`.** Put it on the grid parent and
+every residue cell becomes Chrome-exact:
+
+```text
+                                    width:min-content   width:auto
+      grid parent, default              230.0  ✗          230.0  ✓
+      grid parent, justify-items:start  110.0  ✓          110.0
+      flex parent, default              110.0  ✓          110.0  ✓
+```
+
+A grid item's default `justify-items: stretch` fills the track **on the INLINE axis**, and it is
+*right* to do so for `width:auto` — row `f` proves it, because **Chrome also says 230 there**. A flex
+row stretches only the **CROSS** axis, which is exactly why the same subjects were already exact
+under a flex parent, and why fifteen cells that share a parent looked like a grid defect.
+
+⚠⚠⚠ **SO THE ITEM ONLY *LOOKS* `auto`.** `resolve_intrinsic_inline` declines to run for a node that
+is itself a container (`if !container` at its call site in `taffy_tree.rs`), so the keyword sidecar
+never crosses into taffy and `width: min-content` arrives **indistinguishable from `width: auto`** —
+whereupon the grid correctly stretches something that should never have been stretchable. **The
+defect is an absent input, not a wrong algorithm**, and no amount of work inside the grid path would
+have found that: every fixture aimed there would have been measuring a correct implementation.
+
+**The fix is named and is NOT taken in this tick, deliberately.** It is the root-suppression flag
+`taffy_tree.rs` already documents with its own number: measuring a container's intrinsic width builds
+a *second* `TaffyDom` for that node, whose `add` would reach `resolve_intrinsic_inline` again on the
+same node and recurse without bound — **a Bar 0 crash, not a wrong number**. That is a mechanism, not
+a line, and this tick's product is that the next one starts from it instead of re-deriving it from
+fifteen cells. Banked in the gate's own doc comment, where the next reader of those cells will be.
+
+**SELF-AUDIT (due at 1162, the hook blocks past it): CLEAN.** `scripts/self-audit.sh` reports
+*"methodology and reality agree"* with **zero** ✗ or ⚠ rows — every gate declares how to break it,
+the process-defect ledger (49) names a mechanism per defect, the cluster registry (392) is the
+ledger, journal entries are present for the last five ticks, and the pattern ledger (1085 rows) moves
+with the engine. ⚠ Recorded plainly because *"an audit that finds nothing is a suspicious audit"* is
+this repo's own standing warning — the three cadence instruments run in ticks 1161–1162 were **not**
+all clean, and the two that found things (surface audit #56, constitution check #110) found them by
+looking at the loop's own MEASUREMENTS rather than at its structure. The self-audit checks structure,
+and the structure is genuinely fine.
+
+RATCHET: held — no engine code changed in this tick; `manuk-layout` 173/173.
+
+PERF: none — measurement only.
+
+WIKI: `docs/wiki/box-layout.md` — the mechanism is recorded in the gate
+`intrinsic_keywords_and_the_font_size_zero_inline_block_grid`'s own doc comment, which is where the
+fifteen cells are asserted and therefore where the next reader arrives. [no-pattern]
+
 ## Tick 1161 — the PRIMARY METRIC's own source was a month stale, and it was hiding a Bar 0 (2026-08-11)
 
 TICK SHAPE: capability (selector matching) + measurement (the metric's source). HYPOTHESIS, written

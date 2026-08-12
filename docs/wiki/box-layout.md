@@ -9110,3 +9110,40 @@ diverging set is *exactly* these three, so a new divergence is RED and closing o
 | `e` grid | `101.3x100` | `150x100` | grid does not transfer a `max-width` clamp back through the ratio |
 | `f` grid | `810.1x800` | `600x800` | grid's `(Min,Min)` arm derives from the wrong axis — and note grid must NOT copy flex here |
 | `j` abspos | `150x148.4` | `150x148.1` | the abspos `box-sizing` deduction rounds the ratio transfer differently |
+
+## One control row says the GRID is right and the KEYWORD never arrived (tick 1162)
+
+t1160's 96-cell battery left **15 residue cells**, all the same shape: an intrinsic sizing keyword
+(`min-content` / `max-content` / `fit-content`) on a subject that is **itself a flex or grid
+container**, inside a **grid** parent, where we return the track width (230) instead of the keyword's
+answer. Fifteen cells sharing a parent reads as a grid-item sizing defect. It is not.
+
+**One control row decides it** — put `justify-items: start` on the grid parent:
+
+```text
+                                    width:min-content   width:auto
+      grid parent, default              230.0  ✗          230.0  ✓
+      grid parent, justify-items:start  110.0  ✓          110.0
+      flex parent, default              110.0  ✓          110.0  ✓
+```
+
+A grid item's default `justify-items: stretch` fills the track **on the INLINE axis**, and it is
+**right** to do that for `width: auto` — the `width:auto` row proves it, because Chrome also says 230
+there. A flex row stretches only the **CROSS** axis, which is precisely why the same subjects were
+already exact under a flex parent, and why the residue clustered on one parent and looked causal.
+
+**So the item only *looks* `auto`.** `resolve_intrinsic_inline` declines to run for a node that is
+itself a container (`if !container` at its call site in `taffy_tree.rs`), so the keyword sidecar never
+crosses into taffy and `width: min-content` arrives **indistinguishable from `width: auto`** —
+whereupon the grid correctly stretches something that should never have been stretchable.
+
+> **The defect is an ABSENT INPUT, not a wrong algorithm.** No fixture aimed at the grid path could
+> have found it: every one of them would have been measuring a correct implementation, and reporting
+> it correct.
+
+**The fix is named and is not a line.** `taffy_tree.rs` documents it with its own number: measuring a
+container's intrinsic width builds a *second* `TaffyDom` for that node, whose `add` reaches
+`resolve_intrinsic_inline` again on the same node and recurses without bound — **a Bar 0 crash, not a
+wrong number**. It needs a root-suppression flag on the nested build. The fifteen cells stay asserted
+as an exact set by `intrinsic_keywords_and_the_font_size_zero_inline_block_grid`, so closing one is
+RED and the next reader arrives at the mechanism rather than at a symptom.
