@@ -173,6 +173,22 @@ pub struct TextFragment {
     /// `<p>text <a>link</a></p>`). Inline elements produce no `LayoutBox`, so this is
     /// the only way to recover their geometry.
     pub node: Option<NodeId>,
+    /// ⚠⚠⚠ **THE TEXT NODE THIS RUN CAME FROM — which `node` above is NOT, and the difference is
+    /// every out-of-flow box preceded by bare text.** `node` is the deepest *element* ancestor, so
+    /// for `<div>XX<div style="position:absolute">…` it is the **container**, i.e. the abspos's own
+    /// parent. `refine_inline_static_positions` selects the fragments that PRECEDE an out-of-flow
+    /// box by testing membership in a set of preceding *siblings*, and a container is never one of
+    /// its own children's siblings — so every bare-text fragment was silently skipped and the box
+    /// landed at the content-box origin as though nothing came before it. Wrapping the identical
+    /// text in a `<span>` made it Chrome-exact, which is what named the mechanism (t1187's battery).
+    ///
+    /// `None` for a synthetic fragment (a spacer, a `<br>`'s empty fragment, an `inline-block`'s
+    /// reporter) — those already carry a real element in `node`, and it is already a sibling.
+    ///
+    /// Ordering by position in the `frags` vector instead of by identity is the tempting cheap
+    /// version and is WRONG: a container can hold bare text on **both sides** of the out-of-flow
+    /// box, and nothing in `frags` says which side a run is on.
+    pub origin: Option<NodeId>,
     /// Distance from `baseline` **up** to the top of this run's CSS content area —
     /// `round(ascent)` for *this run's own* face and size, which on a mixed-font line is not the
     /// line's ascent. Stored relative to the baseline on purpose: every vertical shift in this
@@ -1540,6 +1556,7 @@ fn apply_text_overflow_ellipsis(
                     text: prefix,
                     style: f.style,
                     node: f.node,
+                    origin: f.origin,
                     content_ascent: f.content_ascent,
                     content_height: f.content_height,
                 });
@@ -1557,6 +1574,8 @@ fn apply_text_overflow_ellipsis(
         width: ell_w,
         text: ell.to_string(),
         style: ell_style,
+        // The ellipsis is synthesised by `text-overflow`; it came from no text node.
+        origin: None,
         node,
         content_ascent: ell_ca,
         content_height: ell_ch,
@@ -1644,6 +1663,7 @@ fn apply_line_clamp(
                     text: prefix,
                     style: f.style,
                     node: f.node,
+                    origin: f.origin,
                     content_ascent: f.content_ascent,
                     content_height: f.content_height,
                 });
@@ -1659,6 +1679,8 @@ fn apply_line_clamp(
         width: ell_w,
         text: ell.to_string(),
         style: ell_style,
+        // The ellipsis is synthesised by `text-overflow`; it came from no text node.
+        origin: None,
         node,
         content_ascent: ell_ca,
         content_height: ell_ch,
@@ -3291,8 +3313,31 @@ impl Ctx<'_> {
                 let st = text_style(cs, self.fonts);
                 self.fonts.measure(" ", st.font_key, st.font_size)
             };
+            // ⚠⚠⚠ **`f.node` IS THE DEEPEST ELEMENT ANCESTOR, WHICH FOR BARE TEXT IS THIS BOX'S
+            // OWN PARENT — never one of its siblings, so every bare-text fragment used to be
+            // skipped and the box landed at the content-box origin as though nothing preceded it.**
+            // `f.origin` is the text node itself, which IS a sibling. Measured, Ahem 25px, one
+            // variable per row (`offsetLeft,offsetTop`):
+            //
+            // ```text
+            //   preceding in-flow content              before    after / Chrome
+            //   text "XX"                                0,0        50,0
+            //   text "XX", abspos display:block          0,0        50,0
+            //   <span>XX</span>  (an ELEMENT)           50,0        50,0   <- CONTROL, unmoved
+            //   text "XXXXXX" wrapping in 100px          0,0        50,25
+            //   text "XX<br>XX"                         50,0        50,25
+            // ```
+            //
+            // The `<span>` control is what named the mechanism: wrap the identical text in an
+            // element and the position was already exact. The `<br>` row is the same fact in
+            // disguise — `<br>` IS an element, so its fragment counted while the text after it did
+            // not, which is why that row was right in `x` and wrong in `y`.
+            let belongs = |f_node: Option<NodeId>, f_origin: Option<NodeId>| {
+                f_node.is_some_and(|n| before.contains(&n))
+                    || f_origin.is_some_and(|n| before.contains(&n))
+            };
             for f in frags {
-                if f.node.is_some_and(|n| before.contains(&n)) {
+                if belongs(f.node, f.origin) {
                     take(f.line_top, f.x + f.width + trailing_margin(f.node));
                 }
             }
@@ -4559,6 +4604,8 @@ impl Ctx<'_> {
                 // The marker is the only item on its line; nothing precedes it to break at.
                 break_before: false,
                 node: Some(node),
+                // A control's own rendered text is synthesised, not a text node in the tree.
+                origin: None,
                 no_wrap: true,
                 break_word: false,
             }];
@@ -5615,6 +5662,8 @@ impl Ctx<'_> {
             text,
             style,
             node: Some(node),
+            // A list marker is generated content, not a text node.
+            origin: None,
             content_ascent: lm.ascent.round(),
             content_height: lm.content_height(),
         })
@@ -9631,6 +9680,8 @@ impl Ctx<'_> {
                 space_before: !block_level && gap.space.is_some() && !*first,
                 break_before: !block_level && !*first && (gap.brk || lead_ws),
                 node: attr,
+                // `content:` is generated: there is no text node behind it.
+                origin: None,
                 no_wrap: true,
                 break_word: false,
             },
@@ -9827,18 +9878,19 @@ impl Ctx<'_> {
             }
         }
         let Some((i, off)) = split_at else { return };
-        let (tail, style, node, break_word) = {
+        let (tail, style, node, origin, break_word) = {
             let InlineItem::Word {
                 text,
                 style,
                 node,
+                origin,
                 break_word,
                 ..
             } = &mut out[i]
             else {
                 return;
             };
-            let saved = (text.split_off(off), *style, *node, *break_word);
+            let saved = (text.split_off(off), *style, *node, *origin, *break_word);
             *style = head_style;
             *break_word = false;
             saved
@@ -9853,6 +9905,8 @@ impl Ctx<'_> {
                 // `)T)` never gets to end a line with `est` on the next one.
                 break_before: false,
                 node,
+                // The tail is the same text node as the head `::first-letter` was split from.
+                origin,
                 no_wrap: true,
                 break_word,
             },
@@ -9886,6 +9940,8 @@ impl Ctx<'_> {
         text: &str,
         style: TextStyle,
         node: Option<NodeId>,
+        // The TEXT NODE — see `TextFragment::origin`.
+        origin: Option<NodeId>,
         stop: f32,
         no_wrap: bool,
         first: &mut bool,
@@ -9896,6 +9952,7 @@ impl Ctx<'_> {
                     stop,
                     style,
                     node,
+                    origin,
                     no_wrap,
                 });
                 *first = false;
@@ -9912,6 +9969,7 @@ impl Ctx<'_> {
                     // `-processing-013` and `-052` all say so. The caller sets `gap.brk` after this.
                     break_before: false,
                     node,
+                    origin,
                     no_wrap,
                     break_word: false,
                 });
@@ -10008,6 +10066,7 @@ impl Ctx<'_> {
                                             &ws,
                                             style,
                                             owner,
+                                            Some(node),
                                             self.tab_stop(cs, style),
                                             false,
                                             first,
@@ -10024,6 +10083,7 @@ impl Ctx<'_> {
                                             gap,
                                             first,
                                             owner,
+                                            Some(node),
                                             false,
                                             break_word,
                                             keep_all,
@@ -10061,7 +10121,15 @@ impl Ctx<'_> {
                             if is_css_white_space(ch) {
                                 if !buf.is_empty() {
                                     push_word(
-                                        out, &mut buf, style, gap, first, owner, false, break_word,
+                                        out,
+                                        &mut buf,
+                                        style,
+                                        gap,
+                                        first,
+                                        owner,
+                                        Some(node),
+                                        false,
+                                        break_word,
                                         keep_all,
                                     );
                                 }
@@ -10074,7 +10142,15 @@ impl Ctx<'_> {
                         }
                         if !buf.is_empty() {
                             push_word(
-                                out, &mut buf, style, gap, first, owner, false, break_word,
+                                out,
+                                &mut buf,
+                                style,
+                                gap,
+                                first,
+                                owner,
+                                Some(node),
+                                false,
+                                break_word,
                                 keep_all,
                             );
                         }
@@ -10104,6 +10180,7 @@ impl Ctx<'_> {
                             line,
                             style,
                             owner,
+                            Some(node),
                             self.tab_stop(cs, style),
                             true,
                             first,
@@ -10116,7 +10193,15 @@ impl Ctx<'_> {
                     if is_css_white_space(ch) {
                         if !buf.is_empty() {
                             push_word(
-                                out, &mut buf, style, gap, first, owner, no_wrap, break_word,
+                                out,
+                                &mut buf,
+                                style,
+                                gap,
+                                first,
+                                owner,
+                                Some(node),
+                                no_wrap,
+                                break_word,
                                 keep_all,
                             );
                         }
@@ -10129,7 +10214,16 @@ impl Ctx<'_> {
                 }
                 if !buf.is_empty() {
                     push_word(
-                        out, &mut buf, style, gap, first, owner, no_wrap, break_word, keep_all,
+                        out,
+                        &mut buf,
+                        style,
+                        gap,
+                        first,
+                        owner,
+                        Some(node),
+                        no_wrap,
+                        break_word,
+                        keep_all,
                     );
                 }
             }
@@ -10824,6 +10918,7 @@ impl Ctx<'_> {
                     space_before,
                     break_before,
                     node,
+                    origin,
                     no_wrap,
                     break_word,
                 } if break_word
@@ -10849,6 +10944,8 @@ impl Ctx<'_> {
                                 // create; the first inherits the original word's opportunity.
                                 break_before: !first_chunk || break_before,
                                 node,
+                                // A split chunk is still the same text node.
+                                origin,
                                 no_wrap: false,
                                 break_word: false,
                             });
@@ -10865,6 +10962,7 @@ impl Ctx<'_> {
                             space_before: first_chunk && space_before,
                             break_before: !first_chunk || break_before,
                             node,
+                            origin,
                             no_wrap: false,
                             break_word: false,
                         });
@@ -11049,6 +11147,8 @@ impl Ctx<'_> {
                         ascent: basc,
                         descent: bdesc,
                         node,
+                        // A `<br>`'s reporter fragment: an element, not a text node.
+                        origin: None,
                         report_h: breport,
                         report_ascent: None,
                         atomic: None,
@@ -11100,6 +11200,8 @@ impl Ctx<'_> {
                         ascent: basc,
                         descent: bdesc,
                         node,
+                        // A `<br>`'s reporter fragment: an element, not a text node.
+                        origin: None,
                         report_h: breport,
                         report_ascent: None,
                         atomic: None,
@@ -11144,6 +11246,7 @@ impl Ctx<'_> {
                 stop,
                 style,
                 node,
+                origin,
                 no_wrap,
             } = item
             {
@@ -11180,6 +11283,7 @@ impl Ctx<'_> {
                     ascent: lm.ascent,
                     descent: lm.descent,
                     node,
+                    origin,
                     report_h: None,
                     report_ascent: None,
                     atomic: None,
@@ -11215,6 +11319,7 @@ impl Ctx<'_> {
                     space_before,
                     break_before,
                     node,
+                    origin,
                     no_wrap,
                     break_word: _,
                 } => {
@@ -11266,6 +11371,8 @@ impl Ctx<'_> {
                         no_wrap,
                         Some(break_before),
                         Box::new(move |x: f32| LineFrag {
+                            // The word's own text node — this is what the inline static position needs.
+                            origin,
                             x,
                             width: word_w,
                             text,
@@ -11299,6 +11406,8 @@ impl Ctx<'_> {
                         true,
                         None,
                         Box::new(move |x: f32| LineFrag {
+                            // Synthetic: an atomic box, a spacer or generated content — no text node.
+                            origin: None,
                             x: x + dx,
                             width: w,
                             text,
@@ -11370,6 +11479,8 @@ impl Ctx<'_> {
                         no_wrap,
                         None,
                         Box::new(move |x: f32| LineFrag {
+                            // Synthetic: an atomic box, a spacer or generated content — no text node.
+                            origin: None,
                             x,
                             width: advance,
                             text: String::new(),
@@ -11437,6 +11548,8 @@ impl Ctx<'_> {
                         true, // padding never introduces a break within its element
                         Some(break_before),
                         Box::new(move |x: f32| LineFrag {
+                            // Synthetic: an atomic box, a spacer or generated content — no text node.
+                            origin: None,
                             x,
                             width,
                             text: String::new(),
@@ -11664,6 +11777,8 @@ struct LineFrag {
     ascent: f32,
     descent: f32,
     node: Option<NodeId>,
+    /// The originating TEXT node — see [`TextFragment::origin`], which this becomes.
+    origin: Option<NodeId>,
     /// **A synthetic fragment that reports a fixed box** — an inline padding/border spacer, or the
     /// empty fragment a bare `<br>` leaves behind. These carry an element's geometry while having
     /// no text and no font, so they have `ascent == descent == 0` and their height cannot be
@@ -11864,6 +11979,7 @@ fn close_line(
                 text: f.text,
                 style: f.style,
                 node: f.node,
+                origin: f.origin,
                 content_ascent: 0.0,
                 content_height: 0.0,
             });
@@ -12191,6 +12307,7 @@ fn close_line(
                 text: f.text,
                 style: f.style,
                 node: f.node,
+                origin: f.origin,
                 content_ascent: fa,
                 content_height: fa + fd,
             });
@@ -12291,6 +12408,9 @@ enum InlineItem {
         break_before: bool,
         /// Deepest element ancestor of this word's text node.
         node: Option<NodeId>,
+        /// The text node itself — see [`TextFragment::origin`]. Distinct from `node`, and the
+        /// distinction is the whole of the inline static position for bare text.
+        origin: Option<NodeId>,
         /// `white-space:nowrap` — no line break may occur before this word within its run.
         no_wrap: bool,
         /// `overflow-wrap:break-word` / `word-break:break-all` — this word may be split at an
@@ -12428,6 +12548,8 @@ enum InlineItem {
         /// ascent/descent to the line box, so a line that is nothing but tabs is still line-tall.
         style: TextStyle,
         node: Option<NodeId>,
+        /// The text node the tab character came from — see `TextFragment::origin`.
+        origin: Option<NodeId>,
         /// ⚠ **The run's `white-space` no-wrap flag, carried because the tab sits BETWEEN two words
         /// of it.** `layout_inline` forbids a break only when the item and the one before it are
         /// both `no_wrap`; a tab that reported `false` would hand the word after it a break
@@ -12768,6 +12890,9 @@ fn push_word(
     gap: &mut PendingGap,
     first: &mut bool,
     node: Option<NodeId>,
+    // The TEXT NODE these words came from — see `TextFragment::origin`. `node` above is the
+    // deepest ELEMENT ancestor and is a different thing.
+    origin: Option<NodeId>,
     no_wrap: bool,
     break_word: bool,
     keep_all: bool,
@@ -12790,6 +12915,7 @@ fn push_word(
             // before it says so.
             break_before: if i == 0 { gap.brk && !*first } else { true },
             node,
+            origin,
             no_wrap,
             break_word,
         });

@@ -46371,6 +46371,94 @@ PERF: none — one UA rule and one narrowed branch in a cascade that already ran
 WIKI: `docs/wiki/css-cascade.md` — where Chrome draws the form-control `box-sizing` line, and why a
 layout-crate test cannot see it.
 
+## Tick 1188 — a fragment now says which TEXT NODE it came from, not only which element (2026-08-12)
+
+TICK SHAPE: capability.
+
+HYPOTHESIS (written before the fix, kept verbatim): t1187 measured that
+`refine_inline_static_positions` skips every bare-text fragment, because it selects on
+`TextFragment::node` — *the deepest ELEMENT ancestor* — against a `before` set of preceding
+SIBLINGS, and for bare text that node is the container itself. The fix t1187 specified: carry the
+**originating text node** on the fragment beside the element ancestor, thread it through the
+intermediate line-item struct, and match on it. PREDICTION: rows 1, 2, 3 and 5 of t1187's battery
+become Chrome-exact while row 4 (the `<span>` CONTROL) does not move, and
+`positioned-grid-descendants-*` moves off its `offsetLeft 30 vs 55`.
+
+**The hypothesis held on every row it named.** A/B on the same battery, old binary preserved before
+the rebuild:
+
+```text
+                                          OLD        THIS TICK
+   text "XX"                              0,0          50,0
+   text "XX", abspos display:block        0,0          50,0
+   text "XX", abspos is a <span>          0,0          50,0
+   <span>XX</span>  (an ELEMENT)         50,0          50,0     <- CONTROL, unmoved
+   text "XX<br>XX"                       50,0          50,25
+   the same inside a GRID item           25,0          50,25
+   the same inside a FLEX item           25,0          50,25
+```
+
+⚠ **AND ONE ROW MOVED TO A VALUE MY ARITHMETIC HAD NOT PREDICTED, AND THE ARITHMETIC WAS THE THING
+THAT WAS WRONG.** t1187's battery listed `text "XXXXXX"` in a 100px box as *"expected 50,25"*. It
+came out **150,0**, and 150 is correct: `XXXXXX` is a single word with no break opportunity, so it
+**overflows** rather than wrapping, and Chrome puts it on one line too. The expectation column was
+mine and not a measurement — recorded because it was written down before the run, which is the only
+reason it can be checked at all.
+
+**MEASURED, full sweep, against t1186's banked marks:**
+
+```text
+   css/css-grid   2141 -> 2421   +280      positioned-grid-descendants-001: 0/100 -> 100/100
+   nineteen other areas    unmoved to the subtest
+   WPT TOTAL    445406 -> 445686  +280     crashes 0 in EVERY area, 0 areas down
+   css/css-grid + css/css-flexbox REFTESTS   210 / 312 — byte-identical
+   manuk-layout unit tests                   174/174
+```
+
+⚠⚠ **THE SWEEP WAS RUN TWICE ON PURPOSE, BECAUSE I CONTAMINATED THE FIRST ONE.** The RED-proof
+edits `engine/layout/src/lib.rs`, and I ran it **while the sweep was in flight** — `wpt-sweep.sh`
+invokes `cargo run --release` per area, so any area measured after that point could have been
+measured with the mutated binary. The rule this repo already owns is *every number has a harness*;
+a sweep whose tree changed underneath it is not a number. The re-run on the restored tree is
+**byte-identical across all twenty areas**, so the reading stands — and it now stands on two
+independent runs rather than one, which is a better place to be than if I had not made the mistake.
+
+**THE SHAPE OF THE FIX, and why the cheap one does not ship.** `TextFragment::origin` is the text
+node the run came from, threaded `collect_inline_node` → `InlineItem::Word`/`Tab` → `LineFrag` →
+`TextFragment`. It is **`None` wherever there genuinely is no text node** — generated `content:`, a
+form control's own rendered text, a list marker, a `text-overflow` ellipsis, a `<br>`'s reporter
+fragment, an `inline-block`'s atomic, an inline padding spacer — all of which already carry a real
+*element* in `node`, and an element is already a sibling, so `None` there is a fact rather than a
+gap. The tempting cheap version is to order fragments by their index in `frags`; it passes the
+obvious battery and is **wrong**, because a container can hold bare text on *both sides* of the
+out-of-flow box and nothing in `frags` says which side a run is on. That case is a row in the gate.
+
+**FOUR TICKS, FOUR MECHANISMS, ONE 3,200-SUBTEST ZERO — and only the last one was layout.** t1183
+the missing ruler · t1184 the `load` round's reflow hook · t1186 the module round's · t1188 the
+inline static position. The board has said `css/css-grid` for fourteen ticks and it has now been
+paid four times running by something that was not grid. **An area is a directory, not a cause**, and
+the operative move each time was to ask *what is different about the files that score zero* rather
+than to read the layout math.
+
+GATE: `g_static_pos_after_text` — **nine rows, three of them CONTROLS, and no hard-coded glyph
+widths.** Every row is stated against `#ruler`, an in-flow `<span>` holding the same text in the
+same font, so the gate means the same thing on a host with different fonts; the line advance is
+measured as the gap between two stacked rulers rather than read off a span's rect height (the
+content area is 29px where the line box is 25 — the first draft got that wrong and the gate caught
+it). RED-proven: drop `|| f_origin.is_some_and(…)` and every `after_text*` row collapses to 0 while
+`after_element` does not move.
+
+RATCHET: held. Zero areas down, `crashes=0` in every area, reftest legs byte-identical. WPT TOTAL
+445406 → **445686**.
+
+PERF: one `Option<NodeId>` (8 bytes) per inline item and per fragment, and one extra
+`HashSet::contains` per fragment in `refine_inline_static_positions` — which runs only for a
+container that actually has an out-of-flow child (the function's first line is an early return).
+
+WIKI: `docs/wiki/box-layout.md` — *"The inline static position counts preceding ELEMENTS and not
+preceding TEXT"*, updated from t1187's measurement to the landed fix, with the `None` cases
+enumerated and the refuted expectation recorded.
+
 ## Tick 1187 — the inline static position counts preceding ELEMENTS and not preceding TEXT (2026-08-12)
 
 TICK SHAPE: measurement — the discovery battery that prices and localises the 3,200-subtest zero

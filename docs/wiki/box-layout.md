@@ -5,7 +5,7 @@ Manuk's flex and grid layout runs on a vendored **taffy 0.12** tree (`engine/lay
 lays out the flex/grid containers and their directly-nested flex/grid descendants. The mapping from
 Manuk's `ComputedStyle` to `taffy::Style` (`to_taffy_style`) is where the realities below live.
 
-## THE INLINE STATIC POSITION COUNTS PRECEDING **ELEMENTS** AND NOT PRECEDING **TEXT** (t1187, measured, not yet fixed)
+## THE INLINE STATIC POSITION COUNTS PRECEDING **ELEMENTS** AND NOT PRECEDING **TEXT** (t1187 measured, t1188 fixed)
 
 `refine_inline_static_positions` reconstructs where an out-of-flow box *would* have been: it takes
 the furthest-along point that flow reached among the abspos's preceding in-flow siblings, and it
@@ -44,11 +44,40 @@ algorithms. It is the whole of `css/css-grid/abspos/positioned-grid-descendants-
 **3,200 subtests**), whose fixture is `X<br />XX` before the abspos: we report `offsetLeft` **30**
 where Chrome says **55**, and 30 is exactly `padding-left 5 + the <br>'s x of 25`.
 
-**The fix is a field, not a heuristic.** A container-attributed fragment cannot be ordered against
-the abspos by node identity — that is *why* the code was written this way — so the fragment has to
-carry the **text node it came from** alongside the element ancestor it is attributed to. Ordering by
-`frags` index instead is the tempting cheap version and it is wrong: a container can hold bare text
-on both sides of the abspos, and nothing in `frags` says which side a run is on.
+**The fix is a field, not a heuristic** (t1188). A container-attributed fragment cannot be ordered
+against the abspos by node identity — that is *why* the code was written this way — so the fragment
+carries `TextFragment::origin`, the **text node it came from**, alongside the element ancestor it is
+attributed to, and the selection tests both. Ordering by `frags` index instead is the tempting cheap
+version and it is wrong: a container can hold bare text on both sides of the abspos, and nothing in
+`frags` says which side a run is on — which is a row in the gate, not a hypothetical.
+
+The field is threaded `collect_inline_node` → `InlineItem::Word`/`Tab` → `LineFrag` →
+`TextFragment`, and it is **`None` wherever there is genuinely no text node**: a `::before`/`::after`
+whose `content:` is generated, a form control's own rendered text, a list marker, a `text-overflow`
+ellipsis, a `<br>`'s reporter fragment, an `inline-block`'s atomic, an inline padding spacer. Those
+already carry a real element in `node`, and an element is already a sibling — so `None` there is a
+fact rather than a gap.
+
+**Measured, and it is the payoff for three preceding ticks of instrument work:**
+
+```text
+   css/css-grid   2141 -> 2421   +280      (positioned-grid-descendants-001: 0/100 -> 100/100)
+   nineteen other areas    unmoved to the subtest, crashes 0
+   css/css-grid + css/css-flexbox REFTESTS   byte-identical (210 / 312)
+```
+
+⚠ **One row of the battery moved to a value that is NOT what the arithmetic predicted, and the
+arithmetic was wrong.** `text "XXXXXX"` in a 100px box came out at x=150 on line 1, not x=50 on
+line 2 — because `XXXXXX` is a single word with no break opportunity, so it *overflows* rather than
+wrapping, and Chrome puts it on one line too. The expectation column was mine, not a measurement;
+the engine was right. Recorded because "expected 50,25" was written down before the run.
+
+⚠ **Gated by `g_static_pos_after_text`, nine rows, three of them CONTROLS, with NO hard-coded glyph
+widths** — every row is stated against `#ruler`, an in-flow `<span>` holding the same text in the
+same font, and the line advance is measured as the gap between two stacked rulers rather than read
+off a span's rect height (the content area is 29px where the line box is 25). RED-proven: drop
+`|| f_origin.is_some_and(…)` and every `after_text*` row collapses to 0 while `after_element` — the
+same text inside a `<span>` — does not move.
 
 ## AN INTRINSIC KEYWORD ON A *CONTAINER*, AND THE ROOT-SUPPRESSION FLAG THAT MAKES IT MEASURABLE (t1163)
 
