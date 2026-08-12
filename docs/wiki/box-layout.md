@@ -9006,3 +9006,33 @@ against 0 when the question is min-content**, which t1149 derived from Chrome by
 
 ⚠ **Port as a source of algorithms, not as a reason to skip the measurement.** Replacing the whole
 seam would have rewritten eight working arms to fix two. The eight ✓ rows are the controls.
+
+### The conflict arms are FLEX-ONLY, and two candidate fix sites are refuted (t1158)
+
+Same image, same constraints, one row per formatting context — this is the **inverse** of the
+*one rule, N implementations* trap: three implementations are right and the fourth is wrong.
+
+```text
+                                      CHROME    block    float    abspos     FLEX
+  min-width:600px + max-height:100px  600x100   600x100  600x100  600x100   600x593  ✗
+  max-width:150px + min-height:800px  150x800   150x800  150x800  150x800   810x800  ✗
+```
+
+Refuted, each implemented in full and measured inert — do not re-derive:
+
+| candidate | result |
+|---|---|
+| both conflict arms in `Ctx::clamp_replaced_intrinsic` (the measure seam) | INERT — row unchanged at `600x592.5` |
+| withholding `aspect_ratio` from taffy when the bounds make it unsatisfiable | INERT **and the filter fires** (`over_wide=true → aspect_ratio: None`), answer still `600x592.5` |
+
+`592.5 = 600 / 1.0126582`, so the height is derived from the width through the ratio *after* taffy
+has been told there is no ratio — which points at whatever reads `cs.aspect_ratio` directly:
+`replaced_default_size`'s `(_, Some(r)) => width / r` arm and the measure closure's ratio
+short-circuit, neither of which consults the bounds. ⚠ `MANUK_TRACE_INTRINSIC` does **not** fire on
+this path — `replaced_default_size` returns before it.
+
+The six controls for the eventual gate, Chrome-measured on a 480×474 image in a 230px column, so the
+next attempt does not re-measure them: `max-width:150px` → `150x148` · `max-height:100px` →
+`101x100` · `min-width:600px` → `600x593` · `min-height:600px` → `608x600` · both maxes → `101x100`
+· both mins → `810x800`. Every single violation **preserves** the ratio; only the two conflicts
+abandon it.

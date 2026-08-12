@@ -13,9 +13,9 @@
 |---|---|---|
 | ticks landed | **863** | ticks 1–1157 |
 | median tick cycle | **28m** | 862 intervals |
-| median, last 10 | **15m** | 10 intervals |
+| median, last 10 | **17m** | 10 intervals |
 | fastest / slowest | 5s / 5.4d | |
-| **ticks per hour** | **1.14** | 759.3h elapsed |
+| **ticks per hour** | **1.13** | 759.7h elapsed |
 | median verify wall | **63s** | 802 ticks |
 | wall trend | 39s → 13m — getting slower ⚠️ | first 3 vs last 3 |
 
@@ -959,6 +959,6 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 | **1153** | 2026-08-11 19:13 | 4m | capability | 13m | +131/−33 | 437 | 81 | 56.0% · | the faces DIFFER, and an unknown share of "shape" was a font that never loaded (2026-08-11 |
 | **1154** | 2026-08-11 19:54 | 41m | measurement | 13m | +479/−33 | 438 | 81 | 56.0% · | one hundred `@font-face` rules for one family, and `unicode-range` is not in the tree (202 |
 | **1155** | 2026-08-11 20:10 | 16m | capability | 13m | +354/−36 | 438 | 81 | 56.0% · | `unicode-range` is parsed and 99 fetches stop, and the acceptance test did NOT move (2026- |
-| **1157** | 2026-08-11 20:19 | 9m | measurement | 13m | +137/−33 | 438 | 81 | 56.0% · | the port target is TWO ARMS of an eight-arm table, and eight rows are already exact (2026- |
+| **1157** | 2026-08-11 20:44 | 34m | measurement | 13m | +124/−33 | 438 | 81 | 56.0% · | the port target is TWO ARMS of an eight-arm table, and eight rows are already exact (2026- |
 
 *`·` after a WPT figure means **carried forward**, not measured this tick.*

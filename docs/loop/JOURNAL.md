@@ -46371,6 +46371,65 @@ PERF: none — one UA rule and one narrowed branch in a cascade that already ran
 WIKI: `docs/wiki/css-cascade.md` — where Chrome draws the form-control `box-sizing` line, and why a
 layout-crate test cannot see it.
 
+## Tick 1158 — the conflict arm is in NEITHER place I could see, and both severances say so (2026-08-11)
+
+TICK SHAPE: measurement — t1157's named build, attempted, and **not landed**. Two candidate fix
+sites, each implemented fully and each measured INERT. The tick is the two refutations and the
+narrowing, because an inert change that ships as a fix is the green mutation this window has now
+caught five times.
+
+⚠⚠⚠ **FIRST, THE DEFECT IS FLEX-ONLY — THREE IMPLEMENTATIONS ARE RIGHT AND THE FOURTH IS WRONG.**
+Same image, same constraints, one row per formatting context:
+
+```text
+                                       CHROME    block    float    abspos     FLEX
+   min-width:600px + max-height:100px  600x100   600x100  600x100  600x100   600x593  ✗
+   max-width:150px + min-height:800px  150x800   150x800  150x800  150x800   810x800  ✗
+```
+
+This is the INVERSE of the *one rule, N implementations* shape this project keeps paying for
+(t720-724, t1027, t1131): the duplicated block/float/abspos clamps all implement CSS 2.1 §10.4's
+conflict arms correctly, and only the flex/grid path does not. Nothing but a per-formatting-context
+battery could have found that, and the three ✓ columns are the reason the next tick can be confident
+it is changing the right code.
+
+⚠⚠ **CANDIDATE 1 — the measure seam (`clamp_replaced_intrinsic`, t1149's own function). INERT.**
+Added both conflict arms with resolved `min-width`/`min-height`; the row stayed at `600x592.5`,
+unchanged to the half-pixel.
+
+⚠⚠ **CANDIDATE 2 — withholding the ratio from taffy. ALSO INERT, AND IT FIRED.** taffy enforces
+whatever `aspect_ratio` it is handed, so `to_taffy_style` looked like the only place the rule could
+live for a flex item. The test is unsatisfiability, not "both are set": with ratio `r` a box at most
+`max_h` tall is at most `max_h × r` wide, so `min_w` above that cannot be met with the ratio intact.
+Instrumented, **the filter fires exactly as designed**:
+
+```text
+   [ar] r=1.0126582  minw=Px(600.0)  maxh=Px(100.0)  over_wide=true   -> aspect_ratio: None
+```
+
+and the answer is **still `600x592.5`**. `592.5 = 600 / 1.0126582` — the height is being derived from
+the width through the ratio *after* taffy has been told there is no ratio. Both edits were reverted;
+`engine/` is untouched by this tick.
+
+**WHAT THAT LEAVES, and it is now a short list.** The 592.5 is produced by something that reads
+`cs.aspect_ratio` directly rather than taffy's copy of it — which is `replaced_default_size`'s own
+`(_, Some(r)) => width / r` arm and the measure closure's ratio short-circuit, neither of which
+consults the bounds. The next tick's first act is to print what that closure is asked and what it
+answers for this one element; the seam has `MANUK_TRACE_INTRINSIC` for exactly this and it does not
+fire on the replaced path, because `replaced_default_size` returns before it.
+
+⚠ **AND THE GATE IS WRITTEN AND WAS NOT LANDED.** An eight-row battery — the two conflict arms plus
+six Chrome-exact controls (each single violation, both-maxes, both-mins) — is drafted and RED on the
+two rows it should be red on. It is not committed because a red test is not a gate, and its six
+controls are recorded in the wiki so the next tick starts from them rather than re-measuring Chrome.
+
+RATCHET: held — `engine/` reverted to HEAD, `git status` clean of source. Nothing inert shipped.
+
+PERF: none — measurement only.
+
+WIKI: `docs/wiki/box-layout.md` — the §10.4 section, extended with the per-formatting-context
+localisation and the two refutations. [no-pattern]
+
 ## Tick 1157 — the port target is TWO ARMS of an eight-arm table, and eight rows are already exact (2026-08-11)
 
 TICK SHAPE: measurement (probe before build) — the observer's steer item (1): *"PORT whole
