@@ -46371,6 +46371,123 @@ PERF: none — one UA rule and one narrowed branch in a cascade that already ran
 WIKI: `docs/wiki/css-cascade.md` — where Chrome draws the form-control `box-sizing` line, and why a
 layout-crate test cannot see it.
 
+## Tick 1160 — the battery's CONTROL row found a 569px space, and `font-size:0` is a RESET (2026-08-11)
+
+TICK SHAPE: capability (text metrics / inline layout). HYPOTHESIS, written before the build: the
+board's target #1 is *intrinsic sizing*, and `taffy_tree.rs` names its own NOT-DONE with a number —
+an intrinsic keyword on a box that is ITSELF a flex/grid container is dropped (`if !container` at
+the call site), measured 109.30 against Chrome's 37.33. Predicted: build the 96-cell battery, find
+that gap, fix it. **The battery found something underneath it instead, and the intrinsic-keyword
+residue is now a NAMED single mechanism rather than the tick's subject.**
+
+⚠⚠⚠ **THE CONTROL ROW WAS THE FINDING, AGAIN — AND THIS TIME THE CONTROL WAS `width:auto`.** Row `f`
+exists only so a keyword row has something to be compared against. It was wrong: two `inline-block`s
+of **40px and 70px in a 230px box** came out on TWO lines. Chrome puts them on one. Nothing about
+that row is a keyword, a container or an aspect ratio — it is the plainest cell in a 96-cell table,
+and a battery that had fixed `font-size` at 16px (or measured only the subject rows) would have
+shipped a keyword fix on top of it and never seen it.
+
+⚠⚠⚠ **THE MECHANISM: swash reads `size(0.0)` as *"FONT UNITS"*, NOT AS ZERO.** Both
+`ShaperBuilder::size` and `ScalerBuilder::size` default to `0` and document it as *"equivalent to
+the units per em of the font"*. So a CSS `font-size: 0` passed straight through did not ask for a
+zero-width run — it asked for the run in the font's own **design units**, and swash answered
+truthfully:
+
+```text
+   ITEM adv=40.0 space=0.0   est_h=10.0 pen=0.0  avail=230.0 overflows=false
+   ITEM adv=70.0 space=569.0 est_h=10.0 pen=40.0 avail=230.0 overflows=TRUE
+                       ^^^^^ one space, at font-size:0
+```
+
+**`font-size: 0` IS NOT AN EDGE CASE.** It is the pre-flexbox reset for the whitespace between
+`inline-block` children — `.grid{font-size:0}` + `.col{display:inline-block;font-size:16px}` — and
+its entire purpose is that the inter-column space collapses to nothing. With a **569px** space
+between every pair of columns, every grid built that way stacked **one column per line**: the exact
+layout the idiom exists to prevent. The `font-size:0`/`line-height:0` reset is in **109 of the 373
+stylesheets** the burndown corpus loads (t1132's count).
+
+⚠⚠ **THE LADDER NAMED THE ORGAN, because the symptom is indistinguishable from a wrap:**
+
+```text
+                                            CHROME    before      after
+   font-size:0    40 + sp + 70   in 230px   1 line    2 lines     1 line
+   font-size:0    10 + sp + 10   in 230px   1 line    2 lines     1 line   <- NOT an overflow (20px!)
+   font-size:0    40 + nbsp + 70 in 230px   1 line    2 lines     1 line   <- NOT a break opportunity
+   font-size:0    40 + 70, no space         1 line    1 line      1 line   CTRL
+   font-size:1px  40 + sp + 70              1 line    1 line      1 line   CTRL — the edge is EXACTLY 0
+   font-size:16px 40 + sp + 70              1 line    1 line      1 line   CTRL
+```
+
+The `10 + 10` row rules out an overflow (20px of content in a 230px box), the `&nbsp;` row rules out
+a break-opportunity decision — **a non-breaking space must never break** — and the `1px` row says the
+boundary is exactly zero rather than "small". What is left is the advance itself, which is where the
+trace was pointed.
+
+**THE FIX IS ONE EARLY RETURN AT THE ONE FUNNEL.** `manuk_text::FontContext::shape_run` is where both
+`measure` and `shape_bidi` bottom out, so clamping at either call site would have left the other
+holding font units — the `one rule, N implementations` shape this repo has paid for at t720, t1027,
+t1131 and t1134.
+
+⚠⚠⚠ **THE SECOND SEAM WAS ALMOST WAVED THROUGH AS A GREEN MUTATION, AND MEASURING IT SAID
+OTHERWISE — 1.9 MB PER GLYPH.** `rasterize` hands the same `size` to swash's *scaler*, which shares
+the convention, and the first draft of this write-up reasoned that it was now unreachable (no glyphs
+at size 0) and therefore dead code to guard. **Measured instead of reasoned:**
+
+```text
+   rasterize("A", size=0)    ->  1358 x 1409   1,913,422 bytes   ...and it is CACHED in the glyph LRU
+   rasterize("A", size=16)   ->    11 x   12         132 bytes
+```
+
+That is the actual root of tick 15's `font-size:0` "glyph-shaped continents", where one word buried
+old.reddit's post titles under ~27,000px of flat grey. It is a `pub` entry point whose only
+protection would otherwise be *"every caller happens to iterate glyphs a same-size shaping
+produced"*. Guarded, and RED-proven with the measurement.
+
+⚠⚠⚠ **AND THE REPO HAS NAMED THIS CONVENTION SINCE TICK 15.** `docs/wiki/text-layout.md` L78 says
+it outright — *"`font-size: 0` makes swash emit UNSCALED font-unit outlines — 1000–1500px bitmaps per
+glyph"*, and prescribes a guard. **No guard was ever built.** What tick 15 actually fixed was the
+symptom's other cause (the parser dropped a unitless `0`, so the size stayed inherited); the seam
+kept answering in font units for another eleven hundred ticks, and the MEASURE half was never
+implicated at all. **A documented mechanism with no gate is an unmeasured claim** — the same shape
+audit #54 found in the capability map, one layer down.
+
+**MEASURED — OLD BINARY REBUILT FROM HEAD AND RUN IN THE SAME HOUR, PASS-SETS DIFFED, NOT COUNTS:**
+
+```text
+  css/CSS2       3973 -> 3974   + css/CSS2/linebox/line-breaking-font-size-zero-001.html   0 LOST
+  css/css-flexbox  314 -> 314   css/css-grid 211 -> 211   pass-sets IDENTICAL
+  css/css-sizing    54 ->  54   css/css-text 500 -> 500   pass-sets IDENTICAL
+  manuk-text 10/10 · manuk-layout 173/173 · manuk-paint 22/22
+  (the WPT control was run with the shape_run half only; the rasterize guard is unreachable from
+   the text path and cannot move a reftest — it is banked on its own measurement, above)
+```
+
+⚠ **The suite's own name for the defect is the test that flipped** — `line-breaking-font-size-zero-001`
+— which is the cheapest possible confirmation that the mechanism is the one the spec authors meant,
+and a reminder that the WPT tree had been naming this for years.
+
+**THE INTRINSIC-KEYWORD RESIDUE IS NOW ONE MECHANISM, NOT A SPREAD.** The fix took the battery from
+**30 of 96 divergent cells to 15**, and the 15 are exactly
+`{a,b,c,e,h} × {flex,grid,inline-flex} × parent=grid`: an intrinsic keyword on a subject that is
+ITSELF a flex/grid container, inside a **grid** parent, where we hand back the track width (230)
+instead of the keyword's answer. Under a *flex* parent the same subjects are already exact (t1149's
+`fit_content_inline`), which is what localises it to the grid-item path. Shapes `d`, `f` and `g` are
+exact in all twelve contexts — that is what says the residue is about the CONTAINER subject and not
+about the keywords. The gate asserts the diverging set is EXACTLY those 15, so closing one is RED.
+
+⚠ **THE SUBJECT'S OWN `display` CHANGES CHROME'S ANSWER, and a one-display fixture would have called
+two thirds of that a bug** — the t1159 lesson, holding one tick later: a `display:flex` subject makes
+the two boxes flex items so its min-content is their SUM (110), a block subject's is their MAX (70),
+and a `display:grid` subject puts each in its own implicit row (70, twice as tall).
+
+RATCHET: held. Zero losses in five WPT areas against a same-hour old-binary control; all crate
+suites green; Bar 0 unaffected (no new code path, one early return).
+
+PERF: strictly negative work — a size-0 run now returns before building a shaper.
+
+WIKI: `docs/wiki/text-metrics.md` — "swash reads size(0) as font units, and `font-size:0` is a
+reset". PATTERN: "THE `font-size:0` INLINE-BLOCK GRID" — `docs/loop/WEB-PATTERNS.md`.
+
 ## Tick 1159 — the conflict arms LANDED, and the sixth control was measured in the wrong context (2026-08-11)
 
 TICK SHAPE: capability (layout primitive) — t1157's named build, t1158's narrowing, finished. Two

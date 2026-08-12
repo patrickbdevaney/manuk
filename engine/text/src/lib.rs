@@ -1004,6 +1004,32 @@ impl FontContext {
         rtl: bool,
         mut emit: impl FnMut(&swash::shape::cluster::Glyph, f32),
     ) -> f32 {
+        // ⚠⚠⚠ **SWASH READS `size(0.0)` AS *"FONT UNITS"*, NOT AS ZERO** — its shaper and its scaler
+        // both default to `0`, and both document that as *"equivalent to the units per em of the
+        // font"*. So `font-size: 0` did not ask for a zero-width run; it asked for the run measured
+        // in the font's own design units, and a single space came back **569px**.
+        //
+        // That is not an obscure value: `font-size: 0` on a container is THE pre-flexbox reset for
+        // the whitespace between `inline-block` children (`.grid{font-size:0}` + `.col{display:
+        // inline-block;font-size:16px}`), and the whole point of it is that the inter-column space
+        // collapses to nothing. With a 569px space between every pair of columns, every such grid
+        // stacked one column per line — the layout the idiom exists to prevent.
+        //
+        // ```text
+        //                                            CHROME   BEFORE   AFTER
+        //   40px + space + 70px inline-blocks, 230px   1 line  2 lines  1 line
+        //   the space's own advance at font-size:0       0      569       0
+        // ```
+        //
+        // Nothing above this clamps, and it is deliberately clamped HERE rather than at each call
+        // site: this is the one function that knows what swash was asked, and `measure`, `shape` and
+        // the glyph scaler all funnel through the same convention (t720's "one rule, N
+        // implementations" — the second implementation is what the tick after this one pays for).
+        // A `&nbsp;` broke the line too, which is what proves it was never a break-opportunity
+        // decision: an advance is an advance whether or not a break may fall at it.
+        if !(size > 0.0) {
+            return 0.0;
+        }
         let Some(fd) = self.face(face) else {
             return 0.0;
         };
@@ -1123,6 +1149,27 @@ impl FontContext {
             return Some(hit.clone());
         }
 
+        // ⚠⚠⚠ **THE SCALER SHARES THE SHAPER'S CONVENTION, AND HERE IT COSTS 1.9 MB A GLYPH.**
+        // `ScalerBuilder::size` also defaults to `0` = *"the units per em of the font"*, so a
+        // request at `font-size: 0` renders the **unscaled outline**: measured, one `A` comes back
+        // **1358x1409, 1,913,422 bytes** against 11x12 / 132 bytes at 16px — and it is then held in
+        // the glyph LRU. This is the root of tick 15's `font-size: 0` "glyph-shaped continents",
+        // where one word buried old.reddit's post titles under ~27,000px of flat grey.
+        //
+        // ⚠ **`docs/wiki/text-layout.md` HAS NAMED THIS CONVENTION SINCE TICK 15** — *"any rasteriser
+        // needs a guard on glyph bitmaps larger than a few multiples of the font size"* — and no such
+        // guard was ever built. What was fixed then was the SYMPTOM's other cause (the parser dropped
+        // a unitless `0` so the size stayed inherited); the seam kept answering in font units for
+        // another eleven hundred ticks. A documented mechanism with no gate is an unmeasured claim.
+        //
+        // The guard is on the QUESTION, not on the output size: *"how big is too big"* is a
+        // heuristic that has to be tuned per face, while *"we never meant to ask for font units"* is
+        // a fact about the API. It is not redundant with `shape_run`'s clamp — this is a `pub` entry
+        // point, and its protection would otherwise be that every caller happens to iterate glyphs
+        // that a same-size shaping produced.
+        if !(size > 0.0) {
+            return None;
+        }
         let fd = self.face(face)?;
         let font = swash::FontRef::from_index(&fd.data, fd.index as usize)?;
 
@@ -1250,6 +1297,97 @@ pub fn cap_height_px(families: &[String], bold: bool, italic: bool, size_px: f32
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// # G_FONT_SIZE_ZERO — swash reads `size(0.0)` as **font units**, and `font-size: 0` is a reset
+    ///
+    /// `ShaperBuilder::size` and `ScalerBuilder::size` both default to `0`, documented as
+    /// *"equivalent to the units per em of the font"*. So passing a CSS `font-size: 0` straight
+    /// through did not ask for a zero-width run — it asked for the run measured in the font's own
+    /// **design units**, and swash answered truthfully. One space came back **569px**.
+    ///
+    /// ⚠⚠⚠ **`font-size: 0` IS NOT AN EDGE CASE — it is the pre-flexbox reset for the whitespace
+    /// between `inline-block` children**, the idiom `.grid{font-size:0}` + `.col{display:inline-block;
+    /// font-size:16px}`, whose entire purpose is that the inter-column space collapses to nothing.
+    /// With a 569px space between every pair of columns, every such grid stacked **one column per
+    /// line** — the exact layout the idiom exists to prevent.
+    ///
+    /// ⚠⚠ **THE LADDER IS WHAT NAMES THE ORGAN, because the symptom looks like a wrap.** Two
+    /// `inline-block`s of 40px and 70px in a 230px box:
+    ///
+    /// ```text
+    ///                                     CHROME    ours before   ours after
+    ///   font-size:0    40 + sp + 70        1 line     2 lines       1 line
+    ///   font-size:0    10 + sp + 10        1 line     2 lines       1 line   <- NOT an overflow
+    ///   font-size:0    40 + &nbsp; + 70    1 line     2 lines       1 line   <- NOT a break opp.
+    ///   font-size:0    40 + 70, no space   1 line     1 line        1 line   CTRL
+    ///   font-size:1px  40 + sp + 70        1 line     1 line        1 line   CTRL — EXACTLY zero
+    ///   font-size:16px 40 + sp + 70        1 line     1 line        1 line   CTRL
+    /// ```
+    ///
+    /// The `10 + 10` row rules out an overflow (20px in a 230px box), the `&nbsp;` row rules out a
+    /// break-opportunity decision (a non-breaking space must never break), and the `1px` row says
+    /// the boundary is **exactly zero** rather than "small". What is left is the advance itself.
+    ///
+    /// ⚠ **CLAMPED AT `shape_run`, THE ONE FUNNEL**, because `measure` and `shape_bidi` both bottom
+    /// out there — fixing it at either call site would leave the other holding font units. The
+    /// GREEN mutation is recorded rather than acted on: `rasterize` passes the same `size` to
+    /// swash's *scaler*, which shares the convention, but it is only ever reached with glyphs that
+    /// `shape_bidi` produced — and at size 0 there are now none. Guarding it too would be dead code
+    /// that passes forever, which is the definition of vacuous coverage (STATUS.md, `G_POOL_ISOLATION`).
+    ///
+    /// To watch it go RED: delete the `size > 0.0` early return in `shape_run`.
+    #[test]
+    fn a_zero_font_size_measures_zero_and_not_the_fonts_design_units() {
+        let fonts = FontContext::new();
+        let key = FontKey::default();
+        // The subject: at font-size 0 every advance is zero, whatever the string.
+        for text in [" ", "\u{a0}", "hello there world", ""] {
+            assert_eq!(
+                fonts.measure(text, key, 0.0),
+                0.0,
+                "font-size:0 must measure zero for {text:?}, not the font's design units"
+            );
+            assert!(
+                fonts.shape(text, key, 0.0).glyphs.is_empty(),
+                "font-size:0 must shape to no glyphs for {text:?}"
+            );
+        }
+        // CONTROL — the boundary is EXACTLY zero, not "small". A 1px space is a real, positive
+        // advance, and a 16px one is larger still. If the guard ever became `size < 1.0` or a
+        // clamp-to-minimum, these rows go red.
+        let one = fonts.measure(" ", key, 1.0);
+        let sixteen = fonts.measure(" ", key, 16.0);
+        assert!(
+            one > 0.0 && sixteen > one,
+            "a positive font-size must still measure positively and scale: 1px={one} 16px={sixteen}"
+        );
+        // CONTROL — the design-unit answer is what swash gives back when it is asked for it, and it
+        // is enormous compared with any plausible px advance. This row is why the bug was invisible
+        // as a "rounding" or "metrics" problem: it is off by the em scale, not by a pixel.
+        assert!(
+            sixteen < 100.0,
+            "a 16px space is a px advance, not a design-unit one: {sixteen}"
+        );
+        // ⚠⚠⚠ THE RASTER HALF, measured rather than assumed. Without its guard, `rasterize` at
+        // size 0 returns a **1358x1409 bitmap, 1,913,422 bytes**, and caches it — against 11x12 and
+        // 132 bytes at 16px. `docs/wiki/text-layout.md` has named this convention since tick 15 and
+        // no guard was ever built for it.
+        let run = fonts.shape("A", key, 16.0);
+        let g = run.glyphs[0];
+        assert!(
+            fonts.rasterize(g.glyph_id, g.face, 0.0, 0.0).is_none(),
+            "rasterizing at font-size 0 must be refused, not answered with the unscaled outline"
+        );
+        let at16 = fonts
+            .rasterize(g.glyph_id, g.face, 16.0, 0.0)
+            .expect("a 16px glyph rasterizes");
+        assert!(
+            at16.width < 64 && at16.height < 64,
+            "a 16px glyph is a 16px-ish bitmap, not a design-unit one: {}x{}",
+            at16.width,
+            at16.height
+        );
+    }
 
     /// **`line-height: normal` rounds the PARTS, not the SUM — and the old rule was fitted at one
     /// font size while its counter-example dropped a term.**

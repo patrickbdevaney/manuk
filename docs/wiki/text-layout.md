@@ -3745,3 +3745,78 @@ locally-installed same-named face would mask it. Only the fetch is skipped.
 `face_id`'s per-glyph fallback already reaches a face that has the glyphs. So on a page where the
 right face *arrives*, selection was never the failure, and the remaining question is whether it
 arrives at all: the fetch, its timing against the render deadline, or the format.
+
+## swash reads `size(0)` as FONT UNITS, and `font-size: 0` is a RESET, not an edge case (tick 1160)
+
+`ShaperBuilder::size` and `ScalerBuilder::size` both **default to `0`**, documented as *"equivalent
+to the units per em of the font"*. Passing a CSS `font-size: 0` straight through therefore did not
+ask for a zero-width run — it asked for the run measured in the font's own **design units**, and
+swash answered truthfully. **One space came back 569px.**
+
+**Why that is a layout bug and not a curiosity.** `font-size: 0` on a container is the pre-flexbox
+reset for the whitespace between `inline-block` children:
+
+```css
+.grid { font-size: 0 }                                  /* kill the inter-column space   */
+.col  { display: inline-block; font-size: 16px }        /* put the text size back         */
+```
+
+The whole point of the idiom is that the space between two columns collapses to nothing. With a
+569px space between every pair, **every grid built this way stacked one column per line** — the
+layout the idiom exists to prevent. The `font-size:0` / `line-height:0` reset is in **109 of the 373
+stylesheets** the burndown corpus loads.
+
+**The ladder is what names the organ, because the symptom is indistinguishable from a wrap.** Two
+`inline-block`s of 40px and 70px:
+
+```text
+                                            CHROME    before      after
+   font-size:0    40 + sp + 70   in 230px   1 line    2 lines     1 line
+   font-size:0    10 + sp + 10   in 230px   1 line    2 lines     1 line   <- NOT an overflow (20px!)
+   font-size:0    40 + nbsp + 70 in 230px   1 line    2 lines     1 line   <- NOT a break opportunity
+   font-size:0    40 + 70, no space         1 line    1 line      1 line   CTRL
+   font-size:1px  40 + sp + 70              1 line    1 line      1 line   CTRL — the edge is EXACTLY 0
+   font-size:16px 40 + sp + 70              1 line    1 line      1 line   CTRL
+```
+
+The `10 + 10` row rules out an overflow — 20px of content in a 230px box. The `&nbsp;` row rules out
+a break-opportunity decision: **a non-breaking space must never break**, so whatever forced the line
+was not reading break opportunities at all. The `1px` row says the boundary is *exactly zero*, not
+"small". What is left is the advance, which is where the inline trace was pointed and where it
+printed `space=569.0`.
+
+**Clamped at `shape_run`, the one funnel**, because `measure` and `shape_bidi` both bottom out
+there; fixing either call site would have left the other holding font units — the *one rule, N
+implementations* shape this repo has paid for at t720, t1027, t1131 and t1134.
+
+⚠⚠⚠ **The raster half was nearly waved through as a green mutation, and measuring it said 1.9 MB.**
+`rasterize` hands the same `size` to swash's *scaler*, which shares the convention. The reasoning
+*"at size 0 `shape_bidi` yields no glyphs, so guarding it is dead code"* is comfortable and was not
+checked. The measurement:
+
+```text
+   rasterize("A", size=0)   ->  1358 x 1409   1,913,422 bytes   ...and CACHED in the glyph LRU
+   rasterize("A", size=16)  ->    11 x   12         132 bytes
+```
+
+That is the actual root of tick 15's `font-size: 0` "glyph-shaped continents". `rasterize` is a
+`pub` entry point; its only other protection is that callers happen to iterate glyphs a same-size
+shaping produced. The guard is on the **question** (*we never meant to ask for font units*), not on
+the output size — *"how big is too big"* is a per-face heuristic, while the convention is a fact
+about the API.
+
+⚠⚠⚠ **This section's own tick-15 entry, sixty lines up, has named the convention the whole time** —
+and prescribed *"any rasteriser needs a guard on glyph bitmaps larger than a few multiples of the
+font size"*. **No guard was ever built.** Tick 15 fixed the symptom's other cause (the parser dropped
+a unitless `0`, so the size stayed inherited), and the seam kept answering in font units for another
+eleven hundred ticks — with the measure half never implicated at all. **A documented mechanism with
+no gate is an unmeasured claim.**
+
+**Measured** against a same-hour old binary, pass-sets diffed: `css/CSS2` **3973 → 3974**, and the
+one test that flipped is `css/CSS2/linebox/line-breaking-font-size-zero-001.html` — the suite's own
+name for the defect. `css-flexbox`, `css-grid`, `css-sizing` and `css-text` pass-sets byte-identical.
+
+Gated by `a_zero_font_size_measures_zero_and_not_the_fonts_design_units` (manuk-text, with the 1px
+and 16px control rows that make the boundary *exactly* zero) and by the 96-cell layout battery
+`intrinsic_keywords_and_the_font_size_zero_inline_block_grid`. Both RED-proven by deleting the
+early return.

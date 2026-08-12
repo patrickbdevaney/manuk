@@ -1951,6 +1951,7 @@
   - L3634 · A box that is WIDER *and* TALLER is a FACE, and the diff reports the computed family (t1151)
   - L3664 · Measure the face, do not name it — canvas.measureText is the channel getComputedStyle lacks (t1153)
   - L3700 · One hundred @font-face rules for one family — unicode-range (t1154)
+  - L3749 · swash reads size(0) as FONT UNITS, and font-size: 0 is a RESET, not an edge case (tick 1160)
 
 ## The wasm demo — running the engine inside someone else's browser
 `docs/wiki/wasm-demo.md`
@@ -1978,4 +1979,4 @@
   - L124 · Rank mechanisms by FLIP RATE, not failing-subtest count — CSS layout is a multi-assertion slog
 
 ---
-1885 sections across 22 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+1886 sections across 22 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.

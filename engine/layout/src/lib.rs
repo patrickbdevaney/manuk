@@ -11492,6 +11492,12 @@ impl Ctx<'_> {
             // `nowrap` (the break would fall *within* a nowrap run — CSS `white-space`).
             let breakable = brk.unwrap_or(!(no_wrap && prev_no_wrap));
             let overflows = !cur.is_empty() && pen + space_w + advance > line_avail;
+            if std::env::var("MANUK_INLINE_TRACE").is_ok() {
+                eprintln!(
+                    "ITEM adv={advance:.1} space={space_w:.1} est_h={est_h:.1} pen={pen:.1} avail={line_avail:.1} cur={} brk={brk:?} nowrap={no_wrap} overflows={overflows}",
+                    cur.len()
+                );
+            }
             let mut place_x: Option<f32> = None;
             if overflows && breakable {
                 // Close the current line, then open a fresh band for this item.
@@ -18477,6 +18483,283 @@ mod tests {
             diverged
                 .iter()
                 .map(|(id, m, got, want)| format!("  {id:>2} {m:<7} ours {got:<12} Chrome {want}"))
+                .collect::<Vec<_>>()
+                .join("\n")
+        );
+    }
+
+    /// # G_FONT_SIZE_ZERO_GRID — the `font-size:0` inline-block grid, and the intrinsic keywords
+    ///
+    /// ⚠⚠⚠ **THE SUBJECT OF THIS BATTERY WAS THE INTRINSIC SIZING KEYWORDS, AND ITS CONTROL ROW
+    /// FOUND A BIGGER DEFECT UNDERNEATH THEM.** `f` is `width:auto` — the plainest cell in the
+    /// table, present only so a keyword row has something to be compared against — and it was
+    /// wrong: two `inline-block`s of 40px and 70px in a **230px** box came out on TWO lines.
+    ///
+    /// The cause is one seam below layout. swash's `ShaperBuilder::size` defaults to `0`, documented
+    /// as *"equivalent to the units per em of the font"*, so `font-size: 0` asked for the run in the
+    /// font's **design units** and a single space measured **569px**. `font-size: 0` on a container
+    /// is the pre-flexbox reset for the whitespace between `inline-block` children, so every grid
+    /// built that way stacked one column per line. Fixed at `manuk_text::FontContext::shape_run`
+    /// and gated there by `a_zero_font_size_measures_zero_and_not_the_fonts_design_units`; this
+    /// test is the LAYOUT consequence, and the reason the battery keeps `font-size:0` rather than
+    /// switching to a font-independent construct that would hide it again.
+    ///
+    /// **96 cells: 8 constraint shapes × 4 subject displays × 3 parent formatting contexts**,
+    /// Chrome-measured in ONE page so the reference cannot drift between rows. The content is two
+    /// fixed-size `inline-block`s (40px, 70px) with a zero-advance break opportunity between them,
+    /// so min-content and max-content are **70 and 110 by construction** and no host font can move
+    /// a number in this table.
+    ///
+    /// ⚠⚠ **THE SUBJECT'S OWN `display` CHANGES CHROME'S ANSWER, AND THAT IS NOT OUR DOING.** A
+    /// `display:flex` subject makes the two boxes flex items, so its min-content is their **sum**
+    /// (110) where a block subject's is their **max** (70); a `display:grid` subject puts each in
+    /// its own implicit row, so it is 70 and twice as tall. A one-display fixture would have called
+    /// two of those three a bug.
+    ///
+    /// **THE FIX MOVED 15 OF THE 30 DIVERGENT CELLS**, and the 15 that remain are exactly ONE
+    /// mechanism rather than a spread: `{a,b,c,e,h} × {flex,grid,inline-flex} × parent=grid` — an
+    /// intrinsic keyword on a subject that is **itself a flex/grid container**, inside a **grid**
+    /// parent, where we hand back the track width (230) instead of the keyword's answer. Under a
+    /// *flex* parent the same subjects are already exact (t1149's `fit_content_inline`), which is
+    /// what localises the residue to the grid item path. `resolve_intrinsic_inline` declines to run
+    /// for a container at all (`if !container` at its call site) because resolving it there would
+    /// re-enter the measure it is inside — named with its number in `taffy_tree.rs` and left for
+    /// the tick that builds the root-suppression flag it needs.
+    ///
+    /// Rows `d`, `f` and `g` are exact in all twelve contexts, which is what says the residue is
+    /// about the *container* subject and not about the keywords.
+    ///
+    /// The residue is asserted as an EXACT SET, so a new divergence is RED **and closing one is
+    /// also RED** (edit the list, never widen it). To watch the whole table go RED: delete the
+    /// `size > 0.0` early return in `manuk_text::FontContext::shape_run`.
+    ///
+    /// Chrome-measured 2026-08-11, `google-chrome --headless=new`, all 96 cells in one page.
+    #[test]
+    fn intrinsic_keywords_and_the_font_size_zero_inline_block_grid() {
+        const CONTENT: &str = r#"<i style="display:inline-block;width:40px;height:10px"></i> <i style="display:inline-block;width:70px;height:10px"></i>"#;
+        // Chrome's answer for each shape, in the fixed order
+        // subject {block, flex, grid, inline-flex} × parent {block, flex, grid}.
+        let chrome: &[(&str, &str, &[&str])] = &[
+            (
+                "a",
+                "width:min-content",
+                &[
+                    "70.00x20.00",
+                    "70.00x20.00",
+                    "70.00x20.00",
+                    "110.00x10.00",
+                    "110.00x10.00",
+                    "110.00x10.00",
+                    "70.00x20.00",
+                    "70.00x20.00",
+                    "70.00x20.00",
+                    "110.00x10.00",
+                    "110.00x10.00",
+                    "110.00x10.00",
+                ],
+            ),
+            (
+                "b",
+                "width:max-content",
+                &[
+                    "110.00x10.00",
+                    "110.00x10.00",
+                    "110.00x10.00",
+                    "110.00x10.00",
+                    "110.00x10.00",
+                    "110.00x10.00",
+                    "70.00x20.00",
+                    "70.00x20.00",
+                    "70.00x20.00",
+                    "110.00x10.00",
+                    "110.00x10.00",
+                    "110.00x10.00",
+                ],
+            ),
+            (
+                "c",
+                "width:fit-content",
+                &[
+                    "110.00x10.00",
+                    "110.00x10.00",
+                    "110.00x10.00",
+                    "110.00x10.00",
+                    "110.00x10.00",
+                    "110.00x10.00",
+                    "70.00x20.00",
+                    "70.00x20.00",
+                    "70.00x20.00",
+                    "110.00x10.00",
+                    "110.00x10.00",
+                    "110.00x10.00",
+                ],
+            ),
+            (
+                "d",
+                "min-width:max-content",
+                &[
+                    "230.00x10.00",
+                    "110.00x10.00",
+                    "230.00x10.00",
+                    "230.00x10.00",
+                    "110.00x10.00",
+                    "230.00x10.00",
+                    "230.00x20.00",
+                    "70.00x20.00",
+                    "230.00x20.00",
+                    "110.00x10.00",
+                    "110.00x10.00",
+                    "230.00x10.00",
+                ],
+            ),
+            (
+                "e",
+                "max-width:min-content",
+                &[
+                    "70.00x20.00",
+                    "70.00x20.00",
+                    "70.00x20.00",
+                    "110.00x10.00",
+                    "110.00x10.00",
+                    "110.00x10.00",
+                    "70.00x20.00",
+                    "70.00x20.00",
+                    "70.00x20.00",
+                    "110.00x10.00",
+                    "110.00x10.00",
+                    "110.00x10.00",
+                ],
+            ),
+            (
+                "f",
+                "width:auto",
+                &[
+                    "230.00x10.00",
+                    "110.00x10.00",
+                    "230.00x10.00",
+                    "230.00x10.00",
+                    "110.00x10.00",
+                    "230.00x10.00",
+                    "230.00x20.00",
+                    "70.00x20.00",
+                    "230.00x20.00",
+                    "110.00x10.00",
+                    "110.00x10.00",
+                    "230.00x10.00",
+                ],
+            ),
+            (
+                "g",
+                "width:min-content;max-width:50px",
+                &[
+                    "50.00x20.00",
+                    "50.00x20.00",
+                    "50.00x20.00",
+                    "50.00x10.00",
+                    "50.00x10.00",
+                    "50.00x10.00",
+                    "50.00x20.00",
+                    "50.00x20.00",
+                    "50.00x20.00",
+                    "50.00x10.00",
+                    "50.00x10.00",
+                    "50.00x10.00",
+                ],
+            ),
+            (
+                "h",
+                "width:fit-content;min-width:90px",
+                &[
+                    "110.00x10.00",
+                    "110.00x10.00",
+                    "110.00x10.00",
+                    "110.00x10.00",
+                    "110.00x10.00",
+                    "110.00x10.00",
+                    "90.00x20.00",
+                    "90.00x20.00",
+                    "90.00x20.00",
+                    "110.00x10.00",
+                    "110.00x10.00",
+                    "110.00x10.00",
+                ],
+            ),
+        ];
+        // The cells where we still disagree with Chrome — ONE mechanism, named above.
+        let residue: &[(&str, &str, &str, &str)] = &[
+            ("a", "flex", "grid", "230.00x10.00"),
+            ("a", "grid", "grid", "230.00x20.00"),
+            ("a", "iflex", "grid", "230.00x10.00"),
+            ("b", "flex", "grid", "230.00x10.00"),
+            ("b", "grid", "grid", "230.00x20.00"),
+            ("b", "iflex", "grid", "230.00x10.00"),
+            ("c", "flex", "grid", "230.00x10.00"),
+            ("c", "grid", "grid", "230.00x20.00"),
+            ("c", "iflex", "grid", "230.00x10.00"),
+            ("e", "flex", "grid", "230.00x10.00"),
+            ("e", "grid", "grid", "230.00x20.00"),
+            ("e", "iflex", "grid", "230.00x10.00"),
+            ("h", "flex", "grid", "230.00x10.00"),
+            ("h", "grid", "grid", "230.00x20.00"),
+            ("h", "iflex", "grid", "230.00x10.00"),
+        ];
+        let subj: &[(&str, &str)] = &[
+            ("block", "display:block"),
+            ("flex", "display:flex"),
+            ("grid", "display:grid"),
+            ("iflex", "display:inline-flex"),
+        ];
+        let parent: &[(&str, &str)] = &[
+            ("block", ""),
+            ("flex", "display:flex"),
+            ("grid", "display:grid"),
+        ];
+        let mut diverged: Vec<(String, String, String, String, String)> = Vec::new();
+        for (sid, scss, want) in chrome {
+            let mut k = 0usize;
+            for (did, dcss) in subj {
+                for (pid, pcss) in parent {
+                    let html = format!(
+                        r#"<div style="width:230px;{pcss}"><div id="S" style="{dcss};{scss}">{CONTENT}</div></div>"#
+                    );
+                    let (dom, root) = layout_html(&html, "body{margin:0;font-size:0}", 1000.0);
+                    let rects = root.node_rects(&dom);
+                    let r = rects[&by_id(&dom, "S")];
+                    let got = format!("{:.2}x{:.2}", r.width, r.height);
+                    if got != want[k] {
+                        diverged.push((
+                            sid.to_string(),
+                            did.to_string(),
+                            pid.to_string(),
+                            got,
+                            want[k].to_string(),
+                        ));
+                    }
+                    k += 1;
+                }
+            }
+        }
+        let mut got_set: Vec<String> = diverged
+            .iter()
+            .map(|(s, d, p, got, _)| format!("{s}/{d}/{p}={got}"))
+            .collect();
+        got_set.sort();
+        let mut want_set: Vec<String> = residue
+            .iter()
+            .map(|(s, d, p, got)| format!("{s}/{d}/{p}={got}"))
+            .collect();
+        want_set.sort();
+        assert_eq!(
+            got_set,
+            want_set,
+            "the 96-cell intrinsic-keyword battery must match Chrome everywhere except the NAMED \
+             residue (an intrinsic keyword on a flex/grid CONTAINER inside a GRID parent). \
+             Divergences, with Chrome's answer:\n{}",
+            diverged
+                .iter()
+                .map(|(s, d, p, got, want)| format!(
+                    "  {s:>2} {d:<6} in {p:<6} ours {got:<14} Chrome {want}"
+                ))
                 .collect::<Vec<_>>()
                 .join("\n")
         );
