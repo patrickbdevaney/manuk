@@ -2509,3 +2509,79 @@ and the alias list now derive from **one** array, because a hand-copied second l
 `color-scheme` and the `-webkit-` spellings get dashed attributes without joining `__n`. That is not
 sloppiness — it is Chrome's shape too: `length` counts *declarations*, while the IDL attributes exist
 for every *supported property* regardless of whether one is set.
+
+## `CSS.supports` answers a false NO for what we render — `RECOVERED_LONGHANDS` (tick 1180)
+
+The section above (t1177) priced `el.style` setter validation and **refused it**, because the
+`CSS.supports` seam it would validate through answers `false` for properties this engine ships. This
+tick makes the seam honest. Two things it predicted turned out to be wrong, and both are worth
+keeping because each would have cost real work.
+
+### CORRECTION 1 — it is FOUR properties, not six, and the probe needed no expectation column
+
+t1177's battery listed six declarations `CSS.supports` denies that Chrome supports. **Four of those
+six were the instrument being correct.** The reason the count was wrong is the reason the whole
+battery was refused: *Chrome's* answer had been written into the expectation column of a question
+about *this* engine.
+
+The replacement probe has **no expectation column at all**. For every property the computed-style
+snapshot answers to, it asks `CSS.supports(p, cs[p])` — the value the engine itself just produced,
+and therefore by construction one it supports:
+
+```text
+   ASKED 139 properties   FALSE_NO 4  (+1 absent)
+     scrollbar-width · scrollbar-color · scroll-snap-type · scroll-snap-align
+     -webkit-line-clamp — ABSENT from the computed snapshot entirely
+```
+
+> **A self-calibrating probe cannot inherit the author's beliefs.** Ask the engine about its own
+> output and every `false` is a proven contradiction, with nothing recalled and nothing borrowed.
+
+`-webkit-line-clamp` is the one the probe *could not* see — it is recovered by the merge and consumed
+by layout but never reaches the computed snapshot, so it came back `ABSENT`, not `false`. Its
+evidence is its own unit test. **A probe's blind spot is not an absence of the thing.**
+
+### CORRECTION 2 — the plan named the wrong hook, and the existing one was already right
+
+t1177 specified *"an allowlist applied to the RAW condition **before** Stylo sees it (Stylo cannot
+parse these, so the existing `rewrite_parse_only` hook is too late)"*. That is a whole raw-text
+pre-parser, and it was **not needed**: `SupportsCondition::Declaration` holds the raw `prop: value`
+slice, so Stylo parses the *condition tree* perfectly well and merely evaluates the declaration
+false. The existing hook was in exactly the right place, and `RECOVERED_LONGHANDS` is nine lines in
+the same match arm as the denylist.
+
+> **"Stylo cannot parse this property" and "Stylo cannot parse this condition" are different
+> sentences.** The first is true; the plan carried it one level up, where it is false, and budgeted a
+> subsystem for it.
+
+The payoff is that composition is free — the declaration is swapped for `ALWAYS_SUPPORTED`
+(`color: red`) or `NEVER_SUPPORTED` and **Stylo** resolves the surrounding `and`/`or`/`not`, exactly
+as the denylist half already does. `not (scrollbar-width: thin)` is false and
+`not (scrollbar-width: banana)` is true, with no boolean logic written here.
+
+### The value half is not optional
+
+A name-keyed allowlist would answer yes to `scrollbar-width: banana` — which is t1177's
+`el.style.color = "yelow"` lie moved one layer down, and **worse here, because the next tick's setter
+is going to trust this answer.** So `recovered_value_valid` writes the grammar out per property
+rather than routing through `apply_declaration`:
+
+> **The cascade's parser is LENIENT BY DESIGN and a `supports` answer must not be.**
+> `-webkit-line-clamp`'s own arm says *"`none`/`0`/garbage → unclamped"*, because a cascade must not
+> abort a page over a bad value. Reusing it would have made every value valid — the exact failure the
+> function exists to prevent. `-webkit-line-clamp: 0` is the row where the two must differ.
+
+⚠ **`scroll-snap-type: none` kills the cheap validator.** *"Apply it and see whether the computed
+style changed"* answers NO for every property asked about its own initial value — and `none` is both
+the initial value and a perfectly valid one.
+
+### The entry criterion, so the list cannot grow by opinion
+
+A property belongs iff **both**: it reaches a `ComputedStyle` field through the `MinimalCascade`
+recovery merge, **and** its `CONSTELLATION.tsv` row says `gated` with the gate named. `text-wrap`,
+`content-visibility`, `-webkit-box-orient` and `anchor-name` fail the second test and stay honest
+NOs. All 30 claims — negatives first — are held by `G_SUPPORTS_HONESTY`.
+
+⚠ **One drift recorded, not acted on:** `display: -webkit-box` IS applied by that same merge
+(`legacy_webkit_box`), while constellation rows 353/423 say `missing`. The row is probably stale, but
+widening an allowlist on a row nobody has measured is how the false YES gets back in.

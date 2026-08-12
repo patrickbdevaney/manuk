@@ -46371,6 +46371,107 @@ PERF: none — one UA rule and one narrowed branch in a cascade that already ran
 WIKI: `docs/wiki/css-cascade.md` — where Chrome draws the form-control `box-sizing` line, and why a
 layout-crate test cannot see it.
 
+## Tick 1180 — `CSS.supports` said NO about five properties this engine renders (2026-08-12)
+
+TICK SHAPE: capability.
+
+t1177 specified this tick and made it a PRECONDITION: `el.style`'s setter validates nothing
+(`e.style.color = "yelow"` sticks), the fix is to validate through the `CSS.supports` seam, and the
+seam cannot be trusted yet because it answers **false for properties we ship**. Wiring validation
+first would turn `el.style.webkitLineClamp = 3` into a **silent no-op** — deleting a capability this
+project shipped and gated. So: make the seam honest, then validate through it.
+
+⚠⚠⚠ **THE PROBE HAS NO EXPECTATION COLUMN, WHICH IS THE WHOLE POINT.** t1177's battery was refused
+because I wrote *Chrome's* answer into a `supports` column, and `CSS.supports` is a question about
+THIS engine. So this tick asks the engine about **its own computed value**: for every property the
+computed-style snapshot answers to, `CSS.supports(prop, cs[prop])` — a value the engine itself just
+produced, and therefore by construction one it supports. Every `false` is a PROVEN false-NO, with
+nothing recalled and nothing borrowed:
+
+```text
+   ASKED 139 properties   FALSE_NO 4  (+1 absent)
+     scrollbar-width  :: thin
+     scrollbar-color  :: rgb(255, 0, 0) rgb(0, 0, 255)
+     scroll-snap-type :: none
+     scroll-snap-align:: none
+     -webkit-line-clamp  — ABSENT from the computed snapshot entirely
+```
+
+**Four, not the six t1177 guessed.** `text-wrap`, `content-visibility`, `-webkit-box-orient` and
+`anchor-name` answer false because we genuinely do not have them — the constellation says `missing`
+or `unknown` for all four, so that `false` is HONEST and must stay. The four above all say **`gated`
+with a named gate** (`G_SCROLLBAR_THEME`, `G_SCROLL_SNAP`), and all four reach a `ComputedStyle`
+field through **one** place: the `MinimalCascade` recovery merge at `stylo_engine.rs:1075-1121`.
+That is the mechanical entry criterion, not a judgement call — a property qualifies iff it is
+recovered by that merge and its constellation row is `gated`.
+
+HYPOTHESIS: `RECOVERED_LONGHANDS`, the exact mirror of the existing `PARSE_ONLY_LONGHANDS` denylist
+and applied by the same condition-tree rewrite (so `not (scrollbar-width: thin)` composes correctly
+instead of a text filter answering it backwards), with the value VALUE-VALIDATED so
+`scrollbar-width: banana` stays false. Held by `G_SUPPORTS_HONESTY`. Expected WPT movement: small —
+this tick exists to make the NEXT one safe, and says so rather than borrowing its credit.
+
+⚠⚠⚠ **CORRECTION 1 — THE PLAN NAMED THE WRONG HOOK, AND BUDGETED A SUBSYSTEM FOR IT.** t1177
+specified *"an allowlist applied to the RAW condition **before** Stylo sees it (Stylo cannot parse
+these, so the existing `rewrite_parse_only` hook is too late)"*. That is a raw-text pre-parser, and
+it was **not needed**. `SupportsCondition::Declaration` holds the raw `prop: value` slice, so Stylo
+parses the *condition tree* perfectly well and merely evaluates the declaration false — which means
+the existing hook was in exactly the right place. Proven by construction: the fix lives in
+`rewrite_parse_only`, and if Stylo had produced no rule `honest_supports` would never have been
+called at all.
+
+> **"Stylo cannot parse this PROPERTY" and "Stylo cannot parse this CONDITION" are different
+> sentences.** The first is true. The plan carried it one level up, where it is false.
+
+The whole delta is nine lines in the same match arm as the denylist, and composition comes free:
+the declaration is swapped for `ALWAYS_SUPPORTED`/`NEVER_SUPPORTED` and **Stylo** resolves the
+surrounding `and`/`or`/`not`, exactly as the denylist half already does.
+
+⚠⚠ **CORRECTION 2 — THE LENIENT PARSER COULD NOT BE REUSED, WHICH IS THE OTHER HALF OF THE PLAN.**
+t1177 said to value-validate *through* `MinimalCascade::parse_declarations`. Those arms are
+**lenient by design** — `-webkit-line-clamp`'s own comment reads *"`none`/`0`/garbage →
+unclamped"* — because a cascade must not abort a page over a bad value. A `supports` answer has the
+opposite duty. Routing through them would have made **every** value valid, which is precisely the
+lie this list must not tell, so the grammar is written out per property and
+`-webkit-line-clamp: 0` is the gate row where the two deliberately disagree.
+
+MEASURED, vs the same release binary one hour earlier on the pre-fix tree:
+
+```text
+   css/css-overflow   263/831  ->  264/837     +1 pass, +6 ATTEMPTED
+   the other twelve CSS areas + css/css-values        0, 0 areas down, HANG/CRASH 0
+```
+
+**+1, and the honest reading is that the +6 attempted matters more than the +1 passed:** six
+subtests that never ran now run, because a file whose `@supports (scrollbar-width: …)` guard used to
+answer no now enters its body. This tick was predicted to be small **before** the numbers came back
+(the hypothesis above says so), and it is small. It exists to make the next one safe.
+
+RED-PROOF: `RECOVERED_LONGHANDS` severed behind an env flag, same binary, same run. All ten subject
+rows flip (`sw sc scf sst sstn ssa lc lcu lcn swi` → false) **and both composition rows flip with
+them** (`notsw` false→true, `orsw` true→false), while **every negative row and all fourteen
+pre-existing claims hold unchanged** — `sw-bad sc-one sc-bad sst-bad sst-two ssa-bad lc-bad lc-zero
+lc-empty tw cv bo an` all still false, `vtn op wm flt clip mbm bdf us csch mi to flex nope notvtn`
+all unmoved.
+
+⚠ **ONE DRIFT RECORDED, NOT ACTED ON.** `display: -webkit-box` is applied by the same merge
+(`legacy_webkit_box`, with a Chromium-measured comment), while `CONSTELLATION.tsv` rows 353/423 say
+`missing`. The row is probably stale — but widening an allowlist on a row nobody has measured is how
+the false YES gets back in, so it is filed rather than fixed.
+
+NEXT (t1177 step 2, now unblocked and the reason this tick exists): `el.style`'s setter validates
+through this seam. The corpus-wide prize is `test_invalid_value` — **1,978 call sites across
+`~/wpt/css`**, every one of which asserts that an invalid declaration leaves `getPropertyValue`
+empty, and every one of which we fail today because the setter stores the string.
+
+PERF: neutral — the allowlist is checked only for a declaration whose property name matches five
+entries, and `recovered_value_valid` runs no parser except for `scrollbar-color`, which asks
+`supports_condition("color: …")` at a bounded depth of one (the inner property is not on the list,
+so it cannot recurse).
+
+WIKI: `docs/wiki/dom-semantics.md` — "`CSS.supports` answers a false NO for what we render —
+`RECOVERED_LONGHANDS`", carrying both corrections and the self-calibrating-probe rule.
+
 ## Tick 1179 — a computed style did not answer to its own CSS property name (2026-08-12)
 
 TICK SHAPE: capability.

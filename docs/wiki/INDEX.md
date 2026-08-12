@@ -991,6 +991,11 @@
   - L2451 · A computed style must answer to its own CSS property name — the DASHED ATTRIBUTE (tick 1179)
   - L2470 · Why the third one is not a spelling convenience
   - L2489 · The shape of the fix, and the two things that keep it honest
+  - L2513 · CSS.supports answers a false NO for what we render — RECOVERED_LONGHANDS (tick 1180)
+  - L2520 · CORRECTION 1 — it is FOUR properties, not six, and the probe needed no expectation column
+  - L2544 · CORRECTION 2 — the plan named the wrong hook, and the existing one was already right
+  - L2562 · The value half is not optional
+  - L2578 · The entry criterion, so the list cannot grow by opinion
 
 ## THE FIDELITY INSTRUMENT — what it can and cannot see
 `docs/wiki/fidelity-instrument.md`
@@ -1996,4 +2001,4 @@
   - L124 · Rank mechanisms by FLIP RATE, not failing-subtest count — CSS layout is a multi-assertion slog
 
 ---
-1903 sections across 22 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+1908 sections across 22 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.

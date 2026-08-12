@@ -3143,6 +3143,175 @@ const UNRENDERED_LONGHANDS: &[&str] = &[
 /// hand-rolled boolean logic — resolves the surrounding `and`/`or`/`not`.
 const NEVER_SUPPORTED: &str = "-manuk-not-a-property: 1";
 
+/// The twin of [`NEVER_SUPPORTED`], for a property we DO render that Stylo's servo build cannot
+/// parse at all. Same trick, opposite sign: substitute a declaration Stylo certainly supports and
+/// let Stylo compose the surrounding `and`/`or`/`not`.
+const ALWAYS_SUPPORTED: &str = "color: red";
+
+/// **THE MISSING OPPOSITE OF [`PARSE_ONLY_LONGHANDS`] — properties this engine RENDERS and Stylo's
+/// servo build cannot parse, so `@supports` and `CSS.supports()` answered a false NO.**
+///
+/// The denylist above subtracts properties the `layout.unimplemented` pref made *parseable* but
+/// which we do not render. This list adds back the mirror-image case: `engine="gecko"` properties
+/// that stylo 0.19's servo build **drops at parse time**, which this engine recovers through the
+/// `MinimalCascade` merge (see the merge block in `cascade_via_stylo_sized`). Stylo cannot answer
+/// for them at all, so its verdict is not merely wrong — it is uninformed.
+///
+/// ⚠ **A false NO is not the harmless direction here.** It is the *precondition* for validating
+/// `el.style`'s setter through this seam (tick 1177): the moment the setter rejects what
+/// `CSS.supports` denies, every property on this list becomes a **silent no-op** —
+/// `el.style.webkitLineClamp = 3` would delete a capability this project shipped and gated. That is
+/// why this tick comes first and separately.
+///
+/// **THE ENTRY CRITERION IS MECHANICAL, NOT A JUDGEMENT.** A property belongs here iff BOTH:
+///
+///  1. it reaches a `ComputedStyle` field through the `MinimalCascade` recovery merge, and
+///  2. its `CONSTELLATION.tsv` row says `gated`, with the gate named.
+///
+/// Measured by asking the engine about **its own computed value** — `CSS.supports(p, cs[p])` over
+/// every property the computed snapshot answers to (139 of them), which needs no expectation column
+/// and so cannot repeat t1177's error of writing *Chrome's* answer into a question about *this*
+/// engine. Four came back false, and they are these four. `text-wrap`, `content-visibility`,
+/// `-webkit-box-orient` and `anchor-name` also answer false and are deliberately **absent**: the
+/// constellation says `missing`/`unknown` for all four, so their NO is honest and must stay.
+///
+/// `-webkit-line-clamp` is the fifth and is here on criterion 1 alone — it is recovered by the
+/// merge (`cs.line_clamp = m.line_clamp`) and consumed by layout, but it never reaches the computed
+/// snapshot, so the self-calibrating probe reported it ABSENT rather than false. Its evidence is
+/// `line_clamp_recovers_through_the_stylo_cascade` in this file.
+const RECOVERED_LONGHANDS: &[&str] = &[
+    // gated: G_SCROLLBAR_THEME — both are `engine="gecko"` in stylo 0.19 (tick 469).
+    "scrollbar-width",
+    "scrollbar-color",
+    // gated: G_SCROLL_SNAP — recovered into the Stylo path like `text-overflow` (tick 266).
+    "scroll-snap-type",
+    "scroll-snap-align",
+    // Rendered since tick 413; recovered at `stylo_engine.rs` `cs.line_clamp = m.line_clamp`.
+    // Both spellings, because a page asks with whichever it writes (the shorthand lesson the
+    // denylist above learned the hard way in surface audit #34).
+    "-webkit-line-clamp",
+    "line-clamp",
+];
+
+/// **The value half — because a property name alone is not a capability claim.**
+///
+/// `CSS.supports('scrollbar-width', 'banana')` must stay **false**, or the allowlist trades one
+/// dishonest answer for another: a blanket YES on the property name is exactly the t1177 lie
+/// (`el.style.color = "yelow"` sticks) moved one layer down, and it would be *worse* here because
+/// the whole point of this list is to be trusted by a setter.
+///
+/// Written out rather than routed through `apply_declaration`, deliberately: those arms are
+/// **lenient by design** (`-webkit-line-clamp`'s own comment says *"`none`/`0`/garbage →
+/// unclamped"*), because a cascade must not abort a page over a bad value. A `supports` answer has
+/// the opposite duty — it must say no. Reusing the lenient parser would have made every value
+/// valid, which is the failure this function exists to prevent.
+fn recovered_value_valid(prop: &str, value: &str) -> bool {
+    let v = value.trim();
+    if v.is_empty() {
+        return false;
+    }
+    // CSS-wide keywords are valid on every property, and a page really does write
+    // `@supports (scrollbar-width: initial)`.
+    if ["initial", "inherit", "unset", "revert", "revert-layer"]
+        .iter()
+        .any(|k| v.eq_ignore_ascii_case(k))
+    {
+        return true;
+    }
+    let toks: Vec<&str> = v.split_ascii_whitespace().collect();
+    match prop.to_ascii_lowercase().as_str() {
+        "scrollbar-width" => {
+            toks.len() == 1
+                && ["auto", "thin", "none"]
+                    .iter()
+                    .any(|k| toks[0].eq_ignore_ascii_case(k))
+        }
+        // `auto`, or exactly TWO colours (thumb then track).
+        "scrollbar-color" => {
+            (toks.len() == 1 && toks[0].eq_ignore_ascii_case("auto"))
+                || (parse_color_count(v) == Some(2))
+        }
+        // `none`, or an axis with an optional strictness keyword.
+        "scroll-snap-type" => match toks.len() {
+            1 => ["none", "x", "y", "block", "inline", "both"]
+                .iter()
+                .any(|k| toks[0].eq_ignore_ascii_case(k)),
+            2 => {
+                ["x", "y", "block", "inline", "both"]
+                    .iter()
+                    .any(|k| toks[0].eq_ignore_ascii_case(k))
+                    && ["mandatory", "proximity"]
+                        .iter()
+                        .any(|k| toks[1].eq_ignore_ascii_case(k))
+            }
+            _ => false,
+        },
+        // One or two of the alignment keywords (block then inline).
+        "scroll-snap-align" => {
+            !toks.is_empty()
+                && toks.len() <= 2
+                && toks.iter().all(|t| {
+                    ["none", "start", "end", "center"]
+                        .iter()
+                        .any(|k| t.eq_ignore_ascii_case(k))
+                })
+        }
+        // `none` or a positive `<integer>` — the authored form, and all layout consumes.
+        "-webkit-line-clamp" | "line-clamp" => {
+            toks.len() == 1
+                && (toks[0].eq_ignore_ascii_case("none")
+                    || toks[0].parse::<u16>().is_ok_and(|n| n >= 1))
+        }
+        // A property reached this function without a value grammar. Answering YES would be the
+        // blanket lie this function exists to prevent, so the safe direction is NO — and
+        // `G_SUPPORTS_HONESTY` names every member of the list, so a new entry without a rule here
+        // fails loudly rather than silently answering false forever.
+        _ => false,
+    }
+}
+
+/// How many of `s`'s whitespace-separated groups are colours Stylo can parse — `None` if any group
+/// is not. Used only by `scrollbar-color`, which takes exactly two. Functional notation
+/// (`rgb(255 0 0)`) contains spaces, so the split is on top-level whitespace, not every space.
+fn parse_color_count(s: &str) -> Option<usize> {
+    let mut n = 0usize;
+    let mut depth = 0i32;
+    let mut cur = String::new();
+    let flush = |cur: &mut String, n: &mut usize| -> bool {
+        if cur.trim().is_empty() {
+            return true;
+        }
+        let ok = supports_condition(&format!("color: {}", cur.trim()));
+        cur.clear();
+        if ok {
+            *n += 1;
+        }
+        ok
+    };
+    for c in s.chars() {
+        match c {
+            '(' => {
+                depth += 1;
+                cur.push(c);
+            }
+            ')' => {
+                depth -= 1;
+                cur.push(c);
+            }
+            ' ' | '\t' if depth == 0 => {
+                if !flush(&mut cur, &mut n) {
+                    return None;
+                }
+            }
+            _ => cur.push(c),
+        }
+    }
+    if !flush(&mut cur, &mut n) {
+        return None;
+    }
+    Some(n)
+}
+
 /// **The honest verdict for an `@supports` condition, or `None` when Stylo's own is already right.**
 ///
 /// The whole difficulty is composition: `not (backdrop-filter: blur(1px))` must be **true** while
@@ -3178,6 +3347,22 @@ fn rewrite_parse_only(
             // `Declaration` holds the raw `prop: value` slice; the property is everything before
             // the first colon. Compared case-insensitively, as CSS property names are.
             let name = d.0.split(':').next().unwrap_or("").trim();
+            // **The ALLOWLIST is consulted FIRST** — a property Stylo cannot parse cannot also be one
+            // the `layout.unimplemented` pref made parseable, so membership in both lists is a
+            // contradiction rather than a precedence question. Checking this side first makes that
+            // contradiction impossible to express instead of silently resolving it.
+            if RECOVERED_LONGHANDS
+                .iter()
+                .any(|p| name.eq_ignore_ascii_case(p))
+            {
+                let value = d.0.splitn(2, ':').nth(1).unwrap_or("");
+                let verdict = if recovered_value_valid(name, value) {
+                    ALWAYS_SUPPORTED
+                } else {
+                    NEVER_SUPPORTED
+                };
+                return (SC::Declaration(Declaration(verdict.to_string())), true);
+            }
             // Both lists answer the same question — *do we RENDER this?* — and differ only in why the
             // property became parseable. Kept separate so each carries its own evidence and can be
             // shortened independently as capabilities land.
