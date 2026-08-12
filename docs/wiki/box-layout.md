@@ -9036,3 +9036,77 @@ next attempt does not re-measure them: `max-width:150px` → `150x148` · `max-h
 `101x100` · `min-width:600px` → `600x593` · `min-height:600px` → `608x600` · both maxes → `101x100`
 · both mins → `810x800`. Every single violation **preserves** the ratio; only the two conflicts
 abandon it.
+
+### The conflict arms, LANDED — and the sixth "control" was measured in the wrong context (t1159)
+
+⚠⚠⚠ **THE 50-CELL TABLE IS THE FINDING.** t1157 priced ten constraint shapes in ONE formatting
+context and t1158 priced two shapes in four. Running all ten across all five — `flex`, `block`,
+`float`, `abspos`, `grid`, in one Chrome page so the reference cannot drift between rows — says
+something neither could: **Chrome itself is per-context on one of the rows.**
+
+```text
+                                        CHROME                       OURS (before → after)
+                                  flex        others          flex              grid
+  a max-width:150px               150x148.1   150x148.1       ✓                 ✓
+  b max-height:100px              101.3x100   101.3x100       ✓                 ✓
+  c min-width:600px               600x592.5   600x592.5       ✓                 ✓
+  d min-height:600px              607.6x600   607.6x600       ✓                 ✓
+  e max-w:150 + max-h:100         101.3x100   101.3x100       ✓            150x148.1 → 150x100 ✗
+  f min-w:600 + min-h:800         600x800     810.1x800       ✓            600x800 ✗ (unmoved)
+  g min-w:600 + max-h:100         600x100     600x100      600x592.5 → ✓   600x592.5 → ✓
+  h max-w:150 + min-h:800         150x800     150x800      810.1x800 → ✓       ✓
+  i max-width:100%                230x227.1   230x227.1       ✓                 ✓
+  j border-box + padding + max-w  150x148.4   150x148.4       ✓                 ✓  (abspos ✗ 148.1)
+```
+
+⚠⚠ **ROW `f` IS WHY THE CONTEXT AXIS HAD TO BE IN THE TABLE.** t1158's wiki entry banked *"both mins
+→ 810x800"* as one of the six controls for this gate. That number is Chrome's **block** answer;
+Chrome's **flex** answer is `600x800`, which is what we already produced. A fix aimed at "correcting"
+flex to 810 would have been a regression that every single-context fixture on the board would have
+scored as a fix. **A control measured in a different formatting context is not a control.**
+
+**THE MECHANISM: taffy synthesises a missing `min` axis through the ratio and never caps it.**
+`Size::maybe_apply_aspect_ratio` is applied to `min_size` in both `compute/leaf.rs` and
+`compute/flexbox.rs`, so `min-width:600px` on a 1.0126 ratio becomes `min-height:592.5px` — and in
+taffy's clamp (`.maybe_min(max).maybe_max(min)`) a min beats a max. That synthesis is **right** for
+the six single-violation arms (it is what makes row `c` Chrome-exact); §10.4 only abandons the ratio
+where a min and a max conflict *across* the axes. So the fix is to cap the synthesised minimum, not
+to withhold the ratio — which is exactly why t1158's second candidate was inert.
+
+**THE FIX IS A PAIR, AND THE HALVES DO NOT COVER THE SAME ROWS** (each mutated out, whole table
+re-run):
+
+| half | row `g` flex | row `h` flex |
+|---|---|---|
+| `taffy_tree::to_taffy_style` caps the synthesised `min_size` by the opposite `max` | `600x592.5` | `150x800` ✓ |
+| `layout_block` re-applies a taffy item's **px** height clamp (was `if !taffy_item`) | `600x592.5` | `150x800` ✓ |
+| both | `600x100` ✓ | `150x800` ✓ |
+
+Row `h` needed only the first (`min-height:800` was already definite — nothing to synthesise; the cap
+on the *width* min is what it wanted). Row `g` needs both: the cap makes taffy's slot `600×100`, and
+without the second half `layout_block` re-derives `592.5` from the used width through §10.6.2 **after**
+taffy's clamp and throws the slot away. That second half is also why t1158's first candidate was
+inert — the wrong number was being re-created downstream of every seam it patched.
+
+⚠ **The `if !taffy_item` guard was right about percentages and wrong about lengths.** It exists
+because re-resolving a percentage clamp against the slot squares the percentage; its own comment
+already said *"a px clamp re-applied to the slot is a no-op"*, and a no-op is precisely what it is on
+every row where the ratio did not re-derive the height. Only lengths are re-applied; percentages
+stay taffy's.
+
+**PRICED, old binary rebuilt and run in the same hour, pass-SETS diffed:**
+
+```text
+  css/css-flexbox  reftest 313 → 314   (+flexbox-min-width-auto-002c.html, 0 lost)
+                   testharness 1325 → 1329 subtests
+  css/css-grid · css/css-sizing · css/css-position   reftest and testharness BYTE-IDENTICAL
+```
+
+**RESIDUE, named with Chrome's answer so the next tick starts from a number** — the gate asserts the
+diverging set is *exactly* these three, so a new divergence is RED and closing one is also RED:
+
+| cell | Chrome | ours | mechanism |
+|---|---|---|---|
+| `e` grid | `101.3x100` | `150x100` | grid does not transfer a `max-width` clamp back through the ratio |
+| `f` grid | `810.1x800` | `600x800` | grid's `(Min,Min)` arm derives from the wrong axis — and note grid must NOT copy flex here |
+| `j` abspos | `150x148.4` | `150x148.1` | the abspos `box-sizing` deduction rounds the ratio transfer differently |

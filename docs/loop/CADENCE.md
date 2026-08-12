@@ -11,12 +11,12 @@
 
 | | value | over |
 |---|---|---|
-| ticks landed | **863** | ticks 1–1157 |
-| median tick cycle | **28m** | 862 intervals |
-| median, last 10 | **17m** | 10 intervals |
+| ticks landed | **864** | ticks 1–1159 |
+| median tick cycle | **28m** | 863 intervals |
+| median, last 10 | **22m** | 10 intervals |
 | fastest / slowest | 5s / 5.4d | |
-| **ticks per hour** | **1.13** | 759.7h elapsed |
-| median verify wall | **63s** | 802 ticks |
+| **ticks per hour** | **1.13** | 760.8h elapsed |
+| median verify wall | **63s** | 803 ticks |
 | wall trend | 39s → 13m — getting slower ⚠️ | first 3 vs last 3 |
 
 The **cycle** is the real unit: implement → debug → verify wall → land. The wall is only part of
@@ -28,10 +28,10 @@ it, and a wall that grows taxes every future tick, so it is tracked separately f
 
 * **capabilities asserted** (`G_CAPABILITY`): 48 → **81**
 * **live gates**: 27 → **438**
-* **✅ rows in the capability ledger**: 144 → **571**
+* **✅ rows in the capability ledger**: 144 → **572**
 * **Bar 0 — oracle hangs**: 0 of 265 sites
 
-**381 of 863 ticks** (44%) moved a
+**382 of 864 ticks** (44%) moved a
 user-visible capability. The rest were instruments, infrastructure and corrections — and the
 ledger says the corrections were not overhead: three of its top three priorities were phantoms,
 and finding that out redirected everything after it.
@@ -90,7 +90,7 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 
 ## What a capability costs
 
-* **381** capability ticks, median cycle **28m**
+* **382** capability ticks, median cycle **28m**
 * median diff per tick: **+264 / −34** lines across 8 files
 
 ## Every tick
@@ -960,5 +960,6 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 | **1154** | 2026-08-11 19:54 | 41m | measurement | 13m | +479/−33 | 438 | 81 | 56.0% · | one hundred `@font-face` rules for one family, and `unicode-range` is not in the tree (202 |
 | **1155** | 2026-08-11 20:10 | 16m | capability | 13m | +354/−36 | 438 | 81 | 56.0% · | `unicode-range` is parsed and 99 fetches stop, and the acceptance test did NOT move (2026- |
 | **1157** | 2026-08-11 20:44 | 34m | measurement | 13m | +124/−33 | 438 | 81 | 56.0% · | the port target is TWO ARMS of an eight-arm table, and eight rows are already exact (2026- |
+| **1159** | 2026-08-11 21:53 | 69m | capability | 13m | +489/−37 | 438 | 81 | 56.0% · | the conflict arms LANDED, and the sixth control was measured in the wrong context (2026-08 |
 
 *`·` after a WPT figure means **carried forward**, not measured this tick.*

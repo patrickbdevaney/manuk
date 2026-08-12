@@ -234,6 +234,74 @@ fn grid_line(pair: (CssGridLine, CssGridLine)) -> Line<GridPlacement> {
 /// properties taffy needs to lay out a flex/grid container and its items. Inline/float/table
 /// specifics stay with Manuk (this node is a leaf to taffy in those cases).
 pub fn to_taffy_style(cs: &ComputedStyle, calc: &mut Vec<(f32, f32)>) -> Style {
+    // ⚠⚠⚠ **CSS 2.1 §10.4's TWO CONFLICT ARMS — WHERE A MIN ON ONE AXIS AND A MAX ON THE OTHER
+    // CANNOT BOTH BE MET WITH THE RATIO INTACT, AND THE SPEC SAYS THE RATIO LOSES.**
+    //
+    // taffy synthesises a missing min axis from the ratio (`Size::maybe_apply_aspect_ratio`, applied
+    // to `min_size` in both `compute/leaf.rs` and `compute/flexbox.rs`) and that is CORRECT for the
+    // single-violation arms — it is exactly what makes `min-width:600px` on a 480×474 image come out
+    // 600×592.5, Chrome's answer. What taffy does not do is cap that synthesised minimum by the
+    // OTHER axis's maximum, so `min-width:600px; max-height:100px` synthesises `min-height:592.5px`,
+    // the min beats the max in the clamp, and the box is **493px too tall**. §10.4's table names the
+    // case explicitly:
+    //
+    // ```text
+    //   (w < min-w) and (h > max-h)   ->   (min-w, max-h)
+    //   (w > max-w) and (h < min-h)   ->   (max-w, min-h)
+    // ```
+    //
+    // Both bounds win and the ratio is abandoned. Capping the SYNTHESISED minimum is the smallest
+    // form of that: taffy's clamp then lands on `(min-w, max-h)` by itself, and the eight arms it
+    // already gets right are untouched because the cap only bites when `min/r` exceeds the max.
+    //
+    // Chrome-measured through five formatting contexts (480×474 image in a 230px column):
+    //
+    // ```text
+    //                                       CHROME     block/float/abspos   flex        grid
+    //   min-width:600px + max-height:100px  600x100    600x100  ✓           600x593 ✗   600x593 ✗
+    //   max-width:150px + min-height:800px  150x800    150x800  ✓           810x800 ✗   150x800 ✓
+    // ```
+    //
+    // ⚠ The block/float/abspos copies of §10.4 were already right (t1157 priced eight of ten arms
+    // Chrome-exact); this is the fourth formatting context, which is taffy's, and the only one that
+    // could not be fixed by writing the rule a fourth time — the number is produced inside the
+    // dependency, so the fix has to be in what the dependency is TOLD. t1158 refuted the two
+    // obvious sites (`clamp_replaced_intrinsic`, and withholding the ratio from taffy) by measuring
+    // both INERT; the slot itself was already 600×592.5 before our block path ever saw it.
+    //
+    // ⚠ **PX BOUNDS ONLY, and that is a real limit rather than an oversight.** This seam has no
+    // percentage basis — `dimension()` hands taffy the percentage to resolve later — so a
+    // conflicting `min-width:80%`/`max-height:100px` pair is not detectable here and keeps taffy's
+    // answer. Naming it beats a wrong basis guessed at.
+    let conflict_min = |ratio: f32| -> (Option<f32>, Option<f32>) {
+        let px = |d: manuk_css::Dim| match d {
+            manuk_css::Dim::Px(p) => Some(p.max(0.0)),
+            _ => None,
+        };
+        // A `max-*` that is an intrinsic KEYWORD is content-derived and not a length; leave those to
+        // taffy rather than pretending a number was available.
+        let max_w = px(cs.max_width).filter(|_| cs.max_width_keyword.is_none());
+        let max_h = px(cs.max_height).filter(|_| cs.max_height_keyword.is_none());
+        // Only the axis taffy would SYNTHESISE (the one whose min is `auto`) can be over-tight, and
+        // only while the automatic-minimum zero above has not already made it definite.
+        let synth_h = matches!(cs.min_height, manuk_css::Dim::Auto)
+            && cs.overflow_y == manuk_css::Overflow::Visible;
+        let synth_w = matches!(cs.min_width, manuk_css::Dim::Auto)
+            && cs.overflow_x == manuk_css::Overflow::Visible;
+        let h = match (synth_h, px(cs.min_width), max_h) {
+            (true, Some(mw), Some(mh)) if mw / ratio > mh => Some(mh),
+            _ => None,
+        };
+        let w = match (synth_w, px(cs.min_height), max_w) {
+            (true, Some(mh), Some(mw)) if mh * ratio > mw => Some(mw),
+            _ => None,
+        };
+        (w, h)
+    };
+    let (conflict_min_w, conflict_min_h) = match cs.aspect_ratio.filter(|r| *r > 0.0) {
+        Some(r) => conflict_min(r),
+        None => (None, None),
+    };
     Style {
         display: map_display(cs.display),
         box_sizing: if cs.box_sizing == BoxSizing::BorderBox {
@@ -301,14 +369,18 @@ pub fn to_taffy_style(cs: &ComputedStyle, calc: &mut Vec<(f32, f32)>) -> Style {
         // `overflow-y` the block one. Applying it to every box, not just flex/grid items, is safe:
         // a block box's automatic minimum is already zero, so this can only ever agree with it.
         min_size: Size {
-            width: if cs.overflow_x != manuk_css::Overflow::Visible
+            width: if let Some(w) = conflict_min_w {
+                length(w)
+            } else if cs.overflow_x != manuk_css::Overflow::Visible
                 && matches!(cs.min_width, manuk_css::Dim::Auto)
             {
                 length(0.0)
             } else {
                 dimension(cs.min_width, calc)
             },
-            height: if cs.overflow_y != manuk_css::Overflow::Visible
+            height: if let Some(h) = conflict_min_h {
+                length(h)
+            } else if cs.overflow_y != manuk_css::Overflow::Visible
                 && matches!(cs.min_height, manuk_css::Dim::Auto)
             {
                 length(0.0)

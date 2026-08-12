@@ -46371,6 +46371,96 @@ PERF: none — one UA rule and one narrowed branch in a cascade that already ran
 WIKI: `docs/wiki/css-cascade.md` — where Chrome draws the form-control `box-sizing` line, and why a
 layout-crate test cannot see it.
 
+## Tick 1159 — the conflict arms LANDED, and the sixth control was measured in the wrong context (2026-08-11)
+
+TICK SHAPE: capability (layout primitive) — t1157's named build, t1158's narrowing, finished. Two
+CSS 2.1 §10.4 conflict arms, Chrome-exact in flex AND grid, gated by a 50-cell per-formatting-context
+table and RED-proven by mutating each half of the fix out separately.
+
+⚠⚠⚠ **THE FINDING IS THAT CHROME IS PER-CONTEXT ON ONE ROW, AND THE PREVIOUS TICK BANKED THAT ROW AS
+A CONTROL WITH THE WRONG NUMBER.** t1157 priced ten constraint shapes in one context; t1158 priced
+two shapes in four. Running ALL TEN across ALL FIVE — `flex` `block` `float` `abspos` `grid`, in one
+Chrome page so the reference cannot drift between rows — is what surfaced it:
+
+```text
+                                   CHROME flex   CHROME others   OURS flex        OURS grid
+  f  min-width:600px + min-height:800px  600x800     810.1x800    600x800  ✓   600x800  ✗
+  g  min-width:600px + max-height:100px  600x100       600x100    600x592.5 ✗  600x592.5 ✗
+  h  max-width:150px + min-height:800px  150x800       150x800    810.1x800 ✗  150x800  ✓
+```
+
+t1158's wiki banked *"both mins → 810x800"* as one of six controls for this gate. **That is Chrome's
+BLOCK answer.** Chrome's flex answer is `600x800`, which is what we already produced — so a fix aimed
+at "correcting" flex to 810 would have been a regression that every single-context fixture would have
+scored as a fix. **A control measured in a different formatting context is not a control**, and the
+only reason this was caught is that the battery varied the context as a column instead of fixing it.
+
+⚠⚠ **THE MECHANISM IS INSIDE THE DEPENDENCY, WHICH IS WHY THREE HAND-WRITTEN COPIES OF §10.4 COULD
+ALL BE RIGHT.** taffy synthesises a missing `min_size` axis through the ratio
+(`Size::maybe_apply_aspect_ratio`, applied to `min_size` in both `compute/leaf.rs` and
+`compute/flexbox.rs`) and never caps it by the opposite `max` — so `min-width:600px` on a 1.0126
+ratio becomes `min-height:592.5px`, and in taffy's clamp a min beats a max. That synthesis is
+**correct** for the six single-violation arms — it is what makes `min-width:600px` alone come out
+Chrome's `600x592.5` — and §10.4 abandons the ratio only where a min and a max conflict ACROSS the
+axes. So the fix is to **cap the synthesised minimum**, and that is exactly why t1158's second
+candidate (withholding the ratio entirely) was inert: it deleted the six right answers to reach the
+two wrong ones, and something downstream re-created the wrong number anyway.
+
+⚠⚠ **THE FIX IS A PAIR AND THE HALVES DO NOT COVER THE SAME ROWS** — each mutated out, whole table
+re-run, which is the only way the asymmetry is visible:
+
+```text
+                                                          row g flex   row h flex
+  to_taffy_style caps the synthesised min by the max        600x592.5    150x800  ✓
+  layout_block re-applies a taffy item's PX height clamp    600x592.5    150x800  ✓
+  BOTH                                                      600x100  ✓   150x800  ✓
+```
+
+Row `h` is carried by the first half alone (`min-height:800` was already definite, so nothing had to
+be synthesised — the cap on the WIDTH min is what it needed). Row `g` needs both: the cap makes
+taffy's slot `600×100`, and without the second half `layout_block` re-derives `592.5` from the used
+width through §10.6.2 **after** taffy's clamp and throws that slot away. **That is also the reason
+t1158's first candidate was inert** — the wrong number was being re-created downstream of every seam
+it patched, so no fix upstream of `layout_block` could ever show.
+
+⚠ **THE `if !taffy_item` GUARD WAS RIGHT ABOUT PERCENTAGES AND WRONG ABOUT LENGTHS**, and its own
+comment said so: *"a px clamp re-applied to the slot is a no-op"*. It was written to stop a
+percentage clamp being re-resolved against the slot (which squares the percentage) and it also
+switched off the length half, which is not a no-op the moment the ratio re-derives the height after
+taffy has clamped it. Percentages stay taffy's; only lengths are re-applied.
+
+**MEASURED — OLD BINARY REBUILT FROM HEAD AND RUN IN THE SAME HOUR, PASS-SETS DIFFED, NOT COUNTS:**
+
+```text
+  css/css-flexbox   reftest      313 → 314    +flexbox-min-width-auto-002c.html, 0 LOST
+                    testharness  1325 → 1329 subtests
+  css/css-grid      reftest 211 → 211   testharness 558 → 558     byte-identical
+  css/css-sizing    reftest  54 →  54   testharness 576 → 576     byte-identical
+  css/css-position  reftest  10 →  10   testharness  96 →  96     byte-identical
+  manuk-layout suite  172/172
+```
+
+⚠ **AND THE GRID COLUMN IS A THIRD DEFECT SITE THIS BATTERY FOUND FOR FREE.** Nobody had measured
+grid on these rows. Three cells still diverge and each is now a number rather than a suspicion; the
+gate asserts the diverging set is EXACTLY these three, so a new divergence is RED **and closing one
+is also RED** (edit the list, never widen it):
+
+```text
+  e  grid    Chrome 101.3x100     ours 150.0x100.0   (moved from 150.0x148.1 — one axis closed)
+  f  grid    Chrome 810.1x800     ours 600.0x800.0   ⚠ and grid must NOT copy flex here
+  j  abspos  Chrome 150.0x148.4   ours 150.0x148.1
+```
+
+RATCHET: held. Zero reftest or subtest losses in four areas against a same-hour old-binary control;
+172/172 layout suite; Bar 0 clean (HANG/CRASH 0 in all four areas, both binaries).
+
+PERF: none — the added work is two `f32` comparisons per styled box in `to_taffy_style`, guarded on
+`aspect_ratio.is_some()`, and one already-computed clamp re-applied per taffy item.
+
+WIKI: `docs/wiki/box-layout.md` — "The conflict arms, LANDED — and the sixth control was measured in
+the wrong context". PATTERN: "THE CONSTRAINED MEDIA SLOT INSIDE A FLEX OR GRID CARD" —
+`docs/loop/WEB-PATTERNS.md`.
+
 ## Tick 1158 — the conflict arm is in NEITHER place I could see, and both severances say so (2026-08-11)
 
 TICK SHAPE: measurement — t1157's named build, attempted, and **not landed**. Two candidate fix

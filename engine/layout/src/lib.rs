@@ -4174,7 +4174,39 @@ impl Ctx<'_> {
         // `height` — without one the item's height is `auto`, and `extract_placed` adopts the slot
         // height *after* this clamp runs, quietly overwriting the squared value. So the defect was
         // masked by a later assignment on every row but one.
-        if !taffy_item {
+        // ⚠⚠⚠ **…AND SKIPPING THE WHOLE CLAMP FOR A TAFFY ITEM SKIPPED THE HALF THAT IS NOT A
+        // PERCENTAGE.** The paragraph above is exactly right about percentages and is why this guard
+        // exists — but it also reads as *"taffy already clamped, so there is nothing to do"*, and for
+        // a replaced item that is false: `content_height` was re-derived from the used width through
+        // the ratio 200 lines up (§10.6.2), **after** taffy's clamp, so a `max-height` taffy honoured
+        // is thrown away again on the way out. The guard's own analysis says the fix is safe — *"a
+        // `px` clamp re-applied to the slot is a no-op"* — and a no-op is precisely what it is on
+        // every row where the ratio did not re-derive the height.
+        //
+        // Chrome-measured, a 480×474 image in a 230px flex column (`min-width:600px;
+        // max-height:100px`): Chrome **600×100**, ours **600×592.5** — 493px too tall, and the
+        // taffy slot was already 600×100 once `to_taffy_style` learned §10.4's conflict arms. This is
+        // the second half of that pair and neither half moves the row alone.
+        let (min_h, max_h) = if taffy_item {
+            // PERCENTAGE CLAMPS STAY TAFFY'S — re-resolving one against the slot squares it, which is
+            // the defect the guard was written for. Only lengths are re-applied here.
+            let px_only = |d: Dim, kw: bool, dflt: f32, v: f32| match d {
+                Dim::Px(_) if !kw => v,
+                _ => dflt,
+            };
+            (
+                px_only(s.min_height, s.min_height_keyword.is_some(), 0.0, min_h),
+                px_only(
+                    s.max_height,
+                    s.max_height_keyword.is_some(),
+                    f32::INFINITY,
+                    max_h,
+                ),
+            )
+        } else {
+            (min_h, max_h)
+        };
+        {
             let unclamped_height = content_height;
             if max_h.is_finite() {
                 content_height = content_height.min(max_h);
@@ -4216,7 +4248,12 @@ impl Ctx<'_> {
             // inline→block half above carries, applied to its mirror. `<svg width="1000"
             // height="266" style="max-width:100%;max-height:30px">` is 400x30 in Chrome (both axes
             // clamped, neither derived) where the same element WITHOUT the attributes is 112.78x30.
-            if content_height != unclamped_height
+            // ⚠ **THE TRANSFER STAYS OFF FOR A TAFFY ITEM**, and deliberately: the width is taffy's
+            // verdict (the flex/grid algorithm distributed it), not this path's to re-derive. §10.4's
+            // conflict arms — the one place the inline axis genuinely has to move for a flex item —
+            // are handed to taffy as a capped `min_size` instead (`taffy_tree::to_taffy_style`).
+            if !taffy_item
+                && content_height != unclamped_height
                 && is_replaced_element(self.dom.tag_name(node))
                 && (s.width == Dim::Auto || s.width_is_natural)
             {
@@ -18266,6 +18303,182 @@ mod tests {
             g("auto") < 100.0,
             "height:auto must still be content-sized, got {}",
             g("auto")
+        );
+    }
+
+    /// # G_REPLACED_10_4 — CSS 2.1 §10.4's constraint-violation table, PER FORMATTING CONTEXT
+    ///
+    /// ⚠⚠⚠ **THE TWO ARMS WHERE A MIN AND A MAX CONFLICT ACROSS THE AXES, AND WHERE THE SPEC SAYS
+    /// THE RATIO LOSES.** §10.4's table has eight arms; six of them move one axis and let the ratio
+    /// drag the other along, and two of them do not:
+    ///
+    /// ```text
+    ///   (w < min-w) and (h > max-h)   ->   (min-w, max-h)
+    ///   (w > max-w) and (h < min-h)   ->   (max-w, min-h)
+    /// ```
+    ///
+    /// Both bounds win, and the box stops being the ratio's shape. `min-width:600px;
+    /// max-height:100px` on a 480×474 image is **600×100** in Chrome; we produced **600×592.5**, a
+    /// box 493px too tall, and `max-width:150px; min-height:800px` came out **810×800** against
+    /// Chrome's 150×800 — 660px too wide and straight out of the viewport.
+    ///
+    /// ⚠⚠ **THE DEFECT WAS FLEX/GRID-ONLY, AND THAT IS WHY IT SURVIVED.** Priced across five
+    /// formatting contexts (t1157/t1158 found the first two columns; the grid column is this tick's):
+    ///
+    /// ```text
+    ///                                       CHROME    block  float  abspos    flex      grid
+    ///   min-width:600 + max-height:100      600x100     ✓      ✓      ✓     600x593 ✗ 600x593 ✗
+    ///   max-width:150 + min-height:800      150x800     ✓      ✓      ✓     810x800 ✗   ✓
+    /// ```
+    ///
+    /// The three hand-written copies of §10.4 all had the conflict arms; the fourth context is
+    /// **taffy's**, and the number is produced inside the dependency — so it could not be fixed by
+    /// writing the rule a fourth time. taffy synthesises a missing `min_size` axis through the ratio
+    /// (`Size::maybe_apply_aspect_ratio`) without capping it by the opposite `max`, so `min-width:600`
+    /// became `min-height:592.5`, and a min beats a max in its clamp.
+    ///
+    /// **THE FIX IS A PAIR, AND THE TWO HALVES DO NOT COVER THE SAME ROWS** — measured by mutating
+    /// each half out and re-running the whole table, which is the only way the asymmetry is visible:
+    ///
+    /// ```text
+    ///                                                            row g flex   row h flex
+    ///   to_taffy_style caps the synthesised min by the max        600x592.5    150x800  ✓
+    ///   layout_block re-applies a taffy item's PX height clamp    600x592.5    150x800  ✓
+    ///   BOTH                                                      600x100  ✓   150x800  ✓
+    /// ```
+    ///
+    /// Row `h` is carried by the taffy half alone (`min-height:800` was already definite, so nothing
+    /// had to be synthesised — the cap on the *width* min is what it needed). Row `g` needs both:
+    /// the cap makes taffy's slot 600×100, and without the second half `layout_block` re-derives
+    /// 592.5 from the used width and throws that slot away.
+    ///
+    /// — because the item's height is re-derived from its used width through the ratio (§10.6.2)
+    /// *after* taffy's clamp, so a `max-height` taffy honoured was thrown away on the way out.
+    ///
+    /// ⚠ **`f` IS THE ROW THAT PROVES CHROME ITSELF IS PER-CONTEXT**, and it is the reason this is a
+    /// 50-cell table rather than a 10-row one: `min-width:600px; min-height:800px` is **600×800 in
+    /// flex** and **810×800 everywhere else** in Chrome. Fixing flex "up" to 810 would have been a
+    /// regression that every single-context fixture would have called a fix.
+    ///
+    /// ⚠ **THE THREE RESIDUE CELLS ARE ASSERTED AS RESIDUE, NOT AS TRUTH** — the test states Chrome's
+    /// answer for all fifty and requires the mismatching set to be *exactly* these three, so a new
+    /// divergence is RED and closing one of them is also RED (edit the list, do not widen it):
+    ///
+    /// ```text
+    ///   grid   max-w:150 + max-h:100   Chrome 101.3x100    ours 150.0x100.0   (was 150.0x148.1)
+    ///   grid   min-w:600 + min-h:800   Chrome 810.1x800    ours 600.0x800.0
+    ///   abspos border-box + padding    Chrome 150.0x148.4  ours 150.0x148.1
+    /// ```
+    ///
+    /// To watch it go RED: drop the `conflict_min_*` arms from `taffy_tree::to_taffy_style`, or
+    /// restore the `if !taffy_item` guard on the block-axis clamp in `layout_block` — either half
+    /// alone returns `600x592.5` on row `g`.
+    ///
+    /// Chrome-measured 2026-08-11, `google-chrome --headless=new --dump-dom`, one 480×474 SVG image
+    /// in a 230px column, all five contexts in one page so the reference cannot drift between rows.
+    #[test]
+    fn replaced_constraint_violation_table_per_formatting_context() {
+        // Chrome's answer for each (case, context). One entry means all five agree.
+        let chrome: &[(&str, &str, &[(&str, &str)])] = &[
+            ("a", "max-width:150px", &[("*", "150.0x148.1")]),
+            ("b", "max-height:100px", &[("*", "101.3x100.0")]),
+            ("c", "min-width:600px", &[("*", "600.0x592.5")]),
+            ("d", "min-height:600px", &[("*", "607.6x600.0")]),
+            (
+                "e",
+                "max-width:150px;max-height:100px",
+                &[("*", "101.3x100.0")],
+            ),
+            (
+                "f",
+                "min-width:600px;min-height:800px",
+                // ⚠ flex is NOT the odd one out by our doing — Chrome says so.
+                &[("flex", "600.0x800.0"), ("*", "810.1x800.0")],
+            ),
+            (
+                "g",
+                "min-width:600px;max-height:100px",
+                &[("*", "600.0x100.0")],
+            ),
+            (
+                "h",
+                "max-width:150px;min-height:800px",
+                &[("*", "150.0x800.0")],
+            ),
+            ("i", "max-width:100%", &[("*", "230.0x227.1")]),
+            (
+                "j",
+                "box-sizing:border-box;padding:10px;max-width:150px",
+                &[("*", "150.0x148.4")],
+            ),
+        ];
+        // The cells where we still disagree with Chrome, each with the mechanism it belongs to. A
+        // cell that leaves this list — in either direction — fails the test.
+        let residue: &[(&str, &str, &str)] = &[
+            // grid does not transfer a `max-width` clamp back through the ratio (separate seam).
+            ("e", "grid", "150.0x100.0"),
+            // grid's (Min,Min) arm picks the wrong axis to derive from (separate seam).
+            ("f", "grid", "600.0x800.0"),
+            // the abspos path's `box-sizing` deduction rounds the ratio transfer differently.
+            ("j", "abspos", "150.0x148.1"),
+        ];
+        let case = |mode: &str, img: &str| {
+            let html = match mode {
+                "flex" => format!(
+                    r#"<div id="r" style="width:230px;display:flex"><img id="i" style="{img}"></div>"#
+                ),
+                "grid" => format!(
+                    r#"<div id="r" style="width:230px;display:grid"><img id="i" style="{img}"></div>"#
+                ),
+                "float" => format!(
+                    r#"<div id="r" style="width:230px"><img id="i" style="float:left;{img}"></div>"#
+                ),
+                "abspos" => format!(
+                    r#"<div id="r" style="width:230px;position:relative;height:900px"><img id="i" style="position:absolute;top:0;left:0;{img}"></div>"#
+                ),
+                _ => format!(r#"<div id="r" style="width:230px"><img id="i" style="{img}"></div>"#),
+            };
+            let (dom, root) =
+                layout_html_with_natural(&html, "body{margin:0}", 1000.0, "i", 480.0, 474.0);
+            let rects = root.node_rects(&dom);
+            let i = rects[&by_id(&dom, "i")];
+            format!("{:.1}x{:.1}", i.width, i.height)
+        };
+        let mut diverged: Vec<(String, String, String, String)> = Vec::new();
+        for (id, css, want) in chrome {
+            for mode in ["flex", "block", "float", "abspos", "grid"] {
+                let expect = want
+                    .iter()
+                    .find(|(m, _)| *m == mode)
+                    .or_else(|| want.iter().find(|(m, _)| *m == "*"))
+                    .expect("every case names a Chrome answer")
+                    .1;
+                let got = case(mode, css);
+                if got != expect {
+                    diverged.push((id.to_string(), mode.to_string(), got, expect.to_string()));
+                }
+            }
+        }
+        let mut got_set: Vec<String> = diverged
+            .iter()
+            .map(|(id, mode, got, _)| format!("{id}/{mode}={got}"))
+            .collect();
+        got_set.sort();
+        let mut want_set: Vec<String> = residue
+            .iter()
+            .map(|(id, mode, got)| format!("{id}/{mode}={got}"))
+            .collect();
+        want_set.sort();
+        assert_eq!(
+            got_set,
+            want_set,
+            "§10.4's constraint-violation table must match Chrome in every formatting context \
+             except the three NAMED residue cells. Divergences, with Chrome's answer:\n{}",
+            diverged
+                .iter()
+                .map(|(id, m, got, want)| format!("  {id:>2} {m:<7} ours {got:<12} Chrome {want}"))
+                .collect::<Vec<_>>()
+                .join("\n")
         );
     }
 
