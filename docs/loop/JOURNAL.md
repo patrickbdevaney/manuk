@@ -46371,6 +46371,86 @@ PERF: none — one UA rule and one narrowed branch in a cascade that already ran
 WIKI: `docs/wiki/css-cascade.md` — where Chrome draws the form-control `box-sizing` line, and why a
 layout-crate test cannot see it.
 
+## Tick 1174 — the RULE was right, the TRANSLATION was not, and eight tests named the difference (2026-08-12)
+
+TICK SHAPE: capability attempt → **REFUSED BY THE RATCHET AND REVERTED**. t1173 measured that grid's
+abspos static position is the **padding** box where block and flex use the content box, with a
+three-row Chrome control table. This tick built that fix. **It is Chrome-exact on its own control
+table and it costs eight `css-grid` reftests, so it does not land.**
+
+**THE FIX, AND IT WORKED ON EVERY ROW IT WAS DESIGNED AGAINST.** `placed_static_position_only`
+receives the static position relative to the CONTENT origin; for a grid container with an auto-placed
+abspos child it now subtracts the container's own padding:
+
+```text
+                          CHROME          BEFORE          AFTER
+   block container       15,15           15,15           15,15    ✓ control, unmoved
+   flex  container       15,145          15,145          15,145   ✓ control, unmoved
+   grid  container        5,265          15,265           5,265   ✗→✓
+   manuk-layout                          173/173         173/173
+```
+
+⚠⚠⚠ **AND THEN THE REFTESTS, WHICH IS THE MEASUREMENT THAT MATTERS HERE — old binary rebuilt from
+t1173 and run in the same hour:**
+
+```text
+                     OLD (t1173)    NEW      verdict
+   css/css-grid          211        203      −8   ← THE RATCHET REFUSES
+   css/css-flexbox       314        314       =
+   gained                             0
+```
+
+⚠⚠⚠ **THE EIGHT LOST TESTS ARE THE ENTIRE DIAGNOSIS, AND THEIR NAMES ARE THE MECHANISM:**
+
+```text
+   grid-abspos-staticpos-align-items-center-large-border-padding.html
+   grid-abspos-staticpos-align-items-end-large-border-padding.html
+   grid-abspos-staticpos-align-items-flex-end-large-border-padding.html
+   grid-abspos-staticpos-align-items-self-end-large-border-padding.html
+   grid-abspos-staticpos-align-self-center-large-border-padding.html
+   grid-abspos-staticpos-align-self-end-large-border-padding.html
+   grid-abspos-staticpos-align-self-flex-end-large-border-padding.html
+   grid-abspos-staticpos-align-self-self-end-large-border-padding.html
+```
+
+**Every one is an ALIGNMENT case, and every one is `-large-border-padding`.** The WPT authors named
+the exact hazard in the filename. Taffy's slot has *already* aligned the item within the **content**
+box; subtracting the padding afterwards TRANSLATES an aligned result. For `start` — the only
+alignment my control table exercised — a translation happens to be correct, which is precisely why
+the fix looked complete. For `center` and `end` it is wrong by construction: the box must be aligned
+within the **padding box**, which is *larger*, so the right answer is **not a translation at all**.
+
+⚠⚠ **SO THE RULE FROM t1173 STANDS AND THE IMPLEMENTATION SHAPE IS NOW KNOWN TO BE WRONG.** The
+static-position area must **BE** the padding box — taffy has to align the abspos item within a box
+that includes the container's padding — rather than being corrected after the fact. That is a change
+to what the tree is given, not to what its answer is post-multiplied by, and it is the fifth distinct
+scope this exclusion has been measured at:
+
+```text
+   t1119  inset-bearing abspos child of FLEX          taken
+   t1125  every abspos child of FLEX only             taken
+   t1126  grid arm narrowed by the SPEC discriminator taken
+   t1174  grid static position translated by padding  REFUSED −8    ← this tick
+```
+
+⚠ **AND IT GAINED NOTHING MEASURABLE EITHER — `+0`.** The abspos static-position cases it genuinely
+fixes are testharness assertions, not reftests, so even a version that traded nothing would not have
+shown up in this table. **A fix whose benefit the ratchet's own instrument cannot see, and whose cost
+it can, is a fix that must be built differently** — not one to argue for.
+
+**REVERTED. Nothing landed in the engine this tick.** The product is the refusal, the eight names,
+and the corrected shape of the fix. My own memory records the rule this instantiates: *a scope drawn
+around a failure is a note to come back* — this time the note names the mechanism instead of the
+symptom.
+
+RATCHET: **held, and it did the work of the tick** — it refused a Chrome-exact change on the strength
+of eight reftests, which is the behaviour that makes the other 203 worth believing.
+
+PERF: none — the change was reverted.
+
+WIKI: none [forced] — nothing landed; the mechanism is recorded here and in t1173's control table for
+the tick that builds it correctly. [no-pattern]
+
 ## Tick 1173 — GRID's abspos static position is the PADDING box, and block and flex are the controls that prove it (2026-08-12)
 
 TICK SHAPE: measurement (layout diagnosis). t1172 named grid **abspos** as 40% of the largest CSS

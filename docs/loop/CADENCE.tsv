@@ -876,3 +876,4 @@ tick	sha	epoch	iso	delta_s	shape	wall_s	files	added	deleted	gates	claims	wpt_pas
 1171	4f4928ef	1786535827	2026-08-12T07:57:07-04:00	361	measurement	808	5	160	33	442	81	3896	6960	0	577	0	half of Interop 2026 is on our own death-tail, and my reconciliation lied twice (2026-08-12)
 1172	fcc48029	1786536336	2026-08-12T08:05:36-04:00	509	measurement	808	6	120	33	442	81	3896	6960	0	577	0	css/css-grid, decomposed: 40% of the gap is ABSPOS, and `in el.style` is false for EVERY property (2026-08-12)
 1173	ff536961	1786536786	2026-08-12T08:13:06-04:00	450	measurement	808	4	100	32	442	81	3896	6960	0	577	0	GRID's abspos static position is the PADDING box, and block and flex are the controls that prove it (2026-08-12)
+1174	2a8c8452	1786539221	2026-08-12T08:53:41-04:00	2435	capability	808	4	113	32	442	81	3896	6960	0	577	0	the RULE was right, the TRANSLATION was not, and eight tests named the difference (2026-08-12)

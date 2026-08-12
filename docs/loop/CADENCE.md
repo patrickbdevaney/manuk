@@ -11,12 +11,12 @@
 
 | | value | over |
 |---|---|---|
-| ticks landed | **877** | ticks 1–1173 |
-| median tick cycle | **28m** | 876 intervals |
-| median, last 10 | **44m** | 10 intervals |
+| ticks landed | **878** | ticks 1–1174 |
+| median tick cycle | **28m** | 877 intervals |
+| median, last 10 | **40m** | 10 intervals |
 | fastest / slowest | 5s / 5.4d | |
-| **ticks per hour** | **1.14** | 771.2h elapsed |
-| median verify wall | **63s** | 816 ticks |
+| **ticks per hour** | **1.14** | 771.8h elapsed |
+| median verify wall | **63s** | 817 ticks |
 | wall trend | 39s → 13m — getting slower ⚠️ | first 3 vs last 3 |
 
 The **cycle** is the real unit: implement → debug → verify wall → land. The wall is only part of
@@ -31,7 +31,7 @@ it, and a wall that grows taxes every future tick, so it is tracked separately f
 * **✅ rows in the capability ledger**: 144 → **577**
 * **Bar 0 — oracle hangs**: 0 of 265 sites
 
-**388 of 877 ticks** (44%) moved a
+**389 of 878 ticks** (44%) moved a
 user-visible capability. The rest were instruments, infrastructure and corrections — and the
 ledger says the corrections were not overhead: three of its top three priorities were phantoms,
 and finding that out redirected everything after it.
@@ -90,8 +90,8 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 
 ## What a capability costs
 
-* **388** capability ticks, median cycle **28m**
-* median diff per tick: **+265 / −34** lines across 8 files
+* **389** capability ticks, median cycle **28m**
+* median diff per tick: **+264 / −34** lines across 8 files
 
 ## Every tick
 
@@ -974,5 +974,6 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 | **1171** | 2026-08-12 07:57 | 6m | measurement | 13m | +160/−33 | 442 | 81 | 56.0% · | half of Interop 2026 is on our own death-tail, and my reconciliation lied twice (2026-08-1 |
 | **1172** | 2026-08-12 08:05 | 8m | measurement | 13m | +120/−33 | 442 | 81 | 56.0% · | css/css-grid, decomposed: 40% of the gap is ABSPOS, and `in el.style` is false for EVERY p |
 | **1173** | 2026-08-12 08:13 | 8m | measurement | 13m | +100/−32 | 442 | 81 | 56.0% · | GRID's abspos static position is the PADDING box, and block and flex are the controls that |
+| **1174** | 2026-08-12 08:53 | 41m | capability | 13m | +113/−32 | 442 | 81 | 56.0% · | the RULE was right, the TRANSLATION was not, and eight tests named the difference (2026-08 |
 
 *`·` after a WPT figure means **carried forward**, not measured this tick.*
