@@ -46371,6 +46371,133 @@ PERF: none — one UA rule and one narrowed branch in a cascade that already ran
 WIKI: `docs/wiki/css-cascade.md` — where Chrome draws the form-control `box-sizing` line, and why a
 layout-crate test cannot see it.
 
+## Tick 1166 — the primary metric's source, refreshed at last (2026-08-12)
+
+TICK SHAPE: measurement — the full `scripts/wpt-sweep.sh` re-run that has been blocked since Jul 16.
+
+HYPOTHESIS, written before the sweep returns, so the numbers cannot rewrite the expectation:
+
+1. **The total will RISE substantially, and almost none of it is this week's work.** t1163 established
+   that every row in `WPT-AREAS.tsv` is a stale lower bound of unknown depth — `css/css-flexbox`
+   reads 6.2% and measures 36.3%; `css/css-sizing` 12.0% → 27.6%. Roughly 1,100 flexbox subtests and
+   400 sizing subtests were earned by ~100 ticks between Jul 16 and now and have simply never been
+   banked. **Reporting that rise as this tick's gain would be the dishonest reading**, and it is
+   written down here in advance for exactly that reason.
+2. **The DENOMINATORS will move too, and that is not corpus drift.** `~/wpt` is a clean tree at a
+   Jul-13 commit. A testharness file emits more subtests the further the engine gets through it, so
+   the attempted total is itself an engine measurement — `css/css-grid` 2841 → 9281 is the extreme
+   case. A denominator that grew is progress wearing a confusing hat.
+3. **The RANKING will change, which is the part that matters.** On the stale board `css/css-flexbox`
+   is the biggest CSS mass (3,371 failing) and `css/css-grid` second (2,691). Measured, grid's real
+   failing mass is ~8,723 — nearly 4× the board's figure and larger than flexbox's. **The board has
+   been ranking the loop's own work off numbers that put the wrong area first.**
+4. **`css/selectors` will report HANG/CRASH 0**, which is the ratchet's sole objection to banking this
+   file and the reason t1161 correctly held it. Three ticks and three unrelated mechanisms cleared it
+   (t1161 `:has()` quadratic → t1164 unrooted reflector → t1165 `getElementById` scan).
+
+⚠ If the ratchet refuses this file for any OTHER reason, the refusal is the result and the numbers get
+recorded here rather than banked — the same discipline t1161 applied, for the same reason.
+
+**RESULT: predictions 1–4 all held, and the fifth thing happened — THE RATCHET REFUSED AGAIN, ON ONE
+ROW.** The sweep is otherwise the cleanest this file has ever had: **zero crashes in every area**,
+**zero duplicate wire requests**, and every single row up except one.
+
+```text
+   area                    BANKED (Jul 16)            NOW        delta
+   dom                       2899/6481          4004/7193        +1105
+   html/dom                 55783/59818        56440/59922         +657
+   css/selectors              784/2327          2912/5222         +2128
+   css/css-flexbox            223/3594          1329/3660         +1106
+   css/css-fonts              924/2854          1975/3425         +1051
+   css/css-text               584/900           1230/2212          +646
+   css/css-grid               150/2841           558/9281          +408
+   css/css-sizing             191/1588           576/2084          +385
+   css/css-values             280/1461           471/1881          +191
+   css/css-display             10/24             125/151           +115
+   (…every remaining row also up…)
+   domparsing                 188/1273           149/1273           -39   <-- REFUSED
+   TOTAL                   422865/1212290     430751/1225500      +7886   34.88% -> 35.15%
+```
+
+⚠⚠⚠ **+7,886 SUBTESTS, AND ESSENTIALLY NONE OF IT IS THIS TICK'S OR THIS WEEK'S WORK** — which is
+prediction 1, written before the sweep returned, and it is the whole reason it was written down
+first. This is ~100 ticks of earned progress that was never banked because the file was frozen.
+**Anyone reading "+7,886" as a week's work would be reading it wrong.**
+
+⚠⚠⚠ **AND THE RANKING WAS WRONG, WHICH IS THE PART THAT COST SOMETHING.** The board ranks CSS work by
+failing mass. On the stale numbers `css/css-flexbox` led with 3,371 failing and `css/css-grid`
+followed with 2,691. Measured: flexbox is **2,331** and grid is **8,723** — grid is nearly **4×** the
+board's figure and by far the largest CSS surface. The loop has been choosing between areas using
+numbers that put the wrong one first.
+
+⚠⚠⚠ **THE `domparsing` −39 IS REAL, IT IS NOT MINE, AND IT IS NOT WHAT t1161 THOUGHT IT WAS.** t1161
+attributed it to the runner attempting more files than the instrument that set the mark, citing
+`css/css-grid` 2841 → 9281 and `css/selectors` 2327 → 5215 as proof the harness had changed.
+**`domparsing`'s denominator is IDENTICAL — 1273 then, 1273 now** — so that explanation, whatever it
+does for other rows, does not cover this one. Measured instead of inherited:
+
+```text
+   domparsing, tick-1165 binary (this tick's HEAD)      149/1273
+   domparsing, tick-1162 binary (session start,
+     rebuilt from 6c8f497d in the same hour)            149/1273   IDENTICAL
+```
+
+So **none of this session's three engine ticks caused it** — it predates them, somewhere in the
+~1,100 commits since Jul 16. That is as far as this tick can honestly take it: localising 39 subtests
+across 1,100 commits is a bisect with a ~15-minute build per step, and it is a tick of its own.
+
+**THE FILE IS THEREFORE HELD, NOT BANKED — for the second time, and for a DIFFERENT reason than the
+first.** t1161 held it on a Bar 0; that Bar 0 is now closed (t1161 → t1164 → t1165, three
+mechanisms). This time it is a genuine, pre-existing, unexplained 39-subtest loss, and **lowering the
+mark is exactly the laundering the ratchet exists to prevent.** t1161 wrote that *"'lower the mark'
+arrives with its reasoning already done rather than as a convenience"* — the reasoning it offered has
+now been checked and does not hold for this row, so the mark stands and the regression gets found.
+
+⚠ **What the next tick has that this one did not:** the blocker is one row, 39 subtests, provably not
+from this session, with the full current sweep recorded above and a per-file breakdown captured
+(`domparsing` is 57 files; the mass is in `tentative/` proposals — `positional-methods` 0/348,
+`stream-*` 0/52…0/72 — which are almost certainly zero in both readings, so the 39 is in the
+non-tentative files and the search space is small). **The refresh lands the moment that row is
+explained.**
+
+**THE WALL-TIME AUDIT, DUE AT 1166 (every 20 ticks; the hook blocks past it): NOTHING TO TRIM, AND
+THE AUDIT CANNOT SEE MOST OF WHAT IT AUDITS.** Recorded plainly, because *"an audit that finds
+nothing is a suspicious audit"* is this repo's own standing warning and the honest answer here is
+half "lean" and half "blind":
+
+```text
+   wall total 1243s
+     293s  P  parity, 72/72 vs headless Chrome    24%
+      98s  T  crate tests                          8%
+      40s  B  build (workspace + headless)         3%
+      29s  everything else NAMED (G6/G1/D/F/…)     2%
+   ─────
+     460s  attributed          783s (63%) NOT attributed to any named row
+```
+
+⚠⚠ **The 63% is not waste — it is the 439-gate suite in aggregate, which the table does not break
+out.** So the audit's four admissible questions (redundancy / parallelism / caching / scope) cannot
+be aimed: the biggest cost has no line. On the rows it CAN see there is nothing to take — `P` is
+72 real-Chrome comparisons and is the parity bar itself; `T` is the crate suites; `B` is already
+incremental-in-RAM. **Trimming any of them would be cutting coverage, which the audit forbids in its
+own text.**
+
+⚠ **The one rigor-preserving lever the audit names is `cargo-nextest`** (shared test binary, harder
+parallelism — ~1.5s of SpiderMonkey startup per JS gate, times ~439 gates, is plausibly a large share
+of that 783s). It is a **harness** change and therefore the observer's, not mine (PART VII), so it is
+reported here rather than attempted. This tick added one gate (`g_get_element_by_id_index`, 438 →
+439) and the wall came in at 1243s gate / 1283s total, i.e. the addition is inside the noise of the
+cold/warm bimodality already recorded at t1141.
+
+RATCHET: **held, and it did the work of the tick** — it refused a file whose headline was +7,886 on
+the strength of a single −39 row, which is precisely the behaviour that makes the other 19 rows worth
+believing.
+
+PERF: none — measurement only.
+
+WIKI: none [forced] — this tick's artefact is the sweep and its adjudication, which belong in the
+journal and in `docs/loop/WPT-AREAS.tsv`'s own history, not in a topic file. [no-pattern]
+
 ## Tick 1165 — the row that changed NO engine code was the proof, and every list build was quadratic (2026-08-12)
 
 TICK SHAPE: capability + Bar 0 + perf (DOM lookup). HYPOTHESIS, written before the work: t1164 took
