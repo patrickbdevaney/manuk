@@ -11,12 +11,12 @@
 
 | | value | over |
 |---|---|---|
-| ticks landed | **873** | ticks 1–1169 |
-| median tick cycle | **28m** | 872 intervals |
+| ticks landed | **874** | ticks 1–1170 |
+| median tick cycle | **28m** | 873 intervals |
 | median, last 10 | **59m** | 10 intervals |
 | fastest / slowest | 5s / 5.4d | |
-| **ticks per hour** | **1.13** | 769.6h elapsed |
-| median verify wall | **63s** | 812 ticks |
+| **ticks per hour** | **1.13** | 770.8h elapsed |
+| median verify wall | **63s** | 813 ticks |
 | wall trend | 39s → 13m — getting slower ⚠️ | first 3 vs last 3 |
 
 The **cycle** is the real unit: implement → debug → verify wall → land. The wall is only part of
@@ -31,7 +31,7 @@ it, and a wall that grows taxes every future tick, so it is tracked separately f
 * **✅ rows in the capability ledger**: 144 → **577**
 * **Bar 0 — oracle hangs**: 0 of 265 sites
 
-**388 of 873 ticks** (44%) moved a
+**388 of 874 ticks** (44%) moved a
 user-visible capability. The rest were instruments, infrastructure and corrections — and the
 ledger says the corrections were not overhead: three of its top three priorities were phantoms,
 and finding that out redirected everything after it.
@@ -91,7 +91,7 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 ## What a capability costs
 
 * **388** capability ticks, median cycle **28m**
-* median diff per tick: **+265 / −34** lines across 8 files
+* median diff per tick: **+266 / −34** lines across 8 files
 
 ## Every tick
 
@@ -970,5 +970,6 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 | **1167** | 2026-08-12 05:51 | 80m | capability | 13m | +579/−153 | 441 | 81 | 56.0% · | the frame loaded and nothing ever said so (2026-08-12) |
 | **1168** | 2026-08-12 06:32 | 40m | capability | 13m | +562/−173 | 442 | 81 | 56.0% · | the work-around WAS the bug report, and the metric is unfrozen after ~100 ticks (2026-08-1 |
 | **1169** | 2026-08-12 06:37 | 5m | measurement | 13m | +191/−33 | 442 | 81 | 56.0% · | six ticks landed and the EXIT was never measured once (2026-08-12) |
+| **1170** | 2026-08-12 07:51 | 74m | measurement | 13m | +299/−32 | 442 | 81 | 56.0% · | the checkpoint check #111 demanded: SCORABILITY moved, shape did not (2026-08-12) |
 
 *`·` after a WPT figure means **carried forward**, not measured this tick.*

@@ -46371,6 +46371,71 @@ PERF: none — one UA rule and one narrowed branch in a cascade that already ran
 WIKI: `docs/wiki/css-cascade.md` — where Chrome draws the form-control `box-sizing` line, and why a
 layout-crate test cannot see it.
 
+## Tick 1170 — the checkpoint check #111 demanded: SCORABILITY moved, shape did not (2026-08-12)
+
+TICK SHAPE: measurement — the CrUX fidelity sweep that check #111 named as the next tick, because six
+engine ticks had landed against an exit bar nobody had read. 200 sites, `--jobs 2` (the bankable
+setting), banked as `docs/loop/SWEEP-t1170-rows.tsv`, `merged 200 (sampled 200)` — the reconciliation
+balances.
+
+⚠⚠⚠ **CHECK #111's PREDICTION HELD, AND IT IS THE USEFUL KIND OF RESULT.** It said t1165 and t1167
+were *"drivability wins the shape gauge CANNOT see"*. They are — and they are visible in the OTHER
+leg:
+
+```text
+                              t1159      t1170
+   scorability               77.5%      80.5%     +3.0 pt   <- the session's visible effect
+   in-scope                    129        133     (denominator churn, known)
+   shape-only  count            42         42      FLAT
+   jarring-clean count          38         39      +1
+   M1 conjunction count         25         25      FLAT     <- the RENDER bar
+   CORPUS fidelity gauge     0.4522     0.4548    +0.0026
+   common set (n=96)   Δshape -0.0048, Δsite_score -0.0054  (up 13 / down 10)
+```
+
+⚠⚠⚠ **THE PERCENTAGES FELL WHILE THE COUNTS HELD, AND THAT IS THE DENOMINATOR TRAP RUNNING
+BACKWARDS.** `shape-only` reads 32.6% → 31.6% and M1 19.4% → 18.8%, and **neither is a regression**:
+the counts are 42 → 42 and 25 → 25, while the in-scope denominator grew 129 → 133. **More sites
+became measurable, which mechanically lowers a percentage.** The ledger's own standing warning is
+*"a number that rose while scorable FELL is composition, not progress"* — this is that sentence in
+mirror image, and reporting "M1 fell 0.6pt" would be the exact lie it was written to prevent.
+
+⚠⚠ **TWELVE SITES STARTED SCORING AND THREE STOPPED**, which is the movement the headline percentage
+hides:
+
+```text
+   NEWLY scored (12)  bhfudbal.ba · bhramarah.in · house.udn.com · nortenoticia.com.br
+                      patrickmorin.com · payb.jp · pogoda.by · pt88.app · sip777man.site
+                      www.smecel.com.br · www.trivago.be · www.trivago.fr
+   LOST scoring (3)   coinmarketcap.com · mangaraw.ac · mayatoys.in
+```
+
+**`trivago` ×2 and `payb.jp` are named in the board's own worklist** as booted-but-thin / independent-
+jarring sites, and they now score. That shape — *a page that used to die or hang now completes* — is
+exactly what t1164 (the `appendChild` SIGSEGV), t1165 (`getElementById` O(document), which turned a
+list build from 14s into 32ms) and t1167 (the `<iframe>` `load` event) would produce. ⚠ **Attribution
+is INFERRED, not proven**: this is one sweep against one prior sweep, and my own memory records that
+scorability's net *"alternates in sign EVERY sweep"*. The +3.0pt is stated as the reading it is.
+
+⚠⚠ **AND THE COMMON-SET BAND SAYS THE SHAPE WORK DID NOTHING MEASURABLE.** n=96, mean Δshape
+**−0.0048**, up 13 / down 10 — sign-balanced noise, well inside the churn floor. t1163 was the one
+tick this session that touched geometry (intrinsic keywords on containers, 96-cell battery 81/96 →
+96/96 Chrome-exact) and it does not surface here. **That is not a refutation of t1163** — it is the
+board's own *"high-usage, low-magnitude errors the instrument cannot price"* case, and the honest
+report is *"the instrument cannot see it"*, not *"it bought nothing"*.
+
+**SO THE LEG ORDER IS NOW UNAMBIGUOUS.** The board says *work the lower leg*: scorability is **80.5%**
+and the M1 conjunction is **18.8%**. Shape/jarring is the lower leg by a factor of four, and the
+refreshed WPT board (t1168) independently puts `css/css-grid` at the top with 8,723 failing. **Two
+instruments that were disagreeing three ticks ago now point at the same place.**
+
+RATCHET: held — no engine code changed in this tick; nothing was banked that went backwards.
+
+PERF: none — measurement only.
+
+WIKI: none [forced] — the artefact is `docs/loop/SWEEP-t1170-rows.tsv` and the gauge reading above.
+[no-pattern]
+
 ## Tick 1169 — six ticks landed and the EXIT was never measured once (2026-08-12)
 
 TICK SHAPE: measurement — the cadence re-read of `CONSTITUTION.MD` (due every 8 ticks; last at 1161),
