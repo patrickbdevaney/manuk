@@ -46371,6 +46371,104 @@ PERF: none — one UA rule and one narrowed branch in a cascade that already ran
 WIKI: `docs/wiki/css-cascade.md` — where Chrome draws the form-control `box-sizing` line, and why a
 layout-crate test cannot see it.
 
+## Tick 1184 — a node appended in the `load` handler has NO GEOMETRY, forever (2026-08-12)
+
+TICK SHAPE: capability.
+
+HYPOTHESIS (written before the fix, kept verbatim): t1183 left
+`css/css-grid/abspos/positioned-grid-descendants-*` at a flat 0 with the right ruler installed,
+first assertion `width expected 50 but got 0`. Bisected with a six-row battery, two of them
+controls:
+
+```text
+   R1 append during parse, read during parse       550   CONTROL
+   R2 append in the load handler, read there         0   <- THE SUBJECT
+   R3 ...re-read after an unrelated write            0
+   R4 ...re-read after writing the node's OWN style  0
+   R5 ...re-read one task later (setTimeout)         0   <- it never recovers
+   R6 a node that existed since parse              550   CONTROL
+```
+
+⚠⚠⚠ **IT IS NOT A GRID BUG, AND THE FIRST HYPOTHESIS — `<script type="module">` — WAS REFUTED BY A
+CONTROL ROW.** A four-cell probe said `module 4 grids: 0 · module 100 grids: 0 · classic 4: 550 ·
+classic 100: 550`, which reads as *"modules don't lay out"* and is wrong. Adding a
+**`<script defer src>` arm** — same deferred timing, no modules — put it at 550 alongside the
+modules and moved the variable to **WHEN the append happens**, not how the script was loaded. The
+module rows had been 0 only because nothing appended after them; the classic ones were rescued by a
+later round that did.
+
+⚠⚠⚠ **`Page::fire_lifecycle` IS THE ONE SCRIPT RE-ENTRY OF EIGHTEEN THAT INSTALLED NO
+`ReflowScope`.** A geometry read is supposed to force a synchronous reflow — the binding calls the
+host, the host re-cascades and re-lays-out, the read answers fresh. The machinery all exists and
+seventeen re-entries arm it. `fire_lifecycle` delegates to `eval_for_test`, whose signature has
+neither `fonts` nor a viewport width, so it **could not** arm it and silently did not. That is
+`set_root_box`'s own documented shape — *a post-layout pass wired into two of three call sites is a
+pass that silently does not run on the third* — and the round it was missing from is the one where
+**a very large fraction of the web builds its DOM**. The four call sites already had both arguments
+in scope and nothing outside `page/lib.rs` calls it, so the fix is the signature plus one line.
+
+⚠⚠⚠ **AND ARMING THE HOOK EXPOSED A SECOND DEFECT IN THE PATH IT ARMED — THE −6 THAT IS THE REAL
+FINDING.** With the lifecycle reflowing, `css/css-grid/abspos` went **100 → 94**, one file,
+`empty-grid-001.html` 6 → 0, every row reading `width expected 0 but got 784`. `forced_reflow`
+rebuilt its stylesheet list with `MinimalCascade::collect_style_elements` — **inline `<style>` and
+nothing else** — so a page re-cascaded without `/css/support/width-keyword-classes.css` loses
+`.min-content` and every grid takes the full viewport width. That is verbatim the hazard
+`recascade_all_sources`'s doc comment was extracted to name (*"it would quietly drop every external
+stylesheet"*), sitting unfixed in a **second implementation** that nothing had been able to reach,
+because the biggest script round in the document had no hook.
+
+> **A dormant code path is not a correct one. Arming a hook is also a decision to run everything
+> behind it** — and a fresh WRONG answer is worse than the stale right one it replaced.
+
+`sheets_of(dom, final_url, external_css)` is now the single implementation `Page::all_sheets` and
+`forced_reflow` both go through, so the list a geometry read re-cascades against and the list the
+page paints from cannot diverge again. `empty-grid-001` is back to its old 6/9, with the same three
+pre-existing grid-track failures.
+
+⚠ **AND THE HYPOTHESIS'S SECOND HALF WAS WRONG, WHICH THE MEASUREMENT SAID.** I predicted that if R5
+stayed 0 the residue would be `ReflowScope::install`'s `laid_out_at: dom.mutation_seq()` recording a
+sequence no layout had reached. One `install` fixed R2 **and** R3–R5: once the round that mutates
+also reflows, the bookkeeping is consistent by construction. No second fix was needed and none was
+built.
+
+**MEASURED — full sweep, same checkout, against t1183's banked marks:**
+
+```text
+   css/selectors     2912 -> 3119   +207
+   css/css-sizing     853 ->  921    +68
+   css/css-grid      2018 -> 2059    +41
+   css/css-fonts     2730 -> 2742    +12
+   css/css-flexbox   1469 -> 1475     +6
+   html/dom         56441 -> 56443    +2
+   thirteen other areas          unmoved to the subtest
+   WPT TOTAL       444987 -> 445323  +336   crashes 0 in EVERY area, 0 areas down
+```
+
+⚠ **THE ORIGINAL TARGET IS STILL A ZERO.** `positioned-grid-descendants-*` (32 files, 3,200
+subtests) is unmoved: it builds from a module and measures inside `document.fonts.ready.then(…)`,
+and its first assertion is still `width expected 50 but got 0`. Two ticks have now found real,
+separately-banked defects behind it — the ruler (t1183) and the lifecycle reflow (t1184) — and
+neither was the one it is failing on. Named so the next tick starts from that fact rather than
+re-deriving it: **the promise/microtask round is the next re-entry to check for a scope.**
+
+GATE: `g_load_geometry` — seven rows, **three CONTROLS**, RED-proven in the two distinct ways it is
+meant to fail. Delete the `install` from `fire_lifecycle` and it reports
+`parse=550 load=0 own-write=0 external=0 inline=0 timer=0 parse-era=550` — both controls standing.
+Restore `collect_style_elements` and it reports `external=800` (the viewport width) while
+`inline=90` holds, which is what localises the second half to **external** sheets rather than to the
+reflow's cascade in general. No two expected widths in the fixture share a number.
+
+RATCHET: held. Zero areas down, `crashes=0` in every area. WPT TOTAL 444987 → **445323**.
+
+PERF: one extra `ReflowScope` arm-and-drop per lifecycle event (two per navigation), which is a
+`Box` allocation and an image-map `Rc` clone. The reflow itself only runs if a handler actually
+mutated the DOM — `forced_reflow` returns immediately when `mutation_seq` is unchanged, which is the
+common case. `ReflowCtx` carries `final_url`/`external_css` as raw pointers rather than clones, on
+the same contract as `fonts`, because a round's CSS text can be hundreds of KB.
+
+WIKI: `docs/wiki/js-engine.md` — *"A forced synchronous reflow must be armed on EVERY script
+re-entry, and the `load` round had none"*.
+
 ## Tick 1183 — the WPT suite measures in Ahem, and the testharness leg had no Ahem (2026-08-12)
 
 TICK SHAPE: capability — instrument fidelity (the third ratchet face) plus the engine defect that

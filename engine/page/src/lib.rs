@@ -1406,6 +1406,47 @@ struct ReflowCtx {
     /// The decoded images as of this script round — a standing layout input the cascade cannot
     /// supply. See `apply_natural_sizes`.
     images: HashMap<NodeId, std::rc::Rc<manuk_paint::DecodedImage>>,
+    /// ⚠⚠⚠ **THE EXTERNAL HALF OF THE CASCADE, WITHOUT WHICH THIS RE-LAYOUT IS A DIFFERENT
+    /// ENGINE.** `forced_reflow` used to rebuild its sheet list with
+    /// `MinimalCascade::collect_style_elements`, which reads inline `<style>` and nothing else —
+    /// the exact hazard `recascade_all_sources` was extracted to name (*"it would quietly drop
+    /// every external stylesheet"*), sitting unfixed in the reflow path. It was invisible while
+    /// the biggest script round had no reflow hook at all; the moment t1184 armed one for the
+    /// lifecycle, `css/css-grid/abspos/empty-grid-001.html` went 6 → 0 with every row reading
+    /// `width expected 0 but got 784` — `.min-content` lives in `/css/support/width-keyword-
+    /// classes.css`, so the forced reflow re-cascaded the page without it and every grid took the
+    /// full viewport width.
+    ///
+    /// Pointers rather than clones, on the same contract as `fonts`: a script round's CSS text can
+    /// be hundreds of KB and this is armed on every re-entry into script.
+    final_url: *const String,
+    external_css: *const HashMap<String, String>,
+}
+
+/// **Every stylesheet the document has, inline and external, in cascade order.**
+///
+/// A free function rather than a `Page` method because its OTHER caller is `forced_reflow`, which
+/// has only a `&Dom` and a context — and when that caller grew its own copy of this logic it grew a
+/// WRONG one (`collect_style_elements`, inline `<style>` only). *One rule, one implementation*: the
+/// list a geometry read re-cascades against and the list the page paints from are now the same
+/// list, by construction.
+fn sheets_of(
+    dom: &Dom,
+    final_url: &String,
+    external_css: &HashMap<String, String>,
+) -> Vec<Stylesheet> {
+    collect_style_sources(dom, final_url)
+        .iter()
+        .filter_map(|src| match src {
+            StyleSource::Inline(css, m) => Some(Stylesheet::parse(&wrap_media(css, m))),
+            // A sheet that has not arrived (or never will) contributes nothing — the same outcome
+            // as before for a genuinely missing sheet, and `failed_css` is what records that it was
+            // asked for.
+            StyleSource::External(url, m) => external_css
+                .get(url)
+                .map(|css| Stylesheet::parse(&wrap_media(css, m))),
+        })
+        .collect()
 }
 
 /// The reflow itself, called up from the JS bindings when a geometry read finds a dirtied DOM.
@@ -1422,7 +1463,8 @@ unsafe fn forced_reflow(ctx: *mut std::ffi::c_void, dom: *mut Dom) {
     let fonts = unsafe { &*c.fonts };
     // The same cascade the surrounding batch relayout uses, so a forced reflow and the post-script
     // pass can never disagree about the same tree.
-    let sheets: Vec<Stylesheet> = MinimalCascade::collect_style_elements(dom);
+    let sheets: Vec<Stylesheet> =
+        sheets_of(dom, unsafe { &*c.final_url }, unsafe { &*c.external_css });
     let root_box;
     (c.styles, root_box) = restyle_and_layout(dom, &sheets, fonts, c.viewport_width, &c.images);
     c.rects = root_box
@@ -1455,6 +1497,8 @@ impl ReflowScope {
         fonts: &FontContext,
         viewport_width: f32,
         images: &HashMap<NodeId, std::rc::Rc<manuk_paint::DecodedImage>>,
+        final_url: &String,
+        external_css: &HashMap<String, String>,
     ) -> ReflowScope {
         let mut ctx = Box::new(ReflowCtx {
             fonts: fonts as *const FontContext,
@@ -1467,6 +1511,8 @@ impl ReflowScope {
             // intrinsic size — the ninth re-cascade site, and it needs the same standing input the
             // other eight get.
             images: images.clone(),
+            final_url: final_url as *const String,
+            external_css: external_css as *const HashMap<String, String>,
         });
         let p = &mut *ctx as *mut ReflowCtx as *mut std::ffi::c_void;
         let prev_maps = manuk_js::view_maps();
@@ -1991,7 +2037,7 @@ impl Page {
         // is the only place a human is waiting, and it is the only place the difference is visible.
         page.run_deferred_scripts(fonts, viewport_width);
         // Parsing is done and the deferred scripts have executed — that IS DOMContentLoaded.
-        page.fire_lifecycle("DOMContentLoaded");
+        page.fire_lifecycle("DOMContentLoaded", fonts, viewport_width);
         // On the SYNC path there is no async runtime to fetch subframes with; a caller that needs a
         // frame's document (a gate) drives `render_iframe` directly. The async path
         // (`load_async`/`finish_loading`) is where real frames load.
@@ -1999,7 +2045,7 @@ impl Page {
         // Inline `<svg>` needs no network either — rasterize on this path too (tick 394), so
         // gates and shell navigations paint vectors, not only the fetch path via `apply_images`.
         page.rasterize_inline_svgs_into_images();
-        page.fire_lifecycle("load");
+        page.fire_lifecycle("load", fonts, viewport_width);
         page
     }
 
@@ -2262,7 +2308,7 @@ impl Page {
             &mut nav_hits,
         );
         // Parsing is done and the deferred scripts have executed — that IS DOMContentLoaded.
-        page.fire_lifecycle("DOMContentLoaded");
+        page.fire_lifecycle("DOMContentLoaded", fonts, viewport_width);
         nav_phase(
             "DOMContentLoaded",
             &mut nav_at,
@@ -2284,7 +2330,7 @@ impl Page {
         );
         // The subresource phases have not run yet, but the document and its frames are ready, which is
         // what `load` waits for. The call is idempotent, so `finish_loading` firing it again is harmless.
-        page.fire_lifecycle("load");
+        page.fire_lifecycle("load", fonts, viewport_width);
         nav_phase(
             "load event",
             &mut nav_at,
@@ -2384,7 +2430,7 @@ impl Page {
         // **`load` fires either way.** A real browser fires it when loading settles; it does not
         // withhold the event forever because one subresource was slow. Withholding it would leave
         // every `window.onload` handler on the page unrun — which is the bug this exists to fix.
-        self.fire_lifecycle("load");
+        self.fire_lifecycle("load", fonts, viewport_width);
     }
 
     #[cfg(feature = "spidermonkey")]
@@ -2722,19 +2768,7 @@ impl Page {
     /// fixed"*). One rule with N implementations is one rule that is wrong N−1 times; this is the
     /// implementation, and there is now only one.
     fn all_sheets(&self) -> Vec<Stylesheet> {
-        collect_style_sources(&self.dom, &self.final_url)
-            .iter()
-            .filter_map(|src| match src {
-                StyleSource::Inline(css, m) => Some(Stylesheet::parse(&wrap_media(css, m))),
-                // A sheet that has not arrived (or never will) contributes nothing — the same
-                // outcome as before for a genuinely missing sheet, and `failed_css` is what
-                // records that it was asked for.
-                StyleSource::External(url, m) => self
-                    .external_css
-                    .get(url)
-                    .map(|css| Stylesheet::parse(&wrap_media(css, m))),
-            })
-            .collect()
+        sheets_of(&self.dom, &self.final_url, &self.external_css)
     }
 
     /// **Run the scripts that do not block first paint** — `defer`, `async`, `type="module"`.
@@ -3924,7 +3958,14 @@ impl Page {
             .into_iter()
             .map(|(n, r)| (n, [r.x, r.y, r.width, r.height]))
             .collect();
-        let _reflow = ReflowScope::install(&self.dom, fonts, viewport_width, &self.images);
+        let _reflow = ReflowScope::install(
+            &self.dom,
+            fonts,
+            viewport_width,
+            &self.images,
+            &self.final_url,
+            &self.external_css,
+        );
         let proceed = match manuk_js::dispatch_event(
             ctx,
             &mut self.dom,
@@ -3976,7 +4017,14 @@ impl Page {
                 .into_iter()
                 .map(|(n, r)| (n, [r.x, r.y, r.width, r.height]))
                 .collect();
-            let _reflow = ReflowScope::install(&self.dom, fonts, viewport_width, &self.images);
+            let _reflow = ReflowScope::install(
+                &self.dom,
+                fonts,
+                viewport_width,
+                &self.images,
+                &self.final_url,
+                &self.external_css,
+            );
             for ty in ["input", "change"] {
                 if let Err(e) =
                     manuk_js::dispatch_event(ctx, &mut self.dom, node, ty, &rects, &self.styles)
@@ -4021,7 +4069,14 @@ impl Page {
                 .into_iter()
                 .map(|(n, r)| (n, [r.x, r.y, r.width, r.height]))
                 .collect();
-            let _reflow = ReflowScope::install(&self.dom, fonts, viewport_width, &self.images);
+            let _reflow = ReflowScope::install(
+                &self.dom,
+                fonts,
+                viewport_width,
+                &self.images,
+                &self.final_url,
+                &self.external_css,
+            );
             let proceed = match manuk_js::dispatch_drop(
                 ctx,
                 &mut self.dom,
@@ -4073,7 +4128,14 @@ impl Page {
                 .into_iter()
                 .map(|(n, r)| (n, [r.x, r.y, r.width, r.height]))
                 .collect();
-            let _reflow = ReflowScope::install(&self.dom, fonts, viewport_width, &self.images);
+            let _reflow = ReflowScope::install(
+                &self.dom,
+                fonts,
+                viewport_width,
+                &self.images,
+                &self.final_url,
+                &self.external_css,
+            );
             let proceed = match manuk_js::dispatch_drag(
                 ctx,
                 &mut self.dom,
@@ -4140,7 +4202,14 @@ impl Page {
                 .into_iter()
                 .map(|(n, r)| (n, [r.x, r.y, r.width, r.height]))
                 .collect();
-            let _reflow = ReflowScope::install(&self.dom, fonts, viewport_width, &self.images);
+            let _reflow = ReflowScope::install(
+                &self.dom,
+                fonts,
+                viewport_width,
+                &self.images,
+                &self.final_url,
+                &self.external_css,
+            );
             let proceed = match manuk_js::dispatch_mouse(
                 ctx,
                 &mut self.dom,
@@ -4196,7 +4265,14 @@ impl Page {
                 .into_iter()
                 .map(|(n, r)| (n, [r.x, r.y, r.width, r.height]))
                 .collect();
-            let _reflow = ReflowScope::install(&self.dom, fonts, viewport_width, &self.images);
+            let _reflow = ReflowScope::install(
+                &self.dom,
+                fonts,
+                viewport_width,
+                &self.images,
+                &self.final_url,
+                &self.external_css,
+            );
             let proceed = match manuk_js::dispatch_mouse(
                 ctx,
                 &mut self.dom,
@@ -4282,7 +4358,14 @@ impl Page {
                     .into_iter()
                     .map(|(n, r)| (n, [r.x, r.y, r.width, r.height]))
                     .collect();
-                let _reflow = ReflowScope::install(&self.dom, fonts, viewport_width, &self.images);
+                let _reflow = ReflowScope::install(
+                    &self.dom,
+                    fonts,
+                    viewport_width,
+                    &self.images,
+                    &self.final_url,
+                    &self.external_css,
+                );
                 for ty in ["input", "change"] {
                     if let Err(e) =
                         manuk_js::dispatch_event(ctx, &mut self.dom, node, ty, &rects, &self.styles)
@@ -4356,7 +4439,14 @@ impl Page {
                 .into_iter()
                 .map(|(n, r)| (n, [r.x, r.y, r.width, r.height]))
                 .collect();
-            let _reflow = ReflowScope::install(&self.dom, fonts, viewport_width, &self.images);
+            let _reflow = ReflowScope::install(
+                &self.dom,
+                fonts,
+                viewport_width,
+                &self.images,
+                &self.final_url,
+                &self.external_css,
+            );
             for ty in ["input", "change"] {
                 if let Err(e) =
                     manuk_js::dispatch_event(ctx, &mut self.dom, node, ty, &rects, &self.styles)
@@ -4397,7 +4487,14 @@ impl Page {
                 .into_iter()
                 .map(|(n, r)| (n, [r.x, r.y, r.width, r.height]))
                 .collect();
-            let _reflow = ReflowScope::install(&self.dom, fonts, viewport_width, &self.images);
+            let _reflow = ReflowScope::install(
+                &self.dom,
+                fonts,
+                viewport_width,
+                &self.images,
+                &self.final_url,
+                &self.external_css,
+            );
             if let Err(e) =
                 manuk_js::dispatch_event(ctx, &mut self.dom, node, "input", &rects, &self.styles)
             {
@@ -4566,7 +4663,14 @@ impl Page {
             } else {
                 &["blur"]
             };
-            let _reflow = ReflowScope::install(&self.dom, fonts, viewport_width, &self.images);
+            let _reflow = ReflowScope::install(
+                &self.dom,
+                fonts,
+                viewport_width,
+                &self.images,
+                &self.final_url,
+                &self.external_css,
+            );
             for ty in events {
                 if let Err(e) =
                     manuk_js::dispatch_event(ctx, &mut self.dom, node, ty, &rects, &self.styles)
@@ -4690,20 +4794,50 @@ impl Page {
     ///
     /// The host must fire these because **only the host knows when they are true**: *"the document
     /// finished parsing"* and *"the subresources finished"* are facts about the loader, not about JS.
+    /// ⚠⚠⚠ **AND IT IS THE ONE SCRIPT ROUND OF EIGHTEEN THAT HAD NO `ReflowScope`.** Everything a
+    /// `load` or `DOMContentLoaded` handler appended had **no geometry, and never got any** — not
+    /// on a later read, not after writing the node's own style, not on the next task:
+    ///
+    /// ```text
+    ///   append during parse, read during parse            550   CONTROL
+    ///   append in the load handler, read there              0   <- the defect
+    ///   ...re-read after writing the node's OWN style       0
+    ///   ...re-read one task later (setTimeout)              0   <- it never recovers
+    ///   a node that has existed since parse                550   CONTROL
+    /// ```
+    ///
+    /// A geometry read is supposed to force a synchronous reflow: the binding calls the host, the
+    /// host re-cascades and re-lays-out, the read answers fresh. `ReflowScope::install` arms that
+    /// hook, and `eval_for_test` — the function this one delegates to — takes neither `fonts` nor a
+    /// viewport width, so it could not arm it and silently did not. Every other re-entry into
+    /// script (events, timers, rAF, scroll) installs one. **`window.addEventListener('load', …)` is
+    /// where a very large fraction of the web does its DOM building**, and every box it built
+    /// measured zero.
+    ///
+    /// So the lifecycle takes the same two arguments every other script re-entry does. They were
+    /// already in scope at all four call sites; nothing outside this file calls it.
     #[cfg(feature = "spidermonkey")]
-    pub fn fire_lifecycle(&mut self, which: &str) {
+    pub fn fire_lifecycle(&mut self, which: &str, fonts: &FontContext, viewport_width: f32) {
         // The thread-local is shared by every `Page` on this thread, so re-publish rather than trust it.
         self.publish_iframe_docs();
         let src = match which {
             "DOMContentLoaded" => "globalThis.__fireDOMContentLoaded && __fireDOMContentLoaded()",
             _ => "globalThis.__fireLoad && __fireLoad()",
         };
+        let _reflow = ReflowScope::install(
+            &self.dom,
+            fonts,
+            viewport_width,
+            &self.images,
+            &self.final_url,
+            &self.external_css,
+        );
         self.eval_for_test(src);
     }
 
     /// Without SpiderMonkey there is no JS to notify, so the lifecycle is a no-op — not a lie.
     #[cfg(not(feature = "spidermonkey"))]
-    pub fn fire_lifecycle(&mut self, _which: &str) {}
+    pub fn fire_lifecycle(&mut self, _which: &str, _fonts: &FontContext, _viewport_width: f32) {}
 
     /// **Tell the page whether its tab is in front** — `document.visibilityState` / `document.hidden`,
     /// and the `visibilitychange` event when it flips.
@@ -4886,7 +5020,7 @@ impl Page {
         let mut page = Page::from_prefetched_inner(pre, fonts, viewport_width);
         page.run_deferred_scripts(fonts, viewport_width);
         // Parsing is done and the deferred scripts have executed — that IS DOMContentLoaded.
-        page.fire_lifecycle("DOMContentLoaded");
+        page.fire_lifecycle("DOMContentLoaded", fonts, viewport_width);
         // On the SYNC path there is no async runtime to fetch subframes with; a caller that needs a
         // frame's document (a gate) drives `render_iframe` directly. The async path
         // (`load_async`/`finish_loading`) is where real frames load.
@@ -4894,7 +5028,7 @@ impl Page {
         // Inline `<svg>` needs no network either — rasterize on this path too (tick 394), so
         // gates and shell navigations paint vectors, not only the fetch path via `apply_images`.
         page.rasterize_inline_svgs_into_images();
-        page.fire_lifecycle("load");
+        page.fire_lifecycle("load", fonts, viewport_width);
         page
     }
 
@@ -5061,7 +5195,21 @@ impl Page {
             // A geometry read during these scripts must see the DOM they have built so far, not
             // the snapshot above — `measure -> mutate -> measure` in one round is how every
             // virtualized list sizes its rows.
-            let _reflow = ReflowScope::install(&dom, fonts, viewport_width, &inline_images);
+            //
+            // ⚠ No external sheets HERE, and it is a fact rather than an omission: `from_dom`
+            // builds a Page from a tree the caller already has, so nothing has been fetched and
+            // `external_css` would be empty whatever we passed. Named as an empty map so the
+            // reflow's sheet list is the same function everywhere.
+            let no_external_url = final_url.to_string();
+            let no_external_css: HashMap<String, String> = HashMap::new();
+            let _reflow = ReflowScope::install(
+                &dom,
+                fonts,
+                viewport_width,
+                &inline_images,
+                &no_external_url,
+                &no_external_css,
+            );
             // **The inline images decoded above are publishable RIGHT NOW, before the first script.**
             // `Page` does not exist yet at this point — it is constructed below — so the ordinary
             // `publish_image_sources` hook cannot have run, and a BLOCKING script that draws a `data:`
@@ -5213,7 +5361,14 @@ impl Page {
                 .into_iter()
                 .map(|(n, r)| (n, [r.x, r.y, r.width, r.height]))
                 .collect();
-            let _reflow = ReflowScope::install(&self.dom, fonts, viewport_width, &self.images);
+            let _reflow = ReflowScope::install(
+                &self.dom,
+                fonts,
+                viewport_width,
+                &self.images,
+                &self.final_url,
+                &self.external_css,
+            );
             // (type, buttons-held-during-this-event)
             for (ty, buttons) in [("mousedown", 1u32), ("mouseup", 0u32)] {
                 if let Err(e) = manuk_js::dispatch_mouse_buttons(
@@ -5261,7 +5416,14 @@ impl Page {
             .collect();
         // Covers every dispatch below, including the nested `dispatch_click` a <label> forwards
         // into — a handler that mutates and then measures must see what it just built.
-        let _reflow = ReflowScope::install(&self.dom, fonts, viewport_width, &self.images);
+        let _reflow = ReflowScope::install(
+            &self.dom,
+            fonts,
+            viewport_width,
+            &self.images,
+            &self.final_url,
+            &self.external_css,
+        );
         // ── A <label> forwards its click to the control it labels. ─────────────────────────
         // This is how most checkboxes on the web are actually clicked: the visible target is the
         // text, not the 12px box. Without forwarding, clicking "Remember me" does nothing at all.
@@ -5859,7 +6021,14 @@ impl Page {
             .into_iter()
             .map(|(n, r)| (n, [r.x, r.y, r.width, r.height]))
             .collect();
-        let _reflow = ReflowScope::install(&self.dom, fonts, viewport_width, &self.images);
+        let _reflow = ReflowScope::install(
+            &self.dom,
+            fonts,
+            viewport_width,
+            &self.images,
+            &self.final_url,
+            &self.external_css,
+        );
         if let Err(e) =
             manuk_js::deliver_ws_event(ctx, &mut self.dom, id, event, &rects, &self.styles)
         {
@@ -5901,7 +6070,14 @@ impl Page {
             .into_iter()
             .map(|(n, r)| (n, [r.x, r.y, r.width, r.height]))
             .collect();
-        let _reflow = ReflowScope::install(&self.dom, fonts, viewport_width, &self.images);
+        let _reflow = ReflowScope::install(
+            &self.dom,
+            fonts,
+            viewport_width,
+            &self.images,
+            &self.final_url,
+            &self.external_css,
+        );
         if let Err(e) =
             manuk_js::deliver_fetch_stream(ctx, &mut self.dom, id, event, &rects, &self.styles)
         {
@@ -6058,7 +6234,14 @@ impl Page {
             .into_iter()
             .map(|(n, r)| (n, [r.x, r.y, r.width, r.height]))
             .collect();
-        let _reflow = ReflowScope::install(&self.dom, fonts, viewport_width, &self.images);
+        let _reflow = ReflowScope::install(
+            &self.dom,
+            fonts,
+            viewport_width,
+            &self.images,
+            &self.final_url,
+            &self.external_css,
+        );
         if let Err(e) =
             manuk_js::fire_popstate(ctx, &mut self.dom, state_json, url, &rects, &self.styles)
         {
@@ -6522,7 +6705,14 @@ impl Page {
             .into_iter()
             .map(|(n, r)| (n, [r.x, r.y, r.width, r.height]))
             .collect();
-        let _reflow = ReflowScope::install(&self.dom, fonts, viewport_width, &self.images);
+        let _reflow = ReflowScope::install(
+            &self.dom,
+            fonts,
+            viewport_width,
+            &self.images,
+            &self.final_url,
+            &self.external_css,
+        );
 
         // Leaving, then entering — see the note above on why the order is not cosmetic.
         if let Some(old) = previous.filter(|n| self.dom.is_alive(*n)) {

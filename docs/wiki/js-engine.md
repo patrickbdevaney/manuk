@@ -401,6 +401,57 @@ key (`utils/`), drives it through `load_async`, and asserts `hi:42` (greet() + s
 neuter `extract_import_map` to empty and it goes red (`#out` stays `-`). Residue: import-map `scopes`
 (per-path overrides) not yet honoured — a bounded follow-up; the flat `imports` covers the common case.
 
+## A FORCED SYNCHRONOUS REFLOW must be armed on EVERY script re-entry, and the `load` round had none
+
+A geometry read — `offsetWidth`/`offsetHeight`, `offsetLeft`/`offsetTop`, `getBoundingClientRect`,
+`getClientRects`, `scrollIntoView`, used-value `getComputedStyle` — answers from a layout snapshot
+taken **before** the current script ran. If that script has since mutated the DOM the snapshot is a
+lie, and the spec's remedy is a *forced synchronous reflow*: the read calls up into the host, the
+host re-cascades and re-lays-out, republishes the maps, and the read answers fresh. `ReflowScope` is
+that hook, armed for the duration of one script round and torn down by `Drop` on every path out
+(including a panic unwinding from script, because the ctx is a raw pointer the bindings hold).
+
+**Seventeen re-entries armed it. `fire_lifecycle` — the eighteenth — did not**, and it is the one
+that carries `load` and `DOMContentLoaded`. It delegated to `eval_for_test`, whose signature has
+neither `fonts` nor a viewport width, so it *could not*. The consequence is not subtle:
+
+```text
+   append during parse, read during parse          550   CONTROL
+   append in the load handler, read there            0   <- and it NEVER recovers
+   ...after writing the node's OWN style             0
+   ...one task later (setTimeout)                    0
+   a node that has existed since parse             550   CONTROL
+```
+
+`window.addEventListener('load', …)` is where a very large fraction of the web builds its DOM. Every
+box it built measured zero, forever — no error, no warning, just a browser that reports `0` to every
+library asking how big a thing it just made.
+
+⚠⚠⚠ **Arming it exposed a second defect IN the path it armed, and that is the general lesson.**
+`forced_reflow` rebuilt its stylesheet list with `MinimalCascade::collect_style_elements` — inline
+`<style>` and nothing else. That is the exact hazard `recascade_all_sources`'s doc comment was
+extracted to name (*"it would quietly drop every external stylesheet"*), sitting unfixed in a second
+implementation because **nothing had ever been able to reach it**: the biggest script round in the
+document had no hook, so the wrong re-cascade rarely ran. The moment the lifecycle started
+reflowing, `css/css-grid/abspos/empty-grid-001.html` went **6 → 0**, every row reading
+`width expected 0 but got 784` — `.min-content` lives in an external sheet, and a page re-cascaded
+without it gives every grid the full viewport width.
+
+> **A dormant code path is not a correct one. Arming a hook is also a decision to run everything
+> behind it**, so the tick that arms it owns whatever was rotting there — and a fresh WRONG answer
+> is worse than the stale right one it replaced.
+
+Both halves land together: `sheets_of(dom, final_url, external_css)` is now the single
+implementation that `Page::all_sheets` and `forced_reflow` both go through, so the list a geometry
+read re-cascades against and the list the page paints from cannot diverge again. `ReflowCtx` carries
+`final_url`/`external_css` as raw pointers on the same contract as `fonts`, because a round's CSS
+text can be hundreds of KB and this is armed on every re-entry.
+
+Gated by `g_load_geometry`, seven rows, **three of them controls**, RED-provable in the two distinct
+ways it is meant to fail: drop the `install` (the `load` rows read 0, controls hold) or restore
+`collect_style_elements` (the external row reads 800 instead of 120, and the inline control still
+reads 90 — which is what localises it to *external* sheets rather than to the cascade at large).
+
 ## An unhandled promise rejection is where every framework's failure goes to die
 
 **Every modern framework renders inside an `async` function**, so a throw during render is a *rejected
