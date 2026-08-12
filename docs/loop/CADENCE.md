@@ -11,12 +11,12 @@
 
 | | value | over |
 |---|---|---|
-| ticks landed | **883** | ticks 1–1179 |
-| median tick cycle | **28m** | 882 intervals |
-| median, last 10 | **37m** | 10 intervals |
+| ticks landed | **884** | ticks 1–1180 |
+| median tick cycle | **28m** | 883 intervals |
+| median, last 10 | **34m** | 10 intervals |
 | fastest / slowest | 5s / 5.4d | |
-| **ticks per hour** | **1.14** | 776.5h elapsed |
-| median verify wall | **63s** | 822 ticks |
+| **ticks per hour** | **1.14** | 777.0h elapsed |
+| median verify wall | **63s** | 823 ticks |
 | wall trend | 39s → 13m — getting slower ⚠️ | first 3 vs last 3 |
 
 The **cycle** is the real unit: implement → debug → verify wall → land. The wall is only part of
@@ -27,11 +27,11 @@ it, and a wall that grows taxes every future tick, so it is tracked separately f
 ### Near — the daily driver (doc / app / platform web)
 
 * **capabilities asserted** (`G_CAPABILITY`): 48 → **81**
-* **live gates**: 27 → **443**
-* **✅ rows in the capability ledger**: 144 → **581**
+* **live gates**: 27 → **444**
+* **✅ rows in the capability ledger**: 144 → **582**
 * **Bar 0 — oracle hangs**: 0 of 265 sites
 
-**392 of 883 ticks** (44%) moved a
+**393 of 884 ticks** (44%) moved a
 user-visible capability. The rest were instruments, infrastructure and corrections — and the
 ledger says the corrections were not overhead: three of its top three priorities were phantoms,
 and finding that out redirected everything after it.
@@ -90,8 +90,8 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 
 ## What a capability costs
 
-* **392** capability ticks, median cycle **28m**
-* median diff per tick: **+265 / −34** lines across 8 files
+* **393** capability ticks, median cycle **28m**
+* median diff per tick: **+266 / −34** lines across 8 files
 
 ## Every tick
 
@@ -980,5 +980,6 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 | **1177** | 2026-08-12 11:13 | 19m | measurement | 13m | +303/−35 | 442 | 81 | 56.0% · | `el.style.color = "yelow"` sticks, and the negative rows refused the obvious fix (2026-08- |
 | **1178** | 2026-08-12 12:52 | 1.7h | capability | 13m | +465/−101 | 443 | 81 | 56.0% · | an INVALID declaration is applied as the INITIAL value, so it overrides the valid one befo |
 | **1179** | 2026-08-12 13:31 | 38m | capability | 13m | +555/−33 | 443 | 81 | 56.0% · | a computed style did not answer to its own CSS property name (2026-08-12) |
+| **1180** | 2026-08-12 14:03 | 32m | capability | 13m | +466/−36 | 444 | 81 | 56.0% · | `CSS.supports` said NO about five properties this engine renders (2026-08-12) |
 
 *`·` after a WPT figure means **carried forward**, not measured this tick.*

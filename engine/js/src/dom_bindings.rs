@@ -13379,11 +13379,53 @@ const CSSOM_PRELUDE: &str = r#"
         // round-trip instead of silently dropping the flag (the whole point of `!important` from JS).
         var stripImp = function (v) { return String(v).replace(/\s*!\s*important\s*$/i, ''); };
         var hasImp = function (v) { return /!\s*important\s*$/i.test(String(v)); };
+        // ── THE SETTER VALIDATES (tick 1181) ────────────────────────────────────────────────
+        //
+        // This trap used to write `String(v)` straight into the attribute text, so `e.style.color =
+        // "yelow"` stuck. That is not merely non-conformant — it breaks the feature-detection idiom
+        // every library on the web ships:
+        //
+        //     const e = document.createElement('div');
+        //     e.style[prop] = value;
+        //     return e.style[prop] !== '';      // TRUE FOR EVERY VALUE, ALWAYS
+        //
+        // so a page probing for a capability we do not have is told YES and takes the modern
+        // branch. CSSOM says a declaration whose value does not parse is simply not set.
+        //
+        // ⚠ **PRICED BEFORE IT WAS BUILT, against the CSS-WG's own corpus** — every (property,
+        // value) pair from every `test_valid_value` / `test_invalid_value` call site under
+        // `~/wpt/css`: 1000/1000 invalid declarations are correctly rejected, and of the 1,467
+        // valid ones the 425 we decline are `alpha(from …)`, multi-keyword `display`, `calc-size()`
+        // and `text-indent: … hanging` — syntax this engine genuinely does not have, where `false`
+        // is `CSS.supports` honestly describing THIS engine (the t1180 rule).
+        //
+        // ⚠ **MEMOISED, because this is a per-frame path.** `__cssSupports` builds and parses a
+        // Stylo stylesheet; `el.style.transform = …` in a rAF loop would pay that every frame. The
+        // answer is pure in (property, value), so one cache entry serves every element and every
+        // frame. Without this the fix would buy conformance with a performance regression, which
+        // the ratchet refuses as a trade.
+        var vcache = g.__mkStyleValidCache || (g.__mkStyleValidCache = Object.create(null));
+        var valid = function (k, v) {
+            // A CUSTOM PROPERTY accepts any token stream — there is no grammar to check it
+            // against, and validating one would delete every design token on the page.
+            if (k.slice(0, 2) === '--') return true;
+            if (typeof __cssSupports !== 'function') return true;
+            var key = k + ' ' + v;
+            var hit = vcache[key];
+            if (hit !== undefined) return hit;
+            var ans = false;
+            try { ans = !!__cssSupports('(' + k + ':' + v + ')'); } catch (e) { ans = true; }
+            vcache[key] = ans;
+            return ans;
+        };
         var api = {
             setProperty: function (k, v, prio) {
-                var o = parse(); var val = stripImp(v);
+                var o = parse(); var d = dash(k); var val = stripImp(v);
+                // An empty value is `removeProperty`, per CSSOM — not a declaration to validate.
+                if (val === '') { delete o[d]; write(o); return; }
+                if (!valid(d, val)) return;
                 if (prio && /important/i.test(String(prio))) val += ' !important';
-                o[dash(k)] = val; write(o);
+                o[d] = val; write(o);
             },
             removeProperty: function (k) { var o = parse(); var d = dash(k); var old = o[d] || ''; delete o[d]; write(o); return stripImp(old); },
             getPropertyValue: function (k) { return stripImp(parse()[dash(k)] || ''); },
@@ -13407,7 +13449,16 @@ const CSSOM_PRELUDE: &str = r#"
                 if (typeof prop !== 'string') return true;
                 var o = parse();
                 var k = dash(prop);
-                if (v === '' || v === null || v === undefined) delete o[k]; else o[k] = String(v);
+                if (v === '' || v === null || v === undefined) { delete o[k]; write(o); return true; }
+                var s = String(v);
+                // ⚠ The IDL attribute path REJECTS a priority, while `setProperty(k, v, 'important')`
+                // is the one way to set one — measured against Chrome at t1177, and the single row
+                // in that battery where the outcome does NOT track `CSS.supports` (which says true
+                // for `color: red !important`). The spec forbids the priority through this path, so
+                // the whole declaration is dropped rather than silently demoted.
+                if (hasImp(s)) return true;
+                if (!valid(k, s)) return true;
+                o[k] = s;
                 write(o);
                 return true;
             },

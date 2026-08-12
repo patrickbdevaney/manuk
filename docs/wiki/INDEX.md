@@ -996,6 +996,10 @@
   - L2544 · CORRECTION 2 — the plan named the wrong hook, and the existing one was already right
   - L2562 · The value half is not optional
   - L2578 · The entry criterion, so the list cannot grow by opinion
+  - L2589 · el.style validates: the setter drops what does not parse (tick 1181)
+  - L2608 · The method: price the LOSS, not the gain, against the corpus that defines both
+  - L2632 · What the fix does not do, on purpose
+  - L2648 · The result, and what it says about the board
 
 ## THE FIDELITY INSTRUMENT — what it can and cannot see
 `docs/wiki/fidelity-instrument.md`
@@ -2001,4 +2005,4 @@
   - L124 · Rank mechanisms by FLIP RATE, not failing-subtest count — CSS layout is a multi-assertion slog
 
 ---
-1908 sections across 22 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+1912 sections across 22 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.

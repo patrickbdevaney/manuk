@@ -46371,6 +46371,116 @@ PERF: none — one UA rule and one narrowed branch in a cascade that already ran
 WIKI: `docs/wiki/css-cascade.md` — where Chrome draws the form-control `box-sizing` line, and why a
 layout-crate test cannot see it.
 
+## Tick 1181 — `el.style` accepted every string, and the CSS-WG's own corpus priced the fix (2026-08-12)
+
+TICK SHAPE: capability.
+
+t1177 measured it and refused to build it; t1180 removed the blocker. `element.style` is a `Proxy`
+over the `style` attribute text whose `set` trap writes `String(v)` straight in, so **nothing is
+validated**: `e.style.color = "yelow"` sticks, and the feature-detection idiom every library ships —
+
+```js
+   const e = document.createElement('div');
+   e.style[prop] = value;
+   return e.style[prop] !== '';        // TRUE FOR EVERY VALUE, ALWAYS
+```
+
+— answers *supported* for everything, so a page takes the modern branch for capabilities we do not
+have. In WPT it is `test_invalid_value`, the CSS corpus's second-largest shared-helper assertion:
+**1,978 call sites across `~/wpt/css`**, every one asserting that an invalid declaration leaves
+`getPropertyValue` empty, and every one failing today.
+
+⚠⚠⚠ **THE QUESTION THAT DECIDES THE TICK IS NOT THE GAIN, IT IS THE LOSS** — how many declarations
+the engine currently stores would become silent no-ops. So the fix was priced against the CSS-WG's
+own corpus before a line of it was written: every `(property, value)` pair from every
+`test_valid_value` and `test_invalid_value` call site under `~/wpt/css`, asked of `CSS.supports`.
+
+```text
+   INVALID  n=1000   supports=false 1000   supports=TRUE   0    <- every one correctly rejected
+   VALID    n=1467   supports=true  1042   supports=FALSE 425    <- the ones we would DELETE
+```
+
+**And the 425 refuse the alarm they raise.** The histogram's top rows are `display` 54, `color` 42,
+`width` 16, `text-indent` 8 — properties this engine unquestionably renders, which reads like a
+false-NO class big enough to kill the tick. Reading the VALUES says otherwise: all 42 `color` rows
+are CSS Color 5's relative-color `alpha(from …)`; all 54 `display` rows are multi-keyword
+(`run-in`, `ruby`, `list-item flow-root`, `grid-lanes`); all 16 `width` rows are `calc-size()`; all
+8 `text-indent` rows are the `hanging`/`each-line` keywords. Not one is a value this engine
+supports and denies.
+
+> **COUNT the property, then READ WHAT THE VALUES SAY** — t1089's rule, and it changed the verdict
+> in both directions this window: at the property axis the counts said *disaster*, and at the value
+> axis they said *the answer is honest*. `false` here is `CSS.supports` correctly describing THIS
+> engine, which is the same rule t1180 was built on.
+
+HYPOTHESIS: the `set` trap and `setProperty` validate through `__cssSupports` and drop what does not
+parse; custom properties bypass validation entirely (they accept anything); the IDL setter rejects a
+value carrying `!important` (Chrome-measured, t1177 — `setProperty(k,v,'important')` is the only
+path). Memoised per `(property, value)`, because `el.style.x = y` is a per-frame path on the real
+web and a Stylo stylesheet parse per assignment would be a performance trade the ratchet refuses.
+Expected: most of the `test_invalid_value` mass, and honest feature detection.
+
+⚠⚠⚠ **MEASURED — +2,714 SUBTESTS ACROSS THIRTEEN CSS AREAS, 0 AREAS DOWN, HANG/CRASH 0 IN EVERY
+ONE.** Against the same release binary one tick earlier:
+
+```text
+   AREA                     was      now      Δ
+   css/css-values           940     1697    +757      20.9% -> 40.4%
+   css/css-color           5640     6260    +620
+   css/css-fonts           2287     2730    +443
+   css/css-grid            1465     1765    +300      the #1 board row, moved by a CSSOM fix
+   css/css-backgrounds      300      445    +145
+   css/css-text            1518     1603     +85
+   css/css-transforms       168      240     +72
+   css/css-sizing           725      792     +67
+   css/css-overflow         264      327     +63
+   css/css-flexbox         1406     1450     +44
+   css/css-display          215      258     +43
+   css/css-position         224      264     +40
+   css/css-ui               206      241     +35
+                                          ──────
+                                           +2714
+```
+
+⚠⚠⚠ **THE #1 BOARD ROW MOVED, AND NOT BY LAYOUT.** `css/css-grid` has been the board's top lever
+for fourteen ticks and every steer on record reads it as the M1 layout slog to be ported from
+blitz/servo. It gained **+300 from a twelve-line change to a JS `Proxy`'s `set` trap.** The board
+ranks by area mass, and area mass says nothing about *which organ* the failures are in: a third of
+the CSS corpus's failures were never about CSS at all, they were one CSSOM object accepting every
+string. This is the third time this window a *shared mechanism* beat the per-area ranking (t1176's
+missing helper library, t1179's dashed attribute, now this) — and all three were invisible to a
+ranker that reads areas, because **an area is a directory, not a cause.**
+
+⚠⚠ **THE PRICE WAS PAID AND IT CAME IN UNDER THE FORECAST.** The probe predicted a loss on up to
+425 valid declarations we decline; the measured result is **zero areas down**. The reason is that
+those 425 were already failing their *serialization* assertion — a value we echo back uncanonically
+never passed `test_valid_value` anyway, so declining it costs a subtest that was not being scored.
+**A forecast that names its own downside is what makes a +2,714 believable**; had an area gone down,
+the same probe would have said in advance which one.
+
+RED-PROOF: validation severed behind a flag, same binary, same run. All six subject rows flip
+(`bad-keyword:blue -> yelow`, `bad-sp:'' -> banana`, `bad-fn:blue -> rgb(255 0)`, `bad-int:'' ->
+abc`, `bad-prop:dropped -> x`, `bad-imp:1px -> 2px`) **and the detection idiom lies in both
+directions** (`det-fake:false -> true`, `det-absent:false -> true`), while **all nine control rows
+hold unchanged** — `ctl-imp:4/important`, `ctl-custom:whatever you like`, `ctl-empty:removed`,
+`ctl-attr:true` included. The memo row flips too (`memo:ok -> red`), which is the row proving the
+cache is keyed on the PAIR.
+
+⚠ **NARROWED DELIBERATELY, AND THE GATE SAYS SO** (`ctl-attr:true`): `el.setAttribute('style', …)`
+is a different path and still stores raw text. Dropping invalid declarations *there* needs a
+per-property serializer — t1177 step 3, the remaining 1,544 `should set the property value` rows in
+`css/css-color`, and the largest of the three pieces. Named, not smuggled in.
+
+PERF: the validator is memoised per `(property, value)` in a process-wide map, because
+`__cssSupports` builds and parses a Stylo stylesheet and `el.style.transform = …` in a rAF loop
+would otherwise pay that every frame. One entry serves every element and every frame; the answer is
+pure in the pair. The gate's `memo:ok` row is what keeps the cache from being keyed on the value
+alone, which would serve `color: red`'s YES to `width: red`.
+
+WIKI: `docs/wiki/dom-semantics.md` — "`el.style` validates: the setter drops what does not parse",
+including the pricing method (ask `CSS.supports` about the CSS-WG's own valid/invalid corpus and
+publish BOTH halves) and why the 425 declined-but-valid rows cost nothing.
+
 ## Tick 1180 — `CSS.supports` said NO about five properties this engine renders (2026-08-12)
 
 TICK SHAPE: capability.

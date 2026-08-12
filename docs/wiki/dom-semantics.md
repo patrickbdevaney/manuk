@@ -2585,3 +2585,73 @@ NOs. All 30 claims — negatives first — are held by `G_SUPPORTS_HONESTY`.
 ⚠ **One drift recorded, not acted on:** `display: -webkit-box` IS applied by that same merge
 (`legacy_webkit_box`), while constellation rows 353/423 say `missing`. The row is probably stale, but
 widening an allowlist on a row nobody has measured is how the false YES gets back in.
+
+## `el.style` validates: the setter drops what does not parse (tick 1181)
+
+`element.style` is a `Proxy` over the `style` attribute text, and its `set` trap wrote `String(v)`
+straight in. **Nothing was validated, ever** — `e.style.color = "yelow"` stuck. CSSOM says a
+declaration whose value does not parse is simply not set.
+
+The cost is not the conformance. It is the feature-detection idiom every CSS-touching library ships:
+
+```js
+   const e = document.createElement('div');
+   e.style[prop] = value;
+   return e.style[prop] !== '';        // TRUE FOR EVERY VALUE, ALWAYS
+```
+
+Every probe answered *supported*, so a page took the modern branch for capabilities this engine does
+not have — **and threw away the fallback it had shipped for exactly that case.** It is the mirror of
+t1172's `'display' in el.style === false`, the same object answering *unsupported* for everything we
+DO have. One object, two detection idioms, both lying, in opposite directions.
+
+### The method: price the LOSS, not the gain, against the corpus that defines both
+
+The gain was never the question — `test_invalid_value` is 1,978 call sites under `~/wpt/css`, all
+failing. The question was **how many working declarations the fix would delete.** So every
+`(property, value)` pair from every `test_valid_value` and `test_invalid_value` call site was
+extracted and asked of `CSS.supports`, and **both halves published**:
+
+```text
+   INVALID  n=1000   supports=false 1000   supports=TRUE   0
+   VALID    n=1467   supports=true  1042   supports=FALSE 425   <- the declarations we would DELETE
+```
+
+> **COUNT the property, then READ WHAT THE VALUES SAY.** The 425's histogram is `display` 54,
+> `color` 42, `width` 16, `text-indent` 8 — properties this engine unquestionably renders, which
+> reads like a false-NO class big enough to kill the tick. The values say otherwise: all 42 `color`
+> rows are CSS Color 5's `alpha(from …)`, all 54 `display` rows are multi-keyword (`run-in`, `ruby`,
+> `list-item flow-root`), all 16 `width` rows are `calc-size()`. Not one is a value we support and
+> deny. At the property axis the counts said *disaster*; at the value axis they said *honest*.
+
+**The forecast held: zero areas down.** Those 425 were already failing their *serialization*
+assertion — a value echoed back uncanonically never passed `test_valid_value` anyway — so declining
+it costs a subtest that was not being scored. A forecast that names its own downside is what makes
+the +2,714 believable.
+
+### What the fix does not do, on purpose
+
+| path | validates | why |
+|---|---|---|
+| `el.style.color = v` (IDL) | ✅ and rejects a `!important` in the value | Chrome-measured (t1177): the spec forbids a priority through this path |
+| `el.style.setProperty(k, v, prio)` | ✅ value only | `setProperty(k,v,'important')` is the ONLY path to a priority |
+| `--custom: anything` | ❌ never | a custom property has no grammar; validating one deletes every design token on the page |
+| `el.setAttribute('style', …)` | ❌ still raw | needs a per-property serializer — t1177 step 3, and the larger job |
+
+⚠ **Memoised per `(property, value)`, and the pair matters.** `__cssSupports` builds and parses a
+Stylo stylesheet; `el.style.transform = …` in a rAF loop would pay that every frame, so conformance
+would have been bought with a performance regression the ratchet refuses. One process-wide entry
+serves every element and every frame because the answer is pure in the pair — and a cache keyed on
+the *value* alone would serve `color: red`'s YES to `width: red`. `G_STYLE_SETTER_VALIDATES` has a
+row for exactly that.
+
+### The result, and what it says about the board
+
+**+2,714 subtests across thirteen CSS areas, 0 down, HANG/CRASH 0 in every one** — including
+**`css/css-grid` +300**, the board's #1 lever for fourteen ticks, which every steer on record reads
+as the M1 layout slog to be ported from blitz/servo. It moved by twelve lines in a JS `Proxy`.
+
+> **An area is a directory, not a cause.** Three times in one window a *shared mechanism* beat the
+> per-area ranking — t1176's missing helper library, t1179's dashed attribute, and this — and all
+> three were invisible to a ranker that reads areas. Rank by area to find the mass; histogram the
+> assertion messages to find the organ.
