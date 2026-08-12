@@ -2938,6 +2938,12 @@ impl Page {
         manuk_js::register_dom(&mut *child.dom as *mut manuk_dom::Dom);
         self.child_pages.insert(node, child);
         self.publish_iframe_docs();
+        // **`load` fires HERE, at the one place a child document is installed**, and not at the two
+        // callers — `set_root_box` above states the rule this follows: three call sites feeding one
+        // post-step is how a pass silently does not run on the third. Both the fetched path
+        // (`fetch_and_load_iframes`) and the network-free path (`load_inline_frames`: `srcdoc`,
+        // `about:blank`, bare `<iframe>`) arrive here, and so does every direct caller.
+        self.fire_frame_load(node);
     }
 
     /// Tell the JS world which arena sits behind each `<iframe>`. Cheap, and it must run before any
@@ -2984,6 +2990,45 @@ impl Page {
     /// `contentDocument` **on the very next line** still sees `null`; one that reads it at
     /// `DOMContentLoaded`, `load`, or from any later task sees a real document. Closing that means
     /// building a child document from inside a JS binding, which is a different change.
+    /// **Fire `load` on an `<iframe>` ELEMENT once its document is installed.**
+    ///
+    /// ⚠⚠⚠ **THE FRAME LOADED AND NOTHING EVER SAID SO.** `contentDocument` was populated and
+    /// readable — t512's work — but no `load` event was ever dispatched on the element, so
+    /// `<iframe onload=…>`, `frame.addEventListener('load', …)` and the `onload` property were all
+    /// dead. Probed one property per file so the pass count names the failure:
+    ///
+    /// ```text
+    ///   contentDocument non-null              PASS   <- the frame really is loaded
+    ///   contentDocument has the child's text  PASS   <- ...and really is the right document
+    ///   INLINE onload= fired                  FAIL
+    ///   addEventListener('load') fired        FAIL
+    ///   the onload PROPERTY is a function     FAIL
+    /// ```
+    ///
+    /// The first two rows are what make the last three a *missing event* rather than a missing
+    /// frame. `<iframe onload>` is how an embed, an ad slot, a payment frame, an OAuth popup-frame
+    /// and every lazy widget on the web announce readiness — and in WPT it is what gates
+    /// `domparsing`'s four `DOMParser-parseFromString-url*` files (45 subtests each, all
+    /// `harness=TIMEOUT` at ~120ms because their shared `loadPromise` never resolves).
+    ///
+    /// Same shape as the `<script>` completion event: dispatch on the element, through the ordinary
+    /// event path, so inline handlers, listeners and the reflected property all see it.
+    #[cfg(feature = "spidermonkey")]
+    fn fire_frame_load(&mut self, node: manuk_dom::NodeId) {
+        let Some(ctx) = &self.js else { return };
+        let rects: HashMap<manuk_dom::NodeId, [f32; 4]> = self
+            .root_box
+            .node_rects(&self.dom)
+            .into_iter()
+            .map(|(n, r)| (n, [r.x, r.y, r.width, r.height]))
+            .collect();
+        let _ = manuk_js::dispatch_event(ctx, &mut self.dom, node, "load", &rects, &self.styles);
+    }
+
+    /// Without SpiderMonkey there is no handler to notify — a no-op, not a lie.
+    #[cfg(not(feature = "spidermonkey"))]
+    fn fire_frame_load(&mut self, _node: manuk_dom::NodeId) {}
+
     #[cfg(feature = "spidermonkey")]
     fn load_inline_frames(&mut self, fonts: &FontContext) {
         let mut work: Vec<(manuk_dom::NodeId, String)> = Vec::new();

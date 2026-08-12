@@ -1739,3 +1739,56 @@ cargo-nextest, workspace-hack, risk-based gate scheduling, the banked-binary cac
 **Nothing trimmed, and the honest headline is a correction to the method rather than a percentage:**
 this audit's cadence samples one wall, the wall is bimodal by 10×, and the fix is to record the MODE
 alongside the total so #45 can be compared to #43 at all.
+
+## Audit #45 — tick 1166 (2026-08-12), wall total **1243s** — the COLD mode, and #44's fix applied
+
+⚠ **RECORDED WITH ITS MODE, which is exactly what audit #44 asked for and could not do.** #44 closed
+by saying *"this audit's cadence samples one wall, the wall is bimodal by 10×, and the fix is to
+record the MODE alongside the total so #45 can be compared to #43 at all."* So: this is a **COLD**
+sample — 1243s, taken on a tick that changed `engine/js` and `engine/dom` and therefore rebuilt the
+gate test binaries. It is comparable to **#43's 1204s**, not to #44's 110s or #42's 95s. Same wall,
+same box, three ticks in this session came in at 1282s / 1283s / 1243s cold and the arithmetic is
+stable.
+
+### Where the seconds go
+
+```text
+   wall total 1243s
+     293s  P  parity, 72/72 vs headless Chrome    24%
+      98s  T  crate tests                          8%
+      40s  B  build (workspace + headless)         3%
+      29s  everything else NAMED (G6/G1/D/F/…)     2%
+   ─────
+     460s  attributed          783s (63%) with no line
+```
+
+⚠⚠ **The 63% is #44's finding, unchanged and re-confirmed: it is the gate TEST-BINARY rebuild**, not
+a gate, not the workspace build, and not distributed. #44 established this with the twice-test (a
+warm re-run of the same tree comes in at ~120s). This audit adds only that the mode is now written
+down.
+
+### The rigor-preserving candidates
+
+1. **Redundancy** — audit #43's standing candidate still holds and is still untaken: **P** launches a
+   fresh headless Chrome per fixture; batching them behind one browser buys the same 72 assertions
+   for fewer seconds, each still failing independently. That is `tests/wpt`, i.e. agent territory,
+   and it is the one item on this list I could take. It reads **293s** here — between #43's 270s and
+   this session's other samples — so the number is now stable enough to rank on.
+2. **Parallelism** — gates launch concurrently; the perf floors are deliberately serial. ⚠ One new
+   observation: `F2 pipeline large/mid` went RED once this session at **7.68×** against a 7.5 limit,
+   on code proven inert on that bench, with swap 7/7 GB full and two runaway `chrome` processes at
+   100%. F2 is a ratio so machine speed divides out — but only a *uniform* slowdown does, and swap
+   exhaustion hits the 8,808-node page far harder than the 1,208-node one, which is the exact shape
+   F2 reads as superlinear. Re-measured directly 3× at 6.02 / 6.26 / 5.90. **Not acted on**
+   (`scripts/` is observer-owned); recorded because it is a real limit of the instrument under memory
+   pressure and it cost one full wall.
+3. **Caching** — the banked-binary cache (`$HOME/manuk-builds`, keyed by tree hash) is now recorded
+   for the **FOURTH** consecutive audit and is still absent. This session alone would have used it
+   **five times**: t1163, t1164, t1165 and t1167 each rebuilt an old binary for a same-hour control,
+   and t1165 rebuilt one twice. That is the single largest avoidable cost the loop is paying, and it
+   is entirely in observer territory.
+4. **Scope** — no gate builds materially more than it asserts on.
+
+**Nothing trimmed.** Two gates were ADDED this session (`g_dom_mutation_rooting`,
+`g_get_element_by_id_index`, `g_iframe_load_event`: 438 → 441) and the cold wall did not move outside
+its own 1243–1283s band, so the additions are inside the noise.

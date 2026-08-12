@@ -46371,6 +46371,113 @@ PERF: none — one UA rule and one narrowed branch in a cascade that already ran
 WIKI: `docs/wiki/css-cascade.md` — where Chrome draws the form-control `box-sizing` line, and why a
 layout-crate test cannot see it.
 
+## Tick 1167 — the frame loaded and nothing ever said so (2026-08-12)
+
+TICK SHAPE: capability (nested browsing context / event dispatch). HYPOTHESIS, written before the
+work: t1166 held the `WPT-AREAS.tsv` refresh on one row — `domparsing` 149 against a mark of 188 —
+and named the next move as finding those 39 subtests. Rather than bisect ~1,100 commits at ~15
+minutes a build, **fix forward**: get the area above its mark by closing whatever is failing now.
+Predicted: the four `DOMParser-parseFromString-url*` files, **0/45 each — 180 subtests in one
+cluster** — are a DOMParser URL bug. **Wrong, and the harness column said so in one glance.**
+
+⚠⚠⚠ **ALL FOUR ARE `harness=TIMEOUT` AT ~120 ms.** They are not failing assertions; they never
+finish. Their shared `domparser-url-tests.js` opens with
+
+```js
+const loadPromise = new Promise(resolve => { window.resolveLoadPromise = resolve; });
+```
+
+and the page resolves it from `<iframe … onload="window.resolveLoadPromise();">`. **The iframe's
+`load` event never fires**, so the promise never settles and 180 subtests are unreachable — nothing
+to do with DOMParser at all.
+
+⚠⚠⚠ **AND THE FRAME IS FINE, WHICH IS THE HALF THAT DECIDES THE DIAGNOSIS.** Probed one property per
+FILE so the pass count names the failure instead of a message having to:
+
+```text
+                                          BEFORE   AFTER
+   contentDocument non-null                PASS    PASS   <- CONTROL
+   contentDocument has the child's text    PASS    PASS   <- CONTROL
+   INLINE onload= fired                    FAIL    PASS
+   addEventListener('load') fired          FAIL    PASS
+   the onload PROPERTY is a function       FAIL    FAIL   <- different mechanism, named below
+```
+
+`contentDocument` has been populated and readable since t512 — the frame really is loaded and really
+is the right document. **Without those two rows the same symptom reads as "iframes don't work"**,
+which is false, and would have sent the fix into the loader.
+
+**THE FIX IS ONE DISPATCH, AT THE ONE FUNNEL.** `render_iframe` is where a child document is
+installed; the fetched path (`fetch_and_load_iframes`), the network-free path (`load_inline_frames` —
+`srcdoc`, `about:blank`, a bare `<iframe>`) and every direct caller all arrive there. ⚠ The first
+draft dispatched from the two *callers* instead — which is `set_root_box`'s own documented lesson
+(*"three call sites feeding one post-step is how a pass silently does not run on the third"*) being
+re-learned instead of applied, and the gate caught it immediately by not seeing the event at all.
+
+**MEASURED — old binary rebuilt from t1166 and run in the same hour:**
+
+```text
+   WPT dom          4004/7193  ->  6366/10503   +2362 passes, +3310 ATTEMPTED
+   WPT html/dom    56440/59922 -> 56441/59922   +1
+   WPT domparsing    149/1273  ->   149/1293    +20 attempted, pass FLAT
+   manuk-dom 11/11 · manuk-layout 173/173 · HANG/CRASH 0 in all three areas
+```
+
+⚠⚠ **THE ATTEMPTED TOTAL MOVING IS THE MEASUREMENT, NOT AN ARTEFACT.** A testharness file emits
+subtests as it gets through them, so a file whose `loadPromise` never settles emits almost none.
+`dom` gained **3,310 attempted** — the honest count of tests that previously could not START. The
++2,362 was checked against a same-hour old binary precisely because a jump that size is exactly what
+t1163 taught me not to believe on sight.
+
+⚠⚠⚠ **AND THE AREA I TOOK THIS TICK FOR DID NOT MOVE — SAID PLAINLY, BECAUSE IT WAS THE TARGET.**
+`domparsing` is still 149, still below its 188 mark, **so the refresh is still held.** The four url
+files now RUN and then fail on their own merits (`doc.URL` / `documentURI` / `baseURI` on a
+DOMParser-created document), which is a separate gap this tick did not touch and must not claim. The
+tick bought a real capability and did not buy the thing it set out to buy; both halves are the result.
+
+⚠ **THE GATE HAD TO BE TAUGHT TO DESCRIBE ITS OWN RED HONESTLY.** `report()` is only called from the
+handlers, so with the dispatch severed `#out` is never written and the *control* assertion fired —
+announcing *"the frame's document is not installed"*, which is the exact false reading that cost this
+defect three ticks of misattribution. It now checks the unwritten sentinel first and says the true
+thing: neither handler ran, the document IS installed, the event is what is missing.
+
+**NOT covered, named with its number:** the `onload` IDL attribute as a readable PROPERTY (`typeof
+frame.onload === 'function'`). The handler runs; the content attribute is not reflected into a
+property object. Different mechanism — event-handler IDL reflection — and the gate asserts it in its
+**failing** state so it cannot be quietly assumed fixed.
+
+⚠⚠ **AND THE WALL AUDIT I "RECORDED" IN t1166 HAD NOT BEEN RECORDED AT ALL.** I ran it, wrote the
+findings into t1166's journal entry, and set `LAST_WALL_AUDIT` in `STATUS.md` — which
+`status-update.sh` then **regenerated from `docs/loop/WALL-AUDIT.md`**, silently reverting it to 1146.
+The tick landed green and the audit was still overdue one tick later. **The field is derived, not
+authored**, and writing to a derived field is a no-op that leaves a receipt saying otherwise — the
+`scripted-edit silent no-op` shape, in the loop's own bookkeeping. Banked properly now as **Audit #45**
+in `WALL-AUDIT.md`, which is the file the deriver reads, and it applies #44's own request by recording
+the **MODE** (COLD, 1243s — comparable to #43's 1204s, not to #44's warm 110s). ⚠ Its standing finding
+is that the banked-binary cache is absent for the **fourth** consecutive audit, and **this session
+alone would have used it five times** — every same-hour old-binary control in t1163/1164/1165/1167.
+
+⚠⚠ **AND THE WALL CAUGHT A BUILD I HAD NOT BUILT.** The first landing attempt went RED on
+`manuk-agent: INSTRUMENT FAULT — no verdict on 4 runs incl 3 on a QUIET box`, which reads like a hang
+and was a **compile error in the HEADLESS build**: my helper was inserted between
+`#[cfg(feature = "spidermonkey")]` and the `fn load_inline_frames` it belonged to, orphaning the
+attribute — so under `--no-default-features` that function lost its cfg and collided with its own
+`not(spidermonkey)` twin. ⚠ **`cargo check -p manuk-page --features stylo,spidermonkey` was GREEN the
+whole time**, which is why I did not see it: I checked the configuration I was working in and the
+break was in the other one. The wall builds both (`B · build (workspace)` + `headless compiles
+(--no-default-features)`) and that is precisely what it is for. ⚠ Recorded also because the RED
+*message* was three layers from the cause — a cargo compile failure surfaced as "no test verdict"
+surfaced as "a real hang/OOM" — and the honest lesson is to read the raw `cargo test` output before
+believing an aggregated diagnosis.
+
+RATCHET: held. No area lost a subtest; no crashes anywhere.
+
+PERF: none — one event dispatch per frame installed, on a path that already builds a whole document.
+
+WIKI: `docs/wiki/dom-semantics.md` — the document-lifecycle section gains its one-level-down twin,
+"an `<iframe>` fired no `load` either". PATTERN: "THE EMBED, AD SLOT, PAYMENT FRAME OR LAZY WIDGET
+THAT WAITS FOR `onload`" — `docs/loop/WEB-PATTERNS.md`.
+
 ## Tick 1166 — the primary metric's source, refreshed at last (2026-08-12)
 
 TICK SHAPE: measurement — the full `scripts/wpt-sweep.sh` re-run that has been blocked since Jul 16.

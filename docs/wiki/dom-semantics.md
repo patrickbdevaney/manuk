@@ -137,6 +137,67 @@ Both must be **idempotent** (several load paths can reach them) and `DOMContentL
 **both** registries — jQuery listens on `document`, `testharness.js` listens on `window`, and in a real
 browser the event bubbles document → window.
 
+## …and the SAME GAP existed one level down: an `<iframe>` fired no `load` either (t1167)
+
+The lifecycle section above is about the DOCUMENT's `load`. **An `<iframe>` ELEMENT has its own, and
+it did not fire.** `contentDocument` has been populated and readable since t512 — the frame really is
+there, and really is the right document — but nothing was ever dispatched on the element, so
+`<iframe onload=…>`, `frame.addEventListener('load', …)` and every `loadPromise` built on them
+silently never ran.
+
+⚠⚠⚠ **THE TWO CONTROL ROWS ARE WHAT MAKE THIS A MISSING EVENT RATHER THAN A MISSING FRAME**, and the
+probe was deliberately split one property per file so the pass count names the failure:
+
+```text
+                                         BEFORE   AFTER
+  contentDocument non-null                PASS    PASS   <- CONTROL: the frame really is loaded
+  contentDocument has the child's text    PASS    PASS   <- CONTROL: and it is the right document
+  INLINE onload= fired                    FAIL    PASS
+  addEventListener('load') fired          FAIL    PASS
+  the onload PROPERTY is a function       FAIL    FAIL   <- a DIFFERENT mechanism, see below
+```
+
+Without the controls the same symptom reads as *"iframes don't work"*, which is false and sends the
+fix into the loader instead of the event path.
+
+**Where it fires: `render_iframe`, and only there.** That is the one place a child document is
+installed — the fetched path (`fetch_and_load_iframes`), the network-free path
+(`load_inline_frames`: `srcdoc`, `about:blank`, a bare `<iframe>`) and every direct caller all arrive
+through it. The first draft dispatched from the two *callers* instead, which is the
+`set_root_box` lesson (*"three call sites feeding one post-step is how a pass silently does not run
+on the third"*) being re-learned rather than applied.
+
+**Why it is worth a tick:** `<iframe onload>` is how an ad slot, an embed, a payment frame, an OAuth
+frame and every lazy widget on the web announce readiness. Measured against a same-hour old binary:
+
+```text
+   WPT dom          4004/7193  ->  6366/10503   +2362 passes, +3310 ATTEMPTED
+   WPT html/dom    56440/59922 -> 56441/59922   +1
+   WPT domparsing    149/1273  ->   149/1293    +20 attempted, pass FLAT
+```
+
+⚠⚠ **THE ATTEMPTED TOTAL MOVING IS THE MEASUREMENT, NOT AN ARTEFACT.** A testharness file emits
+subtests as it gets through them, so a file whose `loadPromise` never settles emits almost none.
+`dom` gained **3,310 attempted** subtests — that is the honest count of tests that previously could
+not start.
+
+⚠⚠ **AND THE AREA THIS TICK WAS TAKEN FOR DID NOT MOVE ITS PASS COUNT.** `domparsing`'s four
+`DOMParser-parseFromString-url*` files were `harness=TIMEOUT` at ~120 ms because their shared
+`loadPromise` never resolved; they now RUN and then fail on their own merits, asserting
+`doc.URL` / `documentURI` / `baseURI` on a `DOMParser`-created document. **That is a separate gap and
+this fix must not claim it.**
+
+**NOT covered, named:** the `onload` IDL attribute as a readable PROPERTY (`typeof frame.onload ===
+'function'`). The handler *runs*; the content attribute is not reflected into a property. That is the
+event-handler-IDL-attribute reflection surface — a different mechanism — and `g_iframe_load_event`
+asserts it in its **failing** state so it cannot be quietly assumed fixed.
+
+⚠ **The gate had to be taught to describe its own RED honestly.** `report()` is only called from the
+handlers, so with the dispatch severed `#out` is never written and the *control* assertion fires,
+announcing *"the frame's document is not installed"* — the exact false reading that cost this defect
+three ticks of misattribution. It now checks for the unwritten sentinel first and says the true
+thing: *neither handler ran; the document IS installed; the event is what is missing.*
+
 ## CharacterData offsets are UTF-16 CODE UNITS — not bytes, not `char`s
 
 `"😀".length === 2` in JavaScript. An offset of 1 lands **inside the surrogate pair**. Rust strings are
