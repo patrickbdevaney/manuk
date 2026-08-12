@@ -46371,6 +46371,78 @@ PERF: none — one UA rule and one narrowed branch in a cascade that already ran
 WIKI: `docs/wiki/css-cascade.md` — where Chrome draws the form-control `box-sizing` line, and why a
 layout-crate test cannot see it.
 
+## Tick 1168 — the work-around WAS the bug report, and the metric is unfrozen after ~100 ticks (2026-08-12)
+
+TICK SHAPE: capability (DOM URL surface) + the metric refresh it unblocks. HYPOTHESIS, written before
+the work: t1167 unblocked `domparsing`'s four `DOMParser-parseFromString-url*` files from
+`harness=TIMEOUT` and they immediately failed on their own assertions — `doc.URL`, `doc.documentURI`,
+`doc.baseURI` on a DOMParser-created document. Predicted: implement those three; 180 subtests are
+behind them, and `domparsing` needs +39 to clear the mark that has held the whole `WPT-AREAS.tsv`
+refresh. **Held, and the probe found the gap was wider than the test.**
+
+⚠⚠⚠ **`baseURI` DID NOT EXIST ANYWHERE — INCLUDING ON THE MAIN DOCUMENT.**
+
+```text
+                                       BEFORE                            AFTER
+   document.URL          CONTROL       "https://dp.test/dir/page.html"   same   ✓
+   document.baseURI                     undefined                        ✓ ✗→✓
+   DOMParser doc .URL                   undefined                        ✓ ✗→✓
+   DOMParser doc .documentURI           undefined                        ✓ ✗→✓
+   DOMParser doc .baseURI               undefined                        ✓ ✗→✓
+   DOMParser XML doc .URL               undefined                        ✓ ✗→✓
+```
+
+**The CONTROL row is what localises it.** `document.URL` worked, so this was never *"URLs are
+broken"*: `URL` and `documentURI` were **own properties of `g.document`**, so every document that is
+not the window's had none — and `baseURI` is a **`Node`** property that was never built at all.
+
+⚠⚠⚠ **AND THE ABSENCE WAS ALREADY IN THE TREE, WRITTEN DOWN AND ROUTED AROUND.** `reflect_js.rs`
+carries `new URL(raw, document.baseURI || location.href)`. **The `|| location.href` half IS this
+gap** — someone hit it, wrote a fallback, and shipped. *A work-around in the tree is a bug report
+nobody filed*, and the loop has no instrument that reads its own `||`s.
+
+**THE FIX IS PLACEMENT, NOT NEW BEHAVIOUR.** `URL`/`documentURI` onto `Document.prototype`,
+`baseURI` onto `Node.prototype` — the placement `defaultView` already uses. ⚠ The own-properties on
+`g.document` still **shadow** them for the main document, deliberately: they are accessors onto the
+live `g.location`, which `__applyUrl` replaces wholesale on every SPA navigation, so a prototype
+getter that won instead would go stale on the first `pushState`. That is asserted, not assumed.
+
+⚠⚠⚠ **THE METRIC IS UNFROZEN. `WPT-AREAS.tsv` BANKS FOR THE FIRST TIME SINCE JULY 16.**
+
+```text
+   WPT domparsing   149/1293 -> 190/1293   +41   <- CROSSES the 188 mark that held everything
+   WPT dom         6366/10503 -> 6370/10503  +4
+   ── then the full sweep, 0 crashes and 0 duplicate wire requests in EVERY area ──
+   TOTAL  422865/1212290 (Jul 16)  ->  433162/1228830  =  34.88% -> 35.25%   +10297
+   THE RATCHET HOLDS. Nothing went backwards.
+```
+
+⚠⚠ **+10,297 IS NOT THIS TICK AND IS NOT THIS WEEK.** t1166 wrote that prediction down before its
+own sweep returned and it holds unchanged: the bulk is ~100 ticks of earned progress that could not
+be banked while one row sat below its mark. **This tick contributed +41 of it.** The other ~10,250
+were already true; what changed is that the scoreboard is now allowed to say so.
+
+⚠⚠ **AND THE RANKING THE BOARD USES IS NOW CORRECT FOR THE FIRST TIME IN ~100 TICKS** — `css/css-grid`
+is the largest CSS surface (~8,700 failing), not `css/css-flexbox` (~2,300) as the stale file said.
+The next capability tick should be chosen off the refreshed board, not the one this session started
+from.
+
+⚠ **ONE GATE ROW WAS VACUOUS ON THE FIRST DRAFT AND THE RED-PROOF CAUGHT IT.**
+`d.URL === d.documentURI` compares two `undefined`s and stays **GREEN** with the entire prelude
+severed. It now also requires the value to be non-empty. It was found by reading **every row** of the
+RED-proof output rather than just its verdict — which is the only way a vacuous row ever shows
+itself, and this repo has paid for that lesson before (t1161's `:has()` gate was blind to its own
+subject).
+
+RATCHET: held — and this is the tick where it finally says yes. Every one of the 20 rows is at or
+above its mark; 0 crashes corpus-wide.
+
+PERF: none — three property getters, defined once at prelude time.
+
+WIKI: `docs/wiki/dom-semantics.md` — "`baseURI` did not exist anywhere, and `URL`/`documentURI` were
+own properties of one object". PATTERN: "THE FRAMEWORK THAT RESOLVES A RELATIVE URL IT WAS HANDED" —
+`docs/loop/WEB-PATTERNS.md`.
+
 ## Tick 1167 — the frame loaded and nothing ever said so (2026-08-12)
 
 TICK SHAPE: capability (nested browsing context / event dispatch). HYPOTHESIS, written before the

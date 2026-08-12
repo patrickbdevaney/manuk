@@ -7314,6 +7314,14 @@ pub fn install(rt: &mut Runtime, global: mozjs::rust::HandleObject) -> Result<()
     // AFTER reflection: `contentDocument` must not collide with a reflected accessor, and reflect.js
     // skips any IDL name already `in proto`.
     eval(rt, global, crate::iframe_js::IFRAME_JS, "iframe.js")?;
+    // AFTER iframe.js: both define on `Document.prototype`, and this one asks `!('URL' in DP)`,
+    // so it must run once the prototype chain is fully built.
+    eval(
+        rt,
+        global,
+        crate::document_url_js::DOCUMENT_URL_JS,
+        "document_url.js",
+    )?;
     // **MSE.** After the prelude (it needs `setTimeout` and `DOMException`, and it must land AFTER
     // the inert-name sweep rather than be overwritten by it) and after `dom_bindings`' `install`,
     // which is where `URL` comes from — `URL.createObjectURL` is the whole attachment channel, so

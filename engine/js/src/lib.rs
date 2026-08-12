@@ -1573,8 +1573,9 @@ pub mod canvas;
 #[cfg(feature = "_sm")]
 pub mod collections_js;
 #[cfg(feature = "_sm")]
-pub mod dom_bindings;
+pub mod document_url_js;
 #[cfg(feature = "_sm")]
+pub mod dom_bindings;
 pub mod iframe_js;
 #[cfg(feature = "_sm")]
 pub mod inline_handlers_js;

@@ -137,6 +137,46 @@ Both must be **idempotent** (several load paths can reach them) and `DOMContentL
 **both** registries — jQuery listens on `document`, `testharness.js` listens on `window`, and in a real
 browser the event bubbles document → window.
 
+## `baseURI` did not exist ANYWHERE, and `URL`/`documentURI` were OWN properties of one object (t1168)
+
+Probed on a page loaded from `https://dp.test/dir/page.html`:
+
+```text
+                                       BEFORE                            AFTER
+  document.URL          CONTROL        "https://dp.test/dir/page.html"   same   ✓
+  document.baseURI                      undefined                        ✓ ✗→✓
+  DOMParser doc .URL / .documentURI     undefined                        ✓ ✗→✓
+  DOMParser doc .baseURI                undefined                        ✓ ✗→✓
+```
+
+**The CONTROL row localises it.** `document.URL` worked, so this was never "URLs are broken":
+`URL` and `documentURI` were defined as **own properties of `g.document`**, so every document that
+is not the window's had none — and `baseURI` is a **`Node`** property that was never built at all.
+
+⚠⚠ **THE ABSENCE WAS ALREADY WRITTEN DOWN AND ROUTED AROUND.** `reflect_js.rs` carries
+`new URL(raw, document.baseURI || location.href)`. The `|| location.href` half *is* this gap,
+shipped as a fallback rather than filed as a bug. **A work-around in the tree is a bug report nobody
+wrote.**
+
+**Placement:** `URL`/`documentURI` on `Document.prototype`, `baseURI` on `Node.prototype` — the same
+placement `defaultView` uses. ⚠ The own-properties on `g.document` still **shadow** these for the
+main document, deliberately: they are accessors onto the live `g.location`, which `__applyUrl`
+replaces wholesale on every SPA `pushState`, so a prototype getter that won instead would go stale on
+the first navigation. `g_document_url_base` pins that with a `pushState` row.
+
+**What the values ARE.** A DOMParser document's URL is the **responsible document's** URL (DOM
+§DOMParser) — not `about:blank`, not empty. `baseURI` is the node's OWN document's `<base href>`
+resolved against that URL, or the URL itself when there is none (HTML §2.4.1) — read from
+`this.ownerDocument`, so a node in a DOMParser document does not inherit the window's `<base>`.
+
+**Measured:** `domparsing` **149 → 190** (+41) and `dom` +4. That +41 is what crossed the **188**
+ratchet mark which had been holding the entire `WPT-AREAS.tsv` refresh since Jul 16.
+
+⚠ **One gate row was VACUOUS on the first draft**: `d.URL === d.documentURI` compares two
+`undefined`s and stays GREEN with the whole prelude severed. It now also requires the value to be
+non-empty. Found by reading **every row** of the RED-proof rather than just its verdict — which is
+the only way a vacuous row ever shows itself.
+
 ## …and the SAME GAP existed one level down: an `<iframe>` fired no `load` either (t1167)
 
 The lifecycle section above is about the DOCUMENT's `load`. **An `<iframe>` ELEMENT has its own, and
