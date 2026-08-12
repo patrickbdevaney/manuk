@@ -210,6 +210,52 @@ to show itself; this one needed a loop of appends. **Any binding that holds a `*
 a call that can allocate is the same bug**, and the grep that finds it is *"a raw object local, then
 a call, then a use of that local"* — not a search for the word `unsafe`.
 
+## `getElementById` IS A DOCUMENT SCAN, AND `window.<id>` CALLS IT ON EVERY ACCESS — so every list build was QUADRATIC (t1165)
+
+`document.getElementById` was `descendants(root).find(...)`: **O(document) per call**. On its own
+that is merely slow. What makes it quadratic is HTML §7.3.3 **named access** — `window.container` for
+`<div id=container>` — which this engine publishes as a **getter that calls `getElementById` on every
+access**. So the single most common loop on the web:
+
+```js
+for (let i = 0; i < n; i++) container.appendChild(document.createElement('span'));
+```
+
+pays a full document scan *per iteration*. Measured: the same 2,000 appends took **117 ms** in an
+empty document and **14,029 ms** with 16,000 nodes present. Hoisting the identifier — `var c =
+container` — made the identical loop **14 ms**. **A 1000× difference with no engine change at all.**
+
+⚠⚠⚠ **THE LADDER MATTERED MORE THAN THE FIX, BECAUSE THREE TICKS HAD BLAMED THE WRONG ORGAN.** The
+only visible symptom was one WPT Bar 0 (`css/selectors/invalidation/has-complexity.html`), so the
+cost was attributed to `:has()`, then to a quadratic recascade, then to `appendChild`. Each was
+eliminated by a **control row that was supposed to mean nothing**: a *detached* parent stayed flat
+(no named global), `createElement` alone stayed flat (`document` is a real global, not an element),
+and severing `record_mutation` changed nothing. The decisive row changed *no engine code whatsoever*
+— it just hoisted the identifier out of the loop.
+
+**Fix: `Dom::id_index`, an `id → Vec<NodeId>` map populated in `set_attr`** (every id in the engine
+arrives there; the HTML parser routes through it too). It is **deliberately allowed to be stale** —
+entries are never eagerly removed — so `Dom::get_element_by_id` **verifies every candidate against
+the live tree** and **falls back to the original scan** whenever it cannot produce a unique verified
+answer (two verified candidates included: duplicate ids are legal and the spec wants the first in
+TREE order, which an insertion-ordered index cannot answer). The index can only make the lookup
+faster, never different.
+
+⚠⚠⚠ **AND THE FIRST PREDICATE WAS WRONG BY EXACTLY ONE WPT SUBTEST.** Verification used
+`is_inclusive_ancestor`, which walks `parent()` — and `parent()` **crosses the shadow boundary**
+while `descendants()`, seeded from `children()`, does not. An element moved *into* a shadow root
+still verified as a descendant of the document, so `window.target2` stayed defined where the spec
+requires `undefined`. `dom/nodes/moveBefore/moveBefore-id-map.html` went 4/4 → 3/4 and the whole
+`dom` area moved by **−1** — caught by an old-binary per-file diff, on a change whose headline was a
+1000× win. **A fast path must be predicate-IDENTICAL to the slow path it stands in for, not merely
+close to it** (`Dom::light_tree_contains`).
+
+Gated by `g_get_element_by_id_index`: correctness first (duplicate ids, shadow scoping, stale
+entries after `remove()` and after an id rename), then a **ratio** — the same 2,000 appends with and
+without 8,000 unrelated nodes — RED-proven at **70.5×** with the index severed. Same-hour old-binary
+control: `dom` 4004/7193 unchanged, `html/dom` 56438 → 56440, `css/selectors` 2905/5215 → 2912/5222
+with **HANG/CRASH 1 → 0**.
+
 **The resolve hook is the SYNC half, and it must NOT fetch — because this engine has no synchronous
 network (tick 513, ESM import-graph B2).** SpiderMonkey calls `module_resolve_hook` once per `import`
 during `ModuleLink`, which runs synchronously on the JS thread. The obvious design — "fetch+compile the

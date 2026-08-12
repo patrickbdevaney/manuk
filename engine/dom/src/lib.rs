@@ -259,6 +259,25 @@ pub struct Dom {
     /// ever showed. Same dead-end-wire shape as `:focus` before tick 246 — the shell knows the
     /// pointer is down, the cascade never heard. The shell writes it on pointer down/up.
     active: Option<NodeId>,
+    /// **`id` → the elements that have claimed it — a HINT, never an authority.**
+    ///
+    /// `document.getElementById` was a full `descendants(root).find(...)` scan, i.e. **O(document)
+    /// per call**, and `window.<id>` (HTML §7.3.3 named access) is a GETTER that calls it on *every
+    /// access*. So a loop that touches a bare identifier for an element — `for (…) {
+    /// container.appendChild(…) }`, the shape of every list build on the web — is **quadratic in
+    /// document size**. Measured t1165: the same 2,000 appends cost **117ms** in an empty document
+    /// and **14,029ms** with 16,000 nodes present; hoisting the identifier into a local made the
+    /// identical loop **14ms** — a **1000×** difference with no other change.
+    ///
+    /// ⚠⚠⚠ **THIS INDEX IS DELIBERATELY ALLOWED TO BE WRONG, AND THAT IS THE WHOLE SAFETY
+    /// ARGUMENT.** Entries are added on `set_attr("id", …)` and never eagerly removed, so it may
+    /// hold nodes whose id changed, that were detached, or that are in another document's tree —
+    /// and it may be MISSING a node if some future path writes an id without going through
+    /// `set_attr`. [`Dom::get_element_by_id`] therefore **verifies every candidate** against the
+    /// live tree and **falls back to the original full scan** whenever the fast path cannot
+    /// produce a unique verified answer. The index can only ever make the lookup FASTER, never
+    /// different: its worst case is exactly the behaviour it replaced.
+    id_index: std::collections::HashMap<String, Vec<NodeId>>,
 }
 
 impl Default for Dom {
@@ -288,6 +307,7 @@ impl Dom {
             focused: None,
             focus_visible: false,
             active: None,
+            id_index: std::collections::HashMap::new(),
         }
     }
 
@@ -958,16 +978,92 @@ impl Dom {
     pub fn set_attr(&mut self, id: NodeId, name: impl Into<String>, value: impl Into<String>) {
         if let NodeData::Element(el) = &mut self.nodes[id.index()].data {
             let name = name.into();
+            let value = value.into();
+            // Record the id BEFORE the borrow ends; see `id_index` for why a stale or duplicate
+            // entry is harmless and a missing one is merely slow.
+            let indexed = (name == "id").then(|| value.clone());
             if let Some(a) = el.attrs.iter_mut().find(|a| a.name == name) {
-                a.value = value.into();
+                a.value = value;
             } else {
-                el.attrs.push(Attr {
-                    name,
-                    value: value.into(),
-                });
+                el.attrs.push(Attr { name, value });
+            }
+            if let Some(v) = indexed {
+                let slot = self.id_index.entry(v).or_default();
+                if !slot.contains(&id) {
+                    slot.push(id);
+                }
             }
             self.mark_dirty(id);
         }
+    }
+
+    /// **`getElementById` in O(1) for the shape every page actually has**, falling back to the
+    /// original full tree scan whenever the index cannot produce a unique verified answer.
+    ///
+    /// `root` scopes the search exactly as the caller's `this` does — a Document, but also a
+    /// ShadowRoot or DocumentFragment, since `getElementById` is `NonElementParentNode`. A
+    /// candidate counts only if it is a descendant of `root`, which is also what excludes a node
+    /// that has since been detached or moved into a different tree in the same arena.
+    ///
+    /// ⚠ **Two verified candidates fall back to the scan rather than guessing.** The spec answer is
+    /// the FIRST such element in tree order, and duplicate ids are invalid but legal; the index is
+    /// insertion-ordered, not tree-ordered, so it cannot answer that question. Falling back keeps
+    /// the semantics byte-identical in the one case where the fast path is not equivalent.
+    /// Is `n` inside `root`'s subtree **as [`Dom::descendants`] walks it** — i.e. through the LIGHT
+    /// tree, never crossing into a shadow tree?
+    ///
+    /// ⚠⚠⚠ **THIS IS NOT [`Dom::is_inclusive_ancestor`], AND THE DIFFERENCE IS A REAL WPT TEST.**
+    /// `descendants` seeds from `children`, and a shadow root is **not** a child of its host — but
+    /// `parent()` *does* cross that boundary. Verifying an index candidate with
+    /// `is_inclusive_ancestor` therefore answers a strictly more generous question than the scan it
+    /// is standing in for: an element moved INTO a shadow root still looked like a descendant of the
+    /// document, so `document.getElementById` kept finding it — and, through the `window.<id>`
+    /// getter, `window.target2` stayed defined when the spec says it must become `undefined`.
+    /// `dom/nodes/moveBefore/moveBefore-id-map.html` caught it as `4/4 → 3/4`, which is the ratchet
+    /// working exactly as intended and the reason the fast path must be predicate-identical to the
+    /// slow one, not merely close to it.
+    fn light_tree_contains(&self, root: NodeId, n: NodeId) -> bool {
+        let mut cur = Some(n);
+        while let Some(c) = cur {
+            if c == root {
+                return true;
+            }
+            // Ascending out of a shadow tree is where the two predicates part company. `root` itself
+            // being that shadow root is handled above, so this only rejects a genuine crossing.
+            if self.is_shadow_root(c) {
+                return false;
+            }
+            cur = self.parent(c);
+        }
+        false
+    }
+
+    pub fn get_element_by_id(&self, root: NodeId, id: &str) -> Option<NodeId> {
+        if let Some(cands) = self.id_index.get(id) {
+            let mut hit = None;
+            let mut count = 0usize;
+            for &n in cands {
+                // VERIFY: the index is a hint. A stale entry names a node whose id has changed, or
+                // one that no longer hangs off this root.
+                if self.is_alive(n)
+                    && self.element(n).and_then(|e| e.id()) == Some(id)
+                    && self.light_tree_contains(root, n)
+                {
+                    count += 1;
+                    if count > 1 {
+                        break;
+                    }
+                    hit = Some(n);
+                }
+            }
+            if count == 1 {
+                return hit;
+            }
+        }
+        // The original implementation, kept verbatim as the fallback: an index MISS must be
+        // indistinguishable from never having had an index.
+        self.descendants(root)
+            .find(|&n| self.element(n).and_then(|e| e.id()) == Some(id))
     }
 
     // -- Incremental-layout dirty tracking (A2) -----------------------------

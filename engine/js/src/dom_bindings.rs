@@ -3296,9 +3296,15 @@ unsafe fn doc_get_by_id(cx: *mut RawJSContext, argc: u32, vp: *mut Value) -> boo
         *vp = NullValue();
         return true;
     };
-    let found = (*dom)
-        .descendants(root)
-        .find(|&n| (*dom).element(n).and_then(|e| e.id()) == Some(id.as_str()));
+    // ⚠⚠⚠ **THIS WAS A FULL DOCUMENT SCAN, AND `window.<id>` CALLS IT ON EVERY ACCESS.** HTML
+    // §7.3.3 named access publishes `window.container` for `<div id=container>` as a GETTER that
+    // resolves through this method, so a loop written against a bare identifier — which is how
+    // every list build, every `for (…) container.appendChild(…)`, is written — was quadratic in
+    // document size. Measured t1165: 2,000 appends cost 117ms in an empty document and 14,029ms
+    // with 16,000 nodes present, and hoisting the identifier into a local made the same loop 14ms.
+    // `Dom::get_element_by_id` is an index with a verified fast path and this exact scan as its
+    // fallback, so the answer cannot change — only the cost.
+    let found = (*dom).get_element_by_id(root, &id);
     return_node_or_null(cx, vp, dom, found);
     true
 }

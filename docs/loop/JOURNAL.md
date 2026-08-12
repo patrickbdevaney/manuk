@@ -46371,6 +46371,100 @@ PERF: none — one UA rule and one narrowed branch in a cascade that already ran
 WIKI: `docs/wiki/css-cascade.md` — where Chrome draws the form-control `box-sizing` line, and why a
 layout-crate test cannot see it.
 
+## Tick 1165 — the row that changed NO engine code was the proof, and every list build was quadratic (2026-08-12)
+
+TICK SHAPE: capability + Bar 0 + perf (DOM lookup). HYPOTHESIS, written before the work: t1164 took
+the `css/selectors` Bar 0 from CRASH to HANG, and the remaining hang had a name inherited from t1161
+— *"`Page::relayout` recascades on every node-count growth, so 75,000 appends drive 75,000 full
+re-cascades"*. Predicted: build incremental style invalidation. **Wrong for the third time in a row
+about this one test, and a ladder of controls said so before a line was written.**
+
+⚠⚠⚠ **THE COST IS `getElementById`, AND `window.<id>` CALLS IT ON EVERY ACCESS.** `document.getElementById`
+was `descendants(root).find(...)` — O(document) per call. HTML §7.3.3 named access publishes
+`window.container` for `<div id=container>` as a **getter that resolves through it**. So the single
+most common loop on the web is quadratic in page size, and not because of anything in `appendChild`:
+
+```text
+                                                          BEFORE      AFTER
+  A. N connected appends, empty doc     N=16000            4075 ms     299 ms
+  B. the SAME 2000 appends, after M     M=0                 117 ms      30 ms
+     pre-existing nodes                 M=4000             3648 ms      28 ms
+                                        M=16000           14029 ms      32 ms
+  C. same appends, parent DETACHED      CONTROL             186 ms     209 ms
+  D. createElement only, M=16000        CONTROL               8 ms       8 ms
+     appendChild of PREALLOCATED nodes  M=16000           14976 ms      21 ms
+  E. bare `container`                   M=16000           14018 ms      27 ms
+     `var c = container`, SAME LOOP     CONTROL              14 ms      15 ms
+```
+
+⚠⚠⚠ **ROW E IS THE FINDING AND IT REQUIRED NO ENGINE CHANGE TO PRODUCE.** Identical appends,
+identical document, identical everything — the only difference is whether the parent is reached
+through the bare identifier or through a local hoisted out of the loop. **14,018 ms against 14 ms.**
+A 1000× defect, sitting in front of every list, feed, table and virtualised scroller on the web, and
+the experiment that proved it is two words of JavaScript.
+
+⚠⚠ **FOUR WRONG ORGANS WERE ELIMINATED BY ROWS THAT WERE SUPPOSED TO MEAN NOTHING.** A *detached*
+parent stayed flat (a local, no named global). `createElement` alone stayed flat (`document` is a
+real global, not an element). Severing `record_mutation` changed nothing — **a green mutation is a
+reading**. And severing `Dom::append_child` looked like a 500× win until I noticed it also stops the
+tree growing, i.e. **my own bisect was confounded and I nearly banked it as the answer**.
+
+⚠⚠ **AND MY FIRST BALLAST CONTROL WAS CONTAMINATED IN THE OTHER DIRECTION.** It built the ballast
+with connected `appendChild` calls — the very cost it was holding constant — so the setup was inside
+the number. Rebuilt through a `DocumentFragment` (one insertion) with the phases timed separately in
+the page. Both errors were mine, in an instrument I wrote this tick, and both were caught by a row
+disagreeing with another row rather than by inspection.
+
+**THE FIX: `Dom::id_index`, AND IT IS DELIBERATELY ALLOWED TO BE WRONG.** `id → Vec<NodeId>`,
+populated in `set_attr` — every id in the engine arrives there, the HTML parser included. Entries are
+never eagerly removed, so the index may name renamed, detached or foreign-tree nodes.
+`get_element_by_id` therefore **verifies every candidate against the live tree** and **falls back to
+the original scan** whenever it cannot produce a unique verified answer — two verified candidates
+included, because duplicate ids are legal and the spec wants the first in TREE order, which an
+insertion-ordered index cannot answer. **The index can only make the lookup faster, never different;
+its worst case is exactly the behaviour it replaced.**
+
+⚠⚠⚠ **THE FIRST PREDICATE WAS WRONG BY EXACTLY ONE SUBTEST, AND THE RATCHET CAUGHT IT ON A CHANGE
+WHOSE HEADLINE WAS 1000×.** Verification used `is_inclusive_ancestor`, which walks `parent()` — and
+`parent()` **crosses the shadow boundary** while `descendants()`, seeded from `children()`, does not.
+An element moved INTO a shadow root still verified as a descendant of the document, so
+`window.target2` stayed defined where the spec requires `undefined`. The `dom` area read **4003
+against the old binary's 4004**; a per-file diff named
+`dom/nodes/moveBefore/moveBefore-id-map.html`, 4/4 → 3/4 — a test whose title is literally about the
+id map. **A fast path must be predicate-IDENTICAL to the slow path it stands in for, not merely close
+to it** (`Dom::light_tree_contains`). ⚠ A count-level check would have shown "−1, probably noise";
+what caught it was diffing per-FILE against a same-hour old binary.
+
+**MEASURED — same-hour old-binary control, per-file diffed:**
+
+```text
+   WPT dom              4004/7193  ->  4004/7193   (=)    [4003 with the wrong predicate]
+   WPT html/dom        56438/59922 -> 56440/59922  (+2)
+   WPT css/selectors    2905/5215  ->  2912/5222   (+7)   HANG/CRASH 1 -> 0
+   css/selectors/invalidation/has-complexity.html          Bar 0 CLOSED
+   manuk-dom 11/11 · manuk-css 37/37 · manuk-layout 173/173
+```
+
+⚠⚠⚠ **THE BAR 0 THAT HAS BLOCKED THE PRIMARY METRIC SINCE JULY 16 IS CLOSED.** It took three ticks
+and three different mechanisms — t1161's `:has()` quadratic, t1164's unrooted reflector, t1165's
+`getElementById` scan — each of which was only visible once the one in front of it was gone. That is
+the board's own *"the win is ONE LAYER DEEP"* shape, three layers deep, and it is why `WPT-AREAS.tsv`
+could not be refreshed. **It can be now** — `css/selectors` reports HANG/CRASH 0, which was the
+ratchet's sole objection. Refreshing it is the named next tick, and it is a measurement tick: t1163
+showed every row on that board is a stale lower bound, so the refresh will move numbers that no
+engine change this week produced, and it must not be reported as this week's work.
+
+RATCHET: held, and it did real work this tick — the −1 was found, attributed and fixed rather than
+waived. No area lost a subtest; one Bar 0 closed.
+
+PERF: the headline. `getElementById` O(document) → O(1) on the common shape; the same 2,000 appends
+go **14,029 ms → 32 ms** with 16,000 nodes present (438×), and a 16,000-append list build goes
+**4,075 ms → 299 ms** and is now linear rather than quadratic.
+
+WIKI: `docs/wiki/js-engine.md` — "`getElementById` is a document scan, and `window.<id>` calls it on
+every access". PATTERN: "THE SCRIPT-BUILT LIST, FEED, TABLE OR VIRTUALISED SCROLLER" gains its second
+mechanism — `docs/loop/WEB-PATTERNS.md`.
+
 ## Tick 1164 — the crash was never `:has()`, it was `appendChild`, and the negative control proved it (2026-08-12)
 
 TICK SHAPE: capability + Bar 0 (JS↔DOM binding, GC rooting). HYPOTHESIS, written before the work:
