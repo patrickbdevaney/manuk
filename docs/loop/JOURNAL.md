@@ -46371,6 +46371,115 @@ PERF: none — one UA rule and one narrowed branch in a cascade that already ran
 WIKI: `docs/wiki/css-cascade.md` — where Chrome draws the form-control `box-sizing` line, and why a
 layout-crate test cannot see it.
 
+## Tick 1175 — GRID §9 HAS TWO SECTIONS, and t1173's control table varied the wrong thing (2026-08-12)
+
+TICK SHAPE: capability. The rebuild t1174's refusal specified — and the refusal turned out to be
+right about more than it knew.
+
+HYPOTHESIS (written before the sweep): t1173 measured that a grid's abspos static position resolves
+against the **padding** box where block and flex use the content box; t1174 implemented that as a
+post-hoc subtraction and the ratchet refused it, −8 `css-grid` reftests, **every one an
+`-large-border-padding` ALIGNMENT case**. So change *what the tree is given* rather than what its
+answer is multiplied by: hand the real padding back to the grid root so taffy aligns inside the
+padding box, and subtract it out of the slots afterwards.
+
+⚠⚠⚠ **THAT HYPOTHESIS WAS BUILT ON A CONFOUNDED FIXTURE AND THE SAME EIGHT TESTS SAID SO AGAIN.**
+The first cut of this tick did exactly what the hypothesis says. It reproduces t1173's Chrome control
+table **exactly** — and it loses the same eight reftests, plus one:
+
+```text
+                     OLD (HEAD)    "padding box for every grid root"
+   css/css-grid          211                 202     −9
+   css/css-flexbox       314                 314      =
+```
+
+Two independent implementations of one rule, refused for the identical eight files, is not an
+implementation problem. **So I read the eight tests instead of the spec.** Their `meta name=assert`
+says *"aligned within the center of the grid's **content box**"*, and their references are ordinary
+**in-flow** items — which are aligned in the content box by definition. WPT's own oracle contradicted
+t1173's Chrome reading head-on.
+
+⚠⚠⚠ **THE DISCRIMINATOR IS NOT `display`. IT IS WHETHER THE GRID IS ALSO THE CONTAINING BLOCK.**
+Live Chromium, one variable per row, one document, with **flex as the control** (`border:23px;
+padding:13px; padding-top:74px`, so the padding edge is `(23,23)` and the content edge is `(36,97)`):
+
+```text
+   display  position    CHROME     which box
+   grid     static      36,97      CONTENT edge
+   grid     relative    23,23      PADDING edge   ← the only row that moves
+   flex     static      36,97      CONTENT edge
+   flex     relative    36,97      CONTENT edge   ← `position` does not flip flex
+```
+
+That is **Grid §9.1 vs §9.2**, and the spec has a section for each: *"with a grid container as
+**containing block**"* → a grid area coinciding with the **padding** edges; *"with a grid container
+as **parent**"* → the **content** edges. Flexbox §4.1 has no such split, which is what the two flex
+rows prove. **t1173's fixture held `position: relative` fixed across all three of its rows** — every
+container in it was §9.1 — so the one variable it varied, `display`, absorbed the whole effect. *A
+rule with one arm measured is half a rule*, and this is the second time this exclusion has been sized
+by a fixture that could not see its own second variable (t1126 was the first).
+
+⚠⚠⚠ **AND THE OBVIOUS IMPLEMENTATION IS SIZE-UNSAFE, WHICH ONLY THE TESTHARNESS LEG COULD SEE.**
+Restoring the padding before the one and only `compute_root_layout` is wrong in a way no reasoning
+about coordinates predicts: taffy folds a grid root's padding into `min_size` as a **box-sizing
+adjustment** (`compute/grid/mod.rs`), so `min-height:100px` on a padded grid grew the container *and
+its row*. `grid-box-sizing-001`, Chrome-expected 144:
+
+```text
+                          CHROME    HEAD    padding restored in place    two-pass
+   container height        144      144            168                     144
+   the item's height       100      100            124                     100
+   css/css-grid subtests   —        558            556                     558
+```
+
+The reftest leg was **blind to this** (0 files moved) and the testharness leg caught it as −2. So the
+padding box is now asked for in a **second, size-neutral solve**: pass 1 is untouched and stays the
+sole authority for every size and every in-flow position, and pass 2 re-solves with both axes pinned
+to the size pass 1 already resolved, `min`/`max` cleared, and only the slots of `position:absolute`
+children copied out. `restate_grid_abspos_in_the_padding_box`.
+
+**MEASURED, same hour, old binary rebuilt from HEAD and run against the same checkout:**
+
+```text
+                            OLD (HEAD)    THIS TICK    verdict
+   css/css-grid  testharness    558          558       held, per-directory IDENTICAL
+   css/css-flexbox reftests     314          314       =
+   css/css-grid    reftests     211          210       −1  ← named and attributed below
+   manuk-layout                173/173      174/174    +1 (the new gate)
+```
+
+⚠⚠ **THE −1 IS ONE FILE, IT IS `grid-lanes/` (Grid L3 masonry, `display: inline-grid-lanes`, which
+we do not implement — 12 of its siblings in that directory already FAIL), AND THE MECHANISM IT
+EXERCISES MOVED FROM WRONG TO CHROME-EXACT.** `row-line-names-008` nests a `position:relative;
+display:grid; padding:10px 1px 0 4px` container inside an `inline-grid-lanes` parent. Lifting that
+inner container out of the unimplemented parent and measuring it directly:
+
+```text
+                                  CHROME     OLD      THIS TICK
+   the abspos child's offset       1,1       5,1        1,1
+```
+
+Old was the content edge and wrong; new is Chrome's answer. The pass was a coincidental pixel match
+against a reference that itself needs masonry. **Recorded as a loss anyway rather than netted away** —
+the number is 210, not "211 adjusted".
+
+GATE: `a_grid_abspos_static_position_is_the_padding_box_only_when_the_grid_is_its_containing_block` —
+the four Chrome rows above as assertions, **three of them controls**, plus the container's own box on
+all four arms so the size regression above cannot come back silently. RED-proven twice, in the two
+distinct ways it is meant to fail: drop the `is_abs_containing_block` term → rows 1 and 3 read
+`(23,23)`; sever the re-solve → row 2 reads `(36,97)`.
+
+RATCHET: the banked invariant (`WPT:css/css-grid` subtests) is **held exactly, per directory**;
+`css-flexbox` is unmoved; the single reftest delta is attributed above to a feature we do not
+implement, with the old-binary control that names the old number.
+
+PERF: one extra taffy solve, and only for a grid that (a) establishes a containing block, (b) has
+non-zero padding and (c) has at least one `position:absolute` child. Every other container takes an
+early return before the cache is touched.
+
+WIKI: `docs/wiki/box-layout.md` — "Grid §9 has two sections: the static-position area is the PADDING
+box only when the grid is the containing block".
+
 ## Tick 1174 — the RULE was right, the TRANSLATION was not, and eight tests named the difference (2026-08-12)
 
 TICK SHAPE: capability attempt → **REFUSED BY THE RATCHET AND REVERTED**. t1173 measured that grid's

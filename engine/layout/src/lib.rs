@@ -8326,6 +8326,12 @@ impl Ctx<'_> {
             || s.establishes_containing_block
     }
 
+    /// **Is this element the containing block its out-of-flow `absolute` descendants resolve
+    /// against?** — the crate-level rule, forwarded so the ancestor walks below read in one line.
+    fn is_abs_containing_block(s: &ComputedStyle) -> bool {
+        is_abs_containing_block(s)
+    }
+
     /// The containing block for a `position: fixed` box: the **viewport**, unless an ancestor
     /// carries a grouping property — in which case that ancestor's padding box wins, and the box
     /// scrolls with it instead of staying pinned to the screen.
@@ -8395,7 +8401,7 @@ impl Ctx<'_> {
                 // transformed element itself always qualifies (a transform establishes a containing
                 // block for its out-of-flow descendants), which is the common case by far.
                 let s = self.style_of(n);
-                if s.position != Position::Static || Self::establishes_out_of_flow_cb(s) {
+                if Self::is_abs_containing_block(s) {
                     pre.entry(n).or_insert(b.rect);
                 }
             }
@@ -8433,7 +8439,7 @@ impl Ctx<'_> {
                 // A grouping property qualifies an ancestor here **whatever its `position`** — that
                 // is the whole point of the rule, and testing `position != Static` alone walked
                 // straight past a `transform`ed `static` wrapper to whatever lay outside it.
-                if s.position != Position::Static || Self::establishes_out_of_flow_cb(s) {
+                if Self::is_abs_containing_block(s) {
                     if let Some(r) = rects.get(&anc) {
                         return (padding_box_of(*r, s), Some(anc));
                     }
@@ -17296,6 +17302,89 @@ mod tests {
         );
     }
 
+    /// # G_GRID_STATICPOS — Grid §9.1 vs §9.2, and the discriminator is NOT `display`
+    ///
+    /// An out-of-flow child of a grid takes its static position from *"a grid area whose edges
+    /// coincide with"* — the **padding** edges when the grid is also its **containing block**
+    /// (§9.1), the **content** edges when the grid is merely its parent (§9.2). Two sections, two
+    /// answers, and the engine gave the §9.2 answer to both.
+    ///
+    /// **Chrome-measured, one variable per row, flex as the control** (`--headless`, all four in
+    /// one document, `border:23px; padding:13px; padding-top:74px`, so the padding edge is `(23,23)`
+    /// and the content edge is `(36,97)`):
+    ///
+    /// ```text
+    ///     display  position    Chrome      which box
+    ///     grid     static      36,97       CONTENT edge
+    ///     grid     relative    23,23       PADDING edge   ← the only row that moves
+    ///     flex     static      36,97       CONTENT edge
+    ///     flex     relative    36,97       CONTENT edge   ← `position` does not flip flex (§4.1)
+    /// ```
+    ///
+    /// ⚠⚠⚠ **THE THREE CONTROL ROWS ARE THE TEST.** t1173 measured this on a fixture that varied
+    /// `display` while holding `position: relative` fixed, concluded *"grid uses the padding box"*,
+    /// and two implementations of that rule were each refused by the ratchet for the SAME eight
+    /// `-large-border-padding` reftests — whose grids are `position: static`, and whose references
+    /// are ordinary in-flow items. A rule with one arm measured is half a rule.
+    ///
+    /// ⚠⚠ **AND ROW 2's SIZE IS ASSERTED TOO**, because the first spelling of the fix got the
+    /// position right and grew the container: taffy folds a grid root's padding into `min_size` as a
+    /// box-sizing adjustment, so restoring it before the main solve made `min-height:100px` mean
+    /// 124. See [`taffy_tree::restate_grid_abspos_in_the_padding_box`], which is why that is a
+    /// second, size-neutral pass.
+    ///
+    /// To watch it go RED: drop the `is_abs_containing_block` term (rows 1 and 3 move to `23,23`),
+    /// or skip the re-solve entirely (row 2 stays at `36,97`).
+    #[test]
+    fn a_grid_abspos_static_position_is_the_padding_box_only_when_the_grid_is_its_containing_block()
+    {
+        let html = r#"
+            <div class="g"     id="c1"><div class="k" id="k1"></div></div>
+            <div class="g rel" id="c2"><div class="k" id="k2"></div></div>
+            <div class="f"     id="c3"><div class="k" id="k3"></div></div>
+            <div class="f rel" id="c4"><div class="k" id="k4"></div></div>"#;
+        let css = ".g{display:grid} .f{display:flex} \
+                   .g,.f{width:100px;height:200px;border:23px solid black;\
+                         padding:13px;padding-top:74px;margin:0} \
+                   .rel{position:relative} \
+                   .k{position:absolute;width:50px;height:100px}";
+        let (dom, root) = layout_html(html, css, 800.0);
+        let rects = root.node_rects(&dom);
+        let by = |id: &str| {
+            dom.descendants(dom.root())
+                .find(|&n| dom.element(n).and_then(|e| e.attr("id")) == Some(id))
+                .unwrap_or_else(|| panic!("#{id}"))
+        };
+        let offset = |i: usize| {
+            let (c, k) = (rects[&by(&format!("c{i}"))], rects[&by(&format!("k{i}"))]);
+            (k.x - c.x, k.y - c.y)
+        };
+        const PADDING_EDGE: (f32, f32) = (23.0, 23.0);
+        const CONTENT_EDGE: (f32, f32) = (36.0, 97.0);
+        assert_eq!(offset(1), CONTENT_EDGE, "grid, static — Grid §9.2");
+        assert_eq!(offset(2), PADDING_EDGE, "grid, relative — Grid §9.1");
+        assert_eq!(
+            offset(3),
+            CONTENT_EDGE,
+            "CONTROL: flex, static — Flexbox §4.1"
+        );
+        assert_eq!(
+            offset(4),
+            CONTENT_EDGE,
+            "CONTROL: flex, relative — `position` must NOT move a flex static position"
+        );
+        // The §9.1 row must not have paid for its position with its size: the container is its
+        // declared 100x200 content box plus the 23px border and 13/74px padding, on both arms.
+        for i in 1..=4 {
+            let c = rects[&by(&format!("c{i}"))];
+            assert_eq!(
+                (c.width, c.height),
+                (172.0, 333.0),
+                "container c{i} keeps its own box"
+            );
+        }
+    }
+
     /// W4 regression: a **floated** table must still get TABLE layout. `layout_table` was only
     /// reachable from the block path, so a table arriving as a float (or flex/grid item) fell
     /// through to the generic path — where `<tr>`/`<th>` are not block-level, so every cell's text
@@ -23540,6 +23629,29 @@ mod tests {
             c.height
         );
     }
+}
+
+/// **Is this element the containing block its out-of-flow `absolute` descendants resolve against?**
+/// — a non-`static` `position` OR a grouping property (`transform`/`filter`/`will-change`/…), which
+/// together are the whole of the CSS rule and the exact predicate `abs_containing_block` walks the
+/// ancestor chain with.
+///
+/// ⚠⚠⚠ **It lives at crate level because a SECOND consumer now depends on it giving the same
+/// answer, and the two are in different modules.** Grid §9 splits an abspos child's **static
+/// position** on precisely this question — §9.1 *"with a grid container as containing block"* → a
+/// grid area coinciding with the **padding** edges; §9.2 *"with a grid container as parent"* → the
+/// **content** edges — so [`taffy_tree::solve_subtree`] has to ask it of the grid root. Measured in
+/// Chrome, one variable, with flex as the control (t1175):
+///
+/// ```text
+///    display  position    Chrome     which box
+///    grid     static      36,97      CONTENT edge
+///    grid     relative    23,23      PADDING edge   ← the only row that moves
+///    flex     static      36,97      CONTENT edge
+///    flex     relative    36,97      CONTENT edge   ← `position` does not flip flex
+/// ```
+fn is_abs_containing_block(s: &ComputedStyle) -> bool {
+    s.position != Position::Static || Ctx::establishes_out_of_flow_cb(s)
 }
 
 /// A containing block is an element's **padding box** — its border box inset by the border widths.

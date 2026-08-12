@@ -9218,3 +9218,67 @@ container's intrinsic width builds a *second* `TaffyDom` for that node, whose `a
 wrong number**. It needs a root-suppression flag on the nested build. The fifteen cells stay asserted
 as an exact set by `intrinsic_keywords_and_the_font_size_zero_inline_block_grid`, so closing one is
 RED and the next reader arrives at the mechanism rather than at a symptom.
+
+## Grid §9 has TWO sections: the static-position area is the PADDING box only when the grid is the CONTAINING BLOCK
+
+An out-of-flow child of a grid takes its static position from *"a grid area whose edges coincide
+with"* — and CSS Grid §9 names two different boxes in two different sections:
+
+| spec | condition | the area |
+|---|---|---|
+| §9.1 | *"with a grid container as **containing block**"* | the grid's **padding** edges |
+| §9.2 | *"with a grid container as **parent**"* (something else is the CB) | the grid's **content** edges |
+
+Flexbox §4.1 has no such split — a flex container's static-position rectangle is its content box
+whether or not it is also the containing block. Measured against live Chromium, one variable per row,
+all four in one document, `border:23px; padding:13px; padding-top:74px` so the padding edge is
+`(23,23)` and the content edge is `(36,97)`:
+
+```text
+   display  position    CHROME     which box
+   grid     static      36,97      CONTENT edge
+   grid     relative    23,23      PADDING edge   ← the only row that moves
+   flex     static      36,97      CONTENT edge
+   flex     relative    36,97      CONTENT edge   ← the CONTROL: `position` does not flip flex
+```
+
+> **A fixture that holds `position` fixed cannot see this rule, and will read the whole effect onto
+> whatever it happens to be varying.** t1173's control table varied `display` across three
+> `position: relative` containers, concluded *"grid uses the padding box"*, and two separate
+> implementations of that half-rule were each refused by the ratchet for the **same eight**
+> `css/css-grid/abspos/*-large-border-padding` reftests — whose grids are `position: static` (§9.2)
+> and whose references are ordinary in-flow items, i.e. the content box asserted directly. The tests
+> even say so in their own `meta name=assert`.
+
+**Taffy already implements §9.1.** `compute/grid/mod.rs` gives an abspos child whose track indexes
+are unresolvable the rect `border.top … container_border_box.height − border.bottom`, which *is* the
+padding box. It was invisible here because `TaffyDom::build` zeroes the root's frame — Manuk applies
+the container's own margin/padding/border around the subtree — so that rect collapses onto the
+content box, which is §9.2. By that accident every §9.2 page was already right.
+
+### …and restoring the padding in place is SIZE-UNSAFE
+
+Handing the padding back before the single `compute_root_layout` gets the position right and breaks
+the box, because taffy folds a grid root's padding into `min_size` as a **box-sizing adjustment**. On
+`css/css-grid/grid-model/grid-box-sizing-001` (`min-height:100px`, `padding:17px 13px 7px 3px`):
+
+```text
+                          CHROME    before    padding restored in place    two-pass
+   container height        144       144              168                    144
+   the item's height       100       100              124                    100
+   css/css-grid subtests    —        558              556                    558
+```
+
+⚠ **The reftest leg was blind to this** — zero files moved — and the testharness leg caught it. Two
+legs, because each is blind to something the other sees.
+
+So the padding box is asked for in a **second, size-neutral solve**
+(`taffy_tree::restate_grid_abspos_in_the_padding_box`): pass 1 is never re-read and stays the sole
+authority for every size and every in-flow position; pass 2 pins both axes to the size pass 1 already
+resolved, clears `min`/`max` so nothing can size anything, and copies out only the slots of
+`position:absolute` children. It early-returns unless the root is a grid **and** establishes a
+containing block **and** has non-zero padding **and** has an out-of-flow child.
+
+Gated by `a_grid_abspos_static_position_is_the_padding_box_only_when_the_grid_is_its_containing_block`
+(the four rows above, three of them controls, plus the container's own box so the size regression
+cannot come back silently).

@@ -535,6 +535,14 @@ pub struct TaffyDom<'m> {
     /// not this tree's business anyway, because the block path that wraps the subtree already
     /// resolved it (`shrink_to_fit`) and hands it in as `container_width`.
     built_for: DomNodeId,
+    /// **THE ROOT'S OWN PADDING, KEPT BECAUSE ONE CONSUMER STILL NEEDS IT: a GRID's out-of-flow
+    /// static-position AREA.** [`Self::build`] zeroes the root's frame (Manuk applies it around the
+    /// subtree), and for every in-flow answer that is right. But taffy's grid gives an
+    /// auto-placed `position:absolute` child the rect `border.top … border_box.height −
+    /// border.bottom` — **the padding box**, exactly as Grid §9 says — and with the padding zeroed
+    /// that rect collapses onto the CONTENT box. Handing the real padding back on a grid root (see
+    /// [`solve_subtree`]) is what makes taffy's already-correct rule visible.
+    root_padding: Rect<LengthPercentage>,
 }
 
 impl<'m> TaffyDom<'m> {
@@ -551,12 +559,14 @@ impl<'m> TaffyDom<'m> {
             measure,
             calc: Vec::new(),
             built_for: container,
+            root_padding: Rect::zero(),
         };
         let root = tree.add(dom, styles, container);
         // The container's own margin/padding/border/inset are applied by Manuk's block
         // layout around this subtree; the tree just positions children from the content
         // origin, so zero them on the root and pin it in flow.
         let r: usize = root.into();
+        tree.root_padding = tree.nodes[r].style.padding;
         tree.nodes[r].style.margin = Rect::zero();
         tree.nodes[r].style.padding = Rect::zero();
         tree.nodes[r].style.border = Rect::zero();
@@ -1325,14 +1335,138 @@ pub fn solve_subtree<'m>(
         },
     );
     let child_ids: Vec<TId> = tree.nodes[r].children.clone();
-    let placed: Vec<Placed> = child_ids.iter().map(|&c| tree.placed(c)).collect();
-    // `content_box_height`, not `size.height`, and the two are **equal here** — `build` zeroes the
+    let mut placed: Vec<Placed> = child_ids.iter().map(|&c| tree.placed(c)).collect();
+    // `content_box_height`, not `size.height`, and **the two are equal here** — `build` zeroes the
     // root's margin/padding/border because Manuk applies the container's own frame around the
     // content origin it passes in. This is the defensive form rather than a fix for a live bug: the
     // caller's `cy` IS the content origin and it adds the frame back itself, so if that zeroing is
     // ever removed a border-box height would silently double-count the padding. The claim this
     // spelling makes — *"the content box"* — stays true either way.
-    (placed, tree.nodes[r].layout.content_box_height())
+    //
+    // ⚠ It is read HERE, before the §9.1 re-solve below, because that pass deliberately perturbs
+    // the root's box and must not be allowed to answer any question but its own.
+    let content_h = tree.nodes[r].layout.content_box_height();
+    restate_grid_abspos_in_the_padding_box(
+        &mut tree,
+        root,
+        styles,
+        container,
+        container_width,
+        content_h,
+        &child_ids,
+        &mut placed,
+    );
+    (placed, content_h)
+}
+
+/// ⚠⚠⚠ **GRID §9 HAS TWO SECTIONS AND THEY GIVE DIFFERENT ANSWERS — the discriminator is not
+/// `display`, it is whether the grid is ALSO the child's CONTAINING BLOCK.** An abspos child of a
+/// grid with no definite grid position takes its static position from *"a grid area whose edges
+/// coincide with"*: the **padding** edges when the grid is the containing block (§9.1), the
+/// **content** edges when the grid is merely the parent (§9.2). Measured against live Chromium, one
+/// variable per row, with flex as the control (t1175):
+///
+/// ```text
+///     display  position    Chrome     which box
+///     grid     static      36,97      CONTENT edge
+///     grid     relative    23,23      PADDING edge   ← the only row that moves
+///     flex     static      36,97      CONTENT edge
+///     flex     relative    36,97      CONTENT edge   ← `position` does not flip flex (§4.1)
+/// ```
+///
+/// **Taffy already implements §9.1** — `compute/grid/mod.rs` gives an abspos child with
+/// unresolvable track indexes the rect `border.top … container_border_box.height − border.bottom`,
+/// which IS the padding box. It was invisible because [`TaffyDom::build`] zeroes the root's frame,
+/// collapsing that rect onto the content box; by that accident every §9.2 page was already right.
+///
+/// ⚠⚠⚠ **THIS RUNS AS A SECOND SOLVE, AND THE REASON IS A MEASURED REGRESSION.** The obvious
+/// spelling — hand the padding back before the one and only `compute_root_layout` — is wrong in a
+/// way no reasoning about coordinates predicts: taffy adds the padding to `min_size` as a
+/// box-sizing adjustment (`grid/mod.rs`), so `min-height:100px` on a padded grid grew the container
+/// **and its row** by the padding (`grid-box-sizing-001`: 144 → 168, the item 100 → 124, −2
+/// `css/css-grid` subtests). The root's box participates in sizing; it must not be perturbed by a
+/// question about where one out-of-flow child sits.
+///
+/// So pass 1 above stays the sole authority for every size and every in-flow position — it is not
+/// re-read here — and this pass exists only to ask taffy *"align this child in the padding box
+/// instead"*. Both axes are pinned to the size pass 1 already resolved and `min`/`max` are cleared,
+/// so nothing in pass 2 can size anything: the tracks are the same tracks, and only the slots of
+/// `position:absolute` children are copied out, shifted back into content-origin coordinates.
+///
+/// ⚠⚠ **TWO EARLIER SHAPES OF THIS FIX WERE REFUSED BY THE RATCHET, AND BOTH LOST THE SAME EIGHT
+/// `-large-border-padding` REFTESTS** — t1174 as a post-hoc subtraction of the padding, and t1175's
+/// first cut as the padding box for EVERY grid root. Those eight are §9.2 (their grids are
+/// `position: static`) and their references are ordinary in-flow items, so they assert the content
+/// box directly. **t1173's control table varied `display` while holding `position: relative` fixed,
+/// and read the whole effect onto the variable it happened to be varying.**
+///
+/// To watch it go RED: drop the `is_abs_containing_block` term (the §9.2 rows move to the padding
+/// edge and those eight reftests fail), or skip the call entirely (the §9.1 row stays at the
+/// content edge).
+#[allow(clippy::too_many_arguments)]
+fn restate_grid_abspos_in_the_padding_box(
+    tree: &mut TaffyDom<'_>,
+    root: TId,
+    styles: &StyleMap,
+    container: DomNodeId,
+    container_width: f32,
+    content_h: f32,
+    child_ids: &[TId],
+    placed: &mut [Placed],
+) {
+    let r: usize = root.into();
+    let pad = tree.root_padding;
+    if !matches!(tree.nodes[r].style.display, taffy::Display::Grid)
+        || !crate::is_abs_containing_block(&styles[&container])
+        || pad == Rect::zero()
+    {
+        return;
+    }
+    let out_of_flow: Vec<usize> = child_ids
+        .iter()
+        .enumerate()
+        .filter(|(_, &c)| {
+            tree.nodes[usize::from(c)].style.position == taffy::style::Position::Absolute
+        })
+        .map(|(i, _)| i)
+        .collect();
+    if out_of_flow.is_empty() {
+        return;
+    }
+    for n in tree.nodes.iter_mut() {
+        n.cache.clear();
+    }
+    tree.nodes[r].style.padding = pad;
+    tree.nodes[r].style.box_sizing = taffy::BoxSizing::ContentBox;
+    tree.nodes[r].style.min_size = Size {
+        width: auto(),
+        height: auto(),
+    };
+    tree.nodes[r].style.max_size = Size {
+        width: auto(),
+        height: auto(),
+    };
+    tree.nodes[r].style.size = Size {
+        width: length(container_width),
+        height: length(content_h.max(0.0)),
+    };
+    compute_root_layout(
+        tree,
+        root,
+        Size {
+            width: AvailableSpace::Definite(container_width),
+            height: AvailableSpace::Definite(content_h.max(0.0)),
+        },
+    );
+    // Taffy's OWN resolved padding, not the style's, so a percentage cancels exactly against the
+    // shift it produced.
+    let resolved = tree.nodes[r].layout.padding;
+    for i in out_of_flow {
+        let mut p = tree.placed(child_ids[i]);
+        p.slot.x -= resolved.left;
+        p.slot.y -= resolved.top;
+        placed[i] = p;
+    }
 }
 
 /// The **max-content width** of a flex/grid container, asked of taffy directly.

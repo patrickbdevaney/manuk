@@ -457,6 +457,8 @@
   - L9081 · The conflict arms are FLEX-ONLY, and two candidate fix sites are refuted (t1158)
   - L9111 · The conflict arms, LANDED — and the sixth "control" was measured in the wrong context (t1159)
   - L9185 · One control row says the GRID is right and the KEYWORD never arrived (tick 1162)
+  - L9222 · Grid §9 has TWO sections: the static-position area is the PADDING box only when the grid is the CONTAINING BLOCK
+  - L9259 · …and restoring the padding in place is SIZE-UNSAFE
 
 ## browser-capabilities.md
 `docs/wiki/browser-capabilities.md`
@@ -1986,4 +1988,4 @@
   - L124 · Rank mechanisms by FLIP RATE, not failing-subtest count — CSS layout is a multi-assertion slog
 
 ---
-1893 sections across 22 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+1895 sections across 22 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
