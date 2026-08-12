@@ -524,6 +524,17 @@ pub struct TaffyDom<'m> {
     /// Mixed `calc(px + pct%)` terms, indexed by the handle encoded into each calc `Dimension`.
     /// taffy hands the handle back to [`Self::resolve_calc_value`] with the definite basis.
     calc: Vec<(f32, f32)>,
+    /// **THE ROOT-SUPPRESSION FLAG — the one node whose intrinsic keyword must NOT be resolved in
+    /// this tree, and the reason [`Self::resolve_intrinsic_inline`] can run for a CONTAINER at all.**
+    ///
+    /// Measuring a container's intrinsic width answers by building a *second* `TaffyDom` rooted at
+    /// that same node ([`max_content_width`] / [`solve_subtree`], both reached through the measure
+    /// callback). Without this, the nested build's `add` would arrive back at the resolver on the
+    /// node it is already inside and recurse without bound — a Bar 0 crash, not a wrong number.
+    /// Suppressing it at the ROOT is what makes the nested build terminate: the root's own width is
+    /// not this tree's business anyway, because the block path that wraps the subtree already
+    /// resolved it (`shrink_to_fit`) and hands it in as `container_width`.
+    built_for: DomNodeId,
 }
 
 impl<'m> TaffyDom<'m> {
@@ -539,6 +550,7 @@ impl<'m> TaffyDom<'m> {
             nodes: Vec::new(),
             measure,
             calc: Vec::new(),
+            built_for: container,
         };
         let root = tree.add(dom, styles, container);
         // The container's own margin/padding/border/inset are applied by Manuk's block
@@ -595,13 +607,21 @@ impl<'m> TaffyDom<'m> {
     /// under `content-box` AND under `border-box`. Taffy subtracts the frame from `size` under
     /// border-box, so the frame is added back there to land on the same border box either way.
     ///
-    /// ⚠ **NOT DONE, named with its number: a flex/grid item that is ITSELF a flex/grid CONTAINER.**
-    /// `display:flex; width:min-content` nested in a flex row measures **109.30** against Chrome's
-    /// 37.33. Resolving it here would re-enter: the measure callback answers a container's intrinsic
-    /// width by building a *second* `TaffyDom` for that node, whose `add` would reach this function
-    /// again on the same node and recurse without bound — a Bar-0 crash, not a wrong number. It
-    /// needs a root-suppression flag on the nested build, which is a different mechanism; the
-    /// `container` guard at the call site is what keeps the recursion profile unchanged.
+    /// ⚠⚠⚠ **AN ITEM THAT IS ITSELF A FLEX/GRID CONTAINER IS NOW RESOLVED HERE TOO, AND THE THING
+    /// THAT MAKES THAT SAFE IS [`TaffyDom::built_for`].** Until t1163 the call site read
+    /// `if !container`, because the measure callback answers a container's intrinsic width by
+    /// building a *second* `TaffyDom` rooted at that node, whose `add` would reach this function
+    /// again on the same node and recurse without bound. The root-suppression flag breaks exactly
+    /// that cycle — the nested build declines to resolve its OWN root — so the guard here narrows
+    /// from *"never for a container"* to *"never for the node this tree was built for"*.
+    ///
+    /// ⚠⚠ **THE SYMPTOM DID NOT LOOK LIKE A MISSING INPUT, IT LOOKED LIKE A GRID BUG (t1162).** A
+    /// grid item's default `justify-items: stretch` fills the track on the INLINE axis, which is
+    /// *correct* for `width: auto`. With the keyword dropped, `width: min-content` arrived
+    /// indistinguishable from `auto`, and the grid dutifully stretched a box that should never have
+    /// been stretchable — 230 against Chrome's 110. A flex parent stretches only the CROSS axis,
+    /// which is why the same subjects were already exact there and why fifteen cells of one battery
+    /// pointed at a correct implementation.
     fn resolve_intrinsic_inline(&mut self, cs: &ComputedStyle, node: DomNodeId, style: &mut Style) {
         if cs.width_keyword.is_none()
             && cs.min_width_keyword.is_none()
@@ -738,7 +758,10 @@ impl<'m> TaffyDom<'m> {
                 ..Style::DEFAULT
             };
         }
-        if !container && dom.is_element(node) {
+        // A container's intrinsic keyword is resolvable here as of t1163; the ROOT's is not, and
+        // `built_for` says why — the measure that would answer it builds a tree rooted at this very
+        // node, so resolving it at the root is unbounded recursion rather than a number.
+        if dom.is_element(node) && node != self.built_for {
             self.resolve_intrinsic_inline(cs, node, &mut style);
         }
         let children: Vec<TId> = if container {

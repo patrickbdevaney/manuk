@@ -5,6 +5,77 @@ Manuk's flex and grid layout runs on a vendored **taffy 0.12** tree (`engine/lay
 lays out the flex/grid containers and their directly-nested flex/grid descendants. The mapping from
 Manuk's `ComputedStyle` to `taffy::Style` (`to_taffy_style`) is where the realities below live.
 
+## AN INTRINSIC KEYWORD ON A *CONTAINER*, AND THE ROOT-SUPPRESSION FLAG THAT MAKES IT MEASURABLE (t1163)
+
+**Symptom.** `<div style="display:flex; width:min-content">` inside a **grid** parent measured the
+full track — 230 against Chrome's 110 — while the identical subject inside a *flex* parent was already
+exact. Fifteen cells of the 96-cell battery, all sharing a grid parent.
+
+**And the symptom named the wrong organ.** One control row settles it (t1162): put
+`justify-items: start` on the grid parent and every cell becomes Chrome-exact *with no fix at all*.
+
+```text
+                                 width:min-content   width:auto
+   grid parent, default              230.0  ✗          230.0  ✓   ← Chrome ALSO says 230 here
+   grid parent, justify-items:start  110.0  ✓          110.0
+   flex parent, default              110.0  ✓          110.0  ✓
+```
+
+A grid item's default `justify-items: stretch` fills the track on the **inline** axis, and that is
+*correct* for `width:auto` — the `width:auto` column is the control that proves it. A flex row
+stretches only the **cross** axis, which is the entire reason the same subjects were already right
+there. **The grid was never wrong. The input was absent.**
+
+**Cause.** `resolve_intrinsic_inline` — the function that resolves a `min-content`/`max-content`
+sidecar to px before the style crosses into taffy, because taffy's `Dimension` validates as
+`LENGTH | PERCENT | AUTO` only — was guarded `if !container` at its call site in `TaffyDom::add`.
+So a keyword on a flex/grid container never crossed, and `width: min-content` arrived
+**indistinguishable from `width: auto`**. The grid then stretched a box that should never have been
+stretchable, which is the correct handling of the wrong input.
+
+**Why the guard was there, and it was a real hazard, not caution.** The measure callback answers a
+container's intrinsic width by building a *second* `TaffyDom` rooted at that same node
+(`max_content_width` / `solve_subtree`, both reached through `shrink_to_fit`). Resolving at the call
+site unguarded means the nested build's `add` arrives back at the resolver **on the node it is
+already inside** — unbounded recursion, a Bar 0 crash rather than a wrong number.
+
+**Fix — one field, one comparison.** `TaffyDom::built_for` records the DOM node the tree was built
+for, and the guard narrows from *"never for a container"* to *"never for THIS tree's root"*:
+
+```rust
+-        if !container && dom.is_element(node) {
++        if dom.is_element(node) && node != self.built_for {
+             self.resolve_intrinsic_inline(cs, node, &mut style);
+```
+
+The nested build declines to resolve its **own root**, which is exactly the cycle and nothing else.
+It costs no correctness: the root's own width was never this tree's business — the block path that
+wraps the subtree already resolved it (`shrink_to_fit`) and hands it in as `container_width`.
+Recursion is now bounded by DOM nesting of keyword-carrying containers, and a page with no intrinsic
+keyword does strictly the same work as before (the resolver early-returns on the three sidecars).
+
+**Gate.** `intrinsic_keywords_and_the_font_size_zero_inline_block_grid` (manuk-layout) — 96 cells,
+8 constraint shapes × 4 subject displays × 3 parent contexts, Chrome-measured in one page, **now
+96/96 with an EMPTY residue list**. Two RED-proofs, both run rather than reasoned:
+
+```text
+   restore `if !container`                 → the SAME fifteen cells return at 230, no others
+   delete the `node != built_for` clause   → `has overflowed its stack`, SIGABRT
+```
+
+⚠ **The second one matters more than the first.** The recursion hazard had been carried in a doc
+comment as a prediction since t930 and was never executed; running it turns *"this would recurse"*
+into a measurement, and confirms the flag is load-bearing rather than defensive decoration. A guard
+whose necessity has never been demonstrated is indistinguishable from one that is merely inherited.
+
+**Price.** WPT `css-flexbox` / `css-grid` / `css-sizing` are **byte-identical** against a same-hour
+old-binary control (1329/3660 · 558/9281 · 576/2084, 0 crashes each) — layout reftests are byte-exact
+conjunctions and one primitive does not flip them. Corpus usage weight is where this is paid for:
+of 373 cached stylesheets, **54 (14.5%)** carry an intrinsic keyword on a width property and **every
+one of those 54 also uses flex or grid**; 20 (5.4%) declare both in one block. The keyword is a
+flex/grid-era construct, so "an intrinsic keyword on a container" is the ordinary case of the rarer
+one, not an exotic intersection.
+
 ## A GENERATED BOX WHOSE `display` MAKES NO BOX MUST MAKE NO CONTENT — 47% of corpus pages switch a pseudo off at a breakpoint (t1093)
 
 `@media (max-width:600px){ .card::after{ display:none } }` is how every responsive stylesheet

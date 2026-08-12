@@ -46371,6 +46371,154 @@ PERF: none — one UA rule and one narrowed branch in a cascade that already ran
 WIKI: `docs/wiki/css-cascade.md` — where Chrome draws the form-control `box-sizing` line, and why a
 layout-crate test cannot see it.
 
+## Tick 1163 — the named fix is ONE FIELD, and the metric it was priced against was a MONTH STALE (2026-08-12)
+
+TICK SHAPE: capability (layout — intrinsic sizing across the taffy boundary). HYPOTHESIS, written
+before the work and inherited verbatim from t1162, which deliberately named the fix instead of
+taking it: `resolve_intrinsic_inline` declines to run for a node that is itself a flex/grid
+container, so `width: min-content` on such a node arrives in taffy **indistinguishable from
+`width: auto`** — whereupon a grid parent's default `justify-items: stretch` correctly stretches
+something that should never have been stretchable. The named fix is a **root-suppression flag**,
+because the measure that answers a container's intrinsic width builds a *second* `TaffyDom` rooted
+at that same node, and the nested build's `add` would re-enter the resolver on the node it is
+already inside — **a Bar 0 crash, not a wrong number**. Predicted: the flag closes all fifteen
+residue cells. **It did, and it is one struct field and one comparison.**
+
+```rust
+-        if !container && dom.is_element(node) {
++        if dom.is_element(node) && node != self.built_for {
+             self.resolve_intrinsic_inline(cs, node, &mut style);
+```
+
+`built_for` is the DOM node the tree was BUILT FOR. Suppressing the resolver there — and *only*
+there — is what makes the nested build terminate, and it costs nothing correctness-wise because the
+root's own width was never this tree's business: the block path that wraps the subtree already
+resolved it (`shrink_to_fit`) and hands it in as `container_width`. The guard narrows from *"never
+for a container"* to *"never for THIS tree's root"*, which is the actual invariant the old guard was
+approximating with a much bigger hammer.
+
+**THE 96-CELL BATTERY IS NOW 96/96 CHROME-EXACT, AND ITS RESIDUE LIST IS EMPTY.**
+
+```text
+   8 constraint shapes × 4 subject displays × 3 parent contexts
+   t1160  (font-size:0 is a RESET)      30 divergent → 15
+   t1162  (measured, did not fix)       15 → 15, mechanism NAMED
+   t1163  (this tick, the named fix)    15 → 0
+```
+
+The fifteen were exactly `{a,b,c,e,h} × {flex,grid,inline-flex} × parent=grid` and they closed
+**together**, from one input, which is the confirmation that t1162's reading was right: one
+mechanism, not a spread. An empty residue is a stronger assertion than a listed one — the gate now
+goes RED on any single cell that drifts, with nowhere to hide.
+
+⚠⚠⚠ **AND THE HEADLINE FINDING IS NOT THE FIX. IT IS THAT THE PRIMARY METRIC'S OWN FILE IS STILL
+FROZEN AT JULY 16, AND IT ALMOST BOUGHT THIS TICK A SIX-FOLD WIN IT DID NOT EARN.** The first
+post-fix reading looked spectacular:
+
+```text
+                        WPT-AREAS.tsv (banked)   this tick, NEW binary
+   css/css-flexbox            223 / 3594              1329 / 3660
+   css/css-sizing             191 / 1588               576 / 2084
+```
+
+**+1,106 flexbox subtests from a one-line guard change** is not a number any honest reading of that
+diff supports, and the denominator moving (3594 → 3660) is the tell — a corpus that cannot grow, and
+did not (`~/wpt` is clean at a Jul-13 commit). So the **OLD-BINARY CONTROL** was run: the fix backed
+out of the tree, `manuk-wpt` rebuilt from it, both areas re-run **in the same hour, same box**:
+
+```text
+                     OLD binary        NEW binary      Δ
+   css/css-flexbox   1329 / 3660      1329 / 3660      0     0 crashes
+   css/css-grid       558 / 9281       558 / 9281      0     0 crashes
+   css/css-sizing     576 / 2084       576 / 2084      0     0 crashes
+```
+
+**Byte-identical.** Every one of those 1,106 "gained" subtests was banked before Jul 16 by a
+different instrument and has been sitting in the ledger unclaimed ever since. t1161 found this file
+frozen and **held** its refresh (correctly — the ratchet refuses to bank a file reporting a Bar 0,
+and `css/selectors` still crashes); the consequence, which is this tick's contribution, is that
+**every WPT row on the board is a lower bound of unknown depth, and a tick that diffs against one
+will read its own work as enormous.** The rule that caught it is t799-807's, unchanged and now
+4-for-4: *rebuild the old tree and run it in the same hour.* It changed the verdict again.
+
+⚠⚠ **SO THE HONEST PRICE OF THIS TICK ON WPT IS ZERO, AND THAT IS THE EXPECTED SHAPE, NOT A
+DISAPPOINTMENT.** The board says it outright — layout reftests are byte-exact CONJUNCTIONS, so a
+page needs flex AND sizing AND floats AND inline all correct for one test to flip. A primitive that
+is Chrome-exact on 15 of 96 measured cells and moves 0 of 12,000 reftests is the plateau the board
+described, priced. What it is NOT is unmeasured: the battery moved, and the battery is a
+Chrome-measured instrument with a control row in every family.
+
+⚠⚠ **PRICED ON THE CORPUS, NO BUILD (the VI.3 usage-weight term this repo refuses ticks on):**
+
+```text
+   cached corpus stylesheets ....................................... 373
+   with a `display:flex|grid` rule at all .......................... 201  (54%)
+   with an intrinsic keyword on width/min-width/max-width ..........  54  (14.5%)
+   ...and ALL 54 of those also carry a flex/grid rule ..............  54  ← every one
+   ONE declaration block declaring BOTH (the exact subject) ........  20  (5.4%)
+```
+
+The lower bound is the co-declared form (`.thing{display:flex;width:min-content}`, 5.4%); the upper
+is the utility-class form (`.flex{display:flex}` + `.w-min{width:min-content}` on one element,
+14.5%). ⚠ **The row that says the most is the third one: not a single stylesheet in the corpus uses
+an intrinsic width keyword WITHOUT also using flex or grid.** The keyword is a flex/grid-era
+construct, so *"an intrinsic keyword on a container"* is not an exotic intersection of two rare
+things — it is the ordinary case of the rarer one. For comparison, t1145 refused the table-row
+anonymous-cell rule at 1.6%.
+
+⚠⚠⚠ **THE HAZARD THE OLD GUARD EXISTED FOR WAS A PREDICTION IN A DOC COMMENT SINCE t930, AND IT HAD
+NEVER BEEN RUN. IT IS TRUE.** Both mutations were executed, not reasoned about:
+
+```text
+   restore `if !container`                → the SAME fifteen cells return at 230, and no others
+   delete the `node != built_for` clause  → `has overflowed its stack`, SIGABRT (signal 6)
+```
+
+The first is the ordinary RED-proof. **The second is the one worth having**: it converts *"resolving
+here would recurse without bound"* — a sentence three ticks quoted as settled fact — into a
+measurement, and it establishes that `built_for` is load-bearing rather than defensive decoration.
+A guard whose necessity has never been demonstrated is indistinguishable from one that is merely
+inherited, which is this repo's own standing complaint about `partial` map rows with no gate (t1139)
+and about documented mechanisms with no guard (t1160's swash convention, named since tick 15 and
+never enforced). This one is now enforced *and* demonstrated.
+
+RATCHET: held. `manuk-layout` 173/173; `manuk-page`'s `g_intrinsic_flex_grid` green; three WPT areas
+byte-identical against a same-hour old-binary control with 0 HANG/CRASH in each; no mark lowered, no
+file banked.
+
+PERF: bounded by construction — `resolve_intrinsic_inline` returns immediately unless the node
+carries one of the three keyword sidecars, so a page with no intrinsic keyword does strictly the
+same work as before. Recursion depth is now bounded by DOM nesting of *keyword-carrying containers*
+rather than being refused outright.
+
+⚠⚠ **THE WALL WENT RED ON `F2` AND IT WAS THE BOX, PROVEN TWO WAYS RATHER THAN ASSERTED ONCE.** The
+second wall failed `F2 pipeline large/mid 7.68x exceeds 7.5x` — after the FIRST wall, on the same
+engine code forty minutes earlier, had passed it at **6.63x**. Two independent disproofs were run
+before touching anything:
+
+1. ⚠⚠⚠ **THE FIX IS PROVABLY INERT ON THAT BENCH.** `docs/bench/mid.html` and `large.html` contain
+   **zero** occurrences of `min-content`/`max-content`/`fit-content`, and `resolve_intrinsic_inline`
+   early-returns when all three keyword sidecars are `None`. The changed line cannot add a
+   microsecond to a page with no intrinsic keyword — this is an argument from the code's own
+   structure, checked with `grep`, not from a benchmark that could itself be noisy.
+2. **The ratio was re-measured directly, three times, at a fraction of a wall's cost** — 6.02, 6.26,
+   5.90 against the 7.5 bar. One contended sample, not a trend.
+
+The condition is visible and is not the loop's: `swap 7/7 GB full`, `load average 9.10`, and **two
+`chrome` processes pegged at 100% CPU for 22h and 26h**. ⚠ They were NOT killed — t846's rule holds,
+*a count is not an identification*, and those are the box's own sessions. ⚠⚠ `F2` is a RATIO
+specifically so machine speed divides out, and `verify.sh` says so in its own comment; what divides
+out is a **uniform** slowdown, and swap exhaustion is not uniform — it hits the 8,808-node page far
+harder than the 1,208-node one, which is precisely the shape `F2` reads as superlinear scaling. That
+is a real limit of the instrument under memory pressure, recorded here rather than worked around,
+since `scripts/` is observer-owned (PART VII).
+
+WIKI: `docs/wiki/box-layout.md` — "an intrinsic keyword on a CONTAINER, and the root-suppression
+flag that makes it measurable". PATTERN: "THE SHRINK-TO-FIT CARD, PILL, BADGE, DROPDOWN OR TOOLTIP
+THAT IS ITSELF A FLEX/GRID CONTAINER" — `docs/loop/WEB-PATTERNS.md`. ⚠ The `[no-pattern]` exemption
+was claimed first and the pre-commit hook refused it, correctly: 14.5% of corpus stylesheets is a
+class of the web, not a refactor.
+
 ## Tick 1162 — one CONTROL ROW says our grid is right and the KEYWORD never arrived (2026-08-11)
 
 TICK SHAPE: measurement (layout diagnosis) + the due self-audit. HYPOTHESIS, written before the

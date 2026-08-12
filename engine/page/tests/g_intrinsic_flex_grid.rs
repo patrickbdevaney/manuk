@@ -76,13 +76,16 @@
 //!   against Chrome's 18. A block-axis intrinsic size is the content height *at the item's resolved
 //!   width*, and that width does not exist when the style is built — a different mechanism from the
 //!   inline axis, where min-content and max-content are answerable with no context at all.
-//! - **An item that is ITSELF a flex/grid container.** `display:flex; width:min-content` nested in a
-//!   flex row measures **109.30** against Chrome's 37.33. Resolving it would re-enter: the measure
-//!   callback answers a container's intrinsic width by building a *second* `TaffyDom` for that node,
-//!   whose `add` reaches the resolver again on the same node and recurses without bound — **a Bar-0
-//!   crash, not a wrong number.** The `container` guard at the call site is what keeps the recursion
-//!   profile identical to before this tick; lifting it needs a root-suppression flag on the nested
-//!   build.
+//! - ~~**An item that is ITSELF a flex/grid container.**~~ **CLOSED AT t1163**, by the
+//!   root-suppression flag this note asked for: `TaffyDom::built_for` names the one node whose
+//!   keyword the tree must not resolve, so the nested build terminates and the call-site guard
+//!   narrows from `!container` to `node != built_for`. The 96-cell battery
+//!   `intrinsic_keywords_and_the_font_size_zero_inline_block_grid` (manuk-layout) is the gate that
+//!   moved — its fifteen named residue cells all closed and its residue list is now empty.
+//!   ⚠ The mechanism was not what the symptom said: the cells read 230 (the grid track) because a
+//!   grid item's default `justify-items: stretch` fills the track on the inline axis, which is
+//!   *right* for `width:auto` — and a dropped keyword is indistinguishable from `auto`. An absent
+//!   input wearing a grid bug's clothes.
 
 use manuk_text::FontContext;
 

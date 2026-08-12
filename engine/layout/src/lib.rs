@@ -18516,22 +18516,22 @@ mod tests {
     /// its own implicit row, so it is 70 and twice as tall. A one-display fixture would have called
     /// two of those three a bug.
     ///
-    /// **THE FIX MOVED 15 OF THE 30 DIVERGENT CELLS**, and the 15 that remain are exactly ONE
-    /// mechanism rather than a spread: `{a,b,c,e,h} × {flex,grid,inline-flex} × parent=grid` — an
-    /// intrinsic keyword on a subject that is **itself a flex/grid container**, inside a **grid**
-    /// parent, where we hand back the track width (230) instead of the keyword's answer. Under a
-    /// *flex* parent the same subjects are already exact (t1149's `fit_content_inline`), which is
-    /// what localises the residue to the grid item path. `resolve_intrinsic_inline` declines to run
-    /// for a container at all (`if !container` at its call site) because resolving it there would
-    /// re-enter the measure it is inside — named with its number in `taffy_tree.rs` and left for
-    /// the tick that builds the root-suppression flag it needs.
+    /// **THE BATTERY IS 96/96 AS OF t1163, AND IT GOT THERE IN THREE TICKS OF THREE DIFFERENT
+    /// SHAPES.** t1160's `font-size:0` fix moved 15 of the 30 divergent cells; t1162 *measured* the
+    /// remaining 15 instead of fixing them and found they were one mechanism; t1163 closed all
+    /// fifteen with a one-line change to a GUARD. The 15 were exactly
+    /// `{a,b,c,e,h} × {flex,grid,inline-flex} × parent=grid` — an intrinsic keyword on a subject
+    /// that is **itself a flex/grid container**, inside a **grid** parent, where we handed back the
+    /// track width (230) instead of the keyword's answer. Under a *flex* parent the same subjects
+    /// were already exact (t1149's `fit_content_inline`), which is what localised them to the grid
+    /// item path — and, as it turned out, to the wrong subsystem entirely.
     ///
-    /// Rows `d`, `f` and `g` are exact in all twelve contexts, which is what says the residue is
-    /// about the *container* subject and not about the keywords.
+    /// Rows `d`, `f` and `g` were exact in all twelve contexts throughout, which is what said the
+    /// residue was about the *container* subject and not about the keywords.
     ///
-    /// ⚠⚠⚠ **THE RESIDUE'S MECHANISM IS NOW MEASURED, NOT SUSPECTED (tick 1162), AND OUR GRID IS NOT
-    /// THE THING THAT IS WRONG.** One control row decides it — put `justify-items: start` on the grid
-    /// parent and every residue cell becomes Chrome-exact:
+    /// ⚠⚠⚠ **OUR GRID WAS NEVER THE THING THAT WAS WRONG (tick 1162), AND ONE CONTROL ROW SAID SO.**
+    /// Put `justify-items: start` on the grid parent and every residue cell became Chrome-exact
+    /// *without any fix at all*:
     ///
     /// ```text
     ///                                 width:min-content   width:auto
@@ -18545,18 +18545,24 @@ mod tests {
     /// there. A flex row stretches only the **CROSS** axis, which is the whole reason the same
     /// subjects are already exact under a flex parent and why this looked like a grid defect.
     ///
-    /// **So the item only LOOKS `auto`.** `resolve_intrinsic_inline` declines to run for a node that
-    /// is itself a container (`if !container` at its call site), so the keyword sidecar never crosses
-    /// into taffy and `width: min-content` arrives indistinguishable from `width: auto` — whereupon
-    /// the grid correctly stretches something that should never have been stretchable. The fix is
-    /// therefore NOT in the grid: it is the root-suppression flag named in `taffy_tree.rs`, which
-    /// lets a container's own intrinsic width be measured without the nested build re-entering this
-    /// function on the same node. Recorded here so the next tick starts from a mechanism instead of
-    /// re-deriving one from fifteen cells.
+    /// **So the item only LOOKED `auto`.** `resolve_intrinsic_inline` declined to run for a node
+    /// that is itself a container (`if !container` at its call site), so the keyword sidecar never
+    /// crossed into taffy and `width: min-content` arrived indistinguishable from `width: auto` —
+    /// whereupon the grid correctly stretched something that should never have been stretchable.
+    /// **The defect was an absent INPUT, not a wrong algorithm**, and no amount of work inside the
+    /// grid path would have found it: every fixture aimed there would have been measuring a correct
+    /// implementation.
     ///
-    /// The residue is asserted as an EXACT SET, so a new divergence is RED **and closing one is
-    /// also RED** (edit the list, never widen it). To watch the whole table go RED: delete the
-    /// `size > 0.0` early return in `manuk_text::FontContext::shape_run`.
+    /// t1163's fix is therefore in neither the grid nor the resolver but in the guard between them —
+    /// [`taffy_tree::TaffyDom::built_for`], the root-suppression flag that lets a container's own
+    /// intrinsic width be measured without the nested build re-entering the resolver on the same
+    /// node. One field, one comparison.
+    ///
+    /// The residue is asserted as an EXACT SET (now empty), so a new divergence is RED **and
+    /// closing one is also RED** (edit the list, never widen it). Two ways to watch this table go
+    /// RED, both verified: restore `if !container` at the `resolve_intrinsic_inline` call site →
+    /// the same fifteen cells return at 230; delete the `size > 0.0` early return in
+    /// `manuk_text::FontContext::shape_run` → the whole table goes.
     ///
     /// Chrome-measured 2026-08-11, `google-chrome --headless=new`, all 96 cells in one page.
     #[test]
@@ -18710,24 +18716,12 @@ mod tests {
                 ],
             ),
         ];
-        // The cells where we still disagree with Chrome — ONE mechanism, named above.
-        let residue: &[(&str, &str, &str, &str)] = &[
-            ("a", "flex", "grid", "230.00x10.00"),
-            ("a", "grid", "grid", "230.00x20.00"),
-            ("a", "iflex", "grid", "230.00x10.00"),
-            ("b", "flex", "grid", "230.00x10.00"),
-            ("b", "grid", "grid", "230.00x20.00"),
-            ("b", "iflex", "grid", "230.00x10.00"),
-            ("c", "flex", "grid", "230.00x10.00"),
-            ("c", "grid", "grid", "230.00x20.00"),
-            ("c", "iflex", "grid", "230.00x10.00"),
-            ("e", "flex", "grid", "230.00x10.00"),
-            ("e", "grid", "grid", "230.00x20.00"),
-            ("e", "iflex", "grid", "230.00x10.00"),
-            ("h", "flex", "grid", "230.00x10.00"),
-            ("h", "grid", "grid", "230.00x20.00"),
-            ("h", "iflex", "grid", "230.00x10.00"),
-        ];
+        // ⚠⚠⚠ **EMPTY SINCE t1163 — ALL 96 CELLS ARE CHROME-EXACT.** The fifteen cells that used to
+        // live here were one mechanism (an intrinsic keyword on a subject that is itself a
+        // flex/grid container, inside a grid parent) and they closed together, from the ONE input
+        // fix `taffy_tree.rs` named: the root-suppression flag. An empty residue is a stronger
+        // assertion than a listed one — any single cell that drifts is now RED with nowhere to hide.
+        let residue: &[(&str, &str, &str, &str)] = &[];
         let subj: &[(&str, &str)] = &[
             ("block", "display:block"),
             ("flex", "display:flex"),
