@@ -8649,6 +8649,131 @@ VI.2's method list rather than leaving it as two anecdotes.
    repeat and did not prevent it. A prediction in a comment is not a gate. `scripts/` is
    observer-owned, so this is a request, filed here and in the journal.
 
+## Check #113 — tick 1185 (2026-08-12)
+
+**HORIZON: H0 — Pareto Web Parity.** **EXIT GATE (re-read from PART II, not recalled), all binary:**
+~83% WPT subtest pass **across categories** · differential-oracle-verified viability across all four
+usage-weighted corpora · the headful shell daily-drivable by its own developer · **every rendered
+construct queryable through the in-process semantic API.** PART VII re-scopes the near term: the bar
+is *"reliably renders and runs the representative real internet,"* and **83%+ WPT is explicitly OUT
+of v1 scope**; WPT is the climb, CrUX M1/M2 is the certification.
+
+### → Did the last 8 ticks (1177–1184) move an EXIT-GATE condition, or only the scoreboard?
+
+**Gate — and by a route the loop was not steering toward.** The window banked **+11,825 WPT
+subtests** (433,162 → 445,323, 35.25% → 35.64%), zero areas down, zero crashes in every area. But
+the constitutionally interesting fact is *what kind of work produced it*:
+
+```text
+   t1179  the dashed IDL attribute on computed style      one CSSOM mechanism
+   t1180  CSS.supports told the truth about 5 properties  one CSSOM mechanism
+   t1181  el.style validates its setter                   +2,714 across THIRTEEN areas
+   t1182  the board was ranking off stale numbers         measurement
+   t1183  the testharness leg had no Ahem                 +439, INSTRUMENT
+   t1184  the `load` round had no reflow hook             +336, ONE missing call
+```
+
+**Not one of those is CSS layout math**, which is what VI.4 step 2 and every steer on the board have
+named as the H0.1 lever for a hundred ticks. `css/css-grid` — the board's #1 row throughout — went
+**1,457 → 2,059 (+602) without a single line of grid code being written.** It moved because a JS
+Proxy started validating, because a font got installed, and because a script round got a hook.
+
+> **t1179's rule generalises and is now four ticks old with four subjects: AN AREA IS A DIRECTORY,
+> NOT A CAUSE.** Ranking by area and then working *inside* the area is what kept the loop
+> reverse-engineering grid geometry per-assertion. The mechanisms that actually moved grid were all
+> outside it.
+
+### → Is `orient`'s ranking (usage-weight × failing-breadth, tail excluded — §VI.3) still the north star?
+
+**Yes on the rule, and the window exposed a SEVENTH inflation mode — the first one that inflates the
+DENOMINATOR of a real area rather than the usage-weight of a construct.** VI.3 already carries six
+(unanchored grep · co-occurrence · legacy no-op value · the organ-the-metric-cannot-see · the
+missing support directory · the frozen file). t1183 adds:
+
+> **A SUITE HAS A RULER, AND INSTALLING IT ON ONE LEG OF TWO IS A DIVERGENCE, NOT A PARTIAL FIX.**
+> WPT lays text out in **Ahem** (every glyph exactly 1em × 1em) so an expectation can be an integer.
+> `reftest::install_ahem` has registered the face since t1088; `harness::run_one` — **the leg the
+> primary metric is read through** — never did, for 95 further ticks. **3,804 files under `css/`**
+> link `/fonts/ahem.css` (1,637 CSS2 · 844 css-text · **835 css-grid**), and this checkout has no
+> `wpt/fonts/` to serve, so the dependency is invisible to the report. The failure it produces
+> (`width expected 50 but got 0`) is shaped exactly like a layout defect.
+
+Same family as check #112's missing `css/support/`, and the same tell: **the percentage barely moves
+while a specific area jumps**, because the ruler is wrong rather than the denominator missing. The
+reconciliation that catches it is the one nothing runs — *"does every `src`/`href` a test names
+actually resolve?"* — now with a second clause: **"and does the runner provide what the suite
+requires of its HOST?"** Ahem is a host requirement, not a fetch, which is why the resolve-check
+alone would still have missed it.
+
+⚠ **A big-but-tail number has NOT crept back.** `encoding` contributed **0** of the +11,825 across
+this whole window. The tick-84 failure mode is not recurring.
+
+### → Is any invariant being bent?
+
+- **I5 (never trade a regression) — EXERCISED TWICE, and both times the loss was the finding.**
+  t1183's ruler cost `css/css-fonts` **−3**, all in `font-unicode-PUA.html`: with no Ahem, *both*
+  arms of its comparison fell back to serif and **agreed**, so it passed by cancellation over a real
+  defect (css-fonts-4 forbids a generic family from matching a Private-Use-Area codepoint — the
+  block every icon font lives in). t1184's hook cost `css/css-grid` **−6**, all in
+  `empty-grid-001.html`, because `forced_reflow` rebuilt the cascade from inline `<style>` only.
+  Neither was waived, neither was netted away, and both were fixed in the tick that exposed them.
+  **A dormant code path is not a correct one: arming a hook is also a decision to run everything
+  behind it.**
+- **I4 (Pareto discipline)** — held. Every capability this window is a top-of-the-web construct:
+  feature-detecting a CSS property, icon fonts, and *building your DOM in a `load` handler*.
+- **I3 (semantic model in lockstep)** — held, and t1184 strengthens it materially rather than
+  incidentally. `manuk-a11y` reads geometry from `node_rects`; a subtree built by a `load` handler
+  had **no boxes at all**, so the agent's own view of any such page was as empty as the layout's.
+  Fixing the reflow hook fixed the agent surface on the same page in the same commit.
+- **I2 (never patch deps)** — held; nothing vendored was touched. t1183 *considered* vendoring
+  upstream's full `Ahem.ttf`, measured it across fourteen areas, found **every number identical**,
+  and reverted it rather than carry an unmeasured binary.
+
+### PART VI correction
+
+**What is now DONE that VI did not record:** VI.2's *"H0.1 layout beyond Taffy"* row is the most
+over-subscribed paragraph in this document, and this window says something the row does not: **two
+of the three largest single-tick gains to CSS-layout areas in the project's history came from
+OUTSIDE layout** — `el.style` validation (t1181, +2,714 across thirteen areas) and a missing script
+round hook (t1184, +336 including `css/selectors` +207). The row's own hard-won list of layout
+sub-categories (tables, inline composition, floats, transformed containing blocks, the intrinsic
+measurement pass) remains correct and is not what has been paying.
+
+**What is now the real blocker, named with its measurement rather than inferred:**
+
+```text
+   css/css-grid/abspos/positioned-grid-descendants-*   32 files, 3,200 subtests, a flat ZERO
+```
+
+Three consecutive ticks have opened a defect behind it and **none of them was the one it fails on**:
+t1183 (no ruler), t1184 (no reflow hook in the `load` round), and — measured this tick, correcting
+t1184's own guess — it is **not** the promise/microtask round either. A five-arm probe with the
+current binary reads `parse 550 · queueMicrotask 550 · microtask 550 · fonts.ready 550 · load 550 ·
+microtask-in-load 550 · timer 550`, all correct, while a node appended **by a `<script type=module>`
+and measured later still reads 0** — with an inline `<style>` as well as an external one, at n=1 as
+well as n=100. **The module round is the remaining unscoped re-entry.** ⚠ The same probe shows
+`requestAnimationFrame`'s callback **never firing at all**, which is a separate and larger finding
+and is recorded here rather than acted on.
+
+⚠ **And a governance defect in this file's own siblings, found by tick.sh refusing to run.**
+`status-update.sh` derives `LAST_SURFACE_AUDIT` from `^## Audit #[0-9]+ — tick \K[0-9]+`, which is
+case-sensitive; t1182 wrote `## AUDIT #45 — tick 1182` and reused a number from t1050, so a
+performed audit read as **overdue at the very next tick**. Corrected to `#58` in place at t1183 with
+the reason attached. *An audit the instrument cannot parse is an audit that did not happen* — the
+same shape as `LAST_WALL_AUDIT` being DERIVED, which this loop has already paid for once.
+
+### STEER
+
+1. **Next tick: the MODULE round's `ReflowScope`.** It is measured, it is one call site of the same
+   eighteen, and it is the last named thing standing between the loop and a 3,200-subtest zero.
+2. **Then `requestAnimationFrame`, which appears not to run at all** — verify before believing it
+   (this file's standing rule), but if it holds it outranks grid: every animation, every scroll-
+   linked effect, and every layout-thrash-avoidance idiom on the web is built on it.
+3. **Stop opening `css/css-grid` by reading grid tests.** Four ticks of evidence say the productive
+   move is to ask *what is different about the files that score zero* — script type, helper library,
+   host requirement — before reading a single line of layout math. **An area is a directory, not a
+   cause**, and the grid rows have now paid out three times for mechanisms that were not grid.
+
 ## Check #112 — tick 1177 (2026-08-12)
 
 **HORIZON: H0 — Pareto Web Parity.** **EXIT GATE (re-read from PART II, not recalled), all binary:**

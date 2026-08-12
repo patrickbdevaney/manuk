@@ -46371,6 +46371,61 @@ PERF: none — one UA rule and one narrowed branch in a cascade that already ran
 WIKI: `docs/wiki/css-cascade.md` — where Chrome draws the form-control `box-sizing` line, and why a
 layout-crate test cannot see it.
 
+## Tick 1185 — an AREA is a directory, and grid gained 602 without a line of grid code (2026-08-12)
+
+TICK SHAPE: measurement — the cadence re-read of `CONSTITUTION.MD` (due every 8 ticks; last at
+1177), banked as check #113 in `docs/loop/CONSTITUTION-CHECK.md`.
+
+⚠⚠⚠ **FINDING 1 — THE WINDOW MOVED THE GATE, AND NOT ONE TICK IN IT WAS CSS LAYOUT MATH.** Ticks
+1177–1184 banked **+11,825 WPT subtests** (433,162 → 445,323), zero areas down, zero crashes. The
+board's #1 row throughout was `css/css-grid`, and it went **1,457 → 2,059 (+602) without a single
+line of grid code being written** — it moved because a JS Proxy started validating its setter
+(t1181), because a font got installed on the testharness leg (t1183), and because a script round got
+its reflow hook (t1184). VI.4 step 2 and every steer on record name CSS layout math as the H0.1
+lever. Four ticks of evidence now say the productive question is *what is different about the files
+that score zero* — script type, helper library, host requirement — asked **before** reading a line of
+layout math. **An area is a directory, not a cause**, and grid has now paid out three times for
+mechanisms that were not grid.
+
+⚠⚠⚠ **FINDING 2 — A SEVENTH INFLATION MODE, and it is the first that corrupts a real area's RULER
+rather than its denominator.** VI.3 carries six. t1183 adds: *a suite has a ruler, and installing it
+on one leg of two is a DIVERGENCE, not a partial fix.* `reftest::install_ahem` has registered Ahem
+since t1088; `harness::run_one` — **the leg the primary metric is read through** — never did, for 95
+further ticks, across the **3,804 files under `css/`** that link `/fonts/ahem.css`. Same family as
+check #112's missing `css/support/`, and the reconciliation that would catch it needs a second
+clause: not only *"does every `src`/`href` a test names resolve"* but **"does the runner provide what
+the suite requires of its HOST?"** — Ahem is a host requirement, not a fetch.
+
+⚠⚠ **FINDING 3 — I5 WAS EXERCISED TWICE THIS WINDOW AND BOTH TIMES THE LOSS WAS THE FINDING.**
+t1183's ruler cost `css-fonts` −3 (two errors cancelling and reading as agreement over a real
+PUA font-matching defect); t1184's hook cost `css-grid` −6 (`forced_reflow` rebuilding the cascade
+from inline `<style>` only). Neither waived, neither netted away, both fixed in the tick that
+exposed them. **A dormant code path is not a correct one — arming a hook is also a decision to run
+everything behind it.**
+
+**THE BLOCKER, MEASURED THIS TICK RATHER THAN INFERRED — and it corrects t1184's own guess.**
+`positioned-grid-descendants-*` (32 files, 3,200 subtests) is still a flat zero. t1184's journal
+predicted the promise/microtask round as the next unscoped re-entry. **It is not.** A seven-arm probe
+on the current binary reads `parse 550 · queueMicrotask 550 · microtask 550 · fonts.ready 550 ·
+load 550 · microtask-in-load 550 · timer 550` — all correct — while a node appended by a
+`<script type="module">` and measured later still reads **0**, with an inline `<style>` as well as an
+external one, at n=1 as well as n=100. **The module round is the remaining unscoped re-entry**, and
+that is the next tick. ⚠ The same probe shows `requestAnimationFrame`'s callback **never firing at
+all** — recorded, not acted on, and to be verified before it is believed.
+
+⚠ **A GOVERNANCE DEFECT IN THIS FILE'S SIBLINGS, found by tick.sh refusing to run** (fixed at t1183,
+recorded here because the class recurs): `status-update.sh` derives `LAST_SURFACE_AUDIT` from
+`^## Audit #[0-9]+ — tick \K[0-9]+`, which is case-sensitive. t1182 wrote `## AUDIT #45 — tick 1182`
+and reused a number from t1050, so a performed audit read as overdue at the very next tick. *An audit
+the instrument cannot parse is an audit that did not happen.*
+
+RATCHET: held — no engine code changed this tick. WPT TOTAL unchanged at 445,323.
+
+PERF: none — measurement only.
+
+WIKI: none — this tick's artefact is `docs/loop/CONSTITUTION-CHECK.md` check #113, which is the wiki
+for the loop's own governance. [no-pattern]
+
 ## Tick 1184 — a node appended in the `load` handler has NO GEOMETRY, forever (2026-08-12)
 
 TICK SHAPE: capability.
