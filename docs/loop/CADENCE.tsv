@@ -878,3 +878,4 @@ tick	sha	epoch	iso	delta_s	shape	wall_s	files	added	deleted	gates	claims	wpt_pas
 1173	ff536961	1786536786	2026-08-12T08:13:06-04:00	450	measurement	808	4	100	32	442	81	3896	6960	0	577	0	GRID's abspos static position is the PADDING box, and block and flex are the controls that prove it (2026-08-12)
 1174	2a8c8452	1786539221	2026-08-12T08:53:41-04:00	2435	capability	808	4	113	32	442	81	3896	6960	0	577	0	the RULE was right, the TRANSLATION was not, and eight tests named the difference (2026-08-12)
 1175	41aa716f	1786544348	2026-08-12T10:19:08-04:00	5127	capability	808	9	461	38	442	81	3896	6960	0	578	0	GRID §9 HAS TWO SECTIONS, and t1173's control table varied the wrong thing (2026-08-12)
+1176	4dae1edf	1786546485	2026-08-12T10:54:45-04:00	2137	measurement	808	7	214	48	442	81	3896	6960	0	578	0	the #1 lever's corpus was missing the stylesheet that makes `.grid` a grid (2026-08-12)

@@ -46371,6 +46371,115 @@ PERF: none — one UA rule and one narrowed branch in a cascade that already ran
 WIKI: `docs/wiki/css-cascade.md` — where Chrome draws the form-control `box-sizing` line, and why a
 layout-crate test cannot see it.
 
+## Tick 1176 — the #1 lever's corpus was missing the stylesheet that makes `.grid` a grid (2026-08-12)
+
+TICK SHAPE: measurement — instrument fidelity on the board's top-ranked area.
+
+⚠⚠⚠ **`~/wpt/css/support/` DOES NOT EXIST IN THE CHECKOUT, AND 298 `css/css-grid` TEST FILES
+`<link>` IT.** Decomposing `css/css-grid`'s 8,723 failing subtests for the next target: `abspos` is
+the largest single directory (31/3510 = **0.9%**), and **3,128 of its 3,479 failures are `width`,
+of which ~2,974 are the same shape — `expected N but got 0`.** The tests name their own subject:
+
+```text
+   <div class="sizedToGridArea absolute onlyFirstRowOnlyFirstColumn" data-expected-width="50">
+```
+
+`.sizedToGridArea`, `.absolute`, `.onlyFirstRowOnlyFirstColumn` — **and `.grid` itself** — are
+defined in `/css/support/grid.css`, whose first rule is `.grid { display: grid }`. The checkout is a
+**cone-mode sparse checkout** whose pattern list never included `/css/support/`, so that file 404s
+and every one of those 298 files is being scored as an **unstyled page that is not a grid at all**.
+
+```text
+   href="/css/support/grid.css"                   295 files
+   href="/css/support/alignment.css"              107
+   href="/css/support/width-keyword-classes.css"   39
+   href="/css/support/height-keyword-classes.css"   5
+   ── all four MISSING · all 298 in css/css-grid, no other area links them
+```
+
+The blobs were already in the local object store at the pinned SHA — `git sparse-checkout add
+css/support` materialised 61 files, added exactly one line to the pattern file, and left every test
+file count unchanged (`css-grid` 3204, `css-flexbox` 1763, `css-sizing` 855). **The denominator does
+not move**: `support/` holds no tests, and `checkLayout('.grid')` counts DOM elements, not rules.
+
+PREDICTION, written before the re-run: `css/css-grid` rises substantially, most of it in `abspos`,
+**and there will be real losses** — a subtest that "passed" by asserting something an unstyled div
+happened to satisfy now gets measured properly. If the net is negative the ratchet refuses and the
+numbers get recorded here instead of banked.
+
+⚠⚠⚠ **THE PREDICTION WAS RIGHT ABOUT THE DIRECTION, WRONG ABOUT THE SCOPE, AND WRONG ABOUT THE
+LOSSES — AND THE SCOPE IS THE FINDING.** `css/support/` is not a css-grid stylesheet directory. It
+holds **nine testharness HELPER LIBRARIES**, `<script src>`'d by ~700 files across *every* CSS area:
+
+```text
+   parsing-testcommon.js · computed-testcommon.js · interpolation-testcommon.js
+   shorthand-testcommon.js · color-testcommon.js · inheritance-testcommon.js
+   numeric-testcommon.js · query-testcommon.js · serialize-testcommon.js
+
+   css-backgrounds 104 files · css-text 97 · css-fonts 94 · css-grid 84 · css-transforms 61
+   css-ui 57 · selectors 54 · css-color 52 · css-sizing 48 · css-overflow 46 · …
+```
+
+Absent, `test_valid_value` / `test_computed_value` are `undefined`, the file **throws at its first
+call**, and reports one harness error where it should report hundreds of subtests. The board's whole
+CSS ranking was computed on a corpus in which most CSS parsing and computed-value tests never ran.
+
+**FULL SWEEP, every area, before and after the one-line sparse-checkout change:**
+
+```text
+   css/css-color            32/108      ->    5625/11005    +5593   ← the colour corpus was 108 subtests
+   css/css-grid            558/9281     ->    1457/10911     +899
+   css/css-values          471/1881     ->     877/4193      +406
+   css/css-fonts          1975/3425     ->    2241/4872      +266
+   css/css-text           1230/2212     ->    1449/3000      +219
+   css/css-backgrounds      27/86       ->     235/1055      +208
+   css/css-ui               38/488      ->     183/866       +145
+   css/css-sizing          576/2084     ->     685/2409      +109
+   css/css-position         96/311      ->     200/511       +104
+   css/css-transforms       72/288      ->     168/700        +96
+   css/css-overflow        157/474      ->     250/831        +93
+   css/css-display         125/151      ->     215/482        +90
+   css/css-flexbox        1329/3660     ->    1366/3907       +37
+   css/selectors          2912/5222     ->    2912/5560        +0   (denominator only)
+   dom · html/dom · domparsing · url · encoding · cssom  BYTE-IDENTICAL   ← the controls
+   ─────────────────────────────────────────────────────────────────────
+   TOTAL               433162/1228830   ->  441427/1249461  +8265 pass, +20631 counted, 35.25% -> 35.33%
+```
+
+⚠⚠ **NOT ONE AREA FELL, AND THE FIVE NON-CSS AREAS ARE BYTE-IDENTICAL** — which is the control that
+says this is the stylesheet-and-helper directory doing exactly what its absence predicted, and not
+some other thing that moved in the same hour. `css/css-grid`'s **reftest** leg is byte-identical too
+(210, same file set): the reftests do not load these helpers, so the two legs disagree in exactly the
+way the corpus says they should.
+
+⚠⚠⚠ **THIS IS A CORRECTION, NOT PROGRESS. NO ENGINE CODE CHANGED IN THIS TICK.** The engine did not
+get better by 8,265 subtests; it was always passing them and the instrument was scoring a page whose
+helper library had 404'd. The honest statement of the delta is *"the board overstated CSS failure by
+8,265 subtests and understated the corpus by 20,631"* — and the percentage barely moves (35.25 →
+35.33) precisely because both halves grew, which is the tell that the denominator was the thing that
+was wrong. **A moving denominator is the tell**, and this is the second time in nine ticks that the
+primary metric's source turned out to be measuring something other than the engine (t1168 found it
+frozen; this finds it partial).
+
+⚠ **AND THE RANKING IT FEEDS HAS CHANGED.** On the repaired corpus `css/css-color` carries **5,380**
+failing subtests where the board listed **76** — it was ranked last of seventeen and belongs near the
+top. The board's own #1, `css/css-grid`, is now 9,454 failing rather than 8,723.
+
+⚠ **HARNESS NOTE (observer-owned, not touched here):** the repair is a one-line
+`git sparse-checkout add css/support` in `~/wpt`, which lives **outside this repo** and will be lost
+the next time `scripts/wpt-setup.sh` runs — its `SUBSETS` list has no `css/support` entry, and
+`sparse-checkout set` is authoritative. Adding `css/support` to that list is the durable fix; it is
+in `scripts/` and is therefore the observer's, so it is named here rather than edited (PART VII).
+
+RATCHET: **held, and it rose on fifteen areas at once with none falling** — the five non-CSS areas
+are byte-identical controls. `WPT-AREAS.tsv` regenerated by a full `scripts/wpt-sweep.sh`, 0 crashes,
+0 duplicate wire requests.
+
+PERF: none — no engine code changed.
+
+WIKI: `docs/wiki/conformance-and-oracles.md` — "the WPT checkout is SPARSE, and `css/support/` holds
+the testharness helper libraries the whole CSS corpus is written against". [no-pattern]
+
 ## Tick 1175 — GRID §9 HAS TWO SECTIONS, and t1173's control table varied the wrong thing (2026-08-12)
 
 TICK SHAPE: capability. The rebuild t1174's refusal specified — and the refusal turned out to be

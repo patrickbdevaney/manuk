@@ -3758,3 +3758,58 @@ antialiasing"* is not what is happening: **the plateau is the layout, not the sc
 The general lesson is the one t1112 and t1150 already paid for: the premise was answerable from
 failures the runner was already producing and throwing away. **The instrument had the datum and
 printed the verdict.**
+
+## The WPT checkout is SPARSE, and `css/support/` holds the library the whole CSS corpus is written against
+
+`~/wpt` is a **cone-mode sparse checkout** (`scripts/wpt-setup.sh` → `git sparse-checkout set
+$SUBSETS`). Its pattern list names test directories — `css/css-grid`, `css/css-color`, … — and until
+t1176 it did **not** name `css/support/`, which is not a test directory and so was never noticed.
+
+`css/support/` contains nine **testharness helper libraries**:
+
+```text
+   parsing-testcommon.js · computed-testcommon.js · interpolation-testcommon.js
+   shorthand-testcommon.js · color-testcommon.js · inheritance-testcommon.js
+   numeric-testcommon.js · query-testcommon.js · serialize-testcommon.js
+```
+
+…plus `grid.css` and `alignment.css`, whose first rule is literally `.grid { display: grid }`.
+Roughly 700 CSS test files `<script src>` or `<link>` one of them.
+
+**What their absence looks like from inside the metric, and why it is nearly invisible:**
+
+- a file whose helper 404s **throws at its first `test_valid_value(...)` call** and reports ONE
+  harness error instead of its several hundred subtests. It does not crash, it does not time out
+  loudly, and it does not appear as a skip;
+- a `checkLayout('.grid')` file scores a page in which **`.grid` is not a grid at all**, so it fails
+  on geometry that was never asked for. `css/css-grid/abspos` read **0.9%**, and 2,974 of its 3,479
+  failures were the single shape `width expected N but got 0`;
+- the **reftest leg is completely blind to it** — reftests do not load the helpers, so
+  `css/css-grid`'s reftest count was byte-identical (210) across the repair while its testharness
+  count moved +899. Two legs, and only one of them can see this class.
+
+**Measured, one line of sparse-checkout, full sweep before and after:**
+
+```text
+   css/css-color            32/108      ->    5625/11005    +5593
+   css/css-grid            558/9281     ->    1457/10911     +899
+   css/css-values          471/1881     ->     877/4193      +406
+   …every CSS area rose or held; NOT ONE FELL
+   dom · html/dom · domparsing · url · encoding   BYTE-IDENTICAL   ← the controls
+   TOTAL               433162/1228830   ->  441427/1249461  +8265 pass / +20631 counted
+```
+
+> **This is a CORRECTION, not progress — no engine code changed.** The tell is that the percentage
+> barely moved (35.25% → 35.33%) while both halves grew by thousands: when a metric's numerator and
+> denominator move together, the thing that was wrong is the **denominator**, and the ranking built
+> on it was wrong in a way the headline could not show. `css/css-color` was listed last of seventeen
+> areas with 76 failing subtests; on the repaired corpus it carries **5,380**.
+
+⚠ **A checkout that is missing files is not a checkout that is missing tests.** The test-file counts
+were unchanged across the repair (`css-grid` 3204, `css-flexbox` 1763, `css-sizing` 855) — 61 files
+were added and none of them is a test. Any audit that reconciles "tests present" would have passed.
+The reconciliation that catches this one is **"does every `src`/`href` a test names actually
+resolve"**, which nothing runs.
+
+⚠ Durability: `sparse-checkout set` is authoritative, so a re-run of `scripts/wpt-setup.sh` reverts
+this. `css/support` belongs in that script's `SUBSETS` list.
