@@ -5861,7 +5861,15 @@ does not touch that ranking: its CSS items are either already gated or on the de
 
 ---
 
-## AUDIT #45 — tick 1182 (2026-08-12): the map is COMPLETE against the world's list, and my reconciliation instrument was not
+## Audit #58 — tick 1182 (2026-08-12): the map is COMPLETE against the world's list, and my reconciliation instrument was not
+
+> ⚠ **HEADING CORRECTED AT t1183, and the malformed one was a silent cadence failure.**
+> `status-update.sh` derives `LAST_SURFACE_AUDIT` from `^## Audit #[0-9]+ — tick \K[0-9]+`, which is
+> **case-sensitive**: this entry was written `## AUDIT #45 — tick 1182`, so the cadence gate could not
+> see it, read the last audit as **t1171**, and declared the audit overdue at the very next tick — one
+> that had just been performed. It also reused the number of `Audit #45 — tick 1050`; the running
+> series is #54@1139 · #55@1150 · #56@1161 · #57@1171, so this is **#58**.
+> *An audit that the instrument cannot parse is an audit that did not happen.*
 
 **Sources read (live, not from memory):**
 

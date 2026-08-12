@@ -93,6 +93,45 @@ Separately: **a unitless zero is a valid CSS length**, so a parser handling only
 > **because it was a LETTER.** *When every instrument agrees a bug cannot exist, they are all sampling the
 > same layer. Bisect the layer below.*
 
+## A Private-Use-Area codepoint may not use a GENERIC family — and that is the whole icon-font web
+
+`FontContext::resolve_family` answers *"which face does this element use?"* for the element as a whole,
+and stops at the **first** entry of the `font-family` list it can honour. That is right for text and
+wrong for exactly one block of Unicode. css-fonts-4 §char-handling-issues:
+
+> *"If a given character is a Private-Use-Area Unicode codepoint, user agents must only match font
+> families named in the font-family list that are **not generic families**. If none of the families
+> named in the font-family list contain a glyph for that codepoint, user agents must display some form
+> of missing glyph symbol for that character **rather than attempting installed font fallback**."*
+
+**PUA (U+E000–U+F8FF and the two supplementary planes) is where every icon font lives** — Font Awesome,
+Material Icons, Bootstrap Icons, and every in-house glyph set. A PUA codepoint has no agreed meaning, so
+another family's glyph at the same address is not a worse rendering of the same character: it is a
+different character. `font-family: sans-serif, "Font Awesome 6 Free"` therefore rendered whatever the
+system sans keeps at U+F007 — and when the webfont failed to load, the ordinary CJK/emoji fallback found
+*something*, so a 404 and a success looked the same on screen.
+
+**The fix is a SECOND family on the key, not a change to `resolve_family`.** `FontKey::pua_family` is the
+interned id of the first **non-generic** family in the same list, computed beside `family` in
+`layout::text_style` (and in canvas's `fillText` key) and consumed by the per-character `resolve_face`.
+Three things about the shape:
+
+- **It is part of the KEY, not a side-table.** The shaped-run cache is keyed on `FontKey`; two elements
+  that differ only in which family their icons may use must not share a cache entry.
+- **`first_non_generic_family` is deliberately not a flag on `resolve_family`.** That function's whole
+  contract is *"the first entry we can honour, generics included"*, and the two answers differ for
+  exactly the stacks this rule is about. One function behind a boolean would make every caller decide a
+  spec question it does not know it is being asked.
+- **Both clauses land together.** Choosing the right family but still allowing installed-font fallback
+  leaves the failed-webfont case rendering a wrong glyph; suppressing fallback without choosing the
+  right family leaves the working case rendering a wrong glyph. Either half alone is still *a different
+  character, presented as a fallback*.
+
+⚠ **It was unmeasurable until the WPT testharness leg got its ruler in the same tick.**
+`css/css-fonts/matching/font-unicode-PUA.html` compares `serif, …, 'Ahem'` against `'Ahem'`; with no
+Ahem installed **both arms fell back to serif and agreed**, so the suite reported a pass over a real
+defect. See `conformance-and-oracles.md`, *"A suite has a ruler"*.
+
 ## Chromium never asks fontconfig for a bare generic family — it asks for **Arial** and **Times New Roman**
 
 `fontdb`'s defaults are the **Windows** names, usually absent on Linux, so `font-family: sans-serif` landed

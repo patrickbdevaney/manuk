@@ -1221,6 +1221,7 @@ fn run_fidelity_cmd(args: &[String], fonts: &FontContext) {
                                                 family: fonts.resolve_family(&st.font_family),
                                                 bold,
                                                 italic: st.italic,
+                                                pua_family: None,
                                             };
                                             let a = fonts
                                                 .measure(FACE_PROBE, key, st.font_size)
@@ -3517,6 +3518,9 @@ fn run_oracle_merge(args: &[String]) {
 /// flushes. If the child stops making progress, the driver kills it, and **the test after the last
 /// flushed line is the one that hung** — named, recorded, and stepped over so the run continues.
 fn run_wpt_cmd(args: &[String], fonts: &FontContext) {
+    // The suite's ruler (Ahem) is installed by `harness::run_one` — the call site the gate
+    // exercises, so that deleting it turns a test RED rather than silently re-measuring 3,804
+    // files in the fallback face. See `manuk_wpt::reftest::install_ahem`.
     let Some(dir) = flag(args, "--wpt")
         .map(PathBuf::from)
         .or_else(manuk_wpt::find_wpt_checkout)

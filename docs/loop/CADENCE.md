@@ -11,12 +11,12 @@
 
 | | value | over |
 |---|---|---|
-| ticks landed | **885** | ticks 1–1181 |
-| median tick cycle | **28m** | 884 intervals |
-| median, last 10 | **34m** | 10 intervals |
+| ticks landed | **886** | ticks 1–1183 |
+| median tick cycle | **28m** | 885 intervals |
+| median, last 10 | **37m** | 10 intervals |
 | fastest / slowest | 5s / 5.4d | |
-| **ticks per hour** | **1.14** | 777.4h elapsed |
-| median verify wall | **63s** | 824 ticks |
+| **ticks per hour** | **1.14** | 778.9h elapsed |
+| median verify wall | **63s** | 825 ticks |
 | wall trend | 39s → 13m — getting slower ⚠️ | first 3 vs last 3 |
 
 The **cycle** is the real unit: implement → debug → verify wall → land. The wall is only part of
@@ -28,10 +28,10 @@ it, and a wall that grows taxes every future tick, so it is tracked separately f
 
 * **capabilities asserted** (`G_CAPABILITY`): 48 → **81**
 * **live gates**: 27 → **444**
-* **✅ rows in the capability ledger**: 144 → **582**
+* **✅ rows in the capability ledger**: 144 → **583**
 * **Bar 0 — oracle hangs**: 0 of 265 sites
 
-**394 of 885 ticks** (45%) moved a
+**395 of 886 ticks** (45%) moved a
 user-visible capability. The rest were instruments, infrastructure and corrections — and the
 ledger says the corrections were not overhead: three of its top three priorities were phantoms,
 and finding that out redirected everything after it.
@@ -90,8 +90,8 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 
 ## What a capability costs
 
-* **394** capability ticks, median cycle **28m**
-* median diff per tick: **+265 / −34** lines across 8 files
+* **395** capability ticks, median cycle **28m**
+* median diff per tick: **+266 / −34** lines across 8 files
 
 ## Every tick
 
@@ -982,5 +982,6 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 | **1179** | 2026-08-12 13:31 | 38m | capability | 13m | +555/−33 | 443 | 81 | 56.0% · | a computed style did not answer to its own CSS property name (2026-08-12) |
 | **1180** | 2026-08-12 14:03 | 32m | capability | 13m | +466/−36 | 444 | 81 | 56.0% · | `CSS.supports` said NO about five properties this engine renders (2026-08-12) |
 | **1181** | 2026-08-12 14:28 | 25m | capability | 13m | +191/−47 | 444 | 81 | 56.0% · | `el.style` accepted every string, and the CSS-WG's own corpus priced the fix (2026-08-12) |
+| **1183** | 2026-08-12 15:58 | 1.5h | capability | 13m | +1050/−408 | 444 | 81 | 56.0% · | the WPT suite measures in Ahem, and the testharness leg had no Ahem (2026-08-12) |
 
 *`·` after a WPT figure means **carried forward**, not measured this tick.*

@@ -1741,6 +1741,10 @@ fn text_style(cs: &ComputedStyle, fonts: &FontContext) -> TextStyle {
         family: fonts.resolve_family(&cs.font_family),
         bold: cs.font_weight >= 600,
         italic: cs.italic,
+        // Which family a Private-Use-Area codepoint may use — NOT the same answer as
+        // `resolve_family`, and the difference is every icon font behind a generic. See
+        // `FontKey::pua_family`.
+        pua_family: fonts.first_non_generic_family(&cs.font_family),
     };
     // `line-height: normal` is the FONT's business, not arithmetic's. Every engine derives it from
     // the face's ascent + descent + lineGap; a 1.2× multiplier is a guess that makes every line box
@@ -1771,6 +1775,7 @@ fn text_style(cs: &ComputedStyle, fonts: &FontContext) -> TextStyle {
             family: fonts.resolve_family(&cs.font_family),
             bold: cs.font_weight >= 600,
             italic: cs.italic,
+            pua_family: fonts.first_non_generic_family(&cs.font_family),
         },
         font_size: cs.font_size,
         color: cs.color,
@@ -11019,6 +11024,9 @@ impl Ctx<'_> {
                                     family: FontFamily::SansSerif,
                                     bold: false,
                                     italic: false,
+                                    // A synthetic fragment with no text — nothing to place a
+                                    // Private-Use-Area codepoint in.
+                                    pua_family: None,
                                 },
                                 font_size: 16.0,
                                 color: Rgba::BLACK,
@@ -11067,6 +11075,9 @@ impl Ctx<'_> {
                                     family: FontFamily::SansSerif,
                                     bold: false,
                                     italic: false,
+                                    // A synthetic fragment with no text — nothing to place a
+                                    // Private-Use-Area codepoint in.
+                                    pua_family: None,
                                 },
                                 font_size: 16.0,
                                 color: Rgba::BLACK,
@@ -11349,6 +11360,8 @@ impl Ctx<'_> {
                         family: FontFamily::SansSerif,
                         bold: false,
                         italic: false,
+                        // An empty-text fragment carrying geometry only — no glyphs, so no PUA.
+                        pua_family: None,
                     };
                     (
                         advance,
@@ -11414,6 +11427,8 @@ impl Ctx<'_> {
                         family: FontFamily::SansSerif,
                         bold: false,
                         italic: false,
+                        // An empty-text fragment carrying geometry only — no glyphs, so no PUA.
+                        pua_family: None,
                     };
                     (
                         width,

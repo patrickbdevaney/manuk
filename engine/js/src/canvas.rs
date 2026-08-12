@@ -693,6 +693,8 @@ fn font_key(
         family: fonts.resolve_family(&names),
         bold,
         italic,
+        // A canvas `fillText` draws the same PUA icons a page does — see `FontKey::pua_family`.
+        pua_family: fonts.first_non_generic_family(&names),
     }
 }
 

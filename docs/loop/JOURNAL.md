@@ -46371,6 +46371,110 @@ PERF: none — one UA rule and one narrowed branch in a cascade that already ran
 WIKI: `docs/wiki/css-cascade.md` — where Chrome draws the form-control `box-sizing` line, and why a
 layout-crate test cannot see it.
 
+## Tick 1183 — the WPT suite measures in Ahem, and the testharness leg had no Ahem (2026-08-12)
+
+TICK SHAPE: capability — instrument fidelity (the third ratchet face) plus the engine defect that
+correcting the instrument exposed.
+
+HYPOTHESIS (written before the measurement, kept verbatim): `css/css-grid` is the board's #1 lever
+and t1172 decomposed its gap; the largest zero inside it is `abspos/positioned-grid-descendants-*` —
+32 files, 3,200 subtests, a flat 0. Reading the failure MESSAGE rather than the score says
+`width expected 50 but got 0`, and **50 is two Ahem em boxes at 25px**.
+
+⚠⚠⚠ **THE SUITE'S RULER WAS INSTALLED ON ONE LEG OF TWO, AND THE OTHER LEG IS WHERE THE PRIMARY
+METRIC IS READ.** WPT does not test prose: it lays text out in **Ahem**, whose every glyph is exactly
+`1em × 1em`, so a layout expectation becomes an integer. WPT's own runner requirement is that the
+face be installed on the host, and `wpt/fonts/` **is not in this checkout** — so the
+`<link href="/fonts/ahem.css">` those tests carry fetches nothing. `reftest::install_ahem` has
+registered it since t1088. `harness::run_one` never did:
+
+```text
+   3,804 files under css/ link /fonts/ahem.css
+     1,637 css/CSS2    844 css/css-text    835 css/css-grid   <- the board's #1 lever
+```
+
+**Measured against a same-hour old binary, one arm per build, and the FULL sweep re-run:**
+
+```text
+                        OLD (HEAD)    THIS TICK    verdict
+   css/css-grid            1765         2018       +253
+   css/css-text            1603         1708       +105
+   css/css-sizing           792          853        +61
+   css/css-flexbox         1450         1469        +19
+   css/css-ui               241          242         +1
+   nine other css/ areas    =            =          unmoved to the subtest
+   dom · html/dom · encoding · domparsing · url   unmoved
+   WPT TOTAL             444548       444987       +439    crashes 0 in EVERY area
+   css/css-grid  REFTESTS   210          210        =      (css-flexbox 312 = 312)
+```
+
+⚠⚠⚠ **AND IT COST −3, WHICH WAS THE SECOND FINDING RATHER THAN A PRICE.**
+`css/css-fonts/matching/font-unicode-PUA.html` asserts that `font-family: serif, …, 'Ahem'` and
+`font-family: 'Ahem'` render **U+F000–F002** to the same width — css-fonts-4's rule that a
+Private-Use-Area codepoint must match **only non-generic** families. With no Ahem *both arms fell
+back to serif and agreed at 21.484375*; with Ahem the second arm is 22 and the first is still
+21.484375, because `resolve_family` stops at the first entry it can honour and that entry was
+`serif`. **Two errors cancelled and read as agreement** — the trap `install_ahem`'s own doc-comment
+predicted for the reftest leg, firing on the testharness leg.
+
+**So the tick is a PAIR whose halves are each inert.** Installing the ruler alone is −3 and the
+ratchet refuses it; the PUA rule alone moves nothing, because without the ruler the test passes by
+cancellation. `FontKey::pua_family` carries the **first non-generic family in the same list**,
+computed beside `resolve_family` in `layout::text_style` (and in canvas's `fillText` key) and
+consumed by the per-character `resolve_face`. Both spec clauses land together — the eligible-family
+half and the *"missing-glyph symbol rather than installed font fallback"* half — because either alone
+still renders **a different character and calls it a fallback**. **PUA is where every icon font on
+the web lives** (Font Awesome, Material Icons, Bootstrap Icons): a generic ahead of the icon font
+drew whatever glyph the system face keeps at U+F007, and a 404'd webfont was indistinguishable from a
+working one.
+
+⚠⚠ **WHAT I WAS WRONG ABOUT, and the measurement is what said so.** I read the −3 as a *subset
+ruler*: the registered face is `engine/text/tests/fixtures/Ahem.woff2`, **245 codepoints against
+upstream's 278**, so "the subset lacks the PUA glyphs" was a clean story. I vendored the full
+21,768-byte `Ahem.ttf`, rebuilt, and re-ran all fourteen areas: **every number identical, to the
+subtest.** Decoding the fixture's own `cmap` then said why — it *has* U+F000–F002. The full face was
+**reverted**: it bought nothing measurable and would have been an unmeasured change to the *reftest*
+leg, which shares the constant. The hole is real, currently inert, and recorded at the constant so
+the next reader does not re-derive it.
+
+⚠ **AND THE ORIGINAL TARGET IS STILL A ZERO, HONESTLY THIS TIME.** `positioned-grid-descendants-*`
+is 32 files × 100 at 0 both before and after. The ruler was necessary and is not sufficient: with
+Ahem installed the first assertion is still `width expected 50 but got 0` — an abspos grid-placed
+descendant with auto insets gets a **zero** shrink-to-fit width. That is a real engine gap, now
+measured with the right ruler, and it is the next tick.
+
+GATES, both RED-proven in the way each is meant to fail:
+`a_testharness_run_lays_text_out_in_the_ahem_face_the_suite_measures_with` (in `harness.rs`, running
+through `run_one` so the gate exercises the **call site** — delete `install_ahem(fonts)` and it
+reports `expected 200x100, got 133.40625x100`), and
+`a_private_use_codepoint_matches_only_the_non_generic_families_the_author_named` — **four rows,
+three of them CONTROLS, and no expectation column**: every row is an equality between two
+measurements taken on this host, plus a blindness check that refuses to pass if Ahem and serif happen
+to agree at U+F000. Deleting the `is_private_use` arm flips row 1 (97.65625 vs 100.0) and leaves all
+three controls standing, which is what makes them controls.
+
+⚠ **A THIRD, FREE FINDING, caught by tick.sh refusing to run.** The surface-audit cadence gate said
+*"OVERDUE (last: tick 1171)"* one tick after t1182 performed audit #45. `status-update.sh` derives
+`LAST_SURFACE_AUDIT` from `^## Audit #[0-9]+ — tick \K[0-9]+` and that pattern is **case-sensitive**;
+t1182 wrote `## AUDIT #45 — tick 1182`, so the audit was invisible to the instrument that schedules
+it — and its number collided with `Audit #45 — tick 1050` besides. Renumbered **#58** (the running
+series is #54@1139 · #55@1150 · #56@1161 · #57@1171) and corrected in place with the reason attached.
+*An audit the instrument cannot parse is an audit that did not happen* — the same shape as
+`LAST_WALL_AUDIT` being DERIVED, which this loop has already been bitten by once.
+
+RATCHET: held. Zero areas down, `crashes=0` in every area, reftest legs byte-identical against a
+same-hour old binary. WPT TOTAL 444548 → **444987**.
+
+PERF: `first_non_generic_family` is one extra list walk per `TextStyle` construction (a scan that
+stops at the first non-generic name and only queries fontdb for that one); `pua_face` is resolved
+once per shaped run and only when the run contains a PUA codepoint's key. `install_ahem` became
+idempotent — `has_family` is the un-fallen-back question — because the testharness leg calls it per
+file rather than once per run.
+
+WIKI: `docs/wiki/conformance-and-oracles.md` — *"A suite has a ruler, and installing it on one leg is
+worse than not installing it at all"*; `docs/wiki/text-layout.md` — *"A Private-Use-Area codepoint
+may not use a GENERIC family"*.
+
 ## Tick 1182 — the board was ranking off numbers three thousand subtests stale (2026-08-12)
 
 TICK SHAPE: measurement — the full WPT sweep (re-rank), SURFACE AUDIT #45 (due at 1181) and the

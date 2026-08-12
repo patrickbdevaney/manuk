@@ -21,6 +21,7 @@ fn key() -> FontKey {
         family: FontFamily::SansSerif,
         bold: false,
         italic: false,
+        pua_family: None,
     }
 }
 

@@ -499,189 +499,190 @@
   - L15 · WPT has neither blind spot, because the tests carry their own verdict
   - L21 · Integration mechanics (these are the sanctioned hooks, not workarounds)
   - L40 · A hang can only be contained by a PROCESS boundary
-  - L52 · Guard every instrument against measuring ITSELF
-  - L68 · THREE DIFFERENT FINDINGS MUST NEVER SHARE A NAME
-  - L82 · A runner must account for the child that DIED, not just the one that hung
-  - L94 · ONE SNAPSHOT, BOTH ENGINES — and never diff against a DEGRADED oracle
-  - L106 · Probing only [id] elements makes the oracle nearly BLIND
-  - L118 · THE SCORE GATES; THE EYEBALL DIAGNOSES — a pixel score is a poor proxy for correctness
-  - L136 · Cluster by ROOT CAUSE, not by tag name — and rank by DISTINCT SITES
-  - L154 · Score geometry PARENT-RELATIVE (SHAPE), never against the document origin (tick 335)
-  - L296 · Gates must run the SHIPPING configuration
-  - L305 · A gate that is never INVOKED is indistinguishable from a gate that passes (tick 239)
-  - L337 · A gate that CANNOT FAIL is a decoration — and they go vacuous SILENTLY
-  - L347 · MUTATION-TEST THE WALL — and then verify the mutation tester
-  - L372 · "The probe didn't say yes" is NOT "the probe said no"
-  - L385 · Corpus BREADTH, not verification throughput, surfaces class bugs
-  - L396 · Every number has a HARNESS, and the harness is part of the number
-  - L410 · Residual-bug estimation must use a REMOVAL model, because discovery is SERIAL
-  - L420 · Read Blink/Gecko for the ALGORITHM; never copy the CODE — and know what that buys
-  - L430 · Three gates that exist because green gates coexisted with real bugs
-  - L440 · THREE anchors of parity scope, and each sees what the others cannot
-  - L454 · The async CI lane is redundant verification you never wait on
-  - L462 · The pattern ledger, and why it is now executable
-  - L481 · The mechanism
-  - L494 · The gaps that are real (with receipts, tick 65)
-  - L506 · The cadence ledger — measuring the loop, not just the browser
-  - L526 · Backfilled from git, and what was deliberately left blank
-  - L540 · What it found on its first run, and it is strategic
-  - L562 · The one number it refuses to give
-  - L568 · A doubled event handler inflates the WPT count ~2× — the score can lie in your favor
-  - L583 · The batch-size crash class — heavy layout areas OOM a shared process
-  - L592 · The crash class is a real SIGSEGV UAF, not OOM — and ISOLATION-RETRY separates it from a per-page Bar 0
-  - L612 · A SECOND, distinct SIGSEGV: css-values/calc-size interpolate-size — a REAL per-page crash (survives isolation)
-  - L636 · Probing the constellation: unknown is a bug, not a state
-  - L654 · A probe must be behavioural, and in this engine that is not pedantry
-  - L664 · The probe gate is a ratchet, not a survey
-  - L672 · A probe whose claim cannot fail measures nothing (tick 230)
-  - L690 · Some capabilities cannot be probed from inside the page
-  - L698 · The oracle must know whether the engine actually styled the page (tick 383)
-  - L722 · Same-tag index paths misattribute TREE drift as STYLE drift (tick 395)
-  - L745 · BUILD SPEC — selector-path keying: the class signature that stops silent mispairing (tick 399)
-  - L776 · LANDED (tick 401) — the keying is live, and the predictions held
-  - L794 · JS-platform-surface probe sweep — vein mined out (tick 487)
-  - L812 · The DOM-method / CSS-property surface vein is mined out too — one level deeper than t487 (tick 492)
-  - L850 · The exit certificate is now COMPUTED, not read off 265 stanzas of stderr (tick 547)
-  - L898 · The certificate's FIRST sweep found the certificate could be passed vacuously (tick 549)
-  - L925 · What the sweep actually says
-  - L949 · The class signature was making healthy pages read as 0% coverage (tick 550)
-  - L962 · The ablation, measured on six sites, decisive in both directions
-  - L985 · What this invalidates, said plainly
-  - L997 · The diff carries the COMPUTED FONT — and a rect-only diff could not have asked the question (tick 563)
-  - L1034 · curl exits 0 on a 403, so the certificate could not tell a bot wall from a document (tick 611)
-  - L1064 · The second mechanism, which a status check alone would not have found
-  - L1085 · A refusal is not a rendering result — and this is the sharp edge
-  - L1101 · And the denominator had a hole the whole time
-  - L1118 · What the report says now
-  - L1132 · The oracle renders a SHELL for JS-built pages, and the certificate was scoring it (tick 614)
-  - L1153 · Naming it, not fixing it
-  - L1168 · The vacuous rows were inflating the headline
-  - L1189 · The open question, stated rather than smuggled
-  - L1198 · A diff field must measure the same quantity on both sides (tick 627)
-  - L1223 · The fix, and what the field can honestly answer
-  - L1249 · The load budget trades COVERAGE against SHAPE (tick 632)
-  - L1280 · The fix whose gate passes before the fix (tick 637)
-  - L1320 · Two citation dialects, and each instrument was blind to one (surface audit #36, tick 638)
-  - L1353 · Ranked by area is not ranked by sites moved (constitution check #46, tick 639)
-  - L1377 · Drift concentrates on the oldest question marks (tick 645)
-  - L1411 · An unverified MSRV is a claim with teeth (tick 648)
-  - L1443 · The instrument must survive the engine dying under it (tick 650)
-  - L1501 · The remembered reproducer that no longer reproduces (tick 650)
-  - L1529 · 100% of nothing is 100% (tick 651)
-  - L1575 · The rule could name the oracle failing us, and had no word for us failing (tick 653)
-  - L1607 · A live site's fidelity score has an error bar, and it is bigger than most of our deltas (tick 657)
-  - L1622 · Why a live site is not a fixture
-  - L1637 · This does not retract the deltas that were real
-  - L1644 · The instrument now carries it
-  - L1672 · The spread was printed for fifteen ticks and nothing consumed it (tick 673)
-  - L1736 · The general form, which is the fourth time this project has paid for it
-  - L1744 · The oracle's probe never waited for the page to render (tick 674)
-  - L1754 · One probe killed it
-  - L1767 · The funnel named the real one in one field
-  - L1793 · What it bought, stated honestly
-  - L1805 · The gate is on the source, deliberately
-  - L1819 · The lesson, and it is an old one wearing new clothes
-  - L1829 · Every deferred throw on the app web went into an array only the WPT runner reads (tick 675)
-  - L1839 · 1. reportError() did not report
-  - L1858 · 2. __reportError — the funnel — stored errors instead of saying them
-  - L1874 · 3. Neither carried the address — one rule, three implementations
-  - L1886 · What landed
-  - L1901 · The honest remainder
-  - L1909 · The gate
-  - L1922 · A step change in the instrument is not an error bar on the subject (tick 676)
-  - L1929 · What t674's deferred probe did to the ORACLE'S POPULATION
-  - L1947 · …and the spread block read all of that as the sites' own noise
-  - L1966 · The fix: the version IS the probes' text
-  - L1988 · RED-proven from both sides
-  - L1998 · ~~scored 5 → 6~~ — RETRACTED at tick 682; the real reading is scored 5 (tick 681)
-  - L2011 · scored 5 → 6, and the repeat machinery's first real use exposed two defects (tick 681)
-  - L2017 · The certificate moved
-  - L2039 · Defect 1 — a draw whose ORACLE population collapsed is a different DOCUMENT
-  - L2063 · Defect 2 — a tie at the median was decided by nothing
-  - L2072 · And the repeats are worthless on three of the four sites they cost
-  - L2094 · A rule whose justification is falsified by the run that motivated it (tick 682)
-  - L2099 · What t681 claimed
-  - L2106 · What the log said
-  - L2125 · Both rules corrected
-  - L2139 · The lesson, and it is a sharper form of one already on file
-  - L2153 · A repeat that measured nothing is not paid for twice (tick 687)
-  - L2173 · This breaks tick 673's monotonicity argument on purpose
-  - L2181 · ⚠ And the gate's first draft was vacuous — the third time this session
-  - L2196 · The claimed clusters moved — ikea coverage 97.1% → 100%, keirin dy 206 → 161 (tick 692)
-  - L2234 · The priority ledger was keyed by TAG because delta never crossed the serialisation boundary (tick 744)
-  - L2265 · One rule, ONE implementation
-  - L2285 · A missing delta is REFUSED, not zeroed
-  - L2300 · The RED proof for the band had itself never run
-  - L2312 · The instrument charged its own panic to the engine — and 12 of 13 "crashes" were timeouts (tick 748)
-  - L2317 · A non-ASCII class name panicked the sweep, and the site was banked as crashed
-  - L2348 · reason=crashed conflates a panic with a watchdog kill — 12 of 13, measured
-  - L2371 · Two instruments answered one question, and the permissive one published (tick 751)
-  - L2385 · The signature, and why it reads as noise
-  - L2402 · The refusal is about ASYMMETRY, not about starvation
-  - L2420 · Where the refusal goes, and which side of the denominator
-  - L2436 · The rule
-  - L2444 · A killed process and a faulting one leave the identical trace (tick 753)
-  - L2461 · Why the fix goes in the failing process, not in the reader
-  - L2484 · The rule
-  - L2492 · The key is part of the measurement: one ancestor's class list re-keyed whole documents (tick 754)
-  - L2532 · The rules
-  - L2546 · The parallel sweep — and what parallelism COSTS (tick 771)
-  - L2557 · Two accounting defects it surfaced while being built
-  - L2568 · ⚠ The speed is not free, and the cost is SCORABILITY, not accuracy
-  - L2594 · The reference probe was WIDENING the page it measured (t781)
-  - L2625 · Why the near-miss took a while to name
-  - L2634 · The general form
-  - L2656 · thin-overlap said "this is OURS", and the number that decides it was never read (t782)
-  - L2668 · What the cohort actually looks like
-  - L2713 · The new reason, and what it deliberately does NOT do
-  - L2733 · The general form
-  - L2739 · Is a zero intersection a RENDERING result or a KEYING result? (t783)
-  - L2790 · The key that survives an inserted sibling — :nth-child → :nth-of-type (t784)
-  - L2830 · The chunked sweep's spawn-loop arithmetic — a constant budget against a variable workload (t824)
-  - L2835 · The mechanism, in the order the log prints it
-  - L2854 · The defect: CHUNK_ROUNDS = 4
-  - L2870 · The fix
-  - L2884 · Verified live, on the sites that did it
-  - L2902 · Attributing a per-site sweep delta (t847) — the integer test is NOT the control
-  - L2931 · A sweep row is a LOWER BOUND on the same binary's solo reading
-  - L2939 · A corollary about corpus reach
-  - L2946 · An oracle timeout is the REFERENCE hanging, and for 57 ticks it was booked as ours (t861)
-  - L2966 · The four wrong turns this took, because each one looked like the answer
-  - L2990 · What changed, and deliberately what did not
-  - L3012 · The third cohort in a row that was not ours
-  - L3020 · A quiet UNSCORED label can be hiding a Bar 0 (tick 863)
-  - L3036 · Four discriminators localized a nine-of-nine segfault with NOT ONE symbol
-  - L3053 · Why a dead reproducer is worse than an open bug
-  - L3068 · A control that changes a VARIABLE without changing the MECHANISM is silence, not a refutation (tick 865)
-  - L3097 · The mechanism, and the size of it
-  - L3115 · The cheap fix was measured and REFUSED
-  - L3140 · A 0% on a suite nobody has run is indistinguishable from a capability zero (tick 870)
-  - L3173 · The sibling error, in the same tick
-  - L3181 · And the skip reason had been true of the file and false of the test for the whole corpus
-  - L3193 · --window-size is a WINDOW size, and two defects were hiding each other behind it
-  - L3216 · ⚠⚠⚠ The reason this stayed invisible: the engine had the mirror-image bug
-  - L3259 · ⚠ And the third caller: the SHELL had none either (t1019)
-  - L3279 · The reference browser had no mouse, and 22.9% of the corpus asks (t1020)
-  - L3304 · The decision rule, now with three subjects and two branches
-  - L3330 · Pricing it, and the grep that lied by half
-  - L3347 · The gate, and why its negative probe is the load-bearing one
-  - L3359 · What the battery cleared, and the one row that discriminates
-  - L3377 · The reading-order conjunct is geometry after all, and one site said otherwise (t1084)
-  - L3416 · The guard that was tolerant in exactly one direction
-  - L3431 · A BLIND INSTRUMENT MIS-RANKS THE WORK-LIST, NOT JUST THE SCORE (t1091)
-  - L3457 · ⚠⚠⚠ A REASON STRING IS A PROPERTY OF THE READER — grouping by it groups CAUSES together
-  - L3496 · AHEM IS THE SUITE'S RULER — 1,090 CSS 2.1 reftests (17.4%) measure with a font that was not installed (t1090)
-  - L3518 · ⚠⚠⚠ It is NOT a missing external-stylesheet fetch, and counting the construct said it was
-  - L3532 · ⚠⚠ A net-zero directory is not evidence of anything — diff the STATE, not the count
-  - L3541 · The 4 losses were each an accidental pass, and each named a real defect
-  - L3551 · A REFERENCE IS A DOCUMENT — 1,230 CSS 2.1 reftests were unpassable by construction (t1088)
-  - L3615 · The struct field that broke this crate's tests for the SECOND time
-  - L3630 · A bucketed probe loses the distinction it was built to find (t1142)
-  - L3642 · The readout trick this used
-  - L3653 · A gate that asserts a wrapped line COUNT asserts the installed fonts
-  - L3692 · A RED-proof that is already green is not a RED-proof
-  - L3725 · WPT fuzzy is the author's allowance — and on this suite it banks nothing (t1156)
-  - L3762 · The WPT checkout is SPARSE, and css/support/ holds the library the whole CSS corpus is written against
+  - L52 · A SUITE HAS A RULER, AND INSTALLING IT ON ONE LEG IS WORSE THAN NOT INSTALLING IT AT ALL
+  - L116 · Guard every instrument against measuring ITSELF
+  - L132 · THREE DIFFERENT FINDINGS MUST NEVER SHARE A NAME
+  - L146 · A runner must account for the child that DIED, not just the one that hung
+  - L158 · ONE SNAPSHOT, BOTH ENGINES — and never diff against a DEGRADED oracle
+  - L170 · Probing only [id] elements makes the oracle nearly BLIND
+  - L182 · THE SCORE GATES; THE EYEBALL DIAGNOSES — a pixel score is a poor proxy for correctness
+  - L200 · Cluster by ROOT CAUSE, not by tag name — and rank by DISTINCT SITES
+  - L218 · Score geometry PARENT-RELATIVE (SHAPE), never against the document origin (tick 335)
+  - L360 · Gates must run the SHIPPING configuration
+  - L369 · A gate that is never INVOKED is indistinguishable from a gate that passes (tick 239)
+  - L401 · A gate that CANNOT FAIL is a decoration — and they go vacuous SILENTLY
+  - L411 · MUTATION-TEST THE WALL — and then verify the mutation tester
+  - L436 · "The probe didn't say yes" is NOT "the probe said no"
+  - L449 · Corpus BREADTH, not verification throughput, surfaces class bugs
+  - L460 · Every number has a HARNESS, and the harness is part of the number
+  - L474 · Residual-bug estimation must use a REMOVAL model, because discovery is SERIAL
+  - L484 · Read Blink/Gecko for the ALGORITHM; never copy the CODE — and know what that buys
+  - L494 · Three gates that exist because green gates coexisted with real bugs
+  - L504 · THREE anchors of parity scope, and each sees what the others cannot
+  - L518 · The async CI lane is redundant verification you never wait on
+  - L526 · The pattern ledger, and why it is now executable
+  - L545 · The mechanism
+  - L558 · The gaps that are real (with receipts, tick 65)
+  - L570 · The cadence ledger — measuring the loop, not just the browser
+  - L590 · Backfilled from git, and what was deliberately left blank
+  - L604 · What it found on its first run, and it is strategic
+  - L626 · The one number it refuses to give
+  - L632 · A doubled event handler inflates the WPT count ~2× — the score can lie in your favor
+  - L647 · The batch-size crash class — heavy layout areas OOM a shared process
+  - L656 · The crash class is a real SIGSEGV UAF, not OOM — and ISOLATION-RETRY separates it from a per-page Bar 0
+  - L676 · A SECOND, distinct SIGSEGV: css-values/calc-size interpolate-size — a REAL per-page crash (survives isolation)
+  - L700 · Probing the constellation: unknown is a bug, not a state
+  - L718 · A probe must be behavioural, and in this engine that is not pedantry
+  - L728 · The probe gate is a ratchet, not a survey
+  - L736 · A probe whose claim cannot fail measures nothing (tick 230)
+  - L754 · Some capabilities cannot be probed from inside the page
+  - L762 · The oracle must know whether the engine actually styled the page (tick 383)
+  - L786 · Same-tag index paths misattribute TREE drift as STYLE drift (tick 395)
+  - L809 · BUILD SPEC — selector-path keying: the class signature that stops silent mispairing (tick 399)
+  - L840 · LANDED (tick 401) — the keying is live, and the predictions held
+  - L858 · JS-platform-surface probe sweep — vein mined out (tick 487)
+  - L876 · The DOM-method / CSS-property surface vein is mined out too — one level deeper than t487 (tick 492)
+  - L914 · The exit certificate is now COMPUTED, not read off 265 stanzas of stderr (tick 547)
+  - L962 · The certificate's FIRST sweep found the certificate could be passed vacuously (tick 549)
+  - L989 · What the sweep actually says
+  - L1013 · The class signature was making healthy pages read as 0% coverage (tick 550)
+  - L1026 · The ablation, measured on six sites, decisive in both directions
+  - L1049 · What this invalidates, said plainly
+  - L1061 · The diff carries the COMPUTED FONT — and a rect-only diff could not have asked the question (tick 563)
+  - L1098 · curl exits 0 on a 403, so the certificate could not tell a bot wall from a document (tick 611)
+  - L1128 · The second mechanism, which a status check alone would not have found
+  - L1149 · A refusal is not a rendering result — and this is the sharp edge
+  - L1165 · And the denominator had a hole the whole time
+  - L1182 · What the report says now
+  - L1196 · The oracle renders a SHELL for JS-built pages, and the certificate was scoring it (tick 614)
+  - L1217 · Naming it, not fixing it
+  - L1232 · The vacuous rows were inflating the headline
+  - L1253 · The open question, stated rather than smuggled
+  - L1262 · A diff field must measure the same quantity on both sides (tick 627)
+  - L1287 · The fix, and what the field can honestly answer
+  - L1313 · The load budget trades COVERAGE against SHAPE (tick 632)
+  - L1344 · The fix whose gate passes before the fix (tick 637)
+  - L1384 · Two citation dialects, and each instrument was blind to one (surface audit #36, tick 638)
+  - L1417 · Ranked by area is not ranked by sites moved (constitution check #46, tick 639)
+  - L1441 · Drift concentrates on the oldest question marks (tick 645)
+  - L1475 · An unverified MSRV is a claim with teeth (tick 648)
+  - L1507 · The instrument must survive the engine dying under it (tick 650)
+  - L1565 · The remembered reproducer that no longer reproduces (tick 650)
+  - L1593 · 100% of nothing is 100% (tick 651)
+  - L1639 · The rule could name the oracle failing us, and had no word for us failing (tick 653)
+  - L1671 · A live site's fidelity score has an error bar, and it is bigger than most of our deltas (tick 657)
+  - L1686 · Why a live site is not a fixture
+  - L1701 · This does not retract the deltas that were real
+  - L1708 · The instrument now carries it
+  - L1736 · The spread was printed for fifteen ticks and nothing consumed it (tick 673)
+  - L1800 · The general form, which is the fourth time this project has paid for it
+  - L1808 · The oracle's probe never waited for the page to render (tick 674)
+  - L1818 · One probe killed it
+  - L1831 · The funnel named the real one in one field
+  - L1857 · What it bought, stated honestly
+  - L1869 · The gate is on the source, deliberately
+  - L1883 · The lesson, and it is an old one wearing new clothes
+  - L1893 · Every deferred throw on the app web went into an array only the WPT runner reads (tick 675)
+  - L1903 · 1. reportError() did not report
+  - L1922 · 2. __reportError — the funnel — stored errors instead of saying them
+  - L1938 · 3. Neither carried the address — one rule, three implementations
+  - L1950 · What landed
+  - L1965 · The honest remainder
+  - L1973 · The gate
+  - L1986 · A step change in the instrument is not an error bar on the subject (tick 676)
+  - L1993 · What t674's deferred probe did to the ORACLE'S POPULATION
+  - L2011 · …and the spread block read all of that as the sites' own noise
+  - L2030 · The fix: the version IS the probes' text
+  - L2052 · RED-proven from both sides
+  - L2062 · ~~scored 5 → 6~~ — RETRACTED at tick 682; the real reading is scored 5 (tick 681)
+  - L2075 · scored 5 → 6, and the repeat machinery's first real use exposed two defects (tick 681)
+  - L2081 · The certificate moved
+  - L2103 · Defect 1 — a draw whose ORACLE population collapsed is a different DOCUMENT
+  - L2127 · Defect 2 — a tie at the median was decided by nothing
+  - L2136 · And the repeats are worthless on three of the four sites they cost
+  - L2158 · A rule whose justification is falsified by the run that motivated it (tick 682)
+  - L2163 · What t681 claimed
+  - L2170 · What the log said
+  - L2189 · Both rules corrected
+  - L2203 · The lesson, and it is a sharper form of one already on file
+  - L2217 · A repeat that measured nothing is not paid for twice (tick 687)
+  - L2237 · This breaks tick 673's monotonicity argument on purpose
+  - L2245 · ⚠ And the gate's first draft was vacuous — the third time this session
+  - L2260 · The claimed clusters moved — ikea coverage 97.1% → 100%, keirin dy 206 → 161 (tick 692)
+  - L2298 · The priority ledger was keyed by TAG because delta never crossed the serialisation boundary (tick 744)
+  - L2329 · One rule, ONE implementation
+  - L2349 · A missing delta is REFUSED, not zeroed
+  - L2364 · The RED proof for the band had itself never run
+  - L2376 · The instrument charged its own panic to the engine — and 12 of 13 "crashes" were timeouts (tick 748)
+  - L2381 · A non-ASCII class name panicked the sweep, and the site was banked as crashed
+  - L2412 · reason=crashed conflates a panic with a watchdog kill — 12 of 13, measured
+  - L2435 · Two instruments answered one question, and the permissive one published (tick 751)
+  - L2449 · The signature, and why it reads as noise
+  - L2466 · The refusal is about ASYMMETRY, not about starvation
+  - L2484 · Where the refusal goes, and which side of the denominator
+  - L2500 · The rule
+  - L2508 · A killed process and a faulting one leave the identical trace (tick 753)
+  - L2525 · Why the fix goes in the failing process, not in the reader
+  - L2548 · The rule
+  - L2556 · The key is part of the measurement: one ancestor's class list re-keyed whole documents (tick 754)
+  - L2596 · The rules
+  - L2610 · The parallel sweep — and what parallelism COSTS (tick 771)
+  - L2621 · Two accounting defects it surfaced while being built
+  - L2632 · ⚠ The speed is not free, and the cost is SCORABILITY, not accuracy
+  - L2658 · The reference probe was WIDENING the page it measured (t781)
+  - L2689 · Why the near-miss took a while to name
+  - L2698 · The general form
+  - L2720 · thin-overlap said "this is OURS", and the number that decides it was never read (t782)
+  - L2732 · What the cohort actually looks like
+  - L2777 · The new reason, and what it deliberately does NOT do
+  - L2797 · The general form
+  - L2803 · Is a zero intersection a RENDERING result or a KEYING result? (t783)
+  - L2854 · The key that survives an inserted sibling — :nth-child → :nth-of-type (t784)
+  - L2894 · The chunked sweep's spawn-loop arithmetic — a constant budget against a variable workload (t824)
+  - L2899 · The mechanism, in the order the log prints it
+  - L2918 · The defect: CHUNK_ROUNDS = 4
+  - L2934 · The fix
+  - L2948 · Verified live, on the sites that did it
+  - L2966 · Attributing a per-site sweep delta (t847) — the integer test is NOT the control
+  - L2995 · A sweep row is a LOWER BOUND on the same binary's solo reading
+  - L3003 · A corollary about corpus reach
+  - L3010 · An oracle timeout is the REFERENCE hanging, and for 57 ticks it was booked as ours (t861)
+  - L3030 · The four wrong turns this took, because each one looked like the answer
+  - L3054 · What changed, and deliberately what did not
+  - L3076 · The third cohort in a row that was not ours
+  - L3084 · A quiet UNSCORED label can be hiding a Bar 0 (tick 863)
+  - L3100 · Four discriminators localized a nine-of-nine segfault with NOT ONE symbol
+  - L3117 · Why a dead reproducer is worse than an open bug
+  - L3132 · A control that changes a VARIABLE without changing the MECHANISM is silence, not a refutation (tick 865)
+  - L3161 · The mechanism, and the size of it
+  - L3179 · The cheap fix was measured and REFUSED
+  - L3204 · A 0% on a suite nobody has run is indistinguishable from a capability zero (tick 870)
+  - L3237 · The sibling error, in the same tick
+  - L3245 · And the skip reason had been true of the file and false of the test for the whole corpus
+  - L3257 · --window-size is a WINDOW size, and two defects were hiding each other behind it
+  - L3280 · ⚠⚠⚠ The reason this stayed invisible: the engine had the mirror-image bug
+  - L3323 · ⚠ And the third caller: the SHELL had none either (t1019)
+  - L3343 · The reference browser had no mouse, and 22.9% of the corpus asks (t1020)
+  - L3368 · The decision rule, now with three subjects and two branches
+  - L3394 · Pricing it, and the grep that lied by half
+  - L3411 · The gate, and why its negative probe is the load-bearing one
+  - L3423 · What the battery cleared, and the one row that discriminates
+  - L3441 · The reading-order conjunct is geometry after all, and one site said otherwise (t1084)
+  - L3480 · The guard that was tolerant in exactly one direction
+  - L3495 · A BLIND INSTRUMENT MIS-RANKS THE WORK-LIST, NOT JUST THE SCORE (t1091)
+  - L3521 · ⚠⚠⚠ A REASON STRING IS A PROPERTY OF THE READER — grouping by it groups CAUSES together
+  - L3560 · AHEM IS THE SUITE'S RULER — 1,090 CSS 2.1 reftests (17.4%) measure with a font that was not installed (t1090)
+  - L3582 · ⚠⚠⚠ It is NOT a missing external-stylesheet fetch, and counting the construct said it was
+  - L3596 · ⚠⚠ A net-zero directory is not evidence of anything — diff the STATE, not the count
+  - L3605 · The 4 losses were each an accidental pass, and each named a real defect
+  - L3615 · A REFERENCE IS A DOCUMENT — 1,230 CSS 2.1 reftests were unpassable by construction (t1088)
+  - L3679 · The struct field that broke this crate's tests for the SECOND time
+  - L3694 · A bucketed probe loses the distinction it was built to find (t1142)
+  - L3706 · The readout trick this used
+  - L3717 · A gate that asserts a wrapped line COUNT asserts the installed fonts
+  - L3756 · A RED-proof that is already green is not a RED-proof
+  - L3789 · WPT fuzzy is the author's allowance — and on this suite it banks nothing (t1156)
+  - L3826 · The WPT checkout is SPARSE, and css/support/ holds the library the whole CSS corpus is written against
 
 ## CSS AND THE CASCADE — Stylo realities and quirks actually encountered
 `docs/wiki/css-cascade.md`
@@ -1807,177 +1808,178 @@
   - L62 · A percentage width on a flex item resolves TWICE unless the assigned width is distinguished from the containing-block width
   - L73 · A replaced element's auto height comes from used width × intrinsic ratio, not from the image's pixels
   - L78 · font-size: 0 makes swash emit UNSCALED font-unit outlines — 1000–1500px bitmaps per glyph
-  - L96 · Chromium never asks fontconfig for a bare generic family — it asks for **Arial** and **Times New Roman**
-  - L115 · font-family was never mapped from the cascade AT ALL — and it wore a font-metrics costume for ticks
-  - L120 · line-height: normal comes from the font's ascent + descent + lineGap
-  - L127 · A block box inside an inline must BLOCKIFY the inline (CSS2 §9.2.1.1)
-  - L135 · Empty inline elements have GEOMETRY, and pages depend on it
-  - L141 · Two ways content is laid out perfectly and still cannot be SEEN
-  - L151 · Inline elements produce no layout box — so <a> and <button> had NO GEOMETRY AT ALL
-  - L160 · WOFF2 needs no C++ — and neither swash nor skrifa will decompress it for you
-  - L171 · A shaped-run cache key must EXCLUDE pixel size
-  - L178 · The char-based glyph model cannot express ligatures or complex scripts
-  - L185 · Skrifa is the library Chromium itself ships
-  - L194 · tiny-skia has no Gaussian blur
-  - L200 · Shrink-to-fit content extent must include the child's RIGHT margin (margin box, not border box)
-  - L210 · text-transform — rendered casing without touching the DOM text (tick 182)
-  - L239 · overflow-wrap / word-break — char-level breaking of an unbreakable token (tick 183)
-  - L273 · letter-spacing / word-spacing — tracking a run's advance in measure and paint (tick 184)
-  - L306 · text-overflow: ellipsis — truncating a clipped single line (tick 186)
-  - L335 · text-decoration-color — a colored underline paints in its own hue, not the text color (tick 187)
-  - L366 · text-decoration-thickness / text-underline-offset — a decoration line the design's own weight and position
-  - L397 · The shaper must be told WHICH SCRIPT it is shaping (tick 214)
-  - L443 · The bidi BASE direction — direction: rtl / dir="rtl" (tick 215)
-  - L492 · Canvas text is the DOM text stack, wired to a different surface
-  - L506 · The canvas blit cannot be manuk_paint's blit
-  - L514 · measureText returning length * 7 was worse than an imprecise width
-  - L521 · Transforms: uniform scale is exact, rotation is the documented gap
-  - L536 · Gate lesson: a pixel claim must re-assert that ink exists
-  - L543 · Canvas drawImage — the first operation that needs pixels flowing INWARD
-  - L545 · The plumbing was directional, and that is why the method was a no-op
-  - L558 · Canvases and images must live in SEPARATE registries even though Page merges them
-  - L568 · A negative extent means two different things on the two rects
-  - L576 · It is a PATTERN FILL of the destination rect, not draw_pixmap
-  - L584 · tiny-skia applies the fill transform to the SHADER as well as the path
-  - L599 · RED probes executed, not asserted (process rule 3)
-  - L608 · Residue
-  - L614 · The line box is a whole number of pixels (tick 269)
-  - L619 · The measurement
-  - L634 · The rule
-  - L638 · The wrong rule that looks identical
-  - L657 · What is NOT rounded
-  - L665 · The inline box is the CONTENT AREA, not the line box (tick 271)
-  - L682 · The rule (CSS 2.1 §10.6.1)
-  - L691 · The two rounding rules are opposite, and that is not a typo
-  - L710 · Half-leading is signed
-  - L717 · Where it is stored, and why relative to the baseline
-  - L728 · Measured effect
-  - L744 · The synthetic fragments that were riding on line_height
-  - L764 · text-transform: capitalize titlecases the first LETTER of a word, not the first character (tick 412)
-  - L778 · white-space: pre-wrap PRESERVES spaces; pre-line COLLAPSES them — they shared one path (tick 413)
-  - L797 · text-indent shifts the FIRST line box only — and it powers image replacement (tick 416)
-  - L820 · -webkit-line-clamp: N caps a block at N lines with a trailing … (tick 417)
-  - L846 · The ch unit is the font's real 0-advance, not the 0.5em fallback (tick 499)
-  - L878 · The ex unit is the face's real x-height (OS/2 sxHeight), not 0.5em (tick 500)
-  - L892 · The cap unit is the face's real cap-height — it used to collapse to 0px (tick 502)
-  - L907 · No named font family ever resolved — fontdb's name query is case-SENSITIVE (tick 557)
-  - L952 · The SECOND defect, one line later: intern_family discarded the case (tick 558)
-  - L981 · @font-face shadows a same-named local face — a failed download must look failed (tick 561)
-  - L1010 · A downloaded web font is a THIRD reason to re-lay-out (tick 619)
-  - L1026 · Every layer below it was already correct
-  - L1041 · ⚠ The blast radius is smaller than it looks, and it was measured
-  - L1057 · The fix must not reintroduce the cost it is fixing
-  - L1065 · What is still unmeasured
-  - L1071 · The line box has no STRUT, and that is the dy term (tick 690)
-  - L1100 · FIXED at tick 691 — two changes, one behaviour
-  - L1132 · The strut's cost: desitales2 dy 91 → 110, and line-height: normal is exonerated (tick 693)
-  - L1172 · The half-leading belongs to each INLINE BOX, not to the line (tick 695)
-  - L1207 · top and bottom are opposites, and only a fixture carrying both can see it
-  - L1219 · What it is worth, and the honest ledger
-  - L1251 · A family declares four faces; the loop fetched one, and resolved its URL against the wrong document (tick 747)
-  - L1257 · A — the idempotence key was the FAMILY, so only the first weight ever loaded
-  - L1305 · B — a relative src resolved against the DOCUMENT, not the stylesheet
-  - L1332 · system-ui is a different font from sans-serif, and an alias at the FRONT of a stack decides the whole stack (tick 749)
-  - L1344 · 1. The two generics need two different faces, and this file already said so
-  - L1374 · 2. An early match discards the rest of the author's list
-  - L1397 · The reusable rule
-  - L1409 · The collapsible set is CSS's, not Unicode's (tick 759)
-  - L1440 · The rule
-  - L1450 · A line box with no content-bearing member does not exist — and the spec's own sentence is too wide (tick 761)
-  - L1471 · Chrome is NARROWER than its own spec text, and only the measurement says so
-  - L1495 · Chrome does not break after a solidus (t791)
-  - L1527 · A text-bearing inline-block sits on its own baseline (t795)
-  - L1562 · UAX #9 rule L2: a line's inline BOXES are reordered — and having the other half of bidi is what hid it
-  - L1626 · An inline element's box is ITS OWN content area, resolved PER AXIS (t853)
-  - L1688 · vertical-align is implemented for atomic inlines and absent for text (t913)
-  - L1714 · The cause is one if
-  - L1732 · Why it belongs to the <div>-height burndown
-  - L1740 · The fix must be both halves at once
-  - L1747 · A branch that ignores a field and a field that can only hold one value look identical (t914)
-  - L1769 · <sup>/<sub> had no UA rule at all
-  - L1776 · What is asserted, and what is named
-  - L1790 · Both halves in one change
-  - L1798 · The offset is the PARENT's font size × 0.375 (t915)
-  - L1820 · The strut tuple gained a member rather than the constant gaining a fudge
-  - L1830 · A formula that degenerates to a no-op on the common case reads as implemented (t916)
-  - L1858 · The family, four ticks on
-  - L1877 · vertical-align: <length> parsed to baseline and vanished (t922)
-  - L1900 · The family, five ticks on
-  - L1917 · A property RECOVERED from the second UA sheet is OVERWRITTEN by it, not falling back to it (t923)
-  - L1939 · The guard that outlives the fix
-  - L1945 · An inline box contributes leading even when it holds no text of its own (tick 934 measured · tick 935 LANDED)
-  - L2000 · Also measured: a nowrap inline in overflow:hidden reports a CLAMPED width
-  - L2008 · The negative result from the same sweep
-  - L2017 · As landed (t935) — every line box and every y byte-identical to Chrome
-  - L2047 · The residue, pinned at OUR number (t935) — CLOSED at t939, and it was ONE BRANCH
-  - L2095 · A TAB has no width — its advance is an OUTPUT of the pen (t959–t962)
-  - L2172 · A list-box <select> is sized by ROWS, and the row is NOT a line box (t958, t963)
-  - L2253 · A replaced element's baseline is its bottom margin edge, and <img> was right by ACCIDENT (t967)
-  - L2309 · …and the OTHER half: the line box that CONTAINS the icon (t968 specified, t970 LANDED)
-  - L2365 · text-indent moves the line's START edge; it was charged as a leading fragment (t988)
-  - L2383 · The break-point symptom is invisible to every obvious instrument
-  - L2394 · The alignment rows are the evidence the model is right, not a bonus
-  - L2418 · A HORIZONTAL-only frame left the inline's box on the LINE, not on its content (t994)
-  - L2461 · The same property, two implementations, and a comment saying they could not diverge
-  - L2494 · ⚠ The fixture bug that made the first run report 20 of 20 exact
-  - L2505 · ::first-letter is absent, and it is 10.5% of the CSS 2.1 suite's remaining failures (t1077)
-  - L2536 · Why it is a subsystem and not a tick
-  - L2557 · ::first-letter is a RANGE over InlineItems, and UAX #14 had already cut it in two (t1078)
-  - L2596 · The step that was not free, and the row that found it
-  - L2636 · The negative row, which the suite provides
-  - L2645 · Measured
-  - L2671 · What is left, named rather than discovered later
-  - L2680 · A soft wrap opportunity at a space belongs to the element that CONTAINS the space (t1105)
-  - L2703 · What it costs, and how it reaches a table
-  - L2719 · The fix is known, was measured, and is REFUSED — the residue is a second defect
-  - L2744 · The 36 containers are NOT the break rule — three hypotheses, three fixtures, three negatives (t1106)
-  - L2783 · Generated content on a NESTED INLINE element was dropped entirely — half the corpus declares one (t1107)
-  - L2807 · The measurement, both engines, 16px/1 monospace in a 300px box
-  - L2840 · What it bought, and the one place it cost
-  - L2868 · A soft wrap opportunity is a property of the GAP — and the breaker had to be able to go back to one (t1108)
-  - L2881 · The battery: 20 rows, both engines, 16px/1 monospace
-  - L2914 · Restricting the opportunities exposed a forward-only greedy breaker
-  - L2936 · Three details the restriction made load-bearing
-  - L2946 · What it bought
-  - L2974 · Generated content is TEXT, so its white space collapses — and an empty block-level generated box is not an inline word (t1110)
-  - L2996 · Two bugs in the fix, both caught by the suite and neither by reasoning
-  - L3008 · The gate had a VACUOUS ROW and the mutation is what found it
-  - L3015 · What it is worth, measured honestly
-  - L3029 · The two sites nearest the M1 bar, and three hypotheses that died (t1111)
-  - L3045 · The exemplars, and what they are not
-  - L3076 · MANUK_HOVF_TRACE — the overflow is reported on the symptom, and the defect is an ancestor (t1112)
-  - L3110 · A flex item loses its specified width when the container is shrink-to-fit AND a sibling grows (t1113)
-  - L3136 · Reach, and where the code is
-  - L3147 · A definite width IS the box's intrinsic contribution — both of them (t1114)
-  - L3174 · What it is worth, stated exactly
-  - L3193 · Two more gate rows were written and deleted
-  - L3201 · A flex child FILLS the 1e6 measuring width, and the slack heuristic then throws away its items (t1115)
-  - L3239 · The fix: a filled flex box answers for itself (t1116)
-  - L3272 · An atomic inline IS a line box, and the bare ones were invisible to the search (t1131)
-  - L3305 · It is one rule with two implementations, and both had it
-  - L3322 · The non-visible clause is NOT gated on being atomic, and a WPT test says so
-  - L3332 · What it does NOT buy, and why that is the interesting half
-  - L3342 · line-height: 0 is a value, and the strut's two halves cancel (t1132)
-  - L3375 · Two things this fixture says that the failing row alone does not
-  - L3394 · The suite counts drift across hours, and only a same-hour set diff attributes
-  - L3402 · A <br> is a BREAK, not an inline box on the line it ends (t1137)
-  - L3424 · The wrapped control is what identifies the mechanism
-  - L3433 · And its own rect is the font's CONTENT AREA
-  - L3446 · The gate that was pinning the engine to the bug
-  - L3456 · ⚠ A GREEN mutation, recorded rather than acted on
-  - L3476 · line-height: normal rounds the PARTS, not the SUM — a constant fitted at one SIZE (t1138)
-  - L3492 · Why it survived, and what the old doc got wrong
-  - L3506 · Why no ranking could have found it
-  - L3521 · The gate guards against being re-fitted
-  - L3530 · UAX #14 is Chrome-exact on 26 of 27 rows — and the 27th was word-break: keep-all (t1140)
-  - L3543 · The 27th
-  - L3577 · A data: URI contains a SEMICOLON, and the declaration splitter cut every one in half (t1143)
-  - L3603 · The control row is what named the organ, and the first probe got it backwards
-  - L3612 · Priced before building
-  - L3634 · A box that is WIDER *and* TALLER is a FACE, and the diff reports the computed family (t1151)
-  - L3664 · Measure the face, do not name it — canvas.measureText is the channel getComputedStyle lacks (t1153)
-  - L3700 · One hundred @font-face rules for one family — unicode-range (t1154)
-  - L3749 · swash reads size(0) as FONT UNITS, and font-size: 0 is a RESET, not an edge case (tick 1160)
+  - L96 · A Private-Use-Area codepoint may not use a GENERIC family — and that is the whole icon-font web
+  - L135 · Chromium never asks fontconfig for a bare generic family — it asks for **Arial** and **Times New Roman**
+  - L154 · font-family was never mapped from the cascade AT ALL — and it wore a font-metrics costume for ticks
+  - L159 · line-height: normal comes from the font's ascent + descent + lineGap
+  - L166 · A block box inside an inline must BLOCKIFY the inline (CSS2 §9.2.1.1)
+  - L174 · Empty inline elements have GEOMETRY, and pages depend on it
+  - L180 · Two ways content is laid out perfectly and still cannot be SEEN
+  - L190 · Inline elements produce no layout box — so <a> and <button> had NO GEOMETRY AT ALL
+  - L199 · WOFF2 needs no C++ — and neither swash nor skrifa will decompress it for you
+  - L210 · A shaped-run cache key must EXCLUDE pixel size
+  - L217 · The char-based glyph model cannot express ligatures or complex scripts
+  - L224 · Skrifa is the library Chromium itself ships
+  - L233 · tiny-skia has no Gaussian blur
+  - L239 · Shrink-to-fit content extent must include the child's RIGHT margin (margin box, not border box)
+  - L249 · text-transform — rendered casing without touching the DOM text (tick 182)
+  - L278 · overflow-wrap / word-break — char-level breaking of an unbreakable token (tick 183)
+  - L312 · letter-spacing / word-spacing — tracking a run's advance in measure and paint (tick 184)
+  - L345 · text-overflow: ellipsis — truncating a clipped single line (tick 186)
+  - L374 · text-decoration-color — a colored underline paints in its own hue, not the text color (tick 187)
+  - L405 · text-decoration-thickness / text-underline-offset — a decoration line the design's own weight and position
+  - L436 · The shaper must be told WHICH SCRIPT it is shaping (tick 214)
+  - L482 · The bidi BASE direction — direction: rtl / dir="rtl" (tick 215)
+  - L531 · Canvas text is the DOM text stack, wired to a different surface
+  - L545 · The canvas blit cannot be manuk_paint's blit
+  - L553 · measureText returning length * 7 was worse than an imprecise width
+  - L560 · Transforms: uniform scale is exact, rotation is the documented gap
+  - L575 · Gate lesson: a pixel claim must re-assert that ink exists
+  - L582 · Canvas drawImage — the first operation that needs pixels flowing INWARD
+  - L584 · The plumbing was directional, and that is why the method was a no-op
+  - L597 · Canvases and images must live in SEPARATE registries even though Page merges them
+  - L607 · A negative extent means two different things on the two rects
+  - L615 · It is a PATTERN FILL of the destination rect, not draw_pixmap
+  - L623 · tiny-skia applies the fill transform to the SHADER as well as the path
+  - L638 · RED probes executed, not asserted (process rule 3)
+  - L647 · Residue
+  - L653 · The line box is a whole number of pixels (tick 269)
+  - L658 · The measurement
+  - L673 · The rule
+  - L677 · The wrong rule that looks identical
+  - L696 · What is NOT rounded
+  - L704 · The inline box is the CONTENT AREA, not the line box (tick 271)
+  - L721 · The rule (CSS 2.1 §10.6.1)
+  - L730 · The two rounding rules are opposite, and that is not a typo
+  - L749 · Half-leading is signed
+  - L756 · Where it is stored, and why relative to the baseline
+  - L767 · Measured effect
+  - L783 · The synthetic fragments that were riding on line_height
+  - L803 · text-transform: capitalize titlecases the first LETTER of a word, not the first character (tick 412)
+  - L817 · white-space: pre-wrap PRESERVES spaces; pre-line COLLAPSES them — they shared one path (tick 413)
+  - L836 · text-indent shifts the FIRST line box only — and it powers image replacement (tick 416)
+  - L859 · -webkit-line-clamp: N caps a block at N lines with a trailing … (tick 417)
+  - L885 · The ch unit is the font's real 0-advance, not the 0.5em fallback (tick 499)
+  - L917 · The ex unit is the face's real x-height (OS/2 sxHeight), not 0.5em (tick 500)
+  - L931 · The cap unit is the face's real cap-height — it used to collapse to 0px (tick 502)
+  - L946 · No named font family ever resolved — fontdb's name query is case-SENSITIVE (tick 557)
+  - L991 · The SECOND defect, one line later: intern_family discarded the case (tick 558)
+  - L1020 · @font-face shadows a same-named local face — a failed download must look failed (tick 561)
+  - L1049 · A downloaded web font is a THIRD reason to re-lay-out (tick 619)
+  - L1065 · Every layer below it was already correct
+  - L1080 · ⚠ The blast radius is smaller than it looks, and it was measured
+  - L1096 · The fix must not reintroduce the cost it is fixing
+  - L1104 · What is still unmeasured
+  - L1110 · The line box has no STRUT, and that is the dy term (tick 690)
+  - L1139 · FIXED at tick 691 — two changes, one behaviour
+  - L1171 · The strut's cost: desitales2 dy 91 → 110, and line-height: normal is exonerated (tick 693)
+  - L1211 · The half-leading belongs to each INLINE BOX, not to the line (tick 695)
+  - L1246 · top and bottom are opposites, and only a fixture carrying both can see it
+  - L1258 · What it is worth, and the honest ledger
+  - L1290 · A family declares four faces; the loop fetched one, and resolved its URL against the wrong document (tick 747)
+  - L1296 · A — the idempotence key was the FAMILY, so only the first weight ever loaded
+  - L1344 · B — a relative src resolved against the DOCUMENT, not the stylesheet
+  - L1371 · system-ui is a different font from sans-serif, and an alias at the FRONT of a stack decides the whole stack (tick 749)
+  - L1383 · 1. The two generics need two different faces, and this file already said so
+  - L1413 · 2. An early match discards the rest of the author's list
+  - L1436 · The reusable rule
+  - L1448 · The collapsible set is CSS's, not Unicode's (tick 759)
+  - L1479 · The rule
+  - L1489 · A line box with no content-bearing member does not exist — and the spec's own sentence is too wide (tick 761)
+  - L1510 · Chrome is NARROWER than its own spec text, and only the measurement says so
+  - L1534 · Chrome does not break after a solidus (t791)
+  - L1566 · A text-bearing inline-block sits on its own baseline (t795)
+  - L1601 · UAX #9 rule L2: a line's inline BOXES are reordered — and having the other half of bidi is what hid it
+  - L1665 · An inline element's box is ITS OWN content area, resolved PER AXIS (t853)
+  - L1727 · vertical-align is implemented for atomic inlines and absent for text (t913)
+  - L1753 · The cause is one if
+  - L1771 · Why it belongs to the <div>-height burndown
+  - L1779 · The fix must be both halves at once
+  - L1786 · A branch that ignores a field and a field that can only hold one value look identical (t914)
+  - L1808 · <sup>/<sub> had no UA rule at all
+  - L1815 · What is asserted, and what is named
+  - L1829 · Both halves in one change
+  - L1837 · The offset is the PARENT's font size × 0.375 (t915)
+  - L1859 · The strut tuple gained a member rather than the constant gaining a fudge
+  - L1869 · A formula that degenerates to a no-op on the common case reads as implemented (t916)
+  - L1897 · The family, four ticks on
+  - L1916 · vertical-align: <length> parsed to baseline and vanished (t922)
+  - L1939 · The family, five ticks on
+  - L1956 · A property RECOVERED from the second UA sheet is OVERWRITTEN by it, not falling back to it (t923)
+  - L1978 · The guard that outlives the fix
+  - L1984 · An inline box contributes leading even when it holds no text of its own (tick 934 measured · tick 935 LANDED)
+  - L2039 · Also measured: a nowrap inline in overflow:hidden reports a CLAMPED width
+  - L2047 · The negative result from the same sweep
+  - L2056 · As landed (t935) — every line box and every y byte-identical to Chrome
+  - L2086 · The residue, pinned at OUR number (t935) — CLOSED at t939, and it was ONE BRANCH
+  - L2134 · A TAB has no width — its advance is an OUTPUT of the pen (t959–t962)
+  - L2211 · A list-box <select> is sized by ROWS, and the row is NOT a line box (t958, t963)
+  - L2292 · A replaced element's baseline is its bottom margin edge, and <img> was right by ACCIDENT (t967)
+  - L2348 · …and the OTHER half: the line box that CONTAINS the icon (t968 specified, t970 LANDED)
+  - L2404 · text-indent moves the line's START edge; it was charged as a leading fragment (t988)
+  - L2422 · The break-point symptom is invisible to every obvious instrument
+  - L2433 · The alignment rows are the evidence the model is right, not a bonus
+  - L2457 · A HORIZONTAL-only frame left the inline's box on the LINE, not on its content (t994)
+  - L2500 · The same property, two implementations, and a comment saying they could not diverge
+  - L2533 · ⚠ The fixture bug that made the first run report 20 of 20 exact
+  - L2544 · ::first-letter is absent, and it is 10.5% of the CSS 2.1 suite's remaining failures (t1077)
+  - L2575 · Why it is a subsystem and not a tick
+  - L2596 · ::first-letter is a RANGE over InlineItems, and UAX #14 had already cut it in two (t1078)
+  - L2635 · The step that was not free, and the row that found it
+  - L2675 · The negative row, which the suite provides
+  - L2684 · Measured
+  - L2710 · What is left, named rather than discovered later
+  - L2719 · A soft wrap opportunity at a space belongs to the element that CONTAINS the space (t1105)
+  - L2742 · What it costs, and how it reaches a table
+  - L2758 · The fix is known, was measured, and is REFUSED — the residue is a second defect
+  - L2783 · The 36 containers are NOT the break rule — three hypotheses, three fixtures, three negatives (t1106)
+  - L2822 · Generated content on a NESTED INLINE element was dropped entirely — half the corpus declares one (t1107)
+  - L2846 · The measurement, both engines, 16px/1 monospace in a 300px box
+  - L2879 · What it bought, and the one place it cost
+  - L2907 · A soft wrap opportunity is a property of the GAP — and the breaker had to be able to go back to one (t1108)
+  - L2920 · The battery: 20 rows, both engines, 16px/1 monospace
+  - L2953 · Restricting the opportunities exposed a forward-only greedy breaker
+  - L2975 · Three details the restriction made load-bearing
+  - L2985 · What it bought
+  - L3013 · Generated content is TEXT, so its white space collapses — and an empty block-level generated box is not an inline word (t1110)
+  - L3035 · Two bugs in the fix, both caught by the suite and neither by reasoning
+  - L3047 · The gate had a VACUOUS ROW and the mutation is what found it
+  - L3054 · What it is worth, measured honestly
+  - L3068 · The two sites nearest the M1 bar, and three hypotheses that died (t1111)
+  - L3084 · The exemplars, and what they are not
+  - L3115 · MANUK_HOVF_TRACE — the overflow is reported on the symptom, and the defect is an ancestor (t1112)
+  - L3149 · A flex item loses its specified width when the container is shrink-to-fit AND a sibling grows (t1113)
+  - L3175 · Reach, and where the code is
+  - L3186 · A definite width IS the box's intrinsic contribution — both of them (t1114)
+  - L3213 · What it is worth, stated exactly
+  - L3232 · Two more gate rows were written and deleted
+  - L3240 · A flex child FILLS the 1e6 measuring width, and the slack heuristic then throws away its items (t1115)
+  - L3278 · The fix: a filled flex box answers for itself (t1116)
+  - L3311 · An atomic inline IS a line box, and the bare ones were invisible to the search (t1131)
+  - L3344 · It is one rule with two implementations, and both had it
+  - L3361 · The non-visible clause is NOT gated on being atomic, and a WPT test says so
+  - L3371 · What it does NOT buy, and why that is the interesting half
+  - L3381 · line-height: 0 is a value, and the strut's two halves cancel (t1132)
+  - L3414 · Two things this fixture says that the failing row alone does not
+  - L3433 · The suite counts drift across hours, and only a same-hour set diff attributes
+  - L3441 · A <br> is a BREAK, not an inline box on the line it ends (t1137)
+  - L3463 · The wrapped control is what identifies the mechanism
+  - L3472 · And its own rect is the font's CONTENT AREA
+  - L3485 · The gate that was pinning the engine to the bug
+  - L3495 · ⚠ A GREEN mutation, recorded rather than acted on
+  - L3515 · line-height: normal rounds the PARTS, not the SUM — a constant fitted at one SIZE (t1138)
+  - L3531 · Why it survived, and what the old doc got wrong
+  - L3545 · Why no ranking could have found it
+  - L3560 · The gate guards against being re-fitted
+  - L3569 · UAX #14 is Chrome-exact on 26 of 27 rows — and the 27th was word-break: keep-all (t1140)
+  - L3582 · The 27th
+  - L3616 · A data: URI contains a SEMICOLON, and the declaration splitter cut every one in half (t1143)
+  - L3642 · The control row is what named the organ, and the first probe got it backwards
+  - L3651 · Priced before building
+  - L3673 · A box that is WIDER *and* TALLER is a FACE, and the diff reports the computed family (t1151)
+  - L3703 · Measure the face, do not name it — canvas.measureText is the channel getComputedStyle lacks (t1153)
+  - L3739 · One hundred @font-face rules for one family — unicode-range (t1154)
+  - L3788 · swash reads size(0) as FONT UNITS, and font-size: 0 is a RESET, not an edge case (tick 1160)
 
 ## The wasm demo — running the engine inside someone else's browser
 `docs/wiki/wasm-demo.md`
@@ -2005,4 +2007,4 @@
   - L124 · Rank mechanisms by FLIP RATE, not failing-subtest count — CSS layout is a multi-assertion slog
 
 ---
-1912 sections across 22 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+1914 sections across 22 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.

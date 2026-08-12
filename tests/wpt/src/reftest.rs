@@ -151,7 +151,16 @@ pub fn render_page_rgba(html: &str, url: &str, fonts: &FontContext, w: u32, h: u
 }
 
 /// The WPT Ahem face, WOFF2-compressed — the same 1,624-byte fixture `manuk-page`'s webfont gates
-/// serve over HTTP. See [`install_ahem`] for why a reftest run cannot mean anything without it.
+/// serve over HTTP. See [`install_ahem`] for why a WPT run cannot mean anything without it.
+///
+/// ⚠ **It is a 245-codepoint subset of upstream's 278-codepoint `wpt/fonts/Ahem.ttf` v1.50**, and
+/// t1183 measured what that costs: **nothing, across fourteen `css/` areas, to the subtest.** The
+/// 33 it drops are not what the suite measures with; `X`, the Latin block, the space and the
+/// PUA codepoints `U+F000–F002` that `css-fonts/matching/font-unicode-PUA.html` turns on are all
+/// present. Swapping in the full face was built, measured and **reverted** — it moved no number on
+/// the testharness leg and would have been an unmeasured change to the *reftest* leg, which shares
+/// this constant. Recorded so the next reader does not re-derive it: the hole is real, currently
+/// inert, and a measured reason is what should reopen it.
 const AHEM_WOFF2: &[u8] = include_bytes!(concat!(
     env!("CARGO_MANIFEST_DIR"),
     "/../../engine/text/tests/fixtures/Ahem.woff2"
@@ -188,16 +197,42 @@ const AHEM_WOFF2: &[u8] = include_bytes!(concat!(
 /// **Ahem be installed on the host**, and [`FontContext::register_font`] is that: the face enters
 /// `fontdb` under its own internal family name, exactly as `fc-cache` would have put it there.
 ///
-/// Scoped to the reftest runner on purpose. A test font must never reach a real page, so this is
-/// **not** in `FontContext::new`.
-fn install_ahem(fonts: &FontContext) {
+/// Scoped to the WPT runners on purpose. A test font must never reach a real page, so this is
+/// **not** in `FontContext::new` — `boxes`, `fidelity` and `oracle` render the live internet and
+/// must keep seeing exactly the faces a user has.
+///
+/// ⚠⚠⚠ **AND THE SENTENCE ABOVE USED TO SAY "the reftest runner", WHICH IS THE DEFECT.** The
+/// tick that wrote this installed the ruler on the leg it was debugging and left the other leg —
+/// the **testharness** leg, which is where the project's PRIMARY metric (the monotonic WPT
+/// subtest total) is read — measuring the fallback face. The suite states the dependency in the
+/// markup rather than in `meta flags`, so nothing in the report could name it:
+///
+/// ```text
+///   3,804 files under css/ link `/fonts/ahem.css`
+///     1,637 css/CSS2      844 css/css-text      835 css/css-grid   <- the board's #1 lever
+///        93 css/css-flexbox    68 css/css-fonts   65 css/css-overflow  …
+/// ```
+///
+/// `css/css-grid/abspos/positioned-grid-descendants-*` is the shape of it: 32 files, 3,200
+/// subtests, a flat **zero**, and the first assertion of every one of them is
+/// `width expected 50 but got 0` — where 50 is *two Ahem em boxes at 25px*. A run without the
+/// ruler cannot distinguish "the engine got this wrong" from "the engine was measured with the
+/// wrong ruler", and this cluster is both.
+///
+/// Idempotent, because the testharness leg calls it per test file rather than once per run:
+/// `has_family` is the un-fallen-back question (`resolve_family("Ahem")` answers `Named` on a host
+/// with no Ahem at all), so a second call is a scan of the face list and nothing else.
+pub fn install_ahem(fonts: &FontContext) {
+    if fonts.has_family("Ahem") {
+        return;
+    }
     match manuk_text::decode_woff2(AHEM_WOFF2) {
         Some(sfnt) => fonts.register_font(sfnt),
-        // Loud, because every ahem-flagged test would otherwise fail for a reason the report cannot
-        // name — which is the state this function exists to end.
+        // Loud, because otherwise every ahem-dependent test fails for a reason no report can name
+        // — which is the state this function exists to end.
         None => eprintln!(
-            "⚠ Ahem.woff2 did not decode — every `flags: ahem` test (17.4% of css/CSS2) will \
-             measure the fallback face and fail"
+            "⚠ Ahem.woff2 did not decode — every ahem-dependent test (3,804 files under css/, \
+             17.4% of css/CSS2's reftests) will measure the fallback face and fail"
         ),
     }
 }

@@ -69,6 +69,7 @@ fn g_line_box_rounding() {
         family: FontFamily::SansSerif,
         bold: false,
         italic: false,
+        pua_family: None,
     };
     let lm = fonts.line_metrics(key, 16.0);
     assert!(

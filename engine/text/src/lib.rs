@@ -35,6 +35,25 @@ pub struct FontKey {
     pub family: FontFamily,
     pub bold: bool,
     pub italic: bool,
+    /// ⚠⚠⚠ **THE FAMILY A PRIVATE-USE-AREA CODEPOINT IS ALLOWED TO USE, WHICH IS NOT `family`.**
+    ///
+    /// css-fonts-4 §char-handling-issues: *"If a given character is a Private-Use-Area Unicode
+    /// codepoint, user agents must only match font families named in the font-family list that are
+    /// **not generic families**."* [`FontContext::resolve_family`] answers for the element as a
+    /// whole and returns at the **first** entry it can honour — so `font-family: sans-serif,
+    /// "Font Awesome"` resolves to `SansSerif`, and every icon in the U+E000–U+F8FF block is then
+    /// drawn from whatever glyph the system sans face happens to have at that codepoint. That is
+    /// the *wrong icon*, silently, rather than a missing-glyph box.
+    ///
+    /// This is the interned id of the **first non-generic family in the same list** — computed once
+    /// beside `family`, carried on the key so it reaches the per-character face resolution in
+    /// [`FontContext::segment`], and `None` when the list has no non-generic entry (in which case
+    /// the spec's answer is the missing-glyph symbol, not a fallback face).
+    ///
+    /// It is part of the KEY, not a side-table, because it changes which glyphs a run produces and
+    /// the shaped-run cache is keyed on this struct. Two elements that differ only here must not
+    /// share a cache entry.
+    pub pua_family: Option<u32>,
 }
 
 impl Default for FontKey {
@@ -43,8 +62,18 @@ impl Default for FontKey {
             family: FontFamily::SansSerif,
             bold: false,
             italic: false,
+            pua_family: None,
         }
     }
+}
+
+/// Is `ch` in one of Unicode's three Private Use Areas?
+///
+/// css-fonts-4 singles these out because a PUA codepoint has **no agreed meaning**: the only font
+/// that can render it correctly is one the page named itself. A generic family's glyph at the same
+/// codepoint is not a worse rendering of the same character — it is a different character.
+pub fn is_private_use(ch: char) -> bool {
+    matches!(ch as u32, 0xE000..=0xF8FF | 0xF_0000..=0xF_FFFD | 0x10_0000..=0x10_FFFD)
 }
 
 /// Vertical metrics of a font at a given size, in px. `descent` is a positive
@@ -495,6 +524,23 @@ impl FontContext {
         self.db.borrow().len()
     }
 
+    /// Is a face for **exactly** this family present, with no fallback in the answer?
+    ///
+    /// [`resolve_family`] and [`font`] cannot answer this: both fall back to sans-serif when the
+    /// name is unknown, so *"does `font-family: Ahem` work"* comes back `true` on a host that has
+    /// never seen Ahem. The WPT runners need the un-fallen-back answer to make installing the
+    /// suite's ruler idempotent, and a caller that wants to know whether a family is genuinely
+    /// available — rather than merely resolvable — has had no way to ask.
+    ///
+    /// [`resolve_family`]: FontContext::resolve_family
+    /// [`font`]: FontContext::font
+    pub fn has_family(&self, name: &str) -> bool {
+        self.db
+            .borrow()
+            .faces()
+            .any(|f| f.families.iter().any(|(n, _)| n.eq_ignore_ascii_case(name)))
+    }
+
     /// Resolve (and cache) a fontdue face for `key`, or `None` if unavailable.
     pub fn font(&self, key: FontKey) -> Option<Rc<fontdue::Font>> {
         if let Some(hit) = self.cache.borrow().get(&key) {
@@ -725,6 +771,75 @@ impl FontContext {
         FontFamily::SansSerif
     }
 
+    /// The **first non-generic family in `names` that has a real face** — the only thing a
+    /// Private-Use-Area codepoint is allowed to be drawn with (css-fonts-4
+    /// §char-handling-issues). `None` when the list names no such family, which is the spec's
+    /// "display some form of missing glyph symbol" case rather than a fallback.
+    ///
+    /// Deliberately NOT a variant of [`resolve_family`]: that function's whole contract is *"the
+    /// first entry we can honour, generics included"*, and the two answers differ for exactly the
+    /// stacks this rule is about. Sharing one function behind a flag would make every caller
+    /// decide a spec question it does not know it is being asked.
+    ///
+    /// [`resolve_family`]: FontContext::resolve_family
+    pub fn first_non_generic_family(&self, names: &[String]) -> Option<u32> {
+        for raw in names {
+            let orig = raw.trim().trim_matches(['"', '\'']);
+            let n = orig.to_ascii_lowercase();
+            // The generics, plus the CSS-Fonts-4 spellings `resolve_family` honours. `emoji`,
+            // `math` and `fangsong` are generics we do not implement — they must still be SKIPPED
+            // here, or a page listing one before its icon font would pick it as the PUA family and
+            // then fail to resolve it to anything.
+            if matches!(
+                n.as_str(),
+                "" | "serif"
+                    | "sans-serif"
+                    | "monospace"
+                    | "cursive"
+                    | "fantasy"
+                    | "system-ui"
+                    | "ui-serif"
+                    | "ui-sans-serif"
+                    | "ui-monospace"
+                    | "ui-rounded"
+                    | "emoji"
+                    | "math"
+                    | "fangsong"
+            ) {
+                continue;
+            }
+            // An `@font-face` family wins under its CSS name, exactly as in `resolve_family`.
+            if self.webfonts.borrow().contains_key(&n) {
+                return Some(self.intern_family(&n));
+            }
+            // A DECLARED-but-unloaded `@font-face` family shadows any same-named local face, so
+            // matching continues to the next entry (t561) — the same rule, for the same reason.
+            if self.declared_webfonts.borrow().contains(&n) {
+                continue;
+            }
+            // ⚠ `orig`, not `n`: `fontdb::Family::Name` matching is case-SENSITIVE (t557).
+            let q = fontdb::Query {
+                families: &[fontdb::Family::Name(orig)],
+                weight: fontdb::Weight::NORMAL,
+                stretch: fontdb::Stretch::Normal,
+                style: fontdb::Style::Normal,
+            };
+            let db = self.db.borrow();
+            let matched = db.query(&q).is_some_and(|id| {
+                db.face(id).is_some_and(|f| {
+                    f.families
+                        .iter()
+                        .any(|(fam, _)| fam.eq_ignore_ascii_case(&n))
+                })
+            });
+            drop(db);
+            if matched {
+                return Some(self.intern_family(orig));
+            }
+        }
+        None
+    }
+
     /// The **name of the family this stack actually resolves to** — the answer to *"which face did you
     /// use?"*, which a box on its own cannot give.
     ///
@@ -906,7 +1021,24 @@ impl FontContext {
 
     /// Resolve which face to shape/render `ch` with: the primary if it has the glyph, else
     /// the first fallback face that does (CJK/emoji/symbols), else the primary (`.notdef`).
-    fn resolve_face(&self, ch: char, primary: FaceId) -> FaceId {
+    ///
+    /// ⚠⚠⚠ **A PRIVATE-USE-AREA CODEPOINT TAKES NEITHER PATH.** css-fonts-4
+    /// §char-handling-issues carves it out twice over: only **non-generic** families in the
+    /// author's list may match it, and *"if none of the families named in the font-family list
+    /// contain a glyph for that codepoint, user agents must display some form of missing glyph
+    /// symbol for that character **rather than attempting installed font fallback**"*. Both halves
+    /// matter and both are here, because either one alone renders a *different character* and
+    /// calls it a fallback: PUA is where every icon font lives, so the failure is Font Awesome's
+    /// U+F007 coming out as whatever the system serif keeps at that address.
+    fn resolve_face(&self, ch: char, primary: FaceId, pua: Option<FaceId>) -> FaceId {
+        if is_private_use(ch) {
+            // Only the author's first non-generic family, and no installed-font fallback after it.
+            // `primary` here is the missing-glyph carrier, which is exactly the spec's remedy.
+            return match pua {
+                Some(p) if self.face_covers(p, ch) => p,
+                _ => primary,
+            };
+        }
         if ch.is_whitespace() || ch.is_control() || self.face_covers(primary, ch) {
             return primary;
         }
@@ -916,6 +1048,21 @@ impl FontContext {
             }
         }
         primary
+    }
+
+    /// The face a Private-Use-Area codepoint may be drawn with, per [`FontKey::pua_family`].
+    /// `None` when the list named no non-generic family, or when that family has no face.
+    fn pua_face(&self, key: FontKey) -> Option<FaceId> {
+        let id = key.pua_family?;
+        // Same weight/style as the run: an icon font ships one face, but a text family named as
+        // the first non-generic entry may well ship four, and picking the roman for a bold run
+        // would change the advance.
+        self.primary_face(FontKey {
+            family: FontFamily::Named(id),
+            bold: key.bold,
+            italic: key.italic,
+            pua_family: None,
+        })
     }
 
     /// Vertical line metrics for `key` at `size` px. Falls back to a reasonable
@@ -955,7 +1102,7 @@ impl FontContext {
         if let Some(primary) = self.primary_face(key) {
             // Width is order-independent, so measure without bidi reordering.
             let mut pen = 0.0f32;
-            for (face, script, run) in self.segment(text, primary) {
+            for (face, script, run) in self.segment(text, primary, self.pua_face(key)) {
                 self.shape_run(&run, face, script, size, false, |g, _| pen += g.advance);
             }
             total = Some(pen);
@@ -968,11 +1115,16 @@ impl FontContext {
 
     /// Split `text` into maximal runs sharing a resolved face (primary + per-glyph
     /// fallback), so each run can be shaped by a single font.
-    fn segment(&self, text: &str, primary: FaceId) -> Vec<(FaceId, Script, String)> {
+    fn segment(
+        &self,
+        text: &str,
+        primary: FaceId,
+        pua: Option<FaceId>,
+    ) -> Vec<(FaceId, Script, String)> {
         use swash::text::Codepoint;
         let mut runs: Vec<(FaceId, Script, String)> = Vec::new();
         for ch in text.chars() {
-            let face = self.resolve_face(ch, primary);
+            let face = self.resolve_face(ch, primary, pua);
             let script = ch.script();
             // `Common` (spaces, digits, most punctuation) and `Inherited` (combining marks) carry
             // no script of their own. Opening a new run for them would cut a word in half — and an
@@ -1093,6 +1245,7 @@ impl FontContext {
                 metrics,
             };
         };
+        let pua = self.pua_face(key);
         let mut glyphs = Vec::new();
         let mut pen = 0.0f32;
         // Bidi: reorder the text into visual runs against the PARAGRAPH's base level, then within
@@ -1109,7 +1262,7 @@ impl FontContext {
             for vr in vruns {
                 let rtl = levels[vr.start].is_rtl();
                 let sub = &text[vr.clone()];
-                for (face, script, run) in self.segment(sub, primary) {
+                for (face, script, run) in self.segment(sub, primary, pua) {
                     let advance = self.shape_run(&run, face, script, size, rtl, |g, x| {
                         glyphs.push(GlyphPos {
                             glyph_id: g.id,
@@ -1256,9 +1409,12 @@ pub fn bidi_levels(text: &str, base_rtl: bool) -> Vec<u8> {
 pub fn zero_advance_px(families: &[String], bold: bool, italic: bool, size_px: f32) -> f32 {
     METRICS_CTX.with(|ctx| {
         let key = FontKey {
+            // These three measure `0`, the x-height and the cap-height — never a Private-Use-Area
+            // codepoint — so the PUA family is genuinely absent here, not merely unsupplied.
             family: ctx.resolve_family(families),
             bold,
             italic,
+            pua_family: None,
         };
         ctx.measure("0", key, size_px)
     })
@@ -1271,9 +1427,12 @@ pub fn zero_advance_px(families: &[String], bold: bool, italic: bool, size_px: f
 pub fn x_height_px(families: &[String], bold: bool, italic: bool, size_px: f32) -> Option<f32> {
     METRICS_CTX.with(|ctx| {
         let key = FontKey {
+            // These three measure `0`, the x-height and the cap-height — never a Private-Use-Area
+            // codepoint — so the PUA family is genuinely absent here, not merely unsupplied.
             family: ctx.resolve_family(families),
             bold,
             italic,
+            pua_family: None,
         };
         ctx.x_height(key, size_px)
     })
@@ -1286,9 +1445,12 @@ pub fn x_height_px(families: &[String], bold: bool, italic: bool, size_px: f32) 
 pub fn cap_height_px(families: &[String], bold: bool, italic: bool, size_px: f32) -> Option<f32> {
     METRICS_CTX.with(|ctx| {
         let key = FontKey {
+            // These three measure `0`, the x-height and the cap-height — never a Private-Use-Area
+            // codepoint — so the PUA family is genuinely absent here, not merely unsupplied.
             family: ctx.resolve_family(families),
             bold,
             italic,
+            pua_family: None,
         };
         ctx.cap_height(key, size_px)
     })
@@ -1638,6 +1800,7 @@ mod tests {
                 family,
                 bold: false,
                 italic: false,
+                pua_family: None,
             };
             faces.push(f.primary_face(key));
             widths.push(f.measure(S, key, 16.0));
@@ -1779,6 +1942,7 @@ mod tests {
             family,
             bold: false,
             italic: false,
+            pua_family: None,
         };
         if f.primary_face(key(sysui)) != f.primary_face(key(sans)) {
             assert_ne!(
@@ -1843,5 +2007,108 @@ mod tests {
             sysui,
             "`-apple-system` names no family on Linux; it must fall through, not become system-ui"
         );
+    }
+
+    /// ⚠⚠⚠ **A PRIVATE-USE-AREA CODEPOINT MAY NOT BE DRAWN FROM A GENERIC FAMILY, and every icon
+    /// font on the web lives in that block.**
+    ///
+    /// css-fonts-4 §char-handling-issues: *"If a given character is a Private-Use-Area Unicode
+    /// codepoint, user agents must only match font families named in the font-family list that are
+    /// not generic families. If none of the families named in the font-family list contain a glyph
+    /// for that codepoint, user agents must display some form of missing glyph symbol for that
+    /// character rather than attempting installed font fallback."*
+    ///
+    /// [`FontContext::resolve_family`] answers for the whole element and stops at the FIRST entry
+    /// it can honour, so `font-family: serif, Icons` resolved to `Serif` and U+F000 came out as
+    /// whatever the system serif keeps at that address — **a different character, silently**, and
+    /// the case where the icon font failed to load was indistinguishable from the case where it
+    /// worked. Found by `css/css-fonts/matching/font-unicode-PUA.html`, which could only see it
+    /// once t1183 installed Ahem on the testharness leg: with no Ahem, BOTH arms of its comparison
+    /// fell back to serif and the test passed by cancellation.
+    ///
+    /// **Self-calibrating — there is no expectation column.** Every row states an EQUALITY between
+    /// two measurements taken on this host, so it means the same thing on a box with different
+    /// fonts installed. Three of the four rows are CONTROLS.
+    ///
+    /// **To watch it go RED: delete the `is_private_use` arm from `resolve_face`** — row 1 falls
+    /// back to the serif advance and rows 2–4 are unmoved, which is what makes them controls.
+    #[test]
+    fn a_private_use_codepoint_matches_only_the_non_generic_families_the_author_named() {
+        const PUA: &str = "\u{F000}";
+        let f = FontContext::new();
+        let Some(sfnt) = decode_woff2(include_bytes!("../tests/fixtures/Ahem.woff2")) else {
+            panic!("the Ahem fixture must decode — it is the ruler this test measures with");
+        };
+        f.register_font(sfnt);
+        assert!(
+            f.has_family("Ahem"),
+            "Ahem must register under its own name"
+        );
+
+        let names = |v: &[&str]| -> Vec<String> { v.iter().map(|s| s.to_string()).collect() };
+        let key = |v: &[&str]| FontKey {
+            family: f.resolve_family(&names(v)),
+            bold: false,
+            italic: false,
+            pua_family: f.first_non_generic_family(&names(v)),
+        };
+        let w = |v: &[&str], text: &str| f.measure(text, key(v), 100.0);
+
+        // Ahem's em box is the ruler: every glyph is exactly 1em wide. If the fixture and the
+        // generic happen to agree at this codepoint the test cannot discriminate, and saying so
+        // beats a green that means nothing.
+        let ahem_pua = w(&["Ahem"], PUA);
+        let serif_pua = w(&["serif"], PUA);
+        assert_ne!(
+            ahem_pua, serif_pua,
+            "the probe is blind on this host: Ahem and serif measure U+F000 identically"
+        );
+
+        // 1. THE DEFECT. A generic first, the author's real family after it.
+        assert_eq!(
+            w(&["serif", "Ahem"], PUA),
+            ahem_pua,
+            "`font-family: serif, Ahem` must draw U+F000 from Ahem — the generic is not eligible \
+             for a Private-Use-Area codepoint (css-fonts-4 char-handling-issues)"
+        );
+
+        // 2. CONTROL — a NON-PUA character in the same list is untouched: `serif` wins, as it must.
+        assert_eq!(
+            w(&["serif", "Ahem"], "X"),
+            w(&["serif"], "X"),
+            "the PUA rule must not touch ordinary text: `serif, Ahem` still measures X in serif"
+        );
+
+        // 3. CONTROL — the named family already first. Unchanged, and it is the common icon-font
+        //    shape (`font-family: "Font Awesome", sans-serif`), so a regression here would be the
+        //    fix breaking the case that already worked.
+        assert_eq!(
+            w(&["Ahem", "serif"], PUA),
+            ahem_pua,
+            "`Ahem, serif` already resolved to Ahem and must keep doing so"
+        );
+
+        // 4. THE SECOND CLAUSE — no installed-font fallback. With no non-generic family named,
+        //    the codepoint gets the primary's missing-glyph symbol, NOT a rummage through every
+        //    installed face for something that happens to have a glyph there.
+        let serif_primary = f
+            .primary_face(key(&["serif"]))
+            .expect("serif must resolve to a face");
+        assert_eq!(
+            f.resolve_face('\u{F000}', serif_primary, None),
+            serif_primary,
+            "a PUA codepoint with no author-named family must show the missing-glyph symbol, not \
+             an installed-font fallback"
+        );
+        // ...and the control that keeps row 4 honest: an ordinary uncovered character DOES still
+        // fall back, so row 4 is measuring the PUA carve-out and not a dead fallback path.
+        let cjk = '\u{4E00}';
+        if f.fallback_faces().iter().any(|&fb| f.face_covers(fb, cjk)) {
+            assert_ne!(
+                f.resolve_face(cjk, serif_primary, None),
+                serif_primary,
+                "non-PUA fallback must still work — otherwise row 4 proves nothing"
+            );
+        }
     }
 }

@@ -49,6 +49,70 @@ hung** — named, recorded, and stepped over.
 > independently and for the same reason: **only an OS process boundary contains a spinning C++ JIT
 > frame.**
 
+## A SUITE HAS A RULER, AND INSTALLING IT ON ONE LEG IS WORSE THAN NOT INSTALLING IT AT ALL
+
+WPT does not test prose. It lays text out in **Ahem** — a face whose every glyph is exactly
+`1em × 1em`, `0.8em` ascent and `0.2em` descent — so a layout expectation becomes an integer the
+test can assert: `font: 25px/1 Ahem` on `XX` is **50 × 25**, and nothing else. WPT's own runner
+requirement is that the face be **installed on the host**; the `<link href="/fonts/ahem.css">` every
+such test carries is served by `wpt.py` out of `wpt/fonts/`, a directory **this checkout does not
+have**.
+
+`reftest::install_ahem` has registered the face into `fontdb` since t1088. `harness::run_one` — the
+**other** leg, and the one the project's primary metric (the monotonic WPT subtest total) is read
+through — did not, for a further 95 ticks:
+
+```text
+   3,804 files under css/ link /fonts/ahem.css
+     1,637 css/CSS2    844 css/css-text    835 css/css-grid   <- the board's #1 lever
+```
+
+**The gap was invisible because the dependency is stated in the markup, not in `meta flags`, and
+because the failure it produces is shaped exactly like an engine defect.**
+`css/css-grid/abspos/positioned-grid-descendants-*` is 32 files, 3,200 subtests, a flat zero, and
+every one of them opens `width expected 50 but got 0`. Nothing in that message says *ruler*. It took
+reading the fixture's CSS — `font: 25px/1 Ahem` — to see that the 50 was two em boxes.
+
+Installing it on the testharness leg, measured against the same-day t1182 sweep, one binary rebuilt
+per arm in the same hour:
+
+```text
+   css/css-grid      1765 -> 2018   +253
+   css/css-text      1603 -> 1708   +105
+   css/css-sizing     792 ->  853    +61
+   css/css-flexbox   1450 -> 1469    +19
+   css/css-ui         241 ->  242     +1
+   nine other areas   unmoved to the subtest
+```
+
+**Two rules, and the second is the one that cost the extra hour.**
+
+1. **The ruler goes at the LIBRARY entry point, not in the driver.** `install_ahem` is called from
+   `run_one`, so the gate (`a_testharness_run_lays_text_out_in_the_ahem_face_the_suite_measures_with`)
+   exercises the real call site and deleting the call turns it RED. Put it in `main.rs` and the gate
+   can only test the function, never the wiring — which is precisely the shape of the defect it is
+   guarding.
+2. **INSTALLING A RULER TURNS ACCIDENTAL PASSES INTO HONEST FAILS, and one of them was a real
+   defect.** `css/css-fonts` went **−3**, all three in `matching/font-unicode-PUA.html`, which
+   asserts that `font-family: serif, sans-serif, …, 'Ahem'` and `font-family: 'Ahem'` render
+   **U+F000–F002** to the same width — css-fonts-4's rule that a Private-Use-Area codepoint must
+   match only **non-generic** families. With no Ahem installed *both* arms fell back to serif and
+   agreed at `21.484375`; with Ahem installed the second arm is `22` and the first still
+   `21.484375`, because the engine matched `serif` first. **Two errors cancelled and read as
+   agreement.** The −3 is the ruler exposing the defect, not causing it; the fix is in the same
+   tick.
+
+> **The general rule: when an instrument has two legs, a fix applied to one of them is a
+> DIVERGENCE, not a partial fix** — and the leg you are not debugging is the one that keeps
+> reporting.
+
+**What the subset ruler did NOT cost, measured rather than assumed.** The face installed is
+`engine/text/tests/fixtures/Ahem.woff2`, a **245-codepoint** subset of upstream's 278. Swapping in
+the full `wpt/fonts/Ahem.ttf` was built and run across all fourteen areas above: **every number
+identical, to the subtest.** It was reverted — it bought nothing measurable and would have been an
+unmeasured change to the *reftest* leg, which shares the constant. The hole is real and currently
+inert.
+
 ## Guard every instrument against measuring ITSELF
 
 The runner prints a warning when >25% of files report nothing:

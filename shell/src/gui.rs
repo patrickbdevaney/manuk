@@ -2042,6 +2042,9 @@ impl App {
                 family: FontFamily::SansSerif,
                 bold: false,
                 italic: false,
+                // Browser chrome names no font family, so there is no author list a
+                // Private-Use-Area codepoint could be restricted to.
+                pua_family: None,
             },
             font_size: size,
             color,
@@ -2302,6 +2305,9 @@ impl App {
                 family: FontFamily::SansSerif,
                 bold: false,
                 italic: false,
+                // Browser chrome names no font family, so there is no author list a
+                // Private-Use-Area codepoint could be restricted to.
+                pua_family: None,
             },
             font_size: size,
             color,

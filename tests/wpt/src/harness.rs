@@ -366,6 +366,16 @@ pub async fn run_one(
     fonts: &FontContext,
     timeout: std::time::Duration,
 ) -> TestFile {
+    // ⚠⚠⚠ **THE SUITE MEASURES IN AHEM AND THIS LEG HAD NO AHEM.** `run_reftests` has installed
+    // the face since t1088; this function — the one the project's PRIMARY metric (the monotonic
+    // WPT subtest total) is read through — never did, so **3,804 files under `css/` were laid out
+    // in whatever face `fontdb` picked**, `css/css-grid` (the board's #1 lever) among them at 835.
+    // The dependency is declared in the markup (`<link href="/fonts/ahem.css">`) rather than in
+    // `meta flags`, and there is no `wpt/fonts/` in this checkout to serve, so nothing in the
+    // report could name the cause: `width expected 50 but got 0` reads as a layout defect whether
+    // or not the ruler is right. It is here, not in the driver, so the gate exercises the call
+    // site. Idempotent — see [`crate::reftest::install_ahem`].
+    crate::reftest::install_ahem(fonts);
     let url = format!("{base}/{rel}");
     let t0 = std::time::Instant::now();
 
@@ -604,6 +614,86 @@ mod tests {
         assert_eq!(
             skip_reason("dom/x.html", r#"<script src="/resources/testharness.js">"#),
             None
+        );
+    }
+
+    /// ⚠⚠⚠ **A TESTHARNESS RUN MUST LAY TEXT OUT IN AHEM, AND FOR 1,183 TICKS IT DID NOT.**
+    ///
+    /// Ahem's every glyph is exactly `1em × 1em`, which is what lets a WPT layout test state its
+    /// expectation as an integer: `font: 100px/1 Ahem` on `XX` is **200 × 100**, and nothing else.
+    /// Substitute the fallback face and the same document measures `133.40625 × 116` on this host
+    /// — so the test fails, and its message (`expected 200 but got 133.40625`) reads exactly like
+    /// an engine defect.
+    ///
+    /// **To watch it go RED: delete `install_ahem(fonts)` from [`run_one`].** It runs through
+    /// `run_one` rather than measuring a `FontContext` directly for that reason — the defect being
+    /// gated was a *missing call on one of two legs*, and only the call site can catch it coming
+    /// back. `run_reftests` has the same gate for the other leg
+    /// (`a_reftest_run_installs_the_ahem_face_the_suite_measures_with`); this one exists because
+    /// having it on one leg is what hid the gap.
+    ///
+    /// **3,804 files under `css/` link `/fonts/ahem.css`** — 1,637 `CSS2`, 844 `css-text`, 835
+    /// `css-grid` — and this checkout has no `wpt/fonts/`, so there is nothing to fetch and the
+    /// dependency is invisible to the report.
+    #[test]
+    fn a_testharness_run_lays_text_out_in_the_ahem_face_the_suite_measures_with() {
+        let root = std::env::temp_dir().join("manuk-harness-ahem");
+        let _ = std::fs::remove_dir_all(&root);
+        std::fs::create_dir_all(root.join("resources")).expect("temp resources dir");
+        std::fs::create_dir_all(root.join("mini")).expect("temp suite dir");
+
+        // A stand-in for `testharness.js`. `run_one` reads the report out of a `#__wpt_results__`
+        // element, so the fixture only has to append one — using the real suite would drag in the
+        // whole 200KB harness to assert a font metric.
+        std::fs::write(
+            root.join("mini/ahem-em-box.html"),
+            r#"<!doctype html><meta charset="utf-8"><title>ahem ruler</title>
+<script src="/resources/testharness.js"></script>
+<body style="margin:0"><div id="log"></div>
+<div id="a" style="font:100px/1 Ahem;display:inline-block">XX</div>
+<script>
+  var r = document.getElementById('a').getBoundingClientRect();
+  __wpt_report(r.width === 200 && r.height === 100,
+               'two Ahem em boxes at 100px: expected 200x100, got ' + r.width + 'x' + r.height);
+</script>"#,
+        )
+        .expect("write test");
+        std::fs::write(
+            root.join("resources/testharness.js"),
+            r#"function __wpt_report(ok, msg) {
+  var s = document.createElement('script');
+  s.id = '__wpt_results__';
+  s.type = 'application/json';
+  s.textContent = JSON.stringify({harness: "OK", message: "", tests: [
+    {name: "Ahem is the ruler", status: ok ? 0 : 1, message: ok ? "" : msg}]});
+  (document.body || document.documentElement).appendChild(s);
+}"#,
+        )
+        .expect("write shim");
+
+        let rt = tokio::runtime::Runtime::new().expect("tokio");
+        let report = rt.block_on(async {
+            let (addr, _srv) = serve(root.clone()).await.expect("server");
+            let fonts = FontContext::new();
+            run_one(
+                &format!("http://{addr}"),
+                "mini/ahem-em-box.html",
+                &fonts,
+                std::time::Duration::from_secs(30),
+            )
+            .await
+        });
+
+        let (pass, total) = report.counts();
+        assert_eq!(
+            (pass, total),
+            (1, 1),
+            "a `font: 100px/1 Ahem` `XX` must measure exactly 200x100 — that arithmetic IS how \
+             3,804 WPT files under css/ state their expected geometry, css/css-grid's 835 among \
+             them. Without the face installed the fallback measures ~133x116 and every one of \
+             them fails for a reason no failure message can name.\n  harness={} subtests={:?}",
+            report.harness_status,
+            report.subtests
         );
     }
 }
