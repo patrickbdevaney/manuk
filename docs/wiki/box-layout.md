@@ -5,6 +5,51 @@ Manuk's flex and grid layout runs on a vendored **taffy 0.12** tree (`engine/lay
 lays out the flex/grid containers and their directly-nested flex/grid descendants. The mapping from
 Manuk's `ComputedStyle` to `taffy::Style` (`to_taffy_style`) is where the realities below live.
 
+## THE INLINE STATIC POSITION COUNTS PRECEDING **ELEMENTS** AND NOT PRECEDING **TEXT** (t1187, measured, not yet fixed)
+
+`refine_inline_static_positions` reconstructs where an out-of-flow box *would* have been: it takes
+the furthest-along point that flow reached among the abspos's preceding in-flow siblings, and it
+selects those fragments with
+
+```rust
+    if f.node.is_some_and(|n| before.contains(&n)) { … }
+```
+
+`before` is the set of **preceding sibling NodeIds and their descendants**. But `TextFragment::node`
+is documented as *"the deepest **element** ancestor of the text this run came from"* — so for bare
+text sitting directly in the container, `node` is **the container itself**, which is the abspos's
+PARENT and is never in `before`. Every such fragment is silently skipped.
+
+Measured, one variable per row, Ahem at 25px in a 100px box (`offsetLeft,offsetTop`):
+
+```text
+   preceding content                       ours     Chrome/WPT
+   text "XX", abspos display:inline        0,0        50,0
+   text "XX", abspos display:block         0,0        50,0
+   text "XX", abspos is a <span>           0,0        50,0
+   <span>XX</span>  (an ELEMENT)          50,0        50,0    <- CONTROL: already right
+   text "XXXXXX" wrapping in 100px         0,0        50,25
+   text "XX<br>XX"                        50,0        50,25   <- the <br> is an element…
+```
+
+**Row 4 is the whole diagnosis.** Wrap the identical text in a `<span>` and the position is exact;
+leave it bare and the abspos lands at the content-box origin as though nothing preceded it. Row 6
+is the same fact wearing a disguise: `<br>` is an *element*, so its fragment (at x=50, on line 1)
+is counted, and the "XX" *after* it — a bare text node on line 2 — is not, which is why the answer
+is right in x and wrong in y.
+
+⚠ **This is not a grid, flex or block defect: all three containers give byte-identical numbers**,
+which is what says it is one mechanism in inline layout rather than three in the container
+algorithms. It is the whole of `css/css-grid/abspos/positioned-grid-descendants-*` (32 files,
+**3,200 subtests**), whose fixture is `X<br />XX` before the abspos: we report `offsetLeft` **30**
+where Chrome says **55**, and 30 is exactly `padding-left 5 + the <br>'s x of 25`.
+
+**The fix is a field, not a heuristic.** A container-attributed fragment cannot be ordered against
+the abspos by node identity — that is *why* the code was written this way — so the fragment has to
+carry the **text node it came from** alongside the element ancestor it is attributed to. Ordering by
+`frags` index instead is the tempting cheap version and it is wrong: a container can hold bare text
+on both sides of the abspos, and nothing in `frags` says which side a run is on.
+
 ## AN INTRINSIC KEYWORD ON A *CONTAINER*, AND THE ROOT-SUPPRESSION FLAG THAT MAKES IT MEASURABLE (t1163)
 
 **Symptom.** `<div style="display:flex; width:min-content">` inside a **grid** parent measured the

@@ -888,3 +888,4 @@ tick	sha	epoch	iso	delta_s	shape	wall_s	files	added	deleted	gates	claims	wpt_pas
 1184	80d6ff24	1786567712	2026-08-12T16:48:32-04:00	2984	capability	808	10	759	214	445	81	3896	6960	0	584	0	a node appended in the `load` handler has NO GEOMETRY, forever (2026-08-12)
 1185	3887324c	1786568327	2026-08-12T16:58:47-04:00	615	measurement	808	5	214	33	445	81	3896	6960	0	584	0	an AREA is a directory, and grid gained 602 without a line of grid code (2026-08-12)
 1186	44b2e25f	1786570583	2026-08-12T17:36:23-04:00	2256	capability	808	11	386	178	445	81	3896	6960	0	585	0	the MODULE round is the nineteenth call site, and it had no reflow hook either (2026-08-12)
+1187	111e7092	1786571287	2026-08-12T17:48:07-04:00	704	measurement	808	6	563	460	445	81	3896	6960	0	585	0	the inline static position counts preceding ELEMENTS and not preceding TEXT (2026-08-12)

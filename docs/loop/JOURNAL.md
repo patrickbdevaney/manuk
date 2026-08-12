@@ -46371,6 +46371,62 @@ PERF: none — one UA rule and one narrowed branch in a cascade that already ran
 WIKI: `docs/wiki/css-cascade.md` — where Chrome draws the form-control `box-sizing` line, and why a
 layout-crate test cannot see it.
 
+## Tick 1187 — the inline static position counts preceding ELEMENTS and not preceding TEXT (2026-08-12)
+
+TICK SHAPE: measurement — the discovery battery that prices and localises the 3,200-subtest zero
+t1183/t1184/t1186 spent three ticks clearing the instrument off. **Measured and NOT built**, with the
+reason stated below.
+
+t1186 left `css/css-grid/abspos/positioned-grid-descendants-*` failing on a real layout question for
+the first time: `offsetLeft expected 55 but got 30`. This tick asks what mechanism that is, with a
+six-row battery, **one variable per row and a CONTROL** — Ahem at 25px in a 100px box,
+`offsetLeft,offsetTop`:
+
+```text
+   preceding in-flow content                ours     Chrome / the WPT fixture
+   text "XX", abspos display:inline         0,0        50,0
+   text "XX", abspos display:block          0,0        50,0
+   text "XX", abspos is a <span>            0,0        50,0
+   <span>XX</span>  (an ELEMENT)           50,0        50,0    <- CONTROL: already exact
+   text "XXXXXX" wrapping in 100px          0,0        50,25
+   text "XX<br>XX"                         50,0        50,25
+```
+
+⚠⚠⚠ **ROW 4 IS THE WHOLE DIAGNOSIS. Wrap the identical text in a `<span>` and the position is
+Chrome-exact; leave it bare and the abspos lands at the content-box origin as though nothing
+preceded it.** `refine_inline_static_positions` selects fragments with
+`f.node.is_some_and(|n| before.contains(&n))`, where `before` is *preceding siblings and their
+descendants* — but `TextFragment::node` is, by its own doc comment, **the deepest ELEMENT ancestor**,
+which for bare text is the CONTAINER, i.e. the abspos's parent, which is never in `before`. Every
+bare-text fragment is silently skipped.
+
+Row 6 is the same fact in disguise and explains the WPT number exactly: `<br>` **is** an element, so
+its fragment (x = 50, line 1) is counted while the "XX" after it — a bare text node on line 2 — is
+not. The fixture's item is `X<br />XX`, so we take the `<br>`'s x of 25 and add the grid's
+`padding-left` of 5: **30**, which is the number the suite reports.
+
+⚠⚠ **AND IT IS NOT A GRID DEFECT — block, flex and grid containers give BYTE-IDENTICAL numbers.**
+That is the row set that says one mechanism in inline layout rather than three in the container
+algorithms, and it is the fourth consecutive tick in which the `css/css-grid` board row has been
+paid by something outside grid.
+
+**WHY IT IS NOT BUILT IN THIS TICK, stated rather than left implicit.** The fix is a **field, not a
+heuristic**: a container-attributed fragment cannot be ordered against the abspos by node identity —
+that is *why* the code selects the way it does — so `TextFragment` has to carry the **text node it
+came from** beside the element ancestor it is attributed to, threaded through the intermediate
+line-item struct and its seven construction sites. The tempting cheap version, ordering by `frags`
+index, is wrong and would pass this battery: a container can hold bare text on **both sides** of the
+abspos, and nothing in `frags` says which side a run is on. A wide refactor started at the end of a
+long session is the WIP-on-inconsistent-state failure the atomicity rule exists to prevent, so this
+tick banks the measurement, the control row and the fix's shape, and the next tick builds it.
+
+RATCHET: held — no engine code changed this tick. WPT TOTAL unchanged at 445,406.
+
+PERF: none — measurement only.
+
+WIKI: `docs/wiki/box-layout.md` — *"The inline static position counts preceding ELEMENTS and not
+preceding TEXT"*, with the battery and the reason the cheap fix is wrong. [no-pattern]
+
 ## Tick 1186 — the MODULE round is the nineteenth call site, and it had no reflow hook either (2026-08-12)
 
 TICK SHAPE: capability. (The WALL-TIME AUDIT was also due at 1186 and is banked as #46.)
