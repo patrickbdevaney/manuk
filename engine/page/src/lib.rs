@@ -2805,6 +2805,27 @@ impl Page {
         // Before the scripts run, not after: a script that draws an image on its first tick must find
         // the pixels already there, or the draw silently no-ops and the canvas stays blank.
         self.publish_image_sources();
+        // ⚠⚠⚠ **THE MODULE ROUND NEEDS THE FORCED-REFLOW HOOK, AND THE RELAYOUT BELOW IS NOT A
+        // SUBSTITUTE FOR IT.** `if ran > 0` re-lays-out *after* this pass, so a module's nodes do
+        // eventually get boxes and do eventually paint — but **every microtask the module queues
+        // drains inside `run_deferred_scripts`**, before that line. `document.fonts.ready.then(…)`,
+        // `Promise.resolve().then(…)`, a dynamic `import()`'s continuation and the whole
+        // `queueMicrotask` family therefore measured the PRE-MODULE snapshot: a node the module had
+        // just appended read `offsetWidth === 0`, and `css/css-grid/abspos/positioned-grid-
+        // descendants-*` (32 files, 3,200 subtests) scored a flat zero on exactly that.
+        //
+        // This is the same defect t1184 fixed for `fire_lifecycle` and the same shape as
+        // `set_root_box`'s warning: a pass wired into all but one of its call sites is a pass that
+        // silently does not run on that one. ES modules are how the modern web ships JavaScript, so
+        // this round is not a corner — it is most of them.
+        let _reflow = ReflowScope::install(
+            &self.dom,
+            fonts,
+            viewport_width,
+            &self.images,
+            &self.final_url,
+            &self.external_css,
+        );
         let ran = match manuk_js::run_deferred_scripts(ctx, &mut self.dom, &rects, &self.styles) {
             Ok(n) => n,
             Err(e) => {

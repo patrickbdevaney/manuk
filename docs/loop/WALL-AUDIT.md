@@ -1792,3 +1792,51 @@ down.
 **Nothing trimmed.** Two gates were ADDED this session (`g_dom_mutation_rooting`,
 `g_get_element_by_id_index`, `g_iframe_load_event`: 438 → 441) and the cold wall did not move outside
 its own 1243–1283s band, so the additions are inside the noise.
+
+## Audit #46 — tick 1186 (2026-08-12), wall total **103s** — the WARM mode, the leanest reading on record, and the P candidate is now PRICED AT 5s
+
+```text
+    60s  T   58%      12s  G6      7s  D      5s  P      5s  G1      3s  F      1s  F4      1s  B
+```
+
+**The bimodality #44 named and #45 measured cold is now measured warm at its floor: 103s**, against
+#44's 110s and #45's 1,243s on the same wall with the same gates. Nothing was trimmed to get here and
+nothing regressed; the wall is simply being read in its warm mode. **The 300s target is met with
+3× headroom in this mode and missed by 4× in the other**, and *which mode you sampled* remains the
+single largest term in any wall number this project quotes. `STATUS.md`'s `LAST_WALL_TIME: 808s` is
+neither: it is a third sample between the modes, and it is the one the ratchet's advisory prints.
+
+⚠⚠⚠ **AUDIT #45's RANKED CANDIDATE #1 IS REFUTED BY THIS SAMPLE, AND THE REFUTATION IS THE FINDING.**
+Audits #43 and #45 both ranked **P** (72 parity fixtures, each launching a fresh headless Chrome)
+as the one rigor-preserving optimisation in agent territory, on readings of **270s** and **293s** —
+"stable enough to rank on." Here it is **5s, 5% of the wall.** The two readings are not in tension
+and neither is wrong: P's cost is *launching Chrome*, which in the cold mode competes with a
+30-crate rebuild for the same cores and in the warm mode does not. So the honest statement is not
+"P costs 293s" or "P costs 5s" but:
+
+> **A per-section wall cost is a fraction of a MODE, not a constant** — and ranking optimisation
+> candidates off the cold-mode profile would have bought a batched-Chrome refactor in `tests/wpt`
+> whose warm-mode payoff is bounded by five seconds. **Re-price a candidate in BOTH modes before
+> taking it.** The loop has now carried this candidate as #1 across three audits on one mode's
+> numbers.
+
+### The rigor-preserving candidates, re-priced
+
+1. **Redundancy** — **T is 58% and is the only section that is large in both modes** (60s here, and
+   the gate test-binary rebuild is #44's named 63% of the cold wall). It is where the seconds are,
+   and the admissible form is unchanged: `cargo-nextest` shares one test binary and parallelises
+   harder than `cargo test`, buying the same assertions for fewer seconds. `scripts/` — observer
+   territory, recorded not acted on.
+2. **Parallelism** — gates launch concurrently; the perf floors are deliberately serial. Nothing has
+   gone accidentally serial: the profile's shape is unchanged from #44's.
+3. **Caching** — the banked-binary cache (`$HOME/manuk-builds`, keyed by tree hash) is now recorded
+   for the **FIFTH** consecutive audit and is still absent. This session used a hand-rolled version
+   of it twice (t1183 and t1184 each preserved `target/release/manuk-wpt` to `/tmp` before rebuilding,
+   for the same-hour old-binary control). Observer territory.
+4. **Scope** — no gate builds materially more than it asserts on. **P is no longer a scope
+   candidate**, per the re-pricing above.
+
+**Nothing trimmed.** One gate was ADDED this session (`g_load_geometry`: 444 → 445) and the warm wall
+came in at its lowest recorded value, so the addition is inside the noise — as it should be, since
+the gate is one page load with no network.
+

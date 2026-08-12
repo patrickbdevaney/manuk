@@ -46371,6 +46371,83 @@ PERF: none — one UA rule and one narrowed branch in a cascade that already ran
 WIKI: `docs/wiki/css-cascade.md` — where Chrome draws the form-control `box-sizing` line, and why a
 layout-crate test cannot see it.
 
+## Tick 1186 — the MODULE round is the nineteenth call site, and it had no reflow hook either (2026-08-12)
+
+TICK SHAPE: capability. (The WALL-TIME AUDIT was also due at 1186 and is banked as #46.)
+
+HYPOTHESIS (written before the fix, kept verbatim): t1184 armed `fire_lifecycle`'s `ReflowScope` and
+t1185 measured that seven script rounds now read correct geometry while **a node appended by a
+`<script type="module">` and measured later still reads 0** — with an inline `<style>` as well as an
+external one, at n=1 as well as n=100. Read from the tree rather than guessed:
+`Page::run_deferred_scripts` — the function that runs every `defer`, `async` and `type="module"`
+script — **installs no `ReflowScope`**. It re-lays-out *after* the pass (`if ran > 0`), which is why
+the nodes are eventually painted; but `document.fonts.ready.then(…)` and every other microtask a
+module queues drain **inside** that pass, before the relayout, so a read there answers from the
+pre-module snapshot.
+
+**The hypothesis held exactly, and the fix is one `ReflowScope::install` — the same line t1184 added
+to `fire_lifecycle`.**
+
+```text
+                        OLD (HEAD)   THIS TICK
+   css/css-grid            2059        2141      +82
+   css/css-text            1708        1709       +1
+   eighteen other areas      =           =       unmoved to the subtest
+   WPT TOTAL             445323      445406      +83   crashes 0 in EVERY area, 0 areas down
+```
+
+⚠⚠⚠ **THE 3,200-SUBTEST ZERO IS NO LONGER AN INSTRUMENT-SHAPED ZERO, AND THAT IS THE RESULT WORTH
+MORE THAN THE +83.** `positioned-grid-descendants-*` has opened three ticks running with a different
+defect behind it each time — no ruler (t1183), no reflow hook in the `load` round (t1184), no reflow
+hook in the module round (t1186). Its first assertion has moved:
+
+```text
+   before t1183   width  expected 50 but got 0     <- the ruler was wrong
+   after  t1184   width  expected 50 but got 0     <- the round had no hook
+   after  t1186   offsetLeft expected 55 but got 30   <- a REAL grid static-position question
+```
+
+Width and height now pass on every row. What remains is grid abspos placement arithmetic — the thing
+the board has been asking for all along, and it took three non-grid ticks to be able to *see* it.
+
+⚠⚠ **IT TOOK THREE TICKS BECAUSE THE SYMPTOM NAMED THE WRONG ORGAN TWICE.** First the grid (the
+tests live in `css/css-grid` and are not about grid). Then `<script type="module">` itself: a
+four-cell probe read `module 0 / classic 550` and that is a clean, wrong conclusion — a
+**`defer`-vs-module control row** put both at 550 and moved the variable to *when the append
+happens*. Only once the `load` round was armed did the module round stand alone as the last one
+still reading zero.
+
+> **The general diagnostic, promoted because it is now three-for-three: when a mutation is
+> eventually visible but not immediately, do not ask "does layout run?" — ask WHICH RE-ENTRY the
+> read happened in, and enumerate the HOOK's call sites rather than layout's code paths.**
+
+**WALL-TIME AUDIT #46 (due at 1186): wall total 103s — the leanest reading on record, and it
+REFUTES the candidate the last three audits ranked #1.** Audits #43 and #45 both put **P** (72 parity
+fixtures, one headless Chrome each) at the top of the rigor-preserving list on readings of 270s and
+293s — *"stable enough to rank on."* This sample reads it at **5s, 5% of the wall.** Neither number
+is wrong: P's cost is *launching Chrome*, which in the cold mode competes with a 30-crate rebuild for
+the same cores and in the warm mode does not. **A per-section wall cost is a fraction of a MODE, not
+a constant** — and taking the candidate would have bought a batched-Chrome refactor whose warm-mode
+payoff is bounded by five seconds. `T` (58% here, and #44's named 63% of the cold wall) is the only
+section large in **both** modes and is the real target; it is `scripts/`, so it is recorded and not
+acted on. Nothing trimmed; one gate added this session and the warm wall still came in at its lowest
+recorded value.
+
+GATE: `g_load_geometry` extended to **nine rows, three of them CONTROLS**, and RED-proven in the
+**three** distinct ways it is now meant to fail. Removing this tick's `install` alone reports
+`parse=550 module=0 module-microtask=0 load=550 own-write=551 external=120 inline=90 timer=551
+parse-era=550` — the module rows flip and **the `load` rows do not**, which is what makes t1184 and
+t1186 two findings rather than one restated.
+
+RATCHET: held. Zero areas down, `crashes=0` in every area. WPT TOTAL 445323 → **445406**.
+
+PERF: one extra `ReflowScope` arm-and-drop per navigation that has any deferred script (a `Box`
+allocation and an image-map `Rc` clone). The reflow itself runs only if a module actually mutated the
+DOM before a geometry read — `forced_reflow` returns immediately on an unchanged `mutation_seq`.
+
+WIKI: `docs/wiki/js-engine.md` — the forced-reflow section extended with the module round and the
+"which re-entry, not which code path" diagnostic.
+
 ## Tick 1185 — an AREA is a directory, and grid gained 602 without a line of grid code (2026-08-12)
 
 TICK SHAPE: measurement — the cadence re-read of `CONSTITUTION.MD` (due every 8 ticks; last at

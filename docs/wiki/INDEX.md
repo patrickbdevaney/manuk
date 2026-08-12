@@ -1330,140 +1330,140 @@
   - L168 · THE THIRD INSTANCE IS appendChild, AND IT WAS BLAMED ON A :has() COMPLEXITY TEST FOR THREE TICKS (t1164)
   - L213 · getElementById IS A DOCUMENT SCAN, AND window.<id> CALLS IT ON EVERY ACCESS — so every list build was QUADRATIC (t1165)
   - L404 · A FORCED SYNCHRONOUS REFLOW must be armed on EVERY script re-entry, and the load round had none
-  - L455 · An unhandled promise rejection is where every framework's failure goes to die
-  - L467 · Custom-element upgrade has four traps, and each hides the next
-  - L479 · Svelte 5 lifts accessors off Node.prototype — so reflectors need a prototype bridge
-  - L490 · Symbol.hasInstance answers framework instanceof checks without a real prototype chain
-  - L500 · libc::_exit() to dodge a shutdown crash is a data-loss bug in disguise
-  - L509 · A panic that travels through SpiderMonkey's C++ frames does not unwind — it ABORTS
-  - L515 · A runaway task loop needs a hard drain ceiling — and the ceiling must assert the page RENDERED
-  - L523 · The SpiderMonkey-vs-V8 "capability gap" is mostly a myth. The real gap is ONE API family.
-  - L534 · Lean JS engines (QuickJS, Hermes, JerryScript) are ruled out by the BAR, not by taste
-  - L542 · The SpiderMonkey modification boundary exists because of ADVERSARIAL-FUZZING CALENDAR TIME
-  - L552 · Two SpiderMonkey contexts in one test binary segfault nondeterministically
-  - L558 · catch_unwind AROUND an extern "C" fn does NOTHING. The catch must be INSIDE it.
-  - L589 · Shutting SpiderMonkey down — and the rule that makes teardown work
-  - L606 · The workaround that wasn't
-  - L613 · The ordering trap (this is the part worth remembering)
-  - L633 · The shape that works
-  - L660 · DOM reflectors: the prototype chain, and the two bugs hiding in "it works"
-  - L687 · The shape now
-  - L702 · Two traps worth knowing
-  - L714 · The stated limit
-  - L722 · And it moved WPT not at all
-  - L727 · <canvas> 2D — from a stub that drew nothing to a real rasterizer
-  - L739 · How it reaches the screen — with no new machinery
-  - L750 · Where the state lives, and why it is split
-  - L761 · Done, and honestly not done
-  - L774 · The bug that hurt most, and it was not the rasterizer
-  - L787 · Reflecting a NUMBER attribute: four rules the naive getter gets wrong (tick 117)
-  - L821 · dispatchEvent validity, and the native seam that swallowed the throw (tick 118)
-  - L844 · A node id is unique only WITHIN its arena — so a reflector must resolve against its OWN document
-  - L871 · A per-arena identity cache must not CLOBBER the shared __nodes — it breaks event dispatch silently
-  - L884 · Mass reflector access + the reflection layer can overflow the C stack, and SpiderMonkey won't catch it
-  - L918 · A reused SpiderMonkey runtime across many pages SIGSEGVs — a cross-file reflector/rooting UAF (open Bar-0)
-  - L939 · A second, DETERMINISTIC C-stack overflow (html/semantics) — NATIVE recursion, not the stack-quota class
-  - L972 · Web Crypto entropy: crypto.getRandomValues / randomUUID (tick 160)
-  - L1004 · HTML Constraint Validation, on the shared prototype (tick 161)
-  - L1029 · crypto.subtle.digest — async surface over a sync host hash (tick 162)
-  - L1054 · Forced synchronous reflow — the read path lays out before it answers (tick 213)
-  - L1105 · Web Workers — running a script in a scope that must NOT be the page's (tick 280)
-  - L1112 · The scope is a deny-list over a with, not an allow-list
-  - L1141 · The clone is taken at POST time
-  - L1154 · Loading, and what is honestly out of reach
-  - L1172 · Service Workers — the third side of a capability built over three ticks (tick 281)
-  - L1182 · The lifecycle IS the capability
-  - L1196 · Interception, and the recursion that hangs
-  - L1219 · Why the worker internals are published on one object
-  - L1230 · Blob object-URLs carry real bytes — canvas.toBlob + blob: fetch (tick 284)
-  - L1237 · canvas.toBlob decodes the one raster toDataURL already produced
-  - L1249 · blob: resolves in fetch against the one object-URL registry
-  - L1277 · scheduler.postTask — priority-ordered main-thread work (tick 293)
-  - L1291 · The teeth G_SCHEDULER_POSTTASK uses
-  - L1298 · DOMMatrix — 2D affine transform math (tick 294)
-  - L1315 · DOMPoint — the geometry point that pairs with DOMMatrix (tick 295)
-  - L1327 · DOMQuad — four points, the enclosing box (tick 296)
-  - L1337 · Error.stackTraceLimit — the property is a shim, the behavior is an honest no (tick 400)
-  - L1348 · document.location is window.location — and the alias must be an accessor (tick 402)
-  - L1366 · getPropertyValue is total — a string for every input (tick 403)
-  - L1376 · document.currentScript — a thread-local, set per classic evaluation (tick 404)
-  - L1387 · structuredClone preserves binary types — the plain-object degrade is silent corruption (tick 421)
-  - L1407 · putImageData is a raw pixel blit, ImageData is the buffer libraries build (tick 423)
-  - L1430 · TextDecoder honours its label (windows-1252 + utf-16), not UTF-8-for-everything (tick 424)
-  - L1449 · test262, and the three defects the FIRST run found before it produced a number (tick 546)
-  - L1462 · The runner: manuk-wpt test262 (tests/wpt/src/test262.rs)
-  - L1476 · Three defects, in the order the run hit them
-  - L1505 · What the 5,101 failures are, and what they are not
-  - L1514 · The skips are the honest part, and one of them is Bar 0
-  - L1528 · An interface object is defined IFF the thing it names exists (tick 608)
-  - L1542 · What it cost, measured
-  - L1559 · The rule, and the negative half is the load-bearing half
-  - L1569 · Predicates are exact, not generous
-  - L1579 · Known residue, named rather than papered over
-  - L1589 · The layering, which is the part to expect next time
-  - L1596 · The event-loop drain is bounded by the CLOCK, not only by a task count (t610)
-  - L1640 · run_with_fetcher had no bound at all
-  - L1649 · What the gate had to prove, and the draft that was green for the wrong reason
-  - L1667 · A feature-detect that THROWS is worse than one that answers no (tick 615)
-  - L1691 · The answers, and why one of them is deliberately false
-  - L1704 · Where it was found, and what it did not fix
-  - L1713 · A module's imports resolve against the MODULE's url, not the document's (tick 617)
-  - L1738 · What it cost, measured
-  - L1759 · The mechanism: the DOM cannot answer, so something else must
-  - L1775 · A dynamic import's module must OUTLIVE the hook that made it (tick 624)
-  - L1805 · Why a synchronous hook is honest here
-  - L1814 · ⚠ A hook installed at one of two sites looks exactly like no hook at all
-  - L1822 · The three symptoms, and what each one means
-  - L1833 · Top-level await interleaves, and a cycle links with live bindings (tick 636)
-  - L1874 · The document said it was a comment (tick 642)
-  - L1917 · The sanitizer that returned nothing (tick 643)
-  - L1957 · A subset that refuses is not a stub (tick 644)
-  - L1996 · A bug with good prose is still a bug (tick 647)
-  - L2029 · An error that cannot be located is a status, not a finding (tick 662)
-  - L2056 · Where this sits relative to G_SILENT_FAIL
-  - L2069 · It paid out on the first real site, in one run
-  - L2090 · Two things the gate does that are not decoration
-  - L2102 · A bound that is per-drain when the harm is per-page (tick 667)
-  - L2117 · The outer timeout was never going to enforce this
-  - L2131 · The fixture is the whole gate
-  - L2142 · What it does not buy, named rather than hidden
-  - L2153 · Every inline script on every page compiled under one name (tick 679)
-  - L2193 · The browser heard the rejection and the page did not (tick 696)
-  - L2227 · One rule, two implementations, and only one of them was built (tick 712)
-  - L2269 · Four ways to get this wrong, all of which look green from outside
-  - L2306 · A frame with nothing to fetch still needs a document (tick 717)
-  - L2330 · What a page does with a document it makes for itself
-  - L2347 · The engine knew the answer and no page could reach it (tick 724)
-  - L2362 · Why a false negative is worse than a missing feature
-  - L2372 · The shape, and how it hid
-  - L2392 · A mutation record must not COMPILE A SCRIPT (tick 768 — Bar 0)
-  - L2427 · Two things this cost, both worth keeping
-  - L2439 · The grep this called for, and what it found (tick 769)
-  - L2461 · ⚠ The gate that could not go red
-  - L2479 · A HALF-INSTALLED API is worse than an absent one — performance.clearMarks blanked a top-1000 site
-  - L2507 · Inert was also wrong on its own terms
-  - L2515 · The errors are load-bearing, so they are the spec's errors
-  - L2531 · What it bought, with the control
-  - L2547 · The interface surface is defined IFF the capability exists — and its denominator is a measurement
-  - L2558 · The half that is not "add more names"
-  - L2576 · ⚠ The refusal is part of the surface, and a gate caught the attempt to skip it
-  - L2598 · The gate, and one way it was briefly vacuous
-  - L2611 · A two-field object literal is a half-installed API that no probe of NAMES can see (tick 777)
-  - L2636 · The other two defects in the same four lines
-  - L2651 · Screen, History, Location and VisualViewport were inert stubs of objects we build
-  - L2665 · The gate
-  - L2681 · A write-only defect: every gate in this repo reads (tick 778)
-  - L2702 · The mechanism
-  - L2725 · ⚠ The transferable finding — a surface has more than one mode of use
-  - L2743 · Measured next to it, and NOT fixed here
-  - L2752 · An error message that names our file is not evidence that the answer is ours (tick 779)
-  - L2775 · The enum-completeness question, which is two-sided
-  - L2792 · And one entry that had quietly become false
-  - L2800 · A five-clause is_empty() outlives the decision that makes one clause false (t855)
-  - L2831 · An unhandled rejection must say WHAT was rejected
-  - L2852 · The shape of the describer, and why each bound is there
-  - L2868 · The second defect it surfaced — and the correction, because the first reading was wrong
-  - L2898 · The bottom of that chain — 'withCredentials' in xhr is jQuery's ENTIRE cross-origin capability
+  - L476 · An unhandled promise rejection is where every framework's failure goes to die
+  - L488 · Custom-element upgrade has four traps, and each hides the next
+  - L500 · Svelte 5 lifts accessors off Node.prototype — so reflectors need a prototype bridge
+  - L511 · Symbol.hasInstance answers framework instanceof checks without a real prototype chain
+  - L521 · libc::_exit() to dodge a shutdown crash is a data-loss bug in disguise
+  - L530 · A panic that travels through SpiderMonkey's C++ frames does not unwind — it ABORTS
+  - L536 · A runaway task loop needs a hard drain ceiling — and the ceiling must assert the page RENDERED
+  - L544 · The SpiderMonkey-vs-V8 "capability gap" is mostly a myth. The real gap is ONE API family.
+  - L555 · Lean JS engines (QuickJS, Hermes, JerryScript) are ruled out by the BAR, not by taste
+  - L563 · The SpiderMonkey modification boundary exists because of ADVERSARIAL-FUZZING CALENDAR TIME
+  - L573 · Two SpiderMonkey contexts in one test binary segfault nondeterministically
+  - L579 · catch_unwind AROUND an extern "C" fn does NOTHING. The catch must be INSIDE it.
+  - L610 · Shutting SpiderMonkey down — and the rule that makes teardown work
+  - L627 · The workaround that wasn't
+  - L634 · The ordering trap (this is the part worth remembering)
+  - L654 · The shape that works
+  - L681 · DOM reflectors: the prototype chain, and the two bugs hiding in "it works"
+  - L708 · The shape now
+  - L723 · Two traps worth knowing
+  - L735 · The stated limit
+  - L743 · And it moved WPT not at all
+  - L748 · <canvas> 2D — from a stub that drew nothing to a real rasterizer
+  - L760 · How it reaches the screen — with no new machinery
+  - L771 · Where the state lives, and why it is split
+  - L782 · Done, and honestly not done
+  - L795 · The bug that hurt most, and it was not the rasterizer
+  - L808 · Reflecting a NUMBER attribute: four rules the naive getter gets wrong (tick 117)
+  - L842 · dispatchEvent validity, and the native seam that swallowed the throw (tick 118)
+  - L865 · A node id is unique only WITHIN its arena — so a reflector must resolve against its OWN document
+  - L892 · A per-arena identity cache must not CLOBBER the shared __nodes — it breaks event dispatch silently
+  - L905 · Mass reflector access + the reflection layer can overflow the C stack, and SpiderMonkey won't catch it
+  - L939 · A reused SpiderMonkey runtime across many pages SIGSEGVs — a cross-file reflector/rooting UAF (open Bar-0)
+  - L960 · A second, DETERMINISTIC C-stack overflow (html/semantics) — NATIVE recursion, not the stack-quota class
+  - L993 · Web Crypto entropy: crypto.getRandomValues / randomUUID (tick 160)
+  - L1025 · HTML Constraint Validation, on the shared prototype (tick 161)
+  - L1050 · crypto.subtle.digest — async surface over a sync host hash (tick 162)
+  - L1075 · Forced synchronous reflow — the read path lays out before it answers (tick 213)
+  - L1126 · Web Workers — running a script in a scope that must NOT be the page's (tick 280)
+  - L1133 · The scope is a deny-list over a with, not an allow-list
+  - L1162 · The clone is taken at POST time
+  - L1175 · Loading, and what is honestly out of reach
+  - L1193 · Service Workers — the third side of a capability built over three ticks (tick 281)
+  - L1203 · The lifecycle IS the capability
+  - L1217 · Interception, and the recursion that hangs
+  - L1240 · Why the worker internals are published on one object
+  - L1251 · Blob object-URLs carry real bytes — canvas.toBlob + blob: fetch (tick 284)
+  - L1258 · canvas.toBlob decodes the one raster toDataURL already produced
+  - L1270 · blob: resolves in fetch against the one object-URL registry
+  - L1298 · scheduler.postTask — priority-ordered main-thread work (tick 293)
+  - L1312 · The teeth G_SCHEDULER_POSTTASK uses
+  - L1319 · DOMMatrix — 2D affine transform math (tick 294)
+  - L1336 · DOMPoint — the geometry point that pairs with DOMMatrix (tick 295)
+  - L1348 · DOMQuad — four points, the enclosing box (tick 296)
+  - L1358 · Error.stackTraceLimit — the property is a shim, the behavior is an honest no (tick 400)
+  - L1369 · document.location is window.location — and the alias must be an accessor (tick 402)
+  - L1387 · getPropertyValue is total — a string for every input (tick 403)
+  - L1397 · document.currentScript — a thread-local, set per classic evaluation (tick 404)
+  - L1408 · structuredClone preserves binary types — the plain-object degrade is silent corruption (tick 421)
+  - L1428 · putImageData is a raw pixel blit, ImageData is the buffer libraries build (tick 423)
+  - L1451 · TextDecoder honours its label (windows-1252 + utf-16), not UTF-8-for-everything (tick 424)
+  - L1470 · test262, and the three defects the FIRST run found before it produced a number (tick 546)
+  - L1483 · The runner: manuk-wpt test262 (tests/wpt/src/test262.rs)
+  - L1497 · Three defects, in the order the run hit them
+  - L1526 · What the 5,101 failures are, and what they are not
+  - L1535 · The skips are the honest part, and one of them is Bar 0
+  - L1549 · An interface object is defined IFF the thing it names exists (tick 608)
+  - L1563 · What it cost, measured
+  - L1580 · The rule, and the negative half is the load-bearing half
+  - L1590 · Predicates are exact, not generous
+  - L1600 · Known residue, named rather than papered over
+  - L1610 · The layering, which is the part to expect next time
+  - L1617 · The event-loop drain is bounded by the CLOCK, not only by a task count (t610)
+  - L1661 · run_with_fetcher had no bound at all
+  - L1670 · What the gate had to prove, and the draft that was green for the wrong reason
+  - L1688 · A feature-detect that THROWS is worse than one that answers no (tick 615)
+  - L1712 · The answers, and why one of them is deliberately false
+  - L1725 · Where it was found, and what it did not fix
+  - L1734 · A module's imports resolve against the MODULE's url, not the document's (tick 617)
+  - L1759 · What it cost, measured
+  - L1780 · The mechanism: the DOM cannot answer, so something else must
+  - L1796 · A dynamic import's module must OUTLIVE the hook that made it (tick 624)
+  - L1826 · Why a synchronous hook is honest here
+  - L1835 · ⚠ A hook installed at one of two sites looks exactly like no hook at all
+  - L1843 · The three symptoms, and what each one means
+  - L1854 · Top-level await interleaves, and a cycle links with live bindings (tick 636)
+  - L1895 · The document said it was a comment (tick 642)
+  - L1938 · The sanitizer that returned nothing (tick 643)
+  - L1978 · A subset that refuses is not a stub (tick 644)
+  - L2017 · A bug with good prose is still a bug (tick 647)
+  - L2050 · An error that cannot be located is a status, not a finding (tick 662)
+  - L2077 · Where this sits relative to G_SILENT_FAIL
+  - L2090 · It paid out on the first real site, in one run
+  - L2111 · Two things the gate does that are not decoration
+  - L2123 · A bound that is per-drain when the harm is per-page (tick 667)
+  - L2138 · The outer timeout was never going to enforce this
+  - L2152 · The fixture is the whole gate
+  - L2163 · What it does not buy, named rather than hidden
+  - L2174 · Every inline script on every page compiled under one name (tick 679)
+  - L2214 · The browser heard the rejection and the page did not (tick 696)
+  - L2248 · One rule, two implementations, and only one of them was built (tick 712)
+  - L2290 · Four ways to get this wrong, all of which look green from outside
+  - L2327 · A frame with nothing to fetch still needs a document (tick 717)
+  - L2351 · What a page does with a document it makes for itself
+  - L2368 · The engine knew the answer and no page could reach it (tick 724)
+  - L2383 · Why a false negative is worse than a missing feature
+  - L2393 · The shape, and how it hid
+  - L2413 · A mutation record must not COMPILE A SCRIPT (tick 768 — Bar 0)
+  - L2448 · Two things this cost, both worth keeping
+  - L2460 · The grep this called for, and what it found (tick 769)
+  - L2482 · ⚠ The gate that could not go red
+  - L2500 · A HALF-INSTALLED API is worse than an absent one — performance.clearMarks blanked a top-1000 site
+  - L2528 · Inert was also wrong on its own terms
+  - L2536 · The errors are load-bearing, so they are the spec's errors
+  - L2552 · What it bought, with the control
+  - L2568 · The interface surface is defined IFF the capability exists — and its denominator is a measurement
+  - L2579 · The half that is not "add more names"
+  - L2597 · ⚠ The refusal is part of the surface, and a gate caught the attempt to skip it
+  - L2619 · The gate, and one way it was briefly vacuous
+  - L2632 · A two-field object literal is a half-installed API that no probe of NAMES can see (tick 777)
+  - L2657 · The other two defects in the same four lines
+  - L2672 · Screen, History, Location and VisualViewport were inert stubs of objects we build
+  - L2686 · The gate
+  - L2702 · A write-only defect: every gate in this repo reads (tick 778)
+  - L2723 · The mechanism
+  - L2746 · ⚠ The transferable finding — a surface has more than one mode of use
+  - L2764 · Measured next to it, and NOT fixed here
+  - L2773 · An error message that names our file is not evidence that the answer is ours (tick 779)
+  - L2796 · The enum-completeness question, which is two-sided
+  - L2813 · And one entry that had quietly become false
+  - L2821 · A five-clause is_empty() outlives the decision that makes one clause false (t855)
+  - L2852 · An unhandled rejection must say WHAT was rejected
+  - L2873 · The shape of the describer, and why each bound is there
+  - L2889 · The second defect it surfaced — and the correction, because the first reading was wrong
+  - L2919 · The bottom of that chain — 'withCredentials' in xhr is jQuery's ENTIRE cross-origin capability
 
 ## Manuk Daily-Driver Usability Roadmap (synthesized, tick 138)
 `docs/wiki/lever-map.md`

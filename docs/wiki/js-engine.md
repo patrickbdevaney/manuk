@@ -447,10 +447,31 @@ read re-cascades against and the list the page paints from cannot diverge again.
 `final_url`/`external_css` as raw pointers on the same contract as `fonts`, because a round's CSS
 text can be hundreds of KB and this is armed on every re-entry.
 
-Gated by `g_load_geometry`, seven rows, **three of them controls**, RED-provable in the two distinct
-ways it is meant to fail: drop the `install` (the `load` rows read 0, controls hold) or restore
-`collect_style_elements` (the external row reads 800 instead of 120, and the inline control still
-reads 90 — which is what localises it to *external* sheets rather than to the cascade at large).
+⚠⚠⚠ **AND `fire_lifecycle` WAS NOT THE LAST ONE. `run_deferred_scripts` IS THE NINETEENTH** — the
+function that runs every `defer`, `async` and **`type="module"`** script, i.e. how the modern web
+ships JavaScript. It re-lays-out *after* the pass (`if ran > 0`), so a module's nodes are eventually
+painted and the defect is invisible to anything that looks later; but **every microtask a module
+queues drains INSIDE that pass**, before the relayout. `document.fonts.ready.then(…)`,
+`Promise.resolve().then(…)` and a dynamic `import()`'s continuation all measured the pre-module
+snapshot.
+
+That is why finding this took three ticks: the loop bisected to *"a `<script type=module>` appends
+and nothing lays out"*, a `defer`-vs-module control row moved the variable to **when** rather than
+**how**, and only after the `load` round was fixed did the module round stand alone as the last one
+still reading zero. `css/css-grid/abspos/positioned-grid-descendants-*` — 32 files, 3,200 subtests,
+flat zero — is the WPT shape of it, and arming the hook moved its first assertion from
+`width expected 50 but got 0` to a real grid static-position question.
+
+> **The recurring diagnostic: when a mutation is eventually visible but not immediately, the
+> question is not "does layout run?" — it is WHICH RE-ENTRY the read happened in.** Enumerate the
+> call sites of the hook, not the code paths of the layout.
+
+Gated by `g_load_geometry`, nine rows, **three of them controls**, RED-provable in the three distinct
+ways it is meant to fail: drop the `fire_lifecycle` install (the `load` rows read 0, controls hold),
+drop the `run_deferred_scripts` install (the `module` rows read 0 while the `load` rows still pass —
+which is what makes them two findings and not one), or restore `collect_style_elements` (the
+external row reads 800 instead of 120, and the inline control still reads 90 — which localises that
+half to *external* sheets rather than to the cascade at large).
 
 ## An unhandled promise rejection is where every framework's failure goes to die
 

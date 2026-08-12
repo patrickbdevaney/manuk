@@ -1,4 +1,4 @@
-//! **G_LOAD_GEOMETRY — a box built by a `load` handler must HAVE a box.**
+//! **G_LOAD_GEOMETRY — a box built by a deferred script round must HAVE a box.**
 //!
 //! ⚠⚠⚠ **`window.addEventListener('load', …)` is where a very large fraction of the web builds its
 //! DOM, and everything it built measured ZERO — permanently.** Not on a later read, not after
@@ -35,8 +35,21 @@
 //! worse than neither — a reflow that runs with half the cascade replaces an old right answer with
 //! a fresh wrong one.
 //!
-//! **To watch it go RED, two ways:** delete the `ReflowScope::install` from `fire_lifecycle` (the
-//! `load` rows read 0 while both controls hold), or point `forced_reflow`'s sheet list back at
+//! ⚠⚠⚠ **AND `fire_lifecycle` WAS NOT THE LAST ONE — `run_deferred_scripts` IS THE NINETEENTH CALL
+//! SITE (t1186).** It runs every `defer`, `async` and **`type="module"`** script, and it installed no
+//! scope either. It re-lays-out *after* the pass (`if ran > 0`), so a module's nodes are eventually
+//! painted and the defect hides from anything that looks later — but **every microtask a module
+//! queues drains INSIDE that pass**, before the relayout. `document.fonts.ready.then(…)`,
+//! `Promise.resolve().then(…)` and a dynamic `import()`'s continuation therefore all measured the
+//! pre-module snapshot. ES modules are how the modern web ships JavaScript, so this round is not a
+//! corner — it is most of them. `css/css-grid/abspos/positioned-grid-descendants-*` (32 files,
+//! **3,200 subtests**) scored a flat zero on exactly this, and the file's first assertion moved from
+//! `width expected 50 but got 0` to a real layout question the moment the hook was armed.
+//!
+//! **To watch it go RED, three ways:** delete the `ReflowScope::install` from `fire_lifecycle` (the
+//! `load` rows read 0 while both controls hold), delete the one from `run_deferred_scripts` (the
+//! `module` rows read 0 while the `load` rows still pass — which is what makes them separate
+//! findings rather than one), or point `forced_reflow`'s sheet list back at
 //! `collect_style_elements` (the `external` row reads the viewport width instead of the sheet's
 //! 120).
 
@@ -85,7 +98,7 @@ fn css_origin() -> String {
 /// **One test, on purpose** — each JS gate spins its own SpiderMonkey runtime, and two in one
 /// binary tear down messily enough to segfault *sometimes*, which is worse than failing.
 #[test]
-fn a_box_built_by_a_load_handler_has_geometry_and_the_forced_reflow_keeps_the_external_sheets() {
+fn a_box_built_by_a_deferred_round_has_geometry_and_the_forced_reflow_keeps_the_external_sheets() {
     let fonts = FontContext::new();
     let origin = css_origin();
 
@@ -101,6 +114,8 @@ fn a_box_built_by_a_load_handler_has_geometry_and_the_forced_reflow_keeps_the_ex
              <div id="parse-era" style="width:550px;height:10px"></div>
              <script>
                var R = [];
+               window.__R = R;
+               window.__add = add;
                function add(cls, css) {{
                  var d = document.createElement('div');
                  if (cls) d.className = cls;
@@ -127,6 +142,17 @@ fn a_box_built_by_a_load_handler_has_geometry_and_the_forced_reflow_keeps_the_ex
                    R.push('parse-era=' + document.getElementById('parse-era').offsetWidth);
                    document.getElementById('out').textContent = R.join(' ');
                  }}, 0);
+               }});
+             </script>
+             <script type="module">
+               // THE MODULE ROUND. Deferred, so this runs before `load`, in
+               // `run_deferred_scripts` — which re-lays-out only AFTER the whole pass.
+               var m = window.__add(null, 'width:550px;height:10px');
+               window.__R.push('module=' + m.offsetWidth);
+               // ...and the microtask a module queues, which drains INSIDE the same pass. This is
+               // the exact shape of the WPT files that scored zero (`document.fonts.ready.then`).
+               Promise.resolve().then(function () {{
+                 window.__R.push('module-microtask=' + window.__add(null, 'width:550px;height:10px').offsetWidth);
                }});
              </script>
            </body></html>"#
@@ -193,6 +219,19 @@ fn a_box_built_by_a_load_handler_has_geometry_and_the_forced_reflow_keeps_the_ex
         (
             "parse-era=550",
             "CONTROL — a node that has existed since parse is unaffected by any of it",
+        ),
+        (
+            "module=550",
+            "THE MODULE ROUND — `run_deferred_scripts` runs every `defer`/`async`/`type=module` \
+             script and was the NINETEENTH call site with no `ReflowScope`. Its `if ran > 0` \
+             relayout happens after the whole pass, so the nodes do eventually paint and only a \
+             read taken DURING the round can see the defect",
+        ),
+        (
+            "module-microtask=550",
+            "the microtask a module queues drains INSIDE `run_deferred_scripts`, before that \
+             relayout — this is the exact shape (`document.fonts.ready.then(…)`) that scored \
+             css/css-grid/abspos/positioned-grid-descendants-* a flat zero across 32 files",
         ),
     ] {
         assert!(
