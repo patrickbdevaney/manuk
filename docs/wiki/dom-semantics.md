@@ -2447,3 +2447,65 @@ an allowlist applied to the RAW condition **before** Stylo sees it, value-valida
 
 **Order matters and each step gates the next:** allowlist → setter validation → canonical
 serialization (the largest piece, a value serializer per property).
+
+## A computed style must answer to its own CSS property name — the DASHED ATTRIBUTE (tick 1179)
+
+`getComputedStyle(el)` returned a snapshot object with **camelCase slots only**. So this was false:
+
+```js
+  'margin-left' in getComputedStyle(el)     // false
+  getComputedStyle(el)['margin-left']       // undefined
+```
+
+for `margin-left` — a property this engine has cascaded, laid out and painted correctly for a
+thousand ticks. CSSOM's *"CSS property to IDL attribute"* rule defines **three** attributes per
+supported property, and we had shipped one:
+
+| attribute | example | had it |
+|---|---|---|
+| camel-cased | `marginLeft` | ✅ |
+| webkit-cased | `webkitUserSelect` | ✅ |
+| **dashed** — the CSS property name itself, for every name containing `-` | `'margin-left'` | ❌ |
+
+### Why the third one is not a spelling convenience
+
+It is the **first line** of `wpt/css/support/computed-testcommon.js`, which is how the CSS test
+corpus asks every computed-value question, and it passes the **dashed** name:
+
+```js
+  assert_true(property in getComputedStyle(target),
+              property + " doesn't seem to be supported in the computed style");
+```
+
+So the corpus reported *"margin-left doesn't seem to be supported in the computed style"* — and
+every subtest under that helper died **before a value was ever read**. Histogramming the assertion
+messages of `css/css-values` (not the test names) put this sentence at the top of the area:
+`letter-spacing` 24, `background-image` 24, `object-position` 28+40, `z-index` 6, `margin-left` 6 —
+all properties we have. The area's headline said *values*; the failure was *the object's IDL surface*.
+
+> **Histogram the ASSERTION MESSAGE, not the test name.** The test names said `calc()`, `attr()`,
+> `if()`. The messages said the helper never got past its own first line.
+
+### The shape of the fix, and the two things that keep it honest
+
+`computed_style_js` emits `(function(){var o={…};var a=[["margin-left","marginLeft"],…];for(…)
+{var v=o[a[i][1]];if(v!==undefined)o[a[i][0]]=v;}return o;})()` — an object literal cannot reference
+itself while it is being built, so the aliases are installed one statement later. Pairs are emitted
+from Rust rather than a name list the JS re-derives, because this runs on **every `getComputedStyle`
+call**, which is already a forced-reflow trigger; a per-call regex over ninety names is real work.
+
+- **`if(v!==undefined)` is the honesty clause.** A name whose camel slot this build does not emit
+  stays *absent*, so `'view-transition-name' in cs` is still **false**. `in` is a question about THIS
+  engine — the same rule that governs `CSS.supports` one section above. A blanket `true` would be
+  t1177's lie wearing a new hat.
+- **A custom property is NOT a dashed attribute.** Chrome answers `'--brand' in cs` → `false` and
+  routes custom properties through `getPropertyValue` alone. We match that.
+
+`COMPUTED_STD_NAMES` was hoisted to module scope for this: the enumeration list (`length` / `item(i)`)
+and the alias list now derive from **one** array, because a hand-copied second list is how
+`length` drifted from the property count before (tick 597).
+
+⚠ **The attribute set is deliberately LARGER than the enumeration set.** `user-select`,
+`color-scheme` and the `-webkit-` spellings get dashed attributes without joining `__n`. That is not
+sloppiness — it is Chrome's shape too: `length` counts *declarations*, while the IDL attributes exist
+for every *supported property* regardless of whether one is set.

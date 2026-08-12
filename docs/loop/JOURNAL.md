@@ -46371,6 +46371,102 @@ PERF: none — one UA rule and one narrowed branch in a cascade that already ran
 WIKI: `docs/wiki/css-cascade.md` — where Chrome draws the form-control `box-sizing` line, and why a
 layout-crate test cannot see it.
 
+## Tick 1179 — a computed style did not answer to its own CSS property name (2026-08-12)
+
+TICK SHAPE: capability.
+
+HYPOTHESIS: the board's #2 leverage row is `css/css-values` at 877/4193 = 20.9%, so I ran the whole
+area with `--show-failures` and histogrammed the ASSERTION MESSAGES rather than the test names. The
+top clusters were not about values at all:
+
+```text
+   59  assert_true: scale doesn't seem to be supported in the computed style expected true got false
+   40  assert_true: 'object-position' is a supported property for the computed style ...
+   28  assert_true: object-position doesn't seem to be supported in the computed style ...
+   24  assert_true: letter-spacing doesn't seem to be supported ...
+   24  assert_true: background-image doesn't seem to be supported ...
+    6  assert_true: z-index doesn't seem to be supported ...
+    6  assert_true: margin-left doesn't seem to be supported ...
+```
+
+`margin-left`. `z-index`. Properties this engine has laid out correctly for a thousand ticks, and
+the CSS-WG's own helper says we do not support them. The sentence is emitted by ONE line —
+the FIRST line of `test_computed_value`, which is how `wpt/css/support/*` asks every computed-value
+question in the corpus:
+
+```js
+  assert_true(property in getComputedStyle(target),
+              property + " doesn't seem to be supported in the computed style");
+```
+
+and it passes the **dashed** name. CSSOM defines three IDL attributes per property — camel-cased
+(`marginLeft`), webkit-cased (`webkitUserSelect`), and, for every name containing a `-`, the
+**dashed attribute**, which is the CSS property name itself. We shipped only the first: our
+`getComputedStyle` snapshot is a plain object of camelCase slots, so `cs['margin-left']` is
+`undefined` and `'margin-left' in cs` is **false**. Every subtest under the helper therefore dies
+before a value is ever read.
+
+HYPOTHESIS: install the dashed attribute for every property the snapshot already carries, and the
+helper's gate opens for the properties we really do have — while `view-transition-name` keeps
+answering false, because `in` is a question about THIS engine (t1177's lesson, in a new place).
+
+⚠⚠⚠ **MEASURED — THE HYPOTHESIS WAS AIMED AT ONE AREA AND THE HELPER IS LOADED BY THIRTEEN.**
+Every CSS area re-run against the same release binary, compared to the marks banked at 11:13 today
+on the pre-fix tree (a same-hour control, per the standing old-binary rule):
+
+```text
+   AREA                     mark      now     Δ        the area I aimed at is the 4th largest gain
+   css/css-text             1449     1518    +69
+   css/css-backgrounds       235      300    +65
+   css/css-values            877      940    +63   <- the ONLY area the histogram named
+   css/css-fonts            2241     2287    +46
+   css/css-sizing            685      725    +40
+   css/css-flexbox          1366     1406    +40
+   css/css-position          200      224    +24
+   css/css-ui                183      206    +23
+   css/css-color            5625     5640    +15
+   css/css-overflow          250      263    +13
+   css/css-grid             1457     1465     +8
+   css/css-display           215      215      0
+   css/css-transforms        168      168      0
+                                    ─────  ─────
+                                            +406   0 areas down · HANG/CRASH 0 in every area
+```
+
+**+406 subtests from a one-statement JS alias loop, and 343 of them are in areas nobody was
+looking at.** The reason is structural and worth keeping: `computed-testcommon.js` is a *shared
+helper*, so a defect in it is not an area's defect — it is a **corpus-wide multiplier**, and the
+per-area board cannot show that shape at all. This is the t1176 lesson arriving from the other
+side: that tick found the helper library MISSING and gained 8,265; this one found the engine
+failing the helper's FIRST LINE and gained 406. Both were invisible to a ranker that reads areas.
+
+⚠ **`css/css-display` and `css/css-transforms` moved by exactly ZERO, and that is the control.**
+Both are reftest-heavy areas whose testharness files do not route through `test_computed_value`.
+A fix that moved *every* area equally would have been the tell that I was measuring the binary and
+not the change.
+
+⚠ **`cssom` reports 0/0 FILES 0 — it is not in the sparse checkout at all** (`WPT:cssom 0` in
+`RATCHET.tsv` was never a score, it was an absence, and it has been sitting there reading like a
+floor). Same class as t1176's `css/support/`. Recorded, not chased: `git sparse-checkout add cssom`
+is the next cheap corpus correction, and it is the area this very tick's subject belongs to.
+
+RED-PROOF: `dashed_alias_js` severed behind an env flag, same binary, same run —
+`in-margin-left:false in-z-index:false in-letter-spacing:false … get-margin-left:undefined
+agree:false roundtrip:undefined`, while **every negative and every control row held unchanged**
+(`neg-absent:false neg-bogus:false neg-custom-in:false ctl-camel:11px ctl-gpv:11px ctl-item0:color
+once:1 len-sane:true`). The gate fails on its subject and only on its subject.
+
+PERF: neutral by construction — the alias table is emitted from Rust as `(dashed, camelKey)` pairs
+so the per-call cost is one array walk over ~60 entries, not a regex over ninety names on a path
+that is already a forced-reflow trigger. `extra_computed_props` was computed **twice** per
+`getComputedStyle` before this tick and is now computed once, which is a small net win on the same
+path.
+
+WIKI: `docs/wiki/dom-semantics.md` — "A computed style must answer to its own CSS property name",
+including the rule this tick is really about: **histogram the ASSERTION MESSAGE, not the test
+name.** The names said `calc()`, `attr()`, `if()`; the messages said the helper never got past its
+own first line.
+
 ## Tick 1178 — an INVALID declaration is applied as the INITIAL value, so it overrides the valid one before it (2026-08-12)
 
 TICK SHAPE: capability.

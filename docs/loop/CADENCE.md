@@ -15,7 +15,7 @@
 | median tick cycle | **28m** | 881 intervals |
 | median, last 10 | **27m** | 10 intervals |
 | fastest / slowest | 5s / 5.4d | |
-| **ticks per hour** | **1.14** | 774.9h elapsed |
+| **ticks per hour** | **1.14** | 775.8h elapsed |
 | median verify wall | **63s** | 821 ticks |
 | wall trend | 39s → 13m — getting slower ⚠️ | first 3 vs last 3 |
 
@@ -27,8 +27,8 @@ it, and a wall that grows taxes every future tick, so it is tracked separately f
 ### Near — the daily driver (doc / app / platform web)
 
 * **capabilities asserted** (`G_CAPABILITY`): 48 → **81**
-* **live gates**: 27 → **442**
-* **✅ rows in the capability ledger**: 144 → **579**
+* **live gates**: 27 → **443**
+* **✅ rows in the capability ledger**: 144 → **580**
 * **Bar 0 — oracle hangs**: 0 of 265 sites
 
 **391 of 882 ticks** (44%) moved a
@@ -978,6 +978,6 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 | **1175** | 2026-08-12 10:19 | 85m | capability | 13m | +461/−38 | 442 | 81 | 56.0% · | GRID §9 HAS TWO SECTIONS, and t1173's control table varied the wrong thing (2026-08-12) |
 | **1176** | 2026-08-12 10:54 | 36m | measurement | 13m | +214/−48 | 442 | 81 | 56.0% · | the #1 lever's corpus was missing the stylesheet that makes `.grid` a grid (2026-08-12) |
 | **1177** | 2026-08-12 11:13 | 19m | measurement | 13m | +303/−35 | 442 | 81 | 56.0% · | `el.style.color = "yelow"` sticks, and the negative rows refused the obvious fix (2026-08- |
-| **1178** | 2026-08-12 11:54 | 41m | capability | 13m | +337/−42 | 442 | 81 | 56.0% · | an INVALID declaration is applied as the INITIAL value, so it overrides the valid one befo |
+| **1178** | 2026-08-12 12:52 | 1.7h | capability | 13m | +465/−101 | 443 | 81 | 56.0% · | an INVALID declaration is applied as the INITIAL value, so it overrides the valid one befo |
 
 *`·` after a WPT figure means **carried forward**, not measured this tick.*

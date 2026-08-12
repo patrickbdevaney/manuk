@@ -1452,6 +1452,139 @@ fn camel(name: &str) -> String {
     out
 }
 
+/// The ordered dash-case CSS property names the `getComputedStyle` snapshot exposes as
+/// standard slots. Module-level because TWO things derive from it and they must not drift apart:
+/// the array-like enumeration (`.length` / `.item(i)`) and the DASHED ATTRIBUTE aliases.
+const COMPUTED_STD_NAMES: &[&str] = &[
+    "color",
+    "background-color",
+    "font-size",
+    "font-weight",
+    "font-style",
+    "font-family",
+    "line-height",
+    "text-align",
+    "display",
+    "position",
+    "overflow",
+    "overflow-x",
+    "overflow-y",
+    "visibility",
+    "white-space",
+    "pointer-events",
+    "scrollbar-width",
+    "scrollbar-color",
+    "opacity",
+    "width",
+    "height",
+    // The LOGICAL spellings, emitted from the same `used_dim_css` as the physical pair.
+    "inline-size",
+    "block-size",
+    "margin-top",
+    "margin-right",
+    "margin-bottom",
+    "margin-left",
+    "padding-top",
+    "padding-right",
+    "padding-bottom",
+    "padding-left",
+    "top",
+    "right",
+    "bottom",
+    "left",
+    "z-index",
+    "transform",
+    "justify-content",
+    "align-items",
+    "align-self",
+    "flex-direction",
+    "flex-wrap",
+    "flex-grow",
+    "flex-shrink",
+    "flex-basis",
+    "row-gap",
+    "column-gap",
+    "box-sizing",
+    "min-width",
+    "max-width",
+    "min-height",
+    "max-height",
+    "scroll-snap-type",
+    "scroll-snap-align",
+    // The visual-effects bundle (ticks 592-595). Every one of these RENDERS now, and a
+    // property that renders but reads back `undefined` is the worse half of the same lie.
+    "filter",
+    "backdrop-filter",
+    "clip-path",
+    "mix-blend-mode",
+];
+
+/// Camel-cased slots the object literal carries that are NOT in `COMPUTED_STD_NAMES` — either
+/// because they are vendor-prefixed spellings of a property already listed, or (`user-select`,
+/// `color-scheme`) because the enumeration list has never included them. Both still deserve their
+/// dashed attribute: the IDL surface is a question about *which properties this object answers to*,
+/// which is a strictly larger set than *which declarations it enumerates* (that is true in Chrome
+/// too — `length` counts declarations, the attributes exist regardless).
+const COMPUTED_UNENUMERATED_NAMES: &[&str] = &[
+    "user-select",
+    "color-scheme",
+    "-webkit-user-select",
+    "-webkit-filter",
+    "-webkit-backdrop-filter",
+    "-webkit-clip-path",
+];
+
+/// **The DASHED ATTRIBUTE** — CSSOM's *"CSS property to IDL attribute"* rule, the one we never
+/// implemented: alongside the camel-cased attribute (`marginLeft`) and the webkit-cased attribute
+/// (`webkitUserSelect`), every property whose name contains a `-` also answers to **the CSS property
+/// name itself** — `style['margin-left']`, and therefore `'margin-left' in style`.
+///
+/// It is not a spelling convenience. `wpt/css/support/computed-testcommon.js` opens every single
+/// computed-value test with `assert_true(property in getComputedStyle(target))` and passes the
+/// DASHED name, so a snapshot with camelCase slots only reports *"margin-left doesn't seem to be
+/// supported in the computed style"* for a property this engine has laid out correctly for a
+/// thousand ticks — and the whole subtest dies before a value is ever read.
+///
+/// Emitted as `(dashed, camelKey)` pairs rather than a name list the JS re-derives, because this
+/// runs on **every `getComputedStyle` call** and a per-call regex over ninety names is real work on
+/// a path that is already a forced-reflow trigger. A leading `-` is dropped before camel-casing so
+/// `-webkit-user-select` finds `webkitUserSelect` and not `WebkitUserSelect`.
+fn dashed_alias_js(extra: &[(&'static str, String)]) -> String {
+    let mut out = String::from("var a=[");
+    let mut first = true;
+    let mut emit = |name: &str, out: &mut String| {
+        // A dashless property (`color`, `width`) IS its own camel-cased attribute — nothing to alias.
+        if !name.contains('-') {
+            return;
+        }
+        let camel_key = camel(name.strip_prefix('-').unwrap_or(name));
+        if !first {
+            out.push(',');
+        }
+        first = false;
+        out.push('[');
+        out.push_str(&js_string_literal(name));
+        out.push(',');
+        out.push_str(&js_string_literal(&camel_key));
+        out.push(']');
+    };
+    for name in COMPUTED_STD_NAMES {
+        emit(name, &mut out);
+    }
+    for (name, _) in extra {
+        emit(name, &mut out);
+    }
+    for name in COMPUTED_UNENUMERATED_NAMES {
+        emit(name, &mut out);
+    }
+    // `if(v!==undefined)` keeps the alias HONEST: a name whose camel slot this build does not emit
+    // stays absent, so `in` remains a truthful question about what we actually have. Custom
+    // properties are deliberately not here — Chrome answers `'--brand' in cs` false and routes them
+    // through `getPropertyValue` alone.
+    out.push_str("];for(var i=0;i<a.length;i++){var v=o[a[i][1]];if(v!==undefined)o[a[i][0]]=v;}");
+    out
+}
+
 fn computed_style_js(
     cs: &manuk_css::ComputedStyle,
     rect: Option<[f32; 4]>,
@@ -1632,71 +1765,11 @@ fn computed_style_js(
     // computed style does `for (i=0;i<s.length;i++) s.item(i)`, so an absent `length`/`item` makes
     // the whole declaration un-enumerable. Custom properties (`--foo`) enumerate after the standard
     // longhands, matching the order `getPropertyValue` already answers them in.
+    // Computed ONCE and shared by the three consumers below (the enumeration list, the object slots,
+    // the dashed aliases). It builds ~60 strings and `getComputedStyle` is a hot, forced-reflow path.
+    let extra = extra_computed_props(cs, content_absent_is_none);
     let names_js = {
-        const STD: &[&str] = &[
-            "color",
-            "background-color",
-            "font-size",
-            "font-weight",
-            "font-style",
-            "font-family",
-            "line-height",
-            "text-align",
-            "display",
-            "position",
-            "overflow",
-            "overflow-x",
-            "overflow-y",
-            "visibility",
-            "white-space",
-            "pointer-events",
-            "scrollbar-width",
-            "scrollbar-color",
-            "opacity",
-            "width",
-            "height",
-            // The LOGICAL spellings, emitted from the same `used_dim_css` as the physical pair.
-            "inline-size",
-            "block-size",
-            "margin-top",
-            "margin-right",
-            "margin-bottom",
-            "margin-left",
-            "padding-top",
-            "padding-right",
-            "padding-bottom",
-            "padding-left",
-            "top",
-            "right",
-            "bottom",
-            "left",
-            "z-index",
-            "transform",
-            "justify-content",
-            "align-items",
-            "align-self",
-            "flex-direction",
-            "flex-wrap",
-            "flex-grow",
-            "flex-shrink",
-            "flex-basis",
-            "row-gap",
-            "column-gap",
-            "box-sizing",
-            "min-width",
-            "max-width",
-            "min-height",
-            "max-height",
-            "scroll-snap-type",
-            "scroll-snap-align",
-            // The visual-effects bundle (ticks 592-595). Every one of these RENDERS now, and a
-            // property that renders but reads back `undefined` is the worse half of the same lie.
-            "filter",
-            "backdrop-filter",
-            "clip-path",
-            "mix-blend-mode",
-        ];
-        let extra = extra_computed_props(cs, content_absent_is_none);
+        const STD: &[&str] = COMPUTED_STD_NAMES;
         let mut arr = String::from("[");
         for (i, n) in STD.iter().enumerate() {
             if i > 0 {
@@ -1725,7 +1798,7 @@ fn computed_style_js(
     let (names_js, names_len) = names_js;
     let q = js_string_literal;
     format!(
-        "({{color:{}, backgroundColor:{}, fontSize:{}, fontWeight:{}, fontStyle:{}, \
+        "(function(){{var o={{color:{}, backgroundColor:{}, fontSize:{}, fontWeight:{}, fontStyle:{}, \
           fontFamily:{}, lineHeight:{}, textAlign:{}, display:{}, position:{}, overflow:{}, overflowX:{}, overflowY:{}, \
           visibility:{}, whiteSpace:{}, pointerEvents:{}, userSelect:{}, webkitUserSelect:{}, colorScheme:{}, \
           scrollbarWidth:{}, scrollbarColor:{}, opacity:{}, \
@@ -1765,7 +1838,7 @@ fn computed_style_js(
           return v===undefined?'':String(v);}},\
           __n:{}, length:{}, \
           item:function(i){{var n=this.__n[i];return n===undefined?'':n;}},\
-          getPropertyPriority:function(){{return '';}}}})",
+          getPropertyPriority:function(){{return '';}}}};{}return o;}})()",
         q(&rgba_css(&cs.color)),
         q(&cs.background_color.map(|c| rgba_css(&c)).unwrap_or_else(|| "rgba(0, 0, 0, 0)".into())),
         q(&format!("{}px", cs.font_size)),
@@ -1861,12 +1934,12 @@ fn computed_style_js(
         // legacy CSSOM spelling every framework still reads.
         {
             let mut out = String::new();
-            for (name, val) in extra_computed_props(cs, content_absent_is_none) {
+            for (name, val) in &extra {
                 out.push_str(&camel(name));
                 out.push(':');
                 out.push_str(&js_string_literal(&val));
                 out.push(',');
-                if name == "float" {
+                if *name == "float" {
                     out.push_str("cssFloat:");
                     out.push_str(&js_string_literal(&val));
                     out.push(',');
@@ -1892,6 +1965,9 @@ fn computed_style_js(
         },
         names_js,
         names_len,
+        // The dashed attributes, installed after the literal exists — an object literal cannot
+        // reference itself while it is being built.
+        dashed_alias_js(&extra),
     )
 }
 

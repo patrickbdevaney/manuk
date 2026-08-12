@@ -988,6 +988,9 @@
   - L2367 · What it costs — measured, because the obvious answer is wrong
   - L2389 · element.style is a raw-string Proxy: the setter validates nothing, and the two feature-detection idioms lie in OPPOSITE directions
   - L2420 · …but CSS.supports is not yet a safe validator, and a NEGATIVE row is what proved it
+  - L2451 · A computed style must answer to its own CSS property name — the DASHED ATTRIBUTE (tick 1179)
+  - L2470 · Why the third one is not a spelling convenience
+  - L2489 · The shape of the fix, and the two things that keep it honest
 
 ## THE FIDELITY INSTRUMENT — what it can and cannot see
 `docs/wiki/fidelity-instrument.md`
@@ -1993,4 +1996,4 @@
   - L124 · Rank mechanisms by FLIP RATE, not failing-subtest count — CSS layout is a multi-assertion slog
 
 ---
-1900 sections across 22 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+1903 sections across 22 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
