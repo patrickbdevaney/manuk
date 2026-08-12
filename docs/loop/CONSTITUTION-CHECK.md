@@ -7503,6 +7503,117 @@ test for the arc**, which is one sweep.
    three minutes, no build), so the suite ranks *where to look* and the corpus decides *whether to
    go*. That single step is what would have caught `::first-letter` as the thin one it was.
 
+## Check #110 — tick 1161 (2026-08-11)
+
+**HORIZON: H0** (Pareto Web Parity). **GATE:** M1 v1 RENDER — `shape >= 0.75` on `>= 95%` of the
+in-scope CrUX corpus, then M2 FUNCTION, then M3 v2 RE-CERT (`phase0-milestones.sh`, owner-locked).
+Unchanged, and PART II's own H0 exit gate (`~83% WPT across categories`, four-corpora oracle
+viability, a daily-drivable shell, every rendered construct queryable) is unchanged behind it.
+
+### 1 · ⚠⚠⚠ THE BOARD'S NEW PRIMARY METRIC IS THE ONE PART VI.3 DEMOTES, AND THIS TICK MEASURED THE GAP
+
+The owner directive of 2026-08-11 makes **"the MONOTONIC WPT TOTAL" the primary per-tick progress
+metric**. PART VI.3 says, in the imperative:
+
+> **"`WPT:TOTAL` is demoted from a north star to a bookkeeping mark. The loop optimises
+> usage-weighted breadth, not subtest count."**
+
+Both can be true and this check is the reconciliation, because the board itself separates the two
+roles — *"WPT is how you CLIMB on solid ground, CrUX M1/M2 is how you CERTIFY done"*, and *"NEVER
+move the exit"*. The **exit** is untouched, so no invariant is bent. What VI.3 warns about is the
+**climb** being read off a number whose mass is in the exotic tail — and tick 1161's refresh of
+`WPT-AREAS.tsv` (frozen since Jul 16) measured exactly how much:
+
+```text
+   RAW TOTAL                430,742 / 1,225,493  = 35.15%   <- the board's primary metric
+   minus encoding            70,183 /    98,059  = 71.57%   (encoding is 92.0% of the denominator)
+   minus encoding + html/dom 13,745 /    38,137  = 36.04%   <- the CSS/DOM breadth the loop works
+   css/* only                 9,591 /    29,664  = 32.33%
+```
+
+**Tick 84's trap is still the shape of the number**: VI.3 recorded encoding at 96% of passing
+subtests, and it is 92% of the *denominator* today. A +1,300-subtest gain across the entire CSS
+surface — which is what ticks 1155–1161 actually bought — moves the raw total by **~0.1pt**.
+
+**This is NOT a drift finding and the loop should not be steered off the board.** The board's total
+is monotone and honest, which is precisely what it was elevated for (against a CrUX sweep that
+slides). The correction is narrower, and it is a reporting one:
+
+> **Report the raw total AND the encoding-excluded pair. A tick that moves `css/*` from 32.0% to
+> 32.3% has moved the frontier by three tenths of a point and the headline by one tenth, and only
+> one of those two numbers is about the engine.**
+
+`css/*` at **32.33%** is, to two decimal places, the same **32.3%** VI.3 published as the honest
+gauge at tick 86 — a coincidence of arithmetic, since the aperture has widened enormously since
+(VI.3's "~8 sub-areas of hundreds" is now 20 areas and 1.23M subtests), but a useful reminder that
+the frontier number has not been the headline number for 1,075 ticks.
+
+### 2 · GATE OR SCOREBOARD — this window: gate, and one of the eight is a Bar 0
+
+Ticks 1154–1161. Against the H0 gate conditions:
+
+- **t1159** (§10.4 conflict arms in taffy's context) and **t1160** (`font-size:0` measured in font
+  units) are **layout/text correctness on the M1 path** — H0.1 and H0.8, gate work.
+- **t1161** is the one that is not scoreboard *or* gate in the ordinary sense: refreshing the
+  metric's own source turned up a **Bar 0 crash** (`css/selectors/invalidation/has-complexity.html`,
+  `HANG/CRASH 1`). PART II ranks Bar 0 above every visual divergence, so this outranked the
+  histogram and was taken immediately, which is the standing rule working.
+- The `:has()` fix is **not** the whole of that Bar 0, and check #110 records the honest half: the
+  cascade is now linear (104× at n=4000) and the test still crashes, because `Page::relayout`
+  recascades on every node-count growth (`engine/page/src/lib.rs:6167`) — 75,000 appends, 75,000
+  full cascades.
+
+### 3 · ⚠⚠⚠ PART VI.2's H0.1 ROW IS VINDICATED BY A ROUTE NOBODY PLANNED — INCREMENTAL RELAYOUT
+
+H0.1 reads: *"full block/inline/table/float box model with **double-dirty-bit incremental relayout
+designed in from day one** (this is the single highest-leverage architectural decision in the
+renderer; retrofitting incrementality is a rewrite)"*. VI.2 has recorded for 1,075 ticks that we are
+on Taffy with **no** incremental relayout, and the loop has treated that as a *performance* debt to
+be paid later.
+
+**It is not a performance debt. It is the second half of a Bar 0**, and a WPT test now names it. The
+constitution called incrementality the single highest-leverage architectural decision in the
+renderer and it was right for a reason nobody had written down: without it, **every DOM mutation is
+O(document)**, so any page that builds its content in a loop — which is every SPA, every feed, every
+table render — pays `mutations × nodes`. `has-complexity.html` is that shape with the constant turned
+up until the watchdog fires.
+
+**PART VI.2 IS CORRECTED** to say so: the H0.1 incremental-relayout clause is re-ranked from
+*deferred performance work* to **a named Bar 0 mechanism with a reproducing test**, and it is the
+first thing this check has found that both the constitution and a WPT test agree on independently.
+
+### 4 · INVARIANTS
+
+- **I2 (never patch deps):** held, and tested twice this window. t1159's §10.4 fix is *what taffy is
+  TOLD* (a capped `min_size`), not a patch to taffy; t1160's is a clamp on what swash is ASKED
+  (`size(0)` means font units), not a change to swash. Both are the sanctioned shape — the fork
+  surface in `STATUS.md` is still empty.
+- **I3 (semantic model in lockstep):** held by construction this window — all three ticks change
+  element GEOMETRY, which `node_rects` feeds to `manuk_a11y` and thence to the agent's click point.
+  ⚠ Still held *by accident* rather than by a check, which is t852's finding and remains open.
+- **I4 (Pareto discipline):** §1 above IS the I4 audit, and the answer is that the metric's shape is
+  a reporting risk rather than a violated invariant. `:has()` is the opposite of tail work — a
+  mainstream selector on lists, tables and feeds.
+- **I5 (the oracle is the discovery engine):** ⚠ **partially contradicted, and worth recording.**
+  This window's two largest findings came from neither the oracle nor the log: t1160's from a
+  BATTERY'S CONTROL ROW, and t1161's from **re-running a stale instrument file**. Check #51 widened
+  I5 from the crawl to the instrumented log; #110 widens it once more — **the discovery engines are
+  the oracle, the log, the battery's control rows, and the metric's own freshness.**
+- **I1, I6, I7, I8:** untouched this window.
+
+### 5 · THE STEER — binding on the next tick
+
+1. ⚠⚠⚠ **INCREMENTAL STYLE INVALIDATION / RELAYOUT IS NOW THE NAMED NEXT MECHANISM**, promoted by
+   §3 from a performance backlog item to the open half of a Bar 0 with a reproducing WPT test
+   (`css/selectors/invalidation/has-complexity.html`). It is H0.1's own clause, and the constitution
+   has called it the highest-leverage architectural decision in the renderer since tick 0.
+2. **Report the encoding-excluded pair beside the raw total** every time the primary metric is
+   quoted (§1). `scripts/` is observer-owned, so this is a request rather than an edit.
+3. **Re-run `WPT-AREAS.tsv` on a cadence** — 15s an area, and a Bar 0 hid in a stale row for 26
+   days. Filed as a request in surface audit #56 too.
+4. **`domparsing` 188 → 149 on an unchanged denominator is unattributed** and stays an open
+   question: the old binary no longer exists, so no same-hour control is possible.
+
 ## Check #109 — tick 1152 (2026-08-11)
 
 **HORIZON: H0.** **GATE:** M1 v1 RENDER — `shape >= 0.75` on `>= 95%` of the in-scope corpus, then M2

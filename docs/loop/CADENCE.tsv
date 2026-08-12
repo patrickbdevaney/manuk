@@ -863,3 +863,4 @@ tick	sha	epoch	iso	delta_s	shape	wall_s	files	added	deleted	gates	claims	wpt_pas
 1155	0d339c6c	1786493437	2026-08-11T20:10:37-04:00	979	capability	808	7	354	36	438	81	3896	6960	0	571	0	`unicode-range` is parsed and 99 fetches stop, and the acceptance test did NOT move (2026-08-11)
 1157	8e20d501	1786495465	2026-08-11T20:44:25-04:00	2028	measurement	808	6	124	33	438	81	3896	6960	0	571	0	the port target is TWO ARMS of an eight-arm table, and eight rows are already exact (2026-08-11)
 1159	419f54f0	1786502873	2026-08-11T22:47:53-04:00	7408	capability	808	12	852	33	438	81	3896	6960	0	573	0	the conflict arms LANDED, and the sixth control was measured in the wrong context (2026-08-11)
+1161	3d54fced	1786506722	2026-08-11T23:52:02-04:00	3849	capability	808	11	722	52	438	81	3896	6960	0	573	0	the PRIMARY METRIC's own source was a month stale, and it was hiding a Bar 0 (2026-08-11)

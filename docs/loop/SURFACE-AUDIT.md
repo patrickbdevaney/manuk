@@ -5709,3 +5709,86 @@ which is why the board ranks on corpus fidelity and not on flips. Recorded becau
 number that would otherwise be argued about from memory.
 
 MEASURED 525 of 561; `unknown` still 36 — none resolved. Rows added: 0. Rows corrected: 1.
+
+## Audit #56 — tick 1161 (2026-08-11) — the ROWS were right and their MEASUREMENTS were 26 days old, and an independent engine hit the same plateau in the same month
+
+### Sources (read this audit, not recalled)
+
+- `github.com/web-platform-tests/interop` → `2026/README.md` — re-read: **20 focus areas + 4
+  investigation efforts**, unchanged since audit #55 read it eleven ticks ago.
+- ladybird.org newsletters, Jan–Jul 2026 — an independent engine's curve, and the one external
+  series that is directly comparable to ours.
+- webkit.org/blog/17818, web.dev/blog/interop-2026, igalia.com/news/interop-2026.
+
+### The reconciliation found NOTHING NEW, and that is the correct result twice running
+
+All 20 focus areas still have rows; all still carry explicit verdicts; nothing was added. Audit #55
+established this and #56 confirms it did not rot in eleven ticks. **The frame is not behind the
+world's list.** Repeating that check was cheap; what it freed the audit to look at is the layer
+below, which is where this one found its finding.
+
+### ⚠⚠⚠ What we had been wrong about — a `gated` row whose MEASUREMENT is a month old is also an unmeasured claim
+
+Audit #54 established *"a `partial` row with no gate is an UNMEASURED CLAIM."* This audit found the
+next layer of the same defect, and it was live: **`docs/loop/WPT-AREAS.tsv` — the source the PRIMARY
+per-tick progress metric is computed from — had not been re-run since Jul 16.** Twenty-six days,
+roughly a hundred ticks, while the loop steered by the total it produces. Refreshing it costs
+**~15 seconds per area**.
+
+Every row had moved, and one came back carrying a **Bar 0 crash** (`css/selectors`, `HANG/CRASH 1` —
+`has-complexity.html`, the `:has()` quadratic; see tick 1161). The map said the right things about
+the world and the numbers under it were a month stale.
+
+> **A frozen metric is not a slow metric. It is a metric that cannot report a crash.**
+
+### ⚠⚠ And a percentage can be FLAT while the engine got 3.7× better — the suite grows underneath us
+
+```text
+                        STALE (Jul 16)        FRESH (Aug 11)       passes    pct
+   css/css-grid          150/2841   5.3%       558/9281   6.0%      x3.7    +0.7pt
+   css/css-sizing        191/1588  12.0%       576/2084  27.6%      x3.0   +15.6pt
+   css/css-flexbox       223/3594   6.2%      1329/3660  36.3%      x6.0   +30.1pt
+```
+
+`css-grid`'s denominator **tripled** (2841 → 9281) while its passes nearly quadrupled, so the
+percentage moved 0.7 points. **A ratio against a moving denominator is not a progress metric**, and
+anyone reading the `pct` column would have concluded grid was stuck. Read `pass` as the monotone
+series and `pct` only as a coverage share.
+
+### ⚠⚠ The external calibration, which is new and which the board should have
+
+Ladybird — independent, non-Chromium, and as of 2026 running **its style and layout pipeline in
+Rust** (selector matching first, then computed style, cascade, animations, `calc()`, layout-tree
+construction, and every formatting context from block through SVG):
+
+```text
+   passing WPT subtests   Apr 2,067,263 → May 2,075,546 → Jun 2,078,912 → Jul 2,079,020
+   monthly gain                          +8,283          +3,366          +108
+   ours (tick 1161)       430,742 of 1,225,493
+```
+
+Two things follow, and both are steering-relevant:
+
+1. **The plateau is not local.** An independent engine, further along and on the same kind of stack,
+   saw its monthly gain collapse from 8,283 to 108 in three months. The board's read that layout
+   reftests are byte-exact CONJUNCTIONS with low flip is corroborated from outside this repo — our
+   flat headline is the shape of the terrain, not evidence the loop stopped working.
+2. **Their ORDER is a ranked external path** for the board's *"PORT, don't reverse-engineer"* steer:
+   selector matching → computed style → cascade → animations → `calc()` → layout-tree construction →
+   formatting contexts. That is an engine that walked this road choosing to do the matcher first.
+
+### The steer — binding on the next ticks
+
+1. ⚠⚠⚠ **CLOSE THE `:has()` BAR 0's SECOND HALF.** `Page::relayout` recascades whenever the node
+   count grows (`engine/page/src/lib.rs:6167`), so 75,000 `appendChild` calls are 75,000 full
+   cascades. Tick 1161 made each cascade linear; **incremental style invalidation** is what makes
+   there be fewer of them, and the WPT test still crashes until it exists.
+2. **Re-run `WPT-AREAS.tsv` on a cadence, not on an inspiration** — it is 15s an area and it is the
+   primary metric's source. `scripts/` is observer-owned, so this is filed as a request: wire the
+   refresh into the wall, or into the sweep, so a Bar 0 cannot hide in a stale row for a month again.
+3. **`domparsing` fell 188 → 149 on an unchanged denominator and cannot be attributed** — the old
+   binary no longer exists, so no same-hour control is possible. Open question, deliberately not
+   explained away.
+4. **The total is 92% `encoding` by test count** (1,127,434 of 1,225,493). A +1,300-subtest gain
+   across the whole CSS surface moves the headline ~0.1pt. Good monotonicity check, poor sensitivity
+   one — do not read a flat total as a flat engine.

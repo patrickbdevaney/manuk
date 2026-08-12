@@ -46371,6 +46371,153 @@ PERF: none — one UA rule and one narrowed branch in a cascade that already ran
 WIKI: `docs/wiki/css-cascade.md` — where Chrome draws the form-control `box-sizing` line, and why a
 layout-crate test cannot see it.
 
+## Tick 1161 — the PRIMARY METRIC's own source was a month stale, and it was hiding a Bar 0 (2026-08-11)
+
+TICK SHAPE: capability (selector matching) + measurement (the metric's source). HYPOTHESIS, written
+before the work: the board's standing directive says *"if `WPT-AREAS.tsv` is stale (mtime old),
+REFRESH it before trusting the number"*. Its mtime was **Jul 16** — twenty-six days and roughly a
+hundred ticks — while the loop steered by the total it produces. Predicted: the rows are low and the
+refresh is bookkeeping. **It was not bookkeeping. One row came back with a Bar 0 crash in it.**
+
+⚠⚠⚠ **THE REFRESH COSTS 15 SECONDS AN AREA, AND `css/selectors` CAME BACK `HANG/CRASH 1`.** Every
+area had moved, several enormously, and one carried a Bar 0:
+
+```text
+                        STALE (Jul 16)      FRESH            crashes
+   css/css-flexbox        223/3594  6.2%    1329/3660 36.3%     0
+   css/css-grid           150/2841  5.3%     558/9281  6.0%     0
+   css/css-sizing         191/1588 12.0%     576/2084 27.6%     0
+   css/css-fonts          924/2854 32.4%    1975/3425 57.7%     0
+   css/css-display         10/24   41.7%     125/151  82.8%     0
+   css/selectors          784/2327 33.7%    2905/5215 55.7%   ⚠ 1
+   domparsing             188/1273 14.8%     149/1273 11.7%     0   ⚠ DOWN 39
+   TOTAL              422865/1212290 34.88%  430742/1225493 35.15%
+```
+
+**A frozen metric is not a slow metric — it is a metric that cannot report a crash.** The loop has a
+lesson for instruments that lie; this is the shape where the instrument does not lie, it simply
+stops being asked.
+
+⚠⚠⚠ **THE CRASH IS `css/selectors/invalidation/has-complexity.html`, AND ITS TITLE IS THE
+DIAGNOSIS**: *":has() invalidation should not be O(n^2)"*. It builds 75,000 elements under one
+`<main>` and asserts the page still responds. The runner reported `CRASH (killed by a signal)` — the
+watchdog killing a page that had stopped responding. **Reproducible solo.**
+
+**MEASURED BEFORE THEORISING — the ladder, and it is unambiguous:**
+
+```text
+      n      250    500   1000   2000   4000        75000 (the test)
+    BEFORE    41    133    551   2074   8176 ms     ~48 MINUTES, extrapolated
+    AFTER      8      9     20     36     68 ms     (and linear on out: 8000->137, 16000->291,
+                                                     25000->452)
+```
+
+Each doubling of `n` cost **4×** — exactly quadratic. The mechanism: the cascade visits every node,
+and `main:has(span) span` sends every one of those spans up to the single `<main>` to re-run the
+subtree search, so the work is `nodes × subtree`. The fix is that **the `:has()` question is asked of
+the ANCHOR, and the anchor is asked the same question over and over** — `main:has(span)` has ONE
+answer for `<main>` and it was recomputed once per span. A memo keyed
+`(that exact :has() pseudo, that node) -> bool`, open for the duration of one cascade, collapses it.
+**104× at n=4000.**
+
+⚠⚠ **THE MEMO IS SCOPED, NOT AMBIENT, AND THAT IS THE WHOLE OF ITS SAFETY.** `HasMemoScope` is an
+RAII guard a cascade pass opens over a DOM it does not mutate. With no scope open there is no cache
+and every call computes, so a caller that mutates between queries (`querySelectorAll` from script)
+cannot read a stale answer — it never had one. **Both cascade implementations open one in this
+tick** (`MinimalCascade::cascade_scoped` and `stylo_engine`'s `:has()` loop): the *one rule, N
+implementations* trap this repo paid for at t720, t1027, t1131 and t1134, avoided by fixing both at
+once instead of discovering the second one three ticks later.
+
+⚠⚠⚠ **THE FIRST DRAFT OF THE GATE WAS BLIND TO ITS OWN SUBJECT AND REPORTED THE BUG FIXED WITH THE
+FIX REMOVED.** It carried only `main:has(...) .subject` rules — and the rule index buckets by the
+RIGHTMOST compound, so exactly ONE element ever asked the question: three evaluations either way,
+memo or no memo. **The rule that creates the quadratic is the one whose SUBJECT is the repeated
+element**, `main:has(span) span`. With it restored the gate reads **53 evaluations at 50 spans and
+2003 at 2000** without the memo, and a handful with it. (t1065-1077's lesson, one more time: a
+battery can be blind to its own subject and report it working.)
+
+⚠⚠ **THE GATE IS A COUNTER, NOT A STOPWATCH** — a timing assertion on a shared box is a flake, and
+*"how many times did the expensive thing actually run"* is both the quantity the fix is about and
+exact. It asserts correctness first (the subject's colour must not depend on how many spans exist),
+because a memo that returns the wrong answer is a worse bug than the one it fixes and a pure speed
+assertion cannot see it.
+
+⚠⚠⚠ **THE BAR 0 IS NOT CLOSED, AND SAYING OTHERWISE WOULD BE THE EASY LIE.** The WPT test still
+crashes, because a SECOND quadratic dominates it and it is in a different subsystem — named with its
+file and line rather than suspected: `Page::relayout` *"recascades only when the node count outgrew
+the style map"* (`engine/page/src/lib.rs:6167`), so each of the test's 75,000 `appendChild` calls
+triggers a FULL re-cascade — `appends × nodes`. **This fix makes each of those cascades linear
+instead of quadratic; it does not make there be fewer of them.** Incremental style invalidation is
+what closes it, and it is a different tick. This is the board's own *"the win is ONE LAYER DEEP"*
+shape, and the honest report is that the layer is now measured rather than guessed.
+
+⚠⚠⚠ **THE REFRESHED `WPT-AREAS.tsv` IS *HELD*, NOT HIDDEN — THE RATCHET REFUSES TO BANK A FILE THAT
+REPORTS A BAR 0, AND IT IS RIGHT.** Once the crash row was honest, the ratchet said:
+
+```text
+   ✗ BAR 0: css/selectors has 1 HANG/CRASH. A crash outranks every score,
+     and the score is worthless beside it.
+```
+
+That is the rule working, not a blocker to route around. **The refresh therefore does not land in
+this tick** — the file stays at its Jul 16 values until the crash is closed. What lands instead is
+every measurement it produced, recorded in five places that are read: this entry's table, surface
+audit #56, constitution check #110, `PART VI.2` of `CONSTITUTION.MD`, and the pattern ledger. **The
+numbers are not lost and the crash is not buried; only the ratchet's own scoreboard is withheld, by
+its own rule, until the thing it refuses is fixed.** The next tick banks the refresh with the fix.
+
+⚠⚠⚠ **AND THE CRASH IS A THIRD SUBSYSTEM, MEASURED RATHER THAN ASSUMED — IT IS NOT A TIMEOUT.**
+Re-run with a **300-second** per-test budget instead of the default, it still dies *"killed by a
+signal"*. So the watchdog is not the killer and the quadratic cascade was never the whole story: at
+75,000 elements built one `createElement`/`appendChild` at a time through SpiderMonkey, this is the
+**JS↔DOM binding surface** — `PART VI.1`'s H0.4 row, *"the largest unsafe surface in the codebase"*,
+which tick 84 already paid for once with a mass-reflector recursion overflowing the C stack. Three
+mechanisms now sit behind one test: the `:has()` quadratic (**fixed here**), the recascade-per-growth
+(named, `engine/page/src/lib.rs:6167`), and this. **Each was found only by removing the one in front
+of it**, which is the board's own *"the win is ONE LAYER DEEP"* shape, three layers deep.
+
+⚠⚠⚠ **THE RATCHET ALSO REFUSED ON `domparsing` 188 → 149, AND IT WAS RIGHT TO — SO THE MARK WAS
+INVESTIGATED RATHER THAN WAIVED.** Three facts, in the order they were established:
+
+1. **It is not this tick.** The refreshed 149 was measured on the **pre-memo HEAD binary**, before a
+   line of this tick's code existed. `css/selectors` is byte-identical across the memo (2905/5215),
+   and `:has()` matching has no path into `domparsing`.
+2. **It is not the corpus.** `~/wpt` is a **clean tree at a 2026-07-13 commit with zero untracked
+   files** — older than the mark itself. The test files are byte-for-byte what they were.
+3. ⚠⚠⚠ **IT IS THE INSTRUMENT, AND THE PROOF IS IN THE OTHER ROWS.** With that identical corpus,
+   `css/css-grid`'s attempted total went **2841 → 9281** and `css/selectors`' **2327 → 5215**. The
+   corpus cannot grow and did not; **the RUNNER now attempts far more files than the one that set
+   these marks**, and ~100 ticks of `tests/wpt/` work sit between them. *"Every number has a harness,
+   and the harness is part of the number"* — a mark set by a different instrument is not a mark.
+
+⚠⚠ **AND THE `banked_at` COLUMN SAYS TONIGHT, WHICH IS THE SECOND HALF OF THE SAME DEFECT.**
+`RATCHET.tsv` reads `WPT:domparsing 188  2026-08-11T22:47:58` — but that timestamp is when the
+ratchet last **read `WPT-AREAS.tsv`**, not when the measurement was taken, and the file it read had
+been frozen since Jul 16. **A month-old measurement was wearing tonight's timestamp**, which is
+precisely what made the staleness invisible: every instrument that could have reported it was
+reporting the read, not the reading.
+
+**No mark is edited in this tick**, because the refresh it belongs to is held (above) — but the
+investigation is banked here so the next tick does not repeat it, and so *"lower the mark"* arrives
+with its reasoning already done rather than as a convenience. ⚠ **What is NOT claimed:** a bisect
+over the 1,158 commits since Jul 16 was not run, so *"the instrument changed"* is the explanation the
+evidence supports and not one it proves. All nineteen other rows moved UP or level.
+
+⚠ **AND THE TOTAL IS 92% `encoding` BY TEST COUNT** (1,127,434 of 1,225,493). A +1,300-subtest gain
+across the whole CSS surface moves the headline by ~0.1pt. That is a real property of the primary
+metric and it is worth the observer knowing: the total is a good MONOTONICITY check and a poor
+sensitivity one.
+
+**MEASURED — pass-SETS, not counts, on the rebuilt binary:** `css/selectors` 2905/5215 before and
+after the memo, byte-identical; `manuk-css` 37/37, `manuk-layout` 173/173, `manuk-page` 25/25.
+
+RATCHET: held. No suite lost a test; the change is strictly less work for identical answers.
+
+PERF: `:has()` cascade 8176ms → 68ms at n=4000 (104×), quadratic → linear.
+
+WIKI: `docs/wiki/css-cascade.md` — "`:has()` was quadratic, and the metric that would have caught it
+was frozen". PATTERN: "THE `:has()` RULE ON A LIST, TABLE OR FEED" — `docs/loop/WEB-PATTERNS.md`.
+
 ## Tick 1160 — the battery's CONTROL row found a 569px space, and `font-size:0` is a RESET (2026-08-11)
 
 TICK SHAPE: capability (text metrics / inline layout). HYPOTHESIS, written before the build: the

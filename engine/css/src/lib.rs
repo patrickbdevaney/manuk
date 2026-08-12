@@ -2175,6 +2175,93 @@ pub(crate) fn is_contenteditable(dom: &Dom, node: NodeId) -> bool {
     false
 }
 
+// The `:has()` memo for ONE cascade pass — see `HasMemoScope`, and the `Pseudo::Has` arm of
+// `pseudo_matches` for why it exists (a Bar 0 hang, not an optimisation).
+//
+// `None` means **no scope is open**, which is the default and the safe state: every `:has()` is
+// computed. A cache that is ambient would answer from a DOM that has since changed; this one only
+// exists while a caller has promised not to mutate.
+thread_local! {
+    static HAS_MEMO: std::cell::RefCell<Option<std::collections::HashMap<(usize, NodeId), bool>>> =
+        const { std::cell::RefCell::new(None) };
+}
+
+/// Opens the `:has()` memo for as long as this value lives. **The contract is that the DOM does not
+/// change while it is open** — which is exactly true of a cascade pass, and is why the scope is a
+/// guard the cascade creates rather than a cache the matcher owns.
+///
+/// Nested scopes are safe: an inner one finds a memo already open and leaves it alone, so the
+/// outermost scope owns the lifetime. Without that, an inner `Drop` would close the cache the outer
+/// pass was still using.
+pub struct HasMemoScope {
+    owner: bool,
+}
+
+impl HasMemoScope {
+    /// Open the memo (or join the one already open).
+    pub fn new() -> Self {
+        let owner = HAS_MEMO.with(|m| {
+            let mut m = m.borrow_mut();
+            if m.is_none() {
+                *m = Some(std::collections::HashMap::new());
+                true
+            } else {
+                false
+            }
+        });
+        Self { owner }
+    }
+}
+
+impl Default for HasMemoScope {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl Drop for HasMemoScope {
+    fn drop(&mut self) {
+        if self.owner {
+            HAS_MEMO.with(|m| *m.borrow_mut() = None);
+        }
+    }
+}
+
+// **The count of UNCACHED `:has()` evaluations** — the gate's readout, and the reason the gate is a
+// counter rather than a stopwatch. A timing assertion on a shared CI box is a flake; "how many times
+// did the expensive thing actually run" is the quantity the fix is about, and it is exact.
+thread_local! {
+    static HAS_EVALS: std::cell::Cell<u64> = const { std::cell::Cell::new(0) };
+}
+
+/// How many `:has()` branch searches have actually run on this thread. Test-facing.
+pub fn has_evaluations() -> u64 {
+    HAS_EVALS.with(|c| c.get())
+}
+
+/// Reset the `:has()` evaluation counter. Test-facing.
+pub fn reset_has_evaluations() {
+    HAS_EVALS.with(|c| c.set(0));
+}
+
+/// Read a memoised `:has()` answer, if a scope is open and it has been computed.
+///
+/// ⚠ The borrow is released before the caller computes anything — a `:has()` branch can contain
+/// another `:has()`, so holding it across the evaluation would be a re-entrant `RefCell` panic
+/// (a Bar 0 crash introduced by the fix for a Bar 0 hang).
+fn has_memo_get(key: (usize, NodeId)) -> Option<bool> {
+    HAS_MEMO.with(|m| m.borrow().as_ref().and_then(|c| c.get(&key).copied()))
+}
+
+/// Record a `:has()` answer. A no-op when no scope is open.
+fn has_memo_put(key: (usize, NodeId), value: bool) {
+    HAS_MEMO.with(|m| {
+        if let Some(c) = m.borrow_mut().as_mut() {
+            c.insert(key, value);
+        }
+    });
+}
+
 fn pseudo_matches(p: &Pseudo, dom: &Dom, node: NodeId) -> bool {
     let el = match dom.element(node) {
         Some(e) => e,
@@ -2243,57 +2330,100 @@ fn pseudo_matches(p: &Pseudo, dom: &Dom, node: NodeId) -> bool {
         Pseudo::Not(inner) => !compound_matches(inner, dom, node),
         // `:has(...)` — does ANY element in the anchor's relative scope match the branch selector?
         //
-        // The search space is decided by the leading combinator, and getting that right is the whole
-        // cost of the feature: a descendant `:has()` searches the subtree, a child `:has()` searches one
-        // level, and a sibling `:has()` searches forward among siblings. Searching the subtree for a
-        // sibling selector would be both wrong and slow.
-        Pseudo::Has(branches) => branches.iter().any(|(comb, sel)| match comb {
-            // `Dom::descendants` seeds with the node's CHILDREN — it does NOT yield the node itself, so
-            // there is nothing to skip. Skipping one here silently dropped the FIRST descendant, which is
-            // exactly where `:has(.probe)` finds `.probe` on `<div class=a><div class=probe>`. The bug
-            // and the test that catches it are the same two lines.
-            Combinator::Descendant => dom
-                .descendants(node)
-                .any(|d| dom.is_element(d) && selector_matches_relative(sel, dom, d, node)),
-            Combinator::Child => dom
-                .children(node)
-                .any(|c| dom.is_element(c) && selector_matches_relative(sel, dom, c, node)),
-            Combinator::NextSibling => dom
-                .next_sibling(node)
-                .into_iter()
-                .flat_map(|n| {
-                    // The next ELEMENT sibling, skipping text nodes between them.
-                    let mut cur = Some(n);
-                    std::iter::from_fn(move || {
-                        while let Some(x) = cur {
-                            cur = dom.next_sibling(x);
-                            if dom.is_element(x) {
-                                return Some(x);
-                            }
-                        }
-                        None
-                    })
-                    .take(1)
-                })
-                .any(|sib| selector_matches_relative(sel, dom, sib, node)),
-            Combinator::SubsequentSibling => {
-                let mut cur = dom.next_sibling(node);
-                let mut hit = false;
-                while let Some(x) = cur {
-                    if dom.is_element(x) && selector_matches_relative(sel, dom, x, node) {
-                        hit = true;
-                        break;
-                    }
-                    cur = dom.next_sibling(x);
-                }
-                hit
+        // ⚠⚠⚠ **`:has()` WAS QUADRATIC, AND ONE WPT TEST IS NAMED AFTER EXACTLY THAT.**
+        // `css/selectors/invalidation/has-complexity.html` — *":has() invalidation should not be
+        // O(n^2)"* — builds 75,000 elements under one `<main>` and asserts the page still responds.
+        // It did not: the cascade visits every node, `main:has(span) span` makes every one of those
+        // spans walk up to `<main>` and re-run the subtree search, so the work is
+        // `nodes × subtree`. Measured on the ladder below, each doubling costs **4×**:
+        //
+        // ```text
+        //     n     250    500   1000   2000   4000        75000 (the test)
+        //    ms      41    133    551   2074   8176        ~48 MINUTES, extrapolated
+        // ```
+        //
+        // The runner reported it as `CRASH (killed by a signal)` — the watchdog killing a page that
+        // had stopped responding. **That is Bar 0**, not a conformance miss: any real page with a
+        // `:has()` rule and a few thousand elements froze the tab.
+        //
+        // The answer is the same one Chrome and WebKit reach: **the `:has()` question is asked of the
+        // ANCHOR, and the anchor is asked the same question over and over.** `main:has(span)` has one
+        // answer for `<main>`, and it was being recomputed once per span. Memoising `(this exact
+        // :has() pseudo, this node) -> bool` for the duration of one cascade collapses
+        // `nodes × subtree` back to `subtree`, because the second and later askers are a hash lookup.
+        //
+        // ⚠ **THE MEMO IS SCOPED, NOT AMBIENT, AND THAT IS THE WHOLE OF ITS SAFETY.** It is only
+        // open inside a [`HasMemoScope`], which a cascade pass opens over a DOM it does not mutate
+        // and closes on drop. With no scope open there is no cache and every call computes — so a
+        // caller that mutates between queries (`querySelectorAll` from script, say) cannot read a
+        // stale answer, because it never had one to read.
+        Pseudo::Has(branches) => {
+            // Key on the branch list's own allocation: two different `:has()` pseudos are two
+            // different `Vec`s. An EMPTY branch list is the one case that can collide across
+            // pseudos, and it is harmless — `.any()` over nothing is `false` for all of them.
+            let key = (branches.as_ptr() as usize, node);
+            if let Some(hit) = has_memo_get(key) {
+                return hit;
             }
-        }),
+            let out = has_branches_match(branches, dom, node);
+            has_memo_put(key, out);
+            out
+        }
         // A pseudo-ELEMENT never *filters* the element — the rule matches the originating element
         // and styles its generated box. The cascade routes those declarations to `before`/`after`.
         Pseudo::Before | Pseudo::After => true,
         Pseudo::NeverStatic => false,
     }
+}
+
+/// The uncached `:has()` evaluation — the search space is decided by the leading combinator, and
+/// getting that right is the whole cost of the feature: a descendant `:has()` searches the subtree,
+/// a child `:has()` searches one level, and a sibling `:has()` searches forward among siblings.
+/// Searching the subtree for a sibling selector would be both wrong and slow.
+fn has_branches_match(branches: &[(Combinator, Selector)], dom: &Dom, node: NodeId) -> bool {
+    HAS_EVALS.with(|c| c.set(c.get() + 1));
+    branches.iter().any(|(comb, sel)| match comb {
+        // `Dom::descendants` seeds with the node's CHILDREN — it does NOT yield the node itself, so
+        // there is nothing to skip. Skipping one here silently dropped the FIRST descendant, which is
+        // exactly where `:has(.probe)` finds `.probe` on `<div class=a><div class=probe>`. The bug
+        // and the test that catches it are the same two lines.
+        Combinator::Descendant => dom
+            .descendants(node)
+            .any(|d| dom.is_element(d) && selector_matches_relative(sel, dom, d, node)),
+        Combinator::Child => dom
+            .children(node)
+            .any(|c| dom.is_element(c) && selector_matches_relative(sel, dom, c, node)),
+        Combinator::NextSibling => dom
+            .next_sibling(node)
+            .into_iter()
+            .flat_map(|n| {
+                // The next ELEMENT sibling, skipping text nodes between them.
+                let mut cur = Some(n);
+                std::iter::from_fn(move || {
+                    while let Some(x) = cur {
+                        cur = dom.next_sibling(x);
+                        if dom.is_element(x) {
+                            return Some(x);
+                        }
+                    }
+                    None
+                })
+                .take(1)
+            })
+            .any(|sib| selector_matches_relative(sel, dom, sib, node)),
+        Combinator::SubsequentSibling => {
+            let mut cur = dom.next_sibling(node);
+            let mut hit = false;
+            while let Some(x) = cur {
+                if dom.is_element(x) && selector_matches_relative(sel, dom, x, node) {
+                    hit = true;
+                    break;
+                }
+                cur = dom.next_sibling(x);
+            }
+            hit
+        }
+    })
 }
 
 fn attr_matches(a: &AttrSel, dom: &Dom, node: NodeId) -> bool {
@@ -4104,6 +4234,11 @@ impl MinimalCascade {
     }
 
     pub fn cascade_scoped(&self, dom: &Dom, sheets: &[ScopedSheet]) -> StyleMap {
+        // The `:has()` memo, open for exactly this pass — see `HasMemoScope`. The pass reads the DOM
+        // and writes only styles, which is the promise the guard is asserting. The Stylo path opens
+        // its own around the equivalent loop (`stylo_engine.rs`); one rule, and this time BOTH
+        // implementations got it in the same tick.
+        let _has_memo = HasMemoScope::new();
         let mut map = StyleMap::new();
         // Build the rule index ONCE for the whole document (see `build_index`), instead of
         // re-scanning every rule for every element.
@@ -8100,6 +8235,124 @@ mod shadow_scoping_tests {
 #[cfg(test)]
 mod pseudo_tests {
     use super::*;
+
+    /// # G_HAS_LINEAR — `:has()` was QUADRATIC, and one WPT test is named after exactly that
+    ///
+    /// `css/selectors/invalidation/has-complexity.html` — *":has() invalidation should not be
+    /// O(n^2)"* — builds 75,000 elements under one `<main>` and asserts the page still responds.
+    /// The runner reported it as **`CRASH (killed by a signal)`**: the watchdog killing a page that
+    /// had stopped responding. **That is Bar 0**, and it was found by refreshing
+    /// `docs/loop/WPT-AREAS.tsv`, which had been frozen since Jul 16 — the primary metric's own
+    /// source hiding a crash for a month.
+    ///
+    /// **The mechanism.** The cascade visits every node, and `main:has(span) span` sends every one
+    /// of those spans up to the single `<main>` to re-run the subtree search. The work is
+    /// `nodes × subtree`, and the ladder is unambiguous — each doubling of `n` cost **4×**:
+    ///
+    /// ```text
+    ///      n      250    500   1000   2000   4000      75000 (the test)
+    ///     BEFORE   41    133    551   2074   8176 ms   ~48 MINUTES, extrapolated
+    ///     AFTER     8      9     20     36     68 ms   (linear: 8000->137, 16000->291, 25000->452)
+    /// ```
+    ///
+    /// **The answer is that the `:has()` question is asked of the ANCHOR, and the anchor is asked
+    /// the same question over and over.** `main:has(span)` has ONE answer for `<main>`; it was being
+    /// recomputed once per span. Memoising `(this exact :has() pseudo, this node) -> bool` for the
+    /// duration of one cascade collapses `nodes × subtree` to `subtree`.
+    ///
+    /// ⚠⚠ **THE GATE IS A COUNTER, NOT A STOPWATCH.** A timing assertion on a shared box is a flake,
+    /// and this loop has been burned by machine-dependent numbers before. *"How many times did the
+    /// expensive thing actually run"* is the quantity the fix is about, and it is exact: the count of
+    /// uncached `:has()` branch searches must NOT grow with the number of spans.
+    ///
+    /// ⚠⚠⚠ **THE BAR 0 IS NOT CLOSED, AND SAYING OTHERWISE WOULD BE THE EASY LIE.** The WPT test
+    /// still crashes after this fix, because a SECOND quadratic dominates it and it is in a different
+    /// subsystem: `Page::relayout` *"recascades only when the node count outgrew the style map"*
+    /// (`engine/page/src/lib.rs:6167`), so each of the test's 75,000 `appendChild` calls triggers a
+    /// FULL re-cascade — `appends × nodes`. This fix makes each of those cascades linear instead of
+    /// quadratic; it does not make there be fewer of them. Incremental style invalidation is the
+    /// mechanism that closes it, and it is a different tick.
+    ///
+    /// ⚠ **THE MEMO IS SCOPED, NOT AMBIENT, AND THAT IS THE WHOLE OF ITS SAFETY.** It exists only
+    /// inside a [`HasMemoScope`], which a cascade pass opens over a DOM it does not mutate and closes
+    /// on drop. With no scope open there is no cache and every call computes — so a caller that
+    /// mutates between queries (`querySelectorAll` from script) cannot read a stale answer, because
+    /// it never had one. Both cascade implementations open one in this tick (`MinimalCascade::
+    /// cascade_scoped` and `stylo_engine`'s `:has()` loop) — the *one rule, N implementations* trap
+    /// this repo has paid for at t720, t1027, t1131 and t1134, avoided by fixing both at once.
+    ///
+    /// ⚠⚠⚠ **THE FIRST DRAFT OF THIS GATE WAS BLIND TO ITS OWN SUBJECT AND REPORTED THE BUG FIXED
+    /// WITH THE FIX REMOVED.** It carried only `main:has(...) .subject` rules — and the rule index
+    /// buckets by the RIGHTMOST compound, so exactly ONE element (`.subject`) ever asked the
+    /// question. Three evaluations either way, memo or no memo. The rule that creates the quadratic
+    /// is the one whose SUBJECT is the repeated element — `main:has(span) span`, which sends all
+    /// 2,000 spans up to the same anchor. It is in the fixture for that reason and must not be
+    /// removed to "simplify" it.
+    ///
+    /// To watch it go RED: delete the `HasMemoScope::new()` line in `cascade_scoped`.
+    #[test]
+    fn has_is_evaluated_once_per_anchor_not_once_per_element() {
+        const CSS: &str = r#"
+div, main { color: grey }
+main:has(span) .subject { color: red }
+main:has(span + span) .subject { color: green }
+main:has(div div span) .subject { color: purple }
+main:has(span) span { color: black }
+"#;
+        let run = |n: usize| -> (u64, usize, Option<String>) {
+            let spans = "<span></span>".repeat(n);
+            let html = format!(
+                "<main><div id=container>{spans}</div><div id=subject class=subject></div></main>"
+            );
+            let dom = manuk_html::parse(&html);
+            let sheets = vec![Stylesheet::parse(CSS)];
+            reset_has_evaluations();
+            let map = MinimalCascade.cascade(&dom, &sheets);
+            // The SUBJECT's colour is the correctness half — a memo that returns the wrong answer
+            // would be a much worse bug than the one it fixes, and a pure speed assertion cannot see
+            // it. `main:has(span + span)` wins over `main:has(span)` on source order.
+            let subject = dom
+                .descendants(dom.root())
+                .find(|&x| dom.element(x).and_then(|e| e.attr("id")) == Some("subject"));
+            let color = subject
+                .and_then(|x| map.get(&x))
+                .map(|s| format!("{:?}", s.color));
+            (has_evaluations(), map.len(), color)
+        };
+        let (e_small, n_small, c_small) = run(50);
+        let (e_large, n_large, c_large) = run(2000);
+
+        // CORRECTNESS FIRST — the memo must not change a single answer, at either size.
+        assert_eq!(
+            c_small, c_large,
+            "the subject's colour must not depend on how many spans are present"
+        );
+        assert!(
+            c_small.is_some(),
+            "the subject must be styled at all (the fixture must be able to express its subject)"
+        );
+        assert_eq!(
+            n_small, 56,
+            "50 spans + main + container + subject + root-ish"
+        );
+        assert_eq!(n_large, 2006);
+
+        // THE SUBJECT — evaluations must not grow with the element count. 40× the spans must not
+        // cost 40× the searches; before the memo it cost MORE than 40× (the searches themselves got
+        // longer too, which is the second factor of the quadratic).
+        assert!(
+            e_large <= e_small * 2,
+            "`:has()` must be evaluated per ANCHOR, not per element: {e_small} evaluations at 50 \
+             spans but {e_large} at 2000. A memo that is not open makes this ratio ~40x."
+        );
+        // ...and the absolute count is small, so the assertion above cannot be satisfied by both
+        // numbers being huge.
+        assert!(
+            e_large < 200,
+            "3 `:has()` rules over a handful of anchors is a handful of searches, not {e_large}"
+        );
+    }
+
     /// **AN XHTML `<style><![CDATA[ … ]]></style>` SHEET WAS DROPPED IN ITS ENTIRETY.**
     ///
     /// Every rule, not just the first — which is what separates this from ordinary CSS error

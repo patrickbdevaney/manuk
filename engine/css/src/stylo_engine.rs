@@ -1002,6 +1002,17 @@ pub fn cascade_via_stylo_sized(
         // `RelativeRule` for the measurement, including which `n` actually drives it.
         let has_index = crate::collect_relative_rules(&has_sheets);
         timed(&mut ph.has_ns, || {
+            // ⚠⚠⚠ **THE SCOPE THAT MAKES `:has()` LINEAR INSTEAD OF QUADRATIC — Bar 0.**
+            // Every element below asks the same `:has()` question of the same few anchors
+            // (`main:has(span) span` sends all 75,000 spans of
+            // `css/selectors/invalidation/has-complexity.html` up to the one `<main>`), and each ask
+            // re-walked that anchor's subtree. Measured 4× per doubling of `n`; the WPT runner
+            // reported the test as `CRASH (killed by a signal)` because the watchdog killed a page
+            // that had stopped responding.
+            //
+            // The guard is opened HERE, around a loop that does not mutate the DOM, and closed when
+            // it ends — which is the entire safety argument. See `manuk_css::HasMemoScope`.
+            let _has_memo = crate::HasMemoScope::new();
             let nodes: Vec<NodeId> = dom.flat_descendants(dom.root());
             for node in nodes {
                 if !dom.is_element(node) {

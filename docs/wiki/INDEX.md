@@ -832,6 +832,7 @@
   - L2777 · What it is worth, measured
   - L2799 · Residue, named: reading_order 4 → 5 on that page, deterministic, and ours
   - L2811 · The route in, recorded because the subject was not what made me look
+  - L2826 · :has() was quadratic, and the metric that would have caught it was FROZEN (tick 1161)
 
 ## `<dialog>`, `popover`, and the top layer (ticks 194-195)
 `docs/wiki/dialog-and-top-layer.md`
@@ -1979,4 +1980,4 @@
   - L124 · Rank mechanisms by FLIP RATE, not failing-subtest count — CSS layout is a multi-assertion slog
 
 ---
-1886 sections across 22 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+1887 sections across 22 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.

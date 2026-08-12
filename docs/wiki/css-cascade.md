@@ -2822,3 +2822,65 @@ four measured rows with the two negative ones FIRST. RED-proven twice, and each 
 *different* pair of rows: returning `16.0` for `Monospace` fails the two default-size rows;
 restoring the UA declaration fails the two inherited-size rows. Either half alone leaves the other
 direction broken, which is what makes both arms necessary.
+
+## `:has()` was quadratic, and the metric that would have caught it was FROZEN (tick 1161)
+
+Two findings, and the second is only reachable through the first.
+
+**The metric's source had not been re-run since Jul 16.** `docs/loop/WPT-AREAS.tsv` is what the
+primary per-tick progress metric is computed from, and it had gone twenty-six days and ~100 ticks
+without a refresh while the loop steered by the total it produces. Refreshing it costs **~15 seconds
+per area**. Every row had moved — `css/css-sizing` 12.0% → 27.6%, `css/css-fonts` 32.4% → 57.7%,
+`css/css-flexbox` 6.2% → 36.3% — and one row came back carrying a **Bar 0 crash**.
+
+> **A frozen metric is not a slow metric. It is a metric that cannot report a crash.**
+
+**The crash is `css/selectors/invalidation/has-complexity.html`, and its title is the diagnosis:**
+*":has() invalidation should not be O(n^2)"*. It builds 75,000 elements under one `<main>`. The
+runner reported `CRASH (killed by a signal)` — the watchdog killing a page that had stopped
+responding.
+
+**Measured before theorising.** Each doubling of `n` cost 4×:
+
+```text
+      n      250    500   1000   2000   4000        75000 (the test)
+    BEFORE    41    133    551   2074   8176 ms     ~48 MINUTES, extrapolated
+    AFTER      8      9     20     36     68 ms     (linear on out: 8000->137, 25000->452)
+```
+
+The cascade visits every node, and `main:has(span) span` sends every one of those spans up to the
+single `<main>` to re-run its subtree search: the work is `nodes × subtree`. **The `:has()` question
+is asked of the ANCHOR, and the anchor is asked the same question over and over** — `main:has(span)`
+has one answer for `<main>`, recomputed once per span. A memo keyed `(that :has() pseudo, that node)`
+collapses it. **104× at n=4000.**
+
+**The memo is SCOPED, not ambient, and that is the whole of its safety.** `HasMemoScope` is an RAII
+guard that a cascade pass opens over a DOM it does not mutate. With no scope open there is no cache
+and every call computes — so a caller that mutates between queries (`querySelectorAll` from script)
+cannot read a stale answer, because it never had one to read. **Both cascade implementations open one
+in the same tick** (`MinimalCascade::cascade_scoped` and `stylo_engine`'s `:has()` loop) — the *one
+rule, N implementations* trap paid for at t720, t1027, t1131 and t1134.
+
+⚠⚠⚠ **The first draft of the gate was blind to its own subject and reported the bug fixed with the
+fix removed.** It carried only `main:has(...) .subject` rules, and the rule index buckets by the
+**rightmost** compound — so exactly one element ever asked the question, and the count was three
+either way. The rule that creates the quadratic is the one whose **subject is the repeated element**,
+`main:has(span) span`. Restored, the gate reads **53 evaluations at 50 spans and 2003 at 2000**
+without the memo.
+
+⚠⚠ **The gate is a COUNTER, not a stopwatch** — a timing assertion on a shared box is a flake, while
+*"how many times did the expensive thing run"* is exact and is what the fix is about. It asserts
+correctness first: a memo that returns the wrong answer is a worse bug than the one it fixes, and a
+pure speed assertion cannot see it.
+
+⚠⚠⚠ **The Bar 0 is NOT closed.** The WPT test still crashes, because a second quadratic dominates it
+in a different subsystem — named rather than suspected: `Page::relayout` *"recascades only when the
+node count outgrew the style map"* (`engine/page/src/lib.rs:6167`), so each of the test's 75,000
+`appendChild` calls triggers a **full re-cascade**. This fix makes each of those cascades linear; it
+does not make there be fewer of them. **Incremental style invalidation is what closes it.**
+
+⚠ **Two honest residues.** `domparsing` fell 188 → 149 on an unchanged denominator and **cannot be
+attributed** — the old number came from a binary that no longer exists, so no same-hour control is
+possible. And the WPT total is **92% `encoding` by test count** (1,127,434 of 1,225,493), so a
++1,300-subtest gain across the whole CSS surface moves the headline ~0.1pt: it is a good monotonicity
+check and a poor sensitivity one.
