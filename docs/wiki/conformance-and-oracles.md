@@ -3721,3 +3721,40 @@ web barely does this"* are two different refusals, and only the second is an I4 
 > **A steer is a hypothesis with a test attached — the same standing rule as a reason string.** Two
 > governing documents carried this one for eight ticks, each citing the other's citation. The step is:
 > **price it · ask which ORGAN it moves · and RUN THE RED-PROOF BEFORE CITING IT.**
+
+## WPT `fuzzy` is the author's allowance — and on this suite it banks nothing (t1156)
+
+`<meta name=fuzzy content="maxDifference=0-2;totalPixels=0-100">` is WPT's mechanism for a reftest
+whose reference cannot be byte-identical (antialiasing on a rotated edge, a gradient's dithering).
+The runner now honours it: `parse_fuzzy` handles the spellings WPT ships (either key order,
+whitespace, a bare number as a range of itself, an absent key as unconstrained) and **declines a
+`<ref-url>:`-prefixed allowance** rather than apply one reference's tolerance to another. It applies
+to `match` references only — a `mismatch` asserts the renders *differ*, and an allowance there would
+mean "different by at least a little", which WPT does not define.
+
+⚠ **Honouring it is conformance; a blanket tolerance would be loosening the bar.** The number is
+chosen by the test author, per test, checked into WPT, and a test with no annotation stays
+byte-exact. A default fuzz would move 6,263 tests at once on a number this loop picked for itself.
+
+**Priced before building, and the price refuted the reason for building it.** The annotation is on
+**6 files in `css/CSS2`** (282 in `css/`, 425 in the whole checkout). And every failing `match` now
+prints `[maxdiff N, Mpx]`, which turns the suite into its own histogram:
+
+```text
+                   failures   maxdiff<=2   within 0-2/0-100   maxdiff>128
+  normal-flow         181         0               0               165
+  positioning         173         0               0               169
+  floats-clear         96         0               0                94
+  linebox              35         0               0                33
+  ───────────────────────────────────────────────────────────────────────
+                      485         0               0               461  (95%)
+```
+
+**Not one failing reftest is a near miss.** 95% differ by more than 128 on a channel — blue against
+white, a box somewhere else — and even the smallest-area failures (under 100 pixels) exceed maxdiff
+32. So byte-exact comparison costs this suite nothing, and *"visually-correct pages fail on 1px
+antialiasing"* is not what is happening: **the plateau is the layout, not the scoring.**
+
+The general lesson is the one t1112 and t1150 already paid for: the premise was answerable from
+failures the runner was already producing and throwing away. **The instrument had the datum and
+printed the verdict.**

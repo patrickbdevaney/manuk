@@ -46371,6 +46371,70 @@ PERF: none — one UA rule and one narrowed branch in a cascade that already ran
 WIKI: `docs/wiki/css-cascade.md` — where Chrome draws the form-control `box-sizing` line, and why a
 layout-crate test cannot see it.
 
+## Tick 1156 — the observer's fuzzy-scoring steer, PRICED — and byte-exactness costs zero (2026-08-11)
+
+TICK SHAPE: capability (instrument) — the observer pushed a new top-of-board steer mid-invocation
+(`91be6691`): *"ACCELERATE THE M1 LAYOUT SLOG — PORT, don't reverse-engineer"*, whose item (2) is
+*"FUZZY reftest scoring — the runner is byte-exact RGBA so visually-correct pages fail on 1px
+antialiasing; adopt WPT fuzzy to bank them."* Taken, priced first per check #108, and **the price
+refutes the premise.**
+
+⚠⚠⚠ **ACROSS 485 REFTEST FAILURES IN FOUR `css/CSS2` DIRECTORIES, THE NUMBER THAT WOULD BE BANKED BY
+A FUZZY ALLOWANCE IS ZERO.**
+
+```text
+                      failures   maxdiff<=2   within 0-2/0-100   maxdiff>128
+   normal-flow           181         0               0               165
+   positioning           173         0               0               169
+   floats-clear           96         0               0                94
+   linebox                35         0               0                33
+   ─────────────────────────────────────────────────────────────────────────
+                         485         0               0               461  (95%)
+```
+
+**Not one failing reftest is a near miss.** 95% differ by more than 128 on a channel — blue against
+white, a box that is somewhere else — and the smallest-area bucket (15 failures under 100 pixels)
+is *still* above maxdiff 32. Byte-exact comparison is costing this suite **nothing**: every failure
+is a real layout or paint divergence, and *"visually-correct pages fail on 1px antialiasing"* is not
+happening here. ⚠ **The plateau is the layout, not the scoring** — which redirects the steer's own
+budget onto its items (1) PORT from `blitz/`/`servo/` and (3) the leverage ranker, and away from the
+one that looked cheapest.
+
+⚠⚠ **AND THE ANNOTATION'S OWN REACH WAS PRICED BEFORE A LINE WAS WRITTEN:** `<meta name=fuzzy>` is on
+**6 files in `css/CSS2`** (282 across all of `css/`, 425 in the whole checkout). Even fully honoured
+it can move at most six tests on the suite this loop runs. That grep took three minutes and is the
+difference between this tick and the fifth green mutation of the window.
+
+**IT LANDED ANYWAY, AND ON PURPOSE.** Honouring a test's own declared allowance is **conformance**,
+not a loosened bar, and the distinction is who picks the number: the test AUTHOR, per test, checked
+into WPT, with a bare test staying byte-exact. `parse_fuzzy` handles the spellings WPT actually
+ships (either key order, whitespace, a bare number as a range of itself, an absent key as
+unconstrained) and **declines a `<ref-url>:`-prefixed allowance** rather than risk applying one
+reference's tolerance to another. Fuzzy applies to `match` only — a `mismatch` asserts the renders
+DIFFER, and an allowance there would mean "different by at least a little", which WPT does not
+define.
+
+**THE HALF THAT PAYS IS THE DATUM, NOT THE PASS.** Every failing `match` now prints
+`[maxdiff N, Mpx]`, which is what turned the whole 6,263-file suite into the table above in one run.
+The observer's premise was answerable from failures the runner was already producing and throwing
+away — the same shape as t1150's reading-order pair and t1112's h-overflow ancestor: **the
+instrument had the datum and printed the verdict.**
+
+RATCHET: held. `engine/` untouched — `tests/wpt/src/reftest.rs`, agent territory. `manuk-wpt`
+103/103. The four directories' pass counts are unmoved (485/181/192 on `normal-flow` before and
+after), because no test in them carries the annotation — which is itself the measurement.
+
+GATE: `a_tests_own_fuzzy_allowance_is_honoured_and_a_bare_test_stays_byte_exact` — the four shipped
+spellings, the two negative rows (no annotation; a per-reference prefix), the per-CHANNEL fuzz
+measurement, and **both ends** of the allowance so the range is not read as a ceiling only.
+RED-proven by dropping `|| fuzz_ok`.
+
+PERF: `pixel_fuzz` walks the buffers once on a comparison that already walked them; it runs only on
+a reftest that is not byte-identical, i.e. only on failures.
+
+WIKI: `docs/wiki/conformance-and-oracles.md` — "WPT `fuzzy` is the author's allowance, and on this
+suite it banks nothing: 0 of 485 failures are near misses"
+
 ## Tick 1155 — `unicode-range` is parsed and 99 fetches stop, and the acceptance test did NOT move (2026-08-11)
 
 TICK SHAPE: capability (css + page) — t1154's build spec, steps 1 and 2. Step 3 (coverage-aware face

@@ -673,6 +673,7 @@
   - L3642 · The readout trick this used
   - L3653 · A gate that asserts a wrapped line COUNT asserts the installed fonts
   - L3692 · A RED-proof that is already green is not a RED-proof
+  - L3725 · WPT fuzzy is the author's allowance — and on this suite it banks nothing (t1156)
 
 ## CSS AND THE CASCADE — Stylo realities and quirks actually encountered
 `docs/wiki/css-cascade.md`
@@ -1974,4 +1975,4 @@
   - L124 · Rank mechanisms by FLIP RATE, not failing-subtest count — CSS layout is a multi-assertion slog
 
 ---
-1881 sections across 22 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+1882 sections across 22 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
