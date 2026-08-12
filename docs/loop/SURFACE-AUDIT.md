@@ -5792,3 +5792,69 @@ Two things follow, and both are steering-relevant:
 4. **The total is 92% `encoding` by test count** (1,127,434 of 1,225,493). A +1,300-subtest gain
    across the whole CSS surface moves the headline ~0.1pt. Good monotonicity check, poor sensitivity
    one — do not read a flat total as a flat engine.
+
+## Audit #57 — tick 1171 (2026-08-12) — HALF of Interop 2026 is on our own DEATH-TAIL, and my reconciliation script lied twice
+
+**SOURCES (fetched, not recalled):**
+- https://web.dev/blog/interop-2026 — the authoritative list of the 20 focus areas + 4 investigations
+- https://webkit.org/blog/17818/announcing-interop-2026/ , https://hacks.mozilla.org/2026/02/launching-interop-2026/ , https://www.igalia.com/news/interop-2026.html — the same list from the other three participants
+
+### What was ADDED to the map: NOTHING, and that is the second consecutive clean result
+
+Every one of Interop 2026's twenty focus areas and four investigations already has a row in
+`docs/loop/CONSTELLATION.tsv` (562 rows). Audit #55 found the same for the 2025 list. **The map is not
+missing capabilities the world names** — it has now survived that test twice against a list assembled
+independently by Apple, Google, Igalia, Microsoft and Mozilla.
+
+### What we had been WRONG about — my own reconciliation, twice, in the same pass
+
+⚠⚠⚠ **THE FIRST RUN OF THIS AUDIT PRODUCED TWO FALSE `missing` VERDICTS, AND THEY WERE MINE.** I
+matched each Interop area against the constellation with a regex over BOTH the `capability` and the
+`what_breaks_without_it` columns, then reported the weakest-status hit. Two areas were mis-attributed:
+
+```text
+   Interop area          my first pass     the truth
+   dialogs and popovers   missing          GATED  (G_DIALOG + G_POPOVER, plus G_DIALOG_RENDER,
+                                                   G_DIALOG_REQUEST_CLOSE, G_TOGGLE_EVENT_SOURCE)
+   view transitions       missing          GATED  (G_VIEW_TRANSITION); the cross-document form
+                                                   Interop 2026 expands to is `partial`
+```
+
+Both were matched by the PROSE of an unrelated row (the anchor-positioning row's
+`what_breaks_without_it` mentions popovers). **A reconciliation that reads the description column is
+matching a sentence, not a capability** — and it produced exactly the kind of confident false
+negative this instrument exists to catch, one level up from where it was looking. Corrected by
+matching the `capability` column only, and the corrected table is below.
+
+### The corrected reconciliation, and the finding
+
+```text
+   gated / works (7)   dialogs+popovers · contrast-color() · IndexedDB getAllRecords ·
+                       Navigation API · scroll snap · WebVTT · View Transitions (base)
+   partial (4)         attr() · fetch uploads+ranges · media pseudo-classes · zoom
+                       (+ cross-document view transitions)
+   missing (10)        anchor positioning · container style queries · scroll-driven animations ·
+                       custom highlights · JSPI · scoped custom element registries · WebRTC ·
+                       WebTransport · JPEG XL · shape() · view-transition pseudo-classes
+```
+
+⚠⚠⚠ **EIGHT OF THOSE TEN ARE ON THIS PROJECT'S OWN EXPLICIT DEATH-TAIL / SKIP-v1 LIST** — anchor
+positioning, scroll-driven animations, custom highlights, JSPI, scoped registries, JPEG XL, WebRTC
+and WebTransport-over-HTTP/3 are all named there by the tick-543 orders. **So the world's top-20 for
+2026 and our v1 scope disagree on half the list, and the disagreement is DELIBERATE and already
+written down.** That is not a defect — our exit is *"runs almost every website"*, not *"wins
+Interop"* — but it had never been stated as a ratio, and a 10-of-20 divergence is large enough that
+it should be a decision the owner re-affirms rather than a fact that accumulates quietly. **Recorded
+here as a standing disclosure, not as a steer to go build them.**
+
+⚠ **THE TWO THAT ARE *NOT* ON THE DEATH-TAIL are the only candidates this audit surfaces:**
+**container style queries** (`@container style(--x: y)`) and **`shape()`** — both `missing`, both CSS,
+neither deferred anywhere. They are named for pricing (corpus frequency first, per the standing rule),
+not scheduled.
+
+### Re-rank?
+
+**No.** Nothing discovered here outranks the current CO-#1. The binding constraint remains M1 at
+**18.8%** against a 95% bar (measured this session, t1170), and the refreshed WPT board puts
+`css/css-grid` at **8,723 failing** — the largest CSS surface and the M1 body. Interop 2026's list
+does not touch that ranking: its CSS items are either already gated or on the death-tail.

@@ -46371,6 +46371,66 @@ PERF: none — one UA rule and one narrowed branch in a cascade that already ran
 WIKI: `docs/wiki/css-cascade.md` — where Chrome draws the form-control `box-sizing` line, and why a
 layout-crate test cannot see it.
 
+## Tick 1171 — half of Interop 2026 is on our own death-tail, and my reconciliation lied twice (2026-08-12)
+
+TICK SHAPE: measurement — the cadence surface audit (due every 10 ticks; last at 1161), banked as
+audit #57 in `docs/loop/SURFACE-AUDIT.md`. Sources FETCHED, not recalled: `web.dev/blog/interop-2026`
+plus the WebKit, Mozilla and Igalia announcements of the same list.
+
+**NOTHING WAS ADDED TO THE MAP, AND THAT IS NOW A TWO-TIME RESULT.** All twenty Interop 2026 focus
+areas and all four investigations already have rows in `CONSTELLATION.tsv` (562 rows). Audit #55
+found the same against the 2025 list. The map is not missing capabilities the world names.
+
+⚠⚠⚠ **WHAT I WAS WRONG ABOUT WAS MY OWN RECONCILIATION, AND IT PRODUCED TWO FALSE `missing`
+VERDICTS IN ONE PASS.** I matched each Interop area against BOTH the `capability` and the
+`what_breaks_without_it` columns and reported the weakest-status hit:
+
+```text
+   Interop area          my first pass     the truth
+   dialogs and popovers   missing          GATED (G_DIALOG + G_POPOVER, + three more)
+   view transitions       missing          GATED (G_VIEW_TRANSITION); the cross-document
+                                                  form Interop expands to is `partial`
+```
+
+Both were matched by the **prose** of an unrelated row — the anchor-positioning row's description
+mentions popovers. **A reconciliation that reads the description column is matching a sentence, not
+a capability.** It is the same class as t1164's mislabelled probe table: an instrument I wrote for
+one tick, wrong on its first run, caught only because a row contradicted what I knew independently.
+Corrected to match the `capability` column only.
+
+⚠⚠⚠ **THE FINDING: EIGHT OF THE TEN STILL-`missing` INTEROP AREAS ARE ON THIS PROJECT'S OWN EXPLICIT
+DEATH-TAIL.**
+
+```text
+   gated / works (7)   dialogs+popovers · contrast-color() · IndexedDB getAllRecords ·
+                       Navigation API · scroll snap · WebVTT · View Transitions (base)
+   partial (4)         attr() · fetch uploads+ranges · media pseudo-classes · zoom
+   missing (10)        anchor positioning* · container style queries · scroll-driven animations* ·
+                       custom highlights* · JSPI* · scoped custom element registries* · WebRTC* ·
+                       WebTransport* · JPEG XL* · shape()          (* = named on the death-tail)
+```
+
+**The world's top-20 for 2026 and our v1 scope disagree on half the list, and the disagreement is
+deliberate and already written down** (the tick-543 orders). That is not a defect — the exit is
+*"runs almost every website"*, not *"wins Interop"* — but it had never been stated as a **ratio**,
+and 10-of-20 is large enough to be a decision the owner re-affirms rather than a fact that
+accumulates quietly. Recorded as a standing disclosure, **not** as a steer to go build them.
+
+⚠ **The only two candidates this audit surfaces** are the ones that are `missing` and NOT deferred
+anywhere: **container style queries** and **`shape()`**. Named for pricing (corpus frequency first,
+per the standing rule), not scheduled.
+
+**RE-RANK? NO.** Nothing here outranks CO-#1. The binding constraint is still M1 at **18.8%** against
+95% (measured last tick), and the refreshed board puts `css/css-grid` at **8,723 failing** — the
+largest CSS surface and the M1 body. Interop 2026's CSS items are either already gated or on the
+death-tail, so the list does not move the ranking.
+
+RATCHET: held — no engine code changed in this tick.
+
+PERF: none — measurement only.
+
+WIKI: none [forced] — the artefact is `docs/loop/SURFACE-AUDIT.md` audit #57. [no-pattern]
+
 ## Tick 1170 — the checkpoint check #111 demanded: SCORABILITY moved, shape did not (2026-08-12)
 
 TICK SHAPE: measurement — the CrUX fidelity sweep that check #111 named as the next tick, because six
