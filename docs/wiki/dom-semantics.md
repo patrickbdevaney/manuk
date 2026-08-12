@@ -2385,3 +2385,65 @@ and wrong about injected SVG, with nothing reporting a disagreement.
 **Named residue:** `getComputedStyle(rect).fill` is `undefined` where Chrome says `rgb(255, 0, 0)` —
 SVG presentation attributes do not reach computed style, which is exactly what charting code reads
 back.
+
+## `element.style` is a raw-string Proxy: the setter validates nothing, and the two feature-detection idioms lie in OPPOSITE directions
+
+`element.style` is a JS `Proxy` over the element's `style` **attribute text** (`CSSOM_PRELUDE` in
+`engine/js/src/dom_bindings.rs`). Its `set` trap writes `String(v)` into that text unconditionally,
+so **every value round-trips verbatim**:
+
+```text
+   e.style.color = "yelow"                 ->  "yelow"        Chrome: ""
+   e.style.color = "rgb(255 0)"            ->  "rgb(255 0)"   Chrome: ""
+   e.style.display = "not-a-thing"         ->  "not-a-thing"  Chrome: ""
+```
+
+**The cost is not the WPT subtests — it is the detection idiom the whole web is written in:**
+
+```js
+   const e = document.createElement('div');
+   e.style[prop] = value;
+   return e.style[prop] !== '';     // ← TRUE FOR EVERY VALUE, so every capability reads "supported"
+```
+
+A page therefore takes the modern branch for capabilities this engine does not have. And it is the
+**exact mirror** of the other hole in the same object: `'display' in el.style` is `false` (t1172), so
+the `in`-based idiom reads *unsupported* for everything we DO have. One object, two idioms, both
+lying, in opposite directions — and neither is visible to a rendering test.
+
+**Chrome's contract, measured over 40 rows:** invalid → `""`; valid → stored and **canonically
+serialized** (`hsl(120 30% 50%)` → `rgb(89, 166, 89)`, `#ff0000` → `rgb(255, 0, 0)`, `RED` → `red`,
+`"  red  "` → `red`). The outcome tracks `CSS.supports(prop + ': ' + value)` on every row **except**
+`color: red !important`, which the IDL setter must reject even though `CSS.supports` says true — a
+priority may only arrive via `setProperty(k, v, 'important')`.
+
+### …but `CSS.supports` is not yet a safe validator, and a NEGATIVE row is what proved it
+
+Our `CSS.supports` is Chrome-exact on every trap that matters — `inherit` / `initial` / `unset` /
+`revert`, `var(--x)`, `var(--x, red)`, `rgb(255 0 0 / var(--a))`, `calc(100% - 10px)` vs the invalid
+`calc(100% -10px)`, and **every custom-property row**. It answers `false` for six declarations Chrome
+supports, and the split is the whole point:
+
+```text
+   -webkit-line-clamp: 3      false   ← WE RENDER IT (t413, gated)     -> a FALSE NO
+   scrollbar-width: thin      false   ← constellation `gated`          -> a FALSE NO
+   -webkit-box-orient         false   ← constellation `missing`        -> HONEST
+   content-visibility: auto   false   ← constellation `missing`        -> HONEST
+   text-wrap: balance         false   ← constellation `missing`        -> HONEST
+   anchor-name: --a           false   ← constellation `unknown`        -> HONEST
+```
+
+> **`CSS.supports` is not a question about Chrome. It is a question about THIS engine.** Writing
+> Chrome's answers into a battery's expectation column makes four correct answers look like bugs.
+> Only where `CONSTELLATION.tsv`'s **`capability` column** says `gated` is Chrome's `true` also ours.
+
+Validating the setter through this seam **today** would make `el.style.webkitLineClamp = 3` a silent
+no-op and delete a shipped capability. The two false NOs come from properties recovered through the
+MinimalCascade merge that Stylo's servo build cannot parse at all (`-webkit-line-clamp` is
+`engine="gecko"` in stylo 0.19), so `@supports` never parses the condition and `unwrap_or(false)`
+answers. `honest_supports`'s denylist turns false YESes into NOs; these need the missing opposite —
+an allowlist applied to the RAW condition **before** Stylo sees it, value-validated through
+`MinimalCascade`, with the constellation's `gated` status as the entry criterion.
+
+**Order matters and each step gates the next:** allowlist → setter validation → canonical
+serialization (the largest piece, a value serializer per property).

@@ -8649,6 +8649,100 @@ VI.2's method list rather than leaving it as two anecdotes.
    repeat and did not prevent it. A prediction in a comment is not a gate. `scripts/` is
    observer-owned, so this is a request, filed here and in the journal.
 
+## Check #112 — tick 1177 (2026-08-12)
+
+**HORIZON: H0 — Pareto Web Parity.** **EXIT GATE (re-read from PART II, not recalled), all binary:**
+~83% WPT subtest pass **across categories** · differential-oracle-verified viability across all four
+usage-weighted corpora · the headful shell daily-drivable by its own developer · **every rendered
+construct queryable through the in-process semantic API.**
+
+### → Did the last 8 ticks move an EXIT-GATE condition, or only the scoreboard?
+
+**Neither, and the honest answer is more interesting than either: this window corrected the
+SCOREBOARD'S HONESTY, and a naive reading of the ratchet will mistake that for the largest tick in a
+hundred.**
+
+```text
+   t1175  grid §9.1 abspos static position, Chrome-exact   +0 WPT subtests, −1 reftest   capability
+   t1176  css/support/ materialised in the checkout        +8,265 subtests               INSTRUMENT
+   t1177  css-color decomposed; the fix REFUSED            +0                            measurement
+```
+
+⚠⚠⚠ **t1176 IS NOT AN EXIT-GATE MOVE AND MUST NOT BE READ AS ONE.** No engine code changed. The WPT
+checkout is a cone-mode sparse checkout whose pattern list omitted `/css/support/` — nine testharness
+helper libraries (`parsing-testcommon.js`, `computed-testcommon.js`, …) plus `grid.css`, whose first
+rule is `.grid { display: grid }`, loaded by ~700 CSS test files. Absent, each of those files threw at
+its first `test_valid_value(...)` and reported ONE error instead of hundreds of subtests. The engine
+was always passing them. **The gate condition is "~83% across categories"; what moved is our reading
+of the categories, not the engine's distance from the bar.**
+
+⚠⚠ **AND IT CHANGED THE RANKING THE LOOP STEERS BY, WHICH IS THE PART THAT ACTUALLY MATTERS.**
+`css/css-color` was listed **last of seventeen with 76 failing subtests** and carries **5,380**. A
+loop that had spent a tick "finishing" css-color would have been optimising a 108-subtest phantom.
+The tell was available before the sweep and nobody had looked for it: **the percentage barely moved
+(35.25% → 35.33%) while both halves grew by thousands.** When numerator and denominator move
+together, the denominator was the thing that was wrong.
+
+### → Is `orient`'s ranking (usage-weighted breadth, tail excluded, §VI.3) still the north star?
+
+**Yes, but there is a live tension worth naming rather than leaving implicit.** VI.3 demoted
+`WPT:TOTAL` to *"a bookkeeping mark"* 1,091 ticks ago because it is a Pareto trap. The current lever
+board's PHASE MANDATE (owner, 2026-08-11) names *"the MONOTONIC WPT TOTAL"* as the **primary per-tick
+progress metric**. Read literally those conflict. They do not in practice — the board's own tally line
+prints `reachable (excl encoding tail): 72,600 / 101,396 = 71.6%`, so the board already excludes the
+tail when it ranks — but the mark printed at every tick landing is the un-excluded one, and
+**`encoding` is 1,127,434 of 1,249,461 subtests: 90.2% of the denominator.** A reader of
+`RATCHET.tsv` alone would be steering by a number that is nine-tenths the exotic tail I4 says to
+degrade. Recorded so the next reader does not have to re-derive it. **No steer change: the board's
+ranking line is the operative one.**
+
+### → Is any invariant being bent?
+
+⚠⚠ **I3, and it is the SECOND time this exact bend has been recorded** (check #72, tick 852, said it
+first). t1175 changed element geometry — a grid's out-of-flow static position — and geometry **IS**
+the semantic model: `node_rects` → `manuk_a11y::build_tree_with_rects` → `A11yNode.bbox` → the agent's
+click point. Check #72's steer was explicit: *"land it with an agent-side click-point assertion in the
+same tick."* **t1175 did not.** It is gated by a layout-crate assertion on rects, which is the
+renderer's view of the change, and it passes I3 only because `node_rects` is a shared producer — the
+same accident #72 named. The bend is small and the fix is cheap; what makes it worth recording is that
+a check found it, wrote the remedy, and the loop did not adopt it, so the remedy needs to be a
+mechanism rather than a note. **STEER: the next tick that moves an element's geometry lands an
+agent-side assertion with it, and if that is impractical the tick says why in its journal entry.**
+
+**I2 held** — t1175's fix is a supplement in our own code; taffy 0.12.1 is untouched and the tick's
+own comment cites `compute/grid/mod.rs` by reference rather than copying it. **I4 held** — CSSOM
+parsing and grid abspos are both squarely representative surface. **I5:** the oracle crawl is still
+`PARTIAL` in `STATUS.md`, and this window's discovery engine was neither the crawl nor the
+instrumented log (check #51's correction) but a **third thing: reading a failing test's own HTML and
+noticing the file it names is absent.** That is not a drift from I5 so much as evidence that I5's
+"discovery engine" is now plural, which VI.2 should say.
+
+### → PART VI correction
+
+**VI.3's aperture clause is amended.** It has said since tick 86 that *"the aperture is the biggest
+lever, and it is barely open — ~8 sub-areas of hundreds are measured."* That framed the risk as
+**unmeasured areas**. t1176 found a second and worse mode: **an area that IS measured, whose corpus is
+missing files the tests themselves name.** A missing area is a visible zero; a missing support file is
+a *plausible low percentage* that ranks, gets picked, and buys engine ticks. The reconciliation that
+would have caught it is neither "are the areas measured" nor "are the tests present" (the test-file
+counts were unchanged across the repair — 61 non-test files were added) but **"does every `src`/`href`
+a test names actually resolve"**, and nothing runs that. Added to VI.3 as inflation mode #6, alongside
+the five grep-inflation modes already there.
+
+### → STEER
+
+1. **The `el.style` setter validates nothing** (t1177): `e.style.color = "yelow"` sticks, so the
+   universal feature-detection idiom `e.style[p] = v; return e.style[p] !== ''` answers *supported*
+   for every capability we lack — the exact mirror of t1172's `'display' in el.style === false`. This
+   is an **I3-adjacent** defect (the semantic surface lying about itself) and a daily-driver one. The
+   ordered path is in the t1177 entry: `RECOVERED_LONGHANDS` allowlist → setter validation → canonical
+   serialization. Do not skip step 1 — the negative rows proved that wiring the validator in today
+   would silently delete `-webkit-line-clamp`, which we ship and gate.
+2. **Geometry ticks land an agent-side assertion** (I3, above).
+3. **Re-rank before picking, once.** The board's CSS ordering was computed on the pre-repair corpus for
+   its whole life. It has been re-swept; use the new ordering, and treat any pre-t1176 per-area CSS
+   number in this file or the journal as measured by a different instrument.
+
 ## Check #111 — tick 1169 (2026-08-12)
 
 **HORIZON: H0 / Phase 0.** **EXIT GATE (unchanged, and re-read rather than recalled):** the

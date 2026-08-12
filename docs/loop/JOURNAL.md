@@ -46371,6 +46371,115 @@ PERF: none — one UA rule and one narrowed branch in a cascade that already ran
 WIKI: `docs/wiki/css-cascade.md` — where Chrome draws the form-control `box-sizing` line, and why a
 layout-crate test cannot see it.
 
+## Tick 1177 — `el.style.color = "yelow"` sticks, and the negative rows refused the obvious fix (2026-08-12)
+
+TICK SHAPE: measurement — decomposition of the newly-visible #2 lever, and a fix REFUSED before a
+line of it was written.
+
+t1176's corpus repair moved `css/css-color` from **last of seventeen (76 failing)** to **#2 (5,380)**.
+Nobody has ever looked at those subtests, so this decomposes them.
+
+**44% OF THE AREA IS ONE CSSOM CALL.** 2,362 of 5,380 failures are `e.style['color'] = X`:
+
+```text
+   1544  e.style['color'] = "…" should set the property value        (valid, we reject)
+    818  e.style['color'] = "…" should not set the property value    (invalid, we ACCEPT)
+```
+
+⚠⚠ **AND THE NAMES OF THE VALUES SENT ME AT THE WRONG ORGAN.** The rejected list is full of
+`hsl(120 30% 50%)` — CSS Color 4's space-separated spelling, which Tailwind emits — so the obvious
+reading is *"we do not parse modern colour syntax"*. A 19-row battery, **negative rows first**, says
+otherwise: **all 15 positive rows PASS**, space-separated, `none`, unitless and slash-alpha included.
+**Only the four negative rows fail** — and they fail the same way:
+
+```text
+   e.style.color = "yelow"                 ->  "yelow"      (Chrome: "")
+   e.style.color = "rgb(255 0)"            ->  "rgb(255 0)" (Chrome: "")
+   e.style.color = "hsl(120 30% 50% 0.5)"  ->  echoed       (Chrome: "")
+```
+
+**The setter does not parse anything. It stores the string.** `element.style` is a JS `Proxy` over the
+`style` attribute text (`CSSOM_PRELUDE`), and its `set` trap writes `String(v)` straight in.
+
+⚠⚠⚠ **THE DAILY-DRIVER COST IS NOT THE SUBTESTS, IT IS THE FEATURE-DETECTION IDIOM**, which is
+written exactly this way on the real web:
+
+```js
+   const e = document.createElement('div');
+   e.style[prop] = value;
+   return e.style[prop] !== '';        // ← TRUE FOR EVERY VALUE HERE
+```
+
+Every probe answers *supported*, so a page takes the modern branch for capabilities we do not have.
+It is the exact mirror of t1172's `'display' in el.style === false`, which is the same surface
+answering *unsupported* for everything we DO have. **One object, two detection idioms, both lying,
+in opposite directions.**
+
+**Chrome's contract, measured (24 rows + 16 more for custom properties and prefixes):** invalid → `""`;
+valid → stored and **canonically serialized** (`hsl(120 30% 50%)` → `rgb(89, 166, 89)`, `#ff0000` →
+`rgb(255, 0, 0)`, `RED` → `red`). And **the outcome tracks `CSS.supports(prop + ': ' + value)` on
+every row but one** — `color: red !important` is rejected by the IDL setter while `CSS.supports` says
+true, because the spec forbids a priority through that path (`setProperty(k,v,'important')` is the
+only way). So the fix looks like three lines: validate with the `__cssSupports` seam we already have.
+
+⚠⚠⚠ **AND THE NEGATIVE ROWS REFUSED IT.** Our `CSS.supports` is **19/19 Chrome-exact** on every trap
+I expected to break it — `inherit`, `initial`, `unset`, `revert`, `var(--x)`, `var(--x, red)`,
+`rgb(255 0 0 / var(--a))`, `calc(100% - 10px)` vs `calc(100% -10px)`, and **every custom-property
+row**. But on a wider sweep it answers **false for six declarations Chrome supports**, and one of
+them is fatal to the fix:
+
+```text
+   -webkit-line-clamp: 3      supports=false   ← WE RENDER THIS (t413, and it has a gate)
+   scrollbar-width: thin      supports=false   ← constellation says `gated` (G_SCROLLBAR_THEME)
+   -webkit-box-orient         supports=false   ← constellation says `missing`  → HONEST
+   content-visibility: auto   supports=false   ← constellation says `missing`  → HONEST
+   text-wrap: balance         supports=false   ← constellation says `missing`  → HONEST
+   anchor-name: --a           supports=false   ← constellation says `unknown`  → HONEST
+```
+
+Wiring validation in today would make `el.style.webkitLineClamp = 3` a **silent no-op** — deleting a
+capability this project shipped and gated. *A fix that breaks the commonest use of the feature it
+improves* is the trap the battery exists to catch, and it caught it before any code was written.
+
+⚠⚠ **AND FOUR OF THOSE SIX ARE THE INSTRUMENT BEING CORRECT, WHICH MEANS MY BATTERY'S EXPECTATION
+COLUMN WAS THE THING THAT WAS WRONG.** I wrote Chrome's answer into the `supports` column, and
+`CSS.supports` is not a question about Chrome — **it is a question about THIS engine**. Only where
+the constellation says we render it is Chrome's `true` also ours. `honest_supports` exists for
+exactly this and its denylist turns false YESes into NOs; what these two rows need is the missing
+opposite — an **allowlist** for properties recovered through the MinimalCascade merge that Stylo's
+servo build cannot parse at all (`-webkit-line-clamp` is `engine="gecko"` in stylo 0.19, so
+`@supports` never even parses the condition and `unwrap_or(false)` answers).
+
+**THE NEXT TICK IS SPECIFIED, IN ORDER, AND EACH STEP IS GATED BY THE ONE BEFORE:**
+
+1. `supports_condition` gains a `RECOVERED_LONGHANDS` allowlist applied to the RAW condition before
+   Stylo sees it (Stylo cannot parse these, so the existing `rewrite_parse_only` hook is too late),
+   value-validated through `MinimalCascade::parse_declarations` so `-webkit-line-clamp: banana`
+   stays false. Entry criterion: the constellation's `capability` column says `gated`, and the gate
+   is named. Held by `G_SUPPORTS_HONESTY`.
+2. THEN the `el.style` setter validates through that seam, rejecting `!important` on the IDL path.
+   Expected: most of the 818 "should not set" subtests, and honest feature detection.
+3. Canonical SERIALIZATION (`RED` → `red`, `hsl(…)` → `rgb(…)`) is the other 1,544 and is a separate,
+   larger job — a value serializer per property. Named, not smuggled in.
+
+ALSO IN THIS TICK: **CONSTITUTION CHECK #112** (due at 1177, and it is a hard block, which is how it
+got done). Horizon H0, gate re-read from PART II. Honest answer to *gate or scoreboard?* — **neither:
+this window corrected the scoreboard's HONESTY, and a naive reading of the ratchet will mistake
+t1176's +8,265 for the largest tick in a hundred.** Two findings worth carrying: `WPT:TOTAL` is 90.2%
+`encoding`, so the mark printed at every landing is nine-tenths the tail I4 says to degrade (the
+board's own `excl encoding tail` line is the operative ranking, and the tension is presentational —
+recorded so it is not re-derived); and **I3 is bent for the SECOND time in the same way** — check #72
+(t852) said a geometry tick must land an agent-side click-point assertion, and t1175 changed an
+element's static position without one. PART VI.3 amended with a sixth inflation mode (the missing
+support file, above). Full text: `docs/loop/CONSTITUTION-CHECK.md` check #112.
+
+RATCHET: held — no engine code changed. Nothing landed but the measurement.
+
+PERF: none.
+
+WIKI: `docs/wiki/dom-semantics.md` — "`element.style` is a raw-string Proxy: the setter validates
+nothing, and the two feature-detection idioms lie in opposite directions". [no-pattern]
+
 ## Tick 1176 — the #1 lever's corpus was missing the stylesheet that makes `.grid` a grid (2026-08-12)
 
 TICK SHAPE: measurement — instrument fidelity on the board's top-ranked area.
