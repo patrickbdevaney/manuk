@@ -8766,9 +8766,12 @@ same shape as `LAST_WALL_AUDIT` being DERIVED, which this loop has already paid 
 
 1. **Next tick: the MODULE round's `ReflowScope`.** It is measured, it is one call site of the same
    eighteen, and it is the last named thing standing between the loop and a 3,200-subtest zero.
-2. **Then `requestAnimationFrame`, which appears not to run at all** — verify before believing it
-   (this file's standing rule), but if it holds it outranks grid: every animation, every scroll-
-   linked effect, and every layout-thrash-avoidance idiom on the web is built on it.
+2. ~~**Then `requestAnimationFrame`, which appears not to run at all**~~ — ⚠ **WITHDRAWN AT t1189:
+   VERIFIED AND FALSE.** `requestAnimationFrame` is a function, returns an id, delivers a numeric
+   timestamp, and `cancelAnimationFrame` cancels. The t1185 probe registered its rAF inside a `load`
+   handler and read the result from a `setTimeout` queued *before* it — an ordering artefact of the
+   fixture. The steer said *"verify before believing it"* and that is the only reason this cost one
+   probe instead of a tick. **A probe row that does not report is not a capability that is absent.**
 3. **Stop opening `css/css-grid` by reading grid tests.** Four ticks of evidence say the productive
    move is to ask *what is different about the files that score zero* — script type, helper library,
    host requirement — before reading a single line of layout math. **An area is a directory, not a

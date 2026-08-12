@@ -46371,6 +46371,82 @@ PERF: none — one UA rule and one narrowed branch in a cascade that already ran
 WIKI: `docs/wiki/css-cascade.md` — where Chrome draws the form-control `box-sizing` line, and why a
 layout-crate test cannot see it.
 
+## Tick 1189 — `requestAnimationFrame` is FINE, and the abspos remainder is one spec clause the code already quotes (2026-08-12)
+
+TICK SHAPE: measurement — a correction I owed, and the decomposition of what four ticks of work left
+behind.
+
+⚠⚠⚠ **CORRECTION FIRST: `requestAnimationFrame` WORKS, AND I SAID OTHERWISE IN TWO PLACES.** t1185's
+probe showed an `H rAF` row that never reported, and I wrote *"requestAnimationFrame's callback never
+fires at all"* into the journal **and into constitution check #113's steer, where it was ranked
+second**. I flagged it *"verify before believing it"*, which is the only reason this is a correction
+and not a wasted tick. Verified:
+
+```text
+   typeof requestAnimationFrame   function
+   returns                        number (an id)
+   cancelAnimationFrame           cancels — the +100 callback did not run
+   callbacks fired                2 of 3, as scheduled
+   the timestamp argument         number
+```
+
+The t1185 probe registered its rAF inside a `load` handler and took its report from a `setTimeout`
+queued **before** it. That is an ordering artefact of my own fixture, not an engine gap. **A probe
+row that does not report is not a capability that is absent** — the same shape as *"the probe didn't
+say yes is not the probe said no"*, and this file has now paid for it twice.
+
+**WHAT FOUR TICKS OF WORK LEFT BEHIND, decomposed.** `css/css-grid/abspos` is **462/3510** (was 100
+before t1183), and the remainder is two clusters and a tail, not a death-tail:
+
+```text
+   orthogonal-positioned-grid-descendants-*    1/1600    16 files   writing-mode: vertical-lr
+   positioned-grid-descendants-*             361/1600    16 files   -001 is 100/100; 002-016 are not
+   everything else in abspos/                100/310     25 files
+```
+
+**And the 15 files are ONE variable.** `-001` sets every inset `auto` and passes outright; `002`
+onwards set `left`/`top`/`right`/`bottom` to numbers. Histogramming `-002`'s messages — `left: 25`,
+everything else auto — gives three rows and nothing else:
+
+```text
+   30 x  offsetLeft expected  30 but got 25      grid-column-start: 1  ->   5 + 25
+   20 x  offsetLeft expected 230 but got 25      grid-column-start: 2  -> 205 + 25
+   10 x  offsetLeft expected 530 but got 25      grid-column-start: 3  -> 505 + 25
+```
+
+We answer **25** on every row: `left` resolved against the grid container's **padding box**, never
+against the **grid area** the box was placed into. The 10 rows we do pass are `grid-column-start:
+auto`, where the two boxes coincide.
+
+⚠⚠⚠ **THE ENGINE ALREADY QUOTES THE RULE AND ALREADY NAMES THIS AS THE MISSING HALF.**
+`placed_static_position_only` carries Grid §9 verbatim —
+
+> *"If the element has a definite grid position … the containing block is the corresponding grid
+> area. Otherwise, the containing block is the padding edge of the grid container."*
+
+— and returns `false` for definite placement with the comment *"this pass cannot build that rect."*
+t1126 narrowed the exclusion to the spec's own discriminator and left the grid-area half open; these
+1,239 subtests are that half, still open, in the one file that says so.
+
+**AND THE OBVIOUS SOURCE FOR THE RECT DOES NOT WORK, which is why this is a tick and not a line.**
+`Placed::slot` is taffy's computed rect for a placed item, and for a definite-placement abspos
+*child* of a grid it would be the grid area. **These tests place the abspos as a GRANDCHILD** —
+inside a grid item, with the grid as its containing block because the grid is `position: relative`.
+Taffy never sees it as an item, so no slot exists for it. The rect has to come from the grid's
+**resolved track positions**, which nothing currently exposes outside the taffy solve. That is the
+shape of the next tick, and it is worth stating before starting it rather than after.
+
+⚠ **The `orthogonal-*` set (1,600 subtests at 1) is `writing-mode: vertical-lr` and is a different,
+larger mechanism.** Named so a future ranker does not read 3,048 missing subtests in one directory
+as one lever.
+
+RATCHET: held — no engine code changed this tick. WPT TOTAL unchanged at 445,686.
+
+PERF: none — measurement only.
+
+WIKI: none — the artefacts are this decomposition and the rAF correction, which belong in the
+journal and in `CONSTITUTION-CHECK.md` #113 (amended in place). [no-pattern]
+
 ## Tick 1188 — a fragment now says which TEXT NODE it came from, not only which element (2026-08-12)
 
 TICK SHAPE: capability.
