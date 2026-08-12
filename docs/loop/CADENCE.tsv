@@ -880,3 +880,4 @@ tick	sha	epoch	iso	delta_s	shape	wall_s	files	added	deleted	gates	claims	wpt_pas
 1175	41aa716f	1786544348	2026-08-12T10:19:08-04:00	5127	capability	808	9	461	38	442	81	3896	6960	0	578	0	GRID §9 HAS TWO SECTIONS, and t1173's control table varied the wrong thing (2026-08-12)
 1176	4dae1edf	1786546485	2026-08-12T10:54:45-04:00	2137	measurement	808	7	214	48	442	81	3896	6960	0	578	0	the #1 lever's corpus was missing the stylesheet that makes `.grid` a grid (2026-08-12)
 1177	7eb918cd	1786547614	2026-08-12T11:13:34-04:00	1129	measurement	808	8	303	35	442	81	3896	6960	0	578	0	`el.style.color = "yelow"` sticks, and the negative rows refused the obvious fix (2026-08-12)
+1178	247b51b7	1786550088	2026-08-12T11:54:48-04:00	2474	capability	808	8	337	42	442	81	3896	6960	0	579	0	an INVALID declaration is applied as the INITIAL value, so it overrides the valid one before it (2026-08-12)

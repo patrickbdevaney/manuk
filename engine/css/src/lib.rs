@@ -5099,12 +5099,14 @@ fn apply_declaration(s: &mut ComputedStyle, d: &Declaration, parent_fs: f32) {
             // `x mandatory` / `y proximity` / `both mandatory` / `none`. The axis is the first
             // token; the strictness token is accepted and ignored (see `ScrollSnapAxis`).
             let lower = v.trim().to_ascii_lowercase();
-            let axis = lower.split_whitespace().next().unwrap_or("none");
+            let axis = lower.split_whitespace().next().unwrap_or("");
             s.scroll_snap_type = match axis {
                 "x" | "inline" => ScrollSnapAxis::X,
                 "y" | "block" => ScrollSnapAxis::Y,
                 "both" => ScrollSnapAxis::Both,
-                _ => ScrollSnapAxis::None,
+                "none" => ScrollSnapAxis::None,
+                // INVALID → drop the declaration (CSS 2.1 §4.2), do not reset to the initial value.
+                _ => return,
             }
         }
         "scroll-snap-align" => {
@@ -5112,20 +5114,48 @@ fn apply_declaration(s: &mut ComputedStyle, d: &Declaration, parent_fs: f32) {
             // CONTAINER declares, so a single alignment is all that is consulted — taking the first
             // token is correct for `start`/`center`/`end` and for the doubled `start start`.
             let lower = v.trim().to_ascii_lowercase();
-            let first = lower.split_whitespace().next().unwrap_or("none");
+            let first = lower.split_whitespace().next().unwrap_or("");
             s.scroll_snap_align = match first {
                 "start" => ScrollSnapAlign::Start,
                 "center" => ScrollSnapAlign::Center,
                 "end" => ScrollSnapAlign::End,
-                _ => ScrollSnapAlign::None,
+                "none" => ScrollSnapAlign::None,
+                // INVALID → drop the declaration (CSS 2.1 §4.2).
+                _ => return,
             }
         }
+        // ⚠⚠⚠ **`_ => Initial` APPLIES AN INVALID DECLARATION; CSS 2.1 §4.2 SAYS TO IGNORE IT.** The
+        // difference only shows when a valid declaration came first — `text-transform: uppercase;
+        // text-transform: banana` must stay UPPERCASE, and a `_ => TextTransform::None` arm quietly
+        // resets it. Measured against live Chromium on `<span>wwwww</span>` at 16px, with the three
+        // control rows that make this a rule about *dropping* rather than about garbage:
+        //
+        // ```text
+        //                               CHROME    before    after
+        //     uppercase; banana          75.52      58        76     ✗→✓
+        //     uppercase                  75.52      76        76     ✓ we DO apply it
+        //     banana only                57.78      58        58     ✓ only-invalid → initial
+        //     uppercase; none            57.78      58        58     ✓ a VALID override still wins
+        // ```
+        //
+        // The last two rows are the ones a careless fix breaks: making the property *sticky* would
+        // keep `uppercase` across row four, and treating unknown-only as *inherit* would break row
+        // three. Leaving the field untouched is the only shape that satisfies all four, and it is
+        // also what "ignore the declaration" literally means.
+        //
+        // ⚠⚠ **THE SCOPE IS ARCHITECTURAL, NOT A HEDGE.** The shipping cascade is Stylo, which drops
+        // invalid declarations correctly on its own. This applies to the properties `stylo_engine`
+        // RECOVERS from here because Stylo's servo build cannot express them — those arms decide the
+        // shipping answer, and those are the arms fixed. See `NONE_IS_A_REAL_KEYWORD` below for the
+        // one case that still assigns on the fall-through, and why.
         "text-transform" => {
             s.text_transform = match v.trim().to_ascii_lowercase().as_str() {
                 "uppercase" => TextTransform::Uppercase,
                 "lowercase" => TextTransform::Lowercase,
                 "capitalize" => TextTransform::Capitalize,
-                _ => TextTransform::None,
+                "none" => TextTransform::None,
+                // Not a keyword this property takes → the declaration is INVALID and is dropped.
+                _ => return,
             }
         }
         // `scrollbar-width`/`scrollbar-color` are `engine="gecko"` in stylo 0.19 (dropped from the
@@ -5136,7 +5166,9 @@ fn apply_declaration(s: &mut ComputedStyle, d: &Declaration, parent_fs: f32) {
             s.scrollbar_width = match v.trim().to_ascii_lowercase().as_str() {
                 "thin" => ScrollbarWidth::Thin,
                 "none" => ScrollbarWidth::None,
-                _ => ScrollbarWidth::Auto,
+                "auto" => ScrollbarWidth::Auto,
+                // INVALID → drop the declaration (CSS 2.1 §4.2).
+                _ => return,
             }
         }
         "scrollbar-color" => {
@@ -5177,20 +5209,26 @@ fn apply_declaration(s: &mut ComputedStyle, d: &Declaration, parent_fs: f32) {
             s.overflow_wrap = match v.trim().to_ascii_lowercase().as_str() {
                 "break-word" => OverflowWrap::BreakWord,
                 "anywhere" => OverflowWrap::Anywhere,
-                _ => OverflowWrap::Normal,
+                "normal" => OverflowWrap::Normal,
+                // INVALID → drop the declaration (CSS 2.1 §4.2).
+                _ => return,
             }
         }
         "direction" => {
             s.direction = match v.trim().to_ascii_lowercase().as_str() {
                 "rtl" => Direction::Rtl,
-                _ => Direction::Ltr,
+                "ltr" => Direction::Ltr,
+                // INVALID → drop the declaration (CSS 2.1 §4.2).
+                _ => return,
             }
         }
         "word-break" => {
             s.word_break = match v.trim().to_ascii_lowercase().as_str() {
                 "break-all" => WordBreak::BreakAll,
                 "keep-all" => WordBreak::KeepAll,
-                _ => WordBreak::Normal,
+                "normal" => WordBreak::Normal,
+                // INVALID → drop the declaration (CSS 2.1 §4.2).
+                _ => return,
             }
         }
         // `letter-spacing`/`word-spacing`: a length added after each char / to each space. `normal`
@@ -7357,6 +7395,123 @@ mod tests {
         let sheets = vec![Stylesheet::parse(css)];
         let map = MinimalCascade.cascade(&dom, &sheets);
         (dom, map)
+    }
+
+    /// # An INVALID declaration is IGNORED — it must not overwrite the valid one before it
+    ///
+    /// CSS 2.1 §4.2: *"User agents must ignore a declaration with an illegal value."* Every keyword
+    /// arm in [`apply_declaration`] was written as `match { "a" => A, "b" => B, _ => Initial }`, so
+    /// an unrecognised value was **applied** as the initial value — which is only invisible while
+    /// nothing valid came first.
+    ///
+    /// This matters on the SHIPPING path and not merely here, because Stylo's servo build cannot
+    /// express these properties and `stylo_engine` recovers them from this cascade. Measured against
+    /// live Chromium, `<span style="display:inline-block">wwwww</span>` at 16px proportional:
+    ///
+    /// ```text
+    ///                               CHROME    before    after
+    ///     uppercase; banana          75.52      58        76     <- THE DEFECT
+    ///     uppercase                  75.52      76        76     <- we DO apply text-transform
+    ///     banana only                57.78      58        58     <- only-invalid IS the initial
+    ///     uppercase; none            57.78      58        58     <- a VALID override still wins
+    /// ```
+    ///
+    /// ⚠⚠ **THE LAST TWO ROWS ARE WHAT MAKE THIS A RULE ABOUT *DROPPING*.** A fix that made the
+    /// property sticky satisfies row one and breaks row four; one that made an unknown-only value
+    /// inherit satisfies row one and breaks row three. Leaving the field untouched is the only shape
+    /// that satisfies all four — and it is what "ignore the declaration" literally means.
+    ///
+    /// ⚠ Each arm therefore had to gain the keyword it was previously falling through to
+    /// (`"none" => TextTransform::None`), because that keyword is REAL and must still be honoured.
+    /// Dropping the fall-through without adding it would turn `text-transform: none` into a no-op.
+    ///
+    /// To watch it go RED: restore any `_ => <Initial>` arm — row one reads the initial value again.
+    #[test]
+    fn an_invalid_declaration_is_dropped_and_does_not_override_the_valid_one_before_it() {
+        let one = |decl: &str| {
+            let (dom, map) = styled(&format!("span {{ {decl} }}"));
+            let n = query_selector_all(&dom, dom.root(), "span")[0];
+            map.get(&n).cloned().unwrap_or_else(ComputedStyle::initial)
+        };
+
+        // ── text-transform: the row measured against Chrome, with its three controls.
+        assert_eq!(
+            one("text-transform: uppercase; text-transform: banana").text_transform,
+            TextTransform::Uppercase,
+            "an INVALID value must be ignored, leaving the valid declaration standing"
+        );
+        assert_eq!(
+            one("text-transform: uppercase").text_transform,
+            TextTransform::Uppercase,
+            "CONTROL: the property is applied at all"
+        );
+        assert_eq!(
+            one("text-transform: banana").text_transform,
+            TextTransform::None,
+            "CONTROL: an only-invalid declaration leaves the INITIAL value, not a sticky one"
+        );
+        assert_eq!(
+            one("text-transform: uppercase; text-transform: none").text_transform,
+            TextTransform::None,
+            "CONTROL: a VALID later declaration still wins — `none` is a real keyword, not a fallback"
+        );
+
+        // ── the sibling arms, same shape, same rule. Each carries its own valid-override control so
+        // that adding the previously-fallen-through keyword is proven and not assumed.
+        assert_eq!(
+            one("word-break: break-all; word-break: banana").word_break,
+            WordBreak::BreakAll
+        );
+        assert_eq!(
+            one("word-break: break-all; word-break: normal").word_break,
+            WordBreak::Normal,
+            "CONTROL: `normal` is a real keyword"
+        );
+        assert_eq!(
+            one("overflow-wrap: break-word; overflow-wrap: banana").overflow_wrap,
+            OverflowWrap::BreakWord
+        );
+        assert_eq!(
+            one("overflow-wrap: break-word; overflow-wrap: normal").overflow_wrap,
+            OverflowWrap::Normal,
+            "CONTROL: `normal` is a real keyword"
+        );
+        assert_eq!(
+            one("scroll-snap-align: center; scroll-snap-align: banana").scroll_snap_align,
+            ScrollSnapAlign::Center
+        );
+        assert_eq!(
+            one("scroll-snap-align: center; scroll-snap-align: none").scroll_snap_align,
+            ScrollSnapAlign::None,
+            "CONTROL: `none` is a real keyword"
+        );
+        assert_eq!(
+            one("scroll-snap-type: x mandatory; scroll-snap-type: banana").scroll_snap_type,
+            ScrollSnapAxis::X
+        );
+        assert_eq!(
+            one("scroll-snap-type: x mandatory; scroll-snap-type: none").scroll_snap_type,
+            ScrollSnapAxis::None,
+            "CONTROL: `none` is a real keyword"
+        );
+        assert_eq!(
+            one("scrollbar-width: thin; scrollbar-width: banana").scrollbar_width,
+            ScrollbarWidth::Thin
+        );
+        assert_eq!(
+            one("scrollbar-width: thin; scrollbar-width: auto").scrollbar_width,
+            ScrollbarWidth::Auto,
+            "CONTROL: `auto` is a real keyword"
+        );
+        assert_eq!(
+            one("direction: rtl; direction: banana").direction,
+            Direction::Rtl
+        );
+        assert_eq!(
+            one("direction: rtl; direction: ltr").direction,
+            Direction::Ltr,
+            "CONTROL: `ltr` is a real keyword"
+        );
     }
 
     /// **The four container-level Box-Alignment longhands, on the MINIMAL cascade.**

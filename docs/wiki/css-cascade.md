@@ -2884,3 +2884,58 @@ attributed** — the old number came from a binary that no longer exists, so no 
 possible. And the WPT total is **92% `encoding` by test count** (1,127,434 of 1,225,493), so a
 +1,300-subtest gain across the whole CSS surface moves the headline ~0.1pt: it is a good monotonicity
 check and a poor sensitivity one.
+
+## An invalid declaration is IGNORED — and `_ => Initial` applies it
+
+CSS 2.1 §4.2: *"User agents must ignore a declaration with an illegal value."* Every keyword arm in
+`MinimalCascade`'s `apply_declaration` was written as:
+
+```rust
+   s.text_transform = match v {
+       "uppercase" => Uppercase, "lowercase" => Lowercase, "capitalize" => Capitalize,
+       _ => TextTransform::None,        // ← garbage APPLIED as the initial value
+   }
+```
+
+That is invisible until a **valid declaration came first**, at which point the invalid one silently
+overrides it. Measured against live Chromium, `<span style="display:inline-block">wwwww</span>` at
+16px proportional:
+
+```text
+                                  CHROME    before    after
+   uppercase; banana               75.52      58        76     <- THE DEFECT
+   uppercase                       75.52      76        76     <- control: we DO apply it
+   banana only                     57.78      58        58     <- control: only-invalid IS initial
+   uppercase; none                 57.78      58        58     <- control: a VALID override wins
+```
+
+> **The last two rows are what make this a rule about DROPPING rather than about garbage.** A fix
+> that made the property *sticky* satisfies row one and breaks row four; one that made an
+> unknown-only value *inherit* satisfies row one and breaks row three. Leaving the field untouched
+> (`_ => return`) is the only shape that satisfies all four, and it is what "ignore the declaration"
+> literally means.
+
+⚠ **Each arm had to gain the keyword it was falling through to.** `_ => TextTransform::None` was
+doing double duty as *"garbage"* and as *"`none`"*; deleting the fall-through without writing
+`"none" => TextTransform::None` turns a real keyword into a no-op. Six arms, six restored keywords:
+`none`, `normal` ×2, `none` ×2, `auto`, `ltr`.
+
+### Why this is a SHIPPING bug and not just a fallback one
+
+The shipping cascade is Stylo (`live-cascade-is-stylo-not-minimal`) and Stylo drops invalid
+declarations correctly. The blast radius is exactly the properties `stylo_engine` **recovers** from
+`MinimalCascade` because Stylo's servo build cannot express them — `text-transform`, `text-overflow`,
+`object-fit`, `overflow-wrap`, `word-break`, `scroll-snap-*`, `scrollbar-*`, `-webkit-line-clamp`,
+`letter-spacing`, `word-spacing`, `direction`. For those, this cascade's answer **is** the shipping
+answer.
+
+⚠⚠ **It moved zero WPT subtests — a full sweep of all twenty areas was byte-identical.** The suite
+does not exercise "an invalid declaration after a valid one" for these six properties. Per check #72
+the honest report is *"the instrument cannot price this"*, not *"this bought nothing"*: the pattern
+(a design system shipping a vendor value the engine does not know, after the fallback it does) is
+common, and the cost is a whole property silently reverting.
+
+⚠ **Residual:** `apply_declaration` has ~200 arms and the `_ => Initial` shape is not unique to the
+six fixed here; the rest are decided by Stylo on the shipping path, so they are fallback-correctness
+debt rather than live defects. Sweeping them is a tick, with the same entry criterion — an arm may
+drop its fall-through only once every real keyword it was absorbing has been written out.

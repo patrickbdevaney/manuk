@@ -46371,6 +46371,87 @@ PERF: none — one UA rule and one narrowed branch in a cascade that already ran
 WIKI: `docs/wiki/css-cascade.md` — where Chrome draws the form-control `box-sizing` line, and why a
 layout-crate test cannot see it.
 
+## Tick 1178 — an INVALID declaration is applied as the INITIAL value, so it overrides the valid one before it (2026-08-12)
+
+TICK SHAPE: capability.
+
+HYPOTHESIS: t1177 went looking for a validity oracle to put behind `CSS.supports` and found that
+`apply_declaration` has none — its keyword arms are `match { "a" => A, "b" => B, _ => Initial }`, so
+garbage is indistinguishable from the initial keyword. **That is not only an `@supports` blocker. CSS
+2.1 §4.2 says an invalid declaration is IGNORED, and a `_ => Initial` arm APPLIES it** — overriding
+whatever valid declaration came before it in the cascade.
+
+FALSIFIABLE BAR, measured against live Chromium before any code changed, **three control rows**
+(`<span display:inline-block>wwwww</span>`, 16px proportional):
+
+```text
+                              CHROME    MANUK
+   #a  uppercase; banana       75.52      58    ✗  THE DEFECT
+   #b  uppercase               75.52      76    ✓  control: we DO apply text-transform
+   #c  banana only             57.78      58    ✓  control: only-invalid → initial IS correct
+   #d  uppercase; none         57.78      58    ✓  control: a VALID override must still win
+```
+
+⚠ Rows #c and #d are what make this a rule about *dropping* rather than a rule about *garbage*: a fix
+that simply ignored unknown keywords everywhere would satisfy #a and break neither — but a fix that
+made the property sticky would break #d, and one that made unknown-only inherit would break #c.
+
+⚠⚠ SCOPE, and it is a property of the architecture rather than a hedge: the shipping cascade is
+**Stylo**, which drops invalid declarations correctly. The blast radius is exactly the properties
+`stylo_engine` RECOVERS from `MinimalCascade` because Stylo's servo build cannot express them —
+`text-transform`, `text-overflow`, `object-fit`, `overflow-wrap`, `word-break`, `scroll-snap-*`,
+`scrollbar-*`, `-webkit-line-clamp`, `letter-spacing`, `word-spacing`, `direction`. Those are the
+arms that decide the shipping answer, and they are the ones with this shape.
+
+**FIXED, on the shipping path, all four rows Chrome-exact:**
+
+```text
+                              CHROME    before    after
+   #a  uppercase; banana       75.52      58        76     ✗→✓
+   #b  uppercase               75.52      76        76     ✓ unmoved
+   #c  banana only             57.78      58        58     ✓ unmoved
+   #d  uppercase; none         57.78      58        58     ✓ unmoved
+```
+
+⚠ **EACH ARM HAD TO GAIN THE KEYWORD IT WAS FALLING THROUGH TO**, and that is the part a careless
+version gets wrong: `_ => TextTransform::None` was doing double duty as *"garbage"* and as
+*"`none`"*. Deleting the fall-through without adding `"none" => TextTransform::None` turns a real
+keyword into a no-op — which row #d is there to catch. Six arms, six added keywords: `none`,
+`normal` ×2, `none` ×2, `auto`, `ltr`.
+
+⚠⚠⚠ **AND IT MOVED NOT ONE WPT SUBTEST — full sweep, every area, ZERO delta in all twenty:**
+
+```text
+   TOTAL  441427/1249461  ->  441427/1249461     Δ 0    every area byte-identical
+```
+
+That is stated first rather than buried, and it is not a reason to doubt the fix: the four-row
+Chrome table is the measurement, and the suite simply does not exercise *"an invalid declaration
+after a valid one"* for these six properties. The standing rule from check #72 applies — **"the
+instrument cannot price this" is the honest report, not "this bought nothing."** The class is real
+and common (a design system shipping a vendor value the engine does not know, after the fallback it
+does) and the price is a whole property silently reverting.
+
+⚠ **RESIDUAL, NAMED:** this fixes the six arms whose keyword sets I enumerated against their own
+match bodies. `apply_declaration` has ~200 arms and the `_ => Initial` shape is not unique to these
+six — the rest are decided by Stylo on the shipping path, so they are correctness debt in the
+headless/JS-less fallback rather than a live rendering defect. **A sweep of the remaining arms is a
+tick, not a line**, and the entry criterion is the same: an arm may only drop its fall-through once
+every real keyword it was absorbing has been written out.
+
+GATE: `an_invalid_declaration_is_dropped_and_does_not_override_the_valid_one_before_it`
+(`engine/css/src/lib.rs`) — the Chrome row plus its three controls for `text-transform`, and for each
+of the five sibling arms both the invalid-override row AND a valid-override row that proves the
+newly-written-out keyword still works. RED-proven by restoring `_ => TextTransform::None`: row one
+reads `None` against `Uppercase`.
+
+RATCHET: held — full sweep, twenty areas, **zero delta anywhere**; `manuk-css` 37→38, `manuk-layout`
+174/174 unmoved.
+
+PERF: none — the same match, one arm spelled out.
+
+WIKI: `docs/wiki/css-cascade.md` — "an invalid declaration is IGNORED, and `_ => Initial` applies it".
+
 ## Tick 1177 — `el.style.color = "yelow"` sticks, and the negative rows refused the obvious fix (2026-08-12)
 
 TICK SHAPE: measurement — decomposition of the newly-visible #2 lever, and a fix REFUSED before a

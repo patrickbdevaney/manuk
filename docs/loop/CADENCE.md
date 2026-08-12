@@ -11,12 +11,12 @@
 
 | | value | over |
 |---|---|---|
-| ticks landed | **881** | ticks 1–1177 |
-| median tick cycle | **28m** | 880 intervals |
+| ticks landed | **882** | ticks 1–1178 |
+| median tick cycle | **28m** | 881 intervals |
 | median, last 10 | **27m** | 10 intervals |
 | fastest / slowest | 5s / 5.4d | |
-| **ticks per hour** | **1.14** | 774.2h elapsed |
-| median verify wall | **63s** | 820 ticks |
+| **ticks per hour** | **1.14** | 774.9h elapsed |
+| median verify wall | **63s** | 821 ticks |
 | wall trend | 39s → 13m — getting slower ⚠️ | first 3 vs last 3 |
 
 The **cycle** is the real unit: implement → debug → verify wall → land. The wall is only part of
@@ -28,10 +28,10 @@ it, and a wall that grows taxes every future tick, so it is tracked separately f
 
 * **capabilities asserted** (`G_CAPABILITY`): 48 → **81**
 * **live gates**: 27 → **442**
-* **✅ rows in the capability ledger**: 144 → **578**
+* **✅ rows in the capability ledger**: 144 → **579**
 * **Bar 0 — oracle hangs**: 0 of 265 sites
 
-**390 of 881 ticks** (44%) moved a
+**391 of 882 ticks** (44%) moved a
 user-visible capability. The rest were instruments, infrastructure and corrections — and the
 ledger says the corrections were not overhead: three of its top three priorities were phantoms,
 and finding that out redirected everything after it.
@@ -90,7 +90,7 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 
 ## What a capability costs
 
-* **390** capability ticks, median cycle **28m**
+* **391** capability ticks, median cycle **28m**
 * median diff per tick: **+265 / −34** lines across 8 files
 
 ## Every tick
@@ -978,5 +978,6 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 | **1175** | 2026-08-12 10:19 | 85m | capability | 13m | +461/−38 | 442 | 81 | 56.0% · | GRID §9 HAS TWO SECTIONS, and t1173's control table varied the wrong thing (2026-08-12) |
 | **1176** | 2026-08-12 10:54 | 36m | measurement | 13m | +214/−48 | 442 | 81 | 56.0% · | the #1 lever's corpus was missing the stylesheet that makes `.grid` a grid (2026-08-12) |
 | **1177** | 2026-08-12 11:13 | 19m | measurement | 13m | +303/−35 | 442 | 81 | 56.0% · | `el.style.color = "yelow"` sticks, and the negative rows refused the obvious fix (2026-08- |
+| **1178** | 2026-08-12 11:54 | 41m | capability | 13m | +337/−42 | 442 | 81 | 56.0% · | an INVALID declaration is applied as the INITIAL value, so it overrides the valid one befo |
 
 *`·` after a WPT figure means **carried forward**, not measured this tick.*
