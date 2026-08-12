@@ -11,12 +11,12 @@
 
 | | value | over |
 |---|---|---|
-| ticks landed | **867** | ticks 1–1163 |
-| median tick cycle | **28m** | 866 intervals |
-| median, last 10 | **31m** | 10 intervals |
+| ticks landed | **868** | ticks 1–1164 |
+| median tick cycle | **28m** | 867 intervals |
+| median, last 10 | **37m** | 10 intervals |
 | fastest / slowest | 5s / 5.4d | |
-| **ticks per hour** | **1.13** | 764.5h elapsed |
-| median verify wall | **63s** | 806 ticks |
+| **ticks per hour** | **1.13** | 765.4h elapsed |
+| median verify wall | **63s** | 807 ticks |
 | wall trend | 39s → 13m — getting slower ⚠️ | first 3 vs last 3 |
 
 The **cycle** is the real unit: implement → debug → verify wall → land. The wall is only part of
@@ -27,11 +27,11 @@ it, and a wall that grows taxes every future tick, so it is tracked separately f
 ### Near — the daily driver (doc / app / platform web)
 
 * **capabilities asserted** (`G_CAPABILITY`): 48 → **81**
-* **live gates**: 27 → **438**
-* **✅ rows in the capability ledger**: 144 → **574**
+* **live gates**: 27 → **439**
+* **✅ rows in the capability ledger**: 144 → **575**
 * **Bar 0 — oracle hangs**: 0 of 265 sites
 
-**384 of 867 ticks** (44%) moved a
+**385 of 868 ticks** (44%) moved a
 user-visible capability. The rest were instruments, infrastructure and corrections — and the
 ledger says the corrections were not overhead: three of its top three priorities were phantoms,
 and finding that out redirected everything after it.
@@ -90,7 +90,7 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 
 ## What a capability costs
 
-* **384** capability ticks, median cycle **28m**
+* **385** capability ticks, median cycle **28m**
 * median diff per tick: **+265 / −34** lines across 8 files
 
 ## Every tick
@@ -964,5 +964,6 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 | **1161** | 2026-08-11 23:52 | 64m | capability | 13m | +722/−52 | 438 | 81 | 56.0% · | the PRIMARY METRIC's own source was a month stale, and it was hiding a Bar 0 (2026-08-11) |
 | **1162** | 2026-08-12 00:20 | 28m | measurement | 13m | +155/−36 | 438 | 81 | 56.0% · | one CONTROL ROW says our grid is right and the KEYWORD never arrived (2026-08-11) |
 | **1163** | 2026-08-12 01:33 | 73m | capability | 13m | +760/−518 | 438 | 81 | 56.0% · | the named fix is ONE FIELD, and the metric it was priced against was a MONTH STALE (2026-0 |
+| **1164** | 2026-08-12 02:27 | 55m | capability | 13m | +491/−170 | 439 | 81 | 56.0% · | the crash was never `:has()`, it was `appendChild`, and the negative control proved it (20 |
 
 *`·` after a WPT figure means **carried forward**, not measured this tick.*

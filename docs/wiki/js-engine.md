@@ -165,6 +165,51 @@ a full `JS_GC`, and reads it back through the registry with its private intact �
 untraced-`Heap` registry goes red (collected or dangling) exactly there. Same lesson as `DOC_REFLECTOR`:
 **keep the handle in a structure the GC traces; never a bare `Cell`/`HashMap` value.**
 
+### THE THIRD INSTANCE IS `appendChild`, AND IT WAS BLAMED ON A `:has()` COMPLEXITY TEST FOR THREE TICKS (t1164)
+
+The rule above was stated at `DOC_REFLECTOR`, restated for the ESM registry — and **broken in the
+three most-used DOM methods on the web**. `el_append_child`, `el_insert_before` and `el_remove_child`
+each read the node's reflector out of the argument vector as a raw `*mut JSObject`, called
+`record_mutation`, and then stored that pointer as the return value. `record_mutation` is **not a
+no-op when nothing is observing**: it calls `new_reflector` for the target and for every added or
+removed node, and builds jsvals for the call. Those are allocations, and a moving GC in any of them
+leaves the held pointer stale.
+
+⚠⚠⚠ **THE SYMPTOM NAMED THE WRONG ORGAN FOR THREE TICKS, AND THE NEGATIVE CONTROLS ARE WHAT BROKE
+IT.** The only visible trace was one `CRASH (killed by a signal)` in `css/selectors`, on
+`invalidation/has-complexity.html` — *":has() invalidation should not be O(n^2)"* — so it was
+attributed in turn to the `:has()` cascade, to a quadratic recascade, and to *"the JS↔DOM binding
+surface at 75,000 elements"*. A nine-cell ladder settled it in one run:
+
+```text
+                                                    SEGV rate (release, run ALONE)
+  25,000 appendChild, PLAIN stylesheet     CONTROL       2/4     ← no :has() anywhere
+   1,000 appendChild + :has() rules                      0/4     ← only 1,000 elements
+  25,000 appendChild + :has() rules                      4/4
+  10,000 createElement, NEVER APPENDED     CONTROL       0/4     ← the negative control
+  static page, no createElement at all     CONTROL       0/4     ← the negative control
+```
+
+Ten thousand `createElement` calls that are never appended never crash. A plain stylesheet with no
+`:has()` crashes as readily as one with it. **It is `appendChild`** — not the selector, not the
+cascade, not the page size — and a page appending a thousand script-created elements is every SPA,
+every framework render and every list build on the web.
+
+**The fix is one `rooted!` per binding.** Measured: `8/16 → 0/16` SIGSEGV on the two worst probe
+cells; WPT `dom` 4004/7193 and `css/selectors` 2905/5215 byte-identical against a same-hour
+old-binary control, because a rooting annotation changes GC safety and nothing else. Gated by
+`g_dom_mutation_rooting`, which asserts **object identity** (`parent.appendChild(n) === n`) rather
+than merely "did not crash" — RED 6/10 on the reverted tree, and **one of those six was not a crash
+at all** but a failed identity assertion, which is the case that matters most: a relocated pointer
+that stays mapped hands script a live-looking object with the wrong contents, and crash-watching
+alone would never see it.
+
+⚠⚠ **THE STANDING LESSON, NOW THREE-FOR-THREE: this hazard is INVISIBLE TO REVIEW and invisible to
+the type system, so it must be found by ALLOCATION VOLUME.** `DOC_REFLECTOR` needed 60,000 objects
+to show itself; this one needed a loop of appends. **Any binding that holds a `*mut JSObject` across
+a call that can allocate is the same bug**, and the grep that finds it is *"a raw object local, then
+a call, then a use of that local"* — not a search for the word `unsafe`.
+
 **The resolve hook is the SYNC half, and it must NOT fetch — because this engine has no synchronous
 network (tick 513, ESM import-graph B2).** SpiderMonkey calls `module_resolve_hook` once per `import`
 during `ModuleLink`, which runs synchronously on the JS thread. The obvious design — "fetch+compile the

@@ -866,3 +866,4 @@ tick	sha	epoch	iso	delta_s	shape	wall_s	files	added	deleted	gates	claims	wpt_pas
 1161	3d54fced	1786506722	2026-08-11T23:52:02-04:00	3849	capability	808	11	722	52	438	81	3896	6960	0	573	0	the PRIMARY METRIC's own source was a month stale, and it was hiding a Bar 0 (2026-08-11)
 1162	5915d150	1786508418	2026-08-12T00:20:18-04:00	1696	measurement	808	8	155	36	438	81	3896	6960	0	573	0	one CONTROL ROW says our grid is right and the KEYWORD never arrived (2026-08-11)
 1163	522d90a6	1786512797	2026-08-12T01:33:17-04:00	4379	capability	808	10	760	518	438	81	3896	6960	0	574	0	the named fix is ONE FIELD, and the metric it was priced against was a MONTH STALE (2026-08-12)
+1164	3097d180	1786516068	2026-08-12T02:27:48-04:00	3271	capability	808	9	491	170	439	81	3896	6960	0	575	0	the crash was never `:has()`, it was `appendChild`, and the negative control proved it (2026-08-12)

@@ -46371,6 +46371,100 @@ PERF: none — one UA rule and one narrowed branch in a cascade that already ran
 WIKI: `docs/wiki/css-cascade.md` — where Chrome draws the form-control `box-sizing` line, and why a
 layout-crate test cannot see it.
 
+## Tick 1164 — the crash was never `:has()`, it was `appendChild`, and the negative control proved it (2026-08-12)
+
+TICK SHAPE: capability + Bar 0 (JS↔DOM binding, GC rooting). HYPOTHESIS, written before the work:
+t1163 proved every WPT row on the board is a stale lower bound, and the one thing blocking a refresh
+of `WPT-AREAS.tsv` is the `css/selectors` Bar 0 that t1161 correctly refused to bank around. t1161
+named two mechanisms for it — a quadratic recascade and *"the JS↔DOM binding surface at 75,000
+elements"* — so the predicted tick was: close one of those. **Both were wrong about what the crash
+IS, and a nine-cell ladder with two negative controls said so in one run.**
+
+⚠⚠⚠ **THE CRASH HAS NOTHING TO DO WITH `:has()`, WITH THE CASCADE, OR WITH 75,000 ELEMENTS.**
+
+```text
+                                                   SEGV rate (release, each run ALONE)
+   25,000 appendChild, PLAIN stylesheet   CONTROL       2/4      <- no :has() anywhere
+   25,000 appendChild, plain + getCS      CONTROL       1/4
+    1,000 appendChild + :has() rules                    0/4      <- only 1,000 elements
+    5,000 appendChild + :has() rules                    1/4
+   10,000 appendChild + :has() rules                    3/4
+   25,000 appendChild + :has() rules                    2/4
+   25,000 appendChild + :has() rules, no getCS          4/4
+   10,000 createElement, NEVER APPENDED   CONTROL       0/4      <- THE NEGATIVE CONTROL
+   static page, no createElement at all   CONTROL       0/4      <- THE NEGATIVE CONTROL
+```
+
+⚠⚠⚠ **THE TWO NEGATIVE CONTROLS ARE THE ENTIRE FINDING.** Ten thousand `createElement` calls that are
+never appended never crash, and a static page never crashes — while *every* row that calls
+`appendChild` in a loop crashes, at rates independent of `:has()`, of `getComputedStyle` and of page
+size. Had the ladder varied only the thing the standing diagnosis named (the selector, the count), it
+would have found a rate that rose with N and confirmed the wrong story. **The rows that were there to
+mean nothing are the rows that decided it** — the third time in five ticks (t1160, t1162, t1164).
+
+⚠⚠ **AND THE FIRST TABLE I BUILT HAD THE FILE NAMES WRONG.** The runner's discovery order is not
+alphabetical, and I had assumed it was, so an early per-index table attached real exit codes to the
+wrong fixtures. It was caught because one index reported a path in its JSONL that contradicted its
+label. The table above is rebuilt reading each path from the runner's own output. *An instrument I
+wrote for one tick is still an instrument, and it lied first.*
+
+**THE MECHANISM, AND IT IS A RULE THIS FILE STATES IN ONE PLACE AND BROKE IN THREE.**
+`el_append_child` read the child's reflector out of the argument vector as a raw `*mut JSObject`,
+called `record_mutation`, then stored that pointer as the return value. `record_mutation` is **not a
+no-op when nothing is observing** — it calls `new_reflector` for the target and for every added or
+removed node and builds jsvals for the call, all of which can trigger a **moving** GC. And
+`new_reflector`'s own body has said so since it was written:
+
+> ROOT THE CACHE IMMEDIATELY. A raw `*mut JSObject` held across ANY allocation is a dangling pointer
+> waiting to happen ... a bug that Rust's type system cannot see, because to it a `*mut JSObject` is
+> just a number.
+
+The same file then did exactly that in `appendChild`, `insertBefore` **and** `removeChild` — the
+three most-used DOM mutation methods there are. All three are fixed here, in one tick, because *one
+rule / N implementations* is the shape this repo has paid for at t720, t1027, t1131 and t1134.
+(`moveBefore` returns `undefined` and was never exposed.) The fix is one `rooted!` per binding.
+
+**MEASURED — old binary rebuilt from HEAD and run in the same hour, pass-sets not counts:**
+
+```text
+   probe, two worst cells, 8 runs each     BEFORE  8/16 SEGV      AFTER  0/16
+   g_dom_mutation_rooting (this crate)     reverted 6/10 RED      fixed  0/10 RED
+   WPT dom                                 4004/7193              4004/7193   IDENTICAL
+   WPT css/selectors                       2905/5215              2905/5215   IDENTICAL
+   css/selectors/invalidation              CRASH has-complexity   HANG has-complexity
+```
+
+⚠⚠⚠ **THE BAR 0 ON THAT TEST IS NOT CLOSED, AND SAYING OTHERWISE WOULD BE THE EASY LIE.** The CRASH
+became a HANG, which is t1161's *other* named mechanism doing exactly what it said it would:
+`Page::relayout` recascades on every node-count growth, so 75,000 appends drive 75,000 full
+re-cascades. Incremental style invalidation closes that, and it is a different tick. **What this tick
+fixed was never that test's property** — it is a general instability that any page appending a
+thousand elements can hit, and it happened to be visible only there because that is the only test in
+the tree that appends enough. ⚠ So `WPT-AREAS.tsv` still cannot be banked: the area still reports
+HANG/CRASH 1, and the ratchet is still right to refuse it.
+
+⚠⚠ **THE GATE ASSERTS IDENTITY, NOT SURVIVAL.** `parent.appendChild(n) === n` is what a stale pointer
+breaks, and it is checked on every one of 20,000 iterations. **One of the six REDs on the reverted
+tree was not a crash at all** — it reached the assertion and failed it. That is the case that matters
+most and the one a crash-watching gate would never see: a relocated pointer that stays mapped hands
+script a live-looking object with the wrong contents. ⚠ The RED is probabilistic (it needs a GC to
+land inside `record_mutation`) and the gate publishes both halves of its own rate — 6/10 reverted,
+0/10 fixed — because 6/10 alone could be a flaky gate and 10/10 green alone could be a gate that
+stopped looking.
+
+RATCHET: held. Two WPT areas byte-identical against a same-hour old-binary control; `manuk-page`
+`g_dom_mutation_rooting` 10/10; no mark lowered. A rooting annotation changes GC safety and nothing
+else, which is exactly what the identical pass-sets say.
+
+PERF: none measurable — `rooted!` is a stack push/pop per call. The allocation it protects against
+(`record_mutation`'s unconditional `new_reflector` per mutation, even with zero observers) is a real
+standing cost and is named here as the next perf lever, not taken.
+
+WIKI: `docs/wiki/js-engine.md` — the existing section *"A raw `*mut JSObject` cached across a GC
+boundary is a use-after-free"* gains its THIRD instance, which is the honest place for it: the rule
+did not need restating, it needed enforcing. PATTERN: "THE SCRIPT-BUILT LIST, FEED OR TABLE" —
+`docs/loop/WEB-PATTERNS.md`.
+
 ## Tick 1163 — the named fix is ONE FIELD, and the metric it was priced against was a MONTH STALE (2026-08-12)
 
 TICK SHAPE: capability (layout — intrinsic sizing across the taffy boundary). HYPOTHESIS, written

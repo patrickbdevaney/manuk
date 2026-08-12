@@ -3787,13 +3787,22 @@ unsafe fn el_append_child(cx: *mut RawJSContext, argc: u32, vp: *mut Value) -> b
     };
     match arg_object(vp, argc, 0).and_then(|o| node_and_dom(o).map(|(_, c)| (o, c))) {
         Some((child_obj, child)) => {
+            // ⚠⚠⚠ **BAR 0: `record_mutation` ALLOCATES, AND `child_obj` IS A RAW `*mut JSObject`.**
+            // It calls `new_reflector` for the target and for every added/removed node and builds
+            // jsvals for the argument list — all of which can trigger a **moving** GC. Holding the
+            // returned object across that and then storing it is precisely the hazard
+            // `new_reflector` documents in its own body ("a raw `*mut JSObject` held across ANY
+            // allocation is a dangling pointer waiting to happen"), and it is the rule this file
+            // states in one place and broke in three. Root it. Measured: a page appending 1,000+
+            // script-created elements SIGSEGV'd in **8 of 16** runs before this line existed.
+            rooted!(in(cx) let child_root = child_obj);
             // Pre-insertion validity FIRST — an ancestor or a Document here makes the tree a cycle.
             if !insertion_is_valid(cx, dom, parent, child) {
                 return false;
             }
             (*dom).append_child(parent, child);
             record_mutation(cx, dom, "childList", parent, None, None, &[child], &[]);
-            *vp = ObjectValue(child_obj);
+            *vp = ObjectValue(child_root.get());
         }
         None => *vp = UndefinedValue(),
     }
@@ -6217,8 +6226,10 @@ unsafe fn el_insert_before(cx: *mut RawJSContext, argc: u32, vp: *mut Value) -> 
                 Some(rf) => (*dom).insert_before(parent, child, rf),
                 None => (*dom).append_child(parent, child),
             }
+            // Same hazard as `el_append_child`: `record_mutation` allocates and can move `obj`.
+            rooted!(in(cx) let obj_root = obj);
             record_mutation(cx, dom, "childList", parent, None, None, &[child], &[]);
-            *vp = ObjectValue(obj);
+            *vp = ObjectValue(obj_root.get());
         }
         None => *vp = NullValue(),
     }
@@ -6233,9 +6244,13 @@ unsafe fn el_remove_child(cx: *mut RawJSContext, argc: u32, vp: *mut Value) -> b
     };
     match arg_object(vp, argc, 0).and_then(|o| node_and_dom(o).map(|(_, n)| (o, n))) {
         Some((obj, child)) => {
+            // Same hazard as `el_append_child`: `record_mutation` allocates and can move `obj`.
+            // The third copy of one rule — fixed in the same tick, because a rule enforced at two
+            // of three call sites is the shape this repo has paid for at t720, t1027, t1131, t1134.
+            rooted!(in(cx) let obj_root = obj);
             record_mutation(cx, dom, "childList", parent, None, None, &[], &[child]);
             (*dom).remove_child(parent, child);
-            *vp = ObjectValue(obj);
+            *vp = ObjectValue(obj_root.get());
         }
         None => *vp = NullValue(),
     }
