@@ -8648,3 +8648,95 @@ VI.2's method list rather than leaving it as two anecdotes.
    to `Seen`, three test constructors missed), and the comment on the constructor predicted the
    repeat and did not prevent it. A prediction in a comment is not a gate. `scripts/` is
    observer-owned, so this is a request, filed here and in the journal.
+
+## Check #111 — tick 1169 (2026-08-12)
+
+**HORIZON: H0 / Phase 0.** **EXIT GATE (unchanged, and re-read rather than recalled):** the
+`DAILY-DRIVER-CERTIFICATION.md` certificate on the real-site corpus — `shape>=0.75` **AND**
+jarring-clean on ≥95% of the in-scope sites, plus interactivity, with named exceptions only. WPT is
+the CLIMB; CrUX M1/M2 is the CERT. **Never move the exit to make either number.**
+
+### → Did the last 6 ticks move an EXIT-GATE condition, or only the scoreboard?
+
+**Honest answer: mostly the scoreboard, and one of them was the scoreboard itself — but the
+scoreboard needed it, and the exit was NOT measured once in six ticks.**
+
+```text
+   t1163  layout: intrinsic keyword on a CONTAINER   96-cell Chrome battery 81/96 -> 96/96, WPT flat
+   t1164  Bar 0:  unrooted reflector in appendChild  8/16 SEGV -> 0/16
+   t1165  perf:   getElementById was O(document)     list build 14,029ms -> 32ms (438x)
+   t1166  measurement: the sweep, HELD on one row    (no engine change)
+   t1167  capability: <iframe> fired no `load`       WPT dom 4004 -> 6366
+   t1168  capability: baseURI/URL/documentURI        domparsing 149 -> 190; METRIC UNFROZEN
+```
+
+⚠⚠⚠ **THE DRIFT, NAMED: six ticks landed and the CERTIFICATION CHECKPOINT WAS NEVER RUN.** The
+newest fidelity sweep is `SWEEP-t1159-rows.tsv` (Aug 11 22:00) — it predates every one of them. The
+board's own instruction is *"run the CrUX gauge + binary M1 ~each sweep (~6h)"*; it has now been ~9
+hours and six engine ticks. Read off the stale-but-latest data:
+
+```text
+   in-scope 129 · scored 100 · scorability 77.5%
+   shape-only 42/129 = 32.6%   jarring-clean 38/129 = 29.5%
+   M1 conjunction  25/129 = 19.4%   <- the RENDER bar
+   CORPUS fidelity 0.4522          <- the single steering gauge
+   common-set Δ    shape +0.0047, site_score +0.0048  (up 9 / down 8)
+```
+
+**So the exit bar sits at 19.4% against 95%, and this session moved it by an unmeasured amount.**
+t1163 is the only one of the six that plausibly touches it (intrinsic sizing is geometry); t1165 and
+t1167 are drivability wins that the shape gauge cannot see; t1164 is stability. **The steer is
+therefore: the next tick RUNS THE SWEEP** — six ticks of unmeasured engine change is exactly the
+"blind on its own headline" state the CO-#1 block was written to prevent.
+
+### → Is `orient`'s ranking (usage-weighted breadth, tail excluded, §VI.3) still the north star?
+
+**Yes, and it just got materially MORE honest — that is this session's structural result.**
+`WPT-AREAS.tsv` had been frozen at Jul-16 values for ~100 ticks, so the board was ranking work off
+numbers that put the wrong area first. Refreshed at t1168:
+
+```text
+                     board SAID      board NOW      what changed
+   css/css-grid       2691 failing    8723 failing   <- now the LARGEST CSS surface
+   css/css-flexbox    3371 failing    2331 failing   <- was ranked #1, is not
+```
+
+⚠ **No big-but-tail number has crept back to the top.** `encoding` is still 92% of the WPT universe
+by count and contributed **+3** of the +10,297 — the gains are all in active areas. The tick-84
+failure mode (climbing the encoding hill) is not recurring.
+
+### → Is any invariant being bent?
+
+- **I4 (Pareto discipline)** — held. Every capability this session is a top-of-the-web construct:
+  `appendChild` in a loop, `getElementById`, `<iframe onload>`, `node.baseURI`. None is tail work.
+- **I3 (semantic model lands in lockstep)** — held, and by construction rather than by luck this
+  time: none of the six added a *rendered construct*, so there is no new semantic surface owed.
+  t1165 and t1167 both improve the agentic surface incidentally (a list that builds in 32ms instead
+  of 14s is a page an agent can act on; a frame that announces readiness is one it can wait for).
+- **I5 (never trade a regression)** — held **and exercised three times**: t1165's `dom` −1 was found
+  by a per-FILE diff and fixed rather than waived; t1166 REFUSED to bank a +7,886 file over a single
+  −39 row and refused to lower the mark; t1167's first landing attempt was RED and was fixed, not
+  re-run.
+- **I2 (never patch deps)** — held; nothing vendored was touched.
+
+### PART VI correction
+
+**What is now DONE that VI did not record:** the `css/selectors` Bar 0 that blocked the primary
+metric is closed (three mechanisms, t1161 → t1164 → t1165); `WPT-AREAS.tsv` is live again at
+**433162/1228830 = 35.25%**, 0 crashes in every area.
+
+**What is now the real blocker:** unchanged and unmeasured — **M1's 19.4% conjunction against a 95%
+bar**, with scorability at 77.5% still capping it. The refreshed board says the largest *measured*
+CSS surface is `css/css-grid` (8,723 failing, 6.0% pass), which is also the M1 body per the board's
+own "LAYOUT = the M1 slog, PORT from blitz/servo" steer. Those two now agree, which they did not
+before t1168.
+
+### STEER
+
+1. **Next tick: RUN THE CrUX FIDELITY SWEEP.** Six engine ticks are unmeasured against the exit.
+2. **Then take `css/css-grid`** — it is simultaneously the largest measured WPT surface and the M1
+   body, and the board only started saying so once the metric was unfrozen. PORT from `blitz/` and
+   `servo/` per the standing steer rather than deriving per-assertion.
+3. **Grep the tree's own `||` fallbacks.** t1168's `baseURI` gap was sitting in `reflect_js.rs` as
+   `document.baseURI || location.href` — *a work-around in the tree is a bug report nobody filed*,
+   and the loop has no instrument that reads its own fallbacks. That is a cheap, novel probe.

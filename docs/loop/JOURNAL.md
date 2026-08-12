@@ -46371,6 +46371,71 @@ PERF: none — one UA rule and one narrowed branch in a cascade that already ran
 WIKI: `docs/wiki/css-cascade.md` — where Chrome draws the form-control `box-sizing` line, and why a
 layout-crate test cannot see it.
 
+## Tick 1169 — six ticks landed and the EXIT was never measured once (2026-08-12)
+
+TICK SHAPE: measurement — the cadence re-read of `CONSTITUTION.MD` (due every 8 ticks; last at 1161),
+banked as check #111 in `docs/loop/CONSTITUTION-CHECK.md`.
+
+⚠⚠⚠ **FINDING 1 — THE SESSION CLIMBED HARD AND NEVER ONCE READ THE EXIT BAR.** Six ticks landed
+(t1163–t1168) and every one of them was measured against WPT. The newest fidelity sweep is
+`SWEEP-t1159-rows.tsv`, **Aug 11 22:00 — it predates all six.** The board's own instruction is *"run
+the CrUX gauge + binary M1 ~each sweep (~6h)"*; it has been ~9 hours and six engine ticks. Read off
+the latest (stale) data, the exit sits at:
+
+```text
+   M1 conjunction (shape>=0.75 AND jarring-clean) = 25/129 = 19.4%   against a 95% bar
+   scorability 77.5%  ·  CORPUS fidelity gauge 0.4522
+```
+
+Of the six, only t1163 (intrinsic sizing) plausibly moves that number; t1165 and t1167 are real
+drivability wins the shape gauge **cannot see**; t1164 is stability. **So the honest statement is
+that this session's effect on the exit is UNKNOWN**, which is precisely the *"blind on its own
+headline"* state the CO-#1 block exists to prevent. **The steer is that the next tick runs the
+sweep.**
+
+⚠⚠⚠ **FINDING 2 — THE NORTH STAR GOT MATERIALLY MORE HONEST, AND THAT IS THIS SESSION'S STRUCTURAL
+RESULT.** §VI.3 binds the loop to usage-weighted breadth, which it reads off the board — and the
+board had been ranking work from a **Jul-16 file for ~100 ticks**:
+
+```text
+                     board SAID      board NOW      what changed
+   css/css-grid       2691 failing    8723 failing   <- now the LARGEST CSS surface
+   css/css-flexbox    3371 failing    2331 failing   <- was ranked #1, is not
+```
+
+⚠ **No tail number crept back to the top**: `encoding` is still 92% of the WPT universe by count and
+contributed **+3** of the +10,297. The tick-84 failure mode is not recurring.
+
+⚠⚠ **FINDING 3 — I5 WAS EXERCISED THREE TIMES THIS WINDOW, NOT MERELY OBSERVED.** t1165's `dom` −1
+was caught by a per-FILE diff against a same-hour old binary and **fixed**; t1166 **refused** to bank
+a +7,886 file over a single −39 row *and* refused to lower the mark; t1167's first landing attempt
+was RED and was fixed rather than re-run. An invariant that only ever passes is not evidence; these
+three are.
+
+**I4 held** — every capability this window is a top-of-the-web construct (`appendChild` in a loop,
+`getElementById`, `<iframe onload>`, `node.baseURI`), none is tail work. **I3 held by construction**:
+none of the six added a *rendered* construct, so no semantic surface was owed. **I2 held.**
+
+**PART VI CORRECTED:** the `css/selectors` Bar 0 that blocked the primary metric is **closed** (three
+mechanisms across t1161/t1164/t1165) and `WPT-AREAS.tsv` is live again at **433162/1228830 =
+35.25%**. The real blocker is unchanged and unmeasured: **M1 at 19.4% against 95%**, scorability
+77.5% still capping it. ⚠ The refreshed board and the standing *"LAYOUT is the M1 body, PORT from
+blitz/servo"* steer now **agree** on `css/css-grid` — they did not before t1168, because the stale
+file ranked flexbox first.
+
+**THE STEER (full text in check #111):** (1) next tick **runs the CrUX fidelity sweep**; (2) then take
+**`css/css-grid`**, now simultaneously the largest measured WPT surface and the M1 body; (3) a cheap
+novel probe — **grep the tree's own `||` fallbacks**, because t1168's `baseURI` gap had been sitting
+in `reflect_js.rs` as `document.baseURI || location.href` and *a work-around in the tree is a bug
+report nobody filed*.
+
+RATCHET: held — no engine code changed in this tick.
+
+PERF: none — measurement only.
+
+WIKI: none [forced] — this tick's artefact is `docs/loop/CONSTITUTION-CHECK.md` check #111, which is
+the wiki for the loop's own governance. [no-pattern]
+
 ## Tick 1168 — the work-around WAS the bug report, and the metric is unfrozen after ~100 ticks (2026-08-12)
 
 TICK SHAPE: capability (DOM URL surface) + the metric refresh it unblocks. HYPOTHESIS, written before
