@@ -70,6 +70,7 @@ awk -F'\t' '
     area=$1; pass=$2+0; total=$3+0; pct=$4+0
     if(total<=0) next
     fail=total-pass; w=weight(area)
+    if(area!="encoding"){ apass+=pass; atot+=total }   # ACTIVE = the meaningful basis (encoding is 1.1M charset edge cases)
     # LEVERAGE = usage-weight x winnable-tests(capped) x room-to-grow.
     #  - cap failing at 4000: past a few thousand it is one "big vein", raw size stops being urgency.
     #  - headroom=(1-pass%): an area at 93% is the death-TAIL (little left); at 6% it is the BODY.
@@ -85,7 +86,8 @@ awk -F'\t' '
   END{
     # sort rows by leverage desc (simple insertion; n is small)
     for(i=1;i<=n;i++) for(j=i+1;j<=n;j++){ split(rows[i],A,"\t"); split(rows[j],B,"\t"); if(B[1]+0>A[1]+0){t=rows[i];rows[i]=rows[j];rows[j]=t} }
-    printf "  SOLID-GROUND TOTAL: %d/%d = %.2f%% WPT subtests passing (monotonic; the number only rises when the engine improves)\n", tp, tt, (tt?100*tp/tt:0)
+    printf "  ⭐ PRIMARY (solid ground) = ACTIVE-AREAS WPT pass rate (layout+DOM+CSS, encoding EXCLUDED): %d/%d = %.2f%%  (monotonic; rises only when the engine improves)\n", apass, atot, (atot?100*apass/atot:0)
+    printf "     (raw all-areas total incl. 1.1M encoding tests: %d/%d = %.2f%% — NOT the metric; encoding is charset edge cases)\n", tp, tt, (tt?100*tp/tt:0)
     printf "  Remaining in-scope failures across areas: %d\n\n", sumfail
     printf "  %-8s  %-20s  %-12s  %-7s  %-7s  %s\n", "LEVERAGE","AREA","PASS/TOTAL","PCT","FLIP","FAILING"
     printf "  %s\n", "────────────────────────────────────────────────────────────────────────────────"
