@@ -46371,6 +46371,81 @@ PERF: none — one UA rule and one narrowed branch in a cascade that already ran
 WIKI: `docs/wiki/css-cascade.md` — where Chrome draws the form-control `box-sizing` line, and why a
 layout-crate test cannot see it.
 
+## Tick 1182 — the board was ranking off numbers three thousand subtests stale (2026-08-12)
+
+TICK SHAPE: measurement — the full WPT sweep (re-rank), SURFACE AUDIT #45 (due at 1181) and the
+SELF-AUDIT (due at 1182), all three of which came due at once.
+
+⚠⚠⚠ **THE RE-RANK WAS THE POINT, AND IT WAS OVERDUE BY THIS SESSION'S OWN WORK.** t1179-t1181
+landed **+3,121 subtests** and `WPT-AREAS.tsv` predated all of it, so the lever board was listing
+`css/css-values` at **20.9%** while the same binary measured **40.4%**. A board that stale does not
+merely understate progress — it picks the wrong lever, which is the failure t1163 named (*a moving
+DENOMINATOR is the tell*) and t1176 named again (*RE-RANK before picking a lever*).
+
+```text
+   WPT TOTAL   433162/1228830 = 35.25%   (t1168)
+            -> 444548/1249475 = 35.58%   +11,386 passes · crashes 0 in EVERY area
+```
+
+**The order below the top DID change**, which is exactly why the sweep is not optional:
+
+```text
+                     board SAID      board NOW     
+   css/css-grid       9454 failing    9146 failing   #1 still, by 2x the next
+   css/css-color      5380            4745
+   css/selectors      2648            2648           <- rose from #6 to #5 by standing still
+   css/css-values     3316            2504           <- fell past it
+   css/css-flexbox    2541            2457           <- and past it
+```
+
+⚠ **`cssom` now says so itself.** The sweep prints *"no runnable testharness files — empty, not
+broken"*. t1181 filed `WPT:cssom 0` as an absence reading like a floor; the instrument now
+distinguishes the two without being asked, which is the honest shape.
+
+### SURFACE AUDIT #45 — the map is COMPLETE, and my reconciliation was not
+
+Read live: the `web-platform-tests/interop` 2026 README, WebKit's announcement, and web.dev's
+Baseline 2026 digests. **Reconciled 31 externally-named priorities** (20 focus areas + 4
+investigations + 7 Baseline-2026 items) against `CONSTELLATION.tsv`.
+
+⚠⚠⚠ **THIRTY OF THIRTY-ONE ALREADY HAVE A CAPABILITY ROW.** This file's standing prior — *"an audit
+that finds nothing is a suspicious audit; six phantoms say the map is never clean"* — was written in
+the six-phantoms era and **no longer describes this map.** Audits #31/#34/#42 did the work; the map
+has caught up with the world's list. Recorded so the next audit does not manufacture a finding to
+satisfy a prior that has expired.
+
+The one addition: **`<dialog closedby>` + `popover="hint"`**, added `unknown`. And its shape
+generalises — rows 90/208/222/334 cover `<dialog>`+popover, `ToggleEvent.source`, `CloseWatcher` and
+top-layer rendering, so **the FEATURE is mapped and this year's ADDITIONS to it are not.** Our map
+tracks features; Interop tracks the year's additions to features. A row can be `gated`, accurate and
+three years old at the sub-feature level while a name-matching reconciliation reports it covered.
+
+⚠⚠⚠ **WHAT I WAS WRONG ABOUT: THE RECONCILIATION INSTRUMENT, THREE TIMES IN ONE AUDIT.** I filed
+four candidate gaps and **withdrew three** on inspection — `fetch uploads + ranges` (I grepped the
+spec's wording, `"Range header"`; the row is worded `fetch uploads + ranges (streaming)`),
+`container style queries` (**case** — the row says `container STYLE queries`), and `Trusted Types`
+(`awk`'s `IGNORECASE` silently inert under this `awk`).
+
+> **A reconciliation that matches on MY phrasing of a capability measures my vocabulary, not the
+> map.** The standing rule *"match the `capability` column, never the prose column"* is correct and
+> is only half of it: grepping the whole line **over**-reports coverage (a prose mention reads as a
+> row) and grepping column 2 with a brittle matcher **under**-reports it. Both failed here, in
+> opposite directions, in the same twenty minutes.
+
+### SELF-AUDIT — one prescribed-but-not-executed item, and it is not mine to fix
+
+`verify wall: 731s EXCEEDS the 300s target`. That is the harness, which is observer-owned under
+PART VII — recorded here and NOT acted on, per the standing scope rule. Everything else passed,
+including every gate declaring how to break it. `LAST_WALL_AUDIT` is 1166 and the wall audit is due
+at 1186.
+
+RATCHET: held — no engine code changed this tick. WPT TOTAL rose 433162 → 444548.
+
+PERF: none — measurement only.
+
+WIKI: none — this tick's artefacts are `docs/loop/SURFACE-AUDIT.md` #45 and the refreshed
+`docs/loop/WPT-AREAS.tsv`, which are the loop's own instruments. [no-pattern]
+
 ## Tick 1181 — `el.style` accepted every string, and the CSS-WG's own corpus priced the fix (2026-08-12)
 
 TICK SHAPE: capability.

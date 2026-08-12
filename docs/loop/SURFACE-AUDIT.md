@@ -5858,3 +5858,70 @@ not scheduled.
 **18.8%** against a 95% bar (measured this session, t1170), and the refreshed WPT board puts
 `css/css-grid` at **8,723 failing** — the largest CSS surface and the M1 body. Interop 2026's list
 does not touch that ranking: its CSS items are either already gated or on the death-tail.
+
+---
+
+## AUDIT #45 — tick 1182 (2026-08-12): the map is COMPLETE against the world's list, and my reconciliation instrument was not
+
+**Sources read (live, not from memory):**
+
+- `github.com/web-platform-tests/interop/blob/main/2026/README.md` — the canonical 2026 list
+- `webkit.org/blog/17818/announcing-interop-2026/` — the 20 focus areas with descriptions
+- `web.dev/baseline/2026` + the 2026 monthly Baseline digests — Newly/Widely Available this year
+
+**Reconciled: 31 externally-named priorities** — 20 Interop 2026 focus areas, 4 investigation areas,
+and 7 Baseline-2026 items (`:active-view-transition`, Trusted Types, Navigation API, `lh`, `rlh`,
+`contain-intrinsic-size`, view transitions).
+
+### The result, and it is the opposite of what this instrument was built expecting
+
+⚠⚠⚠ **THIRTY OF THIRTY-ONE ALREADY HAVE A CAPABILITY ROW.** Container style queries (row 370),
+`shape()`, anchor positioning (99/502), scroll-driven animations (92), scoped custom element
+registries (96), JSPI (97), custom highlights (103), WebTransport (106), `getAllRecords()` (178),
+`contrast-color()` (192), `:open` (182), `attr()` (100), CSS `zoom` (101), **fetch uploads + ranges
+(105)**, WebVTT (79), Trusted Types (257), `lh`/`rlh` (206), `:active-view-transition` (199) — all
+present, each with a status and, where claimed, a named gate.
+
+This file's own standing prior is *"an audit that finds nothing is a suspicious audit; six phantoms
+say the map is never clean."* That prior was written in the six-phantoms era and **it no longer
+describes this map.** Audits #31/#34/#42 added most of these rows; the map has caught up with the
+world's list. Recorded so the next audit does not manufacture a finding to satisfy the prior.
+
+### The ONE addition
+
+**`<dialog closedby>` + `popover="hint"`** — the Interop 2026 *Dialog and Popover Additions*. Added
+as `unknown`. Rows 90/208/222/334 cover `<dialog>`+popover, `ToggleEvent.source`, `CloseWatcher` and
+top-layer rendering, so the **feature** is mapped and **this year's additions to it** are not.
+
+> ⚠⚠ **THAT IS THE SHAPE OF THE ONLY MISS, AND IT GENERALISES: our map tracks FEATURES; Interop
+> tracks the year's ADDITIONS to features.** A row can be `gated`, accurate, and three years old at
+> the sub-feature level while the audit's own reconciliation — which matches on capability NAMES —
+> reports it covered. The next audit should reconcile at the *sub-feature* grain for every row whose
+> feature appears on an Interop list, not at the row grain.
+
+### ⚠⚠⚠ What I was wrong about: the RECONCILIATION INSTRUMENT, three times in one audit
+
+I filed four candidate gaps. **Three evaporated on inspection**, each from a different defect in how
+the reconciliation was run:
+
+| candidate | why it looked missing | what it actually was |
+|---|---|---|
+| fetch uploads + ranges | grepped for `"Range header"`, the spec's wording | row 105, worded `fetch uploads + ranges (streaming)`, `partial` |
+| container style queries | `awk $2 ~ /container style quer/` | row 370, worded `container STYLE queries` — **case** |
+| Trusted Types | same awk, `IGNORECASE` silently inert under this `awk` | row 257, `missing`, since audit #31 |
+
+**A reconciliation that matches on my phrasing of a capability measures my vocabulary, not the map.**
+The standing rule *"match the `capability` column, never the prose column"* is correct and is only
+half of it: grepping the whole line **over**-reports coverage (a prose mention reads as a row), and
+grepping column 2 with a brittle matcher **under**-reports it. Both failed here, in opposite
+directions, in the same twenty minutes — which is why every candidate gap in this audit was opened
+and read before it was filed, and why 3 of 4 were withdrawn.
+
+### Re-rank?
+
+**No — but for a different reason than last time.** Nothing external outranks the current CO-#1. The
+re-rank that IS due is *internal*: this session landed **+3,121 WPT subtests** (t1179 +406,
+t1180 +1, t1181 +2,714) and `WPT-AREAS.tsv` predates all of it, so the lever board is ranking off
+numbers that are three thousand subtests stale — `css/css-values` is listed at 20.9% and measured
+**40.4%**. The full sweep is running in this same tick. **A moving denominator is the tell**
+(t1163), and the board must not pick the next lever until it is refreshed.
