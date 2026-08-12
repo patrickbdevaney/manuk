@@ -46371,6 +46371,76 @@ PERF: none — one UA rule and one narrowed branch in a cascade that already ran
 WIKI: `docs/wiki/css-cascade.md` — where Chrome draws the form-control `box-sizing` line, and why a
 layout-crate test cannot see it.
 
+## Tick 1157 — the port target is TWO ARMS of an eight-arm table, and eight rows are already exact (2026-08-11)
+
+TICK SHAPE: measurement (probe before build) — the observer's steer item (1): *"PORT whole
+algorithms from `blitz/` (Taffy+Stylo = our EXACT stack), NOT deriving flex/grid/sizing
+per-assertion."* Taken against the seam this window already touched, and priced before porting.
+
+⚠⚠⚠ **BLITZ HAS THE WHOLE OF CSS 2.1 §10.4 AND WE HAVE TWO OF ITS EIGHT ARMS — AND IT TURNS OUT
+EIGHT OF TEN CASES ARE ALREADY CHROME-EXACT ANYWAY.** `blitz-dom/src/layout/replaced.rs` carries the
+complete constraint-violation table (`Violation::{None,Min,Max}` × both axes, all eight
+combinations), the `box-sizing` adjustment, the `attr_size` precedence, and — cited to
+`css-sizing-3#replaced-percentage-min-contribution` — the exact rule t1149 derived empirically from
+Chrome by hand: **a percentage max resolves against 0 when the question is MIN-content.** Reading it
+after deriving it is its own lesson about the order those two things should happen in.
+
+Priced against Chrome, a 480×474 image in a 230px column, ten constraint shapes:
+
+```text
+                                              CHROME     OURS
+   a  max-width:150px                         150x148    150x148   ✓
+   b  max-height:100px                        101x100    101x100   ✓
+   c  min-width:600px                         600x593    600x593   ✓
+   d  min-height:600px                        608x600    608x600   ✓
+   e  max-width + max-height                  101x100    101x100   ✓
+   f  min-width + min-height                  810x800    810x800   ✓
+   g  min-width:600px + max-height:100px      600x100    600x593   ✗
+   h  max-width:150px + min-height:800px      150x800    810x800   ✗
+   i  max-width:100%                          230x227    230x227   ✓
+   j  box-sizing:border-box + padding + max    150x148    150x148   ✓
+```
+
+**Eight of ten already match, including both `box-sizing` and the percentage-min-contribution rule.**
+The port target is therefore not "the algorithm" — it is exactly the two arms where the constraints
+**CONFLICT**, `(Min, Max)` and `(Max, Min)`, and where §10.4 says both bounds win and **the aspect
+ratio is abandoned**. We apply one bound and let the ratio drag the other axis back out of range:
+`min-width:600 + max-height:100` should be `600×100` and we produce `600×593`, a box **493px too
+tall**; `max-width:150 + min-height:800` should be `150×800` and we produce `810×800`, **660px too
+wide** and straight out of the viewport.
+
+⚠⚠ **THIS IS WHY THE STEER SAYS PORT AND WHY IT STILL HAS TO BE PRICED.** A wholesale replacement of
+our replaced-sizing seam would have rewritten eight working arms to fix two, on a path five ticks of
+this window already touched — the largest available diff for the smallest available delta, and every
+regression it caused would have been invisible until a sweep. A port is a *source of correct
+algorithms*, not a reason to skip the measurement: the eight ✓ rows above are the controls the port
+must not move, and they did not exist before this tick.
+
+**THE BUILD, NAMED WITH ITS EVIDENCE:** add the two conflict arms, verbatim from CSS 2.1 §10.4's
+table (blitz's `replaced.rs` is a correct transcription of it and is MIT/Apache, so it is a legal
+and idiomatic reference — I2's *never copy Blink/Gecko* does not reach it, and the board directs it).
+The gate is the ten rows above: two must move, **eight must not**.
+
+⚠ Recorded so the next tick does not start in the wrong file: `g` and `h` are the img's FINAL used
+size, not its intrinsic contribution, so this is not `clamp_replaced_intrinsic` (t1149's seam) —
+taffy clamps per axis independently and our ratio transfer runs after it. Locating which of the two
+wins is the first ten minutes of that tick.
+
+⚠ **HARNESS, one line as PART VII requires, not fixed:** this tick's first wall came back **RED on
+G3** with a **docs-only** diff (`git status`: STATUS, JOURNAL, two generated TSVs, two wiki files —
+no `engine/`, no `tests/`). The wall's own three-times-on-a-quiet-box retry did not clear it, and the
+identical command it retries with — `cargo test -q -p manuk-shell -- --nocapture` — passes **75/75 +
+2/2, exit 0, zero occurrences of `test result: FAILED`** run alone one minute later. A gate that goes
+red on a diff that cannot reach it and green on re-run is the false-RED class the reliability
+doctrine names. `scripts/` is observer-owned; reported here and the tick re-run unchanged.
+
+RATCHET: held trivially — nothing landed in `engine/`.
+
+PERF: none — measurement only.
+
+WIKI: `docs/wiki/box-layout.md` — "CSS 2.1 §10.4 has eight arms, we have six of them right, and the
+two that are wrong are where the constraints CONFLICT" [no-pattern]
+
 ## Tick 1156 — the observer's fuzzy-scoring steer, PRICED — and byte-exactness costs zero (2026-08-11)
 
 TICK SHAPE: capability (instrument) — the observer pushed a new top-of-board steer mid-invocation

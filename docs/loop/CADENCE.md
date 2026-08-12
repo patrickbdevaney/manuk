@@ -11,12 +11,12 @@
 
 | | value | over |
 |---|---|---|
-| ticks landed | **862** | ticks 1–1155 |
-| median tick cycle | **28m** | 861 intervals |
-| median, last 10 | **17m** | 10 intervals |
+| ticks landed | **863** | ticks 1–1157 |
+| median tick cycle | **28m** | 862 intervals |
+| median, last 10 | **15m** | 10 intervals |
 | fastest / slowest | 5s / 5.4d | |
-| **ticks per hour** | **1.13** | 759.1h elapsed |
-| median verify wall | **63s** | 801 ticks |
+| **ticks per hour** | **1.14** | 759.3h elapsed |
+| median verify wall | **63s** | 802 ticks |
 | wall trend | 39s → 13m — getting slower ⚠️ | first 3 vs last 3 |
 
 The **cycle** is the real unit: implement → debug → verify wall → land. The wall is only part of
@@ -31,7 +31,7 @@ it, and a wall that grows taxes every future tick, so it is tracked separately f
 * **✅ rows in the capability ledger**: 144 → **571**
 * **Bar 0 — oracle hangs**: 0 of 265 sites
 
-**381 of 862 ticks** (44%) moved a
+**381 of 863 ticks** (44%) moved a
 user-visible capability. The rest were instruments, infrastructure and corrections — and the
 ledger says the corrections were not overhead: three of its top three priorities were phantoms,
 and finding that out redirected everything after it.
@@ -959,5 +959,6 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 | **1153** | 2026-08-11 19:13 | 4m | capability | 13m | +131/−33 | 437 | 81 | 56.0% · | the faces DIFFER, and an unknown share of "shape" was a font that never loaded (2026-08-11 |
 | **1154** | 2026-08-11 19:54 | 41m | measurement | 13m | +479/−33 | 438 | 81 | 56.0% · | one hundred `@font-face` rules for one family, and `unicode-range` is not in the tree (202 |
 | **1155** | 2026-08-11 20:10 | 16m | capability | 13m | +354/−36 | 438 | 81 | 56.0% · | `unicode-range` is parsed and 99 fetches stop, and the acceptance test did NOT move (2026- |
+| **1157** | 2026-08-11 20:19 | 9m | measurement | 13m | +137/−33 | 438 | 81 | 56.0% · | the port target is TWO ARMS of an eight-arm table, and eight rows are already exact (2026- |
 
 *`·` after a WPT figure means **carried forward**, not measured this tick.*

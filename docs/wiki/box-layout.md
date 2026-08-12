@@ -8974,3 +8974,35 @@ same clamp on a cross-block axis would flatten every column taller than its offe
 This is a **supplement, not a fork** (`STATUS.md`, option 3) — the fork surface stays empty, and a
 taffy bump cannot silently revert it because
 `a_nested_flex_container_is_fit_content_not_max_content_wide` owns the four Chrome-measured numbers.
+
+## CSS 2.1 §10.4 has eight arms; the two we get wrong are where the constraints CONFLICT (t1157)
+
+A replaced element's used size is §10.4's constraint-violation table: min/max on each axis, eight
+combinations, with the aspect ratio preserved *except* in the two cases where the two axes' bounds
+disagree. Measured against Chrome, a 480×474 image in a 230px column:
+
+```text
+                                            CHROME     OURS
+  max-width:150px                           150x148    150x148   ✓
+  max-height:100px                          101x100    101x100   ✓
+  min-width:600px                           600x593    600x593   ✓
+  min-height:600px                          608x600    608x600   ✓
+  max-width + max-height                    101x100    101x100   ✓
+  min-width + min-height                    810x800    810x800   ✓
+  min-width:600px + max-height:100px        600x100    600x593   ✗  <- (Min, Max)
+  max-width:150px + min-height:800px        150x800    810x800   ✗  <- (Max, Min)
+  max-width:100%                            230x227    230x227   ✓
+  box-sizing:border-box + padding + max      150x148    150x148   ✓
+```
+
+**When the constraints conflict, both bounds win and the ratio is abandoned.** We apply one bound and
+let the ratio drag the other axis back out of range — `600×593` where Chrome gives `600×100` (493px
+too tall), `810×800` where Chrome gives `150×800` (660px too wide, straight out of the viewport).
+
+`blitz/packages/blitz-dom/src/layout/replaced.rs` is a correct transcription of the whole table
+(MIT/Apache, and Taffy+Stylo is our exact stack), including the `box-sizing` adjustment and — cited
+to `css-sizing-3#replaced-percentage-min-contribution` — the rule that **a percentage max resolves
+against 0 when the question is min-content**, which t1149 derived from Chrome by hand first.
+
+⚠ **Port as a source of algorithms, not as a reason to skip the measurement.** Replacing the whole
+seam would have rewritten eight working arms to fix two. The eight ✓ rows are the controls.
