@@ -3131,3 +3131,51 @@ intact, so rounding to 2–3 decimals would pass the headline and destroy this),
 documented length limit** so the tick that widens the type must edit that line on purpose.
 ⚠ **+0 WPT** — no test in the area writes a plain percentage and reads it back, which is exactly why
 the defect survived.
+
+## The conversions existed; the CSSOM was lossy (t1210)
+
+Constitution check #115 ranked `css/css-color` as the board's largest coherent mechanism — 94% of its
+4,745 failures are `color()`, `color-mix()`, `oklch/lch/lab/hwb` — and steered *"port the
+colour-space conversions"*. **One probe refuted that in four minutes:**
+
+```text
+   oklch(0.7 0.15 200)  → rgb(0, 185, 195)      lab(50% 40 -30)  → rgb(165, 91, 171)
+   hwb(90 10% 20%)      → rgb(115, 204, 26)     color(srgb …)    → rgb(51, 102, 153)
+   color-mix(in srgb, red 50%, blue) → rgb(128, 0, 128)
+```
+
+Every CSS Color 4/5 function resolves, correctly. **Stylo has had this all along**;
+`values.rs::parse_color` (hex/rgb/hsl/named) is the *MinimalCascade fallback*, and reading the
+fallback to infer the engine is *grep the artefact, infer the engine* wearing a different hat.
+
+**The real mechanism, read from the assertions rather than inferred:**
+
+```text
+   expected "color(srgb 1 0.5 0.5)"   but got "rgb(255, 128, 128)"   ← the right colour
+   expected "oklch(0 0 0)"            but got "rgb(0, 0, 0)"         ← the right colour
+```
+
+**The pixels are correct and the CSSOM is lossy.** CSS Color 4 says a computed colour keeps its
+space; only legacy `rgb()`/`hsl()`/hex/named compute to `rgb()`. Ours flattens everything to `Rgba`
+(four `u8`s), so the space is gone before `getComputedStyle` can see it. **A type change through the
+cascade, not a conversion port.**
+
+### The defect that WAS fixable today, sitting beside them
+
+```text
+   expected "oklch(0 0 0 / 0.5)"  but got  "rgba(0, 0, 0, 0.5019608)"
+```
+
+Alpha is a `u8` (`0.5` → `128`) and the serializer did `128 as f32 / 255.0`. Every translucent colour
+failed its own round trip — every overlay, disabled control, shadow and hover tint on the web.
+
+**The rule is "the shortest decimal that round-trips", so the fix is a SEARCH, not a precision**, and
+`G_ALPHA_SERIALIZATION` proves it over **all 256 byte values**:
+
+```text
+   RED 1  the bare division                FAILED `half:rgba(0, 0, 0, 0.5)`
+   RED 2  a FIXED 2 decimals (plausible)   FAILED `roundTripsEveryByte:all256`
+```
+
+Two decimals passes every hand-picked value and turns `2/255 = 0.008` into `0.01` → byte **3**; six
+reproduces the artefact. **`css/css-color` 6260 → 6299 (+39)**, controls flat, 0 crashes.

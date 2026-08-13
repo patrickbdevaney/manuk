@@ -46371,6 +46371,89 @@ PERF: none — one UA rule and one narrowed branch in a cascade that already ran
 WIKI: `docs/wiki/css-cascade.md` — where Chrome draws the form-control `box-sizing` line, and why a
 layout-crate test cannot see it.
 
+## Tick 1210 — check #115's own steer was wrong, and the probe that refuted it took four minutes (2026-08-13)
+
+TICK SHAPE: capability — the tick check #115 sent me to, and **a correction to that check**.
+
+⚠⚠⚠ **THE STEER SAID "PORT THE COLOUR-SPACE CONVERSIONS". THEY ALREADY EXIST AND ARE NUMERICALLY
+CORRECT.** One probe, four minutes, before writing a line of conversion code:
+
+```text
+   color: oklch(0.7 0.15 200)         →  rgb(0, 185, 195)
+   color: lab(50% 40 -30)             →  rgb(165, 91, 171)
+   color: hwb(90 10% 20%)             →  rgb(115, 204, 26)
+   color: color(srgb 0.2 0.4 0.6)     →  rgb(51, 102, 153)
+   color: color-mix(in srgb, red 50%, blue)  →  rgb(128, 0, 128)
+   color: lch(50% 40 100) · oklab(0.6 0.1 -0.1)  →  both resolve
+```
+
+Every CSS Color 4/5 function resolves, and to the right colour. **Stylo — the shipping cascade — has
+had this all along**; `values.rs::parse_color` (hex/rgb/hsl/named only) is the *MinimalCascade
+fallback*, and I read the fallback and inferred the engine. **Third time in six ticks I have
+published a claim from an artefact instead of from the code path** (t1204→t1205 on
+`object-position`, t1208's routing, this). The rule this loop wrote at t1205 is right and I keep
+needing it: *name and RUN the path before publishing.* The probe is now cheaper than the mistake, and
+I ran it first this time — the correction cost four minutes instead of a tick.
+
+⚠⚠⚠ **SO WHAT ARE THE 4,460 FAILURES? THE COMPUTED VALUE MUST PRESERVE THE COLOUR SPACE.** Read from
+the assertions rather than inferred:
+
+```text
+   expected "color(srgb 1 0.5 0.5)"   but got "rgb(255, 128, 128)"   ← the right colour
+   expected "oklch(0 0 0)"            but got "rgb(0, 0, 0)"         ← the right colour
+   expected "lch(0 0 none)"           but got "rgb(0, 0, 0)"         ← the right colour
+```
+
+**The pixels are correct and the CSSOM is lossy.** CSS Color 4 says a colour's computed value keeps
+its space — only legacy `rgb()`/`hsl()`/hex/named compute to `rgb()`. Ours flattens everything to
+`Rgba` (four `u8`s), so the space is gone before `getComputedStyle` can report it. That is a **type
+change through the cascade**, not a conversion port, and it is now named correctly for whoever takes
+it.
+
+**AND THE SAME ASSERTIONS HANDED ME A DEFECT THAT IS FIXABLE TODAY**, sitting in plain sight beside
+the space-preservation ones:
+
+```text
+   expected "oklch(0 0 0 / 0.5)"  but got  "rgba(0, 0, 0, 0.5019608)"
+                                                          ^^^^^^^^^
+```
+
+Alpha is a `u8` (`0.5` → `128`) and the serializer did `128 as f32 / 255.0` = `0.5019608`. **Every
+translucent colour on every page failed its own round trip** — `rgba(0,0,0,0.5)` in, `0.5019608`
+out — and comparing the string you wrote to the string you read back is how a library detects its own
+write. This is t1205's `object-position` defect one property family wider, and translucent colour is
+not a corner of the web: it is every overlay, disabled control, shadow and hover tint.
+
+**THE RULE IS "THE SHORTEST DECIMAL THAT ROUND-TRIPS", SO THE FIX IS A SEARCH, NOT A PRECISION.**
+A fixed precision is wrong at **both** ends, and `G_ALPHA_SERIALIZATION` proves it with all 256 byte
+values rather than three spot checks:
+
+```text
+   RED 1  the bare division (the state before)   FAILED `half:rgba(0, 0, 0, 0.5)`
+   RED 2  a FIXED 2 decimals (the plausible fix) FAILED `roundTripsEveryByte:all256`
+```
+
+RED 2 is the instructive one: two decimals passes every hand-picked value and turns `2/255 = 0.008`
+into `0.01`, which quantises to byte **3**. Six decimals reproduces the artefact. Only the search is
+right, and only the 256-value arm can see that.
+
+**MEASURED, same release binary, same hour:**
+
+```text
+   css/css-color   6260 → 6299   (+39)   56.9% → 57.2%   0 crashes
+   dom             7517 → 7517     (0)           71.6%   ← control
+   html/dom       56445 → 56445    (0)           94.2%   ← control
+   ──────────────────────────────────────────────────────────────
+   PRIMARY (active-areas)  86963 → 87002   71.26% → 71.29%
+```
+
++39 is small and it is the honest number: the bulk of that area is the space-preservation type
+change, which this tick names rather than attempts.
+
+PERF: a ≤3-iteration search replacing one division, on a computed-colour read. F1/F2 unmoved.
+
+WIKI: docs/wiki/css-cascade.md — "The conversions existed; the CSSOM was lossy"
+
 ## Tick 1209 — the constitution check, and the classifier that PROMOTED a row instead of refusing one (2026-08-13)
 
 TICK SHAPE: measurement — the cadence re-read of `CONSTITUTION.MD` (due every 8 ticks; last at

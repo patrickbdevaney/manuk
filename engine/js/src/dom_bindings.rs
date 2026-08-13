@@ -785,12 +785,50 @@ fn used_dim_css(
 }
 
 /// An `Rgba` as a CSS color string.
+///
+/// ⚠⚠⚠ **THE ALPHA DOES NOT SURVIVE ITS OWN ROUND TRIP, and this is the same defect as t1205's
+/// `object-position`, one property family wider.** Alpha is stored as a `u8` — `0.5` becomes `128` —
+/// and `128 as f32 / 255.0` is `0.5019608`. So a sheet saying `rgba(0, 0, 0, 0.5)` read back as
+/// **`rgba(0, 0, 0, 0.5019608)`**, and every page that compares the string it wrote against the
+/// string it reads back — the standard way a library detects its own write — saw the write as lost.
+/// Translucent colour is not a corner of the web; it is every overlay, every disabled control, every
+/// shadow.
+///
+/// **The fix serializes what the u8 MEANT, not what it divides to.** CSS Color 4 specifies alpha
+/// serialization as the shortest decimal that round-trips to the same 8-bit value, which is exactly
+/// `round(a/255 * 100) / 100` for two decimals plus a trailing-zero trim — `128 → 0.5`, `26 → 0.1`,
+/// `1 → 0` is wrong so three decimals are kept where two do not round-trip. Rather than reimplement
+/// that search, this rounds to **three** decimals and trims: `0.502` would not match Chrome, so the
+/// value is first snapped to the nearest 1/255 grid point's canonical decimal.
 fn rgba_css(c: &manuk_css::Rgba) -> String {
     if c.a == 255 {
         format!("rgb({}, {}, {})", c.r, c.g, c.b)
     } else {
-        format!("rgba({}, {}, {}, {})", c.r, c.g, c.b, c.a as f32 / 255.0)
+        format!("rgba({}, {}, {}, {})", c.r, c.g, c.b, alpha_css(c.a))
     }
+}
+
+/// The shortest decimal that maps back to the same 8-bit alpha — CSS Color 4's serialization rule.
+///
+/// Tries 1, then 2, then 3 decimal places and takes the first whose value re-quantises to the same
+/// byte. `128` → `0.5` (not `0.5019608`), `26` → `0.1`, `77` → `0.3`, and a byte with no short
+/// representation keeps enough digits to be exact. Written as a search rather than a formula because
+/// the rule IS "the shortest that round-trips", and a fixed precision is wrong at both ends: two
+/// decimals mangles `0.008`, six reproduces the artefact this exists to remove.
+fn alpha_css(a: u8) -> String {
+    let exact = a as f32 / 255.0;
+    for places in 1..=3u32 {
+        let scale = 10f32.powi(places as i32);
+        let rounded = (exact * scale).round() / scale;
+        if (rounded * 255.0).round() as i32 == a as i32 {
+            let mut s = format!("{rounded:.*}", places as usize);
+            if s.contains('.') {
+                s = s.trim_end_matches('0').trim_end_matches('.').to_string();
+            }
+            return s;
+        }
+    }
+    format!("{exact}")
 }
 
 /// Serialize a `ComputedStyle` to a JS object-literal source (camelCase CSS properties →

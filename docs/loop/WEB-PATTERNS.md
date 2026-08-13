@@ -5186,6 +5186,26 @@ draining the JS event loop to its 20,000-task ceiling, which has no wall-clock b
 images now arrive; the page is still slow for another reason. Same discipline as t608: **do not book
 "site X works now" from "one of site X's defects is gone."**
 
+## Every translucent colour failed its own round trip (tick 1210)
+
+| pattern | where it shows up | status |
+| --- | --- | --- |
+| `el.style.color = 'rgba(0,0,0,.5)'; getComputedStyle(el).color` — write, read back, compare. Alpha is stored as a `u8` (`0.5` → `128`) and the serializer did `128/255` = **`0.5019608`**, so the write read as lost | Every overlay, disabled control, shadow and hover tint on the web; it is how a library detects its own write | ✅ fixed (tick 1210) — the shortest decimal that round-trips; gated by **`G_ALPHA_SERIALIZATION`** over all 256 byte values |
+
+Same defect as t1205's `object-position` (`20% 30%` → `20% 30.000002%`), one property family wider:
+**a value of the right type that no comparison will ever match.**
+
+⚠ **The rule is "the SHORTEST decimal that round-trips", so the fix is a SEARCH.** A fixed precision
+is wrong at both ends — two decimals turns `2/255 = 0.008` into `0.01` (byte **3**), six reproduces
+the artefact. The gate's 256-value arm is what sees that; three spot checks cannot.
+
+⚠⚠⚠ **AND THE TICK'S LARGER PRODUCT IS A CORRECTED STEER.** Constitution check #115 sent this tick
+to *"port the colour-space conversions"*. **They already exist and are numerically correct** —
+`oklch`, `lab`, `hwb`, `color()`, `color-mix()` all resolve, via Stylo. `values.rs::parse_color` is
+the *MinimalCascade fallback*, and reading the fallback to infer the engine is *grep the artefact,
+infer the engine* in a new hat. The real mechanism is that **CSS Color 4 computed values must
+preserve their SPACE** and ours flatten to four `u8`s — a type change through the cascade.
+
 ## An `<iframe>` serving XML was parsed as HTML, silently (tick 1208)
 
 | pattern | where it shows up | status |

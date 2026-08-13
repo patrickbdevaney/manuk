@@ -854,6 +854,8 @@
   - L3068 · The escalation, and it is the transferable part
   - L3089 · A failure histogram cannot tell you what WORKS (t1205)
   - L3117 · The real defect, which nothing in that suite was testing
+  - L3135 · The conversions existed; the CSSOM was lossy (t1210)
+  - L3163 · The defect that WAS fixable today, sitting beside them
 
 ## `<dialog>`, `popover`, and the top layer (ticks 194-195)
 `docs/wiki/dialog-and-top-layer.md`
@@ -2059,4 +2061,4 @@
   - L169 · The one real lever inside the remainder, measured and left named
 
 ---
-1966 sections across 22 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+1968 sections across 22 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
