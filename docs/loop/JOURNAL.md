@@ -46371,6 +46371,73 @@ PERF: none — one UA rule and one narrowed branch in a cascade that already ran
 WIKI: `docs/wiki/css-cascade.md` — where Chrome draws the form-control `box-sizing` line, and why a
 layout-crate test cannot see it.
 
+## Tick 1195 — the CrUX sweep the last two constitution checks asked for, and it disagrees with itself (2026-08-13)
+
+TICK SHAPE: measurement — the exit-metric sweep check #114 declared non-optional after check #113
+deferred it. 200 CrUX trend sites, `docs/loop/SWEEP-t1194-rows.tsv`.
+
+✅ **IT RAN, AND THE GAP IT CLOSED WAS 24 TICKS WIDE.** `progress-metric.sh` had been reading
+`SWEEP-t1170-rows.tsv` since t1170, so every M1 number this loop has quoted for 25 ticks described
+an engine that no longer existed.
+
+⚠⚠⚠ **THE RESULT DISAGREES WITH ITSELF, AND BOTH HALVES ARE PUBLISHED AS THE CONSTITUTION REQUIRES.**
+
+| | t1170 | t1194 | |
+|---|---|---|---|
+| **M1 conjunction** (the RENDER bar) | 18.8% | **20.1%** | ▲ |
+| mean over SCORED sites | 0.5653 | **0.5731** | ▲ |
+| common-set Δshape (n=96, drift-robust) | — | **+0.0039** | ▲ |
+| common-set Δsite_score | — | **+0.0038** | ▲ |
+| shape-only | 31.6% | 29.1% | ▼ |
+| jarring-clean | 29.3% | 28.4% | ▼ |
+| **scorability** | 80.5% | **73.1%** | ▼▼ |
+| **CORPUS fidelity** | 0.4548 | **0.4192** | ▼ |
+
+**Read together: the engine got BETTER at what it renders and FEWER sites rendered.** Every quality
+signal rose, including the drift-robust common-set comparison — the one designed to survive corpus
+churn. The corpus gauge fell anyway, because it is `quality × scorability` and scorability lost
+7.4 points. `scored` went 107 → 98, and the decomposition is entirely `timeout-150s` **7 → 15**.
+
+⚠⚠⚠ **THE INSTRUMENT MANUFACTURED TWO Bar-0 CRASHES AND I ALMOST FILED THEM.** The first read showed
+`crashed 0 → 2` (`videa.hu`, `redemoura.gupy.io`) — and the RATCHET refuses to bank a sweep
+reporting a crash. **Both were PHANTOMS.** Re-run SOLO on the same release binary: `videa.hu`
+**scores**, `redemoura.gupy.io` is `thin-overlap-2`. Neither crashes. They were artefacts of the
+chunked driver I wrote to run this corpus — a site in flight when the process self-exits is filed as
+`crashed`, which is the exact phantom the fidelity runner's own comment warns about (*"never
+recovered as a phantom Bar-0 `crashed` by the next run"*). Corrected by appending the solo rows
+(the file is append-only and readers keep the last row per site).
+
+✅ **AND THE TIMEOUTS ARE REAL — I checked before blaming my own driver for those too.** `7info.ru`
+and `bhramarah.in` both time out SOLO at 150s. So the scorability loss is not an instrument artefact;
+only the crashes were. **Two surprising readings, opposite verdicts, and the only way to tell was to
+re-run each one alone** (t962-974's rule, earning itself again).
+
+⚠ **WHAT THIS TICK DOES *NOT* CLAIM.** It does not attribute the timeout regression. A per-sweep
+comparison cannot answer *"did our changes COST this"* — only a same-hour OLD-BINARY control can
+(t799-807, t830-839), and that was not run. The live sweep also slides (network, bot-walls, real
+sites changing); `in-scope` moved 133 → 134 and `unreachable` 15 → 18 with no engine involvement.
+**The honest statement is: quality up, scorability down 7.4pt on real timeouts, cause unattributed.**
+
+⚠ **MY OWN PROCESS DEFECT, RECORDED BECAUSE IT NEARLY POISONED THE CORPUS FILE.** The first driver I
+wrote parsed the corpus as one column when its format is `<stratum>  <url>`, fed malformed lines to
+the binary, and wrote **24,000 junk rows named `https:`** before I looked. Nothing was banked (the
+file was untracked and deleted), but the lesson is cheap and general: **a generated corpus file
+deserves a shape assertion before it is consumed, not after.** The rewritten driver refuses to run a
+todo list whose lines are not all `http(s)://`, which is why the second attempt could not repeat it.
+
+BOARD / STEER for the next tick, re-derived from THIS reading rather than inherited:
+**the binding constraint is scorability, not shape.** 36 of 134 in-scope sites produce no score at
+all, and `timeout-150s` (15) is now the largest engine-owned bucket in that set — bigger than
+`css-starved`, `thin-overlap` and `tree-divergence` combined. Shape work moves ~1pt per sweep;
+converting 15 timeouts into scored sites moves the corpus gauge by an order more, and it is
+PERFORMANCE work, which the loop has not treated as a fidelity input since t602 said it was one.
+
+PERF: none — measurement only.
+
+WIKI: none — the artefact is `docs/loop/SWEEP-t1194-rows.tsv` plus this entry; the methodology notes
+(phantom crash vs real timeout, and the corpus-shape assertion) belong in the journal, not a topic
+page. [no-pattern]
+
 ## Tick 1194 — `querySelectorAll('.a :is(.b, .c)')` returned an EMPTY LIST, and `:is()` was not the bug (2026-08-12)
 
 TICK SHAPE: capability — the largest tick of the session, and the root cause was a `split(',')`.

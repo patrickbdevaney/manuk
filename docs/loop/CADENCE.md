@@ -11,12 +11,12 @@
 
 | | value | over |
 |---|---|---|
-| ticks landed | **896** | ticks 1–1193 |
-| median tick cycle | **28m** | 895 intervals |
+| ticks landed | **897** | ticks 1–1194 |
+| median tick cycle | **28m** | 896 intervals |
 | median, last 10 | **36m** | 10 intervals |
 | fastest / slowest | 5s / 5.4d | |
-| **ticks per hour** | **1.14** | 785.2h elapsed |
-| median verify wall | **63s** | 835 ticks |
+| **ticks per hour** | **1.14** | 788.4h elapsed |
+| median verify wall | **63s** | 836 ticks |
 | wall trend | 39s → 13m — getting slower ⚠️ | first 3 vs last 3 |
 
 The **cycle** is the real unit: implement → debug → verify wall → land. The wall is only part of
@@ -31,7 +31,7 @@ it, and a wall that grows taxes every future tick, so it is tracked separately f
 * **✅ rows in the capability ledger**: 144 → **591**
 * **Bar 0 — oracle hangs**: 0 of 265 sites
 
-**402 of 896 ticks** (45%) moved a
+**403 of 897 ticks** (45%) moved a
 user-visible capability. The rest were instruments, infrastructure and corrections — and the
 ledger says the corrections were not overhead: three of its top three priorities were phantoms,
 and finding that out redirected everything after it.
@@ -90,8 +90,8 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 
 ## What a capability costs
 
-* **402** capability ticks, median cycle **28m**
-* median diff per tick: **+266 / −34** lines across 8 files
+* **403** capability ticks, median cycle **28m**
+* median diff per tick: **+267 / −34** lines across 8 files
 
 ## Every tick
 
@@ -993,5 +993,6 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 | **1191** | 2026-08-12 21:03 | 27m | capability | 13m | +279/−35 | 449 | 81 | 56.0% · | 201 "invalid selectors" were a CSSOM identity bug, and `.pastoral` was the tell (2026-08-1 |
 | **1192** | 2026-08-12 21:42 | 39m | capability | 13m | +548/−44 | 450 | 81 | 56.0% · | a computed style that THREW on a non-string argument, and what 40 messages were really wor |
 | **1193** | 2026-08-12 22:16 | 35m | capability | 13m | +556/−41 | 451 | 81 | 56.0% · | a frame's window and document were rebuilt on every read, and its nodes claimed the PARENT |
+| **1194** | 2026-08-13 01:27 | 3.2h | capability | 13m | +306/−33 | 451 | 81 | 56.0% · | `querySelectorAll('.a :is(.b, .c)')` returned an EMPTY LIST, and `:is()` was not the bug ( |
 
 *`·` after a WPT figure means **carried forward**, not measured this tick.*

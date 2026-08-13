@@ -895,3 +895,4 @@ tick	sha	epoch	iso	delta_s	shape	wall_s	files	added	deleted	gates	claims	wpt_pas
 1191	8b6ba346	1786583011	2026-08-12T21:03:31-04:00	1613	capability	808	10	279	35	449	81	3896	6960	0	589	0	201 "invalid selectors" were a CSSOM identity bug, and `.pastoral` was the tell (2026-08-12)
 1192	c752d511	1786585336	2026-08-12T21:42:16-04:00	2325	capability	808	13	548	44	450	81	3896	6960	0	590	0	a computed style that THREW on a non-string argument, and what 40 messages were really worth (2026-08-12)
 1193	5228932f	1786587408	2026-08-12T22:16:48-04:00	2072	capability	808	11	556	41	451	81	3896	6960	0	591	0	a frame's window and document were rebuilt on every read, and its nodes claimed the PARENT's document (2026-08-12)
+1194	b31364aa	1786598828	2026-08-13T01:27:08-04:00	11420	capability	808	5	306	33	451	81	3896	6960	0	591	0	`querySelectorAll('.a :is(.b, .c)')` returned an EMPTY LIST, and `:is()` was not the bug (2026-08-12)
