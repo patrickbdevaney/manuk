@@ -186,7 +186,11 @@ pub async fn serve(root: PathBuf) -> std::io::Result<(SocketAddr, tokio::task::J
                     let root = root.clone();
                     async move {
                         let path = req.uri().path().to_string();
-                        let (status, ctype, body) = resolve(&root, &path);
+                        let query = req.uri().query().unwrap_or("").to_string();
+                        let (status, ctype, body) = match py_handler(&path, &query) {
+                            Some(r) => r,
+                            None => resolve(&root, &path),
+                        };
                         Ok::<_, std::convert::Infallible>(
                             Response::builder()
                                 .status(StatusCode::from_u16(status).unwrap())
@@ -227,6 +231,39 @@ fn resolve(root: &Path, url_path: &str) -> (u16, &'static str, Vec<u8>) {
         Ok(bytes) => (200, content_type(&full), bytes),
         Err(_) => (404, "text/plain", b"not found".to_vec()),
     }
+}
+
+/// **The one wptserve `.py` handler this harness answers, and why it is worth a special case.**
+///
+/// `dom/nodes/encoding.py` is five lines — it returns `<!doctype html><meta charset="LABEL">` for
+/// `?label=X` — and `Document-characterSet-normalization-{1,2}.html` drive **636 subtests** through
+/// it, one per encoding label in the whole Encoding Standard. A static file server answers `404`, so
+/// every one of those iframes loads nothing and 636 assertions fail without ever reaching the
+/// engine. It is the same *mis-provisioned reference* class as t1208's MIME table: the instrument
+/// was not asking for the page it was scoring.
+///
+/// ⚠ **This is deliberately ONE handler, not a wptserve implementation.** Reimplementing wptserve is
+/// not on this project's road, and a general Python execution path in the test harness would be a
+/// subsystem with its own bugs. A five-line handler that unblocks 636 subtests of a real engine
+/// capability is a different proposition from that, and the boundary is worth stating so the next
+/// one is a decision rather than a slide.
+fn py_handler(path: &str, query: &str) -> Option<(u16, &'static str, Vec<u8>)> {
+    if !path.ends_with("/dom/nodes/encoding.py") {
+        return None;
+    }
+    let label = query
+        .split('&')
+        .find_map(|kv| kv.strip_prefix("label="))
+        .unwrap_or("utf-8");
+    // The handler HTML-escapes the label into a `<meta charset>`; so do we, minimally, because the
+    // label list contains characters that would otherwise close the attribute.
+    let escaped = label
+        .replace('&', "&amp;")
+        .replace('<', "&lt;")
+        .replace('>', "&gt;")
+        .replace('"', "&quot;");
+    let body = format!("<!doctype html><meta charset=\"{escaped}\">");
+    Some((200, "text/html", body.into_bytes()))
 }
 
 fn content_type(p: &Path) -> &'static str {

@@ -1048,6 +1048,9 @@
   - L3134 · Banked, where t1197 was reverted — and the distinction is the point
   - L3150 · createEvent accepted every name, so it could not be feature-detected (t1206)
   - L3187 · One rule, and it was written out in ONE of its two callers (t1207)
+  - L3217 · The engine was told the encoding and threw it away (t1211)
+  - L3229 · ⚠⚠⚠ The ordering was the fix, and the first version measured +0 without it
+  - L3252 · The instrument was blocking it too — encoding.py, the fifth mis-provisioned reference
 
 ## THE FIDELITY INSTRUMENT — what it can and cannot see
 `docs/wiki/fidelity-instrument.md`
@@ -2061,4 +2064,4 @@
   - L169 · The one real lever inside the remainder, measured and left named
 
 ---
-1968 sections across 22 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+1971 sections across 22 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.

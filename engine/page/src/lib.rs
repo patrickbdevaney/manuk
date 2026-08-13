@@ -3005,7 +3005,7 @@ impl Page {
         fonts: &FontContext,
         depth: u8,
     ) {
-        self.render_iframe_with_type(node, html, url, fonts, depth, None)
+        self.render_iframe_with_type(node, html, url, fonts, depth, None, None)
     }
 
     /// **The same, but told what the server said it was sending.**
@@ -3027,6 +3027,7 @@ impl Page {
         fonts: &FontContext,
         depth: u8,
         content_type: Option<&str>,
+        charset: Option<&str>,
     ) {
         // **Depth limit.** An iframe whose document contains an iframe is normal; a page that frames
         // itself is a fork bomb. Chromium's limit is far higher, but ours renders each level to a
@@ -3069,6 +3070,14 @@ impl Page {
         // **Keep the document.** Everything above this line already existed; the child was built in full
         // and then thrown away, which is why `contentDocument` was `undefined` for eighty-three ticks.
         // Registering the arena is what makes a reflector into it *safe* — see `manuk_js::register_dom`.
+        // ⚠ **BEFORE `fire_frame_load` BELOW, and that ordering is the whole point.** Every test —
+        // and every embed — reads the child document inside its `load` handler, so a value written
+        // after `render_iframe_with_type` returns is written after the only moment anyone looks.
+        // The first version of this set it at the call site and measured +0 for exactly that reason.
+        if let Some(cs) = charset {
+            let doc = child.dom.root();
+            child.dom.set_character_set(doc, cs);
+        }
         manuk_js::register_dom(&mut *child.dom as *mut manuk_dom::Dom);
         self.child_pages.insert(node, child);
         self.publish_iframe_docs();
@@ -3236,8 +3245,9 @@ impl Page {
         // One round of fetches, concurrently. A frame inside a frame is handled by the child's own
         // load — `MAX_IFRAME_DEPTH` is the fork-bomb guard.
         let fetches = pending.into_iter().map(|(node, url, _w, _h)| async move {
-            let (html, final_url, headers) = fetch_html_with_headers(&url).await.ok()?;
-            Some((node, html, final_url, headers))
+            let (html, final_url, headers, charset) =
+                fetch_html_with_headers_named(&url).await.ok()?;
+            Some((node, html, final_url, headers, charset))
         });
         let got: Vec<_> = futures_util::future::join_all(fetches)
             .await
@@ -3246,7 +3256,7 @@ impl Page {
             .collect();
         // The embedder is THIS document — the origin the framed page is being asked to trust.
         let embedder = Url::parse(&self.final_url).ok();
-        for (node, html, final_url, headers) in got {
+        for (node, html, final_url, headers, charset) in got {
             // **A site that says "do not frame me" must not be framed.** `X-Frame-Options` and CSP
             // `frame-ancestors` are the only clickjacking defence a page has, and ignoring them is
             // silent: the frame renders, the user interacts with it believing it is the outer site,
@@ -3266,7 +3276,17 @@ impl Page {
                 .iter()
                 .find(|(k, _)| k.eq_ignore_ascii_case("content-type"))
                 .map(|(_, v)| v.clone());
-            self.render_iframe_with_type(node, &html, &final_url, fonts, 0, ct.as_deref());
+            // **What the bytes were decoded FROM** travels with them: the sniffer computed it and
+            // every caller threw it away, which is why `document.characterSet` was a constant.
+            self.render_iframe_with_type(
+                node,
+                &html,
+                &final_url,
+                fonts,
+                0,
+                ct.as_deref(),
+                Some(charset.as_str()),
+            );
         }
     }
 
@@ -8995,6 +9015,17 @@ pub async fn fetch_html(url: &str) -> Result<(String, String)> {
 /// document path does not. Split rather than widened so the ~dozen `fetch_html` call sites stay
 /// unchanged: a framing decision is the only caller that cares.
 pub async fn fetch_html_with_headers(url: &str) -> Result<(String, String, Vec<(String, String)>)> {
+    fetch_html_with_headers_named(url)
+        .await
+        .map(|(t, u, h, _)| (t, u, h))
+}
+
+/// The same, **and the canonical name of the encoding the body was decoded from** — what
+/// `document.characterSet` is specified to report. Split rather than widened so the existing callers
+/// stay unchanged; only the frame loader, which owns a child document, has anywhere to put it.
+pub async fn fetch_html_with_headers_named(
+    url: &str,
+) -> Result<(String, String, Vec<(String, String)>, String)> {
     if url.starts_with("http://") || url.starts_with("https://") {
         // The document gets the long deadline; its subresources get the short one. See
         // `manuk_net::fetch_document`.
@@ -9009,19 +9040,26 @@ pub async fn fetch_html_with_headers(url: &str) -> Result<(String, String, Vec<(
         if resp.status >= 400 {
             tracing::info!(status = resp.status, %url, "error status — rendering its body, as a browser does");
         }
-        // WHATWG charset sniff (D4) instead of lossy UTF-8.
+        // WHATWG charset sniff (D4) instead of lossy UTF-8 — and KEEP the name it sniffed.
+        let (text, enc) = resp.decoded_text_named();
         Ok((
-            resp.decoded_text(),
+            text,
             resp.final_url.to_string(),
             resp.headers.clone(),
+            enc.to_string(),
         ))
     } else if let Some(rest) = url.strip_prefix("data:") {
-        Ok((decode_data_url(rest)?, url.to_string(), Vec::new()))
+        Ok((
+            decode_data_url(rest)?,
+            url.to_string(),
+            Vec::new(),
+            "UTF-8".to_string(),
+        ))
     } else {
         let path = url.strip_prefix("file://").unwrap_or(url);
         let html =
             std::fs::read_to_string(path).with_context(|| format!("reading local file {path}"))?;
-        Ok((html, url.to_string(), Vec::new()))
+        Ok((html, url.to_string(), Vec::new(), "UTF-8".to_string()))
     }
 }
 

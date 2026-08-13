@@ -62,7 +62,15 @@ fn frame_probe(
     let mut page = manuk_page::Page::load(parent, "https://parent.test/", fonts, 900.0);
     let root = page.dom().root();
     let fnode = manuk_css::query_selector_all(page.dom(), root, "#f")[0];
-    page.render_iframe_with_type(fnode, child, "https://embed.test/a", fonts, 0, content_type);
+    page.render_iframe_with_type(
+        fnode,
+        child,
+        "https://embed.test/a",
+        fonts,
+        0,
+        content_type,
+        None,
+    );
     page.eval_for_test(
         r#"var f = document.getElementById('f');
            var d = f.contentDocument;

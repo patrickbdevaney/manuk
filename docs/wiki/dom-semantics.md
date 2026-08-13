@@ -3213,3 +3213,51 @@ plausible half-fix: *share the rule without the parameter* → `emptyNameIsADocu
 ⚠ **`domparsing` moving is the tell that the extraction was the right shape rather than the tidy
 one:** a third caller nobody was thinking about — `DOMParser` — was already reaching the same rule
 and got the fix for free. A copy would have left it where it was.
+
+## The engine was told the encoding and threw it away (t1211)
+
+`document.characterSet` / `.charset` / `.inputEncoding` returned the constant `"UTF-8"`, with the
+comment *"we decode to UTF-8, so that is the answer"*. **That answers a different question.** The DOM
+asks what the document's encoding **was**; `<meta charset=iso-8859-5>` must report `ISO-8859-5`
+however the engine stores it internally.
+
+The answer was already computed — `manuk_net::charset::sniff` picks the encoding on every load and
+**every caller discarded it**. The same shape as `contentType` before t1075 and `compatMode` before
+t241: a getter returning a constant beside a field that already knew, all three within a hundred
+lines of each other.
+
+### ⚠⚠⚠ The ordering was the fix, and the first version measured +0 without it
+
+Setting the value at the call site — after `render_iframe_with_type` returned — moved nothing.
+Applying the rule this session earned (*a zero from a reachable, observed mechanism is a question
+about the diagnosis*), the probe said:
+
+```text
+   html=<html><head><meta charset="iso-8859-5"></head>…   ← the document was served correctly
+   cs=UTF-8                                                ← and the getter did not see it
+```
+
+**`fire_frame_load` runs INSIDE `render_iframe_with_type`**, and every test — and every embed — reads
+a child document inside its `load` handler. **A value written after the call is written after the
+only moment anyone looks.**
+
+```text
+   value set AT THE CALL SITE        dom 7517 → 7517    (+0)
+   value set BEFORE the load event   dom 7517 → 8142  (+625)
+```
+
+**The capability, the plumbing and the instrument were all correct in the first version, and it
+bought nothing.** The difference is four lines of ordering.
+
+### The instrument was blocking it too — `encoding.py`, the fifth mis-provisioned reference
+
+636 subtests drive `iframe.src = "encoding.py?label=" + label`, a five-line wptserve handler
+returning `<!doctype html><meta charset="LABEL">`. A static file server answers 404, so every one of
+those iframes loaded nothing. One handler was added to the harness — ⚠ **deliberately one, not a
+wptserve implementation**, with the boundary written into the code so the next one is a decision
+rather than a slide.
+
+`G_DOCUMENT_CHARACTER_SET` asserts all three aliases agree, that the name is the Encoding Standard's
+canonical spelling (`encoding_rs::Encoding::name()`, so no table of ours can drift from the
+decoder's), that an untold frame still reports `UTF-8`, and that **the child's encoding does not leak
+onto the parent** — a single global would have passed the headline claim and broken the page around it.

@@ -9291,9 +9291,23 @@ unsafe fn doc_get_referrer(cx: *mut RawJSContext, _argc: u32, vp: *mut Value) ->
     true
 }
 
-/// `document.characterSet` / `.charset` / `.inputEncoding` — we decode to UTF-8, so that is the answer.
+/// `document.characterSet` / `.charset` / `.inputEncoding` — **the encoding the bytes were decoded
+/// FROM**, by its canonical Encoding-Standard name.
+///
+/// ⚠ This returned the constant `"UTF-8"`, with the comment *"we decode to UTF-8, so that is the
+/// answer"*. That reasoning answers a different question: the DOM asks what the document's encoding
+/// **was**, and a page declaring `<meta charset=iso-8859-5>` must report `ISO-8859-5` however it is
+/// stored internally. The sniffer (`manuk_net::charset::sniff`) had computed the answer on every
+/// load and every caller discarded it — *the engine had been told and threw it away*, the same shape
+/// as `contentType` before t1075 and `compatMode` before t241, in the same getter neighbourhood.
+///
+/// The three names are aliases of one value, which is why they share one native.
 unsafe fn doc_get_charset(cx: *mut RawJSContext, _argc: u32, vp: *mut Value) -> bool {
-    return_string(cx, vp, "UTF-8");
+    let name = match this_node(vp) {
+        Some((dom, node)) => (*dom).character_set((*dom).root()).to_string(),
+        None => "UTF-8".to_string(),
+    };
+    return_string(cx, vp, &name);
     true
 }
 

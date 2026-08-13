@@ -46371,6 +46371,69 @@ PERF: none — one UA rule and one narrowed branch in a cascade that already ran
 WIKI: `docs/wiki/css-cascade.md` — where Chrome draws the form-control `box-sizing` line, and why a
 layout-crate test cannot see it.
 
+## Tick 1211 — the engine was TOLD the encoding and threw it away, and the ORDERING was the fix (2026-08-13)
+
+TICK SHAPE: capability — `dom` (#1), its **largest single remaining family: 636 subtests**, and the
+biggest move of the session.
+
+**`document.characterSet` / `.charset` / `.inputEncoding` returned the constant `"UTF-8"`**, with the
+comment *"we decode to UTF-8, so that is the answer"*. That reasoning answers a different question:
+the DOM asks what the document's encoding **was**, and a page declaring `<meta charset=iso-8859-5>`
+must report `ISO-8859-5` however the engine stores it. **The answer was already computed** —
+`manuk_net::charset::sniff` picks the encoding on every load (BOM → `Content-Type` → `<meta>` prescan
+→ detector) and **every caller discarded it**. Same shape as `contentType` before t1075 and
+`compatMode` before t241: a getter returning a constant beside a field that already knew, and all
+three live within a hundred lines of each other.
+
+⚠⚠⚠ **AND THE INSTRUMENT WAS BLOCKING IT TOO — `encoding.py`, the FIFTH mis-provisioned reference.**
+The 636 subtests drive `iframe.src = "encoding.py?label=" + label`, a five-line wptserve handler that
+returns `<!doctype html><meta charset="LABEL">`. A static file server answers **404**, so every one
+of those iframes loaded nothing. One handler in `tests/wpt/src/harness.rs` — ⚠ **deliberately ONE,
+not a wptserve implementation**, and the boundary is written into the code so the next one is a
+decision rather than a slide.
+
+⚠⚠⚠ **THE ORDERING WAS THE FIX, AND THE FIRST VERSION MEASURED +0 WITHOUT IT.** I set the charset at
+the call site, after `render_iframe_with_type` returned, and `dom` did not move — 7517 → 7517.
+Applying this session's own rule (*a zero from a reachable, observed mechanism is a question about
+the diagnosis*), the probe said the handler worked and the value was still `UTF-8`:
+
+```text
+   html=<html><head><meta charset="iso-8859-5"></head>…   ← the handler served it
+   cs=UTF-8                                                ← and the getter did not see it
+```
+
+**`fire_frame_load` runs INSIDE `render_iframe_with_type`**, and every test — and every embed — reads
+a child document inside its `load` handler. **A value written after the call is written after the
+only moment anyone looks.** The charset is now passed *into* the frame renderer and recorded before
+the load event fires.
+
+**MEASURED, same release binary, same hour:**
+
+```text
+   engine getter + harness handler, value set AT THE CALL SITE   dom 7517 → 7517    (+0)
+   the same, value set BEFORE the load event                     dom 7517 → 8142  (+625)
+                                                                     71.6% → 77.5%   0 crashes
+   html/dom                                                    56445 → 56445    (0)  ← control
+   ──────────────────────────────────────────────────────────────────────────────────
+   PRIMARY (active-areas)   87002 → 87627    71.29% → 71.80%
+```
+
+**+625 is the largest single move of this session, and the difference between it and +0 is four lines
+of ordering.** That is worth stating plainly: the capability, the plumbing and the instrument were all
+correct in the first version, and it bought nothing, because the value arrived after the observation.
+
+Gated by `G_DOCUMENT_CHARACTER_SET`, RED-proven by restoring the constant. The gate asserts all three
+aliases agree (they are one value with three spellings), that the name is the **Encoding Standard's**
+canonical spelling (`IBM866`, `ISO-8859-5` — `encoding_rs::Encoding::name()`, so no table of ours can
+drift from the decoder's), that a frame told nothing still reports `UTF-8` (the default was right, it
+was just being used as the whole answer), and that **the child's encoding does not leak onto the
+parent** — a single global would have passed the headline claim and broken the page around it.
+
+PERF: one `HashMap` entry per non-UTF-8 document — the same shape as `content_types` beside it, and
+absent for the overwhelmingly common case. F1/F2 unmoved.
+
+WIKI: docs/wiki/dom-semantics.md — "The engine was told the encoding and threw it away"
+
 ## Tick 1210 — check #115's own steer was wrong, and the probe that refuted it took four minutes (2026-08-13)
 
 TICK SHAPE: capability — the tick check #115 sent me to, and **a correction to that check**.

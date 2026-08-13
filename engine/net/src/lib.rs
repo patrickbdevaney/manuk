@@ -239,8 +239,14 @@ impl Response {
     /// BOM → HTTP `Content-Type` charset → `<meta>` prescan (first 1024 bytes) →
     /// `chardetng` detector → UTF-8 default. Use this for HTML documents.
     pub fn decoded_text(&self) -> String {
+        self.decoded_text_named().0
+    }
+
+    /// The decoded body **and the canonical name of the encoding it came from** — see
+    /// [`charset::decode_html_named`].
+    pub fn decoded_text_named(&self) -> (String, &'static str) {
         let ct = self.header("content-type");
-        charset::decode_html(&self.body, ct)
+        charset::decode_html_named(&self.body, ct)
     }
 }
 
@@ -251,9 +257,21 @@ pub mod charset {
 
     /// Decode HTML `bytes` to a `String` following the WHATWG sniff order.
     pub fn decode_html(bytes: &[u8], content_type: Option<&str>) -> String {
+        decode_html_named(bytes, content_type).0
+    }
+
+    /// The same decode, **and the canonical name of the encoding it decoded FROM**.
+    ///
+    /// `sniff` computed this every time and every caller threw it away, which is why
+    /// `document.characterSet` was a hardcoded `"UTF-8"`: the question is not what we decoded *to*
+    /// (always UTF-8 internally) but what the bytes *were*, and that is a different string on every
+    /// legacy page. `Encoding::name()` is the Encoding Standard's canonical spelling — `IBM866`,
+    /// `ISO-8859-5`, `windows-1252` — which is exactly what the DOM is specified to report, case and
+    /// all.
+    pub fn decode_html_named(bytes: &[u8], content_type: Option<&str>) -> (String, &'static str) {
         let enc = sniff(bytes, content_type);
         let (text, _, _) = enc.decode(bytes);
-        text.into_owned()
+        (text.into_owned(), enc.name())
     }
 
     /// Pick the encoding: BOM → Content-Type charset → `<meta>` prescan → detector.

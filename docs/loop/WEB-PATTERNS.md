@@ -5186,6 +5186,28 @@ draining the JS event loop to its 20,000-task ceiling, which has no wall-clock b
 images now arrive; the page is still slow for another reason. Same discipline as t608: **do not book
 "site X works now" from "one of site X's defects is gone."**
 
+## A value written after the `load` event is written after the only moment anyone looks (tick 1211)
+
+| pattern | where it shows up | status |
+| --- | --- | --- |
+| `document.characterSet` / `.charset` / `.inputEncoding` — the encoding a document was DECODED FROM. All three returned the constant `"UTF-8"`, while the sniffer had computed the real answer on every load and every caller discarded it | Any page that branches on its own encoding, every legacy-charset document, and the 636 WPT subtests that walk the whole Encoding Standard label table | ✅ fixed (tick 1211) — gated by **`G_DOCUMENT_CHARACTER_SET`**; `dom` **7517 → 8142 (+625)**, the largest single move of its session |
+
+⚠⚠⚠ **THE ORDERING WAS THE FIX, AND THE FIRST VERSION MEASURED +0 WITHOUT IT.** Set at the call
+site — after `render_iframe_with_type` returned — nothing moved. **`fire_frame_load` runs INSIDE that
+call**, and every test *and every embed* reads a child document inside its `load` handler:
+
+```text
+   value set AT THE CALL SITE        dom 7517 → 7517    (+0)
+   value set BEFORE the load event   dom 7517 → 8142  (+625)
+```
+
+**The capability, the plumbing and the instrument were all correct in the first version and it bought
+nothing.** The general form is worth keeping: *a document property must be in place before the event
+that announces the document is ready*, because that event is the only moment anything reads it.
+
+⚠ The instrument was blocking it too — `encoding.py`, a five-line wptserve handler a static server
+answers 404 for. **Fifth mis-provisioned reference.**
+
 ## Every translucent colour failed its own round trip (tick 1210)
 
 | pattern | where it shows up | status |

@@ -295,6 +295,11 @@ pub struct Dom {
     /// Absent = `text/html`, which is both the correct default and what this engine produces
     /// everywhere except the XML path — so the common case stores nothing.
     content_types: std::collections::HashMap<NodeId, String>,
+    /// **The encoding a document was DECODED FROM**, by its canonical Encoding-Standard name.
+    /// Same shape as [`content_types`] and for the same reason: the engine is told the answer at
+    /// decode time and used to throw it away, so `document.characterSet` was a hardcoded `"UTF-8"`
+    /// for a page that declared `<meta charset=iso-8859-5>`.
+    character_sets: std::collections::HashMap<NodeId, String>,
 }
 
 impl Default for Dom {
@@ -326,6 +331,7 @@ impl Dom {
             active: None,
             id_index: std::collections::HashMap::new(),
             content_types: std::collections::HashMap::new(),
+            character_sets: std::collections::HashMap::new(),
         }
     }
 
@@ -631,6 +637,7 @@ impl Dom {
             // slot mints a different `NodeId`), so this is hygiene rather than correctness — without
             // it a page that churns documents grows the map forever.
             self.content_types.remove(&id);
+            self.character_sets.remove(&id);
         }
     }
 
@@ -733,6 +740,31 @@ impl Dom {
             self.content_types.remove(&doc);
         } else {
             self.content_types.insert(doc, ct.to_string());
+        }
+    }
+
+    /// **The encoding this document was decoded from**, by its canonical Encoding-Standard name
+    /// (`UTF-8`, `ISO-8859-5`, `windows-1252`, `IBM866`, …) — what `document.characterSet`,
+    /// `.charset` and `.inputEncoding` all report.
+    ///
+    /// Defaults to `UTF-8`, which is what a document with no declaration and no detectable legacy
+    /// encoding is. The default is NOT the whole answer, and that confusion is exactly the bug this
+    /// replaces: the getter returned the constant `"UTF-8"` with the comment *"we decode to UTF-8,
+    /// so that is the answer"* — but the question is what the bytes were decoded **FROM**, and the
+    /// sniffer (`manuk_net::charset::sniff`) had already computed it and discarded it.
+    pub fn character_set(&self, doc: NodeId) -> &str {
+        self.character_sets
+            .get(&doc)
+            .map(String::as_str)
+            .unwrap_or("UTF-8")
+    }
+
+    /// Record the encoding a document was decoded from. Only a non-`UTF-8` encoding stores anything.
+    pub fn set_character_set(&mut self, doc: NodeId, name: &str) {
+        if name.eq_ignore_ascii_case("UTF-8") {
+            self.character_sets.remove(&doc);
+        } else {
+            self.character_sets.insert(doc, name.to_string());
         }
     }
 
