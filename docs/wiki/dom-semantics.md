@@ -3146,3 +3146,40 @@ holds the count still. Banking a mechanism that was never reachable is not.
 hides `#inner` and the parent says nothing about that node, so `gcsChildAnswer:hidden` is unreachable
 for a lookup that silently reads the parent's map — and `gcsNotParent` asserts the two documents
 disagree, so a coincidence cannot pass either.
+
+## `createEvent` accepted every name, so it could not be feature-detected (t1206)
+
+`document.createEvent(iface)` was `g[String(iface)] || g.Event`. Both halves are wrong.
+
+**1. The fallback accepted everything.** `createEvent('NotAnEvent')` returned a plain `Event` where
+DOM §createEvent says throw `NotSupportedError` — and the throw is **how a page feature-detects an
+event interface**. An engine that never throws answers *"supported"* for every name, so the library
+takes the modern branch and gets an `Event` with the wrong prototype: a value of the right type that
+fails at the first `instanceof`. Third instance of this shape in one session, after the selector
+feature-detect (t1200) and jQuery's `support.cors`.
+
+**2. The lookup was case-sensitive, and five table entries have no global at all.** DOM matches
+**ASCII-case-insensitively** against a **fixed table**, and `Events`/`HTMLEvents`/`SVGEvents` →
+`Event`, `MouseEvents` → `MouseEvent`, `UIEvents` → `UIEvent` are aliases with no interface of their
+own:
+
+```text
+   createEvent('MouseEvents')  →  Event      (should be MouseEvent)
+   createEvent('mouseevent')   →  Event      (should be MouseEvent)
+   createEvent('UIEvents')     →  Event      (should be UIEvent)
+```
+
+`MouseEvents` and `HTMLEvents` are the spellings **jQuery's `trigger` and Google Analytics emit**, so
+a synthesised click arrived as a bare `Event` — no `clientX`, no `button`, `instanceof MouseEvent`
+false. The old code was right about `Events` **only by accident**, because its fallback was `Event`.
+
+**Measured:** `dom` **7147 → 7306 (+159)**, `html/dom` and `css/selectors` unchanged, 0 crashes.
+
+⚠ `G_CREATE_EVENT_ALIASES`'s last claim is `dispatches:yes` — an event built this way must still
+reach a listener, because **a gate that only proved the throws would pass with `createEvent` deleted
+entirely.**
+
+⚠ **The honest edge:** `TextEvent`, `DeviceMotionEvent` and `DeviceOrientationEvent` are in the
+spec's table and not in this engine, and `TouchEvent` is added to the table **only when the engine
+exposes it** — the spec's own *"if the UA supports legacy touch events"* clause. All of them throw
+`NotSupportedError`, which is the truthful answer; claiming them would be false presence.

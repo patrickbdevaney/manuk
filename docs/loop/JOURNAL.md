@@ -46371,6 +46371,87 @@ PERF: none — one UA rule and one narrowed branch in a cascade that already ran
 WIKI: `docs/wiki/css-cascade.md` — where Chrome draws the form-control `box-sizing` line, and why a
 layout-crate test cannot see it.
 
+## Tick 1206 — `createEvent` accepted EVERY name, so it could not be feature-detected (2026-08-13)
+
+TICK SHAPE: capability — `dom` (still #1 at 1074), and **classified by construct before taking it**
+per t1204's own rule: `dom`'s failing mass is **3.4% unshipped/tentative** against
+`css/css-values`' 50.9%. It passes the test; the row is real.
+
+**`document.createEvent(iface)` was `g[String(iface)] || g.Event`, and both halves are wrong.**
+
+⚠⚠⚠ **1. THE FALLBACK ACCEPTED EVERYTHING, so the throw a page listens for never came.**
+`createEvent('NotAnEvent')` returned a plain `Event`. DOM §createEvent says throw
+`NotSupportedError`, and the reason is not conformance:
+
+> **the throw is how a page feature-detects an event interface.** An engine that never throws
+> answers *"supported"* for every name it is handed, so the detecting library takes the modern branch
+> and gets an `Event` with the wrong prototype — a value of the right *type* that fails at the first
+> `instanceof`.
+
+Third time this exact shape has paid out in this session alone, after the selector feature-detect
+(t1200) and jQuery's `support.cors`: **ask what a library BELIEVES, not what it can detect.**
+
+⚠⚠⚠ **2. THE LOOKUP WAS CASE-SENSITIVE, AND FIVE TABLE ENTRIES HAVE NO GLOBAL AT ALL.** DOM matches
+the argument **ASCII-case-insensitively** against a **fixed table**, and `Events`, `HTMLEvents`,
+`SVGEvents` → `Event`, `MouseEvents` → `MouseEvent`, `UIEvents` → `UIEvent` are aliases with no
+interface of their own. `g['MouseEvents']` is `undefined`, so **every one of them fell to
+`|| g.Event`**:
+
+```text
+   createEvent('MouseEvents')  →  Event      (should be MouseEvent)
+   createEvent('mouseevent')   →  Event      (should be MouseEvent)
+   createEvent('UIEvents')     →  Event      (should be UIEvent)
+```
+
+That is not archaeology. `MouseEvents` and `HTMLEvents` are the spellings **jQuery's `trigger` and
+Google Analytics actually emit**, so a synthesised click was arriving as a bare `Event` — no
+`clientX`, no `button`, `instanceof MouseEvent` false — on every page that drives one through the
+legacy API. The old code was correct on `Events` **only by accident**, because its fallback happened
+to be `Event`.
+
+**MEASURED, same release binary, same hour:**
+
+```text
+   dom            7147 → 7306   (+159)   68.0% → 69.6%   0 crashes   ← predicted 152
+   html/dom      56445 → 56445     (0)           94.2%   0 crashes   ← control
+   css/selectors  3757 → 3757      (0)           67.6%   0 crashes   ← control
+   ──────────────────────────────────────────────────────────────
+   PRIMARY (active-areas)  86578 → 86737   70.94% → 71.07%
+```
+
+Gated by `G_CREATE_EVENT_ALIASES`, RED-proven by restoring the global lookup (`expected
+unknown:THROW:NotSupportedError`). ⚠ The gate's last claim is `dispatches:yes` — an event built this
+way must still REACH a listener, because **a gate that only proved the throws would pass with
+`createEvent` deleted entirely.**
+
+⚠ **THE HONEST EDGE, asserted rather than hidden:** three table entries name interfaces this engine
+does not implement (`TextEvent`, `DeviceMotionEvent`, `DeviceOrientationEvent`), and `TouchEvent` is
+in the table **only when the engine exposes it** — which is exactly what the spec's *"if the UA
+supports legacy touch events"* clause means. For all of those `createEvent` throws
+`NotSupportedError`: we do not have the interface, and a page asking is entitled to hear so rather
+than receive an `Event` wearing the name. Claiming them would be false presence.
+
+WALL-TIME AUDIT #47 (due every 20 ticks, last 1186; run at 1206) — **the gates are 17% of the wall
+and the audit cannot see the other 83%.** Itemised: T 70s, B 35s, G6 20s, everything else ≤7s —
+**~148s of a 858s total.** The audit's four admissible questions (redundancy, parallelism, caching,
+scope) are all questions about GATES, so every second it is equipped to examine could go to zero and
+the wall would still be ~710s. **An optimisation instrument that itemises 17% of its subject will
+always report the subject as lean.** The remainder is the BUILD, and two independent readings agree:
+the t1202 self-audit's `1012s EXCEEDS the 300s target`, and five direct readings this session —
+**235s, 271s, 1011s, 1047s, 858s — BIMODAL, not drifting** (cold vs warm, the t1144 split).
+**Nothing was trimmed and nothing should have been by this loop:** every candidate (nextest, mold,
+workspace-hack, narrower per-gate build scope) is `scripts/` and build config, which PART VII makes
+observer-owned. No coverage touched, no floor widened, no gate sampled or moved to CI. Full write-up
+in `docs/loop/WALL-AUDIT.md` #47, including the hand-off: `wall-audit.sh` should itemise the build
+phase, because an audit reporting 858s while accounting for 148s invites the conclusion that the
+wall is fine.
+
+PERF: a table lookup and one `toLowerCase()` replacing a dynamic global property read, on a
+per-`createEvent` path. F1/F2 unmoved.
+
+WIKI: docs/wiki/dom-semantics.md — "`createEvent` accepted every name, so it could not be
+feature-detected"
+
 ## Tick 1205 — I probed the lever tick 1204 named, and tick 1204 was WRONG about it (2026-08-13)
 
 TICK SHAPE: capability — small, plus the more valuable half: **a published correction.** t1204 named

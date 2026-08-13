@@ -7,6 +7,49 @@ moved to CI to fake a fast local wall. Only optimisations that buy the same asse
 
 ---
 
+## Audit #47 — tick 1206 (2026-08-13): the gates are 17% of the wall, and the audit cannot see the other 83%
+
+```text
+   WALL TOTAL                                858s
+   ────────────────────────────────────────────────
+   T   (crate tests)                          70s   8%
+   B   (build-ish section)                    35s   4%
+   G6  (clickability)                         20s   2%
+   D · G1 · P · F · F4 · every G_*        ≤ 7s each
+   ────────────────────────────────────────────────
+   itemised                                 ~148s   17%
+   NOT ITEMISED                             ~710s   83%
+```
+
+⚠⚠⚠ **THE FINDING IS ABOUT THE INSTRUMENT, AND IT IS THE SAME CLASS THIS LOOP KEEPS CATCHING.** The
+audit's four admissible questions — redundancy, parallelism, caching, scope — are all questions
+about **gates**, and the gates are **17% of the wall**. Every second the audit is equipped to
+examine could be driven to zero and the wall would still be ~710s. **An optimisation instrument
+that itemises 17% of its subject will always report the subject as lean**, which is exactly what a
+sparse audit is for and exactly what this one cannot do.
+
+The unaccounted 83% is the **BUILD**, and two independent readings this session agree:
+
+- `scripts/self-audit.sh` at t1202: *"verify wall: 1012s EXCEEDS the 300s target — Part 21.2 item 1
+  has regressed"* — a ~3.4× overrun of a Tier-0 target that blocks backlog work by its own rules.
+- Watched directly across consecutive ticks of comparable tree size this session: **235s, 271s,
+  1011s, 1047s, 858s.** Not drift — **BIMODAL**, cold-build vs warm-build, the same split recorded
+  at t1144 (1243s cold / 113s warm).
+
+**NOTHING WAS TRIMMED, and nothing should have been by this loop.** Every candidate the audit names
+(cargo-nextest to share test binaries, mold/lld, workspace-hack, narrower per-gate build scope) lives
+in `scripts/` and the build configuration, which CONSTITUTION.MD PART VII makes **observer-owned**.
+This audit's product is therefore a hand-off, not an edit:
+
+> **For the observer:** the wall's cost is the BUILD, not the gate wall. Optimising gates cannot
+> reach it — 17% is the whole reachable surface. And `wall-audit.sh` itself should itemise the build
+> phase, because an audit that reports 858s while accounting for 148s of it invites the conclusion
+> that the wall is fine.
+
+**No coverage was touched, no floor widened, no gate sampled or moved to CI.** The rigor half of the
+audit is clean: every one of the ~104 gates still runs, and the 19 in the wall still went red for
+this session's RED probes on demand.
+
 ## Audit #1 — tick 93 (wall 61s)
 
 **Where the seconds go:**

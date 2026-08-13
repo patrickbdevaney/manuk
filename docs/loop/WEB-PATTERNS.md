@@ -5186,6 +5186,20 @@ draining the JS event loop to its 20,000-task ceiling, which has no wall-clock b
 images now arrive; the page is still slow for another reason. Same discipline as t608: **do not book
 "site X works now" from "one of site X's defects is gone."**
 
+## The legacy spelling jQuery and GA actually emit, answered with the wrong interface (tick 1206)
+
+| pattern | where it shows up | status |
+| --- | --- | --- |
+| `document.createEvent('MouseEvents' \| 'HTMLEvents' \| 'UIEvents' \| 'mouseevent')` — the legacy pre-constructor event API. Five table entries are ALIASES with no global of their own, and the lookup was a case-sensitive property read, so every one fell through to a plain `Event` | **jQuery's `trigger` and Google Analytics emit exactly these spellings.** A synthesised click arrived as a bare `Event` — no `clientX`, no `button`, `instanceof MouseEvent` false | ✅ fixed (tick 1206) — the spec's fixed, case-insensitive table; gated by **`G_CREATE_EVENT_ALIASES`**; `dom` **7147 → 7306 (+159)** |
+| `try { document.createEvent(X) } catch (e) { … }` — feature-detecting an event interface. `createEvent('NotAnEvent')` returned an `Event` instead of throwing `NotSupportedError`, so the detection answered "supported" for **every** name | Any library that probes before using an interface | ✅ same fix |
+
+**Third instance of one shape in a single session** — after the selector feature-detect (t1200) and
+jQuery's `support.cors`: **ask what a library BELIEVES, not what it can detect.** An engine that
+cannot say *no* is read as saying *yes*.
+
+⚠ The gate's last claim is `dispatches:yes`: an event built this way must still reach a listener,
+because a gate that only proved the throws would pass with `createEvent` deleted entirely.
+
 ## A value of the right TYPE that no comparison will ever match (tick 1205)
 
 | pattern | where it shows up | status |

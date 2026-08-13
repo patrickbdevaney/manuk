@@ -15837,8 +15837,51 @@ const WINDOW_PRELUDE: &str = r#"
         if (typeof g.document !== 'undefined' && typeof g.document.createEvent !== 'function') {
             // On `Document.prototype` (tick 776) — the event constructors are globals, so this needs
             // no document of its own; it was an own property of the singleton purely by habit.
+            // ⚠⚠⚠ **THE ARGUMENT IS A FIXED, CASE-INSENSITIVE ALIAS TABLE — NOT A GLOBAL LOOKUP.**
+            //
+            // This was `g[String(iface)] || g.Event`, and both halves are wrong:
+            //
+            //   * **the fallback accepts everything.** `createEvent('NotAnEvent')` returned an `Event`
+            //     where the spec says throw `NotSupportedError`. 152 `dom` subtests assert exactly that
+            //     throw, and — more to the point — the throw is how a page feature-DETECTS an event
+            //     interface. An engine that never throws answers "supported" for every name it is
+            //     handed, so the detecting library takes the modern branch and gets an `Event` with the
+            //     wrong prototype. Same shape as the selector feature-detect at t1200.
+            //   * **the lookup is case-SENSITIVE and misses the plural aliases.** DOM §createEvent
+            //     matches ASCII-case-insensitively, so `mouseevent` and `MOUSEEVENT` are both
+            //     `MouseEvent`; and `MouseEvents`, `UIEvents`, `HTMLEvents`, `SVGEvents` and `Events`
+            //     are aliases with NO global of their own — `g['MouseEvents']` is `undefined`, so every
+            //     one of them fell to the `|| g.Event` branch and came back as a plain `Event`. That is
+            //     the legacy spelling jQuery's `trigger` and Google Analytics actually use.
+            //
+            // The table is the spec's, verbatim. `TouchEvent` is in it only when this engine exposes
+            // the interface, which is what the spec's own "if the UA supports legacy touch events"
+            // clause means — claiming it otherwise would be false presence.
+            var CREATE_EVENT_ALIASES = {
+                beforeunloadevent: 'BeforeUnloadEvent', compositionevent: 'CompositionEvent',
+                customevent: 'CustomEvent', devicemotionevent: 'DeviceMotionEvent',
+                deviceorientationevent: 'DeviceOrientationEvent', dragevent: 'DragEvent',
+                event: 'Event', events: 'Event', focusevent: 'FocusEvent',
+                hashchangeevent: 'HashChangeEvent', htmlevents: 'Event',
+                keyboardevent: 'KeyboardEvent', messageevent: 'MessageEvent',
+                mouseevent: 'MouseEvent', mouseevents: 'MouseEvent',
+                storageevent: 'StorageEvent', svgevents: 'Event', textevent: 'TextEvent',
+                uievent: 'UIEvent', uievents: 'UIEvent'
+            };
+            if (typeof g.TouchEvent === 'function') {
+                CREATE_EVENT_ALIASES.touchevent = 'TouchEvent';
+            }
             g.__defDoc('createEvent', function (iface) {
-                var C = g[String(iface)] || g.Event;
+                var name = CREATE_EVENT_ALIASES[String(iface).toLowerCase()];
+                var C = name ? g[name] : undefined;
+                if (typeof C !== 'function') {
+                    // Not in the table, or an alias whose interface this engine does not implement.
+                    // Both are honestly `NotSupportedError` — the spec's answer, and the one a feature
+                    // detect needs to hear.
+                    throw new DOMException(
+                        "Failed to execute 'createEvent' on 'Document': The provided event type ('" +
+                        String(iface) + "') is invalid.", 'NotSupportedError');
+                }
                 var e = new C('');
                 // Per spec the event is created UNINITIALIZED — `initEvent` must be called before it is
                 // dispatched, and until then its type is the empty string. The flag makes dispatching it
