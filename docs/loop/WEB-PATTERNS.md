@@ -5186,6 +5186,22 @@ draining the JS event loop to its 20,000-task ceiling, which has no wall-clock b
 images now arrive; the page is still slow for another reason. Same discipline as t608: **do not book
 "site X works now" from "one of site X's defects is gone."**
 
+## `'prop' in el.style` — THE feature detect — was false for every feature we have (tick 1218)
+
+| pattern | where it shows up | status |
+| --- | --- | --- |
+| `if ('gridTemplateColumns' in el.style) { /* modern */ } else { /* fallback */ }` — the CSS feature-detection idiom. `el.style`'s Proxy answered `has` with *"is this property currently SET"*, so it was **false for every feature the engine has** (t1171: 0 of 28, `display` included) | Modernizr and every polyfill loader is built on it. **A capability we possess reported as absent makes a page take its fallback path against a working engine** | ✅ fixed (tick 1218) — gated by **`G_STYLE_SUPPORTED_PROPS`**; `css/css-grid` **+22** |
+
+⚠⚠⚠ **THE BLOCKER WAS NAMED 47 TICKS EARLIER AND THE MISSING HALF WAS ONE SENTENCE.** t1171:
+*"`supports_condition` answers one declaration at a time and is not enumerable, so there is no list
+to hand the Proxy."* → **One-at-a-time is fine if you have candidates to ask.** 263 candidate names
+filtered through the *same* oracle `@supports` and `CSS.supports()` use, so the three cannot drift —
+which is exactly what the warning against *guessing a list* was protecting.
+
+⚠ **It cannot regress, by construction:** the registry is a **lower bound** — an unasked name answers
+as before, a SET property answers `true` regardless. **`false` can become `true`, never the reverse.**
+Cost measured before it was paid: **21ms, lazily**, so a page that never feature-detects never pays.
+
 ## A stylesheet has `@namespace` and `querySelector` does not (tick 1217)
 
 | pattern | where it shows up | status |

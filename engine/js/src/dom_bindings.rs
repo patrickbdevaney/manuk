@@ -403,6 +403,25 @@ pub fn set_supports_hook(f: SupportsFn) {
     SUPPORTS_HOOK.with(|c| c.set(Some(f)));
 }
 
+/// **The ENUMERABLE half of the same question** — which property names does the engine support?
+///
+/// [`SupportsFn`] answers one declaration at a time, and tick 1171 named that as the blocker for
+/// `el.style`'s `in` operator: *"there is no list to hand the proxy."* The half that was missing is
+/// that **one-at-a-time is fine if you have candidates to ask** — the host builds the list once from
+/// its own oracle and hands it over here, so the JS and CSS halves still cannot drift apart.
+pub type SupportedPropsFn = fn() -> &'static [&'static str];
+
+thread_local! {
+    static SUPPORTED_PROPS_HOOK: std::cell::Cell<Option<SupportedPropsFn>> =
+        const { std::cell::Cell::new(None) };
+}
+
+/// Install the supported-property-name registry. Same contract and same call site as
+/// [`set_supports_hook`].
+pub fn set_supported_props_hook(f: SupportedPropsFn) {
+    SUPPORTED_PROPS_HOOK.with(|c| c.set(Some(f)));
+}
+
 /// May an inline `<script>` carrying this `nonce` attribute execute under the document's
 /// Content-Security-Policy?
 ///
@@ -454,6 +473,19 @@ pub fn eval_supports(condition: &str) -> bool {
     SUPPORTS_HOOK
         .with(|c| c.get())
         .is_some_and(|f| f(condition))
+}
+
+/// `__cssSupportedProps()` — the supported property names, space-joined.
+///
+/// One string rather than an array because the caller builds a `Set` from it once and never looks
+/// again; an array would be 260 reflector allocations for a value used as a membership test.
+unsafe fn css_supported_props(cx: *mut RawJSContext, _argc: u32, vp: *mut Value) -> bool {
+    let names = SUPPORTED_PROPS_HOOK
+        .with(|c| c.get())
+        .map(|f| f().join(" "))
+        .unwrap_or_default();
+    return_string(cx, vp, &names);
+    true
 }
 
 thread_local! {
@@ -11116,6 +11148,14 @@ pub unsafe fn install(
     JS_DefineFunction(
         &mut wrap_cx(cx),
         global.handle(),
+        c"__cssSupportedProps".as_ptr(),
+        host_fn!(css_supported_props),
+        0,
+        0,
+    );
+    JS_DefineFunction(
+        &mut wrap_cx(cx),
+        global.handle(),
         c"__idb".as_ptr(),
         host_fn!(host_idb),
         1,
@@ -13950,8 +13990,36 @@ const CSSOM_PRELUDE: &str = r#"
                 write(o);
                 return true;
             },
+            // ⚠⚠⚠ **CSSOM SAYS A DECLARATION EXPOSES AN IDL ATTRIBUTE FOR EVERY *SUPPORTED*
+            // PROPERTY, SET OR NOT — and this answered "is it currently SET".**
+            //
+            // So `'gridTemplateColumns' in el.style` — **the** CSS feature-detection idiom, the one
+            // Modernizr and every polyfill loader is built on — was `false` for every feature this
+            // engine actually has (t1171 measured 0 of 28, `display` included). A capability we
+            // POSSESS reported as absent is the inverse of the usual failure and strictly worse: it
+            // makes a page take its fallback path against a working engine.
+            //
+            // t1171 named the blocker as *"`supports_condition` answers one declaration at a time
+            // and is not enumerable, so there is no list to hand the proxy"*. The missing half is
+            // that **one-at-a-time is fine if you have candidates to ask**: the host builds the list
+            // from its own oracle (`stylo_engine::supported_property_names`, the same evaluator
+            // `@supports` and `CSS.supports()` use, so the three cannot drift) and hands it over.
+            //
+            // Built **lazily and once** — 21ms measured, and a page that never feature-detects never
+            // pays it. Set properties still answer true regardless, so a property outside the
+            // candidate list behaves exactly as it did before rather than worse.
             has: function (t, prop) {
-                return Object.prototype.hasOwnProperty.call(t, prop) || dash(prop) in parse();
+                if (Object.prototype.hasOwnProperty.call(t, prop)) return true;
+                if (dash(prop) in parse()) return true;
+                if (typeof prop !== 'string') return false;
+                if (!g.__cssSupportedSet) {
+                    var names = (typeof g.__cssSupportedProps === 'function')
+                        ? g.__cssSupportedProps() : '';
+                    var set = Object.create(null);
+                    names.split(' ').forEach(function (n) { if (n) { set[n] = 1; } });
+                    g.__cssSupportedSet = set;
+                }
+                return g.__cssSupportedSet[dash(prop)] === 1;
             },
             deleteProperty: function (t, prop) { var o = parse(); delete o[dash(prop)]; write(o); return true; },
             ownKeys: function () { return Object.keys(parse()).map(camel); }

@@ -1940,6 +1940,13 @@ fn install_supports_hook() {
     manuk_js::set_supports_hook(manuk_css::stylo_engine::supports_condition);
     #[cfg(not(feature = "stylo"))]
     manuk_js::set_supports_hook(|_| false);
+    // The ENUMERABLE half of the same question, from the same oracle — see
+    // `stylo_engine::supported_property_names`. Installed here rather than at three call sites for
+    // the reason the comment above gives: three callers is what produced one.
+    #[cfg(feature = "stylo")]
+    manuk_js::set_supported_props_hook(manuk_css::stylo_engine::supported_property_names);
+    #[cfg(not(feature = "stylo"))]
+    manuk_js::set_supported_props_hook(|| &[]);
 }
 
 thread_local! {

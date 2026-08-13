@@ -46371,6 +46371,69 @@ PERF: none — one UA rule and one narrowed branch in a cascade that already ran
 WIKI: `docs/wiki/css-cascade.md` — where Chrome draws the form-control `box-sizing` line, and why a
 layout-crate test cannot see it.
 
+## Tick 1218 — the blocker t1171 named was "there is no list", and one-at-a-time is fine if you have candidates (2026-08-13)
+
+TICK SHAPE: capability — check #116's steer #4 (*the census is a reusable instrument; `el.style`'s
+IDL surface is next*), and it closes a defect this loop **named and could not fix 47 ticks ago**.
+
+**CSSOM says a `CSSStyleDeclaration` exposes an IDL attribute for every SUPPORTED property, set or
+not.** `el.style` is a `Proxy` whose `has` trap was `dash(prop) in parse()` — *"is this property
+currently SET"*. t1171 measured the result and wrote it down:
+
+```text
+   'display' in el.style                     FALSE   ← and 27 other names, 0/28
+   el.style.gridTemplateColumns = '1fr 2fr'  → reads back "1fr 2fr"   ✓ set/get works
+```
+
+**`'prop' in el.style` is THE CSS feature-detection idiom** — Modernizr and every polyfill loader is
+built on it. Answering `false` for a feature the engine *has* is the inverse of the usual failure and
+strictly worse: **it makes a page take its fallback path against a working engine.**
+
+⚠⚠⚠ **THE BLOCKER t1171 NAMED, AND THE HALF THAT WAS MISSING.** Its own words:
+
+> *"`has` must answer for the set of SUPPORTED property names, and the engine's honest oracle is
+> `supports_condition` — but it answers one declaration at a time and is not enumerable, so there is
+> no list to hand the Proxy. Building that registry is the tick; guessing a list would re-create the
+> `PARSE_ONLY_LONGHANDS` drift."*
+
+**One-at-a-time is fine if you have candidates to ask.** `CANDIDATE_PROPERTIES` (263 names, the
+common CSS surface) is that list, and `supported_property_names()` filters it through
+`supports_condition` — **the same evaluator `@supports` and `CSS.supports()` consult**, so the three
+cannot drift, which is precisely what the warning against *guessing a list* was protecting. The
+registry is the answer the oracle gives, not a list anyone wrote down.
+
+**COST MEASURED BEFORE IT WAS PAID:** 263 `supports_condition` calls are **21ms**, and they are paid
+**lazily on the first `in`** — a page that never feature-detects never pays. That measurement is why
+the design is lazy rather than at install.
+
+⚠ **AND IT CANNOT REGRESS ANYTHING, by construction rather than by hope.** The registry is a **lower
+bound**: a name outside the candidate list is never asked and answers exactly as before; a property
+that IS set answers `true` regardless, because the registry is consulted only after the set-check
+fails. **The change can only turn `false` into `true`.** Both edges are pinned — `setStillWins` and
+`unknownStaysFalse` — and so is the guarantee that matters most: `agreesWithSupports` asserts
+`('display' in el.style) === CSS.supports('display','flex')`, so the registry and the oracle can
+never answer one name two ways.
+
+**MEASURED, same release binary, same hour:**
+
+```text
+   css/css-grid   2421 → 2443   (+22)   22.2% → 22.4%   0 crashes
+   dom            8142 → 8142     (0)           77.5%   ← control
+   ────────────────────────────────────────────────────────────
+   PRIMARY (active-areas)   87728 → 87750    71.88% → 71.90%
+```
+
+⚠ `css/cssom` reports `FILES 0` — the sparse WPT checkout still omits it (recorded at t1176 and
+still true), so the area this tick most directly serves cannot be measured at all. The `+22` is what
+`css-grid` could see of it.
+
+RED-proven by restoring the set-only trap (`expected display:true`).
+
+PERF: 21ms once, lazily, on the first `in el.style` a page performs; zero on a page that never does.
+F1/F2 unmoved.
+
+WIKI: docs/wiki/css-cascade.md — "One-at-a-time is fine if you have candidates to ask"
+
 ## Tick 1217 — the tool I built two ticks ago would REGRESS the thing it looks perfect for (2026-08-13)
 
 TICK SHAPE: measurement — a **refusal with the trap measured**, which is worth more than the tick it

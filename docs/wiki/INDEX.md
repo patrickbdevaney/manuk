@@ -861,6 +861,8 @@
   - L3269 · The same round-trip bug for the third time (t1216)
   - L3293 · Where the census ended up
   - L3306 · A rule is only as portable as the context it encodes (t1217)
+  - L3337 · One-at-a-time is fine if you have candidates to ask (t1218)
+  - L3350 · The blocker t1171 named, and the half that was missing
 
 ## `<dialog>`, `popover`, and the top layer (ticks 194-195)
 `docs/wiki/dialog-and-top-layer.md`
@@ -2071,4 +2073,4 @@
   - L169 · The one real lever inside the remainder, measured and left named
 
 ---
-1978 sections across 22 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+1980 sections across 22 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.

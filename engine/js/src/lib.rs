@@ -567,6 +567,20 @@ pub fn set_supports_hook(f: SupportsFn) {
 #[cfg(not(feature = "_sm"))]
 pub fn set_supports_hook(_f: SupportsFn) {}
 
+/// The ENUMERABLE half of the feature-query seam — see [`dom_bindings::SupportedPropsFn`].
+#[cfg(feature = "_sm")]
+pub type SupportedPropsFn = dom_bindings::SupportedPropsFn;
+#[cfg(not(feature = "_sm"))]
+pub type SupportedPropsFn = fn() -> &'static [&'static str];
+
+#[cfg(feature = "_sm")]
+pub fn set_supported_props_hook(f: SupportedPropsFn) {
+    dom_bindings::set_supported_props_hook(f)
+}
+
+#[cfg(not(feature = "_sm"))]
+pub fn set_supported_props_hook(_f: SupportedPropsFn) {}
+
 /// A host callback answering "may an inline `<script>` with this nonce run under the document's
 /// Content-Security-Policy?".
 pub type CspInlineFn = Box<dyn Fn(manuk_dom::NodeId, Option<&str>) -> bool>;

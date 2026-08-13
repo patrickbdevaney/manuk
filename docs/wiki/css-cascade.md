@@ -3333,3 +3333,40 @@ declared_prefixes)`, with the declarations threaded to the rule-insertion point.
 Second instance in one session: t1210 nearly ported colour conversions that already existed, because
 `values.rs::parse_color` is the *MinimalCascade fallback* rather than the engine. Both times the
 check that caught it was **running the thing rather than reading it**.
+
+## One-at-a-time is fine if you have candidates to ask (t1218)
+
+CSSOM says a `CSSStyleDeclaration` exposes an IDL attribute for **every supported property**, set or
+not. `el.style`'s `Proxy` answered `has` with *"is this property currently SET"*, so t1171 measured:
+
+```text
+   'display' in el.style                     FALSE   ← and 27 other names, 0/28
+   el.style.gridTemplateColumns = '1fr 2fr'  → reads back "1fr 2fr"   ✓ set/get works
+```
+
+**`'prop' in el.style` is THE CSS feature-detection idiom.** Answering `false` for a feature the
+engine *has* makes a page take its fallback **against a working engine**.
+
+### The blocker t1171 named, and the half that was missing
+
+> *"…`supports_condition` answers one declaration at a time and is not enumerable, so there is no
+> list to hand the Proxy. Building that registry is the tick; guessing a list would re-create the
+> `PARSE_ONLY_LONGHANDS` drift."*
+
+**One-at-a-time is fine if you have candidates to ask.** `CANDIDATE_PROPERTIES` (263 names) is asked,
+and `supported_property_names()` keeps whatever `supports_condition` — **the same evaluator
+`@supports` and `CSS.supports()` use** — says yes to. The registry is *the oracle's answer*, not a
+list anyone wrote down, which is exactly what the warning against guessing was protecting.
+
+**Cost measured before it was paid:** 263 calls = **21ms**, spent **lazily on the first `in`**. A page
+that never feature-detects never pays, and that measurement is why the design is lazy.
+
+⚠ **It cannot regress anything, by construction.** The registry is a **lower bound** — a name outside
+the candidate list is never asked and answers as before; a property that IS set answers `true`
+regardless, because the registry is consulted only after the set-check fails. **`false` can become
+`true`, never the reverse.** `agreesWithSupports` pins the guarantee that matters:
+`('display' in el.style) === CSS.supports('display','flex')`.
+
+**Measured:** `css/css-grid` **2421 → 2443 (+22)**, `dom` unchanged, 0 crashes. ⚠ `css/cssom` reports
+`FILES 0` — the sparse checkout still omits it (t1176), so the area this most directly serves cannot
+be measured at all.
