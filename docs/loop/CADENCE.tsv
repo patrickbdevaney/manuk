@@ -909,3 +909,4 @@ tick	sha	epoch	iso	delta_s	shape	wall_s	files	added	deleted	gates	claims	wpt_pas
 1206	70ebb45f	1786621878	2026-08-13T07:51:18-04:00	1736	capability	808	12	427	37	457	81	3896	6960	0	600	0	`createEvent` accepted EVERY name, so it could not be feature-detected (2026-08-13)
 1207	e6a9642e	1786623565	2026-08-13T08:19:25-04:00	1687	capability	808	11	372	58	458	81	3896	6960	0	601	0	one rule, and it was written out in ONE of its two callers (2026-08-13)
 1208	d58c3dcc	1786625897	2026-08-13T08:58:17-04:00	2332	capability	808	11	416	39	459	81	3896	6960	0	602	0	the engine routing bought ZERO, and the pair bought +120 (2026-08-13)
+1209	c3c04bd5	1786626223	2026-08-13T09:03:43-04:00	326	measurement	808	5	222	33	459	81	3896	6960	0	602	0	the constitution check, and the classifier that PROMOTED a row instead of refusing one (2026-08-13)

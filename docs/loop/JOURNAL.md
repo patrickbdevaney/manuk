@@ -46371,6 +46371,64 @@ PERF: none — one UA rule and one narrowed branch in a cascade that already ran
 WIKI: `docs/wiki/css-cascade.md` — where Chrome draws the form-control `box-sizing` line, and why a
 layout-crate test cannot see it.
 
+## Tick 1209 — the constitution check, and the classifier that PROMOTED a row instead of refusing one (2026-08-13)
+
+TICK SHAPE: measurement — the cadence re-read of `CONSTITUTION.MD` (due every 8 ticks; last at
+1201), banked as check #115 in `docs/loop/CONSTITUTION-CHECK.md`.
+
+⚠⚠⚠ **FINDING 1 — THE WINDOW'S REAL RESULT IS A RULE ABOUT ZEROS, EARNED THREE DIFFERENT WAYS.**
+Three of the eight ticks measured `+0` and every one of those zeros was the product. The loop already
+knew *a fix that works and moves nothing means the dispatch is the bug*; this window sharpened it into
+a decision procedure that separates three outcomes the scoreboard cannot tell apart:
+
+| the mechanism | verdict | instance |
+|---|---|---|
+| **never ran** | **REVERT** — false presence is worse than absence | t1197 |
+| **runs, observed, next link holds the count** | **BANK, and name the link** | t1202 |
+| **runs, observed, buys nothing** | **the DIAGNOSIS is wrong — read the assertion again** | t1208 |
+
+The third is new and it is the one that paid: t1208's `+0` sent me back to the assertion's actual
+text — *"expected `Dummy XML document` but got `Dummy XML document\n`"* — and a **trailing newline**
+named the second half. Engine alone `+0`; the pair **+120**.
+
+⚠⚠⚠ **FINDING 2 — THE CONSTRUCT CLASSIFIER HAS NOW CHANGED THE DECISION IN BOTH DIRECTIONS, WHICH IS
+WHAT MAKES IT AN INSTRUMENT RATHER THAN A VETO.** t1204 added it as a seventh inflation mode for
+§VI.3 — `LEVERAGE` has no term for whether the failing mass is shippable spec — and used it to
+REFUSE the board's #2 row. Applied to the #3 row this tick, it says the opposite:
+
+```text
+   dom               3.4% unshipped   ← took it 4× for +975
+   css/css-values   50.9% unshipped   ← REFUSED
+   css/css-color    94.0% ONE SUBSYSTEM  ← PROMOTED
+       color( 1732 · color-mix( 1470 · relative colour (`from`) 390
+       oklch( 160 · lch( 158 · color-layers( 136 · hwb( 130 · lab( 128
+```
+
+**These are not `random()`.** `color-mix()` and `oklch()` are Baseline and ship on real sites, and
+every row is **the same conversion machinery** — the CSS Color 4/5 colour-space model. So
+`css/css-color` is not a 4,745-bug tail, it is **the largest single COHERENT mechanism on the board**,
+and the raw leverage number could not say that in either direction.
+
+⚠⚠ **FINDING 3 — I5 WAS EXERCISED TWICE MORE, AND ONCE AGAINST THIS WINDOW'S OWN WORK.** t1203's
+200-site sweep caught the selector validator this session shipped throwing on **two VALID selectors
+on a real site**, and it was fixed in the tick that found it rather than carried. A loop that only
+ratchets forward on its own numbers would have banked the sweep and left the regression.
+
+COMPLIANCE: **PART VII held** — the wall audit found the wall is the BUILD, not the gates (148s
+itemised of 858s), every optimisation candidate lives in observer-owned `scripts/`, and **nothing in
+`scripts/` was touched all session**, including through two harness false-REDs. `tests/wpt/` was
+edited once (t1208's MIME table), which is agent territory per the certification-redesign block.
+
+THE STEER (full text in check #115): **take `css/css-color`** and PORT the colour-space conversions
+rather than deriving per-assertion · run the construct classifier before every area pick · the next
+CrUX sweep must carry a **same-hour old-binary control**, so the common-set Δ can be attributed
+rather than noted · the wall is a hand-off, not an edit.
+
+PERF: none — measurement only.
+
+WIKI: none — this tick's artefact is `docs/loop/CONSTITUTION-CHECK.md` check #115, which is the wiki
+for the loop's own governance. [no-pattern]
+
 ## Tick 1208 — the engine routing bought ZERO, and the pair bought +120 (2026-08-13)
 
 TICK SHAPE: capability — `dom` (#1), the 98-subtest XML family. **Two halves, each inert alone**, and

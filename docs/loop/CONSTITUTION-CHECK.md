@@ -8726,6 +8726,136 @@ reading in 24 ticks, so this line is inherited, not observed** — and saying so
    five ticks the area ranker named the wrong organ (unshipped spec; a CSSOM identity bug; a
    `split(',')`). The ranker finds mass, never mechanism.
 
+## Check #115 — tick 1209 (2026-08-13)
+
+**HORIZON: H0 — Pareto Web Parity.** **EXIT GATE (re-read from PART II, not recalled), all binary:**
+~83% WPT subtest pass **across categories** · differential-oracle-verified viability across all four
+usage-weighted corpora · the headful shell daily-drivable by its own developer · **every rendered
+construct queryable through the in-process semantic API.** PART VII re-scopes the near term: WPT is
+the CLIMB, CrUX M1/M2 is the CERTIFICATION, and 83%+ WPT is explicitly out of v1 scope.
+
+### → Did the last 8 ticks (1202–1209) move an EXIT-GATE condition, or only the scoreboard?
+
+**Gate.** And the window is unusual in that **three of its eight ticks measured ZERO and every one of
+those zeros was the product**:
+
+```text
+   t1202  arena-aware getComputedStyle in a frame            +0    a chain link, cleared
+   t1203  the CrUX sweep + surface audit #60 + a FALSE THROW  —    caught on 200 real sites
+   t1204  REFUSED the board's #2 row: 50.9% unshipped spec    —    a refusal
+   t1205  object-position round-trip, and t1204 RETRACTED    +0    a published correction
+   t1206  createEvent: the alias table                     +159
+   t1207  createDocument: ONE validate-and-extract          +106    (+91 dom, +15 domparsing)
+   t1208  framed XML: engine +0, engine+instrument         +120
+   ───────────────────────────────────────────────────────────────────────────────────────
+   PRIMARY (active areas)   85603 → 86963      70.14% → 71.26%     over t1198-1208
+   dom                       6382 → 7517       60.8%  → 71.6%      0 crashes throughout
+```
+
+⚠⚠⚠ **THE WINDOW'S REAL RESULT IS A RULE ABOUT ZEROS, and it earned it three different ways.** This
+loop already knew that *a fix that works and moves nothing means the dispatch is the bug*. The window
+sharpened it into a decision procedure that distinguishes three outcomes the scoreboard cannot:
+
+| the mechanism | the verdict | instance |
+|---|---|---|
+| **never ran** | **REVERT** — false presence is worse than absence | t1197 (registered, never requested) |
+| **runs, observed, and the next link holds the count** | **BANK, and name the link** | t1202 (`getComputedStyle` 484→0, then 308 `undefined` — a frame's style map is a load-time snapshot) |
+| **runs, observed, and buys nothing** | **the DIAGNOSIS is wrong — go read the assertion again** | t1208 (routing correct; the harness served `.xml` as `text/plain`) |
+
+The third row is new and it is the one that paid: t1208's `+0` was not a disappointment to explain
+away, it was the signal that sent me back to the assertion's actual text — *"expected `Dummy XML
+document` but got `Dummy XML document\n`"* — where a **trailing newline** named the second half.
+Engine alone `+0`; **the pair `+120`.**
+
+### → Is `orient`'s ranking (usage-weighted breadth, tail excluded, §VI.3) still the north star?
+
+**Yes, and this window added the missing TERM to it — twice, with numbers.**
+
+⚠⚠⚠ **A SEVENTH INFLATION MODE, and it is in the RANKER rather than the grep (t1204).**
+`LEVERAGE = usage × winnable × room-to-grow × flip-rate` has **no term for whether the failing mass
+is shippable spec**. Measured by classifying every `FAIL` block by construct:
+
+```text
+   dom               3.4% unshipped   ← took it 4× for +975
+   css/css-values   50.9% unshipped   ← REFUSED (random(), if(style), calc-size(), attr(), …)
+```
+
+**The remedy is one command and no build:** run the area `--show-failures` and classify by
+construct before taking it. Three minutes.
+
+⚠⚠⚠ **AND APPLYING IT TO THE NEXT ROW PRODUCED A RESULT THAT CHANGES THE RANKING — `css/css-color`
+is 94.0% ONE SUBSYSTEM, and that is the opposite of a tail.**
+
+```text
+   css/css-color: 4,745 failing subtests
+     color(       1732   ·  color-mix(   1470  ·  relative colour (`from`)  390
+     oklch( 160   ·  lch( 158  ·  color-layers( 136  ·  hwb( 130  ·  lab( 128
+     ──────────────────────────────────────────────────────────────────────
+     4,460 of 4,745 = 94.0%
+```
+
+**These are not `random()`.** `color-mix()` and `oklch()` are Baseline and are on real sites today,
+and every row above is **the same conversion machinery** — the CSS Color 4/5 colour-space model. So
+the classifier does not only *disqualify* rows; here it says the opposite of what the raw leverage
+number implied: **`css/css-color` is the largest single COHERENT mechanism on the board**, one
+subsystem rather than 4,745 bugs. That is a genuinely different steer from *"#3 by leverage"*, and it
+is the kind of thing §VI.3 exists to catch.
+
+### → Is any invariant being bent?
+
+- **I4 (Pareto discipline)** — held, and **exercised as a refusal** for the first time in a while:
+  t1204 declined the board's #2 row on a measured 50.9% and said so in the journal rather than
+  quietly picking something else. That is tick-84's lesson operating as a procedure.
+- **I5 (never trade a regression)** — held **and exercised twice more**: t1203's sweep caught the
+  selector validator throwing on two VALID selectors on a real site (`G\:TEST`,
+  `a[href*=\#]…`) — a regression this very window introduced — and it was fixed in the tick that
+  found it, not carried. t1200 had already refused `dom +272` while `css/selectors` was −289.
+- **I2 (never patch deps)** — held. Nothing vendored touched.
+- **I3 (semantic model in lockstep)** — held; no new rendered construct was added, and t1202/t1208
+  both widen what an agent can read out of a frame.
+- **I7 (honest walls)** — held and repeatedly exercised: `getComputedStyle` kept OFF a frame window
+  until it could answer correctly (t1201) and then RETIRED with a gate (t1202); `createEvent` throws
+  for three table entries this engine does not implement rather than returning an `Event` wearing
+  the name (t1206); the XML parser's lowercasing residual is PINNED in a gate rather than hidden
+  (t1208).
+
+### PART VI correction
+
+**What is now DONE that VI did not record:** `dom` is no longer a 60% area — **6382 → 7517 (71.6%)**
+across seven mechanisms, with `html/dom` as the control every single time and never moving.
+Script preemption exists (t1198). The frame boundary is no longer a platform cliff: a frame's window
+carries the interface objects (t1201), its computed style resolves against its own arena (t1202), and
+its parser is chosen by its content type (t1208).
+
+**What is now the real blocker:** unchanged, and this window measured it again rather than assuming
+it. The t1203 sweep: **M1 20.1% → 20.0% (flat), scorability 73.1% → 74.6%, corpus fidelity 0.4192 →
+0.4213, and the drift-robust common-set Δ NEGATIVE at −0.0147 (5 up / 10 down)**. Both halves
+published. That delta is inside the churn band and **is not attributable to this window's ticks
+without a same-hour old-binary control, which was not run** — recorded as an open question, not a
+verdict. VI.2's *"the M1 ceiling is 82.2–87.4% against a stated bar of 95%, and no amount of engine
+work closes it"* still stands and is still an **owner decision**.
+
+**Three named, measured levers, in order:**
+
+1. **`css/css-color`'s colour-space model** — 4,460 subtests, one subsystem, Baseline on the real web.
+2. **A frame-owned `ReflowCtx`** — 308 subtests. A frame's style map is a load-time snapshot;
+   `forced_reflow` re-cascades whatever arena it is handed but writes into the MAIN page's context
+   and resolves sheets against the PARENT's URL.
+3. **`object-position` cannot hold a length** — small, but it is how every cropped hero stays in
+   frame, and the type change is named (`ObjectPosition` stores fractions).
+
+### STEER
+
+1. **Take `css/css-color`.** It is the largest coherent mechanism on the board and the classifier
+   says so with a number. Port the colour-space conversions rather than deriving per-assertion —
+   the standing PORT steer applies exactly here.
+2. **Run the construct classifier before every area pick.** It has now changed the decision twice in
+   opposite directions (disqualified `css-values`, promoted `css-color`).
+3. **A CrUX sweep is owed again after the next batch** — and this time **run a same-hour old-binary
+   control**, so the common-set delta can be attributed instead of noted.
+4. **Hand-off, not an edit: the wall is the BUILD, not the gates.** Wall audit #47 itemised 148s of
+   858s; every optimisation candidate lives in observer-owned `scripts/`.
+
 ## Check #114 — tick 1201 (2026-08-13)
 
 **HORIZON: H0 — Pareto Web Parity.** **EXIT GATE (re-read from PART II, not recalled), all binary:**
