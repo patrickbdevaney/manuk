@@ -1010,6 +1010,11 @@
   - L2729 · Two adjacent bugs this uncovered, both invisible until XML existed
   - L2741 · The measured well-formedness boundary, written down rather than implied
   - L2760 · Result
+  - L2773 · sheet.cssRules was a fresh array on every read — 201 "invalid selectors" that were nothing of the kind (tick 1191)
+  - L2804 · The design was right; the identity was missing
+  - L2817 · Live AND stable — either alone is a wrong fix
+  - L2828 · A getter cannot refresh a reference nobody reads through
+  - L2841 · Result
 
 ## THE FIDELITY INSTRUMENT — what it can and cannot see
 `docs/wiki/fidelity-instrument.md`
@@ -2017,4 +2022,4 @@
   - L124 · Rank mechanisms by FLIP RATE, not failing-subtest count — CSS layout is a multi-assertion slog
 
 ---
-1924 sections across 22 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+1929 sections across 22 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.

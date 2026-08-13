@@ -2769,3 +2769,80 @@ its own documentation.
 > gap between them. The remaining `Document-contentType` mass (a document navigated to a PNG, CSS
 > or TXT URL must report *that* type) is now cheap for the first time, because the storage exists
 > and only the load path has to write it.
+
+## `sheet.cssRules` was a fresh array on every read — 201 "invalid selectors" that were nothing of the kind (tick 1191)
+
+`css/selectors/parsing` scored **8/392 = 2.0%**, and the failure histogram named the culprits:
+
+```
+201  assert_equals: Sheet should have 1 rule expected 1 but got 0
+```
+
+with test names reading `"[att]" should be a valid selector`, `".pastoral" should be a valid
+selector`, `"body > p" should be a valid selector`, `"h1 em" should be a valid selector`.
+
+> **Those are the most basic selectors in CSS, and that is the tell.** An engine that could not
+> parse `.pastoral` would not render a single page on the web. When a histogram indicts a mechanism
+> that demonstrably works, the mechanism is not the defect — the HARNESS PATH is. Read the helper
+> before believing the ranking.
+
+The helper is WPT's own `css/support/parsing-testcommon.js`:
+
+```js
+const style = document.createElement("style");
+document.head.append(style);
+const {sheet} = style;
+const {cssRules} = sheet;          // ← BOUND ONCE, here
+sheet.insertRule(selector + "{}");
+assert_equals(cssRules.length, 1); // ← read from the bound reference
+```
+
+`insertRule` worked. The selector engine was innocent. **`cssRules` returned a NEW ARRAY on every
+read**, so the reference bound on line 4 was a snapshot frozen before the insert, and reported `0`
+forever.
+
+### The design was right; the identity was missing
+
+The sheet is a **live projection over the `<style>` element's `textContent`** — the element's text
+is the single source of truth, and `insertRule`/`deleteRule` are implemented by rewriting it. That
+is a good design and it is *why* `cssRules` was rebuilt per read: rebuilding is what makes it live.
+It just minted a fresh object each time, so `sheet.cssRules !== sheet.cssRules`, which the spec
+forbids — a `CSSRuleList` has identity.
+
+**The principle was already written down, one level too shallow.** `el.sheet` is cached per element,
+with the comment *"ONE object per element: `el.sheet === el.sheet` is an assumption every CSSOM
+consumer makes, and a library that stashes bookkeeping on the sheet loses it otherwise."* Exactly
+that argument applies to the rule list, and had not been carried down to it.
+
+### Live AND stable — either alone is a wrong fix
+
+| fix | identity | liveness |
+|---|---|---|
+| rebuild per read (before) | ❌ | ✅ |
+| cache and never refresh | ✅ | ❌ **dead list** |
+| **cache + refresh in place** | ✅ | ✅ |
+
+Both wrong answers were RED-probed against the gate, and the dead-list probe is the one worth
+keeping: it passes every identity claim while making `freshAfterInsert` read `0`.
+
+### A getter cannot refresh a reference nobody reads through
+
+The first version refreshed inside the `cssRules` getter and **still failed the WPT idiom** —
+`cssRules.length` on a bound array runs no accessor of ours, so the update was never asked for. The
+refresh therefore has to be **pushed at mutation time**: `insertRule` and `deleteRule` call the same
+`__syncRules` after rewriting the element's text.
+
+⚠ **NAMED LIMIT, measured not assumed.** A raw `style.textContent = …` write also runs no accessor,
+so a bound list observes that change at the next read *of the sheet* rather than at the instant of
+the write. The two mutation paths that are ours push immediately, which is what the
+captured-reference idiom needs. `G_CSSRULELIST_IS_LIVE_AND_STABLE` asserts both halves separately
+(`freshAfterText` and `capturedAfterText`) so the boundary is pinned rather than implied.
+
+### Result
+
+**`css/selectors` 3119 → 3250 (+131)**, `css/selectors/parsing` **2.0% → 33.2%**, HANG/CRASH 0;
+`css/css-values` and `dom` re-measured unchanged. PRIMARY WPT 69.78% → **69.89%**.
+
+> Second time in two ticks that the area ranker pointed at the wrong organ: t1190's `domparsing`
+> was 65% unshipped-spec `tentative/`, and this one's `css/selectors` was a CSSOM identity bug.
+> **Rank by area to find the mass; read the failing test's HELPER to find the organ.**

@@ -46371,6 +46371,83 @@ PERF: none — one UA rule and one narrowed branch in a cascade that already ran
 WIKI: `docs/wiki/css-cascade.md` — where Chrome draws the form-control `box-sizing` line, and why a
 layout-crate test cannot see it.
 
+## Tick 1191 — 201 "invalid selectors" were a CSSOM identity bug, and `.pastoral` was the tell (2026-08-12)
+
+TICK SHAPE: capability — a shared MECHANISM found by reading the failing test's HELPER after the
+assertion histogram indicted an organ that demonstrably works. Gate
+`G_CSSRULELIST_IS_LIVE_AND_STABLE` (14 claims), 2 RED probes.
+
+⚠⚠⚠ **THE HISTOGRAM NAMED THE WRONG ORGAN, AND THE TEST NAMES MADE IT CONVINCING.**
+`css/selectors/parsing` scored **8/392 = 2.0%**; 201 of the failures were
+`assert_equals: Sheet should have 1 rule expected 1 but got 0`, under names reading
+`"[att]" should be a valid selector`, `".pastoral" …`, `"body > p" …`, `"h1 em" …`. Read as a
+ranking that says: the selector engine cannot parse a class selector. **Those are the most basic
+selectors in CSS — an engine that could not parse `.pastoral` would not render one page on the web.**
+That implausibility is the whole finding. `insertRule` worked; the selector engine was innocent.
+
+⚠⚠⚠ **THE DEFECT: `sheet.cssRules` RETURNED A NEW ARRAY ON EVERY READ.** WPT's own
+`css/support/parsing-testcommon.js` binds it once — `const {cssRules} = sheet;` — then calls
+`sheet.insertRule(sel + "{}")` and reads `cssRules.length`. The bound reference was a snapshot
+frozen before the insert and reported `0` forever. It also means `sheet.cssRules !==
+sheet.cssRules`, which the spec forbids: a `CSSRuleList` has identity.
+
+✅ **THE DESIGN WAS RIGHT; THE IDENTITY WAS MISSING.** The sheet is a live projection over the
+`<style>` element's `textContent` — the element's text is the single source of truth and
+`insertRule`/`deleteRule` rewrite it — so rebuilding per read is precisely what made it LIVE. It
+just minted a fresh object each time.
+
+⚠⚠ **THE PRINCIPLE WAS ALREADY WRITTEN DOWN, ONE LEVEL TOO SHALLOW.** `el.sheet` is cached per
+element under the comment *"ONE object per element: `el.sheet === el.sheet` is an assumption every
+CSSOM consumer makes, and a library that stashes bookkeeping on the sheet loses it otherwise."*
+That is verbatim the argument for the rule list, and it had not been carried down to it. Worth
+generalising: **when a rule is justified by an argument, check every level the argument covers.**
+
+⚠⚠ **LIVE AND STABLE — EITHER ALONE IS A WRONG FIX**, and both wrong answers were RED-probed:
+rebuild-per-read (identity ✗, live ✓) is the bug; cache-and-never-refresh (identity ✓, live ✗)
+passes every identity claim while making `freshAfterInsert` read `0`. The dead-list probe is the one
+worth keeping, because it is the fix a reader would reach for first.
+
+⚠⚠ **A GETTER CANNOT REFRESH A REFERENCE NOBODY READS THROUGH.** My first version refreshed inside
+the `cssRules` getter and **still failed the WPT idiom** — `cssRules.length` on a bound array runs no
+accessor of ours, so the update was never asked for. The refresh must be **PUSHED at mutation time**:
+`insertRule`/`deleteRule` call the same `__syncRules` after rewriting the element's text. NAMED
+LIMIT, measured: a raw `style.textContent = …` write also runs no accessor, so a bound list sees it
+at the next read *of the sheet*; the gate pins both halves separately (`freshAfterText` vs
+`capturedAfterText`) rather than implying the boundary.
+
+**MEASURED (release binary, foreground):**
+
+| area | before | after |
+|---|---|---|
+| `css/selectors` | 3119/5560 (56.1%) | **3250/5560 (58.5%)** — +131 |
+| ↳ `css/selectors/parsing` | 8/392 (2.0%) | **130/392 (33.2%)** |
+| `css/css-values` | 1697/4201 | **1697/4201 — unchanged** (regression control) |
+| `dom` (first 230 files) | 4241/7049 | **4241/7049 — unchanged** (regression control) |
+
+HANG/CRASH 0 everywhere. PRIMARY metric 69.78% → **69.89%**; `WPT-AREAS.tsv` updated.
+
+⚠⚠⚠ **SECOND TICK RUNNING WHERE THE AREA RANKER POINTED AT THE WRONG ORGAN.** t1190's `domparsing`
+14.7% was **65% unshipped-spec `tentative/`**; this tick's `css/selectors` was a **CSSOM identity
+bug**. The standing rule is "histogram the assertion message, not the test name" — this window adds
+the next step: **when the histogram indicts a mechanism that demonstrably works, READ THE FAILING
+TEST'S HELPER.** Rank by area to find the mass; read the helper to find the organ. Both ticks took
+~15 minutes of measurement to redirect and would each have been a multi-tick grind against an
+innocent subsystem.
+
+BOARD: on-mandate — `css/selectors` is the board's #2 leverage row, moved by a shared mechanism
+rather than per-assertion grinding, which is what the PORT-don't-reverse-engineer steer asks for.
+
+REMAINDER, cheap and adjacent: `css/selectors/query` is **0/12 (2 files)** and `css/selectors/media`
+**16.7%** — both untouched by this fix and both small enough to read directly. The other 78 failures
+in `parsing` are `"X" should throw in querySelector ... did not throw`: we ACCEPT invalid selectors
+where the spec requires a `SyntaxError`, which is a single validation seam, not 78 bugs.
+
+PERF: none — one cached array per sheet replaces an allocation per read, so if anything this is
+strictly less work on a hot CSSOM path.
+
+WIKI: `docs/wiki/dom-semantics.md` — why the histogram was convincing and wrong, the live-vs-stable
+table, and why the refresh has to be pushed rather than pulled.
+
 ## Tick 1190 — `parseFromString(s, 'text/xml')` ran the HTML parser, so an SVG string had no `clipPath` in it (2026-08-12)
 
 TICK SHAPE: capability — a shared MECHANISM found by histogramming assertion messages, not by the

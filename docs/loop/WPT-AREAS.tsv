@@ -1,7 +1,7 @@
 area	pass	total	pct	crashes	dupes
 dom	6382	10503	60.8	0	0
 html/dom	56443	59922	94.2	0	0
-css/selectors	3119	5560	56.1	0	0
+css/selectors	3250	5560	58.5	0	0
 css/css-flexbox	1475	3907	37.8	0	0
 css/css-grid	2421	10911	22.2	0	0
 css/css-sizing	921	2409	38.2	0	0
@@ -19,4 +19,4 @@ cssom	0	0	0.0	0	0
 domparsing	219	1294	16.9	0	0
 url	1	7	14.3	0	0
 encoding	360562	1127434	32.0	0	0
-TOTAL	445727	1249476	35.67	0	0
+TOTAL	445858	1249476	35.68	0	0

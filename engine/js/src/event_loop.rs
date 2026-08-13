@@ -6178,6 +6178,41 @@ const PRELUDE: &str = r#"
           };
         };
         var __makeSheet = function (el) {
+          // **ONE `CSSRuleList` per sheet — the SAME rule as `el.sheet === el.sheet` one level up,
+          // which was reasoned about there and NOT applied here.** `cssRules` re-derived the list
+          // from `el.textContent` on every read, which makes it correctly LIVE but mints a NEW array
+          // each time, so `sheet.cssRules !== sheet.cssRules` and any code that binds the list once
+          // reads a snapshot frozen at bind time:
+          //
+          //     const {cssRules} = sheet;      // ← captured here
+          //     sheet.insertRule(sel + "{}");
+          //     cssRules.length                // ← still 0, forever
+          //
+          // That destructuring is not exotic — it is what WPT's own `parsing-testcommon.js` does, so
+          // **201 of the 392 subtests in `css/selectors/parsing` failed on `Sheet should have 1
+          // rule`** while the selector engine was innocent and `insertRule` worked perfectly.
+          //
+          // Kept in the closure rather than as a property on the array so the list stays a clean
+          // indexed collection — a `__src` expando would show up in `Object.keys`/`for…in`.
+          var __rules = null, __rulesSrc = null;
+          // Refresh the ONE list in place from the element's text. Called from the `cssRules`
+          // getter AND from `insertRule`/`deleteRule` — the getter alone is not enough, because the
+          // whole point is a reference someone is holding: `cssRules.length` on a bound list runs
+          // no accessor of ours, so a mutation must PUSH the update rather than wait to be asked.
+          var __syncRules = function (sheetObj) {
+            var src = el.textContent == null ? '' : String(el.textContent);
+            if (__rules === null) {
+              __rules = [];
+              __rules.item = function (n) { return this[n] === undefined ? null : this[n]; };
+            }
+            if (__rulesSrc !== src) {
+              var parts = __splitRules(src);
+              for (var i = 0; i < parts.length; i++) { __rules[i] = __ruleOf(parts[i], sheetObj); }
+              __rules.length = parts.length;   // truncates when rules were deleted
+              __rulesSrc = src;
+            }
+            return __rules;
+          };
           var sheet = {
             ownerNode: el,
             ownerRule: null,
@@ -6211,13 +6246,9 @@ const PRELUDE: &str = r#"
               for (var i = 0; i < parts.length; i++) { list[i] = parts[i]; }
               return list;
             },
-            get cssRules() {
-              var src = el.textContent == null ? '' : String(el.textContent);
-              var parts = __splitRules(src), list = [];
-              for (var i = 0; i < parts.length; i++) { list.push(__ruleOf(parts[i], this)); }
-              list.item = function (n) { return this[n] === undefined ? null : this[n]; };
-              return list;
-            },
+            // Still LIVE — the element's text remains the single source of truth — but refreshed
+            // IN PLACE, so the identity every consumer holds survives the update.
+            get cssRules() { return __syncRules(this); },
             insertRule: function (text, index) {
               var src = el.textContent == null ? '' : String(el.textContent);
               var list = __splitRules(src);
@@ -6228,6 +6259,7 @@ const PRELUDE: &str = r#"
               if (!(at >= 0 && at <= list.length)) { throw new Error('IndexSizeError'); }
               list.splice(at, 0, String(text).trim());
               el.textContent = list.join('\n');
+              __syncRules(this);   // a BOUND `cssRules` must see this without being re-read
               return at;
             },
             deleteRule: function (index) {
@@ -6237,6 +6269,7 @@ const PRELUDE: &str = r#"
               if (!(at >= 0 && at < list.length)) { throw new Error('IndexSizeError'); }
               list.splice(at, 1);
               el.textContent = list.join('\n');
+              __syncRules(this);   // same reason as `insertRule`
             },
             // Legacy IE aliases. styled-components and emotion both still probe for them on old
             // paths, and a runtime that finds neither `insertRule` nor `addRule` gives up entirely.

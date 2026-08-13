@@ -15,7 +15,7 @@
 | median tick cycle | **28m** | 892 intervals |
 | median, last 10 | **35m** | 10 intervals |
 | fastest / slowest | 5s / 5.4d | |
-| **ticks per hour** | **1.14** | 783.1h elapsed |
+| **ticks per hour** | **1.14** | 783.6h elapsed |
 | median verify wall | **63s** | 832 ticks |
 | wall trend | 39s → 13m — getting slower ⚠️ | first 3 vs last 3 |
 
@@ -27,8 +27,8 @@ it, and a wall that grows taxes every future tick, so it is tracked separately f
 ### Near — the daily driver (doc / app / platform web)
 
 * **capabilities asserted** (`G_CAPABILITY`): 48 → **81**
-* **live gates**: 27 → **447**
-* **✅ rows in the capability ledger**: 144 → **587**
+* **live gates**: 27 → **448**
+* **✅ rows in the capability ledger**: 144 → **588**
 * **Bar 0 — oracle hangs**: 0 of 265 sites
 
 **399 of 893 ticks** (45%) moved a
@@ -989,6 +989,6 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 | **1187** | 2026-08-12 17:48 | 12m | measurement | 13m | +563/−460 | 445 | 81 | 56.0% · | the inline static position counts preceding ELEMENTS and not preceding TEXT (2026-08-12) |
 | **1188** | 2026-08-12 18:50 | 63m | capability | 13m | +893/−475 | 446 | 81 | 56.0% · | a fragment now says which TEXT NODE it came from, not only which element (2026-08-12) |
 | **1189** | 2026-08-12 18:58 | 8m | measurement | 13m | +115/−35 | 446 | 81 | 56.0% · | `requestAnimationFrame` is FINE, and the abspos remainder is one spec clause the code alre |
-| **1190** | 2026-08-12 20:10 | 72m | capability | 13m | +902/−48 | 447 | 81 | 56.0% · | `parseFromString(s, 'text/xml')` ran the HTML parser, so an SVG string had no `clipPath` i |
+| **1190** | 2026-08-12 20:36 | 1.6h | capability | 13m | +404/−42 | 448 | 81 | 56.0% · | `parseFromString(s, 'text/xml')` ran the HTML parser, so an SVG string had no `clipPath` i |
 
 *`·` after a WPT figure means **carried forward**, not measured this tick.*
