@@ -1883,3 +1883,47 @@ and neither is wrong: P's cost is *launching Chrome*, which in the cold mode com
 came in at its lowest recorded value, so the addition is inside the noise — as it should be, since
 the gate is one page load with no network.
 
+
+## Audit #48 — tick 1226 (2026-08-13)
+
+**Total 114s warm.** Well inside the 300s re-measure threshold Tier 0 item 1 names, and the leanest
+end of the bimodal band this project already records (1243s cold / 113s warm).
+
+```text
+    62s  T   54%        5s  D    4%        1s  F4  1%
+    20s  G6  18%        4s  P    4%        1s  B   1%
+     6s  G1   5%        3s  F    3%        0s  G_VIEWPORT · G_TEARDOWN · G_STALE_NODE · G_SILENT_FAIL
+```
+
+### ⚠⚠⚠ THE FINDING: THIS AUDIT'S INSTRUMENT MEASURES THE 10%, AND THE TAX IS THE OTHER 90%
+
+Four walls ran this session, and `verify.sh` prints its own decomposition:
+
+```text
+   t1222   gate 1063s · build  39s · total 1102s     engine/js touched
+   t1224   gate  867s · build  39s · total  906s     engine/js + engine/css touched
+   t1225   gate  114s · build   1s · total  115s     docs-only
+   t1226   gate  114s                                 (this audit, warm)
+```
+
+**The "gate" number is not assertion time — it is dominated by REBUILDING each gate's test binary.**
+A docs-only tick and an engine tick differ by **9.6×** on the same wall with the same gates and the
+same assertions. So the per-gate histogram above ranks the 114s that a *docs* tick pays, while the
+tax an *engine* tick actually pays is ~1,000s of compilation that this histogram cannot see at all.
+
+**Every one of the four admissible optimisations the audit offers is aimed at the wrong number.**
+Redundancy, parallelism, caching and scope are all about assertion seconds. Trimming the whole 114s
+to zero would save **10%** of a real engine tick's wall. ⚠ *An audit whose instrument measures a
+different quantity from the cost it exists to control will keep reporting "lean" while the tax rises.*
+
+### What that implies, and where it belongs
+
+The lever is the **build graph** — a statically-linked JS engine in every gate binary, rebuilt per
+gate when a shared crate changes (`cargo-nextest` sharing one test binary, a workspace-hack, sccache).
+**That is harness territory (CONSTITUTION.MD PART VII)**, so it is recorded here for the observer and
+not touched. The agent-side half is already being done and is the reason t1225 cost 115s: **keep
+docs/measurement ticks free of engine edits so they take the warm path.**
+
+**Nothing trimmed.** Two gates were ADDED this session (`g_resolved_insets`, `g_inline_style_serializes`:
+463 → 465) and the warm wall is unchanged at 114s — as it should be, since both are single page loads
+with no network.

@@ -11,12 +11,12 @@
 
 | | value | over |
 |---|---|---|
-| ticks landed | **926** | ticks 1–1225 |
-| median tick cycle | **28m** | 925 intervals |
-| median, last 10 | **17m** | 10 intervals |
+| ticks landed | **927** | ticks 1–1226 |
+| median tick cycle | **28m** | 926 intervals |
+| median, last 10 | **20m** | 10 intervals |
 | fastest / slowest | 5s / 5.4d | |
-| **ticks per hour** | **1.15** | 802.6h elapsed |
-| median verify wall | **63s** | 865 ticks |
+| **ticks per hour** | **1.15** | 804.0h elapsed |
+| median verify wall | **63s** | 866 ticks |
 | wall trend | 39s → 13m — getting slower ⚠️ | first 3 vs last 3 |
 
 The **cycle** is the real unit: implement → debug → verify wall → land. The wall is only part of
@@ -31,7 +31,7 @@ it, and a wall that grows taxes every future tick, so it is tracked separately f
 * **✅ rows in the capability ledger**: 144 → **612**
 * **Bar 0 — oracle hangs**: 0 of 265 sites
 
-**420 of 926 ticks** (45%) moved a
+**420 of 927 ticks** (45%) moved a
 user-visible capability. The rest were instruments, infrastructure and corrections — and the
 ledger says the corrections were not overhead: three of its top three priorities were phantoms,
 and finding that out redirected everything after it.
@@ -91,7 +91,7 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 ## What a capability costs
 
 * **420** capability ticks, median cycle **28m**
-* median diff per tick: **+268 / −34** lines across 8 files
+* median diff per tick: **+269 / −34** lines across 8 files
 
 ## Every tick
 
@@ -1023,5 +1023,6 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 | **1223** | 2026-08-13 14:26 | 44m | capability | 13m | +589/−239 | 464 | 81 | 56.0% · | the thing I called unreachable was in a table I was already reading (2026-08-13) |
 | **1224** | 2026-08-13 15:34 | 68m | capability | 13m | +673/−192 | 465 | 81 | 56.0% · | `el.style` never serialized anything; it echoed the author's bytes (2026-08-13) |
 | **1225** | 2026-08-13 15:40 | 6m | measurement | 13m | +186/−34 | 465 | 81 | 56.0% · | the refusal rule, promoted from a tick's finding into the constitution (2026-08-13) |
+| **1226** | 2026-08-13 17:03 | 83m | measurement | 13m | +367/−33 | 465 | 81 | 56.0% · | the certification checkpoint, and the flat gauge is the CORRECT answer (2026-08-13) |
 
 *`·` after a WPT figure means **carried forward**, not measured this tick.*

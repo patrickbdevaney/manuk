@@ -46371,6 +46371,92 @@ PERF: none — one UA rule and one narrowed branch in a cascade that already ran
 WIKI: `docs/wiki/css-cascade.md` — where Chrome draws the form-control `box-sizing` line, and why a
 layout-crate test cannot see it.
 
+## Tick 1226 — the certification checkpoint, and the flat gauge is the CORRECT answer (2026-08-13)
+
+TICK SHAPE: measurement — the CrUX fidelity sweep t1225's constitution check named as its #1 steer,
+banked as `docs/loop/SWEEP-t1226-rows.tsv` (200 sites, `--jobs 2`, the bankable mode). **22 ticks of
+engine work had gone unmeasured against the exit bar.**
+
+```text
+   in-scope 132 · scored 98 · SCORABILITY 74.2%          EXCLUDED (bot-wall/unreachable) 68/200 = 34%
+   shape-only        38/132 = 28.8%        jarring-clean  39/132 = 29.5%
+   M1 CONJUNCTION    26/132 = 19.7%   ← the RENDER bar, against 95%.  NEED +97 sites
+   CORPUS fidelity   0.4163            shape_mean 61.7%   cov_mean 87.4%
+   Δ vs t1203:  pass-count 30.0% → 28.8%  (−1.2 pts)
+                COMMON-SET BAND  +0.98 pts   (n=94 scored in BOTH · 8 up · 2 down)
+```
+
+⚠⚠ **THE TWO HALVES DISAGREE IN SIGN, AND THE LOOP'S OWN RULE SAYS WHICH ONE TO READ.** Pass-count is
+down 1.2 pts; the drift-robust common-set band is **up 0.98**. `fidelity-progress` prints the reason
+beside the number — *"PASS-COUNT = NOISY ±2-4 sites"* — and the standing rule is **read the
+COMMON-SET BAND, never the means or the count.** Eight sites up, two down, on the 94 scored in both
+sweeps. So: real, small, positive movement, and a headline that cannot see it.
+
+⚠⚠⚠ **AND THE READING THAT MATTERS MOST IS THAT THIS SESSION'S +2,408 WPT WAS NEVER SUPPOSED TO MOVE
+THIS GAUGE — AND DID NOT.** t1222/t1223/t1224 are **CSSOM reporting surfaces**: what
+`getComputedStyle` and `el.style` *say*. M1 is **geometry**: where the boxes *are*. Those are
+different organs, and the gauge is doing its job by **not** moving. Writing *"three big ticks, flat
+M1, therefore the ticks did not work"* is precisely the error this loop already carries a rule
+against — *price it, then ask WHICH ORGAN the fix moves and whether the metric can SEE it.* The
+CSSOM work is the **FUNCTION leg (M2)**, banked on the monotonic WPT total, which is where it shows.
+**Two bars, two organs; the failure mode is charging one bar's work to the other's account.**
+
+⚠⚠⚠ **THE BINDING CONSTRAINT IS SCORABILITY, AND ITS LARGEST BUCKET IS A CLOCK — NOT A SHAPE.**
+M1 is *capped* at 74.2% because 34 in-scope sites do not render at all, and the unscored histogram is
+unambiguous about which lever that is:
+
+```text
+   timeout-150s 13   ← the largest ENGINE-OWNED bucket, and it is PERFORMANCE
+   shell-only    7 · other 6 · thin-overlap 3 · css-starved 3 · render-fail 2
+   (bot-wall-403 34 · unreachable 16 · probe-blocked 6 · http-404 5 — NOT ours, correctly EXCLUDED)
+```
+
+**Thirteen sites are burning a 150-second budget.** Named, so the next tick has a worklist and not a
+category: `ticket.jfa.jp` · `d2rwkn96gppqo1.cloudfront.net` · `beb88run.xyz` · `bhramarah.in` ·
+`neutypechic.com` · `bbs.ruliweb.com` · `coinmarketcap.com` · `www.friulioggi.it` ·
+`swiftspinus.com` · `sip777man.site` · `payb.jp` · `morikoshi.net` · `pt88.app`.
+
+**This independently re-confirms t1194's finding 32 ticks later** — *"quality UP but scorability DOWN
+on REAL timeouts; the next lever is PERFORMANCE, not shape"* — and it has not been worked since. A
+site that times out scores **zero**, so each one cleared is worth more than any shape nudge: it
+raises the CAP rather than the fill.
+
+**The near-bar cohort, for when the cap moves:** 22 sites sit in `0.60 ≤ shape < 0.75`, and **5 of
+them are already jarring-clean** (`pasarbokep.com` 0.705, `secure5.entertimeonline.com` 0.692 among
+them) — a shape nudge on those five is five M1 crossings, versus one crossing for clearing any single
+jarring dimension corpus-wide.
+
+⚠ **The excluded fraction fell 70 → 68 and in-scope rose 130 → 132**, so the denominator moved under
+the pass-count. That is the third instrument confound this loop has named (§7's population change),
+and it is exactly why the common-set band is the number of record.
+
+⚠⚠⚠ **THE WALL-TIME AUDIT ALSO CAME DUE AND FOUND THAT ITS OWN INSTRUMENT MEASURES THE 10%**
+(audit #48, `docs/loop/WALL-AUDIT.md`). The warm wall is **114s** — lean, inside the 300s threshold.
+But four walls ran this session and `verify.sh` prints its own decomposition:
+
+```text
+   t1222   gate 1063s · build  39s · total 1102s     engine/js touched
+   t1224   gate  867s · build  39s · total  906s     engine/js + engine/css touched
+   t1225   gate  114s · build   1s · total  115s     docs-only
+```
+
+**The "gate" seconds are not assertion time — they are dominated by REBUILDING each gate's test
+binary.** A docs tick and an engine tick differ by **9.6×** on the same wall, same gates, same
+assertions. So the audit's per-gate histogram ranks the 114s a *docs* tick pays, while the tax an
+*engine* tick actually pays is ~1,000s of compilation the histogram cannot see. **All four
+optimisations the audit offers — redundancy, parallelism, caching, scope — are aimed at assertion
+seconds; trimming all 114s to zero saves 10% of a real tick.** ⚠ *An audit whose instrument measures a
+different quantity from the cost it controls will keep reporting "lean" while the tax rises.* The
+lever is the build graph (a statically-linked JS engine in every gate binary), which is PART VII
+harness territory — recorded for the observer, not touched. **Nothing trimmed**; two gates were added
+this session (463 → 465) and the warm wall is unchanged.
+
+PERF: none — measurement only. ⚠ The sweep OWNS the tree while it runs (~65 min for 200 sites at
+`--jobs 2`); nothing was edited during it.
+
+WIKI: none — the artefact is `docs/loop/SWEEP-t1226-rows.tsv` and the `FIDELITY-PROGRESS.tsv` row,
+which are the instrument's own record. [no-pattern]
+
 ## Tick 1225 — the refusal rule, promoted from a tick's finding into the constitution (2026-08-13)
 
 TICK SHAPE: measurement — the cadence re-read of `CONSTITUTION.MD` (due every 8 ticks; last at 1217),
