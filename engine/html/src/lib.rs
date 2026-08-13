@@ -47,6 +47,96 @@ pub fn parse_bytes(bytes: &[u8]) -> Dom {
         .expect("parsing is infallible for in-memory input")
 }
 
+/// The result of an XML parse: the tree, and **whether the source was well-formed**.
+///
+/// XML has no error recovery. A document that is not well-formed does not get "fixed up" the way
+/// HTML does — per the DOM spec it must be replaced wholesale by a `parsererror` document, so the
+/// verdict is not diagnostics, it is the return value.
+pub struct XmlParse {
+    pub dom: Dom,
+    /// Empty iff the source was well-formed.
+    pub errors: Vec<String>,
+}
+
+impl XmlParse {
+    /// ⚠ **MEASURED, NOT ASSUMED — and it is not the full spec set.** xml5ever reports mismatched
+    /// end tags, EOF inside a tag, a stray end tag, a bad character reference, two document
+    /// elements, an empty document and duplicate attributes. It does **NOT** report two cases a
+    /// strict XML parser must reject, because its tree builder silently recovers from both:
+    ///
+    /// | input              | strict XML | here            |
+    /// |--------------------|------------|-----------------|
+    /// | `<foo>` (unclosed) | fatal      | **accepted**    |
+    /// | `<f a=1/>` (unquoted attr value) | fatal | **accepted** |
+    ///
+    /// The unclosed-tag case is not reachable from the sink: xml5ever's `end()` drains its open
+    /// element stack and pops each entry *before* `TreeSink::finish` runs, and `open_elems` is
+    /// private, so by the time we can look, a well-formed and an unclosed parse are identical. It
+    /// is written down here rather than papered over — `parseFromString("<foo>", "text/xml")`
+    /// therefore yields the parsed tree where Chrome yields a `parsererror`. Closing it needs a
+    /// change upstream (or driving the tokenizer directly), not a guess in this crate.
+    pub fn well_formed(&self) -> bool {
+        self.errors.is_empty()
+    }
+}
+
+/// **Parse an XML string into a [`Dom`] — case-sensitively, with real namespaces.**
+///
+/// This is the same arena, the same `ArenaSink` and the same `markup5ever::TreeSink` trait the
+/// HTML path already drives; only the tree builder differs. That is why this is a port rather than
+/// a second parser: xml5ever and html5ever share a version train and an interface, so every
+/// behaviour the sink already implements (shadow roots, template contents, the id index) applies
+/// unchanged.
+///
+/// The difference that matters to callers is that **XML is not HTML with different tags**:
+/// `<Foo/>` and `<foo/>` are distinct elements, an unclosed tag is a fatal error rather than
+/// something to recover from, and elements carry the namespace their `xmlns` declared instead of
+/// being forced into the HTML namespace. Running XML through the HTML parser — which is what
+/// `DOMParser.parseFromString(s, 'text/xml')` did before this existed — silently lowercases every
+/// tag name and never reports the error.
+pub fn parse_xml(src: &str) -> XmlParse {
+    let sink = sink::ArenaSink::new();
+    let errors = sink.errors_handle();
+    let dom = xml5ever::driver::parse_document(sink, xml5ever::driver::XmlParseOpts::default())
+        .from_utf8()
+        .read_from(&mut std::io::Cursor::new(src.as_bytes()))
+        .expect("parsing is infallible for in-memory input");
+    let errors = errors.borrow().clone();
+    XmlParse { dom, errors }
+}
+
+/// The namespace a `parsererror` element lives in. Gecko minted it, and every other engine
+/// adopted it verbatim — WPT asserts this exact string, so it is not ours to choose.
+pub const PARSERERROR_NS: &str = "http://www.mozilla.org/newlayout/xml/parsererror.xml";
+
+/// **Parse `src` as XML directly under `dst_doc`, an existing document node in `dst`.**
+///
+/// `NodeId`s are arena-local, so the freshly parsed tree cannot be moved across — it is cloned in,
+/// exactly as `set_inner_html` already does for HTML fragments.
+///
+/// Returns the well-formedness errors, empty iff the parse was clean. **On a malformed document
+/// the tree grafted in is a `parsererror` document, not the partial parse** — that substitution
+/// lives here, in one place, rather than at each call site, because it IS the parse result as far
+/// as the DOM spec is concerned.
+pub fn parse_xml_into(src: &str, dst: &mut Dom, dst_doc: NodeId) -> Vec<String> {
+    let parsed = parse_xml(src);
+    if parsed.well_formed() {
+        let root = parsed.dom.root();
+        let kids: Vec<NodeId> = parsed.dom.children(root).collect();
+        for k in kids {
+            clone_into(&parsed.dom, k, dst, dst_doc);
+        }
+    } else {
+        // Per DOM §DOMParser: the document element becomes `parsererror`, carrying a
+        // human-readable description of what went wrong.
+        let err = dst.create_element_ns(Some(PARSERERROR_NS.to_string()), "parsererror");
+        let msg = dst.create_text(parsed.errors.join("\n"));
+        dst.append_child(err, msg);
+        dst.append_child(dst_doc, err);
+    }
+    parsed.errors
+}
+
 /// B-latency — an **incremental** parse driven by bytes as they arrive off the socket.
 ///
 /// `feed`/`feed_bytes` push chunks (UTF-8 sequences split across a boundary are handled by
@@ -340,6 +430,94 @@ mod tests {
         assert!(dom.element(p).unwrap().has_class("lead"));
         assert_eq!(dom.text_content(p), "Hello world");
         assert_eq!(dom.text_content(dom.find_first("title").unwrap()), "Hi");
+    }
+
+    /// **XML is not HTML with different tags.** Every assertion here is something the HTML parser
+    /// gets deliberately, correctly WRONG for XML input — which is what `DOMParser.parseFromString`
+    /// was doing to every `text/xml` string it was handed.
+    #[test]
+    fn xml_is_case_sensitive_and_namespaced() {
+        let p = parse_xml(r#"<Foo xmlns="urn:x"><Bar baz="Q"/></Foo>"#);
+        assert!(p.well_formed(), "well-formed input: {:?}", p.errors);
+        let root = p
+            .dom
+            .children(p.dom.root())
+            .next()
+            .expect("document element");
+        // The HTML parser lowercases every tag name. XML must not.
+        assert_eq!(p.dom.tag_name(root), Some("Foo"));
+        let el = p.dom.element(root).expect("element");
+        assert_eq!(el.namespace.as_deref(), Some("urn:x"), "xmlns is honoured");
+        let bar = p.dom.children(root).next().expect("child");
+        assert_eq!(p.dom.tag_name(bar), Some("Bar"), "child keeps its case");
+    }
+
+    /// A malformed XML document is NOT recovered from — it is replaced. HTML's error recovery
+    /// means `parse("<foo>")` always yields a tree; for XML that same input is fatal.
+    #[test]
+    fn malformed_xml_becomes_a_parsererror_document() {
+        // A mismatched end tag — the error class xml5ever DOES report. See `XmlParse::well_formed`
+        // for the two it does not.
+        let p = parse_xml("<foo></bar>");
+        assert!(!p.well_formed(), "mismatched end tag is not well-formed");
+
+        let mut dst = Dom::new();
+        let doc = dst.create_document();
+        let errs = parse_xml_into("<foo></bar>", &mut dst, doc);
+        assert!(!errs.is_empty());
+        let de = dst.children(doc).next().expect("document element");
+        assert_eq!(dst.tag_name(de), Some("parsererror"));
+        assert_eq!(
+            dst.element(de).unwrap().namespace.as_deref(),
+            Some(PARSERERROR_NS)
+        );
+    }
+
+    /// **Pins the known well-formedness gap so it cannot drift unnoticed.** These two inputs are
+    /// fatal errors in strict XML and are currently accepted; the table in `XmlParse::well_formed`
+    /// says why. If a future xml5ever starts reporting them this test FAILS — which is the point:
+    /// the day the gap closes, the loop is told, rather than the limitation quietly outliving its
+    /// own documentation.
+    #[test]
+    fn known_wellformedness_gap_is_pinned() {
+        assert!(
+            parse_xml("<foo>").well_formed(),
+            "unclosed tag still accepted — if this now FAILS the gap has CLOSED: \
+             delete this test and assert the parsererror instead"
+        );
+        assert!(
+            parse_xml("<f a=1/>").well_formed(),
+            "unquoted attribute value still accepted — same instruction as above"
+        );
+    }
+
+    /// The clean path must graft the real tree into the CALLER's arena, not a parsererror.
+    #[test]
+    fn well_formed_xml_grafts_into_the_target_arena() {
+        let mut dst = Dom::new();
+        let doc = dst.create_document();
+        let errs = parse_xml_into("<foo><bar/></foo>", &mut dst, doc);
+        assert!(errs.is_empty(), "{errs:?}");
+        let de = dst.children(doc).next().expect("document element");
+        assert_eq!(dst.tag_name(de), Some("foo"));
+        assert_eq!(dst.children(de).count(), 1, "child survives the graft");
+    }
+
+    /// A document reports the type it was PARSED as, per document — not one hardcoded answer for
+    /// the whole arena. One arena holds many documents, which is why this is keyed by node.
+    #[test]
+    fn content_type_is_per_document() {
+        let mut dom = Dom::new();
+        let html_doc = dom.create_document();
+        let xml_doc = dom.create_document();
+        assert_eq!(dom.content_type(html_doc), "text/html", "the default");
+        dom.set_content_type(xml_doc, "image/svg+xml");
+        assert_eq!(dom.content_type(xml_doc), "image/svg+xml");
+        assert_eq!(
+            dom.content_type(html_doc),
+            "text/html",
+            "the sibling document is untouched"
+        );
     }
 
     #[test]

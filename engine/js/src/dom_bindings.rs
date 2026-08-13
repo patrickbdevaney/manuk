@@ -3033,6 +3033,8 @@ unsafe fn define_members(
         prop_guarded!(prop, c"anchors", doc_get_anchors, None);
         // Document-level (delegated) events.
         def_guarded!(def, c"__createHTMLDocument", doc_create_html_document, 1);
+        def_guarded!(def, c"__parseXML", doc_parse_xml, 2);
+        def_guarded!(def, c"__createXMLDocument", doc_create_xml_document, 2);
         // Test-only: proves the containment boundary is real. Not registered otherwise.
         if std::env::var_os("MANUK_PANIC_PROBE").is_some() {
             def_guarded!(def, c"__panicProbe", el_panic_probe, 0);
@@ -7323,6 +7325,98 @@ unsafe fn doc_create_html_document(cx: *mut RawJSContext, argc: u32, vp: *mut Va
     // difference is only that `createHTMLDocument`'s document lives in the SAME arena as the main one,
     // which is why the subtree-scoped `documentElement`/`body`/`head` getters above are required for it
     // to be safe.
+    // The reflector build + node-cache seeding is shared with `createDocument` and
+    // `DOMParser.parseFromString`; see `reflect_document` for why the seeding is load-bearing.
+    reflect_document(cx, dom, doc, vp)
+}
+
+/// **`DOMParser.parseFromString(str, type)` for the XML types — a document parsed as XML.**
+///
+/// The JS prelude used to answer every MIME type by HTML-parsing into a `createHTMLDocument`. For
+/// `text/html` that is right; for the four XML types it is wrong in ways nothing reports:
+///
+/// * **case is destroyed** — the HTML tokenizer lowercases tag names, so `<Foo/>` became `<foo>`.
+///   Every SVG string with a `<clipPath>`, `<linearGradient>` or `<textPath>` in it — which is most
+///   of them — came back with elements that match no selector and paint nothing;
+/// * **namespaces are invented** — everything landed in the XHTML namespace regardless of `xmlns`;
+/// * **malformed input is silently recovered** instead of becoming a `parsererror` document;
+/// * `contentType` reported `text/html` even though the caller had just named the type.
+///
+/// This is what JS reaches for to read an RSS/Atom feed, an SVG string, a SOAP body or a sitemap —
+/// `new DOMParser().parseFromString(xhr.responseText, "text/xml")` is the canonical line — so the
+/// failure surfaced as a feed reader that found no `<pubDate>` and an icon set that rendered blank.
+///
+/// The document is built in the CALLER's arena, exactly like `createHTMLDocument`, so
+/// `el.ownerDocument === doc` holds and the whole Document surface comes along.
+unsafe fn doc_parse_xml(cx: *mut RawJSContext, argc: u32, vp: *mut Value) -> bool {
+    let Some((dom, _)) = this_node(vp) else {
+        *vp = NullValue();
+        return true;
+    };
+    let src = arg_string(cx, vp, argc, 0).unwrap_or_default();
+    let ty = arg_string(cx, vp, argc, 1).unwrap_or_else(|| "application/xml".to_string());
+
+    let doc = (*dom).create_document();
+    // The `parsererror` substitution for malformed input lives in `parse_xml_into`, so there is one
+    // implementation of that spec rule rather than one per caller.
+    manuk_html::parse_xml_into(&src, &mut *dom, doc);
+    // The document reports the type it was ASKED for — including when the parse failed, which is
+    // what `DOMParser-parseFromString-xml` asserts: a parsererror document still carries the
+    // requested contentType.
+    (*dom).set_content_type(doc, &ty);
+    reflect_document(cx, dom, doc, vp)
+}
+
+/// **`document.__createXMLDocument(ns, qualifiedName)` — `DOMImplementation.createDocument`.**
+///
+/// An XML document is not an HTML document with different content: per DOM §createDocument it has
+/// **no doctype, no `<html>`, no `<head>` and no `<body>`** — just an optional document element
+/// named `qualifiedName` in namespace `ns`. `createDocument` used to call `__createHTMLDocument()`
+/// and discard both of its arguments, so it returned an `<html><head></head><body></body></html>`
+/// skeleton whose `documentElement` was `HTML` no matter what the caller asked for.
+unsafe fn doc_create_xml_document(cx: *mut RawJSContext, argc: u32, vp: *mut Value) -> bool {
+    let Some((dom, _)) = this_node(vp) else {
+        *vp = NullValue();
+        return true;
+    };
+    let ns = arg_string(cx, vp, argc, 0).filter(|s| !s.is_empty());
+    let ns_for_type = ns.clone();
+    let qname = arg_string(cx, vp, argc, 1).unwrap_or_default();
+
+    let doc = (*dom).create_document();
+    // An EMPTY qualifiedName means a document with no document element at all — that is a valid,
+    // specified outcome (`createDocument(null, "")`), not a degenerate one to paper over.
+    if !qname.is_empty() {
+        let root = (*dom).create_element_ns(ns, &qname);
+        (*dom).append_child(doc, root);
+    }
+    // **The content type is derived from the NAMESPACE, not fixed.** DOM §createDocument: default
+    // `application/xml`, but the HTML namespace gives `application/xhtml+xml` and the SVG namespace
+    // `image/svg+xml`. `Document-contentType` asserts the XHTML case by name, and a flat
+    // `application/xml` fails it while looking entirely reasonable.
+    let ct = match ns_for_type.as_deref() {
+        Some("http://www.w3.org/1999/xhtml") => "application/xhtml+xml",
+        Some("http://www.w3.org/2000/svg") => "image/svg+xml",
+        _ => "application/xml",
+    };
+    (*dom).set_content_type(doc, ct);
+    reflect_document(cx, dom, doc, vp)
+}
+
+/// Build the JS reflector for a Document node and return it through `vp`.
+///
+/// Shared by `createHTMLDocument`, `createDocument` and `DOMParser.parseFromString` because getting
+/// this wrong is silent: the reflector must carry `Document.prototype` (not the element member set)
+/// **and** be seeded into the node cache, or `el.ownerDocument === doc` fails and every library
+/// that walks from a node back to its document — DOMPurify's `createNodeIterator` call being the
+/// measured casualty — operates on a tree it cannot see. Three copies of that would be three
+/// chances to omit the cache seeding.
+unsafe fn reflect_document(
+    cx: *mut RawJSContext,
+    dom: *mut Dom,
+    doc: NodeId,
+    vp: *mut Value,
+) -> bool {
     let doc_obj = match dom_protos(cx) {
         Some((_, doc_proto)) => {
             rooted!(in(cx) let proto = doc_proto);
@@ -7339,9 +7433,6 @@ unsafe fn doc_create_html_document(cx: *mut RawJSContext, argc: u32, vp: *mut Va
     JS_SetReservedSlot(dobj.get(), SLOT_NODE, &nv);
     let dv = PrivateValue(dom as *const std::ffi::c_void);
     JS_SetReservedSlot(dobj.get(), SLOT_DOM, &dv);
-    // Seed the identity cache with THIS reflector, so `el.ownerDocument === doc` and `ownerDocument`
-    // resolves back to the real Document (with the factory surface) instead of `new_reflector` minting a
-    // second, element-proto object for the same node id.
     rooted!(in(cx) let cache = node_cache_for(cx, dom).unwrap_or(ptr::null_mut()));
     if !cache.get().is_null() {
         rooted!(in(cx) let ov = ObjectValue(dobj.get()));
@@ -9009,9 +9100,22 @@ unsafe fn doc_get_compat_mode(cx: *mut RawJSContext, _argc: u32, vp: *mut Value)
     true
 }
 
-/// `document.contentType` — `"text/html"` for the HTML documents this engine produces.
+/// **`document.contentType` — what THIS document was parsed as.**
+///
+/// This was a hardcoded `"text/html"` for every document in existence. That is the right answer
+/// almost everywhere, which is exactly why it survived: the one place it is wrong is the one place
+/// the page **told us the answer** — `DOMParser.parseFromString(s, "text/xml")` handed us a MIME
+/// type, and the getter overrode it with a constant.
+///
+/// The value is per DOCUMENT NODE, not per arena (`create_document` mints many documents into one
+/// `Dom`), so it is resolved through the node handle the same way `compatMode` is.
 unsafe fn doc_get_content_type(cx: *mut RawJSContext, _argc: u32, vp: *mut Value) -> bool {
-    return_string(cx, vp, "text/html");
+    let ct = match this_node(vp) {
+        Some((dom, node)) => (*dom).content_type(node).to_string(),
+        // No handle (a detached/synthetic document): the default this engine produces.
+        None => "text/html".to_string(),
+    };
+    return_string(cx, vp, &ct);
     true
 }
 
@@ -10438,8 +10542,14 @@ unsafe fn doc_get_scrolling_element(cx: *mut RawJSContext, _argc: u32, vp: *mut 
 unsafe fn doc_get_document_element(cx: *mut RawJSContext, _argc: u32, vp: *mut Value) -> bool {
     match this_node(vp) {
         Some((dom, root)) => {
-            let html = (*dom).find_first_in(root, "html");
-            return_node_or_null(cx, vp, dom, html);
+            // **The FIRST ELEMENT CHILD, not "the `<html>` element".** For every HTML document
+            // those are the same node, which is why the hardcoded tag search survived — but an XML
+            // document's root is whatever the source named (`<rss>`, `<svg>`, `<soap:Envelope>`),
+            // so the tag search returned `null` and every walk from `documentElement` died at the
+            // first property access. It is also what the spec says: the document element is
+            // positional, not nominal.
+            let de = (*dom).children(root).find(|&c| (*dom).is_element(c));
+            return_node_or_null(cx, vp, dom, de);
         }
         None => *vp = NullValue(),
     }
@@ -13960,8 +14070,16 @@ const WINDOW_PRELUDE: &str = r#"
                     ? ownerDoc.__createHTMLDocument()
                     : ownerDoc.__createHTMLDocument(String(title));
             },
+            // ⚠ This used to be `ownerDoc.__createHTMLDocument()` with **both arguments dropped**,
+            // so `createDocument('urn:x', 'foo')` returned an `<html><head><body>` skeleton whose
+            // documentElement was `HTML`. It now builds the specified thing: no doctype, no
+            // html/head/body, and the document element the caller named — and it is the ONLY
+            // producer of an `XMLDocument` (`parseFromString` is deliberately not one).
             createDocument: function (ns, qualifiedName) {
-                var d = ownerDoc.__createHTMLDocument();
+                var d = ownerDoc.__createXMLDocument(
+                    ns == null ? '' : String(ns),
+                    qualifiedName == null ? '' : String(qualifiedName));
+                try { Object.defineProperty(d, '__isXMLDocument', { value: true }); } catch (e) {}
                 return d;
             },
             // `hasFeature()` is specified to ALWAYS return true — it is a legacy method the spec now

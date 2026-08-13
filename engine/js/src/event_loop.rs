@@ -2107,8 +2107,18 @@ const PRELUDE: &str = r#"
           // reflector carrying `Document.prototype`, and its identity seeded into the node cache so
           // `el.ownerDocument === doc` holds). Two ways to make a document, one real and one
           // pretend, is the one-rule-two-implementations defect; this deletes the pretend one.
-          var doc = document.implementation.createHTMLDocument('');
           var s = String(str == null ? '' : str);
+          // **The MIME type is an INSTRUCTION, not a label.** Every type below is parsed by the XML
+          // tree builder (case-sensitive, real namespaces, `parsererror` on malformed input); only
+          // `text/html` goes through the HTML path. Before this, all five were HTML-parsed — which
+          // lowercases `<clipPath>`/`<linearGradient>`, puts everything in the XHTML namespace, and
+          // silently recovers from errors XML says are fatal.
+          var t = String(type == null ? '' : type).toLowerCase().split(';')[0].trim();
+          if (t === 'text/xml' || t === 'application/xml' ||
+              t === 'application/xhtml+xml' || t === 'image/svg+xml') {
+            return document.__parseXML(s, t);
+          }
+          var doc = document.implementation.createHTMLDocument('');
           // A full-document string is set on the documentElement so `<head>` content lands in the
           // head; anything else is a fragment and belongs in the body, which is where an innerHTML
           // parse would put it anyway.
@@ -2117,7 +2127,10 @@ const PRELUDE: &str = r#"
           } else {
             doc.body.innerHTML = s;
           }
-          try { doc.contentType = type || 'text/html'; } catch (e) {}
+          // (No `doc.contentType = …` here any more. That assignment was a silent no-op — the
+          // getter is native and has no setter, so the `catch` swallowed the failure and the
+          // document went on reporting `text/html` whatever it was handed. The only type that
+          // still reaches this line IS `text/html`, which is now the honest default.)
           return doc;
         };
       }
@@ -4347,6 +4360,16 @@ const PRELUDE: &str = r#"
       // A Document node has nodeType 9; the old `o === document` predicate made `createHTMLDocument()
       // instanceof Document` false, which is the FIRST assertion in `DOMImplementation-createHTMLDocument`.
       iface('Document', function(o){ return !!o && o.nodeType === 9; });
+      // `XMLDocument` — a Document subclass, and its ABSENCE was the loud failure: a test that says
+      // `doc instanceof XMLDocument` does not fail that assertion when the global is missing, it
+      // throws `XMLDocument is not defined` and takes **the rest of the file** with it.
+      //
+      // ⚠ The narrow predicate is the point, and it is easy to get backwards. Only
+      // `DOMImplementation.createDocument()` produces an XMLDocument; **`DOMParser.parseFromString`
+      // does NOT**, whatever type it was given — `DOMParser-parseFromString-xml` asserts
+      // `assert_false(doc instanceof XMLDocument)` for all four XML types. So this cannot key off
+      // `contentType`; it keys off the flag `createDocument` sets, and nothing else sets.
+      iface('XMLDocument', function(o){ return !!o && o.nodeType === 9 && !!o.__isXMLDocument; });
       iface('Window', function(o){ return o === globalThis; });
 
       iface('HTMLIFrameElement',   tagIs('IFRAME'));

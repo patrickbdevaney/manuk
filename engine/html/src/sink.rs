@@ -52,14 +52,20 @@ pub struct ArenaSink {
     /// owns the sink (B-latency's `StreamParser`).
     dom: Rc<RefCell<Dom>>,
     /// Parse errors, kept for diagnostics rather than discarded.
-    errors: RefCell<Vec<String>>,
+    ///
+    /// Shared (`Rc`) for the same reason `dom` is: `TreeSink::finish` CONSUMES the sink and hands
+    /// back only the `Dom`, so a caller that needs to know *whether the parse was clean* has no
+    /// way to ask afterwards. For HTML that does not matter — the spec's error recovery means every
+    /// input produces a tree. For **XML it is the whole answer**: a document that is not
+    /// well-formed must become a `parsererror` document, not the tree we happened to build.
+    errors: Rc<RefCell<Vec<String>>>,
 }
 
 impl Default for ArenaSink {
     fn default() -> Self {
         ArenaSink {
             dom: Rc::new(RefCell::new(Dom::new())),
-            errors: RefCell::new(Vec::new()),
+            errors: Rc::new(RefCell::new(Vec::new())),
         }
     }
 }
@@ -77,6 +83,12 @@ impl ArenaSink {
 
     pub fn errors(&self) -> Vec<String> {
         self.errors.borrow().clone()
+    }
+
+    /// A handle onto the error log, readable AFTER `finish` has consumed the sink — which is the
+    /// only moment an XML caller can act on well-formedness. See the `errors` field.
+    pub fn errors_handle(&self) -> Rc<RefCell<Vec<String>>> {
+        Rc::clone(&self.errors)
     }
 
     /// Append `child` (a node or text) to `parent`, merging adjacent text nodes the way a

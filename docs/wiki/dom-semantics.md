@@ -2655,3 +2655,117 @@ as the M1 layout slog to be ported from blitz/servo. It moved by twelve lines in
 > per-area ranking — t1176's missing helper library, t1179's dashed attribute, and this — and all
 > three were invisible to a ranker that reads areas. Rank by area to find the mass; histogram the
 > assertion messages to find the organ.
+
+## `DOMParser.parseFromString` ignored its second argument — XML was parsed by the HTML parser (tick 1189)
+
+`new DOMParser().parseFromString(s, 'text/xml')` built a `createHTMLDocument()` and HTML-parsed the
+string. The MIME type was accepted, stored nowhere, and acted on never. Four wrongs on one line:
+
+| | HTML parser does | XML requires |
+|---|---|---|
+| **case** | lowercases every tag name | case-sensitive |
+| **namespace** | forces XHTML on everything | whatever `xmlns` declared |
+| **malformed input** | error recovery, always a tree | fatal → `parsererror` document |
+| **`contentType`** | reported `text/html` | the type the caller named |
+
+**The symptom is an SVG string with no `<clipPath>` in it.** Parse SVG markup through `DOMParser`
+and `clipPath`, `linearGradient` and `textPath` come back as `clippath`, `lineargradient`,
+`textpath` — matching no selector, resolving against no SVG attribute set, painting nothing, with
+no error raised. The same line is how JS reads an RSS/Atom feed, a SOAP body and a sitemap.
+
+### The engine was TOLD the answer and threw it away
+
+The prelude did try: `try { doc.contentType = type || 'text/html'; } catch (e) {}`. But
+`document.contentType` is a **native getter with no setter**, so the assignment threw, the `catch`
+swallowed it, and the document went on reporting `text/html`. The getter itself was:
+
+```rust
+unsafe fn doc_get_content_type(cx, _argc, vp) -> bool {
+    return_string(cx, vp, "text/html");   // every document, unconditionally
+    true
+}
+```
+
+> **A silent no-op wrapped in a `catch` is worse than an absent feature.** The code reads as though
+> content type is handled. Nothing logs, nothing throws, and the wrong answer is a plausible one.
+
+### Content type is per DOCUMENT, not per arena — and that is the non-obvious part
+
+The tempting move is to copy `quirks`, a `bool` on `Dom` that reaches every consumer with no
+signature change. **It would have been wrong.** `quirks` is a property of *the parse that built the
+arena*, but **one arena holds many documents**: `create_document` mints a fresh `Document` node for
+every `createHTMLDocument`, every `parseFromString` and every iframe. A single field on `Dom` would
+make the newest parse retroactively rewrite what every earlier document claims to be.
+
+It is therefore a `HashMap<NodeId, String>` keyed by node. `NodeId` **packs the slot generation**,
+so a freed-and-reused slot mints a different key and cannot inherit the previous occupant's type —
+the map is generation-safe by construction, and `free_slot` drops entries for hygiene only.
+
+### The parser is a PORT, not a second implementation
+
+`xml5ever` shares html5ever's version train *and* its `markup5ever::TreeSink` trait, so
+`ArenaSink` — the existing sink that parses straight into the arena — backs both parsers
+**unchanged**. `parse_xml` is the same sink, the same arena, a different tree builder. This is the
+board's "port whole algorithms, don't reverse-engineer" rule paying out at near-zero cost.
+
+### One producer of `XMLDocument`, and it is NOT `DOMParser`
+
+The narrow predicate is the whole subtlety:
+
+```js
+iface('XMLDocument', function(o){ return !!o && o.nodeType === 9 && !!o.__isXMLDocument; });
+```
+
+It **cannot** key off `contentType`, because `DOMParser-parseFromString-xml` asserts
+`assert_false(doc instanceof XMLDocument)` for all four XML types. Only
+`DOMImplementation.createDocument()` produces one. Branding every XML parse as `XMLDocument` looks
+like the more complete fix and is a wrong one — `G_XML_IS_PARSED_AS_XML`'s `notXmlDoc` claim exists
+to catch exactly that, and was RED-proven against it.
+
+**A missing global is not a failed assertion.** `doc instanceof XMLDocument` with no such global
+throws `XMLDocument is not defined` and takes **the rest of the file** with it — which is why one
+absent constructor accounted for 113 `dom` subtests.
+
+### Two adjacent bugs this uncovered, both invisible until XML existed
+
+1. **`documentElement` was `find_first_in(root, "html")`** — a *nominal* lookup where the spec says
+   *positional* (the document's first element child). Identical for every HTML document, which is
+   why it survived; `null` for an XML document rooted at `<rss>`, `<svg>` or `<soap:Envelope>`, so
+   every walk died at the first property access.
+2. **`createDocument(ns, qualifiedName)` discarded both arguments**, calling `__createHTMLDocument()`
+   and returning an `<html><head><body>` skeleton. It now builds the specified tree: the named
+   document element, no doctype, no html/head/body — and its content type is **derived from the
+   namespace** (HTML → `application/xhtml+xml`, SVG → `image/svg+xml`, else `application/xml`). A
+   flat `application/xml` reads as reasonable and fails `Document-contentType` by name.
+
+### The measured well-formedness boundary, written down rather than implied
+
+xml5ever reports mismatched end tags, EOF inside a tag, a stray end tag, a bad character reference,
+two document elements, an empty document and duplicate attributes. It does **not** report two cases
+strict XML rejects:
+
+| input | strict XML | here |
+|---|---|---|
+| `<foo>` (unclosed at EOF) | fatal | **accepted** |
+| `<f a=1/>` (unquoted attr value) | fatal | **accepted** |
+
+The unclosed case is **not reachable from the sink**: xml5ever's `end()` drains its open-element
+stack and pops each entry *before* `TreeSink::finish` runs, and `open_elems` is private — by the
+time we can look, a well-formed and an unclosed parse are identical. So
+`parseFromString('<foo>', 'text/xml')` yields the parsed tree where Chrome yields a `parsererror`.
+`manuk_html`'s `known_wellformedness_gap_is_pinned` **asserts the gap**, so the day a future
+xml5ever closes it the test fails and the loop is told, instead of the limitation quietly outliving
+its own documentation.
+
+### Result
+
+**`domparsing` 190 → 219 subtests** (non-tentative 35.8% → 42.1%), `NO_REPORT 1 → 0`;
+**`dom` 6370 → 6380**. HANG/CRASH 0 in both.
+
+> **The +10 in `dom` is the honest headline, and it is much smaller than the 113 that "XMLDocument
+> is not defined" suggested.** Defining a missing global stops a file dying at its first reference;
+> it does not make the assertions that follow *pass*. A histogram of error messages ranks where the
+> engine is SILENT, not how much is winnable — the two are different numbers and this tick is the
+> gap between them. The remaining `Document-contentType` mass (a document navigated to a PNG, CSS
+> or TXT URL must report *that* type) is now cheap for the first time, because the storage exists
+> and only the load path has to write it.

@@ -891,3 +891,4 @@ tick	sha	epoch	iso	delta_s	shape	wall_s	files	added	deleted	gates	claims	wpt_pas
 1187	111e7092	1786571287	2026-08-12T17:48:07-04:00	704	measurement	808	6	563	460	445	81	3896	6960	0	585	0	the inline static position counts preceding ELEMENTS and not preceding TEXT (2026-08-12)
 1188	0a8c0138	1786575052	2026-08-12T18:50:52-04:00	3765	capability	808	10	893	475	446	81	3896	6960	0	586	0	a fragment now says which TEXT NODE it came from, not only which element (2026-08-12)
 1189	a984407e	1786575522	2026-08-12T18:58:42-04:00	470	measurement	808	5	115	35	446	81	3896	6960	0	586	0	`requestAnimationFrame` is FINE, and the abspos remainder is one spec clause the code already quotes (2026-08-12)
+1190	d3b30a51	1786579822	2026-08-12T20:10:22-04:00	4300	capability	808	17	902	48	447	81	3896	6960	0	587	0	`parseFromString(s, 'text/xml')` ran the HTML parser, so an SVG string had no `clipPath` in it (2026-08-12)

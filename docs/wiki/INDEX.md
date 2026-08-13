@@ -1002,6 +1002,14 @@
   - L2608 · The method: price the LOSS, not the gain, against the corpus that defines both
   - L2632 · What the fix does not do, on purpose
   - L2648 · The result, and what it says about the board
+  - L2659 · DOMParser.parseFromString ignored its second argument — XML was parsed by the HTML parser (tick 1189)
+  - L2676 · The engine was TOLD the answer and threw it away
+  - L2692 · Content type is per DOCUMENT, not per arena — and that is the non-obvious part
+  - L2704 · The parser is a PORT, not a second implementation
+  - L2711 · One producer of XMLDocument, and it is NOT DOMParser
+  - L2729 · Two adjacent bugs this uncovered, both invisible until XML existed
+  - L2741 · The measured well-formedness boundary, written down rather than implied
+  - L2760 · Result
 
 ## THE FIDELITY INSTRUMENT — what it can and cannot see
 `docs/wiki/fidelity-instrument.md`
@@ -2009,4 +2017,4 @@
   - L124 · Rank mechanisms by FLIP RATE, not failing-subtest count — CSS layout is a multi-assertion slog
 
 ---
-1916 sections across 22 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+1924 sections across 22 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.

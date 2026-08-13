@@ -278,6 +278,23 @@ pub struct Dom {
     /// produce a unique verified answer. The index can only ever make the lookup FASTER, never
     /// different: its worst case is exactly the behaviour it replaced.
     id_index: std::collections::HashMap<String, Vec<NodeId>>,
+    /// **What a document node says it IS** — `document.contentType`, per DOCUMENT, not per arena.
+    ///
+    /// This is the one piece of document metadata that could NOT ride on `Dom` the way `quirks`
+    /// does, and the reason is worth writing down because it is easy to get backwards: `quirks` is
+    /// a property of *the parse that built this arena*, but **one arena holds many documents**.
+    /// `create_document` mints a fresh `Document` node in the SAME arena for every
+    /// `createHTMLDocument`, every `DOMParser.parseFromString` and every iframe — so a single
+    /// `bool` on `Dom` would make the newest parse retroactively rewrite what every earlier
+    /// document claims to be.
+    ///
+    /// It is keyed by `NodeId`, which **packs the slot generation**, so a freed-and-reused slot
+    /// mints a different key and can never inherit the previous occupant's type. `free_slot`
+    /// drops the entry anyway, so the map does not grow without bound on a long-lived page.
+    ///
+    /// Absent = `text/html`, which is both the correct default and what this engine produces
+    /// everywhere except the XML path — so the common case stores nothing.
+    content_types: std::collections::HashMap<NodeId, String>,
 }
 
 impl Default for Dom {
@@ -308,6 +325,7 @@ impl Dom {
             focus_visible: false,
             active: None,
             id_index: std::collections::HashMap::new(),
+            content_types: std::collections::HashMap::new(),
         }
     }
 
@@ -609,6 +627,10 @@ impl Dom {
             self.alive[i] = false;
             self.generations[i] = self.generations[i].wrapping_add(1);
             self.free.push(i);
+            // Generation-packing already makes a stale `content_types` entry unreadable (the reused
+            // slot mints a different `NodeId`), so this is hygiene rather than correctness — without
+            // it a page that churns documents grows the map forever.
+            self.content_types.remove(&id);
         }
     }
 
@@ -690,6 +712,28 @@ impl Dom {
     /// `Document`, and everything that already walks the tree works on it unchanged.
     pub fn create_document(&mut self) -> NodeId {
         self.alloc(NodeData::Document)
+    }
+
+    /// **`document.contentType`** — the MIME type this document was produced from.
+    ///
+    /// Defaults to `text/html`, which is what this engine produces everywhere the XML path is not
+    /// taken. Before this existed the getter was a hardcoded `"text/html"` string, so a document
+    /// the page had *explicitly asked* to be parsed as `text/xml` still reported itself as HTML —
+    /// the engine had been told the answer and threw it away.
+    pub fn content_type(&self, doc: NodeId) -> &str {
+        self.content_types
+            .get(&doc)
+            .map(String::as_str)
+            .unwrap_or("text/html")
+    }
+
+    /// Record what a document node is. Only the non-default (XML) types actually store anything.
+    pub fn set_content_type(&mut self, doc: NodeId, ct: &str) {
+        if ct == "text/html" {
+            self.content_types.remove(&doc);
+        } else {
+            self.content_types.insert(doc, ct.to_string());
+        }
     }
 
     /// **Is `maybe_ancestor` an INCLUSIVE ancestor of `node`?** (i.e. itself, or any ancestor.)

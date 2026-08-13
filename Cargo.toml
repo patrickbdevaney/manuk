@@ -73,6 +73,9 @@ chardetng = "0.1"
 
 # --- HTML parsing (Reuse) ---
 html5ever = "0.39"
+# The XML tree builder. Same authors, same version train and — decisively — the SAME
+# `markup5ever::TreeSink` trait html5ever drives, so `ArenaSink` backs both parsers unchanged.
+xml5ever = "0.39"
 markup5ever_rcdom = "0.39"
 tendril = "0.4"
 

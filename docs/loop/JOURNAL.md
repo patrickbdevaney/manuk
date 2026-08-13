@@ -46371,6 +46371,111 @@ PERF: none — one UA rule and one narrowed branch in a cascade that already ran
 WIKI: `docs/wiki/css-cascade.md` — where Chrome draws the form-control `box-sizing` line, and why a
 layout-crate test cannot see it.
 
+## Tick 1190 — `parseFromString(s, 'text/xml')` ran the HTML parser, so an SVG string had no `clipPath` in it (2026-08-12)
+
+TICK SHAPE: capability — a shared MECHANISM found by histogramming assertion messages, not by the
+area ranker. Gate `G_XML_IS_PARSED_AS_XML` (22 claims), four RED probes, all quoted with the values
+they produced.
+
+⚠⚠⚠ **THE DEFECT: `DOMParser.parseFromString` IGNORED ITS SECOND ARGUMENT.** Every MIME type — the
+four XML ones included — was answered by HTML-parsing into a `createHTMLDocument()`. That is four
+wrongs on one line: **case is destroyed** (HTML lowercases tag names; XML is case-sensitive),
+**namespaces are invented** (everything landed in XHTML regardless of `xmlns`), **malformed input is
+silently recovered** where XML says it is fatal, and **`contentType` reported `text/html`**.
+
+The symptom is concrete and silent: parse an SVG string through `DOMParser` and `<clipPath>`,
+`<linearGradient>` and `<textPath>` come back as `clippath`, `lineargradient`, `textpath` — matching
+no selector, painting nothing, no error raised. Same line reads RSS/Atom, SOAP and sitemaps.
+
+⚠⚠ **THE ENGINE WAS TOLD THE ANSWER AND THREW IT AWAY.** The prelude did try:
+`try { doc.contentType = type; } catch (e) {}` — but `contentType` is a native getter with **no
+setter**, so the assignment threw and the `catch` swallowed it, while the getter itself was a
+hardcoded `return_string(cx, vp, "text/html")` for **every document in existence**. A silent no-op
+wrapped in a `catch` is worse than an absent feature: the code reads as though it is handled.
+
+⚠⚠ **CONTENT TYPE IS PER DOCUMENT, NOT PER ARENA — and copying `quirks` would have been wrong.**
+`quirks` is a `bool` on `Dom` that reaches every consumer with no signature change, and it was the
+obvious model. But **one arena holds many documents** (`create_document` mints one per
+`createHTMLDocument`, per `parseFromString`, per iframe), so a single field would make the newest
+parse retroactively rewrite what every earlier document claims to be. It is a `HashMap<NodeId,_>`;
+`NodeId` packs the slot generation, so a reused slot cannot inherit the old occupant's type.
+
+✅ **THE PARSER IS A PORT, NOT A SECOND IMPLEMENTATION** — the board's own rule paying out at
+near-zero cost. `xml5ever` shares html5ever's version train *and* its `markup5ever::TreeSink` trait,
+so the existing `ArenaSink` backs both parsers **unchanged**: same sink, same arena, different tree
+builder.
+
+⚠ **ONE PRODUCER OF `XMLDocument`, AND IT IS NOT `DOMParser`.** `DOMParser-parseFromString-xml`
+asserts `assert_false(doc instanceof XMLDocument)` for all four XML types — only
+`createDocument()` makes one. The predicate therefore CANNOT key off `contentType`. Branding every
+XML parse as `XMLDocument` looks like the more complete fix and is a wrong one; the gate's
+`notXmlDoc` claim exists to catch exactly that and was RED-proven against it.
+
+**TWO ADJACENT BUGS THIS UNCOVERED**, both invisible until XML existed: `documentElement` was
+`find_first_in(root, "html")` — a *nominal* lookup where the spec says *positional* (first element
+child), identical for HTML and `null` for a document rooted at `<rss>`/`<svg>`; and
+`createDocument(ns, qualifiedName)` **discarded both arguments**, returning an `<html><head><body>`
+skeleton. Its content type is also **derived from the namespace** (HTML → `application/xhtml+xml`,
+SVG → `image/svg+xml`) — a flat `application/xml` reads as reasonable and fails by name.
+
+⚠ **THE WELL-FORMEDNESS GAP IS NAMED AND PINNED, NOT PAPERED OVER.** xml5ever reports mismatched end
+tags, EOF-in-tag, stray end tags, bad char refs, two document elements and duplicate attributes — but
+**not** `<foo>` unclosed at EOF, because its `end()` drains the open-element stack *before*
+`TreeSink::finish` and `open_elems` is private, so a well-formed and an unclosed parse are identical
+by the time we can look. `known_wellformedness_gap_is_pinned` **asserts the gap**, so the day it
+closes the test fails and the loop is told.
+
+**MEASURED (release binary, foreground; HANG/CRASH 0 in both):**
+
+| area | before | after |
+|---|---|---|
+| `domparsing` | 190/1293 (14.7%) | **219/1294 (16.9%)**, non-tentative 35.8% → 42.1%, `NO_REPORT 1 → 0` |
+| `dom` | 6370/10503 (60.6%) | **6382/10503 (60.8%)** |
+
+PRIMARY metric 85124/122041 = 69.75% → **85165/122042 = 69.78%**; `WPT-AREAS.tsv` updated.
+
+⚠⚠⚠ **THE +12 IN `dom` IS THE HONEST HEADLINE AND IT IS MUCH SMALLER THAN THE 113 I RANKED ON.**
+`XMLDocument is not defined` appeared 113 times in the assertion histogram. Defining the global stops
+a file **dying at its first reference**; it does not make the assertions that follow *pass*. **A
+histogram of error messages ranks where the engine is SILENT, not how much is WINNABLE** — two
+different numbers, and this tick is the distance between them. Worth carrying: the same histogram
+method that beat the per-area ranker 3× also over-promised here, and the over-promise is in the
+*translation from message-count to flip-count*, not in the method.
+
+**TWO DEAD LEADS KILLED BEFORE THEY COST A TICK**, both by naming and running the code path: (1)
+html5ever's `warn!("foster parenting not implemented")` is **stale upstream text** — it sets the flag
+`appropriate_place_for_insertion` honours, i.e. it IS the implementation; (2) Stylo's `Saw @import
+rule, but no way to trigger the load` is cosmetic — `@import` is walked out-of-band at the page level
+(t564). Both look like large absences in a log.
+
+**PROCESS NOTE, recorded because it nearly published a false RED:** a heredoc's python edit **landed**
+even though the shell command carrying it errored out, so the "backup" taken next captured an
+already-mutated file and probe 2's first reading was probes 1+2 stacked. Caught only because the
+output showed `caseKept:HTML`, a symptom probe 2 cannot cause. **Re-read the tree, not the intent,
+before trusting a RED.**
+
+BOARD: on-mandate — the board's PRIMARY per-tick metric is the monotonic WPT total and this raises it
+on the #1 and #8 leverage rows, via a shared mechanism rather than per-assertion grinding.
+
+HARNESS NOTE (observer-owned, NO action taken by me beyond re-running). Before the tick:
+`target/debug/deps` was **116G across 499 executables, none older than 3 days**, so there was nothing
+safely stale to prune, and `/home` sat at 94% (18G free). **The wall then purged its own build
+mid-run** — the documented 95% self-purge — and the first verify came back with `G2`, `G3`,
+`G_RUNAWAY`, `G_CONTAIN` and `G_INTERACT` all RED. They are **NOT verdicts about the engine**, and
+the wall says so itself in the transcript: `failed to open object file ... libbitflags`, `linking
+with cc failed ... cssparser-macros`, each printed under its own `BUILD FAILED for gate <x> — this
+is NOT a verdict about the engine` banner. Disk went **94% → 55% (127G free)** across that run,
+which is the purge's own signature. Re-run on the now-clean tree; no `scripts/` file was touched.
+
+REMAINDER, now cheap for the first time because the storage exists: `Document-contentType` wants a
+**navigated** document to report its response's MIME type (`image/png`, `text/css`, `text/plain`) —
+only the load path has to write what `Dom::set_content_type` already stores.
+
+PERF: none — XML is a new path; the HTML path is untouched and `htmlStillWorks` asserts it.
+
+WIKI: `docs/wiki/dom-semantics.md` — the four wrongs on one line, why content type could not ride on
+`Dom` the way `quirks` does, and the measured well-formedness boundary.
+
 ## Tick 1189 — `requestAnimationFrame` is FINE, and the abspos remainder is one spec clause the code already quotes (2026-08-12)
 
 TICK SHAPE: measurement — a correction I owed, and the decomposition of what four ticks of work left
