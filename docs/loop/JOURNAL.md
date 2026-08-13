@@ -46371,6 +46371,87 @@ PERF: none — one UA rule and one narrowed branch in a cascade that already ran
 WIKI: `docs/wiki/css-cascade.md` — where Chrome draws the form-control `box-sizing` line, and why a
 layout-crate test cannot see it.
 
+## Tick 1213 — the frame-ReflowCtx design, written down instead of started at hour twelve (2026-08-13)
+
+TICK SHAPE: measurement — a **scoped refusal** plus the design it refuses to rush, and one harness
+line the observer needs.
+
+**THE LEVER IS CORRECTLY IDENTIFIED AND IT IS A SUBSYSTEM CHANGE.** `css/selectors` passes the
+construct classifier at **5.2% unshipped** (t1212), and its largest single family — **308 subtests**
+in `attribute-selectors/attribute-case` — is t1202's named residual: a frame's style map is a
+**LOAD-TIME SNAPSHOT**, so `global.getComputedStyle(elm)` on an element the test just created returns
+`undefined`. The main document does not have this problem because `force_reflow_if_stale`
+re-cascades it on every style read; a frame gets no such pass.
+
+**THE DESIGN, derived from the tree this tick so the next session does not re-derive it:**
+
+```text
+   force_reflow_if_stale()  →  REFLOW_HOOK.last()          ← a STACK, keyed by nothing
+                            →  f(ctx, CURRENT_DOM)         ← always the re-entry's arena
+   forced_reflow(ctx, dom)  →  re-cascades `dom` …
+                            →  … but writes into the MAIN page's ReflowCtx
+                            →  … and resolves sheets against the PARENT's url + external_css
+```
+
+Three changes, in this order:
+
+1. **`REFLOW_HOOK` becomes a MAP from arena address → `(fn, ctx)`**, not a stack, so
+   `with_style_in(dom, …)` can force *the right* reflow instead of the innermost one.
+2. **Each child page gets its own `ReflowScope`** for the duration of a script round.
+   `ReflowScope::install` already takes everything by reference (`&Dom`, `&FontContext`, width,
+   `&images`, `&final_url`, `&external_css`) and needs **no `&mut Page`** — which is the fact that
+   makes this tractable at all.
+3. ⚠ **The borrow is the whole risk.** A child `Page` is a value inside the parent's
+   `child_pages: HashMap`, so a scope over it aliases the `&mut self` the script round holds. The
+   sound pattern is `std::mem::take(&mut self.child_pages)` for the duration of the round and put it
+   back after — the children are then owned locally and each can carry a scope. Anything that keeps
+   a raw `*mut Page` into a live `HashMap` is the ADR-009 seam wearing a different hat.
+
+⚠⚠⚠ **AND THE REASON THIS TICK IS A REFUSAL RATHER THAN AN ATTEMPT.** This is a delicate borrow
+split on the JS↔layout seam — the surface `CONSTITUTION.MD` H0.4 names as *"the largest unsafe
+surface in the codebase"* — at the end of a fifteen-tick session. This loop's own doctrine is that a
+rushed subsystem change on that seam is how a Bar 0 regression lands, and **a design written down is
+worth more than a half-finished one banked.** The next session starts with the three steps above and
+the borrow hazard already named, which is most of the work of getting it right.
+
+⚠⚠ **HARNESS NOTE FOR THE OBSERVER (recorded, not acted on — PART VII):** `git push` began failing at
+tick 1212 with `git@github.com: Permission denied (publickey)`. Tick 1211 pushed cleanly 26 minutes
+earlier, so a credential became unavailable mid-session rather than a repo/permission change.
+**Every tick since is COMMITTED LOCALLY and gate-green** — `tick.sh` runs the wall, commits, and only
+then pushes, so the ratchet and the receipts are intact and the commits need only a push. Nothing in
+`scripts/` was touched.
+
+**WHERE THE SESSION LEFT THE BOARD**, all measured this session rather than guessed:
+
+```text
+   dom              8142/10503  77.5%    3.4% unshipped   ← worked 7×, 60.8% → 77.5%
+   css/selectors    3757/5560   67.6%    5.2% unshipped   ← PASSES; next lever is the 308 above
+   css/css-color    6299/11005  57.2%   94.0% ONE SUBSYSTEM (CSSOM type change, t1210)
+   css/css-values   1705/4201   40.6%   50.9% unshipped   ← REFUSED (t1204)
+```
+
+SURFACE AUDIT #61 (due every 10 ticks, last 1203; run at 1213) — **I probed the map instead of
+reading it, and 3 of my 14 probes tested the wrong thing.** Fourteen `gated` claims, one page:
+**eleven answered exactly as their receipt says** (`URL.canParse`, `var()` arithmetic resolving to
+24px, `customElements`, the observer trio, `createImageBitmap`, IndexedDB + `IDBKeyRange`,
+`navigator.credentials`, `compatMode`, `dblclick` dispatch). The other three were **my** error, all
+the same error: a fresh `ImageData` is transparent so my `putImageData` fixture destroyed its own
+evidence; `DataTransfer` is not what the *file-input actuation* row claims; and `field-sizing`'s row
+claims the LAYOUT behaviour, not the CSSOM property. ⚠ *I test the artefact I can reach rather than
+the claim as written* — the same sentence as *grep the artefact, infer the engine*, pointed at a
+probe, and the instrument built to catch that habit exhibited it in its own first pass.
+⚠⚠⚠ **A GENUINE GAP SURFACED ANYWAY AND IT MAKES A CLASS:** `getComputedStyle(el).fieldSizing` is
+EMPTY while the property is honoured in layout — the **fourth** instance this session of *the engine
+does the right thing and reports the wrong thing*, after `object-position` (t1205), colour spaces
+(t1210) and `characterSet` (t1211), each found by a different accident. **CSSOM LOSSINESS is now a
+named `partial` row** in `CONSTELLATION.tsv`, with the next instrument named: enumerate the
+properties the cascade resolves, ask `getComputedStyle` for each, list the ones it cannot say.
+
+PERF: none — measurement only.
+
+WIKI: none — the artefact is this entry's design, which belongs beside the residual it closes rather
+than in a topic page that would describe unbuilt work. [no-pattern]
+
 ## Tick 1212 — I swept the class instead of waiting for the next instance of it (2026-08-13)
 
 TICK SHAPE: capability — small, and deliberately chosen by a **sweep** rather than by a failing test.

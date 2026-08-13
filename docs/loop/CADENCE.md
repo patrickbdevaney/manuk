@@ -11,12 +11,12 @@
 
 | | value | over |
 |---|---|---|
-| ticks landed | **913** | ticks 1–1211 |
-| median tick cycle | **28m** | 912 intervals |
-| median, last 10 | **27m** | 10 intervals |
+| ticks landed | **914** | ticks 1–1213 |
+| median tick cycle | **28m** | 913 intervals |
+| median, last 10 | **29m** | 10 intervals |
 | fastest / slowest | 5s / 5.4d | |
-| **ticks per hour** | **1.14** | 797.2h elapsed |
-| median verify wall | **63s** | 852 ticks |
+| **ticks per hour** | **1.14** | 797.7h elapsed |
+| median verify wall | **63s** | 853 ticks |
 | wall trend | 39s → 13m — getting slower ⚠️ | first 3 vs last 3 |
 
 The **cycle** is the real unit: implement → debug → verify wall → land. The wall is only part of
@@ -28,10 +28,10 @@ it, and a wall that grows taxes every future tick, so it is tracked separately f
 
 * **capabilities asserted** (`G_CAPABILITY`): 48 → **81**
 * **live gates**: 27 → **461**
-* **✅ rows in the capability ledger**: 144 → **604**
+* **✅ rows in the capability ledger**: 144 → **605**
 * **Bar 0 — oracle hangs**: 0 of 265 sites
 
-**414 of 913 ticks** (45%) moved a
+**414 of 914 ticks** (45%) moved a
 user-visible capability. The rest were instruments, infrastructure and corrections — and the
 ledger says the corrections were not overhead: three of its top three priorities were phantoms,
 and finding that out redirected everything after it.
@@ -1010,5 +1010,6 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 | **1209** | 2026-08-13 09:03 | 5m | measurement | 13m | +222/−33 | 459 | 81 | 56.0% · | the constitution check, and the classifier that PROMOTED a row instead of refusing one (20 |
 | **1210** | 2026-08-13 09:30 | 26m | capability | 13m | +345/−36 | 460 | 81 | 56.0% · | check #115's own steer was wrong, and the probe that refuted it took four minutes (2026-08 |
 | **1211** | 2026-08-13 10:13 | 43m | capability | 13m | +445/−50 | 461 | 81 | 56.0% · | the engine was TOLD the encoding and threw it away, and the ORDERING was the fix (2026-08- |
+| **1213** | 2026-08-13 10:45 | 33m | measurement | 13m | +149/−3 | 461 | 81 | 56.0% · | the frame-ReflowCtx design, written down instead of started at hour twelve (2026-08-13) |
 
 *`·` after a WPT figure means **carried forward**, not measured this tick.*

@@ -5936,6 +5936,70 @@ numbers that are three thousand subtests stale — `css/css-values` is listed at
 
 ---
 
+## Audit #61 — tick 1213 (2026-08-13): I probed the map instead of reading it, and 3 of my 14 probes tested the wrong thing
+
+**Method, and it is the third distinct angle this instrument has taken.** #59 checked the map against
+the world's list (Interop 2026: nothing missing). #60 turned it on the reconciler (the map was clean;
+the reconciler was not). This one turns it on **the receipts**: for a sample of rows marked `gated`,
+**does the engine actually answer?** — because this session's own failure mode was inferring a
+capability from an artefact three separate times (t1205, t1208, t1210), and a `gated` row with a
+receipt is exactly such an artefact.
+
+Fourteen `gated` claims, one page, one run:
+
+```text
+   ✅ URL.canParse=true            ✅ customProps=24px (var(--x)*2, resolved)
+   ✅ customElements=function      ✅ IntersectionObserver=function
+   ✅ ResizeObserver=function      ✅ createImageBitmap=function
+   ✅ indexedDB=function           ✅ IDBKeyRange=function
+   ✅ navigator.credentials=object ✅ compatMode=CSS1Compat
+   ✅ dblclick dispatch=1
+   ❓ putImageData=0   ❓ DataTransfer().items=undefined   ❓ fieldSizing=EMPTY
+```
+
+### ⚠⚠⚠ THE FINDING IS ABOUT THE AUDITOR: 3 of my 14 probes tested something the row does not claim
+
+Not one of the three is a map defect, and all three are the **same error**, which is the same error
+this session made three times in its diagnoses:
+
+| my probe | what the row actually claims |
+|---|---|
+| `createImageData(2,2)` → set `data[0]=9` → `putImageData` → read back `0` | **My fixture destroys its own evidence.** A fresh `ImageData` is transparent (`alpha=0`), and a premultiplied canvas stores `(0,0,0,0)`, so reading `0` is CORRECT. |
+| `new DataTransfer().items` | the row is *"file-input actuation (set FileList on `input[type=file]`)"* — the **agent** actuation path, not `DataTransfer` |
+| `getComputedStyle(el).fieldSizing` | the row claims the **layout** behaviour (*"field-sized hugs content"*, `@supports` flips yes), gated by `G_PROBE_CAPABILITIES` |
+
+> **I test the artefact I can reach rather than the claim as written.** That is the same sentence as
+> *grep the artefact, infer the engine*, pointed at a probe instead of a grep — and it is worth
+> recording that the instrument built to catch that habit exhibited it in its own first pass.
+
+### AND A GENUINE GAP SURFACED ANYWAY, which makes it a CLASS rather than four coincidences
+
+`getComputedStyle(el).fieldSizing` is the **empty string** while `field-sizing` is honoured in
+layout. A page feature-detecting through `getComputedStyle` is told *not supported* by an engine that
+supports it. That is the **fourth** instance this session of one shape:
+
+```text
+   t1205  object-position   right on screen, "20% 30.000002%" in the CSSOM (and a length dropped)
+   t1210  colour spaces     right on screen, "rgb(...)" where the space must be preserved
+   t1211  characterSet      known at decode time, a constant in the CSSOM
+   t1213  field-sizing      honoured in layout, EMPTY in the CSSOM
+```
+
+⚠⚠⚠ **THE ENGINE DOES THE RIGHT THING AND REPORTS THE WRONG THING, REPEATEDLY, BECAUSE THE
+COMPUTED-STYLE SERIALIZER IS A SEPARATE HAND-MAINTAINED SURFACE FROM THE CASCADE.** Every one of
+these was found by a *different* accident. **CSSOM LOSSINESS is now a named class**, and the honest
+next instrument is the one this audit's own method suggests: enumerate the properties the cascade
+resolves, ask `getComputedStyle` for each, and list the ones it cannot say. That is the same
+*enumerate what can be enumerated* rule that produced the UA-sheet audit, pointed at the CSSOM.
+
+**ADDED to `CONSTELLATION.tsv`:** one row — *the computed-style surface reports what the cascade
+resolved* — status `partial`, naming the four known instances, so the class has somewhere to live
+rather than being rediscovered a fifth time.
+
+**CORRECTED:** nothing. Eleven of fourteen receipts are exactly true, which after #60's *"the map is
+clean and the reconciler was not"* is a second consecutive audit finding the map in better shape than
+the thing checking it.
+
 ## Audit #60 — tick 1203 (2026-08-13): a gate has TWO names, and each instrument was blind to exactly the gates the other could see
 
 **Method, and it is deliberately the INTERNAL half.** The external half (Interop 2026 against
