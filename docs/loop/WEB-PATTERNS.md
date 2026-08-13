@@ -5186,6 +5186,31 @@ draining the JS event loop to its 20,000-task ceiling, which has no wall-clock b
 images now arrive; the page is still slow for another reason. Same discipline as t608: **do not book
 "site X works now" from "one of site X's defects is gone."**
 
+## try/catch around a selector is a FEATURE DETECT, and an engine that never throws always answers YES (tick 1200)
+
+| pattern | where it shows up | status |
+| --- | --- | --- |
+| `try { document.querySelector(SEL) } catch (e) { /* fall back */ }` — the standard way a library asks whether the engine supports a selector. `querySelectorAll('[')` returned an EMPTY NodeList where the spec says `SyntaxError`, so the detection answered "supported" for **every** selector, including ones we silently cannot match, and the library took the modern branch and got nothing | Polyfill loaders, `:has()`/`:is()` capability probes, CSS-in-JS runtimes validating author input, and every sanitiser that rejects a user-supplied selector by catching | ✅ fixed (tick 1200) — `manuk_css::selector_syntax_error` + `throw_dom` in the four query natives, gated by **`G_SELECTOR_SYNTAX_ERROR`**; `dom` **6671 → 6943 (+272)**, `css/selectors` **3643 → 3681 (+38)** |
+
+**Ask what a library BELIEVES, not what it can detect** — the third time this exact shape has paid
+out here, after jQuery's `support.cors` and tippy's brand check.
+
+⚠⚠ **THE DANGEROUS DIRECTION IS THE FALSE THROW.** *"Throw when the matcher's parser returns
+`None`"* is one line and is a capability regression: that parser also returns `None` for
+`p::first-line` and `div:hover`, which are **valid** selectors we merely do not model, and throwing
+on them turns "unimplemented" into an exception inside the page's own script. Validity is answered by
+grammar; modelling stays the matcher's business. And **Stylo is the wrong authority** despite having
+a real parser — its servo build rejects `:has()`, so delegating would have deleted a shipped
+capability used by 13% of the corpus.
+
+⚠⚠⚠ **ONE CORPUS IS NOT A CORPUS, and this is the transferable half.** Calibrated against WPT's own
+34-invalid/207-valid list to a perfect score, the first version measured `dom` **+272** and
+`css/selectors` **−289** — a net LOSS. `attribute-selectors` writes CSS comments *inside the selector
+under test* (`[foo='BAR'] /* sanity check */`), `:is()`/`:has()` are **forgiving** lists, and case
+flags may be **hex escapes** (`\73`). None of the three is visible in the first corpus. **A
+validator is only as honest as the widest set of things it has been shown**, and the second corpus —
+the 112 selectors `css/selectors` was observed passing in — is now committed beside the first.
+
 ## A family is not covered by its representative — `:nth-child` worked and the other five returned NOTHING (tick 1199)
 
 | pattern | where it shows up | status |

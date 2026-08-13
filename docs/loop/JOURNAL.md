@@ -46371,6 +46371,92 @@ PERF: none — one UA rule and one narrowed branch in a cascade that already ran
 WIKI: `docs/wiki/css-cascade.md` — where Chrome draws the form-control `box-sizing` line, and why a
 layout-crate test cannot see it.
 
+## Tick 1200 — an invalid selector must THROW, and calibrating on ONE corpus cost 289 subtests (2026-08-13)
+
+TICK SHAPE: capability — the `dom` vein again (still #1 on `scripts/wpt-leverage.sh` at 1399), and
+the largest remaining family in its assertion-message histogram.
+
+**`document.querySelectorAll('[')` returned an empty NodeList.** So did `querySelector('div,')`,
+`matches('::example')` and `closest('^|div')`. All four are specified to throw a `SyntaxError`
+`DOMException`, and the reason that matters is not conformance:
+
+> **try/catch around a selector is how the web feature-detects selector support.** An engine that
+> never throws answers *"supported"* for **every** selector — including the ones it silently cannot
+> match — so the library takes the modern branch and gets an empty list forever.
+
+Third time this exact shape has paid out here, after jQuery's `support.cors` and tippy's brand
+check: **ask what a library BELIEVES, not what it can detect.**
+
+⚠⚠ **THE DANGEROUS DIRECTION IS THE FALSE THROW, and the obvious implementation takes it.** *"Throw
+when `parse_selector` returns `None`"* is one line and is a **capability regression** — that parser
+also returns `None` for `p::first-line` and `div:hover`, which are **valid** selectors this engine
+merely does not model. Throwing on those converts *"unimplemented"* into an exception inside the
+page's own script, which is strictly worse than the empty list it had. So validity is answered by
+**grammar only** (`engine/css/src/selector_syntax.rs`) and modelling stays the matcher's business.
+
+⚠⚠ **AND STYLO IS THE WRONG AUTHORITY, despite having a real selector parser.** Its *servo* build
+returns `false` from `parse_has()`, so it **rejects `:has()`** — the construct this engine hand-rolled
+a supplement for because 13% of the corpus uses it. `SelectorParser::parse_author_origin_no_namespace`
+would have made `querySelector(':has(.x)')` throw, deleting a shipped capability. The gate's
+`hasStillMatches` claim pins that trap as an assertion rather than a comment.
+
+⚠⚠⚠ **THE FINDING OF THIS TICK IS A MEASUREMENT, NOT THE FEATURE: ONE CORPUS IS NOT A CORPUS.**
+Calibrated against WPT's own `dom/nodes/selectors.js` — **34/34 invalid rejected, 0/207 valid falsely
+rejected**, a perfect score on the authority's own list — the first version measured:
+
+```text
+  dom            6671 → 6943   (+272)   ← exactly the prediction
+  css/selectors  3643 → 3354   (−289)   ← a NET LOSS
+```
+
+`css/selectors/attribute-selectors` **writes CSS comments inside the selector under test** —
+`[foo='BAR'] /* sanity check (match) */` — and a validator that has not stripped `/* … */` calls
+those malformed and throws on them. Two more fell out of the same re-run: `:is()`/`:has()` are
+**forgiving** selector lists (`:is(:total-nonsense)` is valid and matches nothing, so recursion into
+them must not fail closed the way `:not()` must), and attribute case-flags may be written as **hex
+escapes** (`\73`, `\49`). **None of the three is visible in the first corpus.** A validator is only
+as honest as the widest set of things it has been shown, and both corpora — WPT's 241 and the 112
+selectors `css/selectors` was observed passing in — are now `selector_syntax.rs`'s own unit test,
+whole rather than sampled.
+
+**MEASURED after the fix, same release binary, same hour, full areas:**
+
+```text
+  dom            6671 → 6943   (+272)   63.5% → 66.1%    0 crashes
+  css/selectors  3643 → 3681    (+38)   65.5% → 66.2%    0 crashes
+  html/dom      56445 → 56445     (0)            94.2%   0 crashes   ← control
+  domparsing      219 → 219       (0)            16.9%   0 crashes   ← control
+  ────────────────────────────────────────────────────────────────
+  PRIMARY (active-areas)  85988 → 86298   70.46% → 70.71%
+```
+
+**AND THE REAL WEB, because a false throw lands in a page's own script:** three sites, both binaries,
+same hour (`boxes --fetch`) — `news.ycombinator.com` 122 boxes, `en.wikipedia.org` 464,
+`theguardian.com` 128, **identical in both arms**, and **zero** selectors rejected on any of them.
+
+**THREE RULES EXIST ONLY BECAUSE A CORPUS REFUSED AN EARLIER DRAFT**, and each is a general CSS fact
+worth carrying: an unclosed `[` or `(` **at end of input is VALID** (CSS closes an open block at EOF,
+so `[align="center"` and `::slotted(foo` are in WPT's *valid* list); **escapes are identifier
+characters** (`.foo\:bar` is one class name, not a class plus an unknown pseudo); and
+`:nth-child()`'s argument is **An+B, not a selector list** — recursing into it rejected
+`:nth-child(3n)`, eight valid entries and zebra striping across the whole web.
+
+⚠ **RESIDUAL, named:** the pseudo-class/element allow-lists are the maintenance surface, and their
+errors are asymmetric — a name missing from them **throws inside a real page**, a name wrongly on
+them merely fails to throw. Everything ambiguous therefore resolves to VALID: vendor-prefixed pseudos
+are accepted without being listed, and a functional pseudo whose name is known is accepted whatever
+its argument. The remaining 204 `dom` failures of the `funcOrConstructor is undefined` shape are a
+DIFFERENT mechanism, measured this tick and not fixed: an `<iframe>`'s `contentWindow` carries only
+`document` and `location` — `Node`, `Element`, `Event`, `DOMException`, `window`, `self` are all
+absent — so `root.ownerDocument.defaultView.DOMException` is `undefined` inside a frame. That is the
+next lever in this vein.
+
+PERF: `selector_syntax_error` is one linear scan per query call, ahead of a matcher that already
+walks the whole subtree. F1 cascade 0.25 of 0.55, F2 6.70× of 7.5× — unmoved.
+
+WIKI: docs/wiki/css-cascade.md — "An invalid selector must THROW — and calibrating on ONE corpus cost
+289 subtests"
+
 ## Tick 1199 — `:nth-child` worked, so the family looked implemented — the other five returned NOTHING (2026-08-13)
 
 TICK SHAPE: capability — the top-leverage `dom` vein per `scripts/wpt-leverage.sh` (1568, 60.8%,

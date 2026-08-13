@@ -3398,6 +3398,9 @@ unsafe fn doc_query(cx: *mut RawJSContext, argc: u32, vp: *mut Value) -> bool {
         *vp = NullValue();
         return true;
     };
+    if throw_if_bad_selector(cx, &sel) {
+        return false;
+    }
     let found = manuk_css::query_selector(&*dom, root, &sel);
     return_node_or_null(cx, vp, dom, found);
     true
@@ -7507,6 +7510,26 @@ unsafe fn el_click(cx: *mut RawJSContext, _argc: u32, vp: *mut Value) -> bool {
     true
 }
 
+/// **Refuse a syntactically invalid selector the way the spec does: throw.**
+///
+/// `querySelectorAll('[')` returned an empty NodeList. The spec says `SyntaxError`, and the
+/// difference is load-bearing rather than pedantic — **try/catch around a selector is how the web
+/// feature-detects selector support**, so an engine that never throws answers "supported" for every
+/// selector, including the ones it silently cannot match.
+///
+/// ⚠ Validity is NOT "did the matcher understand it". `p::first-line` is a perfectly valid selector
+/// this engine does not model; it must return an empty list and NOT throw. That distinction lives in
+/// `manuk_css::selector_syntax_error`, which answers grammar only — see its module docs.
+unsafe fn throw_if_bad_selector(cx: *mut RawJSContext, sel: &str) -> bool {
+    match manuk_css::selector_syntax_error(sel) {
+        Some(msg) => {
+            throw_dom(cx, "SyntaxError", &msg);
+            true
+        }
+        None => false,
+    }
+}
+
 /// `document.querySelectorAll(sel)` / `element.querySelectorAll(sel)` → a JS `Array`
 /// of element reflectors (a static NodeList, per this tranche).
 unsafe fn doc_query_all(cx: *mut RawJSContext, argc: u32, vp: *mut Value) -> bool {
@@ -7515,6 +7538,9 @@ unsafe fn doc_query_all(cx: *mut RawJSContext, argc: u32, vp: *mut Value) -> boo
         return true;
     };
     let sel = arg_string(cx, vp, argc, 0).unwrap_or_default();
+    if throw_if_bad_selector(cx, &sel) {
+        return false;
+    }
     let matches = manuk_css::query_selector_all(&*dom, root, &sel);
 
     let arr_ptr = NewArrayObject1(&mut wrap_cx(cx), matches.len());
@@ -10106,7 +10132,12 @@ unsafe fn host_parse_url(cx: *mut RawJSContext, argc: u32, vp: *mut Value) -> bo
 /// `element.matches(sel)` — does this element match the selector?
 unsafe fn el_matches(cx: *mut RawJSContext, argc: u32, vp: *mut Value) -> bool {
     let ok = match (this_node(vp), arg_string(cx, vp, argc, 0)) {
-        (Some((dom, node)), Some(sel)) => manuk_css::matches_selector(&*dom, node, &sel),
+        (Some((dom, node)), Some(sel)) => {
+            if throw_if_bad_selector(cx, &sel) {
+                return false;
+            }
+            manuk_css::matches_selector(&*dom, node, &sel)
+        }
         _ => false,
     };
     *vp = mozjs::jsval::BooleanValue(ok);
@@ -10118,6 +10149,9 @@ unsafe fn el_matches(cx: *mut RawJSContext, argc: u32, vp: *mut Value) -> bool {
 unsafe fn el_closest(cx: *mut RawJSContext, argc: u32, vp: *mut Value) -> bool {
     match (this_node(vp), arg_string(cx, vp, argc, 0)) {
         (Some((dom, node)), Some(sel)) => {
+            if throw_if_bad_selector(cx, &sel) {
+                return false;
+            }
             let mut cur = Some(node);
             while let Some(n) = cur {
                 if (*dom).is_element(n) && manuk_css::matches_selector(&*dom, n, &sel) {

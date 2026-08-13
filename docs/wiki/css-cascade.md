@@ -2985,3 +2985,66 @@ same element rather than leaving the agreement to inference.
 
 **Measured, same binary, same hour:** `dom` **6383 → 6671 (+288)**, `css/selectors`
 **3547 → 3643 (+96)**, `html/dom` **56445 → 56445 (unchanged)**, 0 crashes in all three.
+
+## An invalid selector must THROW — and calibrating on ONE corpus cost 289 subtests (t1200)
+
+**`document.querySelectorAll('[')` returned an empty NodeList.** So did `querySelector('div,')`,
+`matches('::example')` and `closest('^|div')`. All four are specified to throw a `SyntaxError`
+`DOMException`, and the gap is not pedantry:
+
+> **try/catch around a selector is how the web feature-detects selector support.** An engine that
+> never throws answers *"supported"* for **every** selector — including the ones it silently cannot
+> match — so the library takes the modern branch and gets an empty list forever.
+
+Same shape as jQuery's `support.cors`: **ask what a library BELIEVES, not what it can detect.**
+
+### Validity is NOT "did the matcher understand it", and conflating them is a capability regression
+
+The one-line implementation is *"throw when `parse_selector` returns `None`"*. That parser returns
+`None` for two unrelated reasons:
+
+| selector | valid? | `parse_selector` | correct answer |
+|---|---|---|---|
+| `p::first-line` | **yes** — a real pseudo-element we do not model | `None` | empty list, **no throw** |
+| `div:hover` | **yes** | `NeverStatic` | empty list, no throw |
+| `::example` | **no** — unknown pseudo-element | `None` | **throw** |
+| `[` | **no** | `None` | **throw** |
+
+Throwing on the first two turns *"unimplemented"* into **an exception inside the page's own
+script** — strictly worse than the empty list it had. So `manuk_css::selector_syntax_error` answers
+**grammar only**, and modelling stays the matcher's business.
+
+⚠⚠ **And Stylo is the wrong authority, even though it has a real selector parser.** Its *servo*
+build returns `false` from `parse_has()`, so it **rejects `:has()`** — the construct this engine
+hand-rolled a supplement for because 13% of the corpus uses it. `SelectorParser::parse_…` would have
+made `querySelector(':has(.x)')` throw, deleting a shipped capability. `hasStillMatches` in
+`G_SELECTOR_SYNTAX_ERROR` pins that trap as an assertion.
+
+### ⚠⚠⚠ THE MEASUREMENT THAT CAUGHT THE REAL BUG: one corpus is not a corpus
+
+Calibrated against WPT's `dom/nodes/selectors.js` alone — **34/34 invalid rejected, 0/207 valid
+falsely rejected**, a clean score — the first landing measured:
+
+```text
+  dom            6671 → 6943   (+272)   ← exactly as predicted
+  css/selectors  3643 → 3354   (−289)   ← a NET LOSS
+```
+
+**`css/selectors/attribute-selectors` writes CSS comments inside the selector under test** —
+`[foo='BAR'] /* sanity check (match) */` — and a validator that has not stripped `/* … */` calls
+those malformed. Two more fell out of the same re-run: `:is()`/`:has()` are **forgiving** selector
+lists (`:is(:total-nonsense)` is valid and matches nothing, so recursion into them must not fail
+closed the way `:not()` must), and attribute case-flags may be written as **hex escapes** (`\73`,
+`\49`). None of the three is visible in the first corpus.
+
+With comments stripped: `dom` **+272**, `css/selectors` **+38**, `html/dom` and `domparsing`
+**unchanged**, 0 crashes — and no false throw on any of three real sites (`news.ycombinator`,
+`en.wikipedia`, `theguardian`: identical box counts against the old binary, zero rejected selectors).
+Both corpora — WPT's 241 and the 112 selectors `css/selectors` was observed passing in — are now
+`selector_syntax.rs`'s own unit test, whole rather than sampled.
+
+**Three rules exist only because a corpus refused an earlier draft**, and each is a general CSS fact
+worth keeping: an unclosed `[` or `(` **at end of input is VALID** (CSS closes an open block at EOF,
+so `[align="center"` and `::slotted(foo` are in WPT's *valid* list); **escapes are identifier
+characters** (`.foo\:bar` is one class name); and `:nth-child()`'s argument is **An+B, not a selector
+list** — recursing into it rejected `:nth-child(3n)`, which is zebra striping across the whole web.

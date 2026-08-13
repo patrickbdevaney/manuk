@@ -20,6 +20,11 @@ use manuk_dom::{Dom, ElementData, NodeData, NodeId};
 
 pub mod values;
 
+/// **Selector SYNTAX validation** — a question separate from "can we match it", and the reason
+/// `querySelectorAll('[')` returned an empty list instead of throwing `SyntaxError`.
+pub mod selector_syntax;
+pub use selector_syntax::selector_syntax_error;
+
 pub use values::Rgba;
 
 /// A resolved length in one of the forms layout understands. `em`/`rem` are

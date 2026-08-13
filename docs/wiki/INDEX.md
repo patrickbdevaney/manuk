@@ -845,6 +845,9 @@
   - L2943 · :nth-child worked, so the whole An+B family looked implemented (t1199)
   - L2969 · :first-of-type is NOT :first-child, and a homogeneous fixture cannot tell them apart
   - L2978 · One rule, two implementations — and only one of them was broken
+  - L2989 · An invalid selector must THROW — and calibrating on ONE corpus cost 289 subtests (t1200)
+  - L3001 · Validity is NOT "did the matcher understand it", and conflating them is a capability regression
+  - L3023 · ⚠⚠⚠ THE MEASUREMENT THAT CAUGHT THE REAL BUG: one corpus is not a corpus
 
 ## `<dialog>`, `popover`, and the top layer (ticks 194-195)
 `docs/wiki/dialog-and-top-layer.md`
@@ -2040,4 +2043,4 @@
   - L124 · Rank mechanisms by FLIP RATE, not failing-subtest count — CSS layout is a multi-assertion slog
 
 ---
-1947 sections across 22 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+1950 sections across 22 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.

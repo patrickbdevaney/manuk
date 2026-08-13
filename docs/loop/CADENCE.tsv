@@ -900,3 +900,4 @@ tick	sha	epoch	iso	delta_s	shape	wall_s	files	added	deleted	gates	claims	wpt_pas
 1197	5e7ce4ea	1786601208	2026-08-13T02:06:48-04:00	1754	measurement	808	6	97	32	451	81	3896	6960	0	591	0	I built the preemption t1196 scoped, PROVED IT INERT, and reverted it (2026-08-13)
 1198	18d5f91e	1786603590	2026-08-13T02:46:30-04:00	2382	capability	808	12	672	44	452	81	3896	6960	0	592	0	the missing half was a THREAD, and preemption costs the four anchor sites ZERO boxes (2026-08-13)
 1199	8634b8d1	1786605569	2026-08-13T03:19:29-04:00	1979	capability	808	11	502	44	453	81	3896	6960	0	593	0	`:nth-child` worked, so the family looked implemented — the other five returned NOTHING (2026-08-13)
+1200	60281c98	1786608038	2026-08-13T04:00:38-04:00	2469	capability	808	13	1546	37	454	81	3896	6960	0	594	0	an invalid selector must THROW, and calibrating on ONE corpus cost 289 subtests (2026-08-13)
