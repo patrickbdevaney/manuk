@@ -6137,3 +6137,86 @@ was refreshed this session for `dom`, `domparsing`, `css/selectors`, `css/css-va
 and the two areas the ranker over-promises (`domparsing` = 65% unshipped `tentative/`;
 `css/css-values` = `calc-size()`/`random-item()`) are recorded in the t1190/t1192 entries so the
 board is read with that discount.
+
+## Audit #64 — tick 1223 (2026-08-13): THREE INVENTORIES OF THE SAME TERRITORY, NONE RECONCILED
+
+**Sources.** [Interop 2026 focus areas](https://web.dev/blog/interop-2026) ·
+[web-platform-tests/interop 2026 README](https://github.com/web-platform-tests/interop/blob/main/2026/README.md) ·
+[WebKit: Announcing Interop 2026](https://webkit.org/blog/17818/announcing-interop-2026/) ·
+[Igalia: Interop 2026 focus areas](https://www.igalia.com/news/interop-2026.html) ·
+plus a **local** reconciliation the audit procedure did not previously ask for, described below.
+
+### The external half: the map is broadly CURRENT on Interop 2026, and that is the finding
+
+20 focus areas, 4 investigation areas. Checked each against `CONSTELLATION.tsv`:
+
+```text
+   scroll snap          gated      container queries  gated      view transitions   gated
+   :open pseudo-class   gated      popover(+hint)     gated      cross-doc VT       partial
+   shape()              missing    subgrid            missing    WebTransport       missing
+   WebRTC               missing (explicitly OUT OF SCOPE, settled — not a gap)
+```
+
+**Nothing the four vendors agreed matters most for 2026 is off our map**, and nothing on it
+outranks the current CO-#1. That is a *negative* result and it is the one worth having: the frame is
+not wrong at the top. It is wrong in the middle, which is where the local half found it.
+
+### The local half: THE MAP CONTRADICTS ITSELF ABOUT `tab-size`, AND A TEST FILE WAS A THIRD MAP
+
+This audit was triggered by a defect, not by the calendar. `g_computed_style_publishes_the_cascade`
+carries a **17-name `absent` list** — a guard asserting that certain properties must keep reading
+`undefined`, because fabricating an initial value for a capability we do not honour is
+`@supports`-style false presence. It went RED with `LEAKED:tabSize`. Auditing the whole list against
+`ComputedStyle` (not just the row that fired) turned up three things at once:
+
+| inventory | what it says about `tab-size` |
+|---|---|
+| the GATE's `absent` list | *"we do not honour it — it must read `undefined`"* |
+| `CONSTELLATION.tsv` row 116 | **`missing`** — *"absent, confirmed by grep (0 files)"* (tick 954) |
+| `CONSTELLATION.tsv` row 383 | *"the cascade **resolves** it and the serializer **will not say** it"* (LOSSY, tick 1214) |
+
+**Rows 116 and 383 of the same file disagree, and BOTH are now wrong.** `tab-size` is live end to
+end — `engine/css/src/lib.rs:1219` (field), `:5428` (parse), `:1788` (inherit), `:1906` (damage),
+`stylo_engine.rs:1135` (extraction), **`engine/layout/src/lib.rs:9924` `tab_stop()` (honoured in the
+text shaper, resolving a `<number>` against the run's own font)**, and `dom_bindings.rs:2296`
+(published). Three inventories of one property: one said absent, one said lossy, one said absent —
+and the engine had shipped it.
+
+> **Audit #63 said: reconcile the map against its own duplicates.** This one says the next thing:
+> **the map is not the only map.** A negative assertion in a test file — *"this must stay
+> `undefined`"* — is capability knowledge, it is maintained by a different hand, and nothing has ever
+> compared the two. That is how one went stale in the direction that HIDES shipped work while the
+> other went stale in the direction that hides a GAP.
+
+### ADDED — seven capabilities absent from a 572-row map, each with a MEASURED verdict
+
+The guard list had already measured them; nobody had transcribed the measurement. Grepping all
+seventeen names for a `ComputedStyle` field is the probe, and it takes one line:
+
+```text
+   caret-color · accent-color · unicode-bidi · font-stretch · container-type · column-count · contain
+```
+
+Filed `missing` rather than `unknown` — the receipt is a source-grep with a named file:line, which is
+the same standard the rest of the map's `missing` rows are held to.
+
+### CORRECTED
+
+- `tab-size` row 116 `missing` → **`gated`**, with the layout receipt above.
+- Row 383's LOSSY head drops `tab-size` — it is published as of this session.
+
+### What we had been wrong about
+
+**That the map was the inventory.** It is *an* inventory. The gate wall holds a second one in
+negative form, and the two drift in opposite directions with nothing to catch either. ⚠ The
+structural note, for the observer rather than for me (PART VII): the guard stayed RED and unread
+because **the wall runs 19 of 104 gates** — a gate outside the wall is a claim nobody is checking.
+
+### Re-rank?
+
+**No re-rank at the top.** But the audit produced a forecast for the tick that triggered it, by
+accident and an hour early: `writing_mode` came back **0** in the same grep, and the 48 residual
+subtests of t1223's inset family are *exactly* the writing-mode mirror
+(`cbHeight − staticPositionY`). **A guard list of things the engine does not have is a BACKLOG nobody
+had read as one** — sixteen named, measured, currently-absent capabilities, sitting in a test file as
+a negative assertion.

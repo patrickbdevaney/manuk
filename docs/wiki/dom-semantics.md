@@ -820,11 +820,24 @@ implementation ("ask layout what offset it applied") passes the simple rows and 
   (CSS2 §9.4.3). Pure arithmetic on the computed values; no geometry needed.
 * **`sticky`** — `auto` is **preserved**. A sticky box's offsets are a clamp range, not a
   displacement, so `auto` means *unclamped on this edge* and has no px equivalent.
-* **`absolute`/`fixed`** — ⚠ **REFUSED and pinned.** A resolved `auto` there is the used **static
-  position** — where the box *would have been in flow* — which is layout output this seam does not
-  receive, and nothing about the computed style plus the containing block can derive it. The gate
-  asserts `auto` on purpose, so the tick that publishes the static position has to come back and
-  change that line deliberately rather than discover it.
+* **`absolute`/`fixed`** — the used value is a **distance between two laid-out boxes**:
+  `used top = element margin-box top − containing-block padding-box top`, and the mirror on each
+  far edge. ⚠ The inset runs to the **margin** box, not the border box (CSS 2.1 §10.3.7), which with
+  the zero margins the common case has is invisible — and wrong on a centred dialog.
+
+  ⚠⚠⚠ **This arm was REFUSED for a tick on a claim that was overstated, and the correction is worth
+  more than the fix.** The refusal read: *"a resolved `auto` is the used static position, which is
+  layout output this seam does not receive."* But the seam **does** receive `layout_rect(n)`, and the
+  containing block's box was one field away from carrying its origin. The refusal was right about the
+  *specified* value and wrong about what was derivable from values already in hand. **The general
+  form: "this seam does not have X" is a claim about the seam's INPUTS, and it has to be checked
+  against them rather than recalled — a distance between two things you can both see is not a
+  missing input.**
+
+  ⚠ It is also the **one arm answered by LAYOUT** rather than by arithmetic on the cascade, and that
+  is a different risk profile: everywhere else a wrong containing block yields an honest refusal;
+  here a mis-placed box yields a confidently wrong px. The `auto`/`auto` row reports the used
+  **static position**, so it asserts where layout put the box.
 
 ### The failure is worse than `NaN`, and the RED proof is what showed it
 
@@ -841,8 +854,22 @@ box, and they all route through `inset_css`. That is not tidiness: `max-inline-s
 this exact drift once, where the logical spelling said `auto` and the physical one said `none` about
 the same element. The gate asserts all three agree.
 
-**GATE** `G_RESOLVED_INSETS` — `computed_insets_are_the_used_offset_against_the_containing_block`.
-RED-proven by making `used_inset_css` return `None`: 20 claims fail.
+### The static position ACCUMULATES, and one level of nesting cannot show it
+
+An `auto`/`auto` abspos box sits at its static position — the **content** box of its in-flow parent,
+which is *not* the padding box its containing block is measured from. The two differ by exactly the
+containing block's padding, so a single-level fixture reads `8px` where the naive expectation is `0`
+and both look plausible. Down a chain it accumulates: a wrapper with `margin 4 / border 2 / padding 1`
+inside a containing block with `padding 8` puts the box at `8 + 4 + 2 + 1 = 15`. That is WPT's own
+arithmetic for the same nesting (`staticPositionY: 1 + 2 + 4 + 8` in `getComputedStyle-insets.js`),
+and the gate asserts the nested number rather than the single-level one for that reason.
+
+**GATE** `G_RESOLVED_INSETS` — `computed_insets_are_the_used_offset_against_the_containing_block`,
+38 claims. RED-proven twice, and the second proof is what makes the gate able to attribute: make
+`used_inset_css` return `None` and **30 of 38** fail; keep the whole mechanism and drop only the
+containing block's **origin** (`[0, 0, w, h]`) and **exactly the five `absau*` rows fail**. A
+percentage needs the containing block's SIZE, an `auto` needs its POSITION — a gate that could not
+tell those apart would credit one tick with both.
 
 ## getComputedStyle must expose the properties the cascade ALREADY computed — undefined is a bug, not a value
 

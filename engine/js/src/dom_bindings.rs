@@ -655,14 +655,19 @@ unsafe fn containing_block_size(
     dom: *mut Dom,
     node: NodeId,
     pos: manuk_css::Position,
-) -> Option<[f32; 2]> {
+) -> Option<[f32; 4]> {
     use manuk_css::{Overflow, Position};
+    // ⚠ The viewport has no ORIGIN in the rect table's coordinate space, so it answers `[0, 0, w, h]`
+    // — which is exactly right for the initial containing block (the document origin) and is why an
+    // `auto` inset against it is still derivable.
     let viewport = || {
         let (w, h) = manuk_css::values::viewport_size();
-        Some([w, h])
+        Some([0.0, 0.0, w, h])
     };
-    // The box an ancestor contributes. `content` subtracts padding as well as border.
-    let area = |a: NodeId, content: bool| -> Option<[f32; 2]> {
+    // The box an ancestor contributes, as `[x, y, w, h]`. `content` subtracts padding as well as
+    // border. The ORIGIN is carried because an `auto` inset on an abspos box is a DISTANCE between
+    // this box and the element's own — a size alone cannot answer it (t1223).
+    let area = |a: NodeId, content: bool| -> Option<[f32; 4]> {
         let r = layout_rect(a)?;
         with_style(a, |st| {
             // A padding we cannot resolve here is a number we must not invent.
@@ -672,13 +677,17 @@ unsafe fn containing_block_size(
                 _ => None,
             };
             let bw = &st.border_width;
+            let (mut x, mut y) = (r[0] + bw.left, r[1] + bw.top);
             let mut w = r[2] - bw.left - bw.right;
             let mut h = r[3] - bw.top - bw.bottom;
             if content {
-                w -= px_of(&st.padding.left)? + px_of(&st.padding.right)?;
-                h -= px_of(&st.padding.top)? + px_of(&st.padding.bottom)?;
+                let (pl, pt) = (px_of(&st.padding.left)?, px_of(&st.padding.top)?);
+                x += pl;
+                y += pt;
+                w -= pl + px_of(&st.padding.right)?;
+                h -= pt + px_of(&st.padding.bottom)?;
             }
-            Some([w.max(0.0), h.max(0.0)])
+            Some([x, y, w.max(0.0), h.max(0.0)])
         })
         .flatten()
     };
@@ -973,15 +982,24 @@ enum InsetSide {
 ///   side it is that side negated, and against an `auto` opposite it is `0px` (CSS2 §9.4.3).
 /// - `position: sticky` — `auto` is **preserved** as `auto`; a sticky box's offsets are a clamp
 ///   range, not a displacement, so there is no used offset to report.
-/// - `position: absolute` / `fixed` — ⚠ **REFUSED, and named rather than approximated.** A resolved
-///   `auto` there is the **used static position**, which is layout output this seam does not
-///   receive: it is where the box *would have been* in flow, not anything derivable from the
-///   computed style plus the containing block. Reporting the specified `auto` is the honest answer
-///   until layout publishes the static position, and it is what Chrome would disagree with — that
-///   residual is ~216 of the family and is stated, not hidden.
+/// - `position: absolute` / `fixed` — the used value is a **DISTANCE BETWEEN TWO LAID-OUT BOXES**,
+///   and t1222 refused it on the grounds that it was *"layout output this seam does not receive."*
+///   ⚠⚠⚠ **That was overstated, and the correction is the whole of t1223.** The seam receives
+///   `layout_rect(n)` — the element's own laid-out border box — and the containing block's box is
+///   now carried with its ORIGIN as well as its size. Both boxes are in the same table, so
+///   `used top = element margin-box top − CB padding-box top` is a subtraction, not a missing input.
+///   The refusal was correct about the *specified* value and wrong about what could be derived from
+///   values already in hand.
+///
+/// ⚠ **This is the ONE arm whose answer comes from LAYOUT rather than from arithmetic on the
+/// cascade, and that is a different risk.** Everywhere else a wrong containing block yields a
+/// refusal; here a mis-placed box yields a confidently wrong px. The `auto`/`auto` case is the sharp
+/// end — it reports the used **static position**, so it asserts where our layout put the box, not
+/// what our serializer did with the value.
 fn used_inset_css(
     cs: &manuk_css::ComputedStyle,
-    cb: Option<[f32; 2]>,
+    cb: Option<[f32; 4]>,
+    rect: Option<[f32; 4]>,
     side: InsetSide,
 ) -> Option<String> {
     use manuk_css::{Dim, Display, Position};
@@ -1004,8 +1022,8 @@ fn used_inset_css(
     // resolve here, and a `relative; top:auto; bottom:3px` still has to negate, so those two must
     // work with **no** containing block rather than fall back to the specified value.
     let basis = cb.map(|cb| match side {
-        InsetSide::Top | InsetSide::Bottom => cb[1],
-        InsetSide::Left | InsetSide::Right => cb[0],
+        InsetSide::Top | InsetSide::Bottom => cb[3],
+        InsetSide::Left | InsetSide::Right => cb[2],
     });
     // Multiply BEFORE dividing: `basis * pct / 100.0` is exact for the round numbers a stylesheet
     // actually carries, where `pct / 100.0 * basis` rounds `10%` of `100px` through an inexact 0.1.
@@ -1031,8 +1049,29 @@ fn used_inset_css(
                 Dim::Auto => 0.0,
                 other => -resolve(other)?,
             },
-            // Sticky preserves `auto`; abspos/fixed need the static position. Both keep `auto`.
-            _ => return None,
+            // Sticky PRESERVES `auto` — a clamp range has no used offset to report.
+            Position::Sticky | Position::Static => return None,
+            // Abspos/fixed: the gap between the containing block's padding edge and the element's
+            // own MARGIN edge, both of which are laid out and both of which are in hand.
+            Position::Absolute | Position::Fixed => {
+                let (cb, r) = (cb?, rect?);
+                // ⚠ The inset runs to the MARGIN box, not the border box (CSS 2.1 §10.3.7: `left +
+                // margin-left + … + margin-right + right` spans the containing block). With the zero
+                // margins the common case has they coincide, which is exactly why getting it wrong
+                // here would pass every simple fixture and fail on a centred dialog.
+                let m = |d: &Dim| match d {
+                    Dim::Px(v) => Some(*v),
+                    Dim::Auto => Some(0.0),
+                    Dim::Percent(p) => Some(cb[2] * p / 100.0),
+                    Dim::Calc { px, pct } => Some(px + cb[2] * pct / 100.0),
+                };
+                match side {
+                    InsetSide::Top => r[1] - m(&cs.margin.top)? - cb[1],
+                    InsetSide::Left => r[0] - m(&cs.margin.left)? - cb[0],
+                    InsetSide::Bottom => (cb[1] + cb[3]) - (r[1] + r[3] + m(&cs.margin.bottom)?),
+                    InsetSide::Right => (cb[0] + cb[2]) - (r[0] + r[2] + m(&cs.margin.right)?),
+                }
+            }
         },
         other => resolve(other)?,
     };
@@ -1057,14 +1096,23 @@ fn inset_needs_containing_block(cs: &manuk_css::ComputedStyle) -> bool {
     {
         return false;
     }
-    [
+    let sides = [
         &cs.inset.top,
         &cs.inset.right,
         &cs.inset.bottom,
         &cs.inset.left,
-    ]
-    .iter()
-    .any(|d| matches!(d, Dim::Percent(_) | Dim::Calc { .. }))
+    ];
+    // An abspos/fixed `auto` is a distance from the containing block's padding edge (t1223), so it
+    // needs the walk too — and `auto` is the DEFAULT, which is why this arm is checked by `position`
+    // rather than folded into the `any` below: almost every abspos element on the web hits it.
+    if matches!(cs.position, Position::Absolute | Position::Fixed)
+        && sides.iter().any(|d| matches!(d, Dim::Auto))
+    {
+        return true;
+    }
+    sides
+        .iter()
+        .any(|d| matches!(d, Dim::Percent(_) | Dim::Calc { .. }))
 }
 
 /// One inset property, as `getComputedStyle` must report it: the **used** value where
@@ -1073,8 +1121,13 @@ fn inset_needs_containing_block(cs: &manuk_css::ComputedStyle) -> bool {
 /// Every one of the twelve call sites (four physical, four logical, four in the `inset` shorthand)
 /// goes through this one function, so the fallback rule cannot drift between two spellings of the
 /// same box — the drift the `max-inline-size` note records catching once already.
-fn inset_css(cs: &manuk_css::ComputedStyle, cb: Option<[f32; 2]>, side: InsetSide) -> String {
-    used_inset_css(cs, cb, side).unwrap_or_else(|| {
+fn inset_css(
+    cs: &manuk_css::ComputedStyle,
+    cb: Option<[f32; 4]>,
+    rect: Option<[f32; 4]>,
+    side: InsetSide,
+) -> String {
+    used_inset_css(cs, cb, rect, side).unwrap_or_else(|| {
         dim_css(match side {
             InsetSide::Top => &cs.inset.top,
             InsetSide::Right => &cs.inset.right,
@@ -1402,7 +1455,8 @@ fn content_css(cs: &manuk_css::ComputedStyle, absent_is_none: bool) -> String {
 
 fn extra_computed_props(
     cs: &manuk_css::ComputedStyle,
-    cb: Option<[f32; 2]>,
+    cb: Option<[f32; 4]>,
+    rect: Option<[f32; 4]>,
     content_absent_is_none: bool,
 ) -> Vec<(&'static str, String)> {
     use manuk_css::*;
@@ -1751,10 +1805,19 @@ fn extra_computed_props(
         // ones, for the reason the `max-*` note below records having learned the hard way: a second
         // serializer for one box is a drift that only a re-sweep finds. `inset-block-start` reading
         // `10%` while `top` reads `20px` about the same element is that drift.
-        ("inset-inline-start", inset_css(cs, cb, InsetSide::Left)),
-        ("inset-inline-end", inset_css(cs, cb, InsetSide::Right)),
-        ("inset-block-start", inset_css(cs, cb, InsetSide::Top)),
-        ("inset-block-end", inset_css(cs, cb, InsetSide::Bottom)),
+        (
+            "inset-inline-start",
+            inset_css(cs, cb, rect, InsetSide::Left),
+        ),
+        (
+            "inset-inline-end",
+            inset_css(cs, cb, rect, InsetSide::Right),
+        ),
+        ("inset-block-start", inset_css(cs, cb, rect, InsetSide::Top)),
+        (
+            "inset-block-end",
+            inset_css(cs, cb, rect, InsetSide::Bottom),
+        ),
         (
             "min-inline-size",
             min_dim_css(&cs.min_width, cs.min_width_keyword),
@@ -1782,10 +1845,10 @@ fn extra_computed_props(
         // Chrome serialises the four-value shorthand collapsed when the sides agree.
         ("inset", {
             let (t, r, b, l) = (
-                inset_css(cs, cb, InsetSide::Top),
-                inset_css(cs, cb, InsetSide::Right),
-                inset_css(cs, cb, InsetSide::Bottom),
-                inset_css(cs, cb, InsetSide::Left),
+                inset_css(cs, cb, rect, InsetSide::Top),
+                inset_css(cs, cb, rect, InsetSide::Right),
+                inset_css(cs, cb, rect, InsetSide::Bottom),
+                inset_css(cs, cb, rect, InsetSide::Left),
             );
             if t == r && r == b && b == l {
                 t
@@ -2009,7 +2072,7 @@ fn dashed_alias_js(extra: &[(&'static str, String)]) -> String {
 fn computed_style_js(
     cs: &manuk_css::ComputedStyle,
     rect: Option<[f32; 4]>,
-    cb: Option<[f32; 2]>,
+    cb: Option<[f32; 4]>,
     content_absent_is_none: bool,
 ) -> String {
     use manuk_css::{
@@ -2276,7 +2339,7 @@ fn computed_style_js(
     // longhands, matching the order `getPropertyValue` already answers them in.
     // Computed ONCE and shared by the three consumers below (the enumeration list, the object slots,
     // the dashed aliases). It builds ~60 strings and `getComputedStyle` is a hot, forced-reflow path.
-    let extra = extra_computed_props(cs, cb, content_absent_is_none);
+    let extra = extra_computed_props(cs, cb, rect, content_absent_is_none);
     let names_js = {
         const STD: &[&str] = COMPUTED_STD_NAMES;
         let mut arr = String::from("[");
@@ -2399,10 +2462,10 @@ fn computed_style_js(
         // CSSOM: the insets resolve to the USED offset in px on a positioned element. The specified
         // value is the fallback for the cases `used_inset_css` refuses (static, display:none, an
         // unresolvable containing block, an abspos `auto`) — never the default.
-        q(&inset_css(cs, cb, InsetSide::Top)),
-        q(&inset_css(cs, cb, InsetSide::Right)),
-        q(&inset_css(cs, cb, InsetSide::Bottom)),
-        q(&inset_css(cs, cb, InsetSide::Left)),
+        q(&inset_css(cs, cb, rect, InsetSide::Top)),
+        q(&inset_css(cs, cb, rect, InsetSide::Right)),
+        q(&inset_css(cs, cb, rect, InsetSide::Bottom)),
+        q(&inset_css(cs, cb, rect, InsetSide::Left)),
         q(&cs.z_index.map(|z| z.to_string()).unwrap_or_else(|| "auto".into())),
         q(&transform_css(&cs.transform, rect)),
         q(justify_content),

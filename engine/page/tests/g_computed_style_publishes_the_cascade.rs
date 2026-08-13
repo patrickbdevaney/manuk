@@ -108,7 +108,16 @@ const HTML: &str = r##"<!doctype html><html><head><style>
   // ── DELIBERATELY ABSENT — the guard that stops a later "be helpful" edit from emitting initial
   //    values for properties this engine does not honour. Each of these is a real capability a page
   //    feature-detects, and a fabricated answer routes the caller into a wall instead of a fallback.
-  var absent = ['hyphens','touchAction','willChange','writingMode','tabSize','containerType',
+  //
+  // ⚠⚠ **`tabSize` WAS IN THIS LIST AND THE ENGINE OUTGREW IT (t1223).** `tab_size` gained a real
+  //    `ComputedStyle` field and `computed_style_js` began publishing it — so this gate went RED
+  //    saying `LEAKED:tabSize`, and it was RIGHT that something changed and WRONG about which side
+  //    was at fault: the engine gained a capability and the guard had no way to notice. It stayed
+  //    red and unread because the wall runs 19 of 104 gates. ⚠ Found by t1222's stash control (the
+  //    failure reproduced byte-identically at HEAD), and the fix is the whole list AUDITED against
+  //    the cascade rather than the one row that fired: of the seventeen names, `tab_size` is the
+  //    ONLY one that has grown a `ComputedStyle` field. The other sixteen are still honestly absent.
+  var absent = ['hyphens','touchAction','willChange','writingMode','containerType',
                 'scrollBehavior','overscrollBehavior','caretColor','accentColor','isolation',
                 'contain','columnCount','breakInside','unicodeBidi','fontStretch',
                 'gridTemplateColumns'];

@@ -46371,6 +46371,113 @@ PERF: none — one UA rule and one narrowed branch in a cascade that already ran
 WIKI: `docs/wiki/css-cascade.md` — where Chrome draws the form-control `box-sizing` line, and why a
 layout-crate test cannot see it.
 
+## Tick 1223 — the thing I called unreachable was in a table I was already reading (2026-08-13)
+
+TICK SHAPE: capability — closing the family t1222 **refused and pinned**, plus the stale guard t1222
+found with the stash control.
+
+HYPOTHESIS, and it starts by correcting the tick before it: t1222 said an `auto` inset on an
+`absolute`/`fixed` element resolves to the used **static position**, *"which is layout output this
+seam does not receive"*. **That was overstated.** The seam receives `layout_rect(n)` — the element's
+laid-out border box — and the used inset IS a distance between two boxes both of which are in that
+same table: `used top = element margin-box top − containing-block padding-box top`. The refusal was
+real about the *specified* value and wrong about what could be derived. So: extend
+`containing_block_size` to return the CB's **origin** as well as its size, and answer an abspos/fixed
+`auto` from geometry.
+
+⚠ This is the one place in the family where the answer comes from LAYOUT rather than from arithmetic
+on the cascade, so it is the one place a layout error becomes a *wrong number* instead of an honest
+`auto`. The `auto`/`auto` row is the sharp end — it asserts our static position, not our serializer.
+
+Also folded in, and stated rather than smuggled: the `stillAbsent=LEAKED:tabSize` guard t1222
+attributed to HEAD. Audited the whole 17-name list against the cascade rather than fixing the one row
+that fired — **`tab_size` is the only one of the seventeen that has grown a `ComputedStyle` field**,
+so the guard is stale in exactly one place and correct in sixteen. It is a test-file change with no
+engine effect, so it cannot move the WPT numbers and attribution is not at risk.
+
+PREDICTION, written before the run: `css/cssom` 2455/3490 → **~2670** (+~216).
+
+**MEASURED: 2455/3490 → 2621/3487 — +166, 70.3% → 75.2%.** Controls: `dom` **8142 (=)**,
+`css/css-position` **264 (=)**. PRIMARY **71.86% → 72.00%**.
+
+⚠⚠ **THE PREDICTION MISSED BY 50, AND THE MISS IS THE FINDING.** It was right about the family's
+SIZE and wrong in assuming all of it was winnable. The residual is **48 subtests**, and it is one
+thing, which the arithmetic names without needing a hypothesis:
+
+```text
+   'top'  expected "185px" got "15px"     185 = 200 − 15     ← cbHeight − staticPositionY
+   'top'  expected "173px" got "127px"    173 = 300 − 127
+   'left' expected "370px" got "30px"     370 = 400 − 30     ← cbWidth  − staticPositionX
+   'left' expected "346px" got "254px"    346 = 600 − 254
+```
+
+**Every residual row is the same number MIRRORED.** WPT runs this family across 36 writing-mode
+pairs, and its expectation for the static-position row is
+`cbWM.blockStart == "top" ? staticPositionY : cbHeight - staticPositionY`. We answer `horizontal-tb`
+in all 36 because **the engine has no writing mode at all**. 166 landed + 48 mirrored = 214, against
+a predicted 216 — so the family was sized correctly to within two subtests and the error was entirely
+in "winnable".
+
+⚠⚠⚠ **AND THE BLOCKER WAS NAMED BY THE OTHER HALF OF THIS TICK, AN HOUR EARLIER, BY ACCIDENT.**
+Auditing the stale `stillAbsent` guard meant grepping all seventeen of its names against
+`ComputedStyle` — and `writing_mode` came back **0**, alongside `hyphens`, `contain`, `caret_color`
+and thirteen others. That grep was run to answer *"is this guard still honest?"* and it happens to be
+the exact forecast for *"what caps the inset family?"*. **A guard list of things the engine does not
+have is a BACKLOG nobody had read as one** — sixteen named, measured, currently-absent capabilities,
+sitting in a test file as a negative assertion. That is worth more than this tick's +166 and is
+written down here rather than left in the grep.
+
+⚠ **NOT A REGRESSION, AND WORTH SAYING:** those 48 rows read `auto` before this tick and read a
+*wrong number* after it. That sounds like the trade this loop refuses — it is not, because the
+subtest failed either way and no mark moved down. But it IS the risk the module doc names: this is
+the one arm answered by LAYOUT, so it is the one arm where our own gap surfaces as a confident wrong
+answer instead of an honest `auto`. Recorded so the next reader of `getComputedStyle().top` under a
+vertical writing mode knows the number is horizontal-tb's, not a bug in the serializer.
+
+THE GUARD HALF, as promised: audited all seventeen names rather than fixing the one that fired.
+**`tab_size` is the only one of the seventeen that has grown a `ComputedStyle` field**, so the guard
+was stale in exactly one place and correct in sixteen. The engine gained a capability and the guard
+had no way to notice — the mirror image of the usual failure. ⚠ It stayed RED and unread because the
+wall runs **19 of 104 gates**; that is harness territory (PART VII), so it is named here for the
+observer rather than touched.
+
+PERF: none. The walk is still gated, and `inset_needs_containing_block` grew one arm — an abspos
+element with an `auto` inset now needs it too, which is *most* abspos elements, so the gate is
+narrower than it was. The reflow hook is idempotent on `mutation_seq`, so an ancestor step is an
+integer compare; the F1/F2 floors are unmoved.
+
+⚠⚠⚠ **THE SURFACE AUDIT CAME DUE MID-TICK AND THE TICK HAD ALREADY WRITTEN ITS FINDING — audit #64,
+`docs/loop/SURFACE-AUDIT.md`.** The external half is a *negative* result worth having: all 20
+Interop-2026 focus areas were checked against `CONSTELLATION.tsv` and **not one is off our map**
+(scroll snap / container queries / view transitions / `:open` / popover `gated`; `shape()` / subgrid
+/ WebTransport `missing`; WebRTC settled out of scope). The frame is not wrong at the top.
+
+**It is wrong in the middle, and the local half found THREE INVENTORIES OF ONE PROPERTY:**
+
+```text
+   the GATE's `absent` guard   "we do not honour tab-size — it must read undefined"
+   CONSTELLATION row 116       missing   "absent, confirmed by grep (0 files)"     (t954)
+   CONSTELLATION row 383       "the cascade RESOLVES it, the serializer will not say it"  (t1214)
+```
+
+**Two rows of the same file disagree, and all three are wrong.** `tab-size` is live end to end —
+cascade field, parse, inherit, damage, Stylo extraction, **`engine/layout/src/lib.rs:9924`
+`tab_stop()` honouring it in the text shaper**, and published in the CSSOM. Audit #63's rule was
+*reconcile the map against its own duplicates*; #64's is the next one: **the map is not the only
+map.** A negative assertion in a test file is capability knowledge maintained by a different hand,
+and nothing has ever compared the two — which is how one went stale in the direction that HIDES
+SHIPPED WORK while the other went stale in the direction that hides a GAP.
+
+ADDED, measured rather than guessed (the grep IS the probe): `caret-color` · `accent-color` ·
+`unicode-bidi` · `font-stretch` · `container-type` · `column-count` · `contain` — seven capabilities
+absent from a 572-row map, filed `missing` with a source receipt rather than `unknown`. MEASURED
+**535 → 542 of 579**. CORRECTED: row 116 `missing` → `gated`. ⚠ `unicode-bidi`'s absence is a
+**spoofing** surface, not only a visual one — an injected RLO re-orders the Latin UI around a
+user-supplied name, and `isolate` is the escape hatch.
+
+WIKI: `docs/wiki/dom-semantics.md` — "The static position ACCUMULATES, and one level of nesting
+cannot show it"
+
 ## Tick 1222 — the inset serializer never had a containing block, so it published the author's `10%` (2026-08-13)
 
 TICK SHAPE: capability — the lever t1220 named and t1221 re-sized as **half of `css/cssom`**: plumb the

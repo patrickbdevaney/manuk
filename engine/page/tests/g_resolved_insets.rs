@@ -15,11 +15,16 @@
 //!
 //! **It was blocked on exactly one missing input, and t1220 named it before this tick started:** a
 //! percentage inset resolves against the **containing block**, and `computed_style_js` received the
-//! element's own `rect` and nothing else. `containing_block_size` now walks the arena for it — the
-//! parent's CONTENT box for `relative`/`sticky`, the nearest positioned-or-transformed ancestor's
-//! PADDING box for `absolute`, the nearest transformed ancestor (else the viewport) for `fixed`.
-//! Three different ancestors and three different boxes; picking the wrong one is silent, because
-//! every one of them yields a plausible number.
+//! element's own `rect` and nothing else. `containing_block_size` now walks the arena for it — and
+//! it is **four different ancestors and two different box areas**, where picking the wrong one is
+//! silent because every one of them yields a plausible number about a real element:
+//!
+//! ```text
+//!   relative   the parent element                                   CONTENT box
+//!   sticky     the nearest SCROLL CONTAINER (the scrollport)        CONTENT box
+//!   absolute   the nearest positioned-or-transformed ancestor       PADDING box
+//!   fixed      the nearest TRANSFORMED ancestor, else the viewport  PADDING box
+//! ```
 //!
 //! **What it costs while it is wrong, and the RED proof sharpened this rather than confirming it.**
 //! The expected story was "`parseFloat` returns `NaN`". It does not: `parseFloat("10%")` is **`10`**.
@@ -40,13 +45,22 @@
 //! - `relative` — `auto` IS resolved: `-(opposite)`, or `0px` when the opposite is also `auto`.
 //! - `sticky` — `auto` is **preserved**. A sticky box's offsets are a clamp range, not a
 //!   displacement, so there is no used offset to report.
-//! - `absolute`/`fixed` — ⚠ **REFUSED, named rather than approximated.** A resolved `auto` there is
-//!   the used **static position** — where the box *would have been in flow* — which is layout output
-//!   this seam does not receive. It is asserted below as still reporting `auto`, so the tick that
-//!   publishes the static position has to come back and change this line deliberately.
+//! - `absolute`/`fixed` — the used value is a **distance between two laid-out boxes**. ⚠⚠⚠ t1222
+//!   refused this arm on the grounds that it was *"layout output this seam does not receive"*, and
+//!   **that was overstated**: the seam receives `layout_rect(n)`, and once the containing block
+//!   carries its ORIGIN as well as its size, `used top = element margin-box top − CB padding-box
+//!   top` is a subtraction. The refusal was right about the *specified* value and wrong about what
+//!   was derivable from values already in hand. ⚠ It is also the ONE arm answered by LAYOUT rather
+//!   than by arithmetic on the cascade — everywhere else a wrong containing block yields an honest
+//!   refusal; here a mis-placed box yields a confidently wrong px.
 //!
-//! **Proven RED**: restore `dim_css(&cs.inset.*)` at the four physical call sites and fifteen claims
-//! fail, `pop-parse-top=NaN` among them — the consequence rather than the symptom.
+//! **Proven RED, twice, and the second proof is the interesting one.** Make `used_inset_css` return
+//! `None` and **30 of the 38 claims fail** (`endsWithPx`, `noPercentLeak`, `noCalcLeak` among them —
+//! the consequence rather than the symptom). Then the surgical one: keep the whole mechanism and
+//! drop only the containing block's **ORIGIN**, reporting `[0, 0, w, h]`, and **exactly the five
+//! `absau*` rows fail and nothing else**. That is what separates the two halves of this mechanism —
+//! percentages need the containing block's SIZE, an `auto` needs its POSITION, and a gate that
+//! could not tell them apart would credit one tick for both.
 
 use manuk_text::FontContext;
 
@@ -79,7 +93,13 @@ const HTML: &str = r##"<!doctype html><html><head><style>
   #stat    { position:static; top:10%; left:25%; }
   #gone    { display:none; position:relative; top:10%; }
   #abs     { position:absolute; top:10%; left:25%; bottom:50%; right:75%; }
-  #absau   { position:absolute; bottom:3px; }
+  #absau   { position:absolute; bottom:3px; height:0px; }
+  #absau2  { position:absolute; top:1px; height:0px; }
+  #absau3  { position:absolute; height:0px; }
+  /* The static position ACCUMULATES down the in-flow chain. WPT's own arithmetic for this exact
+     nesting is 1 + 2 + 4 + 8 = 15 (padding + border + margin + the CB's padding). */
+  #inwrap  { padding:1px 2px; border-width:2px 4px; border-style:solid; margin:4px 8px; }
+  #absau4  { position:absolute; height:0px; }
   #fix     { position:fixed; top:10%; left:25%; }
 </style></head><body>
 <div id="inflow">
@@ -87,7 +107,7 @@ const HTML: &str = r##"<!doctype html><html><head><style>
   <div id="relau1"></div><div id="relau2"></div><div id="relau3"></div>
   <div id="stick"></div><div id="stat"></div><div id="gone"></div>
 </div>
-<div id="absctr"><div id="abs"></div><div id="absau"></div></div>
+<div id="absctr"><div id="abs"></div><div id="absau"></div><div id="absau2"></div><div id="absau3"></div><div id="inwrap"><div id="absau4"></div></div></div>
 <div id="scroller"><div id="wrap"><div id="stick2"></div></div></div>
 <div id="fixctr"><div id="fix"></div></div>
 <div id="out">-</div>
@@ -129,7 +149,12 @@ const HTML: &str = r##"<!doctype html><html><head><style>
   p('stick.bot',  q('stick', 'bottom'));  // ...but PRESERVES `auto` — it is a clamp, not an offset
   p('stick2.top', q('stick2', 'top'));    // ...against the SCROLLPORT (200), not the parent (50)
   p('stick2.left',q('stick2', 'left'));   // 25% of the scrollport's 400 content width
-  p('absau.top',  q('absau', 'top'));     // REFUSED: an abspos `auto` is the used STATIC POSITION
+  // ── An abspos `auto` is a DISTANCE BETWEEN TWO LAID-OUT BOXES, so it comes from geometry.
+  p('absau.top',   q('absau', 'top'));    // auto/bottom:3px, height 0 -> 200 - 3 = 197
+  p('absau2.bot',  q('absau2', 'bottom'));// top:1px/auto, height 0    -> 200 - 1 = 199
+  p('absau3.top',  q('absau3', 'top'));   // BOTH auto -> the STATIC POSITION: the CB's padding 8
+  p('absau4.top',  q('absau4', 'top'));   // ...ACCUMULATED down a nested chain: 8 + 4 + 2 + 1 = 15
+  p('absau4.left', q('absau4', 'left'));  // ...and on the inline axis: 16 + 8 + 4 + 2 = 30
 
   // ── The logical spellings are the same box and must not drift from the physical ones.
   p('logical-agrees',
@@ -251,12 +276,38 @@ fn computed_insets_are_the_used_offset_against_the_containing_block() {
         ),
         ("stick2.left=100px", "25% of the scrollport's 400px content width, not the wrapper's"),
         (
-            "absau.top=auto",
-            "REFUSED AND PINNED: an abspos `auto` resolves to the used STATIC POSITION, which is \
-             layout output this seam does not receive. Chrome says a number here and we say `auto`; \
-             asserting `auto` means the tick that publishes the static position must change this \
-             line on purpose rather than discover it",
+            "absau.top=197px",
+            "t1222 REFUSED this row on the grounds that an abspos `auto` is 'layout output this seam \
+             does not receive', and that was OVERSTATED. The used inset is a DISTANCE BETWEEN TWO \
+             LAID-OUT BOXES — the element's own rect and the containing block's padding box — and \
+             both were already in hand once the containing block carried its ORIGIN as well as its \
+             size. `bottom:3px` in a 200px-tall padding box with a 0-height element ⇒ top = 197",
         ),
+        (
+            "absau2.bot=199px",
+            "…and the mirror: `top:1px` with `bottom:auto` ⇒ bottom = 200 - 1 - 0. The two rows \
+             together prove the subtraction is anchored to the right EDGE on each side, which a \
+             single row cannot show",
+        ),
+        (
+            "absau3.top=8px",
+            "⚠ THE SHARP END, and the one row here that asserts LAYOUT rather than the serializer: \
+             both sides `auto` ⇒ the used STATIC POSITION, where the box would have been in flow. \
+             ⚠ It is 8, NOT 0, and the first version of this claim said 0: the containing block for \
+             an abspos box is the PADDING box, while the static position sits at the CONTENT box — \
+             so they differ by exactly the containing block's padding. Two boxes of the same element \
+             that are easy to conflate, and only a padded container tells them apart",
+        ),
+        (
+            "absau4.top=15px",
+            "…and the static position ACCUMULATES down the in-flow chain, which one level cannot \
+             show. `#absau4` sits inside a wrapper with margin 4 / border 2 / padding 1, inside a \
+             containing block with padding 8: 8 + 4 + 2 + 1 = 15. That is WPT's own arithmetic for \
+             this exact nesting (`staticPositionY: 1 + 2 + 4 + 8` in getComputedStyle-insets.js), \
+             arrived at here independently — which is why it is worth asserting rather than the \
+             single-level 8",
+        ),
+        ("absau4.left=30px", "the inline axis of the same accumulation: 16 + 8 + 4 + 2"),
         // ── Reconciliation.
         (
             "logical-agrees=true",
