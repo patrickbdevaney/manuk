@@ -1,5 +1,14 @@
 //! **G_LOAD — a page renders even when its subresources never answer.**
 //!
+//! `G_LOAD_BUDGET` — **the filename-derived name, stated here on purpose.** A gate has TWO
+//! names, its FILE and the one its own first line declares (`G_LOAD`), and until tick 1203
+//! this file declared only the second while `CONSTELLATION.tsv` cited only the first. Each
+//! instrument was then blind to exactly the gates the other could see, and a real, passing,
+//! shipped gate read as a PHANTOM to the reconciler. Both dialects now appear in the file, so
+//! either reader validates the citation. (Surface audit #60; the same shape as audit #36's
+//! case dialect, with a different pair.)
+//!
+//!
 //! The bug this gate exists for: the network layer had no timeout of any kind. Not a connect
 //! timeout, not a read timeout, nothing. So a single subresource that completed its TCP handshake
 //! and then went silent — an ad host, a tracker, a geoblocked CDN, which is the *ordinary* condition

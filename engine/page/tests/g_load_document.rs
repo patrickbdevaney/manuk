@@ -1,5 +1,14 @@
 //! **G_LOAD (part 2) — the DOCUMENT gets a longer deadline than its subresources.**
 //!
+//! `G_LOAD_DOCUMENT` — **the filename-derived name, stated here on purpose.** A gate has TWO
+//! names, its FILE and the one its own first line declares (`G_LOAD`), and until tick 1203
+//! this file declared only the second while `CONSTELLATION.tsv` cited only the first. Each
+//! instrument was then blind to exactly the gates the other could see, and a real, passing,
+//! shipped gate read as a PHANTOM to the reconciler. Both dialects now appear in the file, so
+//! either reader validates the citation. (Surface audit #60; the same shape as audit #36's
+//! case dialect, with a different pair.)
+//!
+//!
 //! In its own binary, and that is not cosmetic. `request_timeout()` and `load_budget()` are process-wide
 //! `OnceLock`s: the first caller to read them wins, forever. This test and `g_load_budget.rs` both set
 //! `MANUK_NET_TIMEOUT_MS`, to *different values*, and cargo runs tests in parallel — so they were racing

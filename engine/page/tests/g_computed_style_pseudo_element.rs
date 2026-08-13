@@ -1,5 +1,14 @@
 //! **G_COMPUTED_PSEUDO — `getComputedStyle(el, '::before')` reports the PSEUDO, not the element.**
 //!
+//! `G_COMPUTED_STYLE_PSEUDO_ELEMENT` — **the filename-derived name, stated here on purpose.** A gate has TWO
+//! names, its FILE and the one its own first line declares (`G_COMPUTED_PSEUDO`), and until tick 1203
+//! this file declared only the second while `CONSTELLATION.tsv` cited only the first. Each
+//! instrument was then blind to exactly the gates the other could see, and a real, passing,
+//! shipped gate read as a PHANTOM to the reconciler. Both dialects now appear in the file, so
+//! either reader validates the citation. (Surface audit #60; the same shape as audit #36's
+//! case dialect, with a different pair.)
+//!
+//!
 //! The second argument was **ignored**, and that is a strictly worse failure than not supporting it.
 //! `getComputedStyle(div, '::before')` returned the *div's* style object, so a page asking about a
 //! generated box was answered about a different box entirely, with no way to tell:

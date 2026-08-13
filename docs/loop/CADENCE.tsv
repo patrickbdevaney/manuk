@@ -903,3 +903,4 @@ tick	sha	epoch	iso	delta_s	shape	wall_s	files	added	deleted	gates	claims	wpt_pas
 1200	60281c98	1786608038	2026-08-13T04:00:38-04:00	2469	capability	808	13	1546	37	454	81	3896	6960	0	594	0	an invalid selector must THROW, and calibrating on ONE corpus cost 289 subtests (2026-08-13)
 1201	079d8abb	1786610122	2026-08-13T04:35:22-04:00	2084	capability	808	12	611	41	455	81	3896	6960	0	595	0	an iframe's window had TWO properties, and the platform vanished at the frame boundary (2026-08-13)
 1202	145524c8	1786611691	2026-08-13T05:01:31-04:00	1569	capability	808	13	350	50	455	81	3896	6960	0	596	0	the arena-aware style lookup LANDS and moves ZERO, and the +0 is the finding (2026-08-13)
+1203	415cf357	1786618296	2026-08-13T06:51:36-04:00	6605	measurement	808	18	561	41	455	81	3896	6960	0	597	0	the sweep caught a FALSE THROW three anchor sites could not (2026-08-13)

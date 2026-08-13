@@ -848,6 +848,8 @@
   - L2989 · An invalid selector must THROW — and calibrating on ONE corpus cost 289 subtests (t1200)
   - L3001 · Validity is NOT "did the matcher understand it", and conflating them is a capability regression
   - L3023 · ⚠⚠⚠ THE MEASUREMENT THAT CAUGHT THE REAL BUG: one corpus is not a corpus
+  - L3052 · Three populations, three classes of miss: only the open web writes the shapes nobody would test (t1203)
+  - L3068 · The escalation, and it is the transferable part
 
 ## `<dialog>`, `popover`, and the top layer (ticks 194-195)
 `docs/wiki/dialog-and-top-layer.md`
@@ -2049,4 +2051,4 @@
   - L124 · Rank mechanisms by FLIP RATE, not failing-subtest count — CSS layout is a multi-assertion slog
 
 ---
-1956 sections across 22 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+1958 sections across 22 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.

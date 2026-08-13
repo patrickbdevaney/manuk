@@ -1,5 +1,14 @@
 //! **G_BIDI_BASE — an RTL paragraph is ordered from the right.**
 //!
+//! `G_BIDI_BASE_DIRECTION` — **the filename-derived name, stated here on purpose.** A gate has TWO
+//! names, its FILE and the one its own first line declares (`G_BIDI_BASE`), and until tick 1203
+//! this file declared only the second while `CONSTELLATION.tsv` cited only the first. Each
+//! instrument was then blind to exactly the gates the other could see, and a real, passing,
+//! shipped gate read as a PHANTOM to the reconciler. Both dialects now appear in the file, so
+//! either reader validates the citation. (Surface audit #60; the same shape as audit #36's
+//! case dialect, with a different pair.)
+//!
+//!
 //! The Unicode Bidi Algorithm resolves every run against a paragraph **base level**, and
 //! `FontContext::shape` hard-coded that base to LTR. So `direction: rtl` and `dir="rtl"` — how the
 //! entire Arabic, Hebrew, Persian and Urdu web declares itself — changed nothing: every character

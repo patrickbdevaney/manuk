@@ -1,5 +1,14 @@
 //! **G_XHR_EVENTTARGET (streaming half) — the delivery path that DID fire `loadend`.**
 //!
+//! `G_XHR_EVENTTARGET_STREAM` — **the filename-derived name, stated here on purpose.** A gate has TWO
+//! names, its FILE and the one its own first line declares (`G_XHR_EVENTTARGET`), and until tick 1203
+//! this file declared only the second while `CONSTELLATION.tsv` cited only the first. Each
+//! instrument was then blind to exactly the gates the other could see, and a real, passing,
+//! shipped gate read as a PHANTOM to the reconciler. Both dialects now appear in the file, so
+//! either reader validates the citation. (Surface audit #60; the same shape as audit #36's
+//! case dialect, with a different pair.)
+//!
+//!
 //! Split into its own file because a `PageContext` is per-PROCESS: two `#[test]`s that each build a
 //! page in one binary SIGSEGV. (Learned the hard way often enough to be a standing rule; it cost this
 //! tick one run.)

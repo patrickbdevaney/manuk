@@ -5186,6 +5186,27 @@ draining the JS event loop to its 20,000-task ceiling, which has no wall-clock b
 images now arrive; the page is still slow for another reason. Same discipline as t608: **do not book
 "site X works now" from "one of site X's defects is gone."**
 
+## Only the OPEN WEB writes the shapes nobody would think to test (tick 1203)
+
+| pattern | where it shows up | status |
+| --- | --- | --- |
+| **Escapes inside a selector's TYPE name and its unquoted attribute value** — `G\:TEST` (a type selector whose name carries an escaped colon) and `a[href*=\#]` (the anchor-link idiom). t1200's syntax validator taught escapes to `#`, `.` and pseudo names and not to these two, so both **threw a `SyntaxError` inside the page's own script** | `www.unoeste.br`, found by the 200-site CrUX sweep. `a[href*="#"]`-shaped selectors are how every smooth-scroll, tab and anchor-offset script on the web finds its links; `G\:…` is VML-era markup that is still shipping | ✅ fixed (tick 1203) — both committed into `selector_syntax.rs`'s corpus, RED-proven |
+
+⚠⚠⚠ **THREE POPULATIONS, THREE CLASSES OF MISS — and each caught what the previous ones
+structurally could not:**
+
+```text
+   WPT's 34 invalid + 207 valid   → perfect score, blind to CSS comments INSIDE a selector
+   css/selectors' observed 112    → caught comments, forgiving :is(), hex-escape flags
+   200 REAL SITES                 → caught escapes in the TYPE SELECTOR and the ATTRIBUTE VALUE
+```
+
+> **A spec corpus and a test corpus are both written by people who know the grammar. Only the open
+> web writes the shapes nobody would think to test.**
+
+⚠ **The bias held everywhere else:** 3 rejections across 200 real sites, and no other page lost a
+selector — which is what a fail-open validator is supposed to look like when it is wrong.
+
 ## A fix that WORKS and moves ZERO — and the zero named the next link (tick 1202)
 
 | pattern | where it shows up | status |

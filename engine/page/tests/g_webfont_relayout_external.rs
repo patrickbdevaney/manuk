@@ -1,4 +1,13 @@
 //! **G_WEBFONT_RELAYOUT (external-stylesheet half) — the same claim on the path where the `@font-face`
+//!
+//! `G_WEBFONT_RELAYOUT_EXTERNAL` — **the filename-derived name, stated here on purpose.** A gate has TWO
+//! names, its FILE and the one its own first line declares (`G_WEBFONT_RELAYOUT`), and until tick 1203
+//! this file declared only the second while `CONSTELLATION.tsv` cited only the first. Each
+//! instrument was then blind to exactly the gates the other could see, and a real, passing,
+//! shipped gate read as a PHANTOM to the reconciler. Both dialects now appear in the file, so
+//! either reader validates the citation. (Surface audit #60; the same shape as audit #36's
+//! case dialect, with a different pair.)
+//!
 //! arrives in an EXTERNAL sheet.**
 //!
 //! Split into its own file because a `PageContext` is per-PROCESS (two `#[test]`s in one binary

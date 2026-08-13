@@ -3048,3 +3048,40 @@ worth keeping: an unclosed `[` or `(` **at end of input is VALID** (CSS closes a
 so `[align="center"` and `::slotted(foo` are in WPT's *valid* list); **escapes are identifier
 characters** (`.foo\:bar` is one class name); and `:nth-child()`'s argument is **An+B, not a selector
 list** — recursing into it rejected `:nth-child(3n)`, which is zebra striping across the whole web.
+
+## Three populations, three classes of miss: only the open web writes the shapes nobody would test (t1203)
+
+The selector-syntax validator (t1200) was calibrated against WPT's own list, corrected against a
+second, and **still threw on two valid selectors on a real site**:
+
+```text
+   www.unoeste.br   'G\:TEST'
+   www.unoeste.br   'a[href*=\#]:not([href=\#]):not(.scroll-ignore):not([data-tab])…'
+```
+
+Both are escapes, and both are valid: `G\:TEST` is a **type selector whose name contains an escaped
+colon** (VML-era markup, still shipping), and `a[href*=\#]` is the anchor-link idiom every
+smooth-scroll and tab script is written with. t1200 taught escape handling to `#`, `.` and pseudo
+names — and not to the type selector or the unquoted attribute value. **A partial fix, in the one
+direction that throws.**
+
+### The escalation, and it is the transferable part
+
+```text
+   WPT's 34 invalid + 207 valid   → perfect score, blind to CSS comments INSIDE a selector
+   css/selectors' observed 112    → caught comments, forgiving :is(), hex-escape flags
+   200 REAL SITES                 → caught escapes in the TYPE SELECTOR and the ATTRIBUTE VALUE
+```
+
+Each population caught what the previous ones structurally could not. *"One corpus is not a corpus"*
+needed a third clause:
+
+> **A spec corpus and a test corpus are both written by people who know the grammar. Only the OPEN
+> WEB writes the shapes nobody would think to test.**
+
+All three populations are now committed as `selector_syntax.rs`'s own unit test. RED-proven by
+reverting the type-selector scan to a bare `is_ident_char` loop, which the gate reports in its own
+words: `⚠ THE DANGEROUS DIRECTION … ["G\\:TEST"]`.
+
+⚠ **The instrument was cheap and the bias held:** 3 rejections across 200 real sites, and no other
+page lost a selector.

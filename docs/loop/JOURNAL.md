@@ -46371,6 +46371,116 @@ PERF: none — one UA rule and one narrowed branch in a cascade that already ran
 WIKI: `docs/wiki/css-cascade.md` — where Chrome draws the form-control `box-sizing` line, and why a
 layout-crate test cannot see it.
 
+## Tick 1203 — the sweep caught a FALSE THROW three anchor sites could not (2026-08-13)
+
+TICK SHAPE: measurement — the two cadence instruments that came due together (surface audit #60,
+due every 10 ticks; the CrUX sweep constitution check #114's STEER #4 declared owed) — **plus the
+one-line fix the sweep's own log demanded.** Neither instrument touches the engine, which is why
+they ran together; the fix is here rather than deferred because it is a regression this window
+introduced and the ratchet does not carry those forward.
+
+⚠⚠⚠ **THE FINDING: t1200's selector validator THREW ON TWO VALID SELECTORS ON A REAL SITE, and the
+three-anchor control I ran at t1200 could not see it.**
+
+```text
+   www.unoeste.br   'G\:TEST'  is not a valid selector
+   www.unoeste.br   'a[href*=\#]:not([href=\#]):not(.scroll-ignore):not([data-tab])…'
+```
+
+Both are **escapes**, and both are valid: `G\:TEST` is a type selector whose *name* contains an
+escaped colon (VML-era markup, still shipping), and `a[href*=\#]` is the anchor-link idiom every
+smooth-scroll and tab script on the web is written with. t1200 taught escape handling to `#`, `.`
+and pseudo names — and **not** to the type selector or the unquoted attribute value. A partial fix,
+in the one direction this validator's own doc comment calls dangerous: *a false invalid throws inside
+a real page's script; a false valid returns the empty list the page already had.*
+
+**THIRD POPULATION, THIRD CLASS OF MISS, and that is now a pattern rather than an anecdote:**
+
+```text
+   WPT's 34 invalid + 207 valid      → perfect score, and blind to CSS comments in a selector
+   css/selectors' observed 112       → caught comments, forgiving :is(), hex-escape flags
+   200 REAL SITES (this sweep)       → caught escapes in the TYPE SELECTOR and the ATTRIBUTE VALUE
+```
+
+Each population caught what the previous two structurally could not. **The rule check #114 wrote as
+*"one corpus is not a corpus"* needed a third clause: a spec corpus and a test corpus are both
+written by people who know the grammar, and only the OPEN WEB writes the shapes nobody would think
+to test.** Both corpus-found selectors are now committed into `selector_syntax.rs`'s own unit test
+alongside the other two populations; RED-proven by reverting the type-selector scan, which reports
+`⚠ THE DANGEROUS DIRECTION … ["G\\:TEST"]` in the gate's own words.
+
+⚠ **AND THE INSTRUMENT DID ITS JOB CHEAPLY: 3 rejections across 200 sites.** The validator's
+fail-open bias held everywhere else — no other real page lost a selector.
+
+### THE SWEEP — banked, and both halves published
+
+`docs/loop/SWEEP-t1203-rows.tsv`, 200 sites, `--jobs 2`, against `SWEEP-t1194-rows.tsv`:
+
+```text
+                                    t1194     t1203
+   M1 conjunction (the RENDER bar)   20.1%    20.0%   (26/130)   flat
+   scorability                       73.1%    74.6%              ▲ +1.5
+   shape-only                        29.1%    30.0%              ▲
+   jarring-clean                     28.4%    29.2%              ▲
+   mean over SCORED sites            0.5731   0.5646             ▼
+   CORPUS fidelity (the gauge)       0.4192   0.4213             ▲ +0.002
+   common-set Δshape (n=91)          +0.0039  −0.0147            ▼▼  5 up / 10 down
+```
+
+**Read honestly: the gates and the gauge are flat-to-up, and the drift-robust common-set delta is
+NEGATIVE.** Those are not reconcilable into one story and I am not going to force them into one. The
+common-set band is the reading designed to survive corpus churn, and it says the sites scored in both
+sweeps got very slightly worse on average; the binary gates say one more site crossed. Per
+`PART VI`'s own rule — *a `--jobs 2` row is bankable for the DENOMINATOR and is not evidence about
+any single site* — **−0.0147 across 91 sites with 5 up and 10 down is inside the churn band this
+loop has documented and is NOT attributable to any of the five capability ticks in this window,
+because no same-hour old-binary control was run.** Saying which of those it is would need the
+control, and this tick did not run one. It is recorded as an open question, not as a verdict.
+
+⚠ The one thing this window's ticks COULD have caused is the false-throw class above, and that was
+found, priced (3 rejections / 200 sites) and fixed in this same tick rather than carried.
+
+### SURFACE AUDIT #60 — the map is clean and the reconciler was not, again
+
+Asked: *for every `gated` row in `CONSTELLATION.tsv`, does the gate it names EXIST?* First answer:
+**seven phantoms.** True answer: **zero.** A 100% false-positive rate, in two ways:
+
+- **3 of 7 were the reconciler's aperture** — `G_AUDIO_RATE`/`G_MSE_JOIN` are inline `#[test]`
+  modules in `shell/src/*.rs`, `G_HANG` lives in the harness. *A gate is not a file location.*
+- ⚠⚠⚠ **6 of 7 were a genuine defect in the tree: A GATE HAS TWO NAMES.** Six gate files declare a
+  name in their first doc line that differs from their own filename (`g_load_document.rs` declares
+  `G_LOAD`; `g_xhr_eventtarget_stream.rs` declares `G_XHR_EVENTTARGET`; four more). The map cites the
+  **filename** dialect; any reconciler that reads the **declared** dialect calls the citation a
+  phantom. Each instrument is blind to exactly the gates the other can see — and the row it hit
+  hardest is the FIRST capability in the file, *"HTML parsing (incl. malformed)"*, whose
+  what-breaks-without-it is *"every page"*.
+
+This is audit #36's finding with a different pair of dialects (that one was CASE), so the general
+form is now stated: **a cross-reference between two artefacts needs ONE canonical spelling; derive it
+independently on each side and the two derivations diverge, each reading the divergence as the
+other's error.** Fixed by making both dialects appear in each file — nothing renamed, because the
+point is that *either* reader validates, not that one wins. Re-reconciled: zero phantoms.
+
+⚠ **And the audit's own index had drifted** — `#57` appeared twice (t1171 and t1193). Renumbered
+with a note rather than silently, because a silently corrected index is what this file exists to
+catch.
+
+SELF-AUDIT note carried from t1202: the one prescribed-but-not-executed item remains the verify wall
+(1012s vs the 300s Tier-0 target). `scripts/` is observer-owned; recorded, not touched.
+
+HARNESS NOTE (observer-owned; recorded, not touched — SECOND OCCURRENCE OF A NAMED CLASS): this
+tick's first wall came back `✗ manuk-shell tests FAILED` on a tree whose only engine change is two
+`scan_ident` calls inside `manuk-css`'s selector validator — a crate `manuk-shell` does not exercise
+on that path at all. Run directly one minute later the same suite is **`75 passed; 0 failed`** (plus
+2). Byte-identical to the t1197 note: a false-RED from the wall's parallel gate stage, with `/home`
+at 94%. No `scripts/` file touched; re-run on the unchanged tree.
+
+PERF: none — two `scan_ident` calls replacing two inline loops, on a path that already scanned the
+same characters.
+
+WIKI: docs/wiki/css-cascade.md — "Three populations, three classes of miss: only the open web writes
+the shapes nobody would think to test"
+
 ## Tick 1202 — the arena-aware style lookup LANDS and moves ZERO, and the +0 is the finding (2026-08-13)
 
 TICK SHAPE: capability — constitution check #114's steer #1. The capability lands, is gated and

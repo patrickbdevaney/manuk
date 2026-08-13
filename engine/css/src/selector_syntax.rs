@@ -406,9 +406,12 @@ fn compound_is_bad(text: &str) -> bool {
     if i < b.len() && b[i] == '*' {
         i += 1;
     } else if i < b.len() && is_ident_start(b[i]) {
-        while i < b.len() && is_ident_char(b[i]) {
-            i += 1;
-        }
+        // ⚠ `scan_ident`, NOT a bare `is_ident_char` loop. `G\:TEST` is a TYPE selector whose name
+        // contains an escaped colon — real markup, found on `www.unoeste.br` by the t1203 corpus
+        // sweep — and a scan that stops at the backslash reads `:TEST` as an unknown pseudo-class
+        // and throws inside the page's own script. t1200 taught escapes to `#`, `.` and pseudo names
+        // and NOT to this one; a partial fix in the direction that THROWS is the dangerous one.
+        i = scan_ident(&b, i);
     }
 
     let mut parts = 0usize;
@@ -566,12 +569,14 @@ fn attr_is_bad(inner: &str) -> bool {
         let s = i;
         // An unquoted value is an IDENT. `[class= space unquoted ]` fails here — not on the first
         // word, which parses fine, but on the second, which has nowhere to go.
+        //
+        // ⚠ And it is an ident WITH ESCAPES: `a[href*=\#]` is the anchor-link idiom every
+        // smooth-scroll and tab script on the web is written with, and it was found throwing on
+        // `www.unoeste.br` by the t1203 corpus sweep. Same omission as the type selector above.
         if !is_ident_start(b[i]) && !b[i].is_ascii_digit() {
             return true;
         }
-        while i < b.len() && is_ident_char(b[i]) {
-            i += 1;
-        }
+        i = scan_ident(&b, i);
         if i == s {
             return true;
         }
@@ -751,6 +756,13 @@ mod wpt_corpus {
     /// refuses — because `attribute-selectors` writes `/* … */` comments inside the selector under
     /// test and `:is()` is a FORGIVING list. Neither is visible in the first corpus.
     const VALID: &[&str] = &[
+        // ⚠⚠⚠ **FOUND THROWING ON REAL SITES BY THE t1203 CORPUS SWEEP, and neither corpus above
+        // contains their shape.** A type selector whose name carries an escaped colon, and the
+        // anchor-link attribute idiom with an escaped `#`. Both are ESCAPE handling that t1200 taught
+        // to `#`/`.`/pseudo names and not to the type selector or the unquoted attribute value — a
+        // partial fix in the direction that THROWS. THIRD population, third class of miss.
+        "G\\:TEST",
+        "a[href*=\\#]:not([href=\\#]):not(.scroll-ignore):not([data-tab]):not([data-toggle])",
         "html",
         "html",
         "body",

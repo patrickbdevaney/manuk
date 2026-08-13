@@ -5936,7 +5936,87 @@ numbers that are three thousand subtests stale — `css/css-values` is listed at
 
 ---
 
-## Audit #57 — tick 1193 (2026-08-12): the frame is right, and the map contradicted ITSELF
+## Audit #60 — tick 1203 (2026-08-13): a gate has TWO names, and each instrument was blind to exactly the gates the other could see
+
+**Method, and it is deliberately the INTERNAL half.** The external half (Interop 2026 against
+`CONSTELLATION.tsv`) was run at audit #59 eleven ticks ago and came back *"nothing missing"* — all 20
+focus areas and all 4 investigations already carry a row. Re-reading the same list would have been
+theatre. So this audit turns the instrument on the thing audit #58 already caught once: **the
+reconciler**, not the map.
+
+The question asked: *for every row in `CONSTELLATION.tsv` whose status is `gated`, does the gate it
+names EXIST?*
+
+### THE FIRST ANSWER WAS SEVEN PHANTOMS. THE TRUE ANSWER IS ZERO.
+
+```text
+   G_AUDIO_RATE  G_CAP_TOUCH_PROBE  G_HANG  G_LOAD_BUDGET
+   G_LOAD_DOCUMENT  G_MSE_JOIN  G_XHR_EVENTTARGET_STREAM
+```
+
+Every one is a real, existing, passing gate. **The instrument was wrong seven times out of seven**,
+in two distinct ways, and that 100% false-positive rate is this audit's actual product — *grep the
+artefact, infer the engine* producing a wrong number for the fourth time in this file.
+
+**Failure 1 — the reconciler's own aperture (3 of 7).** `G_AUDIO_RATE` and `G_MSE_JOIN` are inline
+`#[test]` modules in `shell/src/audio.rs` and `shell/src/media.rs`; `G_HANG` lives in
+`tests/wpt/src/main.rs` and `scripts/oracle-crawl.sh`. A reconciler that reads only `*/tests/*.rs`
+cannot see a gate that lives in a `src` file or in the harness. **A gate is not a file location.**
+
+⚠⚠⚠ **Failure 2 — and it is a genuine defect in the tree, not in the instrument: A GATE HAS TWO
+NAMES (6 of 7, overlapping).**
+
+| gate file | the FILENAME says | the file's own first line says |
+|---|---|---|
+| `g_computed_style_pseudo_element.rs` | `G_COMPUTED_STYLE_PSEUDO_ELEMENT` | `G_COMPUTED_PSEUDO` |
+| `g_load_budget.rs` | `G_LOAD_BUDGET` | `G_LOAD` |
+| `g_load_document.rs` | `G_LOAD_DOCUMENT` | `G_LOAD` |
+| `g_webfont_relayout_external.rs` | `G_WEBFONT_RELAYOUT_EXTERNAL` | `G_WEBFONT_RELAYOUT` |
+| `g_xhr_eventtarget_stream.rs` | `G_XHR_EVENTTARGET_STREAM` | `G_XHR_EVENTTARGET` |
+| `g_bidi_base_direction.rs` | `G_BIDI_BASE_DIRECTION` | `G_BIDI_BASE` |
+
+`CONSTELLATION.tsv` cites the **filename** dialect. Any reconciler that reads a file's declared name
+— which is the natural thing to read, since that is where the gate documents itself — sees the
+**other** dialect and reports the citation as a phantom. The two instruments are each blind to
+exactly the gates the other can see, and a shipped, passing, load-bearing gate (`G_LOAD_DOCUMENT`
+backs *"HTML parsing (incl. malformed)"*, the first capability row in the file, whose
+what-breaks-without-it is literally *"every page"*) reads as unmeasured.
+
+**This is audit #36's finding recurring with a different pair of dialects.** That one was CASE — a
+lowercase `g_foo` citation was validated by nothing, because `map-reconcile.sh` matched
+`G_[A-Z0-9_]+` while the gate-directory diff compared uppercase. Two citation dialects then; two
+citation dialects now, and nobody had asked whether there were more. The general form is worth
+stating once:
+
+> **A cross-reference between two artefacts needs ONE canonical spelling, and if the spelling is
+> derived independently on each side, the two derivations will diverge and each side will read the
+> divergence as the other side's error.**
+
+### FIXED — both dialects now appear in the file
+
+Six one-line edits: each file's doc comment now states its **filename-derived** name alongside the
+one it already declared, with the reason. Nothing is renamed — a rename would break whatever selects
+these tests by name, and the point is not to pick a winner but to make **either reader validate the
+citation**. Re-run of the reconciliation after the edits and after widening its aperture to the whole
+tree: **zero phantoms.**
+
+### AND THE AUDIT'S OWN INDEX HAD DRIFTED
+
+`#57` appeared **twice** — tick 1171 and tick 1193. The instrument that audits the map had lost count
+of itself. The tick-1193 entry is renumbered to `#59` here, with a note rather than a silent fix,
+because a silently corrected index is exactly the kind of thing this file exists to catch.
+
+### What this audit did NOT find
+
+No missing capability, no contradicted row, no wrong frame. **The map is clean and the instrument
+was not** — the same verdict as audit #58, from a different direction, which is itself the finding:
+two consecutive audits have now caught the reconciler rather than the map. The next audit should
+start by assuming the reconciler is wrong.
+
+## Audit #59 — tick 1193 (2026-08-12): the frame is right, and the map contradicted ITSELF
+
+*(Renumbered at tick 1203. It was filed as `#57`, which audit #57 at tick 1171 already was — the
+instrument that audits the map had drifted in its own index. Noted rather than silently fixed.)*
 
 **Sources read (external, not memory):**
 
