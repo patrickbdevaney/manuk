@@ -3033,3 +3033,63 @@ must complete and land its DOM write — then proves the cut as a **counterfactu
 with `MANUK_MAX_DRAIN_MS=0` runs to completion), then proves the page survives it. RED-proven by
 severing exactly one line: the watchdog's `JS_RequestInterruptCallback` call, which restores the
 t1197 inert state and fails with that state named in the message.
+
+### THERE ARE THREE HOST→JS ENTRY POINTS, AND ONLY DRAINS WERE ARMED (t1228)
+
+Arming a deadline is a statement about **where** script can start, and t1198 armed it in the two
+places script *continues*: `event_loop::run_deferred` and `event_loop::run_with_fetcher`. Neither is
+where script **begins**. The host enters JS from three distinct places, and a spin in any of them is
+the same frozen tab:
+
+| # | Entry point | What runs there | Armed |
+|---|---|---|---|
+| 1 | `event_loop::run_deferred` / `run_with_fetcher` | timers, microtasks, fetch settlement | ✅ t1198 |
+| 2 | `PageContext::eval` (`dom_bindings.rs`) | **`Page::fire_lifecycle`** → every `DOMContentLoaded` and `load` handler; and every runtime-fetched `<script>` | ✅ **t1228** |
+| 3 | `run_one_script` (`dom_bindings.rs`) | inline / blocking `<script>` at parse time | ❌ **still open** |
+
+⚠⚠⚠ **#2 is the one the corpus lands in.** `fire_lifecycle` builds a `ReflowScope` and calls
+`eval_for_test` → `PageContext::eval` → `evaluate_script`, which is the **first** statement of that
+function: the drain that would have bounded it does not exist yet. t1226 named SCORABILITY (74.2%) as
+the binding cap on M1 and `timeout-150s` (13 sites) as its largest engine-owned bucket; t1227 reduced
+one of them (`payb.jp`) on our own clock and found it completes thirteen seconds of load phases and
+then burns 97% of a core inside that call. **A site that times out scores zero**, so this is the M1
+*cap*, not the fill — and `window.addEventListener('load', …)` is where a very large fraction of the
+web does its initialisation.
+
+The guard is scoped to the synchronous script **and dropped before the drain**, so the drain still
+arms its own budget as it always has: one budget per script, one per drain — the rule the two
+existing sites already followed. Widening one guard across both would silently halve the grace a
+legitimately slow handler has, which is the *"fast because we never ran the script"* trap wearing a
+bug fix's clothes.
+
+**The half that made this not a one-liner, and it had to be measured rather than reasoned about:**
+terminating a script leaves SpiderMonkey in an uncatchable-error state, so cutting the
+`DOMContentLoaded` round could plausibly poison the context for the `load` round that follows it — a
+cut that silently ended all further script would trade a hang for a **dead page**. It does not: a
+`load` listener registered before the spin still fires after the cut. `G_LIFECYCLE_PREEMPTION`'s
+fourth arm asserts exactly that, alongside the intact static DOM and the pre-handler writes.
+
+RED-proven by deleting the `ScriptDeadline::arm` line: **6.037s bounded vs 6.043s unbounded**, the
+handler completing in both — which is what the sweep was recording as a 150s timeout.
+
+**The real site, with the old-binary control and a same-binary counterfactual** (`payb.jp`, the site
+t1227 ranked the lever on, through `boxes --fetch` — our render alone, no Chromium in the picture):
+
+| binary | budget | wall | our CPU | boxes | last phase logged |
+|---|---|---|---|---|---|
+| HEAD, rebuilt the same hour | 5000 | 3m20s **KILLED** | user 3m08s | 0 | `deferred scripts ms=5072` |
+| this tick | 0 | 3m20s **KILLED** | user 3m08s | 0 | `deferred scripts ms=5108` |
+| this tick | 5000 | **49.8s** / 55.4s | user **0m23s** | 3 | `DOMContentLoaded ms=6075` |
+
+Row 1 is the standing old-binary rule (t799): a clean reading attributes nothing until the old tree,
+rebuilt in the same hour, has refused to reproduce it — it reproduced t1227's signature exactly. Row 2
+is the *same* binary with the clock disabled, which is what says the clock and not the rebuild is
+doing the work. `user` 3m08s → 0m23s is the half no network variance can explain.
+
+⚠⚠ **AND THE CUT IS SILENT — a named, unfixed residue.** Row 3's phase completes where row 2 never
+returns, so something was terminated at ~5s, yet neither `PageContext::eval`'s preemption warn nor
+`run_deferred`'s `preempted` warn appears anywhere in the log. The suspect is `run_deferred`'s closing
+`microtask_checkpoint(rt, global)?` — the one step in that function **not** wrapped in
+`preempt_aware`, so its `Err` propagates out of `run_deferred`, out of `PageContext::eval`, and lands
+in `Page::eval_for_test`'s `let _ = manuk_js::eval_in_page(…)` discard. A preemption nobody logs is
+the `G_SILENT_FAIL` shape. The cut above is attributed by the 2×2, **not** by a log line.

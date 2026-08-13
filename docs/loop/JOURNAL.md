@@ -46371,6 +46371,87 @@ PERF: none — one UA rule and one narrowed branch in a cascade that already ran
 WIKI: `docs/wiki/css-cascade.md` — where Chrome draws the form-control `box-sizing` line, and why a
 layout-crate test cannot see it.
 
+## Tick 1228 — the lifecycle was the unguarded entry point, and now it is armed (2026-08-13)
+
+TICK SHAPE: capability — the fix t1227 specified, refused-to-start and left for a fresh session,
+built with the fixture, the gate and the RED proof it said the job needed.
+
+HYPOTHESIS: `Page::fire_lifecycle` routes into `PageContext::eval`, whose `evaluate_script` is the
+host's synchronous re-entry into page script and the FIRST thing it does — before any drain exists
+to bound it. t1198 armed `ScriptDeadline` in exactly two places, both of them drains
+(`event_loop::run_deferred`, `event_loop::run_with_fetcher`). So every `DOMContentLoaded` and every
+`load` handler on the web ran **unpreemptible**, and a handler that does not return owns the process.
+Arm the same budget around that one `evaluate_script`, scoped to the synchronous script and dropped
+before the drain, so the drain still arms its own budget exactly as it always has.
+
+MEASURED — the gate, `G_LIFECYCLE_PREEMPTION`, four arms, promise before cut:
+
+```text
+  ARM 1  300ms handler, 5000ms budget      DCL-COMPLETED           <- not touched (the promise)
+  ARM 2  6000ms handler, budget DISABLED   DCL-COMPLETED  6.035s   <- the spin is real
+  ARM 3  6000ms handler, 500ms budget      DCL-DID-NOT-COMPLETE    <- cut at 0.539s
+  ARM 4  after the cut: #sink intact, INLINE-RAN kept, LOAD-FIRED
+```
+
+RED-PROVEN by deleting the `ScriptDeadline::arm` line and re-running: **6.037s bounded vs 6.043s
+unbounded**, `DCL-COMPLETED`. That is HEAD, and it is what the fidelity sweep has been recording as a
+150s timeout.
+
+⚠⚠⚠ **ARM 4 IS THE HALF t1227 REFUSED TO BANK BLIND, AND IT PASSES.** Terminating a script leaves
+SpiderMonkey in an uncatchable-error state, so the open question was whether cutting the
+`DOMContentLoaded` round poisons the context for the `load` round that follows it — a cut that
+silently ended all further script would trade a hang for a **dead page**, which the ratchet refuses.
+It does not: the `load` listener registered before the spin still fires after the cut. Asserted, not
+assumed.
+
+⚠⚠⚠ **AND THE REAL SITE THE LEVER WAS RANKED ON NOW RENDERS — WITH THE OLD-BINARY CONTROL, SAME
+HOUR, AND A SAME-BINARY COUNTERFACTUAL.** t1226 named SCORABILITY (74.2%) as the binding cap on M1 and
+`timeout-150s` (13 sites) as its largest engine-owned bucket; `payb.jp` is the one t1227 reduced.
+A gate proves a mechanism; only this says the mechanism was the site's:
+
+```text
+                                            wall      our CPU    boxes   last phase logged
+  HEAD, rebuilt 17:45, budget 5000    3m20s KILLED   user 3m08s      0   "deferred scripts ms=5072"
+  THIS TICK,           budget 0       3m20s KILLED   user 3m08s      0   "deferred scripts ms=5108"
+  THIS TICK,           budget 5000        49.8s      user 0m23s      3   "DOMContentLoaded ms=6075"
+                                          55.4s      user 0m23s      3    (re-run, second reading)
+```
+
+Row 1 is the OLD-BINARY CONTROL (the standing rule since t799: a clean reading attributes nothing
+until the old tree, rebuilt in the same hour, has refused to reproduce it — it reproduced t1227's
+signature exactly, including stopping dead after the `deferred scripts` marker). Row 2 is the SAME
+BINARY with the clock bound disabled, which is what says the clock and not the rebuild is doing the
+work. **`user` time 3m08s → 0m23s** is the half no network variance can explain.
+
+⚠⚠ **THE CUT IS REAL AND IT IS SILENT, AND THAT IS THIS TICK'S RESIDUE.** Row 3's `DOMContentLoaded`
+phase COMPLETES in 6075ms where row 2 never returns, so something was terminated at ~5s — but neither
+this function's new warn nor `run_deferred`'s `preempted` warn appears anywhere in the log. The
+suspect is `run_deferred`'s closing `microtask_checkpoint(rt, global)?`, which is the one step in that
+function NOT wrapped in `preempt_aware`: its `Err` propagates out of `run_deferred`, out of
+`PageContext::eval`, and lands in `Page::eval_for_test`'s `let _ = manuk_js::eval_in_page(…)` — a
+discard. A preemption nobody logs is the `G_SILENT_FAIL` shape and it is NOT fixed here; it is named,
+with a file:line hypothesis, for its own tick. **The cut is attributed by the 2×2 above, not by a log
+line, and this write-up does not claim otherwise.**
+
+⚠ **RESIDUE, NAMED SO THE NEXT TICK DOES NOT INHERIT IT AS DONE.** (1) `run_one_script`
+(`engine/js/src/dom_bindings.rs`) — the one place an inline/blocking `<script>` runs — is still
+unarmed; that is t1198's own recorded residue and it is now the LAST unguarded entry point of the
+three. It is deliberately not swept in here: it changes the load path of every page in the corpus and
+deserves its own RED proof and its own A/B. (2) Whether the other 12 timeout sites share this
+mechanism is still unmeasured — only `payb.jp` was ever reduced. (3) The silent cut above.
+
+⚠ HARNESS, one line and no more (PART VII — the observer owns `scripts/`): the hygiene cron wiped
+`target/debug` **mid-build** (117G → 308K, `/home` 94% → 53%), and the prewarm died with `failed to
+write .fingerprint/… (os error 2)` — the build deleting its own inputs, the known no-build-active-guard
+race. Cost one full debug rebuild; worked around by re-running, nothing in `scripts/` touched.
+
+PERF: strictly negative-cost by construction — the guard is one atomic store, one mutex-guarded
+pointer publish and a `OnceLock` thread spawn that already happens on every drain. Nothing that
+finished before finishes later; ARM 1 asserts that directly.
+
+WIKI: `docs/wiki/js-engine.md` — the three host→JS entry points, and which of them the watchdog can
+reach.
+
 ## Tick 1227 — the timeout bucket is ONE unguarded entry point, named (2026-08-13)
 
 TICK SHAPE: measurement — a diagnosis of the lever t1226's sweep named as binding, carried to a

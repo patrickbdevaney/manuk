@@ -104,7 +104,7 @@ pub fn clear_convergence_state() {
 /// **Set with the measured distribution in hand, not by taste** — see the constant's value and the
 /// gate `G_DRAIN_BUDGET`. `MANUK_MAX_DRAIN_MS` overrides; `0` disables the clock bound entirely,
 /// which is what lets the gate show that this bound and not the count is what changes the outcome.
-fn max_drain_ms() -> u128 {
+pub(crate) fn max_drain_ms() -> u128 {
     std::env::var("MANUK_MAX_DRAIN_MS")
         .ok()
         .and_then(|v| v.parse().ok())

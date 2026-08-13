@@ -12230,8 +12230,45 @@ impl PageContext {
         publish_named_globals(runtime, global.handle());
         rooted!(&in(runtime.cx()) let mut rval = UndefinedValue());
         let opts = CompileOptionsWrapper::new(runtime.cx_no_gc(), c"dynamic.js".to_owned(), 1);
-        if evaluate_script(runtime.cx(), global.handle(), src, rval.handle_mut(), opts).is_err() {
-            tracing::warn!(error = %pending_exception(raw_cx), "a dynamically loaded <script> threw");
+        // ⚠⚠⚠ **THE THIRD SCRIPT ENTRY POINT, AND IT WAS THE UNGUARDED ONE** (tick 1228).
+        //
+        // `ScriptDeadline` — the watchdog thread without which `JS_AddInterruptCallback` is inert
+        // (t1197's measured negative) — was armed by t1198 in exactly two places, both of them
+        // *drains*: [`crate::event_loop::run_deferred`] and [`crate::event_loop::run_with_fetcher`].
+        // This function is neither. It is the host's synchronous re-entry into page script, and the
+        // `evaluate_script` below is the FIRST thing it does, before any drain exists to bound it.
+        //
+        // **`Page::fire_lifecycle` routes through here**, so every `DOMContentLoaded` and every
+        // `load` handler on the web ran unpreemptible, and a handler that did not return owned the
+        // process. t1227 reduced the fidelity sweep's largest engine-owned unscored bucket
+        // (`timeout-150s`, 13 sites) to exactly this: `payb.jp` completes thirteen seconds of load
+        // phases, calls `fire_lifecycle("DOMContentLoaded")`, and burns 97% of a core until the
+        // sweep's own timeout kills it. A site that times out scores ZERO, so this is the M1 **cap**,
+        // not the fill.
+        //
+        // The guard is scoped to the synchronous script alone and dropped before the drain, so the
+        // drain still arms its OWN budget exactly as it always has — one budget per script, one per
+        // drain, which is the rule both existing arm sites already follow. Widening it to span both
+        // would silently halve the grace a legitimately slow handler has, and that is the
+        // "fast because we never ran the script" trap wearing a bug fix's clothes.
+        {
+            let budget = crate::event_loop::max_drain_ms();
+            let _deadline = crate::watchdog::ScriptDeadline::arm(raw_cx, budget);
+            if evaluate_script(runtime.cx(), global.handle(), src, rval.handle_mut(), opts).is_err()
+            {
+                if crate::watchdog::fired() {
+                    // Not a page error — we cut it off. Same distinction `preempt_aware` draws in the
+                    // drain, and for the same reason: the two arrive here byte-identically, and
+                    // reporting a deliberate cut as "the page threw" is the silent-failure shape.
+                    tracing::warn!(
+                        budget_ms = budget as u64,
+                        "PREEMPTED a host-driven script that was over budget and not returning \
+                         (a lifecycle or dynamically-loaded script). Painting what we have."
+                    );
+                } else {
+                    tracing::warn!(error = %pending_exception(raw_cx), "a dynamically loaded <script> threw");
+                }
+            }
         }
         crate::event_loop::run_deferred(runtime, global.handle())?;
         Ok(())
