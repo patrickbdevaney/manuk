@@ -46371,6 +46371,69 @@ PERF: none — one UA rule and one narrowed branch in a cascade that already ran
 WIKI: `docs/wiki/css-cascade.md` — where Chrome draws the form-control `box-sizing` line, and why a
 layout-crate test cannot see it.
 
+## Tick 1196 — the 150s timeout is FOUR budget overruns, and the budget cannot preempt JS (2026-08-13)
+
+TICK SHAPE: measurement — the instrument tick t1195's own steer called for. It names the mechanism
+behind the largest engine-owned bucket in the exit metric, and verifies that the fix exists.
+
+**WHY THIS AND NOT A CAPABILITY TICK:** t1195's sweep re-derived the binding constraint as
+**scorability, not shape** — 36 of 134 in-scope sites produce no score, and `timeout-150s` (15) is
+the largest engine-owned bucket in that set. A diagnosis that costs more than a tick makes the next
+tick the INSTRUMENT (board's standing rule), so this measures rather than guesses.
+
+⚠⚠⚠ **THE MEASUREMENT (`7info.ru`, confirmed to time out SOLO — not a driver artefact).** Full
+fidelity run, `RUST_LOG` on, wall-clocked:
+
+```text
+  event loop hit its TIME budget   count=1     elapsed_ms=20929   budget_ms=5000
+  event loop hit its TIME budget   count=101   elapsed_ms=12794   budget_ms=5000
+  event loop hit its TIME budget   count=60    elapsed_ms= 7479   budget_ms=5000
+  load budget of 12.0s exhausted mid-phase — painting now
+  event loop hit its TIME budget   count=56    elapsed_ms= 8146   budget_ms=5000
+  UNMEASURABLE [timeout-150s]
+  TOTAL 151.27s
+```
+
+Two compounding facts, and neither is where I would have looked first (fetch is **4.5s**, images
+**0.19s** — the network is not the problem):
+
+1. ⚠⚠⚠ **A SINGLE TASK RAN 20,929ms AGAINST A 5,000ms BUDGET.** `count=1` — *one* task. The budget
+   is not being violated by a runaway chain; it is being violated by one function call. This is
+   **documented, deliberate behaviour**, and the comment in `event_loop.rs:7470` says so exactly:
+   *"Checked only on the task boundary, so a single long-running task is not interrupted mid-flight
+   — this bounds a runaway CHAIN … and never preempts JS."* The ceiling was designed against
+   `setInterval(fn, 0)`, and the sites timing out are not doing that.
+2. **The drain is RE-ENTERED, and each entry pays its own overshoot** — four separate overruns
+   totalling ~49s, each 1.5–4× over budget. The 12s page-level load budget fires in the middle and
+   does not stop it either.
+
+**`TOTAL 151.27s` against a 150s bar. It MISSES BY 1.3 SECONDS** — which is the most actionable part
+of the reading: these are not hopeless pages, they are pages a bounded improvement flips from
+*unscored* to *scored*, and the gauge counts an unscored site as **0**.
+
+✅ **THE FIX EXISTS AND IS REACHABLE — verified, not assumed.** `JS_AddInterruptCallback` is present
+in our mozjs 0.18 (`mozjs-0.18.0/src/jsapi2_wrappers.in.rs`), and the tree currently calls **no
+interrupt API at all** (`grep` for `AddInterruptCallback`/`RequestInterruptCallback` across
+`engine/js/` returns nothing). So real preemption is a wiring job against an API we already have,
+not a SpiderMonkey upgrade.
+
+⚠ **AND IT IS A TRADE THE NEXT TICK MUST MEASURE, NOT ASSUME.** Interrupting at 5s converts a
+timeout into a *scored but less complete* page: scorability up, per-site shape possibly down. The
+gauge is `quality × scorability` and an unscored site scores 0, so the arithmetic favours it — but
+"favours it" is a prediction, and the rule is to write the prediction down BEFORE the sweep and then
+publish both halves. **Prediction, recorded now: scorability rises by roughly the timeout bucket
+(≤ +11pt), mean-over-scored falls, and corpus fidelity rises net.** If mean-over-scored falls far
+enough to cancel it, the interrupt budget is too tight and is a tunable, not a failure.
+
+⚠ Bar-0 relevance, stated because it outranks the fidelity argument: a page holding the thread for
+**20.9 seconds with no way to interrupt it** is the shape `G_RUNAWAY` exists to forbid, and the
+existing ceiling provably does not cover it — it counts tasks, and this is one task.
+
+PERF: none — measurement only. (The subject IS perf; nothing was changed.)
+
+WIKI: none — the artefact is this entry's measurement; it becomes a wiki page when the fix lands and
+there is a mechanism to describe rather than a reading. [no-pattern]
+
 ## Tick 1195 — the CrUX sweep the last two constitution checks asked for, and it disagrees with itself (2026-08-13)
 
 TICK SHAPE: measurement — the exit-metric sweep check #114 declared non-optional after check #113
