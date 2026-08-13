@@ -2954,6 +2954,71 @@ fn cascade_one_element(
 /// exists*, because JS only runs inside a page — which is why `G_CSS_SUPPORTS` asserts the
 /// agreement from inside a real `Page::load`, and why the unit tests below stay off pref-gated
 /// properties rather than pinning a configuration the browser never runs in.
+/// ⚠⚠⚠ **`el.style.backgroundPosition` MUST BE THE *SERIALIZED* VALUE, AND WE ECHOED THE AUTHOR'S
+/// TEXT.**
+///
+/// CSSOM's `getPropertyValue` returns *"the result of serializing the declaration's value"* — a
+/// normal form, not the bytes the author typed. `el.style` is built over the `style` **attribute**,
+/// so `style="background-position: 5% .5%"` read back as `"5% .5%"` where every browser says
+/// `"5% 0.5%"`. Measured, on WPT's own `serialize-values.html`:
+///
+/// ```text
+///                                   Chrome                        ours (before)
+///   background-position: 5% .5%     "5% 0.5%"                     "5% .5%"
+///   background-position: 5% -0px    "5% 0px"                      "5% -0px"
+///   background-image: url(http://…) "url(\"http://…\")"           "url(http://…)"
+/// ```
+///
+/// **Why this is a Stylo call and not a regex.** t1220 sized this family at 164 subtests and refused
+/// the obvious fix in advance: *"a targeted 'prepend 0 to a leading dot' fix would pass all 164 and
+/// be a band-aid — `el.style` does not SERIALIZE values at all, it ECHOES them, and every other
+/// CSSOM normalisation (unit case, colour form, shorthand ordering) is silently wrong the same
+/// way."* That refusal is honoured here: the value is round-tripped through **Stylo's own parser and
+/// its own serializer**, so the normal form is whatever the cascade would agree it is, for every
+/// property at once — the leading zero, the quoted URL and the negative zero all fall out of it, and
+/// so do the normalisations nobody has thought to test yet.
+///
+/// It is the same discipline `supports_condition` above is built on, and for the same reason: three
+/// surfaces that answer questions about one declaration (`@supports`, `CSS.supports()`, `el.style`)
+/// must share **one** evaluator, or they drift apart depending on which one a page asks first.
+///
+/// **Returns `None` when the declaration does not parse**, which the caller must treat as *"leave it
+/// alone"* rather than *"it is empty"* — a custom property (`--x`) has no grammar to normalise
+/// against, and an invalid declaration is not this function's to delete.
+pub fn serialize_declaration(property: &str, value: &str) -> Option<String> {
+    // A `{`/`}` would close the declaration block; a `;` would start a second declaration and let
+    // the answer come from a property nobody asked about.
+    if property.is_empty() || property.starts_with("--") || value.is_empty() {
+        return None;
+    }
+    if property.contains([':', ';', '{', '}']) || value.contains(['{', '}']) {
+        return None;
+    }
+    // The same pref set `supports_condition` uses, for the same reason: a serializer configured
+    // differently from the parser that cascades would normalise a property the cascade drops.
+    stylo_static_prefs::set_pref!("layout.grid.enabled", true);
+    stylo_static_prefs::set_pref!("layout.container-queries.enabled", true);
+    stylo_static_prefs::set_pref!("layout.unimplemented", true);
+    stylo_static_prefs::set_pref!("layout.css.contrast-color.enabled", true);
+
+    let url = ::url::Url::parse("about:manuk").ok()?;
+    let url_data = UrlExtraData(ServoArc::new(url));
+    let block = parse_style_attribute(
+        &format!("{property}:{value}"),
+        &url_data,
+        None,
+        QuirksMode::NoQuirks,
+        CssRuleType::Style,
+    );
+    let id = stylo::properties::PropertyId::parse_enabled_for_all_content(property).ok()?;
+    let mut out = String::new();
+    block.property_value_to_css(&id, &mut out).ok()?;
+    // An empty serialization means Stylo did not keep the declaration (an unsupported property, or a
+    // value it declined). Echoing the author's text is the honest answer there — this function
+    // normalises what the engine understands and refuses to invent a normal form for the rest.
+    (!out.is_empty()).then_some(out)
+}
+
 pub fn supports_condition(condition: &str) -> bool {
     // A condition containing a block delimiter could otherwise close the `@supports` block and
     // inject rules, which would make the probe answer a question nobody asked.

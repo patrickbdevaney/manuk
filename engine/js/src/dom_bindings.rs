@@ -403,6 +403,37 @@ pub fn set_supports_hook(f: SupportsFn) {
     SUPPORTS_HOOK.with(|c| c.set(Some(f)));
 }
 
+/// **Serialize one declaration into CSSOM's normal form** — the seam behind `el.style`'s read path.
+///
+/// A hook for exactly the reason [`SupportsFn`] is one: the answer lives in the CSS engine and
+/// `manuk-js` must not grow a dependency on it. Installing Stylo's own serializer keeps `el.style`,
+/// `@supports` and `CSS.supports()` answering from **one** parser — three surfaces asking about one
+/// declaration that must not drift apart.
+pub type SerializeDeclFn = fn(property: &str, value: &str) -> Option<String>;
+
+thread_local! {
+    static SERIALIZE_DECL_HOOK: std::cell::Cell<Option<SerializeDeclFn>> =
+        const { std::cell::Cell::new(None) };
+}
+
+/// Install the CSS declaration serializer.
+pub fn set_serialize_decl_hook(f: SerializeDeclFn) {
+    SERIALIZE_DECL_HOOK.with(|c| c.set(Some(f)));
+}
+
+/// Serialize a declaration, or `None` if there is no engine to ask or it declined.
+///
+/// ⚠ **With no hook installed the answer is `None`, and the caller ECHOES the author's text.** That
+/// is the opposite polarity from [`eval_supports`]'s conservative `false`, and deliberately so:
+/// there, guessing "yes" invents a capability; here, returning an empty string would **delete a
+/// declaration the page set**. The failure mode of echoing is a non-normalised string; the failure
+/// mode of inventing is a lost style.
+pub fn serialize_decl(property: &str, value: &str) -> Option<String> {
+    SERIALIZE_DECL_HOOK
+        .with(|c| c.get())
+        .and_then(|f| f(property, value))
+}
+
 /// **The ENUMERABLE half of the same question** — which property names does the engine support?
 ///
 /// [`SupportsFn`] answers one declaration at a time, and tick 1171 named that as the blocker for
@@ -10429,6 +10460,40 @@ unsafe fn host_css_supports(cx: *mut RawJSContext, argc: u32, vp: *mut Value) ->
     true
 }
 
+/// `__cssSerialize(property, value)` → the CSSOM normal form, or `''` to mean "leave it alone".
+///
+/// The seam behind `el.style`'s read path. It returns the empty string for a declaration the engine
+/// declines rather than a normalised guess, and the JS side treats that as **echo the author's
+/// text** — see `serialize_decl` for why this polarity is the opposite of `__cssSupports`'s.
+unsafe fn host_css_serialize(cx: *mut RawJSContext, argc: u32, vp: *mut Value) -> bool {
+    let prop = arg_string(cx, vp, argc, 0).unwrap_or_default();
+    let val = arg_string(cx, vp, argc, 1).unwrap_or_default();
+    let out = serialize_decl(&prop, &val).unwrap_or_default();
+    let Ok(cs) = std::ffi::CString::new(out) else {
+        *vp = str_empty(cx);
+        return true;
+    };
+    let js = mozjs::jsapi::JS_NewStringCopyZ(cx, cs.as_ptr());
+    *vp = if js.is_null() {
+        str_empty(cx)
+    } else {
+        mozjs::jsval::StringValue(&*js)
+    };
+    true
+}
+
+/// The empty string as a `Value` — the "leave it alone" answer, and the only failure mode this seam
+/// has. It must never be `undefined`: the JS side falls back to the author's text on `''`, and on
+/// `undefined` it would fall back on a value that `String()`s to `"undefined"`.
+unsafe fn str_empty(cx: *mut RawJSContext) -> Value {
+    let js = mozjs::jsapi::JS_NewStringCopyZ(cx, c"".as_ptr());
+    if js.is_null() {
+        UndefinedValue()
+    } else {
+        mozjs::jsval::StringValue(&*js)
+    }
+}
+
 /// `__caches(opJson)` → result JSON — the single native seam behind `caches`.
 ///
 /// Same shape and same reason as `__idb`: one string-in / string-out function, so there is exactly
@@ -11544,6 +11609,14 @@ pub unsafe fn install(
         c"__cssSupports".as_ptr(),
         host_fn!(host_css_supports),
         1,
+        0,
+    );
+    JS_DefineFunction(
+        &mut wrap_cx(cx),
+        global.handle(),
+        c"__cssSerialize".as_ptr(),
+        host_fn!(host_css_serialize),
+        2,
         0,
     );
     JS_DefineFunction(
@@ -14315,6 +14388,39 @@ const CSSOM_PRELUDE: &str = r#"
             vcache[key] = ans;
             return ans;
         };
+        // ── THE READ PATH SERIALIZES (tick 1224) ────────────────────────────────────────────
+        //
+        // `el.style` is built over the style ATTRIBUTE, so every read handed back the author's own
+        // bytes. CSSOM says `getPropertyValue` returns *the result of SERIALIZING the value* — a
+        // normal form — so `style="background-position: 5% .5%"` must read back `"5% 0.5%"`.
+        //
+        // ⚠ **t1220 refused the obvious fix in advance and this honours that refusal**: a "prepend 0
+        // to a leading dot" regex would pass all 164 WPT subtests and be a band-aid, because
+        // `el.style` does not serialize AT ALL — it echoes — and every other normalisation (unit
+        // case, colour form, quoted URLs, `-0px`) is silently wrong the same way. So the value goes
+        // through STYLO'S OWN parser and serializer, which is the same evaluator `@supports` and
+        // `CSS.supports()` use. Three surfaces, one declaration, one answer.
+        //
+        // ⚠ `''` means LEAVE IT ALONE, not "empty" — a custom property has no grammar to normalise
+        // against, and a declaration Stylo declines is not ours to delete. Echoing is the honest
+        // fallback; inventing an empty string would lose a style the page set.
+        //
+        // ⚠ MEMOISED on (property, value) for the same reason `vcache` is: `el.style.transform` in
+        // a rAF loop must not pay a Stylo parse per frame. The answer is pure in its inputs, so one
+        // entry serves every element and every frame.
+        var scache = g.__mkStyleSerCache || (g.__mkStyleSerCache = Object.create(null));
+        var ser = function (k, v) {
+            if (!v || k.slice(0, 2) === '--') return v;
+            if (typeof __cssSerialize !== 'function') return v;
+            var key = k + ' ' + v;
+            var hit = scache[key];
+            if (hit === undefined) {
+                try { hit = __cssSerialize(k, v) || v; } catch (e) { hit = v; }
+                scache[key] = hit;
+            }
+            return hit;
+        };
+        var read = function (k) { return ser(k, stripImp(parse()[k] || '')); };
         var api = {
             setProperty: function (k, v, prio) {
                 var o = parse(); var d = dash(k); var val = stripImp(v);
@@ -14325,7 +14431,7 @@ const CSSOM_PRELUDE: &str = r#"
                 o[d] = val; write(o);
             },
             removeProperty: function (k) { var o = parse(); var d = dash(k); var old = o[d] || ''; delete o[d]; write(o); return stripImp(old); },
-            getPropertyValue: function (k) { return stripImp(parse()[dash(k)] || ''); },
+            getPropertyValue: function (k) { return read(dash(k)); },
             getPropertyPriority: function (k) { return hasImp(parse()[dash(k)] || '') ? 'important' : ''; },
             item: function (i) { var ks = Object.keys(parse()); return ks[i] === undefined ? '' : ks[i]; }
         };
@@ -14338,8 +14444,10 @@ const CSSOM_PRELUDE: &str = r#"
                 // `style[0]` is the INDEXED getter — it returns the property NAME at that index (dash-case),
                 // the array-like half of CSSStyleDeclaration that `item(i)` mirrors. Out of range -> undefined.
                 if (/^\d+$/.test(prop)) { var ks = Object.keys(parse()); return ks[+prop]; }
-                // A camelCase/dash read (`style.color`) returns the value WITHOUT its `!important` priority.
-                return stripImp(parse()[dash(prop)] || '');
+                // A camelCase/dash read (`style.color`) returns the value WITHOUT its `!important`
+                // priority, and SERIALIZED — the IDL attribute and `getPropertyValue` are two
+                // spellings of one read and must not disagree, so both go through `read`.
+                return read(dash(prop));
             },
             set: function (t, prop, v) {
                 if (prop === 'cssText') { el.setAttribute('style', String(v)); return true; }

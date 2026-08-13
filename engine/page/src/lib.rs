@@ -1940,6 +1940,14 @@ fn install_supports_hook() {
     manuk_js::set_supports_hook(manuk_css::stylo_engine::supports_condition);
     #[cfg(not(feature = "stylo"))]
     manuk_js::set_supports_hook(|_| false);
+    // The SERIALIZING half of the same seam (t1224): `el.style` must report CSSOM's normal form,
+    // not the author's text. ⚠ Its no-engine answer is `None`, not a value — the opposite polarity
+    // from `supports`, because echoing an un-normalised string costs conformance while inventing an
+    // empty one would DELETE a declaration the page set.
+    #[cfg(feature = "stylo")]
+    manuk_js::set_serialize_decl_hook(manuk_css::stylo_engine::serialize_declaration);
+    #[cfg(not(feature = "stylo"))]
+    manuk_js::set_serialize_decl_hook(|_, _| None);
     // The ENUMERABLE half of the same question, from the same oracle — see
     // `stylo_engine::supported_property_names`. Installed here rather than at three call sites for
     // the reason the comment above gives: three callers is what produced one.

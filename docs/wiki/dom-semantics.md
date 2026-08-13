@@ -762,6 +762,52 @@ The gate asserts `resolved content width + border + padding === offsetWidth`, an
 that the resolved width IS `offsetWidth`. Two numbers describing the same box that disagree mean one
 of them is invented — the accounting-reconciliation mechanism, applied to a single element.
 
+## `el.style` did not SERIALIZE — it ECHOED, and the fix is Stylo's serializer, not a regex
+
+`getComputedStyle` is a *computed*-value surface; `el.style` is a live view over the `style`
+**attribute**, and it handed back the exact bytes the author typed. CSSOM says `getPropertyValue`
+returns *"the result of serializing the declaration's value"* — a **normal form**:
+
+```text
+   style="…"                          Chrome                   ours (before)
+   background-position: 5% .5%        "5% 0.5%"                "5% .5%"
+   background-position: 5% -0px       "5% 0px"                 "5% -0px"
+   background-image: url(http://x/)   "url(\"http://x/\")"     "url(http://x/)"
+```
+
+### The refusal that shaped the fix, written a tick before it
+
+t1220 sized this at 164 subtests and declined the obvious version in advance: *"a targeted 'prepend 0
+to a leading dot' fix would pass all 164 and be a band-aid — `el.style` does not serialize at all, it
+echoes, and every other CSSOM normalisation (unit case, colour form, shorthand ordering) is silently
+wrong the same way."* So the value round-trips through `stylo_engine::serialize_declaration` —
+**Stylo's own `parse_style_attribute` and its own `property_value_to_css`**. The leading zero, the
+quoted URL and the negative zero fall out of it together, and so do the normalisations nobody has
+written a test for yet. That is the entire difference between this and a regex: `-0px → 0px` and
+`url(x) → url("x")` are not reachable from any rule about leading zeros.
+
+It is also the third surface on one seam. `@supports`, `CSS.supports()` and now `el.style` all
+answer questions about a single declaration, and they share **one** evaluator — because two of them
+once disagreed, and which answer a page got depended on which it asked first.
+
+### `''` means LEAVE IT ALONE, and the polarity is the opposite of `CSS.supports`'s
+
+⚠ The seam returns the empty string for anything it declines, and the caller **echoes** rather than
+clears. `eval_supports` defaults to a conservative `false` because guessing "yes" *invents a
+capability*; `serialize_decl` defaults to echoing because returning empty would **delete a
+declaration the page set**. Same seam shape, opposite safe direction, and picking the wrong one is
+silent in both cases. A **custom property** is refused for a different reason: `--brand: .5rem` has
+no grammar to normalise against, and normalising it would rewrite every design token on the page.
+
+⚠ Memoised on `(property, value)`, like the setter's validator beside it — `el.style.transform` in a
+`requestAnimationFrame` loop must not pay a Stylo parse per frame. Buying conformance with a
+per-frame regression is a trade, and the ratchet refuses trades.
+
+**GATE** `G_INLINE_STYLE_SERIALIZES` — `inline_style_reads_back_the_serialized_value_not_the_authors_text`,
+10 claims. RED-proven: echo the raw text and **six** fail. The other four stay green *by design* —
+they assert the refusals and the two-spellings reconciliation, which must hold whether the mechanism
+is on or off. A gate whose every claim falls to one mutation is testing one thing.
+
 ## The INSETS are resolved values too, and the blocker was one missing input: the containing block
 
 `top`/`right`/`bottom`/`left` sit in the **same used-value bucket** as `width`/`height` above — CSSOM's

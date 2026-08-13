@@ -46371,6 +46371,91 @@ PERF: none — one UA rule and one narrowed branch in a cascade that already ran
 WIKI: `docs/wiki/css-cascade.md` — where Chrome draws the form-control `box-sizing` line, and why a
 layout-crate test cannot see it.
 
+## Tick 1224 — `el.style` never serialized anything; it echoed the author's bytes (2026-08-13)
+
+TICK SHAPE: capability — the largest named family left in `css/cssom` after t1222/t1223, and the one
+t1220 refused the band-aid for a tick in advance.
+
+HYPOTHESIS: `el.style` is a live view over the `style` **attribute**, so every read hands back the
+exact text the author typed. CSSOM says `getPropertyValue` returns *"the result of serializing the
+declaration's value"* — a NORMAL FORM. `style="background-position: 5% .5%"` reads back `"5% .5%"`
+where Chrome says `"5% 0.5%"`; `-0px` stays `-0px`; `url(http://x/)` stays unquoted.
+
+⚠ **The fix is Stylo's serializer, NOT a regex, and that is t1220's call being honoured rather than
+re-decided.** t1220: *"a targeted 'prepend 0 to a leading dot' fix would pass all 164 and be a
+band-aid — `el.style` does not SERIALIZE values, it ECHOES them, and every other CSSOM normalisation
+is silently wrong the same way."* So a new host hook round-trips the value through
+`parse_style_attribute` + `property_value_to_css` — the same evaluator `@supports` and
+`CSS.supports()` already share, making `el.style` the third surface on one seam.
+
+PREDICTION, written before the run: `css/cssom` 2621/3487 → **~2740** (+~120 of the 105-row
+`serialize-values.html` family plus its neighbours).
+
+**MEASURED — and the prediction was wrong about the UNIT, not the size. PRIMARY 72.00% → 73.92%,
+`WPT:TOTAL` +2,408, FOURTEEN areas up and NONE down:**
+
+```text
+   css/css-color      6299 →  7525   +1226      css/css-text     1709 → 1756    +47
+   css/css-values     1705 →  2199    +494      css/css-display   258 →  296    +38
+   css/cssom          2621 →  2789    +168      css/css-flexbox  1482 → 1504    +22
+   css/css-fonts      2742 →  2895    +153      css/css-overflow  327 →  342    +15
+   css/css-transforms  313 →   393     +80      css/css-sizing    921 →  934    +13
+   css/css-grid       2443 →  2517     +74      css/css-position  264 →  274    +10
+   css/css-backgrounds 466 →   524     +58      css/css-ui        242 →  251     +9
+   CONTROLS: dom 8142 (=) · css/selectors 3757 (=) · domparsing 234 (=) · url 1 (=)
+```
+
+I predicted +120 **in one area**. The mechanism was cross-area, and I had no line in the hypothesis
+for that — the tick's own artefact is why.
+
+⚠⚠⚠ **THE SHARED MECHANISM BEAT THE PER-AREA RANKER, AND THIS IS THE FOURTH TIME.** The two areas
+that moved most are the two the board had **refused by name**:
+
+- `css/css-values` — REFUSED at t1204 as *"50.9% unshipped spec (calc-size/random-item)"*. **+494.**
+- `css/css-color` — t1220: *"94.0% unshipped, ONE subsystem: the CSSOM colour-space TYPE CHANGE."*
+  **+1226**, from a fix aimed at `background-position`.
+
+**So the "unshipped spec" number was OVER-COUNTED, and the reason is a classifier error I can now
+name precisely: it read what a test ASKS FOR, not why WE FAIL IT.** A test whose subject is `oklch()`
+is filed as unshipped-spec — but if it fails because `el.style.color` echoed the author's bytes
+instead of serializing them, the subject was never the blocker. Both areas are full of
+`test_valid_value(prop, value)`, which is *set it on `el.style`, read it back, compare to the
+serialization* — a CSSOM assertion wearing a colour/values test's clothes.
+
+**The corrected rule, which is cheap and would have caught this: a refusal on "unshipped spec"
+grounds must be justified by the FAILING MESSAGE, not by the test's subject.** `css/css-color`'s
+failures said `expected "rgb(0,0,255)" but got …` — a serialization shape, visible without running
+anything new. The same discipline t1221 applied to its own classifier (*"histogram the ASSERTION
+MESSAGE, not the test name"*), applied one level up to the REFUSAL.
+
+⚠ **`html/dom` READ 56444 AGAINST A MARK OF 56445, AND IT IS NOISE — PROVEN, NOT ASSUMED.** The
+ratchet refuses a regression, so it was re-run on the same binary and came back **56445/59922,
+exactly the mark**. The tell is that the numerator and the denominator moved **together**: a subtest
+that sometimes is not *created* is a flake, not a failure. (`NO_REPORT 3`, `TH_TIMEOUT 9` in that
+area.) Banked at the reproducing reading, and the ±1 band is recorded so the next reader of a
+single-digit `html/dom` move knows it is not readable either.
+
+PERF: none. The serialization is memoised on `(property, value)` in the same cache shape as the
+setter's validator beside it — `el.style.transform` in a rAF loop pays one Stylo parse per distinct
+value, ever, not one per frame. Buying conformance with a per-frame regression would be a trade.
+
+⚠⚠ **THE FIRST WALL WAS A FALSE RED, AND IT IS THE `wall-self-purge-at-95-percent` CLASS WITH A NEW
+TELL.** `manuk-agent` AND `manuk-net` both reported *"INSTRUMENT FAULT — no verdict on 4 runs incl 3
+on a QUIET box. A REAL hang/OOM, not wall contention."* **`manuk-net` contains no CSS and no JS**, so
+two unrelated crates failing together was the signal that it was not the diff. The wall had printed
+`D · disk (95% full — reclaiming before the build fails on ENOSPC)` immediately before, and the
+reclaim tore `target/`: cargo still believed the proc-macro layer was fresh while
+`libquote`/`libsyn` were gone, so builds died with `can't find crate for 'quote'` and a **cascading
+`E0282` inside `zerovec-derive`** — a third-party crate, which is what made it look like a toolchain
+break rather than a torn cache. `cargo clean -p quote -p syn -p proc-macro2 -p zerovec-derive`
+(90 files, 80MB) and both crates rebuild and pass: **manuk-net 97 passed, manuk-agent 126 passed.**
+⚠ The documented tell for this class was *"missing `extern location for manuk_text`"*; **the new tell
+is a THIRD-PARTY crate failing to compile at all**, which reads as an upstream problem and is not
+one. Recorded per PART VII and left to the observer — no `scripts/` file was touched.
+
+WIKI: `docs/wiki/dom-semantics.md` — "`el.style` did not SERIALIZE — it ECHOED, and the fix is
+Stylo's serializer, not a regex"
+
 ## Tick 1223 — the thing I called unreachable was in a table I was already reading (2026-08-13)
 
 TICK SHAPE: capability — closing the family t1222 **refused and pinned**, plus the stale guard t1222

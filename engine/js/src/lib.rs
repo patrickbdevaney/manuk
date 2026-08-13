@@ -567,6 +567,22 @@ pub fn set_supports_hook(f: SupportsFn) {
 #[cfg(not(feature = "_sm"))]
 pub fn set_supports_hook(_f: SupportsFn) {}
 
+/// A host callback serializing one declaration into CSSOM's normal form.
+pub type SerializeDeclFn = fn(property: &str, value: &str) -> Option<String>;
+
+/// Install the CSS declaration serializer used by `el.style`'s read path.
+///
+/// Same seam and same reason as [`set_supports_hook`]: `el.style`, `@supports` and `CSS.supports()`
+/// are three surfaces asking about ONE declaration, and they must share one parser or they drift
+/// apart depending on which a page asks first.
+#[cfg(feature = "_sm")]
+pub fn set_serialize_decl_hook(f: SerializeDeclFn) {
+    dom_bindings::set_serialize_decl_hook(f)
+}
+
+#[cfg(not(feature = "_sm"))]
+pub fn set_serialize_decl_hook(_f: SerializeDeclFn) {}
+
 /// The ENUMERABLE half of the feature-query seam — see [`dom_bindings::SupportedPropsFn`].
 #[cfg(feature = "_sm")]
 pub type SupportedPropsFn = dom_bindings::SupportedPropsFn;
