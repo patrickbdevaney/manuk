@@ -46371,6 +46371,63 @@ PERF: none — one UA rule and one narrowed branch in a cascade that already ran
 WIKI: `docs/wiki/css-cascade.md` — where Chrome draws the form-control `box-sizing` line, and why a
 layout-crate test cannot see it.
 
+## Tick 1192 — a computed style that THREW on a non-string argument, and what 40 messages were really worth (2026-08-12)
+
+TICK SHAPE: capability — a throw-class fix, small and honestly sized. Gate
+`G_COMPUTED_STYLE_COERCES_ITS_ARGUMENT` (12 claims), 1 RED probe.
+
+⚠⚠ **THE DEFECT: `getComputedStyle(el).getPropertyValue(0)` threw `TypeError: p.charCodeAt is not a
+function`.** The method opened by testing for the `--` custom-property prefix with
+`p.charCodeAt(0) === 45`, on its RAW argument. `charCodeAt` exists on strings; per CSSOM the
+parameter is a `CSSOMString` and **WebIDL converts whatever it is handed before the body runs**, so
+a number, `null` or an object is a well-defined call returning `""`.
+
+It is the **throw class**, which is why it outranks its own subtest count: a TypeError in a property
+read takes the rest of the script with it. `props.forEach(p => cs.getPropertyValue(p))` over a list
+holding an index, a `null` hole or a `String` wrapper is ordinary code.
+
+✅ **THE LIVE `el.style` PATH WAS MEASURED AND WAS ALREADY CORRECT** — `getPropertyValue`,
+`removeProperty` and `getPropertyPriority` all coerce there. This was a second implementation of the
+same interface diverging from the first; the gate now pins the live path too, so a later
+"unification" cannot regress the half that was right.
+
+⚠ **`String(p)`, NOT `typeof p === 'string'` — and the RED probe is what shows the difference.**
+With the coercion removed, `num`, `null`, `obj` and `bool` all throw, but **`new String('color')`
+still passes**, because a String object really does have `charCodeAt`. A `typeof` guard would route
+that wrapper down the not-a-string path and answer `""` — satisfying every no-throw claim while
+silently returning the wrong value. `wrapper` is a claim of its own for exactly that.
+
+**MEASURED:** `css/css-values` **1697 → 1705 (+8)**, HANG/CRASH 0. PRIMARY 69.89% → **69.90%**.
+
+⚠⚠⚠ **+8, NOT THE +40 THE MESSAGE COUNT SUGGESTED — THE SECOND TIME IN THREE TICKS.** t1190: 113
+`XMLDocument is not defined` messages bought +12. Here: 40 `p.charCodeAt is not a function` messages
+bought +8. **A histogram of failure messages ranks where the engine is SILENT or THROWS; it does not
+say how many assertions become true once the noise stops.** The 40 sat inside files whose other
+assertions still fail for unrelated reasons. Both numbers are worth having and the write-up has to
+say which is which — the message count is a SEARCH ranking, the flip count is the PROGRESS.
+
+⚠⚠ **A SECOND AREA IS SUBSTANTIALLY UNSHIPPED SPEC, AND THE RANKER CANNOT SEE IT.** Read the values,
+not the property names (the t1177 rule): `css/css-values`' `assert_not_equals: property should be
+set` mass is `width` ×69 — **every one `calc-size(…)`** — `font-family` ×32, **every one
+`random-item(…)`**, plus `background-image` ×33. That is CSS Values 5, unshipped. Same shape as
+t1190's `domparsing` (65% `tentative/`). **Ranking `css/css-values` at leverage 821 over-promises
+what is winnable there**, and the board's #3 row should be read with that discount until someone
+re-measures it excluding experimental values.
+
+DELIBERATELY NOT TAKEN, and worth recording as a refusal: the other 78 `parsing` failures are
+`"X" should be an invalid selector` — and the list is `:-internal-*`, `:-webkit-full-screen-*`,
+`::-apple-attachment-controls-container`. Rejecting vendor-internal pseudo-classes we already ignore
+buys WPT subtests and **zero real-site capability**; the exit bar is real-site drivability, and
+CONSTITUTION VI forbids moving toward the metric and away from the bar. Left on the table on purpose.
+
+BOARD: on-mandate — a throw-class killer on the #3 leverage row, with the area's own inflation
+measured and reported rather than ground against.
+
+PERF: none — one `String()` on a call that already allocated.
+
+WIKI: `docs/wiki/dom-semantics.md` — the throw class, why `String(p)` and not `typeof`, and the
+message-count-vs-flip-count gap now seen twice.
+
 ## Tick 1191 — 201 "invalid selectors" were a CSSOM identity bug, and `.pastoral` was the tell (2026-08-12)
 
 TICK SHAPE: capability — a shared MECHANISM found by reading the failing test's HELPER after the

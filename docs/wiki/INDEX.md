@@ -1015,6 +1015,9 @@
   - L2817 · Live AND stable — either alone is a wrong fix
   - L2828 · A getter cannot refresh a reference nobody reads through
   - L2841 · Result
+  - L2850 · A computed style that THREW on a non-string argument — and what the 40-message count was really worth (tick 1192)
+  - L2874 · String(p), not typeof p === 'string'
+  - L2882 · The honest size, and the lesson repeated
 
 ## THE FIDELITY INSTRUMENT — what it can and cannot see
 `docs/wiki/fidelity-instrument.md`
@@ -2022,4 +2025,4 @@
   - L124 · Rank mechanisms by FLIP RATE, not failing-subtest count — CSS layout is a multi-assertion slog
 
 ---
-1929 sections across 22 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+1932 sections across 22 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.

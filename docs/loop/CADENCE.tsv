@@ -892,3 +892,4 @@ tick	sha	epoch	iso	delta_s	shape	wall_s	files	added	deleted	gates	claims	wpt_pas
 1188	0a8c0138	1786575052	2026-08-12T18:50:52-04:00	3765	capability	808	10	893	475	446	81	3896	6960	0	586	0	a fragment now says which TEXT NODE it came from, not only which element (2026-08-12)
 1189	a984407e	1786575522	2026-08-12T18:58:42-04:00	470	measurement	808	5	115	35	446	81	3896	6960	0	586	0	`requestAnimationFrame` is FINE, and the abspos remainder is one spec clause the code already quotes (2026-08-12)
 1190	8487826e	1786581398	2026-08-12T20:36:38-04:00	5876	capability	808	10	404	42	448	81	3896	6960	0	588	0	`parseFromString(s, 'text/xml')` ran the HTML parser, so an SVG string had no `clipPath` in it (2026-08-12)
+1191	8b6ba346	1786583011	2026-08-12T21:03:31-04:00	1613	capability	808	10	279	35	449	81	3896	6960	0	589	0	201 "invalid selectors" were a CSSOM identity bug, and `.pastoral` was the tell (2026-08-12)

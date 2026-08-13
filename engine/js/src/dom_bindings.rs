@@ -1812,6 +1812,7 @@ fn computed_style_js(
           filter:{}, webkitFilter:{}, backdropFilter:{}, webkitBackdropFilter:{}, \
           clipPath:{}, webkitClipPath:{}, mixBlendMode:{}, {} __custom:{}, \
           getPropertyValue:function(p){{\
+          p=String(p);\
           if(p.charCodeAt(0)===45&&p.charCodeAt(1)===45){{var cvv=this.__custom[p];return cvv===undefined?'':String(cvv);}}\
           var m={{'background-color':'backgroundColor','font-size':'fontSize',\
           'font-weight':'fontWeight','font-style':'fontStyle','font-family':'fontFamily',\

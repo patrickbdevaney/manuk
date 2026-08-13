@@ -2846,3 +2846,53 @@ captured-reference idiom needs. `G_CSSRULELIST_IS_LIVE_AND_STABLE` asserts both 
 > Second time in two ticks that the area ranker pointed at the wrong organ: t1190's `domparsing`
 > was 65% unshipped-spec `tentative/`, and this one's `css/selectors` was a CSSOM identity bug.
 > **Rank by area to find the mass; read the failing test's HELPER to find the organ.**
+
+## A computed style that THREW on a non-string argument — and what the 40-message count was really worth (tick 1192)
+
+`getComputedStyle(el).getPropertyValue(0)` threw `TypeError: p.charCodeAt is not a function`. The
+method opened by testing for a custom property:
+
+```js
+getPropertyValue: function (p) {
+  if (p.charCodeAt(0) === 45 && p.charCodeAt(1) === 45) { … }   // "--" prefix?
+```
+
+`charCodeAt` exists on strings. Per CSSOM the parameter is a `CSSOMString`, and **WebIDL converts
+whatever it is handed before the method body runs** — a number, `null` or an object is a
+well-defined call returning `""`, not an exception.
+
+This is the **throw class**, and it is why it matters more than the property being asked for: a
+TypeError in a property read takes the rest of the script with it. Iterating a property list is
+ordinary code — `props.forEach(p => cs.getPropertyValue(p))` over an array holding an index, a
+`null` hole, or a `String` wrapper is enough to hit it.
+
+**The LIVE `el.style` path was measured and was already correct** — `getPropertyValue`,
+`removeProperty` and `getPropertyPriority` all coerce there. The defect was specific to the
+computed-style object, which is a second implementation of the same interface. The gate asserts the
+live path too, so a later unification cannot regress the half that was already right.
+
+### `String(p)`, not `typeof p === 'string'`
+
+The RED probe makes the distinction concrete. With the coercion removed, `num`, `null`, `obj` and
+`bool` all throw — but **`new String('color')` still passes**, because a String object really does
+have `charCodeAt`. A `typeof` guard would send that wrapper down the "not a string" path and return
+`""`, satisfying every no-throw claim while silently answering the wrong thing. `wrapper` is a claim
+of its own for exactly that reason.
+
+### The honest size, and the lesson repeated
+
+**`css/css-values` 1697 → 1705 (+8)** — not the +40 the error-message count suggested. The 40
+messages sat inside files whose *other* assertions still fail for unrelated reasons: the rejected
+values there are `calc-size(auto, size)`, `random-item(--x, serif, sans-serif)` and friends —
+**unshipped CSS Values 5**, not properties we deny.
+
+> **Message count is not flip count.** t1190 recorded this gap (113 `XMLDocument is not defined`
+> messages bought +12) and here it is again at a different scale. A histogram of failure messages
+> ranks where the engine is SILENT or THROWS; it does not say how many assertions become true when
+> the noise stops. Both numbers are worth having — but only one of them is progress, and the write-up
+> has to say which is which.
+
+Also worth recording from the same sweep: **`css/css-values`' 40.4% is substantially unshipped
+spec**, the same shape as t1190's `domparsing` (65% `tentative/`). Its `assert_not_equals: property
+should be set` mass is `width: calc-size(…)` ×69, `font-family: random-item(…)` ×32,
+`background-image` ×33. Ranking that area by its failure count over-promises what is winnable.
