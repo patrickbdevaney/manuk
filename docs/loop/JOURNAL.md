@@ -46371,6 +46371,68 @@ PERF: none — one UA rule and one narrowed branch in a cascade that already ran
 WIKI: `docs/wiki/css-cascade.md` — where Chrome draws the form-control `box-sizing` line, and why a
 layout-crate test cannot see it.
 
+## Tick 1215 — the census produced a worklist and the worklist paid (2026-08-13)
+
+TICK SHAPE: capability — the head of t1214's own census, closed one tick after it was measured.
+
+The census asked 215 properties, found **107 silent**, and split them: **15 LOSSY** (the cascade
+resolves it and the serializer omits it) versus **92 HONEST** (not modelled, so silence is correct).
+This closes the **seven** lossy names with real-web weight and no recorded reason to stay silent:
+
+```text
+   rotate · scale · translate · transform-origin
+   align-content · justify-items · justify-self
+```
+
+**`rotate`/`scale`/`translate` are the individual transform properties every animation library reads
+before it animates**, and this project already owns the scar: `undefined + ' scale(2)'` is the string
+`"undefined scale(2)"`, which is `G_TRANSFORM`'s whole reason for existing. **The same failure, four
+properties over**, and it took a census to see it because nothing was failing loudly.
+
+⚠⚠⚠ **`transform-origin` RESOLVES ITS PERCENTAGES, and that is the claim the naive fix fails.** The
+initial value is `50% 50%` and Chrome reports **used pixels** — half the border box. A serializer
+that echoed `50% 50%` would have *added the property and kept the defect*, which is this file's
+recurring shape. On a 200×100 box the answer is `100px 50px`. RED-proven as its own probe.
+
+**RED-PROVEN TWICE, the second being the state the census measured:**
+
+```text
+   transform-origin echoes the percentage (the naive fix)   FAILED `originResolvesToPx:100px 50px`
+   rotate/scale/translate report "" instead of `none`       FAILED `rotateNone:none`
+```
+
+The second matters more than it looks: **the initial value must be `none`, not `""`.** A property
+answering the empty string is indistinguishable from one the engine does not support — which is
+exactly what the census measured — so adding the property without its initial value would leave the
+detection broken for every element that has not set it.
+
+**MEASURED, same release binary, same hour:**
+
+```text
+   css/css-transforms   240 →  313   (+73)   34.3% → 44.7%   0 crashes
+   css/css-flexbox     1475 → 1482    (+7)   37.8% → 37.9%   0 crashes
+   css/css-grid        2421 → 2421     (0)           22.2%   ← control
+   dom                 8142 → 8142     (0)           77.5%   ← control
+   ──────────────────────────────────────────────────────────────────
+   PRIMARY (active-areas)   87627 → 87707    71.80% → 71.87%
+```
+
+⚠ **The first reading of `dom` was 8140, a −2, and it did not reproduce**: run SOLO it is 8142. Four
+areas plus a build were sharing the box, and `TH_TIMEOUT` was 33/8 against the solo 56 — the same
+concurrency flake recorded at t1212, and the second time this session a −N has evaporated on a solo
+re-run. **Re-run solo before believing a −N** is now a two-instance rule rather than an anecdote.
+
+⚠ **WHAT IS DELIBERATELY NOT DONE:** the other eight lossy names. **Six are the grid family**, whose
+silence is recorded as deliberate at t1171-74 — Chrome reports the **used** track sizes, so echoing
+what the cascade holds would be a wrong answer of the right type. `background-position` and
+`tab-size` are the remaining two, left for a tick that can price their serialization forms rather
+than guess them. **A census's value is that it makes "not doing something" a decision with a
+reason**, and three of the fifteen now have one written down.
+
+PERF: seven more values in a computed-style read that already builds ~120. F1/F2 unmoved.
+
+WIKI: docs/wiki/css-cascade.md — "The census produced a worklist and the worklist paid"
+
 ## Tick 1214 — HALF the computed-style surface is silent, and only 15 of it is a defect (2026-08-13)
 
 TICK SHAPE: measurement — the instrument surface audit #61 named one tick ago, built and run rather

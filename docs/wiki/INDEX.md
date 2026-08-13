@@ -857,6 +857,7 @@
   - L3135 · The conversions existed; the CSSOM was lossy (t1210)
   - L3163 · The defect that WAS fixable today, sitting beside them
   - L3183 · Half the computed-style surface is silent, and only 15 of it is a defect (t1214)
+  - L3229 · The census produced a worklist and the worklist paid (t1215)
 
 ## `<dialog>`, `popover`, and the top layer (ticks 194-195)
 `docs/wiki/dialog-and-top-layer.md`
@@ -2067,4 +2068,4 @@
   - L169 · The one real lever inside the remainder, measured and left named
 
 ---
-1974 sections across 22 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+1975 sections across 22 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.

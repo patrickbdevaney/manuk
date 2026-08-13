@@ -1604,6 +1604,13 @@ const COMPUTED_STD_NAMES: &[&str] = &[
     "justify-content",
     "align-items",
     "align-self",
+    "align-content",
+    "justify-items",
+    "justify-self",
+    "transform-origin",
+    "rotate",
+    "scale",
+    "translate",
     "flex-direction",
     "flex-wrap",
     "flex-grow",
@@ -1846,6 +1853,69 @@ fn computed_style_js(
     let align_items = ai_css(cs.align_items);
     // `align-self: auto` (the initial) defers to the container — its resolved value is `auto`.
     let align_self = cs.align_self.map(ai_css).unwrap_or("auto");
+
+    // ── **SEVEN PROPERTIES THE CASCADE RESOLVED AND THIS SERIALIZER WOULD NOT SAY** (t1214's census).
+    //
+    // The census asked all 215 properties and split the 107 silent ones into **15 LOSSY** (the value
+    // exists, the serializer omits it) and **92 HONEST** (not modelled, so silence is correct). These
+    // are the LOSSY ones that carry real-web weight and have no recorded reason to stay silent:
+    //
+    //   * `rotate`/`scale`/`translate` — the INDIVIDUAL transform properties. Every animation library
+    //     reads them before it animates, and this project already owns the scar: `undefined + '
+    //     scale(2)'` is the string `"undefined scale(2)"`, which is `G_TRANSFORM`'s whole reason for
+    //     existing. Same failure, four properties over.
+    //   * `transform-origin` — read by every library that sets one.
+    //   * `align-content`/`justify-items`/`justify-self` — the flex/grid alignment reads.
+    //
+    // ⚠ The six GRID entries in that list are deliberately NOT here: Chrome reports the **used**
+    // track sizes for `grid-template-*`, so echoing what the cascade holds would be a wrong answer of
+    // the right type (recorded t1171-74). `background-position` and `tab-size` are the two remaining
+    // lossy names and are left for a tick that can price their serialization forms.
+    let align_content = match cs.align_content {
+        JustifyContent::Normal => "normal",
+        JustifyContent::FlexStart => "flex-start",
+        JustifyContent::FlexEnd => "flex-end",
+        JustifyContent::Center => "center",
+        JustifyContent::SpaceBetween => "space-between",
+        JustifyContent::SpaceAround => "space-around",
+        JustifyContent::SpaceEvenly => "space-evenly",
+    };
+    let justify_items = ai_css(cs.justify_items);
+    let justify_self = cs.justify_self.map(ai_css).unwrap_or("auto");
+
+    // ⚠ **`transform-origin` RESOLVES ITS PERCENTAGES**, and that is not decoration. The initial value
+    // is `50% 50%` and Chrome reports it in **used pixels** — half the border box — so echoing `50%
+    // 50%` would be the wrong-answer-of-the-right-type this file keeps naming. With no rect (a pseudo
+    // has no box) the percentage form is the honest fallback rather than a fabricated pixel count.
+    let transform_origin = {
+        let (ox, oy) = &cs.transform_origin;
+        let resolve = |d: &manuk_css::Dim, extent: Option<f32>| -> String {
+            match (d, extent) {
+                (manuk_css::Dim::Percent(p), Some(e)) => format!("{}px", p / 100.0 * e),
+                _ => dim_css(d),
+            }
+        };
+        format!(
+            "{} {}",
+            resolve(ox, rect.map(|r| r[2])),
+            resolve(oy, rect.map(|r| r[3]))
+        )
+    };
+    let rotate_css = match &cs.rotate {
+        Some(manuk_css::TransformFn::Rotate(rad)) => format!("{}deg", rad.to_degrees()),
+        Some(_) | None => "none".to_string(),
+    };
+    // `scale: 2` and `scale: 2 2` both serialize as `2` — Chrome omits an equal second component.
+    let scale_css = match cs.scale {
+        Some((x, y)) if (x - y).abs() < f32::EPSILON => format!("{x}"),
+        Some((x, y)) => format!("{x} {y}"),
+        None => "none".to_string(),
+    };
+    let translate_css = match &cs.translate {
+        Some((x, y)) if matches!(y, manuk_css::Dim::Px(v) if *v == 0.0) => dim_css(x),
+        Some((x, y)) => format!("{} {}", dim_css(x), dim_css(y)),
+        None => "none".to_string(),
+    };
     let flex_direction = match cs.flex_direction {
         FlexDirection::Row => "row",
         FlexDirection::RowReverse => "row-reverse",
@@ -1912,7 +1982,9 @@ fn computed_style_js(
           width:{}, height:{}, inlineSize:{}, blockSize:{}, marginTop:{}, marginRight:{}, marginBottom:{}, marginLeft:{}, \
           paddingTop:{}, paddingRight:{}, paddingBottom:{}, paddingLeft:{}, \
           top:{}, right:{}, bottom:{}, left:{}, zIndex:{}, transform:{}, \
-          justifyContent:{}, alignItems:{}, alignSelf:{}, flexDirection:{}, flexWrap:{}, \
+          justifyContent:{}, alignItems:{}, alignSelf:{}, alignContent:{}, justifyItems:{}, \
+          justifySelf:{}, transformOrigin:{}, rotate:{}, scale:{}, translate:{}, \
+          flexDirection:{}, flexWrap:{}, \
           flexGrow:{}, flexShrink:{}, flexBasis:{}, rowGap:{}, columnGap:{}, \
           boxSizing:{}, minWidth:{}, maxWidth:{}, minHeight:{}, maxHeight:{}, \
           scrollSnapType:{}, scrollSnapAlign:{}, \
@@ -1933,6 +2005,8 @@ fn computed_style_js(
           'padding-top':'paddingTop','padding-right':'paddingRight','padding-bottom':'paddingBottom',\
           'padding-left':'paddingLeft','z-index':'zIndex',\
           'justify-content':'justifyContent','align-items':'alignItems','align-self':'alignSelf',\
+          'align-content':'alignContent','justify-items':'justifyItems','justify-self':'justifySelf',\
+          'transform-origin':'transformOrigin',\
           'flex-direction':'flexDirection','flex-wrap':'flexWrap','flex-grow':'flexGrow',\
           'flex-shrink':'flexShrink','flex-basis':'flexBasis','row-gap':'rowGap',\
           'column-gap':'columnGap','box-sizing':'boxSizing','min-width':'minWidth',\
@@ -1997,6 +2071,13 @@ fn computed_style_js(
         q(justify_content),
         q(align_items),
         q(align_self),
+        q(align_content),
+        q(justify_items),
+        q(justify_self),
+        q(&transform_origin),
+        q(&rotate_css),
+        q(&scale_css),
+        q(&translate_css),
         q(flex_direction),
         q(flex_wrap),
         q(&flex_grow),

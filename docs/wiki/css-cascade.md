@@ -3225,3 +3225,43 @@ condition (a flex item, a grid child, a replaced element) reads as present. It m
 serializer ever say this*, not *does it say the right thing* — and the four instances that motivated
 it were all cases where the serializer **did** answer, wrongly. **A silence census and a correctness
 census are different instruments; this is the first.**
+
+## The census produced a worklist and the worklist paid (t1215)
+
+t1214's census: 215 properties asked, **107 silent**, split into **15 LOSSY** (the cascade resolves
+it, the serializer omits it) and **92 HONEST** (not modelled). This closes the seven lossy names with
+real-web weight and no recorded reason to stay silent:
+
+```text
+   rotate · scale · translate · transform-origin · align-content · justify-items · justify-self
+```
+
+**`rotate`/`scale`/`translate` are the individual transform properties every animation library reads
+before animating** — and `undefined + ' scale(2)'` is `"undefined scale(2)"`, which is
+`G_TRANSFORM`'s whole reason for existing. **The same failure, four properties over**, invisible
+until a census looked.
+
+⚠⚠⚠ **`transform-origin` resolves its percentages.** The initial is `50% 50%` and Chrome reports
+**used pixels**; a serializer echoing `50% 50%` would have added the property and kept the defect. On
+a 200×100 box: `100px 50px`.
+
+```text
+   RED  transform-origin echoes the percentage    FAILED `originResolvesToPx:100px 50px`
+   RED  rotate/scale/translate report "" not none FAILED `rotateNone:none`
+```
+
+The second matters more than it looks: **the initial value must be `none`, not `""`** — a property
+answering the empty string is indistinguishable from one the engine does not support, which is
+exactly what the census measured.
+
+**Measured:** `css/css-transforms` **240 → 313 (+73)**, `css/css-flexbox` **1475 → 1482 (+7)**,
+`css/css-grid` and `dom` unchanged as controls, 0 crashes.
+
+⚠ **Not done, with reasons:** six of the remaining eight are the grid family, whose silence is
+deliberate (t1171-74 — Chrome reports **used** track sizes). `background-position` and `tab-size`
+await a tick that can price their serialization forms. **A census's value is that it makes "not doing
+something" a decision with a reason.**
+
+⚠ **`dom` first read 8140, a −2, and did not reproduce** — solo it is 8142. Second instance this
+session of a −N evaporating on a solo re-run (t1212 was the first). **Re-run solo before believing a
+−N.**

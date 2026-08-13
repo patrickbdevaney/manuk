@@ -5186,6 +5186,26 @@ draining the JS event loop to its 20,000-task ceiling, which has no wall-clock b
 images now arrive; the page is still slow for another reason. Same discipline as t608: **do not book
 "site X works now" from "one of site X's defects is gone."**
 
+## The individual transform properties every animation library reads (tick 1215)
+
+| pattern | where it shows up | status |
+| --- | --- | --- |
+| `getComputedStyle(el).rotate / .scale / .translate / .transformOrigin` — the individual transform properties, read before an animation starts. All `undefined`, so `undefined + ' scale(2)'` gives the string `"undefined scale(2)"` | Every animation and layout library; `G_TRANSFORM` exists for exactly this failure on `transform`, and this is the same failure four properties over | ✅ fixed (tick 1215) — gated by **`G_COMPUTED_LOSSY_SEVEN`**; `css/css-transforms` **240 → 313 (+73)** |
+| `getComputedStyle(el).alignContent / .justifyItems / .justifySelf` — the flex and grid alignment reads | Layout libraries measuring a container before they place into it | ✅ same fix; `css/css-flexbox` **+7** |
+
+⚠⚠⚠ **FOUND BY A CENSUS, NOT BY A FAILING TEST.** t1214 asked all 215 properties and split the 107
+silent into **15 LOSSY** (the cascade resolves it, the serializer omits it) and **92 HONEST** (not
+modelled — silence is correct). Nothing was failing loudly; the properties simply were not there.
+
+⚠⚠ **`transform-origin` resolves its percentages** — Chrome reports USED pixels (`100px 50px` on a
+200×100 box), so a serializer echoing `50% 50%` would have added the property and kept the defect.
+And the initial value must be **`none`, not `""`**: a property answering the empty string is
+indistinguishable from one the engine does not support, which is the very thing the census measured.
+
+⚠ **Six of the remaining eight are deliberately left silent** (the grid family — Chrome reports
+*used* track sizes). **A census's value is that it makes "not doing something" a decision with a
+reason.**
+
 ## A framed document's `referrer` is its EMBEDDER, and it was always `""` (tick 1212)
 
 | pattern | where it shows up | status |
