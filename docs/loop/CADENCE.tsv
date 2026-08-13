@@ -919,3 +919,4 @@ tick	sha	epoch	iso	delta_s	shape	wall_s	files	added	deleted	gates	claims	wpt_pas
 1217	bce513ad	1786636330	2026-08-13T11:52:10-04:00	347	measurement	808	8	267	34	462	81	3896	6960	0	608	0	the tool I built two ticks ago would REGRESS the thing it looks perfect for (2026-08-13)
 1218	83d16f7b	1786638378	2026-08-13T12:26:18-04:00	2048	capability	808	14	685	36	463	81	3896	6960	0	609	0	the blocker t1171 named was "there is no list", and one-at-a-time is fine if you have candidates (2026-08-13)
 1219	bef2e160	1786638699	2026-08-13T12:31:39-04:00	321	measurement	808	7	140	35	463	81	3896	6960	0	609	0	the aperture was pointed at the OLD location, and the PRIMARY metric goes DOWN (2026-08-13)
+1220	5b8008cb	1786638976	2026-08-13T12:36:16-04:00	277	measurement	808	6	145	33	463	81	3896	6960	0	609	0	the newly-visible area classified, and both its mechanisms are subsystem work (2026-08-13)

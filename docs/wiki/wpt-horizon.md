@@ -213,3 +213,40 @@ measurement got wider.**
 
 ⚠ **Not durable:** `scripts/wpt-setup.sh`'s `SUBSETS` still names `cssom`, so a setup re-run reverts
 this. Observer-owned; the one-line change needed is `cssom` → `css/cssom`.
+
+## The newly-visible area, classified (t1220)
+
+`css/cssom` entered the board at **1917/3502 (54.7%)** one tick after t1219 found the aperture aimed
+at the pre-move path — after 22 ticks of CSSOM work priced *without its own area on the board*.
+
+```text
+   css/cssom   1,547 failing   ·   1.7% unshipped/very-new   →  the cleanest classifier result
+                                                                 of the session (cleaner than dom's 3.4%)
+     432   absolutize % / calc() into px   (computed `top`/`bottom`/`left`/`right`)
+     164   raw inline style serialization  (`.5%` must serialize as `0.5%`)
+     116   absent API / undefined          (`caretRangeFromPoint`, …)
+     835   other
+```
+
+### Both named mechanisms are subsystem work
+
+**1. Absolutize into pixels (432).** CSSOM's *resolved value* for an inset on a positioned element is
+the **used** value in px:
+
+```text
+   top: 10%               →  expected "20px"   got "10%"
+   top: calc(-1px + 10%)  →  expected "19px"   got "calc(-1px + 10%)"
+```
+
+**The blocker is that resolving it needs the CONTAINING BLOCK's size, and the serializer has only the
+element's own border box.** Layout-info plumbing, not serialization — the same shape as every
+CSSOM-lossiness instance: *the engine knows the answer and the reporting surface cannot reach it.*
+
+**2. Raw inline style serialization (164).** `el.style.backgroundPosition` returns `"5% .5%"` where
+CSSOM requires `"5% 0.5%"`. ⚠ A targeted *prepend-0* fix passes all 164 and is a **band-aid**:
+`el.style` does not serialize values at all, it **echoes** the author's text, so every other CSSOM
+normalisation is silently wrong the same way.
+
+Both written down with their blockers rather than half-built — the third such call in one session
+(t1213's frame `ReflowCtx`, t1217's `@namespace` validator), and each time the alternative was a
+change on a seam that deserves a fresh session.

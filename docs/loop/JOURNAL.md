@@ -46371,6 +46371,78 @@ PERF: none — one UA rule and one narrowed branch in a cascade that already ran
 WIKI: `docs/wiki/css-cascade.md` — where Chrome draws the form-control `box-sizing` line, and why a
 layout-crate test cannot see it.
 
+## Tick 1220 — the newly-visible area classified, and both its mechanisms are subsystem work (2026-08-13)
+
+TICK SHAPE: measurement — the re-rank t1219's aperture correction demands, and a **scoped refusal**
+of the two levers it surfaces.
+
+**`css/cssom` entered the board one tick ago at 1917/3502 (54.7%)** after 22 ticks of this session
+priced CSSOM work *without its own area on the board*. Classified by construct, per the rule t1204
+added to §VI.3:
+
+```text
+   css/cssom   1,547 failing   ·   1.7% unshipped/very-new   →  PASSES the classifier cleanly
+     432   absolutize % / calc() into px   (the computed value of `top`/`bottom`/`left`/`right`)
+     164   raw inline style serialization  (`.5%` must serialize as `0.5%`)
+     116   absent API / undefined          (`caretRangeFromPoint`, `caretPositionFromPoint`, …)
+     835   other
+```
+
+**1.7% is the cleanest classifier result of the session** — cleaner than `dom` (3.4%) — so this is a
+real area with real work, not a tail.
+
+⚠⚠⚠ **AND BOTH NAMED MECHANISMS ARE SUBSYSTEM WORK, WHICH IS WHY THIS TICK STOPS AT NAMING THEM.**
+
+**1. Absolutize percentages and `calc()` into pixels — 432 subtests.**
+
+```text
+   top: 10%                →  getComputedStyle: expected "20px"  got "10%"
+   top: calc(-1px + 10%)   →  expected "19px"                    got "calc(-1px + 10%)"
+```
+
+CSSOM's *resolved value* for an inset on a positioned element is the **used** value in pixels. Ours
+is `dim_css(&cs.inset.top)`, which prints what the cascade holds. **The blocker is that resolving it
+needs the CONTAINING BLOCK's size, and the serializer has only the element's own border box** —
+`computed_style_js(cs, rect, …)` receives `rect`, not the containing block. Plumbing that in is a
+layout-info change, not a serializer one, and it is the same shape as the four CSSOM-lossiness
+instances t1213 named: **the engine knows the answer and the reporting surface cannot reach it.**
+
+**2. Raw inline style serialization — 164 subtests.**
+
+```text
+   el.style.backgroundPosition   expected "5% 0.5%"   got "5% .5%"
+```
+
+CSSOM requires a number below 1 to serialize **with a leading zero**. `el.style` returns the
+author's raw text, because the proxy stores the parsed style *attribute* verbatim. ⚠ **A targeted
+"prepend 0 to a leading dot" fix would pass all 164 and be a band-aid on the real gap** — `el.style`
+does not *serialize* values at all, it *echoes* them, and every other CSSOM normalisation
+(unit case, colour form, shorthand ordering) is silently wrong the same way. This session has spent
+seven ticks declining exactly that kind of partial fix, and doing it here at hour twenty-one would be
+inconsistent with every one of them.
+
+**BOTH ARE WRITTEN DOWN WITH THEIR BLOCKERS** rather than half-built, which is the same call as
+t1213's frame-`ReflowCtx` and t1217's `@namespace`-aware validator — the third time this session, and
+each time the alternative was a change on a seam that deserves a fresh session.
+
+**WHERE THE BOARD STANDS**, every row classified by a measured number rather than a guess:
+
+```text
+   css/cssom       54.7%    1.7% unshipped   1,547 failing   ← NEW; 432 + 164 named above
+   dom             77.5%    3.4%             2,361           ← worked 7× this session
+   css/selectors   67.6%    5.2%             1,803           ← 308 = frame ReflowCtx (t1213)
+                                                               114 = @namespace validator (t1217)
+   css/css-color   57.2%   94.0% ONE SUBSYSTEM               ← the colour-space TYPE CHANGE (t1210)
+   css/css-values  40.6%   50.9%                             ← REFUSED (t1204)
+```
+
+**Every lever on that board is now named, sized, and carries its blocker.** That was not true 23
+ticks ago, and it is the state a session should leave behind.
+
+PERF: none — measurement only.
+
+WIKI: docs/wiki/wpt-horizon.md — "The newly-visible area, classified"
+
 ## Tick 1219 — the aperture was pointed at the OLD location, and the PRIMARY metric goes DOWN (2026-08-13)
 
 TICK SHAPE: measurement — an **aperture correction**, and by the standing rule it is *a correction,

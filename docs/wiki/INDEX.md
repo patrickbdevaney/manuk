@@ -2073,6 +2073,8 @@
   - L169 · The one real lever inside the remainder, measured and left named
   - L178 · A sparse checkout is a claim about where the tests are (t1219)
   - L203 · ⚠ The PRIMARY metric goes DOWN, and that is the point
+  - L217 · The newly-visible area, classified (t1220)
+  - L231 · Both named mechanisms are subsystem work
 
 ---
-1982 sections across 22 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+1984 sections across 22 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
