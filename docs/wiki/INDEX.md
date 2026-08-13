@@ -2049,6 +2049,8 @@
   - L105 · Platform / real-time — explicitly deferred; track but do NOT compete with doc-web core for priority
   - L112 · How this feeds the priority ledger
   - L124 · Rank mechanisms by FLIP RATE, not failing-subtest count — CSS layout is a multi-assertion slog
+  - L135 · The leverage ranker has no term for unshipped spec (t1204)
+  - L169 · The one real lever inside the remainder, measured and left named
 
 ---
-1958 sections across 22 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+1960 sections across 22 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.

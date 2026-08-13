@@ -46371,6 +46371,74 @@ PERF: none — one UA rule and one narrowed branch in a cascade that already ran
 WIKI: `docs/wiki/css-cascade.md` — where Chrome draws the form-control `box-sizing` line, and why a
 layout-crate test cannot see it.
 
+## Tick 1204 — the leverage ranker's #2 row is HALF UNSHIPPED SPEC, and the ranker cannot see it (2026-08-13)
+
+TICK SHAPE: measurement — a REFUSAL of the board's #2 row, which is a result. Four consecutive ticks
+took `scripts/wpt-leverage.sh`'s #1 row (`dom`) and paid +975 subtests; this tick asked the same
+question of **#2 (`css/css-values`, leverage 815, 1708/4201 = 40.7%, 2,496 failing)** and the answer
+is *don't*.
+
+⚠⚠⚠ **50.9% OF ITS FAILING SUBTESTS ARE CONSTRUCTS NOTHING SHIPS YET.** Classified by parsing every
+`FAIL` block's name and message, 2,337 failing subtests:
+
+```text
+   random(          231     if(style)        217     calc-size()      194
+   attr()           179     sibling-index    124     random-item()     63
+   progress()        60     {{hosts}}         46     sibling-count     25
+   ident()           24     interpolate-size  10     if(supports)      10
+   if(media)          6
+   ─────────────────────────────────────────────────────────────────────
+   1,189 of 2,337 = 50.9%   unshipped spec + wptserve templating we do not run
+```
+
+The remaining 1,148 do not concentrate either — the identifiable properties are `margin-top` 62
+(nearly all `clamp(none, …)` degenerate-argument edges), **`object-position` 24**, `left` 12,
+`background-image` 10, and a long scatter.
+
+⚠⚠⚠ **THIS IS A DEFECT IN THE RANKER, AND IT IS A SEVENTH INFLATION MODE FOR PART VI.3.** The other
+six are all about the corpus GREP (an unanchored property name, a co-occurrence, a legacy no-op
+value, a metric that cannot see the organ, a missing support file, one corpus). This one is about
+`wpt-leverage.sh` itself:
+
+> **`LEVERAGE = usage × winnable-tests × room-to-grow × flip-rate` has no term for whether the
+> failing mass is SHIPPABLE SPEC.** An area whose gap is `random()` and `if(style)` scores exactly
+> like an area whose gap is real, because both are *failing tests in a high-usage directory*.
+
+That is I4's trap wearing the ranker's own arithmetic, and it is the tick-84 shape (climbing the
+encoding hill) with a subtler slope: encoding was visibly exotic, `css/css-values` is *values*, which
+sounds like the core of CSS and half is a 2026 working draft.
+
+**THE CHEAP REMEDY, and it is one command rather than a build:** before taking an area, run it with
+`--show-failures` and classify the failing mass by CONSTRUCT — the same assertion-message histogram
+that found four mechanisms this window, asked one level up. Three minutes, no build. `dom` survives
+that test (its failing mass was `assert_throws_dom`, missing interface objects and real selector
+gaps — all shippable); `css/css-values` does not.
+
+⚠ **AND THE MEMORY WAS RIGHT AND UNQUANTIFIED.** The loop's own note said *"areas inflated by
+unshipped spec (domparsing 65% `tentative/`, css-values = calc-size/random-item)"* — recorded at
+t1190 as a caution and never priced. **A caution that is not a number does not survive contact with
+a ranker that produces one.** 50.9% is the number.
+
+**NAMED, MEASURED, AND LEFT FOR A DEDICATED TICK — the one real lever inside the remainder:**
+`object-position` is wrong on **every** value that is not the default:
+
+```text
+   e.style['object-position'] = '70% 60px'    getComputedStyle → "50% 50%"   (expected "70% 60px")
+   e.style['object-position'] = '30px 50%'    getComputedStyle → "50% 50%"
+   e.style['object-position'] = 'calc(100% - 20px) calc(100% - 10px)'  →  "50% 50%"
+```
+
+`50% 50%` is the INITIAL value, so this is not a serialization rounding error — the declaration is
+not being applied at all on the shipping (Stylo) path, and the `ObjectPosition` type stores `x`/`y`
+as **fractions** (`cs.object_position.x * 100.0` at `dom_bindings.rs:1356`) so it **cannot represent
+a length** even once it is. Two changes, not one: widen the type, then map the property in the Stylo
+path. It matters beyond the 24 subtests — `object-position` is how every cropped hero image and
+avatar keeps its subject in frame under `object-fit: cover`.
+
+PERF: none — measurement only.
+
+WIKI: docs/wiki/wpt-horizon.md — "The leverage ranker has no term for unshipped spec"
+
 ## Tick 1203 — the sweep caught a FALSE THROW three anchor sites could not (2026-08-13)
 
 TICK SHAPE: measurement — the two cadence instruments that came due together (surface audit #60,
