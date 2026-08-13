@@ -46371,6 +46371,67 @@ PERF: none — one UA rule and one narrowed branch in a cascade that already ran
 WIKI: `docs/wiki/css-cascade.md` — where Chrome draws the form-control `box-sizing` line, and why a
 layout-crate test cannot see it.
 
+## Tick 1221 — my own classifier under-counted, and the correction changes the ranking (2026-08-13)
+
+TICK SHAPE: measurement — a **correction to tick 1220, published one tick later**, and the closing
+state of the board.
+
+⚠⚠⚠ **t1220's classification was WRONG, and it was wrong in the direction that matters.** I bucketed
+`css/cssom`'s failures by keyword and reported:
+
+```text
+   t1220 said:   432 absolutize · 164 inline serialization · 116 absent API · 835 "other"
+```
+
+**The 835 "other" is not other.** Re-reading it: `216 assert_equals: 'top' …` and
+`108 … 'bottom' …` are **the same absolutize family** — my keyword only matched the failures whose
+*test name* contained "absolutiz", and the rest say it only in the assertion. The true shape:
+
+```text
+   css/cssom  1,547 failing
+     ~756   absolutize % / calc() into px      ← 49% of the area, not 28%
+      164   raw inline style serialization
+      116   absent API (caretPositionFromPoint, caretRangeFromPoint, …)
+     ~500   genuinely assorted, largest single row 25
+```
+
+**One mechanism is half the area.** t1220 reported it as a bit over a quarter and put it beside three
+peers; it is not a peer of anything, and the ranking a reader would take from that entry is wrong.
+
+⚠⚠ **THE LESSON IS ABOUT THE CLASSIFIER, and it is the same one this session has now learned four
+times in four costumes:** *I test the artefact I can reach rather than the claim as written.* Here
+the artefact was the **test NAME** and the claim lives in the **assertion MESSAGE** — which is
+precisely the rule this loop already carries as *"histogram the ASSERTION MESSAGE, not the test
+name"*, applied to the classifier itself rather than to a search. **The instrument I built two ticks
+ago to stop mis-ranking areas mis-ranked one by reading the wrong field.**
+
+The corrected form, so the classifier is not wrong the same way again: **classify on the assertion
+message, and check that the residual bucket has no row larger than the smallest named family.**
+`css/cssom`'s largest residual row is now **25**, against a smallest named family of 116 — that is
+the check t1220 skipped, and it takes one line.
+
+**NOTHING ELSE IN t1220 CHANGES.** The classifier verdict (1.7% unshipped — the cleanest of the
+session), both blockers, and the refusal to start either at hour twenty-one all stand. Only the
+relative sizes move, and they move toward *one mechanism dominates this area*.
+
+**THE CLOSING BOARD** — every row a measured number, every lever named with its blocker:
+
+```text
+   AREA            pct     unshipped   failing   the named lever
+   css/cssom      54.7%      1.7%       1,547    ~756 absolutize % → px: needs the CONTAINING
+                                                 BLOCK's size, which the serializer never receives
+   dom            77.5%      3.4%       2,361    worked 7× this session (60.8% → 77.5%)
+   css/selectors  67.6%      5.2%       1,803    308 = a frame-owned ReflowCtx (design, t1213)
+                                                 114 = @namespace-aware validator (trap, t1217)
+   css/css-color  57.2%     94.0%       4,706    ONE subsystem: the CSSOM colour-space TYPE CHANGE
+                                                 (the conversions already exist and are correct)
+   css/css-values 40.6%     50.9%       2,496    REFUSED — half is unshipped spec
+```
+
+PERF: none — measurement only.
+
+WIKI: none — the artefact is this correction, which belongs beside the entry it corrects. [no-pattern]
+
 ## Tick 1220 — the newly-visible area classified, and both its mechanisms are subsystem work (2026-08-13)
 
 TICK SHAPE: measurement — the re-rank t1219's aperture correction demands, and a **scoped refusal**
