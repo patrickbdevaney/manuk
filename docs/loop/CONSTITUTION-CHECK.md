@@ -8726,6 +8726,144 @@ reading in 24 ticks, so this line is inherited, not observed** — and saying so
    five ticks the area ranker named the wrong organ (unshipped spec; a CSSOM identity bug; a
    `split(',')`). The ranker finds mass, never mechanism.
 
+## Check #114 — tick 1201 (2026-08-13)
+
+**HORIZON: H0 — Pareto Web Parity.** **EXIT GATE (re-read from PART II, not recalled), all binary:**
+~83% WPT subtest pass **across categories** · differential-oracle-verified viability across all four
+usage-weighted corpora · the headful shell daily-drivable by its own developer · **every rendered
+construct queryable through the in-process semantic API.** PART VII re-scopes the near term: the bar
+is *"reliably renders and runs the representative real internet,"* and 83%+ WPT is explicitly OUT of
+v1 scope; WPT is the CLIMB, CrUX M1/M2 is the CERTIFICATION.
+
+### → Did the last 8 ticks (1194–1201) move an EXIT-GATE condition, or only the scoreboard?
+
+**Gate, on the ACTIVE-AREAS measure — and the window splits cleanly into two halves that should be
+read differently.**
+
+```text
+   t1194  querySelectorAll('.a :is(.b,.c)') returned an EMPTY LIST        capability
+   t1195  the CrUX sweep two checks had asked for                         measurement
+   t1196  the 150s timeout is FOUR budget overruns                        measurement
+   t1197  built the preemption, PROVED IT INERT, REVERTED it              REFUSAL
+   t1198  the missing half was a THREAD — script preemption lands         capability (Bar 0)
+   t1199  five of six An+B pseudos returned NOTHING                +384   capability
+   t1200  an invalid selector must THROW                           +310   capability
+   t1201  a frame's window had TWO properties                      +280   capability
+   ────────────────────────────────────────────────────────────────────────────
+   PRIMARY (active areas, encoding excluded)   85603 → 86578   70.14% → 70.94%
+   dom 6382 → 7147 (+765, 60.8% → 68.0%)   ·   css/selectors 3547 → 3757 (+210)
+   html/dom, domparsing, encoding UNCHANGED as controls   ·   0 crashes throughout
+```
+
+⚠⚠⚠ **AND THE HALF THAT MATTERS MORE, because it is the one the scoreboard cannot show: t1197 was
+a REFUSAL and it was the most constitutionally correct tick in the window.** A registered-but-never-
+requested `JS_AddInterruptCallback` compiled, installed, and let a 60s spin run to completion twice.
+It was **reverted rather than banked "for later"** — `grep` would have answered yes,
+`CONSTELLATION.tsv` would have gained a row, and the next reader would have believed preemption
+existed. The reliability doctrine ranks false presence strictly worse than absence, and the loop
+obeyed it against the pull of a landed diff. **A tick that banks nothing and prevents a false
+capability claim is a gate tick, not a lost one.**
+
+### → Is `orient`'s ranking (usage-weighted breadth, tail excluded, §VI.3) still the north star?
+
+**Yes, and this window is the cleanest demonstration of it the loop has produced.** Every one of the
+four capability ticks was picked off `scripts/wpt-leverage.sh`'s **#1 row** (`dom`), and each was
+found the same way: run the area with `--show-failures`, **histogram the ASSERTION MESSAGE**, and
+probe the top *mechanism* rather than the top *count*. Encoding contributed **zero**; no big-but-tail
+number crept back.
+
+⚠⚠ **A METHOD CORRECTION, and it refines a rule this file already carries.** Check #109 established
+that the message histogram is a **search ranking, not a forecast** (113 messages → +12). t1201
+predicted **204 `dom` + 76 `css/selectors`** from the histogram before the fix and both came back
+**exact**. The distinction is now nameable: a histogram row is a forecast when the message is a
+**HARD BLOCKER** — the same `undefined`, one dereference from the assertion, so the test cannot be
+*stated* — and a search ranking when it is a **symptom**, where each row hides a different cause.
+`assert_throws_dom … did not throw` (665 rows) is the second kind; `funcOrConstructor is undefined`
+(280 rows, one missing property) was the first.
+
+⚠⚠⚠ **A SIXTH GREP/CALIBRATION INFLATION MODE, and it belongs in VI.3 beside the other five —
+CALIBRATED ON ONE CORPUS.** t1200's selector-syntax validator scored a **perfect 34/34 invalid and
+0/207 false-positive against WPT's own `dom/nodes/selectors.js`** — the authority's own list — and
+then measured `dom` **+272** with `css/selectors` **−289**, a **net LOSS the ratchet refused**.
+`css/selectors/attribute-selectors` writes CSS comments *inside the selector under test*
+(`[foo='BAR'] /* sanity check */`), `:is()`/`:has()` are **forgiving** lists, and case flags may be
+**hex escapes**. None of the three is visible in the first corpus. The general form:
+
+> **A validator is only as honest as the widest set of things it has been shown, and a perfect score
+> against the authority's own corpus is not evidence about any other corpus.**
+
+The fix is structural rather than a one-off: **both** corpora — WPT's 241 and the 112 selectors
+`css/selectors` was observed passing in — are now committed as `selector_syntax.rs`'s own unit test,
+whole rather than sampled.
+
+⚠⚠ **AND A DECISION RULE THE WINDOW PRODUCED TWICE: BIAS THE AMBIGUOUS CASE TOWARD "DO NOTHING".**
+A false *invalid* throws inside a real page's script; a false *valid* returns the empty list the page
+already had. Those are not symmetric, so every unrecognised construct resolves to valid. The same
+shape governed t1201's deny list (`getComputedStyle` stays **absent** rather than shadowed by
+`undefined`, because `STYLES_PTR` would answer with the PARENT's style) and t1198's `preempt_aware`
+(a terminated script and a page that threw are byte-identical `Err`s; reading the first as the second
+would turn every slow page into a *failed* page).
+
+### → Is any invariant being bent?
+
+- **I2 (never patch deps)** — held, and **exercised as a positive decision twice.** t1200 declined to
+  use Stylo's real selector parser as the validity authority: its *servo* build returns `false` from
+  `parse_has()`, so delegating would have made `querySelector(':has(.x)')` **throw**, deleting a
+  shipped capability used by 13% of the corpus. The alternative was not "patch Stylo" but "own the
+  grammar" — which is exactly what the *borrowed engine is a means* clause prescribes.
+- **I3 (semantic model lands in lockstep)** — held. None of the four added a *rendered* construct, so
+  no new semantic surface is owed; t1198 and t1201 both improve the agentic surface incidentally (a
+  page that cannot be frozen by one task is a page an agent can act on; a frame whose window carries
+  the platform is one an agent can reach into).
+- **I4 (Pareto discipline)** — held. `:nth-of-type`, `:last-of-type`, invalid-selector throws and a
+  frame's `contentWindow` are all top-of-the-web constructs. No tail work.
+- **I5 (never trade a regression)** — held **and exercised twice, in the two directions that matter**:
+  t1197 reverted a working-looking build that did nothing, and t1200 refused to bank `dom +272` while
+  `css/selectors` was −289, fixed the cause, and re-measured to +272/+38.
+- **I7 (honest walls)** — held, and strengthened. t1201 deliberately left `getComputedStyle` OFF the
+  frame window and wrote the reason into the gate as an assertion (`gcsAbsent`) rather than a comment,
+  and named the 484 subtests it therefore does not close.
+
+### PART VI correction
+
+**What is now DONE that VI did not record:**
+
+- **Script preemption exists** (t1198, `G_SCRIPT_PREEMPTION`). VI.2's H0.1 row says incrementality is
+  the open half of a Bar 0 because *"every DOM mutation is O(document)"*; that is still true, but the
+  *other* Bar 0 in the same family — **a single task that never returns could not be stopped by any
+  bound the engine had** — is now closed. `MAX_TASKS_PER_DRAIN` and `MANUK_MAX_DRAIN_MS` are both
+  checked on the task boundary; a watchdog thread now issues `JS_RequestInterruptCallback` past the
+  budget. Measured cost on four real sites: **zero boxes**.
+- **`dom` is no longer a 60% area.** 6382 → **7147 (68.0%)** in four ticks, from four independent
+  mechanisms, with `html/dom` and `encoding` unchanged as controls each time.
+
+**What is now the real blocker, re-derived rather than recalled:** unchanged in kind and now sharper
+in name. VI.2's *"the M1 ceiling is 82.2–87.4% against a stated bar of 95%, and no amount of engine
+work closes it"* still stands and is still an **owner decision**. The loop's honest position is that
+it is climbing WPT (solid ground, monotonic, +975 this window) while the CrUX certification metric
+remains capped by an instrument defect nobody has been authorised to change.
+
+**The next lever in the current vein is named and measured:** **484 `css/selectors` subtests die on
+`global.getComputedStyle is not a function` inside a frame.** They are NOT closed by t1201, because
+`STYLES_PTR` is a single thread-local holding ONE page's style map — a frame node looked up there
+returns the parent's style. The fix is an **arena-aware style lookup**, which is a real subsystem
+change and the largest single measured item left in this vein.
+
+### STEER
+
+1. **Take the arena-aware style lookup** — 484 subtests, one named mechanism, and it retires a
+   documented *deliberate absence* rather than adding surface.
+2. **Keep the method that produced this window**: `wpt-leverage.sh`'s #1 row → run the area with
+   `--show-failures` → histogram the **assertion message** → probe the top **mechanism**. Four ticks,
+   four mechanisms, +975. Ask of each histogram row whether it is a **hard blocker** (forecastable) or
+   a **symptom** (a search ranking) before quoting a number.
+3. **Carry the sixth inflation mode into VI.3** — *calibrated on one corpus* — and apply its rule
+   generally: any new validator, ranker or gate is calibrated against at least two independently
+   authored populations, and both are committed with it.
+4. **A CrUX sweep is owed.** Eight ticks have landed since t1195's sweep, four of them capability
+   ticks; the certification checkpoint is unmeasured again. That is the same blind-on-its-own-headline
+   state check #111 named.
+
 ## Check #113 — tick 1185 (2026-08-12)
 
 **HORIZON: H0 — Pareto Web Parity.** **EXIT GATE (re-read from PART II, not recalled), all binary:**

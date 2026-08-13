@@ -3029,3 +3029,61 @@ be wrong, which is why the gate carries a claim naming that boundary rather than
 > CSSOM identity bug, and here `css/selectors` was a **string-splitting** bug in the shared list
 > parser. Rank by area to find the mass; read the failing test's helper — and then read what the
 > code it accuses actually *does* — to find the organ.
+
+## A frame's window had TWO properties, and one of them was `location` (t1201)
+
+Measured inside the WPT harness, on a real loaded frame:
+
+```text
+  HAVE    [document, location]
+  MISSING [DOMException, Node, Element, HTMLElement, Event, Document,
+           NodeFilter, Range, getComputedStyle, window, self, Object, Array, Function]
+```
+
+`contentWindow` was a hand-rolled object literal carrying `document`, `frameElement`, `location`
+and three no-ops. **Every platform interface object vanished at the frame boundary** — and a script
+inside a frame, or reaching into one, addresses the platform through `d.defaultView`.
+
+The cost concentrates in one line of WPT's own harness:
+
+```js
+  assert_throws_dom("SyntaxError", root.ownerDocument.defaultView.DOMException, () => …)
+```
+
+`defaultView.DOMException` was `undefined`, so `assert_throws_dom` died reading `.name` off it.
+**204 `dom` and 76 `css/selectors` subtests failed before any behaviour was tested** — the tests were
+not failing, they could not be *stated*. Both numbers were predicted from the histogram before the
+fix and both came back exact: `dom` 6943 → **7147 (+204)**, `css/selectors` 3681 → **3757 (+76)**,
+`html/dom` and `encoding` unchanged, 0 crashes.
+
+### Inheriting the parent's globals is the TRUTH here, not a pretence
+
+This engine gives a frame its own **document** (its own arena, `contentDocument` identity since
+t1193) but **not its own JS realm** — a limit `iframe_js` already states. One realm means
+`frameWin.Node` and `Node` genuinely *are* the same object, and `e instanceof frameWin.DOMException`
+genuinely *is* the right answer for an exception this realm threw. So the frame window inherits the
+parent global rather than being empty, and the gate asserts the **identity** (`sameConstructor`),
+not merely the presence — if a per-frame realm ever lands, that is the claim that must change.
+
+### A Proxy, not a prototype chain — and the RED probe shows why
+
+Two things a prototype cannot do:
+
+1. **`getComputedStyle` must stay ABSENT, not shadowed by `undefined`.** Its absence is reasoned:
+   `STYLES_PTR` is a single thread-local holding ONE page's style map, so a frame node looked up
+   there returns the **parent's** style. Exposing it converts a documented absence into a silently
+   wrong answer, and a property that exists and answers `undefined` is a feature-detection trap.
+2. **A write must land on the frame's OWN object**, and `Object.keys(frameWin)` must not enumerate
+   the parent global. Every embed stashes a ready flag or a message-port handle on its window.
+
+```text
+  RED 1  the object literal (the state before)   FAILED `missing[]`
+  RED 2  Object.setPrototypeOf(own, globalThis)  PASSES `missing[]`, FAILS `gcsAbsent`
+```
+
+RED 2 is the instructive one: the plausible one-line fix carries the platform across correctly and
+silently re-exposes the wrong-answer surface the module docs spent a paragraph excluding.
+
+⚠ **STILL OWED:** the 484 `css/selectors` subtests that die on `global.getComputedStyle is not a
+function` in a frame are **not** closed by this — they need the style lookup to become arena-aware,
+which is the deeper fix `iframe_js`'s module docs name. That is the next lever in this vein.

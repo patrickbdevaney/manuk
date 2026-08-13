@@ -1032,6 +1032,9 @@
   - L2998 · :not() had to become a list too — and it fails CLOSED where :is() fails open
   - L3014 · :where() shares :is()'s variant, and the boundary is stated
   - L3021 · Result
+  - L3033 · A frame's window had TWO properties, and one of them was location (t1201)
+  - L3059 · Inheriting the parent's globals is the TRUTH here, not a pretence
+  - L3068 · A Proxy, not a prototype chain — and the RED probe shows why
 
 ## THE FIDELITY INSTRUMENT — what it can and cannot see
 `docs/wiki/fidelity-instrument.md`
@@ -2043,4 +2046,4 @@
   - L124 · Rank mechanisms by FLIP RATE, not failing-subtest count — CSS layout is a multi-assertion slog
 
 ---
-1950 sections across 22 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+1953 sections across 22 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.

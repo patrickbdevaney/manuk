@@ -46371,6 +46371,89 @@ PERF: none — one UA rule and one narrowed branch in a cascade that already ran
 WIKI: `docs/wiki/css-cascade.md` — where Chrome draws the form-control `box-sizing` line, and why a
 layout-crate test cannot see it.
 
+## Tick 1201 — an iframe's window had TWO properties, and the platform vanished at the frame boundary (2026-08-13)
+
+TICK SHAPE: capability — the `dom` vein (still #1 at 1207), the mechanism t1200's residue named.
+
+**MEASURED FIRST, inside the WPT harness, on a real loaded frame:**
+
+```text
+  HAVE    [document, location]
+  MISSING [DOMException, Node, Element, HTMLElement, Event, Document,
+           NodeFilter, Range, getComputedStyle, window, self, Object, Array, Function]
+```
+
+`contentWindow` was a hand-rolled object literal with `document`, `frameElement`, `location` and
+three no-ops. **Every platform interface object was `undefined` at the frame boundary** — and a
+script inside a frame, or one reaching into it, addresses the platform through `d.defaultView`.
+
+The cost concentrates in ONE line of WPT's own harness:
+
+```js
+  assert_throws_dom("SyntaxError", root.ownerDocument.defaultView.DOMException, () => …)
+```
+
+`defaultView.DOMException` was `undefined`, so `assert_throws_dom` died reading `.name` off it.
+**The tests were not failing — they could not be STATED.**
+
+⚠⚠⚠ **BOTH NUMBERS WERE PREDICTED FROM THE HISTOGRAM BEFORE THE FIX AND BOTH CAME BACK EXACT:**
+
+```text
+  dom            6943 → 7147   (+204)   66.1% → 68.0%   0 crashes   ← predicted 204
+  css/selectors  3681 → 3757    (+76)   66.2% → 67.6%   0 crashes   ← predicted 76
+  html/dom      56445 → 56445     (0)           94.2%   0 crashes   ← control
+  encoding     360562 → 360562    (0)           32.0%   0 crashes   ← control, and it is
+                                                                       the FRAME-driven area
+  ────────────────────────────────────────────────────────────────
+  PRIMARY (active-areas)  86298 → 86578   70.71% → 70.94%
+```
+
+A prediction that lands exactly is worth recording precisely because this loop's own memory says the
+histogram is a **search ranking, not a forecast** (113 msgs → +12). It is a forecast when the
+messages are a *hard blocker* rather than a symptom: every one of these 280 was the same
+`undefined`, one property, one dereference from the assertion.
+
+**INHERITING THE PARENT'S GLOBALS IS THE TRUTH HERE, NOT A PRETENCE.** This engine gives a frame its
+own document (its own arena, `contentDocument` identity since t1193) but **not its own JS realm** — a
+limit `iframe_js`'s module docs already state. One realm means `frameWin.Node` and `Node` genuinely
+*are* the same object, and `e instanceof frameWin.DOMException` genuinely *is* the right answer for
+an exception this realm threw. The gate asserts the **identity** (`sameConstructor`), not merely the
+presence, so that a future per-frame realm has to come back and change it.
+
+⚠⚠ **A PROXY, NOT A PROTOTYPE CHAIN — AND RED PROBE 2 IS THE WHOLE ARGUMENT:**
+
+```text
+  RED 1  the object literal (the state before)   FAILED `missing[]`
+  RED 2  Object.setPrototypeOf(own, globalThis)  PASSES `missing[]`, FAILS `gcsAbsent`
+```
+
+The plausible one-line fix carries the platform across correctly and **silently re-exposes the
+wrong-answer surface the module docs spent a paragraph excluding**: `getComputedStyle` must stay
+ABSENT, because `STYLES_PTR` is a single thread-local holding ONE page's style map, so a frame node
+looked up there returns the **parent's** style. A property that exists and answers `undefined` is a
+feature-detection trap. A prototype chain also leaks writes and makes `Object.keys(frameWin)`
+enumerate the entire parent global; the Proxy's `set`/`ownKeys` traps keep both on the frame's own
+object, asserted by `writeIsolated` and `keysOwnOnly`.
+
+**REAL-SITE CONTROL** (`boxes --fetch`, both binaries, same hour): `news.ycombinator.com` 122,
+`en.wikipedia.org` 464, `theguardian.com` 128 — identical in both arms.
+
+⚠ **THE FIXTURE'S OWN LESSON, small but it cost two runs:** `Page::load` on a parent with **no
+`<script>` element** builds no JS global, so `eval_for_test` ran into nothing and the gate reported
+an empty string. The vacuity claim `frameLoaded:true` caught it immediately, which is what a vacuity
+claim is for; without it the gate would have passed on a page where nothing happened.
+
+⚠ **STILL OWED, named rather than discovered later:** 484 `css/selectors` subtests die on
+`global.getComputedStyle is not a function` inside a frame. They are NOT closed by this — they need
+the style lookup to become **arena-aware**, which is the deeper fix `iframe_js` names, and it is the
+next lever in this vein.
+
+PERF: one `Proxy` allocation per frame, once, cached on the element beside the window it wraps. The
+traps are on a frame window's property reads only; nothing on the main global changes. F1/F2 unmoved.
+
+WIKI: docs/wiki/dom-semantics.md — "A frame's window had TWO properties, and one of them was
+`location`"
+
 ## Tick 1200 — an invalid selector must THROW, and calibrating on ONE corpus cost 289 subtests (2026-08-13)
 
 TICK SHAPE: capability — the `dom` vein again (still #1 on `scripts/wpt-leverage.sh` at 1399), and

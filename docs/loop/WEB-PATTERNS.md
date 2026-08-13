@@ -5186,6 +5186,29 @@ draining the JS event loop to its 20,000-task ceiling, which has no wall-clock b
 images now arrive; the page is still slow for another reason. Same discipline as t608: **do not book
 "site X works now" from "one of site X's defects is gone."**
 
+## A frame's window had TWO properties, so the platform vanished at the frame boundary (tick 1201)
+
+| pattern | where it shows up | status |
+| --- | --- | --- |
+| Anything reached through a frame's window: `iframe.contentWindow.Node`, `d.defaultView.DOMException`, `frames[0].Event`, cross-frame `instanceof`, a ready flag stashed on `w`. `contentWindow` was an object literal with `document`, `frameElement`, `location` and three no-ops — **every platform interface object was `undefined`** | Ad and analytics frames, YouTube/Vimeo embeds, payment fields, OAuth frames, and every library that probes `iframe.contentWindow.<Ctor>` before touching a frame. In WPT it is one harness line: `assert_throws_dom(type, root.ownerDocument.defaultView.DOMException, fn)` — **204 `dom` + 76 `css/selectors` subtests could not be STATED**, let alone pass | ✅ fixed (tick 1201) — gated by **`G_FRAME_WINDOW_SURFACE`**; `dom` **6943 → 7147 (+204)**, `css/selectors` **3681 → 3757 (+76)**, both exactly as predicted |
+
+**Inheriting the parent's globals is the TRUTH here, not a pretence.** This engine gives a frame its
+own *document* but not its own *JS realm*, so `frameWin.Node` and `Node` really are one object. The
+gate asserts the **identity**, not the presence — if a per-frame realm ever lands, that is the claim
+that has to change.
+
+⚠⚠ **A Proxy, not a prototype chain, and the RED probe is the argument.** `Object.setPrototypeOf(own,
+globalThis)` passes the "platform is there" claim and **fails** the one that matters:
+`getComputedStyle` must stay **ABSENT**, because `STYLES_PTR` holds ONE page's style map and a frame
+node looked up in it returns the *parent's* style. A property that exists and answers `undefined` is
+a feature-detection trap; the plausible one-line fix silently re-exposes the wrong-answer surface the
+module docs spent a paragraph excluding. A write must also land on the frame's own object rather than
+the top-level page's global.
+
+⚠ **STILL OWED:** 484 `css/selectors` subtests die on `global.getComputedStyle is not a function`
+inside a frame. They need the style lookup to become **arena-aware**, which is a different and deeper
+fix than this one.
+
 ## try/catch around a selector is a FEATURE DETECT, and an engine that never throws always answers YES (tick 1200)
 
 | pattern | where it shows up | status |

@@ -34,9 +34,12 @@
 //! ## Stated limits, because a stub is worse than an absence
 //!
 //! * The child shares the parent's JS global. So a script *inside* a frame is not isolated from its
-//!   parent, and `contentWindow` is not a real `Window` — it carries `document`, `frameElement`,
-//!   `location` and the listener/`postMessage` no-ops, which is what the code in the wild actually
-//!   touches. Cross-origin restrictions are **not** enforced.
+//!   parent, and `contentWindow` is not a real `Window`: it carries `document`, `frameElement`,
+//!   `location`, `window`/`self`/`parent`/`top` and the listener/`postMessage` no-ops as its OWN
+//!   properties, and **inherits every platform interface object from the parent global** through a
+//!   Proxy (t1201). That inheritance is the literal truth about this engine rather than a
+//!   pretence — one realm means `frameWin.Node === Node` — but it is also exactly why a separate
+//!   realm per frame remains owed. Cross-origin restrictions are **not** enforced.
 //! * ⚠⚠ **`getComputedStyle` is deliberately ABSENT from that window, and the reason is a defect
 //!   one layer down, not an oversight.** `STYLES_PTR` is a single thread-local holding ONE page's
 //!   style map, and `window_get_computed_style` keeps only the `NodeId` from `node_and_dom`,
@@ -95,7 +98,7 @@ pub const IFRAME_JS: &str = r#"
       // embed and OAuth frame keeps — was written to an object thrown away on the next line.
       // Same rule as `el.sheet` and `f.contentDocument`; it was missing in all three.
       if (el.__manukWin) { return el.__manukWin; }
-      var win = {
+      var own = {
         // A GETTER, not the `d` captured above: the window object now outlives a single read, and a
         // frame that NAVIGATES gets a new document. Caching the value here would buy identity by
         // making the window permanently stale — the same live-and-stable pair `sheet.cssRules`
@@ -108,6 +111,58 @@ pub const IFRAME_JS: &str = r#"
         removeEventListener: function () {},
         postMessage: function () {}
       };
+
+      // ── **A FRAME'S WINDOW HAD TWO PROPERTIES, AND ONE OF THEM WAS `location`.**
+      //
+      // Measured inside the harness: `Node`, `Element`, `HTMLElement`, `Event`, `Document`,
+      // `DOMException`, `window`, `self` — every platform global — was `undefined` on this object.
+      // A script inside a frame, and every script that reaches INTO one, works through
+      // `d.defaultView`, so the whole platform vanished at the frame boundary. WPT's
+      // `assert_throws_dom(type, root.ownerDocument.defaultView.DOMException, fn)` could not even
+      // EXPRESS its assertion: 204 `dom` and 76 `css/selectors` subtests died reading `.name` off
+      // `undefined`, before any behaviour was tested.
+      //
+      // ⚠ **Inheriting the parent's globals here is not a pretence — it is the literal truth about
+      // this engine.** The child SHARES the parent's JS global (stated in the module docs above), so
+      // `frameWin.Node` and `Node` really are the same object, and `e instanceof frameWin.DOMException`
+      // really is the right answer for an exception this realm threw. A separate realm per frame is a
+      // different, larger piece of work; until it exists, ONE realm honestly reported beats a window
+      // with two properties.
+      //
+      // A Proxy rather than a prototype chain, for two reasons a prototype cannot give:
+      //   * `getComputedStyle` must stay **ABSENT**, not merely shadowed by `undefined` — a property
+      //     that exists and answers `undefined` is the feature-detection trap this file already
+      //     refuses elsewhere. `STYLES_PTR` is a single thread-local holding ONE page's style map, so
+      //     a frame node looked up there gets the PARENT's style: exposing it turns a documented
+      //     absence into a silently wrong answer. `has` reports false and `get` returns undefined.
+      //   * a `set` must land on the frame's OWN object. Every embed stashes a ready flag or a
+      //     message-port handle on its window; with a prototype chain those writes create own
+      //     properties here anyway, but the `has`/`getOwnPropertyDescriptor` answers would still be
+      //     the parent's, and `Object.keys(frameWin)` would enumerate the whole parent global.
+      var DENY = { getComputedStyle: 1 };
+      var win = new Proxy(own, {
+        get: function (t, k, r) {
+          if (Reflect.has(t, k) || DENY[k]) { return Reflect.get(t, k, r); }
+          return globalThis[k];
+        },
+        has: function (t, k) {
+          if (Reflect.has(t, k)) { return true; }
+          if (DENY[k]) { return false; }
+          return k in globalThis;
+        },
+        set: function (t, k, v) { return Reflect.set(t, k, v); },
+        deleteProperty: function (t, k) { return Reflect.deleteProperty(t, k); },
+        ownKeys: function (t) { return Reflect.ownKeys(t); }
+      });
+
+      // `window`/`self` are the frame's OWN window — the single most-read property on a window
+      // object, and the one a prototype chain would have silently answered with the PARENT's.
+      // `parent`/`top` point at the containing global, which for a one-level frame is the truth.
+      own.window = win;
+      own.self = win;
+      own.parent = globalThis;
+      own.top = globalThis;
+
       Object.defineProperty(el, '__manukWin', {
         value: win, configurable: true, enumerable: false, writable: false
       });

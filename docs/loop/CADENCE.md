@@ -11,12 +11,12 @@
 
 | | value | over |
 |---|---|---|
-| ticks landed | **902** | ticks 1–1200 |
-| median tick cycle | **28m** | 901 intervals |
-| median, last 10 | **37m** | 10 intervals |
+| ticks landed | **903** | ticks 1–1201 |
+| median tick cycle | **29m** | 902 intervals |
+| median, last 10 | **35m** | 10 intervals |
 | fastest / slowest | 5s / 5.4d | |
-| **ticks per hour** | **1.14** | 791.0h elapsed |
-| median verify wall | **63s** | 841 ticks |
+| **ticks per hour** | **1.14** | 791.5h elapsed |
+| median verify wall | **63s** | 842 ticks |
 | wall trend | 39s → 13m — getting slower ⚠️ | first 3 vs last 3 |
 
 The **cycle** is the real unit: implement → debug → verify wall → land. The wall is only part of
@@ -27,11 +27,11 @@ it, and a wall that grows taxes every future tick, so it is tracked separately f
 ### Near — the daily driver (doc / app / platform web)
 
 * **capabilities asserted** (`G_CAPABILITY`): 48 → **81**
-* **live gates**: 27 → **454**
-* **✅ rows in the capability ledger**: 144 → **594**
+* **live gates**: 27 → **455**
+* **✅ rows in the capability ledger**: 144 → **595**
 * **Bar 0 — oracle hangs**: 0 of 265 sites
 
-**406 of 902 ticks** (45%) moved a
+**407 of 903 ticks** (45%) moved a
 user-visible capability. The rest were instruments, infrastructure and corrections — and the
 ledger says the corrections were not overhead: three of its top three priorities were phantoms,
 and finding that out redirected everything after it.
@@ -90,7 +90,7 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 
 ## What a capability costs
 
-* **406** capability ticks, median cycle **28m**
+* **407** capability ticks, median cycle **29m**
 * median diff per tick: **+267 / −34** lines across 8 files
 
 ## Every tick
@@ -999,5 +999,6 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 | **1198** | 2026-08-13 02:46 | 40m | capability | 13m | +672/−44 | 452 | 81 | 56.0% · | the missing half was a THREAD, and preemption costs the four anchor sites ZERO boxes (2026 |
 | **1199** | 2026-08-13 03:19 | 33m | capability | 13m | +502/−44 | 453 | 81 | 56.0% · | `:nth-child` worked, so the family looked implemented — the other five returned NOTHING (2 |
 | **1200** | 2026-08-13 04:00 | 41m | capability | 13m | +1546/−37 | 454 | 81 | 56.0% · | an invalid selector must THROW, and calibrating on ONE corpus cost 289 subtests (2026-08-1 |
+| **1201** | 2026-08-13 04:35 | 35m | capability | 13m | +611/−41 | 455 | 81 | 56.0% · | an iframe's window had TWO properties, and the platform vanished at the frame boundary (20 |
 
 *`·` after a WPT figure means **carried forward**, not measured this tick.*
