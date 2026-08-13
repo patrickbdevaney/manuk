@@ -5186,6 +5186,27 @@ draining the JS event loop to its 20,000-task ceiling, which has no wall-clock b
 images now arrive; the page is still slow for another reason. Same discipline as t608: **do not book
 "site X works now" from "one of site X's defects is gone."**
 
+## A stylesheet has `@namespace` and `querySelector` does not (tick 1217)
+
+| pattern | where it shows up | status |
+| --- | --- | --- |
+| A CSS rule whose selector is invalid must be **dropped** from `document.styleSheets[n].cssRules`; we keep it | 114 `css/selectors` subtests, and any script that enumerates `cssRules` to audit or rewrite a sheet | ⏸ **REFUSED with the trap measured** (tick 1217) — the obvious fix regresses |
+| `@namespace x '…'; [x|lang='A']` — a rule using a DECLARED prefix. We already drop it | the same file records it: *"rule didn't parse into CSSOM expected 2 but got 1"* | ⏸ same fix owed |
+
+⚠⚠⚠ **THE TOOL WAS ALREADY IN HAND AND WOULD HAVE MADE THINGS WORSE.**
+`manuk_css::selector_syntax_error` (t1200, calibrated on three populations) answers *"is this
+selector valid"* — but its namespace rule is *"any non-`*` prefix is UNDECLARED, therefore
+invalid"*, which is **correct for `querySelector`** (no `@namespace` in scope — it is why WPT lists
+`ns|div` as invalid) and **wrong for a stylesheet**. Measured: it rejects `x|lang` and
+`[x|lang='A']`, both valid under a declaration.
+
+> **A rule is only as portable as the context it encodes.**
+
+Second instance in one session — t1210 nearly ported colour conversions that already existed because
+`parse_color` is the *MinimalCascade fallback*, not the engine. **Both times the check that caught it
+was running the thing rather than reading it.** The correct move is
+`selector_syntax_error_in_sheet(sel, declared_prefixes)`.
+
 ## Every property stored as a NORMALISED fraction has the same round-trip bug (tick 1216)
 
 | pattern | where it shows up | status |

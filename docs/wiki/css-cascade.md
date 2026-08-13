@@ -3302,3 +3302,34 @@ is cheaper than a dangling citation.
 
 **Nothing in that table is unexplained** — the state a census is for, and the state it was not in
 three ticks earlier. `css/css-backgrounds` **445 → 466 (+21)**.
+
+## A rule is only as portable as the context it encodes (t1217)
+
+`css/selectors` reports **114 subtests** of *"invalid rule parsed into CSSOM expected 0 but got 1"* —
+a stylesheet rule with an invalid selector must be **dropped** from `cssRules`, and we keep it. The
+tool is already in hand: `manuk_css::selector_syntax_error`, built at t1200 and calibrated against
+three independent populations.
+
+⚠⚠⚠ **And it would drop VALID rules.** Measured:
+
+```text
+   selector_syntax_error("[foo[")        →  REJECT   ✓ correct, and what the 114 want
+   selector_syntax_error("x|lang")       →  REJECT   ✗ VALID in a sheet declaring @namespace x
+   selector_syntax_error("[x|lang='A']") →  REJECT   ✗ same
+   selector_syntax_error("*|lang")       →  accept   ✓
+```
+
+The validator's rule is *"any non-`*` prefix is UNDECLARED, therefore invalid"*, which is **correct
+for `querySelector`** — there is no `@namespace` in scope there, which is exactly why WPT lists
+`ns|div` among its invalid selectors. **A stylesheet has `@namespace`.** And `css/selectors` already
+records the matching failure: `@namespace x '…'; [x|lang='A']` reports *"rule didn't parse into CSSOM
+expected 2 but got 1"* — **a rule we are already dropping and should not.**
+
+The correct move is a namespace-aware variant, `selector_syntax_error_in_sheet(sel,
+declared_prefixes)`, with the declarations threaded to the rule-insertion point.
+
+> **A rule is only as portable as the context it encodes.**
+
+Second instance in one session: t1210 nearly ported colour conversions that already existed, because
+`values.rs::parse_color` is the *MinimalCascade fallback* rather than the engine. Both times the
+check that caught it was **running the thing rather than reading it**.

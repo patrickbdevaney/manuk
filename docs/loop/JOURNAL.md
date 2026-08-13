@@ -46371,6 +46371,84 @@ PERF: none — one UA rule and one narrowed branch in a cascade that already ran
 WIKI: `docs/wiki/css-cascade.md` — where Chrome draws the form-control `box-sizing` line, and why a
 layout-crate test cannot see it.
 
+## Tick 1217 — the tool I built two ticks ago would REGRESS the thing it looks perfect for (2026-08-13)
+
+TICK SHAPE: measurement — a **refusal with the trap measured**, which is worth more than the tick it
+prevents.
+
+**THE LEVER LOOKS OBVIOUS AND IS ALREADY IN HAND.** `css/selectors` reports **114 subtests** of
+`assert_equals: invalid rule parsed into CSSOM expected 0 but got 1` — a stylesheet rule whose
+selector is invalid must be **dropped** from `document.styleSheets[n].cssRules`, and we keep it:
+
+```text
+   [foo[ /* sanity check (invalid) */        invalid rule parsed into CSSOM  expected 0 got 1
+   [foo='bar' i i]                           …
+   [foo i ='bar']                            …
+```
+
+`manuk_css::selector_syntax_error` — built at t1200, calibrated against **three** independent
+populations (WPT's 34+207, `css/selectors`' observed 112, and two selectors found throwing on a real
+site at t1203) — answers exactly that question. One call at the rule-insertion point.
+
+⚠⚠⚠ **AND IT WOULD DROP VALID RULES, BECAUSE A STYLESHEET HAS `@namespace` AND `querySelector` DOES
+NOT.** Measured, not reasoned:
+
+```text
+   selector_syntax_error("[foo[")        →  REJECT   ✓ correct, and what the 114 want
+   selector_syntax_error("x|lang")       →  REJECT   ✗ VALID in a sheet that declares @namespace x
+   selector_syntax_error("[x|lang='A']") →  REJECT   ✗ same
+   selector_syntax_error("*|lang")       →  accept   ✓
+```
+
+The validator's namespace rule is *"any non-`*` prefix is UNDECLARED, therefore invalid"*, and that
+is **correct for `querySelector`** — there is no `@namespace` in scope there, which is why WPT lists
+`ns|div` among its invalid selectors. In a **stylesheet** the prefix may be declared, and
+`css/selectors` has the matching failure already on record: `@namespace x '…'; [x|lang='A']` reports
+`rule didn't parse into CSSOM expected 2 but got 1` — **a rule we are ALREADY dropping and should
+not.** Applying the validator naively would turn 114 gains into an unknown number of losses on the
+same file, and the ratchet refuses that.
+
+**WHAT THE TICK IS, THEN:** the correct move is a **namespace-aware variant** —
+`selector_syntax_error_in_sheet(sel, declared_prefixes)` — where the prefix rule consults the
+sheet's `@namespace` declarations instead of assuming none. That is a real change with a real input
+(the declarations must reach the rule-insertion point), and it is written down here rather than
+half-built at hour sixteen of a nineteen-tick session.
+
+⚠ **THE GENERAL FORM, because this is the second time this session one context's rule was nearly
+applied in another:** t1210 nearly ported colour conversions that already existed because
+`values.rs::parse_color` is the *MinimalCascade fallback* and not the engine. Here a validator
+written for a context with **no namespace declarations** was nearly applied to one that has them.
+**A rule is only as portable as the context it encodes** — and both times the check that caught it
+was running the thing rather than reading it.
+
+**THE BOARD AS THIS SESSION LEAVES IT**, every row classified by construct rather than guessed:
+
+```text
+   css/css-values   40.6%   50.9% unshipped        REFUSED (t1204)
+   css/css-color    57.2%   94.0% ONE SUBSYSTEM    the CSSOM colour-space TYPE CHANGE (t1210)
+   css/selectors    67.6%    5.2% unshipped        PASSES — 308 = frame ReflowCtx (design t1213)
+                                                            114 = this rule, needs @namespace
+   dom              77.5%    3.4% unshipped        PASSES — worked 7× this session
+```
+
+CONSTITUTION CHECK #116 (due every 8 ticks, last 1209; run at 1217) — **the exit-gate clause that
+moved this window is *"every rendered construct queryable through the in-process semantic API"*, and
+it moved because an instrument was built to ASK rather than because a test failed.** The CSSOM census
+asked all 215 properties, found 107 silent, split them 15 lossy / 92 honest, and the worklist was
+finished in two ticks. **Nothing was failing loudly; the properties simply were not there.** I3 as a
+gate rather than a slogan. ⚠ **A THIRD RANKING INSTRUMENT EARNED ITS PLACE:** `orient` (which area),
+the construct classifier (is this area's mass shippable), and now **the census** (what can this
+surface not say) — and the census is the only one that finds work nothing is failing about. ⚠ **The
+one place the loop bent itself:** three diagnoses published from an artefact rather than a code path,
+each caught within a tick by running the thing; the fix that works is making the probe the FIRST step
+rather than the verification. STEER (full text in check #116): take the `css/css-color` CSSOM
+colour-space type change · run a CrUX sweep **with a same-hour old-binary control** · keep the probe
+first · the census is reusable — `el.style`'s IDL surface is the next obvious subject.
+
+PERF: none — measurement only.
+
+WIKI: docs/wiki/css-cascade.md — "A rule is only as portable as the context it encodes"
+
 ## Tick 1216 — the last two lossy names, and the same round-trip bug for the THIRD time (2026-08-13)
 
 TICK SHAPE: capability — the tail of t1214's census. **All nine non-grid lossy names are now closed**,

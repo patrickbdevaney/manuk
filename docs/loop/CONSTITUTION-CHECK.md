@@ -8726,6 +8726,107 @@ reading in 24 ticks, so this line is inherited, not observed** — and saying so
    five ticks the area ranker named the wrong organ (unshipped spec; a CSSOM identity bug; a
    `split(',')`). The ranker finds mass, never mechanism.
 
+## Check #116 — tick 1217 (2026-08-13)
+
+**HORIZON: H0 — Pareto Web Parity.** **EXIT GATE (re-read from PART II, not recalled), all binary:**
+~83% WPT subtest pass **across categories** · differential-oracle-verified viability across all four
+usage-weighted corpora · the headful shell daily-drivable by its own developer · **every rendered
+construct queryable through the in-process semantic API.** PART VII: WPT is the CLIMB, CrUX M1/M2 is
+the CERTIFICATION.
+
+### → Did the last 8 ticks (1210–1217) move an EXIT-GATE condition, or only the scoreboard?
+
+**Gate — and the fourth exit-gate clause specifically, which this loop has barely touched in a
+hundred ticks.**
+
+```text
+   t1210  alpha round-trip; check #115's steer RETRACTED            +39
+   t1211  characterSet — the ORDERING was the fix                  +625
+   t1212  referrer, found by SWEEPING the constant-getter class      +0
+   t1213  frame-ReflowCtx DESIGN + surface audit #60/#61              —
+   t1214  the CSSOM census: 215 asked, 107 silent, 15 lossy           —
+   t1215  seven lossy names closed                                  +80
+   t1216  the last two, and the round-trip bug's THIRD instance     +21
+   t1217  REFUSED the CSSOM rule fix, with the trap measured          —
+   ───────────────────────────────────────────────────────────────────────
+   PRIMARY (active areas)   87002 → 87728      71.29% → 71.88%
+   over the whole session   85603 → 87728      70.14% → 71.88%   0 crashes throughout
+```
+
+⚠⚠⚠ **THE CLAUSE THAT MOVED IS *"every rendered construct queryable through the in-process semantic
+API"* — and it moved because an instrument was built to ASK, not because a test failed.** The census
+(t1214) asked all 215 CSS properties whether the CSSOM can say them: **107 could not**, and splitting
+that into **15 lossy / 92 honest** turned a vague unease into a nine-item worklist that was finished
+in two ticks. Every one of those nine is a *rendered construct that was not queryable* — the exit
+gate's own words. **Nothing was failing loudly; the properties simply were not there.**
+
+That is I3 operating as a gate rather than as a slogan, and it is the answer to *"gate or
+scoreboard?"* for this window.
+
+### → Is `orient`'s ranking (usage-weighted breadth, tail excluded, §VI.3) still the north star?
+
+**Yes, and the construct classifier is now doing the ranking's honest work in BOTH directions** —
+`dom` 3.4% and `css/selectors` 5.2% (taken), `css/css-values` 50.9% (refused), `css/css-color` 94.0%
+(promoted as one subsystem). Every row on the board is now classified by a number rather than a
+guess, which was not true eight ticks ago.
+
+⚠⚠⚠ **AND A THIRD INSTRUMENT EARNED ITS PLACE THIS WINDOW: THE CENSUS.** The loop had `orient`
+(which area), the classifier (is this area's mass shippable), and now *enumerate a surface and ask
+what it cannot say*. The three answer different questions and the census is the only one that finds
+**work nothing is failing about**. Its output is not a list of bugs — it is a **worklist with a
+question attached to each row**, and six of the fifteen came back *"silent on purpose"* with a
+citation. **A census's value is that it makes NOT doing something a decision with a reason.**
+
+### → Is any invariant being bent?
+
+- **I5 (never trade a regression)** — held, and **exercised in a new way**: t1217 refused a fix that
+  would have bought 114 subtests and lost an unmeasured number on the same file, because
+  `selector_syntax_error`'s *"any prefix is undeclared"* rule is right for `querySelector` and wrong
+  for a stylesheet with `@namespace`. **Measured before refusing, not argued.**
+- **I7 (honest walls)** — held repeatedly: six grid properties left silent *with the reason written
+  down*; `G_COMPUTED_LOSSY_SEVEN` kept its stale name rather than dangle t1215's citations; the XML
+  parser's lowercasing pinned in a gate.
+- **I2 / I3 / I4** — held. Nothing vendored touched; no rendered construct added without its query
+  surface; no tail work taken.
+
+⚠ **The one place the loop bent itself, and it is worth naming:** **three diagnoses published from an
+artefact rather than a code path** (t1204's `object-position`, t1208's XML routing, t1210's colour
+conversions), each caught within a tick by *running the thing*. The rule already existed. The
+correction that worked was making the probe **the first step rather than the verification** — at
+t1210 it cost four minutes; at t1204 it cost a tick.
+
+### PART VI correction
+
+**What is now DONE that VI did not record:** the CSSOM is no longer an unmeasured surface. 215
+properties enumerated, 107 silences classified, nine closed, six deliberately kept with citations.
+`dom` is 77.5% (from 60.8%). Script preemption exists. A frame carries the platform, its own
+computed style, its own encoding, its own referrer, and the parser its content type names.
+
+**What is now the real blocker:** unchanged and still an **owner decision** — VI.2's M1 ceiling of
+82.2–87.4% against a stated 95% bar. The t1203 sweep measured it again: M1 flat at 20.0%,
+scorability up to 74.6%, and a **negative** drift-robust common-set delta that was not attributable
+without an old-binary control.
+
+**Three named, measured, ordered levers:**
+
+1. **`css/css-color`'s CSSOM colour-space type change** — ~4,400 subtests, one subsystem. The
+   conversions already exist and are correct (t1210); the computed value must preserve its space.
+2. **A frame-owned `ReflowCtx`** — 308 subtests; design and the borrow hazard written at t1213.
+3. **`selector_syntax_error_in_sheet(sel, declared_prefixes)`** — 114 + the `@namespace` rules we
+   currently drop; the trap is measured at t1217.
+
+### STEER
+
+1. **Take the colour-space type change.** It is the largest coherent mechanism on the board and the
+   only one whose size is measured rather than estimated.
+2. **Run a CrUX sweep WITH a same-hour old-binary control** — check #115 asked for this and it has
+   not happened; without it the common-set delta stays unattributable.
+3. **Keep the probe FIRST.** Three published-then-retracted diagnoses in one session all had the
+   same fix and it costs minutes.
+4. **The census is a reusable instrument, not a one-off** — the obvious next surfaces are the
+   `el.style` IDL surface (t1171's *"not one CSS property name answers `in` on `el.style`"*) and the
+   event-handler attribute surface.
+
 ## Check #115 — tick 1209 (2026-08-13)
 
 **HORIZON: H0 — Pareto Web Parity.** **EXIT GATE (re-read from PART II, not recalled), all binary:**
