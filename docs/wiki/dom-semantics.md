@@ -2960,3 +2960,72 @@ two of them frame windows — and dies on `global.getComputedStyle is not a func
 > changed is that a node in an `<iframe>` stopped reporting the parent's document — a wrong answer
 > of the right type, delivered with total confidence, on the #1 platform-web capability. The honest
 > report is *"the instrument cannot price this"*, not *"this bought +2"*.
+
+## `querySelectorAll('.a :is(.b, .c)')` returned an EMPTY LIST — and `:is()` was not the bug (tick 1194)
+
+Two defects, and the interesting one is not the missing feature.
+
+**The visible half:** `manuk_css`'s selector matcher — the one behind `querySelector`,
+`querySelectorAll`, `matches` and `closest` — had a `Pseudo` enum with `Not` and `Has` and **no
+`Is`/`Where`**. Both fell through the parser's `_ => return None` arm, which drops the **whole
+selector**, not the unknown part. `:is()`/`:where()` are Baseline and are how every modern
+stylesheet writes a grouped rule (`.card :is(h1, h2, h3)`), so the silence was broad — and silent:
+no error, no warning, an empty NodeList.
+
+**The root cause, which has nothing to do with `:is()`:**
+
+```rust
+fn parse_selector_list(text: &str) -> Vec<Selector> {
+    text.split(',')          // ← blind to parentheses
+```
+
+A comma inside a functional pseudo is an **argument** separator, not a **list** separator. So:
+
+```text
+  .a :is(.b, .c)        →  ".a :is(.b"   +  ".c)"
+  p:has(> img, > svg)   →  "p:has(> img" +  "> svg)"
+  :not(.a, .b)          →  ":not(.a"     +  ".b)"
+```
+
+The first fragment carries an unbalanced `(` and parses as though the list held only its first
+member; the second is garbage and is dropped.
+
+> **It did not fail loudly — it quietly matched a SUBSET.** That is the worst of the three possible
+> outcomes and is exactly why it survived: `:is(.b, .c)` returned the `.b` elements and looked like
+> it worked. A paren-aware `split_top_level_commas` was already in the same file, already used by
+> the `:has()` arm, three thousand lines away.
+
+### `:not()` had to become a list too — and it fails CLOSED where `:is()` fails open
+
+`Not(Box<Compound>)` could not represent `:not(.a, .b)` (Baseline) or `:not(.a .b)` (complex
+member). It is now `Not(Vec<Selector>)`, matching when **none** match.
+
+The forgiveness rules are deliberately **opposite**, and the RED probe shows why:
+
+| pseudo | invalid member | why |
+|---|---|---|
+| `:is()`, `:has()` | **dropped**, rest still apply | matching fewer things is a safe degradation |
+| `:not()` | **whole pseudo invalid** | dropping a member **INVERTS** — it matches strictly MORE |
+
+With the naive split restored, `.a span:not(.b, .c, .e)` returned **3 elements instead of 1**: it had
+silently become `:not(.b)`. A dropped `:is()` member reads as "unsupported"; a dropped `:not()`
+member reads as a correct answer to a different question.
+
+### `:where()` shares `:is()`'s variant, and the boundary is stated
+
+They differ only in **specificity** — `:where()` contributes zero — and this matcher answers *"does
+it match"* for `querySelector`/`matches`/`closest`, where specificity is never consulted. The live
+cascade is Stylo's and computes specificity itself. Folding them anywhere specificity IS read would
+be wrong, which is why the gate carries a claim naming that boundary rather than leaving it implied.
+
+### Result
+
+**`css/selectors` 3250 → 3547 (+297)** — `css/selectors/query` **0/12 → 12/12 (100%)**,
+`invalidation` 2031 → 2274 (+243), the area root +42. `dom` and `css/css-values` re-measured
+**unchanged** as controls. HANG/CRASH 0. PRIMARY WPT **69.90% → 70.14%**, the first reading above 70.
+
+> **The biggest tick of the session came from a `split(',')`.** Third time in five ticks that the
+> area ranker named the wrong organ: `domparsing` was unshipped spec, `css/selectors/parsing` was a
+> CSSOM identity bug, and here `css/selectors` was a **string-splitting** bug in the shared list
+> parser. Rank by area to find the mass; read the failing test's helper — and then read what the
+> code it accuses actually *does* — to find the organ.

@@ -8649,6 +8649,83 @@ VI.2's method list rather than leaving it as two anecdotes.
    repeat and did not prevent it. A prediction in a comment is not a gate. `scripts/` is
    observer-owned, so this is a request, filed here and in the journal.
 
+## Check #114 — tick 1193 (2026-08-12)
+
+### The horizon and its gate
+
+**H0 / Phase-0 EXIT is unchanged: real-site drivability** — the `DAILY-DRIVER-CERTIFICATION.md`
+conjunction (Bar 0 + jarring-clean + shape ≥ 0.75 on ≥ 95% of the in-scope corpus + interactivity),
+certified against CrUX. **WPT is the CLIMB, CrUX is the CERT** (owner, 2026-08-11). Nothing here
+moves the exit.
+
+### Gate, or scoreboard? — the honest answer is BOTH, and the imbalance is the finding
+
+The five ticks since check #113 (t1190 XML parsing, t1191 `cssRules` identity, t1192 computed-style
+coercion, t1193 frame window/document identity, t1194 `:is()`/`:where()` + the selector-list split)
+are **real capability, not scoreboard padding** — each is a construct the live web uses, each has a
+RED-proven gate, and two of them (the `split(',')` and the frame `ownerDocument`) were producing
+**confidently wrong answers**, not absences. PRIMARY WPT 69.75% → **70.14%**.
+
+**But every one of them was ranked, chosen and verified against WPT, and NONE was measured against
+the exit.** That is the drift, and it is now explicit:
+
+⚠⚠⚠ **CHECK #113's STEER #1 WAS *"NEXT TICK: RUN THE CrUX FIDELITY SWEEP — six engine ticks are
+unmeasured against the exit."* IT WAS NOT RUN. Eight ticks later the count is THIRTEEN, and
+`progress-metric.sh` is still reading `SWEEP-t1170-rows.tsv` — a sweep from TWENTY-FOUR ticks ago.**
+The gauge's last honest numbers are therefore: scorability 80.5%, shape-only 31.6%,
+jarring-clean 29.3%, **M1 conjunction 18.8%**, corpus fidelity 0.4548 — all describing an engine
+that no longer exists.
+
+This is the exact failure the self-audit calls *prescribed-but-not-executed*, and a constitution
+check that merely repeats last check's unexecuted steer is not a check, it is a second opinion. The
+reason it slipped is legible and worth naming: **the WPT loop is fast and self-rewarding** (measure
+area → fix mechanism → re-measure area → land, ~30 min), while the sweep is slow and returns a
+number that does not move per-tick. The gradient is steeper on the hill that is not the mountain —
+which is the precise wording of why this instrument exists (tick 84).
+
+### Invariants
+
+- **I5 (never trade a regression)** — held, and exercised deliberately: every tick this window
+  carried a re-measured CONTROL area (`dom` and `css/css-values`, unchanged at 4241/7049 and
+  1705/4201 across three separate fixes), so "no regression" is a reading rather than an assumption.
+- **I3 (semantic model)** — held, and t1193 is the interesting case: it *repaired* I3 rather than
+  bending it. A node inside an `<iframe>` had been reporting the PARENT's `document`, so the agent's
+  view of a framed page was wrong-with-confidence; that is now correct.
+- **I2 (never patch deps)** — held. t1190 ADDED `xml5ever` as a dependency rather than vendoring or
+  patching html5ever, and reused the existing `markup5ever::TreeSink` unchanged.
+- **PART VII (harness is observer-owned)** — held under pressure: the wall self-purged mid-run and
+  produced five RED gates; diagnosed from the wall's own `BUILD FAILED … NOT a verdict about the
+  engine` banners and the 94%→55% disk drop, re-run clean, and **no `scripts/` file touched**. The
+  self-audit's one open item (verify wall 978s vs the 300s target) is also harness-owned; it was
+  recorded with the three green receipts (273s / 1011s / 819s) that prove the regression is real
+  rather than a purge artefact — which is what I first assumed and checked before writing down.
+
+### PART VI correction
+
+**Now DONE that VI did not record:** the querySelector-path selector engine had a
+**parenthesis-blind list splitter** — every functional pseudo taking a comma list (`:is`, `:where`,
+`:not`, `:has`) was silently matching a SUBSET; closed t1194 (`css/selectors` +297, `query` 0→100%).
+Document identity is now stable across all four sites it was missing (`sheet.cssRules`,
+`contentWindow`, `contentDocument`, plus the `ownerDocument` arena question).
+
+**Now the real blocker — and check #113's naming of it still stands, unmeasured:** M1's conjunction
+against the 95% bar, with scorability capping it. **The blocker has not been re-derived from a live
+reading in 24 ticks, so this line is inherited, not observed** — and saying so is the correction.
+
+### STEER
+
+1. ⚠⚠⚠ **THE NEXT TICK IS THE CrUX FIDELITY SWEEP, AND IT IS NOT OPTIONAL THIS TIME.** It was
+   deferred once already. Thirteen engine ticks — including two that fixed confidently-wrong answers
+   on the platform-web's #1 capability — are unmeasured against the exit, and the M1 blocker is
+   being asserted from a 24-tick-old reading. Run it, publish BOTH halves (the gain and the loss),
+   and re-derive PART VI's blocker from the result rather than from this file.
+2. **Then `css/css-grid`** — still the largest measured WPT surface and the M1 body; PORT from
+   `blitz/` and `servo/`. Unchanged from #113 and still correct.
+3. **Standing, promoted from three ticks of evidence:** rank by area to find the mass → read the
+   failing test's **helper** → then read what the code it accuses actually **does**. Three times in
+   five ticks the area ranker named the wrong organ (unshipped spec; a CSSOM identity bug; a
+   `split(',')`). The ranker finds mass, never mechanism.
+
 ## Check #113 — tick 1185 (2026-08-12)
 
 **HORIZON: H0 — Pareto Web Parity.** **EXIT GATE (re-read from PART II, not recalled), all binary:**

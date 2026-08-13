@@ -1022,6 +1022,10 @@
   - L2921 · ownerDocument asked the wrong question — and it is t643 one boundary further out
   - L2934 · What was deliberately NOT added, and why absence beats a stub
   - L2953 · Result, and what the number cannot see
+  - L2964 · querySelectorAll('.a :is(.b, .c)') returned an EMPTY LIST — and :is() was not the bug (tick 1194)
+  - L2998 · :not() had to become a list too — and it fails CLOSED where :is() fails open
+  - L3014 · :where() shares :is()'s variant, and the boundary is stated
+  - L3021 · Result
 
 ## THE FIDELITY INSTRUMENT — what it can and cannot see
 `docs/wiki/fidelity-instrument.md`
@@ -2029,4 +2033,4 @@
   - L124 · Rank mechanisms by FLIP RATE, not failing-subtest count — CSS layout is a multi-assertion slog
 
 ---
-1936 sections across 22 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+1940 sections across 22 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.

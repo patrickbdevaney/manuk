@@ -1990,7 +1990,16 @@ enum Pseudo {
     Open,
     Link,
     /// `:not(<compound>)` — a single inner compound (no combinators).
-    Not(Box<Compound>),
+    /// `:not(...)` — a COMPLEX selector list; the element matches when **none** of them do.
+    ///
+    /// A list, not a single compound: `:not(.a, .b)` is Selectors 4 and Baseline, and `:not(.a .b)`
+    /// takes a complex member. Holding one `Compound` made both unparsable, which dropped the whole
+    /// selector rather than the pseudo.
+    Not(Vec<Selector>),
+    /// `:is(...)` / `:where(...)` — a forgiving list of COMPLEX selectors, matched with the
+    /// element under test as the subject. `:where()` shares this variant because the two differ
+    /// only in specificity, which this matcher never consults (see the parse site).
+    Is(Vec<Selector>),
     /// **`:has(<relative-selector-list>)` — hand-rolled, because Stylo's *servo* build DISCARDS it.**
     ///
     /// `parse_has()` returns `false` there (Gecko's returns `true`), so a selector containing `:has()`
@@ -2327,7 +2336,9 @@ fn pseudo_matches(p: &Pseudo, dom: &Dom, node: NodeId) -> bool {
         Pseudo::Link => {
             matches!(el.name.as_str(), "a" | "area" | "link") && el.attr("href").is_some()
         }
-        Pseudo::Not(inner) => !compound_matches(inner, dom, node),
+        Pseudo::Not(list) => !list.iter().any(|s| selector_matches(s, dom, node)),
+        // Any member matching, with THIS node as the subject, is a match.
+        Pseudo::Is(list) => list.iter().any(|s| selector_matches(s, dom, node)),
         // `:has(...)` — does ANY element in the anchor's relative scope match the branch selector?
         //
         // ⚠⚠⚠ **`:has()` WAS QUADRATIC, AND ONE WPT TEST IS NAMED AFTER EXACTLY THAT.**
@@ -3526,8 +3537,28 @@ fn skip_at_rule(src: &str, start: usize) -> usize {
     i
 }
 
+/// Split a selector list on its TOP-LEVEL commas and parse each branch.
+///
+/// ⚠⚠⚠ **This was `text.split(',')` — a naive split that does not see parentheses — and it is the
+/// root cause `:is()` merely exposed.** A comma inside a functional pseudo is an argument
+/// separator, not a list separator, so every one of these was cut in half:
+///
+/// ```text
+///   .a :is(.b, .c)        →  ".a :is(.b"   +  ".c)"
+///   p:has(> img, > svg)   →  "p:has(> img" +  "> svg)"
+///   :not(.a, .b)          →  ":not(.a"     +  ".b)"
+/// ```
+///
+/// The first fragment has an unbalanced `(` and parses as though the list held only its first
+/// member; the second is garbage and is dropped. So the selector did not fail loudly — it
+/// **quietly matched a subset**, which is the worst of the three possible outcomes and is why it
+/// survived: `:is(.b, .c)` returned the `.b` elements and looked like it worked.
+///
+/// `split_top_level_commas` — already in this file, already used by the `:has()` arm — is
+/// parenthesis-aware and is what this should always have called.
 fn parse_selector_list(text: &str) -> Vec<Selector> {
-    text.split(',')
+    split_top_level_commas(text)
+        .iter()
         .filter_map(|s| parse_selector(s.trim()))
         .collect()
 }
@@ -3875,9 +3906,55 @@ fn parse_pseudo(name: &str, arg: Option<&str>) -> Option<Pseudo> {
             let (a, b) = parse_nth(arg?)?;
             Pseudo::NthChild(a, b)
         }
+        // ⚠ `:not()` is NOT forgiving — unlike `:is()`/`:has()`. Selectors 4 is explicit: an
+        // invalid member makes the whole `:not()` invalid, because dropping one would INVERT the
+        // meaning of the rest (`:not(.a, ??)` silently becoming `:not(.a)` matches strictly more,
+        // not less). So this fails closed on any unparsable member, and `:is()` above does not.
         "not" => {
-            let inner = parse_compound(arg?.trim())?;
-            Pseudo::Not(Box::new(inner))
+            let mut list = Vec::new();
+            for raw in split_top_level_commas(arg?) {
+                list.push(parse_selector(raw.trim())?);
+            }
+            if list.is_empty() {
+                return None;
+            }
+            Pseudo::Not(list)
+        }
+        // **`:is()` / `:where()` — a FORGIVING list of COMPLEX selectors, matched with this element
+        // as the subject.**
+        //
+        // Both fell through to the `_ => return None` arm below, which drops the WHOLE selector —
+        // so `document.querySelectorAll('.a :is(.b, .c)')` returned **nothing at all**, not a
+        // partial answer. They are Baseline CSS and the standard way every modern stylesheet and
+        // component library writes a grouped rule (`.card :is(h1, h2, h3)`), so the silence was
+        // broad.
+        //
+        // The list members are COMPLEX, not compound (`:is(.e + .f, .g > .b)` is legal), which is
+        // why this reuses `parse_selector`/`selector_matches` rather than the compound pair `:not`
+        // uses — matching a complex selector with a given node as the subject is exactly what
+        // `selector_matches` already does.
+        //
+        // FORGIVING means an unparsable member is DROPPED and the rest still apply — `:is(.a, 123)`
+        // matches `.a`, and only an entirely unusable list makes the selector fail. That is the same
+        // rule `:has()` implements one arm down, and it is why `:is()` cannot take a stylesheet with
+        // it the way an unknown pseudo does.
+        //
+        // ⚠ `:where()` is IDENTICAL here on purpose. The two differ only in SPECIFICITY — `:where()`
+        // contributes zero — and this matcher answers *"does it match"* for
+        // `querySelector`/`matches`/`closest`, where specificity is not consulted. The live cascade
+        // is Stylo's and computes specificity itself, so nothing downstream of this needs the
+        // distinction. Collapsing them anywhere specificity IS read would be wrong.
+        "is" | "where" | "matches" | "-webkit-any" | "-moz-any" => {
+            let mut list = Vec::new();
+            for raw in split_top_level_commas(arg?) {
+                if let Some(sel) = parse_selector(raw.trim()) {
+                    list.push(sel);
+                }
+            }
+            if list.is_empty() {
+                return None;
+            }
+            Pseudo::Is(list)
         }
         "has" => {
             // A forgiving relative-selector list: `:has(> .a, + .b, .c)`. A branch we cannot parse is

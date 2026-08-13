@@ -46371,6 +46371,94 @@ PERF: none — one UA rule and one narrowed branch in a cascade that already ran
 WIKI: `docs/wiki/css-cascade.md` — where Chrome draws the form-control `box-sizing` line, and why a
 layout-crate test cannot see it.
 
+## Tick 1194 — `querySelectorAll('.a :is(.b, .c)')` returned an EMPTY LIST, and `:is()` was not the bug (2026-08-12)
+
+TICK SHAPE: capability — the largest tick of the session, and the root cause was a `split(',')`.
+Gate `G_IS_WHERE_SELECTORS` (15 claims), 2 RED probes.
+
+⚠⚠ **THE VISIBLE HALF.** `manuk_css`'s matcher — behind `querySelector`, `querySelectorAll`,
+`matches` and `closest` — had a `Pseudo` enum with `Not` and `Has` and **no `Is`/`Where`**. Both
+fell through the parser's `_ => return None` arm, which drops the **whole selector**, not the
+unknown part. `:is()`/`:where()` are Baseline and are how every modern stylesheet writes a grouped
+rule; the failure was an empty NodeList with no error.
+
+⚠⚠⚠ **THE ROOT CAUSE, WHICH HAS NOTHING TO DO WITH `:is()`:** `parse_selector_list` was
+`text.split(',')` — **blind to parentheses**. A comma inside a functional pseudo is an ARGUMENT
+separator, not a LIST separator, so `.a :is(.b, .c)` was cut into `".a :is(.b"` + `".c)"`,
+`p:has(> img, > svg)` into `":has(> img"` + `"> svg)"`, and `:not(.a, .b)` likewise. The first
+fragment carries an unbalanced `(` and parses as though the list held only its FIRST member; the
+second is garbage and is dropped.
+
+**It did not fail loudly — it quietly matched a SUBSET.** That is the worst of the three possible
+outcomes and is precisely why it survived: `:is(.b, .c)` returned the `.b` elements and looked like
+it worked. ⚠ A paren-aware `split_top_level_commas` was **already in the same file, already used by
+the `:has()` arm**, three thousand lines away.
+
+⚠⚠ **`:not()` HAD TO BECOME A LIST TOO — AND IT FAILS *CLOSED* WHERE `:is()` FAILS OPEN.**
+`Not(Box<Compound>)` could not represent `:not(.a, .b)` (Baseline) or a complex member. The
+forgiveness rules are deliberately OPPOSITE: `:is()`/`:has()` drop an invalid member and apply the
+rest (matching fewer things is a safe degradation), while `:not()` invalidates entirely — **dropping
+a `:not()` member INVERTS the meaning and matches strictly MORE**. RED probe 1 demonstrates it:
+with the naive split restored, `.a span:not(.b, .c, .e)` returns **3 elements instead of 1**,
+because it had silently become `:not(.b)`. A dropped `:is()` member reads as "unsupported"; a
+dropped `:not()` member reads as a **correct answer to a different question**.
+
+✅ `:where()` shares `:is()`'s variant on purpose — they differ only in SPECIFICITY, which this
+matcher never consults (the live cascade is Stylo's and computes its own). The gate carries a claim
+naming that boundary rather than leaving it implicit.
+
+**MEASURED (release binary, foreground):**
+
+| area | before | after |
+|---|---|---|
+| `css/selectors` | 3250/5560 (58.5%) | **3547/5560 (63.8%)** — +297 |
+| ↳ `css/selectors/query` | 0/12 (0.0%) | **12/12 (100%)** |
+| ↳ `css/selectors/invalidation` | 2031/2913 | **2274/2913** — +243 |
+| `dom` (first 230) | 4241/7049 | **unchanged** (control) |
+| `css/css-values` | 1705/4201 | **unchanged** (control) |
+
+HANG/CRASH 0. PRIMARY **69.90% → 70.14%** — the first reading above 70.
+
+⚠⚠⚠ **THIRD TIME IN FIVE TICKS THE AREA RANKER NAMED THE WRONG ORGAN.** t1190 `domparsing` was 65%
+unshipped `tentative/`; t1191 `css/selectors/parsing` was a CSSOM identity bug; here `css/selectors`
+was a **string-splitting bug in the shared list parser**. The rule is now three steps, and each was
+earned: **rank by area to find the mass → read the failing test's HELPER → then read what the code
+it accuses actually DOES.** Step 3 is this tick's addition: the histogram accused the selector
+engine, the helper exonerated it, and the defect was in a `split(',')` neither of them mentions.
+
+⚠ **THREE OF MY OWN CLAIMS WERE WRONG AND THE ENGINE WAS RIGHT** (`.e + .f` selects the `.f`, not
+both; `:where(.b)` inside `:is()` also matches the nested `b2`; `span:not(.b,.c,.e)` leaves exactly
+one span). Each was corrected against the output rather than argued with — worth recording because
+the gate's value depends on its claims being derived from the spec and the fixture, not from what I
+expected to see.
+
+BOARD: on-mandate — `css/selectors` is the board's #2 leverage row, moved by a shared mechanism, and
+the fix is one line of the kind the PORT-don't-reverse-engineer steer is meant to find.
+
+REMAINDER, adjacent and now cheap: `css/selectors/media` is 3/18 and `selectors-4` 2/10, both
+untouched by this and both small enough to read directly.
+
+CONSTITUTION CHECK #114 (due every 8 ticks; last 1185, run here): recorded in
+`docs/loop/CONSTITUTION-CHECK.md`. ⚠⚠⚠ **The honest answer to "gate or scoreboard?" is BOTH, and the
+imbalance is the finding.** These five ticks are real capability with RED-proven gates — two of them
+fixed *confidently wrong* answers, not absences — but **every one was ranked, chosen and verified
+against WPT and NONE was measured against the exit.** Check #113's STEER #1 was *"next tick: run the
+CrUX fidelity sweep"* and **it was not run**; eight ticks later `progress-metric.sh` is still reading
+`SWEEP-t1170-rows.tsv`, a sweep from **24 ticks ago**, so the M1 blocker this loop keeps citing
+(18.8% conjunction, 80.5% scorability) describes an engine that no longer exists. The reason it
+slipped is worth naming: the WPT loop is fast and self-rewarding (~30 min, measure→fix→re-measure→
+land) while the sweep is slow and returns a number that does not move per tick — **the gradient is
+steeper on the hill that is not the mountain**, which is verbatim why that instrument exists.
+**NEXT TICK IS THE SWEEP, not optional, and PART VI's blocker gets re-derived from its result rather
+than inherited.**
+
+PERF: `split_top_level_commas` allocates a `String` per branch where `split(',')` borrowed. Selector
+lists are parsed once per query and are short; against that, the previous code was producing WRONG
+answers, and the ratchet does not trade correctness for an allocation.
+
+WIKI: `docs/wiki/dom-semantics.md` — why a subset-match is the worst failure mode, and the opposite
+forgiveness rules of `:is()` and `:not()`.
+
 ## Tick 1193 — a frame's window and document were rebuilt on every read, and its nodes claimed the PARENT's document (2026-08-12)
 
 TICK SHAPE: capability — the same identity bug as t1191, found in its fourth site, plus a
