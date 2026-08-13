@@ -9282,12 +9282,25 @@ unsafe fn doc_set_title(cx: *mut RawJSContext, argc: u32, vp: *mut Value) -> boo
     true
 }
 
-/// `document.referrer` — **the empty string**, which is what a direct navigation reports.
+/// **`document.referrer`** — the URL of the document that linked to or embedded this one.
 ///
-/// It was `undefined`, and `document.referrer.split('/')` is the single most common thing an analytics
-/// tag does on the first line of its boot. `undefined` there is a `TypeError`; `""` is a fact.
+/// This returned the empty string unconditionally. `""` is the right answer for a document nobody
+/// referred to — a typed URL, a bookmark — and it was being given for *every* document, including a
+/// framed one, whose referrer is its **embedder**. That is the value analytics, attribution and
+/// paywall scripts read first thing inside an embed, and a constant `""` tells all of them the user
+/// arrived from nowhere.
+///
+/// ⚠ Found by a SWEEP rather than by a failing test: after `characterSet` turned out to be the third
+/// getter in this file returning a constant beside a value the engine already had (`contentType`
+/// t1075, `compatMode` t241), every native getter here was checked for a body that is a literal with
+/// no lookup in it. **This was the only one left**, which is the more useful half of the result — the
+/// class is now swept rather than sampled.
 unsafe fn doc_get_referrer(cx: *mut RawJSContext, _argc: u32, vp: *mut Value) -> bool {
-    return_string(cx, vp, "");
+    let r = match this_node(vp) {
+        Some((dom, _)) => (*dom).referrer((*dom).root()).to_string(),
+        None => String::new(),
+    };
+    return_string(cx, vp, &r);
     true
 }
 

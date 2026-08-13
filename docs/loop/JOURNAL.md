@@ -46371,6 +46371,82 @@ PERF: none — one UA rule and one narrowed branch in a cascade that already ran
 WIKI: `docs/wiki/css-cascade.md` — where Chrome draws the form-control `box-sizing` line, and why a
 layout-crate test cannot see it.
 
+## Tick 1212 — I swept the class instead of waiting for the next instance of it (2026-08-13)
+
+TICK SHAPE: capability — small, and deliberately chosen by a **sweep** rather than by a failing test.
+
+**t1211 made `characterSet` the THIRD getter in `dom_bindings.rs` returning a constant beside a value
+the engine already had** — after `contentType` (t1075) and `compatMode` (t241), all three within a
+hundred lines of each other. Three instances found three separate times, each by tripping over it, is
+the shape PART VI already names: *every part of the platform that can be ENUMERATED should be
+enumerated once.* So instead of waiting for the fourth, I enumerated: every native getter in that
+file whose whole body is a literal with **no lookup** in it (`this_node`, `with_style`,
+`layout_rect`, `CURRENT_DOM` all absent).
+
+```text
+   native getters whose whole body is a CONSTANT:  1
+     doc_get_referrer            return_string(cx, vp, "")
+```
+
+**One. And that is the more useful half of the result** — the class is now *swept* rather than
+sampled, so the next reader does not have to wonder whether there are twenty more.
+
+**`document.referrer` returned `""` unconditionally.** `""` is the correct answer for a document
+nobody referred to — a typed URL, a bookmark — which is exactly why the constant survived three
+audits: it is right about the top-level document most of the time. It is wrong about **a framed
+document, whose referrer is its embedder**, and that is the value analytics, attribution and paywall
+scripts read first thing inside an embed. A constant `""` tells every one of them the user arrived
+from nowhere.
+
+Set in `render_iframe_with_type` **before `fire_frame_load`**, applying t1211's rule directly rather
+than rediscovering it. Gated by `G_DOCUMENT_CHARACTER_SET`'s new claims, RED-proven by restoring the
+constant (`ref=` empty). The gate asserts **both** directions: the framed document reports its
+embedder, and the top-level document still reports `""` — because the default was never wrong, it was
+being used as the whole answer.
+
+**MEASURED, same release binary, same hour:**
+
+```text
+   dom        8142 → 8142   (0)   77.5%   0 crashes
+   html/dom  56445 → 56445  (0)   94.2%   0 crashes
+```
+
+**+0, and stated plainly:** the WPT areas this loop measures do not exercise a framed document's
+referrer. This is a real-web capability with a gate and no scoreboard movement — the second such tick
+this session (t1205 was the first), and by the rule check #115 wrote, it banks because the mechanism
+**runs and is observed** rather than merely being present.
+
+⚠ **AN INSTRUMENT NOTE WORTH THE LINE: the first reading was `html/dom` 56444, a −1.** Re-run SOLO it
+is 56445. The −1 run had `TH_TIMEOUT 56` against the solo run's `9` — I had a `cargo test` compiling
+alongside it. **A concurrent build makes an async test time out and reads as a regression**, which is
+the `--jobs 8` lesson in a new costume, and the ratchet would have refused a real one. Re-run solo
+before believing a −1.
+
+⚠⚠ **AND THE TICK'S OTHER PRODUCT: TWO AREAS CLASSIFIED**, per t1204's rule that an area's failing
+mass must be classified by construct before it is taken:
+
+```text
+   css/selectors   1,761 failing   5.2% unshipped (`:heading` 55, `:has-slotted` 23, `:state(` 13)
+                                   → PASSES. 1,670 shippable, and its largest family (308) is the
+                                     `attribute-case` `getComputedStyle` tests IN A FRAME — which is
+                                     t1202's named residual, a frame-owned `ReflowCtx`.
+   css/css-color   4,706 failing  94.0% ONE SUBSYSTEM  → the CSSOM type change (t1210)
+```
+
+Both are now measured rather than guessed, and the next session can pick without re-deriving.
+
+SELF-AUDIT (due every 10 ticks, last 1202; run at 1212): **the same single prescribed-but-not-executed
+item, and it is HARNESS-OWNED** — `verify wall: 1252s EXCEEDS the 300s target`. Everything else green.
+The number has risen again (1012s at t1202 → 1252s here), and wall audit #47 ten ticks ago established
+where it lives: **the gates are 148s of it and the build is the rest**, so every candidate
+(nextest, mold, workspace-hack, narrower per-gate build scope) is `scripts/` and build config, which
+PART VII makes observer-owned. Recorded, not acted on; the hand-off in `WALL-AUDIT.md` #47 stands.
+
+PERF: one `HashMap` entry per framed document — the same shape as `character_sets` beside it, absent
+for a top-level page. F1/F2 unmoved.
+
+WIKI: docs/wiki/dom-semantics.md — "I swept the class instead of waiting for the next instance"
+
 ## Tick 1211 — the engine was TOLD the encoding and threw it away, and the ORDERING was the fix (2026-08-13)
 
 TICK SHAPE: capability — `dom` (#1), its **largest single remaining family: 636 subtests**, and the

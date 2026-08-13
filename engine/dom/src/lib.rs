@@ -300,6 +300,10 @@ pub struct Dom {
     /// decode time and used to throw it away, so `document.characterSet` was a hardcoded `"UTF-8"`
     /// for a page that declared `<meta charset=iso-8859-5>`.
     character_sets: std::collections::HashMap<NodeId, String>,
+    /// **The URL that referred to this document** — `document.referrer`. Same shape as
+    /// [`character_sets`], and found by the same sweep: a getter returning a constant beside a value
+    /// the engine already had.
+    referrers: std::collections::HashMap<NodeId, String>,
 }
 
 impl Default for Dom {
@@ -332,6 +336,7 @@ impl Dom {
             id_index: std::collections::HashMap::new(),
             content_types: std::collections::HashMap::new(),
             character_sets: std::collections::HashMap::new(),
+            referrers: std::collections::HashMap::new(),
         }
     }
 
@@ -638,6 +643,7 @@ impl Dom {
             // it a page that churns documents grows the map forever.
             self.content_types.remove(&id);
             self.character_sets.remove(&id);
+            self.referrers.remove(&id);
         }
     }
 
@@ -757,6 +763,25 @@ impl Dom {
             .get(&doc)
             .map(String::as_str)
             .unwrap_or("UTF-8")
+    }
+
+    /// **`document.referrer`** — the URL of the document that linked to or embedded this one.
+    ///
+    /// The empty string is the correct answer for a document nobody referred to (a typed URL, a
+    /// bookmark), and it was being returned for *every* document — including a framed one, whose
+    /// referrer is its embedder and is the value analytics, attribution and paywall scripts read
+    /// first thing inside an embed.
+    pub fn referrer(&self, doc: NodeId) -> &str {
+        self.referrers.get(&doc).map(String::as_str).unwrap_or("")
+    }
+
+    /// Record who referred to a document. An empty referrer stores nothing — it is the default.
+    pub fn set_referrer(&mut self, doc: NodeId, url: &str) {
+        if url.is_empty() {
+            self.referrers.remove(&doc);
+        } else {
+            self.referrers.insert(doc, url.to_string());
+        }
     }
 
     /// Record the encoding a document was decoded from. Only a non-`UTF-8` encoding stores anything.

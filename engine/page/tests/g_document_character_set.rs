@@ -43,6 +43,7 @@ fn charset_probe(cs: Option<&str>, fonts: &FontContext) -> String {
         r#"var d = document.getElementById('f').contentDocument;
            var r = d ? (d.characterSet + '|' + d.charset + '|' + d.inputEncoding) : 'NODOC';
            r += '|top=' + document.characterSet;
+           r += '|ref=' + (d ? d.referrer : '-') + '|topref=' + document.referrer;
            var s = document.createElement('script'); s.id = '__cs__';
            s.type = 'application/json'; s.textContent = r;
            document.documentElement.appendChild(s);"#,
@@ -100,9 +101,25 @@ fn a_document_reports_the_encoding_it_was_decoded_from() {
          mislabel every frame in the engine — got {none:?}"
     );
 
-    // ── 4. AND THE PARENT IS NOT DISTURBED. A per-document value stored per document.
+    // ── 4. `document.referrer` — the SAME sweep, and the last constant getter in the file. A framed
+    //    document's referrer is its EMBEDDER; the top-level document here was referred to by nobody.
     assert!(
-        legacy.ends_with("|top=UTF-8"),
+        legacy.contains("|ref=https://parent.test/"),
+        "a FRAMED document's `referrer` is its embedder — the value analytics, attribution and \
+         paywall scripts read first thing inside an embed. This returned `\"\"` for every document. \
+         Found by sweeping this file's natives for a body that is a literal with no lookup in it, \
+         after `characterSet` turned out to be the third such getter — got {legacy:?}"
+    );
+    assert!(
+        legacy.contains("|topref="),
+        "and the TOP-LEVEL document was referred to by nobody, so its referrer stays the empty \
+         string — `\"\"` was always the right answer for THAT document, which is exactly why the \
+         constant survived — got {legacy:?}"
+    );
+
+    // ── 5. AND THE PARENT IS NOT DISTURBED. A per-document value stored per document.
+    assert!(
+        legacy.contains("|top=UTF-8"),
         "the CHILD's encoding must not leak onto the parent document — this is a per-document \
          value, and a single global would have passed claim 1 and broken the page around it — got \
          {legacy:?}"

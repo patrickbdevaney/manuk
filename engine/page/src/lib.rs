@@ -3078,6 +3078,15 @@ impl Page {
             let doc = child.dom.root();
             child.dom.set_character_set(doc, cs);
         }
+        // **A framed document's referrer is its EMBEDDER**, and it is read first thing inside every
+        // analytics, attribution and paywall script an embed runs. Set here for the same reason the
+        // charset is: `fire_frame_load` is below, and a value written after it is written after the
+        // only moment anyone looks (t1211).
+        {
+            let doc = child.dom.root();
+            let embedder = self.final_url.clone();
+            child.dom.set_referrer(doc, &embedder);
+        }
         manuk_js::register_dom(&mut *child.dom as *mut manuk_dom::Dom);
         self.child_pages.insert(node, child);
         self.publish_iframe_docs();

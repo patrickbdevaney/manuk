@@ -5186,6 +5186,24 @@ draining the JS event loop to its 20,000-task ceiling, which has no wall-clock b
 images now arrive; the page is still slow for another reason. Same discipline as t608: **do not book
 "site X works now" from "one of site X's defects is gone."**
 
+## A framed document's `referrer` is its EMBEDDER, and it was always `""` (tick 1212)
+
+| pattern | where it shows up | status |
+| --- | --- | --- |
+| `document.referrer` read inside an embed. It returned `""` unconditionally — which is the CORRECT answer for a document nobody referred to, and wrong for a framed one | Analytics, attribution and paywall scripts read it first thing inside an embed; a constant `""` tells every one of them the user arrived from nowhere | ✅ fixed (tick 1212) — gated by **`G_DOCUMENT_CHARACTER_SET`**, RED-proven. ⚠ **+0 WPT** — the measured areas do not exercise it |
+
+⚠⚠⚠ **FOUND BY A SWEEP, NOT BY A FAILING TEST.** `characterSet` (t1211) was the **third** getter in
+one file returning a constant beside a value the engine already had — after `contentType` (t1075) and
+`compatMode` (t241), all within a hundred lines. Rather than wait for the fourth, every native getter
+whose whole body is a literal with **no lookup** in it was enumerated:
+
+```text
+   native getters whose whole body is a CONSTANT:  1   →  doc_get_referrer
+```
+
+**One, and that is the more useful half** — the class is *swept* rather than sampled. The default was
+never wrong; it was being used as the whole answer, which is exactly why it survived three audits.
+
 ## A value written after the `load` event is written after the only moment anyone looks (tick 1211)
 
 | pattern | where it shows up | status |

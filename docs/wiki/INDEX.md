@@ -1051,6 +1051,8 @@
   - L3217 · The engine was told the encoding and threw it away (t1211)
   - L3229 · ⚠⚠⚠ The ordering was the fix, and the first version measured +0 without it
   - L3252 · The instrument was blocking it too — encoding.py, the fifth mis-provisioned reference
+  - L3265 · I swept the class instead of waiting for the next instance (t1212)
+  - L3284 · Why document.referrer survived three audits
 
 ## THE FIDELITY INSTRUMENT — what it can and cannot see
 `docs/wiki/fidelity-instrument.md`
@@ -2064,4 +2066,4 @@
   - L169 · The one real lever inside the remainder, measured and left named
 
 ---
-1971 sections across 22 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+1973 sections across 22 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.

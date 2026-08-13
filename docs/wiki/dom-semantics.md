@@ -3261,3 +3261,42 @@ rather than a slide.
 canonical spelling (`encoding_rs::Encoding::name()`, so no table of ours can drift from the
 decoder's), that an untold frame still reports `UTF-8`, and that **the child's encoding does not leak
 onto the parent** — a single global would have passed the headline claim and broken the page around it.
+
+## I swept the class instead of waiting for the next instance (t1212)
+
+t1211 made `characterSet` the **third** getter in `dom_bindings.rs` returning a constant beside a
+value the engine already had — after `contentType` (t1075) and `compatMode` (t241), all three within
+a hundred lines. Three instances found three separate times, each by tripping over it, is the shape
+PART VI already names: **every part of the platform that can be ENUMERATED should be enumerated
+once.**
+
+So: every native getter in that file whose whole body is a literal with **no lookup** in it
+(`this_node`, `with_style`, `layout_rect`, `CURRENT_DOM` all absent).
+
+```text
+   native getters whose whole body is a CONSTANT:  1
+     doc_get_referrer            return_string(cx, vp, "")
+```
+
+**One — and that is the more useful half of the result.** The class is now *swept* rather than
+sampled; the next reader does not have to wonder whether there are twenty more.
+
+### Why `document.referrer` survived three audits
+
+`""` is the **correct** answer for a document nobody referred to — a typed URL, a bookmark — so the
+constant is right about the top-level document most of the time. It is wrong about **a framed
+document, whose referrer is its embedder**, which is the value analytics, attribution and paywall
+scripts read first thing inside an embed. A constant `""` tells all of them the user arrived from
+nowhere.
+
+Set before `fire_frame_load`, applying t1211's ordering rule rather than rediscovering it. The gate
+asserts **both** directions — the framed document reports its embedder, the top-level one still
+reports `""` — because the default was never wrong, it was being used as the whole answer.
+
+**+0 WPT**, stated plainly: the areas this loop measures do not exercise a framed referrer. A
+real-web capability with a gate and no scoreboard movement.
+
+⚠ **Instrument note:** the first reading was `html/dom` **56444**, a −1. Solo re-run: **56445**. The
+−1 run showed `TH_TIMEOUT 56` against the solo run's `9` — a `cargo test` was compiling alongside it.
+**A concurrent build makes an async test time out and reads as a regression.** Re-run solo before
+believing a −1.
