@@ -46371,6 +46371,56 @@ PERF: none — one UA rule and one narrowed branch in a cascade that already ran
 WIKI: `docs/wiki/css-cascade.md` — where Chrome draws the form-control `box-sizing` line, and why a
 layout-crate test cannot see it.
 
+## Tick 1225 — the refusal rule, promoted from a tick's finding into the constitution (2026-08-13)
+
+TICK SHAPE: measurement — the cadence re-read of `CONSTITUTION.MD` (due every 8 ticks; last at 1217),
+banked as check #117 in `docs/loop/CONSTITUTION-CHECK.md`, plus the PART VI correction it demands.
+
+⚠⚠⚠ **FINDING 1 — THE APERTURE HAS A SEVENTH INFLATION MODE, AND IT IS THE FIRST ONE THAT DEFLATES.**
+VI.3 §2 records six ways the loop's aperture misreports; all six make an area look *bigger* or
+*better* than it is. This one makes an area look **unwinnable**, and it therefore costs whole areas
+rather than whole ticks. The loop discounts an area by its *unshipped-spec* fraction before taking
+it — and that classifier reads **what a test ASKS FOR, not why WE FAIL IT**:
+
+```text
+   css/css-values   REFUSED t1204: "50.9% unshipped spec (calc-size/random-item)"     →  +494
+   css/css-color    FILED   t1220: "94.0% unshipped, ONE subsystem: the TYPE CHANGE"  → +1226
+```
+
+Both moved from a fix aimed at `background-position` in a third area. A test whose subject is
+`oklch()` is filed unshipped-spec, but if it fails because `el.style.color` **echoed** the author's
+bytes, the subject was never the blocker: both areas are dense with `test_valid_value(prop, value)`,
+which is *set it on `el.style`, read it back, compare against the serialization* — **a CSSOM
+assertion wearing a colour/values test's clothes.** The rule now in PART VI: **a refusal on
+"unshipped spec" grounds must be justified by the FAILING MESSAGE, not by the test's subject**, which
+is t1221's own *"histogram the ASSERTION MESSAGE, not the test name"* applied to the **refusal**
+instead of to the search. It costs one grep and it was worth 1,720 subtests.
+
+⚠⚠⚠ **FINDING 2 — THE CERTIFICATION CHECKPOINT HAS BEEN UNMEASURED FOR 22 TICKS, AND THIS IS THE
+SAME DRIFT CHECK #74 NAMED AT FOUR TIMES THE LENGTH.** The newest banked sweep is
+`SWEEP-t1203-rows.tsv`. The board's own instruction is *"run the CrUX gauge + binary M1 ~each sweep
+(~6h)"*. Three of the intervening ticks were large. **The loop is a good climber that has not looked
+at the mountain in a day** — one of H0's four exit conditions moved a great deal and the other three
+are unobserved. Named as the #1 steer rather than folded into a capability tick.
+
+⚠⚠ **FINDING 3 — I5 WAS EXERCISED THREE TIMES THIS WINDOW AND WAIVED ZERO TIMES**, which is worth
+recording because the temptation was real each time: `html/dom` read 56444 against a mark of 56445
+and was RE-RUN rather than accepted (it returned 56445/59922 exactly; the tell was numerator and
+denominator moving *together*); `css/cssom`'s denominator drift was priced by two same-binary runs
+before anything was banked, and the **lower** reading was taken; and a RED wall was diagnosed to a
+torn `target/` rather than re-run until it happened to pass.
+
+COMPLIANCE: **I2 held positively** — `serialize_declaration` CALLS Stylo rather than reimplementing a
+serializer, making `el.style` the third surface on one evaluator with `@supports` and
+`CSS.supports()`. **I3 held by construction** — none of the window's ticks added a rendered construct,
+so no semantic surface is owed. **PART VII held** — the false-RED wall was diagnosed and worked around
+agent-side with `cargo clean -p`, and no `scripts/` file was touched.
+
+PERF: none — measurement only.
+
+WIKI: none — this tick's artefact is `docs/loop/CONSTITUTION-CHECK.md` check #117 and the PART VI.3
+correction it writes, which is the wiki for the loop's own governance. [no-pattern]
+
 ## Tick 1224 — `el.style` never serialized anything; it echoed the author's bytes (2026-08-13)
 
 TICK SHAPE: capability — the largest named family left in `css/cssom` after t1222/t1223, and the one

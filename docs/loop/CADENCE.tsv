@@ -924,3 +924,4 @@ tick	sha	epoch	iso	delta_s	shape	wall_s	files	added	deleted	gates	claims	wpt_pas
 1222	6e2bcc0e	1786642948	2026-08-13T13:42:28-04:00	3752	capability	808	8	950	169	464	81	3896	6960	0	610	0	the inset serializer never had a containing block, so it published the author's `10%` (2026-08-13)
 1223	ecf90c7a	1786645608	2026-08-13T14:26:48-04:00	2660	capability	808	13	589	239	464	81	3896	6960	0	611	0	the thing I called unreachable was in a table I was already reading (2026-08-13)
 1224	db98f5d3	1786649665	2026-08-13T15:34:25-04:00	4057	capability	808	13	673	192	465	81	3896	6960	0	612	0	`el.style` never serialized anything; it echoed the author's bytes (2026-08-13)
+1225	6d75e1ca	1786650013	2026-08-13T15:40:13-04:00	348	measurement	808	6	186	34	465	81	3896	6960	0	612	0	the refusal rule, promoted from a tick's finding into the constitution (2026-08-13)

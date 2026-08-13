@@ -9408,3 +9408,104 @@ before t1168.
 3. **Grep the tree's own `||` fallbacks.** t1168's `baseURI` gap was sitting in `reflect_js.rs` as
    `document.baseURI || location.href` — *a work-around in the tree is a bug report nobody filed*,
    and the loop has no instrument that reads its own fallbacks. That is a cheap, novel probe.
+
+## Check #117 — tick 1225 (2026-08-13)
+
+### The horizon and its gate, named out loud
+
+**H0.** Exit gate: **~83% WPT across categories**, oracle-verified across the four corpora, a
+daily-drivable shell, and semantic-API coverage of every rendered construct.
+
+### → Did the last ~8 ticks move an EXIT-GATE condition, or only the scoreboard?
+
+**A gate condition, and by the largest margin this session — but only ONE of the four, and the
+honest answer has to say which.**
+
+```text
+   PRIMARY (active areas, encoding excluded)   71.42%  →  73.92%     +2.50 pt in three ticks
+   WPT:TOTAL                                  450228  →  453340     +3,112
+   the board's own read-out                            83% reachable → 11,402 subtests to go
+```
+
+t1222/t1223/t1224 are one mechanism family — CSSOM's *resolved* and *serialized* value surfaces
+reporting what the cascade or the author held instead of the normal form. **Fourteen areas up, none
+down.** That is the first exit-gate condition moving, not the scoreboard.
+
+⚠⚠ **The other three conditions did not move, and one of them has now gone UNMEASURED for a long
+window.** The CrUX certification checkpoint — the gauge the board itself says to run *"~each sweep
+(~6h)"* — was last banked at `SWEEP-t1203-rows.tsv`. **Twenty-two ticks.** The loop is climbing solid
+ground and is blind on the bar that actually defines "done". This is the same drift check #74 named
+at t1168 ("six ticks landed and the certification checkpoint was never run"), recurring at four times
+the length. **It is the steer below.**
+
+### → Is `orient`'s ranking (usage-weighted breadth, tail excluded, §VI.3) still the north star?
+
+**Yes — and this window found a defect in HOW IT IS APPLIED that was costing the loop whole areas.**
+
+VI.3 ranks by usage-weighted breadth and the loop discounts an area by its *unshipped-spec* fraction
+before taking it. That discount was **over-counted**, and t1224 measured it:
+
+```text
+   css/css-values   REFUSED at t1204 as "50.9% unshipped spec (calc-size/random-item)"    →  +494
+   css/css-color    t1220: "94.0% unshipped, ONE subsystem: the colour-space TYPE CHANGE" → +1226
+```
+
+Both moved from a fix aimed at `background-position` in a third area. **The classifier read what a
+test ASKS FOR, not why WE FAIL IT.** A test whose subject is `oklch()` is filed unshipped-spec — but
+if it fails because `el.style.color` echoed the author's bytes rather than serializing them, the
+subject was never the blocker. Both areas are dense with `test_valid_value(prop, value)`, which is
+*set it on `el.style`, read it back, compare against the serialization*: **a CSSOM assertion wearing
+a colour/values test's clothes.**
+
+> **The correction, and it costs one grep: A REFUSAL ON "UNSHIPPED SPEC" GROUNDS MUST BE JUSTIFIED BY
+> THE FAILING MESSAGE, NOT BY THE TEST'S SUBJECT.** `css/css-color`'s failures said
+> `expected "rgb(0,0,255)" but got …` — a serialization shape, readable without running anything new.
+> This is t1221's own rule (*"histogram the ASSERTION MESSAGE, not the test name"*) applied one level
+> up: to the **refusal** rather than to the search.
+
+⚠ **No big-but-tail number has crept back to the top.** `encoding` is still 92% of the WPT universe
+by count and contributed **0** of the +3,112. The tick-84 failure mode is not recurring.
+
+### → Is any invariant being bent?
+
+- **I2 (never patch deps)** — held, and the window leaned on it *positively*: `serialize_declaration`
+  **calls** Stylo's `parse_style_attribute` + `property_value_to_css` rather than reimplementing a
+  serializer. `el.style` is now the third surface sharing one evaluator with `@supports` and
+  `CSS.supports()`, which is the anti-drift discipline VI.3 asks for.
+- **I3 (semantic model in lockstep)** — held **by construction**: none of the three ticks added a
+  *rendered* construct, so no new semantic surface is owed. All three improved the agentic surface
+  incidentally (an agent reading `getComputedStyle().top` now gets px, not `10%`).
+- **I4 (Pareto discipline)** — held. `getComputedStyle().top`, `el.style.x` and abspos insets are
+  top-of-the-web constructs, not tail work.
+- **I5 (never trade a regression)** — **exercised three times and not once waived.** `html/dom` read
+  56444 against a mark of 56445 and was re-run rather than accepted: it returned **56445/59922
+  exactly**, and the tell was that numerator and denominator moved *together* (a subtest not
+  *created* is a flake, not a failure). `css/cssom`'s denominator drift was priced by two runs of the
+  same binary before anything was banked, and the **lower** reading was taken. And a RED wall was
+  diagnosed to a torn `target/` rather than re-run until green.
+
+### PART VI correction
+
+**What is now DONE that VI did not record:** the CSSOM *lossiness* class named by check #61 (VI.2's
+`css/css-values` row cites it) is materially closed on its two largest members — the resolved-value
+surface for the **inset** family (four containing blocks, including the `sticky` **scrollport** rule)
+and the **serialized-value** surface for `el.style`. `css/cssom` **54.7% → 79.6%** across the window.
+
+**What VI.3 must now carry, added by this check:** the aperture list in VI.3 §2 records five
+inflation modes plus check #112's sparse-checkout sixth. **This is a SEVENTH, and it deflates rather
+than inflates: the unshipped-spec DISCOUNT, computed from the test's subject instead of its failure,
+which caused two areas to be refused by name while holding 1,720 winnable subtests.**
+
+**What is now the real blocker:** unchanged in kind and now unmeasured in fact — **M1 on the in-scope
+CrUX corpus against a 95% bar**, with the scorability ceiling (check #83's 82.2–87.4% instrument cap)
+still the larger half and still an owner decision.
+
+### STEER
+
+1. **RUN THE CrUX FIDELITY SWEEP.** Twenty-two ticks are unmeasured against the exit bar, and three
+   of them were large. The loop is a good climber that has not looked at the mountain in a day.
+2. **Re-audit every standing REFUSAL against its failing MESSAGE**, not its subject — `css/css-values`
+   and `css/css-color` are already re-opened by measurement; `domparsing` (recorded as "65% tentative/")
+   is the next one that has never been checked this way and is 1,060 failing at 18.1%.
+3. **A shared MECHANISM outranks the per-area ranker, for the fourth time.** When picking, ask what
+   one seam is wrong across many areas before asking which area is largest.
