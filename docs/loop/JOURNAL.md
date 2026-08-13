@@ -46371,6 +46371,101 @@ PERF: none — one UA rule and one narrowed branch in a cascade that already ran
 WIKI: `docs/wiki/css-cascade.md` — where Chrome draws the form-control `box-sizing` line, and why a
 layout-crate test cannot see it.
 
+## Tick 1193 — a frame's window and document were rebuilt on every read, and its nodes claimed the PARENT's document (2026-08-12)
+
+TICK SHAPE: capability — the same identity bug as t1191, found in its fourth site, plus a
+cross-document correctness defect underneath it. Gate `G_FRAME_WINDOW_IS_ONE_OBJECT` (12 claims),
+2 RED probes.
+
+⚠⚠⚠ **`f.contentWindow === f.contentWindow` WAS FALSE. So was `f.contentDocument ===
+f.contentDocument`.** Both minted a fresh object per access, so: state stashed on the frame's window
+(the ready flag / message-port handle / resize callback every embed and OAuth frame keeps) went to
+an object discarded on the next line; `e.target.ownerDocument === frame.contentDocument` — the
+standard "is this event from my frame?" test — was **never true**; a `WeakMap` keyed on the frame's
+document gained one entry per read; and `defaultView` was a flat `null` for every non-singleton
+document.
+
+⚠⚠⚠ **FOURTH SITE OF ONE BUG IN ONE WINDOW OF TICKS.** `sheet.cssRules` (t1191) was the same defect
+one subsystem over, and **`el.sheet` had the rule written down correctly the whole time**: *"ONE
+object per element … a library that stashes bookkeeping on the sheet loses it otherwise."* The rule
+existed and had not been carried to its neighbours. Generalising the t1191 note: **when a rule is
+justified by an argument, go find every place the argument applies** — the comment is the search
+query.
+
+⚠⚠ **`ownerDocument` ASKED THE WRONG QUESTION, AND IT IS t643 ONE BOUNDARY FURTHER OUT.** The guard
+was `cur != (*dom).root()`, meaning *"not the main document"*. **That is a question about the ARENA,
+not about the root node.** Inside a frame's arena the owning document IS that arena's root, so the
+test was false exactly where the answer mattered and **every node in an `<iframe>` reported the
+PARENT's `document`** — a walk keyed on `root.ownerDocument || root` (DOMPurify's, and every
+sanitizer's) runs against the wrong tree and finds nothing. Now `foreign_arena || cur != root()`.
+
+✅ **LIVE AND STABLE, AGAIN.** The cached window exposes `document` as a **getter**, not the value
+captured at build time — a frame that navigates gets a new document, and caching the value would
+have bought identity by making the window permanently stale. `defaultView` finds its frame by
+COMPARING documents, which is **only possible because identity now holds**; RED probe 2 shows five
+claims falling together when the cache consult is removed, which is the dependency made visible.
+
+⚠⚠⚠ **DELIBERATELY NOT ADDED: `contentWindow.getComputedStyle`.** Measured this tick — computed
+style does not work on a framed element **at all**. `STYLES_PTR` is a single thread-local holding
+ONE page's style map, and `window_get_computed_style` keeps only the `NodeId` from `node_and_dom`,
+**discarding the arena**, so a child node is looked up in the parent's map. On a frame whose own
+stylesheet sets `visibility:hidden`: `gcsHidden = visible` (the child's stylesheet never reached it)
+and a plain child element reports `undefined`. Exposing the method would turn *absent* into
+*silently wrong* — false-presence, which the reliability doctrine ranks strictly worse. **It stays
+off until the style lookup is arena-aware. That is the next tick, and it is worth ~480 subtests** in
+`css/selectors/attribute-selectors/attribute-case`, whose helper iterates `[window, quirks, xml]` —
+two of them frame windows — and dies on `global.getComputedStyle is not a function`.
+
+**MEASURED:** `html/dom` **56443 → 56445 (+2)**, `dom` unchanged (4241/7049 control), HANG/CRASH 0.
+PRIMARY 69.90% (unmoved at 2 d.p.).
+
+⚠⚠⚠ **+2 IS THE INSTRUMENT'S ANSWER, NOT THE FIX'S VALUE — and CONSTITUTION VI.3 decides this, it
+is not a preference.** Where usage-weight and measured-breadth disagree, usage-weight wins. WPT's
+iframe tests need the frame-loading harness, so almost none of them exercise this path here. What
+actually changed is that a node inside an `<iframe>` stopped reporting the parent's document — a
+wrong answer of the RIGHT TYPE, delivered with total confidence, on what the constellation calls the
+**#1 platform-web capability**. The honest report is *"the instrument cannot price this"*, not
+*"this bought +2"* — the failure mode t852 Finding 2 recorded and this tick is a clean instance of.
+
+BOARD: on-mandate — the fix is on the #1/#11 leverage rows' shared mechanism, and it converts the
+next tick's biggest measured lever (480 subtests) from "unknown" into "diagnosed and scoped".
+
+SELF-AUDIT (due every 10 ticks; last 1182, run here and banked as 1192): **one prescribed-but-not-
+executed item**, and it is HARNESS-OWNED, so I recorded it rather than touching it — *"verify wall:
+978s EXCEEDS the 300s target — Part 21.2 item 1 has regressed. mold/lld, cargo-nextest,
+workspace-hack, risk-based gate scheduling."* ⚠⚠ **THE REGRESSION IS REAL — I nearly filed it as a
+measurement artefact and the receipts say otherwise.** My first instinct was that 978s came from the
+wall's mid-run self-purge (the t1190 harness note), so I checked the three GREEN receipts this
+window before writing it down: **total 273s, then 1011s, then 819s** (gate 248s / 978s / 779s). The
+978s is the gate time from a green run on a clean tree, not a purge artefact. The jump follows the
+purge — every gate binary had to be rebuilt from nothing and the working set is still refilling —
+but that is a HYPOTHESIS about the cause, not the reading. Harness-owned either way; recorded, not
+touched. Everything else in the audit is green: 49 process defects
+each naming a closing mechanism, 392 clusters, 1102 pattern rows, journal continuous, every gate
+declaring how to break it.
+
+SURFACE AUDIT #57 (due every 10 ticks; last 1182, run here): **the frame is right, and the map
+contradicted ITSELF.** Read externally rather than from memory — the Interop 2026 README plus all
+four vendors' announcements. **All 20 focus areas and all 4 investigation efforts already have a row
+in `CONSTELLATION.tsv`** with a real verdict, so nothing the vendors agreed matters most for 2026 is
+off our map; the standing "ranking inside the wrong frame" worry does not hold here. The find was
+INTERNAL: **`clip-path` had TWO rows for one capability with OPPOSITE verdicts** — `gated`
+(`G_CLIP_PATH`, which exists and passes) and `missing` (no gate). Settled from source, not
+preference: `stylo_engine.rs:3132` (t593) says `inset`/`circle`/`ellipse`/`polygon` clip and
+`path()`/`shape()`/`url()` do not. The `missing` row was **claiming a SHIPPED capability was
+absent** — rot in the direction that hides work already done — and is now re-scoped to name only the
+non-basic shapes. ⚠ **A duplicate row is worse than a missing one**: a gap says "unmeasured" and
+invites a probe, while two rows disagreeing say "measured" twice and whichever a reader hits first
+becomes the answer. Audit #56 found phantoms created by how the reconciliation was MATCHED; this one
+found a phantom that survived because nobody compared the map **to itself**. Procedure amended in
+`SURFACE-AUDIT.md`: after reconciling against the world, reconcile the map against its own
+duplicates — group by capability, flag any group whose `status` is not unanimous.
+
+PERF: none — one cached object per frame replaces an allocation per read.
+
+WIKI: `docs/wiki/dom-semantics.md` — the four sites of one identity bug, the arena-vs-root question,
+and why `getComputedStyle` stays absent.
+
 ## Tick 1192 — a computed style that THREW on a non-string argument, and what 40 messages were really worth (2026-08-12)
 
 TICK SHAPE: capability — a throw-class fix, small and honestly sized. Gate

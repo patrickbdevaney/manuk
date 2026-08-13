@@ -34,8 +34,21 @@
 //! ## Stated limits, because a stub is worse than an absence
 //!
 //! * The child shares the parent's JS global. So a script *inside* a frame is not isolated from its
-//!   parent, and `contentWindow` is not a real `Window` — it is `{ document, frameElement }`, which is
-//!   what the code in the wild actually touches. Cross-origin restrictions are **not** enforced.
+//!   parent, and `contentWindow` is not a real `Window` — it carries `document`, `frameElement`,
+//!   `location` and the listener/`postMessage` no-ops, which is what the code in the wild actually
+//!   touches. Cross-origin restrictions are **not** enforced.
+//! * ⚠⚠ **`getComputedStyle` is deliberately ABSENT from that window, and the reason is a defect
+//!   one layer down, not an oversight.** `STYLES_PTR` is a single thread-local holding ONE page's
+//!   style map, and `window_get_computed_style` keeps only the `NodeId` from `node_and_dom`,
+//!   discarding the arena — so a child node is looked up in the PARENT's map. Measured on a frame
+//!   whose own stylesheet sets `visibility:hidden`: `getComputedStyle(childEl).visibility` is
+//!   `visible` (the child's stylesheet never reached it) and a *plain* child element reports
+//!   `undefined`. That is the wrong-answer-of-the-right-type shape `el_content_document`'s doc
+//!   comment describes, one document boundary further out. Exposing `getComputedStyle` here would
+//!   turn *absent* into *silently wrong*; it stays off until the style lookup is arena-aware.
+//!   Worth ~480 subtests in `css/selectors/attribute-selectors/attribute-case`, whose helper
+//!   iterates `[window, quirks, xml]` — two of them frame windows — and dies on
+//!   `global.getComputedStyle is not a function`.
 //! * The frame does not re-render when its document is mutated from the parent. The DOM is live and
 //!   readable; the *pixels* are a snapshot. Painting a mutated frame is its own tick.
 //!
@@ -76,8 +89,18 @@ pub const IFRAME_JS: &str = r#"
       if (d === undefined) return undefined;
       if (d === null) return null;
       var el = this;
-      return {
-        document: d,
+      // **ONE window object per frame.** This built a fresh object literal on EVERY read, so
+      // `f.contentWindow === f.contentWindow` was false and anything a script stashed on the
+      // window — a ready flag, a message-port handle, a resize callback, the bookkeeping every
+      // embed and OAuth frame keeps — was written to an object thrown away on the next line.
+      // Same rule as `el.sheet` and `f.contentDocument`; it was missing in all three.
+      if (el.__manukWin) { return el.__manukWin; }
+      var win = {
+        // A GETTER, not the `d` captured above: the window object now outlives a single read, and a
+        // frame that NAVIGATES gets a new document. Caching the value here would buy identity by
+        // making the window permanently stale — the same live-and-stable pair `sheet.cssRules`
+        // needed.
+        get document() { return frameDoc(el); },
         frameElement: el,
         // A frame's window is a global-ish object, and scripts poke at these before anything else.
         get location() { return { href: el.getAttribute('src') || 'about:blank' }; },
@@ -85,6 +108,10 @@ pub const IFRAME_JS: &str = r#"
         removeEventListener: function () {},
         postMessage: function () {}
       };
+      Object.defineProperty(el, '__manukWin', {
+        value: win, configurable: true, enumerable: false, writable: false
+      });
+      return win;
     }
   });
 
@@ -94,7 +121,24 @@ pub const IFRAME_JS: &str = r#"
       !('defaultView' in Document.prototype)) {
     Object.defineProperty(Document.prototype, 'defaultView', {
       configurable: true,
-      get: function () { return this === document ? globalThis : null; }
+      get: function () {
+        if (this === document) return globalThis;
+        // **A FRAMED document's view is its frame's window** — it was a flat `null` for every
+        // document that was not the singleton, so `iframeDoc.defaultView.postMessage(…)` and
+        // `d.defaultView.location` (the way a script inside-out addresses its own frame, and the
+        // idiom every embed uses to talk back) died on `null`.
+        //
+        // ⚠ This is only implementable because `contentDocument` identity now holds: the owning
+        // frame is found by COMPARING documents, and until this tick that comparison was false
+        // against the very document it was handed.
+        var els = document.getElementsByTagName ? document.getElementsByTagName('iframe') : [];
+        for (var i = 0; i < els.length; i++) {
+          if (els[i].contentDocument === this) { return els[i].contentWindow; }
+        }
+        // A document with no frame — `createHTMLDocument`, `parseFromString` — genuinely has no
+        // view, and `null` is the spec's answer for it, not a fallback.
+        return null;
+      }
     });
   }
 })();

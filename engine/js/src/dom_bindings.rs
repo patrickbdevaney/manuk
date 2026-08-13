@@ -5160,6 +5160,33 @@ unsafe fn el_content_document(cx: *mut RawJSContext, _argc: u32, vp: *mut Value)
     if !dom_is_live(child) {
         return true;
     }
+    // **ONE document object per frame — `f.contentDocument === f.contentDocument`.**
+    //
+    // This minted a FRESH reflector on every read, so the identity comparison every embed script
+    // makes was false against itself:
+    //
+    //     var d = frame.contentDocument;
+    //     … later …
+    //     e.target.ownerDocument === frame.contentDocument   // ← never true
+    //
+    // and a `WeakMap`/`Set` keyed on the frame's document accumulated one entry per read. The
+    // child arena already HAS a node cache (`__nodes_<addr>`, minted per arena precisely because a
+    // node id is unique only within one); consulting it before building is all that was missing,
+    // and it is the same cache `reflect_document` seeds so `el.ownerDocument === doc` holds.
+    rooted!(in(cx) let cache0 = node_cache_for(cx, child).unwrap_or(ptr::null_mut()));
+    if !cache0.get().is_null() {
+        rooted!(in(cx) let mut cached = UndefinedValue());
+        if JS_GetElement(
+            &mut wrap_cx(cx),
+            cache0.handle(),
+            root.0 as u32,
+            cached.handle_mut(),
+        ) && cached.get().is_object()
+        {
+            *vp = cached.get();
+            return true;
+        }
+    }
     let doc_ptr = match dom_protos(cx) {
         Some((_, doc_proto)) => {
             rooted!(in(cx) let proto = doc_proto);
@@ -5175,6 +5202,17 @@ unsafe fn el_content_document(cx: *mut RawJSContext, _argc: u32, vp: *mut Value)
     JS_SetReservedSlot(doc.get(), SLOT_NODE, &nv);
     let dv = PrivateValue(child as *const std::ffi::c_void);
     JS_SetReservedSlot(doc.get(), SLOT_DOM, &dv);
+    // Seed the child arena's cache so the NEXT read returns this same object (and so a node in the
+    // child resolves its  to it rather than minting a second one).
+    if !cache0.get().is_null() {
+        rooted!(in(cx) let ov = ObjectValue(doc.get()));
+        JS_SetElement(
+            &mut wrap_cx(cx),
+            cache0.handle(),
+            root.0 as u32,
+            ov.handle(),
+        );
+    }
     *vp = ObjectValue(doc.get());
     true
 }
@@ -9360,7 +9398,16 @@ unsafe fn el_get_owner_document(cx: *mut RawJSContext, _argc: u32, vp: *mut Valu
         while let Some(p) = (*dom).parent(cur) {
             cur = p;
         }
-        if (*dom).is_document(cur) && cur != (*dom).root() {
+        // **"Not the main document" is a question about the ARENA, not about the root node.**
+        //
+        // The guard used to be `cur != (*dom).root()` alone. Inside a FRAME's arena the owning
+        // document IS that arena's root — so the test was false exactly where the answer mattered
+        // most, and every node in an `<iframe>` fell through to report the PARENT's `document`.
+        // That is the DOMPurify failure of t643 all over again, one document boundary further out:
+        // `frameDoc.getElementById('x').ownerDocument === frameDoc` was false, and a walk keyed on
+        // `root.ownerDocument || root` ran against the wrong tree.
+        let foreign_arena = dom != CURRENT_DOM.with(|c| c.get());
+        if (*dom).is_document(cur) && (foreign_arena || cur != (*dom).root()) {
             // Restricted to a NON-main document. ⚠ **The RED probe corrected the reason I first
             // wrote here.** I claimed this guard is what keeps `el.ownerDocument === document`
             // object-identical; dropping it leaves that assertion GREEN, because the node cache

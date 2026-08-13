@@ -2896,3 +2896,67 @@ Also worth recording from the same sweep: **`css/css-values`' 40.4% is substanti
 spec**, the same shape as t1190's `domparsing` (65% `tentative/`). Its `assert_not_equals: property
 should be set` mass is `width: calc-size(…)` ×69, `font-family: random-item(…)` ×32,
 `background-image` ×33. Ranking that area by its failure count over-promises what is winnable.
+
+## A frame's window and document were rebuilt on every read — the same identity bug, fourth site (tick 1193)
+
+`f.contentWindow === f.contentWindow` was **false**. So was `f.contentDocument ===
+f.contentDocument`. Both minted a fresh object per access.
+
+| what breaks | why |
+|---|---|
+| state stashed on the frame's window | written to an object discarded on the next line — the ready flag, message-port handle and resize callback every embed and OAuth frame keeps |
+| `e.target.ownerDocument === frame.contentDocument` | the standard "is this event from my frame?" test, **never true** |
+| a `WeakMap`/`Set` keyed on the frame's document | one entry per read, forever |
+| `iframeDoc.defaultView` | flat `null` for any document that was not the singleton |
+
+**This is the fourth site of one bug in a single window of ticks** — `sheet.cssRules` (t1191) was the
+same defect one subsystem over, and `el.sheet` had the rule written down correctly the whole time:
+*"ONE object per element … a library that stashes bookkeeping on the sheet loses it otherwise."*
+The rule existed; it had not been carried to its neighbours.
+
+**Live AND stable, again.** The cached window exposes `document` as a **getter**, not the value
+captured when it was built — a frame that navigates gets a new document, and caching the value would
+have bought identity by making the window permanently stale. Exactly the pair `cssRules` needed.
+
+### `ownerDocument` asked the wrong question — and it is t643 one boundary further out
+
+```rust
+if (*dom).is_document(cur) && cur != (*dom).root() {   // ← "not the main document"
+```
+
+*"Not the main document"* is a question about the **ARENA**, not about the root node. Inside a
+frame's arena the owning document **is** that arena's root, so the test was false exactly where the
+answer mattered, and **every node in an `<iframe>` reported the PARENT's `document`**. That is the
+DOMPurify failure of t643 repeated across the frame boundary: a walk keyed on
+`root.ownerDocument || root` runs against the wrong tree and finds nothing. The guard is now
+`foreign_arena || cur != root()`.
+
+### What was deliberately NOT added, and why absence beats a stub
+
+**`contentWindow.getComputedStyle` is still missing on purpose.** Measured this tick: computed style
+does not work on a framed element *at all*. `STYLES_PTR` is a single thread-local holding ONE page's
+style map, and `window_get_computed_style` keeps only the `NodeId` from `node_and_dom`, **discarding
+the arena** — so a child node is looked up in the parent's map. On a frame whose own stylesheet sets
+`visibility:hidden`:
+
+```text
+  gcsHidden = visible     ← the child's stylesheet never reached it
+  gcsPlain  = undefined   ← a plain child element has no entry at all
+```
+
+Adding the method would convert *absent* into *silently wrong* — false-presence, which the
+reliability doctrine ranks strictly worse. It stays off until the style lookup is arena-aware.
+**That is the next tick, and it is worth ~480 subtests** in
+`css/selectors/attribute-selectors/attribute-case`, whose helper iterates `[window, quirks, xml]` —
+two of them frame windows — and dies on `global.getComputedStyle is not a function`.
+
+### Result, and what the number cannot see
+
+**`html/dom` 56443 → 56445 (+2)**, `dom` unchanged, HANG/CRASH 0.
+
+> **+2 is the instrument's answer, not the fix's value, and the distinction is constitutional
+> (VI.3: where usage-weight and measured-breadth disagree, usage-weight wins).** WPT's iframe tests
+> need the frame-loading harness, so almost none of them exercise this path here. What actually
+> changed is that a node in an `<iframe>` stopped reporting the parent's document — a wrong answer
+> of the right type, delivered with total confidence, on the #1 platform-web capability. The honest
+> report is *"the instrument cannot price this"*, not *"this bought +2"*.

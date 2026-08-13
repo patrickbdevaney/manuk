@@ -1018,6 +1018,10 @@
   - L2850 · A computed style that THREW on a non-string argument — and what the 40-message count was really worth (tick 1192)
   - L2874 · String(p), not typeof p === 'string'
   - L2882 · The honest size, and the lesson repeated
+  - L2900 · A frame's window and document were rebuilt on every read — the same identity bug, fourth site (tick 1193)
+  - L2921 · ownerDocument asked the wrong question — and it is t643 one boundary further out
+  - L2934 · What was deliberately NOT added, and why absence beats a stub
+  - L2953 · Result, and what the number cannot see
 
 ## THE FIDELITY INSTRUMENT — what it can and cannot see
 `docs/wiki/fidelity-instrument.md`
@@ -2025,4 +2029,4 @@
   - L124 · Rank mechanisms by FLIP RATE, not failing-subtest count — CSS layout is a multi-assertion slog
 
 ---
-1932 sections across 22 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+1936 sections across 22 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.

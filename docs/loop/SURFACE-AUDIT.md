@@ -5933,3 +5933,63 @@ t1180 +1, t1181 +2,714) and `WPT-AREAS.tsv` predates all of it, so the lever boa
 numbers that are three thousand subtests stale — `css/css-values` is listed at 20.9% and measured
 **40.4%**. The full sweep is running in this same tick. **A moving denominator is the tell**
 (t1163), and the board must not pick the next lever until it is refreshed.
+
+---
+
+## Audit #57 — tick 1193 (2026-08-12): the frame is right, and the map contradicted ITSELF
+
+**Sources read (external, not memory):**
+
+- <https://github.com/web-platform-tests/interop/blob/main/2026/README.md> — the authoritative
+  Interop 2026 list: 20 focus areas + 4 investigation efforts.
+- <https://webkit.org/blog/17818/announcing-interop-2026/>, <https://web.dev/blog/interop-2026>,
+  <https://www.igalia.com/news/interop-2026.html>, <https://hacks.mozilla.org/2026/02/launching-interop-2026/>
+  — the four vendors' own framing, used to confirm the list and catch anything phrased differently.
+
+### ADDED: nothing. And this time that is a RESULT, not a skipped audit.
+
+All **20 focus areas and all 4 investigation efforts** of Interop 2026 already have a row in
+`CONSTELLATION.tsv` — container style queries, anchor positioning, `attr()`, `contrast-color()`,
+CSS zoom, custom highlights, dialogs/popovers, fetch uploads+ranges, IndexedDB, JSPI, media
+pseudo-classes, Navigation API, scoped custom element registries, scroll-driven animations, scroll
+snap, `shape()`, view transitions, web compat, WebRTC, WebTransport, plus JPEG XL, WebVTT,
+accessibility testing and mobile testing. Verdicts range across `gated`/`partial`/`missing`/
+`unknown`, which is the point: **each is a measured position, not a blank.**
+
+The standing worry — *"the loop ranks inside a frame that may be the wrong frame"* — does not hold
+against Interop 2026. Nothing the four vendors agreed matters most for 2026 is off our map.
+
+### CORRECTED: `clip-path` — TWO ROWS, ONE CAPABILITY, OPPOSITE VERDICTS
+
+The audit's real find, and it is exactly the failure this instrument exists for:
+
+| row | verdict | gate |
+|---|---|---|
+| `CSS \`clip-path\` (the basic shapes)` | **gated** | `G_CLIP_PATH, G_SUPPORTS_HONESTY` |
+| `` `clip-path` + basic shapes (`inset()`/`circle()`/`polygon()`/`path()`) `` | **missing** | — |
+
+Those are the same capability. The map asserted both that we ship it and that we do not.
+
+**Settled from source, not from preference.** `engine/css/src/stylo_engine.rs:3132` (tick 593) says
+the four basic shapes `inset`/`circle`/`ellipse`/`polygon` clip the group's offscreen surface, and
+`path()`/`shape()`/`url()` do not. `G_CLIP_PATH` exists and **passes (2 tests, covering
+`inset`/`circle`/`polygon`)**. So the `gated` row was right and the `missing` row was **claiming a
+shipped capability was absent** — rot in the direction that hides work already done.
+
+The duplicate is now re-scoped to name what is genuinely absent:
+`` `clip-path: path()` / `shape()` / `url(#id)` (the NON-basic shapes) ``, `missing`.
+
+> **A duplicate row is worse than a missing one.** A gap says *"unmeasured"* and invites a probe. Two
+> rows disagreeing say *"measured"* twice, and whichever one a reader hits first becomes the answer.
+> Audit #56 found phantoms created by how the reconciliation was *matched*; this one found a phantom
+> that survived because nobody compared the map to **itself**. Add to the audit procedure: after
+> reconciling against the world, **reconcile the map against its own duplicates** — group by
+> capability and flag any group whose `status` column is not unanimous.
+
+### Re-rank?
+
+**No.** Nothing external outranks the current CO-#1. The internal re-rank is already live: `WPT-AREAS.tsv`
+was refreshed this session for `dom`, `domparsing`, `css/selectors`, `css/css-values` and `html/dom`,
+and the two areas the ranker over-promises (`domparsing` = 65% unshipped `tentative/`;
+`css/css-values` = `calc-size()`/`random-item()`) are recorded in the t1190/t1192 entries so the
+board is read with that discount.
