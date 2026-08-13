@@ -5186,6 +5186,44 @@ draining the JS event loop to its 20,000-task ceiling, which has no wall-clock b
 images now arrive; the page is still slow for another reason. Same discipline as t608: **do not book
 "site X works now" from "one of site X's defects is gone."**
 
+## The bound is on the TASK BOUNDARY, so ONE task that never returns is unreachable by all of it (tick 1198)
+
+| pattern | where it shows up | status |
+| --- | --- | --- |
+| A page runs **one** task that does not return — a busy-wait, a pathological regex, an unbounded synchronous loop inside a `setTimeout`/`fetch` reaction. Every bound the event loop has (`MAX_TASKS_PER_DRAIN`, `MANUK_MAX_DRAIN_MS`) is checked **between** tasks, so none of them can reach it, and the tab is frozen with no recourse | The fidelity sweep's **150s per-site timeout** — the largest engine-owned bucket in the exit metric — is **four consecutive drain-budget overruns** (t1196), none cuttable. Live: `theguardian.com` and `agoda.com` each hit exactly one such task per load; `news.ycombinator.com` and `en.wikipedia.org` never do | ✅ fixed (tick 1198) — a watchdog thread requests a SpiderMonkey interrupt past the budget, gated by **`G_SCRIPT_PREEMPTION`** |
+
+**The bound and the ceiling were both real and both blind to the same shape.** t610 fixed the *unit*
+(a task count is not a wall-clock harm); this fixes the *granularity*. `event_loop.rs` stated the
+remaining hole in its own comment — *"a single long-running task is not interrupted mid-flight …
+and never preempts JS"* — and it read as a scope note for 588 ticks rather than as the thing behind
+every unattributable timeout.
+
+⚠⚠⚠ **THE MECHANISM IS A THREAD, AND THAT IS THE WHOLE FINDING.** `JS_AddInterruptCallback` only
+**registers** a callback; SpiderMonkey polls it only after `JS_RequestInterruptCallback`, which in
+Firefox is issued by a watchdog thread. t1197 built the callback, the deadline and the arming on
+both drain paths — it compiled, it registered, and a 60s spin ran to completion **twice**. That build
+was **reverted rather than banked**, because a registered callback that never fires is *false
+presence*: `grep` would have said yes and the capability ledger would have gained a row.
+
+**WHY THIS IS NOT "fast because we never ran the script" — measured, not argued.** Four real sites,
+both binaries, same hour, release build (`boxes --fetch`):
+
+```text
+                                 HEAD              tick 1198          preemptions
+  news.ycombinator.com           122 boxes 2.6s    122 boxes 2.5s     0
+  en.wikipedia.org/…             464 boxes 5.9s    464 boxes 6.2s     0
+  theguardian.com/international  128 boxes 75.6s   128 boxes 72.9s    1
+  agoda.com                       13 boxes 36.6s    13 boxes 35.5s    1
+```
+
+**Identical box counts on all four.** The cut fires only on the pages the budget was already giving
+up on and it costs them **no content**; the two converging pages never see it. The seconds are one
+run per arm and are not attributable — t610's own retraction is the reason that sentence is here.
+
+⚠ **RESIDUAL:** only the two **drains** are armed. A long-running **inline `<script>` at parse time**
+is still unreachable by any bound — a different arming site, and a riskier one, since it would cut a
+page's own boot rather than its scheduled work.
+
 ## A self-rescheduling timer is bounded by a task COUNT, and the count is not the harm (tick 610)
 
 | pattern | where it shows up | status |

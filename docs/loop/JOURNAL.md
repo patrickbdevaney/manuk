@@ -46371,6 +46371,89 @@ PERF: none — one UA rule and one narrowed branch in a cascade that already ran
 WIKI: `docs/wiki/css-cascade.md` — where Chrome draws the form-control `box-sizing` line, and why a
 layout-crate test cannot see it.
 
+## Tick 1198 — the missing half was a THREAD, and preemption costs the four anchor sites ZERO boxes (2026-08-13)
+
+TICK SHAPE: capability — the concrete next step t1197 wrote down after proving registration alone
+inert. Bar 0 / performance face: a task that never returns is now reachable by the budget that was
+always supposed to bound it.
+
+⚠⚠⚠ **`JS_AddInterruptCallback` REGISTERS; `JS_RequestInterruptCallback` REQUESTS; and the thing
+that requests is a THREAD.** t1197 built the callback, the deadline and the arming on both drain
+paths, and a 60s spin ran to completion twice. That build was reverted rather than banked. This tick
+is the same diff **plus `engine/js/src/watchdog.rs`** — a `manuk-js-watchdog` thread that polls every
+20ms and calls `JS_RequestInterruptCallback` on the page context whenever the drain is past its
+budget. That single call is the whole delta between inert and working, and severing it is how the
+gate is RED-proven:
+
+```text
+  gate, watchdog requesting          ok      6s task cut at the 500ms budget
+  gate, ONE line severed (t1197)     FAILED  "SPIN-COMPLETED"  6.06s vs 6.06s unbounded
+  gate, restored                     ok
+```
+
+**WHAT THE BUDGET COULD NEVER REACH.** `MAX_TASKS_PER_DRAIN` and `MANUK_MAX_DRAIN_MS` are both
+checked on the **task boundary** — `event_loop.rs` says so in its own comment, *"a single
+long-running task is not interrupted mid-flight … and never preempts JS"* — so they bound a runaway
+*chain* and are structurally blind to one task that does not return. t1196 priced that: the sweep's
+150s per-site timeout is **four consecutive drain-budget overruns**, none of them cuttable.
+
+⚠⚠ **THE MEASUREMENT THAT DECIDES WHETHER THIS IS A FIX OR A TRADE — four real sites, both binaries,
+same hour, release build** (`boxes --fetch`, the old binary rebuilt from the t1197 tree at 02:02, the
+new one at 02:22):
+
+```text
+                                 HEAD              this tick          preemptions
+  news.ycombinator.com           122 boxes 2.6s    122 boxes 2.5s     0
+  en.wikipedia.org/…             464 boxes 5.9s    464 boxes 6.2s     0
+  theguardian.com/international  128 boxes 75.6s   128 boxes 72.9s    1
+  agoda.com                       13 boxes 36.6s    13 boxes 35.5s    1
+```
+
+**Box counts are IDENTICAL on all four.** Preemption fires on exactly the two pages the budget was
+already giving up on, and it costs them **zero boxes** — which is the question that mattered, because
+terminating a script mid-flight is the one way this could have been *"fast because we never ran the
+script"* rather than an optimisation. The two converging pages never see it at all. ⚠ The seconds are
+ONE RUN PER ARM and are **not attributable** — 2.7s and 1.1s on 75s and 36s loads is inside this
+box's noise, and I am not claiming them.
+
+**THE FAILURE MODE THIS CREATES, and the guard.** A terminated script and a page that threw arrive
+at the drain loop as **byte-identical `Err`s**. Reading the first as the second would turn every slow
+page into a *failed* page — a capability regression bought with a performance fix, which the ratchet
+refuses. `preempt_aware()` splits them on `watchdog::fired()`: a preemption stops the drain the same
+way a task-ceiling hit does (`note_drain_stopped_short()`), a real error still propagates, and
+`FIRED` is cleared by the same guard that armed the deadline so a stale verdict cannot swallow the
+NEXT drain's genuine error.
+
+**WHY A RAW `*mut JSContext` MAY CROSS A THREAD HERE**, stated because the neighbouring file
+documents two exit-crash classes from getting exactly this wrong (ADR-009): `JS_RequestInterruptCallback`
+is the one entry point SpiderMonkey documents as callable off the context's own thread (it sets a
+flag — no JS, no allocation, no GC lock); the pointer is published **only for the duration of one
+drain**, by a guard whose lifetime is a frame holding `&mut Runtime`, so it cannot outlive the
+runtime; and publish/clear/use all happen under **one mutex**, so a clear racing a poll blocks until
+that poll has returned. The deadline itself is a plain `AtomicU64` on purpose — the interrupt callback
+runs on the JS thread in the hot poll path and must never block on the watchdog. `G_CLEAN_EXIT`,
+`G_CONTAIN`, `G_DRAIN_BUDGET`, `G_DRAIN_BOUNDS_THE_PAGE` and `G_SILENT_FAIL` are all green.
+
+**THE GATE PROVES THE PROMISE BEFORE THE CUT.** `G_SCRIPT_PREEMPTION` asserts first that a 300ms
+busy-wait under a 5s budget **completes and lands its DOM write** (a deadline that clips honest work
+is the trap, not the fix), then asserts the cut as a **counterfactual** — the same 6s spin with
+`MANUK_MAX_DRAIN_MS=0` must run to completion — rather than against a wall-clock threshold a loaded
+build box can fake, then asserts the page survives: `#sink` intact and the inline script's earlier
+write still in the DOM. One task in the fixture, so the 20,000-task ceiling cannot be what stops it.
+
+⚠ **RESIDUAL, NAMED RATHER THAN DISCOVERED LATER:** only the two **drains** are armed. A long-running
+**inline `<script>` at parse time** is still unreachable by any bound, and that is a different arming
+site with a different risk profile (cutting a page's own boot script, not its scheduled work). And
+the fidelity cost of the cut is measured here on four sites, not on the corpus — the next sweep
+prices it against scorability, which is where t1196 said the 150s bucket lives.
+
+PERF: the watchdog thread is 50 wakeups/second of one atomic load that returns `0` and sleeps again;
+it is spawned lazily on the first armed drain, so a JS-less build never has one. No measurable cost
+on the two converging anchors (2.6→2.5s, 5.9→6.2s — noise in both directions).
+
+WIKI: docs/wiki/js-engine.md — "Preemption — a script the browser can actually stop, and why the
+API's *other* half is a thread"
+
 ## Tick 1197 — I built the preemption t1196 scoped, PROVED IT INERT, and reverted it (2026-08-13)
 
 TICK SHAPE: measurement — a REFUSAL, which is a result. The fix t1196 verified as "reachable" is

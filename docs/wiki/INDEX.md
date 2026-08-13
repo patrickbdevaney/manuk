@@ -1489,6 +1489,10 @@
   - L2873 · The shape of the describer, and why each bound is there
   - L2889 · The second defect it surfaced — and the correction, because the first reading was wrong
   - L2919 · The bottom of that chain — 'withCredentials' in xhr is jQuery's ENTIRE cross-origin capability
+  - L2967 · Preemption — a script the browser can actually stop, and why the API's *other* half is a thread
+  - L2982 · The mechanism, and the half that is easy to miss
+  - L3006 · Why a raw *mut JSContext may cross a thread here
+  - L3022 · The failure mode this creates, and the guard against it
 
 ## Manuk Daily-Driver Usability Roadmap (synthesized, tick 138)
 `docs/wiki/lever-map.md`
@@ -2033,4 +2037,4 @@
   - L124 · Rank mechanisms by FLIP RATE, not failing-subtest count — CSS layout is a multi-assertion slog
 
 ---
-1940 sections across 22 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+1944 sections across 22 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.

@@ -1604,6 +1604,11 @@ pub mod history_bindings;
 #[cfg(feature = "_sm")]
 pub mod event_loop;
 
+/// The watchdog thread that lets the drain budget PREEMPT a single long-running task, rather than
+/// only bound a chain of short ones. See the module docs — registration alone is inert (t1197).
+#[cfg(feature = "_sm")]
+pub mod watchdog;
+
 #[cfg(test)]
 mod tests {
     use super::*;

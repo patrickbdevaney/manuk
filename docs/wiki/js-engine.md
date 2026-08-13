@@ -2963,3 +2963,73 @@ closing it needs a credentials-mode field through `take_fetches`'s tuple (~20 ca
 absent and deliberately so: `responseURL` and `responseXML` (both need host plumbing), and
 `upload`/`XMLHttpRequestUpload` — that one is *named in the standing absence list* because this engine
 does not stream a request body, and `G_IFACE_SURFACE_2` asserts the absence on purpose.
+
+## Preemption — a script the browser can actually stop, and why the API's *other* half is a thread
+
+**The drain budget could never stop the shape that hangs a tab.** `MAX_TASKS_PER_DRAIN` and
+`MANUK_MAX_DRAIN_MS` are both checked on the **task boundary**, so they bound a runaway *chain*
+(`setInterval(fn, 0)`, a self-reposting `rAF`) and are structurally unable to touch **one task that
+does not return**. The comment in `event_loop.rs` said so plainly and it was read as a scope note
+rather than as a gap:
+
+> *"Checked only on the task boundary, so a single long-running task is not interrupted mid-flight …
+> and never preempts JS."*
+
+Tick 1196 priced that against the corpus: the fidelity sweep's 150s per-site timeout — the largest
+engine-owned bucket in the exit metric — is **four consecutive drain-budget overruns**, and the
+budget could not cut any of them.
+
+### The mechanism, and the half that is easy to miss
+
+```text
+  JS thread                         watchdog thread ("manuk-js-watchdog")
+  ─────────                         ────────────────────────────────────
+  ScriptDeadline::arm(cx, budget)
+    JS_AddInterruptCallback(cx, cb) ─── REGISTERS the callback. Inert on its own.
+    DEADLINE = now + budget
+    publish cx  ──────────────────►  every 20ms: if now >= DEADLINE
+                                        JS_RequestInterruptCallback(cx)   ◄── the missing half
+  …running script…
+  SpiderMonkey polls cb  ◄────────────  (only because an interrupt was REQUESTED)
+    cb returns false  ⇒ script TERMINATED, uncatchable
+  drain sees Err, asks watchdog::fired()  ⇒ "we cut it", not "the page threw"
+  ScriptDeadline::drop → DEADLINE = 0, cx retired, FIRED = 0
+```
+
+⚠⚠⚠ **`JS_AddInterruptCallback` only registers. Nothing polls it until
+`JS_RequestInterruptCallback` has been called, and in Firefox that caller is a watchdog THREAD.**
+Tick 1197 built the callback, the deadline and the arming on both drain paths; it compiled, it
+registered, and a 60s spin ran to completion **twice**. That build was reverted rather than banked —
+a registered callback that never fires is *false presence*, which `grep` and the capability ledger
+would both have reported as a working feature.
+
+### Why a raw `*mut JSContext` may cross a thread here
+
+SpiderMonkey is thread-affine and `spidermonkey.rs` documents two exit-crash classes that came from
+getting its lifetimes wrong (ADR-009). Three properties contain this one:
+
+1. `JS_RequestInterruptCallback` is the **one** entry point documented as callable off the context's
+   own thread — it sets a flag, runs no JS, allocates nothing, takes no GC lock.
+2. The pointer is published **only for the duration of one drain**, by a guard whose lifetime is a
+   stack frame holding `&mut Runtime`, and cleared in that guard's `Drop`. It cannot outlive the
+   runtime.
+3. Publish, clear and use all happen under **one mutex**, so a clear racing a poll blocks until the
+   poll's call into SpiderMonkey has returned.
+
+The deadline itself is a plain `AtomicU64`, deliberately: the interrupt callback runs on the **JS
+thread** in the hot poll path and must never be able to block on the watchdog.
+
+### The failure mode this creates, and the guard against it
+
+A terminated script and a page that threw arrive at the drain loop as **byte-identical `Err`s**.
+Treating the first as the second would turn every slow page into a *failed* page — a capability
+regression bought with a performance fix. `preempt_aware()` splits them on `watchdog::fired()`:
+preemption breaks the drain the same way a task-ceiling hit does (`note_drain_stopped_short()`), and
+a real error still propagates. `FIRED` is cleared by the same guard that armed the deadline, so a
+stale verdict can never swallow the *next* drain's genuine error.
+
+**`G_SCRIPT_PREEMPTION` proves the promise before the cut** — a 300ms busy-wait under a 5s budget
+must complete and land its DOM write — then proves the cut as a **counterfactual** (the same 6s spin
+with `MANUK_MAX_DRAIN_MS=0` runs to completion), then proves the page survives it. RED-proven by
+severing exactly one line: the watchdog's `JS_RequestInterruptCallback` call, which restores the
+t1197 inert state and fails with that state named in the message.

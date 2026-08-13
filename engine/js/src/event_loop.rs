@@ -7424,6 +7424,22 @@ fn microtask_checkpoint(rt: &mut Runtime, global: mozjs::rust::HandleObject) -> 
     Ok(())
 }
 
+/// **A drain step that failed, classified.** `Ok(Some(v))` ran; `Ok(None)` means *the watchdog
+/// terminated the script* — we cut it off deliberately, so the page is not broken and the drain
+/// stops the same way a task-ceiling hit does; `Err(e)` is a genuine page error and still propagates.
+///
+/// This distinction is the whole reason preemption is safe to ship: a terminated script and a page
+/// that threw arrive here byte-identically, and treating the first as the second would turn every
+/// slow page into a *failed* page — a capability regression bought with a performance fix, which the
+/// ratchet refuses.
+fn preempt_aware<T>(r: Result<T, String>) -> Result<Option<T>, String> {
+    match r {
+        Ok(v) => Ok(Some(v)),
+        Err(_) if crate::watchdog::fired() => Ok(None),
+        Err(e) => Err(e),
+    }
+}
+
 /// Run the event loop to quiescence with **no network** (pending `fetch`/XHR requests,
 /// if any, resolve with status 0). See [`run_with_fetcher`] for the I/O-enabled loop.
 pub fn run(rt: &mut Runtime, global: mozjs::rust::HandleObject) -> Result<u32, String> {
@@ -7439,9 +7455,19 @@ pub fn run_deferred(rt: &mut Runtime, global: mozjs::rust::HandleObject) -> Resu
     let mut count = 0u32;
     let started = std::time::Instant::now();
     let budget = max_drain_ms();
-    loop {
-        microtask_checkpoint(rt, global)?;
-        let ran = eval(rt, global, NEXT_TASK, "event_loop_tick.js")?;
+    // The same budget, armed against the SCRIPT. Every check below is on a task boundary and so
+    // cannot touch a task that never returns — see `crate::watchdog`.
+    let _deadline = crate::watchdog::ScriptDeadline::arm(unsafe { rt.cx().raw_cx() }, budget);
+    let mut preempted = false;
+    'drain: loop {
+        let Some(()) = preempt_aware(microtask_checkpoint(rt, global))? else {
+            preempted = true;
+            break 'drain;
+        };
+        let Some(ran) = preempt_aware(eval(rt, global, NEXT_TASK, "event_loop_tick.js"))? else {
+            preempted = true;
+            break 'drain;
+        };
         if ran.is_boolean() && ran.to_boolean() {
             count += 1;
             // **A runaway task chain must not hang the browser (Bar 0).**
@@ -7484,7 +7510,18 @@ pub fn run_deferred(rt: &mut Runtime, global: mozjs::rust::HandleObject) -> Resu
         }
         break;
     }
-    microtask_checkpoint(rt, global)?;
+    if preempted {
+        tracing::warn!(
+            count,
+            elapsed_ms = started.elapsed().as_millis() as u64,
+            budget_ms = budget as u64,
+            "event loop PREEMPTED a task that was over budget and not returning — painting what we \
+             have. The alternative is a frozen tab that no task-boundary check can reach."
+        );
+        note_drain_stopped_short();
+    } else {
+        microtask_checkpoint(rt, global)?;
+    }
     // The per-drain distribution, which is how the budget above was chosen rather than guessed. A
     // converging page's drain is tens of tasks and single-digit milliseconds; anything that shows up
     // here in seconds is the interesting case.
@@ -7795,12 +7832,26 @@ where
     // one of them enforced it.
     let started = std::time::Instant::now();
     let budget = max_drain_ms();
-    loop {
-        microtask_checkpoint(rt, global)?;
+    // See `run_deferred` and `crate::watchdog`: the same budget, armed against the SCRIPT so that a
+    // single task which never returns is reachable at all.
+    let _deadline = crate::watchdog::ScriptDeadline::arm(unsafe { rt.cx().raw_cx() }, budget);
+    let mut preempted = false;
+    'drain: loop {
+        let Some(()) = preempt_aware(microtask_checkpoint(rt, global))? else {
+            preempted = true;
+            break 'drain;
+        };
 
         // Perform all currently-pending network requests.
         let mut did_io = false;
-        while let Some(req) = eval_string(rt, global, NEXT_PENDING, "event_loop_net.js")? {
+        loop {
+            let Some(next) =
+                preempt_aware(eval_string(rt, global, NEXT_PENDING, "event_loop_net.js"))?
+            else {
+                preempted = true;
+                break 'drain;
+            };
+            let Some(req) = next else { break };
             did_io = true;
             // "id\x01kind\x01method\x01url\x01headers\x01body" (this loop's mock fetcher ignores
             // headers/body; the live host path in `drain_pending` replays them onto the wire).
@@ -7825,12 +7876,24 @@ where
                     js_string_literal(&body)
                 )
             };
-            eval(rt, global, &deliver, "event_loop_deliver.js")?;
+            let Some(()) =
+                preempt_aware(eval(rt, global, &deliver, "event_loop_deliver.js").map(|_| ()))?
+            else {
+                preempted = true;
+                break 'drain;
+            };
         }
 
-        microtask_checkpoint(rt, global)?; // delivery may queue micro/promise jobs
+        // delivery may queue micro/promise jobs
+        let Some(()) = preempt_aware(microtask_checkpoint(rt, global))? else {
+            preempted = true;
+            break 'drain;
+        };
 
-        let ran = eval(rt, global, NEXT_TASK, "event_loop_tick.js")?;
+        let Some(ran) = preempt_aware(eval(rt, global, NEXT_TASK, "event_loop_tick.js"))? else {
+            preempted = true;
+            break 'drain;
+        };
         let ran = ran.is_boolean() && ran.to_boolean();
         // Both bounds, checked on the task boundary and before either `continue` — including the
         // `did_io` one, because "a delivered result may have scheduled more work" is precisely how a
@@ -7865,7 +7928,18 @@ where
         }
         break;
     }
-    microtask_checkpoint(rt, global)?; // final checkpoint
+    if preempted {
+        tracing::warn!(
+            count,
+            elapsed_ms = started.elapsed().as_millis() as u64,
+            budget_ms = budget as u64,
+            "fetcher event loop PREEMPTED a task that was over budget and not returning — painting \
+             what we have."
+        );
+        note_drain_stopped_short();
+    } else {
+        microtask_checkpoint(rt, global)?; // final checkpoint
+    }
     tracing::debug!(
         count,
         elapsed_ms = started.elapsed().as_millis() as u64,
