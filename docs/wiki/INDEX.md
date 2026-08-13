@@ -842,6 +842,9 @@
   - L2826 · :has() was quadratic, and the metric that would have caught it was FROZEN (tick 1161)
   - L2888 · An invalid declaration is IGNORED — and _ => Initial applies it
   - L2923 · Why this is a SHIPPING bug and not just a fallback one
+  - L2943 · :nth-child worked, so the whole An+B family looked implemented (t1199)
+  - L2969 · :first-of-type is NOT :first-child, and a homogeneous fixture cannot tell them apart
+  - L2978 · One rule, two implementations — and only one of them was broken
 
 ## `<dialog>`, `popover`, and the top layer (ticks 194-195)
 `docs/wiki/dialog-and-top-layer.md`
@@ -2037,4 +2040,4 @@
   - L124 · Rank mechanisms by FLIP RATE, not failing-subtest count — CSS layout is a multi-assertion slog
 
 ---
-1944 sections across 22 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+1947 sections across 22 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.

@@ -5186,6 +5186,30 @@ draining the JS event loop to its 20,000-task ceiling, which has no wall-clock b
 images now arrive; the page is still slow for another reason. Same discipline as t608: **do not book
 "site X works now" from "one of site X's defects is gone."**
 
+## A family is not covered by its representative — `:nth-child` worked and the other five returned NOTHING (tick 1199)
+
+| pattern | where it shows up | status |
+| --- | --- | --- |
+| The structural An+B pseudo-classes in `querySelector`/`querySelectorAll`/`matches`/`closest`: `:nth-last-child`, `:nth-of-type`, `:nth-last-of-type`, `:first-of-type`, `:last-of-type`, `:only-of-type`. All six hit `parse_pseudo`'s `_ => return None`, which drops the **whole selector** — so a valid query returned an EMPTY LIST, indistinguishable from a page with nothing to match | Zebra-striped tables and lists, "last item, no bottom border", `:first-of-type` headings inside prose blocks, every component library that scopes a rule to the first/last element of a kind. `em:nth-of-type(3)` → 0 (Chrome 1) · `li:nth-last-child(3n)` → 0 (Chrome 2) · `#p :last-of-type` → 0 (Chrome 2), while `li:nth-child(2n)` → 3 was correct | ✅ fixed (tick 1199) — gated by **`G_STRUCTURAL_PSEUDOS`**; `dom` **6383 → 6671 (+288)**, `css/selectors` **3547 → 3643 (+96)** |
+
+⚠⚠⚠ **THE WORKING MEMBER HID THE OTHER FIVE.** A probe asking *"do An+B selectors work?"* reaches
+for `:nth-child`, gets `yes`, and closes the question about a family of six where five are absent.
+The general form: **a family is not covered by its representative** — and `parse_pseudo` is a flat
+list of match arms, so "which of these six are actually here" was a two-second read nobody had a
+reason to do.
+
+⚠⚠ **AND ONLY ONE OF THE TWO ENGINES WAS BROKEN.** The live cascade is Stylo's and always resolved
+these, so `em:nth-of-type(2) { color: … }` **rendered correctly the whole time** while every script
+that asked `querySelectorAll` about the same element got nothing. The page looked right; the DOM
+answered wrong. That asymmetry is why this survived — the visual instrument this project steers by
+could not see it, by construction.
+
+**`:first-of-type` is not `:first-child`**, and a homogeneous fixture cannot tell them apart: in a
+mixed run the first `<span>` and the first `<b>` are each first *of their type* while neither is a
+first child. A fix counting all element siblings passes every list-of-`<li>` test and is wrong on
+every paragraph, card body and nav bar. RED-proven both ways — remove the parse arms and
+`firstOfType` reads `0`; remove the type filter and it reads `1:e1` instead of `3:e1,s1,b1`.
+
 ## The bound is on the TASK BOUNDARY, so ONE task that never returns is unreachable by all of it (tick 1198)
 
 | pattern | where it shows up | status |

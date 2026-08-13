@@ -11,12 +11,12 @@
 
 | | value | over |
 |---|---|---|
-| ticks landed | **900** | ticks 1–1198 |
-| median tick cycle | **28m** | 899 intervals |
-| median, last 10 | **37m** | 10 intervals |
+| ticks landed | **901** | ticks 1–1199 |
+| median tick cycle | **28m** | 900 intervals |
+| median, last 10 | **34m** | 10 intervals |
 | fastest / slowest | 5s / 5.4d | |
-| **ticks per hour** | **1.14** | 789.7h elapsed |
-| median verify wall | **63s** | 839 ticks |
+| **ticks per hour** | **1.14** | 790.3h elapsed |
+| median verify wall | **63s** | 840 ticks |
 | wall trend | 39s → 13m — getting slower ⚠️ | first 3 vs last 3 |
 
 The **cycle** is the real unit: implement → debug → verify wall → land. The wall is only part of
@@ -27,11 +27,11 @@ it, and a wall that grows taxes every future tick, so it is tracked separately f
 ### Near — the daily driver (doc / app / platform web)
 
 * **capabilities asserted** (`G_CAPABILITY`): 48 → **81**
-* **live gates**: 27 → **452**
-* **✅ rows in the capability ledger**: 144 → **592**
+* **live gates**: 27 → **453**
+* **✅ rows in the capability ledger**: 144 → **593**
 * **Bar 0 — oracle hangs**: 0 of 265 sites
 
-**404 of 900 ticks** (45%) moved a
+**405 of 901 ticks** (45%) moved a
 user-visible capability. The rest were instruments, infrastructure and corrections — and the
 ledger says the corrections were not overhead: three of its top three priorities were phantoms,
 and finding that out redirected everything after it.
@@ -90,8 +90,8 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 
 ## What a capability costs
 
-* **404** capability ticks, median cycle **28m**
-* median diff per tick: **+266 / −34** lines across 8 files
+* **405** capability ticks, median cycle **28m**
+* median diff per tick: **+267 / −34** lines across 8 files
 
 ## Every tick
 
@@ -997,5 +997,6 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 | **1195** | 2026-08-13 01:37 | 10m | measurement | 13m | +96/−32 | 451 | 81 | 56.0% · | the CrUX sweep the last two constitution checks asked for, and it disagrees with itself (2 |
 | **1197** | 2026-08-13 02:06 | 29m | measurement | 13m | +97/−32 | 451 | 81 | 56.0% · | I built the preemption t1196 scoped, PROVED IT INERT, and reverted it (2026-08-13) |
 | **1198** | 2026-08-13 02:46 | 40m | capability | 13m | +672/−44 | 452 | 81 | 56.0% · | the missing half was a THREAD, and preemption costs the four anchor sites ZERO boxes (2026 |
+| **1199** | 2026-08-13 03:19 | 33m | capability | 13m | +502/−44 | 453 | 81 | 56.0% · | `:nth-child` worked, so the family looked implemented — the other five returned NOTHING (2 |
 
 *`·` after a WPT figure means **carried forward**, not measured this tick.*

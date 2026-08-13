@@ -1958,6 +1958,21 @@ enum Pseudo {
     OnlyChild,
     /// `:nth-child(an+b)` — coefficients `a`, `b` (1-based index among element siblings).
     NthChild(i32, i32),
+    /// **`:nth-last-child(an+b)` — the same index counted from the END.**
+    ///
+    /// Absent, it fell through to `_ => return None` and took the **whole selector** with it, so
+    /// `querySelectorAll('li:nth-last-child(3n)')` answered `[]` rather than a wrong set. The same
+    /// silent-empty shape as `:is()` at t1194.
+    NthLastChild(i32, i32),
+    /// **The `-of-type` family**, whose index counts only siblings of the SAME element type rather
+    /// than all element siblings. `:first-of-type` is not `:first-child` — `<p>x<em>a</em>…` has an
+    /// `<em>` that is first of its type and is nobody's first child, and the two answers differ on
+    /// most real markup.
+    FirstOfType,
+    LastOfType,
+    OnlyOfType,
+    NthOfType(i32, i32),
+    NthLastOfType(i32, i32),
     Root,
     Empty,
     Checked,
@@ -2105,6 +2120,48 @@ fn prev_element_sibling(dom: &Dom, node: NodeId) -> Option<NodeId> {
         cur = dom.prev_sibling(n);
     }
     None
+}
+
+/// 1-based index of `node` among its element siblings **of the same type**, and the total count of
+/// those. The `-of-type` twin of [`element_sibling_position`], and the only difference is the tag
+/// filter — which is exactly the difference `:first-child` and `:first-of-type` disagree on.
+///
+/// The "type" is the local name, as the Dom stores it. A namespace-aware comparison would need
+/// namespaces on `Element`, which this arena does not carry per-node; HTML content is all one
+/// namespace, so the distinction only bites on inline SVG/MathML with colliding local names.
+fn type_sibling_position(dom: &Dom, node: NodeId) -> (usize, usize) {
+    let Some(name) = dom.element(node).map(|e| e.name.clone()) else {
+        return (1, 1);
+    };
+    let Some(parent) = dom.parent(node) else {
+        return (1, 1);
+    };
+    let mut index = 0;
+    let mut total = 0;
+    for c in dom.children(parent) {
+        if dom.element(c).map(|e| e.name == name).unwrap_or(false) {
+            total += 1;
+            if c == node {
+                index = total;
+            }
+        }
+    }
+    (index.max(1), total.max(1))
+}
+
+/// **`idx == a*n + b` for some integer `n >= 0`** — the whole of `An+B` matching, in one place.
+///
+/// Written once because four pseudo-classes need it and a copy that drifts is how
+/// `:nth-child` and `:nth-of-type` end up disagreeing about `-n+3`. The `a == 0` case is a plain
+/// equality (`:nth-child(3)`); otherwise the division is checked by re-multiplying, so a
+/// non-divisible index fails rather than rounding into a match.
+fn nth_matches(a: i32, b: i32, idx: i32) -> bool {
+    if a == 0 {
+        idx == b
+    } else {
+        let n = (idx - b) / a;
+        n >= 0 && a * n + b == idx
+    }
 }
 
 /// 1-based index of `node` among its element siblings, and the total element-sibling count.
@@ -2294,14 +2351,25 @@ fn pseudo_matches(p: &Pseudo, dom: &Dom, node: NodeId) -> bool {
         }
         Pseudo::NthChild(a, b) => {
             let (idx, _) = element_sibling_position(dom, node);
-            let idx = idx as i32;
-            // idx == a*n + b for some integer n >= 0.
-            if *a == 0 {
-                idx == *b
-            } else {
-                let n = (idx - b) / a;
-                n >= 0 && a * n + b == idx
-            }
+            nth_matches(*a, *b, idx as i32)
+        }
+        Pseudo::NthLastChild(a, b) => {
+            let (idx, total) = element_sibling_position(dom, node);
+            nth_matches(*a, *b, (total - idx + 1) as i32)
+        }
+        Pseudo::FirstOfType => type_sibling_position(dom, node).0 == 1,
+        Pseudo::LastOfType => {
+            let (idx, total) = type_sibling_position(dom, node);
+            idx == total
+        }
+        Pseudo::OnlyOfType => type_sibling_position(dom, node).1 == 1,
+        Pseudo::NthOfType(a, b) => {
+            let (idx, _) = type_sibling_position(dom, node);
+            nth_matches(*a, *b, idx as i32)
+        }
+        Pseudo::NthLastOfType(a, b) => {
+            let (idx, total) = type_sibling_position(dom, node);
+            nth_matches(*a, *b, (total - idx + 1) as i32)
         }
         Pseudo::Root => dom
             .parent(node)
@@ -3902,9 +3970,31 @@ fn parse_pseudo(name: &str, arg: Option<&str>) -> Option<Pseudo> {
         // rule gated on them just doesn't apply (rather than dropping the whole rule).
         "hover" | "focus" | "active" | "visited" | "target" | "focus-within" | "focus-visible"
         | "placeholder-shown" | "autofill" => Pseudo::NeverStatic,
+        "first-of-type" => Pseudo::FirstOfType,
+        "last-of-type" => Pseudo::LastOfType,
+        "only-of-type" => Pseudo::OnlyOfType,
         "nth-child" => {
             let (a, b) = parse_nth(arg?)?;
             Pseudo::NthChild(a, b)
+        }
+        // **The other four An+B pseudos, absent since this parser was written.** `:nth-child` was
+        // here alone, so `:nth-last-child`, `:nth-of-type` and `:nth-last-of-type` hit the
+        // `_ => return None` arm at the bottom — which drops the ENTIRE selector, not the pseudo.
+        // Measured before the fix: `em:nth-of-type(3)` → 0 matches (Chrome 1),
+        // `li:nth-last-child(3n)` → 0 (Chrome 2), `#p :last-of-type` → 0 (Chrome 2), while
+        // `li:nth-child(2n)` was correct at 3. An empty answer from a valid selector is the
+        // hardest failure to notice, because it looks exactly like a page with nothing to match.
+        "nth-last-child" => {
+            let (a, b) = parse_nth(arg?)?;
+            Pseudo::NthLastChild(a, b)
+        }
+        "nth-of-type" => {
+            let (a, b) = parse_nth(arg?)?;
+            Pseudo::NthOfType(a, b)
+        }
+        "nth-last-of-type" => {
+            let (a, b) = parse_nth(arg?)?;
+            Pseudo::NthLastOfType(a, b)
         }
         // ⚠ `:not()` is NOT forgiving — unlike `:is()`/`:has()`. Selectors 4 is explicit: an
         // invalid member makes the whole `:not()` invalid, because dropping one would INVERT the

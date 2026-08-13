@@ -46371,6 +46371,88 @@ PERF: none — one UA rule and one narrowed branch in a cascade that already ran
 WIKI: `docs/wiki/css-cascade.md` — where Chrome draws the form-control `box-sizing` line, and why a
 layout-crate test cannot see it.
 
+## Tick 1199 — `:nth-child` worked, so the family looked implemented — the other five returned NOTHING (2026-08-13)
+
+TICK SHAPE: capability — the top-leverage `dom` vein per `scripts/wpt-leverage.sh` (1568, 60.8%,
+HIGH flip), reached by histogramming the ASSERTION MESSAGE rather than the test name.
+
+⚠⚠⚠ **FIVE OF THE SIX An+B PSEUDO-CLASSES WERE ABSENT, AND THE SIXTH IS WHY NOBODY LOOKED.**
+`manuk_css`'s `Pseudo` enum carried **`NthChild` alone**; `:nth-last-child`, `:nth-of-type`,
+`:nth-last-of-type`, `:first-of-type`, `:last-of-type` and `:only-of-type` all fell through
+`parse_pseudo`'s `_ => return None`, which drops the **whole selector**. Measured on a six-`<li>`
+list and a mixed `<p>`, against Chrome:
+
+```text
+  li:nth-child(2n)          3   ← correct, and the reason nobody looked
+  em:nth-of-type(3)         0   (Chrome 1)
+  li:nth-last-child(3n)     0   (Chrome 2)
+  #p :last-of-type          0   (Chrome 2)
+  #p :nth-last-of-type(2n)  0   (Chrome 2)
+```
+
+**A family is not covered by its representative.** A probe asking *"do An+B selectors work?"*
+reaches for `:nth-child`, gets `yes`, and closes the question about six constructs where five are
+missing. `parse_pseudo` is a flat list of match arms — *which of these six are here* was a
+two-second read, and nothing in the loop had a reason to do it. The empty NodeList is the hardest
+failure shape there is: it is byte-identical to a page that genuinely has nothing to match.
+
+⚠⚠⚠ **ONE RULE, TWO IMPLEMENTATIONS — AND ONLY ONE OF THEM WAS BROKEN, WHICH IS WHY IT SURVIVED.**
+The live cascade is **Stylo's** and has always resolved these pseudos, so
+`em:nth-of-type(2) { color: … }` **rendered correctly the entire time** while
+`querySelectorAll('em:nth-of-type(2)')` found nothing. The page looked right and the DOM answered
+wrong — a shape the fidelity instrument this loop steers by **cannot see by construction**. The
+gate's `cascadeAgrees` claim now asserts the two engines name the same element rather than leaving
+the agreement to inference.
+
+**MEASURED, same release binary, same hour, full areas:**
+
+```text
+  dom            6383 → 6671   (+288)   60.8% → 63.5%    0 crashes
+  css/selectors  3547 → 3643    (+96)   63.8% → 65.5%    0 crashes
+  html/dom      56445 → 56445     (0)            94.2%   0 crashes   ← the regression control
+  ────────────────────────────────────────────────────────────────
+  PRIMARY (active-areas)  85603 → 85988   70.14% → 70.46%
+```
+
+`html/dom` is the control arm, not decoration: the selector engine is shared across every area that
+calls `querySelector`, so a change to `parse_pseudo` could have moved it in either direction. It did
+not move at all.
+
+**RED-PROVEN TWICE, because the fix has two halves that fail differently:**
+
+```text
+  remove the parse arms (the state before this tick)
+      firstOfType:0  lastOfType:0  onlyOfType:0        ← the selector is dropped WHOLE
+  remove the type filter (count ALL element siblings — the plausible half-fix)
+      firstOfType:1:e1  nthOfType2:0  matchesApi:false ← and homogeneousAgrees STAYS true
+```
+
+**`:first-of-type` is not `:first-child`, and a homogeneous fixture cannot tell them apart.** In
+`<p><em>a</em><span>b</span><em>c</em><b>f</b></p>` the `<span>` and the `<b>` are each first *of
+their type* and neither is anybody's first child. A sibling-counting fix passes every list-of-`<li>`
+fixture and is wrong on every paragraph, card body and nav bar — so `G_STRUCTURAL_PSEUDOS`'s subject
+is deliberately heterogeneous and the `<li>` list is present only as the control.
+
+**HOW IT WAS FOUND, because the method is the transferable part.** The board's mandate is
+`scripts/wpt-leverage.sh`; its top row is `dom`. Running that area with `--show-failures` and
+histogramming the **assertion message** (not the test name) put `assert_throws_dom` at the top —
+which is a validation family, not one bug — but two rows down sat *"The method should return the
+expected number of matches"* ×142 and *"should match the selector"* ×178, and those messages carry
+the failing selector verbatim. Four minutes of reading, one 10-line probe, and the mechanism was
+named. ⚠ The top row was a red herring, and the second-and-third rows were the lever: **rank by
+mechanism, not by count.**
+
+⚠ **RESIDUAL, named:** `:nth-col`/`:nth-last-col` (table-column pseudos) are still unparsed and
+still drop the selector; they are Selectors 4 and effectively unused on the open web. The
+`-of-type` comparison is on the **local name** — a namespace-aware comparison would need per-node
+namespaces the arena does not carry, so inline SVG/MathML with a colliding local name is the one
+unmodelled edge, stated in `type_sibling_position`'s doc rather than discovered later.
+
+PERF: none — `type_sibling_position` is one pass over the parent's children, the same shape as the
+`element_sibling_position` beside it that `:nth-child` has always used. F1/F2 unmoved.
+
+WIKI: docs/wiki/css-cascade.md — "`:nth-child` worked, so the whole An+B family looked implemented"
+
 ## Tick 1198 — the missing half was a THREAD, and preemption costs the four anchor sites ZERO boxes (2026-08-13)
 
 TICK SHAPE: capability — the concrete next step t1197 wrote down after proving registration alone

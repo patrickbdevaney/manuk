@@ -2939,3 +2939,49 @@ common, and the cost is a whole property silently reverting.
 six fixed here; the rest are decided by Stylo on the shipping path, so they are fallback-correctness
 debt rather than live defects. Sweeping them is a tick, with the same entry criterion — an arm may
 drop its fall-through only once every real keyword it was absorbing has been written out.
+
+## `:nth-child` worked, so the whole An+B family looked implemented (t1199)
+
+**`document.querySelectorAll('em:nth-of-type(3)')` returned an EMPTY LIST.** So did
+`li:nth-last-child(3n)`, `:first-of-type`, `:last-of-type` and `:only-of-type`. Measured on a
+six-`<li>` list and a mixed `<p>`, against Chrome's answers:
+
+```text
+  li:nth-child(2n)          3   ← correct, and the reason nobody looked
+  em:nth-of-type(3)         0   (Chrome 1)
+  li:nth-last-child(3n)     0   (Chrome 2)
+  #p :last-of-type          0   (Chrome 2)
+  #p :nth-last-of-type(2n)  0   (Chrome 2)
+```
+
+`manuk_css`'s `Pseudo` enum carried **`NthChild` alone**. Every sibling of it fell through
+`parse_pseudo`'s `_ => return None` arm — which drops the **whole selector**, not the unknown part.
+An empty NodeList from a valid selector is the hardest failure shape to notice, because it is
+indistinguishable from a page that genuinely has nothing to match. Same mechanism as t1194's
+`:is()`, one enum away.
+
+⚠⚠⚠ **THE WORKING MEMBER IS WHAT HID THE OTHER FIVE.** `:nth-child` answering correctly is a
+positive result about the family that is true of exactly one of its six members, and a probe that
+asks *"do An+B selectors work?"* gets `yes`. The general form, and it is the third time this project
+has met it: **a family is not covered by its representative.** `parse_pseudo` is a flat match arm
+list, so "which of these six are here" is a two-second read that nobody had a reason to do.
+
+### `:first-of-type` is NOT `:first-child`, and a homogeneous fixture cannot tell them apart
+
+In `<p><em>a</em><span>b</span><em>c</em><b>f</b></p>` the `<span>` and the `<b>` are each **first of
+their type** and neither is anybody's first child. A fix that counted *all* element siblings returns
+`e1` alone and passes every list-of-`<li>` fixture, which is why `G_STRUCTURAL_PSEUDOS`'s subject is
+deliberately heterogeneous and the `<li>` list is only the control. RED-proven: with the type filter
+removed, `firstOfType` reads `1:e1` instead of `3:e1,s1,b1`, `nthOfType2` reads `0`, and
+`matches(':nth-of-type(2)')` reads `false` — while `homogeneousAgrees` stays `true`.
+
+### One rule, two implementations — and only one of them was broken
+
+The live cascade is **Stylo's**, which has always resolved these pseudos. So
+`em:nth-of-type(2) { color: … }` *rendered* correctly the entire time while
+`querySelectorAll('em:nth-of-type(2)')` found nothing: the page looked right and every script that
+asked about it got an empty answer. The `cascadeAgrees` claim asserts the two engines now name the
+same element rather than leaving the agreement to inference.
+
+**Measured, same binary, same hour:** `dom` **6383 → 6671 (+288)**, `css/selectors`
+**3547 → 3643 (+96)**, `html/dom` **56445 → 56445 (unchanged)**, 0 crashes in all three.
