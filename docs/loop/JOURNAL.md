@@ -46371,6 +46371,68 @@ PERF: none — one UA rule and one narrowed branch in a cascade that already ran
 WIKI: `docs/wiki/css-cascade.md` — where Chrome draws the form-control `box-sizing` line, and why a
 layout-crate test cannot see it.
 
+## Tick 1197 — I built the preemption t1196 scoped, PROVED IT INERT, and reverted it (2026-08-13)
+
+TICK SHAPE: measurement — a REFUSAL, which is a result. The fix t1196 verified as "reachable" is
+reachable and **not sufficient**, and finding that out cost one tick instead of the several it would
+have cost after landing.
+
+**WHAT I BUILT** (and then removed): a thread-local script deadline, an
+`unsafe extern "C" fn interrupt_cb` returning `false` past it, registration via
+`JS_AddInterruptCallback` alongside the existing host hooks, and the deadline armed with a `Drop`
+guard in **both** drain loops — `run_deferred` and `run_with_fetcher` (the second one matters: `run()`
+delegates to it and it is the path a page load actually takes, so arming only the first would have
+looked done and protected nothing).
+
+⚠⚠⚠ **IT COMPILED, IT REGISTERED, AND IT DID NOTHING.** The falsifiable probe — one `setTimeout`
+task spinning on `while (Date.now() - t < 60000)`, i.e. exactly the `count=1` shape t1196 measured —
+ran to completion **both times**:
+
+```text
+  DBG7: [FINISHED-904388107] in 60.36s     ← deadline armed in run_deferred only
+  DBG7: [FINISHED-903215258] in 60.36s     ← armed in BOTH drain loops
+```
+
+**THE MECHANISM I MISSED, and it is the whole design of the API:** `JS_AddInterruptCallback` only
+*registers* the callback. SpiderMonkey polls it when an interrupt has been **REQUESTED** — a
+separate `JS_RequestInterruptCallback(cx)`, which in Firefox is issued by a **WATCHDOG THREAD**.
+Registration alone is inert by construction. My t1196 note said the fix was "a wiring job against an
+API we already have"; that was **half right and the missing half is a thread**, which is a
+materially different piece of work: a raw `*mut JSContext` shared across threads, with a lifetime
+that must not outlive the runtime — on the seam this file already documents as the source of two
+separate exit-crash classes (ADR-009).
+
+✅ **WHY IT WAS REVERTED RATHER THAN LANDED "FOR LATER".** A registered callback that never fires is
+**false-presence**: `grep AddInterruptCallback` would answer yes, `CONSTELLATION.tsv` would gain a
+row, the next reader would believe preemption exists, and the 20.9s task would still hold the
+thread. The reliability doctrine ranks that strictly worse than the absence, and the constitution's
+own words apply — *a stub is worse than an absence*, *a dormant code path is not a correct one*.
+Nothing was banked; the tree is byte-identical to t1196.
+
+⚠ **THE ERROR IN t1196 THAT THIS CORRECTS**, stated plainly because a written prediction is only
+worth anything if its failure is published too: I verified the API *exists* and inferred the work was
+small. **Existence is not sufficiency.** The check I skipped is the one this loop already has a rule
+for — *name and RUN the code path before publishing a claim about it* — and running it took eight
+minutes. t1196's prediction about the fidelity trade is untouched and still unmeasured; only its
+cost estimate was wrong.
+
+**WHAT THE NEXT TICK NEEDS, now concrete rather than assumed:** a watchdog thread holding the
+context pointer, a way to stop it before teardown (this file's `TeardownGuard` is where that
+ordering is decided), and the deadline arming that already exists in this entry's diff. The
+falsifiable probe is written and takes 60s to run — it is `g_dbg7` above, and it should become the
+gate rather than being re-derived.
+
+HARNESS NOTE (observer-owned; recorded, not touched): this tick's first verify came back
+`✗ manuk-shell tests FAILED` on a **journal-only** change, with `engine/` byte-identical to t1196.
+Run directly one minute later the same suite is **`75 passed; 0 failed`** (plus 2). A false-RED from
+the wall's parallel gate stage, the same class as the `BUILD FAILED … NOT a verdict about the engine`
+banners at t1190 — `/home` was back to 94%. Re-run on the unchanged tree; no `scripts/` file touched.
+
+PERF: none — nothing shipped.
+
+WIKI: none — the artefact is this negative result; it becomes a page when a working mechanism
+exists to describe. [no-pattern]
+
 ## Tick 1196 — the 150s timeout is FOUR budget overruns, and the budget cannot preempt JS (2026-08-13)
 
 TICK SHAPE: measurement — the instrument tick t1195's own steer called for. It names the mechanism
