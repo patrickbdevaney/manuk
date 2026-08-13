@@ -1043,6 +1043,7 @@
   - L3111 · ⚠⚠⚠ It landed, it is RED-proven, and it moved ZERO subtests
   - L3134 · Banked, where t1197 was reverted — and the distinction is the point
   - L3150 · createEvent accepted every name, so it could not be feature-detected (t1206)
+  - L3187 · One rule, and it was written out in ONE of its two callers (t1207)
 
 ## THE FIDELITY INSTRUMENT — what it can and cannot see
 `docs/wiki/fidelity-instrument.md`
@@ -2056,4 +2057,4 @@
   - L169 · The one real lever inside the remainder, measured and left named
 
 ---
-1963 sections across 22 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+1964 sections across 22 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.

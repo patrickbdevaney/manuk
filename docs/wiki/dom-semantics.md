@@ -3183,3 +3183,33 @@ entirely.**
 spec's table and not in this engine, and `TouchEvent` is added to the table **only when the engine
 exposes it** — the spec's own *"if the UA supports legacy touch events"* clause. All of them throw
 `NotSupportedError`, which is the truthful answer; claiming them would be false presence.
+
+## One rule, and it was written out in ONE of its two callers (t1207)
+
+DOM specifies `createElementNS(ns, qname)` and `DOMImplementation.createDocument(ns, qname)` against
+**the same algorithm** — *validate and extract*. The engine had it written out inside
+`createElementNS` and **not at all** inside `createDocument`:
+
+```text
+   createDocument('http://example.com/', 'xmlns')   → a Document   (spec: NamespaceError)
+   createDocument(null, 'p:q')                      → a Document   (spec: NamespaceError)
+   createDocument('http://example.com/', 'a:b:c')   → a Document   (spec: InvalidCharacterError)
+```
+
+**The fix is an EXTRACTION, not a second copy.** *One rule, two implementations* is a shape this
+project keeps paying for (t720-724; `event_loop`'s two drain loops, one bounded and one not).
+Copying the validation across would pass a gate on the day and let the two diverge at the next spec
+change. `validate_and_extract()` is the single implementation, and `G_CREATE_DOCUMENT_VALIDATION`
+asserts **both** callers — so a later tick that gives one its own copy fails on the arm it forgets.
+
+⚠ **The one difference is SPECIFIED, so it is a parameter.** `createDocument(null, "")` is valid — a
+document with no document element — while `createElementNS(null, "")` is an `InvalidCharacterError`.
+An explicit `allow_empty` flag, with both halves pinned. RED-proven twice, the second being the
+plausible half-fix: *share the rule without the parameter* → `emptyNameIsADocument` fails.
+
+**Measured:** `dom` **7306 → 7397 (+91)**, **`domparsing` 219 → 234 (+15)**, `html/dom` unchanged,
+0 crashes.
+
+⚠ **`domparsing` moving is the tell that the extraction was the right shape rather than the tidy
+one:** a third caller nobody was thinking about — `DOMParser` — was already reaching the same rule
+and got the fix for free. A copy would have left it where it was.

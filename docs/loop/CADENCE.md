@@ -11,12 +11,12 @@
 
 | | value | over |
 |---|---|---|
-| ticks landed | **908** | ticks 1–1206 |
-| median tick cycle | **28m** | 907 intervals |
+| ticks landed | **909** | ticks 1–1207 |
+| median tick cycle | **28m** | 908 intervals |
 | median, last 10 | **31m** | 10 intervals |
 | fastest / slowest | 5s / 5.4d | |
-| **ticks per hour** | **1.14** | 794.8h elapsed |
-| median verify wall | **63s** | 847 ticks |
+| **ticks per hour** | **1.14** | 795.3h elapsed |
+| median verify wall | **63s** | 848 ticks |
 | wall trend | 39s → 13m — getting slower ⚠️ | first 3 vs last 3 |
 
 The **cycle** is the real unit: implement → debug → verify wall → land. The wall is only part of
@@ -27,11 +27,11 @@ it, and a wall that grows taxes every future tick, so it is tracked separately f
 ### Near — the daily driver (doc / app / platform web)
 
 * **capabilities asserted** (`G_CAPABILITY`): 48 → **81**
-* **live gates**: 27 → **457**
-* **✅ rows in the capability ledger**: 144 → **600**
+* **live gates**: 27 → **458**
+* **✅ rows in the capability ledger**: 144 → **601**
 * **Bar 0 — oracle hangs**: 0 of 265 sites
 
-**410 of 908 ticks** (45%) moved a
+**411 of 909 ticks** (45%) moved a
 user-visible capability. The rest were instruments, infrastructure and corrections — and the
 ledger says the corrections were not overhead: three of its top three priorities were phantoms,
 and finding that out redirected everything after it.
@@ -90,8 +90,8 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 
 ## What a capability costs
 
-* **410** capability ticks, median cycle **28m**
-* median diff per tick: **+268 / −34** lines across 8 files
+* **411** capability ticks, median cycle **28m**
+* median diff per tick: **+269 / −34** lines across 8 files
 
 ## Every tick
 
@@ -1005,5 +1005,6 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 | **1204** | 2026-08-13 06:57 | 6m | measurement | 13m | +147/−33 | 455 | 81 | 56.0% · | the leverage ranker's #2 row is HALF UNSHIPPED SPEC, and the ranker cannot see it (2026-08 |
 | **1205** | 2026-08-13 07:22 | 25m | capability | 13m | +323/−36 | 456 | 81 | 56.0% · | I probed the lever tick 1204 named, and tick 1204 was WRONG about it (2026-08-13) |
 | **1206** | 2026-08-13 07:51 | 29m | capability | 13m | +427/−37 | 457 | 81 | 56.0% · | `createEvent` accepted EVERY name, so it could not be feature-detected (2026-08-13) |
+| **1207** | 2026-08-13 08:19 | 28m | capability | 13m | +372/−58 | 458 | 81 | 56.0% · | one rule, and it was written out in ONE of its two callers (2026-08-13) |
 
 *`·` after a WPT figure means **carried forward**, not measured this tick.*

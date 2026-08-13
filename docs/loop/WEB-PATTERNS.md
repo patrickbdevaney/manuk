@@ -5186,6 +5186,25 @@ draining the JS event loop to its 20,000-task ceiling, which has no wall-clock b
 images now arrive; the page is still slow for another reason. Same discipline as t608: **do not book
 "site X works now" from "one of site X's defects is gone."**
 
+## One rule, two callers, and only one of them had it (tick 1207)
+
+| pattern | where it shows up | status |
+| --- | --- | --- |
+| `document.implementation.createDocument(ns, qname)` — building an XML/SVG document from script. It ran **no validation at all**, so `createDocument('http://example.com/', 'xmlns')` returned a Document where the spec says `NamespaceError`, and a two-colon name built a document instead of `InvalidCharacterError` | Every library that constructs an XML or SVG document programmatically, and every sanitiser that builds an inert document to parse into | ✅ fixed (tick 1207) — gated by **`G_CREATE_DOCUMENT_VALIDATION`**; `dom` **+91**, `domparsing` **+15** |
+
+**The fix is an EXTRACTION, not a second copy** — DOM specifies `createElementNS` and
+`createDocument` against the *same* algorithm, and the engine had it written out in one of them.
+*One rule, two implementations* is a shape this project keeps paying for, so
+`validate_and_extract()` is the single implementation and the gate asserts **both** callers: a later
+tick that re-copies fails on the arm it forgets.
+
+⚠ **The one difference is SPECIFIED, so it is a parameter.** `createDocument(null, "")` is valid — a
+document with no document element — while `createElementNS(null, "")` is an `InvalidCharacterError`.
+Both halves pinned; RED-proven by *sharing the rule without the parameter*.
+
+⚠ **`domparsing` moving is the tell the extraction was right rather than merely tidy:** `DOMParser`,
+a third caller nobody was thinking about, reached the same rule and got the fix for free.
+
 ## The legacy spelling jQuery and GA actually emit, answered with the wrong interface (tick 1206)
 
 | pattern | where it shows up | status |

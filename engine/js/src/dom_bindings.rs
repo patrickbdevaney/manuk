@@ -3772,29 +3772,67 @@ unsafe fn doc_create_element_ns(cx: *mut RawJSContext, argc: u32, vp: *mut Value
     };
     let qname = arg_string(cx, vp, argc, 1).unwrap_or_default();
 
-    // The spec's validation, in order, and each one is a distinct WPT block:
-    //   * the qualified name must be a valid Name        → InvalidCharacterError
-    //   * at most one colon, neither end                 → InvalidCharacterError
-    //   * a prefix with NO namespace                     → NamespaceError
-    //   * the `xml` prefix outside the XML namespace     → NamespaceError
-    //   * `xmlns` (as prefix or name) outside XMLNS ns   → NamespaceError, and vice versa
-    let ns_str = ns.as_deref().filter(|n| !n.is_empty());
+    if let Some((name, msg)) = validate_and_extract(ns.as_deref(), &qname, false) {
+        return throw_dom(cx, name, &msg);
+    }
+
+    let node = (*dom).create_element_ns(ns.clone(), qname);
+    *vp = ObjectValue(new_reflector(cx, dom, node));
+    true
+}
+
+/// **DOM's "validate and extract" — ONE implementation, because it has TWO callers.**
+///
+/// `createElementNS` and `DOMImplementation.createDocument` are specified against the *same*
+/// algorithm, and the engine had it written out inside `createElementNS` and **not at all** inside
+/// `createDocument` — so `createDocument("http://example.com/", "xmlns")` built a document instead of
+/// throwing, 39 `dom` subtests deep. Extracting it rather than copying it is the standing rule this
+/// project has paid for repeatedly: *one rule, two implementations* is how the two silently diverge.
+///
+/// Returns `Some((exception_name, message))` when the pair is invalid. Each arm is a distinct WPT
+/// block:
+///
+/// * the qualified name must be a valid `Name`, with at most one colon and neither at an end
+///   → `InvalidCharacterError`
+/// * a prefix with **no** namespace → `NamespaceError`
+/// * the `xml` prefix outside the XML namespace → `NamespaceError`
+/// * `xmlns`, as prefix or as the whole name, outside the XMLNS namespace → `NamespaceError`,
+///   **and the converse** — the XMLNS namespace with any other name is equally invalid
+///
+/// ⚠ `allow_empty` is the ONE difference between the callers and it is specified, not a shortcut:
+/// `createDocument(null, "")` is a valid call meaning *a document with no document element*, while
+/// `createElementNS(null, "")` is an `InvalidCharacterError`. Encoding it as a parameter keeps the
+/// divergence visible instead of letting it become a second copy.
+fn validate_and_extract(
+    ns: Option<&str>,
+    qname: &str,
+    allow_empty: bool,
+) -> Option<(&'static str, String)> {
+    if qname.is_empty() {
+        return if allow_empty {
+            None
+        } else {
+            Some((
+                "InvalidCharacterError",
+                format!("'{qname}' is not a valid qualified name"),
+            ))
+        };
+    }
+    let ns_str = ns.filter(|n| !n.is_empty());
     let (prefix, local) = match qname.split_once(':') {
         Some((p, l)) => (Some(p), l),
-        None => (None, qname.as_str()),
+        None => (None, qname),
     };
-    let name_ok = !qname.is_empty()
-        && qname.matches(':').count() <= 1
+    let name_ok = qname.matches(':').count() <= 1
         && !qname.starts_with(':')
         && !qname.ends_with(':')
         && is_valid_xml_name(local)
         && prefix.map(is_valid_xml_name).unwrap_or(true);
     if !name_ok {
-        return throw_dom(
-            cx,
+        return Some((
             "InvalidCharacterError",
-            &format!("'{qname}' is not a valid qualified name"),
-        );
+            format!("'{qname}' is not a valid qualified name"),
+        ));
     }
     const XML_NS: &str = "http://www.w3.org/XML/1998/namespace";
     const XMLNS_NS: &str = "http://www.w3.org/2000/xmlns/";
@@ -3803,16 +3841,13 @@ unsafe fn doc_create_element_ns(cx: *mut RawJSContext, argc: u32, vp: *mut Value
         || ((prefix == Some("xmlns") || qname == "xmlns") && ns_str != Some(XMLNS_NS))
         || (ns_str == Some(XMLNS_NS) && prefix != Some("xmlns") && qname != "xmlns");
     if bad_ns {
-        return throw_dom(
-            cx,
+        Some((
             "NamespaceError",
-            &format!("'{qname}' is not valid in namespace {ns_str:?}"),
-        );
+            format!("'{qname}' is not valid in namespace {ns_str:?}"),
+        ))
+    } else {
+        None
     }
-
-    let node = (*dom).create_element_ns(ns.clone(), qname);
-    *vp = ObjectValue(new_reflector(cx, dom, node));
-    true
 }
 
 /// `document.createComment(text)` — Vue and Svelte use comment nodes as anchors for every conditional
@@ -7500,6 +7535,15 @@ unsafe fn doc_create_xml_document(cx: *mut RawJSContext, argc: u32, vp: *mut Val
     let ns = arg_string(cx, vp, argc, 0).filter(|s| !s.is_empty());
     let ns_for_type = ns.clone();
     let qname = arg_string(cx, vp, argc, 1).unwrap_or_default();
+
+    // **The same "validate and extract" `createElementNS` runs, and it ran nowhere here.**
+    // `createDocument("http://example.com/", "xmlns")` built a document where the spec says
+    // `NamespaceError`; so did an `xml` prefix outside the XML namespace, and a qualified name with
+    // two colons. `allow_empty` is the one specified difference — `createDocument(null, "")` is a
+    // valid call meaning *no document element*.
+    if let Some((name, msg)) = validate_and_extract(ns.as_deref(), &qname, true) {
+        return throw_dom(cx, name, &msg);
+    }
 
     let doc = (*dom).create_document();
     // An EMPTY qualifiedName means a document with no document element at all — that is a valid,

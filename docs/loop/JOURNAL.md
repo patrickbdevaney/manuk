@@ -46371,6 +46371,62 @@ PERF: none — one UA rule and one narrowed branch in a cascade that already ran
 WIKI: `docs/wiki/css-cascade.md` — where Chrome draws the form-control `box-sizing` line, and why a
 layout-crate test cannot see it.
 
+## Tick 1207 — one rule, and it was written out in ONE of its two callers (2026-08-13)
+
+TICK SHAPE: capability — `dom` (#1), the dominant remaining mechanism in its assertion histogram.
+
+**DOM specifies `createElementNS(ns, qname)` and `DOMImplementation.createDocument(ns, qname)`
+against THE SAME algorithm — *validate and extract*.** The engine had that algorithm written out
+inside `createElementNS` and **not at all** inside `createDocument`:
+
+```text
+   createDocument('http://example.com/', 'xmlns')   → a Document   (spec: NamespaceError)
+   createDocument(null, 'p:q')                      → a Document   (spec: NamespaceError)
+   createDocument('http://example.com/', 'a:b:c')   → a Document   (spec: InvalidCharacterError)
+```
+
+39 `dom` subtests assert exactly those throws and every one arrived at
+`assert_throws_dom … did not throw`.
+
+⚠⚠ **THE FIX IS AN EXTRACTION, NOT A SECOND COPY, and that is the load-bearing decision.** *One
+rule, two implementations* is a shape this project has paid for repeatedly — t720-724 named it, and
+`event_loop`'s two drain loops were the most recent instance (one enforced its bound, the other had
+none). Copying `createElementNS`'s validation into `createDocument` would have passed a gate on the
+day and let the two diverge at the next spec change. `validate_and_extract()` is now the single
+implementation and **both** callers route through it — which is why the gate asserts the
+`createElementNS` side too: **if a later tick gives one caller its own copy again, the arm it forgets
+fails here.**
+
+⚠ **THE ONE DIFFERENCE BETWEEN THE CALLERS IS SPECIFIED, SO IT IS A PARAMETER.**
+`createDocument(null, "")` is **valid** — a document with no document element — while
+`createElementNS(null, "")` is an `InvalidCharacterError`. That asymmetry is real, so it is an
+explicit `allow_empty` flag rather than a silent behavioural difference, and **both halves are
+pinned**. RED-proven twice, the second probe being the plausible half-fix:
+
+```text
+   remove createDocument's validation (the state before)   FAILED `xmlnsWrongNs:THROW:NamespaceError`
+   share the rule WITHOUT `allow_empty`                    FAILED `emptyNameIsADocument:NO-ROOT`
+```
+
+**MEASURED, same release binary, same hour:**
+
+```text
+   dom            7306 → 7397   (+91)   69.6% → 70.4%   0 crashes
+   domparsing      219 →  234   (+15)   16.9% → 18.1%   0 crashes   ← a bonus: `DOMParser`
+                                                                       shares the validator
+   html/dom      56445 → 56445    (0)           94.2%   0 crashes   ← control
+   ──────────────────────────────────────────────────────────────
+   PRIMARY (active-areas)  86737 → 86843   71.07% → 71.16%
+```
+
+`domparsing` moving is the tell that the extraction was the right shape rather than the tidy one: a
+third caller nobody was thinking about was already reaching the same rule, and it got the fix for
+free. A copy would have left it where it was.
+
+PERF: one function call replacing an inline block, on document/element construction. F1/F2 unmoved.
+
+WIKI: docs/wiki/dom-semantics.md — "One rule, and it was written out in ONE of its two callers"
+
 ## Tick 1206 — `createEvent` accepted EVERY name, so it could not be feature-detected (2026-08-13)
 
 TICK SHAPE: capability — `dom` (still #1 at 1074), and **classified by construct before taking it**
