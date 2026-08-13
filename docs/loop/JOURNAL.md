@@ -46371,6 +46371,67 @@ PERF: none — one UA rule and one narrowed branch in a cascade that already ran
 WIKI: `docs/wiki/css-cascade.md` — where Chrome draws the form-control `box-sizing` line, and why a
 layout-crate test cannot see it.
 
+## Tick 1214 — HALF the computed-style surface is silent, and only 15 of it is a defect (2026-08-13)
+
+TICK SHAPE: measurement — the instrument surface audit #61 named one tick ago, built and run rather
+than left as a suggestion.
+
+**The audit had just named CSSOM LOSSINESS as a class** — four instances in one session
+(`object-position` t1205, colour spaces t1210, `characterSet` t1211, `field-sizing` t1213), each
+found by a *different* accident — and prescribed the obvious instrument: *enumerate the properties
+the cascade resolves, ask `getComputedStyle` for each, list the ones it cannot say.* That is the same
+**enumerate what can be enumerated** rule that produced the UA-sheet audit, pointed at the CSSOM.
+
+**215 properties asked, on one element, in one run:**
+
+```text
+   SILENT (getPropertyValue returns "")            107 / 215   =  49.8%
+     ├─ LOSSY   the cascade resolves it and the CSSOM will not say     15
+     └─ HONEST  not in `ComputedStyle` at all — we do not model it     92
+```
+
+⚠⚠⚠ **THE SPLIT IS THE WHOLE PRODUCT, and a flat "107 silent" would have been actively misleading.**
+Silence is the *correct* answer for a property this engine does not implement; it is a defect only
+when the answer exists and the serializer will not say it. Cross-checking each silent name against
+`ComputedStyle`'s own fields separates the two mechanically:
+
+```text
+   LOSSY (15):  align-content · background-position · justify-items · justify-self
+                rotate · scale · translate · transform-origin · tab-size
+                grid-auto-columns · grid-auto-flow · grid-auto-rows
+                grid-template-areas · grid-template-columns · grid-template-rows
+```
+
+**`rotate`/`scale`/`translate`/`transform-origin` are the head of that list by real-web weight** —
+they are the individual transform properties every animation library reads before it animates, and
+this project already has the scar: `undefined + ' scale(2)'` is the string `"undefined scale(2)"`,
+which is `G_TRANSFORM`'s whole reason for existing. The same shape, four properties over.
+`align-content`/`justify-items`/`justify-self` are the flex/grid alignment reads every layout
+library performs.
+
+⚠ **AND SIX OF THE FIFTEEN ARE THE GRID FAMILY, WHOSE ABSENCE IS RECORDED AS DELIBERATE** (t1171-74):
+Chrome reports the **used** track sizes for `grid-template-columns`, not the specified value, so
+echoing what the cascade holds would be *a wrong answer of the right type* — worse than the silence.
+**That is not a rule to apply from memory**: it must be re-read before anyone touches those six, and
+it is exactly why this instrument's output is a *worklist with a question attached to each row*
+rather than a list of bugs. The remaining nine have no such caveat recorded.
+
+**THE 92 ARE NOT A BACKLOG EITHER, and saying so is half the honesty here.** They are properties the
+engine does not model, and per CSSOM a *supported* property must answer while an unsupported one need
+not. Turning any of them from silent into a value is a capability tick, not a serializer tick — the
+two look identical in this table and are completely different work.
+
+⚠ **WHAT THIS INSTRUMENT CANNOT SEE**, stated so the next reader does not over-trust it: it asks one
+element in one document, so a property that answers only under some condition (a flex item, a grid
+child, a replaced element) reads as present here. It measures *"will the serializer ever say this"*,
+not *"does it say the right thing"* — the four instances that motivated it were all cases where the
+serializer **did** answer, wrongly. **A silence census and a correctness census are different
+instruments, and this is only the first.**
+
+PERF: none — measurement only.
+
+WIKI: docs/wiki/css-cascade.md — "Half the computed-style surface is silent, and only 15 of it is a defect"
+
 ## Tick 1213 — the frame-ReflowCtx design, written down instead of started at hour twelve (2026-08-13)
 
 TICK SHAPE: measurement — a **scoped refusal** plus the design it refuses to rush, and one harness

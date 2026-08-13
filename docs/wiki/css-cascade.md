@@ -3179,3 +3179,49 @@ failed its own round trip — every overlay, disabled control, shadow and hover 
 
 Two decimals passes every hand-picked value and turns `2/255 = 0.008` into `0.01` → byte **3**; six
 reproduces the artefact. **`css/css-color` 6260 → 6299 (+39)**, controls flat, 0 crashes.
+
+## Half the computed-style surface is silent, and only 15 of it is a defect (t1214)
+
+Surface audit #61 named **CSSOM lossiness** as a class — four instances in one session
+(`object-position`, colour spaces, `characterSet`, `field-sizing`), each found by a different
+accident — and prescribed the instrument: *enumerate the properties the cascade resolves, ask
+`getComputedStyle` for each, list the ones it cannot say.*
+
+**215 properties, one element, one run:**
+
+```text
+   SILENT (getPropertyValue returns "")            107 / 215   =  49.8%
+     ├─ LOSSY   the cascade resolves it and the CSSOM will not say     15
+     └─ HONEST  not in `ComputedStyle` at all — we do not model it     92
+```
+
+⚠⚠⚠ **The split is the whole product.** Silence is the *correct* answer for a property the engine
+does not implement; it is a defect only when the answer exists and the serializer will not say it.
+Cross-checking each silent name against `ComputedStyle`'s own fields separates them mechanically:
+
+```text
+   LOSSY (15):  align-content · background-position · justify-items · justify-self
+                rotate · scale · translate · transform-origin · tab-size
+                grid-auto-columns · grid-auto-flow · grid-auto-rows
+                grid-template-areas · grid-template-columns · grid-template-rows
+```
+
+**`rotate`/`scale`/`translate`/`transform-origin` head the list by real-web weight** — the individual
+transform properties every animation library reads before animating, and this project already carries
+the scar: `undefined + ' scale(2)'` is `"undefined scale(2)"`, which is why `G_TRANSFORM` exists.
+Same shape, four properties over.
+
+⚠ **Six of the fifteen are the grid family, whose absence is recorded as DELIBERATE** (t1171-74):
+Chrome reports the **used** track sizes, so echoing the specified value would be *a wrong answer of
+the right type*. Re-read that decision before touching those six — which is why this instrument's
+output is a **worklist with a question attached to each row**, not a list of bugs.
+
+**The 92 are not a backlog.** They are properties the engine does not model; turning one from silent
+into a value is a *capability* tick, not a serializer tick. The two look identical in this table and
+are completely different work.
+
+⚠ **What it cannot see:** one element, one document — a property that answers only under some
+condition (a flex item, a grid child, a replaced element) reads as present. It measures *will the
+serializer ever say this*, not *does it say the right thing* — and the four instances that motivated
+it were all cases where the serializer **did** answer, wrongly. **A silence census and a correctness
+census are different instruments; this is the first.**
