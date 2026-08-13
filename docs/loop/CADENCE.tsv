@@ -926,3 +926,4 @@ tick	sha	epoch	iso	delta_s	shape	wall_s	files	added	deleted	gates	claims	wpt_pas
 1224	db98f5d3	1786649665	2026-08-13T15:34:25-04:00	4057	capability	808	13	673	192	465	81	3896	6960	0	612	0	`el.style` never serialized anything; it echoed the author's bytes (2026-08-13)
 1225	6d75e1ca	1786650013	2026-08-13T15:40:13-04:00	348	measurement	808	6	186	34	465	81	3896	6960	0	612	0	the refusal rule, promoted from a tick's finding into the constitution (2026-08-13)
 1226	9be1f7b0	1786655022	2026-08-13T17:03:42-04:00	5009	measurement	808	8	367	33	465	81	3896	6960	0	612	0	the certification checkpoint, and the flat gauge is the CORRECT answer (2026-08-13)
+1227	b489cab1	1786656511	2026-08-13T17:28:31-04:00	1489	measurement	808	4	102	32	465	81	3896	6960	0	612	0	the timeout bucket is ONE unguarded entry point, named (2026-08-13)

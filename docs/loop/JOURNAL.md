@@ -46371,6 +46371,75 @@ PERF: none — one UA rule and one narrowed branch in a cascade that already ran
 WIKI: `docs/wiki/css-cascade.md` — where Chrome draws the form-control `box-sizing` line, and why a
 layout-crate test cannot see it.
 
+## Tick 1227 — the timeout bucket is ONE unguarded entry point, named (2026-08-13)
+
+TICK SHAPE: measurement — a diagnosis of the lever t1226's sweep named as binding, carried to a
+file:line and a mechanism, and **written down rather than half-built** (the t1213/t1220 call).
+
+**t1226 said the M1 cap is SCORABILITY (74.2%) and its largest engine-owned bucket is
+`timeout-150s` = 13 sites. This tick asks WHY, of one of them, and the answer is singular.**
+
+⚠⚠⚠ **IT IS OUR CLOCK, AND IT IS CPU — NOT THE NETWORK AND NOT THE ORACLE.** The standing rule is
+that a pair-timeout attributes to nobody, so `payb.jp` was re-run **alone, with no Chromium in the
+picture**, through `boxes --fetch` (which measures only our render):
+
+```text
+   real 5m00.035s   user 4m51.994s   sys 0m0.522s      ← 97% CPU, killed by MY timeout, not finished
+```
+
+**Bar 0 by this project's own definition** (`manuk_ms > 30s`), attributed on our own clock.
+
+⚠⚠⚠ **AND THE ENGINE'S OWN PHASE LOG NAMES THE PHASE WITHOUT A PROFILER.** `perf` and `gdb` are both
+blocked on this box (`perf_event_paranoid=4`, `ptrace_scope`), and changing a sysctl is neither in
+remit nor necessary — `RUST_LOG=info` already prints a per-phase budget line:
+
+```text
+   external scripts                    ms=5103
+   module graph prefetch               ms=0
+   cascade+layout+blocking scripts     ms=721
+   deferred scripts                    ms=7338
+   <nothing, ever again>               ← 97% CPU from here
+```
+
+The page **loads**: jQuery Migrate 3.4.1 prints to the console, thirteen seconds of phases complete.
+Then the next statement after the `deferred scripts` marker runs and never returns
+(`engine/page/src/lib.rs:2378`):
+
+```rust
+   // Parsing is done and the deferred scripts have executed — that IS DOMContentLoaded.
+   page.fire_lifecycle("DOMContentLoaded", fonts, viewport_width);
+```
+
+⚠⚠⚠ **THE MECHANISM: `fire_lifecycle` IS A THIRD, UNGUARDED SCRIPT ENTRY POINT.** t1198 closed script
+preemption by arming `watchdog::ScriptDeadline` — the watchdog THREAD that makes
+`JS_RequestInterruptCallback` fire — and it armed it in exactly two places,
+`event_loop::run_deferred` (`:7460`) and `event_loop::run_with_fetcher` (`:7837`). `fire_lifecycle`
+(`engine/page/src/lib.rs:4989`) does neither: it builds a `ReflowScope` and calls
+**`self.eval_for_test(src)` raw**. So every `DOMContentLoaded` and every `load` handler on the web
+runs **unpreemptible**, and a handler that does not return owns the process.
+
+That is the same shape as t1198's own recorded residue — *"⚠ inline `<script>` still unreachable"* —
+one entry point further on, and it is the one the **largest unscored bucket lands in**. A site that
+times out scores **zero**, so this raises the M1 CAP rather than the fill.
+
+**THE FIX, SPECIFIED AND DELIBERATELY NOT STARTED AT THE END OF A SESSION** (the t1213/t1220 call,
+for the fourth time): arm `ScriptDeadline` around `fire_lifecycle`'s `eval_for_test`, with the same
+budget the drain uses. ⚠ It is NOT a one-liner to bank blind — `fire_lifecycle` is called from at
+least two phases and from `finish_loading` idempotently, a preempted `load` handler must still leave
+the page renderable rather than half-initialised, and the gate has to prove the RED (a page whose
+`DOMContentLoaded` handler is `while(1){}` must render and report, not hang). That is a tick with a
+fixture, a gate and a RED proof, and it deserves a fresh session.
+
+⚠ **Two things this tick did NOT establish, stated so the next one does not inherit them as facts:**
+whether the other 12 timeout sites share this mechanism (only `payb.jp` was reduced), and whether the
+spin is a `while(1)` or an unbounded `setInterval`/`rAF` re-post against the virtual clock — t680's
+`next_in_ms=86400000 vclock_ms=13822876800000` is the standing suspect and was not confirmed here.
+
+PERF: none — measurement only. ⚠ No profiler was available and none was needed; the instrument that
+answered is one the engine already prints.
+
+WIKI: none — the artefact is this diagnosis, which belongs beside the sweep that ranked it. [no-pattern]
+
 ## Tick 1226 — the certification checkpoint, and the flat gauge is the CORRECT answer (2026-08-13)
 
 TICK SHAPE: measurement — the CrUX fidelity sweep t1225's constitution check named as its #1 steer,
