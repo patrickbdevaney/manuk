@@ -5186,6 +5186,33 @@ draining the JS event loop to its 20,000-task ceiling, which has no wall-clock b
 images now arrive; the page is still slow for another reason. Same discipline as t608: **do not book
 "site X works now" from "one of site X's defects is gone."**
 
+## A fix that WORKS and moves ZERO — and the zero named the next link (tick 1202)
+
+| pattern | where it shows up | status |
+| --- | --- | --- |
+| `frameWin.getComputedStyle(elementInsideTheFrame)` — reading a style across a frame boundary. `STYLES_PTR` held ONE page's style map and the arena was discarded at the call site, so a frame element resolved against the PARENT's styles: a wrong answer of the right type, which is why the property was withheld from a frame's window entirely (t1201) | Responsive embeds measuring themselves, ad frames checking visibility, `css/selectors/attribute-selectors/attribute-case`'s `[window, quirks, xml]` helper — two of those three are frame windows | ✅ arena-aware (tick 1202) — gated by **`G_FRAME_WINDOW_SURFACE`**, the deliberate absence RETIRED. ⚠ **+0 WPT**, and see below |
+
+⚠⚠⚠ **THE CAPABILITY LANDED AND THE COUNT DID NOT MOVE, AND THAT MEASUREMENT IS THE PRODUCT.**
+`css/selectors`, `dom`, `html/dom` and `css/css-color` are all byte-identical, 0 crashes. The
+assertion histogram says exactly which link cleared and which one now holds:
+
+```text
+  BEFORE   484 ×  global.getComputedStyle is not a function
+  AFTER      0 ×  global.getComputedStyle is not a function      ← the fix DID land
+           308 ×  expected (string) "hidden" but got (undefined) undefined
+```
+
+**A frame's style map is a LOAD-TIME SNAPSHOT.** The test creates its element at runtime
+(`global.document.createElement('div')`), so it has no entry. The main document is re-cascaded on
+every style read by `force_reflow_if_stale`; a frame gets no such pass, and giving it one needs a
+**frame-owned reflow context** — `forced_reflow` re-cascades whatever arena it is handed but writes
+into the MAIN page's `ReflowCtx` and resolves sheets against the PARENT's URL and external CSS.
+
+**Banked where t1197 was reverted, and the distinction is the general rule:** t1197's mechanism
+never ran (banking it would have been *false presence* — `grep` says yes, nothing works); t1202's
+mechanism runs and is observed, with a different named gap downstream. **A chain has links, and
+clearing one that is genuinely cleared is progress even when the next link holds the count still.**
+
 ## A frame's window had TWO properties, so the platform vanished at the frame boundary (tick 1201)
 
 | pattern | where it shows up | status |

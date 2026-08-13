@@ -1035,6 +1035,9 @@
   - L3033 · A frame's window had TWO properties, and one of them was location (t1201)
   - L3059 · Inheriting the parent's globals is the TRUTH here, not a pretence
   - L3068 · A Proxy, not a prototype chain — and the RED probe shows why
+  - L3091 · The style lookup had ONE map, and the +0 named the next link (t1202)
+  - L3111 · ⚠⚠⚠ It landed, it is RED-proven, and it moved ZERO subtests
+  - L3134 · Banked, where t1197 was reverted — and the distinction is the point
 
 ## THE FIDELITY INSTRUMENT — what it can and cannot see
 `docs/wiki/fidelity-instrument.md`
@@ -2046,4 +2049,4 @@
   - L124 · Rank mechanisms by FLIP RATE, not failing-subtest count — CSS layout is a multi-assertion slog
 
 ---
-1953 sections across 22 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+1956 sections across 22 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.

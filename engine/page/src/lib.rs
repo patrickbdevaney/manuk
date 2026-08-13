@@ -3013,6 +3013,27 @@ impl Page {
             })
             .collect();
         manuk_js::set_iframe_docs(m);
+
+        // **And each child's COMPUTED-STYLE map, keyed by its arena.** `getComputedStyle` had one
+        // style map to read, so a frame element resolved against the PARENT's — the same
+        // one-arena assumption `node_and_dom` closed for the DOM, one pass later in the pipeline.
+        //
+        // ⚠ Published HERE and nowhere else, for the reason the field above documents: a child
+        // `Page` is a value in a `HashMap`, so its `styles` field MOVES when that map rehashes.
+        // `Page::dom` is a `Box` and survives that; `Page::styles` is not, so its address is only
+        // meaningful until the next `child_pages` mutation — which is exactly the window this
+        // single call site covers, because every such mutation calls it.
+        let styles: std::collections::HashMap<usize, usize> = self
+            .child_pages
+            .iter_mut()
+            .map(|(_, c)| {
+                (
+                    &mut *c.dom as *mut manuk_dom::Dom as usize,
+                    &c.styles as *const _ as usize,
+                )
+            })
+            .collect();
+        manuk_js::set_frame_styles(styles);
     }
 
     /// **The frames whose document does not come off the network** — `srcdoc`, `src="about:blank"`,

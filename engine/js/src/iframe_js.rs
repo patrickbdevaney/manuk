@@ -139,7 +139,14 @@ pub const IFRAME_JS: &str = r#"
       //     message-port handle on its window; with a prototype chain those writes create own
       //     properties here anyway, but the `has`/`getOwnPropertyDescriptor` answers would still be
       //     the parent's, and `Object.keys(frameWin)` would enumerate the whole parent global.
-      var DENY = { getComputedStyle: 1 };
+      // ⚠ **THE DENY LIST IS NOW EMPTY, and that is a RETIREMENT, not a relaxation (t1202).**
+      // `getComputedStyle` was withheld here because `STYLES_PTR` held ONE page's style map, so a
+      // frame element resolved against the PARENT's styles — a wrong answer of the right type, which
+      // is worse than an absence. The lookup is arena-aware as of t1202 (`FRAME_STYLES`), so the
+      // reason is gone and the property comes back. The mechanism stays in place because the NEXT
+      // wrong-answer-of-the-right-type on this seam should be excluded the same way rather than
+      // shipped.
+      var DENY = {};
       var win = new Proxy(own, {
         get: function (t, k, r) {
           if (Reflect.has(t, k) || DENY[k]) { return Reflect.get(t, k, r); }

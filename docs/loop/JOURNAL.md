@@ -46371,6 +46371,97 @@ PERF: none — one UA rule and one narrowed branch in a cascade that already ran
 WIKI: `docs/wiki/css-cascade.md` — where Chrome draws the form-control `box-sizing` line, and why a
 layout-crate test cannot see it.
 
+## Tick 1202 — the arena-aware style lookup LANDS and moves ZERO, and the +0 is the finding (2026-08-13)
+
+TICK SHAPE: capability — constitution check #114's steer #1. The capability lands, is gated and
+RED-proven, and the WPT total does not move. **The zero is the result, and it names the next link.**
+
+**WHAT WAS WRONG.** `STYLES_PTR` is a single thread-local holding ONE page's computed-style map, and
+`window_get_computed_style` threw the arena away on its first line:
+
+```rust
+  let node = arg_object(vp, argc, 0).and_then(|o| node_and_dom(o).map(|(_, n)| n));
+                                                                    ^^^^^^ the arena, discarded
+```
+
+So a frame element's `NodeId` was looked up in the **parent's** map and answered about a different
+element in a different document — a *wrong answer of the right type*, and precisely why t1201
+deliberately **withheld** `getComputedStyle` from a frame's window rather than ship it. Each child
+`Page` already owns a full style map; nothing published it. `Page::publish_iframe_docs` — the one
+site that already publishes every child arena's address, and the one every `child_pages` mutation
+goes through — now publishes the style maps beside them, and `with_style_in(dom, node)` resolves by
+arena. `iframe_js`'s DENY list is empty; the withholding is **retired, not relaxed**.
+
+Gated by `G_FRAME_WINDOW_SURFACE`'s new claims, and the fixture is built so only the right
+implementation can pass: **the CHILD's own stylesheet hides `#inner` and the parent says nothing
+about that node**, so `gcsChildAnswer:hidden` is unreachable for a lookup that silently reads the
+parent's map. RED-proven by forcing `with_style_in` back to the main map: `expected
+gcsChildAnswer:hidden`.
+
+⚠⚠⚠ **AND IT MOVED NOTHING. Measured, same release binary, same hour, four full areas:**
+
+```text
+  css/selectors  3757 → 3757   (0)   67.6%   0 crashes
+  dom            7147 → 7147   (0)   68.0%   0 crashes
+  html/dom      56445 → 56445  (0)   94.2%   0 crashes
+  css/css-color  6260 → 6260   (0)   56.9%   0 crashes   ← the heaviest getComputedStyle
+                                                            consumer, and the control that
+                                                            says the main path is untouched
+```
+
+**The prediction was 484 subtests and the delivery is 0.** This loop's rule for that shape is *"a fix
+that WORKS and moves NOTHING means the DISPATCH is the bug"* — so the tick's real product is the
+measurement of WHICH link it is, and the message histogram answers it exactly:
+
+```text
+  BEFORE   484 ×  global.getComputedStyle is not a function
+  AFTER      0 ×  global.getComputedStyle is not a function      ← the fix DID land
+           308 ×  expected (string) "hidden" but got (undefined) undefined
+```
+
+**The function is now reachable and returns `undefined` for the property**, because the test does
+`elm = global.document.createElement('div'); global.document.body.appendChild(elm)` — and **a frame's
+style map is a LOAD-TIME SNAPSHOT.** A node the script creates afterwards has no entry in it. The
+main document does not have this problem: `force_reflow_if_stale` re-cascades it on every style read.
+A frame gets no such pass, and giving it one is not a line — `forced_reflow` re-cascades whatever
+arena it is handed but writes the result into the MAIN page's `ReflowCtx` and resolves sheets against
+the PARENT's URL and external CSS, so a frame needs its **own** reflow context. That is the next
+lever, and it is now a named subsystem change rather than an estimate.
+
+**WHY THIS IS BANKED RATHER THAN REVERTED**, since t1197 in this same session reverted a build that
+did nothing. The two are opposite shapes and the distinction is the whole point:
+
+| t1197 | t1202 |
+|---|---|
+| the mechanism **never ran** — a registered callback nothing requested | the mechanism **runs and is observed**: `hidden`, from the child's own sheet, RED-proven |
+| banking it would have been **false presence** — `grep` says yes, nothing works | the capability is real; a *different, named* gap sits downstream of it |
+| nothing measurable changed anywhere | the blocking error class went **484 → 0** |
+
+A chain has links, and clearing one that is genuinely cleared is progress even when the next link
+holds the count still. Banking a mechanism that was never reachable is not.
+
+⚠ **HONEST BOUND, written into `with_style_in` rather than discovered later:** a frame's styles are
+as of its own last layout — the same bound its *pixels* already carry (`iframe_js`: *"the frame does
+not re-render when its document is mutated from the parent"*). `force_reflow_if_stale` is
+deliberately NOT called on the frame path, because it would re-cascade the main document and cost a
+full relayout to refresh the wrong map.
+
+SELF-AUDIT (due every 10 ticks, last 1192; run at 1202): **one prescribed-but-not-executed item, and
+it is HARNESS-OWNED so it is recorded rather than acted on** — `verify wall: 1012s EXCEEDS the 300s
+target`. Everything else is green: 3/3 Tier-0, every gate declares how to break it, 49 process
+defects each naming a closing MECHANISM, the pattern ledger at 1,118 rows moving with the engine,
+journal entries for the last 5 ticks, and enforcement mechanical rather than remembered. Per
+CONSTITUTION.MD PART VII the wall is `scripts/` and belongs to the observer; this loop does not touch
+it. ⚠ The number is real and worth the observer's attention: it has roughly quintupled against the
+Tier-0 target, and this session watched it read 235s and 1,011s on consecutive ticks of the same
+tree size — **bimodal, not drifting**, which matches the cold/warm split already recorded at t1144.
+
+PERF: one `HashMap<usize, usize>` built per `publish_iframe_docs` — the same iteration that already
+builds the arena map, and empty for a page with no frames. The lookup is one hash probe ahead of the
+existing one. F1/F2 unmoved.
+
+WIKI: docs/wiki/dom-semantics.md — "The style lookup had ONE map, and the +0 named the next link"
+
 ## Tick 1201 — an iframe's window had TWO properties, and the platform vanished at the frame boundary (2026-08-13)
 
 TICK SHAPE: capability — the `dom` vein (still #1 at 1207), the mechanism t1200's residue named.

@@ -3087,3 +3087,62 @@ silently re-exposes the wrong-answer surface the module docs spent a paragraph e
 ⚠ **STILL OWED:** the 484 `css/selectors` subtests that die on `global.getComputedStyle is not a
 function` in a frame are **not** closed by this — they need the style lookup to become arena-aware,
 which is the deeper fix `iframe_js`'s module docs name. That is the next lever in this vein.
+
+## The style lookup had ONE map, and the +0 named the next link (t1202)
+
+`STYLES_PTR` is a single thread-local holding ONE page's computed-style map, and
+`window_get_computed_style` discarded the arena on its first line:
+
+```rust
+  let node = arg_object(vp, argc, 0).and_then(|o| node_and_dom(o).map(|(_, n)| n));
+                                                                    ^^^^^^ the arena, discarded
+```
+
+A frame element's `NodeId` was therefore looked up in the **parent's** map and answered about a
+different element in a different document — the same one-arena assumption `node_and_dom` closed for
+the DOM, one pass later in the pipeline. It is a *wrong answer of the right type*, which is why t1201
+deliberately **withheld** `getComputedStyle` from a frame's window rather than ship it.
+
+Each child `Page` already owns a full style map; nothing published it. `Page::publish_iframe_docs` —
+the single site every `child_pages` mutation goes through, and the one that already publishes each
+child arena's address — now publishes the style maps beside them. `iframe_js`'s deny list is empty:
+the withholding is **retired**, not relaxed.
+
+### ⚠⚠⚠ It landed, it is RED-proven, and it moved ZERO subtests
+
+```text
+  css/selectors 3757 → 3757 · dom 7147 → 7147 · html/dom 56445 → 56445 · css/css-color 6260 → 6260
+```
+
+The prediction was 484. The histogram says exactly which link cleared and which one now holds:
+
+```text
+  BEFORE   484 ×  global.getComputedStyle is not a function
+  AFTER      0 ×  global.getComputedStyle is not a function      ← the fix DID land
+           308 ×  expected (string) "hidden" but got (undefined) undefined
+```
+
+**A frame's style map is a LOAD-TIME SNAPSHOT.** The test does
+`elm = global.document.createElement('div'); global.document.body.appendChild(elm)`, and a node the
+script creates afterwards has no entry. The main document does not have this problem —
+`force_reflow_if_stale` re-cascades it on every style read — but a frame gets no such pass, and
+giving it one is not a line: `forced_reflow` re-cascades whatever arena it is handed while writing
+the result into the MAIN page's `ReflowCtx` and resolving sheets against the PARENT's URL and
+external CSS. **A frame needs its own reflow context.** That is the next lever, now a named subsystem
+change rather than an estimate.
+
+### Banked, where t1197 was reverted — and the distinction is the point
+
+| t1197 (reverted) | t1202 (banked) |
+|---|---|
+| the mechanism **never ran** — a registered callback nothing requested | the mechanism **runs and is observed**: `hidden`, from the child's own sheet |
+| banking it would be **false presence** — `grep` says yes, nothing works | the capability is real; a *different, named* gap sits downstream |
+| nothing measurable changed anywhere | the blocking error class went **484 → 0** |
+
+A chain has links, and clearing one that is genuinely cleared is progress even when the next link
+holds the count still. Banking a mechanism that was never reachable is not.
+
+**The gate's fixture is built so only the right implementation can pass:** the CHILD's stylesheet
+hides `#inner` and the parent says nothing about that node, so `gcsChildAnswer:hidden` is unreachable
+for a lookup that silently reads the parent's map — and `gcsNotParent` asserts the two documents
+disagree, so a coincidence cannot pass either.

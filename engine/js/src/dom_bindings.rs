@@ -536,6 +536,26 @@ thread_local! {
         std::cell::RefCell::new(std::collections::HashMap::new());
 }
 
+thread_local! {
+    /// **Each live child arena's COMPUTED-STYLE map, keyed by the arena's address.**
+    ///
+    /// `STYLES_PTR` holds exactly ONE page's styles, so `getComputedStyle` on a frame element was
+    /// looked up in the PARENT's map and answered about a different element — the wrong-answer-of-
+    /// the-right-type shape. That is why `getComputedStyle` was deliberately withheld from a frame's
+    /// window (t1201), and this table is what retires the withholding rather than papering over it.
+    ///
+    /// Borrowed, exactly like `STYLES_PTR`: a child `Page`'s `styles` field is inline in a `HashMap`
+    /// value and therefore MOVES when that map rehashes, so this is republished at the same single
+    /// site as the arena addresses (`Page::publish_iframe_docs`) and is valid for the same window.
+    static FRAME_STYLES: std::cell::RefCell<std::collections::HashMap<usize, usize>> =
+        std::cell::RefCell::new(std::collections::HashMap::new());
+}
+
+/// Publish each child arena's style map. Same contract and same call site as [`set_iframe_docs`].
+pub fn set_frame_styles(m: std::collections::HashMap<usize, usize>) {
+    FRAME_STYLES.with(|c| *c.borrow_mut() = m);
+}
+
 /// Publish the live child documents. `Page` calls this before it runs scripts; the arenas must outlive
 /// the run, which is why the child `Page`s are boxed and owned by the parent (see `manuk_page::Page`).
 pub fn set_iframe_docs(m: std::collections::HashMap<NodeId, (usize, NodeId)>) {
@@ -578,6 +598,35 @@ fn with_style<R>(node: NodeId, f: impl FnOnce(&manuk_css::ComputedStyle) -> R) -
         }
         unsafe { (*p).get(&node).map(f) }
     })
+}
+
+/// **The same read, resolved against the node's OWN arena.**
+///
+/// `STYLES_PTR` is one page's style map. A frame element's `NodeId` looked up there names a
+/// *different element in a different document* with total confidence — the same class of defect
+/// `node_and_dom` was written to close for the DOM, one pass later in the pipeline. So the arena
+/// decides which map answers, and a frame arena's map comes from [`FRAME_STYLES`].
+///
+/// ⚠ **No forced reflow for a frame.** `force_reflow_if_stale` re-cascades the MAIN document; running
+/// it here would refresh the wrong map and cost a full relayout to do it. A child's styles are as of
+/// its own last layout, which is the same bound its pixels already carry (`iframe_js`: *"the frame
+/// does not re-render when its document is mutated from the parent"*). Stated rather than hidden.
+fn with_style_in<R>(
+    dom: *mut Dom,
+    node: NodeId,
+    f: impl FnOnce(&manuk_css::ComputedStyle) -> R,
+) -> Option<R> {
+    let frame = FRAME_STYLES.with(|c| c.borrow().get(&(dom as usize)).copied());
+    match frame {
+        Some(addr) => {
+            let p = addr as *const std::collections::HashMap<NodeId, manuk_css::ComputedStyle>;
+            if p.is_null() {
+                return None;
+            }
+            unsafe { (*p).get(&node).map(f) }
+        }
+        None => with_style(node, f),
+    }
 }
 
 /// A `Dim` as a CSS string.
@@ -2078,7 +2127,9 @@ const EMPTY_DECLARATION_JS: &str =
 /// everywhere — Bootstrap/Foundation-era responsive code hides the active breakpoint in
 /// `body::before { content: "sm" }` and reads it back through exactly this call.
 unsafe fn window_get_computed_style(cx: *mut RawJSContext, argc: u32, vp: *mut Value) -> bool {
-    let node = arg_object(vp, argc, 0).and_then(|o| node_and_dom(o).map(|(_, n)| n));
+    // ⚠ **THE ARENA IS KEPT, and it used to be thrown away right here** (`.map(|(_, n)| n)`), which
+    // is the whole reason a frame element's computed style was the PARENT's.
+    let target = arg_object(vp, argc, 0).and_then(|o| node_and_dom(o));
     // `null`/`undefined` mean "no pseudo"; everything else is ToString-coerced, exactly as Chrome
     // does (`getComputedStyle(el, 0)` reports the element).
     let pseudo = parse_pseudo_elt(arg_string_nullable(cx, vp, argc, 1).as_deref());
@@ -2090,9 +2141,14 @@ unsafe fn window_get_computed_style(cx: *mut RawJSContext, argc: u32, vp: *mut V
         return true;
     }
     // The rect is needed because a PERCENTAGE translate resolves against the element's own border box.
-    let js = node.and_then(|n| {
-        let rect = layout_rect(n);
-        with_style(n, |cs| match &pseudo {
+    let js = target.and_then(|(dom, n)| {
+        // ⚠ `rect: None` for a FRAME element. `LAYOUT_RECTS_PTR` is the same one-page side-table
+        // `STYLES_PTR` is, so a frame node looked up in it would answer with the parent's geometry —
+        // the exact defect this arena split exists to close, and answering `auto` is the honest
+        // alternative until a frame's rects are published too.
+        let is_frame = FRAME_STYLES.with(|c| c.borrow().contains_key(&(dom as usize)));
+        let rect = if is_frame { None } else { layout_rect(n) };
+        with_style_in(dom, n, |cs| match &pseudo {
             PseudoReq::Element => computed_style_js(cs, rect, false),
             // ⚠ `rect: None` for every pseudo, and that is the HONEST answer rather than a
             // shortcut: a generated box has no `NodeId`, so `layout_rect` has nothing to look it

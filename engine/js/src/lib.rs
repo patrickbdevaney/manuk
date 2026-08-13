@@ -669,6 +669,21 @@ pub fn set_iframe_docs(
 ) {
 }
 
+/// **Each live child arena's computed-style map, keyed by the arena's address.**
+///
+/// `getComputedStyle` had exactly one style map to read (`STYLES_PTR`), so a frame element's
+/// `NodeId` was looked up in the PARENT's map and answered about a different element. That is why
+/// t1201 deliberately withheld `getComputedStyle` from a frame's window rather than expose a wrong
+/// answer; this is the table that retires the withholding. Same contract and same call site as
+/// [`set_iframe_docs`] — borrowed, republished whenever the child set changes.
+#[cfg(feature = "_sm")]
+pub fn set_frame_styles(m: std::collections::HashMap<usize, usize>) {
+    dom_bindings::set_frame_styles(m);
+}
+
+#[cfg(not(feature = "_sm"))]
+pub fn set_frame_styles(_m: std::collections::HashMap<usize, usize>) {}
+
 /// An arena is legal to resolve reflectors against.
 #[cfg(feature = "_sm")]
 pub fn register_dom(dom: *mut manuk_dom::Dom) {

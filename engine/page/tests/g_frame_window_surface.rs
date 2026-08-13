@@ -54,7 +54,12 @@ const PARENT: &str = r#"<!doctype html><html><body>
   <script>window.__parentRan = 1;</script>
 </body></html>"#;
 
-const CHILD: &str = r#"<!doctype html><html><body><p id="inner">hello</p></body></html>"#;
+/// ⚠ The child hides `#inner` **with its own stylesheet**, and the parent says nothing about that
+/// node. That asymmetry is the entire point: a `getComputedStyle` that resolves a frame `NodeId`
+/// against the PARENT's style map answers `visible` — a wrong answer of the right type — and only a
+/// fixture where the two documents disagree can tell the two implementations apart.
+const CHILD: &str = r#"<!doctype html><html><head><style>#inner { visibility: hidden; }</style></head>
+<body><p id="inner">hello</p></body></html>"#;
 
 const PROBE: &str = r#"
   var R = [];
@@ -84,10 +89,14 @@ const PROBE: &str = r#"
   p('windowSelf:' + (w.window === w) + '/' + (w.self === w));
   p('parentTop:' + (w.parent === globalThis) + '/' + (w.top === globalThis));
 
-  // ── 4. THE DELIBERATE ABSENCE, and it must be an ABSENCE. `STYLES_PTR` holds one page's style
-  //    map, so a frame node looked up in it gets the parent's style — a wrong answer of the right
-  //    type. `in` must report false, not "present but undefined".
-  p('gcsAbsent:' + (('getComputedStyle' in w) === false) + '/' + (typeof w.getComputedStyle));
+  // ── 4. `getComputedStyle` THROUGH THE FRAME'S WINDOW, ANSWERING ABOUT THE FRAME'S OWN ELEMENT.
+  //    Withheld until t1202 because `STYLES_PTR` held ONE page's style map, so a frame node resolved
+  //    against the PARENT's styles. Now arena-aware — and the claim is not that the property exists
+  //    but that its ANSWER is the child's, which is the only version a wrong lookup fails.
+  p('gcsPresent:' + (typeof w.getComputedStyle));
+  p('gcsChildAnswer:' + w.getComputedStyle(d.getElementById('inner')).visibility);
+  p('gcsNotParent:' + (w.getComputedStyle(d.getElementById('inner')).visibility
+                       !== getComputedStyle(document.getElementById('out')).visibility));
 
   // ── 5. A WRITE MUST NOT ESCAPE INTO THE PARENT GLOBAL.
   w.__manukFrameFlag = 42;
@@ -160,12 +169,22 @@ const CLAIMS: &[(&str, &str)] = &[
         "`parent`/`top` point at the containing global — how a framed script asks 'am I embedded'",
     ),
     (
-        "gcsAbsent:true/undefined",
-        "⚠⚠ THE DELIBERATE ABSENCE, AND IT MUST BE AN ABSENCE. `STYLES_PTR` is a single thread-local \
-         holding ONE page's style map, so a frame node looked up in it returns the PARENT's style — \
-         a wrong answer of the right type. `'getComputedStyle' in w` must be FALSE: a property that \
-         exists and answers `undefined` is a feature-detection trap, and this is exactly why the \
-         inheritance is a Proxy with a deny list rather than a prototype",
+        "gcsPresent:function",
+        "`getComputedStyle` reaches the frame window. Withheld until t1202 — see the next claim for \
+         why its mere presence is not the interesting half",
+    ),
+    (
+        "gcsChildAnswer:hidden",
+        "⚠⚠ THE LOAD-BEARING HALF. The child's own stylesheet hides `#inner`; the PARENT's styles \
+         say nothing about that node. Before t1202 the lookup had one style map (`STYLES_PTR`) and \
+         resolved a frame `NodeId` against the parent's — a wrong answer of the RIGHT TYPE, which is \
+         why the property was withheld rather than shipped. Asserting the ANSWER, not the presence, \
+         is what makes an arena-blind lookup fail this",
+    ),
+    (
+        "gcsNotParent:true",
+        "and the two documents must DISAGREE, so a lookup that silently reads the parent's map \
+         cannot pass by coincidence",
     ),
     (
         "writeIsolated:true/undefined",
