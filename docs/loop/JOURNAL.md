@@ -46371,6 +46371,93 @@ PERF: none — one UA rule and one narrowed branch in a cascade that already ran
 WIKI: `docs/wiki/css-cascade.md` — where Chrome draws the form-control `box-sizing` line, and why a
 layout-crate test cannot see it.
 
+## Tick 1222 — the inset serializer never had a containing block, so it published the author's `10%` (2026-08-13)
+
+TICK SHAPE: capability — the lever t1220 named and t1221 re-sized as **half of `css/cssom`**: plumb the
+CONTAINING BLOCK into `computed_style_js` and absolutize `top`/`right`/`bottom`/`left`.
+
+HYPOTHESIS: `getComputedStyle(el).top` on a positioned element must be the **used value in px**
+(CSSOM resolved-value special case). We return `dim_css(&cs.inset.top)` — what the cascade holds — so
+a page reads `"10%"` or `"calc(-1px + 10%)"` where Chrome reads `"20px"`. The blocker t1220 named is
+real and is the whole tick: the serializer receives the element's own `rect` and **not** its
+containing block. Walk the arena for the CB (parent CONTENT box for `relative`/`sticky`; nearest
+positioned/transformed ancestor's PADDING box for `absolute`; nearest transformed ancestor or the
+viewport for `fixed`), resolve `Percent`/`Calc` against it, and resolve relative `auto` to
+`-(opposite)` / `0`. REFUSED and named in advance: `auto` on an abspos/fixed element needs the used
+STATIC POSITION, which is layout output this seam does not have.
+
+PREDICTION, written before the run: `css/cssom` 1917/3501 → **~2450** (+~540 of the 756 `'top'`/
+`'bottom'` rows), with the abspos/fixed `auto` trio (~216) still failing by construction.
+
+**MEASURED: `css/cssom` 1915/3501 → 2455/3490 — +540, 54.7% → 70.3%.** The prediction was written
+before the build and landed within five subtests of the reading, which is the part worth keeping: the
+mechanism model was right, not just the direction. PRIMARY (active areas, encoding excluded)
+**71.42% → 71.86%**. Controls: `dom` **8142 (=)**, `css/css-position` **264 (=)**.
+
+⚠⚠⚠ **`sticky` IS NOT `relative`, AND THE FIRST IMPLEMENTATION HAD IT AS ONE.** I wrote sticky's
+containing block as the parent's content box — the obvious reading — and it would have been
+*confidently wrong for the case sticky exists to serve*. CSS Position 3 §6.3: a sticky box's insets
+are insets from the **scrollport**, the nearest scroll container's content box. WPT does not say this
+in prose anywhere I read; it says it as a **controlled experiment**, and only reading the family
+file-by-file finds it:
+
+```text
+  getComputedStyle-insets-sticky.html                  #container-for-inflow { overflow: hidden }
+  getComputedStyle-insets-sticky-container-for-abspos  #container-for-abspos { overflow: hidden }
+  …-relative / -absolute / -fixed / -static            no overflow anywhere
+```
+
+Two files add `overflow` to the element they name as the basis. Four files in the same family,
+sharing the same helper and the same DOM, deliberately do not. That difference **is** the spec text.
+A sticky table header or sidebar is almost never its scroller's direct child, so the parent rule is
+not off by a few pixels — it resolves against a **different element**. Caught because the fixture was
+built by reading each file's config rather than generalising from the first one.
+
+⚠⚠ **THE FAILURE WAS WORSE THAN THE ONE I WROTE DOWN, and the RED proof is what corrected it.** The
+hypothesis said `parseFloat` returns `NaN`. It does not: **`parseFloat("10%")` is `10`.** So every
+tooltip, drag handle and sticky-header polyfill that pins a start value got a **plausible number in
+the wrong unit** — 10% of a 900px container silently became `10px` — and nothing threw. Only the
+`calc()` spelling is `NaN`. One property, two different silent failures, chosen by how the author
+happened to write the same offset. The gate asserts both, because the `NaN` half is the one a reader
+would assume and the other half is the one that actually hurts.
+
+⚠ **THE DENOMINATOR MOVED −10 AND IT IS NOISE, MEASURED RATHER THAN ASSUMED.** 3501 → 3490 is the
+tell this loop is trained to distrust, so it was priced: **two runs of the SAME new binary read
+3492 and 3490, and `HANG/CRASH` read 1 then 2 on identical bytes.** ~15 files in this area are flaky
+by construction (12 `TH_TIMEOUT` + 1–2 `HANG/CRASH` + 0–3 `ACCUM`), so the denominator is not stable
+to better than ~±10. **The consequence, stated so a later tick does not misread this area: a
+single-digit move in `css/cssom` is NOT READABLE.** +540 is 54× the noise band; +8 would have been
+nothing. The lower of the two new readings is what was banked — never the better one.
+
+⚠ **BAR 0, PRE-EXISTING, NOT MINE:** `css/cssom` reports `HANG/CRASH 1` on the OLD binary too, in the
+same hour. Present at HEAD, so it is not this tick's to trade — but it is real and unowned.
+
+⚠⚠ **A PRE-EXISTING RED FOUND WHILE SWEEPING, ATTRIBUTED BY THE STASH CONTROL, NOT MINE, AND NOT
+FOLDED IN.** `g_computed_style_publishes_the_cascade` fails with `stillAbsent=LEAKED:tabSize` — and
+`git stash`ing this tick's `dom_bindings.rs` reproduces it **byte-identically** at HEAD. The gate's
+`absent` list still names `tabSize` as a property with no cascade field, but the engine grew
+`tab_size_css` and now publishes it. **The engine is right and the GATE is stale** — the mirror image
+of the usual failure, and it has been RED and unread because the wall runs 19 of 104 gates. It is
+**tick 1223**, named here rather than mixed in, on the t853→t854 precedent: mixing a capability fix
+with an unrelated repair makes neither attributable.
+
+REFUSED, as promised in advance and now pinned by an assertion: `auto` on an `absolute`/`fixed`
+element resolves to the used **static position** — layout output this seam does not receive — so it
+still reports `auto`. That is ~216 subtests of the family left on the table, and `absau.top=auto` is
+asserted **on purpose** so the tick that publishes the static position has to change that line
+deliberately rather than discover it.
+
+PERF: none, and the tree walk was gated rather than accepted. `getComputedStyle` is one of the
+hottest calls a page makes and `containing_block_size` walks to the root for an abspos element with
+no positioned ancestor — so `inset_needs_containing_block` skips the walk entirely unless some inset
+is a `Percent` or a `Calc`. That is why `used_inset_css` takes an **`Option`** basis: `top: 10px` and
+a relative `auto` both still have to resolve with no containing block at all, and `au1.top=-3px` is
+the gate row that proves the fast path. The reflow hook the walk would otherwise multiply is
+idempotent on `mutation_seq`, so an ancestor step costs an integer compare, not a layout.
+
+WIKI: `docs/wiki/dom-semantics.md` — "The INSETS are resolved values too, and the blocker was one
+missing input: the containing block"
+
 ## Tick 1221 — my own classifier under-counted, and the correction changes the ranking (2026-08-13)
 
 TICK SHAPE: measurement — a **correction to tick 1220, published one tick later**, and the closing

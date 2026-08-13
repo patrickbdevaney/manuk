@@ -762,6 +762,88 @@ The gate asserts `resolved content width + border + padding === offsetWidth`, an
 that the resolved width IS `offsetWidth`. Two numbers describing the same box that disagree mean one
 of them is invented — the accounting-reconciliation mechanism, applied to a single element.
 
+## The INSETS are resolved values too, and the blocker was one missing input: the containing block
+
+`top`/`right`/`bottom`/`left` sit in the **same used-value bucket** as `width`/`height` above — CSSOM's
+resolved-value special case puts them there whenever the property *applies* to an element that
+generates a box. They stayed on the computed value for one reason, and t1220 named it precisely
+before the fix: *"resolving it needs the containing block's size, and the serializer has only the
+element's own border box."* `computed_style_js` took `rect`; a percentage inset resolves against the
+**containing block**, which is a different element entirely.
+
+```text
+                                                Chrome     ours (before)
+  position:relative; top:10%   (CB 100px tall)   10px         10%
+  position:absolute; top:10%   (CB 200px tall)   20px         10%
+  top:calc(10% - 1px)          (CB 100px tall)    9px         calc(-1px + 10%)
+  position:relative; bottom:3px, top:auto        -3px         auto
+```
+
+### Three positions, three different ancestors, three different boxes
+
+`containing_block_size` walks the arena. Picking the wrong row is **silent**, because every row
+returns a plausible number about a real element:
+
+| `position` | basis element | area |
+|---|---|---|
+| `relative` | the nearest **element ancestor** (the in-flow parent) | **content** box |
+| `sticky` | the nearest **scroll container** ancestor, else the viewport | **content** box |
+| `absolute` | the nearest ancestor that is **positioned or transformed** | **padding** box |
+| `fixed` | the nearest **transformed** ancestor, else the viewport | **padding** box |
+
+⚠ **An IDENTITY transform still establishes the containing block.** `transform: scale(1)` is the
+standard trick for pinning a `fixed` child, and WPT's `getComputedStyle-insets-fixed.html` is built
+on exactly it — so an implementation that skips a numerically-identity transform answers that whole
+file against the viewport and is wrong by a factor of the page.
+
+⚠⚠⚠ **`sticky` is NOT `relative` here, and the first implementation had it as one.** CSS Position 3
+§6.3: a sticky box's insets are insets from the edges of the **scrollport** — the nearest scroll
+container's content box — not from its containing block. WPT states this as a *controlled
+experiment* rather than as prose, which is why reading the family file-by-file finds it and reading
+the spec from memory does not: `getComputedStyle-insets-sticky.html` and
+`-sticky-container-for-abspos.html` each add `overflow: hidden` to the element they name as the
+basis, and the `relative`/`absolute`/`fixed` files in the same family deliberately do not. The
+difference is the whole point — a sticky table header or sidebar is almost never a direct child of
+its scroller, so resolving against the parent is not a small error, it is a **different element**.
+(`overflow: hidden` counts: it is a scroll container the user cannot scroll, not the absence of one.)
+
+### Absolutize the COMPUTED value — this is NOT "report what layout used"
+
+`position:relative; top:10%; bottom:50%` is **over-constrained** (layout applies `bottom = -top`), and
+CSSOM's own special case says an over-constrained inset resolves to the *computed* value. So the two
+sides absolutize **independently** — `10px` and `50px`, not `10px` and `-10px`. The intuitive
+implementation ("ask layout what offset it applied") passes the simple rows and fails here.
+
+### `auto` splits three ways, and only two are answerable at this seam
+
+* **`relative`** — `auto` *is* resolved: `-(opposite)`, or `0px` when the opposite is also `auto`
+  (CSS2 §9.4.3). Pure arithmetic on the computed values; no geometry needed.
+* **`sticky`** — `auto` is **preserved**. A sticky box's offsets are a clamp range, not a
+  displacement, so `auto` means *unclamped on this edge* and has no px equivalent.
+* **`absolute`/`fixed`** — ⚠ **REFUSED and pinned.** A resolved `auto` there is the used **static
+  position** — where the box *would have been in flow* — which is layout output this seam does not
+  receive, and nothing about the computed style plus the containing block can derive it. The gate
+  asserts `auto` on purpose, so the tick that publishes the static position has to come back and
+  change that line deliberately rather than discover it.
+
+### The failure is worse than `NaN`, and the RED proof is what showed it
+
+The expected story was *"`parseFloat` returns `NaN`"*. It does not — **`parseFloat("10%")` is `10`**.
+Every tooltip, dropdown, drag handle and sticky-header polyfill that pins a start value got a
+**plausible number in the wrong unit**: 10% of a 900px container silently became `10px`, and nothing
+anywhere threw. Only the `calc()` spelling of the same offset is `NaN`. One property, two different
+silent failures, chosen by how the author happened to write it.
+
+### Twelve call sites, one function
+
+Physical (`top`), logical (`inset-block-start`) and the `inset` shorthand are three spellings of one
+box, and they all route through `inset_css`. That is not tidiness: `max-inline-size` already caught
+this exact drift once, where the logical spelling said `auto` and the physical one said `none` about
+the same element. The gate asserts all three agree.
+
+**GATE** `G_RESOLVED_INSETS` — `computed_insets_are_the_used_offset_against_the_containing_block`.
+RED-proven by making `used_inset_css` return `None`: 20 claims fail.
+
 ## getComputedStyle must expose the properties the cascade ALREADY computed — undefined is a bug, not a value
 
 `computed_style_js` built a fixed ~30-property snapshot and silently dropped several `ComputedStyle`

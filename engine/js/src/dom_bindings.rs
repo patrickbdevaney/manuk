@@ -615,6 +615,122 @@ fn layout_rect(node: NodeId) -> Option<[f32; 4]> {
     })
 }
 
+/// **The CONTAINING BLOCK's `[width, height]`, which is the one input the inset serializer never
+/// had** (see [`used_inset_css`]).
+///
+/// t1220 named this as the blocker and stopped there: *"resolving it needs the CONTAINING BLOCK's
+/// size, and the serializer has only the element's own border box."* It is a walk up the **arena**,
+/// not a layout change — every number it reads (`layout_rect`, `border_width`, `padding`) is already
+/// published, and the only thing missing was somebody asking the tree which ancestor is the answer.
+///
+/// **Three different ancestors, three different boxes, and picking the wrong one is silent:**
+///
+/// | `position` | basis element | area |
+/// |---|---|---|
+/// | `relative` | the nearest **element ancestor** (the in-flow parent) | **content** box |
+/// | `sticky` | the nearest **SCROLL CONTAINER** ancestor, else the viewport | **content** box |
+/// | `absolute` | the nearest ancestor that is **positioned or transformed** | **padding** box |
+/// | `fixed` | the nearest **transformed** ancestor, else the viewport | **padding** box |
+///
+/// A `transform` establishes a containing block for *both* `absolute` and `fixed` descendants even
+/// when it is the identity — `transform: scale(1)` is the standard trick for pinning a `fixed`
+/// child, and `getComputedStyle-insets-fixed.html` is built on exactly that, so treating an
+/// identity transform as "no transform" would answer the whole file against the viewport.
+///
+/// ⚠⚠⚠ **`sticky` IS NOT `relative` HERE, and the obvious reading of the spec text says it is.**
+/// CSS Position 3 §6.3: a sticky box's insets are insets from the edges of the **scrollport** — the
+/// nearest scroll container's content box — *not* from its containing block. WPT states it as a
+/// controlled experiment rather than as prose: `getComputedStyle-insets-sticky.html` and
+/// `-sticky-container-for-abspos.html` each add `overflow: hidden` to the element they name as the
+/// basis, and the `relative`/`absolute`/`fixed` files in the same family deliberately do not. The
+/// difference is the whole point: a sticky table header or sidebar is almost never a direct child of
+/// its scroller, so resolving against the parent is not a small error — it is a different element.
+///
+/// ⚠ **A percentage or `calc()` PADDING on the containing block refuses rather than guesses**, the
+/// same call `used_dim_css` already makes one property family over: that padding resolves against
+/// *its* containing block's width, which is one more level up than this walk carries, and a
+/// confidently wrong containing block would put a wrong px on every inset below it. The element
+/// keeps its specified value in that case, which is the answer we can defend.
+unsafe fn containing_block_size(
+    dom: *mut Dom,
+    node: NodeId,
+    pos: manuk_css::Position,
+) -> Option<[f32; 2]> {
+    use manuk_css::{Overflow, Position};
+    let viewport = || {
+        let (w, h) = manuk_css::values::viewport_size();
+        Some([w, h])
+    };
+    // The box an ancestor contributes. `content` subtracts padding as well as border.
+    let area = |a: NodeId, content: bool| -> Option<[f32; 2]> {
+        let r = layout_rect(a)?;
+        with_style(a, |st| {
+            // A padding we cannot resolve here is a number we must not invent.
+            let px_of = |d: &manuk_css::Dim| match d {
+                manuk_css::Dim::Px(v) => Some(*v),
+                manuk_css::Dim::Auto => Some(0.0),
+                _ => None,
+            };
+            let bw = &st.border_width;
+            let mut w = r[2] - bw.left - bw.right;
+            let mut h = r[3] - bw.top - bw.bottom;
+            if content {
+                w -= px_of(&st.padding.left)? + px_of(&st.padding.right)?;
+                h -= px_of(&st.padding.top)? + px_of(&st.padding.bottom)?;
+            }
+            Some([w.max(0.0), h.max(0.0)])
+        })
+        .flatten()
+    };
+    let parent_element = |n: NodeId| -> Option<NodeId> {
+        let mut cur = (*dom).parent(n);
+        while let Some(p) = cur {
+            if (*dom).is_element(p) {
+                return Some(p);
+            }
+            cur = (*dom).parent(p);
+        }
+        None
+    };
+    match pos {
+        Position::Static => None,
+        Position::Relative => area(parent_element(node)?, true),
+        Position::Sticky => {
+            // The SCROLLPORT: the nearest scroll container's content box. `overflow: hidden` counts
+            // — it is a scroll container that the user cannot scroll, not the absence of one.
+            let mut cur = parent_element(node);
+            while let Some(a) = cur {
+                let scrolls = with_style(a, |st| {
+                    st.overflow_x != Overflow::Visible || st.overflow_y != Overflow::Visible
+                })
+                .unwrap_or(false);
+                if scrolls {
+                    return area(a, true);
+                }
+                cur = parent_element(a);
+            }
+            // No scroll container ⇒ the box sticks against the DOCUMENT's scrollport.
+            viewport()
+        }
+        Position::Absolute | Position::Fixed => {
+            let mut cur = parent_element(node);
+            while let Some(a) = cur {
+                let establishes = with_style(a, |st| {
+                    !st.transform.is_empty()
+                        || (pos == Position::Absolute && st.position != Position::Static)
+                })
+                .unwrap_or(false);
+                if establishes {
+                    return area(a, false);
+                }
+                cur = parent_element(a);
+            }
+            // No such ancestor ⇒ the INITIAL containing block, which is the viewport.
+            viewport()
+        }
+    }
+}
+
 /// Read one node's computed style from the borrowed snapshot, **re-cascading first if the script
 /// has dirtied the DOM** — `getComputedStyle` is a forced-reflow trigger just like a geometry read.
 ///
@@ -814,6 +930,158 @@ fn used_dim_css(
         }
     };
     Some(format!("{}px", used.max(0.0)))
+}
+
+/// Which physical inset [`used_inset_css`] is being asked about.
+#[derive(Clone, Copy, PartialEq)]
+enum InsetSide {
+    Top,
+    Right,
+    Bottom,
+    Left,
+}
+
+/// ⚠⚠⚠ **`getComputedStyle(el).top` IS THE *RESOLVED* VALUE — THE USED OFFSET IN PX — AND WE WERE
+/// HANDING BACK THE AUTHOR'S `10%`.**
+///
+/// CSSOM's resolved-value special case puts `top`/`right`/`bottom`/`left` in the used-value bucket
+/// whenever the property applies to a **positioned** element that generates a box. We returned
+/// `dim_css(&cs.inset.top)` — what the cascade holds — so a page read `"10%"`, or the raw
+/// `"calc(-1px + 10%)"`, where Chrome reads `"20px"` and `"19px"`.
+///
+/// **This is the same shape as `used_dim_css` one property family over, and it was blocked on one
+/// missing input.** t1220 sized it at ~756 `css/cssom` subtests and named the blocker exactly: the
+/// serializer receives the element's own `rect` and *not* its containing block, and a percentage
+/// inset resolves against the **containing block**, never against the element. That input now
+/// arrives as `cb` (see `containing_block_size`), and the rest is arithmetic.
+///
+/// **What it costs while it is wrong.** `parseFloat(getComputedStyle(el).top)` is `NaN` on every
+/// percentage-positioned element — which is every tooltip, dropdown, drag handle and sticky-header
+/// polyfill that pins a start value before it animates. It is precisely the `getComputedStyle(el)
+/// .transform` defect (`"undefined scale(2)"`) in a different property: *a wrong answer of the right
+/// type*, handed to a caller with no way to tell.
+///
+/// **The absolutization is of the COMPUTED value, and that is not the same as "what layout did".**
+/// Over-constraint is deliberately NOT applied: `position: relative; top: 10%; bottom: 50%` is
+/// over-constrained (layout uses `bottom = -top`), and CSSOM's own special case says an
+/// over-constrained inset resolves to the **computed** value — so both sides absolutize
+/// independently (`10px` and `50px`) rather than negating. Chrome agrees, and `getComputedStyle-
+/// insets-relative.html` asserts exactly that pair.
+///
+/// **`auto` splits three ways, and only two of them are answerable here:**
+/// - `position: relative` — `auto` IS resolved (it is not preserved): against a non-`auto` opposite
+///   side it is that side negated, and against an `auto` opposite it is `0px` (CSS2 §9.4.3).
+/// - `position: sticky` — `auto` is **preserved** as `auto`; a sticky box's offsets are a clamp
+///   range, not a displacement, so there is no used offset to report.
+/// - `position: absolute` / `fixed` — ⚠ **REFUSED, and named rather than approximated.** A resolved
+///   `auto` there is the **used static position**, which is layout output this seam does not
+///   receive: it is where the box *would have been* in flow, not anything derivable from the
+///   computed style plus the containing block. Reporting the specified `auto` is the honest answer
+///   until layout publishes the static position, and it is what Chrome would disagree with — that
+///   residual is ~216 of the family and is stated, not hidden.
+fn used_inset_css(
+    cs: &manuk_css::ComputedStyle,
+    cb: Option<[f32; 2]>,
+    side: InsetSide,
+) -> Option<String> {
+    use manuk_css::{Dim, Display, Position};
+    // No box ⇒ the computed value, exactly as `width`/`height` do. `display: none` keeps `10%`.
+    if cs.display == Display::None || cs.display == Display::Contents {
+        return None;
+    }
+    // The property does not *apply* to a static element, so its resolved value is the computed one.
+    if cs.position == Position::Static {
+        return None;
+    }
+    // ⚠ **The percentage basis is PHYSICAL, not logical**: `top`/`bottom` resolve against the
+    // containing block's HEIGHT and `left`/`right` against its WIDTH, in every writing mode. WPT
+    // runs this family across all 36 writing-mode pairs and expects the same px on all of them.
+    //
+    // ⚠⚠ **`basis` is an OPTION, and that is a PERFORMANCE decision with a correctness payoff.**
+    // Finding the containing block is a walk up the arena, and `getComputedStyle` is one of the
+    // hottest calls a page makes — so `window_get_computed_style` skips the walk entirely unless
+    // some inset actually needs a basis (`inset_needs_containing_block`). A `top: 10px` still has to
+    // resolve here, and a `relative; top:auto; bottom:3px` still has to negate, so those two must
+    // work with **no** containing block rather than fall back to the specified value.
+    let basis = cb.map(|cb| match side {
+        InsetSide::Top | InsetSide::Bottom => cb[1],
+        InsetSide::Left | InsetSide::Right => cb[0],
+    });
+    // Multiply BEFORE dividing: `basis * pct / 100.0` is exact for the round numbers a stylesheet
+    // actually carries, where `pct / 100.0 * basis` rounds `10%` of `100px` through an inexact 0.1.
+    let resolve = |d: &Dim| match d {
+        Dim::Px(v) => Some(*v),
+        Dim::Percent(p) => Some(basis? * p / 100.0),
+        Dim::Calc { px, pct } => Some(px + basis? * pct / 100.0),
+        Dim::Auto => None,
+    };
+    let (this, opposite) = match side {
+        InsetSide::Top => (&cs.inset.top, &cs.inset.bottom),
+        InsetSide::Bottom => (&cs.inset.bottom, &cs.inset.top),
+        InsetSide::Left => (&cs.inset.left, &cs.inset.right),
+        InsetSide::Right => (&cs.inset.right, &cs.inset.left),
+    };
+    // ⚠ **`auto` is matched STRUCTURALLY, not inferred from a `None`.** `resolve` returns `None` for
+    // two different reasons — the value IS `auto`, or it is a percentage with no containing block to
+    // resolve against — and collapsing them would make `relative; top:10%` with an unresolvable
+    // containing block report `-(bottom)` instead of falling back to the author's `10%`.
+    let used = match this {
+        Dim::Auto => match cs.position {
+            Position::Relative => match opposite {
+                Dim::Auto => 0.0,
+                other => -resolve(other)?,
+            },
+            // Sticky preserves `auto`; abspos/fixed need the static position. Both keep `auto`.
+            _ => return None,
+        },
+        other => resolve(other)?,
+    };
+    // `-0px` is a string no browser emits and every equality check misses.
+    let used = if used == 0.0 { 0.0 } else { used };
+    Some(format!("{used}px"))
+}
+
+/// Would resolving this element's insets need a containing block at all?
+///
+/// The gate on the tree walk in `window_get_computed_style`, and it is deliberately a **superset**
+/// of what actually consumes the basis: it says yes whenever any inset is a `Percent` or a `Calc`,
+/// without asking which side is being serialised. Being narrower would mean re-deciding the rule in
+/// two places, and the two would drift — the failure mode this file already carries three notes
+/// about. Being *wrong* in the other direction is the one that cannot happen: a `false` here means
+/// no inset has a percentage, so no call can need a basis.
+fn inset_needs_containing_block(cs: &manuk_css::ComputedStyle) -> bool {
+    use manuk_css::{Dim, Display, Position};
+    if cs.position == Position::Static
+        || cs.display == Display::None
+        || cs.display == Display::Contents
+    {
+        return false;
+    }
+    [
+        &cs.inset.top,
+        &cs.inset.right,
+        &cs.inset.bottom,
+        &cs.inset.left,
+    ]
+    .iter()
+    .any(|d| matches!(d, Dim::Percent(_) | Dim::Calc { .. }))
+}
+
+/// One inset property, as `getComputedStyle` must report it: the **used** value where
+/// [`used_inset_css`] can reach it, and the computed value everywhere it honestly cannot.
+///
+/// Every one of the twelve call sites (four physical, four logical, four in the `inset` shorthand)
+/// goes through this one function, so the fallback rule cannot drift between two spellings of the
+/// same box — the drift the `max-inline-size` note records catching once already.
+fn inset_css(cs: &manuk_css::ComputedStyle, cb: Option<[f32; 2]>, side: InsetSide) -> String {
+    used_inset_css(cs, cb, side).unwrap_or_else(|| {
+        dim_css(match side {
+            InsetSide::Top => &cs.inset.top,
+            InsetSide::Right => &cs.inset.right,
+            InsetSide::Bottom => &cs.inset.bottom,
+            InsetSide::Left => &cs.inset.left,
+        })
+    })
 }
 
 /// An `Rgba` as a CSS color string.
@@ -1134,6 +1402,7 @@ fn content_css(cs: &manuk_css::ComputedStyle, absent_is_none: bool) -> String {
 
 fn extra_computed_props(
     cs: &manuk_css::ComputedStyle,
+    cb: Option<[f32; 2]>,
     content_absent_is_none: bool,
 ) -> Vec<(&'static str, String)> {
     use manuk_css::*;
@@ -1478,10 +1747,14 @@ fn extra_computed_props(
         ("padding-inline-end", dim_css(&cs.padding.right)),
         ("padding-block-start", dim_css(&cs.padding.top)),
         ("padding-block-end", dim_css(&cs.padding.bottom)),
-        ("inset-inline-start", dim_css(&cs.inset.left)),
-        ("inset-inline-end", dim_css(&cs.inset.right)),
-        ("inset-block-start", dim_css(&cs.inset.top)),
-        ("inset-block-end", dim_css(&cs.inset.bottom)),
+        // ⚠ The logical inset spellings route through the SAME `used_inset_css` as the physical
+        // ones, for the reason the `max-*` note below records having learned the hard way: a second
+        // serializer for one box is a drift that only a re-sweep finds. `inset-block-start` reading
+        // `10%` while `top` reads `20px` about the same element is that drift.
+        ("inset-inline-start", inset_css(cs, cb, InsetSide::Left)),
+        ("inset-inline-end", inset_css(cs, cb, InsetSide::Right)),
+        ("inset-block-start", inset_css(cs, cb, InsetSide::Top)),
+        ("inset-block-end", inset_css(cs, cb, InsetSide::Bottom)),
         (
             "min-inline-size",
             min_dim_css(&cs.min_width, cs.min_width_keyword),
@@ -1509,10 +1782,10 @@ fn extra_computed_props(
         // Chrome serialises the four-value shorthand collapsed when the sides agree.
         ("inset", {
             let (t, r, b, l) = (
-                dim_css(&cs.inset.top),
-                dim_css(&cs.inset.right),
-                dim_css(&cs.inset.bottom),
-                dim_css(&cs.inset.left),
+                inset_css(cs, cb, InsetSide::Top),
+                inset_css(cs, cb, InsetSide::Right),
+                inset_css(cs, cb, InsetSide::Bottom),
+                inset_css(cs, cb, InsetSide::Left),
             );
             if t == r && r == b && b == l {
                 t
@@ -1736,6 +2009,7 @@ fn dashed_alias_js(extra: &[(&'static str, String)]) -> String {
 fn computed_style_js(
     cs: &manuk_css::ComputedStyle,
     rect: Option<[f32; 4]>,
+    cb: Option<[f32; 2]>,
     content_absent_is_none: bool,
 ) -> String {
     use manuk_css::{
@@ -2002,7 +2276,7 @@ fn computed_style_js(
     // longhands, matching the order `getPropertyValue` already answers them in.
     // Computed ONCE and shared by the three consumers below (the enumeration list, the object slots,
     // the dashed aliases). It builds ~60 strings and `getComputedStyle` is a hot, forced-reflow path.
-    let extra = extra_computed_props(cs, content_absent_is_none);
+    let extra = extra_computed_props(cs, cb, content_absent_is_none);
     let names_js = {
         const STD: &[&str] = COMPUTED_STD_NAMES;
         let mut arr = String::from("[");
@@ -2122,10 +2396,13 @@ fn computed_style_js(
         q(&dim_css(&cs.padding.right)),
         q(&dim_css(&cs.padding.bottom)),
         q(&dim_css(&cs.padding.left)),
-        q(&dim_css(&cs.inset.top)),
-        q(&dim_css(&cs.inset.right)),
-        q(&dim_css(&cs.inset.bottom)),
-        q(&dim_css(&cs.inset.left)),
+        // CSSOM: the insets resolve to the USED offset in px on a positioned element. The specified
+        // value is the fallback for the cases `used_inset_css` refuses (static, display:none, an
+        // unresolvable containing block, an abspos `auto`) — never the default.
+        q(&inset_css(cs, cb, InsetSide::Top)),
+        q(&inset_css(cs, cb, InsetSide::Right)),
+        q(&inset_css(cs, cb, InsetSide::Bottom)),
+        q(&inset_css(cs, cb, InsetSide::Left)),
         q(&cs.z_index.map(|z| z.to_string()).unwrap_or_else(|| "auto".into())),
         q(&transform_css(&cs.transform, rect)),
         q(justify_content),
@@ -2349,8 +2626,25 @@ unsafe fn window_get_computed_style(cx: *mut RawJSContext, argc: u32, vp: *mut V
         // alternative until a frame's rects are published too.
         let is_frame = FRAME_STYLES.with(|c| c.borrow().contains_key(&(dom as usize)));
         let rect = if is_frame { None } else { layout_rect(n) };
+        // The CONTAINING BLOCK, for the insets — a walk up the same arena, refused for a frame
+        // element for the same reason `rect` is (the side-tables are the MAIN page's).
+        //
+        // ⚠ **Gated, because `getComputedStyle` is a hot call and this is a tree walk.** An abspos
+        // element with no positioned ancestor walks to the root, and a page that polls computed
+        // style in a scroll handler would pay that on every frame — for a number almost no element
+        // needs. Only a positioned element with a PERCENTAGE or `calc()` inset requires a basis;
+        // `10px` and a relative `auto` both resolve without one (see `used_inset_css`).
+        let cb = if is_frame {
+            None
+        } else {
+            with_style_in(dom, n, |cs| {
+                inset_needs_containing_block(cs).then_some(cs.position)
+            })
+            .flatten()
+            .and_then(|pos| containing_block_size(dom, n, pos))
+        };
         with_style_in(dom, n, |cs| match &pseudo {
-            PseudoReq::Element => computed_style_js(cs, rect, false),
+            PseudoReq::Element => computed_style_js(cs, rect, cb, false),
             // ⚠ `rect: None` for every pseudo, and that is the HONEST answer rather than a
             // shortcut: a generated box has no `NodeId`, so `layout_rect` has nothing to look it
             // up by. It costs one row against Chrome — an auto-sized BLOCK pseudo reports `auto`
@@ -2361,26 +2655,38 @@ unsafe fn window_get_computed_style(cx: *mut RawJSContext, argc: u32, vp: *mut V
             // `content: normal` computes to `none` on `::before`/`::after` and ONLY there — hence
             // the flag rather than a blanket "is this a pseudo".
             PseudoReq::Before => match cs.before.as_deref() {
-                Some(p) => computed_style_js(p, None, true),
-                None => {
-                    computed_style_js(&manuk_css::ComputedStyle::absent_pseudo_of(cs), None, true)
-                }
+                Some(p) => computed_style_js(p, None, None, true),
+                None => computed_style_js(
+                    &manuk_css::ComputedStyle::absent_pseudo_of(cs),
+                    None,
+                    None,
+                    true,
+                ),
             },
             PseudoReq::After => match cs.after.as_deref() {
-                Some(p) => computed_style_js(p, None, true),
-                None => {
-                    computed_style_js(&manuk_css::ComputedStyle::absent_pseudo_of(cs), None, true)
-                }
+                Some(p) => computed_style_js(p, None, None, true),
+                None => computed_style_js(
+                    &manuk_css::ComputedStyle::absent_pseudo_of(cs),
+                    None,
+                    None,
+                    true,
+                ),
             },
             PseudoReq::FirstLetter => match cs.first_letter.as_deref() {
-                Some(p) => computed_style_js(p, None, false),
-                None => {
-                    computed_style_js(&manuk_css::ComputedStyle::absent_pseudo_of(cs), None, false)
-                }
+                Some(p) => computed_style_js(p, None, None, false),
+                None => computed_style_js(
+                    &manuk_css::ComputedStyle::absent_pseudo_of(cs),
+                    None,
+                    None,
+                    false,
+                ),
             },
-            PseudoReq::Uncascaded => {
-                computed_style_js(&manuk_css::ComputedStyle::absent_pseudo_of(cs), None, false)
-            }
+            PseudoReq::Uncascaded => computed_style_js(
+                &manuk_css::ComputedStyle::absent_pseudo_of(cs),
+                None,
+                None,
+                false,
+            ),
             PseudoReq::Unknown => unreachable!("handled above"),
         })
     });
