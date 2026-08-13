@@ -5186,6 +5186,30 @@ draining the JS event loop to its 20,000-task ceiling, which has no wall-clock b
 images now arrive; the page is still slow for another reason. Same discipline as t608: **do not book
 "site X works now" from "one of site X's defects is gone."**
 
+## A value of the right TYPE that no comparison will ever match (tick 1205)
+
+| pattern | where it shows up | status |
+| --- | --- | --- |
+| `el.style.foo = X; getComputedStyle(el).foo === X` — **write, read back, compare.** `object-position: 20% 30%` read back as **`20% 30.000002%`**, so the comparison fails and the write looks lost | Every animation and layout library detects its own write this way. `object-position` is how each cropped hero and avatar keeps its subject in frame under `object-fit: cover` | ✅ fixed (tick 1205) — gated by **`G_OBJECT_POSITION_COMPUTED`**, RED-proven. ⚠ **+0 WPT** |
+
+`ObjectPosition` stores each axis as a free-space **fraction** (`30%` → `0.3`) because that is what
+the paint path needs, and the serializer did `0.3f32 * 100.0`. Every other percentage in the file is
+fine — `Dim::Percent` stores the percentage itself — so this property is the only one that round-trips
+through a fraction. Same class as `undefined + ' scale(2)'` → `"undefined scale(2)"`: a value of the
+right *type* that no string comparison will ever match.
+
+⚠⚠⚠ **AND THE TICK'S LARGER PRODUCT IS A RETRACTION.** Tick 1204 named this lever from a *failure
+histogram* and published that the property was *"not applied at all on the Stylo path"*. A four-minute
+probe refuted both halves: percentages and every keyword apply correctly, and the length fallback is a
+**documented deliberate limit** the parser states in its own comment.
+
+> **A failure histogram tells you what is broken among the things a suite CHOSE to test. It cannot
+> tell you the property works — or does not — for anything else.**
+
+Every `object-position` row in `css/css-values` happens to involve a length, a `calc()` or a
+Selectors-5 keyword, so a sample of failures showed 100% failure for a property working fine in the
+majority case nobody tests there. *Grep the artefact, infer the engine* — one level up.
+
 ## Only the OPEN WEB writes the shapes nobody would think to test (tick 1203)
 
 | pattern | where it shows up | status |

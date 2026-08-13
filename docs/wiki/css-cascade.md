@@ -3085,3 +3085,49 @@ words: `⚠ THE DANGEROUS DIRECTION … ["G\\:TEST"]`.
 
 ⚠ **The instrument was cheap and the bias held:** 3 rejections across 200 real sites, and no other
 page lost a selector.
+
+## A failure histogram cannot tell you what WORKS (t1205)
+
+Tick 1204 histogrammed `css/css-values`' failing assertions, read the top rows, and published:
+*`object-position` "is not being applied at all on the shipping (Stylo) path."* A four-minute direct
+probe says that is wrong twice:
+
+```text
+   object-position: 20% 30%       →  20% 30.000002%   ← APPLIED. the float is the bug
+   object-position: top           →  50% 0%           ← correct
+   object-position: right bottom  →  100% 100%        ← correct
+   object-position: 30px 50%      →  50% 50%          ← the length IS dropped …
+```
+
+…and the length fallback is **documented and deliberate** — the parser's own comment says
+*"percentages relative to length (px) aren't fraction-convertible without the box, so they … fall
+back to centered."*
+
+**Why the histogram misled, and it generalises:** every `object-position` row in that suite happens
+to involve a length, a `calc()`, or a Selectors-5 keyword. So a sample of *failures* showed a 100%
+failure rate for a property that works for the majority case **the suite never tests**.
+
+> **A failure histogram tells you what is broken among the things a suite CHOSE to test. It cannot
+> tell you the property works — or does not — for anything else.**
+
+This is *"grep the artefact, infer the engine"* one level up, and it is the same rule that caught the
+UA-sheet count and the `zoom: 1` frequency: **name and RUN the code path before publishing a claim
+about it.**
+
+### The real defect, which nothing in that suite was testing
+
+`getComputedStyle(img).objectPosition` answered **`20% 30.000002%`** for `object-position: 20% 30%`.
+`ObjectPosition` stores each axis as a free-space **fraction** (`30%` → `0.3`) because that is what
+the paint path needs, and the serializer did `0.3f32 * 100.0`. Every other percentage in the file is
+fine — `Dim::Percent` stores the percentage itself — so this property is the one that round-trips
+through a fraction.
+
+Not cosmetic: comparing the string you wrote against the string you read back is how every animation
+and layout library detects its own write, and `"20% 30%"` ≠ `"20% 30.000002%"` reads as *the write
+was lost*. Same class as `undefined + ' scale(2)'` → `"undefined scale(2)"`.
+
+`G_OBJECT_POSITION_COMPUTED` gates it, **refuses a blunt round** (`33.333% 66.667%` must survive
+intact, so rounding to 2–3 decimals would pass the headline and destroy this), and **pins the
+documented length limit** so the tick that widens the type must edit that line on purpose.
+⚠ **+0 WPT** — no test in the area writes a plain percentage and reads it back, which is exactly why
+the defect survived.

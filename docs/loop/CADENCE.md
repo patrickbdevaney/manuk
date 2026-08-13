@@ -11,12 +11,12 @@
 
 | | value | over |
 |---|---|---|
-| ticks landed | **906** | ticks 1–1204 |
-| median tick cycle | **28m** | 905 intervals |
-| median, last 10 | **34m** | 10 intervals |
+| ticks landed | **907** | ticks 1–1205 |
+| median tick cycle | **28m** | 906 intervals |
+| median, last 10 | **31m** | 10 intervals |
 | fastest / slowest | 5s / 5.4d | |
-| **ticks per hour** | **1.14** | 793.9h elapsed |
-| median verify wall | **63s** | 845 ticks |
+| **ticks per hour** | **1.14** | 794.3h elapsed |
+| median verify wall | **63s** | 846 ticks |
 | wall trend | 39s → 13m — getting slower ⚠️ | first 3 vs last 3 |
 
 The **cycle** is the real unit: implement → debug → verify wall → land. The wall is only part of
@@ -27,11 +27,11 @@ it, and a wall that grows taxes every future tick, so it is tracked separately f
 ### Near — the daily driver (doc / app / platform web)
 
 * **capabilities asserted** (`G_CAPABILITY`): 48 → **81**
-* **live gates**: 27 → **455**
-* **✅ rows in the capability ledger**: 144 → **597**
+* **live gates**: 27 → **456**
+* **✅ rows in the capability ledger**: 144 → **598**
 * **Bar 0 — oracle hangs**: 0 of 265 sites
 
-**408 of 906 ticks** (45%) moved a
+**409 of 907 ticks** (45%) moved a
 user-visible capability. The rest were instruments, infrastructure and corrections — and the
 ledger says the corrections were not overhead: three of its top three priorities were phantoms,
 and finding that out redirected everything after it.
@@ -90,7 +90,7 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 
 ## What a capability costs
 
-* **408** capability ticks, median cycle **28m**
+* **409** capability ticks, median cycle **28m**
 * median diff per tick: **+268 / −34** lines across 8 files
 
 ## Every tick
@@ -1003,5 +1003,6 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 | **1202** | 2026-08-13 05:01 | 26m | capability | 13m | +350/−50 | 455 | 81 | 56.0% · | the arena-aware style lookup LANDS and moves ZERO, and the +0 is the finding (2026-08-13) |
 | **1203** | 2026-08-13 06:51 | 1.8h | measurement | 13m | +561/−41 | 455 | 81 | 56.0% · | the sweep caught a FALSE THROW three anchor sites could not (2026-08-13) |
 | **1204** | 2026-08-13 06:57 | 6m | measurement | 13m | +147/−33 | 455 | 81 | 56.0% · | the leverage ranker's #2 row is HALF UNSHIPPED SPEC, and the ranker cannot see it (2026-08 |
+| **1205** | 2026-08-13 07:22 | 25m | capability | 13m | +323/−36 | 456 | 81 | 56.0% · | I probed the lever tick 1204 named, and tick 1204 was WRONG about it (2026-08-13) |
 
 *`·` after a WPT figure means **carried forward**, not measured this tick.*

@@ -629,6 +629,26 @@ fn with_style_in<R>(
     }
 }
 
+/// **A percentage, serialized so it survives its own round trip.**
+///
+/// `object-position` is stored as a free-space FRACTION (`30%` → `0.3`) because that is what the
+/// paint path needs, and `0.3f32 * 100.0` is `30.000002`. So `getComputedStyle(el).objectPosition`
+/// answered **`20% 30.000002%`** for a sheet that said `20% 30%` — measured, not theorised. Every
+/// `assert_equals` fails on that, and so does every real page that compares the string it wrote to
+/// the string it reads back, which is how animation and layout libraries detect their own writes.
+///
+/// The rest of this file does not have the problem, because `Dim::Percent` stores the percentage
+/// itself; this property round-trips through a fraction and is the odd one out. Five decimals keeps
+/// `33.333%` exact (`0.33333 * 100.0` is `33.332999…`) and is well inside the precision any CSS
+/// serialization carries; trailing zeros and a bare `.` are trimmed, so an exact value prints exact.
+fn pct(v: f32) -> String {
+    let mut s = format!("{:.5}", v);
+    if s.contains('.') {
+        s = s.trim_end_matches('0').trim_end_matches('.').to_string();
+    }
+    format!("{s}%")
+}
+
 /// A `Dim` as a CSS string.
 fn dim_css(d: &manuk_css::Dim) -> String {
     match d {
@@ -1352,9 +1372,9 @@ fn extra_computed_props(
         (
             "object-position",
             format!(
-                "{}% {}%",
-                cs.object_position.x * 100.0,
-                cs.object_position.y * 100.0
+                "{} {}",
+                pct(cs.object_position.x * 100.0),
+                pct(cs.object_position.y * 100.0)
             ),
         ),
         (

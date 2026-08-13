@@ -46371,6 +46371,67 @@ PERF: none — one UA rule and one narrowed branch in a cascade that already ran
 WIKI: `docs/wiki/css-cascade.md` — where Chrome draws the form-control `box-sizing` line, and why a
 layout-crate test cannot see it.
 
+## Tick 1205 — I probed the lever tick 1204 named, and tick 1204 was WRONG about it (2026-08-13)
+
+TICK SHAPE: capability — small, plus the more valuable half: **a published correction.** t1204 named
+`object-position` as the one real lever inside `css/css-values`' non-tail remainder and described it
+from a SAMPLE of failing assertions. A direct probe says that description was wrong twice.
+
+⚠⚠⚠ **THE CORRECTION.** t1204 wrote that `object-position` *"is not being applied at all on the
+shipping (Stylo) path"* and that the type's inability to hold a length was the second of two
+problems. **Both halves of that are wrong**, and the probe took four minutes:
+
+```text
+   object-position: 20% 30%       →  20% 30.000002%   ← APPLIED. the float is the bug
+   object-position: top           →  50% 0%           ← correct
+   object-position: right bottom  →  100% 100%        ← correct
+   object-position: 30px 50%      →  50% 50%          ← the length IS dropped …
+```
+
+…and the length fallback is **a documented deliberate limit, not an oversight**. The parser says so
+in its own comment: *"percentages relative to length (px) aren't fraction-convertible without the
+box, so they (and any unrecognized token) fall back to centered."*
+
+**Why t1204 got it wrong is the transferable part, and it is a sampling error with a name.** I
+histogrammed the failing assertions and read the top rows — and *every* `object-position` row in
+`css/css-values` happens to involve a length, a `calc()`, or a Selectors-5 keyword (`x-start`), so a
+sample of failures had a 100% rate of a property that was in fact working for the majority case
+nobody was testing there. **A failure histogram tells you what is broken among the things a suite
+CHOSE to test; it cannot tell you the property works for anything else.** This is the same rule as
+*"grep the artefact, infer the engine"* — one level up, and it caught me the same way it caught the
+UA-sheet count and the `zoom: 1` frequency. **Name and RUN the code path before publishing a claim
+about it** — the rule this loop already has, applied to a claim about a property rather than an API.
+
+**THE REAL DEFECT THE PROBE FOUND, which nothing in `css/css-values` was testing:**
+`getComputedStyle(img).objectPosition` answers **`20% 30.000002%`** for a sheet that says
+`20% 30%`. `ObjectPosition` stores each axis as a free-space FRACTION (`30%` → `0.3`) because that
+is what the paint path needs, and the serializer did `0.3f32 * 100.0`. Every other percentage in the
+file is fine — `Dim::Percent` stores the percentage itself — so this property is the one that
+round-trips through a fraction and the only one with the defect.
+
+**A float artefact is a real failure, not cosmetic:** the standard way a library detects its own
+write is to compare the string it set with the string it reads back. `"20% 30%"` ≠
+`"20% 30.000002%"`, so the write looks lost. Same class as `undefined + ' scale(2)'` producing
+`"undefined scale(2)"` (`G_TRANSFORM`) — a value of the right *type* that no comparison will match.
+
+Gated by `G_OBJECT_POSITION_COMPUTED`, RED-proven by restoring the bare multiplication
+(`expected pct:20% 30%`). ⚠ **The gate refuses a blunt round**: `33.333% 66.667%` must survive
+intact, so a fix that rounded to 2 or 3 decimals would pass the headline claim and destroy this one.
+And `lengthStillFallsBackToCentre:50% 50%` **pins the documented limit on purpose**, so the tick that
+widens the type has to come back and edit that line deliberately.
+
+⚠⚠ **MEASURED: +0 WPT.** `css/css-values` 1708 → 1708, `dom` 7147 → 7147, 0 crashes. Stated plainly
+rather than buried: **no WPT test in that area writes a plain percentage and reads it back**, which
+is precisely why the defect survived — and precisely why the probe found it and the histogram did
+not. The value here is a correctness fix on the read path every real page uses, plus a retraction of
+a claim this loop published one tick ago. Second +0 tick in this session, and the second time the
+zero is the honest number rather than a disappointment (t1202 was the first).
+
+PERF: one `format!` with a fixed precision replacing one with default float formatting, on a
+per-property computed-style read. F1/F2 unmoved.
+
+WIKI: docs/wiki/css-cascade.md — "A failure histogram cannot tell you what WORKS"
+
 ## Tick 1204 — the leverage ranker's #2 row is HALF UNSHIPPED SPEC, and the ranker cannot see it (2026-08-13)
 
 TICK SHAPE: measurement — a REFUSAL of the board's #2 row, which is a result. Four consecutive ticks
