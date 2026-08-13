@@ -174,3 +174,42 @@ not applied at all on the shipping Stylo path, and `ObjectPosition` stores `x`/`
 (`cs.object_position.x * 100.0`) so it cannot represent a length even once it is. Two changes: widen
 the type, then map the property. It matters past its 24 subtests — `object-position` is how every
 cropped hero and avatar keeps its subject in frame under `object-fit: cover`.
+
+## A sparse checkout is a claim about where the tests are (t1219)
+
+`WPT-AREAS.tsv` carried `cssom 0 0 0.0` for as long as anyone looked, and the loop's memory recorded
+it as *"`cssom` is STILL missing (FILES 0)"*. It was not missing — the **aperture was aimed at the
+old path**:
+
+```text
+   ~/wpt/cssom/       →  crashtests/ only, 2 files   ← the pre-move location, and what the
+                                                        sparse checkout names
+   ~/wpt/css/cssom/   →  225 files                   ← where the tests actually are
+```
+
+WPT moved its CSSOM tests from top-level `cssom/` into `css/cssom/`. The checkout faithfully pulls
+the old directory; the runner faithfully reports `FILES 0`.
+
+> **A sparse checkout is a claim about where the tests are, and it goes stale when upstream moves
+> them. A `0/0` area is not "unmeasured because it is hard" — it is a claim that failed silently.**
+
+Second instance: t1176 found `/css/support/` omitted — nine testharness helpers whose absence made
+~700 files report ONE error instead of hundreds of subtests (+8,265 on repair).
+
+**Measured after `git sparse-checkout add css/cssom`: 1917 / 3502 = 54.7%, 0 crashes.** 1,917
+subtests were already passing and nobody knew, and 1,585 fail in the area this session spent seven
+ticks inside — **every CSSOM lever priced this session was priced without its own area on the board.**
+
+### ⚠ The PRIMARY metric goes DOWN, and that is the point
+
+```text
+   before   87750 / 122042  =  71.90%
+   after    89667 / 125544  =  71.42%
+```
+
+Numerator +1,917, denominator +3,502 — an area below the running average pulls the headline down.
+That is the correct behaviour of an honest denominator. **The engine did not get worse; the
+measurement got wider.**
+
+⚠ **Not durable:** `scripts/wpt-setup.sh`'s `SUBSETS` still names `cssom`, so a setup re-run reverts
+this. Observer-owned; the one-line change needed is `cssom` → `css/cssom`.

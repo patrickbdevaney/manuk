@@ -2071,6 +2071,8 @@
   - L124 · Rank mechanisms by FLIP RATE, not failing-subtest count — CSS layout is a multi-assertion slog
   - L135 · The leverage ranker has no term for unshipped spec (t1204)
   - L169 · The one real lever inside the remainder, measured and left named
+  - L178 · A sparse checkout is a claim about where the tests are (t1219)
+  - L203 · ⚠ The PRIMARY metric goes DOWN, and that is the point
 
 ---
-1980 sections across 22 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+1982 sections across 22 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.

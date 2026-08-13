@@ -46371,6 +46371,69 @@ PERF: none — one UA rule and one narrowed branch in a cascade that already ran
 WIKI: `docs/wiki/css-cascade.md` — where Chrome draws the form-control `box-sizing` line, and why a
 layout-crate test cannot see it.
 
+## Tick 1219 — the aperture was pointed at the OLD location, and the PRIMARY metric goes DOWN (2026-08-13)
+
+TICK SHAPE: measurement — an **aperture correction**, and by the standing rule it is *a correction,
+not progress*. The headline number **falls**, and that is the honest reading.
+
+**`WPT-AREAS.tsv` has carried `cssom  0  0  0.0` for as long as anyone has looked**, and the loop's
+own memory records it as *"`cssom` is STILL missing (`FILES 0`)"*. It is not missing. It is
+**pointed at the wrong path**:
+
+```text
+   ~/wpt/cssom/          →  crashtests/ only, 2 files      ← the OLD, pre-move location
+   ~/wpt/css/cssom/      →  225 files                      ← where the tests actually are,
+                                                              and NOT in the sparse checkout
+```
+
+WPT moved its CSSOM tests from top-level `cssom/` into `css/cssom/`. The sparse checkout still names
+the old directory, so it faithfully pulls a nearly-empty one, and the runner faithfully reports
+`FILES 0`. **Nothing was broken; the aperture was aimed at where the tests used to be.**
+
+⚠ **This is t1176's finding recurring with a different directory** — there it was `/css/support/`
+(nine testharness helpers, absent → ~700 files each reporting ONE error instead of hundreds of
+subtests, +8,265 on repair). The general form is now twice-instanced and worth stating plainly:
+
+> **A sparse checkout is a claim about where the tests are, and it goes stale when upstream moves
+> them. A `0/0` area is not "unmeasured because it is hard" — it is a claim that failed silently.**
+
+**MEASURED after `git sparse-checkout add css/cssom`:**
+
+```text
+   css/cssom   1917 / 3502  =  54.7%   0 crashes   ← an ENTIRELY unmeasured area
+```
+
+**1,917 subtests were already passing and nobody knew.** And 1,585 are failing in the area this
+session has spent seven ticks inside — the CSSOM — which is exactly the *rank inside the wrong frame*
+hazard VI.3 names: **every CSSOM lever this session priced was priced without its own area on the
+board.**
+
+⚠⚠⚠ **AND THE PRIMARY METRIC FALLS, WHICH IS THE POINT:**
+
+```text
+   before   87750 / 122042  =  71.90%
+   after    89667 / 125544  =  71.42%
+```
+
+The numerator rises by 1,917 and the denominator by 3,502, so an area below the running average
+**pulls the headline down**. That is the correct behaviour of an honest denominator, and reporting it
+any other way would be the metric-flattering this project has caught itself at repeatedly. **The
+engine did not get worse between two ticks; the measurement got wider.**
+
+⚠ **NOT DURABLE, and recorded rather than worked around:** `scripts/wpt-setup.sh`'s
+`sparse-checkout set` is authoritative and its `SUBSETS` list still names `cssom`, so a re-run of
+setup reverts this. That file is observer-owned (PART VII) and was not touched. **The one-line
+change the observer needs is `cssom` → `css/cssom` in `SUBSETS`.**
+
+**RE-RANK, per the standing rule that a corrected aperture invalidates the previous ordering:**
+`css/cssom` enters at **1,585 failing, 54.7%** — mid-table by size, but it is the *only* area whose
+subject this session has seven ticks of context in, and its failures are the same CSSOM-lossiness
+class t1213 named.
+
+PERF: none — measurement only.
+
+WIKI: docs/wiki/wpt-horizon.md — "A sparse checkout is a claim about where the tests are"
+
 ## Tick 1218 — the blocker t1171 named was "there is no list", and one-at-a-time is fine if you have candidates (2026-08-13)
 
 TICK SHAPE: capability — check #116's steer #4 (*the census is a reusable instrument; `el.style`'s

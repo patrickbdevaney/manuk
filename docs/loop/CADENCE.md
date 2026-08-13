@@ -11,12 +11,12 @@
 
 | | value | over |
 |---|---|---|
-| ticks landed | **919** | ticks 1–1218 |
-| median tick cycle | **28m** | 918 intervals |
-| median, last 10 | **28m** | 10 intervals |
+| ticks landed | **920** | ticks 1–1219 |
+| median tick cycle | **28m** | 919 intervals |
+| median, last 10 | **27m** | 10 intervals |
 | fastest / slowest | 5s / 5.4d | |
-| **ticks per hour** | **1.15** | 799.4h elapsed |
-| median verify wall | **63s** | 858 ticks |
+| **ticks per hour** | **1.15** | 799.5h elapsed |
+| median verify wall | **63s** | 859 ticks |
 | wall trend | 39s → 13m — getting slower ⚠️ | first 3 vs last 3 |
 
 The **cycle** is the real unit: implement → debug → verify wall → land. The wall is only part of
@@ -31,7 +31,7 @@ it, and a wall that grows taxes every future tick, so it is tracked separately f
 * **✅ rows in the capability ledger**: 144 → **609**
 * **Bar 0 — oracle hangs**: 0 of 265 sites
 
-**417 of 919 ticks** (45%) moved a
+**417 of 920 ticks** (45%) moved a
 user-visible capability. The rest were instruments, infrastructure and corrections — and the
 ledger says the corrections were not overhead: three of its top three priorities were phantoms,
 and finding that out redirected everything after it.
@@ -91,7 +91,7 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 ## What a capability costs
 
 * **417** capability ticks, median cycle **28m**
-* median diff per tick: **+269 / −34** lines across 8 files
+* median diff per tick: **+268 / −34** lines across 8 files
 
 ## Every tick
 
@@ -1016,5 +1016,6 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 | **1216** | 2026-08-13 11:46 | 27m | capability | 13m | +218/−39 | 462 | 81 | 56.0% · | the last two lossy names, and the same round-trip bug for the THIRD time (2026-08-13) |
 | **1217** | 2026-08-13 11:52 | 6m | measurement | 13m | +267/−34 | 462 | 81 | 56.0% · | the tool I built two ticks ago would REGRESS the thing it looks perfect for (2026-08-13) |
 | **1218** | 2026-08-13 12:26 | 34m | capability | 13m | +685/−36 | 463 | 81 | 56.0% · | the blocker t1171 named was "there is no list", and one-at-a-time is fine if you have cand |
+| **1219** | 2026-08-13 12:31 | 5m | measurement | 13m | +140/−35 | 463 | 81 | 56.0% · | the aperture was pointed at the OLD location, and the PRIMARY metric goes DOWN (2026-08-13 |
 
 *`·` after a WPT figure means **carried forward**, not measured this tick.*
