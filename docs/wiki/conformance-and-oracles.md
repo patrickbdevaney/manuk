@@ -3877,3 +3877,51 @@ resolve"**, which nothing runs.
 
 ⚠ Durability: `sparse-checkout set` is authoritative, so a re-run of `scripts/wpt-setup.sh` reverts
 this. `css/support` belongs in that script's `SUBSETS` list.
+
+## The engine routing bought ZERO, and the pair bought +120 (t1208)
+
+**Half one — the engine.** Nothing on the frame-loading path looked at the response `Content-Type`,
+so every framed document went through the **HTML parser**: wrapped in `<html><head><body>`, every tag
+name lowercased, errors recovered from silently. `render_iframe_with_type` now routes on the MIME
+Sniffing rule — `text/xml`, `application/xml`, or **anything ending in `+xml`**, the suffix that
+makes `xhtml+xml`, `svg+xml`, `rss+xml` and `atom+xml` all work without an enumeration that would be
+wrong for the next one.
+
+**It moved zero.** `dom` 7397 → 7397, with the gate proving the routing works. A zero from a
+*reachable, observed* mechanism is a question about the diagnosis — so read what the assertion
+actually says rather than what it implies:
+
+```text
+   assert_equals: XML document didn't load
+       expected "Dummy XML document"  but got  "Dummy XML document\n"
+```
+
+The frame loads, the text is right, **there is a trailing newline** — exactly the HTML-vs-XML
+difference (in XML the newline after the root element is outside the document element; the HTML
+parser puts it inside `<body>`). The routing was right and could never fire.
+
+### Half two — the instrument, and it is the MIS-PROVISIONED REFERENCE class for the fourth time
+
+```text
+   tests/wpt/src/harness.rs
+     "xht" | "xhtml"  =>  "text/html"               ← wptserve sends application/xhtml+xml
+     "xml"            =>  (no arm) "text/plain; …"  ← nothing it served was ever XML
+```
+
+**The engine was answering honestly about the bytes it was told it had.** After `--hide-scrollbars`,
+`--window-size` and the interaction media features, this is the fourth subject — and the first where
+the mis-provisioning lives in a **MIME table**, a place nobody looks because it reads as
+configuration rather than as a measurement input.
+
+```text
+   engine routing ALONE     dom 7397 → 7397    (+0)
+   BOTH                     dom 7397 → 7517  (+120)   0 crashes, controls flat
+```
+
+**Neither half moves anything alone.** A pair whose halves are each inert is a shape this loop has
+met before (t1149-1152), and it is why the zero had to be investigated rather than banked or
+reverted.
+
+⚠ **Residual, pinned by the fixture rather than hidden:** the XML parser does not preserve name case
+— a `<Foo>` root comes back with `localName` `foo`. XML is case-sensitive; that is a separate defect
+below `parse_xml`, asserted at its honest current value so the tick that fixes it must edit the line.

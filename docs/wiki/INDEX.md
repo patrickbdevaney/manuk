@@ -684,6 +684,8 @@
   - L3756 · A RED-proof that is already green is not a RED-proof
   - L3789 · WPT fuzzy is the author's allowance — and on this suite it banks nothing (t1156)
   - L3826 · The WPT checkout is SPARSE, and css/support/ holds the library the whole CSS corpus is written against
+  - L3881 · The engine routing bought ZERO, and the pair bought +120 (t1208)
+  - L3903 · Half two — the instrument, and it is the MIS-PROVISIONED REFERENCE class for the fourth time
 
 ## CSS AND THE CASCADE — Stylo realities and quirks actually encountered
 `docs/wiki/css-cascade.md`
@@ -2057,4 +2059,4 @@
   - L169 · The one real lever inside the remainder, measured and left named
 
 ---
-1964 sections across 22 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+1966 sections across 22 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.

@@ -46371,6 +46371,80 @@ PERF: none — one UA rule and one narrowed branch in a cascade that already ran
 WIKI: `docs/wiki/css-cascade.md` — where Chrome draws the form-control `box-sizing` line, and why a
 layout-crate test cannot see it.
 
+## Tick 1208 — the engine routing bought ZERO, and the pair bought +120 (2026-08-13)
+
+TICK SHAPE: capability — `dom` (#1), the 98-subtest XML family. **Two halves, each inert alone**, and
+the second one was found only because the first measured zero.
+
+**HALF ONE — the engine.** Nothing on the frame-loading path ever looked at the response's
+`Content-Type`, so every framed document went through the **HTML parser**, which wraps the content in
+`<html><head><body>`, lowercases every tag name and recovers silently from errors.
+`render_iframe_with_type` now routes on the MIME Sniffing rule — `text/xml`, `application/xml`, or
+**anything ending in `+xml`**, which is what makes `xhtml+xml`, `svg+xml`, `rss+xml` and `atom+xml`
+all work without an enumeration that would be wrong for the next one. `Page::load_xml` is a
+**sibling** of `Page::load`, both delegating to a new `Page::load_dom`; the only difference between
+them is which parser produced the `Dom`, and everything after is shared — the shape t1207 named.
+
+⚠⚠⚠ **AND IT MOVED ZERO. `dom` 7397 → 7397.** The gate proved the routing works (`documentElement`
+is `Foo`, not `HTML`), so the mechanism was reachable, observed, and bought nothing — which meant the
+diagnosis was still wrong. **I had inferred the cause from an assertion message for the second time
+in three ticks**, the exact failure t1205 published a rule about. So I read what the assertion
+actually said, instead of what it implied:
+
+```text
+   assert_equals: XML document didn't load
+       expected "Dummy XML document"  but got  "Dummy XML document\n"
+```
+
+**The frame loads. The text is right. There is a trailing newline** — which is precisely the
+HTML-vs-XML difference (in XML the newline after the root element is *outside* the document element;
+the HTML parser puts it inside `<body>`). So the routing was right and could never fire.
+
+⚠⚠⚠ **HALF TWO — THE INSTRUMENT, AND IT IS PART VI's "MIS-PROVISIONED REFERENCE" CLASS FOR THE
+FOURTH TIME.** `tests/wpt/src/harness.rs`'s MIME table:
+
+```text
+   "xht" | "xhtml"  =>  "text/html"                  ← wrong; wptserve sends application/xhtml+xml
+   "xml"            =>  (no arm) "text/plain; …"     ← nothing this harness served was ever XML
+```
+
+**The engine was answering honestly about the bytes it was told it had.** After
+`--hide-scrollbars` (the gutter), `--window-size` (a window is not a viewport) and the interaction
+media features (`hover: none` on 22.9% of the corpus), this is the fourth subject and the first where
+the mis-provisioning lives in a **MIME table** — a place nobody had thought to look because a MIME
+table looks like configuration rather than like a measurement input.
+
+**MEASURED, same release binary, same hour:**
+
+```text
+   engine routing ALONE          dom 7397 → 7397    (+0)
+   harness MIME table ALONE      (not run separately — it is inert without the routing)
+   BOTH                          dom 7397 → 7517  (+120)   70.4% → 71.6%   0 crashes
+   html/dom                    56445 → 56445        (0)            94.2%   ← control
+   domparsing                    234 → 234          (0)            18.1%   ← control
+   ──────────────────────────────────────────────────────────────────────
+   PRIMARY (active-areas)   86843 → 86963    71.16% → 71.26%
+```
+
+**Neither half moves anything alone, which is the finding.** A pair whose halves are each inert is a
+shape this loop has met before (t1149-1152's fit-content clamp) and it is the reason the +0 had to be
+investigated rather than banked or reverted: a zero from a *reachable, observed* mechanism is a
+question about the diagnosis, not a verdict on the fix.
+
+Gated by `G_IFRAME_XML_CONTENT_TYPE`, RED-proven by routing everything back to the HTML parser
+(`HTML|html/…` instead of `FOO|foo/…`). The gate also pins the **safe default** — an absent or
+unrecognised type stays HTML, because every existing `render_iframe` caller passes no type and a rule
+that guessed XML would blank every frame in the engine.
+
+⚠ **A RESIDUAL FOUND BY THE FIXTURE AND PINNED RATHER THAN HIDDEN:** the XML parser does **not**
+preserve name case — a `<Foo>` root comes back with `localName` `foo`. XML is case-sensitive, so that
+is wrong, and it is a separate defect below `parse_xml` (the arena sink or `create_element`). The
+gate asserts it at its honest current value so the tick that fixes it must edit that line.
+
+PERF: one MIME-essence comparison per framed document. F1/F2 unmoved.
+
+WIKI: docs/wiki/conformance-and-oracles.md — "The engine routing bought zero, and the pair bought +120"
+
 ## Tick 1207 — one rule, and it was written out in ONE of its two callers (2026-08-13)
 
 TICK SHAPE: capability — `dom` (#1), the dominant remaining mechanism in its assertion histogram.

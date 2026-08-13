@@ -243,7 +243,22 @@ fn content_type(p: &Path) -> &'static str {
         //
         // Real `wptserve` sends no charset for `.html` precisely so the document can declare its own. So do
         // we now. *An instrument that overrides the thing it is measuring is not measuring it.*
-        "html" | "htm" | "xht" | "xhtml" => "text/html",
+        "html" | "htm" => "text/html",
+        // ⚠⚠⚠ **`.xhtml` SAID `text/html` AND `.xml` FELL THROUGH TO `text/plain`, so nothing this
+        // harness serves was ever XML.** Real `wptserve` sends `application/xhtml+xml` and
+        // `text/xml`, and the difference is not a label: it decides WHICH PARSER runs. The HTML
+        // parser wraps a document in `<html><head><body>`, lowercases every tag name, and swallows
+        // the trailing newline after the root element INTO the body — which is exactly the shape
+        // `dom/nodes/Document-createElement.html` reports as
+        // `expected "Dummy XML document" but got "Dummy XML document\n"` on 98 subtests, and the
+        // engine was answering honestly about the bytes it was told it had.
+        //
+        // This is PART VI's **mis-provisioned reference** class again (`--hide-scrollbars`,
+        // `--window-size`, the interaction media features): the instrument was not asking for the
+        // page it was scoring, and the difference was charged to the engine. It is the fourth
+        // subject and the first where the mis-provisioning is in a MIME table.
+        "xht" | "xhtml" => "application/xhtml+xml",
+        "xml" => "text/xml",
         "js" | "mjs" => "text/javascript; charset=utf-8",
         "css" => "text/css; charset=utf-8",
         "json" => "application/json",

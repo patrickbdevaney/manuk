@@ -1671,6 +1671,25 @@ pub struct Page {
     load_deadline: Option<std::time::Instant>,
 }
 
+/// **Is this an XML MIME type?** The MIME Sniffing standard's rule, and the `+xml` suffix is the
+/// load-bearing half: it is what makes `application/xhtml+xml`, `image/svg+xml`,
+/// `application/rss+xml` and `application/atom+xml` all XML without enumerating them — an
+/// enumeration would be wrong for the next one.
+///
+/// Parameters are stripped (`text/xml; charset=utf-8`) and the comparison is ASCII-case-insensitive,
+/// because a real server sends both. An absent or unparseable type is NOT XML: HTML is the safe
+/// default on a path where guessing wrong means a blank frame.
+fn is_xml_mime(content_type: Option<&str>) -> bool {
+    let Some(ct) = content_type else { return false };
+    let essence = ct
+        .split(';')
+        .next()
+        .unwrap_or("")
+        .trim()
+        .to_ascii_lowercase();
+    essence == "text/xml" || essence == "application/xml" || essence.ends_with("+xml")
+}
+
 /// **The slice of the load budget reserved for COMMITTING what the network already delivered.**
 ///
 /// The budget is enforced by a `tokio::time::timeout` around the whole phase sequence, so the instant
@@ -2027,7 +2046,40 @@ impl Page {
     }
 
     pub fn load(html: &str, final_url: &str, fonts: &FontContext, viewport_width: f32) -> Page {
-        let mut page = Page::from_dom(manuk_html::parse(html), final_url, fonts, viewport_width);
+        Page::load_dom(manuk_html::parse(html), final_url, fonts, viewport_width)
+    }
+
+    /// **The same load, from an XML parse.** `XML is not HTML with different tags`
+    /// (`manuk_html::parse_xml`): `<Foo/>` and `<foo/>` are distinct elements, `xmlns` gives real
+    /// namespaces, and an unclosed tag is a fatal error rather than something to recover from.
+    ///
+    /// This exists because an `<iframe src="…​.xml">` was handed to the HTML parser, which lowercases
+    /// every tag and never reports the error — so a framed XML document's `documentElement` was the
+    /// wrong element with the wrong name. RSS/Atom, SVG documents and XHTML pages all arrive through
+    /// exactly that path.
+    ///
+    /// ⚠ Deliberately a sibling of `load`, both delegating to [`Page::load_dom`], rather than a second
+    /// copy of the load sequence — the shape t1207 named: *one rule, two implementations* is how the
+    /// two silently diverge, and everything after the parse (deferred scripts, DOMContentLoaded,
+    /// inline-SVG rasterization, `load`) is identical for both.
+    pub fn load_xml(src: &str, final_url: &str, fonts: &FontContext, viewport_width: f32) -> Page {
+        Page::load_dom(
+            manuk_html::parse_xml(src).dom,
+            final_url,
+            fonts,
+            viewport_width,
+        )
+    }
+
+    /// The load sequence, from an already-parsed document. Shared by [`Page::load`] and
+    /// [`Page::load_xml`]; the ONLY difference between them is which parser produced the `Dom`.
+    pub fn load_dom(
+        dom: manuk_dom::Dom,
+        final_url: &str,
+        fonts: &FontContext,
+        viewport_width: f32,
+    ) -> Page {
+        let mut page = Page::from_dom(dom, final_url, fonts, viewport_width);
         // **Both passes, back to back.** `from_dom` runs only the scripts that block first paint; the
         // deferred ones (`defer`, `async`, `type=module`) run here. So this function behaves exactly as
         // it always has — every gate, and the whole SPA suite, sees all scripts run before it asserts
@@ -2953,6 +3005,29 @@ impl Page {
         fonts: &FontContext,
         depth: u8,
     ) {
+        self.render_iframe_with_type(node, html, url, fonts, depth, None)
+    }
+
+    /// **The same, but told what the server said it was sending.**
+    ///
+    /// An `<iframe src="…​.xml">` was parsed as HTML, because nothing on this path ever looked at the
+    /// response's `Content-Type`. The HTML parser lowercases every tag name and recovers silently from
+    /// errors, so a framed XML document came back with the wrong `documentElement` and no complaint —
+    /// and *98 `dom` subtests* fail at their first line for that reason, before testing anything.
+    ///
+    /// The routing rule is the MIME sniffing standard's: an XML MIME type is `text/xml`,
+    /// `application/xml`, or **anything ending in `+xml`** — which is what makes `application/
+    /// xhtml+xml`, `image/svg+xml`, `application/rss+xml` and `application/atom+xml` all XML without
+    /// enumerating them. Everything else stays HTML, including an absent or unparseable type.
+    pub fn render_iframe_with_type(
+        &mut self,
+        node: manuk_dom::NodeId,
+        html: &str,
+        url: &str,
+        fonts: &FontContext,
+        depth: u8,
+        content_type: Option<&str>,
+    ) {
         // **Depth limit.** An iframe whose document contains an iframe is normal; a page that frames
         // itself is a fork bomb. Chromium's limit is far higher, but ours renders each level to a
         // bitmap, so the cost compounds and the returns do not.
@@ -2975,7 +3050,11 @@ impl Page {
 
         // A whole page, at the iframe's own viewport width — so its media queries and its layout see the
         // size of the frame, not the size of the window. That is what makes a responsive embed responsive.
-        let mut child = Page::load(html, url, fonts, w as f32);
+        let mut child = if is_xml_mime(content_type) {
+            Page::load_xml(html, url, fonts, w as f32)
+        } else {
+            Page::load(html, url, fonts, w as f32)
+        };
         if visible {
             let canvas = child.paint(fonts, w, h);
             let img = manuk_paint::DecodedImage {
@@ -3183,7 +3262,11 @@ impl Page {
                     continue;
                 }
             }
-            self.render_iframe(node, &html, &final_url, fonts, 0);
+            let ct = headers
+                .iter()
+                .find(|(k, _)| k.eq_ignore_ascii_case("content-type"))
+                .map(|(_, v)| v.clone());
+            self.render_iframe_with_type(node, &html, &final_url, fonts, 0, ct.as_deref());
         }
     }
 

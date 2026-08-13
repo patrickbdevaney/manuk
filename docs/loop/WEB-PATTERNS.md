@@ -5186,6 +5186,24 @@ draining the JS event loop to its 20,000-task ceiling, which has no wall-clock b
 images now arrive; the page is still slow for another reason. Same discipline as t608: **do not book
 "site X works now" from "one of site X's defects is gone."**
 
+## An `<iframe>` serving XML was parsed as HTML, silently (tick 1208)
+
+| pattern | where it shows up | status |
+| --- | --- | --- |
+| `<iframe src="feed.xml">` / `.xhtml` / `.svg` — a framed document whose `Content-Type` is XML. Nothing on the frame path looked at the type, so every framed document went through the **HTML parser**: wrapped in `<html><head><body>`, every tag lowercased, errors recovered from silently | RSS/Atom readers, SVG documents, XHTML pages, and any embed whose server labels it `+xml` | ✅ fixed (tick 1208) — MIME Sniffing's `+xml` suffix rule; gated by **`G_IFRAME_XML_CONTENT_TYPE`**; `dom` **7397 → 7517 (+120)** |
+
+⚠⚠⚠ **THE ENGINE HALF ALONE BOUGHT ZERO, AND THE PAIR BOUGHT +120.** The routing was correct and
+could never fire, because `tests/wpt/src/harness.rs` mapped `.xhtml` → `text/html` and `.xml` →
+`text/plain`. **The engine was answering honestly about the bytes it was told it had** — PART VI's
+*mis-provisioned reference* class for the fourth time, after `--hide-scrollbars`, `--window-size` and
+the interaction media features, and the first where it lives in a **MIME table**, which reads as
+configuration rather than as a measurement input.
+
+**A zero from a reachable, observed mechanism is a question about the diagnosis, not a verdict on the
+fix.** Reading what the assertion actually said — `expected "Dummy XML document" but got "Dummy XML
+document\n"` — named the trailing newline, which *is* the HTML-vs-XML difference, and pointed at the
+second half.
+
 ## One rule, two callers, and only one of them had it (tick 1207)
 
 | pattern | where it shows up | status |
