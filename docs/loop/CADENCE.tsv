@@ -915,3 +915,4 @@ tick	sha	epoch	iso	delta_s	shape	wall_s	files	added	deleted	gates	claims	wpt_pas
 1213	5c1ecaec	1786632343	2026-08-13T10:45:43-04:00	1963	measurement	808	4	149	3	461	81	3896	6960	0	605	0	the frame-ReflowCtx design, written down instead of started at hour twelve (2026-08-13)
 1214	1e52d210	1786632672	2026-08-13T10:51:12-04:00	329	measurement	808	7	143	34	461	81	3896	6960	0	605	0	HALF the computed-style surface is silent, and only 15 of it is a defect (2026-08-13)
 1215	015516ae	1786634341	2026-08-13T11:19:01-04:00	1669	capability	808	10	405	37	462	81	3896	6960	0	607	0	the census produced a worklist and the worklist paid (2026-08-13)
+1216	cfae6506	1786635983	2026-08-13T11:46:23-04:00	1642	capability	808	10	218	39	462	81	3896	6960	0	608	0	the last two lossy names, and the same round-trip bug for the THIRD time (2026-08-13)

@@ -3265,3 +3265,40 @@ something" a decision with a reason.**
 ⚠ **`dom` first read 8140, a −2, and did not reproduce** — solo it is 8142. Second instance this
 session of a −N evaporating on a solo re-run (t1212 was the first). **Re-run solo before believing a
 −N.**
+
+## The same round-trip bug for the third time (t1216)
+
+`background-position` and `tab-size` were the two lossy names t1214's census left unpriced. The first
+carried a trap this file had already paid for twice:
+
+```text
+   t1205  object-position      x/y stored as a FRACTION of free space   "20% 30.000002%"
+   t1210  alpha                stored as a u8, divided by 255           "rgba(…, 0.5019608)"
+   t1216  background-position  x/y stored as a FRACTION of free space   "30.000002% 70%"
+```
+
+> **Every property that stores a NORMALISED value for the paint path and serializes by multiplying
+> back has this bug** — and it is invisible on any value that happens to land on a representable
+> boundary, which is why it took three separate accidents to name.
+
+`pct()` — written at t1210 for alpha — is shared here rather than re-derived, which is the only
+reason the third instance cost minutes instead of a tick. RED-proven by restoring the raw
+multiplication.
+
+⚠ **A stale gate name kept on purpose.** `G_COMPUTED_LOSSY_SEVEN` now covers nine. t1215's journal and
+`CONSTELLATION.tsv` row cite that name; renaming would leave both dangling — **precisely the
+two-dialect rot surface audit #60 spent a tick untangling.** A stale name with a note in its own doc
+is cheaper than a dangling citation.
+
+### Where the census ended up
+
+```text
+   215 asked · 107 silent
+     15 LOSSY   →  9 CLOSED (t1215 seven, t1216 two)
+                   6 the GRID family, silent ON PURPOSE (Chrome reports USED track sizes)
+     92 HONEST  →  not modelled; silence is correct, and turning one into a value is a CAPABILITY
+                   tick, not a serializer one
+```
+
+**Nothing in that table is unexplained** — the state a census is for, and the state it was not in
+three ticks earlier. `css/css-backgrounds` **445 → 466 (+21)**.

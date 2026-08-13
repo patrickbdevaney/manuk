@@ -5186,6 +5186,27 @@ draining the JS event loop to its 20,000-task ceiling, which has no wall-clock b
 images now arrive; the page is still slow for another reason. Same discipline as t608: **do not book
 "site X works now" from "one of site X's defects is gone."**
 
+## Every property stored as a NORMALISED fraction has the same round-trip bug (tick 1216)
+
+| pattern | where it shows up | status |
+| --- | --- | --- |
+| `getComputedStyle(el).backgroundPosition` / `.tabSize` — the last two non-grid lossy names. `background-position` stores a FRACTION of the free space, so serializing multiplies by 100 and `0.3f32 * 100.0` is **`30.000002`** | Any page comparing what it wrote to what it reads back; `background-position` is on nearly every themed site | ✅ fixed (tick 1216) — `pct()` shared from t1210; `css/css-backgrounds` **445 → 466 (+21)** |
+
+⚠⚠⚠ **THIRD INSTANCE OF ONE BUG IN ONE FILE, and it is now nameable rather than three coincidences:**
+
+```text
+   t1205  object-position      FRACTION of free space   "20% 30.000002%"
+   t1210  alpha                u8 / 255                 "rgba(…, 0.5019608)"
+   t1216  background-position  FRACTION of free space   "30.000002% 70%"
+```
+
+> **Every property that stores a NORMALISED value for the paint path and serializes by multiplying
+> back has this bug**, and it is invisible on any value that lands on a representable boundary —
+> which is why it took three separate accidents to see.
+
+**Where t1214's census ended up:** 107 silent → **15 lossy (9 now closed, 6 grid silent on purpose)**
+and **92 honest** (not modelled — silence is correct). Nothing in that table is unexplained.
+
 ## The individual transform properties every animation library reads (tick 1215)
 
 | pattern | where it shows up | status |

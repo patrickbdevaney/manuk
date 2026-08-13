@@ -11,12 +11,12 @@
 
 | | value | over |
 |---|---|---|
-| ticks landed | **916** | ticks 1–1215 |
-| median tick cycle | **28m** | 915 intervals |
+| ticks landed | **917** | ticks 1–1216 |
+| median tick cycle | **28m** | 916 intervals |
 | median, last 10 | **28m** | 10 intervals |
 | fastest / slowest | 5s / 5.4d | |
-| **ticks per hour** | **1.15** | 798.3h elapsed |
-| median verify wall | **63s** | 855 ticks |
+| **ticks per hour** | **1.15** | 798.7h elapsed |
+| median verify wall | **63s** | 856 ticks |
 | wall trend | 39s → 13m — getting slower ⚠️ | first 3 vs last 3 |
 
 The **cycle** is the real unit: implement → debug → verify wall → land. The wall is only part of
@@ -28,10 +28,10 @@ it, and a wall that grows taxes every future tick, so it is tracked separately f
 
 * **capabilities asserted** (`G_CAPABILITY`): 48 → **81**
 * **live gates**: 27 → **462**
-* **✅ rows in the capability ledger**: 144 → **607**
+* **✅ rows in the capability ledger**: 144 → **608**
 * **Bar 0 — oracle hangs**: 0 of 265 sites
 
-**415 of 916 ticks** (45%) moved a
+**416 of 917 ticks** (45%) moved a
 user-visible capability. The rest were instruments, infrastructure and corrections — and the
 ledger says the corrections were not overhead: three of its top three priorities were phantoms,
 and finding that out redirected everything after it.
@@ -90,8 +90,8 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 
 ## What a capability costs
 
-* **415** capability ticks, median cycle **28m**
-* median diff per tick: **+270 / −34** lines across 8 files
+* **416** capability ticks, median cycle **28m**
+* median diff per tick: **+269 / −34** lines across 8 files
 
 ## Every tick
 
@@ -1013,5 +1013,6 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 | **1213** | 2026-08-13 10:45 | 33m | measurement | 13m | +149/−3 | 461 | 81 | 56.0% · | the frame-ReflowCtx design, written down instead of started at hour twelve (2026-08-13) |
 | **1214** | 2026-08-13 10:51 | 5m | measurement | 13m | +143/−34 | 461 | 81 | 56.0% · | HALF the computed-style surface is silent, and only 15 of it is a defect (2026-08-13) |
 | **1215** | 2026-08-13 11:19 | 28m | capability | 13m | +405/−37 | 462 | 81 | 56.0% · | the census produced a worklist and the worklist paid (2026-08-13) |
+| **1216** | 2026-08-13 11:46 | 27m | capability | 13m | +218/−39 | 462 | 81 | 56.0% · | the last two lossy names, and the same round-trip bug for the THIRD time (2026-08-13) |
 
 *`·` after a WPT figure means **carried forward**, not measured this tick.*

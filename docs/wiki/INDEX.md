@@ -858,6 +858,8 @@
   - L3163 · The defect that WAS fixable today, sitting beside them
   - L3183 · Half the computed-style surface is silent, and only 15 of it is a defect (t1214)
   - L3229 · The census produced a worklist and the worklist paid (t1215)
+  - L3269 · The same round-trip bug for the third time (t1216)
+  - L3293 · Where the census ended up
 
 ## `<dialog>`, `popover`, and the top layer (ticks 194-195)
 `docs/wiki/dialog-and-top-layer.md`
@@ -2068,4 +2070,4 @@
   - L169 · The one real lever inside the remainder, measured and left named
 
 ---
-1975 sections across 22 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+1977 sections across 22 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.

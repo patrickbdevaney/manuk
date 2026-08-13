@@ -1,4 +1,10 @@
-//! # G_COMPUTED_LOSSY_SEVEN — seven properties the cascade resolved and the CSSOM would not say
+//! # G_COMPUTED_LOSSY_SEVEN — the properties the cascade resolved and the CSSOM would not say
+//!
+//! ⚠ **The name says SEVEN and it now covers NINE** (t1216 added `background-position` and
+//! `tab-size`). The name is kept deliberately: t1215's journal and `CONSTELLATION.tsv` row cite
+//! `G_COMPUTED_LOSSY_SEVEN`, and renaming a gate leaves those citations pointing at nothing — which
+//! is precisely the two-dialect rot surface audit #60 spent a tick untangling. **A stale name with a
+//! note is cheaper than a dangling citation.**
 //!
 //! Tick 1214's census asked `getComputedStyle` for **215 properties** and found **107 silent**, then
 //! split them mechanically against `ComputedStyle`'s own fields:
@@ -26,8 +32,11 @@
 //! The other eight lossy names. **Six are the grid family** (`grid-template-*`, `grid-auto-*`), whose
 //! silence is recorded as deliberate at t1171-74: Chrome reports the **used** track sizes, so echoing
 //! what the cascade holds would be *a wrong answer of the right type* — worse than the silence.
-//! `background-position` and `tab-size` are the remaining two and are left for a tick that can price
-//! their serialization forms rather than guess them.
+//! ✅ `background-position` and `tab-size` — the other two — landed at **t1216**, and the first
+//! carried the round-trip trap for the THIRD time in this file: `BgPos::Pct` is a fraction of the
+//! free space, so `0.3f32 * 100.0` is `30.000002`. Every one of these properties stores a normalised
+//! fraction for the paint path and serializes by multiplying back, which is why `pct()` is shared
+//! rather than re-derived at each site.
 //!
 //! ## ⚠⚠ `transform-origin` RESOLVES ITS PERCENTAGES, and that is the claim a naive fix fails
 //!
@@ -43,10 +52,14 @@ const HTML: &str = r##"<!doctype html><html><head><style>
   #t { rotate: 45deg; scale: 2; translate: 10px 20px; }
   #u { scale: 2 3; translate: 5px; }
   #f { display: flex; align-content: space-between; justify-items: center; }
+  #bg { background-position: 30% 70%; }
+  #bgpx { background-position: 10px 20px; }
+  #tab { tab-size: 4; }
   #f > i { justify-self: flex-end; }
 </style></head><body>
   <div id="b"></div><div id="t"></div><div id="u"></div>
   <div id="f"><i id="i">x</i></div>
+  <div id="bg"></div><div id="bgpx"></div><div id="tab"></div>
   <div id="plain"></div>
   <div id="out">-</div>
   <script>
@@ -76,6 +89,14 @@ const HTML: &str = r##"<!doctype html><html><head><style>
     p('justifyItems:' + g('f', 'justifyItems'));
     p('justifySelf:' + g('i', 'justifySelf'));
     p('justifySelfAuto:' + g('plain', 'justifySelf'));
+
+    // ── 4b. THE LAST TWO NON-GRID LOSSY NAMES. ⚠ `background-position` stores a FRACTION of the
+    //    free space, so `0.3 * 100.0` is `30.000002` — the third instance in this file of the
+    //    round-trip artefact `alpha_css` (t1210) and `object-position` (t1205) were written for.
+    p('bgPct:' + g('bg', 'backgroundPosition'));
+    p('bgPx:' + g('bgpx', 'backgroundPosition'));
+    p('bgInitial:' + g('plain', 'backgroundPosition'));
+    p('tabSize:' + g('tab', 'tabSize'));
 
     // ── 5. REACHABLE BY BOTH SPELLINGS. `getPropertyValue('align-content')` and `.alignContent`
     //    are one value; a fix that adds only the camelCase key leaves every dashed read silent.
@@ -152,6 +173,20 @@ const CLAIMS: &[(&str, &str)] = &[
          is what the census itself asked with",
     ),
     ("dashedOrigin:100px 50px", "and the dashed form of the resolved origin"),
+    (
+        "bgPct:30% 70%",
+        "⚠ THE ROUND-TRIP TRAP, THIRD INSTANCE IN THIS FILE. `BgPos::Pct` is a FRACTION of the free \
+         space, so the serializer multiplies by 100 and `0.3f32 * 100.0` is `30.000002`. Every one \
+         of these properties stores a normalised fraction for the paint path and serializes by \
+         multiplying back — which is why `pct()` is shared rather than re-derived",
+    ),
+    ("bgPx:10px 20px", "an absolute offset keeps its unit"),
+    (
+        "bgInitial:0% 0%",
+        "the initial value is `0% 0%`, not the empty string — the same initial-value rule as \
+         `rotate:none`",
+    ),
+    ("tabSize:4", "`tab-size: 4` computes to the bare number"),
     (
         "alignItems:stretch",
         "THE RATCHET. The neighbours these were spliced in beside — a positional format template \

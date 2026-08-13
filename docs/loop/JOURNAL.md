@@ -46371,6 +46371,59 @@ PERF: none — one UA rule and one narrowed branch in a cascade that already ran
 WIKI: `docs/wiki/css-cascade.md` — where Chrome draws the form-control `box-sizing` line, and why a
 layout-crate test cannot see it.
 
+## Tick 1216 — the last two lossy names, and the same round-trip bug for the THIRD time (2026-08-13)
+
+TICK SHAPE: capability — the tail of t1214's census. **All nine non-grid lossy names are now closed**,
+and the six that remain silent are the grid family with a written reason.
+
+**`background-position` and `tab-size`** were the two the census left unpriced. Both are small, and
+the first carried a trap this file has already paid for twice:
+
+⚠⚠⚠ **`BgPos::Pct` IS A FRACTION OF THE FREE SPACE, so the serializer multiplies by 100 —
+`0.3f32 * 100.0` is `30.000002`.** That is the **third** instance of one bug in one file:
+
+```text
+   t1205  object-position   x/y stored as a FRACTION of free space    "20% 30.000002%"
+   t1210  alpha             stored as a u8, divided by 255            "rgba(…, 0.5019608)"
+   t1216  background-position  x/y stored as a FRACTION of free space  "30.000002% 70%"
+```
+
+**The pattern is now nameable rather than three coincidences: every property that stores a
+NORMALISED value for the paint path and serializes by multiplying back has this bug**, and it is
+invisible on any value that happens to land on a representable boundary. `pct()` — written at t1210
+for alpha — is shared here rather than re-derived, which is the only reason the third instance took
+minutes instead of another tick. RED-proven by restoring the raw multiplication.
+
+⚠ **A NAME KEPT ON PURPOSE:** the gate is `G_COMPUTED_LOSSY_SEVEN` and now covers **nine**. t1215's
+journal and `CONSTELLATION.tsv` row cite that name, and renaming it would leave both pointing at
+nothing — **precisely the two-dialect rot surface audit #60 spent a tick untangling.** A stale name
+with a note in its own doc comment is cheaper than a dangling citation, and the note is there.
+
+**MEASURED, same release binary, same hour:**
+
+```text
+   css/css-backgrounds   445 → 466   (+21)   42.2% → 44.2%   0 crashes
+   ────────────────────────────────────────────────────────────────
+   PRIMARY (active-areas)   87707 → 87728    71.87% → 71.88%
+```
+
+**WHERE THE CENSUS ENDED UP**, two ticks after it was taken:
+
+```text
+   215 asked · 107 silent
+     15 LOSSY   →  9 CLOSED (t1215 seven, t1216 two)
+                  6 the GRID family, silent on purpose (t1171-74: Chrome reports USED track sizes)
+     92 HONEST  →  not modelled; silence is the correct answer, and turning any of them into a
+                   value is a CAPABILITY tick, not a serializer one
+```
+
+**Nothing in that table is now unexplained**, which is the state a census is for and the state it was
+not in three ticks ago.
+
+PERF: two more values in a read that already builds ~130. F1/F2 unmoved.
+
+WIKI: docs/wiki/css-cascade.md — "The same round-trip bug for the third time"
+
 ## Tick 1215 — the census produced a worklist and the worklist paid (2026-08-13)
 
 TICK SHAPE: capability — the head of t1214's own census, closed one tick after it was measured.

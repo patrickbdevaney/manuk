@@ -1611,6 +1611,8 @@ const COMPUTED_STD_NAMES: &[&str] = &[
     "rotate",
     "scale",
     "translate",
+    "background-position",
+    "tab-size",
     "flex-direction",
     "flex-wrap",
     "flex-grow",
@@ -1911,6 +1913,30 @@ fn computed_style_js(
         Some((x, y)) => format!("{x} {y}"),
         None => "none".to_string(),
     };
+    // ── **THE LAST TWO NON-GRID LOSSY NAMES** (t1214's census), and the first carries a trap this
+    // file has already paid for once.
+    //
+    // ⚠ `BgPos::Pct` is a **fraction of the free space** (`box − tile`), stored as `f32`, so
+    // `0.3 * 100.0` is `30.000002` — the exact round-trip artefact `alpha_css` was written for at
+    // t1210 and `object-position` at t1205. **Third instance of one bug in one file**, and the
+    // reason it keeps recurring is that every one of these properties stores a normalised fraction
+    // for the paint path and serializes by multiplying back. `pct()` is the shared answer.
+    let bg_pos = {
+        let one = |b: &manuk_css::BgPos| match b {
+            manuk_css::BgPos::Pct(f) => pct(f * 100.0),
+            manuk_css::BgPos::Px(v) => format!("{v}px"),
+        };
+        format!(
+            "{} {}",
+            one(&cs.background_position.x),
+            one(&cs.background_position.y)
+        )
+    };
+    // `tab-size: 4` computes to the bare number `4`; a length keeps its unit.
+    let tab_size_css = match cs.tab_size {
+        manuk_css::TabSize::Spaces(n) => format!("{n}"),
+        manuk_css::TabSize::Px(v) => format!("{v}px"),
+    };
     let translate_css = match &cs.translate {
         Some((x, y)) if matches!(y, manuk_css::Dim::Px(v) if *v == 0.0) => dim_css(x),
         Some((x, y)) => format!("{} {}", dim_css(x), dim_css(y)),
@@ -1984,6 +2010,7 @@ fn computed_style_js(
           top:{}, right:{}, bottom:{}, left:{}, zIndex:{}, transform:{}, \
           justifyContent:{}, alignItems:{}, alignSelf:{}, alignContent:{}, justifyItems:{}, \
           justifySelf:{}, transformOrigin:{}, rotate:{}, scale:{}, translate:{}, \
+          backgroundPosition:{}, tabSize:{}, \
           flexDirection:{}, flexWrap:{}, \
           flexGrow:{}, flexShrink:{}, flexBasis:{}, rowGap:{}, columnGap:{}, \
           boxSizing:{}, minWidth:{}, maxWidth:{}, minHeight:{}, maxHeight:{}, \
@@ -2006,7 +2033,8 @@ fn computed_style_js(
           'padding-left':'paddingLeft','z-index':'zIndex',\
           'justify-content':'justifyContent','align-items':'alignItems','align-self':'alignSelf',\
           'align-content':'alignContent','justify-items':'justifyItems','justify-self':'justifySelf',\
-          'transform-origin':'transformOrigin',\
+          'transform-origin':'transformOrigin','background-position':'backgroundPosition',\
+          'tab-size':'tabSize',\
           'flex-direction':'flexDirection','flex-wrap':'flexWrap','flex-grow':'flexGrow',\
           'flex-shrink':'flexShrink','flex-basis':'flexBasis','row-gap':'rowGap',\
           'column-gap':'columnGap','box-sizing':'boxSizing','min-width':'minWidth',\
@@ -2078,6 +2106,8 @@ fn computed_style_js(
         q(&rotate_css),
         q(&scale_css),
         q(&translate_css),
+        q(&bg_pos),
+        q(&tab_size_css),
         q(flex_direction),
         q(flex_wrap),
         q(&flex_grow),
