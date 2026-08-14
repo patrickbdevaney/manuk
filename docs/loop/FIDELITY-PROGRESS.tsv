@@ -55,3 +55,4 @@ iso_sweep	sweep_tick	sites	scored	shape_ge0.75	shape_ge0.75_pct	shape_mean	cov_m
 2026-08-13T16:56:56	t1226	200	98	38	19.0	61.7	87.4	docs/loop/SWEEP-t1226-rows.tsv	68	132	28.8	crux	36.4	22.0
 2026-08-14T01:08:39	t1233	200	104	45	22.5	62.0	87.1	docs/loop/SWEEP-t1233-rows.tsv	65	135	33.3	crux	36.3	22.2
 2026-08-14T10:42:22	t1243	200	104	45	22.5	63.2	88.6	docs/loop/SWEEP-t1243-rows.tsv	67	133	33.8	crux	78.2	33.8
+2026-08-14T18:01:20	t1252	200	108	44	22.0	62.7	87.4	docs/loop/SWEEP-t1252-rows.tsv	69	131	33.6	crux	82.4	33.6

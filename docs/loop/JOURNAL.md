@@ -46371,6 +46371,99 @@ PERF: none — one UA rule and one narrowed branch in a cascade that already ran
 WIKI: `docs/wiki/css-cascade.md` — where Chrome draws the form-control `box-sizing` line, and why a
 layout-crate test cannot see it.
 
+## Tick 1252 — five sizing ticks, +160 WPT, and the corpus did not move. Both halves are the result. (2026-08-14)
+
+TICK SHAPE: measurement — steer item 2 from check #120. Six engine changes and an oracle repair were
+unpriced; the board's cadence rule (sweep every ~5-6 fixes) was met twice over.
+
+**THE PREDICTION, WRITTEN BEFORE THE SWEEP RETURNED** (the t1144 rule): *scorability up a little
+(the window killed no hangs, but t1247's oracle fix stops nine documents being parsed wrong);
+the COMMON-SET BAND flat-to-slightly-up, because five ticks of sizing work landed on constructs the
+corpus does contain; `timeout-150s` flat.*
+
+BANKED (`docs/loop/SWEEP-t1252-rows.tsv`, 200 sites, `--jobs 2`, 150 s cap):
+
+```text
+                            t1243        t1252
+  in-scope                    132          131
+  SCORED                      118          121     = 92.4% of in-scope   (was 89.4%)
+  timeout-150s                 13           10
+  shape>=0.75                  46           45
+  M1 GATE                      29           27
+  shape_mean                 58.9         58.3     cov_mean 84.8 -> 83.4
+  COMMON-SET BAND    mean -0.64 · MEDIAN +0.00 · 28 up · 31 down · 54 UNCHANGED (113 sites)
+```
+
+⭐⭐⭐ **THE HONEST HEADLINE, AND IT IS THE ONE THE PREDICTION GOT WRONG: FIVE SIZING TICKS AND +160
+WPT SUBTESTS MOVED THE CORPUS BY NOTHING MEASURABLE.** Median **+0.00**, trimmed mean **+0.08**, and
+**54 of 113 sites byte-identical**. Every mover of 5 points or more is a **sample-size flip**, not a
+geometry change — the population changed under the score, which is t1102's rule (*a shape delta is
+not a shape delta until both readings scored the same POPULATION*):
+
+```text
+   +41.5  merchant.upi9.pro          n     2 -> 47
+   -89.7  sports.yahoo.com           n  1910 -> 3      <- the SAME site that flipped +89.7 at t1243
+   -35.7  experiencia.pichincha.com  n     4 -> 7
+   -15.0  vk.com                     n     5 -> 4
+    +8.1  www.hdnails.it             n  1108 -> 1108   <- same n, and STILL not a clean gain (below)
+    -6.7  www.unoeste.br             n   435 -> 431
+```
+
+The five M1 verdict flips are the same story: four of the five `PASS → fail` are those oscillating
+small-n sites (`agoda`, `mobcup`, `gismart`, `mayatoys`), and the one `fail → PASS` is
+`merchant.upi9.pro`, whose sample went from 2 elements to 47. **M1 29 → 27 is not a regression and
+46 → 45 is not one either; both are inside the instrument's own churn** (t1144's scorability churn
+floor, which alternates sign every sweep).
+
+⚠ **AND THE ONE SITE THAT LOOKED LIKE A CLEAN GAIN IS NOT ONE.** `www.hdnails.it` moves +8.1 at an
+*identical* n=1108, which is exactly the shape a real geometry fix takes. But its three readings are
+**0.538 (t1243, quirks oracle) → 0.716 (t1248, repaired) → 0.619 (here)** — it is a site with
+run-to-run variance at stable n, not a site this window fixed. Checking the third reading is what
+stopped that from becoming the tick's headline.
+
+⚠⚠ **THE MECHANISM LEDGER DID NOT SHRINK EITHER, and the counts went slightly UP for a reason that is
+not a regression:** SCORED rose 118 → 121, so three more sites contribute causes.
+
+```text
+  mis-sized height   91 -> 92 sites     mis-sized width  75 -> 75
+  displaced y        65 -> 69           mis-sized y      43 -> 49
+  missing box        42 -> 40           display          21 -> 19
+```
+
+**No cluster shrank.** The board's own rule for a CO-#1 tick is *"PROVE the cluster's site-count
+SHRINKS next sweep"*, and by that rule the five sizing ticks are **not yet on-mandate** — they were
+chosen from `css/css-sizing`'s failure histogram, which is exactly what check #120's steer item 3
+predicted would happen and warned about one tick before the sweep confirmed it.
+
+**What DID move, and it is real:** SCORABILITY **89.4% → 92.4%**, `timeout-150s` **13 → 10**. Nothing
+this window targeted hangs, so the most likely cause is the corpus's own churn plus t1247's oracle
+fix; it is **not attributed** here beyond that.
+
+⚠ **THE INSTRUMENT CHANGED MID-INTERVAL AND THIS COMPARISON MIXES TWO DELTAS.** t1247 repaired the
+quirks-mode `<base>` splice, so t1243's rows and t1252's come from different instruments (the rows
+files' `instrument` column says so). The mixing is **bounded**: t1248 re-ran all 9 sites the bug could
+reach with the repaired oracle and **zero M1 verdicts changed**. Stated rather than smoothed over.
+
+⭐ **NEXT — and it follows from this tick rather than from the histogram:** take the next capability
+tick from **`docs/loop/SWEEP-t1252-mechanisms.tsv`**, top row (`geometry/mis-sized: height`, **92
+sites**), and localise it the way t1249 was localised — failure text → file → property. The rule the
+board states and this window did not follow: **a CO-#1 tick names the cluster it will shrink.**
+
+⚠ **A FALSE RED, ATTRIBUTED RATHER THAN RE-RUN BLIND.** The first wall came back with **`G_INTERACT`
+failed — a tab operation stalls the UI thread**, on a tick that changed **no engine code at all** (rows
+files, journal, STATUS). The tell was in the perf floors printed beside it: `F2` reported
+**423.78ms / 64.16ms** where the same gate on this box read 289.74/43.82 four hours earlier — the
+machine ~45% slower, not the browser. `uptime` said **load 13.66**, and the CPU was saturated by
+`cc1plus` / `ptxas` / `cicc` — a **CUDA/C++ build routed through the shared `sccache` daemon, owned by
+neither this loop nor the wall.** Not killed (t846: *a count is not an identification*), not
+"fixed" — waited out. It finished, load fell to 3.79, and the tick was re-run. *An oracle must never be
+able to charge someone else's slowness to your account* — here the gate nearly charged a foreign
+CUDA build to the browser's interactivity.
+
+PERF: none — measurement only, nothing compiled while it ran.
+
+WIKI: none — the artefacts are `SWEEP-t1252-rows.tsv` and `SWEEP-t1252-mechanisms.tsv`. [no-pattern]
+
 ## Tick 1251 — the I3 gap check #120 found in my own window, closed (2026-08-14)
 
 TICK SHAPE: capability — steer item 1 from constitution check #120, which found the only bent

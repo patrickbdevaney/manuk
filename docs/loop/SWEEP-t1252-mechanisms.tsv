@@ -1,0 +1,10 @@
+#sites	hits	mechanism
+92	3286	geometry/mis-sized: height
+75	7011	geometry/mis-sized: width
+69	1813	geometry/displaced: y (vertical drift)
+49	1974	geometry/mis-sized: y (vertical drift)
+44	798	geometry/displaced: x (horizontal)
+40	12470	missing box
+35	1122	geometry/mis-sized: x (horizontal)
+25	2713	unaligned key (we drew as many)
+19	3288	display
