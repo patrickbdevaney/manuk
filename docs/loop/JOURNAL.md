@@ -46371,6 +46371,69 @@ PERF: none — one UA rule and one narrowed branch in a cascade that already ran
 WIKI: `docs/wiki/css-cascade.md` — where Chrome draws the form-control `box-sizing` line, and why a
 layout-crate test cannot see it.
 
+## Tick 1246 — a NATURAL width is not a SPECIFIED width, and this was the sixth site to ask and the first to ask half (2026-08-14)
+
+TICK SHAPE: capability — t1245's residue, closed. Three ticks on one mechanism, and each one found
+the next by measuring rather than by reasoning about it.
+
+**THE RESIDUE, AND THE PART OF MY OWN WRITE-UP THAT WAS WRONG.** t1245 said a stretched `<canvas>`
+stayed 30 wide because *"we apply canvas's width/height content attributes as CSS presentational
+hints"*. **We do not** — `engine/css/src/lib.rs:4835` guards both fills with `tag != "canvas"` and its
+comment already states the rule exactly: *"its attributes are the output BITMAP (the natural size),
+not the CSS dimension properties"*, with a named twin in `stylo_engine`. That work was already done.
+The 30 came from `fill_natural_size` writing the bitmap width as the **natural** width — which is
+correct — and from the ratio transfer refusing to look past it.
+
+**THE DEFECT IS ONE HALF OF A PREDICATE.** *"The author did not specify a width"* is spelled
+`s.width == Dim::Auto || s.width_is_natural` — a derived width (a decoded bitmap's pixels, a canvas's
+bitmap attribute) is not a declaration, and a definite block size plus a ratio outranks it. **Five
+sites in this file already spell it that way** — `lib.rs:4345`, `:5498`, `:6494`, `:8740`, `:9145`.
+The ratio transfer t1244 widened had `Dim::Auto` **alone**, so it declined for precisely the replaced
+elements it exists to serve. Sixth site, first to ask half the question — *one rule, N
+implementations*, and the N-th is always the one nobody diffed against the other five.
+
+**THE THREE-TICK ARC, MEASURED AT EACH STEP** (`<canvas width=30 height=60>` in a 200×20 block,
+Chrome 10×20 on both rows):
+
+```text
+                     Chrome    t1244     t1245     t1246
+  height: stretch    10x20     30x60  ✗  30x20  ✗  10x20  ✓
+  height: 100%       10x20    200x400 ✗  30x20  ✗  10x20  ✓
+```
+
+t1244 taught the transfer every spelling of a definite block size. t1245 gave it a containing block
+whose height was not erased. t1246 let it look past a width nobody declared. **Each fix was correct
+and each one alone moved nothing on these rows** — which is why the arc took three ticks and not one,
+and why every step needed its own Chrome measurement instead of a plan.
+
+Whole-fixture parity, same fixture across the arc: **shape 45.5% → 63.6% → 90.9%**, and the one
+remaining divergence is `<body>`'s own height, which no row here touches.
+
+GATE: `a_natural_width_yields_to_a_definite_block_size_and_a_ratio` — both spellings plus a CONTROL
+that keeps the bitmap as the used size when the block axis is INDEFINITE (a natural width yielding to
+a ratio must not become a natural width yielding to nothing). **RED-proven** by dropping
+`|| s.width_is_natural`: *"got 30x20"*. Layout suite **177/177**.
+
+MEASURED, same binary, same hour:
+
+```text
+  css/css-sizing    972 -> 979   (+7; 934 -> 979 = +45 across t1244+t1245+t1246)
+  css/css-flexbox  1504  (=)   css/css-grid       2517  (=)
+  css/css-position  274  (=)   css/css-display     296  (=)
+  css/css-overflow  342  (=)   css/css-backgrounds 524  (=)
+  layout suite 177/177 · HANG/CRASH 0
+```
+
+⚠ **STILL NOT ESTABLISHED, carried forward unchanged from t1245 because nothing here touched it:**
+`height:100%` on an atomic inline inside an **auto-height** parent measures **50×800 in Chrome** and
+50×16 here. Ours is unchanged by construction (an auto-height parent yields `pch = None`). It is one
+probe, and it is the next thing worth measuring in this area.
+
+PERF: none — one extra boolean OR in a guard already evaluated once per block. F1/F2 unmoved.
+
+WIKI: `docs/wiki/box-layout.md` — the "NATURAL width is not a SPECIFIED width" section, appended to
+the atomic-inline entry.
+
 ## Tick 1245 — t1244's fix was correct and moved nothing, because the DISPATCH erased the containing block (2026-08-14)
 
 TICK SHAPE: capability — the residue t1244 named, taken next, and the naming turned out to be **half

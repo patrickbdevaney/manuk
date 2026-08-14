@@ -9457,3 +9457,33 @@ dimension attributes to CSS for `img` / `input type=image` / `embed` / `iframe` 
 become the *intrinsic* size. ⚠ An author `style="width:auto"` does not rescue it, because *`auto` the
 author wrote and `auto` nobody set are the same computed value* — t1026's third way to be wrong, and
 t1026's own fix (make the hint a real cascade origin rather than a post-pass) is the shape to copy.
+
+### A NATURAL width is not a SPECIFIED width (t1246) — and the canvas exclusion was already done
+
+The t1245 residue above named the wrong cause. `<canvas>`'s width/height attributes are **already**
+excluded from the presentational-hint fill (`engine/css/src/lib.rs:4835`, `tag != "canvas"`, with a
+named twin in `stylo_engine`) and that comment already states the rule. The 30px came from
+`fill_natural_size` recording the bitmap as the **natural** width — which is correct — and from the
+ratio transfer refusing to look past it.
+
+*"The author did not specify a width"* is spelled `s.width == Dim::Auto || s.width_is_natural`. A
+decoded bitmap's pixel width and a canvas's bitmap attribute are **derived**, not declared, and a
+definite block size plus a ratio outranks both. Five sites in `engine/layout/src/lib.rs` already
+spell it that way — `:4345`, `:5498`, `:6494`, `:8740`, `:9145` — and the ratio transfer had
+`Dim::Auto` alone. Sixth site to ask the question, first to ask half of it.
+
+**The three-tick arc, and why it could not have been one tick** (`<canvas width=30 height=60>` in a
+200×20 block; Chrome says 10×20 on both rows):
+
+```text
+                     Chrome    t1244     t1245     t1246
+  height: stretch    10x20     30x60  ✗  30x20  ✗  10x20  ✓
+  height: 100%       10x20    200x400 ✗  30x20  ✗  10x20  ✓
+```
+
+t1244 taught the transfer every spelling of a definite block size · t1245 gave it a containing block
+whose height had not been erased · t1246 let it look past a width nobody declared. **Each fix was
+correct, and each one alone moved these rows not at all.** Whole-fixture parity went 45.5% → 63.6% →
+90.9%. The lesson is not "we were slow": it is that a guard is a **conjunction**, and a conjunction
+with three wrong terms reports the same symptom as one with one — so each term has to be measured
+out separately and no amount of reasoning about the first will reveal the third.

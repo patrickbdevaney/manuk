@@ -465,6 +465,7 @@
   - L9412 · An atomic inline is a BLOCK laid out in a containing block we refused to describe (t1245)
   - L9437 · The diagnostic that found it: a correct fix that moved nothing
   - L9450 · ⚠ <canvas>'s width/height attributes are the BITMAP size, not a CSS presentational hint
+  - L9461 · A NATURAL width is not a SPECIFIED width (t1246) — and the canvas exclusion was already done
 
 ## browser-capabilities.md
 `docs/wiki/browser-capabilities.md`
@@ -2117,4 +2118,4 @@
   - L231 · Both named mechanisms are subsystem work
 
 ---
-2024 sections across 22 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+2025 sections across 22 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.

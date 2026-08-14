@@ -3722,7 +3722,22 @@ impl Ctx<'_> {
         // `Dim::Auto`'s representation — so the ratio must not derive a width over the top of it.
         // (This is what kept a `width:stretch` `<canvas width="40" height="20">` at 40px: the
         // stretch arm sized it correctly and then `height x ratio` overwrote the answer.)
-        if s.width == Dim::Auto && !s.width_stretch && taffy_known.is_none() {
+        //
+        // ⚠⚠ **`width_is_natural` COUNTS AS AUTO HERE, AND THIS WAS THE SIXTH SITE TO ASK THE
+        // QUESTION AND THE FIRST TO ASK ONLY HALF OF IT.** "The author did not specify a width" is
+        // `s.width == Dim::Auto || s.width_is_natural` — a decoded bitmap's own pixel width, and a
+        // `<canvas>`'s `width` attribute (which is the output BITMAP, not a CSS dimension property,
+        // so the cascade correctly declines to make it a hint and `fill_natural_size` records it
+        // instead), are *derived*, not declared, and a definite block size plus a ratio outranks
+        // them. Five other sites in this file already spell it that way — `lib.rs:4345`, `:5498`,
+        // `:6494`, `:8740`, `:9145` — and this one had `Dim::Auto` alone, so the transfer declined
+        // for exactly the replaced elements it exists to serve.
+        //
+        // Chrome-measured, `<canvas width=30 height=60>` (bitmap 30x60) in a 200x20 block:
+        // `height:stretch` is **10x20**; ours was **30x20** — the height correct since t1245 and the
+        // width still pinned to the bitmap.
+        if (s.width == Dim::Auto || s.width_is_natural) && !s.width_stretch && taffy_known.is_none()
+        {
             if let (Some(r), Some(h)) = (s.aspect_ratio, specified_definite_h) {
                 if r > 0.0 {
                     width = h * r;
@@ -22881,6 +22896,68 @@ mod tests {
             (w - 200.0).abs() < 1.0 && (h - 400.0).abs() < 1.0,
             "CONTROL: with no definite height the box fills the inline axis and the ratio gives the \
              height (Chrome: 200x400) — got {w}x{h}"
+        );
+    }
+
+    /// **A NATURAL width is not a SPECIFIED width — the sixth site to ask, and the first to ask
+    /// only half the question.**
+    ///
+    /// "The author did not specify a width" is `s.width == Dim::Auto || s.width_is_natural`. A
+    /// decoded bitmap's own pixel width, and a `<canvas>`'s `width` **content attribute** — which is
+    /// the output BITMAP, not a CSS dimension property, so the cascade correctly refuses to make it
+    /// a presentational hint and `fill_natural_size` records it instead — are *derived*, not
+    /// declared. A definite block size plus a ratio outranks both. Five other sites in this file
+    /// already spell the predicate that way (`:4345`, `:5498`, `:6494`, `:8740`, `:9145`); the ratio
+    /// transfer had `Dim::Auto` alone, so it declined for exactly the replaced elements it exists to
+    /// serve.
+    ///
+    /// Chrome-measured, `<canvas width=30 height=60>` in a 200x20 containing block:
+    ///
+    /// ```text
+    ///                            Chrome    t1244    t1245    now
+    ///   height: stretch          10x20     30x60    30x20    10x20  ✓
+    ///   height: 100%             10x20    200x400   30x20    10x20  ✓
+    /// ```
+    ///
+    /// **To watch it go RED:** drop `|| s.width_is_natural` from the transfer's guard; the width
+    /// snaps back to the bitmap's 30.
+    #[test]
+    fn a_natural_width_yields_to_a_definite_block_size_and_a_ratio() {
+        let row = |h: &str| {
+            let html = format!(
+                r#"<div id="p"><canvas id="a" width="30" height="60" style="height:{h}"></canvas></div>"#
+            );
+            let css = "body{margin:0} #p{width:200px;height:20px}";
+            let (dom, root) = layout_html(&html, css, 800.0);
+            let rects = root.node_rects(&dom);
+            let n = dom
+                .descendants(dom.root())
+                .find(|&n| dom.element(n).and_then(|e| e.attr("id")) == Some("a"))
+                .expect("id");
+            (rects[&n].width, rects[&n].height)
+        };
+        for h in ["stretch", "100%"] {
+            let (w, ht) = row(h);
+            assert!(
+                (w - 10.0).abs() < 1.0 && (ht - 20.0).abs() < 1.0,
+                "a canvas whose 30x60 BITMAP is its natural size, with height:{h} over a definite \
+                 20px block, is 10x20 (Chrome: 10x20) — got {w}x{ht}"
+            );
+        }
+        // CONTROL — with no definite block size the bitmap IS the answer, both axes. A natural width
+        // yielding to a ratio must not become a natural width yielding to nothing.
+        let html = r#"<div id="p"><canvas id="a" width="30" height="60"></canvas></div>"#;
+        let css = "body{margin:0} #p{width:200px}";
+        let (dom, root) = layout_html(html, css, 800.0);
+        let rects = root.node_rects(&dom);
+        let n = dom
+            .descendants(dom.root())
+            .find(|&n| dom.element(n).and_then(|e| e.attr("id")) == Some("a"))
+            .expect("id");
+        let (w, h) = (rects[&n].width, rects[&n].height);
+        assert!(
+            (w - 30.0).abs() < 1.0 && (h - 60.0).abs() < 1.0,
+            "CONTROL: with an indefinite block size the 30x60 bitmap is the used size — got {w}x{h}"
         );
     }
 
