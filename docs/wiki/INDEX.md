@@ -1838,6 +1838,8 @@
   - L538 · cq_relaid is a SWITCH, not a gradient
   - L545 · The cascade is superlinear in SHEET count
   - L554 · The completed chain
+  - L570 · …and inside ONE cascade, 43% is PSEUDO-ELEMENT MATCHING (t1238)
+  - L603 · The completed chain, four levels
 
 ## THE WIKI — what we durably KNOW, organised by subsystem
 `docs/wiki/README.md`
@@ -2103,4 +2105,4 @@
   - L231 · Both named mechanisms are subsystem work
 
 ---
-2010 sections across 22 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+2012 sections across 22 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.

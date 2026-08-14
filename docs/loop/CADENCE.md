@@ -11,12 +11,12 @@
 
 | | value | over |
 |---|---|---|
-| ticks landed | **937** | ticks 1–1236 |
-| median tick cycle | **29m** | 936 intervals |
+| ticks landed | **938** | ticks 1–1237 |
+| median tick cycle | **28m** | 937 intervals |
 | median, last 10 | **60m** | 10 intervals |
 | fastest / slowest | 5s / 5.4d | |
-| **ticks per hour** | **1.15** | 816.9h elapsed |
-| median verify wall | **63s** | 876 ticks |
+| **ticks per hour** | **1.15** | 817.2h elapsed |
+| median verify wall | **63s** | 877 ticks |
 | wall trend | 39s → 13m — getting slower ⚠️ | first 3 vs last 3 |
 
 The **cycle** is the real unit: implement → debug → verify wall → land. The wall is only part of
@@ -31,7 +31,7 @@ it, and a wall that grows taxes every future tick, so it is tracked separately f
 * **✅ rows in the capability ledger**: 144 → **616**
 * **Bar 0 — oracle hangs**: 0 of 265 sites
 
-**424 of 937 ticks** (45%) moved a
+**424 of 938 ticks** (45%) moved a
 user-visible capability. The rest were instruments, infrastructure and corrections — and the
 ledger says the corrections were not overhead: three of its top three priorities were phantoms,
 and finding that out redirected everything after it.
@@ -90,8 +90,8 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 
 ## What a capability costs
 
-* **424** capability ticks, median cycle **29m**
-* median diff per tick: **+269 / −34** lines across 8 files
+* **424** capability ticks, median cycle **28m**
+* median diff per tick: **+268 / −34** lines across 8 files
 
 ## Every tick
 
@@ -1034,5 +1034,6 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 | **1234** | 2026-08-14 03:10 | 72m | capability | 13m | +506/−95 | 468 | 81 | 56.0% · | `getComputedStyle` was a call into the JS compiler, and that is why jQuery pages hang (202 |
 | **1235** | 2026-08-14 05:23 | 2.2h | capability | 13m | +358/−33 | 469 | 81 | 56.0% · | the fix works, moves nothing on the sites it was aimed at, and my own build faked the numb |
 | **1236** | 2026-08-14 05:56 | 33m | instrument | 13m | +233/−33 | 469 | 81 | 56.0% · | the whole `timeout-150s` bucket is FORCED REFLOW, and one of them is a single 21-second la |
+| **1237** | 2026-08-14 06:17 | 21m | measurement | 13m | +168/−33 | 469 | 81 | 56.0% · | the 21-second layout is TWO cascades, and the second one is the container-query pass (2026 |
 
 *`·` after a WPT figure means **carried forward**, not measured this tick.*

@@ -46371,6 +46371,83 @@ PERF: none — one UA rule and one narrowed branch in a cascade that already ran
 WIKI: `docs/wiki/css-cascade.md` — where Chrome draws the form-control `box-sizing` line, and why a
 layout-crate test cannot see it.
 
+## Tick 1238 — the cascade's biggest term is PSEUDO-ELEMENT MATCHING, and the fix that named it fixed the other half (2026-08-14)
+
+TICK SHAPE: measurement — the fourth and last level of the attribution chain, and the cheapest of the
+four because **the instrument already existed**: `MANUK_CASCADE_PROFILE=1` has been in
+`stylo_engine.rs` since the `PseudoIndex` work. The tick is a grep and a run, not a build.
+
+**`bhramarah.in`, one cascade, 23,001 elements, 8,208 ms:**
+
+```text
+  pseudo_ms      3531.6   43.0%   <- LARGEST
+  element_ms     1705.5   20.8%
+  computed_ms    1481.0   18.0%
+  minimal_ms      978.7   11.9%   <- MinimalCascade, running INSIDE the Stylo cascade
+  has_ms          288.7    3.5%
+  unattributed    211.7    2.6%
+  flush+hints+recover ~11   0.1%
+```
+
+⚠⚠⚠ **PSEUDO-ELEMENT MATCHING COSTS TWICE WHAT MATCHING EVERY ORDINARY SELECTOR COSTS** — 3,531 ms
+against `element_ms`'s 1,705 ms, over the same 23,001 elements, to serve the handful that actually
+have a `::before` or `::after`.
+
+⚠⚠⚠ **AND THE FIX THAT NAMED THIS BUG ALREADY EXISTS ONE LAYER UP.** `PseudoIndex`'s own doc comment
+records the history exactly: `cascade_one_element` used to walk every rule in every sheet for every
+element — O(elements × rules) — and **bucketing** fixed it; *"the pseudo-element path never got that
+fix"*, so `PseudoIndex` was built to hoist the **collection** out of the per-element loop, measured
+at the time as 9.0 s of a 19.5 s cascade on wix.com. **That hoist worked and it is not the whole
+bug.** Collection is now once per document; **matching is still a linear scan of every collected
+pseudo rule, per element.** `RuleIndex` buckets its rules by tag/class/id so an element tests only
+the rules that could possibly match it, and `PseudoIndex` has no such structure — so the *same*
+O(elements × rules) shape that was fixed for ordinary selectors is still live for pseudos.
+
+> **The general form, and it is the third time this project has hit it: a fix aimed at a measured
+> phase fixes THAT PHASE, and the sibling work in the same function keeps the old shape.** The
+> profiler said "collection", the collection was hoisted, the number fell, and the *matching* half —
+> never separately measured — kept the algorithm the hoist was a response to.
+
+⚠⚠ **SECOND DEFECT, INDEPENDENT AND SMALLER: `minimal_ms` is 978 ms, and it is the from-scratch
+`MinimalCascade` running INSIDE `cascade_via_stylo_sized`.** A whole second cascade engine, over the
+same DOM and the same sheets, on a path that already runs twice per geometry read on any page with a
+container query — so **~2 s per forced reflow on this site is a cascade whose output the Stylo path
+then overrides.** Whether it is load-bearing (a recovery/merge input) or vestigial is **NOT
+established** and is a read of `cascade_element`, not a guess.
+
+**THE CHAIN IS NOW COMPLETE, FOUR LEVELS, FOUR TICKS:**
+
+```text
+  timeout-150s bucket — the M1 SCORABILITY CAP, largest in-scope engine-owned bucket
+   └─ 95-99%  FORCED REFLOW                                       (t1236)
+       └─ 99.8%  restyle_and_layout                               (t1237)
+           ├─ 51%  container_query_recascade = cascade #2 + layout #2
+           ├─ 40%  cascade_styles          ← superlinear in n_sheets
+           └─  9%  layout_document
+               └─ inside ONE cascade:                             (t1238)
+                   ├─ 43%  pseudo matching   ← O(elements × pseudo rules), UNBUCKETED
+                   ├─ 21%  element matching  ← bucketed, and 2x cheaper for the same elements
+                   ├─ 18%  computed-value conversion
+                   └─ 12%  MinimalCascade, redundant inside the Stylo cascade
+```
+
+**THE NEXT TICK IS NOW A FIX AND IT IS SPECIFIED: bucket `PseudoIndex` the way `RuleIndex` is
+bucketed.** Same file, same pattern, an existing correct implementation to copy the shape of, and the
+profiler already in place to prove it. ⚠ The gate must assert the *behaviour* (`::before`/`::after`
+content and specificity are unchanged across a fixture with many elements and few pseudo rules), not
+the timing — a bucketing bug drops a rule silently, which is a worse failure than the slowness.
+
+⚠ **NOT ESTABLISHED, carried forward:** why `cascade_styles` is superlinear in **sheet count** (42→51
+sheets took 1,261→8,437 ms on a flat node count). Unbucketed pseudo matching is *consistent* with it —
+more sheets means more pseudo rules and the scan is linear in them — but this tick did not vary sheet
+count against `pseudo_ms`, so that is a hypothesis and the bucketing fix is its test.
+
+PERF: none — measurement only, and the profiler is env-gated (`MANUK_CASCADE_PROFILE`), costing one
+relaxed atomic read per phase when off.
+
+WIKI: `docs/wiki/performance.md` — the completed four-level chain and the "a fix aimed at a measured
+phase leaves the sibling work in the same function unfixed" pattern.
+
 ## Tick 1237 — the 21-second layout is TWO cascades, and the second one is the container-query pass (2026-08-14)
 
 TICK SHAPE: measurement — the level-down profile t1236 owed, built as two threshold-gated log lines

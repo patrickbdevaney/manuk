@@ -566,3 +566,57 @@ obvious suspect was 0.2%.
 *defect* and the many-small-reflows sites a separate *design* problem. Right about priority, wrong
 about the organ: **both named defects are in the CASCADE**, and the frequency×cost sites run the same
 two-cascade path — so a fix to either moves both shapes. They were never two problems.
+
+## …and inside ONE cascade, 43% is PSEUDO-ELEMENT MATCHING (t1238)
+
+The instrument for this level already existed — `MANUK_CASCADE_PROFILE=1`, added during the
+`PseudoIndex` work. `bhramarah.in`, one cascade, 23,001 elements, 8,208 ms:
+
+```text
+  pseudo_ms      3531.6   43.0%   <- LARGEST
+  element_ms     1705.5   20.8%
+  computed_ms    1481.0   18.0%
+  minimal_ms      978.7   11.9%   <- MinimalCascade, running INSIDE the Stylo cascade
+  has_ms          288.7    3.5%
+  unattributed    211.7    2.6%
+```
+
+**Pseudo matching costs twice what matching every ordinary selector costs** — 3,531 ms against
+1,705 ms over the same elements — to serve the handful that actually have a `::before`/`::after`.
+
+⚠⚠⚠ **The fix already exists one layer up, and it only fixed half the bug.** `PseudoIndex`'s own doc
+comment records that `cascade_one_element` was O(elements × rules), that **bucketing** fixed it, and
+that *"the pseudo-element path never got that fix"* — so `PseudoIndex` hoisted the pseudo rule
+**collection** out of the per-element loop (measured then at 9.0 s of a 19.5 s cascade on wix.com).
+That hoist worked. **Matching is still a linear scan of every collected pseudo rule, per element**,
+because `RuleIndex` buckets by tag/class/id and `PseudoIndex` has no such structure.
+
+> **A fix aimed at a measured phase fixes THAT PHASE, and the sibling work in the same function keeps
+> the old shape.** The profiler said "collection", collection was hoisted, the number fell — and the
+> *matching* half, never separately measured, kept the very algorithm the hoist was a response to.
+
+⚠ **Second, independent: `minimal_ms` 978 ms is `MinimalCascade` running INSIDE
+`cascade_via_stylo_sized`** — a whole second cascade engine over the same DOM and sheets, on a path
+that already runs twice per geometry read on any container-query page. Whether it is load-bearing
+(a recovery/merge input) or vestigial is **not established**; that is a read of `cascade_element`.
+
+### The completed chain, four levels
+
+```text
+  timeout-150s bucket — the M1 SCORABILITY CAP
+   └─ 95-99%  FORCED REFLOW                                      (t1236)
+       └─ 99.8%  restyle_and_layout                              (t1237)
+           ├─ 51%  container_query_recascade = cascade #2 + layout #2
+           ├─ 40%  cascade_styles       ← superlinear in n_sheets
+           └─  9%  layout_document
+               └─ inside ONE cascade:                            (t1238)
+                   ├─ 43%  pseudo matching  ← O(elements × pseudo rules), UNBUCKETED
+                   ├─ 21%  element matching ← bucketed, 2x cheaper for the same elements
+                   ├─ 18%  computed-value conversion
+                   └─ 12%  MinimalCascade, redundant inside the Stylo cascade
+```
+
+**Next: bucket `PseudoIndex` the way `RuleIndex` is bucketed** — same file, same pattern, an existing
+correct implementation to copy, and the profiler already in place to prove it. ⚠ Gate the
+**behaviour** (`::before`/`::after` content and specificity across a fixture with many elements and
+few pseudo rules), not the timing: a bucketing bug drops a rule silently, which is worse than slow.
