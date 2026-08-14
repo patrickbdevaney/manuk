@@ -6138,6 +6138,85 @@ and the two areas the ranker over-promises (`domparsing` = 65% unshipped `tentat
 `css/css-values` = `calc-size()`/`random-item()`) are recorded in the t1190/t1192 entries so the
 board is read with that discount.
 
+## Audit #66 — tick 1243 (2026-08-14): a CLEAN audit, an honest NOTHING, and a class column that cannot rank the sweep it names
+
+**Sources.** [web.dev Baseline 2026](https://web.dev/baseline/2026) ·
+[web.dev Baseline monthly digests — Jan / Apr / May 2026](https://web.dev/blog/baseline-digest-may-2026) ·
+[This Month in Ladybird — Jun/Jul 2026](https://ladybird.org/news/)
+
+**Lens chosen deliberately NOT to repeat #65.** Audit #65 (ten ticks ago) read Interop 2026 and found
+all 20 focus areas already mapped. Re-running that query would have re-found that answer, so this one
+took the two lenses #65 did not: **Baseline "newly available" in 2026** (what the world now considers
+safe to USE, which is a different list from what the vendors agreed to FIX) and **Ladybird's own
+newsletters** (what an independent engine finds hard, in the order they took it).
+
+### NOTHING TO ADD — again, and this time the reconciliation is printed rather than asserted
+
+Every feature the Baseline-2026 digests name already carries a `CONSTELLATION.tsv` row with a status:
+
+```text
+  multi-keyword display (display: inline flex)          doc       gated
+  animation-composition                                 doc       missing
+  :active-view-transition / -type()                     app       missing
+  container STYLE queries (@container style(--x: y))    css       missing
+  Trusted Types                                         security  missing
+  Navigation API                                        app       gated
+  Content-Encoding: zstd                                net       missing
+  Array toSorted/toReversed/with/… (modern built-ins)   js        works
+```
+
+Ladybird's named difficulty — *"websites depend on undocumented quirks in established engines"* — is
+on the map too, as `cross / real-world QUIRKS (not just the spec)` (partial), `cross / quirks-mode
+rendering` (gated) and `dom / document.all` (missing). **Five consecutive audits have found the
+external frame current.**
+
+### ⚠ THE ONLY "DISCOVERY" THIS AUDIT MADE WAS AN ARTEFACT OF ITS OWN GREP, AND IT IS RECORDED AS ONE
+
+I searched the map for `mixed content` and got **zero hits**, and wrote down a genuine gap:
+mixed-content blocking is a real browser behaviour with a *rendering* consequence (a blocked
+`http://` subresource on an `https://` page is a missing image or an unrun script — a MISSING_BOX
+cause). It is on the map. The row spells it **`mixed-content`**, hyphenated, inside
+`net / HSTS + upgrade-insecure-requests + mixed-content blocking (missing)`.
+
+This is the audit's own standing warning firing on the auditor: *"an audit that finds nothing is a
+suspicious audit"* is a prompt to change the LENS, not a licence to accept the first thing a grep
+fails to match. A one-token spelling difference produced a confident false gap in under a minute, and
+the only reason it did not reach the map as a duplicate row is that the check was re-run. **Grep the
+map with at least two spellings before recording an absence** — the same rule this project already
+holds for the corpus (t1092's 5× undercount was a join-key error of exactly this shape).
+
+### ⚠⚠ THE REAL FINDING: the `class` column cannot rank the security sweep the board schedules
+
+The board's tier list ends with *"THEN a reasonable security sweep (T0.5 CSP, codec licensing,
+capability scoping, POST-never-downgraded-to-GET, BiDi loopback default…)"*. The map's `class`
+column has exactly **one** `security` row (Trusted Types). The other ~12 security capabilities are
+filed under three other classes:
+
+```text
+  CSP                    platform, platform, net, security, text, net   (6 rows, 4 classes)
+  CORS                   platform, app
+  SameSite               platform
+  HSTS / mixed-content   net
+  Subresource Integrity  net
+  iframe sandbox         app
+  COOP · COEP            platform
+  Referrer-Policy        net
+  Permissions-Policy     net
+  X-Frame-Options        net
+```
+
+So `grep '^security' CONSTELLATION.tsv` — the obvious way to scope that sweep — returns **1 of ~13**,
+and a sweep scoped that way would silently cover 8% of its own subject. This is not a coverage gap
+(every capability is present and statused); it is a **ranking** gap, and it is invisible to the
+`MEASURED` invariant, which counts verdicts and not whether the axis you slice by is usable. The same
+shape as audit #64's "three inventories, none reconciled", one column further in.
+
+**Not fixed here** — re-classing 13 rows mid-tick would rewrite the file every other instrument reads,
+and the change belongs to the tick that runs the sweep. Recorded so that tick starts by fixing its own
+index instead of trusting it.
+
+---
+
 ## Audit #65 — tick 1233 (2026-08-14): the world's TOP-20 and our DEATH-TAIL are the SAME LIST, and the metric's denominator moved upstream
 
 **Sources.** [web-platform-tests/interop 2026 README](https://github.com/web-platform-tests/interop/blob/main/2026/README.md)

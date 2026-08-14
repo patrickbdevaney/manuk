@@ -3666,6 +3666,56 @@ impl Ctx<'_> {
                 other => other.resolve(cw, (cw - extra).max(0.0)),
             },
         };
+        // ⚠⚠⚠ **A DEFINITE BLOCK SIZE IS DEFINITE HOWEVER IT WAS SPELLED, AND THIS ENGINE KNEW
+        //    ONLY ONE SPELLING.** `height` reaches layout as four different `Dim`s that all mean
+        // *"this box's block size is decided"* — `20px`, `100%` of a definite parent, a `calc()`
+        // over one, and `stretch`/`-webkit-fill-available` (which is `Dim::Auto` plus a flag, by the
+        // t154/t219 representation). The block-size consumer 300 lines below (`own_definite_h`)
+        // already handled all four. The **ratio transfer** — the CSS2 §10.3.2 rule that gives a
+        // replaced element's `auto` inline size from its definite block size and its intrinsic
+        // ratio — matched on `Dim::Px` alone, so three of the four spellings silently produced no
+        // transfer at all and the box kept its intrinsic width.
+        //
+        // Chrome-measured, `<canvas width=30 height=60>` (intrinsic ratio 1:2) in a 20x20
+        // containing block, one row per spelling (`/tmp/t1244-fix.html`):
+        //
+        // ```text
+        //                                     Chrome     before      after
+        //   height: stretch                   10x20      30x60  ✗    10x20  ✓
+        //   height: 100%                      10x20      20x40  ✗    10x20  ✓
+        //   height: 20px                      10x20      10x20  ✓    10x20  ✓   <- the one arm
+        //   <svg viewBox="0 0 30 60"> stretch 10x20      20x40  ✗    10x20  ✓
+        //   no CSS at all (CONTROL)           30x60      30x60  ✓    30x60  ✓
+        // ```
+        //
+        // The `100%` row is the one that says this is not a `stretch` bug: **a percentage height on
+        // a replaced element with a ratio is the responsive-media idiom of the entire web** — a
+        // `<video>`/`<img>`/`<canvas>` filling a fixed-height hero, card or tile — and it came out
+        // filling the container's WIDTH and deriving a height from that, which is the transfer
+        // running in the wrong direction.
+        //
+        // Computed ONCE here and consumed by `own_definite_h` below, rather than written twice:
+        // *one rule, one implementation* is the discipline this file states in six other places,
+        // and a second copy of a four-armed match is exactly how the `Dim::Px`-only arm survived.
+        let bs_extra_h = if s.box_sizing == BoxSizing::BorderBox {
+            pt + pb + bt + bb
+        } else {
+            0.0
+        };
+        // `height:stretch`/`-webkit-fill-available` fill the containing block's definite content
+        // height: the MARGIN box fills `pch`, so the content box is `pch` minus this box's own
+        // margins, border and padding (box-sizing-independent — stretch fills available space, not
+        // a specified length, so the full deduction applies in both modes). `None` pch (auto-height
+        // parent) leaves it content-sized, at parity with Chrome.
+        let specified_definite_h: Option<f32> = match s.height {
+            Dim::Px(p) => Some((p - bs_extra_h).max(0.0)),
+            Dim::Percent(pct) => pch.map(|h| (h * pct / 100.0 - bs_extra_h).max(0.0)),
+            Dim::Calc { .. } => pch.map(|h| (s.height.resolve(h, 0.0) - bs_extra_h).max(0.0)),
+            Dim::Auto if s.height_stretch => {
+                pch.map(|h| (h - mt - mb - pt - pb - bt - bb).max(0.0))
+            }
+            Dim::Auto => None,
+        };
         // The mirror case: an `auto` width on a replaced element with a definite height comes from
         // that height and the ratio.
         // `width: stretch` is a DEFINITE width, not an auto one — it just happens to share
@@ -3673,7 +3723,7 @@ impl Ctx<'_> {
         // (This is what kept a `width:stretch` `<canvas width="40" height="20">` at 40px: the
         // stretch arm sized it correctly and then `height x ratio` overwrote the answer.)
         if s.width == Dim::Auto && !s.width_stretch && taffy_known.is_none() {
-            if let (Some(r), Dim::Px(h)) = (s.aspect_ratio, s.height) {
+            if let (Some(r), Some(h)) = (s.aspect_ratio, specified_definite_h) {
                 if r > 0.0 {
                     width = h * r;
                 }
@@ -3971,33 +4021,20 @@ impl Ctx<'_> {
         // percentage-height *child* resolves against (CSS2 §10.5). Computed before laying
         // out children so their `height:%` works; `None` (auto height) means a percent-height
         // child falls back to its content height.
-        let bs_extra_h = if s.box_sizing == BoxSizing::BorderBox {
-            pt + pb + bt + bb
-        } else {
-            0.0
-        };
         // Taffy already resolved this item's height against its real containing block; re-resolving
         // the percentage against the slot it produced applies it twice (see `taffy_item_height`).
         // The slot is a BORDER box, so the content height is it less this box's own padding+border —
         // the same subtraction the width axis makes above, and it makes the `box-sizing` adjustment
         // (`bs_extra_h`) redundant for these, exactly as it is for `taffy_known` widths.
+        //
+        // The non-taffy arm is [`specified_definite_h`], computed up at the ratio transfer because
+        // that transfer needs the same answer BEFORE the width is decided. It used to be written out
+        // a second time here, and the copy up there matched `Dim::Px` alone — see the block comment
+        // beside it for what the three missing arms cost.
         let own_definite_h: Option<f32> = match self.taffy_item_height.borrow().get(&node).copied()
         {
             Some(border_box) => Some((border_box - pt - pb - bt - bb).max(0.0)),
-            None => match s.height {
-                Dim::Px(p) => Some((p - bs_extra_h).max(0.0)),
-                Dim::Percent(pct) => pch.map(|h| (h * pct / 100.0 - bs_extra_h).max(0.0)),
-                Dim::Calc { .. } => pch.map(|h| (s.height.resolve(h, 0.0) - bs_extra_h).max(0.0)),
-                // `height:stretch`/`-webkit-fill-available` fill the containing block's definite content
-                // height: the MARGIN box fills `pch`, so the content box is `pch` minus this box's own
-                // margins, border and padding (box-sizing-independent — stretch fills available space, not
-                // a specified length, so the full deduction applies in both modes). `None` pch (auto-height
-                // parent) leaves it content-sized, at parity with Chrome.
-                Dim::Auto if s.height_stretch => {
-                    pch.map(|h| (h - mt - mb - pt - pb - bt - bb).max(0.0))
-                }
-                Dim::Auto => None,
-            },
+            None => specified_definite_h,
         };
 
         // **Scrollbar-gutter reservation** (CSS Overflow 4 §3.2). A classic (non-overlay) vertical
@@ -22739,6 +22776,77 @@ mod tests {
         assert!(
             (kid_h - 100.0).abs() < 1.0,
             "height:50% child of a stretched (200px) box must be 100px, got {kid_h}"
+        );
+    }
+
+    /// **G_RATIO_DEFINITE_BLOCK — the ratio transfer fires for EVERY spelling of a definite block
+    /// size, not only `Dim::Px`.**
+    ///
+    /// CSS2 §10.3.2 / CSS Sizing 4: a box with an intrinsic (or declared) ratio and an `auto` inline
+    /// size takes its inline size from its **definite** block size. `height` reaches layout as four
+    /// `Dim`s that all mean definite — `20px`, `100%` of a definite parent, a `calc()` over one, and
+    /// `stretch`/`-webkit-fill-available` (`Dim::Auto` + a flag) — and the transfer matched `Dim::Px`
+    /// alone, so three of the four produced no transfer and the box kept its intrinsic width.
+    ///
+    /// Chrome-measured (`/tmp/t1244-ctl.html`, a 200x20 containing block, `aspect-ratio:30/60`):
+    ///
+    /// ```text
+    ///                        Chrome    before      after
+    ///   height: stretch      10x20     200x20  ✗   10x20  ✓
+    ///   height: 100%         10x20     200x20  ✗   10x20  ✓
+    ///   height: 20px         10x20      10x20  ✓   10x20  ✓   <- the one arm that worked
+    ///   height: auto         200x400   200x400 ✓  200x400 ✓   <- CONTROL, must NOT transfer
+    /// ```
+    ///
+    /// ⚠ **The `height:auto` row is the half of the rule that says where it must NOT apply** (t998):
+    /// with no definite block size the inline axis fills and the BLOCK size comes from the ratio —
+    /// the opposite direction. A fix that made every ratio box 10px wide would pass the first three
+    /// rows and destroy every `aspect-ratio` card on the web.
+    ///
+    /// ⚠ **Not guarded on `is_replaced_element`, and that is measured rather than assumed:** Chrome
+    /// applies the transfer to a plain `<div>` with a declared `aspect-ratio` exactly as it does to
+    /// a `<canvas>` with an intrinsic one — both rows above are `<div>`s.
+    ///
+    /// **To watch it go RED:** narrow `specified_definite_h`'s match back to `Dim::Px(p) => …` with
+    /// the other arms returning `None`; the stretch and percent rows go to 200 wide.
+    #[test]
+    fn a_definite_block_size_transfers_through_the_ratio_however_it_is_spelled() {
+        let row = |h: &str| {
+            let html = r#"<div id="p"><div id="box"></div></div>"#;
+            let css = format!(
+                "body{{margin:0}} #p{{width:200px;height:20px}} #box{{aspect-ratio:30/60;height:{h}}}"
+            );
+            let (dom, root) = layout_html(html, &css, 400.0);
+            let rects = root.node_rects(&dom);
+            let n = dom
+                .descendants(dom.root())
+                .find(|&n| dom.element(n).and_then(|e| e.attr("id")) == Some("box"))
+                .expect("id");
+            (rects[&n].width, rects[&n].height)
+        };
+        for spelling in ["stretch", "-webkit-fill-available", "100%", "20px"] {
+            let (w, h) = row(spelling);
+            assert!(
+                (w - 10.0).abs() < 1.0 && (h - 20.0).abs() < 1.0,
+                "height:{spelling} is a DEFINITE block size, so the 30/60 ratio must give a 10x20 \
+                 box (Chrome: 10x20) — got {w}x{h}"
+            );
+        }
+        // CONTROL — an INDEFINITE block size transfers the other way: the inline axis fills the
+        // containing block and the ratio produces the height. This row must not move.
+        let html = r#"<div id="p"><div id="box"></div></div>"#;
+        let css = "body{margin:0} #p{width:200px} #box{aspect-ratio:30/60}";
+        let (dom, root) = layout_html(html, css, 400.0);
+        let rects = root.node_rects(&dom);
+        let n = dom
+            .descendants(dom.root())
+            .find(|&n| dom.element(n).and_then(|e| e.attr("id")) == Some("box"))
+            .expect("id");
+        let (w, h) = (rects[&n].width, rects[&n].height);
+        assert!(
+            (w - 200.0).abs() < 1.0 && (h - 400.0).abs() < 1.0,
+            "CONTROL: with no definite height the box fills the inline axis and the ratio gives the \
+             height (Chrome: 200x400) — got {w}x{h}"
         );
     }
 

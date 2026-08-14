@@ -460,6 +460,8 @@
   - L9259 · One control row says the GRID is right and the KEYWORD never arrived (tick 1162)
   - L9296 · Grid §9 has TWO sections: the static-position area is the PADDING box only when the grid is the CONTAINING BLOCK
   - L9333 · …and restoring the padding in place is SIZE-UNSAFE
+  - L9360 · A definite block size is definite however it was SPELLED (t1244)
+  - L9403 · ⚠ There is a THIRD copy, it is the one that reaches <img>, and it is still open
 
 ## browser-capabilities.md
 `docs/wiki/browser-capabilities.md`
@@ -2112,4 +2114,4 @@
   - L231 · Both named mechanisms are subsystem work
 
 ---
-2019 sections across 22 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+2021 sections across 22 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.

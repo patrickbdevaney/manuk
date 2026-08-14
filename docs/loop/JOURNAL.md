@@ -46371,6 +46371,87 @@ PERF: none — one UA rule and one narrowed branch in a cascade that already ran
 WIKI: `docs/wiki/css-cascade.md` — where Chrome draws the form-control `box-sizing` line, and why a
 layout-crate test cannot see it.
 
+## Tick 1244 — a definite block size is definite however it was SPELLED, and the ratio transfer knew one spelling (2026-08-14)
+
+TICK SHAPE: capability — check #119's steer 3 (*"a capability tick before another measurement one"*,
+two windows overdue) taken against the target t1243 had just MEASURED rather than one remembered.
+
+**HOW THE TARGET WAS CHOSEN, because the board and the corpus agreed and that is what made it
+takeable.** The board's phase mandate says pick a ★CSS-LAYOUT row and *"the top mechanism in the
+failure histogram IS the tick"*; `css/css-sizing` is 38.8% and ★. t1243's own corpus ledger,
+independently, ranks `geometry/mis-sized: width` at **75 sites / 6,683 hits, 59% of them ours
+NARROWER**. Two instruments, two populations, one mechanism: SIZING.
+
+**THE DEFECT, and it is a shape this file names in six other places.** `height` reaches layout as
+four `Dim`s that all mean *"this box's block size is decided"* — `20px`, `100%` of a definite parent,
+a `calc()` over one, and `stretch`/`-webkit-fill-available` (`Dim::Auto` plus a flag, the t154/t219
+representation). CSS2 §10.3.2's **ratio transfer** — a box with an intrinsic or declared ratio and an
+`auto` inline size takes its inline size from its definite block size — matched **`Dim::Px` alone**
+(`engine/layout/src/lib.rs:3676`), so three of the four spellings produced no transfer and the box
+kept its intrinsic width. The block-size consumer 300 lines below (`own_definite_h`) already handled
+all four correctly; the two were written out separately and only one of them was ever fixed.
+
+**CHROME-MEASURED, not recalled** (`/tmp/t1244-ctl.html`, a 200×20 containing block,
+`aspect-ratio:30/60`):
+
+```text
+                       Chrome    before      after
+  height: stretch      10x20     200x20  ✗   10x20  ✓
+  height: 100%         10x20     200x20  ✗   10x20  ✓
+  height: 20px         10x20      10x20  ✓   10x20  ✓   <- the one arm that worked
+  height: auto        200x400    200x400 ✓  200x400 ✓   <- CONTROL, must NOT transfer
+```
+
+⚠ **The `height:100%` row is why this is not a `stretch` bug.** A percentage height on a box with a
+ratio is the responsive-media idiom of the whole web — a `<video>`/`<img>`/`<canvas>`/card filling a
+fixed-height hero or tile — and it came out filling the container's WIDTH and deriving a height from
+that, which is the transfer running in the **wrong direction**.
+
+⚠ **NOT guarded on `is_replaced_element`, and that is measured rather than assumed.** Chrome applies
+the transfer to a plain `<div>` with a declared `aspect-ratio` exactly as to a `<canvas>` with an
+intrinsic one — both rows above are `<div>`s. I expected a stretch-fit `auto` width to win for a
+non-replaced block and Chrome says otherwise, so the guard I was about to write would have been
+wrong.
+
+⚠ **The `height:auto` CONTROL is the half of the rule that says where it must NOT apply** (t998). With
+no definite block size the inline axis fills and the ratio produces the HEIGHT. A fix that made every
+ratio box 10px wide passes the first three rows and destroys every `aspect-ratio` card on the web.
+
+Written as ONE expression (`specified_definite_h`) consumed by both the transfer and
+`own_definite_h`, rather than a second four-armed match — *one rule, one implementation* is the
+discipline that would have prevented this defect in the first place.
+
+GATE: `a_definite_block_size_transfers_through_the_ratio_however_it_is_spelled` — four spellings plus
+the auto CONTROL. **RED-proven two independent ways:** narrowing the percent arm to `None` →
+`height:100% … got 200x400`; disabling the stretch arm → `height:stretch … got 200x400`. Green on
+restore, and the whole layout suite is **175/175**.
+
+MEASURED, same binary, same hour:
+
+```text
+  css/css-sizing    934 -> 952   (+18)
+  css/css-flexbox  1504  (=)     css/css-grid   2517  (=)
+  css/css-position  274  (=)     css/css-display 296  (=)
+  layout suite 175/175 · HANG/CRASH 0
+```
+
+⚠⚠⚠ **AND THE SIBLING HALF IS NOT DONE — NAMED HERE WITH ITS MEASURED ROWS RATHER THAN LEFT TO LOOK
+CLOSED.** The fixture's `<canvas>` rows are still wrong after the fix (`height:stretch` → 30×60 and
+`height:100%` → 200×400 against Chrome's 10×20 for both), because an **inline-level** replaced
+element never reaches `layout_block`. It is sized by `replaced_default_size`
+(`engine/layout/src/lib.rs:6410`), which carries a **third copy** of the same transfer —
+`(_, Some(r), Dim::Px(h)) => h * r` — with the identical `Dim::Px`-only defect. That copy cannot
+simply be widened: the function takes `avail_width` and **has no containing-block HEIGHT at all**, so
+closing it means threading a block-axis available size through the seam and its callers. That is a
+signature change, it is the next tick, and it is the half that reaches `<img>` and `<video>` — the
+tags the corpus actually carries. ⭐ **NEXT: `replaced_default_size` gets a block-axis available
+size.** The fixtures that prove it are already written and their Chrome rows are above.
+
+PERF: none — the added match is four arms over a value already in scope, evaluated once per block,
+and it REPLACES an identical match that ran later in the same function. F1/F2 unmoved.
+
+WIKI: `docs/wiki/box-layout.md` — "a definite block size is definite however it was spelled".
+
 ## Tick 1243 — the CrUX sweep, nine ticks overdue, run to price t1240 (2026-08-14)
 
 TICK SHAPE: measurement — the sweep constitution check #119 named as the single highest-value next

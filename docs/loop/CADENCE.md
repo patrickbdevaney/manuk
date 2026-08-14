@@ -11,12 +11,12 @@
 
 | | value | over |
 |---|---|---|
-| ticks landed | **942** | ticks 1–1242 |
-| median tick cycle | **29m** | 941 intervals |
+| ticks landed | **943** | ticks 1–1243 |
+| median tick cycle | **29m** | 942 intervals |
 | median, last 10 | **61m** | 10 intervals |
 | fastest / slowest | 5s / 5.4d | |
-| **ticks per hour** | **1.14** | 822.0h elapsed |
-| median verify wall | **63s** | 881 ticks |
+| **ticks per hour** | **1.14** | 822.8h elapsed |
+| median verify wall | **63s** | 882 ticks |
 | wall trend | 39s → 13m — getting slower ⚠️ | first 3 vs last 3 |
 
 The **cycle** is the real unit: implement → debug → verify wall → land. The wall is only part of
@@ -28,10 +28,10 @@ it, and a wall that grows taxes every future tick, so it is tracked separately f
 
 * **capabilities asserted** (`G_CAPABILITY`): 48 → **81**
 * **live gates**: 27 → **471**
-* **✅ rows in the capability ledger**: 144 → **618**
+* **✅ rows in the capability ledger**: 144 → **619**
 * **Bar 0 — oracle hangs**: 0 of 265 sites
 
-**426 of 942 ticks** (45%) moved a
+**426 of 943 ticks** (45%) moved a
 user-visible capability. The rest were instruments, infrastructure and corrections — and the
 ledger says the corrections were not overhead: three of its top three priorities were phantoms,
 and finding that out redirected everything after it.
@@ -1039,5 +1039,6 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 | **1240** | 2026-08-14 08:20 | 72m | capability | 13m | +121/−34 | 470 | 81 | 56.0% · | 18,364 elements were building a `ComputedStyle` for a `::before` that generates nothing (2 |
 | **1241** | 2026-08-14 09:03 | 42m | measurement | 13m | +297/−48 | 471 | 81 | 56.0% · | the self-audit, and the second cascade engine is LOAD-BEARING (2026-08-14) |
 | **1242** | 2026-08-14 11:00 | 2.0h | capability | 13m | +883/−33 | 471 | 81 | 56.0% · | the parse-time stale-snapshot defect does not exist, and my own instrument invented it (20 |
+| **1243** | 2026-08-14 11:50 | 50m | measurement | 13m | +378/−54 | 471 | 81 | 56.0% · | the CrUX sweep, nine ticks overdue, run to price t1240 (2026-08-14) |
 
 *`·` after a WPT figure means **carried forward**, not measured this tick.*

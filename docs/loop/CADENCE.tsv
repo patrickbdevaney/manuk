@@ -941,3 +941,4 @@ tick	sha	epoch	iso	delta_s	shape	wall_s	files	added	deleted	gates	claims	wpt_pas
 1240	37442d02	1786710048	2026-08-14T08:20:48-04:00	4322	capability	808	6	121	34	470	81	3896	6960	0	618	0	18,364 elements were building a `ComputedStyle` for a `::before` that generates nothing (2026-08-14)
 1241	573c0e22	1786712598	2026-08-14T09:03:18-04:00	2550	measurement	808	8	297	48	471	81	3896	6960	0	618	0	the self-audit, and the second cascade engine is LOAD-BEARING (2026-08-14)
 1242	a04038eb	1786719630	2026-08-14T11:00:30-04:00	7032	capability	808	11	883	33	471	81	3896	6960	0	618	0	the parse-time stale-snapshot defect does not exist, and my own instrument invented it (2026-08-14)
+1243	37cc9659	1786722617	2026-08-14T11:50:17-04:00	2987	measurement	808	9	378	54	471	81	3896	6960	0	619	0	the CrUX sweep, nine ticks overdue, run to price t1240 (2026-08-14)

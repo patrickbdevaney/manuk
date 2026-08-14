@@ -9356,3 +9356,55 @@ containing block **and** has non-zero padding **and** has an out-of-flow child.
 Gated by `a_grid_abspos_static_position_is_the_padding_box_only_when_the_grid_is_its_containing_block`
 (the four rows above, three of them controls, plus the container's own box so the size regression
 cannot come back silently).
+
+## A definite block size is definite however it was SPELLED (t1244)
+
+`height` arrives at layout as four different `Dim`s that all mean the same thing — *this box's block
+size is decided*:
+
+| spelling | representation |
+|---|---|
+| `20px` | `Dim::Px(20)` |
+| `100%` of a definite parent | `Dim::Percent(100)` + `pch` |
+| `calc(100% - 8px)` over one | `Dim::Calc{..}` + `pch` |
+| `stretch` / `-webkit-fill-available` | **`Dim::Auto` plus `s.height_stretch`** (the t154/t219 representation) |
+
+CSS2 §10.3.2's **ratio transfer** — a box with an intrinsic or declared aspect ratio and an `auto`
+inline size takes its inline size from its definite block size — matched **`Dim::Px` alone**. Three
+of the four spellings therefore produced no transfer and the box kept its intrinsic width, while the
+block-size consumer 300 lines further down (`own_definite_h`) handled all four correctly the whole
+time. Two hand-written copies of one rule; only one of them ever got fixed.
+
+Chrome-measured, a 200×20 containing block, `aspect-ratio: 30/60`:
+
+```text
+                       Chrome    before      after
+  height: stretch      10x20     200x20  ✗   10x20  ✓
+  height: 100%         10x20     200x20  ✗   10x20  ✓
+  height: 20px         10x20      10x20  ✓   10x20  ✓
+  height: auto        200x400    200x400 ✓  200x400 ✓   <- CONTROL
+```
+
+Two things this measurement settled that reasoning had got wrong:
+
+- **The `auto` row is the half of the rule that says where it must NOT apply.** With an *indefinite*
+  block size the transfer runs the other way: the inline axis fills the containing block and the
+  ratio produces the height. A fix without that row passes the first three and makes every
+  `aspect-ratio` card on the web 10px wide.
+- **There is no `is_replaced_element` guard, and I was about to write one.** Chrome applies the
+  transfer to a plain `<div>` with a declared `aspect-ratio` exactly as it does to a `<canvas>` with
+  an intrinsic one — both rows above are `<div>`s. `width: auto` is not stretch-fit when the box has
+  a ratio and a definite block size.
+
+The fix computes the definite block size **once** (`specified_definite_h`) and lets both the transfer
+and `own_definite_h` read it, because a second four-armed match is precisely how the `Dim::Px`-only
+arm survived.
+
+### ⚠ There is a THIRD copy, it is the one that reaches `<img>`, and it is still open
+
+An **inline-level** replaced element never reaches `layout_block`. It is sized by
+`replaced_default_size`, which carries the same transfer a third time —
+`(_, Some(r), Dim::Px(h)) => h * r` — with the identical defect. It cannot simply be widened: that
+function takes `avail_width` and **has no containing-block height at all**, so closing it means
+threading a block-axis available size through the seam and its callers. Until then an inline
+`<img>`/`<video>`/`<canvas>` with a ratio and a `%`/`stretch` height still sizes from the wrong axis.
