@@ -11,12 +11,12 @@
 
 | | value | over |
 |---|---|---|
-| ticks landed | **941** | ticks 1–1241 |
-| median tick cycle | **29m** | 940 intervals |
-| median, last 10 | **47m** | 10 intervals |
+| ticks landed | **942** | ticks 1–1242 |
+| median tick cycle | **29m** | 941 intervals |
+| median, last 10 | **61m** | 10 intervals |
 | fastest / slowest | 5s / 5.4d | |
-| **ticks per hour** | **1.15** | 820.0h elapsed |
-| median verify wall | **63s** | 880 ticks |
+| **ticks per hour** | **1.14** | 822.0h elapsed |
+| median verify wall | **63s** | 881 ticks |
 | wall trend | 39s → 13m — getting slower ⚠️ | first 3 vs last 3 |
 
 The **cycle** is the real unit: implement → debug → verify wall → land. The wall is only part of
@@ -31,7 +31,7 @@ it, and a wall that grows taxes every future tick, so it is tracked separately f
 * **✅ rows in the capability ledger**: 144 → **618**
 * **Bar 0 — oracle hangs**: 0 of 265 sites
 
-**425 of 941 ticks** (45%) moved a
+**426 of 942 ticks** (45%) moved a
 user-visible capability. The rest were instruments, infrastructure and corrections — and the
 ledger says the corrections were not overhead: three of its top three priorities were phantoms,
 and finding that out redirected everything after it.
@@ -90,8 +90,8 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 
 ## What a capability costs
 
-* **425** capability ticks, median cycle **29m**
-* median diff per tick: **+269 / −34** lines across 8 files
+* **426** capability ticks, median cycle **29m**
+* median diff per tick: **+270 / −34** lines across 8 files
 
 ## Every tick
 
@@ -1038,5 +1038,6 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 | **1238** | 2026-08-14 07:08 | 51m | measurement | 13m | +443/−58 | 470 | 81 | 56.0% · | the cascade's biggest term is PSEUDO-ELEMENT MATCHING, and the fix that named it fixed the |
 | **1240** | 2026-08-14 08:20 | 72m | capability | 13m | +121/−34 | 470 | 81 | 56.0% · | 18,364 elements were building a `ComputedStyle` for a `::before` that generates nothing (2 |
 | **1241** | 2026-08-14 09:03 | 42m | measurement | 13m | +297/−48 | 471 | 81 | 56.0% · | the self-audit, and the second cascade engine is LOAD-BEARING (2026-08-14) |
+| **1242** | 2026-08-14 11:00 | 2.0h | capability | 13m | +883/−33 | 471 | 81 | 56.0% · | the parse-time stale-snapshot defect does not exist, and my own instrument invented it (20 |
 
 *`·` after a WPT figure means **carried forward**, not measured this tick.*

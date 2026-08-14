@@ -46371,6 +46371,153 @@ PERF: none — one UA rule and one narrowed branch in a cascade that already ran
 WIKI: `docs/wiki/css-cascade.md` — where Chrome draws the form-control `box-sizing` line, and why a
 layout-crate test cannot see it.
 
+## Tick 1243 — the CrUX sweep, nine ticks overdue, run to price t1240 (2026-08-14)
+
+TICK SHAPE: measurement — the sweep constitution check #119 named as the single highest-value next
+tick, and the board's own cadence rule (sweep after ~5-6 fixes of either class) has been unmet since
+t1233.
+
+**THE PREDICTION, WRITTEN BEFORE THE SWEEP RETURNS** (the t1144 rule — a prediction scored after the
+fact is a rationalisation):
+
+1. **SCORABILITY roughly FLAT, ±2 sites.** t1240 is the only tick in the window that moved a real
+   site, it moved ONE (`bhramarah.in`, 21.2 s → 14.4 s per forced reflow), and that site **still
+   exceeds the 150 s cap** — so it should not have crossed into `scored`. If scorability moves more
+   than a couple of sites, the cause is denominator drift or the corpus, not this window.
+2. **The COMMON-SET BAND roughly FLAT.** Nothing this window touched geometry. t1240 is a cost fix
+   and t1239/t1234 were measured inert; the only way the band moves is if a site that was previously
+   timing out now renders *partially* and scores badly, which pushes the band DOWN.
+3. **`timeout-150s` down by 0-2 sites**, for the same reason as (1).
+
+⚠ If (1) and (2) both come back flat, the honest headline for this window is **"a complete causal
+attribution and one real engine fix, worth zero measured corpus movement"** — and per check #119 that
+is a **debt to state**, not a result to dress up. The chain t1236-t1240 is worth having on its own
+terms (it is what makes the next fix findable), but it does not get to borrow credit from a number it
+did not move.
+
+⚠ **NOT BUILDING WHILE IT RUNS** — t1235 established that this session's own `cargo build` is part of
+the harness, and every site in the `timeout-150s` bucket sits close enough to the cap that a few
+contended seconds decide its verdict. **Held: nothing compiled between 09:05 and 10:40.**
+
+---
+
+### THE PREDICTION, SCORED
+
+```text
+  1. SCORABILITY flat ±2 sites          RIGHT (just)  scored 121 -> 118, in-scope 134 -> 132
+  2. COMMON-SET BAND flat               RIGHT on the MEDIAN (+0.00, 57 of 114 byte-identical)
+                                        and its stated MECHANISM was right too — see below
+  3. timeout-150s down 0-2              WRONG on the net (10 -> 13); RIGHT on the sites
+```
+
+BANKED (`docs/loop/SWEEP-t1243-rows.tsv`, 200 sites, `--jobs 2`, 150 s cap, binary `db5684eb`):
+
+```text
+  in-scope 132 (68 excluded: bot-wall / unreachable / http-4xx / empty / probe-blocked)
+  SCORED         118  = 89.4% of in-scope        (t1233: 121 = 90.3%)
+  shape>=0.75     46  = 39.0% of scored          (t1233:  47 = 38.8%)
+  M1 GATE         29  = 24.6% of scored          (t1233:  28 = 23.1%)
+  shape_mean    58.9 · cov_mean 84.8             (t1233: 57.4 · 81.9)
+  COMMON-SET BAND  mean +1.99 pts · MEDIAN +0.00 · 34 up · 23 down · 57 UNCHANGED (114 sites)
+```
+
+⚠ **BOTH SWEEPS ARE RECOMPUTED HERE FROM THEIR ROWS WITH ONE DEFINITION**, so these do not match the
+headline t1233 published (77.0% scorability): that number came from the fidelity tool's own in-scope
+logic, which a per-site run does not expose. Comparing a number computed one way against a number
+computed another way is the error this loop has already paid for; the rule is written into
+`/tmp/t1243/score.sh` and the t1233 column above is the RECOMPUTED one.
+
+⚠⚠ **AND THE MEAN BAND IS A LIE THE MEDIAN CATCHES.** `+1.99` is carried by **two** sites that went
+from rendering almost nothing to rendering fully — `sports.yahoo.com` **n 3 → 1910**, shape
+0.000 → 0.897, and `mayatoys.in` **n 11 → 1028**, 0.182 → 0.811. Those are SCORABILITY events wearing
+a shape number's clothes (t1102: a shape delta is not a shape delta until both readings scored the
+same POPULATION). On the 114-site common set the median delta is **+0.00 and exactly half the sites
+are byte-identical**. Prediction 2 is right, and right for the reason it gave.
+
+⭐⭐⭐ **t1240 IS ATTRIBUTABLE AT THE CORPUS, AND THE PREDICTION THAT SAID IT WOULD NOT BE WAS WRONG.**
+`bhramarah.in` — the single site the whole t1236→t1240 chain was priced on, and which prediction 1
+said "still exceeds the 150 s cap, so it should not have crossed into `scored`" — **crossed**:
+
+```text
+  t1233   bhramarah.in   timeout-150s   unscored
+  t1243   bhramarah.in   coverage 0.959113 · shape 0.583092 · 1384 scored elements
+```
+
+`7info.ru` (the `count=1 → elapsed 9,326 ms` site t1235 measured) also cleared. So the window's debt
+is **discharged, not deferred**: one engine fix, one site crossing from ZERO to 1,384 scorable
+elements. The bucket still grew net (**3 cleared · 7 still · 6 new**) because six different sites
+entered it, which is the churn floor t1144 named, not a regression of the fix.
+
+⚠⚠⚠ **THE FINDING THAT CHANGES THE STEER — THE GEOMETRY MASS HAS NO DIRECTION, AND THE BOARD'S
+OLDEST SHAPE LEVER IS FALSIFIED.** The board has carried tick-267's hypothesis for ~980 ticks and
+still prints it as *"the HIGHEST-YIELD SHAPE lever"*: **ONE shared constant (font metrics /
+line-height / margin / border-box rounding) likely snaps MANY boxes into 8px tolerance at once.** A
+shared constant is a *directional* error — it makes boxes systematically too tall, or too wide, or
+too far down. Measured over the 1,264 divergence example boxes this sweep printed:
+
+```text
+  HEIGHT differs:  ours TALLER 365  ·  ours SHORTER 375     51% / 49%   <- no direction
+  WIDTH  differs:  ours WIDER  202  ·  ours NARROWER 361    36% / 64%   <- weak, one way
+```
+
+And the same question asked of the FONT, which every divergence line already carries as
+`family/px/advance` (the advance is Chrome's own `measureText` of a fixed probe in that element's
+resolved font — so the two sides of a `vs` answer "did the same text metrics produce these boxes?"
+directly, and nobody had ever read it):
+
+```text
+   698  52.5%   font IDENTICAL          <- same family, same px, same advance, DIFFERENT box
+   448  33.7%   ADVANCE differs (same family+size)   239 wider / 209 narrower · mean ratio 1.054
+   175  13.2%   FAMILY differs
+     9   0.7%   SIZE differs
+```
+
+**More than half the divergence mass is produced by boxes whose text metrics AGREE with Chrome to
+the pixel.** For that half, no font constant exists that could move them — it is layout math. And the
+third that *does* disagree on advance has no direction either (mean ours/chrome 1.054, near-evenly
+split), which is face substitution per site, not one constant. ⚠ SAMPLING, stated because it bounds
+the claim: the cause block prints up to THREE examples per cause, so this is weighted toward the top
+causes rather than the full divergence population.
+
+⚠⚠ **AND THE MECHANISM RANKING IS INVERTED FROM THE ONE THE BOARD IS STEERING BY.** The board's
+CO-#1 block orders the work *"MISSING_BOX FIRST — 401 sites / 17154 hits … geometry 1781 / 37184"*.
+Rolled up over this corpus (`docs/loop/SWEEP-t1243-mechanisms.tsv`, ranked by DISTINCT SITES, which
+is the board's own rule):
+
+```text
+  sites  hits   mechanism
+     91  3244   geometry/mis-sized: height
+     75  6683   geometry/mis-sized: width
+     65  1615   geometry/displaced: y (vertical drift)
+     43  1672   geometry/mis-sized: y (vertical drift)
+     43   745   geometry/displaced: x (horizontal)
+     42 10943   missing box              <- SIXTH by sites, FIRST by hits
+     29   780   geometry/mis-sized: x (horizontal)
+     23  2254   unaligned key (we drew as many)
+     21  3290   display
+```
+
+`missing box` is **sixth by distinct sites and first by hits** — the shape a *descendant count* takes
+(t911: a missing-box count is a descendant count; one dropped container bills its whole subtree). The
+board's ordering was measured on the CURATED 265 and this is the CrUX 200, so this is a corpus
+difference, not a contradiction — but the corpus the mandate now steers by is this one, and on it
+**SIZING beats DROPPING by more than 2:1 in breadth.**
+
+⚠ **HARNESS, one line per PART VII, not fixed by me:** the sweep driver died at 09:59 with 157 of 200
+sites run, no `done` marker, no children and its PID gone. The remaining 43 were run to completion in
+the same configuration (2 concurrent, 150 s cap, same binary) from `/tmp/t1243/sweep2.sh`; the rows
+file is one sweep, not two configurations. The driver is agent-side scratch in `/tmp`, not `scripts/`.
+
+⭐ **NEXT: a CAPABILITY tick, and the target is now measured rather than remembered** — the sizing
+mass, entered through `geometry/mis-sized: width` (75 sites / 6,683 hits, 64% of them ours NARROWER)
+and NOT through a font constant, which this tick just falsified. Check #119's rule that a capability
+tick must follow a measurement one is now two windows overdue.
+
+PERF: none — measurement only, nothing compiled.
+
+WIKI: `docs/wiki/fidelity-instrument.md` — "the divergence line has always carried the font that
+produced each box, and on half the mass it says the font AGREES".
+
 ## Tick 1242 — the parse-time stale-snapshot defect does not exist, and my own instrument invented it (2026-08-14)
 
 TICK SHAPE: capability — a probe written to confirm a recorded defect, which refuted it instead, and

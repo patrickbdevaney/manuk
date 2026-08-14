@@ -1,0 +1,201 @@
+#name	coverage	shape	h_overflow	overlap	reading_order	dead_target	shape_n	reason	instrument
+comix.to	-	-	0	0	0	0	0	bot-wall-403	db5684eb
+service.smt.docomo.ne.jp	-	-	0	0	0	0	0	unreachable	db5684eb
+www.naukri.com	0.280702	0.312500	0	1	1	0	16		db5684eb
+www.mangago.me	-	-	0	0	0	0	0	bot-wall-403	db5684eb
+www.ebay.com	-	-	0	0	0	0	0	timeout-150s	db5684eb
+www.agoda.com	0.107673	0.770115	0	0	0	0	87		db5684eb
+fdown.net	-	-	0	0	0	0	0	bot-wall-403	db5684eb
+bill.pitc.com.pk	-	-	0	0	0	0	0	unreachable	db5684eb
+www.ikea.com	0.924051	0.782534	0	0	1	0	584		db5684eb
+bbs.ruliweb.com	-	-	0	0	0	0	0	timeout-150s	db5684eb
+www.otomoto.pl	0.967742	0.767619	0	1	1	0	1050		db5684eb
+mangaraw.ac	0.835804	0.622101	0	0	1	1	733		db5684eb
+aternos.org	-	-	0	0	0	0	0	bot-wall-403	db5684eb
+missav.live	-	-	0	0	0	0	0	bot-wall-403	db5684eb
+www.bilibili.com	0.867540	0.770134	1	1	1	0	596		db5684eb
+vk.com	1.000000	0.400000	0	0	0	0	5	oracle-module-shell-5	db5684eb
+meet.google.com	0.474298	0.128951	0	1	1	1	1993		db5684eb
+tukrd.com	1.000000	0.973684	0	0	0	0	38		db5684eb
+www.amazon.com.be	-	-	0	0	0	0	0	empty-202	db5684eb
+www.amazon.com.mx	-	-	0	0	0	0	0	empty-202	db5684eb
+client.dkitrxmdwoqruvsi.net	-	-	0	0	0	0	0	http-404	db5684eb
+www.paypal.com	0.892977	0.651685	0	1	1	0	534		db5684eb
+people.com	-	-	0	0	0	0	0	bot-wall-403	db5684eb
+toyhou.se	-	-	0	0	0	0	0	bot-wall-403	db5684eb
+cibnext.icici.bank.in	-	-	0	0	0	0	0	http-404	db5684eb
+linkmake.in	1.000000	0.797297	0	0	0	0	74		db5684eb
+255md.com	1.000000	0.906977	0	0	0	0	43		db5684eb
+janitorai.com	-	-	0	0	0	0	0	bot-wall-403	db5684eb
+www.marktplaats.nl	0.998765	0.959209	0	0	0	0	809		db5684eb
+stdn.iau.ir	-	-	0	0	0	0	0	bot-wall-403	db5684eb
+awlyaa.education.dz	1.000000	0.833333	0	0	0	0	6	shell-only-6	db5684eb
+desiviral.net	0.999092	0.856364	0	0	0	0	1100		db5684eb
+www.repubblica.it	0.993853	0.724005	0	1	1	0	2587		db5684eb
+www.livescore.cz	1.000000	1.000000	0	0	0	0	1957		db5684eb
+mobcup.fm	0.852941	1.000000	0	0	0	0	29		db5684eb
+m.youm7.com	0.992936	0.821344	0	1	1	0	1265		db5684eb
+momon-ga.com	1.000000	0.608392	0	0	0	0	572		db5684eb
+www.5movierulz.discount	1.000000	0.712984	0	0	1	0	439		db5684eb
+esaj.tjsp.jus.br	1.000000	0.500000	0	0	0	0	4	shell-only-4	db5684eb
+ww1.goojara.to	-	-	0	0	0	0	0	probe-blocked	db5684eb
+www.mobile.bg	0.995227	0.438849	0	1	1	0	417		db5684eb
+merchant.upi9.pro	1.000000	0.500000	0	0	0	0	2	shell-only-2	db5684eb
+tracker.shadowfax.in	0.052632	0.000000	0	0	0	0	1	tree-divergence-48	db5684eb
+chat.google.com	1.000000	0.881356	0	0	0	0	59		db5684eb
+www.kicktipp.com	1.000000	0.927083	0	0	0	0	96		db5684eb
+haraj.com.sa	-	-	0	0	0	0	0	probe-blocked	db5684eb
+alastonsuomi.com	-	-	0	0	0	0	0	unreachable	db5684eb
+id.vk.ru	1.000000	0.148814	1	1	0	1	1223		db5684eb
+altogel.fit	-	-	0	0	0	0	0	unreachable	db5684eb
+videa.hu	0.948454	0.402174	1	0	1	1	736		db5684eb
+www.tz.de	0.924714	0.833240	1	1	1	0	1781		db5684eb
+coinmarketcap.com	-	-	0	0	0	0	0	timeout-150s	db5684eb
+sports.yahoo.com	0.994792	0.896859	0	0	1	0	1910		db5684eb
+nitter.net	-	-	0	0	0	0	0	empty-200	db5684eb
+gw.geneanet.org	-	-	0	0	0	0	0	bot-wall-403	db5684eb
+rpsc.rajasthan.gov.in	0.990081	0.977231	0	0	0	0	1098		db5684eb
+www.bolde.com	-	-	0	0	0	0	0	bot-wall-403	db5684eb
+funinjeet.com	-	-	0	0	0	0	0	http-405	db5684eb
+dashboard.twitch.tv	0.181818	0.500000	0	0	0	0	2	tree-divergence-58	db5684eb
+pasarbokep.com	0.992095	0.705179	0	0	0	0	251		db5684eb
+mkp.gem.gov.in	-	-	0	0	0	0	0	unreachable	db5684eb
+developers.google.com	0.844492	0.547315	0	1	1	0	391		db5684eb
+celeb.gate.cc	0.989691	0.760417	0	0	0	0	480		db5684eb
+oilprice.com	0.987768	0.642415	1	1	1	0	646		db5684eb
+www.fragrantica.com	0.999328	0.686848	0	1	0	0	2973		db5684eb
+www.woolworths.com.au	-	-	0	0	0	0	0	bot-wall-403	db5684eb
+www.blick.ch	-	-	0	0	0	0	0	bot-wall-403	db5684eb
+www.netvasco.com.br	0.990196	0.587459	0	0	1	0	606		db5684eb
+www.hemnet.se	-	-	0	0	0	0	0	bot-wall-403	db5684eb
+www.cbse.gov.in	1.000000	0.175439	0	0	0	0	57		db5684eb
+fr.bongacams.com	-	-	0	0	0	0	0	bot-wall-403	db5684eb
+ubys.bingol.edu.tr	0.993976	0.975758	0	0	0	0	165		db5684eb
+www.mobile.ir	0.997451	0.701874	0	1	0	1	1174		db5684eb
+hope.cap-systems.org	1.000000	0.000000	0	0	0	0	17		db5684eb
+www.alphanews.live	0.990921	0.756021	0	1	1	0	3820		db5684eb
+www.freesupertips.com	0.356607	0.760000	1	1	1	0	475		db5684eb
+patrickmorin.com	0.985714	0.557971	0	0	1	0	138		db5684eb
+www.broshurko.bg	-	-	0	0	0	0	0	bot-wall-200	db5684eb
+www.nautica.com	-	-	0	0	0	0	0	bot-wall-403	db5684eb
+linxonline.co.pierce.wa.us	-	-	0	0	0	0	0	probe-blocked	db5684eb
+app.ordertime.com	1.000000	1.000000	0	0	0	0	29		db5684eb
+lms.sltc.ac.lk	1.000000	0.919355	0	0	0	0	124		db5684eb
+mexcbt.ed-cl.com	0.925926	0.000000	0	1	1	0	25		db5684eb
+xhdesign.today	-	-	0	0	0	0	0	probe-blocked	db5684eb
+ticket.jfa.jp	-	-	0	0	0	0	0	timeout-150s	db5684eb
+www.crazyshop.pl	0.914118	0.683274	1	1	1	0	1405		db5684eb
+house.udn.com	1.000000	0.000000	0	0	0	0	1	shell-only-1	db5684eb
+www.friulioggi.it	-	-	0	0	0	0	0	timeout-150s	db5684eb
+pogoda.by	0.519608	0.773585	0	0	0	0	53		db5684eb
+mirai-compass.net	-	-	0	0	0	0	0	http-404	db5684eb
+d2rwkn96gppqo1.cloudfront.net	0.555556	0.000000	0	0	0	0	5	oracle-module-shell-9	db5684eb
+www.trivago.be	0.964900	0.114328	1	1	1	0	1347		db5684eb
+www.trivago.de	0.965149	0.112749	1	1	1	0	1357		db5684eb
+www.trivago.fr	0.964950	0.109711	1	1	1	0	1349		db5684eb
+www.trivago.jp	0.964672	0.111360	1	1	1	0	1338		db5684eb
+www.trivago.pl	0.964900	0.106904	1	1	1	0	1347		db5684eb
+www.monopolybingogame.com	0.535714	0.266667	0	0	0	0	15		db5684eb
+secure5.entertimeonline.com	1.000000	0.692308	0	0	0	0	39		db5684eb
+www.mundotoro.com	-	-	0	0	0	0	0	bot-wall-403	db5684eb
+www.aftenbladet.no	0.943324	0.377800	1	0	1	0	982		db5684eb
+www.puentedemando.com	0.985269	0.774846	1	1	1	1	1137		db5684eb
+www.jatekshop.eu	0.974102	0.765009	0	0	1	0	1166		db5684eb
+donate.onenation.org.au	-	-	0	0	0	0	0	bot-wall-403	db5684eb
+cyoinatu-onna.com	0.967213	0.557203	0	0	0	0	1416		db5684eb
+forums.moneysavingexpert.com	1.000000	0.500000	0	0	0	0	10		db5684eb
+swiftspinus.com	-	-	0	0	0	0	0	timeout-150s	db5684eb
+v8m5e6.com	-	-	0	0	0	0	0	bot-wall-200	db5684eb
+a1.ro	-	-	0	0	0	0	0	timeout-150s	db5684eb
+aims.ucc-caloocan.edu.ph	-	-	0	0	0	0	0	unreachable	db5684eb
+www.razaoautomovel.com	0.951420	0.677141	1	1	1	0	1273		db5684eb
+sparkivo.pro	-	-	0	0	0	0	0	unreachable	db5684eb
+acesso.pagbank.com.br	-	-	0	0	0	0	0	bot-wall-403	db5684eb
+crm.majoo.id	0.716981	0.605263	0	0	0	0	38		db5684eb
+promo.golesliga1max.pe	-	-	0	0	0	0	0	unreachable	db5684eb
+www.smecel.com.br	1.000000	0.488372	0	0	0	0	43		db5684eb
+www.radec.com.mx	-	-	0	0	0	0	0	bot-wall-403	db5684eb
+lms12.tvu.ac.ir	-	-	0	0	0	0	0	unreachable	db5684eb
+possssno.sbs	1.000000	0.991304	0	0	0	0	575		db5684eb
+serennu.com	1.000000	0.737705	0	1	0	0	61		db5684eb
+www.heart.org	-	-	0	0	0	0	0	bot-wall-403	db5684eb
+basescan.org	-	-	0	0	0	0	0	bot-wall-403	db5684eb
+booking.directferries.com	0.100000	0.500000	0	0	0	0	2	thin-overlap-2	db5684eb
+app.levelupxx69.online	-	-	0	0	0	0	0	bot-wall-403	db5684eb
+www.lyreco.com	0.936652	0.763285	0	0	1	0	414		db5684eb
+www.unoeste.br	0.937500	0.788506	1	1	1	0	435		db5684eb
+secure.paymentech.com	-	-	0	0	0	0	0	probe-blocked	db5684eb
+lp.rsaiben.com	-	-	0	0	0	0	0	http-404	db5684eb
+sip777man.site	0.481054	0.938356	1	1	1	0	1168		db5684eb
+dla7h4u1.com	-	-	0	0	0	0	0	bot-wall-200	db5684eb
+www.kantorsupersam.pl	-	-	0	0	0	0	0	unreachable	db5684eb
+www.villaggioposeidone.it	0.004338	0.000000	0	0	0	0	2	tree-divergence-600	db5684eb
+cloud.ssktco-op.com	-	-	0	0	0	0	0	unreachable	db5684eb
+admin.munchbakery.com	1.000000	0.931818	0	0	0	0	44		db5684eb
+allticketscol.com	1.000000	0.000000	0	0	0	0	1	oracle-module-shell-1	db5684eb
+creaturecock.com	-	-	0	0	0	0	0	unreachable	db5684eb
+payb.jp	-	-	0	0	0	0	0	timeout-150s	db5684eb
+www.dapam-sirius.fr	1.000000	0.933333	0	0	0	0	30		db5684eb
+packages.booking.com	-	-	0	0	0	0	0	bot-wall-403	db5684eb
+pivaldi.restoplace.ws	0.969231	0.743386	0	1	1	0	378		db5684eb
+www.taphouse23.com	0.376703	0.147756	1	1	1	0	1604		db5684eb
+ebanking.bdm-sa.com	-	-	0	0	0	0	0	unreachable	db5684eb
+www.ta3lemkonline.com	0.995699	0.680346	0	0	1	0	463		db5684eb
+beb88run.xyz	0.657003	0.909708	0	1	1	0	1473		db5684eb
+www.datacareservices.com	-	-	0	0	0	0	0	probe-blocked	db5684eb
+zainascarfs.com	-	-	0	0	0	0	0	bot-wall-403	db5684eb
+phone.uslowcosthousing.com	-	-	0	0	0	0	0	bot-wall-403	db5684eb
+www.cuneocronaca.it	-	-	0	0	0	0	0	css-starved-1	db5684eb
+atendimentomondial.zendesk.com	-	-	0	0	0	0	0	bot-wall-403	db5684eb
+ofero.id	0.980296	0.000000	1	1	1	0	199		db5684eb
+morikoshi.net	-	-	0	0	0	0	0	timeout-150s	db5684eb
+probidas.lt	0.707627	0.375250	1	0	1	0	501		db5684eb
+777juegos.com	0.941176	0.725000	1	0	0	1	80		db5684eb
+redinfor.com.pe	0.950000	0.684211	1	0	0	0	38		db5684eb
+ru.restaurantguru.com	0.982287	0.534426	0	1	1	0	610		db5684eb
+mydogcot.com	0.895551	0.449244	1	1	1	0	463		db5684eb
+simplepdf.com	-	-	0	0	0	0	0	timeout-150s	db5684eb
+profissionaliza.cademi.com.br	-	-	0	0	0	0	0	timeout-150s	db5684eb
+www.library.chiyoda.tokyo.jp	0.963731	0.779570	0	0	0	0	372		db5684eb
+www.timeline.com	0.978827	0.435940	1	1	1	0	1202		db5684eb
+7info.ru	0.665582	0.749389	0	1	1	0	818		db5684eb
+admin.zoomph.com	1.000000	0.588235	0	0	0	0	34		db5684eb
+littlecaesarsbcs.libellum.com.mx	1.000000	0.935897	0	0	0	0	78		db5684eb
+e8c76.com	-	-	0	0	0	0	0	bot-wall-200	db5684eb
+fr.download.it	-	-	0	0	0	0	0	bot-wall-403	db5684eb
+pordentrodetudo.com.br	0.920988	0.246649	0	1	1	0	746		db5684eb
+cloud.email.cruzeirodosul.edu.br	-	-	0	0	0	0	0	http-404	db5684eb
+bhramarah.in	0.959113	0.583092	0	1	1	0	1384		db5684eb
+portagelearning.edu	0.064935	0.000000	0	1	0	0	10		db5684eb
+dedebet252.com	-	-	0	0	0	0	0	bot-wall-403	db5684eb
+www.kuechenmomente.de	0.903030	0.775168	0	0	0	0	894		db5684eb
+aksesjambi.com	0.989619	0.350816	0	1	1	0	858		db5684eb
+ab.asimakog.eu.org	-	-	0	0	0	0	0	bot-wall-403	db5684eb
+hipmiluwuutara.org	0.341064	0.228000	1	1	1	0	250		db5684eb
+www.kroftools.com	0.059970	0.525000	0	0	0	0	40		db5684eb
+seduniaselat.com	0.992157	0.847826	1	0	1	0	506		db5684eb
+www.waitaly.net	-	-	0	0	0	0	0	bot-wall-403	db5684eb
+www.wdimax.com	1.000000	0.976127	0	0	0	0	377		db5684eb
+123moviesfree.day	-	-	0	0	0	0	0	bot-wall-403	db5684eb
+gismart.com	0.982517	0.839858	0	0	0	0	281		db5684eb
+hnhbkis.edu.in	0.823944	0.957265	0	0	0	0	234		db5684eb
+virtual.lapampa.edu.ar	-	-	0	0	0	0	0	unreachable	db5684eb
+rockstaractu.com	0.922353	0.950255	0	0	1	0	784		db5684eb
+experiencia.pichincha.com	0.086957	0.500000	0	0	0	0	4	thin-overlap-4	db5684eb
+pt88.app	-	-	0	0	0	0	0	timeout-150s	db5684eb
+bhfudbal.ba	0.978541	0.599415	1	0	1	1	684		db5684eb
+sestra.cc	0.992991	0.927059	0	1	1	0	425		db5684eb
+www.hdnails.it	0.989286	0.537906	1	1	1	0	1108		db5684eb
+webfenix.movilidadbogota.gov.co	0.897959	0.068182	0	0	0	0	44	render-failed	db5684eb
+mayatoys.in	0.998058	0.811284	0	0	0	0	1028		db5684eb
+ru4.bongacams-ru.com	1.000000	1.000000	0	0	0	0	39		db5684eb
+redemoura.gupy.io	0.006897	0.000000	0	0	0	0	2	thin-overlap-2	db5684eb
+www.arw.ro	-	-	0	0	0	0	0	bot-wall-403	db5684eb
+neutypechic.com	-	-	0	0	0	0	0	timeout-150s	db5684eb
+ioi-russia.vdi.mipt.ru	1.000000	0.309524	0	0	0	0	420		db5684eb
+nysainfo.pl	0.391684	0.688073	0	0	1	0	763		db5684eb
+nortenoticia.com.br	1.000000	0.430435	0	1	0	0	690		db5684eb
+meuconsultordigital.com.br	0.975258	0.295983	0	1	0	0	473		db5684eb
+portal.ensuretyfinance.com	1.000000	0.863636	0	0	0	0	22		db5684eb
+venus.zeronline.cloud	-	-	0	0	0	0	0	probe-blocked	db5684eb
+www.jazzguitar.be	-	-	0	0	0	0	0	bot-wall-403	db5684eb

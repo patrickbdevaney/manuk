@@ -1304,3 +1304,63 @@ chain marks the first row where that starts.
 ⚠ Read it with `MANUK_RO_PARTITION=1`, which answers a different question: *how many of these
 inversions involve a zero-area box, a box parked off-screen left, or an in-flow/out-of-flow pair* —
 i.e. whether the count is an engine target at all before you spend a tick on which box moved.
+
+## The divergence line has always carried the FONT, and on half the mass it says the font AGREES (t1243)
+
+Every geometry divergence the sweep prints looks like this, and the braces are not decoration:
+
+```text
+  …/div:nth-of-type(3): [610 1384 566×566]  {Noto IKEA/16/170}
+                     vs [610 1384 566×84]   {Noto IKEA/16/218}
+```
+
+The triple is `first-declared-family / used px size / ADVANCE`, where the advance is Chrome's own
+`measureText` of a fixed probe string **in that element's resolved font** (`chrome.rs`, probe field 6,
+added t563 for exactly this reason: *"`[74x16] vs [76x18]` is unattributable without it"*). So the two
+sides of a `vs` answer, per divergence and for free, the question every shape tick has had to guess
+at: **did the same text metrics produce these two boxes?**
+
+Nobody had ever read it in aggregate. Asked of all 1,330 example lines in the t1243 CrUX sweep:
+
+```text
+   698  52.5%   font IDENTICAL          same family, same px, same advance — and a DIFFERENT box
+   448  33.7%   ADVANCE differs (same family + size)
+   175  13.2%   FAMILY differs
+     9   0.7%   SIZE differs
+```
+
+**More than half the divergence mass is boxes whose text metrics agree with Chrome to the pixel.**
+No font constant can move those; they are layout math. This is the falsification of the board's
+oldest shape lever — tick-267's *"ONE shared constant (font metrics / line-height / margin /
+border-box rounding) likely snaps MANY boxes into 8px tolerance at once"*, carried unchallenged for
+~980 ticks — and the geometry itself says the same thing, because **a shared constant is a
+DIRECTIONAL error and this mass has no direction**:
+
+```text
+  HEIGHT differs:  ours TALLER 365 · ours SHORTER 375     51% / 49%
+  WIDTH  differs:  ours WIDER  202 · ours NARROWER 361    36% / 64%
+```
+
+Even the third that *does* disagree on advance is undirected (239 wider, 209 narrower, mean
+ours/chrome 1.054) — that is per-site face substitution (a webfont Chrome loaded and we did not),
+not one constant.
+
+⚠ **The sampling bounds the claim, and it is stated rather than buried:** the root-cause block prints
+up to THREE examples per cause, so this population is weighted toward the top causes. It is enough to
+kill "one constant fixes many sites"; it is not a census of every divergence.
+
+### The per-site cause block is a per-site ranking — the corpus one has to be rolled up
+
+Each run prints `G1 ROOT CAUSES (§3b)` ranked by **that site's** hits, and the board asks for a
+ranking by **distinct sites**. Those are different orders, and reading the per-site one as if it were
+the corpus one is how `missing box` stayed first for a year: it leads on hits (10,943) because a
+missing box is a *descendant* count (t911 — one dropped container bills its whole subtree), and it is
+**sixth on sites** (42). Two rollups, both cheap, both now banked per sweep:
+
+| artefact | key | what it is for |
+|---|---|---|
+| `SWEEP-t<N>-causes.tsv` | the full label, incl. tag and power-of-2 band | aiming a fix once the mechanism is chosen |
+| `SWEEP-t<N>-mechanisms.tsv` | the label with tag and band stripped | choosing the mechanism — this is MASS |
+
+The fine labels fragment one cause across a dozen rows (`height ~16px <div>`, `height ~256px <div>`,
+…) and every row then looks small, which is precisely the shape that hides a shared root cause.

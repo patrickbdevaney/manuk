@@ -1141,6 +1141,8 @@
   - L1224 · A missing-box count is a DESCENDANT count — rank by truncation points, not by tag
   - L1248 · And the deficit does not say which LEG it belongs to
   - L1266 · MANUK_RO_TRACE — an inversion is reported on the PAIR, and the defect is one box (t1150)
+  - L1308 · The divergence line has always carried the FONT, and on half the mass it says the font AGREES (t1243)
+  - L1352 · The per-site cause block is a per-site ranking — the corpus one has to be rolled up
 
 ## FRAMEWORKS — React, Svelte, Next, jQuery: what actually breaks
 `docs/wiki/frameworks.md`
@@ -2110,4 +2112,4 @@
   - L231 · Both named mechanisms are subsystem work
 
 ---
-2017 sections across 22 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+2019 sections across 22 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
