@@ -46371,6 +46371,74 @@ PERF: none — one UA rule and one narrowed branch in a cascade that already ran
 WIKI: `docs/wiki/css-cascade.md` — where Chrome draws the form-control `box-sizing` line, and why a
 layout-crate test cannot see it.
 
+## Tick 1249 — `stretch` was representable on `height` and NOT on `min-height`/`max-height`, which is t930 one keyword later (2026-08-14)
+
+TICK SHAPE: capability — the board's ★`css/css-sizing` row again, taken by reading the failure
+histogram down to a file and then to a property, which is what the board's own instruction says to do.
+
+**HOW THE TARGET WAS FOUND, and one wrong turn on the way.** The largest remaining cluster in
+`css/css-sizing/stretch` was ~168 assertions on `<div class="test" style="position: absolute; …">`,
+so the first hypothesis was an **abspos** defect. It was wrong: the `.test` rule those files share is
+`block-size: stretch`, and a four-row probe showed our engine handles `block-size: stretch`,
+`block-size: 30px` and `inline-size: 20px` correctly — Stylo resolves the logical spellings onto the
+physical ones and always has. Replicating the file's exact box model (2+3px block margins, 3px
+border, 2px padding, a 50px containing block) gave **40×45, which is the number the test expects.**
+The construct was already right, and the cluster was in the files one directory-listing over:
+`stretch-min-block-size-001` and `stretch-max-block-size-001`.
+
+**THE DEFECT: `stretch` is representable on `height` and not on the min/max pair.** `stretch` parses
+to `Dim::Auto`, and on a **max** `Dim::Auto` reads as *"no limit"* while on a **min** it reads as
+**zero** — so with no flag beside the `Dim` the declaration is not representable at all and the clamp
+silently does nothing. That is **exactly** the shape t930 fixed for the *intrinsic* keywords on these
+same four properties (*"a keyword landed on `Dim::Auto`, which the clamp reads as 0 on a min and as
+no-limit on a max"*), one keyword later and in the same four slots.
+
+New `min_height_stretch` / `max_height_stretch`, set in **both** cascades (`size_is_stretch` /
+a new `maxsize_is_stretch` in the Stylo map; the literal-keyword arms in `MinimalCascade`), and
+consumed by the block clamp. The value is not recomputed: **`stretch_fit_h` is
+`specified_definite_h`'s stretch arm**, evaluated once, so `height`, `min-height` and `max-height`
+cannot drift apart about what "stretch" means.
+
+MEASURED, same binary, same hour:
+
+```text
+  css/css-sizing    979 -> 1034  (+55 — the largest single move of this window)
+                                 (934 -> 1034 = +100 across t1244…t1249)
+  css/css-flexbox  1504  (=)   css/css-grid    2517  (=)
+  css/css-position  274  (=)   css/css-display  296  (=)
+  layout suite 178/178 · HANG/CRASH 0
+```
+
+Chrome-verified on `/tmp/t1249-c.html` — five rows including both aliases and both logical spellings,
+**whole fixture 100%**.
+
+GATE: `stretch_on_the_block_axis_min_and_max_is_the_stretch_fit_size`, with **two** controls: a `max`
+must CAP and never grow (a 10px height stays 10), and an INDEFINITE containing block leaves the box
+content-sized because there is nothing to stretch to. **RED-proven twice, independently** — deleting
+the min arm gives *"got 28"*, deleting the max arm gives *"got 510"*.
+
+⚠⚠ **AND THE GATE'S FIRST TWO DRAFTS BOTH FAILED FOR REASONS THAT WERE NOT THE FLAG.** Draft 1 wrote
+`margin-block-start` in the fixture CSS and asserted 45; it got **50**, because `layout_html`
+cascades with **`MinimalCascade`, not the shipping Stylo path**, and the minimal cascade has no
+logical margin arm — so the margins were 0 and the arithmetic was right about the wrong box. Draft 2
+asserted the logical `min-block-size` spelling and got **28** for the same reason. **A gate must not
+depend on a second, unrelated mapping to state its own claim**, so the unit gate asserts the
+PHYSICAL spellings and the logical half is carried by the Chrome-verified fixture and the WPT delta —
+with the reason written beside it, because the next person to add a layout gate will hit this.
+
+⚠ **RESIDUE, named rather than half-built: the INLINE axis.** `min-width`/`max-width: stretch` is the
+exact mirror and is deliberately NOT in this tick — every failing test in the directory exercises the
+block axis, so the inline half would be an unmeasured change riding along with a measured one.
+
+⚠ **USAGE WEIGHT, stated plainly rather than implied by the subtest count.** `max-block-size: stretch`
+is a tail construct on today's web. The half that is not tail is **`min-height: -webkit-fill-available`**,
+the mobile-Safari full-height idiom, which is the same code path and is a row in the gate.
+
+PERF: none — two bools and one `Option<f32>` computed from values already in scope, once per block.
+F1/F2 unmoved.
+
+WIKI: `docs/wiki/box-layout.md` — "`stretch` on the min/max pair, and why `Dim::Auto` cannot carry it".
+
 ## Tick 1248 — the repair obligation, discharged on the CORPUS: one site corrected, zero verdicts changed, one hypothesis refuted (2026-08-14)
 
 TICK SHAPE: measurement — small and non-optional. t1247 repaired the instrument, and t1242's rule

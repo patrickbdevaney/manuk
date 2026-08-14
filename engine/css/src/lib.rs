@@ -1394,6 +1394,23 @@ pub struct ComputedStyle {
     /// `getComputedStyle` must serialise back the keyword the author wrote.
     pub min_height_keyword: Option<IntrinsicSize>,
     pub max_height_keyword: Option<IntrinsicSize>,
+    /// **`stretch` on the block-axis MIN/MAX pair** — `min-height`/`max-height` and their logical
+    /// spellings `min-block-size`/`max-block-size`.
+    ///
+    /// Its own flag for the same reason [`Self::height_stretch`] is: `stretch` collapses to
+    /// `Dim::Auto` for length resolution, and on a *max* that reads as "no limit" while on a *min*
+    /// it reads as zero — so without the flag the declaration is not representable at all and the
+    /// clamp silently does nothing. The `stretch` value here means *the stretch-fit block size*:
+    /// the containing block's definite content height less this box's own margins, border and
+    /// padding — the same quantity `height: stretch` resolves to, which is why layout computes it
+    /// once (`specified_definite_h`'s stretch arm) and both readers share it.
+    ///
+    /// ⚠ **Inline axis deliberately NOT added in the same tick.** `min-width`/`max-width: stretch`
+    /// is the exact mirror and every failing test in `css/css-sizing/stretch` exercises the BLOCK
+    /// axis, so the inline half would be an unmeasured change riding along with a measured one.
+    /// Named as residue rather than half-built.
+    pub min_height_stretch: bool,
+    pub max_height_stretch: bool,
     pub float: Float,
     pub clear: Clear,
     pub position: Position,
@@ -1681,6 +1698,8 @@ impl ComputedStyle {
             min_width_keyword: None,
             max_width_keyword: None,
             min_height_keyword: None,
+            min_height_stretch: false,
+            max_height_stretch: false,
             max_height_keyword: None,
             float: Float::None,
             clear: Clear::None,
@@ -5540,7 +5559,16 @@ fn apply_declaration(s: &mut ComputedStyle, d: &Declaration, parent_fs: f32) {
                 s.max_width = d;
             }
         }
+        // ⚠ The `stretch` flag is set OUTSIDE the `is_negative_size` guard's effect on the `Dim`,
+        // because `stretch` parses to `Dim::Auto` (not a negative length) and the guard passes — but
+        // it is set from the same keyword text, so a bad value cannot turn it on. Twin of the
+        // `height` arm above and of `stylo_map`'s `size_is_stretch`/`maxsize_is_stretch`.
         "min-height" => {
+            let low = v.trim().to_ascii_lowercase();
+            s.min_height_stretch = matches!(
+                low.as_str(),
+                "stretch" | "-webkit-fill-available" | "-moz-available"
+            );
             let d = values::parse_dim(v, s.font_size);
             if !is_negative_size(d) {
                 s.min_height_keyword = intrinsic_kw_bare(v);
@@ -5548,6 +5576,11 @@ fn apply_declaration(s: &mut ComputedStyle, d: &Declaration, parent_fs: f32) {
             }
         }
         "max-height" => {
+            let low = v.trim().to_ascii_lowercase();
+            s.max_height_stretch = matches!(
+                low.as_str(),
+                "stretch" | "-webkit-fill-available" | "-moz-available"
+            );
             let d = values::parse_dim(v, s.font_size);
             if !is_negative_size(d) {
                 s.max_height_keyword = intrinsic_kw_bare(v);

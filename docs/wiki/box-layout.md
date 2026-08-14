@@ -9487,3 +9487,39 @@ correct, and each one alone moved these rows not at all.** Whole-fixture parity 
 90.9%. The lesson is not "we were slow": it is that a guard is a **conjunction**, and a conjunction
 with three wrong terms reports the same symptom as one with one — so each term has to be measured
 out separately and no amount of reasoning about the first will reveal the third.
+
+## `stretch` on the min/max pair, and why `Dim::Auto` cannot carry it (t1249)
+
+`stretch` / `-webkit-fill-available` parse to `Dim::Auto`. On `height` that is harmless because
+`height_stretch` rides alongside. On the min/max pair it is fatal in **two opposite directions**:
+
+| property | `Dim::Auto` is read as | so the declaration becomes |
+|---|---|---|
+| `min-height: stretch` | 0 | no floor at all |
+| `max-height: stretch` | no limit | no cap at all |
+
+Either way the clamp silently does nothing, and nothing in the pipeline reports a dropped
+declaration. This is **precisely the shape t930 fixed for the intrinsic keywords on these same four
+properties** — *"a keyword landed on `Dim::Auto`, which the clamp reads as 0 on a min and as no-limit
+on a max"* — one keyword later and in the same four slots. When a value collapses to a shared
+representation, every property that reads that representation needs its own sidecar, and the fix for
+one keyword is not the fix for the next.
+
+The value is the **stretch-fit block size**: the containing block's definite content height less this
+box's own margins, border and padding. It is not recomputed for the clamps — `stretch_fit_h` *is*
+`specified_definite_h`'s stretch arm, so `height`, `min-height` and `max-height` cannot drift apart
+about what "stretch" means.
+
+Controls that make the rule complete: a `max` **caps and never grows** (a 10px height stays 10), and
+an **indefinite** containing block leaves the box content-sized, because an unresolvable min is 0 and
+an unresolvable max is `none`.
+
+### ⚠ `layout_html` cascades with `MinimalCascade`, not with the shipping Stylo path
+
+Two drafts of this gate failed for reasons that were not the flag under test: one wrote
+`margin-block-start` in its fixture CSS (margins came out 0, so the arithmetic was right about the
+wrong box) and one asserted the logical `min-block-size` spelling. **The unit-test helper has no
+logical-property arm; Stylo does.** So a layout gate written against `layout_html` cannot assert a
+logical spelling, and one that tries is asserting a second unrelated mapping rather than its own
+claim. Assert the physical spelling in the unit gate and carry the logical half with a
+Chrome-diffed fixture.

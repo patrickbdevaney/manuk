@@ -4234,11 +4234,23 @@ impl Ctx<'_> {
         // Both were the clamp reading `Dim::Auto` as "unset". Content-box already, so no
         // `bs_extra_h` conversion — same reason as the inline axis above.
         // min-height / max-height clamp (content-box).
+        // **`stretch` on the block-axis min/max pair is the STRETCH-FIT block size**, which is the
+        // exact quantity `height: stretch` already resolves to — the containing block's definite
+        // content height less this box's own margins, border and padding. So it is not recomputed
+        // here: `stretch_fit_h` IS `specified_definite_h`'s stretch arm, evaluated once above, and
+        // the three readers (`height`, `min-height`, `max-height`) cannot drift apart.
+        //
+        // `None` (an indefinite containing block) means the constraint has nothing to resolve
+        // against, and CSS treats an unresolvable min as 0 and an unresolvable max as `none` — which
+        // is what falling through to the existing arms already produces.
+        let stretch_fit_h: Option<f32> = pch.map(|h| (h - mt - mb - pt - pb - bt - bb).max(0.0));
         let min_h = match s.min_height_keyword {
             Some(_) => natural_content_h.max(0.0),
+            None if s.min_height_stretch => stretch_fit_h.unwrap_or(0.0),
             None => (s.min_height.resolve(pch.unwrap_or(0.0), 0.0) - bs_extra_h).max(0.0),
         };
         let max_h = match s.max_height {
+            _ if s.max_height_stretch => stretch_fit_h.unwrap_or(f32::INFINITY),
             _ if s.max_height_keyword.is_some() && !is_table_box => natural_content_h.max(0.0),
             Dim::Auto => f32::INFINITY,
             // A percentage `max-height` against an **indefinite** containing-block height is
@@ -22896,6 +22908,98 @@ mod tests {
             (w - 200.0).abs() < 1.0 && (h - 400.0).abs() < 1.0,
             "CONTROL: with no definite height the box fills the inline axis and the ratio gives the \
              height (Chrome: 200x400) — got {w}x{h}"
+        );
+    }
+
+    /// **`stretch` on the block-axis MIN/MAX pair — `min-height`/`max-height` and their logical
+    /// spellings `min-block-size`/`max-block-size`.**
+    ///
+    /// `stretch` parses to `Dim::Auto`, and on a *max* that reads as "no limit" while on a *min* it
+    /// reads as **zero** — so without a flag beside the `Dim` the declaration is not representable
+    /// at all and the clamp silently does nothing. Exactly the shape t930 fixed for the intrinsic
+    /// keywords on these same four properties, one keyword later.
+    ///
+    /// The value is the **stretch-fit block size**: the containing block's definite content height
+    /// less this box's own margins, border and padding — the same quantity `height: stretch`
+    /// resolves to, which is why layout computes it once and all three readers share it.
+    ///
+    /// Geometry from `css/css-sizing/stretch/stretch-{min,max}-block-size-001.html`, whose own
+    /// comments derive it: a 50px containing block, a child with 2+3px block margins, 3px border and
+    /// 2px padding → **border box 45**. Chrome-verified on `/tmp/t1249-c.html` (whole fixture 100%).
+    ///
+    /// **To watch it go RED:** delete the `s.min_height_stretch` / `s.max_height_stretch` arms from
+    /// the `min_h`/`max_h` matches; the min row collapses to border+padding (10) and the max row
+    /// stops capping.
+    #[test]
+    fn stretch_on_the_block_axis_min_and_max_is_the_stretch_fit_size() {
+        let row = |inner: &str| {
+            let html = format!(r#"<div id="p"><div id="a" style="{inner}">x</div></div>"#);
+            // ⚠ PHYSICAL margins on purpose. The first cut wrote `margin-block-start`, this helper's
+            // cascade does not map the logical spelling, the margins came out 0 — and the assertion
+            // then failed at 50 for a reason that had nothing to do with the flag under test. A gate
+            // must not depend on a second unrelated mapping to state its own claim.
+            let css = "body{margin:0} #p{width:400px;height:50px} \
+                       #a{margin-top:2px;margin-bottom:3px;border:3px solid blue;padding:2px}";
+            let (dom, root) = layout_html(&html, css, 800.0);
+            let rects = root.node_rects(&dom);
+            let n = dom
+                .descendants(dom.root())
+                .find(|&n| dom.element(n).and_then(|e| e.attr("id")) == Some("a"))
+                .expect("id");
+            rects[&n].height
+        };
+        // A `min` floors the box at the stretch-fit size: content 50-5(margins)-4(padding)-6(border)
+        // = 35, border box 45.
+        // ⚠⚠ **PHYSICAL SPELLINGS ONLY IN THIS UNIT GATE, and the reason is an instrument fact worth
+        // knowing: `layout_html` cascades with `MinimalCascade`, not with the SHIPPING Stylo path.**
+        // Stylo resolves `min-block-size`/`max-block-size` onto the physical properties against the
+        // element's writing mode, so the logical spellings reach `min_height_stretch` for free on
+        // the real engine — and they are the spellings every failing `css/css-sizing/stretch` test
+        // uses, which is where the +55 comes from. `MinimalCascade` has no logical arm, so asserting
+        // the logical spelling HERE would assert a mapping this helper does not have and fail for a
+        // reason that is not the flag under test. The logical half is covered by
+        // `/tmp/t1249-c.html` (Chrome-verified, whole fixture 100%) and by the WPT delta.
+        for p in ["min-height"] {
+            let h = row(&format!("{p}:stretch"));
+            assert!(
+                (h - 45.0).abs() < 1.0,
+                "{p}:stretch floors the box at the stretch-fit size (border box 45) — got {h}"
+            );
+        }
+        // A `max` caps an over-large height at the same size.
+        for p in ["max-height"] {
+            let h = row(&format!("{p}:stretch;height:500px"));
+            assert!(
+                (h - 45.0).abs() < 1.0,
+                "{p}:stretch caps the box at the stretch-fit size (border box 45) — got {h}"
+            );
+        }
+        // The `-webkit-fill-available` alias, which is the spelling the mobile web actually ships.
+        let h = row("min-height:-webkit-fill-available");
+        assert!(
+            (h - 45.0).abs() < 1.0,
+            "the fill-available alias must behave identically — got {h}"
+        );
+        // CONTROL 1 — a `max` must not GROW a smaller box.
+        let h = row("max-block-size:stretch;height:10px");
+        assert!(
+            (h - 20.0).abs() < 1.0,
+            "CONTROL: a max caps, it never stretches — a 10px height stays 10 (border box 20), got {h}"
+        );
+        // CONTROL 2 — with an INDEFINITE containing block there is nothing to stretch to, so the
+        // constraint has no effect and the box stays content-sized. An unresolvable min is 0.
+        let html = r#"<div id="p"><div id="a" style="min-block-size:stretch">x</div></div>"#;
+        let css = "body{margin:0} #p{width:400px} #a{border:3px solid blue;padding:2px}";
+        let (dom, root) = layout_html(html, css, 800.0);
+        let rects = root.node_rects(&dom);
+        let n = dom
+            .descendants(dom.root())
+            .find(|&n| dom.element(n).and_then(|e| e.attr("id")) == Some("a"))
+            .expect("id");
+        let h = rects[&n].height;
+        assert!(
+            h > 0.0 && h < 60.0,
+            "CONTROL: an indefinite containing block leaves the box content-sized, got {h}"
         );
     }
 

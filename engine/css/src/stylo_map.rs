@@ -170,6 +170,14 @@ fn minsize_intrinsic_kw(s: &Size) -> Option<crate::IntrinsicSize> {
     }
 }
 
+/// The [`size_is_stretch`] twin for `MaxSize`. A separate function because `max-*` has its own
+/// generic (`GenericMaxSize`, which carries `None` where `Size` carries `Auto`) — the same reason
+/// `maxsize_intrinsic_kw` cannot be `minsize_intrinsic_kw`.
+fn maxsize_is_stretch(s: &MaxSize) -> bool {
+    use stylo::values::generics::length::GenericMaxSize as GM;
+    matches!(s, GM::Stretch | GM::WebkitFillAvailable)
+}
+
 /// `max-width`/`max-height` `MaxSize` → `Dim` (`none`/keywords → `Dim::Auto` = no limit).
 fn maxsize_to_dim(s: &MaxSize) -> Dim {
     match s {
@@ -572,6 +580,13 @@ pub fn to_computed_style(cv: &ComputedValues) -> ComputedStyle {
     s.min_height_keyword = minsize_intrinsic_kw(&cmnh);
     s.max_width_keyword = maxsize_intrinsic_kw(&cmxw);
     s.max_height_keyword = maxsize_intrinsic_kw(&cmxh);
+    // `stretch` on the block-axis min/max pair — see `ComputedStyle::min_height_stretch`. Stylo has
+    // already resolved the LOGICAL spellings (`min-block-size` / `max-block-size`) onto these
+    // physical ones against the element's writing mode, which is why there is nothing to map here
+    // for them and why the whole `css/css-sizing/stretch` block-size family arrives through
+    // `clone_min_height` / `clone_max_height`.
+    s.min_height_stretch = size_is_stretch(&cmnh);
+    s.max_height_stretch = maxsize_is_stretch(&cmxh);
     s.min_width = size_to_dim(&cmnw);
     s.min_height = size_to_dim(&cmnh);
     s.max_width = maxsize_to_dim(&cmxw);

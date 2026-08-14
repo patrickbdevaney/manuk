@@ -466,6 +466,8 @@
   - L9437 · The diagnostic that found it: a correct fix that moved nothing
   - L9450 · ⚠ <canvas>'s width/height attributes are the BITMAP size, not a CSS presentational hint
   - L9461 · A NATURAL width is not a SPECIFIED width (t1246) — and the canvas exclusion was already done
+  - L9491 · stretch on the min/max pair, and why Dim::Auto cannot carry it (t1249)
+  - L9517 · ⚠ layout_html cascades with MinimalCascade, not with the shipping Stylo path
 
 ## browser-capabilities.md
 `docs/wiki/browser-capabilities.md`
@@ -2120,4 +2122,4 @@
   - L231 · Both named mechanisms are subsystem work
 
 ---
-2027 sections across 22 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+2029 sections across 22 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
