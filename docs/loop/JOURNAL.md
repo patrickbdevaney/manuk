@@ -46371,6 +46371,51 @@ PERF: none — one UA rule and one narrowed branch in a cascade that already ran
 WIKI: `docs/wiki/css-cascade.md` — where Chrome draws the form-control `box-sizing` line, and why a
 layout-crate test cannot see it.
 
+## Tick 1232 — the self-audit (due at 1232), and what this window actually bought (2026-08-14)
+
+TICK SHAPE: measurement — the cadence self-audit (`scripts/self-audit.sh`, due every 10 ticks; last
+at 1222, and the hook blocks commits past 10).
+
+**AUDIT: fully green.** Every gate declares how to break it; the process-defect ledger (49) names a
+MECHANISM per defect rather than a lesson; enforcement is mechanical (hook wired + executable, gate
+receipt written, cadence hook-enforced, STATUS generated); journal complete for the last 5 ticks;
+pattern ledger 1163 rows and moving with the engine. No `✗`, no `⚠`.
+
+**WHAT THE WINDOW BOUGHT, and the honest split** — four ticks, two capability and two measurement:
+
+```text
+  t1228  PageContext::eval / fire_lifecycle armed      G_LIFECYCLE_PREEMPTION   RED-proven
+  t1229  run_one_script armed — the CLASS is closed    G_INLINE_SCRIPT_PREEMPTION  RED-proven
+  t1230  css/selectors' densest bucket is a FRAME bug, not a selector bug
+  t1231  and the frame gap NEVER recovers, which killed t1230's own specified fix
+```
+
+The preemption class is **complete**: all three host→JS entry points armed, after three separate
+ticks each patched only the one in front of it. The general form is now written down in the wiki —
+*arming a guard is a statement about where script can START, and the places script CONTINUES are not
+the places it begins.*
+
+⚠⚠⚠ **THE WINDOW'S BEST RESULT IS A FIX THAT WAS NOT BUILT.** t1230 specified the frame re-cascade as
+*"the frame-document equivalent of the `ReflowScope` arming t1184/t1186 did"*, and t1231's single
+cross-task control row falsified that framing before a line was written: staleness is fixed by the
+next re-entry, and this gap is fixed by none of them. **A one-fixture gate would have passed.** That
+is the fourth time in this project's record that a probe run BEFORE the build changed what got built,
+and the first time it did so against a spec this loop had itself written one tick earlier.
+
+COMPLIANCE, recorded because it was tested hard: **PART VII held through SEVEN RED walls** — not one
+line of `scripts/` was edited. Every RED was diagnosed on the agent's own side (a proc-macro build
+corruption; `syn`/`quote` rlibs missing against live fingerprints) and worked around with `rm -rf` of
+the agent's own build dir and compile cache. ⚠ **The wall's build-failure guard has a hole worth the
+observer's attention:** it greps a GATE's output for `error: could not compile`, but a failure inside
+a **dependency of a crate suite** takes the *no-verdict* path and is reported as
+`INSTRUMENT FAULT — a REAL hang/OOM`. Five suites were reported as hangs; all five passed standalone.
+Named, not fixed. And **the RATCHET held**: nothing was traded, nothing landed on a red wall.
+
+PERF: none — measurement only.
+
+WIKI: none — this tick's artefact is the audit itself, which is loop governance rather than engine
+mechanism. [no-pattern]
+
 ## Tick 1231 — the frame gap NEVER recovers, and that rules out the fix t1230 specified (2026-08-14)
 
 TICK SHAPE: measurement — one control row against t1230's own specified fix, taken BEFORE building

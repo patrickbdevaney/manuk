@@ -11,12 +11,12 @@
 
 | | value | over |
 |---|---|---|
-| ticks landed | **932** | ticks 1–1231 |
-| median tick cycle | **28m** | 931 intervals |
-| median, last 10 | **55m** | 10 intervals |
+| ticks landed | **933** | ticks 1–1232 |
+| median tick cycle | **28m** | 932 intervals |
+| median, last 10 | **46m** | 10 intervals |
 | fastest / slowest | 5s / 5.4d | |
-| **ticks per hour** | **1.15** | 810.6h elapsed |
-| median verify wall | **63s** | 871 ticks |
+| **ticks per hour** | **1.15** | 810.7h elapsed |
+| median verify wall | **63s** | 872 ticks |
 | wall trend | 39s → 13m — getting slower ⚠️ | first 3 vs last 3 |
 
 The **cycle** is the real unit: implement → debug → verify wall → land. The wall is only part of
@@ -31,7 +31,7 @@ it, and a wall that grows taxes every future tick, so it is tracked separately f
 * **✅ rows in the capability ledger**: 144 → **614**
 * **Bar 0 — oracle hangs**: 0 of 265 sites
 
-**422 of 932 ticks** (45%) moved a
+**422 of 933 ticks** (45%) moved a
 user-visible capability. The rest were instruments, infrastructure and corrections — and the
 ledger says the corrections were not overhead: three of its top three priorities were phantoms,
 and finding that out redirected everything after it.
@@ -1029,5 +1029,6 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 | **1229** | 2026-08-13 22:39 | 3.4h | capability | 13m | +343/−34 | 467 | 81 | 56.0% · | the third entry point, and the class is CLOSED (2026-08-13) |
 | **1230** | 2026-08-13 23:26 | 48m | measurement | 13m | +180/−46 | 467 | 81 | 56.0% · | the frame's style map is cascaded ONCE, and a stale doc blamed the wrong organ (2026-08-14 |
 | **1231** | 2026-08-13 23:36 | 10m | measurement | 13m | +123/−33 | 467 | 81 | 56.0% · | the frame gap NEVER recovers, and that rules out the fix t1230 specified (2026-08-14) |
+| **1232** | 2026-08-13 23:46 | 11m | measurement | 13m | +79/−33 | 467 | 81 | 56.0% · | the self-audit (due at 1232), and what this window actually bought (2026-08-14) |
 
 *`·` after a WPT figure means **carried forward**, not measured this tick.*
