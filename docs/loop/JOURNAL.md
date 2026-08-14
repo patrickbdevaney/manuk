@@ -46371,6 +46371,66 @@ PERF: none — one UA rule and one narrowed branch in a cascade that already ran
 WIKI: `docs/wiki/css-cascade.md` — where Chrome draws the form-control `box-sizing` line, and why a
 layout-crate test cannot see it.
 
+## Tick 1241 — the self-audit, and the second cascade engine is LOAD-BEARING (2026-08-14)
+
+TICK SHAPE: measurement — the cadence self-audit (due every 10 ticks; last at 1232, and the hook
+blocks the tick after this one), plus the `minimal_ms` question t1238 left open, closed by reading
+the code rather than by another profile.
+
+**AUDIT: one item, and it is OUT OF MY SCOPE.**
+
+```text
+  ✗ verify wall: 836s EXCEEDS the 300s target — Part 21.2 item 1 has regressed.
+```
+
+`scripts/verify.sh` is observer-owned (PART VII / `docs/loop/V1-SCOPE.md`), so this is **recorded and
+not acted on**, which is the whole of the rule. Two honest notes for whoever does act on it: the
+836 s reading was taken during a window in which this session was building `manuk-wpt` in release
+between ticks, and **t1235 established that the agent's own build is part of the harness** — so the
+number is an upper bound on a contended box, not a clean measurement. And the wall **purged its own
+build mid-run** during this window (see below), which is a second reason to re-measure before
+sizing the work. Everything else in the audit is green: 49 process defects each naming a mechanism,
+enforcement mechanical (hook wired + executable, receipt written, cadence hook-enforced, STATUS
+generated), journal complete for the last 5 ticks, pattern ledger 1,169 rows and moving.
+
+⚠⚠⚠ **AND `MinimalCascade` INSIDE THE STYLO CASCADE IS LOAD-BEARING, NOT VESTIGIAL — the question
+t1238 flagged, answered, and it is a REFUSAL rather than a fix.** 983 ms of every cascade (19% of what
+remains after t1240) is a second cascade engine running over the same DOM and the same sheets, and
+the temptation is obvious. It cannot go. It has **three** consumers:
+
+```text
+  in-walk    field_sizing_content, appearance_none   — must land BEFORE the presentational hints,
+                                                        because their job is to VETO a UA hint
+  recover    vertical_align, visibility, mask_image, background_image, text_decoration, list_style
+                                                      — Stylo's SERVO build does not expose these
+  fallback   map.entry(node).or_insert(minimal)      — SHADOW DOM: Stylo's walk has no tree-scoped
+                                                        matching, so shadow content has no other cascade
+```
+
+`visibility` alone is not optional and the reason is written at the site: the modern web hides
+dropdowns, modals and tooltips with `visibility:hidden` (animatable, unlike `display:none`), and
+without it **every one of them paints on top of the page.**
+
+⚠ **What IS available, and the code says so itself** — *"Could later be narrowed to a
+vertical-align-only scan to avoid the second cascade."* `MinimalCascade` computes a **full
+`ComputedStyle` for every node to recover eight fields**. A property-subset pass would keep every
+consumer above and drop most of the 983 ms. That is the next bounded lever in this chain and it is
+**not** a delete. ⚠ It is also the third time in six ticks that the fix which looked available was the
+wrong one — `sheets_of` (0.2%), pseudo bucketing (inert), and now this. **The pattern: the expensive
+thing and the removable thing keep turning out to be different objects.**
+
+⚠ **HARNESS, one line as PART VII requires: the wall PURGED ITS OWN BUILD MID-RUN on the previous
+tick.** Twelve gates failed (`G_SELECTOR`, `G_LIFECYCLE`, `G_IFRAME`, `G_FORM`, `G_DEFER`,
+`G_ANIMATION`, `G_DEDUP`, …) while `B · build` reported **✓**, and all six sampled passed
+**standalone**; `/home` went **94% → 57% during the run**. A plain re-run landed clean. Recorded
+because the signature is cheap to recognise and expensive to misread as a regression: **many gates
+red + build green + they pass standalone + a large drop in `df -h /home`.** Not fixed; not mine.
+
+PERF: none — measurement and governance.
+
+WIKI: `docs/wiki/performance.md` — why the second cascade engine cannot be deleted, and what can be
+narrowed instead. [no-pattern]
+
 ## Tick 1240 — 18,364 elements were building a `ComputedStyle` for a `::before` that generates nothing (2026-08-14)
 
 TICK SHAPE: capability — the instrument t1239 specified, and the fix it found, in one tick because

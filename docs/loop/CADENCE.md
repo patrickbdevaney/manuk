@@ -15,7 +15,7 @@
 | median tick cycle | **29m** | 939 intervals |
 | median, last 10 | **49m** | 10 intervals |
 | fastest / slowest | 5s / 5.4d | |
-| **ticks per hour** | **1.15** | 819.0h elapsed |
+| **ticks per hour** | **1.15** | 819.3h elapsed |
 | median verify wall | **63s** | 879 ticks |
 | wall trend | 39s → 13m — getting slower ⚠️ | first 3 vs last 3 |
 
@@ -1036,6 +1036,6 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 | **1236** | 2026-08-14 05:56 | 33m | instrument | 13m | +233/−33 | 469 | 81 | 56.0% · | the whole `timeout-150s` bucket is FORCED REFLOW, and one of them is a single 21-second la |
 | **1237** | 2026-08-14 06:17 | 21m | measurement | 13m | +168/−33 | 469 | 81 | 56.0% · | the 21-second layout is TWO cascades, and the second one is the container-query pass (2026 |
 | **1238** | 2026-08-14 07:08 | 51m | measurement | 13m | +443/−58 | 470 | 81 | 56.0% · | the cascade's biggest term is PSEUDO-ELEMENT MATCHING, and the fix that named it fixed the |
-| **1240** | 2026-08-14 08:02 | 54m | capability | 13m | +231/−42 | 470 | 81 | 56.0% · | 18,364 elements were building a `ComputedStyle` for a `::before` that generates nothing (2 |
+| **1240** | 2026-08-14 08:20 | 72m | capability | 13m | +121/−34 | 470 | 81 | 56.0% · | 18,364 elements were building a `ComputedStyle` for a `::before` that generates nothing (2 |
 
 *`·` after a WPT figure means **carried forward**, not measured this tick.*

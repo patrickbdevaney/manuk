@@ -710,3 +710,28 @@ about it is conditional**, so no reorder helps. It is a ~200-field eager convers
 style, per cascade, and the cascade runs twice per geometry read on a container-query page. The shape
 of the answer is to stop converting eagerly — share the `Arc<ComputedValues>` and convert on demand —
 and that is a **subsystem, not a tick**. Price it before starting.
+
+## The second cascade engine cannot be deleted — but it can be narrowed (t1241)
+
+`MinimalCascade` runs **inside** `cascade_via_stylo_sized`, over the same DOM and the same sheets:
+983 ms of every cascade, 19% of what remains after t1240. The temptation to delete it is obvious and
+**it is load-bearing**, with three distinct consumers:
+
+| where | what it supplies | why Stylo cannot |
+|---|---|---|
+| in-walk | `field_sizing_content`, `appearance_none` | must land **before** the presentational hints — their job is to *veto* a UA hint |
+| recover | `vertical_align`, `visibility`, `mask_image`, `background_image`, `text_decoration`, `list_style` | Stylo's **servo** build does not expose them |
+| fallback | `map.entry(node).or_insert(minimal)` | **shadow DOM** — Stylo's walk has no tree-scoped matching, so shadow content has no other cascade |
+
+`visibility` alone is not optional, and the reason is written at the site: the modern web hides
+dropdowns, modals and tooltips with `visibility:hidden` (animatable, unlike `display:none`), and
+without it **every one of them paints on top of the page**.
+
+⚠ **What is available** — and the code says so itself: *"Could later be narrowed to a
+vertical-align-only scan to avoid the second cascade."* `MinimalCascade` computes a **full
+`ComputedStyle` for every node to recover eight fields.** A property-subset pass keeps every consumer
+above and drops most of the 983 ms. That is the next bounded lever, and it is **not** a delete.
+
+> ⚠ Third time in six ticks that the fix which *looked* available was the wrong one — `sheets_of`
+> (0.2% of a forced reflow), pseudo bucketing (14× narrower, inert), and now this. **The expensive
+> thing and the removable thing keep turning out to be different objects.**
