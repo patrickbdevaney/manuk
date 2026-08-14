@@ -939,3 +939,4 @@ tick	sha	epoch	iso	delta_s	shape	wall_s	files	added	deleted	gates	claims	wpt_pas
 1237	5fc7a7c2	1786702660	2026-08-14T06:17:40-04:00	1262	measurement	808	7	168	33	469	81	3896	6960	0	616	0	the 21-second layout is TWO cascades, and the second one is the container-query pass (2026-08-14)
 1238	1787f271	1786705726	2026-08-14T07:08:46-04:00	3066	measurement	808	9	443	58	470	81	3896	6960	0	617	0	the cascade's biggest term is PSEUDO-ELEMENT MATCHING, and the fix that named it fixed the other half (2026-08-14)
 1240	37442d02	1786710048	2026-08-14T08:20:48-04:00	4322	capability	808	6	121	34	470	81	3896	6960	0	618	0	18,364 elements were building a `ComputedStyle` for a `::before` that generates nothing (2026-08-14)
+1241	573c0e22	1786712598	2026-08-14T09:03:18-04:00	2550	measurement	808	8	297	48	471	81	3896	6960	0	618	0	the self-audit, and the second cascade engine is LOAD-BEARING (2026-08-14)

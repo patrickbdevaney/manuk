@@ -497,10 +497,22 @@ drain subtracts its own entry snapshot. The gate carries a CONTROL arm (identica
 geometry read, must report zero) because a counter incremented in the wrong place is also non-zero
 after a page loads.
 
-⚠ **A parse-time inline `<script>`'s geometry reads report ZERO forced reflows** — found because the
-gate's first fixture ran at parse time and counted nothing. Consistent with t1183-1188's *"ReflowScope
-missing from 2 of 19 rounds"*: a `measure → mutate → measure` loop in a parse-time script is reading a
-**stale snapshot**. Candidate defect, unfixed.
+⚠⚠⚠ **STRUCK (t1242) — this was FALSE, and the instrument invented it.** The original text read:
+*"a parse-time inline `<script>`'s geometry reads report ZERO forced reflows … a
+`measure → mutate → measure` loop in a parse-time script is reading a stale snapshot. Candidate
+defect."* Measured with a four-line fixture: the geometry is **fresh** (`before:0 after:100`) and the
+accounting **sees** the reflow. The zero was read **while the counter was still being RESET by each
+drain** — the very bug this tick went on to fix — and the parse-time case was never re-checked after
+the counter was made monotonic.
+
+> **A reading taken with an instrument you then repair does not survive the repair, and it will not
+> retract itself.** When a measurement tool changes, every observation already banked from it is a
+> hypothesis again.
+
+Pinned by `G_PARSE_TIME_FORCED_REFLOW`. ⚠ This strikes **one** round off t1183-1188's *"ReflowScope
+missing from 2 of 19 rounds"* — that residue still stands for the rounds this fixture does not
+exercise. And it confirms `reflow_ms` has **no blind spot** on the parse-time path, so the
+"95-99% of every drain overrun is forced reflow" attribution does not need re-pricing.
 
 ## …and the reflow is TWO cascades: the container-query pass is 51% of it (t1237)
 

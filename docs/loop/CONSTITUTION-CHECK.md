@@ -9409,6 +9409,91 @@ before t1168.
    `document.baseURI || location.href` — *a work-around in the tree is a bug report nobody filed*,
    and the loop has no instrument that reads its own fallbacks. That is a cheap, novel probe.
 
+## Check #119 — tick 1242 (2026-08-14)
+
+### The horizon and its gate, named out loud
+
+**H0.** Exit gate: **~83% WPT across categories**, oracle-verified across the four corpora, a
+daily-drivable shell, and **semantic-API coverage of every rendered construct** (I3).
+
+### → Did the last ~8 ticks move an EXIT-GATE condition, or only the scoreboard?
+
+**Neither, and that is the honest and uncomfortable answer: this window moved a CAUSAL CHAIN, and it
+has not yet been measured against any gate.**
+
+* **WPT PRIMARY: unchanged.** Every area re-measured this window came back **exactly at its mark** —
+  `dom` 8142, `html/dom` 56445, `css/selectors` 3757, `css/cssom` 2789, `css/css-values` 2199,
+  `css/css-display` 296. Nothing was won and nothing was lost. **Two windows in a row with a flat
+  PRIMARY** (check #118 said the same), against an ~83% bar.
+* **The drivability leg: a real engine improvement, unmeasured at the corpus.** t1240 cut one forced
+  reflow on a CrUX corpus site from **21,220 ms → 14,366 ms (−32%)** and one cascade by **37%**. That
+  is aimed straight at the M1 **scorability** cap — a site that times out scores ZERO — and it is the
+  first thing in nine ticks that moved a real site. **It has not been sweep-verified.**
+* **Measurement was five of nine ticks, and it bought the one fix.** t1236→t1238 attributed the
+  `timeout-150s` bucket four levels down (forced reflow 95–99% → `restyle_and_layout` 99.8% → cascade
+  ×2 → `to_computed_style` 53%), and **every level killed a plausible wrong answer**: not script
+  preemption, not network, not `sheets_of` re-parsing 51 sheets (0.2%), not `layout_document` (9%),
+  not selector matching (t1239's 14× narrowing was inert). Under the RATCHET's third face this is
+  defensible. **It is also over the ceiling check #118 set** — *"three of the last five were
+  measurement, and that is the ceiling"* — and it went to five of nine.
+
+**The verdict: not drift, but a DEBT.** The window did the honest thing at every step and never
+stopped to price itself. Check #118 already flagged the same shape one window earlier.
+
+### → Is §VI.3's usage-weighted breadth still the north star, or has a big-but-tail number crept back?
+
+**Still the north star, and this window is unusually clean on it.** Nothing touched `encoding`.
+Everything worked was top-of-the-web by construction: `getComputedStyle` (what `jQuery.css()` calls),
+`::before`/`::after` (every icon, bullet and clearfix), forced reflow (every virtualized list), and
+`to_computed_style` (every element of every page). **The tail was not climbed once.**
+
+⚠ **One genuine §VI.3 tension, stated rather than smoothed over:** four of nine ticks were priced on a
+**single site** (`bhramarah.in`). It is a legitimate representative of a large class — many
+stylesheets, 23k nodes, a design system — but *"a correction derived from ONE site is a claim about
+that site"* is this loop's own rule from t1235, and it applies to a cost attribution exactly as it
+applied to a contention one.
+
+### → Is any invariant being bent?
+
+* **I2 (never patch deps)** — held, and leaned on positively: `bucket_key_of` is now shared by
+  `RuleIndex` and `PseudoIndex` rather than copied, which is the anti-drift discipline VI.3 asks for.
+* **I3 (semantic model in lockstep)** — held **by construction**: no tick this window added a rendered
+  construct, so no new semantic surface is owed. t1240's reorder is provably behaviour-preserving.
+* **I4 (Pareto discipline)** — held; see above.
+* **I5 (never trade a regression)** — **exercised four times and never waived.** A −4 in `css/cssom`
+  was refused even though the same change was +41 in `css/css-values` (net +37) — and the +41 was
+  then shown to be **noise** (same binary: 2168/2168/2240). A 147 s → 42 s real-site "win" was
+  **retracted** when the old binary reproduced 41.6 s. Two RED walls were diagnosed (contention;
+  the wall purging its own build mid-run) rather than re-run until green.
+
+### PART VI correction
+
+**Now DONE that VI did not record:** the `timeout-150s` bucket is no longer an unattributed class. It
+is **layout**, specifically **cascade**, specifically **our own `ComputedValues → ComputedStyle`
+marshalling at 53% of a cascade**. One of its two named defects is fixed (t1240).
+
+**What VI.3 must now carry:** an eighth entry in its aperture list, and it is about the loop's own
+instruments rather than about WPT — **an observation banked from an instrument you subsequently
+repair does not survive the repair, and it will not retract itself** (t1242 found a t1236 "defect"
+that was an artefact of the counter bug t1236 fixed later in the same tick).
+
+**The real blocker: unchanged in kind and now overdue in fact — M1 on the in-scope CrUX corpus.** The
+last sweep was **t1233, nine ticks ago**, and the board's own cadence rule says to sweep after ~5–6
+fixes of either class.
+
+### STEER
+
+1. **RUN THE CrUX SWEEP.** It is the single highest-value next tick, it is overdue by the board's own
+   rule, and it is the only thing that can price t1240. ⚠ Per t1235: **do not build while it runs** —
+   the agent's own compile is part of the harness.
+2. **Then the next cascade lever, and it is already specified and priced:** `to_computed_style` is a
+   ~200-field eager conversion per element per cascade, the cascade runs **twice** per geometry read
+   on a container-query page, and it is **29% of what remains**. The shape of the answer is to share
+   the `Arc<ComputedValues>` and convert on demand. **That is a subsystem, not a tick** — price it
+   before starting, and do not start it at the end of a long window.
+3. **A capability tick before another measurement one.** Check #118 set the ceiling and this window
+   went past it. The debt is now two windows deep.
+
 ## Check #118 — tick 1233 (2026-08-14)
 
 ### The horizon and its gate, named out loud

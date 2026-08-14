@@ -46371,6 +46371,68 @@ PERF: none — one UA rule and one narrowed branch in a cascade that already ran
 WIKI: `docs/wiki/css-cascade.md` — where Chrome draws the form-control `box-sizing` line, and why a
 layout-crate test cannot see it.
 
+## Tick 1242 — the parse-time stale-snapshot defect does not exist, and my own instrument invented it (2026-08-14)
+
+TICK SHAPE: capability — a probe written to confirm a recorded defect, which refuted it instead, and
+the gate that keeps it refuted.
+
+**THE CLAIM UNDER TEST, and it is mine.** t1236 recorded, as a side finding of building
+`G_REFLOW_ACCOUNTING`: *"a parse-time inline `<script>`'s geometry reads report ZERO forced
+reflows … consistent with t1183-1188's `ReflowScope` missing from 2 of 19 rounds … a
+`measure → mutate → measure` loop in a parse-time script is reading a STALE SNAPSHOT. Real candidate
+defect."* It went into the journal, `docs/wiki/performance.md` and a memory file, and it is exactly
+the kind of thing a later tick picks up and builds against.
+
+**IT IS FALSE, on both halves, and the fixture is four lines:**
+
+```text
+  parse-time blocking <script>:  measure -> append 4 x 25px -> measure
+    before:0  after:100     <- FRESH. The mutation is laid out before the second read.
+    reflow_n > 0            <- and the ACCOUNTING SEES IT.
+```
+
+⚠⚠⚠ **THE ARTEFACT WAS THE BUG THAT SAME TICK FIXED.** t1236's first fixture ran at parse time and
+read 0 — **while the counter was still being RESET by each drain**, which is the defect t1236 went on
+to find and fix later in the same tick. I made the counter monotonic, re-ran the *`DOMContentLoaded`*
+version, saw it count, and **never re-checked the parse-time case that produced the original zero.**
+The finding survived the fix that invalidated it.
+
+> **A reading taken with an instrument you then repair does not survive the repair — and it will not
+> retract itself.** The moment a measurement tool changes, every observation already banked from it
+> is a hypothesis again. There were exactly two of those in t1236 and I re-derived one.
+
+**THE GATE IS KEPT RATHER THAN THE FIXTURE THROWN AWAY**, and the reason is the same one that makes
+this tick worth landing at all: the false claim is written in **three** places, and *a suspicion
+recorded in three places will be re-derived by whoever reads them*. `G_PARSE_TIME_FORCED_REFLOW` is
+the cheapest possible refutation — 0.26 s, two arms, and it fails the day either half stops being
+true. Its assertion messages carry the correction rather than the suspicion.
+
+⚠ **WHAT THIS DOES NOT SAY.** It does not clear t1183-1188's residue — *"`ReflowScope` missing from
+2 of 19 rounds"* is a separate, still-standing observation about rounds this fixture does not
+exercise. It says the **parse-time blocking-script round is not one of them**, which is one round
+struck off a list of nineteen, measured rather than assumed.
+
+⚠ **AND IT NARROWS t1236-t1240's ATTRIBUTION IN A GOOD DIRECTION:** the parse-time path goes through
+`force_reflow_if_stale` like every other, so `reflow_ms` has **no blind spot there** and the
+"95-99% of every drain overrun is forced reflow" number does not need re-pricing. That was the other
+possible outcome of this probe, and it is stated because it was genuinely open until it was measured.
+
+⚠ **THE CONSTITUTION CHECK CAME DUE MID-TICK (last 1233), SO IT IS IN THIS COMMIT** — check #119.
+Its honest verdict on this window: **neither gate nor scoreboard — a CAUSAL CHAIN, unpriced.** WPT
+PRIMARY is flat (every area re-measured came back exactly at its mark), t1240's real-site −32% has
+**not been sweep-verified**, and measurement was **five of nine ticks** against check #118's stated
+ceiling of *"three of the last five, and that is the ceiling"*. Not drift — a **debt**, now two
+windows deep. I5 was exercised four times and never waived (a −4 refused despite a +37 net; a
+147 s → 42 s "win" retracted by its own old-binary control). **STEER: run the CrUX sweep — it is
+overdue by the board's own cadence rule and it is the only thing that can price t1240 — then the
+`to_computed_style` eager-conversion subsystem, which is 29% of what remains and must be priced
+before it is started.**
+
+PERF: none — one new gate, no engine change.
+
+WIKI: `docs/wiki/performance.md` — the side finding struck, with the reason it was wrong, because
+leaving a refuted claim in the wiki is worse than never writing it. [no-pattern]
+
 ## Tick 1241 — the self-audit, and the second cascade engine is LOAD-BEARING (2026-08-14)
 
 TICK SHAPE: measurement — the cadence self-audit (due every 10 ticks; last at 1232, and the hook

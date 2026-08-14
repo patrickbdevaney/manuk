@@ -1834,17 +1834,17 @@
   - L451 · The timeout-150s bucket is FORCED REFLOW, and reflow_n splits it into two different bugs (t1236)
   - L474 · reflow_n is the discriminator, and it names TWO bugs
   - L489 · ⚠ An accounting counter that under-reports looks like GOOD NEWS
-  - L505 · …and the reflow is TWO cascades: the container-query pass is 51% of it (t1237)
-  - L538 · cq_relaid is a SWITCH, not a gradient
-  - L545 · The cascade is superlinear in SHEET count
-  - L554 · The completed chain
-  - L570 · …and inside ONE cascade, 43% is PSEUDO-ELEMENT MATCHING (t1238)
-  - L603 · The completed chain, four levels
-  - L624 · Bucketing the pseudo index: a 14× narrowing that bought nothing (t1239)
-  - L631 · ⚠ The first version narrowed NOTHING, and only a fan-out counter could say so
-  - L649 · …and pseudo_ms still does not move: 3,531 → 3,560 ms
-  - L669 · to_computed_style is 53% of the cascade, and the content test was two statements too late (t1240)
-  - L714 · The second cascade engine cannot be deleted — but it can be narrowed (t1241)
+  - L517 · …and the reflow is TWO cascades: the container-query pass is 51% of it (t1237)
+  - L550 · cq_relaid is a SWITCH, not a gradient
+  - L557 · The cascade is superlinear in SHEET count
+  - L566 · The completed chain
+  - L582 · …and inside ONE cascade, 43% is PSEUDO-ELEMENT MATCHING (t1238)
+  - L615 · The completed chain, four levels
+  - L636 · Bucketing the pseudo index: a 14× narrowing that bought nothing (t1239)
+  - L643 · ⚠ The first version narrowed NOTHING, and only a fan-out counter could say so
+  - L661 · …and pseudo_ms still does not move: 3,531 → 3,560 ms
+  - L681 · to_computed_style is 53% of the cascade, and the content test was two statements too late (t1240)
+  - L726 · The second cascade engine cannot be deleted — but it can be narrowed (t1241)
 
 ## THE WIKI — what we durably KNOW, organised by subsystem
 `docs/wiki/README.md`
