@@ -587,6 +587,8 @@ pub fn to_computed_style(cv: &ComputedValues) -> ComputedStyle {
     // `clone_min_height` / `clone_max_height`.
     s.min_height_stretch = size_is_stretch(&cmnh);
     s.max_height_stretch = maxsize_is_stretch(&cmxh);
+    s.min_width_stretch = size_is_stretch(&cmnw);
+    s.max_width_stretch = maxsize_is_stretch(&cmxw);
     s.min_width = size_to_dim(&cmnw);
     s.min_height = size_to_dim(&cmnh);
     s.max_width = maxsize_to_dim(&cmxw);

@@ -9523,3 +9523,37 @@ logical-property arm; Stylo does.** So a layout gate written against `layout_htm
 logical spelling, and one that tries is asserting a second unrelated mapping rather than its own
 claim. Assert the physical spelling in the unit gate and carry the logical half with a
 Chrome-diffed fixture.
+
+### The inline half, and why it splits in two (t1250)
+
+`min-width` / `max-width: stretch` is not a symmetric copy of the block-axis fix, because t219's
+observation decides it: *"`stretch` only differs from `auto` for the boxes that shrink-to-fit"*.
+
+| box | `min-width: stretch` before | why |
+|---|---|---|
+| plain block | **already right** | `width: auto` fills the containing block |
+| float / inline-block / abspos / replaced | **wrong** | those hug their content |
+| any box, `max-width: stretch` | **wrong everywhere** | a max has no `auto` behaviour to be accidentally right about |
+
+So the fix has to reach `layout_float` as well as `layout_block` — and the first cut did not. WPT
+moved (+46) while the float row on the fixture stayed at 10, which is t1237's rule again: *a fix
+aimed at a measured phase leaves the sibling work in the same function unfixed.* The fixture caught
+it only because it had a float row in it **before** the code did.
+
+⚠ The abspos clamp (`layout_abs`) is the third copy of this pair and is deliberately unpatched: no
+row on the fixture or in the failing WPT set exercises it, so patching it would be an unmeasured
+change riding on a measured one.
+
+### ⚠ On this suite, read the COUNT and never the percentage
+
+Two runs of the **same binary** over `css/css-sizing`:
+
+```text
+  run A   1080 / 2388   HANG/CRASH 1
+  run B   1080 / 2409   HANG/CRASH 0 · ACCUM 1
+```
+
+The numerator is stable; the denominator swings by 21 and the crash flips classification, because the
+cross-file runtime-reuse artefact (ACCUM) is nondeterministic. A "43.3% → 45.2%" and a "44.8%" can be
+the same 1080. ⚠ And a `HANG/CRASH 1` here is not automatically yours: the t1249 binary, rebuilt and
+run in the same hour, reproduced it exactly.

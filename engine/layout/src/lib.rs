@@ -3840,12 +3840,19 @@ impl Ctx<'_> {
         };
         // min-width / max-width clamp (max applied first, then min wins), converted to the
         // content box to match `width`.
+        // The inline mirror of `stretch_fit_h`, and the same single-source discipline: this IS the
+        // quantity the `Dim::Auto if s.width_stretch` arm above resolves to (`cw - extra`, the
+        // containing block's content width less this box's own margins, border and padding), so
+        // `width`, `min-width` and `max-width` cannot disagree about what stretch means.
+        let stretch_fit_w = (cw - extra).max(0.0);
         let min_w = match s.min_width_keyword {
             Some(k) => kw_w(k).max(0.0),
+            None if s.min_width_stretch => stretch_fit_w,
             None => (s.min_width.resolve(cw, 0.0) - bs_extra_w).max(0.0),
         };
         let max_w = match s.max_width_keyword {
             Some(k) => kw_w(k).max(0.0),
+            None if s.max_width_stretch => stretch_fit_w,
             None => match s.max_width {
                 Dim::Auto => f32::INFINITY,
                 other => (other.resolve(cw, f32::INFINITY) - bs_extra_w).max(0.0),
@@ -5377,12 +5384,22 @@ impl Ctx<'_> {
         } else {
             0.0
         };
+        // ⚠ **THE FLOAT TWIN, and it is the whole reason `stretch` on the inline min/max pair is
+        // worth having at all.** t219 built `width_stretch` on the observation that *"`stretch` only
+        // differs from `auto` for the boxes that shrink-to-fit"* — and a FLOAT is exactly one of
+        // those. Chrome-measured (t1250): `min-inline-size:stretch; float:left` in a 120px
+        // containing block is **115** and ours was **10**, the float hugging its (empty) content.
+        // Fixing only `layout_block` would have moved the WPT number and left the one construct on
+        // the fixture that a real page actually uses.
+        let stretch_fit_w = (cw - ml - mr - pl - pr - bl - br).max(0.0);
         let min_w = match s.min_width_keyword {
             Some(k) => kw_w(k, cw.max(0.0)).max(0.0),
+            None if s.min_width_stretch => stretch_fit_w,
             None => (s.min_width.resolve(cw, 0.0) - bs_extra_w).max(0.0),
         };
         let max_w = match s.max_width_keyword {
             Some(k) => kw_w(k, cw.max(0.0)).max(0.0),
+            None if s.max_width_stretch => stretch_fit_w,
             None => match s.max_width {
                 Dim::Auto => f32::INFINITY,
                 other => (other.resolve(cw, f32::INFINITY) - bs_extra_w).max(0.0),
@@ -22908,6 +22925,81 @@ mod tests {
             (w - 200.0).abs() < 1.0 && (h - 400.0).abs() < 1.0,
             "CONTROL: with no definite height the box fills the inline axis and the ratio gives the \
              height (Chrome: 200x400) — got {w}x{h}"
+        );
+    }
+
+    /// **The INLINE-axis mirror — and the FLOAT row is the one that makes it worth having.**
+    ///
+    /// t219 built `width_stretch` on the observation that *"`stretch` only differs from `auto` for
+    /// the boxes that shrink-to-fit"*. That is why the min/max inline pair splits in two:
+    ///
+    /// - on a **plain block** `min-width: stretch` was already right, because `width: auto` fills;
+    /// - on a **float / inline-block / abspos / replaced** box it was not, because those hug;
+    /// - and a **max** was never right anywhere, because a max has no `auto` behaviour to be
+    ///   accidentally correct about.
+    ///
+    /// Chrome-measured (t1250, a 120px containing block, the child carrying 2+3px inline margins,
+    /// 3px border and 2px padding → stretch-fit border box **115**):
+    ///
+    /// ```text
+    ///                                          Chrome   before   after
+    ///   max-inline-size:stretch; width:500px     115      510  ✗   115  ✓
+    ///   min-inline-size:stretch; float:left      115       10  ✗   115  ✓
+    ///   min-inline-size:stretch (plain block)    115      115  ✓   115  ✓
+    ///   max-inline-size:stretch; width:20px       30       30  ✓    30  ✓   <- CONTROL
+    /// ```
+    ///
+    /// The float row is why `layout_float` gets the clamp too: fixing only `layout_block` moves the
+    /// WPT number and leaves the one construct on the fixture a real page actually uses.
+    ///
+    /// **To watch it go RED:** delete the `s.max_width_stretch` arm (the 500px row stops capping) or
+    /// the `s.min_width_stretch` arm in `layout_float` (the float hugs at 10 again).
+    #[test]
+    fn stretch_on_the_inline_axis_min_and_max_reaches_the_shrink_to_fit_boxes() {
+        let row = |inner: &str| {
+            let html = format!(r#"<div id="p"><div id="a" style="{inner}"></div></div>"#);
+            // Physical spellings — `layout_html` cascades with `MinimalCascade`, which has no
+            // logical arm; see the block-axis twin for what that cost two drafts.
+            let css = "body{margin:0} #p{width:120px;height:40px} \
+                       #a{margin-left:2px;margin-right:3px;border:3px solid blue;padding:2px;height:10px}";
+            let (dom, root) = layout_html(&html, css, 800.0);
+            let rects = root.node_rects(&dom);
+            let n = dom
+                .descendants(dom.root())
+                .find(|&n| dom.element(n).and_then(|e| e.attr("id")) == Some("a"))
+                .expect("id");
+            rects[&n].width
+        };
+        // A max caps an over-large width at the stretch-fit size: 120-5(margins)=115 border box.
+        let w = row("max-width:stretch;width:500px");
+        assert!(
+            (w - 115.0).abs() < 1.0,
+            "max-width:stretch caps at the stretch-fit inline size (border box 115) — got {w}"
+        );
+        // ⭐ THE LOAD-BEARING ROW: a float shrink-to-fits, so this is where a `min` is not already
+        // satisfied by `auto`.
+        let w = row("min-width:stretch;float:left");
+        assert!(
+            (w - 115.0).abs() < 1.0,
+            "min-width:stretch on a FLOAT stretches it to 115 instead of hugging its content — got {w}"
+        );
+        // The alias the mobile web ships.
+        let w = row("min-width:-webkit-fill-available;float:left");
+        assert!(
+            (w - 115.0).abs() < 1.0,
+            "the fill-available alias must behave identically — got {w}"
+        );
+        // CONTROL 1 — a max caps, it never grows.
+        let w = row("max-width:stretch;width:20px");
+        assert!(
+            (w - 30.0).abs() < 1.0,
+            "CONTROL: a 20px width stays 20 (border box 30) under a stretch max — got {w}"
+        );
+        // CONTROL 2 — a plain block was already correct and must not move.
+        let w = row("min-width:stretch");
+        assert!(
+            (w - 115.0).abs() < 1.0,
+            "CONTROL: a plain block already filled; it must still be 115 — got {w}"
         );
     }
 

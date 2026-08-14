@@ -11,12 +11,12 @@
 
 | | value | over |
 |---|---|---|
-| ticks landed | **948** | ticks 1–1248 |
-| median tick cycle | **29m** | 947 intervals |
+| ticks landed | **949** | ticks 1–1250 |
+| median tick cycle | **29m** | 948 intervals |
 | median, last 10 | **39m** | 10 intervals |
 | fastest / slowest | 5s / 5.4d | |
-| **ticks per hour** | **1.15** | 825.3h elapsed |
-| median verify wall | **63s** | 887 ticks |
+| **ticks per hour** | **1.15** | 826.8h elapsed |
+| median verify wall | **63s** | 888 ticks |
 | wall trend | 39s → 13m — getting slower ⚠️ | first 3 vs last 3 |
 
 The **cycle** is the real unit: implement → debug → verify wall → land. The wall is only part of
@@ -28,10 +28,10 @@ it, and a wall that grows taxes every future tick, so it is tracked separately f
 
 * **capabilities asserted** (`G_CAPABILITY`): 48 → **81**
 * **live gates**: 27 → **471**
-* **✅ rows in the capability ledger**: 144 → **622**
+* **✅ rows in the capability ledger**: 144 → **623**
 * **Bar 0 — oracle hangs**: 0 of 265 sites
 
-**429 of 948 ticks** (45%) moved a
+**430 of 949 ticks** (45%) moved a
 user-visible capability. The rest were instruments, infrastructure and corrections — and the
 ledger says the corrections were not overhead: three of its top three priorities were phantoms,
 and finding that out redirected everything after it.
@@ -90,8 +90,8 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 
 ## What a capability costs
 
-* **429** capability ticks, median cycle **29m**
-* median diff per tick: **+270 / −34** lines across 8 files
+* **430** capability ticks, median cycle **29m**
+* median diff per tick: **+271 / −34** lines across 8 files
 
 ## Every tick
 
@@ -1045,5 +1045,6 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 | **1246** | 2026-08-14 13:26 | 32m | capability | 13m | +365/−52 | 471 | 81 | 56.0% · | a NATURAL width is not a SPECIFIED width, and this was the sixth site to ask and the first |
 | **1247** | 2026-08-14 13:51 | 24m | instrument | 13m | +102/−34 | 471 | 81 | 56.0% · | the ORACLE was rendering in QUIRKS MODE, and it scored a 784px divergence against a row wh |
 | **1248** | 2026-08-14 14:24 | 33m | measurement | 13m | +293/−33 | 471 | 81 | 56.0% · | the repair obligation, discharged on the CORPUS: one site corrected, zero verdicts changed |
+| **1250** | 2026-08-14 15:51 | 87m | capability | 13m | +383/−34 | 471 | 81 | 56.0% · | the inline mirror, and a Bar-0 that the OLD BINARY refused to let me own (2026-08-14) |
 
 *`·` after a WPT figure means **carried forward**, not measured this tick.*

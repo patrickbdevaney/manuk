@@ -9409,6 +9409,114 @@ before t1168.
    `document.baseURI || location.href` — *a work-around in the tree is a bug report nobody filed*,
    and the loop has no instrument that reads its own fallbacks. That is a cheap, novel probe.
 
+## Check #120 — tick 1250 (2026-08-14)
+
+### The horizon and its gate, named out loud
+
+**H0.** Exit gate: **~83% WPT across categories**, oracle-verified across the four corpora, a
+daily-drivable shell, and **semantic-API coverage of every rendered construct** (I3).
+
+### → Did the last ~8 ticks move an EXIT-GATE condition, or only the scoreboard?
+
+**A gate condition, and for the first time in three windows it is the WPT one.** Checks #118 and #119
+both had to report PRIMARY flat. This window:
+
+```text
+  css/css-sizing   934 -> 1094   (+160)   38.8% -> 45.4%
+  css-flexbox · css-grid · css-position · css-display · css-overflow · css-backgrounds   ALL FLAT
+```
+
+One area, one mechanism family, and every neighbour unmoved — which is what a *targeted* +160 looks
+like as opposed to a denominator artefact. The **oracle-verified** leg moved too: t1243 ran the
+overdue CrUX sweep and **priced t1240** (`bhramarah.in`, the one site the whole t1236→t1240 chain was
+derived on, crossed from `timeout-150s`/unscored to **1,384 scored elements**), and t1247/t1248
+repaired and re-verified the instrument the corpus leg is measured with.
+
+**The debt check #119 recorded is paid.** It said *"a capability tick before another measurement
+one"*, two windows deep. This window ran **five capability ticks, one instrument tick, two
+measurement ticks** — the inverse of the 5-of-9-measurement window it was complaining about.
+
+### → Is §VI.3's usage-weighted breadth still the north star, or has a big-but-tail number crept back?
+
+**Mostly held, with ONE honest tension that is written into the tick that has it.**
+
+- **t1244–t1246 are top-of-the-web by construction**: a box with an `aspect-ratio` or an intrinsic
+  ratio inside a **fixed-height container**, and `height: 100%` on an atomic inline. That is the
+  responsive-media tile, the card grid row, the hero strip — and `height:100%` is universal.
+- **t1249–t1250 are half tail and say so.** `max-block-size: stretch` is not on today's web in
+  volume; **`min-height: -webkit-fill-available`** — the mobile-Safari full-height idiom — is, and it
+  is the same code path and a row in the gate. t1249's own journal entry states this under a
+  *"USAGE WEIGHT, stated plainly rather than implied by the subtest count"* heading rather than
+  letting +55 subtests imply importance. That is §VI.3 working as a disclosure rule when it cannot
+  work as a filter.
+- **Nothing touched `encoding`.** The tail was not climbed.
+
+⚠ **The real §VI.3 pressure this window is a DIFFERENT one, and it is unresolved:** t1243's own
+corpus ledger ranks the mass as `geometry/mis-sized: height` **91 sites** and `width` **75 sites**,
+and this window's five capability ticks were all chosen from the **WPT** histogram, not from that
+ledger. They are plausibly the same mechanism — sizing — but *plausibly* is not measured, and the
+sweep that would say is 12 hours and eight ticks old.
+
+### → Is any invariant being bent?
+
+* **I5 (never trade a regression)** — **exercised at its hardest and held.** t1250's first re-measure
+  returned `HANG/CRASH 1` **and** a denominator moved 2409 → 2388. Bar 0 plus a moving denominator is
+  a revert, not a note. The change was stashed, the t1249 tree rebuilt, and the suite re-run in the
+  same hour: the old binary reproduced **HANG/CRASH 1 and 2388 exactly**. Pre-existing, nondeterministic
+  ACCUM. The fix landed on evidence rather than on a preference.
+* **I2 (never patch deps)** — held.
+* **I4 (Pareto discipline)** — held; see above.
+* ⚠⚠⚠ **I3 (semantic model in lockstep) — BENT, BY THIS WINDOW, AND THE CHECK'S OWN PROMPT NAMES THE
+  SHAPE: *"a capability tick that skips its semantic-model exposure bends I3."*** t1249 and t1250
+  added `min-height`/`max-height`/`min-width`/`max-width: stretch` to **layout** and not to the
+  **semantic API**. `getComputedStyle(el).minHeight` serialises through
+  `min_dim_css(&cs.min_height, cs.min_height_keyword)` (`engine/js/src/dom_bindings.rs:1891/1895`,
+  and again at `:2690/2692`), which consults the `Dim` and the **intrinsic keyword** — and there is
+  no `stretch` term anywhere in that path. So a box now sized correctly by `min-height: stretch`
+  reports something else when a script asks. **I3 says such a subsystem is not done**, and this is
+  the same two-hands shape t930 fixed for the intrinsic keywords on these exact four properties: the
+  keyword needed its own sidecar in layout *and* in serialisation, and this window supplied only the
+  first.
+
+  ⚠ Evidence type, stated: this is a **source-level** finding (the serialiser's inputs cannot carry
+  the value), not a run-measured one. It is actionable as it stands and the fixing tick must measure
+  it against Chrome rather than inherit this claim.
+
+### PART VI correction
+
+**Now DONE that VI did not record:** the block- and inline-axis `stretch` family is representable and
+consumed (`height`, `min/max-height`, `min/max-width`, block and float paths); the CSS2 §10.3.2 ratio
+transfer accepts every spelling of a definite block size and reaches atomic inlines and
+natural-width replaced elements; and **the fidelity oracle no longer renders `<head>`-less documents
+in quirks mode** — a defect that had been silently scoring 9 of 183 corpus documents against the
+wrong parsing mode.
+
+**What VI.3 must now carry:** a ninth aperture entry, and it is a rule about residues rather than
+about WPT — **a residue is a measurement, and it gets the same standard as the fix.** t1244 named
+`replaced_default_size` as the location of its own residue; t1245 spent its first minutes discovering
+that function has exactly one caller and it was the wrong one. One grep, before the claim.
+
+**The real blocker, re-derived:** unchanged in kind — **M1 on the in-scope CrUX corpus** — and now
+sharper, because the instrument that measures it was repaired mid-window. The last full sweep
+(t1243) predates **five engine ticks and the oracle fix**, and t1248 verified only the 9 sites the
+oracle bug could reach.
+
+### STEER
+
+1. **Close the I3 gap first.** It is the only bent invariant, it is two ticks old, it is mine, and
+   I3 is a gate condition in its own right — *semantic-API coverage of every rendered construct*.
+   `stretch` needs a sidecar in the min/max serialisation exactly as the intrinsic keywords have one.
+   Measure the expected strings against Chrome; do not inherit this check's source-level reading.
+2. **Then the sweep.** Six changes and an instrument repair are unpriced, the board's own cadence rule
+   (sweep every ~5–6 fixes) is met, and it is the only thing that can say whether five WPT-chosen
+   sizing ticks moved the corpus mass that t1243's ledger actually ranks.
+3. **Then pick from the CORPUS ledger, not the WPT histogram.** Five consecutive ticks were chosen
+   from `css/css-sizing`'s failure list. It worked, and it is not the ranking §VI.3 binds the loop to.
+
+**Next check due: tick 1258.**
+
+---
+
 ## Check #119 — tick 1242 (2026-08-14)
 
 ### The horizon and its gate, named out loud

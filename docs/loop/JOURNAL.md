@@ -46371,6 +46371,85 @@ PERF: none — one UA rule and one narrowed branch in a cascade that already ran
 WIKI: `docs/wiki/css-cascade.md` — where Chrome draws the form-control `box-sizing` line, and why a
 layout-crate test cannot see it.
 
+## Tick 1250 — the inline mirror, and a Bar-0 that the OLD BINARY refused to let me own (2026-08-14)
+
+TICK SHAPE: capability — the residue t1249 named, measured first and then built, plus an old-binary
+control that changed the verdict from *revert* to *land*.
+
+**MEASURED BEFORE BUILT** (t1249 called this residue *unmeasured*, so measuring it was the first
+step). A 120px containing block, the child carrying 2+3px inline margins, 3px border, 2px padding →
+stretch-fit border box **115**:
+
+```text
+                                          Chrome   before   after
+  max-inline-size:stretch; width:500px      115      510  ✗   115  ✓
+  min-inline-size:stretch; float:left       115       10  ✗   115  ✓
+  min-inline-size:stretch (plain block)     115      115  ✓   115  ✓
+  max-inline-size:stretch; width:20px        30       30  ✓    30  ✓   <- CONTROL
+```
+
+**The split is exactly what t219 predicted and is the reason this is worth having.** t219 built
+`width_stretch` on *"`stretch` only differs from `auto` for the boxes that shrink-to-fit"* — so a
+**plain block** was already right (`auto` fills), a **float** was not (it hugs), and a **max** was
+never right anywhere, because a max has no `auto` behaviour to be accidentally correct about.
+
+⚠ **AND THE FLOAT ROW IS WHY `layout_float` GOT THE CLAMP TOO.** The first cut patched only
+`layout_block`: WPT moved (+46) and the float row on my own fixture stayed at 10. *A fix aimed at a
+measured phase leaves the SIBLING work in the same function unfixed* (t1237) — here it was the twin
+clamp one function over, and the fixture caught it because the fixture had a float row in it before
+the code did.
+
+⚠⚠⚠ **A Bar 0 APPEARED, AND THE OLD BINARY REFUSED TO LET ME OWN IT.** The first full re-measure came
+back **`HANG/CRASH 1`** with the denominator moved **2409 → 2388** — a Bar-0 signal and a moving
+denominator in the same reading, which by the RATCHET is a revert, not a note. So the change was
+**stashed, the t1249 tree rebuilt, and the suite re-run in the same hour** (t799-807):
+
+```text
+  NEW binary, run A   1080 / 2388   HANG/CRASH 1
+  OLD binary (t1249)  1034 / 2388   HANG/CRASH 1      <- reproduces EXACTLY. Not mine.
+  NEW binary, run B   1080 / 2409   HANG/CRASH 0 · ACCUM 1
+```
+
+It is the **known, tracked, nondeterministic ACCUM artefact** — *"SIGSEGV'd the shared batch runtime
+but PASS in a fresh one"* — and in isolation the affected directory runs clean (40/88, HANG/CRASH 0).
+⭐ **The useful reading is that the NUMERATOR is stable and the DENOMINATOR is not:** 1080 on both
+runs of the same binary, while the denominator swings by 21 and the crash flips classification. On
+this area, **read the count, never the percentage** — a 43.3% → 45.2% "gain" and a 44.8% one are the
+same 1080 against two different denominators.
+
+MEASURED, same binary, same hour, same denominator:
+
+```text
+  css/css-sizing   1034 -> 1094  (+60)      (934 -> 1094 = +160 across t1244…t1250)
+  css/css-flexbox  1504  (=)   css/css-grid    2517  (=)
+  css/css-position  274  (=)   css/css-display  296  (=)
+  HANG/CRASH 0 on all five · layout suite 179/179
+```
+
+Fixture (five rows, both aliases, both logical spellings, the float): **100%**.
+
+GATE: `stretch_on_the_inline_axis_min_and_max_reaches_the_shrink_to_fit_boxes`, with the float row
+called out as load-bearing and **two** controls (a max caps and never grows; a plain block was
+already correct and must not move). **RED-proven twice, independently** — the block max arm deleted
+gives *"got 510"*, the float min arm deleted gives *"got 10"*.
+
+⚠ **RESIDUE:** the abspos clamp (`layout_abs`, `lib.rs:8702`) is the third copy of this pair and is
+NOT patched — no row on the fixture or in the failing WPT set exercises it, so patching it would be
+an unmeasured change. Named, with the file:line, so the next tick that finds a row for it knows
+where to go — and this time the file:line was grepped, not remembered (t1246).
+
+⚠ **HARNESS, one line per PART VII, not fixed by me:** the first wall run came back RED with ~20 gates
+reporting `BUILD FAILED … this is NOT a verdict about the engine` while `B · build` was ✓ — and the
+error was **`failed to move dependency graph … No such file or directory`**, i.e. the incremental
+directory disappearing *mid-build*. Not the 95% self-purge (`df` reads **60%, 113G free**) and not
+proc-macro corruption (that signature is a `syn`/dependency failure, not a vanished
+`target/debug/incremental`). Something reclaimed the build's own inputs while it was using them.
+Diagnosed, not touched; re-run.
+
+PERF: none — two bools and one `f32` from values already in scope, once per box. F1/F2 unmoved.
+
+WIKI: `docs/wiki/box-layout.md` — the inline half, appended to the t1249 section.
+
 ## Tick 1249 — `stretch` was representable on `height` and NOT on `min-height`/`max-height`, which is t930 one keyword later (2026-08-14)
 
 TICK SHAPE: capability — the board's ★`css/css-sizing` row again, taken by reading the failure

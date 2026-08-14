@@ -468,6 +468,8 @@
   - L9461 · A NATURAL width is not a SPECIFIED width (t1246) — and the canvas exclusion was already done
   - L9491 · stretch on the min/max pair, and why Dim::Auto cannot carry it (t1249)
   - L9517 · ⚠ layout_html cascades with MinimalCascade, not with the shipping Stylo path
+  - L9527 · The inline half, and why it splits in two (t1250)
+  - L9547 · ⚠ On this suite, read the COUNT and never the percentage
 
 ## browser-capabilities.md
 `docs/wiki/browser-capabilities.md`
@@ -2122,4 +2124,4 @@
   - L231 · Both named mechanisms are subsystem work
 
 ---
-2029 sections across 22 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+2031 sections across 22 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.

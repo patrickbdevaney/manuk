@@ -1411,6 +1411,24 @@ pub struct ComputedStyle {
     /// Named as residue rather than half-built.
     pub min_height_stretch: bool,
     pub max_height_stretch: bool,
+    /// The INLINE-axis mirror — `min-width`/`max-width` and `min-inline-size`/`max-inline-size`.
+    ///
+    /// Chrome-measured (t1250, a 120px containing block, the child carrying 2+3px inline margins,
+    /// 3px border and 2px padding → stretch-fit border box **115**):
+    ///
+    /// ```text
+    ///                                          Chrome   before    after
+    ///   max-inline-size:stretch; width:500px    115      510   ✗   115  ✓
+    ///   min-inline-size:stretch; float:left     115       10   ✗   115  ✓
+    ///   min-inline-size:stretch (plain block)   115      115   ✓   115  ✓   <- auto already fills
+    ///   max-inline-size:stretch; width:20px      30       30   ✓    30  ✓   <- CONTROL, caps only
+    /// ```
+    ///
+    /// The two that were wrong are exactly the two t219 named when it built `width_stretch`:
+    /// *"`stretch` only differs from `auto` for the boxes that shrink-to-fit"* — a **float** is one
+    /// of those, and a **max** has no `auto` behaviour to be accidentally right about.
+    pub min_width_stretch: bool,
+    pub max_width_stretch: bool,
     pub float: Float,
     pub clear: Clear,
     pub position: Position,
@@ -1700,6 +1718,8 @@ impl ComputedStyle {
             min_height_keyword: None,
             min_height_stretch: false,
             max_height_stretch: false,
+            min_width_stretch: false,
+            max_width_stretch: false,
             max_height_keyword: None,
             float: Float::None,
             clear: Clear::None,
@@ -5546,6 +5566,11 @@ fn apply_declaration(s: &mut ComputedStyle, d: &Declaration, parent_fs: f32) {
         // keyword it does not know, i.e. **0 on a min and no-limit on a max**. Tag the keyword
         // beside the `Dim` exactly as the `width` arm above does, at parity with the stylo map.
         "min-width" => {
+            let low = v.trim().to_ascii_lowercase();
+            s.min_width_stretch = matches!(
+                low.as_str(),
+                "stretch" | "-webkit-fill-available" | "-moz-available"
+            );
             let d = values::parse_dim(v, s.font_size);
             if !is_negative_size(d) {
                 s.min_width_keyword = intrinsic_kw_bare(v);
@@ -5553,6 +5578,11 @@ fn apply_declaration(s: &mut ComputedStyle, d: &Declaration, parent_fs: f32) {
             }
         }
         "max-width" => {
+            let low = v.trim().to_ascii_lowercase();
+            s.max_width_stretch = matches!(
+                low.as_str(),
+                "stretch" | "-webkit-fill-available" | "-moz-available"
+            );
             let d = values::parse_dim(v, s.font_size);
             if !is_negative_size(d) {
                 s.max_width_keyword = intrinsic_kw_bare(v);
