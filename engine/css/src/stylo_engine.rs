@@ -1699,6 +1699,103 @@ fn layer_name_string(n: &stylo::stylesheets::layer_rule::LayerName) -> String {
     n.to_css_string()
 }
 
+/// **The bucket a selector goes in: `(0,id) | (1,class) | (2,tag)`, most selective first.**
+///
+/// `sel.iter()` walks the RIGHTMOST compound — the one that must match THIS element; anything to
+/// its left is an ancestor/sibling constraint checked afterwards. `*`, `:hover`, `[attr]` and
+/// friends have no cheap key and return `None`, meaning "must be tried against everything", which
+/// is what Stylo's own `SelectorMap` does too.
+///
+/// ⚠ **Shared by `RuleIndex` and `PseudoIndex` on purpose.** The pseudo path was a linear scan for
+/// 1238 ticks precisely because bucketing was written once, for ordinary selectors, and the sibling
+/// structure in the same file never got it; a second copy of this key is how the two would drift
+/// apart again the first time one of them learned about attribute selectors.
+fn bucket_key_of(
+    sel: &selectors::parser::Selector<stylo::selector_parser::SelectorImpl>,
+    qm: QuirksMode,
+) -> Option<(u8, String)> {
+    use selectors::parser::{Combinator, Component};
+    let mut key: Option<(u8, String)> = None;
+    let mut iter = sel.iter();
+    loop {
+        for comp in &mut iter {
+            let cand = match comp {
+                Component::ID(v) => Some((0u8, index_key(&v.to_string(), qm))),
+                Component::Class(v) => Some((1u8, index_key(&v.to_string(), qm))),
+                Component::LocalName(n) => Some((2u8, n.lower_name.to_string())),
+                _ => None,
+            };
+            // Prefer the most selective key available: id > class > tag.
+            if let Some(c) = cand {
+                if key.as_ref().map(|k| c.0 < k.0).unwrap_or(true) {
+                    key = Some(c);
+                }
+            }
+        }
+        // ⚠⚠⚠ **A PSEUDO-ELEMENT IS ITS OWN COMPOUND, AND IT IS THE RIGHTMOST ONE.** For
+        // `.icon::before` the selector reads (right to left) `[PseudoElement(Before)]`, the
+        // `PseudoElement` combinator, then `[Class(icon)]` — so `sel.iter()` alone yields ONLY the
+        // pseudo and every pseudo rule keys to `None` and lands in the universal bucket. Measured
+        // t1239 on `bhramarah.in`: `all=28 picked=28 univ=28` on every element, i.e. bucketing
+        // narrowed *nothing* and `pseudo_ms` did not move. The SUBJECT compound — the part that
+        // describes the element the pseudo hangs off — is one sequence further left, so step over
+        // the pseudo-element combinator and keep looking.
+        match iter.next_sequence() {
+            Some(Combinator::PseudoElement) => continue,
+            _ => break,
+        }
+    }
+    key
+}
+
+/// The tag/class/id index over one list of rules — the structure `RuleIndex` has always had,
+/// factored out so `PseudoIndex` can have it too. Indices point into the owning `Vec`.
+#[derive(Default)]
+struct BucketIndex {
+    by_id: std::collections::HashMap<String, Vec<u32>>,
+    by_class: std::collections::HashMap<String, Vec<u32>>,
+    by_tag: std::collections::HashMap<String, Vec<u32>>,
+    universal: Vec<u32>,
+}
+
+impl BucketIndex {
+    fn insert(&mut self, key: Option<(u8, String)>, i: u32) {
+        match key {
+            Some((0, v)) => self.by_id.entry(v).or_default().push(i),
+            Some((1, v)) => self.by_class.entry(v).or_default().push(i),
+            Some((2, v)) => self.by_tag.entry(v).or_default().push(i),
+            _ => self.universal.push(i),
+        }
+    }
+
+    /// The universal bucket plus the buckets this element's own tag, id and classes can be in.
+    /// Every candidate is still FULLY MATCHED afterwards — this only decides what to skip.
+    fn candidates(&self, dom: &Dom, node: NodeId, out: &mut Vec<u32>) {
+        out.clear();
+        out.extend_from_slice(&self.universal);
+        if let Some(tag) = dom.tag_name(node) {
+            if let Some(v) = self.by_tag.get(tag) {
+                out.extend_from_slice(v);
+            }
+        }
+        if let Some(e) = dom.element(node) {
+            let qm = qm_of(dom);
+            if let Some(id) = e.attr("id") {
+                if let Some(v) = self.by_id.get(&index_key(id, qm)) {
+                    out.extend_from_slice(v);
+                }
+            }
+            for c in e.classes() {
+                if let Some(v) = self.by_class.get(&index_key(&c, qm)) {
+                    out.extend_from_slice(v);
+                }
+            }
+        }
+        // Source order, so the `(specificity, order)` sort downstream is stable and correct.
+        out.sort_unstable();
+    }
+}
+
 struct IndexedRule {
     sel: selectors::parser::Selector<stylo::selector_parser::SelectorImpl>,
     /// **The cascade's FIRST sort, and this index did not have it.** 0 = user-agent, 1 = author.
@@ -1792,25 +1889,8 @@ impl RuleIndex {
         cq_stack: &[ServoArc<Vec<ContainerCondition>>],
         origin_rank: u8,
     ) {
-        use selectors::parser::Component;
         for sel in selectors.slice() {
-            // The rightmost compound is the one that must match THIS element; anything to its left
-            // is an ancestor/sibling constraint checked afterwards.
-            let mut key: Option<(u8, String)> = None;
-            for comp in sel.iter() {
-                let cand = match comp {
-                    Component::ID(v) => Some((0u8, index_key(&v.to_string(), qm))),
-                    Component::Class(v) => Some((1u8, index_key(&v.to_string(), qm))),
-                    Component::LocalName(n) => Some((2u8, n.lower_name.to_string())),
-                    _ => None,
-                };
-                // Prefer the most selective key available: id > class > tag.
-                if let Some(c) = cand {
-                    if key.as_ref().map(|k| c.0 < k.0).unwrap_or(true) {
-                        key = Some(c);
-                    }
-                }
-            }
+            let key = bucket_key_of(sel, qm);
             let i = self.rules.len() as u32;
             self.rules.push(IndexedRule {
                 sel: sel.clone(),
@@ -2320,6 +2400,17 @@ struct PseudoRule {
 struct PseudoIndex {
     before: Vec<PseudoRule>,
     after: Vec<PseudoRule>,
+    /// ⚠⚠⚠ **The tag/class/id buckets, one per pseudo, added t1239.** `PseudoIndex` hoisted the
+    /// *collection* of these rules out of the per-element loop and left the *matching* as a linear
+    /// scan of every collected rule for every element — the exact O(elements × rules) shape that
+    /// `RuleIndex`'s bucketing had already been built to fix, one struct away in the same file.
+    /// Measured on `bhramarah.in` (23,001 elements, 51 sheets): pseudo matching was **43% of an
+    /// 8,208 ms cascade — 3,531 ms, twice what matching every ordinary selector cost**.
+    ///
+    /// The buckets are parallel to the three `Vec`s above and index into them.
+    idx_before: BucketIndex,
+    idx_after: BucketIndex,
+    idx_first_letter: BucketIndex,
     /// `::first-letter` — a THIRD bucket, and it is here rather than in its own index because the
     /// collection walk is the expensive half and it is already paying for it. Stylo's *servo*
     /// build has `PseudoElement::FirstLetter` and the selectors crate accepts the CSS2 single-colon
@@ -2339,6 +2430,9 @@ impl PseudoIndex {
             before: Vec::new(),
             after: Vec::new(),
             first_letter: Vec::new(),
+            idx_before: BucketIndex::default(),
+            idx_after: BucketIndex::default(),
+            idx_first_letter: BucketIndex::default(),
         };
         let mut order = 0usize;
         for sheet in sheets {
@@ -2368,12 +2462,20 @@ impl PseudoIndex {
                         // order this produces has to be the same one the per-element walk
                         // produced, or rules that tie on specificity would reorder.
                         let bucket = match sel.pseudo_element() {
-                            Some(&Pe::Before) => Some(&mut self.before),
-                            Some(&Pe::After) => Some(&mut self.after),
-                            Some(&Pe::FirstLetter) => Some(&mut self.first_letter),
+                            Some(&Pe::Before) => Some((&mut self.before, &mut self.idx_before)),
+                            Some(&Pe::After) => Some((&mut self.after, &mut self.idx_after)),
+                            Some(&Pe::FirstLetter) => {
+                                Some((&mut self.first_letter, &mut self.idx_first_letter))
+                            }
                             _ => None,
                         };
-                        if let Some(bucket) = bucket {
+                        if let Some((bucket, index)) = bucket {
+                            // ⚠ The key comes from the SAME helper `RuleIndex` uses. A `::before`
+                            // selector's rightmost compound carries the pseudo AND its subject's
+                            // tag/class/id (`.icon::before` → class `icon`), so the ordinary key is
+                            // the right one — a pseudo needs no special case, which is part of why
+                            // this was easy to leave undone.
+                            index.insert(bucket_key_of(sel, qm), bucket.len() as u32);
                             bucket.push(PseudoRule {
                                 sel: sel.clone(),
                                 origin_rank,
@@ -2423,6 +2525,17 @@ impl PseudoIndex {
             Pe::FirstLetter => &self.first_letter,
             // Only the three pseudos above are resolved here; anything else has no rules to offer.
             _ => &[],
+        }
+    }
+
+    /// The bucket index parallel to [`rules_for`]'s `Vec`.
+    fn index_for(&self, want: &stylo::selector_parser::PseudoElement) -> Option<&BucketIndex> {
+        use stylo::selector_parser::PseudoElement as Pe;
+        match want {
+            Pe::Before => Some(&self.idx_before),
+            Pe::After => Some(&self.idx_after),
+            Pe::FirstLetter => Some(&self.idx_first_letter),
+            _ => None,
         }
     }
 
@@ -2524,8 +2637,20 @@ fn cascade_pseudo(
     parent_cv: &ServoArc<ComputedValues>,
     want: stylo::selector_parser::PseudoElement,
 ) -> Option<crate::ComputedStyle> {
-    let candidates = pseudo_index.rules_for(&want);
-    if candidates.is_empty() {
+    let all = pseudo_index.rules_for(&want);
+    if all.is_empty() {
+        return None;
+    }
+    // **Only the rules whose rightmost compound could match this element**, the same narrowing
+    // `RuleIndex` has always done for ordinary selectors — every survivor is still fully matched
+    // below, so this decides what to SKIP and never what applies. Before t1239 this was `all`, and
+    // it was 43% of the cascade on a 23,001-element page.
+    let Some(index) = pseudo_index.index_for(&want) else {
+        return None;
+    };
+    let mut picked: Vec<u32> = Vec::new();
+    index.candidates(el.dom, el.node, &mut picked);
+    if picked.is_empty() {
         return None;
     }
     let mut winners: Vec<(
@@ -2535,7 +2660,8 @@ fn cascade_pseudo(
         usize,
         ServoArc<stylo::shared_lock::Locked<PropertyDeclarationBlock>>,
     )> = Vec::new();
-    for r in candidates {
+    for i in picked {
+        let r = &all[i as usize];
         let mut ctx = MatchingContext::new(
             MatchingMode::ForStatelessPseudoElement,
             None,

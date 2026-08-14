@@ -620,3 +620,48 @@ that already runs twice per geometry read on any container-query page. Whether i
 correct implementation to copy, and the profiler already in place to prove it. ⚠ Gate the
 **behaviour** (`::before`/`::after` content and specificity across a fixture with many elements and
 few pseudo rules), not the timing: a bucketing bug drops a rule silently, which is worse than slow.
+
+## Bucketing the pseudo index: a 14× narrowing that bought nothing (t1239)
+
+t1238 specified "bucket `PseudoIndex` the way `RuleIndex` is bucketed". Done, through **one shared
+`bucket_key_of`** rather than a second copy — the pseudo path was linear for 1,238 ticks precisely
+because bucketing was written once, for ordinary selectors, and the sibling structure in the same
+file never got it.
+
+### ⚠ The first version narrowed NOTHING, and only a fan-out counter could say so
+
+With the key computed exactly as `RuleIndex` computes it, `pseudo_ms` did not move (3,531 → 3,537):
+
+```text
+  FANOUT all=28 picked=28 univ=28     <- EVERY pseudo rule was in the UNIVERSAL bucket
+```
+
+**A pseudo-element is its own compound, and it is the rightmost one.** `.icon::before` reads, right
+to left, `[PseudoElement(Before)]` · the `PseudoElement` combinator · `[Class(icon)]`. `sel.iter()`
+stops at the first combinator, so it yields **only the pseudo** — every rule keys to `None` and the
+index collapses to one universal bucket. The subject compound is one `next_sequence()` further left.
+
+```text
+  before:  all=28 picked=28   all=22 picked=22   all=34 picked=34
+  after:   all=28 picked=2    all=22 picked=0    all=34 picked=8
+```
+
+### …and `pseudo_ms` still does not move: 3,531 → 3,560 ms
+
+A fourteen-fold reduction in matching work changed nothing, which is a **measurement**: whatever
+`cascade_pseudo` spends its 43% on, **it is not selector matching**. The remaining suspect is the
+per-element tail — `merge_ascending` + `ServoArc::new` + `stylist.compute_for_declarations` — which
+runs for every element with *any* matching pseudo rule, and a `*::before` in the universal bucket
+makes that every element on the page. **Narrowing candidates cannot help a cost paid once per element
+regardless of how many candidates there were.**
+
+> **A fix that works and moves nothing has told you where the cost ISN'T — and that is worth having,
+> but only if it is reported as that.** "Bucketed the pseudo index, 14× fewer rules tested" is true,
+> sounds like a win, and would leave the next tick believing the 43% was addressed.
+
+It is landed rather than reverted because it *works* (unlike t1197's inert callback, which was
+reverted for not firing at all): a strict algorithmic improvement, behaviourally gated, costing
+nothing, removing a known `O(elements × rules)` shape before the workload that punishes it arrives.
+
+**Next: instrument the per-element tail of `cascade_pseudo`.** The fan-out counter is the template —
+prove where the cost is before building anything.

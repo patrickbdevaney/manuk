@@ -46371,6 +46371,90 @@ PERF: none — one UA rule and one narrowed branch in a cascade that already ran
 WIKI: `docs/wiki/css-cascade.md` — where Chrome draws the form-control `box-sizing` line, and why a
 layout-crate test cannot see it.
 
+## Tick 1239 — `PseudoIndex` is bucketed, it narrows 28 candidates to 2, and it moves NOTHING — which is the measurement (2026-08-14)
+
+TICK SHAPE: capability — the fix t1238 specified, built, gated, RED-proven, measured, and reported
+as **inert on the workload it was aimed at**, because that is what it is.
+
+**THE FIX, and it is correct.** `PseudoIndex` now carries the same tag/class/id buckets `RuleIndex`
+has always had, through **one shared `bucket_key_of`** rather than a second copy — the pseudo path
+was a linear scan for 1,238 ticks precisely because bucketing was written once, for ordinary
+selectors, and the sibling structure in the same file never got it.
+
+⚠⚠⚠ **AND THE FIRST VERSION OF IT NARROWED NOTHING, WHICH ONLY A FAN-OUT COUNTER COULD SAY.** With
+the key computed exactly as `RuleIndex` computes it, `pseudo_ms` did not move — 3,531 ms → 3,537 ms.
+The reason:
+
+```text
+  FANOUT all=28 picked=28 univ=28     <- EVERY pseudo rule was in the UNIVERSAL bucket
+```
+
+**A pseudo-element is its own compound, and it is the RIGHTMOST one.** `.icon::before` reads, right
+to left, `[PseudoElement(Before)]` · the `PseudoElement` combinator · `[Class(icon)]` — so
+`sel.iter()`, which stops at the first combinator, yields **only the pseudo**, every rule keys to
+`None`, and the whole index is one universal bucket. Stepping over the pseudo-element combinator to
+the **subject** compound fixes it:
+
+```text
+  before:  all=28 picked=28   all=22 picked=22   all=34 picked=34
+  after:   all=28 picked=2    all=22 picked=0    all=34 picked=8
+```
+
+**A 4–14× cut in rules tested per element.** The gate is green, the twelve pseudo/cascade gates are
+green, and `css/selectors` 3757 · `css/cssom` 2789 · `dom` 8142 are all **exactly** at their marks.
+
+⚠⚠⚠ **AND `pseudo_ms` STILL DOES NOT MOVE: 3,531 → 3,560 ms.** A fourteen-fold reduction in matching
+work changed nothing, and that is not a disappointing result, it is a **measurement**: whatever
+`cascade_pseudo` spends its 43% on, **it is not selector matching.** The remaining suspect is the
+per-element tail — `merge_ascending` + `ServoArc::new` + `stylist.compute_for_declarations`, which
+runs for every element that has *any* matching pseudo rule, and a `*::before` in the universal bucket
+means that is every element on the page. Narrowing candidates cannot help a cost paid once per
+element regardless of how many candidates there were.
+
+> **The general form, and this loop has now hit it twice in six ticks (t1234's byte reduction, this):
+> a fix that works and moves nothing has told you where the cost ISN'T, and that is worth having —
+> but only if it is reported as that.** The version of this tick that says "bucketed the pseudo index,
+> 14× fewer rules tested" is true, sounds like a win, and would leave the next tick believing the 43%
+> was addressed.
+
+**WHY IT IS LANDED RATHER THAN REVERTED**, since "moves nothing" was grounds for reverting an inert
+callback at t1197: that revert was of a mechanism that **did not work** (`JS_AddInterruptCallback`
+without a watchdog thread never fires). This one *works* — the narrowing is measured, 28 → 2 — it is
+a strict algorithmic improvement with a behavioural gate, it costs nothing, and it removes a known
+`O(elements × rules)` shape before the workload that punishes it arrives. The claim attached to it is
+"correct and inert here", not "faster".
+
+GATE: `G_PSEUDO_INDEX_BUCKETS` — nine claims across every bucket a `::before` selector can land in
+(tag, class, id, universal, an **attribute** selector that must fall THROUGH to universal, a
+descendant selector that must key on its **rightmost** compound, a positional `:nth-child(2)`, and
+the separate `::after` index), plus a negative arm: the first `<li>` shares `li`'s bucket with
+`li:nth-child(2)::before` and must still **lose on matching** and fall back to `*::before`.
+**The danger here is silence, not slowness** — a mis-keyed selector lands where the element never
+looks and the rule simply never applies, with no error and one missing icon. RED-proven by
+`picked.clear()`: all nine claims fail.
+
+⚠ **A mutation that does not go red may be a mutation that DID NOT APPLY.** My first RED patch
+(inventing a bucket key for attribute selectors) left the gate green — because at that moment every
+rule was universal anyway, so the patch could not change an outcome. The second (`!spec > 0` as a
+`retain` predicate) was a bitwise-NOT that is almost always true: a no-op wearing a mutation's
+clothes. Both are the `scripted-edit-silent-no-op` class, and the tell is the same one this project
+already wrote down: **check that the patch changed the file AND that the change could matter.**
+
+⚠ **PRE-EXISTING RED FOUND WHILE SWEEPING, NOT MINE:** `g_structural_pseudos` fails at **HEAD** —
+verified by stashing this tick's diff and re-running — with `expected unknownStillDrops:0` and that
+key **absent from the output entirely**. It is not in the wall's 19-gate subset. Named here rather
+than folded in, because a failure that arrives with an unrelated diff gets attributed to that diff.
+
+⚠ **NEXT, and it follows directly:** instrument the per-element tail of `cascade_pseudo`
+(`compute_for_declarations` in particular) — that is where the 43% has to be, and the fan-out counter
+is the template for proving it before building anything.
+
+PERF: no measured change on `bhramarah.in` (`pseudo_ms` 3,531 → 3,560, inside run-to-run noise), and
+the fan-out is 4–14× narrower. Both numbers are the result; neither is a win.
+
+WIKI: `docs/wiki/performance.md` — the subject-compound keying, the fan-out numbers, and why a 14×
+narrowing bought nothing.
+
 ## Tick 1238 — the cascade's biggest term is PSEUDO-ELEMENT MATCHING, and the fix that named it fixed the other half (2026-08-14)
 
 TICK SHAPE: measurement — the fourth and last level of the attribution chain, and the cheapest of the
