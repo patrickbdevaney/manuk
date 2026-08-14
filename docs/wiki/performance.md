@@ -501,3 +501,68 @@ after a page loads.
 gate's first fixture ran at parse time and counted nothing. Consistent with t1183-1188's *"ReflowScope
 missing from 2 of 19 rounds"*: a `measure → mutate → measure` loop in a parse-time script is reading a
 **stale snapshot**. Candidate defect, unfixed.
+
+## …and the reflow is TWO cascades: the container-query pass is 51% of it (t1237)
+
+t1236 left "why does one forced reflow cost 21 seconds" open. Two threshold-gated log lines answer it.
+
+⚠ **The obvious suspect was wrong, and by three orders of magnitude.** `forced_reflow` calls
+`sheets_of`, which re-parses the stylesheet set *from source* on every reflow — on a 51-sheet document
+that reads like the whole story. **It is 43 ms of 21,220.** Caching it would have been a correct
+optimisation worth 0.2%, shipped with a claim that the bucket was addressed.
+
+**Level 1 — `forced_reflow` on `bhramarah.in`:**
+
+```text
+  total_ms=21220  sheets_ms=43  layout_ms=21169  rects_ms=7  publish_ms=0  n_sheets=51 nodes=23013
+```
+
+**Level 2 — inside `restyle_and_layout`:**
+
+```text
+  cascade_ms  layout_ms  container_query_ms  cq_relaid  n_sheets  nodes
+        1261        519                   0      false        42  22987
+        4155       1869                6421       true        47  22997
+        8437       1942               10981       true        51  23013
+        8179       1863               10714       true        52  23022
+```
+
+| term | share | what it is |
+|---|---|---|
+| `container_query_recascade` | **51%** | a **second full cascade + a second full layout** |
+| `cascade_styles` | **40%** | the first cascade — **superlinear in sheet count** |
+| `layout_document` | 9% | actual layout |
+
+**Layout is not the problem inside layout. Cascade is, and it runs twice.**
+
+### `cq_relaid` is a SWITCH, not a gradient
+
+At 42 sheets the container-query pass costs **0 ms and returns false**. At 47 it returns **true**,
+costs 6,421 ms, and returns true on every forced reflow thereafter. **One arriving stylesheet with a
+container query turns every subsequent geometry read from one cascade into two, permanently** — on a
+document whose node count moved 22,987 → 23,022 across those rows, a tenth of a percent.
+
+### The cascade is superlinear in SHEET count
+
+Sheets **42 → 51 (+21%)** takes `cascade_ms` **1,261 → 8,437 (+569%)**, with node count flat.
+Whatever `cascade_styles` does per sheet is not additive. ⚠ **Why is NOT established** — the
+candidates are a per-call rebuild of the structure the cascade matches against (a stylist built per
+call rather than per sheet-set change) and per-sheet re-walks of the document, and they are
+distinguishable by one more level of the same instrument. Measure before building: on this path the
+obvious suspect was 0.2%.
+
+### The completed chain
+
+```text
+  timeout-150s bucket (the M1 scorability cap)
+    └─ 95-99% of every drain budget overrun is FORCED REFLOW           (t1236)
+        └─ 99.8% of a forced reflow is restyle_and_layout              (t1237)
+            ├─ 51%  container_query_recascade = cascade #2 + layout #2
+            ├─ 40%  cascade_styles          ← superlinear in n_sheets
+            └─  9%  layout_document
+```
+
+⚠ **This corrects t1236's ranking.** That tick called `bhramarah.in`'s single 21-second pass a layout
+*defect* and the many-small-reflows sites a separate *design* problem. Right about priority, wrong
+about the organ: **both named defects are in the CASCADE**, and the frequency×cost sites run the same
+two-cascade path — so a fix to either moves both shapes. They were never two problems.

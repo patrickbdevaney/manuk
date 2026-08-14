@@ -46371,6 +46371,82 @@ PERF: none — one UA rule and one narrowed branch in a cascade that already ran
 WIKI: `docs/wiki/css-cascade.md` — where Chrome draws the form-control `box-sizing` line, and why a
 layout-crate test cannot see it.
 
+## Tick 1237 — the 21-second layout is TWO cascades, and the second one is the container-query pass (2026-08-14)
+
+TICK SHAPE: measurement — the level-down profile t1236 owed, built as two threshold-gated log lines
+so a normal pass costs two `Instant`s and says nothing, and the pathological one says everything.
+
+**THE HYPOTHESIS, WRITTEN FIRST AND KILLED BY ITS OWN INSTRUMENT.** Reading `forced_reflow`, the
+obvious suspect was `sheets_of` — it re-parses the stylesheet set *from source* on every forced
+reflow, which on a 51-sheet document reads like the whole story. **It is 43 ms of 21,220.** Recorded
+because the instrument was built to test a candidate and the candidate died in one run; had I
+"obviously" cached the sheets instead, the tick would have shipped a correct optimisation worth
+0.2% and reported the bucket as addressed.
+
+**LEVEL 1 — `forced_reflow`, phase-split on `bhramarah.in`:**
+
+```text
+  total_ms=21220  sheets_ms=43  layout_ms=21169  rects_ms=7  publish_ms=0   n_sheets=51 nodes=23013
+```
+
+**99.8% is `restyle_and_layout`.** Not sheet parsing, not `node_rects`, not the republish.
+
+**LEVEL 2 — inside `restyle_and_layout`, and this is the answer:**
+
+```text
+  cascade_ms  layout_ms  container_query_ms  cq_relaid  n_sheets  nodes
+        1261        519                   0      false        42  22987
+        4155       1869                6421       true        47  22997
+        8437       1942               10981       true        51  23013
+        8391       1927               10721       true        51  23013
+        8179       1863               10714       true        52  23022
+```
+
+⚠⚠⚠ **THE LARGEST SINGLE TERM IS `container_query_recascade` AT 10,981 ms — 51% — AND IT IS A SECOND
+FULL CASCADE PLUS A SECOND FULL LAYOUT.** `cascade_styles` is 8,437 ms (40%); `layout_document`
+itself is 1,942 ms (9%). **Layout is not the problem inside layout: CASCADE is, and it runs TWICE.**
+
+⚠⚠⚠ **AND THE `cq_relaid` COLUMN IS A SWITCH, NOT A GRADIENT.** At 42 sheets the container-query
+pass costs **0 ms and returns false**; at 47 it returns **true** and costs 6,421 ms, and it returns
+true on every forced reflow after that. **One arriving stylesheet with a container query turns every
+subsequent geometry read from one cascade into two, permanently.** The document did not change
+meaningfully across those rows — `nodes` moves 22,987 → 23,022, a tenth of a percent.
+
+⚠⚠⚠ **THE OTHER HALF IS SUPERLINEAR IN SHEET COUNT AND THE NUMBERS ARE NOT SUBTLE.**
+Sheets **42 → 51 is +21%**; `cascade_ms` **1,261 → 8,437 is +569%**, on a node count that is flat.
+Whatever `cascade_styles` does per sheet is not additive. That is a second, independent defect, and
+it is the one that makes the first one expensive rather than merely wasteful.
+
+**THE ATTRIBUTION CHAIN IS NOW COMPLETE, and it took four ticks to walk down four levels:**
+
+```text
+  timeout-150s bucket (M1 scorability cap)
+    └─ 95-99% of every drain budget overrun is FORCED REFLOW          (t1236)
+        └─ 99.8% of a forced reflow is restyle_and_layout             (t1237, level 1)
+            ├─ 51%  container_query_recascade = cascade #2 + layout #2 (t1237, level 2)
+            ├─ 40%  cascade_styles                                     ← superlinear in n_sheets
+            └─  9%  layout_document
+```
+
+⚠ **NOT ESTABLISHED, and it is the next tick:** *why* `cascade_styles` is superlinear in sheet count.
+The two candidates are a per-sheet rebuild of whatever Stylo-side structure the cascade matches
+against (a stylist built per call rather than per sheet-set change), and per-sheet re-walks of the
+document. **They are distinguishable by one more level of the same instrument**, and given this
+tick's own result — the obvious suspect was 0.2% — it should be measured before anything is built.
+
+⚠ **A ranking correction to t1236, which I would otherwise have carried forward.** t1236 said to take
+`bhramarah.in`'s single 21-second pass first because *"a 21-second layout is a DEFECT, whereas
+'layout is O(document)' is a DESIGN"*. That framing was right about priority and **wrong about the
+organ**: the defect is not in layout, and both named defects are in the CASCADE. The frequency×cost
+sites (`friulioggi` 233 × 33 ms, `7info.ru` 545 × 10 ms) run the *same* two-cascade path, so a fix to
+either defect moves both shapes — they were never two independent problems, only two samples of one.
+
+PERF: none — two `Instant` pairs on a path that already rebuilds the whole document's styles, and
+both log lines are gated at 100 ms (a frame and a half), so an ordinary reflow prints nothing.
+
+WIKI: `docs/wiki/performance.md` — the completed four-level attribution chain, the `cq_relaid` switch,
+and the superlinear-in-sheets number.
+
 ## Tick 1236 — the whole `timeout-150s` bucket is FORCED REFLOW, and one of them is a single 21-second layout (2026-08-14)
 
 TICK SHAPE: instrument + measurement — the profile t1235 said was owed, built as a permanent counter

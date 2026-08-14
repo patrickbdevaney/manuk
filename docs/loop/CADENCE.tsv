@@ -935,3 +935,4 @@ tick	sha	epoch	iso	delta_s	shape	wall_s	files	added	deleted	gates	claims	wpt_pas
 1233	4c8b4393	1786687138	2026-08-14T01:58:58-04:00	7925	measurement	808	9	461	35	467	81	3896	6960	0	614	0	the sweep banked, the prediction scored, and a SOLO number that did not survive `--jobs 2` (2026-08-14)
 1234	4c25a79c	1786691430	2026-08-14T03:10:30-04:00	4292	capability	808	10	506	95	468	81	3896	6960	0	615	0	`getComputedStyle` was a call into the JS compiler, and that is why jQuery pages hang (2026-08-14)
 1235	4646c9bf	1786699400	2026-08-14T05:23:20-04:00	7970	capability	808	10	358	33	469	81	3896	6960	0	616	0	the fix works, moves nothing on the sites it was aimed at, and my own build faked the number that said otherwise (2026-08-14)
+1236	868482b2	1786701398	2026-08-14T05:56:38-04:00	1998	instrument	808	7	233	33	469	81	3896	6960	0	616	0	the whole `timeout-150s` bucket is FORCED REFLOW, and one of them is a single 21-second layout (2026-08-14)

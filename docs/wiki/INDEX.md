@@ -1834,6 +1834,10 @@
   - L451 · The timeout-150s bucket is FORCED REFLOW, and reflow_n splits it into two different bugs (t1236)
   - L474 · reflow_n is the discriminator, and it names TWO bugs
   - L489 · ⚠ An accounting counter that under-reports looks like GOOD NEWS
+  - L505 · …and the reflow is TWO cascades: the container-query pass is 51% of it (t1237)
+  - L538 · cq_relaid is a SWITCH, not a gradient
+  - L545 · The cascade is superlinear in SHEET count
+  - L554 · The completed chain
 
 ## THE WIKI — what we durably KNOW, organised by subsystem
 `docs/wiki/README.md`
@@ -2099,4 +2103,4 @@
   - L231 · Both named mechanisms are subsystem work
 
 ---
-2006 sections across 22 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+2010 sections across 22 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.

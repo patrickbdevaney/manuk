@@ -172,14 +172,36 @@ fn restyle_and_layout(
     viewport_width: f32,
     images: &std::collections::HashMap<manuk_dom::NodeId, std::rc::Rc<manuk_paint::DecodedImage>>,
 ) -> (StyleMap, LayoutBox) {
+    // ⚠ Phase-split for the same reason `forced_reflow` is: t1237 measured ONE forced reflow at
+    // 21,169 ms on `bhramarah.in` and this function is all of it. Reported only when it is slow
+    // enough for a human to see, so a normal pass costs two `Instant`s and no log line.
+    let t_cascade = std::time::Instant::now();
     let mut styles = cascade_styles(dom, sheets, viewport_width);
+    let us_cascade = t_cascade.elapsed().as_micros() as u64;
     // **BETWEEN the cascade and the layout, every time.** See `apply_natural_sizes`: a decoded
     // image's intrinsic size is not in any stylesheet, so a cascade that rebuilds the style map
     // erases it, and the picture becomes a full-width strip of zero height.
     apply_natural_sizes(dom, &mut styles, images);
+    let t_layout = std::time::Instant::now();
     let mut root_box = layout_document(dom, &styles, fonts, viewport_width);
+    let us_layout = t_layout.elapsed().as_micros() as u64;
+    let t_cq = std::time::Instant::now();
+    let mut cq_relaid = false;
     if container_query_recascade(dom, sheets, viewport_width, &mut styles, &root_box) {
         root_box = layout_document(dom, &styles, fonts, viewport_width);
+        cq_relaid = true;
+    }
+    let us_cq = t_cq.elapsed().as_micros() as u64;
+    if (us_cascade + us_layout + us_cq) / 1000 >= 100 {
+        tracing::info!(
+            cascade_ms = us_cascade / 1000,
+            layout_ms = us_layout / 1000,
+            container_query_ms = us_cq / 1000,
+            cq_relaid,
+            n_sheets = sheets.len(),
+            nodes = dom.len(),
+            "SLOW RESTYLE+LAYOUT"
+        );
     }
     (styles, root_box)
 }
@@ -1461,21 +1483,53 @@ unsafe fn forced_reflow(ctx: *mut std::ffi::c_void, dom: *mut Dom) {
         return;
     }
     let fonts = unsafe { &*c.fonts };
+    // ⚠⚠⚠ **PHASE-SPLIT, because t1236 could see that a forced reflow costs 21 SECONDS on
+    // `bhramarah.in` and not what inside it does.** `REFLOW_COST` measures this function from the
+    // outside and cannot see into itself; these four spans are the level down, and they are logged
+    // (not merely counted) because the interesting case is ONE pass, so an aggregate would hide it.
+    let t_sheets = std::time::Instant::now();
     // The same cascade the surrounding batch relayout uses, so a forced reflow and the post-script
     // pass can never disagree about the same tree.
     let sheets: Vec<Stylesheet> =
         sheets_of(dom, unsafe { &*c.final_url }, unsafe { &*c.external_css });
+    let us_sheets = t_sheets.elapsed().as_micros() as u64;
+
+    let t_layout = std::time::Instant::now();
     let root_box;
     (c.styles, root_box) = restyle_and_layout(dom, &sheets, fonts, c.viewport_width, &c.images);
+    let us_layout = t_layout.elapsed().as_micros() as u64;
+
+    let t_rects = std::time::Instant::now();
     c.rects = root_box
         .node_rects(dom)
         .into_iter()
         .map(|(n, r)| (n, [r.x, r.y, r.width, r.height]))
         .collect();
+    let us_rects = t_rects.elapsed().as_micros() as u64;
+
     c.laid_out_at = dom.mutation_seq();
     // The box tree is dropped: the read wants rects, and the host's own post-script relayout still
     // produces the tree that gets painted. A forced reflow answers a question; it does not commit.
+    let t_pub = std::time::Instant::now();
     unsafe { manuk_js::republish_view_maps(&c.rects, &c.styles) };
+    let us_pub = t_pub.elapsed().as_micros() as u64;
+
+    // 100ms is a frame and a half — below it this is a normal read and the log would be noise;
+    // above it a single geometry read is visible to a human, and this line says which phase did it.
+    let total_ms = (us_sheets + us_layout + us_rects + us_pub) / 1000;
+    if total_ms >= 100 {
+        tracing::info!(
+            total_ms,
+            sheets_ms = us_sheets / 1000,
+            n_sheets = sheets.len(),
+            layout_ms = us_layout / 1000,
+            rects_ms = us_rects / 1000,
+            n_rects = c.rects.len(),
+            publish_ms = us_pub / 1000,
+            nodes = dom.len(),
+            "SLOW FORCED REFLOW — one geometry read laid out the whole document"
+        );
+    }
 }
 
 /// Installs [`forced_reflow`] for one script round and guarantees its teardown.
