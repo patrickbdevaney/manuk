@@ -686,6 +686,7 @@
   - L3826 · The WPT checkout is SPARSE, and css/support/ holds the library the whole CSS corpus is written against
   - L3881 · The engine routing bought ZERO, and the pair bought +120 (t1208)
   - L3903 · Half two — the instrument, and it is the MIS-PROVISIONED REFERENCE class for the fourth time
+  - L3929 · css/css-values has a ±72-subtest error bar, and it comes from the ACCUM Bar 0 (t1235)
 
 ## CSS AND THE CASCADE — Stylo realities and quirks actually encountered
 `docs/wiki/css-cascade.md`
@@ -1542,6 +1543,9 @@
   - L3176 · The gap NEVER recovers — which rules out the reflow-hook template (t1231)
   - L3213 · getComputedStyle was a call into the JS COMPILER (t1234)
   - L3253 · The fix: the constant half is a SHARED METHOD TABLE, installed once per global
+  - L3294 · ⚠ THE REAL-SITE ATTRIBUTION WAS REFUTED BY ITS OWN OLD-BINARY CONTROL (t1235)
+  - L3319 · Where the time actually goes: the drain budget overruns by up to 6.4×, and the discriminator is the TASK COUNT
+  - L3339 · The names hoist, and the guard that makes it admissible (t1235)
 
 ## Manuk Daily-Driver Usability Roadmap (synthesized, tick 138)
 `docs/wiki/lever-map.md`
@@ -2092,4 +2096,4 @@
   - L231 · Both named mechanisms are subsystem work
 
 ---
-1999 sections across 22 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+2003 sections across 22 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.

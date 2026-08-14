@@ -11,12 +11,12 @@
 
 | | value | over |
 |---|---|---|
-| ticks landed | **935** | ticks 1–1234 |
-| median tick cycle | **28m** | 934 intervals |
-| median, last 10 | **60m** | 10 intervals |
+| ticks landed | **936** | ticks 1–1235 |
+| median tick cycle | **28m** | 935 intervals |
+| median, last 10 | **78m** | 10 intervals |
 | fastest / slowest | 5s / 5.4d | |
-| **ticks per hour** | **1.15** | 814.1h elapsed |
-| median verify wall | **63s** | 874 ticks |
+| **ticks per hour** | **1.15** | 815.6h elapsed |
+| median verify wall | **63s** | 875 ticks |
 | wall trend | 39s → 13m — getting slower ⚠️ | first 3 vs last 3 |
 
 The **cycle** is the real unit: implement → debug → verify wall → land. The wall is only part of
@@ -28,10 +28,10 @@ it, and a wall that grows taxes every future tick, so it is tracked separately f
 
 * **capabilities asserted** (`G_CAPABILITY`): 48 → **81**
 * **live gates**: 27 → **468**
-* **✅ rows in the capability ledger**: 144 → **615**
+* **✅ rows in the capability ledger**: 144 → **616**
 * **Bar 0 — oracle hangs**: 0 of 265 sites
 
-**423 of 935 ticks** (45%) moved a
+**424 of 936 ticks** (45%) moved a
 user-visible capability. The rest were instruments, infrastructure and corrections — and the
 ledger says the corrections were not overhead: three of its top three priorities were phantoms,
 and finding that out redirected everything after it.
@@ -90,8 +90,8 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 
 ## What a capability costs
 
-* **423** capability ticks, median cycle **28m**
-* median diff per tick: **+269 / −34** lines across 8 files
+* **424** capability ticks, median cycle **28m**
+* median diff per tick: **+270 / −34** lines across 8 files
 
 ## Every tick
 
@@ -1032,5 +1032,6 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 | **1232** | 2026-08-13 23:46 | 11m | measurement | 13m | +79/−33 | 467 | 81 | 56.0% · | the self-audit (due at 1232), and what this window actually bought (2026-08-14) |
 | **1233** | 2026-08-14 01:58 | 2.2h | measurement | 13m | +461/−35 | 467 | 81 | 56.0% · | the sweep banked, the prediction scored, and a SOLO number that did not survive `--jobs 2` |
 | **1234** | 2026-08-14 03:10 | 72m | capability | 13m | +506/−95 | 468 | 81 | 56.0% · | `getComputedStyle` was a call into the JS compiler, and that is why jQuery pages hang (202 |
+| **1235** | 2026-08-14 04:41 | 1.5h | capability | 13m | +403/−53 | 468 | 81 | 56.0% · | the fix works, moves nothing on the sites it was aimed at, and my own build faked the numb |
 
 *`·` after a WPT figure means **carried forward**, not measured this tick.*

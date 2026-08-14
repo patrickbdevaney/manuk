@@ -3290,3 +3290,62 @@ where it is callable is a global where the table has already been installed. Fiv
 **Gate:** `G_COMPUTED_STYLE_IS_NOT_A_COMPILER_CALL` — 4,000 reads across 200 elements must complete
 inside the drain budget. RED before this change (the loop is cut, the marker never written), green
 after.
+
+### ⚠ THE REAL-SITE ATTRIBUTION WAS REFUTED BY ITS OWN OLD-BINARY CONTROL (t1235)
+
+t1234 read `ticket.jfa.jp` at **147.2 s** before the fix and **42.4 s** after, and took the 3.5× as
+attribution. The **old binary, rebuilt from `a45850d3` and run in the same hour**, refuses to
+reproduce the baseline:
+
+| | old binary (pre-fix) | new binary |
+|---|---|---|
+| `ticket.jfa.jp` | 41.6s · 43.5s · 43.3s | 42.4s · 42.4s · 43.6s · 126.9s |
+| `7info.ru` | 132.2s · TIMEOUT · 101.5s | 150.1s · 103.6s · 107.6s |
+
+The 147.2 s reading was taken **while this session's own `cargo build` was running on the same box**.
+
+> **THE AGENT'S OWN BUILD IS PART OF THE HARNESS.** A site measurement taken while the session is
+> compiling is a measurement of the compile. `nice` does not save it: the sites that matter are
+> already at the cap, and a few contended seconds are exactly what pushes them over.
+
+`7info.ru`'s apparent *regression* (111.4 s → TIMEOUT) is the same artefact from the other side — the
+same binary gives 150.1 / 103.6 / 107.6, so a site straddling the cap reports a regression roughly
+half the time it is asked.
+
+**What survives:** the cost defect is real, deterministic and RED-provable — 11,017 bytes of
+generated JavaScript per read, and 4,000 reads are cut by the watchdog without the fix. **What does
+not:** the claim that it explains the `timeout-150s` bucket. It moved **zero of eight** sites.
+
+### Where the time actually goes: the drain budget overruns by up to 6.4×, and the discriminator is the TASK COUNT
+
+```text
+  neutypechic.com   count=1331   elapsed_ms=5001   budget_ms=5000    <- EXACT
+  www.friulioggi.it count=29     elapsed_ms=7797   budget_ms=5000
+  bhramarah.in      count=176    elapsed_ms=31841  budget_ms=5000    <- 6.4x over
+  bhramarah.in      count=2      elapsed_ms=21572  budget_ms=5000    <- 4.3x over on TWO tasks
+  7info.ru          count=1      elapsed_ms=9326   budget_ms=5000    <- 9.3s in ONE task
+```
+
+**The budget is enforced BETWEEN tasks and is exact there** — 1,331 tasks land on 5,001 ms against a
+5,000 ms budget. What blows it is a *single* task running for seconds. The drain already arms
+`ScriptDeadline`, so the script half of such a task is preemptible; **the residue is native,
+unpreemptible work the task triggers** — cascade, layout, forced reflow — which no
+`JS_RequestInterruptCallback` can stop, because the interpreter is not running when it happens. On
+`bhramarah.in` that is 86 s + 22 s + 24 s = **132 of the site's 150 s**, all three phases `gave_up=1`.
+
+⚠ **Not established: which native call.** That is a profile, not a deduction, and it is the lever the
+`timeout-150s` bucket actually sits on.
+
+### The names hoist, and the guard that makes it admissible (t1235)
+
+`extra_computed_props` returns a flat, unconditional `vec![]` — the same ~68 names in the same order
+for every element, only the *values* varying — so `globalThis.__csExtra` carries the names and
+`__csAliasStd` their aliases, and a call emits only values. **11,017 → 6,561 → 3,154 bytes (−71%).**
+
+⚠⚠⚠ **Hoisting names makes the per-call values POSITIONAL against a list computed elsewhere.** The
+day one entry of that `vec![]` becomes conditional, every name after it shifts and `item(i)` and the
+dashed aliases report the **wrong property with no error anywhere**. Guarded twice:
+`extra_names_are_canonical` compares the two lists **on every call** and falls back to inline
+emission on mismatch, and `extra_name_stability` drives the function across 16 argument combinations
+(initial vs styled, all four `rect`/`cb` pairings, both pseudo polarities) requiring an identical
+name list. *Without the guard this is a landmine with a good benchmark.*

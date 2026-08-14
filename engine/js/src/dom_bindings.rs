@@ -2065,14 +2065,52 @@ const COMPUTED_UNENUMERATED_NAMES: &[&str] = &[
 /// a path that is already a forced-reflow trigger. A leading `-` is dropped before camel-casing so
 /// `-webkit-user-select` finds `webkitUserSelect` and not `WebkitUserSelect`.
 fn dashed_alias_js(extra: &[(&'static str, String)]) -> String {
-    // Only the DERIVED names are per-element; the standard and unenumerated lists are the same
-    // ~80 pairs on every call and live in `globalThis.__csAliasStd` (see `cs_proto_js`). The
-    // aliasing loop itself moved to `globalThis.__csAlias` for the same reason — it was ~90 bytes
-    // of loop body re-parsed per read.
+    // The whole pair table is the same ~140 pairs on every call and lives in
+    // `globalThis.__csAliasStd` (see `cs_proto_js`); the aliasing loop moved to
+    // `globalThis.__csAlias` for the same reason. A call emits pairs only in the FALLBACK case —
+    // when this element's derived names are not the canonical list, which cannot happen today and
+    // is checked rather than assumed (see `extra_names`).
+    if extra_names_are_canonical(extra) {
+        return "globalThis.__csAlias(o,[]);".to_string();
+    }
     let mut out = String::from("globalThis.__csAlias(o,[");
     out.push_str(&alias_pairs_js(extra.iter().map(|(n, _)| *n)));
     out.push_str("]);");
     out
+}
+
+/// The canonical `extra_computed_props` NAME list, derived ONCE from the same function that produces
+/// the values — never a hand-copied second list, which is the drift `G_COMPUTED_CUSTOM_PROPERTIES`
+/// caught when `length` was a literal `50` against a list of 52.
+///
+/// `extra_computed_props` returns a flat, unconditional `vec![]`: the same ~68 names in the same
+/// order for every element, with only the *values* varying. That is what makes the names hoistable
+/// into `globalThis.__csExtra` and their aliases into `__csAliasStd`, taking ~4 KB out of every read.
+fn extra_names() -> &'static [&'static str] {
+    static NAMES: std::sync::OnceLock<Vec<&'static str>> = std::sync::OnceLock::new();
+    NAMES.get_or_init(|| {
+        extra_computed_props(&manuk_css::ComputedStyle::initial(), None, None, false)
+            .into_iter()
+            .map(|(n, _)| n)
+            .collect()
+    })
+}
+
+/// ⚠⚠⚠ **The guard that makes hoisting the names safe, and it is not ceremony.** Once the names live
+/// in a global array, the per-call *values* become **positional** against a list computed somewhere
+/// else — so the day someone makes one entry of `extra_computed_props` conditional, every name after
+/// it would shift and `item(i)`/the dashed aliases would report the WRONG PROPERTY with no error
+/// anywhere. That is a silent wrong answer, the worst shape a failure takes here.
+///
+/// So the two lists are compared on every call and the emitter falls back to writing the names
+/// inline when they differ. It costs ~68 pointer comparisons on a path that already builds ~68
+/// strings; the alternative is trusting a coupling that nothing enforces.
+fn extra_names_are_canonical(extra: &[(&'static str, String)]) -> bool {
+    extra.len() == extra_names().len()
+        && extra
+            .iter()
+            .zip(extra_names())
+            .all(|((n, _), c)| std::ptr::eq(*n, *c) || n == c)
 }
 
 /// `[["background-color","backgroundColor"],…]` for the dashed names in `names`, as JS array
@@ -2178,12 +2216,21 @@ fn cs_proto_js() -> String {
     // stays absent, so `in` remains a truthful question about what we actually have. Custom
     // properties are deliberately not here — Chrome answers `'--brand' in cs` false and routes them
     // through `getPropertyValue` alone.
-    out.push_str("globalThis.__csAliasStd=[");
+    // The DERIVED names too, in the original STD → extra → unenumerated order.
+    out.push_str("globalThis.__csExtra=[");
+    for (i, n) in extra_names().iter().enumerate() {
+        if i > 0 {
+            out.push(',');
+        }
+        out.push_str(&js_string_literal(n));
+    }
+    out.push_str("];globalThis.__csAliasStd=[");
     out.push_str(&alias_pairs_js(
         COMPUTED_STD_NAMES
             .iter()
-            .chain(COMPUTED_UNENUMERATED_NAMES.iter())
-            .copied(),
+            .copied()
+            .chain(extra_names().iter().copied())
+            .chain(COMPUTED_UNENUMERATED_NAMES.iter().copied()),
     ));
     out.push_str(
         "];globalThis.__csAlias=function(o,x){\
@@ -2473,20 +2520,32 @@ fn computed_style_js(
         // is emitted as source. `concat` returns a FRESH array, so `item()`'s backing store is
         // still private to this snapshot and a script that writes `cs.__n[0]` cannot poison the
         // next element's enumeration.
-        let mut arr = String::from("globalThis.__csStd.concat([");
-        for (i, (n, _)) in extra.iter().enumerate() {
-            if i > 0 {
-                arr.push(',');
+        let mut arr = String::from("globalThis.__csStd.concat(");
+        if extra_names_are_canonical(&extra) {
+            arr.push_str("globalThis.__csExtra");
+        } else {
+            arr.push('[');
+            for (i, (n, _)) in extra.iter().enumerate() {
+                if i > 0 {
+                    arr.push(',');
+                }
+                arr.push_str(&js_string_literal(n));
             }
-            arr.push_str(&js_string_literal(n));
+            arr.push(']');
         }
-        for (name, _) in cs.custom_properties.iter() {
-            if !arr.ends_with('[') {
-                arr.push(',');
+        // Only the element's OWN custom properties are ever per-call, and most elements have none —
+        // `concat` with no second argument beats an empty array literal.
+        if !cs.custom_properties.is_empty() {
+            arr.push_str(",[");
+            for (i, (name, _)) in cs.custom_properties.iter().enumerate() {
+                if i > 0 {
+                    arr.push(',');
+                }
+                arr.push_str(&js_string_literal(name));
             }
-            arr.push_str(&js_string_literal(name));
+            arr.push(']');
         }
-        arr.push_str("])");
+        arr.push(')');
         (arr, STD.len() + extra.len() + cs.custom_properties.len())
     };
     // **`length` is DERIVED, not a literal.** It used to be the constant `50`, and the `STD` list
@@ -2862,9 +2921,11 @@ unsafe fn window_get_computed_style(cx: *mut RawJSContext, argc: u32, vp: *mut V
             .to_string()
     });
     // The cost of one read, in the units it is paid in: bytes handed to the JS parser. On a default
-    // `<div>`: **11,017 before** the shared method table and the hoisted name/alias tables, **6,561
-    // after**. `RUST_LOG=manuk_js=trace` is how the next round of this is measured rather than
-    // estimated — and there is a next round, because ~4 KB of the remainder is still constant NAMES.
+    // `<div>`: **11,017 → 6,561** (t1234, the shared method table) **→ 3,154** (t1235, the derived
+    // names and their aliases). `RUST_LOG=manuk_js=trace` is how the next round is measured rather
+    // than estimated — and the remaining tail is `__custom`, which is UNBOUNDED rather than large:
+    // every custom property in scope is serialized into every snapshot, so a design-token site
+    // (`bhramarah.in`) still generates a ~38 KB read. Bounding it needs a lazy native accessor.
     tracing::trace!(bytes = src.len(), "computed-style snapshot source");
     match eval_in_current_global(cx, &src) {
         Some(v) => *vp = v,
@@ -20165,6 +20226,71 @@ unsafe fn history_push(cx: *mut RawJSContext, argc: u32, vp: *mut Value) -> bool
     PENDING_HISTORY.with(|q| q.borrow_mut().push((kind, state, url)));
     *vp = UndefinedValue();
     true
+}
+
+/// **The hoisted name list must be the SAME list a real, styled element produces.**
+///
+/// `computed_style_js` emits its extra property *values* positionally against `globalThis.__csExtra`
+/// whenever `extra_names_are_canonical` says the lists agree. `extra_names` derives that global from
+/// `ComputedStyle::initial()` — so if `extra_computed_props` ever grows a name that only some
+/// elements get, the guard has to notice, and this test is what proves the guard is load-bearing
+/// rather than decorative: it drives the function with a style that differs from `initial()` in the
+/// fields most likely to gate a name, plus the `rect`/`cb`/pseudo arguments, and requires the NAMES
+/// to be identical every time.
+///
+/// It is a pure-Rust test on purpose (no SpiderMonkey global), so it can assert every combination in
+/// one `#[test]` without the one-JS-gate-per-test rule.
+#[cfg(test)]
+mod extra_name_stability {
+    use super::*;
+
+    #[test]
+    fn the_derived_extra_names_are_the_same_list_for_every_element() {
+        let canonical: Vec<&str> = extra_names().to_vec();
+        assert!(
+            !canonical.is_empty(),
+            "extra_names() is empty — the hoist would silently drop every derived property"
+        );
+
+        let mut styled = manuk_css::ComputedStyle::initial();
+        styled.display = manuk_css::Display::Flex;
+        styled.position = manuk_css::Position::Absolute;
+        styled.overflow_x = manuk_css::Overflow::Scroll;
+        styled.box_sizing = manuk_css::BoxSizing::BorderBox;
+        styled.font_size = 24.0;
+        styled.custom_properties = vec![("--brand".into(), "#f00".into())];
+
+        for (label, cs) in [
+            ("initial", &manuk_css::ComputedStyle::initial()),
+            ("styled", &styled),
+        ] {
+            for (rect, cb) in [
+                (None, None),
+                (Some([1.0, 2.0, 300.0, 400.0]), None),
+                (None, Some([0.0, 0.0, 900.0, 600.0])),
+                (
+                    Some([1.0, 2.0, 300.0, 400.0]),
+                    Some([0.0, 0.0, 900.0, 600.0]),
+                ),
+            ] {
+                for pseudo in [false, true] {
+                    let got: Vec<&str> = extra_computed_props(cs, cb, rect, pseudo)
+                        .into_iter()
+                        .map(|(n, _)| n)
+                        .collect();
+                    assert_eq!(
+                        got, canonical,
+                        "extra_computed_props changed its NAME list for \
+                         ({label}, rect={rect:?}, cb={cb:?}, pseudo={pseudo}).\n\n  \
+                         The per-call values are emitted POSITIONALLY against globalThis.__csExtra, \
+                         so a shifted name list makes item(i) and the dashed aliases report the \
+                         WRONG PROPERTY with no error anywhere. Either keep the vec![] flat and \
+                         unconditional, or drop the hoist."
+                    );
+                }
+            }
+        }
+    }
 }
 
 #[cfg(test)]

@@ -46371,6 +46371,138 @@ PERF: none — one UA rule and one narrowed branch in a cascade that already ran
 WIKI: `docs/wiki/css-cascade.md` — where Chrome draws the form-control `box-sizing` line, and why a
 layout-crate test cannot see it.
 
+## Tick 1235 — the fix works, moves nothing on the sites it was aimed at, and my own build faked the number that said otherwise (2026-08-14)
+
+TICK SHAPE: capability + correction — the attribution measurement t1234 owed, which refuted t1234's
+real-site claim, plus the second half of the cost work it specified.
+
+⚠⚠⚠ **THE HEADLINE IS A RETRACTION, AND THE INSTRUMENT THAT PRODUCED THE BAD NUMBER WAS ME.**
+t1234 measured `ticket.jfa.jp` at **147.2 s** before its fix and **42.4 s** after, and read that 3.5×
+as attribution. The **OLD BINARY, rebuilt from `a45850d3` and run in the SAME HOUR** — this project's
+own standing control, which has changed the verdict three times before (t799-807, t830-839, t846) —
+refuses to reproduce the baseline:
+
+```text
+                       OLD binary (pre-t1234)      NEW binary (t1234)
+  ticket.jfa.jp        41.6s · 43.5s · 43.3s       42.4s · 42.4s · 43.6s · 126.9s
+  7info.ru            132.2s · TIMEOUT · 101.5s    150.1s · 103.6s · 107.6s
+```
+
+**Indistinguishable.** The 147.2 s reading was taken while **my own `cargo build` was running on the
+same box** — and the tick's own log shows I started a debug build seven minutes into a `nice -n 15`
+measurement loop. So the general form, which is the fourth variant of a lesson already written here
+four times (*"every number has a harness, and the harness is part of the number"*):
+
+> **THE AGENT'S OWN BUILD IS PART OF THE HARNESS.** A site measurement taken while this session is
+> compiling is a measurement of the compile. `nice` does not save it: the sites that matter are the
+> ones already at the cap, and they are exactly the ones a few contended seconds push over it.
+
+**And `7info.ru`'s apparent REGRESSION (111.4s → 150.1s TIMEOUT) was noise too** — the same binary
+gives 150.1 / 103.6 / 107.6. A site that straddles the cap will report a regression roughly half the
+time it is asked. **Nothing was traded; nothing regressed.** Two readings of one site, one on each
+binary, could have banked either conclusion, and it would have been the wrong one both times.
+
+**WHAT SURVIVES OF t1234, stated exactly.** The cost defect is real, deterministic and gated: a
+`getComputedStyle` read compiled **11,017 bytes** of generated JavaScript, and
+`G_COMPUTED_STYLE_IS_NOT_A_COMPILER_CALL` goes RED without the fix — 4,000 reads across 200 elements
+are **cut by the watchdog** and the marker is never written. That is a real class of page unblocked.
+**What does NOT survive is the claim that it explains the `timeout-150s` bucket.** It moved **zero of
+eight** sites. *A fix that works and moves nothing means the bottleneck is elsewhere* — the loop's own
+t1048 rule, arriving here by a different road.
+
+⚠⚠⚠ **AND THE PHASE LOG NAMES WHERE ELSE, WITH A DISCRIMINATOR RATHER THAN A GUESS.** The drain's
+time budget is **5,000 ms** and the overrun is not uniform — it tracks the TASK COUNT:
+
+```text
+  neutypechic.com   count=1331   elapsed_ms=5001   budget_ms=5000    <- EXACT
+  www.friulioggi.it count=29     elapsed_ms=7797   budget_ms=5000
+  bhramarah.in      count=176    elapsed_ms=31841  budget_ms=5000    <- 6.4x over
+  bhramarah.in      count=2      elapsed_ms=21572  budget_ms=5000    <- 4.3x over on TWO tasks
+  7info.ru          count=1      elapsed_ms=9326   budget_ms=5000    <- 9.3s in ONE task
+```
+
+**The budget is enforced BETWEEN tasks and is exact there** (1,331 tasks, 5,001 ms against 5,000).
+What blows it is a SINGLE task running for seconds — and the drain already arms `ScriptDeadline`, so
+the script half of that task *is* preemptible. **The residue is therefore native, unpreemptible work
+the task triggers** — cascade, layout, forced reflow — which no `JS_RequestInterruptCallback` can
+stop, because the interpreter is not running. On `bhramarah.in` that is 86 s + 22 s + 24 s = **132 of
+the site's 150 s**, all three phases flagged `gave_up=1`. ⚠ **NOT ESTABLISHED:** which native call it
+is. That is a profile, and it is the next tick.
+
+**WHAT THIS TICK BUILDS: the second half of the cost work t1234 specified**, taken because the byte
+count is deterministic and gated even though it is now known NOT to move the bucket — the honest
+frame being *finish pricing the path correctly, then go where the measurement points.*
+
+```text
+  11,017 bytes  ->  6,561  (t1234, the shared method/kebab table)
+   6,561 bytes  ->  3,154  (t1235, the derived names and their aliases)     -71% overall
+```
+
+`extra_computed_props` returns a flat, unconditional `vec![]` — the same ~68 names in the same order
+for every element, only the values varying — so `globalThis.__csExtra` carries the names and
+`__csAliasStd` carries their aliases, and a call emits only values.
+
+⚠⚠⚠ **THE HAZARD IS THE WHOLE DIFFICULTY, AND IT IS GUARDED TWICE.** Hoisting names makes the
+per-call *values* **positional** against a list computed somewhere else: the day one entry of that
+`vec![]` becomes conditional, every name after it shifts and `item(i)` and the dashed aliases report
+the **WRONG PROPERTY, with no error anywhere** — a silent wrong answer, and the exact drift
+`G_COMPUTED_CUSTOM_PROPERTIES` caught when `length` was a literal `50` against a list of 52. So:
+(1) `extra_names_are_canonical` compares the two lists **on every call** and falls back to inline
+emission on any mismatch, and (2) `extra_name_stability` drives `extra_computed_props` across 16
+argument combinations — initial vs a styled element, all four `rect`/`cb` pairings, both pseudo
+polarities — and requires the NAME list to be identical every time. The guard is what makes the
+hoist admissible; without it this is a landmine with a good benchmark.
+
+GATE: `G_COMPUTED_STYLE_IS_NOT_A_COMPILER_CALL` unchanged and still RED-provable; its own wall time is
+now **5.36s (RED) → 2.80s (t1234) → 1.82s (t1235)**. New: `extra_name_stability` (pure Rust, no JS
+global, so one `#[test]` covers all 16 combinations without the one-gate-per-test rule).
+
+REGRESSION SURFACE: fifteen `g_computed_*` / `g_object_position_*` / frame gates green, and the
+three WPT areas re-measured — **`css/cssom` 2789 = mark, `dom` 8142 = mark** (the two stable areas,
+both exact, which is what says the hoist regressed nothing).
+
+⚠⚠⚠ **AND `css/css-values` IS NOT A STABLE MEASUREMENT — IT VARIES BY 72 SUBTESTS ON ONE BINARY,
+WHICH RETRACTS A CLAIM I MADE LAST TICK.** Three runs, same binary, same hour:
+
+```text
+  2168 / 4174      2168 / 4201      2240 / 4200      <- spread 72, and the DENOMINATOR moves too
+```
+
+The instrument names its own cause in the same output: **`ACCUM` — files that SIGSEGV the shared
+batch runtime and pass in a fresh one — and WHICH files do it changes between runs.** Run 1 lost
+`calc-infinity-nan-computed` + `if-style-invalidation` + `viewport-units-media-queries`; run 2 lost
+`viewport-units-css2-001` instead of `if-style-invalidation`. A different file poisoning the shared
+runtime takes a different set of subtests down with it. (The underlying UAF is already a tracked
+Bar 0.)
+
+**So t1234's "+41 in `css/css-values` for the prototype design" is REFUTED: 2240 appears on this
+binary with no prototype anywhere in it.** Both 2199 and 2240 are draws from one distribution, and I
+banked the difference between two draws as a property of a one-line change — the *same* error as the
+`ticket.jfa.jp` 147.2 s above, in a different instrument, in the same tick. That is what makes it
+worth writing twice: **it is not that I trusted a bad instrument, it is that I read a DELTA off a
+single pair of readings without ever asking what one instrument does when nothing changes.**
+
+**The row is therefore LEFT AT ITS BANKED 2199 rather than updated to any single draw.** Writing
+2168 would bank noise as a regression; writing 2240 would bank it as progress. Both would be the
+same mistake with different signs, and `ratchet.sh` cannot see through ±72 either way. What the
+ledger needs from this tick is not a new number for that row — it is the knowledge that **the row's
+error bar is ±72 and the loop has been steering on deltas smaller than that.**
+
+⚠ **`__custom` IS THE REMAINING TAIL AND IT IS UNBOUNDED, NOT LARGE.** Every custom property in scope
+is serialized into every snapshot, so a design-token site still generates a **~38 KB** read
+(`bhramarah.in`, measured after both hoists — 44,529 before). Bounding it needs a lazy native
+accessor holding the node, not another hoist. Given this tick's own result, it should be built only
+if a measurement says it is binding.
+
+PERF: 11,017 → 3,154 bytes handed to the JS parser per `getComputedStyle`, measured at both ends and
+instrumented as `tracing::trace!(bytes, "computed-style snapshot source")`. **Zero attributable
+real-site movement**, stated as the result rather than omitted.
+
+WIKI: `docs/wiki/js-engine.md` — the §"call into the JS COMPILER" section corrected on both counts
+(the real-site attribution refuted by its own old-binary control; the `css/css-values` "+41" refuted
+by re-running the same binary), plus the drain-budget discriminator that names where the time
+actually goes, and `docs/wiki/conformance-and-oracles.md` for the ±72 error bar itself.
+
 ## Tick 1234 — `getComputedStyle` was a call into the JS compiler, and that is why jQuery pages hang (2026-08-14)
 
 TICK SHAPE: capability — a hot-path defect found by taking t1233's own named next measurement (re-run

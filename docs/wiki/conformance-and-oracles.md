@@ -3925,3 +3925,30 @@ reverted.
 ⚠ **Residual, pinned by the fixture rather than hidden:** the XML parser does not preserve name case
 — a `<Foo>` root comes back with `localName` `foo`. XML is case-sensitive; that is a separate defect
 below `parse_xml`, asserted at its honest current value so the tick that fixes it must edit the line.
+
+## `css/css-values` has a ±72-subtest error bar, and it comes from the ACCUM Bar 0 (t1235)
+
+Three runs of `manuk-wpt wpt css/css-values`, **same binary, same hour**:
+
+```text
+  2168 / 4174      2168 / 4201      2240 / 4200      <- spread 72; the DENOMINATOR moves too
+```
+
+The instrument names the cause in its own output: **`ACCUM` — a file that SIGSEGVs the shared batch
+runtime and passes in a fresh one — and WHICH files do it changes between runs.** One run lost
+`calc-infinity-nan-computed` + `if-style-invalidation` + `viewport-units-media-queries`; the next lost
+`viewport-units-css2-001` instead of `if-style-invalidation`. A different file poisoning the shared
+runtime takes a different set of subtests with it, which moves numerator and denominator together.
+
+⚠⚠⚠ **This retroactively refutes a t1234 finding.** That tick measured a one-line change at **+41** in
+this area and banked it as a property of the change; **2240 appears with none of that change in the
+binary.** Both readings are draws from one distribution.
+
+> **An area's ERROR BAR is measured by running the SAME binary twice, and until you have it, a delta
+> is not a result.** `css/cssom` (2789) and `dom` (8142) were exact across three runs the same hour —
+> so this is a property of *this area*, not of the harness in general, and the discriminator is the
+> ACCUM count printed on every run. **Read it before believing a `css/css-values` delta.**
+
+Practical rule: for this area, treat anything under ~±72 as unmeasured, take the ACCUM count as the
+confounder, and re-run before banking. Fixing the underlying cross-file runtime-reuse UAF would
+remove the noise at its source and is tracked as a Bar 0.

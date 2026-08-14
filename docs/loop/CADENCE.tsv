@@ -934,3 +934,4 @@ tick	sha	epoch	iso	delta_s	shape	wall_s	files	added	deleted	gates	claims	wpt_pas
 1232	231a9147	1786679213	2026-08-13T23:46:53-04:00	637	measurement	808	4	79	33	467	81	3896	6960	0	614	0	the self-audit (due at 1232), and what this window actually bought (2026-08-14)
 1233	4c8b4393	1786687138	2026-08-14T01:58:58-04:00	7925	measurement	808	9	461	35	467	81	3896	6960	0	614	0	the sweep banked, the prediction scored, and a SOLO number that did not survive `--jobs 2` (2026-08-14)
 1234	4c25a79c	1786691430	2026-08-14T03:10:30-04:00	4292	capability	808	10	506	95	468	81	3896	6960	0	615	0	`getComputedStyle` was a call into the JS compiler, and that is why jQuery pages hang (2026-08-14)
+1235	6da972d1	1786696886	2026-08-14T04:41:26-04:00	5456	capability	808	9	403	53	468	81	3896	6960	0	616	0	the fix works, moves nothing on the sites it was aimed at, and my own build faked the number that said otherwise (2026-08-14)
