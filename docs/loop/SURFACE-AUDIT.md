@@ -6138,6 +6138,71 @@ and the two areas the ranker over-promises (`domparsing` = 65% unshipped `tentat
 `css/css-values` = `calc-size()`/`random-item()`) are recorded in the t1190/t1192 entries so the
 board is read with that discount.
 
+## Audit #65 — tick 1233 (2026-08-14): the world's TOP-20 and our DEATH-TAIL are the SAME LIST, and the metric's denominator moved upstream
+
+**Sources.** [web-platform-tests/interop 2026 README](https://github.com/web-platform-tests/interop/blob/main/2026/README.md)
+(20 focus areas + 4 investigations, verbatim) · [web.dev: Interop 2026](https://web.dev/blog/interop-2026) ·
+[WebKit: Announcing Interop 2026](https://webkit.org/blog/17818/announcing-interop-2026/) ·
+[Mozilla Hacks: Launching Interop 2026](https://hacks.mozilla.org/2026/02/launching-interop-2026/) ·
+[Igalia: Interop 2026](https://www.igalia.com/news/interop-2026.html) ·
+[This Month in Ladybird — Apr/May/Jun/Jul 2026](https://ladybird.org/news/)
+
+### NOTHING TO ADD — all 20 focus areas are already on the map. That is the good half.
+
+Every one of Interop 2026's 20 focus areas (container style queries · CSS anchor positioning · `attr()` ·
+`contrast-color()` · CSS zoom · custom highlights · dialogs+popovers · fetch uploads and ranges ·
+IndexedDB · JSPI · media pseudo-classes · Navigation API · scoped custom element registries ·
+scroll-driven animations · scroll snap · `shape()` · view transitions · web compat · WebRTC ·
+WebTransport) and all four investigations (a11y testing · JPEG XL · mobile testing · WebVTT) already
+have at least one `CONSTELLATION.tsv` row. **No capability had to be added with status `unknown`.**
+Four consecutive audits have now found the external frame current; the map is being maintained.
+
+### ⚠⚠⚠ THE FINDING: the four vendors' TOP-20 and our owner-locked DEATH-TAIL are substantially the SAME LIST
+
+Reading the STATUS column rather than the presence column:
+
+```text
+  container style queries        missing        <- board's death-tail? no  — genuinely open
+  CSS anchor positioning         missing/unknown <- NAMED in the tick-543 death-tail
+  custom highlights              missing        <- NAMED in the death-tail
+  JSPI                           missing        <- NAMED in the death-tail
+  scoped custom element regs     missing        <- NAMED in the death-tail
+  scroll-driven animations       missing        <- NAMED in the death-tail
+  WebTransport                   missing        <- NAMED in the death-tail (WebTransport-HTTP3)
+  JPEG XL                        missing        <- NAMED in the death-tail (and an Interop INVESTIGATION)
+  css zoom · fetch uploads · media pseudo-classes   partial
+```
+
+**Eight of the twenty focus areas are `missing`, and six of those eight are items this project has
+explicitly decided NOT to build** ("DEATH-TAIL — do NOT build; feature-detect cleanly and NAME as
+post-Phase-0 exceptions", board block tick ~543). That is not a contradiction to resolve unilaterally
+— the death-tail call is **owner-locked** and was made for a defensible reason (Phase 0 is
+daily-driver drivability, not spec completeness). **It is a fact the owner should see stated plainly**,
+because the justification for deferring them was "the web does not need these to be drivable", and the
+four engine vendors have since agreed in writing that they are the twenty things that matter most in
+2026. ⚠ **Surfaced, not acted on.** The audit's job is to check the map, not to overrule the roadmap.
+
+### ⚠⚠ A SECOND FINDING, and it is about OUR OWN HEADLINE NUMBER
+
+**WPT imported test262 upstream in April 2026 — +53,207 JavaScript subtests.** Our checkout does not
+have it (`~/wpt/test262` is absent). The PRIMARY metric (`scripts/wpt-leverage.sh`, 73.92%) is a
+fraction over "active areas", so the next time `wpt-setup.sh` syncs, **the denominator moves by 53k
+tests this engine has never run** — and the headline will fall for a reason that is not a regression.
+This is the exact shape of the frozen-metric/moving-denominator defect this loop has hit twice
+(t1163-1170: *"a moving DENOMINATOR is the tell"*). Recorded BEFORE it happens, so the drop is read as
+a re-baseline rather than chased as a bug. ⚠ Also worth knowing when reading anyone's WPT numbers:
+Ladybird's own 2026 monthly gains (1,991,061 → 2,079,020 subtests) include that same import, so a
+chunk of their reported climb is suite growth, not engine work.
+
+### What we had been wrong about
+
+Nothing external — and the honest report is that **this audit's value was entirely in the STATUS
+column, not the presence column.** Three of the last four audits have concluded "the map is current",
+which is a real risk of the procedure becoming a formality: presence is cheap to check and stops
+being informative once the map is good. **The procedure should be read as: reconcile STATUS against
+the world's priority order, not just names against names.** That is the change this audit makes to
+how the next one is run.
+
 ## Audit #64 — tick 1223 (2026-08-13): THREE INVENTORIES OF THE SAME TERRITORY, NONE RECONCILED
 
 **Sources.** [Interop 2026 focus areas](https://web.dev/blog/interop-2026) ·

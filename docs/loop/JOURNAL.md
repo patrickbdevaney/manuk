@@ -46371,6 +46371,85 @@ PERF: none — one UA rule and one narrowed branch in a cascade that already ran
 WIKI: `docs/wiki/css-cascade.md` — where Chrome draws the form-control `box-sizing` line, and why a
 layout-crate test cannot see it.
 
+## Tick 1233 — the sweep banked, the prediction scored, and a SOLO number that did not survive `--jobs 2` (2026-08-14)
+
+TICK SHAPE: measurement — a clean `--jobs 2` CrUX sweep (200 sites, the bankable configuration per
+t771), run because t1228/t1229 both landed AFTER the t1226 sweep and the loop was steering on an 8h
+-old number that could not see them.
+
+**THE PREDICTION WAS WRITTEN BEFORE THE SWEEP RETURNED** (the t1144 rule), and it is scored here
+rather than quietly restated:
+
+```text
+  1. timeout-150s drops 13 -> ~2          WRONG   it went 13 -> 10 (6 cleared, 3 NEW)
+  2. scorability rises, but by LESS than
+     11 sites' worth (the t777 lesson)    RIGHT   +6 scored
+  3. M1 pass-rate roughly FLAT            RIGHT   on the BAND (-0.09); the pass-count headline
+                                                  says +4.5pt and the instrument itself labels it
+                                                  NOISY +/-2-4 sites
+```
+
+BANKED:
+
+```text
+  SCORABILITY   74.2% -> 77.0%     scored 98 -> 104   (in-scope 132 -> 135, excluded 68 -> 65)
+  M1 GATE       19.0% -> 22.2%
+  shape>=0.75   28.8% -> 33.3%     (+4.5pt — but PASS-COUNT is the noisy read)
+  COMMON-SET BAND  -0.09 pts       96 sites scored in BOTH sweeps · 7 up · 8 down   <- FLAT
+  shape_mean 61.7 -> 62.0 · cov_mean 87.4 -> 87.1
+```
+
+**Read the BAND, not the pass-count** (the standing rule): the band is **−0.09 over the 96-site
+common set — flat.** The geometry did not move, and nothing this window claimed it would. What moved
+is **SCORABILITY, +6 sites**, which is exactly what a hang-killer is supposed to buy and exactly the
+observer's current priority (1). ⚠ The DENOMINATOR moved too (132→135 in-scope, 65 excluded vs 68),
+so the 74.2→77.0 comparison is not a pure engine delta — a moving denominator is the tell, and it is
+stated rather than hidden.
+
+⚠⚠⚠ **AND THE FINDING THAT MATTERS MOST IS THAT MY OWN SOLO NUMBER DID NOT SURVIVE THE SWEEP.**
+t1229 measured the timeout bucket with `boxes --fetch`, SOLO, at a 120s cap, and reported **11 of 13
+complete**. The sweep, at 150s with **two concurrent Chrome+manuk pairs**, cleared **6**:
+
+```text
+  CLEARED  beb88run.xyz · sip777man.site   <- BOTH sites t1229 attributed to itself. The attribution HOLDS.
+           d2rwkn96…cloudfront.net · morikoshi.net · pt88.app · swiftspinus.com
+  STILL    payb.jp   <- t1228's site. 49.8s SOLO, >150s in the pair.
+           bbs.ruliweb · bhramarah.in · coinmarketcap · neutypechic · ticket.jfa.jp · friulioggi
+  NEW      7info.ru · secure.paymentech.com · simplepdf.com
+```
+
+**This project has already written the rule I broke: *never diff a `--jobs 2` number against a SOLO
+one* (t1134-1135).** I ran the bucket solo, reported 11, and the scoring instrument says 6. Both
+measurements are true of what they measured — solo isolates OUR clock and is the right ATTRIBUTION
+instrument; the sweep is the SCORING instrument — and the gap between them is the **contention
+cost**, which on `payb.jp` is at least 100 seconds. The consequence is a correction to the board's
+own framing: **the `timeout-150s` bucket is not purely an engine property, and the M1 cap attributed
+to "engine timeouts" is overstated by however much of that bucket is contention.** t1229's write-up
+said "2 of 13" for its own attribution and that number is unchanged; what was overstated was the
+CLASS total, and it was overstated in this journal.
+
+⚠ **NOT ESTABLISHED:** how much of the remaining 10 is contention vs engine. The measurement that
+answers it is the one t1227 used — each survivor re-run SOLO through `boxes --fetch`, on our clock,
+with no Chromium in the picture. That is a cheap next tick and it re-prices the largest unscored
+bucket honestly.
+
+⚠ **AND THE SURFACE AUDIT CAME DUE MID-TICK (last 1223), SO IT IS IN THIS COMMIT** — audit #65,
+recorded in `SURFACE-AUDIT.md`. Two findings worth reading from the journal: (1) **all 20 Interop
+2026 focus areas are already on the map** — nothing to add — but **8 are `missing` and 6 of those 8
+are items this project explicitly named as DEATH-TAIL** ("do NOT build … name as post-Phase-0
+exceptions", board block ~t543). The death-tail call is OWNER-LOCKED and is not overruled here; it is
+**surfaced**, because its justification was *"the web does not need these to be drivable"* and the
+four engine vendors have since agreed in writing that they are the twenty things that matter most in
+2026. (2) **WPT imported test262 upstream in April 2026 (+53,207 subtests)** and our checkout does not
+have it — so the next `wpt-setup.sh` sync moves the PRIMARY metric's DENOMINATOR by 53k tests this
+engine has never run, and the headline will FALL for a reason that is not a regression. Recorded
+before it happens so it is read as a re-baseline, not chased as a bug.
+
+PERF: none — measurement only.
+
+WIKI: none — the artefact is `docs/loop/SWEEP-t1233-rows.tsv` + the banked
+`FIDELITY-PROGRESS.tsv` row, which is where sweep results belong. [no-pattern]
+
 ## Tick 1232 — the self-audit (due at 1232), and what this window actually bought (2026-08-14)
 
 TICK SHAPE: measurement — the cadence self-audit (`scripts/self-audit.sh`, due every 10 ticks; last

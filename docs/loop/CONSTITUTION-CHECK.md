@@ -9409,6 +9409,84 @@ before t1168.
    `document.baseURI || location.href` — *a work-around in the tree is a bug report nobody filed*,
    and the loop has no instrument that reads its own fallbacks. That is a cheap, novel probe.
 
+## Check #118 — tick 1233 (2026-08-14)
+
+### The horizon and its gate, named out loud
+
+**H0.** Exit gate: **~83% WPT across categories**, oracle-verified across the four corpora, a
+daily-drivable shell, and **semantic-API coverage of every rendered construct** (I3).
+
+### → Did the last ~8 ticks move an EXIT-GATE condition, or only the scoreboard?
+
+**Half and half, and the honest split is worth stating because the two legs disagree.**
+
+* **Gate, on the drivability leg.** t1228/t1229 closed the script-preemption class — a page whose
+  `DOMContentLoaded`, `load` or blocking `<script>` never returns can now be cut, so it renders
+  instead of freezing. That is **Bar 0** (a frozen tab is not daily-drivable) and it is
+  oracle-verified: the banked t1233 sweep moved **SCORABILITY 74.2% → 77.0%** and cleared 6 of the 13
+  `timeout-150s` sites. Gate condition, measured, banked.
+* **NOT the gate, on the WPT leg.** PRIMARY is **73.92%, unchanged this window**, against an ~83%
+  bar. Nothing this window moved it, and nothing claimed to.
+* **Instrument, deliberately.** t1230/t1231/t1233 were measurement. They are defensible under the
+  RATCHET's third face (instrument fidelity) and they earned it concretely: **t1231 falsified a fix
+  t1230 had itself specified, before it was built.** But three of the last five ticks were
+  measurement, and that is the ceiling of what is defensible — the next tick must be capability.
+
+### → Is §VI.3's usage-weighted breadth still the north star, or has a big-but-tail number crept back?
+
+**Still the north star, and it was tested this window.** `wpt-leverage.sh` ranked `css/selectors`
+top; following it down led not to selector parsing but to **frames** — *"the platform web IS other
+people's documents inside yours"*. That is usage-weighted breadth working exactly as designed: the
+ranker pointed at a directory and the mechanism underneath it was more valuable than the directory.
+No tail number crept in; encoding stayed excluded.
+
+### ⚠⚠⚠ THE FINDING: an I3 VIOLATION HAS BEEN SITTING OPEN, AND CALLING IT "726 WPT SUBTESTS" HID IT
+
+I3 is not a preference: *"the synchronous in-process semantic model — DOM, computed style, layout
+geometry, and a first-class accessibility tree — is a load-bearing engine subsystem … **every
+renderer subsystem lands with its semantic-model exposure or it is not done**."*
+
+t1230/t1231 measured that **a node inside an `<iframe>` has NO computed style at all** —
+`getComputedStyle(n).display` is `undefined`, not `"block"` — for any node inserted after the frame
+loaded. The frame **renders**. Its pixels are painted. Its DOM is live and readable. **Only the
+semantic model is absent.** That is precisely the shape I3 forbids, and it has been carried as a
+documented limitation rather than a violation.
+
+**Ranked as a WPT number it is 726 subtests in one directory — real but ordinary. Ranked as I3 it is
+a load-bearing subsystem that does not cover a rendered construct, and I3 says such a subsystem is
+NOT DONE.** This is the same re-ranking t852 recorded (*"the burndown's ranker cannot see the I3
+cost, and nothing else computes it"*), on a different organ, and the loop again reached for the WPT
+number first. **The steer: the frame re-cascade is the next capability tick, ranked as I3, and the
+agent-side consequence — an agent reading computed style inside an embed gets `undefined` — belongs
+in its gate.**
+
+### ⚠⚠ AND A CONSTITUTIONAL TENSION FOR THE OWNER, SURFACED NOT RESOLVED (from surface audit #65)
+
+I4 makes tail-avoidance law and calls it *"part of the opportunity."* Audit #65 found that **8 of
+Interop 2026's 20 focus areas are `missing` here, and 6 of those 8 are on this project's owner-locked
+DEATH-TAIL list** (anchor positioning, custom highlights, JSPI, scoped custom element registries,
+scroll-driven animations, WebTransport; plus JPEG XL among the investigations). The death-tail call
+was justified as *"the web does not need these to be drivable"* — but the four engine vendors have
+since agreed **in writing** that these are the twenty things that matter most in 2026, which is the
+opposite of a tail signal. **I4's own text points both ways here** (usage-weighted breadth vs. the
+exotic tail), and this is an owner decision, not a loop decision. Recorded so it is decided rather
+than inherited.
+
+### PART VI correction
+
+VI's reconciliation still describes the scorability ceiling as the binding H0 blocker. That is now
+**77.0%** (was 74.2%), and its largest engine-owned bucket — `timeout-150s` — is **partly a sweep
+CONTENTION artifact, not an engine property**: t1233 measured `payb.jp` at 49.8s SOLO and >150s in a
+`--jobs 2` pair. VI should record that the bucket is an upper bound on engine cost, and that the
+honest per-site number comes from a SOLO `boxes --fetch` run.
+
+### The steer
+
+1. **The frame re-cascade, ranked as I3** (seam: `with_style_in`'s frame arm; blocker: a borrow
+   conflict, not the algorithm — see the t1231 entry). Capability, not measurement.
+2. Re-run the 10 surviving `timeout-150s` sites SOLO to split contention from engine.
+3. Owner: the I4 / death-tail vs Interop-2026 question above.
+
 ## Check #117 — tick 1225 (2026-08-13)
 
 ### The horizon and its gate, named out loud

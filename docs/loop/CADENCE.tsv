@@ -932,3 +932,4 @@ tick	sha	epoch	iso	delta_s	shape	wall_s	files	added	deleted	gates	claims	wpt_pas
 1230	ef87de50	1786677993	2026-08-13T23:26:33-04:00	2853	measurement	808	8	180	46	467	81	3896	6960	0	614	0	the frame's style map is cascaded ONCE, and a stale doc blamed the wrong organ (2026-08-14)
 1231	f7714469	1786678576	2026-08-13T23:36:16-04:00	583	measurement	808	6	123	33	467	81	3896	6960	0	614	0	the frame gap NEVER recovers, and that rules out the fix t1230 specified (2026-08-14)
 1232	231a9147	1786679213	2026-08-13T23:46:53-04:00	637	measurement	808	4	79	33	467	81	3896	6960	0	614	0	the self-audit (due at 1232), and what this window actually bought (2026-08-14)
+1233	4c8b4393	1786687138	2026-08-14T01:58:58-04:00	7925	measurement	808	9	461	35	467	81	3896	6960	0	614	0	the sweep banked, the prediction scored, and a SOLO number that did not survive `--jobs 2` (2026-08-14)
