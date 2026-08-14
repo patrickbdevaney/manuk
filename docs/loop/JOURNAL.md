@@ -46371,6 +46371,98 @@ PERF: none — one UA rule and one narrowed branch in a cascade that already ran
 WIKI: `docs/wiki/css-cascade.md` — where Chrome draws the form-control `box-sizing` line, and why a
 layout-crate test cannot see it.
 
+## Tick 1245 — t1244's fix was correct and moved nothing, because the DISPATCH erased the containing block (2026-08-14)
+
+TICK SHAPE: capability — the residue t1244 named, taken next, and the naming turned out to be **half
+wrong in a way that only building it could reveal**.
+
+⚠⚠⚠ **THE RESIDUE I NAMED LAST TICK WAS A HYPOTHESIS AND I WROTE IT AS A LOCATION.** t1244's write-up
+says an inline-level replaced element *"is sized by `replaced_default_size` (lib.rs:6410)"*. It is
+not. `replaced_default_size` has exactly **one** caller — the flex/grid item measure seam — and the
+`<canvas>` rows that stayed broken were not flex items. The first thing this tick did was grep for
+that caller, which is the check that should have preceded the claim. **A residue is a measurement
+too, and it gets the same standard as the fix.**
+
+**WHERE THEY ACTUALLY GO, and it makes the defect one line.** An atomic inline — `inline-block`,
+`<img>`, `<canvas>`, `<video>`, `<svg>` — is laid out by `layout_block` like any other box
+(`collect_inline_node`'s atomic arm). `layout_block` decides `height:100%`, a `calc()` over a
+percentage, `height:stretch` **and the CSS2 §10.3.2 ratio transfer** entirely from its `pch`
+parameter, the containing block's definite content height. That call passed a hard-coded **`None`**:
+
+```rust
+let r = self.layout_block(node, cw, None, 0.0, 0.0, 0.0, &mut fc);
+```
+
+So every atomic inline on the web was told *"your containing block has no definite height"* — false
+whenever the establishing block has one — and all four rules were **unreachable**, not wrong.
+
+⚠⚠⚠ **THIS IS WHY t1244 MOVED NONE OF ITS OWN `<canvas>` ROWS.** That tick widened the ratio transfer
+to accept every spelling of a definite block size, gated it, proved it RED two ways — and the canvas
+rows did not move a pixel. *A fix that works and moves nothing means the **DISPATCH** is the bug*
+(t1048), and this is that rule firing on consecutive ticks: the transfer was already correct, and it
+was being asked about a containing block whose height had been erased one frame up.
+
+**CHROME-MEASURED, both fixtures** (`/tmp/t1245-b.html` 400×200 block, `/tmp/t1245-a.html` canvas):
+
+```text
+                                              Chrome    before     after
+  inline-block, height:100%                   50x200    50x16   ✗  50x200  ✓
+  inline-block, height:stretch                50x200    50x16   ✗  50x200  ✓
+  inline-block, aspect-ratio:1/4, height:100%  50x200   50x16   ✗  50x200  ✓
+  <canvas> declared ratio, height:stretch      10x20   200x400  ✗   10x20  ✓
+  <canvas> declared ratio, height:100%         10x20   200x400  ✗   10x20  ✓
+  inline-block, height:auto (CONTROL)          50x16    50x16   ✓   50x16  ✓
+```
+
+THE CHANGE: `pch` threaded through `flush_inline_run` → `collect_inline_group` →
+`collect_inline_node` to that one call. It is already a parameter of `layout_children`, so every one
+of the six call sites had the right value in scope — the parameter was simply never carried the last
+three frames. No new state, no side table (t1119's *"ask every side-table WHICH PASSES CAN WRITE"*
+is why it is a parameter and not a cache).
+
+GATE: `an_atomic_inline_resolves_against_its_containing_blocks_definite_height` — four spellings, the
+ratio row, and the `height:auto` CONTROL that must stay content-sized. **RED-proven** by restoring the
+`None`: *"height:100% … got 18"*. Layout suite **176/176**.
+
+MEASURED, same binary, same hour:
+
+```text
+  css/css-sizing    952 -> 972   (+20; +38 across t1244+t1245 from 934)
+  css/css-flexbox  1504  (=)   css/css-grid      2517  (=)
+  css/css-position  274  (=)   css/css-display    296  (=)
+  css/css-overflow  342  (=)   layout suite 176/176 · HANG/CRASH 0
+```
+
+⚠ **RESIDUE #1, and this time it is grepped rather than guessed.** `<canvas width=30 height=60>` with
+a stretched height still comes out **30×20 against Chrome's 10×20** — the height is now right and the
+width is not, because we apply canvas's `width`/`height` **content attributes as CSS presentational
+hints**, so `s.width` is `Dim::Px(30)` and the ratio transfer's `width == Dim::Auto` guard correctly
+declines. HTML maps dimension attributes to CSS for `img`/`input type=image`/`embed`/`iframe`/
+`object`/`video`/`marquee` — **`canvas` is not on that list**; its attributes are the BITMAP size,
+i.e. the intrinsic size. t1026 already solved this exact shape for `<img>` by making the hint a real
+cascade origin instead of a post-pass; doing the same subtraction for `<canvas>` is the next tick.
+⚠ Author `style="width:auto"` does NOT rescue it either (measured, row A5) — *"`auto` the author WROTE
+and `auto` nobody set are the same computed value"*, which is t1026's own third-way-to-be-wrong.
+
+⚠ **RESIDUE #2 — NOT ESTABLISHED, and NOT caused by this tick.** A CONTROL row surfaced a divergence
+nobody was looking for: `height:100%` on an atomic inline inside an **auto-height** parent measures
+**50×800 in Chrome** and 50×16 here. Ours is unchanged by this tick by construction (an auto-height
+parent yields `pch = None` before and after, so the atomic's call receives `None` either way) — this
+is a pre-existing difference the fixture exposed, not a regression. What Chrome is resolving that
+percentage against is not established and is worth one probe before anyone assumes.
+
+⚠ **AND ONE BOOKKEEPING CORRECTION, because it would otherwise read as a refutation:** t1244's landing
+banked `WPT:css/css-sizing 934` with an 11:50 timestamp. tick.sh prints that block **before the
+build**, from the cached WPT sweep, and warned in the same run: *"the sweep is 8h old"*. The 952 in
+t1244 and the 972 here are same-hour solo runs on the new binary. A `(=)` in that block is not a
+measurement of this tree.
+
+PERF: none — one extra `Option<f32>` through three call frames, no allocation, no new work. F1/F2
+unmoved.
+
+WIKI: `docs/wiki/box-layout.md` — "an atomic inline is a BLOCK laid out in a containing block we
+refused to describe".
+
 ## Tick 1244 — a definite block size is definite however it was SPELLED, and the ratio transfer knew one spelling (2026-08-14)
 
 TICK SHAPE: capability — check #119's steer 3 (*"a capability tick before another measurement one"*,

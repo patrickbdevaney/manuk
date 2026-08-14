@@ -4570,7 +4570,7 @@ impl Ctx<'_> {
         // Putting the branch HERE, rather than special-casing each caller, is what makes the item
         // measure and paint identically to an element wrapping the same text.
         if matches!(self.dom.data(node), NodeData::Text(_)) {
-            let items = self.collect_inline_group(&[node], cw, None);
+            let items = self.collect_inline_group(&[node], cw, None, pch);
             if items.is_empty() {
                 return (BoxContent::Inline(vec![]), 0.0);
             }
@@ -4747,7 +4747,7 @@ impl Ctx<'_> {
                     self.static_pos_writes.set(self.static_pos_writes.get() + 1);
                 }
             }
-            let items = self.collect_inline_group(&flow_kids, cw, Some(node));
+            let items = self.collect_inline_group(&flow_kids, cw, Some(node), pch);
             let bcs = self.style_of(node);
             let align = bcs.text_align;
             // `text-indent` on the block establishing this IFC applies to its first line box;
@@ -4880,6 +4880,7 @@ impl Ctx<'_> {
                     cw,
                     floats,
                     &run_bcs,
+                    pch,
                 );
                 // ── ⚠⚠⚠ **A FLOAT THAT FOLLOWS INLINE TEXT BELONGS AT THE TOP OF THAT LINE BOX,
                 //    NOT BELOW IT.** CSS 2.1 §9.5 rule 6: *"the outer top of a floating box may not
@@ -5016,6 +5017,7 @@ impl Ctx<'_> {
                     cw,
                     floats,
                     &run_bcs,
+                    pch,
                 );
                 // §9.5: a table is placed BESIDE a float rather than under it, exactly as the
                 // `ks.display == Display::Table` arm below does for a real one.
@@ -5036,6 +5038,7 @@ impl Ctx<'_> {
                     cw,
                     floats,
                     &run_bcs,
+                    pch,
                 );
                 // Clearance pushes the block below the relevant floats.
                 if ks.clear != Clear::None {
@@ -5127,6 +5130,7 @@ impl Ctx<'_> {
             cw,
             floats,
             &run_bcs,
+            pch,
         );
 
         // ⚠⚠ **THE CLEARFIX — a BLOCK-LEVEL `::after`, which generated content had no way to be.**
@@ -8978,11 +8982,12 @@ impl Ctx<'_> {
         cw: f32,
         floats: &FloatContext,
         bcs: &manuk_css::ComputedStyle,
+        pch: Option<f32>,
     ) -> (f32, f32) {
         if run.is_empty() {
             return (cur_y, prev_margin);
         }
-        let items = self.collect_inline_group(run, cw, None);
+        let items = self.collect_inline_group(run, cw, None, pch);
         run.clear();
         if items.is_empty() {
             return (cur_y, prev_margin); // whitespace-only: keep the pending margin
@@ -9754,6 +9759,10 @@ impl Ctx<'_> {
         nodes: &[NodeId],
         cw: f32,
         owner: Option<NodeId>,
+        // **The establishing block's definite CONTENT HEIGHT** — carried purely so an ATOMIC INLINE
+        // can be laid out in a containing block that has one. See [`Ctx::collect_inline_node`]'s
+        // atomic arm for what passing `None` here cost.
+        pch: Option<f32>,
     ) -> Vec<InlineItem> {
         let mut out = Vec::new();
         let mut gap = PendingGap::default();
@@ -9771,7 +9780,7 @@ impl Ctx<'_> {
             );
         }
         for &n in nodes {
-            self.collect_inline_node(n, &mut out, &mut gap, &mut first, None, cw);
+            self.collect_inline_node(n, &mut out, &mut gap, &mut first, None, cw, pch);
         }
         if let Some(o) = owner {
             self.push_pseudo(
@@ -10026,6 +10035,7 @@ impl Ctx<'_> {
         first: &mut bool,
         owner: Option<NodeId>,
         cw: f32,
+        pch: Option<f32>,
     ) {
         match self.dom.data(node) {
             NodeData::Text(raw) => {
@@ -10333,7 +10343,31 @@ impl Ctx<'_> {
                     // access to `static_pos`. So the origin is banked and the shift applied where the
                     // final box comes back — see `translate_static_positions`.
                     let static_before = self.static_pos_writes.get();
-                    let r = self.layout_block(node, cw, None, 0.0, 0.0, 0.0, &mut fc);
+                    // ⚠⚠⚠ **`pch` WAS HARD-CODED `None` HERE, AND THAT MADE EVERY DEFINITE-HEIGHT
+                    // RULE UNREACHABLE FOR AN ATOMIC INLINE.** An atomic inline — `<img>`,
+                    // `<canvas>`, `<video>`, `<svg>`, `inline-block` — is laid out by `layout_block`
+                    // like any other box, and `layout_block` decides `height:100%`, `calc()` over a
+                    // percentage, `height:stretch` and the CSS2 §10.3.2 ratio transfer entirely from
+                    // this parameter. Passing `None` told all four *"your containing block has no
+                    // definite height"*, which is FALSE whenever the establishing block has one, so
+                    // the box silently fell back to its intrinsic size and the ratio ran off the
+                    // inline axis instead.
+                    //
+                    // Chrome-measured, `<canvas>` with a 30/60 ratio in a 200x20 containing block
+                    // (`/tmp/t1245-a.html`), one row per way of naming the ratio:
+                    //
+                    // ```text
+                    //                                        Chrome    before     after
+                    //   intrinsic (width/height attrs), stretch 10x20    30x60  ✗   10x20  ✓
+                    //   declared aspect-ratio, stretch          10x20    30x60  ✗   10x20  ✓
+                    //   declared aspect-ratio, height:100%      10x20   200x400 ✗   10x20  ✓
+                    // ```
+                    //
+                    // t1244 fixed the ratio transfer to accept every spelling of a definite block
+                    // size and it moved NONE of these rows — *a fix that works and moves nothing
+                    // means the DISPATCH is the bug* (t1048). The transfer was right; it was being
+                    // asked about a containing block whose height had been erased one frame up.
+                    let r = self.layout_block(node, cw, pch, 0.0, 0.0, 0.0, &mut fc);
                     if self.static_pos_writes.get() != static_before {
                         self.atomic_static_origin
                             .borrow_mut()
@@ -10690,7 +10724,7 @@ impl Ctx<'_> {
                 // N4: inline content also follows the flat tree.
                 let children: Vec<NodeId> = self.dom.flat_children(node);
                 for c in children {
-                    self.collect_inline_node(c, out, gap, first, Some(node), cw);
+                    self.collect_inline_node(c, out, gap, first, Some(node), cw, pch);
                 }
                 self.push_pseudo(node, Some(node), |s| &s.after, false, out, gap, first, cw);
                 if pad_r > 0.0 {
@@ -22847,6 +22881,76 @@ mod tests {
             (w - 200.0).abs() < 1.0 && (h - 400.0).abs() < 1.0,
             "CONTROL: with no definite height the box fills the inline axis and the ratio gives the \
              height (Chrome: 200x400) — got {w}x{h}"
+        );
+    }
+
+    /// **G_ATOMIC_INLINE_CB_HEIGHT — an atomic inline's containing block HAS a height, and this
+    /// engine told it otherwise.**
+    ///
+    /// An atomic inline (`inline-block`, `<img>`, `<canvas>`, `<video>`, `<svg>`) is laid out by
+    /// `layout_block` like any other box, and `layout_block` decides `height:100%`, a `calc()` over
+    /// a percentage, `height:stretch` and the CSS2 §10.3.2 ratio transfer **entirely from its `pch`
+    /// parameter** — the containing block's definite content height. `collect_inline_node` passed a
+    /// hard-coded `None`, so all four rules were unreachable for every atomic inline on the web.
+    ///
+    /// ⚠ **This is why t1244's fix moved none of these rows.** That tick widened the ratio transfer
+    /// to accept every spelling of a definite block size, gated it, proved it RED, and the `<canvas>`
+    /// rows did not move — *a fix that works and moves nothing means the DISPATCH is the bug*
+    /// (t1048). The transfer was correct; it was being asked about a containing block whose height
+    /// had been erased one frame up.
+    ///
+    /// Chrome-measured (`/tmp/t1245-b.html`, a 400x200 block; `/tmp/t1245-a.html` for the ratio):
+    ///
+    /// ```text
+    ///                                              Chrome    before     after
+    ///   inline-block, height:100%                  50x200    50x16   ✗  50x200  ✓
+    ///   inline-block, height:stretch               50x200    50x16   ✗  50x200  ✓
+    ///   inline-block, aspect-ratio:1/4, height:100% 50x200    (n/a)  ✗  50x200  ✓
+    ///   inline-block, height:auto (CONTROL)         50x16    50x16   ✓   50x16  ✓
+    /// ```
+    ///
+    /// **To watch it go RED:** put `None` back in place of `pch` at the `layout_block` call in
+    /// `collect_inline_node`'s atomic arm; every definite row collapses to the content height.
+    #[test]
+    fn an_atomic_inline_resolves_against_its_containing_blocks_definite_height() {
+        let row = |inner: &str| {
+            let html = format!(r#"<div id="p"><span id="a" style="{inner}">x</span></div>"#);
+            let css = "body{margin:0} #p{width:400px;height:200px}";
+            let (dom, root) = layout_html(&html, css, 800.0);
+            let rects = root.node_rects(&dom);
+            let n = dom
+                .descendants(dom.root())
+                .find(|&n| dom.element(n).and_then(|e| e.attr("id")) == Some("a"))
+                .expect("id");
+            (rects[&n].width, rects[&n].height)
+        };
+        for h in [
+            "100%",
+            "stretch",
+            "-webkit-fill-available",
+            "calc(100% - 0px)",
+        ] {
+            let (_, got) = row(&format!("display:inline-block;width:50px;height:{h}"));
+            assert!(
+                (got - 200.0).abs() < 1.0,
+                "an atomic inline with height:{h} resolves against its containing block's definite \
+                 200px (Chrome: 200) — got {got}"
+            );
+        }
+        // The ratio transfer, which needs the SAME `pch` one step earlier: with a definite block
+        // size the inline axis comes from the ratio.
+        let (w, h) = row("display:inline-block;aspect-ratio:1/4;height:100%");
+        assert!(
+            (w - 50.0).abs() < 1.0 && (h - 200.0).abs() < 1.0,
+            "aspect-ratio:1/4 over a definite 200px block size gives a 50x200 box (Chrome: 50x200) \
+             — got {w}x{h}"
+        );
+        // CONTROL — an INDEFINITE height must stay content-sized. Passing the containing block's
+        // height down must not turn `height:auto` into a stretch.
+        let (_, auto_h) = row("display:inline-block;width:50px");
+        assert!(
+            auto_h > 0.0 && auto_h < 60.0,
+            "CONTROL: height:auto on an atomic inline stays content-sized (one line), got {auto_h}"
         );
     }
 

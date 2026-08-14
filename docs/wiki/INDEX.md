@@ -462,6 +462,9 @@
   - L9333 · …and restoring the padding in place is SIZE-UNSAFE
   - L9360 · A definite block size is definite however it was SPELLED (t1244)
   - L9403 · ⚠ There is a THIRD copy, it is the one that reaches <img>, and it is still open
+  - L9412 · An atomic inline is a BLOCK laid out in a containing block we refused to describe (t1245)
+  - L9437 · The diagnostic that found it: a correct fix that moved nothing
+  - L9450 · ⚠ <canvas>'s width/height attributes are the BITMAP size, not a CSS presentational hint
 
 ## browser-capabilities.md
 `docs/wiki/browser-capabilities.md`
@@ -2114,4 +2117,4 @@
   - L231 · Both named mechanisms are subsystem work
 
 ---
-2021 sections across 22 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+2024 sections across 22 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.

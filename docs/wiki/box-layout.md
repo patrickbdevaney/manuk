@@ -9408,3 +9408,52 @@ An **inline-level** replaced element never reaches `layout_block`. It is sized b
 function takes `avail_width` and **has no containing-block height at all**, so closing it means
 threading a block-axis available size through the seam and its callers. Until then an inline
 `<img>`/`<video>`/`<canvas>` with a ratio and a `%`/`stretch` height still sizes from the wrong axis.
+
+## An atomic inline is a BLOCK laid out in a containing block we refused to describe (t1245)
+
+An atomic inline — `inline-block`, `inline-flex`, `<img>`, `<canvas>`, `<video>`, `<svg>` — is not
+laid out by some separate inline sizing routine. It goes through **`layout_block`**, exactly like a
+block-level box, from `collect_inline_node`'s atomic arm. And `layout_block` decides four separate
+things **entirely** from its `pch` parameter, the containing block's definite content height:
+
+- `height: 100%`
+- `calc()` over a percentage height
+- `height: stretch` / `-webkit-fill-available`
+- the CSS2 §10.3.2 **ratio transfer** (definite block size + ratio → inline size)
+
+That call passed a hard-coded `None`. Every atomic inline on the web was therefore told *"your
+containing block has no definite height"* — false whenever the establishing block has one — and all
+four rules were **unreachable rather than wrong**.
+
+```text
+                                              Chrome    before     after
+  inline-block, height:100%                   50x200    50x16   ✗  50x200  ✓
+  inline-block, height:stretch                50x200    50x16   ✗  50x200  ✓
+  inline-block, aspect-ratio:1/4, height:100%  50x200   50x16   ✗  50x200  ✓
+  <canvas> declared ratio, height:stretch      10x20   200x400  ✗   10x20  ✓
+  inline-block, height:auto (CONTROL)          50x16    50x16   ✓   50x16  ✓
+```
+
+### The diagnostic that found it: a correct fix that moved nothing
+
+t1244 widened the ratio transfer from `Dim::Px`-only to every spelling of a definite block size,
+gated it, and proved it RED two independent ways. Its own `<canvas>` rows then did not move a pixel.
+That is the signature of **a dispatch bug, not a rule bug** — the rule was already right and was
+being asked about a containing block whose height had been erased one frame up. Two consecutive ticks
+of this project's own t1048 lesson: *works, and moves nothing ⇒ the dispatch is the bug.*
+
+The fix is a parameter, not a cache: `pch` threaded through `flush_inline_run` →
+`collect_inline_group` → `collect_inline_node`. It is already a parameter of `layout_children`, so
+all six call sites had the right value in scope — it simply was not carried the last three frames.
+A side table would have re-raised t1119's *"ask every side-table WHICH PASSES CAN WRITE"*.
+
+### ⚠ `<canvas>`'s width/height attributes are the BITMAP size, not a CSS presentational hint
+
+Still open, and it is why a `<canvas width=30 height=60>` with a stretched height comes out **30×20**
+against Chrome's **10×20**: we apply those attributes as CSS presentational hints, so `s.width` is
+`Dim::Px(30)` and the ratio transfer's `width == Dim::Auto` guard correctly declines. HTML maps
+dimension attributes to CSS for `img` / `input type=image` / `embed` / `iframe` / `object` / `video` /
+`marquee` — **`canvas` is not on that list**. Its attributes give the bitmap's dimensions, which
+become the *intrinsic* size. ⚠ An author `style="width:auto"` does not rescue it, because *`auto` the
+author wrote and `auto` nobody set are the same computed value* — t1026's third way to be wrong, and
+t1026's own fix (make the hint a real cascade origin rather than a post-pass) is the shape to copy.
