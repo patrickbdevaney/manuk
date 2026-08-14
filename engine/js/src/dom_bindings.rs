@@ -2065,38 +2065,132 @@ const COMPUTED_UNENUMERATED_NAMES: &[&str] = &[
 /// a path that is already a forced-reflow trigger. A leading `-` is dropped before camel-casing so
 /// `-webkit-user-select` finds `webkitUserSelect` and not `WebkitUserSelect`.
 fn dashed_alias_js(extra: &[(&'static str, String)]) -> String {
-    let mut out = String::from("var a=[");
-    let mut first = true;
-    let mut emit = |name: &str, out: &mut String| {
-        // A dashless property (`color`, `width`) IS its own camel-cased attribute — nothing to alias.
+    // Only the DERIVED names are per-element; the standard and unenumerated lists are the same
+    // ~80 pairs on every call and live in `globalThis.__csAliasStd` (see `cs_proto_js`). The
+    // aliasing loop itself moved to `globalThis.__csAlias` for the same reason — it was ~90 bytes
+    // of loop body re-parsed per read.
+    let mut out = String::from("globalThis.__csAlias(o,[");
+    out.push_str(&alias_pairs_js(extra.iter().map(|(n, _)| *n)));
+    out.push_str("]);");
+    out
+}
+
+/// `[["background-color","backgroundColor"],…]` for the dashed names in `names`, as JS array
+/// elements (no enclosing brackets). A dashless property (`color`, `width`) IS its own camel-cased
+/// attribute, so it is skipped. A leading `-` is dropped before camel-casing so
+/// `-webkit-user-select` finds `webkitUserSelect` and not `WebkitUserSelect`.
+fn alias_pairs_js<'a>(names: impl Iterator<Item = &'a str>) -> String {
+    let mut out = String::new();
+    for name in names {
         if !name.contains('-') {
-            return;
+            continue;
         }
-        let camel_key = camel(name.strip_prefix('-').unwrap_or(name));
-        if !first {
+        if !out.is_empty() {
             out.push(',');
         }
-        first = false;
         out.push('[');
         out.push_str(&js_string_literal(name));
         out.push(',');
-        out.push_str(&js_string_literal(&camel_key));
+        out.push_str(&js_string_literal(&camel(
+            name.strip_prefix('-').unwrap_or(name),
+        )));
         out.push(']');
-    };
-    for name in COMPUTED_STD_NAMES {
-        emit(name, &mut out);
     }
-    for (name, _) in extra {
-        emit(name, &mut out);
+    out
+}
+
+/// **Everything a computed-style snapshot needs that does not depend on the element**, installed
+/// ONCE per global next to `CSSOM_PRELUDE`.
+///
+/// ⚠ **The three methods are referenced as OWN properties of each snapshot, not inherited from a
+/// prototype**, and that is a measured constraint rather than a style choice: putting them on a
+/// prototype cost **4 subtests in `css/cssom`** (`Object.keys`/`getOwnPropertyNames` over a computed
+/// style stop listing them). Sharing the *function objects* buys the whole compile saving anyway —
+/// what was expensive was re-parsing the bodies, not naming three slots.
+///
+/// ⚠⚠⚠ **This exists because `getComputedStyle` was a call into the JS COMPILER.** Its result was
+/// built by formatting an ~11 KB JavaScript *source string* and handing it to `evaluate_script` —
+/// per call. About 8 KB of that was constant: the `getPropertyValue` body, the 50-entry kebab→camel
+/// lookup table (allocated *again* on every `getPropertyValue` invocation, because it was a literal
+/// inside the function), `item`, `getPropertyPriority`, and the 50-name enumeration array. All of it
+/// re-tokenized and re-compiled for an object whose actual content is ~70 short strings.
+///
+/// `getComputedStyle` is what `jQuery.css()` calls, which is what `.width()`, `.height()`,
+/// `.offset()` and `.is(':visible')` call. A jQuery-era layout routine does this once per element
+/// per pass, so the cost is paid **per element per pass** — and on `ticket.jfa.jp` (CrUX corpus,
+/// `timeout-150s` bucket) it was paid until the script-preemption watchdog cut the pass down, every
+/// three seconds, forever. The page never quiesced and scored *unscorable* rather than badly.
+///
+/// The names array is generated rather than written out because `COMPUTED_STD_NAMES` is the single
+/// source of truth for it — a hand-copied second list is the drift `G_COMPUTED_CUSTOM_PROPERTIES`
+/// already caught once, when `length` was a literal `50` against a list of 52.
+fn cs_proto_js() -> String {
+    let mut out = String::from("globalThis.__csStd=[");
+    for (i, n) in COMPUTED_STD_NAMES.iter().enumerate() {
+        if i > 0 {
+            out.push(',');
+        }
+        out.push_str(&js_string_literal(n));
     }
-    for name in COMPUTED_UNENUMERATED_NAMES {
-        emit(name, &mut out);
-    }
+    // The kebab→camel table, hoisted OUT of `getPropertyValue` — it used to be an object literal in
+    // the function body, so every `getPropertyValue('font-size')` allocated a fresh 50-property
+    // object before it could look one name up.
+    out.push_str(
+        "];globalThis.__csMap={'background-color':'backgroundColor','font-size':'fontSize',\
+         'font-weight':'fontWeight','font-style':'fontStyle','font-family':'fontFamily',\
+         'line-height':'lineHeight','text-align':'textAlign','white-space':'whiteSpace',\
+         'pointer-events':'pointerEvents','user-select':'userSelect',\
+         '-webkit-user-select':'userSelect','-moz-user-select':'userSelect',\
+         'color-scheme':'colorScheme',\
+         'scrollbar-width':'scrollbarWidth','scrollbar-color':'scrollbarColor',\
+         'margin-top':'marginTop',\
+         'margin-right':'marginRight','margin-bottom':'marginBottom','margin-left':'marginLeft',\
+         'padding-top':'paddingTop','padding-right':'paddingRight','padding-bottom':'paddingBottom',\
+         'padding-left':'paddingLeft','z-index':'zIndex',\
+         'justify-content':'justifyContent','align-items':'alignItems','align-self':'alignSelf',\
+         'align-content':'alignContent','justify-items':'justifyItems','justify-self':'justifySelf',\
+         'transform-origin':'transformOrigin','background-position':'backgroundPosition',\
+         'tab-size':'tabSize',\
+         'flex-direction':'flexDirection','flex-wrap':'flexWrap','flex-grow':'flexGrow',\
+         'flex-shrink':'flexShrink','flex-basis':'flexBasis','row-gap':'rowGap',\
+         'column-gap':'columnGap','box-sizing':'boxSizing','min-width':'minWidth',\
+         'max-width':'maxWidth','min-height':'minHeight','max-height':'maxHeight',\
+         'overflow-x':'overflowX','overflow-y':'overflowY',\
+         'scroll-snap-type':'scrollSnapType','scroll-snap-align':'scrollSnapAlign',\
+         '-webkit-filter':'filter','-webkit-backdrop-filter':'backdropFilter',\
+         '-webkit-clip-path':'clipPath'};\
+         globalThis.__csProto={\
+         getPropertyValue:function(p){\
+         p=String(p);\
+         if(p.charCodeAt(0)===45&&p.charCodeAt(1)===45){var cvv=this.__custom[p];return cvv===undefined?'':String(cvv);}\
+         var k=globalThis.__csMap[p]||p.replace(/-([a-z])/g,function(_,c){return c.toUpperCase();});\
+         var v=this[k];if(v===undefined)v=this[p];\
+         return v===undefined?'':String(v);},\
+         item:function(i){var n=this.__n[i];return n===undefined?'':n;},\
+         getPropertyPriority:function(){return '';}};",
+    );
+    // The dashed aliases (`cs['background-color']` alongside `cs.backgroundColor`). `'grid-area' in
+    // cs` is how a feature-detect asks whether we support a property, so the dashed spelling has to
+    // be a real own key — but the STANDARD and UNENUMERATED halves of that list are identical on
+    // every call, so only the derived names are emitted per read (see `dashed_alias_js`).
+    //
     // `if(v!==undefined)` keeps the alias HONEST: a name whose camel slot this build does not emit
     // stays absent, so `in` remains a truthful question about what we actually have. Custom
     // properties are deliberately not here — Chrome answers `'--brand' in cs` false and routes them
     // through `getPropertyValue` alone.
-    out.push_str("];for(var i=0;i<a.length;i++){var v=o[a[i][1]];if(v!==undefined)o[a[i][0]]=v;}");
+    out.push_str("globalThis.__csAliasStd=[");
+    out.push_str(&alias_pairs_js(
+        COMPUTED_STD_NAMES
+            .iter()
+            .chain(COMPUTED_UNENUMERATED_NAMES.iter())
+            .copied(),
+    ));
+    out.push_str(
+        "];globalThis.__csAlias=function(o,x){\
+         var a=globalThis.__csAliasStd,i,v;\
+         for(i=0;i<a.length;i++){v=o[a[i][1]];if(v!==undefined)o[a[i][0]]=v;}\
+         for(i=0;i<x.length;i++){v=o[x[i][1]];if(v!==undefined)o[x[i][0]]=v;}};",
+    );
     out
 }
 
@@ -2373,23 +2467,26 @@ fn computed_style_js(
     let extra = extra_computed_props(cs, cb, rect, content_absent_is_none);
     let names_js = {
         const STD: &[&str] = COMPUTED_STD_NAMES;
-        let mut arr = String::from("[");
-        for (i, n) in STD.iter().enumerate() {
+        // **The STANDARD half is the same 50-odd strings on every call, so it is a `concat` against
+        // one frozen global array rather than 50 string literals re-tokenized per read.** Only the
+        // per-element half — the derived `extra` names and the element's own custom properties —
+        // is emitted as source. `concat` returns a FRESH array, so `item()`'s backing store is
+        // still private to this snapshot and a script that writes `cs.__n[0]` cannot poison the
+        // next element's enumeration.
+        let mut arr = String::from("globalThis.__csStd.concat([");
+        for (i, (n, _)) in extra.iter().enumerate() {
             if i > 0 {
                 arr.push(',');
             }
             arr.push_str(&js_string_literal(n));
         }
-        // DERIVED, not copied — the whole point of `extra_computed_props` being one list.
-        for (n, _) in &extra {
-            arr.push(',');
-            arr.push_str(&js_string_literal(n));
-        }
         for (name, _) in cs.custom_properties.iter() {
-            arr.push(',');
+            if !arr.ends_with('[') {
+                arr.push(',');
+            }
             arr.push_str(&js_string_literal(name));
         }
-        arr.push(']');
+        arr.push_str("])");
         (arr, STD.len() + extra.len() + cs.custom_properties.len())
     };
     // **`length` is DERIVED, not a literal.** It used to be the constant `50`, and the `STD` list
@@ -2401,7 +2498,8 @@ fn computed_style_js(
     let (names_js, names_len) = names_js;
     let q = js_string_literal;
     format!(
-        "(function(){{var o={{color:{}, backgroundColor:{}, fontSize:{}, fontWeight:{}, fontStyle:{}, \
+        "(function(){{var __P=globalThis.__csProto;var o={{\
+          color:{}, backgroundColor:{}, fontSize:{}, fontWeight:{}, fontStyle:{}, \
           fontFamily:{}, lineHeight:{}, textAlign:{}, display:{}, position:{}, overflow:{}, overflowX:{}, overflowY:{}, \
           visibility:{}, whiteSpace:{}, pointerEvents:{}, userSelect:{}, webkitUserSelect:{}, colorScheme:{}, \
           scrollbarWidth:{}, scrollbarColor:{}, opacity:{}, \
@@ -2417,38 +2515,9 @@ fn computed_style_js(
           scrollSnapType:{}, scrollSnapAlign:{}, \
           filter:{}, webkitFilter:{}, backdropFilter:{}, webkitBackdropFilter:{}, \
           clipPath:{}, webkitClipPath:{}, mixBlendMode:{}, {} __custom:{}, \
-          getPropertyValue:function(p){{\
-          p=String(p);\
-          if(p.charCodeAt(0)===45&&p.charCodeAt(1)===45){{var cvv=this.__custom[p];return cvv===undefined?'':String(cvv);}}\
-          var m={{'background-color':'backgroundColor','font-size':'fontSize',\
-          'font-weight':'fontWeight','font-style':'fontStyle','font-family':'fontFamily',\
-          'line-height':'lineHeight','text-align':'textAlign','white-space':'whiteSpace',\
-          'pointer-events':'pointerEvents','user-select':'userSelect',\
-          '-webkit-user-select':'userSelect','-moz-user-select':'userSelect',\
-          'color-scheme':'colorScheme',\
-          'scrollbar-width':'scrollbarWidth','scrollbar-color':'scrollbarColor',\
-          'margin-top':'marginTop',\
-          'margin-right':'marginRight','margin-bottom':'marginBottom','margin-left':'marginLeft',\
-          'padding-top':'paddingTop','padding-right':'paddingRight','padding-bottom':'paddingBottom',\
-          'padding-left':'paddingLeft','z-index':'zIndex',\
-          'justify-content':'justifyContent','align-items':'alignItems','align-self':'alignSelf',\
-          'align-content':'alignContent','justify-items':'justifyItems','justify-self':'justifySelf',\
-          'transform-origin':'transformOrigin','background-position':'backgroundPosition',\
-          'tab-size':'tabSize',\
-          'flex-direction':'flexDirection','flex-wrap':'flexWrap','flex-grow':'flexGrow',\
-          'flex-shrink':'flexShrink','flex-basis':'flexBasis','row-gap':'rowGap',\
-          'column-gap':'columnGap','box-sizing':'boxSizing','min-width':'minWidth',\
-          'max-width':'maxWidth','min-height':'minHeight','max-height':'maxHeight',\
-          'overflow-x':'overflowX','overflow-y':'overflowY',\
-          'scroll-snap-type':'scrollSnapType','scroll-snap-align':'scrollSnapAlign',\
-          '-webkit-filter':'filter','-webkit-backdrop-filter':'backdropFilter',\
-          '-webkit-clip-path':'clipPath'}};\
-          var k=m[p]||String(p).replace(/-([a-z])/g,function(_,c){{return c.toUpperCase();}});\
-          var v=this[k];if(v===undefined)v=this[p];\
-          return v===undefined?'':String(v);}},\
+          getPropertyValue:__P.getPropertyValue, \
           __n:{}, length:{}, \
-          item:function(i){{var n=this.__n[i];return n===undefined?'':n;}},\
-          getPropertyPriority:function(){{return '';}}}};{}return o;}})()",
+          item:__P.item, getPropertyPriority:__P.getPropertyPriority}};{}return o;}})()",
         q(&rgba_css(&cs.color)),
         q(&cs.background_color.map(|c| rgba_css(&c)).unwrap_or_else(|| "rgba(0, 0, 0, 0)".into())),
         q(&format!("{}px", cs.font_size)),
@@ -2792,6 +2861,11 @@ unsafe fn window_get_computed_style(cx: *mut RawJSContext, argc: u32, vp: *mut V
           getPropertyPriority:function(){return '';}})"
             .to_string()
     });
+    // The cost of one read, in the units it is paid in: bytes handed to the JS parser. On a default
+    // `<div>`: **11,017 before** the shared method table and the hoisted name/alias tables, **6,561
+    // after**. `RUST_LOG=manuk_js=trace` is how the next round of this is measured rather than
+    // estimated — and there is a next round, because ~4 KB of the remainder is still constant NAMES.
+    tracing::trace!(bytes = src.len(), "computed-style snapshot source");
     match eval_in_current_global(cx, &src) {
         Some(v) => *vp = v,
         None => *vp = NullValue(),
@@ -11536,6 +11610,15 @@ pub unsafe fn install(
     // The JS-side event-listener registry that addEventListener/dispatchEvent drive.
     let _ = eval_in_current_global(cx, LISTENER_PRELUDE);
     let _ = eval_in_current_global(cx, CSSOM_PRELUDE);
+    // The computed-style snapshot's shared method table + name tables. ⚠ It must reach EVERY global
+    // that can run script, not only the main one — a frame's `getComputedStyle` evaluates in the
+    // FRAME's global, and the generated snapshot reads `globalThis.__csProto` directly, so a global
+    // without it would throw inside its own snapshot and hand the page back `null`.
+    //
+    // **That cannot happen, and the reason is structural rather than careful:** `getComputedStyle`
+    // is a native function this same `install()` defines on the global, so a global where it is
+    // callable is a global where this line has already run.
+    let _ = eval_in_current_global(cx, &cs_proto_js());
     // Seed the identity cache with the document (id = root) so event bubbling to
     // document-level (delegated) listeners resolves its node id.
     JS_SetProperty(

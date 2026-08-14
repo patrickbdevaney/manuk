@@ -11,12 +11,12 @@
 
 | | value | over |
 |---|---|---|
-| ticks landed | **934** | ticks 1–1233 |
-| median tick cycle | **28m** | 933 intervals |
-| median, last 10 | **58m** | 10 intervals |
+| ticks landed | **935** | ticks 1–1234 |
+| median tick cycle | **28m** | 934 intervals |
+| median, last 10 | **60m** | 10 intervals |
 | fastest / slowest | 5s / 5.4d | |
-| **ticks per hour** | **1.15** | 812.9h elapsed |
-| median verify wall | **63s** | 873 ticks |
+| **ticks per hour** | **1.15** | 814.1h elapsed |
+| median verify wall | **63s** | 874 ticks |
 | wall trend | 39s → 13m — getting slower ⚠️ | first 3 vs last 3 |
 
 The **cycle** is the real unit: implement → debug → verify wall → land. The wall is only part of
@@ -27,11 +27,11 @@ it, and a wall that grows taxes every future tick, so it is tracked separately f
 ### Near — the daily driver (doc / app / platform web)
 
 * **capabilities asserted** (`G_CAPABILITY`): 48 → **81**
-* **live gates**: 27 → **467**
-* **✅ rows in the capability ledger**: 144 → **614**
+* **live gates**: 27 → **468**
+* **✅ rows in the capability ledger**: 144 → **615**
 * **Bar 0 — oracle hangs**: 0 of 265 sites
 
-**422 of 934 ticks** (45%) moved a
+**423 of 935 ticks** (45%) moved a
 user-visible capability. The rest were instruments, infrastructure and corrections — and the
 ledger says the corrections were not overhead: three of its top three priorities were phantoms,
 and finding that out redirected everything after it.
@@ -90,8 +90,8 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 
 ## What a capability costs
 
-* **422** capability ticks, median cycle **28m**
-* median diff per tick: **+268 / −34** lines across 8 files
+* **423** capability ticks, median cycle **28m**
+* median diff per tick: **+269 / −34** lines across 8 files
 
 ## Every tick
 
@@ -1031,5 +1031,6 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 | **1231** | 2026-08-13 23:36 | 10m | measurement | 13m | +123/−33 | 467 | 81 | 56.0% · | the frame gap NEVER recovers, and that rules out the fix t1230 specified (2026-08-14) |
 | **1232** | 2026-08-13 23:46 | 11m | measurement | 13m | +79/−33 | 467 | 81 | 56.0% · | the self-audit (due at 1232), and what this window actually bought (2026-08-14) |
 | **1233** | 2026-08-14 01:58 | 2.2h | measurement | 13m | +461/−35 | 467 | 81 | 56.0% · | the sweep banked, the prediction scored, and a SOLO number that did not survive `--jobs 2` |
+| **1234** | 2026-08-14 03:10 | 72m | capability | 13m | +506/−95 | 468 | 81 | 56.0% · | `getComputedStyle` was a call into the JS compiler, and that is why jQuery pages hang (202 |
 
 *`·` after a WPT figure means **carried forward**, not measured this tick.*

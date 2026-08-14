@@ -46371,6 +46371,161 @@ PERF: none — one UA rule and one narrowed branch in a cascade that already ran
 WIKI: `docs/wiki/css-cascade.md` — where Chrome draws the form-control `box-sizing` line, and why a
 layout-crate test cannot see it.
 
+## Tick 1234 — `getComputedStyle` was a call into the JS compiler, and that is why jQuery pages hang (2026-08-14)
+
+TICK SHAPE: capability — a hot-path defect found by taking t1233's own named next measurement (re-run
+the `timeout-150s` survivors SOLO, on our clock, with no Chromium in the picture) and reading the
+log instead of the number.
+
+**THE HYPOTHESIS, written before the measurement returned:** t1233 showed a SOLO reading of the
+timeout bucket (11 of 13 complete) that the `--jobs 2` sweep contradicted (6 of 13), and named the
+open question — *how much of the remaining 10 is contention and how much is engine?* The prediction
+was **"mostly contention"**, on the grounds that `payb.jp` alone lost 100 s to the pair.
+
+**THE PREDICTION WAS WRONG, and the direction it was wrong in is the tick.** All ten re-measured
+SOLO, one at a time, `RUST_LOG=info`, release binary, 150 s cap, no Chromium anywhere:
+
+```text
+  bhramarah.in           150.2s  TIMEOUT      coinmarketcap.com      150.1s  TIMEOUT
+  neutypechic.com        150.1s  TIMEOUT      www.friulioggi.it      150.1s  TIMEOUT
+  bbs.ruliweb.com        150.0s  TIMEOUT      payb.jp                150.1s  TIMEOUT
+  ticket.jfa.jp          147.2s  completed, barely   <- engine-bound in everything but the verdict
+  7info.ru               111.4s  completed, barely   <- same
+  secure.paymentech.com   26.7s  completed    <- contention
+  simplepdf.com           27.8s  completed    <- contention
+```
+
+**EIGHT OF TEN ARE ENGINE, TWO ARE CONTENTION** — the opposite of the prediction, and the opposite of
+the correction t1233 issued against itself. t1233 read the SOLO/`--jobs 2` gap on `payb.jp` (49.8s vs
+>150s) and generalised from it that the class total was *overstated by contention*; on the whole
+bucket measured the same way, contention explains **two sites**, and `payb.jp` itself is not one of
+them — it now times out SOLO too. **The general form: a contention correction derived from ONE site
+is a claim about that site.** t1233 was right that the two instruments measure different things and
+wrong about which way the residual ran.
+
+And **every one of the eight shows script preemption**, four of them cut inside a *generated*
+`dom_event.js` source:
+
+```text
+  bhramarah.in    dom_event.js:1:44529      ticket.jfa.jp   dom_event.js:1:11149
+  payb.jp         dom_event.js:1:17488      friulioggi.it   dom_event.js:1:14407
+```
+
+⚠⚠⚠ **`dom_event.js` is the filename `eval_in_current_global` gives every snippet the bindings
+generate — so a column number of 44,529 is a statement about how big a program a DOM read compiles.**
+`getComputedStyle` built its result by `format!`-ing a JavaScript SOURCE STRING and handing it to
+`evaluate_script`. **Measured, not estimated: 11,017 bytes on a default `<div>`, per call.** About
+8 KB of it constant — the `getPropertyValue` body, a 50-entry kebab→camel table that was an object
+literal *inside* that body (so it was also re-allocated on every `getPropertyValue` invocation), the
+`item`/`getPropertyPriority` bodies, the ~50-name enumeration array, and ~80 dashed-alias pairs with
+their loop. All re-tokenized and re-compiled for an object whose content is ~70 short strings.
+
+**Why this is a hang and not a slow path.** `getComputedStyle` is what `jQuery.css()` calls, which is
+what `.width()`, `.height()`, `.offset()` and `.is(':visible')` call — so it is paid **per element per
+pass**. `ticket.jfa.jp`'s `footerPosition()` runs on a 3-second self-rescheduling `setTimeout`; the
+preemption watchdog (t1198/t1228/t1229 — the class this loop just closed) cuts the pass, the timer
+re-enters, it is cut again, and the page never quiesces:
+
+```text
+  Xe → Ge → css → get → css → ce.fn[o] → footerPosition
+  @dom_event.js:1:11077   "Script terminated by timeout"
+```
+
+⚠⚠ **AND THE FAILURE IS NOT ONLY SLOWNESS — IT IS A `null` RETURN.** Cut the script *while the
+snapshot itself is being evaluated* and `evaluate_script` returns `Err`, the binding falls to
+`*vp = NullValue()`, and the page sees `getComputedStyle(el) === null`. Measured on `bhramarah.in`:
+
+```text
+  custom element connectedCallback: TypeError: can't access property "getPropertyValue", e is null
+```
+
+A throw inside `connectedCallback` aborts the upgrade. **That is a render-blocker of the throw class
+— the observer's priority (1) — produced by a COST bug.** Cost and correctness are not separate axes
+on this path, which is the general form worth keeping.
+
+**THE FIX: the constant half is a SHARED METHOD TABLE, installed once per global.** `cs_proto_js()`
+installs `__csProto` (the three method *function objects*), `__csMap`, `__csStd`, `__csAliasStd` and
+`__csAlias`; a call emits only its own data and names the shared functions.
+
+```text
+  11,017 bytes  ->  6,561      -40%, on a default `<div>`, MEASURED both ends
+```
+
+⚠⚠⚠ **THE FIRST DESIGN INHERITED THE THREE METHODS FROM A `__proto__`, AND THAT WAS A −4 REGRESSION
+IN `css/cssom` — caught only because the area was RE-MEASURED instead of reasoned about.** The
+reasoning for it was good and is written down two paragraphs above where I first wrote it: Chrome
+carries those methods on `CSSStyleDeclaration.prototype`, so inheriting them is *more* conformant,
+and `for…in` is unaffected because it walks the chain. WPT disagrees — `Object.keys` /
+`getOwnPropertyNames` over a computed style stop listing them. Naming three slots
+(`getPropertyValue:__P.getPropertyValue`) costs ~110 bytes and buys the entire saving back, because
+**what was expensive was re-parsing the bodies, not naming the slots.**
+
+⚠⚠⚠ **AND THE SAME ONE-LINE CHANGE WAS +41 IN `css/css-values`. ONE EDIT, TWO AREAS, OPPOSITE
+SIGNS** — which nothing but measuring both would have said:
+
+```text
+  area              prototype      own properties (SHIPPED)
+  css/cssom            2785  -4       2789  = mark
+  css/css-values       2240  +41      2199  = mark
+  dom (CONTROL)        8142   0       8142  = mark
+```
+
+**Net +37, and REFUSED.** The ratchet does not trade a regression for a capability, and +41/−4 is
+exactly the shape it exists to stop — a package deal that reads as progress in the total. The shipped
+version is neutral on all three areas and keeps the whole cost win; the +41 stays on the table and is
+reachable the moment those 4 `css/cssom` subtests are understood. ⚠ The denominator of
+`css/css-values` moved **4175 → 4201** on its own between the banked sweep and this one, so the row is
+updated with the new total and the same pass count — a moving denominator is the tell, and it is
+stated rather than folded into the delta.
+
+⚠ **The table is installed next to `CSSOM_PRELUDE`, and that is load-bearing.** A frame's
+`getComputedStyle` evaluates in the FRAME's global, and the generated snapshot reads
+`globalThis.__csProto` directly — a global without it would throw inside its own snapshot and hand
+the page back `null`, which is the very failure this tick is about. **It cannot happen, and the
+reason is structural rather than careful:** `getComputedStyle` is a native function this same
+`install()` defines on the global, so a global where it is callable is a global where the table has
+already been installed. Five frame gates pin it.
+
+GATE: `G_COMPUTED_STYLE_IS_NOT_A_COMPILER_CALL` — 4,000 reads across 200 elements, the properties
+`.css()` actually reads. **RED-PROVEN before the fix**: `#out` stays `-` because the watchdog cuts
+the loop and the marker is never written. Green after, and the gate's own wall time fell **5.36s →
+2.80s** across the three revisions. Break it by inlining the constant machinery back into the
+per-call literal.
+
+REGRESSION SURFACE, checked before the wall: all **eleven** `g_computed_*` / `g_object_position_*`
+gates green, plus five frame gates (`g_frame_window_is_one_object`, `g_frame_window_surface`,
+`g_iframe`, `g_iframe_rerender`, `g_inline_frame_document`) because the shared table has to reach a
+frame's global — sixteen green on the shipped design. **No behaviour change survives into the
+commit**: the own-property shape means every snapshot has exactly the keys, order, `length` and
+enumeration it had before, and the three WPT areas re-measured back to their banked marks to the
+subtest.
+
+⚠ **NOT CLOSED, and specified so the next tick does not re-derive it.** The remaining 6,561 bytes are
+still ~4 KB of **names**, and those are constant too: `extra_computed_props` returns a flat,
+unconditional `vec![]` — the same ~68 names in the same order every call, only the values vary.
+Hoisting them reaches ~2.7 KB. It was **not** taken in this tick because it makes the per-call values
+**positional** against a list computed elsewhere, so one future conditional entry silently desyncs
+names from values — the exact drift `G_COMPUTED_CUSTOM_PROPERTIES` caught when `length` was a literal
+`50` against a list of 52. The safe shape is to derive the list from `extra_computed_props` itself
+and compare it per call, falling back to inline emission on mismatch. Separately, `__custom` is
+**unbounded** — every custom property in scope is serialized into every snapshot, which is how
+`bhramarah.in` reached a **44,529-byte** read — and bounding that needs a lazy native accessor, not a
+hoist.
+
+⚠ **A harness observation, not acted on (PART VII):** `/home` is at **94%** with `target/debug` at
+117 G and no orphan test binaries older than three days, so it is a live warm build rather than
+bloat. Recorded because `wall-self-purge-at-95-percent` is one big link away.
+
+PERF: this IS the perf result — a DOM read no longer compiles a program. 11,017 → 6,561 bytes handed
+to the JS parser per `getComputedStyle`, and the kebab→camel table went from one allocation per
+`getPropertyValue` call to one per global. Instrumented permanently as
+`tracing::trace!(bytes, "computed-style snapshot source")` so the next round is measured, not
+estimated.
+
+WIKI: `docs/wiki/js-engine.md` — "`getComputedStyle` was a call into the JS COMPILER", including the
+prototype-vs-own-property measurement, the two hoists still on the table, and why one of them is a
+hazard rather than a chore.
+
 ## Tick 1233 — the sweep banked, the prediction scored, and a SOLO number that did not survive `--jobs 2` (2026-08-14)
 
 TICK SHAPE: measurement — a clean `--jobs 2` CrUX sweep (200 sites, the bankable configuration per

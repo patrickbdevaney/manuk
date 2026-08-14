@@ -3209,3 +3209,84 @@ make a lifecycle-only implementation fail.
 
 ⚠ **Open, and it sizes the prize:** the shell calls `repaint_child_frames` and the WPT harness never
 does, so this may be far more visible under the harness than in the real browser. Measure that first.
+
+## `getComputedStyle` was a call into the JS COMPILER (t1234)
+
+**A DOM read that hands the JS engine a fresh multi-kilobyte PROGRAM is not a slow path, it is a hang
+mechanism.** `window_get_computed_style` built its result by `format!`-ing a JavaScript **source
+string** and passing it to `evaluate_script`. Measured on a default `<div>`: **11,017 bytes, per
+call.** Tokenized, parsed, bytecode-compiled and run, every time, for an object whose actual content
+is ~70 short strings.
+
+About **8 KB of that was constant** — the same bytes on every call, for every element, on every page:
+
+| constant payload | why it was there |
+|---|---|
+| the `getPropertyValue` body | needed on the result object |
+| a 50-entry kebab→camel table | an object **literal inside** that body — so it was also *allocated fresh on every `getPropertyValue` invocation* |
+| `item` / `getPropertyPriority` bodies | the array-like `CSSStyleDeclaration` surface |
+| the `__n` enumeration array | ~50 standard property names, re-quoted per call |
+| the dashed-alias pair table + its loop | ~80 `["background-color","backgroundColor"]` pairs, so `'grid-area' in cs` is a truthful question |
+
+**Why this is the hang and not a micro-optimisation.** `getComputedStyle` is what `jQuery.css()`
+calls, which is what `.width()`, `.height()`, `.offset()` and `.is(':visible')` call. A jQuery-era
+layout routine pays it **per element per pass**. Under the script-preemption watchdog (t1198/t1228/
+t1229) that pass gets **cut**, and a routine on a self-rescheduling `setTimeout` re-enters, gets cut
+again, and the page never quiesces:
+
+```text
+  Xe → Ge → css → get → css → ce.fn[o] → footerPosition   <- jQuery, in a 3s self-rescheduling timer
+  @dom_event.js:1:11077   "Script terminated by timeout"  <- column 11077 IS the generated source
+```
+
+**And the failure is not merely slowness — it is a `null` return.** If the watchdog cuts the script
+*while the snapshot itself is being evaluated*, `evaluate_script` returns `Err`, the binding falls to
+`*vp = NullValue()`, and the page sees `getComputedStyle(el) === null`. Measured on `bhramarah.in`:
+
+```text
+  custom element connectedCallback: TypeError: can't access property "getPropertyValue", e is null
+```
+
+A throw inside `connectedCallback` aborts the custom-element upgrade — a **render-blocker of the
+throw class**, produced by a *cost* bug. Cost and correctness are not separate axes here.
+
+### The fix: the constant half is a SHARED METHOD TABLE, installed once per global
+
+`cs_proto_js()` installs `__csProto` (the three method *function objects*), `__csMap` (the kebab
+table, now hoisted out of the function so it is allocated once, not per call), `__csStd` (the
+standard names) and `__csAliasStd` + `__csAlias` (the alias pairs and the loop over them). A call
+emits only its own data, naming the shared functions as `getPropertyValue:__P.getPropertyValue` etc.
+
+```text
+  11,017 bytes  ->  6,561      -40%, on a default `<div>`
+```
+
+⚠⚠⚠ **THE FIRST DESIGN PUT THE METHODS ON A `__proto__` AND IT WAS A −4 REGRESSION IN
+`css/cssom` — caught only because the area was re-measured rather than reasoned about.** Inheriting
+them is *more* Chrome-like (Chrome's live objects carry them on `CSSStyleDeclaration.prototype`) and
+it is what the reasoning said to do; WPT disagrees, because `Object.keys` / `getOwnPropertyNames`
+over a computed style stop listing them. Naming three slots costs ~110 bytes and buys the whole
+saving back — **what was expensive was re-parsing the bodies, not naming the slots.**
+
+⚠⚠ **AND THE SAME CHANGE WAS +41 IN `css/css-values`.** One edit, measured across three areas:
+
+| area | prototype | own properties (shipped) |
+|---|---|---|
+| `css/cssom` | 2785 (**−4**) | **2789** = mark |
+| `css/css-values` | 2240 (**+41**) | **2199** = mark |
+| `dom` (control) | 8142 | 8142 |
+
+Net +37 — and **refused**, because the ratchet does not trade a regression for a capability. The
+shipped version is neutral on all three and keeps the whole cost win. The +41 is real, still on the
+table, and only reachable once the 4 `css/cssom` subtests are understood; taking it as a package was
+the trade the ratchet exists to stop. *A one-line change can move two areas in opposite directions,
+and only measuring both says so.*
+
+⚠ **A global without `__csProto` would throw inside its own snapshot** and hand the page back
+`null` — the exact failure documented above. That cannot happen, and the reason is structural rather
+than careful: `getComputedStyle` is a native function `install()` defines on the global, so a global
+where it is callable is a global where the table has already been installed. Five frame gates pin it.
+
+**Gate:** `G_COMPUTED_STYLE_IS_NOT_A_COMPILER_CALL` — 4,000 reads across 200 elements must complete
+inside the drain budget. RED before this change (the loop is cut, the marker never written), green
+after.
