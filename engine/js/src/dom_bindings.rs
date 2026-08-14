@@ -897,7 +897,29 @@ fn intrinsic_css(k: manuk_css::IntrinsicSize) -> &'static str {
 /// because an intrinsic keyword collapses to `Dim::Auto` for length resolution and would otherwise
 /// serialise as `auto` (t930). Chrome-measured: `min-width: min-content` reads back `"min-content"`,
 /// on both the physical and the logical spelling.
-fn min_dim_css(d: &manuk_css::Dim, kw: Option<manuk_css::IntrinsicSize>) -> String {
+///
+/// ⚠⚠⚠ **`stretch` NEEDS THE SAME SIDECAR THE INTRINSIC KEYWORDS HAVE, AND IT ARRIVED TWO TICKS
+/// LATE.** t1249/t1250 taught LAYOUT to size `min-height`/`max-height`/`min-width`/`max-width:
+/// stretch` and did not teach the SEMANTIC API to say so — `stretch` collapses to `Dim::Auto`
+/// exactly as `min-content` does, so the box was sized correctly and read back as `auto`/`0px`/
+/// `none`, i.e. as UNSET. That is the shape I3 forbids (*"every renderer subsystem lands with its
+/// semantic-model exposure or it is not done"*) and it is the same two-hands failure t930 fixed for
+/// the intrinsic keywords **on these exact four properties**, one keyword later.
+///
+/// Chrome-measured (`/tmp/t1251-q.html`, `document.compatMode` standards):
+///
+/// ```text
+///   min-height: stretch                  -> "stretch"
+///   max-height: stretch                  -> "stretch"
+///   min-width / max-width: stretch       -> "stretch"
+///   min-height: -webkit-fill-available   -> "stretch"   <- the ALIAS normalises to it
+///   min-block-size: stretch              -> "stretch"   (on `minHeight`, logical resolved)
+///   min-width unset                      -> "0px"    · max-* unset -> "none"   (unchanged)
+/// ```
+fn min_dim_css(d: &manuk_css::Dim, kw: Option<manuk_css::IntrinsicSize>, stretch: bool) -> String {
+    if stretch {
+        return "stretch".to_string();
+    }
     match kw {
         Some(k) => intrinsic_css(k).to_string(),
         None => dim_css(d),
@@ -907,7 +929,10 @@ fn min_dim_css(d: &manuk_css::Dim, kw: Option<manuk_css::IntrinsicSize>) -> Stri
 /// `max-width`/`max-height` — as [`min_dim_css`], but an unset `Dim::Auto` means **`none`**, not
 /// `auto`. Both spellings route through here so the physical and logical pair cannot drift, which
 /// is the drift `extra_computed_props` already records having caught once.
-fn max_dim_css(d: &manuk_css::Dim, kw: Option<manuk_css::IntrinsicSize>) -> String {
+fn max_dim_css(d: &manuk_css::Dim, kw: Option<manuk_css::IntrinsicSize>, stretch: bool) -> String {
+    if stretch {
+        return "stretch".to_string();
+    }
     match kw {
         Some(k) => intrinsic_css(k).to_string(),
         None => match d {
@@ -1888,11 +1913,11 @@ fn extra_computed_props(
         ),
         (
             "min-inline-size",
-            min_dim_css(&cs.min_width, cs.min_width_keyword),
+            min_dim_css(&cs.min_width, cs.min_width_keyword, cs.min_width_stretch),
         ),
         (
             "min-block-size",
-            min_dim_css(&cs.min_height, cs.min_height_keyword),
+            min_dim_css(&cs.min_height, cs.min_height_keyword, cs.min_height_stretch),
         ),
         // ⚠ `max-*` serialises an unset value as **`none`**, not `auto` — the same rule the physical
         // `max-width`/`max-height` already follow. The first version of this block used
@@ -1903,11 +1928,11 @@ fn extra_computed_props(
         // spellings now call the SAME `max_dim_css`, rather than repeating the rule in two places.
         (
             "max-inline-size",
-            max_dim_css(&cs.max_width, cs.max_width_keyword),
+            max_dim_css(&cs.max_width, cs.max_width_keyword, cs.max_width_stretch),
         ),
         (
             "max-block-size",
-            max_dim_css(&cs.max_height, cs.max_height_keyword),
+            max_dim_css(&cs.max_height, cs.max_height_keyword, cs.max_height_stretch),
         ),
         // The `inset` shorthand. `cs.inset` is held by the cascade and was simply never published;
         // Chrome serialises the four-value shorthand collapsed when the sides agree.
@@ -2687,10 +2712,10 @@ fn computed_style_js(
         // ⚠ The keyword sidecar wins over the `Dim` — an intrinsic `min-content`/`max-content`/
         // `fit-content` collapses to `Dim::Auto` for length resolution and would read back as
         // `auto`/`none`, i.e. as UNSET. Chrome returns the keyword (measured, t930).
-        q(&min_dim_css(&cs.min_width, cs.min_width_keyword)),
-        q(&max_dim_css(&cs.max_width, cs.max_width_keyword)),
-        q(&min_dim_css(&cs.min_height, cs.min_height_keyword)),
-        q(&max_dim_css(&cs.max_height, cs.max_height_keyword)),
+        q(&min_dim_css(&cs.min_width, cs.min_width_keyword, cs.min_width_stretch)),
+        q(&max_dim_css(&cs.max_width, cs.max_width_keyword, cs.max_width_stretch)),
+        q(&min_dim_css(&cs.min_height, cs.min_height_keyword, cs.min_height_stretch)),
+        q(&max_dim_css(&cs.max_height, cs.max_height_keyword, cs.max_height_stretch)),
         // Serialised back to the CSS keywords a script wrote, because feature detection reads them
         // back: a carousel library checks `scrollSnapType` to decide whether to run its own JS
         // fallback, and an empty string sends it down the polyfill path over a working native snap.

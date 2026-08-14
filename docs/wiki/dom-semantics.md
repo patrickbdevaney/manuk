@@ -3455,3 +3455,36 @@ real-web capability with a gate and no scoreboard movement.
 −1 run showed `TH_TIMEOUT 56` against the solo run's `9` — a `cargo test` was compiling alongside it.
 **A concurrent build makes an async test time out and reads as a regression.** Re-run solo before
 believing a −1.
+
+## A value that collapses to `Dim::Auto` needs a sidecar in BOTH hands (t1251)
+
+`min-content`, `max-content`, `fit-content` and **`stretch`** all collapse to `Dim::Auto` for length
+resolution on `min-width` / `max-width` / `min-height` / `max-height`. That single representation has
+to be recovered **twice**, by two different consumers:
+
+| hand | what it needs the sidecar for | fixed for the intrinsic keywords | fixed for `stretch` |
+|---|---|---|---|
+| **layout** | the clamp reads `Dim::Auto` as 0 on a min and no-limit on a max | t930 | t1249 / t1250 |
+| **serialisation** | `getComputedStyle` reports the box as UNSET | t930 | **t1251** |
+
+t1249/t1250 supplied the first hand and not the second, so a box sized correctly by
+`min-height: stretch` read back as `auto` — **sized right, reports unset**, which is precisely the
+shape I3 forbids (*every renderer subsystem lands with its semantic-model exposure or it is not
+done*). t930's comment about the sidecar was still sitting in the serialiser; the next keyword to
+collapse to the same representation simply did not inherit it.
+
+**The general rule, worth carrying past this instance:** when a new value collapses into an existing
+representation, the question is not *"does layout handle it?"* but *"how many readers of that
+representation are there?"* — and the answer here has always been two.
+
+Chrome-measured strings (standards mode): all four properties serialise `stretch` as **`"stretch"`**,
+the `-webkit-fill-available` alias **normalises to `"stretch"`**, and the logical spellings land on
+the physical accessor.
+
+### ⚠ A control that wants to assert a value you know is wrong should assert a PREDICATE
+
+The no-leak control for this gate wanted Chrome's `0px` for an unset `min-width`. Ours answers
+`auto` — a real, older, separate divergence. Asserting `0px` fails a correct tick; asserting `auto`
+**pins the engine to the bug** (t1004). The control instead asserts `sa.minWidth !== 'stretch'`,
+which is exactly the claim it exists to make and stays true after the `auto`/`0px` defect is fixed.
+⭐ That defect is now measured and named rather than absorbed into a passing gate.

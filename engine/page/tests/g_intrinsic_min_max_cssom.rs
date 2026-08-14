@@ -50,12 +50,18 @@ const HTML: &str = r##"<!doctype html><html><body>
 <div id="c" style="min-width:30px;max-width:40px;min-height:50px;max-height:60px">x</div>
 <div id="u">x</div>
 <div id="fn" style="min-width:fit-content(50px);max-width:fit-content(50px)">x</div>
+<div id="s" style="min-width:stretch;max-width:stretch;min-height:stretch;max-height:stretch">x</div>
+<div id="sa" style="min-height:-webkit-fill-available;max-width:-webkit-fill-available">x</div>
+<div id="sl" style="min-block-size:stretch;max-inline-size:stretch">x</div>
 <pre id="out"></pre>
 <script>
   var R = [], k = getComputedStyle(document.getElementById('k')),
       c = getComputedStyle(document.getElementById('c')),
       u = getComputedStyle(document.getElementById('u')),
-      f = getComputedStyle(document.getElementById('fn'));
+      f = getComputedStyle(document.getElementById('fn')),
+      st = getComputedStyle(document.getElementById('s')),
+      sa = getComputedStyle(document.getElementById('sa')),
+      sl = getComputedStyle(document.getElementById('sl'));
   // ── THE KEYWORD ROUND-TRIPS, on both spellings of each property.
   R.push('minW:' + k.minWidth);
   R.push('maxW:' + k.maxWidth);
@@ -76,6 +82,28 @@ const HTML: &str = r##"<!doctype html><html><body>
   R.push('uMaxW:' + u.maxWidth);
   // ── `fit-content(<length>)` is not valid here — the declaration is dropped (Chrome-measured).
   R.push('fnMaxW:' + f.maxWidth);
+  // ── `stretch` IS A KEYWORD ON THESE FOUR TOO, and it needs the same sidecar the intrinsic ones
+  //    have: it collapses to `Dim::Auto` identically, so without it a box sized correctly by
+  //    `min-height:stretch` reads back as UNSET. Chrome-measured — all four are the string
+  //    "stretch", the `-webkit-fill-available` ALIAS normalises to it, and the LOGICAL spelling
+  //    lands on the physical accessor.
+  R.push('sMinW:' + st.minWidth);
+  R.push('sMaxW:' + st.maxWidth);
+  R.push('sMinH:' + st.minHeight);
+  R.push('sMaxH:' + st.maxHeight);
+  R.push('saMinH:' + sa.minHeight);
+  R.push('saMaxW:' + sa.maxWidth);
+  R.push('slMinH:' + sl.minHeight);
+  R.push('slMaxW:' + sl.maxWidth);
+  // CONTROL — the axis the stretch rows did NOT set must still read unset, so "stretch" cannot be
+  // leaking onto every property from a shared flag.
+  R.push('saMaxH:' + sa.maxHeight);
+  // ⚠ Asserted as a PREDICATE, not as a string, and deliberately: our unset `min-width` reads
+  //   `auto` where Chrome reads `0px` (measured this tick, /tmp/t1251-q.html). That is a real and
+  //   SEPARATE divergence, and writing `saMinW:auto` here would PIN the engine to it (t1004). The
+  //   claim this control exists to make is only that `stretch` does not LEAK onto a property the
+  //   author never set — which this states exactly, and which stays true after that bug is fixed.
+  R.push('saMinWnotstretch:' + (sa.minWidth !== 'stretch'));
   document.getElementById('out').textContent = R.join(' ');
 </script></body></html>"##;
 
@@ -98,6 +126,31 @@ fn the_intrinsic_min_max_keywords_read_back() {
             "maxW:fit-content",
             "`max-width:fit-content` reads back the keyword; it read `none`, which is what a script \
              checks to conclude there is NO cap",
+        ),
+        (
+            "sMinW:stretch",
+            "⚠ I3: `min-width:stretch` is SIZED correctly by layout since t1250 and must also be              VISIBLE — `stretch` collapses to `Dim::Auto` exactly as `min-content` does, so without              its own sidecar the box reads back as UNSET (Chrome: \"stretch\")",
+        ),
+        ("sMaxW:stretch", "the inline max, same rule"),
+        ("sMinH:stretch", "the block min, same rule"),
+        ("sMaxH:stretch", "the block max, same rule"),
+        (
+            "saMinH:stretch",
+            "the `-webkit-fill-available` ALIAS normalises to `stretch` (Chrome-measured), so a              script comparing against one spelling is not sent down a polyfill path",
+        ),
+        ("saMaxW:stretch", "the alias on the inline max"),
+        (
+            "slMinH:stretch",
+            "the LOGICAL spelling `min-block-size:stretch` reaches the PHYSICAL accessor — the              drift `extra_computed_props` has already caught once",
+        ),
+        ("slMaxW:stretch", "logical `max-inline-size:stretch`"),
+        (
+            "saMaxH:none",
+            "CONTROL: an axis the stretch rows did not set still reads UNSET — `stretch` must not              leak across properties from a shared flag",
+        ),
+        (
+            "saMinWnotstretch:true",
+            "CONTROL: the same on a min. Asserted as a predicate because our unset `min-width` says              `auto` where Chrome says `0px` — a separate divergence, and pinning this gate to              either string would pin the engine to one of them",
         ),
         ("minH:max-content", "the block-axis min, same rule"),
         ("maxH:min-content", "the block-axis max, same rule"),

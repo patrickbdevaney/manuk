@@ -46371,6 +46371,58 @@ PERF: none — one UA rule and one narrowed branch in a cascade that already ran
 WIKI: `docs/wiki/css-cascade.md` — where Chrome draws the form-control `box-sizing` line, and why a
 layout-crate test cannot see it.
 
+## Tick 1251 — the I3 gap check #120 found in my own window, closed (2026-08-14)
+
+TICK SHAPE: capability — steer item 1 from constitution check #120, which found the only bent
+invariant of the window and found it in **this session's own ticks**.
+
+**THE VIOLATION.** t1249 and t1250 taught LAYOUT to size `min-height` / `max-height` / `min-width` /
+`max-width: stretch`, and did not teach the SEMANTIC API to say so. `stretch` collapses to `Dim::Auto`
+**exactly as `min-content` does**, and the serialiser consults only the `Dim` and the *intrinsic*
+keyword — so a box sized correctly by `min-height: stretch` read back as `auto`. Sized right, reports
+unset. I3: *"every renderer subsystem lands with its semantic-model exposure or it is not done."*
+
+⚠ **It is the same two-hands failure t930 fixed for the intrinsic keywords ON THESE EXACT FOUR
+PROPERTIES**, one keyword later. t930's own comment is still there — *"the keyword sidecar wins over
+the `Dim` … Chrome returns the keyword (measured, t930)"* — and the next keyword to collapse to
+`Dim::Auto` did not inherit it. **When a value collapses to a shared representation, the sidecar has
+to be added in layout AND in serialisation, and the fix for one keyword is not the fix for the next.**
+
+**CHROME-MEASURED FIRST, because check #120's finding was source-level and said so** (*"the fixing
+tick must measure the strings against Chrome rather than inherit this claim"*):
+
+```text
+  min-height: stretch                  -> "stretch"
+  max-height: stretch                  -> "stretch"
+  min-width / max-width: stretch       -> "stretch"
+  min-height: -webkit-fill-available   -> "stretch"   <- the ALIAS normalises to it
+  min-block-size: stretch              -> "stretch"   (on `minHeight`; logical resolved)
+```
+
+GATE: t930's own `g_intrinsic_min_max_cssom` **extended** rather than a parallel gate — the two
+keywords are one rule and belong in one place. Ten new rows: four properties, the alias, both logical
+spellings, and two no-leak CONTROLS. **RED-proven** by making `min_dim_css` ignore its new argument:
+`sMinW:auto sMinH:auto saMinH:auto slMinH:auto` — the exact "sized right, reads unset" symptom.
+
+⚠⚠ **AND A CONTROL FOUND A SECOND, SEPARATE DIVERGENCE — WHICH IS NOT FIXED HERE AND IS NOT PINNED
+EITHER.** The no-leak control on `min-width` wanted to assert Chrome's `0px` for an unset value; ours
+answers **`auto`**. That is real (Chrome-measured this tick) and it is **older than this window** —
+the gate's pre-existing `uMinW:auto` row has been asserting it for as long as it has existed. Writing
+`saMinW:0px` would have failed a correct tick; writing `saMinW:auto` would have **pinned the engine
+to the bug** (t1004: *a gate can PIN the engine to a bug*). So the control asserts a **predicate** —
+`sa.minWidth !== 'stretch'` — which states exactly the claim it exists to make (no leak across
+properties) and stays true after the `auto`/`0px` defect is fixed. ⭐ **The `auto` vs `0px` unset
+serialisation is now a measured, named, unfixed defect** with a Chrome reading attached.
+
+MEASURED: `g_intrinsic_min_max_cssom` green with 10 new rows; layout suite 179/179 (untouched — this
+tick changes serialisation only, no geometry).
+
+PERF: none — one `bool` argument and an early return on a call already made once per computed-style
+read. F1/F2 unmoved.
+
+WIKI: `docs/wiki/dom-semantics.md` — "a value that collapses to `Dim::Auto` needs a sidecar in BOTH
+hands".
+
 ## Tick 1250 — the inline mirror, and a Bar-0 that the OLD BINARY refused to let me own (2026-08-14)
 
 TICK SHAPE: capability — the residue t1249 named, measured first and then built, plus an old-binary
