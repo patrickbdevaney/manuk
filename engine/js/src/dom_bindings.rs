@@ -528,6 +528,35 @@ thread_local! {
         const { std::cell::RefCell::new(Vec::new()) };
     /// Re-entrancy guard. The hook lays out; layout must never re-enter a geometry read.
     static IN_REFLOW: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
+    /// `(calls, microseconds)` spent inside the forced-reflow hook since the last reset.
+    ///
+    /// ⚠⚠⚠ **This exists because the drain's time budget is exact between tasks and blown by a
+    /// SINGLE task, and nothing could say what that task was doing.** Measured t1235 across the
+    /// `timeout-150s` corpus bucket: `neutypechic.com` lands `count=1331 → elapsed_ms=5001` against
+    /// a 5,000 ms budget — *exact* — while `7info.ru` reports `count=1 → elapsed_ms=9326` and
+    /// `bhramarah.in` `count=2 → 21572`. The drain already arms `ScriptDeadline`, so the SCRIPT half
+    /// of such a task is preemptible; what cannot be preempted is **native work the script triggers**
+    /// — `JS_RequestInterruptCallback` is polled at interpreter back-edges, and there are none while
+    /// the thread is inside a Rust binding.
+    ///
+    /// Forced reflow is the leading candidate (a geometry read on a dirtied DOM re-runs cascade AND
+    /// layout, and `measure → mutate → measure` in a loop is the shape every virtualized list has),
+    /// but it is a **hypothesis until this counter says so** — and a small number here is just as
+    /// informative, because it rules the candidate out instead of leaving it plausible.
+    static REFLOW_COST: std::cell::Cell<(u32, u64)> = const { std::cell::Cell::new((0, 0)) };
+}
+
+/// `(calls, microseconds)` spent in forced reflow on this thread, **monotonic for the process**.
+///
+/// ⚠ **Monotonic-and-subtract rather than reset-and-read, and that is not a style preference.** The
+/// first cut had the drain zero this counter on entry — which is wrong twice over: drains NEST (a
+/// lifecycle round drains inside another drain), so an inner drain zeroed the outer one's
+/// accounting and the outer reported a number missing everything the inner did; and it left the
+/// counter unreadable from outside the drain, because whatever a caller reset was zeroed again
+/// before it could observe anything. A monotonic counter has neither problem: each drain snapshots
+/// on entry and reports its own delta, and a host (or a gate) can bracket any interval it likes.
+pub fn reflow_cost() -> (u32, u64) {
+    REFLOW_COST.with(|c| c.get())
 }
 
 /// Push the forced-reflow callback for one re-entry into JS.
@@ -572,7 +601,15 @@ fn force_reflow_if_stale() {
         return;
     }
     IN_REFLOW.with(|c| c.set(true));
+    // Timed on the INSIDE of the re-entrancy guard, so nested reads are not double-counted: the
+    // guard makes this the one place a reflow actually happens.
+    let t0 = std::time::Instant::now();
     unsafe { f(ctx, dom) };
+    let us = t0.elapsed().as_micros() as u64;
+    REFLOW_COST.with(|c| {
+        let (n, tot) = c.get();
+        c.set((n + 1, tot + us));
+    });
     IN_REFLOW.with(|c| c.set(false));
 }
 

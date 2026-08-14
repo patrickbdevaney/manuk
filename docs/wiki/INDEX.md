@@ -1831,6 +1831,9 @@
   - L410 · The timeout cohort is our clock, not a regression — and it is now the largest unscored reason
   - L434 · Why that is still the top finding and not an excuse
   - L443 · The methodological residue
+  - L451 · The timeout-150s bucket is FORCED REFLOW, and reflow_n splits it into two different bugs (t1236)
+  - L474 · reflow_n is the discriminator, and it names TWO bugs
+  - L489 · ⚠ An accounting counter that under-reports looks like GOOD NEWS
 
 ## THE WIKI — what we durably KNOW, organised by subsystem
 `docs/wiki/README.md`
@@ -2096,4 +2099,4 @@
   - L231 · Both named mechanisms are subsystem work
 
 ---
-2003 sections across 22 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+2006 sections across 22 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.

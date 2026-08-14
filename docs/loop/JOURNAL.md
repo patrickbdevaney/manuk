@@ -46371,6 +46371,93 @@ PERF: none — one UA rule and one narrowed branch in a cascade that already ran
 WIKI: `docs/wiki/css-cascade.md` — where Chrome draws the form-control `box-sizing` line, and why a
 layout-crate test cannot see it.
 
+## Tick 1236 — the whole `timeout-150s` bucket is FORCED REFLOW, and one of them is a single 21-second layout (2026-08-14)
+
+TICK SHAPE: instrument + measurement — the profile t1235 said was owed, built as a permanent counter
+rather than a one-off, because the loop had spent three ticks unable to say where a long task went.
+
+**THE HYPOTHESIS, WRITTEN BEFORE THE COUNTER EXISTED** (t1235's own residue): the drain's budget is
+exact between tasks (`count=1331 → elapsed_ms=5001` against 5,000) and blown by a *single* task
+(`count=1 → 9,326 ms`); the drain already arms `ScriptDeadline`, so the SCRIPT half is preemptible;
+therefore the residue is **native work the script triggers**, and forced reflow is the leading
+candidate. ⚠ Written down as a candidate precisely so that a small number would *rule it out* rather
+than leave it plausible — the failure mode this loop keeps recording is a hypothesis that survives
+because nobody built the instrument that could kill it.
+
+**IT IS NOT SMALL. `dom_bindings::REFLOW_COST` times the inside of `force_reflow_if_stale` — the one
+funnel a geometry read goes through — and the drain reports its own delta:**
+
+```text
+  site                 count  elapsed_ms  reflow_n  reflow_ms   reflow share
+  7info.ru                 1        9324        18       9259     99.3%
+  7info.ru               150        5751        22       5722     99.5%
+  7info.ru               114        6616       545       5711     86.3%
+  www.friulioggi.it       29        7801       233       7666     98.3%
+  bhramarah.in           176       22419         1      21302     95.0%
+  bhramarah.in             2       22428         1      21879     97.6%
+```
+
+⚠⚠⚠ **95–99% OF EVERY BUDGET OVERRUN IS ONE FUNCTION.** The `timeout-150s` bucket — the largest
+in-scope engine-owned bucket in the CrUX sweep, and the M1 scorability cap — is not a JavaScript
+problem, not a network problem and not a script-preemption problem. **It is layout.**
+
+⚠⚠⚠ **AND THE `reflow_n` COLUMN SPLITS IT INTO TWO DIFFERENT BUGS, which is the part a wall-clock
+number alone could never have said:**
+
+```text
+  bhramarah.in     reflow_n=1    reflow_ms=21302   ->  ONE layout pass takes TWENTY-ONE SECONDS
+  www.friulioggi.it reflow_n=233 reflow_ms=7666    ->  33ms each, 233 times
+  7info.ru         reflow_n=18   reflow_ms=9259    ->  514ms each, 18 times
+  7info.ru         reflow_n=545  reflow_ms=5711    ->  10ms each, 545 times
+```
+
+1. **A COST bug — a single cascade+layout pass costing 21 s.** No frequency argument touches this;
+   `bhramarah.in` would still time out if it forced exactly one reflow, which it does. This is a
+   layout-algorithm pathology on one document and it will have a specific, findable cause.
+2. **A FREQUENCY×COST bug — hundreds of reflows at 10–500 ms each.** This is the `measure → mutate →
+   measure` shape (every virtualized list, every equal-height/masonry routine), and the answer to it
+   is incremental invalidation: we re-cascade and re-lay-out the *whole document* for a read that
+   follows a one-node mutation.
+
+**These are two different fixes and they are not interchangeable** — which is exactly why the tick
+that builds either one has to start from this table rather than from a wall-clock number. Ranking
+them is the next tick's job, and `bhramarah.in`'s 21 s single pass is the one I would take first
+because a 21-second layout is a *defect*, whereas "layout is O(document)" is a *design* that needs a
+subsystem.
+
+GATE: `G_REFLOW_ACCOUNTING`, two arms with a CONTROL — a page doing `measure → mutate → measure`
+inside a lifecycle round must report reflow, and a page doing the identical DOM work with **no
+geometry read** must report **zero**. The control is what makes arm 1 mean anything: a counter
+incremented in the wrong place satisfies "non-zero after a page loads" while measuring nothing.
+
+⚠⚠⚠ **THE GATE EARNED ITS KEEP BY FAILING AGAINST MY OWN FIRST CUT, AND THE BUG IT FOUND IS THE ONE
+THIS TICK EXISTS TO AVOID.** I had the drain **reset** the counter on entry. That is wrong twice:
+**drains NEST** — a lifecycle round drains inside another drain — so an inner drain zeroed the outer
+one's accounting and the outer reported a number missing everything the inner did; and the reset made
+the counter unobservable from outside a drain, so the gate read a hard **0** for a fixture that
+visibly forces reflow. An accounting instrument that under-reports does not look broken, it looks
+like **good news** — "reflow is not the problem" — and would have sent the next tick at the wrong
+subsystem with a number to back it up. It is monotonic now, and each drain subtracts its own
+snapshot.
+
+⚠ **NOT ESTABLISHED, named so it is not assumed:** (a) *why* one pass costs 21 s — that is the next
+profile, one level down, and this counter cannot see inside itself; (b) whether the 21 s pass is
+cascade or layout; (c) `neutypechic.com` and `payb.jp` produced no budget-trip line in this run at
+all, so their time is somewhere else again and they are not covered by this attribution. Three of
+the eight, not eight of the eight.
+
+⚠ A finding on the side, not chased: **a parse-time inline `<script>`'s geometry reads report ZERO
+forced reflows** — the first version of the gate's fixture ran at parse time and counted nothing,
+which is why it now runs inside `DOMContentLoaded`. That is consistent with t1183-1188's *"ReflowScope
+missing from 2 of 19 rounds"* and means a `measure → mutate → measure` loop in a parse-time script
+reads a **stale snapshot**. Named as a candidate defect, deliberately unfixed here.
+
+PERF: none — the counter is one `Instant::now()` pair inside the existing `IN_REFLOW` guard, which
+already gates the expensive path, and it is not on the cheap "nothing changed" branch.
+
+WIKI: `docs/wiki/performance.md` — "the timeout bucket is forced reflow, and `reflow_n` splits it
+into two different bugs".
+
 ## Tick 1235 — the fix works, moves nothing on the sites it was aimed at, and my own build faked the number that said otherwise (2026-08-14)
 
 TICK SHAPE: capability + correction — the attribution measurement t1234 owed, which refuted t1234's

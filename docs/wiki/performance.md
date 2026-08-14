@@ -447,3 +447,57 @@ it is a **performance** tick, not a function one.
 composition-free comparator — mean Δshape over the 89 sites scored in BOTH sweeps — reads **−0.15
 points** (7 up, 8 down by >2pt): flat. When a cohort sits *at* a deadline, the deadline is part of the
 measurement, and the sweep should record the load it ran under.
+
+## The `timeout-150s` bucket is FORCED REFLOW, and `reflow_n` splits it into two different bugs (t1236)
+
+The drain's time budget is **exact between tasks** and blown by a *single* task. The drain already
+arms `ScriptDeadline`, so the SCRIPT half of such a task is preemptible — `JS_RequestInterruptCallback`
+is polled at interpreter back-edges. **There are none while the thread is inside a Rust binding**, so
+the residue is native work the script triggered, and nothing could say which.
+
+`dom_bindings::REFLOW_COST` times the inside of `force_reflow_if_stale` — the one funnel every
+geometry read goes through — and the drain reports its own delta beside `elapsed_ms`:
+
+```text
+  site                 count  elapsed_ms  reflow_n  reflow_ms   reflow share
+  7info.ru                 1        9324        18       9259     99.3%
+  7info.ru               150        5751        22       5722     99.5%
+  7info.ru               114        6616       545       5711     86.3%
+  www.friulioggi.it       29        7801       233       7666     98.3%
+  bhramarah.in           176       22419         1      21302     95.0%
+  bhramarah.in             2       22428         1      21879     97.6%
+```
+
+**95–99% of every budget overrun is one function.** The bucket is not JavaScript, not network and not
+script preemption. It is layout.
+
+### `reflow_n` is the discriminator, and it names TWO bugs
+
+| shape | evidence | what fixes it |
+|---|---|---|
+| **COST** — one pass is pathological | `bhramarah.in` `reflow_n=1`, `reflow_ms=21302` — **a single cascade+layout pass takes 21 seconds** | a specific defect in one document's layout; no frequency argument touches it |
+| **FREQUENCY×COST** — many passes, each ordinary | `www.friulioggi.it` 233 × 33ms · `7info.ru` 18 × 514ms · 545 × 10ms | incremental invalidation — today a read after a one-node mutation re-cascades and re-lays-out the **whole document** |
+
+They are not interchangeable, and a wall-clock number alone cannot tell them apart — which is the
+reason this counter reports a **count** next to a duration rather than just a duration.
+
+⚠ **Not established:** *why* one pass costs 21 s (the next profile, one level down — this counter
+cannot see inside itself), and whether it is cascade or layout. And it covers **three of the eight**
+timeout sites: `neutypechic.com` and `payb.jp` produced no budget-trip line at all, so their time is
+somewhere else again.
+
+### ⚠ An accounting counter that under-reports looks like GOOD NEWS
+
+The first cut had the drain **reset** the counter on entry. Wrong twice: **drains nest**, so an inner
+drain zeroed the outer one's accounting; and the reset made the counter unobservable from outside a
+drain, so `G_REFLOW_ACCOUNTING` read a hard **0** for a fixture that visibly forces reflow. A zero
+here does not read as "broken instrument", it reads as *"reflow is not the problem"* — and would have
+aimed the next tick at the wrong subsystem with a number behind it. **It is monotonic now**, and each
+drain subtracts its own entry snapshot. The gate carries a CONTROL arm (identical DOM work, no
+geometry read, must report zero) because a counter incremented in the wrong place is also non-zero
+after a page loads.
+
+⚠ **A parse-time inline `<script>`'s geometry reads report ZERO forced reflows** — found because the
+gate's first fixture ran at parse time and counted nothing. Consistent with t1183-1188's *"ReflowScope
+missing from 2 of 19 rounds"*: a `measure → mutate → measure` loop in a parse-time script is reading a
+**stale snapshot**. Candidate defect, unfixed.

@@ -15,7 +15,7 @@
 | median tick cycle | **28m** | 935 intervals |
 | median, last 10 | **78m** | 10 intervals |
 | fastest / slowest | 5s / 5.4d | |
-| **ticks per hour** | **1.15** | 815.6h elapsed |
+| **ticks per hour** | **1.15** | 816.3h elapsed |
 | median verify wall | **63s** | 875 ticks |
 | wall trend | 39s → 13m — getting slower ⚠️ | first 3 vs last 3 |
 
@@ -27,7 +27,7 @@ it, and a wall that grows taxes every future tick, so it is tracked separately f
 ### Near — the daily driver (doc / app / platform web)
 
 * **capabilities asserted** (`G_CAPABILITY`): 48 → **81**
-* **live gates**: 27 → **468**
+* **live gates**: 27 → **469**
 * **✅ rows in the capability ledger**: 144 → **616**
 * **Bar 0 — oracle hangs**: 0 of 265 sites
 
@@ -1032,6 +1032,6 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 | **1232** | 2026-08-13 23:46 | 11m | measurement | 13m | +79/−33 | 467 | 81 | 56.0% · | the self-audit (due at 1232), and what this window actually bought (2026-08-14) |
 | **1233** | 2026-08-14 01:58 | 2.2h | measurement | 13m | +461/−35 | 467 | 81 | 56.0% · | the sweep banked, the prediction scored, and a SOLO number that did not survive `--jobs 2` |
 | **1234** | 2026-08-14 03:10 | 72m | capability | 13m | +506/−95 | 468 | 81 | 56.0% · | `getComputedStyle` was a call into the JS compiler, and that is why jQuery pages hang (202 |
-| **1235** | 2026-08-14 04:41 | 1.5h | capability | 13m | +403/−53 | 468 | 81 | 56.0% · | the fix works, moves nothing on the sites it was aimed at, and my own build faked the numb |
+| **1235** | 2026-08-14 05:23 | 2.2h | capability | 13m | +358/−33 | 469 | 81 | 56.0% · | the fix works, moves nothing on the sites it was aimed at, and my own build faked the numb |
 
 *`·` after a WPT figure means **carried forward**, not measured this tick.*

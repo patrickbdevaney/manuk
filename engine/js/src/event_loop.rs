@@ -7458,6 +7458,12 @@ pub fn run_deferred(rt: &mut Runtime, global: mozjs::rust::HandleObject) -> Resu
     // The same budget, armed against the SCRIPT. Every check below is on a task boundary and so
     // cannot touch a task that never returns — see `crate::watchdog`.
     let _deadline = crate::watchdog::ScriptDeadline::arm(unsafe { rt.cx().raw_cx() }, budget);
+    // Snapshot the forced-reflow accounting so the number reported below is THIS drain's delta.
+    // See `dom_bindings::REFLOW_COST` — the drain's budget is exact between tasks and blown by a
+    // single task, and this is what says whether that task was laying out or doing something else.
+    // ⚠ A snapshot, not a reset: drains NEST, and a reset makes an inner drain erase the outer
+    // drain's accounting.
+    let reflow_at_start = crate::dom_bindings::reflow_cost();
     let mut preempted = false;
     'drain: loop {
         let Some(()) = preempt_aware(microtask_checkpoint(rt, global))? else {
@@ -7482,9 +7488,15 @@ pub fn run_deferred(rt: &mut Runtime, global: mozjs::rust::HandleObject) -> Resu
             // tasks, not tens of thousands. Crossing it means the page is not converging, and the right
             // answer is to render what we have rather than to keep spinning forever.
             if count >= MAX_TASKS_PER_DRAIN {
+                let (reflow_n, reflow_us) = {
+                    let (n, us) = crate::dom_bindings::reflow_cost();
+                    (n - reflow_at_start.0, us - reflow_at_start.1)
+                };
                 tracing::warn!(
                     count,
                     elapsed_ms = started.elapsed().as_millis() as u64,
+                    reflow_n,
+                    reflow_ms = reflow_us / 1000,
                     spinning = %spinner_summary(rt, global),
                     "event loop hit its task ceiling — the page is not converging. Painting what we \
                      have. The alternative is a frozen tab."
@@ -7496,10 +7508,21 @@ pub fn run_deferred(rt: &mut Runtime, global: mozjs::rust::HandleObject) -> Resu
             // task boundary, so a single long-running task is not interrupted mid-flight — this bounds
             // a runaway *chain*, which is what the ceiling above was always for, and never preempts JS.
             if budget > 0 && started.elapsed().as_millis() > budget {
+                // ⚠ `reflow_ms` is the half of `elapsed_ms` the preemption watchdog CANNOT reach:
+                // an interrupt callback is polled at interpreter back-edges, and there are none
+                // while the thread is inside layout. A large `reflow_ms` against a small `count`
+                // is the signature of one task laying out repeatedly; a small one says the time is
+                // somewhere this counter does not yet see, which is equally worth knowing.
+                let (reflow_n, reflow_us) = {
+                    let (n, us) = crate::dom_bindings::reflow_cost();
+                    (n - reflow_at_start.0, us - reflow_at_start.1)
+                };
                 tracing::warn!(
                     count,
                     elapsed_ms = started.elapsed().as_millis() as u64,
                     budget_ms = budget as u64,
+                    reflow_n,
+                    reflow_ms = reflow_us / 1000,
                     "event loop hit its TIME budget — the page is not converging fast enough to be \
                      worth more of the user's clock. Painting what we have."
                 );
@@ -7835,6 +7858,12 @@ where
     // See `run_deferred` and `crate::watchdog`: the same budget, armed against the SCRIPT so that a
     // single task which never returns is reachable at all.
     let _deadline = crate::watchdog::ScriptDeadline::arm(unsafe { rt.cx().raw_cx() }, budget);
+    // Snapshot the forced-reflow accounting so the number reported below is THIS drain's delta.
+    // See `dom_bindings::REFLOW_COST` — the drain's budget is exact between tasks and blown by a
+    // single task, and this is what says whether that task was laying out or doing something else.
+    // ⚠ A snapshot, not a reset: drains NEST, and a reset makes an inner drain erase the outer
+    // drain's accounting.
+    let reflow_at_start = crate::dom_bindings::reflow_cost();
     let mut preempted = false;
     'drain: loop {
         let Some(()) = preempt_aware(microtask_checkpoint(rt, global))? else {
