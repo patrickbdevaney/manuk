@@ -46371,6 +46371,90 @@ PERF: none — one UA rule and one narrowed branch in a cascade that already ran
 WIKI: `docs/wiki/css-cascade.md` — where Chrome draws the form-control `box-sizing` line, and why a
 layout-crate test cannot see it.
 
+## Tick 1229 — the third entry point, and the class is CLOSED (2026-08-13)
+
+TICK SHAPE: capability — t1228's named residue, taken immediately rather than filed: the LAST
+unguarded host→JS entry point, which was also t1198's own recorded residue thirty ticks ago.
+
+HYPOTHESIS: `ScriptDeadline` reaches script from exactly three places, and until this tick only two
+were armed. `run_one_script` is the third — the one place BOTH script passes call
+(`PageContext::load` runs the paint-blocking scripts through it, `run_deferred_scripts` runs the
+`defer`/`async`/module ones), and t1198 wrote *"inline `<script>` still unreachable"* and moved on. A
+page's blocking scripts run before anything is painted, so a spin there is strictly worse than one in
+a lifecycle handler: there is no partial page to fall back to.
+
+```text
+  event_loop::run_deferred / run_with_fetcher   timers, microtasks, fetch settlement   t1198
+  PageContext::eval  (Page::fire_lifecycle)     DOMContentLoaded / load handlers        t1228
+  run_one_script                                 inline + blocking <script> at parse    t1229  ← this
+```
+
+MEASURED — `G_INLINE_SCRIPT_PREEMPTION`, four arms, promise before cut:
+
+```text
+  ARM 1  300ms script, 5000ms budget      SPIN-COMPLETED           <- not touched (the promise)
+  ARM 2  6000ms script, budget DISABLED   SPIN-COMPLETED  6.035s   <- the spin is real
+  ARM 3  6000ms script, 500ms budget      SPIN-DID-NOT-COMPLETE    <- cut at 0.544s
+  ARM 4  the NEXT <script> still ran (AFTER-RAN), #before kept, #sink intact
+```
+
+RED-PROVEN by deleting the arm: **6.036s bounded vs 6.034s unbounded**, `SPIN-COMPLETED`. Both
+sibling gates re-run green in the same session (`g_lifecycle_preemption` 0.551s cut,
+`g_script_preemption` 0.568s cut), which is what says three arms and not one moved twice.
+
+⚠⚠⚠ **ARM 4 IS A DIFFERENT QUESTION FROM t1228's ARM 4, AND THAT IS WHY IT IS HERE.** There, the
+`load` round that survived a cut `DOMContentLoaded` was a *separate host re-entry with a drain in
+between*. Here the next `<script>` is evaluated by the very next iteration of the same loop, with
+nothing at all in between — so a termination state that outlived the script it terminated would make
+ONE runaway script silently kill **every script after it on the page**. That is a capability
+regression bought with a hang fix and the ratchet refuses it outright, so it is asserted rather than
+inferred from the sibling gate. It passes: `AFTER-RAN`.
+
+⚠⚠⚠ **AND THE WHOLE `timeout-150s` BUCKET WAS RE-MEASURED, WITH THE HEAD CONTROL, SO THE TWO TICKS
+DO NOT GET TO SHARE CREDIT.** All 13 sites t1226 recorded as `timeout-150s` were run through
+`boxes --fetch` (our render alone, no Chromium) at a 120s cap, on this tick's binary and on HEAD
+(= t1228) rebuilt in the same hour:
+
+```text
+                                    HEAD (t1228)          THIS TICK
+  beb88run.xyz                  TIMEOUT 120s   0 boxes    57s   12 boxes   <- t1229
+  sip777man.site                TIMEOUT 121s   0 boxes    64s   13 boxes   <- t1229
+  ticket.jfa.jp                 TIMEOUT 120s   0 boxes    TIMEOUT 0 boxes  <- still open
+  bhramarah.in                  TIMEOUT 120s   0 boxes    TIMEOUT 0 boxes  <- still open
+  d2rwkn96…cloudfront.net / neutypechic / bbs.ruliweb / coinmarketcap /
+  friulioggi / swiftspinus / payb.jp / morikoshi / pt88.app                <- already green at HEAD
+```
+
+**This tick's number is 2 of 13, and it is 2 and not 11.** Nine were already complete at HEAD, which
+is the previous tick's ground (or earlier — t1227 was measurement-only, but nothing here separates
+t1228 from what preceded it and this write-up does not pretend to). **11 of the 13 now render where
+the sweep scored all 13 as zero**, and 2 remain — named, not rounded away. ⚠ Single readings at a
+120s cap against the sweep's 150s, so the two survivors are a floor on the remaining work, not a
+proof that only two are left.
+
+⚠ **WHAT THIS DOES NOT CLAIM.** `run_scripts` (`dom_bindings.rs:11854`) has a second, older copy of
+the inline-script loop with its own `evaluate_script` — it is NOT armed, and it is NOT armed
+deliberately: its only caller is `manuk_js::run_document_scripts`, which a repo-wide grep shows
+**nothing calls**. Arming a dead path would be false presence. It is named here so the next reader
+does not have to re-derive that, and so that if it is ever revived it is revived armed.
+
+⚠ HARNESS, one line (PART VII — `scripts/` is observer-owned and nothing in it was touched): the
+first wall REDed five crate suites (`manuk-css`/`layout`/`paint`/`net`/`agent`) as *"INSTRUMENT
+FAULT — a REAL hang/OOM"*. All five pass standalone. The cause is the same one that cost t1228 two
+rebuilds — the hygiene cron's *"deps orphans unread by any build in >1 day"* prune deletes `syn` and
+`quote` rlibs that live fingerprints still reference, so every proc-macro crate fails with `E0463
+can't find crate`. `cargo clean -p` on the proc-macro layer cleared it. ⚠ **The wall's own
+build-failure guard did not catch this**: it greps for `error: could not compile` in the GATE's
+output, and here the failure was inside a DEPENDENCY of a crate suite, which took the
+*no-verdict* path instead and got reported as a hang. Named for the observer; not fixed here.
+
+PERF: none measurable — one atomic store and one mutex-guarded pointer publish per script; the
+budget is per SCRIPT, so a page with forty inline scripts gets forty budgets, which is exactly the
+grace it had when it had none. ARM 1 asserts directly that nothing which finished before finishes
+later.
+
+WIKI: `docs/wiki/js-engine.md` — the three-entry-point table, now complete.
+
 ## Tick 1228 — the lifecycle was the unguarded entry point, and now it is armed (2026-08-13)
 
 TICK SHAPE: capability — the fix t1227 specified, refused-to-start and left for a fresh session,

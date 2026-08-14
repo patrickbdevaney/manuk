@@ -14205,6 +14205,23 @@ fn run_one_script(
     // real browser has and this can only approximate at a seam. Incremental: one `querySelectorAll`,
     // and only names not already seen get defined, so fifty scripts pay fifty cheap sweeps.
     publish_named_globals(runtime, global);
+    // ⚠⚠⚠ **THE THIRD AND LAST HOST→JS ENTRY POINT** (tick 1229). `ScriptDeadline` — the watchdog
+    // thread without which `JS_AddInterruptCallback` is inert (t1197's measured negative) — reaches
+    // script from exactly three places, armed by three separate ticks: the drains
+    // (`event_loop::run_deferred` / `run_with_fetcher`, t1198), the host's synchronous re-entry
+    // (`PageContext::eval`, which is where `Page::fire_lifecycle` lands, t1228), and **this one**.
+    //
+    // t1198 named it as its own residue — *"inline `<script>` still unreachable"* — and a page's
+    // blocking scripts are the WORST place to be unreachable, because they run before anything is
+    // painted: a spin here leaves no partial page to fall back to, only a frozen tab.
+    //
+    // ONE arm covers BOTH passes, because this function is deliberately the one place both call:
+    // `PageContext::load` runs the paint-blocking scripts through it and `run_deferred_scripts` runs
+    // the `defer`/`async`/module ones. Per SCRIPT, not per page — a page with forty inline scripts
+    // gets forty budgets, which is the same grace it had when it had none, and matches the two
+    // sibling sites (one budget per script, one per drain).
+    let budget = crate::event_loop::max_drain_ms();
+    let _deadline = crate::watchdog::ScriptDeadline::arm(raw_cx, budget);
     if is_module {
         // Modules are never `document.currentScript`, per spec — the thread-local stays -1.
         if !unsafe { run_module(raw_cx, src, Some(node)) } {
@@ -14216,7 +14233,18 @@ fn run_one_script(
         let opts =
             CompileOptionsWrapper::new(runtime.cx_no_gc(), inline_script_source_name(node), 1);
         if evaluate_script(runtime.cx(), global, src, rval.handle_mut(), opts).is_err() {
-            tracing::warn!(error = %pending_exception(raw_cx), "a page <script> threw");
+            if crate::watchdog::fired() {
+                // Not a page error — we cut it off. The same distinction `preempt_aware` draws in
+                // the drain: the two arrive here byte-identically, and reporting a deliberate cut as
+                // "the page threw" is the silent-failure shape `G_SILENT_FAIL` forbids.
+                tracing::warn!(
+                    budget_ms = budget as u64,
+                    "PREEMPTED a blocking <script> that was over budget and not returning. The \
+                     scripts after it still run; the alternative is a frozen tab."
+                );
+            } else {
+                tracing::warn!(error = %pending_exception(raw_cx), "a page <script> threw");
+            }
         }
         set_current_script(None);
     }

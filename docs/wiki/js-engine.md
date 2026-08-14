@@ -3045,7 +3045,43 @@ the same frozen tab:
 |---|---|---|---|
 | 1 | `event_loop::run_deferred` / `run_with_fetcher` | timers, microtasks, fetch settlement | ✅ t1198 |
 | 2 | `PageContext::eval` (`dom_bindings.rs`) | **`Page::fire_lifecycle`** → every `DOMContentLoaded` and `load` handler; and every runtime-fetched `<script>` | ✅ **t1228** |
-| 3 | `run_one_script` (`dom_bindings.rs`) | inline / blocking `<script>` at parse time | ❌ **still open** |
+| 3 | `run_one_script` (`dom_bindings.rs`) | inline / blocking `<script>` at parse time | ✅ **t1229** |
+
+**The class is closed, and it took three ticks because each one only saw the entry point in front of
+it.** t1198 armed the drains and wrote its own residue down (*"inline `<script>` still
+unreachable"*); t1227 found the lifecycle by reducing a real timeout site; t1229 took the residue.
+The general form worth keeping: **arming a guard is a statement about where script can START, and the
+places script continues are not the places it begins** — enumerate the entry points, do not patch the
+one the current bug came through.
+
+**What closing the class bought, measured against the bucket that ranked it** — all 13 sites the
+t1226 sweep recorded as `timeout-150s`, through `boxes --fetch` (our render alone) at a 120s cap, on
+t1229's binary and on HEAD (= t1228) rebuilt the same hour:
+
+| site | HEAD (t1228) | t1229 |
+|---|---|---|
+| `beb88run.xyz` | TIMEOUT 120s, 0 boxes | **57s, 12 boxes** |
+| `sip777man.site` | TIMEOUT 121s, 0 boxes | **64s, 13 boxes** |
+| `ticket.jfa.jp` · `bhramarah.in` | TIMEOUT, 0 boxes | TIMEOUT, 0 boxes |
+| the other nine | complete | complete |
+
+**t1229's number is 2 of 13, not 11** — nine were already green at HEAD. **11 of 13 now render where
+the sweep scored all 13 as zero**, and the two survivors are named rather than rounded away. A site
+that times out scores ZERO, so this is the M1 *cap* moving, not the fill. ⚠ Single readings at a 120s
+cap against the sweep's 150s: two survivors is a **floor** on the remaining work.
+
+⚠ `run_scripts` (`dom_bindings.rs:11854`) holds a second, older copy of the inline-script loop with
+its own `evaluate_script`, and it is **deliberately not armed**: its only caller is
+`manuk_js::run_document_scripts`, which a repo-wide grep shows nothing calls. Arming a dead path
+would be false presence — the exact failure t1197 was reverted for. Named here so it is revived
+armed, if it is ever revived.
+
+⚠⚠ **`run_one_script`'s ARM 4 is a different question from `PageContext::eval`'s**, and both had to
+be asserted. In the lifecycle case the `load` round that survives a cut `DOMContentLoaded` is a
+separate host re-entry with a drain in between. In the inline case the next `<script>` is evaluated
+by the **very next iteration of the same loop**, with nothing in between — so a termination state
+outliving the script it terminated would let ONE runaway script silently kill every script after it
+on the page. Both pass; neither was inferred from the other.
 
 ⚠⚠⚠ **#2 is the one the corpus lands in.** `fire_lifecycle` builds a `ReflowScope` and calls
 `eval_for_test` → `PageContext::eval` → `evaluate_script`, which is the **first** statement of that
