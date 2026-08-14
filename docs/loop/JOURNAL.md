@@ -46371,6 +46371,63 @@ PERF: none — one UA rule and one narrowed branch in a cascade that already ran
 WIKI: `docs/wiki/css-cascade.md` — where Chrome draws the form-control `box-sizing` line, and why a
 layout-crate test cannot see it.
 
+## Tick 1248 — the repair obligation, discharged on the CORPUS: one site corrected, zero verdicts changed, one hypothesis refuted (2026-08-14)
+
+TICK SHAPE: measurement — small and non-optional. t1247 repaired the instrument, and t1242's rule
+says an observation banked from an instrument you subsequently repair does not survive the repair
+**and will not retract itself**. t1247 discharged that for its five FIXTURES; the corpus half was
+still owed, and leaving it owed is how a stale number becomes a steer.
+
+**SCOPED TO THE 9 SITES THE BUG COULD REACH**, not a re-sweep: only a document with a doctype and no
+literal `<head>` was parsed in quirks mode, and t1247 measured that set exactly (16 of 183 have no
+`<head>`; 9 of those carry a doctype). Same configuration as t1243 (2 concurrent, 150 s cap), new
+binary — the rows file's `instrument` column moves `db5684eb → 65801248`, which is what that column
+is for.
+
+BANKED (`docs/loop/SWEEP-t1248-quirks9-rows.tsv`):
+
+```text
+  site                              shape t1243 -> t1248     Δ
+  www.hdnails.it                    0.5379 -> 0.7163      +17.8 pts   <- the correction
+  patrickmorin.com                  0.5580 -> 0.5612       +0.3
+  www.otomoto.pl                    0.7676 -> 0.7705       +0.3
+  aksesjambi.com                    0.3508 -> 0.3520       +0.1
+  rpsc.rajasthan.gov.in             0.9772 -> 0.9774       +0.0
+  littlecaesarsbcs.libellum.com.mx  0.9359 -> 0.9359        0.0
+  gismart.com                       0.8399 -> 0.8399        0.0
+  ofero.id                          0.0000 -> 0.0000        0.0
+  celeb.gate.cc                     0.7604 -> 0.7573       -0.3
+```
+
+⭐ **THE HEADLINE IS THE ONE NOBODY WANTS TO WRITE: ZERO M1 VERDICTS CHANGED.** Computed as
+`shape ≥ 0.75 ∧ all four jarring invariants clean`, every one of the nine gives the **same** verdict
+before and after. So t1243's banked corpus numbers **stand**, and the instrument defect — which was
+real, and which reported a 784px divergence on a row where the engine is exactly right — moved the
+metric it feeds by **nothing**. Both halves are true and only saying the first would be advocacy.
+
+⚠ **AND I NEARLY WROTE THE OPPOSITE.** `www.hdnails.it` gains 17.8 points, and my first reading of it
+was *"it crosses the 0.75 M1 bar"*. It does not: 0.7163 is still under 0.75, **and** the site carries
+`h_overflow`, `overlap` and `reading_order` violations in both readings, so it fails the conjunction
+twice over regardless of shape. Checking the other four columns before claiming a crossing is the
+t841 lesson (*M1 is a CONJUNCTION*), and it took one command.
+
+⚠⚠ **THE `celeb.gate.cc` HYPOTHESIS IS REFUTED, BY THE MEASUREMENT THAT WAS SUPPOSED TO CONFIRM IT.**
+t1247 noted that the loop's most-cited stable CONTROL is on the affected list, and asked — as a
+hypothesis, explicitly — whether its unexplained t852 drift (0.783158 → 0.768421, reproduced twice by
+the old binary) was a parsing-mode artefact. **It was not.** With the doctype restored the site moves
+**−0.3 points**, well inside its own run-to-run range. The drift t852 recorded remains unexplained,
+and it is now unexplained with one candidate eliminated rather than with one plausible story
+attached.
+
+⚠ `ofero.id` gains a `dead_target` violation (0 → 1) while its shape stays exactly 0.000 — movement in
+the other direction, on a site that scores zero either way. Not chased; recorded so the next sweep
+does not read it as new.
+
+PERF: none — measurement only, no engine change.
+
+WIKI: none — the artefact is `docs/loop/SWEEP-t1248-quirks9-rows.tsv` and the correction is already
+written up in `docs/wiki/fidelity-instrument.md` under t1247. [no-pattern]
+
 ## Tick 1247 — the ORACLE was rendering in QUIRKS MODE, and it scored a 784px divergence against a row where we are exactly right (2026-08-14)
 
 TICK SHAPE: instrument — the RATCHET's third face. The "NOT ESTABLISHED" row I carried through two

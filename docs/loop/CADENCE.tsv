@@ -945,3 +945,4 @@ tick	sha	epoch	iso	delta_s	shape	wall_s	files	added	deleted	gates	claims	wpt_pas
 1244	980f9390	1786724755	2026-08-14T12:25:55-04:00	2138	capability	808	8	289	39	471	81	3896	6960	0	620	0	a definite block size is definite however it was SPELLED, and the ratio transfer knew one spelling (2026-08-14)
 1245	39189b2a	1786726493	2026-08-14T12:54:53-04:00	1738	capability	808	8	207	34	471	81	3896	6960	0	621	0	t1244's fix was correct and moved nothing, because the DISPATCH erased the containing block (2026-08-14)
 1246	7baec12e	1786728416	2026-08-14T13:26:56-04:00	1923	capability	808	8	365	52	471	81	3896	6960	0	621	0	a NATURAL width is not a SPECIFIED width, and this was the sixth site to ask and the first to ask half (2026-08-14)
+1247	1d8a16fa	1786729870	2026-08-14T13:51:10-04:00	1454	instrument	808	6	102	34	471	81	3896	6960	0	621	0	the ORACLE was rendering in QUIRKS MODE, and it scored a 784px divergence against a row where we are exactly right (2026-08-14)

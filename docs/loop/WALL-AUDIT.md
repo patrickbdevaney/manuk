@@ -7,7 +7,7 @@ moved to CI to fake a fast local wall. Only optimisations that buy the same asse
 
 ---
 
-## Audit @ tick 1247 (2026-08-14) — audit #47's finding RECURS, the gap narrowed 17% → 39%, and the residue is now BUILD not gates
+## Audit #48 — tick 1247 (2026-08-14): audit #47's finding RECURS, the gap narrowed 17% → 39%, and the residue is still BUILD
 
 ⚠ **THIS IS NOT A NEW FINDING AND MUST NOT BE READ AS ONE.** Audit #47 (t1206, forty-one ticks ago)
 already said it in its title — *"the gates are 17% of the wall, and the audit cannot see the other
