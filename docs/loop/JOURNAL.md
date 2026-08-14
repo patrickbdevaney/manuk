@@ -46371,6 +46371,83 @@ PERF: none — one UA rule and one narrowed branch in a cascade that already ran
 WIKI: `docs/wiki/css-cascade.md` — where Chrome draws the form-control `box-sizing` line, and why a
 layout-crate test cannot see it.
 
+## Tick 1240 — 18,364 elements were building a `ComputedStyle` for a `::before` that generates nothing (2026-08-14)
+
+TICK SHAPE: capability — the instrument t1239 specified, and the fix it found, in one tick because
+the instrument answered in a single run and the fix it pointed at is a **reorder of two statements**.
+
+**THE INSTRUMENT.** t1239 proved the pseudo cost is not selector matching (candidates 28 → 2, `pseudo_ms`
+unmoved), leaving the per-element tail. Split three ways — a merge, an allocation, and Stylo's
+computed-value pipeline — and reported on the existing `CASCADE PHASES` line:
+
+```text
+  pseudo_ms=3542   pseudo_tail_n=18364   merge=115ms   compute=260ms   to_computed_style=2886ms
+```
+
+⚠⚠⚠ **`to_computed_style` IS 81% OF THE PSEUDO PHASE — AND IT IS OUR OWN CODE, NOT STYLO'S.** Stylo's
+actual computed-value pipeline (`compute_for_declarations`) is **260 ms**; converting its
+`ComputedValues` into our `ComputedStyle` is **2,886 ms**. The same function is another 1,483 ms on
+the ordinary-element path, so **one marshalling function was 53% of the entire 8,196 ms cascade.**
+Four ticks of attribution had been walking toward Stylo and arrived at the boundary layer we wrote.
+
+⚠⚠⚠ **AND `pseudo_tail_n=18364` IS THE BUG STATED AS A NUMBER.** 18,364 elements had a full
+`ComputedStyle` built for a `::before`. **Seven of them generate content.** A single `*::before`
+anywhere in the page's CSS puts a matching rule in the universal bucket for every element, and each
+one paid a ~200-field conversion whose result was then discarded by a `content` test **two statements
+later**.
+
+**THE FIX IS THAT REORDER.** `content` is read straight off Stylo's `cv` — it never needed our
+conversion to answer — so the test moves above `to_computed_style`. **The semantics are identical and
+provably so: the old code's fallthrough was already `_ => return None`** for `Content::Normal` and
+`Content::None`; this returns the same `None` before doing the wasted work rather than after.
+`::first-letter` is explicitly excluded and keeps its own early return *below* the conversion, because
+it re-styles text the author already wrote and requiring `content` would drop
+`p:first-letter { font-size: 200% }` — every real `::first-letter` rule on the web.
+
+**MEASURED, `bhramarah.in`, 23,001 elements, same binary class, same hour:**
+
+```text
+                            before      after
+  pseudo_tail_n              18364          7      <- the elements that ACTUALLY generate content
+  pseudo_ms                   3542        436      -88%
+  one cascade  total_ms       8196       5163      -37%
+  SLOW FORCED REFLOW        21,220     14,366      -32%   <- the number the timeout bucket is made of
+```
+
+**This is the first fix in the chain that moves the real site**, and it is stated with that
+qualification because the two before it did not: t1234's byte reduction moved zero of eight sites,
+and t1239's 14× candidate narrowing moved nothing at all. ⚠ `bhramarah.in` still exceeds the 150 s
+cap — 14.4 s per forced reflow is better and is not fixed. The remaining terms are unchanged and now
+dominant: `element_ms` 1,665 · `computed_ms` 1,503 (the *same* `to_computed_style`, on the ordinary
+path, untouched by this) · `minimal_ms` 983 (a whole second cascade engine running inside the first).
+
+REGRESSION SURFACE: twelve pseudo/cascade/paint gates green, and `css/selectors` 3757 ·
+`css/cssom` 2789 · `dom` 8142 · `css/css-display` 296 — **all four exactly at their marks**. The
+`css/cssom` denominator read 3500 against 3502; the pass count is identical and per t1235 that band
+is instrument noise, not a result.
+
+GATE: no new gate, and that is a deliberate call rather than an omission. The change is a **pure
+reorder with a proven-identical fallthrough**, and the behaviour it must not break is already pinned
+by `G_PSEUDO_CASCADE`, `G_FIRST_LETTER`, `G_CSS_BEFORE_LIFECYCLE`, `G_COMPUTED_STYLE_PSEUDO_ELEMENT`
+and t1239's `G_PSEUDO_INDEX_BUCKETS` — five gates that between them assert generated content, the
+`::first-letter` exception, and the `getComputedStyle(el,'::before')` surface for an element with no
+content. A sixth gate asserting the same thing would be coverage theatre; what this tick adds instead
+is the `pseudo_tail_n` counter, which is the thing that was missing.
+
+⚠ **NEXT, and the measurement already names it:** `to_computed_style` is still **1,503 ms** on the
+ordinary-element path — 29% of the remaining cascade — and nothing about that call is conditional, so
+no reorder helps it. It is a ~200-field eager conversion of every element's style into our own struct,
+per cascade, and the cascade runs twice per geometry read on any container-query page. The shape of
+the answer is to stop converting eagerly (share the `Arc<ComputedValues>` and convert on demand), and
+that is a subsystem, not a tick — price it before starting.
+
+PERF: **this IS the perf result.** `pseudo_ms` −88%, one cascade −37%, one forced reflow on a real
+CrUX corpus site −32% (21.2 s → 14.4 s). Instrumented permanently as `pseudo_tail_n` /
+`pseudo_compute_ms` / `pseudo_tocs_ms` on the `MANUK_CASCADE_PROFILE` line.
+
+WIKI: `docs/wiki/performance.md` — `to_computed_style` is 53% of the cascade, and the content test
+was two statements too late.
+
 ## Tick 1239 — `PseudoIndex` is bucketed, it narrows 28 candidates to 2, and it moves NOTHING — which is the measurement (2026-08-14)
 
 TICK SHAPE: capability — the fix t1238 specified, built, gated, RED-proven, measured, and reported

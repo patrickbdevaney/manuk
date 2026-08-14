@@ -665,3 +665,48 @@ nothing, removing a known `O(elements × rules)` shape before the workload that 
 
 **Next: instrument the per-element tail of `cascade_pseudo`.** The fan-out counter is the template —
 prove where the cost is before building anything.
+
+## `to_computed_style` is 53% of the cascade, and the `content` test was two statements too late (t1240)
+
+t1239 ruled out selector matching, leaving `cascade_pseudo`'s per-element tail. Split three ways:
+
+```text
+  pseudo_ms=3542   pseudo_tail_n=18364   merge=115ms   compute=260ms   to_computed_style=2886ms
+```
+
+⚠⚠⚠ **`to_computed_style` is 81% of the pseudo phase, and it is OUR code, not Stylo's.** Stylo's own
+computed-value pipeline (`compute_for_declarations`) is **260 ms**; converting its `ComputedValues`
+into our `ComputedStyle` is **2,886 ms**. The same function is another 1,483 ms on the ordinary-element
+path — **one marshalling function is 53% of the entire 8,196 ms cascade.** Four ticks of attribution
+walked toward Stylo and arrived at the boundary layer we wrote.
+
+⚠⚠⚠ **`pseudo_tail_n=18364` is the bug as a number.** 18,364 elements had a full `ComputedStyle`
+built for a `::before`. **Seven generate content.** One `*::before` anywhere in the page's CSS puts a
+matching rule in the universal bucket for every element, and each paid a ~200-field conversion whose
+result a `content` test discarded **two statements later**.
+
+**The fix is that reorder.** `content` is read straight off Stylo's `cv` and never needed the
+conversion. Semantics are provably identical — the old fallthrough was already `_ => return None` for
+`Content::Normal`/`Content::None`. ⚠ `::first-letter` is excluded and keeps its early return *below*
+the conversion: it re-styles text the author already wrote, so requiring `content` would drop
+`p:first-letter { font-size: 200% }` — every real `::first-letter` rule on the web.
+
+```text
+                            before      after
+  pseudo_tail_n              18364          7
+  pseudo_ms                   3542        436      -88%
+  one cascade  total_ms       8196       5163      -37%
+  SLOW FORCED REFLOW        21,220     14,366      -32%
+```
+
+**The first fix in this chain that moves the real site** — said with that qualification because the
+two before it did not (t1234's byte reduction moved zero of eight sites; t1239's 14× candidate
+narrowing moved nothing). ⚠ `bhramarah.in` still exceeds the 150 s cap. The remaining terms are now
+dominant: `element_ms` 1,665 · `computed_ms` 1,503 (**the same `to_computed_style`**, ordinary path,
+untouched) · `minimal_ms` 983 (a second cascade engine inside the first).
+
+⚠ **Next, already named by the measurement:** `to_computed_style` is 29% of what remains and **nothing
+about it is conditional**, so no reorder helps. It is a ~200-field eager conversion of every element's
+style, per cascade, and the cascade runs twice per geometry read on a container-query page. The shape
+of the answer is to stop converting eagerly — share the `Arc<ComputedValues>` and convert on demand —
+and that is a **subsystem, not a tick**. Price it before starting.

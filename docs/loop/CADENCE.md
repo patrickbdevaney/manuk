@@ -11,12 +11,12 @@
 
 | | value | over |
 |---|---|---|
-| ticks landed | **939** | ticks 1–1238 |
-| median tick cycle | **29m** | 938 intervals |
+| ticks landed | **940** | ticks 1–1240 |
+| median tick cycle | **29m** | 939 intervals |
 | median, last 10 | **49m** | 10 intervals |
 | fastest / slowest | 5s / 5.4d | |
-| **ticks per hour** | **1.15** | 818.1h elapsed |
-| median verify wall | **63s** | 878 ticks |
+| **ticks per hour** | **1.15** | 819.0h elapsed |
+| median verify wall | **63s** | 879 ticks |
 | wall trend | 39s → 13m — getting slower ⚠️ | first 3 vs last 3 |
 
 The **cycle** is the real unit: implement → debug → verify wall → land. The wall is only part of
@@ -28,10 +28,10 @@ it, and a wall that grows taxes every future tick, so it is tracked separately f
 
 * **capabilities asserted** (`G_CAPABILITY`): 48 → **81**
 * **live gates**: 27 → **470**
-* **✅ rows in the capability ledger**: 144 → **617**
+* **✅ rows in the capability ledger**: 144 → **618**
 * **Bar 0 — oracle hangs**: 0 of 265 sites
 
-**424 of 939 ticks** (45%) moved a
+**425 of 940 ticks** (45%) moved a
 user-visible capability. The rest were instruments, infrastructure and corrections — and the
 ledger says the corrections were not overhead: three of its top three priorities were phantoms,
 and finding that out redirected everything after it.
@@ -90,8 +90,8 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 
 ## What a capability costs
 
-* **424** capability ticks, median cycle **29m**
-* median diff per tick: **+269 / −34** lines across 8 files
+* **425** capability ticks, median cycle **29m**
+* median diff per tick: **+268 / −34** lines across 8 files
 
 ## Every tick
 
@@ -1036,5 +1036,6 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 | **1236** | 2026-08-14 05:56 | 33m | instrument | 13m | +233/−33 | 469 | 81 | 56.0% · | the whole `timeout-150s` bucket is FORCED REFLOW, and one of them is a single 21-second la |
 | **1237** | 2026-08-14 06:17 | 21m | measurement | 13m | +168/−33 | 469 | 81 | 56.0% · | the 21-second layout is TWO cascades, and the second one is the container-query pass (2026 |
 | **1238** | 2026-08-14 07:08 | 51m | measurement | 13m | +443/−58 | 470 | 81 | 56.0% · | the cascade's biggest term is PSEUDO-ELEMENT MATCHING, and the fix that named it fixed the |
+| **1240** | 2026-08-14 08:02 | 54m | capability | 13m | +231/−42 | 470 | 81 | 56.0% · | 18,364 elements were building a `ComputedStyle` for a `::before` that generates nothing (2 |
 
 *`·` after a WPT figure means **carried forward**, not measured this tick.*

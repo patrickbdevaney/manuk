@@ -1843,6 +1843,7 @@
   - L624 · Bucketing the pseudo index: a 14× narrowing that bought nothing (t1239)
   - L631 · ⚠ The first version narrowed NOTHING, and only a fan-out counter could say so
   - L649 · …and pseudo_ms still does not move: 3,531 → 3,560 ms
+  - L669 · to_computed_style is 53% of the cascade, and the content test was two statements too late (t1240)
 
 ## THE WIKI — what we durably KNOW, organised by subsystem
 `docs/wiki/README.md`
@@ -2108,4 +2109,4 @@
   - L231 · Both named mechanisms are subsystem work
 
 ---
-2015 sections across 22 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+2016 sections across 22 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.

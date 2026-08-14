@@ -689,6 +689,8 @@ pub fn cascade_via_stylo_sized(
     let mut ph = Phases::default();
     #[cfg(not(target_arch = "wasm32"))]
     let t_all = std::time::Instant::now();
+    // Snapshot, not reset — the counter is monotonic (see `pseudo_tail`).
+    let tail0 = pseudo_tail();
     // Parse each sheet's raw source with Stylo's own parser; keep the Arcs so we can
     // iterate their compiled rules for matching.
     let mut stylo_sheets: Vec<ServoArc<StyloStylesheet>> = Vec::new();
@@ -1182,6 +1184,7 @@ pub fn cascade_via_stylo_sized(
         // Whatever the named phases do not account for is reported as its own line rather than
         // spread across them. An instrument whose parts silently sum to the whole is one that
         // cannot tell you it is missing something.
+        let (tail_n, tail_m, tail_c, tail_t) = pseudo_tail();
         let named = ph.flush_ns
             + ph.minimal_ns
             + ph.element_ns
@@ -1202,6 +1205,11 @@ pub fn cascade_via_stylo_sized(
             pseudo_ms = ms(ph.pseudo_ns),
             has_ms = ms(ph.has_ns),
             unattributed_ms = ms(total_ns.saturating_sub(named)),
+            // The split of `pseudo_ms` that bucketing could never reach — see `PSEUDO_TAIL`.
+            pseudo_tail_n = tail_n.saturating_sub(tail0.0),
+            pseudo_merge_ms = ms((tail_m - tail0.1) * 1000),
+            pseudo_compute_ms = ms((tail_c - tail0.2) * 1000),
+            pseudo_tocs_ms = ms((tail_t - tail0.3) * 1000),
             "CASCADE PHASES"
         );
     }
@@ -2358,6 +2366,36 @@ impl RuleIndex {
     }
 }
 
+thread_local! {
+    /// `(calls, merge_us, compute_us, to_computed_style_us)` for `cascade_pseudo`'s per-element
+    /// tail — the part that runs once per element regardless of how many candidate rules there
+    /// were, and therefore the part bucketing cannot touch. Reported by the `CASCADE PHASES` line
+    /// under `MANUK_CASCADE_PROFILE=1`.
+    static PSEUDO_TAIL: std::cell::Cell<(u64, u128, u128, u128)> =
+        const { std::cell::Cell::new((0, 0, 0, 0)) };
+}
+
+fn add_pseudo_tail(merge_us: u64, compute_us: u64, to_cs_us: u64) {
+    if !profiling() {
+        return;
+    }
+    PSEUDO_TAIL.with(|c| {
+        let (n, m, cp, t) = c.get();
+        c.set((
+            n + 1,
+            m + merge_us as u128,
+            cp + compute_us as u128,
+            t + to_cs_us as u128,
+        ));
+    });
+}
+
+/// Monotonic, like `dom_bindings::REFLOW_COST` and for the same reason: a reset makes a nested
+/// caller erase an outer one's accounting, and t1236 shipped that bug once already.
+fn pseudo_tail() -> (u64, u128, u128, u128) {
+    PSEUDO_TAIL.with(|c| c.get())
+}
+
 /// One `::before` / `::after` rule, hoisted out of the sheet tree at index-build time.
 struct PseudoRule {
     sel: selectors::parser::Selector<stylo::selector_parser::SelectorImpl>,
@@ -2691,20 +2729,46 @@ fn cascade_pseudo(
             ascending.push((decl, importance));
         }
     }
+    // ⚠⚠⚠ **THE PER-ELEMENT TAIL, and t1239 says this is where the 43% has to be.** Bucketing cut
+    // the candidate set 28 → 2 and `pseudo_ms` did not move, which rules out selector matching:
+    // whatever this function costs, it is paid once per element that has ANY matching pseudo rule,
+    // and a `*::before` in the universal bucket makes that EVERY element on the page. Split three
+    // ways because they are three different fixes — a merge, an allocation, and Stylo's whole
+    // computed-value pipeline.
+    let t_merge = std::time::Instant::now();
     let arc = ServoArc::new(lock.wrap(merge_ascending(&ascending)));
+    let us_merge = t_merge.elapsed().as_micros() as u64;
+    let t_compute = std::time::Instant::now();
     let cv = stylist.compute_for_declarations::<StyloElement>(guards, parent_cv, arc);
+    let us_compute = t_compute.elapsed().as_micros() as u64;
+    use stylo::values::generics::counters::{Content, ContentItem};
+    // ⚠⚠⚠ **THE `content` TEST MOVED ABOVE `to_computed_style`, AND THAT REORDER IS THE FIX.**
+    // Only a pseudo whose `content` produced something generates a box at all — and the test reads
+    // straight off Stylo's `cv`, so it never needed our conversion to answer. Below it, this
+    // function converted ~200 fields into a `ComputedStyle` and then threw the result away for
+    // every element whose `::before` resolved to `normal` — which, with a `*::before` anywhere in
+    // the page's CSS, is nearly every element on it.
+    //
+    // Measured t1240 on `bhramarah.in` (23,001 elements): `to_computed_style` was **2,886 ms of the
+    // 3,542 ms pseudo phase (81%)** across 18,364 calls, and the same function is another 1,483 ms
+    // on the ordinary-element path — **53% of the entire 8,196 ms cascade in one conversion.**
+    //
+    // ⚠ `::first-letter` must NOT take this gate: it re-styles text the author already wrote, so
+    // requiring `content` would drop every real rule on the web (`p:first-letter { font-size:200% }`
+    // sets no `content` and never will). Its early return is BELOW, after the conversion it needs.
+    let raw_content = cv.get_counters().clone_content();
+    let is_first_letter = want == stylo::selector_parser::PseudoElement::FirstLetter;
+    if !is_first_letter && matches!(raw_content, Content::Normal | Content::None) {
+        return None;
+    }
+    let t_to_cs = std::time::Instant::now();
     let mut cs = to_computed_style(&cv);
-    // ⚠ **`::first-letter` returns HERE, before the `content` test below, and the early return IS
-    // the semantic difference.** Generated content only exists if `content` produced something;
-    // `::first-letter` re-styles text the author already wrote, so requiring `content` would have
-    // dropped every real rule on the web (`p:first-letter { font-size: 200% }` sets no `content`
-    // and never will). Everything after this point is the generated-content path.
-    if want == stylo::selector_parser::PseudoElement::FirstLetter {
+    let us_to_cs = t_to_cs.elapsed().as_micros() as u64;
+    add_pseudo_tail(us_merge, us_compute, us_to_cs);
+    if is_first_letter {
         return Some(cs);
     }
-    // Only a pseudo with `content` generates a box at all.
-    use stylo::values::generics::counters::{Content, ContentItem};
-    let parts = match cv.get_counters().clone_content() {
+    let parts = match raw_content {
         Content::Items(items) => {
             let mut out: Vec<crate::ContentPart> = Vec::new();
             // Adjacent literal text coalesces, so `"S" counter(x) ". "` is three parts and not five
