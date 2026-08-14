@@ -46371,6 +46371,57 @@ PERF: none — one UA rule and one narrowed branch in a cascade that already ran
 WIKI: `docs/wiki/css-cascade.md` — where Chrome draws the form-control `box-sizing` line, and why a
 layout-crate test cannot see it.
 
+## Tick 1231 — the frame gap NEVER recovers, and that rules out the fix t1230 specified (2026-08-14)
+
+TICK SHAPE: measurement — one control row against t1230's own specified fix, taken BEFORE building
+it, which is what stopped it from being built wrong.
+
+t1230 specified: *"re-cascade a frame's document on mutation … the frame-document equivalent of the
+`ReflowScope` arming t1184/t1186 did"*. That framing assumes the defect is a **same-round staleness**
+— the read happening in a re-entry with no reflow hook armed. **One probe falsifies it:**
+
+```text
+  A  CONTROL: an ORIGINAL frame node, display          "block"      PASS
+  B  node created in the load handler, read SAME round undefined    FAIL
+  C  the same node, read in the NEXT task              undefined    FAIL
+  D  created AND read in the next task                 undefined    FAIL
+  E  read TWO tasks after creation                     undefined    FAIL
+```
+
+**It never recovers.** A same-round-staleness defect is fixed by the next re-entry; this one is not
+fixed by any of them, so it is not staleness — **the child page is never re-laid-out on the script
+path at all.** t1184/t1186's shape is the wrong template and a `ReflowScope`-style arming would have
+been built, passed its fixture, and moved nothing.
+
+⚠⚠⚠ **AND THE MACHINERY ALREADY EXISTS, WHICH IS WHY THE NARROW FIX IS A TRAP.**
+`Page::repaint_child_frames` → `repaint_frame` → `child.relayout(fonts, w)` re-cascades a child and
+is correctly dirty-guarded — but it is on the **shell's paint path**, and nothing on the script path
+calls it. `FRAME_STYLES` points at the child's *live* `styles` map, so **no republish is needed**:
+re-laying-out the child at the right moment is the whole fix.
+
+**Where it must go, and the trade-off that decides it, stated so the next tick does not have to
+re-derive it:**
+
+| candidate | reach | cost |
+|---|---|---|
+| `publish_iframe_docs` (2 call sites, `fire_lifecycle` has `fonts`+`viewport_width` in scope) | **lifecycle rounds only** — not `dispatch`, not timers, not rAF | tiny |
+| the `forced_reflow` hook (fires on any read) | **every re-entry** — correct | `ReflowCtx` cannot reach `child_pages`; needs a new pointer, and raw pointers held across allocating calls are the Bar-0 class this repo has hit before |
+
+The first is **deliberately NOT taken**: it would pass a one-fixture gate and leave every non-lifecycle
+read stale — *a dormant code path is not a correct one*, and *a fix that works and moves nothing means
+the dispatch is the bug*. The second is the real tick, and it needs a fixture whose rows are B–E
+above (a cross-task row is what makes a lifecycle-only fix fail), the A control, and a RED proof.
+
+⚠ **NOT ESTABLISHED:** whether the shell path (`repaint_child_frames`) makes this invisible in the
+real browser and visible only under the WPT harness, which never calls it. That changes the size of
+the real-world prize but not the WPT one, and it was not probed. It is the first thing the next tick
+should measure, because it decides whether this is a 726-subtest instrument gap or a live-site defect.
+
+PERF: none — measurement only, no source change.
+
+WIKI: `docs/wiki/js-engine.md` — the frame re-cascade, and why the reflow-hook template does not fit.
+[no-pattern]
+
 ## Tick 1230 — the frame's style map is cascaded ONCE, and a stale doc blamed the wrong organ (2026-08-14)
 
 TICK SHAPE: measurement — the board's top WPT leverage row (`css/selectors`, 67.6%, fail=1803)

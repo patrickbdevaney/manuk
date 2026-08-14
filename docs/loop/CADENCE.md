@@ -11,12 +11,12 @@
 
 | | value | over |
 |---|---|---|
-| ticks landed | **931** | ticks 1–1230 |
-| median tick cycle | **28m** | 930 intervals |
+| ticks landed | **932** | ticks 1–1231 |
+| median tick cycle | **28m** | 931 intervals |
 | median, last 10 | **55m** | 10 intervals |
 | fastest / slowest | 5s / 5.4d | |
-| **ticks per hour** | **1.15** | 810.4h elapsed |
-| median verify wall | **63s** | 870 ticks |
+| **ticks per hour** | **1.15** | 810.6h elapsed |
+| median verify wall | **63s** | 871 ticks |
 | wall trend | 39s → 13m — getting slower ⚠️ | first 3 vs last 3 |
 
 The **cycle** is the real unit: implement → debug → verify wall → land. The wall is only part of
@@ -31,7 +31,7 @@ it, and a wall that grows taxes every future tick, so it is tracked separately f
 * **✅ rows in the capability ledger**: 144 → **614**
 * **Bar 0 — oracle hangs**: 0 of 265 sites
 
-**422 of 931 ticks** (45%) moved a
+**422 of 932 ticks** (45%) moved a
 user-visible capability. The rest were instruments, infrastructure and corrections — and the
 ledger says the corrections were not overhead: three of its top three priorities were phantoms,
 and finding that out redirected everything after it.
@@ -91,7 +91,7 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 ## What a capability costs
 
 * **422** capability ticks, median cycle **28m**
-* median diff per tick: **+269 / −34** lines across 8 files
+* median diff per tick: **+268 / −34** lines across 8 files
 
 ## Every tick
 
@@ -1028,5 +1028,6 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 | **1228** | 2026-08-13 19:13 | 1.8h | capability | 13m | +448/−36 | 466 | 81 | 56.0% · | the lifecycle was the unguarded entry point, and now it is armed (2026-08-13) |
 | **1229** | 2026-08-13 22:39 | 3.4h | capability | 13m | +343/−34 | 467 | 81 | 56.0% · | the third entry point, and the class is CLOSED (2026-08-13) |
 | **1230** | 2026-08-13 23:26 | 48m | measurement | 13m | +180/−46 | 467 | 81 | 56.0% · | the frame's style map is cascaded ONCE, and a stale doc blamed the wrong organ (2026-08-14 |
+| **1231** | 2026-08-13 23:36 | 10m | measurement | 13m | +123/−33 | 467 | 81 | 56.0% · | the frame gap NEVER recovers, and that rules out the fix t1230 specified (2026-08-14) |
 
 *`·` after a WPT figure means **carried forward**, not measured this tick.*

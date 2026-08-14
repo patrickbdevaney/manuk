@@ -3172,3 +3172,40 @@ frame-document equivalent of the `ReflowScope` arming t1184/t1186 did for the `l
 rounds. Not a one-liner: the frame's cascade needs its own sheets and fonts, `FRAME_STYLES` is keyed
 by arena pointer, and the paint-side snapshot (the same missing re-cascade seen from the pixels) must
 stay consistent with the CSSOM side or the two will disagree.
+
+### The gap NEVER recovers — which rules out the reflow-hook template (t1231)
+
+t1230 specified the fix as *"the frame-document equivalent of the `ReflowScope` arming t1184/t1186
+did"*. That assumes **same-round staleness**: the read happened in a re-entry with no reflow hook
+armed. One control row falsifies it:
+
+| when the node is created / read | `getComputedStyle(n).display` | |
+|---|---|---|
+| an ORIGINAL frame node | `"block"` | ✅ CONTROL |
+| created in the `load` handler, read the SAME round | `undefined` | ❌ |
+| the same node, read in the NEXT task | `undefined` | ❌ |
+| created AND read in the next task | `undefined` | ❌ |
+| read TWO tasks after creation | `undefined` | ❌ |
+
+**Staleness is fixed by the next re-entry. This is not.** The child page is never re-laid-out on the
+**script path** at all — so arming a reflow hook would have been built, would have passed its
+fixture, and would have moved nothing.
+
+**The machinery already exists**, which is exactly what makes the narrow fix a trap:
+`repaint_child_frames` → `repaint_frame` → `child.relayout(fonts, w)` re-cascades a child and is
+correctly dirty-guarded — but it lives on the **shell's paint path** and nothing on the script path
+calls it. `FRAME_STYLES` holds a pointer to the child's *live* `styles` map, so **no republish is
+needed**: re-laying-out the child at the right moment is the entire fix.
+
+| candidate site | reach | cost |
+|---|---|---|
+| `publish_iframe_docs` (2 call sites; `fire_lifecycle` has `fonts`+`viewport_width` in scope) | **lifecycle rounds only** — not `dispatch`, timers or rAF | tiny |
+| the `forced_reflow` hook (fires on any read) | **every re-entry** — correct | `ReflowCtx` cannot reach `child_pages`; a new raw pointer here is the Bar-0 class this repo has already been bitten by |
+
+The first is **deliberately not taken**: it passes a one-fixture gate and leaves every non-lifecycle
+read stale. *A dormant code path is not a correct one*, and *a fix that works and moves nothing means
+the dispatch is the bug.* A gate for the real fix needs the cross-task rows above — they are what
+make a lifecycle-only implementation fail.
+
+⚠ **Open, and it sizes the prize:** the shell calls `repaint_child_frames` and the WPT harness never
+does, so this may be far more visible under the harness than in the real browser. Measure that first.
