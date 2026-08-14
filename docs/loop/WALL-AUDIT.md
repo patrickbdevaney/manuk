@@ -7,6 +7,75 @@ moved to CI to fake a fast local wall. Only optimisations that buy the same asse
 
 ---
 
+## Audit @ tick 1247 (2026-08-14) — audit #47's finding RECURS, the gap narrowed 17% → 39%, and the residue is now BUILD not gates
+
+⚠ **THIS IS NOT A NEW FINDING AND MUST NOT BE READ AS ONE.** Audit #47 (t1206, forty-one ticks ago)
+already said it in its title — *"the gates are 17% of the wall, and the audit cannot see the other
+83%"* — and correctly attributed the unaccounted remainder to the **BUILD**. What is new here is only
+the movement, so this entry is scoped to that.
+
+**Wall: gate 1126s · build 41s · total 1167s** against a 189s mark. Trend across this session's three
+landings on a warming tree: **1695s → 1265s → 1167s** — cold-start decay, not a regression, and the
+build phase is a flat ~40s throughout, so the cost is entirely in the **gate phase**.
+
+### What the audit could see
+
+```text
+  206s  P (real-site parity)      18%
+  164s  T (crate tests)           15%
+   41s  B (build)                  4%
+   12s  G6 · 5s G1 · 5s D · 3s F · 1s G_CHARDATA
+    0s  × ~55 further gates
+```
+
+### The movement: itemised coverage 17% → 39%, and the wall fell 858s → 1167s… on a COLDER tree
+
+```text
+                     audit #47 (t1206)      here (t1247)
+  wall total              858s                 1167s
+  itemised               ~148s   17%            437s   39%
+  NOT itemised           ~710s   83%            689s   61%
+```
+
+⚠ **The two totals are not comparable and saying so is the point.** t1206's 858s was one wall; the
+three this session ran 1695 → 1265 → 1167 on a **warming** tree, because this agent rebuilt
+`--release -p manuk-wpt` between every tick to measure WPT (t1235: *the agent's own build is part of
+the harness*). The **unitemised seconds barely moved (710 → 689)** while the itemised ones grew, which
+is consistent with #47's attribution — the residue is BUILD, it is roughly constant, and what varies
+on top of it is gate work.
+
+`.git/manuk-wall-sections` sums to **437s** against a gate phase of **1,126s**. Every gate below
+`G_CHARDATA` records **0s**, which is not credible for ~55 gates that each stand up a SpiderMonkey
+runtime (~1.5s of startup apiece by this script's own §1). Two readings are consistent with it, and
+neither is comfortable: the section timer has whole-second granularity so sub-second gates round to
+zero, **and** whatever runs between the recorded sections is billed to nobody.
+
+Either way the consequence is the same and it is the reason this is written up rather than shrugged
+off: **the instrument that decides where wall-time goes cannot see the majority of the wall it is
+auditing**, so the ranked list above is a ranking of the 39% that happens to be timed. Optimising the
+top of it is optimising the part that was easy to measure — which is the exact failure this project
+names as meta-instrument #3 (*"8 of 30 process defects were caught by a number that did not add up —
+not by any gate"*, `STATUS.md`).
+
+### What was trimmed: nothing, and deliberately
+
+Of the four admissible questions the script poses, none has an answer that survives its own
+constraint on the visible 39%:
+
+- **REDUNDANCY** — `P` (206s) is the 72-page real-site parity set and `T` (164s) is the crate suites.
+  Neither duplicates the other's assertion; sharing a runtime between them is a `nextest` change to
+  the harness, not an agent-side one.
+- **PARALLELISM / CACHING / SCOPE** — the gates already launch concurrently, incrementals already
+  live in RAM, and the perf floors are serialised **on purpose** (a benchmark sharing the machine is
+  not a benchmark).
+
+Dropping a gate, widening a floor, sampling instead of covering, or moving a check to CI are all
+inadmissible, so the honest result is: **on what this audit can see, the wall is lean.** On the 61%
+it cannot see, the honest result is that nobody knows.
+
+⚠ **PART VII: the section timer is in `scripts/`, which is observer-owned. Not touched.** Recorded
+here so the next person who reads a wall-audit ranking knows what denominator it is a ranking of.
+
 ## Audit #47 — tick 1206 (2026-08-13): the gates are 17% of the wall, and the audit cannot see the other 83%
 
 ```text

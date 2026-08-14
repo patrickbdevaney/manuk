@@ -46371,6 +46371,90 @@ PERF: none — one UA rule and one narrowed branch in a cascade that already ran
 WIKI: `docs/wiki/css-cascade.md` — where Chrome draws the form-control `box-sizing` line, and why a
 layout-crate test cannot see it.
 
+## Tick 1247 — the ORACLE was rendering in QUIRKS MODE, and it scored a 784px divergence against a row where we are exactly right (2026-08-14)
+
+TICK SHAPE: instrument — the RATCHET's third face. The "NOT ESTABLISHED" row I carried through two
+ticks turned out to be the instrument, and chasing it as an engine defect would have been the next
+capability tick.
+
+**THE PROBE THAT WAS SUPPOSED TO TAKE ONE MINUTE.** t1245 and t1246 both carried the same unresolved
+line: *"`height:100%` on an atomic inline inside an AUTO-height parent measures 50×800 in Chrome and
+50×16 here."* Widening it to four rows made it worse, not clearer — the **block** child diverged
+identically, so it was not an atomic-inline rule at all, and `height:50%` came back 400, exactly half
+of 800. A percentage resolving against the **viewport** through auto-height ancestors is not a CSS2
+§10.5 behaviour; it is **quirks mode**. So the next thing measured was not our layout — it was the
+oracle:
+
+```text
+  same file, loaded directly by the same Chrome        document.compatMode = CSS1Compat  (standards)
+  span 50x16 · parent 50x16      <- and 50x16 is OUR answer
+  the same file THROUGH the fidelity probe             span 50x800 · parent 400x800
+```
+
+⚠⚠⚠ **THE MECHANISM, AND IT IS THREE LINES OF STRING CONCATENATION.** HTML's parser treats a
+`<!DOCTYPE>` as a doctype **only when it is the first thing in the document**. Three probes —
+`capture_url_screenshot`, the `[id]` box probe, and `capture_seen_all_paths` (the one that produces
+SHAPE) — each assembled their document as *"insert `<base href=…>` after `<head>`, **or else
+PREPEND**"*. The `else` branch puts a tag in front of the doctype, the doctype degrades to a
+bogus-comment token, and Chrome parses the page in **`BackCompat`**. In quirks mode a percentage
+height walks up through auto-height ancestors to the initial containing block; in standards mode it
+computes to `auto`. Hence 800 where the answer is 16.
+
+**IT WAS LIVE ON THE REAL SWEEP, NOT ONLY ON FIXTURES — and here is the number rather than a worry.**
+Of the 200 CrUX corpus URLs, 183 fetched non-empty, and **16 ship no literal `<head>`; 9 of those 16
+carry a doctype**, so those nine were being rendered quirks by the oracle while the real page is
+standards:
+
+```text
+  celeb.gate.cc · rpsc.rajasthan.gov.in · aksesjambi.com · littlecaesarsbcs.libellum.com.mx
+  www.hdnails.it · patrickmorin.com · www.otomoto.pl · gismart.com · ofero.id
+```
+
+⚠ **`celeb.gate.cc` is on that list, and it is the site this loop has been using as its most stable
+CONTROL** (t852 FINDING 3: byte-identical at 0.783158 across four consecutive A/Bs, then *"moved on
+its own"* to 0.768421 with the old binary reproducing the move twice). A control that is scored
+against the wrong parsing mode is a control whose stability is an accident of that mode. **Stated as
+a hypothesis, not a conclusion** — the drift is not re-derived here and the next sweep will say.
+`www.otomoto.pl` is also on it, and it is one of the corpus's largest scorers (n=1050 at t1243).
+
+THE FIX: one `splice_head(html, insert)` — `<head>` if there is one, else **after the doctype**, else
+prepend (no doctype means the author already chose quirks, and prepending is faithful). The three
+call sites had written the same wrong `else` three times, which is this repository's standing *one
+rule, N implementations* failure in its usual shape.
+
+GATE: `splice_head_never_puts_anything_in_front_of_the_doctype` — no-`<head>`, the `<!DOCTYPE HTML>`
+spelling the web ships, the explicit-`<head>` seam, and the no-doctype CONTROL that must still
+prepend. **RED-proven** by disabling the doctype arm: *"got: `<base href=…><!doctype html>`"*.
+
+⚠⚠⚠ **AND THE OBLIGATION t1242 WROTE INTO THE CONSTITUTION FIRED ON ME: *an instrument you REPAIR
+invalidates its own earlier readings*.** Every Chrome row in t1244, t1245 and t1246 came through this
+probe. So they were **re-run through the repaired instrument** rather than reasoned about:
+
+```text
+  fixture           before this tick        after
+  t1244-fix.html    shape  61.5%            100.0%
+  t1244-ctl.html    shape  80.0%            100.0%
+  t1245-a.html      shape  90.9%            100.0%
+  t1245-b.html      shape  72.7%            100.0%
+  t1247-p.html      shape  11.1%            100.0%
+```
+
+**All five go to 100%, which VALIDATES the three fixes rather than retracting them.** Had t1244–t1246
+been aimed at quirks-mode targets, the repaired instrument would now show divergence; it shows none.
+The rows those ticks acted on were percentage/stretch heights against a **definite** parent, which
+resolves identically in both modes — the quirks difference only bites when the ancestor chain is
+auto-height, which is exactly the row that was left NOT ESTABLISHED.
+
+⚠⚠ **RETRACTED, explicitly, in both places it was written:** the t1245 and t1246 residue *"Chrome
+gives 50×800 where we give 50×16"* is **withdrawn**. Chrome gives 50×16. **We were right, and the
+instrument said we were 784px wrong.** That is the fourth time an instrument here has produced a
+confident false divergence, and it is the first one that was about to become a capability tick.
+
+PERF: none — the instrument does the same work, in the right order.
+
+WIKI: `docs/wiki/fidelity-instrument.md` — "the oracle deleted the doctype and scored us in quirks
+mode".
+
 ## Tick 1246 — a NATURAL width is not a SPECIFIED width, and this was the sixth site to ask and the first to ask half (2026-08-14)
 
 TICK SHAPE: capability — t1245's residue, closed. Three ticks on one mechanism, and each one found

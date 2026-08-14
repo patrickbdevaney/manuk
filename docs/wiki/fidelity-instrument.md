@@ -1364,3 +1364,56 @@ missing box is a *descendant* count (t911 — one dropped container bills its wh
 
 The fine labels fragment one cause across a dozen rows (`height ~16px <div>`, `height ~256px <div>`,
 …) and every row then looks small, which is precisely the shape that hides a shared root cause.
+
+## The oracle deleted the doctype and scored us in QUIRKS MODE (t1247)
+
+HTML's parser treats a `<!DOCTYPE>` as a doctype **only when it is the first thing in the document**.
+Three probes — `capture_url_screenshot`, the `[id]` box probe, and `capture_seen_all_paths` (the one
+that produces SHAPE) — each built their document the same way:
+
+```rust
+if let Some(i) = html.find("<head>") { …insert after <head>… } else { format!("{base}{html}") }
+```
+
+The `else` branch puts `<base href=…>` in front of the doctype. The doctype degrades to a
+bogus-comment token and Chrome parses the page in **`BackCompat`**. In quirks mode a percentage
+height walks up through auto-height ancestors to the initial containing block; in standards mode
+CSS2 §10.5 computes it to `auto`:
+
+```text
+                                        through the probe   Chrome, same file, direct   ours
+  inline-block, height:100%, auto CB        50x800                 50x16                50x16
+  BLOCK child,  height:100%, auto CB        50x800                 50x16                50x16
+  inline-block, height:50%,  auto CB        50x400                 50x16                50x16
+```
+
+So the instrument reported a **784px divergence on a row where the engine is exactly right** — and it
+would have reported it forever, because a page with no literal `<head>` cannot be scored honestly by
+a probe that deletes its doctype.
+
+**It was live on the corpus, not only on fixtures.** Of 200 CrUX URLs, 183 fetched non-empty; **16
+ship no literal `<head>` and 9 of those carry a doctype** — `celeb.gate.cc`, `rpsc.rajasthan.gov.in`,
+`aksesjambi.com`, `littlecaesarsbcs.libellum.com.mx`, `www.hdnails.it`, `patrickmorin.com`,
+`www.otomoto.pl`, `gismart.com`, `ofero.id`. ⚠ `celeb.gate.cc` is the site this loop has used as its
+most stable CONTROL, and `www.otomoto.pl` is one of its largest scorers.
+
+The fix is one `splice_head`: `<head>` if present, else **after the doctype**, else prepend — no
+doctype means the author already chose quirks, so prepending is faithful. Three call sites had
+written the same wrong `else` three times.
+
+### The repair obligation, discharged rather than asserted
+
+t1242 wrote the rule: *an observation banked from an instrument you subsequently repair does not
+survive the repair, and it will not retract itself.* Every Chrome row in t1244/t1245/t1246 came
+through this probe, so all four fixtures were **re-run through the repaired instrument**:
+
+```text
+  t1244-fix 61.5% → 100.0%   ·   t1244-ctl 80.0% → 100.0%
+  t1245-a   90.9% → 100.0%   ·   t1245-b   72.7% → 100.0%   ·   t1247-p 11.1% → 100.0%
+```
+
+All five reach 100%, which **validates** those three fixes: had they been aimed at quirks-mode
+targets, the repaired instrument would now show divergence. The rows they acted on were percentage
+and `stretch` heights against a **definite** parent, which resolves identically in both modes. The
+one row the bug did corrupt is exactly the one that was honestly left *"NOT ESTABLISHED"* — which is
+the argument for writing that label instead of guessing.

@@ -487,12 +487,7 @@ pub fn capture_boxes_all_ids(url: &str, vw: u32, vh: u32) -> Result<HashMap<Stri
     // <base> so subresources still resolve to the real origin.
     let html = ureq_get(url)?;
     let base = format!("<base href=\"{url}\">");
-    let doc = if let Some(i) = html.find("<head>") {
-        let (a, b) = html.split_at(i + 6);
-        format!("{a}{base}{b}{PROBE_ALL_IDS_JS}")
-    } else {
-        format!("{base}{html}{PROBE_ALL_IDS_JS}")
-    };
+    let doc = format!("{}{PROBE_ALL_IDS_JS}", splice_head(&html, &base));
     let tmp = std::env::temp_dir().join(format!("manuk-struct-{}.html", stable_tag(&doc)));
     std::fs::write(&tmp, &doc)?;
     let mut cmd = Command::new(&chrome);
@@ -536,12 +531,7 @@ pub fn capture_seen_all_paths(
     let chrome = chrome_bin().ok_or(Unmeasurable::Unreachable)?;
     let html = fetch_document(url)?;
     let base = format!("<base href=\"{url}\">");
-    let doc = if let Some(i) = html.find("<head>") {
-        let (a, b) = html.split_at(i + 6);
-        format!("{a}{base}{b}{PROBE_ALL_PATHS_JS}")
-    } else {
-        format!("{base}{html}{PROBE_ALL_PATHS_JS}")
-    };
+    let doc = format!("{}{PROBE_ALL_PATHS_JS}", splice_head(&html, &base));
     let tmp = std::env::temp_dir().join(format!("manuk-shape-{}.html", stable_tag(&doc)));
     std::fs::write(&tmp, &doc).map_err(|_| Unmeasurable::ProbeBlocked)?;
     let mut cmd = Command::new(&chrome);
@@ -1129,6 +1119,60 @@ pub fn capture_boxes(html: &str, vw: u32, vh: u32) -> Result<HashMap<String, Box
     parse_probe_json(&dom)
 }
 
+/// **Splice `<base>` into a document without pushing Chrome into QUIRKS MODE.**
+///
+/// ⚠⚠⚠ **THE ORACLE WAS RENDERING HEADLESS FIXTURES IN QUIRKS MODE AND SCORING US AGAINST IT.**
+/// Three probes assembled their document as *"insert after `<head>`, or else PREPEND"*, and the
+/// `else` branch is the bug: HTML's own parser rule is that a `<!DOCTYPE>` is only a doctype **when
+/// it is the first thing in the document**. Prepending `<base href=…>` puts a tag in front of it,
+/// the doctype degrades to a comment-like token, and Chrome switches to `CSS1Compat`'s opposite —
+/// `BackCompat`. Every page that does not spell a literal `<head>` was affected, which is nearly
+/// every hand-written fixture and every page whose `<head>` the author let the parser imply.
+///
+/// **What it cost, measured (t1247).** A `height:100%` box inside an auto-height parent:
+///
+/// ```text
+///                                        oracle's Chrome   REAL Chrome    ours
+///   inline-block, height:100%              50x800            50x16       50x16
+///   block child,  height:100%              50x800            50x16       50x16
+///   inline-block, height:50%               50x400            50x16       50x16
+/// ```
+///
+/// In quirks mode a percentage height walks up through auto-height ancestors to the initial
+/// containing block; in standards mode CSS2 §10.5 computes it to `auto`. So the oracle reported a
+/// **784px divergence on a row where we are exactly right**, and it would have reported it forever —
+/// a fixture with no `<head>` cannot be scored honestly by an instrument that deletes its doctype.
+/// (`document.compatMode` from the same file, loaded directly: `CSS1Compat`. Through the probe:
+/// quirks behaviour.)
+///
+/// One function rather than a fourth copy of the three-line match: the three call sites had written
+/// the same `else` branch three times and it was wrong all three times, which is this repository's
+/// standing *one rule, N implementations* failure in its usual shape.
+fn splice_head(html: &str, insert: &str) -> String {
+    if insert.is_empty() {
+        return html.to_string();
+    }
+    // Preferred seam, unchanged: immediately inside an explicit `<head>`.
+    if let Some(i) = html.find("<head>") {
+        let (a, b) = html.split_at(i + 6);
+        return format!("{a}{insert}{b}");
+    }
+    // No `<head>`: go in AFTER the doctype so the doctype stays first. Case-insensitive, because
+    // `<!DOCTYPE html>` is the spelling most of the web ships.
+    let lower = html.to_ascii_lowercase();
+    if lower.trim_start().starts_with("<!doctype") {
+        let lead = html.len() - html.trim_start().len();
+        if let Some(gt) = html[lead..].find('>') {
+            let cut = lead + gt + 1;
+            let (a, b) = html.split_at(cut);
+            return format!("{a}{insert}{b}");
+        }
+    }
+    // No doctype at all — the document is quirks-mode by the author's own choice, and prepending
+    // changes nothing about that. Faithful.
+    format!("{insert}{html}")
+}
+
 /// G1 — screenshot a **live URL** in headless Chrome, so Chromium fetches the page's own CSS,
 /// images and fonts exactly as it would for a user. (The file:// variant below can't do that for a
 /// real site: relative subresource URLs would resolve against the temp file.)
@@ -1153,13 +1197,7 @@ pub fn capture_url_screenshot(
     // two different documents. One page, two probes.
     let html = fetch_document(url)?;
     let base = format!("<base href=\"{url}\">");
-    let doc = match html.find("<head>") {
-        Some(i) => {
-            let (a, b) = html.split_at(i + 6);
-            format!("{a}{base}{b}")
-        }
-        None => format!("{base}{html}"),
-    };
+    let doc = splice_head(&html, &base);
     let tmp = std::env::temp_dir().join(format!("manuk-shot-{}.html", stable_tag(&doc)));
     std::fs::write(&tmp, &doc).map_err(|_| Unmeasurable::ProbeBlocked)?;
     let mut cmd = Command::new(&chrome);
@@ -1317,6 +1355,72 @@ fn stable_tag(html: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// **G_ORACLE_STAYS_IN_STANDARDS_MODE — the `<base>` splice must never displace the doctype.**
+    ///
+    /// HTML's parser treats a `<!DOCTYPE>` as a doctype **only when it is the first thing in the
+    /// document**. Three probes assembled their document as *"after `<head>`, or else PREPEND"*, and
+    /// the prepend put `<base href=…>` in front of the doctype — so Chrome parsed every
+    /// `<head>`-less page in **quirks mode** while the real page is standards mode, and scored us
+    /// against it.
+    ///
+    /// Measured (t1247): a `height:100%` box in an auto-height parent read **50x800** through the
+    /// probe and **50x16** in the same Chrome loading the same file directly — which is also our own
+    /// answer. The oracle reported a 784px divergence on a row where the engine is exactly right,
+    /// and **9 of 183 live corpus documents** ship a doctype with no literal `<head>`, so this was
+    /// live on the real sweep and not only on fixtures.
+    ///
+    /// **To watch it go RED:** change `splice_head`'s no-`<head>` arm back to
+    /// `format!("{insert}{html}")` unconditionally.
+    #[test]
+    fn splice_head_never_puts_anything_in_front_of_the_doctype() {
+        let base = "<base href=\"https://x.test/\">";
+
+        // No `<head>`: the doctype must still be first, and the base must still be present.
+        let out = splice_head("<!doctype html>\n<div>hi</div>", base);
+        assert!(
+            out.trim_start()
+                .to_ascii_lowercase()
+                .starts_with("<!doctype"),
+            "the doctype must remain the first thing in the document, got: {out}"
+        );
+        assert!(
+            out.contains(base),
+            "the <base> must still be spliced in: {out}"
+        );
+
+        // The spelling the web actually ships.
+        let out = splice_head("<!DOCTYPE HTML>\n<p>x</p>", base);
+        assert!(
+            out.trim_start()
+                .to_ascii_lowercase()
+                .starts_with("<!doctype"),
+            "case-insensitive: got {out}"
+        );
+        assert!(out.contains(base));
+
+        // An explicit `<head>` keeps the original, preferred seam.
+        let out = splice_head(
+            "<!doctype html><html><head><title>t</title></head></html>",
+            base,
+        );
+        assert!(out
+            .trim_start()
+            .to_ascii_lowercase()
+            .starts_with("<!doctype"));
+        assert!(
+            out.find(base).unwrap() < out.find("<title>").unwrap(),
+            "the base belongs immediately inside <head>: {out}"
+        );
+
+        // CONTROL — no doctype at all. The document is quirks by the author's own choice and
+        // prepending changes nothing, so the faithful thing is to leave that alone.
+        let out = splice_head("<div>hi</div>", base);
+        assert!(
+            out.starts_with(base),
+            "no doctype: prepending is faithful, got {out}"
+        );
+    }
 
     #[test]
     fn inject_probe_places_before_body_close() {
