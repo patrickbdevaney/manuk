@@ -1538,6 +1538,7 @@
   - L3006 · Why a raw *mut JSContext may cross a thread here
   - L3022 · The failure mode this creates, and the guard against it
   - L3037 · THERE ARE THREE HOST→JS ENTRY POINTS, AND ONLY DRAINS WERE ARMED (t1228)
+  - L3133 · A frame's document is cascaded ONCE — and the doc that said otherwise blamed a seam already fixed (t1230)
 
 ## Manuk Daily-Driver Usability Roadmap (synthesized, tick 138)
 `docs/wiki/lever-map.md`
@@ -2088,4 +2089,4 @@
   - L231 · Both named mechanisms are subsystem work
 
 ---
-1995 sections across 22 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+1996 sections across 22 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.

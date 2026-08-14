@@ -46371,6 +46371,76 @@ PERF: none — one UA rule and one narrowed branch in a cascade that already ran
 WIKI: `docs/wiki/css-cascade.md` — where Chrome draws the form-control `box-sizing` line, and why a
 layout-crate test cannot see it.
 
+## Tick 1230 — the frame's style map is cascaded ONCE, and a stale doc blamed the wrong organ (2026-08-14)
+
+TICK SHAPE: measurement — the board's top WPT leverage row (`css/selectors`, 67.6%, fail=1803)
+taken down to a mechanism and a file:line, with the CONTROL row that names the organ.
+
+⚠⚠⚠ **THE DENSEST BUCKET IS NOT WHAT ITS DIRECTORY NAME SAYS IT IS.** `css/selectors` splits into
+nine subdirectories, and the densest failing mass is
+`attribute-selectors/attribute-case` — **726 failing subtests in FOUR files** (832/1558 = 53.4%).
+The name says attribute case-sensitivity. Histogramming the assertion message says otherwise:
+
+```text
+  216  assert_equals: selector matched expected (string) "X" but got (undefined) undefined
+  114  assert_equals: invalid rule parsed into CSSOM expected N but got N
+  101  assert_equals: valid selector didn't match expected "X" but got "X"
+   92  assert_equals: selector didn't match expected (string) "X" but got (undefined) undefined
+   36  sheet.insertRule is not a function
+```
+
+**308 of them are `undefined`, and the failing rows are the test's own SANITY CHECKS** —
+`[foo='BAR']` against `<div foo="BAR">`. A sanity row failing is never the thing the file is named
+after; it is the helper.
+
+⚠⚠⚠ **AND THE HELPER IS `[window, quirks, xml].forEach(...)` — TWO OF THE THREE ARE FRAME WINDOWS.**
+Reproduced from scratch in a five-arm probe, and the CONTROL rows are what name the organ:
+
+```text
+  gCS present on the frame window                             PASS
+  ORIGINAL frame node, frame's OWN sheet    -> "hidden"       PASS   <- CONTROL: arena lookup CORRECT
+  ORIGINAL frame node, display              -> "block"        PASS   <- CONTROL: frame styles PRESENT
+  PARENT-CREATED node in the frame, display -> undefined      FAIL   <- the defect
+  PARENT-CREATED node, + a new rule         -> undefined      FAIL
+```
+
+**A frame document is cascaded ONCE, when it loads, and never again** — so a node inserted into it
+afterwards has **no computed style at all**: `display` is `undefined`, not `"block"`. Not a wrong
+answer, an absent one. The two passing ORIGINAL rows rule out the arena lookup and the frame's own
+stylesheet; **the variable is WHEN the node was inserted**, which is exactly t1186's shape — *do not
+ask whether layout runs, ask which re-entry the read happened in*. The attribute-case helper creates
+the element it measures, inside the parent's `load` handler, in the frame's document.
+
+⚠⚠⚠ **AND THE MODULE'S OWN DOC COMMENT BLAMED THE WRONG ORGAN FOR ~28 TICKS.**
+`engine/js/src/iframe_js.rs` still said *"`getComputedStyle` is deliberately ABSENT from that window …
+`STYLES_PTR` is a single thread-local holding ONE page's style map"*. Both halves are false: t1202
+made the lookup arena-aware (`FRAME_STYLES`) and retired the deny list — and the code twenty lines
+below says so. Only the module doc outlived the fix. **A stale limitation reads exactly like a
+current one**, and this one names a seam that is already correct, so the next tick to trust it would
+have been sent at the wrong file. Corrected here, with the measurement that replaces it.
+
+⚠ **A TRAP IN THE DATA, WRITTEN DOWN BECAUSE IT COST TIME:** `global.mode` on a frame window answers
+the PARENT's `mode` (one realm — the frame shares the parent's JS global, which this module states
+plainly). So **all 726 failures are NAMED `"in standards mode"`** even though most are frame arms.
+Bucketing the failures by their own test names says *"the top-level window arm is broken"*, which is
+false, and it is the first thing I tried.
+
+THE FIX, SPECIFIED AND DELIBERATELY NOT STARTED (the t1213/t1220/t1227 call): re-cascade a frame's
+document when it is mutated, and publish the result into `FRAME_STYLES` — the frame-document
+equivalent of the `ReflowScope` arming that t1184/t1186 did for the `load` and module rounds. ⚠ It is
+not a one-liner: the frame's cascade needs its own sheets and fonts, `FRAME_STYLES` is keyed by arena
+pointer, and the paint-side snapshot (the same missing re-cascade, seen from the pixels) has to stay
+consistent with the CSSOM side or the two will disagree. A fixture, a gate with the ORIGINAL-node
+control rows above, and a RED proof.
+
+⚠ **NOT CLAIMED:** how many of the 726 are frame arms vs the 114 `invalid rule parsed into CSSOM`
+and 36 `sheet.insertRule is not a function` rows, which are a DIFFERENT mechanism in the same files
+and were not probed. The 726 is the directory's total, not this mechanism's share.
+
+PERF: none — measurement only; the one source edit is a doc comment.
+
+WIKI: `docs/wiki/js-engine.md` — the frame realm, what is arena-correct and what is cascaded once.
+
 ## Tick 1229 — the third entry point, and the class is CLOSED (2026-08-13)
 
 TICK SHAPE: capability — t1228's named residue, taken immediately rather than filed: the LAST

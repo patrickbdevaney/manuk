@@ -3129,3 +3129,46 @@ returns, so something was terminated at ~5s, yet neither `PageContext::eval`'s p
 `preempt_aware`, so its `Err` propagates out of `run_deferred`, out of `PageContext::eval`, and lands
 in `Page::eval_for_test`'s `let _ = manuk_js::eval_in_page(…)` discard. A preemption nobody logs is
 the `G_SILENT_FAIL` shape. The cut above is attributed by the 2×2, **not** by a log line.
+
+## A frame's document is cascaded ONCE — and the doc that said otherwise blamed a seam already fixed (t1230)
+
+The frame realm has two separate properties and they are easy to conflate. **One is correct and one
+is not**, and a CONTROL row is what tells them apart:
+
+| what is read | answer | |
+|---|---|---|
+| `frameWin.getComputedStyle` exists | function | ✅ present since t1202 |
+| an **ORIGINAL** frame node, styled by the frame's OWN sheet | `"hidden"` | ✅ **CONTROL** — the arena lookup is right |
+| an **ORIGINAL** frame node, `display` | `"block"` | ✅ **CONTROL** — the frame's styles are published |
+| a node the **parent CREATES** in the frame, `display` | `undefined` | ❌ the defect |
+| that node, after the parent adds a rule to the frame's sheet | `undefined` | ❌ |
+
+**A frame document is cascaded once, when it loads, and never again.** A node inserted afterwards has
+**no entry in the style map at all** — `display` is `undefined`, not `"block"`. That is an *absent*
+answer, not a wrong one, and the two passing ORIGINAL rows are what rule out the arena lookup
+(`FRAME_STYLES`, t1202) and the frame's own stylesheet. **The variable is WHEN the node was
+inserted** — the t1186 shape exactly: *do not ask whether layout runs, ask which re-entry the read
+happened in.*
+
+**What it costs, measured:** `css/selectors/attribute-selectors/attribute-case` is **726 failing
+subtests in four files**, the densest bucket under `css/selectors` (the board's top leverage row).
+Its helper iterates `[window, quirks, xml]` — two of the three are frame windows — and it **creates
+the element it measures**, in the parent's `load` handler, inside the frame's document. The top
+assertion message across the directory is `expected (string) "hidden" but got (undefined) undefined`.
+
+⚠⚠⚠ **THE MODULE DOC OUTLIVED ITS OWN FIX BY ~28 TICKS.** `iframe_js.rs` still said
+*"`getComputedStyle` is deliberately ABSENT … `STYLES_PTR` is a single thread-local holding ONE
+page's style map"* — false on both halves since t1202, and contradicted by the code twenty lines
+below it, which documents the deny list's retirement. **A stale limitation reads exactly like a
+current one**; anyone trusting it goes to a seam that is already correct. Corrected at t1230.
+
+⚠ **A trap in the failure data.** `global.mode` on a frame window answers the **parent's** `mode` —
+one realm, which this engine states plainly — so all 726 failures are *named* `"in standards mode"`
+even though most are frame arms. Bucketing by test name says "the top-level arm is broken," which is
+false. **Bucket by the assertion message, not the test name.**
+
+**Owed:** re-cascade a frame's document on mutation and publish into `FRAME_STYLES` — the
+frame-document equivalent of the `ReflowScope` arming t1184/t1186 did for the `load` and module
+rounds. Not a one-liner: the frame's cascade needs its own sheets and fonts, `FRAME_STYLES` is keyed
+by arena pointer, and the paint-side snapshot (the same missing re-cascade seen from the pixels) must
+stay consistent with the CSSOM side or the two will disagree.

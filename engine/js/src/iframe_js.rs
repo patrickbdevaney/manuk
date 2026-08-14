@@ -40,20 +40,38 @@
 //!   Proxy (t1201). That inheritance is the literal truth about this engine rather than a
 //!   pretence — one realm means `frameWin.Node === Node` — but it is also exactly why a separate
 //!   realm per frame remains owed. Cross-origin restrictions are **not** enforced.
-//! * ⚠⚠ **`getComputedStyle` is deliberately ABSENT from that window, and the reason is a defect
-//!   one layer down, not an oversight.** `STYLES_PTR` is a single thread-local holding ONE page's
-//!   style map, and `window_get_computed_style` keeps only the `NodeId` from `node_and_dom`,
-//!   discarding the arena — so a child node is looked up in the PARENT's map. Measured on a frame
-//!   whose own stylesheet sets `visibility:hidden`: `getComputedStyle(childEl).visibility` is
-//!   `visible` (the child's stylesheet never reached it) and a *plain* child element reports
-//!   `undefined`. That is the wrong-answer-of-the-right-type shape `el_content_document`'s doc
-//!   comment describes, one document boundary further out. Exposing `getComputedStyle` here would
-//!   turn *absent* into *silently wrong*; it stays off until the style lookup is arena-aware.
-//!   Worth ~480 subtests in `css/selectors/attribute-selectors/attribute-case`, whose helper
-//!   iterates `[window, quirks, xml]` — two of them frame windows — and dies on
-//!   `global.getComputedStyle is not a function`.
+//! * ✅ **`getComputedStyle` is PRESENT and arena-correct since t1202** (`FRAME_STYLES`). ⚠ This
+//!   bullet used to say it was *deliberately absent* because `STYLES_PTR` held one page's map — that
+//!   text outlived the fix by ~28 ticks and was still blaming the wrong organ when t1230 re-measured
+//!   it. **A stale limitation reads exactly like a current one**, and this one would have sent the
+//!   next tick at a seam that was already correct.
+//! * ⚠⚠⚠ **THE REAL REMAINING DEFECT IS NARROWER AND WAS MIS-ATTRIBUTED TO THE ABOVE: a node
+//!   inserted into a frame's document AFTER the frame's initial cascade has NO computed style at
+//!   all — not a wrong one, not an initial one.** The frame document is cascaded once when it loads
+//!   and never again, so its style map has no entry for a later node and `getComputedStyle(n).display`
+//!   is `undefined` rather than `"block"`. Measured t1230, with the CONTROL that names the organ:
+//!
+//!   ```text
+//!     gCS present on the frame window                              PASS
+//!     ORIGINAL frame node, frame's OWN sheet   -> "hidden"         PASS  <- CONTROL: the arena
+//!     ORIGINAL frame node, display             -> "block"          PASS  <-   lookup is CORRECT
+//!     PARENT-CREATED node in the frame, display -> undefined       FAIL  <- the defect
+//!     PARENT-CREATED node, + a new rule         -> undefined       FAIL
+//!   ```
+//!
+//!   The two passing ORIGINAL rows are what rule out the arena lookup and the frame's own
+//!   stylesheet; the variable is **WHEN the node was inserted**, exactly the t1186 shape (*"do not
+//!   ask whether layout runs — ask which re-entry the read happened in"*). This is what
+//!   `css/selectors/attribute-selectors/attribute-case` dies on: its helper iterates
+//!   `[window, quirks, xml]`, and for the two frame globals it CREATES the element it then measures,
+//!   inside the parent's `load` handler. **726 failing subtests in that one directory**, and the
+//!   top failure message across it is `expected (string) "hidden" but got (undefined) undefined`.
+//!   ⚠ `global.mode` on a frame window answers the PARENT's `mode` (one realm, per the note above),
+//!   so all 726 are *named* `"in standards mode"` — the name does NOT say which arm failed, and
+//!   bucketing by it will mislead.
 //! * The frame does not re-render when its document is mutated from the parent. The DOM is live and
-//!   readable; the *pixels* are a snapshot. Painting a mutated frame is its own tick.
+//!   readable; the *pixels* are a snapshot. Painting a mutated frame is its own tick — and it is the
+//!   same missing re-cascade as the bullet above, seen from the paint side rather than the CSSOM side.
 //!
 //! Both are written down here rather than papered over, because a `contentWindow` that pretended to be a
 //! Window would be feature-detected, registered against, and would silently never work — which is the
