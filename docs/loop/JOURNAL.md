@@ -80962,3 +80962,87 @@ dropped, no floor widened, no check moved to CI. **The gate wall is lean; the di
 PERF: none — measurement only. CAPABILITY: none claimed.
 
 WIKI: `docs/wiki/fidelity-instrument.md` — a scorability regression is chased to an old-binary control.
+
+## Tick 1269 — the cascade held the whole `grid-*` family and `getComputedStyle` published NONE of it (2026-08-15)
+
+TICK SHAPE: capability — the top mechanism in the board's #1 area (`css/css-grid`, 7,138 failing),
+taken from the assertion histogram that t1266/t1267 made readable.
+
+⚠⚠⚠ **`getComputedStyle(el).gridAutoFlow` WAS `undefined`.** Not `""`, not the initial value —
+**absent**. `'gridTemplateAreas' in getComputedStyle(el)` was `false` and
+`getPropertyValue('grid-auto-rows')` returned `""`, for an element the very same `ComputedStyle` had
+just laid out as a grid container. `ComputedStyle` has carried `grid_auto_flow`, `grid_auto_rows`,
+`grid_auto_columns`, `grid_template_areas`, `grid_column` and `grid_row` as typed fields since grid
+landed, and `engine/layout/src/taffy_tree.rs` consumes every one. **Only the CSSOM object declined to
+publish them** — invariant I3 failing on the property family a grid layout is *made of*, and the
+`transform` shape again: applied for sixty ticks before the number reached JS. Not a wrong value, an
+absent one, which is the harder half to notice because the page looks right.
+
+**HOW IT WAS RANKED, AND THE METHOD POINT IS THAT THE PREVIOUS TWO TICKS BOUGHT THIS ONE.** The
+`css/css-grid` failure histogram — unreadable before t1266/t1267 because 13 of its files scored zero
+out of zero — is now dominated by a single named shape:
+
+```text
+   315+276+108+97+36+34+33+32 …  assert_in_array: gridTemplate* value UNDEFINED not in array [...]
+   241+137+26                    assert_true: grid-template-* doesn't seem to be supported in the computed style
+```
+
+Two serialisations are Chrome's answer rather than shortcuts, and both are pinned: the **shorthand
+omits a trailing initial component** (`grid-column: 1` → `"1"`, not `"1 / auto"`), and
+**`grid-template-areas` is a RECONSTRUCTION** — the cascade stores Stylo's resolved line *rects*, not
+the author's rows, so the value is rebuilt as `"head head" "nav main" "foot foot"` with `.` for a
+null cell. Re-emitting the author's bytes would be the *wrong* answer; Chrome normalises too.
+
+⚠⚠ **`grid-template-columns`/`-rows` ARE STILL ABSENT, ON PURPOSE, AND THE GATE ASSERTS THE
+ABSENCE.** Theirs is one of the few resolved values CSSOM §5.1 defines as the **USED** value: Chrome
+answers a grid container with laid-out px, so `repeat(3, 1fr)` on a 900px grid reads back
+`"300px 300px 300px"`. We hold the *specified* tracks only, so publishing them from the cascade would
+answer `"repeat(3, 1fr)"` — **a wrong answer of the right type**, which every caller then does
+arithmetic on. `undefined` tells the truth (t608: *a name is defined IFF the thing it names exists*).
+⭐ **The withholding has a fully specified exit, which is what makes it a decision and not a
+limitation:** taffy computes the used tracks and offers them through
+`LayoutGridContainer::set_detailed_grid_info` — a trait method whose **default body is the no-op we
+inherit today** — under a `detailed_layout_info` feature taffy 0.12 **already enables by default**.
+Option 1 on the borrowed-engine ladder: no fork, no patch, one trait method. ⚠ The hazard to design
+around first is ours: `solve_subtree` also runs during INTRINSIC MEASUREMENT, so a side-table keyed by
+node id gets written by a probe whose outputs are contractually discarded — exactly how
+`pre_transform_rect` was poisoned at t1120 by being first-write-wins, and the §9.1 grid re-solve runs
+after the main pass so "last write wins" is not automatically right either.
+
+```text
+  css/css-grid   7549 -> 7608  (+59, sweep-vs-sweep; solo reads 7484 -> 7687, +203)
+  css/css-values 3108 -> 3116  (+8)                    WPT TOTAL  467318 -> 467385  (+67)
+```
+
+⚠⚠ **TWO ROWS READ DOWN AND BOTH WERE CHASED TO AN OLD-BINARY CONTROL RATHER THAN ARGUED ABOUT.**
+
+```text
+  dom           sweep 8152 vs mark 8154.   t1269 binary 8154 · PRE-t1269 control 8154   -> the SWEEP is the flake
+  css/css-sizing sweep 2322 vs mark 2352.  t1269 binary 2309/2322/2330 (den 5807/5823/5836)
+                                           PRE-t1269 control 2330/2306 (den 5846/5808)
+                                           pass RATE 39.7-40.0% in every one of the five
+```
+
+The css-sizing numerator and denominator move **together** (`TH_TIMEOUT 8-9`: a test that never
+completes emits no subtests), and the control binary sits in the same band — so the mark is the run
+that happened to have the highest denominator, not a capability that was lost. Both banked at their
+marks: **no advance claimed, no regression demonstrated.** ⚠ `css/cssom` was dropped by the sweep for
+the third consecutive tick (`wpt-sweep.sh`'s AREAS holds the empty top-level `cssom`) and re-measured
+by hand at 2792/2794 — still observer territory, still reported.
+
+GATE: `G_GRID_COMPUTED_STYLE` — **proven RED on two independent mutations**: delete the six published
+entries → `flow=undefined auto=undefined|undefined areas=undefined … kebab=||`, the exact pre-fix
+state; and publish `grid-template-columns`/`-rows` → `withheld=false/false`. ⭐ The second falsification
+was run *because* t1267's gate shipped a first draft that could not go red at all — an assertion that
+guards a deliberate ABSENCE has to be falsified in the direction of the absence being removed, and
+assuming it is not the same as running it.
+
+NEXT: the **used track sizes** above — it is now the only thing standing between `css/css-grid` and
+its largest remaining cluster (~931 `gridTemplate* value undefined` assertions), and the whole path is
+written down: capture `set_detailed_grid_info` on `TaffyDom`, decide the side-table write polarity
+against the measurement pass FIRST, thread `DetailedGridTracksInfo::sizes` up to the CSSOM, and delete
+assertion (5) of this gate in the same commit.
+
+PERF: none claimed. CAPABILITY: reading a grid container back through `getComputedStyle`.
+
+WIKI: `docs/wiki/css-cascade.md` — "the cascade held the whole `grid-*` family and `getComputedStyle` published NONE of it".

@@ -891,6 +891,9 @@
   - L3436 · Declaration ORDER is the whole of the cascade rule this surface owes
   - L3450 · Ledger — same-hour OLD-BINARY control
   - L3467 · Named residual, measured and not fixed
+  - L3474 · The cascade held the whole grid-* family and getComputedStyle published NONE of it (t1269)
+  - L3491 · Two serialisation rules that are Chrome's answer, not shortcuts
+  - L3500 · ⚠⚠⚠ grid-template-columns / -rows are STILL absent, on purpose, and the gate asserts the absence
 
 ## `<dialog>`, `popover`, and the top layer (ticks 194-195)
 `docs/wiki/dialog-and-top-layer.md`
@@ -2179,4 +2182,4 @@
   - L231 · Both named mechanisms are subsystem work
 
 ---
-2086 sections across 22 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+2089 sections across 22 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.

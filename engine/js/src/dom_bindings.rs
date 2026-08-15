@@ -915,6 +915,103 @@ fn dim_css(d: &manuk_css::Dim) -> String {
     }
 }
 
+/// One `<track-size>` back to CSS — the serialisation `grid-auto-rows` / `grid-auto-columns` publish.
+///
+/// ⚠ **`minmax()` keeps its function form, and that is Chrome's answer rather than a shortcut.** The
+/// resolved value of `grid-auto-*` is the COMPUTED value, not a used one: Chrome-measured,
+/// `grid-auto-rows: minmax(100px, auto)` reads back `"minmax(100px, auto)"`, and only a plain single
+/// track collapses to its own spelling.
+fn track_size_css(t: &manuk_css::TrackSize) -> String {
+    fn unit(u: &manuk_css::TrackUnit) -> String {
+        match u {
+            manuk_css::TrackUnit::Px(v) => format!("{v}px"),
+            manuk_css::TrackUnit::Fr(v) => format!("{v}fr"),
+            manuk_css::TrackUnit::Percent(p) => format!("{p}%"),
+            manuk_css::TrackUnit::Auto => "auto".into(),
+            manuk_css::TrackUnit::MinContent => "min-content".into(),
+            manuk_css::TrackUnit::MaxContent => "max-content".into(),
+        }
+    }
+    match t {
+        manuk_css::TrackSize::Px(v) => format!("{v}px"),
+        manuk_css::TrackSize::Fr(v) => format!("{v}fr"),
+        manuk_css::TrackSize::Percent(p) => format!("{p}%"),
+        manuk_css::TrackSize::Auto => "auto".into(),
+        manuk_css::TrackSize::MinContent => "min-content".into(),
+        manuk_css::TrackSize::MaxContent => "max-content".into(),
+        manuk_css::TrackSize::MinMax(a, b) => format!("minmax({}, {})", unit(a), unit(b)),
+    }
+}
+
+/// A `<track-size>+` list, with the initial value spelled out. **Empty means `auto`, not `""`** —
+/// an empty string is what a property that does not exist returns, and the whole point of publishing
+/// these is that the caller can tell the difference.
+fn track_list_css(list: &[manuk_css::TrackSize]) -> String {
+    if list.is_empty() {
+        return "auto".into();
+    }
+    list.iter()
+        .map(track_size_css)
+        .collect::<Vec<_>>()
+        .join(" ")
+}
+
+/// One `grid-column` / `grid-row` line pair, in the shorthand's `start / end` form.
+///
+/// ⚠ **`auto / auto` collapses to `auto`, and that is Chrome's serialisation rather than a
+/// shortening.** CSSOM serialises a shorthand by omitting a trailing component that equals its
+/// initial value, so `grid-row: 1` reads back `"1"` and only a genuinely two-sided placement keeps
+/// the slash.
+fn grid_line_pair_css(pair: &(manuk_css::GridLine, manuk_css::GridLine)) -> String {
+    fn one(l: &manuk_css::GridLine) -> String {
+        match l {
+            manuk_css::GridLine::Auto => "auto".into(),
+            manuk_css::GridLine::Line(n) => n.to_string(),
+            manuk_css::GridLine::Span(n) => format!("span {n}"),
+        }
+    }
+    let (s, e) = (one(&pair.0), one(&pair.1));
+    if e == "auto" {
+        s
+    } else {
+        format!("{s} / {e}")
+    }
+}
+
+/// `grid-template-areas`, rebuilt from the resolved rects back into the ASCII art the author wrote.
+///
+/// ⚠⚠ **The cascade stores line RECTS, not the source rows** — Stylo pre-resolves the ASCII art —
+/// so this is a reconstruction rather than an echo, and the reconstruction is the honest direction:
+/// Chrome's resolved value is *also* normalised (one space between cells, one quoted string per
+/// row), so re-emitting the author's exact bytes would be the wrong answer. A cell no named area
+/// covers is `.`, which is the spec's null-cell token.
+fn grid_template_areas_css(areas: &[manuk_css::GridAreaRect]) -> String {
+    if areas.is_empty() {
+        return "none".into();
+    }
+    let rows = areas.iter().map(|a| a.row.1).max().unwrap_or(1).max(2) - 1;
+    let cols = areas.iter().map(|a| a.col.1).max().unwrap_or(1).max(2) - 1;
+    let mut out = String::new();
+    for r in 1..=rows {
+        let mut cells: Vec<&str> = Vec::with_capacity(cols as usize);
+        for c in 1..=cols {
+            let name = areas
+                .iter()
+                .find(|a| a.row.0 <= r && r < a.row.1 && a.col.0 <= c && c < a.col.1)
+                .map(|a| a.name.as_str())
+                .unwrap_or(".");
+            cells.push(name);
+        }
+        if !out.is_empty() {
+            out.push(' ');
+        }
+        out.push('"');
+        out.push_str(&cells.join(" "));
+        out.push('"');
+    }
+    out
+}
+
 /// The CSS keyword an [`manuk_css::IntrinsicSize`] serialises back to.
 fn intrinsic_css(k: manuk_css::IntrinsicSize) -> &'static str {
     match k {
@@ -1856,6 +1953,58 @@ fn extra_computed_props(
             "gap",
             format!("{} {}", dim_css(&cs.row_gap), dim_css(&cs.column_gap)),
         ),
+        // ── THE GRID CONTAINER PROPERTIES THE CASCADE ALREADY HOLDS (t1269).
+        //
+        // ⚠⚠⚠ **THE WHOLE `grid-*` FAMILY READ `undefined` — not `""`, ABSENT** — while
+        // `display: grid` laid the page out correctly from the very same `ComputedStyle`. The
+        // cascade has parsed `grid_auto_flow`, `grid_auto_rows` and `grid_auto_columns` into typed
+        // fields since grid landed, and `taffy_tree.rs` consumes all three; only this object
+        // declined to publish them. That is invariant **I3** — *"the semantic model is never allowed
+        // to lag the renderer"* — failing on the property family a grid layout is made of, and it is
+        // the same shape as the t901 batch: not a wrong value, an absent one.
+        //
+        // Measured on `css/css-grid`: `assert_true: grid-auto-rows doesn't seem to be supported in
+        // the computed style` and its siblings, plus every `assert_in_array: … value undefined`.
+        (
+            "grid-auto-flow",
+            match cs.grid_auto_flow {
+                manuk_css::GridAutoFlow::Row => "row",
+                manuk_css::GridAutoFlow::Column => "column",
+                manuk_css::GridAutoFlow::RowDense => "row dense",
+                manuk_css::GridAutoFlow::ColumnDense => "column dense",
+            }
+            .to_string(),
+        ),
+        ("grid-auto-rows", track_list_css(&cs.grid_auto_rows)),
+        ("grid-auto-columns", track_list_css(&cs.grid_auto_columns)),
+        (
+            "grid-template-areas",
+            grid_template_areas_css(&cs.grid_template_areas),
+        ),
+        // The ITEM half of the family. `grid-column` / `grid-row` are placement, not sizing, so
+        // their resolved value is the computed one on every element — container or item.
+        ("grid-column", grid_line_pair_css(&cs.grid_column)),
+        ("grid-row", grid_line_pair_css(&cs.grid_row)),
+        // ⚠⚠ **`grid-template-columns` / `-rows` ARE DELIBERATELY *NOT* PUBLISHED HERE, AND THE
+        // REASON IS THE RULE THIS WHOLE OBJECT IS BUILT ON.** Their resolved value is not the
+        // computed value — CSSOM §5.1 makes them one of the few properties whose resolved value is
+        // the **USED** value, so on a grid container Chrome answers with the laid-out track sizes in
+        // px (`repeat(3, 1fr)` on a 900px grid reads back `"300px 300px 300px"`). We hold the
+        // SPECIFIED tracks and nothing else, so publishing them from here would answer
+        // `"repeat(3, 1fr)"` — a **wrong answer of the right type**, which every caller would then
+        // do arithmetic on. `undefined` at least tells the truth, and t608's rule stands: *a name is
+        // defined IFF the thing it names exists.*
+        //
+        // The used sizes are RECOVERABLE and the path is short, which is why this is a named next
+        // tick and not a limitation: taffy computes them and hands them out through
+        // `LayoutGridContainer::set_detailed_grid_info` — a trait method whose **default body is a
+        // no-op we inherit**, under the `detailed_layout_info` feature that taffy 0.12 already
+        // enables **by default**. `DetailedGridTracksInfo::sizes` is the `Vec<f32>` wanted.
+        // ⚠ The hazard to design around before writing it is t1120's, not taffy's: `solve_subtree`
+        // also runs during INTRINSIC MEASUREMENT, so a side-table keyed by node id will be written
+        // by a probe whose outputs are contractually discarded. `pre_transform_rect` was poisoned
+        // permanently by exactly that, because it was first-write-wins. Ask which passes can write
+        // BEFORE choosing the polarity.
         // ─────────────────────────────────────────────────────────────────────────────────────────
         // ⚠⚠⚠ **THE t901 SWEEP BATCH — properties the cascade ALREADY HOLDS and this object refused
         // to publish.** One diff of the whole `getComputedStyle` object against Chrome, over seven
@@ -2112,6 +2261,15 @@ const COMPUTED_STD_NAMES: &[&str] = &[
     "flex-basis",
     "row-gap",
     "column-gap",
+    // The grid-container properties whose resolved value IS the computed value (t1269).
+    // `grid-template-columns`/`-rows` are absent on purpose — theirs is the USED value; see the
+    // object literal.
+    "grid-auto-flow",
+    "grid-auto-rows",
+    "grid-auto-columns",
+    "grid-template-areas",
+    "grid-column",
+    "grid-row",
     "box-sizing",
     "min-width",
     "max-width",

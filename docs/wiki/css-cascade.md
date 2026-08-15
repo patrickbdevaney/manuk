@@ -3470,3 +3470,52 @@ css-grid's `+234` at a fixed denominator.
 on the computed-style object at all. That is a different surface (the computed-style mirror, not the
 declaration block) and a different tick; recorded here so the next reader does not rediscover it from
 the same probe.
+
+## The cascade held the whole `grid-*` family and `getComputedStyle` published NONE of it (t1269)
+
+`getComputedStyle(el).gridAutoFlow` was `undefined`. Not `""`, not the initial value — **absent**;
+`'gridTemplateAreas' in getComputedStyle(el)` was `false` and
+`getPropertyValue('grid-auto-rows')` returned `""`, for an element the very same `ComputedStyle` had
+just laid out as a grid container. `ComputedStyle` has carried `grid_auto_flow`, `grid_auto_rows`,
+`grid_auto_columns`, `grid_template_areas`, `grid_column` and `grid_row` as typed fields since grid
+landed, and `engine/layout/src/taffy_tree.rs` consumes every one. Only the CSSOM object declined.
+
+That is invariant **I3** failing on the property family a grid layout is *made of*, and it is the
+`transform` shape again — applied for sixty ticks before the number reached JS. **Not a wrong value,
+an absent one**, which is the harder half to notice because the page looks right.
+
+`css/css-grid`: **7484 → 7687 on comparable solo runs (+203)**, and the assertions it clears name
+themselves — `assert_true: grid-auto-rows doesn't seem to be supported in the computed style`,
+`assert_in_array: gridTemplateAreas value undefined not in array ["none"]`.
+
+### Two serialisation rules that are Chrome's answer, not shortcuts
+
+- **The shorthand omits a trailing initial component.** `grid-column: 1` reads back `"1"`, not
+  `"1 / auto"`; `grid-row: span 2` likewise. Only a genuinely two-sided placement keeps the slash.
+- **`grid-template-areas` is a RECONSTRUCTION, and that is the honest direction.** The cascade stores
+  Stylo's resolved line *rects*, not the author's rows, so the value is rebuilt: `"head head" "nav
+  main" "foot foot"`, one space between cells, `.` for a cell no named area covers. Re-emitting the
+  author's exact bytes would be the *wrong* answer — Chrome normalises too.
+
+### ⚠⚠⚠ `grid-template-columns` / `-rows` are STILL absent, on purpose, and the gate asserts the absence
+
+Theirs is one of the few resolved values CSSOM §5.1 defines as the **used** value, so Chrome answers a
+grid container with laid-out track sizes in px: `repeat(3, 1fr)` on a 900px grid reads back
+`"300px 300px 300px"`. This engine holds the *specified* tracks only. Publishing them from the cascade
+would answer `"repeat(3, 1fr)"` — a **wrong answer of the right type**, which every caller then does
+arithmetic on. `undefined` at least tells the truth (t608: *a name is defined IFF the thing it names
+exists*), and `G_GRID_COMPUTED_STYLE` assertion (5) pins it so nobody "completes the family" by
+accident.
+
+⭐ **The withholding has a fully specified exit, which is what makes it a decision rather than a
+limitation.** Taffy computes the used tracks and offers them through
+`LayoutGridContainer::set_detailed_grid_info` — a trait method whose **default body is the no-op we
+inherit today** — under a `detailed_layout_info` feature that taffy 0.12 **already enables by
+default**. `DetailedGridTracksInfo::sizes` is the `Vec<f32>`. Option 1 on the borrowed-engine ladder:
+no fork, no patch, one trait method.
+
+⚠ **The hazard to design around first is ours, not taffy's.** `solve_subtree` also runs during
+INTRINSIC MEASUREMENT, so a side-table keyed by node id will be written by a probe whose outputs are
+contractually discarded — exactly how `pre_transform_rect` was poisoned permanently at t1120 by being
+first-write-wins. Ask *which passes can write* before choosing the polarity, and remember the §9.1
+grid re-solve runs after the main pass, so "last write wins" is not automatically the final one either.
