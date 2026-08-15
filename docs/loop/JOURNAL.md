@@ -46371,6 +46371,93 @@ PERF: none — one UA rule and one narrowed branch in a cascade that already ran
 WIKI: `docs/wiki/css-cascade.md` — where Chrome draws the form-control `box-sizing` line, and why a
 layout-crate test cannot see it.
 
+## Tick 1253 — a third of the vertical mass is a CONSEQUENCE, and the margin-collapse hypothesis died at 0.7% (2026-08-14)
+
+TICK SHAPE: measurement — t1252's own steer, executed: take the next target from
+`SWEEP-t1252-mechanisms.tsv` (top row `geometry/mis-sized: height`, **92 sites**) rather than from the
+WPT histogram, and localise it before building anything.
+
+**FIRST CUT — what the height rows are NOT.** On the 69 small-band (`~8px`/`~16px`, `<div>`) height
+divergences:
+
+```text
+  WIDTH agrees on 59 of 69   (86%)     <- so it is not "the box is narrower, so the text wraps taller"
+  font IDENTICAL on 55.1%             <- so it is not the text metrics either
+```
+
+Same box width, same font, different height. Both of the obvious explanations are out on the majority
+before a line of code was written.
+
+**A HYPOTHESIS, AND ITS DEATH IN ONE COMMAND.** One concrete row looked like a complete answer —
+`sestra.cc`: Chrome `[0 0 1200×110]`, ours `[0 10 1200×100]`, our box starting **10px lower and
+exactly 10px shorter**, which is the signature of a top margin Chrome contains and we let escape.
+Margin collapsing is a high-frequency shared root cause and it would have been a fine tick. Tested
+across all 615 vertical divergences as `dw == 0 && dy == -dh`:
+
+```text
+  4 rows.  0.7%.
+```
+
+**One site, not a class.** *A correction derived from ONE site is a claim about that site* (t1235), and
+the command that said so cost less than the fix would have.
+
+⭐⭐⭐ **THE FINDING: THE VERTICAL MASS DECOMPOSES, AND A THIRD OF IT IS SOMEBODY ELSE'S FAULT.** Over
+615 rows carrying a vertical divergence (`mis-sized: height` ∪ `displaced: y`):
+
+```text
+   191   31.1%   PURE SHIFT   — right size, right width, wrong Y   -> the cause is ABOVE it
+   114   18.5%   PURE RESIZE  — right origin, right width, wrong height -> the cause is INSIDE it
+   306   49.8%   mixed (both, or the width moved too)
+     4    0.7%   margin-shaped
+```
+
+**The `displaced: y` cluster the ledger ranks at 69 sites is substantially a CONSEQUENCE cluster.** A
+box that is the correct size and in the wrong place was displaced by something earlier in the flow;
+fixing it *where it is reported* is fixing a symptom, and the ledger — which ranks by where the
+divergence is OBSERVED — cannot tell the two apart. The oracle already computes `FIRST DIVERGENCE`
+per site for exactly this reason and the ranking does not use it.
+
+⭐ **AND THE SHIFT POPULATION IS CHEAPER THAN ITS COUNT SUGGESTS.** For each of the 66 sites carrying
+pure-shift rows, how many *distinct* `dy` values does it carry?
+
+```text
+  26 sites  — EVERY shifted box carries the SAME dy      <- ONE upstream box explains the whole site
+  40 sites  — more than one distinct dy
+```
+
+**On 40% of the affected sites the entire shift population is one defect**, repeated down the page by
+the flow. Those sites do not need 191 fixes; they need 26.
+
+⚠ **The RESIZE population has no direction either** (49 taller, 65 shorter, 58% within 2× of Chrome),
+which is consistent with t1243's corpus-wide reading and is the third measurement in a row to refuse
+the "one shared constant" story.
+
+⭐ **NEXT, and it is now a specified capability tick rather than a cluster name:** take the **26
+single-`dy` sites**, read each one's `FIRST DIVERGENCE` line — the oracle already prints it — and
+localise the ONE box that starts the drift. That is a mechanism per site with a bounded, checkable
+work-list, and it is the first target this window that was chosen by the corpus rather than by a WPT
+failure list.
+
+⚠ **A SECOND `G_INTERACT` RED, AND MY OWN CONTENTION DETECTOR REFUSED THE EASY EXPLANATION.** t1252
+diagnosed a `G_INTERACT` false-RED as machine contention and wrote the tell into the wiki: *read the
+perf floors' absolute numbers*. Applying it here **refutes** that explanation — `F2` printed
+**266.62 ms / 39.69 ms**, squarely in this box's normal range (289.74/43.82 four hours earlier;
+423.78/64.16 on the contended run). So the same symptom, and not the same cause; reusing t1252's
+sentence would have been a story rather than a diagnosis.
+
+What it actually is: the gate printed **no numbers at all**, where a genuine timing failure prints
+`switch`/`close` medians. Run standalone it passes with room to spare — `open 3.492 · switch 0.036 ·
+close 0.015`, worst **4.684 ms against a 16 ms frame**. And `scripts/verify.sh`'s own comments name
+this gate, by name, as the one that false-REDs under the parallel build race (*"the isolated shell
+gates (G_RUNTIME_COUNT/G_INTERACT) intermittently false-RED under that race … ~40 min/tick of pure
+waste, and a flaky gate that teaches the loop to distrust a RED"*). Harness-owned, documented,
+re-run — **not** re-explained with a borrowed cause.
+
+PERF: none — measurement only, no engine change, nothing compiled.
+
+WIKI: `docs/wiki/fidelity-instrument.md` — "a vertical divergence is a SHIFT or a RESIZE, and the
+ledger cannot tell them apart".
+
 ## Tick 1252 — five sizing ticks, +160 WPT, and the corpus did not move. Both halves are the result. (2026-08-14)
 
 TICK SHAPE: measurement — steer item 2 from check #120. Six engine changes and an oracle repair were

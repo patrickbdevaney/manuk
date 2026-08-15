@@ -949,3 +949,4 @@ tick	sha	epoch	iso	delta_s	shape	wall_s	files	added	deleted	gates	claims	wpt_pas
 1248	f1730ba8	1786731848	2026-08-14T14:24:08-04:00	1978	measurement	808	10	293	33	471	81	3896	6960	0	622	0	the repair obligation, discharged on the CORPUS: one site corrected, zero verdicts changed, one hypothesis refuted (2026-08-14)
 1250	62c3718b	1786738608	2026-08-14T16:16:48-04:00	6760	capability	808	9	211	44	471	81	3896	6960	0	624	0	the inline mirror, and a Bar-0 that the OLD BINARY refused to let me own (2026-08-14)
 1252	d9b4d23f	1786748556	2026-08-14T19:02:36-04:00	9948	measurement	808	8	340	33	471	81	3896	6960	0	624	0	five sizing ticks, +160 WPT, and the corpus did not move. Both halves are the result. (2026-08-14)
+1253	6f7add45	1786753987	2026-08-14T20:33:07-04:00	5431	measurement	808	8	238	34	471	81	3896	6960	0	624	0	a third of the vertical mass is a CONSEQUENCE, and the margin-collapse hypothesis died at 0.7% (2026-08-14)

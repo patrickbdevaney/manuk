@@ -1417,3 +1417,42 @@ targets, the repaired instrument would now show divergence. The rows they acted 
 and `stretch` heights against a **definite** parent, which resolves identically in both modes. The
 one row the bug did corrupt is exactly the one that was honestly left *"NOT ESTABLISHED"* — which is
 the argument for writing that label instead of guessing.
+
+## A vertical divergence is a SHIFT or a RESIZE, and the ledger cannot tell them apart (t1253)
+
+The mechanism ledger ranks by where a divergence is **observed**. For the vertical axis that conflates
+two different things, and the split is measurable in one pass over the sweep's own example boxes
+(`dw`, `dy`, `dh` between Chrome's box and ours):
+
+```text
+  615 rows with a vertical divergence
+    191   31.1%   PURE SHIFT   right size, right width, wrong Y   -> cause is ABOVE it
+    114   18.5%   PURE RESIZE  right origin, right width, wrong height -> cause is INSIDE it
+    306   49.8%   mixed
+      4    0.7%   dy == -dh (margin-shaped)
+```
+
+**A third of the vertical mass is a consequence, not a defect.** A box that is the correct size and in
+the wrong place was pushed there by something earlier in the flow — so `geometry/displaced: y`, which
+the ledger ranks at 69 sites, is substantially a *symptom* cluster. The oracle already computes
+`FIRST DIVERGENCE` per site; the ranking does not use it.
+
+And the shift population is cheaper than its count: per site, count the **distinct** `dy` values.
+
+```text
+  26 of 66 sites — EVERY shifted box carries the SAME dy   -> ONE upstream box explains the whole site
+  40 of 66 sites — more than one distinct dy
+```
+
+On 40% of affected sites the whole shift population is one defect repeated down the page. Those sites
+need 26 fixes, not 191 — and the `dy` histogram per site is the cheapest way to find out which kind
+of site you are looking at before spending a tick on it.
+
+### Two hypotheses this pass killed, both in one command each
+
+- **"The box is narrower, so the text wraps taller."** On the small-band height rows the **width
+  agrees on 86%** of them.
+- **"It is margin collapsing."** One site (`sestra.cc`: Chrome `[0 0 1200×110]`, ours
+  `[0 10 1200×100]`) has the exact signature — lower by precisely what it lost in height. Across all
+  615 rows that signature is **0.7%**. One site is not a class (t1235), and testing it cost less than
+  the fix would have.

@@ -6138,6 +6138,80 @@ and the two areas the ranker over-promises (`domparsing` = 65% unshipped `tentat
 `css/css-values` = `calc-size()`/`random-item()`) are recorded in the t1190/t1192 entries so the
 board is read with that discount.
 
+## Audit #67 — tick 1253 (2026-08-14): the APERTURE, checked locally for the first time — four directories in our own checkout have never been measured
+
+**Sources.** [Servo — January 2026 development report / servo.org](https://servo.org/) ·
+[Phoronix: Servo Browser Engine Starts 2026 With Many Notable Improvements](https://www.phoronix.com/news/Servo-January-2026) ·
+[servo/servo Roadmap wiki](https://github.com/servo/servo/wiki/Roadmap) ·
+[web-platform-tests/wpt](https://github.com/web-platform-tests/wpt) · **plus a local reconciliation
+of the WPT checkout against `RATCHET.tsv`.**
+
+**Lens chosen not to repeat #65 or #66.** #65 read Interop 2026, #66 read Baseline-2026 + Ladybird.
+This one took **Servo** (the other independent Rust engine — what *it* chose to build says what it
+found load-bearing) and, when the external search for "new WPT directories" produced nothing usable,
+turned the question inward: **which directories does our own checkout contain that we have never
+measured?** That is the §VI.4-step-1 aperture question, and it had never been asked as a diff.
+
+### One genuine ADD from the external lens
+
+Servo's January-2026 report names `cursor-color`, `content: image`, Ogg audio via `<audio>`, and text
+input fields. Reconciled against `CONSTELLATION.tsv`:
+
+```text
+  Ogg / <audio>        17 rows          already mapped
+  content: …            6 rows          the family is mapped (quotes, open-quote, counters, attr())
+  text input            1 row           mapped
+  cursor-color          0 rows   <- ADD, status `unknown`
+```
+
+⚠ **`cursor-color` is a real absence, and it is small.** Recorded as the audit is meant to record
+things — a bigger, uglier map is a good tick — while noting plainly that a caret-colour property is
+not a lever.
+
+### ⚠⚠⚠ THE FINDING: FOUR TOP-LEVEL DIRECTORIES, ~2,058 TEST FILES, NEVER MEASURED — AND TWO OF THEM ARE I3
+
+The checkout holds 14 top-level directories. The RATCHET tracks **20 areas across 6 of them**
+(`dom`, `html/dom`, `css/*` ×15, `cssom`, `domparsing`, `url`, `encoding`). Diffing the two:
+
+```text
+  files   directory     status
+    872   svg           NEVER MEASURED — and we render SVG (svg_geometry.rs, viewBox, path data)
+    744   mathml        never measured — owner-declared BORDERLINE/death-tail, so this one is a DECISION
+    264   wai-aria      NEVER MEASURED
+    178   accname       NEVER MEASURED
+```
+
+**`wai-aria` + `accname` are 442 files that measure exactly the subsystem I3 declares load-bearing**
+— *"the synchronous in-process semantic model — DOM, computed style, layout geometry, and a
+first-class accessibility tree"* — and which `STATUS.md`'s own platform map, item 8, already calls
+**unmeasured**: *"`engine/a11y` exists and `hit_test` uses it, but whether the **tree itself** is
+correct (roles, names, focus order) is **unmeasured**"*. The map has been saying so; the instrument to
+check it has been sitting in the checkout the whole time, unrun. **`accname` is the accessible-NAME
+computation** — precisely "roles, names" — and it is the agentic surface's ground truth, not a
+conformance nicety.
+
+**`svg` at 872 files is the larger raw number and is not a death-tail call**: we paint SVG today,
+`svg_geometry::apply` exists, and no sweep has ever told us how much of it is right.
+
+### ⚠ And the checkout itself is SPARSE — the aperture has two lids, not one
+
+Upstream WPT has on the order of 80 top-level directories; ours has **14**. So "areas we do not
+track" is partly "areas we do not have" (`fetch`, `service-workers`, `webaudio`, `IndexedDB`,
+`performance-timeline`, `FileAPI`, `websockets`, …). This is the same class as t1176 (*the checkout
+omitted `css/support/`, and ~700 CSS files threw at their first helper call*) one level up: **a
+metric's denominator is bounded by a checkout nobody re-derives**, and `wpt-setup.sh` is
+observer-owned so the widening is not the agent's to do. Recorded so the next PRIMARY re-baseline is
+read as an aperture change and not as a regression.
+
+### The steer this audit produces
+
+**Run `wai-aria` + `accname` once.** It is one command, it costs no build, it turns an I3 subsystem
+that `STATUS.md` has carried as "unmeasured" for hundreds of ticks into a number, and unlike `svg` it
+has a constitutional hook rather than only a file count. If it comes back high, that is a claim the
+project can make; if it comes back low, it is the first measured gap in the semantic model.
+
+---
+
 ## Audit #66 — tick 1243 (2026-08-14): a CLEAN audit, an honest NOTHING, and a class column that cannot rank the sweep it names
 
 **Sources.** [web.dev Baseline 2026](https://web.dev/baseline/2026) ·
