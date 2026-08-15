@@ -1633,6 +1633,20 @@ pub struct Page {
     /// Whether any element uses `position:sticky` — gates the per-frame sticky paint pass so
     /// non-sticky pages pay nothing.
     has_sticky: bool,
+    /// ⚠⚠⚠ **THE "ALREADY RAN" MARKER FOR RUNTIME-FETCHED SCRIPTS, WHICH USED TO BE "DELETE ITS
+    /// `src`" — AND A SCRIPT CANNOT READ ITS OWN URL OFF AN ATTRIBUTE THAT IS GONE.**
+    ///
+    /// `fetch_and_run_dynamic_scripts` removed `src` *before* evaluating, so throughout its own
+    /// execution a script's `document.currentScript.src` was the **empty string** where Chrome
+    /// gives the URL. That is a wrong answer of the right type, which is worse than a missing one:
+    /// `new URL(document.currentScript.src)` does not skip, it **throws** —
+    /// `TypeError: Invalid URL: ` on 4 of 200 CrUX corpus sites (marktplaats.nl, mangaraw.ac,
+    /// sports.yahoo.com, nautica.com).
+    ///
+    /// The marker moves in here so `src` can survive the call. The attribute is still removed
+    /// **after** the script runs, so the post-run document is byte-identical to before — the only
+    /// thing that changed is what the script itself can see while it is running.
+    dyn_scripts_ran: std::collections::HashSet<manuk_dom::NodeId>,
     /// **The pre-fetched ES-module import graph (B3b)** — resolved-url → source for every module the
     /// page's `<script type=module>` roots reach. Filled by the async pre-fetch pass (`load_async` /
     /// `prepare_prefetched`) and seeded into the JS layer by [`run_deferred_scripts`] at the instant the
@@ -4056,6 +4070,10 @@ impl Page {
                 .dom
                 .descendants(self.dom.root())
                 .filter(|&n| self.dom.tag_name(n) == Some("script"))
+                // A node in `dyn_scripts_ran` has already been evaluated. This used to be read off
+                // the DOM ("`src` was deleted, so it ran"), which is why a running script could not
+                // see its own URL — see the field's own comment.
+                .filter(|n| !self.dyn_scripts_ran.contains(n))
                 .filter_map(|n| {
                     let src = self.dom.element(n)?.attr("src")?.trim().to_string();
                     (!src.is_empty()).then(|| (n, resolve_url(&self.final_url, &src)))
@@ -4090,8 +4108,11 @@ impl Page {
 
             let mut any = false;
             for (node, text) in fetched {
-                // Mark it run *first*: a script that throws must not be retried forever.
-                self.dom.remove_attr(node, "src");
+                // Mark it run *first*: a script that throws must not be retried forever. The mark is
+                // the SET, not the deletion of `src` — the attribute now outlives the evaluation so
+                // that `document.currentScript.src` is the URL while the script runs, and is removed
+                // below once it has.
+                self.dyn_scripts_ran.insert(node);
                 let Some(ctx) = &self.js else { continue };
                 let rects: HashMap<manuk_dom::NodeId, [f32; 4]> = self
                     .root_box
@@ -4141,6 +4162,12 @@ impl Page {
                 let ty = if fetched_ok { "load" } else { "error" };
                 let _ =
                     manuk_js::dispatch_event(ctx, &mut self.dom, node, ty, &rects, &self.styles);
+                // `src` is dropped HERE rather than before the evaluation, so the post-run document
+                // is exactly what it has always been (`collect_inline_scripts` reads a surviving
+                // `src` as "the fetch failed, nothing to run") while the script itself still saw its
+                // own URL. The `load`/`error` handler above is a script-visible callback too, so the
+                // removal comes after it for the same reason.
+                self.dom.remove_attr(node, "src");
                 // A handler almost always injects the NEXT script (that is what a chunk loader is
                 // for), so this round counts as progress even when the body itself was empty.
                 any = true;
@@ -5531,6 +5558,7 @@ impl Page {
             styles,
             js,
             has_sticky,
+            dyn_scripts_ran: std::collections::HashSet::new(),
             // Empty by default; the async pre-fetch pass on the caller's path sets this before the
             // deferred (module) scripts run (`load_async`, `from_prefetched_inner`).
             module_graph_sources: std::collections::HashMap::new(),

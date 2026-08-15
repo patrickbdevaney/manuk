@@ -42,6 +42,7 @@ fn script_origin() -> String {
                      window.r.push('cs-self:' + (cs === document.getElementById('ext')));\
                      window.r.push('cs-tag:' + (cs && cs.tagName));\
                      window.r.push('cs-attr:' + (cs && cs.getAttribute('data-cfg')));\
+                     window.r.push('cs-src-has-chunk:' + !!(cs && cs.src && cs.src.indexOf('chunk.js') >= 0));\
                      document.getElementById('out').textContent = window.r.join(' ');";
                 let _ = s.write_all(
                     format!(
@@ -117,6 +118,14 @@ fn a_runtime_fetched_script_sees_itself_as_current_script() {
         "cs-self:true",  // it is THAT element — asserted against the page's own getElementById
         "cs-tag:SCRIPT", // as a real element reflector
         "cs-attr:alpha", // whose attributes are readable — the `data-*` config every loader reads
+        // ⚠⚠⚠ AND ITS OWN URL IS READABLE WHILE IT RUNS. The "already ran" marker used to BE the
+        // deletion of `src`, applied BEFORE the evaluation — so `document.currentScript.src` was the
+        // empty string for the whole of a script's life. That is a wrong answer of the right type,
+        // and it is worse than a missing one: `new URL('')` does not skip, it THROWS
+        // (`TypeError: Invalid URL: ` on 4 of 200 CrUX sites). The marker is an in-memory set now,
+        // and `src` is removed AFTER the script and its load handler have run, so the post-run
+        // document is unchanged.
+        "cs-src-has-chunk:true",
     ] {
         assert!(
             got.contains(claim),

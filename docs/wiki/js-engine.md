@@ -3432,3 +3432,40 @@ divs. On the instrument built for this question:
 > **Judge the ratchet on the instrument, never on a proxy you invented for convenience thirty minutes
 > earlier.** This is the fourth time a convenience number has contradicted the purpose-built one here,
 > and the first time it nearly caused a good tick to be reverted rather than a bad one landed.
+
+## A script could not read its own URL (t1263)
+
+`fetch_and_run_dynamic_scripts` marked a runtime-fetched script as executed by **deleting its `src`
+attribute**, and did it *before* evaluating. So for the whole of its own execution,
+`document.currentScript.src` was the **empty string** where Chrome gives the URL.
+
+⚠ **A wrong answer of the right type is worse than a missing one.** A missing `src` makes a loader
+skip; an empty one makes `new URL(document.currentScript.src)` **throw**.
+
+The marker is an in-memory `HashSet<NodeId>` on `Page` now, and the attribute is removed **after** the
+script and its `load`/`error` handler have run — so the post-run document is byte-identical to before
+(`collect_inline_scripts` still reads a surviving `src` as *"the fetch failed, nothing to run"*) and
+only the running script's view changed.
+
+### The hypothesis that sent me here was refuted, and that is the more useful half
+
+The motivation was t1262's histogram: `TypeError: Invalid URL: ` — empty argument — at 4 of 200 sites,
+with `nautica.com` on both that list and the `document.write` list. Measured after the fix:
+
+```text
+  www.marktplaats.nl  1 -> 1     mangaraw.ac  1 -> 1
+  sports.yahoo.com    1 -> 1     nautica.com  3 -> 2
+```
+
+**One throw of six.** The empty `src` was real and it was not what those pages were passing to
+`new URL`. Two things worth keeping from that:
+
+> **A histogram row is a SUSPECT, not a defect.** The same session's
+> `SyntaxError: expected expression, got '<'` (5 sites) died to a five-minute check: `7info.ru` ships
+> a literal `<script ...>` tag *inside* a `<script>` body, so the outer script's text begins with `<`
+> **in the bytes the server sent** — Chrome compiles the same string and throws the same error. Not
+> every throw in our log is our bug, and the discriminator is cheap: read the source bytes.
+
+> **A fix can be right and buy nothing you went in for.** This one matches Chrome, is gated, and
+> removes a lie the engine told every chunk loader — and it does not close the cluster that motivated
+> it. Reporting the cluster as closed would have been the easiest sentence to write.

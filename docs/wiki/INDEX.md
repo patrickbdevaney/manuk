@@ -1584,6 +1584,8 @@
   - L3378 · document.write is not legacy trivia; it is how ad tags work
   - L3395 · The second entry point, found by the first one's regression
   - L3420 · The regression that was not one
+  - L3436 · A script could not read its own URL (t1263)
+  - L3450 · The hypothesis that sent me here was refuted, and that is the more useful half
 
 ## Manuk Daily-Driver Usability Roadmap (synthesized, tick 138)
 `docs/wiki/lever-map.md`
@@ -2158,4 +2160,4 @@
   - L231 · Both named mechanisms are subsystem work
 
 ---
-2065 sections across 22 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+2067 sections across 22 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.

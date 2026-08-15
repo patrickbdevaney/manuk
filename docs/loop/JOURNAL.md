@@ -80430,3 +80430,87 @@ wrong answer of the right type, and the marker wants to become an in-memory set.
 PERF: none claimed.
 
 WIKI: `docs/wiki/js-engine.md` — "document.write was absent, and killing it revealed the second entry point".
+
+## Tick 1263 — a script could not read its own URL, and the reason I went looking was WRONG (2026-08-15)
+
+TICK SHAPE: capability — one conformance fix, gated and RED-proven, with a corpus result that
+**refutes the hypothesis that motivated it**. Both halves are the entry.
+
+HYPOTHESIS (written first): t1262's histogram has `TypeError: Invalid URL: ` — with an *empty*
+argument — at 4 of 200 sites, and t1262's own NEXT noted that a runtime-fetched script's `src`
+attribute is **removed before it runs**. `new URL('')` throws. `nautica.com` is on both lists. So the
+empty `src` feeds the empty `new URL`, and one fix closes both.
+
+CONFIRMED, the first half — the engine really was lying about `src`. Probed by extending the t1262
+gate's own fixture:
+
+```text
+  cs-src-empty:true      <- document.currentScript.getAttribute('src') === null, DURING the script
+```
+
+`fetch_and_run_dynamic_scripts` used *"delete its `src`"* as the already-ran marker and applied it
+**before** evaluating, so for the whole of its own execution a script's
+`document.currentScript.src` was the empty string where Chrome gives the URL. **That is a wrong
+answer of the right type, which is worse than a missing one** — a missing `src` makes a loader skip;
+an empty one makes `new URL(...)` throw.
+
+FIX — the marker moves into an in-memory `dyn_scripts_ran: HashSet<NodeId>` on `Page`, and the
+attribute is removed **after** the script and its `load`/`error` handler have run. The post-run
+document is byte-identical to before (`collect_inline_scripts` still reads a surviving `src` as *"the
+fetch failed, nothing to run"*); the only thing that changed is what the script can see while it is
+the one running.
+
+GATE — `G_FETCHED_CURRENT_SCRIPT` extended, RED-proven a second time and for a different reason than
+its first:
+
+```text
+  restore the before-eval removal -> cs-src-has-chunk:false   (was: cs-null:true, no set_current_script)
+```
+
+⚠⚠⚠ **AND THE HYPOTHESIS THAT SENT ME HERE IS REFUTED. The `Invalid URL` cluster DOES NOT CLOSE:**
+
+```text
+  site                  Invalid URL throws   OLD -> NEW
+  www.marktplaats.nl                            1 -> 1
+  mangaraw.ac                                   1 -> 1
+  sports.yahoo.com                              1 -> 1
+  www.nautica.com                               3 -> 2      <- one of three, and only here
+```
+
+One throw of six. So the empty `src` was real, and it was **not** what those pages were passing to
+`new URL`. The fix is correct on its own terms — it is gated, it matches Chrome, and it removes a
+lie the engine was telling every chunk loader — but **it does not buy the cluster I went in for, and
+saying it did would be the easiest sentence in this entry to write.**
+
+⚠ **A PRE-EXISTING RED I DID NOT INTRODUCE AND DELIBERATELY DID NOT "FIX":**
+`g_constellation_wellformed` fails on three `CONSTELLATION.tsv` rows whose status is `unmeasurable`
+(`hyphens: auto`, `scroll-behavior: smooth`, `scroll-margin/scroll-padding`), against an allowed set
+of `gated|works|partial|missing|unknown`. My tree does not touch that file and the wall does not run
+that test, which is why t1262 landed green over it. **It is not a typo** — t1008/t1018 introduced
+`unmeasurable` with a real meaning the other five statuses cannot express (*"the oracle is
+structurally blind to this property"*, each row carrying a measured Chrome-is-byte-identical probe).
+So the two honest resolutions are *widen the vocabulary and decide how it tallies* or *destroy the
+distinction*, and the gate's own message names the stake: an unrecognised status **silently drops out
+of every tally, including the readiness percentage the phase gate is judged on.** That is the
+accounting-reconciliation class this project rates as its highest-yield instrument, and it deserves
+its own tick rather than a one-word edit inside someone else's.
+
+SURFACE AUDIT #68 ran in this tick (it came due at 1263 and the hook blocks the commit until it
+does). ⭐ **It asked THIS LOOP'S OWN INSTRUMENT instead of the internet** — 200 CrUX sites loaded,
+throws histogrammed by assertion message — which is meta-instrument #2 from `STATUS.md` ("a measured,
+usage-weighted surface instead of an imagined one"), and it re-ranked my own instinct by six places.
+ADDED 4 rows (`document.write` gated · fetched-`currentScript` gated · `isSecureContext` missing ·
+`HTMLDocument` **as a global interface object** missing). CORRECTED: the map's three `HTMLDocument`
+hits are all `createHTMLDocument()` and the `create*` family — **a grep for the name made a different
+capability look covered.**
+
+NEXT: the constellation status vocabulary above (it is an accounting hole, not a typo). Then the rest
+of t1262's histogram — `isSecureContext` (2 sites) and `HTMLDocument` (2) are absent globals and one
+line each; `SyntaxError: expected expression, got '<'` (5 sites) is **NOT ours** and was killed by a
+five-minute check: `7info.ru` ships a literal `<script ...>` tag *inside* a `<script>` body, so the
+outer script's text begins with `<` in the bytes the server sent, and Chrome compiles the same string
+and throws the same error. A histogram row is a suspect, not a defect.
+
+PERF: none claimed.
+
+WIKI: `docs/wiki/js-engine.md` — "a script could not read its own URL".

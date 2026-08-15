@@ -6438,3 +6438,72 @@ subtests of t1223's inset family are *exactly* the writing-mode mirror
 (`cbHeight − staticPositionY`). **A guard list of things the engine does not have is a BACKLOG nobody
 had read as one** — sixteen named, measured, currently-absent capabilities, sitting in a test file as
 a negative assertion.
+
+## Audit #68 — tick 1263 (2026-08-15)
+
+**Source, and it is a departure worth naming: this loop's own instrument, not the internet.** The
+audit's step 1 says to ask the world what capabilities it names. This one asked **200 real CrUX
+corpus sites** what they actually *call*, by loading every one and histogramming the JS throws by
+assertion message, ranked by distinct sites. That is the "capability probe moved into every real
+corpus page" that `STATUS.md` ranks as meta-instrument #2 — a **usage-weighted** surface instead of
+an imagined one — and it disagreed with my own instinct by six places.
+
+```text
+   8  can't access property "hasAttribute", p.stubScriptElement is null   <- a vendor script's own state
+   6  TypeError: document.write is not a function                         <- OURS, #1
+   6  TurnstileError: [Cloudflare Turnstile] ...                          <- a bot wall
+   5  SyntaxError: expected expression, got '<'                           <- NOT OURS (see below)
+   4  TypeError: Invalid URL:                                             <- open
+   3  Error: addEventListener and attachEvent are unavailable.
+   2  ReferenceError: isSecureContext is not defined                      <- ADDED
+   2  ReferenceError: HTMLDocument is not defined                         <- ADDED
+   1  TypeError: window.AudioContext is not a constructor                 <- already on the map, x2
+```
+
+### ADDED
+
+- `document.write` / `document.writeln` — **`gated`** (`G_DOCUMENT_WRITE`). The map had **no row**
+  (`grep -c` = 0) and the engine had no binding. 7 of 200 sites.
+- `document.currentScript` inside a **runtime-fetched** script — **`gated`**
+  (`G_FETCHED_CURRENT_SCRIPT`).
+- `window.isSecureContext` — **`missing`**, 2 of 200. One boolean global, unbuilt.
+- `HTMLDocument` as a **global interface object** — **`missing`**, 2 of 200.
+
+### CORRECTED
+
+- The map's three `HTMLDocument` hits are all about `createHTMLDocument()` and the
+  `Document.prototype.create*` family — **a different capability**. The interface object itself was
+  never on the map, and a grep for the name made it look covered.
+- Row 251 and row 500 both carry Web Audio, one `missing` and one `unknown`, priced at
+  0/171 on an older corpus. The new histogram makes it **1 of 200** — still correctly unranked.
+
+### What we had been wrong about
+
+**That a throw in our log is a defect of ours.** `SyntaxError: expected expression, got '<'` was the
+fourth-ranked mechanism and looked like a parser or content-type bug worth a tick. It is neither:
+`7info.ru` ships a literal `<script ...>` tag *inside* a `<script>` body, so the outer script's text
+begins with `<` **in the bytes the server sent**, and Chrome compiles the same string and throws the
+same error. Five minutes with `--dump-html` killed it.
+
+> **A histogram row is a SUSPECT, not a defect** — and the check is cheap: read the source bytes
+> before believing the message. The complement is also now on the record from the same session: a fix
+> can be right, gated, and buy **nothing** the histogram sent you in for (t1263's `Invalid URL`
+> cluster closed 1 throw of 6).
+
+⚠ **A structural finding for the observer, and it is the same shape as its predecessor's**: the gate
+`g_constellation_wellformed` is **RED on the committed tree** — three rows carry status
+`unmeasurable` (`hyphens: auto`, `scroll-behavior: smooth`, `scroll-margin/scroll-padding`) against
+an allowed set of `gated|works|partial|missing|unknown`. It is **not a typo**: t1008/t1018 introduced
+that status with a meaning the other five cannot express (*"the oracle is structurally blind to
+this"*), each row carrying a measured Chrome-is-byte-identical probe. The gate's own message names
+the stake — an unrecognised status **silently drops out of every tally, including the readiness
+percentage the phase gate is judged on**. It went unnoticed because the wall does not run that test,
+which is *precisely* audit #67's predecessor-finding recurring ("the wall runs 19 of 104 gates; a gate outside
+the wall is a claim nobody is checking").
+
+### Re-rank?
+
+**No re-rank at the top** — the render/layout main line is unchanged. Within the throw-class worklist
+the histogram *did* re-rank: `AudioContext` (the candidate t1261 carried into this session) is **1 of
+200** and `document.write` is **7**, so the instinct was the seventh-best lever and the measurement
+moved it to first.

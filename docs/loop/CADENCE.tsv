@@ -957,3 +957,4 @@ tick	sha	epoch	iso	delta_s	shape	wall_s	files	added	deleted	gates	claims	wpt_pas
 1260	26cc5fd2	1786791528	2026-08-15T06:58:48-04:00	4385	perf	997	9	443	36	472	81	3896	6960	0	629	0	taffy's cache has NINE SLOTS and one of them holds every definite width (2026-08-15)
 1261	483d4b22	1786793594	2026-08-15T07:33:14-04:00	2066	measurement	997	7	169	33	472	81	3896	6960	0	629	0	the TIMEOUT bucket is FOUR causes, and my own last tick was 1 of 9 (2026-08-15)
 1262	314fe16b	1786799752	2026-08-15T09:15:52-04:00	6158	capability	997	12	582	42	474	81	3896	6960	0	630	0	`document.write` was ABSENT, and killing it revealed the second entry point (2026-08-15)
+1263	2f58e6b8	1786802726	2026-08-15T10:05:26-04:00	2974	capability	997	11	272	36	474	81	3896	6960	0	631	0	a script could not read its own URL, and the reason I went looking was WRONG (2026-08-15)
