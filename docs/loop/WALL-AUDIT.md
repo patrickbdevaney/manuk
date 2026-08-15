@@ -7,6 +7,55 @@ moved to CI to fake a fast local wall. Only optimisations that buy the same asse
 
 ---
 
+## Audit #49 — tick 1267 (2026-08-15): the wall is 837s and **D (disk hygiene) is now the LARGEST line at 27%** — the first time the top cost is not a gate
+
+**Wall: gate 837s · build 29s · total 866s** against a 189s mark. Trend across this session's three
+landings: **673s → 837s → (this)**. The build phase is 24–29s throughout, so the cost is the gate phase,
+as audits #47 and #48 both found.
+
+### What the audit could see
+
+```text
+  230s  D  (disk hygiene / reclaim)   27%      <- NEW as the #1 line
+  193s  P  (real-site parity)         23%
+   99s  T  (crate tests)              12%
+   29s  B  (build)                     3%
+   18s  G6 · 6s G1 · 3s F · 1s F4
+    0s  × ~60 further gates
+```
+
+### The finding, and it is a DISK finding rather than a gate finding
+
+⚠⚠⚠ **`D` is not a gate — it is the reclaim step, and it only runs because the disk is at 89%.**
+`tick.sh` printed `D · disk (89% full — reclaiming before the build fails on ENOSPC)` and then spent
+**230 seconds** on it, more than the parity suite. That is the standing bloat this audit exists to
+find, and its cause is not in the wall at all: it is 248G of 297G on `/home`, most of it `target/`
+debug artefacts. The observer's t1258 change (`debug = "line-tables-only"`, gate bins 249MB → 178MB)
+attacked exactly this and the pressure has come back.
+
+⚠ **This is harness territory and is therefore REPORTED, NOT TOUCHED** (`scripts/` is observer-owned,
+and `disk-hygiene.sh`'s prune-vs-live-rustc interlock is a fix the observer already made once, at
+t235). The agent-side contribution is the opposite of an edit: **stop generating the pressure.** This
+session rebuilt `--release -p manuk-wpt` five times across three ticks — twice for the same tick,
+because the old-binary control (t1268) legitimately requires a rebuild out and a rebuild back.
+
+### The rigor-preserving questions, answered
+
+1. **REDUNDANCY** — no change. The ~60 gates costing 0s are cheap because they share the test binary
+   already; the two costly sections are a real-site parity suite and the crate tests, and neither is
+   duplicated work.
+2. **PARALLELISM** — `P` at 193s and `T` at 99s are unchanged in kind from audit #48 (206s / 164s);
+   `T` nearly halved on a warmer tree, which is the expected shape and not an optimisation.
+3. **CACHING** — ⭐ **this is where the second is actually buyable, and it is the D line.** A reclaim
+   that runs *inside* the wall charges the tick for disk pressure the tick did not create. Whether it
+   can move out of the wall (a cron already exists) is an observer call; the measurement is recorded
+   here so the decision has a number attached: **27% of the wall, 230s, on a step that asserts nothing.**
+4. **SCOPE** — no gate builds more than it asserts on that this audit can see.
+
+**Nothing was trimmed, and nothing should have been.** No gate dropped, no floor widened, no check
+moved to CI. The audit's honest result is: **the gate wall is lean and the wall is not what grew — the
+disk did.**
+
 ## Audit #48 — tick 1247 (2026-08-14): audit #47's finding RECURS, the gap narrowed 17% → 39%, and the residue is still BUILD
 
 ⚠ **THIS IS NOT A NEW FINDING AND MUST NOT BE READ AS ONE.** Audit #47 (t1206, forty-one ticks ago)

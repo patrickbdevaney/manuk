@@ -80840,3 +80840,125 @@ defend, and the CrUX fidelity sweep has not run this window.
 PERF: none claimed. CAPABILITY: the Web Animations feature detect.
 
 WIKI: `docs/wiki/js-engine.md` — "`in` walks UP, never DOWN".
+
+## Tick 1268 — the real-site debt: a clean --jobs 2 CrUX sweep, hypothesis stated FIRST (2026-08-15)
+
+TICK SHAPE: measurement — check #122's own STEER 2, written one tick ago: *"two consecutive WPT-only
+ticks is the limit this check will defend."* t1266 and t1267 moved `WPT:TOTAL` +12,127 between them
+and moved **no measured real-site number**, and the last banked CrUX rows are `SWEEP-t1252` (2026-08-14).
+A clean `--jobs 2` sweep of all 203 CrUX-trend sites, on a quiet box (load 2.04) with **no build beside
+it** — the release binary is frozen for the duration, per t1183's rule against editing the tree
+mid-sweep.
+
+**HYPOTHESIS, RECORDED BEFORE THE ROWS LAND so the reading cannot be fitted to them.** This is the
+discipline t857 used and it is the whole reason a measurement tick is worth a tick:
+
+1. **M1 and `shape` ≈ FLAT.** Neither landed fix touches layout arithmetic. t1266 restores expando
+   storage on DOM nodes; t1267 corrects a feature detect. Both are JS-binding defects.
+2. **SCORABILITY may move UP by a small amount, and if it does, t1266 is the likelier cause.** A page
+   whose framework parks state on a node (`node.value`, `node.target`, `node.name`, `node.content`) was
+   silently reading back a string; if any corpus site died on that, it now boots further. I am *not*
+   predicting it will — check #121 counted the throw-class cohort at **14 of 200 (7%)**, so the
+   population that could move is small.
+3. **The rows' value is the WORKLIST, not the headline** — specifically, whether the ~80-site gap to the
+   95% bar is still dominated by the instrument ceiling (check #83's 82.2–87.4%) rather than by engine
+   work.
+
+⚠ **A FLAT READING WOULD CONFIRM THE HYPOTHESIS, NOT REFUTE THE TICKS.** t1227 already banked the rule
+that *a flat M1 after a big WPT win is CORRECT*; the failure mode to guard against here is reading a
+flat number as "the last two ticks were worthless" when what they actually bought — per check #122 — is
+a **truthful ranking instrument** for the twelve CSS-layout areas the board ranks CO-#1.
+
+⚠⚠ **AND THE READING MUST BE DIFFED ON MEMBERSHIP, NOT ON THE MEAN.** Check #103's population-changed
+delta and check #106's per-site non-reproduction both say the same thing: rank on which sites CROSSED,
+in both directions, and treat every per-site delta as a question until a same-hour control answers it.
+
+RESULT — **the hypothesis held on both halves it predicted, and the one thing it got wrong was
+predicted in the wrong DIRECTION, which is the more useful outcome.**
+
+```text
+                              t1252            t1268
+  shape >= 0.75           44/131  33.6%    46/133  34.6%     <- +1.0 pt, inside the +-2-4 site noise
+  M1 (shape AND jarring)                   31/133  23.3%
+  scored / in-scope      108/131          107/133             <- DOWN 1: the instrument flags it
+  shape_mean                62.7%            63.0%
+  cov_mean                  87.4%            87.9%
+  COMMON-SET BAND (104 sites scored in BOTH):        -0.01 pts
+```
+
+⭐ **THE BAND IS THE READING, AND IT IS -0.01 — FLAT TO TWO DECIMAL PLACES.** Hypothesis 1 holds
+exactly. And `manuk-wpt sweep-diff` is unambiguous about *why* the pass-count moved at all:
+
+```text
+  117 sites in both files - 11 moved more than 2 shape points
+    NOT ATTRIBUTABLE - the INSTRUMENT changed   [11]
+    NOT ATTRIBUTABLE - the POPULATION changed   [0]
+    ATTRIBUTABLE - same instrument, same population   [0]   <- ZERO
+```
+
+**Not one attributable mover in either direction.** t1266 and t1267 were JS-binding fixes and the
+corpus says so. `fidelity-progress.sh` also fires its own DENOMINATOR-TRAP warning (`shape_mean
+62.7->63.0 ROSE while scored 108->107 FELL`), which is the correct thing for it to say and is the
+reason the +1.0 pt is not being reported as progress.
+
+⚠⚠⚠ **HYPOTHESIS 2 WAS WRONG, AND WRONG IN THE OPPOSITE DIRECTION: SCORABILITY WENT DOWN, 108 -> 107.**
+That is a ratchet question, not a footnote, so it was chased to attribution rather than filed under
+churn. Bucketing the reason column across the 200 common rows — **11 sites changed reason, and they
+change in BOTH directions**:
+
+```text
+  GAINED an unscorable reason          LOST one (now scored)
+    7info.ru          timeout-150s       mangaraw.ac     timeout-150s -> scored
+    coinmarketcap.com timeout-150s       morikoshi.net   timeout-150s -> scored
+    payb.jp           timeout-150s       mayatoys.in     unreachable  -> scored
+    www.cuneocronaca.it  css-starved-1
+  RE-CLASSIFIED between unscorable buckets: vk.com · sports.yahoo.com · amazon.com.mx · experiencia.pichincha.com
+```
+
+**Three timeouts gained and three lost is the churn signature**, not a regression. The one row that is
+NOT that shape is `www.cuneocronaca.it` — scored at t1252, `css-starved-1` now — so it got the control
+this project's own rule demands, and it got the expensive version:
+
+```text
+  SOLO, current binary            www.cuneocronaca.it  css-starved-1
+  SOLO, OLD-BINARY CONTROL        www.cuneocronaca.it  css-starved-1     <- built from bd0c6f9a (PRE-t1266)
+      (engine/js/src/{reflect_js,event_loop,lib,dom_bindings}.rs at the pre-t1266 revision, rebuilt,
+       run in the same hour on the same box, then restored and rebuilt)
+```
+
+**The binary that predates both ticks produces the identical reason.** It is site drift or an origin
+change, not ours. ⚠ The cost of that answer was ~10 minutes of build; the cost of *not* asking would
+have been either an unjustified revert or an unexamined regression, and t799's rule is that only a
+same-hour old-binary run attributes anything.
+
+⚠⚠ **WHAT THIS SWEEP ACTUALLY BUYS, STATED PLAINLY, BECAUSE A FLAT NUMBER IS EASY TO MIS-SPEND.** It
+does *not* vindicate t1266/t1267 as render work — they were not render work and did not claim to be.
+It discharges check #122's STEER 2 (*"two consecutive WPT-only ticks is the limit this check will
+defend"*), it re-establishes a burndown point after 16 unmeasured ticks, and it hands back the number
+that governs the next arc: **the scorability ceiling is 107/133 = 80.5%**, and the 26 unscored are
+`timeout 11 · shell-only 5 · other 5 · thin-overlap 3 · css-starved 1 · render-fail 1`. **Timeout is
+now 42% of the unscored cohort and the single largest bucket** — which is t1236's *"the TIMEOUT bucket
+is forced reflow"* and t1260's *"it is FOUR causes, and probe COUNT is not probe COST"*, still open,
+still the biggest lever on the M1 cap.
+
+⚠ M1 needs **+96 sites** to reach the 95% bar (31/133 today). Check #83's instrument ceiling
+(82.2-87.4%) is still the larger half of that distance and is still an owner decision.
+
+NEXT: the **ANIMATION TIMELINE** decomposition named by constitution check #122 — the largest single
+mechanism the repaired WPT instrument can now see (764 subtests in `css/css-transforms` alone, the same
+absence under every interpolation file in twelve areas), and real daily-driver capability rather than
+conformance. Step (a) only: evaluate an effect at a given progress, PORTED from Stylo's `Animate`
+trait. ⚠ Do not attempt (a)+(b)+(c) in one tick — t156 burned 2h+ on exactly that shape.
+
+⚠ **WALL AUDIT #49 was due this tick and is included** (`docs/loop/WALL-AUDIT.md`). Wall 837s, and for
+the first time the largest line is **not a gate**: `D` (disk reclaim) is **230s = 27%**, ahead of the
+parity suite at 193s. It runs only because `/home` is at **89%** (248G of 297G; `target/` alone is
+96G), so the tick is being charged 230 seconds for disk pressure it did not create — on a step that
+asserts nothing. `scripts/` is observer-owned so this is **reported, not touched**; the agent-side
+contribution is to stop generating the pressure, and this tick is itself an example of the cost
+(the old-binary control is two extra release rebuilds, correctly spent). Nothing was trimmed: no gate
+dropped, no floor widened, no check moved to CI. **The gate wall is lean; the disk is what grew.**
+
+PERF: none — measurement only. CAPABILITY: none claimed.
+
+WIKI: `docs/wiki/fidelity-instrument.md` — a scorability regression is chased to an old-binary control.

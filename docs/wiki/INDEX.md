@@ -1182,6 +1182,9 @@
   - L1404 · The repair obligation, discharged rather than asserted
   - L1421 · A vertical divergence is a SHIFT or a RESIZE, and the ledger cannot tell them apart (t1253)
   - L1451 · Two hypotheses this pass killed, both in one command each
+  - L1460 · A SCORABILITY regression is a ratchet question — chase it to an old-binary control, not to a shrug (t1268)
+  - L1475 · The scorability −1 is the part that cannot be waved through
+  - L1494 · The control, and what makes it a control
 
 ## FRAMEWORKS — React, Svelte, Next, jQuery: what actually breaks
 `docs/wiki/frameworks.md`
@@ -2176,4 +2179,4 @@
   - L231 · Both named mechanisms are subsystem work
 
 ---
-2083 sections across 22 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+2086 sections across 22 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.

@@ -1456,3 +1456,59 @@ of site you are looking at before spending a tick on it.
   `[0 10 1200×100]`) has the exact signature — lower by precisely what it lost in height. Across all
   615 rows that signature is **0.7%**. One site is not a class (t1235), and testing it cost less than
   the fix would have.
+
+## A SCORABILITY regression is a ratchet question — chase it to an old-binary control, not to a shrug (t1268)
+
+`fidelity-progress.sh` printed two warnings on the t1268 sweep, and they are the two it should print:
+
+```text
+  ⚠ SCORABILITY-REGRESSED: scored 108 -> 107 (fewer sites measurable — investigate, not progress)
+  DENOMINATOR-TRAP: shape_mean 62.7->63.0 ROSE while scored 108->107 FELL — the gain is NOT real
+```
+
+A pass-count that rises while the denominator of *measurable* sites falls is the composition trap this
+instrument was built to catch, so the +1.0 pt on `shape ≥ 0.75` is not progress and was not reported as
+such. The **common-set band** — the mean Δshape over the 104 sites scored in *both* sweeps — read
+**−0.01 points**, and `manuk-wpt sweep-diff` classified all 11 movers as NOT ATTRIBUTABLE with
+**zero** in the attributable bucket. That is the reading.
+
+### The scorability −1 is the part that cannot be waved through
+
+"Fewer sites are measurable" is a ratchet question: if an engine change stopped a site rendering, the
+tick is a regression regardless of what else it bought. The cheap first cut is to **bucket the reason
+column across the common rows and look at the DIRECTION of the changes**:
+
+```text
+  GAINED an unscorable reason          LOST one (now scored)
+    7info.ru           timeout-150s      mangaraw.ac    timeout-150s -> scored
+    coinmarketcap.com  timeout-150s      morikoshi.net  timeout-150s -> scored
+    payb.jp            timeout-150s      mayatoys.in    unreachable  -> scored
+    www.cuneocronaca.it   css-starved-1
+```
+
+⭐ **Three timeouts gained and three lost IS the churn signature.** A real regression is one-directional;
+a wall-clock bound flapping in both directions on a 150s budget is the bound, not the engine. What that
+leaves is the one row whose shape is different — a site that was scored and is now unscorable for a
+*non-timeout* reason — and that one gets the expensive answer.
+
+### The control, and what makes it a control
+
+```text
+  SOLO, current binary        www.cuneocronaca.it  css-starved-1
+  SOLO, OLD-BINARY CONTROL    www.cuneocronaca.it  css-starved-1
+```
+
+The old binary was built by checking the *suspect files* out at the pre-suspect revision
+(`git checkout <sha> -- engine/js/src/{reflect_js,event_loop,lib,dom_bindings}.rs`), rebuilding release,
+running in **the same hour on the same box**, then restoring and rebuilding. Identical reason ⇒ site
+drift or an origin change, not ours.
+
+⚠ **Two mechanical traps in doing this, both hit and both cheap to avoid.** `git checkout <sha> -- <paths>`
+**stages** the old content, so copying the new files back leaves the index holding the old ones (`MM` in
+`git status`) — finish with `git restore --staged` and verify `git diff --stat engine/` is empty before
+believing the tree. And the restore must be followed by a **rebuild**, or the next measurement is taken
+with the control binary still on disk.
+
+⚠⚠ **The cost/benefit is not close.** ~10 minutes of build bought the difference between an unjustified
+revert and an unexamined regression. t799's rule stands: *only a same-hour old-binary run attributes
+cost*, and a per-site delta is a question until it has one.

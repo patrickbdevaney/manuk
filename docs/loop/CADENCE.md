@@ -11,12 +11,12 @@
 
 | | value | over |
 |---|---|---|
-| ticks landed | **962** | ticks 1–1266 |
-| median tick cycle | **29m** | 961 intervals |
+| ticks landed | **963** | ticks 1–1267 |
+| median tick cycle | **29m** | 962 intervals |
 | median, last 10 | **60m** | 10 intervals |
 | fastest / slowest | 5s / 5.4d | |
-| **ticks per hour** | **1.13** | 847.4h elapsed |
-| median verify wall | **63s** | 901 ticks |
+| **ticks per hour** | **1.13** | 849.4h elapsed |
+| median verify wall | **63s** | 902 ticks |
 | wall trend | 39s → 17m — getting slower ⚠️ | first 3 vs last 3 |
 
 The **cycle** is the real unit: implement → debug → verify wall → land. The wall is only part of
@@ -31,7 +31,7 @@ it, and a wall that grows taxes every future tick, so it is tracked separately f
 * **✅ rows in the capability ledger**: 144 → **635**
 * **Bar 0 — oracle hangs**: 0 of 265 sites
 
-**437 of 962 ticks** (45%) moved a
+**438 of 963 ticks** (45%) moved a
 user-visible capability. The rest were instruments, infrastructure and corrections — and the
 ledger says the corrections were not overhead: three of its top three priorities were phantoms,
 and finding that out redirected everything after it.
@@ -90,7 +90,7 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 
 ## What a capability costs
 
-* **437** capability ticks, median cycle **29m**
+* **438** capability ticks, median cycle **29m**
 * median diff per tick: **+272 / −34** lines across 8 files
 
 ## Every tick
@@ -1059,5 +1059,6 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 | **1264** | 2026-08-15 10:28 | 23m | capability | 17m | +286/−33 | 475 | 81 | 56.0% · | two absent globals, and the prelude that ran before the things it read (2026-08-15) |
 | **1265** | 2026-08-15 11:25 | 58m | instrument-correctness | 17m | +460/−21 | 476 | 81 | 56.0% · | the capability ledger's parts did not sum to its whole, for 247 ticks (2026-08-15) |
 | **1266** | 2026-08-15 12:27 | 62m | capability | 17m | +549/−20 | 477 | 81 | 56.0% · | `div.target = el` stored the STRING "[object HTMLSpanElement]", and it had silenced 194 WP |
+| **1267** | 2026-08-15 14:25 | 2.0h | capability | 17m | +437/−4 | 477 | 81 | 56.0% · | `element.animate()` worked and `'animate' in Element.prototype` was FALSE (2026-08-15) |
 
 *`·` after a WPT figure means **carried forward**, not measured this tick.*
