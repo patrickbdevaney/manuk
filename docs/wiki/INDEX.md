@@ -470,6 +470,12 @@
   - L9517 · ⚠ layout_html cascades with MinimalCascade, not with the shipping Stylo path
   - L9527 · The inline half, and why it splits in two (t1250)
   - L9547 · ⚠ On this suite, read the COUNT and never the percentage
+  - L9561 · Grid §9.1 replaces the CONTAINING BLOCK, and *"child"* is not in the sentence (t1256)
+  - L9574 · The histogram said "one answer for nine questions"
+  - L9595 · The element had TWO boxes, and only one of them was wrong
+  - L9611 · Ask taffy the question; do not answer it a second time
+  - L9628 · The two control rows are what make it a rule
+  - L9649 · Ledger — measured, with a same-hour OLD-BINARY control
 
 ## browser-capabilities.md
 `docs/wiki/browser-capabilities.md`
@@ -2130,4 +2136,4 @@
   - L231 · Both named mechanisms are subsystem work
 
 ---
-2037 sections across 22 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+2043 sections across 22 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
