@@ -11,12 +11,12 @@
 
 | | value | over |
 |---|---|---|
-| ticks landed | **951** | ticks 1–1253 |
-| median tick cycle | **29m** | 950 intervals |
-| median, last 10 | **43m** | 10 intervals |
+| ticks landed | **952** | ticks 1–1255 |
+| median tick cycle | **29m** | 951 intervals |
+| median, last 10 | **39m** | 10 intervals |
 | fastest / slowest | 5s / 5.4d | |
-| **ticks per hour** | **1.14** | 831.8h elapsed |
-| median verify wall | **63s** | 890 ticks |
+| **ticks per hour** | **1.14** | 832.5h elapsed |
+| median verify wall | **63s** | 891 ticks |
 | wall trend | 39s → 13m — getting slower ⚠️ | first 3 vs last 3 |
 
 The **cycle** is the real unit: implement → debug → verify wall → land. The wall is only part of
@@ -28,10 +28,10 @@ it, and a wall that grows taxes every future tick, so it is tracked separately f
 
 * **capabilities asserted** (`G_CAPABILITY`): 48 → **81**
 * **live gates**: 27 → **471**
-* **✅ rows in the capability ledger**: 144 → **624**
+* **✅ rows in the capability ledger**: 144 → **625**
 * **Bar 0 — oracle hangs**: 0 of 265 sites
 
-**430 of 951 ticks** (45%) moved a
+**431 of 952 ticks** (45%) moved a
 user-visible capability. The rest were instruments, infrastructure and corrections — and the
 ledger says the corrections were not overhead: three of its top three priorities were phantoms,
 and finding that out redirected everything after it.
@@ -90,7 +90,7 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 
 ## What a capability costs
 
-* **430** capability ticks, median cycle **29m**
+* **431** capability ticks, median cycle **29m**
 * median diff per tick: **+270 / −34** lines across 8 files
 
 ## Every tick
@@ -1048,5 +1048,6 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 | **1250** | 2026-08-14 16:16 | 1.9h | capability | 13m | +211/−44 | 471 | 81 | 56.0% · | the inline mirror, and a Bar-0 that the OLD BINARY refused to let me own (2026-08-14) |
 | **1252** | 2026-08-14 19:02 | 2.8h | measurement | 13m | +340/−33 | 471 | 81 | 56.0% · | five sizing ticks, +160 WPT, and the corpus did not move. Both halves are the result. (202 |
 | **1253** | 2026-08-14 20:53 | 1.8h | measurement | 13m | +99/−32 | 471 | 81 | 56.0% · | a third of the vertical mass is a CONSEQUENCE, and the margin-collapse hypothesis died at  |
+| **1255** | 2026-08-14 21:36 | 43m | capability | 17m | +214/−35 | 471 | 81 | 56.0% · | a NO-BREAK SPACE is not whitespace, and t1254's "top mechanism" was my own grep matching i |
 
 *`·` after a WPT figure means **carried forward**, not measured this tick.*

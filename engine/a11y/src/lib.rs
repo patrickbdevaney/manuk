@@ -906,8 +906,31 @@ fn id_index(dom: &Dom) -> HashMap<String, NodeId> {
     map
 }
 
+/// Trim and collapse the whitespace in an accessible name — **ASCII whitespace, and no other kind.**
+///
+/// ⚠⚠⚠ **`split_whitespace` SPLITS ON UNICODE WHITESPACE, AND U+00A0 IS UNICODE WHITESPACE.** accname
+/// §4 (and HTML's own definition) collapse *ASCII* whitespace — space, tab, LF, FF, CR — and a
+/// NO-BREAK SPACE is none of those: it is a character the author deliberately chose so the text would
+/// NOT break there, and it must survive into the name. Rust's `split_whitespace` uses
+/// `char::is_whitespace` (Unicode `White_Space`), which contains U+00A0, so every non-breaking space
+/// in a name was silently rewritten to a plain space.
+///
+/// Measured against the accname suite — the expectation is the AUTHOR's string, byte for byte:
+///
+/// ```text
+///   <button>button\u{a0}label</button>   expected "button\u{a0}label"   got "button label"
+///   <div role=heading>…                  same
+///   <span role=button>… mixed / leading / trailing nbsp   same
+/// ```
+///
+/// It matters past conformance: a screen reader announces the name it is given, and **the agentic
+/// surface matches on it** — an agent told to click "Sign\u{a0}up" and an engine that stored
+/// "Sign up" do not find the same element. NBSP is common in exactly the short UI strings agents
+/// target (prices, "Sign up", "Add to cart", French punctuation).
+///
+/// `split_ascii_whitespace` is the same function over the right alphabet.
 fn normalize(s: &str) -> String {
-    s.split_whitespace().collect::<Vec<_>>().join(" ")
+    s.split_ascii_whitespace().collect::<Vec<_>>().join(" ")
 }
 
 /// Accessible name for `node`, following a pragmatic subset of **accname**:
@@ -1781,6 +1804,38 @@ mod tests {
     }
 
     #[test]
+    /// **A NO-BREAK SPACE SURVIVES INTO THE ACCESSIBLE NAME; ASCII WHITESPACE COLLAPSES.**
+    ///
+    /// accname §4 and HTML collapse *ASCII* whitespace. `split_whitespace` collapses *Unicode*
+    /// whitespace, and U+00A0 is Unicode whitespace — so every non-breaking space in a name was
+    /// silently rewritten to a plain space. It matters past conformance: the agentic surface matches
+    /// on the accessible name, and an agent told to click "Sign\u{a0}up" against an engine that
+    /// stored "Sign up" does not find the element. NBSP lives in exactly the short UI strings agents
+    /// target — prices, "Sign\u{a0}up", "Add\u{a0}to\u{a0}cart", French punctuation.
+    ///
+    /// **To watch it go RED:** put `split_whitespace` back in `normalize`.
+    #[test]
+    fn a_non_breaking_space_survives_name_normalisation() {
+        // Collapsed: runs of ASCII whitespace become one space, and the ends are trimmed.
+        assert_eq!(normalize("  button \t\n label  "), "button label");
+        // PRESERVED: U+00A0 is not ASCII whitespace and is part of the author's string.
+        assert_eq!(normalize("button\u{a0}label"), "button\u{a0}label");
+        assert_eq!(
+            normalize("\u{a0}lead"),
+            "\u{a0}lead",
+            "a LEADING nbsp is not trimmed either"
+        );
+        assert_eq!(
+            normalize("trail\u{a0}"),
+            "trail\u{a0}",
+            "nor a trailing one"
+        );
+        // Mixed: the ASCII run collapses, the nbsp stays, and they do not merge into one space.
+        assert_eq!(normalize("a \u{a0} b"), "a \u{a0} b");
+        // CONTROL — an all-ASCII name is untouched by this change.
+        assert_eq!(normalize("plain  name"), "plain name");
+    }
+
     fn accessible_name_precedence_labelledby_then_label_then_content() {
         let dom = dom_with(|d, body| {
             // aria-labelledby beats aria-label beats content

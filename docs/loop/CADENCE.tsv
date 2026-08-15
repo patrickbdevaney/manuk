@@ -950,3 +950,4 @@ tick	sha	epoch	iso	delta_s	shape	wall_s	files	added	deleted	gates	claims	wpt_pas
 1250	62c3718b	1786738608	2026-08-14T16:16:48-04:00	6760	capability	808	9	211	44	471	81	3896	6960	0	624	0	the inline mirror, and a Bar-0 that the OLD BINARY refused to let me own (2026-08-14)
 1252	d9b4d23f	1786748556	2026-08-14T19:02:36-04:00	9948	measurement	808	8	340	33	471	81	3896	6960	0	624	0	five sizing ticks, +160 WPT, and the corpus did not move. Both halves are the result. (2026-08-14)
 1253	6256678f	1786755184	2026-08-14T20:53:04-04:00	6628	measurement	808	4	99	32	471	81	3896	6960	0	624	0	a third of the vertical mass is a CONSEQUENCE, and the margin-collapse hypothesis died at 0.7% (2026-08-14)
+1255	b75168a8	1786757772	2026-08-14T21:36:12-04:00	2588	capability	997	8	214	35	471	81	3896	6960	0	625	0	a NO-BREAK SPACE is not whitespace, and t1254's "top mechanism" was my own grep matching itself (2026-08-14)

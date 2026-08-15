@@ -1083,6 +1083,8 @@
   - L3439 · Why document.referrer survived three audits
   - L3459 · A value that collapses to Dim::Auto needs a sidecar in BOTH hands (t1251)
   - L3484 · ⚠ A control that wants to assert a value you know is wrong should assert a PREDICATE
+  - L3492 · A NO-BREAK SPACE is not whitespace, and the agent matches on the name (t1255)
+  - L3514 · ⚠ A classifier that greps for the word its corpus is named after will always find it
 
 ## THE FIDELITY INSTRUMENT — what it can and cannot see
 `docs/wiki/fidelity-instrument.md`
@@ -2128,4 +2130,4 @@
   - L231 · Both named mechanisms are subsystem work
 
 ---
-2035 sections across 22 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+2037 sections across 22 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.

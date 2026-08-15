@@ -46371,6 +46371,91 @@ PERF: none — one UA rule and one narrowed branch in a cascade that already ran
 WIKI: `docs/wiki/css-cascade.md` — where Chrome draws the form-control `box-sizing` line, and why a
 layout-crate test cannot see it.
 
+## Tick 1255 — a NO-BREAK SPACE is not whitespace, and t1254's "top mechanism" was my own grep matching itself (2026-08-14)
+
+TICK SHAPE: capability — the a11y mechanism t1254 ranked, taken next. The first thing it did was
+**retract t1254's ranking**.
+
+⚠⚠⚠ **THE CORRECTION, FIRST, BECAUSE IT IS ALREADY COMMITTED IN TWO PLACES.** t1254's journal entry
+and commit message both say *"the top mechanism is `<label>` association (57)"*. **That number is an
+artefact of my own clustering.** I bucketed the failing tests by searching for the substring `label`
+— and every accname test carries `data-expectedlabel` and the word "label" in its name, because the
+suite is *about* names. The bucket matched itself. Re-clustered on the test NAME field only:
+
+```text
+   67   other
+   24   CSS generated content (::before/::after contributing to the name)
+   22   NBSP / whitespace normalisation
+   20   name from a STRUCTURAL descendant
+   20   aria-labelledby
+    8   ::marker
+    7   placeholder / tooltip fallback order
+    5   aria-owns          2   hidden / aria-hidden
+```
+
+**`<label>` association is not in the list at all.** This is t1242's rule firing on me a second time
+in one session — *an observation banked from an instrument you subsequently repair does not survive
+the repair, and it will not retract itself* — and the instrument here was a one-line `awk` I wrote
+myself. **A classifier that greps for a word the corpus is named after will always find it.**
+
+**THE REAL DEFECT, and it is one token.** `normalize()` — the accname whitespace collapse — was
+`s.split_whitespace()`. **Rust's `split_whitespace` splits on UNICODE whitespace, and U+00A0 is
+Unicode whitespace.** accname §4 (and HTML's own definition) collapse **ASCII** whitespace — space,
+tab, LF, FF, CR — and a NO-BREAK SPACE is none of them: it is the character an author chose
+specifically so the text would *not* break there. Every non-breaking space in every accessible name
+was silently rewritten to a plain space:
+
+```text
+  <button>button\u{a0}label</button>     expected "button\u{a0}label"   got "button label"
+  <div role=heading>…                    same · leading · trailing · mixed
+```
+
+**Why it matters past conformance, and this is the half that makes it a capability tick:** the
+**agentic surface matches on the accessible name**. An agent told to click *"Sign\u{a0}up"* against an
+engine that stored *"Sign up"* does not find the element — and NBSP lives in exactly the short UI
+strings agents target: prices, "Sign\u{a0}up", "Add\u{a0}to\u{a0}cart", French punctuation before
+`?` and `:`. This is I3 and the agentic floor in one line, which is what t1254 said the area was for.
+
+The fix is `split_ascii_whitespace` — the same function over the right alphabet.
+
+MEASURED, same binary, same hour:
+
+```text
+  accname    306 -> 328   (+22)   63.6% -> 68.2%
+  wai-aria   238  (=)     html-aam  253  (=)
+  a11y suite 20/20 · HANG/CRASH 0 on all three
+```
+
+⭐ **+22 is EXACTLY the cluster size the corrected histogram predicted.** A mechanism count that
+predicts its own delta to the subtest is the strongest form this loop has for saying the cluster was
+real and completely closed — and it is only available because the classifier was fixed first.
+
+GATE: `a_non_breaking_space_survives_name_normalisation` — collapse of ASCII runs, NBSP preserved in
+the middle, **leading and trailing NBSP not trimmed either**, a mixed case that must not merge the
+two, and an all-ASCII CONTROL that this change must not touch. **RED-proven** by restoring
+`split_whitespace`: `left: "button label"` / `right: "button\u{a0}label"`.
+
+⚠ **RESIDUE, ranked and not started:** `CSS generated content` (24) is now the top named cluster —
+`::before`/`::after` text contributing to the accessible name — and `accname/name/shadowdom` is still
+**0/6**. Both are named with counts rather than claimed.
+
+⚠ **HARNESS, one line per PART VII, and this time with the evidence that names the mechanism.** The
+first wall came back RED with ~15 gates reporting `BUILD FAILED … this is NOT a verdict about the
+engine` — `error: extern location for quote does not exist: target/debug/deps/libquote-*.rmeta` and
+`could not compile string_cache_codegen / http / flate2`. Earlier the same session (t1250) the same
+shape appeared as `failed to move dependency graph … No such file or directory`. **The measurement
+that identifies it: `target/debug` was 22G at 19:25 and is 8.9G now — 13G deleted while the wall was
+using it**, with `df` at **59%** (118G free), i.e. nowhere near the hygiene script's own
+free-disk safety valve. So this is not the 95% self-purge and not proc-macro corruption: **something
+is pruning the build's inputs while the build is running.** Diagnosed with a number, not touched
+(`scripts/` is observer-owned), re-run.
+
+PERF: none — `split_ascii_whitespace` is if anything cheaper (a byte test rather than a `char`
+classification). F1/F2 unmoved.
+
+WIKI: `docs/wiki/dom-semantics.md` — "a NO-BREAK SPACE is not whitespace, and the agent matches on
+the name".
+
 ## Tick 1254 — the accessibility tree, measured for the first time: 63.8%, and the top mechanism is `<label>` (2026-08-14)
 
 TICK SHAPE: measurement — surface audit #67's own steer, executed the same session it was written. It

@@ -3488,3 +3488,38 @@ The no-leak control for this gate wanted Chrome's `0px` for an unset `min-width`
 **pins the engine to the bug** (t1004). The control instead asserts `sa.minWidth !== 'stretch'`,
 which is exactly the claim it exists to make and stays true after the `auto`/`0px` defect is fixed.
 ⭐ That defect is now measured and named rather than absorbed into a passing gate.
+
+## A NO-BREAK SPACE is not whitespace, and the agent matches on the name (t1255)
+
+accname §4 and HTML collapse **ASCII** whitespace — space, tab, LF, FF, CR. Rust's
+`str::split_whitespace` collapses **Unicode** whitespace, and `U+00A0 NO-BREAK SPACE` is Unicode
+whitespace. So the accessible-name normaliser silently rewrote every NBSP an author wrote into a
+plain space:
+
+```text
+  <button>button\u{a0}label</button>   expected "button\u{a0}label"   got "button label"
+```
+
+`split_ascii_whitespace` is the same function over the right alphabet. **accname 306 → 328 (+22).**
+
+**Why this is not a conformance nicety.** The agentic surface matches on the accessible name. An agent
+told to click *"Sign\u{a0}up"* against an engine that stored *"Sign up"* does not find the element,
+and NBSP lives in precisely the short UI strings agents target — prices, `Sign&nbsp;up`,
+`Add&nbsp;to&nbsp;cart`, and French punctuation before `?` `!` `:` `;`. I3 and the agentic floor in
+one line.
+
+⚠ The trimming half matters too and is a separate row in the gate: a **leading or trailing** NBSP is
+not trimmed either, because trimming is also defined over ASCII whitespace.
+
+### ⚠ A classifier that greps for the word its corpus is named after will always find it
+
+t1254 ranked this area's failures by bucketing test names on substrings and reported *"the top
+mechanism is `<label>` association, 57"*. Every accname test carries `data-expectedlabel` and the word
+"label" in its name — **the bucket matched itself**, and `<label>` association is not in the corrected
+ranking at all. Re-cluster on the test-name field alone, and sanity-check any bucket whose name is a
+word the suite is *about*. The corrected top three are CSS generated content (24), NBSP (22), and
+name-from-a-structural-descendant (20).
+
+The tell that the correction was right: the NBSP fix landed **+22**, exactly the corrected cluster's
+size. A mechanism count that predicts its own delta to the subtest is the strongest available
+evidence that the cluster was real and is now closed.
