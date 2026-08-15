@@ -511,9 +511,116 @@ struct TNode {
     style: Style,
     children: Vec<TId>,
     cache: Cache,
+    /// The **exact** measure memo that sits in front of `cache`'s nine slots — see [`MeasureMemo`].
+    memo: MeasureMemo,
     layout: Layout,
     /// Flex/grid container (taffy lays out its children) vs. Manuk-measured leaf.
     container: bool,
+}
+
+/// ⚠⚠⚠ **TAFFY'S PER-NODE CACHE HAS NINE SLOTS AND ONE OF THEM ABSORBS EVERY DEFINITE WIDTH — SO A
+/// CONTAINER THAT SIZES ITS ITEMS AT SEVERAL WIDTHS EVICTS ITS OWN ANSWER ON EVERY PROBE.**
+///
+/// `Cache::compute_cache_slot` (taffy 0.12.1 `tree/cache.rs`) buckets a `ComputeSize` result by
+/// *shape* of the request, not by its value: with neither dimension known, **slot 5 is
+/// `(MaxContent | Definite(_), MaxContent | Definite(_))`** — every definite available width lands
+/// there and overwrites the last one. Taffy states the assumption in its own comment: *"a node will
+/// generally be sized under one or the other but not both."* On a real page that assumption fails,
+/// and when it fails the cache does not merely stop helping — it turns each nesting level into a
+/// multiplier, because a missed parent re-solves its whole subtree.
+///
+/// Measured on `morikoshi.net` (4,437 nodes, ten flex/grid containers, 48.7 s to load, the
+/// `timeout-150s` cohort that IS the M1 scorability cap). One container, `NodeId(1441)`:
+///
+/// ```text
+///                       probes   distinct leaves   cache_hit   cache_miss   per-leaf lookups
+///   taffy's 9 slots    294,991               357     263,325      374,759              1,644
+/// ```
+///
+/// ⚠⚠⚠ **1,644 lookups per leaf against 21 DISTINCT INPUTS.** The tree is asked the same twenty-one
+/// questions seventy-eight times each and answers `None` every time. That is not an algorithm asking
+/// a lot of different questions — it is a memo that does not retain, and no per-document total could
+/// ever have said so (t1258-1259 built the ledger that names the container; this is what it named).
+///
+/// ⚠ **Scope, deliberately narrow: `ComputeSize` only.** `PerformLayout` keeps taffy's single-entry
+/// `final_layout_entry` **unchanged**, and that is a correctness requirement rather than caution. A
+/// `PerformLayout` run *writes* its descendants' `layout` fields; taffy's one slot means a repeat of
+/// an earlier key always re-runs and re-writes them. Remembering more `PerformLayout` results would
+/// let a stale hit skip those writes after an intervening different-key run had overwritten the
+/// subtree — geometry corruption bought with a speed-up. `ComputeSize` writes nothing (taffy's
+/// flexbox/grid return before final placement), which is exactly why it is the safe half.
+///
+/// The match predicate is taffy's own, reproduced rather than invented: same packed
+/// known-dimensions/available-space key, same x-axis parent size. Only the *storage* differs — an
+/// exact list instead of nine buckets — so a hit here is a hit taffy would also have served had its
+/// slot not been overwritten. This is a **supplement, not a fork** (`STATUS.md` option 3): `CacheTree`
+/// is the extension point taffy publishes for exactly this, and the fork surface stays empty.
+#[derive(Default)]
+struct MeasureMemo {
+    /// `(packed key, x-axis parent size, measured outer size)`, newest last.
+    entries: Vec<(u64, u32, Size<f32>)>,
+}
+
+/// Past this many distinct measure requests for ONE node the memo stops growing and behaves like
+/// taffy's fixed cache again. A bound, not a tuning knob: the observed distinct-input count on the
+/// pathological container is **21**, so this is an order of magnitude of headroom, and an unbounded
+/// per-node `Vec` on a hostile page is a memory bug wearing a performance fix's clothes.
+const MEASURE_MEMO_CAP: usize = 64;
+
+impl MeasureMemo {
+    /// Taffy's `mixed_cache_key`, for one axis: a known dimension if there is one, otherwise the
+    /// available space. Reproduced from `tree/cache.rs` — the bit patterns are the contract.
+    fn axis_key(kd: Option<f32>, avail: AvailableSpace) -> u32 {
+        match kd {
+            Some(v) => v.to_bits(),
+            None => match avail {
+                // Negated, exactly as taffy does, so a definite value can never collide with the
+                // `INFINITY`/`NEG_INFINITY` bit patterns the two keywords use.
+                AvailableSpace::Definite(v) => (-v).to_bits(),
+                AvailableSpace::MinContent => f32::NEG_INFINITY.to_bits(),
+                AvailableSpace::MaxContent => f32::INFINITY.to_bits(),
+            },
+        }
+    }
+
+    fn key(inputs: &LayoutInput) -> (u64, u32) {
+        let kd = inputs.known_dimensions;
+        let av = inputs.available_space;
+        let packed = (u64::from(Self::axis_key(kd.width, av.width)) << 32)
+            | u64::from(Self::axis_key(kd.height, av.height));
+        // Taffy compares only the WIDTH of `parent_size` here (`x_axis_parent_size`), with the bit
+        // it packs the requested axis into masked off. Same predicate, same mask.
+        let parent_w = match inputs.parent_size.width {
+            Some(v) => v.to_bits(),
+            None => f32::INFINITY.to_bits(),
+        } & !(1u32 << 31);
+        (packed, parent_w)
+    }
+
+    fn get(&self, inputs: &LayoutInput) -> Option<Size<f32>> {
+        let (packed, parent_w) = Self::key(inputs);
+        self.entries
+            .iter()
+            .find(|(k, p, _)| *k == packed && *p == parent_w)
+            .map(|(_, _, size)| *size)
+    }
+
+    fn store(&mut self, inputs: &LayoutInput, size: Size<f32>) {
+        let (packed, parent_w) = Self::key(inputs);
+        if let Some(e) = self
+            .entries
+            .iter_mut()
+            .find(|(k, p, _)| *k == packed && *p == parent_w)
+        {
+            e.2 = size;
+        } else if self.entries.len() < MEASURE_MEMO_CAP {
+            self.entries.push((packed, parent_w, size));
+        }
+    }
+
+    fn clear(&mut self) {
+        self.entries.clear();
+    }
 }
 
 /// A unified taffy tree spanning one flex/grid container and its directly-nested flex/grid
@@ -823,6 +930,7 @@ impl<'m> TaffyDom<'m> {
             style,
             children,
             cache: Cache::new(),
+            memo: MeasureMemo::default(),
             layout: Layout::new(),
             container,
         });
@@ -1102,13 +1210,27 @@ impl LayoutPartialTree for TaffyDom<'_> {
 
 impl CacheTree for TaffyDom<'_> {
     fn cache_get(&self, node_id: TId, inputs: &LayoutInput) -> Option<LayoutOutput> {
-        self.nodes[usize::from(node_id)].cache.get(inputs)
+        let n = &self.nodes[usize::from(node_id)];
+        // `ComputeSize` is served by the exact memo (see `MeasureMemo` for why only this run mode);
+        // everything else is taffy's cache verbatim.
+        if inputs.run_mode == taffy::RunMode::ComputeSize {
+            if let Some(size) = n.memo.get(inputs) {
+                return Some(LayoutOutput::from_outer_size(size));
+            }
+        }
+        n.cache.get(inputs)
     }
     fn cache_store(&mut self, node_id: TId, inputs: &LayoutInput, output: LayoutOutput) {
-        self.nodes[usize::from(node_id)].cache.store(inputs, output);
+        let n = &mut self.nodes[usize::from(node_id)];
+        if inputs.run_mode == taffy::RunMode::ComputeSize {
+            n.memo.store(inputs, output.size);
+        }
+        n.cache.store(inputs, output);
     }
     fn cache_clear(&mut self, node_id: TId) {
-        self.nodes[usize::from(node_id)].cache.clear();
+        let n = &mut self.nodes[usize::from(node_id)];
+        n.memo.clear();
+        n.cache.clear();
     }
 }
 
@@ -1549,6 +1671,7 @@ pub fn grid_area_containing_block<'m>(
         style: phantom,
         children: Vec::new(),
         cache: Cache::new(),
+        memo: MeasureMemo::default(),
         layout: Layout::new(),
         container: false,
     });

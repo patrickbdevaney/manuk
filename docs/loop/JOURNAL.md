@@ -80129,3 +80129,121 @@ PERF: the instrument's own hot-path cost, removed (see above). No engine perf cl
 
 WIKI: `docs/wiki/performance.md` — "ONE container is 96% of a page's measure probes — and `@container`
 was the wrong next tick".
+
+## Tick 1260 — taffy's cache has NINE SLOTS and one of them holds every definite width (2026-08-15)
+
+TICK SHAPE: perf — the fix at the end of the t1236→t1240→t1258→t1259 attribution chain. t1259 named
+the container and specified the next tick exactly: *"open `NodeId(1441)` on `morikoshi.net` — 293k
+probes for one container is either a taffy re-solve loop or a measure closure varying its inputs, and
+the ledger cannot tell those apart while the node can."* It was neither.
+
+HYPOTHESIS (written first, and REFUTED): `fit_content_inline` re-runs the whole flex/grid solve at
+`MinContent` on any container wider than its available space, and that second `run` bypasses
+`compute_child_layout` — an uncached solve inside a cached one, which is exponential in nesting depth.
+The A/B says it is a **1.48x factor, not the mechanism**:
+
+```text
+                              probes on NodeId(1441)
+  as shipped                            294,991
+  with the fit-content re-run OFF       199,201     <- still 199k. Not it.
+```
+
+⚠⚠⚠ **THE MEASUREMENT THAT SETTLED IT — 1,644 LOOKUPS PER LEAF AGAINST 21 DISTINCT INPUTS.** A
+temporary per-node histogram inside the solve:
+
+```text
+  DIAG container=NodeId(1441) probes=294,991 distinct_leaves=357
+                              cache_hit=263,325  cache_miss=374,759  fit_reruns=10,986
+     MISS NodeId(2120) x1644  DISTINCT_INPUTS=21
+     MISS NodeId(1741) x1644  DISTINCT_INPUTS=22
+```
+
+Every one of the 357 leaves is probed **exactly 1,644 times** — a uniform multiplier, so there is no
+hot node; the whole subtree is re-walked. And the cache is asked the same twenty-one questions
+seventy-eight times each and answers `None` every time. **That is not an algorithm asking many
+different questions. It is a memo that does not retain.**
+
+⚠⚠⚠ **THE CAUSE IS IN TAFFY'S OWN SOURCE, AND IT IS A DOCUMENTED ASSUMPTION RATHER THAN A BUG.**
+`Cache::compute_cache_slot` (taffy 0.12.1 `tree/cache.rs`) buckets a `ComputeSize` result by the
+**shape** of the request, not its value — nine slots, and **slot 5 is
+`(MaxContent | Definite(_), MaxContent | Definite(_))`**, so *every* definite available width lands
+there and evicts the last one. Taffy states the assumption in its own comment: *"definite available
+space shares a cache slot with max-content because a node will generally be sized under one or the
+other but not both."* On a real page that assumption fails, and when it fails the cache does not
+merely stop helping — **a missed parent re-solves its whole subtree, so each nesting level becomes a
+multiplier.**
+
+FIX — an exact `MeasureMemo` in front of those nine slots, in the `CacheTree` impl we already own.
+Same match predicate as taffy's (same packed known-dimensions/available-space key, same x-axis parent
+size), reproduced rather than invented; only the STORAGE differs — an exact list, capped at 64
+entries per node, living for exactly one `solve_subtree`. A hit here is a hit taffy would also have
+served had its slot not been overwritten. **Supplement, not fork** (`STATUS.md` option 3): `CacheTree`
+is the extension point taffy publishes for this, and the fork surface stays empty.
+
+⚠ **SCOPE IS `ComputeSize` ONLY, AND THAT IS A CORRECTNESS REQUIREMENT, NOT CAUTION.** A
+`PerformLayout` run *writes* its descendants' `layout` fields; taffy's single `final_layout_entry`
+means a repeat of an earlier key always re-runs and re-writes them. Remembering more `PerformLayout`
+results would let a stale hit skip those writes after an intervening different-key run had already
+overwritten the subtree — **geometry corruption bought with a speed-up**. `ComputeSize` writes nothing
+(taffy's flexbox/grid return before final placement), which is exactly why it is the safe half.
+
+RESULT — same-hour old-binary A/B (`/tmp/old-wpt` built from HEAD d4b5d97b, alternated old/new/old/new
+against the live site inside one 6-minute window):
+
+```text
+  morikoshi.net            OLD                    NEW              
+  worst_solve_probes       293,455 / 293,713      4,987 / 5,113     58x fewer
+  measure_hits (document)  305,749 / 306,023     10,231 / 10,351    30x fewer
+  taffy_ms                     797 / 806            428 / 577
+  layout total_ms            1,032 / 1,408          662 / 1,182
+```
+
+GATE — `G_MEASURE_MEMO_KEEPS_NESTING_LINEAR`, RED-proven. The fixture is nested
+`grid-template-columns: auto 1fr` (the ordinary sidebar-and-content idiom) at four depths, and the
+assertion is the **second difference**, not a threshold:
+
+```text
+                  depth 8    12    16    20     marginal cost of four more levels
+  taffy 9 slots       160   336   576   880      44 -> 60 -> 76   RISING  (quadratic)
+  exact memo           36    52    68    84       4 ->  4 ->  4   FLAT    (linear)
+```
+
+A magic number would be a claim about taffy 0.12.1's constant factors that a bump could move for
+innocent reasons. *"Nesting is additive"* is the property the fix actually buys, it is what fails when
+the memo is removed, and it needs no calibration. Removing the `ComputeSize` arm from
+`cache_get`/`cache_store` goes RED with `176 near the top ... 304 near the bottom`.
+
+NO REGRESSION — the full upstream WPT reftest run is **byte-identical on both binaries**:
+
+```text
+  old-wpt   6510 passed, 5615 failed, 20731 skipped (32856 total)
+  new-wpt   6510 passed, 5615 failed, 20731 skipped (32856 total)
+```
+
+plus `manuk-layout` 182/182. That equality is the point: an exact memo of a deterministic function
+must change *what it costs* and nothing about *what it computes*, and a reftest suite that moved would
+mean the match predicate was wrong.
+
+⚠⚠ **NO PAGE-SPEED CLAIM, AND THE HONEST NUMBER SAYS SO: `morikoshi.net` LOADS IN 49-50s EITHER WAY.**
+Its wall is network-bound in this harness (17.7s user against 50s real), so a 58x cut in layout probes
+does not show up in it at all. The claim is the growth curve and the layout-solve cost, both measured
+above. Saying otherwise would be exactly the self-flattery t1259 flagged when it refused to imply a
+speedup — and the temptation here was larger, because this time something real *did* get faster.
+
+⚠ **THE INSTRUMENT THAT FOUND THIS WAS THROWN AWAY BEFORE THE FIX WAS WRITTEN.** The per-node
+histogram and the `DISTINCT_INPUTS` set answered one question — *are the misses distinct questions or
+evictions?* — and that question does not recur. `git checkout` of the diagnostic, then the fix from a
+clean tree: t1242's lesson is that an instrument you keep is an instrument whose earlier readings you
+must re-derive.
+
+NEXT: the same predicate question, asked of the OTHER nine sites in the `timeout-150s` cohort — this
+one was chosen because t1259's ledger named it, and one site is not a cohort (t1199). `taffy_ms` is
+now the largest named layout bucket on `morikoshi.net` (428-577ms of a 662-1,182ms layout); the next
+lever is whether `unattributed_ms` (157-654ms — ordinary block/inline flow, outside every measurement
+region) is real work or an accounting hole.
+
+PERF: `worst_solve_probes` 293,455 -> 4,987 and `measure_hits` 306,087 -> 10,305 on the anchor site;
+nesting cost quadratic -> linear, gated. No page-load claim (see above).
+
+WIKI: `docs/wiki/performance.md` — "taffy's cache has nine slots and one of them holds every definite
+width"; `docs/loop/WEB-PATTERNS.md` — the nested-sidebar-grid row.

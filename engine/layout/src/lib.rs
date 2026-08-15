@@ -24736,6 +24736,79 @@ mod tests {
     /// The fixture is nested flex with unsized text items, which is what actually drives the measure
     /// seam — a plain block document exercises none of it and would let both assertions pass
     /// vacuously, so the counts are asserted NON-ZERO first.
+    /// # G_MEASURE_MEMO_KEEPS_NESTING_LINEAR — one more nesting level must cost a CONSTANT, not more
+    ///
+    /// t1258-1259 built the ledger that names the pathological container; this gate asserts the
+    /// property that made it pathological. Taffy's per-node `Cache` has **nine slots chosen by the
+    /// SHAPE of a request, not its value**, and slot 5 holds every *"neither dimension known,
+    /// definite available width"* result — so a container sized at several definite widths overwrites
+    /// its own answer on every probe. A missed parent re-solves its whole subtree, so the miss is not
+    /// a lost optimisation: it makes each nesting level a MULTIPLIER.
+    ///
+    /// Measured on this fixture — nested `grid-template-columns: auto 1fr`, the ordinary
+    /// sidebar-and-content idiom, at four depths:
+    ///
+    /// ```text
+    ///                     depth 8    12    16    20     marginal cost per added level
+    ///   taffy's 9 slots       160   336   576   880      44 -> 60 -> 76   (rising: QUADRATIC)
+    ///   exact measure memo     36    52    68    84       4 ->  4 ->  4   (flat:   LINEAR)
+    /// ```
+    ///
+    /// The assertion is the **second difference**, deliberately, and not a threshold on the count.
+    /// A magic number would be a statement about taffy 0.12.1's constant factors that a bump could
+    /// move for innocent reasons; *"nesting is additive"* is the property the fix actually buys, it
+    /// is what fails when the memo is removed, and it needs no calibration. Delete the `ComputeSize`
+    /// arm from `cache_get`/`cache_store` in `taffy_tree.rs` and the marginal cost climbs 44 → 76 and
+    /// this goes RED.
+    ///
+    /// ⚠ On the live corpus this is worth 58x on the container t1259 named: `morikoshi.net`'s
+    /// `NodeId(1441)` goes **293,455 probes → 4,987**, and the whole document's measure lookups
+    /// **306,087 → 10,305**, with `taffy_ms` 723-806 → 428-577 in a same-hour old-binary A/B.
+    /// ⚠⚠ It did **not** make that page load faster (49-50s either way — it is network-bound in that
+    /// harness), and this gate claims nothing about page time. It claims the growth curve.
+    #[test]
+    fn measure_memo_keeps_nesting_linear() {
+        // `auto 1fr` is what makes the fixture bite: the `auto` track is sized from its item's
+        // content contributions (min-content, then max-content), and the `1fr` track is then handed
+        // a DEFINITE width — three requests per level whose results all compete for one taffy slot.
+        let probes_at = |depth: usize| -> u64 {
+            let mut html = String::new();
+            for i in 0..depth {
+                html.push_str(&format!(
+                    "<div class=g id=d{i}><div class=s>side words</div>"
+                ));
+            }
+            html.push_str("some words here that wrap around quite a lot indeed truly yes");
+            for _ in 0..depth {
+                html.push_str("</div>");
+            }
+            let css = ".g{display:grid;grid-template-columns:auto 1fr}.s{min-width:0}";
+            let (_dom, _root) = layout_html(&html, css, 300.0);
+            layout_phases().worst_solve_probes
+        };
+
+        let (p8, p12, p16, p20) = (probes_at(8), probes_at(12), probes_at(16), probes_at(20));
+
+        // NON-VACUITY — a fixture that drove no item measure would satisfy every inequality below.
+        assert!(
+            p8 > 0 && p20 > p8,
+            "the nested grids must actually probe their items and must probe MORE when deeper — \
+             got {p8} at depth 8 and {p20} at depth 20; this gate is measuring nothing"
+        );
+
+        let early = p12 - p8; // cost of levels 9..12
+        let late = p20 - p16; // cost of levels 17..20
+        assert!(
+            late * 2 <= early * 3,
+            "adding four nesting levels costs {early} probes near the top of the tree and {late} \
+             near the bottom — the marginal cost of DEPTH is rising, which is the taffy nine-slot \
+             cache thrashing: every definite available width lands in slot 5 and evicts the last \
+             one, so a missed parent re-solves its whole subtree. \
+             (depth 8/12/16/20 -> {p8}/{p12}/{p16}/{p20}; the exact `MeasureMemo` in taffy_tree.rs \
+             is what holds these flat)"
+        );
+    }
+
     #[test]
     fn layout_phase_ledger_partitions_and_is_per_layout() {
         const HTML: &str = "<div id=outer>\

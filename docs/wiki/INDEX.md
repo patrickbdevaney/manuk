@@ -1881,6 +1881,11 @@
   - L751 · layout_ms was never layout — the @container re-pass is HALF of every forced reflow (t1258)
   - L792 · The correctness defect the profile walked into
   - L821 · ONE container is 96% of a page's measure probes — and @container was the wrong next tick (t1259)
+  - L858 · Taffy's cache has NINE SLOTS and one of them holds every definite width (t1260)
+  - L876 · The cause is a documented assumption in taffy, not a bug
+  - L893 · The shape of the damage — measured, and it is a growth curve
+  - L905 · The fix, and why it is ComputeSize only
+  - L920 · The numbers, and the one this does NOT buy
 
 ## THE WIKI — what we durably KNOW, organised by subsystem
 `docs/wiki/README.md`
@@ -2146,4 +2151,4 @@
   - L231 · Both named mechanisms are subsystem work
 
 ---
-2053 sections across 22 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+2058 sections across 22 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.

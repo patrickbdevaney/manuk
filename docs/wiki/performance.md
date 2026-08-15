@@ -854,3 +854,88 @@ one container asks 293k times — and that is now a one-command question instead
 > The measure memo made each probe cheap, which is exactly why this hid for so long: the cost never
 > showed up as a slow *function*, only as a slow page. **A memo does not fix an algorithm that asks the
 > wrong number of questions; it makes the wrong number affordable enough to go unnoticed.**
+
+## Taffy's cache has NINE SLOTS and one of them holds every definite width (t1260)
+
+t1259 named the box: `morikoshi.net`'s `NodeId(1441)`, 293,455 of the document's 306,087 item-measure
+probes. It could not say **why**, and it named two candidates — a taffy re-solve loop, or a measure
+closure varying its inputs enough to defeat the cache. The answer is a third thing, and it is visible
+only when you ask the misses what they were asking *for*:
+
+```text
+  DIAG container=NodeId(1441) probes=294,991 distinct_leaves=357
+                              cache_hit=263,325  cache_miss=374,759
+     MISS NodeId(2120) x1644  DISTINCT_INPUTS=21
+     MISS NodeId(1741) x1644  DISTINCT_INPUTS=22
+```
+
+⚠⚠⚠ **1,644 lookups per leaf against 21 distinct inputs, and all 357 leaves probed the same 1,644
+times.** A uniform multiplier means there is no hot node — the whole subtree is re-walked. The cache
+is asked twenty-one questions seventy-eight times each and says `None` every time.
+
+### The cause is a documented assumption in taffy, not a bug
+
+`Cache::compute_cache_slot` (taffy 0.12.1, `tree/cache.rs`) buckets a `ComputeSize` result by the
+**shape** of the request rather than its value. Nine slots; the one that matters is
+
+```text
+  Slot 5: neither known_dimension set, and
+          x-avail is (MaxContent | Definite(_))  and  y-avail is (MaxContent | Definite(_))
+```
+
+so **every definite available width shares one slot** and each store evicts the last. Taffy says why
+in its own comment: *"definite available space shares a cache slot with max-content because a node
+will generally be sized under one or the other but not both."* That is true of most layouts. When it
+is false, the failure is not graceful — **a missed parent re-solves its whole subtree, so every
+nesting level becomes a multiplier**, and the page gets slow in a way that no per-function profile can
+localise.
+
+### The shape of the damage — measured, and it is a growth curve
+
+Nested `grid-template-columns: auto 1fr` (sidebar + content, the most ordinary layout on the web).
+The `auto` track is sized from min-content then max-content contributions; the `1fr` track is then
+handed a **definite** width. Three requests per level, all competing for slot 5:
+
+```text
+                  depth 8    12    16    20     marginal cost of four more levels
+  taffy 9 slots       160   336   576   880      44 -> 60 -> 76   RISING  (quadratic)
+  exact memo           36    52    68    84       4 ->  4 ->  4   FLAT    (linear)
+```
+
+### The fix, and why it is `ComputeSize` only
+
+An exact `MeasureMemo` in front of the nine slots, inside the `CacheTree` impl we already own —
+taffy's own match predicate (same packed known-dimensions/available-space key, same x-axis parent
+size), reproduced rather than invented, with only the *storage* changed: an exact list capped at 64
+entries per node, living for exactly one `solve_subtree`. A hit is one taffy would also have served
+had its slot survived. **Supplement, not fork** — `CacheTree` is the published extension point.
+
+⚠⚠⚠ **`PerformLayout` KEEPS TAFFY'S SINGLE ENTRY, AND THAT IS CORRECTNESS, NOT CAUTION.** A
+`PerformLayout` run *writes* its descendants' `layout` fields. Taffy's one slot means a repeat of an
+earlier key always re-runs and re-writes them. Remember more of them and a stale hit skips those
+writes after an intervening different-key run has already overwritten the subtree — **geometry
+corruption bought with a speed-up.** `ComputeSize` writes nothing (flexbox and grid both return before
+final placement), which is precisely why it is the half that is safe to remember.
+
+### The numbers, and the one this does NOT buy
+
+Same-hour old-binary A/B, alternated old/new/old/new against the live site:
+
+```text
+  morikoshi.net            OLD                    NEW
+  worst_solve_probes       293,455 / 293,713      4,987 / 5,113     58x
+  measure_hits (document)  305,749 / 306,023     10,231 / 10,351    30x
+  taffy_ms                     797 / 806            428 / 577
+  page load                  50.6s / 49.1s        50.7s / 50.5s     <- FLAT
+```
+
+⚠⚠ **The page is not faster.** Its wall is network-bound in this harness (17.7s user against 50s
+real), so a 58x cut in layout probes does not appear in it at all. The claim is the growth curve and
+the solve cost. The temptation to round that up was larger here than in the two instrument ticks
+before it, *because this time something real did get faster* — which is exactly when the claim needs
+to be smallest.
+
+> **A memo does not fix an algorithm that asks the wrong number of questions** (t1259) — and the
+> converse, learned here: **an algorithm asking a reasonable number of questions is defeated by a memo
+> that answers by SHAPE instead of by VALUE.** The wrong number was never taffy's; it was ours for
+> asking twenty-one distinct questions of a cabinet with nine drawers.

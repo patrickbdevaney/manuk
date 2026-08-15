@@ -11,12 +11,12 @@
 
 | | value | over |
 |---|---|---|
-| ticks landed | **955** | ticks 1–1259 |
-| median tick cycle | **29m** | 954 intervals |
-| median, last 10 | **77m** | 10 intervals |
+| ticks landed | **956** | ticks 1–1260 |
+| median tick cycle | **29m** | 955 intervals |
+| median, last 10 | **1.5h** | 10 intervals |
 | fastest / slowest | 5s / 5.4d | |
-| **ticks per hour** | **1.13** | 840.7h elapsed |
-| median verify wall | **63s** | 894 ticks |
+| **ticks per hour** | **1.13** | 841.9h elapsed |
+| median verify wall | **63s** | 895 ticks |
 | wall trend | 39s → 17m — getting slower ⚠️ | first 3 vs last 3 |
 
 The **cycle** is the real unit: implement → debug → verify wall → land. The wall is only part of
@@ -28,10 +28,10 @@ it, and a wall that grows taxes every future tick, so it is tracked separately f
 
 * **capabilities asserted** (`G_CAPABILITY`): 48 → **81**
 * **live gates**: 27 → **472**
-* **✅ rows in the capability ledger**: 144 → **628**
+* **✅ rows in the capability ledger**: 144 → **629**
 * **Bar 0 — oracle hangs**: 0 of 265 sites
 
-**433 of 955 ticks** (45%) moved a
+**433 of 956 ticks** (45%) moved a
 user-visible capability. The rest were instruments, infrastructure and corrections — and the
 ledger says the corrections were not overhead: three of its top three priorities were phantoms,
 and finding that out redirected everything after it.
@@ -91,7 +91,7 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 ## What a capability costs
 
 * **433** capability ticks, median cycle **29m**
-* median diff per tick: **+271 / −34** lines across 8 files
+* median diff per tick: **+272 / −34** lines across 8 files
 
 ## Every tick
 
@@ -1052,5 +1052,6 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 | **1256** | 2026-08-14 23:42 | 2.1h | capability | 17m | +557/−34 | 471 | 81 | 56.0% · | Grid §9.1 says CONTAINING BLOCK, not "child", and the element had two boxes (2026-08-14) |
 | **1257** | 2026-08-15 05:06 | 5.4h | capability | 17m | +627/−38 | 472 | 81 | 56.0% · | a shorthand SETS its longhands, and the CONTROL row said it was never a grid bug (2026-08- |
 | **1259** | 2026-08-15 05:45 | 39m | instrument | 17m | +329/−43 | 472 | 81 | 56.0% · | the frequency check KILLED my own next tick, and one container is 96% of the page (2026-08 |
+| **1260** | 2026-08-15 06:58 | 73m | perf | 17m | +443/−36 | 472 | 81 | 56.0% · | taffy's cache has NINE SLOTS and one of them holds every definite width (2026-08-15) |
 
 *`·` after a WPT figure means **carried forward**, not measured this tick.*
