@@ -80247,3 +80247,85 @@ nesting cost quadratic -> linear, gated. No page-load claim (see above).
 
 WIKI: `docs/wiki/performance.md` — "taffy's cache has nine slots and one of them holds every definite
 width"; `docs/loop/WEB-PATTERNS.md` — the nested-sidebar-grid row.
+
+## Tick 1261 — the TIMEOUT bucket is FOUR causes, and my own last tick was 1 of 9 (2026-08-15)
+
+TICK SHAPE: measurement — the frequency check t1259 taught, turned on t1260. NO capability claim and
+NO perf claim; nothing renders differently and nothing is faster. It is here because it kills a steer
+the loop has been climbing since t1236 and because it prices the tick I landed 40 minutes ago.
+
+⚠⚠⚠ **I MEASURED MY OWN FIX ACROSS THE COHORT IT WAS SUPPOSED TO SERVE AND IT IS 1 OF 9.** t1260's
+exact `MeasureMemo` is a 58x win on `morikoshi.net` and a rounding error everywhere else. Same-hour
+old/new binaries, `worst_solve_probes`, every reachable `timeout-150s` site:
+
+```text
+  site                    nodes    probes OLD -> NEW      taffy_ms OLD -> NEW   verdict
+  morikoshi.net           6,289    293,696 ->   4,992         512 ->   236      FIXED 58x
+  bhramarah.in           23,022     85,525 ->  63,163       2,128 -> 2,122      1.35x, time FLAT
+  mangaraw.ac             2,608     20,907 ->  20,727         222 ->   194      unmoved
+  ticket.jfa.jp           3,028      1,779 ->   1,779       2,168 -> 2,148      unmoved
+  bbs.ruliweb.com        12,956        231 ->     231       2,959 -> 2,947      unmoved
+  neutypechic.com         2,653        199 ->     199          23 ->    29      unmoved
+  www.friulioggi.it       3,315          1 ->       1        0.06 ->  0.07      unmoved
+  swiftspinus.com            57          0 ->       0           0 ->     0      unmoved
+  secure.paymentech.com      13          0 ->       0           0 ->     0      unmoved
+```
+
+The fix is right and the gate is real — but *"the shared mechanism, and it is one box"* (t1259, my own
+words) was a claim about one site wearing a cohort's clothes. **The ledger named the worst container
+on the site I happened to profile, and I read that as naming the cohort's cause.**
+
+⚠⚠⚠ **AND THE STEER IT SITS ON IS WRONG TOO: t1236's "THE TIMEOUT BUCKET IS FORCED REFLOW" IS 4 OF
+9.** Five of the nine spend essentially no time in layout at all, and three of those five are not
+slow — they are *not there*:
+
+```text
+  LAYOUT-BOUND (4)     morikoshi.net · bhramarah.in · bbs.ruliweb.com · ticket.jfa.jp
+  LAYOUT INNOCENT (5)  mangaraw.ac      194ms layout   — renders, fast, times out elsewhere
+                       neutypechic.com   23ms layout   — same
+                       www.friulioggi.it 0.06ms layout — 3,315 nodes, renders a 14,029px page in 47ms
+                       swiftspinus.com   57 NODES      — an app shell that never hydrates
+                       secure.paymentech.com 13 NODES  — an empty document
+```
+
+⚠⚠ **THE THROW ON `swiftspinus.com` IS NAMED, AND IT IS THE HALF-INSTALLED CLASS AGAIN**:
+`TypeError: window.AudioContext is not a constructor`. `AudioContext` is defined nowhere in the
+engine, the page's bundle constructs one **unguarded**, and the boot dies there — 57 nodes,
+`initial-loading` and `initial-logo` and nothing else. ⚠ **NOT built this tick, deliberately**: Web
+Audio is on the named death-tail (`STATUS.md`), and *how many corpus sites construct an `AudioContext`
+unguarded* is exactly the question t1259 says to answer before sizing a lever. One named throw is a
+site, not a class, until it is counted.
+
+⚠⚠⚠ **THE NEW SPLIT, AND IT IS THE RANKING FACT: PROBE COUNT AND PROBE COST ARE DIFFERENT BUGS.**
+Dividing the two columns above is what the per-document totals could never do:
+
+```text
+  morikoshi.net (before t1260)  293,696 probes @ 0.0017 ms   COUNT problem   -> fixed
+  mangaraw.ac                    20,727 probes @ 0.009  ms   many, and cheap -> innocent
+  ticket.jfa.jp                   1,779 probes @ 1.2    ms   COST problem
+  bbs.ruliweb.com                   231 probes @ 12.8   ms   COST problem, 7,500x morikoshi's
+```
+
+`bbs.ruliweb.com` spends 2.9 seconds inside a taffy solve that asks for **231 item measures**. That is
+not a memo problem and no cache can touch it: one probe is re-laying out a large block subtree. t1260
+fixed the *count* half on the one site that had it, and the *cost* half is untouched and unmeasured.
+
+NO GATE. This tick asserts nothing and adds nothing to the wall — there is no code change to guard.
+Said plainly because a measurement tick that ships a gate to look productive is how a wall fills with
+assertions nobody can fail.
+
+NEXT, and it is now two ranked questions instead of one hypothesis:
+1. **Split `taffy_ms`** — it is charged outermost-only, so it currently contains BOTH taffy's own
+   flex/grid algorithm AND every block/inline layout our measure closure runs inside it. A 12.8ms
+   probe is our block layout, not taffy's; the ledger cannot say so today and `bbs.ruliweb.com` +
+   `ticket.jfa.jp` are 5.1 of the cohort's seconds waiting on that split.
+2. **Count `AudioContext`** across the CrUX corpus before writing a line of it.
+
+⚠ A method note worth more than either: the +26% `taffy_ms` regression I thought I saw on
+`bbs.ruliweb.com` in the first pass was **noise** — three repeats put OLD at 2,959-3,696ms and NEW at
+2,947-3,995ms on a page whose own node count moves 12,956 <-> 13,313 between loads. One reading of a
+live site is not a reading (t654: the score's ERROR BAR = the same binary twice).
+
+PERF: none — no code changed.
+
+WIKI: `docs/wiki/performance.md` — "the timeout bucket is four causes, and probe COUNT is not probe COST".

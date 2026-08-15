@@ -939,3 +939,52 @@ to be smallest.
 > converse, learned here: **an algorithm asking a reasonable number of questions is defeated by a memo
 > that answers by SHAPE instead of by VALUE.** The wrong number was never taffy's; it was ours for
 > asking twenty-one distinct questions of a cabinet with nine drawers.
+
+## The timeout bucket is FOUR causes, and probe COUNT is not probe COST (t1261)
+
+t1236 concluded *"the TIMEOUT BUCKET IS FORCED REFLOW"* and the loop has steered on it since. Priced
+across every reachable `timeout-150s` site with the ledger t1258-1260 built, it is **4 of 9**:
+
+```text
+  site                    nodes    probes OLD -> NEW      taffy_ms OLD -> NEW
+  morikoshi.net           6,289    293,696 ->   4,992         512 ->   236     LAYOUT-BOUND
+  bhramarah.in           23,022     85,525 ->  63,163       2,128 -> 2,122     LAYOUT-BOUND
+  bbs.ruliweb.com        12,956        231 ->     231       2,959 -> 2,947     LAYOUT-BOUND
+  ticket.jfa.jp           3,028      1,779 ->   1,779       2,168 -> 2,148     LAYOUT-BOUND
+  mangaraw.ac             2,608     20,907 ->  20,727         222 ->   194     innocent
+  neutypechic.com         2,653        199 ->     199          23 ->    29     innocent
+  www.friulioggi.it       3,315          1 ->       1        0.06 ->  0.07     innocent
+  swiftspinus.com            57          0 ->       0           0 ->     0     57 NODES
+  secure.paymentech.com      13          0 ->       0           0 ->     0     13 NODES
+```
+
+Two of the nine are not slow — they are **absent**. `swiftspinus.com` is an app shell that never
+hydrates (`initial-loading`, `initial-logo`, nothing else) because its bundle constructs an
+`AudioContext` unguarded and `TypeError: window.AudioContext is not a constructor` kills the boot.
+`www.friulioggi.it` renders a 14,029px document in **47 ms** and still times out, so whatever costs it
+150 seconds is not in layout at all.
+
+### Probe COUNT and probe COST are different bugs, and only division separates them
+
+```text
+  morikoshi.net (before)   293,696 probes @ 0.0017 ms    COUNT   -> fixed by the exact memo (t1260)
+  mangaraw.ac               20,727 probes @ 0.009  ms    many, and cheap
+  ticket.jfa.jp              1,779 probes @ 1.2    ms    COST
+  bbs.ruliweb.com              231 probes @ 12.8   ms    COST — 7,500x morikoshi's per-probe price
+```
+
+`bbs.ruliweb.com` spends **2.9 seconds inside a taffy solve that asks for 231 item measures.** No
+cache can touch that: one probe is re-laying out a large block subtree. The exact memo fixed the
+*count* half on the one site that had it; the *cost* half is untouched.
+
+⚠ **`taffy_ms` cannot answer the next question, and that is a property of its own accounting rule.**
+It is charged **outermost-only** (by design — see the phase ledger), so it contains both taffy's own
+flex/grid algorithm and every block/inline layout our measure closure runs *inside* it. A 12.8 ms
+probe is ours, not taffy's, and the ledger has no way to say so. Splitting that one bucket is what
+the two remaining layout-bound sites are waiting on.
+
+> **The ledger names the worst container on the site you profiled. It does not name the cohort's
+> cause, and reading it that way is how t1260 came to be sized for nine sites and land on one.**
+> t1259 refuted its own predecessor's next tick with a three-minute grep and wrote *"one site is not a
+> corpus"* in the same entry that then generalised from one site. The check is cheap; the discipline
+> is remembering to run it on your OWN conclusion, not only the previous tick's.

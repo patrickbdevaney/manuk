@@ -11,12 +11,12 @@
 
 | | value | over |
 |---|---|---|
-| ticks landed | **956** | ticks 1–1260 |
-| median tick cycle | **29m** | 955 intervals |
+| ticks landed | **957** | ticks 1–1261 |
+| median tick cycle | **29m** | 956 intervals |
 | median, last 10 | **1.5h** | 10 intervals |
 | fastest / slowest | 5s / 5.4d | |
-| **ticks per hour** | **1.13** | 841.9h elapsed |
-| median verify wall | **63s** | 895 ticks |
+| **ticks per hour** | **1.13** | 842.5h elapsed |
+| median verify wall | **63s** | 896 ticks |
 | wall trend | 39s → 17m — getting slower ⚠️ | first 3 vs last 3 |
 
 The **cycle** is the real unit: implement → debug → verify wall → land. The wall is only part of
@@ -31,7 +31,7 @@ it, and a wall that grows taxes every future tick, so it is tracked separately f
 * **✅ rows in the capability ledger**: 144 → **629**
 * **Bar 0 — oracle hangs**: 0 of 265 sites
 
-**433 of 956 ticks** (45%) moved a
+**433 of 957 ticks** (45%) moved a
 user-visible capability. The rest were instruments, infrastructure and corrections — and the
 ledger says the corrections were not overhead: three of its top three priorities were phantoms,
 and finding that out redirected everything after it.
@@ -91,7 +91,7 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 ## What a capability costs
 
 * **433** capability ticks, median cycle **29m**
-* median diff per tick: **+272 / −34** lines across 8 files
+* median diff per tick: **+271 / −34** lines across 8 files
 
 ## Every tick
 
@@ -1053,5 +1053,6 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 | **1257** | 2026-08-15 05:06 | 5.4h | capability | 17m | +627/−38 | 472 | 81 | 56.0% · | a shorthand SETS its longhands, and the CONTROL row said it was never a grid bug (2026-08- |
 | **1259** | 2026-08-15 05:45 | 39m | instrument | 17m | +329/−43 | 472 | 81 | 56.0% · | the frequency check KILLED my own next tick, and one container is 96% of the page (2026-08 |
 | **1260** | 2026-08-15 06:58 | 73m | perf | 17m | +443/−36 | 472 | 81 | 56.0% · | taffy's cache has NINE SLOTS and one of them holds every definite width (2026-08-15) |
+| **1261** | 2026-08-15 07:33 | 34m | measurement | 17m | +169/−33 | 472 | 81 | 56.0% · | the TIMEOUT bucket is FOUR causes, and my own last tick was 1 of 9 (2026-08-15) |
 
 *`·` after a WPT figure means **carried forward**, not measured this tick.*

@@ -1886,6 +1886,8 @@
   - L893 · The shape of the damage — measured, and it is a growth curve
   - L905 · The fix, and why it is ComputeSize only
   - L920 · The numbers, and the one this does NOT buy
+  - L943 · The timeout bucket is FOUR causes, and probe COUNT is not probe COST (t1261)
+  - L967 · Probe COUNT and probe COST are different bugs, and only division separates them
 
 ## THE WIKI — what we durably KNOW, organised by subsystem
 `docs/wiki/README.md`
@@ -2151,4 +2153,4 @@
   - L231 · Both named mechanisms are subsystem work
 
 ---
-2058 sections across 22 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+2060 sections across 22 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
