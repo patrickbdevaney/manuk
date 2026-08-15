@@ -1579,6 +1579,11 @@
   - L3294 · ⚠ THE REAL-SITE ATTRIBUTION WAS REFUTED BY ITS OWN OLD-BINARY CONTROL (t1235)
   - L3319 · Where the time actually goes: the drain budget overruns by up to 6.4×, and the discriminator is the TASK COUNT
   - L3339 · The names hoist, and the guard that makes it admissible (t1235)
+  - L3353 · document.write was ABSENT, and killing it revealed the second entry point (t1262)
+  - L3355 · Ranked, not guessed
+  - L3378 · document.write is not legacy trivia; it is how ad tags work
+  - L3395 · The second entry point, found by the first one's regression
+  - L3420 · The regression that was not one
 
 ## Manuk Daily-Driver Usability Roadmap (synthesized, tick 138)
 `docs/wiki/lever-map.md`
@@ -2153,4 +2158,4 @@
   - L231 · Both named mechanisms are subsystem work
 
 ---
-2060 sections across 22 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+2065 sections across 22 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.

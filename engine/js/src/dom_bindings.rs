@@ -3891,6 +3891,8 @@ unsafe fn define_members(
             2
         );
         def_guarded!(def, c"createDocumentFragment", doc_create_fragment, 0);
+        def_guarded!(def, c"write", doc_write, 1);
+        def_guarded!(def, c"writeln", doc_writeln, 1);
         prop_guarded!(
             prop,
             c"adoptedStyleSheets",
@@ -11671,6 +11673,101 @@ unsafe fn doc_get_body(cx: *mut RawJSContext, _argc: u32, vp: *mut Value) -> boo
     true
 }
 
+/// `document.write(markup)` / `document.writeln(markup)` — HTML §4.3.2.
+///
+/// ⚠⚠⚠ **IT WAS ABSENT — not partial, not wrong: `grep document.write engine/` returned ZERO — and
+/// it is the top ENGINE-GAP throw in the corpus.** A 200-site CrUX sweep histogrammed by assertion
+/// message puts `TypeError: document.write is not a function` at **7 distinct sites (3.5%)**:
+/// `alastonsuomi.com` · `videa.hu` · `oilprice.com` · `nautica.com` · `cyoinatu-onna.com` ·
+/// `razaoautomovel.com` · `ru.restaurantguru.com`. It outranks everything else in that histogram
+/// that is *ours* — the two entries above it are one vendor script's own internal state
+/// (`p.stubScriptElement is null`) and a Cloudflare bot wall, neither of which is an engine gap.
+///
+/// `document.write` is 1997 API and reads like a curiosity until you notice what still emits it:
+/// **ad and analytics tags**, which inject their real payload with
+/// `document.write('<script src=...>')` because that is the only way to get a *synchronous*
+/// dependency into a parsing document. A page whose head does that and gets a `TypeError` loses the
+/// rest of that inline script — and the boot sequence usually goes with it.
+///
+/// **WHERE THE MARKUP GOES, and this is the whole design decision.** The spec inserts it into the
+/// *parser's input stream*, which we do not have re-entrantly. The observable consequence during
+/// parsing is that the written nodes become the running `<script>`'s **next siblings**, and that is
+/// reproducible without a re-entrant parser: parse into a scratch element, move the children out,
+/// and place them `afterend` of `document.currentScript`. Outside script execution there is no
+/// insertion point and we append to `<body>`.
+///
+/// ⚠ **WHAT THIS DELIBERATELY DOES NOT DO: the implicit `document.open()`.** Per spec, a `write()`
+/// after the document is fully parsed **blows the document away** and starts a new one. That is the
+/// behaviour real browsers have and it is also the single most destructive thing on this page — a
+/// late analytics callback would wipe a rendered page to blank. We are not there yet: the honest
+/// intermediate is to append rather than to wipe, because *a page missing one late-written banner is
+/// a page; a page correctly wiped to white is not.* This is a **named divergence from the spec**, not
+/// an oversight, and it is the direction that cannot silently destroy user-visible content. When the
+/// parser can be re-entered, the wipe path is where to start.
+unsafe fn doc_write(cx: *mut RawJSContext, argc: u32, vp: *mut Value) -> bool {
+    doc_write_impl(cx, argc, vp, false)
+}
+
+/// `document.writeln(...)` — `write()` with a newline appended. The newline matters exactly once, in
+/// `<pre>`/`<textarea>` content, and costs nothing to be right about.
+unsafe fn doc_writeln(cx: *mut RawJSContext, argc: u32, vp: *mut Value) -> bool {
+    doc_write_impl(cx, argc, vp, true)
+}
+
+unsafe fn doc_write_impl(cx: *mut RawJSContext, argc: u32, vp: *mut Value, newline: bool) -> bool {
+    *vp = UndefinedValue();
+    let Some((dom, doc_root)) = this_node(vp) else {
+        return true;
+    };
+    // Every argument, concatenated — `document.write(a, b, c)` is one string, not three calls.
+    let mut markup = String::new();
+    for i in 0..argc {
+        if let Some(s) = arg_string(cx, vp, argc, i) {
+            markup.push_str(&s);
+        }
+    }
+    if newline {
+        markup.push('\n');
+    }
+    if markup.is_empty() {
+        return true;
+    }
+    // Parse into a scratch container and MOVE the children out — the same shape
+    // `insertAdjacentHTML` uses, and for the same reason: parsing into the target would clobber the
+    // siblings we are supposed to be writing next to.
+    let scratch = (*dom).create_element("div");
+    manuk_html::set_inner_html(&mut *dom, scratch, &markup);
+    let kids: Vec<NodeId> = (*dom).children(scratch).collect();
+    for &k in &kids {
+        (*dom).remove_child(scratch, k);
+    }
+    if kids.is_empty() {
+        return true;
+    }
+    // The insertion point: after the running <script>, which is where the parser would have put it.
+    // `CURRENT_SCRIPT` is the same thread-local `document.currentScript` reads, so the two can never
+    // disagree about which script is running.
+    let anchor = {
+        let id = CURRENT_SCRIPT.with(|c| c.get());
+        // A script that has already been removed from the tree is not an insertion point — writing
+        // `afterend` of a detached node would silently drop the markup into nowhere.
+        (id >= 0)
+            .then(|| NodeId(id as u64))
+            .filter(|&n| (*dom).parent(n).is_some())
+    };
+    let parent = match anchor {
+        Some(script) => insert_adjacent(dom, script, "afterend", &kids),
+        None => match (*dom).find_first_in(doc_root, "body") {
+            Some(body) => insert_adjacent(dom, body, "beforeend", &kids),
+            None => insert_adjacent(dom, doc_root, "beforeend", &kids),
+        },
+    };
+    if let Some(parent) = parent {
+        record_mutation(cx, dom, "childList", parent, None, None, &kids, &[]);
+    }
+    true
+}
+
 /// `document.head` → the `<head>` element.
 unsafe fn doc_get_head(cx: *mut RawJSContext, _argc: u32, vp: *mut Value) -> bool {
     match this_node(vp) {
@@ -12493,6 +12590,19 @@ impl PageContext {
         src: &str,
         layout: &std::collections::HashMap<NodeId, [f32; 4]>,
         styles: &std::collections::HashMap<NodeId, manuk_css::ComputedStyle>,
+        // ⚠⚠⚠ **THE SCRIPT ELEMENT THIS SOURCE CAME FROM — and it was the THIRD entry point that
+        // did not set it.** `document.currentScript` is the executing `<script>` during a CLASSIC
+        // script, external ones included (HTML §4.12.1); the parse path
+        // (`run_deferred_scripts`) and the injected path (`run_one_script`) both set it, and this
+        // one — the runtime-FETCHED path, which is how the modern web ships nearly all of its
+        // code — did not. So every `createElement('script') + src + appendChild` chunk loader read
+        // `null`, and `document.currentScript.src` is a TypeError that takes the loader with it.
+        // Measured on `videa.hu`: with `document.write` newly working, its ad loader reached
+        // exactly this line and died, and the page rendered FEWER boxes than before (9-10 -> 5-6).
+        // `None` for a host-driven eval that is genuinely not a script element (the agent surface,
+        // the shell's `eval`), because `null` is the spec's answer there and inventing an element
+        // would be worse than the gap.
+        script_node: Option<NodeId>,
     ) -> Result<(), String> {
         set_view_maps(layout, styles);
         // The arena the bindings dereference must be the CURRENT one: the `Dom` this context was
@@ -12530,8 +12640,14 @@ impl PageContext {
         {
             let budget = crate::event_loop::max_drain_ms();
             let _deadline = crate::watchdog::ScriptDeadline::arm(raw_cx, budget);
-            if evaluate_script(runtime.cx(), global.handle(), src, rval.handle_mut(), opts).is_err()
-            {
+            set_current_script(script_node);
+            let evaluated =
+                evaluate_script(runtime.cx(), global.handle(), src, rval.handle_mut(), opts);
+            // Cleared before the error reporting below, and unconditionally: a script that THREW is
+            // still no longer running, and a `currentScript` that outlives its script is a worse
+            // lie than the `null` this fix removed.
+            set_current_script(None);
+            if evaluated.is_err() {
                 if crate::watchdog::fired() {
                     // Not a page error — we cut it off. Same distinction `preempt_aware` draws in the
                     // drain, and for the same reason: the two arrive here byte-identically, and

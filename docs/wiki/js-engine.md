@@ -3349,3 +3349,86 @@ dashed aliases report the **wrong property with no error anywhere**. Guarded twi
 emission on mismatch, and `extra_name_stability` drives the function across 16 argument combinations
 (initial vs styled, all four `rect`/`cb` pairings, both pseudo polarities) requiring an identical
 name list. *Without the guard this is a landmine with a good benchmark.*
+
+## `document.write` was ABSENT, and killing it revealed the second entry point (t1262)
+
+### Ranked, not guessed
+
+t1261 ended holding one named throw (`window.AudioContext is not a constructor`) and the discipline
+not to build on it: *"one named throw is a site, not a class, until it is counted."* Counting means
+loading the 200-site CrUX corpus, capturing every JS throw, and histogramming by assertion message —
+ranked by **distinct sites**:
+
+```text
+   8  TypeError: can't access property "hasAttribute", p.stubScriptElement is null   <- one vendor script
+   6  TypeError: document.write is not a function                                    <- OURS, and #1
+   6  TurnstileError: [Cloudflare Turnstile] ...                                     <- a bot wall
+   5  SyntaxError: expected expression, got '<'                                      <- HTML compiled as JS
+   4  TypeError: Invalid URL:
+   3  Error: addEventListener and attachEvent are unavailable.
+   2  ReferenceError: isSecureContext is not defined
+   2  ReferenceError: HTMLDocument is not defined
+   1  TypeError: window.AudioContext is not a constructor                            <- the instinct
+```
+
+The instinct was the **seventh**-ranked lever. Two of the three entries at or above `document.write`
+are not engine gaps at all (a vendor script's own null state; a bot wall), which is why the histogram
+has to be read by *mechanism ownership* and not by count alone.
+
+### `document.write` is not legacy trivia; it is how ad tags work
+
+`grep -rn document.write engine/` returned **zero**. It survives because ad and analytics tags inject
+their real payload as `document.write('<script src=...>')` — the only way to get a *synchronous*
+dependency into a parsing document. Seven corpus sites die on the TypeError, and it takes the rest of
+the inline script with it.
+
+**Where the markup goes** is the design decision. The spec writes into the parser's input stream,
+which we cannot re-enter. But the observable consequence during parsing is that the written nodes
+become the running `<script>`'s **next siblings** — reproducible without a re-entrant parser: parse
+into a scratch element, move the children out, place them `afterend` of `document.currentScript`.
+
+⚠ **The implicit `document.open()` is deliberately NOT implemented.** Per spec, a `write()` after
+parsing completes **blows the document away and starts a new one**. Real browsers do that; so would a
+late analytics callback, to a fully rendered page. Named divergence, not oversight: *a page missing
+one late-written banner is a page; a page correctly wiped to white is not.*
+
+### The second entry point, found by the first one's regression
+
+With `document.write` working, `videa.hu` ran an ad loader that had never run before, and it died on:
+
+```text
+  TypeError: can't access property "src", document.currentScript is null   at dynamic.js:1:325
+```
+
+⚠⚠⚠ **There are THREE script entry points and only two set `document.currentScript`:**
+
+| entry point | what runs there | set it? |
+|---|---|---|
+| `run_deferred_scripts` | scripts in the authored markup | ✅ |
+| `run_one_script` | scripts injected into the DOM | ✅ |
+| **`PageContext::eval`** | **a `<script src>` FETCHED at runtime** | ❌ **until t1262** |
+
+The third is how the modern web ships nearly all of its code (`createElement('script')` + `src` +
+`appendChild`), so every code-split chunk loader — webpack's `publicPath: "auto"` is literally
+`document.currentScript.src` — has been reading `null`. `G_CURRENT_SCRIPT` stayed green throughout
+because it asserts the **inline** case, the entry point that was already right.
+
+> **A family of N entry points needs a gate per entry point, not a gate per behaviour.** Same shape as
+> `insertAdjacentText` (the third sibling nobody feature-detects) and the six `apply_natural_sizes`
+> callers where being the only correct site is how the other five stayed wrong.
+
+### The regression that was not one
+
+`boxes --fetch | wc -l` said `videa.hu` went 9-10 boxes → 5-6, reproducibly, and the ratchet forbids
+trading a regression for a capability. It was **the proxy that was wrong**: that command counts
+id-bearing boxes, and the count fell because the ad loader now *runs* and replaces its placeholder
+divs. On the instrument built for this question:
+
+```text
+  videa.hu       coverage 87.1% -> 88.7%/93.4%   ·   missing 100 -> 88/51   ·   shape 33.9% -> 33.9%/35.9%
+  oilprice.com   coverage 98.8% -> 100.0%
+```
+
+> **Judge the ratchet on the instrument, never on a proxy you invented for convenience thirty minutes
+> earlier.** This is the fourth time a convenience number has contradicted the purpose-built one here,
+> and the first time it nearly caused a good tick to be reverted rather than a bad one landed.

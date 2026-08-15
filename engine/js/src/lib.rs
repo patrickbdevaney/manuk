@@ -1333,9 +1333,12 @@ pub fn eval_in_page(
     src: &str,
     layout: &std::collections::HashMap<manuk_dom::NodeId, [f32; 4]>,
     styles: &std::collections::HashMap<manuk_dom::NodeId, manuk_css::ComputedStyle>,
+    // The `<script>` element this source was fetched for, so `document.currentScript` can be it —
+    // `None` for a host-driven eval with no element behind it. See `PageContext::eval`.
+    script_node: Option<manuk_dom::NodeId>,
 ) -> Result<(), JsError> {
     with_runtime(|rt| {
-        ctx.eval(rt, dom, src, layout, styles)
+        ctx.eval(rt, dom, src, layout, styles, script_node)
             .map_err(|message| JsError { message })
     })
 }

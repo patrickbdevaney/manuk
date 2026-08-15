@@ -4102,9 +4102,14 @@ impl Page {
                 let fetched_ok = text.is_some();
                 if let Some(src) = &text {
                     if !src.trim().is_empty() {
-                        if let Err(e) =
-                            manuk_js::eval_in_page(ctx, &mut self.dom, src, &rects, &self.styles)
-                        {
+                        if let Err(e) = manuk_js::eval_in_page(
+                            ctx,
+                            &mut self.dom,
+                            src,
+                            &rects,
+                            &self.styles,
+                            Some(node),
+                        ) {
                             tracing::warn!("dynamic script: {e}");
                         }
                         ran += 1;
@@ -5005,7 +5010,7 @@ impl Page {
         ));
         manuk_js::set_snap_candidates(self.snap_candidates_map());
         self.publish_image_sources();
-        let _ = manuk_js::eval_in_page(ctx, &mut self.dom, src, &rects, &self.styles);
+        let _ = manuk_js::eval_in_page(ctx, &mut self.dom, src, &rects, &self.styles, None);
         self.drain_canvases();
         self.drain_element_scrolls();
     }
@@ -5026,7 +5031,7 @@ impl Page {
         let js = "(function(){ try { var e; try { e = new Event('pageswap'); } \
                   catch(_) { e = { type: 'pageswap' }; } e.viewTransition = null; \
                   dispatchEvent(e); } catch(_) {} })()";
-        if let Err(e) = manuk_js::eval_in_page(ctx, &mut self.dom, js, &rects, &self.styles) {
+        if let Err(e) = manuk_js::eval_in_page(ctx, &mut self.dom, js, &rects, &self.styles, None) {
             tracing::debug!("pageswap: {e}");
         }
     }

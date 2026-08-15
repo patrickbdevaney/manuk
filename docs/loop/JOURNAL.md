@@ -80329,3 +80329,104 @@ live site is not a reading (t654: the score's ERROR BAR = the same binary twice)
 PERF: none — no code changed.
 
 WIKI: `docs/wiki/performance.md` — "the timeout bucket is four causes, and probe COUNT is not probe COST".
+
+## Tick 1262 — `document.write` was ABSENT, and killing it revealed the second entry point (2026-08-15)
+
+TICK SHAPE: capability — two throw-class render-blockers, found by histogramming the corpus rather
+than by guessing, and the second one was found by the first one's own regression.
+
+⚠⚠⚠ **I RANKED BEFORE I BUILT, WHICH IS THE ONLY REASON THIS IS THE RIGHT TICK.** t1261 named
+`AudioContext` as a candidate and said explicitly *"one named throw is a site, not a class, until it
+is counted."* So I counted: 200 CrUX corpus sites loaded, every JS throw captured, histogrammed by
+assertion message and ranked by **distinct sites**:
+
+```text
+   8  TypeError: can't access property "hasAttribute", p.stubScriptElement is null   <- one vendor script
+   6  TypeError: document.write is not a function                                    <- OURS, and #1
+   6  TurnstileError: [Cloudflare Turnstile] ...                                     <- a bot wall
+   5  SyntaxError: expected expression, got '<'
+   4  TypeError: Invalid URL:
+   3  Error: addEventListener and attachEvent are unavailable.
+   2  ReferenceError: isSecureContext is not defined
+   2  ReferenceError: HTMLDocument is not defined
+   1  TypeError: window.AudioContext is not a constructor                            <- t1261's candidate
+```
+
+**`AudioContext` is 1 of 200 and `document.write` is 7** (6 by that message plus `Yn.write is not a
+function`, the same call minified). The two entries above it are not engine gaps — one is a vendor
+script's own null state and one is a bot wall. **The lever I would have taken on t1261's instinct was
+the seventh-ranked one.**
+
+⚠⚠⚠ **`document.write` WAS NOT PARTIAL. `grep -rn document.write engine/` RETURNED ZERO.** It reads
+like 1997 trivia until you notice what still emits it: ad and analytics tags, which inject their
+payload as `document.write('<script src=...>')` because that is the only way to get a *synchronous*
+dependency into a parsing document. `alastonsuomi.com` · `videa.hu` · `oilprice.com` · `nautica.com` ·
+`cyoinatu-onna.com` · `razaoautomovel.com` · `ru.restaurantguru.com`.
+
+WHERE THE MARKUP GOES is the whole design decision. The spec inserts into the parser's *input
+stream*, which we cannot re-enter; but the observable consequence during parsing is that the written
+nodes become the running `<script>`'s **next siblings**, and that is reproducible without a re-entrant
+parser — parse into a scratch element, move the children out, place them `afterend` of
+`document.currentScript`. ⚠ **The implicit `document.open()` is deliberately NOT implemented**: per
+spec a `write()` after parsing **blows the document away**, and a late analytics callback would wipe a
+rendered page to blank. Named divergence, not oversight — *a page missing one late-written banner is a
+page; a page correctly wiped to white is not.*
+
+⚠⚠⚠ **AND THEN THE RATCHET CAUGHT ME.** With `document.write` working, `videa.hu` rendered **FEWER**
+boxes than before — 9-10 → 5-6, reproducible across three runs. The cause was one layer down and it is
+the same shape as the fix itself:
+
+```text
+  TypeError: can't access property "src", document.currentScript is null   at dynamic.js:1:325
+```
+
+**There are THREE script entry points in this engine and only two set `document.currentScript`.** The
+parse path (`run_deferred_scripts`) and the injected path (`run_one_script`) both do. `PageContext::eval`
+— **the runtime-FETCHED path, which is how the modern web ships nearly all of its code** — did not.
+So `createElement('script') + src + appendChild` chunk loaders have always read `null`, and
+`document.currentScript.src` is a TypeError that takes the loader with it. `G_CURRENT_SCRIPT` has been
+green over this the whole time because it asserts the *inline* case — the entry point that was already
+right. **A family of three entry points needs a gate per entry point, not a gate per behaviour.**
+
+⚠⚠⚠ **THE REGRESSION WAS NOT A REGRESSION, AND I ALMOST REVERTED A GOOD TICK OVER A PROXY I INVENTED
+THIRTY MINUTES EARLIER.** `boxes --fetch | wc -l` counts id-bearing boxes; it fell because the ad
+loader now *runs* and replaces its placeholder divs. On the instrument that actually measures the
+ratchet:
+
+```text
+  videa.hu        OLD                       NEW
+  coverage        87.1%                     88.7% / 93.4%
+  missing         100 elements              88 / 51
+  shape           33.9%                     33.9% / 35.9%
+  oilprice.com    coverage 98.8%            100.0%
+```
+
+Coverage UP, missing elements roughly HALVED. **A proxy is not the instrument, and the ratchet must be
+judged on the instrument** — the fourth time this project has caught a number it invented for
+convenience contradicting the one it built on purpose.
+
+GATES — two, both RED-proven, and the second one was **vacuous on its first draft**:
+
+```text
+  G_DOCUMENT_WRITE                 no binding   -> err:TypeError: document.write is not a function
+                                   body-append  -> w1-exists:true PASSES, w1-parent/w1-next-sibling FAIL
+  G_FETCHED_CURRENT_SCRIPT         no set       -> cs-null:true cs-self:false cs-tag:null cs-attr:null
+```
+
+The `G_DOCUMENT_WRITE` position claim exists precisely because existence alone is satisfied by a
+no-op — *"the page is told YES and renders blank"*. And `G_FETCHED_CURRENT_SCRIPT` v1 put the
+`<script src>` in the **authored markup**, which the *parse* path runs — so it passed with the fix
+disabled and asserted nothing. The RED probe is the only reason that was caught; the fixture now
+injects the script at runtime, which is both the path under test and how a code-split bundle works.
+
+NEXT — the histogram above is a ranked worklist and nothing in it has been spent except row 2:
+`SyntaxError: expected expression, got '<'` (5 sites) is us compiling an HTML error page as
+JavaScript; `TypeError: Invalid URL:` (4) is our URL parser rejecting what Chrome accepts;
+`isSecureContext` (2) and `HTMLDocument` (2) are missing globals and are one line each. ⚠ Also
+recorded rather than fixed: a runtime-fetched script's `src` attribute is **removed before it runs**
+as the already-ran marker, so `document.currentScript.src` reads empty where Chrome gives the URL — a
+wrong answer of the right type, and the marker wants to become an in-memory set.
+
+PERF: none claimed.
+
+WIKI: `docs/wiki/js-engine.md` — "document.write was absent, and killing it revealed the second entry point".
