@@ -79928,3 +79928,107 @@ PERF: none — measurement only.
 
 WIKI: none — this tick's artefact is `docs/loop/CONSTITUTION-CHECK.md` check #72, which is the wiki
 for the loop's own governance. [no-pattern]
+
+## Tick 1258 — `layout_ms` was never LAYOUT, and the CONTROL ROW found a defect in the re-pass (2026-08-15)
+
+TICK SHAPE: instrument + capability — the board's M1 mandate (throw-class render-blockers, the
+scorability cap) taken at its largest *ours* bucket.
+
+⚠⚠⚠ **THE COHORT WAS RANKED BEFORE ANYTHING WAS BUILT, AND IT IS SMALL.** `SWEEP-t1252` scores 108 of
+200; of the 92 unscorable, only **14 are OURS** — `timeout-150s` **10**, `shell-only` 3,
+`render-failed` 1. The other 78 are bot-walls (36), unreachable (15), 404/empty (12), probe-blocked
+(6), instrument tree-divergence (4), thin-overlap (3). So the M1 cap is one bucket, not a fog. Our own
+load, timed directly: `bhramarah.in` **122.9 s**, `morikoshi.net` 48.7 s, `neutypechic.com` 26.5 s —
+`swiftspinus.com` 3.9 s, which is a DIFFERENT reason and must not be pooled with them.
+
+⚠⚠⚠ **THE ATTRIBUTION CHAIN'S NEXT LINK SAYS THE PREVIOUS LINK'S NAME WAS WRONG.** t1236 split a drain
+into forced reflows; t1237-1240 split the cascade inside one. What no instrument could open was
+`SLOW FORCED REFLOW`'s `layout_ms` — **17,349 ms** against a ~6,200 ms cascade, so ~11 s was inside
+`layout_document` and the obvious reading is that layout is slow. `LAYOUT PHASES`
+(`MANUK_LAYOUT_PROFILE=1`) refutes it outright:
+
+```text
+  LAYOUT PHASES nodes=23013 total_ms=1880  taffy_ms=1689 taffy_n=1  abs_ms=188
+                measure_ms=0 measure_n=0 measure_hits=87399
+                min_content_ms=0 max_content_ms=0  unattributed_ms=3
+```
+
+**`layout_document` is 1.88 s, not 11.** And intrinsic sizing — the standing suspect, the thing two
+`Ctx` fields carry long comments about — is **innocent**: 87,399 measure-cache HITS and zero misses.
+90% of layout is one taffy solve.
+
+⚠⚠⚠ **THE 11 s IS THE `@container` RE-PASS, AND IT IS THE LARGEST SINGLE TERM IN A REFLOW.**
+`SLOW RESTYLE+LAYOUT` was already printing it and nobody had read it beside the reflow line:
+
+```text
+  cascade_ms=4866  layout_ms=1851  container_query_ms=7329  cq_relaid=true   n_sheets=51
+  cascade_ms=1244  layout_ms=516   container_query_ms=0     cq_relaid=false  n_sheets=42
+```
+
+Bigger than the cascade, 4x the layout: a second full cascade + a second full layout of 23,000 nodes,
+on **every** reflow once the sheet count reaches 47. Verified not a misfire — `base.css` and
+`styles.css` both carry real `@container` AND `container-type`, fetched and grepped. The two-pass
+model is correct; re-styling the WHOLE document to resolve rules that can only apply inside a query
+container is what is not.
+
+⚠⚠ **THE TELL, worth more than the number:** across one load the reflows go **1,827 ms → 17,411 ms
+while the box count FALLS (5,337 → 3,326)**. More time, fewer boxes — the shape of re-measurement,
+which is precisely the intuition the ledger then killed.
+
+⚠⚠⚠ **AND THE PROFILE WALKED INTO A CORRECTNESS DEFECT — SIX CALLERS, FIVE WRONG.**
+`container_query_recascade` replaces the style map wholesale, and `restyle_and_layout` states the rule
+eight lines above its own call: *"BETWEEN the cascade and the layout, every time … the picture becomes
+a full-width strip of zero height."* Every caller applied `apply_natural_sizes` BEFORE the re-pass and
+none re-applied it after — so on any page whose CSS contains `@container`, every decoded image's
+intrinsic size is restated and instantly discarded. Measured: a 40x20 image lays out **16x16**, the
+broken-image placeholder. `load_document` alone had spotted it and re-ran its own inline decode —
+**being the only site that was right is how the other five stayed wrong**, the third recurrence of that
+shape in this file (`sheets_of`, `set_root_box`). It now lives INSIDE the re-pass, so a seventh caller
+cannot forget.
+
+GATES — both RED-proven, and each red for a DIFFERENT reason:
+
+```text
+  G_LAYOUT_PHASES (manuk-layout, unit)
+    · remove the PHASE_DEPTH gate  -> buckets sum 233,432,215ns vs a 78,392,657ns layout (3x overcount)
+    · remove the per-layout reset  -> taffy_n reads (1) then (2) across two identical layouts
+  G_CONTAINER_REPASS_KEEPS_NATURAL_SIZE (manuk-page, unit)
+    · remove the apply_natural_sizes call -> the @container row lays out 16x16, not 40x20
+    · the @container-FREE CONTROL row keeps passing, which is what makes it a claim about the RE-PASS
+```
+
+⚠ Both gates are **unit tests, deliberately not new `engine/page/tests/*.rs` files.** t1257 measured
+that every such file is a ~178 MB binary the `js` gate must build and that the set had crossed this
+box's free space. A gate that can be a unit test should be one; the ratchet is the discipline, not the
+binary count.
+
+RESULT — same-hour OLD-BINARY control (HEAD b4f63dab, run 08:29 vs this tree 08:54):
+
+```text
+  bhramarah.in load        108.2s  ->  104.5s      within noise — NO perf claim is made
+  layout_document           1.85s  ->   1.85s      (=)
+  container_query_ms        7,329  ->   7,375      (=)  the re-pass is DIAGNOSED, not yet fixed
+  decoded image, @container page   16x16 -> 40x20  ← the capability delta
+  manuk-layout                180  ->  181 tests
+  manuk-page lib               26  ->   27 tests
+```
+
+⚠ **NO PERFORMANCE CLAIM.** This tick makes the browser render `@container` pages correctly and makes
+the reflow's largest term visible; it does not make it smaller. Saying otherwise would be the
+speed-without-coverage lie the north star names.
+
+⚠ **A NULL RESULT WORTH BANKING:** the first cut of the natural-size gate asserted on the STYLE
+(`height == Px(20)`) and failed against correct code — `fill_natural_size` sets `width` plus an
+`aspect_ratio` and leaves `height:auto` for layout to derive. The rendered rect is both the honest
+assertion and the thing the defect is actually about.
+
+NEXT, priced rather than guessed: scope the `@container` re-pass to query-container subtrees instead
+of the document. And note the accounting trap it exposes — `cascade_ms` and `container_query_ms` are
+TWO cascades, so `to_computed_style` (t1240) and `MinimalCascade` (t1241) are each worth **twice**
+their recorded share on a container-query page.
+
+PERF: none claimed — see above. The instrument's own cost is a counter increment on the cache-hit
+path; timing runs only on misses, so it cannot become what it measures.
+
+WIKI: `docs/wiki/performance.md` — "`layout_ms` was never layout — the `@container` re-pass is HALF of
+every forced reflow".

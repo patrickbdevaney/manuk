@@ -90,6 +90,7 @@ fn container_query_recascade(
     viewport_width: f32,
     styles: &mut StyleMap,
     root_box: &LayoutBox,
+    images: &std::collections::HashMap<manuk_dom::NodeId, std::rc::Rc<manuk_paint::DecodedImage>>,
 ) -> bool {
     if !sheets.iter().any(|s| s.source().contains("@container")) {
         return false;
@@ -109,6 +110,22 @@ fn container_query_recascade(
     match recascaded {
         Ok(new_styles) => {
             *styles = new_styles;
+            // ⚠⚠⚠ **THE RE-PASS REPLACES THE STYLE MAP WHOLESALE, WHICH ERASES EVERY DECODED
+            // IMAGE'S INTRINSIC SIZE — and this is the same rule `restyle_and_layout` states eight
+            // lines above its own call: *"BETWEEN the cascade and the layout, every time."*
+            //
+            // A decoded image's natural size is in no stylesheet, so any rebuilt map has lost it and
+            // the picture lays out as a full-width strip of zero height. Every one of the six callers
+            // applied `apply_natural_sizes` BEFORE this function and none re-applied it after, so on
+            // any page whose CSS contains `@container` the sizes were restated and then immediately
+            // thrown away. The single exception is `load_document`, which spotted the hazard and
+            // re-ran its own inline-image decode afterwards — *being the only site that was right is
+            // how the other five stayed wrong*, which is the shape this file has already named twice
+            // (`sheets_of`, `set_root_box`).
+            //
+            // So it lives INSIDE the re-pass now: the map this function hands back carries the
+            // natural sizes by construction, and a seventh caller cannot forget.
+            apply_natural_sizes(dom, styles, images);
             true
         }
         Err(_) => {
@@ -125,6 +142,7 @@ fn container_query_recascade(
     _viewport_width: f32,
     _styles: &mut StyleMap,
     _root_box: &LayoutBox,
+    _images: &std::collections::HashMap<manuk_dom::NodeId, std::rc::Rc<manuk_paint::DecodedImage>>,
 ) -> bool {
     false
 }
@@ -187,7 +205,7 @@ fn restyle_and_layout(
     let us_layout = t_layout.elapsed().as_micros() as u64;
     let t_cq = std::time::Instant::now();
     let mut cq_relaid = false;
-    if container_query_recascade(dom, sheets, viewport_width, &mut styles, &root_box) {
+    if container_query_recascade(dom, sheets, viewport_width, &mut styles, &root_box, images) {
         root_box = layout_document(dom, &styles, fonts, viewport_width);
         cq_relaid = true;
     }
@@ -5396,7 +5414,14 @@ impl Page {
         // against the map handed to `load_document`, so a re-pass after them would leave
         // `getComputedStyle` answering from the unsized pass. The re-cascade replaces the style
         // map wholesale, so the inline-image natural sizes annotated above are re-applied.
-        if container_query_recascade(&dom, &sheets, viewport_width, &mut styles, &root_box) {
+        if container_query_recascade(
+            &dom,
+            &sheets,
+            viewport_width,
+            &mut styles,
+            &root_box,
+            &inline_images,
+        ) {
             let _ = decode_inline_images(&dom, &mut styles);
             root_box = layout_document(&dom, &styles, fonts, viewport_width);
         }
@@ -6645,6 +6670,7 @@ impl Page {
             viewport_width,
             &mut self.styles,
             &self.root_box,
+            &self.images,
         );
         self.last_cascade = None; // the fingerprint no longer describes this tree
     }
@@ -6694,6 +6720,7 @@ impl Page {
                 viewport_width,
                 &mut self.styles,
                 &self.root_box,
+                &self.images,
             );
             self.last_cascade = None; // the fingerprint no longer describes this tree
         }
@@ -6748,6 +6775,7 @@ impl Page {
             viewport_width,
             &mut new_styles,
             &self.root_box,
+            &self.images,
         );
 
         // A structural mutation adds/removes boxes → reflow at minimum.
@@ -7226,6 +7254,7 @@ impl Page {
             viewport_width,
             &mut new_styles,
             &self.root_box,
+            &self.images,
         );
         // Classify the change vs the pre-external styling (usually Reflow — external
         // rules add geometry).
@@ -10666,6 +10695,82 @@ mod js_interactive_tests {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// # G_CONTAINER_REPASS_KEEPS_NATURAL_SIZE — `@container` must not erase an image's intrinsic size
+    ///
+    /// `restyle_and_layout` states the rule eight lines above its own call site: *"BETWEEN the cascade
+    /// and the layout, EVERY TIME. A cascade that rebuilds the style map erases it, and the picture
+    /// becomes a full-width strip of zero height."* `container_query_recascade` rebuilds the style map
+    /// **wholesale** (`*styles = new_styles`) — and every one of its six callers applied
+    /// `apply_natural_sizes` BEFORE it and none re-applied it after. So on any page whose CSS merely
+    /// contains the string `@container`, every decoded image's natural size was restated and then
+    /// immediately thrown away.
+    ///
+    /// Found by the `LAYOUT PHASES` ledger (t1258): profiling `bhramarah.in` — a Shopify storefront in
+    /// the timeout cohort, whose `base.css` and `styles.css` both carry real `@container` rules —
+    /// showed `container_query_ms=7,329` against a `cascade_ms=4,866`, which is what put the re-pass
+    /// under a microscope in the first place. The defect is a correctness one and was sitting in the
+    /// path the whole time.
+    ///
+    /// ⚠ **THE `@container`-FREE ROW IS THE CONTROL, AND IT IS WHAT MAKES THIS A STATEMENT ABOUT THE
+    /// RE-PASS.** Without it a fix that simply applied natural sizes twice everywhere would pass, and
+    /// so would one that never ran the re-pass at all. The control proves the sizes were already
+    /// correct on the ordinary path — the defect is specifically what the second cascade destroys.
+    ///
+    /// **How it goes RED:** delete the `apply_natural_sizes(dom, styles, images)` call inside
+    /// `container_query_recascade`. The `@container` row reports 0x0 (or the CSS-declared size) and
+    /// the control row keeps passing.
+    #[test]
+    fn container_repass_keeps_a_decoded_images_natural_size() {
+        // 40x20 is deliberately not square and not a round CSS default, so nothing else can produce it.
+        let img = std::rc::Rc::new(manuk_paint::DecodedImage {
+            width: 40,
+            height: 20,
+            rgba: vec![0; 40 * 20 * 4],
+        });
+        let fonts = manuk_text::FontContext::new();
+
+        // (label, css) — the same document, one sheet carrying `@container` and one not.
+        let cases: [(&str, &str); 2] = [
+            (
+                "@container",
+                "#box{container-type:inline-size}@container (min-width:1px){#i{opacity:0.5}}",
+            ),
+            ("CONTROL (no @container)", "#box{width:300px}"),
+        ];
+
+        for (label, css) in cases {
+            let dom = manuk_html::parse("<div id=box><img id=i src='x.png'></div>");
+            let node = dom
+                .descendants(dom.root())
+                .find(|&n| dom.tag_name(n) == Some("img"))
+                .expect("the fixture has an <img>");
+            let mut images = std::collections::HashMap::new();
+            images.insert(node, img.clone());
+
+            let sheets = vec![Stylesheet::parse(css)];
+            let (_styles, root) = restyle_and_layout(&dom, &sheets, &fonts, 800.0, &images);
+
+            // ⚠ Asserted on the LAID-OUT BOX, not on the style. `fill_natural_size` sets `width` plus
+            // an `aspect_ratio` and deliberately leaves `height: auto` for layout to derive, so a
+            // style-level assertion on `height` would fail against correct code — it did, on the first
+            // cut of this gate. The rendered rect is also the thing the defect is actually about.
+            let rect = root
+                .node_rects(&dom)
+                .into_iter()
+                .find(|(n, _)| *n == node)
+                .map(|(_, r)| r)
+                .expect("the <img> produced a box");
+            assert!(
+                (rect.width - 40.0).abs() < 0.5 && (rect.height - 20.0).abs() < 0.5,
+                "{label}: the decoded image must lay out at its 40x20 natural size — got {}x{}. \
+                 A rebuilt cascade carries no intrinsic size, so the picture becomes a strip of \
+                 zero height.",
+                rect.width,
+                rect.height
+            );
+        }
+    }
 
     /// **A COMMA IS A LEGAL URL CHARACTER, AND SPLITTING `srcset` ON COMMAS SHREDS ONE SITE IN TEN
     /// THAT USES THE ATTRIBUTE** (t1046).

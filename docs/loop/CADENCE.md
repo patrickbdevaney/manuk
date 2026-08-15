@@ -15,7 +15,7 @@
 | median tick cycle | **29m** | 953 intervals |
 | median, last 10 | **77m** | 10 intervals |
 | fastest / slowest | 5s / 5.4d | |
-| **ticks per hour** | **1.14** | 839.2h elapsed |
+| **ticks per hour** | **1.13** | 840.1h elapsed |
 | median verify wall | **63s** | 893 ticks |
 | wall trend | 39s → 17m — getting slower ⚠️ | first 3 vs last 3 |
 
@@ -28,7 +28,7 @@ it, and a wall that grows taxes every future tick, so it is tracked separately f
 
 * **capabilities asserted** (`G_CAPABILITY`): 48 → **81**
 * **live gates**: 27 → **472**
-* **✅ rows in the capability ledger**: 144 → **627**
+* **✅ rows in the capability ledger**: 144 → **628**
 * **Bar 0 — oracle hangs**: 0 of 265 sites
 
 **433 of 954 ticks** (45%) moved a
@@ -1050,6 +1050,6 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 | **1253** | 2026-08-14 20:53 | 1.8h | measurement | 13m | +99/−32 | 471 | 81 | 56.0% · | a third of the vertical mass is a CONSEQUENCE, and the margin-collapse hypothesis died at  |
 | **1255** | 2026-08-14 21:36 | 43m | capability | 17m | +214/−35 | 471 | 81 | 56.0% · | a NO-BREAK SPACE is not whitespace, and t1254's "top mechanism" was my own grep matching i |
 | **1256** | 2026-08-14 23:42 | 2.1h | capability | 17m | +557/−34 | 471 | 81 | 56.0% · | Grid §9.1 says CONTAINING BLOCK, not "child", and the element had two boxes (2026-08-14) |
-| **1257** | 2026-08-15 04:17 | 4.6h | capability | 17m | +910/−47 | 472 | 81 | 56.0% · | a shorthand SETS its longhands, and the CONTROL row said it was never a grid bug (2026-08- |
+| **1257** | 2026-08-15 05:06 | 5.4h | capability | 17m | +627/−38 | 472 | 81 | 56.0% · | a shorthand SETS its longhands, and the CONTROL row said it was never a grid bug (2026-08- |
 
 *`·` after a WPT figure means **carried forward**, not measured this tick.*

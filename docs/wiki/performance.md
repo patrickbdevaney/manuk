@@ -747,3 +747,73 @@ above and drops most of the 983 ms. That is the next bounded lever, and it is **
 > ⚠ Third time in six ticks that the fix which *looked* available was the wrong one — `sheets_of`
 > (0.2% of a forced reflow), pseudo bucketing (14× narrower, inert), and now this. **The expensive
 > thing and the removable thing keep turning out to be different objects.**
+
+## `layout_ms` was never layout — the `@container` re-pass is HALF of every forced reflow (t1258)
+
+The attribution chain — drain → forced reflow (t1236) → cascade phases (t1237-1240) — stopped at a
+single number it had no way to open. `SLOW FORCED REFLOW` reports `layout_ms`, and on `bhramarah.in`
+(a Shopify storefront in the sweep's **timeout-150s** cohort, which is the M1 scorability cap) that
+number reads **17,349 ms** against a cascade of ~6,200 ms. So ~11 s per reflow sat inside
+`layout_document` with nothing to say where — and the natural reading, that layout itself is slow, is
+**wrong**.
+
+`LAYOUT PHASES` (`MANUK_LAYOUT_PROFILE=1`, `manuk-layout`) says so directly:
+
+```text
+  LAYOUT PHASES nodes=23013 total_ms=1880  taffy_ms=1689 taffy_n=1  abs_ms=188
+                measure_ms=0 measure_n=0 measure_hits=87399
+                min_content_ms=0 max_content_ms=0  unattributed_ms=3
+```
+
+**`layout_document` costs 1.88 s, not 11.** And the memoization everyone suspected is not merely
+working, it is total: **87,399 measure-cache hits and zero misses.** Intrinsic sizing was the obvious
+culprit and it is innocent — 90% of layout is one taffy solve, and `abs_ms` (10%) is the only other
+term.
+
+The 11 s was in the term nobody had split. `SLOW RESTYLE+LAYOUT` already carried it:
+
+```text
+  cascade_ms=4866   layout_ms=1851   container_query_ms=7329   cq_relaid=true   n_sheets=51
+  cascade_ms=1244   layout_ms=516    container_query_ms=0      cq_relaid=false  n_sheets=42
+```
+
+⚠⚠⚠ **`container_query_ms` is the LARGEST single term in a reflow — bigger than the cascade, four
+times the layout.** It is a second full cascade plus a second full layout of all 23,000 nodes, and it
+fires on **every** reflow from the moment the page's sheet count reaches 47. The two-pass model is
+correct (an `@container` condition answers from geometry, so it needs a laid-out box first), and both
+`base.css` and `styles.css` here carry real `@container` rules — so this is the design's cost, not a
+misfire. What is not correct is that the re-pass re-styles the **whole document** to resolve rules
+that can only apply inside a query container.
+
+⚠ **The tell to keep**: across one load this document's reflows go **1,827 ms → 17,411 ms while the
+box count FALLS (5,337 → 3,326)**. More time, fewer boxes. That shape says *re-measurement*, and the
+instinct it produces — blame intrinsic sizing — is exactly the one the ledger refuted.
+
+### The correctness defect the profile walked into
+
+`container_query_recascade` replaces the style map **wholesale** (`*styles = new_styles`), and
+`restyle_and_layout` states the governing rule eight lines above its own call to it:
+
+> *"**BETWEEN the cascade and the layout, every time.** A cascade that rebuilds the style map erases
+> it, and the picture becomes a full-width strip of zero height."*
+
+All **six** callers applied `apply_natural_sizes` **before** the re-pass and **none** re-applied it
+after. So on any page whose CSS merely contains `@container`, every decoded image's intrinsic size was
+restated and then immediately thrown away — measured, a 40×20 image lays out **16×16**, the
+broken-image placeholder. One site (`load_document`) had spotted the hazard and re-ran its own inline
+decode afterwards; **being the only site that was right is how the other five stayed wrong**, which is
+the third time this file has named that shape (`sheets_of`, `set_root_box`).
+
+It lives **inside** the re-pass now, so the map it returns carries natural sizes by construction and a
+seventh caller cannot forget. Gated by `G_CONTAINER_REPASS_KEEPS_NATURAL_SIZE`, whose `@container`-free
+**control row** is what makes it a statement about the re-pass rather than about images.
+
+⚠ **Next, and it is now priced rather than guessed**: the re-pass must be scoped to query-container
+subtrees instead of the document. Note the accounting trap before starting — `cascade_ms` and
+`container_query_ms` are *two cascades*, so the `to_computed_style` and `MinimalCascade` levers above
+are each worth **twice** what their single-cascade share suggests on a container-query page.
+
+> ⚠ **The instrument's own rule, and it went red to prove it**: these regions nest hard (taffy drives
+> the item measure, which shrink-to-fits, which probes max-content, which may enter taffy again), so
+> `PhaseGuard` charges the **outermost only**. Remove that gate and the buckets sum to **233 ms against
+> a 78 ms layout** — a 3× overcount that would have read as a finding.

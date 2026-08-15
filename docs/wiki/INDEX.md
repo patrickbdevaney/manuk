@@ -1878,6 +1878,8 @@
   - L661 · …and pseudo_ms still does not move: 3,531 → 3,560 ms
   - L681 · to_computed_style is 53% of the cascade, and the content test was two statements too late (t1240)
   - L726 · The second cascade engine cannot be deleted — but it can be narrowed (t1241)
+  - L751 · layout_ms was never layout — the @container re-pass is HALF of every forced reflow (t1258)
+  - L792 · The correctness defect the profile walked into
 
 ## THE WIKI — what we durably KNOW, organised by subsystem
 `docs/wiki/README.md`
@@ -2143,4 +2145,4 @@
   - L231 · Both named mechanisms are subsystem work
 
 ---
-2050 sections across 22 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+2052 sections across 22 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.

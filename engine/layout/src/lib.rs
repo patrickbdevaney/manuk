@@ -134,6 +134,177 @@ impl Drop for IntrinsicProbe<'_, '_> {
     }
 }
 
+/// ⚠⚠⚠ **THE LAYOUT PHASE LEDGER — the level below `SLOW FORCED REFLOW`'s `layout_ms`.**
+///
+/// The attribution chain that found the M1 scorability cap stops one level short of a fix. t1236
+/// split a drain into forced reflows and found ONE costing 21s; t1237-1240 split the *cascade* inside
+/// it and took `to_computed_style` from 53% to a third of what it was. What that chain never split is
+/// the OTHER half: `SLOW FORCED REFLOW` reports `layout_ms`, and on `bhramarah.in` that reads
+/// **17,349ms** against a cascade of ~6,200ms — so ~11s of every reflow is inside `layout_document`
+/// and nothing says where.
+///
+/// The signature that makes this worth naming rather than guessing at: across one load the same
+/// document's reflows go **1,827ms → 17,411ms while the box count FALLS (5,337 → 3,326)**. More time,
+/// fewer boxes. That is the shape of re-measurement, not of more work — and the two candidates,
+/// intrinsic sizing and taffy's per-item probes, are both memoized here already and therefore both
+/// *believed* cheap. A belief about a hot path that no counter has ever contradicted is exactly what
+/// this project keeps paying for.
+///
+/// **The accounting rule is OUTERMOST-ONLY, and it is what makes the buckets a partition rather than
+/// a pile.** These regions nest hard — a max-content probe lays out a subtree, which shrink-to-fits,
+/// which probes again, which may enter taffy, which probes each item again. Charging every entry
+/// would report far more than the wall clock and flatter whichever bucket sits deepest. So one shared
+/// depth counter gates them all: a region is charged only when nothing else is already being charged,
+/// and everything it triggers is charged TO IT. `unattributed` — total minus the buckets — is then a
+/// real quantity with a real meaning: ordinary block/inline flow, outside any measurement.
+///
+/// Counters are **always on**; only the log line is gated by `MANUK_LAYOUT_PROFILE`. Timing happens
+/// on the MISS path only, after each cache lookup, so a cache HIT costs one integer increment and the
+/// instrument cannot itself become the cost it is measuring. (`hits` is recorded precisely so a
+/// reading can prove the memoization works before anyone blames it.)
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct LayoutPhases {
+    /// Wall time of the whole `layout_document` call.
+    pub total_ns: u128,
+    /// Top-level time inside the flex/grid item measure (`measure_intrinsic`), and its entry count.
+    pub measure_ns: u128,
+    pub measure_n: u64,
+    /// `measure_cache` lookups that HIT — the memoization's own receipt.
+    pub measure_hits: u64,
+    /// Top-level time computing **min-content** widths, and its entry count.
+    pub min_content_ns: u128,
+    pub min_content_n: u64,
+    /// Top-level time computing **max-content** widths, and its entry count.
+    pub max_content_ns: u128,
+    pub max_content_n: u64,
+    /// Top-level time inside taffy's flex/grid solve, and its entry count.
+    pub taffy_ns: u128,
+    pub taffy_n: u64,
+    /// Time in the final absolute/fixed placement pass.
+    pub abs_ns: u128,
+}
+
+impl LayoutPhases {
+    /// Everything the named buckets account for.
+    pub fn named_ns(&self) -> u128 {
+        self.measure_ns + self.min_content_ns + self.max_content_ns + self.taffy_ns + self.abs_ns
+    }
+
+    /// Ordinary block/inline flow — the time that is inside no measurement region at all.
+    ///
+    /// Saturating because `total_ns` is sampled around the buckets and a pathological clock could
+    /// otherwise wrap this into a colossal number that reads as a finding.
+    pub fn unattributed_ns(&self) -> u128 {
+        self.total_ns.saturating_sub(self.named_ns())
+    }
+}
+
+thread_local! {
+    static LAYOUT_PHASES: std::cell::Cell<LayoutPhases> = const {
+        std::cell::Cell::new(LayoutPhases {
+            total_ns: 0,
+            measure_ns: 0,
+            measure_n: 0,
+            measure_hits: 0,
+            min_content_ns: 0,
+            min_content_n: 0,
+            max_content_ns: 0,
+            max_content_n: 0,
+            taffy_ns: 0,
+            taffy_n: 0,
+            abs_ns: 0,
+        })
+    };
+    /// How many phase regions are on the stack. Shared by every bucket — see the outermost-only rule.
+    static PHASE_DEPTH: std::cell::Cell<u32> = const { std::cell::Cell::new(0) };
+}
+
+/// Which bucket a [`PhaseGuard`] charges.
+#[derive(Clone, Copy)]
+enum Phase {
+    Measure,
+    MinContent,
+    MaxContent,
+    Taffy,
+    Abs,
+}
+
+/// Charges its region to `phase` **only if no other region is already being charged**.
+struct PhaseGuard {
+    phase: Phase,
+    /// `None` when an enclosing region already owns the clock — then this guard is inert.
+    start: Option<std::time::Instant>,
+}
+
+impl PhaseGuard {
+    fn enter(phase: Phase) -> Self {
+        let depth = PHASE_DEPTH.with(|d| {
+            let v = d.get();
+            d.set(v + 1);
+            v
+        });
+        Self {
+            phase,
+            start: (depth == 0).then(std::time::Instant::now),
+        }
+    }
+}
+
+impl Drop for PhaseGuard {
+    fn drop(&mut self) {
+        PHASE_DEPTH.with(|d| d.set(d.get().saturating_sub(1)));
+        let Some(start) = self.start else { return };
+        let ns = start.elapsed().as_nanos();
+        LAYOUT_PHASES.with(|p| {
+            let mut v = p.get();
+            match self.phase {
+                Phase::Measure => {
+                    v.measure_ns += ns;
+                    v.measure_n += 1;
+                }
+                Phase::MinContent => {
+                    v.min_content_ns += ns;
+                    v.min_content_n += 1;
+                }
+                Phase::MaxContent => {
+                    v.max_content_ns += ns;
+                    v.max_content_n += 1;
+                }
+                Phase::Taffy => {
+                    v.taffy_ns += ns;
+                    v.taffy_n += 1;
+                }
+                Phase::Abs => v.abs_ns += ns,
+            }
+            p.set(v);
+        });
+    }
+}
+
+/// Note one `measure_cache` HIT. Deliberately not a `PhaseGuard`: a hit does no work, and giving it
+/// a clock would make the instrument the hot path.
+fn note_measure_hit() {
+    LAYOUT_PHASES.with(|p| {
+        let mut v = p.get();
+        v.measure_hits += 1;
+        p.set(v);
+    });
+}
+
+/// The phase ledger for the most recent [`layout_document`] on this thread.
+///
+/// Public because the gate asserts on it: an instrument whose numbers only ever appear in a log line
+/// is one nothing can prove goes red.
+pub fn layout_phases() -> LayoutPhases {
+    LAYOUT_PHASES.with(|p| p.get())
+}
+
+/// `MANUK_LAYOUT_PROFILE=1` — read ONCE, for the same reason [`trace_intrinsic`] is.
+fn layout_profiling() -> bool {
+    static V: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
+    *V.get_or_init(|| std::env::var("MANUK_LAYOUT_PROFILE").is_ok())
+}
+
 /// The visual style of a text run, resolved for shaping + paint.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct TextStyle {
@@ -1033,6 +1204,14 @@ pub fn layout_document(
     viewport_width: f32,
 ) -> LayoutBox {
     LAYOUTS.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+    // The ledger describes ONE layout, so it is reset here rather than accumulated across the
+    // document's lifetime — a running total would answer a question nobody asked and would hide the
+    // reflow-to-reflow growth that is the whole reason this exists. `PHASE_DEPTH` is reset with it
+    // because a panic unwinding out of a previous layout could otherwise leave it above zero, which
+    // would silently disable every bucket from then on.
+    LAYOUT_PHASES.with(|p| p.set(LayoutPhases::default()));
+    PHASE_DEPTH.with(|d| d.set(0));
+    let t_all = std::time::Instant::now();
     let ctx = Ctx {
         dom,
         styles,
@@ -1056,7 +1235,7 @@ pub fn layout_document(
         .or_else(|| dom.find_first("html"))
         .or_else(|| dom.children(dom.root()).find(|&n| dom.is_element(n)));
 
-    match root_el {
+    let out = match root_el {
         Some(el) => {
             // The initial containing block is itself a BFC root; `layout_block` gives
             // the root element its own context, so this outer one is just a seed.
@@ -1083,7 +1262,10 @@ pub fn layout_document(
                 .boxx;
             // Absolute/fixed boxes were skipped in flow; place them in a final pass
             // against their containing blocks (CSS2 §9.6).
-            ctx.position_absolutes(el, &mut root, viewport_width);
+            {
+                let _phase = PhaseGuard::enter(Phase::Abs);
+                ctx.position_absolutes(el, &mut root, viewport_width);
+            }
             root
         }
         None => LayoutBox {
@@ -1111,7 +1293,37 @@ pub fn layout_document(
             out_of_flow: false,
             content: BoxContent::Block(vec![]),
         },
-    }
+    };
+
+    LAYOUT_PHASES.with(|p| {
+        let mut v = p.get();
+        v.total_ns = t_all.elapsed().as_nanos();
+        p.set(v);
+        if layout_profiling() {
+            let ms = |ns: u128| ns as f64 / 1.0e6;
+            tracing::warn!(
+                nodes = dom.len(),
+                total_ms = ms(v.total_ns),
+                measure_ms = ms(v.measure_ns),
+                measure_n = v.measure_n,
+                measure_hits = v.measure_hits,
+                min_content_ms = ms(v.min_content_ns),
+                min_content_n = v.min_content_n,
+                max_content_ms = ms(v.max_content_ns),
+                max_content_n = v.max_content_n,
+                taffy_ms = ms(v.taffy_ns),
+                taffy_n = v.taffy_n,
+                abs_ms = ms(v.abs_ns),
+                // Whatever the named buckets do not account for gets its own column rather than
+                // being spread across them — the same rule `CASCADE PHASES` follows, and for the
+                // same reason: an instrument whose parts always sum to the whole cannot tell you it
+                // is missing something.
+                unattributed_ms = ms(v.unattributed_ns()),
+                "LAYOUT PHASES"
+            );
+        }
+    });
+    out
 }
 
 /// Is `node` a block-level box in its parent's formatting context?
@@ -6142,6 +6354,9 @@ impl Ctx<'_> {
             self.min_content_cache.borrow_mut().insert(node, w);
             return w;
         }
+        // Below the cache AND below the definite-width short-circuit: only the path that actually
+        // lays a subtree out is charged. See `LayoutPhases`.
+        let _phase = PhaseGuard::enter(Phase::MinContent);
         let mut fc = FloatContext::new(0.0, 1.0);
         let _probe = IntrinsicProbe::enter(self);
         let (content, _h) = self.layout_children(node, 0.0, 0.0, 1.0, None, &mut fc);
@@ -6261,6 +6476,7 @@ impl Ctx<'_> {
         if let Some(&cached) = self.max_content_cache.borrow().get(&node) {
             return cached;
         }
+        let _phase = PhaseGuard::enter(Phase::MaxContent);
         // Ceil to the LayoutUnit grid, never round — see `taffy_tree::ceil_to_layout_unit`. An
         // intrinsic width that is a few thousandths of a pixel SHORT of what its own content needs
         // makes the box re-wrap the run it was measured from.
@@ -6577,8 +6793,11 @@ impl Ctx<'_> {
         // (which pass the same very-large avail) share a cache entry.
         let key = (node, avail.round().min(u32::MAX as f32) as u32);
         if let Some(&cached) = self.measure_cache.borrow().get(&key) {
+            note_measure_hit();
             return cached;
         }
+        // After the cache check: a HIT must not pay for a clock. See `LayoutPhases`.
+        let _phase = PhaseGuard::enter(Phase::Measure);
         // ⚠⚠ **A REPLACED ELEMENT HAS NO CHILDREN TO MEASURE, so measuring them reports ZERO.**
         //
         // This seam answers "how big does this flex/grid item want to be?" by laying the subtree out
@@ -9230,6 +9449,10 @@ impl Ctx<'_> {
             Dim::Px(p) => Some(p),
             _ => None,
         };
+        // Charged as one region: the measure closure below re-enters this file, so taffy's own solve
+        // and the item measures it drives are ONE cost from the caller's point of view. See
+        // `LayoutPhases` for why nesting is attributed outward rather than split.
+        let _phase = PhaseGuard::enter(Phase::Taffy);
         let (placed, solved_h) = taffy_tree::solve_subtree(
             self.dom,
             self.styles,
@@ -24443,6 +24666,88 @@ mod tests {
              its frame is added OUTSIDE the declared length.",
             c.width,
             c.height
+        );
+    }
+
+    /// # G_LAYOUT_PHASES — the layout ledger is a PARTITION, and it describes ONE layout
+    ///
+    /// `SLOW FORCED REFLOW` reports a single `layout_ms`, and on `bhramarah.in` that number is
+    /// **17,349ms** against a cascade of ~6,200ms — so ~11s per reflow is inside `layout_document`
+    /// and the attribution chain that t1236-t1240 built stops exactly there. [`LayoutPhases`] is the
+    /// next link. This gate asserts the two properties that make its numbers mean anything; without
+    /// them it is a pile of plausible milliseconds, which is the failure mode this project has paid
+    /// for more than once (an instrument that cannot be wrong is one that measured nothing).
+    ///
+    /// **1 — the buckets never exceed the whole.** These regions nest hard: a taffy solve drives the
+    /// item measure, which shrink-to-fits, which probes max-content, which lays out a subtree that
+    /// may enter taffy again. `PhaseGuard`'s shared `PHASE_DEPTH` charges only the OUTERMOST region,
+    /// so the buckets are disjoint intervals inside `total_ns`. Delete the depth gate — charge every
+    /// entry — and nesting double-counts until `named_ns()` runs past `total_ns`, and this goes RED.
+    ///
+    /// **2 — the ledger is per-layout, not cumulative.** Two identical layouts of the same document
+    /// must report the same counts, because the question is *"what did THIS reflow cost"* and a
+    /// running total answers a different one. Remove the reset at the top of `layout_document` and
+    /// the second reading doubles, and this goes RED.
+    ///
+    /// The fixture is nested flex with unsized text items, which is what actually drives the measure
+    /// seam — a plain block document exercises none of it and would let both assertions pass
+    /// vacuously, so the counts are asserted NON-ZERO first.
+    #[test]
+    fn layout_phase_ledger_partitions_and_is_per_layout() {
+        const HTML: &str = "<div id=outer>\
+             <div class=row><div class=cell>alpha beta</div><div class=cell>gamma</div></div>\
+             <div class=row><div class=cell>delta epsilon zeta</div><div class=cell>eta</div></div>\
+             </div>";
+        const CSS: &str = "#outer{display:flex;flex-direction:column;width:400px}\
+             .row{display:flex}.cell{flex:1}";
+
+        let (_dom, _root) = layout_html(HTML, CSS, 400.0);
+        let a = layout_phases();
+
+        // NON-VACUITY. If the fixture drove no flex solve, everything below is trivially true.
+        assert!(
+            a.taffy_n > 0,
+            "the fixture must actually enter taffy, or this gate asserts nothing — taffy_n={}",
+            a.taffy_n
+        );
+        assert!(
+            a.total_ns > 0,
+            "layout_document must have clocked itself — total_ns=0"
+        );
+
+        // 1 — PARTITION. Outermost-only accounting makes the buckets disjoint sub-intervals of the
+        // whole, so their sum cannot outrun it.
+        assert!(
+            a.named_ns() <= a.total_ns,
+            "the phase buckets sum to {}ns but the whole layout took {}ns — the buckets are \
+             DOUBLE-COUNTING, which is what `PHASE_DEPTH` exists to prevent. \
+             (measure={} min_content={} max_content={} taffy={} abs={})",
+            a.named_ns(),
+            a.total_ns,
+            a.measure_ns,
+            a.min_content_ns,
+            a.max_content_ns,
+            a.taffy_ns,
+            a.abs_ns
+        );
+
+        // The depth counter must come back to rest, or every later layout silently reports zeros.
+        assert_eq!(
+            PHASE_DEPTH.with(|d| d.get()),
+            0,
+            "PHASE_DEPTH did not unwind to 0 — every subsequent layout would be charged to nothing"
+        );
+
+        // 2 — PER-LAYOUT. The same document laid out again reports the same counts, not the sum.
+        let (_dom2, _root2) = layout_html(HTML, CSS, 400.0);
+        let b = layout_phases();
+        assert_eq!(
+            (b.taffy_n, b.measure_n, b.min_content_n, b.max_content_n),
+            (a.taffy_n, a.measure_n, a.min_content_n, a.max_content_n),
+            "the ledger ACCUMULATED across two layouts of the same document — it must describe one \
+             layout. first={:?} second={:?}",
+            (a.taffy_n, a.measure_n, a.min_content_n, a.max_content_n),
+            (b.taffy_n, b.measure_n, b.min_content_n, b.max_content_n)
         );
     }
 }
