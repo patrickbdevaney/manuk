@@ -11809,10 +11809,58 @@ unsafe fn el_offset_pos(vp: *mut Value, axis: usize) -> f64 {
     match offset_parent(dom, node) {
         // No offsetParent → the border edge relative to the initial containing block, i.e. absolute.
         None => (self_edge as f64).round(),
-        // Otherwise, subtract the offsetParent's padding-edge origin (its border-box edge plus its
-        // border width on that side).
         Some(op) => {
+            // ⚠⚠⚠ **THE BODY IS NOT AN ORDINARY `offsetParent`, AND EVERY `check-layout-th.js` SUITE
+            // ON THE WEB PLATFORM MEASURES THROUGH IT.** `offsetParent` returns the body for any
+            // element with no positioned ancestor — which is *most* elements on *most* pages — and
+            // CSSOM View's step 3 says to subtract the offsetParent's PADDING EDGE. Applied to the
+            // body that subtracts the UA's `margin: 8px`, so an element at the top-left of an
+            // ordinary document reported **0** where both Chrome and Firefox report **8**.
+            //
+            // Measured against live Chromium rather than reasoned from the spec, one variable per
+            // row (`google-chrome --headless --dump-dom`, an `<iframe>` per row so each gets its own
+            // body). `x` is the element's own ICB-relative position:
+            //
+            // ```text
+            //   body style                    x    Chrome offsetLeft
+            //   margin:8                       8         8
+            //   margin:0                       0         0
+            //   margin:8 padding:10           18        18
+            //   margin:8 border:5             13        13
+            //   margin:8 padding:10 border:5  23        23
+            //   margin:8 position:relative     8         0     <- the discriminator
+            //   margin:8 rel padding:10       18        10
+            //   margin:8 rel border:5         13         5
+            //   margin:8 abs border:5         13         5
+            //   CONTROL, a non-body offsetParent — the spec's own rule, and we were ALREADY right:
+            //   div rel border:5 padding:10   23        10     (= 23 − padding edge 13)
+            //   div rel border:5              13         0
+            // ```
+            //
+            // Two rules fall out, and they are **different from each other and from the spec**:
+            //
+            // * a **STATIC** body subtracts **nothing** — the answer is the ICB-relative coordinate,
+            //   exactly the `None` branch above. Its margin, padding and border are all *included*.
+            // * a **POSITIONED** body subtracts its **BORDER-BOX** origin, not its padding edge: the
+            //   `rel border:5` row reads 5, not 0, so the border is NOT taken off.
+            //
+            // ⚠⚠ Only the body arm changes. The control rows prove the general path was already
+            // correct, and widening the "don't subtract the border" half to every offsetParent would
+            // break `div rel border:5 padding:10` from 10 to 15 — which is why this is a body case
+            // and not a re-reading of step 3.
+            let op_is_body = (*dom).tag_name(op) == Some("body");
             let op_edge = layout_rect(op).map(|r| r[axis]).unwrap_or(0.0);
+            if op_is_body {
+                let body_static = with_style(op, |cs| cs.position)
+                    .map_or(true, |p| p == manuk_css::Position::Static);
+                return if body_static {
+                    (self_edge as f64).round()
+                } else {
+                    ((self_edge - op_edge) as f64).round()
+                };
+            }
+            // The ordinary offsetParent: subtract its padding-edge origin (border-box edge plus its
+            // border width on that side). CSSOM View step 3, and Chrome-confirmed above.
             let border = with_style(op, |cs| {
                 if axis == 0 {
                     cs.border_width.left

@@ -478,6 +478,8 @@
   - L9649 · Ledger — measured, with a same-hour OLD-BINARY control
   - L9666 · An RTL column flex container's cross axis is the INLINE axis, and taffy cannot be told (t1271)
   - L9702 · How it was ranked — and two wrong turns worth keeping
+  - L9721 · The BODY is not an ordinary offsetParent, and the spec's rule is not what two engines do (t1272)
+  - L9771 · This is t1271's lesson applied to the bar t1271 threw away
 
 ## browser-capabilities.md
 `docs/wiki/browser-capabilities.md`
@@ -2185,4 +2187,4 @@
   - L231 · Both named mechanisms are subsystem work
 
 ---
-2092 sections across 22 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+2094 sections across 22 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.

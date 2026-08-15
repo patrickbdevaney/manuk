@@ -965,3 +965,4 @@ tick	sha	epoch	iso	delta_s	shape	wall_s	files	added	deleted	gates	claims	wpt_pas
 1268	d6a1cb10	1786823283	2026-08-15T15:48:03-04:00	4932	measurement	997	8	466	7	478	81	3896	6960	0	636	0	the real-site debt: a clean --jobs 2 CrUX sweep, hypothesis stated FIRST (2026-08-15)
 1270	6453df08	1786828777	2026-08-15T17:19:37-04:00	5494	capability	997	12	692	78	478	81	3896	6960	0	637	0	a grid's USED track sizes were computed by taffy on every layout and thrown away at the trait boundary (2026-08-15)
 1271	02501281	1786831447	2026-08-15T18:04:07-04:00	2670	capability	997	10	366	50	479	81	3896	6960	0	638	0	an RTL COLUMN flex container laid its cross axis from the LEFT, and our own source had named the gap (2026-08-15)
+1272	d630bd17	1786834221	2026-08-15T18:50:21-04:00	2774	capability	997	10	341	39	480	81	3896	6960	0	639	0	`offsetLeft` subtracted the UA's `margin: 8px` from every element on every ordinary page (2026-08-15)

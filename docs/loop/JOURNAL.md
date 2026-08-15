@@ -81287,3 +81287,85 @@ The IN-FLOW arm is asserted beside the ABSPOS one for the same reason: the WPT m
 PERF: none claimed. CAPABILITY: an RTL column flex container aligns to the correct edge.
 
 WIKI: `docs/wiki/box-layout.md` — an RTL column flex container's cross axis is the INLINE axis.
+
+## Tick 1272 — `offsetLeft` subtracted the UA's `margin: 8px` from every element on every ordinary page (2026-08-15)
+
+TICK SHAPE: capability — the top mechanism in the board's #1 ★ CSS-LAYOUT area, reached by applying
+t1271's OWN lesson to the bar t1271 had dismissed.
+
+CADENCE: the self-audit was due at 1272 and was run. **One prescribed-but-not-executed item, and it
+is HARNESS: `verify wall 871s EXCEEDS the 300s target` (Part 21.2 item 1).** `scripts/` is
+observer-owned per the standing scope rule, so this is recorded here and NOT acted on; every other
+audit line is green (49 process defects recorded, 392 clusters, 1191 pattern rows, every gate declares
+how to break it, journal complete for the last 5 ticks). `LAST_AUDIT_TICK` 1262 → 1272.
+
+HYPOTHESIS. `offsetParent` returns the **body** for any element with no positioned ancestor — which is
+*most* elements on *most* pages. CSSOM View step 3 subtracts the offsetParent's PADDING EDGE, and on
+the body that takes off the UA's `margin: 8px`, so an element at the top-left of an ordinary document
+reported **0** where Chrome and Firefox both report **8**.
+
+⚠⚠⚠ **THE RANKING IS THE POINT OF THIS ENTRY: t1272 IS t1271's LESSON APPLIED TO THE BAR t1271 THREW
+AWAY.** One tick ago the flexbox histogram's tallest bar — `offsetLeft` off by exactly **+8, 533 times,
+4.5× the next row** — was dismissed as an aggregation, and that dismissal was *correct on the evidence
+then available*: grouping by DELTA lumps unrelated mechanisms into one tall bar. Re-grouping **the same
+failures by MARKUP** (t1271's own conclusion) split the +8 — and one of the pieces was uniform in a way
+a coincidence cannot be: the whole `.a` family had **correct widths and correct heights** and *every*
+`offsetLeft` short by 8. Correct sizes plus a constant shift is not four mechanisms, it is one
+coordinate space. ⭐ **The delta was a red herring as a KEY and a true signal as a VALUE; what made it
+readable was REGROUPING, not re-thresholding.**
+
+MEASURED AGAINST LIVE CHROMIUM, not reasoned from the spec (`--headless --dump-dom`, one variable per
+row, each row in its own `<iframe>` so it gets its own body). `x` is the element's ICB-relative position:
+
+```text
+  body style                     x    Chrome offsetLeft
+  margin:8                        8         8
+  margin:0                        0         0
+  margin:8 padding:10            18        18
+  margin:8 border:5              13        13
+  margin:8 padding:10 border:5   23        23
+  margin:8 position:relative      8         0     <- the discriminator
+  margin:8 rel padding:10        18        10
+  margin:8 rel border:5          13         5
+  margin:8 abs border:5          13         5
+  CONTROL — a NON-body offsetParent, the spec's own rule, ALREADY CORRECT here:
+  div rel border:5 padding:10    23        10     (= 23 − its padding edge 13)
+  div rel border:5               13         0
+```
+
+Two rules, **different from each other and from the spec**: a **STATIC** body subtracts **nothing** —
+margin, padding and border are all part of the answer, so `offsetLeft` is simply the ICB-relative
+coordinate — and a **POSITIONED** body subtracts its **BORDER-BOX** origin rather than its padding edge,
+which is why `rel border:5` reads 5 and not 0.
+
+⚠⚠ **Only the body arm moved, and the control rows are what bound it.** Widening the "do not subtract
+the border" half to every offsetParent takes `div rel border:5 padding:10` from 10 to 15. This is a body
+case, not a re-reading of step 3 — and the two engines agreeing against the spec is what makes it the
+de-facto behaviour the platform is written against.
+
+```text
+  css/css-flexbox   1809/4693 -> 2239/4693   (+430, DENOMINATOR IDENTICAL)
+  CONTROLS, same hour, same box, paired binaries:
+    css/css-grid      6276 -> 6276          numerator identical (den 14649/14660)
+    css/css-sizing    2330/5862 -> 2330/5862   BYTE-IDENTICAL, both numbers
+    css/css-position   541/1482 ->  541/1482   BYTE-IDENTICAL, both numbers
+  HANG/CRASH 0.   WPT TOTAL 466162 -> 466592 (+430)
+```
+
+⚠ **Three control areas byte-identical and the moved area at an identical denominator** — there is no
+scorability churn to argue about in either direction. That grid/sizing/position did *not* move is
+itself informative and was not predicted: their fixtures overwhelmingly sit inside a **positioned**
+wrapper, so their `offsetParent` was never the body and their failures are elsewhere. **The body arm is
+narrower than "every check-layout suite" and the controls are what said so.**
+
+GATE: `G_OFFSET_PARENT_BODY` — four elements, **proven RED on two independent mutations**: force
+`op_is_body = false` → `p1=0 p2=22`, the whole float row short by the UA margin, which is exactly the
+state every measurement was taken against; force `op_is_body = true` → the CONTROLS break, `p3` 10 → 15
+and `p4` 0 → 5. ⚠ `p2` exists because **a single element cannot tell "add 8 once" from "measure from
+the ICB"** — both give `p1=8`, and only the second float (at 8+20+2) separates a constant from a
+coordinate space.
+
+PERF: none claimed. CAPABILITY: `offsetLeft`/`offsetTop` agree with Chrome on an ordinary page — which
+is every popup, tooltip, dropdown, drag handle and virtual list that measures before it places.
+
+WIKI: `docs/wiki/box-layout.md` — the body is not an ordinary `offsetParent`.

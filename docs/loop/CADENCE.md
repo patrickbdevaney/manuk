@@ -11,12 +11,12 @@
 
 | | value | over |
 |---|---|---|
-| ticks landed | **966** | ticks 1–1271 |
-| median tick cycle | **29m** | 965 intervals |
+| ticks landed | **967** | ticks 1–1272 |
+| median tick cycle | **29m** | 966 intervals |
 | median, last 10 | **60m** | 10 intervals |
 | fastest / slowest | 5s / 5.4d | |
-| **ticks per hour** | **1.13** | 853.0h elapsed |
-| median verify wall | **63s** | 905 ticks |
+| **ticks per hour** | **1.13** | 853.8h elapsed |
+| median verify wall | **63s** | 906 ticks |
 | wall trend | 39s → 17m — getting slower ⚠️ | first 3 vs last 3 |
 
 The **cycle** is the real unit: implement → debug → verify wall → land. The wall is only part of
@@ -27,11 +27,11 @@ it, and a wall that grows taxes every future tick, so it is tracked separately f
 ### Near — the daily driver (doc / app / platform web)
 
 * **capabilities asserted** (`G_CAPABILITY`): 48 → **81**
-* **live gates**: 27 → **479**
-* **✅ rows in the capability ledger**: 144 → **638**
+* **live gates**: 27 → **480**
+* **✅ rows in the capability ledger**: 144 → **639**
 * **Bar 0 — oracle hangs**: 0 of 265 sites
 
-**440 of 966 ticks** (46%) moved a
+**441 of 967 ticks** (46%) moved a
 user-visible capability. The rest were instruments, infrastructure and corrections — and the
 ledger says the corrections were not overhead: three of its top three priorities were phantoms,
 and finding that out redirected everything after it.
@@ -90,8 +90,8 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 
 ## What a capability costs
 
-* **440** capability ticks, median cycle **29m**
-* median diff per tick: **+272 / −34** lines across 8 files
+* **441** capability ticks, median cycle **29m**
+* median diff per tick: **+273 / −34** lines across 8 files
 
 ## Every tick
 
@@ -1063,5 +1063,6 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 | **1268** | 2026-08-15 15:48 | 82m | measurement | 17m | +466/−7 | 478 | 81 | 56.0% · | the real-site debt: a clean --jobs 2 CrUX sweep, hypothesis stated FIRST (2026-08-15) |
 | **1270** | 2026-08-15 17:19 | 1.5h | capability | 17m | +692/−78 | 478 | 81 | 56.0% · | a grid's USED track sizes were computed by taffy on every layout and thrown away at the tr |
 | **1271** | 2026-08-15 18:04 | 44m | capability | 17m | +366/−50 | 479 | 81 | 56.0% · | an RTL COLUMN flex container laid its cross axis from the LEFT, and our own source had nam |
+| **1272** | 2026-08-15 18:50 | 46m | capability | 17m | +341/−39 | 480 | 81 | 56.0% · | `offsetLeft` subtracted the UA's `margin: 8px` from every element on every ordinary page ( |
 
 *`·` after a WPT figure means **carried forward**, not measured this tick.*

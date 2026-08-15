@@ -9717,3 +9717,65 @@ file). A `flex-flow: column` fixture with all eight keywords reproduced **nothin
 Adding `direction: rtl` to that same fixture then changed **none of our numbers**, which is the defect
 itself: not a wrong answer, an axis never consulted. *A reduction that fails to reproduce has told you
 which variable you left out of it.*
+
+## The BODY is not an ordinary `offsetParent`, and the spec's rule is not what two engines do (t1272)
+
+`offsetParent` returns the **body** for any element with no positioned ancestor — *most* elements on
+*most* pages. CSSOM View step 3 then says to subtract the offsetParent's **padding edge**, which on the
+body takes off the UA's `margin: 8px`: an element at the top-left of an ordinary document reports **0**
+where Chrome and Firefox both report **8**.
+
+**Measured against live Chromium, one variable per row**, each row in its own `<iframe>` so it gets its
+own body (`google-chrome --headless --dump-dom`). `x` is the element's ICB-relative position:
+
+```text
+  body style                     x    Chrome offsetLeft
+  margin:8                        8         8
+  margin:0                        0         0
+  margin:8 padding:10            18        18
+  margin:8 border:5              13        13
+  margin:8 padding:10 border:5   23        23
+  margin:8 position:relative      8         0     <- the discriminator
+  margin:8 rel padding:10        18        10
+  margin:8 rel border:5          13         5
+  margin:8 abs border:5          13         5
+  CONTROL — a NON-body offsetParent, the spec's own rule, ALREADY CORRECT:
+  div rel border:5 padding:10    23        10     (= 23 − its padding edge 13)
+  div rel border:5               13         0
+```
+
+**Two rules, different from each other and from the spec:**
+
+* a **STATIC** body subtracts **nothing** — its margin, padding *and* border are all part of the
+  answer, so `offsetLeft` is simply the ICB-relative coordinate (the same value the `offsetParent ==
+  null` branch returns);
+* a **POSITIONED** body subtracts its **BORDER-BOX** origin, not its padding edge — which is why
+  `rel border:5` reads **5** and not 0.
+
+⚠⚠ **Only the body arm is special, and the control rows are what bound it.** Widening the "do not
+subtract the border" half to every offsetParent takes `div rel border:5 padding:10` from 10 to 15. Two
+engines agreeing against the spec text is what makes this the de-facto behaviour the platform is
+actually written against — and `check-layout-th.js` compares `node.offsetLeft` directly, so every
+`data-offset-x` in the CSS test suites is authored against it.
+
+```text
+  css/css-flexbox 1809/4693 -> 2239/4693  (+430, DENOMINATOR IDENTICAL)
+  CONTROLS paired same hour: css/css-grid 6276 -> 6276 · css/css-sizing 2330/5862 -> 2330/5862
+  · css/css-position 541/1482 -> 541/1482  (the last two BYTE-IDENTICAL in both numbers)
+```
+
+⚠ **That grid/sizing/position did NOT move was not predicted and is informative**: their fixtures
+overwhelmingly sit inside a *positioned* wrapper, so their `offsetParent` was never the body. The body
+arm is narrower than "every check-layout suite", and the controls are what said so.
+
+### This is t1271's lesson applied to the bar t1271 threw away
+
+One tick earlier the same histogram's tallest bar — `offsetLeft` off by exactly **+8, 533 times, 4.5×
+the next row** — was dismissed as an aggregation of unrelated families, and *that was correct on the
+evidence then available*. Re-grouping **the same failures by MARKUP** split the +8, and one piece was
+uniform in a way a coincidence cannot be: the whole `.a` family had **correct widths and correct
+heights** with *every* `offsetLeft` short by 8.
+
+⭐ **Correct sizes plus a constant shift is not N mechanisms — it is one coordinate space.** The delta
+was a red herring as a *key* and a true signal as a *value*; what made it readable was **regrouping,
+not re-thresholding**.
