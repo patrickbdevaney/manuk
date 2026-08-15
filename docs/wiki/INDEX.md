@@ -880,6 +880,13 @@
   - L3306 · A rule is only as portable as the context it encodes (t1217)
   - L3337 · One-at-a-time is fine if you have candidates to ask (t1218)
   - L3350 · The blocker t1171 named, and the half that was missing
+  - L3374 · A shorthand SETS its longhands — that is what the word means, and el.style never did it (t1257)
+  - L3389 · The CONTROL row said it was not a grid bug
+  - L3409 · The expansion is Stylo's, asked for — not reimplemented
+  - L3420 · A READ-side overlay, and the control rows are what forces that
+  - L3436 · Declaration ORDER is the whole of the cascade rule this surface owes
+  - L3450 · Ledger — same-hour OLD-BINARY control
+  - L3467 · Named residual, measured and not fixed
 
 ## `<dialog>`, `popover`, and the top layer (ticks 194-195)
 `docs/wiki/dialog-and-top-layer.md`
@@ -2136,4 +2143,4 @@
   - L231 · Both named mechanisms are subsystem work
 
 ---
-2043 sections across 22 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+2050 sections across 22 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.

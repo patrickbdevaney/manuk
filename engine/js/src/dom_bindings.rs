@@ -434,6 +434,37 @@ pub fn serialize_decl(property: &str, value: &str) -> Option<String> {
         .and_then(|f| f(property, value))
 }
 
+/// **Expand one SHORTHAND into the longhands it sets** — the missing half of the same seam.
+///
+/// [`SerializeDeclFn`] answers *"what does this declaration serialize to"*; a page that writes
+/// `el.style.margin = '1px 2px'` and reads `el.style.marginTop` is asking a different question, and
+/// `el.style` had no way to answer it. Same hook shape and same reason: the expansion is Stylo's,
+/// and `manuk-js` must not grow a dependency on the CSS engine to get it.
+pub type ExpandDeclFn = fn(property: &str, value: &str) -> Vec<(String, String)>;
+
+thread_local! {
+    static EXPAND_DECL_HOOK: std::cell::Cell<Option<ExpandDeclFn>> =
+        const { std::cell::Cell::new(None) };
+}
+
+/// Install the CSS shorthand expander.
+pub fn set_expand_decl_hook(f: ExpandDeclFn) {
+    EXPAND_DECL_HOOK.with(|c| c.set(Some(f)));
+}
+
+/// Expand a shorthand, or an empty list if there is no engine to ask, the property is not a
+/// shorthand, or the value was declined.
+///
+/// ⚠ Empty is the ONLY conservative answer here, and it is the same polarity as
+/// [`serialize_decl`]'s `None`: with no engine, a longhand read keeps returning `''` exactly as it
+/// did before. Inventing longhands would put values on an element that no engine ever parsed.
+pub fn expand_decl(property: &str, value: &str) -> Vec<(String, String)> {
+    EXPAND_DECL_HOOK
+        .with(|c| c.get())
+        .map(|f| f(property, value))
+        .unwrap_or_default()
+}
+
 /// **The ENUMERABLE half of the same question** — which property names does the engine support?
 ///
 /// [`SupportsFn`] answers one declaration at a time, and tick 1171 named that as the blocker for
@@ -10679,6 +10710,37 @@ unsafe fn host_css_serialize(cx: *mut RawJSContext, argc: u32, vp: *mut Value) -
     true
 }
 
+/// `__cssLonghands(property, value)` → a JSON object of the longhands a SHORTHAND sets, or `''`.
+///
+/// The companion to [`host_css_serialize`], and the same contract: the CSS engine owns the answer,
+/// this is only the wire. JSON rather than a `JSObject` for the reason every other seam here is a
+/// string — there is then no `*mut JSObject` to outlive a GC (t1163's Bar 0).
+unsafe fn host_css_longhands(cx: *mut RawJSContext, argc: u32, vp: *mut Value) -> bool {
+    let prop = arg_string(cx, vp, argc, 0).unwrap_or_default();
+    let val = arg_string(cx, vp, argc, 1).unwrap_or_default();
+    let pairs = expand_decl(&prop, &val);
+    if pairs.is_empty() {
+        *vp = str_empty(cx);
+        return true;
+    }
+    let map: serde_json::Map<String, serde_json::Value> = pairs
+        .into_iter()
+        .map(|(k, v)| (k, serde_json::Value::String(v)))
+        .collect();
+    let out = serde_json::Value::Object(map).to_string();
+    let Ok(cs) = std::ffi::CString::new(out) else {
+        *vp = str_empty(cx);
+        return true;
+    };
+    let js = mozjs::jsapi::JS_NewStringCopyZ(cx, cs.as_ptr());
+    *vp = if js.is_null() {
+        str_empty(cx)
+    } else {
+        mozjs::jsval::StringValue(&*js)
+    };
+    true
+}
+
 /// The empty string as a `Value` — the "leave it alone" answer, and the only failure mode this seam
 /// has. It must never be `undefined`: the JS side falls back to the author's text on `''`, and on
 /// `undefined` it would fall back on a value that `String()`s to `"undefined"`.
@@ -11822,6 +11884,14 @@ pub unsafe fn install(
         global.handle(),
         c"__cssSerialize".as_ptr(),
         host_fn!(host_css_serialize),
+        2,
+        0,
+    );
+    JS_DefineFunction(
+        &mut wrap_cx(cx),
+        global.handle(),
+        c"__cssLonghands".as_ptr(),
+        host_fn!(host_css_longhands),
         2,
         0,
     );
@@ -14691,7 +14761,72 @@ const CSSOM_PRELUDE: &str = r#"
             }
             return hit;
         };
-        var read = function (k) { return ser(k, stripImp(parse()[k] || '')); };
+        // ── ⚠⚠⚠ **A SHORTHAND SETS ITS LONGHANDS, AND THIS ONE STORED THE AUTHOR'S BYTES.**
+        //
+        // `el.style` is a view over the style ATTRIBUTE, parsed into a flat dict keyed by the name
+        // the author wrote. So `el.style.margin = '1px 2px'` put ONE entry under `margin`, and
+        // `el.style.marginTop` — a different key — read `''`. CSSOM §6.7 says the block's setter for
+        // a shorthand *sets the longhand properties*, so every browser answers `'1px'`.
+        //
+        // It was never a grid bug, and the CONTROL row is what said so: the probe that found it was
+        // aimed at `grid: 150px 100px / 200px 300px` → `gridTemplateRows`, and the `margin: 1px 2px`
+        // → `marginTop` control failed identically. **Every shorthand on the web is affected** —
+        // `margin`, `padding`, `border`, `background`, `font`, `flex`, `gap`, `inset`, `grid`,
+        // `place-items`, `transition`, `animation` — through `cssText`, the IDL setter,
+        // `setProperty` and `setAttribute('style', …)` alike, because all four land in the same dict.
+        //
+        // ⚠ The expansion is a READ-side overlay, not a rewrite of what is stored. `cssText` must
+        // still round-trip the author's own text (`el.style.cssText` after setting `margin` reads
+        // back `margin`, not four longhands), and `item(i)`/`length` enumerate what was declared.
+        // Layering it on the read keeps all of that byte-identical and confines the change to the
+        // one question that was answered wrongly.
+        //
+        // ⚠ IN DECLARATION ORDER, and that is the whole of the cascade rule this surface owes:
+        // `style="margin: 5px; margin-top: 9px"` must read `marginTop === '9px'`, and reversing the
+        // two must read `'5px'`. A direct declaration is merged at its own position, not preferred
+        // unconditionally — preferring it would make the second spelling wrong.
+        //
+        // ⚠ MEMOISED on the attribute TEXT for the reason `scache` is memoised on (property, value):
+        // a page reading four longhands off one element must not pay four Stylo parses, and the
+        // expansion is pure in the attribute string.
+        var xcache = g.__mkStyleExpCache || (g.__mkStyleExpCache = Object.create(null));
+        var EMPTY_EXPANSION = g.__mkStyleExpEmpty || (g.__mkStyleExpEmpty = Object.create(null));
+        var expanded = function () {
+            var raw = el.getAttribute('style') || '';
+            // An element with no inline style has nothing to expand, and this is the common case on
+            // every page — answer it without a cache lookup or a host call.
+            if (!raw) return EMPTY_EXPANSION;
+            var hit = xcache[raw];
+            if (hit !== undefined) return hit;
+            var o = parse();
+            var out = Object.create(null);
+            for (var k in o) {
+                var v = stripImp(o[k]);
+                var subs = '';
+                if (typeof __cssLonghands === 'function') {
+                    try { subs = __cssLonghands(k, v); } catch (e) { subs = ''; }
+                }
+                if (subs) {
+                    var m; try { m = JSON.parse(subs); } catch (e2) { m = null; }
+                    if (m) { for (var lk in m) out[lk] = m[lk]; continue; }
+                }
+                // A LONGHAND is merged at its own position too, serialized here so the map is one
+                // normal form throughout and `read` never has to know which branch produced a value.
+                out[k] = ser(k, v);
+            }
+            xcache[raw] = out;
+            return out;
+        };
+        var read = function (k) {
+            // The LONGHAND map wins where it has an answer, because it is the one built in
+            // declaration order — `margin-top: 9px; margin: 5px` must read `5px`, and a read that
+            // preferred the direct `margin-top` entry would answer `9px`. A key the map does not
+            // hold is either the SHORTHAND itself (`el.style.margin`) or a custom property, and
+            // both are read straight off the declaration.
+            var e = expanded()[k];
+            if (e !== undefined) return e;
+            return ser(k, stripImp(parse()[k] || ''));
+        };
         var api = {
             setProperty: function (k, v, prio) {
                 var o = parse(); var d = dash(k); var val = stripImp(v);

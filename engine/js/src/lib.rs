@@ -583,6 +583,19 @@ pub fn set_serialize_decl_hook(f: SerializeDeclFn) {
 #[cfg(not(feature = "_sm"))]
 pub fn set_serialize_decl_hook(_f: SerializeDeclFn) {}
 
+/// A host callback expanding one SHORTHAND into the longhands it sets.
+pub type ExpandDeclFn = fn(property: &str, value: &str) -> Vec<(String, String)>;
+
+/// Install the CSS shorthand expander used by `el.style`'s read path — the half
+/// [`set_serialize_decl_hook`] does not answer. Same seam, same one-parser rule.
+#[cfg(feature = "_sm")]
+pub fn set_expand_decl_hook(f: ExpandDeclFn) {
+    dom_bindings::set_expand_decl_hook(f)
+}
+
+#[cfg(not(feature = "_sm"))]
+pub fn set_expand_decl_hook(_f: ExpandDeclFn) {}
+
 /// The ENUMERABLE half of the feature-query seam — see [`dom_bindings::SupportedPropsFn`].
 #[cfg(feature = "_sm")]
 pub type SupportedPropsFn = dom_bindings::SupportedPropsFn;

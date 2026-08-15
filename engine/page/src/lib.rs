@@ -2002,6 +2002,13 @@ fn install_supports_hook() {
     manuk_js::set_serialize_decl_hook(manuk_css::stylo_engine::serialize_declaration);
     #[cfg(not(feature = "stylo"))]
     manuk_js::set_serialize_decl_hook(|_, _| None);
+    // The EXPANDING half: a shorthand sets its longhands, and `el.style` had no way to say so. Same
+    // polarity as the serializer — with no engine the answer is "nothing", which leaves a longhand
+    // read exactly where it was rather than inventing values no parser produced.
+    #[cfg(feature = "stylo")]
+    manuk_js::set_expand_decl_hook(manuk_css::stylo_engine::expand_declaration);
+    #[cfg(not(feature = "stylo"))]
+    manuk_js::set_expand_decl_hook(|_, _| Vec::new());
     // The ENUMERABLE half of the same question, from the same oracle — see
     // `stylo_engine::supported_property_names`. Installed here rather than at three call sites for
     // the reason the comment above gives: three callers is what produced one.

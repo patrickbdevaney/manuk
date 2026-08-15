@@ -152,9 +152,51 @@ opt-level = 0
 # is 2.0 per stem, i.e. exactly the two live feature variants (spidermonkey / stylo,spidermonkey)
 # that verify.sh builds. There is nothing stale to reclaim; the working set is simply that big.
 #
-# `debug = 1` emits LINE TABLES ONLY: `.debug_line` (42MB) is kept, so panics and Bar-0 backtraces
-# still report file:line — which is the debug information this project actually uses, given every
-# crash is triaged from a backtrace and a repro page. Full `.debug_info` (types, locals, expressions)
-# only pays off under an interactive debugger, which is not how this loop works.
-# Costs one full rebuild; buys ~25G back permanently and keeps the wall out of ENOSPC territory.
-debug = 1
+# We want LINE TABLES ONLY: `.debug_line` is kept, so panics and Bar-0 backtraces still report
+# file:line — which is the debug information this project actually uses, given every crash is
+# triaged from a backtrace and a repro page. Full `.debug_info` (types, locals, expressions) only
+# pays off under an interactive debugger, which is not how this loop works.
+#
+# ── CORRECTION (agent, tick 1257). `debug = 1` DOES NOT emit line tables only. Cargo's `1` is
+# rustc's `-Cdebuginfo=limited`: line tables PLUS a DIE tree for functions and types (everything
+# except variables). `debug = "line-tables-only"` is the setting the comment above describes, and
+# the difference is most of the binary. MEASURED with `size -A` on a live 246MB gate binary
+# (`g_runaway`, stylo+spidermonkey) built under `debug = 1`:
+#
+#     .debug_str      97.0 MB      .debug_ranges    6.4 MB
+#     .text           49.5 MB      .debug_aranges   4.6 MB
+#     .debug_line     29.0 MB      .debug_abbrev    0.6 MB
+#     .rodata         21.6 MB      ────────────────────────
+#     .debug_info     19.7 MB      DWARF total    157.3 MB  = 64% of the binary
+#
+# `.debug_info`/`.debug_str`/`.debug_ranges`/`.debug_aranges` are exactly what `limited` adds over
+# `line-tables-only`, and `.debug_str` alone is larger than `.text`. This is not a capability trade:
+# `line-tables-only` is DEFINED as the subset that keeps file:line in a backtrace.
+#
+# WHY IT IS URGENT: `verify.sh`'s `js` gate has no `--test` filter, so cargo builds EVERY
+# `engine/page/tests/*.rs` target (472 of them, one per gate, growing by one per tick — the ratchet's
+# own unpriced disk constant) before running one. At ~249MB each that is ~117.5GB against ~121GB
+# free, and `disk-hygiene.sh` destructively purges `target/debug` at 95%: the cold build crosses the
+# threshold, gets purged, and rebuilds cold forever. t1256 needed 7 wall runs; t1257 took 12 and
+# never converged, every red gate reading BUILD FAILED on a different binary. Three independent runs
+# measured the shortfall at ~18 binaries (run 12 reached 454 of 472 at 145MB free).
+#
+# AND `split-debuginfo = "unpacked"` MOVES THE REST OF THE DWARF OUT OF THE BINARY, which matters
+# far more here than in a normal workspace: 472 test binaries each statically link the SAME dependency
+# graph, so every byte of a dep's `.debug_info`/`.debug_str` was being copied 472 times. Unpacked
+# leaves it in per-crate `.dwo` files that are written ONCE and shared. `.debug_line` STAYS IN THE
+# BINARY, which is why file:line survives — verified, not assumed (below).
+#
+# MEASURED, same gate, same hour, three builds of `g_runaway` (stylo+spidermonkey):
+#
+#     debug = 1                                        275.0 MB    ×472 ≈ 130 GB   ← the deadlock
+#     debug = "line-tables-only"                       204.2 MB    ×472 ≈  96 GB
+#     + split-debuginfo = "unpacked"                   172.1 MB    ×472 ≈  81 GB   ← 37.5% off
+#                                                      (+2.1 MB of .dwo for the leaf crate)
+#
+# FALSIFIABLE CHECK, RUN: a deliberate `index out of bounds` in a temporary `engine/page/tests`
+# target, `RUST_BACKTRACE=1`, under the final profile — the backtrace still resolves
+# `at ./tests/zz_bt_probe.rs:4:14`, and `.debug_line` measures 29.0 MB in the 172 MB binary (i.e.
+# the line tables for EVERY linked crate, not just the leaf). No capability is traded for the space.
+debug = "line-tables-only"
+split-debuginfo = "unpacked"

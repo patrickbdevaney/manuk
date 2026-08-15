@@ -3209,6 +3209,75 @@ pub fn serialize_declaration(property: &str, value: &str) -> Option<String> {
     (!out.is_empty()).then_some(out)
 }
 
+/// ⚠⚠⚠ **A SHORTHAND SETS ITS LONGHANDS — that is what "shorthand" MEANS, and `el.style` never did
+/// it.** Expand `property: value` into the `(longhand, serialized-value)` pairs it sets; empty for a
+/// property that is not a shorthand, or a value the engine declines.
+///
+/// CSSOM §6.7 defines the IDL attribute for every *supported* property as a read of that property's
+/// value from the declaration block, and the block's own setter for a shorthand *"sets the longhand
+/// properties"*. So after `el.style.margin = '1px 2px'`, `el.style.marginTop` is `'1px'` in every
+/// browser. Ours stored the author's declaration verbatim and answered `''` for every longhand of
+/// every shorthand — `margin`, `padding`, `border`, `background`, `flex`, `grid`, `gap`, `font`,
+/// `inset`, `place-items` — which is most of what a page writes.
+///
+/// This is the same seam as [`serialize_declaration`] and it reuses its block: Stylo's parser has
+/// **already** expanded the shorthand by the time `parse_style_attribute` returns, so the longhand
+/// values are sitting in the block waiting to be asked for. What was missing was the question, and
+/// the way to enumerate it — `ShorthandId::longhands()`.
+///
+/// ⚠ Serialising each longhand through `property_value_to_css` (rather than reading the declaration
+/// out of the block directly) keeps this on ONE code path with `serialize_declaration`: the value a
+/// longhand read returns must be byte-identical whether the author wrote the longhand or the
+/// shorthand, and two serialisers cannot promise that.
+pub fn expand_declaration(property: &str, value: &str) -> Vec<(String, String)> {
+    if property.is_empty() || property.starts_with("--") || value.is_empty() {
+        return Vec::new();
+    }
+    if property.contains([':', ';', '{', '}']) || value.contains(['{', '}']) {
+        return Vec::new();
+    }
+    // The same pref set the parser and `serialize_declaration` use — a shorthand expanded under a
+    // different configuration from the one that cascades would report longhands the cascade drops.
+    stylo_static_prefs::set_pref!("layout.grid.enabled", true);
+    stylo_static_prefs::set_pref!("layout.container-queries.enabled", true);
+    stylo_static_prefs::set_pref!("layout.unimplemented", true);
+    stylo_static_prefs::set_pref!("layout.css.contrast-color.enabled", true);
+
+    let Ok(id) = stylo::properties::PropertyId::parse_enabled_for_all_content(property) else {
+        return Vec::new();
+    };
+    let Ok(shorthand) = id.as_shorthand() else {
+        // A longhand already answers through `serialize_declaration`; expanding it would be the
+        // same value under the same name, so there is nothing to add and a caller that merges this
+        // in cannot accidentally shadow the author's own declaration.
+        return Vec::new();
+    };
+    let Ok(url) = ::url::Url::parse("about:manuk") else {
+        return Vec::new();
+    };
+    let url_data = UrlExtraData(ServoArc::new(url));
+    let block = parse_style_attribute(
+        &format!("{property}:{value}"),
+        &url_data,
+        None,
+        QuirksMode::NoQuirks,
+        CssRuleType::Style,
+    );
+    let mut out = Vec::new();
+    for longhand in shorthand.longhands() {
+        let ncp = stylo::properties::NonCustomPropertyId::from(longhand);
+        let mut v = String::new();
+        if block
+            .property_value_to_css(&ncp.to_property_id(), &mut v)
+            .is_ok()
+            && !v.is_empty()
+        {
+            out.push((ncp.name().to_string(), v));
+        }
+    }
+    out
+}
+
 pub fn supports_condition(condition: &str) -> bool {
     // A condition containing a block delimiter could otherwise close the `@supports` block and
     // inject rules, which would make the probe answer a question nobody asked.

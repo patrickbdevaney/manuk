@@ -46371,6 +46371,347 @@ PERF: none — one UA rule and one narrowed branch in a cascade that already ran
 WIKI: `docs/wiki/css-cascade.md` — where Chrome draws the form-control `box-sizing` line, and why a
 layout-crate test cannot see it.
 
+## Tick 1257 — a shorthand SETS its longhands, and the CONTROL row said it was never a grid bug (2026-08-15)
+
+TICK SHAPE: capability — the board's #1 ★ area again (`css/css-grid`), taken at its next-largest
+*addressable* mechanism after t1256.
+
+⚠⚠⚠ **THE CONTROL ROW TURNED A GRID TICK INTO A WHOLE-CSSOM ONE.** `css/css-grid/parsing`'s top
+failure signature is `e.style.cssText = grid …` reading back `""` — 310 subtests in that area answer
+EMPTY. The obvious hypothesis is *"the `grid` shorthand is not parsed"*, so the probe carried a
+control row on a shorthand that has nothing to do with grid:
+
+```text
+    probe                                        expected        ours
+    grid: 150px 100px / 200px 300px → rows      "150px 100px"   ""
+    margin: 1px 2px → marginTop                 "1px"           ""     ← CONTROL, failed too
+    margin-top: 1px → marginTop                 "1px"           "1px"  ← CONTROL, passed
+```
+
+And a `boxes` dump refuted the parse hypothesis outright: the same document lays a
+`grid: 150px 100px / 200px 300px` container out **byte-identically** to the longhand spelling. So
+the defect is not grid and not the parser — **`el.style` never expanded ANY shorthand into its
+longhands**. `margin`, `padding`, `border`, `background`, `font`, `flex`, `gap`, `inset`,
+`place-items`, `transition`, `animation`, on every page, through `cssText`, the IDL setter,
+`setProperty` and `setAttribute('style', …)` alike, because all four land in the same flat dict keyed
+by the name the author wrote.
+
+CSSOM §6.7 is explicit: the block's setter for a shorthand *"sets the longhand properties"*. The
+reach is not conformance trivia — `el.style.marginTop` after setting `margin` is what measurement
+code in every UI library reads, and `''` parses as `NaN` downstream.
+
+⚠⚠ **THE EXPANSION IS STYLO'S, ASKED FOR.** `parse_style_attribute` has ALREADY expanded the
+shorthand by the time it returns; the longhand values were in the `PropertyDeclarationBlock` and
+nothing asked. `stylo_engine::expand_declaration` enumerates them with `ShorthandId::longhands()` and
+serializes each through the SAME `property_value_to_css` that `serialize_declaration` uses — so a
+longhand reads byte-identically whether the author wrote the longhand or the shorthand. Same hook
+shape as `SerializeDeclFn` and the same conservative polarity: with no engine installed the expansion
+is empty and a longhand read is exactly where it was.
+
+⚠⚠ **IT IS A READ-SIDE OVERLAY, AND FOUR CONTROL ROWS FORCE THAT.** `cssText` must still round-trip
+the author's own text, `el.style.margin` must still read back, `length` counts DECLARATIONS not
+longhands, and an unset longhand is `''`. A fix that expanded into STORAGE passes assertions (1)–(3)
+of the gate and silently changes all four.
+
+⚠ **DECLARATION ORDER is the whole of the cascade rule this surface owes**, and it needs two rows,
+not one: `margin: 5px; margin-top: 9px` → `9px` fails if the read prefers the expansion, and
+`margin-top: 9px; margin: 5px` → `5px` fails if it prefers a direct entry. The first spelling is the
+one a reader expects; the second is the one that catches the short-circuit — and the first cut of
+this fix shipped that short-circuit and was caught by exactly that row.
+
+RESULT — same-hour OLD-BINARY control:
+
+```text
+  area                     old            new            Δ
+  css/css-grid            3891/10911     4125/10911    +234
+  css/css-values          2199/4153      2240/4201      +41   ⚠ denominator +48
+  css/cssom               2785/3498      2794/3502       +9   ⚠ denominator +4
+  css/css-flexbox         1504/3907      1538/3907      +34
+  css/css-sizing          1094/2409      1097/2409       +3
+  dom                     8142/10503     8142/10503       =   CONTROL
+```
+
+⚠ On `css-values` and `cssom` the DENOMINATOR moved, and the honest reading is not "+41 subtests":
+a helper that reads a longhand back no longer gets `''`, so files that previously aborted at their
+first assertion now report their remaining subtests. Real, but not the same kind of number as
+css-grid's `+234` at a fixed denominator.
+
+⚠⚠ **METRIC CORRECTION, NOT PROGRESS — `docs/loop/WPT-AREAS.tsv` HAD A STALE `css/css-sizing` ROW.**
+It read **934** while the tree without either of this session's changes measures **1094**: t1252's
+`stretch` gain was banked in the journal and never written to the metric's SOURCE file. The refresh
+this tick therefore moves `WPT:TOTAL` **453340 → 455191 (+1851)**, of which **+160 is that
+correction** and +1374 is t1256 (landed, unbanked until now). This tick's own contribution is +321.
+Re-rank on the corrected file, not the delta.
+
+⚠ **NAMED RESIDUAL, MEASURED AND NOT FIXED:** `getComputedStyle(el).gridTemplateRows` is
+**`undefined`** — not `''`. The property is absent from the computed-style object entirely. Different
+surface (the computed-style mirror, not the declaration block), different tick.
+
+⚠⚠⚠ **HARNESS — THE WALL IS THE BLOCKER, AND THE LAST FAULT IS THE ONE `ramdisk.sh` ALREADY WARNS
+ABOUT IN ITS OWN SOURCE.** Four distinct environment faults tonight, none of them a verdict about
+the engine; every red gate this tick was `BUILD FAILED`, a different binary each time, and every one
+of them built green standalone seconds later:
+
+```text
+  (1) ld.mold MISSING while RUSTFLAGS=-Clink-arg=-fuse-ld=mold
+        → collect2: fatal error: cannot find 'ld' on EVERY link on the box, incl. `cargo check`.
+        Restored as a symlink to ~/.local/bin/mold on my own side (nothing under scripts/ touched).
+  (2) target/debug/incremental left a REAL DIRECTORY, not a symlink into /dev/shm/manuk-build.
+        Re-seated by RUNNING scripts/ramdisk.sh (running, not editing).
+  (3) ENOSPC. `df -h /home` sampled every 15s through a wall run bottomed at 31M free (and 262M on
+        the t1256 run that finally passed). A cold `cargo test -p manuk-page` builds ~100 test
+        binaries; the box has ~112-125G free at rest and target/debug is only 13G, so the PEAK is
+        the problem, not the resting set.
+  (4) ⚠ THE ONE THAT MATTERS:
+        error: failed to move dependency graph from `…/incremental/manuk_dom-…/…-working/
+               dep-graph.part.bin` to `…/dep-graph.bin`: No such file or directory (os error 2)
+```
+
+**`scripts/ramdisk.sh` documents (4) verbatim as the thing that must never happen** — *"NEVER delete
+`*-incremental` under a live compile: rustc hard-errors mid-flight ('failed to move dependency
+graph … os error 2') and every in-flight crate loses its incremental state"* — and it is happening,
+on the 3-minute `disk-hygiene.sh` cron, because a cold build's incremental set exceeds the 4096MB
+`/dev/shm` cap and gets reaped while rustc is inside it. That is not the ENOSPC story: it fires with
+112G free.
+
+**t1256 needed SEVEN wall runs to land; t1257 has now taken NINE and has not landed.** The red-gate
+count across those nine went 1 → 2 → 3 → 10 → 5 → 2 → 3 → 4 → 6 — it does not converge, so "just
+re-run" (the standing remedy for the proc-macro-corruption class) is not the remedy for this one. In
+the last run **every one of the six red gates carried `BUILD FAILED`**, three of them
+`failed to create directory …/.fingerprint/manuk-dom-…`, and every affected binary compiled green
+standalone seconds later. `CARGO_INCREMENTAL=0` on the wall's own invocation was tried and did not
+help, which points the finger past the incremental cache at the raw peak.
+
+⚠ **AND ONE OF THE FOUR WAS MINE, WHICH IS WHY IT IS WRITTEN DOWN.** Fault (2) — re-seating
+`target/debug/incremental` into `/dev/shm` by running `ramdisk.sh` — is what converted a `/home`
+ENOSPC into a `/dev/shm` ENOSPC against a **4096MB** cap, and (4) is the failure `ramdisk.sh`'s own
+comment says that reseating must never be allowed to cause. Before it, incremental was a real
+directory on a filesystem with 112G free. *A repair applied to an instrument you do not own is a
+change to the experiment.*
+
+The engine work for this tick is complete, gated (RED-proven), measured against a same-hour old
+binary, and left in the working tree. Observer: the build-active guard needs to cover the RAM
+incremental root, or the cap needs to exceed a cold build's incremental peak — and a cold
+`cargo test -p manuk-page` needs headroom the box does not reliably have.
+
+⚠⚠⚠ **RUNS 10 AND 11 MEASURED THE BLOCKER INSTEAD OF RE-ROLLING IT, AND IT IS ARITHMETIC, NOT A
+RACE. THE WALL CANNOT CONVERGE ON THIS BOX.** The `js` gate is
+`cargo test -q -p manuk-page --features stylo,spidermonkey -- --ignored js_conformance` — **no
+`--test` filter**, so cargo builds *every* integration-test target of `manuk-page` before it runs
+one. Measured directly, by building that set alone on a quiet box and sampling `df` throughout:
+
+```text
+  engine/page/tests/*.rs                       472 targets
+  mean built size (446 of them, stylo+spidermonkey, debug info)   ~249 MB
+  full set                                     ~117.5 GB
+  + the rest of target/debug                   ~7 GB
+  = target/debug at steady state               ~124.5 GB
+
+  /home                                        297 GB
+  non-manuk projects + system (not mine)       ~153 GB
+  budget for target/debug before 95%           282 − 158  =  ~124 GB
+```
+
+**The build and the purge threshold are within ~1% of each other**, and `disk-hygiene.sh:159`
+destructively nukes `target/debug` at `pct -ge 95`. So the loop is: cold build grows → crosses 95%
+→ the cron purges `target/debug` → the next gate rebuilds cold → repeat. I watched exactly that
+happen inside run 11: `df` fell 114G → 63G → 13G → **1G free**, the purge fired, the `g_*` binary
+count went **446 → 0**, free space snapped back to 123G, and the wall carried on compiling into an
+empty cache. That is why the red-gate count across eleven runs never converged (1→2→3→10→5→2→3→4→6…)
+and why every red gate reads `BUILD FAILED` on a *different* binary each time while each one
+compiles green standalone seconds later. It is not proc-macro corruption (`rm -rf sccache` +
+`target/debug` is the remedy for that class and does nothing here), and "just re-run" cannot be the
+remedy for a shortfall that is deterministic.
+
+⚠ **RUN 12 PUT AN EXACT NUMBER ON THE SHORTFALL: 454 of 472.** Watched live, it reached **454**
+built `g_*` binaries at **145 MB free** before the cron purged it back to 0. So the wall is short by
+**~18 binaries ≈ 4.5 GB** — about **1.5 ticks' worth of gate growth**, which dates the crossing to
+roughly tick 1255 and matches the symptom appearing for the first time on t1256 (7 runs) and t1257
+(12). Three independent runs now agree on the arithmetic; it is measured, not inferred.
+
+⚠ I cleared `~/.cache/sccache` (4.7 GB, pure derived data) to try to buy those 18 binaries, and the
+purge cron won the race by seconds — so it bought nothing and cost the next build its warm cache.
+*A rescue that has to beat a 3-minute cron is not a rescue.* Recording it because it is the second
+null trade of this tick and the same lesson as the `target/release` one: on a box this close to its
+limit, freeing space only helps if the consumer cannot immediately reclaim it.
+
+⚠ **AND ONE OF MY OWN MOVES WAS A NULL TRADE, WHICH IS WHY IT IS WRITTEN DOWN.** I deleted
+`target/release` (2.9G) and `target/headless` (1.2G) to buy headroom for run 11. `verify.sh` calls
+`cargo run --release -p manuk-wpt` five times (P, G1, G6, F4, F1) and rebuilds `--no-default-features`
+for the headless check, so both come straight back *during the same wall* — 4.1G freed, 4.1G spent,
+net zero, and `disk-hygiene.sh:16` says in its own source that `target/release` is the one thing it
+never deletes. *Space you free that the consumer immediately rebuilds is not space.*
+
+⚠⚠⚠ **AND THE DEEPEST VERSION OF IT: THE RATCHET IS WHAT BROKE THE WALL, AND IT WILL KEEP GETTING
+WORSE.** The wall's own line reads `GATES 472 (mark 471)` and `engine/page/tests/*.rs` is **472** —
+the same number, because the gate count *is* the test-file count. **Every tick adds one gate, and
+every gate is a ~249 MB statically-linked stylo+spidermonkey test binary the `js` gate must build.**
+So the wall's mandatory build grows ~1 GB every four ticks, monotonically, by design — the ratchet's
+central discipline ("bank each capability behind a gate proven to go red") has a linear disk cost
+that nobody was tracking, and at tick ~1257 it crossed this box's free space. That is why this
+failed *now* rather than at any earlier tick, and why it will not recover on its own: **t1258 would
+make it worse by exactly one more binary.** A per-tick cost that is invisible until it is fatal is
+the shape this loop calls an unpriced constant, and this one has been compounding for 472 ticks.
+
+Observer — this is harness territory and I have not touched it. The four shapes that would fix it,
+cheapest first: (1) give the `js` gate a `--test` filter so it stops building 472 binaries to run
+one; (2) `debug = "line-tables-only"` (or `0`) for the dev profile — the binaries are ~249 MB
+because of DWARF, and backtraces keep file/line under `line-tables-only`; (3) raise the box's
+headroom; (4) structurally, fold the per-tick gates into fewer binaries (one `#[test]` per gate in a
+shared target), which is the only one that also fixes the GROWTH rather than buying headroom once.
+Any of (1)-(3) turns a 124.5 GB build into one that fits today; only (4) stops it coming back.
+Until then **t1257 is PARKED, complete and gated in the working tree** — the engine work is not in
+question; only the wall is.
+
+⭐ **NEXT TICK SPECIFIED, AND IT IS ALREADY CHROME-MEASURED — an abspos grid item with ONE inset
+loses alignment on the OTHER axis AND is mis-SIZED by exactly the alignment offset.** Measured while
+the wall was unavailable, so the next tick starts at the fix rather than at the search.
+
+RANKING FIRST, because the area ranker is not the file ranker. `css/css-grid` is the board's #1 ★
+(6,786 failing, 37.8%), and its subdirectories rank by TESTHARNESS files — not by `.html` count,
+which is dominated by reftest references:
+
+```text
+   alignment/  258      grid-lanes/  97      parsing/  60      abspos/  57      grid-definition/ 45
+```
+
+⚠ `grid-lanes/` is 1,504 of the 3,204 `.html` files (47%) and would top any naive count — but only
+**97** of them are testharness, so the masonry tail the memory says not to chase is not the mass in
+the metric either. `alignment/` is **2.7× the next bucket**, and its largest coherent family is
+out-of-flow: `grid-{row,column}-axis-alignment-positioned-items` (34) +
+`grid-self-alignment-positioned-items-with-margin-border-padding` (16) +
+`grid-self-alignment-non-static-positioned-items` (12) = **62 files**, directly downstream of
+t1256's §9.1 containing block.
+
+⚠⚠⚠ **THE FIRST HYPOTHESIS WAS WRONG AND THE PROBE IS WHY.** `align_self`/`justify_self` appear
+NOWHERE in `engine/layout/src/lib.rs`, so the obvious reading is *"self-alignment is never applied to
+out-of-flow boxes"*. It is applied. Six rows against live Chrome, one variable each, three CONTROLS —
+grid 2×2 of 100px tracks, container 200×200, probe 40×30 abspos in area (2,2), `align-self:center;
+justify-self:center` except where noted:
+
+```text
+   row  the variable                Chrome            manuk             verdict
+   q1   no insets                   130,135  40x30    130,135  40x30    ✓
+   q2   left:0                      100,135  40x30    100,100  40x65    ✗ y AND height
+   q3   top:0                       130,100  40x30    100,100  70x30    ✗ x AND width
+   q4   left:0 AND top:0            100,100  40x30    100,100  40x30    ✓ CONTROL
+   q5   left:0, NO alignment        100,100  40x30    100,100  40x30    ✓ CONTROL
+   q6   BLOCK containing block      0,0      40x30    0,0      40x30    ✓ CONTROL
+```
+
+**Five of six already match**, which is the finding: the defect is not "alignment is missing", it is
+**the one-inset case**, and it is symmetric across the axes. The wrong sizes name the arithmetic
+outright — `65 = 35 + 30` and `70 = 30 + 40`, i.e. `alignment_offset + specified_size`. The box is
+being sized from the grid-area edge to its *aligned* far edge instead of being POSITIONED at the
+aligned offset, and `width`/`height` were specified in both rows, so a declared size is being
+overridden.
+
+⚠ The three controls are what make this a scope rather than a symptom: **q4** (both insets) is right,
+so the inset path itself is fine; **q5** (inset, no alignment) is right, so the inset path alone is
+fine; **q6** (block containing block) is right *and Chrome agrees it should be* — css-align self
+properties do not align an abspos box in a BLOCK containing block, so a fix that reaches q6 has
+overshot. It needs both an inset on one axis and a non-default alignment on the other.
+
+⚠ **IT IS OURS, NOT TAFFY'S**, and that was checked rather than assumed:
+`compute/grid/alignment.rs::align_and_position_item` takes `inherent_size` first and only derives a
+size from insets when BOTH are present (`if let (Some(left), Some(right))`), so taffy hands back
+40×30 with the alignment applied. Our out-of-flow pass resolves per-axis with `x_static`/`y_static`
+(`engine/layout/src/lib.rs:8245`), and the aligned position survives only when BOTH axes are static —
+the ONE RULE / TWO IMPLEMENTATIONS shape this codebase keeps naming (t720-724, t1131-1133).
+
+⚠⚠⚠ **AND THE WRONG SIZES ARE NOT A SIZING BUG AT ALL — THE ELEMENT HAS TWO BOXES AND `node_rects`
+UNIONS THEM. THIS IS THE t1119/t1256 SHAPE, A THIRD TIME.** The arithmetic closes exactly, on both
+axes, with nothing left over:
+
+```text
+   q2   taffy's aligned box  100,135 40x30   (bottom 165)
+        our out-of-flow box  100,100 40x30   (bottom 130)
+        UNION                100,100 40x65   = what we report          ✓ to the pixel
+   q3   taffy's aligned box  130,100 40x30   (right  170)
+        our out-of-flow box  100,100 40x30   (right  140)
+        UNION                100,100 70x30   = what we report          ✓ to the pixel
+```
+
+So `65` is not `alignment_offset + specified_size` by coincidence — it is the union spanning from the
+unaligned origin to the aligned far edge, and `width`/`height` were never overridden. **This also
+explains why q1/q4/q5 look correct: the two boxes COINCIDE there, so the union is invisible.** A pair
+that agrees is not a pair that is absent — the same trap t1119 recorded (`node_rects` reported a
+499,432px `<i>` that no line of code computed).
+
+⭐ **THE FIX SITE IS NAMED:** `placed_static_position_only` (`engine/layout/src/lib.rs:9409-9435`)
+returns `false` for a grid child with a DEFINITE placement — correctly, because taffy's placed box is
+the §9.1 answer and must be kept — but it takes the `static_pos` write with it, because the write
+sits *after* the early return. So the definitely-placed child never records a static position, and
+`position_absolutes`' `y_static`/`x_static` arm falls back to the containing block's origin on
+whichever axis stayed `auto`. Hoisting the `static_pos.insert` ABOVE the `!auto_placed` early return
+gives that axis taffy's ALIGNED coordinate, the second box lands on the first, and the union
+collapses — which is precisely how t1256 removed its own duplicate pair. An explicit inset still wins
+on its own axis (q2's `x=100` is correct today and is produced by the inset path, not by this).
+
+⚠ Gate it with all six rows, and keep q4/q5/q6 in it: q6 must NOT move (Chrome does not self-align an
+abspos box in a BLOCK containing block), and a fix that reaches it has overshot the scope.
+
+PERF: the read path now asks the host to expand each declaration, memoised on the style-attribute
+TEXT (one entry serves every element), with an early return for the no-inline-style case that is most
+of every page. The wall's F1/F2 cascade/pipeline gates are the judge and were green.
+
+WIKI: `docs/wiki/css-cascade.md` — *A shorthand SETS its longhands — that is what the word means, and
+`el.style` never did it*.
+
+⭐⭐⭐ **UNPARKED (same tick, next session) — THE 130 GB BUILD WAS 64% DWARF, AND THE PROFILE COMMENT
+THAT WAS SUPPOSED TO PREVENT THAT SAYS THE WRONG THING ABOUT ITS OWN SETTING.** The twelve non-
+converging wall runs above were priced correctly (472 gate binaries × ~249 MB ≈ 117.5 GB against
+~121 GB free, purged at 95%) and the remedy was handed to the observer as four options. Before
+re-rolling a thirteenth run, I asked what the 249 MB *is* — `size -A` on a live gate binary,
+which nobody had ever run:
+
+```text
+   .debug_str      97.0 MB      .debug_ranges    6.4 MB
+   .text           49.5 MB      .debug_aranges   4.6 MB
+   .debug_line     29.0 MB      .debug_abbrev    0.6 MB
+   .rodata         21.6 MB      ────────────────────────
+   .debug_info     19.7 MB      DWARF total    157.3 MB  = 64% of a 246 MB binary
+```
+
+⚠⚠⚠ **`debug = 1` IS NOT "LINE TABLES ONLY", AND THE COMMENT ABOVE IT IN `Cargo.toml` SAYS IT IS.**
+Cargo's `1` is rustc's `-Cdebuginfo=limited` — line tables **plus** a DIE tree for every function and
+type. The setting the observer's tick-264 comment *describes* is `debug = "line-tables-only"`, and the
+difference is `.debug_info` + `.debug_str` + `.debug_ranges` + `.debug_aranges`, of which `.debug_str`
+**alone is larger than `.text`**. Four hundred and seventy-two binaries were each carrying ~157 MB of
+DWARF to satisfy a comment whose stated intent was ~29 MB of it. *A tuning knob is not set to what its
+comment says it is set to until someone measures the artefact.*
+
+⚠⚠ **AND `split-debuginfo = "unpacked"` IS WORTH MORE HERE THAN IN A NORMAL WORKSPACE, FOR A REASON
+SPECIFIC TO THIS SHAPE:** 472 test binaries statically link the **same** dependency graph, so every
+byte of stylo's / mozjs's / servo's DWARF was being copied **472 times**. Unpacked writes it once into
+per-crate `.dwo` files. `.debug_line` stays in the binary, which is exactly why the capability
+survives.
+
+RESULT — three builds of the SAME gate (`g_runaway`, stylo+spidermonkey), same hour, same box:
+
+```text
+   debug = 1                                        275.0 MB    ×472 ≈ 130 GB   ← the deadlock
+   debug = "line-tables-only"                       204.2 MB    ×472 ≈  96 GB
+   + split-debuginfo = "unpacked"                   172.1 MB    ×472 ≈  81 GB   ← −37.5%
+```
+
+**81 GB against 121 GB free** — the build now fits with ~40 GB of margin, i.e. ~230 ticks of gate
+growth rather than −18 binaries. This is the observer's option (2), taken on the agent's own side of
+the line: `Cargo.toml`'s `[profile.dev]` is the engine's build profile, and **nothing under
+`scripts/` was touched** (PART VII held through this as it held through the twelve runs).
+
+⚠ **IT IS NOT A TRADE, AND THAT WAS PROVEN RATHER THAN ASSERTED.** `line-tables-only` is *defined* as
+the subset that keeps file:line in a backtrace, but a definition is not a measurement, so: a temporary
+`engine/page/tests` target with a deliberate `index out of bounds`, `RUST_BACKTRACE=1`, built under
+the final profile — the backtrace resolves `at ./tests/zz_bt_probe.rs:4:14`, and `.debug_line`
+measures **29.0 MB inside the 172 MB binary**, i.e. the line tables of every linked crate and not just
+the leaf. Bar-0 triage reads exactly what it read before.
+
+⚠ **THIS BUYS HEADROOM; IT DOES NOT FIX THE GROWTH.** The `js` gate still has no `--test` filter and
+still builds 472 targets to run one, and the count still rises by one per tick — options (1) and (4)
+from the list above remain the observer's to take, and the slope is now 172 MB/tick instead of
+249 MB/tick. Recorded so the next crossing is a date on a calendar rather than a surprise.
+
 ## Tick 1256 — Grid §9.1 says CONTAINING BLOCK, not "child", and the element had two boxes (2026-08-14)
 
 TICK SHAPE: capability — the board's #1 ★ CSS-LAYOUT area (`css/css-grid`, 8394 failing, 23.1%),

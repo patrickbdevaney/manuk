@@ -3370,3 +3370,103 @@ regardless, because the registry is consulted only after the set-check fails. **
 **Measured:** `css/css-grid` **2421 → 2443 (+22)**, `dom` unchanged, 0 crashes. ⚠ `css/cssom` reports
 `FILES 0` — the sparse checkout still omits it (t1176), so the area this most directly serves cannot
 be measured at all.
+
+## A shorthand SETS its longhands — that is what the word means, and `el.style` never did it (t1257)
+
+CSSOM §6.7 gives a declaration block an IDL attribute for every *supported* property, and the
+block's setter for a shorthand *"sets the longhand properties"*. So this is `'1px'` in every browser:
+
+```js
+el.style.margin = '1px 2px';
+el.style.marginTop;            // '1px'   — ours: ''
+```
+
+`el.style` here is a Proxy over the style **attribute**, parsed into a flat dict keyed by the name
+the author wrote. A shorthand stored ONE entry under its own name, and `margin-top` is a different
+key. Every longhand of every shorthand read `''` — through `cssText`, the IDL setter, `setProperty`
+and `setAttribute('style', …)` alike, because all four land in that same dict.
+
+### The CONTROL row said it was not a grid bug
+
+This was found aiming at `css/css-grid/parsing`, whose top failure signature is
+`e.style.cssText = grid …` reading back `""` (310 subtests in that area alone). The obvious
+hypothesis is *"the `grid` shorthand is not parsed"* — so the probe carried a control row,
+`margin: 1px 2px` → `marginTop`, on the theory that a working shorthand would separate the two:
+
+```text
+    probe                                         expected   ours
+    grid: 150px 100px / 200px 300px → rows       "150px 100px"   ""
+    margin: 1px 2px → marginTop                  "1px"           ""    ← CONTROL, failed too
+    margin-top: 1px → marginTop                  "1px"           "1px"  ← CONTROL, passed
+```
+
+And layout was never involved: the same document lays out `grid: 150px 100px / 200px 300px`
+byte-for-byte identically to the longhand spelling. **`margin`, `padding`, `border`, `background`,
+`font`, `flex`, `gap`, `inset`, `place-items`, `transition`, `animation`** — all of it, on every
+page. A one-area histogram found a whole-CSSOM defect because one row in the battery was not about
+grid.
+
+### The expansion is Stylo's, asked for — not reimplemented
+
+`parse_style_attribute` has **already** expanded the shorthand by the time it returns; the longhand
+values were sitting in the `PropertyDeclarationBlock` and nothing asked for them.
+`stylo_engine::expand_declaration` enumerates them with `ShorthandId::longhands()` and serializes
+each through the SAME `property_value_to_css` that `serialize_declaration` uses. That matters: a
+longhand read must be byte-identical whether the author wrote the longhand or the shorthand, and two
+serialisers cannot promise that. Same hook shape as `SerializeDeclFn`, same reason (`manuk-js` must
+not depend on the CSS engine), same conservative polarity — with no engine installed the expansion
+is empty and a longhand read is exactly where it was.
+
+### A READ-side overlay, and the control rows are what forces that
+
+The map is layered over the read, not written into storage. `cssText` must still round-trip the
+author's own text, and `length` / `item(i)` still enumerate what was **declared**:
+
+```text
+    el.style.cssText = 'margin: 1px 2px'
+      el.style.margin      '1px 2px'        the shorthand still reads back
+      el.style.cssText     'margin: 1px 2px' the author's own text, not four longhands
+      el.style.length      1                DECLARATIONS, not longhands
+      el.style.marginTop   '1px'            the fix
+```
+
+A fix that expanded into storage passes the first three assertions of the gate and silently changes
+all four of these.
+
+### Declaration ORDER is the whole of the cascade rule this surface owes
+
+Two rows, and only an in-order merge satisfies both:
+
+```text
+    'margin: 5px; margin-top: 9px'   → marginTop '9px'   (fails if the read prefers the expansion)
+    'margin-top: 9px; margin: 5px'   → marginTop '5px'   (fails if the read prefers a direct entry)
+```
+
+The first spelling is the one a reader expects and the second is the one that catches a
+short-circuit, which is why the gate carries both. The expansion map is therefore built by walking
+the declarations **in order**, merging a shorthand's longhands and a direct longhand alike at the
+position each was written.
+
+### Ledger — same-hour OLD-BINARY control
+
+```text
+  area                     old            new            Δ
+  css/css-grid            3891/10911     4125/10911    +234
+  css/css-values          2199/4153      2240/4201      +41   ⚠ denominator +48: more tests RAN
+  css/cssom               2785/3498      2794/3502       +9   ⚠ denominator +4, same effect
+  css/css-flexbox         1504/3907      1538/3907      +34
+  css/css-sizing          1094/2409      1097/2409       +3
+  dom                     8142/10503     8142/10503       =   CONTROL
+```
+
+⚠ On `css-values` and `cssom` the DENOMINATOR moved, so read the count and say why: a helper that
+reads a longhand back no longer gets `''`, so files that previously aborted at their first assertion
+now report their remaining subtests. That is real, and it is not the same kind of number as
+css-grid's `+234` at a fixed denominator.
+
+### Named residual, measured and not fixed
+
+`getComputedStyle(el).gridTemplateRows` is **`undefined`** — not `''`, undefined: the property is not
+on the computed-style object at all. That is a different surface (the computed-style mirror, not the
+declaration block) and a different tick; recorded here so the next reader does not rediscover it from
+the same probe.
