@@ -1597,6 +1597,11 @@
   - L3473 · Two absent globals, and the prelude that ran before the things it read (t1264)
   - L3479 · The ordering bug, and how it was caught
   - L3497 · Both have a wrong implementation that no feature detect can see
+  - L3510 · in walks UP, never DOWN — so a method installed on a SUBCLASS is invisible to its own feature detect (t1267)
+  - L3525 · ⚠⚠⚠ A FALSE ABSENCE is worse than a missing feature, because only the careful caller is punished
+  - L3538 · ⚠⚠ THE PROTOTYPE CHAIN DOES NOT EXIST DURING THE PRELUDE, and the obvious fix proves it
+  - L3553 · ⚠ The chain here is FLATTER than the spec's, and the second claim died to a measurement
+  - L3567 · ⚠⚠ EXISTENCE IS NOT SUFFICIENCY — and here the shortfall names the next tick exactly
 
 ## Manuk Daily-Driver Usability Roadmap (synthesized, tick 138)
 `docs/wiki/lever-map.md`
@@ -2171,4 +2176,4 @@
   - L231 · Both named mechanisms are subsystem work
 
 ---
-2078 sections across 22 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+2083 sections across 22 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.

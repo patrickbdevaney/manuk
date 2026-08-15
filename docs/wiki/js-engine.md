@@ -3506,3 +3506,77 @@ not, `http://localhost` **secure** (W3C Secure Contexts §3.1) — and asserts `
 by identity, which is what the HTML spec means by *"must be the same object"*.
 
 > *Absence routes a caller to its fallback; half-presence routes it into a wall.* Fourth naming.
+
+## `in` walks UP, never DOWN — so a method installed on a SUBCLASS is invisible to its own feature detect (t1267)
+
+`element.animate()` worked. Every element had it, every call did the right thing, and the gate that
+exercises `el.animate(...).finished` had been green for its whole life. The one thing that did not work
+is the only line the web writes to ask whether the API is there:
+
+```js
+'animate' in Element.prototype        // false
+```
+
+The prelude installs the Web Animations shim on `Object.getPrototypeOf(document.createElement('div'))`
+— which is **`HTMLElement.prototype`**, one link *below* `Element` on
+`HTMLElement → Element → Node → EventTarget`. Everything inherits it downward, so no call ever failed.
+But `in` walks **up**, and a property defined on a subclass is not a property of the class.
+
+### ⚠⚠⚠ A FALSE ABSENCE is worse than a missing feature, because only the careful caller is punished
+
+The caller who writes a detect is exactly the caller who has a fallback path. The detect answers "no",
+the library disables its animations, and nothing throws, logs, or renders differently enough to notice.
+A library that had simply *called* `animate` would have worked. This is the mirror of the false presence
+the reliability doctrine already names, and it is the harder one to find, because every test that
+exercises the feature passes.
+
+WPT's `css/support/interpolation-testcommon.js` gates its whole Web Animations leg on that exact line,
+and that leg runs in all **194 `*-interpolation.html` files across twelve CSS areas**. In
+`css/css-transforms` alone, **909 failing subtests said nothing but "Web Animations should be
+supported."**
+
+### ⚠⚠ THE PROTOTYPE CHAIN DOES NOT EXIST DURING THE PRELUDE, and the obvious fix proves it
+
+The one-word fix — install on `g.Element.prototype` instead of on a probe element's prototype — was
+written, built and measured, and it is **worse**. At prelude time the chain has not been assembled, and
+the object `Element.prototype` names *then* is the shared tier that later becomes **`Node.prototype`**:
+the detect still read `false`, and text and comment nodes gained an `animate` they had no business
+having. One false absence traded for a false presence.
+
+So the placement has to be corrected **after** the chain is built. `engine/js/src/animatable_js.rs` runs
+in the late module sequence (after `reflect.js`, where every link is real) and **relocates** the
+descriptor — carried verbatim and deleted from the subclass, so the implementation, its closed-over
+`WeakMap` of running animations and `Animation` identity all survive. A relocation that only copies is a
+duplication, and two homes for one method is how a later monkey-patch lands on the definition nobody
+calls.
+
+### ⚠ The chain here is FLATTER than the spec's, and the second claim died to a measurement
+
+The natural companion claim — *"and SVG was broken, since `SVGElement` reaches `Element` without passing
+through `HTMLElement`"* — is true of the spec and **false of this engine**. Measured:
+
+```text
+  div   ->  HTMLElement{} -> Element{animate,getAnimations} -> Node{matches,tagName,nodeType,data} -> EventTarget -> Object
+  text  ->  HTMLElement{} -> Element{animate,getAnimations} -> Node{matches,tagName,nodeType,data} -> EventTarget -> Object
+```
+
+Every node shares one chain, so `<rect>.animate` already worked — and a **Text node** already answered
+`'animate' in node`, a pre-existing false presence this fix neither creates nor closes. It was written
+into the first draft of the module doc before it was checked. **The whole benefit is the detect.**
+
+### ⚠⚠ EXISTENCE IS NOT SUFFICIENCY — and here the shortfall names the next tick exactly
+
+Making the detect honest moved `css/css-transforms` **1566 → 1711 (+145) on an unchanged denominator** —
+not +909. The other 764 stopped saying "unsupported" and started saying the truth. The shim
+fast-forwards to the animation's END STATE in a microtask; it cannot report an intermediate frame, so
+`animation.pause(); animation.currentTime = 50000` on a 100s animation still reads the final value:
+
+```text
+  expected "matrix(1, 0, 0, 1, 25, 25)"   but got "matrix(1, 0, 0, 1, 0, 0)"
+```
+
+⭐ **And the same shortfall appears under all four interpolation legs** — CSS Transitions, CSS
+Transitions-with-`all`, CSS Animations and Web Animations each fail the identical `at (0.25)` case. That
+is not four bugs; it is one absent subsystem seen from four doors: **the engine has no animation
+timeline and applies end states only.** A 145-subtest gain that measures a 764-subtest hole is a better
+result than the 909 would have been, because it prices the hole.

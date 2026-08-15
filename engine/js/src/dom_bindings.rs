@@ -17420,11 +17420,20 @@ const WINDOW_PRELUDE: &str = r#"
         // depends on — the call not throwing, and `await el.animate(...).finished` resolving so the
         // next step runs — plus the correct END-STATE styling. The honest limit, stated plainly: no
         // intermediate frames; the animation snaps to its end rather than tweening.
-        // The element prototype is fetched from a probe element, NOT `g.Element`: there is no `Element`
-        // binding this early in the prelude, but the real chain link
+        // The element prototype is fetched from a probe element, NOT `g.Element`: there is no *final*
+        // `Element` binding this early in the prelude, but the real chain link
         // (instance → HTMLElement.prototype → …) is `Object.getPrototypeOf(createElement(...))`, and a
         // method defined on it is inherited by every element that exists now or later (same idiom the
         // `files` getter below uses).
+        //
+        // ⚠⚠⚠ **THAT LINK IS NOT `Element.prototype`, AND `animatable_js.rs` RE-HOMES IT AFTERWARDS.**
+        // The spec puts `animate`/`getAnimations` on the `Animatable` mixin, which **`Element`**
+        // includes — and the detect the whole web writes is `'animate' in Element.prototype`. Landing
+        // here, one link below `Element`, that detect read **false** while `div.animate()` worked
+        // perfectly: a FALSE ABSENCE, invisible to every test that just calls the method. Do not
+        // "simplify" this by installing on `g.Element.prototype` here — measured, at prelude time that
+        // object is the SHARED tier that later becomes `Node.prototype`, so it hands `animate` to text
+        // and comment nodes instead. The chain does not exist yet; the fix has to run after it does.
         var __elProto = null;
         try { __elProto = Object.getPrototypeOf(g.document.createElement('div')); } catch (e) {}
         if (__elProto && typeof __elProto.animate !== 'function') {

@@ -960,3 +960,4 @@ tick	sha	epoch	iso	delta_s	shape	wall_s	files	added	deleted	gates	claims	wpt_pas
 1263	2f58e6b8	1786802726	2026-08-15T10:05:26-04:00	2974	capability	997	11	272	36	474	81	3896	6960	0	631	0	a script could not read its own URL, and the reason I went looking was WRONG (2026-08-15)
 1264	ec593fd8	1786804101	2026-08-15T10:28:21-04:00	1375	capability	997	9	286	33	475	81	3896	6960	0	632	0	two absent globals, and the prelude that ran before the things it read (2026-08-15)
 1265	05bbb398	1786807557	2026-08-15T11:25:57-04:00	3456	instrument-correctness	997	8	460	21	476	81	3896	6960	0	634	0	the capability ledger's parts did not sum to its whole, for 247 ticks (2026-08-15)
+1266	fdfcad3d	1786811259	2026-08-15T12:27:39-04:00	3702	capability	997	12	549	20	477	81	3896	6960	0	635	0	`div.target = el` stored the STRING "[object HTMLSpanElement]", and it had silenced 194 WPT files (2026-08-15)

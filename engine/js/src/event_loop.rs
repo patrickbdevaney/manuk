@@ -7362,6 +7362,18 @@ pub fn install(rt: &mut Runtime, global: mozjs::rust::HandleObject) -> Result<()
         eval(rt, global, crate::reflect_js::REFLECT_JS, "reflect.js")?;
     }
 
+    // `Animatable` (`animate` / `getAnimations`) onto **`Element.prototype`**, where the spec puts it.
+    // The prelude installs the shim before the prototype chain exists, so it lands on whatever link a
+    // probe element happens to have then — below `Element`, which makes `'animate' in Element.prototype`
+    // read FALSE for an API that works, and makes it genuinely ABSENT on SVG. This must run after the
+    // chain is built; here is the first point at which every link is real.
+    eval(
+        rt,
+        global,
+        crate::animatable_js::ANIMATABLE_JS,
+        "animatable.js",
+    )?;
+
     // `MutationObserver` LAST of all: it wraps the mutating methods, and it must wrap the FINAL versions
     // of them — including the ones the collections and attrs layers have already replaced. Install it
     // earlier and it observes a method that is later swapped out from under it, so a page's mutations

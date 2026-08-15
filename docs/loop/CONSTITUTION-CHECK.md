@@ -9409,6 +9409,115 @@ before t1168.
    `document.baseURI || location.href` — *a work-around in the tree is a bug report nobody filed*,
    and the loop has no instrument that reads its own fallbacks. That is a cheap, novel probe.
 
+## Check #122 — tick 1267 (2026-08-15)
+
+**Horizon:** H0 — Pareto Web Parity, re-scoped by **PART VII** (v1 shippable). **Gate (VII.1):** the
+four components — daily-driver rendering parity on the representative corpus · the agentic surface ·
+"good enough" security (Bar 0) · reasonable performance. PART VII remains explicit that **a WPT number
+is a horizon and a diagnostic, never a gate.**
+
+**Gate or scoreboard?** ⚠ **Scoreboard, honestly — and the window is worth keeping anyway, for a reason
+that is itself a PART VI correction.** t1266 and t1267 moved `WPT:TOTAL` **+10,445 and +1,682** and
+moved **no measured real-site number at all**. By check #121's own rule — *the constitution decides
+ties, and it says real-sites-moved* — that is drift, and it is named here rather than excused.
+
+⚠⚠⚠ **BUT THE +10,445 IS NOT THE TICK-84 SHAPE, AND THE DIFFERENCE IS THE FINDING.** Tick 84 climbed
+the `encoding` tail — a real number in an area I4 says to degrade gracefully. This window's gain is
+**entirely inside the `css/*` layout areas the board ranks CO-#1**, and it came from **two defects in
+the JS→DOM binding layer that were suppressing the measurement of those areas**:
+
+```text
+  t1266  div.target = el  stored the STRING "[object HTMLSpanElement]"   -> 194 files scored 0 of ZERO
+  t1267  'animate' in Element.prototype === false while el.animate works -> the WAAPI leg disabled in all 194
+```
+
+Both are **instrument-suppression defects wearing a capability defect's clothes** — and the direction
+matters: they were suppressing `css-grid`, `css-backgrounds`, `css-transforms`, `css-sizing`,
+`css-flexbox`, the exact areas VI.2 names as *"CSS layout breadth is the weak spot."* So the loop was
+not measuring the thing it has been told to work, and the number it was ranking by was wrong **low** in
+the highest-priority areas. Two ticks of scoreboard bought a **truthful ranking instrument** for the
+main line. That is the honest defence, and it does not extend to a third such tick.
+
+### → Is `orient`'s ranking still the north star, or has a big-but-tail number crept back?
+
+No tail creep — `encoding` contributed **0** of the +12,127 across both ticks, and the areas that moved
+are precisely the usage-weighted layout subtrees. But the ranking instrument itself was caught lying,
+which is the more interesting answer: `css/css-backgrounds` was ranked **13th of 19** by failing mass
+and gained **+2,872 + 425**, statistically tied with `css/css-grid` at **#1** (+2,832 + 592). ⭐ **What
+those two shared was not a layout primitive — it was a TEST HARNESS**, and the harness FILE COUNT (30
+interpolation files in css-backgrounds vs 13 in css-grid) predicted the delta far better than the
+per-area ranker did. This is the **fifth** instance of check #117's rule that *a shared MECHANISM
+outranks the per-area ranker* (t1179-1181, t1215, t1219, t1224, and now t1266).
+
+### → Is any invariant being bent?
+
+- **I4 (Pareto discipline)** — held, and *stress-tested by the shape of the win*. Storing state on a DOM
+  node and probing `Element.prototype` for a capability are top-of-the-web constructs, not tail work.
+- **I3 (semantic model in lockstep)** — held; neither tick added a rendered construct, and both improved
+  the agentic surface incidentally (an agent that parks state on a node now keeps it).
+- **I5 (the oracle is the discovery engine)** — ⚠ **bent, usefully, and PART VI's own correction to it is
+  what fired.** Neither defect was findable by the oracle or by the failure histogram. t1266's victims
+  produced **no assertions at all** and t1267's produced one that named the wrong cause. Both were found
+  in the **instrumented log** — check #51 already promoted the log over the crawl for *depth*; this
+  window adds the mechanism: **a test that throws in `setup` scores zero out of ZERO**, so it is
+  invisible to a failure histogram AND to a pass percentage, and the only place it appears is stderr.
+- **I2 (never patch deps)** — held. Both fixes are our own binding layer.
+- **I7 (honest walls)** — ⚠ **exercised, and the honest report is the smaller number.** t1267 could have
+  been reported as "unblocked 909 subtests"; it moved **+145** on an unchanged denominator. The other
+  764 stopped saying *"unsupported"* and started saying the truth.
+
+### PART VI correction
+
+**VI.3's aperture list records seven inflation/deflation modes. THIS IS AN EIGHTH, and it is the most
+expensive kind — it makes an area look HARDER than it is, in the areas the loop is told to work.** Call
+it **the SUPPRESSED HARNESS**: a defect in a shared *support library's* host requirements — not in the
+tests, not in the checkout, not in the area's subject — that makes hundreds of files throw during
+`setup` and emit **zero subtests**. It is the exact mirror of check #112's missing `css/support/`
+(*"a missing SUPPORT FILE is a plausible low percentage that ranks, gets picked, and buys engine
+ticks"*), except that here the files were present and the *engine* was the missing dependency. ⚠ **And
+the tell is the same one, which is now three-for-three: WHEN NUMERATOR AND DENOMINATOR MOVE TOGETHER,
+THE DENOMINATOR WAS WHAT WAS WRONG.** `css/css-sizing` went 45.5% → 39.6% while gaining 1,185 passing
+subtests. ⚠⚠ The reconciliation that catches it cheaply is **neither** *"are the areas measured"*
+**nor** *"does every `src` resolve"* (check #112's), but **"how many of this area's FILES emitted no
+subtests, and do they share a support library?"** — which nothing runs today.
+
+**What VI.2 must now carry:** the CSS layout row's *"WPT marks remain a regression ratchet"* is true and
+was, for these areas, a ratchet on a suppressed reading. Post-repair, `css/css-transforms` **31.1%**,
+`css/css-flexbox` **36.2%**, `css/css-sizing` **40.0%** are the first honest numbers those areas have
+had, and they are **lower** than the pre-repair percentages they replace.
+
+**What is now the real blocker, and it is newly NAMED rather than newly discovered.** The 194 files now
+emit their assertions, and the assertions agree across all four of the harness's legs — CSS Transitions,
+CSS Transitions-with-`all`, CSS Animations and Web Animations all fail the identical `at (0.25)` case:
+
+```text
+  expected "matrix(1, 0, 0, 1, 25, 25)"   but got "matrix(1, 0, 0, 1, 0, 0)"
+```
+
+That is not four bugs seen four times; it is **one absent subsystem seen from four doors — the engine
+has no ANIMATION TIMELINE and applies END STATES only.** STATUS.md's tick-543 orders already list *"live
+CSS transition/animation timeline (end-state-only today)"* in the bounded remainder; what is new is that
+it now has a **measured size** (764 subtests in `css/css-transforms` alone, and the same mechanism under
+every interpolation file in twelve areas) and a **named borrow path** consistent with I2 and the board's
+*PORT, don't reverse-engineer*: Stylo already implements the spec's `Animate` trait over computed values,
+and the engine calls Stylo for the cascade.
+
+### STEER
+
+1. **THE ANIMATION TIMELINE IS THE NEXT MAIN-LINE ARC, and it is a decomposition, not a tick.** It is
+   the largest single named mechanism the repaired instrument can now see, it is real daily-driver
+   capability rather than conformance (every site animates), and it satisfies VI.2's layout mandate
+   because the interpolation harness is spread across all twelve layout areas. Decompose it before
+   starting: (a) evaluate an effect at a given progress; (b) drive progress from `currentTime`/easing;
+   (c) reach the computed style through the existing cascade. Do **not** start it as one tick — t156's
+   grid-template-areas burned 2h+ on exactly that mistake.
+2. **PAY THE REAL-SITE DEBT FIRST.** Two consecutive WPT-only ticks is the limit this check will defend.
+   The CrUX fidelity sweep has not run this window, and check #121's steer to run it is now older still.
+3. **BUILD THE SUPPRESSED-HARNESS RECONCILIATION** — *files that emitted zero subtests, grouped by the
+   support library they include*. It is one pass over data the runner already has, it would have found
+   both of this window's defects in one command, and by construction it finds the ones nobody has
+   tripped over yet.
+
 ## Check #121 — tick 1259 (2026-08-15)
 
 **Horizon:** H0 — Pareto Web Parity, re-scoped by **PART VII** (v1 shippable). **Gate (VII.1):** the

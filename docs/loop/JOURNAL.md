@@ -80746,3 +80746,97 @@ emit is REAL layout math that was never visible before, and `css/css-transforms`
 PERF: none claimed. CAPABILITY: storing state on a DOM node.
 
 WIKI: `docs/wiki/dom-semantics.md` — "an accessor on a SHARED prototype is a claim about EVERY element".
+
+## Tick 1267 — `element.animate()` worked and `'animate' in Element.prototype` was FALSE (2026-08-15)
+
+TICK SHAPE: capability — a FALSE ABSENCE in the CSS-LAYOUT area the board ranks, found by histogramming
+the assertions t1266 made visible. Includes constitution check #122 (due this tick).
+
+⚠⚠⚠ **THE DEFECT: `in` WALKS UP, NEVER DOWN.** The Web Animations shim is installed in the prelude on
+`Object.getPrototypeOf(document.createElement('div'))` — measured, **`HTMLElement.prototype`**, one
+link *below* `Element` on `HTMLElement → Element → Node → EventTarget`. Everything inherits it
+downward, so every call worked and `g_web_animations` had been green for its whole life. But a property
+defined on a subclass is not a property of the class, and the only line the web writes to ask whether
+the API exists is `'animate' in Element.prototype` — which read **false**.
+
+⚠⚠ **A FALSE ABSENCE PUNISHES EXACTLY THE CAREFUL CALLER.** The caller who writes a detect is the one
+who has a fallback path: the detect says no, the library disables its animations, and nothing throws or
+logs. A library that had simply *called* `animate` would have been fine. It is the mirror of the false
+presence the reliability doctrine names, and the harder half to find, because **every test that
+exercises the feature passes.** WPT's `interpolation-testcommon.js` gates its whole Web Animations leg
+on that exact line — **909 failing subtests in `css/css-transforms` said nothing but "Web Animations
+should be supported".**
+
+⚠⚠ **THE ONE-WORD FIX IS WORSE, AND IT WAS BUILT AND MEASURED BEFORE BEING REJECTED.** Installing on
+`g.Element.prototype` in the prelude: at prelude time **the prototype chain does not exist yet**, and
+the object that name resolves to is the shared tier that later becomes `Node.prototype`. The detect
+still read `false` **and** text and comment nodes gained an `animate` — one false absence traded for a
+false presence. So `engine/js/src/animatable_js.rs` runs in the LATE module sequence (after
+`reflect.js`, where every link is real) and **relocates** the descriptor: carried verbatim, deleted from
+the subclass, so the implementation, its closed-over `WeakMap` and `Animation` identity all survive.
+
+⚠ **THE SECOND CLAIM DIED TO A MEASUREMENT, AND IT WAS ALREADY WRITTEN DOWN WHEN IT DIED.** The natural
+companion — *"and SVG was broken, since `SVGElement` reaches `Element` without passing through
+`HTMLElement`"* — is true of the spec and **false of this engine**. Every node shares ONE chain here:
+
+```text
+  div   ->  HTMLElement{} -> Element{animate,getAnimations} -> Node{matches,tagName,nodeType,data} -> ...
+  text  ->  HTMLElement{} -> Element{animate,getAnimations} -> Node{matches,tagName,nodeType,data} -> ...
+```
+
+`<rect>.animate` already worked, and a **Text node** already answered `'animate' in node` — a
+pre-existing false presence this fix neither creates nor closes. The draft docstring asserting the SVG
+win was deleted rather than shipped. **The whole benefit is the detect.**
+
+⚠⚠⚠ **EXISTENCE IS NOT SUFFICIENCY — AND THE SHORTFALL IS THE MORE VALUABLE HALF OF THIS TICK.** The
+honest detect bought **+145 on an unchanged denominator, not +909**. The other 764 stopped saying
+"unsupported" and started saying the truth, and **all four of the harness's legs — CSS Transitions, CSS
+Transitions-with-`all`, CSS Animations and Web Animations — now fail the IDENTICAL case**:
+
+```text
+  expected "matrix(1, 0, 0, 1, 25, 25)"   but got "matrix(1, 0, 0, 1, 0, 0)"     at (0.25)
+```
+
+That is not four bugs; it is **one absent subsystem seen from four doors — the engine has no ANIMATION
+TIMELINE and applies END STATES only.** A 145-subtest gain that prices a 764-subtest hole beats the 909
+would have been.
+
+```text
+  css/css-grid   +592   css/css-values +156   css/css-ui     +85   css/css-overflow +15
+  css/css-backgr +425   css/css-transforms +145   css/css-sizing +70   css/css-flexbox  +15
+  css/css-fonts  +125   css/css-text    +36   css/css-color   +3   css/css-position +15
+                              WPT TOTAL  465636 -> 467318   (+1,682)
+```
+
+⚠ **TWO NOISE-BOUND ROWS, BANKED AT THEIR MARKS AND NOT AS PROGRESS.** `html/dom` read **56448 /
+56448 / 56449** across three runs of ONE binary on an identical denominator, with the known ACCUM
+batch-runtime UAF firing (and one run reporting `HANG/CRASH 1` for the same artefact). `css/cssom` read
+**2792 / 2794** — and is *dropped by the sweep every time* (`wpt-sweep.sh`'s AREAS list holds the empty
+top-level `cssom`, not `css/cssom`; reported at t1266, still observer territory, still restored by hand).
+Both marks sit inside their bands, so both are banked at the mark: **no advance claimed, no regression
+demonstrated.**
+
+⚠ **A HARNESS SELF-INFLICTION, RECORDED BECAUSE IT NEARLY COST THE TICK.** Proving the gate RED by
+`git stash push` of a path list that included an UNTRACKED file made the push fail — and the `&&`-chained
+`git stash pop` then popped a **pre-existing stash from tick 574**, conflicting `engine/css/src/lib.rs`
+and `stylo_engine.rs`. Recovered with `git checkout HEAD --` on the two files; the stash entry survived
+because a conflicted pop keeps it. **In a repo with a stash stack, `git stash pop` is not the inverse of
+`git stash push`.** Use `cp` to a scratch copy for a RED proof — which is how both of this gate's
+assertions were then falsified independently.
+
+GATE: `G_ANIMATABLE_ON_ELEMENT` — **proven RED twice, on two different mutations**: disable the re-home
+→ `detect=false/false owner=false` while `call=yes tracked=true` (the bug's exact shape: the API works
+and the detect lies); drop the `delete p[n]` → `homes=2`. ⚠ The first draft of assertion (3) named
+`HTMLElement.prototype` directly and read `false` in BOTH states — **an assertion that could not go
+red**, caught by running the falsification rather than assuming it, and rewritten to count owners along
+the chain.
+
+NEXT: **the animation timeline, decomposed before it is started** (constitution check #122 STEER 1) —
+(a) evaluate an effect at a given progress, (b) drive progress from `currentTime`/easing, (c) reach
+computed style through the existing cascade; PORT from Stylo's `Animate` trait rather than deriving it.
+⚠ And **pay the real-site debt first**: two consecutive WPT-only ticks is the limit check #122 will
+defend, and the CrUX fidelity sweep has not run this window.
+
+PERF: none claimed. CAPABILITY: the Web Animations feature detect.
+
+WIKI: `docs/wiki/js-engine.md` — "`in` walks UP, never DOWN".
