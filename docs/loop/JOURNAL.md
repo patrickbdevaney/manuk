@@ -80642,3 +80642,107 @@ seconds across `bbs.ruliweb.com` + `ticket.jfa.jp` and which no current instrume
 PERF: none. CAPABILITY: none.
 
 WIKI: `docs/wiki/conformance-and-oracles.md` — "the ledger's parts did not sum to its whole".
+
+## Tick 1266 — `div.target = el` stored the STRING "[object HTMLSpanElement]", and it had silenced 194 WPT files (2026-08-15)
+
+TICK SHAPE: capability — one shared mechanism, found by reading the THROW LOG of a mandated
+CSS-LAYOUT area instead of its assertion histogram.
+
+⚠⚠⚠ **THE DEFECT, MEASURED BEFORE ANYTHING WAS TOUCHED.** On a plain `<div>`:
+
+```text
+  d.target = spanElement   ->  d.target === "[object HTMLSpanElement]"   (a STRING)
+  d.href   = 1             ->  d.href   === "file:///tmp/1"              (resolved as a URL)
+  d.value  = 1             ->  d.value  === "1"
+```
+
+Fifteen names — `target href src rel type alt name placeholder action method content media srcset
+htmlFor value` — are installed as native reflected-attribute accessors on **one shared prototype**,
+**ungated by tag**. An accessor on the prototype shadows assignment, so an expando write became an
+attribute write on every element that does not have that IDL attribute, including every custom
+element. Nothing throws and nothing logs: the caller reads back a plausible string, which is the
+**wrong answer of the right type** this project keeps paying for.
+
+**HOW IT WAS FOUND, AND THE METHOD POINT IS THE INTERESTING PART.** The board mandates CSS-LAYOUT, so
+I ran `manuk-wpt wpt css/css-sizing --show-failures` and histogrammed the assertion messages exactly
+as t1221 prescribes: 557 `width expected N but got N`, 410 `height`. That ranking is *real layout
+math* and it is also **the wrong instrument for this bug**, because the bug's victims produce no
+assertions at all. The tell was on **stderr**, which the histogram discards: the same
+`TypeError: can't access property "setProperty", target.style is undefined` repeating once per file,
+at `interpolation-testcommon.js`. ⭐ **A test that throws in `setup` scores zero out of ZERO — it is
+invisible to a failure histogram, and it is invisible to the pass PERCENTAGE. Histogram the THROWS
+beside the assertions.**
+
+**THE FIX IS A GATE ON THE NATIVE ACCESSOR, NOT A REMOVAL OF IT** — and the correct mechanism already
+existed and had declined to run. `reflect_js.rs` builds one tag-dispatching accessor per IDL name
+whose setter already ends in `Object.defineProperty(this, idl, {value: v, …})` — the expando. It never
+ran for these fifteen, because the layer opens `if (idl in proto) return;` ("the engine's
+implementation wins"). That guard was written for a real Bar-0 crash and is not wrong; it is simply
+the wrong *answer*. Standing down and gating are different things: the native implementation knows
+what the table does not (`<template>.content` is a `DocumentFragment`, a ProcessingInstruction's
+`target` is its node name, `img.src` resolves against the base), so it must still be called **on the
+tags that have the attribute**. Now it is wrapped, not skipped.
+
+⚠⚠ **THE REFLECTION TABLE IS NOT AN EXISTENCE TABLE, AND GATING ON IT ALONE WOULD HAVE BEEN A LARGER
+BUG THAN THE ONE FIXED.** `REFLECT_TABLE` lists `value` for six elements (button/data/li/meter/
+option/param) and omits `<input>`, `<textarea>`, `<select>`, `<progress>`, `<output>` — **because
+their `value` is not a reflection.** The table's silence is a statement about the MECHANISM, not about
+EXISTENCE. A blind table gate makes `input.value` `undefined`. Same shape for `<template>.content`.
+And the third carve-out is by **NAMESPACE, not tag name**: `<use href>` is an `SVGAnimatedString`, and
+an HTML table has no authority over a foreign element. All three are pinned by assertions (3) and (4)
+of the gate, which is the half of `G_EXPANDO_OVER_REFLECTION` worth more than the half that catches
+the original bug.
+
+⚠⚠ **THE PERCENTAGE FALLS ON TWELVE OF THE FOURTEEN AREAS THAT MOVED, AND THAT IS THE FIX WORKING.**
+`css/css-sizing` went `1097/2409 = 45.5%` → `2282/5801 = 39.3%`: **+1,185 passing subtests while the
+pass rate drops 6 points**, because 3,392 subtests that had never been *created* now exist and pass at
+a lower rate. Read the count. t1163's rule — a moving DENOMINATOR is the tell, READ COUNTS BESIDE % —
+decides this, and RATCHET.tsv banks the numerator, so the ratchet holds on every row:
+
+```text
+  css/css-backgrounds  +2872      css/css-values      +712      css/css-text     +218
+  css/css-grid         +2832      css/css-fonts       +507      css/css-flexbox  +147
+  css/css-sizing       +1185      css/css-ui          +374      css/css-overflow  +87
+  css/css-transforms   +1173      css/css-position    +252      css/css-color     +38
+                                  css/css-display      +30      dom +12 · html/dom +4
+                              WPT TOTAL  455191 -> 465636   (+10,445)
+```
+
+⭐ **THE RANKING WAS RIGHT AND THE MECHANISM WAS ELSEWHERE.** The board ranks `css/css-grid` #1 by
+failing mass and `css/css-backgrounds` 13th. The two biggest gains are #1 and #13, in the same
+proportion (+2832 / +2872) — because what they share is not a layout primitive, it is a **test
+harness**, and the harness count (30 interpolation files in css-backgrounds vs 13 in css-grid)
+predicted the delta better than the failing-subtest ranking did.
+
+⚠ **A HARNESS DISCREPANCY, REPORTED AND NOT TOUCHED (scripts/ is observer-owned).**
+`scripts/wpt-sweep.sh`'s `AREAS` list contains **`cssom`** — the empty top-level directory, 0 files —
+and **not `css/cssom`**, which holds 189 files and carries a mark of 2794. So a full sweep silently
+DELETES the `css/cssom` row that per-area ticks have been maintaining, and the ratchet would read a
+2,794-subtest area as vanished. I re-measured it directly and restored the row. It reads
+**2790 / 2792 / 2794 of 3502 across three runs of the SAME binary** — the spread is the known ACCUM
+UAF (2, 4 and 5 files SIGSEGV the shared batch runtime and pass in a fresh one), so the area has a
+**±4 error bar and the mark sits inside it**. Banked at the mark: no advance claimed, and no
+regression demonstrated, which is the only honest reading of a number whose noise exceeds its move.
+
+⚠ **RESIDUALS, NAMED.** (a) `object.data` reads `null` — the native `data` accessor is
+`CharacterData`'s, and `<object>` is in the reflection table so the gate correctly routes it to the
+native path, which has nothing for an element. Pre-existing, unchanged by this tick, and now visible.
+(b) `protocol`/`hostname`/`port`/`host`/`pathname`/`search`/`hash` are natively installed and are
+**not in the reflection table at all**, so they are outside this gate and `div.hostname = x` is still
+laundered through a URL parser. Seven names, one more tick.
+
+GATE: `G_EXPANDO_OVER_REFLECTION` (`engine/page/tests/g_expando_over_reflection.rs`) — **proven RED**
+by stashing the fix: `identity=false unset=0/15 broken=div.target,ce.target,div.href,…` — all 15 names
+× both element kinds, with the IDL half (`idl=`, `value=`, `tplcontent=`, `svghref=`) green before and
+after, so the gate distinguishes the fix from its own blast radius.
+
+NEXT: the seven URL-decomposition names (`protocol`/`hostname`/`port`/`host`/`pathname`/`search`/
+`hash`) are the same defect outside this gate's reach — they are native and absent from the reflection
+table, so `appliesTo` cannot see them. Either add their `a`/`area` rows to the table or give them the
+same explicit carve-out. Then re-run the CSS-LAYOUT histogram: the assertion mass those 194 files now
+emit is REAL layout math that was never visible before, and `css/css-transforms` at 28.5% and
+`css/css-flexbox` at 35.9% are honest numbers for the first time.
+
+PERF: none claimed. CAPABILITY: storing state on a DOM node.
+
+WIKI: `docs/wiki/dom-semantics.md` — "an accessor on a SHARED prototype is a claim about EVERY element".

@@ -3523,3 +3523,74 @@ name-from-a-structural-descendant (20).
 The tell that the correction was right: the NBSP fix landed **+22**, exactly the corrected cluster's
 size. A mechanism count that predicts its own delta to the subtest is the strongest available
 evidence that the cluster was real and is now closed.
+
+## An accessor on a SHARED prototype is a claim about EVERY element — and it eats the expando (t1266)
+
+`div.target = someElement` did not store `someElement`. It stored the **string**
+`"[object HTMLSpanElement]"` — in a content attribute — on an element that has no `target` IDL
+attribute at all. `d.href = 1` came back `"file:///tmp/1"`, resolved as a URL.
+
+The cause is one line of architecture. The native reflected-attribute accessors are installed with a
+flat list on **one shared prototype**, ungated by tag:
+
+```rust
+prop_guarded!(prop, c"target", el_get_target_dispatch, Some(el_set_target));
+prop_guarded!(prop, c"href",   el_get_href,            Some(el_set_href));
+// …15 of these are ALSO tag-specific IDL attributes
+```
+
+An accessor on the prototype **shadows assignment**: the setter runs instead of an own data property
+being created. So every one of those names — `target href src rel type alt name placeholder action
+method content media srcset htmlFor value` — silently converted an expando write into an attribute
+write, on `<div>`, on `<span>`, and on every custom element.
+
+### ⚠⚠⚠ The generic reflection layer already had the correct mechanism, and DECLINED to use it
+
+`reflect_js.rs` builds one accessor per IDL name whose getter dispatches on `this.tagName`, and whose
+setter has exactly the right fallback:
+
+```js
+else Object.defineProperty(this, idl, { value: v, writable: true, configurable: true, enumerable: true });
+```
+
+That is the expando. It never ran for these fifteen names, because the layer opens with
+
+```js
+if (idl in proto) return;   // "the engine's implementation wins"
+```
+
+and the native accessor was already there. The guard was written for a real reason — an earlier version
+clobbered a native implementation and **crashed a WPT child process**, a Bar 0 regression. But
+*standing down* and *gating* are different answers, and only one of them is right here: the native
+implementation knows things the table does not (`<template>.content` is a `DocumentFragment`, a
+ProcessingInstruction's `target` is its node name, `img.src` resolves against the base), so it must
+still be called **on the tags that have the attribute**. The fix wraps it rather than replacing it.
+
+### ⚠⚠ A REFLECTION table is not an EXISTENCE table, and gating on it would have been the bigger bug
+
+`REFLECT_TABLE` lists `value` for six elements — button, data, li, meter, option, param. `<input>`,
+`<textarea>`, `<select>`, `<progress>` and `<output>` are absent, and they are absent **because their
+`value` is not a reflection** (it is a value-mode / list-derived property). The table's silence is a
+statement about the *mechanism*, not about *existence*. A gate that trusted it would have made
+`input.value` `undefined` — a far larger regression than the one being fixed. Same shape for
+`<template>.content`. Both need an explicit carve-out, and the gate asserts them.
+
+And the third carve-out is by **namespace, not tag name**: `<use href>` is an `SVGAnimatedString` with
+its own IDL, and an HTML attribute table has no authority over a foreign element. Gating on
+"is this tag in the HTML table" would have deleted it.
+
+### The blast radius, and why it was invisible for so long
+
+Nothing throws. Nothing logs. The caller reads back a plausible string — the *wrong answer of the right
+type* this project keeps paying for. It is how WPT's own `css/support/interpolation-testcommon.js`
+died: it parks an element on a container with `targetContainer.target = target`, reads it back one line
+later, and calls `target.style.setProperty(...)`. Every `*-interpolation.html`, `*-composition.html`
+and `*-no-interpolation.html` in the tree threw during **setup** and therefore produced **no subtests at
+all** — 194 files across css-transforms, css-backgrounds, css-values, css-sizing, css-grid, css-fonts,
+css-ui, css-text, css-position, css-flexbox, css-color and css-display.
+
+⚠ **So the fix moves the NUMERATOR and the DENOMINATOR together, and the percentage FALLS.**
+`css/css-sizing` went `1097/2409 = 45.5%` → `2331/5892 = 39.6%`: **+1,234 passing subtests** while the
+pass rate dropped 6 points, because 3,483 subtests that never existed came into being and pass at a
+lower rate. Read the count. A file that throws in `setup` scores zero out of *zero*, which is the most
+flattering denominator there is.

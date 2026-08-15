@@ -1102,6 +1102,10 @@
   - L3484 · ⚠ A control that wants to assert a value you know is wrong should assert a PREDICATE
   - L3492 · A NO-BREAK SPACE is not whitespace, and the agent matches on the name (t1255)
   - L3514 · ⚠ A classifier that greps for the word its corpus is named after will always find it
+  - L3527 · An accessor on a SHARED prototype is a claim about EVERY element — and it eats the expando (t1266)
+  - L3547 · ⚠⚠⚠ The generic reflection layer already had the correct mechanism, and DECLINED to use it
+  - L3569 · ⚠⚠ A REFLECTION table is not an EXISTENCE table, and gating on it would have been the bigger bug
+  - L3582 · The blast radius, and why it was invisible for so long
 
 ## THE FIDELITY INSTRUMENT — what it can and cannot see
 `docs/wiki/fidelity-instrument.md`
@@ -2167,4 +2171,4 @@
   - L231 · Both named mechanisms are subsystem work
 
 ---
-2074 sections across 22 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+2078 sections across 22 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.

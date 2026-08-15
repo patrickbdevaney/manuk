@@ -254,6 +254,38 @@ pub const REFLECT_JS: &str = r#"
   // tick, not a line.
   var SKIP_TYPES = { 'tokenlist': 1, 'settable tokenlist': 1 };
 
+  // ── DOES THIS IDL ATTRIBUTE EXIST ON *THIS* ELEMENT AT ALL?
+  //
+  // The whole point of the shared accessor is that it answers `false` for most (tag, name) pairs, and
+  // the answer has to be the same one the NATIVE accessors give — otherwise the two layers disagree
+  // about what `div.target` even is. `descFor` already asks it for the reflected layer; this wraps it
+  // with the two carve-outs the table alone cannot express.
+  var HTML_NS = 'http://www.w3.org/1999/xhtml';
+  // **The table under-describes exactly two names, and both would be a catastrophic gate if trusted
+  // blindly.** `value` is in the table only for the six elements that reflect it as a plain content
+  // attribute (button/data/li/meter/option/param) — but `<input>`, `<textarea>`, `<select>`,
+  // `<progress>` and `<output>` all have a `value` IDL attribute that is NOT a reflection (it is a
+  // value-mode / list-derived property), so the table's silence about them is a statement about
+  // REFLECTION, not about EXISTENCE. Gating on the table alone would have made `input.value`
+  // `undefined`. `content` is the same shape: the table has `<meta content>`, and `<template>.content`
+  // is a DocumentFragment the engine dispatches natively.
+  var EXTRA_TAGS = {
+    value: { input: 1, textarea: 1, select: 1, progress: 1, output: 1 },
+    content: { template: 1 },
+  };
+  function appliesTo(el, idl) {
+    if (!el || typeof el.tagName !== 'string') return true;
+    // SVG and MathML define their own IDL for names HTML also uses (`<use href>` is an
+    // `SVGAnimatedString`, not this table's string). Never gate a foreign element on an HTML table.
+    var ns = el.namespaceURI;
+    if (ns && ns !== HTML_NS) return true;
+    var tag = el.tagName.toLowerCase();
+    var ex = EXTRA_TAGS[idl];
+    if (ex && ex[tag]) return true;
+    var byTag = BY_NAME[idl];
+    return !!(byTag && (byTag[tag] || byTag['*']));
+  }
+
   Object.keys(BY_NAME).forEach(function (idl) {
     var anyReflectable = false;
     for (var tg in BY_NAME[idl]) { if (!SKIP_TYPES[BY_NAME[idl][tg].t]) anyReflectable = true; }
@@ -269,7 +301,39 @@ pub const REFLECT_JS: &str = r#"
     // `in` walks the chain, which is the question actually being asked: *does this name already mean
     // something here?* If it does, the engine's implementation wins — a reflection layer that overwrites
     // a real one is a regression wearing a feature's clothes.
-    if (idl in proto) return;
+    //
+    // ⚠⚠⚠ **BUT "the engine's implementation wins" WAS SILENTLY DESTROYING EVERY EXPANDO OF THAT NAME.**
+    // The native accessors are installed on ONE shared prototype and are NOT tag-gated, so `target`,
+    // `href`, `src`, `name`, `type`, `value`, `content`, … reflect on *every* element. `div.target = el`
+    // did not store `el`; it ran a reflection setter that wrote `String(el)` into a content attribute,
+    // and reading it back returned the string `"[object HTMLSpanElement]"`. That is not a missing
+    // feature — it is a WRONG ANSWER of the right type, which is the class this project keeps paying
+    // for: `d.href = 1` came back `"file:///tmp/1"`.
+    //
+    // So: rather than stand down, **GATE the native accessor with the same tag test the reflected layer
+    // uses.** On a tag that has the IDL attribute, the native implementation is called unchanged (it
+    // knows things the table does not — `<template>.content`, a ProcessingInstruction's `target`, a URL
+    // resolved against the document base). On a tag that does not, the property behaves as it does in
+    // every other browser: an ordinary own data property.
+    var owner = ownerOf(proto, idl);
+    if (owner) {
+      // Only gate a CONFIGURABLE ACCESSOR PAIR. A data property, a read-only accessor or anything on
+      // `Object.prototype` is left exactly as it was — narrowing this to the case actually observed is
+      // what keeps a fix from becoming a second, larger bug.
+      var od = (owner === Object.prototype) ? null : Object.getOwnPropertyDescriptor(owner, idl);
+      if (!od || !od.configurable || typeof od.get !== 'function' || typeof od.set !== 'function') return;
+      var nget = od.get, nset = od.set;
+      Object.defineProperty(owner, idl, {
+        configurable: true,
+        enumerable: od.enumerable,
+        get: function () { return appliesTo(this, idl) ? nget.call(this) : undefined; },
+        set: function (v) {
+          if (appliesTo(this, idl)) { nset.call(this, v); }
+          else Object.defineProperty(this, idl, { value: v, writable: true, configurable: true, enumerable: true });
+        },
+      });
+      return;
+    }
 
     Object.defineProperty(proto, idl, {
       configurable: true,
