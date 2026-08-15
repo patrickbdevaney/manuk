@@ -15,7 +15,7 @@
 | median tick cycle | **29m** | 950 intervals |
 | median, last 10 | **43m** | 10 intervals |
 | fastest / slowest | 5s / 5.4d | |
-| **ticks per hour** | **1.14** | 831.5h elapsed |
+| **ticks per hour** | **1.14** | 831.8h elapsed |
 | median verify wall | **63s** | 890 ticks |
 | wall trend | 39s → 13m — getting slower ⚠️ | first 3 vs last 3 |
 
@@ -1047,6 +1047,6 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 | **1248** | 2026-08-14 14:24 | 33m | measurement | 13m | +293/−33 | 471 | 81 | 56.0% · | the repair obligation, discharged on the CORPUS: one site corrected, zero verdicts changed |
 | **1250** | 2026-08-14 16:16 | 1.9h | capability | 13m | +211/−44 | 471 | 81 | 56.0% · | the inline mirror, and a Bar-0 that the OLD BINARY refused to let me own (2026-08-14) |
 | **1252** | 2026-08-14 19:02 | 2.8h | measurement | 13m | +340/−33 | 471 | 81 | 56.0% · | five sizing ticks, +160 WPT, and the corpus did not move. Both halves are the result. (202 |
-| **1253** | 2026-08-14 20:33 | 1.5h | measurement | 13m | +238/−34 | 471 | 81 | 56.0% · | a third of the vertical mass is a CONSEQUENCE, and the margin-collapse hypothesis died at  |
+| **1253** | 2026-08-14 20:53 | 1.8h | measurement | 13m | +99/−32 | 471 | 81 | 56.0% · | a third of the vertical mass is a CONSEQUENCE, and the margin-collapse hypothesis died at  |
 
 *`·` after a WPT figure means **carried forward**, not measured this tick.*

@@ -46371,6 +46371,72 @@ PERF: none — one UA rule and one narrowed branch in a cascade that already ran
 WIKI: `docs/wiki/css-cascade.md` — where Chrome draws the form-control `box-sizing` line, and why a
 layout-crate test cannot see it.
 
+## Tick 1254 — the accessibility tree, measured for the first time: 63.8%, and the top mechanism is `<label>` (2026-08-14)
+
+TICK SHAPE: measurement — surface audit #67's own steer, executed the same session it was written. It
+costs one command and no build, and it converts a subsystem `STATUS.md` has carried as **"unmeasured"**
+for hundreds of ticks into a number.
+
+**WHY THIS OUTRANKED THE CSS ROW THE BOARD IS SHOWING.** I3 makes *"a first-class accessibility
+tree"* a load-bearing engine subsystem and the exit gate names *semantic-API coverage of every
+rendered construct*. `STATUS.md`'s platform map, item 8, has said the quiet part for a long time:
+*"`engine/a11y` exists and `hit_test` uses it, but whether the **tree itself** is correct (roles,
+names, focus order) is **unmeasured**"*. **The instrument that answers it has been sitting in our own
+WPT checkout the entire time, unrun** — that is what audit #67 found by diffing the checkout against
+the RATCHET instead of asking the internet.
+
+**MEASURED, first time ever, HANG/CRASH 0 on all three:**
+
+```text
+  accname     306 / 481   63.6%   (19 files)   the accessible NAME computation
+  wai-aria    238 / 434   54.8%   (30 files)   roles, states, properties
+  html-aam    253 / 335   75.5%   (15 files)   HTML element -> ARIA role mapping
+  ─────────────────────────────────────────
+  TOTAL       797 /1250   63.8%   (64 files)
+```
+
+⚠ **`html-aam` was in the checkout and my own aperture diff missed it**, because I filtered to
+directories with ≥40 test files and it has 15. **A threshold chosen to keep a list short is a
+threshold that hides things**, and it hid the highest-scoring of the three. Recorded rather than
+quietly corrected.
+
+⭐ **THE NUMBER IS NOT EMBARRASSING AND IT IS NOT THE GATE EITHER.** 63.8% against an ~83% bar, on a
+subsystem nobody had scored. Three sub-directories score **zero**, which is the shape worth reading
+first (t1183: *ask what is DIFFERENT about the zero-scoring files*): `wai-aria/pressed` 0/4,
+`wai-aria/subtree` 0/1, `accname/name/shadowdom` 0/6 — the last of which is the accessible name
+crossing a **shadow boundary**, i.e. every web-component control.
+
+**THE RANKED MECHANISM LIST for `accname`, from the failing test NAMES rather than from the count:**
+
+```text
+  57   <label> association            <- the top mechanism
+  43   other
+  41   CSS generated content (::before/::after contributing to the name)
+  20   aria-labelledby
+   7   placeholder fallback
+   5   aria-owns (content relocation)
+   2   hidden / aria-hidden
+```
+
+**`<label>` association is first, and it is the one that matters beyond conformance.** `<label
+for="email">Email</label>` is how a form field gets its name, and the accessible name is *what the
+agentic surface clicks and types into*. An agent asked to "fill in the email field" resolves that
+through exactly this computation. This is I3 and the agentic floor in the same defect.
+
+⚠ **THESE THREE AREAS ARE NOT IN THE RATCHET, so they cannot regress-guard themselves.** The sweep's
+area list lives in `scripts/` (observer-owned), so adding them is not the agent's to do — the numbers
+are banked in this entry instead, which makes them a baseline a human can diff even if the wall
+cannot. Named per PART VII rather than worked around.
+
+⭐ **NEXT: `<label>` association in the accessible-name computation** — 57 subtests, a measured top
+mechanism, and the agentic surface's ground truth. That is a capability tick chosen from a
+constitutional invariant rather than from a WPT histogram or a corpus cluster, which is a third
+selection route this window had not used.
+
+PERF: none — measurement only, no engine change, nothing compiled.
+
+WIKI: none — the artefact is this baseline. [no-pattern]
+
 ## Tick 1253 — a third of the vertical mass is a CONSEQUENCE, and the margin-collapse hypothesis died at 0.7% (2026-08-14)
 
 TICK SHAPE: measurement — t1252's own steer, executed: take the next target from
