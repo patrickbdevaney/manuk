@@ -80032,3 +80032,100 @@ path; timing runs only on misses, so it cannot become what it measures.
 
 WIKI: `docs/wiki/performance.md` — "`layout_ms` was never layout — the `@container` re-pass is HALF of
 every forced reflow".
+
+## Tick 1259 — the frequency check KILLED my own next tick, and one container is 96% of the page (2026-08-15)
+
+TICK SHAPE: instrument — the second and last link in the layout attribution chain, taken because
+t1258's ledger could say *what* was slow and not *which box*.
+
+⚠⚠⚠ **I REFUTED MY OWN NAMED NEXT TICK BEFORE BUILDING IT.** t1258 ended by naming the `@container`
+re-pass as the lever (7,329 ms of a 14,297 ms reflow). Fetching and grepping the CSS of every
+reachable `timeout-150s` site in `SWEEP-t1252` says it is **2 of 9**:
+
+```text
+  container-type present:  bhramarah.in ✓   neutypechic.com ✓
+  container-type ABSENT:   bbs.ruliweb.com · mangaraw.ac · ticket.jfa.jp · www.friulioggi.it
+                           swiftspinus.com · secure.paymentech.com · morikoshi.net
+```
+
+A 2-of-9 mechanism is a site fix, not the cohort's cause. The re-pass is still the largest term on the
+two sites that have it and the wiki keeps it — but it is **demoted**, and a tick sized for it would
+have been sized for a lever it does not have. *Grep the corpus before building*, applied to my own
+previous tick's conclusion.
+
+⚠⚠⚠ **THE SHARED MECHANISM, AND IT IS ONE BOX.** `morikoshi.net` — 4,437 nodes, zero container
+queries, 48.7 s:
+
+```text
+  early   nodes=4383 total_ms=277   taffy_n=16 taffy_ms=16   measure_hits=104
+  later   nodes=4437 total_ms=1112  taffy_n=10 taffy_ms=583  measure_hits=306,087
+                     worst_solve_probes=293,455  worst_solve_node=Some(NodeId(1441))
+```
+
+**The node count does not move and the probe count rises 2,943x.** Ten flex/grid containers; **one is
+293,455 of 306,087 probes — 96%** — and the other nine share ~12,000. A single subtree with an
+algorithmic blow-up, which no per-document total could ever have named. `bhramarah.in` shows the same
+shape: 87,399 probes against `taffy_n=1`.
+
+⚠⚠ **TWO SUSPECTS EXCLUDED BY THE LEDGER RATHER THAN BY ARGUMENT.** Intrinsic sizing is innocent —
+`measure_n=0` beside 306,087 hits means the memo absorbs every probe, so not one of them re-lays-out a
+subtree, and the two `Ctx` cache fields that carry long comments about O(n^2) traps are doing exactly
+their job. Taffy's own per-node cache is wired correctly (`CacheTree for TaffyDom` delegates to
+taffy's `Cache`); the single `cache.clear()` sits inside `restate_grid_abspos_in_the_padding_box`,
+guarded to grid abspos containing blocks with non-zero padding, and returns early otherwise. **What is
+left is the probe COUNT** — why one container asks 293k times.
+
+GATE — `G_LAYOUT_PHASES` extended, RED-proven a third time and for a different reason than its first
+two:
+
+```text
+  · zero the probe delta  -> "probed their items 0 times — wired to the wrong seam"
+  (t1258's two remain: remove PHASE_DEPTH -> 3x overcount; remove the reset -> taffy_n (1) then (2))
+```
+
+The new assertion is not just "a number appeared": it checks the blamed node **is one of the fixture's
+flex containers**, because a probe delta attributed to the wrong box is worse than none — it would
+send the next tick to open an innocent subtree.
+
+RESULT — same-hour control (HEAD 41169eef, run 09:08 vs this tree 09:16):
+
+```text
+  morikoshi.net measure_hits   306,087  ->  306,087   (=)  pure instrument, nothing behaves differently
+  morikoshi.net taffy_ms           583  ->      583   (=)
+  worst container                UNKNOWN ->  NodeId(1441) @ 293,455 probes   ← the delta
+  manuk-layout                       181 ->  181 tests (the gate was extended, not added)
+```
+
+⚠ **NO capability or perf claim.** This tick changes no rendering and no timing; it converts a
+session-long diagnosis into one command. Said plainly because an instrument tick that implies a
+speedup is the self-flattery this loop keeps catching.
+
+⚠ **A MEMO DOES NOT FIX AN ALGORITHM THAT ASKS THE WRONG NUMBER OF QUESTIONS — it makes the wrong
+number affordable enough to go unnoticed.** That is why this hid: the cost never appeared as a slow
+function, only as a slow page.
+
+NEXT: open `NodeId(1441)` on `morikoshi.net` (`MANUK_LAYOUT_PROFILE=1` names it) — its display, its
+child count, and its item styles. 293k probes for one container is either a taffy re-solve loop or a
+measure closure that defeats taffy's cache by varying its inputs; the ledger cannot tell those apart
+and the node can.
+
+⚠⚠⚠ **THE FIRST WALL WENT RED ON `G_INTERACT`, AND CHASING IT FOUND A REAL DEFECT I HAD WRITTEN —
+which is not the same thing as the RED being mine.** The gate is the UI-thread latency one, and
+`verify.sh` documents in its own source that it and `G_RUNTIME_COUNT` false-RED under the CPU
+contention of ~25 parallel gate builds. The discriminator is the observer's, not an opinion: *"a real
+regression fails deterministically; a contention false-RED clears on a quiet machine."* Re-run solo on
+an idle box: **manuk-shell 75 passed, 0 failed.** Contention.
+
+But the suspicion was worth acting on, because the audit it forced found overhead I had genuinely
+introduced: `measure_hits` lived **inside** `LayoutPhases`, and `note_measure_hit` therefore copied the
+whole ~120-byte ledger out of its `Cell` and back **on the cache-HIT path — 306,087 times per layout on
+`morikoshi.net`**. t1259 had made it worse by adding two more fields to the struct being copied. It now
+lives in its own `Cell<u64>`, and `probes_at_entry` is read only by a CHARGED guard instead of by every
+inert nested one. *The instrument had started to become the cost it exists to measure* — the exact
+failure this project files under "the instrument was the bug", caught here only because a flaky gate
+pointed at the right file for the wrong reason.
+
+PERF: the instrument's own hot-path cost, removed (see above). No engine perf claim.
+
+WIKI: `docs/wiki/performance.md` — "ONE container is 96% of a page's measure probes — and `@container`
+was the wrong next tick".

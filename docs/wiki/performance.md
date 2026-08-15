@@ -817,3 +817,40 @@ are each worth **twice** what their single-cascade share suggests on a container
 > the item measure, which shrink-to-fits, which probes max-content, which may enter taffy again), so
 > `PhaseGuard` charges the **outermost only**. Remove that gate and the buckets sum to **233 ms against
 > a 78 ms layout** — a 3× overcount that would have read as a finding.
+
+## ONE container is 96% of a page's measure probes — and `@container` was the wrong next tick (t1259)
+
+t1258 ended by naming the `@container` re-pass as the next lever. **The frequency check refutes it.**
+Of the nine reachable `timeout-150s` sites in `SWEEP-t1252` — the cohort that IS the M1 scorability cap
+— exactly **two** carry `container-type` anywhere in their CSS (`bhramarah.in`, `neutypechic.com`);
+the other seven have none. A 2-of-9 mechanism is a site fix, not the cohort's cause, and the re-pass
+work would have been sized for a lever it does not have. *Grep the corpus before building* earned its
+keep again.
+
+The shared mechanism is one level over, and the ledger names it. `morikoshi.net` — 4,437 nodes, no
+container queries at all, 48.7 s to load:
+
+```text
+  early   LAYOUT PHASES nodes=4383 total_ms=277   taffy_n=16 taffy_ms=16    measure_hits=104
+  later   LAYOUT PHASES nodes=4437 total_ms=1112  taffy_n=10 taffy_ms=583   measure_hits=306,087
+                        worst_solve_probes=293,455  worst_solve_node=Some(NodeId(1441))
+```
+
+⚠⚠⚠ **The node count does not move (4,383 → 4,437) and the probe count goes up 2,943×.** Ten flex/grid
+containers on the page; **one of them accounts for 293,455 of the 306,087 probes — 96%** — while the
+other nine share ~12,000 between them. This is not a big page and it is not death by a thousand cuts:
+it is a single subtree with an algorithmic blow-up, and every per-document total ever printed here was
+incapable of saying so.
+
+⚠ **Two suspects are already excluded, both by the ledger rather than by argument.** Intrinsic sizing
+is innocent — `measure_n=0` against 306,087 hits means the memo absorbs *every* probe, so no probe
+re-lays-out a subtree. And taffy's own per-node cache is wired correctly (`CacheTree` for `TaffyDom`
+delegates to taffy's `Cache`); the one `cache.clear()` in the file is inside
+`restate_grid_abspos_in_the_padding_box`, guarded to grid containers that are abspos containing blocks
+with non-zero padding, and it returns early otherwise. **What remains is the probe COUNT itself** — why
+one container asks 293k times — and that is now a one-command question instead of a session:
+`MANUK_LAYOUT_PROFILE=1` prints the node.
+
+> The measure memo made each probe cheap, which is exactly why this hid for so long: the cost never
+> showed up as a slow *function*, only as a slow page. **A memo does not fix an algorithm that asks the
+> wrong number of questions; it makes the wrong number affordable enough to go unnoticed.**

@@ -1880,6 +1880,7 @@
   - L726 · The second cascade engine cannot be deleted — but it can be narrowed (t1241)
   - L751 · layout_ms was never layout — the @container re-pass is HALF of every forced reflow (t1258)
   - L792 · The correctness defect the profile walked into
+  - L821 · ONE container is 96% of a page's measure probes — and @container was the wrong next tick (t1259)
 
 ## THE WIKI — what we durably KNOW, organised by subsystem
 `docs/wiki/README.md`
@@ -2145,4 +2146,4 @@
   - L231 · Both named mechanisms are subsystem work
 
 ---
-2052 sections across 22 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+2053 sections across 22 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.

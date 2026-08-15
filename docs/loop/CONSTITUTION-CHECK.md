@@ -9409,6 +9409,83 @@ before t1168.
    `document.baseURI || location.href` — *a work-around in the tree is a bug report nobody filed*,
    and the loop has no instrument that reads its own fallbacks. That is a cheap, novel probe.
 
+## Check #121 — tick 1259 (2026-08-15)
+
+**Horizon:** H0 — Pareto Web Parity, re-scoped by **PART VII** (v1 shippable). **Gate (VII.1):** the
+four components — daily-driver rendering parity on the representative corpus · the agentic surface ·
+"good enough" security (Bar 0) · reasonable performance. ⚠ PART VII is explicit that **"a WPT number
+is a horizon and a diagnostic, never a gate; 83% and beyond is explicitly OUT OF SCOPE for v1."**
+
+**Gate or scoreboard?** **Gate, and the window turned toward it mid-window.** t1256/t1257 were
+WPT-flip ticks (`css-grid` +234, a whole-CSSOM shorthand fix, `WPT:TOTAL` +1,851). t1258/t1259 moved
+**zero** WPT and were the right ticks anyway: both attack the M1 real-site render number, which is
+what VII.1 actually gates on. The lever-board's "PRIMARY PER-TICK METRIC = the monotonic WPT total"
+and PART VII's "never a gate" are reconcilable — the board itself says WPT is how you climb and
+CrUX M1/M2 is how you certify — but the constitution is the one that decides ties, and it says
+real-sites-moved.
+
+⚠⚠⚠ **THE STEER THE BOARD IS STILL GIVING IS BASED ON A NUMBER THE LATEST SWEEP NO LONGER SUPPORTS.**
+The owner refinement of 2026-08-13 orders **"(1) THROW-CLASS RENDER-BLOCKERS FIRST — ~22% of in-scope
+sites (~29 of 130) DO NOT RENDER AT ALL"**, then placement. Bucketing `SWEEP-t1252`'s reason column —
+the freshest sweep, and the first time this has been counted rather than carried:
+
+```text
+  200 sampled  =  108 scorable  +  92 unscorable
+  of the 92:  bot-wall 40 · unreachable 15 · 404/empty 12 · probe-blocked 6
+              instrument tree-divergence 4 · thin-overlap 3      = 78 NOT OURS
+              timeout-150s 10 · shell-only 3 · render-failed 1   = 14 OURS  (7% of 200)
+```
+
+**The throw-class cohort is 14 sites, not ~29, and it is now the SMALLER half by roughly 5×.** With
+M1 at 33.6% of ~131 in-scope (~44 passing) against a 95% bar (~124), the gap is ~80 sites — **at most
+14 of which are scorability. ~66 are SHAPE on sites that already render and already score.** The
+t1226-era "22% do not render at all" was true when written and the throw-killer arc (t777 onward)
+is what made it false. *A steer that succeeded stops being a steer.*
+
+**Invariants.** **I2 held** — the `@container`/taffy work touched no vendored source; taffy's
+`detailed_layout_info` feature was read and deliberately not enabled. **I3 held and was ADVANCED, not
+merely not-bent**: t1258's fix restores a decoded image's natural size on `@container` pages, and the
+image's box is exactly what feeds `node_rects` → the AX bbox → the agent's click point, so a 40×20
+picture that laid out 16×16 was an I3 mis-actuation surface as much as a render defect. **I4 held** —
+the timeout cohort is usage-weighted real web. **I5 current** — the CrUX sweep ran at t1252.
+
+### PART VI correction
+
+**What is now DONE that VI does not record:** the layout half of the forced-reflow attribution chain.
+VI.2 has carried "layout is slow on real sites" as an undifferentiated blocker; it is now split, and
+**the intuitive answer was wrong**. `layout_document` is 1.88 s of a 17.3 s reflow, intrinsic sizing
+is innocent (306,087 measure probes, **zero** misses), and the cost is elsewhere: the `@container`
+re-pass on the two corpus sites that use it, and — the shared mechanism — **a single flex/grid
+container issuing 293,455 of one page's 306,087 probes (96%)**.
+
+**What VI.4 must now carry:** VI.4 sequences incremental relayout (H0.1) as *"real H0 scope but not on
+the parity critical path … pulled forward only if the oracle shows layout correctness (not speed)
+blocking real sites."* **The condition has now been met on its own terms.** The timeout cohort does not
+fail on correctness *or* on speed-as-polish — it fails because a whole-document re-cascade + re-layout
+per geometry read exceeds the instrument's clock, so the sites are **unscorable**, which is a *breadth*
+failure wearing a performance costume. Incrementality is on the critical path now, by VI.4's own test.
+
+**What is now the real blocker:** **shape/placement on the ~108 already-scorable sites** — roughly five
+times the scorability half, and no longer the thing the board names first.
+
+### STEER
+
+1. **RE-RANK THE BOARD'S (1) AND (2).** Placement/shape geometry is the binding half by ~5×; the
+   throw-class cohort is 14 sites. Do not spend the next arc on render-blockers because a steer written
+   at t1226 says they are 22% — count them first, they are 7%.
+2. **FINISH THE LAYOUT CHAIN BEFORE LEAVING IT.** `NodeId(1441)` on `morikoshi.net` is one command from
+   named (`MANUK_LAYOUT_PROFILE=1`). 293k probes in one container is either a taffy re-solve loop or a
+   measure closure defeating taffy's cache — a fix there is worth the whole timeout cohort, and the
+   diagnosis is currently 90% paid for.
+3. **A FREQUENCY CHECK BEFORE A NAMED NEXT TICK, INCLUDING MY OWN.** t1258 named the `@container`
+   re-pass as the lever; t1259 grepped the cohort's CSS and found it is 2 of 9. The check cost three
+   minutes and saved a mis-sized tick. *A "NEXT" written at the end of a tick is a hypothesis, and the
+   tick that inherits it owes it a count.*
+
+**Next check due: tick 1267.**
+
+---
+
 ## Check #120 — tick 1250 (2026-08-14)
 
 ### The horizon and its gate, named out loud

@@ -953,3 +953,4 @@ tick	sha	epoch	iso	delta_s	shape	wall_s	files	added	deleted	gates	claims	wpt_pas
 1255	b75168a8	1786757772	2026-08-14T21:36:12-04:00	2588	capability	997	8	214	35	471	81	3896	6960	0	625	0	a NO-BREAK SPACE is not whitespace, and t1254's "top mechanism" was my own grep matching itself (2026-08-14)
 1256	6be0b089	1786765326	2026-08-14T23:42:06-04:00	7554	capability	997	9	557	34	471	81	3896	6960	0	626	0	Grid §9.1 says CONTAINING BLOCK, not "child", and the element had two boxes (2026-08-14)
 1257	27d65b92	1786784816	2026-08-15T05:06:56-04:00	19490	capability	997	9	627	38	472	81	3896	6960	0	628	0	a shorthand SETS its longhands, and the CONTROL row said it was never a grid bug (2026-08-15)
+1259	d384e707	1786787143	2026-08-15T05:45:43-04:00	2327	instrument	997	9	329	43	472	81	3896	6960	0	628	0	the frequency check KILLED my own next tick, and one container is 96% of the page (2026-08-15)

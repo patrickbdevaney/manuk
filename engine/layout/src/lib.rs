@@ -182,6 +182,17 @@ pub struct LayoutPhases {
     pub taffy_n: u64,
     /// Time in the final absolute/fixed placement pass.
     pub abs_ns: u128,
+    /// ⚠⚠⚠ **THE WORST SINGLE FLEX/GRID SOLVE — how many item measures it asked for, and which
+    /// container asked.** The totals above say layout is slow and that the measure memo is working;
+    /// they cannot say WHICH box is pathological, and that is the whole remaining distance to a fix.
+    ///
+    /// Measured, and this is why it is a field rather than a note: `morikoshi.net` is a **4,437-node**
+    /// document with **ten** flex/grid containers, and its `measure_hits` go **104 → 306,087** across
+    /// one load while the node count does not move. ~30,600 probes for one container is not a big
+    /// page, it is an algorithmic blow-up in a single subtree — and a per-document total can never
+    /// name it.
+    pub worst_solve_probes: u64,
+    pub worst_solve_node: Option<NodeId>,
 }
 
 impl LayoutPhases {
@@ -213,10 +224,25 @@ thread_local! {
             taffy_ns: 0,
             taffy_n: 0,
             abs_ns: 0,
+            worst_solve_probes: 0,
+            worst_solve_node: None,
         })
     };
     /// How many phase regions are on the stack. Shared by every bucket — see the outermost-only rule.
     static PHASE_DEPTH: std::cell::Cell<u32> = const { std::cell::Cell::new(0) };
+    /// ⚠ **`measure_hits` lives in its OWN cell and not in `LayoutPhases`, and that is a property of
+    /// the instrument's honesty rather than a micro-optimisation.** It is incremented on the cache-HIT
+    /// path, which `morikoshi.net` takes **306,087 times in a single layout**. Folding it into the
+    /// struct made every one of those hits copy the whole ledger out of the `Cell` and copy it back —
+    /// a ~120-byte round trip on the hottest line in layout, i.e. the instrument becoming the cost it
+    /// exists to measure. A `u64` increment cannot do that.
+    static MEASURE_HITS: std::cell::Cell<u64> = const { std::cell::Cell::new(0) };
+}
+
+/// Probes asked for so far this layout — hits plus misses. Read only where a region is actually being
+/// charged (a handful of times per layout), never on the hit path.
+fn probes_so_far() -> u64 {
+    MEASURE_HITS.with(|c| c.get()) + LAYOUT_PHASES.with(|p| p.get().measure_n)
 }
 
 /// Which bucket a [`PhaseGuard`] charges.
@@ -225,7 +251,8 @@ enum Phase {
     Measure,
     MinContent,
     MaxContent,
-    Taffy,
+    /// Carries the container whose solve this is, so the worst one can be NAMED.
+    Taffy(NodeId),
     Abs,
 }
 
@@ -234,6 +261,9 @@ struct PhaseGuard {
     phase: Phase,
     /// `None` when an enclosing region already owns the clock — then this guard is inert.
     start: Option<std::time::Instant>,
+    /// `measure_hits + measure_n` on the way in, so the drop can difference it. Only meaningful for
+    /// a charged `Taffy` region.
+    probes_at_entry: u64,
 }
 
 impl PhaseGuard {
@@ -246,6 +276,11 @@ impl PhaseGuard {
         Self {
             phase,
             start: (depth == 0).then(std::time::Instant::now),
+            // Hits AND misses: the question is how many times taffy ASKED, and a memo that turns a
+            // subtree layout into a lookup changes the price of a probe, not the count.
+            // Only a CHARGED guard reads it. An inert nested guard is entered on the hot path and
+            // must stay a depth increment and nothing more.
+            probes_at_entry: if depth == 0 { probes_so_far() } else { 0 },
         }
     }
 }
@@ -270,9 +305,15 @@ impl Drop for PhaseGuard {
                     v.max_content_ns += ns;
                     v.max_content_n += 1;
                 }
-                Phase::Taffy => {
+                Phase::Taffy(node) => {
                     v.taffy_ns += ns;
                     v.taffy_n += 1;
+                    let probes = (MEASURE_HITS.with(|c| c.get()) + v.measure_n)
+                        .saturating_sub(self.probes_at_entry);
+                    if probes > v.worst_solve_probes {
+                        v.worst_solve_probes = probes;
+                        v.worst_solve_node = Some(node);
+                    }
                 }
                 Phase::Abs => v.abs_ns += ns,
             }
@@ -284,11 +325,7 @@ impl Drop for PhaseGuard {
 /// Note one `measure_cache` HIT. Deliberately not a `PhaseGuard`: a hit does no work, and giving it
 /// a clock would make the instrument the hot path.
 fn note_measure_hit() {
-    LAYOUT_PHASES.with(|p| {
-        let mut v = p.get();
-        v.measure_hits += 1;
-        p.set(v);
-    });
+    MEASURE_HITS.with(|c| c.set(c.get() + 1));
 }
 
 /// The phase ledger for the most recent [`layout_document`] on this thread.
@@ -296,7 +333,9 @@ fn note_measure_hit() {
 /// Public because the gate asserts on it: an instrument whose numbers only ever appear in a log line
 /// is one nothing can prove goes red.
 pub fn layout_phases() -> LayoutPhases {
-    LAYOUT_PHASES.with(|p| p.get())
+    let mut v = LAYOUT_PHASES.with(|p| p.get());
+    v.measure_hits = MEASURE_HITS.with(|c| c.get());
+    v
 }
 
 /// `MANUK_LAYOUT_PROFILE=1` — read ONCE, for the same reason [`trace_intrinsic`] is.
@@ -1210,6 +1249,7 @@ pub fn layout_document(
     // because a panic unwinding out of a previous layout could otherwise leave it above zero, which
     // would silently disable every bucket from then on.
     LAYOUT_PHASES.with(|p| p.set(LayoutPhases::default()));
+    MEASURE_HITS.with(|c| c.set(0));
     PHASE_DEPTH.with(|d| d.set(0));
     let t_all = std::time::Instant::now();
     let ctx = Ctx {
@@ -1299,6 +1339,7 @@ pub fn layout_document(
         let mut v = p.get();
         v.total_ns = t_all.elapsed().as_nanos();
         p.set(v);
+        v.measure_hits = MEASURE_HITS.with(|c| c.get());
         if layout_profiling() {
             let ms = |ns: u128| ns as f64 / 1.0e6;
             tracing::warn!(
@@ -1314,6 +1355,9 @@ pub fn layout_document(
                 taffy_ms = ms(v.taffy_ns),
                 taffy_n = v.taffy_n,
                 abs_ms = ms(v.abs_ns),
+                // The container to open next, and how hard it asked. A total cannot name a box.
+                worst_solve_probes = v.worst_solve_probes,
+                worst_solve_node = ?v.worst_solve_node,
                 // Whatever the named buckets do not account for gets its own column rather than
                 // being spread across them — the same rule `CASCADE PHASES` follows, and for the
                 // same reason: an instrument whose parts always sum to the whole cannot tell you it
@@ -9452,7 +9496,7 @@ impl Ctx<'_> {
         // Charged as one region: the measure closure below re-enters this file, so taffy's own solve
         // and the item measures it drives are ONE cost from the caller's point of view. See
         // `LayoutPhases` for why nesting is attributed outward rather than split.
-        let _phase = PhaseGuard::enter(Phase::Taffy);
+        let _phase = PhaseGuard::enter(Phase::Taffy(node));
         let (placed, solved_h) = taffy_tree::solve_subtree(
             self.dom,
             self.styles,
@@ -24736,6 +24780,33 @@ mod tests {
             PHASE_DEPTH.with(|d| d.get()),
             0,
             "PHASE_DEPTH did not unwind to 0 — every subsequent layout would be charged to nothing"
+        );
+
+        // 3 — THE WORST SOLVE IS NAMED, AND IT NAMES A REAL CONTAINER. A probe count with no node
+        // attached cannot start a diagnosis, and a node that is not one of the flex containers would
+        // mean the guard is charging the wrong box.
+        assert!(
+            a.worst_solve_probes > 0,
+            "the fixture's flex solves probed their items {} times — a solve that asks for no \
+             measurement means the attribution is wired to the wrong seam",
+            a.worst_solve_probes
+        );
+        let worst = a
+            .worst_solve_node
+            .expect("the worst solve must name its container");
+        let tag = _dom.tag_name(worst);
+        let is_a_flex_container = _dom
+            .element(worst)
+            .and_then(|e| {
+                e.attr("id")
+                    .map(|v| v == "outer")
+                    .or(e.attr("class").map(|v| v == "row"))
+            })
+            .unwrap_or(false);
+        assert!(
+            is_a_flex_container,
+            "the worst solve blamed {worst:?} (<{tag:?}>), which is not one of this fixture's flex \
+             containers (#outer or .row) — the probe delta is being attributed to the wrong node"
         );
 
         // 2 — PER-LAYOUT. The same document laid out again reports the same counts, not the sum.
