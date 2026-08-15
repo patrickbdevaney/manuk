@@ -1493,6 +1493,25 @@ fn sheets_of(
 ///
 /// # Safety
 /// `ctx` is a `*mut ReflowCtx` from a live [`ReflowScope`]; `dom` is the re-entry's live arena.
+/// **Hand the just-completed layout's grid track sizes to the CSSOM.**
+///
+/// Read from `manuk_layout`'s thread-local rather than threaded through a return value because
+/// `layout_document` answers with a `LayoutBox` and nothing else; the read is only valid IMMEDIATELY
+/// after a layout, which is why every caller sits directly on one ([`Page::set_root_box`], the
+/// pre-`Page` load path, and [`forced_reflow`]) and none of them further away.
+///
+/// The tuple is the transport type: `manuk-js` has no `manuk-layout` dependency and must not grow
+/// one, so `GridTracks` cannot cross that edge — the same reason the snap candidates are a bare
+/// `(Vec<f32>, Vec<f32>)`.
+fn publish_grid_tracks() {
+    manuk_js::set_grid_tracks(
+        manuk_layout::grid_tracks()
+            .into_iter()
+            .map(|(n, t)| (n, (t.columns, t.rows)))
+            .collect(),
+    );
+}
+
 unsafe fn forced_reflow(ctx: *mut std::ffi::c_void, dom: *mut Dom) {
     let c = unsafe { &mut *(ctx as *mut ReflowCtx) };
     let dom = unsafe { &*dom };
@@ -1530,6 +1549,11 @@ unsafe fn forced_reflow(ctx: *mut std::ffi::c_void, dom: *mut Dom) {
     // produces the tree that gets painted. A forced reflow answers a question; it does not commit.
     let t_pub = std::time::Instant::now();
     unsafe { manuk_js::republish_view_maps(&c.rects, &c.styles) };
+    // A forced reflow is what `getComputedStyle` triggers when the script has dirtied the DOM, so the
+    // grid tracks have to be republished HERE too or `el.style.gridTemplateColumns = …` followed by a
+    // read-back would answer with the tracks from before the assignment — the staleness the rects
+    // beside them are already protected from.
+    publish_grid_tracks();
     let us_pub = t_pub.elapsed().as_micros() as u64;
 
     // 100ms is a frame and a half — below it this is a normal read and the log would be noise;
@@ -5463,6 +5487,9 @@ impl Page {
             .into_iter()
             .map(|(n, r)| (n, [r.x, r.y, r.width, r.height]))
             .collect();
+        // The `Page` does not exist yet, so `set_root_box` cannot be the seam here — but the probe
+        // scripts below DO run `getComputedStyle`, and this is the layout they must read.
+        publish_grid_tracks();
         // Only stand up a JS context for documents that actually have a script — a static page
         // needs no engine spin-up (faster load, and no persistent global to keep alive). With
         // no initial script, no listener can ever be registered, so there is nothing to lose.
@@ -6673,6 +6700,13 @@ impl Page {
         // The inside of an `<svg>` is not laid out by CSS; its boxes come from path data and the
         // `viewBox` transform, and both need the svg's USED box, which exists only now.
         svg_geometry::apply(&mut self.root_box, &self.svg_geometry);
+        // **The USED grid track sizes, which exist ONLY as a by-product of the layout that just
+        // finished** — `grid-template-columns`/`-rows` resolve to the used value (CSSOM §5.1), and
+        // taffy hands them over through a trait method whose default body is a no-op (t1270). This is
+        // exactly the "adding the next post-layout pass here makes it run everywhere" case this
+        // function's own doc comment was written for: wired into two of the three layout sites, a
+        // grid would report last layout's tracks on whichever path was missed.
+        publish_grid_tracks();
     }
 
     /// **Re-run the cascade over EVERY stylesheet the document has** — inline `<style>` and

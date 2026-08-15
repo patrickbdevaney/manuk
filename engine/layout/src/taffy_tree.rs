@@ -506,6 +506,29 @@ pub struct Placed {
     pub children: Vec<Placed>,
 }
 
+/// **The USED track sizes of one grid container — the value CSSOM §5.1 says
+/// `grid-template-columns`/`-rows` resolve to, and the one number taffy computed on every layout and
+/// then threw away at a trait boundary.**
+///
+/// `grid-template-*` is one of the few properties whose *resolved* value is the **used** value rather
+/// than the computed one: Chrome answers a 900px `repeat(3, 1fr)` grid with `"300px 300px 300px"`,
+/// not with the author's `repeat(3, 1fr)`. t1269 measured that we had only the specified tracks and
+/// **withheld the property entirely** rather than publish a wrong answer of the right type. This is
+/// the value that makes publishing it correct.
+///
+/// The sizes are the **tracks only** — taffy's `GridTrack` vector interleaves gutter pseudo-tracks
+/// between the real ones, and `DetailedGridTracksInfo::sizes` has already filtered them out
+/// (`gutters` carries them separately, and `gap` is published from the cascade). Implicit tracks are
+/// included in document order exactly as Chrome includes them: an item auto-placed into row 4 of a
+/// two-row template makes `gridTemplateRows` report four sizes.
+#[derive(Debug, Clone, Default, PartialEq)]
+pub struct GridTracks {
+    /// Used size, in px, of each column track — inline axis, in visual order.
+    pub columns: Vec<f32>,
+    /// Used size, in px, of each row track — block axis, top to bottom.
+    pub rows: Vec<f32>,
+}
+
 struct TNode {
     dom: DomNodeId,
     style: Style,
@@ -650,6 +673,23 @@ pub struct TaffyDom<'m> {
     /// that rect collapses onto the CONTENT box. Handing the real padding back on a grid root (see
     /// [`solve_subtree`]) is what makes taffy's already-correct rule visible.
     root_padding: Rect<LengthPercentage>,
+    /// **The used track sizes taffy hands back through `LayoutGridContainer::set_detailed_grid_info`,
+    /// which is a no-op by default and was therefore invisible.** Keyed by DOM node because the
+    /// taffy ids are private to this tree and every consumer upstream speaks `DomNodeId`.
+    ///
+    /// ⚠ **THE WRITE POLARITY IS LAST-WINS, AND THAT IS A READING OF TAFFY, NOT A GUESS.**
+    /// `compute_grid_layout` returns at `run_mode == RunMode::ComputeSize` (taffy 0.12.1
+    /// `compute/grid/mod.rs:543`) **before** it reaches the `set_detailed_grid_info` call at 703 — so
+    /// an intrinsic *sizing* request against a node in THIS tree never writes here at all, and every
+    /// entry is from a real `PerformLayout`. The remaining probe hazard is one level out: a
+    /// max-content measure builds a **second** `TaffyDom` and runs a full `compute_root_layout` on it
+    /// at a huge available width, which does write. That one is caught by `Ctx::intrinsic_probe` at
+    /// the point of RECORDING (see `layout_flex_or_grid`) — the same flag `record_transform` gates on
+    /// after t1120 poisoned `pre_transform_rect` permanently by being first-write-wins. ⚠ That guard
+    /// measured INERT (removing it changes no published value, because a flex container measures its
+    /// items before it lays them out, so the real pass writes last anyway); the ordering is what
+    /// carries this, and the guard is defence in depth. Recorded at the recording site.
+    grid_tracks: Vec<(DomNodeId, GridTracks)>,
 }
 
 impl<'m> TaffyDom<'m> {
@@ -667,6 +707,7 @@ impl<'m> TaffyDom<'m> {
             calc: Vec::new(),
             built_for: container,
             root_padding: Rect::zero(),
+            grid_tracks: Vec::new(),
         };
         let root = tree.add(dom, styles, container);
         // The container's own margin/padding/border/inset are applied by Manuk's block
@@ -1275,6 +1316,28 @@ impl LayoutGridContainer for TaffyDom<'_> {
     fn get_grid_child_style(&self, child_node_id: TId) -> &Style {
         &self.nodes[usize::from(child_node_id)].style
     }
+
+    /// ⚠⚠⚠ **THE DEFAULT BODY OF THIS METHOD IS A NO-OP, WHICH IS WHY A NUMBER THAT WAS COMPUTED ON
+    /// EVERY SINGLE LAYOUT WAS UNREACHABLE FOR THE WHOLE LIFE OF THE GRID IMPLEMENTATION.**
+    ///
+    /// taffy resolves the used size of every grid track — it has to, that *is* grid layout — and then
+    /// offers it here. Not overriding it is not "the feature is off"; the work happened and the
+    /// result was discarded one frame from the caller. `detailed_layout_info` is in taffy 0.12's
+    /// `default` feature set, so nothing had to be enabled: only this body had to exist.
+    ///
+    /// That is the same shape as t1267's `element.animate()` (the method WORKED while its feature
+    /// detect was false) read from the other side: here the capability was *present in the
+    /// dependency* and absent from us because a hook nobody wrote defaults to silence.
+    fn set_detailed_grid_info(&mut self, node_id: TId, info: taffy::DetailedGridInfo) {
+        let dom = self.nodes[usize::from(node_id)].dom;
+        self.grid_tracks.push((
+            dom,
+            GridTracks {
+                columns: info.columns.sizes,
+                rows: info.rows.sizes,
+            },
+        ));
+    }
 }
 
 /// Chrome's `LayoutUnit` — 1/64 CSS px. **Every length Blink computes is quantised to this
@@ -1415,7 +1478,7 @@ pub fn solve_subtree<'m>(
     container_height: Option<f32>,
     measure: impl FnMut(DomNodeId, Size<Option<f32>>, Size<AvailableSpace>) -> (Size<f32>, Option<f32>)
         + 'm,
-) -> (Vec<Placed>, f32) {
+) -> (Vec<Placed>, f32, Vec<(DomNodeId, GridTracks)>) {
     let (mut tree, root) = TaffyDom::build(dom, styles, container, Box::new(measure));
     // Pin the root to the given content size (Manuk resolved width; height when definite).
     let r: usize = root.into();
@@ -1468,6 +1531,15 @@ pub fn solve_subtree<'m>(
     // ⚠ It is read HERE, before the §9.1 re-solve below, because that pass deliberately perturbs
     // the root's box and must not be allowed to answer any question but its own.
     let content_h = tree.nodes[r].layout.content_box_height();
+    // ⚠ **READ HERE, FOR THE SAME REASON `content_h` IS READ HERE — the §9.1 re-solve below
+    // deliberately perturbs the root's box** (it zeroes the min/max size and hands the real padding
+    // back so an abspos child's static position lands in the PADDING box), and a grid re-solved
+    // under a different box answers a different track question. `set_detailed_grid_info` fires again
+    // on that pass, so taking the snapshot *after* it would publish the perturbation.
+    //
+    // The vector is drained rather than cloned: the tree is dropped a few lines later and every
+    // entry is wanted.
+    let tracks = std::mem::take(&mut tree.grid_tracks);
     restate_grid_abspos_in_the_padding_box(
         &mut tree,
         root,
@@ -1478,7 +1550,7 @@ pub fn solve_subtree<'m>(
         &child_ids,
         &mut placed,
     );
-    (placed, content_h)
+    (placed, content_h, tracks)
 }
 
 /// ⚠⚠⚠ **GRID §9 HAS TWO SECTIONS AND THEY GIVE DIFFERENT ANSWERS — the discriminator is not
@@ -1799,7 +1871,7 @@ mod tests {
         cs.flex_shrink = 0.0; // don't let flex shrink the item below its basis
         styles.insert(sidebar, cs);
 
-        let (placed, _solved_h) =
+        let (placed, _solved_h, _tracks) =
             solve_subtree(&dom, &styles, container, 1000.0, None, |_n, _k, _a| {
                 (
                     Size {
@@ -1844,7 +1916,7 @@ mod tests {
         }
 
         // Leaves measure to zero content (only grow matters here).
-        let (placed, _solved_h) =
+        let (placed, _solved_h, _tracks) =
             solve_subtree(&dom, &styles, container, 300.0, None, |_n, _k, _a| {
                 (
                     Size {
@@ -1911,7 +1983,7 @@ mod tests {
             styles.insert(k, cs);
         }
 
-        let (placed, _solved_h) =
+        let (placed, _solved_h, _tracks) =
             solve_subtree(&dom, &styles, container, 600.0, None, |_n, _k, _a| {
                 (
                     Size {
@@ -1982,7 +2054,7 @@ mod tests {
         }
 
         // Height `None` = the container's own height is indefinite, which is the whole point.
-        let (placed, _solved_h) =
+        let (placed, _solved_h, _tracks) =
             solve_subtree(&dom, &styles, container, 600.0, None, |_n, _k, _a| {
                 (
                     Size {

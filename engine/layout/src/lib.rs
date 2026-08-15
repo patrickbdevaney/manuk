@@ -44,6 +44,8 @@ use manuk_text::{FontContext, FontFamily, FontKey};
 pub mod flex;
 mod taffy_tree;
 
+pub use taffy_tree::GridTracks;
+
 /// Width (px) of a classic, space-taking scrollbar — the inline gutter an `overflow:scroll`
 /// container reserves for its vertical scrollbar. 15px is the long-standing default UA metric on
 /// Linux/desktop and the figure `getBoundingClientRect`-driven WPT expects; overlay scrollbars
@@ -336,6 +338,29 @@ pub fn layout_phases() -> LayoutPhases {
     let mut v = LAYOUT_PHASES.with(|p| p.get());
     v.measure_hits = MEASURE_HITS.with(|c| c.get());
     v
+}
+
+thread_local! {
+    /// The used grid track sizes produced by the most recent [`layout_document`] on this thread.
+    ///
+    /// A thread-local rather than a return value because `layout_document` answers with a
+    /// `LayoutBox` and nothing else, and threading a second output through the ~dozen call sites in
+    /// `engine/page` to serve one CSSOM property would be a wider change than the capability. It is
+    /// the same shape as [`layout_phases`], with the same lifetime rule: **overwritten wholesale at
+    /// the START of every `layout_document`**, so a grid that stops being a grid stops having tracks
+    /// rather than keeping the last ones it had.
+    static GRID_TRACKS: RefCell<HashMap<NodeId, GridTracks>> = RefCell::new(HashMap::new());
+}
+
+/// The used track sizes of every grid container in the most recent [`layout_document`] on this
+/// thread — see [`GridTracks`].
+///
+/// Cloned rather than taken: `getComputedStyle` may be called any number of times against one
+/// layout, and a `take` would make the *second* reader see an empty map. That is the bug class
+/// t1266 named from the other direction — a reader that silently answers "absent" is
+/// indistinguishable from an unsupported property.
+pub fn grid_tracks() -> HashMap<NodeId, GridTracks> {
+    GRID_TRACKS.with(|g| g.borrow().clone())
 }
 
 /// `MANUK_LAYOUT_PROFILE=1` — read ONCE, for the same reason [`trace_intrinsic`] is.
@@ -1125,6 +1150,13 @@ struct Ctx<'a> {
     /// inverse would silently inflate it.
     transform_matrix: RefCell<HashMap<NodeId, [f32; 6]>>,
     pre_transform_rect: RefCell<HashMap<NodeId, Rect>>,
+    /// **Every grid container's USED track sizes, which is the value `grid-template-columns`/`-rows`
+    /// RESOLVE to (CSSOM §5.1) and the one thing that made publishing them possible.**
+    ///
+    /// Written only from a real layout pass — see [`Ctx::intrinsic_probe`] and the recording site in
+    /// [`Ctx::layout_flex_or_grid`]. Read out through [`grid_tracks`] after `layout_document`
+    /// returns, the same way [`layout_phases`] is.
+    grid_tracks: RefCell<HashMap<NodeId, GridTracks>>,
 }
 
 /// Lay out a whole document into a fragment tree, given a viewport width in px.
@@ -1269,6 +1301,7 @@ pub fn layout_document(
         static_pos_writes: std::cell::Cell::new(0),
         transform_matrix: RefCell::new(HashMap::new()),
         pre_transform_rect: RefCell::new(HashMap::new()),
+        grid_tracks: RefCell::new(HashMap::new()),
     };
     let root_el = dom
         .find_first("body")
@@ -1367,6 +1400,11 @@ pub fn layout_document(
             );
         }
     });
+    // **Published WHOLESALE, not merged.** A grid that this layout no longer solves — the rule
+    // stopped matching, the element was removed, `display` changed — must lose its tracks in the
+    // same instant, because `getComputedStyle` answering last-layout's track sizes is the stale-read
+    // class this engine keeps catching (t1120's poisoned `pre_transform_rect`, t1242's counter).
+    GRID_TRACKS.with(|g| *g.borrow_mut() = ctx.grid_tracks.take());
     out
 }
 
@@ -9497,7 +9535,7 @@ impl Ctx<'_> {
         // and the item measures it drives are ONE cost from the caller's point of view. See
         // `LayoutPhases` for why nesting is attributed outward rather than split.
         let _phase = PhaseGuard::enter(Phase::Taffy(node));
-        let (placed, solved_h) = taffy_tree::solve_subtree(
+        let (placed, solved_h, grid_tracks) = taffy_tree::solve_subtree(
             self.dom,
             self.styles,
             node,
@@ -9566,6 +9604,39 @@ impl Ctx<'_> {
                 )
             },
         );
+        // ── **THE USED TRACK SIZES, AND THE PROBE GUARD THAT IS THE WHOLE DESIGN OF THIS LINE.**
+        //
+        // t1120 poisoned `pre_transform_rect` permanently by recording from a pass whose outputs are
+        // contractually discarded: a max-content probe lays the same subtree out at a **1e6**
+        // available width, and a grid solved at 1e6 has tracks to match. Publishing those through
+        // `getComputedStyle` would be worse than the `undefined` t1269 shipped — a caller doing
+        // arithmetic on `"999900px"` is not merely uninformed, it is wrong.
+        //
+        // `intrinsic_probe` is the flag that already knows (see [`IntrinsicProbe`], and note t1236's
+        // correction that the flex/grid item measure — the 1e6 one — did not raise it until it was
+        // fixed). Inside a probe the whole record is dropped; outside one it is LAST-WINS, because a
+        // container laid out twice in one document layout keeps the second answer, which is the one
+        // whose fragments survive into the tree.
+        //
+        // ⚠⚠ **AND THE TWO ARE NOT INDEPENDENT — MEASURED, BECAUSE THE FALSIFICATION CAME BACK
+        // INERT.** Replacing this guard with `if true` changes nothing on a grid nested in a flex row
+        // (`g_grid_computed_style`'s `probed=` arm reads `300px 300px` either way): a flex container
+        // measures its items and *then* lays them out, so the real pass is the last write regardless.
+        // **Last-wins is the load-bearing half; the guard is defence in depth** against an ordering
+        // where a probe would be the final writer for a node. It is kept because it costs one branch
+        // and because t1120 is what a wrong answer here looks like — but it is not what makes the
+        // published number right, and claiming otherwise would be a gate that cannot go red wearing a
+        // comment that says it can.
+        //
+        // ⚠ RTL is deliberately NOT mirrored here even though the slots below are: `direction`
+        // reverses which *track* an item lands in, not the order the track list is authored or
+        // reported in — `grid-template-columns` still reads out track 1 first in both directions.
+        if !self.intrinsic_probe.get() {
+            let mut m = self.grid_tracks.borrow_mut();
+            for (dn, tracks) in grid_tracks {
+                m.insert(dn, tracks);
+            }
+        }
         // ── **AN RTL GRID'S COLUMN AXIS RUNS RIGHT-TO-LEFT, AND TAFFY CANNOT BE TOLD.** `direction`
         // reverses a grid's inline-axis track order (CSS Grid §3: the column axis is the inline axis),
         // so the first item goes in the RIGHTMOST column. Taffy has no `direction` property, and the

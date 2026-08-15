@@ -440,6 +440,24 @@ pub fn set_snap_candidates(c: std::collections::HashMap<manuk_dom::NodeId, (Vec<
 pub fn set_snap_candidates(_c: std::collections::HashMap<manuk_dom::NodeId, (Vec<f32>, Vec<f32>)>) {
 }
 
+/// **Publish each grid container's USED track sizes, `(columns, rows)` in px.**
+///
+/// `grid-template-columns` / `grid-template-rows` are among the few properties CSSOM §5.1 resolves to
+/// the **used** value, so `getComputedStyle` on a 900px `repeat(3, 1fr)` grid must answer
+/// `"300px 300px 300px"`. Only the host has laid the grid out, and the numbers come from a taffy trait
+/// method whose default body is a no-op — which is why they were computed on every layout and reached
+/// no caller until t1270.
+///
+/// A bare tuple for the same reason [`set_snap_candidates`] takes one: this crate has no
+/// `manuk-layout` dependency and must not grow one.
+#[cfg(feature = "_sm")]
+pub fn set_grid_tracks(g: std::collections::HashMap<manuk_dom::NodeId, (Vec<f32>, Vec<f32>)>) {
+    dom_bindings::set_grid_tracks(g);
+}
+
+#[cfg(not(feature = "_sm"))]
+pub fn set_grid_tracks(_g: std::collections::HashMap<manuk_dom::NodeId, (Vec<f32>, Vec<f32>)>) {}
+
 /// **Seed the `<script type=module>` NODE → source-url map (tick 617).**
 ///
 /// A module's imports resolve against the MODULE's url. That is the document url for an inline root —

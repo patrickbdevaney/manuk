@@ -3999,3 +3999,66 @@ the first passes is what `G_POOL_ISOLATION` was retired for.
 > **The gate worked. It went RED and stayed RED, and nothing ran it.** `verify.sh` runs 19 of 104
 > gates. A gate outside the wall is a claim nobody is checking — and the failure mode is not a
 > missing assertion, it is an unread one.
+
+## ~1,900 WPT subtests were passing on `"" === ""`, and publishing one property revealed it (t1270)
+
+**The primary metric structurally rewards NOT implementing a CSSOM property.** This is not a claim
+about grid; grid is only where it was caught.
+
+`css/support/interpolation-testcommon.js` backs the **194 `*-interpolation.html` files across twelve
+CSS areas**. Its comparison is two reads of the same property (lines 459 / 473):
+
+```js
+  var expectedValue = getComputedStyle(expectedTargetContainer.target).getPropertyValue(property);
+  ...
+  comparisonFunction(getComputedStyle(target).getPropertyValue(property), expectedValue);
+```
+
+`getPropertyValue` answers `""` for a property the computed-style object does not carry — **on the
+animated target and on the reference target alike**. So for any unpublished property the assertion is
+`assert_equals("", "")` and **every subtest in the file passes**, at every progress point, for an
+engine with no interpolation whatsoever. t1016's *two errors cancel and read as agreement*, at the
+scale of a whole harness.
+
+**Measured, on an OLD/NEW binary pair built in the same hour on the same box.** t1270 published
+`grid-template-columns` / `grid-template-rows` — two properties whose resolved value is the USED one,
+recovered from taffy's `set_detailed_grid_info`. Same command, `css/css-grid --batch 10`:
+
+```text
+  css/css-grid              OLD  7707/14687        NEW  6276/14629        net -1431
+    grid-definition          462/1284  ->   802/1284     +340   ← real: used tracks now readable
+    layout-algorithm          87/528   ->   217/528      +130   ← real
+    parsing                  967/1598  ->  1037/1598      +70   ← real
+    animation               1952/2030  ->   822/2092    -1130   ← was VACUOUS
+    grid-lanes/animation    1331/1571  ->   544/1634     -787   ← was VACUOUS
+  HANG/CRASH 0 both. Every other subdirectory byte-identical.
+  CONTROLS: css/css-flexbox 1700/4693 in BOTH (identical). css/css-sizing 2330 -> 2352 (rate
+  39.75% -> 39.92%, inside its known band). css/css-values 3075/8282 -> 3124/8133.
+```
+
+⚠⚠⚠ **The two loss rows were diffed by FAILING TITLE, not inferred from the totals.** Of 784 distinct
+failing titles under the new binary in `css/css-grid/animation`, **760 are new and every one of them
+names `grid-template-columns` or `grid-template-rows`** — 380 each, an exact split. The remaining 24
+are the pre-existing `grid-auto-*` failures the old binary already had.
+
+⚠⚠ **A CORRECTION, NOT A REGRESSION — and the project has already banked the same shape in the other
+direction** (t1176: the WPT checkout was missing `css/support/`, the number that moved was the
+instrument, *"a CORRECTION, not progress → RE-RANK"*). Nothing that worked works less well: no page
+renders differently and no API returns a worse answer. What fell is a count of assertions that were
+never looking at the engine. The +585 real passes and the −1917 vacuous ones are **the same one-line
+change** and cannot be separated, so no advance is claimed either.
+
+⚠ **The dodge was available, measured, and refused.** `interpolation-testcommon.js` builds plain
+`<div>` targets, so restricting publication to grid *containers* would have kept all ~1,900 vacuous
+passes **and** the +585. It is refused because it is score-tuning wearing a spec argument: on a
+non-grid element the resolved value IS the computed value, the cascade holds it, and withholding a
+value we have is the FALSE ABSENCE the reliability doctrine ranks beside a false presence — t1267
+priced one of those at 909 subtests.
+
+**What this predicts, and it is the actionable half.** Every future CSSOM publication tick pays this
+toll, and the toll's size is set by how many interpolation subtests the property owns, *not* by how
+right the published value is. The reason it bites at all is one sentence in `animatable_js.rs`: the
+Web Animations shim **fast-forwards to the end state rather than tweening**. Two resolutions, for the
+observer to rank: (1) land real interpolation — the shim is the shared blocker for all twelve areas,
+not a grid problem; or (2) treat an interpolation leg as unscored until the property's own
+`isSupported` leg is real, so the metric stops paying for absence.

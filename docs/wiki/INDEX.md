@@ -707,6 +707,7 @@
   - L3970 · The status column answers ONE question, and the row was answering two
   - L3987 · Two fixes were available and one of them was a disguise
   - L3993 · And no "the buckets must sum" assertion was added
+  - L4003 · ~1,900 WPT subtests were passing on "" === "", and publishing one property revealed it (t1270)
 
 ## CSS AND THE CASCADE — Stylo realities and quirks actually encountered
 `docs/wiki/css-cascade.md`
@@ -2182,4 +2183,4 @@
   - L231 · Both named mechanisms are subsystem work
 
 ---
-2089 sections across 22 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+2090 sections across 22 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.

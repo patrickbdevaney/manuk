@@ -145,6 +145,17 @@ thread_local! {
     /// `[scrollTop, scrollLeft, scrollHeight, scrollWidth, clientHeight, clientWidth]`.
     static SCROLL_GEOM: std::cell::RefCell<std::collections::HashMap<NodeId, [f32; 6]>> =
         std::cell::RefCell::new(std::collections::HashMap::new());
+    /// **Per-grid-container USED track sizes, `(columns, rows)` in px** — published by the host,
+    /// because taffy computes them and only the host has a layout tree.
+    ///
+    /// This is the input `grid-template-columns` / `grid-template-rows` had been missing: CSSOM §5.1
+    /// makes them resolve to the **USED** value, so a 900px `repeat(3, 1fr)` grid must read back
+    /// `"300px 300px 300px"`. t1269 measured that we held only the SPECIFIED tracks and chose to
+    /// publish nothing at all rather than a wrong answer of the right type. A bare tuple rather than
+    /// a layout type because **this crate has no `manuk-layout` dependency and must not grow one** —
+    /// the same reason [`SNAP_CANDIDATES`] is a `(Vec<f32>, Vec<f32>)`.
+    static GRID_TRACKS: std::cell::RefCell<std::collections::HashMap<NodeId, (Vec<f32>, Vec<f32>)>> =
+        std::cell::RefCell::new(std::collections::HashMap::new());
     /// `element.scrollTop = n` requests the host has not applied yet. The value here is ALREADY CLAMPED
     /// — a script that sets `scrollTop = 1e9` to reach the bottom must read back the real maximum, not
     /// a billion, or every "am I at the bottom?" check on the web breaks.
@@ -650,6 +661,13 @@ pub fn set_scroll_geometry(g: std::collections::HashMap<NodeId, [f32; 6]>) {
     SCROLL_GEOM.with(|c| *c.borrow_mut() = g);
 }
 
+/// Publish the per-grid-container used track sizes — see [`GRID_TRACKS`]. Replaces wholesale rather
+/// than merging: an element that stopped being a grid must stop having tracks in the same instant, or
+/// `getComputedStyle` answers with the last layout in which it was one.
+pub fn set_grid_tracks(g: std::collections::HashMap<NodeId, (Vec<f32>, Vec<f32>)>) {
+    GRID_TRACKS.with(|c| *c.borrow_mut() = g);
+}
+
 /// Publish the per-container scroll-snap candidates for one re-entry — see [`SNAP_CANDIDATES`]. Owned
 /// by the host (only it has the layout tree); the `scrollLeft`/`scrollTop` setters snap against them.
 pub fn set_snap_candidates(c: std::collections::HashMap<NodeId, (Vec<f32>, Vec<f32>)>) {
@@ -700,6 +718,15 @@ pub fn take_element_scrolls() -> Vec<(NodeId, f32, f32)> {
 
 fn scroll_geom(node: NodeId) -> [f32; 6] {
     SCROLL_GEOM.with(|c| c.borrow().get(&node).copied().unwrap_or([0.0; 6]))
+}
+
+/// One grid container's used `(columns, rows)` track sizes, **laying out first if the script has
+/// dirtied the DOM** — the same forced-reflow contract [`layout_rect`] carries, and required for the
+/// same reason: `el.style.gridTemplateColumns = …; getComputedStyle(el).gridTemplateColumns` must
+/// read back the tracks that assignment produced, not the ones before it.
+fn grid_tracks_of(node: NodeId) -> Option<(Vec<f32>, Vec<f32>)> {
+    force_reflow_if_stale();
+    GRID_TRACKS.with(|c| c.borrow().get(&node).cloned())
 }
 
 /// Read one node's layout rect from the borrowed snapshot, **laying out first if the script has
@@ -952,6 +979,68 @@ fn track_list_css(list: &[manuk_css::TrackSize]) -> String {
     }
     list.iter()
         .map(track_size_css)
+        .collect::<Vec<_>>()
+        .join(" ")
+}
+
+/// **`grid-template-columns` / `grid-template-rows` — the two properties in this family whose
+/// resolved value is the USED one (CSSOM §5.1), which is why this takes layout's answer and the
+/// cascade's and picks between them rather than serialising either alone.**
+///
+/// | the element | what Chrome answers | the arm here |
+/// |---|---|---|
+/// | a laid-out **grid container** | the used track sizes in px — `repeat(3, 1fr)` in 900px ⇒ `"300px 300px 300px"` | `Some(used)` |
+/// | anything else, with a declared template | the **computed** track list — `"100px 200px"` | `None`, non-empty cascade |
+/// | anything else, undeclared | `"none"` | `None`, empty cascade |
+///
+/// ⚠⚠ **`none` and `auto` are different initial values and this family contains BOTH.** The empty
+/// case here is `none` — `grid-template-*`'s initial value — where [`track_list_css`]'s empty case is
+/// `auto`, because `grid-auto-rows`/`-columns` initialise to `auto`. Copying the sibling serialiser
+/// would have made `getComputedStyle(document.body).gridTemplateColumns` read `"auto"`, which is a
+/// legal value of the property and therefore silent: `if (s.gridTemplateColumns !== 'none')` is the
+/// standard "is this templated?" test and `auto` passes it.
+///
+/// ⚠ A used size is a laid-out float and is serialised through the same `{v}px` spelling as every
+/// other used length here, so `1fr 2fr` in 300px reads `"98.6562px 197.344px"` — Chrome's own
+/// fractional answer, not a rounded one. A grid with **no tracks at all** (a grid container with no
+/// template and no items) laid out as a grid still answers `"none"`: zero tracks is what it has.
+fn used_track_list_css(used: Option<&[f32]>, computed: &[manuk_css::TrackComponent]) -> String {
+    if let Some(sizes) = used {
+        if !sizes.is_empty() {
+            return sizes
+                .iter()
+                .map(|v| {
+                    let r = (v * 1e4).round() / 1e4;
+                    if r == r.trunc() {
+                        format!("{}px", r as i64)
+                    } else {
+                        format!("{r}px")
+                    }
+                })
+                .collect::<Vec<_>>()
+                .join(" ");
+        }
+    }
+    if computed.is_empty() {
+        return "none".into();
+    }
+    computed
+        .iter()
+        .map(|c| match c {
+            manuk_css::TrackComponent::Single(t) => track_size_css(t),
+            // `repeat(auto-fill | auto-fit, …)` survives the cascade intact because its repetition
+            // count depends on the container size — which is exactly why it can only be *resolved*
+            // on a grid container, and on one of those the `used` arm above already answered.
+            manuk_css::TrackComponent::AutoRepeat { fit, tracks } => format!(
+                "repeat({}, {})",
+                if *fit { "auto-fit" } else { "auto-fill" },
+                tracks
+                    .iter()
+                    .map(track_size_css)
+                    .collect::<Vec<_>>()
+                    .join(" ")
+            ),
+        })
         .collect::<Vec<_>>()
         .join(" ")
 }
@@ -1679,6 +1768,7 @@ fn extra_computed_props(
     cb: Option<[f32; 4]>,
     rect: Option<[f32; 4]>,
     content_absent_is_none: bool,
+    tracks: Option<&(Vec<f32>, Vec<f32>)>,
 ) -> Vec<(&'static str, String)> {
     use manuk_css::*;
     let px = |v: f32| {
@@ -1985,26 +2075,35 @@ fn extra_computed_props(
         // their resolved value is the computed one on every element — container or item.
         ("grid-column", grid_line_pair_css(&cs.grid_column)),
         ("grid-row", grid_line_pair_css(&cs.grid_row)),
-        // ⚠⚠ **`grid-template-columns` / `-rows` ARE DELIBERATELY *NOT* PUBLISHED HERE, AND THE
-        // REASON IS THE RULE THIS WHOLE OBJECT IS BUILT ON.** Their resolved value is not the
-        // computed value — CSSOM §5.1 makes them one of the few properties whose resolved value is
-        // the **USED** value, so on a grid container Chrome answers with the laid-out track sizes in
-        // px (`repeat(3, 1fr)` on a 900px grid reads back `"300px 300px 300px"`). We hold the
-        // SPECIFIED tracks and nothing else, so publishing them from here would answer
-        // `"repeat(3, 1fr)"` — a **wrong answer of the right type**, which every caller would then
-        // do arithmetic on. `undefined` at least tells the truth, and t608's rule stands: *a name is
-        // defined IFF the thing it names exists.*
+        // ⚠⚠⚠ **`grid-template-columns` / `-rows` RESOLVE TO THE *USED* VALUE — which is why they
+        // were the last two members of the family to land, and why the answer had to come from
+        // LAYOUT rather than from the cascade (t1270).** CSSOM §5.1 lists them among the handful of
+        // properties whose resolved value is the used value: on a grid container Chrome answers with
+        // the laid-out track sizes in px, so `repeat(3, 1fr)` on a 900px grid reads back
+        // `"300px 300px 300px"`. t1269 held only the SPECIFIED tracks and therefore **withheld the
+        // property entirely**, because `"repeat(3, 1fr)"` would have been a *wrong answer of the
+        // right type* — the shape this project rates as the most dangerous, since a grid library
+        // parsing px out of it gets `NaN` from a string that looked valid.
         //
-        // The used sizes are RECOVERABLE and the path is short, which is why this is a named next
-        // tick and not a limitation: taffy computes them and hands them out through
-        // `LayoutGridContainer::set_detailed_grid_info` — a trait method whose **default body is a
-        // no-op we inherit**, under the `detailed_layout_info` feature that taffy 0.12 already
-        // enables **by default**. `DetailedGridTracksInfo::sizes` is the `Vec<f32>` wanted.
-        // ⚠ The hazard to design around before writing it is t1120's, not taffy's: `solve_subtree`
-        // also runs during INTRINSIC MEASUREMENT, so a side-table keyed by node id will be written
-        // by a probe whose outputs are contractually discarded. `pre_transform_rect` was poisoned
-        // permanently by exactly that, because it was first-write-wins. Ask which passes can write
-        // BEFORE choosing the polarity.
+        // `tracks` is that used answer. It comes from `LayoutGridContainer::set_detailed_grid_info`,
+        // a taffy trait method whose **default body is a no-op** — so the sizes were computed on
+        // every layout this engine has ever run, and discarded one frame from the caller.
+        //
+        // **THE FALLBACK IS THE COMPUTED TRACK LIST, AND THAT IS NOT A CONSOLATION PRIZE — IT IS
+        // WHAT CHROME ANSWERS.** The used-value rule applies to a *grid container*; on anything else
+        // the resolved value is the computed one, so a `display:block` element carrying
+        // `grid-template-columns: 100px 200px` reads back `"100px 200px"`, and an element that never
+        // declared it reads back `"none"`. Which is why both names can now be emitted
+        // UNCONDITIONALLY, keeping the enumeration list canonical: the property is defined on every
+        // element and only the rule it qualifies for changes.
+        (
+            "grid-template-columns",
+            used_track_list_css(tracks.map(|t| t.0.as_slice()), &cs.grid_template_columns),
+        ),
+        (
+            "grid-template-rows",
+            used_track_list_css(tracks.map(|t| t.1.as_slice()), &cs.grid_template_rows),
+        ),
         // ─────────────────────────────────────────────────────────────────────────────────────────
         // ⚠⚠⚠ **THE t901 SWEEP BATCH — properties the cascade ALREADY HOLDS and this object refused
         // to publish.** One diff of the whole `getComputedStyle` object against Chrome, over seven
@@ -2136,15 +2235,12 @@ fn extra_computed_props(
         // holds here (`auto`, or the line number), so publishing them is faithful.
         ("grid-column-start", grid_line_css(&cs.grid_column.0)),
         ("grid-column-end", grid_line_css(&cs.grid_column.1)),
-        // ⚠ **`grid-template-columns` IS DELIBERATELY LEFT ABSENT, and it is the most instructive
-        // omission in this batch.** The cascade holds it — `Vec<TrackComponent>` — so it *looks*
-        // publishable. But Chrome does not report the author's track list: on a rendered grid it
-        // reports the **USED track sizes in px** (`98.6562px 197.344px` for `1fr 2fr` in a 300px
-        // container), and `none` on every non-grid element. Emitting `1fr 2fr` would be a **wrong
-        // answer of the RIGHT TYPE** — the shape this project rates as the most dangerous, because a
-        // grid library parsing px out of it gets `NaN` from a string that looked valid. The used
-        // track sizes are not on this seam; publishing them needs layout's track list, which is its
-        // own tick. Absence keeps the caller on its fallback.
+        // ⚠ **`grid-template-columns` WAS the most instructive omission in the t901 batch, and it
+        // was closed at t1270 by the route this comment named: layout's own track list.** The
+        // measurement that justified the absence still stands as the SPEC READING — Chrome reports
+        // `98.6562px 197.344px` for `1fr 2fr` in a 300px container, not `1fr 2fr` — it is now the
+        // reading the published value SATISFIES rather than the reason it is withheld. See the
+        // `used_track_list_css` entries above.
         // ⚠ `inline-size` / `block-size` are the LOGICAL spellings of `width`/`height`, so they
         // resolve to the USED value exactly as those do (t897) — via the same `used_dim_css`, so the
         // two spellings of one box can never disagree. `rect` is not available in this function, so
@@ -2340,10 +2436,16 @@ fn dashed_alias_js(extra: &[(&'static str, String)]) -> String {
 fn extra_names() -> &'static [&'static str] {
     static NAMES: std::sync::OnceLock<Vec<&'static str>> = std::sync::OnceLock::new();
     NAMES.get_or_init(|| {
-        extra_computed_props(&manuk_css::ComputedStyle::initial(), None, None, false)
-            .into_iter()
-            .map(|(n, _)| n)
-            .collect()
+        extra_computed_props(
+            &manuk_css::ComputedStyle::initial(),
+            None,
+            None,
+            false,
+            None,
+        )
+        .into_iter()
+        .map(|(n, _)| n)
+        .collect()
     })
 }
 
@@ -2497,6 +2599,7 @@ fn computed_style_js(
     rect: Option<[f32; 4]>,
     cb: Option<[f32; 4]>,
     content_absent_is_none: bool,
+    tracks: Option<&(Vec<f32>, Vec<f32>)>,
 ) -> String {
     use manuk_css::{
         AlignItems, BoxSizing, Display, FlexDirection, FlexWrap, JustifyContent, Overflow,
@@ -2762,7 +2865,7 @@ fn computed_style_js(
     // longhands, matching the order `getPropertyValue` already answers them in.
     // Computed ONCE and shared by the three consumers below (the enumeration list, the object slots,
     // the dashed aliases). It builds ~60 strings and `getComputedStyle` is a hot, forced-reflow path.
-    let extra = extra_computed_props(cs, cb, rect, content_absent_is_none);
+    let extra = extra_computed_props(cs, cb, rect, content_absent_is_none, tracks);
     let names_js = {
         const STD: &[&str] = COMPUTED_STD_NAMES;
         // **The STANDARD half is the same 50-odd strings on every call, so it is a `concat` against
@@ -3116,8 +3219,12 @@ unsafe fn window_get_computed_style(cx: *mut RawJSContext, argc: u32, vp: *mut V
             .flatten()
             .and_then(|pos| containing_block_size(dom, n, pos))
         };
+        // The USED grid tracks, for the two properties CSSOM §5.1 resolves to the used value.
+        // Refused for a frame element for exactly the reason `rect` is: the side-table is the MAIN
+        // page's, so a frame node found in it would be answering with another document's grid.
+        let tracks = if is_frame { None } else { grid_tracks_of(n) };
         with_style_in(dom, n, |cs| match &pseudo {
-            PseudoReq::Element => computed_style_js(cs, rect, cb, false),
+            PseudoReq::Element => computed_style_js(cs, rect, cb, false, tracks.as_ref()),
             // ⚠ `rect: None` for every pseudo, and that is the HONEST answer rather than a
             // shortcut: a generated box has no `NodeId`, so `layout_rect` has nothing to look it
             // up by. It costs one row against Chrome — an auto-sized BLOCK pseudo reports `auto`
@@ -3128,30 +3235,33 @@ unsafe fn window_get_computed_style(cx: *mut RawJSContext, argc: u32, vp: *mut V
             // `content: normal` computes to `none` on `::before`/`::after` and ONLY there — hence
             // the flag rather than a blanket "is this a pseudo".
             PseudoReq::Before => match cs.before.as_deref() {
-                Some(p) => computed_style_js(p, None, None, true),
+                Some(p) => computed_style_js(p, None, None, true, None),
                 None => computed_style_js(
                     &manuk_css::ComputedStyle::absent_pseudo_of(cs),
                     None,
                     None,
                     true,
+                    None,
                 ),
             },
             PseudoReq::After => match cs.after.as_deref() {
-                Some(p) => computed_style_js(p, None, None, true),
+                Some(p) => computed_style_js(p, None, None, true, None),
                 None => computed_style_js(
                     &manuk_css::ComputedStyle::absent_pseudo_of(cs),
                     None,
                     None,
                     true,
+                    None,
                 ),
             },
             PseudoReq::FirstLetter => match cs.first_letter.as_deref() {
-                Some(p) => computed_style_js(p, None, None, false),
+                Some(p) => computed_style_js(p, None, None, false, None),
                 None => computed_style_js(
                     &manuk_css::ComputedStyle::absent_pseudo_of(cs),
                     None,
                     None,
                     false,
+                    None,
                 ),
             },
             PseudoReq::Uncascaded => computed_style_js(
@@ -3159,6 +3269,7 @@ unsafe fn window_get_computed_style(cx: *mut RawJSContext, argc: u32, vp: *mut V
                 None,
                 None,
                 false,
+                None,
             ),
             PseudoReq::Unknown => unreachable!("handled above"),
         })

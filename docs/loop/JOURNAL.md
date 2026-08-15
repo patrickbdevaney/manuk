@@ -81046,3 +81046,148 @@ assertion (5) of this gate in the same commit.
 PERF: none claimed. CAPABILITY: reading a grid container back through `getComputedStyle`.
 
 WIKI: `docs/wiki/css-cascade.md` — "the cascade held the whole `grid-*` family and `getComputedStyle` published NONE of it".
+
+## Tick 1270 — a grid's USED track sizes were computed by taffy on every layout and thrown away at the trait boundary (2026-08-15)
+
+TICK SHAPE: capability — the named NEXT of t1269, in the board's #1 layout area: the USED track sizes
+of a grid container, which `getComputedStyle` could not answer and layout had already computed.
+
+
+HYPOTHESIS. `getComputedStyle(el).gridTemplateColumns` is `undefined` on a grid container, and t1269
+proved that absence was a *decision*: CSSOM §5.1 resolves `grid-template-columns`/`-rows` to the
+**USED** value, we held only the specified tracks, and answering `"repeat(3, 1fr)"` where Chrome
+answers `"300px 300px 300px"` is a wrong answer of the right type. The exit was written down in the
+same tick: taffy already computes the used tracks and offers them through
+`LayoutGridContainer::set_detailed_grid_info` — a trait method whose **default body is the no-op we
+inherit** — under a `detailed_layout_info` feature taffy 0.12 enables by default. Option 1 on the
+borrowed-engine ladder: no fork, no patch, one trait method.
+
+THE HAZARD, PRICED BEFORE THE CODE (t1120's, not taffy's). `solve_subtree` also runs during
+INTRINSIC MEASUREMENT — a max-content probe builds a *second* `TaffyDom` and runs a full
+`compute_root_layout` on it at a 1e6 available width — so a side table keyed by node id is written
+by a pass whose outputs are contractually discarded. That is exactly how `pre_transform_rect` was
+poisoned permanently at t1120 by being first-write-wins. **Ask which passes can write BEFORE
+choosing the polarity.** Two readings settle it: taffy's `compute_grid_layout` returns at
+`run_mode == RunMode::ComputeSize` **160 lines before** the `set_detailed_grid_info` call, so the
+measurement pass *inside one tree* never writes; and the nested probe tree is caught by
+`Ctx::intrinsic_probe`, the flag `record_transform` already gates on.
+
+PREDICTION: `css/css-grid`'s largest remaining assertion cluster (~931 `gridTemplate* value
+undefined`) shrinks; `grid-template-columns` on a 900px `repeat(3, 1fr)` grid reads back three px
+values that sum to the container's content width.
+
+RESULT. The capability landed exactly as specified — and the AREA TOTAL WENT DOWN, which is the
+whole story of this tick and is reported before anything else.
+
+```text
+  OLD (pre-t1270) and NEW, SAME HOUR, SAME BOX, BACK TO BACK, css/css-grid --batch 10
+
+  css/css-grid                    OLD  7707/14687      NEW  6276/14629     net -1431
+    ├ grid-definition             OLD   462/1284       NEW   802/1284      +340
+    ├ layout-algorithm            OLD    87/528        NEW   217/528       +130
+    ├ parsing                     OLD   967/1598       NEW  1037/1598      +70
+    ├ css/css-grid (top)          OLD    90/175        NEW   113/175       +23
+    ├ grid-items                  OLD   151/901        NEW   169/901       +18
+    ├ animation                   OLD  1952/2030       NEW   822/2092    -1130
+    └ grid-lanes/animation        OLD  1331/1571       NEW   544/1634     -787
+  HANG/CRASH 0 in both. Every other subdirectory is byte-identical.
+```
+
+⚠⚠⚠ **THE −1917 IS ENTIRELY TWO `animation` DIRECTORIES, AND EVERY ONE OF THOSE SUBTESTS WAS
+PASSING ON `"" === ""`.** The failure sets were diffed, not guessed: of 784 distinct failing titles
+in `css/css-grid/animation` under the new binary, **760 are new and every single one names
+`grid-template-columns` or `grid-template-rows`** (380 each). The mechanism is one line of the
+harness, `css/support/interpolation-testcommon.js:459/473`:
+
+```js
+  var expectedValue = getComputedStyle(expectedTargetContainer.target).getPropertyValue(property);
+  ...
+  comparisonFunction(getComputedStyle(target).getPropertyValue(property), expectedValue);
+```
+
+**Both sides read the same absent property.** Until this tick `getPropertyValue('grid-template-columns')`
+returned `""` on the animated target *and* on the reference target, so `assert_equals("", "")` passed —
+~1,900 subtests certifying that an engine which does not interpolate grid tracks interpolates them
+correctly. This is t1016's *two errors CANCEL and read as agreement* with a new face, and it is the
+G6 shape STATUS.md already carries (*"scored a browser finding ZERO links as perfect clickability"*).
+
+⚠⚠ **SO THIS IS A CORRECTION, NOT A REGRESSION, AND THE DISTINCTION IS THE PROJECT'S OWN** (t1176
+banked the same shape in the opposite direction: a number that moved because the instrument changed
+is not progress). Nothing that worked works less well: no page renders differently, no API returns a
+worse answer, and the engine gained a CSSOM property Chrome has. What fell is a count that was
+measuring nothing. **No WPT advance is claimed and none is available to claim** — the +585 real
+passes and the −1917 vacuous ones are the same one-line change and cannot be separated.
+
+⚠⚠⚠ **THE FINDING THE OBSERVER NEEDS, BECAUSE IT IS ABOUT THE PRIMARY METRIC AND NOT ABOUT GRID:
+the monotonic WPT total STRUCTURALLY REWARDS NOT PUBLISHING A PROPERTY.** `interpolation-testcommon.js`
+backs 194 `*-interpolation.html` files across twelve CSS areas, and in every one of them an *absent*
+property scores a full house while a *published* one is judged against an animation subsystem that
+(by its own module doc, `animatable_js.rs`) **fast-forwards to the end state rather than tweening**.
+Every CSSOM publication tick from here on will pay this toll, and the size of the toll is set by how
+many interpolation subtests the property has — not by how right the value is. The two candidate
+resolutions are for the observer to rank: score the interpolation legs only when the property's
+`isSupported` leg is real, or land track-list interpolation.
+
+⚠ **THE PUBLICATION WAS NOT NARROWED TO GRID CONTAINERS TO DODGE THIS, AND THE OPTION WAS MEASURED
+BEFORE IT WAS REFUSED.** `interpolation-testcommon.js` creates plain `<div>` targets, so withholding
+the property on non-grid elements would have kept all ~1,900 vacuous passes AND the +585. It is
+refused because it is score-tuning wearing a spec argument: on a non-grid element the resolved value
+IS the computed value, the cascade holds it, and withholding a value we have is the FALSE ABSENCE the
+reliability doctrine ranks beside a false presence (t1267, 909 subtests).
+
+
+CONTROLS, same OLD/NEW pair, same hour: `css/css-flexbox` **1700/4693 in both — byte-identical**,
+which is the strongest form this control takes; `css/css-sizing` 2330/5862 → 2352/5892 (rate 39.75%
+→ 39.92%, inside the band five readings established at t1269); `css/css-values` 3075/8282 →
+3124/8133. Nothing outside `css/css-grid` moved.
+
+MECHANISM, one sentence: **taffy resolves every grid track on every layout and hands the result to
+`LayoutGridContainer::set_detailed_grid_info`, whose default body is a no-op** — so the number was
+computed by the engine on every layout it has ever run and discarded one stack frame from the caller.
+The `detailed_layout_info` feature is in taffy 0.12's `default` set; nothing had to be enabled. Option
+1 on the borrowed-engine ladder.
+
+The path: `TaffyDom` accumulates `(DomNodeId, GridTracks)` → `solve_subtree` snapshots them **before**
+the §9.1 abspos re-solve (that pass perturbs the root's box and fires the callback again) →
+`layout_flex_or_grid` records them under `Ctx::intrinsic_probe` → a thread-local published wholesale at
+the end of `layout_document` → `Page::set_root_box`, the pre-`Page` load path and `forced_reflow` hand
+them to `manuk_js` as a bare `(Vec<f32>, Vec<f32>)` (this crate has no `manuk-layout` dependency and
+must not grow one) → `used_track_list_css` picks the used arm for a grid container and the CASCADE arm
+for everything else.
+
+⚠⚠ **THE WRITE-POLARITY HAZARD WAS PRICED FIRST AND THE GUARD MEASURED INERT — recorded, not
+dropped.** t1120 poisoned `pre_transform_rect` permanently by first-write-wins from an intrinsic
+probe. Two readings settle the in-tree half: taffy's `compute_grid_layout` returns at
+`RunMode::ComputeSize` (`compute/grid/mod.rs:543`) **160 lines before** the `set_detailed_grid_info`
+call at 703, so a sizing request never writes. The nested probe tree *does* write and is dropped by
+`Ctx::intrinsic_probe`. ⚠ **But replacing that guard with `if true` changes no published value** — the
+`#fg` arm (a grid inside a flex row, which IS max-content probed) reads `300px 300px` either way,
+because a flex container measures its items and *then* lays them out, so the real pass is the last
+write regardless. **Last-wins is load-bearing; the guard is defence in depth.** Both the gate and the
+recording site now say so, because a comment claiming a RED that does not happen is how a gate that
+cannot fail gets written.
+
+GATE: `G_GRID_COMPUTED_STYLE`, extended — assertion (5) inverted from *withholding* to the used
+value, plus (6) the non-grid arm and (7) the probed arm. **Proven RED by restoring taffy's default
+no-op body**, and the RED string is the discovery: predicted `used=none/none`, it reads
+**`used=1fr 1fr 1fr`** — the exact wrong-answer-of-the-right-type t1269 refused to ship, because the
+serialiser falls through to the cascade arm. That fallback is correct (it is what Chrome answers for a
+`display:none` grid, and for any non-grid element) *and* it is what makes a regression here **silent in
+shape**: only the digits can catch it, so the gate pins digits. The strongest assertion is
+`decl=100px 200px 484px` — the **implicit third track** that `grid-column: 2 / 4` creates, stretched by
+CSS Grid §12.8, which no cascade-derived implementation can produce at all.
+
+⚠ `none`, not `auto`: `grid-template-*` initialises to `none` while its `grid-auto-*` siblings
+initialise to `auto`, so reusing the sibling serialiser would have been silent —
+`if (s.gridTemplateColumns !== 'none')` is the standard "is this templated?" test and `auto` passes it.
+
+NEXT: **the interpolation toll is now the top-ranked item and it is not a grid item.**
+`animatable_js.rs` says in its own doc that the Web Animations shim *fast-forwards to the end state
+rather than tweening*; that one gap is what turns every CSSOM publication into a WPT loss across 194
+interpolation files in twelve areas. Either land real interpolation, or stop scoring an interpolation
+leg whose property has no `isSupported` leg. Ranking that is the observer's call because it changes
+what the PRIMARY METRIC measures.
+
+PERF: none claimed. CAPABILITY: reading a laid-out grid's USED track sizes through `getComputedStyle`.
+
+WIKI: `docs/wiki/conformance-and-oracles.md` — "~1,900 WPT subtests were passing on `"" === ""`".

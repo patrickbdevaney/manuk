@@ -11,12 +11,12 @@
 
 | | value | over |
 |---|---|---|
-| ticks landed | **964** | ticks 1–1268 |
-| median tick cycle | **29m** | 963 intervals |
-| median, last 10 | **60m** | 10 intervals |
+| ticks landed | **965** | ticks 1–1270 |
+| median tick cycle | **29m** | 964 intervals |
+| median, last 10 | **67m** | 10 intervals |
 | fastest / slowest | 5s / 5.4d | |
-| **ticks per hour** | **1.13** | 850.7h elapsed |
-| median verify wall | **63s** | 903 ticks |
+| **ticks per hour** | **1.13** | 852.3h elapsed |
+| median verify wall | **63s** | 904 ticks |
 | wall trend | 39s → 17m — getting slower ⚠️ | first 3 vs last 3 |
 
 The **cycle** is the real unit: implement → debug → verify wall → land. The wall is only part of
@@ -28,10 +28,10 @@ it, and a wall that grows taxes every future tick, so it is tracked separately f
 
 * **capabilities asserted** (`G_CAPABILITY`): 48 → **81**
 * **live gates**: 27 → **478**
-* **✅ rows in the capability ledger**: 144 → **636**
+* **✅ rows in the capability ledger**: 144 → **637**
 * **Bar 0 — oracle hangs**: 0 of 265 sites
 
-**438 of 964 ticks** (45%) moved a
+**439 of 965 ticks** (45%) moved a
 user-visible capability. The rest were instruments, infrastructure and corrections — and the
 ledger says the corrections were not overhead: three of its top three priorities were phantoms,
 and finding that out redirected everything after it.
@@ -90,7 +90,7 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 
 ## What a capability costs
 
-* **438** capability ticks, median cycle **29m**
+* **439** capability ticks, median cycle **29m**
 * median diff per tick: **+272 / −34** lines across 8 files
 
 ## Every tick
@@ -1061,5 +1061,6 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 | **1266** | 2026-08-15 12:27 | 62m | capability | 17m | +549/−20 | 477 | 81 | 56.0% · | `div.target = el` stored the STRING "[object HTMLSpanElement]", and it had silenced 194 WP |
 | **1267** | 2026-08-15 14:25 | 2.0h | capability | 17m | +437/−4 | 477 | 81 | 56.0% · | `element.animate()` worked and `'animate' in Element.prototype` was FALSE (2026-08-15) |
 | **1268** | 2026-08-15 15:48 | 82m | measurement | 17m | +466/−7 | 478 | 81 | 56.0% · | the real-site debt: a clean --jobs 2 CrUX sweep, hypothesis stated FIRST (2026-08-15) |
+| **1270** | 2026-08-15 17:19 | 1.5h | capability | 17m | +692/−78 | 478 | 81 | 56.0% · | a grid's USED track sizes were computed by taffy on every layout and thrown away at the tr |
 
 *`·` after a WPT figure means **carried forward**, not measured this tick.*
