@@ -703,6 +703,10 @@
   - L3881 · The engine routing bought ZERO, and the pair bought +120 (t1208)
   - L3903 · Half two — the instrument, and it is the MIS-PROVISIONED REFERENCE class for the fourth time
   - L3929 · css/css-values has a ±72-subtest error bar, and it comes from the ACCUM Bar 0 (t1235)
+  - L3956 · The capability ledger's parts did not sum to its whole, for 247 ticks (t1265)
+  - L3970 · The status column answers ONE question, and the row was answering two
+  - L3987 · Two fixes were available and one of them was a disguise
+  - L3993 · And no "the buckets must sum" assertion was added
 
 ## CSS AND THE CASCADE — Stylo realities and quirks actually encountered
 `docs/wiki/css-cascade.md`
@@ -2163,4 +2167,4 @@
   - L231 · Both named mechanisms are subsystem work
 
 ---
-2070 sections across 22 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+2074 sections across 22 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.

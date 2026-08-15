@@ -3952,3 +3952,50 @@ binary.** Both readings are draws from one distribution.
 Practical rule: for this area, treat anything under ~±72 as unmeasured, take the ACCUM count as the
 confounder, and re-run before banking. Fixing the underlying cross-file runtime-reuse UAF would
 remove the noise at its source and is tracked as a Bar 0.
+
+## The capability ledger's parts did not sum to its whole, for 247 ticks (t1265)
+
+`scripts/phase0-progress.sh` buckets every row of `CONSTELLATION.tsv` on its status column into
+exactly five names, and divides by **every row**:
+
+```text
+  caps=584   gated=342  works=17  partial=41  missing=143  unknown=38
+                                                            SUM=581   UNACCOUNTED=3
+```
+
+Three rows carried `unmeasurable`, which is in no bucket — so each counted **0 in the numerator and 1
+in the denominator**, appeared in no column of the per-class table, and `PHASE0-PROGRESS.tsv` printed
+a three-capability discrepancy on every landed tick since t1018.
+
+### The status column answers ONE question, and the row was answering two
+
+`hyphens: auto`, `scroll-behavior: smooth`, `scroll-margin`/`scroll-padding` are **`missing`** —
+`engine/css` parses none of them, which is what `missing` asserts. What is *unmeasurable* is **the
+oracle's ability to price them** (each row carries a probe showing Chrome's own boxes are
+byte-identical with and without the property). That is a **ranking** fact, it already lives in the
+receipt column, and putting it in the status column is what pushed the row out of the vocabulary.
+
+```text
+  after:  caps=584  SUM=584  UNACCOUNTED=0
+          readiness 65%  ·  gate-locked 59%  ·  measured 93%     <- IDENTICAL before and after
+```
+
+⚠ **The unchanged percentage is the receipt.** `unmeasurable` already scored 0 and `missing` scores 0;
+a correction that *moved* readiness would have meant three capabilities were quietly re-graded rather
+than filed.
+
+### Two fixes were available and one of them was a disguise
+
+Widening the gate's vocabulary to six values would have made the gate green — and the tally script
+(observer-owned) still buckets on five, so the arithmetic would still not see those rows. That
+**converts a loud RED into a silent hole**, which is the shape of the bug, not its cure.
+
+### And no "the buckets must sum" assertion was added
+
+It would be **vacuous by construction**: the gate already asserts every status is one of five, and
+given that, the buckets sum to the row count necessarily. A second assertion that cannot fail while
+the first passes is what `G_POOL_ISOLATION` was retired for.
+
+> **The gate worked. It went RED and stayed RED, and nothing ran it.** `verify.sh` runs 19 of 104
+> gates. A gate outside the wall is a claim nobody is checking — and the failure mode is not a
+> missing assertion, it is an unread one.

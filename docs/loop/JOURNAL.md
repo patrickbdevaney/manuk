@@ -80579,3 +80579,66 @@ blocked a clean full-suite read three times today, which is itself the argument 
 PERF: none claimed.
 
 WIKI: `docs/wiki/js-engine.md` — "two absent globals, and the prelude that ran before the things it read".
+
+## Tick 1265 — the capability ledger's parts did not sum to its whole, for 247 ticks (2026-08-15)
+
+TICK SHAPE: instrument-correctness — the accounting hole t1263 and t1264 both flagged and neither
+fixed. No capability claim and no perf claim; **no metric moves, and that is the proof it was
+bookkeeping rather than a score.**
+
+⚠⚠⚠ **THE DEFECT, STATED AS ARITHMETIC.** `scripts/phase0-progress.sh` buckets every capability on
+`$4` into exactly five names and divides by **every row**:
+
+```text
+  caps=584   gated=342  works=17  partial=41  missing=143  unknown=38
+                                                            SUM=581   UNACCOUNTED=3
+```
+
+**584 against 581.** Three rows carried status `unmeasurable`, which is in no bucket — so each counted
+**0 in the numerator and 1 in the denominator**, appeared in no column of the per-class table, and the
+ledger row `PHASE0-PROGRESS.tsv` has been printing a three-capability discrepancy **every landed tick
+since t1018** — 247 ticks. *A set of parts that does not sum to its whole* is the accounting
+reconciliation this project's own `STATUS.md` ranks as meta-instrument #3, on the evidence that
+**8 of 30 process defects were caught by a number that did not add up and not by any gate.** This one
+was caught by a gate, and then not read, which is a different failure with the same cost.
+
+**THE FIX IS A RECLASSIFICATION, AND THE REASON IT IS CORRECT IS THAT THE STATUS COLUMN ANSWERS ONE
+QUESTION.** `hyphens: auto`, `scroll-behavior: smooth` and `scroll-margin`/`scroll-padding` are
+`missing` — `engine/css` does not parse any of them, which is exactly what `missing` asserts and it is
+true. What is *unmeasurable* is *the oracle's ability to price them* (each row carries a measured
+probe showing Chrome's own boxes are byte-identical with and without the property). **That is a
+RANKING fact, not a status**, it already lives in full in the receipt column, and conflating the two
+is what put the row outside the vocabulary. The do-not-build reasoning is preserved verbatim and
+extended, not dropped:
+
+```text
+  caps=584   SUM=584   UNACCOUNTED=0
+  readiness 65%  ·  gate-locked 59%  ·  measured 93%      <- IDENTICAL before and after
+```
+
+⚠ **NO NUMBER MOVED, AND IT MUST NOT HAVE.** `unmeasurable` already scored 0 in the numerator and
+`missing` also scores 0, so a correction that changed the readiness percentage would have meant I had
+quietly re-graded three capabilities rather than filed them. The unchanged number is the receipt.
+
+⚠⚠ **I DELIBERATELY DID NOT ADD A "THE BUCKETS MUST SUM" ASSERTION, AND THE REASON MATTERS MORE THAN
+THE ASSERTION WOULD.** It would be **vacuous by construction**: the gate already asserts every status
+is one of the five, and given that, the five buckets sum to the row count necessarily. A second
+assertion that cannot fail while the first one passes is exactly the theatre `falsify.sh` exists to
+find — `G_POOL_ISOLATION` was retired for being a gate on absent machinery, and this would be a gate
+on an implied tautology. **The vocabulary gate did its job; it went RED and stayed RED.** What failed
+is that nothing ran it — `verify.sh` runs 19 of 104 gates, which surface audit #67 already named and
+which is observer territory, so it is reported and not touched.
+
+⚠ The other honest option was to widen the vocabulary to six values, and it is worse: the tally script
+is observer-owned, so adding `unmeasurable` to the gate's allowed set would have made the gate bless a
+status the arithmetic still cannot see — **converting a loud RED into a silent hole**, which is the
+precise shape of the bug being fixed.
+
+NEXT: the unspent half of surface audit #68's worklist — `addEventListener and attachEvent are
+unavailable` (3 sites) is the last engine-owned row above 2. Then back to the layout main line:
+splitting `taffy_ms` into taffy's own algorithm vs our measure closure, which t1261 priced at 5.1
+seconds across `bbs.ruliweb.com` + `ticket.jfa.jp` and which no current instrument can attribute.
+
+PERF: none. CAPABILITY: none.
+
+WIKI: `docs/wiki/conformance-and-oracles.md` — "the ledger's parts did not sum to its whole".

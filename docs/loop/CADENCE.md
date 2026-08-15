@@ -11,12 +11,12 @@
 
 | | value | over |
 |---|---|---|
-| ticks landed | **960** | ticks 1–1264 |
-| median tick cycle | **29m** | 959 intervals |
-| median, last 10 | **61m** | 10 intervals |
+| ticks landed | **961** | ticks 1–1265 |
+| median tick cycle | **29m** | 960 intervals |
+| median, last 10 | **46m** | 10 intervals |
 | fastest / slowest | 5s / 5.4d | |
-| **ticks per hour** | **1.13** | 845.4h elapsed |
-| median verify wall | **63s** | 899 ticks |
+| **ticks per hour** | **1.14** | 845.6h elapsed |
+| median verify wall | **63s** | 900 ticks |
 | wall trend | 39s → 17m — getting slower ⚠️ | first 3 vs last 3 |
 
 The **cycle** is the real unit: implement → debug → verify wall → land. The wall is only part of
@@ -28,10 +28,10 @@ it, and a wall that grows taxes every future tick, so it is tracked separately f
 
 * **capabilities asserted** (`G_CAPABILITY`): 48 → **81**
 * **live gates**: 27 → **475**
-* **✅ rows in the capability ledger**: 144 → **632**
+* **✅ rows in the capability ledger**: 144 → **633**
 * **Bar 0 — oracle hangs**: 0 of 265 sites
 
-**436 of 960 ticks** (45%) moved a
+**436 of 961 ticks** (45%) moved a
 user-visible capability. The rest were instruments, infrastructure and corrections — and the
 ledger says the corrections were not overhead: three of its top three priorities were phantoms,
 and finding that out redirected everything after it.
@@ -1057,5 +1057,6 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 | **1262** | 2026-08-15 09:15 | 1.7h | capability | 17m | +582/−42 | 474 | 81 | 56.0% · | `document.write` was ABSENT, and killing it revealed the second entry point (2026-08-15) |
 | **1263** | 2026-08-15 10:05 | 50m | capability | 17m | +272/−36 | 474 | 81 | 56.0% · | a script could not read its own URL, and the reason I went looking was WRONG (2026-08-15) |
 | **1264** | 2026-08-15 10:28 | 23m | capability | 17m | +286/−33 | 475 | 81 | 56.0% · | two absent globals, and the prelude that ran before the things it read (2026-08-15) |
+| **1265** | 2026-08-15 10:37 | 9m | instrument-correctness | 17m | +153/−36 | 475 | 81 | 56.0% · | the capability ledger's parts did not sum to its whole, for 247 ticks (2026-08-15) |
 
 *`·` after a WPT figure means **carried forward**, not measured this tick.*
