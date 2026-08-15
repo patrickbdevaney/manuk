@@ -3469,3 +3469,40 @@ with `nautica.com` on both that list and the `document.write` list. Measured aft
 > **A fix can be right and buy nothing you went in for.** This one matches Chrome, is gated, and
 > removes a lie the engine told every chunk loader — and it does not close the cluster that motivated
 > it. Reporting the cluster as closed would have been the easiest sentence to write.
+
+## Two absent globals, and the prelude that ran before the things it read (t1264)
+
+`isSecureContext` and `HTMLDocument`, 2 of 200 CrUX sites each, both **throw-class**: a page reading a
+global it expects to exist does not feature-detect first, so absence is a `ReferenceError` that takes
+the rest of the bundle with it rather than a fallback path.
+
+### The ordering bug, and how it was caught
+
+The first draft assigned both as plain values in the JS prelude. That prelude runs **before `Document`
+and `location` are installed on the global**, so it read `typeof g.Document === 'function'` as false
+and `g.location.href` as empty — shipping `HTMLDocument` undefined and `isSecureContext` **false on
+an https page**. The gate printed the whole diagnosis in one line:
+
+```text
+  probe-Document:function   secure:false   htmldoc-defined:false      <- on an https:// page
+```
+
+`Document` is a function *when the page reads it* and was not *when the prelude ran*. Both are
+`Object.defineProperty` accessors now, evaluated at read time.
+
+> **Put a probe next to the assertions in a fixture.** `probe-Document:function` is not an assertion
+> and cost one line; it converted "the alias silently did not take" into "the alias ran too early"
+> without a second run.
+
+### Both have a wrong implementation that no feature detect can see
+
+| wrong version | what a detect sees | what actually happens |
+|---|---|---|
+| `isSecureContext = true` | correct | the page takes the `crypto.subtle` / service-worker path on an **insecure origin** — a worse failure than the ReferenceError |
+| `HTMLDocument = function(){}` | the name exists | every `document instanceof HTMLDocument` answers **false** |
+
+So `G_ABSENT_GLOBALS` asserts **values across three origins** — `https://` secure, plain `http://`
+not, `http://localhost` **secure** (W3C Secure Contexts §3.1) — and asserts `HTMLDocument === Document`
+by identity, which is what the HTML spec means by *"must be the same object"*.
+
+> *Absence routes a caller to its fallback; half-presence routes it into a wall.* Fourth naming.

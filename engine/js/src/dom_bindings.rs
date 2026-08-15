@@ -19322,6 +19322,54 @@ const WINDOW_PRELUDE: &str = r#"
         if (typeof g.outerWidth === 'undefined') g.outerWidth = VW;
         if (typeof g.outerHeight === 'undefined') g.outerHeight = VH;
         if (typeof g.devicePixelRatio === 'undefined') g.devicePixelRatio = 1;
+        // ── **`isSecureContext` and `HTMLDocument`: two ABSENT globals that pages read UNGUARDED**
+        //
+        // Both from this loop's own 200-site CrUX throw histogram (surface audit #68, t1263), 2 of
+        // 200 each. They are in the *throw* class, not the missing-feature class, and the difference
+        // is the whole reason they are worth two lines: a page that reads a global it expects to
+        // exist does not feature-detect first, so absence is a `ReferenceError` that takes the rest
+        // of the bundle with it — not a fallback path.
+        //
+        // `isSecureContext` is the gate every modern API sits behind (`crypto.subtle`, service
+        // workers, geolocation, clipboard), so bundles branch on it at boot. We answer it from the
+        // document's own URL rather than hardcoding `true`: `https:`, `wss:`, `file:` and localhost
+        // are secure contexts, everything else is not. **A hardcoded `true` would be the
+        // wrong-answer-of-the-right-type shape this file keeps naming** — it would send a page down
+        // the `crypto.subtle` path on an `http:` origin, which is a worse failure than the one it
+        // replaces.
+        // ⚠ **BOTH ARE ACCESSORS, NOT VALUES, AND THAT IS AN ORDERING FACT RATHER THAN A STYLE
+        // CHOICE.** This prelude runs BEFORE `Document` and `location` are installed on the global,
+        // so the first draft — plain assignments — read `typeof g.Document === 'function'` as false
+        // and `g.location.href` as empty, and shipped `HTMLDocument` undefined and
+        // `isSecureContext` false on an https page. A getter is evaluated when the PAGE reads it,
+        // by which time both exist. (Measured, not reasoned: the gate printed
+        // `probe-Document:function secure:false htmldoc-defined:false` and named the ordering.)
+        if (typeof g.isSecureContext === 'undefined') {
+            Object.defineProperty(g, 'isSecureContext', {
+                configurable: true, enumerable: true,
+                get: function () {
+                    try {
+                        var u = new URL(String((g.location && g.location.href) || ''));
+                        var h = u.hostname;
+                        return u.protocol === 'https:' || u.protocol === 'wss:'
+                            || u.protocol === 'file:' || h === 'localhost' || h === '127.0.0.1'
+                            || h === '::1' || /\.localhost$/.test(h);
+                    } catch (e) { return false; }
+                }
+            });
+        }
+        // `HTMLDocument` is the legacy alias of `Document` (HTML spec: the two "must be the same
+        // object"), and legacy detection still says `instanceof HTMLDocument` /
+        // `x.constructor === HTMLDocument`. Aliasing the REAL constructor is what the spec asks for
+        // AND makes those answer correctly; a fresh empty function would make the name exist and
+        // every `instanceof` return false — half-presence, which routes a caller into a wall where
+        // absence would have routed it to a fallback.
+        if (typeof g.HTMLDocument === 'undefined') {
+            Object.defineProperty(g, 'HTMLDocument', {
+                configurable: true, enumerable: true,
+                get: function () { return g.Document; }
+            });
+        }
         if (typeof g.screenX === 'undefined') g.screenX = 0;
         if (typeof g.screenY === 'undefined') g.screenY = 0;
         // ── **`screen.orientation` WAS A TWO-FIELD OBJECT LITERAL, AND THAT IS THE WORST SHAPE** (t777)

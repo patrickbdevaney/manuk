@@ -80514,3 +80514,68 @@ and throws the same error. A histogram row is a suspect, not a defect.
 PERF: none claimed.
 
 WIKI: `docs/wiki/js-engine.md` — "a script could not read its own URL".
+
+## Tick 1264 — two absent globals, and the prelude that ran before the things it read (2026-08-15)
+
+TICK SHAPE: capability — the two cheapest rows of the surface-audit #68 worklist, taken because they
+are cheap AND because the histogram that ranked them is this session's own measurement rather than an
+intuition.
+
+`ReferenceError: isSecureContext is not defined` (2 of 200) and `ReferenceError: HTMLDocument is not
+defined` (2 of 200). Both are **throw-class, not missing-feature class**, and that distinction is the
+entire justification for two lines of code: a page reading a global it expects to exist **does not
+feature-detect first**, so absence is not a fallback path, it is a `ReferenceError` that takes the
+rest of the bundle with it.
+
+⚠⚠⚠ **THE FIRST DRAFT SHIPPED BOTH WRONG, AND THE GATE — NOT REASONING — SAID SO.** Plain assignments
+in the JS prelude read `typeof g.Document === 'function'` as **false** and `g.location.href` as the
+**empty string**, because *the prelude runs before `Document` and `location` are installed on the
+global.* The gate printed the diagnosis in one line:
+
+```text
+  probe-Document:function   secure:false   htmldoc-defined:false      <- on an https:// page
+```
+
+`Document` is a function *by the time the page reads it* and was not *when the prelude ran*. Both are
+accessors now, evaluated when the page asks. **An ordering fact I would not have guessed, recovered
+in one run because the fixture printed a probe next to its assertions.**
+
+GATE — `G_ABSENT_GLOBALS`, and **its teeth are the VALUES, not the existence**, because each has an
+easy wrong implementation no feature detect can see. Both RED-proven, separately:
+
+```text
+  no definitions          -> err:ReferenceError: HTMLDocument is not defined
+  isSecureContext = true  -> the http:// row alone fails (secure:true on plain http)
+  HTMLDocument = fn(){}   -> htmldoc-defined:true PASSES while doc-is-html-document:false
+                             and alias-is-document:false FAIL
+```
+
+That second row is the one worth having. **A hardcoded `true` is a WORSE failure than the
+ReferenceError it replaces** — it routes a page down the `crypto.subtle` / service-worker path on an
+insecure origin. So the gate asserts three origins: `https://` secure, plain `http://` **not**, and
+`http://localhost` **secure** (W3C Secure Contexts §3.1 — the row that separates *reads the scheme*
+from *reads the scheme correctly*, and every local dev server depends on it).
+
+And `HTMLDocument` is aliased to the **real `Document`**, per the HTML spec's *"must be the same
+object"* — a fresh function would make the name exist and every `document instanceof HTMLDocument`
+answer **false**. That is the half-presence wall this codebase has now named four times: *absence
+routes a caller to its fallback; half-presence routes it into a wall.*
+
+RESULT — measured on the four corpus sites that threw:
+
+```text
+  bhfudbal.ba · nysainfo.pl · probidas.lt · www.marktplaats.nl      still throwing: 0
+```
+
+⚠ **No render claim.** Four sites stopped throwing a ReferenceError; whether that changes what any of
+them paints is not measured here, and after t1262 — where a throw-killer's benefit showed up as a
+coverage change on two sites and nothing on five — the honest statement is the one the instrument
+supports: *the throw is gone.*
+
+⚠ **The pre-existing `g_constellation_wellformed` RED persists** (three `unmeasurable` rows), exactly
+as recorded in t1263. Still not mine, still not fixed, and it is now the named next tick — it has
+blocked a clean full-suite read three times today, which is itself the argument for doing it.
+
+PERF: none claimed.
+
+WIKI: `docs/wiki/js-engine.md` — "two absent globals, and the prelude that ran before the things it read".

@@ -1586,6 +1586,9 @@
   - L3420 · The regression that was not one
   - L3436 · A script could not read its own URL (t1263)
   - L3450 · The hypothesis that sent me here was refuted, and that is the more useful half
+  - L3473 · Two absent globals, and the prelude that ran before the things it read (t1264)
+  - L3479 · The ordering bug, and how it was caught
+  - L3497 · Both have a wrong implementation that no feature detect can see
 
 ## Manuk Daily-Driver Usability Roadmap (synthesized, tick 138)
 `docs/wiki/lever-map.md`
@@ -2160,4 +2163,4 @@
   - L231 · Both named mechanisms are subsystem work
 
 ---
-2067 sections across 22 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+2070 sections across 22 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
