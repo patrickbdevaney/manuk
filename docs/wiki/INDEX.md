@@ -476,6 +476,8 @@
   - L9611 · Ask taffy the question; do not answer it a second time
   - L9628 · The two control rows are what make it a rule
   - L9649 · Ledger — measured, with a same-hour OLD-BINARY control
+  - L9666 · An RTL column flex container's cross axis is the INLINE axis, and taffy cannot be told (t1271)
+  - L9702 · How it was ranked — and two wrong turns worth keeping
 
 ## browser-capabilities.md
 `docs/wiki/browser-capabilities.md`
@@ -2183,4 +2185,4 @@
   - L231 · Both named mechanisms are subsystem work
 
 ---
-2090 sections across 22 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+2092 sections across 22 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.

@@ -81191,3 +81191,99 @@ what the PRIMARY METRIC measures.
 PERF: none claimed. CAPABILITY: reading a laid-out grid's USED track sizes through `getComputedStyle`.
 
 WIKI: `docs/wiki/conformance-and-oracles.md` — "~1,900 WPT subtests were passing on `"" === ""`".
+
+## Tick 1271 — an RTL COLUMN flex container laid its cross axis from the LEFT, and our own source had named the gap (2026-08-15)
+
+TICK SHAPE: capability — the top mechanism in the board's #1 ★ CSS-LAYOUT area (`css/css-flexbox`,
+36.2%, 2,993 failing), reached by the histogram the board names as the ranker.
+
+HYPOTHESIS, and it was WRONG TWICE before it was right, which is the useful part of this entry.
+
+The board's instruction is literal: *"run `manuk-wpt wpt css/css-flexbox --show-failures` for the
+failure histogram; the top mechanism there IS the tick."* The histogram came back
+
+```text
+  offsetLeft 1285 · width 284 · height 197 · offsetTop 101      (check-layout dimensions)
+  and by DELTA:  offsetLeft +8 ×533   +50 ×119   -50 ×102   -4 ×85   -20 ×71
+```
+
+⚠⚠⚠ **`+8 ×533` IS FOUR AND A HALF TIMES THE NEXT ROW AND IT IS NOT A DEFECT.** `8` is the UA body
+margin, so the first reading — *"offsetLeft is short by the body margin"* — was immediate and wrong.
+Re-grouping the SAME failures by their **markup** instead of by their delta split the +8 across at
+least four unrelated families (`.a`/`.b`/`.c` fixed-size children, `.fixedSizeChild` wrap rows, the
+abspos static-position set); `8` was simply a common free-space width. **A HISTOGRAM ROW IS A
+SUSPECT, NOT A DEFECT** (t1260), and the delta axis is the wrong key to suspect on.
+
+⚠⚠ **THE SECOND WRONG TURN: the first reduction came back GREEN, and that is what found the bug.**
+The one family with a single mechanism under it looked like a `start`/`end` swap — WPT's
+`flex-abspos-staticpos-align-self-*` showed `align-self: start` expected 2 got 10 *and*
+`align-self: end` expected 10 got 2, in the same file. A `flex-flow: column` fixture with all eight
+`align-self` keywords reproduced **nothing**: every value already Chrome-exact. Adding
+`direction: rtl` to that same fixture then changed **none of our numbers at all** — and *that* is the
+defect. Not a wrong answer: an axis that was never consulted.
+
+MECHANISM, and it was WRITTEN IN OUR OWN SOURCE. `taffy_tree::map_direction`'s doc comment, added at
+t764 when the flex ROW case was carried across the taffy boundary, ends:
+
+> `column`/`column-reverse` are unchanged: their main axis is the BLOCK axis, which `direction` does
+> not flip. (RTL does flip a column's *cross*-axis start edge, which taffy cannot express — recorded
+> in `CONSTELLATION.tsv` rather than approximated here.)
+
+⚠⚠⚠ **IT IS NOT AN APPROXIMATION, AND THE EXACT MECHANISM WAS ALREADY SHIPPING ONE FUNCTION AWAY.**
+A column flex container's CROSS axis *is* the inline axis, and `direction` flips the inline axis — so
+mirroring the placed slots against the content box is exact. That is precisely what the grid arm has
+done since t766 (`grid_is_rtl` + `mirror_rtl_grid`). Taffy has no `direction` property at all, so every
+logical inline axis must be carried by hand, and there are exactly three carriers:
+
+```text
+  grid            the COLUMN (inline) axis   CSS Grid §3         mirror the slots   (t766)
+  flex row        the MAIN axis              CSS Flexbox §5.1    map_direction: row <-> row-reverse (t764)
+  flex column     the CROSS axis = INLINE    CSS Flexbox §5.1    mirror the slots   ← THIS TICK
+```
+
+The change is therefore a GENERALISATION, not a new mechanism: `grid_is_rtl` becomes
+`container_inline_axis_is_mirrored` (grid, or a flex container whose `flex-direction` is
+`column`/`column-reverse`), and `mirror_rtl_grid{,_descendants}` lose the word `grid` from their
+names because they were never grid-specific.
+
+```text
+  align-self, flex-flow:column direction:rtl, 16px content box, 8px child
+                                     Chrome   before   after
+  stretch / normal / auto              10       2        10
+  start / self-start / flex-start      10       2        10
+  end   / self-end   / flex-end         2      10         2
+  center                                6       6         6    <- already right: this is a MIRROR
+```
+
+⚠ **`center` being right all along is why this survived 600 ticks.** The commonest RTL column idiom on
+the web is a centred stack, and a mirror is the IDENTITY on a centred box. The failure is only visible
+on a container whose items are aligned to an EDGE.
+
+```text
+  css/css-flexbox   1700/4693 -> 1809/4693   (+109, DENOMINATOR IDENTICAL)
+  CONTROLS, same hour, same box, paired binaries:
+    css/css-grid    6276 -> 6276   numerator BYTE-IDENTICAL (den 14650/14657, the usual churn)
+    css/css-sizing  2330 -> 2330   numerator BYTE-IDENTICAL (den 5841/5858)
+  HANG/CRASH 0.   WPT TOTAL 466053 -> 466162 (+109)
+```
+
+An identical denominator on the moved area and two byte-identical control numerators is the strongest
+form this reading takes — there is no scorability churn to argue about in either direction.
+
+GATE: `G_RTL_COLUMN_CROSS_AXIS`, thirteen boxes in one string, **proven RED on two independent
+mutations**: (1) return `false` for flex — every cross-start keyword reads 2 and every cross-end
+keyword 10, the exact inversion of Chrome on all seven at once; (2) return `true` for flex — the ROW
+control `rr` goes 10 → 2, the double flip landing back where it started, because `map_direction`
+already carried that axis. ⚠ Unlike t1270's probe guard, **this control arm is LOAD-BEARING** and the
+second mutation is what proves it rather than a comment claiming so.
+
+⚠ The keywords are asserted as three groups because they reach the engine by three different routes —
+`stretch`/`normal`/`auto` is the default path with no `align-self` resolution at all, `start`/
+`self-start` are the writing-mode-relative spellings (Stylo `AlignFlags` 2/12), `flex-start` is the
+flex-relative one (flag 4) — and one assertion over all of them would pass on a fix reaching one route.
+The IN-FLOW arm is asserted beside the ABSPOS one for the same reason: the WPT mass that ranked this is
+`flex-abspos-staticpos-*`, but what real RTL pages contain is in-flow items.
+
+PERF: none claimed. CAPABILITY: an RTL column flex container aligns to the correct edge.
+
+WIKI: `docs/wiki/box-layout.md` — an RTL column flex container's cross axis is the INLINE axis.

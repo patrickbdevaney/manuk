@@ -9652,14 +9652,14 @@ impl Ctx<'_> {
         // and it is applied recursively so a grid nested inside a grid gets its own mirror — against
         // its own CONTENT width, which is why the padding/border frame is subtracted here.
         let mut placed = placed;
-        if self.grid_is_rtl(node) {
+        if self.container_inline_axis_is_mirrored(node) {
             let frame = 0.0; // the root's slots are already relative to its content origin
             for p in placed.iter_mut() {
-                self.mirror_rtl_grid(p, cw - frame);
+                self.mirror_rtl_inline(p, cw - frame);
             }
         }
         for p in placed.iter_mut() {
-            self.mirror_rtl_grid_descendants(p);
+            self.mirror_rtl_inline_descendants(p);
         }
         let is_grid = self.is_grid_container(node);
         let boxes: Vec<LayoutBox> = placed
@@ -9780,25 +9780,62 @@ impl Ctx<'_> {
         )
     }
 
-    /// Is this node a GRID container whose inline axis runs right-to-left?
-    fn grid_is_rtl(&self, node: NodeId) -> bool {
+    /// **Does this container's INLINE axis run right-to-left in a way taffy could not be told about?**
+    ///
+    /// Taffy has no `direction` property, so every logical inline axis has to be carried across the
+    /// boundary by hand. There are two containers where that is true and they are *not* the same case:
+    ///
+    /// | container | which axis `direction` flips | how it is carried |
+    /// |---|---|---|
+    /// | **grid** | the column (inline) axis — CSS Grid §3 | this predicate → mirror the slots |
+    /// | **flex `row`** | the MAIN axis — CSS Flexbox §5.1 | `taffy_tree::map_direction`, `row` ⇄ `row-reverse` |
+    /// | **flex `column`** | the **CROSS** axis, which is the inline axis | this predicate → mirror the slots |
+    ///
+    /// ⚠⚠⚠ **THE COLUMN ROW OF THAT TABLE WAS A NAMED, RECORDED GAP AND THE WPT HISTOGRAM RANKED IT.**
+    /// `map_direction`'s own doc said it: *"RTL does flip a column's cross-axis start edge, which taffy
+    /// cannot express — recorded in `CONSTELLATION.tsv` rather than approximated here."* It is not an
+    /// approximation. A column container's cross axis **is** the inline axis, so mirroring the slots
+    /// against the content box is exact, and it is the identical mechanism the grid arm has used since
+    /// t766. Measured against WPT's authored (Chrome) expectations on a `flex-flow: column;
+    /// direction: rtl` container 16px wide holding an 8px child:
+    ///
+    /// ```text
+    ///   align-self          Chrome    ours
+    ///   stretch/normal/auto   10        2
+    ///   start / self-start    10        2
+    ///   end   / self-end       2       10
+    ///   center                 6        6   ← already right, and it is why this is a MIRROR
+    /// ```
+    ///
+    /// ⚠⚠ **A flex `row` container must NOT reach this**, or the flip is applied twice and lands back
+    /// where it started: `map_direction` has already turned it into `row-reverse` inside taffy. The
+    /// `column`/`column-reverse` test is what keeps the two mechanisms from cancelling, and the
+    /// probe's `a(row,rtl)=10` row — correct *before* this change — is the control that proves it.
+    fn container_inline_axis_is_mirrored(&self, node: NodeId) -> bool {
         let s = self.style_of(node);
-        matches!(
-            s.display,
-            manuk_css::Display::Grid | manuk_css::Display::InlineGrid
-        ) && s.direction == manuk_css::Direction::Rtl
+        if s.direction != manuk_css::Direction::Rtl {
+            return false;
+        }
+        match s.display {
+            manuk_css::Display::Grid | manuk_css::Display::InlineGrid => true,
+            manuk_css::Display::Flex | manuk_css::Display::InlineFlex => matches!(
+                s.flex_direction,
+                manuk_css::FlexDirection::Column | manuk_css::FlexDirection::ColumnReverse
+            ),
+            _ => false,
+        }
     }
 
     /// Mirror one placed slot within `content_w` — the RTL column-order flip (see the call site).
-    fn mirror_rtl_grid(&self, p: &mut taffy_tree::Placed, content_w: f32) {
+    fn mirror_rtl_inline(&self, p: &mut taffy_tree::Placed, content_w: f32) {
         p.slot.x = content_w - p.slot.x - p.slot.width;
     }
 
     /// Apply the mirror to every RTL grid container INSIDE an already-placed subtree, so a grid nested
     /// in a flex row (or in another grid) is flipped against its own content box rather than the
     /// outermost one.
-    fn mirror_rtl_grid_descendants(&self, p: &mut taffy_tree::Placed) {
-        if p.container && self.grid_is_rtl(p.dom) {
+    fn mirror_rtl_inline_descendants(&self, p: &mut taffy_tree::Placed) {
+        if p.container && self.container_inline_axis_is_mirrored(p.dom) {
             let s = self.style_of(p.dom);
             let frame = s.padding.left.resolve(p.slot.width, 0.0)
                 + s.padding.right.resolve(p.slot.width, 0.0)
@@ -9806,11 +9843,11 @@ impl Ctx<'_> {
                 + s.border_width.right;
             let content_w = (p.slot.width - frame).max(0.0);
             for c in p.children.iter_mut() {
-                self.mirror_rtl_grid(c, content_w);
+                self.mirror_rtl_inline(c, content_w);
             }
         }
         for c in p.children.iter_mut() {
-            self.mirror_rtl_grid_descendants(c);
+            self.mirror_rtl_inline_descendants(c);
         }
     }
 
@@ -20448,7 +20485,7 @@ mod tests {
     /// ⚠ Second assertion, and it is the one that makes this a *direction* fix: a `direction:ltr` grid
     /// inside the same RTL document keeps LTR column order (Chrome: 0 / 100).
     ///
-    /// RED, run: make `grid_is_rtl` return `false` — item 1 reads 0 where Chrome says 300.
+    /// RED, run: make `container_inline_axis_is_mirrored` return `false` — item 1 reads 0 where Chrome says 300.
     #[test]
     fn an_rtl_grid_orders_its_columns_right_to_left() {
         let (dom, root) = layout_html(
