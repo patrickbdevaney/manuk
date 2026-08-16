@@ -3415,7 +3415,66 @@ fn declaration_is_supported(decl: &str) -> bool {
     probe != base
 }
 
-/// Evaluate a `@media` prelude against the current viewport.
+/// Media Queries Level 4 evaluates in **FOUR** states, and collapsing them to a `bool` inverts
+/// whole stylesheets.
+///
+/// The two extra states are not pedantry — they are the only way `not` can be right:
+///
+/// * **`Unknown`** is `<general-enclosed>`: a syntactically well-formed `( … )` block whose feature
+///   this UA does not recognise. MQ4 §3.2 gives it Kleene logic — `not unknown` is **`Unknown`**,
+///   *not* `True`. A three-state evaluator that folds `Unknown` into `False` and then negates
+///   answers **`true`** for `@media not (some-2029-feature)` and applies a sheet written for a
+///   browser we are not.
+/// * **`Invalid`** is a grammar failure. MQ4 says such a query *"must be replaced with `not all`"* —
+///   and the replacement happens at the **whole-query** level, so it survives an enclosing `not`.
+///   `not )` is false; it is not "the negation of a false thing".
+///
+/// Both collapse to `false` at the top, which is why the old `bool` evaluator looked right on every
+/// query that contained no `not`.
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+enum Mq {
+    True,
+    False,
+    /// `<general-enclosed>` — well-formed, unrecognised. Kleene's third value.
+    Unknown,
+    /// A grammar failure. Absorbing: it survives `not`, `and` and `or` alike.
+    Invalid,
+}
+
+impl Mq {
+    fn of(b: bool) -> Mq {
+        if b {
+            Mq::True
+        } else {
+            Mq::False
+        }
+    }
+    fn not(self) -> Mq {
+        match self {
+            Mq::True => Mq::False,
+            Mq::False => Mq::True,
+            other => other, // Unknown and Invalid both negate to themselves.
+        }
+    }
+    fn and(self, o: Mq) -> Mq {
+        match (self, o) {
+            (Mq::Invalid, _) | (_, Mq::Invalid) => Mq::Invalid,
+            (Mq::False, _) | (_, Mq::False) => Mq::False,
+            (Mq::Unknown, _) | (_, Mq::Unknown) => Mq::Unknown,
+            _ => Mq::True,
+        }
+    }
+    fn or(self, o: Mq) -> Mq {
+        match (self, o) {
+            (Mq::Invalid, _) | (_, Mq::Invalid) => Mq::Invalid,
+            (Mq::True, _) | (_, Mq::True) => Mq::True,
+            (Mq::Unknown, _) | (_, Mq::Unknown) => Mq::Unknown,
+            _ => Mq::False,
+        }
+    }
+}
+
+/// Evaluate a `@media` prelude — a `<media-query-list>` — against the current viewport.
 ///
 /// **Public because `window.matchMedia` must give the same answer.** A page that branches in JS on
 /// `matchMedia('(max-width: 700px)')` and in CSS on the identical query and gets two different
@@ -3423,58 +3482,142 @@ fn declaration_is_supported(decl: &str) -> bool {
 /// in the JS prelude with its own feature table and an `unknown → true` default, i.e. the exact
 /// opposite of this one's `unknown → false`; both are now this function.
 ///
-///
-/// A pragmatic subset, and the subset is chosen by what the real web actually ships: a
-/// comma-separated list of ORed queries, each a chain of `and`-ed terms that are either a media
-/// **type** (`screen` / `all` / `print`) or a parenthesised **feature**, optionally negated by a
-/// leading `not`.
-///
-/// **An unknown feature evaluates FALSE**, per CSS's own error handling — the safe direction,
-/// because the alternative is applying a dark-scheme or print sheet to a light screen.
+/// A `<media-query-list>` is a comma-separated list of `<media-query>`, and a `<media-query>` is
+/// **either** a bare `<media-condition>` **or** `[not | only]? <media-type> [and <condition>]?`.
+/// That distinction is load-bearing: `not print` is a *query* and is TRUE on a screen, while inside
+/// a `sizes` attribute — which takes a `<media-condition>`, see [`media_condition_matches`] — the
+/// same text is a grammar error and is FALSE. One string, two answers, and the difference is which
+/// production asked.
 pub fn media_matches(query: &str) -> bool {
-    query
-        .split(',')
-        .any(|q| !q.trim().is_empty() && media_query_matches(q.trim()))
+    split_top_level(query, ",")
+        .into_iter()
+        .any(|q| !q.trim().is_empty() && eval_media_query(&q.to_ascii_lowercase()) == Mq::True)
 }
 
-fn media_query_matches(q: &str) -> bool {
-    let lower = q.trim().to_ascii_lowercase();
-    let (negate, rest) = match lower.strip_prefix("not ") {
-        Some(r) => (true, r.trim().to_string()),
-        None => (false, lower),
-    };
-    // `only screen` is a legacy cloaking prefix for CSS2 UAs; it has no effect on the result.
-    let rest = rest.strip_prefix("only ").map(str::trim).unwrap_or(&rest);
-    let mut result = true;
-    for term in split_media_terms(rest) {
-        let t = term.trim();
-        if t.is_empty() {
-            continue;
-        }
-        let ok = if let Some(inner) = t.strip_prefix('(').and_then(|s| s.strip_suffix(')')) {
-            media_feature_matches(inner.trim())
-        } else {
-            // A bare media type.
-            matches!(t, "all" | "screen")
-        };
-        result &= ok;
+/// Evaluate a `<media-condition>` — the production `sizes` and `@supports`-style contexts use.
+///
+/// **A media CONDITION cannot contain a media TYPE.** `sizes="not print 100vw, 1px"` must resolve to
+/// `1px`, because `not print` is not a condition at all and the whole `<source-size>` is discarded —
+/// where the identical text in `@media` is a perfectly good query that matches. Routing `sizes`
+/// through [`media_matches`] answered `100vw`, i.e. picked a different bitmap for the same page.
+pub fn media_condition_matches(cond: &str) -> bool {
+    eval_condition(&cond.trim().to_ascii_lowercase()) == Mq::True
+}
+
+/// `<media-query> = <media-condition> | [ not | only ]? <media-type> [ and <media-condition> ]?`
+fn eval_media_query(q: &str) -> Mq {
+    let q = q.trim();
+    if q.is_empty() {
+        return Mq::Invalid;
     }
-    result != negate
+    // A leading `(` can only start a condition. A leading `not (` is `<media-not>`, which is also
+    // a condition — the type form's `not` is followed by an identifier, never a paren.
+    if q.starts_with('(') {
+        return eval_condition(q);
+    }
+    if let Some(rest) = q.strip_prefix("not ") {
+        let rest = rest.trim();
+        if rest.starts_with('(') {
+            return eval_condition(q);
+        }
+        // `not` here negates the result of the WHOLE query (MQ4 §2.1), not just the type.
+        return eval_type_query(rest).not();
+    }
+    // `only screen` is a legacy cloaking prefix for CSS2 UAs; it has no effect on the result.
+    if let Some(rest) = q.strip_prefix("only ") {
+        return eval_type_query(rest.trim());
+    }
+    eval_type_query(q)
 }
 
-/// Split on top-level ` and ` — parens may contain the word in a value, so track depth.
-fn split_media_terms(q: &str) -> Vec<&str> {
+/// `<media-type> [ and <media-condition-without-or> ]?`
+fn eval_type_query(q: &str) -> Mq {
+    let parts = split_top_level(q, " and ");
+    let ty = parts[0].trim();
+    // `not`/`only`/`and`/`or`/`layer` are excluded from `<media-type>` by the grammar itself, so
+    // `not not` is a syntax error rather than a double negative.
+    if !is_css_ident(ty) || matches!(ty, "not" | "only" | "and" | "or" | "layer") {
+        return Mq::Invalid;
+    }
+    // An UNKNOWN media type is valid syntax that simply never matches — `not tty` is TRUE. That is
+    // why this is `False` and not `Unknown`: unknown *types* do not get Kleene treatment, only
+    // unknown *features* do.
+    let mut result = Mq::of(matches!(ty, "all" | "screen"));
+    for p in &parts[1..] {
+        result = result.and(eval_in_parens(p));
+    }
+    result
+}
+
+/// `<media-condition> = <media-not> | <media-in-parens> [ <media-and>* | <media-or>* ]`
+///
+/// The grammar deliberately forbids **mixing** `and` and `or` at one level without parentheses,
+/// because `a and b or c` has no agreed precedence on the web. Mixing is a syntax error, not a
+/// guess.
+fn eval_condition(c: &str) -> Mq {
+    let c = c.trim();
+    if c.is_empty() {
+        return Mq::Invalid;
+    }
+    let ors = split_top_level(c, " or ");
+    let ands = split_top_level(c, " and ");
+    match (ors.len() > 1, ands.len() > 1) {
+        (true, true) => Mq::Invalid,
+        (true, false) => ors
+            .iter()
+            .map(|p| eval_in_parens(p))
+            .fold(Mq::False, Mq::or),
+        (false, true) => ands
+            .iter()
+            .map(|p| eval_in_parens(p))
+            .fold(Mq::True, Mq::and),
+        (false, false) => match c.strip_prefix("not ") {
+            Some(rest) => eval_in_parens(rest).not(),
+            None => eval_in_parens(c),
+        },
+    }
+}
+
+/// `<media-in-parens> = ( <media-condition> ) | <media-feature> | <general-enclosed>`
+fn eval_in_parens(s: &str) -> Mq {
+    let s = s.trim();
+    let Some(inner) = strip_outer_parens(s) else {
+        // `<general-enclosed>` also covers a function-token block, `ident( … )`. Anything else
+        // here — a bare word, a stray `)`, a `!` — never matched the grammar at all.
+        return if is_enclosed_function(s) {
+            Mq::Unknown
+        } else {
+            Mq::Invalid
+        };
+    };
+    let inner = inner.trim();
+    if inner.is_empty() {
+        return Mq::Invalid;
+    }
+    // A nested condition rather than a feature.
+    if inner.starts_with('(')
+        || inner.starts_with("not ")
+        || split_top_level(inner, " and ").len() > 1
+        || split_top_level(inner, " or ").len() > 1
+    {
+        return eval_condition(inner);
+    }
+    eval_feature(inner)
+}
+
+/// Split on a top-level separator — parens may contain the same text inside a value, so track depth.
+fn split_top_level<'a>(q: &'a str, sep: &str) -> Vec<&'a str> {
     let b = q.as_bytes();
     let (mut out, mut depth, mut start, mut i) = (Vec::new(), 0i32, 0usize, 0usize);
     while i < b.len() {
         match b[i] {
-            b'(' => depth += 1,
-            b')' => depth -= 1,
+            b'(' | b'[' | b'{' => depth += 1,
+            b')' | b']' | b'}' => depth -= 1,
             _ => {}
         }
-        if depth == 0 && q[i..].starts_with(" and ") {
+        if depth == 0 && q[i..].starts_with(sep) {
             out.push(&q[start..i]);
-            i += 5;
+            i += sep.len();
             start = i;
             continue;
         }
@@ -3484,7 +3627,56 @@ fn split_media_terms(q: &str) -> Vec<&str> {
     out
 }
 
-fn media_feature_matches(feature: &str) -> bool {
+/// `(a)` → `a`, but **only when the closing paren is the one that opened it**. `(a) or (b)` is not
+/// a parenthesised block, and a naive `strip_prefix('(') + strip_suffix(')')` reads it as the
+/// nonsense `a) or (b` — which is how `or` used to evaluate to a failed feature lookup.
+fn strip_outer_parens(s: &str) -> Option<&str> {
+    let b = s.as_bytes();
+    if b.first() != Some(&b'(') {
+        return None;
+    }
+    let mut depth = 0i32;
+    for (i, c) in b.iter().enumerate() {
+        match c {
+            b'(' => depth += 1,
+            b')' => depth -= 1,
+            _ => {}
+        }
+        if depth == 0 {
+            return if i + 1 == b.len() {
+                Some(&s[1..i])
+            } else {
+                None
+            };
+        }
+    }
+    None
+}
+
+/// `unknown-general-enclosed(foo)` — a function block, which the grammar admits as unrecognised
+/// rather than malformed.
+fn is_enclosed_function(s: &str) -> bool {
+    let Some(open) = s.find('(') else {
+        return false;
+    };
+    is_css_ident(&s[..open]) && strip_outer_parens(&s[open..]).is_some()
+}
+
+fn is_css_ident(s: &str) -> bool {
+    let mut chars = s.chars();
+    let Some(first) = chars.next() else {
+        return false;
+    };
+    if first.is_ascii_digit() {
+        return false;
+    }
+    s.chars()
+        .all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '_' || !c.is_ascii())
+}
+
+/// A single `<media-feature>`. Returns `Unknown` — never `False` — for anything unrecognised, so
+/// that an enclosing `not` cannot turn our ignorance into a positive match.
+fn eval_feature(feature: &str) -> Mq {
     let (vw, vh) = crate::values::viewport_size();
     // Range syntax (`width >= 600px`) is normalised to the `min-`/`max-` prefix form, which is
     // the one the rest of this function speaks. `<`/`>` map to the same comparison here: the
@@ -3507,35 +3699,50 @@ fn media_feature_matches(feature: &str) -> bool {
         } else if let Some(n) = v.strip_suffix("rem").or(v.strip_suffix("em")) {
             n.trim().parse::<f32>().ok().map(|n| n * 16.0)
         } else {
-            v.parse::<f32>().ok()
+            // A unitless number is a length only when it is zero.
+            v.parse::<f32>().ok().filter(|n| *n == 0.0)
         }
     };
+    // A NEGATIVE length is not a false match, it is an invalid `<media-feature>` — and an invalid
+    // feature is `<general-enclosed>`, i.e. Unknown. `not (min-width: -1px)` must not be true.
+    let len = |v: &str| -> Option<f32> { px(v).filter(|n| *n >= 0.0) };
+    // A known feature whose value does not parse is Unknown, not False, for the same reason.
+    let cmp = |v: Option<f32>, f: &dyn Fn(f32) -> bool| match v {
+        Some(v) => Mq::of(f(v)),
+        None => Mq::Unknown,
+    };
     match name.as_str() {
-        "min-width" => px(&value).is_some_and(|v| vw >= v),
-        "max-width" => px(&value).is_some_and(|v| vw <= v),
-        "width" => px(&value).is_some_and(|v| (vw - v).abs() < 0.5),
-        "min-height" => px(&value).is_some_and(|v| vh >= v),
-        "max-height" => px(&value).is_some_and(|v| vh <= v),
-        "height" => px(&value).is_some_and(|v| (vh - v).abs() < 0.5),
-        "orientation" => value == if vw >= vh { "landscape" } else { "portrait" },
+        "min-width" => cmp(len(&value), &|v| vw >= v),
+        "max-width" => cmp(len(&value), &|v| vw <= v),
+        "width" => cmp(len(&value), &|v| (vw - v).abs() < 0.5),
+        "min-height" => cmp(len(&value), &|v| vh >= v),
+        "max-height" => cmp(len(&value), &|v| vh <= v),
+        "height" => cmp(len(&value), &|v| (vh - v).abs() < 0.5),
+        "orientation" => Mq::of(value == if vw >= vh { "landscape" } else { "portrait" }),
         // We are a real, light-scheme, non-reduced-motion desktop browser with a fine pointer
         // and hover. These answers must agree with what `window.matchMedia` tells the page —
         // a browser is allowed to be unusual, it is not allowed to disagree with itself.
-        "prefers-color-scheme" => value == "light",
-        "prefers-reduced-motion" => value.is_empty() || value == "no-preference",
+        "prefers-color-scheme" => Mq::of(value == "light"),
+        "prefers-reduced-motion" => Mq::of(value.is_empty() || value == "no-preference"),
         "prefers-reduced-transparency"
         | "prefers-contrast"
         | "forced-colors"
+        // ⚠ NO `value.is_empty()` arm here, and that is deliberate: the BOOLEAN form of these
+        // features asks *"is it engaged?"*, so `(forced-colors)` is FALSE for us while
+        // `(forced-colors: none)` is TRUE. They are not synonyms.
         | "inverted-colors" => {
-            value == "no-preference" || value == "none" || value == "no-inverted-colors"
+            Mq::of(value == "no-preference" || value == "none" || value == "no-inverted-colors")
         }
-        "hover" | "any-hover" => value.is_empty() || value == "hover",
-        "pointer" | "any-pointer" => value.is_empty() || value == "fine",
-        "color" | "any-color" => value.is_empty() || px(&value).is_some_and(|v| v == 8.0),
-        "display-mode" => value == "browser",
-        "scripting" => value == "enabled",
-        // Unknown feature → false. Never guess in the direction of applying a sheet.
-        _ => false,
+        "hover" | "any-hover" => Mq::of(value.is_empty() || value == "hover"),
+        "pointer" | "any-pointer" => Mq::of(value.is_empty() || value == "fine"),
+        "color" | "any-color" => Mq::of(
+            value.is_empty() || value.trim().parse::<f32>().is_ok_and(|v| v == 8.0),
+        ),
+        "display-mode" => Mq::of(value == "browser"),
+        "scripting" => Mq::of(value == "enabled"),
+        // Unrecognised feature → `<general-enclosed>` → Unknown, which is `false` at the top level
+        // and stays `false` under `not`. Never guess in the direction of applying a sheet.
+        _ => Mq::Unknown,
     }
 }
 

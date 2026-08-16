@@ -1324,7 +1324,12 @@ fn sizes_slot_width(sizes: Option<&str>, viewport_width: f32) -> f32 {
         let Some((cond, value)) = split_trailing_component(entry) else {
             continue;
         };
-        if !cond.trim().is_empty() && !manuk_css::media_matches(cond.trim()) {
+        // ⚠ `media_condition_matches`, NOT `media_matches`: a `<source-size>` takes a
+        // `<media-condition>`, which **cannot contain a media type**. `sizes="not print 100vw, 1px"`
+        // is therefore a 1px slot — the first entry is a grammar error and is discarded — where the
+        // same text after `@media` is a query that matches on screen. Asking the query production
+        // answered `100vw` and fetched a different bitmap.
+        if !cond.trim().is_empty() && !manuk_css::media_condition_matches(cond.trim()) {
             continue;
         }
         // A negative slot is not a parse error the spec forgives — it is an invalid

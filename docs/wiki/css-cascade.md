@@ -3572,3 +3572,69 @@ INTRINSIC MEASUREMENT, so a side-table keyed by node id will be written by a pro
 contractually discarded — exactly how `pre_transform_rect` was poisoned permanently at t1120 by being
 first-write-wins. Ask *which passes can write* before choosing the polarity, and remember the §9.1
 grid re-solve runs after the main pass, so "last write wins" is not automatically the final one either.
+
+## A media query evaluates in FOUR states, and a `bool` gets `not` backwards (tick 1276)
+
+`media_query_matches` returned `bool`. Media Queries Level 4 needs **four** values, and the two
+missing ones are not pedantry — they are the only way `not` can be right.
+
+| State | What it is | Why a `bool` cannot hold it |
+|---|---|---|
+| `Unknown` | `<general-enclosed>`: a well-formed `( … )` naming a feature this UA does not recognise | MQ4 §3.2 gives it Kleene logic. `not Unknown` is **`Unknown`**. Collapse it to `false` first and negate second and you answer **`true`** |
+| `Invalid` | a grammar failure | MQ4: such a query *"must be replaced with `not all`"*, and the replacement is at the **whole-query** level, so it survives an enclosing `not`. `not )` is false, not "the negation of a false thing" |
+
+Both collapse to `false` at the top level, which is exactly why the old evaluator looked correct on
+every query that contained no `not` — and every query on the web that *does* contain one was
+inverted. `@media not (some-feature-from-2029) { … }` applied a sheet written for a browser we are
+not.
+
+⭐ **The old code documented its default as the safe direction, and it was safe in only half of the
+sentence.** The comment read *"an unknown feature evaluates FALSE — the safe direction, because the
+alternative is applying a dark-scheme or print sheet to a light screen."* That is true of a bare
+`(unknown)`. Put a `not` in front and `false` becomes `true` and the sheet is applied — the exact
+outcome the comment claims to prevent. **A default is only safe with respect to the operators that
+can wrap it.**
+
+### `or` did not exist, and nested parens failed by the same shape
+
+`split_media_terms` split on ` and ` only. So `(min-width:0) or (min-width:99999px)` reached the
+feature lookup as ONE term, and its outer parens were removed by
+`strip_prefix('(') + strip_suffix(')')` — which for a two-block string strips the **first** block's
+open and the **last** block's close, yielding the nonsense `min-width:0) or (min-width:99999px`.
+Feature lookup failed; the query was false. **Every `or` query on the open web evaluated FALSE.**
+`((a) or (b)) and (c)` is the same shape and failed identically. The fix is `strip_outer_parens`,
+which only strips when the closing paren is the one that opened the string.
+
+### A `<media-condition>` is NOT a `<media-query>` — one string, two correct answers
+
+```
+<media-query>     = <media-condition> | [ not | only ]? <media-type> [ and <media-condition> ]?
+<media-condition> = <media-not> | <media-in-parens> [ <media-and>* | <media-or>* ]
+```
+
+A **condition cannot contain a media type**. `sizes` takes the condition production, so
+`sizes="not print 100vw, 1px"` resolves to a **1px** slot — the first `<source-size>` is a grammar
+error and is discarded — while the identical text after `@media` is a query that matches on screen.
+`sizes` was calling `media_matches` (the query production), answering `100vw`, and fetching a
+different bitmap for the same page. `manuk_css` now exposes both entry points and the caller picks.
+
+Mixing `and` and `or` at one level without parentheses is a **syntax error**, not a precedence
+question: `a and b or c` has no agreed reading, so the spec refuses to guess and so do we.
+
+### An out-of-range value invalidates the FEATURE; it does not merely fail to match it
+
+`(min-width: -1px)` used to parse to `-1` and answer **true** — an 800px viewport is `>= -1`. A
+negative length is not a valid `<media-feature>`, so the block is `<general-enclosed>` → `Unknown` →
+false, and crucially `not (min-width: -1px)` does not become true. Same for a unitless non-zero:
+`(min-width: 600)` is not a length, though `(min-width: 0)` still is.
+
+**Measured:** WPT `html/semantics/embedded-content/the-img-element/sizes` **512/795 → 632/795**
+(+120), with `css/cssom`, `css/css-values` and `css/css-backgrounds` numerators byte-identical.
+Gated by `G_MEDIA_GRAMMAR`, which drives `matchMedia`, `sizes` and a real `@media` block in one page
+so that the CSS path and the JS path are proven to reach the *same* evaluator.
+
+⚠ **Still wrong, measured here and deliberately left for its own tick:** the **boolean context** of
+the `no-preference` family. `(prefers-reduced-motion)` with no value returns `true`, but the boolean
+form asks *"is it engaged?"* and we are a no-preference browser, so it must be `false`. The idiom
+`@media (prefers-reduced-motion) { * { animation: none !important } }` is everywhere, and today it
+kills every animation on the page.

@@ -900,6 +900,10 @@
   - L3527 · The cascade held the whole grid-* family and getComputedStyle published NONE of it (t1269)
   - L3544 · Two serialisation rules that are Chrome's answer, not shortcuts
   - L3553 · ⚠⚠⚠ grid-template-columns / -rows are STILL absent, on purpose, and the gate asserts the absence
+  - L3576 · A media query evaluates in FOUR states, and a bool gets not backwards (tick 1276)
+  - L3598 · or did not exist, and nested parens failed by the same shape
+  - L3608 · A <media-condition> is NOT a <media-query> — one string, two correct answers
+  - L3624 · An out-of-range value invalidates the FEATURE; it does not merely fail to match it
 
 ## `<dialog>`, `popover`, and the top layer (ticks 194-195)
 `docs/wiki/dialog-and-top-layer.md`
@@ -2198,4 +2202,4 @@
   - L231 · Both named mechanisms are subsystem work
 
 ---
-2105 sections across 22 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+2109 sections across 22 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.

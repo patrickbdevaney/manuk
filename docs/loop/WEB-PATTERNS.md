@@ -2051,6 +2051,45 @@ individually reasonable.
 exactly the half a hand-written second evaluator gets right. Test that the two sides give the *same*
 answer, over features nobody thought to put in the second table.
 
+## The query a browser does not fully understand — `or`, `not`, and the feature nobody has shipped yet (tick 1276)
+
+**Pattern:** `@media (min-width: 60rem) or (orientation: landscape)`, and the forward-compatibility
+idiom `@media not (some-feature-we-do-not-implement) { … }` — the two shapes every design system uses
+to ship one sheet to several generations of browser. Alongside them, the same grammar inside
+`<img sizes>`, `<source media>` and `matchMedia`.
+
+**The class this unlocks:** responsive CSS that says `or`, and progressive enhancement that we no
+longer answer backwards. Two independent failures, both silent:
+
+* **`or` never matched.** The prelude was split on ` and ` only, so an `or` query arrived as ONE term
+  whose parens were stripped from the outside in — `(a) or (b)` became the nonsense `a) or (b`, the
+  feature lookup failed, and the query was false. Nested parens, `((a) or (b)) and (c)`, failed by
+  the identical shape. **Every `or` query on the open web evaluated FALSE**, so its rules never
+  applied and the page fell back to whatever the author wrote for the *other* branch.
+* **`not <unknown>` was TRUE.** Media Queries Level 4 evaluates in four states, not two: an
+  unrecognised feature is `Unknown` (Kleene — `not Unknown` is `Unknown`), and a grammar failure is
+  `not all` at the whole-query level and survives an enclosing `not`. With a `bool`, unknown folded
+  to `false` and negated to **`true`**, so a sheet written for a browser we are not was **applied**.
+
+**Why it hid:** the old default was documented as *"unknown → false, the safe direction, because the
+alternative is applying a print or dark-scheme sheet to a light screen."* That is true — of a bare
+`(unknown)`. It is exactly inverted the moment a `not` is in front of it, and the comment had never
+been asked what `not` did to it. **A default is only safe with respect to the operators that can wrap
+it.**
+
+**The trap:** `sizes` and `@media` do NOT take the same production. `sizes` takes a
+`<media-condition>`, which **cannot contain a media type**, so `sizes="not print 100vw, 1px"` is a
+1px slot while the identical text after `@media` is a query that matches on screen. Routing both at
+one function answers one of them wrong and fetches a different bitmap for the same page.
+
+**Measured:** WPT `the-img-element/sizes` 512/795 → **632/795**; `css/cssom`, `css/css-values`,
+`css/css-backgrounds` numerators byte-identical. Gated by `G_MEDIA_GRAMMAR`, proven RED on five
+mutations, driving `matchMedia`, `sizes` and a live `@media` block in one page so the CSS and JS
+paths are proven to reach the *same* evaluator. ⚠ Still open, measured and deliberately deferred:
+the **boolean context** of `(prefers-reduced-motion)` answers `true`, so the near-universal
+`@media (prefers-reduced-motion) { * { animation: none !important } }` currently kills every
+animation on the page.
+
 ## Feature-detected CSS — `@supports` and `@layer` (tick 276)
 
 **Pattern:** `@supports (display: grid) { … }` shipping an enhancement beside a fallback, and

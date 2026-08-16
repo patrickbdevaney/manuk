@@ -81712,3 +81712,114 @@ which still bounds four of the five parse files. (c) `html/semantics`'s untouche
 `forms/textfieldselection` 385 · `forms/constraints` 338.
 
 WIKI: docs/wiki/networking.md — `sizes` is a FIRST-MATCH list, not a last entry.
+
+## Tick 1276 — `not (anything-we-do-not-know)` was TRUE, and `or` was never a thing (2026-08-16)
+
+TICK SHAPE: capability — the mechanism t1275 MEASURED and refused to smuggle into itself, and the
+one check #118's steer #3 named ("a shared MECHANISM outranks the per-area ranker — for the fifth
+time"). Board re-run at the top of this tick: PHASE MANDATE = CSS-LAYOUT / render-moving, not
+html/dom flips. This is a CSS-layout mechanism whose consumers are `@media`, `matchMedia`,
+`<source media>` and `sizes`.
+
+HYPOTHESIS (written before the code). `media_query_matches` is a **`bool`**, and Media Queries
+Level 4 needs **four** states. Two are missing and each one inverts real stylesheets:
+
+* `<general-enclosed>` — a well-formed `( … )` naming a feature this UA does not know — is
+  **Unknown**, and MQ4 §3.2 gives it Kleene logic, so `not unknown` is **Unknown**. Fold Unknown
+  into `false` first and negate second and you answer **true**: `@media not (some-2029-feature)`
+  APPLIES a sheet written for a browser we are not.
+* A grammar failure is *"replaced with `not all`"* at the **whole-query** level, so it must survive
+  an enclosing `not`. `not )` is false — not "the negation of a false thing".
+
+And `or` did not exist at all: `split_media_terms` split on ` and ` only, so
+`(min-width:0) or (min-width:99999px)` arrived at the feature lookup as ONE term whose outer parens
+were removed by `strip_prefix('(') + strip_suffix(')')`, yielding the nonsense
+`min-width:0) or (min-width:99999px`. **Every `or` query on the open web evaluated FALSE**, and
+nested parens — `((a) or (b)) and (c)` — failed by the identical shape.
+
+⭐ **AND A `<media-condition>` IS NOT A `<media-query>`.** `sizes` takes the *condition* production,
+which **cannot contain a media type**, so `sizes="not print 100vw, 1px"` is a **1px** slot — the
+first entry is a grammar error and is discarded — where the identical text after `@media` is a query
+that matches on screen. One string, two correct-and-different answers. `sizes` was asking the query
+production and therefore fetching a different bitmap.
+
+HOW IT WAS RANKED. t1275 re-histogrammed its own 283-row remainder by the failing element's `sizes`
+value and found the survivors were **media-query grammar, not `sizes` parsing** — and said so instead
+of pricing them into that tick. This is the cash-out.
+
+```text
+  html/semantics   4782/11256  ->  4902/11247   (+120; denominator -9, ordinary wobble)
+    attributable in full:  the-img-element/sizes  512/795 -> 632/795  (+120, den IDENTICAL)
+
+  CONTROLS, paired, same box, same hour, numerator BYTE-IDENTICAL:
+    css/cssom            2794/3502   (MediaList lives here)
+    css/css-values       3230        (den 8033->7976 wobble)
+    css/css-backgrounds  4087/6181
+  HANG/CRASH 0 on sizes and on the whole html/semantics sweep.
+```
+
+⚠ **ONE CONTROL RUN PRINTED `css/css-values HANG/CRASH 1` AND IT IS NOT MINE — PROVEN, NOT ASSUMED.**
+The re-run printed `HANG/CRASH 0` with `ACCUM 4`, naming the four files
+(`calc-infinity-nan-computed`, `if-style-invalidation`, `viewport-units-css2-001`,
+`viewport-units-media-queries`) as *SIGSEGV in-batch, PASSES alone* — the tracked cross-file
+runtime-reuse UAF (docs/wiki/js-engine.md), which is non-deterministic by construction. The
+**numerator was 3230 in both runs**, so the flip is the known Bar-0's flakiness and not a new one.
+Recorded rather than silently re-run until green.
+
+⚠⚠ **THE +120 IS AGAIN INVISIBLE TO THE PRIMARY METRIC**, for the third tick running and for the
+same reason: `html/semantics` has no `WPT-AREAS.tsv` row because `scripts/wpt-sweep.sh` is
+observer-owned and its `AREAS=()` does not list the area. A hand-added row would be DELETED by the
+next full sweep and read as a regression (the `cssom` lesson, t1266). Banked here; the observer is
+asked to wire the area, as at t1274 and t1275.
+
+GATE: `G_MEDIA_GRAMMAR` — 28 rows across **three consumers at once** (`matchMedia`, `sizes`, and a
+real `@media` block read back off the cascade), **4 of them CONTROLS**, proven RED on **FIVE**
+mutations. The `m_*` rows exist to prove the CSS path and the JS path reach the *same* evaluator;
+a page that branches in CSS and in JS on one query and gets two answers renders a layout no
+designer specified.
+
+⚠⚠ **THREE OF MY FIVE PREDICTED MOVED-ROW SETS WERE WRONG, and the gate records the measurement
+rather than the prediction.** (1) `q_oru` does NOT move when Unknown collapses to False — `True or
+False` and `True or Unknown` are both `True`, so an `or` row is structurally blind to that leg.
+(2) `q_notfn` does not move there either: the FUNCTION spelling of general-enclosed reaches
+`Invalid` through the *query* production's identifier check, never through `is_enclosed_function` —
+so a row (`s_notfn`) was ADDED to cover the branch the run showed was uncovered. (3) `s_all` does
+not move when `Invalid` stops being absorbing, because `all` carries no `not`. A gate whose comment
+lists the rows the author *expected* to move is a gate nobody has run against its own mutations.
+
+⭐ **THE OLD CODE'S DEFAULT WAS DOCUMENTED AS THE SAFE DIRECTION AND WAS ONLY SAFE IN ONE HALF OF THE
+SENTENCE.** Its comment read *"an unknown feature evaluates FALSE… the safe direction, because the
+alternative is applying a dark-scheme or print sheet to a light screen."* True for a bare
+`(unknown)`. The moment a `not` is in front of it, `false` becomes `true` and the sheet is applied —
+the exact outcome the comment says it prevents. **A default is only safe with respect to the
+operators that can wrap it**, and this one had never been asked what `not` did to it.
+
+⚠ **AN OUT-OF-RANGE VALUE INVALIDATES THE FEATURE; IT DOES NOT MERELY FAIL TO MATCH IT.**
+`(min-width: -1px)` used to parse to `-1` and answer TRUE (an 800px viewport is `>= -1`). A negative
+length is not a valid `<media-feature>`, so it is `<general-enclosed>` → Unknown → false, and
+`not (min-width:-1px)` must not become true. Same for a unitless non-zero: `(min-width: 600)` is not
+a length.
+
+PERF: none claimed. The evaluator is the same single pass over the prelude; it allocates the same
+`Vec<&str>` splits and adds one four-variant enum that lives in a register.
+
+NEXT, ranked from what this tick measured rather than guessed.
+(a) **The BOOLEAN CONTEXT of the `no-preference` family is inverted, measured here and deliberately
+left out of this tick to keep the pricing clean.** `(prefers-reduced-motion)` with no value returns
+TRUE, but MQ4's boolean context asks *"is it engaged?"* — and we are a no-preference browser, so it
+must be FALSE. The idiom `@media (prefers-reduced-motion) { * { animation: none !important } }` is
+everywhere, and it currently kills every animation on the page — including the ones t1273 just
+taught the engine to interpolate. Same function, ~6 lines, its own gate.
+(b) **`calc()` inside a media feature**: `(min-width: calc(0))` is Unknown to us and matches in
+Chrome (WPT `sizes` row e38). The math resolver `resolve_size_value` already exists in
+`engine/page`; the media evaluator in `engine/css` cannot see it.
+(c) **The `sizes` VALUE tokenizer**, which is the rest of that directory's remainder and is a
+different mechanism again: CSS comments (`sizes="/* */1px"`), identifier ESCAPES (`1\p\x` == `1px`,
+and `\(` must not open a paren for the top-level comma split), and a math function that resolves
+negative being CLAMPED to zero rather than dropped (`min(-100px, 1px)` is a 0 slot, and 0 selects
+the smallest candidate).
+(d) `css/mediaqueries` **is not in the WPT checkout at all** (`ls ~/wpt/css` has no such directory),
+so the tree that would measure this mechanism directly is part of the t1273 aperture gap. Observer
+item, recorded so the absence is a record rather than a silence.
+
+WIKI: docs/wiki/css-cascade.md — a media query evaluates in FOUR states.
