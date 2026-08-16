@@ -7106,3 +7106,28 @@ a coherent answer rather than an argument.
 `G_CLIENT_COORDS`, proven RED two ways; the second mutation — subtracting one level down in the
 shared `layout_rect` — passes **eight of its nine rows** while breaking every `offsetTop` on the web,
 and only a control row written for the mechanism the fix must not touch catches it.
+
+## "What is under the cursor?" on a scrolled page — the drop target, the tooltip, the overlay (tick 1285)
+
+**Pattern:** `document.elementFromPoint(e.clientX, e.clientY)` in a `dragover` handler to find the
+drop target; `elementsFromPoint` to look *past* a drag ghost or an overlay; the same call behind
+tooltip/popover occlusion checks, canvas and overlay hit routing, and `caretRangeFromPoint`.
+
+**The class this unlocks:** all of them, on any page that is scrolled. Both APIs are defined on
+**client** coordinates and were comparing their argument against **document** boxes, so on a page
+scrolled to 300 they answered with whatever sits 300px further up the document — a real element, of a
+plausible type, in a plausible place. Every HTML5 drag-and-drop implementation on the web resolves
+its drop target this way.
+
+**Why it hid:** it is **zero percent wrong at scroll 0**, and it was carried in the source as an
+*honest bound* (*"scroll offset is assumed zero"*) rather than as a bug — which is the most durable
+way for a defect to survive, because every reader sees it acknowledged and moves on.
+
+⭐ **The corroboration is the interesting part:** `IntersectionObserver` had been subtracting the
+scroll all along. Three readers of one layout snapshot — IO (right), `getBoundingClientRect` (wrong,
+fixed t1284), `elementFromPoint` (wrong, fixed here) — because the coordinate boundary had never been
+stated in one place, so each call site decided for itself.
+
+**Measured:** WPT movement **zero** (`css/css-position` 687, `css/cssom` 2794 — unmoved). Gated by
+`G_HIT_POINT_COORDS`, proven RED from each arm separately, with the
+`elementsFromPoint(x,y)[0] === elementFromPoint(x,y)` invariant going false from either side.

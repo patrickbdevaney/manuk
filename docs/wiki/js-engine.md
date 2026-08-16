@@ -1187,6 +1187,33 @@ the gate's `off:` row exists solely to catch that, and under the one-level-down 
 nine rows still pass**. One fix, two mechanisms (t1276): a control row for the mechanism a fix must
 not touch is the only thing that separates them.
 
+### …and the same boundary the other way: `elementFromPoint` takes a CLIENT point (tick 1285)
+
+`document.elementFromPoint(x, y)` / `elementsFromPoint(x, y)` are defined by CSSOM View on **client**
+coordinates and compare their argument directly against `LAYOUT_RECTS_PTR`, which holds **document**
+boxes. On a page scrolled to 300, `elementFromPoint(10, 10)` asks *"what is at the top-left of the
+screen?"* and was answered *"what is at the top-left of the document."* The engine's own comment
+carried it as an accepted bound — *"scroll offset is assumed zero"* — which is what an honest
+limitation looks like right up until it stops being necessary. ⚠ **Delete such a note when the
+limitation goes; a fixed limitation that is still documented becomes a lie in the next reader's
+hands** (t1273).
+
+⚠ **Convert AFTER the WebIDL finite check.** Both take `double`, not `unrestricted double`, so
+NaN/Infinity must throw the spec's own TypeError — converting first turns `NaN` into `NaN + scroll`,
+which matches nothing and returns `null` instead of throwing.
+
+⭐⭐ **THREE READERS OF ONE SNAPSHOT, AND THAT IS THE EVIDENCE THAT THE BOUNDARY MUST LIVE IN ONE
+PLACE.** `IntersectionObserver` builds its entries in the JS prelude as `y: r[1] - scrollY` and
+always has. So before t1284, an IO entry's `boundingClientRect` and the element's own
+`getBoundingClientRect()` **disagreed about the same box on any scrolled page** — one reader
+converting, one not, one (`elementFromPoint`) converting in the wrong direction by omission. None of
+them was written carelessly; the boundary had simply never been stated, so each call site decided for
+itself and two of the three decided differently. (⚠ IO still omits `scrollX` — named, not yet fixed.)
+
+**Held by `engine/page/tests/g_hit_point_coords.rs` (`G_HIT_POINT_COORDS`)**, a separate binary from
+`G_CLIENT_COORDS` on purpose: one holds the way *out*, the other the way *in*. Its `agree:` row
+asserts `elementsFromPoint(x,y)[0] === elementFromPoint(x,y)` and goes false from **either** side.
+
 ⚠ **`SCROLL` is a thread-local that nothing reset per document.** It is written by `set_view_state`
 and `view_changed`, both of which describe a page that already exists — so a document loaded on a
 thread that had previously scrolled inherited the old page's offset. A minor `window.scrollY` bug

@@ -824,6 +824,32 @@ fn to_client(x: f32, y: f32) -> (f32, f32) {
     (x - sx, y - sy)
 }
 
+/// The inverse of [`to_client`] — **client (viewport) coordinates → document coordinates**, for the
+/// APIs that take a point *in* rather than hand a rect *out*.
+///
+/// `document.elementFromPoint(x, y)` / `elementsFromPoint(x, y)` are defined by CSSOM View on
+/// **client** coordinates, and they compare their argument directly against [`LAYOUT_RECTS_PTR`],
+/// which holds **document** boxes. On a page scrolled to 300, `elementFromPoint(10, 10)` asks *"what
+/// is at the top-left of the screen?"* and was answered with *"what is at the top-left of the
+/// document."* The engine's own doc comment said so — *"scroll offset is assumed zero"* — an honest
+/// bound that stopped being necessary the moment `SCROLL` became reliable.
+///
+/// ⚠ **Same failure shape as [`to_client`]'s and, again, ZERO percent wrong until the page scrolls.**
+/// What it breaks on a scrolled page is every drag-and-drop library (a `dragover` handler resolves
+/// its drop target this way), tooltip/popover occlusion checks, canvas and overlay hit routing, and
+/// `caretRangeFromPoint`.
+///
+/// ⭐ **A THIRD READER OF THIS BOUNDARY WAS ALREADY CORRECT, WHICH IS EVIDENCE RATHER THAN TRIVIA.**
+/// `IntersectionObserver` builds its entries in the JS prelude as `y: r[1] - scrollY` and always has.
+/// So before tick 1284 an IO entry's `boundingClientRect` and the element's own
+/// `getBoundingClientRect()` **disagreed about the same box on any scrolled page**. Three readers of
+/// one snapshot, two wrong in opposite directions and one right — because the boundary had never been
+/// stated in one place, so every call site decided for itself. It is stated here now.
+fn from_client(x: f32, y: f32) -> (f32, f32) {
+    let (sx, sy) = SCROLL.with(|c| c.get());
+    (x + sx, y + sy)
+}
+
 fn layout_rect(node: NodeId) -> Option<[f32; 4]> {
     force_reflow_if_stale();
     LAYOUT_RECTS_PTR.with(|c| {
@@ -4658,8 +4684,9 @@ unsafe fn doc_query(cx: *mut RawJSContext, argc: u32, vp: *mut Value) -> bool {
 /// `document.elementFromPoint(x, y)` → the topmost ELEMENT whose border box contains the client point,
 /// or `null`. Bridges to the layout-rect snapshot: among laid-out element boxes containing the point, the
 /// deepest wins (smallest area, later document order on a tie) — children paint over their parents.
-/// Honest bounds: the rects are pre-transform, so a `transform`ed hit area is not yet accounted for, and
-/// scroll offset is assumed zero (client ≈ layout coords for an unscrolled page).
+/// Honest bound: the rects are pre-transform, so a `transform`ed hit area is not yet accounted for.
+/// ⚠ The *scroll* half of that bound is retired (tick 1285) rather than left standing — a limitation
+/// that has been fixed and is still documented becomes a lie in the next reader's hands (t1273).
 ///
 /// ⚠ A non-finite coordinate **throws**, and this comment used to say it *"returns `null`, per
 /// CSSOM-View"* — a citation for behaviour the spec does not describe. CSSOM-View types both
@@ -4689,6 +4716,9 @@ unsafe fn doc_element_from_point(cx: *mut RawJSContext, argc: u32, vp: *mut Valu
              non-finite.",
         );
     }
+    // CLIENT point in, DOCUMENT boxes to test it against — see `from_client`. AFTER the finite
+    // check, so a NaN argument still throws its own message rather than becoming `NaN + scroll`.
+    let (x, y) = from_client(x, y);
     let found = if true {
         LAYOUT_RECTS_PTR.with(|c| {
             let p = c.get();
@@ -4750,8 +4780,9 @@ unsafe fn doc_element_from_point(cx: *mut RawJSContext, argc: u32, vp: *mut Valu
 /// its own anchor, and a "click-through" affordance asks to forward an event to the layer beneath.
 /// With only the singular, every one of those gets the topmost element and no way to look past it.
 ///
-/// Same hit-test as [`doc_element_from_point`], same honest bounds (pre-transform rects, scroll
-/// assumed zero, `pointer-events: none` skipped) and the **same ordering rule**, applied to the whole
+/// Same hit-test as [`doc_element_from_point`], same honest bound (pre-transform rects,
+/// `pointer-events: none` skipped; the scroll assumption was retired at t1285) and the **same
+/// ordering rule**, applied to the whole
 /// stack rather than only its winner: smaller border-box area first (a child is inside its parent),
 /// and on equal area the later element in document order paints on top. Sharing the ordering matters
 /// more than sharing the filter — `elementsFromPoint(x,y)[0]` must equal `elementFromPoint(x,y)` for
@@ -4786,6 +4817,9 @@ unsafe fn doc_elements_from_point(cx: *mut RawJSContext, argc: u32, vp: *mut Val
              non-finite.",
         );
     }
+    // The singular and the plural MUST agree for every point (`elementsFromPoint(x,y)[0]` ==
+    // `elementFromPoint(x,y)`), so they convert identically and at the same place in the sequence.
+    let (x, y) = from_client(x, y);
     let mut hits: Vec<(NodeId, f32)> = LAYOUT_RECTS_PTR.with(|c| {
         let p = c.get();
         if p.is_null() {

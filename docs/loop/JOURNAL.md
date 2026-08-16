@@ -82760,3 +82760,95 @@ NEXT, ranked from what this tick measured.
 
 WIKI: docs/wiki/js-engine.md — the document-vs-client coordinate boundary, which call sites own it,
 and why a correct half plus a wrong half reads as a coherent answer.
+
+## Tick 1285 — the coordinate boundary, the other way round: `elementFromPoint` took a CLIENT point and hit-tested it against DOCUMENT boxes (2026-08-16)
+
+TICK SHAPE: capability. Board re-run at the top of this tick: **unchanged** (★ CSS-LAYOUT;
+`css/css-position` 799 / 46.1%). The lever is t1284's own NEXT (b) — measured, not guessed — and it
+is the **same mechanism read in the opposite direction**, which is why it is one tick and not two.
+
+HYPOTHESIS (written before the code), and the engine's own comment states it:
+
+```rust
+/// `document.elementFromPoint(x, y)` → the topmost ELEMENT whose border box contains the CLIENT point
+/// … scroll offset is assumed zero (client ≈ layout coords for an unscrolled page).
+```
+
+t1284 fixed the way OUT of the geometry snapshot — `getBoundingClientRect` had been answering in
+document coordinates where CSSOM View says viewport. **The way IN was wrong in the mirror image and
+had been honestly labelled as such**: `elementFromPoint(x, y)` and `elementsFromPoint(x, y)` are
+defined on *client* coordinates and compare their argument directly against `LAYOUT_RECTS_PTR`, which
+holds **document** boxes. On a page scrolled to 300, `elementFromPoint(10, 10)` asks "what is at the
+top-left of the screen?" and is answered with "what is at the top-left of the *document*".
+
+⚠ **Same failure shape as t1284 and, again, ZERO percent wrong until the page scrolls** — every test
+and every gate that hit-tests an unscrolled fixture passes. What it breaks on a scrolled page is
+drag-and-drop libraries (every `dragover` resolves its drop target this way), tooltip and popover
+placement, canvas/overlay hit routing, and `caretRangeFromPoint`.
+
+⭐ **A THIRD READER OF THE SAME BOUNDARY WAS ALREADY CORRECT, AND THAT IS EVIDENCE, NOT TRIVIA.**
+`IntersectionObserver` builds its entries in the JS prelude as `y: r[1] - scrollY` — it has been
+subtracting the scroll all along. So before t1284 an `IntersectionObserver` entry's
+`boundingClientRect` and the element's own `getBoundingClientRect()` **disagreed about the same box on
+any scrolled page**, and after t1284 they agree. Three readers of one snapshot, two of them wrong in
+opposite directions, one right: the boundary was never stated in one place, so each call site decided
+for itself.
+
+PLAN. `from_client(x, y)` beside `to_client`, applied in `doc_element_from_point` and
+`doc_elements_from_point` only. Delete the "assumed zero" bound from the doc comment rather than
+leave a stale honesty note — a limitation that is fixed and still documented becomes a lie in the
+next reader's hands (t1273).
+
+⚠ Also found and NOT fixed here, so it is not discovered a third time: the `IntersectionObserver`
+entry subtracts `scrollY` but **not `scrollX`** (`x: r[0]`, `left: r[0]`). Horizontally-scrolled
+documents are rare enough that it is a one-arm fix belonging with the document-scroll work, not
+smuggled into this one.
+
+WHAT LANDED. `from_client(x, y)` beside `to_client`, applied in `doc_element_from_point` and
+`doc_elements_from_point` — **after** each one's WebIDL finite check, so a `NaN` still throws its own
+message rather than becoming `NaN + scroll` and quietly matching nothing. The stale *"scroll offset
+is assumed zero"* bound is **deleted** from both doc comments rather than left standing: a limitation
+that has been fixed and is still documented becomes a lie in the next reader's hands (t1273).
+
+```text
+  WPT MOVEMENT: ZERO, and for the third tick running it is the same reason.
+    css/css-position   687/1482 (=)      css/cssom  2794/3492 (=, mark 2794)
+```
+
+⭐ **Three consecutive ticks have now landed on H0 exit-gate condition (4) with the WPT total flat,
+and the flatness has ONE cause: every testharness fixture measures at scroll 0, where the document
+and client coordinate spaces are identical.** A defect whose error is exactly proportional to a value
+the suite always leaves at zero is invisible to the suite **by construction** — not by oversight.
+Saying that plainly beats three journal entries apologising for a flat number.
+
+GATE: `engine/page/tests/g_hit_point_coords.rs` — G_HIT_POINT_COORDS, seven claims, deliberately a
+separate binary from `G_CLIENT_COORDS` because it holds the *opposite direction* of the same
+boundary. Proven RED two ways, each isolating one arm:
+
+```text
+  (A) drop from_client in the SINGULAR  ->  s10:a s400:b  agree:false   (300px up the document)
+  (B) drop from_client in the PLURAL    ->  plural:a      agree:false   (singular still right)
+```
+
+⭐ **`agree:false` fires in BOTH**, which is the `elementsFromPoint(x,y)[0] === elementFromPoint(x,y)`
+invariant doing exactly what its own doc comment promised — two call sites reading one boundary is
+precisely how they drift, and the gate catches the drift from either side.
+
+⚠ **CARRIED, NOT FIXED, so it is not discovered a third time:** the `IntersectionObserver` entry in
+the JS prelude subtracts `scrollY` but **not `scrollX`** (`x: r[0]`, `left: r[0]`). It belongs with
+the document-scroll work; horizontally-scrolled documents are rare enough that adding it here would
+be a second mutation in one arm.
+
+PERF: two additions per hit-test call, on a `Cell` read.
+
+NEXT, ranked from what this tick measured.
+(a) ⭐⭐ **`window.scrollTo` must bump `SCROLL_SEQ` and feed the sticky pass** (carried from t1283/t1284
+    — the machinery is in place). It is the remaining half of `css/css-position/sticky`'s
+    document-scroller family, and it is the first of these that WILL move the WPT number.
+(b) `IntersectionObserver`'s missing `scrollX` (above) — one arm, folds naturally into (a).
+(c) Transforms composed onto a stuck position — 6 failures in one file.
+(d) Carried: `writing-mode` is a SUBSYSTEM; `left`/`right` sticky stays refused; `g_hscroll_carousel`
+    is RED on `main` and outside the wall (t1282).
+
+WIKI: docs/wiki/js-engine.md — the coordinate boundary now stated in BOTH directions, and the
+three-readers-one-snapshot evidence that says why it has to live in one place.
