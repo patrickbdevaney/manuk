@@ -789,6 +789,32 @@ pub fn take_element_scrolls() -> Vec<(manuk_dom::NodeId, f32, f32)> {
     Vec::new()
 }
 
+/// The pending `element.scrollTop = n` assignments **without draining them** — the forced reflow
+/// lays out as if they had landed so the script reads back its own write; the host still commits
+/// them. See [`dom_bindings::peek_element_scrolls`].
+#[cfg(feature = "_sm")]
+pub fn peek_element_scrolls() -> Vec<(manuk_dom::NodeId, f32, f32)> {
+    dom_bindings::peek_element_scrolls()
+}
+
+#[cfg(not(feature = "_sm"))]
+pub fn peek_element_scrolls() -> Vec<(manuk_dom::NodeId, f32, f32)> {
+    Vec::new()
+}
+
+/// The **non-DOM staleness term** for the forced synchronous reflow: how many scroll assignments a
+/// script has made. `el.scrollTop = n` mutates no DOM, so without this a same-task
+/// `getBoundingClientRect` after a scroll answers from the pre-scroll layout.
+#[cfg(feature = "_sm")]
+pub fn scroll_seq() -> u64 {
+    dom_bindings::scroll_seq()
+}
+
+#[cfg(not(feature = "_sm"))]
+pub fn scroll_seq() -> u64 {
+    0
+}
+
 /// Scroll requests the page made (`scrollTo`, `scrollBy`, `scrollIntoView`) — the host performs
 /// them, because the host owns the viewport.
 #[cfg(feature = "_sm")]

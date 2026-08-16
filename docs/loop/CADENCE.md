@@ -11,12 +11,12 @@
 
 | | value | over |
 |---|---|---|
-| ticks landed | **976** | ticks 1–1281 |
-| median tick cycle | **30m** | 975 intervals |
-| median, last 10 | **62m** | 10 intervals |
+| ticks landed | **977** | ticks 1–1283 |
+| median tick cycle | **30m** | 976 intervals |
+| median, last 10 | **69m** | 10 intervals |
 | fastest / slowest | 5s / 5.4d | |
-| **ticks per hour** | **1.13** | 866.0h elapsed |
-| median verify wall | **63s** | 915 ticks |
+| **ticks per hour** | **1.13** | 867.4h elapsed |
+| median verify wall | **63s** | 916 ticks |
 | wall trend | 39s → 17m — getting slower ⚠️ | first 3 vs last 3 |
 
 The **cycle** is the real unit: implement → debug → verify wall → land. The wall is only part of
@@ -27,11 +27,11 @@ it, and a wall that grows taxes every future tick, so it is tracked separately f
 ### Near — the daily driver (doc / app / platform web)
 
 * **capabilities asserted** (`G_CAPABILITY`): 48 → **81**
-* **live gates**: 27 → **484**
+* **live gates**: 27 → **485**
 * **✅ rows in the capability ledger**: 144 → **642**
 * **Bar 0 — oracle hangs**: 0 of 265 sites
 
-**450 of 976 ticks** (46%) moved a
+**451 of 977 ticks** (46%) moved a
 user-visible capability. The rest were instruments, infrastructure and corrections — and the
 ledger says the corrections were not overhead: three of its top three priorities were phantoms,
 and finding that out redirected everything after it.
@@ -90,7 +90,7 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 
 ## What a capability costs
 
-* **450** capability ticks, median cycle **30m**
+* **451** capability ticks, median cycle **30m**
 * median diff per tick: **+274 / −34** lines across 8 files
 
 ## Every tick
@@ -1073,5 +1073,6 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 | **1279** | 2026-08-16 04:41 | 59m | capability | 17m | +284/−46 | 484 | 81 | 56.0% · | `stretch` on an abspos box measures the AVAILABLE SPACE, not the containing block (2026-08 |
 | **1280** | 2026-08-16 05:59 | 78m | capability | 17m | +376/−63 | 484 | 81 | 56.0% · | the INLINE arm EXISTED and was half-true: "fill the containing block" (2026-08-16) |
 | **1281** | 2026-08-16 07:05 | 66m | capability | 17m | +582/−97 | 484 | 81 | 56.0% · | `position: sticky` implemented ONE of its four edges (2026-08-16) |
+| **1283** | 2026-08-16 08:24 | 79m | capability | 17m | +897/−164 | 485 | 81 | 56.0% · | a scroll is not a DOM mutation, and the forced reflow only knew about DOM mutations (2026- |
 
 *`·` after a WPT figure means **carried forward**, not measured this tick.*

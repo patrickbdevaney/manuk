@@ -161,6 +161,21 @@ thread_local! {
     /// a billion, or every "am I at the bottom?" check on the web breaks.
     static PENDING_ELEM_SCROLLS: std::cell::RefCell<Vec<(NodeId, f32, f32)>> =
         const { std::cell::RefCell::new(Vec::new()) };
+    /// ⚠⚠⚠ **THE SECOND STALENESS TERM — A SCROLL IS NOT A DOM MUTATION.**
+    ///
+    /// The forced synchronous reflow that guards every geometry read (see [`force_reflow_if_stale`])
+    /// asked exactly one question: *has `Dom::mutation_seq` moved?* Assigning `scrollTop` moves no
+    /// mutation counter, so `scroller.scrollTop = 100; target.getBoundingClientRect()` — one script
+    /// task, no DOM change — was answered from the **pre-scroll** layout. That is the shape of every
+    /// virtualised list (`react-window`, `react-virtuoso`, any data grid), of every "scroll it into
+    /// place then measure" carousel, and of the whole `css/css-position/sticky` suite.
+    ///
+    /// The general defect: **a snapshot invalidated by one kind of change is blind to every other
+    /// kind.** Layout-affecting state that is not the DOM needs its own term in the guard.
+    ///
+    /// Monotonic and never reset: the host compares it against the value its published layout was
+    /// computed at, exactly as it does with `mutation_seq`.
+    static SCROLL_SEQ: std::cell::Cell<u64> = const { std::cell::Cell::new(0) };
     /// Per-container scroll-snap candidates, published by the host: `(xs, ys)` content-space snap
     /// offsets clamped to the scrollable range, one list per axis. Empty axis = that axis does not
     /// snap. A `scrollLeft`/`scrollTop` write lands on the nearest candidate at assignment time, so
@@ -745,6 +760,23 @@ pub fn set_iframe_docs(m: std::collections::HashMap<NodeId, (usize, NodeId)>) {
 /// The `element.scrollTop = n` assignments a script made this round, already clamped.
 pub fn take_element_scrolls() -> Vec<(NodeId, f32, f32)> {
     PENDING_ELEM_SCROLLS.with(|q| std::mem::take(&mut *q.borrow_mut()))
+}
+
+/// The same queue **without draining it** — for the forced reflow, which must lay out *as if* the
+/// pending scrolls had been applied so a same-task `getBoundingClientRect` reads the script's own
+/// write, while leaving them for [`take_element_scrolls`] to commit.
+///
+/// ⚠ **Draining here would be a silent bug of the worst shape:** `Page::drain_element_scrolls` would
+/// find an empty queue, `scroll_offsets` would never update, and the tree that actually gets
+/// **painted** would stay unscrolled — a page that measures correctly and renders wrongly.
+pub fn peek_element_scrolls() -> Vec<(NodeId, f32, f32)> {
+    PENDING_ELEM_SCROLLS.with(|q| q.borrow().clone())
+}
+
+/// How many scroll assignments have been made on this thread — the non-DOM staleness term, see
+/// [`SCROLL_SEQ`].
+pub fn scroll_seq() -> u64 {
+    SCROLL_SEQ.with(|c| c.get())
 }
 
 fn scroll_geom(node: NodeId) -> [f32; 6] {
@@ -6701,6 +6733,10 @@ unsafe fn el_set_scroll_axis(
         }
     });
     PENDING_ELEM_SCROLLS.with(|q| q.borrow_mut().push((node, left, top)));
+    // The second staleness term. Bumped even when the value did not change: the cost is one integer
+    // compare on the next geometry read, and deciding "nothing moved" here would need the geometry
+    // this write is about to invalidate.
+    SCROLL_SEQ.with(|c| c.set(c.get().wrapping_add(1)));
     *vp = UndefinedValue();
     true
 }

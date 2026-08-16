@@ -1725,6 +1725,24 @@ struct ReflowCtx {
     /// be hundreds of KB and this is armed on every re-entry into script.
     final_url: *const String,
     external_css: *const HashMap<String, String>,
+    /// ⚠⚠⚠ **THE SECOND STALENESS TERM, AND THE TREE INPUTS IT NEEDS.**
+    ///
+    /// `manuk_js::scroll_seq()` as of the published layout. Without it a script's
+    /// `scroller.scrollTop = 100; el.getBoundingClientRect()` is answered from the **pre-scroll**
+    /// layout, because a scroll assignment bumps no `Dom::mutation_seq` — the shape of every
+    /// virtualised list on the web.
+    scrolled_at: u64,
+    /// The committed per-container scroll offsets. **A reflow that rebuilds the tree from
+    /// `restyle_and_layout` gets an UNSCROLLED one**, because layout starts at zero every time and
+    /// only `Page` knows what has been scrolled — so a forced reflow used to answer a mid-script
+    /// geometry read with the geometry of a page nobody had scrolled. A pointer on the same contract
+    /// as `fonts`: valid for the script round `ReflowScope` owns.
+    scroll_offsets: *const std::collections::HashMap<NodeId, (f32, f32)>,
+    /// The document scroll the sticky shifts must be resolved against, and whether the page has any
+    /// sticky box at all. The reflow runs the SAME scrollport-aware pass `Page::restick` runs, so the
+    /// tree a geometry read answers from and the tree that gets painted cannot disagree.
+    sticky_scroll_y: f32,
+    has_sticky: bool,
 }
 
 /// **Every stylesheet the document has, inline and external, in cascade order.**
@@ -1779,8 +1797,11 @@ fn publish_grid_tracks() {
 unsafe fn forced_reflow(ctx: *mut std::ffi::c_void, dom: *mut Dom) {
     let c = unsafe { &mut *(ctx as *mut ReflowCtx) };
     let dom = unsafe { &*dom };
-    // Idempotent: a run of reads with no mutation between them lays out once, not once each.
-    if dom.mutation_seq() == c.laid_out_at {
+    // Idempotent: a run of reads with no mutation AND no scroll between them lays out once, not once
+    // each. ⚠ The scroll term is not decoration — `el.scrollTop = n` moves no mutation counter, so
+    // with the DOM term alone a same-task measurement after a scroll read the pre-scroll layout.
+    let scroll_seq = manuk_js::scroll_seq();
+    if dom.mutation_seq() == c.laid_out_at && scroll_seq == c.scrolled_at {
         return;
     }
     let fonts = unsafe { &*c.fonts };
@@ -1796,8 +1817,45 @@ unsafe fn forced_reflow(ctx: *mut std::ffi::c_void, dom: *mut Dom) {
     let us_sheets = t_sheets.elapsed().as_micros() as u64;
 
     let t_layout = std::time::Instant::now();
-    let root_box;
+    let mut root_box;
     (c.styles, root_box) = restyle_and_layout(dom, &sheets, fonts, c.viewport_width, &c.images);
+
+    // ⚠⚠⚠ **LAYOUT STARTS AT ZERO EVERY TIME, SO THIS TREE IS UNSCROLLED AND UNSTUCK.** Only `Page`
+    // knows what has been scrolled, so a forced reflow used to answer a mid-script geometry read
+    // with the geometry of a page nobody had scrolled — a confident wrong answer of the right type,
+    // which is worse than not answering (t733).
+    //
+    // The **pending** writes are merged over the committed ones and win: a script that just assigned
+    // `scrollTop` and then measures must read back *its own write*, and the queue is peeked rather
+    // than drained because `Page::drain_element_scrolls` still has to commit it or the painted tree
+    // stays unscrolled.
+    let mut offsets: std::collections::HashMap<NodeId, (f32, f32)> =
+        unsafe { (*c.scroll_offsets).clone() };
+    for (node, left, top) in manuk_js::peek_element_scrolls() {
+        offsets.insert(node, (left, top));
+    }
+    for (node, (sx, sy)) in &offsets {
+        if let Some(b) = root_box.find_mut(*node) {
+            if let manuk_layout::BoxContent::Block(kids) = &mut b.content {
+                for k in kids.iter_mut() {
+                    k.translate(-sx, -sy);
+                }
+            }
+        }
+    }
+    // The SAME scrollport-aware sticky pass `Page::restick` runs, so the tree a geometry read
+    // answers from and the tree that gets painted cannot disagree about where a stuck box is.
+    if c.has_sticky {
+        let (_, vh) = manuk_css::values::viewport_size();
+        let mut applied = std::collections::HashMap::new();
+        apply_sticky(
+            &mut root_box,
+            &c.styles,
+            c.sticky_scroll_y,
+            vh,
+            &mut applied,
+        );
+    }
     let us_layout = t_layout.elapsed().as_micros() as u64;
 
     let t_rects = std::time::Instant::now();
@@ -1809,6 +1867,7 @@ unsafe fn forced_reflow(ctx: *mut std::ffi::c_void, dom: *mut Dom) {
     let us_rects = t_rects.elapsed().as_micros() as u64;
 
     c.laid_out_at = dom.mutation_seq();
+    c.scrolled_at = scroll_seq;
     // The box tree is dropped: the read wants rects, and the host's own post-script relayout still
     // produces the tree that gets painted. A forced reflow answers a question; it does not commit.
     let t_pub = std::time::Instant::now();
@@ -1859,11 +1918,18 @@ impl ReflowScope {
         images: &HashMap<NodeId, std::rc::Rc<manuk_paint::DecodedImage>>,
         final_url: &String,
         external_css: &HashMap<String, String>,
+        scroll_offsets: &std::collections::HashMap<NodeId, (f32, f32)>,
+        sticky_scroll_y: f32,
+        has_sticky: bool,
     ) -> ReflowScope {
         let mut ctx = Box::new(ReflowCtx {
             fonts: fonts as *const FontContext,
             viewport_width,
             laid_out_at: dom.mutation_seq(),
+            scrolled_at: manuk_js::scroll_seq(),
+            scroll_offsets: scroll_offsets as *const std::collections::HashMap<NodeId, (f32, f32)>,
+            sticky_scroll_y,
+            has_sticky,
             rects: HashMap::new(),
             styles: HashMap::new(),
             // Cheap: an `Rc` clone per decoded image, no pixels copied. Without it the reflow a JS
@@ -3294,6 +3360,9 @@ impl Page {
             &self.images,
             &self.final_url,
             &self.external_css,
+            &self.scroll_offsets,
+            self.sticky_scroll_y,
+            self.has_sticky,
         );
         let ran = match manuk_js::run_deferred_scripts(ctx, &mut self.dom, &rects, &self.styles) {
             Ok(n) => n,
@@ -4624,6 +4693,9 @@ impl Page {
             &self.images,
             &self.final_url,
             &self.external_css,
+            &self.scroll_offsets,
+            self.sticky_scroll_y,
+            self.has_sticky,
         );
         let proceed = match manuk_js::dispatch_event(
             ctx,
@@ -4683,6 +4755,9 @@ impl Page {
                 &self.images,
                 &self.final_url,
                 &self.external_css,
+                &self.scroll_offsets,
+                self.sticky_scroll_y,
+                self.has_sticky,
             );
             for ty in ["input", "change"] {
                 if let Err(e) =
@@ -4735,6 +4810,9 @@ impl Page {
                 &self.images,
                 &self.final_url,
                 &self.external_css,
+                &self.scroll_offsets,
+                self.sticky_scroll_y,
+                self.has_sticky,
             );
             let proceed = match manuk_js::dispatch_drop(
                 ctx,
@@ -4794,6 +4872,9 @@ impl Page {
                 &self.images,
                 &self.final_url,
                 &self.external_css,
+                &self.scroll_offsets,
+                self.sticky_scroll_y,
+                self.has_sticky,
             );
             let proceed = match manuk_js::dispatch_drag(
                 ctx,
@@ -4868,6 +4949,9 @@ impl Page {
                 &self.images,
                 &self.final_url,
                 &self.external_css,
+                &self.scroll_offsets,
+                self.sticky_scroll_y,
+                self.has_sticky,
             );
             let proceed = match manuk_js::dispatch_mouse(
                 ctx,
@@ -4931,6 +5015,9 @@ impl Page {
                 &self.images,
                 &self.final_url,
                 &self.external_css,
+                &self.scroll_offsets,
+                self.sticky_scroll_y,
+                self.has_sticky,
             );
             let proceed = match manuk_js::dispatch_mouse(
                 ctx,
@@ -5024,6 +5111,9 @@ impl Page {
                     &self.images,
                     &self.final_url,
                     &self.external_css,
+                    &self.scroll_offsets,
+                    self.sticky_scroll_y,
+                    self.has_sticky,
                 );
                 for ty in ["input", "change"] {
                     if let Err(e) =
@@ -5105,6 +5195,9 @@ impl Page {
                 &self.images,
                 &self.final_url,
                 &self.external_css,
+                &self.scroll_offsets,
+                self.sticky_scroll_y,
+                self.has_sticky,
             );
             for ty in ["input", "change"] {
                 if let Err(e) =
@@ -5153,6 +5246,9 @@ impl Page {
                 &self.images,
                 &self.final_url,
                 &self.external_css,
+                &self.scroll_offsets,
+                self.sticky_scroll_y,
+                self.has_sticky,
             );
             if let Err(e) =
                 manuk_js::dispatch_event(ctx, &mut self.dom, node, "input", &rects, &self.styles)
@@ -5329,6 +5425,9 @@ impl Page {
                 &self.images,
                 &self.final_url,
                 &self.external_css,
+                &self.scroll_offsets,
+                self.sticky_scroll_y,
+                self.has_sticky,
             );
             for ty in events {
                 if let Err(e) =
@@ -5500,6 +5599,9 @@ impl Page {
             &self.images,
             &self.final_url,
             &self.external_css,
+            &self.scroll_offsets,
+            self.sticky_scroll_y,
+            self.has_sticky,
         );
         self.eval_for_test(src);
     }
@@ -5881,6 +5983,20 @@ impl Page {
             // reflow's sheet list is the same function everywhere.
             let no_external_url = final_url.to_string();
             let no_external_css: HashMap<String, String> = HashMap::new();
+            // ⚠ Nothing has been scrolled yet — `from_dom` is building the page — so an empty
+            // offset map is the TRUTH here, not a placeholder. `has_sticky` is likewise not yet
+            // computed (it is derived below, from these same styles); the pre-`Page` scripts run
+            // against scroll 0, where the constructor's own `restick(0.0)` has not happened either,
+            // so both halves agree that this tree is the unshifted one.
+            let no_scroll: std::collections::HashMap<NodeId, (f32, f32)> =
+                std::collections::HashMap::new();
+            // ⚠ `has_sticky` IS derived here, from these same styles, rather than passed as `false`.
+            // It is computed again below for the `Page` — but a blocking script that scrolls a pane
+            // and measures a sticky header inside it runs HERE, before the `Page` exists, and a
+            // hardcoded `false` made that read answer with the header carried down by the scroll.
+            let sticky_here = styles
+                .values()
+                .any(|s| s.position == manuk_css::Position::Sticky);
             let _reflow = ReflowScope::install(
                 &dom,
                 fonts,
@@ -5888,6 +6004,9 @@ impl Page {
                 &inline_images,
                 &no_external_url,
                 &no_external_css,
+                &no_scroll,
+                0.0,
+                sticky_here,
             );
             // **The inline images decoded above are publishable RIGHT NOW, before the first script.**
             // `Page` does not exist yet at this point — it is constructed below — so the ordinary
@@ -6058,6 +6177,9 @@ impl Page {
                 &self.images,
                 &self.final_url,
                 &self.external_css,
+                &self.scroll_offsets,
+                self.sticky_scroll_y,
+                self.has_sticky,
             );
             // (type, buttons-held-during-this-event)
             for (ty, buttons) in [("mousedown", 1u32), ("mouseup", 0u32)] {
@@ -6113,6 +6235,9 @@ impl Page {
             &self.images,
             &self.final_url,
             &self.external_css,
+            &self.scroll_offsets,
+            self.sticky_scroll_y,
+            self.has_sticky,
         );
         // ── A <label> forwards its click to the control it labels. ─────────────────────────
         // This is how most checkboxes on the web are actually clicked: the visible target is the
@@ -6718,6 +6843,9 @@ impl Page {
             &self.images,
             &self.final_url,
             &self.external_css,
+            &self.scroll_offsets,
+            self.sticky_scroll_y,
+            self.has_sticky,
         );
         if let Err(e) =
             manuk_js::deliver_ws_event(ctx, &mut self.dom, id, event, &rects, &self.styles)
@@ -6767,6 +6895,9 @@ impl Page {
             &self.images,
             &self.final_url,
             &self.external_css,
+            &self.scroll_offsets,
+            self.sticky_scroll_y,
+            self.has_sticky,
         );
         if let Err(e) =
             manuk_js::deliver_fetch_stream(ctx, &mut self.dom, id, event, &rects, &self.styles)
@@ -6931,6 +7062,9 @@ impl Page {
             &self.images,
             &self.final_url,
             &self.external_css,
+            &self.scroll_offsets,
+            self.sticky_scroll_y,
+            self.has_sticky,
         );
         if let Err(e) =
             manuk_js::fire_popstate(ctx, &mut self.dom, state_json, url, &rects, &self.styles)
@@ -7412,6 +7546,9 @@ impl Page {
             &self.images,
             &self.final_url,
             &self.external_css,
+            &self.scroll_offsets,
+            self.sticky_scroll_y,
+            self.has_sticky,
         );
 
         // Leaving, then entering — see the note above on why the order is not cosmetic.

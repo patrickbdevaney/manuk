@@ -82493,3 +82493,167 @@ NEXT, ranked from what this tick measured.
 WIKI: docs/wiki/box-layout.md — the LEDGER pattern for baking a scroll-dependent paint effect into
 the layout tree, the nearest-scrollport rule, the two-masker fixture lesson, and the snapshot-blind-
 to-non-DOM-change mechanism.
+
+## Tick 1283 — a scroll is not a DOM mutation, and the forced reflow only knew about DOM mutations (2026-08-16)
+
+TICK SHAPE: capability. Board re-run at the top of this tick: **unchanged** (★ CSS-LAYOUT; the
+PHASE MANDATE and the whole area table are byte-identical to t1282's reading). The lever is t1282's
+own ⭐⭐⭐ NEXT (a) — measured last tick, not guessed.
+
+CADENCE. `./scripts/self-audit.sh` ran (due at 1283; the hook blocks past it) and returns **one**
+prescribed-but-not-executed item: `✗ verify wall: 1816s EXCEEDS the 300s target`. That is
+harness/observer territory per the scope rule, and it is a **trend, not a reading** — 997s at t1281,
+1590s at t1281's tail, 1816s now, with `/home` pinned at 92%. Recorded here and nothing under
+`scripts/` touched. `LAST_AUDIT_TICK` set to 1283.
+
+HYPOTHESIS (written before the code). t1282 put the sticky shift into the box tree and WPT moved by
+exactly zero. The reason it measured is one layer out and is not sticky-specific:
+
+```text
+  fn forced_reflow(...) {
+      if dom.mutation_seq() == c.laid_out_at { return; }      // <- the ONLY staleness term
+      ...
+      (c.styles, root_box) = restyle_and_layout(dom, &sheets, fonts, ...);   // <- a FREE function
+      c.rects = root_box.node_rects(dom)...
+  }
+```
+
+**`el.scrollTop = n` bumps no mutation counter**, so a synchronous
+`scroller.scrollTop = 100; target.getBoundingClientRect()` — the entire shape of
+`css/css-position/sticky`, and of every virtualised list on the web — returns the pre-scroll
+geometry. And `restyle_and_layout` is a free function that has never seen `Page::scroll_offsets`, so
+even when the hook *does* fire (because the script also mutated the DOM) it hands back an
+**unscrolled, unstuck** tree — which is strictly worse than not firing, because it is a confident
+wrong answer of the right type.
+
+⭐ **THE GENERAL FORM, which is why this is a mechanism and not a sticky patch: a snapshot
+invalidated by ONE kind of change is blind to every other kind.** Layout-affecting state that is not
+the DOM — scroll offsets, sticky state, viewport size, media-query state — needs its own term in
+that guard or the read is stale in exactly the case the code was written for.
+
+PLAN. Three parts, one arm each:
+1. `manuk_js` gets a **scroll sequence number**, bumped by the `scrollTop`/`scrollLeft` setters, plus
+   a non-draining `pending_element_scrolls()` peek. Draining there would be a bug: `Page` owns
+   applying them and would find the queue empty, leaving the painted tree unscrolled.
+2. `ReflowCtx` carries `scrolled_at`, a pointer to `Page::scroll_offsets`, the document sticky
+   scroll, and `has_sticky`; `forced_reflow`'s guard gains the second term.
+3. After `restyle_and_layout`, the reflow applies **offsets ∪ pending** (pending wins — it is the
+   write the script just made and must read back) and then the same scrollport-aware sticky pass
+   `Page::restick` uses, so the forced-reflow tree and the committed tree cannot disagree.
+
+⚠ The reflow still does not COMMIT — it answers a question and drops the tree (t1184's contract).
+The pending scrolls stay pending for `drain_element_scrolls`.
+
+WHAT LANDED. `SCROLL_SEQ` in `manuk_js`, bumped by the `scrollTop`/`scrollLeft` setters and exposed
+as `scroll_seq()`; `peek_element_scrolls()` (non-draining); a second term in `forced_reflow`'s
+staleness guard; and, after `restyle_and_layout`, the reflow applies `scroll_offsets ∪ pending` and
+then the same scrollport-aware sticky pass `Page::restick` runs.
+
+⚠ **`from_dom`'s pre-`Page` reflow scope had to derive `has_sticky` ITSELF, and passing `false`
+there was a real bug that the gate caught.** A blocking `<script>` runs *before* the `Page` exists,
+so the scope installed there cannot read `self.has_sticky` — and the first version passed `false`. The
+gate then reported `sticky:318` where it wanted `418`: the scroll applied (via the pending peek,
+which needs no `Page`) while the sticky counter-shift did not, so the header rode down with the
+content. **A load-time script is the most common script there is.**
+
+```text
+  WPT MOVEMENT, and every newly-passing title names this tick:
+    css/css-position          683/1482 -> 687/1482   (+4, mark 683)
+    css/css-position/sticky     15/78  ->   19/78    (19.2% -> 24.4%, HANG/CRASH 0)
+    css/css-overflow           450/963 ->  450/963   (=, no regression)
+
+    + sticky positioned element should be observable by getBoundingClientRect.
+    + sticky position offset should be contained by scrolling box
+    + initially the sticky box should be pushed to the top of the container
+    + sticky offset should not affect the position of other elements.
+```
+
++4 is small and it is the honest number: the remaining 59 need `window.scrollTo` on the **document**
+scroller to reach the tree (the host owns the viewport and treats it as a request), CSS transforms
+composed onto stuck positions, and `left`/`right` sticky. Each is a named mechanism, none is this one.
+
+GATE: `engine/page/tests/g_scroll_measure.rs` — G_SCROLL_MEASURE. Six claims, read through
+`getBoundingClientRect` from inside the page, with the baselines (`pane0:400`, `row0:430`) stated
+first so the post-scroll numbers cannot be luck. Proven RED three ways:
+
+```text
+  (1) drop `scroll_seq == c.scrolled_at`     ->  row1:430  (pre-scroll; no reflow fires)
+  (2) drop the offset-application loop        ->  row1:430  (reflow fires on an UNSCROLLED tree)
+  (3) drop the sticky pass in the reflow      ->  row1:330 correct, sticky:300  (isolates the arm)
+```
+
+⚠ **(1) and (2) produce the SAME reading, and saying so is worth more than claiming three
+distinctions.** When only the scroll changed, `restyle_and_layout`'s output *is* the published
+pre-scroll layout, so "no reflow" and "a reflow that forgot the scroll" are indistinguishable from
+outside. (3) is genuinely separable and that is why the sticky row is its own claim.
+
+PERF: the guard's fast path gains one integer compare per geometry read. When it does fire it also
+clones the scroll-offset map (one entry per scroll container) and the pending queue (usually empty).
+`g_hot_dom_no_compile` — the gate that prices `getBoundingClientRect` — still passes.
+
+NEXT, ranked from what this tick measured.
+(a) ⭐⭐ **`window.scrollTo` must reach the tree** — `host_scroll_to` is a *request* the host performs,
+    so `css/css-position/sticky`'s document-scroller family still reads the unscrolled position
+    ("Sticky elements work with the root (document) scroller: expected 750 but got 8"). The same
+    `scroll_seq`/reflow machinery now exists; it needs the document scroll routed through it.
+(b) **Transforms composed onto a stuck position** — 6 failures in one file
+    ("Translation transform can move sticky element past sticking point"), all of the shape
+    "transform applies to the SHIFTED box".
+(c) Carried: `writing-mode` is a SUBSYSTEM (t1281); `left`/`right` sticky stays refused (t1280).
+(d) `g_hscroll_carousel` is RED on `main` and outside the wall (t1282) — still open.
+
+WIKI: docs/wiki/js-engine.md — the staleness-guard mechanism (a snapshot invalidated by one kind of
+change is blind to every other kind), the peek-don't-drain rule, and the pre-`Page` reflow scope.
+
+### CADENCE ADDENDUM (t1283) — the SURFACE AUDIT was also due, and it blocked the landing
+
+`scripts/tick.sh`'s pre-flight refused the first re-run with `✗ SURFACE AUDIT OVERDUE (last: 1273,
+now 1283)`. Audit #70 is written up in `docs/loop/SURFACE-AUDIT.md`; the web leg was run (Interop
+2026's authoritative 20+4 list, Baseline 2026, Ladybird's 2026 newsletters, Chrome I/O 2026).
+
+⭐ **It added NOTHING to the constellation, for the second audit running — and that is a claim about
+the MAP, not the engine.** All 24 Interop-2026 names, plus Trusted Types, `zstd`, Web Locks,
+HTML-in-Canvas and Digital Credentials, are already rows. Read as a burndown of the four vendors'
+own top-20 the statuses say **9 of 20 are `missing` here**, six of them on the explicit Phase-0
+death-tail cut line (declined, not forgotten); the three that are on **no** cut line are **container
+style queries · Trusted Types · `Content-Encoding: zstd`**.
+
+⚠ **The real finding is map rot: `CSS anchor positioning` is TWO rows with CONTRADICTORY verdicts** —
+line 99 `missing` (a tick-230 probe, ~1,050 ticks stale) and line 512 `unknown` (audit #44, whose own
+receipt claims *"no row before this"*, which was false when written). The `MEASURED` invariant counts
+it twice. Left as two rows **on purpose**: merging is a one-line edit that would erase how the
+duplicate arose, and the honest close is a re-probe that gives one row a measured verdict. Ranked in
+the audit, not silently done here.
+
+⚠ **FIRST WALL RUN WENT RED AND IT WAS THE DOCUMENTED CONTENTION FALSE-RED.** `G3 · affordance` and
+`G_INTERACT` both failed — one captured `manuk-shell` run feeds both messages, so it is ONE failing
+test reported twice. `verify.sh`'s own 3× quiet-retry loop did not clear it because the box was under
+the observer's test-binary reaper (five concurrent `find target/debug/deps …`, load1 8.5). Re-run
+serially on the same tree, twice, exactly as `verify.sh` invokes it
+(`cargo test -q -p manuk-shell -- --nocapture`): **75 passed, 0 failed, twice.** Nothing under
+`scripts/` touched; the tick was re-run rather than the gate distrusted.
+
+### CADENCE ADDENDUM 2 (t1283) — the CONSTITUTION CHECK was also due (check #119)
+
+Three cadence instruments came due on the same tick and the pre-flight surfaced them one at a time:
+self-audit (1272+10), surface audit (1273+10), constitution check (1275+8). All three ran.
+
+⭐⭐⭐ **Check #119's finding is the one worth carrying: `position: sticky` had been shipped for years
+in VIOLATION OF I3** — *"every renderer subsystem lands with its semantic-model exposure or it is not
+done."* The pixels were right and the semantic model could not see it, so H0's **fourth** exit-gate
+condition (*every rendered construct is queryable through the in-process semantic API*) was failing
+inside a subsystem everyone believed was finished. **A feature that is correct in the one channel a
+human checks is the hardest kind to notice is missing** — and the loop had been reading I3 as "did we
+build an a11y tree", which is a much weaker question than the one it actually asks.
+
+That reframes this pair of ticks honestly: **t1282 moved the WPT total by ZERO and t1283 by +4.** By
+the owner's per-tick metric (condition 1) these are two of the weakest ticks in a hundred. By
+condition 4 they are among the strongest. Both readings are true; the constitution ranks the two
+conditions equally, and the per-tick metric cannot see condition 4 at all.
+
+⚠ Check #119 also notes the instrument gap this implies: the oracle **cannot** catch a
+missing-from-the-semantic-model construct, because it probes Chrome with `getBoundingClientRect` and
+diffs our `node_rects` — a construct absent from both sides of our own reader is invisible to the
+diff. The steer adds that question to the surface audit's per-construct pass, and repeats (third
+time) **RUN THE CrUX FIDELITY SWEEP** — which now carries a falsifiable prediction from t1282 rather
+than being a chore.

@@ -6604,3 +6604,92 @@ and a decision on `html/canvas` (Bar-0 `HANG/CRASH 1` first). `WPT-AREAS.tsv` / 
 deliberately **left alone this tick**: adding 20,289 subtests to the denominator is an **APERTURE
 CHANGE, not progress**, and per t1270 a correction must never be banked as a climb. It should land as
 its own disclosed step so the total's jump is attributable.
+
+## Audit #70 — tick 1283 (2026-08-16)
+
+**Sources (web leg, run — not from memory):**
+
+- `https://github.com/web-platform-tests/interop/blob/main/2026/README.md` — the authoritative
+  Interop 2026 list: **20 focus areas** (container style queries · CSS anchor positioning · CSS
+  `attr()` · CSS `contrast-color()` · CSS zoom · custom highlights · dialogs and popovers · fetch
+  uploads and ranges · IndexedDB · JSPI for Wasm · media pseudo-classes · Navigation API · scoped
+  custom element registries · scroll-driven animations · scroll snap · CSS `shape()` · view
+  transitions · web compat · WebRTC · WebTransport) and **4 investigations** (accessibility testing ·
+  JPEG XL · mobile testing · WebVTT).
+- `https://webkit.org/blog/17818/announcing-interop-2026/`, `https://web.dev/blog/interop-2026`,
+  `https://hacks.mozilla.org/2026/02/launching-interop-2026/`, `https://www.igalia.com/news/interop-2026.html`
+- `https://web.dev/baseline/2026` + the monthly digests — 2026's newly-available set:
+  `:active-view-transition`, `shape()`, `contrast-color()`, **Trusted Types**, **`Content-Encoding:
+  zstd`**.
+- `https://ladybird.org/newsletter/2026-07-31/` (and the Jan/Apr/Jun 2026 issues) — the independent
+  engine walking this same road: **2,079,020 passing WPT subtests** and **97.8% of test262**
+  (52,045/53,207); crossed 90% of all WPT subtests in Oct 2025. 2026 additions: Web Locks, downloads
+  with an `about:downloads` page, private browsing, profiles, geolocation, working WebAudio.
+- `https://developer.chrome.com/blog/chrome-at-io26` — HTML-in-Canvas, Declarative Partial Updates,
+  Digital Credentials, passkey "immediate UI".
+
+### What was ADDED: NOTHING — and that is the finding, not the absence of one
+
+**All 24 Interop-2026 names are already rows in `docs/loop/CONSTELLATION.tsv`, each with a status.**
+So are Trusted Types, `zstd`, Web Locks, HTML-in-Canvas, Declarative Partial Updates, Digital
+Credentials and WebGPU. Audit #69's web leg found the same thing one axis over, and this is now the
+**second consecutive audit where the internet named nothing our own disk did not already know.**
+
+⚠ **That is a claim about the MAP, not about the ENGINE**, and the distinction is the whole point of
+this instrument. The map covering the world is exactly what makes the *statuses* load-bearing, and
+read as a burndown of the four vendors' own top-20 they say:
+
+```text
+  gated    Navigation API · scroll snap · View Transitions · WebVTT · contrast-color() · Web Locks · IndexedDB
+  partial  CSS attr() · CSS zoom · media pseudo-classes · fetch uploads+ranges · cross-document View Transitions
+  missing  container style queries · custom highlights · scroll-driven animations · scoped custom
+           element registries · JSPI · WebTransport · JPEG XL · Trusted Types · zstd
+  unknown  CSS anchor positioning · ::scroll-marker/::scroll-button (CSS carousels)
+```
+
+**Nine of the four vendors' twenty are `missing` here.** Six of those nine (`scroll-driven
+animations`, `scoped custom element registries`, `custom highlights`, `JSPI`, `JPEG XL`,
+`WebTransport`) sit on the *explicit* Phase-0 death-tail cut line in `STATUS.md` — a refusal this
+audit does not reopen. The three that are **not** on any cut line, and are therefore genuinely
+unranked work rather than declined work, are **container style queries**, **Trusted Types** and
+**`Content-Encoding: zstd`**.
+
+### What we had been WRONG about: a DUPLICATE row with two CONTRADICTORY verdicts
+
+```text
+  line  99  doc  CSS anchor positioning                                   missing   tick 230 probe
+  line 512  css  CSS anchor positioning (position-area / anchor-name …)   unknown   audit #44 t1039
+```
+
+**One capability, two rows, two different answers, 413 lines apart** — and audit #44's own receipt
+says *"no row before this"*, which was false when it was written. The `MEASURED` invariant counts
+capabilities that have a verdict, so this capability is counted **twice** and pulls the denominator
+in two directions at once. `missing` (t230) is also five hundred ticks stale and was never re-probed,
+which is the exact shape audit #69 named: **a status without an expiry outlives its evidence.**
+
+⚠ It is left as TWO rows here **deliberately and with the reason recorded**: merging them is a
+one-line edit that would erase the evidence of how the duplicate arose, and the honest close is a
+*re-probe* that gives one row a measured verdict and deletes the other. That is a tick, not an audit
+footnote — ranked below, not silently done.
+
+### Is the frame still right?
+
+**Yes, and this audit strengthens the current one rather than bending it.** The engine's binding
+constraint is unchanged — M1 render on the in-scope CrUX corpus — and nothing the four vendors named
+this year outranks it. The comparison that *does* land is Ladybird's: **2.08M passing WPT subtests
+against our 469,193**, on a project of comparable independence. Ours is a floor over 21 named areas
+(plus the 5 that audit #69 found unmeasured), not a whole-checkout number, so the two are **not
+comparable as printed** — and saying that is more useful than either flattering or alarming
+ourselves with a 4× ratio that is mostly aperture.
+
+### RANKED, from this audit only
+
+1. **Re-probe `CSS anchor positioning` and collapse the duplicate to ONE row with a measured
+   verdict.** It is Interop-2026 top-20, it is `1.8%` of the corpus by audit #44's own note, and our
+   map currently answers two different things about it.
+2. **Container style queries** — Interop-2026, `missing`, and NOT on the death-tail cut line.
+3. **Trusted Types** and **`Content-Encoding: zstd`** — 2026 Baseline, `missing`, not on any cut
+   line. `zstd` is a `manuk-net` content-encoding row, i.e. genuinely small.
+4. Standing, from audit #69 and still open: the five WPT trees with no `RATCHET.tsv` row
+   (`html/semantics` 7,070 failing is the #2 mass in the project). **Observer-owned** —
+   `scripts/wpt-sweep.sh` is not agent territory — and repeated here rather than dropped.

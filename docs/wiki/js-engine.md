@@ -1121,6 +1121,50 @@ geometry, which is the blank-virtualized-list bug exactly.
 live `PageContext` parked on its thread; a second test fn loading a page on another thread faults two
 SpiderMonkey runtimes against each other. Sequential `Page::load`s inside ONE fn are fine.
 
+### ⚠⚠⚠ A staleness guard keyed on ONE kind of change is blind to every other kind (tick 1283)
+
+`forced_reflow`'s test was `dom.mutation_seq() == laid_out_at` **and nothing else** for as long as it
+existed. `el.scrollTop = n` mutates no DOM, so:
+
+```js
+  scroller.scrollTop = 100;                 // bumps no mutation counter
+  row.getBoundingClientRect().top;          // ...answered from the PRE-SCROLL layout
+```
+
+That is the shape of every virtualised list (scroll, then measure which rows are in view), of every
+"scroll it into place then measure" carousel, and of the whole `css/css-position/sticky` suite. The
+guard now carries a second term, `manuk_js::scroll_seq()`, bumped in the `scrollTop`/`scrollLeft`
+setters. **The reusable rule: any layout-affecting state that is not the DOM — scroll offsets, sticky
+state, viewport size, media-query state — needs its own term, or the read is stale in precisely the
+case the code was written for.**
+
+**The second half is worse than the first, and it is the part a guard fix alone leaves broken.**
+`forced_reflow` rebuilds through `restyle_and_layout`, a **free function** that has never seen
+`Page::scroll_offsets` — layout starts at zero every time. So a reflow that *did* fire handed back an
+**unscrolled, unstuck** tree: a confident wrong answer of the right type, which is worse than no
+answer. The reflow now re-applies the committed offsets and the scrollport-aware sticky pass before
+extracting rects, so the tree a geometry read answers from and the tree that gets painted cannot
+disagree.
+
+⚠ **PEEK the pending scroll queue; do not DRAIN it.** A script that just wrote `scrollTop` must read
+back its own write, so the reflow lays out as if the pending writes had landed — but `Page` still
+owns *committing* them. Draining in the reflow leaves `drain_element_scrolls` with an empty queue and
+`scroll_offsets` never updated, i.e. **a page that measures correctly and renders wrongly**, which no
+geometry test would catch.
+
+⚠ **`from_dom` installs a reflow scope BEFORE the `Page` exists, and it must derive its own inputs.**
+Blocking `<script>`s run there, so that scope cannot read `self.has_sticky` — and passing `false`
+"because the Page isn't built yet" is a real bug, not a placeholder: the gate reported the scroll
+applied (the pending peek needs no `Page`) while the sticky counter-shift did not, so a sticky header
+rode down with the content it should have pinned above. A load-time script is the most common script
+there is.
+
+**Held by `engine/page/tests/g_scroll_measure.rs` (`G_SCROLL_MEASURE`).** ⚠ Two of its three
+mutations — dropping the guard term, and dropping the offset application — produce the **same**
+reading (`row1:430`), because when only the scroll changed `restyle_and_layout`'s output *is* the
+published pre-scroll layout. Saying so is worth more than claiming three distinctions; only the
+sticky arm is separable from outside.
+
 ---
 
 ## Web Workers — running a script in a scope that must NOT be the page's (tick 280)

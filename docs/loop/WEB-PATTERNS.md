@@ -7056,3 +7056,29 @@ the hardest kind to notice is missing.**
 gated instead by two falsifiable lib checks proven RED by mutation (`natural 0, got 0` when the
 re-bake is deleted; `pane 400, got 300` when the document scrollport is forced), the second of which
 only became falsifiable after **two independent maskers** were removed from its fixture.
+
+## Scroll, then measure — the virtualised list, and the read that answered from before the scroll (tick 1283)
+
+**Pattern:** `scroller.scrollTop = n; row.getBoundingClientRect()` inside one task. react-window,
+react-virtuoso and every data grid on the web do exactly this to decide which rows are now in view;
+so does every "scroll it into place, then measure" carousel, every `scrollIntoView` polyfill, and the
+whole `css/css-position/sticky` suite.
+
+**The class this unlocks:** a same-task geometry read after a scroll now lays out first and answers
+from the scrolled — and sticky-shifted — tree. `css/css-position/sticky` 15/78 → 19/78, and the four
+titles that flipped name the mechanism themselves, including *"sticky positioned element should be
+observable by `getBoundingClientRect`"*.
+
+**Why it hid:** the forced synchronous reflow that guards every geometry read existed, worked, and
+was gated by `Dom::mutation_seq()` — a genuinely correct term for the case it was written for
+(`measure -> mutate -> measure`). **A scroll assignment mutates no DOM**, so the guard was not wrong,
+it was *incomplete*, and an incomplete guard looks exactly like a working one from every test that
+happens to mutate.
+
+⚠ **Still not covered, named rather than implied:** `window.scrollTo` on the **document** scroller is
+a request the host performs, so the document-scroller family still reads the unscrolled position
+("expected 750 but got 8"), and CSS transforms are not composed onto a stuck position. Both are named
+mechanisms with the machinery now in place.
+
+**Measured:** `css/css-position` 683 → 687 (mark 683); `css/css-overflow` 450 → 450 (no regression);
+gated by `G_SCROLL_MEASURE`, proven RED three ways, two of which are honestly indistinguishable.

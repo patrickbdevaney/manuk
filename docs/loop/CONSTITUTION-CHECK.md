@@ -10058,3 +10058,91 @@ check #117's steer #1 was not executed and is repeated below rather than quietly
    outranks the per-area ranker — for the fifth time.**
 
 **Next check due: tick 1283.**
+
+## Check #119 — tick 1283 (2026-08-16)
+
+**Horizon: H0 — Pareto Web Parity.** Exit gate, all four binary, re-read from `CONSTITUTION.MD`
+PART II rather than recalled: (1) ~83% WPT subtest pass across categories; (2) differential-oracle
+viability across all four usage-weighted corpora; (3) the headful shell is daily-drivable by its own
+developer; (4) **every rendered construct is queryable through the in-process semantic API**.
+
+### Did the last 8 ticks move an EXIT-GATE condition, or only the scoreboard?
+
+**A gate condition — and for once it is condition (4), which this loop almost never touches.**
+
+t1276–1281 were scoreboard-and-mechanism ticks (`( feature )` vs `( feature: default )`, `stretch`
+in three arms, sticky's missing `bottom` edge): real, and all of them condition (1). t1282–1283 are
+different in kind, and it is worth naming why:
+
+> **I3 says "every renderer subsystem lands with its semantic-model exposure or it is not done."
+> `position: sticky` had been shipped for years WITHOUT it.** The shift was computed inside
+> `paint_scrolled`, on a throwaway clone — correct pixels, and `getBoundingClientRect`, `offsetTop`,
+> hit-testing, the a11y tree and the oracle's own SHAPE probe all read the *unstuck* box. That is a
+> rendered construct that was **not queryable through the in-process semantic API**: exit-gate
+> condition (4), failing, silently, in a subsystem everybody believed was done.
+
+⚠⚠⚠ **This is the sharpest I3 lesson the loop has produced, and it generalises past sticky: a
+feature that is CORRECT IN THE ONE CHANNEL A HUMAN CHECKS is the hardest kind to notice is missing.**
+Nobody looked at a screenshot and saw a bug, because there wasn't one on the screen. The gate that
+would have caught it is I3 read literally — *does the semantic model see this?* — and the loop had
+been reading I3 as "did we build an a11y tree", which is a much weaker question.
+
+t1283 then found the same shape one layer out and NOT sticky-specific: the forced-reflow staleness
+guard was keyed on `Dom::mutation_seq()` alone, so **any** layout-affecting change that is not a DOM
+mutation — a scroll, and by the same argument a viewport resize or a media-query flip — left the
+semantic API answering from a stale snapshot. Condition (4) again.
+
+### Is `orient`'s ranking still the north star?
+
+**Yes.** Both ticks were taken from `css/css-position` (a ★ CSS-LAYOUT row, 799 failing at 46.1%),
+chosen from a measured histogram, and the board was re-run at the top of each and was byte-identical.
+Nothing tail-shaped crept up: `encoding` is untouched at its banked mark, and the newly-worked
+mechanism (`getBoundingClientRect` after a scroll) is about as Pareto-central as a mechanism gets —
+it is what every virtualised list on the web does.
+
+⚠ **One honest deflation, recorded rather than smoothed:** t1282 moved the WPT total by **zero** and
+t1283 by **+4**. Judged only by condition (1) these are two of the weakest ticks in a hundred. Judged
+by condition (4) they are among the strongest. **Both readings are true, and the constitution ranks
+condition (4) equal to condition (1)** — which is exactly why this instrument exists, because the
+per-tick metric the owner set (the monotonic WPT total) cannot see condition (4) at all.
+
+### Is any invariant being bent?
+
+**No, and I3 was un-bent rather than merely upheld.** I2 held (nothing vendored or patched; the
+change is entirely our own `engine/page` + `engine/js`). I4 held — the two mechanisms are
+usage-weighted, and the tail items this window *declined* are recorded with reasons (`left`/`right`
+sticky refused as a half-true arm; `writing-mode` refused as a subsystem). I1 held: the change is in
+the shared core, so `shell` and `agent` get it identically — and the agent gets it *especially*,
+since the agent surface reads `node_rects` directly.
+
+### PART VI correction
+
+**What VI must now carry:** the reconciliation has repeatedly named the blocker as *M1 render on the
+in-scope CrUX corpus*, with the scorability instrument cap as the larger half. Unchanged. What is
+**new** is a second, structural class beside it, and it belongs in VI because it is a *reconciliation*
+failure rather than a coverage one:
+
+> **A subsystem can be COMPLETE in the renderer and ABSENT from the semantic model, and no instrument
+> the loop owns will report it.** WPT catches it only where a test happens to read the DOM back
+> (which is why sticky read 15/78 while looking perfect on screen); the oracle cannot catch it at all,
+> because the oracle probes Chrome through `getBoundingClientRect` and diffs *our* `node_rects` — so a
+> construct missing from both sides of our own reader is invisible to the diff. **The audit question
+> to add to VI.3: for each rendered construct, does the semantic model see it, and what proves that?**
+
+⚠ Standing and still unexecuted, repeated rather than dropped: check #118's steer #1 — **RUN THE CrUX
+FIDELITY SWEEP**, now unmeasured for ~40 ticks. It has been carried for three checks. t1282's change
+should *move* it (the oracle's SHAPE term reads `node_rects`, and stuck boxes now appear there where
+Chrome also reports them), which makes it a measurement with a prediction attached rather than a
+chore — the most useful shape a deferred measurement can take.
+
+### STEER
+
+1. **RUN THE CrUX FIDELITY SWEEP.** Third repetition. It now carries a falsifiable prediction from
+   t1282 (sticky sites' SHAPE should improve), which is the strongest reason yet to stop deferring it.
+2. **Add the I3 question to the surface audit's per-construct pass:** *is this construct queryable
+   through the semantic API, and which gate proves it?* Sticky answered "no" for years with nobody
+   asking.
+3. Continue on `css/css-position`'s measured next levers (document-scroller `window.scrollTo` into the
+   tree; transforms composed onto a stuck position) — both are condition (1) **and** condition (4).
+
+**Next check due: tick 1291.**
