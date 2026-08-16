@@ -10100,3 +10100,36 @@ Recorded in the gate's own module doc rather than left as an implied claim.
 Measured: `css/css-grid` 6922 → 7043 with the **denominator falling 123 back to its pre-session
 value** — which is what makes the number trustworthy after t1289 gained 132 on a denominator that
 rose 120. Across both ticks: 6790 → 7043, **+253**.
+
+## The #1 area's biggest failure cluster printed an EMPTY message (tick 1291)
+
+WPT's `check-layout-th.js` — which backs most of `css/css-grid`, `css/css-flexbox` and the whole
+`data-expected-width` family — passes the element's `outerHTML` as the assertion **description**. So
+testharness composes `assert_equals: <ten lines of markup> width expected 515 but got 610`, and the
+first line is the literal string `"assert_equals: "`. Every reader takes the first line.
+
+⭐ **That made 4,253 of `css/css-grid`'s 7,257 failing subtests — 59%, in the board's #1 area — one
+indistinguishable blob in every histogram this loop has ever taken**, while
+`width expected 515 but got 610` sat in the output the whole time. Printing the last non-empty line
+beside the first splits it into four named, ranked mechanisms:
+
+```text
+   2495  width expected N but got N        <- the largest single mechanism on the board
+   1010  height expected N but got N
+    522  offsetLeft expected N but got N
+    181  offsetTop expected N but got N
+```
+
+**And the split carries a DIRECTION, which the blob could not.** Width outnumbers height 2.5:1 and
+`offsetLeft` outnumbers `offsetTop` 3:1 — this is not "grid geometry is bad", it is a *width* problem
+with a height problem downstream of it, which is the width→dy laundering the render burndown already
+names (a track a few px too wide re-wraps its prose, changing the line count and every height below).
+
+⚠ **The general form, and it is meta-instrument #1 turned on our own printer:** *the failure MESSAGE
+is the whole product; without it the suite is a scoreboard, and a scoreboard does not fix anything.*
+That comment sits four lines above the code that dropped it. **When a histogram's top row has no
+message, the defect is in the reader before it is in the engine.**
+
+⚠ Priced honestly: three grid ticks in one session (t1289, t1290, and the dive t1288 stopped) ranked
+their levers off the *second* and *third* rows of this histogram. All were correct; none could have
+been known to be the biggest thing there.

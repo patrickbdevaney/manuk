@@ -982,3 +982,4 @@ tick	sha	epoch	iso	delta_s	shape	wall_s	files	added	deleted	gates	claims	wpt_pas
 1287	b8ba557a	1786896213	2026-08-16T12:03:33-04:00	1905	capability	997	5	174	34	489	81	3896	6960	0	642	0	`composite: add` was not implemented, so every additive keyframe REPLACED the value it was supposed to add to (2026-08-16)
 1288	3916b548	1786899996	2026-08-16T13:06:36-04:00	3783	instrument	997	11	466	68	490	81	3896	6960	0	642	0	the wall is GATE-LEAN and DISK-BOUND, and a grid dive was stopped by the test's own `<meta assert>` (2026-08-16)
 1289	8e06c2b0	1786902918	2026-08-16T13:55:18-04:00	2922	capability	997	9	329	35	491	81	3896	6960	0	642	0	the resolved value of `grid-template-columns` dropped every LINE NAME (2026-08-16)
+1290	f9bb8526	1786906216	2026-08-16T14:50:16-04:00	3298	capability	997	8	317	36	491	81	3896	6960	0	642	0	an EMPTY grid was short-circuited to a zero box before taffy ever ran (2026-08-16)

@@ -3517,6 +3517,45 @@ fn run_oracle_merge(args: &[String]) {
 /// So: the driver forks a child per batch; the child appends one JSON line per finished test and
 /// flushes. If the child stops making progress, the driver kills it, and **the test after the last
 /// flushed line is the one that hung** — named, recorded, and stepped over so the run continues.
+/// ⚠⚠⚠ **THE ACTIONABLE LINE OF A MULTI-LINE ASSERTION IS THE LAST ONE, AND EVERY READER TOOK THE
+/// FIRST.**
+///
+/// WPT's `check-layout-th.js` — which backs most of `css/css-grid`, `css/css-flexbox` and the whole
+/// `data-expected-width` family — passes the element's `outerHTML` as the assertion *description*, so
+/// testharness composes `assert_equals: <ten lines of markup> width expected 515 but got 610`. The
+/// first line is then the literal string `"assert_equals: "` and the payload is ten lines down.
+///
+/// ⭐ **That made 4,253 of `css/css-grid`'s 7,257 failing subtests — 59%, in the board's #1 area — one
+/// indistinguishable blob in every histogram this loop has ever taken**, while
+/// `width expected 515 but got 610` sat in the output the whole time. The comment four lines above
+/// the print site says *"the failure MESSAGE is the whole product … a scoreboard does not fix
+/// anything"*; this is that comment applied to the printer itself.
+///
+/// So: first line, then the LAST non-empty line when they differ. The tail is where testharness puts
+/// `expected … but got …` **by construction**, not by luck — it appends it after the description.
+///
+/// ⚠ The full message is not discarded anywhere; a fixture blob is occasionally the thing you need.
+/// This changes the ONE-LINE summary a reader and a histogram see, and nothing else.
+fn fail_line(m: &str) -> String {
+    // ⚠ Keep the first line's own trailing space if it had one — `"assert_equals: "` ends in one,
+    // and trimming it glues the two halves into `assert_equals:width expected …`.
+    let first = m.lines().next().unwrap_or("");
+    let last = m
+        .lines()
+        .rev()
+        .find(|l| !l.trim().is_empty())
+        .unwrap_or("")
+        .trim();
+    if last.is_empty() || last == first.trim() {
+        return first.trim_end().to_string();
+    }
+    if first.ends_with(' ') {
+        format!("{first}{last}")
+    } else {
+        format!("{first} {last}")
+    }
+}
+
 fn run_wpt_cmd(args: &[String], fonts: &FontContext) {
     // The suite's ruler (Ahem) is installed by `harness::run_one` — the call site the gate
     // exercises, so that deleting it turns a test RED rather than silently re-measuring 3,804
@@ -3583,7 +3622,7 @@ fn run_wpt_cmd(args: &[String], fonts: &FontContext) {
                             match st {
                                 manuk_wpt::harness::Sub::Pass => {}
                                 manuk_wpt::harness::Sub::Fail(m) => {
-                                    eprintln!("    FAIL {name}\n         {m}")
+                                    eprintln!("    FAIL {name}\n         {}", fail_line(m))
                                 }
                                 other => eprintln!("    {other:?} {name}"),
                             }

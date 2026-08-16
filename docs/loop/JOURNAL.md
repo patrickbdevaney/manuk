@@ -83409,3 +83409,115 @@ NEXT, ranked from what this tick measured.
 
 WIKI: docs/wiki/box-layout.md — an empty grid is sized by its template, the one-short-circuit-three-
 symptoms shape, and the honest limit of a control row that guards correctness but not narrowness.
+
+## Tick 1291 — 59% of the #1 board area's failures printed an EMPTY message (2026-08-16)
+
+TICK SHAPE: instrument. Board re-run at the top of this tick: **unchanged** (★ CSS-LAYOUT;
+`css/css-grid` is the #1 row). This is meta-instrument #1 applied to the area the board ranks first,
+and it is taken under the loop's own rule that *when a diagnosis costs more than one tick, the next
+tick is the instrument* (t1107-1118). `tests/wpt/` is agent territory; `scripts/` was not touched.
+
+CADENCE. The constitution re-read was due at 1291. Check #120 is written up in
+`docs/loop/CONSTITUTION-CHECK.md`; `LAST_CONSTITUTION_CHECK` → 1291.
+
+HYPOTHESIS (written before the code). A fresh `css/css-grid` histogram, taken after t1289/t1290:
+
+```text
+   4253  assert_equals:                                        <- 59% of 7,257 failing subtests
+   1721  assert_equals: expected "S" but got "S"
+    406  assert_in_array: gridTemplate*   (was 590 before t1289; -184 across two ticks)
+    240  assert_true: 'from' value should be supported          (unshipped-spec discount, refused)
+```
+
+**The top row is not a mechanism. It is 4,253 failures with no message at all** — and the message is
+not missing, it is *unreachable*. WPT's `check-layout-th.js` passes the element's `outerHTML` as the
+assertion description, so testharness composes:
+
+```text
+    FAIL .grid 9
+         assert_equals: 
+    <div class="grid directionRTL">
+      … 9 lines of fixture markup …
+    </div>
+    width expected 515 but got 610          <- THE ONLY ACTIONABLE LINE, and it is LAST
+```
+
+Every reader — the histogram, and a human scanning the output — takes the FIRST line, which is empty.
+⭐ **So the single largest failing mass in the board's #1 area has been an indistinguishable blob for
+as long as this runner has existed, and `width expected 515 but got 610` was sitting in the output
+the whole time.** That is exactly meta-instrument #1's premise, applied to our own printer: *"the
+failure MESSAGE is the whole product; without it the suite is a scoreboard, and a scoreboard does not
+fix anything"* — a comment that sits four lines above the code that drops it.
+
+⚠ **This also means the three grid ticks this session ranked their levers off a histogram whose top
+59% was invisible.** t1289 and t1290 were both correct and both came from the *second* and *third*
+rows. What is unknown — and becomes knowable this tick — is whether either was the biggest thing there.
+
+PLAN. In the `--show-failures` printer, when an assertion message spans multiple lines, print the
+first line AND the last non-empty one, joined. testharness always appends `expected … but got …`
+after the description, so the last line is the payload by construction. Indent the tail so a
+multi-line record still reads as one entry.
+
+⚠ **The full message is NOT discarded** — a fixture blob is occasionally the thing you need — so this
+is an addition to what is printed, not a replacement.
+
+WHAT LANDED. `fail_line(m)` in the `--show-failures` printer: first line, plus the last non-empty
+line when they differ. Ten lines, one call site, no engine change.
+
+⭐⭐⭐ **THE PRODUCT OF THIS TICK IS THE HISTOGRAM IT MAKES POSSIBLE. One blob of 4,253 became FOUR
+NAMED MECHANISMS, ranked:**
+
+```text
+   BEFORE                          AFTER
+   4253  assert_equals:            2495  assert_equals: width expected N but got N
+                                   1010  assert_equals: height expected N but got N
+                                    522  assert_equals: offsetLeft expected N but got N
+                                    181  assert_equals: offsetTop expected N but got N
+```
+
+**`width` alone is 2,495 subtests — the largest single mechanism in the board's #1 area**, and it was
+invisible. So was the fact that width outnumbers height 2.5:1, which is a *direction*: this is not
+"grid geometry is bad", it is a **width** problem that a height problem follows from (a wrong track
+width re-wraps content and cascades into height — the width→dy laundering the burndown named).
+
+⚠ **THREE GRID TICKS THIS SESSION RANKED THEIR LEVERS OFF A HISTOGRAM WHOSE TOP 59% WAS INVISIBLE.**
+t1289 and t1290 came from the *second* and *third* rows and were both correct — but neither was the
+biggest thing there, and nothing in the loop could have said so. That is the cost of an unreadable
+message, priced.
+
+```text
+  WPT MOVEMENT: none, and none is claimed — this tick changes what the runner PRINTS.
+    css/css-grid  7010/14254 = 49.2%   (7043 / 7035 / 7010 across three same-hour runs —
+                                        the known ±30 grid noise band, t1288)
+```
+
+GATE: none added, and that is a deliberate call rather than an omission. The change is in the
+runner's own output formatting; its falsification is the before/after above, run on the same tree
+minutes apart, and it is reproduced in one command:
+
+```text
+  $ manuk-wpt wpt css/css-grid/abspos --show-failures
+    BEFORE   FAIL .grid 9 / assert_equals:                    (then ten lines of fixture markup)
+    AFTER    FAIL .grid 9 / assert_equals: width expected 515 but got 610
+```
+
+⚠ A gate that asserted this would assert a string format, which is the kind of test that breaks on
+every message change and catches nothing — `falsify.sh`'s own category of theatre. **Said out loud
+rather than left as a silent gap**, per the wiki-trailer rule's logic.
+
+⚠ **The full message is not discarded anywhere.** This changes the one-line summary a reader and a
+histogram see; the fixture blob still follows it.
+
+NEXT, ranked — and for the first time this ranking is taken from a READABLE histogram of the #1 area.
+(a) ⭐⭐⭐ **`width expected N but got N` — 2,495 subtests, the largest single mechanism on the board.**
+    Next step is NOT a patch: it is a delta histogram (are they near-misses or gross?), per the
+    probe-before-patch rule that has now paid three times.
+(b) `height` 1,010 — likely downstream of (a) via the width→dy launder; ranked after it deliberately.
+(c) `offsetLeft` 522 / `offsetTop` 181 — placement, and the 3:1 asymmetry is itself a clue.
+(d) Carried: the ANIMATION CLOCK is the ranked #1 *engine* lever and a prerequisite for WAAPI
+    interpolation (check #120 steer 2); the CrUX fidelity sweep is now unmeasured ~50 ticks and
+    check #120 says escalate rather than repeat it a fourth time.
+
+WIKI: docs/wiki/js-engine.md — no; this is a harness/measurement mechanism, recorded in
+docs/wiki/box-layout.md beside the grid work it re-ranks, because that is where the next reader of
+those numbers will be.

@@ -493,6 +493,7 @@
   - L10020 · ⚠⚠⚠ …and the DOM still cannot see it MID-SCRIPT, which is a THIRD gap
   - L10036 · <line-names> are part of the resolved track list — and were dropped at the map boundary (tick 1289)
   - L10070 · An empty grid is sized by its TEMPLATE, and one short-circuit denied it three ways (tick 1290)
+  - L10104 · The #1 area's biggest failure cluster printed an EMPTY message (tick 1291)
 
 ## browser-capabilities.md
 `docs/wiki/browser-capabilities.md`
@@ -2222,4 +2223,4 @@
   - L231 · Both named mechanisms are subsystem work
 
 ---
-2129 sections across 22 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+2130 sections across 22 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.

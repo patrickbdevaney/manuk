@@ -10146,3 +10146,98 @@ chore — the most useful shape a deferred measurement can take.
    tree; transforms composed onto a stuck position) — both are condition (1) **and** condition (4).
 
 **Next check due: tick 1291.**
+
+## Check #120 — tick 1291 (2026-08-16)
+
+**Horizon: H0 — Pareto Web Parity.** Exit gate, all four binary and re-read rather than recalled:
+(1) ~83% WPT subtest pass across categories; (2) differential-oracle viability across all four
+usage-weighted corpora; (3) the headful shell is daily-drivable by its own developer; (4) **every
+rendered construct is queryable through the in-process semantic API**.
+
+### Did the last 8 ticks move an EXIT-GATE condition, or only the scoreboard?
+
+**Both, and this window is the first in a long time where that is straightforwardly true.** Check
+#119 had to argue that t1282–1283 were strong ticks *despite* a flat WPT total, because they moved
+condition (4) and the per-tick metric cannot see it. The window since then answers condition (1) too:
+
+```text
+   t1284  gBCR is CLIENT-relative              condition (4)   WPT   0
+   t1285  elementFromPoint takes a CLIENT point condition (4)  WPT   0
+   t1286  window.scrollTo reaches layout        (4) and (1)    WPT  +2
+   t1287  animation-composition: add            condition (1)  WPT +532  (five ★ areas)
+   t1288  wall audit #49 — instrument           neither        WPT   0
+   t1289  grid <line-names> in resolved value    (4) and (1)   WPT +132 / denom +120
+   t1290  an empty grid is sized by its template (1) and (4)   WPT +121 / denom −123
+```
+
+⭐ **The ordering is the point, and it was not planned.** The three condition-(4) ticks came first and
+bought nothing on the scoreboard; the condition-(1) ticks came after and are the largest gains this
+loop has banked in many sessions. t1284/t1285/t1286 are all one mechanism — *the document↔client
+coordinate boundary* — and t1287's +532 came from a histogram that only became readable once the
+geometry answers underneath it were trustworthy. **A metric that cannot see condition (4) will always
+rank the work that enables it last.** That is a property of the metric, not of the work, and it is
+worth carrying forward as an argument for the loop's own patience rather than as a complaint.
+
+### Is `orient`'s ranking still the north star?
+
+**Yes, and it was obeyed literally.** The board was re-run at the top of every one of these ticks and
+was byte-identical each time; every lever came from a ★ CSS-LAYOUT row (`css/css-position`,
+`css/css-grid`) or from a measured histogram of one. Nothing tail-shaped crept up: `encoding` is
+untouched at its banked mark.
+
+⚠ **Two anti-Pareto traps were declined BY MEASUREMENT this window, and both are recorded so they are
+not re-discovered as bargains.** `'from' value should be supported` looked like a 2,024-subtest lever
+(240 in `css-grid`, 1,784 in `css-values`) and is `CSS.supports` over `<flow-tolerance>` and
+`calc-size()` — **pre-shipping features**, i.e. the unshipped-spec discount (t1273's seventh aperture
+mode). And `IntersectionObserver`'s missing `scrollX` was implemented, measured **provably inert**,
+and reverted (t1286).
+
+### Is any invariant being bent?
+
+**No, and I2 was tested in earnest twice and held both times.** t1287's `animation-composition` is
+entirely borrowed Stylo API — `Procedure::Add`, `Procedure::Accumulate`, `AnimationComposition` as a
+real longhand — ladder option 1, no fork, no patch. t1289's line names likewise read Stylo's own
+`TrackList::line_names`. I1 held (all changes are in the shared core, so `shell` and `agent` get them
+identically). I4 held. **I3 is the invariant this window actively repaired** rather than merely not
+bending: three of the seven ticks exist because a rendered construct was invisible to the semantic
+model, which check #119 named as I3 read literally.
+
+⚠ **THE RATCHET was tested once and held**: t1290's `g_empty_grid_tracks` had a second mutation that
+stayed **green**, and the honest response — recording in the gate's own doc that its control rows
+guard correctness but not narrowness — was taken instead of claiming a distinction the gate does not
+make. Similarly t1286 reverted a working-looking one-token change because it could never be proven
+red. **A green that cannot go red measured nothing** was applied twice, against my own work.
+
+### PART VI correction
+
+VI now carries check #119's addition (*a subsystem can be complete in the renderer and absent from
+the semantic model*), and this window adds the **measurement half** of it:
+
+> **A histogram row is a suspect, and reading its subject is cheaper than any patch built on it.**
+> One `css/css-grid` row (584 `assert_in_array: gridTemplate*`) defeated **three** readings in
+> succession: *"we list implicit tracks and Chrome does not"* — killed by the test file's own
+> `<meta name=assert>`, which says the **exact opposite**; *"the used-value arm is not firing"* —
+> killed by a five-case probe in which it fired every time; and the truth turned out to be **two**
+> independent causes (t1289, t1290). Both fixes landed only because the probe was written **before**
+> the patch, and the first reading would have *removed correct behaviour* to satisfy a misread row.
+
+⚠ **THE OPEN BLOCKER IS UNCHANGED AND IS NOW OLDER: M1 on the in-scope CrUX corpus.** Check #118's
+steer #1 and check #119's steer #1 both said RUN THE CrUX FIDELITY SWEEP, and it has now been
+unmeasured for ~50 ticks. **This is the third consecutive check to repeat it**, which is the point at
+which repeating it again would become decoration rather than a steer.
+
+### STEER
+
+1. **RUN THE CrUX FIDELITY SWEEP — and if it is not run before check #121, escalate it to the owner
+   as a blocked item rather than repeat it a fourth time.** It carries a falsifiable prediction from
+   t1282/t1290 (sticky sites' SHAPE, and any page with a skeleton grid, should improve), which is the
+   strongest form a deferred measurement can take.
+2. **The ANIMATION CLOCK is now the ranked #1 engine lever, and it is a PREREQUISITE, not a
+   competitor.** `element.animate()` does not interpolate at all — it is the *Web Animations* leg of
+   all 194 `*-interpolation.html` files across twelve areas — and it cannot be built without a clock,
+   because synthesising a real animation today would freeze every page's `animate()` at progress 0.
+   That is a capability traded for another, which THE RATCHET refuses. **Clock first.**
+3. Keep the probe-before-patch discipline explicit in the next grid ticks; it is what made this
+   window's two grid fixes correct rather than plausible.
+
+**Next check due: tick 1299.**

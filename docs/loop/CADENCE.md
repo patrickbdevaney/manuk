@@ -11,12 +11,12 @@
 
 | | value | over |
 |---|---|---|
-| ticks landed | **983** | ticks 1–1289 |
-| median tick cycle | **30m** | 982 intervals |
-| median, last 10 | **59m** | 10 intervals |
+| ticks landed | **984** | ticks 1–1290 |
+| median tick cycle | **30m** | 983 intervals |
+| median, last 10 | **57m** | 10 intervals |
 | fastest / slowest | 5s / 5.4d | |
-| **ticks per hour** | **1.13** | 872.9h elapsed |
-| median verify wall | **63s** | 922 ticks |
+| **ticks per hour** | **1.12** | 873.8h elapsed |
+| median verify wall | **63s** | 923 ticks |
 | wall trend | 39s → 17m — getting slower ⚠️ | first 3 vs last 3 |
 
 The **cycle** is the real unit: implement → debug → verify wall → land. The wall is only part of
@@ -31,7 +31,7 @@ it, and a wall that grows taxes every future tick, so it is tracked separately f
 * **✅ rows in the capability ledger**: 144 → **642**
 * **Bar 0 — oracle hangs**: 0 of 265 sites
 
-**456 of 983 ticks** (46%) moved a
+**457 of 984 ticks** (46%) moved a
 user-visible capability. The rest were instruments, infrastructure and corrections — and the
 ledger says the corrections were not overhead: three of its top three priorities were phantoms,
 and finding that out redirected everything after it.
@@ -90,7 +90,7 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 
 ## What a capability costs
 
-* **456** capability ticks, median cycle **30m**
+* **457** capability ticks, median cycle **30m**
 * median diff per tick: **+276 / −34** lines across 8 files
 
 ## Every tick
@@ -1080,5 +1080,6 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 | **1287** | 2026-08-16 12:03 | 32m | capability | 17m | +174/−34 | 489 | 81 | 56.0% · | `composite: add` was not implemented, so every additive keyframe REPLACED the value it was |
 | **1288** | 2026-08-16 13:06 | 63m | instrument | 17m | +466/−68 | 490 | 81 | 56.0% · | the wall is GATE-LEAN and DISK-BOUND, and a grid dive was stopped by the test's own `<meta |
 | **1289** | 2026-08-16 13:55 | 49m | capability | 17m | +329/−35 | 491 | 81 | 56.0% · | the resolved value of `grid-template-columns` dropped every LINE NAME (2026-08-16) |
+| **1290** | 2026-08-16 14:50 | 55m | capability | 17m | +317/−36 | 491 | 81 | 56.0% · | an EMPTY grid was short-circuited to a zero box before taffy ever ran (2026-08-16) |
 
 *`·` after a WPT figure means **carried forward**, not measured this tick.*
