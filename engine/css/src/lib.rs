@@ -1531,6 +1531,24 @@ pub struct ComputedStyle {
     /// knows the container's size.
     pub grid_template_columns: Vec<TrackComponent>,
     pub grid_template_rows: Vec<TrackComponent>,
+    /// ⚠⚠⚠ **THE `<line-names>` OF THOSE TEMPLATES — one entry per grid LINE, i.e. tracks + 1.**
+    ///
+    /// `[a] repeat(4, [b] 200px [c]) [d]` names five lines, and the resolved value Chrome answers
+    /// with is `[a b] 200px [c b] 200px [c b] 200px [c b] 200px [c d]` — the names are part of the
+    /// serialization, not decoration. Until tick 1289 they were read by Stylo, carried through the
+    /// cascade, and then **dropped at the map boundary**: `template_to_tracks` never looked at
+    /// `TrackList::line_names`, so every track size came out right and every name vanished. A grid
+    /// library reading its own template back got a list it could not match to its named areas.
+    ///
+    /// An integer `repeat(N, …)` is expanded here in **lockstep** with the sizes in
+    /// [`Self::grid_template_columns`] — the two lists are consumed together by one interleave, and
+    /// a length that drifts from the size list produces a misaligned name group, which is a wrong
+    /// answer of the right type and strictly worse than the missing names it replaced.
+    ///
+    /// Empty (rather than a vector of empty vectors) when the template declares no names at all,
+    /// which is the overwhelmingly common case and costs nothing.
+    pub grid_template_columns_line_names: Vec<Vec<String>>,
+    pub grid_template_rows_line_names: Vec<Vec<String>>,
     /// `grid-auto-rows` / `grid-auto-columns` (container) — the sizes given to the **implicit**
     /// tracks the auto-placement algorithm creates when there are more items than the explicit
     /// template has room for. A plain `<track-size>+` list with no `repeat()`, because the grammar
@@ -1754,6 +1772,8 @@ impl ComputedStyle {
             vertical_align: VerticalAlign::Baseline,
             grid_template_columns: Vec::new(),
             grid_template_rows: Vec::new(),
+            grid_template_columns_line_names: Vec::new(),
+            grid_template_rows_line_names: Vec::new(),
             grid_auto_rows: Vec::new(),
             grid_auto_columns: Vec::new(),
             grid_auto_flow: GridAutoFlow::Row,

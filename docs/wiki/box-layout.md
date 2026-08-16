@@ -10032,3 +10032,37 @@ The general form, which is the reusable part: **a snapshot invalidated by one ki
 to every other kind.** Layout-affecting state that is not the DOM — scroll offsets, viewport size,
 sticky state, media-query state — needs its own sequence number in that guard, or the read is stale
 in exactly the cases the author wrote the code for.
+
+## `<line-names>` are part of the resolved track list — and were dropped at the map boundary (tick 1289)
+
+`getComputedStyle(el).gridTemplateColumns` on `[a] repeat(4, [b] 200px [c]) [d]` is
+`"[a b] 200px [c b] 200px [c b] 200px [c b] 200px [c d]"`. We answered `"200px 200px 200px 200px"`.
+**Every track size was already right** — named and unnamed templates lay out identically — because
+the names survived parsing and the cascade and were discarded where Stylo's `TrackList` was mapped
+into our `TrackComponent`, which has no room for them.
+
+**The repeat boundary is the whole difficulty.** A repetition's *closing* `<line-names>` and the next
+repetition's *opening* names are **one grid line**, which is why four `[b] … [c]` repetitions
+serialize as `[a b] … [c b] … [c b] … [c b] … [c d]` and not as eight separate groups. Stylo carries
+`line_names` on both `TrackList` and `TrackRepeat`, documented as *"For N values, there will be N+1
+`<line-names>`"*, so the merge is the caller's job.
+
+⚠⚠⚠ **TWO LISTS CONSUMED BY ONE INTERLEAVE MUST BE EXPANDED IN LOCKSTEP, and duplicating the
+expansion is the RIGHT call here.** `template_line_names` repeats `template_to_tracks`'s
+integer-repeat loop, its 1000-track Bar-0 clamp and its empty-tracks `continue` **deliberately**: a
+shared helper that returned two vectors of different lengths is precisely the defect the duplication
+prevents. Get the count right and the merge wrong and you get `[a b] 200px 200px [c b] …` — the right
+names attached to the wrong lines, a **wrong answer of the right type**, strictly worse than the
+missing names it replaced. That string is what the gate's mutation-2 run prints.
+
+⭐ **THE METHOD NOTE, because this row defeated two readings before the right one:** the 584-subtest
+`assert_in_array: gridTemplate*` cluster invited *"we list implicit tracks and Chrome does not"*
+(killed by the test's own `<meta name=assert>`, which says the exact opposite) and then *"the
+used-value arm is not firing"* (killed by a five-case probe in which it fired every time and produced
+the right pixels). **One histogram row, three candidate causes, two wrong** — and the only reason the
+right one surfaced is that the probe was written before the patch.
+
+Held by `engine/page/tests/g_grid_line_names.rs`, RED three ways. Measured: `css/css-grid`
+6790 → 6922, and the cluster it aimed at 590 → 540. ⚠ The numerator rose 132 while the denominator
+rose 120 — files now run further and create subtests that did not exist — so **the −50 on the
+targeted cluster is the claim, not the +132.**

@@ -83196,3 +83196,111 @@ WIKI: none — this tick changed no engine source. Its durable content is an AUD
 #49) and three measurements recorded in this journal entry; the one generalisable lesson — *read the
 test's own `<meta name=assert>` before believing a histogram* — already exists in the wiki as "an
 area is not a cause" and is strengthened here rather than restated as a new mechanism.
+
+## Tick 1289 — the resolved value of `grid-template-columns` dropped every LINE NAME (2026-08-16)
+
+TICK SHAPE: capability. Board re-run at the top of this tick: **unchanged** (★ CSS-LAYOUT;
+`css/css-grid` is the board's #1 row at 7,701 failing). The lever came out of t1288's ranked
+next-step (b) — *split the 584-subtest grid serialization row into its causes* — executed with a
+probe rather than a guess, which is the whole reason t1288 refused to patch it.
+
+HYPOTHESIS (written after the probe, because t1288's lesson was that the histogram lies here). A
+five-case probe against the live engine:
+
+```text
+   CSS                                         ours                     Chrome
+   [a] repeat(4, [b] 200px [c]) [d]     200px 200px 200px 200px   [a b] 200px [c b] … [c d]
+   repeat(4, 200px)                     200px 200px 200px 200px   200px 200px 200px 200px   ✓
+   [first] 90px [last]                  90px                      [first] 90px [last]
+   90px                                 90px                      90px                      ✓
+   [a] 1fr [b] 1fr [c]                  400px 400px               [a] 400px [b] 400px [c]
+```
+
+⭐ **EVERY TRACK SIZE IS ALREADY RIGHT, INCLUDING INSIDE A NAMED `repeat()`.** The named and unnamed
+forms lay out identically and serialize identically. The one and only difference is that **the line
+names are gone** — `template_to_tracks` maps Stylo's `TrackList` into our `TrackComponent` and never
+reads `list.line_names`, which Stylo documents as *"For N values, there will be N+1 `<line-names>`"*.
+So the names survive parsing, survive the cascade, and are discarded at the map boundary.
+
+⚠⚠⚠ **AND THE PROBE KILLED THE OBVIOUS READING FOR THE SECOND TIME.** t1288 stopped a fix built on
+*"we list implicit tracks and Chrome does not"* by reading the test's own `<meta name=assert>` (which
+says the exact opposite). This probe kills the follow-up reading too — *"the used-value arm is not
+firing"* — because in all five cases it **did** fire and produced the right pixels. The 584-subtest
+row now has one cause proven and the rest still unattributed, which is a smaller and much more honest
+claim than the one the histogram invited twice.
+
+**Size, counted rather than estimated:** of the 590 `assert_in_array: gridTemplate*` failures in
+`css/css-grid`, **88 have line names on the expected side** — those are the ones this reaches. The
+remainder are other causes and are NOT claimed.
+
+PLAN. Carry the names to where they are serialized, and nowhere else:
+1. `ComputedStyle` gains `grid_template_columns_line_names` / `..._rows_...` — `Vec<Vec<String>>`,
+   one entry per grid LINE (tracks + 1), with an integer `repeat(N, …)` expanded the same way
+   `template_to_tracks` already expands its sizes, so the two lists cannot fall out of step.
+2. `used_track_list_css` interleaves them: `[a b] 200px [c b] 200px … [c d]`, omitting empty groups.
+
+⚠ **The names must be expanded in LOCKSTEP with the sizes or the interleave is silently misaligned** —
+a wrong answer of the right type, which is worse than the missing names it replaces. That is the one
+failure mode this fix has, and it is what the gate's `repeat` row is written for.
+
+WHAT LANDED. `ComputedStyle::grid_template_{columns,rows}_line_names` (`Vec<Vec<String>>`, one entry
+per grid LINE), populated by a new `template_line_names` in `stylo_map` that walks the same
+`TrackList` as `template_to_tracks` and expands integer repeats identically; and a `weave` in
+`used_track_list_css` that interleaves `names[0] size[0] … names[n]`, omitting empty groups.
+
+```text
+  WPT MOVEMENT — and the honest reading, not the flattering one:
+    css/css-grid   6790/14309 (47.5%)  ->  6922/14429 (48.0%)     mark 6818
+    the TARGETED cluster: `assert_in_array: gridTemplate*`   590  ->  540   (-50)
+    failing-title groups: 57 gone, 16 new
+```
+
+⚠⚠⚠ **THE NUMERATOR ROSE 132 AND THE DENOMINATOR ROSE 120, SO +132 IS NOT 132 FLIPS.** Files that
+previously stopped early now run further and **create** subtests that did not exist before — the
+mirror of t1269's *"numerator and denominator moving together"* tell. The claim this tick will stand
+behind is the **−50 on the cluster it aimed at** and the 57 title-groups gone; the rest is a
+denominator correction, and all 16 newly-failing titles are `Compositing Web Animations: property
+<grid-template-columns>` — the **already-named WAAPI gap** (t1287/t1288), newly *visible* rather than
+newly broken. 6922 is above both the 6818 mark and the 6760–6791 noise band t1288 recorded.
+
+⚠ **46 `assert_in_array` rows now have brackets on OUR side too** — residual mechanisms (shorthand
+`grid-template` name merging, subgrid) that this fix reaches but does not finish. Named as residue,
+not implied to be covered.
+
+GATE: `engine/page/tests/g_grid_line_names.rs` — G_GRID_LINE_NAMES, five claims. Proven RED three
+ways, each isolating one arm:
+
+```text
+  (1) template_line_names -> empty     rep:<200px 200px 200px 200px>            (the pre-tick output)
+  (2) push instead of merge            rep:<[a b] 200px 200px [c b] 200px 200px [c b]>
+  (3) drop the weave's trailing group   rep:<… 200px>  ends:<[first] 90px>
+```
+
+⭐ **(2) IS THE ONE WORTH READING, because its output IS the failure mode the design comment warns
+about.** A repetition's closing names and the next one's opening names are ONE grid line; pushing
+instead of merging keeps the right *count* of names and attaches them to the wrong *lines*, and the
+result — `[a b] 200px 200px [c b] …` — is a plausible-looking string with the sizes and the names
+sliding past each other. **A wrong answer of the right type, strictly worse than the missing names it
+replaced**, and it is the only way this tick could have been a net negative.
+
+⚠ **THE PROBE KILLED THE HISTOGRAM'S READING FOR THE SECOND AND THIRD TIME.** t1288 stopped
+*"we list implicit tracks and Chrome does not"* by reading the test's `<meta name=assert>`. This tick
+then killed *"the used-value arm is not firing"*: in all five probe cases it **did** fire and produced
+the right pixels, named and unnamed templates laying out identically. One 584-subtest histogram row,
+three candidate causes, two of them wrong — and the only reason the right one was found is that the
+probe was written before the patch.
+
+PERF: two `Vec<Vec<String>>` per grid container's cascade, EMPTY on any template that names nothing
+(nearly all of them) — the serializer's whole weave is then one `is_empty` check.
+
+NEXT, ranked from what this tick measured.
+(a) ⭐⭐⭐ **The ANIMATION CLOCK, then `element.animate()`** — carried and now reinforced: all 16 of
+    this tick's newly-visible failures are the WAAPI leg. The clock is the prerequisite (t1288).
+(b) The residual 540 `assert_in_array` rows — 46 of them now bracketed on both sides, i.e. a
+    *name-merging* disagreement rather than a missing-names one. A different probe.
+(c) Carried: transforms composed onto a stuck position; `writing-mode` is a SUBSYSTEM;
+    `g_hscroll_carousel` is RED on `main` and outside the wall (t1282); the host's view-changed
+    signature carries no `scroll_x` (t1286).
+
+WIKI: docs/wiki/box-layout.md — line names as part of the resolved track list, the repeat-boundary
+merge, and the two-lists-in-lockstep rule that keeps a serializer's interleave honest.

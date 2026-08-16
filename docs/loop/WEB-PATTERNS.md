@@ -7178,3 +7178,23 @@ subtree 46.1%→56.2%), `css/css-transforms` 2411→2704, `css/css-sizing` 3028�
 `css/css-backgrounds` 4087→4141, `css/css-values` 3230→3231. `HANG/CRASH 0` in all five; 89 failing
 titles gone and **zero new** in `css/css-position`. Seven more ★ areas use the same harness and are
 named as **unmeasured** rather than implied. Gated by `G_ANIMATION_COMPOSITION`, RED three ways.
+
+## Reading a grid template back — named lines, and the library that cannot match them (tick 1289)
+
+**Pattern:** a layout library writes `grid-template-columns: [content-start] 1fr [content-end]`, then
+reads `getComputedStyle(el).gridTemplateColumns` back to reconcile it with `grid-column:
+content-start / content-end`, to compute a drop target, or to render a designer-facing track editor.
+
+**The class this unlocks:** the resolved value now carries its `<line-names>`, including the merge at
+a `repeat()` boundary (`[a b] 200px [c b] … [c d]`). It answered `200px 200px 200px 200px` before —
+sizes correct, names absent — so the read-back could not be matched to the names the author wrote.
+
+**Why it hid:** the *layout* was never wrong. Named and unnamed templates produce identical boxes, so
+nothing on screen and no geometry test could see it; only a script asking the property what it says
+could, and the answer it got was a valid, plausible track list.
+
+**Measured:** `css/css-grid` 6790 → 6922, and the cluster it aimed at (`assert_in_array:
+gridTemplate*`) 590 → 540. ⚠ Stated honestly: the numerator rose 132 while the **denominator rose
+120** — files that stopped early now run further and create new subtests — so the **−50 on the
+targeted cluster** is the claim, not the +132. Gated by `G_GRID_LINE_NAMES`, RED three ways; the
+middle mutation prints the exact "right names, wrong lines" string the design exists to prevent.

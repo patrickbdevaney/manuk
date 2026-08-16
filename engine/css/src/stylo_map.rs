@@ -351,6 +351,80 @@ fn track_size_to_ours(
 /// every page that used it. The repetition count belongs to layout (CSS Grid §7.2.3.1: the largest
 /// N that fits the container), not to the cascade. `none`/subgrid/masonry still collapse to what we
 /// can model.
+/// **The `<line-names>` of a grid template, one entry per grid LINE (tracks + 1).**
+///
+/// ⚠⚠⚠ **EXPANDED IN LOCKSTEP WITH [`template_to_tracks`], and that is the whole difficulty.** The
+/// two walk the same `TrackList` and must agree on how many tracks came out of it, because the
+/// serializer interleaves them — `names[0] size[0] names[1] size[1] … names[n]`. A drift of one
+/// produces a name attached to the wrong line: a wrong answer of the right type, and strictly worse
+/// than the missing names this replaces. So the integer-`repeat(N, …)` expansion, the 1000-track
+/// Bar-0 clamp and the empty-tracks `continue` are duplicated here **deliberately** rather than
+/// factored out — the shapes are the same, and a shared helper returning two vectors of different
+/// lengths is exactly the bug this comment exists to prevent.
+///
+/// Stylo's own docs: *"For N values, there will be N+1 `<line-names>`"* — on `TrackList` for the
+/// outer list and on `TrackRepeat` for the inner one. Where a repeat's closing names meet the next
+/// element's opening names, CSS merges them onto one line, which is why Chrome answers
+/// `[a] repeat(4, [b] 200px [c]) [d]` as `[a b] 200px [c b] … [c d]`.
+///
+/// Returns EMPTY when the template names nothing — the overwhelmingly common case, and the signal
+/// the serializer uses to skip the interleave entirely.
+fn template_line_names(c: &stylo::values::computed::GridTemplateComponent) -> Vec<Vec<String>> {
+    use stylo::values::generics::grid::{
+        GenericGridTemplateComponent as GC, GenericTrackListValue as TLV, RepeatCount,
+    };
+    let idents = |s: &stylo::OwnedSlice<stylo::values::CustomIdent>| -> Vec<String> {
+        s.iter().map(|i| i.0.to_string()).collect()
+    };
+    let mut lines: Vec<Vec<String>> = Vec::new();
+    // Merge onto the CURRENT line rather than pushing a new one — two adjacent `<line-names>` in the
+    // source are one grid line.
+    let mut merge = |names: Vec<String>, lines: &mut Vec<Vec<String>>| match lines.last_mut() {
+        Some(last) => last.extend(names),
+        None => lines.push(names),
+    };
+    let GC::TrackList(list) = c else {
+        return Vec::new();
+    };
+    let outer =
+        |i: usize| -> Vec<String> { list.line_names.get(i).map(&idents).unwrap_or_default() };
+    lines.push(outer(0));
+    for (vi, v) in list.values.iter().enumerate() {
+        match v {
+            TLV::TrackSize(_) => {
+                lines.push(outer(vi + 1));
+            }
+            TLV::TrackRepeat(r) => {
+                if r.track_sizes.is_empty() {
+                    continue;
+                }
+                let inner: Vec<Vec<String>> = r.line_names.iter().map(&idents).collect();
+                let n = r.track_sizes.len();
+                let reps = match r.count {
+                    RepeatCount::Number(i) => (i.max(0) as usize).min(1000),
+                    // An auto-repeat is ONE `TrackComponent::AutoRepeat` on the size side, so it is
+                    // one track's worth of lines here — the used-value path answers those grids from
+                    // layout and never reaches this list.
+                    RepeatCount::AutoFill | RepeatCount::AutoFit => 1,
+                };
+                for _ in 0..reps {
+                    for k in 0..n {
+                        merge(inner.get(k).cloned().unwrap_or_default(), &mut lines);
+                        lines.push(Vec::new());
+                    }
+                    // The repeat's CLOSING names land on the line the next repetition opens on.
+                    merge(inner.get(n).cloned().unwrap_or_default(), &mut lines);
+                }
+                merge(outer(vi + 1), &mut lines);
+            }
+        }
+    }
+    if lines.iter().all(|l| l.is_empty()) {
+        return Vec::new();
+    }
+    lines
+}
+
 fn template_to_tracks(
     c: &stylo::values::computed::GridTemplateComponent,
 ) -> Vec<crate::TrackComponent> {
@@ -1154,6 +1228,8 @@ pub fn to_computed_style(cv: &ComputedValues) -> ComputedStyle {
 
     // Grid tracks + item placement.
     s.grid_template_columns = template_to_tracks(&cv.clone_grid_template_columns());
+    s.grid_template_columns_line_names = template_line_names(&cv.clone_grid_template_columns());
+    s.grid_template_rows_line_names = template_line_names(&cv.clone_grid_template_rows());
     s.grid_template_rows = template_to_tracks(&cv.clone_grid_template_rows());
     // The IMPLICIT half of the same pair. `grid-template-*` sizes the tracks the author wrote down;
     // these size the ones auto-placement invents when the items outrun them, and they were the two

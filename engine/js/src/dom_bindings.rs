@@ -1134,45 +1134,77 @@ fn track_list_css(list: &[manuk_css::TrackSize]) -> String {
 /// other used length here, so `1fr 2fr` in 300px reads `"98.6562px 197.344px"` — Chrome's own
 /// fractional answer, not a rounded one. A grid with **no tracks at all** (a grid container with no
 /// template and no items) laid out as a grid still answers `"none"`: zero tracks is what it has.
-fn used_track_list_css(used: Option<&[f32]>, computed: &[manuk_css::TrackComponent]) -> String {
+fn used_track_list_css(
+    used: Option<&[f32]>,
+    computed: &[manuk_css::TrackComponent],
+    line_names: &[Vec<String>],
+) -> String {
+    // ⚠⚠⚠ **`<line-names>` ARE PART OF THE RESOLVED VALUE, and they were dropped for as long as this
+    // property has existed.** Chrome answers `[a] repeat(4, [b] 200px [c]) [d]` with
+    // `[a b] 200px [c b] 200px [c b] 200px [c b] 200px [c d]`; we answered
+    // `200px 200px 200px 200px`. Every track SIZE was already right — the names survived parsing and
+    // the cascade and were discarded at the `stylo_map` boundary, so a grid library reading its own
+    // template back got a list it could not match to its named lines.
+    //
+    // The interleave is `names[0] size[0] names[1] size[1] … names[n]`, with empty groups omitted.
+    // `line_names` is EMPTY when the template names nothing (nearly always), and the whole of this is
+    // then one `is_empty` check.
+    let weave = |sizes: Vec<String>| -> String {
+        if line_names.is_empty() {
+            return sizes.join(" ");
+        }
+        let mut parts: Vec<String> = Vec::with_capacity(sizes.len() * 2 + 1);
+        let group = |i: usize| -> Option<String> {
+            let g = line_names.get(i)?;
+            (!g.is_empty()).then(|| format!("[{}]", g.join(" ")))
+        };
+        for (i, sz) in sizes.iter().enumerate() {
+            parts.extend(group(i));
+            parts.push(sz.clone());
+        }
+        parts.extend(group(sizes.len()));
+        parts.join(" ")
+    };
     if let Some(sizes) = used {
         if !sizes.is_empty() {
-            return sizes
-                .iter()
-                .map(|v| {
-                    let r = (v * 1e4).round() / 1e4;
-                    if r == r.trunc() {
-                        format!("{}px", r as i64)
-                    } else {
-                        format!("{r}px")
-                    }
-                })
-                .collect::<Vec<_>>()
-                .join(" ");
+            return weave(
+                sizes
+                    .iter()
+                    .map(|v| {
+                        let r = (v * 1e4).round() / 1e4;
+                        if r == r.trunc() {
+                            format!("{}px", r as i64)
+                        } else {
+                            format!("{r}px")
+                        }
+                    })
+                    .collect::<Vec<_>>(),
+            );
         }
     }
     if computed.is_empty() {
         return "none".into();
     }
-    computed
-        .iter()
-        .map(|c| match c {
-            manuk_css::TrackComponent::Single(t) => track_size_css(t),
-            // `repeat(auto-fill | auto-fit, …)` survives the cascade intact because its repetition
-            // count depends on the container size — which is exactly why it can only be *resolved*
-            // on a grid container, and on one of those the `used` arm above already answered.
-            manuk_css::TrackComponent::AutoRepeat { fit, tracks } => format!(
-                "repeat({}, {})",
-                if *fit { "auto-fit" } else { "auto-fill" },
-                tracks
-                    .iter()
-                    .map(track_size_css)
-                    .collect::<Vec<_>>()
-                    .join(" ")
-            ),
-        })
-        .collect::<Vec<_>>()
-        .join(" ")
+    weave(
+        computed
+            .iter()
+            .map(|c| match c {
+                manuk_css::TrackComponent::Single(t) => track_size_css(t),
+                // `repeat(auto-fill | auto-fit, …)` survives the cascade intact because its repetition
+                // count depends on the container size — which is exactly why it can only be *resolved*
+                // on a grid container, and on one of those the `used` arm above already answered.
+                manuk_css::TrackComponent::AutoRepeat { fit, tracks } => format!(
+                    "repeat({}, {})",
+                    if *fit { "auto-fit" } else { "auto-fill" },
+                    tracks
+                        .iter()
+                        .map(track_size_css)
+                        .collect::<Vec<_>>()
+                        .join(" ")
+                ),
+            })
+            .collect::<Vec<_>>(),
+    )
 }
 
 /// One `grid-column` / `grid-row` line pair, in the shorthand's `start / end` form.
@@ -2228,11 +2260,19 @@ fn extra_computed_props(
         // element and only the rule it qualifies for changes.
         (
             "grid-template-columns",
-            used_track_list_css(tracks.map(|t| t.0.as_slice()), &cs.grid_template_columns),
+            used_track_list_css(
+                tracks.map(|t| t.0.as_slice()),
+                &cs.grid_template_columns,
+                &cs.grid_template_columns_line_names,
+            ),
         ),
         (
             "grid-template-rows",
-            used_track_list_css(tracks.map(|t| t.1.as_slice()), &cs.grid_template_rows),
+            used_track_list_css(
+                tracks.map(|t| t.1.as_slice()),
+                &cs.grid_template_rows,
+                &cs.grid_template_rows_line_names,
+            ),
         ),
         // ─────────────────────────────────────────────────────────────────────────────────────────
         // ⚠⚠⚠ **THE t901 SWEEP BATCH — properties the cascade ALREADY HOLDS and this object refused
