@@ -5275,6 +5275,7 @@ impl Ctx<'_> {
                     floats,
                     cx,
                     last_line.map(|(top, used)| (top, (cw - used).max(0.0))),
+                    pch,
                 );
                 boxes.push(fbox);
             } else if self.kid_is_out_of_flow(k) {
@@ -5442,8 +5443,15 @@ impl Ctx<'_> {
                 let mut nested: Vec<NodeId> = Vec::new();
                 self.collect_inline_floats(k, &mut nested);
                 for f in nested {
-                    let fbox =
-                        self.layout_float(f, cw, cur_y + prev_margin.max(0.0), floats, cx, None);
+                    let fbox = self.layout_float(
+                        f,
+                        cw,
+                        cur_y + prev_margin.max(0.0),
+                        floats,
+                        cx,
+                        None,
+                        pch,
+                    );
                     boxes.push(fbox);
                 }
                 inline_run.push(k);
@@ -5545,6 +5553,16 @@ impl Ctx<'_> {
         // takes `line_top` only if its resolved MARGIN-BOX width still fits in `remaining`, which is
         // why the choice is made here and not at the call site (see there).
         line_fit: Option<(f32, f32)>,
+        // The containing block's DEFINITE content height, threaded exactly as `layout_block`
+        // threads it.
+        //
+        // ⚠ **Deliberately consumed by the `stretch` arms ONLY**, not by the percentage arms. A
+        // float's percentage min/max-height has its own documented behaviour further down (an
+        // indefinite percentage is DROPPED, not resolved against zero, because resolving against
+        // zero erased every responsive image on the page) and changing it is a second, unmeasured
+        // mechanism riding along with a measured one. Named here rather than left as a puzzle for
+        // the next reader who notices the parameter is only half used.
+        pch: Option<f32>,
     ) -> LayoutBox {
         let s = self.style_of(node).clone();
         let ml = s.margin.left.resolve(cw, 0.0);
@@ -5790,9 +5808,30 @@ impl Ctx<'_> {
             {
                 width / r
             }
+            // ── **`height: stretch` ON A FLOAT — THE ONE SHAPE WHERE `auto` IS NOT THE ANSWER.**
+            //
+            // A float shrink-to-fits on `auto` in BOTH axes, so `stretch` is the only way an author
+            // can say *"this floated card is as tall as its column"* — the exact mirror of the
+            // `width: stretch` arm this function already has, and it was missing because
+            // `layout_float` carried no containing-block height at all. Without it a
+            // `float: left; height: stretch` card is its content's height, which for an empty or
+            // image-only card is border+padding and nothing else.
+            //
+            // The margin box fills the CB's content box, so the CONTENT box is that less this
+            // float's own margins, border and padding — box-sizing-independent, identical to
+            // `layout_block`'s `specified_definite_h` stretch arm, because stretch fills available
+            // space rather than resolving a specified length. An indefinite CB leaves it
+            // content-sized, at parity with Chrome and with the block twin.
+            (Dim::Auto, _) if s.height_stretch => match pch {
+                Some(h) => (h - mt - mb - pt - pb - bt - bb).max(0.0),
+                None => ch.max((inner.lowest_bottom()).max(0.0)),
+            },
             (Dim::Auto, _) => ch.max((inner.lowest_bottom()).max(0.0)),
             (other, _) => (other.resolve(0.0, ch) - bs_extra_h).max(0.0),
         };
+        // The same quantity the arm above resolves to, computed once so the min/max pair below
+        // reads it rather than growing a second copy of the formula.
+        let stretch_fit_h: Option<f32> = pch.map(|h| (h - mt - mb - pt - pb - bt - bb).max(0.0));
         // The block-axis half of ⓶. A percentage min/max-height on a float resolves against its
         // containing block's height, which this path does not carry — and CSS2 §10.7 says a
         // percentage `max-height` against an INDEFINITE containing block is treated as `none`. So an
@@ -5808,7 +5847,12 @@ impl Ctx<'_> {
         // twin. It is the SAME expression this function's `Dim::Auto` height arm uses, and it is
         // spelled out rather than shared because the two paths carry different names for it.
         let natural_h = ch.max(inner.lowest_bottom().max(0.0));
-        let min_h = if s.min_height_keyword.is_some() {
+        // `min-height: stretch` / `max-height: stretch` — the same flag pair `layout_block` reads,
+        // and unrepresentable without it: `stretch` collapses to `Dim::Auto`, which a min reads as
+        // zero and a max as "no limit", so the declaration silently does nothing.
+        let min_h = if s.min_height_stretch {
+            stretch_fit_h.unwrap_or(0.0)
+        } else if s.min_height_keyword.is_some() {
             natural_h.max(0.0)
         } else if indefinite_pct(s.min_height) {
             0.0
@@ -5816,6 +5860,7 @@ impl Ctx<'_> {
             (s.min_height.resolve(0.0, 0.0) - bs_extra_h).max(0.0)
         };
         let max_h = match s.max_height {
+            _ if s.max_height_stretch => stretch_fit_h.unwrap_or(f32::INFINITY),
             _ if s.max_height_keyword.is_some() => natural_h.max(0.0),
             Dim::Auto => f32::INFINITY,
             other if indefinite_pct(other) => f32::INFINITY,

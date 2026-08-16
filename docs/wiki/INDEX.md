@@ -480,6 +480,9 @@
   - L9702 · How it was ranked — and two wrong turns worth keeping
   - L9721 · The BODY is not an ordinary offsetParent, and the spec's rule is not what two engines do (t1272)
   - L9771 · This is t1271's lesson applied to the bar t1271 threw away
+  - L9783 · A float is a SECOND implementation of the box, and it acquires the first one's rules one defect at a time (tick 1278)
+  - L9811 · The histogram's biggest bar was TWO mechanisms in two functions
+  - L9834 · ⚠⚠ css/css-sizing as an AREA is too noisy to read
 
 ## browser-capabilities.md
 `docs/wiki/browser-capabilities.md`
@@ -2204,4 +2207,4 @@
   - L231 · Both named mechanisms are subsystem work
 
 ---
-2111 sections across 22 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+2114 sections across 22 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.

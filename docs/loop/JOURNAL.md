@@ -81933,3 +81933,111 @@ DEFER (low value, high cost). Recorded so the 432 is not re-discovered as a barg
 from t1276, still the rest of that directory's remainder.
 
 WIKI: docs/wiki/css-cascade.md — the boolean context asks a different question.
+
+## Tick 1278 — a float shrink-to-fits in BOTH axes, and `stretch` was wired to only one (2026-08-16)
+
+TICK SHAPE: capability — the DIAGNOSIS t1277 said it would take, executed rather than guessed at.
+Board re-run at the top of this tick: unchanged, ★ CSS-LAYOUT. This is `css/css-sizing/stretch`,
+the row t1277 ranked #1 and explicitly refused to pick up on a histogram alone.
+
+HOW IT WAS DIAGNOSED, and the method is the point. t1277 left `stretch` at 439/1004 with the failure
+mass named but not localised (309 `width expected N but got N` + 244 `height …`, joint distribution
+tri-modal). Two readings closed it:
+
+1. **The failure MESSAGE carries the markup.** `check-layout-th.js` builds its assertion message as
+   `'\n' + container.outerHTML + '\n' + "width"`, so every FAIL block in `--show-failures` contains
+   the exact failing element. ⚠ **I first read this as an instrument gap** — the message's first line
+   is empty, so a one-line-per-failure histogram prints a bare `assert_equals:` for the single
+   largest failing family in the whole CSS layout tree, and I was one step from spending a tick
+   repairing an instrument that was working. **The blindness was in my `grep -A1`, not in the tool.**
+2. **A 10-arm PROBE, written before any fix**, replicating WPT's `stretch-block-size-001` container
+   (content box 50px, padding box 60px) with one arm per box type. It returned, first run:
+
+```text
+   div=45 canvas=45 input=45 textarea=45 button=45   ← already correct
+   float=10                                          ← ✗ expected 45
+   p0=55                                             ← abspos, insets 0: already correct
+   pauto=10  ps10=10  pe10=10                        ← ✗ expected 50 / 45 / 45
+```
+
+⭐ **THE HISTOGRAM'S BIGGEST BAR WAS NOT THE MECHANISM.** `got 10 expected 45` was 56 rows and I had
+read it as *"`height: stretch` is treated as `auto`"*. It is not: five of the six in-flow box types
+were already exact. The bar was **two mechanisms in two different functions**, and the probe — not
+the histogram — is what separated them. t1275's lesson at the next level down: a directory is not a
+cause, a message shape is not a cause, and **a single numeric bar is not a cause either**.
+
+MECHANISM (this tick's half). `layout_float` is a second, hand-rolled box resolution beside
+`layout_block`'s, and **its own comments say so**: shrink-to-fit, `box-sizing`, aspect-ratio and the
+min/max clamps were each added to it one measured defect at a time, years after `layout_block` had
+them. `width: stretch` arrived in that sequence. `height: stretch` did not — and *could not have*,
+because the function **took no containing-block height parameter at all**. So a
+`float: left; height: stretch` card was its own content's height, which for the card the keyword
+exists to serve (image, icon, empty coloured panel) is border plus padding and nothing else. And
+`auto` is not a near-miss here: a float shrink-to-fits on `auto` in BOTH axes — that is what a float
+IS — so `stretch` is the only spelling of *"this floated column is as tall as its column"*.
+
+```text
+  css/css-sizing/stretch   439/1004  ->  451/1004   (+12, denominator IDENTICAL,
+                                                     TWO runs byte-identical, HANG/CRASH 0)
+  CONTROLS, paired, same box, same hour, numerator BYTE-IDENTICAL:
+    css/css-flexbox   2394/4693
+    css/css-position   681/1482
+    css/css-overflow   450/963
+    css/css-display    326/549
+```
+
+⚠⚠⚠ **`css/css-sizing` AS AN AREA IS TOO NOISY TO READ, AND I BANKED A SINGLE SAMPLE OF IT LAST
+TICK.** Three runs of the parent area on ONE binary in ONE hour: **2889/5871 · 2861/5850 ·
+2835/5814** — a ±27 numerator band on a moving denominator, driven by the time-dependent
+`animation/` subtree (3009 of its 5850 subtests). The third reading is *below* the 2840 t1277 banked
+as a fact. So: **the row is left at 2840 — an in-band, conservative value — and is NOT raised by this
+tick**, and the claim is carried by the `stretch` SUBDIRECTORY, whose denominator is fixed and whose
+two runs agree exactly. A future sweep reading 2835 will look like a regression on this row and it
+will not be one. *Every number has a harness; this one also has a variance, and I banked its mean as
+if it were a constant.*
+
+GATE: `G_STRETCH_FLOAT_BLOCK_AXIS` — 12 asserted rows, **4 of them CONTROLS**, proven RED on THREE
+mutations whose moved-row sets are nested by design rather than disjoint:
+(1) delete the float's `height_stretch` arm → `float` alone moves (45→10);
+(2) pass `None` for `pch` at both call sites → `float` `fmin` `fmax` move (10 / 10 / 210) — the
+    wider blast radius is the point, because it is the missing PARAMETER and not the missing arm;
+(3) drop the `min_height_stretch`/`max_height_stretch` arms → `fmin` and `fmax` move in OPPOSITE
+    directions (pushed up from 10, pulled down from 210), which is what says the min and the max are
+    each doing their own work rather than one row carrying both.
+
+⚠ **The five in-flow rows carry the IDENTICAL declaration through `layout_block` and move under NONE
+of the three.** They are the rows that localise the defect to the float COPY of the rule rather than
+to the rule — the same control shape `layout_float`'s own `min-content` comment records.
+
+⚠ **`fpx` CORRECTED ITS AUTHOR.** A float with `block-size: 30px` reads back **40**, not 30:
+`offsetHeight` is the BORDER box and this is content-box sizing, so the 3px border and 2px padding
+sit on top of the declared 30. Written expecting 30 and corrected by the run.
+
+⚠ **`pch` is threaded in and consumed by the `stretch` arms ONLY**, and the parameter's doc comment
+says why: a float's percentage min/max-height has its own documented behaviour (an indefinite
+percentage is DROPPED rather than resolved against zero, because resolving against zero erased every
+responsive image on the page), and changing it would be a second unmeasured mechanism riding along
+with a measured one. A half-used parameter with a stated reason beats a silent scope creep.
+
+PERF: none claimed. One extra `Option<f32>` argument and one `match` arm on a path that already
+computed every term it needs.
+
+NEXT, ranked from what this tick measured.
+(a) **The abspos half of the same WPT file, with its numbers already read**: `position:absolute` with
+    both insets auto must be **50** (we say 10), `inset-block-start:10px` **45** (10),
+    `inset-block-end:10px` **45** (10); `inset-block:0` is **55** and already correct. The rule is
+    that an abspos box's stretch-fit is measured against the CB's **padding** box less the used
+    insets, and when BOTH insets are auto the measurement starts at the **static position** — the
+    CB's *content*-box origin — which is why it is 50 and not 55. That needs the static-position side
+    table inside the abspos sizing path: different function, different mechanism, own tick. The gate
+    PRINTS these three rows and deliberately does not assert them, because pinning a value known to
+    be wrong makes the tick that fixes it read as a regression.
+(b) The INLINE axis of the same gap: `width: stretch` on a float is already right, but the histogram
+    still holds 309 `width expected N but got N` rows, and the `writing-mode: vertical-*` /
+    `direction: rtl` group (20 rows) is untouched by either half.
+(c) Carried from t1277 and unchanged: `css/css-sizing/animation` is 1743/3009 with its residue
+    dominated by Web Animations `composite: add`/`accumulate`, which is simply absent.
+(d) Carried from t1276: the `sizes` VALUE tokenizer (comments, identifier escapes, math-function
+    clamping).
+
+WIKI: docs/wiki/box-layout.md — a float is a second implementation of the box.

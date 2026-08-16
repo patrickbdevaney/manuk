@@ -970,3 +970,4 @@ tick	sha	epoch	iso	delta_s	shape	wall_s	files	added	deleted	gates	claims	wpt_pas
 1274	8643bc38	1786846202	2026-08-15T22:10:02-04:00	4288	capability	997	13	657	133	481	81	3896	6960	0	641	0	`currentSrc` published `src`, so an `<img srcset>` with no `src` reported NOTHING (2026-08-15)
 1275	7e215613	1786857017	2026-08-16T01:10:17-04:00	10815	capability	997	14	952	93	483	81	3896	6960	0	642	0	`sizes` read the LAST entry and ignored every media condition (2026-08-15)
 1276	0c77c903	1786860114	2026-08-16T02:01:54-04:00	3097	capability	997	10	378	67	483	81	3896	6960	0	642	0	`not (anything-we-do-not-know)` was TRUE, and `or` was never a thing (2026-08-16)
+1277	a6b23121	1786863215	2026-08-16T02:53:35-04:00	3101	capability	997	9	442	37	484	81	3896	6960	0	642	0	`( feature )` and `( feature: default )` are DIFFERENT QUESTIONS (2026-08-16)

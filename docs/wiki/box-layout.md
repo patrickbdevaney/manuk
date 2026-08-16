@@ -9779,3 +9779,62 @@ heights** with *every* `offsetLeft` short by 8.
 ⭐ **Correct sizes plus a constant shift is not N mechanisms — it is one coordinate space.** The delta
 was a red herring as a *key* and a true signal as a *value*; what made it readable was **regrouping,
 not re-thresholding**.
+
+## A float is a SECOND implementation of the box, and it acquires the first one's rules one defect at a time (tick 1278)
+
+`layout_float` is not a wrapper around `layout_block` — it is a separate, hand-rolled resolution of
+width, height and the min/max clamps, and its own comments record the sequence in which it caught up:
+shrink-to-fit, then `box-sizing`, then the aspect-ratio transfer, then `min-width`/`max-width` (which
+*"do not appear in this function"* until they were added), each after a measured defect on a real
+page. `width: stretch` arrived in that sequence.
+
+**`height: stretch` did not, and could not have — the function took no containing-block height
+parameter at all.** So a `float: left; height: stretch` card was its own content's height. For the
+card the keyword exists to serve (an image, an icon, an empty coloured panel) that is border plus
+padding and nothing else.
+
+⭐ **`auto` is not a near-miss on a float, in either axis.** A float shrink-to-fits on `auto` — that
+is what a float *is* — so `stretch` is the only way an author can say *"this floated column is as
+tall as the column beside it"*. On a plain block, `auto` already fills the inline axis, which is
+exactly why the inline half of this gap hid for so long; on a float, nothing fills by default and the
+absence is total.
+
+The same parameter unlocks `min-height: stretch` / `max-height: stretch`, which were equally
+unrepresentable: `stretch` collapses to `Dim::Auto`, which a **min** reads as zero and a **max** as
+"no limit", so the declaration parsed to a valid value and did nothing.
+
+⚠ **`pch` is threaded in and consumed by the `stretch` arms only.** A float's percentage min/max
+height has its own deliberate behaviour — an indefinite percentage is *dropped*, not resolved against
+zero, because resolving against zero erased every responsive image on the page — and changing it
+would be a second unmeasured mechanism riding on a measured one.
+
+### The histogram's biggest bar was TWO mechanisms in two functions
+
+`css/css-sizing/stretch` failed 565 assertions, of which the largest single shape was `height
+expected 45 but got 10`, 56 times. Read as one bar it says *"`height: stretch` is treated as
+`auto`"*. A 10-arm probe written before any fix said otherwise:
+
+```
+div=45 canvas=45 input=45 textarea=45 button=45   ← already exact
+float=10                                          ← expected 45   (this tick)
+p0=55                                             ← abspos, insets 0: already exact
+pauto=10  ps10=10  pe10=10                        ← expected 50 / 45 / 45  (still open)
+```
+
+Five of six in-flow box types were already correct. **A directory is not a cause, a message shape is
+not a cause, and a single numeric bar is not a cause either** — the probe, not the histogram, is what
+separates them.
+
+⚠ **The abspos half is measured and open.** An abspos box's stretch-fit is the containing block's
+**padding** box less the used insets; when BOTH insets are `auto` the measurement starts at the
+**static position** (the CB's *content*-box origin), which is why zero insets give 55 and auto insets
+give 50. `G_STRETCH_FLOAT_BLOCK_AXIS` prints those three rows and deliberately does not assert them:
+pinning a value known to be wrong makes the tick that fixes it read as a regression.
+
+### ⚠⚠ `css/css-sizing` as an AREA is too noisy to read
+
+Three runs of the parent area on one binary in one hour: **2889/5871 · 2861/5850 · 2835/5814** — a
+±27 numerator band on a moving denominator, driven by the time-dependent `animation/` subtree (3009
+of its ~5850 subtests). The third reading is *below* the value banked into `WPT-AREAS.tsv` as a fact
+one tick earlier. Read the `stretch` **subdirectory** instead: fixed denominator, two runs
+byte-identical, 439/1004 → 451/1004. *Every number has a harness; this one also has a variance.*

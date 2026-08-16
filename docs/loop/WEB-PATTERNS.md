@@ -6920,3 +6920,32 @@ reaches for the common one by reflex.
 so the fix measures **zero** and looks like it did nothing. Gated by `G_MEDIA_GRAMMAR` (44 rows, RED
 on eight mutations) with four value-form CONTROL rows whose job is to stay byte-identical while
 their boolean twins move.
+
+## The floated column that must match its neighbour's height — `float: left; height: stretch` (tick 1278)
+
+**Pattern:** the pre-flexbox two-column card — a floated media panel or sidebar that has to be as tall
+as the column beside it — written today as `float: left; height: stretch` (or its
+`-webkit-fill-available` / `-moz-available` spellings), and the `min-height: stretch` /
+`max-height: stretch` pair that clamps a floated panel to its container.
+
+**The class this unlocks:** every floated box whose height is meant to come from its container rather
+than its content. `layout_float` is a **second, hand-rolled box resolution** beside `layout_block`'s
+— its own comments record acquiring shrink-to-fit, `box-sizing`, the aspect-ratio transfer and the
+min/max clamps one measured defect at a time — and it **took no containing-block height at all**, so
+the block-axis `stretch` could not be resolved even in principle. A floated card came out at border
+plus padding.
+
+**Why it hid:** on a plain block, `auto` already fills the inline axis, so `width: stretch` looks
+like a no-op and the *missing* block-axis twin looks like the same no-op. On a **float** nothing
+fills by default in either axis — `auto` shrink-to-fits, which is what a float *is* — so the absence
+is total rather than partial, and it only shows on the box type nobody writes a unit test for.
+
+**The trap:** the WPT histogram's biggest bar (`height expected 45 but got 10`, 56 rows) reads as
+*"`height: stretch` is treated as `auto`"*. It is not — five of six in-flow box types were already
+exact. The bar was **two mechanisms in two different functions** (the float path, and abspos with an
+auto inset), and only a per-box-type probe separates them.
+
+**Measured:** `css/css-sizing/stretch` 439/1004 → **451/1004**, denominator identical, two runs
+byte-identical; `css-flexbox`, `css-position`, `css-overflow`, `css-display` all byte-identical.
+Gated by `G_STRETCH_FLOAT_BLOCK_AXIS` (12 rows, 4 CONTROLS, RED three ways). ⚠ Still open and
+measured: `stretch` on an absolutely-positioned box with an `auto` inset.
