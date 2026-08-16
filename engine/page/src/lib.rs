@@ -8377,7 +8377,7 @@ impl Page {
         let sticky_boxes;
         let boxes: &LayoutBox = if self.has_sticky {
             let mut b = self.root_box.clone();
-            apply_sticky(&mut b, &self.styles, scroll_y);
+            apply_sticky(&mut b, &self.styles, scroll_y, height as f32);
             sticky_boxes = b;
             &sticky_boxes
         } else {
@@ -9663,28 +9663,41 @@ fn hex(c: u8) -> Option<u8> {
 /// Recursively pin `position:sticky` boxes for the current `scroll_y`. Each sticky child is
 /// shifted (with its subtree) so it stays at its `top` threshold from the viewport, bounded by
 /// the bottom of its containing block (its parent box). Non-sticky boxes are untouched.
-fn apply_sticky(b: &mut LayoutBox, styles: &StyleMap, scroll_y: f32) {
+fn apply_sticky(b: &mut LayoutBox, styles: &StyleMap, scroll_y: f32, viewport_h: f32) {
     use manuk_layout::BoxContent;
-    let cb_bottom = b.rect.y + b.rect.height;
+    let (cb_top, cb_bottom) = (b.rect.y, b.rect.y + b.rect.height);
     let cb_width = b.rect.width;
     if let BoxContent::Block(children) = &mut b.content {
         for child in children.iter_mut() {
             if let Some(node) = child.node {
                 if let Some(s) = styles.get(&node) {
-                    if s.position == manuk_css::Position::Sticky && !s.inset.top.is_auto() {
-                        let top = s.inset.top.resolve(cb_width, 0.0);
-                        let shift = manuk_layout::sticky_shift(
-                            child.rect.y,
-                            child.rect.height,
-                            top,
-                            cb_bottom,
-                            scroll_y,
-                        );
-                        child.shift_y(shift);
+                    // ⚠ `Option`, not a `0.0` default. `bottom: auto` means *do not pin to the
+                    // bottom*; a zero there would pin every top-sticky box to the viewport bottom
+                    // too. The old code asked only `!s.inset.top.is_auto()`, so a
+                    // `position:sticky; bottom:0` footer never entered this branch at all and was
+                    // indistinguishable from `position:static`.
+                    if s.position == manuk_css::Position::Sticky {
+                        let top =
+                            (!s.inset.top.is_auto()).then(|| s.inset.top.resolve(cb_width, 0.0));
+                        let bottom = (!s.inset.bottom.is_auto())
+                            .then(|| s.inset.bottom.resolve(cb_width, 0.0));
+                        if top.is_some() || bottom.is_some() {
+                            let shift = manuk_layout::sticky_shift(
+                                child.rect.y,
+                                child.rect.height,
+                                top,
+                                bottom,
+                                cb_top,
+                                cb_bottom,
+                                scroll_y,
+                                viewport_h,
+                            );
+                            child.shift_y(shift);
+                        }
                     }
                 }
             }
-            apply_sticky(child, styles, scroll_y);
+            apply_sticky(child, styles, scroll_y, viewport_h);
         }
     }
 }
@@ -11309,13 +11322,64 @@ mod tests {
         // Scrolled 500px past the top: the header pins so it stays at the viewport top (top:0),
         // i.e. its document y rises to ~scroll_y.
         let mut boxes = page.root_box.clone();
-        apply_sticky(&mut boxes, &page.styles, 500.0);
+        apply_sticky(&mut boxes, &page.styles, 500.0, 600.0);
         let pinned: std::collections::HashMap<_, _> =
             boxes.node_rects(page.dom()).into_iter().collect();
         assert!(
             (pinned[&hid].y - (natural_y + 500.0)).abs() < 1.5,
             "sticky header pinned to the scroll offset (natural {natural_y}, got {})",
             pinned[&hid].y
+        );
+
+        // ⚠⚠⚠ **THE BOTTOM EDGE, WHICH DID NOT EXIST.** `apply_sticky` asked only
+        // `!s.inset.top.is_auto()`, so `position: sticky; bottom: 0` never entered the branch at
+        // all and was **indistinguishable from `position: static`** — the sticky footer, the bottom
+        // action bar, the mobile toolbar and the "continue" button every checkout flow pins to the
+        // bottom of the screen, all of them silently scrolling away.
+        //
+        // The footer sits below 2000px of filler. At scroll 0 with a 600px viewport it is far below
+        // the fold, so it must be pulled UP onto the viewport's bottom edge: 600 − 0 − 40 = 560.
+        //
+        // **To watch it go RED:** drop the `bottom` arm (`shift.min(…)`) from `sticky_shift`, or
+        // restore `apply_sticky`'s `&& !s.inset.top.is_auto()` guard. Either leaves the footer at
+        // its natural y, which is what the first assertion below rejects.
+        let html2 = r#"<body style="margin:0">
+            <div style="height:2000px">tall content</div>
+            <div id="f" style="position:sticky;bottom:0;height:40px">Footer</div>
+        </body>"#;
+        let page2 = Page::load(html2, "https://x.test/", &fonts, 400.0);
+        assert!(
+            page2.has_sticky,
+            "sticky is detected for a bottom-only inset"
+        );
+        let fid = manuk_css::query_selector_all(page2.dom(), page2.dom().root(), "#f")[0];
+        let nat2 = page2
+            .root_box
+            .node_rects(page2.dom())
+            .into_iter()
+            .collect::<std::collections::HashMap<_, _>>()[&fid]
+            .y;
+        let mut b2 = page2.root_box.clone();
+        apply_sticky(&mut b2, &page2.styles, 0.0, 600.0);
+        let stuck: std::collections::HashMap<_, _> =
+            b2.node_rects(page2.dom()).into_iter().collect();
+        assert!(
+            (stuck[&fid].y - 560.0).abs() < 1.5,
+            "a `bottom:0` sticky footer rides the viewport's bottom edge (natural {nat2}, want 560, \
+             got {}) — before this it was position:static wearing sticky's name",
+            stuck[&fid].y
+        );
+        // CONTROL: scrolled far enough that the footer's own in-flow position is on screen, it must
+        // sit exactly there and not be dragged anywhere. A box that always moves is not sticky, it
+        // is fixed — and this row is what tells the two apart.
+        let mut b3 = page2.root_box.clone();
+        apply_sticky(&mut b3, &page2.styles, 1600.0, 600.0);
+        let rel: std::collections::HashMap<_, _> = b3.node_rects(page2.dom()).into_iter().collect();
+        assert!(
+            (rel[&fid].y - nat2).abs() < 1.5,
+            "once its in-flow position is inside the viewport the footer stops sticking \
+             (natural {nat2}, got {})",
+            rel[&fid].y
         );
     }
 

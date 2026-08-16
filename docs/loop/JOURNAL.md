@@ -82229,3 +82229,96 @@ NEXT, ranked from what this tick measured.
 (d) Carried from t1276: the `sizes` VALUE tokenizer.
 
 WIKI: docs/wiki/box-layout.md — a half-true arm is worse than a missing one.
+
+## Tick 1281 — `position: sticky` implemented ONE of its four edges (2026-08-16)
+
+TICK SHAPE: capability. Board re-run at the top of this tick: unchanged, ★ CSS-LAYOUT. The stretch
+vein was closed by measurement first (below), and the replacement lever was chosen from a fresh
+`css/css-position` histogram: `sticky` is its worst subdirectory at **15/78 = 19.2% across 30 files**,
+and it is on the board's own render sequence (step 8).
+
+⚠⚠⚠ **THE STRETCH VEIN IS CLOSED, AND IT WAS CLOSED BY A MEASUREMENT RATHER THAN BY EXHAUSTION.**
+After t1280 the directory's remaining 360 histogrammed almost entirely into the
+`writing-mode: vertical-rl / vertical-lr / sideways-*` × `direction: rtl` families and the
+orthogonal-writing-mode files (`stretch-inline-size-002/003`, `stretch-block-size-002/003`, whose own
+`<meta name=assert>` says *"regardless of the writing-mode of its DOM-tree parent"*). Then:
+
+```text
+  $ grep -rn "WritingMode\|writing_mode" engine/layout/src/lib.rs   →  ZERO matches
+  $ grep -rn "pub writing_mode\|enum WritingMode" engine/css/src/   →  ZERO matches
+```
+
+**The layout engine does not model writing modes at all.** So the rest of `css/css-sizing/stretch` is
+a SUBSYSTEM, not a tick, and continuing to pick at it would have been the "too big for one atomic
+tick" trap t156 parked grid for. Named here so the next reader does not re-derive it from the
+histogram. (Logical properties still work: Stylo resolves them to physical at computed-value time.)
+
+HYPOTHESIS (written before the code). `apply_sticky` reads exactly one property:
+
+```rust
+if s.position == Position::Sticky && !s.inset.top.is_auto() { … }
+```
+
+So `position: sticky; bottom: 0` **never enters the branch** and is byte-for-byte
+`position: static`. And `sticky_shift` was `natural_y.max(pinned)` — a single `max`, which can only
+push a box DOWN, so the bottom edge was not merely unwired, it was **unrepresentable**.
+
+⭐ **What that costs is not exotic.** `position: sticky; bottom: 0` is the sticky footer, the mobile
+bottom toolbar, the cookie bar, the "add to cart"/"continue" action bar every checkout flow pins to
+the bottom of the screen, and the audio player strip. All of them silently scrolled away.
+
+The rewrite states §6.3 as **two rectangles and a clamp**, which is what makes both edges one rule:
+the sticky view rectangle is the scrollport inset by whichever of `top`/`bottom` the author set; the
+box is shifted the minimum amount that brings its border box inside it; the result is clamped to the
+containing block **in both directions** — the lower bound is what releases a top-stuck header at the
+end of its section, and the upper bound is the mirror that stops a bottom-stuck bar being dragged
+above its section's start.
+
+⚠ **An unset inset stays `None`, never `0`.** `bottom: auto` means *do not pin to the bottom*, and a
+zero default would pin every top-sticky header to the viewport bottom as well.
+
+⚠ **BOTTOM IS APPLIED BEFORE TOP, AND THE ORDER IS THE TIE-BREAK.** Each clause is one-directional
+(`min` only lifts, `max` only lowers) so they are independent until the box is TALLER than the view
+rectangle, at which point both fire and the later one wins. §6.3 gives that to `top`, which is also
+what a reader expects: a header too tall for the screen stays pinned to the top.
+
+```text
+  WPT MOVEMENT: **ZERO, and the reason is the finding.**
+    css/css-position/sticky  15/78  ->  15/78   (HANG/CRASH 0)
+```
+
+⚠⚠⚠ **`position: sticky` IS A PAINT-TIME EFFECT AND IS INVISIBLE TO THE DOM — that is what those 63
+failures are, and it is one sentence rather than sixty-three.** `apply_sticky` runs inside
+`paint_scrolled`, on a **throwaway clone** of the box tree, so the shift never reaches the tree
+`node_rects` / `getBoundingClientRect` read. WPT's sticky suite measures `getBoundingClientRect` on a
+stuck element, which means **every one of its assertions is asking the DOM a question our sticky
+never answers** — and so does every scroll-spy, every "is the header stuck?" class toggle, and every
+sticky-aware measurement library on the real web. Additionally the suite scrolls *scroll containers*
+(`overflow: scroll` divs) while our sticky only knows the document scroll. Two structural gaps, both
+now named with a number attached, neither guessed.
+
+GATE: the existing `sticky_header_pins_on_scroll_and_releases_at_bottom` extended with the bottom
+edge and a CONTROL, plus `sticky_shift_pins_then_releases_at_container_bottom` extended with five new
+assertions (bottom pin, bottom inset, containing-block clamp on the way UP, and the taller-than-the-
+viewport tie-break). Proven RED two ways:
+(A) drop the `bottom` arm from `sticky_shift` → both the layout unit test and the page test fail;
+(B) restore `apply_sticky`'s `&& !s.inset.top.is_auto()` guard → the footer reports
+    **`natural 2000, want 560, got 2000`**, which is the assertion message saying in its own words
+    that the box was `position: static` wearing sticky's name.
+
+PERF: none claimed. One extra `Option` read per sticky child, on a path that only runs on pages that
+contain a sticky box at all (`has_sticky`).
+
+NEXT, ranked from what this tick measured.
+(a) ⭐ **MAKE STICKY REACH THE BOX TREE THE DOM READS.** It is a paint-time clone today; the 63
+    remaining `css/css-position/sticky` assertions are `getBoundingClientRect` readbacks, and so is
+    every scroll-spy on the web. This is the single highest-value follow-on in this area and it is
+    architectural rather than arithmetical.
+(b) **Scroll CONTAINERS.** Sticky is resolved against the document scroll only; WPT's suite (and
+    every sticky table header inside an `overflow:auto` pane) uses a nested scrollport.
+(c) `left`/`right` sticky — the sticky first column of a data table. Needs horizontal scroll
+    threading, which does not exist; deliberately NOT added as a zero-scroll no-op, because a
+    half-true arm is worse than a missing one (t1280).
+(d) The stretch residue is a WRITING-MODE subsystem — see the top of this entry.
+
+WIKI: docs/wiki/box-layout.md — sticky implemented one of its four edges, and paints rather than lays out.

@@ -9927,3 +9927,51 @@ this row is drawn from a population with a moving denominator, and the value ban
 `WPT-AREAS.tsv` is a **single sample above the observed band** — so a future sweep will read a false
 regression there through no fault of the engine. *Every number has a harness; some also have a
 variance, and a mean banked as a constant becomes a trap.*
+
+## `position: sticky` implemented ONE of its four edges — and it PAINTS rather than lays out (tick 1281)
+
+`apply_sticky` read exactly one property:
+
+```rust
+if s.position == Position::Sticky && !s.inset.top.is_auto() { … }
+```
+
+So `position: sticky; bottom: 0` **never entered the branch** and was byte-for-byte
+`position: static`. And `sticky_shift` was `natural_y.max(pinned)` — a single `max`, which can only
+push a box *down*, so the bottom edge was not merely unwired, it was **unrepresentable**.
+
+⭐ **What that costs is not exotic:** the sticky footer, the mobile bottom toolbar, the cookie bar,
+the audio-player strip, and the "add to cart"/"continue" action bar every checkout flow pins to the
+bottom of the screen. All of them silently scrolled away.
+
+The rule, stated as CSS Position §6.3 does — **two rectangles and a clamp**, which is what makes both
+edges one implementation instead of two:
+
+1. the **sticky view rectangle** is the scrollport inset by whichever of `top`/`bottom` the author
+   set: `[scroll + top, scroll + viewport − bottom]`;
+2. the box is shifted the minimum amount that brings its border box inside it;
+3. the result is clamped to the containing block **in both directions** — the lower bound releases a
+   top-stuck header at the end of its section, the upper bound stops a bottom-stuck bar being dragged
+   above its section's start.
+
+⚠ **An unset inset stays `None`, never `0`.** `bottom: auto` means *do not pin to the bottom*; a zero
+default pins every top-sticky header to the viewport bottom as well.
+
+⚠ **Bottom is applied BEFORE top, and the order is the tie-break.** Each clause is one-directional
+(`min` only lifts, `max` only lowers), so they are independent until the box is *taller* than the view
+rectangle — then both fire and the later one wins. §6.3 gives that to `top`.
+
+### ⚠⚠⚠ Sticky is a PAINT-time effect, and that is 63 WPT assertions in one sentence
+
+`apply_sticky` runs inside `paint_scrolled`, **on a throwaway clone** of the box tree, so the shift
+never reaches the tree `node_rects` / `getBoundingClientRect` read. WPT's sticky suite measures
+`getBoundingClientRect` on a stuck element — so every one of its assertions asks the DOM a question
+our sticky never answers, and `css/css-position/sticky` sits at **15/78** for that reason rather than
+for sixty-three separate ones. The same gap is why a scroll-spy, an "is the header stuck?" class
+toggle, or any sticky-aware measurement library reads the *unstuck* box on a real page.
+
+A second structural gap sits beside it: sticky is resolved against the **document** scroll only, while
+the suite (and every sticky table header inside an `overflow:auto` pane) uses a nested scrollport.
+
+⚠ `left`/`right` sticky — the sticky first column of a data table — is deliberately NOT added as a
+zero-horizontal-scroll no-op. **A half-true arm is worse than a missing one** (tick 1280).

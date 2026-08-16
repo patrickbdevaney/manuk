@@ -7001,3 +7001,29 @@ the arm is mutated out.
 
 **Measured:** `css/css-sizing/stretch` 545/1004 → **644/1004**; across ticks 1278–1280, 439 → 644 on
 one rule read three ways. Gated by `G_STRETCH_BLOCK_AXIS` (27 rows, 8 CONTROLS, RED eight ways).
+
+## The bottom action bar — `position: sticky; bottom: 0` (tick 1281)
+
+**Pattern:** the strip pinned to the bottom of the screen until you reach its place in the document —
+the checkout "continue" button, the mobile toolbar, the cookie bar, the audio-player strip, the
+sticky table footer.
+
+**The class this unlocks:** all of them. `apply_sticky` read exactly one property
+(`!s.inset.top.is_auto()`), so a `bottom`-only sticky box **never entered the branch** and was
+byte-for-byte `position: static`; and `sticky_shift` was a single `max`, which can only push a box
+*down*, so the bottom edge was not merely unwired but unrepresentable.
+
+**Why it hid:** sticky headers — the `top` case — work, and they are what anyone checks first. A
+feature can be 25% implemented and read as done because the quarter that exists is the quarter in
+every tutorial.
+
+**The trap, and it is bigger than the edge:** sticky is a **paint-time** effect, applied to a
+throwaway clone of the box tree inside `paint_scrolled`. It never reaches the tree
+`getBoundingClientRect` reads — so a scroll-spy, an "is the header stuck?" class toggle, or any
+sticky-aware measurement library reads the *unstuck* box, and `css/css-position/sticky` sits at 15/78
+for that single reason. Fixing the edge does not fix that; it is named as the next lever rather than
+implied to be covered.
+
+**Measured:** WPT movement **zero**, for the reason above — the capability is gated instead, by a
+falsifiable page-level check proven RED two ways (drop the `bottom` arm; restore the top-only guard),
+the second of which reports `natural 2000, want 560, got 2000`.

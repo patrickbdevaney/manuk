@@ -2367,20 +2367,54 @@ fn is_float(s: &ComputedStyle) -> bool {
 }
 
 /// The document-coordinate shift to apply to a `position:sticky` box at scroll offset
-/// `scroll_y`. The box stays in normal flow until the viewport would scroll it above
-/// `top_inset`, at which point it pins there — but never past the bottom of its containing
-/// block (`cb_bottom`), so it scrolls away with its container. `natural_y`/`box_h` are the
-/// box's in-flow top and height. Returns `0.0` while the box hasn't been scrolled to its
-/// threshold (the common, unshifted case).
+/// `scroll_y`.
+///
+/// CSS Position §6.3 states this as **two rectangles and a clamp**, and stating it that way is what
+/// makes both edges one rule instead of two implementations:
+///
+/// * the **sticky view rectangle** is the scrollport inset by whichever of `top`/`bottom` the author
+///   set — `[scroll_y + top, scroll_y + viewport_h − bottom]`;
+/// * the box is shifted the minimum amount that brings its border box inside that rectangle;
+/// * and the result is **clamped to the containing block**, which is what makes a sticky header
+///   scroll away with its section instead of following the reader forever.
+///
+/// ⚠⚠⚠ **THIS USED TO IMPLEMENT `top` AND NOTHING ELSE.** The old body was
+/// `natural_y.max((scroll_y + top_inset).min(cb_bottom - box_h))` — a single `max`, which can only
+/// push a box DOWN. `bottom` was not merely unsupported: the caller never read the property, so
+/// `position: sticky; bottom: 0` was **indistinguishable from `position: static`**. That is the
+/// sticky footer, the bottom action bar, the mobile toolbar and the "continue" button every checkout
+/// flow pins to the bottom of the screen — all of them silently scrolling away.
+///
+/// An unset inset must stay `None` rather than becoming `0`: `bottom: auto` means *do not pin to the
+/// bottom*, and a `0` there would pin every top-sticky box to the viewport bottom as well.
 pub fn sticky_shift(
     natural_y: f32,
     box_h: f32,
-    top_inset: f32,
+    top_inset: Option<f32>,
+    bottom_inset: Option<f32>,
+    cb_top: f32,
     cb_bottom: f32,
     scroll_y: f32,
+    viewport_h: f32,
 ) -> f32 {
-    let pinned = (scroll_y + top_inset).min(cb_bottom - box_h);
-    natural_y.max(pinned) - natural_y
+    let mut shift = 0.0f32;
+    // ⚠ **BOTTOM FIRST, THEN TOP, and the order is the tie-break rather than a style choice.** Each
+    // clause is one-directional — `min` can only push the box UP, `max` only DOWN — so they are
+    // independent until the box is TALLER than the view rectangle, at which point both fire and the
+    // later one wins. §6.3 gives that to `top`, which is also what a reader expects: a header too
+    // tall for the screen stays pinned to the top rather than to the bottom.
+    if let Some(b) = bottom_inset {
+        shift = shift.min(scroll_y + viewport_h - b - (natural_y + box_h));
+    }
+    if let Some(t) = top_inset {
+        shift = shift.max(scroll_y + t - natural_y);
+    }
+    // Never outside the containing block, in either direction. Both bounds are needed: the lower one
+    // is what releases a top-stuck box at the end of its section, and the upper one is what stops a
+    // bottom-stuck box being dragged above its section's start.
+    let lo = cb_top - natural_y;
+    let hi = (cb_bottom - box_h - natural_y).max(lo);
+    shift.clamp(lo, hi)
 }
 
 /// Is this box positioned out of normal flow (absolute/fixed)? Such boxes are
@@ -18783,15 +18817,60 @@ mod tests {
 
     #[test]
     fn sticky_shift_pins_then_releases_at_container_bottom() {
-        // A header at y=200, 40px tall, sticky top:0, in a container spanning 0..1000.
+        // A header at y=200, 40px tall, in a container spanning 0..1000, viewport 600 tall.
+        let top = |t: f32, scroll: f32| {
+            sticky_shift(200.0, 40.0, Some(t), None, 0.0, 1000.0, scroll, 600.0)
+        };
         // Not scrolled to it yet → no shift.
-        assert_eq!(sticky_shift(200.0, 40.0, 0.0, 1000.0, 100.0), 0.0);
+        assert_eq!(top(0.0, 100.0), 0.0);
         // Scrolled past its top → it pins at the viewport top (shift keeps it at scroll_y+0).
-        assert_eq!(sticky_shift(200.0, 40.0, 0.0, 1000.0, 300.0), 100.0); // 300 - 200
-                                                                          // With a top:10 inset, it pins 10px lower.
-        assert_eq!(sticky_shift(200.0, 40.0, 10.0, 1000.0, 300.0), 110.0);
+        assert_eq!(top(0.0, 300.0), 100.0); // 300 - 200
+                                            // With a top:10 inset, it pins 10px lower.
+        assert_eq!(top(10.0, 300.0), 110.0);
         // Near the container bottom it stops sticking (can't exceed cb_bottom - box_h = 960).
-        assert_eq!(sticky_shift(200.0, 40.0, 0.0, 1000.0, 5000.0), 760.0); // 960 - 200
+        assert_eq!(top(0.0, 5000.0), 760.0); // 960 - 200
+
+        // ── THE BOTTOM EDGE, which did not exist. A 40px footer at y=200 in the same container,
+        // `bottom: 0`, viewport 600: while the viewport bottom (scroll+600) is BELOW the footer's
+        // natural bottom (240) the footer is already visible and must not move…
+        let bot = |b: f32, scroll: f32| {
+            sticky_shift(200.0, 40.0, None, Some(b), 0.0, 1000.0, scroll, 600.0)
+        };
+        assert_eq!(bot(0.0, 0.0), 0.0);
+        // …and once the reader scrolls back UP so the viewport bottom is above it, it is pulled up
+        // to sit on the viewport's bottom edge. Scroll 0 puts the viewport bottom at 600; scrolling
+        // to -? is not a thing, so use a container the box sits low in: at scroll 0 the box at 800
+        // is below the fold and must rise to 560.
+        assert_eq!(
+            sticky_shift(800.0, 40.0, None, Some(0.0), 0.0, 1000.0, 0.0, 600.0),
+            -240.0 // 600 - 0 - 40 - 800
+        );
+        // A `bottom: 20` inset lifts it 20px clear of the viewport edge.
+        assert_eq!(
+            sticky_shift(800.0, 40.0, None, Some(20.0), 0.0, 1000.0, 0.0, 600.0),
+            -260.0
+        );
+        // ⚠ …but never above the TOP of its containing block — the mirror of the release the top
+        // edge gets at the bottom. A container starting at 700 clamps the rise to 700 - 800.
+        assert_eq!(
+            sticky_shift(800.0, 40.0, None, Some(0.0), 700.0, 1000.0, 0.0, 600.0),
+            -100.0
+        );
+        // ⚠ With BOTH insets and a box taller than the view rectangle, TOP wins (§6.3): a 700px
+        // box in a 600px viewport stays pinned to the top rather than to the bottom.
+        assert_eq!(
+            sticky_shift(
+                200.0,
+                700.0,
+                Some(0.0),
+                Some(0.0),
+                0.0,
+                5000.0,
+                300.0,
+                600.0
+            ),
+            100.0
+        );
     }
 
     /// UAX #14 intra-word break opportunities. Plain words are untouched (parity-safe); a

@@ -973,3 +973,4 @@ tick	sha	epoch	iso	delta_s	shape	wall_s	files	added	deleted	gates	claims	wpt_pas
 1277	a6b23121	1786863215	2026-08-16T02:53:35-04:00	3101	capability	997	9	442	37	484	81	3896	6960	0	642	0	`( feature )` and `( feature: default )` are DIFFERENT QUESTIONS (2026-08-16)
 1278	cc19234b	1786866138	2026-08-16T03:42:18-04:00	2923	capability	997	10	306	70	484	81	3896	6960	0	642	0	a float shrink-to-fits in BOTH axes, and `stretch` was wired to only one (2026-08-16)
 1279	d2fe814c	1786869679	2026-08-16T04:41:19-04:00	3541	capability	997	10	284	46	484	81	3896	6960	0	642	0	`stretch` on an abspos box measures the AVAILABLE SPACE, not the containing block (2026-08-16)
+1280	5906afec	1786874375	2026-08-16T05:59:35-04:00	4696	capability	997	9	376	63	484	81	3896	6960	0	642	0	the INLINE arm EXISTED and was half-true: "fill the containing block" (2026-08-16)

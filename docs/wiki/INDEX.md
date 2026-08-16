@@ -486,6 +486,8 @@
   - L9842 · stretch on an out-of-flow box measures the AVAILABLE SPACE, not the containing block (tick 1279)
   - L9882 · A HALF-TRUE arm is worse than a missing one (tick 1280)
   - L9915 · ⚠⚠ css/css-grid is a third NOISY row, and its banked mark sits above its own band
+  - L9931 · position: sticky implemented ONE of its four edges — and it PAINTS rather than lays out (tick 1281)
+  - L9964 · ⚠⚠⚠ Sticky is a PAINT-time effect, and that is 63 WPT assertions in one sentence
 
 ## browser-capabilities.md
 `docs/wiki/browser-capabilities.md`
@@ -2210,4 +2212,4 @@
   - L231 · Both named mechanisms are subsystem work
 
 ---
-2117 sections across 22 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+2119 sections across 22 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
