@@ -7027,3 +7027,32 @@ implied to be covered.
 **Measured:** WPT movement **zero**, for the reason above — the capability is gated instead, by a
 falsifiable page-level check proven RED two ways (drop the `bottom` arm; restore the top-only guard),
 the second of which reports `natural 2000, want 560, got 2000`.
+
+## The sticky header a script MEASURES — and the scroll container it lives in (tick 1282)
+
+**Pattern:** every scroll-spy ("which section am I in?"), every `is-stuck` class toggle, every
+sticky-aware measurement library, and the sticky table header inside an `overflow:auto` data pane.
+All four ask the DOM where the stuck box IS.
+
+**The class this unlocks, and the half it does not:** the box tree the DOM reads
+(`getBoundingClientRect`, `offsetTop`, hit-testing, the a11y tree, the fidelity oracle's SHAPE term)
+now **contains** the sticky shift, and a sticky box is now resolved against its **nearest scrollport**
+rather than always the document viewport. So a page whose geometry is read at load, on a document
+scroll, or after a relayout gets the stuck position — which is what Chrome reports, and therefore
+what the oracle should now agree with.
+
+⚠ **The half it does NOT unlock, stated rather than implied:** a *synchronous*
+`scroller.scrollTop = 100; el.getBoundingClientRect()` inside one script task still answers from the
+pre-scroll snapshot, because the forced-reflow guard is keyed on `Dom::mutation_seq()` and a scroll
+assignment mutates no DOM. That is a third, non-sticky-specific gap — it is the same reason a
+virtualised list mis-measures — and it is the next tick, named rather than smuggled in here.
+
+**Why it hid:** the pixels were right. `apply_sticky` ran inside `paint_scrolled` on a throwaway
+clone, so a human looking at the screen saw a correctly pinned header while every programmatic reader
+in the engine saw the unstuck box. **A feature that is correct in the one channel a human checks is
+the hardest kind to notice is missing.**
+
+**Measured:** WPT movement **zero** (`css/css-position` 683/1482, `sticky` 15/78, both unchanged) —
+gated instead by two falsifiable lib checks proven RED by mutation (`natural 0, got 0` when the
+re-bake is deleted; `pane 400, got 300` when the document scrollport is forced), the second of which
+only became falsifiable after **two independent maskers** were removed from its fixture.

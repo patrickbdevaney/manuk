@@ -82322,3 +82322,174 @@ NEXT, ranked from what this tick measured.
 (d) The stretch residue is a WRITING-MODE subsystem — see the top of this entry.
 
 WIKI: docs/wiki/box-layout.md — sticky implemented one of its four edges, and paints rather than lays out.
+
+### HARNESS OBSERVATION (agent, after t1281 — observer territory, not touched)
+
+`/home` is at **92% (25G free)** and falling across this session (91% at t1276); swap reported **93%
+full** at the t1281 preflight with RAM otherwise free; and the verify wall has grown from ~997s to
+**1590s** (gate 1562s · build 28s), with the disk-reclaim phase alone now taking ~15 minutes of it.
+Nothing was blocked and no harness file was touched — recorded because a wall that lengthens by 60%
+across six ticks is a trend, not a reading. `scripts/` is observer-owned.
+
+### NEXT-SESSION LEVERS (measured this session, scope assessed, none guessed)
+
+1. ⭐⭐⭐ **`writing-mode` is UNIMPLEMENTED and it is now the measured blocker in THREE areas.**
+   `grep -rn "writing_mode" engine/layout/src/lib.rs` and `grep -rn "enum WritingMode" engine/css/src/`
+   both return ZERO. It gates the residue of `css/css-sizing/stretch` (≈360), the largest failing
+   family in `css/css-position` (69 rows in one `vrl`/`vlr` template file), and most of
+   `css/css-overflow`'s `scrollWidth`/`scrollHeight` family (58 rows). **A SUBSYSTEM, not a tick** —
+   the t156 grid-parking shape. Scope it deliberately or refuse it explicitly; do not re-derive it
+   from a fourth histogram.
+2. ⭐⭐ **Make `position: sticky` reach the box tree the DOM reads** (t1281). It is a paint-time
+   effect on a throwaway clone, so `getBoundingClientRect` never sees the shift — that is
+   `css/css-position/sticky` 15/78 in one sentence, plus every scroll-spy on the real web. Contained
+   (store the view state on `Page`, route ~8 rect-construction sites through one helper) but it moves
+   many measured numbers at once, so it wants a session of its own rather than the tail of one.
+3. **`scrollWidth`/`scrollHeight` must include START-direction overflow** — `content_extent` measures
+   only the end edges (`max` of right/bottom from the box origin), so RTL and `flex-wrap: wrap-reverse`
+   content that overflows left/top contributes nothing. The reachable (horizontal-tb) subset is real
+   daily-driver work for the RTL web; the rest is blocked on (1).
+4. Carried from t1276: the `sizes` VALUE tokenizer — CSS comments, identifier escapes (`1\p\x` is
+   `1px`, and `\(` must not open a paren for the top-level comma split), and a math function
+   resolving negative being CLAMPED to zero rather than dropped.
+5. ⚠ **REFUSED, with reasons, so they are not re-discovered as bargains:** `contain-intrinsic-size`
+   is 0/432 in one file but the board lists CSS containment / `content-visibility` under DEFER;
+   `css/css-overflow`'s 50-row parsing family is `scroll-target-group` / `scroll-marker-group` /
+   `scroll-axis-lock`, i.e. the unshipped-spec discount.
+6. ⚠⚠ **TWO LEDGER ROWS ARE NOISY AND THEIR MARKS SIT ABOVE THEIR OWN BANDS.** `css/css-sizing`
+   (±27, its `animation/` subtree is time-dependent) is banked at an auditable FLOOR; `css/css-grid`
+   is banked at 6818 while four same-hour readings — two of them on an OLD binary — span 6760–6791.
+   A future full sweep will read a false regression on `css/css-grid` through no fault of the engine.
+
+## Tick 1282 — sticky was a PAINT effect: the DOM asked where the header was and the box tree said "unstuck" (2026-08-16)
+
+TICK SHAPE: capability. Board re-run at the top of this tick: unchanged — PHASE MANDATE is
+SHAPE/POSITION on ★ CSS-LAYOUT areas, and `css/css-position` is a ★ row (799 failing, 46.1%). The
+lever is t1281's own ⭐⭐ NEXT (a), taken because t1281 MEASURED it rather than guessed it.
+
+HYPOTHESIS (written before the code). Two structural gaps, both named by t1281, both provable from
+the failure text of `css/css-position/sticky` (15/78, 30 files) without opening the engine:
+
+```text
+  FAIL Sticky elements work with the root (document) scroller
+       assert_equals: expected 750 but got 8            <- the UNSHIFTED document y
+  FAIL after reaching the sticking point the sticky box should be offset
+       assert_equals: expected 75 but got 100           <- the UNSHIFTED in-flow y
+  FAIL start of scroll container      expected 20  but got 200
+  FAIL end of scroll container        expected 400 but got 200
+```
+
+**Every one of those is `getBoundingClientRect` on a stuck element**, and every one reports the
+box's *in-flow* position — because `apply_sticky` runs inside `paint_scrolled`, on a **throwaway
+clone** of the box tree. The shift is painted and then thrown away, so the tree that `node_rects`
+(and therefore `getBoundingClientRect`, `offsetTop`, hit-testing, the a11y tree and the fidelity
+oracle's SHAPE term) reads has never contained it. Sticky is not half-implemented in the DOM; it is
+**absent from the DOM**, which is why the suite reads the same number scrolled and unscrolled.
+
+The second gap is the scrollport. `apply_sticky` resolves every sticky box against the **document**
+viewport, but the suite — and every sticky table header inside an `overflow:auto` pane — scrolls a
+*scroll container*. Chrome resolves a sticky box against its **nearest scrollport**.
+
+⭐ **THE MACHINERY FOR THE FIX ALREADY EXISTS AND IS NOT THE PAINT PATH.** `Page::set_element_scroll`
+already **translates the scroll container's children inside `self.root_box`** (that is how
+`element.scrollTop` "moves the actual pixels", G_SCROLL, t67). So the tree is already the source of
+truth for container scrolling; the sticky counter-shift is the one term missing from it.
+
+PLAN, and the invariant that makes it safe to bake a paint effect into the layout tree:
+
+> **`root_box` carries the sticky shifts for the current view state, and `Page::sticky_applied`
+> records the exact per-node `dy` that was baked in — so it can be UNDONE exactly before it is
+> recomputed.** A translation is invertible and commutes, which is what makes this a ledger rather
+> than a cache that can drift.
+
+1. `apply_sticky` becomes **scrollport-aware**: it carries `(sport_top, sport_h)` down the tree and
+   REPLACES it with the padding box of any `overflow: auto|scroll|hidden` box it descends into.
+   `manuk_layout::sticky_shift` is unchanged — its `scroll_y`/`viewport_h` were always "the
+   scrollport top and height in the tree's coordinate space"; only the *caller* assumed document.
+2. `Page::restick(scroll_y)` undoes `sticky_applied`, re-walks, and re-records.
+3. Hooked at the three places the view can change: after every relayout (`reapply_scroll_offsets`,
+   already called at ~10 sites), after an element scroll (`set_element_scroll`), and on document
+   scroll (`view_changed`, BEFORE its `wants_view_events` early-out — a page with no scroll listener
+   still has a sticky header).
+4. `paint_scrolled` keeps working for an arbitrary `scroll_y` by un-baking first, so the paint and
+   the DOM can never disagree and can never double-shift.
+
+⚠ **AN UNSET INSET STAYS `None`** (t1281) and ⚠ **the containing-block clamp is two-sided** — both
+carried unchanged; this tick moves *where* the shift lands, not *what* it is.
+
+WHAT LANDED. `apply_sticky` is scrollport-aware and records what it shifts; `Page::restick` bakes
+those shifts into the live `root_box` and can undo them exactly; it is hooked at construction (a
+sticky box can be stuck at scroll 0), at every relayout, at every element scroll, and on document
+scroll. `paint_scrolled` un-bakes before re-applying for a different scroll, so paint and the DOM
+cannot disagree and cannot compound — and in the common case (paint the scroll you were just told
+about) it now borrows the tree instead of deep-cloning it every frame, which is a per-frame full box
+tree clone removed from every sticky page.
+
+```text
+  WPT MOVEMENT: **ZERO, and the reason is a THIRD gap that this tick MEASURED.**
+    css/css-position         683/1482  ->  683/1482   (banked mark 683 — no regression)
+    css/css-position/sticky    15/78   ->    15/78    (HANG/CRASH 0)
+```
+
+⚠⚠⚠ **THE RECT SNAPSHOT JS READS IS INVALIDATED BY DOM MUTATIONS AND BY NOTHING ELSE — AND
+`el.scrollTop = n` IS NOT A DOM MUTATION.** `layout_rect` calls `force_reflow_if_stale`, which calls
+the host hook, which is `forced_reflow`, whose first statement is
+`if dom.mutation_seq() == c.laid_out_at { return; }`. A scroll assignment bumps no mutation counter,
+so a synchronous `scroller.scrollTop = 100; target.getBoundingClientRect()` — **the entire shape of
+the sticky suite, and of every virtualised list on the web** — is answered from the pre-scroll
+layout. And `forced_reflow` rebuilds through `restyle_and_layout`, a free function that has never
+seen `Page::scroll_offsets`, so even when it does run it produces an **unscrolled** tree.
+
+⭐ **The general form, which is the part worth keeping: a snapshot invalidated by ONE kind of change
+is blind to every other kind.** Layout-affecting state that is not the DOM — scroll offsets, viewport
+size, sticky state, media-query state — needs its own sequence number in that guard, or the read is
+stale in exactly the case the code was written for.
+
+That is a separate mechanism from this one and is the next tick, not a wider version of this one.
+Landing it here would have been two mutations in one arm.
+
+GATE: two lib gates, both proven RED by a mutation, and the SECOND one only after the fixture was
+repaired.
+(A) `sticky_pins_in_the_box_tree_the_dom_reads` — every assertion reads `Page::node_rects`, the map
+    `getBoundingClientRect` answers from. RED by deleting `self.restick(scroll_y)` from
+    `view_changed`: **`natural 0, got 0`** — the header does not move at all, which is the assertion
+    message saying "sticky is invisible to the DOM" in its own words. Carries two CONTROLS: scrolling
+    back releases the header to its EXACT in-flow y (a compounding bake drifts here), and a
+    `bottom:0` footer stops sticking once its in-flow position is on screen.
+(B) `sticky_resolves_against_its_own_scroll_container` — RED by passing the document scrollport down
+    the recursion: **`pane 400, got 300`**, the predicted wrong number.
+
+⚠⚠⚠ **(B)'s FIRST FIXTURE WAS VACUOUS AND THE FALSIFICATION IS THE ONLY REASON I KNOW.** It put the
+pane at document y 0 — where the pane's padding-box top and the document scrollport top are BOTH 0 —
+so the right answer and the wrong one coincide, and the mutation stayed **green**. *The configuration
+that already works is not evidence about the ones that do not* (t1276-1281), and it cost a 400px
+spacer to find. A SECOND masker sat behind it: with the pane itself as the sticky box's containing
+block, §6.3's containing-block clamp pins the header on its own and the sticky constraint is never
+consulted — the assertion would have been measuring the clamp. The `<section>` wrapper removes that.
+**Two independent maskers on one four-line fixture.**
+
+⚠ **`g_hscroll_carousel` IS RED ON `main` AND IS NOT IN THE WALL.** Verified with an old-binary
+control (`git checkout -- engine/page/src/lib.rs`, same hour, byte-identical numbers:
+`left: (1000.0, 300.0)  right: (300.0, 300.0)`). It is a flex `min-width:auto` / `flex-shrink`
+failure with nothing to do with this tick, and `scripts/verify.sh` names its gates explicitly, so
+this one is invisible to the ratchet. Recorded, not fixed here; `scripts/` is observer-owned but the
+GATE is agent territory and this is a real hole in the wall's coverage.
+
+PERF: a deep clone of the whole box tree per painted frame is REMOVED on every sticky page (the
+common path now borrows). Added: one tree walk per scroll on sticky pages only, which is strictly
+less than the clone-plus-walk it replaces. Nothing claimed beyond that.
+
+NEXT, ranked from what this tick measured.
+(a) ⭐⭐⭐ **GIVE `forced_reflow` A SCROLL SEQUENCE NUMBER AND THE SCROLL OFFSETS.** It is the gate on
+    `css/css-position/sticky`'s remaining 63, on `css/css-overflow`'s scroll family, and on every
+    `measure -> scroll -> measure` virtualised list. Bounded: a counter in the `scrollTop`/`scrollLeft`
+    setters, a second term in `forced_reflow`'s staleness test, and a pointer to `Page::scroll_offsets`
+    plus the sticky pass in `ReflowCtx`.
+(b) `left`/`right` sticky — still refused as a zero-horizontal-scroll no-op until horizontal scroll
+    threading exists (t1280's half-true-arm rule).
+(c) Carried: `writing-mode` is a SUBSYSTEM (t1281 lever 1) — scope or refuse it deliberately.
+(d) `g_hscroll_carousel` above: a red gate outside the wall is a ratchet tooth that was never cut.
+
+WIKI: docs/wiki/box-layout.md — the LEDGER pattern for baking a scroll-dependent paint effect into
+the layout tree, the nearest-scrollport rule, the two-masker fixture lesson, and the snapshot-blind-
+to-non-DOM-change mechanism.

@@ -9975,3 +9975,60 @@ the suite (and every sticky table header inside an `overflow:auto` pane) uses a 
 
 ⚠ `left`/`right` sticky — the sticky first column of a data table — is deliberately NOT added as a
 zero-horizontal-scroll no-op. **A half-true arm is worse than a missing one** (tick 1280).
+
+## Baking a paint effect into the layout tree: the LEDGER, not the cache (tick 1282)
+
+Sticky now lands in the live `root_box`, so every DOM reader — `getBoundingClientRect`, `offsetTop`,
+hit-testing, the a11y tree, the fidelity oracle's SHAPE term — sees the stuck position. The general
+mechanism, which applies to any scroll-dependent geometry we later want the DOM to see:
+
+> **Record the exact per-node translation you baked in, and UNDO it before recomputing.** A shift is
+> not derivable from the shifted tree (the constraint is not linear in the scroll: a box is pinned,
+> then *released* at the end of its containing block, and no delta expresses the release), so the
+> only way to recompute is from the true in-flow layout. A translation is exactly invertible, which
+> makes the record a **ledger** — reconstructible, auditable, cannot drift — rather than a cache.
+
+⚠ **Undo order does not matter; re-application order does.** A nested sticky box carries its
+ancestor's shift as well as its own, but both are translations of overlapping subtrees and
+translations commute, so the total removed is the same whichever order the entries are subtracted in.
+Re-application is top-down by construction, because the inner box's constraint must be evaluated
+against its already-shifted ancestor — which is what makes nested sticky offsets accumulate.
+
+**The invalidation rule that this needs and a cache would not:** after a relayout the tree is FRESH,
+so the ledger describes rects that no longer exist — it must be **dropped**, not undone. Undoing a
+shift that was never applied to these boxes moves them wrongly and silently.
+
+### The nearest scrollport, not the viewport
+
+CSS Position §6.3 resolves a sticky box against its **nearest scrollport**. Ours resolved every one
+against the document viewport, so a sticky header inside an `overflow:auto` pane — the second-most
+common sticky construct on the web — was measured against a rectangle it is nowhere near and simply
+scrolled away with its pane. The walk now replaces the scrollport with the padding box of any
+`overflow: auto|scroll|hidden` box it descends into. No scroll term appears in that swap: the
+container's children are *already* translated by its scroll offset in the box tree (that is how
+`element.scrollTop` moves pixels), while the container's own box is not — so the padding box and the
+scrolled children are in one coordinate space.
+
+⚠⚠⚠ **A FIXTURE WHERE THE RIGHT ANSWER AND THE WRONG ONE COINCIDE IS NOT A TEST.** The first version
+of the gate for this put the scrolling pane at document y 0 — where the pane's padding-box top and
+the document scrollport top are BOTH 0 — and the "always use the document scrollport" mutation stayed
+**green**. Two independent maskers had to be removed before the gate could fail: a 400px spacer above
+the pane (so the two scrollports differ), and a `<section>` wrapper inside it (because with the pane
+itself as the containing block, §6.3's containing-block clamp pins the header on its own and the
+sticky constraint is never consulted — the assertion was measuring the clamp).
+
+### ⚠⚠⚠ …and the DOM still cannot see it MID-SCRIPT, which is a THIRD gap
+
+`css/css-position/sticky` did not move at all (15/78, `css/css-position` 683/1482 unchanged), and the
+reason is one layer further out and is **not** sticky-specific. The rect snapshot JS reads is
+published *before* scripts run; `force_reflow_if_stale` re-publishes it, but `forced_reflow` gates on
+`Dom::mutation_seq()` — **and `el.scrollTop = n` is not a DOM mutation.** So a synchronous
+`scroller.scrollTop = 100; target.getBoundingClientRect()` — which is the entire shape of that suite,
+and of every virtualised list — answers from the pre-scroll layout. Worse, `forced_reflow` rebuilds
+the tree with `restyle_and_layout`, a free function that knows nothing of `Page::scroll_offsets`, so
+even when it *does* run it produces an **unscrolled** tree.
+
+The general form, which is the reusable part: **a snapshot invalidated by one kind of change is blind
+to every other kind.** Layout-affecting state that is not the DOM — scroll offsets, viewport size,
+sticky state, media-query state — needs its own sequence number in that guard, or the read is stale
+in exactly the cases the author wrote the code for.

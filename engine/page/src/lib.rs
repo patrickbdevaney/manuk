@@ -1921,6 +1921,27 @@ pub struct Page {
     /// Whether any element uses `position:sticky` — gates the per-frame sticky paint pass so
     /// non-sticky pages pay nothing.
     has_sticky: bool,
+    /// ⚠⚠⚠ **THE STICKY SHIFT CURRENTLY BAKED INTO `root_box`, PER NODE — THE LEDGER THAT LETS A
+    /// PAINT EFFECT LIVE IN THE LAYOUT TREE.**
+    ///
+    /// Until tick 1282 `position:sticky` was applied inside `paint_scrolled`, to a **throwaway
+    /// clone**. The pixels moved and nothing else did: `getBoundingClientRect`, `offsetTop`,
+    /// hit-testing, the a11y tree and the fidelity oracle's SHAPE term all read `root_box`, and
+    /// `root_box` had never contained the shift. So a stuck header reported its *in-flow* position
+    /// — the same number scrolled and unscrolled — which is every one of the 63 failing assertions
+    /// in `css/css-position/sticky`, and every scroll-spy, "is it stuck?" class toggle and
+    /// sticky-aware measurement library on the real web.
+    ///
+    /// The shift now lands in `root_box`. That is only safe because it is **exactly invertible**:
+    /// this map holds the `dy` translated into each sticky node's subtree, so
+    /// [`Page::restick`] can undo it and recompute from the true in-flow layout instead of
+    /// compounding scroll after scroll. Empty on a page with no sticky box, which is nearly all of
+    /// them.
+    sticky_applied: std::collections::HashMap<manuk_dom::NodeId, f32>,
+    /// The **document** scroll offset the baked sticky shifts were computed for. Element scroll
+    /// containers carry their own offset in [`Page::scroll_offsets`] and need no mirror here — their
+    /// children are already translated in the tree, so their scrollport is a plain box rect.
+    sticky_scroll_y: f32,
     /// ⚠⚠⚠ **THE "ALREADY RAN" MARKER FOR RUNTIME-FETCHED SCRIPTS, WHICH USED TO BE "DELETE ITS
     /// `src`" — AND A SCRIPT CANNOT READ ITS OWN URL OFF AN ATTRIBUTE THAT IS GONE.**
     ///
@@ -3790,6 +3811,11 @@ impl Page {
             }
         }
         self.scroll_offsets.insert(node, new);
+        // ⭐ **The scroll just moved a sticky box's own scrollport past it.** The translation above
+        // carried every child of the container, including any sticky one, so without this the
+        // sticky header inside an `overflow:auto` pane scrolls away with the pane — which is the
+        // whole of `css/css-position/sticky`'s scroll-container family reading the in-flow position.
+        self.restick(self.sticky_scroll_y);
         new
     }
 
@@ -3876,6 +3902,45 @@ impl Page {
                 }
             }
         }
+        // The tree is FRESH out of layout, so the old ledger describes boxes that no longer exist —
+        // drop it rather than "undo" a shift that was never applied to these rects.
+        self.sticky_applied.clear();
+        self.restick(self.sticky_scroll_y);
+    }
+
+    /// **Re-bake the `position:sticky` shifts into `root_box` for document scroll `scroll_y`.**
+    ///
+    /// Undo what [`Page::sticky_applied`] says is currently baked in, then walk the tree and apply
+    /// the shifts the current view state calls for, recording them again. Undo-then-reapply rather
+    /// than applying a delta, because the constraint is not linear in the scroll: a box is pinned,
+    /// then released at the end of its containing block, and a delta cannot express the release.
+    ///
+    /// ⚠ **Undo order does not matter and that is not luck.** A nested sticky box has its ancestor's
+    /// shift in its rect as well as its own, but both are translations of overlapping subtrees, and
+    /// translations commute — the total removed from any box is the sum of the entries covering it
+    /// whichever order they are subtracted in. Re-application *is* ordered (outer first, by the
+    /// walk), because the inner box's constraint is evaluated against its already-shifted ancestor,
+    /// which is what makes nested sticky offsets accumulate the way §6.3 says they do.
+    ///
+    /// Costs nothing on a page with no sticky box: `has_sticky` is the first thing it asks.
+    fn restick(&mut self, scroll_y: f32) {
+        if !self.has_sticky {
+            return;
+        }
+        let previous: Vec<(manuk_dom::NodeId, f32)> = self.sticky_applied.drain().collect();
+        for (node, dy) in previous {
+            if let Some(b) = self.root_box.find_mut(node) {
+                b.shift_y(-dy);
+            }
+        }
+        // The document scrollport. `viewport_size()` is the same viewport the cascade resolved
+        // `vh`/`dvh` against, so a sticky box and the units around it cannot disagree about how tall
+        // the screen is.
+        let (_, vh) = manuk_css::values::viewport_size();
+        let mut applied = std::collections::HashMap::new();
+        apply_sticky(&mut self.root_box, &self.styles, scroll_y, vh, &mut applied);
+        self.sticky_applied = applied;
+        self.sticky_scroll_y = scroll_y;
     }
 
     /// Every `overflow: auto|scroll|hidden` container's scroll geometry — what the DOM must report.
@@ -5290,6 +5355,12 @@ impl Page {
     /// `IntersectionObserver` loads its first screenful and stops forever.
     #[cfg(feature = "spidermonkey")]
     pub fn view_changed(&mut self, scroll_y: f32, vw: f32, vh: f32, scrolled: bool) {
+        // ⚠⚠ **BEFORE the `wants_view_events` early-out, and that placement is the point.** A page
+        // with no scroll listener and no observer still has a sticky header, and the DOM must still
+        // be able to say where it is. Gating the re-bake on "is anything listening?" would make
+        // `getBoundingClientRect` correct on exactly the pages that were already asking and wrong on
+        // the quiet ones — a bug visible only to the careful caller (t1267).
+        self.restick(scroll_y);
         let Some(ctx) = &self.js else { return };
         // Most pages have no scroll listener and no observer. For those, every part of what follows
         // — rebuilding the rect map, re-entering JS, pumping timers — is work done to inform a page
@@ -5317,9 +5388,13 @@ impl Page {
         }
     }
 
-    /// Without SpiderMonkey there is nothing to notify.
+    /// Without SpiderMonkey there is nothing to *notify* — but sticky is layout, not script, so the
+    /// re-bake still has to happen or the JS-less build reports a different geometry from the
+    /// shipping one.
     #[cfg(not(feature = "spidermonkey"))]
-    pub fn view_changed(&mut self, _scroll_y: f32, _vw: f32, _vh: f32, _scrolled: bool) {}
+    pub fn view_changed(&mut self, scroll_y: f32, _vw: f32, _vh: f32, _scrolled: bool) {
+        self.restick(scroll_y);
+    }
 
     /// Evaluate a script in the page's context. Used by the conformance suite to read state back
     /// out of the JS world through the DOM, which is the only channel a test has into a page.
@@ -5865,7 +5940,7 @@ impl Page {
         let has_sticky = styles
             .values()
             .any(|s| s.position == manuk_css::Position::Sticky);
-        Page {
+        let mut page = Page {
             pending_submits: std::cell::RefCell::new(Vec::new()),
             final_url: final_url.to_string(),
             title,
@@ -5875,6 +5950,8 @@ impl Page {
             styles,
             js,
             has_sticky,
+            sticky_applied: std::collections::HashMap::new(),
+            sticky_scroll_y: 0.0,
             dyn_scripts_ran: std::collections::HashSet::new(),
             // Empty by default; the async pre-fetch pass on the caller's path sets this before the
             // deferred (module) scripts run (`load_async`, `from_prefetched_inner`).
@@ -5899,7 +5976,15 @@ impl Page {
             last_cascade: None,
             csp,
             load_deadline: None,
-        }
+        };
+        // ⚠ **A STICKY BOX CAN BE STUCK AT SCROLL 0.** `top: 0` on a box whose containing block
+        // starts above the scrollport, and every `bottom`-stuck footer, are already displaced before
+        // anything scrolls — `css/css-position/sticky` opens with exactly that assertion
+        // (*"initially the sticky box should be pushed to the top of the container"*). Baking the
+        // shift only on the first scroll would leave the DOM reporting the in-flow position for the
+        // whole of a page's life if the user never scrolls, which is most sticky footers.
+        page.restick(0.0);
+        page
     }
 
     /// Fire a trusted `click` at `node` and its ancestors (delegation), running the page's JS
@@ -8371,13 +8456,25 @@ impl Page {
     ) -> Canvas {
         let z = self.z_index_map();
         let clip = self.clip_map();
-        // position:sticky is a paint-time effect of the current scroll: pin sticky boxes to
-        // their threshold within their containing block. Applied to a throwaway copy of the
-        // box tree so the base layout is untouched; only sticky pages pay the clone.
+        // ⭐ **THE TREE ALREADY CARRIES THE SHIFT** (tick 1282) — `restick` bakes it in for
+        // `sticky_scroll_y`, so the common case (the host paints the scroll it just reported) is a
+        // plain borrow and the per-frame deep clone this used to pay on every sticky page is gone.
+        //
+        // A caller asking for a DIFFERENT scroll than the page was last told about still gets a
+        // correct picture: un-bake what the ledger says is in the tree, then re-apply for the scroll
+        // requested. Un-baking FIRST is what stops the two shifts compounding — the failure that
+        // baking a paint effect into the layout tree invites, and the reason the ledger exists.
         let sticky_boxes;
-        let boxes: &LayoutBox = if self.has_sticky {
+        let boxes: &LayoutBox = if self.has_sticky && (scroll_y - self.sticky_scroll_y).abs() > 0.01
+        {
             let mut b = self.root_box.clone();
-            apply_sticky(&mut b, &self.styles, scroll_y, height as f32);
+            for (node, dy) in &self.sticky_applied {
+                if let Some(x) = b.find_mut(*node) {
+                    x.shift_y(-dy);
+                }
+            }
+            let mut applied = std::collections::HashMap::new();
+            apply_sticky(&mut b, &self.styles, scroll_y, height as f32, &mut applied);
             sticky_boxes = b;
             &sticky_boxes
         } else {
@@ -9660,10 +9757,41 @@ fn hex(c: u8) -> Option<u8> {
     }
 }
 
-/// Recursively pin `position:sticky` boxes for the current `scroll_y`. Each sticky child is
-/// shifted (with its subtree) so it stays at its `top` threshold from the viewport, bounded by
-/// the bottom of its containing block (its parent box). Non-sticky boxes are untouched.
-fn apply_sticky(b: &mut LayoutBox, styles: &StyleMap, scroll_y: f32, viewport_h: f32) {
+/// Recursively pin `position:sticky` boxes against **their own scrollport**, recording every shift
+/// it makes into `applied` so the exact same translation can later be UNDONE.
+///
+/// Each sticky child is shifted (with its subtree) so it stays at its `top`/`bottom` threshold
+/// inside the scrollport, bounded by its containing block (its parent box). Non-sticky boxes are
+/// untouched.
+///
+/// ## The scrollport is the NEAREST one, not always the viewport (tick 1282)
+///
+/// `sport_top`/`sport_h` describe the sticky view rectangle in **the box tree's coordinate space**,
+/// and the walk REPLACES them with the padding box of any `overflow: auto|scroll|hidden` box it
+/// descends into. CSS Position §6.3 resolves a sticky box against its nearest scrollport, and a
+/// sticky table header inside an `overflow:auto` pane — the single most common sticky construct
+/// after the page header — has nothing to do with the document viewport. This used to resolve
+/// *every* sticky box against the document, so such a header was pinned to a rectangle it is not
+/// inside: `css/css-position/sticky` reported `start of scroll container: expected 20 but got 200`,
+/// which is the in-flow position, unshifted, because the document-relative constraint never fired.
+///
+/// ⚠ **The container's own box is NOT translated by its scroll offset — its children are**
+/// (`Page::set_element_scroll`). So the container's padding box and the already-scrolled children
+/// are in one space, and no scroll term appears here: `sport_top` IS the padding-box top.
+///
+/// ## Why `applied` is an output rather than a side effect
+///
+/// The shift is baked into the live `root_box`, which every DOM reader (`getBoundingClientRect`,
+/// `offsetTop`, hit-testing, the a11y tree, the fidelity oracle) sees. Recomputing on the next
+/// scroll must therefore start from the *unshifted* tree — and a translation is exactly invertible,
+/// so recording `dy` per node is a ledger that cannot drift, where a re-derivation could.
+fn apply_sticky(
+    b: &mut LayoutBox,
+    styles: &StyleMap,
+    sport_top: f32,
+    sport_h: f32,
+    applied: &mut std::collections::HashMap<manuk_dom::NodeId, f32>,
+) {
     use manuk_layout::BoxContent;
     let (cb_top, cb_bottom) = (b.rect.y, b.rect.y + b.rect.height);
     let cb_width = b.rect.width;
@@ -9689,15 +9817,38 @@ fn apply_sticky(b: &mut LayoutBox, styles: &StyleMap, scroll_y: f32, viewport_h:
                                 bottom,
                                 cb_top,
                                 cb_bottom,
-                                scroll_y,
-                                viewport_h,
+                                sport_top,
+                                sport_h,
                             );
-                            child.shift_y(shift);
+                            if shift != 0.0 {
+                                child.shift_y(shift);
+                                *applied.entry(node).or_insert(0.0) += shift;
+                            }
                         }
                     }
                 }
             }
-            apply_sticky(child, styles, scroll_y, viewport_h);
+            // A scroll container becomes the scrollport for everything beneath it.
+            let (ct, ch) = child
+                .node
+                .and_then(|n| styles.get(&n))
+                .filter(|s| {
+                    matches!(
+                        s.overflow,
+                        manuk_css::Overflow::Auto
+                            | manuk_css::Overflow::Scroll
+                            | manuk_css::Overflow::Hidden
+                    )
+                })
+                .map(|s| {
+                    let bw = &s.border_width;
+                    (
+                        child.rect.y + bw.top,
+                        (child.rect.height - bw.top - bw.bottom).max(0.0),
+                    )
+                })
+                .unwrap_or((sport_top, sport_h));
+            apply_sticky(child, styles, ct, ch, applied);
         }
     }
 }
@@ -11304,82 +11455,155 @@ mod tests {
         );
     }
 
+    /// ⚠⚠⚠ **EVERY ASSERTION HERE READS `Page::node_rects` — THE MAP `getBoundingClientRect`
+    /// ANSWERS FROM — AND NOT A PAINT-TIME CLONE.** That is the whole of tick 1282. The shift used
+    /// to be computed inside `paint_scrolled` on a throwaway copy of the box tree, so the pixels
+    /// moved and the DOM never learned: a stuck header reported its in-flow position, scrolled or
+    /// not, to `getBoundingClientRect`, `offsetTop`, hit-testing, the a11y tree, the fidelity
+    /// oracle, and to every scroll-spy on the web.
+    ///
+    /// **To watch it go RED:** delete the `self.restick(scroll_y)` from `view_changed`, or the
+    /// `page.restick(0.0)` at the end of the constructor. Either leaves these rects at the in-flow
+    /// position, which is what the pinned/stuck assertions reject. Dropping the `bottom` arm from
+    /// `manuk_layout::sticky_shift` (t1281) still fails the footer rows.
     #[test]
-    fn sticky_header_pins_on_scroll_and_releases_at_bottom() {
+    fn sticky_pins_in_the_box_tree_the_dom_reads() {
+        // The scrollport height the constructor and `view_changed` resolve against — the SAME
+        // viewport the cascade resolves `vh` against, read rather than assumed so this test cannot
+        // disagree with the engine about how tall the screen is.
+        let (_, vh) = manuk_css::values::viewport_size();
         let html = r#"<body style="margin:0">
             <div id="h" style="position:sticky;top:0;height:40px">Header</div>
             <div style="height:2000px">tall content</div>
         </body>"#;
         let fonts = FontContext::new();
-        let page = Page::load(html, "https://x.test/", &fonts, 400.0);
+        let mut page = Page::load(html, "https://x.test/", &fonts, 400.0);
         assert!(page.has_sticky, "sticky is detected");
 
         let hid = manuk_css::query_selector_all(page.dom(), page.dom().root(), "#h")[0];
-        let rects: std::collections::HashMap<_, _> =
-            page.root_box.node_rects(page.dom()).into_iter().collect();
-        let natural_y = rects[&hid].y;
+        let natural_y = page.node_rects()[&hid].y;
 
         // Scrolled 500px past the top: the header pins so it stays at the viewport top (top:0),
-        // i.e. its document y rises to ~scroll_y.
-        let mut boxes = page.root_box.clone();
-        apply_sticky(&mut boxes, &page.styles, 500.0, 600.0);
-        let pinned: std::collections::HashMap<_, _> =
-            boxes.node_rects(page.dom()).into_iter().collect();
+        // i.e. its document y rises to ~scroll_y — AND THE DOM SAYS SO.
+        page.view_changed(500.0, 400.0, vh, true);
+        let pinned = page.node_rects()[&hid].y;
         assert!(
-            (pinned[&hid].y - (natural_y + 500.0)).abs() < 1.5,
-            "sticky header pinned to the scroll offset (natural {natural_y}, got {})",
-            pinned[&hid].y
+            (pinned - (natural_y + 500.0)).abs() < 1.5,
+            "sticky header pinned to the scroll offset IN node_rects (natural {natural_y}, got \
+             {pinned}) — this is the number getBoundingClientRect returns"
+        );
+        // CONTROL: scrolled back to the top it must return to its in-flow position exactly. A
+        // one-way shift that never releases would pass the row above and is not sticky; it is also
+        // what an un-invertible bake would produce, so this row guards the ledger.
+        page.view_changed(0.0, 400.0, vh, true);
+        let back = page.node_rects()[&hid].y;
+        assert!(
+            (back - natural_y).abs() < 0.01,
+            "scrolling back releases the header to its EXACT in-flow y (natural {natural_y}, got \
+             {back}) — a compounding bake drifts here"
         );
 
-        // ⚠⚠⚠ **THE BOTTOM EDGE, WHICH DID NOT EXIST.** `apply_sticky` asked only
-        // `!s.inset.top.is_auto()`, so `position: sticky; bottom: 0` never entered the branch at
-        // all and was **indistinguishable from `position: static`** — the sticky footer, the bottom
-        // action bar, the mobile toolbar and the "continue" button every checkout flow pins to the
-        // bottom of the screen, all of them silently scrolling away.
+        // ⚠⚠⚠ **THE BOTTOM EDGE** (t1281): `position: sticky; bottom: 0` is the sticky footer, the
+        // bottom action bar and the "continue" button every checkout flow pins to the bottom.
         //
-        // The footer sits below 2000px of filler. At scroll 0 with a 600px viewport it is far below
-        // the fold, so it must be pulled UP onto the viewport's bottom edge: 600 − 0 − 40 = 560.
-        //
-        // **To watch it go RED:** drop the `bottom` arm (`shift.min(…)`) from `sticky_shift`, or
-        // restore `apply_sticky`'s `&& !s.inset.top.is_auto()` guard. Either leaves the footer at
-        // its natural y, which is what the first assertion below rejects.
+        // The footer sits below 2000px of filler, so at scroll 0 it is far below the fold and must
+        // already be pulled UP onto the viewport's bottom edge: `vh − 0 − 40`. **A sticky box can be
+        // stuck at scroll 0**, which is why the constructor re-sticks rather than waiting for a
+        // scroll that may never come.
         let html2 = r#"<body style="margin:0">
             <div style="height:2000px">tall content</div>
             <div id="f" style="position:sticky;bottom:0;height:40px">Footer</div>
         </body>"#;
-        let page2 = Page::load(html2, "https://x.test/", &fonts, 400.0);
+        let mut page2 = Page::load(html2, "https://x.test/", &fonts, 400.0);
         assert!(
             page2.has_sticky,
             "sticky is detected for a bottom-only inset"
         );
         let fid = manuk_css::query_selector_all(page2.dom(), page2.dom().root(), "#f")[0];
-        let nat2 = page2
-            .root_box
-            .node_rects(page2.dom())
-            .into_iter()
-            .collect::<std::collections::HashMap<_, _>>()[&fid]
-            .y;
-        let mut b2 = page2.root_box.clone();
-        apply_sticky(&mut b2, &page2.styles, 0.0, 600.0);
-        let stuck: std::collections::HashMap<_, _> =
-            b2.node_rects(page2.dom()).into_iter().collect();
+        let stuck = page2.node_rects()[&fid].y;
         assert!(
-            (stuck[&fid].y - 560.0).abs() < 1.5,
-            "a `bottom:0` sticky footer rides the viewport's bottom edge (natural {nat2}, want 560, \
-             got {}) — before this it was position:static wearing sticky's name",
-            stuck[&fid].y
+            (stuck - (vh - 40.0)).abs() < 1.5,
+            "a `bottom:0` sticky footer rides the viewport's bottom edge WITHOUT ANY SCROLL (want \
+             {}, got {stuck})",
+            vh - 40.0
         );
         // CONTROL: scrolled far enough that the footer's own in-flow position is on screen, it must
         // sit exactly there and not be dragged anywhere. A box that always moves is not sticky, it
         // is fixed — and this row is what tells the two apart.
-        let mut b3 = page2.root_box.clone();
-        apply_sticky(&mut b3, &page2.styles, 1600.0, 600.0);
-        let rel: std::collections::HashMap<_, _> = b3.node_rects(page2.dom()).into_iter().collect();
+        page2.view_changed(2000.0, 400.0, vh, true);
+        let released = page2.node_rects()[&fid].y;
         assert!(
-            (rel[&fid].y - nat2).abs() < 1.5,
-            "once its in-flow position is inside the viewport the footer stops sticking \
-             (natural {nat2}, got {})",
-            rel[&fid].y
+            (released - 2000.0).abs() < 1.5,
+            "once its in-flow position is inside the viewport the footer stops sticking (want 2000, \
+             got {released})"
+        );
+    }
+
+    /// ⭐ **A SCROLL CONTAINER IS ITS OWN SCROLLPORT** — the sticky table header inside an
+    /// `overflow:auto` pane, which is the second-most-common sticky construct on the web and the
+    /// one `css/css-position/sticky` is mostly made of.
+    ///
+    /// Before tick 1282 every sticky box was resolved against the **document** viewport, so a header
+    /// inside a 200px-tall scrolling pane was measured against a constraint it is nowhere near and
+    /// simply scrolled away with its pane: the suite read `start of scroll container: expected 20
+    /// but got 200` — the in-flow position, unmoved.
+    ///
+    /// **To watch it go RED:** pass `sport_top, sport_h` down `apply_sticky`'s recursion instead of
+    /// the container's padding box, and the header lands at 300 instead of 400.
+    ///
+    /// ⚠⚠⚠ **THE FIRST VERSION OF THIS FIXTURE WAS VACUOUS AND THE FALSIFICATION CAUGHT IT.** It
+    /// put the pane at document y 0, where the pane's padding-box top and the document scrollport
+    /// top are BOTH 0 — so the right answer and the wrong one coincide and the mutation above stayed
+    /// green. **The configuration that already works is not evidence about the ones that do not.**
+    /// The 400px spacer below is the whole difference between a test and a decoration, and the
+    /// `<section>` wrapper is the second half of it: with the pane itself as the containing block,
+    /// the §6.3 containing-block clamp pins the header on its own and the sticky constraint is never
+    /// consulted — the assertion would have been measuring the clamp.
+    #[test]
+    fn sticky_resolves_against_its_own_scroll_container() {
+        let html = r#"<body style="margin:0">
+            <div style="height:400px">spacer — the pane is NOT at the document origin</div>
+            <div id="pane" style="overflow:auto;height:200px">
+              <div id="sec" style="height:600px">
+                <div id="hdr" style="position:sticky;top:0;height:30px">Header</div>
+                <div id="rows" style="height:500px">rows</div>
+              </div>
+            </div>
+        </body>"#;
+        let fonts = FontContext::new();
+        let mut page = Page::load(html, "https://x.test/", &fonts, 400.0);
+        let pane = manuk_css::query_selector_all(page.dom(), page.dom().root(), "#pane")[0];
+        let hdr = manuk_css::query_selector_all(page.dom(), page.dom().root(), "#hdr")[0];
+        let rows = manuk_css::query_selector_all(page.dom(), page.dom().root(), "#rows")[0];
+
+        let pane_top = page.node_rects()[&pane].y;
+        assert!(
+            (pane_top - 400.0).abs() < 1.5,
+            "the pane starts 400px down the document, so its scrollport and the document's cannot \
+             be confused (got {pane_top})"
+        );
+        assert!(
+            (page.node_rects()[&hdr].y - pane_top).abs() < 1.5,
+            "unscrolled, the header is at the top of its pane"
+        );
+
+        // Scroll the PANE, not the document. `set_element_scroll` translates the pane's children in
+        // the live box tree — so without the sticky re-bake the header rides down with them.
+        page.set_element_scroll(pane, 0.0, 100.0);
+        let after = page.node_rects()[&hdr].y;
+        assert!(
+            (after - pane_top).abs() < 1.5,
+            "the header stays pinned to the PANE's top edge after the pane scrolls 100px (pane \
+             {pane_top}, got {after}) — resolved against the DOCUMENT scrollport instead it lands \
+             at 300, riding down with the content"
+        );
+        // CONTROL: the non-sticky sibling in the same pane must have moved the full 100px. Without
+        // this the row above passes for a pane that never scrolled at all.
+        let rows_y = page.node_rects()[&rows].y;
+        assert!(
+            (rows_y - (pane_top + 30.0 - 100.0)).abs() < 1.5,
+            "the pane's non-sticky content really did scroll 100px up (want {}, got {rows_y})",
+            pane_top + 30.0 - 100.0
         );
     }
 

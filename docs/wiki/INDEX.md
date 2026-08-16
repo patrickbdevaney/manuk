@@ -488,6 +488,9 @@
   - L9915 · ⚠⚠ css/css-grid is a third NOISY row, and its banked mark sits above its own band
   - L9931 · position: sticky implemented ONE of its four edges — and it PAINTS rather than lays out (tick 1281)
   - L9964 · ⚠⚠⚠ Sticky is a PAINT-time effect, and that is 63 WPT assertions in one sentence
+  - L9979 · Baking a paint effect into the layout tree: the LEDGER, not the cache (tick 1282)
+  - L10001 · The nearest scrollport, not the viewport
+  - L10020 · ⚠⚠⚠ …and the DOM still cannot see it MID-SCRIPT, which is a THIRD gap
 
 ## browser-capabilities.md
 `docs/wiki/browser-capabilities.md`
@@ -2212,4 +2215,4 @@
   - L231 · Both named mechanisms are subsystem work
 
 ---
-2119 sections across 22 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+2122 sections across 22 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
