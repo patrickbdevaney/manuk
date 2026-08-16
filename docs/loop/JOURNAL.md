@@ -81624,3 +81624,91 @@ bars, all newly visible: `forms/the-input-element` 828 failing, `scripting-1/the
 `forms/textfieldselection` 385, `forms/constraints` 338.
 
 WIKI: docs/wiki/networking.md — the engine picked the candidate and the DOM published `src`.
+
+## Tick 1275 — `sizes` read the LAST entry and ignored every media condition (2026-08-15)
+
+TICK SHAPE: capability — the second leg of t1274, ranked from what t1274 MEASURED rather than
+guessed, and still the tallest single-mechanism bar in the tree surface-audit #69 opened.
+
+HYPOTHESIS (written before the code). `sizes_slot_width` is eleven lines: it takes the **last**
+comma-separated entry, reads its last whitespace token, and understands exactly `px` and `vw`.
+HTML's *"parse a sizes attribute"* is a list of `<source-size>` — each an optional
+`<media-condition>` followed by a `<source-size-value>` — and the **FIRST whose condition matches
+wins**, not the last. So `sizes="(min-width:0) 1px, 100vw"` must resolve to `1px` and we return
+`100vw`, which selects a different candidate and therefore a different-sized box.
+
+HOW IT WAS RANKED. t1274 left `the-img-element/sizes` at 472/795 and the 323 remainder histogrammed
+cleanly by the attribute under test: **200 rows whose paragraph reference is `sizes="1px"`** and 44
+whose reference is `100vw` — i.e. the small-slot-vs-viewport-slot distinction, which is precisely
+what "read the last entry" gets wrong — plus ~52 rows of `calc()`/`min()`/`max()`/`clamp()` and a
+tail of malformed values that must fall back to `100vw`.
+
+WHY IT IS RENDER-MOVING and not a spec-conformance vein: `sizes` picks which bitmap an `<img>`
+gets, and the wrong candidate is a wrong intrinsic size — the `width -> dy launder` family the
+render burndown ranks #1, on an element type present on essentially every real site.
+
+⚠ **BOUNDED BY AN INSTRUMENT GAP THAT IS NAMED, NOT DISCOVERED LATE.** The harness implements no
+wptserve `.sub.` substitution (397 files in the checkout), so four of the five parse files differ
+only by GET parameters they never receive and currently render identically. That caps what this
+tick can reach, and whatever remains after it is attributable there rather than to the engine.
+
+```text
+  html/semantics   4742/11256  ->  4782/11256   (+40)
+    attributable in full:  the-img-element/sizes  472/795 -> 512/795  (+40, den identical)
+    EVERY other subdirectory of the area: BYTE-IDENTICAL (diffed row by row, not inferred).
+
+  CONTROLS, paired, same box, same hour:
+    domparsing     234/1294  BYTE-IDENTICAL
+    css/selectors 3757/5560  BYTE-IDENTICAL
+  the-img-element/srcset held at 241/252. HANG/CRASH 0 in every run.
+```
+
+⚠⚠⚠ **+40, NOT the ~283 the histogram appeared to offer, AND THAT IS THE FINDING.** Re-histogramming
+the remainder by the *sibling's own* `sizes` value — the failing element rather than the paragraph's
+reference, which is what the first pass keyed on — the survivors are almost entirely **media-query
+grammar**, not `sizes` parsing: `not (unknown "general-enclosed") 100vw, 1px` · `(min-width:0) or
+(unknown-mf-name) 1px` · `not print` · `not }` · general-enclosed · unknown feature names. Those live
+in `manuk_css::media_query_matches`, which knows `not`/`only`/`and`/features and does **not** know
+`or` or Media Queries Level 4's *"an unknown condition is FALSE"* discipline. **A different
+mechanism in a different crate**, and it gets its own tick rather than being smuggled into this one.
+
+> **The bar was ONE bar in the histogram and TWO mechanisms underneath it.** t1179's *"an AREA is
+> not a CAUSE"* recurring one level down: a *directory* is not a cause either, and neither is a
+> single failing-message shape. The rank was right and the price was wrong.
+
+⭐ **The old code carried its own estimate of the damage and the estimate was WRONG.** Its comment
+read *"we take the LAST entry's length, which is that unconditional fallback… one candidate step off
+at worst."* The canonical responsive idiom is `sizes="(max-width: 600px) 100vw, 50vw"` — *full width
+on a phone* — and on a phone we returned **50vw**. Not one step off: the narrow viewport got the
+SMALLER file precisely because it was narrow. That is a real-web correctness fix whose value is not
+bounded by the 40 subtests it happened to move.
+
+GATE: `G_SIZES_FIRST_MATCH` — 22 rows, **3 of them CONTROLS**, proven RED on THREE mutations whose
+moved-row sets are DISJOINT: (1) the old `rsplit(',').next()` collapses every value row onto the
+large slot; (2) a `px`/`vw`-only unit table moves `em`/`rem`/`pt`/`cm`/`vmin`; (3) removing the
+math-function arm moves `calc`/`min`/`max`/`clamp`/`comma`. Disjoint sets are what say the three
+legs are independently pinned rather than one assertion counted three times.
+
+⚠ **TWO ROWS DID NOT MOVE UNDER MUTATION 1 AND BOTH ARE KEPT.** `skip`'s last entry was already the
+right answer, and `neg` (`-1px, 1px`) is right under the OLD parser **by accident** — two wrong
+rules cancelling. Recorded in the gate rather than quietly re-worded: *"the mutation did not move
+this row"* is the only thing that separates a row pinning a RULE from a row pinning a COINCIDENCE.
+
+⚠ **`clamp` CORRECTED ITS AUTHOR.** `clamp(1px, -50px, 100px)` is **1px**, not the negative middle —
+the clamping happens before the sign is judged, so it is a valid `<source-size-value>` and not a
+parse error. Written expecting a fallback, kept as the row that says so.
+
+⚠ **A unit table must be LONGEST-SUFFIX-FIRST**: `vmin` ends in `in`, and a shortest-first table
+turns `0.1vmin` into 96 pixels. The `vmin` row exists for exactly that and nothing else.
+
+PERF: none claimed; the work is per-`<img>`-with-`sizes` at selection time, unchanged in shape.
+
+NEXT, ranked from this tick's measurement. (a) **Media-query grammar** in `manuk_css` — `or`,
+general-enclosed, and *unknown-condition-is-FALSE* — which is where the remaining ~283 of `sizes`
+lives and which is shared by `<picture>`'s `<source media>` and every `@media` block, so it is worth
+more than this directory. (b) The harness's missing wptserve `.sub.` substitution (**397 files**),
+which still bounds four of the five parse files. (c) `html/semantics`'s untouched bars:
+`forms/the-input-element` 828 failing · `scripting-1/the-script-element` 484 ·
+`forms/textfieldselection` 385 · `forms/constraints` 338.
+
+WIKI: docs/wiki/networking.md — `sizes` is a FIRST-MATCH list, not a last entry.

@@ -9966,3 +9966,95 @@ still the larger half and still an owner decision.
    is the next one that has never been checked this way and is 1,060 failing at 18.1%.
 3. **A shared MECHANISM outranks the per-area ranker, for the fourth time.** When picking, ask what
    one seam is wrong across many areas before asking which area is largest.
+
+---
+
+## Check #118 — tick 1275
+
+**Horizon:** H0 — Pareto Web Parity. **Gate (four binary conditions):** ~83% WPT across categories ·
+differential-oracle-verified across the four usage-weighted corpora · a daily-drivable shell · every
+rendered construct queryable through the semantic API.
+
+### Gate or scoreboard?
+
+**Both, and the honest answer is that one of the four gate conditions was found to be MEASURED
+WRONG — which is worth more than the subtests.**
+
+Ticks 1268–1275 landed keyframe interpolation (+1406), `offsetLeft`'s body-margin (+430), RTL column
+flex, grid track publication, `<img>.currentSrc` (+555), and `sizes` first-match (+40). On its face
+that is scoreboard: the WPT total moved 466,592 → 468,254 and **not one** of it is oracle-verified
+corpora, shell drivability, or semantic-API coverage.
+
+But surface-audit #69 (t1273) asked the gate's own first condition — *"~83% WPT **across
+categories**"* — what its denominator was, and the answer is that **`RATCHET.tsv` carries 21 area
+rows while the checkout on disk holds five more**, unmeasured:
+
+```text
+   html/semantics  4187/11257    html/canvas  674/4514    html/browsers  184/1832
+   css/CSS2        1905/2252     wai-aria      238/434
+```
+
+`html/semantics` alone is **7,070 failing — the second-largest failing mass in the project**, behind
+`css/css-grid` and ahead of every area the board has ranked for a year. The gate says *across
+categories*, and five categories were not in the sum. **This is I4's ranking instrument reading a
+sample it never declared as one**, and it is the same class as check #112's sparse checkout and
+VI.3's aperture list — an EIGHTH inflation mode, and the largest yet.
+
+⚠ The exclusion of `html/semantics` was not an oversight but a **decision that outlived its reason**:
+`scripts/wpt-sweep.sh:41-43` holds it out for *"2 real per-page crashes … a NEW Bar-0"*, correct at
+**tick 103** and measured at t1273 as **HANG/CRASH 0**. Fixed somewhere in 1,170 ticks by work aimed
+elsewhere. The general rule this yields is the mirror of the six phantom ❌s: **a capability excluded
+FOR A REASON must carry a re-check, or the reason outlives the fact.**
+
+### Is `orient`'s ranking still the north star?
+
+**Yes, and this check strengthens it rather than bending it.** Nothing tail-shaped crept to the top:
+`encoding` is untouched at its banked mark, and the areas worked are `css/css-transforms`,
+`css/css-grid`, `html/semantics` — all Pareto-central. The newly-opened mass is *more* usage-weighted
+than what it displaces: `html/semantics` is forms, scripts, images and iframes.
+
+⚠ One anti-Pareto trap was found and **declined by measurement, not by taste**: `css/CSS2` looked
+like 810 files of pure layout and is **66 testharness files** — the CSS2.1 suite is overwhelmingly
+reftests, which this runner skips. The layout mass everyone assumes lives there is unreachable
+through the testharness lane at all; it needs the reftest lane and WPT fuzzy matching, which PART
+VI.2 and the board already name. Recorded so the next reader does not re-derive it.
+
+### Is any invariant being bent?
+
+**No.** I2 (never patch dependencies) held — t1273's interpolation is entirely borrowed Stylo API,
+ladder option 1, no fork. I1/THE RATCHET was tested in earnest at t1274: `the-img-element/srcset`
+**fell 188 → 131** on the first build, and the drop was diagnosed and **repaired inside the tick** to
+241/252 rather than traded for the +472 elsewhere. I3 is not advanced by these ticks and is not bent
+by them either — none exposes a new rendered construct the semantic model cannot already see.
+
+### PART VI correction
+
+**What VI.3 must now carry — the EIGHTH aperture mode, and it is the reverse of the seventh.**
+Check #117 added the unshipped-spec *discount* (a deflation computed from a test's subject). This one
+is a deflation computed from **nothing at all**: five whole trees absent from the ledger, so their
+13,101 failing subtests were neither counted nor refused — they were *invisible*, which is worse than
+either, because a refusal at least leaves a record to re-audit.
+
+**What is now the real blocker:** unchanged — **M1 on the in-scope CrUX corpus against a 95% bar**,
+with check #83's 82.2–87.4% scorability instrument cap still the larger half and still an owner
+decision. Nothing in this window touched it, and the CrUX sweep is now **unmeasured for ~30 ticks**;
+check #117's steer #1 was not executed and is repeated below rather than quietly dropped.
+
+### STEER
+
+1. **RUN THE CrUX FIDELITY SWEEP** — carried over from check #117 and now older by 8 ticks. Repeating
+   a steer that was not followed is the only honest thing to do with it.
+2. **The aperture is an OWNER/OBSERVER item, and the agent must not paper over it.** `scripts/` is
+   observer-owned; a hand-added `WPT-AREAS.tsv` row for `html/semantics` would be deleted by the next
+   full sweep and read as a regression (the `cssom` lesson, t1266). So the engine improved by 555
+   subtests in a category the primary metric cannot see, and **saying that plainly is worth more than
+   a row that would not survive.** The observer is asked to wire `html/semantics` into `AREAS=()`, and
+   to treat `html/canvas`'s `HANG/CRASH 1` as the Bar-0 it is before that area joins.
+3. **Within the newly-visible tree, rank by mechanism as usual** — `forms/the-input-element` 828
+   failing · `scripting-1/the-script-element` 484 · `forms/textfieldselection` 385 ·
+   `forms/constraints` 338 — but note that t1275 measured a **media-query grammar** gap in
+   `manuk_css` (`or`, general-enclosed, unknown-condition-is-FALSE) that is shared by `<picture>`'s
+   `<source media>`, every `@media` block and ~283 of the `sizes` remainder. **A shared MECHANISM
+   outranks the per-area ranker — for the fifth time.**
+
+**Next check due: tick 1283.**

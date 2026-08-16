@@ -1871,6 +1871,10 @@
   - L1996 · Two boundaries, and they are separate arms
   - L2006 · The table is keyed by (arena, NodeId)
   - L2015 · Not trimmed, and that is a test
+  - L2022 · sizes is a FIRST-MATCH list, not a last entry (tick 1275)
+  - L2028 · The old code estimated its own damage, and the estimate was wrong
+  - L2049 · What the rewrite covers
+  - L2061 · ⚠⚠⚠ One histogram bar, two mechanisms — the rank was right and the price was wrong
 
 ## PERFORMANCE — what is actually slow, and why
 `docs/wiki/performance.md`
@@ -2194,4 +2198,4 @@
   - L231 · Both named mechanisms are subsystem work
 
 ---
-2101 sections across 22 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+2105 sections across 22 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.

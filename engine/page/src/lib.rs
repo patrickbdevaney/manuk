@@ -1291,26 +1291,180 @@ fn parse_srcset(srcset: &str) -> Vec<Candidate<'_>> {
     out
 }
 
-/// The slot width a `w`-descriptor list is measured against, from `sizes`.
+/// The slot width a `w`-descriptor list is measured against — HTML's *"parse a sizes attribute"*.
 ///
-/// **Bounded and named rather than half-implemented.** The full grammar is a comma-separated list of
-/// `<media-condition> <length>` pairs ending in an unconditional length. We take the LAST entry's
-/// length, which is that unconditional fallback, and resolve `vw`/`px`. A page whose first matching
-/// condition would have chosen differently gets the fallback slot — one candidate step off at worst,
-/// where ignoring `sizes` entirely is the thumbnail-across-a-hero bug this replaces.
+/// A `sizes` attribute is a comma-separated list of `<source-size>`, each an optional
+/// `<media-condition>` followed by a `<source-size-value>`, and **the FIRST entry whose condition
+/// matches wins**. The last entry may omit its condition, which is how the unconditional fallback is
+/// written.
+///
+/// ⚠⚠⚠ **THIS USED TO READ THE LAST ENTRY, WHICH IS THE OPPOSITE END OF THE LIST.** The old version
+/// was eleven lines and said so — *"we take the LAST entry's length, which is that unconditional
+/// fallback… one candidate step off at worst"* — a bounded, honestly-labelled approximation that was
+/// right to ship at the time. It is wrong in the common case, and the cost is not one candidate
+/// step: `sizes="(min-width:0) 1px, 100vw"` is a **1px** slot and we answered with the **whole
+/// viewport**, which is the difference between the smallest file and the largest. `sizes` is how a
+/// page tells the browser how big the image will BE, so the wrong answer here is a wrong intrinsic
+/// size, and a wrong intrinsic size re-wraps everything below it.
+///
+/// The fallback when nothing parses is `100vw`, which is also what the spec's *"parse error"* path
+/// leaves in place — and it is what an author who wrote no `sizes` at all gets.
 fn sizes_slot_width(sizes: Option<&str>, viewport_width: f32) -> f32 {
     let Some(sizes) = sizes else {
         return viewport_width;
     };
-    let last = sizes.rsplit(',').next().unwrap_or("").trim();
-    let tok = last.split_ascii_whitespace().last().unwrap_or("");
-    if let Some(v) = tok.strip_suffix("vw").and_then(|n| n.parse::<f32>().ok()) {
-        return viewport_width * v / 100.0;
-    }
-    if let Some(v) = tok.strip_suffix("px").and_then(|n| n.parse::<f32>().ok()) {
-        return v;
+    for entry in split_top_level_commas(sizes) {
+        let entry = entry.trim();
+        if entry.is_empty() {
+            continue;
+        }
+        // The VALUE is the last balanced component value; everything before it is the media
+        // condition. Scanning from the right is what keeps `calc(1px + 2px)` — which contains
+        // whitespace *inside* parentheses — from being read as two tokens.
+        let Some((cond, value)) = split_trailing_component(entry) else {
+            continue;
+        };
+        if !cond.trim().is_empty() && !manuk_css::media_matches(cond.trim()) {
+            continue;
+        }
+        // A negative slot is not a parse error the spec forgives — it is an invalid
+        // `<source-size-value>`, and the entry is skipped rather than clamped to zero.
+        if let Some(px) = resolve_size_value(value, viewport_width) {
+            if px >= 0.0 {
+                return px;
+            }
+        }
     }
     viewport_width
+}
+
+/// Split on commas that are **outside** any `()`/`[]`/`{}` nesting.
+///
+/// Every list in this file needs the same rule and for the same reason: a comma inside a
+/// `min(1px, 200vw)` or a `(min-width: 0)` belongs to that construct, not to the list. Splitting
+/// naively turns one entry into two, and the second half is usually a syntactically valid-looking
+/// fragment that resolves to something plausible — which is the failure mode that hides.
+fn split_top_level_commas(s: &str) -> Vec<&str> {
+    let b = s.as_bytes();
+    let mut out = Vec::new();
+    let (mut depth, mut start) = (0i32, 0usize);
+    for i in 0..b.len() {
+        match b[i] {
+            b'(' | b'[' | b'{' => depth += 1,
+            b')' | b']' | b'}' => depth -= 1,
+            b',' if depth <= 0 => {
+                out.push(&s[start..i]);
+                start = i + 1;
+            }
+            _ => {}
+        }
+    }
+    out.push(&s[start..]);
+    out
+}
+
+/// Split `<media-condition>? <source-size-value>` into its two halves.
+///
+/// Returns `None` when the entry has unbalanced brackets — an unclosed `(` makes the whole
+/// `<source-size>` a parse error, and guessing at the author's intent is how `x(x(),1px` would
+/// otherwise resolve to a real width.
+fn split_trailing_component(entry: &str) -> Option<(&str, &str)> {
+    let b = entry.as_bytes();
+    let mut depth = 0i32;
+    // Walk right-to-left; the value begins at the first top-level whitespace we cross.
+    let mut split_at = 0usize;
+    for i in (0..b.len()).rev() {
+        match b[i] {
+            b')' | b']' | b'}' => depth += 1,
+            b'(' | b'[' | b'{' => {
+                depth -= 1;
+                if depth < 0 {
+                    return None; // an unclosed opener — the entry is a parse error
+                }
+            }
+            c if c.is_ascii_whitespace() && depth == 0 => {
+                split_at = i;
+                break;
+            }
+            _ => {}
+        }
+    }
+    if depth != 0 {
+        return None;
+    }
+    Some((&entry[..split_at], entry[split_at..].trim()))
+}
+
+/// A `<source-size-value>` in CSS pixels, or `None` if it is not one.
+///
+/// The unit table is the whole absolute/relative set rather than the `px`/`vw` pair the old code
+/// knew, because WPT tests every one of them and a page may legitimately write `sizes: 20em`. The
+/// font-relative units resolve against the initial 16px font — this runs before layout and has no
+/// element to ask, which is a real approximation and is why it is stated here rather than implied.
+fn resolve_size_value(v: &str, vw: f32) -> Option<f32> {
+    let v = v.trim();
+    if v.is_empty() {
+        return None;
+    }
+    // Math functions, which are the reason this is recursive at all.
+    let lower = v.to_ascii_lowercase();
+    for (name, n) in [("calc(", 4usize), ("min(", 3), ("max(", 3), ("clamp(", 5)] {
+        if let Some(rest) = lower.strip_prefix(name) {
+            if !rest.ends_with(')') {
+                return None; // `min(1px, 200vw` — unclosed, and a parse error rather than a guess
+            }
+            let inner = &v[n + 1..v.len() - 1];
+            let args: Vec<f32> = split_top_level_commas(inner)
+                .iter()
+                .map(|a| resolve_size_value(a, vw))
+                .collect::<Option<Vec<f32>>>()?;
+            return match (name, args.len()) {
+                ("calc(", 1) => Some(args[0]),
+                ("min(", n) if n > 0 => args.iter().copied().reduce(f32::min),
+                ("max(", n) if n > 0 => args.iter().copied().reduce(f32::max),
+                // `clamp(min, val, max)` — and note the spec's order of operations makes
+                // `clamp(1px, -50px, 100px)` resolve to **1px**, not to the negative middle.
+                ("clamp(", 3) => Some(args[1].clamp(args[0], args[2])),
+                _ => None,
+            };
+        }
+    }
+    // A bare `0` is a length; every other unitless number is not.
+    if let Ok(n) = v.parse::<f32>() {
+        return if n == 0.0 { Some(0.0) } else { None };
+    }
+    // Longest suffix first, or `vmin` matches `in` and `1vmin` becomes 96 pixels.
+    const UNITS: &[(&str, f32)] = &[
+        ("vmin", 0.0), // viewport-relative: filled in below
+        ("vmax", 0.0),
+        ("rem", 16.0),
+        ("px", 1.0),
+        ("em", 16.0),
+        ("ex", 8.0),
+        ("ch", 8.0),
+        ("cm", 96.0 / 2.54),
+        ("mm", 9.6 / 2.54),
+        ("in", 96.0),
+        ("pt", 96.0 / 72.0),
+        ("pc", 16.0),
+        ("vw", 0.0),
+        ("vh", 0.0),
+        ("q", 96.0 / 2.54 / 40.0),
+    ];
+    for (unit, factor) in UNITS {
+        let Some(num) = lower.strip_suffix(unit) else {
+            continue;
+        };
+        let n: f32 = num.trim().parse().ok()?;
+        // ⚠ There is no second viewport axis here: `sizes` is resolved against the viewport WIDTH
+        // for every viewport unit, because that is the only dimension the selection is about and
+        // the height is not known at this point in the load.
+        return Some(match *unit {
+            "vw" | "vh" | "vmin" | "vmax" => vw * n / 100.0,
+            _ => n * factor,
+        });
+    }
+    None
 }
 
 /// Choose one candidate from a `srcset`, or `None` if the list yields nothing usable.

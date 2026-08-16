@@ -2018,3 +2018,64 @@ A `srcset` URL was already delimited by **ASCII** whitespace, so anything still 
 part of the URL. Rust's `str::trim` is **Unicode**-aware and eats U+00A0 — and WPT checks exactly
 that: `<img srcset="\u{a0}data:,a">` must resolve to `…/%C2%A0data:,a`. One convenience call turned
 two conformance rows into silent wrong answers.
+
+## `sizes` is a FIRST-MATCH list, not a last entry (tick 1275)
+
+HTML's *"parse a sizes attribute"* is a list of `<source-size>` — each an optional
+`<media-condition>` followed by a `<source-size-value>` — and **the first entry whose condition
+matches wins**. `sizes_slot_width` took the **last** entry, and understood exactly `px` and `vw`.
+
+### The old code estimated its own damage, and the estimate was wrong
+
+Its comment was honest and specific: *"we take the LAST entry's length, which is that unconditional
+fallback… one candidate step off at worst, where ignoring `sizes` entirely is the
+thumbnail-across-a-hero bug this replaces."* Shipping that was the right call at the time.
+
+But the canonical responsive-image idiom on the real web is
+
+```html
+<img srcset="…" sizes="(max-width: 600px) 100vw, 50vw">
+```
+
+— *"full width on a phone, half width on a desktop"* — and on a phone we answered **50vw**. That is
+not one candidate step: **the narrow viewport got the smaller file precisely because it was
+narrow**, which is the exact inversion of what the author wrote. `sizes` is how a page states how
+big the image will BE, so a wrong answer is a wrong intrinsic size, and a wrong intrinsic size
+re-wraps everything below it.
+
+> **A bounded approximation should carry its bound as a MEASUREMENT, not as an estimate.** This one
+> said "one step off at worst" and was never tested against the idiom it would most often meet.
+
+### What the rewrite covers
+
+First-match ordering · the full length-unit table · `calc()`/`min()`/`max()`/`clamp()` ·
+top-level-comma splitting that is aware of `()`/`[]`/`{}` · parse errors falling back to `100vw`.
+
+Two details that are easy to get backwards, both pinned by `G_SIZES_FIRST_MATCH`:
+
+- **The unit table must be longest-suffix-first.** `vmin` ends in `in`; a shortest-first table turns
+  `0.1vmin` into 96 pixels.
+- **`clamp(1px, -50px, 100px)` is `1px`, not a parse error.** The clamping happens before the sign
+  is judged, so the negative middle argument never reaches the validity check.
+
+### ⚠⚠⚠ One histogram bar, two mechanisms — the rank was right and the price was wrong
+
+t1274 left this directory at 472/795 and the 323 remainder *looked* like one more `sizes` push. It
+was not. Re-histogramming by the **sibling's own** `sizes` value — the failing element, rather than
+the paragraph's reference, which is what the first pass keyed on — the survivors are almost entirely
+**media-query grammar**:
+
+```text
+  not (unknown "general-enclosed") 100vw, 1px
+  (min-width:0) or (unknown-mf-name) 1px
+  not print 100vw, 1px          not } 100vw, 1px
+```
+
+Those belong to `manuk_css::media_query_matches`, which knows `not`/`only`/`and` and features, and
+does not know `or` or Media Queries Level 4's *"an unknown condition evaluates to FALSE"* rule. So
+the leg landed here is worth **+40**, and ~283 sits behind a different mechanism in a different
+crate — one that `<picture>`'s `<source media>` and every `@media` block also read, which makes it
+worth more than this directory alone.
+
+This is t1179's *"an AREA is not a CAUSE"* recurring one level down: **a directory is not a cause
+either, and neither is a single failing-message shape.**
