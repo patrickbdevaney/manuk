@@ -7221,3 +7221,25 @@ only shows on `1fr`/`auto` tracks or when you ask for the height.
 across t1289+t1290 **6790 → 7043**. Gated by `G_EMPTY_GRID_TRACKS`, RED by restoring the
 unconditional short-circuit. ⚠ Its second mutation stayed green and that is recorded in the gate: the
 control rows guard correctness, not the narrowness of the exception.
+
+## The capped column — `fit-content()` in every documentation and dashboard layout (tick 1293)
+
+**Pattern:** `grid-template-columns: fit-content(20ch) 1fr` — a sidebar, nav rail, label column, or
+truncating table cell that hugs its content but is never allowed past a cap. It is the standard
+two-column documentation layout and a staple of dashboards and settings panes.
+
+**The class this unlocks:** the clamp now clamps. `fit-content(<length>)` was mapped to `auto` in the
+cascade, and an `auto` track **absorbs free space** — so `fit-content(50px)` on a 400px grid produced
+a **400px** track. Every capped column took the whole container and pushed its `1fr` sibling to zero.
+
+**Why it hid:** ⚠ **a clamp implemented as a stretcher is not a partial feature, it is the inverse of
+one** — and it renders. There is no error, no missing box, nothing absent from the DOM; the layout is
+simply the opposite of what the author wrote, in a way that looks like a plain one-column grid. And
+the fix was never missing machinery: **taffy implements the §7.2.2 clamp itself** and had never been
+asked.
+
+**Measured:** `css/css-grid` 7010 → 7050 against a ±30 noise band, so read as **at or just above the
+band, not a clean +40** — the number this stands on is the gate. `G_FIT_CONTENT_TRACK`, five exact
+assertions with two controls, RED with the predicted output (`fit=400 big=400 small=400` while both
+controls hold). The three arms are different on purpose: the clamp, the *ceiling-not-a-width* case,
+and the *min-content floor* — the last being the half a naive `min(arg, max-content)` gets wrong.

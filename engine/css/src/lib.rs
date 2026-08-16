@@ -720,6 +720,19 @@ pub enum TrackSize {
     MaxContent,
     /// `minmax(min, max)`.
     MinMax(TrackUnit, TrackUnit),
+    /// ⚠⚠⚠ **`fit-content(<length>)`, which used to COLLAPSE TO `Auto` and therefore STRETCHED.**
+    ///
+    /// Grid §7.2.2 defines it as `minmax(auto, max-content)` clamped by the argument — i.e.
+    /// `min(max-content, max(min-content, <length>))`. Mapping it to `Auto` gave the opposite
+    /// behaviour on the only axis anyone uses it for: an `auto` track absorbs free space, so
+    /// `fit-content(50px)` on a 400px grid produced a **400px** track where every browser gives 50.
+    /// It is the "clamp this column, but no wider than its content" idiom — a sidebar, a label
+    /// column, a truncating table cell — and it did the reverse.
+    ///
+    /// Carries the clamp in px; a percentage argument resolves at cascade time like any other
+    /// length, and an argument that cannot be resolved falls back to `Auto` (the old behaviour)
+    /// rather than guessing.
+    FitContent(f32),
 }
 
 /// One component of a `grid-template-columns` / `-rows` list.

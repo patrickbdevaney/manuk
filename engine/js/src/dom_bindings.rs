@@ -1097,6 +1097,7 @@ fn track_size_css(t: &manuk_css::TrackSize) -> String {
         manuk_css::TrackSize::MinContent => "min-content".into(),
         manuk_css::TrackSize::MaxContent => "max-content".into(),
         manuk_css::TrackSize::MinMax(a, b) => format!("minmax({}, {})", unit(a), unit(b)),
+        manuk_css::TrackSize::FitContent(p) => format!("fit-content({p}px)"),
     }
 }
 

@@ -10169,3 +10169,34 @@ at one glyph or nothing. That is intrinsic sizing, and the lever board's own cor
 same: *"Taffy #204 SHIPPED; the intrinsic-sizing blocker is MANUK'S OWN leaf measure."* Four
 independent readings agreeing (board note, delta shape, sign, sub-area) is the strongest a target has
 been ranked in this area.
+
+## `fit-content(<length>)` was mapped to `auto` — a clamp implemented as a stretcher (tick 1293)
+
+Grid §7.2.2: `fit-content(<length>)` is `min(max-content, max(min-content, <length>))` — *"as wide as
+the content wants, but never wider than this"*. `stylo_map` had `TS::FitContent(_) => TrackSize::Auto`,
+and **an `auto` track absorbs free space**, so `fit-content(50px)` on a 400px grid produced a **400px**
+track. ⚠ **A clamp that stretches is not a partial implementation; it is the inverse of the feature** —
+the capped sidebar, the label column, the truncating table cell and the `fit-content(20ch)` gutter in
+every documentation layout each took the whole container.
+
+Everything needed was already there: **taffy implements the §7.2.2 clamp itself** and was never asked,
+because the cascade handed it `Auto` one layer up. Borrowed, not built. An argument that cannot be
+resolved to px keeps the old `Auto` rather than guessing.
+
+⚠ **The clamp has TWO ends and a naive fix gets one of them.** `fit-content(300px)` on 54px of content
+is **54** (the argument is a *ceiling*, not a width) and `fit-content(5px)` is **24** (floored at
+min-content — the longest unbreakable word). `min(arg, max-content)` passes the first case and fails
+both of these.
+
+### ⭐⭐⭐ …and finding it killed a FIFTH reading in this area
+
+t1292 ranked the next lever as *"the leaf measure for intrinsic sizing"* on **four agreeing readings**,
+one of which was the lever board's own correction: *"Taffy #204 SHIPPED; the intrinsic-sizing blocker
+is MANUK'S OWN leaf measure — fixable in a tick."* A four-line probe says the leaf measure is fine —
+`max-content` 54, `min-content` 24, `auto` 400, flex `max-content` 54, all correct — and only
+`fit-content` was broken. **The board's note is stale, and a tick written against it would have gone
+hunting a working measure.**
+
+Running total for this one histogram row: it has now defeated a reading taken from the histogram
+(twice), from a test file's `<meta name=assert>`, from a delta shape, and from the board itself.
+**Four agreeing readings were not enough; the fifth was a four-line probe.** Write the probe first.

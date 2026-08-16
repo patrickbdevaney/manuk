@@ -338,7 +338,12 @@ fn track_size_to_ours(
             TB::MaxContent => crate::TrackSize::MaxContent,
         },
         TS::Minmax(a, b) => crate::TrackSize::MinMax(breadth_to_unit(a), breadth_to_unit(b)),
-        TS::FitContent(_) => crate::TrackSize::Auto,
+        // ⚠ Resolve the clamp; an unresolvable one (a percentage against an unknown container, a
+        // calc we cannot fold) keeps the OLD `Auto` behaviour rather than inventing a number.
+        TS::FitContent(b) => match breadth_to_unit(b) {
+            crate::TrackUnit::Px(p) => crate::TrackSize::FitContent(p),
+            _ => crate::TrackSize::Auto,
+        },
     }
 }
 

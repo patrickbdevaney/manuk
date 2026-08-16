@@ -185,6 +185,9 @@ fn track(t: &CssTrackSize) -> TrackSizingFunction {
         CssTrackSize::MinContent => min_content(),
         CssTrackSize::MaxContent => max_content(),
         CssTrackSize::MinMax(lo, hi) => minmax(track_min(*lo), track_max(*hi)),
+        // taffy implements the §7.2.2 clamp itself; it was simply never asked, because the cascade
+        // handed it `Auto`.
+        CssTrackSize::FitContent(p) => fit_content(length(*p)),
     }
 }
 

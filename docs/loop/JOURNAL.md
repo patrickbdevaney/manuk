@@ -83612,3 +83612,99 @@ NEXT, ranked — and this ranking is now carried by four agreeing readings rathe
 
 WIKI: docs/wiki/box-layout.md — the sign-flip tell, the near-miss lever refused by measurement for
 this population, and the in-scope/out-of-scope split of the #1 area's remaining mass.
+
+## Tick 1293 — `fit-content(<length>)` on a grid track did the OPPOSITE of what it says (2026-08-16)
+
+TICK SHAPE: capability. Board re-run at the top of this tick: **unchanged** (★ CSS-LAYOUT).
+
+CADENCE. The surface audit was due at 1293. Audit #71 is in `docs/loop/SURFACE-AUDIT.md`;
+`LAST_SURFACE_AUDIT` → 1293. Its finding is below.
+
+⭐⭐⭐ **THE PROBE CORRECTED THE BOARD ITSELF — A FIFTH READING KILLED IN THIS AREA.** t1292 ranked the
+next lever as *the leaf measure for intrinsic sizing*, on four agreeing readings **including the lever
+board's own note**: *"Taffy #204 SHIPPED; the intrinsic-sizing blocker is MANUK'S OWN leaf measure —
+fixable in a tick."* The probe that t1292 insisted on running first says the leaf measure is **fine**:
+
+```text
+   grid-template-columns: max-content   ->  54    (9 chars of 10px monospace)   ✓
+   grid-template-columns: min-content   ->  24    (the longest word)            ✓
+   grid-template-columns: auto          ->  400   (stretches, correct)          ✓
+   flex item width: max-content         ->  54                                  ✓
+   grid-template-columns: fit-content(50px) -> 400  ✗✗  every browser gives 50
+```
+
+**The board's note is STALE and is now measured as such.** Writing a tick against it would have gone
+hunting a working measure. ⚠ **Four agreeing readings were not enough, and the fifth was a four-line
+probe** — this area has now defeated readings taken from a histogram (×2), from a test title, from a
+delta shape and from the board.
+
+HYPOTHESIS, and it is one line of the cascade:
+
+```rust
+    TS::FitContent(_) => crate::TrackSize::Auto,      // stylo_map.rs
+```
+
+Grid §7.2.2 makes `fit-content(<length>)` the clamp `min(max-content, max(min-content, <length>))` —
+*"as wide as the content wants, but never wider than this"*. Mapping it to `Auto` gives the opposite
+behaviour on the only axis anyone uses it for, because **an `auto` track absorbs free space**. So
+`fit-content(50px)` on a 400px grid produced a **400px** track.
+
+⚠ **A clamp that stretches is not a partial implementation, it is the INVERSE of the feature.** The
+idiom is the capped sidebar, the label column, the truncating table cell, the `fit-content(20ch)`
+gutter in every documentation layout — and each of them took the whole container.
+
+WHAT LANDED. `TrackSize::FitContent(f32)`, resolved in `stylo_map` (an unresolvable clamp keeps the
+old `Auto`, rather than guessing), mapped to taffy's own `fit_content(length(..))`, and serialized.
+**Borrowed, not built** — taffy implements §7.2.2 itself and was never asked, because the cascade
+handed it `Auto` one layer up.
+
+```text
+  WPT MOVEMENT:
+    css/css-grid              7010/14254  ->  7050/14308  (mark 6818; the ±30 band, so read as a FLOOR)
+    css/css-grid/grid-items    169/901    ->   169/901    (=) — `fit-content` is not used there
+```
+
+⚠ **The honest reading of +40 against a ±30 noise band is "at or just above the band", not a clean
++40.** The number this tick actually stands on is the gate, not the sweep: five assertions, exact,
+with two controls, RED with the predicted output.
+
+GATE: `engine/page/tests/g_fit_content_track.rs` — G_FIT_CONTENT_TRACK. RED by restoring the old
+mapping:
+
+```text
+   fit=400  big=400  small=400   auctl=400  mcctl=54
+```
+
+**All three clamps stretch to the container while both CONTROLS keep passing**, which is what says
+the controls are not restating the fix. The three arms are deliberately different: `fit(50)` = 50 is
+the clamp; `fit(300)` = 54 proves the argument is a **ceiling, not a width** (a fix that just used the
+argument passes the first and fails this); `fit(5)` = 24 proves the **min-content floor** (the half a
+naive `min(arg, max-content)` gets wrong).
+
+⚠⚠ **SURFACE AUDIT #71 FOUND THE SAME DUPLICATE DEFECT AS #70, WITH THE SAME ONE-LINE PROBE.** #70
+found `CSS anchor positioning` on two rows with contradictory verdicts; #71's very first name from a
+**new** source (the web-features "blocked by one engine" list) was `Temporal`, which is a row (`gated`)
+**and** a name inside the 21-feature ECMAScript mega-row (`works`). Two audits, two duplicates, one
+probe — so the audit names *where they hide*: **a mega-row is a duplicate factory**, invisible to a
+structural grep, and 585 rows contain cells naming 21, 11, 6, 6, 5, 5, 5 and 5 features. ⚠ **Not
+split here**: the honest close is a re-probe giving each name a *measured* verdict, not a text edit
+that manufactures 21 rows carrying an inherited one.
+
+⚠ **AND A RECOMMENDATION ABOUT THE INSTRUMENT ITSELF, recorded in the audit:** the web leg has
+returned **nothing** three audits running, while the structural probe has returned a real finding
+every time (#69's aperture diff found 13,101 invisible subtests; #70 and #71 each found a duplicate).
+Future audits should **lead with the structural probe and use the web leg to supply names to probe
+with** — which is exactly how this one produced its finding.
+
+NEXT, ranked.
+(a) ⭐⭐⭐ The ANIMATION CLOCK, then `element.animate()` (check #120 steer 2) — unchanged, and now the
+    only ⭐⭐⭐ left standing, since t1292's intrinsic-sizing target was measured away above.
+(b) `grid-items` 169/901: the too-narrow width family is **not** the leaf measure. Re-probe it with a
+    single item under `justify-items`/`align-items` before ranking it again.
+(c) Split the ECMAScript mega-row by re-probing (audit #71 rank 1); close `CSS anchor positioning`'s
+    contradictory pair (#70 rank 1).
+(d) Carried: the CrUX fidelity sweep is unmeasured ~50 ticks; check #120 says escalate rather than
+    repeat it a fourth time.
+
+WIKI: docs/wiki/box-layout.md — `fit-content()` as a clamp that was mapped to a stretcher, and the
+fifth reading this area has killed.

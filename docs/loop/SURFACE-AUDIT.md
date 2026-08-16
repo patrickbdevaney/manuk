@@ -6693,3 +6693,89 @@ ourselves with a 4× ratio that is mostly aperture.
 4. Standing, from audit #69 and still open: the five WPT trees with no `RATCHET.tsv` row
    (`html/semantics` 7,070 failing is the #2 mass in the project). **Observer-owned** —
    `scripts/wpt-sweep.sh` is not agent territory — and repeated here rather than dropped.
+
+## Audit #71 — tick 1293 (2026-08-16)
+
+**Sources (web leg, run — and deliberately a DIFFERENT AXIS from #70's, because #70 and #69 both came
+back empty and repeating the same query would have been ritual):**
+
+- `https://web-platform-dx.github.io/web-features-explorer/one-missing-engine/` — **new to this
+  ledger.** The web-features project's list of features *blocked from Baseline by exactly one engine*,
+  which is a sharper question than "what is new" and is the one an independent engine should ask.
+- `https://blog.mozilla.org/netpolicy/2026/03/23/competition-innovation-and-the-future-of-the-web/`,
+  `https://hacks.mozilla.org/2026/02/launching-interop-2026/`
+- `https://www.makeuseof.com/ladybird-new-browser-engine-coming-2026/` — Ladybird is targeting an
+  **alpha in 2026**, still developer-only.
+- WebGPU explainer + `https://developer.chrome.com/docs/web-platform/webgpu/from-webgl-to-webgpu`.
+
+**What the new source names as one-engine-blocked:** `CustomElementRegistry` (scoped registries),
+`hidden="until-found"`, `text-justify`, and the **Temporal API**.
+
+### What was ADDED: NOTHING, for the THIRD audit running
+
+All four are already rows in `docs/loop/CONSTELLATION.tsv`:
+
+```text
+   scoped custom element registries          missing     (also an Interop-2026 focus area, #70)
+   hidden=until-found + beforematch          partial
+   text-justify                              missing
+   Temporal (date/time API)                  gated
+```
+
+Three consecutive audits in which the internet named nothing our own disk did not already hold. **At
+this point that is a finding about the instrument, not a reassurance about the map** — the web leg is
+confirming coverage it has confirmed twice already, and its marginal value is now close to zero while
+its cost is not.
+
+### ⚠⚠⚠ What we had been WRONG about: THE SAME DUPLICATE DEFECT AS #70, FOUND BY THE SAME PROBE
+
+#70 found `CSS anchor positioning` on **two rows with contradictory verdicts** (`missing` / `unknown`).
+The identical probe — grep the feature name, count the rows — found it again on the very first name
+this source supplied:
+
+```text
+   line ???   Temporal (date/time API)                                     gated
+   line ???   modern ECMAScript built-ins (… Set union/intersection,
+              structuredClone, RegExp v flag, Error.cause, WeakRef,
+              FinalizationRegistry, Intl.Segmenter/…, Temporal, …)         works
+```
+
+**Two audits, two duplicates, one probe.** That is no longer a coincidence, and this audit's real
+product is naming *where they hide*:
+
+> **A MEGA-ROW — one `capability` cell that lists many named features — is a duplicate factory.** Every
+> name inside it is invisible to a `grep` of the ledger's own structure, can acquire its own row later
+> without anyone noticing, and carries the mega-row's single verdict regardless of its own state. The
+> `MEASURED` invariant then counts the capability twice, pulling the denominator in two directions.
+
+Counted, so it is a number rather than an impression: `docs/loop/CONSTELLATION.tsv` has **585 rows**,
+of which the worst offenders name 21, 11, 6, 6, 5, 5, 5 and 5 features in a single cell — the largest
+being the ECMAScript built-ins row that swallowed `Temporal`, `structuredClone`, `Intl.Segmenter` and
+seventeen others under one `works`.
+
+⚠ **Not split here, deliberately, and for the same reason #70 left its duplicate standing:** the
+honest close is a re-probe that gives each name a *measured* verdict, not a text edit that
+manufactures rows with an inherited one. A mega-row split into 21 rows all marked `works` because the
+parent said so would make `MEASURED` look better while measuring nothing new — which is the exact
+failure this instrument exists to catch.
+
+### Is the frame still right?
+
+**Yes.** Nothing the world named this window outranks M1 render on the in-scope CrUX corpus. The
+Ladybird comparison from #70 holds and is worth restating as a calibration rather than a threat: an
+independent engine of comparable scope reaching **2.08M** passing WPT subtests to our 469K, with our
+number being a floor over 21 named areas rather than a whole-checkout total — **not comparable as
+printed**, and saying so remains more useful than either reading.
+
+### RANKED, from this audit only
+
+1. **Re-probe and split the ECMAScript mega-row**, giving `Temporal`, `structuredClone`,
+   `Intl.Segmenter`, `Set` methods and the rest their own *measured* verdicts. It is the largest
+   single source of double-counting in the ledger and the second duplicate found by the same probe in
+   two audits.
+2. Carried unclosed from #70: `CSS anchor positioning`'s two contradictory rows.
+3. ⚠ **A STANDING RECOMMENDATION ABOUT THIS INSTRUMENT:** the web leg has now returned nothing three
+   audits running while the *structural* probe (grep a name, count the rows; `ls` the checkout, diff
+   the ledger — #69's aperture diff, which found 13,101 invisible subtests) has returned a real
+   finding **every single time**. Future audits should lead with the structural probe and use the web
+   leg to *supply names to probe with*, which is exactly how this one produced its finding.

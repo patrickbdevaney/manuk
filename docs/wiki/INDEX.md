@@ -495,6 +495,8 @@
   - L10070 · An empty grid is sized by its TEMPLATE, and one short-circuit denied it three ways (tick 1290)
   - L10104 · The #1 area's biggest failure cluster printed an EMPTY message (tick 1291)
   - L10137 · Ranking the #1 area once its failures were readable — and three readings that changed (tick 1292)
+  - L10173 · fit-content(<length>) was mapped to auto — a clamp implemented as a stretcher (tick 1293)
+  - L10191 · ⭐⭐⭐ …and finding it killed a FIFTH reading in this area
 
 ## browser-capabilities.md
 `docs/wiki/browser-capabilities.md`
@@ -2224,4 +2226,4 @@
   - L231 · Both named mechanisms are subsystem work
 
 ---
-2131 sections across 22 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+2133 sections across 22 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
