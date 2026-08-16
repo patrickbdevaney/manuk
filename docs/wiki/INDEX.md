@@ -492,6 +492,7 @@
   - L10001 · The nearest scrollport, not the viewport
   - L10020 · ⚠⚠⚠ …and the DOM still cannot see it MID-SCRIPT, which is a THIRD gap
   - L10036 · <line-names> are part of the resolved track list — and were dropped at the map boundary (tick 1289)
+  - L10070 · An empty grid is sized by its TEMPLATE, and one short-circuit denied it three ways (tick 1290)
 
 ## browser-capabilities.md
 `docs/wiki/browser-capabilities.md`
@@ -2221,4 +2222,4 @@
   - L231 · Both named mechanisms are subsystem work
 
 ---
-2128 sections across 22 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+2129 sections across 22 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.

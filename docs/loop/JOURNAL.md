@@ -83304,3 +83304,108 @@ NEXT, ranked from what this tick measured.
 
 WIKI: docs/wiki/box-layout.md — line names as part of the resolved track list, the repeat-boundary
 merge, and the two-lists-in-lockstep rule that keeps a serializer's interleave honest.
+
+## Tick 1290 — an EMPTY grid was short-circuited to a zero box before taffy ever ran (2026-08-16)
+
+TICK SHAPE: capability. Board re-run at the top of this tick: **unchanged** (★ CSS-LAYOUT;
+`css/css-grid` is the #1 row). The lever is t1289's ranked next-step (b), and the probe found
+something bigger than the serialization row it started from.
+
+HYPOTHESIS (written after the probe, which is now the standing method for this histogram row — it
+has defeated three readings in a row). t1289 left 540 `assert_in_array: gridTemplate*` failures, 46
+of them with correct names on both sides and only the SIZE wrong:
+
+```text
+   value "[a b] 1fr [c b] 1fr [c b] 1fr [c b] 1fr [c d]"  wanted  "[a b] 200px [c b] … [c d]"
+   value "[first] auto [last]"                            wanted  "[first] 0px [last]"
+```
+
+That is the used-value arm not firing — the reading t1289 **killed** with a five-case probe. So the
+probe was re-run with the one axis that differed, and it is the number of children:
+
+```text
+   #empty    repeat(4, [b] 200px [c])   no items   ->  [a b] 200px … [c d]     ✓ (COINCIDENCE)
+   #emptyfr  repeat(4, 1fr)             no items   ->  1fr 1fr 1fr 1fr         ✗ wants 200px ×4
+   #emptyau  [first] auto [last]        no items   ->  [first] auto [last]     ✗ wants 0px
+   #one      repeat(4, 1fr)             ONE item   ->  200px 200px 200px 200px ✓
+   #none     display:none                          ->  1fr 1fr 1fr 1fr         ✓ (correct: computed)
+```
+
+⚠⚠⚠ **`#empty` PASSES AND PROVES NOTHING — the degenerate configuration again.** With fixed `200px`
+tracks the computed value and the used value are the same string, so the fallback path is
+indistinguishable from the real one. It is the fourth time this session that *the configuration which
+already works is not evidence about the ones that do not* (t1276-1281), and it is why the probe
+carried `1fr` and `auto` arms.
+
+⭐⭐ **AND THE REAL DEFECT IS NOT SERIALIZATION AT ALL — IT IS THE BOX.**
+
+```text
+   #rows   grid-template-rows: repeat(3, 100px)   no items  ->  height   0   (Chrome: 300)
+   #gap    100px 100px; row-gap: 20px             no items  ->  height   0   (Chrome: 220)
+   #withkid same template, ONE item                         ->  height 300   ✓
+```
+
+`Ctx::layout_flex_or_grid` opens with `if block_kids.is_empty() { return (Block(vec![]), 0.0) }` —
+**an empty grid never reaches taffy**, so it has no height, no used track sizes, and therefore falls
+back to the specified template. One short-circuit, three symptoms.
+
+⭐ **What that costs on the real web is not exotic:** the skeleton/placeholder grid a page renders
+before its data arrives, the empty-state panel, and any grid whose rows are reserved by the template
+rather than by content — all of them collapse to nothing and the page reflows when the items land.
+That is a layout bug wearing a serialization bug's clothes, and only the height probe separates them.
+
+PLAN. Keep the short-circuit — an empty flex container, and an empty grid with no template, really
+are zero — but **do not take it when the container is a grid that declares explicit tracks**. Taffy
+sizes a childless grid from its template correctly; it was simply never asked.
+
+WHAT LANDED. One condition on one short-circuit in `Ctx::layout_flex_or_grid`: a childless container
+still returns a zero box **unless** it is a grid that declares an explicit template, in which case it
+goes to taffy like any other.
+
+```text
+  WPT MOVEMENT — and this one has a STABLE denominator, unlike t1289's:
+    css/css-grid   6922/14429 (48.0%)  ->  7043/14306 (49.2%)     mark 6818
+                   numerator +121, denominator −123  (back to ~14309, its pre-session value)
+    across the session:  6790 -> 7043  = **+253**, HANG/CRASH 0
+```
+
+⭐ **The denominator falling back to where it started is itself the check.** t1289 gained 132 while
+the denominator gained 120 — files running further and *creating* subtests — and this tick's −123
+returns it to 14306, so the +121 here is not a denominator artefact. Reading the two ticks together
+is what makes either number trustworthy; either alone would be ambiguous.
+
+GATE: `engine/page/tests/g_empty_grid_tracks.rs` — G_EMPTY_GRID_TRACKS, six claims, two of them
+CONTROLS. RED by restoring the unconditional short-circuit:
+
+```text
+  rows:h=0  gap:h=0  fr:h=0  flexctl:h=0  plainctl:h=0  frcols:<1fr 1fr 1fr 1fr>
+```
+
+⚠⚠⚠ **THE SECOND MUTATION STAYED GREEN, AND IT IS RECORDED IN THE GATE ITSELF RATHER THAN DROPPED.**
+Widening the exception to *every* empty container (`if false && block_kids.is_empty() …`) fails **no
+row**: running taffy on an empty flex container, or on a grid with no template, still produces height
+0. So `flexctl:`/`plainctl:` guard **correctness** — they catch a fix that made an empty container
+non-zero — but they do **not** prove the exception is narrow. The narrowing is a **cost** decision,
+and cost is not what this gate measures. The module doc now says so; claiming otherwise would be a
+green that cannot go red, which is the thing `falsify.sh` exists to find.
+
+⚠ One probe row was NOT promoted into the gate: `[first] auto [last]` on an 800px empty grid
+serializes `[first] 800px [last]` here and WPT wants `0px`. An `auto` track absorbs free space under
+`justify-content: normal`, so 800px may well be right for *this* fixture and the suite's differs (its
+grid is content-sized). **Not asserted either way rather than fitted to a number I have not
+explained** — named as open.
+
+PERF: taffy now runs for a childless grid **that declares tracks**, which is the only case that can
+produce a non-zero box. Empty flex containers and template-less grids keep the short-circuit.
+`manuk-layout` 182 tests green; F1/F2 floors green on the wall.
+
+NEXT, ranked from what this tick measured.
+(a) ⭐⭐⭐ The ANIMATION CLOCK, then `element.animate()` — carried, and still the largest single lever.
+(b) The `auto`-track-in-an-empty-grid question above: measure Chrome directly rather than infer.
+(c) The residual `assert_in_array` rows, now with names correct on both sides and only sizes at issue
+    for a shrinking set.
+(d) Carried: transforms on a stuck position; `writing-mode` is a SUBSYSTEM; `g_hscroll_carousel` is
+    RED on `main` and outside the wall (t1282); no `scroll_x` in view-changed (t1286).
+
+WIKI: docs/wiki/box-layout.md — an empty grid is sized by its template, the one-short-circuit-three-
+symptoms shape, and the honest limit of a control row that guards correctness but not narrowness.

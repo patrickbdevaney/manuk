@@ -10066,3 +10066,37 @@ Held by `engine/page/tests/g_grid_line_names.rs`, RED three ways. Measured: `css
 6790 → 6922, and the cluster it aimed at 590 → 540. ⚠ The numerator rose 132 while the denominator
 rose 120 — files now run further and create subtests that did not exist — so **the −50 on the
 targeted cluster is the claim, not the +132.**
+
+## An empty grid is sized by its TEMPLATE, and one short-circuit denied it three ways (tick 1290)
+
+`Ctx::layout_flex_or_grid` opened with `if block_kids.is_empty() { return (Block(vec![]), 0.0) }`, so
+a childless grid **never reached taffy**. `grid-template-rows: repeat(3, 100px)` on an empty grid is
+300px tall in every browser — the template reserves the space, the items do not create it — and it
+measured 0 here. One short-circuit, **three symptoms**:
+
+1. height 0 where the template says 300 (and 0 where `100px 100px` + `row-gap: 20px` says 220);
+2. no used track sizes, because taffy's `set_detailed_grid_info` only fires during a real layout;
+3. therefore `getComputedStyle().gridTemplateColumns` falling back to the **specified** list —
+   `"1fr 1fr 1fr 1fr"` where Chrome answers `"200px 200px 200px 200px"`, which is the fallback path's
+   own doc-comment warning (*"a wrong answer of the right type"*) coming true.
+
+⭐ **The symptom that matters on a real page is the first, and it was found while chasing the third.**
+The skeleton/placeholder grid a page renders before its data arrives collapses to nothing and the
+layout jumps when the items land. **Only the height probe separated a layout bug from a serialization
+one** — the serialization row is what the histogram showed.
+
+⚠ **The degenerate configuration hid it for the fourth time this session.** A childless grid with
+fixed `200px` tracks serializes *correctly* through the fallback, because the specified and used
+values are the same string. The probe only found the defect because it carried `1fr` and `auto` arms
+beside the `200px` one.
+
+⚠⚠⚠ **A CONTROL ROW CAN GUARD CORRECTNESS WITHOUT GUARDING NARROWNESS, and the difference is worth
+knowing before you trust one.** The gate's `flexctl:`/`plainctl:` rows assert that an empty flex
+container and a template-less grid stay zero. Widening the exception to *every* empty container
+fails **no row** — running taffy on them still yields 0. The narrowing is a **cost** decision (do not
+pay taffy for every childless container on every page), and cost is not what a value gate measures.
+Recorded in the gate's own module doc rather than left as an implied claim.
+
+Measured: `css/css-grid` 6922 → 7043 with the **denominator falling 123 back to its pre-session
+value** — which is what makes the number trustworthy after t1289 gained 132 on a denominator that
+rose 120. Across both ticks: 6790 → 7043, **+253**.

@@ -9669,7 +9669,24 @@ impl Ctx<'_> {
                     || matches!(self.dom.data(k), NodeData::Text(t) if !t.trim().is_empty())
             })
             .collect();
-        if block_kids.is_empty() {
+        // ⚠⚠⚠ **AN EMPTY GRID THAT DECLARES TRACKS IS NOT A ZERO BOX, AND THIS SHORT-CIRCUIT MADE
+        // IT ONE.** `grid-template-rows: repeat(3, 100px)` on a childless grid is **300px tall** in
+        // every browser — the template reserves the space, the items do not create it. Returning
+        // early here gave it height 0, and (because taffy never ran) no used track sizes either, so
+        // `getComputedStyle().gridTemplateRows` also fell back to the *specified* list. **One
+        // short-circuit, three symptoms**, and the one that matters on a real page is the first: the
+        // skeleton/placeholder grid a page renders before its data arrives collapses to nothing and
+        // the layout jumps when the items land.
+        //
+        // ⚠ The short-circuit is KEPT for everything else, because those really are zero: an empty
+        // flex container has no items to size from, and a grid with no explicit template has no
+        // tracks to reserve. Only the case where the template itself carries the size is excluded.
+        let empty_grid_with_tracks = {
+            let s = self.style_of(node);
+            matches!(s.display, Display::Grid | Display::InlineGrid)
+                && !(s.grid_template_rows.is_empty() && s.grid_template_columns.is_empty())
+        };
+        if block_kids.is_empty() && !empty_grid_with_tracks {
             return (BoxContent::Block(vec![]), 0.0);
         }
         let container_h = match self.style_of(node).height {

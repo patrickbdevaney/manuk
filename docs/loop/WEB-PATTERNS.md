@@ -7198,3 +7198,26 @@ gridTemplate*`) 590 → 540. ⚠ Stated honestly: the numerator rose 132 while t
 120** — files that stopped early now run further and create new subtests — so the **−50 on the
 targeted cluster** is the claim, not the +132. Gated by `G_GRID_LINE_NAMES`, RED three ways; the
 middle mutation prints the exact "right names, wrong lines" string the design exists to prevent.
+
+## The skeleton grid — reserved space before the data arrives (tick 1290)
+
+**Pattern:** a grid that declares its tracks and renders **empty** until content loads — the skeleton
+/ shimmer placeholder, the empty-state panel, a dashboard whose rows are reserved by
+`grid-template-rows` so the page does not jump when the fetch resolves. It is one of the most common
+loading patterns on the modern web precisely *because* the template holds the space.
+
+**The class this unlocks:** it held no space here. A childless grid was short-circuited to a zero box
+before taffy ever ran, so `grid-template-rows: repeat(3, 100px)` measured **0** instead of 300 — the
+exact layout jump the pattern exists to prevent, reproduced on every such page. The same
+short-circuit also left the container with no used track sizes, so `getComputedStyle` fell back to
+the specified list (`1fr 1fr 1fr 1fr` where Chrome says `200px …`).
+
+**Why it hid:** an empty *flex* container and a template-less grid really are zero, so the
+short-circuit is right almost everywhere; and a childless grid with **fixed px** tracks serializes
+correctly through the fallback because the specified and used values are the same string. The defect
+only shows on `1fr`/`auto` tracks or when you ask for the height.
+
+**Measured:** `css/css-grid` 6922 → **7043**, denominator falling back to 14306, `HANG/CRASH 0`;
+across t1289+t1290 **6790 → 7043**. Gated by `G_EMPTY_GRID_TRACKS`, RED by restoring the
+unconditional short-circuit. ⚠ Its second mutation stayed green and that is recorded in the gate: the
+control rows guard correctness, not the narrowness of the exception.
