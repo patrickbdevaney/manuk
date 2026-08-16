@@ -203,6 +203,55 @@ is pinned by the gate rather than deleted. (2) CSS **transitions** and the Web A
 separate legs of the same harness and are untouched; they need the previous computed value and a
 `currentTime` respectively, and both reuse this interpolation core.
 
+## `animation-composition: add` — the keyframe ADDS to the underlying value (tick 1287)
+
+Each endpoint is built by re-running the element's cascade with the keyframe's block appended, which
+is **replacement by construction** — correct for the default `replace`, and the whole of the defect
+for `add`. WPT read `100px → 150px → 200px` where it wanted `150px → 200px → 250px`: **the
+interpolation already exact, every value short by precisely the underlying.** One missing term, not a
+broken engine — and it sat under **59 files across 11 CSS areas** (`grep -rl test_composition css/`).
+
+Borrowed end to end (ladder option 1, no fork): `Procedure::Add`, `Procedure::Accumulate { count }`,
+and `AnimationComposition` as a real Stylo longhand. The mode is read out of **the same declaration
+block the endpoint is built from** — WPT's harness writes it inside the keyframe
+(`from {${prop}:${v}; animation-composition:${c}}`), and reading it from anywhere else would let the
+two drift.
+
+The underlying value is `cv`: the element's own cascade with no keyframe mixed in, i.e. the style
+that would have been published had it not been animating. That is the spec's definition, and it is
+already in hand at the call site.
+
+⚠⚠⚠ **ONLY THE PROPERTIES AN ENDPOINT ACTUALLY DECLARES MAY BE COMPOSITED, and this is the one way
+the fix can be worse than the bug.** `Sample::properties` is the union over *all* keyframes, and the
+spec's fill-in for an unmentioned property IS the re-cascade — so that side already carries the
+underlying value, and compositing it adds underlying to underlying and **silently doubles it**, on a
+property nobody animated additively. Each side therefore carries `(mode, declared-longhands)`, not a
+mode alone. The gate's `mixed:` row is written for precisely this and is the only row that moves when
+the check is removed.
+
+⚠ **Compositing is PER ENDPOINT, not per animation** — `from add … to replace` is a real and common
+combination in the suite; an animation-wide flag reads the `to` side wrong.
+
+⚠ `Err` from `animate` on the composite step means the pair does not compose (discrete or mismatched
+types); the spec's answer is that the composite is a no-op and the endpoint stands, which is why this
+cannot turn a working property into a broken one.
+
+**Measured:** `css/css-position` 689 → **778**, `css/css-transforms` 2411 → **2704**, `css/css-sizing`
+3028 → **3123**, `css/css-backgrounds` 4087 → **4141**, `css/css-values` 3230 → **3231** — **+532**,
+`HANG/CRASH 0`, and the failing-title diff shows 89 gone and 0 new in `css/css-position`.
+⚠ `css/css-values` barely moved because its compositing files are under `calc-size/animation`, where
+the tests fail at a **parse** gap before they reach interpolation: **a shared mechanism does not reach
+an area whose tests fail before they get to it.**
+
+⚠ **A FIXTURE LESSON WORTH MORE THAN THE FIX.** The first draft of the gate read every row with the
+*relationships* exact and the progress at ~0.8023 instead of 0.5 — which looks at a glance like a
+broken sampler. It is `ease`, the default `animation-timing-function`, whose output at input 0.5 is
+0.8023. **An expectation that hard-codes a number must pin every input that number depends on.** WPT's
+own harness sets the easing explicitly for exactly this reason.
+
+Held by `engine/page/tests/g_animation_composition.rs`, RED three ways (force `Replace`; drop the
+declared-set check; use one mode for both sides), each landing on its predicted number.
+
 ⚠ **`visibility` is not plain-discrete, and the gate row that says so was written expecting the
 opposite.** Its interval is `visible` whenever *either* endpoint is visible; Stylo implements that
 and Chrome agrees. Separately, Stylo's `animate_discrete` returns the 50% flip as `Ok`, so the

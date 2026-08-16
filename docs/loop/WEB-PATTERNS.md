@@ -7155,3 +7155,26 @@ system later, the fast half is a mask over the slow half.**
 `G_DOCUMENT_SCROLL`, proven RED per arm (`stuck:-750 doc:0`). ⚠ A third arm — `IntersectionObserver`'s
 missing `scrollX` — was written, measured as **provably inert** (the host zeroes `scrollX` before
 every observer pass) and **taken back out** rather than landed as an unfalsifiable green.
+
+## Additive animation — the "nudge it from wherever it is" effect (tick 1287)
+
+**Pattern:** `animation-composition: add` (and Web Animations' `composite: 'add'`) — a shake, a
+bounce, a hover-lift or a parallax offset applied *on top of* whatever the element's layout already
+put it at, rather than overwriting it. It is how two animations layer without one erasing the other,
+and it is the whole reason the property exists.
+
+**The class this unlocks:** an additive keyframe now adds. Every endpoint used to be built by
+re-running the cascade with the keyframe appended — replacement by construction — so `bottom: 50px`
+with `from { bottom: 100px; animation-composition: add }` reported `100px` where Chrome reports
+`150px`. The interpolation was already exact; every value was short by precisely the underlying.
+
+**Why it hid:** it is a *silent* wrongness on a property that still animates. The element moves, the
+motion is smooth, the progression is right — it is simply offset by the layout value it was supposed
+to build on. Nothing throws, nothing looks broken in a screenshot, and the default `replace` (which
+is nearly all animation on the web) is unaffected.
+
+**Measured:** **+532 subtests across five areas** — `css/css-position` 689→778 (its `animations`
+subtree 46.1%→56.2%), `css/css-transforms` 2411→2704, `css/css-sizing` 3028→3123,
+`css/css-backgrounds` 4087→4141, `css/css-values` 3230→3231. `HANG/CRASH 0` in all five; 89 failing
+titles gone and **zero new** in `css/css-position`. Seven more ★ areas use the same harness and are
+named as **unmeasured** rather than implied. Gated by `G_ANIMATION_COMPOSITION`, RED three ways.

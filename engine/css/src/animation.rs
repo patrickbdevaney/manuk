@@ -95,6 +95,29 @@ pub struct Sample {
     /// syntax to know what type it interpolates as, which this engine does not yet consult. A
     /// custom property therefore keeps its underlying value instead of getting a wrong one.
     pub properties: Vec<LonghandId>,
+    /// ⚠⚠⚠ **HOW EACH ENDPOINT COMBINES WITH THE UNDERLYING VALUE — `animation-composition`.**
+    ///
+    /// `(mode, declared-longhands)` per side. Until tick 1287 every keyframe **replaced**, because
+    /// each endpoint is produced by re-running the element's cascade with the keyframe's block
+    /// appended, and appending IS replacement. `composite: add` says the keyframe's value is added
+    /// to the underlying one instead — so `underlying [50px] from add [100px]` is `150px`, and we
+    /// answered `100px`: the interpolation exactly right and every value short by the underlying.
+    ///
+    /// ⚠ **The declared set is carried, not just the mode, and it is load-bearing.**
+    /// [`Self::properties`] is the union over ALL keyframes, and an endpoint that does not mention a
+    /// property already carries the underlying value there — compositing it would add underlying to
+    /// underlying and **silently double it**. Each side may only composite what it actually declared.
+    pub from_composite: (Composite, Vec<LonghandId>),
+    pub to_composite: (Composite, Vec<LonghandId>),
+}
+
+/// `animation-composition`, reduced to the three operations Stylo's `Procedure` already implements.
+#[derive(Clone, Copy, PartialEq, Eq, Debug, Default)]
+pub enum Composite {
+    #[default]
+    Replace,
+    Add,
+    Accumulate,
 }
 
 /// **Where in its own timeline is this animation, right now?**
@@ -238,9 +261,38 @@ fn bracket(
         }
     };
 
+    // `animation-composition` is declared INSIDE the keyframe block (that is where WPT's harness
+    // puts it, and where CSS Animations 2 allows it), so it comes out of the same declaration list
+    // the endpoint is built from — no second lookup, and no way for the two to disagree.
+    let composite = |d: &[PropertyDeclaration]| -> (Composite, Vec<LonghandId>) {
+        let mut mode = Composite::Replace;
+        let mut declared = Vec::new();
+        for decl in d {
+            if let PropertyDeclaration::AnimationComposition(ref v) = *decl {
+                if let Some(first) = v.0.first() {
+                    mode = match *first {
+                        stylo::values::specified::AnimationComposition::Add => Composite::Add,
+                        stylo::values::specified::AnimationComposition::Accumulate => {
+                            Composite::Accumulate
+                        }
+                        _ => Composite::Replace,
+                    };
+                }
+                continue;
+            }
+            if let PropertyDeclarationId::Longhand(l) = decl.id() {
+                declared.push(l);
+            }
+        }
+        (mode, declared)
+    };
+    let (from_decls, to_decls) = (decls(lo), decls(hi));
+    let from_composite = composite(&from_decls);
+    let to_composite = composite(&to_decls);
+
     Some(Sample {
-        from: decls(lo),
-        to: decls(hi),
+        from: from_decls,
+        to: to_decls,
         progress: local,
         easing: element_easing.clone(),
         from_declares_easing: steps[lo].declared_timing_function,
@@ -252,6 +304,8 @@ fn bracket(
                 PropertyDeclarationId::Custom(_) => None,
             })
             .collect(),
+        from_composite,
+        to_composite,
     })
 }
 
@@ -322,6 +376,7 @@ pub fn interpolate(
     sample: &Sample,
     from: &ComputedValues,
     to: &ComputedValues,
+    underlying: &ComputedValues,
 ) -> Vec<PropertyDeclaration> {
     // The segment's timing function, resolved the only way a keyframe's specified value can be:
     // read it back COMPUTED out of the from-side cascade, which already contains that keyframe's
@@ -342,6 +397,36 @@ pub fn interpolate(
         ) else {
             continue;
         };
+        // ── `animation-composition`: combine each endpoint with the UNDERLYING value first.
+        //
+        // ⚠⚠⚠ **ONLY WHERE THAT ENDPOINT ACTUALLY DECLARED THE PROPERTY.** `sample.properties` is
+        // the union over every keyframe, and an endpoint that does not mention a property already
+        // carries the underlying value on that side (the fill-in IS the re-cascade) — compositing it
+        // would add underlying to underlying and silently DOUBLE it. That is the one way this can be
+        // worse than the bug it fixes, so the declared set is checked, not the mode alone.
+        //
+        // `Err` from `animate` means the pair does not compose (a discrete or mismatched type); the
+        // spec's answer there is that the composite is a no-op — the endpoint stands as declared —
+        // which is what `unwrap_or` gives, and it is why this cannot turn a working property into a
+        // broken one.
+        let composed = |side: &(Composite, Vec<LonghandId>), v: AnimationValue| -> AnimationValue {
+            if side.0 == Composite::Replace || !side.1.contains(id) {
+                return v;
+            }
+            let Some(u) = AnimationValue::from_computed_values(pid, underlying) else {
+                return v;
+            };
+            let proc = match side.0 {
+                Composite::Add => Procedure::Add,
+                // One iteration's worth: this engine has no iteration counter on the sample, and
+                // `accumulate` over a single pass is `add` for every type Stylo implements it for.
+                Composite::Accumulate => Procedure::Accumulate { count: 1 },
+                Composite::Replace => return v,
+            };
+            u.animate(&v, proc).unwrap_or(v)
+        };
+        let a = composed(&sample.from_composite, a);
+        let b = composed(&sample.to_composite, b);
         let v = match a.animate(&b, Procedure::Interpolate { progress }) {
             Ok(v) => v,
             // Discrete: the value flips at the half-way point of the segment.

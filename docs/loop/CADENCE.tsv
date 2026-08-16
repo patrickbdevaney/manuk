@@ -978,3 +978,4 @@ tick	sha	epoch	iso	delta_s	shape	wall_s	files	added	deleted	gates	claims	wpt_pas
 1283	ad6fee79	1786885662	2026-08-16T09:07:42-04:00	7339	capability	997	9	488	160	486	81	3896	6960	0	642	0	a scroll is not a DOM mutation, and the forced reflow only knew about DOM mutations (2026-08-16)
 1284	0e4b6f60	1786888219	2026-08-16T09:50:19-04:00	2557	capability	997	9	453	162	487	81	3896	6960	0	642	0	the `Client` in `getBoundingClientRect` was never implemented (2026-08-16)
 1285	0a7aec00	1786890790	2026-08-16T10:33:10-04:00	2571	capability	997	11	491	166	488	81	3896	6960	0	642	0	the coordinate boundary, the other way round: `elementFromPoint` took a CLIENT point and hit-tested it against DOCUMENT boxes (2026-08-16)
+1286	57fd51f8	1786894308	2026-08-16T11:31:48-04:00	3518	capability	997	10	650	217	489	81	3896	6960	0	642	0	`window.scrollTo` was a request nobody performed, so the document scroll never reached layout (2026-08-16)

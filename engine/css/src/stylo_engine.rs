@@ -917,7 +917,11 @@ pub fn cascade_via_stylo_sized(
                     cq_active,
                     &s.to,
                 );
-                mixed.extend(crate::animation::interpolate(s, &a, &b));
+                // ⚠ `cv` is the element's own cascade with NO keyframe mixed in — the
+                // *underlying* value `animation-composition: add` adds to. It is the same `cv`
+                // that would have been published if this element were not animating, which is
+                // exactly the spec's definition of the underlying value.
+                mixed.extend(crate::animation::interpolate(s, &a, &b, &cv));
             }
             if !mixed.is_empty() {
                 cv = cascade_one_element(

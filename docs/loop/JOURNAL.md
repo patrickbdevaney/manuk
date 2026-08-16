@@ -82969,3 +82969,145 @@ NEXT, ranked from what this tick measured.
 
 WIKI: docs/wiki/js-engine.md — the optimistic-readback hiding pattern, and the refusal of a provably
 inert arm with the reason recorded at the call site.
+
+## Tick 1287 — `composite: add` was not implemented, so every additive keyframe REPLACED the value it was supposed to add to (2026-08-16)
+
+TICK SHAPE: capability. Board re-run at the top of this tick: **unchanged** (★ CSS-LAYOUT). The lever
+came from a fresh HISTOGRAM of `css/css-position`'s 762 failures rather than from my own NEXT list —
+the method, applied to a list I wrote myself an hour earlier.
+
+HYPOTHESIS (written before the code). The failure text names the mechanism outright:
+
+```text
+  FAIL Compositing CSS Animations: property <bottom> underlying [50px] from add [100px] to add [200px]
+       at (0)   assert_equals: expected "150px " but got "100px "
+       at (0.5) assert_equals: expected "200px " but got "150px "
+       at (1)   assert_equals: expected "250px " but got "200px "
+```
+
+⭐ **THE INTERPOLATION IS ALREADY CORRECT — 100 → 150 → 200 is the exact right progression.** Every
+answer is short by precisely the underlying `50px`. `animation-composition: add` says the keyframe's
+value is **added to** the underlying value rather than replacing it, and our pipeline builds each
+endpoint by re-running the element's own cascade with the keyframe's declarations *appended*, which
+is replacement by construction. So the whole family is one missing term, not a broken engine.
+
+COUNT THE COHORT, because a histogram row is a suspect and not yet a defect (t1260-1262):
+
+```text
+  css/css-position           194 of 762 failing subtests are `Compositing …`   (25%)
+    73  Compositing CSS Animations:  from add … to add
+    16  Compositing CSS Animations:  from add … to replace
+    85  Compositing Web Animations:  from add … to add        <- a DIFFERENT path, see below
+    20  Compositing Web Animations:  from add … to replace
+
+  $ grep -rl "test_composition" /home/patrickd/wpt/css/   ->  59 files across 11 ★ areas
+      css-backgrounds 14 · css-transforms 13 · css-sizing 7 · css-values 6 · css-position 4
+      css-fonts 4 · css-ui 3 · css-text 3 · css-grid 2 · css-flexbox 1 · css-color 1
+```
+
+**This is one mechanism sitting under eleven of the board's own ★ rows.**
+
+⚠ **THE TWO HALVES ARE NOT ONE MECHANISM, AND THE READING SAYS SO.** *CSS Animations* reports
+`100px` — the keyframe value, interpolated correctly, un-added. *Web Animations* reports `50px` — the
+**underlying**, untouched, meaning `element.animate()` never applied the keyframe at all. Those are
+different bugs wearing one test-name prefix, and only the first is this tick. Taking the WAAPI half
+on the strength of the shared prefix would be the "an area is not a cause" error (t1179-1181) with a
+test-title prefix in place of a directory.
+
+PLAN — and it is **ladder option 1, borrowed API, no fork** (I2). Everything needed is already in
+Stylo 0.19: `Procedure::Add`, `Procedure::Accumulate { count }`, and `AnimationComposition` as a real
+longhand that the WPT harness declares **inside the keyframe block**:
+
+```js
+  from {${property}:${from}; animation-composition:${fromComposite}}
+```
+
+1. `Sample` carries `from_composite` / `to_composite`, read by `bracket` out of the step's own
+   declaration block — the same block it already clones.
+2. `interpolate` takes the **underlying** `ComputedValues` (the element's cascade before any keyframe
+   is mixed in, which the caller in `stylo_engine` is already holding) and, per endpoint,
+   composites `underlying ⊕ endpoint` before interpolating.
+
+⚠⚠⚠ **ONLY THE PROPERTIES THE KEYFRAME ACTUALLY DECLARES MAY BE COMPOSITED.** `Sample::properties`
+is the union over *all* keyframes, and an endpoint that does not mention a property already carries
+the underlying value there — adding underlying to underlying would silently DOUBLE it. So each side
+composites against its own declared-longhand set, and a property declared only in `to` is left alone
+on the `from` side. That is the one way this fix can be worse than the bug.
+
+WHAT LANDED. `Composite {Replace, Add, Accumulate}` on `Sample`, read by `bracket` out of the same
+keyframe declaration block the endpoint is built from (no second lookup, so the two cannot disagree);
+`interpolate` takes the underlying `ComputedValues` — `cv`, the cascade that would have been
+published had the element not been animating, which is the spec's definition — and composites each
+endpoint before interpolating. `Procedure::Add` / `Procedure::Accumulate { count: 1 }` are Stylo's.
+
+```text
+  WPT MOVEMENT — measured across FIVE areas, not extrapolated from one:
+    css/css-position       689 -> 778    (+89)   animations 407/883 -> 496/883  (46.1% -> 56.2%)
+    css/css-transforms    2411 -> 2704   (+293)
+    css/css-sizing        3028 -> 3123   (+95)
+    css/css-backgrounds   4087 -> 4141   (+54)
+    css/css-values        3230 -> 3231   (+1)
+    ─────────────────────────────────────────────
+                                        **+532**, HANG/CRASH 0 in all five
+```
+
+⭐ **The prediction was exact where it could be: css/css-position's CSS-Animations compositing rows
+numbered 73 + 16 = 89, and the area moved by 89.** `diff` of the failing-title sets shows **89 titles
+gone and ZERO new ones** — the check that separates a fix from a trade.
+
+⚠ **`css/css-values` moved by ONE, and that is a finding rather than a disappointment.** Its six
+compositing files are under `calc-size/animation`, where the blocker is a different one already on
+the books (*"'to' value should be supported"* — a `calc-size()` PARSE gap, 1,784 subtests, t1283's
+histogram). A shared mechanism does not reach an area whose tests fail before they get to it.
+
+⚠ `css/css-sizing`'s +95 sits well outside its known ±27 noise band (t1276-1281), so it is real; the
+row is still banked as a floor rather than a point.
+
+Seven more ★ areas use the same harness and are NOT yet measured (`css-fonts` 4 files, `css-ui` 3,
+`css-text` 3, `css-grid` 2, `css-flexbox` 1, `css-color` 1) — named as unmeasured rather than
+implied to be covered.
+
+GATE: `engine/page/tests/g_animation_composition.rs` — G_ANIMATION_COMPOSITION, five claims, the
+CONTROL asserted first. Proven RED three ways, each isolating exactly one arm and each landing on its
+predicted number:
+
+```text
+  (1) force Replace in bracket's reader   ->  add:150px  half:150px  acc:150px  mixed:50px
+  (2) drop the declared-set check         ->  mixed:80px   (EVERYTHING ELSE STILL RIGHT)
+  (3) use the FROM mode for both sides    ->  half:200px   (EVERYTHING ELSE STILL RIGHT)
+```
+
+⚠⚠⚠ **(2) IS THE ONE THAT MATTERS AND IT IS THE ONLY WAY THIS FIX COULD BE WORSE THAN THE BUG.**
+`Sample::properties` is the union over all keyframes, so an endpoint that does not declare a property
+already carries the underlying value there — compositing it adds underlying to underlying and
+**doubles** it, on a property the author never animated additively. The `mixed:` row exists solely
+for that, and under (2) it is the *only* row that moves.
+
+⚠ **THE FIRST FIXTURE READ WRONG AND THE ENGINE WAS RIGHT.** Every row came back with the
+relationships exact and the progress at ~0.8023 instead of 0.5, which at a glance looks like a broken
+sample. It is `ease` — the default `animation-timing-function`, whose output at input 0.5 is 0.8023.
+**An expectation that hard-codes a number must pin every input that number depends on**; WPT's own
+harness sets the easing explicitly for exactly this reason, and the fixture now does too.
+
+⚠ **THE TWO HALVES OF THE HISTOGRAM ROW STAYED SEPARATE, AS PREDICTED.** *Compositing Web Animations*
+(105 rows in `css/css-position`) is untouched: it reads back the **underlying**, unchanged, because
+`element.animate()` runs through a JS shim that writes `el.style[prop]` and never interpolates. Same
+test-title prefix, different bug, correctly not claimed.
+
+PERF: one extra `AnimationValue::from_computed_values` + one `animate` per composited property — only
+on elements that both animate and declare `animation-composition`, which is nearly none. `F1`/`F2`
+cascade floors green.
+
+NEXT, ranked from what this tick measured.
+(a) ⭐⭐⭐ **`element.animate()` DOES NOT INTERPOLATE** — the WAAPI shim writes `el.style[prop] =
+    value` and stops. That is 105 of `css/css-position`'s remaining failures and the *Web Animations*
+    leg of all 59 compositing files plus all 194 `*-interpolation.html` files. The Rust engine that
+    would answer it already exists and is what this tick just extended.
+(b) Measure the seven unmeasured ★ areas that use this harness, and bank them.
+(c) `css/css-values`' `calc-size()` parse gap — 1,784 subtests behind *"'to' value should be
+    supported"*, and it now gates a mechanism we have.
+(d) Carried: transforms composed onto a stuck position; `writing-mode` is a SUBSYSTEM;
+    `g_hscroll_carousel` is RED on `main` and outside the wall (t1282).
+
+WIKI: docs/wiki/css-cascade.md — `animation-composition` as underlying⊕endpoint, why only the
+declared set may be composited, and the fixture lesson about pinning the easing.
