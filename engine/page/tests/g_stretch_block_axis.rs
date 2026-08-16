@@ -103,7 +103,23 @@ const HTML: &str = r##"<!doctype html><html><head><style>
        its content. If this moved, the new available-space arm is reaching boxes that did not ask. -->
   <div class="cb" style="position:relative"><div class="test" id="pnone" style="position:absolute; block-size:auto"></div></div>
 
-  <div id="out">-</div><div id="gap">-</div>
+  <!-- ══ THE INLINE AXIS — the mirror of the block half. The CB's inline padding
+       box is 40 + 3 + 3 = 46; `.test`'s inline frame is 2+2 padding + 3+3 border = 10 and it has NO
+       inline margins, so by the same rule: insets 0 -> 46, both auto -> 43 (static position is 3px
+       in), one 10px inset -> 36. -->
+  <div class="cb" style="position:relative"><div class="test" id="i0"    style="inline-size:stretch; block-size:auto; position:absolute; inset-inline:0"></div></div>
+  <div class="cb" style="position:relative"><div class="test" id="iauto" style="inline-size:stretch; block-size:auto; position:absolute"></div></div>
+  <div class="cb" style="position:relative"><div class="test" id="is10"  style="inline-size:stretch; block-size:auto; position:absolute; inset-inline-start:10px"></div></div>
+  <div class="cb" style="position:relative"><div class="test" id="ie10"  style="inline-size:stretch; block-size:auto; position:absolute; inset-inline-end:10px"></div></div>
+  <div class="cb"><div class="test" id="iflow" style="inline-size:stretch; block-size:auto"></div></div>
+  <div class="cb"><div class="test" id="ifloat" style="inline-size:stretch; block-size:auto; float:left"></div></div>
+  <!-- The inline min/max pair, same stretch-fit: 43 available − 10 frame = 33 content, 43 border. -->
+  <div class="cb" style="position:relative"><div class="test" id="imin" style="inline-size:auto; block-size:auto; position:absolute; min-inline-size:stretch"></div></div>
+  <div class="cb" style="position:relative"><div class="test" id="imax" style="inline-size:200px; block-size:auto; position:absolute; max-inline-size:stretch"></div></div>
+  <!-- CONTROL: an abspos box that never said `stretch` shrink-to-fits — empty content, so 0 + 10. -->
+  <div class="cb" style="position:relative"><div class="test" id="inone" style="inline-size:auto; block-size:auto; position:absolute"></div></div>
+
+  <div id="out">-</div><div id="gap">-</div><div id="inl">-</div>
   <script>
   window.addEventListener('load', function(){
     var h=function(id){ return id+'='+document.getElementById(id).offsetHeight; };
@@ -112,6 +128,9 @@ const HTML: &str = r##"<!doctype html><html><head><style>
        'fauto','findef','fpx'].map(h).join(' ');
     document.getElementById('gap').textContent =
       ['p0','pauto','ps10','pe10','pmin','pmax','pnone'].map(h).join(' ');
+    var w=function(id){ return id+'='+document.getElementById(id).offsetWidth; };
+    document.getElementById('inl').textContent =
+      ['i0','iauto','is10','ie10','iflow','ifloat','imin','imax','inone'].map(w).join(' ');
   });
   </script></body></html>"##;
 
@@ -138,7 +157,12 @@ fn block_axis_stretch_reaches_the_float_path() {
     // Two lines, one assertion: the in-flow/float half before the `|`, the out-of-flow half after
     // it. They are separated because they are two mechanisms in two functions under one histogram
     // bar, and reading them side by side is what said so.
-    let got = format!("{} | {}", text(&page, "#out"), text(&page, "#gap"));
+    let got = format!(
+        "{} | {} | {}",
+        text(&page, "#out"),
+        text(&page, "#gap"),
+        text(&page, "#inl")
+    );
     println!("STRETCH-BLOCK {got}");
 
     // RED, run 1 — delete the `(Dim::Auto, _) if s.height_stretch` arm from `layout_float`'s height
@@ -156,10 +180,31 @@ fn block_axis_stretch_reaches_the_float_path() {
     // min/max clamp. MOVED: `fmin` 45 → 10 and `fmax` 45 → 210, in opposite directions, which is
     // what says the min and the max are each doing their own work rather than one of them carrying
     // both rows.
+    //
+    // RED, run 4 — delete the `Dim::Auto if s.height_stretch` arm from `layout_abs`. MOVED:
+    // `pauto` `ps10` `pe10` → 10. ⚠ `p0` does NOT move: with both insets set the generic `auto`
+    // constraint equation already produces the identical number, which is precisely why three of
+    // the four configurations were broken and the fourth looked like proof they all worked.
+    //
+    // RED, run 5 — force `static_v_shift` to `0.0`. MOVED: `pauto` 50 → 55 and `pmin`/`pmax`
+    // 50 → 55, and NOTHING else — the inset-bearing rows never consult it. The whole
+    // static-position clause isolated to one scalar.
+    //
+    // RED, run 6 — drop the abspos `min_height_stretch`/`max_height_stretch` arms. MOVED: `pmin`
+    // 50 → 10 and `pmax` 50 → 210, in opposite directions.
+    //
+    // RED, run 7 — restore the abspos INLINE arm to its old `(cw - frame)` body, i.e. *"fill the
+    // containing block"*. MOVED: `iauto` 43 → 46, `is10` 36 → 46, `ie10` 36 → 46. ⚠ `i0` does NOT
+    // move — the same shape as `p0` one axis over, and the reason the arm looked implemented: with
+    // both insets zero, *fill the CB* and *fill the available space* are the same number.
+    //
+    // RED, run 8 — drop the abspos `min_width_stretch`/`max_width_stretch` arms. MOVED: `imin`
+    // 43 → 10 and `imax` 43 → 210, opposite directions.
     assert_eq!(
         got,
         "float=45 div=45 canvas=45 input=45 textarea=45 button=45 fmin=45 fmax=45 \
-         fauto=10 findef=10 fpx=40 | p0=55 pauto=50 ps10=45 pe10=45 pmin=50 pmax=50 pnone=10",
+         fauto=10 findef=10 fpx=40 | p0=55 pauto=50 ps10=45 pe10=45 pmin=50 pmax=50 pnone=10 \
+         | i0=46 iauto=43 is10=36 ie10=36 iflow=40 ifloat=40 imin=43 imax=43 inone=10",
         "`block-size: stretch` must reach the FLOAT path. A float shrink-to-fits on `auto` in both \
          axes — that is what a float IS — so `stretch` is the only way an author can say *this \
          floated column is as tall as its column*, and `layout_float` carried no containing-block \
@@ -178,6 +223,12 @@ fn block_axis_stretch_reaches_the_float_path() {
          padding box less the USED insets (an `auto` inset contributes zero) and, when BOTH block \
          insets are auto, less the offset to the STATIC POSITION. `p0` and `pauto` must DIFFER by \
          exactly the CB\'s block-start padding (55 vs 50), which is the whole static-position \
-         clause in one comparison; all three of `pauto`/`ps10`/`pe10` answered 10 before"
+         clause in one comparison; all three of `pauto`/`ps10`/`pe10` answered 10 before. \
+         INLINE AXIS: the same rule one axis over, and its arm EXISTED and was half-true — it said \
+         *fill the containing block*, which is right only when both insets are zero. `i0` (46) was \
+         therefore exact while `is10`/`ie10` came out TEN PIXELS TOO WIDE and `iauto` came out the \
+         CB's start-padding too wide, every one of them silently OVERHANGING the anchor rather \
+         than failing visibly. `iflow` and `ifloat` are the in-flow and float shapes that already \
+         worked; `inone` is an abspos box that never said `stretch` and must still shrink-to-fit"
     );
 }

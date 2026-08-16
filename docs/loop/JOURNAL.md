@@ -82139,3 +82139,93 @@ NEXT, ranked from what this tick measured.
     clamping).
 
 WIKI: docs/wiki/box-layout.md — stretch measures available space, not the containing block.
+
+## Tick 1280 — the INLINE arm EXISTED and was half-true: "fill the containing block" (2026-08-16)
+
+TICK SHAPE: capability — the inline mirror of t1279, probed per-box-type FIRST exactly as t1278's
+lesson prescribes. Board re-run at the top of this tick: unchanged, ★ CSS-LAYOUT, `css/css-sizing`.
+
+HYPOTHESIS (written before the code). t1279 closed the block axis; the same directory still held
+**309 `width expected N but got N`** rows against 138 height rows, so the inline axis is now the
+larger half. A 6-arm inline probe, run before any edit:
+
+```text
+   i0=46      iauto=46    is10=46    ie10=46    iflow=40   ifloat=40
+   want 46         43         36         36          40         40
+```
+
+⭐⭐ **AND THE ARM WAS ALREADY THERE.** `layout_abs` had `Dim::Auto if s.width_stretch => (cw - frame)`
+with a comment reading *"`stretch` on an abspos box fills its containing block exactly as
+`left:0; right:0` would."* That sentence is **true for the configuration it names and false for every
+other one**: `inset-inline: 0` was exact, `inset-inline-start: 10px` came out **ten pixels too wide**,
+and both-insets-auto came out the containing block's start-padding too wide. Each one **overhangs its
+anchor silently** rather than failing visibly — a dropdown that is a few pixels wider than the trigger
+it hangs off looks like a design choice.
+
+> **The block axis was a MISSING arm; the inline axis was a HALF-TRUE one, and the half-true one is
+> worse.** A missing arm shows up as a collapsed box the first time anyone looks. A half-true arm is
+> correct in the case its own comment cites, and the comment then reads as a justification for the
+> other three. This is the same shape as t1273's stale comment that *"converted from documenting a
+> limitation to justifying a bug"*, and as `p0`/`i0`: **the configuration that already works is not
+> evidence about the ones that do not.**
+
+```text
+  css/css-sizing/stretch   545/1004  ->  644/1004   (+99, denominator IDENTICAL,
+                                                     TWO runs byte-identical, HANG/CRASH 0)
+  ACROSS t1278-t1280 the directory went  439 -> 644  on ONE rule read three ways.
+
+  CONTROLS, paired, same box, same hour, numerator BYTE-IDENTICAL:
+    css/css-flexbox   2394/4693 · css/css-position 683/1482
+    css/css-overflow   450/963  · css/css-display   326/549
+```
+
+⚠⚠⚠ **A SUSPECTED GRID REGRESSION WAS CLEARED BY AN OLD-BINARY CONTROL, AND IT WAS WORTH THE 20
+MINUTES.** `css/css-grid` read **6760/14433** against a banked **6818/14519** — a 58-subtest drop, and
+under THE RATCHET that is a revert, not a discussion. Same-hour control, HEAD rebuilt without this
+tick's diff:
+
+```text
+  HEAD (no t1280):   6791/14478  ·  6760/14435      <- 6760 EXACTLY, on the OLD binary
+  with t1280:        6760/14433  ·  6768/14450
+```
+
+The bands overlap completely and the pass rate is 46.8–46.9% in all four. **`css/css-grid` is a THIRD
+noisy row** — after `css/css-sizing` (±27) and its own documented grid-lanes denominator wobble — and
+its banked 6818 is a **single sample sitting ABOVE the observed band**, so a future full sweep will
+read a false regression there through no fault of the engine. Named for the observer; the row is not
+touched by this tick.
+
+⚠ `css/css-sizing` is banked at **3028** = the same auditable floor rule as t1279 (lowest previously
+observed area reading 2835, plus the exactly reproducible subdirectory gain 644 − 451 = 193). TOTAL
+469094 → **469193 / 1267185 = 37.03%**.
+
+GATE: `G_STRETCH_BLOCK_AXIS` — 27 rows, **8 of them CONTROLS**, proven RED on **EIGHT** mutations.
+The two new ones: (7) restore the inline arm's old `(cw - frame)` body → `iauto` 43→46, `is10` 36→46,
+`ie10` 36→46 and **`i0` does not move**; (8) drop the abspos `min_width_stretch`/`max_width_stretch`
+arms → `imin` 43→10 and `imax` 43→210, opposite directions.
+
+⚠ **`cargo fmt` VOIDED A MUTATION PATTERN AGAIN**, and this time between ticks rather than within
+one: t1279's `let static_v_shift = if y_static { … }` had been reflowed to five lines, so t1280's
+scripted edit did not match. It cost one run and no wrong conclusion, **because the script `assert`s
+on its own pattern and writes the file only at the end** — a scripted edit that can silently no-op is
+the hazard; one that aborts is merely slow.
+
+PERF: none claimed. One extra `f32` argument and two arms on matches that already computed every term.
+
+NEXT, ranked from what this tick measured.
+(a) **`css/css-sizing/stretch` is 644/1004 and the remaining 360 is now a NAMED family**: the
+    `writing-mode: vertical-rl / vertical-lr / sideways-rl / sideways-lr` × `direction: rtl` group,
+    **80 rows in four blocks of 20**, each a `.container` with `border-top: 5px` or
+    `border-right: 5px` and a `.child` carrying an explicit `writing-mode`. Both axes fail together
+    there, which says the LOGICAL-to-PHYSICAL mapping of the stretch-fit is what is wrong rather than
+    either axis's arithmetic — a third reading of the same rule, and the probe for it should vary
+    `writing-mode` per arm exactly as this one varied box type.
+(b) A separate `<div class="test">` family (20 height + 20 width plain, 18 + 18 under
+    `box-sizing: border-box`) that survives both fixes — a container shape not in this gate's fixture
+    and therefore not yet identified. It is the honest residue and it is named rather than assumed to
+    be part of (a).
+(c) `css/css-sizing/animation` 1743/3009, residue dominated by Web Animations
+    `composite: add`/`accumulate`, absent.
+(d) Carried from t1276: the `sizes` VALUE tokenizer.
+
+WIKI: docs/wiki/box-layout.md — a half-true arm is worse than a missing one.

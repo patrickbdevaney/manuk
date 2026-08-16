@@ -8645,7 +8645,7 @@ impl Ctx<'_> {
             // auto that is the static position — i.e. the containing block's CONTENT-box origin,
             // not its padding-box origin. The difference is exactly the CB's block-start padding,
             // and it is why zero insets stretch to 55 where auto insets stretch to 50.
-            let cb_y0 = cb.y;
+            let (cb_x0, cb_y0) = (cb.x, cb.y);
             if x_static || y_static {
                 if let Some(&(sx, sy)) = self.static_pos.borrow().get(&node) {
                     cb = Rect {
@@ -8667,7 +8667,12 @@ impl Ctx<'_> {
             } else {
                 0.0
             };
-            let mut b = self.layout_abs(node, cb, static_v_shift);
+            let static_h_shift = if x_static {
+                (cb.x - cb_x0).max(0.0)
+            } else {
+                0.0
+            };
+            let mut b = self.layout_abs(node, cb, static_v_shift, static_h_shift);
             if let Some(m) = chain {
                 b.transform_affine(&m);
             }
@@ -9045,6 +9050,8 @@ impl Ctx<'_> {
         // why this is a separate scalar rather than a shrunken `cb`. Shrinking `cb` would silently
         // change what every PERCENTAGE in this function resolves against.
         static_v_shift: f32,
+        // The inline-axis twin of `static_v_shift`, zero unless BOTH inline insets are `auto`.
+        static_h_shift: f32,
     ) -> LayoutBox {
         let s = self.style_of(node).clone();
         let cw = cb.width;
@@ -9153,10 +9160,18 @@ impl Ctx<'_> {
                 IntrinsicSize::MaxContent => self.max_content_width(node),
                 IntrinsicSize::FitContent => self.shrink_to_fit(node, (cw - frame).max(0.0)),
             },
-            // `stretch` on an abspos box fills its containing block exactly as `left:0; right:0`
-            // would — it is the same constraint, said in one property instead of two, and without
-            // it the box shrink-to-fits and a `width:stretch` overlay collapses onto its content.
-            Dim::Auto if s.width_stretch => (cw - frame).max(0.0),
+            // ── **THE INLINE MIRROR OF THE BLOCK ARM ABOVE, AND IT WAS THE HALF-TRUE ONE.** This
+            // arm existed and said `cw - frame`: *"fill the containing block"*. That is right only
+            // when both inline insets are zero — the configuration everyone writes — so
+            // `inset-inline: 0` was exact while `inset-inline-start: 10px` came out **ten pixels too
+            // wide**, and both-insets-auto came out the containing block's start-padding too wide.
+            // Both overhang the anchor silently rather than failing visibly.
+            //
+            // Same two clauses as the block axis: less the USED insets (an `auto` inset contributes
+            // zero), and when BOTH are auto, less the offset to the static position.
+            Dim::Auto if s.width_stretch => {
+                (cw - left.unwrap_or(0.0) - right.unwrap_or(0.0) - static_h_shift - frame).max(0.0)
+            }
             Dim::Auto => match (left, right) {
                 (Some(l), Some(r)) => (cw - l - r - frame).max(0.0),
                 _ => match (definite_ch, s.aspect_ratio) {
@@ -9179,11 +9194,16 @@ impl Ctx<'_> {
             IntrinsicSize::MaxContent => self.max_content_width(node),
             IntrinsicSize::FitContent => self.shrink_to_fit(node, (cw - frame).max(0.0)),
         };
+        // The same stretch-fit the `Dim::Auto if s.width_stretch` arm resolves to, computed once.
+        let stretch_fit_w =
+            (cw - left.unwrap_or(0.0) - right.unwrap_or(0.0) - static_h_shift - frame).max(0.0);
         let min_w = match s.min_width_keyword {
+            _ if s.min_width_stretch => stretch_fit_w,
             Some(k) => kw_w(k).max(0.0),
             None => (s.min_width.resolve(cw, 0.0) - bs_extra_w).max(0.0),
         };
         let max_w = match s.max_width_keyword {
+            _ if s.max_width_stretch => stretch_fit_w,
             Some(k) => kw_w(k).max(0.0),
             None => match s.max_width {
                 Dim::Auto => f32::INFINITY,

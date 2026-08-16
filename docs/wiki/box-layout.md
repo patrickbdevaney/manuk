@@ -9878,3 +9878,52 @@ is the same answer without the blast radius.
 byte-identical; `css-flexbox`, `css-overflow`, `css-display` byte-identical and `css-position` +2.
 Together with the float half (tick 1278) the directory went **439 → 545** on one mechanism read two
 ways.
+
+## A HALF-TRUE arm is worse than a missing one (tick 1280)
+
+The inline axis of abspos `stretch` was not missing. It read:
+
+```rust
+// `stretch` on an abspos box fills its containing block exactly as `left:0; right:0`
+// would — it is the same constraint, said in one property instead of two.
+Dim::Auto if s.width_stretch => (cw - frame).max(0.0),
+```
+
+That sentence is **true for the configuration it names and false for every other one**. `inset-inline:
+0` was exact. `inset-inline-start: 10px` came out **ten pixels too wide**. Both insets `auto` came out
+the containing block's start-padding too wide. Every one of them **overhangs the anchor silently** —
+a dropdown a few pixels wider than its trigger reads as a design choice, not a bug.
+
+| | block axis (t1279) | inline axis (t1280) |
+|---|---|---|
+| symptom | arm **missing** → box collapses to border+padding | arm **half-true** → box overhangs by the inset |
+| how it presents | visibly broken the first time anyone looks | plausible, and its own comment justifies it |
+
+**A missing arm shows up. A half-true arm ships with a comment that reads as its justification.** The
+same shape as a stale comment that converts from *documenting* a limitation to *justifying* a bug, and
+the same shape as `p0`/`i0`: the configuration that already works is not evidence about the ones that
+do not — keep it as a control and pin that it does **not** move under the mutation.
+
+The correct rule, both axes: the available space is the containing block's **padding** box less the
+**used** insets (an `auto` inset contributes zero) and, when **both** insets on that axis are auto,
+less the offset to the **static position**.
+
+**Measured:** `css/css-sizing/stretch` 545/1004 → **644/1004**. Across ticks 1278–1280 the directory
+went **439 → 644** on one rule read three ways (float · abspos block · abspos inline), with
+`css-flexbox`, `css-position`, `css-overflow` and `css-display` byte-identical throughout.
+
+### ⚠⚠ `css/css-grid` is a third NOISY row, and its banked mark sits above its own band
+
+A 58-subtest drop against the ledger looked like a regression, and under THE RATCHET that is a revert
+rather than a discussion. A same-hour **old-binary control** settled it:
+
+```
+HEAD (no t1280):  6791/14478  ·  6760/14435     <- 6760 exactly, on the OLD binary
+with t1280:       6760/14433  ·  6768/14450
+```
+
+The bands overlap completely; the pass rate is 46.8–46.9% in all four. Like `css/css-sizing` (±27),
+this row is drawn from a population with a moving denominator, and the value banked in
+`WPT-AREAS.tsv` is a **single sample above the observed band** — so a future sweep will read a false
+regression there through no fault of the engine. *Every number has a harness; some also have a
+variance, and a mean banked as a constant becomes a trap.*

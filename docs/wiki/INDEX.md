@@ -484,6 +484,8 @@
   - L9811 · The histogram's biggest bar was TWO mechanisms in two functions
   - L9834 · ⚠⚠ css/css-sizing as an AREA is too noisy to read
   - L9842 · stretch on an out-of-flow box measures the AVAILABLE SPACE, not the containing block (tick 1279)
+  - L9882 · A HALF-TRUE arm is worse than a missing one (tick 1280)
+  - L9915 · ⚠⚠ css/css-grid is a third NOISY row, and its banked mark sits above its own band
 
 ## browser-capabilities.md
 `docs/wiki/browser-capabilities.md`
@@ -2208,4 +2210,4 @@
   - L231 · Both named mechanisms are subsystem work
 
 ---
-2115 sections across 22 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+2117 sections across 22 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.

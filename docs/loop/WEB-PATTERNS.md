@@ -6976,3 +6976,28 @@ and every anchored panel is exactly its containing block's start-padding too tal
 histogram bar (tick 1278), 439 → 545 on one directory. Gated by `G_STRETCH_BLOCK_AXIS` (18 rows, 6
 CONTROLS, RED six ways), whose `p0` control pins that the already-working configuration does **not**
 move when the new arm is mutated out.
+
+## The anchored panel that must match its trigger's width — `position: absolute; width: stretch` with an inset (tick 1280)
+
+**Pattern:** the dropdown body, autocomplete list, popover or tooltip pinned to one edge of its
+anchor — `position: absolute; inset-inline-start: 10px; width: stretch` — and the same panel with no
+inset at all, sitting at its static position.
+
+**The class this unlocks:** every anchored panel whose width is meant to come from the anchor. The
+inline arm existed and said *"fill the containing block"*, which is right **only when both insets are
+zero**: with a 10px inset the panel came out **ten pixels too wide**, and with both insets auto it
+came out the container's start-padding too wide.
+
+**Why it hid:** it **overhangs** instead of collapsing. A panel a few pixels wider than its trigger
+looks like a design choice, and the arm's own comment — *"fills its containing block exactly as
+`left:0; right:0` would"* — reads as the justification for the behaviour rather than as the
+description of the one case it covers. A **half-true** implementation is harder to find than a
+missing one.
+
+**The trap:** `inset: 0` is the configuration everyone writes first and the only one that does not
+need the feature — CSS2's constraint equation produces the identical number. Test the *inset-bearing*
+and *auto-inset* configurations, and keep the zero-inset one as a control that must **not** move when
+the arm is mutated out.
+
+**Measured:** `css/css-sizing/stretch` 545/1004 → **644/1004**; across ticks 1278–1280, 439 → 644 on
+one rule read three ways. Gated by `G_STRETCH_BLOCK_AXIS` (27 rows, 8 CONTROLS, RED eight ways).
