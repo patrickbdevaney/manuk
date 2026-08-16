@@ -835,7 +835,7 @@ pub fn cascade_via_stylo_sized(
             continue;
         }
         let el = StyloElement::new(dom, node, &store);
-        let cv = timed(&mut ph.element_ns, || {
+        let mut cv = timed(&mut ph.element_ns, || {
             cascade_one_element(
                 &stylist,
                 &index,
@@ -850,8 +850,94 @@ pub fn cascade_via_stylo_sized(
                 &parent_cv,
                 dom,
                 cq_active,
+                &[],
             )
         });
+        // ── **`@keyframes`, INTERPOLATED — see `crate::animation`.**
+        //
+        // Gated on Stylo's own `specifies_animations()`, which is
+        // `animation_name_iter().any(|n| !n.is_none())` — the same predicate `stylo_map.rs` already
+        // uses for the opacity reveal-hack, so the two cannot drift into disagreeing about which
+        // elements are animating. A page with no `animation-name` anywhere pays one bool read per
+        // element and nothing else.
+        if cv.get_ui().specifies_animations() {
+            let samples = crate::animation::samples_for(&stylist, &guard, el, &cv);
+            // **One final cascade for ALL of them, not one per animation.** `animation-name` is a
+            // list and a later entry beats an earlier one on the properties they share; cascading
+            // per-sample would instead throw the earlier sample away, because each sample's own
+            // from/to pair is built from the UNDERLYING style by definition. Appending in list
+            // order and merging once gives the spec's precedence for free — `merge_ascending`
+            // keeps the last-pushed occurrence.
+            let mut mixed: Vec<PropertyDeclaration> = Vec::new();
+            // ⚠⚠⚠ **AN ENDPOINT SHORT-CIRCUIT WAS BUILT HERE, MEASURED, AND REMOVED — read this
+            // before building it again.** The clock is still 0, so every animation on a real page
+            // sits at progress exactly 0; taking the from-side cascade directly there looks exact
+            // and halves the cost. It is NOT exact. `a.animate(&b, 0.0)` is not `a`: interpolating
+            // `transform: none` with `scale(2)` at 0 yields `matrix(1,0,0,1,0,0)`, not `none`, and
+            // the same round-trip through `to_animated_value`/`uncompute` normalises other types
+            // too. **It cost 36 subtests in `css/css-transforms` and this gate did not see it** —
+            // `g_keyframe_interpolation` was byte-identical with the fast path forced off, which is
+            // exactly the "a fast path must be predicate-IDENTICAL" trap: the equivalence was
+            // checked against too small a population. The right cure for the cost is the animation
+            // clock (which makes progress-0 rare) or a memo, never a second answer.
+            for s in &samples {
+                // The two bracketing keyframes as FULLY CASCADED styles, not as declaration
+                // blocks: interpolation is defined on computed values, and re-running the
+                // element's own cascade with the keyframe appended is what makes a property the
+                // keyframe never mentions fall back to the underlying value on both sides.
+                let a = cascade_one_element(
+                    &stylist,
+                    &index,
+                    &mut candidates,
+                    &mut caches,
+                    &lock,
+                    &url_data,
+                    &guard,
+                    &guards,
+                    &el,
+                    node,
+                    &parent_cv,
+                    dom,
+                    cq_active,
+                    &s.from,
+                );
+                let b = cascade_one_element(
+                    &stylist,
+                    &index,
+                    &mut candidates,
+                    &mut caches,
+                    &lock,
+                    &url_data,
+                    &guard,
+                    &guards,
+                    &el,
+                    node,
+                    &parent_cv,
+                    dom,
+                    cq_active,
+                    &s.to,
+                );
+                mixed.extend(crate::animation::interpolate(s, &a, &b));
+            }
+            if !mixed.is_empty() {
+                cv = cascade_one_element(
+                    &stylist,
+                    &index,
+                    &mut candidates,
+                    &mut caches,
+                    &lock,
+                    &url_data,
+                    &guard,
+                    &guards,
+                    &el,
+                    node,
+                    &parent_cv,
+                    dom,
+                    cq_active,
+                    &mixed,
+                );
+            }
+        }
         // **`rem` is root-relative.** The device carries the root font size that every `rem` in the
         // document resolves against, and it starts at the initial 16px. Unless it is updated once
         // the root element's own font size is known, `html{font-size:62.5%}` — the "1rem = 10px"
@@ -2987,6 +3073,18 @@ fn cascade_one_element(
     parent_cv: &std::collections::HashMap<NodeId, ServoArc<ComputedValues>>,
     dom: &Dom,
     cq_active: bool,
+    // **The ANIMATION cascade origin, and it is a slot rather than a rewrite.**
+    //
+    // CSS Cascade §6.2 puts animations above every author declaration and below `!important`
+    // author ones. This vec is appended LAST to `ascending`, which `merge_ascending` reads in
+    // reverse and therefore treats as the highest-priority normal declarations — exactly that
+    // position. Empty for every element that is not animating, which is almost all of them, and an
+    // empty slice costs one branch.
+    //
+    // ⚠ It is `&[PropertyDeclaration]` and not a block because `ascending` BORROWS its
+    // declarations (see `merge_ascending`), so the storage has to outlive this call — the same
+    // constraint that forces `inline_block` and `hint_block` to be parsed before the merge.
+    anim_decls: &[PropertyDeclaration],
 ) -> ServoArc<ComputedValues> {
     // Only the rules this element could possibly match — see `RuleIndex`. Everything below is
     // unchanged: each candidate is still fully matched by `matches_selector`, and winners are still
@@ -3095,6 +3193,10 @@ fn cascade_one_element(
         for (decl, importance) in block.declaration_importance_iter() {
             ascending.push((decl, importance));
         }
+    }
+    // …and the animation origin above even that (CSS Cascade §6.2) — see `anim_decls`.
+    for decl in anim_decls {
+        ascending.push((decl, Importance::Normal));
     }
     let merged_arc = ServoArc::new(lock.wrap(merge_ascending(&ascending)));
 

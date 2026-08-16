@@ -966,3 +966,4 @@ tick	sha	epoch	iso	delta_s	shape	wall_s	files	added	deleted	gates	claims	wpt_pas
 1270	6453df08	1786828777	2026-08-15T17:19:37-04:00	5494	capability	997	12	692	78	478	81	3896	6960	0	637	0	a grid's USED track sizes were computed by taffy on every layout and thrown away at the trait boundary (2026-08-15)
 1271	02501281	1786831447	2026-08-15T18:04:07-04:00	2670	capability	997	10	366	50	479	81	3896	6960	0	638	0	an RTL COLUMN flex container laid its cross axis from the LEFT, and our own source had named the gap (2026-08-15)
 1272	d630bd17	1786834221	2026-08-15T18:50:21-04:00	2774	capability	997	10	341	39	480	81	3896	6960	0	639	0	`offsetLeft` subtracted the UA's `margin: 8px` from every element on every ordinary page (2026-08-15)
+1273	b528f62c	1786841914	2026-08-15T20:58:34-04:00	7693	capability	997	12	1122	210	481	81	3896	6960	0	640	0	the engine did not interpolate ANYTHING, and a `@keyframes` animation rendered its base rule (2026-08-15)

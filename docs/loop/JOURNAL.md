@@ -81369,3 +81369,121 @@ PERF: none claimed. CAPABILITY: `offsetLeft`/`offsetTop` agree with Chrome on an
 is every popup, tooltip, dropdown, drag handle and virtual list that measures before it places.
 
 WIKI: `docs/wiki/box-layout.md` — the body is not an ordinary `offsetParent`.
+
+## Tick 1273 — the engine did not interpolate ANYTHING, and a `@keyframes` animation rendered its base rule (2026-08-15)
+
+TICK SHAPE: capability — the largest single mechanism in the board's #1 ★ CSS-LAYOUT area, and the
+same mechanism is the largest in two more.
+
+HYPOTHESIS (written before the code). `@keyframes` are parsed, `animation-*` cascades, and the whole
+lot is then discarded: the only thing this engine has ever done with an animation is the
+`has_animation && opacity == 0 -> 1` reveal-hack in `stylo_map.rs`, whose own comment reads *"We
+cannot animate."* If an element half-way through an animation resolved to the INTERPOLATED value,
+the CSS-Animations leg of WPT's `interpolation-testcommon.js` should move and nothing outside the
+animation path should.
+
+HOW IT WAS RANKED, and two areas were rejected on the way. The board's #1 is `css/css-grid` (8,353
+failing). Its tallest bar — `width expected 25 but got 50` ×1220, plus `height 50 -> 25` ×300 — is
+one mechanism, **`writing-mode: vertical-*` on an abspos inside a grid item**, and regrouping the
+whole area BY MARKUP found `verticalRL`/`verticalLR` containers under a third of `alignment`'s
+failures too. ⚠ **It was refused on SIZE, not on value**: `writing_mode` appears five times in the
+whole engine and vertical inline layout inside a 25k-line `layout/lib.rs` is not a tick — and the
+cheap version (swap the box's width and height, paint horizontally) is score-tuning. #2
+`css/css-values` was refused on VALUE: its tallest bar, 1,844 `CSS.supports` failures, is entirely
+`calc-size()`/`interpolate-size`, a Chrome-only experiment. The winner came from noticing the same
+harness under all three: **`css/css-transforms/animation` is 3,608 of that area's 3,789 failures**,
+`css/css-grid/animation` + `grid-lanes/animation` are 2,382 more, and the five legs of
+`interpolation-testcommon.js` split almost evenly (CSS Animations 764, Web Animations 764,
+Compositing 760, Transitions 594+594 in `css-transforms` alone).
+
+⭐⭐⭐ **THE HARNESS NEVER LETS TIME PASS, AND THAT IS WHAT MADE THIS A TICK.** Every leg sets
+`animation-duration: 100s; animation-delay: -50s` and warps the timing function so the fixed sample
+at 50% eases to the tested progress. So the animated computed value is a **static function of the
+cascade** — no compositor, no frame loop, no rAF, nothing to schedule. t1270 wrote this subsystem
+down as its NEXT and priced it as "land real interpolation"; the price is much lower than that once
+you notice the clock is not in the question.
+
+**Everything numeric is BORROWED — ladder option 1, no fork and no patch:** `Stylist::lookup_keyframes`
+(Stylo already builds a `KeyframesAnimation` per name and nothing ever asked for one),
+`AnimationValue::from_computed_values` + `Animate` for the interpolation per property type,
+`AnimationValue::uncompute` to get back to a declaration, `ComputedTimingFunction::calculate_output`
+for `cubic-bezier`/`steps`/`linear()`. Hand-rolled is only what the *servo* build does not ship:
+*where in its own timeline is this animation right now* — delay, iteration count, direction,
+fill-mode.
+
+⚠⚠ **The two bracketing keyframes are reached by CASCADING, not by reading the keyframe block**, and
+that is not extra work for its own sake. A keyframe declares SPECIFIED values and interpolation is
+defined on COMPUTED ones — and re-running the element's own cascade with the keyframe appended is
+what gives the spec's fill-in **for free**: the gate's `w2=60` row has a `from` keyframe that
+declares no width at all, so the from-side is the element's own `20px` base rule, and 60 is a number
+*neither keyframe contains*. The animation cascade origin itself is a SLOT, not a rewrite:
+`cascade_one_element` already builds an ascending declaration vec, so the interpolated declarations
+are appended last — exactly CSS Cascade §6.2's position — behind one parameter.
+
+⚠⚠⚠ **A FAST PATH THAT WAS "EXACT BY CONSTRUCTION" WAS MEASURABLY WRONG, AND THE GATE COULD NOT SEE
+IT.** The clock is still 0, so every animation on a real page sits at progress exactly 0; taking the
+from-side cascade directly there halves the cost and looked like an identity. It is not one:
+`Animate` at progress 0 is **not** the identity — `transform: none` interpolated with `scale(2)` at
+0 is `matrix(1,0,0,1,0,0)`, not `none` — and the round-trip through `to_animated_value`/`uncompute`
+normalises other types the same way. **It cost 36 subtests in `css/css-transforms` (2411 -> 2375 ->
+2411 on the same box, the fast path in and out) while EVERY row of `g_keyframe_interpolation` stayed
+byte-identical with it forced off.** The equivalence check I ran was a real check against too small
+a population. Removed, with a do-not-rebuild-this comment at the site; the cure for the cost is the
+clock or a memo, never a second answer.
+
+```text
+  css/css-transforms   1711/5500  ->  2411/5500   (+700, DENOMINATOR BYTE-IDENTICAL)
+    attributable in full:  /animation  1318/4926 -> 2018/4926  (+700, den identical)
+  css/css-grid         6276/14651 ->  6876/14603  (+600)
+    /animation                     822/2092 -> 1166/2092   (+344, den identical)
+    /grid-lanes/animation          544/~1650 -> ~780/~1580  (+~230, den UNSTABLE — see below)
+  css/css-values       3124/8140  ->  3230/8140   (+106, DENOMINATOR BYTE-IDENTICAL)
+  TOTAL +1406.  HANG/CRASH 0 in every run.
+
+  CONTROLS, paired, same box, same hour:
+    domparsing   234/1294  ->  234/1294   BYTE-IDENTICAL (0 interpolation files)
+    dom         8154/10503 -> 8152/10503  -2 ... AND NOT OURS: the OLD binary produced BOTH
+                8154 and 8152 on two runs in the same hour. That is the area's own error bar.
+```
+
+⚠ **The one denominator that moved is explained and it is not new.** `grid-lanes/animation` reads
+1646/1653/1657 across three OLD-binary runs and 1561/1601/1626 across three new ones — **both
+binaries wobble**, because `diag` catches the fixture mid-flight with *"Script terminated by
+timeout"* inside `getComputedStyle`: these three files build thousands of animated elements in one
+synchronous script and our own watchdog cuts them off, so the cut point moves with the cost of the
+work before it. The wall clock for the directory is **11.15s under both binaries** — the watchdog,
+not the work, is what bounds it. **No passing subtest was lost**: that directory's pass count went
+544 -> 767..800, and the three areas with stable denominators are byte-identical in their
+denominators.
+
+GATE: `G_KEYFRAME_INTERPOLATION` — 15 rows, **5 of them CONTROLS**, proven RED on two independent
+mutations. (1) Delete the `specifies_animations()` block: every animated row collapses onto its base
+rule (`w1=20 w2=20 ks=20 ks2=20 n5=20`), `c1` reads the inherited black and `op50` reads `1` from
+the reveal-hack — and **every control is byte-identical**, which is what says the gate measures the
+animation path rather than the cascade. (2) Ignore the keyframe's own timing function: `ks2` goes
+`0 -> 25` and NOTHING else moves.
+
+⚠ **A row was written expecting `hidden` and the engine was right.** `visibility` is not
+plain-discrete — its interval is `visible` whenever *either* endpoint is visible, which Stylo
+implements and Chrome agrees with. The row is kept as a measurement that corrected its author.
+Separately, Stylo's `animate_discrete` returns the 50% flip as `Ok`, so our `Err(())` handler is
+reached only by genuinely NON-INTERPOLABLE pairs — hence the `d1` row (`auto` ↔ `100px`).
+
+⚠⚠ **The reveal-hack is deliberately NOT deleted and the gate PINS it** (`op0=1`). With the clock at
+0 a real evaluation of a fade-in returns opacity 0, and 52 of 237 corpus sites pair `opacity: 0`
+with an animation — so deleting it would blank a fifth of the web to buy conformance. THE RATCHET
+forbids that trade. `op50=0.5` proves interpolation is nonetheless live, because the hack cannot
+produce 0.5.
+
+NEXT, and it is three separable legs of one harness. (a) **The clock** — `animation::set_time_ms`
+exists and has no caller; wiring it to the document's timeline turns this from a correct static
+sample into actual motion, and retires the reveal-hack. (b) **CSS transitions**, which need the
+previous computed value held across cascades. (c) **The Web Animations shim**, which fast-forwards
+in JS and should instead route `currentTime` into this same core. Each reuses `animation::interpolate`
+unchanged.
+
+PERF: none claimed, and a cost is disclosed — an animated element now cascades four times instead of
+once. It is gated on Stylo's own `specifies_animations()`, so a page with no `animation-name`
+anywhere pays one bool read per element.
+
+WIKI: docs/wiki/css-cascade.md — a `@keyframes` animation is a STATIC function of the cascade.

@@ -155,6 +155,59 @@ obvious.
 An element with `opacity: 0` that *specifies an animation* is not hidden — it is **about to be shown**.
 Treating the computed value as final hid ~a fifth of the web's content.
 
+## A `@keyframes` ANIMATION IS A STATIC FUNCTION OF THE CASCADE (t1273)
+
+Until t1273 this engine **interpolated nothing, anywhere**. `@keyframes` parsed, `animation-*`
+cascaded, and every one of those values was discarded; the sole consumer was the reveal-hack above.
+So an element half-way through `@keyframes grow { from { width: 0 } to { width: 100px } }` rendered
+its **base rule**, and `getComputedStyle` agreed with the base rule.
+
+⭐ **The insight that makes this a tick rather than a subsystem: the value needs no clock.** A
+`100s` animation with `animation-delay: -50s` is at its half-way point **at time zero** — no
+compositor, no frame loop, no rAF, nothing to schedule. So the animated computed value is a *pure
+function of the cascade plus one scalar*, and that scalar defaults to 0 for a static render. WPT's
+`css/support/interpolation-testcommon.js` is built on exactly this idiom, which is why one static
+evaluation reaches **194 `*-interpolation.html` files across twelve CSS areas**.
+
+**Everything numeric is borrowed** — `STATUS.md`'s ladder, option 1, no fork and no patch:
+
+| need | borrowed from |
+|---|---|
+| `@keyframes` → ordered steps + the set of properties that change | `Stylist::lookup_keyframes` → `KeyframesAnimation` |
+| a computed value in animatable form | `AnimationValue::from_computed_values` |
+| the interpolation, per property type | `Animate::animate(Procedure::Interpolate)` |
+| back to a declaration the cascade can take | `AnimationValue::uncompute` |
+| `cubic-bezier` / `steps` / `linear()` | `ComputedTimingFunction::calculate_output` |
+
+Hand-rolled is only what the *servo* build does not ship: **where in its own timeline is this
+animation right now** (`animation.rs::iteration_progress` — delay, iteration count, direction,
+fill-mode).
+
+⚠⚠ **The two bracketing keyframes are reached by CASCADING, not by reading the keyframe block.** A
+keyframe declares *specified* values (`width: 50%`, `color: currentcolor`) and interpolation is
+defined on *computed* ones, so each side is the element's own cascade re-run with that keyframe's
+declarations appended at the animation origin. This is not extra work for its own sake — **it is
+what gives the spec's fill-in for free**: a property the `0%` keyframe never mentions still carries
+the element's underlying value on the from-side, because that cascade still contains every rule that
+produced it. The gate's `w2=60` row is that fill-in, and 60 is a number *neither keyframe contains*.
+
+⚠ **The animation origin is a SLOT, not a rewrite.** `cascade_one_element` already builds an
+ascending `Vec<(&PropertyDeclaration, Importance)>` and merges it; the animation's declarations are
+appended last, which is exactly CSS Cascade §6.2's position (above every normal author declaration).
+The whole seam is one parameter.
+
+⚠ **Two things this does NOT do, named so nobody re-derives them.** (1) There is still no clock:
+`animation::set_time_ms` exists and every caller leaves it at 0, so a real page's animations sit at
+their start rather than running — which is why the `opacity: 0` reveal-hack above stays in force and
+is pinned by the gate rather than deleted. (2) CSS **transitions** and the Web Animations shim are
+separate legs of the same harness and are untouched; they need the previous computed value and a
+`currentTime` respectively, and both reuse this interpolation core.
+
+⚠ **`visibility` is not plain-discrete, and the gate row that says so was written expecting the
+opposite.** Its interval is `visible` whenever *either* endpoint is visible; Stylo implements that
+and Chrome agrees. Separately, Stylo's `animate_discrete` returns the 50% flip as `Ok`, so the
+`Err(())` arm is reached only by genuinely **non-interpolable** pairs like `auto` ↔ `100px`.
+
 ---
 # Backfill — mechanisms recovered from ticks 1–42 (pre-wiki)
 

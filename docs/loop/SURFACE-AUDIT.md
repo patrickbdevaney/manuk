@@ -6507,3 +6507,100 @@ the wall is a claim nobody is checking").
 the histogram *did* re-rank: `AudioContext` (the candidate t1261 carried into this session) is **1 of
 200** and `document.write` is **7**, so the instinct was the seventh-best lever and the measurement
 moved it to first.
+
+---
+
+## Audit #69 — tick 1273 (2026-08-15)
+
+**Source: the APERTURE DIFF (t1254's method), and it beat the internet leg by two orders of magnitude.**
+The web leg was run and confirmed the 2026 Interop focus areas (Anchor Positioning, advanced `attr()`,
+View Transitions, media pseudo-classes `:playing`/`:paused`/`:buffering`, IndexedDB `getAllRecords()`,
+WebTransport, Wasm JSPI) — all real, none of them the biggest thing on our own disk. Then step 2 was run
+the cheap way: **`ls` the WPT checkout and diff it against `docs/loop/RATCHET.tsv`.**
+
+### What we had been wrong about
+
+**THE PRIMARY METRIC HAS BEEN LOOKING AT 60% OF THE CHECKOUT.** `RATCHET.tsv` carries 21 `WPT:` rows.
+The checkout on disk holds **five more substantial trees with no row anywhere**, and they were measured
+this tick, cold, on the release binary:
+
+```text
+   area              pass    total    pct     FAILING   files   TH_TIMEOUT  HANG/CRASH
+   html/semantics    4187 / 11257    37.2%     7070     1794       557          0
+   html/canvas        674 /  4514    14.9%     3840     2287       111          1
+   html/browsers      184 /  1832    10.0%     1648      611       348          0
+   css/CSS2          1905 /  2252    84.6%      347       66         0          0
+   wai-aria           238 /   434    54.8%      196       30         0          0
+   ────────────────────────────────────────────────────────────
+   TOTAL             7188 / 20289    35.4%    13101
+```
+
+**`html/semantics` at 7,070 failing is the SECOND-LARGEST failing mass in the whole project** — behind
+`css/css-grid` (8,353) and ahead of every other area on the board — and it has been invisible to the
+metric that the owner named the *primary per-tick progress metric*.
+
+### The exclusion reason is now FALSE, and nobody re-checked it for 1,170 ticks
+
+`scripts/wpt-sweep.sh:41-43` states, in a comment dated **tick 103/104**, that `html/semantics` is
+*"NOT yet swept ... because it has 2 real per-page crashes (crash even in isolation, not the recoverable
+ACCUM class) that are a NEW Bar-0 to fix before it can join the sweep without failing the ratchet."*
+
+That was a correct and careful decision **in 2026 at tick 103**. This tick measured the area end to end:
+**`HANG/CRASH 0`, FILES 1794, no `NO_REPORT`, no `SHORT`.** Whatever those two crashes were, they were
+fixed somewhere in the intervening 1,170 ticks by work aimed at something else — and because the
+*exclusion* was a comment rather than a *measurement with an expiry*, the area stayed dark long after its
+reason evaporated.
+
+> **A capability excluded FOR A REASON must carry a re-check, or the reason outlives the fact.** This is
+> the mirror of the six phantom ❌s: those were capabilities claimed absent that existed. This is a
+> capability *area* excluded for a blocker that no longer exists. Same failure, opposite sign.
+
+`html/canvas` / `html/browsers` / `css/CSS2` / `wai-aria` are worse: they carry **no exclusion reason at
+all**. They were never on the map to be excluded from.
+
+### ADDED (five rows, status `unknown` → now MEASURED)
+
+- `html/semantics` — **the biggest actionable mass found this audit.**
+- `html/canvas` — 2,287 files. ⚠ carries **`HANG/CRASH 1`**, a real Bar-0 item to localise before this
+  area can join a ratchet-protected sweep. Recorded as a finding, not swept into the total.
+- `html/browsers` — 10.0%, the worst pass rate on the board. `TH_TIMEOUT 348` of 1,832.
+- `css/CSS2` — 84.6%, but only **66 testharness files of 810**: the CSS2.1 suite is overwhelmingly
+  **reftests**, which this runner skips (514 skipped as `reftest (Bar 2 — pixel, deferred)`). The layout
+  mass everyone assumes is in CSS2 is **not reachable through the testharness lane at all** — it needs
+  the reftest lane and WPT fuzzy matching, which the board already names.
+- `wai-aria` — 54.8%, confirming t1254's independent reading to the subtest. Small, correctly unranked.
+
+### CORRECTED
+
+- **`TH_TIMEOUT` is a first-class mechanism, not runner noise.** 1,016 async tests across the three html
+  trees *never complete* (semantics 557, browsers 348, canvas 111) versus **0** across CSS2 and wai-aria.
+  The split is perfectly clean along the boundary of *tests that wait for something to happen* — load
+  events, script execution timing, navigation, media. That is one suspect (per t1263: a suspect, not a
+  defect), and it is worth its own probe before any of it is read as a conformance number.
+
+### Re-rank — YES, and it is the first re-rank an audit has forced in a while
+
+The board's mandate is M1 render + the monotonic WPT total, steered through **render-moving** areas rather
+than pure-DOM-flip veins. The newly-visible mass satisfies both far better than the veins currently
+ranked, and the top row is a single mechanism:
+
+```text
+   html/semantics/embedded-content/the-img-element/sizes    0 / 795   in EIGHT files
+```
+
+**795 failing subtests, zero passing, one mechanism** — `<img sizes>` / `srcset` source-set selection.
+It is the largest single-mechanism bar found anywhere this session, it is **eight files** rather than a
+long tail, and unlike a DOM-flip vein it is *directly* M1-render: responsive images are on essentially
+every real CrUX site, and picking the wrong candidate (or none) is a wrong-sized box — the exact
+`width -> dy launder` family the render burndown ranks #1.
+
+Runners-up, ranked by failing count, all in the same newly-opened tree: `forms/the-input-element` 828 ·
+`scripting-1/the-script-element` 484 · `forms/textfieldselection` 385 · `forms/constraints` 338.
+
+### ⚠ For the observer — `scripts/` is observer-owned and was NOT touched
+
+`scripts/wpt-sweep.sh`'s `AREAS=()` needs `html/semantics` added (its stated blocker is measured gone),
+and a decision on `html/canvas` (Bar-0 `HANG/CRASH 1` first). `WPT-AREAS.tsv` / `RATCHET.tsv` were
+deliberately **left alone this tick**: adding 20,289 subtests to the denominator is an **APERTURE
+CHANGE, not progress**, and per t1270 a correction must never be banked as a climb. It should land as
+its own disclosed step so the total's jump is attributable.
