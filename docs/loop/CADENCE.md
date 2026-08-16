@@ -11,12 +11,12 @@
 
 | | value | over |
 |---|---|---|
-| ticks landed | **987** | ticks 1–1293 |
-| median tick cycle | **30m** | 986 intervals |
-| median, last 10 | **46m** | 10 intervals |
+| ticks landed | **988** | ticks 1–1294 |
+| median tick cycle | **30m** | 987 intervals |
+| median, last 10 | **52m** | 10 intervals |
 | fastest / slowest | 5s / 5.4d | |
-| **ticks per hour** | **1.13** | 875.7h elapsed |
-| median verify wall | **63s** | 926 ticks |
+| **ticks per hour** | **1.13** | 876.7h elapsed |
+| median verify wall | **63s** | 927 ticks |
 | wall trend | 39s → 17m — getting slower ⚠️ | first 3 vs last 3 |
 
 The **cycle** is the real unit: implement → debug → verify wall → land. The wall is only part of
@@ -27,11 +27,11 @@ it, and a wall that grows taxes every future tick, so it is tracked separately f
 ### Near — the daily driver (doc / app / platform web)
 
 * **capabilities asserted** (`G_CAPABILITY`): 48 → **81**
-* **live gates**: 27 → **492**
+* **live gates**: 27 → **493**
 * **✅ rows in the capability ledger**: 144 → **642**
 * **Bar 0 — oracle hangs**: 0 of 265 sites
 
-**458 of 987 ticks** (46%) moved a
+**458 of 988 ticks** (46%) moved a
 user-visible capability. The rest were instruments, infrastructure and corrections — and the
 ledger says the corrections were not overhead: three of its top three priorities were phantoms,
 and finding that out redirected everything after it.
@@ -1084,5 +1084,6 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 | **1291** | 2026-08-16 15:17 | 28m | instrument | 17m | +163/−34 | 491 | 81 | 56.0% · | 59% of the #1 board area's failures printed an EMPTY message (2026-08-16) |
 | **1292** | 2026-08-16 16:17 | 59m | measurement | 17m | +386/−36 | 492 | 81 | 56.0% · | the width mechanism is NOT a near-miss, and the aggregate's SIGN reverses inside its bigge |
 | **1293** | 2026-08-16 16:48 | 31m | capability | 17m | +184/−35 | 492 | 81 | 56.0% · | `fit-content(<length>)` on a grid track did the OPPOSITE of what it says (2026-08-16) |
+| **1294** | 2026-08-16 17:46 | 58m | measurement | 17m | +513/−161 | 493 | 81 | 56.0% · | `minmax(auto, <small>)` ignores the automatic minimum, and it is a TAFFY boundary, not our |
 
 *`·` after a WPT figure means **carried forward**, not measured this tick.*

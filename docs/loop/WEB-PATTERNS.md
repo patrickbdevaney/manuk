@@ -7243,3 +7243,29 @@ band, not a clean +40** — the number this stands on is the gate. `G_FIT_CONTEN
 assertions with two controls, RED with the predicted output (`fit=400 big=400 small=400` while both
 controls hold). The three arms are different on purpose: the clamp, the *ceiling-not-a-width* case,
 and the *min-content floor* — the last being the half a naive `min(arg, max-content)` gets wrong.
+
+## Build a pane, then scroll it — the chat view, the virtualised list, the carousel (tick 1295)
+
+**Pattern:** a script creates a scroll container and scrolls it **in the same task** — a chat pane
+jumping to the newest message, a virtualised list restoring its position, a carousel moving to the
+active slide, a modal scrolling its body to the top, any `scrollIntoView` polyfill.
+
+**The class this unlocks:** all of them. `el.scrollTop = n` is clamped against the published scroll
+geometry so a script writing `1e9` reads back the real maximum — but that map is published *before*
+the script runs, so for an element created this round there is no entry, `max` is `0`, and the write
+is clamped to **zero**. The forced reflow now republishes the scroll geometry (and the snap
+candidates) alongside the rects, styles and grid tracks it already refreshed.
+
+⚠ **A second, independent arm sat behind it:** a script-created `position: sticky` child still did not
+stick, because `has_sticky` — the flag gating the whole sticky pass — was derived from a cascade taken
+before the element existed.
+
+**Why it hid:** ⚠⚠⚠ **the clamp is correct and its input is stale.** Nothing throws, and `scrollTop`
+reads back `0` — a **legal value** — so even a caller that verifies its own assignment sees nothing
+wrong. This is the failure mode a defensive programmer cannot detect.
+
+**Measured:** `css/css-position` 778 → 779, `sticky` 20/78 → **21/78**, `css/css-overflow` 450 (=),
+`HANG/CRASH 0`. ⚠ **+1 is smaller than the mechanism deserves and is reported as it is** — WPT's
+`sticky-util.js` builds every fixture with `createElement`, so the whole family runs through this
+path, but most of those tests fail on a *further* assertion once past the scroll. The value is on the
+real web; the gate (`G_DYNAMIC_SCROLLER`, RED three ways) is what carries it.

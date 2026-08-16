@@ -83815,3 +83815,127 @@ is a true reading and a false task.
 
 WIKI: docs/wiki/box-layout.md — the `minmax(auto, <smaller>)` rule, the five-arm probe that isolates
 it, and why it is an upstream boundary rather than a mapping bug.
+
+## Tick 1295 — a scroll container the SCRIPT created cannot be scrolled: `scrollTop` clamps against a snapshot that predates it (2026-08-16)
+
+TICK SHAPE: capability. Board re-run at the top of this tick: **unchanged** (★ CSS-LAYOUT). Found by
+probing t1293's carried item (transforms on a stuck element) and discovering the family fails for a
+reason that has nothing to do with transforms.
+
+⚠ **TWO HYPOTHESES DIED FIRST, AND BOTH ARE BANKED SO THE NEXT READER DOES NOT RE-TRY THEM.**
+`css/css-position/sticky`'s transform family reads `expected 0 but got 100`, which invites *"transform
+does not reach the rect"*. Probed:
+
+```text
+   stylesheet  transform: translateY(-30px)   ->  rect y = -30                 ✓
+   el.style.transform = 'translateY(-40px)'   ->  rect y 100 -> 60             ✓
+   getComputedStyle(el).transform              ->  matrix(1,0,0,1,0,-40)       ✓
+```
+
+**Transforms reach the rect, from CSS and from a mid-script assignment.** So the transform arm is not
+the bug — and the second hypothesis (*sticky composes with the transform in the wrong order*) dies
+with it, because the failing numbers are off by the SCROLL, not by the transform.
+
+HYPOTHESIS (written after replicating WPT's own `sticky-util.js` structure, which builds its entire
+fixture with `createElement`/`appendChild`):
+
+```text
+   want   noTf=100  tf=0    stuck=50
+   got    noTf=200  tf=100  stuck=200
+```
+
+Every arm is off by exactly the scroll offset, and `tf` is off by the same amount as `noTf` — so the
+transform is applied and **the scroll is not**. `scroller.scrollTop = 100` did nothing.
+
+⭐⭐ **AND THE CAUSE IS THIS SESSION'S OWN THEME, ONE LAYER FURTHER IN.** `el_set_scroll_axis` clamps
+the assignment against `scroll_geom(node)` — *"max = content extent − visible window"* — so that a
+script writing `scrollTop = 1e9` reads back the real maximum. That geometry comes from `SCROLL_GEOM`,
+published by the host **before the script ran**. For an element the script **created this round**
+there is no entry, so `g = [0; 6]`, `max = 0`, and the write is clamped to **zero**:
+
+> **The clamp is correct, its input is stale, and the result is a scroll that silently does nothing.**
+
+⚠ **What that costs is not exotic.** Every SPA that builds a scroll container and then scrolls it in
+the same task: a chat pane jumping to the newest message, a virtualised list restoring position, a
+carousel scrolling to the active slide, a `scrollIntoView` polyfill, a modal scrolling its body to the
+top. All of them assign `scrollTop` and get 0.
+
+PLAN — and the machinery is t1283's, extended by one publication:
+1. `forced_reflow` already rebuilds the tree and republishes rects, styles and **grid tracks**. Add
+   the scroll geometry and the snap candidates, which are derived from the same fresh tree.
+2. `el_set_scroll_axis` forces the reflow **before** reading the geometry it clamps against — exactly
+   as `layout_rect` and `grid_tracks_of` already do, and for exactly the same reason.
+
+⚠ The reflow must publish geometry computed from the tree WITH the committed scroll offsets applied,
+or the clamp's `max` would be measured against an unscrolled tree — the t1283 defect in a new place.
+
+WHAT LANDED. Three arms, each one value that was derived from a snapshot taken before the thing it
+describes existed:
+
+1. `forced_reflow` republishes the **scroll geometry** and the snap candidates from the tree it just
+   built (it already republished rects, styles and grid tracks — this is the fourth member of that
+   set, and the one that was missing);
+2. `el_set_scroll_axis` calls `force_reflow_if_stale()` **before** reading the geometry it clamps
+   against, exactly as `layout_rect` and `grid_tracks_of` already do;
+3. `forced_reflow` derives `has_sticky` from **its own fresh cascade** rather than the flag captured
+   when the scope was armed — the same defect as `from_dom` passing `has_sticky: false` (t1283), one
+   layer along. `reapply_scroll_offsets` also re-asks it now, so a script-added sticky box survives
+   the post-script relayout too.
+
+```text
+  WPT MOVEMENT: small, and reported as it is.
+    css/css-position          778/1482 -> 779/1482     css/css-overflow  450/963 (=)
+    css/css-position/sticky     20/78   ->   21/78     (25.6% -> 26.9%, HANG/CRASH 0)
+```
+
+⚠ **+1 is a smaller number than the mechanism deserves and I am not going to dress it up.** WPT's
+`sticky-util.js` builds every fixture with `createElement`, so the whole scroll-container family runs
+through this path — but most of those tests fail on a *further* assertion once they get past the
+scroll, so fixing the scroll alone flips one. **The value of this tick is on the real web, not on the
+scoreboard**, and the gate is the artefact that carries it.
+
+GATE: `engine/page/tests/g_dynamic_scroller.rs` — G_DYNAMIC_SCROLLER, four claims, one a CONTROL.
+Proven RED three ways, and the third isolates its own arm:
+
+```text
+  (1) drop the scroll-geometry republish   ->  unstuck=200 readback=0 stuck=200 clamp=0
+  (2) drop force_reflow_if_stale           ->  unstuck=200 readback=0 stuck=200 clamp=0
+  (3) use the STALE has_sticky flag        ->  unstuck=100 readback=100 stuck=0  clamp=300
+```
+
+⚠ (1) and (2) are the same reading — two ends of one path, as in t1283 and t1286 — and saying so is
+worth more than claiming three distinctions. (3) is genuinely separable, which is why the sticky arm
+is its own claim.
+
+⚠⚠ **TWO HYPOTHESES DIED BEFORE THE RIGHT ONE, AND BOTH ARE BANKED.** *"A JS-set transform does not
+reach the rect"* — probed and false (`el.style.transform` moves the rect 100 → 60, and
+`getComputedStyle` reports `matrix(1,0,0,1,0,-40)`). *"Sticky composes with the transform in the wrong
+order"* — dead with it, since the failing numbers were off by the SCROLL, not the transform. **The
+`css/css-position/sticky` transform family is not a transform bug**, and the next reader should not
+spend a tick there.
+
+⭐⭐⭐ **AND THIS IS THE SESSION'S THEME, STATED ONCE MORE BECAUSE IT HAS NOW APPEARED SIX TIMES.**
+t1283 (the reflow guard knew only DOM mutations), t1284/t1285 (a coordinate boundary each call site
+decided for itself), t1286 (a request nobody performed, behind a correct read-back), t1290 (an empty
+grid short-circuited before layout), and now twice in one tick:
+
+> **A value derived from a snapshot is wrong for everything created after the snapshot was taken —
+> and the more careful the derivation, the more convincing the wrong answer.** A clamp against a
+> geometry that does not list the element clamps to zero; a feature flag computed from a cascade that
+> has not seen the element says the feature is absent. Neither throws. Both are legal values.
+
+PERF: one `scroll_geometry_of` + `snap_candidates_of` per forced reflow that actually fires (both are
+already computed once per relayout on the committed path); one integer compare added to the
+`scrollTop` setter's fast path. `g_hot_dom_no_compile` green.
+
+NEXT, ranked.
+(a) ⭐⭐⭐ The ANIMATION CLOCK, then `element.animate()` (check #120 steer 2) — unchanged and still the
+    only ⭐⭐⭐ standing.
+(b) Re-run `css/css-position/sticky` failure-by-failure now that its fixtures actually scroll: the
+    family's *next* assertions are now reachable and have never been read.
+(c) Carried: split the ECMAScript mega-row (audit #71); close `CSS anchor positioning`'s
+    contradictory pair (#70); the CrUX fidelity sweep is unmeasured ~50 ticks (check #120 says
+    escalate).
+
+WIKI: docs/wiki/js-engine.md — the published-map family and the rule that every one of its members
+must be republished by the forced reflow, plus the two banked negatives.

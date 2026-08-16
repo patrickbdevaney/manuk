@@ -6804,6 +6804,11 @@ unsafe fn el_set_scroll_axis(
         *vp = UndefinedValue();
         return true;
     };
+    // ⚠ **LAY OUT FIRST, for the same reason `layout_rect` and `grid_tracks_of` do.** The value below
+    // is CLAMPED against this geometry, and for an element the script created this round the
+    // published map has no entry at all — `max` would be 0 and the assignment would be clamped to
+    // zero. A stale input to a correct clamp is a scroll that silently does nothing.
+    force_reflow_if_stale();
     let g = scroll_geom(node);
     let want = arg_f64(cx, vp, argc, 0).unwrap_or(0.0) as f32;
     // max = content extent - visible window. A script that assigns 1e9 to reach the bottom must read

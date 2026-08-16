@@ -1187,6 +1187,44 @@ the gate's `off:` row exists solely to catch that, and under the one-level-down 
 nine rows still pass**. One fix, two mechanisms (t1276): a control row for the mechanism a fix must
 not touch is the only thing that separates them.
 
+### ⚠⚠⚠ THE PUBLISHED-MAP FAMILY — every member must be republished by the forced reflow (tick 1295)
+
+The host publishes several maps into the JS world before a script runs: the layout **rects**, the
+computed **styles**, the **grid tracks**, the **scroll geometry** and the **snap candidates**. The
+forced reflow republished the first three and not the last two — and the omission is not cosmetic,
+because `el.scrollTop = n` is **clamped** against the scroll geometry (*"max = content extent −
+visible window"*, so a script writing `1e9` reads back the real maximum).
+
+For an element the script created **this round** that map has no entry, so `max` is `0` and the
+assignment is clamped to **zero**.
+
+⚠⚠⚠ **The clamp is correct, its input is stale, and the result is a scroll that silently does
+nothing** — no throw, no warning, and `scrollTop` reads back `0`, which is a *legal value*, so even a
+caller that checks its own write sees nothing wrong. Every SPA that builds a scroll container and then
+scrolls it in the same task hits this: a chat pane jumping to the newest message, a virtualised list
+restoring position, a carousel moving to the active slide.
+
+**The rule: if the host publishes it and JS reads it, the forced reflow must republish it.** That set
+is now rects · styles · grid tracks · scroll geometry · snap candidates, and a new member added later
+is a new instance of this bug unless it joins the list. ⚠ Republish from the tree **with the committed
+scroll offsets applied**, or the clamp's `max` is measured against a page nobody scrolled.
+
+⭐ **A SECOND, INDEPENDENT INSTANCE SAT BEHIND IT: a FEATURE FLAG derived from a snapshot.** With the
+scroll working, a script-created `position: sticky` child still did not stick, because `has_sticky` is
+computed from the cascade at `Page` construction and re-read when the reflow scope is armed — both
+before the element existed — and it gates the whole sticky pass. The reflow now asks its **own fresh
+cascade**. Same shape as `from_dom` passing `has_sticky: false` (t1283).
+
+> **A value derived from a snapshot is wrong for everything created after the snapshot was taken, and
+> the more careful the derivation the more convincing the wrong answer.** A clamp against a geometry
+> that does not list the element clamps to zero; a feature flag computed from a cascade that has not
+> seen the element reports the feature absent. Neither throws; both are legal values.
+
+⚠ **Two banked negatives from finding this**, so nobody spends a tick on them: `css/css-position/sticky`'s
+transform family is **not** a transform bug — `el.style.transform` moves the rect (100 → 60) and
+`getComputedStyle` reports `matrix(1,0,0,1,0,-40)` — and it is not a sticky/transform ordering bug
+either, because the failing numbers were off by the **scroll**.
+
 ### ⚠⚠⚠ The most durable place to hide a gap is behind the observable everyone verifies first (tick 1286)
 
 `window.scrollTo(x, y)` is a **request**: it pushes onto `PENDING_SCROLLS` for the host to perform,

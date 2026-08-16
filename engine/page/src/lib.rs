@@ -1845,7 +1845,18 @@ unsafe fn forced_reflow(ctx: *mut std::ffi::c_void, dom: *mut Dom) {
     }
     // The SAME scrollport-aware sticky pass `Page::restick` runs, so the tree a geometry read
     // answers from and the tree that gets painted cannot disagree about where a stuck box is.
-    if c.has_sticky {
+    // ⚠⚠⚠ **ASK THE FRESH CASCADE, NOT THE FLAG CAPTURED AT INSTALL TIME.** `c.has_sticky` was read
+    // off the `Page` when this scope was armed — i.e. before the script ran — so a
+    // `position: sticky` element the script CREATED is invisible to it, and the sticky pass is
+    // skipped for exactly the element the script is about to measure. `c.styles` is the cascade this
+    // reflow just produced and does know about it. Same defect as `from_dom` passing
+    // `has_sticky: false` (t1283), one layer along: **a flag derived from a snapshot is stale in
+    // precisely the case a forced reflow exists to serve.**
+    let has_sticky = c.has_sticky
+        || c.styles
+            .values()
+            .any(|s| s.position == manuk_css::Position::Sticky);
+    if has_sticky {
         let (_, vh) = manuk_css::values::viewport_size();
         // ⚠ **THE LIVE DOCUMENT SCROLL, NOT THE `Page`'s COMMITTED ONE.** `window.scrollTo` is a
         // request the host performs later; all it does synchronously is move `SCROLL` (optimistically,
@@ -1868,6 +1879,22 @@ unsafe fn forced_reflow(ctx: *mut std::ffi::c_void, dom: *mut Dom) {
         .map(|(n, r)| (n, [r.x, r.y, r.width, r.height]))
         .collect();
     let us_rects = t_rects.elapsed().as_micros() as u64;
+
+    // ⚠⚠⚠ **THE SCROLL GEOMETRY MUST BE REPUBLISHED HERE, OR A SCROLL CONTAINER THE SCRIPT JUST
+    // CREATED CANNOT BE SCROLLED.** `el.scrollTop = n` is clamped in the bindings against
+    // `SCROLL_GEOM` — *"max = content extent − visible window"* — so a script that writes `1e9` to
+    // reach the bottom reads back the real maximum. That map is published by the host BEFORE the
+    // script runs, so for an element created THIS round there is no entry, `max` is 0, and the write
+    // is clamped to **zero**: the clamp is correct, its input is stale, and the scroll silently does
+    // nothing. Every SPA that builds a pane and then scrolls it in the same task hits this — a chat
+    // view jumping to the newest message, a virtualised list restoring position, a carousel moving
+    // to the active slide.
+    //
+    // ⚠ Computed from the tree WITH the offsets applied above, because `scroll_geometry_of` adds the
+    // offset back when it measures the extent; handing it an unscrolled tree would measure a
+    // different page from the one the clamp is about.
+    manuk_js::set_scroll_geometry(scroll_geometry_of(&root_box, &c.styles, &offsets));
+    manuk_js::set_snap_candidates(snap_candidates_of(&root_box, &c.styles, &offsets));
 
     c.laid_out_at = dom.mutation_seq();
     c.scrolled_at = scroll_seq;
@@ -3974,6 +4001,20 @@ impl Page {
                 }
             }
         }
+        // ⚠⚠⚠ **RE-ASK WHETHER THE PAGE HAS A STICKY BOX AT ALL, because a SCRIPT can add one.**
+        // `has_sticky` is computed once in the constructor from the initial cascade, and it gates the
+        // whole sticky pass — so a `position: sticky` element created by `createElement` (or by a
+        // class toggle) was invisible to it forever, and the box never stuck. One more instance of
+        // this session's theme: a value derived from a snapshot, and something created after the
+        // snapshot was taken. There IS a second update site on the re-cascade path (`self.styles =
+        // new_styles`), but not every relayout goes through it; this one runs after all of them.
+        //
+        // `any` short-circuits on the first sticky box, so a page with one pays almost nothing and a
+        // page with none pays one pass over a map the caller has just rebuilt anyway.
+        self.has_sticky = self
+            .styles
+            .values()
+            .any(|s| s.position == manuk_css::Position::Sticky);
         // The tree is FRESH out of layout, so the old ledger describes boxes that no longer exist —
         // drop it rather than "undo" a shift that was never applied to these rects.
         self.sticky_applied.clear();
