@@ -11,12 +11,12 @@
 
 | | value | over |
 |---|---|---|
-| ticks landed | **986** | ticks 1–1292 |
-| median tick cycle | **30m** | 985 intervals |
-| median, last 10 | **52m** | 10 intervals |
+| ticks landed | **987** | ticks 1–1293 |
+| median tick cycle | **30m** | 986 intervals |
+| median, last 10 | **46m** | 10 intervals |
 | fastest / slowest | 5s / 5.4d | |
-| **ticks per hour** | **1.13** | 875.2h elapsed |
-| median verify wall | **63s** | 925 ticks |
+| **ticks per hour** | **1.13** | 875.7h elapsed |
+| median verify wall | **63s** | 926 ticks |
 | wall trend | 39s → 17m — getting slower ⚠️ | first 3 vs last 3 |
 
 The **cycle** is the real unit: implement → debug → verify wall → land. The wall is only part of
@@ -31,7 +31,7 @@ it, and a wall that grows taxes every future tick, so it is tracked separately f
 * **✅ rows in the capability ledger**: 144 → **642**
 * **Bar 0 — oracle hangs**: 0 of 265 sites
 
-**457 of 986 ticks** (46%) moved a
+**458 of 987 ticks** (46%) moved a
 user-visible capability. The rest were instruments, infrastructure and corrections — and the
 ledger says the corrections were not overhead: three of its top three priorities were phantoms,
 and finding that out redirected everything after it.
@@ -90,7 +90,7 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 
 ## What a capability costs
 
-* **457** capability ticks, median cycle **30m**
+* **458** capability ticks, median cycle **30m**
 * median diff per tick: **+276 / −34** lines across 8 files
 
 ## Every tick
@@ -1083,5 +1083,6 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 | **1290** | 2026-08-16 14:50 | 55m | capability | 17m | +317/−36 | 491 | 81 | 56.0% · | an EMPTY grid was short-circuited to a zero box before taffy ever ran (2026-08-16) |
 | **1291** | 2026-08-16 15:17 | 28m | instrument | 17m | +163/−34 | 491 | 81 | 56.0% · | 59% of the #1 board area's failures printed an EMPTY message (2026-08-16) |
 | **1292** | 2026-08-16 16:17 | 59m | measurement | 17m | +386/−36 | 492 | 81 | 56.0% · | the width mechanism is NOT a near-miss, and the aggregate's SIGN reverses inside its bigge |
+| **1293** | 2026-08-16 16:48 | 31m | capability | 17m | +184/−35 | 492 | 81 | 56.0% · | `fit-content(<length>)` on a grid track did the OPPOSITE of what it says (2026-08-16) |
 
 *`·` after a WPT figure means **carried forward**, not measured this tick.*

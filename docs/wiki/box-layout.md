@@ -10200,3 +10200,43 @@ hunting a working measure.**
 Running total for this one histogram row: it has now defeated a reading taken from the histogram
 (twice), from a test file's `<meta name=assert>`, from a delta shape, and from the board itself.
 **Four agreeing readings were not enough; the fifth was a four-line probe.** Write the probe first.
+
+## `minmax(auto, <smaller>)` — the automatic minimum is lost, and it is an UPSTREAM boundary (tick 1294)
+
+CSS Grid §7.2.1: in `minmax(min, max)`, **if `max` is smaller than `min`, the max is ignored and the
+track is `min`.** With `grid: 10px / minmax(auto, 0px)` on an `inline-grid` (indefinite width), the
+`auto` minimum is the items' **automatic minimum size** — for an item with `width: 60px;
+padding-left: 6px` that is 66 — so the track is 66 and the container 66 + border. We answer the border
+alone.
+
+**A five-arm probe isolates it to one construct:**
+
+```text
+   minmax(auto, 0px)      container  10 · item 60      ✗   (Chrome: 70)
+   minmax(auto, 100px)    container 110 · item 60      ✓
+   auto                   container  70 · item 60      ✓
+   minmax(60px, 0px)      container  70 · item 60      ✓   <- explicit min beats a smaller max
+   min-content            container  70 · item 60      ✓
+```
+
+⚠⚠⚠ **The item measures 60px in every arm, including the broken one** — the item's own size is right
+and only the *track's* minimum is lost; and `minmax(60px, 0px)`, the same shape with an explicit min,
+is **correct**. Together those two rows rule out the border, the indefinite container, the item
+measure and `minmax` itself, leaving `auto`-as-a-minimum alone.
+
+⚠ **The mapping is not the bug.** `track_min` already produces `MinTrackSizingFunction::auto()`, which
+is the correct taffy primitive. The §7.2.1 max-ignored-when-smaller rule lives inside taffy's
+track-sizing algorithm.
+
+**So it is REFUSED under the borrowed-engine ladder, and the reasoning is the reusable part.** I2
+makes sanctioned dependencies *"adopted, tracked upstream, and never forked or patched"*. Ladder
+options 1–2 (flip a pref, take a named flag delta) do not exist for a spec rule. Option 3 — a
+hand-rolled supplement — would mean computing every item's automatic minimum size ourselves *before*
+taffy runs, so as to rewrite `minmax(auto, X)` into `minmax(<computed>, X)`: **that is
+reimplementing the part of the grid algorithm taffy was borrowed for, i.e. option 4 wearing option 3's
+clothes.** Report upstream; if it is ever taken locally, scope it as a subsystem.
+
+⚠ Priced so the refusal is a decision rather than an evasion: 78 files under `css/css-grid` use
+`minmax(auto`, and the eight `grid-items-minimum-width*` files carry 884 `data-expected-*` assertions
+— **an upper bound on the family, not a claim about this construct**, since those files also exercise
+margins, orthogonal flows and `vertical-lr` and the probe shows only one arm broken.

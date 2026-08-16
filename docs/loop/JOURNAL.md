@@ -83708,3 +83708,110 @@ NEXT, ranked.
 
 WIKI: docs/wiki/box-layout.md — `fit-content()` as a clamp that was mapped to a stretcher, and the
 fifth reading this area has killed.
+
+## Tick 1294 — `minmax(auto, <small>)` ignores the automatic minimum, and it is a TAFFY boundary, not our mapping (2026-08-16)
+
+TICK SHAPE: measurement. Board re-run at the top of this tick: **unchanged** (★ CSS-LAYOUT). This is
+t1293's ranked next-step (b), executed as a probe, and it ends in a **refusal with a reason** rather
+than a patch — which is the outcome I1/I2 require here.
+
+HYPOTHESIS AND PROBE. `css/css-grid/grid-items` is 169/901 with 391 too-narrow `width` rows, and the
+biggest repeated delta is `width expected 76 but got 10`. The fixture behind it
+(`grid-items-minimum-width-002.html`) is short enough to read:
+
+```html
+  .grid { display: inline-grid; border: solid 5px; grid: 10px 10px / minmax(auto, 0px); }
+  <div class="grid" data-expected-width="76">
+    <div class="width60 paddingLeft6" data-expected-width="66"></div>
+```
+
+The container is `inline-grid`, so its width is **indefinite** and comes from its tracks. The track is
+`minmax(auto, 0px)`: max `0`, min `auto` = the items' **automatic minimum size**, which for an item
+with `width: 60px; padding-left: 6px` is 66. Track 66 + 10px border = 76. We answer **10** — the
+border alone, i.e. the track took the `0px` max and the `auto` minimum contributed nothing.
+
+⭐ **A five-arm probe localises it to ONE construct, and everything around it is correct:**
+
+```text
+   minmax(auto, 0px)      container  10 · item 60      ✗   (Chrome: 70)
+   minmax(auto, 100px)    container 110 · item 60      ✓
+   auto                   container  70 · item 60      ✓
+   minmax(60px, 0px)      container  70 · item 60      ✓   <- an EXPLICIT min beats a smaller max
+   min-content            container  70 · item 60      ✓
+```
+
+⚠⚠⚠ **THE ITEM IS 60px IN EVERY ARM, INCLUDING THE BROKEN ONE.** The item's own size is right; only
+the track's *minimum* is lost. And `minmax(60px, 0px)` — the same shape with an explicit min — is
+**correct**, which is what isolates the defect to `auto`-as-a-minimum specifically rather than to
+minmax, to the border, or to indefinite containers.
+
+⚠ **AND OUR MAPPING IS NOT THE BUG, WHICH IS THE POINT OF THIS TICK.**
+`taffy_tree::track_min` already maps `TrackUnit::Auto -> MinTrackSizingFunction::auto()` — the
+correct taffy primitive, which taffy defines as the automatic minimum. CSS Grid §7.2.1 says that in
+`minmax(min, max)`, **if `max` is smaller than `min` the max is IGNORED and the track is `min`**. That
+rule is what we are missing, and it lives inside taffy's track-sizing algorithm, not in our
+translation of the style.
+
+**SO IT IS REFUSED, and the ladder in `STATUS.md` says why.** I2 makes the sanctioned dependencies
+*"adopted, tracked upstream, and never forked or patched"*, and options 1–2 (a pref, a named flag
+delta) do not exist here — there is no flag for a spec rule. Option 3 (a hand-rolled supplement) would
+mean computing each item's automatic minimum size **ourselves**, before taffy runs, in order to
+rewrite `minmax(auto, X)` into `minmax(<computed>, X)` — i.e. reimplementing the part of the grid
+algorithm we borrowed taffy for. **That is option 4 wearing option 3's clothes**, and it is a
+subsystem, not a tick.
+
+PRICED, so the refusal is a decision and not an evasion:
+
+```text
+   files under css/css-grid using `minmax(auto`                     78
+   `data-expected-*` assertions in the 8 grid-items-minimum-width files   884
+```
+
+⚠ **884 is an UPPER bound on that family and NOT a claim about this construct** — those files also
+exercise margins, borders, orthogonal flows and `vertical-lr`, and the 5-arm probe shows only one arm
+broken. The honest statement is: *one construct, definitely wrong, inside a family worth up to 884
+subtests, whose fix is upstream.*
+
+```text
+  WPT MOVEMENT: none, and none is claimed — this tick measures and refuses.
+```
+
+GATE: none, deliberately. A gate asserting today's wrong number would **pin the engine to a bug**
+(t1004); a gate asserting the right number would be a permanently-red test, which the wall treats as
+a regression. The falsifiable artefact is the five-arm probe, reproduced verbatim above.
+
+NEXT, ranked.
+(a) ⭐⭐⭐ The ANIMATION CLOCK, then `element.animate()` (check #120 steer 2) — still the only ⭐⭐⭐
+    standing, and now the only large engine lever in this session's ranking that is NOT blocked
+    upstream or out of scope.
+(b) **Report `minmax(auto, <smaller>)` upstream to taffy** with the five-arm probe and the §7.2.1
+    citation. That is the I2-shaped move: track upstream, do not fork. ⚠ If it is ever taken locally
+    it is a SUBSYSTEM tick and must be scoped as one — recorded here so it is not attempted as a
+    one-liner by a reader who sees only the `expected 76 but got 10` row.
+(c) Carried: split the ECMAScript mega-row (audit #71 rank 1); close `CSS anchor positioning`'s
+    contradictory pair (#70 rank 1); the CrUX fidelity sweep is unmeasured ~50 ticks and check #120
+    says escalate rather than repeat it again.
+
+### CADENCE ADDENDUM (t1294) — the SELF-AUDIT was also due, and its one finding is UNCHANGED
+
+`./scripts/self-audit.sh` (due every 10 ticks; the hook blocks past it) returns exactly one
+prescribed-but-not-executed item, the same one it returned at t1283:
+
+```text
+   ✗ verify wall: 2064s EXCEEDS the 300s target — Part 21.2 item 1 has regressed.
+```
+
+⚠ **And wall audit #49 (t1288) already answered it with a decomposition the self-audit does not
+have:** of a 2070s wall, `D` (disk reclamation) is **1141s = 55%**, every assertion in the wall totals
+**~140s = under 7%**, and `B` (the whole-workspace build) is **39s**. The self-audit's own remedies —
+*"mold/lld, cargo-nextest, workspace-hack, risk-based gate scheduling"* — all target compilation and
+gate scheduling, i.e. the 7% and the 39s. **They cannot reach the 55%.** `LAST_AUDIT_TICK` → 1294;
+`scripts/` untouched, and the observer already has the one-line report from #49.
+
+⭐ Worth stating once, because two instruments now disagree in a way that is informative rather than
+alarming: **the self-audit measures a THRESHOLD and the wall audit measures a DECOMPOSITION, and only
+the second can say whether the threshold is actionable.** A red threshold with an out-of-scope cause
+is a true reading and a false task.
+
+WIKI: docs/wiki/box-layout.md — the `minmax(auto, <smaller>)` rule, the five-arm probe that isolates
+it, and why it is an upstream boundary rather than a mapping bug.

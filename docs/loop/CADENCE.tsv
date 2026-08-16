@@ -985,3 +985,4 @@ tick	sha	epoch	iso	delta_s	shape	wall_s	files	added	deleted	gates	claims	wpt_pas
 1290	f9bb8526	1786906216	2026-08-16T14:50:16-04:00	3298	capability	997	8	317	36	491	81	3896	6960	0	642	0	an EMPTY grid was short-circuited to a zero box before taffy ever ran (2026-08-16)
 1291	446ecace	1786907867	2026-08-16T15:17:47-04:00	1651	instrument	997	6	163	34	491	81	3896	6960	0	642	0	59% of the #1 board area's failures printed an EMPTY message (2026-08-16)
 1292	c5ee4c7c	1786911423	2026-08-16T16:17:03-04:00	3556	measurement	997	13	386	36	492	81	3896	6960	0	642	0	the width mechanism is NOT a near-miss, and the aggregate's SIGN reverses inside its biggest real sub-area (2026-08-16)
+1293	b7494fbc	1786913288	2026-08-16T16:48:08-04:00	1865	capability	997	6	184	35	492	81	3896	6960	0	642	0	`fit-content(<length>)` on a grid track did the OPPOSITE of what it says (2026-08-16)

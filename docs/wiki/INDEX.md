@@ -497,6 +497,7 @@
   - L10137 · Ranking the #1 area once its failures were readable — and three readings that changed (tick 1292)
   - L10173 · fit-content(<length>) was mapped to auto — a clamp implemented as a stretcher (tick 1293)
   - L10191 · ⭐⭐⭐ …and finding it killed a FIFTH reading in this area
+  - L10204 · minmax(auto, <smaller>) — the automatic minimum is lost, and it is an UPSTREAM boundary (tick 1294)
 
 ## browser-capabilities.md
 `docs/wiki/browser-capabilities.md`
@@ -2226,4 +2227,4 @@
   - L231 · Both named mechanisms are subsystem work
 
 ---
-2133 sections across 22 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+2134 sections across 22 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
