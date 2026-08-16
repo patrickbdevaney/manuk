@@ -82657,3 +82657,106 @@ diffs our `node_rects` — a construct absent from both sides of our own reader 
 diff. The steer adds that question to the surface audit's per-construct pass, and repeats (third
 time) **RUN THE CrUX FIDELITY SWEEP** — which now carries a falsifiable prediction from t1282 rather
 than being a chore.
+
+## Tick 1284 — the `Client` in `getBoundingClientRect` was never implemented (2026-08-16)
+
+TICK SHAPE: capability. Board re-run at the top of this tick: **unchanged** (★ CSS-LAYOUT;
+`css/css-position` 799 failing at 46.1%). The lever came out of t1283's read of the geometry path
+rather than from a histogram, and it was **measured before it was believed**.
+
+HYPOTHESIS (written before the code), and it was confirmed by a probe that ran first:
+
+```text
+  got: top0:500  rects0:500  sy:300  top1:500  bot1:540  rects1:500  doc:800  h:40  off:500
+  want:top0:500  rects0:500  sy:300  top1:200  bot1:240  rects1:200  doc:500  h:40  off:500
+```
+
+**CSSOM View defines `getBoundingClientRect` relative to the VIEWPORT** — the `Client` in the name is
+the entire specification. `el_get_bounding_rect` reads `layout_rect`, which is the raw layout
+snapshot in **document** coordinates, and nothing has ever subtracted the scroll. So on a page
+scrolled to 300 an element at document 500 reported `top: 500` where Chrome reports `200`.
+
+⚠⚠⚠ **THIS IS ZERO PERCENT WRONG UNTIL THE PAGE SCROLLS, WHICH IS WHY THE WHOLE GATE WALL AND MOST
+OF WPT CANNOT SEE IT.** Every measurement taken at scroll 0 is correct, and nearly all of them are.
+It becomes 100% wrong the instant a user scrolls, and what it breaks is the most common measurement
+idiom on the web:
+
+```js
+  if (el.getBoundingClientRect().top <= 0) header.classList.add('is-stuck');  // NEVER fires
+  var inView = r.top < innerHeight && r.bottom > 0;                           // ALWAYS true
+  var docY   = r.top + window.scrollY;                                        // DOUBLE-COUNTS
+```
+
+⭐ **The third line is the tell, and it is why `scrollY` and the rect cannot be judged
+independently.** `rect.top + window.scrollY` is *the* documented way back to a document coordinate,
+so the two APIs are only correct **together**. We had a truthful `window.scrollY` (t378 made it
+synchronous) and a document-relative rect — so the idiom returned `y + scroll`: **off by exactly one
+scroll offset, in the direction that looks plausible.** The probe reads `doc:800` for an element at
+500. A correct half plus a wrong half reads as a coherent, confident answer.
+
+PLAN. Subtract the published scroll in the **two client-coordinate APIs only** —
+`el_get_bounding_rect` and `el_get_client_rects` — and NOT in the shared `layout_rect`.
+
+⚠ **The `off:` row is the guard on that choice and is not decoration.** `offsetTop` is
+*offsetParent*-relative, not client-relative, and travels the same `layout_rect`; `elementFromPoint`,
+the `offsetParent` walk, the SVG bbox composition and the internal `__rect(id)` helper all read it
+too. Subtracting inside `layout_rect` would pass every scrolled row above while silently breaking
+every `offsetTop`-based measurement on the web — the one-fix-two-mechanisms trap (t1276).
+
+WHAT LANDED. `to_client(x, y)` beside `layout_rect`, applied in `el_get_bounding_rect` and
+`el_get_client_rects` and nowhere else — plus one line that had to come with it:
+
+⚠⚠ **`SCROLL` IS A THREAD-LOCAL THAT NOTHING EVER RESET, AND THIS TICK PROMOTED THAT FROM A MINOR
+BUG TO A LOAD-BEARING ONE.** It is written by `set_view_state` and by `view_changed`, both of which
+describe a page that *already exists*, so a document loaded on a thread that had previously scrolled
+inherited the OLD page's offset. Before this tick that was a wrong `window.scrollY`; after it, it is
+a wrong `getBoundingClientRect` for every element on the new page, because the rect is now relative
+to exactly that value. Reset at `PageContext::load` — the one place a new document's global is built.
+
+```text
+  WPT MOVEMENT: ZERO, and the reason is the finding restated.
+    css/css-position   687/1482 (=)    css/css-overflow  450/963  (=)
+    css/cssom         2794/3502 (=)    css/css-flexbox  2394/4693 (=)
+```
+
+⭐ **WPT cannot see this, and that is not a criticism of WPT — it is the same property that hid the
+bug.** A testharness file measures its fixture at scroll 0, where document and client coordinates are
+identical, so the entire suite is blind to a defect that is 100% wrong on every scrolled page. **The
+three areas re-measured for regression are the evidence that matters here: all four marks unmoved,
+`HANG/CRASH 0`.** The value of the tick is on the real web, and it is the third tick running to land
+on H0 exit-gate condition (4) — *every rendered construct queryable through the in-process semantic
+API* — rather than condition (1).
+
+GATE: `engine/page/tests/g_client_coords.rs` — G_CLIENT_COORDS. Nine claims. Proven RED two ways:
+
+```text
+  (A) remove the subtraction from gBCR      ->  top1:500 doc:800   (the pre-tick behaviour, exactly)
+  (B) subtract inside `layout_rect` instead ->  off:200            (EVERYTHING ELSE PASSES)
+```
+
+⚠⚠⚠ **(B) IS THE POINT OF THE GATE AND IS WHY IT HAS AN `off:` ROW.** Subtracting one level down —
+in the shared `layout_rect` — fixes both client-coordinate APIs and *silently breaks every
+`offsetTop`-based measurement on the web*, plus the `offsetParent` walk, `elementFromPoint`, the SVG
+bbox composition and the internal `__rect(id)` helper, all of which are legitimately document-space.
+Eight of the nine rows pass under (B). **One fix, two mechanisms** (t1276) — and the only reason it
+is caught is that a control row was written for the mechanism the fix must NOT touch.
+
+The `doc:` row is the second deliberate one: `rect.top + window.scrollY` is the documented way back
+to a document coordinate, so `scrollY` and the rect are **only correct together**. It read 800 for an
+element at 500 — off by exactly one scroll offset, in the direction that looks plausible.
+
+PERF: two subtractions per client-rect call, on a `Cell` read. `g_hot_dom_no_compile` — the gate that
+prices `getBoundingClientRect` — still passes.
+
+NEXT, ranked from what this tick measured.
+(a) ⭐⭐ **`window.scrollTo` must bump `SCROLL_SEQ` and feed the sticky pass** — the machinery from
+    t1283 is in place, and this is the remaining half of the document-scroller family
+    ("Sticky elements work with the root (document) scroller: expected 750 but got 8").
+(b) **`elementFromPoint` takes CLIENT coordinates** — same coordinate-space question, opposite
+    direction (client in, document out); unaudited, and now the obvious next place to look.
+(c) **`IntersectionObserver`'s `boundingClientRect`/`rootBounds`** — same question a third time; if
+    it reports document coordinates it disagrees with `getBoundingClientRect` about the same box.
+(d) Carried: transforms composed onto a stuck position; `writing-mode` is a subsystem.
+
+WIKI: docs/wiki/js-engine.md — the document-vs-client coordinate boundary, which call sites own it,
+and why a correct half plus a wrong half reads as a coherent answer.

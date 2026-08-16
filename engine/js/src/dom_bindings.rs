@@ -794,6 +794,36 @@ fn grid_tracks_of(node: NodeId) -> Option<(Vec<f32>, Vec<f32>)> {
 
 /// Read one node's layout rect from the borrowed snapshot, **laying out first if the script has
 /// dirtied the DOM since that snapshot was taken** — a forced synchronous reflow.
+/// ⚠⚠⚠ **DOCUMENT COORDINATES → CLIENT (VIEWPORT) COORDINATES. The `Client` in
+/// `getBoundingClientRect` is the entire specification, and it was never implemented.**
+///
+/// [`layout_rect`] answers in **document** coordinates — that is what the layout snapshot holds, and
+/// it is the right answer for `offsetTop`/`offsetLeft` (offsetParent-relative), for the
+/// `offsetParent` walk, for `elementFromPoint`, for the SVG bbox composition and for the internal
+/// `__rect(id)` helper. CSSOM View defines `getBoundingClientRect()` and `getClientRects()` relative
+/// to the **viewport**, and nothing subtracted the scroll: on a page scrolled to `y = 300`, an
+/// element at document `y = 500` reported `top: 500` where every other browser reports `200`.
+///
+/// **Zero percent wrong until the page scrolls**, which is why the entire gate wall and most of WPT
+/// could not see it — nearly every measurement in a test is taken at scroll 0. It is 100% wrong the
+/// instant a user scrolls, and it breaks the most common measurement idioms on the web:
+/// `rect.top <= 0` (is the header stuck?) never fires, `r.top < innerHeight && r.bottom > 0` (is it
+/// in view?) is always true, and:
+///
+/// ⭐ **`rect.top + window.scrollY` — the documented way back to a document coordinate — DOUBLE-COUNTS.**
+/// That idiom is why `scrollY` and the rect cannot be judged independently: they are only correct
+/// *together*. `window.scrollY` has been truthful and synchronous since tick 378, so the pair
+/// returned `y + scroll` — off by exactly one scroll offset, in the direction that looks plausible.
+/// **A correct half plus a wrong half reads as a coherent, confident answer.**
+///
+/// ⚠ **Applied at the two client-coordinate CALL SITES, never inside `layout_rect`.** Subtracting one
+/// level down would fix both rows above and silently break every `offsetTop`-based measurement on the
+/// web — one fix, two mechanisms (t1276).
+fn to_client(x: f32, y: f32) -> (f32, f32) {
+    let (sx, sy) = SCROLL.with(|c| c.get());
+    (x - sx, y - sy)
+}
+
 fn layout_rect(node: NodeId) -> Option<[f32; 4]> {
     force_reflow_if_stale();
     LAYOUT_RECTS_PTR.with(|c| {
@@ -5324,10 +5354,11 @@ unsafe fn new_rect_object(
 
 unsafe fn el_get_bounding_rect(cx: *mut RawJSContext, _argc: u32, vp: *mut Value) -> bool {
     let node = this_node(vp).map(|(_, n)| n);
-    let [x, y, w, h] = this_node(vp)
+    let [dx, dy, w, h] = this_node(vp)
         .and_then(|(dom, n)| svg_child_client_rect(dom, n))
         .or_else(|| node.and_then(layout_rect))
         .unwrap_or([0.0, 0.0, 0.0, 0.0]);
+    let (x, y) = to_client(dx, dy);
     let (r, b) = (x + w, y + h);
     *vp = match new_rect_object(
         cx,
@@ -5784,7 +5815,8 @@ unsafe fn el_get_client_rects(cx: *mut RawJSContext, _argc: u32, vp: *mut Value)
     }
     rooted!(in(cx) let g = global);
     rooted!(in(cx) let mut rect_v = NullValue());
-    if let Some([x, y, w, h]) = node.and_then(layout_rect) {
+    if let Some([dx, dy, w, h]) = node.and_then(layout_rect) {
+        let (x, y) = to_client(dx, dy);
         let (r, b) = (x + w, y + h);
         if let Some(o) = new_rect_object(
             cx,
@@ -12785,6 +12817,13 @@ impl PageContext {
         external_scripts: std::collections::HashSet<NodeId>,
     ) -> Result<(Self, usize), String> {
         set_view_maps(layout, styles);
+        // ⚠ **A NEW DOCUMENT STARTS AT SCROLL 0, AND `SCROLL` IS A THREAD-LOCAL THAT NOTHING RESET.**
+        // It is written by `set_view_state` and by `view_changed`, both of which describe a page that
+        // already exists — so a document loaded on a thread that had previously scrolled inherited the
+        // OLD page's offset. That was a `window.scrollY` bug before tick 1284 and is a
+        // `getBoundingClientRect` bug after it, because the rect is now client-relative and this is
+        // the value it is relative TO. One line, at the one place a new global is built.
+        SCROLL.with(|c| c.set((0.0, 0.0)));
 
         let options = RealmOptions::default();
         rooted!(&in(runtime.cx()) let global = unsafe {

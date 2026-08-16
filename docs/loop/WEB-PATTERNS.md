@@ -7082,3 +7082,27 @@ mechanisms with the machinery now in place.
 
 **Measured:** `css/css-position` 683 → 687 (mark 683); `css/css-overflow` 450 → 450 (no regression);
 gated by `G_SCROLL_MEASURE`, proven RED three ways, two of which are honestly indistinguishable.
+
+## "Is it stuck?" / "is it in view?" — the two most-written measurements on the web (tick 1284)
+
+**Pattern:** `if (el.getBoundingClientRect().top <= 0) header.classList.add('is-stuck')` and
+`var inView = r.top < innerHeight && r.bottom > 0`. Sticky-state class toggles, scroll-spies,
+lazy-load without `IntersectionObserver`, sticky-table-header libraries, tooltip and dropdown
+placement, "scroll progress" bars, and every `IntersectionObserver` polyfill are these two lines.
+
+**The class this unlocks:** all of them, on any page that is scrolled. `getBoundingClientRect()` and
+`getClientRects()` returned **document** coordinates; CSSOM View defines them relative to the
+**viewport**. So `rect.top <= 0` never fired, `r.top < innerHeight` was always true, and
+`rect.top + window.scrollY` — the documented way back to a document coordinate — double-counted.
+
+**Why it hid:** it is **zero percent wrong at scroll 0**, which is where every WPT testharness file
+and almost every gate measures. It becomes 100% wrong the instant a user scrolls. A defect whose
+error is proportional to a value the test suite always leaves at zero is invisible to the suite by
+construction — and this one had a *truthful* `window.scrollY` sitting next to it, so the pair read as
+a coherent answer rather than an argument.
+
+**Measured:** WPT movement **zero** for exactly that reason (`css/css-position` 687, `css/cssom`
+2794, `css/css-flexbox` 2394, `css/css-overflow` 450 — all unmoved, `HANG/CRASH 0`). Gated by
+`G_CLIENT_COORDS`, proven RED two ways; the second mutation — subtracting one level down in the
+shared `layout_rect` — passes **eight of its nine rows** while breaking every `offsetTop` on the web,
+and only a control row written for the mechanism the fix must not touch catches it.

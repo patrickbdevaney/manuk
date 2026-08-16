@@ -975,4 +975,4 @@ tick	sha	epoch	iso	delta_s	shape	wall_s	files	added	deleted	gates	claims	wpt_pas
 1279	d2fe814c	1786869679	2026-08-16T04:41:19-04:00	3541	capability	997	10	284	46	484	81	3896	6960	0	642	0	`stretch` on an abspos box measures the AVAILABLE SPACE, not the containing block (2026-08-16)
 1280	5906afec	1786874375	2026-08-16T05:59:35-04:00	4696	capability	997	9	376	63	484	81	3896	6960	0	642	0	the INLINE arm EXISTED and was half-true: "fill the containing block" (2026-08-16)
 1281	85f1db0a	1786878323	2026-08-16T07:05:23-04:00	3948	capability	997	8	582	97	484	81	3896	6960	0	642	0	`position: sticky` implemented ONE of its four edges (2026-08-16)
-1283	713e99b2	1786883060	2026-08-16T08:24:20-04:00	4737	capability	997	13	897	164	485	81	3896	6960	0	642	0	a scroll is not a DOM mutation, and the forced reflow only knew about DOM mutations (2026-08-16)
+1283	ad6fee79	1786885662	2026-08-16T09:07:42-04:00	7339	capability	997	9	488	160	486	81	3896	6960	0	642	0	a scroll is not a DOM mutation, and the forced reflow only knew about DOM mutations (2026-08-16)

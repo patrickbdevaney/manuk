@@ -1159,6 +1159,42 @@ applied (the pending peek needs no `Page`) while the sticky counter-shift did no
 rode down with the content it should have pinned above. A load-time script is the most common script
 there is.
 
+### ⚠⚠⚠ DOCUMENT space vs CLIENT space — and which call site owns the conversion (tick 1284)
+
+`layout_rect` answers in **document** coordinates, which is what the layout snapshot holds. CSSOM
+View defines `getBoundingClientRect()` and `getClientRects()` relative to the **viewport**, and
+nothing subtracted the scroll: on a page scrolled to `y = 300`, an element at document `y = 500`
+reported `top: 500` where every other engine reports `200`. The `Client` in the name was never
+implemented.
+
+**It is zero percent wrong until the page scrolls, and that is why nothing caught it.** A WPT
+testharness file measures its fixture at scroll 0, where the two spaces coincide; so does almost
+every gate. The defect is 100% wrong on every scrolled page, and it breaks the idioms the web is
+made of — `rect.top <= 0` (is the header stuck?) never fires, `r.top < innerHeight && r.bottom > 0`
+(is it in view?) is always true.
+
+⭐ **`rect.top + window.scrollY` is the tell.** It is the documented way back to a document
+coordinate, which means `scrollY` and the rect are **only correct together**. `window.scrollY` has
+been truthful and synchronous since t378, so the pair returned `y + scroll`: off by exactly one
+scroll offset, in the direction that looks plausible. **A correct half plus a wrong half reads as a
+coherent, confident answer** — worse than two obviously-broken halves, which at least argue with each
+other.
+
+**Who owns document space, and must NOT be converted:** `offsetTop`/`offsetLeft` (offsetParent-
+relative), the `offsetParent` walk, `elementFromPoint`, the SVG bbox composition, the internal
+`__rect(id)` helper. Convert at the two client-coordinate CALL SITES, never inside `layout_rect` —
+the gate's `off:` row exists solely to catch that, and under the one-level-down "fix" **eight of its
+nine rows still pass**. One fix, two mechanisms (t1276): a control row for the mechanism a fix must
+not touch is the only thing that separates them.
+
+⚠ **`SCROLL` is a thread-local that nothing reset per document.** It is written by `set_view_state`
+and `view_changed`, both of which describe a page that already exists — so a document loaded on a
+thread that had previously scrolled inherited the old page's offset. A minor `window.scrollY` bug
+before this change and a load-bearing `getBoundingClientRect` bug after it, since the rect is now
+relative to precisely that value. Reset at `PageContext::load`, the one place a new global is built.
+**Making a stale value load-bearing is a cost of every "derive X from ambient state" change, and it
+has to be paid in the same tick.**
+
 **Held by `engine/page/tests/g_scroll_measure.rs` (`G_SCROLL_MEASURE`).** ⚠ Two of its three
 mutations — dropping the guard term, and dropping the offset application — produce the **same**
 reading (`row1:430`), because when only the scroll changed `restyle_and_layout`'s output *is* the
