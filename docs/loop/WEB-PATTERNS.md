@@ -7131,3 +7131,27 @@ stated in one place, so each call site decided for itself.
 **Measured:** WPT movement **zero** (`css/css-position` 687, `css/cssom` 2794 — unmoved). Gated by
 `G_HIT_POINT_COORDS`, proven RED from each arm separately, with the
 `elementsFromPoint(x,y)[0] === elementFromPoint(x,y)` invariant going false from either side.
+
+## `window.scrollTo` then measure — "scroll to the anchor and check what's on screen" (tick 1286)
+
+**Pattern:** `window.scrollTo(0, y)` (or `scrollIntoView`) followed, in the same task, by a geometry
+read — anchor navigation that then measures its target, "scroll to top and re-pin the header",
+restore-scroll-position on back-navigation, and every sticky header on a document-scrolled page.
+
+**The class this unlocks:** the document scroll is now a layout input rather than a number to read
+back. `window.scrollTo` bumps the same staleness term `el.scrollTop` bumps (t1283), and the forced
+reflow re-resolves sticky against the **live** scroll — so a `top:0` sticky header pinned by a
+document scroll reports the right box to `getBoundingClientRect`. WPT's own title for this,
+`"Sticky elements work with the root (document) scroller"`, flipped.
+
+**Why it hid — and it is the most instructive reason in this arc:** `window.scrollY` was *already
+correct*. t378 made the scroll optimistic precisely so a script reads back its own write on the next
+line, which is the first and often only thing anyone checks. Everything downstream of it — the
+relayout, the sticky constraint, the published rects — went on describing the unscrolled page behind
+that one correct number. **When an API answers the caller immediately and tells the rest of the
+system later, the fast half is a mask over the slow half.**
+
+**Measured:** `css/css-position` 687 → **689**, `sticky` 19/78 → **20/78**, `HANG/CRASH 0`. Gated by
+`G_DOCUMENT_SCROLL`, proven RED per arm (`stuck:-750 doc:0`). ⚠ A third arm — `IntersectionObserver`'s
+missing `scrollX` — was written, measured as **provably inert** (the host zeroes `scrollX` before
+every observer pass) and **taken back out** rather than landed as an unfalsifiable green.

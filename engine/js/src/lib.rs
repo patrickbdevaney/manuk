@@ -815,6 +815,20 @@ pub fn scroll_seq() -> u64 {
     0
 }
 
+/// The **live** document scroll `(x, y)` — what `window.scrollX`/`scrollY` report. The forced reflow
+/// resolves sticky against this rather than against the `Page`'s committed value, because a script
+/// may have called `window.scrollTo` a microsecond ago and the committed value is, by definition,
+/// the scroll before that. See [`dom_bindings::view_scroll`].
+#[cfg(feature = "_sm")]
+pub fn view_scroll() -> (f32, f32) {
+    dom_bindings::view_scroll()
+}
+
+#[cfg(not(feature = "_sm"))]
+pub fn view_scroll() -> (f32, f32) {
+    (0.0, 0.0)
+}
+
 /// Scroll requests the page made (`scrollTo`, `scrollBy`, `scrollIntoView`) — the host performs
 /// them, because the host owns the viewport.
 #[cfg(feature = "_sm")]

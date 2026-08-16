@@ -82852,3 +82852,120 @@ NEXT, ranked from what this tick measured.
 
 WIKI: docs/wiki/js-engine.md — the coordinate boundary now stated in BOTH directions, and the
 three-readers-one-snapshot evidence that says why it has to live in one place.
+
+## Tick 1286 — `window.scrollTo` was a request nobody performed, so the document scroll never reached layout (2026-08-16)
+
+TICK SHAPE: capability. Board re-run at the top of this tick: **unchanged** (★ CSS-LAYOUT;
+`css/css-position` 799 / 46.1%). The lever is the ⭐⭐ NEXT (a) carried from t1283, t1284 and t1285 —
+measured three times over and deferred each time because it needed the machinery those ticks built.
+
+HYPOTHESIS (written before the code):
+
+```rust
+    /// Scroll requests the page's script made (`scrollTo`, `scrollBy`, `scrollIntoView`). The host
+    /// owns the viewport, so a script asks and the shell performs …
+    pub fn take_scroll_requests(&self) -> Vec<(f32, f32)> { manuk_js::take_scrolls() }
+```
+
+```text
+  $ grep -rn "take_scroll_requests" shell/ tests/   ->  ZERO callers
+```
+
+**Nobody performs them.** `host_scroll_to` pushes the request onto `PENDING_SCROLLS` and — since
+t378 — *optimistically* sets `SCROLL`, so `window.scrollY` reads back correctly on the very next
+line. That optimism is what has been hiding the gap: the one observable a test checks first is right,
+and everything downstream of the scroll is untouched. So `window.scrollTo(0, 750)` moves `scrollY`
+and moves **nothing else** — no relayout, no re-stick, no re-published rects.
+
+That is exactly the `css/css-position/sticky` document-scroller family, in the suite's own words:
+
+```text
+  FAIL Sticky elements work with the root (document) scroller
+       assert_equals: expected 750 but got 8          <- 8 is the UA body margin, i.e. unmoved
+```
+
+⭐ **The three preceding ticks built every piece this needs and none of them could fire it.** t1283
+gave the forced reflow a `SCROLL_SEQ` staleness term and taught it to apply scroll offsets and the
+sticky pass; t1284 made `getBoundingClientRect` client-relative; t1285 did the same for
+`elementFromPoint`. All three are keyed on state a **document** scroll never touched.
+
+PLAN, three arms, each with its own gate row and its own mutation:
+1. `host_scroll_to` bumps `SCROLL_SEQ` — a document scroll is a layout-affecting change exactly as
+   an element scroll is, and t1283's guard already knows what to do with it.
+2. `forced_reflow` resolves the sticky pass against the **live** document scroll rather than the
+   `Page`'s committed snapshot, because the script may have scrolled a microsecond ago and `SCROLL`
+   is where that lands.
+3. The `IntersectionObserver` entry subtracts `scrollY` but **not `scrollX`** — carried from t1285,
+   fixed here because it is the same input reaching the same kind of consumer.
+
+WHAT LANDED. Two arms, not three. `host_scroll_to` bumps `SCROLL_SEQ`; `forced_reflow` resolves the
+sticky pass against `manuk_js::view_scroll()` — the **live** document scroll — instead of the `Page`'s
+committed snapshot.
+
+```text
+  WPT MOVEMENT: **+2, and the predicted title is one of them.**
+    css/css-position         687/1482 -> 689/1482   (mark 687)
+    css/css-position/sticky    19/78  ->   20/78    (24.4% -> 25.6%, HANG/CRASH 0)
+    css/css-position (root)    95/239 ->   96/239
+
+    + Sticky elements work with the root (document) scroller       <- the named prediction
+    + Dynamic sticky position change doesn't break inner sticky positioned items
+```
+
+⚠⚠⚠ **THE THIRD ARM WAS WRITTEN, MEASURED, AND TAKEN BACK OUT — and that is the finding of this
+tick.** An `IntersectionObserver` entry's `boundingClientRect` subtracts `scrollY` and not `scrollX`,
+so `- scrollX` looks like a one-token completion of t1285's three-readers-one-boundary story. Its
+gate row read **`iox:none`** — the observer had not run at all — and chasing that produced the reason:
+
+```rust
+    // PageContext::view_changed, the ONLY caller of __runObservers:
+    SCROLL.with(|c| c.set((0.0, scroll_y)));     // <- ZEROES scrollX, every pass
+```
+
+**The horizontal scroll is destroyed one layer up, before any observer can see it**, because the
+host's view-changed signature has no `scroll_x` to carry. So the subtraction is **provably inert**: it
+could never be proven RED, and a green that cannot go red measured nothing. Reverted, with the reason
+written at the call site so it is not re-attempted as a bargain. **A half-true arm is worse than a
+missing one** (t1280), and this one would have been half-true on top of an input that no longer
+exists by the time it is read.
+
+GATE: `engine/page/tests/g_document_scroll.rs` — G_DOCUMENT_SCROLL, five claims. Proven RED per arm:
+
+```text
+  (A) drop the SCROLL_SEQ bump in host_scroll_to   ->  stuck:-750  doc:0
+  (B) use the COMMITTED scroll in the sticky pass  ->  stuck:-750  doc:0
+```
+
+⚠ Both arms give the **same** reading, as t1283's did, and for the same structural reason: "no reflow
+fired" and "a reflow that re-stuck against the old scroll" are indistinguishable from outside when
+the old scroll is 0. Said rather than dressed up as two distinctions.
+
+⚠ **MUTATION A DID NOT APPLY ON THE FIRST ATTEMPT AND THE TEST STAYED GREEN.** There are now two
+`SCROLL_SEQ` bumps in the file and the patch matched neither uniquely; the run reported `ok` for a
+tree that was never mutated. Caught by re-reading the patch output, then re-applied by line number.
+**A mutation that does not go RED may not have APPLIED** (t1239) — the check that costs one grep and
+saves a false ratchet tooth.
+
+⭐ **What made this the fourth tick in a row rather than the first: `window.scrollY` was already
+right.** t378 made `window.scrollTo` set the offset optimistically so a script reads its own scroll
+back on the next line — correct, and the single most-checked observable. Everything downstream (the
+staleness guard, the sticky constraint, the published rects) went on describing the unscrolled page
+behind that one correct number. **The most durable place to hide a gap is directly behind the
+observable everyone verifies first.** `Page::take_scroll_requests` has, and had, **zero callers**.
+
+PERF: one integer bump per `window.scrollTo`; one `Cell` read per forced reflow on sticky pages.
+
+NEXT, ranked from what this tick measured.
+(a) **The host's view-changed signature carries no `scroll_x`**, so horizontal document scroll is
+    zeroed before every observer pass and cannot reach `IntersectionObserver` or anything downstream.
+    That is the real fix behind the arm refused above, and it is a signature change through
+    `Page::view_changed` → `PageContext::view_changed` → `__runObservers`.
+(b) **Transforms composed onto a stuck position** — 6 failures in one file, all of the shape
+    "transform applies to the SHIFTED box".
+(c) `css/css-position/sticky`'s remaining 58 are now mostly ancestor-padding/overflow-clip
+    constraint families rather than plumbing — a real layout-math vein, worth a fresh histogram.
+(d) Carried: `writing-mode` is a SUBSYSTEM; `left`/`right` sticky stays refused; `g_hscroll_carousel`
+    is RED on `main` and outside the wall (t1282).
+
+WIKI: docs/wiki/js-engine.md — the optimistic-readback hiding pattern, and the refusal of a provably
+inert arm with the reason recorded at the call site.

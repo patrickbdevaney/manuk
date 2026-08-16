@@ -779,6 +779,17 @@ pub fn scroll_seq() -> u64 {
     SCROLL_SEQ.with(|c| c.get())
 }
 
+/// The **live** document scroll offset `(x, y)` — what `window.scrollX`/`scrollY` report, and
+/// therefore what `getBoundingClientRect` is relative to and what a sticky box must be resolved
+/// against. Written by the host (`set_view_state`, `view_changed`) and, between those,
+/// *optimistically* by `window.scrollTo` so a script reads back its own scroll on the next line.
+///
+/// The forced reflow reads it rather than the `Page`'s committed value: the script may have scrolled
+/// a microsecond ago, and the committed value is by definition the scroll before that.
+pub fn view_scroll() -> (f32, f32) {
+    SCROLL.with(|c| c.get())
+}
+
 fn scroll_geom(node: NodeId) -> [f32; 6] {
     SCROLL_GEOM.with(|c| c.borrow().get(&node).copied().unwrap_or([0.0; 6]))
 }
@@ -11370,6 +11381,13 @@ unsafe fn host_scroll_to(cx: *mut RawJSContext, argc: u32, vp: *mut Value) -> bo
     // promise-returning contract's awaited continuation). The host's application overwrites
     // with the CLAMPED truth, so an out-of-range request over-reports only transiently.
     SCROLL.with(|c| c.set((x.max(0.0), y.max(0.0))));
+    // ⚠⚠⚠ **A DOCUMENT SCROLL IS A LAYOUT-AFFECTING CHANGE EXACTLY AS AN ELEMENT SCROLL IS.**
+    // The optimistic `SCROLL` write above is what hid this: `window.scrollY` reads back correctly on
+    // the very next line, which is the first thing anyone checks, while everything downstream — the
+    // sticky constraint, the client-relative rects, the published snapshot — went on describing the
+    // unscrolled page. Bumping the same staleness term `el.scrollTop` bumps (tick 1283) is what makes
+    // the next geometry read lay out against the scroll the script just performed.
+    SCROLL_SEQ.with(|c| c.set(c.get().wrapping_add(1)));
     *vp = UndefinedValue();
     true
 }
@@ -18904,6 +18922,16 @@ const WINDOW_PRELUDE: &str = r#"
                             target: el,
                             isIntersecting: isInt,
                             intersectionRatio: ratio,
+                            // ⚠⚠ **`scrollX` IS DELIBERATELY ABSENT HERE, AND THAT IS A REFUSAL RATHER
+                            // THAN AN OMISSION (tick 1286).** An entry's rect is client-relative on
+                            // BOTH axes, so `- scrollX` looks like a one-token fix — but
+                            // `PageContext::view_changed`, which is the ONLY thing that calls
+                            // `__runObservers`, opens with `SCROLL.set((0.0, scroll_y))`: it
+                            // ZEROES the horizontal scroll before every observer pass, because the
+                            // host's view-changed signature has no `scroll_x` to pass. So the
+                            // subtraction is provably INERT — it could never be proven RED, and a
+                            // half-true arm is worse than a missing one (t1280). The real fix is one
+                            // layer up, in what the host tells the page about its own viewport.
                             boundingClientRect: { x: r[0], y: r[1] - scrollY, width: r[2], height: r[3],
                                                   top: r[1] - scrollY, left: r[0],
                                                   bottom: r[1] - scrollY + r[3], right: r[0] + r[2] },

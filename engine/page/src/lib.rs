@@ -1847,14 +1847,17 @@ unsafe fn forced_reflow(ctx: *mut std::ffi::c_void, dom: *mut Dom) {
     // answers from and the tree that gets painted cannot disagree about where a stuck box is.
     if c.has_sticky {
         let (_, vh) = manuk_css::values::viewport_size();
+        // ⚠ **THE LIVE DOCUMENT SCROLL, NOT THE `Page`'s COMMITTED ONE.** `window.scrollTo` is a
+        // request the host performs later; all it does synchronously is move `SCROLL` (optimistically,
+        // t378) so `window.scrollY` reads back on the next line. So a script that scrolls and then
+        // measures has a scroll the `Page` has not seen yet, and `c.sticky_scroll_y` is by definition
+        // the scroll BEFORE it. Falls back to the committed value when there is no JS.
+        let live_y = match manuk_js::view_scroll() {
+            (_, y) if y > 0.0 => y,
+            _ => c.sticky_scroll_y,
+        };
         let mut applied = std::collections::HashMap::new();
-        apply_sticky(
-            &mut root_box,
-            &c.styles,
-            c.sticky_scroll_y,
-            vh,
-            &mut applied,
-        );
+        apply_sticky(&mut root_box, &c.styles, live_y, vh, &mut applied);
     }
     let us_layout = t_layout.elapsed().as_micros() as u64;
 

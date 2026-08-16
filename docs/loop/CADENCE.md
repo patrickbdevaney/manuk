@@ -11,12 +11,12 @@
 
 | | value | over |
 |---|---|---|
-| ticks landed | **978** | ticks 1–1284 |
-| median tick cycle | **30m** | 977 intervals |
-| median, last 10 | **62m** | 10 intervals |
+| ticks landed | **979** | ticks 1–1285 |
+| median tick cycle | **30m** | 978 intervals |
+| median, last 10 | **55m** | 10 intervals |
 | fastest / slowest | 5s / 5.4d | |
-| **ticks per hour** | **1.12** | 868.8h elapsed |
-| median verify wall | **63s** | 917 ticks |
+| **ticks per hour** | **1.12** | 869.5h elapsed |
+| median verify wall | **63s** | 918 ticks |
 | wall trend | 39s → 17m — getting slower ⚠️ | first 3 vs last 3 |
 
 The **cycle** is the real unit: implement → debug → verify wall → land. The wall is only part of
@@ -27,11 +27,11 @@ it, and a wall that grows taxes every future tick, so it is tracked separately f
 ### Near — the daily driver (doc / app / platform web)
 
 * **capabilities asserted** (`G_CAPABILITY`): 48 → **81**
-* **live gates**: 27 → **487**
+* **live gates**: 27 → **488**
 * **✅ rows in the capability ledger**: 144 → **642**
 * **Bar 0 — oracle hangs**: 0 of 265 sites
 
-**452 of 978 ticks** (46%) moved a
+**453 of 979 ticks** (46%) moved a
 user-visible capability. The rest were instruments, infrastructure and corrections — and the
 ledger says the corrections were not overhead: three of its top three priorities were phantoms,
 and finding that out redirected everything after it.
@@ -90,8 +90,8 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 
 ## What a capability costs
 
-* **452** capability ticks, median cycle **30m**
-* median diff per tick: **+274 / −34** lines across 8 files
+* **453** capability ticks, median cycle **30m**
+* median diff per tick: **+275 / −34** lines across 8 files
 
 ## Every tick
 
@@ -1075,5 +1075,6 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 | **1281** | 2026-08-16 07:05 | 66m | capability | 17m | +582/−97 | 484 | 81 | 56.0% · | `position: sticky` implemented ONE of its four edges (2026-08-16) |
 | **1283** | 2026-08-16 09:07 | 2.0h | capability | 17m | +488/−160 | 486 | 81 | 56.0% · | a scroll is not a DOM mutation, and the forced reflow only knew about DOM mutations (2026- |
 | **1284** | 2026-08-16 09:50 | 43m | capability | 17m | +453/−162 | 487 | 81 | 56.0% · | the `Client` in `getBoundingClientRect` was never implemented (2026-08-16) |
+| **1285** | 2026-08-16 10:33 | 43m | capability | 17m | +491/−166 | 488 | 81 | 56.0% · | the coordinate boundary, the other way round: `elementFromPoint` took a CLIENT point and h |
 
 *`·` after a WPT figure means **carried forward**, not measured this tick.*

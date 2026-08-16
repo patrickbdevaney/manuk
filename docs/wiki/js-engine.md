@@ -1187,6 +1187,30 @@ the gate's `off:` row exists solely to catch that, and under the one-level-down 
 nine rows still pass**. One fix, two mechanisms (t1276): a control row for the mechanism a fix must
 not touch is the only thing that separates them.
 
+### ⚠⚠⚠ The most durable place to hide a gap is behind the observable everyone verifies first (tick 1286)
+
+`window.scrollTo(x, y)` is a **request**: it pushes onto `PENDING_SCROLLS` for the host to perform,
+and — since t378 — *optimistically* sets `SCROLL` so `window.scrollY` reads back on the very next
+line. That optimism is correct and it is also what hid everything behind it for ~900 ticks. The
+staleness guard was not bumped, the sticky constraint was resolved against the `Page`'s committed
+scroll (by definition the scroll *before* the one just made), and the published rects were never
+re-derived. `Page::take_scroll_requests` has, and had, **zero callers** — nothing ever performed the
+scroll at all. Every one of those is downstream of the single number a test checks first, and that
+number was right.
+
+**The reusable form: when an API is split into "answer the caller now" and "tell the rest of the
+system later", the fast half is a mask.** Audit the slow half explicitly; do not infer it from the
+fast half being correct.
+
+⚠ **A REFUSAL, recorded at the call site rather than as a TODO.** An `IntersectionObserver` entry's
+`boundingClientRect` subtracts `scrollY` and not `scrollX`, which looks like a one-token completion of
+the coordinate-boundary story above. It is **provably inert**: `PageContext::view_changed` is the only
+caller of `__runObservers` and opens with `SCROLL.set((0.0, scroll_y))` — the horizontal scroll is
+zeroed before every observer pass, because the host's view-changed signature has no `scroll_x` to
+carry. The subtraction could never be proven RED. **A green that cannot go red measured nothing**, and
+a half-true arm is worse than a missing one (t1280); the fix belongs a layer up, in what the host
+tells the page about its own viewport.
+
 ### …and the same boundary the other way: `elementFromPoint` takes a CLIENT point (tick 1285)
 
 `document.elementFromPoint(x, y)` / `elementsFromPoint(x, y)` are defined by CSSOM View on **client**
