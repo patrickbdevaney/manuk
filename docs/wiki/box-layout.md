@@ -10133,3 +10133,39 @@ message, the defect is in the reader before it is in the engine.**
 ⚠ Priced honestly: three grid ticks in one session (t1289, t1290, and the dive t1288 stopped) ranked
 their levers off the *second* and *third* rows of this histogram. All were correct; none could have
 been known to be the biggest thing there.
+
+## Ranking the #1 area once its failures were readable — and three readings that changed (tick 1292)
+
+t1291 made `css/css-grid`'s biggest cluster legible (2,495 `width expected N but got N`). The probe
+that followed changed the ranking three times before it settled, which is why the probe-before-patch
+rule keeps earning its place here.
+
+**1. They are NOT near-misses.** Of 2,533 width rows: 1,456 are 9–30px off, 822 are 31–100px, 243 are
+>100px, and **twelve are inside the 8px tolerance**. Tick 267's standing near-miss lever — *"a single
+shared constant likely snaps MANY boxes into tolerance at once"* — is therefore **refused by
+measurement for this population**. There is no constant to find because almost nothing is close.
+⚠ Banked as a NEGATIVE: it may still hold elsewhere; it does not hold here.
+
+**2. ⭐⭐ The SIGN REVERSES between the aggregate and its biggest real sub-area.**
+
+```text
+   css/css-grid  (all)       too WIDE 1806 · too NARROW  727
+   css/css-grid/grid-items   too WIDE   36 · too NARROW 391     <- reversed
+```
+
+Ranking off the aggregate sends the next tick hunting a too-wide bug in an area whose defect is
+too-narrow. **An area is not a cause** — and this is the first time in this codebase that the tell
+was a *sign flip* rather than a message shape or a directory name. **When a mechanism has a
+direction, check that the direction survives disaggregation.**
+
+**3. Much of the mass is out of scope, and saying so shrinks the lever honestly.** `grid-lanes`
+(~900 subtests at 0% across five sub-directories) is **masonry**, an unshipped spec — the same
+`<flow-tolerance>` discount refused at t1288 — and `subgrid` (208 at 13.5%) is on `STATUS.md`'s
+explicit death-tail cut line. The real target is **`grid-items`: 901 subtests at 18.8%**.
+
+**And its deltas name the cause.** `width expected 76 but got 10`, `expected 66 but got 0` — `10` is
+one Ahem character and `0` is none, so an item that should size to its **max-content** is coming out
+at one glyph or nothing. That is intrinsic sizing, and the lever board's own correction says the
+same: *"Taffy #204 SHIPPED; the intrinsic-sizing blocker is MANUK'S OWN leaf measure."* Four
+independent readings agreeing (board note, delta shape, sign, sub-area) is the strongest a target has
+been ranked in this area.

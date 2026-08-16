@@ -83521,3 +83521,94 @@ NEXT, ranked — and for the first time this ranking is taken from a READABLE hi
 WIKI: docs/wiki/js-engine.md — no; this is a harness/measurement mechanism, recorded in
 docs/wiki/box-layout.md beside the grid work it re-ranks, because that is where the next reader of
 those numbers will be.
+
+## Tick 1292 — the width mechanism is NOT a near-miss, and the aggregate's SIGN reverses inside its biggest real sub-area (2026-08-16)
+
+TICK SHAPE: measurement. Board re-run at the top of this tick: **unchanged** (★ CSS-LAYOUT;
+`css/css-grid` #1). This is t1291's ranked next-step (a) executed as the **probe before the patch** —
+the rule that has now paid four times in this area — and it corrects t1291's own ranking with data.
+
+⭐ **FINDING 1 — THE WIDTH FAILURES ARE STRUCTURAL, NOT NEAR-MISSES, AND THAT KILLS A STANDING
+HYPOTHESIS.** Delta histogram over all 2,533 `width expected N but got N` rows:
+
+```text
+   1456   9–30px off
+    822  31–100px off
+    243    >100px off
+     11    2–8px off
+      1     ≤1px off
+```
+
+**Twelve of 2,533 are inside the 8px tolerance.** The board has carried tick 267's near-miss lever —
+*"a single shared constant (font metrics / line-height / margin / border-box rounding) likely snaps
+MANY boxes into tolerance at once"* — as the highest-yield shape lever for a long time. **For this
+population it is refused by measurement**: there is no constant to find, because almost nothing is
+close. Recorded as a banked NEGATIVE so it is not re-derived.
+
+⭐⭐ **FINDING 2 — THE SIGN REVERSES BETWEEN THE AGGREGATE AND ITS BIGGEST REAL SUB-AREA, WHICH MEANS
+THE AGGREGATE IS TWO POPULATIONS.**
+
+```text
+   css/css-grid  (all)          too WIDE 1806  ·  too NARROW  727
+   css/css-grid/grid-items      too WIDE   36  ·  too NARROW 391      <- reversed
+```
+
+Ranking off the aggregate would have sent the next tick hunting a too-wide bug in an area whose real
+defect is too-narrow. **An area is not a cause** (t1179-1181) — for the fourth time in this session,
+and the first time the tell was a *sign flip* rather than a message shape.
+
+⚠ **FINDING 3 — MUCH OF THE 2,495 IS NOT IN SCOPE, AND SAYING SO SHRINKS THE LEVER HONESTLY.**
+Worst sub-areas by pass rate:
+
+```text
+    0.0%    0/538   grid-lanes/items          } grid-lanes = MASONRY, unshipped (the same
+    0.0%    0/57    grid-lanes/track-sizing   } `<flow-tolerance>` t1288 refused as the
+    0.0%    0/54    grid-lanes/subgrid        } unshipped-spec discount — ~900 subtests
+   13.5%   28/208   subgrid                   <- on STATUS.md's explicit death-tail cut line
+   18.8%  169/901   grid-items                <- REAL, SHIPPED, and the actual target
+```
+
+So the honest headline is not *"2,495 width failures"* — it is **`grid-items`, 901 subtests at 18.8%,
+of which 427 are width and 391 of those are too NARROW.**
+
+⭐⭐⭐ **FINDING 4 — THE TOO-NARROW DELTAS NAME INTRINSIC SIZING OUTRIGHT, AND THE BOARD ALREADY SAID
+SO.** The repeated deltas are not scattered:
+
+```text
+   16×  width expected 76 but got 10        16×  width expected 66 but got 0
+   16×  width expected 76 but got 30        10×  width expected 65 but got 0
+   16×  width expected 75 but got 10        10×  width expected 10 but got 0
+```
+
+`10` is one Ahem character and `0` is none — an item that should size to its **max-content** is
+coming out at one glyph or nothing. That is intrinsic sizing, and the lever board carries the
+diagnosis verbatim: *"Correction: Taffy #204 ('Support CSS Grid') SHIPPED; the intrinsic-sizing
+blocker is MANUK'S OWN leaf measure — fixable in a tick."* **Four independent readings now agree**
+(the board's note, the delta shape, the sign, and the sub-area), which is the strongest a target has
+been ranked in this area.
+
+```text
+  WPT MOVEMENT: none, and none is claimed — this tick measures.
+    css/css-grid  7010/14254   (7043 / 7035 / 7010 across four same-hour runs; the ±30 band, t1288)
+```
+
+GATE: none. A measurement tick's falsifiable artefact is its numbers, every one of which is
+reproducible from `manuk-wpt wpt css/css-grid --show-failures` plus the awk in this entry. ⚠ Adding a
+gate that asserted a histogram shape would pin the ENGINE'S CURRENT BUGS as a contract — the t1004
+trap (*"a gate can PIN the engine to a bug"*) — so it is deliberately not done.
+
+NEXT, ranked — and this ranking is now carried by four agreeing readings rather than one histogram.
+(a) ⭐⭐⭐ **THE LEAF MEASURE FOR INTRINSIC SIZING**, verified against `css/css-grid/grid-items`
+    (901 subtests, 18.8%, 391 too-narrow width rows). The board says it is one tick; the deltas say
+    the same thing; do NOT start it without first probing a single `max-content` grid item, because
+    this area has now defeated four readings taken from histograms alone.
+(b) ⚠ **REFUSED, with the reason banked:** `grid-lanes` (~900 subtests at 0%) is masonry —
+    unshipped-spec discount; `subgrid` (208 at 13.5%) is on STATUS.md's death-tail cut line. Together
+    they are a large share of the #1 area's remaining mass and neither is in scope.
+(c) ⚠ **BANKED NEGATIVE: tick 267's near-miss/shared-constant lever does not apply to this
+    population** — 12 of 2,533 rows are within 8px. It may still hold elsewhere; it does not hold here.
+(d) Carried: the ANIMATION CLOCK is the ranked #1 *engine* lever (check #120 steer 2); the CrUX
+    fidelity sweep is unmeasured ~50 ticks and check #120 says escalate rather than repeat it again.
+
+WIKI: docs/wiki/box-layout.md — the sign-flip tell, the near-miss lever refused by measurement for
+this population, and the in-scope/out-of-scope split of the #1 area's remaining mass.
