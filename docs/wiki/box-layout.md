@@ -9838,3 +9838,43 @@ Three runs of the parent area on one binary in one hour: **2889/5871 · 2861/585
 of its ~5850 subtests). The third reading is *below* the value banked into `WPT-AREAS.tsv` as a fact
 one tick earlier. Read the `stretch` **subdirectory** instead: fixed denominator, two runs
 byte-identical, 439/1004 → 451/1004. *Every number has a harness; this one also has a variance.*
+
+## `stretch` on an out-of-flow box measures the AVAILABLE SPACE, not the containing block (tick 1279)
+
+The rule has **two clauses**, and the second is the one that is easy to miss:
+
+1. the area to fill is the containing block's **padding box** — which is what an abspos containing
+   block already is — less the **used** insets, where an `auto` inset contributes **zero**;
+2. and when **both** insets on the axis are `auto`, less the offset to the **static position**,
+   because that is where the box actually starts. The static position is the CB's *content*-box
+   origin, so this subtracts the CB's own start padding.
+
+That second clause is the entire reason one containing block gives three different answers:
+
+| abspos config | available | content | border box |
+|---|---|---|---|
+| `inset-block: 0` | 60 | 45 | 55 |
+| `position: absolute` (both auto) | 55 | 40 | **50** |
+| `inset-block-start: 10px` | 50 | 35 | 45 |
+| `inset-block-end: 10px` | 50 | 35 | 45 |
+
+(CB padding box 60px, child margin+border+padding 15px.)
+
+⚠⚠ **The configuration that already worked is not evidence about the ones that do not.** `stretch`
+resolved through the generic `Dim::Auto` arm, which is definite **only when both insets are set** —
+so `inset-block: 0` came out right by the CSS2 §10.6.4 constraint equation *without the feature
+existing at all*, and the other three fell to content-sized (border and padding and nothing else).
+`inset-block: 0` is also the first thing anyone writes when testing `stretch` on an abspos box.
+`G_STRETCH_BLOCK_AXIS` keeps it as a control and pins that it does **not** move when the stretch arm
+is mutated out.
+
+⚠ **The static-position offset is threaded as its own scalar, not by shrinking the containing-block
+rect.** The caller already replaces `cb.y` with the static position when both insets are auto, and
+shrinking `cb.height` to match would have been one line — and would have silently changed what every
+**percentage** in that function resolves against: insets, heights, min/max bounds. A separate scalar
+is the same answer without the blast radius.
+
+**Measured:** `css/css-sizing/stretch` 451/1004 → **545/1004** (+94), denominator identical, two runs
+byte-identical; `css-flexbox`, `css-overflow`, `css-display` byte-identical and `css-position` +2.
+Together with the float half (tick 1278) the directory went **439 → 545** on one mechanism read two
+ways.

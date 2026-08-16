@@ -11,12 +11,12 @@
 
 | | value | over |
 |---|---|---|
-| ticks landed | **972** | ticks 1–1277 |
-| median tick cycle | **29m** | 971 intervals |
-| median, last 10 | **77m** | 10 intervals |
+| ticks landed | **973** | ticks 1–1278 |
+| median tick cycle | **30m** | 972 intervals |
+| median, last 10 | **62m** | 10 intervals |
 | fastest / slowest | 5s / 5.4d | |
-| **ticks per hour** | **1.13** | 861.8h elapsed |
-| median verify wall | **63s** | 911 ticks |
+| **ticks per hour** | **1.13** | 862.7h elapsed |
+| median verify wall | **63s** | 912 ticks |
 | wall trend | 39s → 17m — getting slower ⚠️ | first 3 vs last 3 |
 
 The **cycle** is the real unit: implement → debug → verify wall → land. The wall is only part of
@@ -31,7 +31,7 @@ it, and a wall that grows taxes every future tick, so it is tracked separately f
 * **✅ rows in the capability ledger**: 144 → **642**
 * **Bar 0 — oracle hangs**: 0 of 265 sites
 
-**446 of 972 ticks** (46%) moved a
+**447 of 973 ticks** (46%) moved a
 user-visible capability. The rest were instruments, infrastructure and corrections — and the
 ledger says the corrections were not overhead: three of its top three priorities were phantoms,
 and finding that out redirected everything after it.
@@ -90,7 +90,7 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 
 ## What a capability costs
 
-* **446** capability ticks, median cycle **29m**
+* **447** capability ticks, median cycle **30m**
 * median diff per tick: **+274 / −34** lines across 8 files
 
 ## Every tick
@@ -1069,5 +1069,6 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 | **1275** | 2026-08-16 01:10 | 3.0h | capability | 17m | +952/−93 | 483 | 81 | 56.0% · | `sizes` read the LAST entry and ignored every media condition (2026-08-15) |
 | **1276** | 2026-08-16 02:01 | 52m | capability | 17m | +378/−67 | 483 | 81 | 56.0% · | `not (anything-we-do-not-know)` was TRUE, and `or` was never a thing (2026-08-16) |
 | **1277** | 2026-08-16 02:53 | 52m | capability | 17m | +442/−37 | 484 | 81 | 56.0% · | `( feature )` and `( feature: default )` are DIFFERENT QUESTIONS (2026-08-16) |
+| **1278** | 2026-08-16 03:42 | 49m | capability | 17m | +306/−70 | 484 | 81 | 56.0% · | a float shrink-to-fits in BOTH axes, and `stretch` was wired to only one (2026-08-16) |
 
 *`·` after a WPT figure means **carried forward**, not measured this tick.*

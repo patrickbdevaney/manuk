@@ -1,5 +1,13 @@
-//! **G_STRETCH_FLOAT_BLOCK_AXIS — a float shrink-to-fits on `auto` in BOTH axes, and `stretch` was
-//! only wired to one of them.**
+//! **G_STRETCH_BLOCK_AXIS — one histogram bar, TWO mechanisms, TWO functions.**
+//!
+//! `css/css-sizing/stretch` failed 565 assertions whose largest single shape was `height expected 45
+//! but got 10`, 56 times. Read as one bar it says *"`block-size: stretch` is treated as `auto`"*.
+//! A 10-arm probe written before any fix said otherwise: five of the six in-flow box types were
+//! already exact. The bar was the **float** path (t1278) and the **abspos** path (t1279), and only a
+//! per-box-type probe separates them. **A directory is not a cause, a message shape is not a cause,
+//! and a single numeric bar is not a cause either.**
+//!
+//! ## The float half — a float shrink-to-fits on `auto` in BOTH axes, and `stretch` was wired to one
 //!
 //! `layout_float` is a second, hand-rolled box resolution living beside `layout_block`'s, and its own
 //! comments say so: shrink-to-fit, `box-sizing`, aspect-ratio and the min/max clamps were each added
@@ -18,25 +26,27 @@
 //! resolved against zero, because resolving against zero erased every responsive image on the page —
 //! and changing it would be a second, unmeasured mechanism riding along with a measured one.
 //!
-//! ⚠⚠ **A MEASURED, UNFIXED NEIGHBOUR, recorded so it is a record and not a silence.** The same WPT
-//! file (`css/css-sizing/stretch/stretch-block-size-001.html`) covers `stretch` on an
-//! ABSOLUTELY-POSITIONED box, and three of its four configurations are still wrong. With the
-//! containing block below (padding box 60px, child margins 5px):
+//! ⭐ **AND THE SECOND MECHANISM UNDER THE SAME HISTOGRAM BAR — the ABSPOS half (tick 1279).**
+//! `stretch` on an out-of-flow box does not measure the containing block. It measures the
+//! **available space**: the CB's *padding* box (which is what an abspos containing block already
+//! is) less the **used** insets — an `auto` inset contributes zero — and, when **both** block insets
+//! are auto, less the offset to the **static position**, because that is where the box starts.
 //!
-//! | abspos config | Chrome / WPT | ours |
-//! |---|---|---|
-//! | `inset-block: 0` | 55 | **55** ✅ — the constraint equation already covers it |
-//! | `position: absolute` (both insets auto) | 50 | 10 ❌ |
-//! | `inset-block-start: 10px` | 45 | 10 ❌ |
-//! | `inset-block-end: 10px` | 45 | 10 ❌ |
+//! Two clauses, and they are what make one containing block give three different answers (padding
+//! box 60px, child frame 15px):
 //!
-//! The rule is that an abspos box's stretch-fit is measured against the CB's **padding** box less
-//! the used insets — and when BOTH insets are auto the measurement starts at the **static
-//! position**, which is the CB's *content*-box origin, hence 50 rather than 55. That needs the
-//! static-position side table inside the abspos sizing path, which is a different function and a
-//! different mechanism, so it is named here with its numbers rather than guessed at in this tick.
-//! The three rows are printed by this gate and deliberately NOT asserted: pinning a value we know to
-//! be wrong would make the tick that fixes it read as a regression.
+//! | abspos config | available | content | border box |
+//! |---|---|---|---|
+//! | `inset-block: 0` | 60 | 45 | **55** — already correct, the constraint equation covers it |
+//! | `position: absolute` (both auto) | 55 | 40 | **50** — the static position is the CB's *content*-box origin, 5px in |
+//! | `inset-block-start: 10px` | 50 | 35 | **45** |
+//! | `inset-block-end: 10px` | 50 | 35 | **45** |
+//!
+//! All three broken ones answered **10** before — border and padding and nothing else — because
+//! `stretch` fell into the generic `auto` case, which is definite ONLY when both insets are set.
+//!
+//! ⚠ The static-position offset is passed as its own scalar rather than by shrinking `cb`.
+//! Shrinking `cb` would silently change what every PERCENTAGE in that function resolves against.
 
 use manuk_text::FontContext;
 
@@ -80,10 +90,18 @@ const HTML: &str = r##"<!doctype html><html><head><style>
        covers `inset-block: 0` and this tick must not disturb it. -->
   <div class="cb" style="position:relative"><div class="test" id="p0" style="position:absolute; inset-block:0"></div></div>
 
-  <!-- ── PRINTED, NOT ASSERTED — the measured gap named in this file's header. -->
+  <!-- ── THE ABSPOS HALF. `pauto` is the row that carries the static-position clause: it must be
+       50, five LESS than `p0`'s 55, because the box starts at the CB's content-box origin. -->
   <div class="cb" style="position:relative"><div class="test" id="pauto" style="position:absolute"></div></div>
   <div class="cb" style="position:relative"><div class="test" id="ps10"  style="position:absolute; inset-block-start:10px"></div></div>
   <div class="cb" style="position:relative"><div class="test" id="pe10"  style="position:absolute; inset-block-end:10px"></div></div>
+  <!-- The abspos min/max pair, derived from the SAME stretch-fit: available 55 − frame 15 = 40
+       content, 50 border box. `pmin` is pushed UP from 10, `pmax` pulled DOWN from 210. -->
+  <div class="cb" style="position:relative"><div class="test" id="pmin" style="position:absolute; block-size:auto; min-block-size:stretch"></div></div>
+  <div class="cb" style="position:relative"><div class="test" id="pmax" style="position:absolute; block-size:200px; max-block-size:stretch"></div></div>
+  <!-- CONTROL: an abspos box that never said `stretch` still sits at its static position and hugs
+       its content. If this moved, the new available-space arm is reaching boxes that did not ask. -->
+  <div class="cb" style="position:relative"><div class="test" id="pnone" style="position:absolute; block-size:auto"></div></div>
 
   <div id="out">-</div><div id="gap">-</div>
   <script>
@@ -91,8 +109,9 @@ const HTML: &str = r##"<!doctype html><html><head><style>
     var h=function(id){ return id+'='+document.getElementById(id).offsetHeight; };
     document.getElementById('out').textContent =
       ['float','div','canvas','input','textarea','button','fmin','fmax',
-       'fauto','findef','fpx','p0'].map(h).join(' ');
-    document.getElementById('gap').textContent = ['pauto','ps10','pe10'].map(h).join(' ');
+       'fauto','findef','fpx'].map(h).join(' ');
+    document.getElementById('gap').textContent =
+      ['p0','pauto','ps10','pe10','pmin','pmax','pnone'].map(h).join(' ');
   });
   </script></body></html>"##;
 
@@ -116,13 +135,11 @@ fn block_axis_stretch_reaches_the_float_path() {
         &fonts,
         800.0,
     ));
-    let got = text(&page, "#out");
-    // The unfixed abspos neighbours, printed so the next tick starts from a reading rather than a
-    // hypothesis. WPT wants `pauto=50 ps10=45 pe10=45`; we answer 10 to all three.
-    println!(
-        "STRETCH-FLOAT {got}\nSTRETCH-ABSPOS-GAP {}",
-        text(&page, "#gap")
-    );
+    // Two lines, one assertion: the in-flow/float half before the `|`, the out-of-flow half after
+    // it. They are separated because they are two mechanisms in two functions under one histogram
+    // bar, and reading them side by side is what said so.
+    let got = format!("{} | {}", text(&page, "#out"), text(&page, "#gap"));
+    println!("STRETCH-BLOCK {got}");
 
     // RED, run 1 — delete the `(Dim::Auto, _) if s.height_stretch` arm from `layout_float`'s height
     // match. MOVED: `float` 45 → 10. Nothing else, including every in-flow row that carries the
@@ -142,7 +159,7 @@ fn block_axis_stretch_reaches_the_float_path() {
     assert_eq!(
         got,
         "float=45 div=45 canvas=45 input=45 textarea=45 button=45 fmin=45 fmax=45 \
-         fauto=10 findef=10 fpx=40 p0=55",
+         fauto=10 findef=10 fpx=40 | p0=55 pauto=50 ps10=45 pe10=45 pmin=50 pmax=50 pnone=10",
         "`block-size: stretch` must reach the FLOAT path. A float shrink-to-fits on `auto` in both \
          axes — that is what a float IS — so `stretch` is the only way an author can say *this \
          floated column is as tall as its column*, and `layout_float` carried no containing-block \
@@ -155,6 +172,12 @@ fn block_axis_stretch_reaches_the_float_path() {
          without its own flag. CONTROLS: `fauto` proves an ordinary float still hugs its content, \
          `findef` proves an INDEFINITE containing block leaves it content-sized rather than \
          collapsing it to zero, `fpx` proves a specified height is untouched, and `p0` is the one \
-         abspos configuration that already worked and must not be disturbed"
+         abspos configuration that already worked and must not be disturbed, and `pnone` proves an abspos \
+         box that never said `stretch` still hugs its content at its static position. \
+         OUT-OF-FLOW: `stretch` measures the AVAILABLE SPACE, not the containing block — the CB's \
+         padding box less the USED insets (an `auto` inset contributes zero) and, when BOTH block \
+         insets are auto, less the offset to the STATIC POSITION. `p0` and `pauto` must DIFFER by \
+         exactly the CB\'s block-start padding (55 vs 50), which is the whole static-position \
+         clause in one comparison; all three of `pauto`/`ps10`/`pe10` answered 10 before"
     );
 }

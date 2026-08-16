@@ -8640,6 +8640,12 @@ impl Ctx<'_> {
             // this existed, instead of nowhere at all. An axis with a real inset keeps `cb`, because
             // that inset must resolve against the CONTAINING BLOCK's edge and not against the flow
             // cursor.
+            // ⚠ Captured BEFORE the static-position anchor overwrites `cb.y`. `stretch` on an
+            // abspos box measures from where the box actually STARTS, and with both block insets
+            // auto that is the static position — i.e. the containing block's CONTENT-box origin,
+            // not its padding-box origin. The difference is exactly the CB's block-start padding,
+            // and it is why zero insets stretch to 55 where auto insets stretch to 50.
+            let cb_y0 = cb.y;
             if x_static || y_static {
                 if let Some(&(sx, sy)) = self.static_pos.borrow().get(&node) {
                     cb = Rect {
@@ -8656,7 +8662,12 @@ impl Ctx<'_> {
                     continue;
                 }
             }
-            let mut b = self.layout_abs(node, cb);
+            let static_v_shift = if y_static {
+                (cb.y - cb_y0).max(0.0)
+            } else {
+                0.0
+            };
+            let mut b = self.layout_abs(node, cb, static_v_shift);
             if let Some(m) = chain {
                 b.transform_affine(&m);
             }
@@ -9024,7 +9035,17 @@ impl Ctx<'_> {
     }
 
     /// Lay out one `absolute`/`fixed` box against containing block `cb`.
-    fn layout_abs(&self, node: NodeId, cb: Rect) -> LayoutBox {
+    fn layout_abs(
+        &self,
+        node: NodeId,
+        cb: Rect,
+        // How far the box's block start was moved off the containing block's block-start edge by
+        // the static-position anchor — zero unless BOTH block insets are `auto`. Only `stretch`
+        // reads it: every other sizing rule measures against the containing block itself, which is
+        // why this is a separate scalar rather than a shrunken `cb`. Shrinking `cb` would silently
+        // change what every PERCENTAGE in this function resolves against.
+        static_v_shift: f32,
+    ) -> LayoutBox {
         let s = self.style_of(node).clone();
         let cw = cb.width;
         // Auto margins resolve to 0 here; a fully-constrained axis (both insets + a definite size)
@@ -9080,6 +9101,23 @@ impl Ctx<'_> {
             // indefinite base (→ auto). So it must NOT take the constraint-equation definite height
             // even with both insets set (CSS Sizing 3 §cyclic-percentage-contribution). `stretch`
             // and `auto` stay definite under both insets — they are not flagged.
+            // ── **`stretch` ON AN ABSPOS BOX MEASURES THE AVAILABLE SPACE, NOT THE CONTAINING
+            // BLOCK.** The area to fill is the CB's PADDING box (which `cb` already is) less the
+            // *used* insets — an `auto` inset contributes zero — and, when BOTH block insets are
+            // auto, less the offset to the static position, because that is where the box starts.
+            //
+            // Those two clauses are why the four configurations of WPT's `stretch-block-size-001`
+            // give three different answers off one containing block (padding box 60, child frame
+            // 15): `inset-block:0` → 45 content / 55 border; both insets auto → the static position
+            // is 5px in (the CB's block-start padding) so 40 / 50; a single 10px inset → 35 / 45.
+            // Without this arm `stretch` fell into the generic `auto` case, which is definite ONLY
+            // when both insets are set — so three of the four came out content-sized, i.e. border
+            // and padding and nothing else.
+            Dim::Auto if s.height_stretch => Some(
+                ((cb.height - top.unwrap_or(0.0) - bottom.unwrap_or(0.0) - static_v_shift)
+                    - frame_v)
+                    .max(0.0),
+            ),
             Dim::Auto if s.height_intrinsic => None,
             Dim::Auto => match (top, bottom) {
                 // The constraint equation already yields the *content* height (`frame_v` carries the
@@ -9198,11 +9236,19 @@ impl Ctx<'_> {
         // The abspos copy of the t930 intrinsic-keyword clamp — the content height, exactly as in
         // the `definite_ch.unwrap_or_else` arm above.
         let natural_h = ch.max(inner.lowest_bottom().max(0.0));
+        // The same stretch-fit the `Dim::Auto if s.height_stretch` arm resolves to, computed once so
+        // the min/max pair reads it instead of growing a second copy of the formula — the discipline
+        // `layout_block` and `layout_float` both spell out.
+        let stretch_fit_h =
+            ((cb.height - top.unwrap_or(0.0) - bottom.unwrap_or(0.0) - static_v_shift) - frame_v)
+                .max(0.0);
         let min_h = match s.min_height_keyword {
+            _ if s.min_height_stretch => stretch_fit_h,
             Some(_) => natural_h.max(0.0),
             None => (s.min_height.resolve(cb.height, 0.0) - bs_extra_h).max(0.0),
         };
         let max_h = match s.max_height {
+            _ if s.max_height_stretch => stretch_fit_h,
             _ if s.max_height_keyword.is_some() => natural_h.max(0.0),
             Dim::Auto => f32::INFINITY,
             other => (other.resolve(cb.height, f32::INFINITY) - bs_extra_h).max(0.0),

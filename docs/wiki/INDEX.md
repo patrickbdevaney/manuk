@@ -483,6 +483,7 @@
   - L9783 · A float is a SECOND implementation of the box, and it acquires the first one's rules one defect at a time (tick 1278)
   - L9811 · The histogram's biggest bar was TWO mechanisms in two functions
   - L9834 · ⚠⚠ css/css-sizing as an AREA is too noisy to read
+  - L9842 · stretch on an out-of-flow box measures the AVAILABLE SPACE, not the containing block (tick 1279)
 
 ## browser-capabilities.md
 `docs/wiki/browser-capabilities.md`
@@ -2207,4 +2208,4 @@
   - L231 · Both named mechanisms are subsystem work
 
 ---
-2114 sections across 22 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+2115 sections across 22 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.

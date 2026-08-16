@@ -6949,3 +6949,30 @@ auto inset), and only a per-box-type probe separates them.
 byte-identical; `css-flexbox`, `css-position`, `css-overflow`, `css-display` all byte-identical.
 Gated by `G_STRETCH_FLOAT_BLOCK_AXIS` (12 rows, 4 CONTROLS, RED three ways). ⚠ Still open and
 measured: `stretch` on an absolutely-positioned box with an `auto` inset.
+
+## The overlay that fills its anchor — `position: absolute; height: stretch` (tick 1279)
+
+**Pattern:** the out-of-flow panel that must be as tall as the thing it is anchored to — a dropdown
+body, a drawer, an image overlay, a scrim — written as `position: absolute` plus `height: stretch`
+(or `-webkit-fill-available`), with **at most one** inset specified, or none at all.
+
+**The class this unlocks:** every abspos box whose size is meant to come from its containing block
+rather than its content. `stretch` resolved through the generic `auto` arm, which is definite only
+when **both** insets are set, so three of the four configurations fell to content-sized — border and
+padding and nothing else.
+
+**Why it hid:** `position: absolute; inset: 0` — the configuration everyone writes first, and the one
+in every "make it fill" snippet — was **already correct without the feature existing**, because the
+CSS2 §10.6.4 constraint equation produces the identical number when both insets are set. A feature
+can look implemented because the only case anyone tests is the case that does not need it.
+
+**The trap:** the rule is not "fill the containing block". It is "fill the **available space**": the
+CB's *padding* box less the **used** insets (an `auto` inset contributes zero) and, when **both**
+insets are auto, less the offset to the **static position** — which is the CB's *content*-box origin.
+That last clause is why zero insets give 55 and auto insets give 50 off the same container. Miss it
+and every anchored panel is exactly its containing block's start-padding too tall.
+
+**Measured:** `css/css-sizing/stretch` 451/1004 → **545/1004**; with the float half of the same
+histogram bar (tick 1278), 439 → 545 on one directory. Gated by `G_STRETCH_BLOCK_AXIS` (18 rows, 6
+CONTROLS, RED six ways), whose `p0` control pins that the already-working configuration does **not**
+move when the new arm is mutated out.

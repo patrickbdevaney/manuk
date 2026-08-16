@@ -82041,3 +82041,101 @@ NEXT, ranked from what this tick measured.
     clamping).
 
 WIKI: docs/wiki/box-layout.md — a float is a second implementation of the box.
+
+## Tick 1279 — `stretch` on an abspos box measures the AVAILABLE SPACE, not the containing block (2026-08-16)
+
+TICK SHAPE: capability — the second mechanism under the histogram bar t1278 split, executed with its
+numbers already read rather than re-derived. Board re-run at the top of this tick: unchanged, ★
+CSS-LAYOUT, `css/css-sizing`.
+
+HYPOTHESIS (written before the code, from the spec and from t1278's probe). `layout_abs` resolved
+`height: stretch` through the generic `Dim::Auto` arm, which is definite **only when both insets are
+set**. So `inset-block: 0` came out right by the CSS2 §10.6.4 constraint equation and the other three
+configurations fell all the way to content-sized. The rule has **two clauses**, and the second is the
+one that is easy to miss:
+
+* the area to fill is the containing block's **PADDING box** less the **used** insets, where an
+  `auto` inset contributes **zero**;
+* and when **BOTH** block insets are auto, less the offset to the **STATIC POSITION** — because that
+  is where the box actually starts, and the static position is the CB's *content*-box origin.
+
+That second clause is the entire reason one containing block gives three different answers:
+
+```text
+  containing block padding box 60px, child frame (margin+border+padding) 15px
+
+  inset-block: 0              avail 60   content 45   border box 55   ← was already right
+  position:absolute (auto)    avail 55   content 40   border box 50   ← was 10
+  inset-block-start: 10px     avail 50   content 35   border box 45   ← was 10
+  inset-block-end: 10px       avail 50   content 35   border box 45   ← was 10
+```
+
+All four came out **exact on the first run**, from the derivation, with no fitting.
+
+⚠ **The static-position offset is passed as its own scalar and NOT by shrinking `cb`.** The caller
+already replaces `cb.y` with the static position when both insets are auto; shrinking `cb.height` to
+match would have been one line and would have **silently changed what every percentage in
+`layout_abs` resolves against** — insets, heights, min/max bounds. A separate scalar is the same
+answer without the blast radius. (`min-height`/`max-height: stretch` share the computed stretch-fit
+rather than growing a second copy of the formula, as in both sibling functions.)
+
+```text
+  css/css-sizing/stretch   451/1004  ->  545/1004   (+94, denominator IDENTICAL,
+                                                     TWO runs byte-identical, HANG/CRASH 0)
+  CONTROLS, paired, same box, same hour:
+    css/css-flexbox   2394/4693  BYTE-IDENTICAL
+    css/css-overflow   450/963   BYTE-IDENTICAL
+    css/css-display    326/549   BYTE-IDENTICAL
+    css/css-position   681 -> 683  (+2 — a gain, not a regression; abspos sizing is shared)
+```
+
+⚠⚠ **THE `css/css-sizing` AREA ROW IS BANKED AS A DELIBERATE FLOOR, 2929, AND THE DERIVATION IS
+STATED SO IT IS AUDITABLE.** t1278 measured this area's variance at **±27 on a moving denominator**
+(2889/5871 · 2861/5850 · 2835/5814) because 3009 of its subtests are the time-dependent `animation/`
+subtree. Two fresh readings are **2942/5828** and **2946/5832** — tighter, but the band is a property
+of the population and not of the hour. So the row is set to `2835 + 94` = **2929**: the LOWEST
+previously observed area reading plus the exactly-reproducible subdirectory gain. That is a value a
+future sweep should not dip below, which is what a monotonic ledger needs from a noisy row. TOTAL
+469003 → **469094 / 1267185 = 37.02%**. ⚠ It is an UNDER-report of ~15 subtests by construction, and
+under-reporting a noisy row is the only version of this that cannot produce a false RED.
+
+GATE: `G_STRETCH_BLOCK_AXIS` (renamed from `G_STRETCH_FLOAT_BLOCK_AXIS`) — 18 rows, **6 of them
+CONTROLS**, proven RED on **SIX** mutations. The three new ones:
+(4) delete `layout_abs`'s `height_stretch` arm → `pauto` `ps10` `pe10` → 10;
+(5) pass `0.0` for `static_v_shift` → `pauto` 50→**55** and `pmin`/`pmax` 50→55, and **nothing
+    else** — the whole static-position clause isolated to one scalar;
+(6) drop the abspos `min_height_stretch`/`max_height_stretch` arms → `pmin` 50→10 and `pmax` 50→210,
+    opposite directions.
+
+⚠⚠ **`p0` DOES NOT MOVE UNDER MUTATION 4, AND THAT IS THE WHOLE DIAGNOSIS IN ONE ROW.** With both
+insets set, the generic `auto` constraint equation produces the identical number — so the one
+configuration a person writes first when testing `stretch` on an abspos box is exactly the one that
+worked without the feature. **The configuration that passes is not evidence about the three that do
+not**, and `p0` is kept as a control precisely to say so.
+
+⚠ Mutation 2 (`pch` → `None` at the float call sites) FAILED TO APPLY on its first scripted run —
+`cargo fmt` had reflowed both call sites into multi-line form since t1278 wrote the pattern. It went
+red once re-matched. The memory note *"`cargo fmt` REFLOWS lines and voids replacements"* earned
+another instance, and it cost one run rather than a wrong conclusion only because the script
+`assert`s on its own pattern.
+
+PERF: none claimed. One extra `f32` argument to `layout_abs`, and one arm on a match that already
+computed every term.
+
+NEXT, ranked from what this tick measured.
+(a) **`css/css-sizing/stretch` is 545/1004 — the remaining 459 is now the INLINE axis and the
+    writing-mode/rtl group.** `width: stretch` on a float is already right, but the earlier histogram
+    held 309 `width expected N but got N` rows, and the `writing-mode: vertical-*` /
+    `direction: rtl` family (20 rows, `.child` markup with an explicit `writing-mode` on every arm)
+    is untouched by either block-axis half. The inline mirror of THIS tick — an abspos box's
+    available inline space, `left`/`right` auto contributing zero, static position when both are
+    auto — is the obvious next cut, and it should be probed per-box-type first for the same reason
+    this one was.
+(b) `css/css-sizing/animation` 1743/3009, residue dominated by Web Animations
+    `composite: add`/`accumulate`, which is absent.
+(c) `contain-intrinsic-size` 0/432 in one file — ⚠ REFUSED, the board lists CSS containment /
+    `content-visibility` under DEFER.
+(d) Carried from t1276: the `sizes` VALUE tokenizer (comments, identifier escapes, math-function
+    clamping).
+
+WIKI: docs/wiki/box-layout.md — stretch measures available space, not the containing block.
