@@ -628,6 +628,18 @@ pub fn set_supported_props_hook(f: SupportedPropsFn) {
 #[cfg(not(feature = "_sm"))]
 pub fn set_supported_props_hook(_f: SupportedPropsFn) {}
 
+/// Publish the source-set selection (`<img>` NodeId → the URL actually chosen) that backs
+/// `currentSrc`. See [`dom_bindings::set_selected_srcs`] for why this is published rather than
+/// recomputed on the JS side.
+#[cfg(feature = "_sm")]
+pub fn set_selected_srcs(map: std::collections::HashMap<(usize, manuk_dom::NodeId), String>) {
+    dom_bindings::set_selected_srcs(map)
+}
+
+/// Without SpiderMonkey there is no getter to answer, so the table has no reader.
+#[cfg(not(feature = "_sm"))]
+pub fn set_selected_srcs(_map: std::collections::HashMap<(usize, manuk_dom::NodeId), String>) {}
+
 /// A host callback answering "may an inline `<script>` with this nonce run under the document's
 /// Content-Security-Policy?".
 pub type CspInlineFn = Box<dyn Fn(manuk_dom::NodeId, Option<&str>) -> bool>;

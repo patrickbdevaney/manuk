@@ -1944,3 +1944,77 @@ that: Chrome picks the **2x** candidate at `devicePixelRatio: 1` on every `x`-de
 (reproduced on two instruments, DPR read back as `1`), which contradicts the obvious reading of the
 selection algorithm and **must be confirmed against a non-headless Chrome before any engine change
 chases it**.
+
+## The engine picked the candidate and the DOM published `src` (tick 1274)
+
+`select_image_url` has run the full `<picture>` → `srcset` → `src` selection since t582, and its own
+doc-comment is emphatic that there must be **one** selection for all its callers. There were two
+answers all along, because a *third* consumer was never wired to it: `<img>.currentSrc`, the DOM
+property, was a getter that returned `this.src`.
+
+The comment above that getter is the part worth keeping, because it was **true when written and
+nobody re-read it**: *"This engine loads an `<img>`'s `src` attribute (it does not yet do
+srcset/`<picture>` candidate selection for the bitmap)."* That was an honest statement of a real
+limitation in the tick that wrote it, and it became false one tick later when `select_image_url`
+landed — at which point it stopped documenting a limitation and started **justifying a bug**.
+
+### The empty string, and why one of them cost 795 subtests
+
+`<img srcset="…">` with **no `src` at all** is legal, and it is what WordPress, every CMS and every
+image CDN emit. There, `this.src` is `''`. So the property did not merely name the wrong file; for
+the most common authoring shape on the modern web it named **no file**.
+
+WPT's `the-img-element/sizes` harness reads the reference image's `currentSrc` **once per
+paragraph** and calls `assert_unreached` on every sibling when it is falsy. One empty string at the
+top of a group therefore failed the entire group, and the directory read **0 of 795** — zero, not a
+long tail. Publishing the selection took it to 472.
+
+### ⚠⚠⚠ The correction that arrived as a regression
+
+The sibling directory `the-img-element/srcset` went **188 → 131** the moment `currentSrc` became
+real. That drop is not a new defect; it is the old one becoming visible. Those rows feed a
+**malformed** `srcset` — `1x 1x`, `1w 1w`, `1w 1x`, `0w`, `-1w` — and assert that the element
+selects **nothing**. Our parser accepted every one of them, but every image published `''`, which is
+the same `''` an invalid list is required to produce. A wrong mechanism was agreeing with the right
+answer, and 57 subtests were scoring on the agreement.
+
+> **A vacuous pass is a debt whose interest is charged to the tick that fixes the real thing.**
+> Publishing a real value did not break those tests; it removed the accident that had been paying
+> for them. The parser was always wrong and the metric could not see it.
+
+Tightening `parse_srcset` to HTML's own descriptor rules did not merely repay the 57 — the directory
+finished at **241/252**, above where it started. The rules that were missing, each of which the old
+"read only the first descriptor token" shortcut silently ignored:
+
+| Rule | Rejects |
+|---|---|
+| at most one `w`, at most one `x`, never both | `1w 1w` · `1x 1x` · `1w 1x` · `1x 1w` |
+| a width is a positive integer | `0w` · `-1w` · `1.5w` |
+| `h` is meaningless without a `w` beside it | `1h` alone (but `1h 900w` is valid) |
+| any unrecognised descriptor is an error for that candidate | `bogus` |
+
+### Two boundaries, and they are separate arms
+
+Descriptor **validation** decides whether a candidate survives. The descriptor **scan** decides
+where the next candidate *begins*, and it is parenthesis-aware: every comma between `(` and `)`
+belongs to one token, so `data:,a ( , data:,b 1x, ), data:,c` is **two** candidates and the answer is
+`c`, while an unclosed `(` swallows the rest of the attribute and yields **nothing**. Splitting at
+the first comma instead selects `b` — a URL the author never offered. `G_IMG_CURRENT_SRC` proves
+each arm under its **own** mutation; asserting both under one is how a gate ends up pinning half of
+what its message claims.
+
+### The table is keyed by `(arena, NodeId)`
+
+The selection is published from `manuk-page` into a side table that `manuk-js` reads, rather than
+recomputed in the getter — a second selection of the same image is the two-cascades trap the
+function's doc-comment already warns about. The key carries the **arena** because a `NodeId` means
+nothing outside its own document, and the fixture that matters here is *iframed*: keyed on the id
+alone, the child's node #7 answers with the parent's node #7, confidently and about a different
+element. That is the one-arena bug `node_and_dom` was written to close, recurring in a new table.
+
+### Not trimmed, and that is a test
+
+A `srcset` URL was already delimited by **ASCII** whitespace, so anything still attached to it is
+part of the URL. Rust's `str::trim` is **Unicode**-aware and eats U+00A0 — and WPT checks exactly
+that: `<img srcset="\u{a0}data:,a">` must resolve to `…/%C2%A0data:,a`. One convenience call turned
+two conformance rows into silent wrong answers.

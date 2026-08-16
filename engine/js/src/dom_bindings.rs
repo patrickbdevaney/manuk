@@ -476,6 +476,37 @@ pub fn expand_decl(property: &str, value: &str) -> Vec<(String, String)> {
         .unwrap_or_default()
 }
 
+thread_local! {
+    /// **The image each `<img>` ACTUALLY selected** — `NodeId` → resolved absolute URL.
+    ///
+    /// `<img>.currentSrc` is *"the URL of the resource the element is displaying"*, and for anything
+    /// with a `srcset` (or a `<picture>` parent) that is **not** its `src`: the engine runs the
+    /// spec's source-set selection to decide what to fetch and decode, and `srcset` with no `src` at
+    /// all is both legal and common — WordPress, every CMS and every image CDN emit it. Until this
+    /// existed the getter returned `this.src`, so those elements reported the **empty string**.
+    ///
+    /// It is a published table rather than a computation because the selection lives in `manuk-page`
+    /// (it needs the `<picture>` walk, the media-condition evaluator and the viewport width) and this
+    /// crate is *below* it. Re-deriving the choice here would be two independent selections of the
+    /// same image — the two-cascades trap that `select_image_url`'s own doc-comment exists to
+    /// prevent. One answer, one owner, carried across the crate boundary.
+    ///
+    /// Empty (no entry) is the honest default: the getter falls back to the resolved `src`, which is
+    /// exactly right for the overwhelming majority of images and is what it always did.
+    ///
+    /// **Keyed by `(arena, NodeId)`**, the same shape as [`set_frame_styles`] and for the same
+    /// reason: a `NodeId` is only unique within its own document, and an iframed `<img>` is the
+    /// primary customer here.
+    static SELECTED_SRC: std::cell::RefCell<std::collections::HashMap<(usize, NodeId), String>> =
+        std::cell::RefCell::new(std::collections::HashMap::new());
+}
+
+/// Publish the source-set selection for this document. Replaces the table wholesale — a stale entry
+/// for a node whose `srcset` changed would be worse than none, since the getter prefers it.
+pub fn set_selected_srcs(map: std::collections::HashMap<(usize, NodeId), String>) {
+    SELECTED_SRC.with(|c| *c.borrow_mut() = map);
+}
+
 /// **The ENUMERABLE half of the same question** — which property names does the engine support?
 ///
 /// [`SupportsFn`] answers one declaration at a time, and tick 1171 named that as the blocker for
@@ -11329,6 +11360,36 @@ unsafe fn host_rect(cx: *mut RawJSContext, argc: u32, vp: *mut Value) -> bool {
     true
 }
 
+/// `__selectedSrc(imgElement)` → the URL this `<img>` actually selected, or `null` if it made no
+/// source-set choice (no `srcset`, no `<picture>`) and the plain `src` is the honest answer.
+///
+/// `null` rather than `''` on purpose: the caller must be able to tell *"the engine chose nothing"*
+/// from *"the engine chose the empty string"*, because only the first may fall back to `src`.
+///
+/// ⚠⚠ **It takes the ELEMENT, not a bare `nodeId`, and that is the whole correctness of it across
+/// frames.** A `NodeId` is only meaningful inside its own arena, and this table's most important
+/// customer is an `<img>` inside an `<iframe>` — WPT's entire `the-img-element/sizes` fixture is
+/// iframed. Keyed on the id alone, the child's node #7 would collide with the parent's node #7 and
+/// return a confident answer about a different element in a different document, which is exactly
+/// the one-arena bug [`node_and_dom`] was written to close. Passing the reflector lets its own
+/// `SLOT_DOM` name the arena, and the key carries both.
+unsafe fn host_selected_src(cx: *mut RawJSContext, argc: u32, vp: *mut Value) -> bool {
+    *vp = NullValue();
+    let Some(obj) = arg_object(vp, argc, 0) else {
+        return true;
+    };
+    let Some((dom, node)) = node_and_dom(obj) else {
+        return true;
+    };
+    let found = SELECTED_SRC.with(|c| c.borrow().get(&(dom as usize, node)).cloned());
+    if let Some(u) = found {
+        if let Some(v) = eval_in_current_global(cx, &js_string_literal(&u)) {
+            *vp = v;
+        }
+    }
+    true
+}
+
 /// `__axRoleName(nodeId)` → `[computedRole, accessibleName]` from the **in-process accessibility
 /// tree**, or `null`.
 ///
@@ -12370,6 +12431,14 @@ pub unsafe fn install(
         global.handle(),
         c"__axRoleName".as_ptr(),
         host_fn!(host_ax_role_name),
+        1,
+        0,
+    );
+    JS_DefineFunction(
+        &mut wrap_cx(cx),
+        global.handle(),
+        c"__selectedSrc".as_ptr(),
+        host_fn!(host_selected_src),
         1,
         0,
     );

@@ -1865,6 +1865,12 @@
   - L1919 · ⚠⚠⚠ Instrument trap 2: the battery could not express its own subject
   - L1930 · And a fix that could not be made to fail was reverted
   - L1939 · Open, and it needs an instrument before it needs an engine change
+  - L1948 · The engine picked the candidate and the DOM published src (tick 1274)
+  - L1961 · The empty string, and why one of them cost 795 subtests
+  - L1972 · ⚠⚠⚠ The correction that arrived as a regression
+  - L1996 · Two boundaries, and they are separate arms
+  - L2006 · The table is keyed by (arena, NodeId)
+  - L2015 · Not trimmed, and that is a test
 
 ## PERFORMANCE — what is actually slow, and why
 `docs/wiki/performance.md`
@@ -2188,4 +2194,4 @@
   - L231 · Both named mechanisms are subsystem work
 
 ---
-2095 sections across 22 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+2101 sections across 22 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.

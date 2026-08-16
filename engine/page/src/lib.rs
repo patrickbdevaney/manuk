@@ -1202,24 +1202,84 @@ fn parse_srcset(srcset: &str) -> Vec<Candidate<'_>> {
         let mut width = None;
         let mut density = 1.0f32;
         if !ended_by_comma {
-            // ── PHASE 2: the descriptor runs to the next COMMA (not to whitespace — `100w` and a
-            //    stray token must not be read as two candidates).
-            while i < n && ws(b[i]) {
-                i += 1;
-            }
+            // ── PHASE 2: the DESCRIPTOR LIST, which runs to the next comma **outside parentheses**
+            //    and is then split on whitespace.
+            //
+            // ⚠⚠ **The parenthesis rule is not decoration — it decides where the next CANDIDATE
+            // starts.** `data:,a ( , data:,b 1x, ), data:,c` has exactly two candidates, because
+            // every comma between `(` and `)` is part of one descriptor token; splitting at the
+            // first comma instead reads `data:,b` as a candidate and picks it. An unclosed `(`
+            // swallows the rest of the attribute, which is why `data:,a (, data:,b` yields NOTHING.
             let dstart = i;
-            while i < n && b[i] != b',' {
+            let mut in_parens = false;
+            while i < n {
+                match b[i] {
+                    b'(' => in_parens = true,
+                    b')' => in_parens = false,
+                    b',' if !in_parens => break,
+                    _ => {}
+                }
                 i += 1;
             }
-            let desc = srcset[dstart..i].trim();
-            if let Some(tok) = desc.split_ascii_whitespace().next() {
-                if let Some(w) = tok.strip_suffix('w').and_then(|v| v.parse::<f32>().ok()) {
-                    width = Some(w);
-                } else if let Some(x) = tok.strip_suffix('x').and_then(|v| v.parse::<f32>().ok()) {
-                    density = x;
-                } else {
-                    continue; // an unparseable descriptor drops the candidate, not the list
+            let desc = &srcset[dstart..i];
+
+            // ⚠⚠⚠ **EVERY DESCRIPTOR IS CHECKED, NOT JUST THE FIRST — AND THE OLD LENIENCY WAS
+            // SCORING ON AN ACCIDENT.** This used to read `desc.split_ascii_whitespace().next()`
+            // and ignore the rest, so `1x 1x`, `1w 1w`, `1w 1x`, `0w` and `-1w` were all accepted
+            // as valid candidates. WPT expects every one of them to produce NO image at all. Those
+            // rows *passed* before this tick only because `currentSrc` returned the empty string
+            // for everything, which is the same empty string an invalid list is supposed to
+            // produce — a wrong mechanism agreeing with the right answer. Publishing the real
+            // selection removed the accident and exposed the parser underneath it.
+            //
+            // The rules are HTML's "parse a srcset attribute" verbatim: at most one of `w`/`x`,
+            // never both, `h` only alongside a `w`, values strictly positive, and ANY unrecognised
+            // descriptor is an error. An error drops THIS candidate, never the whole list.
+            let mut height: Option<f32> = None;
+            let mut density_seen = false;
+            let mut bad = false;
+            for tok in desc.split_ascii_whitespace() {
+                let Some((num, unit)) = tok.split_at_checked(tok.len().saturating_sub(1)) else {
+                    bad = true;
+                    break;
+                };
+                match unit {
+                    "w" => {
+                        // A width is an integer; `1.5w` is not one, and neither is `0w` or `-1w`.
+                        match num.parse::<u32>() {
+                            Ok(v) if v > 0 && width.is_none() && !density_seen => {
+                                width = Some(v as f32)
+                            }
+                            _ => bad = true,
+                        }
+                    }
+                    "x" => match num.parse::<f32>() {
+                        Ok(v)
+                            if v > 0.0 && !density_seen && width.is_none() && height.is_none() =>
+                        {
+                            density = v;
+                            density_seen = true;
+                        }
+                        _ => bad = true,
+                    },
+                    "h" => match num.parse::<u32>() {
+                        Ok(v) if v > 0 && height.is_none() && !density_seen => {
+                            height = Some(v as f32)
+                        }
+                        _ => bad = true,
+                    },
+                    _ => bad = true,
                 }
+                if bad {
+                    break;
+                }
+            }
+            // A `h` descriptor is meaningless on its own — it exists to pair with a `w`.
+            if height.is_some() && width.is_none() {
+                bad = true;
+            }
+            if bad {
+                continue; // an invalid descriptor list drops the candidate, not the list
             }
         }
         out.push(Candidate {
@@ -1366,6 +1426,51 @@ fn select_image_url(dom: &Dom, node: NodeId, viewport_width: f32) -> Option<Stri
         .map(str::trim)
         .filter(|s| !s.is_empty())
         .map(str::to_string)
+}
+
+/// **What each `<img>` chose**, resolved against the document's base — the table behind
+/// `<img>.currentSrc`.
+///
+/// Only elements that made a real source-set CHOICE are recorded. An `<img src=…>` with no
+/// `srcset` and no `<picture>` parent is deliberately absent: its answer is the resolved `src`, the
+/// getter already produces that, and putting it here would be a second copy of a fact that has an
+/// owner. The empty map is therefore the normal case, not a failure case.
+///
+/// Same `select_image_url`, same width as the fetch and decode worklists — see that function's note
+/// on why three callers must not each make their own choice.
+fn selected_image_urls(
+    dom: &Dom,
+    viewport_width: f32,
+    base: &str,
+    out: &mut HashMap<(usize, NodeId), String>,
+) {
+    let arena = dom as *const Dom as usize;
+    for n in dom.flat_descendants(dom.root()) {
+        if dom.tag_name(n) != Some("img") {
+            continue;
+        }
+        let Some(el) = dom.element(n) else { continue };
+        // A plain `src` is not a selection. `<picture>` is, even when the `<img>` carries no
+        // `srcset` of its own, because a matching `<source>` overrides the `src` entirely.
+        let in_picture = dom
+            .parent(n)
+            .map(|p| dom.tag_name(p) == Some("picture"))
+            .unwrap_or(false);
+        if el.attr("srcset").is_none() && !in_picture {
+            continue;
+        }
+        let Some(chosen) = select_image_url(dom, n, viewport_width) else {
+            continue;
+        };
+        // ⚠ **NOT trimmed.** A `srcset` URL was already delimited by ASCII whitespace in
+        // `parse_srcset`, so anything still attached to it is part of the URL — and Rust's `trim`
+        // is Unicode-aware, so it eats U+00A0. WPT checks exactly that: `<img srcset="\u{a0}data:,a">`
+        // must resolve to `…/%C2%A0data:,a`, and trimming here silently produced `data:,a` instead.
+        if chosen.is_empty() {
+            continue;
+        }
+        out.insert((arena, n), resolve_url(base, &chosen));
+    }
 }
 
 fn collect_subresources(dom: &Dom, base: &str) -> Vec<Subresource> {
@@ -3263,6 +3368,32 @@ impl Page {
             })
             .collect();
         manuk_js::set_frame_styles(styles);
+
+        // **And the source-set selection behind `<img>.currentSrc`, for this document AND every
+        // child.** It rides here rather than in `ReflowScope::install` for one reason: `install`
+        // receives a single `&Dom` and has no way to reach `child_pages`, and an iframed `<img>` is
+        // the case that matters most — WPT's whole `the-img-element/sizes` fixture lives inside an
+        // `<iframe>`, and a parent-only table answers `null` for every one of its images.
+        //
+        // `DEFAULT_SELECTION_VIEWPORT`, not the live width, deliberately: this must agree with the
+        // fetch worklist and the decode worklist to the byte, and both select at that width. A
+        // third width here would fetch one candidate and report another.
+        let mut selected = HashMap::new();
+        selected_image_urls(
+            &self.dom,
+            DEFAULT_SELECTION_VIEWPORT,
+            &self.final_url,
+            &mut selected,
+        );
+        for c in self.child_pages.values() {
+            selected_image_urls(
+                &c.dom,
+                DEFAULT_SELECTION_VIEWPORT,
+                &c.final_url,
+                &mut selected,
+            );
+        }
+        manuk_js::set_selected_srcs(selected);
     }
 
     /// **The frames whose document does not come off the network** — `srcdoc`, `src="about:blank"`,

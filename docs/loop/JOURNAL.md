@@ -81487,3 +81487,140 @@ once. It is gated on Stylo's own `specifies_animations()`, so a page with no `an
 anywhere pays one bool read per element.
 
 WIKI: docs/wiki/css-cascade.md — a `@keyframes` animation is a STATIC function of the cascade.
+
+## Tick 1274 — `currentSrc` published `src`, so an `<img srcset>` with no `src` reported NOTHING (2026-08-15)
+
+TICK SHAPE: capability — the top row of the aperture that surface-audit #69 opened this same session,
+and it is render-moving rather than a DOM-flip vein.
+
+HOW IT WAS RANKED, and the ranking came from the audit rather than from the board's histogram.
+Audit #69 diffed the WPT checkout on disk against `RATCHET.tsv` and found **five substantial trees
+with no row anywhere** — `html/semantics` (7,070 failing, the second-largest mass in the project),
+`html/canvas` (3,840), `html/browsers` (1,648), `css/CSS2`, `wai-aria`. The primary metric has been
+looking at ~60% of the checkout. Inside the newly-visible tree the tallest single-mechanism bar is
+`html/semantics/embedded-content/the-img-element/sizes` at **0 of 795 in EIGHT files** — zero
+passing, not a long tail.
+
+HYPOTHESIS (written before the code). `<img>.currentSrc` is a JS shim on `HTMLElement.prototype`
+that returns `this.src`, and its own comment says the engine *"does not yet do srcset/`<picture>`
+candidate selection for the bitmap"*. That comment is **stale**: `select_image_url`
+(`engine/page/src/lib.rs`) does full `<picture>` → `srcset` → `src` selection and has two live
+callers (the fetch worklist and the decode worklist). So the engine *knows* which candidate it
+picked and the DOM publishes a different, often EMPTY, answer — `srcset` with no `src` is legal and
+common, and there `currentSrc` is `''`. If `currentSrc` reported the selection, the `sizes` files
+should move and nothing outside the image path should.
+
+WHY THE WHOLE FILE IS ZERO, which is what makes this one mechanism rather than 795 bugs. Every
+`<p>` in the fixture names a REFERENCE `<img>` and the harness reads `expect = ref.currentSrc`
+first; on `''` it calls `assert_unreached('ref currentSrc was ""')` for **every** sibling in the
+paragraph. One empty string at the top of each group fails the entire group.
+
+⚠ **AN INSTRUMENT ARTEFACT WAS ALMOST THE FINDING.** `diag` reports `onloadCalls: 0` for these
+files, which reads as *"the window `load` handler never ran"* — a boot-class defect, and the board
+ranks those #1. It is nothing: `__onCalls` is a probe counter **no page sets**, so the field is 0 on
+every file ever run. A four-assertion scratch fixture under a throwaway `--wpt` root settled it in
+one run — bare-global `onload = fn`, `addEventListener('load')`, external-script ordering and
+`iframe.contentDocument` all PASS (3/4), and the single failure is
+`assert_true: currentSrc has query, got ` — the empty string, isolated away from the 795.
+
+DESIGN. `select_image_url` lives in `manuk-page`, which depends on `manuk-js`, so the getter cannot
+call it directly. Rather than re-implement the selection in JS — the two-cascades trap that
+`select_image_url`'s own doc-comment was written to prevent — the selection is PUBLISHED: a
+`NodeId -> String` side table refreshed where the image worklist is already computed, a native
+`__selectedSrc(nodeId)` host function beside the existing `__rect`/`__axRoleName`, and the existing
+`currentSrc` getter reads it and falls back to the resolved `src`. One answer, one owner.
+
+⚠ SCOPED OUT, and named so the remainder is attributable: the harness does not implement wptserve's
+`.sub.` substitution (397 files in the checkout), so `sizes-iframed.sub.html` is served with a raw
+`<!{{GET[doctype]}}>` and an unsubstituted `{{GET[style]}}`. Four of the five parse files differ
+ONLY by those two GET parameters, so they currently render identically. Whatever does not flip after
+this engine fix is attributable to that, and it is an instrument tick, not a capability one.
+
+```text
+  html/semantics   4187/11257  ->  4742/11257   (+555, DENOMINATOR BYTE-IDENTICAL)
+    attributable, per directory:
+      the-img-element/sizes                  0/795  ->  472/795   (+472)
+      the-img-element/srcset               188/252  ->  241/252   (+53, and see below)
+      the-img-element                      119/346  ->  141/346   (+22)
+      the-img-element/environment-changes    32/44  ->   36/44    (+4)
+      the-img-element/update-the-image-data   9/20  ->   12/20    (+3)
+    every other subdirectory of the area: BYTE-IDENTICAL.
+
+  CONTROLS, paired, same box, same hour:
+    css/selectors  3757/5560  BYTE-IDENTICAL
+    domparsing      234/1294  BYTE-IDENTICAL
+    dom            8152/10503  -2 ... AND NOT OURS: this is the same error bar t1273 recorded for
+                   this area (the OLD binary produced BOTH 8154 and 8152 in one hour).
+  HANG/CRASH 0 in every run.
+```
+
+⚠⚠⚠ **A REGRESSION ARRIVED FIRST, AND IT WAS THE FINDING RATHER THAN A SETBACK.** The first build
+took `the-img-element/srcset` **188 -> 131**. Those 57 rows feed a MALFORMED `srcset` (`1x 1x`,
+`1w 1w`, `1w 1x`, `0w`, `-1w`) and assert the element selects **nothing**; our parser accepted every
+one of them, but every image published `''`, which is the same `''` an invalid list is required to
+produce. **57 subtests had been scoring on a wrong mechanism agreeing with the right answer** — the
+vacuous-pass class t1270 named, found this time by a fix TRIPPING it rather than by an audit.
+Tightening `parse_srcset` to HTML's own descriptor rules (at most one `w`/`x` and never both, a
+width is a positive integer, `h` only beside a `w`, any unrecognised descriptor is an error) did not
+merely repay the 57: the directory finished at **241/252, above where it started**. Per THE RATCHET
+the drop was never traded — it was repaired inside the tick.
+
+⚠ **TWO BOUNDARIES, TWO ARMS, AND I ASSERTED THEM UNDER ONE MUTATION BEFORE CHECKING.** Descriptor
+VALIDATION decides whether a candidate survives; the paren-aware descriptor SCAN decides where the
+next candidate BEGINS. I wrote the gate's RED note claiming the parenthesis rows would move under
+the validation mutation. They do not — running it showed `g`/`h` byte-identical — so the note was
+corrected and a THIRD mutation added for the scan. A gate whose message claims more arms than its
+proofs cover is pinning half of what it says.
+
+GATE: `G_IMG_CURRENT_SRC` — 18 rows, **3 of them CONTROLS**, proven RED on THREE independent
+mutations. (1) Remove the `__selectedSrc` consultation: every selecting row collapses onto its `src`
+(`a=EMPTY b=/s/fallback.png c=EMPTY d=/s/inline.png frame=EMPTY`) and **every control is
+byte-identical**. (2) Restore the parser's one-token leniency: `e1..e5` select `/s/a.png` and the
+valid `1h 900w` row goes EMPTY. (3) Make the descriptor scan non-paren-aware: `g` and `h` both
+select `/s/b.png` — a URL the author never offered — and nothing else moves.
+
+⚠⚠ **THE `(arena, NodeId)` KEY IS LOAD-BEARING AND THE FIRST BUILD PROVED IT.** Keyed on the bare
+`NodeId`, the fix measured **0/795 — no movement at all** — because WPT's whole fixture is *iframed*
+and a child's node resolves against the PARENT's arena. That is the one-arena bug `node_and_dom` was
+written to close, recurring in a new side table; the gate's `frame` row is what stops it a third
+time. The publish therefore rides on `publish_iframe_docs` (which can reach `child_pages`) and not
+on `ReflowScope::install` (which receives a single `&Dom`).
+
+⚠ **`str::trim` IS UNICODE-AWARE AND ATE A CONFORMANCE ROW.** A `srcset` URL is delimited by ASCII
+whitespace, so anything still attached is part of the URL — and WPT asserts
+`<img srcset="\u{a0}data:,a">` resolves to `…/%C2%A0data:,a`. One convenience call turned two rows
+into silent wrong answers.
+
+⚠⚠⚠ **THE METRIC'S SOURCE WAS STALE BY A WHOLE TICK, AND THIS TICK REFRESHED IT — NONE OF THAT
+REFRESH IS MINE.** `WPT-AREAS.tsv` still carried pre-t1273 numbers for every area t1273 moved, so
++1406 of landed capability was invisible to the primary metric. Re-measured on the current binary:
+`css/css-transforms` 1711 -> **2411** and `css/css-values` 3116 -> **3230** — *byte-identical to
+t1273's own independent readings*, which is what makes the attribution safe rather than assumed —
+`css/css-grid` 6276 -> 6818 (within the grid-lanes denominator wobble t1273 documented), and
+`css/css-backgrounds` 3821 -> **4087**, an area t1273 never measured at all because 3458/5129 of it
+is `css-backgrounds/animations`. TOTAL 466592 -> **468214 / 1267219 = 36.95%**. **+1622 of that is
+t1273's, not this tick's**, and it is recorded here so no later reader prices it twice.
+
+⚠⚠ **AND THIS TICK'S OWN +555 IS NOT IN THE TOTAL AT ALL**, because `html/semantics` has no row —
+which is the entire point of surface-audit #69 above it. `scripts/wpt-sweep.sh` is observer-owned
+and its `AREAS=()` does not list the area; a row hand-added here would be DELETED by the next full
+sweep and read as a regression (the `cssom` lesson, t1266). So the number is banked in this journal
+and in the audit, and the observer is asked to wire the area. **The engine got better by 555
+subtests and the primary metric cannot see it** — the honest form of that sentence is worth more
+than a row that would not survive.
+
+PERF: none claimed. The cost is one `<img>`-only DOM walk per `publish_iframe_docs` call (document
+install and lifecycle, not per script re-entry), and only elements that make a real source-set
+CHOICE are recorded — an ordinary page publishes an empty map and the getter falls through to `src`
+exactly as before.
+
+NEXT, ranked from what this tick measured rather than guessed. (a) The remaining **323 of 795** in
+`sizes` is the spec's *"parse a sizes attribute"* — a media-condition list where the FIRST match
+wins, against `sizes_slot_width`, which reads only the LAST comma-separated entry and ignores media
+conditions entirely. (b) The harness has no wptserve `.sub.` substitution (**397 files** in the
+checkout), so four of the five `sizes` parse files differ only by GET parameters they never receive
+and currently render identically — an instrument tick, and it bounds (a). (c) `html/semantics`'s next
+bars, all newly visible: `forms/the-input-element` 828 failing, `scripting-1/the-script-element` 484,
+`forms/textfieldselection` 385, `forms/constraints` 338.
+
+WIKI: docs/wiki/networking.md — the engine picked the candidate and the DOM published `src`.

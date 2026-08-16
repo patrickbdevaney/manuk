@@ -11,12 +11,12 @@
 
 | | value | over |
 |---|---|---|
-| ticks landed | **968** | ticks 1–1273 |
-| median tick cycle | **29m** | 967 intervals |
-| median, last 10 | **60m** | 10 intervals |
+| ticks landed | **969** | ticks 1–1274 |
+| median tick cycle | **29m** | 968 intervals |
+| median, last 10 | **67m** | 10 intervals |
 | fastest / slowest | 5s / 5.4d | |
-| **ticks per hour** | **1.13** | 855.9h elapsed |
-| median verify wall | **63s** | 907 ticks |
+| **ticks per hour** | **1.13** | 857.1h elapsed |
+| median verify wall | **63s** | 908 ticks |
 | wall trend | 39s → 17m — getting slower ⚠️ | first 3 vs last 3 |
 
 The **cycle** is the real unit: implement → debug → verify wall → land. The wall is only part of
@@ -28,10 +28,10 @@ it, and a wall that grows taxes every future tick, so it is tracked separately f
 
 * **capabilities asserted** (`G_CAPABILITY`): 48 → **81**
 * **live gates**: 27 → **481**
-* **✅ rows in the capability ledger**: 144 → **640**
+* **✅ rows in the capability ledger**: 144 → **641**
 * **Bar 0 — oracle hangs**: 0 of 265 sites
 
-**442 of 968 ticks** (46%) moved a
+**443 of 969 ticks** (46%) moved a
 user-visible capability. The rest were instruments, infrastructure and corrections — and the
 ledger says the corrections were not overhead: three of its top three priorities were phantoms,
 and finding that out redirected everything after it.
@@ -90,7 +90,7 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 
 ## What a capability costs
 
-* **442** capability ticks, median cycle **29m**
+* **443** capability ticks, median cycle **29m**
 * median diff per tick: **+273 / −34** lines across 8 files
 
 ## Every tick
@@ -1065,5 +1065,6 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 | **1271** | 2026-08-15 18:04 | 44m | capability | 17m | +366/−50 | 479 | 81 | 56.0% · | an RTL COLUMN flex container laid its cross axis from the LEFT, and our own source had nam |
 | **1272** | 2026-08-15 18:50 | 46m | capability | 17m | +341/−39 | 480 | 81 | 56.0% · | `offsetLeft` subtracted the UA's `margin: 8px` from every element on every ordinary page ( |
 | **1273** | 2026-08-15 20:58 | 2.1h | capability | 17m | +1122/−210 | 481 | 81 | 56.0% · | the engine did not interpolate ANYTHING, and a `@keyframes` animation rendered its base ru |
+| **1274** | 2026-08-15 22:10 | 71m | capability | 17m | +657/−133 | 481 | 81 | 56.0% · | `currentSrc` published `src`, so an `<img srcset>` with no `src` reported NOTHING (2026-08 |
 
 *`·` after a WPT figure means **carried forward**, not measured this tick.*

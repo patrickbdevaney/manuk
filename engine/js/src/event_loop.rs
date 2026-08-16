@@ -6008,18 +6008,35 @@ const PRELUDE: &str = r#"
       // `<img>.currentSrc` — the READ-ONLY URL of the image resource actually being displayed. Lazy-load,
       // lightbox, gallery and analytics libraries read it constantly to learn WHICH file loaded (and to
       // avoid re-fetching one already shown). It was absent — `'currentSrc' in img` was false — so those
-      // reads got `undefined`. This engine loads an `<img>`'s `src` attribute (it does not yet do
-      // srcset/`<picture>` candidate selection for the bitmap; see `pending_image_urls`), so the HONEST
-      // currentSrc is exactly the resolved `src`: `this.src` already returns the absolute URL, and the
-      // empty string when there is no source to select, which is what the spec wants before selection. It
-      // is read-only (getter only), lives on `HTMLElement.prototype` like the other cross-cutting members
-      // in this block (instances chain through `__HP`, not the per-tag interface prototypes), and is
-      // IMG-guarded so a non-image element reads `undefined` rather than a stray URL.
+      // reads got `undefined`. It is read-only (getter only), lives on `HTMLElement.prototype` like the
+      // other cross-cutting members in this block (instances chain through `__HP`, not the per-tag
+      // interface prototypes), and is IMG-guarded so a non-image element reads `undefined` rather than a
+      // stray URL.
+      //
+      // ⚠⚠⚠ **IT USED TO RETURN `this.src`, AND FOR A `srcset` IMAGE THAT IS THE WRONG FILE — OR NO
+      // FILE AT ALL.** The comment here claimed the engine "does not yet do srcset/`<picture>`
+      // candidate selection", and that stopped being true at tick 582: `select_image_url` runs the
+      // full `<picture>` → `srcset` → `src` selection and both the fetch worklist and the decode
+      // worklist consume it. So the engine has known which candidate it picked all along and this
+      // getter published a different answer — and `<img srcset>` with **no `src`**, which is legal
+      // and is what WordPress, every CMS and every image CDN emit, published the EMPTY STRING.
+      //
+      // The measured cost of that empty string is the shape worth remembering: WPT's
+      // `the-img-element/sizes` files read `expect = referenceImg.currentSrc` ONCE per paragraph and
+      // `assert_unreached` every sibling when it is falsy — so one empty string at the top of each
+      // group failed the whole group, and the directory read **0 of 795**.
+      //
+      // `__selectedSrc` returns `null` (not `''`) when the element made no source-set choice, which
+      // is what lets the `src` fallback stay exactly as correct as it was for every ordinary image.
       if (__HP && !Object.getOwnPropertyDescriptor(__HP, 'currentSrc')) {
         Object.defineProperty(__HP, 'currentSrc', {
           configurable: true,
           get: function() {
             if (!this || this.tagName !== 'IMG') { return undefined; }
+            if (typeof globalThis.__selectedSrc === 'function') {
+              var chosen = globalThis.__selectedSrc(this);
+              if (chosen) { return chosen; }
+            }
             var s = this.getAttribute && this.getAttribute('src');
             return (s && s.trim()) ? this.src : '';
           }
