@@ -904,6 +904,8 @@
   - L3598 · or did not exist, and nested parens failed by the same shape
   - L3608 · A <media-condition> is NOT a <media-query> — one string, two correct answers
   - L3624 · An out-of-range value invalidates the FEATURE; it does not merely fail to match it
+  - L3642 · ( feature ) and ( feature: default ) are different questions (tick 1277)
+  - L3667 · A keyword outside the feature's own value set is INVALID, not merely non-matching
 
 ## `<dialog>`, `popover`, and the top layer (ticks 194-195)
 `docs/wiki/dialog-and-top-layer.md`
@@ -2202,4 +2204,4 @@
   - L231 · Both named mechanisms are subsystem work
 
 ---
-2109 sections across 22 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+2111 sections across 22 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.

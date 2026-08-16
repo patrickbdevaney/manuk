@@ -3674,8 +3674,14 @@ fn is_css_ident(s: &str) -> bool {
         .all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '_' || !c.is_ascii())
 }
 
-/// A single `<media-feature>`. Returns `Unknown` — never `False` — for anything unrecognised, so
-/// that an enclosing `not` cannot turn our ignorance into a positive match.
+/// A single `<media-feature>`, in either of its **two grammars**.
+///
+/// `( feature: value )` asks *"is the value this?"*. `( feature )` — the **boolean context**, MQ4
+/// §2.4 — asks *"is the feature ENGAGED?"*, and those are different questions with different
+/// answers. Treating them as one inverted five features at once; see the boolean block below.
+///
+/// Returns `Unknown` — never `False` — for anything unrecognised or out of range, so that an
+/// enclosing `not` cannot turn our ignorance into a positive match.
 fn eval_feature(feature: &str) -> Mq {
     let (vw, vh) = crate::values::viewport_size();
     // Range syntax (`width >= 600px`) is normalised to the `min-`/`max-` prefix form, which is
@@ -3688,9 +3694,43 @@ fn eval_feature(feature: &str) -> Mq {
     } else if let Some((n, v)) = feature.split_once(':') {
         (n.trim().to_string(), v.trim().to_string())
     } else {
-        // A boolean feature: `(hover)`, `(color)` — true when the feature is non-zero for us.
-        (feature.trim().to_string(), String::new())
+        // ── THE BOOLEAN CONTEXT, and it asks a DIFFERENT QUESTION than the value form.
+        //
+        // `( feature )` with no value means **"is this feature ENGAGED?"** — MQ4 §2.4 — and the
+        // answer is *not* "does its default value match". Treating the two as the same question
+        // inverted five features at once, and the loudest of them is the near-universal
+        //
+        //     @media (prefers-reduced-motion) { * { animation: none !important } }
+        //
+        // which we answered TRUE — so every animation on the page was disabled, on a browser that
+        // has no reduced-motion preference at all. The `(prefers-reduced-motion: reduce)` spelling
+        // was always right, which is exactly why this hid: the common form works.
+        return match feature.trim() {
+            // ⭐ Features whose value set contains NO "false" value match unconditionally in a
+            // boolean context. `(orientation)` is not asking whether we are landscape.
+            "width" | "height" | "orientation" | "display-mode" | "prefers-color-scheme" => {
+                Mq::True
+            }
+            // The "false" value is `no-preference`/`none`, and that is precisely what we are.
+            "prefers-reduced-motion"
+            | "prefers-reduced-transparency"
+            | "prefers-contrast"
+            | "forced-colors"
+            | "inverted-colors" => Mq::False,
+            // Engaged: a desktop browser with a fine pointer, hover, 8-bit colour and JS enabled.
+            "hover" | "any-hover" | "pointer" | "any-pointer" | "color" | "any-color"
+            | "scripting" => Mq::True,
+            // ⚠ A `min-`/`max-` prefix is a RANGE, and a range with no value is not a boolean
+            // feature — it never matched the grammar, so it is `<general-enclosed>`.
+            _ => Mq::Unknown,
+        };
     };
+    // ⚠ Past this point the VALUE form is in hand, so an EMPTY value is a colon with nothing after
+    // it — `(hover: )` — which never matched the grammar. It is not the boolean form; that was
+    // answered above and returned.
+    if value.is_empty() {
+        return Mq::Unknown;
+    }
     // Media-query lengths resolve `em`/`rem` against the INITIAL font size, never the element's.
     let px = |v: &str| -> Option<f32> {
         let v = v.trim();
@@ -3711,6 +3751,17 @@ fn eval_feature(feature: &str) -> Mq {
         Some(v) => Mq::of(f(v)),
         None => Mq::Unknown,
     };
+    // A keyword feature given a value OUTSIDE its own value set is invalid — `<general-enclosed>`,
+    // Unknown — not merely a value we do not happen to be. The distinction only shows up under
+    // `not`: `not (orientation: sideways)` must be FALSE, and answering `False` here would negate
+    // it to true. This is the same rule `len` applies to an out-of-range length, in keyword form.
+    let kw = |ours: &str, allowed: &[&str]| -> Mq {
+        if allowed.contains(&value.as_str()) {
+            Mq::of(value == ours)
+        } else {
+            Mq::Unknown
+        }
+    };
     match name.as_str() {
         "min-width" => cmp(len(&value), &|v| vw >= v),
         "max-width" => cmp(len(&value), &|v| vw <= v),
@@ -3718,28 +3769,40 @@ fn eval_feature(feature: &str) -> Mq {
         "min-height" => cmp(len(&value), &|v| vh >= v),
         "max-height" => cmp(len(&value), &|v| vh <= v),
         "height" => cmp(len(&value), &|v| (vh - v).abs() < 0.5),
-        "orientation" => Mq::of(value == if vw >= vh { "landscape" } else { "portrait" }),
+        "orientation" => kw(
+            if vw >= vh { "landscape" } else { "portrait" },
+            &["portrait", "landscape"],
+        ),
         // We are a real, light-scheme, non-reduced-motion desktop browser with a fine pointer
         // and hover. These answers must agree with what `window.matchMedia` tells the page —
         // a browser is allowed to be unusual, it is not allowed to disagree with itself.
-        "prefers-color-scheme" => Mq::of(value == "light"),
-        "prefers-reduced-motion" => Mq::of(value.is_empty() || value == "no-preference"),
-        "prefers-reduced-transparency"
-        | "prefers-contrast"
-        | "forced-colors"
-        // ⚠ NO `value.is_empty()` arm here, and that is deliberate: the BOOLEAN form of these
-        // features asks *"is it engaged?"*, so `(forced-colors)` is FALSE for us while
-        // `(forced-colors: none)` is TRUE. They are not synonyms.
-        | "inverted-colors" => {
-            Mq::of(value == "no-preference" || value == "none" || value == "no-inverted-colors")
-        }
-        "hover" | "any-hover" => Mq::of(value.is_empty() || value == "hover"),
-        "pointer" | "any-pointer" => Mq::of(value.is_empty() || value == "fine"),
-        "color" | "any-color" => Mq::of(
-            value.is_empty() || value.trim().parse::<f32>().is_ok_and(|v| v == 8.0),
+        "prefers-color-scheme" => kw("light", &["light", "dark"]),
+        "prefers-reduced-motion" => kw("no-preference", &["no-preference", "reduce"]),
+        "prefers-reduced-transparency" => kw("no-preference", &["no-preference", "reduce"]),
+        "prefers-contrast" => kw(
+            "no-preference",
+            &["no-preference", "more", "less", "custom"],
         ),
-        "display-mode" => Mq::of(value == "browser"),
-        "scripting" => Mq::of(value == "enabled"),
+        "forced-colors" => kw("none", &["none", "active"]),
+        "inverted-colors" => kw("none", &["none", "inverted"]),
+        "hover" | "any-hover" => kw("hover", &["none", "hover"]),
+        "pointer" | "any-pointer" => kw("fine", &["none", "coarse", "fine"]),
+        "color" | "any-color" => cmp(
+            value.trim().parse::<f32>().ok().filter(|v| *v >= 0.0),
+            &|v| v == 8.0,
+        ),
+        "display-mode" => kw(
+            "browser",
+            &[
+                "fullscreen",
+                "standalone",
+                "minimal-ui",
+                "browser",
+                "window-controls-overlay",
+                "picture-in-picture",
+            ],
+        ),
+        "scripting" => kw("enabled", &["none", "initial-only", "enabled"]),
         // Unrecognised feature → `<general-enclosed>` → Unknown, which is `false` at the top level
         // and stays `false` under `not`. Never guess in the direction of applying a sheet.
         _ => Mq::Unknown,

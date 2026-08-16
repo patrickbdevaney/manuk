@@ -3638,3 +3638,42 @@ the `no-preference` family. `(prefers-reduced-motion)` with no value returns `tr
 form asks *"is it engaged?"* and we are a no-preference browser, so it must be `false`. The idiom
 `@media (prefers-reduced-motion) { * { animation: none !important } }` is everywhere, and today it
 kills every animation on the page.
+
+## `( feature )` and `( feature: default )` are different questions (tick 1277)
+
+MQ4 §2.4's **boolean context** — a media feature written with no value — asks *"is this feature
+**engaged**?"*. It is not shorthand for *"does its default value match?"*, and `eval_feature` had no
+boolean branch at all: an empty value fell through to the value comparison, where a few arms carried
+an `is_empty()` escape hatch and the rest did not.
+
+| Written | We answered | Correct | Why |
+|---|---|---|---|
+| `(prefers-reduced-motion)` | **true** | `false` | the "false" value is `no-preference`, and that is us |
+| `(prefers-contrast)`, `(forced-colors)`, `(inverted-colors)` | false | `false` | right, but by luck — no `is_empty()` arm |
+| `(orientation)`, `(prefers-color-scheme)` | **false** | `true` | their value sets contain no "false" value, so they always match |
+| `(scripting)` | **false** | `true` | we run scripts |
+| `(width)`, `(height)` | **unknown** | `true` | non-zero |
+
+⭐ **The loud one was switched on.** `@media (prefers-reduced-motion) { *, *::before, *::after
+{ animation: none !important } }` is in most modern CSS resets, and we **matched** it — so every
+animation on such a page was disabled, by a browser with no reduced-motion preference at all, one
+tick after the engine learned to interpolate keyframes.
+
+⭐⭐ **It hid because the common spelling was always right.** `(prefers-reduced-motion: reduce)` — the
+form nearly every site writes — took the value path and answered correctly throughout. **A bug in the
+rare spelling of a common feature is invisible to any test that reaches for the common spelling**,
+which is what a hand-written media-query test does by reflex.
+
+### A keyword outside the feature's own value set is INVALID, not merely non-matching
+
+`(orientation: sideways)` is `<general-enclosed>` → `Unknown` → false, and therefore
+`not (orientation: sideways)` is **false**. Answering a plain `false` here negates to a positive
+match — the identical shape as tick 1276's `not (unknown-feature)`, surviving one level deeper
+because the *feature* was known and only its *value* was not. Every keyword feature now carries its
+allowed set, the same way lengths carry their non-negative range.
+
+⚠ **This mechanism has no local WPT tree.** `css/mediaqueries` is not in the checkout (`ls ~/wpt/css`
+— no such directory), so the correction is gated (`G_MEDIA_GRAMMAR`, 44 rows, RED on eight
+mutations, eight of the rows CONTROLS) and **measured at zero**. The controls — `sizes` 632/795,
+`css/cssom` 2794, `css/css-backgrounds` 4087, `css/css-sizing` 2840 — are byte-identical, which is
+all a suite without the relevant tree can honestly say.

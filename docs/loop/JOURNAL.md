@@ -81823,3 +81823,113 @@ so the tree that would measure this mechanism directly is part of the t1273 aper
 item, recorded so the absence is a record rather than a silence.
 
 WIKI: docs/wiki/css-cascade.md — a media query evaluates in FOUR states.
+
+## Tick 1277 — `( feature )` and `( feature: default )` are DIFFERENT QUESTIONS (2026-08-16)
+
+TICK SHAPE: capability — the mechanism t1276 MEASURED, named, and deliberately left out of itself to
+keep that tick's pricing clean. Board re-run at the top of this tick: unchanged, PHASE MANDATE =
+CSS-LAYOUT / render-moving. This is the second half of the media-query grammar and it is entirely a
+`manuk_css` cascade mechanism.
+
+HYPOTHESIS (written before the code). MQ4 §2.4's **boolean context** — `( feature )` with no value —
+asks *"is this feature ENGAGED?"*. `eval_feature` had no boolean branch at all: an empty value fell
+through to the VALUE comparison, where a few arms carried an `is_empty()` escape hatch and the rest
+did not. So the engine answered the value form's question in both grammars, and five features came
+out inverted in one direction and four in the other:
+
+```text
+  (prefers-reduced-motion)      was TRUE   must be FALSE   ← we have no reduced-motion preference
+  (forced-colors)               was FALSE  must be FALSE   ← right by luck, no is_empty() arm
+  (prefers-contrast)            was FALSE  must be FALSE   ← same
+  (orientation)                 was FALSE  must be TRUE    ← no "false" value exists in its set
+  (prefers-color-scheme)        was FALSE  must be TRUE    ← same
+  (scripting)                   was FALSE  must be TRUE    ← we run scripts
+  (width) / (height)            was UNKNOWN must be TRUE   ← non-zero
+```
+
+⭐ **THE LOUD ONE IS `(prefers-reduced-motion)` AND IT WAS SWITCHED ON.** The idiom
+`@media (prefers-reduced-motion) { *, *::before, *::after { animation: none !important } }` is
+everywhere in modern resets, and we matched it — **so every animation on such a page was disabled**,
+by a browser with no reduced-motion preference at all, one tick after t1273 taught the engine to
+interpolate keyframes in the first place. Two correct-looking subsystems producing a page with no
+motion in it, and neither one wrong on its own.
+
+⭐⭐ **AND IT HID BECAUSE THE COMMON SPELLING WAS ALWAYS RIGHT.** `(prefers-reduced-motion: reduce)`
+— the form nearly every site writes — took the value path and answered correctly the whole time. A
+bug in the rare spelling of a common feature is invisible to any test that reaches for the common
+spelling, which is what a hand-written media-query test does by reflex.
+
+Also closed, same rule one level down: **a keyword outside the feature's own value set is INVALID**,
+not merely non-matching. `(orientation: sideways)` is `<general-enclosed>` → Unknown, so
+`not (orientation: sideways)` is FALSE. Answering plain `false` negated to a positive match — the
+identical shape as t1276's `not (unknown-feature)`, surviving one level deeper because the *feature*
+was known and only its *value* was not.
+
+```text
+  WPT MOVEMENT: **ZERO, and that is not a failure to report — it is an APERTURE fact.**
+    `css/mediaqueries` IS NOT IN THE WPT CHECKOUT AT ALL (`ls ~/wpt/css` — no such directory).
+    The tree that would measure this mechanism directly does not exist locally, so there is no
+    number to move. Observer item, and the fifth face of the t1273 aperture gap.
+
+  CONTROLS, paired, same box, same hour, numerator BYTE-IDENTICAL:
+    the-img-element/sizes  632/795   (t1276's tree, held)
+    css/cssom              2794/3502
+    css/css-backgrounds    4087/6181
+    css/css-sizing         2840/5850
+  HANG/CRASH 0 in every run.
+```
+
+⚠⚠ **WPT-AREAS.tsv WAS STALE ON FOUR ROWS AND THE REFRESH IS NOT MINE.** Re-measured on the current
+binary while taking controls: `css/css-sizing` 2352 → **2840** (its `animation/` subdirectory alone
+is 1743/3009), `css/css-flexbox` 2239 → **2394**, `css/css-position` 541 → **681**,
+`css/css-overflow` 444 → **450**. `css/css-display` 326 and `css/cssom` 2794 were already current.
+**+789 of landed capability was invisible to the primary metric**, and essentially all of it is
+**t1273's keyframe interpolation** reaching the `animation/` subtrees the sweep last read before it
+landed. TOTAL 468214 → **469003 / 1267185 = 37.01%**. Recorded here so no later reader prices it as
+this tick's.
+
+> **This is the third consecutive tick in which the primary metric could not see the work**, for
+> three DIFFERENT reasons: a missing area row (t1274/t1275), a stale area row (this tick's +789), and
+> now a missing tree entirely. The failure modes of a ledger are not one failure mode.
+
+GATE: `G_MEDIA_GRAMMAR` extended to 44 rows — 8 of them CONTROLS, including the four VALUE-form rows
+(`vrm`, `vrmno`, `vscheme`, `vhover`) whose whole job is to hold byte-identical while their BOOLEAN
+twins move. Proven RED on **EIGHT** mutations, three of them new this tick and pairwise disjoint:
+(6) the `no-preference`/`none` family's boolean answer → `True` moves `brm` `bfc` `bcontr` `binv`;
+(7) the no-false-value family's boolean answer → `False` moves `borient` `bscheme` `bscript`
+`bwidth`; (8) `kw` dropping its allowed-set check moves `notbadkw`.
+
+⚠⚠⚠ **MUTATION 1 WENT RED WITHOUT FULLY APPLYING, AND ONLY THE SIZE OF THE RED SAID SO.** It was
+scripted at t1276 as a replacement of *the* `_ => Mq::Unknown` arm; this tick added a SECOND such arm
+in the new boolean block, so the edit hit one of two and the run moved `s_notfn` alone instead of the
+five rows t1276 recorded. **A partial mutation still goes red.** t1239's rule — *a mutation that does
+not go RED may not have APPLIED* — has a sharper twin: **a red that is SMALLER than the recorded one
+is the same evidence.** Re-applied with `replace_all` and the full five-row set came back.
+
+⚠ `q_badkw` does not move under mutation 8, and `q_bminw`/`q_emptyval` move under none of the eight.
+Kept and labelled: an invalid keyword and a non-matching keyword give the same answer until a `not`
+is in front of them, so the `badkw`/`notbadkw` PAIR is the assertion and either row alone proves
+nothing.
+
+PERF: none claimed. One `match` on the feature name is taken earlier than it used to be; the value
+form does strictly less work than before because the `is_empty()` escape hatches are gone.
+
+NEXT, ranked from what this tick measured rather than guessed.
+(a) **`css/css-sizing/stretch` — 439/1004, 47 files, 565 failing, and every one of them is real
+LAYOUT GEOMETRY**: 309 `width expected N but got N` + 244 `height …`, no keyword or parse noise at
+all. `width: stretch` / `-webkit-fill-available` IS implemented (`width_stretch`/`height_stretch`),
+so this is refinement, not absence, and the got/expected joint distribution is multi-modal (`got 10
+expected 45` ×56, `got 40 expected 50` ×40, `got 40 expected 47` ×40) — i.e. **more than one
+mechanism**, which is why it is named as a DIAGNOSIS tick rather than picked up here on a guess.
+(b) **`css/css-sizing/animation` is 1743/3009** and its residue is dominated by Web Animations
+`composite: add`/`accumulate` (`Compositing …: underlying [Npx] from add [Npx]`, 8 rows per property
+× 6 size properties × several files). The discrete-flip fallback in `animation.rs::interpolate` is
+already correct; additive composition is simply absent.
+(c) **`contain-intrinsic-size` is 0/432 in ONE file** — the whole file fails its `'from' value should
+be supported` precondition, i.e. the property does not exist in our cascade. ⚠ **REFUSED, on the
+board's own instruction**: the lever board lists CSS containment / `content-visibility` under
+DEFER (low value, high cost). Recorded so the 432 is not re-discovered as a bargain next tick.
+(d) The `sizes` VALUE tokenizer (comments, identifier escapes, math-function clamping) — carried
+from t1276, still the rest of that directory's remainder.
+
+WIKI: docs/wiki/css-cascade.md — the boolean context asks a different question.
