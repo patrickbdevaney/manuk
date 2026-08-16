@@ -2045,3 +2045,57 @@ docs/measurement ticks free of engine edits so they take the warm path.**
 **Nothing trimmed.** Two gates were ADDED this session (`g_resolved_insets`, `g_inline_style_serializes`:
 463 → 465) and the warm wall is unchanged at 114s — as it should be, since both are single page loads
 with no network.
+
+## Audit #49 — tick 1287 (2026-08-16)
+
+**Total 2070s** — the highest reading this ledger holds, against a 1243s previous cold high (#45) and
+a 114s warm low (#48). And **the shape has completely changed**, which is the finding.
+
+```text
+  1141s  D   55%   <- disk reclamation
+   256s  P   12%
+   106s  T    5%
+    39s  B    2%
+    21s  G6   1%
+     7s  G1 · 5s F · 2s F4 · 0s G_VIEWPORT/G_TEARDOWN/G_STALE_NODE/G_SILENT_FAIL
+```
+
+### ⚠⚠⚠ THE FINDING: THE GATES ARE LEAN. THE DISK IS THE TAX.
+
+Every assertion in the wall — G1, G6, F, F4, T, and every named `G_*` — totals **~140s, under 7%**.
+`B` (the whole-workspace build) is **39s**. The thing that made this the slowest wall on record is
+`D`, the reclamation phase, at **1141 seconds**: the audit's four admissible questions (redundancy,
+parallelism, caching, scope) have **nothing to bite on**, because the seconds are not in the gates.
+
+This also corrects audit #48's framing rather than contradicting it. #48 found that the histogram
+ranked the 10% while the tax was ~1,000s of *compilation* invisible to it. That is no longer true:
+`B` is 39s and `T` 106s, so compilation is now cheap (sccache/mold are working). The ~1,100s moved to
+a different place, and the instrument can see this one.
+
+**The cause is not the wall's design — it is `/home` at 93% with 23G free.** Six ticks this session
+each ran `D` for 13–19 minutes to claw back space that the next release build immediately consumed.
+The trend across the session, from the same instrument:
+
+```text
+   t1281   997s     /home 92%, 25G free
+   t1283  1082s
+   t1287  2070s     /home 93%, 23G free      D alone = 1141s
+```
+
+### What was trimmed: NOTHING, and that is the correct outcome
+
+`scripts/` is observer-owned (CONSTITUTION PART VII / the loop's scope rule), and `D` lives in
+`verify.sh` + `scripts/disk-hygiene.sh`. **An agent-side "optimisation" here would be a harness edit
+the loop explicitly forbids**, and there is no gate to trim: dropping one would violate the audit's
+own non-admissible list and would buy under 7% anyway.
+
+**Reported to the observer, in one line, as the scope rule prescribes:** the wall is gate-lean and
+disk-bound; `D` is 55% of a 2070s wall on a 93%-full volume; the ratio of reclaimed-to-consumed space
+is now roughly break-even (`▶ now 24G free (was 24G)` appears verbatim in the t1283 log). The lever is
+disk capacity or a smaller artefact working set, not gate scheduling.
+
+⚠ **A caveat on the reading, stated rather than left implicit:** this is a *cold* wall in the
+bimodal band this ledger already names, and it was taken while the observer's test-binary reaper was
+running concurrently (five `find target/debug/deps` processes, load1 8.5, in the same window). The
+`D` figure is therefore a **ceiling**, not a steady-state number — but it has been the dominant term
+in every one of the six walls this session, so the ranking is not in doubt even if the magnitude is.

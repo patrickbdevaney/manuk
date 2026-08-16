@@ -83111,3 +83111,88 @@ NEXT, ranked from what this tick measured.
 
 WIKI: docs/wiki/css-cascade.md — `animation-composition` as underlying⊕endpoint, why only the
 declared set may be composited, and the fixture lesson about pinning the easing.
+
+## Tick 1288 — the wall is GATE-LEAN and DISK-BOUND, and a grid dive was stopped by the test's own `<meta assert>` (2026-08-16)
+
+TICK SHAPE: instrument + measurement. Board re-run at the top of this tick: **unchanged**. No engine
+source changed; this tick banks a due audit and three fresh measurements, one of which is a diagnosis
+I **stopped rather than guessed**.
+
+CADENCE. `scripts/wall-audit.sh run` was due at 1287 (every 20 ticks; the pre-flight blocks past it).
+Audit #49 is written up in `docs/loop/WALL-AUDIT.md`. `LAST_WALL_AUDIT` → 1287.
+
+⚠⚠⚠ **THE WALL IS NOT BLOATED BY GATES. THE DISK IS THE TAX.** Total **2070s**, the highest this
+ledger holds, and the shape has completely changed from audit #48's:
+
+```text
+  1141s  D   55%   <- disk reclamation        21s  G6 · 7s G1 · 5s F · 2s F4
+   256s  P   12%                              0s   G_VIEWPORT/G_TEARDOWN/G_STALE_NODE/G_SILENT_FAIL
+   106s  T    5%
+    39s  B    2%
+```
+
+**Every assertion in the wall totals ~140s, under 7%.** The audit's four admissible questions
+(redundancy, parallelism, caching, scope) have nothing to bite on because the seconds are not in the
+gates. It also *corrects* #48 rather than contradicting it: #48 found the tax was ~1,000s of
+invisible compilation, and `B` is now 39s — sccache/mold are working, and the ~1,100s moved somewhere
+the instrument CAN see. **Nothing was trimmed, which is the correct outcome:** `D` lives in
+`verify.sh` + `scripts/disk-hygiene.sh`, both observer-owned, and no gate is worth cutting for under
+7%. Reported in one line per the scope rule: gate-lean, disk-bound, `/home` at 93% with 23G free, and
+the reclaim is roughly break-even (`▶ now 24G free (was 24G)` appears verbatim in the t1283 log).
+
+MEASUREMENTS BANKED (release binary, this hour).
+
+1. **`css/css-grid` reads 6790/14309 = 47.5%, `HANG/CRASH 0`** — *below* its banked mark of 6818, and
+   **that is the known noise, not a regression**: t1276-1281 recorded four same-hour readings spanning
+   6760–6791 against a 6818 mark, two of them on an OLD binary. 6790 sits inside that band. Recorded
+   so a future sweep does not read a false regression off this row (the mark is a point where it
+   should be a floor).
+
+2. ⚠ **TWO BIG "should be supported" CLUSTERS ARE THE UNSHIPPED-SPEC DISCOUNT, MEASURED AND REFUSED.**
+   `assert_true: 'from' value should be supported` is 240 subtests in `css/css-grid` and 1,784 in
+   `css/css-values`, which looks like one fat lever. The harness line is
+   `assert_true(CSS.supports(property, from))`, and the subjects are `<flow-tolerance>` (grid-lanes /
+   masonry) and `calc-size()`. Both are pre-shipping. **Refused with the reason attached**, per
+   t1273's seventh aperture mode, so they are not re-discovered as a bargain a third time.
+
+3. ⭐ **A GRID DIVE STOPPED BY THE TEST'S OWN `<meta name=assert>`, and stopping was the tick's best
+   decision.** `assert_in_array: gridTemplateColumns value "…" not in array […]` is **584 subtests**
+   across three shapes, and the readings looked like one mechanism:
+
+   ```text
+     value "60px 70px 0px 0px 100px" not in array ["60px 70px"]     <- extra 0px tracks
+     value "110px"                   not in array ["none"]
+     value "minmax(100px, 1fr)"      not in array ["800px"]         <- SPECIFIED where USED is wanted
+   ```
+
+   The obvious reading of the first two is *"we list implicitly-created tracks and Chrome does not"*,
+   and `used_track_list_css` does emit every track taffy computed. Then the file itself:
+
+   > `<meta name="assert" content="This test checks that resolved values for 'grid-template-columns'
+   > and 'grid-template-rows' list tracks implicitly created.">`
+
+   **The exact opposite.** Implicit tracks MUST be listed; the `0px 0px` extras are a different
+   defect, and a fix built on the first reading would have removed correct behaviour to satisfy a
+   misread histogram. The third shape (`minmax(100px, 1fr)` where `800px` is wanted) is a *third*
+   mechanism — the used-value arm not firing at all. **One histogram row, at least three causes**
+   (t1179-1181, t1276-1281), and the ranking work is a measurement pass, not a patch.
+
+NEXT, ranked from what this tick measured.
+(a) ⭐⭐⭐ **`element.animate()` DOES NOT INTERPOLATE** — carried from t1287 and still the largest
+    single lever on the board: the WAAPI shim writes `el.style[prop]` and fast-forwards to the last
+    frame in a microtask. It is the *Web Animations* leg of all 194 `*-interpolation.html` files
+    across twelve areas, and 105 of `css/css-position`'s remaining failures alone.
+    ⚠ **Scoped and NOT taken this tick, with the reason: it needs the ANIMATION CLOCK.** Synthesising
+    a real CSS animation would make a page's `animate()` freeze at progress 0 forever (the clock is
+    always 0), which is the `opacity: 0` reveal-hack problem again — a capability traded for another,
+    which THE RATCHET refuses. The honest order is **clock first, then WAAPI**.
+(b) **Split the 584-subtest grid serialization row into its three causes** with a per-shape probe
+    before touching `used_track_list_css`.
+(c) Carried: transforms composed onto a stuck position; `writing-mode` is a SUBSYSTEM;
+    `g_hscroll_carousel` is RED on `main` and outside the wall (t1282); the host's view-changed
+    signature carries no `scroll_x` (t1286).
+
+WIKI: none — this tick changed no engine source. Its durable content is an AUDIT (`WALL-AUDIT.md`
+#49) and three measurements recorded in this journal entry; the one generalisable lesson — *read the
+test's own `<meta name=assert>` before believing a histogram* — already exists in the wiki as "an
+area is not a cause" and is strengthened here rather than restated as a new mechanism.

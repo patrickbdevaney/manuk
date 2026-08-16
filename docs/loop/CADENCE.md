@@ -11,12 +11,12 @@
 
 | | value | over |
 |---|---|---|
-| ticks landed | **980** | ticks 1–1286 |
-| median tick cycle | **30m** | 979 intervals |
+| ticks landed | **981** | ticks 1–1287 |
+| median tick cycle | **30m** | 980 intervals |
 | median, last 10 | **55m** | 10 intervals |
 | fastest / slowest | 5s / 5.4d | |
-| **ticks per hour** | **1.12** | 870.5h elapsed |
-| median verify wall | **63s** | 919 ticks |
+| **ticks per hour** | **1.13** | 871.0h elapsed |
+| median verify wall | **63s** | 920 ticks |
 | wall trend | 39s → 17m — getting slower ⚠️ | first 3 vs last 3 |
 
 The **cycle** is the real unit: implement → debug → verify wall → land. The wall is only part of
@@ -31,7 +31,7 @@ it, and a wall that grows taxes every future tick, so it is tracked separately f
 * **✅ rows in the capability ledger**: 144 → **642**
 * **Bar 0 — oracle hangs**: 0 of 265 sites
 
-**454 of 980 ticks** (46%) moved a
+**455 of 981 ticks** (46%) moved a
 user-visible capability. The rest were instruments, infrastructure and corrections — and the
 ledger says the corrections were not overhead: three of its top three priorities were phantoms,
 and finding that out redirected everything after it.
@@ -90,8 +90,8 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 
 ## What a capability costs
 
-* **454** capability ticks, median cycle **30m**
-* median diff per tick: **+276 / −34** lines across 8 files
+* **455** capability ticks, median cycle **30m**
+* median diff per tick: **+275 / −34** lines across 8 files
 
 ## Every tick
 
@@ -1077,5 +1077,6 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 | **1284** | 2026-08-16 09:50 | 43m | capability | 17m | +453/−162 | 487 | 81 | 56.0% · | the `Client` in `getBoundingClientRect` was never implemented (2026-08-16) |
 | **1285** | 2026-08-16 10:33 | 43m | capability | 17m | +491/−166 | 488 | 81 | 56.0% · | the coordinate boundary, the other way round: `elementFromPoint` took a CLIENT point and h |
 | **1286** | 2026-08-16 11:31 | 59m | capability | 17m | +650/−217 | 489 | 81 | 56.0% · | `window.scrollTo` was a request nobody performed, so the document scroll never reached lay |
+| **1287** | 2026-08-16 12:03 | 32m | capability | 17m | +174/−34 | 489 | 81 | 56.0% · | `composite: add` was not implemented, so every additive keyframe REPLACED the value it was |
 
 *`·` after a WPT figure means **carried forward**, not measured this tick.*
