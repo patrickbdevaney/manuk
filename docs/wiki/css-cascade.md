@@ -3808,3 +3808,69 @@ entire delta is two `*-interpolation.html` files whose **subtest count** changed
 directory run in isolation gives `1094/1840` on **both** binaries. A transition-timing test's subtest
 count depends on its position in the batch, so only fixed-denominator directories are comparable
 across a full-area run.
+
+## Sampling an animation at a time is not a clock (t1301)
+
+An engine with no compositor timeline cannot show you the in-between frames of an animation as time
+passes. It can still answer *"what value does this animation HAVE at time T"* — and those are different
+questions. Conflating them cost this project a standing mis-ranked lever for two constitution checks.
+
+### What the web's animation tests actually do
+
+WPT's `css/support/interpolation-testcommon.js` backs all 194 `*-interpolation.html` files across twelve
+areas. It has four legs, and **not one of them advances a clock**:
+
+| leg | how it pins the sample |
+|---|---|
+| CSS Transitions | `transition-duration: 100s` + `transition-delay: **-50s**` — 50s in at t=0 |
+| CSS Transitions with `all` | same |
+| CSS Animations | `animation-duration: 100s` + `animation-delay: **-50s**` |
+| Web Animations | `animation.pause(); animation.currentTime = 50 * 1000` |
+
+Every leg lands at progress **0.5 at time zero**, then maps 0.5 onto the progress it actually wants with
+`createEasing(at)`, which emits exactly four shapes: `steps(1, end)` for 0, `steps(1, start)` for 1,
+`linear` for 0.5, and `cubic-bezier(0, b, 1, b)` otherwise.
+
+⚠⚠⚠ **So "we need an animation clock first" was priced from the word *animation*, not from the failing
+mechanism.** A clock is real work for pages that genuinely animate; it is not what gates these subtests,
+and ranking it as a prerequisite deferred a fix that was available immediately. This is the same rule
+constitution check #117 wrote for refusals — *justify it by the failing message, not by the subject* —
+applied one level up, to a **prerequisite** instead of a refusal.
+
+### The defect
+
+`element.animate()` fast-forwarded: a microtask applied the LAST keyframe whenever `fill` was
+`forwards`/`both`, and `currentTime` was a plain data property. A test could write `50000`, read `50000`
+straight back, and the element would not move — the *wrong answer of the right type*. That is why a
+probe case asserting `currentTime` round-trips PASSED while the case asserting the sampled value FAILED.
+
+`currentTime` is now an accessor whose setter samples: progress `currentTime / duration`, through the
+effect's easing, then the value between the two surrounding keyframes.
+
+⚠ **The guard is half the fix, and without it the sampling is invisible.** The fast-forward is queued on
+a microtask; the harness pauses and seeks *synchronously*, so the microtask ran afterwards and stamped
+the last keyframe over the sample just taken. `_settle` now refuses a `paused` or `idle` animation.
+
+### Interpolable vs discrete is decided by the numeric SKELETON
+
+Split each endpoint into its numbers and the text between them. `10px 20px` and `20px 30px` share the
+skeleton `["", "px ", "px"]`, so the numbers interpolate pairwise. `1fr 1fr 1fr` and `2fr 2fr` do not —
+different token counts — so the pair is **discrete** and holds `from` until progress 0.5, then takes
+`to`. That is precisely WPT's `expectFlip`, and getting it wrong is invisible: interpolating a
+non-interpolable pair still yields a plausible string, and roughly half the assertions in every
+interpolation file expect the untouched `from` value.
+
+### ⚠⚠ Two ways this gate was vacuous, both found by running the mutation rather than reasoning
+
+- The midpoint case first read the computed value **inline**. Read there it is `0.5` even with the
+  fast-forward still armed, so removing the `_settle` guard left the gate **green**. It now reads after a
+  microtask — the window WPT measures in.
+- The assertions are `contains` checks, and **`steps:0` is a prefix of the wrong answer `steps:0.5`**, so
+  ignoring easing also stayed green. Numeric readings are bracketed now: `steps:[0]`, `midsample:[0.5]`.
+
+### ⚠⚠⚠ And read the LEG's distinct failing names, never the area total
+
+`css/css-grid` run twice on the **same binary** gave `7243/13928` and `7487/14215` — a ±250 spread,
+larger than the +242 this fix appeared to buy. The stable key is distinct failing subtest names for the
+leg the fix touches: **Web Animations 282 → 111 → 110**, against a same-binary churn floor of ~40 names.
+An area total on this area cannot resolve a change this size; do not quote one.

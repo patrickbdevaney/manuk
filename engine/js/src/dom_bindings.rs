@@ -18228,6 +18228,136 @@ const WINDOW_PRELUDE: &str = r#"
                 }
             };
 
+            // ── SAMPLING AN ANIMATION AT A TIME, which is the whole of what the web's animation
+            //    tests ask for and is NOT the same thing as a clock (t1301).
+            //
+            //    WPT's `interpolation-testcommon.js` never lets time pass: three of its four legs
+            //    set a NEGATIVE delay (`duration:100s`, `delay:-50s` → 50s in at t=0) and the
+            //    Web Animations leg does `animation.pause(); animation.currentTime = 50000`. Each
+            //    lands at progress 0.5 and then maps 0.5 to the progress it actually wants with an
+            //    easing. So the question is always *"what value does this animation HAVE at time
+            //    T"*, never *"advance it"*.
+
+            // `steps(1,end)` / `steps(1,start)` / `linear` / `cubic-bezier(a,b,c,d)` — exactly the
+            // four shapes `createEasing` emits, plus the CSS keywords that mean the same curves.
+            var CUBIC_KEYWORDS = {
+                'ease': [0.25, 0.1, 0.25, 1], 'ease-in': [0.42, 0, 1, 1],
+                'ease-out': [0, 0, 0.58, 1], 'ease-in-out': [0.42, 0, 0.58, 1]
+            };
+            var bezierY = function (x1, y1, x2, y2, x) {
+                // Solve x(t) = x for t by bisection, then return y(t). Bisection rather than
+                // Newton because the control points here are author-supplied and a zero derivative
+                // is legal; 30 halvings is ~1e-9, far below any serialized value's precision.
+                var cx = function (t) {
+                    var u = 1 - t;
+                    return 3 * u * u * t * x1 + 3 * u * t * t * x2 + t * t * t;
+                };
+                var lo = 0, hi = 1, t = x;
+                for (var i = 0; i < 30; i++) {
+                    t = (lo + hi) / 2;
+                    if (cx(t) < x) { lo = t; } else { hi = t; }
+                }
+                var u = 1 - t;
+                return 3 * u * u * t * y1 + 3 * u * t * t * y2 + t * t * t;
+            };
+            var applyEasing = function (easing, p) {
+                if (!easing || easing === 'linear') { return p; }
+                var e = String(easing).trim();
+                var m = /^steps\(\s*(\d+)\s*(?:,\s*(jump-start|jump-end|jump-none|jump-both|start|end)\s*)?\)$/.exec(e);
+                if (m) {
+                    var n = parseInt(m[1], 10) || 1;
+                    var pos = m[2] || 'end';
+                    var atStart = (pos === 'start' || pos === 'jump-start');
+                    var step = Math.floor(p * n);
+                    if (atStart) { step += 1; }
+                    if (p >= 1) { step = atStart ? n : n; }
+                    if (p <= 0) { step = atStart ? (p < 0 ? 0 : 1) : 0; }
+                    return Math.min(Math.max(step / n, 0), 1);
+                }
+                var c = /^cubic-bezier\(([^)]*)\)$/.exec(e);
+                var pts = c ? c[1].split(',').map(parseFloat) : CUBIC_KEYWORDS[e];
+                if (pts && pts.length === 4 && pts.every(function (v) { return isFinite(v); })) {
+                    return bezierY(pts[0], pts[1], pts[2], pts[3], Math.min(Math.max(p, 0), 1));
+                }
+                return p;
+            };
+
+            // ⚠ **THE SKELETON DECIDES INTERPOLABLE vs DISCRETE, and getting that split right is
+            //    most of the correctness here.** Split each endpoint into its numbers and the text
+            //    between them. `10px 20px` and `20px 30px` share the skeleton `["", "px ", "px"]`,
+            //    so the numbers interpolate pairwise. `1fr 1fr 1fr` and `2fr 2fr` do NOT — different
+            //    token counts — so the pair is DISCRETE and holds `from` until progress 0.5, then
+            //    `to`. That is precisely WPT's `expectFlip`, and it is why a "wrong" answer here
+            //    would silently pass half the assertions in every interpolation file.
+            var NUM_RE = /-?(?:\d+\.?\d*|\.\d+)(?:e[-+]?\d+)?/gi;
+            var skeleton = function (v) {
+                var nums = [], text = [], last = 0, m;
+                NUM_RE.lastIndex = 0;
+                while ((m = NUM_RE.exec(v)) !== null) {
+                    text.push(v.slice(last, m.index));
+                    nums.push(parseFloat(m[0]));
+                    last = m.index + m[0].length;
+                }
+                text.push(v.slice(last));
+                return { nums: nums, text: text };
+            };
+            var interpolateValue = function (from, to, p) {
+                var a = String(from), b = String(to);
+                var sa = skeleton(a), sb = skeleton(b);
+                var same = sa.nums.length === sb.nums.length && sa.nums.length > 0
+                    && sa.text.length === sb.text.length
+                    && sa.text.every(function (t, i) { return t === sb.text[i]; });
+                if (!same) { return p < 0.5 ? a : b; }   // discrete — flip at the halfway point
+                var out = '';
+                for (var i = 0; i < sa.nums.length; i++) {
+                    var v = sa.nums[i] + (sb.nums[i] - sa.nums[i]) * p;
+                    // Trim float noise without truncating real precision: 0.1+0.2 must not
+                    // serialize as 0.30000000000000004, and 0.5 must stay "0.5".
+                    out += sa.text[i] + String(parseFloat(v.toFixed(6)));
+                }
+                return out + sa.text[sa.text.length - 1];
+            };
+
+            // The value each animated property has at overall progress `p`, given keyframes whose
+            // offsets default to an even spread. Returns a frame-shaped object so it can go through
+            // `applyFrame` like any other.
+            var sampleFrames = function (frames, p) {
+                if (!frames.length) { return null; }
+                var offsetOf = function (f, i) {
+                    return (typeof f.offset === 'number') ? f.offset
+                        : (frames.length === 1 ? 1 : i / (frames.length - 1));
+                };
+                // Which properties are animated at all — the union, so a property named on only one
+                // keyframe still resolves against its neighbour.
+                var props = {};
+                frames.forEach(function (f) {
+                    for (var k in f) {
+                        if (k !== 'offset' && k !== 'easing' && k !== 'composite') { props[k] = 1; }
+                    }
+                });
+                var out = {};
+                for (var prop in props) {
+                    var pts = [];
+                    frames.forEach(function (f, i) {
+                        if (f[prop] !== undefined) { pts.push({ o: offsetOf(f, i), v: f[prop], e: f.easing }); }
+                    });
+                    if (!pts.length) { continue; }
+                    if (pts.length === 1 || p <= pts[0].o) { out[prop] = pts[0].v; continue; }
+                    if (p >= pts[pts.length - 1].o) { out[prop] = pts[pts.length - 1].v; continue; }
+                    for (var i = 0; i < pts.length - 1; i++) {
+                        if (p >= pts[i].o && p <= pts[i + 1].o) {
+                            var span = pts[i + 1].o - pts[i].o;
+                            var local = span > 0 ? (p - pts[i].o) / span : 0;
+                            // A per-keyframe `easing` governs the segment that STARTS at it.
+                            out[prop] = interpolateValue(pts[i].v, pts[i + 1].v,
+                                                         applyEasing(pts[i].e, local));
+                            break;
+                        }
+                    }
+                }
+                return out;
+            };
+
             var Animation = function (el, frames, options) {
                 var opts = (typeof options === 'number') ? { duration: options } : (options || {});
                 var fill = opts.fill || 'none';
@@ -18237,8 +18367,35 @@ const WINDOW_PRELUDE: &str = r#"
                 this.timeline = null;
                 this.playbackRate = 1;
                 this.playState = 'running';
-                this.currentTime = 0;
                 this.startTime = 0;
+                var duration = (typeof opts.duration === 'number' && isFinite(opts.duration))
+                    ? opts.duration : 0;
+                var curTime = 0;
+                // ⚠⚠⚠ **`currentTime` IS AN ACCESSOR, AND THAT IS THE FIX.** It used to be a plain
+                // data property: a test could write `50000` to it, read `50000` back, and the
+                // element's style would not move — the *wrong answer of the right type*, which is
+                // why P6 of t1301's probe passed while P5 failed. Writing it now SAMPLES.
+                Object.defineProperty(this, 'currentTime', {
+                    configurable: true, enumerable: true,
+                    get: function () { return curTime; },
+                    set: function (v) {
+                        curTime = (v === null || v === undefined) ? null : Number(v);
+                        self._sample();
+                    }
+                });
+                // The value this animation HAS at `currentTime`, written through to the element.
+                // Progress is clamped into [0,1] because `fill` decides what happens outside the
+                // active interval and both ends of the harness's expectations (`at` of -0.3 and
+                // 1.5) live there.
+                this._sample = function () {
+                    if (!frames.length || curTime === null) { return; }
+                    var p = duration > 0 ? curTime / duration : (curTime >= 0 ? 1 : 0);
+                    var before = p < 0, after = p >= 1 && duration > 0;
+                    if (before && !(fill === 'backwards' || fill === 'both')) { return; }
+                    if (after && !(fill === 'forwards' || fill === 'both')) { return; }
+                    p = Math.min(Math.max(p, 0), 1);
+                    applyFrame(el, sampleFrames(frames, applyEasing(opts.easing, p)));
+                };
                 this.id = opts.id || '';
                 this.pending = false;
                 this.replaceState = 'active';
@@ -18250,21 +18407,30 @@ const WINDOW_PRELUDE: &str = r#"
                 this.ready = Promise.resolve(this);
 
                 this._settle = function () {
-                    if (self.playState === 'finished') { return; }
-                    if ((fill === 'forwards' || fill === 'both') && frames.length) {
-                        applyFrame(el, frames[frames.length - 1]);
-                    }
+                    // ⚠ **A PAUSED OR CANCELLED ANIMATION IS NOT SETTLED**, and that guard is half
+                    // the fix. `animate()` queues `_settle` on a microtask because there is no
+                    // compositor timeline to finish it; the harness then calls `pause()` and seeks
+                    // SYNCHRONOUSLY, so without this the microtask ran afterwards and stamped the
+                    // last keyframe over the sample that was just taken — which is exactly why a
+                    // seek to the midpoint reported the END value (t1301 probe P5).
+                    if (self.playState === 'finished' || self.playState === 'paused'
+                        || self.playState === 'idle') { return; }
                     self.playState = 'finished';
-                    self.currentTime = (typeof opts.duration === 'number') ? opts.duration : 0;
+                    self.currentTime = duration;
                     finRes(self);
                     if (typeof self.onfinish === 'function') {
                         try { self.onfinish({ type: 'finish', target: self }); } catch (e) {}
                     }
                 };
                 this.play = function () { if (self.playState !== 'finished') { self.playState = 'running'; } return self; };
-                this.pause = function () { self.playState = 'paused'; };
+                // Pausing HOLDS the animation where it is — and, because `_settle` refuses a
+                // paused animation, it is also what stops the queued fast-forward.
+                this.pause = function () { self.playState = 'paused'; self._sample(); };
                 this.reverse = function () { return self; };
-                this.finish = function () { self._settle(); };
+                this.finish = function () {
+                    if (self.playState === 'paused') { self.playState = 'running'; }
+                    self._settle();
+                };
                 this.cancel = function () {
                     self.playState = 'idle'; self.currentTime = 0;
                     var e = new Error('The animation was cancelled.');

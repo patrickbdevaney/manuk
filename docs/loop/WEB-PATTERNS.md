@@ -7472,3 +7472,36 @@ post-resize read. Area `css/css-values` 3230 → 3322, banked but *not* the evid
 denominator bounces ±100 run-to-run (8208 → 7941 → 8033 → 7940 across ticks that never touched
 frames), which is why the claim rides on the isolated file. Gate: `G_IFRAME` (8), RED two ways —
 `pre=300px` without the parent reflow, `vw=204px` without the live terms.
+
+## SCRUBBING AN ANIMATION — pause it, seek it, read the value (t1301)
+
+**The class.** Every scroll-linked hero, every drag-to-dismiss sheet, every video-style progress scrubber
+and every timeline UI in a design tool does the same three things: build an animation, `pause()` it, and
+then write `currentTime` from a pointer or scroll position. GSAP, Motion One, Framer Motion and Web
+Animations by hand all drive that path — the animation is never *played*, it is **positioned**. It is also
+how the entire web platform tests interpolation.
+
+⚠⚠⚠ **"CANNOT ANIMATE OVER TIME" IS NOT "CANNOT SAY WHAT VALUE AN ANIMATION HAS."** With no compositor
+timeline this engine honestly does not render in-between frames as time passes, and it fast-forwarded
+`element.animate()` to its last keyframe. But an unplayed animation still has a well-defined value at any
+`currentTime`, and that value is the entire product for a scrubber. Conflating the two questions is what
+made this look like a subsystem waiting on a clock when it was neither.
+
+The failure shape was the familiar one: `currentTime` was a plain data property, so a caller wrote
+`50000`, read `50000` straight back, and the element did not move. **The wrong answer of the right type** —
+nothing throws, the API confirms the write, and the scrubber is simply frozen at its end state.
+
+⚠ **The queued fast-forward is the second half.** `animate()` settles on a microtask, and a scrubber pauses
+and seeks synchronously — so the microtask ran afterwards and stamped the last keyframe over the value just
+sampled. A `paused` animation is now refused by the settle path. Either half alone buys nothing.
+
+⚠ **Discrete is a behaviour, not a fallback.** A pair that cannot interpolate (`1fr 1fr 1fr` → `2fr 2fr`)
+must hold `from` until progress 0.5 and then take `to`. Interpolating it anyway still yields a plausible
+string, which is exactly why this needs an assertion rather than an eyeball.
+
+**Measured:** `css/css-grid`'s Web Animations leg **282 → 110 distinct failing subtests**, reproduced
+across two runs. ⚠ The area TOTAL is not quoted, because the same binary run twice gave `7243/13928` and
+`7487/14215` — a ±250 spread wider than the change. Gate: `G_WEB_ANIMATIONS` cases 6–8, RED three ways
+(`midsample:[1]` without the settle guard, `discretelow:monospace` with the flip moved off 0.5,
+`steps:[0.5]` with easing ignored). Two of those three mutations first passed against a gate that read its
+value inline and asserted a numeric prefix — both fixed, both recorded in the gate's own header.

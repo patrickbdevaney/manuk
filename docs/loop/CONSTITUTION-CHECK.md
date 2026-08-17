@@ -10344,3 +10344,38 @@ would be exactly the decoration #120 named, so it is escalated below instead.
    until the chain closes.
 
 **Next check due: tick 1307.**
+
+### ⚠⚠⚠ AMENDMENT to check #121 steer #2, made at tick 1301 by measurement — THE ANIMATION CLOCK IS NOT A PREREQUISITE
+
+Steer #2 above (carried unchanged from check #120) ranks the animation clock as the #1 engine lever and
+calls it a **prerequisite**, reasoning that synthesising an animation without a clock would freeze every
+page's `animate()` at progress 0. **t1301 read the harness and that is false for the work it was blocking.**
+
+`css/support/interpolation-testcommon.js` backs all 194 `*-interpolation.html` files across twelve areas,
+and none of its four legs ever advances a clock — three set a NEGATIVE delay (`duration:100s`,
+`delay:-50s`) and the Web Animations leg does `pause()` then writes `currentTime`. All four land at
+progress 0.5 **at time zero** and map it with an easing. The question is always *"what value does this
+animation HAVE at time T"*, never *"advance it"*.
+
+t1301 then landed the Web Animations leg with no clock at all: `css/css-grid`'s Web Animations distinct
+failing subtests **282 → 110**, reproduced across two runs against a ~40-name noise floor.
+
+**The rule this is an instance of is already in this document, and it was not applied to itself.** Check
+#117 wrote: *a refusal on "unshipped spec" grounds must be justified by the FAILING MESSAGE, not by the
+test's subject.* A **prerequisite** is a refusal wearing a schedule's clothes, and this one was priced
+from the word "animation" rather than from what the tests do. Generalised:
+
+> **A PREREQUISITE MUST BE JUSTIFIED BY THE FAILING MESSAGE, EXACTLY LIKE A REFUSAL.** Naming X a
+> prerequisite for Y defers Y indefinitely on the strength of an unmeasured claim, and it reads as
+> planning rather than as the refusal it is.
+
+**Corrected steer #2:** the clock is real, bounded work for pages that genuinely animate over time, and
+it is **no longer ranked as a blocker for the interpolation mass**. The ranked continuation is the
+**CSS-transitions leg of the same harness** — a negative `transition-delay` must land mid-transition,
+engine-side, 486 of `css/css-grid`'s remaining method-attributed failures — then the CSS-animations leg.
+Both are pinned-time sampling, neither needs a clock.
+
+⚠ Also recorded from t1301, because it changes how this area may be reported at all: **`css/css-grid` run
+TWICE ON THE SAME BINARY gave `7243/13928` and `7487/14215`** — a ±250 spread, larger than the +242 the
+tick appeared to buy. Area totals on this area cannot resolve a single tick. Rank and report on **distinct
+failing subtest names for the leg the fix touches**, which is a stable key.

@@ -84704,3 +84704,216 @@ variable subtest counts). Checked before believing the delta rather than after.
 So the claim this tick carries is the **isolated, fixed-denominator** one — `viewport-units-invalidation`
 alone, run in its own directory: **24/24**, deterministic, no shared batch. The +92 area row is
 consistent with it and is banked, but it is not the evidence.
+
+## Tick 1301 — an animation was FAST-FORWARDED to its last keyframe, and the whole interpolation harness samples at a PINNED time (2026-08-17)
+
+TICK SHAPE: capability. Board re-run at the top of this tick: **unchanged** (★ CSS-LAYOUT,
+`css/css-grid` #1 at 7,701 failing / 47.0%; `css/css-values` now reads 4,618 / 41.8%, which is t1300
+landing in the ledger). The board's own HOW-TO-USE line is the instruction being followed: run
+`manuk-wpt wpt css/css-grid --show-failures` and take the top mechanism.
+
+⚠ Reading the histogram BEFORE writing the hypothesis, deliberately — a histogram row is a SUSPECT,
+not a defect (t1289/t1290 cost three wrong readings in a row on this exact area), and t1292 has since
+repaired the reader that printed 59% of this area's messages EMPTY. So the row is worth reading now in
+a way it was not before.
+
+HISTOGRAM, read. `css/css-grid` 7001/14106 = 49.6%, 643 files. Top assertion shape is
+`assert_equals: width expected` ×2,448 — the geometry mass, which has no direction. Regrouped by
+MARKUP per t1271:
+
+```text
+   width+height failures, writing-mode-implicated   2033   (59%)
+   width+height failures, everything else           1425
+```
+
+⚠ **The #1 mass in the #1 board area is `writing-mode`, and it is REFUSED as a tick with a reason.**
+Twelve `abspos/orthogonal-positioned-grid-descendants-0NN` files carry exactly 100 width failures
+each, and the `grid-items-minimum-width-vertical-rl/lr/orthogonal` set carries another ~220. Checked
+rather than recalled (memory carried this from t1276 and a 20-tick-old claim is a hypothesis):
+**`engine/layout` contains no `writing_mode` identifier at all**, and `stylo_engine.rs:3966` asserts
+`!supports_condition("writing-mode: vertical-rl")` — we decline it honestly through `@supports`. That
+is a subsystem (logical axes through every layout pass), not a tick, and this loop has twice burned a
+session on subsystem-scope layout work. Named here so the next reader does not re-derive it.
+
+Regrouping the REMAINDER by subdirectory names the real tick:
+
+```text
+   grid-lanes/animation                                738
+   animation/grid-template-columns-interpolation.html  255
+   animation/grid-template-rows-interpolation.html     240
+   animation/grid-template-{rows,columns}-composition  190
+   animation/grid-no-interpolation.html                 50
+   ── animation total, in css/css-grid alone          1473
+```
+
+⚠⚠⚠ **AND THE STANDING "ANIMATION CLOCK IS A PREREQUISITE" STEER IS WRONG — I WROTE IT MYSELF SIX
+HOURS AGO AND THE HARNESS REFUTES IT.** Check #120 steer #2 and check #121 steer #2 both rank the
+animation clock #1 and call it a prerequisite, on the reasoning that synthesising an animation without
+a clock would freeze every page's `animate()` at progress 0. **Read
+`css/support/interpolation-testcommon.js` and none of its four legs ever advances a clock:**
+
+| leg | how it pins the sample |
+|---|---|
+| CSS Transitions | `transition-duration: 100s` + `transition-delay: **-50s**` → 50s in at t=0 |
+| CSS Transitions with `all` | same |
+| CSS Animations | `animation-duration: 100s` + `animation-delay: **-50s**` |
+| Web Animations | `animation.pause(); animation.currentTime = 50 * 1000` |
+
+All four land at progress 0.5 **at time zero**, then map 0.5 to the wanted progress with
+`createEasing(at)` — `steps(1,end)` / `steps(1,start)` / `linear` / `cubic-bezier(0,b,1,b)`. So the
+194 `*-interpolation.html` files across twelve areas need **the value an animation has at a given
+time**, and never need time to pass. This is check #117's own rule one level up: *a refusal must be
+justified by the failing message, not by the subject* — the prerequisite was priced from the word
+"animation" rather than from what the harness does. The clock remains real work for pages that
+actually animate; it is **not** what gates these subtests, and the steer is corrected below.
+
+PROBE BEFORE PATCH (`css/css-values/t1301probe`, 8 cases, deleted before landing), and it earned its
+keep by killing two of my own readings:
+
+```text
+   P1  style.gridTemplateColumns = '2fr 2fr'   FAIL — expected "2fr 2fr", got "392px 392px"
+   P2  style.setProperty(grid-template-columns) FAIL — expected "3fr 3fr", got "392px 392px"
+   P3  style.opacity camelCase                 PASS
+   P4  animate() fill:forwards → last keyframe  PASS
+   P5  animate() + pause() + currentTime=50s   FAIL — expected "0.5", got "1"
+   P6  currentTime round-trips, pause() sticks PASS
+   P7  transition, delay:-50s                  FAIL — expected "0.5", got "1"
+   P8  discrete pair below progress 0.5        FAIL — got "none"
+```
+
+⚠ **P1 and P2 are the PROBE being wrong, not the engine.** `getComputedStyle().gridTemplateColumns` on
+a grid container is the **used** value, so `392px 392px` is the correct answer to a question I asked
+badly — the setter reached the cascade in both spellings. Had I patched on the histogram's word
+"grid-template-columns" I would have gone after a working path. ⚠ P8 likewise: its target was never
+`display:grid`, so `none` is partly my fixture.
+
+The engine defects are **P5 and P7, and they are one sentence**: an animation's applied value is not
+computed at its current time. `element.animate()` schedules a microtask that jumps to the LAST
+keyframe whenever `fill` is `forwards`/`both` (`dom_bindings.rs`), and `currentTime`/`pause()` are
+inert data properties — P6 proves they round-trip and P5 proves they change nothing.
+
+HYPOTHESIS / SCOPE. Take the **Web Animations leg only** this tick: 492 of `css/css-grid`'s 1,283
+method-attributed failures, one file, no engine-side transition machinery. `pause()` must stop the
+auto-settle; writing `currentTime` must SAMPLE — progress = `currentTime / duration`, mapped through
+the effect's easing, then the value taken between the two surrounding keyframes. Interpolation is by
+NUMERIC SKELETON: tokenize both endpoint values into numbers and the text between them; if the text
+skeletons match, interpolate each number pairwise (`0`→`1`, `10px`→`20px`); if they do not
+(`1fr 1fr 1fr` → `2fr 2fr`), the pair is **discrete** and flips at local progress 0.5, which is exactly
+`expectFlip`. The CSS-transitions leg (P7, 741 failures here) is engine-side and is NOT in this tick.
+
+PREDICTION: the probe's P5 goes green, and `css/css-grid`'s `Web Animations` failures fall
+substantially from 492. The falsifiable claim for the gate: **an animation that is paused and seeked
+to its midpoint reports the midpoint value, not the end value** — which the current fast-forward can
+never produce.
+
+RESULT — **the Web Animations leg of `css/css-grid` went from 282 distinct failing subtests to 110,
+and it reproduces.** The probe's P5 and P8 both flipped green (3/8 → 5/8; the three that remain are
+P1/P2, which were my own bad expectations, and P7, the CSS-transitions leg this tick scoped out).
+
+⚠⚠⚠ **AND THE AREA TOTAL CANNOT RESOLVE THIS TICK — I RAN THE SAME BINARY TWICE AND THE ERROR BAR IS
+BIGGER THAN THE WIN.**
+
+```text
+   css/css-grid, before                 7001 / 14106
+   css/css-grid, after  (run 1)         7243 / 13928     +242
+   css/css-grid, after  (run 2, SAME binary)  7487 / 14215     +244 vs run 1
+```
+
+**A ±250 spread on the same binary, against a claimed +242.** Reporting `+242` would have been a
+number the instrument cannot produce twice. The reading that IS solid is the one taken on a stable
+key — DISTINCT FAILING SUBTEST NAMES for the leg the fix touches:
+
+```text
+   Web Animations, distinct failing names:  282  →  111 (run 1)  →  110 (run 2)
+   same-binary name churn, everything:      23 appeared / 43 vanished
+```
+
+−171 against a ~40-name noise floor, reproducing to within 1 across two runs. That is the claim. The
+RATCHET mark is banked at the **lower** of the two readings (7243) because the mark is a floor.
+
+REGRESSION CHECK, and it is why the same-binary run was worth its wall-clock. The naive name diff
+showed **61 newly failing / 268 newly passing**, and 61 against the RATCHET is not something to wave
+through. Partitioned:
+- **Web Animations names failing now that were not before: ZERO.** The leg the fix touches did not lose
+  a single subtest.
+- All 19 newly-failing names in the settled run are `CSS Transitions*` legs this tick never touched,
+  and every one of them says `assert_true: 'from' value should be supported expected true got false`
+  — a value-support gap on `repeat(auto-fill, auto)`, which check #120 already recorded and DECLINED as
+  an anti-Pareto trap. It is churn in which files emit those subtests, not a regression.
+
+MECHANISM. `currentTime` was a plain data property: a test could write `50000`, read `50000` back, and
+the element would not move — the *wrong answer of the right type*, and precisely why probe P6 passed
+while P5 failed. It is now an accessor whose setter SAMPLES: progress = `currentTime / duration`,
+mapped through the effect's easing, then the value taken between the two surrounding keyframes.
+
+Three pieces, all new and all in the JS prelude:
+- **`applyEasing`** — `linear`, `steps(n, start|end|jump-*)`, `cubic-bezier(a,b,c,d)` and the four
+  keyword curves. The bezier is solved by BISECTION rather than Newton, because the control points are
+  author-supplied and a zero derivative is legal; 30 halvings is ~1e-9, far below any serialized
+  value's precision.
+- **`interpolateValue`** — splits each endpoint into its numbers and the text between them. Matching
+  skeletons interpolate pairwise (`10px 20px` → `20px 30px`); mismatched ones are **discrete** and flip
+  at 0.5, which is exactly WPT's `expectFlip`.
+- **`sampleFrames`** — resolves keyframe offsets (defaulting to an even spread), unions the animated
+  properties so a property named on only one keyframe still resolves against its neighbour, and honours
+  a per-keyframe `easing` over the segment that starts at it.
+
+⚠ **The second half of the fix is a GUARD, and without it the sampling is invisible.** `animate()`
+queues its fast-forward on a microtask because there is no compositor timeline to finish the animation.
+The harness calls `pause()` and seeks SYNCHRONOUSLY — so the microtask ran afterwards and stamped the
+last keyframe over the sample that had just been taken. `_settle` now refuses a `paused` or `idle`
+animation.
+
+⚠⚠⚠ **THE GATE SHIPPED VACUOUS FOR ONE ITERATION, TWICE OVER, AND BOTH WERE CAUGHT BY ACTUALLY RUNNING
+THE MUTATIONS.**
+1. Case 6 first read `getComputedStyle(mid).opacity` **inline**. Read there the answer is `0.5` even
+   with the fast-forward still armed, so the mutation that removes the `_settle` guard stayed **GREEN**.
+   It now records after a microtask — the same window WPT measures in.
+2. The assertions are `contains` checks, and **`steps:0` is a PREFIX of the wrong answer `steps:0.5`**,
+   so the easing mutation ALSO stayed green. The numeric readings are now bracketed (`steps:[0]`,
+   `midsample:[0.5]`).
+Neither would have been found by reasoning about the gate; both fell out of running the RED proof and
+watching it pass. *A green that cannot go red measured nothing* — including a green I had just written.
+
+PROVEN RED (three, all measured):
+- drop the `paused`/`idle` guard in `_settle` → `midsample:[1]`
+- move the discrete flip off 0.5 (`p < 0.0`) → `discretelow:monospace`
+- ignore `easing` (`applyEasing` returns `p`) → `steps:[0.5]`
+
+CONTROLS: `g_web_animations` green as a whole (all eight cases, the five pre-existing ones unchanged);
+`g_animation`, `g_animation_composition`, `g_animatable_on_element` are the neighbouring gates and ride
+the wall.
+
+WIKI: `docs/wiki/css-cascade.md` — "Sampling an animation at a time is not a clock", with the harness
+table and why the `_settle` guard is half the fix.
+
+NEXT, ranked.
+(a) ⭐⭐⭐ **The CSS-TRANSITIONS leg — a NEGATIVE `transition-delay` must land mid-transition.** Probe
+    P7, and 486 of `css/css-grid`'s remaining method-attributed failures across three of the harness's
+    four legs (`CSS Transitions` 229, `with transition-behavior` 128, `with transition-property:all`
+    128). Engine-side, not the JS prelude. This is the direct continuation and it is bigger than what
+    landed here.
+(b) ⭐⭐ The CSS-ANIMATIONS leg — `@keyframes` with `animation-delay: -50s`, 58 failures here. Same
+    mechanism as (a) one origin over.
+(c) ⭐⭐⭐ `writing-mode` is UNIMPLEMENTED in `engine/layout` and is the **#1 mass in the #1 board
+    area** — 2,033 of 3,458 grid geometry failures. Refused as a tick above with a reason; it needs a
+    decomposition session, and it should be escalated as a scoped subsystem rather than nibbled.
+(d) ⭐⭐ `document.styleSheets` is EMPTY for external sheets — carried from t1296/t1300, still unchanged.
+(e) ⚠ `IFRAME_DOCS` is never cleared between navigations — carried from t1299/t1300.
+
+⚠ HARNESS NOTE (observer-owned, not touched). The first two wall runs of this tick RED'd on
+`G_INTERACT`, which is not its own test — it greps `SHELL_OUT` for the `open`/`switch`/`close` lines
+and REDs when they are absent. `manuk-shell` passed **75/75 in the same run**, and run 1 of the wall
+printed those lines GREEN. Measured directly on this tree rather than assumed, because my change grows
+the JS prelude and tab-open executes the prelude — a real mechanism worth discharging:
+
+```text
+   open    median 4.835ms   worst 10.647ms   (one frame = 16ms)
+   switch  median 0.043ms   worst  6.389ms
+   close   median 0.018ms   worst  0.741ms
+```
+
+All three well inside the frame, and `switch`/`close` match run 1 to the third decimal. So the RED is a
+capture/contention artifact (load1 was 16.7, and `verify.sh`'s own comments name `G_INTERACT` and
+`G_RUNTIME_COUNT` as the two gates that intermittently false-RED under a build/load race). Recorded in
+one line per the scope rule; no harness file touched.

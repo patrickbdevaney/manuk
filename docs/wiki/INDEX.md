@@ -929,6 +929,12 @@
   - L3753 · The design, and why the obvious cheap version does not reach
   - L3779 · ⚠⚠⚠ THE SHEET LIST EXISTS THREE TIMES, AND TWO OF THEM ARE NOT THE CASCADE
   - L3800 · What it was worth, and how the number had to be read
+  - L3812 · Sampling an animation at a time is not a clock (t1301)
+  - L3818 · What the web's animation tests actually do
+  - L3840 · The defect
+  - L3854 · Interpolable vs discrete is decided by the numeric SKELETON
+  - L3863 · ⚠⚠ Two ways this gate was vacuous, both found by running the mutation rather than reasoning
+  - L3871 · ⚠⚠⚠ And read the LEG's distinct failing names, never the area total
 
 ## `<dialog>`, `popover`, and the top layer (ticks 194-195)
 `docs/wiki/dialog-and-top-layer.md`
@@ -2239,4 +2245,4 @@
   - L231 · Both named mechanisms are subsystem work
 
 ---
-2146 sections across 22 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+2152 sections across 22 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
