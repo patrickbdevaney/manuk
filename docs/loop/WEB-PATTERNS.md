@@ -7562,3 +7562,32 @@ write; the tell is another path doing the same job measurably better.
 **The rule:** before writing an interpolation, a serialization or a cascade step, ask which existing
 component already answers that question — and if one does, reach it rather than re-derive it, even when
 reaching it costs a host hook and re-deriving it costs twenty lines.
+
+## THE ICON SET — `.icon { fill: currentColor }`, and it cannot work here (t1305)
+
+**The class.** Every modern inline-SVG icon system colours its glyphs from CSS, not from markup:
+`<svg class="icon">` plus `.icon { fill: currentColor }`, so one icon file inherits the surrounding text
+colour, flips with the theme, and changes on hover without touching the DOM. Feather, Heroicons,
+Lucide, Bootstrap Icons, Font Awesome's SVG mode and every chart library that colours series from CSS
+all depend on it. It is also how `stroke-width` is set on stroke-style icon sets.
+
+⚠⚠⚠ **THE ENGINE LOOKS LIKE IT SUPPORTS SVG, AND THE CSS HALF IS ENTIRELY ABSENT.** SVG renders here —
+resvg parses **presentation attributes** itself, so `<rect fill="red">` is correct and every
+attribute-styled graphic is fine. But `getComputedStyle(el).fill` for an element styled by a CSS class
+returns **`""`**: the property does not exist in the cascade at all. Measured, 14 SVG properties,
+`CSS.supports` **0 for 14** — including `fill`. The control (reading the presentation attribute) passes,
+which is exactly what makes the gap invisible from the outside.
+
+**Cause, read from the dependency:** `stylo-0.19.0/properties/longhands.toml` marks the SVG longhands
+`engine = "gecko"` with `struct = "inherited_svg"`. We build the *servo* configuration, so they are
+never generated. `CSS.supports` answering `false` is therefore **honest** — there is no false presence
+to repair, which is why nothing here is gated.
+
+⚠ **Not refused — SCOPED.** Unlike a track-sizing rule buried inside taffy, this one is ours to build:
+resolve the SVG property set in our own cascade layer and hand the results to resvg as presentation
+attributes, which is the interface it already consumes. CSS must beat the attribute, which is the whole
+point of the idiom. That is a subsystem tick and must be taken as one.
+
+⚠ **And the reason it stayed invisible for so long is a metric, not an engine:** `svg` was not a row in
+`WPT-AREAS.tsv` until audit #72 added it. A capability class with no row cannot be ranked, and this one
+was 1,824 failing subtests behind a daily-driver-critical idiom.

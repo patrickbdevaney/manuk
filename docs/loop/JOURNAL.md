@@ -85252,3 +85252,107 @@ NEXT, ranked — **re-ranked by this audit, which is the point of running it.**
 (d) ⭐⭐⭐ The CSS-TRANSITIONS leg — 1,674 across two areas. Subsystem, scoped at t1302.
 (e) ⭐⭐⭐ Publish external stylesheet TEXT to the JS side — carried from t1302.
 (f) ⚠ `svg`'s 39 `TH_TIMEOUT` files; `IFRAME_DOCS` never cleared between navigations (t1299).
+
+## Tick 1305 — `.icon { fill: currentColor }` cannot work: Stylo's SVG longhands are gated to the GECKO build (2026-08-17)
+
+TICK SHAPE: measurement + priced refusal. Board re-run at the top of this tick: **unchanged**
+(★ CSS-LAYOUT). Lever taken from audit #72's re-ranking: `svg`, newly visible at **14.6%** and the
+largest unmeasured population the aperture diff found.
+
+HISTOGRAM. `svg` 313/2137, 472 files. Top assertion shape by a wide margin:
+
+```text
+   assert_true: 'from' value should be supported      522   (29% of the failures)
+   assert_equals: x expected                           33
+   assert_true: expected true got false                31
+   assert_equals: expected Element node <rect …>       28
+```
+
+⚠⚠⚠ **AND CHECK #117'S RULE EARNED ITS KEEP A SECOND TIME — A VERDICT DOES NOT TRAVEL BETWEEN AREAS.**
+Check #120 examined this exact message, `'from' value should be supported`, priced it at 2,024 subtests
+across `css-grid`/`css-values`, found it was `CSS.supports` over `<flow-tolerance>` and `calc-size()` —
+**pre-shipping features** — and DECLINED it as an anti-Pareto trap. Reading that and stopping would have
+been the obvious move. Reading the *failing message in THIS area* instead gives:
+
+```text
+   stroke-width  stroke-dasharray  stroke-dashoffset  fill-rule  color-interpolation
+   path-length   cx  cy  r  rx  ry  x  y
+```
+
+**None of those is pre-shipping.** `stroke-width`/`fill-rule` are SVG 1.1, and `cx`/`cy`/`r`/`x`/`y`/
+`rx`/`ry` are SVG2 geometry properties that have shipped in Chrome for years. Check #117 wrote *a
+refusal must be justified by the FAILING MESSAGE, not by the test's subject*; the sharper form this tick
+adds is: **and not by the same message's verdict in a different area.**
+
+PROBE BEFORE PATCH — 16 cases, and it was worse than the histogram said:
+
+```text
+   CSS.supports(<prop>, <value>) for 14 SVG properties      0 / 14      ALL false
+   computed `r` round-trips after style.setProperty          FAIL
+   computed `stroke-width` round-trips                       FAIL
+```
+
+⭐ **`fill` fails too**, which the histogram never showed because the interpolation files that would
+have named it score zero out of zero. So it is not thirteen animated properties, it is **the whole SVG
+property set, absent from the cascade.** Re-probed against the real-world idiom rather than the suite:
+
+```text
+   I1  fill from a CSS class reaches the computed style    FAIL — expected "rgb(0, 128, 0)", got ""
+   I2  stroke-width from a CSS class                       FAIL — expected "3px", got ""
+   I3  a CSS rule BEATS the fill presentation attribute    FAIL — got ""
+   I4  CONTROL: the fill presentation attribute is read    PASS
+```
+
+> ⚠⚠⚠ **`.icon { fill: currentColor }` — the dominant modern icon-system idiom — CANNOT WORK.**
+> Every inline-SVG icon set, every chart library that colours series from CSS, every `currentColor`
+> theming trick. The control passing is what makes this precise: SVG renders fine from *presentation
+> attributes* (resvg parses those itself), so the engine looks like it supports SVG, and the CSS half
+> is missing entirely.
+
+CAUSE, read from the dependency rather than inferred. In `stylo-0.19.0/properties/longhands.toml`:
+
+```toml
+[stroke-width]
+type = "SVGWidth"
+struct = "inherited_svg"
+engine = "gecko"        # ← and the same on fill, stroke, fill-rule, cx, cy, r, rx, ry, x, y …
+```
+
+**Stylo's SVG longhands are generated for the GECKO build only.** We build the *servo* configuration,
+so these properties do not exist — which also means `CSS.supports` answering `false` is **honest**, not
+a false absence. There is nothing dishonest to repair, which is why no gate is added (and why
+`G_SUPPORTS_HONESTY` has nothing to say here).
+
+PRICED AGAINST STATUS.md's LADDER, so this is a decision and not an evasion:
+
+| # | option | verdict here |
+|---|---|---|
+| 1 | flip a pref | **does not exist** — `engine = "gecko"` is a codegen gate, not a runtime pref |
+| 2 | a named, minimal flag delta in the vendored source | **NOT one token.** It is ~30 longhands *plus* the `inherited_svg` style struct, which the servo build does not have. And STATUS.md already re-priced this exact move for `:has()`: the workspace depends on `stylo = "0.19"` **from crates.io**, so taking Gecko's answer means `[patch.crates-io]` → a local fork, re-applied on every bump. |
+| 3 | a hand-rolled supplement | **the viable path, and it is a subsystem.** Resolve the SVG property set in our own cascade layer (the selector engine that backs `querySelectorAll` is the same one STATUS.md nominated for the `:has()` supplement) and hand the resolved values to resvg as presentation attributes — which is exactly the interface resvg already consumes. |
+| 4 | hand-rolled module | not needed |
+
+⚠ **So it is NOT REFUSED — it is SCOPED, and the distinction matters** because unlike t1294's
+`minmax(auto, <smaller>)` this one is *ours to build*, sits behind a daily-driver-critical idiom, and
+option 3 has a clean seam (resvg already takes presentation attributes). What is refused is doing it as
+an end-of-session tick.
+
+```text
+  WPT MOVEMENT: none, and none is claimed — this tick measures, attributes and prices.
+  Ledger rows from audit #72 stand: svg 313/2137.
+```
+
+GATE: none, deliberately. A gate on today's `""` would PIN THE ENGINE TO A BUG (t1004); a gate on the
+right value would be permanently red, which the wall reads as a regression. The falsifiable artefacts
+are the two probes reproduced verbatim above, plus the three lines of `longhands.toml`.
+
+NEXT, ranked.
+(a) ⭐⭐⭐ **THE SVG CSS-PROPERTY SUPPLEMENT** (option 3 above) — scoped as a subsystem tick: our own
+    cascade pass for the SVG property set, delivered to resvg as presentation attributes, with CSS
+    correctly beating the attribute. Unblocks `svg`'s 522-subtest `supports` wall AND the icon idiom.
+    ⚠ Must be scoped as a subsystem by whoever takes it, not attempted from the `expected "" ` row.
+(b) ⭐⭐⭐ Route Web Animations sampling through Stylo's `Animate` (t1303) — 450 in `css/css-transforms`,
+    fixes a CLASS. **The largest bounded, single-layer lever standing.**
+(c) ⭐⭐⭐ `wai-aria` 54.8% / `accname` 67.8% / `html-aam` 75.5% — constitutional invariant I3.
+(d) ⭐⭐⭐ The CSS-TRANSITIONS leg — 1,674 across two areas. Subsystem, scoped at t1302.
+(e) ⭐⭐⭐ Publish external stylesheet TEXT to the JS side — carried from t1302.

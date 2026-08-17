@@ -3970,3 +3970,50 @@ t1301 priced itself at −171 distinct failing names in `css/css-grid`, correctl
 total because the same binary twice spread ±250. It never ran `css/css-transforms`, whose denominator is
 identical run-to-run — where the same fix is **+605** on a number needing no error bar. A fix to a
 harness *leg* moves every area that harness backs; find the area that can actually resolve it.
+
+## The SVG property set is absent from the cascade, and `CSS.supports` is honest about it (t1305)
+
+SVG renders in this engine because **resvg parses presentation attributes itself**: `<rect fill="red">`
+is correct, and so is every attribute-styled graphic. What does not exist is the CSS half —
+`getComputedStyle(el).fill` for an element styled by a CSS rule returns `""`.
+
+Measured: `CSS.supports` is **false for all 14** of `fill`, `stroke-width`, `stroke-dasharray`,
+`stroke-dashoffset`, `fill-rule`, `color-interpolation`, `path-length`, `cx`, `cy`, `r`, `rx`, `ry`,
+`x`, `y`. Not incomplete — absent.
+
+### Cause: a codegen gate in the dependency, not a pref
+
+```toml
+# stylo-0.19.0/properties/longhands.toml
+[stroke-width]
+type   = "SVGWidth"
+struct = "inherited_svg"
+engine = "gecko"          # ← same on fill, stroke, fill-rule, cx, cy, r, rx, ry, x, y, …
+```
+
+Stylo generates its SVG longhands for the **gecko** build only; we build **servo**. So this is not
+ladder option 1 (there is no runtime pref) and not really option 2 either: it is ~30 longhands *plus* the
+`inherited_svg` style struct the servo build lacks, and STATUS.md already re-priced "take Gecko's answer"
+for `:has()` — the workspace depends on `stylo = "0.19"` from crates.io, so it means `[patch.crates-io]`
+→ a local fork, re-applied on every bump.
+
+⭐ **`CSS.supports` answering `false` is therefore HONEST** — a genuine absence honestly reported, not the
+false-presence shape. Nothing here is gated, because a gate on today's `""` would pin the engine to a bug
+and a gate on the right value would be permanently red.
+
+### The viable path is option 3, and it has a clean seam
+
+Resolve the SVG property set in **our own** cascade layer — the same selector engine that backs
+`querySelectorAll`, which STATUS.md already nominated for the `:has()` supplement — and hand the resolved
+values to resvg **as presentation attributes**, the interface it already consumes. CSS must win over the
+attribute; that is the whole point of `.icon { fill: currentColor }`. Subsystem-sized; scope it as one.
+
+### ⚠ A verdict does not travel between areas
+
+`svg`'s top failure message is `assert_true: 'from' value should be supported` (522 subtests, 29%).
+Constitution check #120 examined that *same message*, priced it at 2,024 subtests in
+`css-grid`/`css-values`, found it was `CSS.supports` over `<flow-tolerance>` and `calc-size()` —
+pre-shipping features — and correctly declined it. In `svg` the same message is `stroke-width`,
+`fill-rule` and the SVG2 geometry properties, all shipped in Chrome for years. Check #117's rule (*cite
+the failing message, not the test's subject*) needs one more clause: **and not the same message's verdict
+in a different area.**
