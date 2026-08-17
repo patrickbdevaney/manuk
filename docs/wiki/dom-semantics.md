@@ -3757,3 +3757,51 @@ css-ui, css-text, css-position, css-flexbox, css-color and css-display.
 pass rate dropped 6 points, because 3,483 subtests that never existed came into being and pass at a
 lower rate. Read the count. A file that throws in `setup` scores zero out of *zero*, which is the most
 flattering denominator there is.
+
+## A style read INSIDE a frame must reflow the frame's PARENT first (t1300)
+
+`getComputedStyle(el)` forces a reflow before it answers, because the answer depends on layout. In the
+main document that is `force_reflow_if_stale()`, guarded on the document's mutation counter so an
+untouched page costs one integer compare. A read on a node inside an `<iframe>` routed somewhere else
+entirely — `with_style_in` → `force_frame_reflow` → the host's `frame_forced_reflow`, which lays out
+the **child**.
+
+So the child was refreshed and the parent never was. That leaves the two facts that decide a frame's
+viewport as the two facts nothing recomputed:
+
+- **the `<iframe>` element's own box.** A frame the script appended one line earlier has no box at all
+  until the parent lays out again, so it was measured at the HTML default **300×150** forever — even
+  though the page's own stylesheet said `iframe { width: 200px }`.
+- **anything the parent's CSS just changed about it.** `f.classList.add('resize')` mutates the
+  *parent*. The child's own re-cascade guard is a conjunction over `(mutation_seq, width, height)` and
+  correctly saw nothing change, so the frame kept answering at its old width.
+
+### The order is the fix
+
+`force_frame_reflow` now calls `force_reflow_if_stale()` **before** it calls the host hook. The two
+re-entrancy flags are separate (`IN_REFLOW` for the document, `IN_FRAME_REFLOW` for the frame), which
+makes the nesting legal in exactly one direction: parent-then-child, never the reverse.
+
+### ⚠ The inset rides ALONG, it is not re-derived — and it must be LIVE, not captured
+
+A frame's viewport is its **content** box (see `frame_content_box`), while layout publishes the
+**border** box. That rule has one home and must keep it, so the bindings do not compute a content box:
+they hand over the fresh border box plus the raw `padding` and `border-width` sums, and the host
+applies `content_from(border, pad, bord)` — the same one-axis subtraction `frame_content_box` uses.
+
+The first design captured that inset on the registry entry when the frame was published, and it is
+worth recording why that is wrong: **a frame the script created in this round was published before the
+parent had ever laid it out**, so its captured inset is `0` and the frame measures at its border box —
+`204px` for a `200px` frame, which is exactly the off-by-two-borders reading `viewport-units-compute`
+already catches. The terms have to be read at the moment of the reflow, not at publish time. The
+captured-inset fields were carried for a while as write-only state; an unread field is a claim nobody
+checks, and they were deleted rather than landed.
+
+### Proven red
+
+`g_iframe` case (8) drives both halves — the appended frame and the reclassed one — through one page:
+
+| mutation | reading |
+|---|---|
+| drop `force_reflow_if_stale()` in `force_frame_reflow` | `pre=300px` (the default; the frame never got a box) |
+| pass `0.0` insets instead of the live terms | `vw=204px` — the border box, caught by the earlier `frame-viewport` assertion |

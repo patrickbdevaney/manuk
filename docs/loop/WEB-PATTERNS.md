@@ -7428,3 +7428,47 @@ already published.
 `expected "200px" but got "300px"` (a frame that exists and is measured, at the HTML default 300x150
 because it has not been laid out yet). Gates: `G_IFRAME` (7) + `G_INLINE_FRAME_DOCUMENT` (4), RED one
 link. Controls: `domparsing` 234/1294, `css/cssom` 2795/3507, both unmoved.
+
+## The RESPONSIVE EMBED — a script appends an `<iframe>`, then the parent's CSS sizes it (t1300)
+
+This closes the link the entry above ended on. That tick left the frame *existing and measured at
+300×150*; this one makes it measure at the width the parent's stylesheet actually gives it.
+
+**The class.** Practically every third-party embed on the open web is injected by script and sized by
+the *host page's* CSS, not by its own markup — Stripe Elements and hosted-checkout frames, ad slots,
+YouTube/Vimeo players, Disqus and comment widgets, Intercom/Zendesk chat launchers, OAuth consent
+frames. The idiom is always the same two steps: `document.createElement('iframe')` + `append`, then a
+rule like `.embed iframe { width: 100% }` — or a class swapped later to react to a breakpoint. The
+frame's own content then lays itself out in **viewport units against the frame**, which is what makes
+a responsive embed responsive.
+
+⚠⚠⚠ **A READ FORCES A REFLOW OF THE DOCUMENT IT NAMES — AND THE FRAME IS NOT THAT DOCUMENT.**
+`getComputedStyle` in the main document forced the main document's reflow; inside a frame it forced
+the *child's*. Both are correct in isolation, and together they leave the frame's own box — which
+lives in the **parent** — refreshed by nobody. The child re-cascades perfectly at a size that is stale
+or was never measured at all.
+
+The second half is the one that proves it, because no amount of child-side work can produce it:
+`iframe.classList.add('resize')` mutates **nothing in the child**. The child's conjunction guard from
+the entry above is right to see no change; the missing term was never the guard, it was that nobody
+had recomputed the size the guard compares against.
+
+⚠ **The inset must be read LIVE, not captured at publish time.** A frame's viewport is its content
+box, so the border box layout publishes needs `padding + border-width` taken off. Capturing that
+subtraction when the registry entry is published looks equivalent and is not: a frame the script
+created *in this round* is published **before the parent has ever laid it out**, so its captured inset
+is `0` and the frame measures at its border box — 204px for a 200px frame, the same off-by-two-borders
+reading `viewport-units-compute` already catches. The terms travel with the reflow call.
+
+⚠ **Scaffolding that stops being read must be deleted in the same tick that supersedes it.** The
+captured-inset fields survived the switch to live terms as write-only state, and a field written and
+never read is a second opinion about which terms make up a content box — waiting to disagree with the
+one real rule. Same tick, same class: a `styles.clone()` added to dodge a borrow was cloning the whole
+computed-style map once per layout, a performance regression bought for nothing.
+
+**Measured:** `viewport-units-invalidation` **0/24 → 24/24**, run isolated on its own fixed
+denominator — twelve width-ish units and twelve height-ish, each on both the pre-resize and the
+post-resize read. Area `css/css-values` 3230 → 3322, banked but *not* the evidence: that row's
+denominator bounces ±100 run-to-run (8208 → 7941 → 8033 → 7940 across ticks that never touched
+frames), which is why the claim rides on the isolated file. Gate: `G_IFRAME` (8), RED two ways —
+`pre=300px` without the parent reflow, `vw=204px` without the live terms.

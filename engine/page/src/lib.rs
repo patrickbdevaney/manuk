@@ -2600,9 +2600,18 @@ fn frame_content_box(
     let bord_x = s.border_width.left + s.border_width.right;
     let bord_y = s.border_width.top + s.border_width.bottom;
     (
-        (border_box_w - pad_x - bord_x).max(1.0),
-        (border_box_h - pad_y - bord_y).max(1.0),
+        content_from(border_box_w, pad_x, bord_x),
+        content_from(border_box_h, pad_y, bord_y),
     )
+}
+
+/// The one-axis arithmetic behind [`frame_content_box`], split out so the forced-reflow path can
+/// apply the SAME subtraction to terms it measured itself. It is the *rule* that must not be
+/// duplicated, not this line — a caller that has already gathered `padding` and `border-width`
+/// sums for an axis subtracts them here rather than growing a second opinion about which terms
+/// count.
+fn content_from(border_box: f32, pad: f32, bord: f32) -> f32 {
+    (border_box - pad - bord).max(1.0)
 }
 
 /// **Resolve viewport units against THIS frame's viewport for the duration of a child cascade.**
@@ -2844,13 +2853,36 @@ thread_local! {
 /// Called only from the JS bindings, with an arena address that is a key of [`FRAME_REFLOW_PAGES`];
 /// entries are replaced whenever the child set changes.
 #[cfg(feature = "spidermonkey")]
-unsafe extern "C" fn frame_forced_reflow(dom: *mut manuk_dom::Dom) {
+#[allow(clippy::too_many_arguments)]
+unsafe extern "C" fn frame_forced_reflow(
+    dom: *mut manuk_dom::Dom,
+    border_w: f32,
+    border_h: f32,
+    pad_x: f32,
+    pad_y: f32,
+    bord_x: f32,
+    bord_y: f32,
+) {
     FRAME_REFLOW_PAGES.with(|r| {
         let mut reg = r.borrow_mut();
         let Some(e) = reg.get_mut(&(dom as usize)) else {
             return;
         };
         let child = unsafe { &mut *e.page };
+        // ⚠ **THE FRAME'S BOX, AS OF THE PARENT LAYOUT THAT JUST RAN.** The bindings force the
+        // parent's reflow before calling this and hand over the frame element's fresh BORDER box;
+        // `0.0` means the parent has no box for it (not yet laid out), in which case the entry's
+        // published size stands. This is what makes an `<iframe>` the script just appended — or one
+        // whose class the script just changed — measure at its real width instead of the default.
+        // ⚠ The padding/border sums arrive LIVE from the bindings rather than being captured when
+        // the entry was published, because a frame the script created in THIS round was published
+        // before the parent had ever laid it out — a captured inset would be `0` and the frame
+        // would measure at its BORDER box (204px for a 200px frame). `content_from` stays the one
+        // place that decides which terms come off; the bindings only supply them.
+        if border_w > 0.0 && border_h > 0.0 {
+            e.width = content_from(border_w, pad_x, bord_x);
+            e.height = content_from(border_h, pad_y, bord_y);
+        }
         // Idempotent: a run of reads with no mutation AND no resize between them lays out once, not
         // once each. Both terms — see `laid_out_w`.
         if child.dom.mutation_seq() == e.laid_out_at

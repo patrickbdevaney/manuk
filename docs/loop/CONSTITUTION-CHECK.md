@@ -10241,3 +10241,106 @@ which repeating it again would become decoration rather than a steer.
    window's two grid fixes correct rather than plausible.
 
 **Next check due: tick 1299.**
+
+## Check #121 — tick 1299 (2026-08-17)
+
+**Horizon: H0 — Pareto Web Parity.** Exit gate, all four binary, re-read from PART II rather than
+recalled: (1) ~83% WPT subtest pass across categories; (2) differential-oracle viability across all
+four usage-weighted corpora; (3) the headful shell is daily-drivable by its own developer; (4) every
+rendered construct is queryable through the in-process semantic API.
+
+### Did the last 8 ticks move an EXIT-GATE condition, or only the scoreboard?
+
+**Condition (4), almost exclusively — and this window is a single sustained mechanism rather than
+eight independent picks.**
+
+```text
+   t1292  59% of the #1 area's failures printed an EMPTY message   instrument   WPT   0
+   t1293  the grid width mechanism is NOT a near-miss              refusal      WPT   0
+   t1294  fit-content(<length>) did the OPPOSITE of what it says   (1) and (4)  WPT  +?
+   t1295  minmax(auto,<smaller>) — an UPSTREAM boundary, refused   refusal      WPT   0
+   t1296  a scroll container the SCRIPT created could not scroll   (4)          WPT  +
+   t1297  <link rel=stylesheet> is SCRIPT-BLOCKING                 (1) and (4)  WPT  +
+   t1298  a frame is its OWN viewport, cascade frozen at build     (4)          WPT  +
+   t1299  a frame the SCRIPT created still had no document         (4)          WPT  +0
+   t1300  a style read INSIDE a frame never reflowed its PARENT    (4) and (1)  +92 area
+```
+
+⭐ **Five of the last six ticks are ONE chain, and it is the condition-(4) chain.** t1297→t1300 are
+successive links in *"what does the page's own script see when it asks the engine a question."* Each
+one alone reads like a narrow iframe fix; together they are the statement that a construct the script
+CREATED is queryable on the next line — which is condition (4) said in the constitution's own words.
+t1299 banked **WPT +0 and said so**, and t1300 then converted the same chain into `0/24 → 24/24`. The
++0 tick was the load-bearing one; a loop steering on the per-tick metric would have abandoned the
+chain one link before it paid.
+
+⚠ **This is check #120's observation happening a second time, which promotes it from an anecdote to a
+property.** #120 recorded that its three condition-(4) ticks bought nothing on the scoreboard and
+enabled the +532 that followed. The same shape recurred here without being planned for. **The metric
+ranks enabling work last, structurally and always** — so a chain that has stated its next link should
+be finished on the strength of the mechanism, not re-ranked each tick against a number that cannot see
+it yet.
+
+### Is `orient`'s ranking still the north star?
+
+**Yes, obeyed literally.** `scripts/lever-board.sh` was re-run at the top of this tick and is
+unchanged: PHASE ★ CSS-LAYOUT, with `css/css-values` the #2 row. t1300 took that row. `encoding` sits
+untouched at its banked mark, so the PART VI.3 anti-Pareto trap stayed shut for another window.
+
+### Is any invariant being bent?
+
+**No, and I3 was tested directly.** Every tick in the frame chain landed its semantic-model exposure
+*as the deliverable* rather than beside it — the renderer already composited frames correctly; what
+was missing was the answer to a query. That is I3 in its strong form.
+
+⭐ **THE RATCHET was applied against this tick's own work, twice, and both are recorded because the
+temptation ran the other way.** t1300's first cut carried `inset_w`/`inset_h` on `FrameReflowEntry`,
+an `insets` map threaded through both publish call sites, and two new `InlineFrame` fields to feed it
+— **every one of them written and never read**, superseded mid-tick by a live-terms path that worked
+better. They were deleted rather than landed. The same tick also removed a `self.styles.clone()` that
+had been added only to dodge a borrow: a clone of the whole computed-style map on a path that runs
+once per layout, which is a performance face traded for a capability face — refused. **An unread field
+is a claim nobody checks**, and here it would have been a second opinion about which terms make up a
+content box, in a chain whose whole difficulty has been keeping that rule in one place.
+
+### PART VI correction
+
+VI.2's H0.1 row is unchanged in substance and gains one clause from this window, about *when* a
+mechanism is finished rather than about layout:
+
+> **A read forces a reflow of the document it NAMES, and a frame is not that document.**
+> `getComputedStyle` correctly forced the main document's reflow, and correctly forced a frame's own
+> reflow for a node inside it. Both halves right, and together they left the frame's *element box* —
+> which lives in the parent — refreshed by nobody. This is the "a CORRECT half + a WRONG half reads
+> COHERENT" class from t1282 arriving in a new subsystem: nothing throws, nothing is obviously
+> missing, and the frame answers with a plausible `300px`.
+
+⚠ **THE OPEN BLOCKER IS UNCHANGED AND IS NOW AT THE ESCALATION LINE THAT CHECK #120 SET: M1 on the
+in-scope CrUX corpus.** Checks #118, #119 and #120 all carried *RUN THE CrUX FIDELITY SWEEP* as steer
+#1, and #120 committed in writing that if it was not run before check #121 it would be **escalated to
+the owner as a blocked item rather than repeated a fourth time**. It was not run. Repeating it here
+would be exactly the decoration #120 named, so it is escalated below instead.
+
+### STEER
+
+1. ⚠⚠⚠ **ESCALATED TO THE OWNER, per check #120's own commitment — the CrUX fidelity sweep is a
+   BLOCKED item, not a deferred one.** It has been unmeasured for ~58 ticks across four checks. The
+   loop's headline render number (M1 in-scope pass) is therefore unknown, and PART VI.2 already
+   records the harder fact underneath it: **the M1 ceiling is 82.2–87.4% against a stated bar of 95%,
+   and no amount of engine work closes that gap** because 17 of 27 unscored sites fail for reasons
+   that are not ours. Restating the steer a fifth time cannot fix a sweep the loop keeps not running;
+   the owner decisions VI.2 already names are the actual unblocker — fix the instrument (the loopback
+   reverse proxy `fidelity.rs` names, worth up to 14 sites), re-state the bar against the SCORABLE
+   denominator, or accept that 95% means something other than what it says.
+2. **The ANIMATION CLOCK remains the ranked #1 engine lever and is still a PREREQUISITE, not a
+   competitor** — carried unchanged from #120 steer #2, and t1300's own NEXT list now names it as (b)
+   via `viewport-units-keyframes` 0/24. `element.animate()` does not interpolate at all; it is the Web
+   Animations leg of all 194 `*-interpolation.html` files across twelve areas, and it cannot be built
+   without a clock because synthesising an animation today would freeze every page's `animate()` at
+   progress 0 — a capability traded for another, which THE RATCHET refuses. **Clock first.**
+3. **Finish a named chain on its mechanism, not on its per-tick number.** New this check, from the
+   t1297–t1300 evidence plus #120's: when a tick's NEXT block names the next link explicitly, that
+   link outranks a re-ranking of the board, because the metric provably cannot price enabling work
+   until the chain closes.
+
+**Next check due: tick 1307.**

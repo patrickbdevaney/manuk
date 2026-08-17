@@ -766,7 +766,9 @@ pub fn set_frame_styles(_m: std::collections::HashMap<usize, usize>) {}
 /// # Safety
 /// `f` must remain callable for as long as any frame arena is published.
 #[cfg(feature = "_sm")]
-pub unsafe fn set_frame_reflow_hook(f: unsafe extern "C" fn(*mut manuk_dom::Dom)) {
+pub unsafe fn set_frame_reflow_hook(
+    f: unsafe extern "C" fn(*mut manuk_dom::Dom, f32, f32, f32, f32, f32, f32),
+) {
     unsafe { dom_bindings::set_frame_reflow_hook(f) }
 }
 
@@ -775,7 +777,10 @@ pub unsafe fn set_frame_reflow_hook(f: unsafe extern "C" fn(*mut manuk_dom::Dom)
 /// # Safety
 /// Trivially safe; the signature matches the `_sm` build.
 #[cfg(not(feature = "_sm"))]
-pub unsafe fn set_frame_reflow_hook(_f: unsafe extern "C" fn(*mut manuk_dom::Dom)) {}
+pub unsafe fn set_frame_reflow_hook(
+    _f: unsafe extern "C" fn(*mut manuk_dom::Dom, f32, f32, f32, f32, f32, f32),
+) {
+}
 
 /// **Install the host's ON-DEMAND child-document builder** — for a frame the script created and
 /// reads on the very next line. See `dom_bindings::ensure_frame_doc`.

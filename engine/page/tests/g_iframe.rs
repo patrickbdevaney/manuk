@@ -367,4 +367,61 @@ fn iframes_have_a_box_show_their_document_and_do_not_block_paint() {
              `src` must NOT be given an invented one. Full report: {dreport}"
         );
     }
+
+    // ── (8) **A STYLE READ INSIDE A FRAME REFLOWS THE FRAME'S OWN PARENT FIRST (t1300).**
+    //
+    //        `getComputedStyle` on a node in the MAIN document forces a reflow of that document. On
+    //        a node inside a FRAME it used to force only the CHILD's — so the two things that decide
+    //        a frame's viewport, namely the `<iframe>` element's own box and everything the parent's
+    //        CSS says about it, were the two things nothing refreshed.
+    //
+    //        `pre` is the frame the script just appended: with no parent reflow it has no box at all
+    //        and is measured at the HTML default (300px), not the 200px its own stylesheet gives it.
+    //        `post` is the harder half and is the reason this claim is worth a gate — the script
+    //        changes the frame's CLASS, so **nothing in the child mutates**. A child-side reflow,
+    //        however correct, cannot produce 400px; only re-deriving the frame's box from a fresh
+    //        PARENT layout can.
+    //
+    //        RED: drop the `force_reflow_if_stale()` call in `force_frame_reflow` -> `pre=300px`
+    //        `post=300px`. RED: keep it but ignore the bindings' live terms in `frame_forced_reflow`
+    //        -> `pre=204px post=404px` (the BORDER box — a frame created this round has no captured
+    //        inset yet).
+    let mut pr = manuk_page::Page::load(
+        r#"<!doctype html><html><head><style>
+             iframe { width: 200px; height: 100px }
+             iframe.resize { width: 400px; height: 300px }
+           </style></head><body>
+           <main id="main"></main><div id="out">-</div>
+           <script>
+             var o = [];
+             var f = document.createElement('iframe');
+             document.getElementById('main').appendChild(f);
+             var d = f.contentDocument, w = f.contentWindow;
+             d.body.innerHTML = '<div id=a style="height:100vw"></div>';
+             var a = d.querySelector('#a');
+             o.push('pre=' + w.getComputedStyle(a).height);
+             f.classList.add('resize');
+             o.push('post=' + w.getComputedStyle(a).height);
+             document.getElementById('out').textContent = o.join('|');
+           </script></body></html>"#,
+        "https://pr.test/",
+        &fonts,
+        800.0,
+    );
+    let _ = &mut pr;
+    let pdom = pr.dom();
+    let pout = manuk_css::query_selector_all(pdom, pdom.root(), "#out");
+    let preport = pout
+        .first()
+        .map(|&n| pdom.text_content(n))
+        .unwrap_or_default();
+    for needle in ["pre=200px", "post=400px"] {
+        assert!(
+            preport.contains(needle),
+            "G_IFRAME/parent-reflow: expected `{needle}` — a style read inside a frame must reflow \
+             the PARENT first, so the frame's own box (and any change the parent's CSS just made to \
+             it) is fresh before the child resolves a viewport unit against it. Full report: \
+             {preport}"
+        );
+    }
 }

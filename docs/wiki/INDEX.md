@@ -1147,6 +1147,10 @@
   - L3710 · ⚠⚠⚠ The generic reflection layer already had the correct mechanism, and DECLINED to use it
   - L3732 · ⚠⚠ A REFLECTION table is not an EXISTENCE table, and gating on it would have been the bigger bug
   - L3745 · The blast radius, and why it was invisible for so long
+  - L3761 · A style read INSIDE a frame must reflow the frame's PARENT first (t1300)
+  - L3779 · The order is the fix
+  - L3785 · ⚠ The inset rides ALONG, it is not re-derived — and it must be LIVE, not captured
+  - L3800 · Proven red
 
 ## THE FIDELITY INSTRUMENT — what it can and cannot see
 `docs/wiki/fidelity-instrument.md`
@@ -2235,4 +2239,4 @@
   - L231 · Both named mechanisms are subsystem work
 
 ---
-2142 sections across 22 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+2146 sections across 22 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.

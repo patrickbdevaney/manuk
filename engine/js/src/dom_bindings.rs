@@ -768,8 +768,9 @@ thread_local! {
     ///
     /// No context pointer: the host keeps its own registry keyed by arena address, so this is a
     /// bare fn pointer with nothing to dangle.
-    static FRAME_REFLOW_HOOK: std::cell::Cell<Option<unsafe extern "C" fn(*mut Dom)>> =
-        const { std::cell::Cell::new(None) };
+    static FRAME_REFLOW_HOOK: std::cell::Cell<
+        Option<unsafe extern "C" fn(*mut Dom, f32, f32, f32, f32, f32, f32)>,
+    > = const { std::cell::Cell::new(None) };
     /// Re-entrancy guard, same role as `IN_REFLOW`: the host's re-cascade must not be able to
     /// re-enter itself through a style read it performs on the way.
     static IN_FRAME_REFLOW: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
@@ -780,7 +781,9 @@ thread_local! {
 ///
 /// # Safety
 /// `f` must remain callable for as long as any frame arena is published.
-pub unsafe fn set_frame_reflow_hook(f: unsafe extern "C" fn(*mut Dom)) {
+pub unsafe fn set_frame_reflow_hook(
+    f: unsafe extern "C" fn(*mut Dom, f32, f32, f32, f32, f32, f32),
+) {
     FRAME_REFLOW_HOOK.with(|c| c.set(Some(f)));
 }
 
@@ -803,7 +806,60 @@ fn force_frame_reflow(dom: *mut Dom) {
         return;
     };
     IN_FRAME_REFLOW.with(|c| c.set(true));
-    unsafe { f(dom) };
+    // ⚠⚠⚠ **THE PARENT LAYS OUT FIRST, AND THAT ORDER IS THE WHOLE FIX (t1300).**
+    //
+    // `getComputedStyle` on a node in the MAIN document forces a reflow of that document; on a node
+    // inside a FRAME it used to force only the child's. So the two things that decide a frame's
+    // viewport — the `<iframe>` element's own box, and everything the parent's CSS says about it —
+    // were the two things nothing refreshed. A frame the script had just appended still had no box
+    // (measured at the 300x150 default forever), and a frame whose class the script had just changed
+    // still answered at its old width, because the mutation was in the PARENT and the child's own
+    // guard correctly saw nothing.
+    //
+    // `force_reflow_if_stale` is itself guarded on the main document's mutation counter, so an
+    // untouched parent costs one integer compare. Its `IN_REFLOW` flag and this function's
+    // `IN_FRAME_REFLOW` flag are separate, so the nesting is legal in exactly one direction:
+    // parent-then-child, never the reverse.
+    force_reflow_if_stale();
+    // The frame's element box, from the layout that reflow just published. `[2]`/`[3]` are the
+    // BORDER box; the host subtracts the inset it captured, because the content-box rule lives
+    // there and must not be copied here.
+    let owner = IFRAME_DOCS.with(|c| {
+        c.borrow()
+            .iter()
+            .find(|(_, (addr, _))| *addr == dom as usize)
+            .map(|(n, _)| *n)
+    });
+    let (bw, bh) = owner
+        .and_then(|n| {
+            LAYOUT_RECTS_PTR.with(|c| {
+                let p = c.get();
+                if p.is_null() {
+                    None
+                } else {
+                    unsafe { (*p).get(&n).copied() }
+                }
+            })
+        })
+        .map(|r| (r[2], r[3]))
+        .unwrap_or((0.0, 0.0));
+    // **The RAW terms, not a decision.** A frame's viewport is its content box, and which terms make
+    // that up is the host's rule (`frame_content_box`) — so this hands over `padding` and
+    // `border-width` sums and combines nothing. Without them a frame created in THIS script round
+    // has no captured inset yet and would be measured at its BORDER box (204px for a 200px frame).
+    let (pad_x, pad_y, bord_x, bord_y) = owner
+        .and_then(|n| {
+            with_style(n, |st| {
+                (
+                    st.padding.left.resolve(bw, 0.0) + st.padding.right.resolve(bw, 0.0),
+                    st.padding.top.resolve(bw, 0.0) + st.padding.bottom.resolve(bw, 0.0),
+                    st.border_width.left + st.border_width.right,
+                    st.border_width.top + st.border_width.bottom,
+                )
+            })
+        })
+        .unwrap_or((0.0, 0.0, 0.0, 0.0));
+    unsafe { f(dom, bw, bh, pad_x, pad_y, bord_x, bord_y) };
     IN_FRAME_REFLOW.with(|c| c.set(false));
 }
 

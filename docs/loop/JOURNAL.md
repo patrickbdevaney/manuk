@@ -84595,3 +84595,112 @@ NEXT, ranked.
 
 WIKI: docs/wiki/dom-semantics.md — the fourth entry in the iframe chain, the lazy-at-the-read design,
 why adoption has exactly one call site, why `Box<Page>` is load-bearing, and the conjunction guard.
+
+## Tick 1300 — a style read INSIDE a frame never reflowed the frame's own PARENT (2026-08-17)
+
+TICK SHAPE: capability. Board re-run at the top of this tick: **unchanged** (★ CSS-LAYOUT,
+`css/css-values` #2). This is t1299's ⭐⭐⭐ NEXT (a) and the last link in a four-tick chain.
+
+HYPOTHESIS. t1299 made a script-created frame real; it is measured at the HTML default **300x150**,
+and `css/css-values/viewport-units-invalidation` wants **200px** because the page's CSS says
+`iframe { width: 200px }`. The frame has no box because the parent has not laid out since the
+`appendChild` — and nothing makes it.
+
+> **`getComputedStyle` on a PARENT node forces a parent reflow. On a CHILD node it does not.**
+> `force_reflow_if_stale` guards every read against the main document; `with_style_in` routes a
+> frame arena to `force_frame_reflow`, which lays out the **child** and never the parent. So the one
+> thing that could give the new frame a box is the one thing the read does not do.
+
+The test then does it a second time, and that half is the same defect wearing a different hat:
+
+```js
+  iframe.classList.add('resize');            // CSS: iframe.resize { width: 400px }
+  assert_equals(win.getComputedStyle(div).height, '400px');
+```
+
+Nothing in the CHILD changed — the mutation is in the parent — so even a perfect child reflow
+answers with the old width. t1299 already made the child's guard a conjunction over its size; what
+is missing is anyone recomputing that size from a **fresh parent layout**.
+
+MECHANISM (predicted). Chain the two reflows in the order the DOM implies: **parent first, then
+republish the frame's box, then child.** The parent's forced reflow already publishes fresh rects and
+styles (`republish_view_maps`), and it does so in *both* phases — `from_dom`'s pre-`Page` script round
+installs a `ReflowScope` exactly as the post-`Page` dispatch paths do — so the fresh number is
+reachable without the host needing a parent `Page` it may not have yet.
+
+⚠ The frame's viewport is its CONTENT box (t1298), and the bindings must not grow a second copy of
+that rule. So the host captures the **inset** (border + padding, the terms `frame_content_box`
+chose) at publish time and applies `content = fresh_border_box − inset`. One rule, still in one place.
+
+PREDICTION: `viewport-units-invalidation` 0/24 goes green on both its assertions — the `200px`
+pre-resize read and the `400px` post-resize one. The falsifiable claim for the gate is the second:
+**a script that resizes an `<iframe>` and then measures a viewport unit inside it reads the new
+width**, which no amount of child-side work can produce.
+
+
+RESULT — **the prediction held exactly: `css/css-values/viewport-units-invalidation` 0/24 → 24/24**,
+all twelve width-ish units (`vw/vi/vmax/svw/svi/svmax/lvw/lvi/lvmax/dvw/dvi/dvmax`) and all twelve
+height-ish ones, on **both** halves of each test — the `200px`/`100px` pre-resize read and the
+`400px`/`300px` post-resize one. Area `css/css-values` **3230 → 3322 (+92)**, 41.8% of 7940; the file
+itself is 24 of that +92, the rest is the same parent-first read reaching the neighbouring
+viewport-unit files. `HANG/CRASH 0`.
+
+MECHANISM, as landed. `force_frame_reflow` calls `force_reflow_if_stale()` **before** the host hook,
+so the parent lays out first and the frame's own box is fresh; the bindings then hand the host the
+frame element's fresh BORDER box plus the raw `padding`/`border-width` sums, and the host applies
+`content_from` — the same one-axis subtraction `frame_content_box` already used, now split out so the
+*rule* has one home while two callers may supply the terms.
+
+⚠ **THE CAPTURED INSET WAS CUT, NOT LANDED.** The first cut of this tick carried `inset_w`/`inset_h`
+on `FrameReflowEntry`, threaded an `insets` map through `publish_frame_reflow_pages` and both its call
+sites, and added `border_w`/`border_h` to `InlineFrame` to feed it. Every one of those fields was
+**written and never read** — the live-terms path in `frame_forced_reflow` had superseded it mid-tick
+and the scaffolding stayed behind. It is deleted. *An unread field is a claim nobody checks*, and it
+would have read as a second opinion about which terms make up a content box — the exact "one rule, N
+implementations" class this chain has been fighting for four ticks. The reason the capture cannot work
+is worth keeping: **a frame the script created in THIS round was published before the parent had ever
+laid it out**, so its captured inset is `0` and the frame measures at its BORDER box.
+
+⚠ Also cut: `self.styles.clone()` in `publish_iframe_docs`, added only to dodge a borrow conflict with
+`child_pages.iter_mut()`. The arena address is the same through `&` as through `&mut`, so a shared
+borrow lets `self.styles` be read in the same pass. That clone was a copy of the WHOLE computed-style
+map on a path that runs once per layout — a performance regression traded for nothing, which THE
+RATCHET refuses.
+
+PROVEN RED (both measured, and the first one differs from what this entry predicted):
+- drop `force_reflow_if_stale()` in `force_frame_reflow` → `pre=300px|post=200px`. Predicted
+  `pre=300px post=300px`; the `post` half actually reads **200px**, because the *second* read still
+  gets the parent layout the first read's `appendChild` eventually triggered — it is one reflow behind,
+  not frozen. Still red on `pre`, and the honest reading is recorded rather than the guessed one.
+- pass `0.0` insets instead of the live terms → `vw=204px`, caught by the earlier `frame-viewport`
+  assertion. The border box, off by exactly the two UA borders.
+
+CONTROLS: `g_iframe` green as a whole (all eight cases), which carries `g_frame_window_surface`,
+`g_iframe_rerender` and `g_iframe_xml_content_type`'s neighbours in the same file.
+
+WIKI: `docs/wiki/dom-semantics.md` — "A style read INSIDE a frame must reflow the frame's PARENT
+first", including the table of the two red mutations and why the captured inset is unbuildable.
+
+NEXT, ranked.
+(a) ⭐⭐ The scrollbar gutter — `viewport-units-scrollbars-compute` 0/34, carried from t1299 (b)
+    unchanged: needs a reduced width to the CASCADE and the full width to LAYOUT, on every page whose
+    root scrolls. Wants its own controls.
+(b) ⭐⭐⭐ Viewport units do not interpolate — `viewport-units-keyframes` 0/24. This is the ANIMATION
+    CLOCK item, which CONSTITUTION-CHECK #120 steer #2 ranks as the #1 engine lever and a
+    PREREQUISITE (194 `*-interpolation.html` files across twelve areas hang off it).
+(c) ⭐⭐⭐ `document.styleSheets` is EMPTY for external sheets — carried from t1296, still unchanged.
+(d) ⚠ `IFRAME_DOCS` is still never cleared between navigations — carried; `FRAME_CREATE_TRIED` beside
+    it IS cleared per document, which keeps making the omission louder.
+(e) ⚠ CONSTITUTION-CHECK steer #1 (RUN THE CrUX FIDELITY SWEEP) is now at its escalation threshold —
+    check #120 said escalate to the owner rather than repeat it a fourth time.
+
+⚠ **READ THE FIXED-DENOMINATOR NUMBER, NOT THE AREA ROW.** `css/css-values`'s denominator moved 8033
+→ 7940 in the same run that pass moved 3230 → 3322, and a denominator that shrinks by ~the amount the
+numerator grows is the exact shape of a setup-throw wash (t1266). It is **not** one here: the row's
+own history is `8208 → 7941 → 8033 → 7940` across four ticks that never touched frames, so ±100 is
+this area's ordinary run-to-run noise (the two `ACCUM` SIGSEGV files and 29 `TH_TIMEOUT` files emit
+variable subtest counts). Checked before believing the delta rather than after.
+
+So the claim this tick carries is the **isolated, fixed-denominator** one — `viewport-units-invalidation`
+alone, run in its own directory: **24/24**, deterministic, no shared batch. The +92 area row is
+consistent with it and is banked, but it is not the evidence.
