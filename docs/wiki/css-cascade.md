@@ -3924,3 +3924,49 @@ and moves nothing.
 than `null` (t663: for an applied linked sheet, `null` is a lie that reads as honest). A linked sheet's
 text does not exist on the JS side, so the view has nothing to view. Publishing fetched stylesheet text
 to JS is the tick that unlocks it.
+
+## Interpolating a value TEXTUALLY is a second implementation, and it is 4.9× worse (t1303)
+
+t1301 taught `element.animate()` to sample at a time, and interpolated the value **in JavaScript** by
+splitting each endpoint into its numbers and the text between them. Matching skeletons interpolate
+pairwise; mismatched ones flip discretely at progress 0.5.
+
+That law is right for simple values — `0`→`1`, `10px 20px`→`20px 30px` — and it is what moved
+`css/css-grid`'s Web Animations leg 282 → 110 and `css/css-transforms` +605. **It is the wrong law for
+any value with structure.**
+
+`transform` interpolates per transform-function, with `none` as the identity and the shorter list padded
+with identities (css-transforms-1 §Interpolation of Transforms). So:
+
+```text
+   from [none] to [translate(200px) rotate(720deg)] at 0.25
+     want  matrix(-1, 0, 0, -1, 50, 0)     got  none
+```
+
+The skeleton test correctly notices the two strings share no structure, and then does the wrong thing.
+
+### ⚠⚠⚠ The number that exposes it is a SIBLING LEG
+
+WPT's interpolation harness runs the same expectations through several legs. In `css/css-transforms`:
+
+| leg | interpolator | failing |
+|---|---|---|
+| CSS Animations | Stylo's `Animate::animate(Procedure::Interpolate)` | **92** |
+| Web Animations | the JS numeric-skeleton path | **450** |
+
+Same properties, same expectations, **4.9×**. `engine/css/src/animation.rs` has borrowed the correct,
+per-property-type interpolation for many ticks — its own doc says everything numeric is *"borrowed, per
+the ladder in STATUS.md — option 1, no fork"* — and a second implementation was written in JavaScript
+anyway. **A duplicate that is right on the easy half reads as working**; only a sibling doing the same
+job better makes it visible.
+
+The repair is to route the Web Animations sample through that same Stylo path (cascade with
+`property: from`, cascade with `property: to`, `Animate` at the progress, serialize back) via a host
+hook from the prelude, keeping the skeleton path only as the fallback for values Stylo declines.
+
+### ⚠ And measure a STABLE-denominator area before pricing a shared-harness fix
+
+t1301 priced itself at −171 distinct failing names in `css/css-grid`, correctly refusing that area's
+total because the same binary twice spread ±250. It never ran `css/css-transforms`, whose denominator is
+identical run-to-run — where the same fix is **+605** on a number needing no error bar. A fix to a
+harness *leg* moves every area that harness backs; find the area that can actually resolve it.

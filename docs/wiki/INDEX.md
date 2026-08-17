@@ -940,6 +940,9 @@
   - L3900 · Three decisions worth not re-deriving
   - L3913 · ⚠ The subtest count is not the claim
   - L3921 · Still out of scope, deliberately
+  - L3928 · Interpolating a value TEXTUALLY is a second implementation, and it is 4.9× worse (t1303)
+  - L3948 · ⚠⚠⚠ The number that exposes it is a SIBLING LEG
+  - L3967 · ⚠ And measure a STABLE-denominator area before pricing a shared-harness fix
 
 ## `<dialog>`, `popover`, and the top layer (ticks 194-195)
 `docs/wiki/dialog-and-top-layer.md`
@@ -2250,4 +2253,4 @@
   - L231 · Both named mechanisms are subsystem work
 
 ---
-2157 sections across 22 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+2160 sections across 22 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.

@@ -85077,3 +85077,100 @@ NEXT, ranked.
 (c) ⭐⭐⭐ `writing-mode` is UNIMPLEMENTED and is the #1 mass in the #1 board area (2,033 of 3,458 grid
     geometry failures). A decomposition session, not a tick — escalate it as scoped subsystem work.
 (d) ⚠ `IFRAME_DOCS` is never cleared between navigations — carried from t1299.
+
+## Tick 1303 — t1301 bought +605 in an area it never measured, and it built a SECOND interpolator that is 4.9× worse than the one we already had (2026-08-17)
+
+TICK SHAPE: measurement + correction. Board re-run at the top of this tick: **unchanged** (★ CSS-LAYOUT).
+`css/css-grid` stays #1 but every remaining mass in it is now blocked or scoped as a subsystem (t1302
+recorded all three), so this tick measures the next unmined ★ area instead: `css/css-transforms`.
+
+RESULT 1 — **t1301's Web Animations fix bought +605 subtests in an area t1301 never ran.**
+
+```text
+   css/css-transforms   2411 / 5500  →  3016 / 5500     +605     43.8% → 54.8%
+```
+
+⭐ **The denominator is IDENTICAL (5500), so this needs no error bar** — unlike `css/css-grid`, where the
+same binary twice spread ±250 and t1301 correctly refused to quote the area total. Same fix, two areas,
+and the one it *could* honestly claim was the one it did not measure. **A fix to a shared harness leg
+moves every area that harness backs; measure at least one area with a STABLE denominator before pricing
+it.** t1301 priced itself at −171 distinct names in one area and was worth four times that.
+
+RESULT 2 — ⚠⚠⚠ **AND THE SAME AREA CONVICTS t1301 OF THE "ONE RULE, N IMPLEMENTATIONS" DEFECT, WITH A
+NUMBER.** Both legs run the *same expectations* over the *same properties* in these files:
+
+```text
+   CSS Animations leg   (routes through Stylo's Animate)      92 failing
+   Web Animations leg   (routes through t1301's JS strings)  450 failing     4.9×
+```
+
+The failures name the mechanism exactly:
+
+```text
+   from [none] to [translate(200px) rotate(720deg)] at (0.25)
+     want  matrix(-1, 0, 0, -1, 50, 0)          got  none
+   from [translate(100px)] to [translate(200px) rotate(720deg)] at (0.25)
+     want  matrix(-1, 0, 0, -1, 125, 0)         got  matrix(1, 0, 0, 1, 100, 0)
+   from [rotateX(90deg) translateX(100px)] to [rotate3d(50,0,0,180deg) translateY(200px)] at (0.25)
+     want  matrix(1, 0, 0, -0.38, 75, -19.13)   got  matrix(1, 0, 0, 0, 100, 0)
+```
+
+t1301's `interpolateValue` decides interpolable-vs-discrete by **numeric skeleton**, and for
+`transform` that is simply the wrong law. `transform` interpolates **per transform-function, with `none`
+as the identity and the shorter list padded with identities** (css-transforms-1 §Interpolation of
+Transforms) — a rule about the value's *structure*, which no textual comparison can see. So the skeleton
+test correctly observes the strings do not match and then does the wrong thing: a discrete flip.
+
+> **`engine/css/src/animation.rs` HAS the right answer and has had it for many ticks.** It borrows
+> Stylo's `Animate::animate(Procedure::Interpolate)`, which is per-property-type and gets transform
+> lists, filters, colours, shadows and `border-image` right by construction. Its own module doc says
+> everything numeric is *"borrowed, per the ladder in STATUS.md — option 1, no fork."* t1301 wrote a
+> second interpolator in JavaScript anyway.
+
+⚠ **The skeleton rule is not worthless and that is why this is a correction rather than a revert.** It
+is *correct* for the large class of simple values (`0`→`1`, `10px 20px`→`20px 30px`) and it is what took
+`css/css-grid`'s Web Animations leg 282 → 110 and this area +605. The defect is that it is the ONLY
+answer, with no route to the real one for structured types. **A second implementation that is right on
+the easy half reads as working, and the number that exposes it is a SIBLING LEG failing 4.9× less on the
+same assertions.**
+
+MEASURED, so the next tick is priced rather than guessed:
+
+```text
+   Web Animations leg still failing, css/css-transforms          450
+   CSS Transitions legs, css/css-transforms                     1188   (594 + 594)
+   CSS Transitions legs, css/css-grid (t1301)                    486
+   CSS Animations leg, css/css-transforms (the Stylo path)        92
+```
+
+⚠ **NO FIX IS ATTEMPTED IN THIS TICK, deliberately, and the reason is the ATOMICITY rule.** The correct
+repair is to route the Web Animations sample through the SAME Stylo interpolation the `@keyframes` path
+uses — which means a new host hook from the JS prelude into the cascade (cascade the element with
+`property: from`, again with `property: to`, `Animate` between them at the progress, serialize back),
+in the shape `set_frame_reflow_hook` / `ensure_frame_doc` already established. That is a multi-layer
+change across `engine/js`, `engine/css` and `engine/page`, and starting it at the end of a session would
+land as partial state. **It is the ranked #1 next tick, scoped as one.**
+
+GATE: none added, deliberately. There is nothing new to assert — a gate on today's wrong transform
+number would PIN THE ENGINE TO A BUG (t1004), and a gate on the right number would be permanently red,
+which the wall reads as a regression. The falsifiable artefacts are the two leg counts above, both
+reproducible with `manuk-wpt wpt css/css-transforms --show-failures`.
+
+```text
+  WPT MOVEMENT banked: css/css-transforms 2411 -> 3016 (+605), retroactively from t1301.
+  No new engine change in this tick.
+```
+
+NEXT, ranked.
+(a) ⭐⭐⭐ **Route Web Animations sampling through Stylo's `Animate`** — a host hook from the prelude into
+    the cascade, killing t1301's duplicate JS interpolator for structured types while keeping the
+    skeleton path as the fallback for values Stylo declines. 450 in `css/css-transforms` alone, and it
+    fixes a whole CLASS (transforms, filters, colours, shadows) rather than a property.
+(b) ⭐⭐⭐ **The CSS-TRANSITIONS leg** — 1,674 across just these two areas. Subsystem, scoped at t1302:
+    needs a per-node previous-computed-value table, and the naive version regresses every real page's
+    hover to its START state.
+(c) ⭐⭐⭐ Publish external stylesheet TEXT to the JS side (unlocks `<link>.sheet`, `document.styleSheets`
+    completeness, `cssRules` on linked sheets) — carried from t1302.
+(d) ⭐⭐⭐ `writing-mode` is absent from `engine/layout` entirely — 2,033 of 3,458 grid geometry failures.
+    A decomposition session.
+(e) ⚠ `IFRAME_DOCS` is never cleared between navigations — carried from t1299.

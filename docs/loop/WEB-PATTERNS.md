@@ -7540,3 +7540,25 @@ the false-presence failure wearing a fix's clothes.
 deliberately **not** the claim. The claim is a box: an element reaching 321px because a rule was mutated
 through `cssRules[0].style.setProperty`. Gate: `G_CSSOM_SHEET_BRIDGE` case 9, RED two ways (dropping the
 write-back leaves the box at 30px; handing at-rules a `.style` trips the false-presence assertion).
+
+## ⚠ A SECOND INTERPOLATOR — the duplicate that is right on the easy half (t1303)
+
+Not a web pattern but a defect class this ledger exists to name. t1301 gave `element.animate()` the
+ability to sample at a time and interpolated values by comparing their **numeric skeletons** in
+JavaScript. Correct for `0`→`1` and `10px 20px`→`20px 30px`; wrong for every value with structure,
+because `transform` interpolates per transform-function with `none` as the identity and the shorter list
+identity-padded, which no textual comparison can see.
+
+**The engine already owned the right answer.** `engine/css/src/animation.rs` borrows Stylo's
+`Animate::animate(Procedure::Interpolate)` — per-property-type, and correct for transforms, filters,
+colours and shadows by construction.
+
+⚠⚠⚠ **What made it visible was a SIBLING LEG, not a test.** WPT's interpolation harness runs the same
+expectations through several legs, so in `css/css-transforms` the CSS-Animations leg (Stylo) fails **92**
+while the Web-Animations leg (the JS strings) fails **450** — same properties, same assertions, 4.9×.
+A duplicate implementation that handles the common half correctly passes every gate anyone thinks to
+write; the tell is another path doing the same job measurably better.
+
+**The rule:** before writing an interpolation, a serialization or a cascade step, ask which existing
+component already answers that question — and if one does, reach it rather than re-derive it, even when
+reaching it costs a host hook and re-deriving it costs twenty lines.
