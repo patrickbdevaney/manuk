@@ -85356,3 +85356,116 @@ NEXT, ranked.
 (c) ⭐⭐⭐ `wai-aria` 54.8% / `accname` 67.8% / `html-aam` 75.5% — constitutional invariant I3.
 (d) ⭐⭐⭐ The CSS-TRANSITIONS leg — 1,674 across two areas. Subsystem, scoped at t1302.
 (e) ⭐⭐⭐ Publish external stylesheet TEXT to the JS side — carried from t1302.
+
+## Tick 1306 — `element.animate()` stops interpolating in JavaScript and SYNTHESIZES a CSS animation instead (2026-08-17)
+
+TICK SHAPE: capability + deduplication. Board re-run at the top of this tick: **unchanged**
+(★ CSS-LAYOUT). This is t1303's ranked #1 — the repair of t1301's duplicate interpolator.
+
+HYPOTHESIS. t1303 measured the defect precisely: in `css/css-transforms` the CSS-Animations leg (which
+routes through Stylo's `Animate`) fails **92**, while the Web Animations leg (t1301's JS numeric-skeleton
+interpolator) fails **450** on the *same* expectations — 4.9×, because `transform` interpolates
+per-function with `none` as the identity and the shorter list identity-padded, which no textual
+comparison can see.
+
+⭐ **The repair does NOT need a new host hook, which is what makes it a tick.** The first design was a
+native bridge from the prelude into the cascade. It is unnecessary: `element.animate()` can express
+itself entirely in CSS the engine already interprets — a synthesized `@keyframes`, `animation-*` set
+inline, and **`currentTime` expressed as a NEGATIVE `animation-delay`**, which is exactly the trick
+WPT's own harness uses on its CSS legs.
+
+PROBE BEFORE PATCH, on the one question the whole design rests on:
+
+```text
+   K1  a synthesized @keyframes interpolates TRANSFORM at 25%   PASS  matrix(-1, 0, 0, -1, 50, 0)
+   K2  a synthesized @keyframes interpolates a simple number    PASS  opacity 0.5
+```
+
+K1 is the precise value the Web Animations leg answers `none` to today. So the engine already computes
+the right answer for structured types; nothing was reaching it.
+
+PLAN. `animate()` builds a `@keyframes` block from the normalized frames (offsets defaulting to an even
+spread, camelCase property names dashed, per-frame `composite` → `animation-composition`), assigns it to
+a `<style>` element's `textContent` — no dependency on the CSSOM bridge's insertRule, so no prelude
+ordering constraint — and sets `animation-name`/`duration`/`timing-function`/`fill-mode` inline.
+`currentTime` becomes `animation-delay: -<currentTime>ms`. **t1301's `interpolateValue`, `sampleFrames`
+and `applyEasing` are DELETED** — the whole point is that there is one interpolator and it is Stylo's.
+
+PREDICTION: `css/css-transforms`'s Web Animations failures fall from 450 toward the CSS-Animations leg's
+92, and `g_web_animations`' cases 6–8 (the midpoint sample, the discrete flip, the easing) stay green
+through an entirely different mechanism — which is the strongest evidence the gate was asserting
+behaviour rather than implementation.
+
+RESULT — ⚠⚠⚠ **THE ENGINE CHANGE IS REVERTED, AND THE REASON IS THE FINDING: t1301'S DUPLICATE WAS
+MASKING A DEFECT IN THE REAL IMPLEMENTATION.**
+
+The rewrite was built and run. Its prediction was *four-fifths* correct, and the fifth is the whole tick:
+
+```text
+   midsample:[0.5]        PASS  ← through an entirely different mechanism. The gate was behavioural.
+   discretelow:serif      PASS
+   discretehigh:monospace PASS
+   endstate:true          PASS
+   steps:[0]              FAIL  →  steps:[1]
+```
+
+⚠ **`steps()` is wrong in the engine's OWN CSS-animation path, and t1301's JS `applyEasing` was the only
+reason that assertion was ever green.** Isolated away from `element.animate()` entirely — a plain
+stylesheet, no JS:
+
+```text
+   A  animation: k 100s -50s linear        forwards   →  opacity 0.5    PASS
+   B  animation: k 100s -50s steps(1, end) forwards   →  opacity 1      FAIL (want 0)
+   C  getComputedStyle(el).animationTimingFunction    →  undefined      FAIL
+   D  the same four longhands set INLINE, steps(1,end)→  opacity 1      FAIL (want 0)
+```
+
+A passes, so delay/duration/fill and the interpolation itself are fine; **B fails from a stylesheet with
+no script in sight.** `animation.rs` *does* call `tf.calculate_output(sample.progress, …)`, so the
+machinery is present and something upstream of it is wrong — a diagnosis this tick does not have and
+will not guess at.
+
+> **This is t1303's finding INVERTED, and it is the sharper half.** t1303 said a duplicate that is right
+> on the easy half reads as working. The other edge: **a duplicate that is right where the original is
+> WRONG conceals the original's defect, and deleting the duplicate looks like causing a regression.**
+> The `steps` assertion has been green since t1301 and the engine has been wrong the whole time.
+
+⚠ Second, independent engine defect found on the way: **`animation-play-state: paused` SUPPRESSES the
+animation entirely.** Every paused case read its *un-animated default* — opacity 1, the UA font — which
+is the un-animated page wearing a plausible answer's clothes. It is why the first run of the rewrite
+read `midsample:[1] discretehigh:serif steps:[1]`: three "wrong values" that were really *no animation
+at all*. Removing that one line fixed all three.
+
+**SO THE TICK REVERTS ITS CODE**, per ATOMICITY and THE RATCHET: the rewrite is strictly better on
+structured types (transform, and by construction filters/colours/shadows) and strictly worse on
+`steps()`, and **a capability traded for another is refused.** Landing it would have swapped one green
+for a different green and called it progress. The working tree is back at `cf1fb479`'s `dom_bindings.rs`
+and `g_web_animations` is green again.
+
+```text
+  WPT MOVEMENT: none, and none is claimed — the engine change is reverted.
+```
+
+⭐ **The design itself is PROVEN and costs nothing to re-take**, which is why this is a sequencing result
+rather than a dead end. Probe K1/K2, run before any of the above: a synthesized `@keyframes` plus a
+negative `animation-delay` gives `matrix(-1, 0, 0, -1, 50, 0)` at 25% — **the exact value the Web
+Animations leg answers `none` to today**. The engine already computes the right answer for structured
+types; nothing was reaching it. The blocker is not the design, it is that two CSS-animation defects sit
+under it.
+
+GATE: none added. Nothing new is asserted, and the two defects found must NOT be gated at today's values
+(that pins the engine to a bug, t1004) nor at the right ones (permanently red). The falsifiable artefact
+is the four-arm stylesheet probe A–D above, which needs no JavaScript to reproduce.
+
+NEXT, ranked — **and the ORDER is the deliverable.**
+(a) ⭐⭐⭐ **Fix `steps()` in the CSS-animation path** — probe arm B, reproducible from a plain
+    stylesheet, `animation.rs` already calls `calculate_output` so the fault is upstream of it. Small,
+    bounded, and it is the gate on (c).
+(b) ⭐⭐⭐ **Fix `animation-play-state: paused` suppressing the animation** — a paused animation must hold
+    its value, not vanish. Also the reason a real page that pauses a CSS animation loses it entirely.
+(c) ⭐⭐⭐ **THEN re-take this tick** — the rewrite is written and proven; with (a) and (b) landed it is
+    strictly better everywhere and trades nothing. 450 failures in `css/css-transforms` alone, and it
+    deletes t1301's duplicate interpolator.
+(d) ⭐⭐⭐ The SVG CSS-property supplement (t1305) · `wai-aria` 54.8% (I3) · the CSS-transitions leg
+    (t1302) · external stylesheet text to JS (t1302).
+

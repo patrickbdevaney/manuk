@@ -7591,3 +7591,29 @@ point of the idiom. That is a subsystem tick and must be taken as one.
 ⚠ **And the reason it stayed invisible for so long is a metric, not an engine:** `svg` was not a row in
 `WPT-AREAS.tsv` until audit #72 added it. A capability class with no row cannot be ranked, and this one
 was 1,824 failing subtests behind a daily-driver-critical idiom.
+
+## ⚠ THE DUPLICATE THAT HID THE ORIGINAL'S BUG (t1306, the inverse of t1303)
+
+t1303 recorded that a second implementation which is right on the easy half **reads as working**. This
+is the other edge of the same coin, and it is the more dangerous one:
+
+> **A duplicate that is right exactly where the original is WRONG conceals the original's defect — and
+> deleting the duplicate then looks like causing a regression.**
+
+`element.animate()` was rewritten to stop interpolating strings in JavaScript and instead synthesize a
+`@keyframes` plus a negative `animation-delay`, handing the whole question to the engine's real,
+Stylo-backed animation path. Four of five gate claims held through the new mechanism. The fifth,
+`steps(1, end)`, went red — **because the engine's own CSS-animation path gets `steps()` wrong, and the
+JS duplicate's hand-rolled easing had been the only reason that assertion was ever green.** Proven with
+no JavaScript at all: a plain stylesheet `animation: k 100s -50s steps(1, end) forwards` yields opacity
+1 where it must yield 0, while the same rule with `linear` is correct.
+
+⚠ A second defect surfaced the same way: **`animation-play-state: paused` suppresses the animation
+entirely**, so a paused element reads its un-animated defaults. Every real page that pauses a CSS
+animation loses it rather than holding it.
+
+**The consequence for how work is sequenced:** removing a duplicate is not a cleanup, it is an
+*integration*, and it must be preceded by fixing whatever the duplicate was covering. The change was
+reverted — it is strictly better on structured values and strictly worse on `steps()`, and a capability
+traded for another is refused — and the order is now: fix `steps()`, fix `play-state: paused`, *then*
+delete the duplicate.
