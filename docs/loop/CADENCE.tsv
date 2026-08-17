@@ -996,3 +996,4 @@ tick	sha	epoch	iso	delta_s	shape	wall_s	files	added	deleted	gates	claims	wpt_pas
 1303	6ca2b211	1786964276	2026-08-17T06:57:56-04:00	808	measurement	997	6	208	36	493	81	3896	6960	0	642	0	t1301 bought +605 in an area it never measured, and it built a SECOND interpolator that is 4.9× worse than the one we already had (2026-08-17)
 1304	a797d2e6	1786965100	2026-08-17T07:11:40-04:00	824	instrument	997	7	223	34	493	81	3896	6960	0	642	0	the metric could not see SVG or the ACCESSIBILITY TREE, and one of those is a constitutional invariant (2026-08-17)
 1306	891eabdc	1786971235	2026-08-17T08:53:55-04:00	6135	capability	997	10	395	40	493	81	3896	6960	0	642	0	`element.animate()` stops interpolating in JavaScript and SYNTHESIZES a CSS animation instead (2026-08-17)
+1308	f65b0519	1786977132	2026-08-17T10:32:12-04:00	5897	capability	997	11	384	49	493	81	3896	6960	0	642	0	a PAUSED animation was treated as an ABSENT one, and it lost every animated property (2026-08-17)

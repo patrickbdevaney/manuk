@@ -2099,3 +2099,64 @@ bimodal band this ledger already names, and it was taken while the observer's te
 running concurrently (five `find target/debug/deps` processes, load1 8.5, in the same window). The
 `D` figure is therefore a **ceiling**, not a steady-state number — but it has been the dominant term
 in every one of the six walls this session, so the ranking is not in doubt even if the magnitude is.
+
+## Audit #50 — tick 1308 (2026-08-17)
+
+Triggered at tick 1307, on a **1210s** wall. `scripts/wall-audit.sh run` attribution:
+
+```text
+   290s  F   (perf floors)   24%        54s  B    4%
+   131s  T   (crate tests)   11%        13s  G6   1%
+    83s  G3  (shell suite)    7%         8s  G1   1%
+   ──────────────────────────────────────────────────
+   588s attributed of 1210s — HALF THE WALL IS UNATTRIBUTED
+```
+
+### ⚠⚠⚠ THE FINDING: THE WALL IS LEAN. THE VARIANCE IS THE BOX, AND THE TRIGGERING NUMBER IS POISONED.
+
+Six walls landed in **this one session**, on essentially the same tree:
+
+```text
+   191s · 190s · 188s · 186s      ← quiet box
+   565s · 1264s                   ← load1 14–28, entirely the observer's `find`-based hygiene cron
+```
+
+**A 6.4× spread with no gate added, widened, or reordered.** This is the reading STATUS.md already
+records for tick 325 — *a contended landing cycle banks a poisoned number, not a regression* — and it is
+the same conclusion audit #49 reached about its own `D` term, which it correctly labelled a **ceiling**
+rather than a steady state. `F` being the largest attributed section is expected and *correct*: the perf
+floors are deliberately NOT parallel, because a benchmark sharing the machine is not a benchmark, which
+makes them the most contention-sensitive thing in the wall by construction.
+
+### ⚠⚠ FOUR SYMPTOMS THIS SESSION, ONE CAUSE — and the Bar 0 one was re-run, not assumed
+
+| symptom | verified against |
+|---|---|
+| `G_INTERACT` + `G3` RED (t1301) | `manuk-shell` passed **75/75 in the same run**; open 4.8ms / switch 0.04ms / close 0.02ms, all inside the 16ms frame |
+| 565s and 1264s walls | 190s on a quiet box, same tree |
+| **`G_RUNAWAY` RED — a Bar 0 gate — at `load1 28`** | **PASSES in isolation in 13.08s on the same tree** |
+
+A Bar 0 RED is never waved through on suspicion, so it was re-run rather than explained away. But every
+one of these four measures **time**, and all four track the hygiene cron rather than anything in the
+engine.
+
+### What was trimmed: NOTHING, and that is the correct outcome
+
+Against the audit's four admissible questions:
+
+1. **REDUNDANCY** — the shell suite is already captured **once** and shared by
+   `G3`/`G_TEARDOWN`/`G_RUNTIME_COUNT`/`G_INTERACT`. Already done.
+2. **PARALLELISM** — gates launch concurrently under `CARGO_BUILD_JOBS`; `F` is serial *on purpose*.
+   Nothing has gone accidentally serial.
+3. **CACHING** — incrementals live in RAM, live fetches are snapshot-cached.
+4. **SCOPE** — the four units are built up front, so each gate only *runs* an already-linked binary.
+
+Nothing here can be bought back without touching coverage, and coverage is sacred. **An audit that finds
+the wall already lean is a fine result.**
+
+### Reported to the observer, in one line, per the scope rule
+
+The wall is gate-lean; the honest warm mark is **~190s**, and any mark banked while `load1 > 10` measures
+the box rather than the wall. Four distinct wall/gate symptoms this session — `G_INTERACT`, `G3`,
+`G_RUNAWAY` and two slow walls — all resolve to the concurrent hygiene cron. The lever is cron scheduling
+versus the landing window, not gate scheduling. No `scripts/` file was touched.

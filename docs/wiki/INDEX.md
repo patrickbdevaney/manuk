@@ -951,6 +951,9 @@
   - L4035 · The narrowing, and why the original win survives
   - L4048 · ⚠ How it was found: a value wrong in ONE property
   - L4065 · ⚠ The audit this opens
+  - L4072 · A PAUSED animation is not an ABSENT one (t1308)
+  - L4092 · ⭐⭐⭐ One extra probe arm decides which organ to open
+  - L4104 · The correct behaviour, including at rest
 
 ## `<dialog>`, `popover`, and the top layer (ticks 194-195)
 `docs/wiki/dialog-and-top-layer.md`
@@ -2261,4 +2264,4 @@
   - L231 · Both named mechanisms are subsystem work
 
 ---
-2168 sections across 22 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+2171 sections across 22 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.

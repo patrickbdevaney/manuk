@@ -11,7 +11,7 @@ css/css-overflow	450	963	46.7	0	0
 css/css-transforms	3016	5500	54.8	0	0
 css/css-ui	710	1900	37.4	0	0
 css/css-backgrounds	4087	6181	66.1	0	0
-css/css-values	3363	7939	42.4	0	0
+css/css-values	3391	7866	43.1	0	0
 css/css-position	683	1482	46.1	0	0
 css/css-display	326	549	59.4	0	0
 css/css-color	7566	11337	66.7	0	0
@@ -24,4 +24,4 @@ svg	313	2137	14.6	0	0
 accname	328	484	67.8	0	0
 wai-aria	238	434	54.8	0	0
 html-aam	253	335	75.5	0	0
-TOTAL	471496	1269895	37.1	0	0
+TOTAL	471524	1269822	37.1	0	0

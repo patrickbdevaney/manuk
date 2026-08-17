@@ -4068,3 +4068,49 @@ for a whole tick (t1306). The seven-arm probe that settled it:
 for many ticks, silently, and cost a tick to misdiagnose. Every such comment is a checkable claim about
 the engine, and a workaround whose premise has died does not merely become dead code — it starts
 corrupting whatever replaced it.
+
+## A PAUSED animation is not an ABSENT one (t1308)
+
+`samples_for` used to skip any animation whose `animation-play-state` is `paused`, and
+`iteration_progress`'s doc filed it in the not-running space *"(we have no way to have started it)"*.
+
+**That conflates *not advancing* with *not existing*.** `paused` freezes the timeline; it does not delete
+the animation, and a frozen animation still has the position its `animation-delay` gives it. The document
+clock is **0** for a static render, so nothing advances for a *running* animation either — `paused`
+therefore changes nothing at all about the value to compute, and the skip was pure loss.
+
+What it cost, measured on one declaration (`animation: k 100s -50s linear paused forwards`):
+
+| property | got | want |
+|---|---|---|
+| `opacity` | `1` (the initial value) | `0.6` |
+| `width` | **`784px`** — `width: auto` filling the container | `70px` |
+
+The element cascaded **as though it had no animation at all**, so every animated property was lost, not
+just opacity.
+
+### ⭐⭐⭐ One extra probe arm decides which organ to open
+
+This is the companion to t1307, and together they form a rule:
+
+> **A value wrong in ONE property and right in every other names the SPECIAL CASE.**
+> **A value wrong in ALL of them names the SHARED PATH.**
+
+t1307's symptom was `steps(1, end)` giving the wrong opacity — and the *right* `0px` on a length, which
+exonerated the shared easing code and convicted the opacity reveal-hack. t1308's symptom was wrong on
+opacity *and* on width, which convicted the shared sampling path. Same probe shape, opposite conclusion,
+and neither is guessable from a single-property reading.
+
+### The correct behaviour, including at rest
+
+With `delay: 0` and `paused`, progress is 0 and the element sits at its **first keyframe** — not at the
+base rule and not at the end. It composes with t1307's narrowing: a non-negative delay landing on
+`opacity: 0` still triggers the reveal, a negative one does not.
+
+⚠ Real pages that write this declaration: `pause-on-hover` marquees and tickers, paused-by-default
+spinners, and every CSS-driven scrubber.
+
+⚠ **And two dead premises in two ticks, both in the animation path** (*"We cannot animate"*, *"we have no
+way to have started it"*). Both were true once, both stopped being true when `crate::animation` landed,
+and neither was re-read. **A workaround's comment is a checkable claim about the engine** — sweeping them
+is now a standing item.

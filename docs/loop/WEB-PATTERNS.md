@@ -7644,3 +7644,36 @@ property it is easing. Before blaming a shared path, run the same input through 
 
 ⚠ The general audit this opens: **which workaround comments name a limitation the engine no longer has?**
 Each is a claim about the engine, and the claims are checkable.
+
+## PAUSE-ON-HOVER — the marquee, the ticker, and the paused-by-default spinner (t1308)
+
+**The class.** `animation-play-state: paused` is the pure-CSS way to hold an animation still, and three
+common idioms are built on it: a **marquee or ticker** that runs continuously and pauses under
+`:hover`/`:focus` (the accessible way to satisfy WCAG 2.2.2 without JavaScript), a **spinner or loader**
+declared paused and started by a class when work begins, and a **CSS-driven scrubber** where the position
+is set from a variable and the animation is never meant to play at all.
+
+⚠⚠⚠ **A PAUSED ANIMATION WAS TREATED AS AN ABSENT ONE, AND THE ELEMENT LOST EVERY ANIMATED PROPERTY.**
+The sampler skipped any `paused` animation, so the element cascaded *as though it declared none*. On one
+declaration (`animation: k 100s -50s linear paused forwards`): `opacity` read the initial `1` instead of
+`0.6`, and the same rule on `width` read **`784px`** — `width: auto` filling the container — instead of
+`70px`. A ticker paused under the cursor did not freeze; it jumped to its unanimated geometry.
+
+**Cause: a comment that stopped being true.** The skip was filed under *"we have no way to have started
+it"*, which conflates *not advancing* with *not existing*. Pausing freezes the timeline; the animation
+still has the position its `animation-delay` gives it. And since the document clock is 0 for a static
+render, nothing advances for a *running* animation either — so `paused` changes nothing whatsoever about
+the value to compute.
+
+⚠ **Correct at rest, too:** with `delay: 0` and `paused`, progress is 0 and the element sits at its
+**first keyframe** — not the base rule, not the end state. That is what a paused-by-default spinner must
+show.
+
+⚠ **The diagnostic rule this pair established** (with [THE PLACED ANIMATION](#) above): a value wrong in
+**one** property names the special case; wrong in **all** of them names the shared path. One extra probe
+arm — the same declaration on a second property — decides which organ to open, and neither tick's answer
+was guessable from a single-property reading.
+
+**Measured:** no WPT area exercises `animation-play-state`, so the scoreboard moved **zero** — which is
+precisely why this was invisible and why the claim is the gate. `G_ANIMATION` case 4, RED as a flat
+`rgb(0,0,170)` where the held value is `~rgb(127,127,212)`.

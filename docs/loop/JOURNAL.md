@@ -85570,3 +85570,143 @@ NEXT, ranked (from check #122's steer).
     ticks and cost a whole tick to misdiagnose. Cheap, mechanical, demonstrated yield of one real defect.
 (d) ⭐⭐⭐ The SVG CSS-property supplement (t1305) · `wai-aria` 54.8% (I3) · the CSS-transitions leg
     (t1302) · external stylesheet text to JS (t1302).
+
+## Tick 1308 — a PAUSED animation was treated as an ABSENT one, and it lost every animated property (2026-08-17)
+
+TICK SHAPE: capability (correctness). Board re-run at the top of this tick: **unchanged** (★ CSS-LAYOUT).
+This is t1307's ranked (a) and check #122's steer #1 — the last item standing before t1306's proven
+rewrite can be re-taken.
+
+PROBE BEFORE PATCH, and it is **worse than t1306 reported**:
+
+```text
+   CONTROL  no play-state declared          opacity 0.6    PASS
+   CONTROL  animation-play-state: running   opacity 0.6    PASS
+            animation-play-state: paused    opacity 1      FAIL  (want 0.6)
+            the same rule on a LENGTH       width 784px    FAIL  (want 70px)
+            CSSOM publishes play-state      undefined      FAIL
+```
+
+⭐ **`784px` is `width: auto` filling the container** — so the element was not merely mis-valued, it
+cascaded **as though it had no animation at all**. t1306 saw this only through opacity and called it
+"three wrong readings"; it is one defect that loses *every* animated property.
+
+> ⭐⭐⭐ **AND THAT IS t1307'S RULE RUN IN THE OPPOSITE DIRECTION, WHICH IS WHAT MAKES IT A RULE AND NOT A
+> STORY.** t1307: a value wrong in ONE property and right in every other names the **special case** (the
+> opacity reveal-hack). t1308: a value wrong in **ALL** properties names the **shared path**. Same probe
+> shape — run the same declaration through a second property — and the answer points in a different
+> direction each time. One extra arm decides which organ to open.
+
+CAUSE — `engine/css/src/animation.rs`, `samples_for`:
+
+```rust
+        if ui.animation_play_state_at(i) == AnimationPlayState::Paused {
+            continue;
+        }
+```
+
+with `iteration_progress`'s doc listing `paused` in the not-running space *"(we have no way to have
+started it)"*. **That conflates NOT ADVANCING with NOT EXISTING.** `animation-play-state: paused` freezes
+the timeline; it does not delete the animation, and a frozen animation still has the position its
+`animation-delay` gives it. And the document clock is **0** for a static render, so nothing advances for
+a *running* animation either — `paused` therefore changes **nothing** about the value to compute. The
+skip was pure loss.
+
+⚠ Same class as t1307's reveal-hack, one function over: **a comment asserting a limitation, which stopped
+being true when `crate::animation` landed and was never re-read.** Two in two ticks, which is why check
+#122 steer #3 makes sweeping these a standing item rather than an anecdote.
+
+VERIFIED, 5/5, including the case that proves the fix is not just "unskip":
+
+```text
+   paused holds its value                                   opacity 0.6   PASS
+   paused on a LENGTH holds its value                        width 70px   PASS
+   a paused-at-start animation is at its FIRST frame         width 20px   PASS
+   + both running/no-play-state controls unchanged
+```
+
+The last one matters: with `delay: 0` and `paused`, progress is 0 and the element must sit at its **first
+keyframe** (20px), not at the base rule and not at the end. It composes correctly with t1307 too — a
+non-negative delay landing on `opacity: 0` still triggers the reveal, a negative one still does not.
+
+⚠ **What it costs on real pages:** `pause-on-hover` marquees and tickers, paused-by-default spinners and
+loaders, and every CSS-driven scrubber. All of them declare `animation-play-state: paused`, and all of
+them were rendering as if the animation did not exist.
+
+```text
+  WPT: css/css-transforms 3016/5500 UNCHANGED · css/css-values 3363/7939 -> 3391/7866
+```
+
+⚠ **The `+28` is NOT claimed as this tick's measure.** The denominator moved −73 in the same run, and
+that area's denominator history is `8208 → 7941 → 8033 → 7940 → 7939 → 7866` across ticks that never
+touched animations — ±100 is its ordinary noise. The mark is banked at the higher pass count because a
+mark is a floor. **The claim is the gate, proven red.** No WPT area exercises `animation-play-state`
+directly, which is exactly why this cost nothing on the scoreboard and everything on real pages.
+
+PROVEN RED: restore the `continue` on `AnimationPlayState::Paused` → the paused element paints a flat
+`rgb(0,0,170)` instead of `~rgb(127,127,212)`. The two readings differ by ~127 in the red channel, which
+no antialiasing can blur.
+
+CONTROLS: `g_animation` green as a whole — cases (1) *an animated element is revealed*, (2) *a
+deliberately hidden element STAYS hidden* and (3) *a placed animation keeps its own value* (t1307) all
+unchanged.
+
+⚠ CARRIED, unfixed and now named twice: **`getComputedStyle(el).animationPlayState` and
+`.animationTimingFunction` are `undefined`** — the CSSOM does not publish the `animation-*` longhands.
+Separate from this defect (the cascade has the values; only the published view lacks them), bounded, and
+it is the shape of t1269's *"the cascade held it, CSSOM published NONE"*.
+
+NEXT, ranked.
+(a) ⭐⭐⭐ **RE-TAKE t1306's REWRITE — it is now UNBLOCKED.** Both defects it exposed are fixed (`steps()`
+    was innocent, t1307; `play-state: paused`, this tick). The rewrite is written and probe-proven — a
+    synthesized `@keyframes` gives `matrix(-1, 0, 0, -1, 50, 0)` at 25%, the exact value the Web
+    Animations leg answers `none` to — and it deletes t1301's duplicate JS interpolator. 450 failures in
+    `css/css-transforms` alone, and it fixes a CLASS (transforms, filters, colours, shadows).
+    ⚠ Re-run the `steps:[0]` and `discrete*` gate cases first: those are precisely what it broke, and
+    they are the reason it was reverted.
+(b) ⭐⭐ **Publish the `animation-*` longhands through CSSOM** — carried above, bounded.
+(c) ⭐⭐ **Sweep the workaround comments for DEAD PREMISES** (check #122 steer #3). Two dead premises in
+    two ticks, both in the animation path, both costing real correctness.
+(d) ⭐⭐⭐ The SVG CSS-property supplement (t1305) · `wai-aria` 54.8% (I3) · the CSS-transitions leg
+    (t1302) · external stylesheet text to JS (t1302).
+
+### WALL-TIME AUDIT (due at 1307) — the wall is LEAN; the variance is CONTENTION, and the number that triggered this audit is poisoned
+
+`./scripts/wall-audit.sh run` @ tick 1307, total **1210s**:
+
+```text
+   290s  F   (perf floors)   24%        54s  B    4%
+   131s  T   (crate tests)   11%        13s  G6   1%
+    83s  G3  (shell suite)    7%         8s  G1   1%
+```
+
+⚠ **Those sections sum to 588s of a 1210s wall — half of it is unattributed**, which is the tell.
+Six walls landed in THIS session on essentially the same tree:
+
+```text
+   191s · 190s · 188s · 186s        ← quiet box
+   565s · 1264s                     ← load1 14–19, entirely the observer's `find`-based hygiene cron
+```
+
+**A 6.4× spread with no gate added or widened.** So the honest reading is the one STATUS.md already
+records for tick 325: *a contended landing cycle banks a poisoned number, not a regression.* `F` being
+the largest section is expected and correct — the perf floors are deliberately NOT parallel (a benchmark
+sharing the machine is not a benchmark), which makes them the most contention-sensitive thing in the
+wall by construction.
+
+Against the audit's four admissible questions: **(1) redundancy** — the shell suite is already captured
+ONCE and shared by G3/G_TEARDOWN/G_RUNTIME_COUNT/G_INTERACT; **(2) parallelism** — the gates launch
+concurrently and `F` is serial on purpose; **(3) caching** — incrementals are in RAM and fetches are
+snapshot-cached; **(4) scope** — the four units are built up front so gates only *run* their linked
+binaries. **Nothing is trimmed, and nothing should be**: an audit that finds the wall already lean is a
+fine result, and the wall-audit script says so itself.
+
+⚠ Harness-owned, so recorded and not acted on (SCOPE rule): the honest warm mark is **~190s**, and any
+mark banked while `load1 > 10` should be read as a measurement of the box, not of the wall.
+
+⚠⚠ **FOUR symptoms this session, one cause.** `G_INTERACT` and `G3` false-RED at t1301 (the shell suite
+passed 75/75 in the same run); the 565s and 1264s walls above; and now **`G_RUNAWAY` — a Bar 0 gate — RED
+at `load1 28`, then PASSING in isolation in 13.08s on the same tree.** A Bar 0 RED is never waved through
+on suspicion, so it was re-run rather than assumed; but every one of these measures *time*, and all four
+track the observer's `find`-based hygiene cron rather than anything in the engine. The wall is lean; the
+box is busy.

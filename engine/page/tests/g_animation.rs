@@ -34,14 +34,18 @@ fn animated_content_is_visible_and_deliberately_hidden_content_is_not() {
            its `opacity: 0` is the answer the author asked for and must NOT be overwritten. */
         .placed { animation: fadeIn 100s -50s steps(1, end) forwards;
                   background: #0000aa; height: 60px }
+        /* PAUSED is not ABSENT: frozen at the position its delay gives it, i.e. opacity 0.5. */
+        .paused { animation: fadeIn 100s -50s linear paused forwards;
+                  background: #0000aa; height: 60px }
       </style>
       <div class="reveal">revealed by an animation</div>
       <div class="hidden">deliberately hidden — and must STAY hidden</div>
       <div class="placed">placed mid-flight AT opacity 0 — must stay transparent</div>
+      <div class="paused">PAUSED mid-fade — must hold opacity 0.5, not vanish</div>
       </body></html>"#;
 
     let page = manuk_page::Page::load(html, "https://anim.test/", &fonts, 800.0);
-    let canvas = page.paint(&fonts, 800, 200);
+    let canvas = page.paint(&fonts, 800, 300);
     let px = canvas.rgba_bytes();
     let at = |y: usize| {
         let i = (y * 800 + 400) * 4;
@@ -102,5 +106,33 @@ fn animated_content_is_visible_and_deliberately_hidden_content_is_not() {
          The hack exists for a fade-in that has NOT STARTED, where 0 is the journey's first frame. An \
          author who writes a negative delay has positioned the animation deliberately, so its value \
          at that point is the answer, not a page that failed to appear."
+    );
+
+    // (4) **A PAUSED ANIMATION HOLDS ITS VALUE — it is not an ABSENT one (t1308).**
+    //     `samples_for` used to `continue` past any `animation-play-state: paused`, on the reasoning
+    //     that we have no way to have STARTED it. That conflates *not advancing* with *not existing*:
+    //     pausing freezes the timeline, and a frozen animation still has the position its
+    //     `animation-delay` gives it. The document clock is 0 for a static render, so nothing advances
+    //     for a RUNNING animation either — `paused` therefore changes nothing about the value.
+    //
+    //     ⚠ **EVERY property was wrong, which is what distinguishes this from case (3).** The skip made
+    //     the element cascade as if it had no animation at all: `opacity` read the initial `1`, and the
+    //     same rule on `width` read **784px** — `width: auto` filling the container — instead of 70px.
+    //     *A value wrong in ONE property names a special case; wrong in ALL of them names the shared
+    //     path.* Case (3) was the former, this is the latter.
+    //
+    //     `#0000aa` at opacity 0.5 over white is ~rgb(127, 127, 212). Skipping the animation instead
+    //     leaves opacity at 1 and paints the flat ~rgb(0, 0, 170) — so the RED and GREEN readings
+    //     differ in the RED channel by ~127, which no antialiasing can blur.
+    //
+    //     RED: restore the `continue` on `AnimationPlayState::Paused` in `animation.rs` -> r ~= 0.
+    let (r4, g4, b4) = at(210);
+    assert!(
+        r4 > 90 && r4 < 170 && b4 > r4 + 30,
+        "G_ANIMATION: a PAUSED animation painted rgb({r4},{g4},{b4}) — expected ~rgb(127,127,212), \
+         i.e. `#0000aa` held at opacity 0.5.\n  \
+         A flat rgb(0,0,170) means the animation was SKIPPED and the element cascaded as though it \
+         had none: pause-on-hover marquees, paused-by-default spinners and CSS-driven scrubbers all \
+         write this declaration, and skipping it loses every animated property, not just opacity."
     );
 }

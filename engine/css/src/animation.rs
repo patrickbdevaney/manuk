@@ -123,9 +123,14 @@ pub enum Composite {
 /// **Where in its own timeline is this animation, right now?**
 ///
 /// Returns `None` — meaning *this element is not animating, cascade it normally* — for the whole of
-/// the not-running space: no duration, `animation-play-state: paused` (we have no way to have started
-/// it), a delay that has not elapsed under a `fill-mode` that does not back-fill, and a finished
-/// animation whose `fill-mode` does not forward-fill.
+/// the not-running space: no duration, a delay that has not elapsed under a `fill-mode` that does not
+/// back-fill, and a finished animation whose `fill-mode` does not forward-fill.
+///
+/// ⚠ **`animation-play-state: paused` is NOT in that space, and used to be (t1308).** The old note read
+/// *"we have no way to have started it"*, which confuses *not advancing* with *not existing*. A paused
+/// animation is frozen at the position its delay gives it, and since the document clock is 0 for a
+/// static render nothing advances for a RUNNING animation either — so `paused` changes nothing about
+/// the value, and skipping it cascaded the element as though it had no animation at all.
 ///
 /// ⚠ **`direction` and `iteration-count` are applied here and not by the caller**, because the
 /// alternate directions are a transform on the *iteration* progress and the caller only ever sees the
@@ -323,7 +328,7 @@ pub fn samples_for<'a, E>(
 where
     E: stylo::dom::TElement + 'a,
 {
-    use stylo::values::computed::{AnimationDirection, AnimationFillMode, AnimationPlayState};
+    use stylo::values::computed::{AnimationDirection, AnimationFillMode};
 
     let ui = cv.get_ui();
     let n = ui.animation_name_count();
@@ -332,9 +337,23 @@ where
     for i in 0..n {
         let name = ui.animation_name_at(i);
         let Some(atom) = name.as_atom() else { continue };
-        if ui.animation_play_state_at(i) == AnimationPlayState::Paused {
-            continue;
-        }
+        // ⚠⚠⚠ **A PAUSED ANIMATION IS NOT AN ABSENT ONE (t1308).** This used to `continue`, on the
+        // reasoning quoted in `iteration_progress`'s doc — *"we have no way to have started it"*. That
+        // conflates *not advancing* with *not existing*: `animation-play-state: paused` freezes the
+        // timeline, it does not delete the animation, and a frozen animation still HAS a position —
+        // the one its `animation-delay` gives it. Our clock sits at 0 for a static render, so nothing
+        // advances for a running animation either, and `paused` therefore changes **nothing** about
+        // the value to compute.
+        //
+        // What skipping cost was not subtle: the element cascaded as if it had no animation at all,
+        // so `animation: k 100s -50s linear paused forwards` read `opacity: 1` (the initial value)
+        // instead of 0.6, and the same rule on `width` read **784px** — `width: auto` filling the
+        // container — instead of 70px. **Every property was wrong, which is what distinguishes this
+        // from t1307**: a value wrong in ONE property names a special case, and a value wrong in ALL
+        // of them names the shared path. Here it is the shared path.
+        //
+        // `pause-on-hover` marquees, paused-by-default spinners, and CSS-driven scrubbers are all
+        // this declaration.
         let Some(anim) = stylist.lookup_keyframes(atom, element) else {
             continue;
         };

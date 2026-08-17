@@ -11,12 +11,12 @@
 
 | | value | over |
 |---|---|---|
-| ticks landed | **997** | ticks 1–1306 |
-| median tick cycle | **30m** | 996 intervals |
-| median, last 10 | **80m** | 10 intervals |
+| ticks landed | **998** | ticks 1–1308 |
+| median tick cycle | **30m** | 997 intervals |
+| median, last 10 | **1.7h** | 10 intervals |
 | fastest / slowest | 5s / 5.4d | |
-| **ticks per hour** | **1.12** | 891.8h elapsed |
-| median verify wall | **63s** | 936 ticks |
+| **ticks per hour** | **1.12** | 893.5h elapsed |
+| median verify wall | **63s** | 937 ticks |
 | wall trend | 39s → 17m — getting slower ⚠️ | first 3 vs last 3 |
 
 The **cycle** is the real unit: implement → debug → verify wall → land. The wall is only part of
@@ -31,7 +31,7 @@ it, and a wall that grows taxes every future tick, so it is tracked separately f
 * **✅ rows in the capability ledger**: 144 → **642**
 * **Bar 0 — oracle hangs**: 0 of 265 sites
 
-**465 of 997 ticks** (47%) moved a
+**466 of 998 ticks** (47%) moved a
 user-visible capability. The rest were instruments, infrastructure and corrections — and the
 ledger says the corrections were not overhead: three of its top three priorities were phantoms,
 and finding that out redirected everything after it.
@@ -90,7 +90,7 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 
 ## What a capability costs
 
-* **465** capability ticks, median cycle **30m**
+* **466** capability ticks, median cycle **30m**
 * median diff per tick: **+278 / −34** lines across 8 files
 
 ## Every tick
@@ -1094,5 +1094,6 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 | **1303** | 2026-08-17 06:57 | 13m | measurement | 17m | +208/−36 | 493 | 81 | 56.0% · | t1301 bought +605 in an area it never measured, and it built a SECOND interpolator that is |
 | **1304** | 2026-08-17 07:11 | 14m | instrument | 17m | +223/−34 | 493 | 81 | 56.0% · | the metric could not see SVG or the ACCESSIBILITY TREE, and one of those is a constitution |
 | **1306** | 2026-08-17 08:53 | 1.7h | capability | 17m | +395/−40 | 493 | 81 | 56.0% · | `element.animate()` stops interpolating in JavaScript and SYNTHESIZES a CSS animation inst |
+| **1308** | 2026-08-17 10:32 | 1.6h | capability | 17m | +384/−49 | 493 | 81 | 56.0% · | a PAUSED animation was treated as an ABSENT one, and it lost every animated property (2026 |
 
 *`·` after a WPT figure means **carried forward**, not measured this tick.*
