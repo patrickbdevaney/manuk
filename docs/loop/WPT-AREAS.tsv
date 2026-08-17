@@ -8,7 +8,7 @@ css/css-sizing	3028	5850	51.8	0	0
 css/css-fonts	3527	7552	46.7	0	0
 css/css-text	2010	4515	44.5	0	0
 css/css-overflow	450	963	46.7	0	0
-css/css-transforms	3016	5500	54.8	0	0
+css/css-transforms	3669	5461	67.2	0	0
 css/css-ui	710	1900	37.4	0	0
 css/css-backgrounds	4087	6181	66.1	0	0
 css/css-values	3391	7866	43.1	0	0
@@ -24,4 +24,4 @@ svg	313	2137	14.6	0	0
 accname	328	484	67.8	0	0
 wai-aria	238	434	54.8	0	0
 html-aam	253	335	75.5	0	0
-TOTAL	471524	1269822	37.1	0	0
+TOTAL	472177	1269783	37.2	0	0

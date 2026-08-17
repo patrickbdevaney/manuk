@@ -7677,3 +7677,30 @@ was guessable from a single-property reading.
 **Measured:** no WPT area exercises `animation-play-state`, so the scoreboard moved **zero** — which is
 precisely why this was invisible and why the claim is the gate. `G_ANIMATION` case 4, RED as a flat
 `rgb(0,0,170)` where the held value is `~rgb(127,127,212)`.
+
+## THE SCRUBBER AND THE TRANSFORM TWEEN — `element.animate()` on anything with structure (t1309)
+
+**The class.** Every imperative animation on the modern web goes through `element.animate()`: FLIP list
+reordering, shared-element transitions, drag-to-dismiss sheets, scroll-linked heroes, and the whole
+GSAP/Motion-One family. What they animate is overwhelmingly **`transform`** — and transform does not
+interpolate textually. It interpolates **per transform-function, with `none` as the identity and the
+shorter list padded with identities.**
+
+So `animate([{transform:'none'}, {transform:'translate(200px) rotate(720deg)'}])` sampled at 25% must be
+`matrix(-1, 0, 0, -1, 50, 0)`. A textual interpolator sees two strings with nothing in common, declares
+them non-interpolable, and answers **`none`** — a plausible value, silently wrong, and wrong for every
+filter, colour, shadow and `border-image` tween too.
+
+⚠⚠⚠ **The engine already owned the right answer.** `element.animate()` now reaches it by expressing itself
+as CSS — a synthesized `@keyframes` plus `animation-delay: -<currentTime>ms` — so Stylo's per-property-type
+`Animate` does the work. The proof is an **equality**: the two WPT harness legs that run the same
+expectations now fail on exactly the same 92, where the JS path failed 450.
+
+⚠ **A duplicate is removed by INTEGRATION, not deletion.** The first attempt was reverted: deleting the JS
+interpolator exposed two real defects it had been masking (a reveal-hack overwriting a computed
+`opacity: 0`, and `animation-play-state: paused` skipping the animation entirely). Both had to land first.
+
+**Measured:** `css/css-transforms` **3016 → 3669 (+653)**, Web Animations leg **450 → 92**, on a
+denominator stable at ~5500 across four runs. `G_WEB_ANIMATIONS` — every case written for the old
+implementation stays green through the new one — RED two ways (`animation-delay: 0ms` instead of the seek;
+dropping the effect's easing).

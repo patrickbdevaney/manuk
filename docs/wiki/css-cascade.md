@@ -4114,3 +4114,63 @@ spinners, and every CSS-driven scrubber.
 way to have started it"*). Both were true once, both stopped being true when `crate::animation` landed,
 and neither was re-read. **A workaround's comment is a checkable claim about the engine** — sweeping them
 is now a standing item.
+
+## `element.animate()` is a synthesized CSS animation, and `currentTime` is a negative delay (t1309)
+
+There is one interpolator in this engine and it is Stylo's `Animate`. `element.animate()` reaches it by
+**expressing itself as CSS**: a `@keyframes` block written into a shared `<style>` element, `animation-*`
+set inline, and `currentTime` written as **`animation-delay: -<currentTime>ms`** — seeking to T is starting
+T ago. No native bridge, no host hook.
+
+```text
+   animate([{opacity:0},{opacity:1}], {duration:100000, easing:'linear'})  +  currentTime = 50000
+     ⇒  @keyframes __manuk-waapi-0 { 0% { opacity: 0 } 100% { opacity: 1 } }
+        animation-name: __manuk-waapi-0; animation-duration: 100000ms;
+        animation-timing-function: linear; animation-delay: -50000ms
+```
+
+### Why: the number that proves the duplicate is gone is an EQUALITY
+
+t1301 interpolated strings in JavaScript instead, which was a second implementation of something the
+engine already owned. WPT's interpolation harness runs the same expectations through several legs, so the
+duplicate was measurable directly — and so was its removal:
+
+| leg | interpolator | before | after |
+|---|---|---|---|
+| CSS Animations | Stylo's `Animate` | 92 | **92** |
+| Web Animations | JS strings → *now the same CSS path* | 450 | **92** |
+
+**92 and 92.** The two legs now fail on precisely the same expectations, because they go through one
+interpolator; a residual difference would have meant a residual duplicate. `css/css-transforms`
+`3016 → 3669` (+653) on a denominator that has been stable at ~5500 across four runs — the
+stable-denominator area to price this kind of fix on.
+
+### ⚠ Three construction notes, each paid for
+
+- **Do NOT set `animation-play-state`.** The first cut set it from the Animation's `playState`, and
+  `paused` **suppressed the animation entirely** — every paused case read its un-animated default. t1308
+  fixed that skip in the engine, but setting it here is still meaningless: the clock is 0, so nothing
+  advances either way, and the negative delay already carries the position.
+- **`@keyframes` text goes through `<style>.textContent`, not the CSSOM bridge's `insertRule`** — that
+  keeps the prelude free of an ordering dependency on the bridge.
+- **`cancel()` must clear the whole declaration**, or a cancelled fade leaves its element frozen mid-fade
+  forever.
+
+### ⭐ The gate survived a total change of mechanism
+
+Every `g_web_animations` case written for the JS interpolator — `midsample:[0.5]`, both discrete cases,
+and `steps:[0]` — is green through this completely different implementation. That is the strongest
+available statement that those assertions describe **behaviour** rather than **implementation**.
+
+### ⚠⚠ Removing a duplicate is an INTEGRATION, and the wall may not be watching
+
+The first attempt (t1306) was reverted because deleting the duplicate went red on `steps(1, end)` — the
+duplicate's hand-rolled easing had been the only reason that assertion was ever green, while the engine's
+own path was wrong for a different reason (the opacity reveal-hack, t1307) and `paused` was being skipped
+(t1308). **Fix what the duplicate was covering first.**
+
+⚠ And this tick found that t1308 had landed a **real regression invisibly**:
+`g_keyframe_interpolation`'s `n3` control asserted a *paused* animation reads its base rule — pinning the
+very bug t1308 fixed — and the wall was green anyway, because `verify.sh` names ~19 gates explicitly while
+`engine/page/tests/` holds **492**. When changing a shared path, run the gates that *mention* it; do not
+infer coverage from a green wall.

@@ -18228,136 +18228,78 @@ const WINDOW_PRELUDE: &str = r#"
                 }
             };
 
-            // ── SAMPLING AN ANIMATION AT A TIME, which is the whole of what the web's animation
-            //    tests ask for and is NOT the same thing as a clock (t1301).
+            // ── **`element.animate()` EXPRESSES ITSELF AS A CSS ANIMATION (t1301, rebuilt t1309).**
             //
-            //    WPT's `interpolation-testcommon.js` never lets time pass: three of its four legs
-            //    set a NEGATIVE delay (`duration:100s`, `delay:-50s` → 50s in at t=0) and the
-            //    Web Animations leg does `animation.pause(); animation.currentTime = 50000`. Each
-            //    lands at progress 0.5 and then maps 0.5 to the progress it actually wants with an
-            //    easing. So the question is always *"what value does this animation HAVE at time
-            //    T"*, never *"advance it"*.
+            //    WPT's `interpolation-testcommon.js` never lets time pass: three of its four legs set a
+            //    NEGATIVE delay (`duration:100s`, `delay:-50s` → 50s in at t=0) and the Web Animations
+            //    leg does `pause(); currentTime = 50000`. Each lands at progress 0.5 and eases from
+            //    there. So the question is always *"what value does this animation HAVE at time T"*,
+            //    never *"advance it"* — a CLOCK was never what was missing.
+            //
+            //    ⚠⚠⚠ **t1301 answered that by interpolating STRINGS in JavaScript, which was a SECOND
+            //    implementation of something the engine already owned.** Measured at t1303: on the same
+            //    expectations in `css/css-transforms`, the CSS-Animations leg (Stylo's `Animate`) failed
+            //    92 and the JS leg failed **450** — 4.9×, because `transform` interpolates per
+            //    transform-function with `none` as the identity and the shorter list identity-padded,
+            //    which no textual comparison can see. A duplicate right on the easy half reads as
+            //    working; only a sibling leg doing the same job better exposed it.
+            //
+            //    ⚠⚠ **And removing it was an INTEGRATION, not a cleanup.** t1306 deleted it and the
+            //    removal went RED on `steps(1, end)` — because the duplicate's hand-rolled easing had
+            //    been the only reason that assertion was ever green, while the engine's own path was
+            //    wrong. t1306 was reverted; t1307 (the opacity reveal-hack, not `steps()`) and t1308
+            //    (`animation-play-state: paused` skipped the animation entirely) fixed the two real
+            //    defects, and only then could this land.
+            //
+            //    So there is ONE interpolator and it is Stylo's. This synthesizes a `@keyframes` block,
+            //    sets `animation-*` inline, and expresses `currentTime` as a **negative
+            //    `animation-delay`**. The text goes through a `<style>` element's `textContent` rather
+            //    than the CSSOM bridge's `insertRule`, so it carries no prelude-ordering dependency.
 
-            // `steps(1,end)` / `steps(1,start)` / `linear` / `cubic-bezier(a,b,c,d)` — exactly the
-            // four shapes `createEasing` emits, plus the CSS keywords that mean the same curves.
-            var CUBIC_KEYWORDS = {
-                'ease': [0.25, 0.1, 0.25, 1], 'ease-in': [0.42, 0, 1, 1],
-                'ease-out': [0, 0, 0.58, 1], 'ease-in-out': [0.42, 0, 0.58, 1]
+            // `backgroundColor` -> `background-color`, `cssFloat` -> `float`, `webkitTransform` ->
+            // `-webkit-transform`. A dashed name is already a CSS name and passes through.
+            var __waDashed = function (prop) {
+                if (prop.indexOf('-') >= 0) { return prop.toLowerCase(); }
+                if (prop === 'cssFloat') { return 'float'; }
+                var d = prop.replace(/[A-Z]/g, function (m) { return '-' + m.toLowerCase(); });
+                if (/^(webkit|moz|ms|o)-/.test(d)) { d = '-' + d; }
+                return d;
             };
-            var bezierY = function (x1, y1, x2, y2, x) {
-                // Solve x(t) = x for t by bisection, then return y(t). Bisection rather than
-                // Newton because the control points here are author-supplied and a zero derivative
-                // is legal; 30 halvings is ~1e-9, far below any serialized value's precision.
-                var cx = function (t) {
-                    var u = 1 - t;
-                    return 3 * u * u * t * x1 + 3 * u * t * t * x2 + t * t * t;
-                };
-                var lo = 0, hi = 1, t = x;
-                for (var i = 0; i < 30; i++) {
-                    t = (lo + hi) / 2;
-                    if (cx(t) < x) { lo = t; } else { hi = t; }
-                }
-                var u = 1 - t;
-                return 3 * u * u * t * y1 + 3 * u * t * t * y2 + t * t * t;
-            };
-            var applyEasing = function (easing, p) {
-                if (!easing || easing === 'linear') { return p; }
-                var e = String(easing).trim();
-                var m = /^steps\(\s*(\d+)\s*(?:,\s*(jump-start|jump-end|jump-none|jump-both|start|end)\s*)?\)$/.exec(e);
-                if (m) {
-                    var n = parseInt(m[1], 10) || 1;
-                    var pos = m[2] || 'end';
-                    var atStart = (pos === 'start' || pos === 'jump-start');
-                    var step = Math.floor(p * n);
-                    if (atStart) { step += 1; }
-                    if (p >= 1) { step = atStart ? n : n; }
-                    if (p <= 0) { step = atStart ? (p < 0 ? 0 : 1) : 0; }
-                    return Math.min(Math.max(step / n, 0), 1);
-                }
-                var c = /^cubic-bezier\(([^)]*)\)$/.exec(e);
-                var pts = c ? c[1].split(',').map(parseFloat) : CUBIC_KEYWORDS[e];
-                if (pts && pts.length === 4 && pts.every(function (v) { return isFinite(v); })) {
-                    return bezierY(pts[0], pts[1], pts[2], pts[3], Math.min(Math.max(p, 0), 1));
-                }
-                return p;
-            };
-
-            // ⚠ **THE SKELETON DECIDES INTERPOLABLE vs DISCRETE, and getting that split right is
-            //    most of the correctness here.** Split each endpoint into its numbers and the text
-            //    between them. `10px 20px` and `20px 30px` share the skeleton `["", "px ", "px"]`,
-            //    so the numbers interpolate pairwise. `1fr 1fr 1fr` and `2fr 2fr` do NOT — different
-            //    token counts — so the pair is DISCRETE and holds `from` until progress 0.5, then
-            //    `to`. That is precisely WPT's `expectFlip`, and it is why a "wrong" answer here
-            //    would silently pass half the assertions in every interpolation file.
-            var NUM_RE = /-?(?:\d+\.?\d*|\.\d+)(?:e[-+]?\d+)?/gi;
-            var skeleton = function (v) {
-                var nums = [], text = [], last = 0, m;
-                NUM_RE.lastIndex = 0;
-                while ((m = NUM_RE.exec(v)) !== null) {
-                    text.push(v.slice(last, m.index));
-                    nums.push(parseFloat(m[0]));
-                    last = m.index + m[0].length;
-                }
-                text.push(v.slice(last));
-                return { nums: nums, text: text };
-            };
-            var interpolateValue = function (from, to, p) {
-                var a = String(from), b = String(to);
-                var sa = skeleton(a), sb = skeleton(b);
-                var same = sa.nums.length === sb.nums.length && sa.nums.length > 0
-                    && sa.text.length === sb.text.length
-                    && sa.text.every(function (t, i) { return t === sb.text[i]; });
-                if (!same) { return p < 0.5 ? a : b; }   // discrete — flip at the halfway point
-                var out = '';
-                for (var i = 0; i < sa.nums.length; i++) {
-                    var v = sa.nums[i] + (sb.nums[i] - sa.nums[i]) * p;
-                    // Trim float noise without truncating real precision: 0.1+0.2 must not
-                    // serialize as 0.30000000000000004, and 0.5 must stay "0.5".
-                    out += sa.text[i] + String(parseFloat(v.toFixed(6)));
-                }
-                return out + sa.text[sa.text.length - 1];
-            };
-
-            // The value each animated property has at overall progress `p`, given keyframes whose
-            // offsets default to an even spread. Returns a frame-shaped object so it can go through
-            // `applyFrame` like any other.
-            var sampleFrames = function (frames, p) {
-                if (!frames.length) { return null; }
-                var offsetOf = function (f, i) {
-                    return (typeof f.offset === 'number') ? f.offset
-                        : (frames.length === 1 ? 1 : i / (frames.length - 1));
-                };
-                // Which properties are animated at all — the union, so a property named on only one
-                // keyframe still resolves against its neighbour.
-                var props = {};
-                frames.forEach(function (f) {
+            var __waSeq = 0;
+            var __waStyleEl = null;
+            var __waKeyframesText = function (name, frames) {
+                var n = frames.length, out = [];
+                for (var i = 0; i < n; i++) {
+                    var f = frames[i];
+                    // An explicit `offset` wins; otherwise keyframes spread evenly, and a lone keyframe
+                    // is the `to` frame (WAAPI's own default).
+                    var off = (typeof f.offset === 'number') ? f.offset
+                        : (n === 1 ? 1 : i / (n - 1));
+                    var decls = [];
                     for (var k in f) {
-                        if (k !== 'offset' && k !== 'easing' && k !== 'composite') { props[k] = 1; }
+                        if (k === 'offset' || k === 'easing' || k === 'composite') { continue; }
+                        if (f[k] === undefined || f[k] === null) { continue; }
+                        decls.push(__waDashed(k) + ': ' + String(f[k]));
                     }
-                });
-                var out = {};
-                for (var prop in props) {
-                    var pts = [];
-                    frames.forEach(function (f, i) {
-                        if (f[prop] !== undefined) { pts.push({ o: offsetOf(f, i), v: f[prop], e: f.easing }); }
-                    });
-                    if (!pts.length) { continue; }
-                    if (pts.length === 1 || p <= pts[0].o) { out[prop] = pts[0].v; continue; }
-                    if (p >= pts[pts.length - 1].o) { out[prop] = pts[pts.length - 1].v; continue; }
-                    for (var i = 0; i < pts.length - 1; i++) {
-                        if (p >= pts[i].o && p <= pts[i + 1].o) {
-                            var span = pts[i + 1].o - pts[i].o;
-                            var local = span > 0 ? (p - pts[i].o) / span : 0;
-                            // A per-keyframe `easing` governs the segment that STARTS at it.
-                            out[prop] = interpolateValue(pts[i].v, pts[i + 1].v,
-                                                         applyEasing(pts[i].e, local));
-                            break;
-                        }
-                    }
+                    // A per-keyframe easing governs the segment starting at it; `composite` maps onto
+                    // the real `animation-composition` longhand (landed t1287).
+                    if (f.easing) { decls.push('animation-timing-function: ' + f.easing); }
+                    if (f.composite) { decls.push('animation-composition: ' + f.composite); }
+                    if (!decls.length) { continue; }
+                    out.push('  ' + (Math.max(0, Math.min(1, off)) * 100) + '% { ' +
+                             decls.join('; ') + ' }');
                 }
-                return out;
+                return '@keyframes ' + name + ' {\n' + out.join('\n') + '\n}';
             };
-
+            // ONE `<style>` element for every animation this document synthesizes — a fresh element per
+            // animation would grow a node per fade on a list-heavy page.
+            var __waInstall = function (doc, text) {
+                if (!__waStyleEl || !__waStyleEl.parentNode) {
+                    __waStyleEl = doc.createElement('style');
+                    (doc.head || doc.documentElement || doc.body).appendChild(__waStyleEl);
+                }
+                __waStyleEl.textContent = (__waStyleEl.textContent || '') + '\n' + text;
+            };
             var Animation = function (el, frames, options) {
                 var opts = (typeof options === 'number') ? { duration: options } : (options || {});
                 var fill = opts.fill || 'none';
@@ -18383,18 +18325,57 @@ const WINDOW_PRELUDE: &str = r#"
                         self._sample();
                     }
                 });
-                // The value this animation HAS at `currentTime`, written through to the element.
-                // Progress is clamped into [0,1] because `fill` decides what happens outside the
-                // active interval and both ends of the harness's expectations (`at` of -0.3 and
-                // 1.5) live there.
+                // **The animation IS a CSS animation, and `currentTime` is a NEGATIVE DELAY.**
+                // Nothing is interpolated here: the declaration hands the whole question to the
+                // cascade, which resolves it through Stylo's per-property-type `Animate` — correct for
+                // transform lists, filters, colours and shadows by construction, which a textual
+                // interpolator can never be.
+                var kfName = null;
                 this._sample = function () {
-                    if (!frames.length || curTime === null) { return; }
-                    var p = duration > 0 ? curTime / duration : (curTime >= 0 ? 1 : 0);
-                    var before = p < 0, after = p >= 1 && duration > 0;
-                    if (before && !(fill === 'backwards' || fill === 'both')) { return; }
-                    if (after && !(fill === 'forwards' || fill === 'both')) { return; }
-                    p = Math.min(Math.max(p, 0), 1);
-                    applyFrame(el, sampleFrames(frames, applyEasing(opts.easing, p)));
+                    if (!frames.length || curTime === null || !el.style) { return; }
+                    if (kfName === null) {
+                        kfName = '__manuk-waapi-' + (__waSeq++);
+                        try {
+                            __waInstall(el.ownerDocument || document,
+                                        __waKeyframesText(kfName, frames));
+                        } catch (e) { kfName = ''; }
+                    }
+                    if (!kfName) { return; }
+                    try {
+                        el.style.animationName = kfName;
+                        // A zero/absent duration would make every progress undefined, so it is
+                        // expressed as a 1ms animation held past its end — which is what "no duration"
+                        // means for a fill-mode animation anyway.
+                        el.style.animationDuration = (duration > 0 ? duration : 1) + 'ms';
+                        el.style.animationTimingFunction = opts.easing || 'linear';
+                        el.style.animationFillMode = fill;
+                        if (opts.iterations !== undefined) {
+                            el.style.animationIterationCount =
+                                (opts.iterations === Infinity) ? 'infinite' : String(opts.iterations);
+                        }
+                        // ⚠⚠⚠ **`animation-play-state` IS DELIBERATELY NOT SET.** t1306's first cut set
+                        // it from `playState`, and `paused` SUPPRESSED the animation entirely — every
+                        // paused case read its un-animated default (opacity 1, the UA font), which is
+                        // the un-animated page wearing a plausible answer's clothes. t1308 fixed that
+                        // skip in the engine, but setting it here would still be meaningless: the
+                        // document clock is 0, so nothing advances either way, and the negative delay
+                        // already expresses exactly where the animation sits.
+                        //
+                        // THE WHOLE DEVICE: seeking to T is starting T ago.
+                        el.style.animationDelay = (-(curTime || 0)) + 'ms';
+                    } catch (e) {}
+                };
+                // Undo everything `_sample` set — `cancel()` must leave no trace in the cascade, or a
+                // cancelled fade keeps its element frozen mid-fade forever.
+                this._clearAnimation = function () {
+                    if (!el.style) { return; }
+                    try {
+                        el.style.animationName = '';
+                        el.style.animationDuration = '';
+                        el.style.animationDelay = '';
+                        el.style.animationFillMode = '';
+                        el.style.animationTimingFunction = '';
+                    } catch (e) {}
                 };
                 this.id = opts.id || '';
                 this.pending = false;
@@ -18432,7 +18413,9 @@ const WINDOW_PRELUDE: &str = r#"
                     self._settle();
                 };
                 this.cancel = function () {
-                    self.playState = 'idle'; self.currentTime = 0;
+                    self.playState = 'idle';
+                    curTime = 0;
+                    self._clearAnimation();
                     var e = new Error('The animation was cancelled.');
                     try { e.name = 'AbortError'; } catch (x) {}
                     finRej(e);

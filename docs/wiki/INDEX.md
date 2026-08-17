@@ -954,6 +954,11 @@
   - L4072 · A PAUSED animation is not an ABSENT one (t1308)
   - L4092 · ⭐⭐⭐ One extra probe arm decides which organ to open
   - L4104 · The correct behaviour, including at rest
+  - L4118 · element.animate() is a synthesized CSS animation, and currentTime is a negative delay (t1309)
+  - L4132 · Why: the number that proves the duplicate is gone is an EQUALITY
+  - L4148 · ⚠ Three construction notes, each paid for
+  - L4159 · ⭐ The gate survived a total change of mechanism
+  - L4165 · ⚠⚠ Removing a duplicate is an INTEGRATION, and the wall may not be watching
 
 ## `<dialog>`, `popover`, and the top layer (ticks 194-195)
 `docs/wiki/dialog-and-top-layer.md`
@@ -2264,4 +2269,4 @@
   - L231 · Both named mechanisms are subsystem work
 
 ---
-2171 sections across 22 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+2176 sections across 22 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.

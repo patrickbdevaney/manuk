@@ -153,7 +153,7 @@ fn a_keyframes_animation_resolves_to_an_interpolated_value() {
     assert_eq!(
         got,
         "w1=50 w2=60 c1=rgb(50, 50, 50) v1=visible d1=100 ks=50 ks2=0 op50=0.5 op0=1 \
-         e1=100 n1=20 n2=20 n3=20 n4=20 n5=0",
+         e1=100 n1=20 n2=20 n3=50 n4=20 n5=0",
         "a `@keyframes` animation must resolve to the INTERPOLATED value at its current position. \
          `w1=50` is the core claim (half of 0→100). `w2=60` is the spec's fill-in — the `from` \
          keyframe declares no width, so the from-side is the element's own 20px base rule, and 60 \
@@ -165,9 +165,19 @@ fn a_keyframes_animation_resolves_to_an_interpolated_value() {
          reaches the `Err(())` handler at all. `ks2=0` is the discriminator for \
          the keyframe's OWN timing function — `steps(2, end)` at raw 0.25 outputs 0 where the \
          element's `linear` would give 25. `op0=1` pins the reveal-hack (`stylo_map.rs`), which is \
-         a deliberate un-traded capability and NOT a bug this tick may delete. CONTROLS: `n1` no \
-         animation, `n2` a name with no `@keyframes` rule, `n3` paused, `n4` a delay that has not \
-         elapsed under `fill-mode: none` — all four must read the base rule 20 — while `n5`, the \
+         a deliberate un-traded capability and NOT a bug this tick may delete. \
+         ⚠⚠⚠ `n3=50` WAS `n3=20` AND THAT EXPECTATION WAS PINNING A BUG (corrected t1308/t1309): \
+         `n3` is `animation-play-state: paused` on the `.half` row, i.e. `delay:-50s` of `100s`, so \
+         its position is progress 0.5 and its width is 50. The sampler used to SKIP any paused \
+         animation — filing it in the not-running space *\"we have no way to have started it\"* — \
+         which conflates NOT ADVANCING with NOT EXISTING: pausing freezes the timeline, a frozen \
+         animation still has the position its delay gives it, and the document clock is 0 for a \
+         static render so nothing advances for a RUNNING animation either. The skip lost EVERY \
+         animated property, not just width (the same declaration on `opacity` read the initial 1, \
+         and on an auto-width box read 784px). So `paused` is NOT a control for the not-running \
+         space and never was. CONTROLS, now three: `n1` no \
+         animation, `n2` a name with no `@keyframes` rule, `n4` a delay that has not \
+         elapsed under `fill-mode: none` — all three must read the base rule 20 — while `n5`, the \
          same row with `fill-mode: backwards`, must back-fill to 0. `n4` vs `n5` differ in one \
          keyword and must differ in their answer, or the fill-mode arm is not consulted at all"
     );

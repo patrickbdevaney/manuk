@@ -85710,3 +85710,106 @@ at `load1 28`, then PASSING in isolation in 13.08s on the same tree.** A Bar 0 R
 on suspicion, so it was re-run rather than assumed; but every one of these measures *time*, and all four
 track the observer's `find`-based hygiene cron rather than anything in the engine. The wall is lean; the
 box is busy.
+
+## Tick 1309 — `element.animate()` stops interpolating in JavaScript: the duplicate is DELETED and Stylo's `Animate` is the only interpolator (2026-08-17)
+
+TICK SHAPE: capability + deduplication. Board re-run at the top of this tick: **unchanged** (★ CSS-LAYOUT).
+This re-takes t1306's reverted rewrite, which check #122 steer #2 ranks #1 and which t1307 + t1308
+unblocked by fixing the two defects its removal exposed.
+
+WHY IT WAS REVERTED, AND WHY THAT IS NOW SETTLED. t1306 built this, measured it, and found it traded a
+green for a green: strictly better on structured types, strictly worse on `steps(1, end)`. Both causes
+have since been named and fixed, and **neither was in the rewrite**:
+
+```text
+   t1307  the opacity reveal-hack overwrote a computed 0   (steps() was innocent all along)
+   t1308  animation-play-state: paused SKIPPED the animation entirely
+```
+
+⚠ The second one is also a **construction note for this tick**: t1306's first cut set
+`el.style.animationPlayState` from the Animation's play state, and that is exactly what suppressed the
+animation. It must not be set — the clock is 0, nothing advances either way, and the negative delay
+already expresses the position.
+
+HYPOTHESIS. `element.animate()` synthesizes a `@keyframes` block, sets `animation-*` inline, and expresses
+`currentTime` as a **negative `animation-delay`** — the device WPT's own CSS legs use. t1301's
+`interpolateValue` / `sampleFrames` / `applyEasing` are **deleted**: there is one interpolator and it is
+Stylo's, borrowed per the ladder (option 1, no fork).
+
+PREDICTION: `css/css-transforms`'s Web Animations failures fall from 450 toward the CSS-Animations leg's
+92, and every `g_web_animations` case — including `steps:[0]`, the one that reverted t1306 — stays green
+through an entirely different mechanism.
+
+RESULT — **the prediction met exactly, and the number that proves it is an EQUALITY.**
+
+```text
+   css/css-transforms        3016 / 5500  →  3669 / 5461      +653     54.8% → 67.2%
+
+   failures by harness leg, BEFORE  →  AFTER
+     Web Animations            450  →   92      ← t1301's JS interpolator, now deleted
+     CSS Animations             92  →   92      ← Stylo's Animate, untouched
+     CSS Transitions           594  →  590      ← untouched (out of scope)
+     CSS Transitions w/ …      594  →  587      ← untouched
+```
+
+⭐⭐⭐ **The Web Animations leg is now EXACTLY EQUAL to the CSS Animations leg — 92 and 92.** Both legs run
+the same expectations over the same properties, and they now fail on precisely the same ones because they
+go through **one** interpolator. That equality is far stronger evidence than the +653: a residual
+difference would have meant a residual duplicate. There is none.
+
+⚠ **The +653 is honest here where an area total often is not.** `css/css-transforms`' denominator has been
+**5500 across four separate runs this session** and is 5461 now (−39); it is the stable-denominator area
+t1303 identified for exactly this purpose, unlike `css/css-grid` where the same binary twice spread ±250.
+
+MECHANISM. `element.animate()` synthesizes `@keyframes` text into a shared `<style>` element, sets
+`animation-name`/`duration`/`timing-function`/`fill-mode`/`iteration-count` inline, and writes
+**`animation-delay: -<currentTime>ms`** — seeking to T is starting T ago. t1301's `interpolateValue`,
+`sampleFrames`, `applyEasing` and `bezierY` are **gone**. `cancel()` clears the declaration so a cancelled
+fade does not leave its element frozen.
+
+⚠ `animation-play-state` is deliberately **not** set: t1306's first cut did, and `paused` suppressed the
+animation entirely. t1308 fixed that skip in the engine, but setting it here would still be meaningless —
+the clock is 0 so nothing advances either way, and the negative delay already carries the position.
+
+⚠⚠⚠ **AND THIS TICK FOUND A REGRESSION t1308 LANDED INVISIBLY.** `g_keyframe_interpolation`'s `n3` control
+asserted that a **paused** animation reads the base rule `20`. `n3` is the `.half` row
+(`delay:-50s` of `100s`) plus `animation-play-state: paused`, so its position is progress 0.5 and its
+correct width is **50**. **That control was pinning the very bug t1308 fixed** (t1004's *"a gate can pin
+the engine to a bug"*), and t1308 flipped it red — yet t1308's wall was **green**, because:
+
+> **`g_keyframe_interpolation` is not in the wall.** `scripts/verify.sh` launches gates with explicit
+> `--test <name>` and names ~19 of them, while `engine/page/tests/` holds **492** `g_*.rs` files, and the
+> `T · crate tests` section does not include `manuk-page`. So the great majority of this crate's gates
+> never run in a tick.
+
+Corrected here: `n3=50`, and the control's prose now explains that `paused` was never a member of the
+not-running space. Harness-owned and recorded in one line per the SCOPE rule; the engine-side lesson is
+mine and is the reason the next paragraph exists.
+
+CONTROLS — because the wall could not be relied on, **all 29 `manuk-page` gates that mention
+`animation`/`animate(`/`@keyframes`/`opacity` were run by hand: 29/29 green**, including `g_animation`
+(t1307 + t1308's cases), `g_animation_composition`, `g_keyframe_interpolation`, `g_transform*`,
+`g_visibility`, `g_check_visibility`, `g_computed_style` and `g_view_transition`.
+
+PROVEN RED (two, both measured, both against the NEW mechanism):
+- write `animation-delay: 0ms` instead of `-currentTime` → `endstate` fails: the seek is what positions it.
+- drop the effect's easing (`animationTimingFunction = 'linear'`) → `steps:[0]` fails.
+
+⭐ **Every `g_web_animations` case — including `steps:[0]`, `midsample:[0.5]` and both discrete cases —
+is green through a COMPLETELY DIFFERENT MECHANISM than the one that first satisfied it.** That is the
+strongest statement available that those assertions describe *behaviour* rather than implementation, and
+it is what t1301's gate was written hoping to be true.
+
+NEXT, ranked.
+(a) ⭐⭐⭐ **The CSS-TRANSITIONS leg — now the single largest named mechanism left**, 1,180 in
+    `css/css-transforms` alone plus 486 in `css/css-grid`. Subsystem, scoped at t1302: a per-node
+    previous-computed-value table, with the *only sample when elapsed time is genuinely positive* guard
+    designed in, or every real page's hover renders its START state.
+(b) ⭐⭐⭐ **~460 of 492 `manuk-page` gates are not in the wall** (harness-owned). This tick found a real
+    regression that hid there for a full tick. Worth reporting to the observer as a coverage gap, not a
+    wall-time one.
+(c) ⭐⭐⭐ The SVG CSS-property supplement (t1305) · `wai-aria` 54.8% (I3) · external stylesheet text to
+    JS (t1302).
+(d) ⭐⭐ Publish the `animation-*` longhands through CSSOM (`animationPlayState` /
+    `animationTimingFunction` are `undefined`) — carried from t1308.
+(e) ⭐⭐ Sweep the workaround comments for DEAD PREMISES (check #122 steer #3).
