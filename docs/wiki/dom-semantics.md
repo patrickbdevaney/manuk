@@ -238,6 +238,62 @@ announcing *"the frame's document is not installed"* — the exact false reading
 three ticks of misattribution. It now checks for the unwritten sentinel first and says the true
 thing: *neither handler ran; the document IS installed; the event is what is missing.*
 
+## …and one level further in: the frame's document arrived AFTER the page's own scripts (t1297)
+
+`contentDocument` has been readable since t512 and the element's `load` has fired since t1167. Both
+are true **at `load`, at `DOMContentLoaded`, and from any later task** — and the one moment neither
+had ever been measured is the moment the page's own parse-time script looks:
+
+```html
+  <iframe id=iframe></iframe>
+  <script> const doc = iframe.contentDocument; …​ </script>
+```
+
+`doc` was `null`. HTML §4.8.5 navigates a srcless `<iframe>` to `about:blank` **when the element is
+inserted**, i.e. during parsing; here it was navigated one whole phase later. `load_inline_frames` —
+the network-free frames, `srcdoc` / `src="about:blank"` / no `src` — is reachable **only** from
+`fetch_and_load_iframes`, which `load_async` calls *after* `DOMContentLoaded`, while `from_dom` runs
+the document's blocking scripts.
+
+> **This is t1296's finding in a second subsystem: the work is done, correctly, one phase too late
+> for the page's own code to see it.** And, as there, the final paint is right either way — the
+> frames do load — so no screenshot, box dump, oracle diff or fidelity score could ever show it.
+
+**The fix, and the one thing to know if you touch it.** `build_inline_frame_docs` runs inside
+`from_dom`, after the first layout (so each frame gets its own viewport width from `rects`) and
+before `manuk_js::load_document`. It publishes through `publish_pre_script_frame_docs`, and the
+`Page` **re-publishes** the instant it exists: the pre-script call hands JS `&Page::styles` addresses
+taken from a local map, and `publish_iframe_docs` is the single call site whose contract is *"every
+mutation of `child_pages` republishes"*. `MAX_IFRAME_DEPTH` is enforced through a thread-local
+counter rather than a parameter, because `from_dom` has no `depth` argument and `Page::load` re-enters
+it — an `<iframe srcdoc="<iframe srcdoc=…>">` would otherwise recurse without a bound.
+
+**What it bought, stated honestly: WPT +0.** The eight `0/N` files in `css/css-values` (135 subtests,
+all the viewport-unit fixtures) moved from a **setup throw on line one** to 135 individually-named
+assertions — `can't access property "body", doc is null` 6 → 1 — and every one of them now lands on
+the *next* link:
+
+```text
+  before   FAIL 100vw computes to 200px   can't access property "body", doc is null
+           NotRun 100vi …  NotRun 100vmax …          (33 more never started)
+  after    FAIL 100vw computes to 200px   assert_equals: expected "200px" but got undefined
+           FAIL 100vi …    FAIL 100vmax …            (33 more, each its own assertion)
+```
+
+⚠⚠ **THE REMAINING LINK IS NAMED IN OUR OWN SOURCE.** `with_style_in` (`engine/js/src/dom_bindings.rs`)
+carries the non-claim *"⚠ **No forced reflow for a frame.** `force_reflow_if_stale` re-cascades the
+MAIN document; running it here would refresh the wrong map."* So a node a script **creates inside the
+child** — which is what every one of those fixtures does, via `doc.body.innerHTML = …` — has no entry
+in the child's style snapshot, and `getComputedStyle` answers `undefined` for every property. That is
+the t1282-1295 class (*a value derived from a snapshot is wrong for everything created after it*),
+and closing it needs a child-aware reflow context: the parent's `ReflowCtx` carries the parent's
+viewport width, URL and external CSS, and a `vw` unit resolved against the wrong viewport is exactly
+the answer those tests exist to check.
+
+**Control:** `domparsing` 234/1294 — exactly its mark, so firing the element's `load` one phase
+earlier (it now precedes `DOMContentLoaded`, which is what the spec says for a frame that needs no
+network) broke nothing that depended on the old ordering.
+
 ## CharacterData offsets are UTF-16 CODE UNITS — not bytes, not `char`s
 
 `"😀".length === 2` in JavaScript. An offset of 1 lands **inside the surrogate pair**. Rust strings are

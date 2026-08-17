@@ -84090,3 +84090,222 @@ NEXT, ranked.
 
 WIKI: docs/wiki/css-cascade.md — the script-blocking rule, the three copies of the sheet list, and
 the bounded-wait design with the condition that makes it affordable.
+
+## Tick 1297 — a parser-inserted `<iframe>` has NO DOCUMENT while the document's own scripts run (2026-08-16)
+
+TICK SHAPE: capability. Board re-run at the top of this tick: **unchanged** (★ CSS-LAYOUT). Taking
+`css/css-values` — 4,803 failing at **40.2%**, the lowest pass rate of the big ★ rows — with the
+file-naming instrument that landed in t1296.
+
+HYPOTHESIS: the area's failing mass is not one CSS mechanism. Ranked by file, the top rows are
+`calc-size/*` (a 2,300-subtest animation family) and `if-conditionals` — both very new CSS. But
+**eight files sit at exactly `0/N`, and all eight fail on the same non-CSS sentence**:
+
+```text
+  css/css-values/viewport-units-compute.html            (0/34)   can't access property "body", doc is null
+  css/css-values/viewport-units-scrollbars-compute.html (0/34)   can't access property "body", doc is null
+  css/css-values/viewport-units-invalidation.html       (0/24)   "
+  css/css-values/viewport-units-keyframes.html          (0/24)   "
+  css/css-values/viewport-units-writing-mode.html       (0/8)    "
+  css/css-values/attr-pseudo-element-originating.html   (0/6)    "
+  css/css-values/viewport-units-extreme-scale.html      (0/4)    "
+  css/css-values/viewport-relative-lengths-scaled-viewport.html (0/1)  "
+                                                        -----
+                                                          135   every one a setup throw (t1266)
+```
+
+`viewport-units-compute.html` is four lines of setup:
+
+```html
+  <iframe id=iframe></iframe>
+  <script> const doc = iframe.contentDocument; ... </script>
+```
+
+PROBE BEFORE PATCH. A three-arm fixture read at parse time, all three frame kinds:
+
+```text
+  PROBE-PARSE-TIME  f=DOCNULL/WINNULL  fs=DOCNULL/WINNULL  fb=DOCNULL/WINNULL
+                    (no src)           (srcdoc)            (src=about:blank)
+```
+
+> **`G_INLINE_FRAME_DOCUMENT` already banks all three of these as WORKING, and it is not wrong.**
+> t512 built them; they are readable at `load`, at `DOMContentLoaded`, from any later task. What
+> nobody measured is the one moment the page's *own* parser-time script looks — and that is the only
+> moment `viewport-units-compute.html` ever looks.
+
+The gate even names the residual, and names it for the **`createElement` + `appendChild`** case
+("closing that means building a child document from inside a JS binding"). The parser-inserted case
+is a *different* residual hiding behind the same sentence, and it is the cheap half: `from_dom`
+already holds the tree, the rects and the URL before it runs a single script.
+
+MECHANISM (predicted): `load_inline_frames` — the network-free frames, `srcdoc` / `about:blank` /
+no `src` — is reachable only from `fetch_and_load_iframes`, which `load_async` calls **after
+DOMContentLoaded**. `from_dom` runs the document's blocking scripts long before that, so
+`IFRAME_DOCS` is still empty when they read it. This is t1296's finding in a second subsystem: the
+work is done, correctly, one phase too late for the page's own code to see it.
+
+⚠ This is exactly the class STATUS.md's North Star names — a phase skipped is indistinguishable
+from a phase optimised. The final paint is right; only the script's view is wrong.
+
+PREDICTION, written before the patch: creating the network-free child documents inside `from_dom`
+ahead of `load_document` turns the eight `0/N` files into measurable ones. It does **not** predict
+135 flips — a viewport-unit test that can finally run may still fail on `svh`/`lvh`/`dvh`. The
+falsifiable claim is narrower and is what the gate will carry: **`contentDocument` is non-null, and
+has a `<body>` that can be written to, for a parser-inserted frame read by a parse-time script.**
+
+WHAT LANDED. `build_inline_frame_docs` runs inside `from_dom` — after the first layout, so each frame
+takes its own viewport width from `rects`, and before `manuk_js::load_document`, so the document's
+blocking scripts find real documents. `publish_pre_script_frame_docs` tells JS which arena sits
+behind which element; the `Page` re-publishes the instant it exists, because the pre-script call
+handed out `&Page::styles` addresses from a map that then moved. `MAX_IFRAME_DEPTH` is enforced
+through a thread-local counter rather than the usual parameter: `from_dom` has no `depth` argument
+and `Page::load` re-enters it, so `<iframe srcdoc="<iframe srcdoc=…>">` would recurse unbounded.
+
+RESULT — AND THE HEADLINE IS +0, WHICH IS THE POINT OF REPORTING IT.
+
+```text
+  css/css-values, SAME HOUR, isolated, before -> after
+    subtests            3231/7738  ->  3231/7745      +0 passes
+    "doc is null"               6  ->        1        the setup throw is gone
+    the eight 0/N files    0/135   ->     0/135        every one still zero
+```
+
+⭐⭐ **AND YET THE FIX IS PROVEN APPLIED, BY THE SHAPE OF THE FAILURE RATHER THAN ITS COUNT.** The
+eight files went from *one* throw plus 127 `NotRun` to **135 individually-named assertions**:
+
+```text
+  before   FAIL 100vw computes to 200px   can't access property "body", doc is null
+           NotRun 100vi …  NotRun 100vmax …           (33 more never started)
+  after    FAIL 100vw computes to 200px   assert_equals: expected "200px" but got undefined
+           FAIL 100vi …    FAIL 100vmax …             (33 more, each its own assertion)
+```
+
+> **This is t1266's finding run backwards.** There, *a setup throw scores zero out of ZERO* and
+> 194 files were invisible to both the histogram and the %. Here the same instrument fidelity is
+> bought back: 135 subtests that could not start now start, and name what they land on. The
+> capability is real (a parse-time script creates, reads and WRITES a frame document — the ad-bait
+> probe, the pristine-`window` lift, the OAuth bridge), and the WPT number is flat. Both are true
+> and reporting only the first would be the trade this project refuses.
+
+⚠⚠⚠ **THE NEXT LINK IS NAMED IN OUR OWN SOURCE, WHICH IS WHY THIS IS NOT A DEAD END.**
+`with_style_in` (`engine/js/src/dom_bindings.rs`) carries the non-claim *"⚠ No forced reflow for a
+frame — `force_reflow_if_stale` re-cascades the MAIN document; running it here would refresh the
+wrong map."* Probed directly:
+
+```text
+  gcs=function  div=DIV  cs=object  h=undefined d=undefined   <- a div the script just created
+                                    bodyh=auto                <- CONTROL: a node that predates it
+```
+
+The control row is the whole diagnosis: `getComputedStyle` on the child works, and answers
+`undefined` **only for nodes created after the child's cascade** — the t1282-1295 class (*a value
+derived from a snapshot is wrong for everything created after it*), inside a child arena. Every one
+of those fixtures does `doc.body.innerHTML = …` and then measures. Closing it needs a child-aware
+reflow context, not a redirect of the parent's: `ReflowCtx` carries the parent's viewport width, URL
+and external CSS, and **a `vw` resolved against the wrong viewport is exactly the answer those tests
+exist to check**. That is a tick, not a line.
+
+GATE: **`G_INLINE_FRAME_DOCUMENT` gains claim (5).** Its four existing assertions all read at `load`
+and all passed throughout; the new one reads in the parse-time script. RED two ways, each isolating
+one link:
+
+```text
+  (a) drop the `build_inline_frame_docs` call in `from_dom`  ->  NULL NULL NULL
+  (b) keep it, drop `publish_pre_script_frame_docs`          ->  NULL NULL NULL  (built, never told)
+```
+
+⚠⚠⚠ **AND THE GATE WENT RED ON A CORRECT ENGINE FIRST, BY MY OWN HAND.** The probe's first version
+wrote bait into all three frames at parse time — and assertion (1) reads the `srcdoc` frame's
+`<p id=inner>` at `load`, which the write had deleted. **A shared fixture lets a new WRITING assertion
+invalidate an older READING one**, and the write persisting is precisely what proves the document is
+live, so the collision was invisible as a design error and immediate as a failure. `srcdoc` is now
+READ (the stronger check anyway — it proves the markup parsed), and only the two blank frames are
+written.
+
+CONTROLS: all eight frame gates green (`g_iframe`, `g_framing`, `g_frame_window_surface`,
+`g_iframe_rerender`, `g_iframe_xml_content_type`, `g_document_character_set`, `g_img_current_src`,
+and this one, whose assertion (4) — the `createElement`+`appendChild` residual — correctly still
+reads `sync-null`; that is a different residual and this tick does not touch it). `domparsing`
+234/1294, **exactly its mark**: the element's `load` now fires before `DOMContentLoaded` rather than
+after, which is what the spec says for a frame that needs no network, and nothing depended on the
+old ordering.
+
+⚠ `docs/loop/WPT-AREAS.tsv` is deliberately NOT edited. The row reads `css/css-values 3230/8033`;
+this tick measured `3231/7745` **isolated**. t1296 established that only fixed-denominator runs are
+comparable — an isolated number written into a row the full sweep produces would corrupt the total
+to book a +1 that is not there.
+
+NEXT, ranked.
+(a) ⭐⭐⭐ **A FORCED REFLOW FOR A FRAME** — `with_style_in`'s named non-claim, above. It is what the
+    135 now-named assertions land on, it is sized by its own control row, and it is the same
+    stale-snapshot class the last dozen ticks have been closing in the main document.
+(b) ⭐⭐⭐ `document.styleSheets` is EMPTY for external sheets — carried from t1296, unchanged.
+(c) ⭐⭐ The ANIMATION CLOCK, then `element.animate()` — carried, unchanged.
+(d) ⚠ `IFRAME_DOCS` is never cleared between navigations. Nothing observed it yet, but a map keyed by
+    `NodeId` that outlives its document is the t1273 `(arena, NodeId)` defect waiting for a second
+    page on the same thread. Noted, not fixed here — one mechanism per tick.
+
+⚠ HARNESS (observed, not fixed — scripts/ are observer-owned). Two things cost this tick ~80
+minutes of wall and one false RED, and both are contention, not regression:
+
+  1. ⚠⚠⚠ **`disk-hygiene.sh` IS PILING UP ON ITSELF, AND THAT IS THE WHOLE STORY.** Measured live:
+
+```text
+   concurrent disk-hygiene.sh processes    19
+   concurrent stem-prune `find`s            9
+   orphan test-binary stems                549      x ~2 finds each, over a 105G target/debug
+   cron cadence                           3 min     one RUN takes 25-40 min
+```
+
+     The cadence is an order of magnitude shorter than the runtime, so every 3 minutes another copy
+     joins the herd and none of them finish sooner. `top` is nine `find target/debug/deps` at ~100%
+     CPU each; load average 11-12 with no cargo running at all. It is progressing, not hung (the
+     PIDs advance), but it means **every wall now runs beside a disk-saturating herd** — which is
+     what makes a thin-margin gate flake, and it is why two consecutive walls went red on two
+     DIFFERENT gates that each pass standalone. Observer-owned (`scripts/`); reported, not touched.
+  2. **`G_RUNAWAY` — a Bar 0 gate — went RED on the first wall, and the old tree is the control:**
+
+```text
+   g_runaway, standalone   OLD tree (19:36, tick-1296 wall)   16.45s
+   g_runaway, standalone   THIS tree                          15.45s     assertion: < 20s
+```
+
+     The gate asserts `elapsed < Duration::from_secs(20)` and sits at ~80% of its own budget, so a
+     parallel wall running beside a disk-saturating `find` pushes it over. **This tree is FASTER than
+     the tree the gate last passed on** — the fixture has no `<iframe>`, so `build_inline_frame_docs`
+     is one `flat_descendants` walk that returns empty (the fixture has no `<iframe>` at all).
+
+     ⚠⚠⚠ **AND THREE NOISY SAMPLES SAID THE OPPOSITE, SO THEY WERE NOT TRUSTED.** Run standalone
+     3x each, my tree read 16.94 / 14.94 / **20.96 FAIL** against HEAD's 14.76 / 14.64 / 16.78 — a
+     14% "slowdown" and a plausible story for it. The honest instrument is the ERROR BAR: build BOTH
+     test binaries once, then **interleave** them so the background load drifts across both arms
+     equally.
+
+```text
+   round      OLD (HEAD)      NEW (mine)
+     1          17.45s          21.66s
+     2          25.73s   <---   15.50s        assertion: elapsed < 20s
+     3          16.53s          18.58s
+     4          16.23s          13.80s
+     5          13.92s          14.31s
+   mean         17.97s          16.77s
+   worst        25.73s          21.66s
+```
+
+     **The OLD tree's worst run is worse than the NEW tree's worst, and its mean is higher.** HEAD
+     would have failed this gate too, on this box, tonight. The sequential comparison was measuring
+     the herd, not the tree — which is the standing rule (*every number has a harness, and the
+     harness is part of the number*) caught in the act, one hour after the herd was measured.
+
+     Re-run, do not weaken: a Bar 0 gate with a thin margin is the observer's to re-baseline, and a
+     margin is not a defect to legislate away to land a tick.
+
+  3. The SECOND wall then went red on **`manuk-shell`** instead — 75 passed standalone on the wall's
+     own invocation (`cargo test -q -p manuk-shell`, default features, no `--features` flag), which
+     is exactly its mark. **Two walls, two different suites, both green standalone, is the signature
+     of contention, not of a regression** — a real regression does not move between subsystems on
+     re-run. Neither red was traded away or argued around; both were re-run.
+
+WIKI: docs/wiki/dom-semantics.md — the third entry in the iframe chain (document t512, element `load`
+t1167, parse-time visibility t1297), the re-publish contract, the thread-local depth bound, and the
+named next link with the reason it cannot reuse the parent's reflow context.

@@ -7302,3 +7302,38 @@ installs. The third was still empty, so the measuring call un-styled the documen
 **223**; **+82, zero losses**, control `css/css-values/calc-size` 984 (=). Gate:
 `G_CSS_BEFORE_LIFECYCLE` claim (4), which t714 pinned as a named non-claim and this tick turns
 positive; RED three ways.
+
+## A parser-inserted `<iframe>` has a document by the time the NEXT `<script>` runs (t1297)
+
+**The pattern on the real web:** a page puts an `<iframe>` in its markup and reads it in the very
+next inline script. That is the ad-bait probe (create a frame, write ad-shaped markup into
+`contentDocument`, see whether it survives — measured on `www.welt.de`), the pristine-`window` lift
+(libraries pull unpatched natives out of a blank frame), the sandbox for untrusted markup, the
+`postMessage` relay, and the OAuth / 3-D-Secure bridge. HTML §4.8.5: an `<iframe>` with no `src` is
+navigated to `about:blank` **when the element is inserted**, so its document exists during parsing.
+
+**The class this unlocks:** the page's own parse-time view of its own frames. `G_INLINE_FRAME_DOCUMENT`
+already banked `srcdoc`, `src="about:blank"` and no-`src` as working, and was not wrong — they are
+readable at `load`, at `DOMContentLoaded`, from any later task. `load_inline_frames` is reachable
+only from `fetch_and_load_iframes`, which runs **after `DOMContentLoaded`**, while `from_dom` runs the
+document's blocking scripts. So the one moment nobody had measured is the only moment those pages look.
+
+⚠ **Same shape as t1296, one subsystem over:** the work is done, correctly, one phase too late for
+the page's own code to see it — and the final paint is right either way, so no screenshot, box dump
+or fidelity score can show it.
+
+⚠⚠ **`typeof null === 'object'`, so the gap survives feature detection.** Every
+`typeof f.contentDocument === 'object'` check passed and the next line threw. A gate must therefore
+assert a **write** (innerHTML in, `querySelectorAll` out), never a non-null check.
+
+⚠⚠⚠ **A SHARED GATE FIXTURE MAKES A NEW *WRITING* ASSERTION ABLE TO DELETE AN OLDER *READING* ONE.**
+The first version of this probe wrote bait into all three frames at parse time; assertion (1) reads
+the `srcdoc` frame's `<p id=inner>` at `load`, and the gate went red on a correct engine. The write
+persisting is exactly what proves the document is live — which is why the collision was invisible as
+a design error and obvious as a failure.
+
+**Measured:** the eight `0/N` files in `css/css-values` (135 subtests) moved from a **setup throw at
+line one** to 135 individually-named assertions; `can't access property "body", doc is null` 6 → 1.
+**WPT total +0, and that is the honest number** — the next link (`with_style_in`'s named non-claim,
+*"no forced reflow for a frame"*) is what those assertions now land on. Gate:
+`G_INLINE_FRAME_DOCUMENT` claim (5), RED two ways. Control: `domparsing` 234/1294, exactly its mark.

@@ -988,3 +988,4 @@ tick	sha	epoch	iso	delta_s	shape	wall_s	files	added	deleted	gates	claims	wpt_pas
 1293	b7494fbc	1786913288	2026-08-16T16:48:08-04:00	1865	capability	997	6	184	35	492	81	3896	6960	0	642	0	`fit-content(<length>)` on a grid track did the OPPOSITE of what it says (2026-08-16)
 1294	7e211f2b	1786916774	2026-08-16T17:46:14-04:00	3486	measurement	997	10	513	161	493	81	3896	6960	0	642	0	`minmax(auto, <small>)` ignores the automatic minimum, and it is a TAFFY boundary, not our mapping (2026-08-16)
 1296	542ed629	1786925725	2026-08-16T20:15:25-04:00	8951	capability	997	10	605	67	493	81	3896	6960	0	642	0	a `<link rel=stylesheet>` is SCRIPT-BLOCKING, and every blocking script in this engine ran before it (2026-08-16)
+1297	0e033212	1786938804	2026-08-16T23:53:24-04:00	13079	capability	997	9	779	225	493	81	3896	6960	0	642	0	a parser-inserted `<iframe>` has NO DOCUMENT while the document's own scripts run (2026-08-16)

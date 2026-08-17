@@ -44,10 +44,41 @@ const HTML: &str = r#"<!doctype html><html><body>
 <div id="blank-read">-</div>
 <div id="nosrc-read">-</div>
 <div id="sync-read">-</div>
+<div id="parse-read">-</div>
 <iframe id="f-srcdoc" srcdoc="<html><body><p id='inner'>hello from srcdoc</p></body></html>"></iframe>
 <iframe id="f-blank" src="about:blank"></iframe>
 <iframe id="f-nosrc"></iframe>
 <script>
+  // (5) THE MOMENT THE PAGE'S OWN CODE LOOKS. Every assertion below this one reads at `load`;
+  // this one reads HERE, in the parse-time script, which is the only moment WPT's viewport-unit
+  // fixtures ever look — and the moment an ad-bait probe, an OAuth bridge and a pristine-window
+  // lift all look too. All three frame kinds, and a WRITE, because a null-typed stub passes a
+  // read-only check (`typeof null === 'object'`).
+  (function () {
+    var r = [];
+    // ⚠ srcdoc is READ, never written. Assertions (1)-(3) below run at `load` against these same
+    // three frames, and the first version of this probe wrote into all three — which DELETED the
+    // `<p id=inner>` assertion (1) reads and turned a passing gate red. A shared fixture makes a
+    // new WRITING assertion able to invalidate an older READING one; reading here is also the
+    // stronger check for srcdoc, because it proves the markup was parsed, not merely that a
+    // document exists.
+    var fd = document.getElementById('f-srcdoc').contentDocument;
+    var inner = fd && fd.getElementById && fd.getElementById('inner');
+    r.push('f-srcdoc=' + (fd ? (inner ? inner.textContent : 'no-element') : 'NULL'));
+    // The other two start empty by definition, so a WRITE is the only thing that can tell a live
+    // document from a stub — `typeof null === 'object'` is what hid the original gap. (2) rewrites
+    // this frame's innerHTML wholesale at `load`, so this cannot collide with it.
+    ['f-blank', 'f-nosrc'].forEach(function (id) {
+      var f = document.getElementById(id);
+      var d = f && f.contentDocument;
+      if (!d) { r.push(id + '=NULL'); return; }
+      if (!d.body) { r.push(id + '=nobody'); return; }
+      d.body.innerHTML = '<b class="probe">x</b>';
+      r.push(id + '=wrote' + d.querySelectorAll('.probe').length);
+    });
+    document.getElementById('parse-read').textContent = r.join(' ');
+  })();
+
   // (4) THE RESIDUAL: append a frame and read it on the very next line.
   var dyn = document.createElement('iframe');
   document.body.appendChild(dyn);
@@ -106,7 +137,9 @@ fn a_frame_with_nothing_to_fetch_still_gets_a_document() {
     let blank = text(&page, "#blank-read");
     let nosrc = text(&page, "#nosrc-read");
     let sync = text(&page, "#sync-read");
+    let parse = text(&page, "#parse-read");
     println!("INLINE-FRAME  srcdoc={srcdoc} blank={blank} nosrc={nosrc} sync={sync}");
+    println!("INLINE-FRAME  parse-time={parse}");
 
     // (1) **`srcdoc` is a document, not an attribute.** RED: drop the `srcdoc` branch from
     // `load_inline_frames` → `no-doc`. This is the case the neighbouring comment claimed for ticks.
@@ -140,5 +173,25 @@ fn a_frame_with_nothing_to_fetch_still_gets_a_document() {
         sync, "sync-null",
         "a frame appended and read on the NEXT LINE still has no document — the known residual. \
          If this now reads SYNC-DOC, that half landed; update the gate."
+    );
+
+    // (5) **THE PARSE-TIME READ — t1297.** Assertions (1)-(3) all read at `load`, and every one of
+    // them passed for 785 ticks while this read `NULL NULL NULL`. The frames were built by
+    // `load_inline_frames`, reachable only from `fetch_and_load_iframes`, which runs *after*
+    // `DOMContentLoaded` — so the document's own blocking scripts, which `from_dom` runs, looked at
+    // an empty `IFRAME_DOCS`. The work was done, correctly, one phase too late for the page to see
+    // it: t1296's finding in a second subsystem.
+    //
+    // ⚠ The write is the assertion, not the non-null check. `typeof null === 'object'` is what made
+    // the original gap invisible, so a `bait1` — innerHTML in, `querySelectorAll` out — is what
+    // distinguishes a live document from a stub that types like one.
+    //
+    // RED: delete the `build_inline_frame_docs` call in `from_dom` → `NULL NULL NULL`. RED: keep it
+    // but drop `publish_pre_script_frame_docs` → the same, because the documents exist and JS is
+    // never told which arena is behind which element.
+    assert_eq!(
+        parse, "f-srcdoc=hello from srcdoc f-blank=wrote1 f-nosrc=wrote1",
+        "a parser-inserted <iframe> must have a live, WRITABLE document by the time the very next \
+         <script> runs — HTML §4.8.5 navigates it to about:blank at insertion. Got {parse:?}"
     );
 }

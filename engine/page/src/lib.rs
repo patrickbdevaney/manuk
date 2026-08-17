@@ -2570,6 +2570,150 @@ fn harvest_finished_css(
     *inflight = still_running;
 }
 
+thread_local! {
+    /// How deep the *pre-script* inline-frame pass currently is on this thread.
+    ///
+    /// `render_iframe_with_type` carries an explicit `depth` parameter, but the pre-script pass runs
+    /// inside `from_dom`, which has no such parameter and is re-entered by `Page::load` on the child.
+    /// An `<iframe srcdoc="<iframe srcdoc=…>">` would therefore recurse without a bound. This is that
+    /// bound, and it uses the same `MAX_IFRAME_DEPTH` the fetched path does so the two agree.
+    static INLINE_FRAME_DEPTH: std::cell::Cell<u8> = const { std::cell::Cell::new(0) };
+}
+
+/// **Build the documents of the network-free `<iframe>`s BEFORE the page's own scripts run.**
+///
+/// ⚠⚠⚠ **The frames were being loaded one whole phase after the only moment the page looks.**
+/// `load_inline_frames` — `srcdoc`, `src="about:blank"`, and no `src` at all — is reachable only
+/// from `fetch_and_load_iframes`, which `load_async` calls **after `DOMContentLoaded`**. But
+/// `from_dom` runs the document's *blocking* scripts, and HTML §4.8.5 says a srcless frame is
+/// navigated to `about:blank` **when the element is inserted**, i.e. during parsing. So the four
+/// lines every WPT viewport-unit test opens with —
+///
+/// ```html
+///   <iframe id=iframe></iframe>
+///   <script> const doc = iframe.contentDocument; …​ </script>
+/// ```
+///
+/// — read `null`, throw, and score **0 out of N** (t1266's shape). `G_INLINE_FRAME_DOCUMENT` banks
+/// all three frame kinds as working and is not wrong: they *are* readable at `load`, at
+/// `DOMContentLoaded`, from any later task. The one moment nobody had measured is the page's own
+/// parse-time script, and it is the only moment those tests ever look.
+///
+/// This is t1296's finding in a second subsystem: the work is done, correctly, one phase too late
+/// for the page's own code to see it — and, exactly as with the stylesheet, the final paint is
+/// right, so no screenshot or box dump could ever show it.
+///
+/// Returns `(node, child page, url, painted bitmap)` per frame; the caller owns installation,
+/// because the `Page` that will hold them does not exist yet.
+#[cfg(feature = "spidermonkey")]
+#[allow(clippy::type_complexity)]
+fn build_inline_frame_docs(
+    dom: &Dom,
+    rects: &std::collections::HashMap<manuk_dom::NodeId, [f32; 4]>,
+    final_url: &str,
+    fonts: &FontContext,
+) -> Vec<(
+    manuk_dom::NodeId,
+    Page,
+    String,
+    Option<std::rc::Rc<manuk_paint::DecodedImage>>,
+)> {
+    if INLINE_FRAME_DEPTH.with(|d| d.get()) >= MAX_IFRAME_DEPTH {
+        return Vec::new();
+    }
+    // The same three-way classification `load_inline_frames` makes, and it must stay the same three:
+    // a frame this pass claims but does not build would be skipped by BOTH passes.
+    // `srcdoc` beats `src` (HTML §4.8.5), including a `src` that points somewhere real.
+    let mut work: Vec<(manuk_dom::NodeId, String)> = Vec::new();
+    for n in dom.flat_descendants(dom.root()) {
+        if dom.tag_name(n) != Some("iframe") {
+            continue;
+        }
+        let Some(el) = dom.element(n) else { continue };
+        if let Some(doc) = el.attr("srcdoc") {
+            work.push((n, doc.to_string()));
+            continue;
+        }
+        let src = el.attr("src").unwrap_or("").trim();
+        if src.is_empty() || src.eq_ignore_ascii_case("about:blank") {
+            work.push((n, String::new()));
+        }
+    }
+    if work.is_empty() {
+        return Vec::new();
+    }
+    INLINE_FRAME_DEPTH.with(|d| d.set(d.get() + 1));
+    let mut out = Vec::new();
+    for (node, html) in work {
+        // The frame's own viewport width, so its media queries and layout see the frame — the
+        // `300x150` fallback is the HTML default an unsized `<iframe>` gets, and it is what
+        // `render_iframe_with_type` uses for a frame with no box.
+        let (w, h, visible) = match rects.get(&node) {
+            Some([_, _, rw, rh]) if *rw >= 1.0 && *rh >= 1.0 => {
+                (rw.round().max(1.0) as u32, rh.round().max(1.0) as u32, true)
+            }
+            _ => (300, 150, false),
+        };
+        let mut child = Page::load(&html, final_url, fonts, w as f32);
+        let img = if visible {
+            let canvas = child.paint(fonts, w, h);
+            Some(std::rc::Rc::new(manuk_paint::DecodedImage {
+                width: canvas.width(),
+                height: canvas.height(),
+                rgba: canvas.rgba_bytes().to_vec(),
+            }))
+        } else {
+            None
+        };
+        // **A framed document's referrer is its EMBEDDER** — set here for the same reason
+        // `render_iframe_with_type` sets it before `fire_frame_load`: after is after the only
+        // moment anyone looks.
+        {
+            let doc = child.dom.root();
+            child.dom.set_referrer(doc, final_url);
+        }
+        manuk_js::register_dom(&mut *child.dom as *mut manuk_dom::Dom);
+        out.push((node, child, final_url.to_string(), img));
+    }
+    INLINE_FRAME_DEPTH.with(|d| d.set(d.get().saturating_sub(1)));
+    out
+}
+
+/// Publish the child arenas + their style maps to JS, from a set the `Page` does not own yet.
+///
+/// ⚠ The addresses published here are `Box<Dom>` (stable across the map move into `Page`) and
+/// `&Page::styles` **inside a `HashMap` value** (stable only until that map is next mutated).
+/// `Page::publish_iframe_docs` is called again the moment the `Page` exists for exactly that reason
+/// — this call covers the window *before* it, which is the window the blocking scripts run in.
+#[cfg(feature = "spidermonkey")]
+fn publish_pre_script_frame_docs(
+    frames: &mut [(
+        manuk_dom::NodeId,
+        Page,
+        String,
+        Option<std::rc::Rc<manuk_paint::DecodedImage>>,
+    )],
+) {
+    let docs: std::collections::HashMap<_, _> = frames
+        .iter_mut()
+        .map(|(n, c, _, _)| {
+            let root = c.dom.root();
+            (*n, (&mut *c.dom as *mut manuk_dom::Dom as usize, root))
+        })
+        .collect();
+    manuk_js::set_iframe_docs(docs);
+    let styles: std::collections::HashMap<usize, usize> = frames
+        .iter_mut()
+        .map(|(_, c, _, _)| {
+            (
+                &mut *c.dom as *mut manuk_dom::Dom as usize,
+                &c.styles as *const _ as usize,
+            )
+        })
+        .collect();
+    manuk_js::set_frame_styles(styles);
+}
+
 /// The document's author stylesheets, in **document order**, with the already-fetched externals
 /// woven in at the position their `<link>` occupies.
 ///
@@ -6194,7 +6338,7 @@ impl Page {
         // so there is nothing to wait for — decoding it here means it has its natural size in the
         // very first box tree, instead of laying out `0x0` and never being corrected on any path that
         // does not run the async subresource pass.
-        let inline_images = decode_inline_images(&dom, &mut styles);
+        let mut inline_images = decode_inline_images(&dom, &mut styles);
         let mut root_box = layout_document(&dom, &styles, fonts, viewport_width);
         // The `@container` re-pass, BEFORE `rects`/JS see any styles: the probe scripts below run
         // against the map handed to `load_document`, so a re-pass after them would leave
@@ -6220,6 +6364,16 @@ impl Page {
         // The `Page` does not exist yet, so `set_root_box` cannot be the seam here — but the probe
         // scripts below DO run `getComputedStyle`, and this is the layout they must read.
         publish_grid_tracks();
+        // **The network-free frames get their documents HERE, before the first script.** See
+        // [`build_inline_frame_docs`]: a parser-inserted `<iframe>` is navigated to `about:blank`
+        // at insertion, so the very next `<script>` must find a real `contentDocument`. `rects` is
+        // the layout above, which is what gives each frame its own viewport width.
+        #[cfg(feature = "spidermonkey")]
+        let mut inline_frames = build_inline_frame_docs(&dom, &rects, final_url, fonts);
+        #[cfg(feature = "spidermonkey")]
+        if !inline_frames.is_empty() {
+            publish_pre_script_frame_docs(&mut inline_frames);
+        }
         // Only stand up a JS context for documents that actually have a script — a static page
         // needs no engine spin-up (faster load, and no persistent global to keep alive). With
         // no initial script, no listener can ever be registered, so there is nothing to lose.
@@ -6329,6 +6483,28 @@ impl Page {
         let has_sticky = styles
             .values()
             .any(|s| s.position == manuk_css::Position::Sticky);
+        // **Take ownership of the frames built above.** They go into the SAME two maps
+        // `render_iframe_with_type` fills, which is what makes `load_inline_frames`' later pass skip
+        // them (`self.iframes.contains_key`) instead of building a second document and orphaning the
+        // one a parse-time script is already holding a reference to.
+        #[cfg(feature = "spidermonkey")]
+        let (frame_pages, frame_urls) = {
+            let mut pages = std::collections::HashMap::new();
+            let mut urls = std::collections::HashMap::new();
+            for (n, child, url, img) in inline_frames {
+                if let Some(img) = img {
+                    inline_images.insert(n, img);
+                }
+                pages.insert(n, child);
+                urls.insert(n, url);
+            }
+            (pages, urls)
+        };
+        #[cfg(not(feature = "spidermonkey"))]
+        let (frame_pages, frame_urls) = (
+            std::collections::HashMap::new(),
+            std::collections::HashMap::new(),
+        );
         let mut page = Page {
             pending_submits: std::cell::RefCell::new(Vec::new()),
             final_url: final_url.to_string(),
@@ -6360,12 +6536,25 @@ impl Page {
             fetched_urls: std::collections::HashSet::new(),
             image_attempts: std::collections::HashSet::new(),
             image_by_url: std::collections::HashMap::new(),
-            iframes: std::collections::HashMap::new(),
-            child_pages: std::collections::HashMap::new(),
+            iframes: frame_urls,
+            child_pages: frame_pages,
             last_cascade: None,
             csp,
             load_deadline: None,
         };
+        // **Re-publish, then announce.** The maps moved into the `Page` above, and
+        // `publish_pre_script_frame_docs` handed JS `&Page::styles` addresses taken from a map that
+        // no longer exists — `publish_iframe_docs` is the single call site whose whole contract is
+        // "every mutation of `child_pages` republishes", and this is one. `load` fires only now,
+        // because it needs a JS context and `from_dom` did not have one when the frames were built.
+        #[cfg(feature = "spidermonkey")]
+        if !page.child_pages.is_empty() {
+            page.publish_iframe_docs();
+            let nodes: Vec<manuk_dom::NodeId> = page.child_pages.keys().copied().collect();
+            for n in nodes {
+                page.fire_frame_load(n);
+            }
+        }
         // ⚠ **A STICKY BOX CAN BE STUCK AT SCROLL 0.** `top: 0` on a box whose containing block
         // starts above the scrollport, and every `bottom`-stuck footer, are already displaced before
         // anything scrolls — `css/css-position/sticky` opens with exactly that assertion

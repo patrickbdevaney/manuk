@@ -11,12 +11,12 @@
 
 | | value | over |
 |---|---|---|
-| ticks landed | **989** | ticks 1–1296 |
-| median tick cycle | **30m** | 988 intervals |
+| ticks landed | **990** | ticks 1–1297 |
+| median tick cycle | **30m** | 989 intervals |
 | median, last 10 | **57m** | 10 intervals |
 | fastest / slowest | 5s / 5.4d | |
-| **ticks per hour** | **1.12** | 879.2h elapsed |
-| median verify wall | **63s** | 928 ticks |
+| **ticks per hour** | **1.12** | 882.8h elapsed |
+| median verify wall | **63s** | 929 ticks |
 | wall trend | 39s → 17m — getting slower ⚠️ | first 3 vs last 3 |
 
 The **cycle** is the real unit: implement → debug → verify wall → land. The wall is only part of
@@ -31,7 +31,7 @@ it, and a wall that grows taxes every future tick, so it is tracked separately f
 * **✅ rows in the capability ledger**: 144 → **642**
 * **Bar 0 — oracle hangs**: 0 of 265 sites
 
-**459 of 989 ticks** (46%) moved a
+**460 of 990 ticks** (46%) moved a
 user-visible capability. The rest were instruments, infrastructure and corrections — and the
 ledger says the corrections were not overhead: three of its top three priorities were phantoms,
 and finding that out redirected everything after it.
@@ -90,8 +90,8 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 
 ## What a capability costs
 
-* **459** capability ticks, median cycle **30m**
-* median diff per tick: **+276 / −34** lines across 8 files
+* **460** capability ticks, median cycle **30m**
+* median diff per tick: **+277 / −34** lines across 8 files
 
 ## Every tick
 
@@ -1086,5 +1086,6 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 | **1293** | 2026-08-16 16:48 | 31m | capability | 17m | +184/−35 | 492 | 81 | 56.0% · | `fit-content(<length>)` on a grid track did the OPPOSITE of what it says (2026-08-16) |
 | **1294** | 2026-08-16 17:46 | 58m | measurement | 17m | +513/−161 | 493 | 81 | 56.0% · | `minmax(auto, <small>)` ignores the automatic minimum, and it is a TAFFY boundary, not our |
 | **1296** | 2026-08-16 20:15 | 2.5h | capability | 17m | +605/−67 | 493 | 81 | 56.0% · | a `<link rel=stylesheet>` is SCRIPT-BLOCKING, and every blocking script in this engine ran |
+| **1297** | 2026-08-16 23:53 | 3.6h | capability | 17m | +779/−225 | 493 | 81 | 56.0% · | a parser-inserted `<iframe>` has NO DOCUMENT while the document's own scripts run (2026-08 |
 
 *`·` after a WPT figure means **carried forward**, not measured this tick.*
