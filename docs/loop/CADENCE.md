@@ -15,7 +15,7 @@
 | median tick cycle | **30m** | 992 intervals |
 | median, last 10 | **59m** | 10 intervals |
 | fastest / slowest | 5s / 5.4d | |
-| **ticks per hour** | **1.12** | 888.6h elapsed |
+| **ticks per hour** | **1.12** | 889.4h elapsed |
 | median verify wall | **63s** | 932 ticks |
 | wall trend | 39s → 17m — getting slower ⚠️ | first 3 vs last 3 |
 
@@ -1089,6 +1089,6 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 | **1297** | 2026-08-17 00:59 | 4.7h | capability | 17m | +941/−274 | 493 | 81 | 56.0% · | a parser-inserted `<iframe>` has NO DOCUMENT while the document's own scripts run (2026-08 |
 | **1298** | 2026-08-17 01:55 | 56m | capability | 17m | +901/−237 | 493 | 81 | 56.0% · | `getComputedStyle` inside a frame answered from a snapshot taken before the script ran (20 |
 | **1299** | 2026-08-17 03:50 | 1.9h | capability | 17m | +504/−45 | 493 | 81 | 56.0% · | a frame the SCRIPT created still had no document, and it is the ad-slot idiom (2026-08-17) |
-| **1301** | 2026-08-17 05:37 | 1.8h | capability | 17m | +631/−48 | 493 | 81 | 56.0% · | an animation was FAST-FORWARDED to its last keyframe, and the whole interpolation harness  |
+| **1301** | 2026-08-17 06:25 | 2.6h | capability | 17m | +544/−43 | 493 | 81 | 56.0% · | an animation was FAST-FORWARDED to its last keyframe, and the whole interpolation harness  |
 
 *`·` after a WPT figure means **carried forward**, not measured this tick.*

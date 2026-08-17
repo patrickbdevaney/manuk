@@ -3874,3 +3874,53 @@ interpolation file expect the untouched `from` value.
 larger than the +242 this fix appeared to buy. The stable key is distinct failing subtest names for the
 leg the fix touches: **Web Animations 282 → 111 → 110**, against a same-binary churn floor of ~40 names.
 An area total on this area cannot resolve a change this size; do not quote one.
+
+## A rule's `.style` is the member that does the work (t1302)
+
+`document.styleSheets[0].cssRules[0]` carried `cssText`, `selectorText`, `type`, `parentStyleSheet` and
+`parentRule` — and no `style`. Every part a reader *inspects* was correct, so the object looked
+finished; the one member that *mutates* anything was absent, and
+`rule.style.setProperty('color', c)` threw `TypeError` on the property access before it could reach the
+cascade. That is the canonical CSSOM write: theme switchers, design-token editors and CSS-in-JS
+runtimes all perform it.
+
+### A view over the element's text, never a parallel model
+
+The whole `<style>`-sheet bridge is a view over the element's own `textContent`, because that text *is*
+the cascade's source of truth — writing it re-cascades through machinery that already exists. `style`
+follows the same rule: reads re-parse the rule's declaration block, and `setProperty`/`removeProperty`
+splice that block back into `el.textContent`.
+
+⚠⚠ **The read/write pair is bound to the rule's INDEX, not to its text.** `__syncRules` rebuilds the
+rule objects whenever the source string changes — and a write *is* such a change. Bind the text and you
+hand the caller a rule whose `.style` addresses a sheet that no longer exists; bind the index and both
+halves stay live across the rebuild the write itself triggered. Same class as *a value derived from a
+snapshot is wrong for everything created after it*, one subsystem over.
+
+### Three decisions worth not re-deriving
+
+- **A `Proxy`, not a fixed property list.** `CSSStyleDeclaration`'s IDL surface is every CSS property
+  there is. Enumerating a subset makes `rule.style.color` work while `rule.style.rowGap` is silently
+  `undefined` — the false-presence shape this bridge exists to avoid.
+- **`setProperty(name, '')` removes** (CSSOM §setProperty step 5). Otherwise clearing an override
+  leaves `color: ` behind, which parses as nothing and drops the whole rule on the next round-trip.
+- **At-rules get no `.style`.** `CSSMediaRule` has no declaration block; an empty one answers a
+  question the spec says to answer with `undefined`.
+
+Declaration splitting tracks **paren** depth, so `rgb(1, 2, 3)` and `url(data:…;base64,…)` survive —
+the same lesson rule splitting already learned about brace depth and `@media`.
+
+### ⚠ The subtest count is not the claim
+
+`css/cssom` moved `2794 → 2802` and `css/css-values` `3322 → 3363`, on stable denominators. Small, and
+reported small: WPT's CSSOM tests overwhelmingly drive `el.style`, which already worked. `rule.style` is
+what *pages* use. The load-bearing assertion is a **box** — an element reaching 321px because a rule was
+mutated through `cssRules[0].style.setProperty` — because a read-only view passes every API-shape check
+and moves nothing.
+
+### Still out of scope, deliberately
+
+`<link>`ed sheets remain absent from `document.styleSheets`, and `<link>.sheet` stays `undefined` rather
+than `null` (t663: for an applied linked sheet, `null` is a lie that reads as honest). A linked sheet's
+text does not exist on the JS side, so the view has nothing to view. Publishing fetched stylesheet text
+to JS is the tick that unlocks it.

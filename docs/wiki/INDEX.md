@@ -935,6 +935,11 @@
   - L3854 · Interpolable vs discrete is decided by the numeric SKELETON
   - L3863 · ⚠⚠ Two ways this gate was vacuous, both found by running the mutation rather than reasoning
   - L3871 · ⚠⚠⚠ And read the LEG's distinct failing names, never the area total
+  - L3878 · A rule's .style is the member that does the work (t1302)
+  - L3887 · A view over the element's text, never a parallel model
+  - L3900 · Three decisions worth not re-deriving
+  - L3913 · ⚠ The subtest count is not the claim
+  - L3921 · Still out of scope, deliberately
 
 ## `<dialog>`, `popover`, and the top layer (ticks 194-195)
 `docs/wiki/dialog-and-top-layer.md`
@@ -2245,4 +2250,4 @@
   - L231 · Both named mechanisms are subsystem work
 
 ---
-2152 sections across 22 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+2157 sections across 22 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.

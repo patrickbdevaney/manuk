@@ -84917,3 +84917,163 @@ All three well inside the frame, and `switch`/`close` match run 1 to the third d
 capture/contention artifact (load1 was 16.7, and `verify.sh`'s own comments name `G_INTERACT` and
 `G_RUNTIME_COUNT` as the two gates that intermittently false-RED under a build/load race). Recorded in
 one line per the scope rule; no harness file touched.
+
+## Tick 1302 — a CSS rule had no `.style`, so the canonical CSSOM write path threw (2026-08-17)
+
+TICK SHAPE: capability. Board re-run at the top of this tick: **unchanged** (★ CSS-LAYOUT,
+`css/css-grid` #1, now 6,685 failing / 52.0% — t1301 in the ledger).
+
+⚠⚠⚠ **THREE CANDIDATES IN THE #1 AREA WERE OPENED AND CLOSED FIRST, and closing them is most of this
+tick's value to the next reader.** The `css/css-grid` histogram (t1301) ranks its remaining mass as:
+
+```text
+   writing-mode-implicated geometry        2033   SUBSYSTEM — `engine/layout` has no `writing_mode`
+                                                  identifier at all and `@supports` honestly says no.
+   CSS-transitions leg of the harness       486   LARGE + STATEFUL — needs a per-node previous-value
+                                                  table; see the refusal below.
+   grid item minimum-size family            508   ALREADY REFUSED at t1294 — `minmax(auto, <smaller>)`
+                                                  is a taffy track-sizing boundary, I2 says track
+                                                  upstream, do not fork.
+   baseline-alignment intrinsic size        194   same taffy track-sizing algorithm.
+```
+
+⚠ **The minimum-size family was about to be re-derived from scratch.** Its signature is
+`width expected 60 but got 0`, which reads like a fresh, bounded bug; the journal says it is t1294's
+already-priced upstream refusal. *Re-deriving a decision that was already correctly made is the most
+expensive kind of drift* — it cost one file-read to avoid, and it would have cost a tick to repeat.
+
+⚠⚠ **AND THE CSS-TRANSITIONS LEG IS DEFERRED WITH A REASON THAT SHARPENS t1301'S OWN AMENDMENT.**
+t1301 proved the animation CLOCK is not a prerequisite for the interpolation harness, and that is
+still true for the Web Animations leg it landed — the test explicitly seeks. **Transitions are the
+case where the clock argument is genuinely correct**, and the distinction is worth writing down:
+
+> A transition is triggered by a value CHANGING and then runs forward. On a static render the clock is
+> 0, so a transition with the ordinary `delay: 0` sits at progress **0** — meaning a page's hover and
+> theme transitions would render their **START** state instead of the settled end state they render
+> today. That is a capability traded for another, which THE RATCHET refuses.
+
+The safe slice exists (apply a transition only when elapsed time is genuinely positive — which is what
+the harness's `delay: -50s` produces — and otherwise keep today's settled-to-end answer), but it also
+needs a per-node table of previous computed values threaded into the cascade. **That is a subsystem
+tick and must be scoped as one**, not started at the end of a session where it would land as partial
+state.
+
+PROBE BEFORE PATCH, on the carried ⭐⭐⭐ item (`document.styleSheets` is EMPTY for external sheets),
+which had been carried for five ticks WITHOUT being verified:
+
+```text
+   S1  document.styleSheets non-empty                  PASS
+   S2  an external <link> appears in it                FAIL — saw: [null] (only the inline <style>)
+   S3  the inline <style> exposes cssRules             PASS
+   S4  styleElement.sheet is live                      FAIL — threw
+   S5  an external sheet exposes cssRules              FAIL — consequence of S2
+```
+
+**The carried claim is TRUE and it is also already a settled scope decision**: the CSSOM bridge is
+deliberately a view over a `<style>` element's own TEXT, and t663 refused giving `<link>.sheet` a
+`null` that "would be a lie that reads as honest." External sheets have no text on the JS side, so
+that is its own tick.
+
+⭐⭐⭐ **But S4 was not the carried item, and it is the real find.** Re-probed to isolate it:
+
+```text
+   R1  styleElement.sheet exists                       PASS
+   R2  one rule                                        PASS
+   R3  selectorText                                    PASS
+   R4  rule.style exists                               FAIL — undefined
+   R5  rule.style.color reads                          FAIL
+   R6  rule.style.length                               FAIL
+   R7  rule.style.getPropertyValue('width')            FAIL
+   R8  rule.style.setProperty reaches the CASCADE      FAIL
+   R9  cssText                                         PASS
+```
+
+`__ruleOf` builds `{cssText, selectorText, type, parentStyleSheet, parentRule}` and **no `style`**. So
+`document.styleSheets[0].cssRules[0].style` is `undefined`, and `rule.style.setProperty('color', …)`
+— the canonical CSSOM write, and what every theme switcher, CSS-in-JS runtime and design-token editor
+does — throws `TypeError` on the property access before it ever reaches the cascade. The sheet, the
+rule list, the selector and the `cssText` are all correct, which is precisely why this survived: the
+object LOOKS complete and fails on the one member that does the work.
+
+HYPOTHESIS / PLAN. Give each rule a live `style` declaration, built the same way as everything else in
+this bridge — **a view over the element's text, never a parallel model**. Parse the rule's declaration
+block on read; `setProperty`/`removeProperty` rewrite that rule inside `el.textContent`, which is the
+cascade's source of truth and re-cascades through machinery that already exists. IDL access
+(`style.color`) needs the camelCase↔dashed mapping, so the object is a `Proxy` over the parsed map
+rather than a fixed property list, which also makes it honest for properties nobody enumerated.
+
+PREDICTION: R4–R8 all go green, and R8 is the falsifiable one for the gate — **a rule mutated through
+`rule.style.setProperty` changes what the element actually computes**, which no read-only view can
+produce.
+
+RESULT — **the probe went 4/9 → 9/9**, including R8, the one that matters: a rule mutated through
+`rule.style.setProperty` changes what the element actually computes.
+
+⚠ **WPT MOVEMENT IS SMALL, AND IT IS REPORTED SMALL.**
+
+```text
+   css/cssom        2794 / 3502  →  2802 / 3507     +8
+   css/css-values   3322 / 7940  →  3363 / 7939    +41
+```
+
+Both denominators are stable (`css/cssom` is the same 3507-ish population run to run, unlike
+`css/css-grid`'s ±250), so these are real rather than churn — but they are **not** the size of the
+capability. The reason is worth recording rather than dressing up: WPT's CSSOM tests overwhelmingly
+drive `el.style`, which already worked. `rule.style` is what *pages* use and what *libraries* use, and
+the suite under-weights it. **The claim of this tick is the gate's box assertion, not the subtest
+count** — `#d` reaching 321px through `cssRules[0].style.setProperty('width', '321px')`.
+
+MECHANISM. `__ruleOf` built `{cssText, selectorText, type, parentStyleSheet, parentRule}` and no
+`style`. It now attaches a lazy `style` whose reads re-parse the rule's declaration block and whose
+writes splice that block back into `el.textContent` — the same *view over the element's text* design
+the rest of this bridge uses, never a parallel model that would have to be kept in sync.
+
+⚠ **The read/write pair is bound to the rule's INDEX, not to its text**, because `__syncRules` rebuilds
+the rule objects whenever the source changes. Binding the text would hand a caller a rule whose
+`.style` silently addresses a sheet that no longer exists — the same class as t1282's *"a value derived
+from a snapshot is wrong for everything created after it"*, one subsystem over. Index-bound, both
+halves stay live across the rebuild the write itself triggers.
+
+Three details that are decisions, not incidentals:
+- **A `Proxy`, not a fixed property list.** The IDL surface of `CSSStyleDeclaration` is every CSS
+  property there is; enumerating a subset makes `rule.style.color` work and `rule.style.rowGap`
+  silently `undefined`, which is the false-presence shape this bridge was built to avoid.
+- **`setProperty(name, '')` REMOVES** (CSSOM §setProperty step 5). A theme clearing an override would
+  otherwise leave `color: ` behind, which parses as nothing and drops the whole rule on the next
+  round-trip.
+- **An at-rule gets NO `style`.** `CSSMediaRule` has no declaration block; handing it an empty one
+  answers with a shape the spec says to answer with `undefined`.
+
+⚠ Declaration splitting tracks PAREN depth, so `rgb(1, 2, 3)` and `url(data:…;base64,…)` are not
+shredded mid-value — the same lesson `__splitRules` already learned about brace depth and `@media`.
+
+PROVEN RED (two, both measured):
+- drop the write-back (`el.textContent` assignment) → `#d` stays 30px, the box assertion fails. This
+  is the one that matters: a read-only view satisfies every shape mark above and moves nothing.
+- give at-rules a `.style` → `T__atrulestyle_object`, the false-presence assertion fails.
+
+CONTROLS: `g_cssom_sheet_bridge` green as a whole — all eleven pre-existing marks unchanged, including
+`T__linksheet_undefined` and `T__divsheet_undefined`, so the `<style>`-only scope decision (t663) is
+intact and was not quietly widened.
+
+⚠ CARRIED, RE-STATED HONESTLY: **`document.styleSheets` still omits external `<link>` sheets** — the
+carried ⭐⭐⭐ item, verified true this tick (probe S2: `saw: [null]`). It is NOT a bug in the bridge, it
+is t663's deliberate scope: a linked sheet's text does not exist on the JS side, so the view has
+nothing to view. Giving it a `null` `.sheet` was explicitly refused as *"a lie that reads as honest"*.
+Landing it means publishing fetched stylesheet TEXT to the JS side — its own tick, and it is now the
+top carried item rather than a repeated line.
+
+WIKI: `docs/wiki/css-cascade.md` — "A rule's `.style` is the member that does the work".
+
+NEXT, ranked.
+(a) ⭐⭐⭐ **The CSS-TRANSITIONS leg** — 486 of `css/css-grid`'s method-attributed failures, plus the
+    same leg across twelve areas. **Scoped as a SUBSYSTEM tick** per the refusal at the top of this
+    entry: it needs a per-node previous-computed-value table threaded into the cascade, and the
+    naive version regresses every real page's hover/theme transition to its START state, which THE
+    RATCHET refuses. Do it deliberately, with the "only sample when elapsed time is genuinely
+    positive" guard designed in from the start.
+(b) ⭐⭐⭐ **Publish external stylesheet TEXT to the JS side**, which unlocks `<link>.sheet`,
+    `document.styleSheets` completeness, and `cssRules` on linked sheets in one move.
+(c) ⭐⭐⭐ `writing-mode` is UNIMPLEMENTED and is the #1 mass in the #1 board area (2,033 of 3,458 grid
+    geometry failures). A decomposition session, not a tick — escalate it as scoped subsystem work.
+(d) ⚠ `IFRAME_DOCS` is never cleared between navigations — carried from t1299.

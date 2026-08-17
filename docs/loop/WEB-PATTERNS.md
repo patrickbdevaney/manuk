@@ -7505,3 +7505,38 @@ across two runs. ⚠ The area TOTAL is not quoted, because the same binary run t
 (`midsample:[1]` without the settle guard, `discretelow:monospace` with the flip moved off 0.5,
 `steps:[0.5]` with easing ignored). Two of those three mutations first passed against a gate that read its
 value inline and asserted a numeric prefix — both fixed, both recorded in the gate's own header.
+
+## THE THEME SWITCHER — mutating a rule instead of an element (t1302)
+
+**The class.** Dark mode, design-token editors, `styled-components`/`emotion` at runtime, admin themes,
+user-adjustable density and font scaling. All of them share one move that has nothing to do with any
+particular element: reach into a **stylesheet rule** and change what it says, so every element the
+selector matches follows at once. The API is `sheet.cssRules[i].style.setProperty(name, value)`.
+
+⚠⚠⚠ **THE RULE OBJECT LOOKED COMPLETE, AND THE MEMBER THAT DOES THE WORK WAS ABSENT.** It carried
+`cssText`, `selectorText`, `type`, `parentStyleSheet` and `parentRule` — every part a reader inspects,
+all correct. `style` was `undefined`, so the write threw `TypeError` on the property access, before
+reaching the cascade. A page enumerating rules, logging them, matching selectors and reading `cssText`
+sees a working CSSOM right up to the line that changes something.
+
+**Why it hid for so long:** `el.style` — the *other* CSSOM path, and the one WPT's own tests
+overwhelmingly drive — worked fine. So the suite said this area was ~80% while the idiom every theming
+library uses threw. *A subtest count under-weights the API that pages actually use.*
+
+⚠ **A view must be bound to the rule's INDEX, not to its text.** The rule list is rebuilt from the
+element's text whenever that text changes — and a write *is* such a change. Bind the text and the caller
+is left holding a rule whose `.style` addresses a sheet that no longer exists; bind the index and both
+reads and writes stay live across the rebuild the write itself triggered.
+
+⚠ **`setProperty(name, '')` must REMOVE.** Clearing an override is exactly what a theme switcher does
+when it returns to defaults, and leaving `color: ` behind parses as nothing and drops the whole rule on
+the next round-trip.
+
+⚠ **A `Proxy`, not a hand-listed set of properties.** `CSSStyleDeclaration` covers every CSS property
+there is; a list makes `rule.style.color` work and `rule.style.rowGap` silently `undefined`, which is
+the false-presence failure wearing a fix's clothes.
+
+**Measured:** `css/cssom` 2794 → 2802, `css/css-values` 3322 → 3363, both on stable denominators — and
+deliberately **not** the claim. The claim is a box: an element reaching 321px because a rule was mutated
+through `cssRules[0].style.setProperty`. Gate: `G_CSSOM_SHEET_BRIDGE` case 9, RED two ways (dropping the
+write-back leaves the box at 30px; handing at-rules a `.style` trips the false-presence assertion).

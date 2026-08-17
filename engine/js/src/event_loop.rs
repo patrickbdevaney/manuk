@@ -6184,15 +6184,178 @@ const PRELUDE: &str = r#"
           if (tail) { out.push(tail); }
           return out;
         };
-        var __ruleOf = function (text, sheet) {
+        // ── **A RULE'S `.style`, and it is the member that does the WORK (t1302).**
+        //
+        // The rule object carried `cssText`, `selectorText`, `type` and its parent links, and NO
+        // `style`. So `sheet.cssRules[0].style.setProperty('color', c)` — the canonical CSSOM write,
+        // and what every theme switcher, CSS-in-JS runtime and design-token editor performs — threw
+        // `TypeError` on the property access, before it could reach the cascade. The rule LOOKED
+        // complete, which is exactly why it survived: everything a reader inspects was right and the
+        // one member that mutates anything was absent.
+        //
+        // ⚠ Built the same way as the rest of this bridge: **a view over the element's text, never a
+        // parallel model.** Reads re-parse the rule at its INDEX from the current text, so a rule a
+        // caller is holding stays live even after `__syncRules` has rebuilt the list; writes splice
+        // that same index and assign `el.textContent`, which is the cascade's source of truth.
+
+        // Split a declaration block on top-level `;` — parens are tracked so `rgb(1, 2, 3)` and
+        // `url(data:...;base64,...)` are not shredded mid-value.
+        var __splitDecls = function (block) {
+          var out = [], depth = 0, start = 0;
+          for (var i = 0; i < block.length; i++) {
+            var ch = block[i];
+            if (ch === '(') { depth++; }
+            else if (ch === ')') { depth--; }
+            else if (ch === ';' && depth === 0) {
+              var t = block.slice(start, i).trim();
+              if (t) { out.push(t); }
+              start = i + 1;
+            }
+          }
+          var tail = block.slice(start).trim();
+          if (tail) { out.push(tail); }
+          return out;
+        };
+        var __parseDecls = function (ruleText) {
+          var a = ruleText.indexOf('{'), b = ruleText.lastIndexOf('}');
+          if (a < 0) { return []; }
+          var block = ruleText.slice(a + 1, b < 0 ? ruleText.length : b);
+          var out = [];
+          var parts = __splitDecls(block);
+          for (var i = 0; i < parts.length; i++) {
+            var c = parts[i].indexOf(':');
+            if (c < 0) { continue; }
+            var name = parts[i].slice(0, c).trim().toLowerCase();
+            var value = parts[i].slice(c + 1).trim();
+            var prio = '';
+            var bang = /!\s*important\s*$/i;
+            if (bang.test(value)) { prio = 'important'; value = value.replace(bang, '').trim(); }
+            if (name) { out.push({ name: name, value: value, priority: prio }); }
+          }
+          return out;
+        };
+        var __serializeDecls = function (list) {
+          var out = [];
+          for (var i = 0; i < list.length; i++) {
+            out.push(list[i].name + ': ' + list[i].value +
+                     (list[i].priority ? ' !' + list[i].priority : ''));
+          }
+          return out.join('; ');
+        };
+        // `backgroundColor` -> `background-color`, `cssFloat` -> `float`, `webkitTransform` ->
+        // `-webkit-transform`. A dashed name is already a CSS name and passes through untouched, so
+        // both spellings reach the same declaration.
+        var __dashed = function (prop) {
+          if (prop.indexOf('-') >= 0) { return prop.toLowerCase(); }
+          if (prop === 'cssFloat') { return 'float'; }
+          var d = prop.replace(/[A-Z]/g, function (m) { return '-' + m.toLowerCase(); });
+          if (/^(webkit|moz|ms|o)-/.test(d)) { d = '-' + d; }
+          return d;
+        };
+        var __declOf = function (readText, writeBlock) {
+          var api = {
+            get cssText() { return __serializeDecls(__parseDecls(readText())); },
+            set cssText(v) { writeBlock(String(v)); },
+            get length() { return __parseDecls(readText()).length; },
+            item: function (i) {
+              var l = __parseDecls(readText());
+              return l[i] === undefined ? '' : l[i].name;
+            },
+            getPropertyValue: function (name) {
+              var d = __dashed(String(name)), l = __parseDecls(readText());
+              for (var i = 0; i < l.length; i++) { if (l[i].name === d) { return l[i].value; } }
+              return '';
+            },
+            getPropertyPriority: function (name) {
+              var d = __dashed(String(name)), l = __parseDecls(readText());
+              for (var i = 0; i < l.length; i++) { if (l[i].name === d) { return l[i].priority; } }
+              return '';
+            },
+            setProperty: function (name, value, priority) {
+              var d = __dashed(String(name)), l = __parseDecls(readText());
+              // An empty value REMOVES the declaration (CSSOM §setProperty step 5) — a theme that
+              // clears an override by assigning '' must not leave `color: ` behind, which parses as
+              // nothing and would silently drop the whole rule on the next round-trip.
+              if (value === null || value === undefined || String(value) === '') {
+                return api.removeProperty(d);
+              }
+              var e = { name: d, value: String(value).trim(),
+                        priority: priority ? String(priority).toLowerCase() : '' };
+              var hit = false;
+              for (var i = 0; i < l.length; i++) { if (l[i].name === d) { l[i] = e; hit = true; break; } }
+              if (!hit) { l.push(e); }
+              writeBlock(__serializeDecls(l));
+            },
+            removeProperty: function (name) {
+              var d = __dashed(String(name)), l = __parseDecls(readText()), old = '';
+              for (var i = 0; i < l.length; i++) {
+                if (l[i].name === d) { old = l[i].value; l.splice(i, 1); break; }
+              }
+              writeBlock(__serializeDecls(l));
+              return old;
+            }
+          };
+          // ⚠ A `Proxy` rather than a fixed property list, because the IDL surface of
+          // `CSSStyleDeclaration` is every CSS property there is — enumerating a subset would make
+          // `rule.style.color` work and `rule.style.rowGap` silently `undefined`, which is the
+          // false-presence shape this bridge exists to avoid.
+          if (typeof Proxy !== 'function') { return api; }
+          return new Proxy(api, {
+            get: function (t, prop) {
+              if (typeof prop !== 'string') { return t[prop]; }
+              if (prop in t) { return t[prop]; }
+              if (/^[0-9]+$/.test(prop)) { return t.item(Number(prop)); }
+              return t.getPropertyValue(prop);
+            },
+            set: function (t, prop, value) {
+              if (typeof prop === 'string' && !(prop in t)) { t.setProperty(prop, value); }
+              else { t[prop] = value; }
+              return true;
+            },
+            has: function (t, prop) {
+              if (prop in t) { return true; }
+              return typeof prop === 'string' && t.getPropertyValue(prop) !== '';
+            },
+            ownKeys: function (t) {
+              var n = t.length, keys = [];
+              for (var i = 0; i < n; i++) { keys.push(String(i)); }
+              keys.push('length');
+              return keys;
+            },
+            getOwnPropertyDescriptor: function (t, prop) {
+              if (typeof prop === 'string' && /^[0-9]+$/.test(prop)) {
+                return { value: t.item(Number(prop)), enumerable: true, configurable: true };
+              }
+              if (prop === 'length') {
+                return { value: t.length, enumerable: false, configurable: true };
+              }
+              return Object.getOwnPropertyDescriptor(t, prop);
+            }
+          });
+        };
+        var __ruleOf = function (text, sheet, readText, writeBlock) {
           var i = text.indexOf('{');
-          return {
-            cssText: text,
+          var isAt = text.charAt(0) === '@';
+          var rule = {
+            get cssText() { return readText ? readText() : text; },
             selectorText: i < 0 ? '' : text.slice(0, i).trim(),
-            type: text.charAt(0) === '@' ? 4 : 1,
+            type: isAt ? 4 : 1,
             parentStyleSheet: sheet,
             parentRule: null
           };
+          // ⚠ Only a STYLE rule gets a `style`. `CSSMediaRule` has no declaration block, and handing
+          // it an empty one would answer a question the spec says to answer with `undefined`.
+          if (!isAt && readText) {
+            var decl = null;
+            Object.defineProperty(rule, 'style', {
+              configurable: true, enumerable: true,
+              get: function () {
+                if (!decl) { decl = __declOf(readText, writeBlock); }
+                return decl;
+              }
+            });
+          }
+          return rule;
         };
         var __makeSheet = function (el) {
           // **ONE `CSSRuleList` per sheet — the SAME rule as `el.sheet === el.sheet` one level up,
@@ -6224,7 +6387,28 @@ const PRELUDE: &str = r#"
             }
             if (__rulesSrc !== src) {
               var parts = __splitRules(src);
-              for (var i = 0; i < parts.length; i++) { __rules[i] = __ruleOf(parts[i], sheetObj); }
+              for (var i = 0; i < parts.length; i++) {
+                // ⚠ The read/write pair is bound to the rule's INDEX, not to its text, so a rule a
+                // caller is still holding keeps reading and writing the LIVE sheet after this list
+                // has been rebuilt underneath it. Binding the text instead would hand out a rule
+                // whose `.style` silently addresses a sheet that no longer exists.
+                __rules[i] = __ruleOf(parts[i], sheetObj, (function (idx) {
+                  return function () {
+                    var cur = __splitRules(el.textContent == null ? '' : String(el.textContent));
+                    return cur[idx] === undefined ? '' : cur[idx];
+                  };
+                })(i), (function (idx) {
+                  return function (block) {
+                    var cur = __splitRules(el.textContent == null ? '' : String(el.textContent));
+                    if (cur[idx] === undefined) { return; }
+                    var t = cur[idx], b = t.indexOf('{');
+                    if (b < 0) { return; }
+                    cur[idx] = t.slice(0, b + 1) + ' ' + block + ' }';
+                    el.textContent = cur.join('\n');
+                    __syncRules(sheetObj);   // a BOUND `cssRules` must see this without a re-read
+                  };
+                })(i));
+              }
               __rules.length = parts.length;   // truncates when rules were deleted
               __rulesSrc = src;
             }

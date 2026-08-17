@@ -35,11 +35,13 @@ use manuk_text::FontContext;
 const INJECTED_WIDTH: i64 = 456;
 /// The width the authored sheet gives before anything is injected.
 const AUTHORED_WIDTH: i64 = 111;
+/// The width written through `rule.style.setProperty` — no other rule in the fixture produces it.
+const DECL_WIDTH: i64 = 321;
 
 const HTML: &str = r##"<!doctype html><html><head><style id="authored">#a { width: 111px }
 @media screen { #m { width: 50px } }
 #c { width: 33px }</style></head><body>
-<div id="a">x</div><div id="m">y</div><div id="c">z</div>
+<div id="a">x</div><div id="m">y</div><div id="c">z</div><div id="d">w</div>
 <script>
   function mark(id) { var d = document.createElement('div'); d.id = id; document.body.appendChild(d); }
   var authored = document.getElementById('authored');
@@ -102,6 +104,36 @@ const HTML: &str = r##"<!doctype html><html><head><style id="authored">#a { widt
   lnk.rel = 'stylesheet'; lnk.href = 'about:blank';
   document.head.appendChild(lnk);
   mark('T__linksheet_' + (typeof lnk.sheet));
+
+  // 9. **A RULE'S `.style` — the member that does the WORK (t1302).** The rule object carried
+  //    `cssText`, `selectorText`, `type` and its parent links and NO `style`, so the canonical CSSOM
+  //    write threw `TypeError` on the property access. Everything a reader inspects was correct,
+  //    which is exactly why it survived unnoticed.
+  var decl = document.createElement('style');
+  decl.textContent = '#d { width: 30px; color: rgb(1, 2, 3) }';
+  document.head.appendChild(decl);
+  var r0 = decl.sheet.cssRules[0];
+  mark('T__declread_' + (r0.style.getPropertyValue('width') === '30px'));
+  mark('T__declidl_' + (r0.style.color === 'rgb(1, 2, 3)'));
+  mark('T__decllen_' + r0.style.length);
+  mark('T__declitem_' + (r0.style.item(0) === 'width'));
+
+  //    …and the WRITE must reach the CASCADE. This is the falsifiable half: a read-only view over
+  //    the rule text passes every assertion above and cannot move a box.
+  r0.style.setProperty('width', '321px');
+  //    …removing a declaration must un-cascade too, or "it applied" could mean "text was appended".
+  r0.style.setProperty('color', 'rgb(4, 5, 6)');
+  mark('T__declwrite_' + (r0.style.getPropertyValue('color') === 'rgb(4, 5, 6)'));
+  //    …an empty value REMOVES, per CSSOM setProperty step 5 — a theme clearing an override must not
+  //    leave `color: ` behind, which parses as nothing and drops the rule on the next round-trip.
+  r0.style.setProperty('color', '');
+  mark('T__declremove_' + (r0.style.getPropertyValue('color') === '' && r0.style.length === 1));
+
+  //    …and an AT-RULE has no declaration block, so it must not be handed an empty one.
+  var atr = document.createElement('style');
+  atr.textContent = '@media screen { #e { width: 5px } }';
+  document.head.appendChild(atr);
+  mark('T__atrulestyle_' + (typeof atr.sheet.cssRules[0].style));
 </script>
 </body></html>"##;
 
@@ -205,8 +237,42 @@ fn a_rule_inserted_through_the_sheet_reaches_the_cascade() {
          a library bug inside a browser bug.\n  marks: {marks:?}"
     );
 
+    assert!(
+        has("T__declread_true") && has("T__declidl_true") && has("T__decllen_2")
+            && has("T__declitem_true"),
+        "a rule's `.style` does not read its own declarations. `cssRules[0].style` was `undefined` \
+         outright (t1302): the rule carried `cssText`, `selectorText`, `type` and its parent links, \
+         so it LOOKED complete, and the one member that mutates anything was absent.\n  marks: {marks:?}"
+    );
+    assert!(
+        has("T__declwrite_true"),
+        "`rule.style.setProperty` did not round-trip. A write that cannot be read back is a view \
+         over a copy, not over the sheet.\n  marks: {marks:?}"
+    );
+    assert!(
+        has("T__declremove_true"),
+        "`rule.style.setProperty(name, '')` did not REMOVE the declaration (CSSOM setProperty step \
+         5). A theme that clears an override would leave `color: ` behind, which parses as nothing \
+         and drops the whole rule on the next round-trip.\n  marks: {marks:?}"
+    );
+    assert!(
+        has("T__atrulestyle_undefined"),
+        "an at-rule was handed a `.style`. `CSSMediaRule` has no declaration block, and an empty one \
+         answers a question the spec says to answer with `undefined` — the false-presence shape this \
+         bridge exists to avoid.\n  marks: {marks:?}"
+    );
+
     // ── THE CLAIM, and it is a BOX, not an API shape. An `insertRule` that returns cleanly and
-    //    changes nothing would satisfy every shape test above and still render the wrong page.
+    //    changes nothing would satisfy every shape test above and still render the wrong page. The
+    //    same is true of `rule.style`: a read-only view passes every mark above and moves nothing.
+    assert_eq!(
+        b.get("d").copied(),
+        Some(DECL_WIDTH),
+        "G_CSSOM_SHEET_BRIDGE: `#d` is not {DECL_WIDTH}px, so `cssRules[0].style.setProperty()` \
+         never reached the cascade. That is the canonical CSSOM write — the one every theme \
+         switcher, design-token editor and CSS-in-JS runtime performs — and a `.style` that reads \
+         correctly but writes nowhere satisfies every shape assertion above."
+    );
     assert_eq!(
         b.get("a").copied(),
         Some(INJECTED_WIDTH),
