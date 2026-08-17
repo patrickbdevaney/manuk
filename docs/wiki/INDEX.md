@@ -925,6 +925,10 @@
   - L3673 · An out-of-range value invalidates the FEATURE; it does not merely fail to match it
   - L3691 · ( feature ) and ( feature: default ) are different questions (tick 1277)
   - L3716 · A keyword outside the feature's own value set is INVALID, not merely non-matching
+  - L3730 · A <link rel=stylesheet> is SCRIPT-blocking, and the sheet list exists in THREE places (t1296)
+  - L3753 · The design, and why the obvious cheap version does not reach
+  - L3779 · ⚠⚠⚠ THE SHEET LIST EXISTS THREE TIMES, AND TWO OF THEM ARE NOT THE CASCADE
+  - L3800 · What it was worth, and how the number had to be read
 
 ## `<dialog>`, `popover`, and the top layer (ticks 194-195)
 `docs/wiki/dialog-and-top-layer.md`
@@ -2228,4 +2232,4 @@
   - L231 · Both named mechanisms are subsystem work
 
 ---
-2135 sections across 22 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+2139 sections across 22 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.

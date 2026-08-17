@@ -3618,9 +3618,21 @@ fn run_wpt_cmd(args: &[String], fonts: &FontContext) {
                 // the suite is a scoreboard, and a scoreboard does not fix anything.
                 if show_fail {
                     if let Some(ts) = &r.subtests {
+                        // **A failure you cannot LOCATE is a histogram row, not a work item.** The
+                        // child has `rel` in hand and was throwing it away, so every diagnosis paid
+                        // a directory bisect to find out which file a bar came from — which is
+                        // exactly why "an AREA is not a CAUSE" kept being unfalsifiable. One header
+                        // per file that has anything to report; silent for a clean file.
+                        let mut hdr = false;
                         for (name, st) in ts {
+                            if matches!(st, manuk_wpt::harness::Sub::Pass) {
+                                continue;
+                            }
+                            if !hdr {
+                                eprintln!("  FILE {rel}  ({p}/{t})");
+                                hdr = true;
+                            }
                             match st {
-                                manuk_wpt::harness::Sub::Pass => {}
                                 manuk_wpt::harness::Sub::Fail(m) => {
                                     eprintln!("    FAIL {name}\n         {}", fail_line(m))
                                 }

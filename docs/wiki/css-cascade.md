@@ -3726,3 +3726,85 @@ allowed set, the same way lengths carry their non-negative range.
 mutations, eight of the rows CONTROLS) and **measured at zero**. The controls — `sizes` 632/795,
 `css/cssom` 2794, `css/css-backgrounds` 4087, `css/css-sizing` 2840 — are byte-identical, which is
 all a suite without the relevant tree can honestly say.
+
+## A `<link rel=stylesheet>` is SCRIPT-blocking, and the sheet list exists in THREE places (t1296)
+
+**The half we honoured and the half we did not.** `<link rel=stylesheet>` is render-blocking *and*
+script-blocking. This engine honoured the paint half — the final layout always contained the author's
+sheets — and skipped the script half: `Page::from_dom` cascades, lays out, and **then** runs the
+document's blocking `<script>`s, while both async constructors applied the fetched external CSS only
+after `from_dom` had returned.
+
+The minimal form is four lines, and note that nothing here is a cascade bug:
+
+```html
+<link rel="stylesheet" href="local.css">   <!--  .k { display: grid }  -->
+<div class="k" id="k"></div>
+<script> /* at parse time: display = "block" — at `load`: display = "grid" */ </script>
+```
+
+⚠ **It is a MEASUREMENT bug and the page is the one measuring.** A carousel reading `offsetWidth`, a
+framework snapshotting `getBoundingClientRect` before hydration, a breakpoint check on
+`document.body.clientWidth` — all get UA-default geometry, write a wrong answer into the DOM, and
+**no later cascade can undo it**: the sheet arrives afterwards and restyles a tree the page already
+mis-built. This is invisible to every screenshot, box dump and fidelity score, because the *final*
+paint is correct.
+
+### The design, and why the obvious cheap version does not reach
+
+t714–t719 already tried three shapes of this and reverted two; the table lives in
+`engine/page/tests/g_css_before_lifecycle.rs`. The landed t719 design starts the sheet fetches before
+the parse and, at the apply point, takes only handles that have **already finished** — never
+awaiting. Moving that harvest one phase earlier (before `from_dom`) is equally free, and it banks
+**nothing** on a fast origin:
+
+```text
+   html parse 0ms · external scripts 2ms · module graph prefetch 0ms   <- the whole head start
+   the sheet lands at ~5ms
+```
+
+So a wait is required, and it is affordable because of **what makes it conditional**:
+
+| bound | why it holds |
+|---|---|
+| only when a blocking `<script>` exists | with none, nothing can observe the difference — and this is precisely the counter-example (*"dead sheets and NO scripts"*) that killed the t716 design |
+| never past `nav_start + load_budget()` | `G_LOAD`'s 2x-page bound is arithmetically untouched |
+| never more than `load_budget() / 4` | a slow origin cannot convert this into the phase t715 reverted |
+
+The already-fetched bytes reach construction through `PENDING_EXTERNAL_CSS`, a thread-local seed of
+exactly the same shape as `PENDING_CSP` and the external-`<script>` set: the fact is known before
+`from_dom` and needed *during* it, so seed, then construct. `from_dom` takes it once, so it can
+neither leak into the next navigation nor into a subframe.
+
+### ⚠⚠⚠ THE SHEET LIST EXISTS THREE TIMES, AND TWO OF THEM ARE NOT THE CASCADE
+
+This is the part worth carrying forward. With the seed in place the debug line read `seeded=1
+bytes=22 sheets=1` — the author's sheet **was** in the first cascade — and the probe still printed
+`display: block`. The three lists:
+
+| # | where | built from |
+|---|---|---|
+| 1 | `from_dom`'s initial cascade | `initial_sheets_with_external` (light tree — shadow `<style>` stays scoped via `collect_shadow_stylesheets`) |
+| 2 | `Page::apply_stylesheets` | `collect_style_sources` (flat tree) + the caller's URL→text map |
+| 3 | **`ReflowScope::install`**, for the forced reflow a blocking script triggers | the map `from_dom` hands it — which was `HashMap::new()` |
+
+`getComputedStyle` **forces a reflow**, list 3 rebuilds the cascade from an empty external map, and
+the document is silently un-styled *by the very call made to measure it*. The comment above it said
+this was "a fact rather than an omission — nothing has been fetched", which was true when written and
+which my own change in the same tick made false.
+
+> **A stale comment converts from documenting a limitation to justifying a bug the moment the
+> limitation lifts.** When you make a "nothing has been fetched here" comment false, grep for its
+> siblings before believing the fix is inert.
+
+### What it was worth, and how the number had to be read
+
+Old binary vs new, same hour, isolated runs, **fixed** denominators: `css/css-grid/parsing` +44,
+`grid-model` +16, `grid-definition` +16, `layout-algorithm` +6 — **+82, zero losses**, with
+`css/css-values/calc-size` (no external CSS) as an unmoved control.
+
+⚠ The whole-area total *fell* (`7022/14257 -> 6991/14101`) and that reading is an artefact: the
+entire delta is two `*-interpolation.html` files whose **subtest count** changed, and the same
+directory run in isolation gives `1094/1840` on **both** binaries. A transition-timing test's subtest
+count depends on its position in the batch, so only fixed-denominator directories are comparable
+across a full-area run.

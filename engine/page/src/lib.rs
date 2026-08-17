@@ -2475,6 +2475,150 @@ thread_local! {
     /// there on and this cell holds nothing between navigations.
     static PENDING_EXTERNAL_SCRIPTS: std::cell::RefCell<std::collections::HashSet<NodeId>> =
         std::cell::RefCell::new(std::collections::HashSet::new());
+
+    /// The author's **external** stylesheets (`<link rel=stylesheet>` URL → CSS text) that had
+    /// already arrived when the next page on this thread is constructed.
+    ///
+    /// ⚠⚠⚠ **A `<link rel=stylesheet>` IS SCRIPT-BLOCKING, AND EVERY BLOCKING `<script>` HERE RAN
+    /// BEFORE IT (t1296).** `from_dom` cascades, lays out, and then runs the document's blocking
+    /// scripts — and both async callers (`load_async`, `from_prefetched_inner`) applied the fetched
+    /// external CSS only *after* `from_dom` returned. So a page's own inline script measured a
+    /// document styled by nothing but the UA sheet and its own `<style>` blocks:
+    ///
+    /// ```text
+    ///   at parse time   getComputedStyle(el).display = "block"   ← the <link> said `grid`
+    ///   at `load`       getComputedStyle(el).display = "grid"
+    /// ```
+    ///
+    /// That is not a WPT artefact. HTML §"a style sheet that is blocking scripts" exists precisely
+    /// because pages measure at parse time: a carousel that reads `offsetWidth` from an inline
+    /// script, a framework that snapshots `getBoundingClientRect` before hydrating, and every
+    /// `document.body.clientWidth` breakpoint check get UA-default geometry and act on it.
+    ///
+    /// Same shape and same reason as the two seeds above — the bytes are known before construction
+    /// and needed *during* it — so it is solved the same way: seed, then construct. `from_dom` takes
+    /// it exactly once, so a sheet seeded here can never leak into the next navigation or into a
+    /// subframe's own construction.
+    static PENDING_EXTERNAL_CSS: std::cell::RefCell<Option<HashMap<String, String>>> =
+        const { std::cell::RefCell::new(None) };
+}
+
+/// Seed the already-fetched external stylesheets for the next page built on this thread, so the
+/// **initial** cascade — the one the document's blocking scripts measure — contains them.
+///
+/// ⚠ Only sheets whose bytes are already in hand belong here. This must never introduce a *wait*:
+/// the two designs that did were measured and reverted (see [`Page::load_async`]). A sheet still in
+/// flight is left to `apply_stylesheets`, exactly as before.
+fn set_pending_external_css(css: HashMap<String, String>) {
+    PENDING_EXTERNAL_CSS.with(|p| *p.borrow_mut() = Some(css));
+}
+
+/// Does this document contain a `<script>` that `from_dom` will execute **before** anything else
+/// gets a turn — i.e. one that can observe an unstyled layout?
+///
+/// The predicate mirrors `manuk_js`'s own `blocks_paint`: a module is deferred by default, and
+/// `defer`/`async` both mean *"do not block me"*. By the time this is asked, `fetch_external_scripts`
+/// has already inlined each external script's text into its element, so a `<script src>` looks like
+/// an inline one here — which is exactly the set that matters.
+///
+/// ⚠⚠ **This predicate is what makes waiting for stylesheets affordable, and it is the answer to the
+/// counter-example that killed the two earlier designs (t715/t716).** The fixture that made a
+/// concurrent CSS wait cost 2s *"has dead sheets and no scripts"* — under this predicate it waits
+/// zero, because with no blocking script there is nothing that could tell the difference and the
+/// existing post-construction apply is already early enough.
+fn document_has_blocking_script(dom: &Dom) -> bool {
+    dom.descendants(dom.root()).any(|n| {
+        if dom.tag_name(n) != Some("script") {
+            return false;
+        }
+        let Some(el) = dom.element(n) else {
+            return false;
+        };
+        let is_module = el
+            .attr("type")
+            .map(|t| t.trim().eq_ignore_ascii_case("module"))
+            .unwrap_or(false);
+        !is_module
+            && el.attr("defer").is_none()
+            && el.attr("async").is_none()
+            && !dom.text_content(n).trim().is_empty()
+    })
+}
+
+/// Move every stylesheet fetch that has **already finished** out of `inflight` and into `out`,
+/// leaving the ones still in flight running.
+///
+/// ⚠ `is_finished()` then `now_or_never()`, never `await` — this must be callable at any point in a
+/// navigation without lengthening it. Extracted because it is now called twice (before the blocking
+/// scripts and after them), and two hand-written copies of a "does this block?" loop is exactly the
+/// kind of duplication that ends with one of them awaiting.
+fn harvest_finished_css(
+    inflight: &mut Vec<(String, tokio::task::JoinHandle<Option<String>>)>,
+    out: &mut HashMap<String, String>,
+) {
+    use futures_util::FutureExt;
+    let mut still_running = Vec::new();
+    for (url, handle) in std::mem::take(inflight) {
+        if !handle.is_finished() {
+            still_running.push((url, handle));
+            continue;
+        }
+        if let Some(Ok(Some(text))) = handle.now_or_never() {
+            out.insert(url, text);
+        }
+    }
+    *inflight = still_running;
+}
+
+/// The document's author stylesheets, in **document order**, with the already-fetched externals
+/// woven in at the position their `<link>` occupies.
+///
+/// ⚠⚠ **The walk is the LIGHT tree, deliberately** — matching
+/// [`MinimalCascade::collect_style_elements`], the function this replaces. `cascade_styles` adds
+/// shadow-root sheets separately *and scoped* (`collect_shadow_stylesheets`); walking the flat tree
+/// here would cascade every shadow `<style>` a second time as an unscoped document sheet.
+fn initial_sheets_with_external(
+    dom: &Dom,
+    base: &str,
+    external: &HashMap<String, String>,
+) -> Vec<Stylesheet> {
+    let mut out = Vec::new();
+    for n in dom.descendants(dom.root()) {
+        match dom.tag_name(n) {
+            Some("style") => {
+                let media = dom
+                    .element(n)
+                    .and_then(|e| e.attr("media"))
+                    .map(str::to_string);
+                out.push(Stylesheet::parse(&wrap_media(&dom.text_content(n), &media)));
+            }
+            Some("link") => {
+                let Some(el) = dom.element(n) else { continue };
+                let is_sheet = el
+                    .attr("rel")
+                    .map(|r| {
+                        r.split_ascii_whitespace()
+                            .any(|t| t.eq_ignore_ascii_case("stylesheet"))
+                    })
+                    .unwrap_or(false);
+                if !is_sheet {
+                    continue;
+                }
+                let Some(href) = el.attr("href").map(str::trim).filter(|h| !h.is_empty()) else {
+                    continue;
+                };
+                // A sheet that has NOT arrived is simply absent from the map and contributes
+                // nothing — the same fall-through as before, now expressed per-sheet instead of
+                // per-document.
+                if let Some(css) = external.get(&resolve_url(base, href)) {
+                    let media = el.attr("media").map(str::to_string);
+                    out.push(Stylesheet::parse(&wrap_media(css, &media)));
+                }
+            }
+            _ => {}
+        }
+    }
+    out
 }
 
 /// Seed the `<script>` nodes whose source came from the network, for the next page built on this
@@ -2807,6 +2951,57 @@ impl Page {
         // The external `<script src>` set, seeded before construction because `from_dom` runs the
         // blocking scripts and each one owes its element a `load` the instant it has executed.
         set_pending_external_scripts(script_origins.keys().copied().collect());
+        // **HARVEST ONCE HERE TOO — because `from_dom` runs the blocking scripts.** The harvest
+        // below is unchanged and still runs; this one is strictly additional, takes only handles
+        // that are ALREADY FINISHED, and therefore adds no latency by exactly the argument the
+        // comment below makes for itself. What it buys is order: a sheet that landed during parse,
+        // the external-script fetch and the module-graph prefetch — which on this path is nearly
+        // all of them, since every one of those phases is network — is in the FIRST cascade, so the
+        // document's own scripts measure the author's page instead of the UA default.
+        //
+        // ⚠⚠⚠ **AND ON A FAST ORIGIN THE FREE HARVEST ALONE IS NOT ENOUGH — MEASURED, NOT ASSUMED.**
+        // The probe that found this runs against a loopback server: `html parse` 0ms, `external
+        // scripts` 2ms, `module graph prefetch` 0ms — so the head start the free harvest relies on
+        // is **2ms**, the sheet lands at ~5ms, and the harvest banks nothing. The page still read
+        // `display: block` from a `<link>` that said `grid`.
+        //
+        // So this waits, and the North Star is why. *"A speed advantage is only real if it comes
+        // from doing the same work better — and not from not doing the work at all"*; `<link
+        // rel=stylesheet>` is script-blocking in every engine, and **"fast because we never waited
+        // for the stylesheet" is the third member of a list this project has already caught twice**
+        // (never loaded the images, never ran the script). Skipping it does not merely paint early:
+        // it hands the page's own code UA-default geometry to compute with.
+        //
+        // ⚠ **BOUNDED THREE WAYS, so it cannot become the phase that t715/t716 reverted:** it is
+        // skipped entirely unless a blocking script exists to observe it; it never runs past the
+        // navigation's own `load_budget()` (so `G_LOAD`'s 2x page bound is untouched); and it never
+        // spends more than a quarter of that budget in one go. Sheets that miss the deadline are
+        // not lost — `finish_loading` picks them up exactly as it does today.
+        if !css_inflight.is_empty() && document_has_blocking_script(&dom) {
+            let budget = load_budget();
+            let deadline =
+                std::cmp::min(nav_started + budget, std::time::Instant::now() + budget / 4);
+            let futs = std::mem::take(&mut css_inflight)
+                .into_iter()
+                .map(|(url, h)| async move { (url, h.await.ok().flatten()) });
+            // `collect_before_deadline`, not `join_all`: a sheet that landed is banked even when a
+            // sibling never answers — the same reason `finish_loading` uses it.
+            for (url, text) in collect_before_deadline(futs, Some(deadline)).await {
+                if let Some(t) = text {
+                    early_css.insert(url, t);
+                }
+            }
+        }
+        harvest_finished_css(&mut css_inflight, &mut early_css);
+        nav_phase(
+            "blocking stylesheets",
+            &mut nav_at,
+            &mut nav_accounted_ms,
+            &mut nav_hits,
+        );
+        if !early_css.is_empty() {
+            set_pending_external_css(early_css.clone());
+        }
         let mut page = Page::from_dom(dom, final_url, fonts, viewport_width);
         // `from_dom` is parse-to-first-layout AND the scripts that block first paint: cascade,
         // layout, and every blocking `<script>` with its drain. On an app-web page this is usually
@@ -2826,17 +3021,7 @@ impl Page {
         // **Take only what has already landed — `is_finished()`, never `await`.** A handle still in
         // flight is left alone: it keeps running, warms the HTTP/negative cache, and
         // `finish_loading` picks the sheet up on its own phase. This loop cannot block.
-        {
-            use futures_util::FutureExt;
-            for (url, handle) in css_inflight {
-                if !handle.is_finished() {
-                    continue;
-                }
-                if let Some(Ok(Some(text))) = handle.now_or_never() {
-                    early_css.insert(url, text);
-                }
-            }
-        }
+        harvest_finished_css(&mut css_inflight, &mut early_css);
         if !early_css.is_empty() {
             tracing::debug!(
                 sheets = early_css.len(),
@@ -5866,6 +6051,15 @@ impl Page {
         // one owes its element a `load` the instant it has executed, which is inside `from_dom`.
         set_pending_csp_with_authorized(csp, csp_authorized_scripts);
         set_pending_external_scripts(external_scripts.into_iter().collect());
+        // **AND THE SHELL HAD THE SAME GAP, one copy along.** `load_async`'s comment says this path
+        // "has always applied the CSS between `from_dom` and the deferred pass, so its lifecycle
+        // events and its timers see a styled document" — true, and it stops one phase short: the
+        // BLOCKING scripts run inside `from_dom`, before that apply. On the shell the bytes are
+        // already fully fetched (that is what `Prefetched` means), so there is not even a
+        // has-it-landed question here — only an ordering one.
+        if !css.is_empty() {
+            set_pending_external_css(css.clone());
+        }
         let mut page = Page::from_dom(dom, &final_url, fonts, viewport_width);
         // Carry the pre-fetched module graph onto the page so `run_deferred_scripts` — which the shell
         // may call much later, after paint — seeds it for the module (deferred) pass. This is the shell
@@ -5969,7 +6163,32 @@ impl Page {
         // PREVIOUS navigation must be gone. Both happen here, on every construction path.
         let csp = install_csp_for_next_page(&dom, final_url);
         let mut dom = Box::new(dom);
-        let sheets: Vec<Stylesheet> = MinimalCascade::collect_style_elements(&dom);
+        // **The author's external sheets belong in THIS cascade, not the one after the scripts.**
+        // See [`PENDING_EXTERNAL_CSS`]: everything below — the first layout and every blocking
+        // `<script>` that reads it — used to run against inline `<style>` alone.
+        //
+        // ⚠ Kept in `seeded_css` rather than consumed on the spot, because the FORCED-REFLOW scope
+        // installed for those same scripts rebuilds the cascade from its own sheet list — hand it an
+        // empty external map and the first `getComputedStyle` in the document un-styles the page it
+        // was called to measure. That is the t1283 family again (a value derived from a snapshot
+        // that predates what it describes), and it is why the seed is a variable here.
+        let seeded_css: HashMap<String, String> = PENDING_EXTERNAL_CSS
+            .with(|p| p.borrow_mut().take())
+            .unwrap_or_default();
+        let sheets: Vec<Stylesheet> = if seeded_css.is_empty() {
+            // Unchanged for every path that seeds nothing (`Page::load`, subframes, gates): the
+            // list is byte-for-byte what it was, so a page with no external CSS cannot move.
+            MinimalCascade::collect_style_elements(&dom)
+        } else {
+            let s = initial_sheets_with_external(&dom, final_url, &seeded_css);
+            tracing::debug!(
+                seeded = seeded_css.len(),
+                bytes = seeded_css.values().map(|v| v.len()).sum::<usize>(),
+                sheets = s.len(),
+                "initial cascade built WITH the author's external stylesheets"
+            );
+            s
+        };
         let mut styles = cascade_styles(&dom, &sheets, viewport_width);
         // **Inline images are sized BEFORE the first layout.** A `data:` image carries its own bytes,
         // so there is nothing to wait for — decoding it here means it has its natural size in the
@@ -6021,12 +6240,19 @@ impl Page {
             // the snapshot above — `measure -> mutate -> measure` in one round is how every
             // virtualized list sizes its rows.
             //
-            // ⚠ No external sheets HERE, and it is a fact rather than an omission: `from_dom`
-            // builds a Page from a tree the caller already has, so nothing has been fetched and
-            // `external_css` would be empty whatever we passed. Named as an empty map so the
-            // reflow's sheet list is the same function everywhere.
-            let no_external_url = final_url.to_string();
-            let no_external_css: HashMap<String, String> = HashMap::new();
+            // ⚠⚠⚠ **THIS USED TO BE AN EMPTY MAP, AND THE COMMENT EXPLAINING WHY WAS TRUE UNTIL
+            // t1296.** It read: *"nothing has been fetched and `external_css` would be empty
+            // whatever we passed"* — correct while `from_dom` was only ever handed a bare tree, and
+            // false the moment the caller started seeding the sheets it had already fetched.
+            //
+            // The consequence is worth stating because it is the whole reason the fix looked inert
+            // for a build: the initial cascade DID contain the author's sheet, the probe still read
+            // `display: block`, and the reason is that `getComputedStyle` **forces a reflow**, the
+            // reflow rebuilds the cascade from the list it is given, and an empty external map
+            // silently un-styles the document the call was made to measure. A correct value and a
+            // correct fetch, defeated by a third copy of the sheet list.
+            let reflow_url = final_url.to_string();
+            let reflow_css: HashMap<String, String> = seeded_css.clone();
             // ⚠ Nothing has been scrolled yet — `from_dom` is building the page — so an empty
             // offset map is the TRUTH here, not a placeholder. `has_sticky` is likewise not yet
             // computed (it is derived below, from these same styles); the pre-`Page` scripts run
@@ -6046,8 +6272,8 @@ impl Page {
                 fonts,
                 viewport_width,
                 &inline_images,
-                &no_external_url,
-                &no_external_css,
+                &reflow_url,
+                &reflow_css,
                 &no_scroll,
                 0.0,
                 sticky_here,

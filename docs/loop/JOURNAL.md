@@ -83939,3 +83939,154 @@ NEXT, ranked.
 
 WIKI: docs/wiki/js-engine.md — the published-map family and the rule that every one of its members
 must be republished by the forced reflow, plus the two banked negatives.
+
+## Tick 1296 — a `<link rel=stylesheet>` is SCRIPT-BLOCKING, and every blocking script in this engine ran before it (2026-08-16)
+
+TICK SHAPE: capability. Board re-run at the top of this tick: **unchanged** (★ CSS-LAYOUT, top row
+`css/css-grid` 7,701 failing). This starts as that row's histogram and ends two layers below it, in
+the load schedule — which is where the row's biggest *fixable* mass actually lives.
+
+⭐⭐ **FIRST, THE INSTRUMENT — AND IT PAID FOR ITSELF INSIDE THE SAME TICK.** `--show-failures`
+printed the assertion but never the FILE it came from; the child had `rel` in hand and threw it
+away. Every diagnosis therefore paid a directory bisect, which is exactly why *"an AREA is not a
+CAUSE"* keeps being unfalsifiable. One header line per file that has anything to report, and the #1
+board area resolved immediately:
+
+```text
+  css/css-grid, failing subtests by directory      css/css-grid/abspos, top files
+    1673  33 files  abspos                           15 x 100  orthogonal-positioned-grid-descendants-0NN
+     980 209 files  alignment                              36  grid-positioned-items-gaps-rtl-001
+     768  13 files  animation                              34  grid-positioned-items-content-alignment-rtl
+     732  32 files  grid-items                             30  grid-positioned-items-gaps-001
+```
+
+⚠ **1,500 of the #1 area's 7,701 are ONE construct, and it is already-banked ground.** Fifteen files
+at *exactly* `0/100`, all named `orthogonal-*`, all `writing-mode: vertical-lr` — and their
+non-orthogonal twins (`positioned-grid-descendants-001..017`, the same helper, the same fixture, one
+class different) never appear in the failure list at all. **WPT shipped the control row.** t1276-1281
+already priced `writing-mode` as unimplemented and blocking three areas; this is a fourth, sized.
+⚠ `grid-items-minimum-width-001/002` (88 more) are t1294's refused `minmax(auto, <smaller>)` taffy
+boundary. Neither is re-derived here.
+
+HYPOTHESIS AND PROBE. What was left ranked `parsing/grid-content-sized-columns-resolution.html` at
+`0/42`, whose whole content is *"a grid container's `grid-template-columns` resolves to the USED
+track sizes"* — a property this engine landed at t1270 and gates. **A landed feature reading 0/42 is
+not a feature bug**, so the probe went before the patch:
+
+```text
+  #b  auto auto                     437px 347px | box=784   ✓ (Chrome's own split)
+  #d  min-content max-content        40px   0px | box=784   ✓
+  #h  minmax(min-content,15px) auto  40px 744px | box=784   ✓
+```
+
+Every arm correct. So the same construct inside the real WPT file was re-probed with **its own
+support stylesheets**, and the answer was not about grid at all:
+
+```text
+  probe-g1  "minmax(min-content, 15px) auto | disp=block jc=normal box=784"
+                                              ^^^^^^^^^^  /css/support/grid.css says display:grid
+```
+
+⭐⭐⭐ **AND THE MINIMAL FORM IS FOUR LINES AND NAMES THE SCHEDULE, NOT THE CASCADE.**
+
+```text
+  <link rel="stylesheet" href="local.css">     /*  .k { display: grid }  */
+  <div class="k" id=k></div>
+  <script> at parse time  ->  k=block          <- the page's own script measures the UA default
+           at `load`      ->  k=grid           <- the sheet did arrive, just too late to matter
+```
+
+> **A `<link rel=stylesheet>` is render-blocking AND SCRIPT-blocking, and this engine honoured only
+> the first half.** `from_dom` cascades, lays out, and *then* runs the document's blocking scripts;
+> both async callers applied the fetched external CSS only **after** `from_dom` returned. The final
+> paint was always right — which is why no screenshot, box dump or fidelity score ever showed it.
+
+⚠ **This is the third member of a list this project has already caught twice.** STATUS.md's North
+Star names *"fast because we never loaded the images"* and *"fast because we never ran the script"*
+as speed bought by not doing the work. **"Fast because we never waited for the stylesheet"** is the
+same trade, and it is worse than a paint artefact: it hands the page's own code UA-default geometry
+to compute with, and no later cascade can undo what the page then writes into the DOM.
+
+WHAT LANDED. Three arms, and the third is the one that matters most to a future reader:
+
+1. **`PENDING_EXTERNAL_CSS`** — a seed of the same shape as `PENDING_CSP` and the external-script
+   set (the bytes are known before construction and needed *during* it), consumed once by `from_dom`
+   so the **first** cascade contains the author's sheets. `initial_sheets_with_external` weaves them
+   in at their `<link>`'s document position; it walks the LIGHT tree deliberately, matching the
+   `collect_style_elements` it replaces, so shadow `<style>` is still scoped by
+   `collect_shadow_stylesheets` instead of cascading twice.
+2. **A wait, bounded three ways** — because the free version does not reach. Moving the existing
+   *harvest-what-has-landed* one phase earlier is free and was tried first; on a loopback origin it
+   banks **nothing** (`html parse` 0ms · `external scripts` 2ms · `module graph prefetch` 0ms, sheet
+   at ~5ms). So `load_async` now waits — **only when a blocking `<script>` exists to observe it**,
+   never past `nav_start + load_budget()`, and never more than a quarter of that budget. That first
+   condition is the direct answer to the row that killed t716's design (*"the fixture has dead
+   sheets and NO scripts"*): under it, that fixture waits zero.
+3. **`from_prefetched_inner` had the identical gap one copy along** — the shell. Its own comment
+   claimed the CSS is applied "between `from_dom` and the deferred pass, so its lifecycle events and
+   its timers see a styled document", which is true and stops one phase short of the blocking
+   scripts.
+
+⚠⚠⚠ **AND THE FIX WAS COMPLETE, CORRECT AND ENTIRELY INVISIBLE FOR ONE BUILD.** With (1) and (2) in
+place the debug line read `seeded=1 bytes=22 sheets=1` — the author's sheet **was** in the initial
+cascade — and the probe still printed `k=block`. The reason is a THIRD copy of the sheet list:
+`getComputedStyle` forces a reflow, `ReflowScope::install` rebuilds the cascade from the list it is
+handed, and `from_dom` handed it `no_external_css: HashMap::new()` under a comment that said this
+was *"a fact rather than an omission — nothing has been fetched"*. **That comment was true when it
+was written and my own change is what made it false.**
+
+> **A stale comment converts from documenting a limitation to justifying a bug the moment the
+> limitation lifts** — t1273's finding, hit again, and this time by my own hand in the same tick.
+
+```text
+  WPT MOVEMENT — old binary vs new, SAME HOUR, ISOLATED runs, FIXED denominators:
+    css/css-grid/parsing           1119/1598 -> 1163/1598   (70.0% -> 72.8%)   +44
+    css/css-grid/grid-model          94/160  ->  110/160    (58.8% -> 68.8%)   +16
+    css/css-grid/grid-definition    990/1284 -> 1006/1284   (77.1% -> 78.3%)   +16
+    css/css-grid/layout-algorithm   217/528  ->  223/528    (41.1% -> 42.2%)    +6
+    css/css-values/calc-size  CONTROL  984/3690 -> 984/3690  (=)  no external CSS, must not move
+                                                             ---
+                                                             +82, zero losses
+```
+
+⚠⚠ **THE WHOLE-AREA TOTAL IS NOT THE EVIDENCE HERE, AND SAYING SO IS THE POINT.** `css/css-grid`
+reads `7022/14257 -> 6991/14101` — a numerator that FELL. The diff of the failing sets says no file
+went from clean to failing; the entire delta is two `*-interpolation.html` files whose **denominator
+moved** (600 -> 558), i.e. subtests not CREATED. The old-binary control settles it:
+
+```text
+  css/css-grid/animation, ISOLATED   old 1094/1840   new 1094/1840   IDENTICAL
+  the same directory IN-BATCH        old      /1920  new      /1819
+```
+
+> **The engine's answer is byte-identical; the subtest COUNT of a transition-timing test depends on
+> its position in the batch.** Only fixed-denominator directories are comparable across a full-area
+> run — which is the t1163 rule (*"a moving denominator is the tell"*) arriving from a new
+> direction: not a stale row, a genuinely context-dependent one.
+
+GATE: **`G_CSS_BEFORE_LIFECYCLE`'s named non-claim is now a CLAIM.** t714/t719 wrote assertion (4) as
+`assert_eq!(blocking, "block/1184")` with a note reading *"if this now reads `flex/829`, the other
+half landed; update the gate."* It reads `flex/829`. Proven RED three ways, each isolating one link:
+
+```text
+  (a) drop `set_pending_external_css` in `load_async`        ->  block/1184
+  (b) drop the bounded wait, keep the free harvest           ->  block/1184  (loopback is too fast)
+  (c) restore `no_external_css` in from_dom's ReflowScope    ->  block/1184  (cascade styled, reflow not)
+```
+
+PERF: no new phase on a page with no blocking script, and none on a page whose sheets already
+landed — both are the common case. `blocking stylesheets` is in the navigation ledger so the phases
+still sum. `G_LOAD`'s 2x page bound is arithmetically untouched: the wait cannot run past
+`nav_start + load_budget()`.
+
+NEXT, ranked.
+(a) ⭐⭐⭐ **`document.styleSheets` is EMPTY for external sheets** — found by the same probe, `sheets=0`
+    at `load` on a page that is correctly styled by that very sheet. The cascade holds it and CSSOM
+    publishes none of it, which is t1269's finding in the other half of the family. Any page that
+    enumerates its own sheets (every theme switcher, every CSS-in-JS runtime) sees nothing.
+(b) ⭐⭐ The ANIMATION CLOCK, then `element.animate()` — carried, unchanged.
+(c) `writing-mode` is now sized at **1,500 subtests in `css/css-grid/abspos` alone**, with WPT's own
+    control row proving the isolation. It is a subsystem, not a tick; scope it as one.
+
+WIKI: docs/wiki/css-cascade.md — the script-blocking rule, the three copies of the sheet list, and
+the bounded-wait design with the condition that makes it affordable.

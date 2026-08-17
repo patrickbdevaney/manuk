@@ -7269,3 +7269,36 @@ wrong. This is the failure mode a defensive programmer cannot detect.
 `sticky-util.js` builds every fixture with `createElement`, so the whole family runs through this
 path, but most of those tests fail on a *further* assertion once past the scroll. The value is on the
 real web; the gate (`G_DYNAMIC_SCROLLER`, RED three ways) is what carries it.
+
+---
+
+## An inline script that measures the page at parse time (t1296)
+
+**The pattern, and it is on nearly every site:** `<link rel=stylesheet>` in `<head>`, then a
+`<script>` in the body that reads `getComputedStyle`, `offsetWidth` or `getBoundingClientRect` and
+writes the answer back into the DOM — a carousel sizing its slides, a framework snapshotting layout
+before hydration, a `clientWidth` breakpoint check, a masonry column count.
+
+**The class this unlocks:** every one of those. A `<link rel=stylesheet>` is render-blocking **and
+script-blocking**; this engine honoured only the first half, so `from_dom` cascaded, laid out and ran
+the blocking scripts, and both async constructors applied the fetched external CSS only *after*
+`from_dom` returned. The page's own code computed against UA-default geometry.
+
+**Why it hid:** ⚠⚠⚠ **the final paint was always correct.** The sheets did arrive, just later, so
+every screenshot, box dump, oracle diff and fidelity score showed a properly styled page. The only
+observer that could ever see it was the page itself — and what it wrote from the wrong numbers, no
+later cascade undoes.
+
+⚠ **This is the third member of the North Star's own list.** *"Fast because we never loaded the
+images"* and *"fast because we never ran the script"* are named in `STATUS.md`; **"fast because we
+never waited for the stylesheet"** is the same trade, and it costs correctness rather than pixels.
+
+⚠⚠ **And the fix was invisible for one build because the sheet list exists THREE times** — the
+initial cascade, `apply_stylesheets`, and the **forced-reflow scope** a `getComputedStyle` call
+installs. The third was still empty, so the measuring call un-styled the document it was measuring.
+
+**Measured:** old vs new binary, same hour, isolated, fixed denominators — `css/css-grid/parsing`
+1119 → **1163**, `grid-model` 94 → **110**, `grid-definition` 990 → **1006**, `layout-algorithm` 217 →
+**223**; **+82, zero losses**, control `css/css-values/calc-size` 984 (=). Gate:
+`G_CSS_BEFORE_LIFECYCLE` claim (4), which t714 pinned as a named non-claim and this tick turns
+positive; RED three ways.

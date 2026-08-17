@@ -30,10 +30,12 @@
 //! The spec is not subtle: a `<link rel=stylesheet>` is render-blocking *and* script-blocking, and
 //! `load` does not fire until the style sheets have loaded.
 //!
-//! ⚠ **Named non-claim, asserted as such below:** a script that BLOCKS the parser (no `defer`, no
-//! `async`) still runs before the sheets are applied — closing that means fetching the sheets before
-//! the `Page` exists, which is the shell path's off-thread prefetch and is its own change. The gate
-//! pins the current honest state so the remaining half cannot be forgotten *or* silently regressed.
+//! ⚠ **The named non-claim CLOSED at t1296, and claim (4) below is now positive.** It read: *"a
+//! script that BLOCKS the parser still runs before the sheets are applied — closing that means
+//! fetching the sheets before the `Page` exists."* That is exactly what happens now: the already-
+//! fetched sheets are **seeded into `from_dom`** (`PENDING_EXTERNAL_CSS`, the same shape as the CSP
+//! and external-script seeds), so they are in the FIRST cascade rather than the one after the
+//! scripts. The design that made it affordable is in the table below.
 //!
 //! ⚠⚠ **Written at t714, reverted twice, landed at t719 on the THIRD design.** The first two are
 //! recorded because the arithmetic that killed them is the reason this one looks the way it does.
@@ -54,6 +56,20 @@
 //! get the external-script fetch, the module-graph prefetch, the cascade, layout and every blocking
 //! script of head start; a sheet that has not arrived by then falls through to `finish_loading`
 //! exactly as it did before. Strictly more capability, zero added latency, nothing to starve.
+//!
+//! ⚠⚠⚠ **t1296 — AND THE FREE HARVEST ALONE DOES NOT REACH THE BLOCKING SCRIPTS, MEASURED.** Moving
+//! that harvest one phase earlier (before `from_dom`, which is where the blocking scripts run) is
+//! free and was tried first. On a loopback origin it banks **nothing**: `html parse` 0ms, `external
+//! scripts` 2ms, `module graph prefetch` 0ms, and the sheet lands at ~5ms. So a *wait* is required,
+//! and the row that killed the third design above — *"the fixture has dead sheets and NO scripts, so
+//! there was no wait to hide behind"* — is answered by making the wait conditional on exactly that:
+//!
+//! ```text
+//!   waits ONLY when a blocking       the dead-sheets/no-scripts fixture waits ZERO, because with
+//!   <script> exists to observe it    no blocking script nothing can observe the difference
+//!   never past nav_start+budget      G_LOAD's 2x page bound is arithmetically untouched
+//!   never more than budget/4         a slow origin cannot convert this into the phase t715 reverted
+//! ```
 //!
 //! ⚠ `www.welt.de` collapsed 95.6% -> 0.03% under the first two designs and does **not** under this
 //! one. That collapse was never the ordering: t715 reproduced it on the *unmodified* engine with
@@ -203,14 +219,27 @@ fn a_script_measuring_the_page_sees_the_authors_stylesheets() {
         "a task queued after `load` must see the AUTHOR's layout"
     );
 
-    // (4) **THE NAMED NON-CLAIM, PINNED.** A parser-blocking script still runs before the sheets are
-    // applied. Asserting the honest current value — rather than leaving it unmentioned — means the
-    // day it is fixed this gate goes red and says so, instead of a half-fix passing quietly. If you
-    // are here because this line failed and `blocking` now reads `flex/829`: that is the remaining
-    // half landing. Delete this assertion and say so in the journal.
+    // (4) **THE NAMED NON-CLAIM, NOW A CLAIM (t1296).** This assertion used to pin the honest
+    // failing value — `assert_eq!(blocking, "block/1184")` — with a note saying that if it ever read
+    // `flex/829` the remaining half had landed and the gate should be updated. It reads `flex/829`.
+    //
+    // RED, three ways, each isolating one link of the chain:
+    //
+    // ```text
+    //   (a) drop `set_pending_external_css` in `load_async`   ->  block/1184
+    //   (b) drop the bounded wait (free harvest only)         ->  block/1184  (loopback is TOO FAST:
+    //                                                              2ms of head start, sheet at ~5ms)
+    //   (c) restore `no_external_css` in `from_dom`'s
+    //       ReflowScope, keeping (a) and (b)                  ->  block/1184  (the initial cascade IS
+    //                                                              styled; `getComputedStyle` forces
+    //                                                              a reflow that un-styles it)
+    // ```
+    //
+    // ⚠ (c) is the one worth keeping: the fix was fully present and fully invisible for one build,
+    // because a third copy of the sheet list — the forced-reflow scope's — was still empty.
     assert_eq!(
-        blocking, "block/1184",
-        "a parser-BLOCKING script still runs before the stylesheets are applied — the known \
-         remaining half. If this now reads {want}, the other half landed; update the gate."
+        blocking, want,
+        "a parser-BLOCKING script must see the AUTHOR's layout: `<link rel=stylesheet>` is \
+         script-blocking, and a page that measures at parse time is the reason the spec says so"
     );
 }
