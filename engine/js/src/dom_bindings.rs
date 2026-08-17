@@ -751,6 +751,54 @@ pub fn set_frame_styles(m: std::collections::HashMap<usize, usize>) {
     FRAME_STYLES.with(|c| *c.borrow_mut() = m);
 }
 
+thread_local! {
+    /// **The forced reflow for a CHILD document** — see [`force_frame_reflow`]. Separate from
+    /// [`REFLOW_HOOK`] on purpose, and the reason is the whole design: that hook's context carries
+    /// the MAIN document's viewport width, URL and external stylesheets, so pointing it at a frame
+    /// would resolve the frame's `vw` against the window. A frame reflow has to be the host's, at
+    /// the frame's own width.
+    ///
+    /// No context pointer: the host keeps its own registry keyed by arena address, so this is a
+    /// bare fn pointer with nothing to dangle.
+    static FRAME_REFLOW_HOOK: std::cell::Cell<Option<unsafe extern "C" fn(*mut Dom)>> =
+        const { std::cell::Cell::new(None) };
+    /// Re-entrancy guard, same role as `IN_REFLOW`: the host's re-cascade must not be able to
+    /// re-enter itself through a style read it performs on the way.
+    static IN_FRAME_REFLOW: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
+}
+
+/// Install the host's child-document reflow. Installed once per process/thread, like the
+/// `CSS.supports` hook, because it carries no borrowed state.
+///
+/// # Safety
+/// `f` must remain callable for as long as any frame arena is published.
+pub unsafe fn set_frame_reflow_hook(f: unsafe extern "C" fn(*mut Dom)) {
+    FRAME_REFLOW_HOOK.with(|c| c.set(Some(f)));
+}
+
+/// **Lay out a child document before answering a style read against it.**
+///
+/// ⚠⚠⚠ A child's style map is computed when the child is built and never again, so **every node a
+/// script CREATES inside a frame is absent from it** and `getComputedStyle` answers `undefined` for
+/// every property. That is the stale-snapshot class (t1282-1295) inside a child arena, and it is the
+/// single sentence 135 WPT viewport-unit assertions land on — each of those fixtures does
+/// `doc.body.innerHTML = …` and then measures what it just wrote.
+///
+/// Cheap when nothing changed: the host compares the child's mutation counter against the value its
+/// current layout was computed at, so a run of reads on an untouched frame costs one call and one
+/// integer compare.
+fn force_frame_reflow(dom: *mut Dom) {
+    if IN_FRAME_REFLOW.with(|c| c.get()) {
+        return;
+    }
+    let Some(f) = FRAME_REFLOW_HOOK.with(|c| c.get()) else {
+        return;
+    };
+    IN_FRAME_REFLOW.with(|c| c.set(true));
+    unsafe { f(dom) };
+    IN_FRAME_REFLOW.with(|c| c.set(false));
+}
+
 /// Publish the live child documents. `Page` calls this before it runs scripts; the arenas must outlive
 /// the run, which is why the child `Page`s are boxed and owned by the parent (see `manuk_page::Page`).
 pub fn set_iframe_docs(m: std::collections::HashMap<NodeId, (usize, NodeId)>) {
@@ -1020,15 +1068,26 @@ fn with_style<R>(node: NodeId, f: impl FnOnce(&manuk_css::ComputedStyle) -> R) -
 /// `node_and_dom` was written to close for the DOM, one pass later in the pipeline. So the arena
 /// decides which map answers, and a frame arena's map comes from [`FRAME_STYLES`].
 ///
-/// ⚠ **No forced reflow for a frame.** `force_reflow_if_stale` re-cascades the MAIN document; running
-/// it here would refresh the wrong map and cost a full relayout to do it. A child's styles are as of
-/// its own last layout, which is the same bound its pixels already carry (`iframe_js`: *"the frame
-/// does not re-render when its document is mutated from the parent"*). Stated rather than hidden.
+/// ⚠ **A frame gets its OWN forced reflow, not the main document's** — see [`force_frame_reflow`].
+/// This used to read *"no forced reflow for a frame: `force_reflow_if_stale` re-cascades the MAIN
+/// document; running it here would refresh the wrong map"*, and that reasoning was right about the
+/// hook and wrong to stop there. `ReflowCtx` carries the parent's viewport width, URL and external
+/// CSS, so borrowing it would resolve a frame's `vw` against the **window** — the exact answer
+/// `css/css-values/viewport-units-compute.html` exists to check. The host reflows the owning child
+/// at the child's own width instead, which is why the hook is separate (t1298).
 fn with_style_in<R>(
     dom: *mut Dom,
     node: NodeId,
     f: impl FnOnce(&manuk_css::ComputedStyle) -> R,
 ) -> Option<R> {
+    let frame = FRAME_STYLES.with(|c| c.borrow().get(&(dom as usize)).copied());
+    // ⚠ BEFORE the address is read below, not after: the host may replace the map's CONTENTS in
+    // place (which is what keeps the published address stable), and a pointer captured first would
+    // still be correct — but a host that ever reallocates would make the order load-bearing, and
+    // this is the cheap way to never depend on that.
+    if frame.is_some() {
+        force_frame_reflow(dom);
+    }
     let frame = FRAME_STYLES.with(|c| c.borrow().get(&(dom as usize)).copied());
     match frame {
         Some(addr) => {

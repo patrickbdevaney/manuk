@@ -2570,6 +2570,165 @@ fn harvest_finished_css(
     *inflight = still_running;
 }
 
+/// **A frame's viewport is its CONTENT box, not its border box** — and the difference is 4px on a
+/// default `<iframe>`, because the UA sheet gives it a 2px border.
+///
+/// ⚠⚠⚠ `node_rects` returns the **border** box. Handing that to the child makes `100vw` inside
+/// `iframe { width: 200px }` resolve to **204px**, which is `css/css-values/viewport-units-compute`'s
+/// first assertion, off by exactly the two borders. Every frame-sizing call site must go through
+/// here, because a second copy of this rule is how two of them end up disagreeing.
+///
+/// ⚠ **This is also the trap a too-kind probe walks straight past.** The fixture that first proved
+/// the frame reflow worked wrote `border:0` on the iframe — and so read `200px` and declared
+/// victory, because it had removed the one thing that breaks it. A probe must not style away the
+/// default it is measuring.
+fn frame_content_box(
+    style: Option<&manuk_css::ComputedStyle>,
+    border_box_w: f32,
+    border_box_h: f32,
+) -> (f32, f32) {
+    let Some(s) = style else {
+        return (border_box_w.max(1.0), border_box_h.max(1.0));
+    };
+    // Percentage padding resolves against the containing block's WIDTH on both axes (CSS 2.1
+    // §8.4 — yes, vertical padding too); the border box is the closest reference in hand and is
+    // exact for the `px` padding that is all an `<iframe>` ever carries in practice.
+    let pad_x =
+        s.padding.left.resolve(border_box_w, 0.0) + s.padding.right.resolve(border_box_w, 0.0);
+    let pad_y =
+        s.padding.top.resolve(border_box_w, 0.0) + s.padding.bottom.resolve(border_box_w, 0.0);
+    let bord_x = s.border_width.left + s.border_width.right;
+    let bord_y = s.border_width.top + s.border_width.bottom;
+    (
+        (border_box_w - pad_x - bord_x).max(1.0),
+        (border_box_h - pad_y - bord_y).max(1.0),
+    )
+}
+
+/// **Resolve viewport units against THIS frame's viewport for the duration of a child cascade.**
+///
+/// ⚠⚠⚠ `manuk_css::values` keeps the viewport in a **global**, and its own comment says why the
+/// height drifts: *"cascade sites thread an authoritative width but not always a height, so they
+/// update width alone."* A child therefore cascaded with the frame's width and the **window's
+/// height**, so in a 200x100 frame `100vw` was right and `100vh` answered **800px** — and `vmin`
+/// and `vmax`, being derived, were wrong in opposite directions, which is why the failures did not
+/// look like one bug.
+///
+/// Restores on drop, on every path including a panic, because a child cascade that leaked its
+/// viewport would silently mis-resolve the PARENT's next one.
+struct ViewportScope((f32, f32));
+
+impl ViewportScope {
+    fn set(w: f32, h: f32) -> ViewportScope {
+        let prev = manuk_css::values::viewport_size();
+        manuk_css::values::set_viewport(w, h);
+        ViewportScope(prev)
+    }
+}
+
+impl Drop for ViewportScope {
+    fn drop(&mut self) {
+        manuk_css::values::set_viewport(self.0 .0, self.0 .1);
+    }
+}
+
+/// One network-free `<iframe>` built ahead of the page's own scripts — see
+/// [`build_inline_frame_docs`]. A struct rather than a tuple because `width` is the field the whole
+/// frame-reflow mechanism turns on, and a bare `f32` in fifth position is exactly the kind of thing
+/// that gets re-derived at the far call site instead of carried.
+#[cfg(feature = "spidermonkey")]
+struct InlineFrame {
+    node: manuk_dom::NodeId,
+    page: Page,
+    url: String,
+    image: Option<std::rc::Rc<manuk_paint::DecodedImage>>,
+    /// The frame's own viewport — what makes `100vw`/`100vh` inside it resolve to the frame.
+    width: f32,
+    height: f32,
+}
+
+/// What the host needs to lay out ONE child document on demand — see [`frame_forced_reflow`].
+#[cfg(feature = "spidermonkey")]
+struct FrameReflowEntry {
+    /// The child `Page`. Raw because the registry outlives no borrow: it is republished at the same
+    /// two sites that republish the arena addresses, and is valid for exactly the same window.
+    page: *mut Page,
+    /// **The FRAME's viewport, not the window's** — the entire reason this is a separate
+    /// mechanism from `ReflowScope`. Both axes: the height is what `100vh` inside the frame reads.
+    width: f32,
+    height: f32,
+    fonts: *const FontContext,
+    /// The child's `mutation_seq` when its current `styles` were computed. The idempotence guard.
+    laid_out_at: u64,
+}
+
+#[cfg(feature = "spidermonkey")]
+thread_local! {
+    /// **Which child `Page` sits behind each frame arena**, keyed the same way `set_frame_styles`
+    /// keys its map — by the arena's address. Published beside it, at the same two call sites.
+    static FRAME_REFLOW_PAGES: std::cell::RefCell<HashMap<usize, FrameReflowEntry>> =
+        std::cell::RefCell::new(HashMap::new());
+}
+
+/// **Lay out a child document before a style read against it is answered.**
+///
+/// ⚠⚠⚠ **A child's cascade ran once, when the child was built, and never again** — so every node a
+/// script CREATES inside a frame is missing from the child's style map and `getComputedStyle`
+/// answers `undefined` for every property. Measured, with its own control row:
+///
+/// ```text
+///   gcs=function  div=DIV  cs=object  h=undefined d=undefined   <- a div the script just created
+///                                     bodyh=auto                <- CONTROL: a node that predates it
+/// ```
+///
+/// The control is the diagnosis: the read path works and the *snapshot* is stale, which is the
+/// t1282-1295 class one arena over. It is the single sentence 135 WPT viewport-unit assertions land
+/// on — each of those fixtures writes `doc.body.innerHTML = …` and then measures what it wrote.
+///
+/// **Why this is not `forced_reflow` pointed at a child.** `ReflowCtx` carries the parent's viewport
+/// width, URL and external stylesheets; borrowing it would resolve the frame's `vw` against the
+/// **window**, which is the exact answer those tests exist to check. The child is laid out at its own
+/// frame width instead.
+///
+/// **And why it is SMALLER than the main reflow, not larger.** `FRAME_STYLES` publishes the *address*
+/// of `Page::styles`, so assigning into that field in place leaves the published pointer valid —
+/// nothing is republished. Rects, the scroll merge, the sticky pass and grid tracks are separate
+/// observables with their own call sites and are deliberately not done here.
+///
+/// # Safety
+/// Called only from the JS bindings, with an arena address that is a key of [`FRAME_REFLOW_PAGES`];
+/// entries are replaced whenever the child set changes.
+#[cfg(feature = "spidermonkey")]
+unsafe extern "C" fn frame_forced_reflow(dom: *mut manuk_dom::Dom) {
+    FRAME_REFLOW_PAGES.with(|r| {
+        let mut reg = r.borrow_mut();
+        let Some(e) = reg.get_mut(&(dom as usize)) else {
+            return;
+        };
+        let child = unsafe { &mut *e.page };
+        // Idempotent: a run of reads with no mutation between them lays out once, not once each.
+        if child.dom.mutation_seq() == e.laid_out_at {
+            return;
+        }
+        let fonts = unsafe { &*e.fonts };
+        // ⚠ **THE FRAME'S OWN VIEWPORT, BOTH AXES, FOR THE DURATION OF THE CASCADE.** Viewport units
+        // are resolved eagerly from a global at parse time, so without this the child re-cascades
+        // with the frame's width and the WINDOW's height.
+        let _vp = ViewportScope::set(e.width, e.height);
+        // The child's OWN sheets and OWN base URL — the same `sheets_of` the main reflow uses, so a
+        // frame's forced reflow and its next full relayout cannot disagree about the same tree.
+        let sheets = sheets_of(&child.dom, &child.final_url, &child.external_css);
+        let (styles, root_box) =
+            restyle_and_layout(&child.dom, &sheets, fonts, e.width, &child.images);
+        // ⚠ Assigned IN PLACE. `&Page::styles` is what `FRAME_STYLES` published; replacing the map's
+        // contents keeps that address valid, and is what makes this reflow need no republish.
+        child.styles = styles;
+        child.root_box = root_box;
+        child.content_height = child.root_box.content_bottom();
+        e.laid_out_at = child.dom.mutation_seq();
+    });
+}
+
 thread_local! {
     /// How deep the *pre-script* inline-frame pass currently is on this thread.
     ///
@@ -2603,21 +2762,16 @@ thread_local! {
 /// for the page's own code to see it — and, exactly as with the stylesheet, the final paint is
 /// right, so no screenshot or box dump could ever show it.
 ///
-/// Returns `(node, child page, url, painted bitmap)` per frame; the caller owns installation,
-/// because the `Page` that will hold them does not exist yet.
+/// Returns one [`InlineFrame`] per frame; the caller owns installation, because the `Page` that will
+/// hold them does not exist yet.
 #[cfg(feature = "spidermonkey")]
-#[allow(clippy::type_complexity)]
 fn build_inline_frame_docs(
     dom: &Dom,
     rects: &std::collections::HashMap<manuk_dom::NodeId, [f32; 4]>,
+    styles: &StyleMap,
     final_url: &str,
     fonts: &FontContext,
-) -> Vec<(
-    manuk_dom::NodeId,
-    Page,
-    String,
-    Option<std::rc::Rc<manuk_paint::DecodedImage>>,
-)> {
+) -> Vec<InlineFrame> {
     if INLINE_FRAME_DEPTH.with(|d| d.get()) >= MAX_IFRAME_DEPTH {
         return Vec::new();
     }
@@ -2648,13 +2802,22 @@ fn build_inline_frame_docs(
         // The frame's own viewport width, so its media queries and layout see the frame — the
         // `300x150` fallback is the HTML default an unsized `<iframe>` gets, and it is what
         // `render_iframe_with_type` uses for a frame with no box.
+        // ⚠ The child's viewport is the frame's CONTENT box — see `frame_content_width`. `rects`
+        // is the BORDER box, and a default `<iframe>` carries a 2px UA border on each side.
         let (w, h, visible) = match rects.get(&node) {
             Some([_, _, rw, rh]) if *rw >= 1.0 && *rh >= 1.0 => {
-                (rw.round().max(1.0) as u32, rh.round().max(1.0) as u32, true)
+                let (cw, ch) = frame_content_box(styles.get(&node), *rw, *rh);
+                (cw.round().max(1.0) as u32, ch.round().max(1.0) as u32, true)
             }
+            // The HTML default for an `<iframe>` with no box of its own.
             _ => (300, 150, false),
         };
-        let mut child = Page::load(&html, final_url, fonts, w as f32);
+        // ⚠ The viewport unit scope wraps the child's WHOLE construction: `Page::load` cascades,
+        // and `100vh` inside the frame is resolved at parse time from the global.
+        let mut child = {
+            let _vp = ViewportScope::set(w as f32, h as f32);
+            Page::load(&html, final_url, fonts, w as f32)
+        };
         let img = if visible {
             let canvas = child.paint(fonts, w, h);
             Some(std::rc::Rc::new(manuk_paint::DecodedImage {
@@ -2673,7 +2836,18 @@ fn build_inline_frame_docs(
             child.dom.set_referrer(doc, final_url);
         }
         manuk_js::register_dom(&mut *child.dom as *mut manuk_dom::Dom);
-        out.push((node, child, final_url.to_string(), img));
+        out.push(InlineFrame {
+            node,
+            page: child,
+            url: final_url.to_string(),
+            image: img,
+            height: h as f32,
+            // ⚠ Carried, not re-derived. The frame's own width is what makes `100vw` inside it
+            // resolve to the frame; a second copy of the `300x150`-fallback rule elsewhere is how
+            // two call sites end up disagreeing about the same frame (the "one rule, N
+            // implementations" class).
+            width: w as f32,
+        });
     }
     INLINE_FRAME_DEPTH.with(|d| d.set(d.get().saturating_sub(1)));
     out
@@ -2686,32 +2860,65 @@ fn build_inline_frame_docs(
 /// `Page::publish_iframe_docs` is called again the moment the `Page` exists for exactly that reason
 /// — this call covers the window *before* it, which is the window the blocking scripts run in.
 #[cfg(feature = "spidermonkey")]
-fn publish_pre_script_frame_docs(
-    frames: &mut [(
-        manuk_dom::NodeId,
-        Page,
-        String,
-        Option<std::rc::Rc<manuk_paint::DecodedImage>>,
-    )],
-) {
+fn publish_pre_script_frame_docs(frames: &mut [InlineFrame], fonts: &FontContext) {
     let docs: std::collections::HashMap<_, _> = frames
         .iter_mut()
-        .map(|(n, c, _, _)| {
-            let root = c.dom.root();
-            (*n, (&mut *c.dom as *mut manuk_dom::Dom as usize, root))
+        .map(|f| {
+            let root = f.page.dom.root();
+            (
+                f.node,
+                (&mut *f.page.dom as *mut manuk_dom::Dom as usize, root),
+            )
         })
         .collect();
     manuk_js::set_iframe_docs(docs);
     let styles: std::collections::HashMap<usize, usize> = frames
         .iter_mut()
-        .map(|(_, c, _, _)| {
+        .map(|f| {
             (
-                &mut *c.dom as *mut manuk_dom::Dom as usize,
-                &c.styles as *const _ as usize,
+                &mut *f.page.dom as *mut manuk_dom::Dom as usize,
+                &f.page.styles as *const _ as usize,
             )
         })
         .collect();
     manuk_js::set_frame_styles(styles);
+    // …and the registry that lets a style read LAY THE CHILD OUT — published here for the same
+    // reason and with the same lifetime as the two maps above. Without it the frames are readable
+    // and frozen at their construction cascade.
+    publish_frame_reflow_pages(
+        frames.iter_mut().map(|f| {
+            let addr = &mut *f.page.dom as *mut manuk_dom::Dom as usize;
+            (addr, &mut f.page, f.width, f.height)
+        }),
+        fonts,
+    );
+}
+
+/// Publish [`FRAME_REFLOW_PAGES`] from whatever currently owns the child pages — a local `Vec`
+/// before the `Page` exists, `Page::child_pages` after it. Both call sites hand over the same three
+/// facts: which arena, which `Page`, and **the frame's own width**.
+#[cfg(feature = "spidermonkey")]
+fn publish_frame_reflow_pages<'a>(
+    entries: impl Iterator<Item = (usize, &'a mut Page, f32, f32)>,
+    fonts: &FontContext,
+) {
+    let m: HashMap<usize, FrameReflowEntry> = entries
+        .map(|(addr, c, width, height)| {
+            let e = FrameReflowEntry {
+                // ⚠ The width is passed in, never re-derived from the child, because it is the one
+                // fact this mechanism exists for: the child laid out at its FRAME's width when it
+                // was built and must keep doing so, which is what makes `100vw` inside a 200px
+                // frame resolve to 200px instead of the window's width.
+                width: width.max(1.0),
+                height: height.max(1.0),
+                page: c as *mut Page,
+                fonts: fonts as *const FontContext,
+                laid_out_at: c.dom.mutation_seq(),
+            };
+            (addr, e)
+        })
+        .collect();
+    FRAME_REFLOW_PAGES.with(|r| *r.borrow_mut() = m);
 }
 
 /// The document's author stylesheets, in **document order**, with the already-fetched externals
@@ -3883,13 +4090,16 @@ impl Page {
         }
         // **No box is not a reason not to load** — see `pending_iframes`. It is a reason not to *paint*.
         let rects = self.root_box.node_rects(&self.dom);
+        // ⚠ CONTENT box, not border box — see `frame_content_width`. The fetched path had the same
+        // 4px error as the inline one; it had simply never been measured.
         let (w, h) = match rects.get(&node) {
-            Some(r) if r.width >= 1.0 && r.height >= 1.0 => (
-                r.width.round().max(1.0) as u32,
-                r.height.round().max(1.0) as u32,
-            ),
+            Some(r) if r.width >= 1.0 && r.height >= 1.0 => {
+                let (cw, ch) = frame_content_box(self.styles.get(&node), r.width, r.height);
+                (cw.round().max(1.0) as u32, ch.round().max(1.0) as u32)
+            }
             _ => (300, 150),
         };
+        let _vp = ViewportScope::set(w as f32, h as f32);
         let visible = rects
             .get(&node)
             .is_some_and(|r| r.width >= 1.0 && r.height >= 1.0);
@@ -3934,7 +4144,7 @@ impl Page {
         }
         manuk_js::register_dom(&mut *child.dom as *mut manuk_dom::Dom);
         self.child_pages.insert(node, child);
-        self.publish_iframe_docs();
+        self.publish_iframe_docs(fonts);
         // **`load` fires HERE, at the one place a child document is installed**, and not at the two
         // callers — `set_root_box` above states the rule this follows: three call sites feeding one
         // post-step is how a pass silently does not run on the third. Both the fetched path
@@ -3945,7 +4155,7 @@ impl Page {
 
     /// Tell the JS world which arena sits behind each `<iframe>`. Cheap, and it must run before any
     /// script that might reach into a frame — which, once frames are loaded, is any script at all.
-    fn publish_iframe_docs(&mut self) {
+    fn publish_iframe_docs(&mut self, fonts: &FontContext) {
         let m: std::collections::HashMap<_, _> = self
             .child_pages
             .iter_mut()
@@ -3976,6 +4186,43 @@ impl Page {
             })
             .collect();
         manuk_js::set_frame_styles(styles);
+
+        // **And the registry that lets a style read LAY THAT CHILD OUT** (t1298) — same key, same
+        // lifetime, same call site, for the reason the block above states: a child `Page` is a value
+        // in a `HashMap`, so a raw pointer to it is meaningful only until the next `child_pages`
+        // mutation, and every such mutation comes through here.
+        //
+        // ⚠ **The width is each frame's OWN box**, taken from the parent's layout, with the same
+        // `300x150` fallback `render_iframe_with_type` uses for a frame with no box. Handing the
+        // window's width here would resolve every `vw` inside every frame against the window, which
+        // is the precise bug this mechanism exists to prevent.
+        #[cfg(feature = "spidermonkey")]
+        {
+            let frame_rects = self.root_box.node_rects(&self.dom);
+            let boxes: HashMap<manuk_dom::NodeId, (f32, f32)> = self
+                .child_pages
+                .keys()
+                .map(|&n| {
+                    let wh = match frame_rects.get(&n) {
+                        Some(r) if r.width >= 1.0 && r.height >= 1.0 => {
+                            let (cw, ch) =
+                                frame_content_box(self.styles.get(&n), r.width, r.height);
+                            (cw.round(), ch.round())
+                        }
+                        _ => (300.0, 150.0),
+                    };
+                    (n, wh)
+                })
+                .collect();
+            publish_frame_reflow_pages(
+                self.child_pages.iter_mut().map(|(n, c)| {
+                    let addr = &mut *c.dom as *mut manuk_dom::Dom as usize;
+                    let (w, h) = boxes.get(n).copied().unwrap_or((300.0, 150.0));
+                    (addr, c, w, h)
+                }),
+                fonts,
+            );
+        }
 
         // **And the source-set selection behind `<img>.currentSrc`, for this document AND every
         // child.** It rides here rather than in `ReflowScope::install` for one reason: `install`
@@ -5960,7 +6207,7 @@ impl Page {
     #[cfg(feature = "spidermonkey")]
     pub fn fire_lifecycle(&mut self, which: &str, fonts: &FontContext, viewport_width: f32) {
         // The thread-local is shared by every `Page` on this thread, so re-publish rather than trust it.
-        self.publish_iframe_docs();
+        self.publish_iframe_docs(fonts);
         let src = match which {
             "DOMContentLoaded" => "globalThis.__fireDOMContentLoaded && __fireDOMContentLoaded()",
             _ => "globalThis.__fireLoad && __fireLoad()",
@@ -6298,6 +6545,14 @@ impl Page {
         // `from_prefetched_inner`), which is why the call belongs here and not in three callers —
         // three callers is what produced one.
         install_supports_hook();
+        // **The child-document reflow, installed for the same reason and in the same place.** It
+        // carries no borrowed state (the host's registry is keyed by arena address), so unlike
+        // `ReflowScope` it is installed once and never torn down — and it belongs on the one
+        // function every construction path goes through, because three callers is what produced one.
+        #[cfg(feature = "spidermonkey")]
+        unsafe {
+            manuk_js::set_frame_reflow_hook(frame_forced_reflow)
+        };
         // Box the DOM up front so its address is stable for the persistent JS context's raw
         // reflector pointers, then style + lay out once and run the document's inline scripts
         // against that layout snapshot (so `getBoundingClientRect` works), letting them mutate
@@ -6369,10 +6624,10 @@ impl Page {
         // at insertion, so the very next `<script>` must find a real `contentDocument`. `rects` is
         // the layout above, which is what gives each frame its own viewport width.
         #[cfg(feature = "spidermonkey")]
-        let mut inline_frames = build_inline_frame_docs(&dom, &rects, final_url, fonts);
+        let mut inline_frames = build_inline_frame_docs(&dom, &rects, &styles, final_url, fonts);
         #[cfg(feature = "spidermonkey")]
         if !inline_frames.is_empty() {
-            publish_pre_script_frame_docs(&mut inline_frames);
+            publish_pre_script_frame_docs(&mut inline_frames, fonts);
         }
         // Only stand up a JS context for documents that actually have a script — a static page
         // needs no engine spin-up (faster load, and no persistent global to keep alive). With
@@ -6491,12 +6746,12 @@ impl Page {
         let (frame_pages, frame_urls) = {
             let mut pages = std::collections::HashMap::new();
             let mut urls = std::collections::HashMap::new();
-            for (n, child, url, img) in inline_frames {
-                if let Some(img) = img {
-                    inline_images.insert(n, img);
+            for f in inline_frames {
+                if let Some(img) = f.image {
+                    inline_images.insert(f.node, img);
                 }
-                pages.insert(n, child);
-                urls.insert(n, url);
+                pages.insert(f.node, f.page);
+                urls.insert(f.node, f.url);
             }
             (pages, urls)
         };
@@ -6549,7 +6804,7 @@ impl Page {
         // because it needs a JS context and `from_dom` did not have one when the frames were built.
         #[cfg(feature = "spidermonkey")]
         if !page.child_pages.is_empty() {
-            page.publish_iframe_docs();
+            page.publish_iframe_docs(fonts);
             let nodes: Vec<manuk_dom::NodeId> = page.child_pages.keys().copied().collect();
             for n in nodes {
                 page.fire_frame_load(n);
@@ -7606,10 +7861,11 @@ impl Page {
             if r.width < 1.0 || r.height < 1.0 {
                 continue;
             }
-            let (w, h) = (
-                r.width.round().max(1.0) as u32,
-                r.height.round().max(1.0) as u32,
-            );
+            // ⚠ CONTENT box — the fifth and last frame-sizing site, through the same rule. A
+            // repaint that laid the child out at the BORDER width would disagree with the pass that
+            // built it, and the frame would reflow by 4px the first time anything touched it.
+            let (cw, ch) = frame_content_box(self.styles.get(&node), r.width, r.height);
+            let (w, h) = (cw.round().max(1.0) as u32, ch.round().max(1.0) as u32);
             self.repaint_frame(node, w, h, fonts, false);
         }
     }
@@ -7638,8 +7894,10 @@ impl Page {
                 return;
             }
         }
-        // The child lays out at the FRAME's width, not the window's — that is what makes a
-        // responsive embed responsive, and it must stay true on every repaint.
+        // The child lays out at the FRAME's viewport, not the window's — that is what makes a
+        // responsive embed responsive, and it must stay true on every repaint. BOTH axes: a
+        // `100vh` hero inside an embed is as common as a `100vw` one.
+        let _vp = ViewportScope::set(w as f32, h as f32);
         child.relayout(fonts, w as f32);
         child.dom.clear_all_dirty();
         let canvas = child.paint(fonts, w, h);

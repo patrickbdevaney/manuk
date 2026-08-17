@@ -294,6 +294,69 @@ the answer those tests exist to check.
 earlier (it now precedes `DOMContentLoaded`, which is what the spec says for a frame that needs no
 network) broke nothing that depended on the old ordering.
 
+## A frame is its own VIEWPORT, and its cascade is not frozen at construction (t1298)
+
+t1297 gave a parser-inserted `<iframe>` a document by the time the page's own script runs, and every
+one of the 135 newly-named viewport-unit assertions then landed on one sentence: `expected "200px"
+but got undefined`. Three links stood between a readable frame and a **measurable** one.
+
+**1. The child's cascade ran once, when the child was built.** So a node the script CREATES inside
+the frame is absent from the child's style map and `getComputedStyle` answers `undefined` for every
+property — the t1282-1295 stale-snapshot class, one arena over. The control row is the diagnosis:
+
+```text
+  gcs=function  div=DIV  cs=object  h=undefined d=undefined   <- a div the script just created
+                                    bodyh=auto                <- CONTROL: a node that predates it
+```
+
+`force_frame_reflow` (bindings) calls a host hook keyed by arena address. It is **not**
+`ReflowScope` aimed at the child, and that is the design: `ReflowCtx` carries the parent's viewport
+width, URL and external CSS, so borrowing it resolves the frame's `vw` against the **window** — the
+exact answer these tests exist to check.
+
+**It is SMALLER than the main reflow, not larger.** `FRAME_STYLES` publishes the *address* of
+`Page::styles`, so assigning into that field in place leaves the pointer valid and nothing is
+republished. Rects, the scroll merge, the sticky pass and grid tracks are separate observables with
+their own call sites and are deliberately not done here.
+
+**2. Viewport units resolved against the window, on ONE axis.** They are resolved eagerly from a
+process-wide global in `manuk_css::values`, whose own comment says cascade sites *"thread an
+authoritative width but not always a height, so they update width alone."* A 200x100 frame therefore
+got the frame's width and the window's height:
+
+```text
+   100vw   200px  ✓        100vh   800px  ✗        the window's height
+   100vmin 200px  ✗        100vmax 800px  ✗        derived — wrong in OPPOSITE directions
+```
+
+> **When derived units disagree with their inputs, suspect the input.** `vmin`/`vmax` being wrong in
+> opposite directions is what made four unit families look like four bugs instead of one stale
+> global. `ViewportScope` sets both axes for a child cascade and restores on drop.
+
+**3. A frame's viewport is its CONTENT box.** `node_rects` returns the border box, and an `<iframe>`
+is the one replaced element with a UA border (2px per side) — so `100vw` in `iframe{width:200px}`
+reads `204px`. `frame_content_box` is the single rule and **five** call sites go through it: the
+inline build, `Page::publish_iframe_docs`, the frame reflow, `render_iframe_with_type` (the fetched
+path had the identical error and had never been measured) and `repaint_child_frames`. This agrees
+from the other direction with `G_IFRAME`'s assertion (1), whose `404x204` / `304x154` border boxes
+were measured against headless Chrome.
+
+**Measured:** `viewport-units-compute` **0/34 → 33/34**, `viewport-units-extreme-scale` **0/4 →
+4/4**, `css/css-values` 3231 → **3298**. Controls: `domparsing` exactly its mark, `css/css-sizing`
++99 on a smaller denominator.
+
+**Two traps worth carrying forward.** ⚠⚠⚠ The probe that first "proved" the reflow wrote `border:0`
+on the iframe — it had **styled away the default it was measuring**, so it could not fail. ⚠ And the
+gate's first version reported an EMPTY string rather than a failure: `from_dom` stands up a JS
+context only for a document that HAS a `<script>`, so a fixture driven purely by `eval_for_test` with
+no script gets `js: None` and the eval is a silent no-op.
+
+**NOT covered, named:** a frame built by `createElement` + `appendChild` and read on the next line
+still has no document (`G_INLINE_FRAME_DOCUMENT` assertion (4)'s pinned `sync-null`) — now sized by
+WPT, at `viewport-units-invalidation` 0/24 and `viewport-relative-lengths-scaled-viewport` 0/1. The
+scrollbar gutter is not subtracted from a frame's viewport (`viewport-units-scrollbars-compute` 0/34,
+a clean 15px miss). Viewport units do not interpolate (`viewport-units-keyframes` 0/24, `auto`).
+
 ## CharacterData offsets are UTF-16 CODE UNITS — not bytes, not `char`s
 
 `"😀".length === 2` in JavaScript. An offset of 1 lands **inside the surrogate pair**. Rust strings are

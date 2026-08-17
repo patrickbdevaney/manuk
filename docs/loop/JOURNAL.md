@@ -84309,3 +84309,141 @@ minutes of wall and one false RED, and both are contention, not regression:
 WIKI: docs/wiki/dom-semantics.md — the third entry in the iframe chain (document t512, element `load`
 t1167, parse-time visibility t1297), the re-publish contract, the thread-local depth bound, and the
 named next link with the reason it cannot reuse the parent's reflow context.
+
+## Tick 1298 — `getComputedStyle` inside a frame answered from a snapshot taken before the script ran (2026-08-16)
+
+TICK SHAPE: capability. Board re-run at the top of this tick: **unchanged** (★ CSS-LAYOUT,
+`css/css-values` still #2 at 40.2%). This is t1297's named ⭐⭐⭐ NEXT, taken directly.
+
+HYPOTHESIS. t1297 gave a parser-inserted `<iframe>` a live document by the time the page's own
+script runs, and the eight `0/N` viewport-unit files went from one setup throw to **135
+individually-named assertions** — every one of them now landing on the same sentence:
+
+```text
+  assert_equals: expected "200px" but got (undefined) undefined
+```
+
+Probed, with its own control row:
+
+```text
+  gcs=function  div=DIV  cs=object  h=undefined d=undefined   <- a div the script just created
+                                    bodyh=auto                <- CONTROL: a node that predates it
+```
+
+`getComputedStyle` on a child document *works*. It answers `undefined` **only for nodes created
+after the child's own cascade** — and every one of those fixtures does `doc.body.innerHTML = …` and
+then measures what it just made. This is the t1282-1295 class (*a value derived from a snapshot is
+wrong for everything created after it*) inside a child arena, and it is stated as a non-claim in our
+own source: `with_style_in` reads *"⚠ **No forced reflow for a frame.** `force_reflow_if_stale`
+re-cascades the MAIN document; running it here would refresh the wrong map."*
+
+That reasoning is correct and is exactly why the fix is not "point the existing hook at the child":
+`ReflowCtx` carries the **parent's** viewport width, URL and external CSS, and **a `vw` resolved
+against the parent's viewport is precisely the answer these tests exist to check**.
+
+PREDICTION, written before the patch. A frame reflow is *smaller* than the main one, not larger,
+because of one property: `FRAME_STYLES` maps `dom_addr -> styles_addr`, so re-cascading a child and
+assigning into `child.styles` **in place** leaves the published address unchanged — nothing needs
+republishing. It needs no rects, no scroll merge, no sticky pass and no grid tracks; those are
+separate observables with their own call sites. So: re-cascade + re-lay-out the owning child at
+**its own** frame width, guarded on the child's `mutation_seq`.
+
+Falsifiable claim for the gate: **a script that writes into a frame's document and then calls
+`contentWindow.getComputedStyle` on a node it just created reads the resolved value, and a viewport
+unit inside that frame resolves against the FRAME's viewport, not the window's.** The second half is
+the one that distinguishes a real fix from a redirect of the parent's hook.
+
+WHAT LANDED — and the prediction held on the mechanism while being WRONG about the size of it.
+
+1. **A frame reflow, and it IS smaller than the main one.** `force_frame_reflow` in the bindings, a
+   host hook (`frame_forced_reflow`) with a registry keyed by arena address, published at the same
+   two sites that publish `set_frame_styles`. It re-cascades and re-lays-out the owning child, then
+   **assigns into `child.styles` in place** — the published address is unchanged, so nothing is
+   republished. No rects, no scroll merge, no sticky pass, no grid tracks; those are separate
+   observables with their own call sites.
+
+2. ⚠⚠⚠ **AND THE PREDICTION MISSED A SECOND HALF THAT WAS TWICE THE SIZE.** With (1) alone the
+   engine answered `100vw = 200px` inside a 200x100 frame — correct — and `100vh = 800px`. Viewport
+   units are resolved **eagerly, from a process-wide global**, and `manuk_css::values` says why in
+   its own comment: *"cascade sites thread an authoritative width but not always a height, so they
+   update width alone."* So a child cascaded with the frame's WIDTH and the WINDOW's HEIGHT.
+
+   > **`vmin` and `vmax` are derived, so one wrong axis makes them wrong in OPPOSITE directions** —
+   > `vmin` read 200px (too big) and `vmax` read 800px (too big) against expectations of 100px and
+   > 200px. That is why the failure list did not look like one bug: four unit families, four
+   > different wrong answers, one stale global.
+
+   `ViewportScope` sets both axes for the duration of a child cascade and restores on drop.
+
+3. ⚠⚠ **A FRAME'S VIEWPORT IS ITS CONTENT BOX, AND THE PROBE THAT "PROVED" ARM 1 HAD STYLED THAT
+   AWAY.** After (1) the engine read `204px` where WPT wanted `200px` — `node_rects` returns the
+   **border** box and an `<iframe>` carries a 2px UA border per side. My own probe had written
+   `border:0` on the iframe, so it read a clean `200px` and I believed the arm was finished.
+
+   > **A probe that removes the default it is measuring cannot fail.** This is the control-row
+   > lesson arriving from the other side: not a missing control, but a fixture quietly configured
+   > into the one shape where the bug does not exist. The gate now carries the DEFAULT border on
+   > purpose, and says so.
+
+   `frame_content_box` is the single rule, and **all five** frame-sizing sites go through it — the
+   inline build, `Page::publish_iframe_docs`, the frame reflow, `render_iframe_with_type` (the
+   FETCHED path, which had the same 4px error and had simply never been measured) and
+   `repaint_child_frames`.
+
+```text
+  css/css-values, SAME HOUR, isolated, per-file denominators FIXED:
+    viewport-units-compute            0/34  ->  33/34
+    viewport-units-extreme-scale       0/4  ->   4/4    ALL PASS
+    area subtests                3231/7738  ->  3298/7842      +67
+```
+
+⚠ The area denominator moved (7738 -> 7842), so **the area total is not the evidence** — t1296's
+rule. The per-file denominators are fixed and are.
+
+```text
+  CONTROLS, same binary, against their WPT-AREAS marks:
+    domparsing        234/1294   EXACTLY its mark      (frame-heavy: the load-event family)
+    css/cssom        2795/3507   mark 2794/3502        flat
+    css/css-sizing   3127/5771   mark 3028/5850        +99 on a SMALLER denominator
+```
+
+GATE: **`G_IFRAME` claim (6)** — chosen deliberately over the more obvious home. `G_IFRAME` is one
+of the 19 gates `verify.sh` launches; `g_inline_frame_document`, where t1297's claim (5) went, is
+**not in the wall**. A claim is only a ratchet tooth where the wall can see it. Proven RED three
+ways, each isolating exactly one link:
+
+```text
+  (a) drop `force_frame_reflow` in `with_style_in`   -> vw|vh|vmin|vmax|px ALL undefined
+  (b) drop `ViewportScope` in the frame reflow        -> vh=720px vmax=720px  (the GLOBAL's default)
+  (c) `frame_content_box` returns the border box      -> vw=204px vh=104px
+```
+
+⚠ **The gate was silent before it was red.** Its first version reported an EMPTY string, not a
+failure — `from_dom` only stands up a JS context for a document that HAS a `<script>`, so a fixture
+driven purely by `eval_for_test` and carrying none gets `js: None` and the eval is a **no-op**. An
+assertion whose subject never ran fails for the wrong reason and would have been "fixed" in the
+wrong place; the fixture now carries a script and a comment saying why.
+
+CONTROLS (gates): all eight frame gates green, plus `g_viewport` and `g_lifecycle`.
+`g_iframe`'s own assertions (1)-(5) are untouched — including the border-box numbers at (1), which
+are **measured against headless Chrome** (404x204 / 304x154) and are the same 2px-per-side border
+`frame_content_box` now subtracts. The two facts agree, from opposite directions.
+
+NEXT, ranked — and the remaining six files each NAME their own next link.
+(a) ⭐⭐⭐ **The `createElement` + `appendChild` frame residual** — `G_INLINE_FRAME_DOCUMENT`
+    assertion (4)'s pinned `sync-null`. It is now sized by WPT rather than asserted in the abstract:
+    `viewport-units-invalidation` (0/24) and `viewport-relative-lengths-scaled-viewport` (0/1) both
+    still die on `doc is null` / `frameDocument is null`, because their frames are built by script
+    rather than by the parser. t1297 closed the parser half; this is the other one.
+(b) ⭐⭐ **The scrollbar gutter is not subtracted from a frame's viewport** —
+    `viewport-units-scrollbars-compute` 0/34, and it is a *clean* miss: `expected "185px" but got
+    "200px"`, i.e. exactly one 15px classic scrollbar. One number, one file, 34 subtests.
+(c) ⭐⭐ Viewport units do not interpolate — `viewport-units-keyframes` 0/24, `expected "100px" but
+    got "auto"`. That is the ANIMATION CLOCK item carried since t1296, now with a sized fixture.
+(d) ⭐ `calc(1dvw + 10%)` serializes instead of computing (`viewport-units-compute`'s last 1 of 34).
+(e) ⭐⭐⭐ `document.styleSheets` is EMPTY for external sheets — carried from t1296, unchanged.
+(f) ⚠ `IFRAME_DOCS` is still never cleared between navigations — carried from t1297, unchanged.
+
+WIKI: docs/wiki/dom-semantics.md — the frame reflow, the three links (stale child cascade, the
+global viewport, the content box), why it could not reuse `ReflowScope`, and the five sizing sites
+that must stay one rule.

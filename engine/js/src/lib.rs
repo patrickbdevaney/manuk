@@ -757,6 +757,26 @@ pub fn set_frame_styles(m: std::collections::HashMap<usize, usize>) {
 #[cfg(not(feature = "_sm"))]
 pub fn set_frame_styles(_m: std::collections::HashMap<usize, usize>) {}
 
+/// **Install the host's forced reflow for CHILD documents.**
+///
+/// Deliberately not the same hook as [`set_reflow_hook`]: that one's context carries the MAIN
+/// document's viewport width, URL and external stylesheets, so aiming it at a frame would resolve
+/// the frame's `vw` against the window. See `dom_bindings::force_frame_reflow`.
+///
+/// # Safety
+/// `f` must remain callable for as long as any frame arena is published.
+#[cfg(feature = "_sm")]
+pub unsafe fn set_frame_reflow_hook(f: unsafe extern "C" fn(*mut manuk_dom::Dom)) {
+    unsafe { dom_bindings::set_frame_reflow_hook(f) }
+}
+
+/// Without SpiderMonkey there is no style read to guard — a no-op, not a lie.
+///
+/// # Safety
+/// Trivially safe; the signature matches the `_sm` build.
+#[cfg(not(feature = "_sm"))]
+pub unsafe fn set_frame_reflow_hook(_f: unsafe extern "C" fn(*mut manuk_dom::Dom)) {}
+
 /// An arena is legal to resolve reflectors against.
 #[cfg(feature = "_sm")]
 pub fn register_dom(dom: *mut manuk_dom::Dom) {

@@ -7337,3 +7337,46 @@ line one** to 135 individually-named assertions; `can't access property "body", 
 **WPT total +0, and that is the honest number** — the next link (`with_style_in`'s named non-claim,
 *"no forced reflow for a frame"*) is what those assertions now land on. Gate:
 `G_INLINE_FRAME_DOCUMENT` claim (5), RED two ways. Control: `domparsing` 234/1294, exactly its mark.
+
+## A frame is its OWN viewport, and its cascade is not frozen at construction (t1298)
+
+**The pattern on the real web:** a script writes into an embedded frame and then measures what it
+wrote — an ad slot sizing its creative, a 3-D-Secure or OAuth frame laying out a challenge, a
+`srcdoc` preview, any responsive embed whose CSS is written in `vw`/`vh`. Two independent defects
+sat behind it, and neither was visible to the assertions that already banked "frames work":
+
+1. **A child's cascade ran once, at construction.** Every node a script CREATES inside a frame was
+   absent from the child's style map, so `getComputedStyle` answered `undefined` for **every
+   property** — the stale-snapshot class (t1282-1295) one arena over. It was a named non-claim in
+   our own source: `with_style_in` read *"no forced reflow for a frame."*
+2. **Viewport units resolved against the WINDOW.** They are resolved *eagerly from a process-wide
+   global*, and that global's own comment says cascade sites *"thread an authoritative width but not
+   always a height."* So a 200x100 frame got the frame's width and the window's height.
+
+⚠⚠⚠ **ONE WRONG AXIS MAKES `vmin` AND `vmax` WRONG IN OPPOSITE DIRECTIONS**, which is why the
+failure list read as four unrelated bugs rather than one stale global. When derived units disagree
+with their inputs, suspect the input, not the derivation.
+
+⚠⚠ **A FRAME'S VIEWPORT IS ITS CONTENT BOX.** `node_rects` returns the BORDER box and an `<iframe>`
+carries a 2px UA border per side, so `100vw` in `iframe{width:200px}` reads **204px**. Five separate
+call sites size a frame; they must share one rule or they disagree by 4px depending on which one
+ran last.
+
+⚠⚠⚠ **AND THE PROBE THAT "PROVED" THE FIX HAD STYLED THE BUG AWAY.** It wrote `border:0` on the
+iframe, read a clean `200px`, and was believed. **A probe that removes the default it is measuring
+cannot fail** — the control-row lesson from the other side: not a missing control, but a fixture
+quietly configured into the one shape where the defect does not exist.
+
+⚠ **And the gate was SILENT before it was red.** `from_dom` only stands up a JS context for a
+document that HAS a `<script>`, so a gate driven purely by `eval_for_test` with no script in its
+fixture gets `js: None`, the eval is a **no-op**, and the assertion fails on an EMPTY report — for
+the wrong reason, in the wrong place.
+
+⚠ **Put a claim where the WALL can see it.** This went into `G_IFRAME` (one of the 19 gates
+`verify.sh` launches) rather than the topically-obvious `g_inline_frame_document`, which is not in
+the wall. A gate outside the wall is documentation, not a ratchet tooth.
+
+**Measured:** `viewport-units-compute` **0/34 -> 33/34**, `viewport-units-extreme-scale` **0/4 ->
+4/4**, area `css/css-values` 3231 -> **3298** (+67; the area denominator moved, so the per-file
+fixed denominators are the evidence). Controls: `domparsing` 234/1294 exactly its mark,
+`css/css-sizing` +99 on a smaller denominator. RED three ways, each isolating one link.

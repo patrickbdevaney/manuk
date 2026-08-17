@@ -227,4 +227,88 @@ fn iframes_have_a_box_show_their_document_and_do_not_block_paint() {
              (embeds, OAuth, payments). Full report: {report}"
         );
     }
+
+    // ── (6) **A FRAME IS ITS OWN VIEWPORT, AND ITS CASCADE IS NOT FROZEN AT CONSTRUCTION (t1298).**
+    //
+    //        Reading a frame's document (5) is not the same as MEASURING one. Two defects sat behind
+    //        that distinction, and neither was visible to any assertion above:
+    //
+    //          a. A child's cascade ran once, when the child was built, so every node a script
+    //             CREATES inside a frame was absent from its style map and `getComputedStyle`
+    //             answered `undefined` for **every property**. `with_style_in` carried this as a
+    //             named non-claim: *"no forced reflow for a frame."*
+    //          b. Viewport units resolved against the WINDOW. `manuk_css::values` keeps the viewport
+    //             in a global whose own comment says cascade sites *"thread an authoritative width
+    //             but not always a height"* — so in a 200x100 frame, `100vw` read the frame and
+    //             `100vh` read the window, and `vmin`/`vmax`, being derived, were wrong in opposite
+    //             directions. That is why the failures did not look like one bug.
+    //
+    //        ⚠ The frame here carries its DEFAULT UA border on purpose. A frame's viewport is its
+    //        CONTENT box, and the probe that first "proved" this fix wrote `border:0` — removing the
+    //        exact 2px-per-side term that makes `100vw` read `204px` instead of `200px`. A gate must
+    //        not style away the default it exists to measure.
+    //
+    //        RED (a): drop the `force_frame_reflow` call in `with_style_in` -> every value
+    //        `undefined`. RED (b): drop the `ViewportScope` in `frame_forced_reflow` -> `vh=800px`,
+    //        `vmax=800px`. RED (c): pass `r.width` instead of `frame_content_box` -> `vw=204px`.
+    let mut vp = manuk_page::Page::load(
+        r#"<!doctype html><html><body style="margin:0">
+             <iframe id="vf" style="width:200px;height:100px"></iframe>
+             <div id="out">-</div>
+             <!-- ⚠ `from_dom` only stands up a JS context for a document that HAS a script, so a
+                  fixture driven purely by `eval_for_test` and carrying no <script> gets `js: None`
+                  and the eval is a silent no-op — an empty report, not a failed assertion. -->
+             <script>window.__vpprobe = 1;</script>
+           </body></html>"#,
+        "https://vp.test/",
+        &fonts,
+        800.0,
+    );
+    vp.eval_for_test(
+        r#"var f = document.getElementById('vf');
+           var d = f.contentDocument, w = f.contentWindow;
+           var r = [];
+           try {
+           if (!d) { r.push('NODOC'); }
+           else {
+             // Every one of these elements is created HERE, after the child's own cascade — which is
+             // the whole point of (a).
+             d.body.innerHTML = '<style>*{margin:0}#a{height:100vw}#b{height:100vh}' +
+                                '#c{height:100vmin}#e{height:100vmax}#p{height:50px}</style>' +
+                                '<div id=a></div><div id=b></div><div id=c></div>' +
+                                '<div id=e></div><div id=p></div>';
+             function h(id){ return w.getComputedStyle(d.querySelector(id)).height; }
+             r.push('vw=' + h('#a'));  r.push('vh=' + h('#b'));
+             r.push('vmin=' + h('#c')); r.push('vmax=' + h('#e'));
+             r.push('px=' + h('#p'));
+             // CONTROL: the window is 800px wide. Without it, `vw=200px` cannot be told apart from
+             // a frame that simply inherited a viewport that happened to be 200.
+             r.push('winw=' + document.documentElement.clientWidth);
+           }
+           } catch (e) { r.push('THROW:' + e.message); }
+           var s = document.createElement('script'); s.id='__vp__'; s.type='application/json';
+           s.textContent = r.join('|'); document.documentElement.appendChild(s);"#,
+    );
+    let vdom = vp.dom();
+    let vout = manuk_css::query_selector_all(vdom, vdom.root(), "#__vp__");
+    let vreport = vout
+        .first()
+        .map(|&n| vdom.text_content(n))
+        .unwrap_or_default();
+    for needle in [
+        "vw=200px",   // the frame's CONTENT width (border box 204 − 2px border per side)
+        "vh=100px",   // the frame's own HEIGHT, not the window's
+        "vmin=100px", // derived — wrong in the opposite direction from vmax if the axes disagree
+        "vmax=200px",
+        "px=50px", // a plain length: proves the cascade RAN for a node the script just made
+        "winw=800", // CONTROL: the window really is 800, so 200/100 are frame-relative
+    ] {
+        assert!(
+            vreport.contains(needle),
+            "G_IFRAME/frame-viewport: expected `{needle}` — a script that writes into a frame and \
+             then measures what it wrote must get the resolved value, and a viewport unit inside a \
+             frame must resolve against the FRAME's content box, not the window. Full report: \
+             {vreport}"
+        );
+    }
 }

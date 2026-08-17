@@ -15,7 +15,7 @@
 | median tick cycle | **30m** | 989 intervals |
 | median, last 10 | **57m** | 10 intervals |
 | fastest / slowest | 5s / 5.4d | |
-| **ticks per hour** | **1.12** | 882.8h elapsed |
+| **ticks per hour** | **1.12** | 883.9h elapsed |
 | median verify wall | **63s** | 929 ticks |
 | wall trend | 39s → 17m — getting slower ⚠️ | first 3 vs last 3 |
 
@@ -1086,6 +1086,6 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 | **1293** | 2026-08-16 16:48 | 31m | capability | 17m | +184/−35 | 492 | 81 | 56.0% · | `fit-content(<length>)` on a grid track did the OPPOSITE of what it says (2026-08-16) |
 | **1294** | 2026-08-16 17:46 | 58m | measurement | 17m | +513/−161 | 493 | 81 | 56.0% · | `minmax(auto, <small>)` ignores the automatic minimum, and it is a TAFFY boundary, not our |
 | **1296** | 2026-08-16 20:15 | 2.5h | capability | 17m | +605/−67 | 493 | 81 | 56.0% · | a `<link rel=stylesheet>` is SCRIPT-BLOCKING, and every blocking script in this engine ran |
-| **1297** | 2026-08-16 23:53 | 3.6h | capability | 17m | +779/−225 | 493 | 81 | 56.0% · | a parser-inserted `<iframe>` has NO DOCUMENT while the document's own scripts run (2026-08 |
+| **1297** | 2026-08-17 00:59 | 4.7h | capability | 17m | +941/−274 | 493 | 81 | 56.0% · | a parser-inserted `<iframe>` has NO DOCUMENT while the document's own scripts run (2026-08 |
 
 *`·` after a WPT figure means **carried forward**, not measured this tick.*
