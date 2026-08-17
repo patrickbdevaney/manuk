@@ -30,9 +30,14 @@ fn animated_content_is_visible_and_deliberately_hidden_content_is_not() {
         @keyframes fadeIn { from { opacity: 0 } to { opacity: 1 } }
         .reveal { opacity: 0; animation: fadeIn 1s forwards; background: #00aa00; height: 60px }
         .hidden { opacity: 0; background: #aa0000; height: 60px }
+        /* PLACED MID-FLIGHT: a negative delay puts this animation at progress 0 deliberately, so
+           its `opacity: 0` is the answer the author asked for and must NOT be overwritten. */
+        .placed { animation: fadeIn 100s -50s steps(1, end) forwards;
+                  background: #0000aa; height: 60px }
       </style>
       <div class="reveal">revealed by an animation</div>
       <div class="hidden">deliberately hidden — and must STAY hidden</div>
+      <div class="placed">placed mid-flight AT opacity 0 — must stay transparent</div>
       </body></html>"#;
 
     let page = manuk_page::Page::load(html, "https://anim.test/", &fonts, 800.0);
@@ -63,5 +68,39 @@ fn animated_content_is_visible_and_deliberately_hidden_content_is_not() {
          REVEALED something the author hid.\n  \
          Forcing every transparent element visible is not a fix, it is a louder bug: closed dropdowns, \
          off-screen menus, and un-fired cookie banners would all appear on top of the page."
+    );
+
+    // (3) **AND AN ANIMATION THE AUTHOR PLACED MID-FLIGHT KEEPS ITS OWN VALUE (t1307).**
+    //     Since `crate::animation` landed, the opacity reaching paint is the value Stylo's `Animate`
+    //     produced for the element's current position — so the reveal above is no longer rescuing a
+    //     base rule, it is overwriting a COMPUTED one whenever that lands on exactly 0.
+    //
+    //     A negative `animation-delay` means the author explicitly placed the animation partway
+    //     through: it is the device WPT's whole interpolation harness uses, and it is how a scrubbed
+    //     animation is expressed. `opacity: 0` there is the answer that was asked for.
+    //
+    //     ⚠ This was found from the far end. t1306 concluded *"`steps()` is wrong in the
+    //     CSS-animation path"* from `steps(1, end)` reading opacity 1 instead of 0. `steps()` is
+    //     FINE — the same declaration on a LENGTH gives the correct `0px`, and `steps(1, start)` /
+    //     `steps(2, end)` / `steps(4, end)` / `linear` / `ease` are all exact. **A value wrong in
+    //     ONE property and right in every other names the special case, not the shared path.**
+    //
+    //     RED: drop the `!placed_mid_flight` term in `stylo_map.rs` -> this paints white, because the
+    //     reveal fires and turns a correct 0 into 1.
+    //     ⚠ The fixture's arithmetic is load-bearing and the first draft got it wrong twice, which is
+    //     why it is spelled out: `-50s` of `100s` is progress 0.5, and `steps(1, end)` maps every
+    //     progress below 1 to **0** — so the eased position is 0 and the correct paint is the page's
+    //     WHITE, not the element's blue. A `-100s` delay would have been progress 1 (opacity 1), and
+    //     asserting "blue" would then have passed with the narrowing REMOVED. Both mistakes were
+    //     caught by the RED proof refusing to go red.
+    let (r3, g3, b3) = at(150);
+    assert!(
+        r3 > 200 && g3 > 200 && b3 > 200,
+        "G_ANIMATION: an animation PLACED mid-flight by a negative delay painted rgb({r3},{g3},{b3}) \
+         instead of staying transparent — the reveal-hack overwrote a correctly computed \
+         `opacity: 0` with 1.\n  \
+         The hack exists for a fade-in that has NOT STARTED, where 0 is the journey's first frame. An \
+         author who writes a negative delay has positioned the animation deliberately, so its value \
+         at that point is the answer, not a page that failed to appear."
     );
 }

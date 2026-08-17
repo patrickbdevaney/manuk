@@ -13,9 +13,9 @@
 |---|---|---|
 | ticks landed | **997** | ticks 1–1306 |
 | median tick cycle | **30m** | 996 intervals |
-| median, last 10 | **57m** | 10 intervals |
+| median, last 10 | **80m** | 10 intervals |
 | fastest / slowest | 5s / 5.4d | |
-| **ticks per hour** | **1.12** | 890.8h elapsed |
+| **ticks per hour** | **1.12** | 891.8h elapsed |
 | median verify wall | **63s** | 936 ticks |
 | wall trend | 39s → 17m — getting slower ⚠️ | first 3 vs last 3 |
 
@@ -91,7 +91,7 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 ## What a capability costs
 
 * **465** capability ticks, median cycle **30m**
-* median diff per tick: **+276 / −34** lines across 8 files
+* median diff per tick: **+278 / −34** lines across 8 files
 
 ## Every tick
 
@@ -1093,6 +1093,6 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 | **1302** | 2026-08-17 06:44 | 19m | capability | 17m | +204/−35 | 493 | 81 | 56.0% · | a CSS rule had no `.style`, so the canonical CSSOM write path threw (2026-08-17) |
 | **1303** | 2026-08-17 06:57 | 13m | measurement | 17m | +208/−36 | 493 | 81 | 56.0% · | t1301 bought +605 in an area it never measured, and it built a SECOND interpolator that is |
 | **1304** | 2026-08-17 07:11 | 14m | instrument | 17m | +223/−34 | 493 | 81 | 56.0% · | the metric could not see SVG or the ACCESSIBILITY TREE, and one of those is a constitution |
-| **1306** | 2026-08-17 07:53 | 41m | capability | 17m | +177/−37 | 493 | 81 | 56.0% · | `element.animate()` stops interpolating in JavaScript and SYNTHESIZES a CSS animation inst |
+| **1306** | 2026-08-17 08:53 | 1.7h | capability | 17m | +395/−40 | 493 | 81 | 56.0% · | `element.animate()` stops interpolating in JavaScript and SYNTHESIZES a CSS animation inst |
 
 *`·` after a WPT figure means **carried forward**, not measured this tick.*

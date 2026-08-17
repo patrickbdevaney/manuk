@@ -995,4 +995,4 @@ tick	sha	epoch	iso	delta_s	shape	wall_s	files	added	deleted	gates	claims	wpt_pas
 1302	5351594d	1786963468	2026-08-17T06:44:28-04:00	1158	capability	997	8	204	35	493	81	3896	6960	0	642	0	a CSS rule had no `.style`, so the canonical CSSOM write path threw (2026-08-17)
 1303	6ca2b211	1786964276	2026-08-17T06:57:56-04:00	808	measurement	997	6	208	36	493	81	3896	6960	0	642	0	t1301 bought +605 in an area it never measured, and it built a SECOND interpolator that is 4.9× worse than the one we already had (2026-08-17)
 1304	a797d2e6	1786965100	2026-08-17T07:11:40-04:00	824	instrument	997	7	223	34	493	81	3896	6960	0	642	0	the metric could not see SVG or the ACCESSIBILITY TREE, and one of those is a constitutional invariant (2026-08-17)
-1306	29fda3ee	1786967583	2026-08-17T07:53:03-04:00	2483	capability	997	5	177	37	493	81	3896	6960	0	642	0	`element.animate()` stops interpolating in JavaScript and SYNTHESIZES a CSS animation instead (2026-08-17)
+1306	891eabdc	1786971235	2026-08-17T08:53:55-04:00	6135	capability	997	10	395	40	493	81	3896	6960	0	642	0	`element.animate()` stops interpolating in JavaScript and SYNTHESIZES a CSS animation instead (2026-08-17)

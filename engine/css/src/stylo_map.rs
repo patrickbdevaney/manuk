@@ -748,7 +748,35 @@ pub fn to_computed_style(cv: &ComputedValues) -> ComputedStyle {
     // `animation_name_iter().any(|n| !n.is_none())`, which is the definition we want and one we should
     // not re-derive (a re-derived constant is how a gate ends up checking its own copy of a number).
     s.has_animation = cv.get_ui().specifies_animations();
-    if s.has_animation && s.opacity == 0.0 {
+    // ⚠⚠⚠ **AND IT MUST NOT FIRE ON AN ANIMATION THE AUTHOR PLACED MID-FLIGHT (t1307).**
+    //
+    // The paragraph above opens *"We cannot animate"*, and that has been FALSE since
+    // `crate::animation` landed: `s.opacity` is now the value Stylo's `Animate` produced for the
+    // element's current position, not the base rule. So an animation that is legitimately AT zero
+    // opacity — because that is what its keyframes say at the point the author positioned it — was
+    // having a correct value overwritten with 1.
+    //
+    // ⭐ It was found from the far end. t1306 concluded *"`steps()` is wrong in the CSS-animation
+    // path"* because `steps(1, end)` at progress 0.5 read opacity 1 instead of 0. **`steps()` is
+    // fine.** The same declaration on a LENGTH gives the correct `0px`; a seven-arm probe has
+    // `steps(1, start)`, `steps(2, end)`, `steps(4, end)`, `linear` and `ease` all exact. Only
+    // opacity was wrong, and only when it landed on exactly 0 — which is this branch, not the
+    // easing. *A wrong value in ONE property and right in every other names the special case, not
+    // the shared path.*
+    //
+    // **The narrowing, and why it keeps the original win.** A NON-negative delay means the animation
+    // has not started: its `opacity: 0` is the journey's first frame, the static render should show
+    // the destination instead, and the 52-of-237 corpus sites this was built for are untouched. A
+    // NEGATIVE delay means the author explicitly placed the animation partway through — it is the
+    // device WPT's whole interpolation harness uses, and it is how a scrubbed animation is
+    // expressed — so an opacity of 0 there is the answer that was asked for, not a page that failed
+    // to appear.
+    let placed_mid_flight = {
+        let ui = cv.get_ui();
+        let n = ui.animation_name_count();
+        (0..n).any(|i| ui.animation_delay_at(i).seconds() < 0.0)
+    };
+    if s.has_animation && s.opacity == 0.0 && !placed_mid_flight {
         s.opacity = 1.0;
     }
 

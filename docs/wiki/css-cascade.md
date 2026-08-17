@@ -4017,3 +4017,54 @@ pre-shipping features — and correctly declined it. In `svg` the same message i
 `fill-rule` and the SVG2 geometry properties, all shipped in Chrome for years. Check #117's rule (*cite
 the failing message, not the test's subject*) needs one more clause: **and not the same message's verdict
 in a different area.**
+
+## The opacity reveal-hack must not overwrite a PLACED animation (t1307)
+
+`stylo_map.rs` forces `opacity: 0` to `1` on any element that declares an animation. The rule is real and
+measured — **52 of 237 corpus sites pair `opacity: 0` with an animation**, and the commonest animation on
+the web is a fade-in whose base rule hides the element, so a static renderer that shows the first frame
+literally renders *nothing*. `prefers-reduced-motion: reduce` is the same idea blessed by the spec: show
+the destination, skip the journey.
+
+⚠⚠⚠ **But its comment opens *"We cannot animate"*, and that has been false since
+`engine/css/src/animation.rs` landed.** `s.opacity` at that point is the value Stylo's `Animate` produced
+for the element's *current position*, not the base rule. So the branch stopped rescuing a base rule and
+started **overwriting a correctly computed one**, for every animation an author had placed at a
+transparent point.
+
+### The narrowing, and why the original win survives
+
+The distinction is already in the CSS, so no heuristic is needed:
+
+| delay | meaning | correct static answer |
+|---|---|---|
+| `>= 0` | the animation has **not started**; `opacity: 0` is the journey's first frame | show the destination — the hack fires |
+| `< 0` | the author placed it **partway through** deliberately | the value at that point — the hack must not fire |
+
+A negative delay is the device WPT's entire interpolation harness uses, and it is how the real web
+expresses staggered list entrances (`animation-delay: calc(-0.1s * var(--i))`), out-of-phase tickers, and
+scrubbed animations. `animation_delay_at` is read from Stylo rather than re-derived (I2, ladder option 1).
+
+### ⚠ How it was found: a value wrong in ONE property
+
+The symptom was `steps(1, end)` reading opacity `1` where it must read `0` — reproducible from a plain
+stylesheet, with no script — which reads exactly like a broken easing function, and was diagnosed as one
+for a whole tick (t1306). The seven-arm probe that settled it:
+
+```text
+   linear 0.5 ✓   ease not-an-endpoint ✓   steps(1, start) 1 ✓
+   steps(2, end) 0.5 ✓   steps(4, end) 0.5 ✓
+   steps(1, end) on a LENGTH → 0px ✓        ← the tell
+   steps(1, end) on OPACITY  → 1  ✗
+```
+
+> **A value wrong in one property and right in every other names the SPECIAL CASE, not the shared path.**
+> Nothing about an easing function knows which property it is easing, so the fault could not live there.
+> Before blaming a shared path, run the same input through a second property.
+
+### ⚠ The audit this opens
+
+**Which workaround comments name a limitation the engine no longer has?** *"We cannot animate"* was false
+for many ticks, silently, and cost a tick to misdiagnose. Every such comment is a checkable claim about
+the engine, and a workaround whose premise has died does not merely become dead code — it starts
+corrupting whatever replaced it.

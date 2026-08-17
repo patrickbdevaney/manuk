@@ -85469,3 +85469,104 @@ NEXT, ranked — **and the ORDER is the deliverable.**
 (d) ⭐⭐⭐ The SVG CSS-property supplement (t1305) · `wai-aria` 54.8% (I3) · the CSS-transitions leg
     (t1302) · external stylesheet text to JS (t1302).
 
+
+## Tick 1307 — the reveal-hack overwrote an opacity Stylo had just computed correctly, and `steps()` was innocent (2026-08-17)
+
+TICK SHAPE: capability (correctness) + the due constitution check. Board re-run at the top of this tick:
+**unchanged** (★ CSS-LAYOUT). This is t1306's ranked (a).
+
+⚠⚠⚠ **AND IT CORRECTS t1306'S DIAGNOSIS, WHICH WAS WRONG.** t1306 concluded *"`steps()` is wrong in the
+engine's CSS-animation path"* from one reading: `steps(1, end)` at progress 0.5 gave opacity 1 instead
+of 0, reproducible from a plain stylesheet. To its credit it refused to guess further. A seven-arm probe
+now exonerates `steps()` completely:
+
+```text
+   linear                 0.5    PASS      steps(2, end)          0.5    PASS
+   ease            not an endpoint PASS    steps(4, end)          0.5    PASS
+   steps(1, start)          1     PASS     steps(1, end)  on a LENGTH  0px  PASS  ← the tell
+   steps(1, end)            1     FAIL (want 0)
+   steps(1, jump-end)       1     FAIL (want 0)
+```
+
+> ⭐⭐⭐ **A VALUE WRONG IN ONE PROPERTY AND RIGHT IN EVERY OTHER NAMES THE SPECIAL CASE, NOT THE SHARED
+> PATH.** The same `steps(1, end)` declaration gives the correct `0px` on a length and the wrong `1` on
+> opacity. Nothing about an easing function knows which property it is easing — so the fault could not
+> be in the easing, and one extra probe arm said so immediately. t1306 blamed the shared code from a
+> single-property symptom; this is *"the symptom names the wrong organ"* with a cheap mechanical cure:
+> **before blaming a shared path, run the same input through a SECOND property.**
+
+CAUSE — `engine/css/src/stylo_map.rs`, and it is scaffolding that outlived its own premise:
+
+```rust
+    // We cannot animate. […]
+    s.has_animation = cv.get_ui().specifies_animations();
+    if s.has_animation && s.opacity == 0.0 { s.opacity = 1.0; }
+```
+
+**"We cannot animate" has been FALSE since `crate::animation` landed.** `s.opacity` is now the value
+Stylo's `Animate` produced for the element's current position, not the base rule — so this branch was
+overwriting a *correctly computed* opacity whenever it landed on exactly 0. The comment asserted a
+limitation the engine no longer had, and nothing re-checked it.
+
+⚠ **NARROWED, NOT REMOVED — the original win is real and had to survive.** 52 of 237 corpus sites pair
+`opacity: 0` with an animation, and at clock 0 an unstarted fade-in genuinely sits at 0, so deleting the
+branch would re-hide a fifth of the corpus. The distinction that separates the two cases is already in
+the CSS:
+
+> A **non-negative** delay means the animation has not started — its `opacity: 0` is the journey's first
+> frame and the static render should show the destination. A **negative** delay means the author placed
+> the animation partway through deliberately (the device WPT's whole harness uses, and how a scrubbed
+> animation is expressed) — so an opacity of 0 there is the answer that was asked for.
+
+`animation_delay_at` is read from Stylo rather than re-derived (I2, ladder option 1).
+
+VERIFIED BOTH WAYS, 4/4:
+
+```text
+   a placed animation AT opacity 0 keeps it                    PASS   (was 1, now 0)
+   CONTROL a placed animation mid-fade is 0.5                  PASS
+   THE ORIGINAL WIN: an unstarted fade-in still reveals        PASS
+   a fade-in with a POSITIVE delay still reveals               PASS
+```
+
+```text
+  WPT MOVEMENT: css/css-transforms 3016/5500 — UNCHANGED, and none is claimed.
+```
+
+⚠ **Reported as zero, deliberately.** The area that could resolve this has no row: the fix is about
+`opacity` landing on exactly 0 under a negative delay, and `css/css-transforms`' failures are transform
+lists. The claim is the gate, proven red.
+
+⚠⚠ **THE GATE'S FIXTURE WAS WRONG TWICE AND THE RED PROOF CAUGHT BOTH** — recorded because neither was
+findable by reading it. (1) `-100s` of a `100s` duration is progress **1**, not 0, so the element sat at
+opacity 1 and the assertion passed with the narrowing removed. (2) I asserted the element should paint
+**blue** when the correct answer is the page's **white**, because opacity 0 paints nothing. Two
+independent errors, in a case I had just reasoned about, and the only thing that surfaced them was
+running the mutation and watching it stay green. *A green that cannot go red measured nothing.*
+
+PROVEN RED: drop the `!placed_mid_flight` term → the placed element paints `rgb(0,0,170)` instead of
+staying transparent, i.e. the reveal fires and turns a correct 0 into 1.
+
+CONTROLS: `g_animation` green as a whole — cases (1) *an animated element is revealed* and (2) *a
+deliberately hidden element STAYS hidden* both unchanged, which is what proves the narrowing did not
+widen or delete the original behaviour.
+
+CONSTITUTION CHECK #122 (due at 1307) — recorded in `docs/loop/CONSTITUTION-CHECK.md`. Horizon H0,
+conditions (1) and (4) both moved this window. Its findings: **I3 was being bent BY OMISSION** (the three
+a11y suites that measure the invariant were not rows, and t1254's 63.8% reading never became one — *a
+number taken once and not banked as a row is a number the loop forgets*); THE RATCHET held hardest at
+t1306 against my own work; and PART VI gains **"a workaround outlives its reason silently, and then
+corrupts the thing that replaced it"**, with the audit question *which workarounds name a limitation the
+engine no longer has?*
+
+NEXT, ranked (from check #122's steer).
+(a) ⭐⭐⭐ **Fix `animation-play-state: paused` suppressing the animation entirely** (t1306). A paused
+    animation must HOLD its value, not vanish — every paused case read its un-animated default. Same
+    class as this tick: a special case corrupting a computed value. It is the last thing standing before
+    (b).
+(b) ⭐⭐⭐ **Re-take t1306's rewrite** — written and probe-proven, deletes t1301's duplicate interpolator,
+    450 in `css/css-transforms` alone, fixes a CLASS not a property.
+(c) ⭐⭐ **Sweep the workaround comments for DEAD PREMISES.** *"We cannot animate"* was false for many
+    ticks and cost a whole tick to misdiagnose. Cheap, mechanical, demonstrated yield of one real defect.
+(d) ⭐⭐⭐ The SVG CSS-property supplement (t1305) · `wai-aria` 54.8% (I3) · the CSS-transitions leg
+    (t1302) · external stylesheet text to JS (t1302).

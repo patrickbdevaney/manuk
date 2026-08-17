@@ -7617,3 +7617,30 @@ animation loses it rather than holding it.
 reverted — it is strictly better on structured values and strictly worse on `steps()`, and a capability
 traded for another is refused — and the order is now: fix `steps()`, fix `play-state: paused`, *then*
 delete the duplicate.
+
+## THE PLACED ANIMATION — a scrubbed or offset keyframe animation that legitimately sits at opacity 0 (t1307)
+
+**The class.** Two real idioms put a CSS animation partway through at load rather than starting it:
+`animation-delay` with a **negative** value — staggered list entrances (`animation-delay: calc(-0.1s * var(--i))`),
+marquees and tickers that must not all begin in phase, hero sequences resumed at a fixed offset — and
+scroll/pointer scrubbing, where the position is the product rather than the playback.
+
+⚠⚠⚠ **A WORKAROUND FOR "WE CANNOT ANIMATE" OUTLIVED ITS PREMISE AND CORRUPTED THE THING THAT REPLACED
+IT.** The engine used to force `opacity: 0` to `1` on any element that declared an animation, because a
+static renderer showing a fade-in's first frame renders **nothing** — measured at 52 of 237 corpus sites.
+That was correct when the engine could not interpolate. It can now: the opacity reaching paint is the
+value Stylo's `Animate` computed for the element's current position. So the rescue became an
+**overwrite** — a correct 0 became 1 — for every animation an author had placed at a transparent point.
+
+**Narrowed, not removed**, and the CSS already distinguishes the two cases: a **non-negative** delay means
+the animation has not started, so its 0 is the journey's first frame and the destination should be shown;
+a **negative** delay means the author positioned it deliberately, so the value there is the answer.
+
+⚠ **How it was found is the transferable part.** The symptom was `steps(1, end)` reading opacity 1 instead
+of 0, which reads exactly like a broken easing function — and was diagnosed as one for a whole tick. The
+same declaration on a **length** gives the correct `0px`. **A value wrong in one property and right in
+every other names the special case, not the shared path**; nothing about an easing function knows which
+property it is easing. Before blaming a shared path, run the same input through a second property.
+
+⚠ The general audit this opens: **which workaround comments name a limitation the engine no longer has?**
+Each is a claim about the engine, and the claims are checkable.

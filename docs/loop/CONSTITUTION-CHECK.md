@@ -10379,3 +10379,107 @@ Both are pinned-time sampling, neither needs a clock.
 TWICE ON THE SAME BINARY gave `7243/13928` and `7487/14215`** — a ±250 spread, larger than the +242 the
 tick appeared to buy. Area totals on this area cannot resolve a single tick. Rank and report on **distinct
 failing subtest names for the leg the fix touches**, which is a stable key.
+
+## Check #122 — tick 1307 (2026-08-17)
+
+**Horizon: H0 — Pareto Web Parity.** Exit gate, re-read from PART II: (1) ~83% WPT subtest pass across
+categories; (2) differential-oracle viability across all four usage-weighted corpora; (3) the headful
+shell is daily-drivable by its own developer; (4) every rendered construct is queryable through the
+in-process semantic API.
+
+### Did the last 8 ticks move an EXIT-GATE condition, or only the scoreboard?
+
+```text
+   t1300  a style read in a frame reflows its PARENT      (4) and (1)   0/24 → 24/24
+   t1301  element.animate() samples at a time             (4) and (1)   282 → 110 names; +605 elsewhere
+   t1302  a CSS rule had no .style                        (4)           +8 / +41, stable denominators
+   t1303  t1301 bought +605 unclaimed; duplicate found    instrument    banked +605
+   t1304  the metric could not see SVG or the a11y tree   APERTURE      +3,390 visible
+   t1305  .icon { fill: currentColor } cannot work        priced refusal 0
+   t1306  the duplicate was HIDING the original's bug     reverted       0
+   t1307  the reveal-hack overwrote a computed opacity    (1) and (4)    this tick
+```
+
+**Condition (1) and (4) both, and the window's most valuable ticks bought ZERO subtests.** t1304 opened
+the aperture; t1305 and t1306 landed no code at all. That is the correct shape for this phase and it is
+worth stating plainly rather than apologising for.
+
+⭐ **THREE ticks in this window exist only because a PREVIOUS tick in the same window was wrong**, and
+each correction was cheaper than the mistake:
+
+1. **t1301 mis-priced itself.** It banked −171 distinct names in `css/css-grid` and refused that area's
+   total (correctly — same binary twice spread ±250). t1303 found the same fix was **+605** in
+   `css/css-transforms`, on an *identical* denominator. **A fix to a shared harness LEG moves every area
+   that leg backs; find the area whose denominator can resolve it.**
+2. **t1301 built a SECOND interpolator.** t1303 measured it: 92 failing through Stylo's `Animate` vs
+   **450** through the JS strings, same expectations. *A duplicate right on the easy half reads as
+   working.*
+3. **t1306 then MISDIAGNOSED that duplicate's removal.** It concluded *"`steps()` is wrong in the
+   CSS-animation path"* and — to its credit — refused to guess further. t1307's seven-arm probe shows
+   `steps()` is **fine**: `steps(1, start)`, `steps(2, end)`, `steps(4, end)`, `linear`, `ease` all
+   exact, and `steps(1, end)` on a LENGTH gives the correct `0px`. Only *opacity* was wrong, and only
+   at exactly 0 — the reveal-hack.
+
+> ⭐⭐⭐ **THE RULE THIS WINDOW EARNS: A VALUE WRONG IN ONE PROPERTY AND RIGHT IN EVERY OTHER NAMES THE
+> SPECIAL CASE, NOT THE SHARED PATH.** t1306 had one failing property and blamed the shared easing
+> code. One extra arm — the same declaration on a length — would have exonerated it immediately. This
+> is the "symptom names the wrong organ" lesson with a cheap, mechanical cure: **before blaming a
+> shared path, run the same input through a SECOND property.**
+
+### Is `orient`'s ranking still the north star?
+
+**Yes, and this window found the ranking was reading a TRUNCATED frame.** The board was re-run at the
+top of all eight ticks and never changed. But audit #72's aperture diff found `svg`, `accname`,
+`wai-aria` and `html-aam` had **no rows at all** — 3,390 subtests, 2,258 failing. *"Pick the top ★ row"*
+cannot rank what is not a row. `encoding` remains untouched at its banked mark, so the PART VI.3
+anti-Pareto trap stayed shut.
+
+### Is any invariant being bent?
+
+⚠⚠⚠ **I3 WAS BEING BENT BY OMISSION, AND THIS WINDOW CAUGHT IT.** I3 makes the accessibility tree *"a
+load-bearing engine subsystem … never allowed to rot."* The three WPT suites that measure exactly that
+were **not in the primary metric**, and t1254 had already measured the tree at 63.8% without that
+reading becoming a row. **A number taken once and not banked as a ROW is a number the loop forgets.**
+Four rows now exist; `wai-aria` at 54.8% is the weakest and is ranked.
+
+I2 held twice under real pressure: t1305 priced Stylo's `engine = "gecko"` SVG longhands against the
+ladder and **refused to fork** (~30 longhands plus a style struct the servo build lacks), scoping the
+hand-rolled supplement instead; t1307 reads `animation_delay_at` from Stylo rather than re-deriving a
+delay. THE RATCHET held hardest at **t1306, against my own work**: a rewrite that was strictly better on
+structured types and strictly worse on `steps()` was **reverted**, because a capability traded for
+another is refused.
+
+### PART VI correction
+
+VI.2's H0.1 row gains one clause, about scaffolding rather than about layout:
+
+> **A WORKAROUND OUTLIVES ITS REASON SILENTLY, AND THEN CORRUPTS THE THING THAT REPLACED IT.** The
+> opacity reveal-hack in `stylo_map.rs` opens with *"We cannot animate."* That premise died when
+> `crate::animation` landed, and the comment was never revisited — so a value Stylo's `Animate` had
+> just computed correctly was being overwritten whenever it landed on exactly 0. The hack is still
+> load-bearing for the case it was built for (52 of 237 corpus sites pair `opacity: 0` with an
+> animation, and at clock 0 an unstarted fade-in genuinely sits at 0), so it is **narrowed, not
+> removed**: an author who writes a NEGATIVE delay has placed the animation deliberately.
+> ⚠ **The audit question this generalises to: which workarounds name a limitation the engine no longer
+> has?** Each one is a comment asserting a fact, and the facts are now checkable.
+
+⚠ **THE OPEN BLOCKER IS UNCHANGED AND WAS ESCALATED AT CHECK #121: M1 on the in-scope CrUX corpus.** It
+has now been unmeasured for ~66 ticks. #121 escalated it to the owner as a blocked item rather than
+repeat it a fifth time; that escalation stands and is not re-argued here.
+
+### STEER
+
+1. **Fix `animation-play-state: paused` suppressing the animation entirely** (found at t1306, still
+   open). A paused animation must HOLD its value, not vanish — every paused case read its un-animated
+   default. It is also the last thing standing between the loop and t1306's proven rewrite.
+2. **THEN re-take t1306's rewrite**, deleting t1301's duplicate interpolator. It is written and probe-
+   proven (a synthesized `@keyframes` gives `matrix(-1, 0, 0, -1, 50, 0)` at 25%, the exact value the
+   Web Animations leg answers `none` to). 450 failures in `css/css-transforms` alone, and it fixes a
+   CLASS — transforms, filters, colours, shadows — not a property.
+3. **Sweep the workaround comments for dead premises**, per the PART VI clause above. `stylo_map.rs`'s
+   *"We cannot animate"* was wrong for many ticks and cost t1306 a whole tick to misdiagnose. This is a
+   cheap, mechanical audit with a demonstrated yield of one real defect.
+4. **`wai-aria` 54.8% / `accname` 67.8% / `html-aam` 75.5%** — I3's own measurement, now rows. Keep them
+   rows.
+
+**Next check due: tick 1315.**

@@ -947,6 +947,10 @@
   - L3984 · Cause: a codegen gate in the dependency, not a pref
   - L4004 · The viable path is option 3, and it has a clean seam
   - L4011 · ⚠ A verdict does not travel between areas
+  - L4021 · The opacity reveal-hack must not overwrite a PLACED animation (t1307)
+  - L4035 · The narrowing, and why the original win survives
+  - L4048 · ⚠ How it was found: a value wrong in ONE property
+  - L4065 · ⚠ The audit this opens
 
 ## `<dialog>`, `popover`, and the top layer (ticks 194-195)
 `docs/wiki/dialog-and-top-layer.md`
@@ -2257,4 +2261,4 @@
   - L231 · Both named mechanisms are subsystem work
 
 ---
-2164 sections across 22 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+2168 sections across 22 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
