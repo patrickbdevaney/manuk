@@ -85174,3 +85174,81 @@ NEXT, ranked.
 (d) ⭐⭐⭐ `writing-mode` is absent from `engine/layout` entirely — 2,033 of 3,458 grid geometry failures.
     A decomposition session.
 (e) ⚠ `IFRAME_DOCS` is never cleared between navigations — carried from t1299.
+
+## Tick 1304 — the metric could not see SVG or the ACCESSIBILITY TREE, and one of those is a constitutional invariant (2026-08-17)
+
+TICK SHAPE: instrument. Board re-run at the top of this tick: **unchanged** (★ CSS-LAYOUT). Both the
+**self-audit** (due at 1304) and the **surface audit** (due at 1303) came due, so this tick is the
+audit pair plus the finding they produced.
+
+SELF-AUDIT: clean — *"methodology and reality agree."* All fourteen checks green; nothing
+prescribed-but-not-executed.
+
+SURFACE AUDIT #72 — **led with the STRUCTURAL probe**, per #71's own standing recommendation that the
+web leg has returned nothing three audits running while the aperture diff has returned a finding every
+single time. It returned one again:
+
+```text
+   svg         313 / 2137  = 14.6%     682 testharness files   ← 1,824 failing
+   accname     328 /  484  = 67.8%
+   wai-aria    238 /  434  = 54.8%
+   html-aam    253 /  335  = 75.5%
+   ────────────────────────────────────────────────────────
+   3,390 subtests that the primary metric could not see · 2,258 of them failing
+```
+
+⚠⚠⚠ **AND ONE OF THEM MEASURES A CONSTITUTIONAL INVARIANT.** I3 says the accessibility tree is *"a
+load-bearing engine subsystem built and maintained at every horizon … never allowed to rot."* The three
+WPT suites that measure precisely that — `accname` (name computation), `wai-aria` (roles/states),
+`html-aam` (HTML→ARIA mapping) — **were not rows in `WPT-AREAS.tsv` at all.**
+
+> **A number taken once and not banked as a ROW is a number the loop forgets.** t1254 already measured
+> the a11y tree at 63.8% and that reading never became a standing row, so an invariant whose own text
+> says *never allowed to rot* went unmeasured for fifty ticks. The fix is not another probe — it is the
+> four rows, which now exist.
+
+⚠ `svg`'s absence is the larger half by volume and was an **omission, not a decision**: the board's SKIP
+list never named SVG, and SVG is on essentially every real site — icons, logos, charts — with every
+D3-class library driving the SVG **DOM**. 14.6% says that DOM is largely absent.
+
+⚠ `svg` also reports **`TH_TIMEOUT 39`** with `HANG/CRASH 0` — 39 files scoring zero out of ZERO, the
+t1266 shape. Read beside the percentage, not under it.
+
+⚠ **The frame was wrong in exactly the way this instrument exists to catch.** *"Pick the top ★ row"* has
+been the mandate for many ticks, and it could not surface `svg` or the a11y trio, because they were not
+rows. Ranking was happening inside a frame that omitted 3,390 subtests.
+
+⚠ Two absences CHECKED and found defensible, so they are stated rather than left ambiguous:
+`css/CSS2` is 810 files but only **66 testharness** (the rest reftests → Bar 2, deferred), and
+`common`/`resources`/`css/support` are helper trees. `mathml` (196 testharness) stays the declared
+borderline-deferred item.
+
+WEB LEG — **Interop 2026**, 20 focus areas + 4 investigations: Anchor Positioning, advanced `attr()`,
+View Transitions, `zoom`, `user-select` (not just `-webkit-`), ESM cyclic modules + multiple top-level
+awaits, scroll-vs-animation event timing. ⭐ **Accessibility is a named INVESTIGATION area** — *"generate
+consistent accessibility trees across browsers"* — which independently corroborates the structural
+finding: the four vendors also think the a11y tree is under-measured. WebRTC continues there at 91.6%
+and remains explicitly out of scope here.
+⚠ Interop's `zoom` is REAL zoom scaling; audit #44 measured `zoom: 1` as a legacy no-op inflating a
+corpus grep 9× (28.1% declared vs 2.3% real). The ledger must not merge the two.
+
+LEDGER: four rows added. `WPT:TOTAL` **469,193 → 471,496 / 1,269,895 = 37.1%**. Per PART VI.3 that total
+is a bookkeeping mark and not a north star; the point is that the metric can now SEE these areas.
+⚠ This is a CORRECTION, not a regression — the denominator grew by 3,390 because the aperture opened, so
+the percentage moves for a reason that has nothing to do with the engine (t1270's rule).
+
+GATE: none, deliberately. This tick adds no engine capability — it widens what the instrument can see,
+which per STATUS.md's *"THE ORACLE'S SCOPE IS THE CEILING"* outranks fixing what it already sees. The
+falsifiable artefact is the four measurements, each reproducible with `manuk-wpt wpt <area>`.
+
+NEXT, ranked — **re-ranked by this audit, which is the point of running it.**
+(a) ⭐⭐⭐ **`svg` at 14.6% (1,824 failing).** Newly visible, largest single unmeasured population, and
+    squarely daily-driver. Histogram it before picking a mechanism — a histogram row is a suspect.
+(b) ⭐⭐⭐ **Route Web Animations sampling through Stylo's `Animate`** (t1303's finding) — kills the
+    duplicate JS interpolator for structured types; 450 in `css/css-transforms` alone and it fixes a
+    CLASS, not a property.
+(c) ⭐⭐⭐ **`wai-aria` 54.8% / `accname` 67.8% / `html-aam` 75.5%** — constitutional invariant I3, now
+    rows, and they must stay rows.
+(d) ⭐⭐⭐ The CSS-TRANSITIONS leg — 1,674 across two areas. Subsystem, scoped at t1302.
+(e) ⭐⭐⭐ Publish external stylesheet TEXT to the JS side — carried from t1302.
+(f) ⚠ `svg`'s 39 `TH_TIMEOUT` files; `IFRAME_DOCS` never cleared between navigations (t1299).

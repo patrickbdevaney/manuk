@@ -993,3 +993,4 @@ tick	sha	epoch	iso	delta_s	shape	wall_s	files	added	deleted	gates	claims	wpt_pas
 1299	ab36dfce	1786953020	2026-08-17T03:50:20-04:00	6898	capability	997	13	504	45	493	81	3896	6960	0	642	0	a frame the SCRIPT created still had no document, and it is the ad-slot idiom (2026-08-17)
 1301	01411f72	1786962310	2026-08-17T06:25:10-04:00	9290	capability	997	10	544	43	493	81	3896	6960	0	642	0	an animation was FAST-FORWARDED to its last keyframe, and the whole interpolation harness samples at a PINNED time (2026-08-17)
 1302	5351594d	1786963468	2026-08-17T06:44:28-04:00	1158	capability	997	8	204	35	493	81	3896	6960	0	642	0	a CSS rule had no `.style`, so the canonical CSSOM write path threw (2026-08-17)
+1303	6ca2b211	1786964276	2026-08-17T06:57:56-04:00	808	measurement	997	6	208	36	493	81	3896	6960	0	642	0	t1301 bought +605 in an area it never measured, and it built a SECOND interpolator that is 4.9× worse than the one we already had (2026-08-17)

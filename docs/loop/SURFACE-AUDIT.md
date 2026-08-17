@@ -6779,3 +6779,92 @@ printed**, and saying so remains more useful than either reading.
    the ledger — #69's aperture diff, which found 13,101 invisible subtests) has returned a real
    finding **every single time**. Future audits should lead with the structural probe and use the web
    leg to *supply names to probe with*, which is exactly how this one produced its finding.
+
+## Audit #72 — tick 1303 (2026-08-17)
+
+**Led with the STRUCTURAL probe, per #71's own standing recommendation** (*"the web leg has returned
+nothing three audits running while the structural probe has returned a real finding every single
+time"*). It returned a finding again, and a large one.
+
+### The aperture diff: `ls` the checkout, diff `WPT-AREAS.tsv`
+
+```text
+   top-level trees in ~/wpt                                        14
+   trees with NO measured row    accname  html-aam  wai-aria  svg  mathml  (+ common, resources)
+   css/ subdirs present                                            17
+   css/ subdirs with NO measured row                     CSS2  (+ support)
+```
+
+`common`/`resources`/`support` are helper trees and are correctly unmeasured. `css/CSS2` is 810 files
+but only **66 testharness** (the rest are reftests → Bar 2, deferred), so its absence as a row is
+defensible and is now stated rather than assumed. The other four are not.
+
+### ⭐⭐⭐ MEASURED, and 2,258 failing subtests were invisible to the primary metric
+
+```text
+   svg         313 / 2137  = 14.6%     682 testharness files   ← 1,824 failing
+   accname     328 /  484  = 67.8%     178 files
+   wai-aria    238 /  434  = 54.8%     265 files
+   html-aam    253 /  335  = 75.5%      15 files
+   ─────────────────────────────────────────────────────────
+   newly visible            3,390 subtests · 1,132 pass · 2,258 fail
+```
+
+All four rows added to `WPT-AREAS.tsv`; `WPT:TOTAL` becomes **471,496 / 1,269,895 = 37.1%**. Per PART
+VI.3 that total is a bookkeeping mark, not a north star — the point of adding these is that the metric
+can now *see* SVG and accessibility at all.
+
+⚠ `svg` also reports **`TH_TIMEOUT 39`** — async tests that never complete. Not a Bar 0 crash
+(`HANG/CRASH 0`), but 39 files scoring zero out of zero, which is the t1266 shape and should be read
+beside the percentage rather than under it.
+
+### ⚠⚠⚠ WHAT WE HAD BEEN WRONG ABOUT — the a11y suites measure a CONSTITUTIONAL invariant and were not in the metric
+
+**I3 makes the accessibility tree load-bearing**: *"a first-class accessibility tree … a load-bearing
+engine subsystem built and maintained at every horizon … never allowed to rot, lag the renderer, or
+become 'the automation module.'"* The three WPT suites that measure exactly that — `accname`
+(accessible-name computation), `wai-aria` (roles and states), `html-aam` (HTML→ARIA mapping) — **were
+not rows in the primary metric.** `wai-aria` at 54.8% is the weakest of the three.
+
+⚠ And this is the SECOND time the a11y tree has had to be given a number by an out-of-band probe:
+t1254 measured it at 63.8% and the reading did not become a standing row. **A number that is taken once
+and not banked as a row is a number the loop forgets** — which is how an invariant that says *never
+allowed to rot* goes unmeasured for fifty ticks.
+
+⚠ `svg` being absent is the more embarrassing half by volume. SVG is on essentially every real site —
+icons, logos, charts, illustrations — and every chart library manipulates the SVG **DOM**. 14.6% says
+that DOM is largely absent, and the board's SKIP list never named SVG as out of scope, so this was not
+a decision, it was an omission.
+
+### The web leg
+
+- **Interop 2026** (20 focus areas, 4 investigation areas): Anchor Positioning, advanced `attr()`, View
+  Transitions, `zoom`, `user-select` (not just `-webkit-`), ESM module loading (cyclic module records,
+  multiple top-level awaits), scroll-vs-animation event timing; WebRTC continues at 91.6% (and remains
+  explicitly OUT of scope here per I7/non-goals).
+- ⭐ **Accessibility is a named Interop 2026 INVESTIGATION area** — *"generate consistent accessibility
+  trees across browsers and improve WPT infrastructure."* That independently corroborates the
+  structural finding above: the four vendors also think the a11y tree is under-measured.
+- Other investigations: JPEG XL testability, mobile/dynamic-viewport infrastructure, WebVTT.
+
+⚠ Interop's `zoom` focus area is worth one note against our own ledger: audit #44 measured `zoom: 1` as
+a **legacy no-op value** inflating a corpus grep 9× (28.1% declared vs 2.3% real). Interop is about
+*real* `zoom` scaling. The two are not the same capability and the ledger must not merge them.
+
+### Is the frame still right?
+
+**Mostly, with one correction.** M1 render on the in-scope CrUX corpus remains the binding Phase-0
+constraint and nothing here outranks it. But the ★ CSS-LAYOUT board could not have surfaced `svg` or
+the a11y trio at all, because they were not rows — so *"pick the top ★ row"* was ranking inside a frame
+that omitted 3,390 subtests, which is precisely the failure this instrument exists to catch.
+
+### RANKED, from this audit only
+
+1. ⭐⭐⭐ **`svg` at 14.6% (1,824 failing).** Newly visible, largest, and directly daily-driver: charts,
+   icons and every D3-class library drive the SVG DOM. Histogram it before picking a mechanism.
+2. ⭐⭐⭐ **`wai-aria` at 54.8% / `accname` 67.8% / `html-aam` 75.5%** — these measure constitutional
+   invariant I3, they are now rows, and they must be kept as rows.
+3. Investigate `svg`'s **39 `TH_TIMEOUT`** files — zero out of zero is the most flattering denominator
+   there is (t1266).
+4. Carried unclosed from #71: re-probe and split the ECMAScript mega-row. Carried from #70: `CSS anchor
+   positioning`'s contradictory pair — now also an Interop 2026 focus area, so it is worth closing.

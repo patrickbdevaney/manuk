@@ -11,12 +11,12 @@
 
 | | value | over |
 |---|---|---|
-| ticks landed | **994** | ticks 1–1302 |
-| median tick cycle | **30m** | 993 intervals |
+| ticks landed | **995** | ticks 1–1303 |
+| median tick cycle | **30m** | 994 intervals |
 | median, last 10 | **59m** | 10 intervals |
 | fastest / slowest | 5s / 5.4d | |
-| **ticks per hour** | **1.12** | 889.7h elapsed |
-| median verify wall | **63s** | 933 ticks |
+| **ticks per hour** | **1.12** | 889.9h elapsed |
+| median verify wall | **63s** | 934 ticks |
 | wall trend | 39s → 17m — getting slower ⚠️ | first 3 vs last 3 |
 
 The **cycle** is the real unit: implement → debug → verify wall → land. The wall is only part of
@@ -31,7 +31,7 @@ it, and a wall that grows taxes every future tick, so it is tracked separately f
 * **✅ rows in the capability ledger**: 144 → **642**
 * **Bar 0 — oracle hangs**: 0 of 265 sites
 
-**464 of 994 ticks** (47%) moved a
+**464 of 995 ticks** (47%) moved a
 user-visible capability. The rest were instruments, infrastructure and corrections — and the
 ledger says the corrections were not overhead: three of its top three priorities were phantoms,
 and finding that out redirected everything after it.
@@ -1091,5 +1091,6 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 | **1299** | 2026-08-17 03:50 | 1.9h | capability | 17m | +504/−45 | 493 | 81 | 56.0% · | a frame the SCRIPT created still had no document, and it is the ad-slot idiom (2026-08-17) |
 | **1301** | 2026-08-17 06:25 | 2.6h | capability | 17m | +544/−43 | 493 | 81 | 56.0% · | an animation was FAST-FORWARDED to its last keyframe, and the whole interpolation harness  |
 | **1302** | 2026-08-17 06:44 | 19m | capability | 17m | +204/−35 | 493 | 81 | 56.0% · | a CSS rule had no `.style`, so the canonical CSSOM write path threw (2026-08-17) |
+| **1303** | 2026-08-17 06:57 | 13m | measurement | 17m | +208/−36 | 493 | 81 | 56.0% · | t1301 bought +605 in an area it never measured, and it built a SECOND interpolator that is |
 
 *`·` after a WPT figure means **carried forward**, not measured this tick.*
