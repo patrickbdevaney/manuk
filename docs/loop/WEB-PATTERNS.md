@@ -7380,3 +7380,51 @@ the wall. A gate outside the wall is documentation, not a ratchet tooth.
 4/4**, area `css/css-values` 3231 -> **3298** (+67; the area denominator moved, so the per-file
 fixed denominators are the evidence). Controls: `domparsing` 234/1294 exactly its mark,
 `css/css-sizing` +99 on a smaller denominator. RED three ways, each isolating one link.
+
+## A frame the SCRIPT created has a document on the NEXT LINE (t1299)
+
+**The pattern on the real web:** `createElement('iframe')` → `appendChild` → read `contentDocument`
+**immediately**. That is the ad slot (build a frame, write the creative into it), the OAuth /
+3-D-Secure bridge, the sandboxed preview, and the pristine-`window` lift every library uses to
+recover unpatched natives. HTML §4.8.5 navigates a srcless `<iframe>` to `about:blank` **when it is
+inserted**, so this is a synchronous read of a document that already exists.
+
+**The class this unlocks:** the other half of t1297. That tick gave *parser-inserted* frames a
+document in time; this one covers the frames the page builds itself.
+
+⚠ **Build it LAZILY, at the read — not at insertion.** Nothing hooks `appendChild`: a frame nobody
+reads costs nothing, and the read is the only place the gap is observable. Decline the frames with a
+real `src` (the fetch path owns those) and remember the decline, keyed `(arena, NodeId)`, or every
+`contentDocument` read of every cross-origin embed re-pays it.
+
+⚠⚠⚠ **THE CONTROL ROW IS THE IMPORTANT HALF.** A builder that answered for
+`<iframe src="https://…">` would invent an empty document for a cross-origin embed — a **false
+presence**, the very class the frame gates exist to catch. Without a `remote=NULL` row, *"it works"*
+and *"it says yes to everything"* read identically.
+
+⚠⚠ **A pinned known gap pays off exactly once, and this was it.** `G_INLINE_FRAME_DOCUMENT`
+assertion (4) asserted the *wrong* value on purpose for 787 ticks, with an instruction attached. When
+the residual closed, the wall went red and told the next reader what had happened — instead of a
+half-fix passing quietly. Pin gaps with assertions, not comments.
+
+⚠⚠ **Ownership belongs at ONE post-step.** Frames born mid-script are adopted inside
+`publish_iframe_docs`, whose contract is already *"every mutation of `child_pages` republishes"* —
+hanging it anywhere else is the *"three call sites feeding one post-step"* failure. And the gate on
+that call site had to widen: it read `if !child_pages.is_empty()`, which strands the page whose ONLY
+frame was built by a script.
+
+⚠⚠ **A guard is a CONJUNCTION.** The frame reflow keyed idempotence on the child's `mutation_seq`
+alone, so a script that *resizes* an `<iframe>` — mutating nothing inside the child — skipped the one
+re-cascade it needed and the child answered at its old width forever. The size is a term too, and it
+must be **preserved** across a republish, not recomputed from the new width: recomputing asserts the
+re-cascade already happened and makes the guard self-satisfying.
+
+⚠ `Box<Page>`, not `Page`, in the pending list — the reflow registry publishes a `*mut Page` and
+`&Page::styles`, both inline in the value, so a growing `Vec<Page>` would dangle every pointer
+already published.
+
+**Measured:** WPT **+0**, reported as such. The proof is the MESSAGE, not the count:
+`viewport-units-invalidation` moved from `can't access property "body", doc is null` (no frame) to
+`expected "200px" but got "300px"` (a frame that exists and is measured, at the HTML default 300x150
+because it has not been laid out yet). Gates: `G_IFRAME` (7) + `G_INLINE_FRAME_DOCUMENT` (4), RED one
+link. Controls: `domparsing` 234/1294, `css/cssom` 2795/3507, both unmoved.

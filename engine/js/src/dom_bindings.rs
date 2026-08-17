@@ -751,6 +751,14 @@ pub fn set_frame_styles(m: std::collections::HashMap<usize, usize>) {
     FRAME_STYLES.with(|c| *c.borrow_mut() = m);
 }
 
+/// Register ONE child arena's style map without replacing the rest — the on-demand counterpart to
+/// [`set_frame_styles`], for a frame born mid-script.
+pub fn set_frame_styles_one(dom_addr: usize, styles_addr: usize) {
+    FRAME_STYLES.with(|c| {
+        c.borrow_mut().insert(dom_addr, styles_addr);
+    });
+}
+
 thread_local! {
     /// **The forced reflow for a CHILD document** — see [`force_frame_reflow`]. Separate from
     /// [`REFLOW_HOOK`] on purpose, and the reason is the whole design: that hook's context carries
@@ -803,6 +811,73 @@ fn force_frame_reflow(dom: *mut Dom) {
 /// the run, which is why the child `Page`s are boxed and owned by the parent (see `manuk_page::Page`).
 pub fn set_iframe_docs(m: std::collections::HashMap<NodeId, (usize, NodeId)>) {
     IFRAME_DOCS.with(|c| *c.borrow_mut() = m);
+}
+
+/// Add ONE frame's arena without disturbing the others — the on-demand path (see
+/// [`ensure_frame_doc`]). `set_iframe_docs` replaces wholesale, which is right when the host
+/// republishes the whole child set and wrong when a single frame is being born mid-script.
+pub fn add_iframe_doc(node: NodeId, dom_addr: usize, root: NodeId) {
+    IFRAME_DOCS.with(|c| c.borrow_mut().insert(node, (dom_addr, root)));
+}
+
+thread_local! {
+    /// **Build the document for a frame the SCRIPT just created** — see [`ensure_frame_doc`].
+    /// Returns `true` if a document now exists for that element.
+    static FRAME_CREATE_HOOK: std::cell::Cell<
+        Option<unsafe extern "C" fn(*mut Dom, NodeId) -> bool>,
+    > = const { std::cell::Cell::new(None) };
+    /// Elements this thread has already asked the host about. A frame with a real `src` is not
+    /// network-free, so the host declines it — and without this the decline would be re-paid on
+    /// every single `contentDocument` read of every cross-origin frame on the page.
+    static FRAME_CREATE_TRIED: std::cell::RefCell<std::collections::HashSet<(usize, NodeId)>> =
+        std::cell::RefCell::new(std::collections::HashSet::new());
+    static IN_FRAME_CREATE: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
+}
+
+/// Install the host's on-demand child-document builder.
+///
+/// # Safety
+/// `f` must remain callable for as long as any document is scriptable.
+pub unsafe fn set_frame_create_hook(f: unsafe extern "C" fn(*mut Dom, NodeId) -> bool) {
+    FRAME_CREATE_HOOK.with(|c| c.set(Some(f)));
+}
+
+/// Forget the "already asked" set — called when a new document is installed, because the keys are
+/// `(arena, NodeId)` and a *reused* arena address would otherwise inherit the previous document's
+/// answers (the `(arena, NodeId)` keying rule from t1273).
+pub fn clear_frame_create_tried() {
+    FRAME_CREATE_TRIED.with(|c| c.borrow_mut().clear());
+}
+
+/// **A frame the script created must have a document on the very NEXT LINE.**
+///
+/// ⚠⚠⚠ HTML §4.8.5 navigates a srcless `<iframe>` to `about:blank` when it is INSERTED, so
+/// `document.body.appendChild(f); f.contentDocument` is a *synchronous* read of a document that is
+/// already supposed to exist. Ours arrived on the host's next round, so it read `null` — and
+/// `typeof null === 'object'`, which is why no feature detect ever caught it. t1297 closed the
+/// parser-inserted half; this is the half where the SCRIPT builds the frame, which is the ad slot,
+/// the OAuth/payment bridge, the sandboxed preview and every pristine-`window` lift on the web.
+///
+/// **Lazy on purpose:** no `appendChild` hook, no insertion-time work for the frames nobody reads.
+/// The one place that can observe the gap is the read itself, so that is where the host is asked.
+fn ensure_frame_doc(dom: *mut Dom, node: NodeId) -> bool {
+    if IN_FRAME_CREATE.with(|c| c.get()) {
+        return false;
+    }
+    let key = (dom as usize, node);
+    if FRAME_CREATE_TRIED.with(|c| c.borrow().contains(&key)) {
+        return false;
+    }
+    let Some(f) = FRAME_CREATE_HOOK.with(|c| c.get()) else {
+        return false;
+    };
+    FRAME_CREATE_TRIED.with(|c| {
+        c.borrow_mut().insert(key);
+    });
+    IN_FRAME_CREATE.with(|c| c.set(true));
+    let built = unsafe { f(dom, node) };
+    IN_FRAME_CREATE.with(|c| c.set(false));
+    built
 }
 
 /// The `element.scrollTop = n` assignments a script made this round, already clamped.
@@ -6585,7 +6660,17 @@ unsafe fn el_content_document(cx: *mut RawJSContext, _argc: u32, vp: *mut Value)
     let Some((_, node)) = this_node(vp) else {
         return true;
     };
-    let Some((dom_addr, root)) = IFRAME_DOCS.with(|c| c.borrow().get(&node).copied()) else {
+    // **The frame may not have been born yet.** If nothing is registered for this element, give the
+    // host one chance to build it right here — a script that appends an `<iframe>` and reads it on
+    // the next line is reading a document HTML says already exists (t1299).
+    let mut entry = IFRAME_DOCS.with(|c| c.borrow().get(&node).copied());
+    if entry.is_none() {
+        let owner = CURRENT_DOM.with(|c| c.get());
+        if !owner.is_null() && ensure_frame_doc(owner, node) {
+            entry = IFRAME_DOCS.with(|c| c.borrow().get(&node).copied());
+        }
+    }
+    let Some((dom_addr, root)) = entry else {
         return true;
     };
     let child = dom_addr as *mut Dom;

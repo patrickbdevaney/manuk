@@ -2632,6 +2632,143 @@ impl Drop for ViewportScope {
     }
 }
 
+#[cfg(feature = "spidermonkey")]
+thread_local! {
+    /// **Child pages built ON DEMAND, mid-script, awaiting adoption** — see
+    /// [`frame_create_on_demand`]. They are already registered with JS and already readable; this
+    /// only holds ownership until the parent `Page` takes them.
+    /// ⚠ **`Box<Page>`, and that is load-bearing.** The reflow registry publishes a `*mut Page` and
+    /// `&Page::styles`, both inline in the value — so a bare `Vec<Page>` would move every child it
+    /// already holds the moment it grew, dangling every pointer published for the earlier ones. The
+    /// `Box` makes each child's address independent of the vector's.
+    static DYNAMIC_FRAMES: std::cell::RefCell<Vec<(manuk_dom::NodeId, Box<Page>, f32, f32)>> =
+        std::cell::RefCell::new(Vec::new());
+    /// What the on-demand builder needs and cannot get from the DOM: the fonts, and the base URL a
+    /// frame's `about:blank`/`srcdoc` document inherits from its embedder (HTML §4.8.5).
+    static DYNAMIC_FRAME_HOST: std::cell::RefCell<Option<(*const FontContext, String)>> =
+        std::cell::RefCell::new(None);
+}
+
+/// Arm the on-demand frame builder for one script round. Cheap; called wherever scripts are about
+/// to run and a `FontContext` + base URL are in hand.
+#[cfg(feature = "spidermonkey")]
+fn arm_dynamic_frames(fonts: &FontContext, base_url: &str) {
+    DYNAMIC_FRAME_HOST.with(|h| {
+        *h.borrow_mut() = Some((fonts as *const FontContext, base_url.to_string()));
+    });
+}
+
+/// **Build the document for a frame the SCRIPT just created, at the moment it is first read.**
+///
+/// ⚠⚠⚠ HTML §4.8.5 navigates a srcless `<iframe>` to `about:blank` **when it is inserted**, so
+///
+/// ```js
+///   var f = document.createElement('iframe');
+///   document.body.appendChild(f);
+///   f.contentDocument.body            // <- already a document, per spec
+/// ```
+///
+/// is a synchronous read of something that already exists. Ours arrived on the host's *next round*,
+/// so it read `null` — and `typeof null === 'object'`, so every feature detect passed and the next
+/// line threw. `G_INLINE_FRAME_DOCUMENT` assertion (4) has pinned this as an honest known gap since
+/// t512; t1297 closed the parser-inserted half, and this is the other one.
+///
+/// **Why it is not a niche.** This exact sequence is the **ad slot** (build a frame, write the
+/// creative into it), the OAuth / 3-D-Secure bridge, the sandboxed preview, and the pristine-`window`
+/// lift every library uses to recover unpatched natives from a frame nobody has touched.
+///
+/// **Lazy, deliberately.** Nothing hooks `appendChild`: a frame nobody reads costs nothing, and the
+/// read is the only place the gap is observable, so that is where the work happens.
+///
+/// Returns `true` if a document now exists for `node`.
+///
+/// # Safety
+/// Called from the JS bindings with the arena that owns `node`.
+#[cfg(feature = "spidermonkey")]
+unsafe extern "C" fn frame_create_on_demand(
+    dom: *mut manuk_dom::Dom,
+    node: manuk_dom::NodeId,
+) -> bool {
+    let Some((fonts_ptr, base)) = DYNAMIC_FRAME_HOST.with(|h| h.borrow().clone()) else {
+        return false;
+    };
+    let parent = unsafe { &*dom };
+    if parent.tag_name(node) != Some("iframe") {
+        return false;
+    }
+    let Some(el) = parent.element(node) else {
+        return false;
+    };
+    // **Only the network-free frames** — the same three-way classification `load_inline_frames` and
+    // `build_inline_frame_docs` make, and it must stay the same three. A frame with a real `src` is
+    // the fetch path's business and is correctly declined here; `FRAME_CREATE_TRIED` makes that
+    // decline cost one set lookup for the rest of the page's life.
+    let html = if let Some(doc) = el.attr("srcdoc") {
+        doc.to_string()
+    } else {
+        let src = el.attr("src").unwrap_or("").trim().to_string();
+        if !(src.is_empty() || src.eq_ignore_ascii_case("about:blank")) {
+            return false;
+        }
+        String::new()
+    };
+    if INLINE_FRAME_DEPTH.with(|d| d.get()) >= MAX_IFRAME_DEPTH {
+        return false;
+    }
+    let fonts = unsafe { &*fonts_ptr };
+    // ⚠ **300x150, the HTML default object size** — and it is the honest answer, not a fallback. A
+    // frame created this instant has not been laid out, so it HAS no box yet; the next layout gives
+    // it one and `publish_iframe_docs` republishes the real width with it.
+    let (w, h) = (300.0f32, 150.0f32);
+    INLINE_FRAME_DEPTH.with(|d| d.set(d.get() + 1));
+    let mut child = {
+        let _vp = ViewportScope::set(w, h);
+        Page::load(&html, &base, fonts, w)
+    };
+    INLINE_FRAME_DEPTH.with(|d| d.set(d.get().saturating_sub(1)));
+    {
+        let croot = child.dom.root();
+        child.dom.set_referrer(croot, &base);
+    }
+    manuk_js::register_dom(&mut *child.dom as *mut manuk_dom::Dom);
+    let mut boxed = Box::new(child);
+    let croot = boxed.dom.root();
+    let addr = &mut *boxed.dom as *mut manuk_dom::Dom as usize;
+    // Registered ONE at a time: the rest of the child set is untouched, because this runs in the
+    // MIDDLE of a script round and the parent's own map must not be rebuilt under it.
+    manuk_js::add_iframe_doc(node, addr, croot);
+    manuk_js::set_frame_styles_one(addr, &boxed.styles as *const _ as usize);
+    // The freshly-built child must be MEASURABLE too, or `getComputedStyle` inside it answers from
+    // nothing — the t1298 mechanism, extended to a child that did not exist when the registry was
+    // last published. Safe because the child is boxed: its address does not depend on the vector's.
+    add_frame_reflow_page(addr, &mut boxed, w, h, fonts);
+    DYNAMIC_FRAMES.with(|v| v.borrow_mut().push((node, boxed, w, h)));
+    true
+}
+
+/// Adopt every frame the on-demand builder created during the last script round.
+///
+/// ⚠ **Called from `publish_iframe_docs` and NOWHERE ELSE.** That function's contract is already
+/// *"every mutation of `child_pages` republishes"*, and this is a mutation of `child_pages` — so
+/// hanging it anywhere else is the *"three call sites feeding one post-step"* failure the codebase
+/// has already paid for twice.
+#[cfg(feature = "spidermonkey")]
+fn adopt_dynamic_frames(
+    child_pages: &mut std::collections::HashMap<manuk_dom::NodeId, Page>,
+    iframes: &mut std::collections::HashMap<manuk_dom::NodeId, String>,
+    base: &str,
+) -> bool {
+    let taken: Vec<_> = DYNAMIC_FRAMES.with(|v| std::mem::take(&mut *v.borrow_mut()));
+    if taken.is_empty() {
+        return false;
+    }
+    for (node, page, _, _) in taken {
+        iframes.entry(node).or_insert_with(|| base.to_string());
+        child_pages.insert(node, *page);
+    }
+    true
+}
+
 /// One network-free `<iframe>` built ahead of the page's own scripts — see
 /// [`build_inline_frame_docs`]. A struct rather than a tuple because `width` is the field the whole
 /// frame-reflow mechanism turns on, and a bare `f32` in fifth position is exactly the kind of thing
@@ -2658,8 +2795,16 @@ struct FrameReflowEntry {
     width: f32,
     height: f32,
     fonts: *const FontContext,
-    /// The child's `mutation_seq` when its current `styles` were computed. The idempotence guard.
+    /// The child's `mutation_seq` when its current `styles` were computed.
     laid_out_at: u64,
+    /// ⚠⚠⚠ **AND THE VIEWPORT THEY WERE COMPUTED AT — because the guard is a CONJUNCTION.**
+    /// `mutation_seq` alone says *"the child's DOM has not changed"*, which is true and irrelevant
+    /// when the thing that changed is the FRAME. A script that resizes an `<iframe>` and then reads
+    /// a `vw` inside it mutates nothing in the child, so a seq-only guard skips the one re-cascade
+    /// that was needed and the child keeps answering at its old width (t1243's lesson, and the
+    /// exact shape of `css/css-values/viewport-units-invalidation`).
+    laid_out_w: f32,
+    laid_out_h: f32,
 }
 
 #[cfg(feature = "spidermonkey")]
@@ -2706,8 +2851,12 @@ unsafe extern "C" fn frame_forced_reflow(dom: *mut manuk_dom::Dom) {
             return;
         };
         let child = unsafe { &mut *e.page };
-        // Idempotent: a run of reads with no mutation between them lays out once, not once each.
-        if child.dom.mutation_seq() == e.laid_out_at {
+        // Idempotent: a run of reads with no mutation AND no resize between them lays out once, not
+        // once each. Both terms — see `laid_out_w`.
+        if child.dom.mutation_seq() == e.laid_out_at
+            && e.width == e.laid_out_w
+            && e.height == e.laid_out_h
+        {
             return;
         }
         let fonts = unsafe { &*e.fonts };
@@ -2726,6 +2875,8 @@ unsafe extern "C" fn frame_forced_reflow(dom: *mut manuk_dom::Dom) {
         child.root_box = root_box;
         child.content_height = child.root_box.content_bottom();
         e.laid_out_at = child.dom.mutation_seq();
+        e.laid_out_w = e.width;
+        e.laid_out_h = e.height;
     });
 }
 
@@ -2894,6 +3045,31 @@ fn publish_pre_script_frame_docs(frames: &mut [InlineFrame], fonts: &FontContext
     );
 }
 
+/// Add ONE entry to [`FRAME_REFLOW_PAGES`] without disturbing the rest — the on-demand path's
+/// counterpart to [`publish_frame_reflow_pages`], which replaces wholesale. Wholesale is right when
+/// the host republishes the whole child set and wrong mid-script, when one frame is being born.
+#[cfg(feature = "spidermonkey")]
+fn add_frame_reflow_page(
+    addr: usize,
+    page: &mut Page,
+    width: f32,
+    height: f32,
+    fonts: &FontContext,
+) {
+    let e = FrameReflowEntry {
+        width: width.max(1.0),
+        height: height.max(1.0),
+        page: page as *mut Page,
+        fonts: fonts as *const FontContext,
+        laid_out_at: page.dom.mutation_seq(),
+        laid_out_w: width.max(1.0),
+        laid_out_h: height.max(1.0),
+    };
+    FRAME_REFLOW_PAGES.with(|r| {
+        r.borrow_mut().insert(addr, e);
+    });
+}
+
 /// Publish [`FRAME_REFLOW_PAGES`] from whatever currently owns the child pages — a local `Vec`
 /// before the `Page` exists, `Page::child_pages` after it. Both call sites hand over the same three
 /// facts: which arena, which `Page`, and **the frame's own width**.
@@ -2902,8 +3078,23 @@ fn publish_frame_reflow_pages<'a>(
     entries: impl Iterator<Item = (usize, &'a mut Page, f32, f32)>,
     fonts: &FontContext,
 ) {
+    // ⚠ The previous entries are read, not discarded: `width`/`height` below are what the frame
+    // IS now, while `laid_out_*` is what the child was last cascaded at. Recomputing `laid_out_*`
+    // from the new width here would assert the re-cascade had already happened and skip it forever
+    // — the guard would be self-satisfying.
+    let prev: HashMap<usize, (u64, f32, f32)> = FRAME_REFLOW_PAGES.with(|r| {
+        r.borrow()
+            .iter()
+            .map(|(k, e)| (*k, (e.laid_out_at, e.laid_out_w, e.laid_out_h)))
+            .collect()
+    });
     let m: HashMap<usize, FrameReflowEntry> = entries
         .map(|(addr, c, width, height)| {
+            let (lat, lw, lh) = prev.get(&addr).copied().unwrap_or((
+                c.dom.mutation_seq(),
+                width.max(1.0),
+                height.max(1.0),
+            ));
             let e = FrameReflowEntry {
                 // ⚠ The width is passed in, never re-derived from the child, because it is the one
                 // fact this mechanism exists for: the child laid out at its FRAME's width when it
@@ -2913,7 +3104,9 @@ fn publish_frame_reflow_pages<'a>(
                 height: height.max(1.0),
                 page: c as *mut Page,
                 fonts: fonts as *const FontContext,
-                laid_out_at: c.dom.mutation_seq(),
+                laid_out_at: lat,
+                laid_out_w: lw,
+                laid_out_h: lh,
             };
             (addr, e)
         })
@@ -4156,6 +4349,17 @@ impl Page {
     /// Tell the JS world which arena sits behind each `<iframe>`. Cheap, and it must run before any
     /// script that might reach into a frame — which, once frames are loaded, is any script at all.
     fn publish_iframe_docs(&mut self, fonts: &FontContext) {
+        // **Adopt anything the on-demand builder made during the last script round, FIRST.** This
+        // is the single post-step for a `child_pages` mutation, so the frames a script created are
+        // taken here and the publish below sees them like any other child (t1299).
+        #[cfg(feature = "spidermonkey")]
+        {
+            let base = self.final_url.clone();
+            adopt_dynamic_frames(&mut self.child_pages, &mut self.iframes, &base);
+            // Re-arm for the round that is about to run: `fire_lifecycle` and every dispatch path
+            // reach here before they execute a line of script.
+            arm_dynamic_frames(fonts, &self.final_url);
+        }
         let m: std::collections::HashMap<_, _> = self
             .child_pages
             .iter_mut()
@@ -6551,8 +6755,14 @@ impl Page {
         // function every construction path goes through, because three callers is what produced one.
         #[cfg(feature = "spidermonkey")]
         unsafe {
-            manuk_js::set_frame_reflow_hook(frame_forced_reflow)
+            manuk_js::set_frame_reflow_hook(frame_forced_reflow);
+            manuk_js::set_frame_create_hook(frame_create_on_demand);
         };
+        // ⚠ A NEW DOCUMENT, so the "already asked" set must go: it is keyed `(arena, NodeId)` and a
+        // reused arena address would otherwise inherit the previous document's answers — the
+        // `(arena, NodeId)` rule from t1273, which is only safe if somebody clears it.
+        #[cfg(feature = "spidermonkey")]
+        manuk_js::clear_frame_create_tried();
         // Box the DOM up front so its address is stable for the persistent JS context's raw
         // reflector pointers, then style + lay out once and run the document's inline scripts
         // against that layout snapshot (so `getBoundingClientRect` works), letting them mutate
@@ -6623,6 +6833,11 @@ impl Page {
         // [`build_inline_frame_docs`]: a parser-inserted `<iframe>` is navigated to `about:blank`
         // at insertion, so the very next `<script>` must find a real `contentDocument`. `rects` is
         // the layout above, which is what gives each frame its own viewport width.
+        // The blocking scripts below can create frames of their own, and the `Page` that will adopt
+        // them does not exist yet — so the builder is armed here and drains at the first
+        // `publish_iframe_docs`, which `from_dom` runs the moment the `Page` is built.
+        #[cfg(feature = "spidermonkey")]
+        arm_dynamic_frames(fonts, final_url);
         #[cfg(feature = "spidermonkey")]
         let mut inline_frames = build_inline_frame_docs(&dom, &rects, &styles, final_url, fonts);
         #[cfg(feature = "spidermonkey")]
@@ -6802,8 +7017,12 @@ impl Page {
         // no longer exists — `publish_iframe_docs` is the single call site whose whole contract is
         // "every mutation of `child_pages` republishes", and this is one. `load` fires only now,
         // because it needs a JS context and `from_dom` did not have one when the frames were built.
+        // ⚠ `child_pages` is EMPTY when a blocking script created the only frame on the page — the
+        // frames it built are still sitting in `DYNAMIC_FRAMES` waiting to be adopted, and adoption
+        // happens inside `publish_iframe_docs`. Gating on `child_pages` alone would strand exactly
+        // the case this tick exists for.
         #[cfg(feature = "spidermonkey")]
-        if !page.child_pages.is_empty() {
+        if !page.child_pages.is_empty() || DYNAMIC_FRAMES.with(|v| !v.borrow().is_empty()) {
             page.publish_iframe_docs(fonts);
             let nodes: Vec<manuk_dom::NodeId> = page.child_pages.keys().copied().collect();
             for n in nodes {

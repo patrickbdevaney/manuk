@@ -164,15 +164,28 @@ fn a_frame_with_nothing_to_fetch_still_gets_a_document() {
         "an <iframe> with NO src must still be navigated to about:blank and get a document — got {nosrc:?}"
     );
 
-    // (4) **THE RESIDUAL, PINNED.** Chrome gives the document synchronously inside `appendChild`;
-    // here it arrives on the host's next round. Asserting the honest current value means the day it
-    // is fixed this gate goes red and says so, rather than a half-fix passing quietly. If you are
-    // here because this failed and `sync` now reads `SYNC-DOC`: that is the residual closing. Delete
-    // this assertion and say so in the journal.
+    // (4) **THE RESIDUAL IS CLOSED, AND THIS ASSERTION IS NOW A CLAIM (t1299).**
+    //
+    // It read `assert_eq!(sync, "sync-null")` from t512 until t1299 — an honest pin on a known gap,
+    // carrying its own instruction: *"if this now reads `SYNC-DOC`, that half landed; update the
+    // gate."* It read `SYNC-DOC`. The gate went red on a fix, exactly as designed, which is the
+    // whole reason a known gap is pinned with an assertion rather than a comment.
+    //
+    // HTML §4.8.5 navigates a srcless `<iframe>` to `about:blank` **when it is inserted**, so
+    // `appendChild(f); f.contentDocument` is a synchronous read of a document that already exists.
+    // Built lazily, at the read: `el_content_document` asks the host to build the frame when
+    // `IFRAME_DOCS` has no entry for it, so a frame nobody reads costs nothing and nothing hooks
+    // `appendChild`.
+    //
+    // ⚠ This is the **ad slot** (create a frame, write the creative into it), the OAuth /
+    // 3-D-Secure bridge, the sandboxed preview, and the pristine-`window` lift every library uses.
+    //
+    // RED: drop the `ensure_frame_doc` call in `el_content_document` -> `sync-null`, the value this
+    // line asserted for 787 ticks.
     assert_eq!(
-        sync, "sync-null",
-        "a frame appended and read on the NEXT LINE still has no document — the known residual. \
-         If this now reads SYNC-DOC, that half landed; update the gate."
+        sync, "SYNC-DOC",
+        "a frame appended and read on the NEXT LINE must already have a document (HTML §4.8.5 \
+         navigates a srcless <iframe> to about:blank at INSERTION). Got {sync:?}"
     );
 
     // (5) **THE PARSE-TIME READ — t1297.** Assertions (1)-(3) all read at `load`, and every one of

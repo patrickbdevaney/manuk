@@ -84447,3 +84447,151 @@ NEXT, ranked — and the remaining six files each NAME their own next link.
 WIKI: docs/wiki/dom-semantics.md — the frame reflow, the three links (stale child cascade, the
 global viewport, the content box), why it could not reuse `ReflowScope`, and the five sizing sites
 that must stay one rule.
+
+## Tick 1299 — a frame the SCRIPT created still had no document, and it is the ad-slot idiom (2026-08-17)
+
+TICK SHAPE: capability. Board re-run at the top of this tick: **unchanged** (★ CSS-LAYOUT,
+`css/css-values` #2 at 40.2%). This is t1298's ⭐⭐⭐ NEXT (a), and it closes a residual this project
+has carried **pinned** since t512.
+
+HYPOTHESIS. `G_INLINE_FRAME_DOCUMENT` assertion (4) has asserted `sync-null` for hundreds of ticks —
+deliberately, as an honest record of a known gap: *"a script that appends a frame and reads
+`contentDocument` on the very next line still sees `null`."* t1297 closed the **parser** half. This
+is the other one, and WPT now sizes it rather than the abstraction doing so:
+
+```text
+  css/css-values/viewport-units-invalidation.html          0/24   can't access property "body", doc is null
+  css/css-values/viewport-relative-lengths-scaled-viewport 0/1    ...createElement, frameDocument is null
+```
+
+Both build their frames from script. On the real web this is the **ad slot** (create a frame, write
+the creative into it), the OAuth/payment bridge, the sandboxed preview, and the pristine-`window`
+lift every library uses to fetch unpatched natives.
+
+⚠ **CHOSEN OVER A BIGGER-LOOKING LEVER, AND THE REASON IS THE RATCHET.** t1298's NEXT (b) —
+the scrollbar gutter, `viewport-units-scrollbars-compute` 0/34 — is a larger single file and reads
+like a one-number fix (`expected "185px" but got "200px"`, exactly one 15px classic scrollbar). It
+was **probed and deliberately not taken this tick**:
+
+```text
+  PROBE-SB  main-vw=800px  main-vh=720px  frame-vw=200px  frame-vh=100px
+            (want 785)     (want 705)     (want 185)      (want 85)
+```
+
+The engine already models a 15px gutter in *layout* (`SCROLLBAR_WIDTH`), so the gap is only in unit
+resolution — but `cascade_styles` sets the viewport from its own `viewport_width` argument, which is
+**also** what `@media` resolves against, while `layout_document` takes the width separately and
+already subtracts the gutter itself. So the correct fix passes a REDUCED width to the cascade and the
+FULL width to layout, on every page whose root scrolls — and `html{overflow:scroll}` is the standard
+layout-shift-prevention idiom, i.e. a very large blast radius for **+34 subtests**. A change that can
+silently move `@media` on a common idiom is not one to rush at the end of a long session; it is a
+tick of its own, with its own controls. Recorded as such rather than half-done.
+
+**This one is ADDITIVE by contrast** — a frame that had *no* document gets one — so its regression
+surface is near zero, which is exactly why it goes first.
+
+MECHANISM (predicted). No `appendChild` hook is needed: make it **lazy**. `el_content_document`
+already fails at one line (`IFRAME_DOCS` has no entry). When the entry is missing and the element is
+a network-free `<iframe>`, ask the host to build it *now* — the same host-hook shape t1298 used for
+the frame reflow, which is already proven in this subsystem.
+
+Ownership is the part with a trap in it, and the codebase has already named it: *"three call sites
+feeding one post-step is how a pass silently does not run on the third."* So the created children are
+adopted in **`publish_iframe_docs`** — the single site whose whole contract is already *"every
+mutation of `child_pages` republishes"* — and nowhere else.
+
+PREDICTION: `G_INLINE_FRAME_DOCUMENT` assertion (4) flips from `sync-null` to `SYNC-DOC`, which is
+the gate going **red on purpose** — its own comment says *"if you are here because this failed and
+`sync` now reads `SYNC-DOC`: that is the residual closing. Delete this assertion and say so in the
+journal."* This is a claim that has been waiting for its turn, not a regression.
+
+WHAT LANDED. Lazy, at the read, exactly as predicted — no `appendChild` hook, so a frame nobody
+reads costs nothing:
+
+1. **`ensure_frame_doc`** in `el_content_document`: when `IFRAME_DOCS` has no entry, ask the host
+   once. `FRAME_CREATE_TRIED` is keyed `(arena, NodeId)` and cleared per document, so a frame with a
+   real `src` — correctly declined, because it is the fetch path's business — costs one set lookup
+   for the rest of the page's life rather than a rebuild attempt per read.
+2. **`frame_create_on_demand`** in the host: the same three-way network-free classification
+   `build_inline_frame_docs` makes, at the HTML default **300x150** (a frame created this instant has
+   not been laid out, so it genuinely has no box yet).
+3. **Adoption in `publish_iframe_docs`, and NOWHERE ELSE** — the site whose contract is already
+   *"every mutation of `child_pages` republishes"*. ⚠ Its caller in `from_dom` was gated on
+   `!page.child_pages.is_empty()`, which would have stranded **exactly this tick's case**: a page
+   whose only frame was built by a script has an empty `child_pages` and a full `DYNAMIC_FRAMES`.
+
+⚠⚠ `DYNAMIC_FRAMES` holds `Box<Page>`, and that is load-bearing rather than stylistic: the reflow
+registry publishes a `*mut Page` and `&Page::styles`, both **inline in the value**, so a plain
+`Vec<Page>` would move every child it already held the moment it grew and dangle every pointer
+published for the earlier ones.
+
+```text
+  PROBE-DYN  sync=BODY  bait=1  vw=300px  remote=NULL  srcdoc=hi
+             created    writable  measurable  CONTROL   script-set srcdoc parses
+```
+
+GATE: **two, and one of them went red on a fix, on purpose.**
+`G_INLINE_FRAME_DOCUMENT` assertion (4) has read `assert_eq!(sync, "sync-null")` since t512, carrying
+its own instruction — *"if this now reads `SYNC-DOC`, that half landed; update the gate."* It read
+`SYNC-DOC`. **That is what a pinned known gap is for**: the day it closes, the wall says so, instead
+of a half-fix passing quietly. It is now a positive claim. And because
+`g_inline_frame_document` is **not one of the 19 gates `verify.sh` launches**, the claim also went
+into **`G_IFRAME` (7)**, which is. RED, both, one link:
+
+```text
+  drop the `ensure_frame_doc` call in `el_content_document`
+      G_IFRAME              -> sync=NULL|remote=NULL
+      G_INLINE_FRAME_DOC    -> sync-null      (the value that line asserted for 787 ticks)
+```
+
+⚠ **`remote=NULL` is the control row and it is the important half.** An on-demand builder that
+answered for an `<iframe src="https://…">` would invent an empty document for a cross-origin embed —
+a **false presence**, the exact class this gate family exists to catch. Without that row, *"it
+works"* and *"it says yes to everything"* are the same reading.
+
+RESULT — **+0 on the area, and the honest reason is that the target file needs a THIRD mechanism.**
+
+```text
+  css/css-values, SAME HOUR, isolated:   3298 -> 3298     +0
+  viewport-units-invalidation            0/24 -> 0/24
+    but the MESSAGE moved, which is the proof the fix applied:
+      before  can't access property "body", doc is null      <- no frame at all
+      after   assert_equals: expected "200px" but got "300px" <- the frame exists and is measured
+```
+
+The frame is now created, readable, writable and measurable — at **300x150**, the default object
+size, because it has not been laid out. The test's CSS says `iframe { width: 200px }`, and getting
+that number requires the PARENT to reflow (giving the new frame a box) *before* the child is
+measured, mid-script. `getComputedStyle` on a **parent** node forces exactly that reflow; on a child
+node it routes through `with_style_in` -> `force_frame_reflow`, which reflows the child and never the
+parent. Closing it means chaining parent-reflow -> republish the frame's box -> child-reflow, and
+taking the width from the parent's **current** layout instead of a cached entry. That is a third
+mechanism and it is the next tick, not a line in this one.
+
+⚠ One thing WAS fixed on the way, and it is a lesson rather than a detail: **the frame reflow's
+idempotence guard was `mutation_seq` ALONE**, so a script that resizes an `<iframe>` — mutating
+nothing inside the child — skipped the one re-cascade it needed and the child answered at its old
+width forever. **A guard is a conjunction** (t1243), and this is the same defect as t1283's
+`mutation_seq`-only reflow guard being blind to a scroll. `laid_out_w/h` are now terms, and
+`publish_frame_reflow_pages` **preserves** them across a republish rather than recomputing them from
+the new width — recomputing would assert the re-cascade had already happened and make the guard
+self-satisfying.
+
+CONTROLS: all frame gates green (`g_iframe`, `g_inline_frame_document`, `g_framing`,
+`g_frame_window_surface`, `g_iframe_rerender`, `g_iframe_xml_content_type`,
+`g_document_character_set`, `g_img_current_src`) plus `g_viewport`, `g_lifecycle`, `g_defer`,
+`g_first_paint`. `domparsing` 234/1294 and `css/cssom` 2795/3507 — both exactly where t1298 left them.
+
+NEXT, ranked.
+(a) ⭐⭐⭐ **A style read inside a frame must reflow the PARENT first.** Named above, sized at
+    `viewport-units-invalidation` 0/24, and it is the last link in this chain.
+(b) ⭐⭐ The scrollbar gutter — probed and deliberately deferred this tick (see the hypothesis);
+    `viewport-units-scrollbars-compute` 0/34, needs a reduced width to the CASCADE and the full width
+    to LAYOUT, on every page whose root scrolls. Wants its own controls.
+(c) ⭐⭐ Viewport units do not interpolate — `viewport-units-keyframes` 0/24, the animation-clock item.
+(d) ⭐⭐⭐ `document.styleSheets` is EMPTY for external sheets — carried from t1296, unchanged.
+(e) ⚠ `IFRAME_DOCS` is still never cleared between navigations — carried; note that
+    `FRAME_CREATE_TRIED` beside it now IS cleared per document, which makes the omission louder.
+
+WIKI: docs/wiki/dom-semantics.md — the fourth entry in the iframe chain, the lazy-at-the-read design,
+why adoption has exactly one call site, why `Box<Page>` is load-bearing, and the conjunction guard.

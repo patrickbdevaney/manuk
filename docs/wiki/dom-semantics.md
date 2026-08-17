@@ -357,6 +357,50 @@ WPT, at `viewport-units-invalidation` 0/24 and `viewport-relative-lengths-scaled
 scrollbar gutter is not subtracted from a frame's viewport (`viewport-units-scrollbars-compute` 0/34,
 a clean 15px miss). Viewport units do not interpolate (`viewport-units-keyframes` 0/24, `auto`).
 
+## …and the fourth link: a frame the SCRIPT created (t1299)
+
+t1297 covered frames the parser inserted. This is the other half, and it is the one the web actually
+writes:
+
+```js
+  var f = document.createElement('iframe');
+  document.body.appendChild(f);
+  f.contentDocument.body            // per HTML §4.8.5 this already exists
+```
+
+**Built lazily, at the read.** `el_content_document` asks the host to build the frame when
+`IFRAME_DOCS` has no entry for it — so nothing hooks `appendChild`, and a frame nobody reads costs
+nothing. Frames with a real `src` are declined (the fetch path owns them) and the decline is
+remembered, keyed `(arena, NodeId)` and cleared per document.
+
+**Ownership has exactly one call site.** Frames born mid-script land in a thread-local and are
+adopted in `publish_iframe_docs` — the function whose contract is already *"every mutation of
+`child_pages` republishes"*. ⚠ Its caller in `from_dom` was gated on `!child_pages.is_empty()`, which
+stranded precisely this case: a page whose only frame was built by a script has an empty
+`child_pages`. ⚠ The pending list holds `Box<Page>` because the reflow registry publishes a
+`*mut Page` and `&Page::styles`, both inline in the value.
+
+**And the guard is a conjunction.** The frame reflow keyed idempotence on the child's `mutation_seq`
+alone — so a script that RESIZES an `<iframe>`, mutating nothing inside the child, skipped the one
+re-cascade it needed. `laid_out_w/h` are terms now, and they are **preserved** across a republish
+rather than recomputed from the new width; recomputing would assert the re-cascade had happened and
+make the guard self-satisfying.
+
+**What this bought: WPT +0, and the message is the evidence.**
+
+```text
+  viewport-units-invalidation
+    before  can't access property "body", doc is null       <- no frame at all
+    after   assert_equals: expected "200px" but got "300px"  <- a frame that exists and is measured
+```
+
+**NOT covered, named — and it is the next link.** A frame created this instant has **no box**, so it
+is measured at the HTML default 300x150; the test's `iframe { width: 200px }` needs the **parent** to
+reflow before the child is measured. `getComputedStyle` on a parent node forces exactly that; on a
+child node it routes through `with_style_in` → `force_frame_reflow`, which reflows the child and
+never the parent. Closing it means chaining parent-reflow → republish the frame's box → child-reflow,
+taking the width from the parent's *current* layout instead of a cached entry.
+
 ## CharacterData offsets are UTF-16 CODE UNITS — not bytes, not `char`s
 
 `"😀".length === 2` in JavaScript. An offset of 1 lands **inside the surrogate pair**. Rust strings are

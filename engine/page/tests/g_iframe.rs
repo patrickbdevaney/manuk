@@ -311,4 +311,60 @@ fn iframes_have_a_box_show_their_document_and_do_not_block_paint() {
              {vreport}"
         );
     }
+
+    // ── (7) **A FRAME THE SCRIPT CREATED HAS A DOCUMENT ON THE NEXT LINE (t1299).**
+    //
+    //        HTML §4.8.5 navigates a srcless `<iframe>` to `about:blank` **when it is inserted**, so
+    //        `appendChild(f); f.contentDocument` reads a document that already exists. Ours arrived
+    //        on the host's next round and read `null` — and `typeof null === 'object'`, so every
+    //        feature detect passed and the next line threw.
+    //
+    //        This is the ad slot (build a frame, write the creative into it), the OAuth /
+    //        3-D-Secure bridge, the sandboxed preview, and the pristine-`window` lift every library
+    //        uses to recover unpatched natives. Built LAZILY, at the read, so a frame nobody reads
+    //        costs nothing and nothing hooks `appendChild`.
+    //
+    //        ⚠ `remote=NULL` is the CONTROL and it is the important half: a frame with a real `src`
+    //        is the FETCH path's business, and an on-demand builder that answered for it would be
+    //        inventing an empty document for a cross-origin embed — a false presence, which is the
+    //        very class this gate family exists to catch. Without this row, "it works" and "it
+    //        answers yes to everything" are the same reading.
+    //
+    //        RED: drop the `ensure_frame_doc` call in `el_content_document` -> `sync=NULL`.
+    let mut dy = manuk_page::Page::load(
+        r#"<!doctype html><html><body><div id="out">-</div><script>
+             var o = [];
+             var f = document.createElement('iframe');
+             document.body.appendChild(f);
+             var d = f.contentDocument;
+             o.push('sync=' + (d ? (d.body ? 'BODY' : 'nobody') : 'NULL'));
+             if (d && d.body) {
+               d.body.innerHTML = '<b class=bait>x</b>';
+               o.push('bait=' + d.querySelectorAll('.bait').length);
+             }
+             var g = document.createElement('iframe');
+             g.src = 'https://elsewhere.test/x';
+             document.body.appendChild(g);
+             o.push('remote=' + (g.contentDocument === null ? 'NULL' : 'doc'));
+             document.getElementById('out').textContent = o.join('|');
+           </script></body></html>"#,
+        "https://dyn.test/",
+        &fonts,
+        800.0,
+    );
+    let _ = &mut dy;
+    let ddom = dy.dom();
+    let dout = manuk_css::query_selector_all(ddom, ddom.root(), "#out");
+    let dreport = dout
+        .first()
+        .map(|&n| ddom.text_content(n))
+        .unwrap_or_default();
+    for needle in ["sync=BODY", "bait=1", "remote=NULL"] {
+        assert!(
+            dreport.contains(needle),
+            "G_IFRAME/dynamic-frame: expected `{needle}` — a frame the script CREATED must have a \
+             live, writable document on the very next line (HTML §4.8.5), and a frame with a real \
+             `src` must NOT be given an invented one. Full report: {dreport}"
+        );
+    }
 }

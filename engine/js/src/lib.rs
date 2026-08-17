@@ -777,6 +777,55 @@ pub unsafe fn set_frame_reflow_hook(f: unsafe extern "C" fn(*mut manuk_dom::Dom)
 #[cfg(not(feature = "_sm"))]
 pub unsafe fn set_frame_reflow_hook(_f: unsafe extern "C" fn(*mut manuk_dom::Dom)) {}
 
+/// **Install the host's ON-DEMAND child-document builder** — for a frame the script created and
+/// reads on the very next line. See `dom_bindings::ensure_frame_doc`.
+///
+/// # Safety
+/// `f` must remain callable for as long as any document is scriptable.
+#[cfg(feature = "_sm")]
+pub unsafe fn set_frame_create_hook(
+    f: unsafe extern "C" fn(*mut manuk_dom::Dom, manuk_dom::NodeId) -> bool,
+) {
+    unsafe { dom_bindings::set_frame_create_hook(f) }
+}
+
+/// # Safety
+/// Trivially safe; the signature matches the `_sm` build.
+#[cfg(not(feature = "_sm"))]
+pub unsafe fn set_frame_create_hook(
+    _f: unsafe extern "C" fn(*mut manuk_dom::Dom, manuk_dom::NodeId) -> bool,
+) {
+}
+
+/// Register one child arena without replacing the rest — the on-demand path's counterpart to
+/// [`set_iframe_docs`].
+#[cfg(feature = "_sm")]
+pub fn add_iframe_doc(node: manuk_dom::NodeId, dom_addr: usize, root: manuk_dom::NodeId) {
+    dom_bindings::add_iframe_doc(node, dom_addr, root);
+}
+
+#[cfg(not(feature = "_sm"))]
+pub fn add_iframe_doc(_node: manuk_dom::NodeId, _dom_addr: usize, _root: manuk_dom::NodeId) {}
+
+/// Register one child arena's style map without replacing the rest — see [`set_frame_styles`].
+#[cfg(feature = "_sm")]
+pub fn set_frame_styles_one(dom_addr: usize, styles_addr: usize) {
+    dom_bindings::set_frame_styles_one(dom_addr, styles_addr);
+}
+
+#[cfg(not(feature = "_sm"))]
+pub fn set_frame_styles_one(_dom_addr: usize, _styles_addr: usize) {}
+
+/// Forget which elements the on-demand builder has already been asked about. Keyed
+/// `(arena, NodeId)`, so a reused arena address must not inherit the last document's answers.
+#[cfg(feature = "_sm")]
+pub fn clear_frame_create_tried() {
+    dom_bindings::clear_frame_create_tried();
+}
+
+#[cfg(not(feature = "_sm"))]
+pub fn clear_frame_create_tried() {}
+
 /// An arena is legal to resolve reflectors against.
 #[cfg(feature = "_sm")]
 pub fn register_dom(dom: *mut manuk_dom::Dom) {

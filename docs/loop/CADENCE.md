@@ -11,12 +11,12 @@
 
 | | value | over |
 |---|---|---|
-| ticks landed | **990** | ticks 1–1297 |
-| median tick cycle | **30m** | 989 intervals |
+| ticks landed | **991** | ticks 1–1298 |
+| median tick cycle | **30m** | 990 intervals |
 | median, last 10 | **57m** | 10 intervals |
 | fastest / slowest | 5s / 5.4d | |
-| **ticks per hour** | **1.12** | 883.9h elapsed |
-| median verify wall | **63s** | 929 ticks |
+| **ticks per hour** | **1.12** | 884.9h elapsed |
+| median verify wall | **63s** | 930 ticks |
 | wall trend | 39s → 17m — getting slower ⚠️ | first 3 vs last 3 |
 
 The **cycle** is the real unit: implement → debug → verify wall → land. The wall is only part of
@@ -31,7 +31,7 @@ it, and a wall that grows taxes every future tick, so it is tracked separately f
 * **✅ rows in the capability ledger**: 144 → **642**
 * **Bar 0 — oracle hangs**: 0 of 265 sites
 
-**460 of 990 ticks** (46%) moved a
+**461 of 991 ticks** (47%) moved a
 user-visible capability. The rest were instruments, infrastructure and corrections — and the
 ledger says the corrections were not overhead: three of its top three priorities were phantoms,
 and finding that out redirected everything after it.
@@ -90,8 +90,8 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 
 ## What a capability costs
 
-* **460** capability ticks, median cycle **30m**
-* median diff per tick: **+277 / −34** lines across 8 files
+* **461** capability ticks, median cycle **30m**
+* median diff per tick: **+278 / −34** lines across 8 files
 
 ## Every tick
 
@@ -1087,5 +1087,6 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 | **1294** | 2026-08-16 17:46 | 58m | measurement | 17m | +513/−161 | 493 | 81 | 56.0% · | `minmax(auto, <small>)` ignores the automatic minimum, and it is a TAFFY boundary, not our |
 | **1296** | 2026-08-16 20:15 | 2.5h | capability | 17m | +605/−67 | 493 | 81 | 56.0% · | a `<link rel=stylesheet>` is SCRIPT-BLOCKING, and every blocking script in this engine ran |
 | **1297** | 2026-08-17 00:59 | 4.7h | capability | 17m | +941/−274 | 493 | 81 | 56.0% · | a parser-inserted `<iframe>` has NO DOCUMENT while the document's own scripts run (2026-08 |
+| **1298** | 2026-08-17 01:55 | 56m | capability | 17m | +901/−237 | 493 | 81 | 56.0% · | `getComputedStyle` inside a frame answered from a snapshot taken before the script ran (20 |
 
 *`·` after a WPT figure means **carried forward**, not measured this tick.*
