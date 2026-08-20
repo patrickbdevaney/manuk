@@ -10240,3 +10240,81 @@ clothes.** Report upstream; if it is ever taken locally, scope it as a subsystem
 `minmax(auto`, and the eight `grid-items-minimum-width*` files carry 884 `data-expected-*` assertions
 — **an upper bound on the family, not a claim about this construct**, since those files also exercise
 margins, orthogonal flows and `vertical-lr` and the probe shows only one arm broken.
+
+## AN ABSPOS GRID CHILD'S AREA LOSES THE CONTENT-ALIGNMENT OFFSET — a taffy index, and TWO priced refusals (t1311)
+
+`css/css-grid/abspos` is 1,673 failing subtests and **1,343 of them carry ONE assertion message**
+(`assert_equals: width`) — the strongest single-mechanism forecast on the board. The mechanism is
+exact, and it is upstream.
+
+**Taffy stores tracks and gutters ALTERNATING** (`[gutter, track, gutter, track, …]`), so grid line
+`n` is entry `2n`. Its two consumers then disagree by exactly one index —
+`taffy-0.12.1/src/compute/grid/mod.rs`:
+
+```text
+   in-flow item   line 588    columns[item.column_indexes.start + 1].offset    ← the TRACK
+   abspos  item   line 672    columns[index].offset                            ← the GUTTER
+```
+
+And `align_tracks` (`compute/grid/alignment.rs:47`) gives the content-alignment share to the
+**track**, never to the gutter that precedes it:
+
+```rust
+let offset = if is_non_collapsed_track { compute_alignment_offset(…) } else { 0.0 };
+track.offset = total_offset + offset;
+```
+
+So the abspos grid area's START edges are short by whatever `justify-content` / `align-content`
+distributed before that line. Measured, `grid-template-columns: 100px 50px; width: 400px;
+justify-content: center`, an abspos child at `grid-column: 1/2` with `width: 100%`:
+
+```text
+                     Chrome        manuk
+   grid-column 1/2   x=125 w=100   x=0   w=225      ← 125 + 100: a left edge that never moved
+   grid-column 2/3   x=225 w=50    x=225 w=50   ✓   ← line 2 is not the first line
+```
+
+⚠ It generalises past the first line: under `space-between` the share lands on tracks 2..n, so every
+line after the first is short instead. The upstream fix is `columns[index]` → `columns[index + 1]`
+for the two start edges — the same expression the in-flow path already uses.
+
+### ⚠⚠⚠ TWO LOCAL FIXES WERE BUILT, MEASURED, AND BOTH ARE TRADES
+
+Same binary twice, same hour, `css/css-grid` (a ±120 area — the baseline itself read 8340 and 8219 on
+two runs of the pristine tree, which is why both arms were re-measured against a fresh one):
+
+```text
+   pristine                                                8219 / 14099 = 58.3%
+   (a) in-flow phantom in grid_area_containing_block        8007 / 14586 = 54.9%    −212
+   (b) …plus routing definite placements to the abspos pass  7031 / 14179 = 49.6%   −1188 more
+```
+
+**(a) asks taffy's CORRECT consumer** — a second, in-flow, `0×0`, self-start phantom carrying the
+probe's placement, whose layout position *is* the grid area origin. It works: the probe goes
+Chrome-exact on all three rows. It also **occupies a grid cell**, so an auto-placed sibling in the
+probe tree is pushed past it, and on an intrinsic-track grid that changes the track sizes the
+containing block is read from. Right answer, wrong blast radius.
+
+**(b) is the one worth remembering.** t1126 kept definitely-placed abspos grid children on taffy's own
+placement *because the abspos pass could not build the grid area*. Once (a) could build it, routing
+them through `position_absolutes` looked like pure deduplication — one implementation of Grid §9
+instead of two. It cost another **1,188 subtests**, because:
+
+> ⭐⭐⭐ **THE CONTAINING BLOCK WAS NEVER THE WHOLE RULE; IT WAS THE PART THAT WAS EASY TO SEE.**
+> Grid §9 also makes `justify-self` / `align-self`, `stretch`, and the safe/unsafe alignment keywords
+> apply to an absolutely-positioned child **within** its grid area. `layout_abs` implements none of
+> that — it knows insets, margins and percentages. Handing it the right rectangle fixes the rectangle
+> and loses the alignment.
+
+**The generalisation, which is the reusable part: when a duplicate is protected by an exclusion, the
+exclusion may be guarding a SECOND capability the other path also provides.** Delete it and you trade
+the one you were fixing for the one you never enumerated. Before removing a fork in the road, list
+what the branch you are deleting *does*, not what it *is for*.
+
+### Priced, so the refusal is a decision
+
+Upstream is a two-line change; taking it locally means a `[patch]` fork of a 40k-line borrowed engine,
+which is exactly what I2 refuses (`minmax(auto, …)` above, and t1305's Stylo SVG longhands). A local
+supplement would have to re-derive `compute_alignment_offset` — taffy's own alignment distribution —
+which is option 4 wearing option 3's clothes. **Report upstream.** Worth ~1,343 subtests in
+`css/css-grid/abspos` alone, plus part of `css/css-grid/alignment`'s 379 `offsetLeft` failures.

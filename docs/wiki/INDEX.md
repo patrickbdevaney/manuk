@@ -498,6 +498,9 @@
   - L10173 · fit-content(<length>) was mapped to auto — a clamp implemented as a stretcher (tick 1293)
   - L10191 · ⭐⭐⭐ …and finding it killed a FIFTH reading in this area
   - L10204 · minmax(auto, <smaller>) — the automatic minimum is lost, and it is an UPSTREAM boundary (tick 1294)
+  - L10244 · AN ABSPOS GRID CHILD'S AREA LOSES THE CONTENT-ALIGNMENT OFFSET — a taffy index, and TWO priced refusals (t1311)
+  - L10281 · ⚠⚠⚠ TWO LOCAL FIXES WERE BUILT, MEASURED, AND BOTH ARE TRADES
+  - L10314 · Priced, so the refusal is a decision
 
 ## browser-capabilities.md
 `docs/wiki/browser-capabilities.md`
@@ -2275,4 +2278,4 @@
   - L231 · Both named mechanisms are subsystem work
 
 ---
-2182 sections across 22 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+2185 sections across 22 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.

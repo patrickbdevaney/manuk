@@ -85980,3 +85980,97 @@ NEXT, ranked.
     to JS (t1302).
 (d) ⭐⭐ Publish the `animation-*` and `transition-*` longhands through CSSOM (carried from t1308).
 (e) ⭐⭐ Sweep the workaround comments for DEAD PREMISES (check #122 steer #3).
+
+## Tick 1311 — the containing block was never the whole rule: an abspos grid area, one taffy index, and two priced refusals (2026-08-19)
+
+TICK SHAPE: measurement + refusal. Board re-run at the top of this tick: **unchanged** (★
+CSS-LAYOUT), and its #1 row is now `css/css-grid` at 5,880 failing.
+
+FORECAST, run before any code. Histogrammed `css/css-grid`'s 5,880 failures by subdirectory and then
+by assertion message. `abspos` is 1,673 of them and **1,343 carry ONE message** —
+`assert_equals: width` — the largest same-signature cluster on the board, which is the shape that
+means *one fix flips them all* (the lever board's own forecast rule).
+
+⚠ Two other candidate masses were **read out of the journal rather than re-derived**, exactly as the
+method says: `grid-minimum-size-grid-items-*` is t1294's closed taffy refusal, and every
+`vertical-rl`/`vertical-lr`/`orthogonal` file is the `writing-mode` gap t1276 named. Two other areas
+were priced and dropped in minutes for the same reason: `css/css-values`' top mass is
+`calc-size()`/`interpolate-size` (**2,542 subtests** — and `grep -rl calc-size stylo-0.19.0` returns
+NOTHING: the functions do not exist in the borrowed engine at all), and `css/css-fonts`' second mass
+is `font-size-adjust` (954), whose `longhands.toml` entry reads `engine = "gecko"` — t1305's refusal,
+one property over.
+
+DIAGNOSIS — **and it is exact, upstream, and two lines.** Taffy stores tracks and gutters
+ALTERNATING, so grid line `n` is entry `2n`; its two consumers then disagree by one index
+(`taffy-0.12.1/src/compute/grid/mod.rs`):
+
+```text
+   in-flow item   line 588    columns[item.column_indexes.start + 1].offset   ← the TRACK
+   abspos  item   line 672    columns[index].offset                           ← the GUTTER
+```
+
+`align_tracks` gives the content-alignment share to the **track** and never to the gutter before it,
+so an abspos grid area's START edges are short by whatever `justify-content`/`align-content`
+distributed. Probed against Chrome, `grid-template-columns: 100px 50px; width: 400px;
+justify-content: center`, child at `grid-column: 1/2` with `width: 100%`: Chrome `x=125 w=100`, we
+produce `x=0 w=225` — **125 + 100, the signature of a left edge that never moved** — while the same
+child at `grid-column: 2/3` is exact, because line 2 is not the first line.
+
+RESULT — **both local fixes are TRADES, and the ratchet refuses them.** Measured same binary twice,
+same hour (`css/css-grid` is a ±120 area: the pristine tree itself read **8340** and **8219** on two
+runs, which is why both arms were re-measured against a fresh baseline rather than against the first
+number):
+
+```text
+   pristine                                                  8219 / 14099 = 58.3%
+   (a) in-flow phantom in grid_area_containing_block          8007 / 14586 = 54.9%    −212
+   (b) …plus routing definite placements to the abspos pass   7031 / 14179 = 49.6%   −1188 more
+```
+
+**(a) asks taffy's CORRECT consumer instead of re-deriving the offset**: a second phantom, in flow,
+`0×0`, `align-self`/`justify-self: start`, carrying the probe's placement — its layout position *is*
+the grid area origin. It works; the probe went Chrome-exact on all three rows
+(`b=[125,50,100,70]`). It also **occupies a grid cell**, so an auto-placed sibling in the probe tree
+is pushed past it, and on an intrinsic-track grid that moves the very tracks the containing block is
+read from. Right answer, wrong blast radius.
+
+⭐⭐⭐ **(b) IS THE ONE WORTH REMEMBERING: THE CONTAINING BLOCK WAS NEVER THE WHOLE RULE; IT WAS THE
+PART THAT WAS EASY TO SEE.** t1126 kept definitely-placed abspos grid children on taffy's placement
+*because the abspos pass could not build the grid area*. Once (a) could build it, routing them
+through `position_absolutes` looked like pure deduplication — one implementation of Grid §9 instead
+of two, which is the move this loop has rewarded a dozen times (t1309 deleted a whole duplicate
+interpolator for +653). It cost **1,188 subtests**, because Grid §9 also makes `justify-self` /
+`align-self`, `stretch` and the safe/unsafe keywords apply to an abspos child *within* its grid area,
+and `layout_abs` implements none of that — it knows insets, margins and percentages. **Handing it the
+right rectangle fixes the rectangle and loses the alignment.**
+
+> **The generalisation: when a duplicate is protected by an EXCLUSION, the exclusion may be guarding a
+> SECOND capability the other path also provides.** Delete it and you trade the one you were fixing
+> for the one you never enumerated. Before removing a fork in the road, list what the branch you are
+> deleting *does*, not what it *is for*. This is the exact inverse of t1303's *"removing a duplicate
+> is an INTEGRATION, not a cleanup"* — there, integrating first was the cure; here, there is nothing
+> to integrate into yet.
+
+⚠ **And the refusal is priced rather than evaded.** Upstream the fix is `columns[index]` →
+`columns[index + 1]` on two lines. Taking it locally means a `[patch]` fork of a 40k-line borrowed
+engine — precisely what I2 refuses (the `minmax(auto, …)` refusal in `docs/wiki/box-layout.md`, and
+t1305's Stylo SVG longhands). A hand-rolled supplement would have to re-derive taffy's own
+`compute_alignment_offset` distribution, i.e. option 4 wearing option 3's clothes. **Report
+upstream.** The tree is left pristine: no engine source changed this tick.
+
+CONTROLS. The pristine baseline was re-measured twice (8340, 8219) precisely because this area's
+counts move; every arm above is against the 8219 run, taken minutes apart from the same build.
+
+NEXT, ranked.
+(a) ⭐⭐⭐ **Grid §9 self-alignment for abspos children inside `layout_abs`** — `justify-self` /
+    `align-self` / `stretch` within the grid area. It is the missing half that made (b) a trade, and
+    building it turns (b) from −1,188 into the unlock for the 1,343-subtest cluster. Subsystem-sized,
+    and now the highest-value *named* item on the layout line.
+(b) ⭐⭐⭐ **Resolve `InterpolateMatrix` / `AccumulateMatrix`** (carried from t1310): every mismatched
+    transform-list interpolation renders as **no transform at all**.
+(c) ⭐⭐ Re-bank the ratchet marks from a sweep over a QUIET tree (carried from t1310).
+(d) ⭐⭐ `test_font_family_parsing` — 530 failing in ONE file, of which 304 are *"rule declaration
+    shouldn't parse"*: our CSSOM `cssText` echoes the source instead of re-serialising parsed
+    declarations, so every invalid declaration "parses".
+(e) ⭐⭐ `CSS.supports('font-variation-settings', '"test" 20')` answers **false** for a property the
+    servo build really does have — a FALSE NO, costing 418 subtests in `css/css-fonts`.
