@@ -87782,3 +87782,97 @@ NEXT, ranked.
 (c) ⭐⭐ **THE FORCED-REFLOW FLUSH** (t1324's (b)) — now with a 40-line repro that dies in 5.8s.
 (d) ⭐⭐ **The 25 unscored in-scope sites** — scorability 81.2% caps M1. Split instrument from engine
     first (check #83).
+
+## Tick 1326 — the anchor's top mechanism is `column-count`, and it is gated on FRAGMENTATION, not on the column algorithm (2026-08-20)
+
+TICK SHAPE: measurement / refusal. Board re-run at the top of this tick: **unchanged**. Took t1325's
+NEXT (a) — the next stable anchor — and the tick is the REFUSAL that measurement produced. ⚠ **NO
+ENGINE SOURCE CHANGED: the implementation was written, measured against Chrome, and reverted.**
+
+### THE ANCHOR, CHOSEN BY ITS ERROR BAR FIRST (t1322's rule)
+
+```text
+   www.crazyshop.pl   68.2% · 68.2%   spread 0.0 on 1,402 ids   — twice oilprice's sample
+```
+
+### THE MECHANISM, READ FROM THE ABSOLUTE `e.g.` LINE (t1325's lesson, applied first this time)
+
+```text
+   72 hits  geometry/mis-sized: width ~8px (<a>)
+      e.g. nav/…/li(9)/…/ul(1)/li(18)/a(1):  [240 432 170x36]  vs  [50 828 185x36]
+```
+
+x 240 → 50 and y 432 → 828: not a width defect at all but a **column** one. One Chrome probe on the
+container named it:
+
+```text
+   <ul class="mega-links-4-columns"> display=block  cols=4  w=740px  rect=740x468
+   <li>                                              w=170px  rect=170x36
+```
+
+`column-count: 4`. The property has **no ComputedStyle field at all** — dropped at parse, so
+`getComputedStyle(el).columnCount` is `undefined` where Chrome says `4` — and 18 links Chrome flows
+into four 170px columns we stack into one.
+
+### THE IMPLEMENTATION THAT LOOKED OBVIOUS, AND THE MEASUREMENT THAT KILLED IT
+
+No fragmentation is needed if the children are atomic: lay them out **once** in a box one column
+wide, then walk the sibling boxes, assign each to a column and `translate` it. That was written —
+`column_count` on `ComputedStyle`, a minimal-cascade parse, a `partition_into_columns` post-pass in
+the BFC arm of `layout_block`, with an explicit refusal for any child taller than the balanced
+target. Then measured:
+
+```text
+   18 <li> of height 36, column-count: 4, width 740, gap 20
+     Chrome  u[0,0 740x168]  i0[0,0 170x36]  i8[190,120 170x36]  i12[380,108 170x36]
+             i4[0,0 360x168]   ← a UNION spanning columns 1 AND 2
+```
+
+⭐⭐⭐ **Chrome balanced to 168px and SPLIT `#i4` ACROSS THE COLUMN BREAK.** Four items fill 144;
+the fifth would reach 180; so rather than move it, Chrome fragments it, and
+`getBoundingClientRect` returns the union of its two fragments. That 360×168 box is one list item cut
+in half.
+
+⚠ **My guard was the wrong guard, and only the measurement could say so.** *"Refuse if a child is
+taller than a column"* never fires here — every child is 36px in a 168px column. Chrome splits
+whenever a child **STRADDLES** the target, which for equal-height items is almost always. The
+`column-count: 2` control beside it (4 items, no straddle) matches Chrome to the pixel, which is what
+proves the algorithm was right and the *scope* was wrong.
+
+### THE REFUSAL, AND WHY IT IS THE TICK
+
+An honest partition-only multicol must refuse unless every column boundary falls exactly on a child
+boundary — **which is precisely the case that does not occur on the anchor that motivated it.** So:
+
+- reverted rather than landed (`git checkout` on both source files, verified clean);
+- ⚠ `column-count` is deliberately **not published to `getComputedStyle`** either. A property this
+  engine can report and cannot apply is the defect t1314 recorded in BOTH directions
+  (`scrollbar-width` reported-not-applied, `field-sizing` applied-not-reported). Adding a third
+  instance to buy a CSSOM number, with the invariant already named at check #124 as the one under
+  most pressure, would be the same mistake made deliberately;
+- `CONSTELLATION.tsv`'s `multicol` row now carries the reason rather than only the symptom. t225 said
+  *"column-count produces no column boxes"*. It now says **multicol is gated on BOX FRAGMENTATION,
+  not on the column algorithm** — the algorithm is twenty lines and they are written down.
+
+⭐ *A `missing` row that names its BLOCKER is worth more than one that names its symptom*: the next
+person to pick multicol now knows the tick is "fragment a box across a break", and that no amount of
+column arithmetic gets there.
+
+### ⚠ WHAT THE PROBE ALSO FOUND AND DID NOT CHASE
+
+`crazyshop.pl`'s coverage is 91.2% and **135 boxes are missing**, all of them under four top-level
+roots (`body/div(1)`, `body/div(4)`, `body/section(2)`, and items beneath `main(1)`/`nav(1)`). ⚠ A
+missing `div` among body's children **shifts every `nth-of-type` index after it**, so a single absent
+subtree can present as a broad missing set — the count is an upper bound on the number of real
+defects, not a list of them. Named for the next tick; not measured further here.
+
+NEXT, ranked.
+(a) ⭐⭐⭐ **THE MISSING TOP-LEVEL SUBTREES on `crazyshop.pl`** — 135 boxes, 4 roots. First question is
+    how many body children each engine has, because one absent `div` shifts every path after it and
+    would make the number look far worse than the defect.
+(b) ⭐⭐⭐ **AUTO table layout** (t1325's (b)) — the twelve-row harness is written and the same
+    fixture family already shows the divergence (`50% + 300px` under `table-layout: auto`: Chrome
+    1164 + 12, ours 928 + 248).
+(c) ⭐⭐ **BOX FRAGMENTATION** as its own subsystem entry, which unlocks multicol AND `break-inside`
+    AND paged output. Not a tick; needs a decomposition session, like the root-box item t1321 refused.
+(d) ⭐⭐ **THE FORCED-REFLOW FLUSH** (t1324's (b)) — 40-line repro, dies in 5.8s.

@@ -518,6 +518,7 @@
   - L10548 · table-layout: fixed — a width: 100% column beside a fixed sidebar took the whole table (t1325)
   - L10565 · The rule, from twelve Chrome measurements on one 1000px table
   - L10601 · Measured
+  - L10615 · column-count is gated on BOX FRAGMENTATION, not on the column algorithm (t1325 probe, refused)
 
 ## browser-capabilities.md
 `docs/wiki/browser-capabilities.md`
@@ -2335,4 +2336,4 @@
   - L231 · Both named mechanisms are subsystem work
 
 ---
-2242 sections across 22 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+2243 sections across 22 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.

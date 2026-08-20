@@ -11,12 +11,12 @@
 
 | | value | over |
 |---|---|---|
-| ticks landed | **1012** | ticks 1–1325 |
-| median tick cycle | **30m** | 1011 intervals |
+| ticks landed | **1013** | ticks 1–1326 |
+| median tick cycle | **30m** | 1012 intervals |
 | median, last 10 | **59m** | 10 intervals |
 | fastest / slowest | 5s / 5.4d | |
-| **ticks per hour** | **1.04** | 969.7h elapsed |
-| median verify wall | **63s** | 951 ticks |
+| **ticks per hour** | **1.04** | 970.3h elapsed |
+| median verify wall | **63s** | 952 ticks |
 | wall trend | 39s → 17m — getting slower ⚠️ | first 3 vs last 3 |
 
 The **cycle** is the real unit: implement → debug → verify wall → land. The wall is only part of
@@ -31,7 +31,7 @@ it, and a wall that grows taxes every future tick, so it is tracked separately f
 * **✅ rows in the capability ledger**: 144 → **642**
 * **Bar 0 — oracle hangs**: 0 of 265 sites
 
-**475 of 1012 ticks** (47%) moved a
+**475 of 1013 ticks** (47%) moved a
 user-visible capability. The rest were instruments, infrastructure and corrections — and the
 ledger says the corrections were not overhead: three of its top three priorities were phantoms,
 and finding that out redirected everything after it.
@@ -1109,5 +1109,6 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 | **1323** | 2026-08-20 12:41 | 9m | audit | 17m | +342/−36 | 500 | 81 | 56.0% · | the audit tick: the constitution already contained t1319's diagnosis, and it carried no st |
 | **1324** | 2026-08-20 13:38 | 57m | instrument | 17m | +362/−35 | 501 | 81 | 56.0% · | the constitution's #1 item states a RATE, nothing had ever measured it, and it is 0.0005 n |
 | **1325** | 2026-08-20 14:42 | 64m | capability | 17m | +443/−46 | 501 | 81 | 56.0% · | a `width: 100%` table column took the whole table, and one width error misplaced 666 of 66 |
+| **1326** | 2026-08-20 15:21 | 38m | measurement | 17m | +167/−34 | 501 | 81 | 56.0% · | the anchor's top mechanism is `column-count`, and it is gated on FRAGMENTATION, not on the |
 
 *`·` after a WPT figure means **carried forward**, not measured this tick.*

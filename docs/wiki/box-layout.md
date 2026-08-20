@@ -10611,3 +10611,40 @@ handed leftovers to percentages would move `50% + 300px` (which must be `500 + 5
 different tree AND a different subtest population. The mark was re-based on the measured pair rather
 than inherited, which is `CONSTITUTION.MD` PART VI's own rule: *a banked number's harness is the tree
 that produced it.*
+
+## `column-count` is gated on BOX FRAGMENTATION, not on the column algorithm (t1325 probe, refused)
+
+`www.crazyshop.pl`'s navigation is `ul.mega-links-4-columns { column-count: 4 }` — 18 links Chrome
+flows into four 170px columns and we stack into one. It is the top mechanism on that anchor (72 of its
+mis-sized `<a>` boxes) and the property has **no ComputedStyle field at all**, so
+`getComputedStyle(el).columnCount` answers `undefined` where Chrome answers `4`.
+
+The obvious implementation is a **post-pass**: lay the children out once in a box one column wide,
+then walk the resulting sibling boxes, assign each to a column and translate it. No fragmentation
+needed, because each child stays whole. It was written, and then measured against Chrome:
+
+```text
+    18 <li> of height 36, column-count: 4, width 740, gap 20
+      Chrome   u[0,0 740x168]  i0[0,0 170x36]  i8[190,120 170x36]  i12[380,108 170x36]
+               i4[0,0 360x168]   ← a UNION spanning columns 1 AND 2
+```
+
+⭐⭐⭐ **Chrome balanced to 168px and SPLIT `#i4` across the column break.** Four items fill 144px;
+the fifth would reach 180; so instead of moving it, Chrome fragments it. `getBoundingClientRect`
+returns the union of its fragments, which is what that 360×168 box is.
+
+So a no-fragmentation multicol is Chrome-exact **only when the item count divides evenly** — the
+`column-count: 2` case beside it (4 items) matches to the pixel — and diverges on the common case.
+The guard *"refuse if any child is taller than a column"* is not enough: Chrome splits whenever a
+child **straddles** the target, which for equal-height items is almost always.
+
+**The version that would be honest refuses unless every column boundary falls exactly on a child
+boundary — which is precisely the case that does not occur on the anchor that motivated it.** So the
+work was reverted rather than landed, and `CONSTELLATION.tsv`'s `multicol` row now carries the reason:
+multicol is gated on box fragmentation, a machinery this engine does not have, and not on the column
+algorithm, which is twenty lines.
+
+⚠ `column-count` is also deliberately NOT published to `getComputedStyle` in the meantime. A property
+this engine can report and cannot apply is the defect t1314 recorded in both directions
+(`scrollbar-width` reported-not-applied, `field-sizing` applied-not-reported), and adding a third
+instance to buy a CSSOM number would be the same mistake with the invariant already named.
