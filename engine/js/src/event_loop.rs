@@ -32,7 +32,48 @@ use mozjs::rust::Runtime;
 /// `fetch`/`XMLHttpRequest` APIs whose I/O the Rust [`run_with_fetcher`] loop performs.
 /// Evaluated once per global.
 /// A runaway task chain must not hang the browser. See `run_deferred`.
-const MAX_TASKS_PER_DRAIN: u32 = 20_000;
+pub const MAX_TASKS_PER_DRAIN: u32 = 20_000;
+
+/// **The ceiling for a drain on a page that has ALREADY given up once this navigation.**
+///
+/// ⚠⚠⚠ `page_stopped_converging()` has existed since t666 and gated exactly ONE consumer — the
+/// dynamic-script ROUND loop. The load PHASE sequence never asked it, so a page that only spins
+/// (injecting no scripts, so the round loop is never entered) paid the full ceiling once per phase.
+/// Measured on `G_RUNAWAY`'s own two-line fixture, with the engine's own phase ledger:
+///
+/// ```text
+///     phase                              ms    gave_up
+///     cascade+layout+blocking scripts  2280          1
+///     deferred scripts                 2286          1
+///     DOMContentLoaded                 2331          1
+///     load event                       2405          1     ->  9.3s, four give-ups
+/// ```
+///
+/// ⭐ **The page demonstrated it was not converging at the FIRST give-up, and we asked it four more
+/// times**, each with a fresh 20,000-task grace. That is the defect `G_DRAIN_BOUNDS_THE_PAGE` closed
+/// for ROUNDS, on an axis nobody looked at — and it is invisible to that gate's fixture, which must
+/// both spin AND inject to enter the round loop at all. t660/t661 argued about whether a spin-only
+/// fixture could show the ROUND defect (it cannot); nobody asked what a spin-only page costs on the
+/// PHASE axis, which is where it costs everything.
+///
+/// ⚠ **The later drains are SHORTENED, not skipped.** `DOMContentLoaded` and `load` must still fire
+/// and their handlers must still run — a page whose listeners never execute is a different and worse
+/// failure than a slow one. 250 tasks is two orders of magnitude more than a converging page's
+/// load-time chain (tens of tasks) and two orders less than the grace a page gets before it has
+/// proven anything.
+pub const MAX_TASKS_AFTER_GIVING_UP: u32 = 250;
+
+/// The ceiling a drain runs to, given whether this navigation has already given up once.
+/// Extracted and PUBLIC so the policy is assertable from a gate binary the wall actually runs:
+/// see `engine/page/tests/g_drain_ceiling.rs`. (`manuk-js`'s own tests are not in `verify.sh`'s
+/// `T · crate tests` list, so a test placed here would be documentation.)
+pub fn drain_ceiling(already_gave_up: bool) -> u32 {
+    if already_gave_up {
+        MAX_TASKS_AFTER_GIVING_UP
+    } else {
+        MAX_TASKS_PER_DRAIN
+    }
+}
 
 thread_local! {
     /// **Did a drain end because the page was not converging, rather than because it was done?**
@@ -59,6 +100,12 @@ thread_local! {
     /// that experiment. A retraction is a verdict on the evidence, not on the hypothesis.
     static DRAIN_STOPPED_SHORT: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
     static DRAIN_CEILING_HITS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+}
+
+/// Set the give-up flag from a gate, so `G_DRAIN_CEILING_SHORTENS` can assert the flag's whole
+/// lifecycle (cleared → set → observed → cleared) without needing a page that spins for seconds.
+pub fn note_drain_stopped_short_for_test() {
+    note_drain_stopped_short();
 }
 
 /// Record that a drain gave up rather than finished. See [`DRAIN_STOPPED_SHORT`].
@@ -7677,6 +7724,10 @@ pub fn run_deferred(rt: &mut Runtime, global: mozjs::rust::HandleObject) -> Resu
     // ⚠ A snapshot, not a reset: drains NEST, and a reset makes an inner drain erase the outer
     // drain's accounting.
     let reflow_at_start = crate::dom_bindings::reflow_cost();
+    // See [`MAX_TASKS_AFTER_GIVING_UP`]: a page that has already hit a ceiling this navigation does
+    // not get a fresh full grace in the next phase. Read ONCE, at the top, so a give-up recorded by
+    // this same drain cannot shorten it retroactively.
+    let ceiling = drain_ceiling(page_stopped_converging());
     let mut preempted = false;
     'drain: loop {
         let Some(()) = preempt_aware(microtask_checkpoint(rt, global))? else {
@@ -7700,7 +7751,7 @@ pub fn run_deferred(rt: &mut Runtime, global: mozjs::rust::HandleObject) -> Resu
             // The ceiling is deliberately generous: a real page's load-time task chain is tens of
             // tasks, not tens of thousands. Crossing it means the page is not converging, and the right
             // answer is to render what we have rather than to keep spinning forever.
-            if count >= MAX_TASKS_PER_DRAIN {
+            if count >= ceiling {
                 let (reflow_n, reflow_us) = {
                     let (n, us) = crate::dom_bindings::reflow_cost();
                     (n - reflow_at_start.0, us - reflow_at_start.1)
@@ -8077,6 +8128,10 @@ where
     // ⚠ A snapshot, not a reset: drains NEST, and a reset makes an inner drain erase the outer
     // drain's accounting.
     let reflow_at_start = crate::dom_bindings::reflow_cost();
+    // See [`MAX_TASKS_AFTER_GIVING_UP`]: a page that has already hit a ceiling this navigation does
+    // not get a fresh full grace in the next phase. Read ONCE, at the top, so a give-up recorded by
+    // this same drain cannot shorten it retroactively.
+    let ceiling = drain_ceiling(page_stopped_converging());
     let mut preempted = false;
     'drain: loop {
         let Some(()) = preempt_aware(microtask_checkpoint(rt, global))? else {
@@ -8140,7 +8195,7 @@ where
         // Both bounds, checked on the task boundary and before either `continue` — including the
         // `did_io` one, because "a delivered result may have scheduled more work" is precisely how a
         // polling page loops here forever.
-        if count >= MAX_TASKS_PER_DRAIN {
+        if count >= ceiling {
             tracing::warn!(
                 count,
                 elapsed_ms = started.elapsed().as_millis() as u64,

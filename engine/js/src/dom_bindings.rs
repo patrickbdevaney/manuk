@@ -21567,7 +21567,13 @@ mod extra_name_stability {
                 ),
             ] {
                 for pseudo in [false, true] {
-                    let got: Vec<&str> = extra_computed_props(cs, cb, rect, pseudo)
+                    // ⚠ `tracks` (the grid track sizes) was added to this signature and only the
+                    // production caller was updated, so THIS FILE'S TEST BUILD HAS NOT COMPILED
+                    // SINCE. It went unnoticed because `verify.sh`'s `T · crate tests` list does not
+                    // include `manuk-js` at all — 22 `#[test]`s in the JS engine, the constitution's
+                    // own "largest unsafe surface in the codebase", have not run in the wall. `None`
+                    // is the no-grid case, which is what every row of this fixture is.
+                    let got: Vec<&str> = extra_computed_props(cs, cb, rect, pseudo, None)
                         .into_iter()
                         .map(|(n, _)| n)
                         .collect();

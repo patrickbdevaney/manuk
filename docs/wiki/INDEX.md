@@ -1751,6 +1751,11 @@
   - L3770 · ⭐⭐ One file, two idioms
   - L3776 · ⭐⭐⭐ The out-of-bounds case is the MILD one
   - L3790 · ⚠⚠ The first gate was VACUOUS and was deleted
+  - L3808 · The hang guard's grace was paid once per LOAD PHASE, not once per navigation (t1330)
+  - L3827 · The signal existed and had one consumer
+  - L3839 · ⚠⚠ clear_convergence_state() had no production caller
+  - L3850 · ⚠ And the end-to-end instrument was built, measured, and thrown away
+  - L3859 · ⚠⚠ manuk-js's tests do not run in the wall
 
 ## Manuk Daily-Driver Usability Roadmap (synthesized, tick 138)
 `docs/wiki/lever-map.md`
@@ -2346,4 +2351,4 @@
   - L231 · Both named mechanisms are subsystem work
 
 ---
-2253 sections across 22 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+2258 sections across 22 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.

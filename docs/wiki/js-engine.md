@@ -3804,3 +3804,63 @@ dead handle can actually be constructed. It is proven RED **two ways**, and the 
 
 > **A gate that cannot fail is worse than no gate — and the only reason this one was caught is that
 > the mutation test was run before the write-up, not after.**
+
+## The hang guard's grace was paid once per LOAD PHASE, not once per navigation (t1330)
+
+A page whose JavaScript never reaches quiescence gets a generous grace (20,000 macrotasks) and then
+the engine paints what it has. ⚠⚠ It got that grace **once per load phase**, and four phases drain.
+From the engine's own ledger (`RUST_LOG=manuk_page=info`), on a page whose entire content is two
+runaway timers:
+
+```text
+    phase                              before        after
+    cascade+layout+blocking scripts   2280ms       2319ms      <- the full grace, once
+    deferred scripts                  2286ms         28ms
+    DOMContentLoaded                  2331ms         29ms
+    load event                        2405ms         28ms
+                                     ───────       ──────
+                                       9.3s          2.4s
+```
+
+`G_RUNAWAY`, whose fixture is exactly that page, went **13–14s → 0.88s**.
+
+### The signal existed and had one consumer
+
+`page_stopped_converging()` has existed since t666 and gated exactly one thing: the dynamic-script
+ROUND loop (`G_DRAIN_BOUNDS_THE_PAGE`). ⭐ That gate's own header explains why its fixture must both
+spin AND inject — a spin-only page never enters the round loop — and nobody then asked what a
+spin-only page costs on the PHASE axis. t660/t661 argued at length about whether a spin-only fixture
+could show the ROUND defect (it cannot). It shows this one perfectly.
+
+A drain that follows a give-up now runs to **250 tasks** instead of 20,000. ⚠ **Shortened, not
+skipped:** `DOMContentLoaded` and `load` must still fire and their handlers still run — a page whose
+listeners never execute is a different and worse failure than a slow one.
+
+### ⚠⚠ `clear_convergence_state()` had no production caller
+
+Its doc predicted the hazard exactly — *"a flag whose reset lives somewhere else is a flag that
+eventually leaks across navigations and silently stops a healthy page from running its scripts"* — and
+the leak had shipped: outside the round loop the flag was never cleared, so **one non-converging page
+poisoned every later navigation in the process**.
+
+⭐ It stayed latent because the flag had a single consumer whose failure mode is invisible (a round
+loop giving up early looks like a page with nothing to do). **A second consumer is what makes a stale
+flag visible.** The reset now sits beside `manuk_net::begin_navigation()`.
+
+### ⚠ And the end-to-end instrument was built, measured, and thrown away
+
+A per-navigation macrotask counter would have made the assertion machine-independent (`G_RUNAWAY`'s
+20-second clock went red three times in one session while the engine never changed). It read **20,000
+whether the fix was in or out** — the drains run on more than one thread and a thread-local sees only
+its own, while the red patch took 25.06s against the fixed 10.11s. A gate that cannot go red is not a
+gate, so the counter was deleted and `G_DRAIN_CEILING_SHORTENS` asserts the *policy* instead, with the
+limitation in its own header.
+
+### ⚠⚠ `manuk-js`'s tests do not run in the wall
+
+Found while looking for a home for that gate: `extra_computed_props` gained a `tracks` parameter and
+only the production caller was updated, so **the crate's test build had not compiled since** — and
+nobody noticed because `verify.sh`'s `T · crate tests` list does not include `manuk-js` at all. 21
+tests over what the constitution calls *"the largest unsafe surface in the codebase"*. The compile
+break is fixed (12 pass, 9 ignored); the crate still cannot join `T`, because the binary SIGSEGVs at
+SpiderMonkey teardown — the same shutdown fault the WPT runner reports as `ACCUM`.

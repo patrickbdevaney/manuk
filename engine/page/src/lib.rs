@@ -3576,6 +3576,22 @@ impl Page {
         // Here and not in `Page::load`, deliberately: `render_iframe` calls `load` for a SUBFRAME, and
         // resetting there would clear the parent navigation's state in the middle of it.
         manuk_net::begin_navigation();
+        // ⚠⚠⚠ **AND THE CONVERGENCE FLAG, WHICH HAD NO PRODUCTION CALLER AT ALL.**
+        //
+        // `clear_convergence_state()` resets *"has a drain given up"*, and its own doc says the reset
+        // lives with the round loop **on purpose** — *"a flag whose reset lives somewhere else is a
+        // flag that eventually leaks across navigations and silently stops a healthy page from
+        // running its scripts."* The hazard was named exactly right and then landed anyway: outside
+        // the round loop the flag was never cleared, so a single non-converging page poisoned every
+        // LATER navigation in the process — the round loop stopped asking, permanently.
+        //
+        // It was latent because the flag had exactly one consumer. t1330 gave it a second (the drain
+        // ceiling itself), which would have turned a silent staleness into every subsequent page
+        // getting a 250-task grace it never earned. **A new consumer is what makes a stale flag
+        // visible**, and the answer is the reset the comment predicted, at the one place that means
+        // "a new page": beside `begin_navigation`.
+        #[cfg(feature = "spidermonkey")]
+        manuk_js::event_loop::clear_convergence_state();
         let nav_started = std::time::Instant::now();
         let mut nav_at = nav_started;
         let mut nav_accounted_ms = 0u64;

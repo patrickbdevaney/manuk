@@ -88187,3 +88187,97 @@ NEXT, ranked.
 (c) ⭐⭐ **THE FORCED-REFLOW FLUSH** (t1324's (b)) — 40-line repro, dies in 5.8s.
 (d) ⭐⭐ **The 25 unscored in-scope sites** — scorability 81.2% caps M1; split instrument from engine
     first (check #83).
+
+## Tick 1330 — a page that never settles paid the hang guard's full grace FOUR TIMES, and the flag that could have stopped it had no caller (2026-08-20)
+
+TICK SHAPE: capability/performance fix + gate. Board re-run at the top of this tick: **unchanged**.
+Reached from a blocked wall: `G_RUNAWAY` went red three times in this session, and the honest question
+*"is 13–14s against a 20s bar the box or the engine?"* had an answer nobody had asked for.
+
+### THE ENGINE'S OWN LEDGER ANSWERED IT IN ONE RUN
+
+`RUST_LOG=manuk_page=info` on a page whose entire content is two runaway timers:
+
+```text
+   phase                              ms    gave_up
+   cascade+layout+blocking scripts  2280          1
+   deferred scripts                 2286          1
+   DOMContentLoaded                 2331          1
+   load event                       2405          1      ->  9.3s, FOUR full graces
+```
+
+⭐⭐⭐ **The page demonstrated it was not converging at the FIRST give-up and was asked four more
+times**, each with a fresh 20,000-task budget.
+
+### ⚠⚠ THE SIGNAL EXISTED, HAD ONE CONSUMER, AND THE OTHER AXIS NEVER ASKED
+
+`page_stopped_converging()` has existed since t666 and gated exactly one thing: the dynamic-script
+ROUND loop, which `G_DRAIN_BOUNDS_THE_PAGE` covers. ⭐ That gate's own header explains why its fixture
+must both spin AND inject — a spin-only page never enters the round loop — and **nobody then asked
+what a spin-only page costs on the PHASE axis.** t660/t661 argued at length about whether a spin-only
+fixture could show the ROUND defect (it cannot). It shows this one perfectly.
+
+Fixed by giving a drain that follows a give-up a **250-task** ceiling instead of 20,000 — shortened,
+not skipped, because `DOMContentLoaded` and `load` must still fire and their handlers still run.
+
+```text
+   9.3s -> 2.4s per navigation      ·      G_RUNAWAY 13-14s -> 0.88s
+   fidelity control: oilprice 85.0 → 85.0 · crazyshop 68.2 → 68.2 · fragrantica within drift
+```
+
+### ⚠⚠⚠ AND `clear_convergence_state()` HAD NO PRODUCTION CALLER AT ALL
+
+Its doc predicted the hazard in as many words — *"a flag whose reset lives somewhere else is a flag
+that eventually leaks across navigations and silently stops a healthy page from running its
+scripts"* — and the leak had shipped: outside the round loop the flag was never cleared, so **one
+non-converging page poisoned every later navigation in the process.**
+
+⭐ It stayed latent because the flag had a single consumer whose failure mode was invisible (the round
+loop giving up early looks like a page with nothing to do). **A second consumer is what makes a stale
+flag visible** — my change would have turned silent staleness into every subsequent page getting a
+250-task grace it never earned. The reset now sits beside `manuk_net::begin_navigation()`, and the
+release probe confirms it: four consecutive loads each get their own full 2.2–2.3s grace.
+
+### ⚠⚠ I BUILT AN INSTRUMENT, MEASURED IT, AND THREW IT AWAY — THIRD GATE HOLE IN THREE TICKS
+
+The end-to-end assertion wants a machine-independent unit (`G_RUNAWAY`'s 20s clock is the cautionary
+case: three reds in one session while the engine never changed). So I added a per-navigation macrotask
+counter. It read **20,000 whether the fix was in or out** — the drains run on more than one thread and
+a thread-local sees only its own. The RED patch took 25.06s against the fixed 10.11s, so the defect
+was plainly there and the counter could not see it.
+
+⭐ **A gate that cannot go red is not a gate**, so the counter was deleted rather than shipped, and
+`G_DRAIN_CEILING_SHORTENS` asserts the POLICY (`drain_ceiling(false) == 20_000`,
+`drain_ceiling(true) == 250`, and the flag's whole lifecycle) — with the limitation written into the
+gate's own header rather than left implied. Proven RED by making the ceiling unconditional.
+
+⚠ Three ticks, three gates, three holes found only by running the red proof (t1328's spare budget
+slot, t1329's two scan-region bugs, this one's blind counter). The rule is holding up: **red-proof a
+gate, never reason about it.**
+
+### ⚠⚠ THE JS ENGINE'S TESTS HAVE NOT RUN IN THE WALL
+
+Trying to put the gate in `manuk-js` found two things at once:
+
+```text
+   cargo test -p manuk-js   →  error[E0061]: this function takes 5 arguments but 4 were supplied
+                               dom_bindings.rs:21570  extra_computed_props(cs, cb, rect, pseudo)
+   verify.sh T list         →  manuk-css manuk-layout manuk-paint manuk-dom manuk-net manuk-agent manuk-shell
+```
+
+A `tracks` parameter was added to `extra_computed_props` and only the production caller updated, so
+**that crate's test build has not compiled since** — unnoticed because `manuk-js` is not in the wall's
+crate list at all. The constitution calls SpiderMonkey GC rooting *"the largest unsafe surface in the
+codebase"* (H0.4) and **21 tests over it have not run.** The compile break is fixed here (12 pass, 9
+ignored, 0 fail). ⚠ The crate still cannot join `T`: the binary SIGSEGVs at SpiderMonkey teardown
+(`pthread_mutex_destroy failed: Device or resource busy`) — the same shutdown fault the WPT runner
+reports as `ACCUM`. Harness list is observer-owned; the teardown is a tick of its own.
+
+NEXT, ranked.
+(a) ⭐⭐⭐ **SPIDERMONKEY TEARDOWN** — it blocks `manuk-js` from the wall (21 tests over the
+    constitution's own largest unsafe surface), it is the WPT runner's `ACCUM` bucket, and it is why
+    every `Page`-owning gate must live in its own binary (t1320) — which is a large part of the
+    519-binary link cost the wall audit keeps finding.
+(b) ⭐⭐⭐ **THE JS-INJECTED SUBTREES on `crazyshop.pl`** (t1327's (a)) — 135 boxes, 8.8% coverage.
+(c) ⭐⭐ **ONE `FontContext` FOR THE OTHER CRATES** (t1329's (b)) — measure each first.
+(d) ⭐⭐ **The 25 unscored in-scope sites** — scorability 81.2% caps M1.

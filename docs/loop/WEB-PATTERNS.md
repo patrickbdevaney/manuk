@@ -8013,3 +8013,31 @@ never matches. That is a harness detail (observer-owned, untouched); the effect 
 **`[no-pattern]` alone cannot land a tick that touches `engine/*/src/`** — the ledger must be touched
 too. This row is that touch, and it keeps the exemption visible in the place the hook's own text asks
 for rather than in a message nobody reads.
+
+## THE PAGE WITH A TIMER THAT NEVER SETTLES — 9.3 seconds of tab, four times over (t1330)
+
+**The class.** A page whose JavaScript never reaches quiescence: `setInterval(fn, 0)`, a self-reposting
+`setTimeout`, a `requestAnimationFrame` loop, an analytics beacon that reschedules itself. It is not a
+broken page — ad tags, chat widgets, carousels and A/B frameworks all ship code shaped like this, and
+the site around it works fine in Chrome.
+
+Our hang guard gives such a page a generous grace (20,000 macrotasks) and then paints what it has,
+which is right. ⚠⚠ **But it gave that grace once per LOAD PHASE**, and four phases drain:
+
+```text
+    phase                              before        after
+    cascade+layout+blocking scripts   2280ms       2319ms      <- the full grace, once
+    deferred scripts                  2286ms         28ms
+    DOMContentLoaded                  2331ms         29ms
+    load event                        2405ms         28ms
+                                     ───────       ──────
+                                       9.3s          2.4s
+```
+
+⭐ The page had already answered the question at the first give-up. Asking four more times cost the
+user seven extra seconds on **every navigation** to such a site — and on a page that also injects
+scripts, the round loop multiplies it again (`www.agoda.com`, t666: 17 drains, 43.6s).
+
+⚠ And the later drains are **shortened, not skipped**: `DOMContentLoaded` and `load` still fire and
+their handlers still run. A page whose listeners never execute is a different and worse failure than
+a slow one.
