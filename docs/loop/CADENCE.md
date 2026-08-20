@@ -11,12 +11,12 @@
 
 | | value | over |
 |---|---|---|
-| ticks landed | **1002** | ticks 1–1313 |
-| median tick cycle | **30m** | 1001 intervals |
-| median, last 10 | **1.6h** | 10 intervals |
+| ticks landed | **1003** | ticks 1–1314 |
+| median tick cycle | **30m** | 1002 intervals |
+| median, last 10 | **73m** | 10 intervals |
 | fastest / slowest | 5s / 5.4d | |
-| **ticks per hour** | **1.04** | 958.3h elapsed |
-| median verify wall | **63s** | 941 ticks |
+| **ticks per hour** | **1.04** | 959.2h elapsed |
+| median verify wall | **63s** | 942 ticks |
 | wall trend | 39s → 17m — getting slower ⚠️ | first 3 vs last 3 |
 
 The **cycle** is the real unit: implement → debug → verify wall → land. The wall is only part of
@@ -27,11 +27,11 @@ it, and a wall that grows taxes every future tick, so it is tracked separately f
 ### Near — the daily driver (doc / app / platform web)
 
 * **capabilities asserted** (`G_CAPABILITY`): 48 → **81**
-* **live gates**: 27 → **497**
+* **live gates**: 27 → **498**
 * **✅ rows in the capability ledger**: 144 → **642**
 * **Bar 0 — oracle hangs**: 0 of 265 sites
 
-**469 of 1002 ticks** (47%) moved a
+**470 of 1003 ticks** (47%) moved a
 user-visible capability. The rest were instruments, infrastructure and corrections — and the
 ledger says the corrections were not overhead: three of its top three priorities were phantoms,
 and finding that out redirected everything after it.
@@ -90,8 +90,8 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 
 ## What a capability costs
 
-* **469** capability ticks, median cycle **30m**
-* median diff per tick: **+278 / −34** lines across 8 files
+* **470** capability ticks, median cycle **30m**
+* median diff per tick: **+279 / −34** lines across 8 files
 
 ## Every tick
 
@@ -1099,5 +1099,6 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 | **1310** | 2026-08-19 21:22 | 58m | capability | 17m | +209/−38 | 494 | 81 | 56.0% · | a CSS transition needs a MEMORY, and the cascade had none (2026-08-19) |
 | **1312** | 2026-08-20 01:54 | 4.5h | capability | 17m | +395/−33 | 496 | 81 | 56.0% · | a colour that is not legacy sRGB keeps its own function, and the space was thrown away at  |
 | **1313** | 2026-08-20 03:23 | 89m | performance | 17m | +717/−39 | 497 | 81 | 56.0% · | the truncation was ONE FILE and a 5s watchdog, and `transition: all` was billed to every e |
+| **1314** | 2026-08-20 04:14 | 51m | capability | 17m | +490/−43 | 498 | 81 | 56.0% · | 138 CSS longhands are structurally absent, and the scroll container's box model had three  |
 
 *`·` after a WPT figure means **carried forward**, not measured this tick.*

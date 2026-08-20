@@ -505,6 +505,10 @@
   - L10328 · 1. scrollbar-width was computed, published, and then ignored
   - L10351 · 2. clientWidth/clientHeight did not exclude the scrollbar
   - L10360 · 3. ⭐⭐⭐ …and fixing (2) EXPOSED (3), which (2)'s bug had been hiding
+  - L10388 · A FLEX ITEM WITH A DEFINITE width COULD NEVER SHRINK — we answered taffy's question with the answer taffy was about to clamp (t1315)
+  - L10420 · ⭐ Why nobody had filed it: the workarounds are folklore and both already worked
+  - L10427 · ⚠ Every input to taffy was correct, and that is what made it hard
+  - L10440 · ⚠⚠ The fix has THREE terms and only the first comes from the spec
 
 ## browser-capabilities.md
 `docs/wiki/browser-capabilities.md`
@@ -2296,4 +2300,4 @@
   - L231 · Both named mechanisms are subsystem work
 
 ---
-2203 sections across 22 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+2207 sections across 22 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.

@@ -86522,3 +86522,114 @@ prescribed-but-not-executed item is `verify wall: 443s EXCEEDS the 300s target` 
 and it is HARNESS territory (`scripts/verify.sh`, build scheduling, mold/nextest/workspace-hack),
 which is observer-owned and which I do not touch. Recorded here rather than acted on, per scope.
 `LAST_AUDIT_TICK` → 1313.
+
+## Tick 1315 — a flex item with a definite `width` could never shrink, and we answered taffy's question with the answer taffy was about to clamp (2026-08-20)
+
+TICK SHAPE: capability. Board re-run at the top of this tick: **unchanged** (★ CSS-LAYOUT). Taken
+straight off t1314's own NEXT item (a) — a gate that was RED on `main` and named its own defect.
+
+FORECAST. `g_hscroll_carousel` asserted `scrollWidth` 300 and read 1000 for five 200px flex items in a
+300px container. Reduced to two lines and probed against headless Chrome, one variable per row:
+
+```text
+                                          Chrome     ours
+   two 200px items, 300px row               150       200   ← the defect
+   …the same + min-width: 0                 150       150   ← control, ALREADY correct
+   …the same + overflow: hidden             150       150   ← control, ALREADY correct
+   two auto-width items, long text          312       312   ← control
+```
+
+⭐⭐⭐ **ONLY THE DEFAULT WAS BROKEN, AND THAT IS WHY NOBODY HAD FILED IT.** *"My flex row won't
+shrink — add `min-width: 0`"* and *"…add `overflow: hidden`"* are on every CSS forum on the web, and
+**both already worked here**: each sets taffy's `style_min_main_size` to a definite zero, which never
+reaches the measure at all. The one configuration that was wrong is the one whose workaround is
+folklore, so it generates no bug reports — only quietly wrong pages.
+
+DIAGNOSIS — **and every input to taffy was CORRECT, which is what made it slow.** Instrumented
+`solve_subtree`: `container_width=300`, `available_space=Definite(300)`, `flex_shrink=1`,
+`min_size=auto`, `display=Flex`, `flex_direction=Row`. And `taffy_tree`'s own unit test
+`solve_subtree_lays_out_flex_row` shrinks to **150/150** with exactly those inputs and has done all
+along.
+
+⚠ Two hypotheses were built, tested and **refuted** before the right one: t1260's exact measure memo
+(its key omits `sizing_mode`, which looked like a smoking gun) and taffy's own 9-slot cache (whose
+`ComputeSize` comparison omits it too). Disabling each — then both — moved the number **not at all**.
+A cache that is innocent is worth the three minutes it costs to exonerate, because the alternative is
+a fix that lands next to the defect.
+
+⭐⭐⭐ **WHAT FOUND IT WAS LOGGING THE CALLBACK, NOT THE INPUTS.**
+
+```text
+   MEASURE known={width: None, height: Some(20)} avail={width: MinContent, …}  ->  width: 200.0
+```
+
+taffy asks the item *"how narrow can you get?"* and we answer **200** — the item's own declared
+width. CSS Box Sizing §5.1 makes a flex item's automatic minimum
+`min(specified size suggestion, content size suggestion)`, and taffy applies that `min` **itself**
+(`compute/flexbox.rs`: `min_content_main_size.maybe_min(child.size.main(dir))`). So it is asking for
+the CONTENT suggestion alone, and answering with the declared width makes its clamp **vacuous**:
+`min(200, 200) = 200`. The automatic minimum of every fixed-width flex item was its own width.
+
+> **When every INPUT is right and the OUTPUT is wrong, the defect is in a CALLBACK — a value the
+> library asked you for, not one you gave it.** Inputs are easy to dump and callbacks are not, so the
+> cheap instrument gets built first and finds nothing.
+
+⭐⭐ **AND THE TWO QUESTIONS WERE ONE FUNCTION.** `min_content_width` short-circuits on a definite
+width, and its comment is *right about its own rule* — CSS Sizing §5.1 does make a definite `width`
+the box's min-content **contribution**, which is what a parent sizing itself around the box needs.
+It is the wrong rule for the *content size suggestion*, and one function was serving both.
+
+THE FIX — **three terms, and only the first comes from the spec:**
+
+```rust
+content_suggestion && self.definite_content_width(node).is_some() && !self.intrinsic_probe.get()
+```
+
+⚠ Terms 2 and 3 were each **bought by a measured regression**, not reasoned. Without them,
+`intrinsic_keywords_and_the_font_size_zero_inline_block_grid` answers **1.02 where Chrome says 110**
+over twelve rows — a `width: min-content` flex box across 40px and 70px inline-blocks. Term 3 is the
+load-bearing one: the same `MinContent` probe on the same leaf serves taffy asking an item for its
+automatic minimum (content-derived) AND this engine asking a flex CONTAINER for its intrinsic width by
+measuring its items (contribution, definite width wins), and the leaf cannot otherwise tell them
+apart. `Ctx::intrinsic_probe` is already set for the second — **the discriminator the architecture
+already owned**, found by reading for one rather than inventing one.
+
+⚠ A fourth trap, and it cost a full build: the first edit landed in the WRONG measure closure. There
+are two — `grid_area_containing_block`'s and `layout_flex_or_grid`'s — and a scripted
+`replace(old, new, 1)` took the first occurrence in file order. **The trace said the branch never
+fired, which is the only reason it was caught**; a mutation that changes nothing may not have applied.
+
+RESULT — fixed denominators, so no error-bar argument is needed:
+
+```text
+   css/css-flexbox    2850 → 2868 / 4693     +18
+   css/css-sizing     4290 → 4336 / 5850     +46
+```
+
+CONTROLS: `css/css-position` 1166, `css/css-display` 332, `css/css-overflow` 481,
+`css/css-transforms` 4735/5500 — four areas that should not have moved and did not. The full
+`manuk-layout` suite is **182/182**, and it was 180/182 on the first two shapes of this fix.
+
+⭐ **`g_hscroll_carousel` is GREEN** — the gate t1314 found red on `main` is closed by the tick that
+its own NEXT list pointed at. `G_FLEX_ITEM_AUTOMATIC_MINIMUM` adds six rows, four of them controls
+(including `flex-shrink: 0`, without which "always shrink" would pass), proven RED.
+
+⚠ **The WPT number badly understates this one.** +64 subtests is what the suite can see; what actually
+changed is that a flex item with a declared width now shrinks, which is the layout primitive under
+every navbar, card row, sidebar, breadcrumb, chat list and carousel on the web. The render corpus is
+where this should show up.
+
+NEXT, ranked.
+(a) ⭐⭐⭐ **RUN THE FIDELITY SWEEP.** The board's CO-#1 is shape≥0.75 on the CrUX corpus and this tick
+    changed a primitive under most of it; the loop is blind on its own headline until it re-measures.
+    This is the first tick in a while whose effect the WPT ledger genuinely cannot see.
+(b) ⭐⭐⭐ **BUILD THE LONGHAND SUPPLEMENT** (t1314's design) and take the 138 in daily-driver order —
+    `appearance`, `fill`/`stroke`, `touch-action`, `scroll-behavior` first. ⚠ Publish a property only
+    when something CONSUMES it.
+(c) ⭐⭐⭐ **INCREMENTAL STYLE INVALIDATION** — `getComputedStyle` re-cascades the whole document
+    (carried from t1313). The largest perf lever on the board.
+(d) ⭐⭐ **Ask both questions of every `gated` capability** (surface audit #73): `scrollbar-width` was
+    reported and not applied, `field-sizing` applied and not reported. `map-reconcile.sh` checks that
+    a gate EXISTS, not that the capability is live in both channels.
+(e) ⭐⭐ `writing-mode` is 19% of the ★ board and that is a floor — `css/css-writing-modes` is not in
+    the checkout at all.

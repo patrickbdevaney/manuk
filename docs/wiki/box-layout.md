@@ -10384,3 +10384,81 @@ proof that a partial fix here is worse than none.
 
 ⚠ Named residue: percentage padding on a scroll container resolves against the box's own border-box
 width here rather than its containing block's, which is not available at that call site.
+
+## A FLEX ITEM WITH A DEFINITE `width` COULD NEVER SHRINK — we answered taffy's question with the answer taffy was about to clamp (t1315)
+
+`min-width: auto` on a flex item resolves to its **content-based minimum size** (CSS Box Sizing §5.1,
+Flexbox §4.5):
+
+```text
+    automatic minimum = min( specified size suggestion , content size suggestion )
+                            = the declared width      = the CONTENT's min-content
+```
+
+taffy implements that and does the `min` **itself**:
+
+```rust
+// taffy-0.12.1/src/compute/flexbox.rs
+let min_content_main_size = tree.measure_child_size(child.node, …, SizingMode::ContentSize, …);
+let clamped = min_content_main_size.maybe_min(child.size.main(dir));   // ← the specified suggestion
+```
+
+⚠⚠⚠ **So what taffy asks the engine for is the CONTENT suggestion alone — and we answered with the
+declared width, which makes that `min` vacuous.** `min(200, 200) = 200`: the automatic minimum of
+every fixed-width flex item was its own width, and **no such item could ever shrink**. The single
+most load-bearing behaviour in flexbox, absent, on the *default* value of the property.
+
+| fixture (two items, 300px row) | Chrome | before | after |
+|---|---|---|---|
+| `width: 200px` | 150 | **200** | 150 |
+| `width: 200px; min-width: 0` | 150 | 150 | 150 |
+| `width: 200px; overflow: hidden` | 150 | 150 | 150 |
+| auto width, long text | 312 | 312 | 312 |
+| 5×200px carousel rail, `scrollWidth` | 300 | **1000** | 300 |
+| the same rail with `flex-shrink: 0` | 1000 | 1000 | 1000 |
+
+### ⭐ Why nobody had filed it: the workarounds are folklore and both already worked
+
+*"My flex row won't shrink — add `min-width: 0`"* and *"…add `overflow: hidden`"* are on every CSS
+forum on the web, and **both were already correct here**. Each sets taffy's `style_min_main_size` to a
+definite zero, which never reaches the measure at all. Only the default was broken — the one
+configuration nobody reports, because the workaround is common knowledge.
+
+### ⚠ Every input to taffy was correct, and that is what made it hard
+
+`container_width=300`, `available_space=Definite(300)`, `flex_shrink=1`, `min_size=auto`,
+`display=Flex`, `flex_direction=Row` — all verified by instrumentation, and `taffy_tree`'s own
+unit test shrinks to 150/150 with exactly those inputs. Two cache layers were disabled and
+**exonerated** before the real answer appeared. What found it was logging what the measure callback
+was ASKED and what it ANSWERED: asked *"how narrow can you get?"* (`known.width = None`,
+`available = MinContent`), it said **200**.
+
+> **The generalisation: when every INPUT is right and the OUTPUT is wrong, the defect is in a
+> CALLBACK — a value the library asked you for, not one you gave it.** Inputs are easy to dump and
+> callbacks are not, so the cheap instrument gets built first and finds nothing.
+
+### ⚠⚠ The fix has THREE terms and only the first comes from the spec
+
+```rust
+content_suggestion && self.definite_content_width(node).is_some() && !self.intrinsic_probe.get()
+```
+
+1. taffy asked the `SizingMode::ContentSize` question.
+2. …and the node has a definite `Dim::Px` width — exactly the case `min_content_width_inner`'s
+   short-circuit was answering. An intrinsic KEYWORD width never hits that short-circuit, so
+   re-deriving it there is a different code path for a box that was already right.
+3. …and we are **not** inside an intrinsic probe. **This is the load-bearing one.** The same
+   `MinContent` probe on the same leaf serves two callers the leaf cannot otherwise tell apart:
+   taffy asking an item for its automatic minimum (content-derived), and this engine asking a flex
+   CONTAINER for its own intrinsic width by measuring its items (contribution — definite width wins).
+   `Ctx::intrinsic_probe` was already set for the second and is the discriminator the architecture
+   already owned.
+
+Terms 2 and 3 were each bought by a measured regression: without them
+`intrinsic_keywords_and_the_font_size_zero_inline_block_grid` answers **1.02 where Chrome says 110**
+for a `width: min-content` flex box over 40px and 70px inline-blocks.
+
+**Measured: `css/css-flexbox` 2850 → 2868, `css/css-sizing` 4290 → 4336, both on fixed denominators
+(4693 and 5850). Controls `css/css-position` 1166, `css/css-display` 332, `css/css-overflow` 481,
+`css/css-transforms` 4735/5500 — all unmoved.** `G_FLEX_ITEM_AUTOMATIC_MINIMUM`, six rows, four of
+them controls, proven RED. `g_hscroll_carousel` — red on `main` since before t1314 — is green again.

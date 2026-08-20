@@ -7846,3 +7846,26 @@ regression.**
 
 Reference measured against headless Chrome, not derived: gutter `auto` 15 / `none` 0 / `thin` **10**,
 and a padded scroller reads `clientW 105  clientH 105  scrollW 105  scrollH 120`.
+
+## THE NAVBAR THAT WOULD NOT SHRINK — only the DEFAULT was broken, and the workarounds are folklore (t1315)
+
+**The class.** A row of things that must fit: a navbar, a card row, a sidebar beside content, a
+breadcrumb trail, a chat list, a toolbar, a carousel. The author writes `display: flex` and gives the
+children a width; the browser shrinks them to fit. That is `flex-shrink: 1` — the **default**.
+
+⚠⚠⚠ **A flex item with a definite `width` could never shrink here.** Two 200px items in a 300px row
+stayed 200 where every browser gives 150, so every such row overflowed its container and either
+clipped, scrolled, or pushed the page wide.
+
+⭐ **And the two famous workarounds both already worked**, which is why it produced no bug reports:
+*"add `min-width: 0`"* and *"add `overflow: hidden`"* are on every CSS forum on the web, and each sets
+a definite zero minimum that never reached the broken path. **Only the default was wrong** — the one
+configuration whose fix is folklore rather than a filing.
+
+The cause: CSS Box Sizing §5.1's automatic minimum is
+`min(specified size suggestion, content size suggestion)`, taffy applies that `min` itself, and we
+answered its content-suggestion question with the item's declared width — making the clamp vacuous.
+
+**Measured:** `css/css-flexbox` 2850 → 2868 and `css/css-sizing` 4290 → 4336 on fixed denominators.
+⚠ That number badly understates it: +64 subtests is what WPT can see, while what changed is the layout
+primitive under most horizontal composition on the web.

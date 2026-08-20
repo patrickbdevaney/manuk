@@ -1072,7 +1072,7 @@ struct Ctx<'a> {
     /// `measure_intrinsic` (`&self`) can fill it.
     /// `(width, height, first-line baseline)` — the baseline rides along because the measure
     /// already lays the subtree out and used to DISCARD the content it came from.
-    measure_cache: RefCell<HashMap<(NodeId, u32), (f32, f32, Option<f32>)>>,
+    measure_cache: RefCell<HashMap<(NodeId, u32, bool), (f32, f32, Option<f32>)>>,
     /// **CSS 2.1 §12.4 counter values, per node that actually needs one** — computed once, lazily,
     /// by a single document-order walk. See [`Ctx::counter_values`].
     counters: RefCell<Option<HashMap<NodeId, HashMap<String, i32>>>>,
@@ -1100,6 +1100,11 @@ struct Ctx<'a> {
     /// Memoized **min-content** widths. Computing one lays out the whole subtree, and
     /// shrink-to-fit now asks for it on every probe, so without this it is an O(n²) trap.
     min_content_cache: RefCell<HashMap<NodeId, f32>>,
+    /// The memo for [`Ctx::min_content_width_of_content`] — a SECOND map, not a second key on the
+    /// one above. ⚠ The two rules answer different numbers for the same node, and a shared map would
+    /// serve whichever ran first; a shared *key space* with a `bool` would work too, but the
+    /// contribution map is read on hot paths that must not pay for a tuple hash.
+    min_content_of_content_cache: RefCell<HashMap<NodeId, f32>>,
     /// Memoized **max-content** (preferred) widths.
     ///
     /// This was the other half of the same trap, and it was the expensive half. `shrink_to_fit`
@@ -1329,6 +1334,7 @@ pub fn layout_document(
         intrinsic_probe: std::cell::Cell::new(false),
         fallback_style: ComputedStyle::initial(),
         min_content_cache: RefCell::new(HashMap::new()),
+        min_content_of_content_cache: RefCell::new(HashMap::new()),
         max_content_cache: RefCell::new(HashMap::new()),
         taffy_item_width: RefCell::new(HashMap::new()),
         taffy_item_height: RefCell::new(HashMap::new()),
@@ -6538,7 +6544,48 @@ impl Ctx<'_> {
     }
 
     fn min_content_width(&self, node: NodeId) -> f32 {
-        if let Some(&c) = self.min_content_cache.borrow().get(&node) {
+        self.min_content_width_inner(node, true)
+    }
+
+    /// **The min-content width of the box's CONTENT, with the box's own definite `width` ignored.**
+    ///
+    /// ⚠⚠⚠ **THIS IS A DIFFERENT QUESTION FROM [`Self::min_content_width`] AND THE TWO WERE ONE
+    /// FUNCTION.** CSS Sizing §5.1 makes a definite `width` the box's min-content *contribution* —
+    /// which is what a parent sizing itself around this box needs, and which the short-circuit below
+    /// is right to return. But CSS Box Sizing §5.1 / Flexbox §4.5 also define the **content size
+    /// suggestion**, and the automatic minimum size of a flex item is
+    /// `min(specified size suggestion, content size suggestion)`. If the content size suggestion
+    /// answers the item's own declared width, **that `min` is vacuous** — the automatic minimum of
+    /// every fixed-width flex item becomes its own width, and no such item can ever shrink.
+    ///
+    /// That is exactly what happened. taffy asks the item *"how narrow can you get?"*
+    /// (`known.width = None`, `available = MinContent`) and clamps the answer with
+    /// `.maybe_min(child.size.main(dir))` itself — so it is asking for the CONTENT suggestion and
+    /// doing the `min` on its own. Answering with the declared width made taffy's clamp a no-op:
+    ///
+    /// ```text
+    ///                                             Chrome     before     after
+    ///   two 200px items in a 300px flex row        150         200        150
+    ///   …the same, min-width: 0            CTRL    150         150        150
+    ///   …the same, overflow: hidden        CTRL    150         150        150
+    ///   two auto-width items, long text    CTRL    312         312        312
+    /// ```
+    ///
+    /// ⚠ The two control rows are why this is a branch and not the algorithm: `min-width: 0` and
+    /// `overflow: hidden` both set taffy's `style_min_main_size` to a definite zero, so neither ever
+    /// reached the measure — which is why *"my flex row will not shrink, add `min-width: 0`"* is
+    /// folklore that worked here while the default did not.
+    fn min_content_width_of_content(&self, node: NodeId) -> f32 {
+        self.min_content_width_inner(node, false)
+    }
+
+    /// The shared body. `own_definite_width_counts` selects which of the two rules above applies.
+    fn min_content_width_inner(&self, node: NodeId, own_definite_width_counts: bool) -> f32 {
+        if own_definite_width_counts {
+            if let Some(&c) = self.min_content_cache.borrow().get(&node) {
+                return c;
+            }
+        } else if let Some(&c) = self.min_content_of_content_cache.borrow().get(&node) {
             return c;
         }
         // ⚠ **BOTH contributions, or neither.** CSS Sizing §5.1 makes a definite `width` the box's
@@ -6547,9 +6594,11 @@ impl Ctx<'_> {
         // `pref.min(avail.max(min_content))`, so a min-content of 9.6 pulls a 24px item straight
         // back down the moment a growable sibling squeezes it. The `MANUK_TRACE_INTRINSIC` output
         // is what said so — `avail=24 -> 24` (fixed) sitting next to `avail=0 -> 9.6` (not).
-        if let Some(w) = self.definite_content_width(node) {
-            self.min_content_cache.borrow_mut().insert(node, w);
-            return w;
+        if own_definite_width_counts {
+            if let Some(w) = self.definite_content_width(node) {
+                self.min_content_cache.borrow_mut().insert(node, w);
+                return w;
+            }
         }
         // Below the cache AND below the definite-width short-circuit: only the path that actually
         // lays a subtree out is charged. See `LayoutPhases`.
@@ -6568,7 +6617,17 @@ impl Ctx<'_> {
                 &|n| self.flex_container_max_content(n),
             ) + self.native_widget_width(node),
         );
-        self.min_content_cache.borrow_mut().insert(node, w);
+        // ⚠ Each rule writes its OWN map. Below the definite-width short-circuit the two compute
+        // the same number, but a box whose `width` is definite never reaches here on the
+        // contribution path — so storing the content answer under the contribution key would hand a
+        // later contribution query the wrong one.
+        if own_definite_width_counts {
+            self.min_content_cache.borrow_mut().insert(node, w);
+        } else {
+            self.min_content_of_content_cache
+                .borrow_mut()
+                .insert(node, w);
+        }
         w
     }
 
@@ -6984,11 +7043,31 @@ impl Ctx<'_> {
         node: NodeId,
         avail_width: Option<f32>,
     ) -> (f32, f32, Option<f32>) {
+        self.measure_intrinsic_baselined_mode(node, avail_width, false)
+    }
+
+    /// [`Self::measure_intrinsic_baselined`], plus the one bit taffy's `LayoutInput` carries and its
+    /// leaf-measure callback does not: **is this the `SizingMode::ContentSize` probe?** See
+    /// [`Self::min_content_width_of_content`] — under that mode taffy has already decided to ignore
+    /// the node's own size styles, and answering with them is what stopped every fixed-width flex
+    /// item from shrinking.
+    fn measure_intrinsic_baselined_mode(
+        &self,
+        node: NodeId,
+        avail_width: Option<f32>,
+        content_suggestion: bool,
+    ) -> (f32, f32, Option<f32>) {
         let avail = avail_width.unwrap_or(1.0e6);
         // Memoize: taffy probes each item several times per solve, and each probe re-lays-out
         // the subtree. Round the available width to a px so repeated min/max-content probes
         // (which pass the same very-large avail) share a cache entry.
-        let key = (node, avail.round().min(u32::MAX as f32) as u32);
+        // ⚠ The mode is part of the key: the same node at the same available width answers two
+        // DIFFERENT numbers under the two rules, and sharing a slot would serve whichever ran first.
+        let key = (
+            node,
+            avail.round().min(u32::MAX as f32) as u32,
+            content_suggestion,
+        );
         if let Some(&cached) = self.measure_cache.borrow().get(&key) {
             note_measure_hit();
             return cached;
@@ -7018,7 +7097,36 @@ impl Ctx<'_> {
             self.measure_cache.borrow_mut().insert(key, sz);
             return sz;
         }
-        let width = self.shrink_to_fit(node, avail);
+        // ⚠⚠⚠ **THREE TERMS, AND EACH ONE WAS BOUGHT BY A MEASURED REGRESSION — THE SPEC ALONE
+        // JUSTIFIES ONLY THE FIRST.**
+        //
+        // 1. `content_suggestion` — taffy asked the `SizingMode::ContentSize` question.
+        // 2. …and the node has a definite `Dim::Px` width, which is exactly the case the
+        //    short-circuit in `min_content_width_inner` was answering. An intrinsic KEYWORD width
+        //    (`width: min-content` on a flex box) never hits that short-circuit, so re-deriving it
+        //    here is a different code path for a box that was already right.
+        // 3. …and we are NOT inside an intrinsic probe. **This is the load-bearing one.** The same
+        //    `MinContent` probe on the same leaf serves TWO callers that the leaf cannot otherwise
+        //    tell apart: taffy asking an item for its automatic minimum (content-derived, the fix),
+        //    and this engine asking a flex CONTAINER for its own intrinsic width by measuring its
+        //    items (contribution, definite width wins). `Ctx::intrinsic_probe` is already set for
+        //    the second and is the discriminator the architecture already owned.
+        //
+        // Terms 2 and 3 both came from `intrinsic_keywords_and_the_font_size_zero_inline_block_grid`
+        // answering **1.02 where Chrome says 110** — a `width: min-content` flex box over 40px and
+        // 70px inline-blocks, whose 110 is the sum of the items' definite widths. Without term 3
+        // those items report their content minimum (~0) and the container collapses.
+        let width = if content_suggestion
+            && self.definite_content_width(node).is_some()
+            && !self.intrinsic_probe.get()
+        {
+            // taffy's `SizingMode::ContentSize` question — see `min_content_width_of_content`. It
+            // clamps this answer with the item's own declared width itself, so answering with that
+            // width makes its clamp vacuous.
+            self.min_content_width_of_content(node)
+        } else {
+            self.shrink_to_fit(node, avail)
+        };
         let mut fc = FloatContext::new(0.0, width.max(1.0));
         // ⚠⚠ **THIS IS AN INTRINSIC MEASUREMENT AND IT WAS THE ONE THAT DID NOT SAY SO.**
         // `min_content_width` and `max_content_width_uncached` both raise the flag; this path — the
@@ -9091,7 +9199,19 @@ impl Ctx<'_> {
                     taffy::AvailableSpace::MinContent => Some(0.0),
                     taffy::AvailableSpace::MaxContent => None,
                 });
-                let (w, h, base) = self.measure_intrinsic_baselined(dn, aw);
+                // ⚠⚠⚠ **THE `MinContent`-WITH-NO-KNOWN-WIDTH PROBE IS TAFFY'S `SizingMode::ContentSize`
+                // QUESTION, AND IT IS NOT THE SAME QUESTION AS "how narrow is your contribution".**
+                // taffy asks a flex/grid item for the CONTENT SIZE SUGGESTION here and applies CSS
+                // Box Sizing §5.1's `min(specified, content)` itself
+                // (`taffy/src/compute/flexbox.rs`: `.maybe_min(child.size.main(dir))`). Answering
+                // with the item's own declared width made that clamp vacuous, so the automatic
+                // minimum size of every fixed-width flex item was its own width and **no such item
+                // could ever shrink** — two 200px items in a 300px row stayed 200 where Chrome gives
+                // 150. See `min_content_width_of_content`.
+                let content_suggestion = known.width.is_none()
+                    && matches!(avail.width, taffy::AvailableSpace::MinContent);
+                let (w, h, base) =
+                    self.measure_intrinsic_baselined_mode(dn, aw, content_suggestion);
                 (
                     taffy::Size {
                         width: known.width.unwrap_or(w),
@@ -9792,7 +9912,18 @@ impl Ctx<'_> {
                         );
                     }
                 }
-                let (w, h, base) = self.measure_intrinsic_baselined(dn, aw);
+                // ⚠⚠⚠ **THE `MinContent`-WITH-NO-KNOWN-WIDTH PROBE IS TAFFY'S
+                // `SizingMode::ContentSize` QUESTION, AND IT IS NOT "how narrow is your
+                // CONTRIBUTION".** taffy asks a flex item for CSS Box Sizing §5.1's *content size
+                // suggestion* here and applies the `min(specified, content)` itself
+                // (`taffy/src/compute/flexbox.rs`: `.maybe_min(child.size.main(dir))`). Answering
+                // with the item's own declared width made that clamp vacuous, so the automatic
+                // minimum size of every fixed-width flex item was its own width and **no such item
+                // could ever shrink**. See `min_content_width_of_content`.
+                let content_suggestion = known.width.is_none()
+                    && matches!(avail.width, taffy::AvailableSpace::MinContent);
+                let (w, h, base) =
+                    self.measure_intrinsic_baselined_mode(dn, aw, content_suggestion);
                 (
                     taffy::Size {
                         width: known.width.unwrap_or(w),
