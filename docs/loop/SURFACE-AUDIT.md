@@ -6868,3 +6868,72 @@ that omitted 3,390 subtests, which is precisely the failure this instrument exis
    there is (t1266).
 4. Carried unclosed from #71: re-probe and split the ECMAScript mega-row. Carried from #70: `CSS anchor
    positioning`'s contradictory pair — now also an Interop 2026 focus area, so it is worth closing.
+
+## Audit #73 — tick 1313 (2026-08-20)
+
+**Sources read, not recalled.**
+- <https://github.com/web-platform-tests/interop/blob/main/2026/README.md> — the authoritative list.
+- <https://webkit.org/blog/17818/announcing-interop-2026/>, <https://web.dev/blog/interop-2026>,
+  <https://www.igalia.com/news/interop-2026.html>, <https://hacks.mozilla.org/2026/02/launching-interop-2026/>.
+- `stylo-0.19.0/properties/longhands.toml` (the borrowed engine's own property table — a source we
+  had never audited, and it turned out to be the biggest finding here).
+
+### Interop 2026 — reconciled, and the map is CLEAN
+
+All **20 focus areas** and all **4 investigation efforts** already have rows in
+`CONSTELLATION.tsv`: container style queries, CSS anchor positioning, CSS `attr()`,
+`contrast-color()`, CSS zoom, custom highlights, dialogs and popovers, fetch uploads and ranges,
+IndexedDB, JSPI for Wasm, media pseudo-classes, Navigation API, scoped custom element registries,
+scroll-driven animations, scroll snap, CSS `shape()`, view transitions, web compat, WebRTC,
+WebTransport; and accessibility testing, JPEG XL, mobile testing, WebVTT.
+
+⚠ **An audit that finds nothing is a suspicious audit — so this one did not stop there.** The frame
+check that mattered was not "which areas exist" but **"which CSS PROPERTIES exist in the engine we
+borrowed"**, and nothing had ever asked it.
+
+### ⭐⭐⭐ ADDED — the property surface itself was never on the map
+
+`stylo-0.19.0/properties/longhands.toml` marks **172 of its 429 longhands `engine = "gecko"`**, and
+the servo build we compile does not include them. Probed all 143 non-vendor-prefixed ones inside a
+real page, two independent ways (`CSS.supports(prop,'inherit')` and a cascade round-trip): five work,
+**138 answer nothing to either**.
+
+**What we had been wrong about — three things, and the third is the one worth carrying.**
+
+1. **We had met this hole three times and never seen it whole.** t1303 refused the SVG longhands,
+   t1305 refused `font-size-adjust`, t1311 refused `calc-size()`. Each refusal was locally correct and
+   each read the gap as one property wide. It is **40% of the CSS longhand surface**.
+2. **Six of the 138 have no `CONSTELLATION.tsv` row at all** — `column-rule-*`,
+   `text-decoration-thickness`, `image-orientation`, `text-emphasis-*`, `paint-order`,
+   `box-decoration-break`. Added as `unknown`, per this instrument's rule that a bigger uglier map is
+   a good tick.
+3. ⭐⭐⭐ **THE 138 IS AN UPPER BOUND, AND THE AUDIT CAUGHT THAT THE TICK'S OWN MEASUREMENT HAD NOT.**
+   Both probes read the computed-style surface, which in this engine is a **separate hand-maintained
+   serializer** — so *"reports nothing"* and *"does nothing"* are two claims and the probes settle
+   only the first. The map's `field-sizing` row says `gated` and my probe said absent; **the row was
+   right.** Chrome sizes `field-sizing: content` on a `<textarea>hi</textarea>` to 22px beside a 182px
+   control, and we size it to **16px beside the same 182px** — it works, and nothing publishes it.
+
+   And the same tick found the mirror image: `scrollbar-width` is **reported and not applied**. A
+   CSSOM check clears one, a layout check clears the other, this engine owns both instruments, and
+   **neither property had ever been asked both questions.** That is a defect CLASS, not two bugs.
+
+### Is the frame still right?
+
+**Yes, and it is now better instrumented.** M1 render on the in-scope CrUX corpus stays the binding
+constraint. But the ★ CSS-LAYOUT board ranks by *failing subtests*, and 138 absent properties are
+close to invisible to it: an absent property mostly produces a long tail of small files, exactly the
+shape a top-N histogram discards. The board was ranking inside a frame that could not see 40% of CSS.
+
+### RANKED, from this audit only
+
+1. ⭐⭐⭐ **Ask both questions of every capability the map calls `gated`.** The reported-vs-applied
+   split is now a demonstrated class with one instance in each direction, and `map-reconcile.sh`
+   checks that a gate EXISTS, not that the capability is live in both channels.
+2. ⭐⭐⭐ **Build the longhand supplement** (design in `docs/wiki/css-cascade.md`: lift from sheet
+   source → re-emit as a custom property → read back in `to_computed_style`; `@property
+   { inherits: false }` parses in the servo build). Then take the 138 in daily-driver order.
+3. ⭐⭐ `writing-mode` is 19% of the ★ CSS-LAYOUT board and that is a FLOOR — `css/css-writing-modes`
+   is not in the WPT checkout at all. Another aperture gap, in the same family as audit #72's.
+4. Carried unclosed from #72: `svg` at 14.6% and its 39 `TH_TIMEOUT` files. From #71: the ECMAScript
+   mega-row split. From #70: `CSS anchor positioning`'s contradictory pair.

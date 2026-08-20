@@ -1000,3 +1000,4 @@ tick	sha	epoch	iso	delta_s	shape	wall_s	files	added	deleted	gates	claims	wpt_pas
 1309	741b6128	1787185490	2026-08-19T20:24:50-04:00	205541	capability	997	13	856	64	494	81	3896	6960	0	642	0	`element.animate()` stops interpolating in JavaScript: the duplicate is DELETED and Stylo's `Animate` is the only interpolator (2026-08-17)
 1310	cd6fd8f5	1787188940	2026-08-19T21:22:20-04:00	3450	capability	997	6	209	38	494	81	3896	6960	0	642	0	a CSS transition needs a MEMORY, and the cascade had none (2026-08-19)
 1312	f1e08722	1787205274	2026-08-20T01:54:34-04:00	16334	capability	997	9	395	33	496	81	3896	6960	0	642	0	a colour that is not legacy sRGB keeps its own function, and the space was thrown away at the `Rgba` boundary (2026-08-19)
+1313	5b112b41	1787210593	2026-08-20T03:23:13-04:00	5319	performance	997	13	717	39	497	81	3896	6960	0	642	0	the truncation was ONE FILE and a 5s watchdog, and `transition: all` was billed to every element on every cascade (2026-08-20)

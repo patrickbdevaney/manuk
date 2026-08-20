@@ -86355,3 +86355,170 @@ NEXT, ranked.
     cap**; the runner should carry a `TERMINATED` row (`watchdog::fired()` already distinguishes it
     from a page that threw) so this class is never again found by diffing four runs by hand.
 (e) ⭐⭐ Resolve `InterpolateMatrix` / `AccumulateMatrix` (carried from t1310).
+
+## Tick 1314 — 138 CSS longhands are structurally absent, and the scroll container's box model had three bugs hiding each other (2026-08-20)
+
+TICK SHAPE: capability + measurement. Board re-run at the top of this tick: **unchanged**
+(★ CSS-LAYOUT, `css/css-grid` #1 at 5,880).
+
+### FORECAST — three candidate masses priced and two refused, before any code
+
+Histogrammed the board's ★ rows by file and then by assertion message.
+
+⚠ **`css/css-values` (#2 row, 4,097 failing) is REFUSED.** 2,461 of its 4,440 are
+`calc-size/animation/*`, and every one carries `'to' value should be supported expected true got
+false` — `calc-size()` does not exist in the borrowed engine (t1311 priced this; `grep -rl calc-size
+stylo-0.19.0` returns nothing). The rest of its head is `if()`, `random()` and other tentative
+spec-drafts. **High WPT mass, no daily-driver content** — the phase mandate says capability, not flips.
+
+⚠ **`css/css-flexbox` (1,843 failing) is 69% WRITING-MODE, and the base mechanism I expected to be
+broken is already RIGHT.** Splitting its failing files by whether their source mentions
+`writing-mode`/`vertical-*`/`sideways-*`: **1,263 WM-touching vs 580 clean**, and the clean remainder
+is a flat tail whose largest file is 17. `negative-overflow-004-no-padding` (96, the #2 file) is
+**100% writing-mode** — every one of its cases sets `sideways-rl|sideways-lr|vertical-rl|vertical-lr`.
+And a probe of the abspos static position — 8 combinations of `flex-direction` × `justify-content` ×
+`align-items`, plus `direction: rtl` — came back **Chrome-exact on all of them**. ⭐ The refusal was
+bought by a 20-line probe rather than by a day of layout work; *"an area is not a cause"* again.
+
+Same split run across every ★ area: **writing-mode is 3,446 of 17,958 board failures (19%)** — 27% of
+`css/css-grid`, 69% of `css/css-flexbox`, 0% of `css/css-ui`, `css/css-display`, `css/css-text`. Real,
+large, and not the majority. ⚠ `css/css-writing-modes` is **absent from the checkout entirely**, so
+that 19% is a floor.
+
+### ⭐⭐⭐ THE MEASUREMENT — 138 CSS longhands are not merely unimplemented, they are ABSENT
+
+Chasing the `should be supported` message out of `css/css-values` and into `css/css-text`,
+`css/css-ui` and `css/css-sizing` — **3,461 subtests carry it across nine areas** — found the shared
+cause. `CSS.supports(prop, 'inherit')` is a PROPERTY-EXISTENCE test, and it answers `false` for
+properties that plainly exist in CSS. Stylo's `longhands.toml` says why: **172 of its 429 longhands
+carry `engine = "gecko"`** and are simply not compiled into the servo build we borrow.
+
+⚠ **AND THE TOML IS NOT THE ANSWER — I PROBED ALL 143 NON-VENDOR ONES IN A REAL PAGE**, two
+independent ways: `CSS.supports(prop, 'inherit')` and a cascade round-trip (set it, read
+`getComputedStyle` back). The two agree **exactly — zero disagreements**. Five work; **138 answer
+nothing to either.** Enumerated in `docs/wiki/css-cascade.md`; the daily-driver names among them:
+
+```text
+   appearance   touch-action   scroll-behavior   overscroll-behavior-x/y   content-visibility
+   fill  stroke  stroke-width  (the `.icon { fill: currentColor }` idiom of every icon set)
+   scroll-margin-*  scroll-padding-*  (16 longhands — sticky-header anchor offsets)
+   resize   shape-outside   hyphens   break-before/after/inside   column-rule-*
+   text-decoration-thickness   text-underline-offset   field-sizing   image-orientation
+```
+
+⚠⚠⚠ **AND THE 138 IS AN UPPER BOUND ON ABSENCE, WHICH THE SURFACE AUDIT CAUGHT AND I DID NOT.**
+Both of my probes read the COMPUTED-STYLE SURFACE, and that surface is a separate hand-maintained
+serializer — so *"reports nothing"* and *"does nothing"* are two claims and I had measured one.
+`field-sizing` is the counter-example and it is in the 138: it reports `""` and `CSS.supports` says
+`false`, and it **works anyway**. Chrome, `field-sizing: content` on a `<textarea>hi</textarea>` beside
+an identical control: **22px vs 182px**. Ours: **16px vs 182px** — the control is byte-identical and
+the field really does shrink to its content. t388 built it; nothing publishes it.
+
+⭐⭐⭐ **SO THIS TICK FOUND THE SAME DEFECT TWICE, POINTING OPPOSITE WAYS, AND EACH ONE IS INVISIBLE IN
+THE CHANNEL THE OTHER IS CHECKED IN.**
+
+```text
+   scrollbar-width    REPORTED and not APPLIED    getComputedStyle says "none", layout takes 15px
+   field-sizing       APPLIED and not REPORTED    the textarea shrinks, getComputedStyle says ""
+```
+
+A CSSOM check clears one and a layout check clears the other, and this engine has both instruments.
+**Neither property was ever asked BOTH questions.** The honest statement of the measurement is
+therefore: *138 of 143 are absent from both `CSS.supports` and the computed-style surface* — which is
+a lower bound on the REPORTING gap and an upper bound on the CAPABILITY gap.
+
+⭐ **This has been met three times as three separate refusals** — t1303's SVG longhands, t1305's
+`font-size-adjust`, t1311's `calc-size()` — and it is ONE hole, 40% of the CSS longhand surface. A
+`[patch]` fork of a 40k-line borrowed engine is what I2 refuses, so the route is a **supplement**, and
+the design is written down rather than left as a wish: rewrite the declaration into a CUSTOM PROPERTY
+that Stylo does cascade, and read it back in `to_computed_style`. That borrows specificity,
+inheritance, `!important` and the whole cascade for free. ⚠ Custom properties inherit by default,
+which would be wrong for the non-inherited half — and `@property { inherits: false }` **does parse in
+the servo build** (`stylesheets/rule_parser.rs:777`, ungated), so the semantics are exact rather than
+approximate. `add_container_supplement` is the precedent for lifting from sheet source.
+
+### THE BUILD — one scroll container, four numbers, three bugs, each hiding the next
+
+`scrollbar-width` is one of the five that already parse. A probe asked what the ENGINE does with it,
+not what the CSSOM says:
+
+```text
+   getComputedStyle(b2).scrollbarWidth   "none"          ← correct
+   b2's child offsetWidth                185             ← Chrome says 200
+```
+
+⭐⭐⭐ **RIGHT IN THE ONE CHANNEL A PERSON CHECKS, WRONG IN THE ONE THE PAGE CAN SEE.** And the reason
+is a comment: `ScrollbarWidth`'s own doc said *"the visible-scrollbar geometry is a paint concern this
+engine does not model."* True when written; **false the day the gutter reservation landed**, and
+nothing re-checked it. A workaround's comment is a checkable claim that dies silently — third time.
+
+⚠⚠ **`clientWidth`/`clientHeight` had the same bug independently**: CSSOM-View excludes the scrollbar
+and `scroll_geometry_of` was handing out the full padding box for every scroll container. That is the
+FUNCTION half — react-window, TanStack Virtual and every data grid divide `clientHeight` by a row
+height to decide how many rows to render.
+
+⭐⭐⭐ **AND FIXING THAT MADE `css/css-overflow` GO DOWN, WHICH IS THE FINDING.**
+
+```text
+   pristine                                       468 / 963
+   + scrollbar excluded from the client box        457 / 963      −11   ← four files went RED
+   + end padding in the scrollable overflow        481 / 963      +13   ← against pristine
+```
+
+The client box is the **FLOOR** of `scrollHeight`, so a client box one scrollbar too large had been
+lifting an under-computed extent right back to the expected number. Four `css/css-overflow` files were
+passing on that floor and not on their geometry; correcting the floor failed all four at once. The
+real defect underneath — CSS Overflow 3 §3.1 puts the container's own END padding into the scrollable
+overflow region, and it was missing — had been invisible for exactly as long as the other bug lasted.
+
+> **A WRONG FLOOR HIDES AN UNDER-COMPUTED VALUE, AND REMOVING THE FLOOR ARRIVES AS A REGRESSION.**
+> The −11 was real and it was not a trade. The only thing that could tell the difference was asking
+> Chrome what `clientHeight` actually is.
+
+REFERENCE — headless Chrome on this platform, both fixtures, `--dump-dom`. Not derived from spec text:
+
+```text
+   scrollbar-width   child offsetWidth   clientWidth        auto 185/185   none 200/200   thin 190/190
+   padded scroller   clientW 105   clientH 105   scrollW 105   scrollH 120
+```
+
+`thin` is **10px measured**; inventing it was the obvious alternative and would have been a constant
+fitted at one point. The padded row pins BOTH rules at once and neither alone produces those four
+numbers — 120 is content 110 + padding-bottom 10, the three 105s are the client floor.
+
+RESULT: **`css/css-overflow` 468 → 481, denominator 963 in every run.** Controls `css/css-position`
+(1166), `css/css-display` (332) and `css/css-transforms` (4735/5500) unmoved.
+
+`G_SCROLLBAR_WIDTH` — three `t` rows, one `n1` control (`overflow: visible`, where `scrollbar-width:
+none` must be inert), one padded row, and the CSSOM assertion that was already green and must stay so.
+Proven RED **three separate ways**: `none`/`thin` folded back to 15px, the client-box subtraction
+removed, and the padding inflation removed.
+
+⚠ FOUND IN PASSING, NOT MINE: **`g_hscroll_carousel` is RED on `main`** — `flexDefault` reports
+`scrollWidth` 1000 where Chrome says 300, i.e. **five 200px flex items are not shrinking in a 300px
+container**. Verified against `git show HEAD:` versions of both files, so it predates this tick.
+`verify.sh` names ~19 gates while `engine/page/tests/` holds 496, which is how a red gate lives on
+main. Not silently fixed here; it is item (a) below.
+
+NEXT, ranked.
+(a) ⭐⭐⭐ **`flex-shrink` is not shrinking** — `g_hscroll_carousel` red on main, five 200px items in a
+    300px flex container reporting 1000. Flex-shrink is the most load-bearing single behaviour in
+    flexbox and `css/css-flexbox` is a ★ row; this is a red gate naming its own defect.
+(b) ⭐⭐⭐ **BUILD THE LONGHAND SUPPLEMENT** and take the 138 in daily-driver order — `appearance`,
+    `fill`/`stroke`, `touch-action`, `scroll-behavior`, `overscroll-behavior-*` first. The design is
+    above and `@property { inherits: false }` is confirmed to parse. ⚠ Publish a property only when
+    something CONSUMES it: this tick's own finding is that a value in the CSSOM that layout ignores is
+    a defect wearing a green tick.
+(c) ⭐⭐⭐ **INCREMENTAL STYLE INVALIDATION — `getComputedStyle` re-cascades the whole document**
+    (carried from t1313). The largest perf lever on the board.
+(d) ⭐⭐ `writing-mode` is 19% of the ★ board and a floor, since `css/css-writing-modes` is not in the
+    checkout at all. Subsystem-sized: taffy is physical-only, so it needs a coordinate transform
+    around it rather than a property mapping.
+(e) ⭐⭐ `overflow: auto` that actually overflows still reserves no gutter — residue in both consumers,
+    named in both, and it needs a second layout pass.
+
+SELF-AUDIT (due at 1313, run before this tick landed). **48 of 49 checks green.** The single
+prescribed-but-not-executed item is `verify wall: 443s EXCEEDS the 300s target` — Part 21.2 item 1,
+and it is HARNESS territory (`scripts/verify.sh`, build scheduling, mold/nextest/workspace-hack),
+which is observer-owned and which I do not touch. Recorded here rather than acted on, per scope.
+`LAST_AUDIT_TICK` → 1313.

@@ -501,6 +501,10 @@
   - L10244 · AN ABSPOS GRID CHILD'S AREA LOSES THE CONTENT-ALIGNMENT OFFSET — a taffy index, and TWO priced refusals (t1311)
   - L10281 · ⚠⚠⚠ TWO LOCAL FIXES WERE BUILT, MEASURED, AND BOTH ARE TRADES
   - L10314 · Priced, so the refusal is a decision
+  - L10322 · THE SCROLL CONTAINER'S BOX MODEL HAD THREE BUGS AND THEY WERE HIDING EACH OTHER (t1314)
+  - L10328 · 1. scrollbar-width was computed, published, and then ignored
+  - L10351 · 2. clientWidth/clientHeight did not exclude the scrollbar
+  - L10360 · 3. ⭐⭐⭐ …and fixing (2) EXPOSED (3), which (2)'s bug had been hiding
 
 ## browser-capabilities.md
 `docs/wiki/browser-capabilities.md`
@@ -977,6 +981,11 @@
   - L4361 · The fix is one comparison, and it is a proof rather than a heuristic
   - L4371 · ⚠ What it did NOT fix, measured rather than assumed
   - L4382 · ⭐ The gate COUNTS; it does not time
+  - L4392 · 138 CSS LONGHANDS ARE NOT UNIMPLEMENTED — THEY ARE ABSENT, AND THE SAME HOLE HAS BEEN REFUSED THREE TIMES SEPARATELY (t1314)
+  - L4420 · The 138, exactly
+  - L4453 · Why this matters more than its WPT number
+  - L4463 · ⚠ This has been refused three times as three different bugs
+  - L4469 · The route, and it is a SUPPLEMENT rather than a fork
 
 ## `<dialog>`, `popover`, and the top layer (ticks 194-195)
 `docs/wiki/dialog-and-top-layer.md`
@@ -2287,4 +2296,4 @@
   - L231 · Both named mechanisms are subsystem work
 
 ---
-2194 sections across 22 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+2203 sections across 22 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.

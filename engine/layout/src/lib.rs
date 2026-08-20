@@ -52,6 +52,42 @@ pub use taffy_tree::GridTracks;
 /// (which take no space) are a separate platform mode we do not emulate here.
 const SCROLLBAR_WIDTH: f32 = 15.0;
 
+/// `scrollbar-width: thin` — 10px, measured against headless Chrome on this platform rather than
+/// guessed. See [`scrollbar_gutter`] for the table and the command.
+const SCROLLBAR_WIDTH_THIN: f32 = 10.0;
+
+/// **How much room the scrollbar takes out of the CONTENT box, given `scrollbar-width`.**
+///
+/// ⚠⚠⚠ **THE ENGINE ALREADY COMPUTED THIS PROPERTY AND THEN IGNORED IT, AND THE COMMENT THAT SAID
+/// SO WAS FALSE.** `ScrollbarWidth`'s own doc read *"the visible-scrollbar geometry is a paint
+/// concern this engine does not model"* — written when it was true. It stopped being true the day
+/// the gutter reservation below landed, and nothing re-checked it: `getComputedStyle(el)
+/// .scrollbarWidth` answered `"none"` while layout went on reserving all 15px. **Right in the one
+/// channel a person checks, wrong in the one the page can see.**
+///
+/// Reference table, headless Chrome on this platform, one `overflow: scroll` box 200×100 with a
+/// `width: 100%` child (`google-chrome --headless --dump-dom`):
+///
+/// ```text
+///     scrollbar-width     child offsetWidth     clientWidth      gutter
+///     auto                        185                185           15
+///     none                        200                200            0
+///     thin                        190                190           10
+/// ```
+///
+/// ⭐ **`none` is not a niche keyword.** `scrollbar-width: none` (beside `::-webkit-scrollbar
+/// { display: none }`) is the standard recipe for a horizontally-scrolling carousel, a chat pane, a
+/// code block and every custom-overlay scroll area on the modern web — and getting it wrong takes
+/// 15px out of the content width of exactly those elements, which then re-wraps their prose. That is
+/// the width-launders-into-dy shape the render burndown ranks on.
+pub fn scrollbar_gutter(sw: manuk_css::ScrollbarWidth) -> f32 {
+    match sw {
+        manuk_css::ScrollbarWidth::None => 0.0,
+        manuk_css::ScrollbarWidth::Thin => SCROLLBAR_WIDTH_THIN,
+        manuk_css::ScrollbarWidth::Auto => SCROLLBAR_WIDTH,
+    }
+}
+
 /// An axis-aligned rectangle in absolute document px.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct Rect {
@@ -4398,7 +4434,7 @@ impl Ctx<'_> {
         // children (and the BFC float band), leaving `width`/`border_box_w` — the box's own
         // offsetWidth — untouched.
         let gutter = if s.overflow_y == Overflow::Scroll {
-            SCROLLBAR_WIDTH.min(width)
+            scrollbar_gutter(s.scrollbar_width).min(width)
         } else {
             0.0
         };
@@ -4411,7 +4447,7 @@ impl Ctx<'_> {
         // case, this narrows the space passed to children while leaving `border_box_h` — the box's own
         // `offsetHeight` — untouched; the reserved strip is where the scrollbar sits.
         let gutter_x = if s.overflow_x == Overflow::Scroll {
-            SCROLLBAR_WIDTH
+            scrollbar_gutter(s.scrollbar_width)
         } else {
             0.0
         };

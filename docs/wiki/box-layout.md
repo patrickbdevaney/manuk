@@ -10318,3 +10318,69 @@ which is exactly what I2 refuses (`minmax(auto, …)` above, and t1305's Stylo S
 supplement would have to re-derive `compute_alignment_offset` — taffy's own alignment distribution —
 which is option 4 wearing option 3's clothes. **Report upstream.** Worth ~1,343 subtests in
 `css/css-grid/abspos` alone, plus part of `css/css-grid/alignment`'s 379 `offsetLeft` failures.
+
+## THE SCROLL CONTAINER'S BOX MODEL HAD THREE BUGS AND THEY WERE HIDING EACH OTHER (t1314)
+
+One `overflow: scroll` box, four numbers, and every one of them was wrong for a different reason.
+Headless Chrome on this platform is the reference throughout — `google-chrome --headless
+--disable-gpu --dump-dom` on the fixtures below, not a derivation from the spec text.
+
+### 1. `scrollbar-width` was computed, published, and then ignored
+
+`scrollbar-width` is `engine = "gecko"` in stylo 0.19, so the servo build we borrow does not have it;
+this engine recovers it from `MinimalCascade` and `getComputedStyle(el).scrollbarWidth` has answered
+correctly for a long time. ⚠⚠⚠ **And that was the whole of it.** `ScrollbarWidth`'s own doc comment
+said *"the visible-scrollbar geometry is a paint concern this engine does not model"* — true when it
+was written, **false the day the gutter reservation landed in `manuk_layout`**, and never re-checked.
+So the CSSOM said `none` while layout went on taking 15px out of the content box.
+
+| `scrollbar-width` | child `offsetWidth` | `clientWidth` | gutter |
+|---|---|---|---|
+| `auto` | 185 | 185 | 15 |
+| `none` | **200** | **200** | **0** |
+| `thin` | **190** | **190** | **10** |
+
+`thin` is **10px measured, not guessed** — inventing that number was the obvious alternative and
+would have been a constant fitted at one point.
+
+⭐ `scrollbar-width: none` is not a niche keyword. Beside `::-webkit-scrollbar { display: none }` it
+is the standard recipe for a horizontally-scrolling carousel, a chat pane, a code block and every
+custom-overlay scroll area on the modern web. Taking 15px out of exactly those elements' content
+width re-wraps their prose — the width-launders-into-dy shape the render burndown ranks on.
+
+### 2. `clientWidth`/`clientHeight` did not exclude the scrollbar
+
+CSSOM-View defines them as the padding box *excluding* the scrollbar. `scroll_geometry_of` was
+handing out the full padding box for every scroll container. **Every virtualised list on the web —
+react-window, TanStack Virtual, every data grid — divides `clientHeight` by a row height to decide how
+many rows to render**, so a `clientHeight` one scrollbar too large renders a row too many and then
+measures the overflow it just caused. Both consumers now call `manuk_layout::scrollbar_gutter`, so
+they cannot drift apart.
+
+### 3. ⭐⭐⭐ …and fixing (2) EXPOSED (3), which (2)'s bug had been hiding
+
+CSS Overflow 3 §3.1 puts the container's own END padding into the scrollable overflow region, and the
+extent left it out. That was invisible **because `clientHeight` was the wrong number**: the client box
+is the FLOOR of `scrollHeight`, so a client box that was one scrollbar too large floored the
+under-computed extent right back up to the expected value. Four `css/css-overflow` files were passing
+on that floor rather than on the geometry, and correcting the floor failed all four at once.
+
+Chrome, `width:100px; height:100px; padding:10px; overflow:scroll` around a 1×100 filler:
+
+```text
+   clientWidth 105   clientHeight 105   scrollWidth 105   scrollHeight 120
+```
+
+Those four numbers pin both rules simultaneously and **neither alone produces them**: the 120 is
+content 110 + padding-bottom 10 (the inflation), and the three 105s are the client floor after the
+scrollbar comes out (the exclusion). `css/css-overflow` **468 → 481 on a denominator of 963 in both
+runs**; the intermediate state — exclusion without inflation — read **457**, which is the tick's own
+proof that a partial fix here is worse than none.
+
+> **The general shape, and it is worth carrying: a WRONG FLOOR HIDES AN UNDER-COMPUTED VALUE, and
+> removing the floor arrives as a REGRESSION.** Four files went from passing to failing on a strictly
+> more correct engine. The `-11` was real, it was not a trade, and the only thing that could tell the
+> difference was asking Chrome what `clientHeight` is.
+
+⚠ Named residue: percentage padding on a scroll container resolves against the box's own border-box
+width here rather than its containing block's, which is not available at that call site.

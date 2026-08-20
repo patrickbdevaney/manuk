@@ -2306,9 +2306,60 @@ fn scroll_geometry_of(
             continue;
         };
         let bw = &st.border_width;
-        let client_w = (b.rect.width - bw.left - bw.right).max(0.0);
-        let client_h = (b.rect.height - bw.top - bw.bottom).max(0.0);
+        // ⚠⚠⚠ **THE SCROLLBAR COMES OUT OF `clientWidth`/`clientHeight` TOO, AND THIS IS THE SECOND
+        // CONSUMER OF ONE RULE.** CSSOM-View defines `clientWidth` as the padding box *"excluding
+        // the vertical scrollbar"*, and the layout gutter below has been reserving that space for
+        // children since it landed — but this table was still handing out the full padding box.
+        // Measured against headless Chrome, one `overflow: scroll` box 200×100: Chrome reports
+        // `clientWidth` **185** where we reported **200**.
+        //
+        // ⭐ It is not a cosmetic 15px. Every virtualised list on the web — react-window,
+        // TanStack Virtual, every data grid — divides `clientHeight` by the row height to decide how
+        // many rows to render, and a `clientHeight` that is one scrollbar too large renders a row
+        // too many and then measures the overflow it just caused. This is the FUNCTION axis of the
+        // same defect whose SHAPE axis is `manuk_layout::scrollbar_gutter`.
+        //
+        // ⚠ Only the deterministic `scroll` case, exactly as the layout gutter does — an
+        // `overflow: auto` box that happens to overflow needs a second layout pass and is residue in
+        // both places. The two must agree, so they call the same function.
+        let sb = manuk_layout::scrollbar_gutter(st.scrollbar_width);
+        let gy = if st.overflow_y == Overflow::Scroll {
+            sb
+        } else {
+            0.0
+        };
+        let gx = if st.overflow_x == Overflow::Scroll {
+            sb
+        } else {
+            0.0
+        };
+        let client_w = (b.rect.width - bw.left - bw.right - gy).max(0.0);
+        let client_h = (b.rect.height - bw.top - bw.bottom - gx).max(0.0);
+        // ⚠⚠⚠ **THE SCROLL CONTAINER'S OWN END PADDING IS PART OF THE SCROLLABLE OVERFLOW REGION,
+        // AND LEAVING IT OUT WAS INVISIBLE BEHIND THE CLIENT-BOX FLOOR.** CSS Overflow 3 §3.1 puts
+        // the box's padding box into the region and inflates descendants at the END edges by the
+        // container's own padding — so a 100px-tall filler in a `padding: 10px` scroller has a
+        // scrollable overflow of 10 + 100 + 10 = 120, not 110.
+        //
+        // Measured, headless Chrome, `width:100px;height:100px;padding:10px;overflow:scroll` around
+        // a 1×100 filler: `clientHeight` **105**, `scrollHeight` **120**, `clientWidth` **105**,
+        // `scrollWidth` **105**. The 120 is content 110 + padding-bottom 10; the 105s are the client
+        // floor. Both rules are needed to produce that pair of numbers and neither alone does.
+        //
+        // ⭐ This was hidden by the very bug fixed above: `client_h` used to be the FULL padding box,
+        // which floored the under-computed extent right back up to the expected number. Four
+        // `css/css-overflow` files were passing on that floor rather than on the geometry, and
+        // subtracting the scrollbar exposed all four at once — a correction arriving in the shape of
+        // a regression.
+        //
+        // ⚠ `resolve` against the box's own border-box width is exact for `px`/`calc()` padding and
+        // an approximation for PERCENTAGE padding, whose correct reference is the containing block's
+        // width — not available here. Named residue: percentage padding on a scroll container.
         let (cw, ch) = b.content_extent();
+        // `content_extent` measures from the BORDER-box origin; the scrollable overflow region is
+        // measured in the PADDING box, so drop the start border and add the end padding.
+        let cw = (cw - bw.left + st.padding.right.resolve(b.rect.width, 0.0)).max(0.0);
+        let ch = (ch - bw.top + st.padding.bottom.resolve(b.rect.width, 0.0)).max(0.0);
         let (sx, sy) = offsets.get(node).copied().unwrap_or((0.0, 0.0));
         // The extent is measured on the ALREADY-SCROLLED tree, so add the offset back: the content did
         // not get shorter because the user scrolled down it.

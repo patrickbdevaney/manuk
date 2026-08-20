@@ -4387,3 +4387,102 @@ and it is the wrong one. The synthetic probe that found this moved its own **unt
 `G_TRANSITION_SAMPLE_COST` asserts **0** samples for 60 unchanged `transition: all` elements (pre-fix:
 exactly 60) and **exactly `ROUNDS`** for the control page where one element really does change — the
 negative half, without which "stop sampling entirely" would pass.
+
+
+## 138 CSS LONGHANDS ARE NOT UNIMPLEMENTED — THEY ARE ABSENT, AND THE SAME HOLE HAS BEEN REFUSED THREE TIMES SEPARATELY (t1314)
+
+`CSS.supports(prop, 'inherit')` is a PROPERTY-EXISTENCE test — the CSS-wide keywords are valid for
+every property, so a `false` means the property is not there at all. Across nine ★ CSS-LAYOUT areas,
+**3,461 failing subtests carry one message**, `'from'/'to' value should be supported expected true got
+false`, and it is that test failing inside `interpolation-testcommon.js`.
+
+⭐⭐⭐ **The cause is upstream and structural. `stylo-0.19.0/properties/longhands.toml` marks 172 of its
+429 longhands `engine = "gecko"`, and the servo build this engine borrows does not compile them.**
+
+⚠ **The TOML is not the answer, and reading it as one would have been wrong.** Probing all 143
+non-vendor-prefixed entries inside a real page — two independent ways, `CSS.supports(prop, 'inherit')`
+and a cascade round-trip, which agree with **zero disagreements** — found **five that work anyway**:
+this engine already recovers `scrollbar-width`, `scrollbar-color`, `scroll-snap-type`,
+`scroll-snap-align` and `-webkit-line-clamp` out of `MinimalCascade`. **138 answer nothing to either.**
+
+⚠⚠⚠ **AND 138 IS AN UPPER BOUND, BECAUSE BOTH PROBES READ THE SAME SURFACE.** `CSS.supports` and
+`getComputedStyle` are both the computed-style serializer, which in this engine is a **separate
+hand-maintained surface** — so *"reports nothing"* and *"does nothing"* are two different claims and
+those probes only settle the first. `field-sizing` is the counter-example, and it is inside the 138:
+it reports `""`, `CSS.supports` says `false`, and it **works**. Chrome sizes
+`field-sizing: content` on a `<textarea>hi</textarea>` to **22px** beside a **182px** control; we size
+it to **16px** beside the same **182px**. t388 built the behaviour and nothing publishes the value.
+
+**Read the number as: 138 of 143 are absent from both `CSS.supports` and the computed-style surface.**
+That is a lower bound on the REPORTING gap and an upper bound on the CAPABILITY gap, and the two are
+not the same number.
+
+### The 138, exactly
+
+```text
+   accent-color                  anchor-name                   anchor-scope                  appearance                    break-after
+   break-before                  break-inside                  clip-rule                     column-rule-color             column-rule-style
+   column-rule-width             contain-intrinsic-block-size  contain-intrinsic-height      contain-intrinsic-inline-size  contain-intrinsic-width
+   content-visibility            counter-set                   d                             fill                          fill-opacity
+   fill-rule                     flood-color                   flood-opacity                 font-palette                  font-size-adjust
+   font-synthesis-position       font-synthesis-small-caps     font-synthesis-style          font-variant-alternates       lighting-color
+   marker-end                    marker-mid                    marker-start                  masonry-auto-flow             math-depth
+   offset-anchor                 offset-distance               offset-position               offset-rotate                 overflow-anchor
+   overscroll-behavior-block     overscroll-behavior-inline    overscroll-behavior-x         overscroll-behavior-y         page
+   page-orientation              paint-order                   position-anchor               position-try-order            position-visibility
+   print-color-adjust            resize                        scroll-snap-stop              scrollbar-gutter              shape-image-threshold
+   shape-margin                  shape-outside                 size                          stop-color                    stop-opacity
+   stroke                        stroke-dasharray              stroke-dashoffset             stroke-miterlimit             stroke-opacity
+   stroke-width                  touch-action                  transform-box                 scroll-timeline-axis          scroll-timeline-name
+   view-timeline-axis            view-timeline-inset           view-timeline-name            vector-effect                 cx
+   cy                            r                             rx                            ry                            x
+   y                             -webkit-text-fill-color       -webkit-text-stroke-color     -webkit-text-stroke-width     forced-color-adjust
+   hyphenate-character           hyphenate-limit-chars         ruby-position                 text-autospace                text-box-edge
+   text-box-trim                 text-decoration-skip-ink      text-emphasis-color           text-emphasis-position        text-emphasis-style
+   text-underline-offset         text-underline-position       text-decoration-inset         initial-letter                text-decoration-thickness
+   scroll-margin-top             scroll-margin-right           scroll-margin-bottom          scroll-margin-left            scroll-margin-block-start
+   scroll-margin-block-end       scroll-margin-inline-start    scroll-margin-inline-end      scroll-padding-top            scroll-padding-right
+   scroll-padding-bottom         scroll-padding-left           scroll-padding-block-start    scroll-padding-block-end      scroll-padding-inline-start
+   scroll-padding-inline-end     box-decoration-break          scroll-behavior               column-fill                   font-variant-emoji
+   math-style                    math-shift                    text-orientation              image-orientation             text-anchor
+   color-interpolation           color-interpolation-filters   shape-rendering               stroke-linecap                stroke-linejoin
+   hyphens                       ruby-align                    text-combine-upright          text-wrap-style               ime-mode
+   field-sizing                  dominant-baseline             timeline-scope
+```
+
+### Why this matters more than its WPT number
+
+The WPT mass is a bad proxy here. What the list actually contains is: `appearance` (every styled
+`<select>` and `<input>` on the web), `fill` / `stroke` / `stroke-width` (the
+`.icon { fill: currentColor }` idiom of Feather, Lucide, Heroicons and every other icon set),
+`touch-action`, `scroll-behavior`, `overscroll-behavior-*`, the sixteen `scroll-margin-*` /
+`scroll-padding-*` longhands that make a sticky header not cover the anchor you jumped to,
+`content-visibility`, `resize`, `shape-outside`, `hyphens`, `break-*`, `column-rule-*`,
+`text-decoration-thickness`, `text-underline-offset`, `field-sizing`, `image-orientation`.
+
+### ⚠ This has been refused three times as three different bugs
+
+t1303 refused the SVG longhands, t1305 refused `font-size-adjust`, t1311 refused `calc-size()`. Each
+refusal was correct in isolation and each read the hole as one property wide. **It is 40% of the CSS
+longhand surface**, and pricing it once is worth more than pricing it forty times.
+
+### The route, and it is a SUPPLEMENT rather than a fork
+
+A `[patch]` fork of a 40k-line borrowed engine is what I2 refuses. The supplement:
+
+1. Lift the declaration from the sheet SOURCE, as `add_container_supplement` already does for
+   `@container` blocks Stylo's servo parse discards.
+2. Re-emit it under the same selector as a **custom property** — `--manuk-appearance: none`. Stylo
+   cascades custom properties fully, so specificity, inheritance, `!important`, `@media`, cascade
+   layers and source order are all **borrowed rather than re-derived**.
+3. Read it back in `to_computed_style` into a typed `ComputedStyle` field.
+
+⚠ Custom properties inherit by default, which is wrong for the non-inherited half of the 138 —
+`appearance`, `resize`, `content-visibility`, `break-*`. **`@property { syntax: "*"; inherits: false }`
+does parse in the servo build** (`stylo-0.19.0/stylesheets/rule_parser.rs:777` is ungated), so the
+non-inherited semantics are exact and not an approximation. That was checked, not assumed.
+
+⚠⚠ **AND A PROPERTY IS ONLY WORTH PUBLISHING WHEN SOMETHING CONSUMES IT.** This same tick found
+`scrollbar-width` computed correctly, reported correctly through `getComputedStyle`, and **ignored by
+layout** for as long as it has existed. A CSSOM answer with no consumer flips WPT subtests and changes
+nothing a user can see — which is the exact trade the North Star forbids.

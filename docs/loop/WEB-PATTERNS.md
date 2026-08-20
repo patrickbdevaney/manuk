@@ -7813,3 +7813,36 @@ after**, wall time 5,050 ms (pinned at the cut) → 3,777–4,734 ms. ⚠ Not el
 that every `getComputedStyle` re-cascades the whole document. `G_TRANSITION_SAMPLE_COST` counts
 samples rather than milliseconds (0 vs 60, proven RED) because the synthetic timing probe moved its
 own untouched control arm by 54% between two runs of one binary.
+
+## THE HIDDEN-SCROLLBAR CAROUSEL — `scrollbar-width: none` was reported and then ignored (t1314)
+
+**The class.** Every horizontally-scrolling rail on the modern web hides its scrollbar. The recipe is
+two lines — `scrollbar-width: none` plus `::-webkit-scrollbar { display: none }` — and it is on
+carousels, chat panes, code blocks, tab strips, tag rows and every custom-overlay scroll area.
+
+⚠⚠⚠ **We answered the script correctly and laid it out wrongly.** `getComputedStyle(el)
+.scrollbarWidth` returned `"none"` while layout went on reserving 15px of the content box, because
+`ScrollbarWidth`'s doc comment said the geometry was *"a paint concern this engine does not model"* —
+true when written, false the day the gutter reservation landed, never re-checked. **Right in the one
+channel a person checks, wrong in the one the page can see.** 15px out of a rail's content width
+re-wraps its cards and its prose.
+
+⚠⚠ **`clientWidth`/`clientHeight` had the same bug independently**, and that one is the FUNCTION axis:
+react-window, TanStack Virtual and every data grid divide `clientHeight` by a row height to decide how
+many rows to render, so a `clientHeight` one scrollbar too large renders a row too many and then
+measures the overflow it just caused.
+
+⭐⭐⭐ **And fixing the client box made the score go DOWN before it went up.** The client box is the
+FLOOR of `scrollHeight`, so a client box one scrollbar too large had been lifting an *under-computed*
+scrollable overflow back to the right answer: four `css/css-overflow` files were passing on the floor
+and not on their geometry. **A wrong floor hides an under-computed value, and removing it arrives as a
+regression.**
+
+```text
+   pristine                                   468 / 963
+   + scrollbar out of the client box           457 / 963   −11
+   + container end padding into the extent     481 / 963   +13
+```
+
+Reference measured against headless Chrome, not derived: gutter `auto` 15 / `none` 0 / `thin` **10**,
+and a padded scroller reads `clientW 105  clientH 105  scrollW 105  scrollH 120`.
