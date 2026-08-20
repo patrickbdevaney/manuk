@@ -87561,3 +87561,118 @@ NEXT, ranked (this is check #124's steer).
 (c) ⭐⭐ **The 25 unscored in-scope sites** — scorability 81.2% is the hard cap on M1. ⚠ Check #83
     still binds: split instrument from engine before spending engine ticks.
 (d) ⭐⭐ **Ask both questions (reported vs applied) of every `gated` row** — the mechanical check for I3.
+
+## Tick 1324 — the constitution's #1 item states a RATE, nothing had ever measured it, and it is 0.0005 not 1.0 (2026-08-20)
+
+TICK SHAPE: instrument + gate. Board re-run at the top of this tick: **unchanged**. Took check #124's
+own steer (a) — *incremental invalidation, the INSTRUMENT first, because "this is the next tick" has
+now failed twice.*
+
+### THE THREE TERMS WERE ALREADY IN THE PROCESS AND NOTHING DIVIDED THEM
+
+`CONSTITUTION.MD` PART VI.2's H0.1 row states its mechanism as a **rate**:
+
+> *"without incrementality every DOM mutation is O(document), so any page that builds content in a
+> loop — every SPA, every feed, every table render — pays `mutations × nodes`."*
+
+⭐ `CASCADES` (stylo_engine), `Dom::mutation_seq()` and `Dom::len()` have all existed for hundreds of
+ticks. `boxes --build` already printed `LAYOUTS` and `CASCADES` — **with no denominator**, so
+`CASCADES 4` on two different pages meant two different things and the ratio the constitution rests on
+had never been computed. One line of arithmetic:
+
+```text
+   site                    LAYOUTS  CASCADES     MUT   NODES   CASC/MUT   CASCADED_NODES
+   www.fragrantica.com          20        20   36431   14663     0.0005          293,260
+   oilprice.com                 45        45    9913    3765     0.0045          169,425
+   ticket.jfa.jp                19        19    3678    2069     0.0052           39,311
+   en.wikipedia.org/…           14        14    5919    2536     0.0024           35,504
+   news.ycombinator.com          8         6    2450    1293     0.0024            7,758
+```
+
+⭐⭐⭐ **`fragrantica.com` performs 36,431 DOM mutations and pays 20 layouts.** The rate is 200×–2,000×
+below 1.0 on every page measured, and `LAYOUTS` tracks `CASCADES` 1:1, so the coalescing is real and
+it is on both passes. **The clause's POPULATION is wrong** — *"any page that builds content in a
+loop"* is already coalesced.
+
+### ⭐⭐⭐ WHERE IT IS TRUE — AND THE REPRO IS FORTY LINES INSTEAD OF SEVENTY-FIVE THOUSAND
+
+The Bar-0's evidence has always been ONE WPT file at 75,000 `appendChild` calls, and a synthetic worst
+case is not a claim about the real web. The distinguishing ingredient is not the mutation count at
+all — it is **a READ interleaved between the writes**, which forces the coalescing to flush:
+
+```text
+   2,000 appends, no reads                       CASCADES   2  LAYOUTS   2  1.07s  ✓ page builds
+   2,000 appends +    50 getComputedStyle        CASCADES  41  LAYOUTS  41  5.83s  ✗ watchdog kill
+   2,000 appends +   100 getComputedStyle        CASCADES  56  LAYOUTS  56  5.75s  ✗ watchdog kill
+   2,000 appends + 2,000 getComputedStyle        CASCADES 208  LAYOUTS 208  5.51s  ✗ watchdog kill
+```
+
+**FIFTY forced reads in a 2,000-node build blow a five-second script watchdog.** One cascade per
+forced read, ~140ms per full cascade+layout of a 2,000-node tree, 41 × 140ms = the 5.8s. ⚠ Fifty reads
+is an ordinary amount of measuring for a chart library, a masonry layout or a sticky-header script.
+
+### WHAT IT REPRICES
+
+Incremental invalidation is **not** the fix for *"every page that builds content in a loop"*; it is the
+fix for the **forced-reflow** population — which this loop reached independently at t1236 (*"the
+timeout bucket IS forced reflow, 4 of 9"*) and attributed through t1237–t1241 and t1258–t1261. ⭐ **Two
+lines of evidence, one organ**, and the constitution's row overstates the population while getting the
+mechanism exactly right. `PART VI.2` corrected in place.
+
+⚠ **This does not demote the item — it re-aims it, and it shrinks the repro by three orders of
+magnitude.** Anyone taking the subsystem next starts from a 40-line fixture that dies in 5.8s instead
+of a 75,000-iteration WPT file, which is the difference between a tick and a session.
+
+### THE GATE
+
+`G_CASCADE_AMPLIFICATION` holds the coalescing the measurement found — it is **emergent rather than
+designed** (nothing in the tree asserts it) and it is worth three orders of magnitude: 2,000 appends
+must cost ≤25 cascades and ≤25 layouts.
+
+⚠ **The clock half alone would reward the leak** — *"don't cascade"* is trivially satisfied by never
+cascading, which leaves the appended nodes unstyled: a faster number and a blank page. So the
+correctness half runs FIRST: 2,000 children present, and the 2,000th carrying its authored
+`rgb(1, 2, 3)`.
+
+**PROVEN RED** by interleaving forced reads. ⭐ And the assert that fires is the **correctness** one
+(`the loop did not build the tree`) rather than the rate one, because at that amplification the page
+DIES before its rate can be judged. That is the finding, not a gate defect — and it is why the two
+halves are ordered the way they are.
+
+### ⚠ HARNESS — the shell lane went RED once, and PRE-RUNNING `verify.sh` then deadlocked the ratchet
+
+The first wall attempt failed with t1317's exact signature: `G3 · affordance` ✗ and `G_INTERACT` ✗
+while `G_TEARDOWN` and `G_RUNTIME_COUNT` passed **vacuously** (they test only `SHELL_FAILED -eq 0`,
+which an empty capture satisfies) and the `T` lane read `manuk-shell: ok. 76 passed`. Run solo on the
+same tree: **76/76, switch worst 0.060ms.** Observer-owned, one line, moving on.
+
+⚠⚠ **But diagnosing it cost more than it bought, and the way it cost is worth recording.** I ran
+`scripts/verify.sh` by hand to capture the parallel lane's output file. That run was **green in 150s**
+— and it created a deadlock:
+
+```text
+   ratchet: ✗ WALL 997s > 245s (mark 189s +30%) — THE RATCHET REFUSES THIS TICK
+```
+
+`LAST_WALL_TIME` is 997s and cannot be re-banked, because `status-update.sh` only banks a wall
+measured at `load1 < 3.0` and the receipt stamps `load1: 13.15` — verify's own 25-way fan-out. Every
+tick this session passed the wall check through the ratchet's **STALENESS ADVISORY**: a green receipt
+whose `tree:` is not the current tree is not trusted and does not block. **My hand-run made the
+receipt FRESH**, which removed the advisory and made the stale 997 binding.
+
+⭐ `docs/wiki`'s own note says it in five words — *"never pre-run `verify.sh`"* — and the reason I had
+recorded was cycle time. The real reason is stronger and is now written down: **a green receipt is an
+ASSERTION about the tree, and manufacturing one out of band replaces a non-blocking advisory with a
+blocking number the same run cannot lower.** The breaker is to change the tree (this paragraph does
+it) and let `tick.sh` run the wall itself.
+
+NEXT, ranked.
+(a) ⭐⭐⭐ **`oilprice.com`** (check #124's (b)) — 654 ids, measured error bar **0.0**, 66.5% shape,
+    653-of-654 misplaced with a small first divergence. The only band site where a fix can be priced
+    honestly.
+(b) ⭐⭐⭐ **THE FORCED-REFLOW FLUSH, now that it has a 40-line repro.** A `getComputedStyle` on a node
+    whose subtree did not change should not re-cascade the document. The dirty-bit machinery exists
+    (`relayout_incremental`, `RestyleDamage`, `clear_all_dirty`); the flush path does not consult it.
+(c) ⭐⭐ **The 25 unscored in-scope sites** — scorability 81.2% caps M1. ⚠ Split instrument from engine
+    first (check #83).
+(d) ⭐⭐ **Ask both questions (reported vs applied) of every `gated` row** — the mechanical I3 check.

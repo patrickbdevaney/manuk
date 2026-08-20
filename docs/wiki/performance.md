@@ -1066,3 +1066,68 @@ number. So the gate has a second half: the pages must really be **queued** (`pen
 i.e. deferred and not skipped) and the drain must really **empty** (`drain_reaps()` → 0). Proven RED
 by restoring the inline free: `G_TAB_REAP` fails and its 16 ms sibling `G_INTERACT` still passes —
 which is the whole point of writing it.
+
+## The constitution's #1 item states a RATE, and nothing had ever measured it — 0.0005 to 0.0052, not 1.0 (t1324)
+
+`CONSTITUTION.MD` PART VI.2's H0.1 row calls incremental relayout *"the single highest-leverage
+architectural decision in the renderer"*, and check #110 re-ranked it from deferred performance work to
+a **Bar 0** on the strength of one sentence:
+
+> *"without incrementality every DOM mutation is O(document), so any page that builds content in a
+> loop — every SPA, every feed, every table render — pays `mutations × nodes`."*
+
+It has been re-steered at checks #123 and #124 and deferred both times. ⭐ **All three terms of that
+rate were already in the process — `CASCADES`, `Dom::mutation_seq()`, `Dom::len()` — and no instrument
+had ever divided them.** `manuk-wpt boxes --fetch <url> --build` now prints the ratio:
+
+```text
+   site                    LAYOUTS  CASCADES     MUT   NODES   CASC/MUT   CASCADED_NODES
+   www.fragrantica.com          20        20   36431   14663     0.0005          293,260
+   oilprice.com                 45        45    9913    3765     0.0045          169,425
+   ticket.jfa.jp                19        19    3678    2069     0.0052           39,311
+   en.wikipedia.org/…           14        14    5919    2536     0.0024           35,504
+   news.ycombinator.com          8         6    2450    1293     0.0024            7,758
+```
+
+**`fragrantica.com` performs 36,431 DOM mutations and pays 20 layouts.** The rate is 200×–2,000× below
+1.0 on every page measured, and `LAYOUTS` tracks `CASCADES` 1:1 — so the coalescing is real and it is
+on both passes. The sentence is **not** true of "any page that builds content in a loop".
+
+### Where it IS true, and the repro is forty lines instead of seventy-five thousand
+
+The Bar-0 evidence has always been one WPT file, `css/selectors/invalidation/has-complexity.html`, at
+**75,000 `appendChild` calls**. That is a synthetic worst case, and a synthetic worst case is not a
+claim about the real web. The distinguishing ingredient turns out not to be the mutation count at all
+— it is a **read interleaved between the writes**, which forces the coalescing to flush:
+
+```text
+   2,000 appends, no reads                        CASCADES   2   LAYOUTS   2   1.07s   ✓ page builds
+   2,000 appends + 50 getComputedStyle calls      CASCADES  41   LAYOUTS  41   5.83s   ✗ watchdog kill
+   2,000 appends + 100 getComputedStyle calls     CASCADES  56   LAYOUTS  56   5.75s   ✗ watchdog kill
+   2,000 appends + 2,000 getComputedStyle calls   CASCADES 208   LAYOUTS 208   5.51s   ✗ watchdog kill
+```
+
+⭐⭐⭐ **FIFTY forced reads in a 2,000-node build are enough to blow a five-second script watchdog.**
+Roughly one cascade per forced read, and a full cascade+layout of a 2,000-node tree costs **~140ms** —
+41 × 140ms is the 5.8s. The Bar 0 is not "75,000 mutations"; it is *fifty reads*, which is an ordinary
+amount of measuring for a chart library, a masonry layout or a sticky-header script to do.
+
+### What this reprices
+
+Incremental invalidation is **not** the fix for "every page that builds content in a loop" — that
+population is already coalesced. It is the fix for the **forced-reflow** population, which this loop
+had already named independently at t1236 (*"the timeout bucket IS forced reflow, 4 of 9"*) and
+attributed through t1237–t1241 and t1258–t1261. The two lines of evidence are the same organ, and the
+constitution's row overstates the population while getting the mechanism right.
+
+### The gate
+
+`G_CASCADE_AMPLIFICATION` (`engine/page/tests/g_cascade_amplification.rs`) holds the coalescing that
+the measurement found, because it is currently **emergent rather than designed** and nothing asserted
+it: 2,000 appends must cost ≤25 cascades and ≤25 layouts.
+
+⚠ The clock half alone would reward the leak — "don't cascade" is trivially satisfied by never
+cascading, leaving the appended nodes unstyled. So the correctness half runs **first**: the tree must
+have 2,000 children and the 2,000th must carry its authored `rgb(1, 2, 3)`. Proven RED by interleaving
+forced reads, and the assert that fires is the *correctness* one, because at that amplification the
+page dies before its rate can be judged — which is the finding, not a gate defect.

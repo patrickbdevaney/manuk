@@ -1948,12 +1948,41 @@ fn run_boxes_cmd(args: &[String], fonts: &manuk_text::FontContext) {
                 manuk_css::stylo_engine::CASCADES.swap(0, std::sync::atomic::Ordering::Relaxed);
             #[cfg(not(feature = "stylo"))]
             let cascades = 0u64;
+            // ⚠⚠⚠ **THE DENOMINATOR THE CASCADE COUNT HAS NEVER HAD — AND WITHOUT IT
+            // `CASCADES 4` AND `CASCADES 4` MEAN DIFFERENT THINGS ON TWO PAGES.**
+            //
+            // `CONSTITUTION.MD` PART VI.2's H0.1 row calls incremental relayout *"the single
+            // highest-leverage architectural decision in the renderer"* and states the mechanism
+            // as a rate: *"without incrementality every DOM mutation is O(document), so any page
+            // that builds content in a loop — every SPA, every feed, every table render — pays
+            // `mutations × nodes`."* Check #110 re-ranked it to a Bar 0 on that sentence, and it
+            // has been re-steered at checks #123 and #124.
+            //
+            // ⭐ **Nothing had ever measured the rate.** The evidence for it is ONE WPT file
+            // (`css/selectors/invalidation/has-complexity.html`, 75,000 `appendChild` calls), and a
+            // synthetic worst case is not a claim about the real web. The three terms are all
+            // already in the process — `CASCADES`, `Dom::mutation_seq()`, `Dom::len()` — and the
+            // ratio between them is the whole question, so it is printed rather than left to be
+            // divided by hand at the moment somebody wants to rank the subsystem.
+            //
+            // `cascaded_nodes` is the constitution's own `mutations × nodes` term, actually
+            // counted: cascades × the node count each one walked. It is what makes a page with 4
+            // cascades over 12,000 nodes comparable to one with 400 over 120.
+            let muts = p.dom().mutation_seq();
+            let nodes = p.dom().len() as u64;
+            let per_mut = if muts > 0 {
+                cascades as f64 / muts as f64
+            } else {
+                0.0
+            };
+            let cascaded_nodes = cascades as u64 * nodes;
             if total < best {
                 best = total;
                 println!(
                     "  load_async {t_load:7.1}ms   finish_loading {:7.1}ms   TOTAL {total:7.1}ms   \
                      calls {n} (repeat {dup})  NET {net} (DUP {netdup})  LAYOUTS {layouts}  \
-                     CASCADES {cascades}",
+                     CASCADES {cascades}  MUT {muts}  NODES {nodes}  CASC/MUT {per_mut:.4}  \
+                     CASCADED_NODES {cascaded_nodes}",
                     total - t_load
                 );
             }

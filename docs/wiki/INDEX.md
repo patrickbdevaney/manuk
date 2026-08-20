@@ -2063,6 +2063,10 @@
   - L1012 · The cause, and the probe that named it
   - L1033 · The fix: discard is an UNLINK, the free is a FRAME LATER
   - L1057 · The gate, and why a stopwatch would have been worse than nothing
+  - L1070 · The constitution's #1 item states a RATE, and nothing had ever measured it — 0.0005 to 0.0052, not 1.0 (t1324)
+  - L1096 · Where it IS true, and the repro is forty lines instead of seventy-five thousand
+  - L1115 · What this reprices
+  - L1123 · The gate
 
 ## THE WIKI — what we durably KNOW, organised by subsystem
 `docs/wiki/README.md`
@@ -2328,4 +2332,4 @@
   - L231 · Both named mechanisms are subsystem work
 
 ---
-2235 sections across 22 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+2239 sections across 22 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.

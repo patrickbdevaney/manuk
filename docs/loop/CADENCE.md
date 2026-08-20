@@ -11,12 +11,12 @@
 
 | | value | over |
 |---|---|---|
-| ticks landed | **1010** | ticks 1–1323 |
-| median tick cycle | **30m** | 1009 intervals |
-| median, last 10 | **72m** | 10 intervals |
+| ticks landed | **1011** | ticks 1–1324 |
+| median tick cycle | **30m** | 1010 intervals |
+| median, last 10 | **59m** | 10 intervals |
 | fastest / slowest | 5s / 5.4d | |
-| **ticks per hour** | **1.04** | 967.6h elapsed |
-| median verify wall | **63s** | 949 ticks |
+| **ticks per hour** | **1.04** | 968.6h elapsed |
+| median verify wall | **63s** | 950 ticks |
 | wall trend | 39s → 17m — getting slower ⚠️ | first 3 vs last 3 |
 
 The **cycle** is the real unit: implement → debug → verify wall → land. The wall is only part of
@@ -27,11 +27,11 @@ it, and a wall that grows taxes every future tick, so it is tracked separately f
 ### Near — the daily driver (doc / app / platform web)
 
 * **capabilities asserted** (`G_CAPABILITY`): 48 → **81**
-* **live gates**: 27 → **500**
+* **live gates**: 27 → **501**
 * **✅ rows in the capability ledger**: 144 → **642**
 * **Bar 0 — oracle hangs**: 0 of 265 sites
 
-**474 of 1010 ticks** (47%) moved a
+**474 of 1011 ticks** (47%) moved a
 user-visible capability. The rest were instruments, infrastructure and corrections — and the
 ledger says the corrections were not overhead: three of its top three priorities were phantoms,
 and finding that out redirected everything after it.
@@ -1107,5 +1107,6 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 | **1321** | 2026-08-20 10:40 | 36m | capability | 17m | +495/−57 | 500 | 81 | 56.0% · | the initial containing block is not the window, and `html { overflow: scroll }` is where t |
 | **1322** | 2026-08-20 12:32 | 1.9h | measurement | 17m | +435/−33 | 500 | 81 | 56.0% · | the first complete sweep under the repaired instrument, and the per-site error bar is not  |
 | **1323** | 2026-08-20 12:41 | 9m | audit | 17m | +342/−36 | 500 | 81 | 56.0% · | the audit tick: the constitution already contained t1319's diagnosis, and it carried no st |
+| **1324** | 2026-08-20 13:38 | 57m | instrument | 17m | +362/−35 | 501 | 81 | 56.0% · | the constitution's #1 item states a RATE, nothing had ever measured it, and it is 0.0005 n |
 
 *`·` after a WPT figure means **carried forward**, not measured this tick.*
