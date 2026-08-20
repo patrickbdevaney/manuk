@@ -959,6 +959,12 @@
   - L4148 · ⚠ Three construction notes, each paid for
   - L4159 · ⭐ The gate survived a total change of mechanism
   - L4165 · ⚠⚠ Removing a duplicate is an INTEGRATION, and the wall may not be watching
+  - L4178 · A CSS TRANSITION NEEDS A MEMORY, WHICH IS THE ONE THING AN ANIMATION DOES NOT (t1310)
+  - L4197 · ⚠⚠⚠ THE GUARD: sample only when the elapsed time is GENUINELY POSITIVE
+  - L4207 · ⚠⚠⚠ THE BEFORE-CHANGE VALUE IS KEPT WHILE THE TRANSITION RUNS
+  - L4215 · ⭐⭐⭐ DISCRETENESS IS A PROPERTY OF THE VALUE PAIR, NOT ONLY OF THE PROPERTY ID
+  - L4239 · Measured (same binary twice, same hour, css/css-transforms, denominator 5500 in both)
+  - L4259 · ⚠⚠⚠ A 20-MINUTE SWEEP OVER A TREE THAT IS BEING EDITED IS NOT A BASELINE
 
 ## `<dialog>`, `popover`, and the top layer (ticks 194-195)
 `docs/wiki/dialog-and-top-layer.md`
@@ -2269,4 +2275,4 @@
   - L231 · Both named mechanisms are subsystem work
 
 ---
-2176 sections across 22 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+2182 sections across 22 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.

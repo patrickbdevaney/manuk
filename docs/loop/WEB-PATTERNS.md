@@ -7704,3 +7704,58 @@ interpolator exposed two real defects it had been masking (a reveal-hack overwri
 denominator stable at ~5500 across four runs. `G_WEB_ANIMATIONS` — every case written for the old
 implementation stays green through the new one — RED two ways (`animation-delay: 0ms` instead of the seek;
 dropping the effect's easing).
+
+## THE HOVER, THE ACCORDION AND THE DRAWER — a CSS transition mid-flight (t1310)
+
+**The class.** `transition` is the single most-written animation declaration on the web, and it is written
+for interaction: a button that darkens on hover, a nav that slides in, an accordion whose height grows, a
+drawer that translates off-screen, a modal that fades. It is `:hover`, `.is-open` and `aria-expanded`
+made visible. Unlike `@keyframes`, nobody declares its endpoints — the *from* is simply whatever the
+element looked like a moment ago.
+
+⚠⚠⚠ **And that is exactly what an engine that re-cascades from scratch does not have.** A cascade computes
+a style from rules; a transition needs the style *the last cascade published*. Before this the engine had
+no such memory, so `transition-*` cascaded, was read by nobody, and every element mid-transition computed
+— and reported through `getComputedStyle` — its **after-change** value, as if the transition had already
+finished. Four of the six legs of WPT's `interpolation-testcommon.js` are transitions, and two of them
+were the largest single named mechanism left in `css/css-transforms` at **594 failing subtests each**.
+
+**What actually renders differently on a real page today: nothing, and that is deliberate.** The document
+clock is 0, so an ordinary `transition: width .3s` has zero elapsed time and is *not running* — sampling
+it would render every one of those interactions in the state it was **leaving**, which is a far larger
+error than not animating at all. The sampler fires only on a NEGATIVE `transition-delay` (an author
+placing the transition in the past). So this tick banks the whole mechanism — the before-change table,
+`all` expansion, per-index list wrapping, timing functions, `transition-behavior: allow-discrete`, the
+discrete flip — behind a guard that lets a clock, when it lands, turn every real page's transitions on
+without another engine change.
+
+⭐⭐⭐ **DISCRETENESS IS A PROPERTY OF THE VALUE PAIR, NOT ONLY OF THE PROPERTY ID.** `transform` is
+continuous, yet `matrix3d(2,0,0,0, 0,2,0,0, 0,0,0,0, 0,0,0,1) → matrix(3,0,0,3,0,0)` has no midpoint at
+all — the from-matrix is singular — so *that pair* is discrete and `transition-behavior` has to be asked a
+second time about it. Found as a **measured regression against the tick's own same-hour control**, not
+read out of the spec: the first cut interpolated it and cost 22 subtests across four legs while the area
+total was up by a thousand. **An area total large enough to be proud of will hide a regression that a
+per-leg histogram against the old binary shows immediately.**
+
+⚠ Its cause is a second, still-open defect worth naming: two transform lists whose functions do not match
+come back from `Animate` as `Ok`, carrying a *deferred* `InterpolateMatrix` that Stylo's servo build
+resolves to `Transform3D::identity()` under a `TODO` and our `stylo_map.rs` drops entirely — so an element
+that should sit half-way between two transforms renders **completely untransformed**.
+`animation::is_unresolvable` routes that case to the discrete flip (one of the two real endpoints) until
+the resolution is built.
+
+**Measured, every row against the PRE-TICK binary in the same hour** (the post-tick sweep's own +3,183
+included `css/selectors +382`, an area with two files that mention `transition` — its banked mark was
+stale, and `css/selectors` measures 4139 on both binaries):
+
+```text
+   css/css-transforms  3697→4735  +1038      css/css-position  1004→1166  +162
+   css/css-sizing      3860→4320   +460      css/css-ui         891→1003  +112
+   css/css-backgrounds 4461→4891   +430      css/selectors     4139→4139     0  ← CONTROL
+   css/css-flexbox     2594→2850   +256                                  ────────
+                                                                           +2458
+```
+
+Transitions legs in `css/css-transforms` **594 → 85** and **594 → 85** — *exactly equal*, the signature
+of one sampler rather than two. `G_TRANSITION_INTERPOLATION` — 14 rows, five of them controls, proven
+RED against the pre-tick tree.

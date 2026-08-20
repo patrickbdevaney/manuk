@@ -380,6 +380,33 @@ where
     out
 }
 
+/// **Did `Animate` hand back an answer this engine cannot actually resolve?**
+///
+/// ⚠⚠⚠ **`Ok` from `animate` is not the same thing as an interpolated value.** When two
+/// `transform` lists do not match function-for-function, CSS Transforms 1 says to interpolate them
+/// as matrices — and Stylo's answer is to return `Ok` carrying a **deferred**
+/// `InterpolateMatrix { from_list, to_list, progress }` for the consumer to resolve against the
+/// reference box. Its servo build never resolves it: `generics/transform.rs` answers
+/// `Transform3D::identity()` with a `TODO`, and our own `stylo_map.rs` drops the operation on its
+/// `_ => {}` arm. So the value that reaches the page is neither endpoint and neither a midpoint —
+/// it is **no transform at all**, which is the largest error the property can produce.
+///
+/// Until that resolution is built, a pair that lands here is treated as **discrete**: one of the
+/// two real endpoints instead of the identity. Strictly better at every progress, and at 0 and 1
+/// exactly right.
+pub fn is_unresolvable(v: &AnimationValue) -> bool {
+    use stylo::values::generics::transform::TransformOperation as TOp;
+    match v {
+        AnimationValue::Transform(t) => t.0.iter().any(|op| {
+            matches!(
+                op,
+                TOp::InterpolateMatrix { .. } | TOp::AccumulateMatrix { .. }
+            )
+        }),
+        _ => false,
+    }
+}
+
 /// **Interpolate one sample's properties between two fully-cascaded styles.**
 ///
 /// `from`/`to` are the element's own cascade re-run with each bracketing keyframe's declarations
@@ -447,9 +474,14 @@ pub fn interpolate(
         let a = composed(&sample.from_composite, a);
         let b = composed(&sample.to_composite, b);
         let v = match a.animate(&b, Procedure::Interpolate { progress }) {
-            Ok(v) => v,
+            // ⚠ `Ok` IS NOT ALWAYS AN ANSWER — see [`is_unresolvable`]. A mismatched pair of
+            // transform lists comes back as a *deferred* `InterpolateMatrix`, which this engine
+            // renders as the IDENTITY matrix: an element that should have been half-way between
+            // two transforms sits completely untransformed. Routed into the discrete arm, it is at
+            // least one of the two real endpoints.
+            Ok(v) if !is_unresolvable(&v) => v,
             // Discrete: the value flips at the half-way point of the segment.
-            Err(()) => {
+            _ => {
                 if progress < 0.5 {
                     a
                 } else {

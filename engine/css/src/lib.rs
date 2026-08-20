@@ -7894,6 +7894,12 @@ pub mod stylo_engine;
 #[cfg(feature = "stylo")]
 pub mod animation;
 
+/// A running CSS TRANSITION sampled to an INTERPOLATED computed value. The sibling of
+/// [`animation`], and the one that needs a MEMORY: a transition's `from` endpoint is what the last
+/// cascade published, and appears in no rule anywhere.
+#[cfg(feature = "stylo")]
+pub mod transition;
+
 /// D2 Step-0 probe: drive real Stylo (Device + parser + Stylist) end to end.
 #[cfg(feature = "stylo")]
 pub mod stylo_probe;

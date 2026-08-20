@@ -810,6 +810,11 @@ pub fn cascade_via_stylo_sized(
     // Preorder walk so a parent's ComputedValues exists before its children's cascade.
     let mut parent_cv: std::collections::HashMap<NodeId, ServoArc<ComputedValues>> =
         std::collections::HashMap::new();
+    // The BEFORE-CHANGE style table this pass is building — see `crate::transition`. Built fresh
+    // and published wholesale at the end of the walk, so a node the document no longer contains
+    // stops being remembered in the same instant it stops being cascaded.
+    let mut next_prev: std::collections::HashMap<NodeId, ServoArc<ComputedValues>> =
+        std::collections::HashMap::new();
     let mut stack: Vec<NodeId> = vec![dom.root()];
     while let Some(node) = stack.pop() {
         // Push children (reverse so we pop them in document order).
@@ -942,6 +947,51 @@ pub fn cascade_via_stylo_sized(
                 );
             }
         }
+        // ── **CSS TRANSITIONS, INTERPOLATED — see `crate::transition`.**
+        //
+        // ⚠ **AFTER the animation mix and not before it**, because CSS Cascade 5 orders the
+        // transition origin ABOVE the animation one. So a property that is both animated and
+        // transitioning interpolates towards its *animated* value, which is what `after` here is.
+        //
+        // ⚠⚠⚠ **THE BEFORE-CHANGE VALUE IS KEPT WHILE THE TRANSITION RUNS, AND THAT IS NOT AN
+        // OPTIMISATION.** Overwriting it every pass makes a transition survive exactly one cascade:
+        // the next recalc would see `before == after` and answer the end state. WPT's
+        // `interpolation-testcommon.js` makes that failure certain rather than unlikely — it runs
+        // `interpolate()` on EVERY target and only then `measure()`s them, so the first target is
+        // re-cascaded once per later target before anybody reads it.
+        let mut transitioning = false;
+        // The cheap gate every element of every page pays: is any transition-delay negative? While
+        // the document clock is 0 nothing else can be running (see `crate::transition`'s guard).
+        if crate::transition::may_be_running(&cv) {
+            if let Some(before) = crate::transition::prev_style(node) {
+                let mixed = crate::transition::sample(&before, &cv);
+                if !mixed.is_empty() {
+                    transitioning = true;
+                    // The before-change style is what this element keeps remembering until the
+                    // transition ends.
+                    next_prev.insert(node, before);
+                    cv = cascade_one_element(
+                        &stylist,
+                        &index,
+                        &mut candidates,
+                        &mut caches,
+                        &lock,
+                        &url_data,
+                        &guard,
+                        &guards,
+                        &el,
+                        node,
+                        &parent_cv,
+                        dom,
+                        cq_active,
+                        &mixed,
+                    );
+                }
+            }
+        }
+        if !transitioning {
+            next_prev.insert(node, cv.clone());
+        }
         // **`rem` is root-relative.** The device carries the root font size that every `rem` in the
         // document resolves against, and it starts at the initial 16px. Unless it is updated once
         // the root element's own font size is known, `html{font-size:62.5%}` — the "1rem = 10px"
@@ -1071,6 +1121,8 @@ pub fn cascade_via_stylo_sized(
         }
         parent_cv.insert(node, cv);
     }
+    // The walk is over: this pass's styles become the next pass's before-change values.
+    crate::transition::publish_pass(next_prev);
 
     // ── **`:has()` — the rules Stylo THREW AWAY.**
     //

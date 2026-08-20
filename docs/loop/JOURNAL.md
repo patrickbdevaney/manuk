@@ -85813,3 +85813,170 @@ NEXT, ranked.
 (d) ⭐⭐ Publish the `animation-*` longhands through CSSOM (`animationPlayState` /
     `animationTimingFunction` are `undefined`) — carried from t1308.
 (e) ⭐⭐ Sweep the workaround comments for DEAD PREMISES (check #122 steer #3).
+
+## Tick 1310 — a CSS transition needs a MEMORY, and the cascade had none (2026-08-19)
+
+TICK SHAPE: capability. Board re-run at the top of this tick: **unchanged** (★ CSS-LAYOUT; the
+mandate names `css/css-transforms` among the ★ rows). This takes t1309's ranked NEXT (a): *"the
+CSS-TRANSITIONS leg — now the single largest named mechanism left, 1,180 in `css/css-transforms`
+alone plus 486 in `css/css-grid`."*
+
+HYPOTHESIS. WPT's `css/support/interpolation-testcommon.js` runs **six** legs. t1301 closed CSS
+Animations and t1309 closed Web Animations by routing it through the same path. The other four are
+transitions, and they use the same trick one property over: `transition-duration: 100s;
+transition-delay: -50s` places a transition at its half-way point **at time zero**, with the timing
+function warped so the fixed sample eases to the tested progress. So the value is again a STATIC
+function of the cascade.
+
+⭐⭐⭐ **WHAT MADE THIS A DIFFERENT BUILD FROM THE ANIMATION ONE, AND IT IS THE WHOLE FINDING: A
+TRANSITION NEEDS A MEMORY.** An animation's two endpoints are both written down in the stylesheet, so
+sampling one is a pure function of the cascade — which is why `animation.rs` owns no state at all. A
+transition's `from` endpoint is *the value this element had before the style change*, and it appears
+in **no rule, no keyframe and no declaration anywhere in the document**. The only place it can come
+from is what the last cascade published. That per-node before-change table is the entire new
+mechanism; everything numeric is still borrowed per the ladder (option 1, no fork):
+`ComputedValues::transition_properties` expands `all` and drops `none`, `LonghandId::is_animatable` /
+`is_discrete_animatable` classify, `Animate` interpolates, `ComputedTimingFunction::calculate_output`
+eases.
+
+PREDICTION (written before the patch, in `g_transition_interpolation`, which was then run RED):
+`t1=75px t2=75px t3=rgb(50, 50, 50) t4=62.5px t5=50px t6=inline t7=block` with all five `n*` controls
+unmoved at `100px`.
+
+RESULT — **the prediction met on the first run, and the pricing is a same-binary-twice control.**
+
+```text
+   css/css-transforms      3697 / 5500  →  4735 / 5500     +1038     67.2% → 86.1%
+
+   failures by harness leg, BEFORE → AFTER   (old binary and new, same hour, same denominator)
+     CSS Transitions                            594  →   85
+     CSS Transitions with transition: all       594  →   85
+     CSS Transitions + allow-discrete             3  →    0
+     CSS Transitions all + allow-discrete         3  →    0
+     CSS Animations                             151  →  144   ← is_unresolvable, not transitions
+     Web Animations                             151  →  144   ← ditto
+```
+
+⭐ **The two plain transition legs are EXACTLY EQUAL at 85 and 85** — the same equality signature
+t1309 read for Web Animations vs CSS Animations. Two legs running the same expectations over the same
+properties now fail on precisely the same ones, because they go through **one** sampler; a residual
+difference would have meant a residual second path.
+
+⚠ **The old-binary control changed what this tick reports, twice.** t1309's journal records the
+animation legs at 92; the control measured them at **151** on the same tree, because that number came
+from a run with a 5461 denominator. Reading the previous tick's number as this tick's baseline would
+have booked a phantom −59 regression in the animation legs. *A leg count does not travel between
+runs any more than an area total does.* And the control is what found the real regression below.
+
+⚠⚠⚠ **THE REGRESSION THE AREA TOTAL HID, AND HOW IT WAS CAUGHT.** The first cut was `+996` and looked
+finished. The per-leg histogram against the old binary showed the two plain transition legs going from
+**0 failures to 7** on `non-invertible-matrix-interpolation`, and the two allow-discrete legs from 3 to
+7 — **22 subtests**, invisible inside a four-figure gain.
+
+⭐⭐⭐ **DISCRETENESS IS A PROPERTY OF THE VALUE PAIR, NOT ONLY OF THE PROPERTY ID.** `transform` is a
+continuous property and passes `is_discrete_animatable() == false`, yet
+`matrix3d(2,0,0,0, 0,2,0,0, 0,0,0,0, 0,0,0,1) → matrix(3,0,0,3,0,0)` has no midpoint at all: the
+from-matrix is **singular**, so the spec makes *that pair* discrete. `transition-behavior` therefore
+has to be consulted a **second time, on the pair** — under `normal` there is no transition at all
+(jump), under `allow-discrete` it flips at 0.5. With that arm the file passes on **all six legs**
+(0 failures), which is +7 on each animation leg as well.
+
+⚠⚠⚠ **AND `Ok` FROM `Animate` IS NOT THE SAME THING AS AN INTERPOLATED VALUE — a new open defect,
+named here.** Two transform lists whose functions do not match come back as `Ok` carrying a *deferred*
+`InterpolateMatrix { from_list, to_list, progress }`. Stylo's servo build never resolves it —
+`values/generics/transform.rs` answers `Transform3D::identity()` under a `TODO` — and our own
+`stylo_map.rs` drops the operation on its `_ => {}` arm. **So an element that should sit half-way
+between two transforms renders completely untransformed**, which is the largest error the property can
+produce, and it was true for every `@keyframes` animation too. `animation::is_unresolvable` names the
+case and routes it to the discrete flip (one of the two real endpoints) so the value is never the
+identity; resolving `InterpolateMatrix` for real is ranked below.
+
+MECHANISM. `engine/css/src/transition.rs`. A thread-local `PREV: HashMap<NodeId, Arc<ComputedValues>>`
+holds each element's before-change style; the cascade walk builds a fresh table and publishes it
+wholesale at the end of the pass, so a node the document no longer contains stops being remembered in
+the same instant it stops being cascaded. The mix is applied **after** the animation mix, because CSS
+Cascade 5 orders the transition origin above the animation one.
+
+⚠ **The before-change value is KEPT while a transition is running on that element, and that is not an
+optimisation.** Overwriting it every pass makes a transition survive exactly one cascade — the next
+recalc would see `before == after` and answer the end state. The harness makes that failure *certain*
+rather than unlikely: it runs `interpolate()` on **every** target and only then `measure()`s them, so
+the first target is re-cascaded once per later target before anybody reads it. The gate reproduces
+that two-phase ordering deliberately, and `t1` sits in front of thirteen later rows for this reason.
+
+⚠⚠⚠ **THE GUARD — SAMPLE ONLY WHEN THE ELAPSED TIME IS GENUINELY POSITIVE — IS THE WHOLE REAL-PAGE
+SAFETY ARGUMENT.** `animation::time_ms` is 0 and nothing in this engine advances it, so an ordinary
+`transition: width .3s` has `elapsed = 0 - 0 = 0` and sits at progress **0**, i.e. its *start* value.
+A sampler without the guard would render every hover, accordion, drawer and menu on the real web in
+the state it was **leaving** — a far larger error than not animating. So the sampler fires only on a
+NEGATIVE delay, which is the WPT idiom and essentially absent from real pages: **this tick changes
+what no corpus page renders, on purpose**, and banks the whole mechanism behind a condition a clock
+will satisfy later with no further engine change. `n1` is that control and reads `100px`, unchanged.
+
+PROVEN RED (three, all measured):
+- the pre-tick tree, before any of this was written: every `t*` row collapses onto its after-change
+  value (`t1=100px t3=rgb(100, 100, 100) t5=100px t7=inline`) while all five `n*` controls hold.
+- interpolating the singular matrix pair instead of flipping it: `t8`/`t9` go wrong AND the four
+  transition legs lose 22 subtests in `css/css-transforms`.
+- (by construction) `t5` vs `t1` and `t6` vs `t7` each differ in ONE declaration and must differ in
+  their answer, or the timing function / behavior keyword is not being consulted at all.
+
+CONTROLS. All 29 `manuk-page` gates touching animation ran green at t1309 and the seven that could
+plausibly move here were re-run by hand: `g_keyframe_interpolation`, `g_animation`,
+`g_animation_composition`, `g_web_animations`, `g_transform_containing_block`, `g_visibility`,
+`g_computed_style` — 7/7 green. (t1309's note stands: `verify.sh` names ~19 gates while
+`engine/page/tests/` holds 492, so a green wall is not coverage.)
+
+⭐⭐⭐ **THE FULL SWEEP CREDITED THIS TICK WITH +3,183 AND ~700 OF THAT IS NOT MINE — A 20-MINUTE
+SWEEP OVER A TREE THAT IS BEING EDITED ATTRIBUTES EACH AREA TO A DIFFERENT TREE.** `ratchet.sh check`
+after the post-tick sweep reported `css/selectors +382` — an area with **two files that mention
+`transition` at all** and none that use the interpolation harness. It cannot be mine, so the *baseline*
+was wrong.
+
+The disciplined answer was the old-binary control (t799), and it settled it in one run: **css/selectors
+measures 4139 on the pre-tick binary too, and 4139 twice on the post-tick one.** Deterministic, and
+flat. The banked mark of 3757 was taken by the observer's 10:56 sweep — which runs ~20 minutes over 25
+areas while t1307/t1308/t1309's code was landing in the working tree, so `css/selectors` (measured
+3rd) and `css/css-transforms` (measured 10th) were scored against **different trees**. A sweep is not
+atomic with respect to the source it is measuring, and its rows are therefore not a baseline any
+single tick may difference against.
+
+So the whole board was re-measured on the pre-tick binary, this hour, and this is what this tick
+actually bought:
+
+```text
+   area                   pre-tick (control)   post-tick        MINE      banked Δ (overstated)
+   css/css-transforms       3697 / 5500       4735 / 5500      +1038          +1063
+   css/css-sizing           3860 / 5892       4320 / 5850       +460  ⚠        +1292
+   css/css-backgrounds      4461 / 6181       4891 / 6181       +430           +804
+   css/css-flexbox          2594 / 4693       2850 / 4693       +256           +456
+   css/css-position         1004 / 1482       1166 / 1482       +162           +483
+   css/css-ui                891 / 1900       1003 / 1900       +112           +293
+   css/selectors            4139 / 5560       4139 / 5560          0  ← CONTROL  +382
+                                                              ───────
+                                                                +2458
+   ⚠ css/css-sizing's denominator moved (5892 → 5850), so +460 is the one figure here that is not
+     on a fixed denominator; the conservative read is +418.
+```
+
+⭐ **`css/selectors` is the CONTROL ROW this tick did not have to invent** — an area the mechanism
+provably cannot reach, measured flat on both binaries while six neighbours moved. That is what says
+the +2,458 is the transition sampler and not a drifting instrument. Ranked below: the banked marks
+themselves are now known to be low, and re-banking them from a sweep taken over a QUIET tree is
+harness work for the observer, recorded here in one line per the SCOPE rule.
+
+NEXT, ranked.
+(a) ⭐⭐⭐ **Resolve `InterpolateMatrix` / `AccumulateMatrix`** — convert both lists to `Matrix3D`
+    against the reference box and interpolate, per Stylo's own `TODO`. Today every mismatched
+    transform-list interpolation renders as **no transform at all** (the discrete flip added here is
+    a floor, not the answer). It is `transform` on the whole animated web, and it is the residue in
+    the 144 that both animation legs still fail.
+(b) ⭐⭐⭐ **Re-bank the ratchet marks from a sweep taken over a QUIET tree** (harness-owned,
+    observer's call): six area marks are provably 200–800 low, `css/selectors` by 382 with no
+    mechanism at all, because the sweep straddled three landing ticks. A mark that is too LOW is the
+    benign direction — the ratchet still refuses regressions — but it silently inflates every
+    subsequent tick's claimed delta, which is how this tick nearly reported +3,183.
+(c) ⭐⭐⭐ The SVG CSS-property supplement (t1305) · `wai-aria` 54.8% (I3) · external stylesheet text
+    to JS (t1302).
+(d) ⭐⭐ Publish the `animation-*` and `transition-*` longhands through CSSOM (carried from t1308).
+(e) ⭐⭐ Sweep the workaround comments for DEAD PREMISES (check #122 steer #3).
