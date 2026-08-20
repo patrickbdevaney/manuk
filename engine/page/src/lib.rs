@@ -1893,8 +1893,8 @@ unsafe fn forced_reflow(ctx: *mut std::ffi::c_void, dom: *mut Dom) {
     // ⚠ Computed from the tree WITH the offsets applied above, because `scroll_geometry_of` adds the
     // offset back when it measures the extent; handing it an unscrolled tree would measure a
     // different page from the one the clamp is about.
-    manuk_js::set_scroll_geometry(scroll_geometry_of(&root_box, &c.styles, &offsets));
-    manuk_js::set_snap_candidates(snap_candidates_of(&root_box, &c.styles, &offsets));
+    manuk_js::set_scroll_geometry(scroll_geometry_of(dom, &root_box, &c.styles, &offsets));
+    manuk_js::set_snap_candidates(snap_candidates_of(dom, &root_box, &c.styles, &offsets));
 
     c.laid_out_at = dom.mutation_seq();
     c.scrolled_at = scroll_seq;
@@ -2289,6 +2289,7 @@ pub fn load_budget() -> std::time::Duration {
 /// exists — and a virtualised list that reads `clientHeight` at boot (they all do) must not be handed a
 /// zero. A capability that only works after the deferred pass is a capability that works on half the web.
 fn scroll_geometry_of(
+    dom: &Dom,
     root_box: &manuk_layout::LayoutBox,
     styles: &StyleMap,
     offsets: &std::collections::HashMap<manuk_dom::NodeId, (f32, f32)>,
@@ -2375,6 +2376,90 @@ fn scroll_geometry_of(
             ],
         );
     }
+
+    // ⚠⚠⚠ **THE ROOT ELEMENT'S `clientWidth`/`clientHeight` ARE THE VIEWPORT, NOT ITS OWN BOX — AND
+    // ANSWERING WITH ITS OWN BOX MEANT `documentElement.clientHeight` WAS THE HEIGHT OF THE WHOLE
+    // DOCUMENT.**
+    //
+    // CSSOM-View is explicit: *"if the element is the root element and the document is not in quirks
+    // mode … return the viewport width/height excluding the size of a rendered scroll bar"* (and in
+    // quirks mode the same clause moves to the HTML `body` element). Every other element reports its
+    // padding box, which is what the fallback above did for everybody — so the ONE element with a
+    // different rule got the general one.
+    //
+    // Measured, headless Chrome vs here, viewport 800x800 over a 5,000px-tall document:
+    //
+    // ```text
+    //                              Chrome        before
+    //     documentElement.clientWidth    800        784
+    //     documentElement.clientHeight   800       5800   <- the DOCUMENT height
+    //     100vw / 100vh              800 / 800  800 / 800  <- already right, which is what hid it
+    // ```
+    //
+    // ⭐ **`clientHeight` off by 7x is not a geometry rounding error, it is a load-bearing lie.**
+    // `document.documentElement.clientHeight` is *the* "how tall is the viewport?" idiom on the web:
+    // `scrollTop + clientHeight >= scrollHeight` is the infinite-scroll test, lazy-image loaders use
+    // it to decide what is within a screen of the fold, sticky/scroll-spy code compares against it,
+    // and virtualised lists divide by it to choose a row count. With `clientHeight` equal to the
+    // document height, *everything* is inside the viewport: infinite scroll fires at once, every
+    // lazy image loads immediately, and the row count is the whole list.
+    //
+    // `vw`/`vh` were already correct — they resolve from `values::viewport_size()`, the same source
+    // used here — which is exactly why this survived: the CSS half of the viewport was right in
+    // every test that looked, and only the CSSOM half was wrong.
+    //
+    // `scrollWidth`/`scrollHeight` come along because they are the same element's *scrolling area*,
+    // floored at the viewport (a short document still scrolls zero, not negative). `scrollTop`/
+    // `scrollLeft` stay 0 here, which is what the fallback already answered — the document scroll
+    // offset is not part of this table, and pretending otherwise would be a new claim, not a fix.
+    let (vpw, vph) = manuk_css::values::viewport_size();
+    // The document element is POSITIONAL — the first element child of the document node — not
+    // `<html>` by name, so an XML/SVG document root gets the rule too. Same definition as
+    // `document.documentElement`, deliberately: two definitions of the root element is how the two
+    // drift apart.
+    let de = dom.children(dom.root()).find(|&c| dom.is_element(c));
+    // Quirks mode moves the clause to `body`. ⚠ Only the element the clause names is given the
+    // viewport: in quirks the root element keeps reporting its own box, which is what Chrome does.
+    let host = if dom.quirks() {
+        de.and_then(|d| dom.find_first_in(d, "body"))
+    } else {
+        de
+    };
+    if let Some(h) = host {
+        // ⚠ **THE ROOT ELEMENT HAS NO BOX IN OUR TREE.** `layout_document` roots the box tree at
+        // `<body>` (`find_first("body")`, then `html`), so `root_box.find(<html>)` is `None` on every
+        // ordinary page — and a `None` here silently made the document's scrolling area equal to the
+        // viewport, i.e. *"this page does not scroll"*, which is the same lie as the one above wearing
+        // different clothes. The document's scrolling area is the root box's far edge, which is what
+        // the fallback in `scroll_getter!` was already reporting before this arm existed. Measured as
+        // the far EDGE, not the size: the body's own top margin is part of the document's height.
+        let b = root_box.find(h).unwrap_or(root_box);
+        let (content_w, content_h) = (b.rect.x + b.rect.width, b.rect.y + b.rect.height);
+        // The scrollbar comes out of the viewport here for the same reason it comes out of an
+        // element's padding box above, and through the same function, so the two cannot disagree.
+        let sb = manuk_layout::scrollbar_gutter(manuk_css::ScrollbarWidth::Auto);
+        let root_st = styles.get(&h);
+        let gy = match root_st.map(|st| st.overflow_y) {
+            Some(Overflow::Scroll) => sb,
+            _ => 0.0,
+        };
+        let gx = match root_st.map(|st| st.overflow_x) {
+            Some(Overflow::Scroll) => sb,
+            _ => 0.0,
+        };
+        m.insert(
+            h,
+            [
+                0.0,
+                0.0,
+                content_h.max(vph - gx),
+                content_w.max(vpw - gy),
+                (vph - gx).max(0.0),
+                (vpw - gy).max(0.0),
+            ],
+        );
+    }
+
     m
 }
 
@@ -2388,12 +2473,13 @@ fn scroll_geometry_of(
 /// reads `100` on the same line, tick 408), so the JS-side mirror must know the snap points at
 /// assignment time; recomputing them in the bindings would be the two-sources-of-truth trap.
 fn snap_candidates_of(
+    dom: &Dom,
     root_box: &manuk_layout::LayoutBox,
     styles: &StyleMap,
     offsets: &std::collections::HashMap<manuk_dom::NodeId, (f32, f32)>,
 ) -> std::collections::HashMap<manuk_dom::NodeId, (Vec<f32>, Vec<f32>)> {
     use manuk_css::Overflow;
-    let geom = scroll_geometry_of(root_box, styles, offsets);
+    let geom = scroll_geometry_of(dom, root_box, styles, offsets);
     let mut m = std::collections::HashMap::new();
     for (node, st) in styles.iter() {
         let axis = st.scroll_snap_type;
@@ -4718,9 +4804,14 @@ impl Page {
     /// virtualised list divides by to decide which slice of the data to render. Give it a wrong number
     /// and it renders the wrong rows; give it `undefined` and it renders `NaN` of them, which is none.
     pub fn scroll_geometry(&self, node: manuk_dom::NodeId) -> Option<[f32; 6]> {
-        scroll_geometry_of(&self.root_box, &self.styles, &self.scroll_offsets)
-            .get(&node)
-            .copied()
+        scroll_geometry_of(
+            &self.dom,
+            &self.root_box,
+            &self.styles,
+            &self.scroll_offsets,
+        )
+        .get(&node)
+        .copied()
     }
 
     /// Scroll `node` to `(left, top)`, clamped to what there is to scroll. Returns the clamped offset
@@ -4921,13 +5012,23 @@ impl Page {
 
     /// Every `overflow: auto|scroll|hidden` container's scroll geometry — what the DOM must report.
     fn scroll_geometry_map(&self) -> std::collections::HashMap<manuk_dom::NodeId, [f32; 6]> {
-        scroll_geometry_of(&self.root_box, &self.styles, &self.scroll_offsets)
+        scroll_geometry_of(
+            &self.dom,
+            &self.root_box,
+            &self.styles,
+            &self.scroll_offsets,
+        )
     }
 
     fn snap_candidates_map(
         &self,
     ) -> std::collections::HashMap<manuk_dom::NodeId, (Vec<f32>, Vec<f32>)> {
-        snap_candidates_of(&self.root_box, &self.styles, &self.scroll_offsets)
+        snap_candidates_of(
+            &self.dom,
+            &self.root_box,
+            &self.styles,
+            &self.scroll_offsets,
+        )
     }
 
     /// Apply the `element.scrollTop = n` assignments a script just made, and **tell the page it
@@ -6426,6 +6527,7 @@ impl Page {
             .map(|(n, r)| (n, [r.x, r.y, r.width, r.height]))
             .collect();
         manuk_js::set_scroll_geometry(scroll_geometry_of(
+            &self.dom,
             &self.root_box,
             &self.styles,
             &self.scroll_offsets,
@@ -6934,11 +7036,13 @@ impl Page {
             None
         } else {
             manuk_js::set_scroll_geometry(scroll_geometry_of(
+                &dom,
                 &root_box,
                 &styles,
                 &std::collections::HashMap::new(),
             ));
             manuk_js::set_snap_candidates(snap_candidates_of(
+                &dom,
                 &root_box,
                 &styles,
                 &std::collections::HashMap::new(),

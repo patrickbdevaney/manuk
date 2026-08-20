@@ -87122,3 +87122,139 @@ NEXT, ranked.
 (c) ⭐⭐ **THE `overflow: auto` VIEWPORT GUTTER** — the residue this tick just made invisible to the
     sweep. It needs a WPT-side gate before it is worked, or it will be re-found the hard way.
 (d) ⭐⭐ **AUDIT THE OTHER WORST-CASE BARS** (t1318's (b)) — still open.
+
+## Tick 1320 — `documentElement.clientHeight` was the height of the whole DOCUMENT, and that number is how the web asks "is this on screen?" (2026-08-20)
+
+TICK SHAPE: capability fix + gate. Board re-run at the top of this tick: **unchanged** (CO-#1 = the
+rendering gap; ★ CSS-LAYOUT). Took the board's own HOW-TO-USE — histogram a ★ area's failures and let
+the top mechanism be the tick — on `css/css-values` (4,097 failing, 46.8%).
+
+### ⚠ THE AREA'S MASS IS NOT THE AREA'S LEVER, AND THE HISTOGRAM SAID SO IN ONE COMMAND
+
+```text
+   css/css-values/calc-size    1167/3699    fail=2532   ← 60% of the area
+   if-conditionals.html                     fail= 202
+   random-*.tentative                       fail= 293
+   calc-mix-serialize.tentative             fail= 113
+   viewport-units-css2-001.html             fail=  88   ← the only daily-driver row in the top ten
+```
+
+⭐ **`calc-size()` alone is 60% of `css/css-values`' failures** — a Chrome-only `interpolate-size`
+feature almost nothing on the real web uses — and most of the tail is `if()`, `random()`, `calc-mix`
+and `attr()` all-types. An area at 46.8% that *looks* like the biggest CSS lever on the board is
+mostly bleeding-edge spec work. ⭐ *FREQUENCY IS NOT LEVERAGE, and a per-file histogram is what tells
+the two apart — the AREA row cannot.*
+
+### THE ONE DAILY-DRIVER ROW, AND IT ACCUSED THE ENGINE OF THE WRONG THING
+
+```text
+   FAIL vw length applied to width
+        assert_equals: expected 78 but got 80
+```
+
+That reads as *"our `vw` is wrong"*. It is not. The test's own line 109:
+
+```js
+   var layoutViewportWidth = document.documentElement.clientWidth;
+   expectedResult: Math.round(layoutViewportWidth * (lengthAmount / 100))
+```
+
+**The test derives its expectation from `documentElement.clientWidth`.** Our `vw` was right and our
+`clientWidth` was wrong, so the engine was marking its own homework with the wrong answer key. ⭐ *An
+assertion names the value that disagreed, never the term that was wrong* — reading `expected 78 but
+got 80` as a `vw` defect would have sent the tick into the units code, which is correct.
+
+Probed both engines on one document, viewport 800×800 over 5,000px of filler:
+
+```text
+                                   Chrome      ours (before)
+    documentElement.clientWidth       800         784
+    documentElement.clientHeight      800        5800   ← the DOCUMENT height
+    100vw / 100vh                800 / 800   800 / 800  ← already right, which is what hid it
+```
+
+### ⭐⭐⭐ THE ROOT ELEMENT IS THE ONLY ELEMENT WITH A DIFFERENT RULE, AND IT GOT THE GENERAL ONE
+
+CSSOM-View: *"if the element is the root element and the document is not in quirks mode … return the
+viewport width/height excluding the size of a rendered scroll bar"* (quirks moves the clause to
+`body`). Every other element reports its padding box — which is exactly what the `scroll_getter`
+fallback did for everybody.
+
+⚠ **A 7× `clientHeight` is not a geometry rounding error, it is a load-bearing lie.**
+`scrollTop + clientHeight >= scrollHeight` is *the* infinite-scroll test; with `clientHeight` equal to
+the document height it is **true on the first frame of every page**. The feed loads its next page
+before the user scrolls, the lazy-loader fetches every below-the-fold image at once, and a virtualised
+list divides by a screen height that is the whole list. ⭐ None of that *looks* broken in a screenshot
+— it looks like a site that loads everything, which reads as slow rather than as wrong, which is why
+a fidelity sweep could never have found it.
+
+### THE FIX, AND THE THIRD DETAIL THAT THE FIRST DRAFT GOT WRONG
+
+The root-element arm lives at the end of `scroll_geometry_of`, beside the `overflow` table, so all
+four of `clientWidth`/`clientHeight`/`scrollWidth`/`scrollHeight` come from one place.
+
+1. The document element is **POSITIONAL** — the first element child of the document node, not `<html>`
+   by name — the same definition `document.documentElement` uses, so an XML/SVG root gets the rule and
+   the two definitions cannot drift.
+2. **Quirks mode moves the clause to `body`**; in quirks the root keeps reporting its own box, as
+   Chrome does.
+3. ⚠⚠ **THE ROOT ELEMENT HAS NO BOX IN OUR TREE.** `layout_document` roots the box tree at `<body>`
+   (`find_first("body")`, then `html`), so `root_box.find(<html>)` is `None` on every ordinary page.
+   My first draft fell back to the viewport there — which made the document's scrolling area equal to
+   the viewport, i.e. *"this page does not scroll"*, **the same lie wearing different clothes**, and
+   the gate caught it: `ch:720 sh:720 atEnd:true`. The scrolling area is now the root box's far EDGE
+   (`x+width`, `y+height`), not its size, because the body's own top margin is part of the document.
+
+```text
+   css/css-values/viewport-units-css2-001.html    72/160 → 144/160   (+72, fixed denominator)
+   css/css-values area                          3611/7708 → 3676/7834
+   fidelity control, 3 anchors (shape / coverage): ticket.jfa.jp 82.1/94.3 → 82.1/94.3 ·
+      razaoautomovel 70.8/90.3 → 70.7/90.2 · fragrantica 73.1/99.9 → 72.7/99.9   — flat, no regression
+```
+
+⚠ The AREA denominator moved 7,708 → 7,834 between runs (the `calc-size` animation files emit a
+varying number of subtests), so **the file is the claim and the area is the ledger** — 160 is a fixed
+denominator, 7,834 is not.
+
+### THE GATE
+
+`G_ROOT_CLIENT_BOX` asserts the root's client box equals `window.innerWidth`/`innerHeight` —
+**agreement between the engine's two answers to the same question**, not a literal, because a host may
+pick any viewport. Then the field consequence directly: `scrollTop + clientHeight >= scrollHeight`
+must be **false** at the top of a 5,000px document.
+
+```text
+   delete the root arm →  ch:5018  innerH:720  atEnd:true      FAILED
+```
+
+Its own test binary: a `Page` owns a SpiderMonkey runtime and two in one process abort on teardown
+(*"There are outstanding JS engine handles"*) — the shared-runtime reuse the WPT runner reports as
+`ACCUM`. The first attempt put it in `g_viewport.rs` and SIGSEGV'd, which is worth writing down
+because it will happen again to anyone adding a second `Page` to an existing gate file.
+
+### ⚠ REFUTED IN TWO COMMANDS, AND WORTH THE SAME SPACE AS THE FIX
+
+The sweep log showed `Saw @import rule, but no way to trigger the load` on **13 of 147 sites** —
+including three near-miss band anchors — and `@import sheet applied` on **zero**. That reads as
+*"whole stylesheets are never fetched"*, a render-blocker of the first order. It is wrong: the sweep
+runs at WARN level and `@import sheet applied` is an `INFO`. Re-run with `RUST_LOG=manuk_page=info`:
+
+```text
+   INFO manuk_page: @import sheet applied bytes=418 url=https://fonts.googleapis.com/css?family=Montserrat…
+```
+
+⭐ **An ABSENCE in a log is a claim about the LOG LEVEL until you have run the path.** One command
+separated "the feature is missing" from "the evidence is filtered", and the tick that would have
+rebuilt `@import` was already built at t564.
+
+NEXT, ranked.
+(a) ⭐⭐⭐ **`documentElement.getBoundingClientRect()` is `<body>`'s box** — 784×5800 against Chrome's
+    800×5821, because `layout_document` roots the tree at `<body>` and the `<html>` element has no box
+    at all. Same root cause as this tick, different consumer, and it means the root element cannot
+    carry a background, a border or a scroll container.
+(b) ⭐⭐⭐ **A CLEAN FULL SWEEP** on `corpus-crux-trend.txt` — still owed since t1319 repaired the
+    instrument; every absolute fidelity headline is pre-repair until it runs.
+(c) ⭐⭐ **`viewport-units-scrollbars-compute.html` is 0/34** and `viewport-units-gutter-00*` are 0/1
+    each — the `overflow: auto`-and-actually-overflows reservation, which t1319 made invisible to the
+    corpus sweep and which therefore has to be worked from WPT.
+(d) ⭐⭐ **AUDIT THE OTHER WORST-CASE BARS** (t1318's (b)) — still open.

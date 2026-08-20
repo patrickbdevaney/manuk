@@ -7918,3 +7918,28 @@ layout change.
 common than the explicit idiom — reserves nothing in our engine and is documented residue. With the
 reference's scrollbars hidden it is now invisible to the sweep, so it needs WPT coverage rather than
 corpus coverage.
+
+## THE INFINITE-SCROLL TEST FIRED ON THE FIRST FRAME OF EVERY PAGE (t1320)
+
+**The class.** Every feed, every lazy-image loader, every virtualised list and every scroll-spy on
+the web asks the same question — *"how tall is the viewport?"* — and asks it the same way:
+`document.documentElement.clientHeight`. The canonical predicate is
+
+```js
+if (de.scrollTop + de.clientHeight >= de.scrollHeight) loadMore();
+```
+
+⚠⚠⚠ **We answered with the height of the whole DOCUMENT.** CSSOM-View gives the root element its own
+rule (the viewport, not its own box); every other element reports its padding box, and our fallback
+did the padding box for everybody. On a 5,000px document in an 800×800 viewport Chrome says `800` and
+we said `5800`.
+
+So the predicate above is **true on the first frame**, before the user has scrolled: the feed loads
+its next page immediately, the lazy-loader fetches every image below the fold at once, and a
+virtualised list divides by a screen height that is the entire list and renders all of it. ⭐ Note the
+direction of the failure — none of it *looks* broken in a screenshot. It looks like a site that loads
+everything, which reads as slow, not as wrong.
+
+`vw`/`vh` were correct the whole time, from the same viewport source, so the CSS half of every test
+passed and only the CSSOM half was wrong. `css/css-values/viewport-units-css2-001.html` — which
+derives its expectations from `documentElement.clientWidth` — went **72/160 → 144/160**.

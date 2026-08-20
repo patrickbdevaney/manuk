@@ -11,7 +11,7 @@ css/css-overflow	468	963	48.6	0	0
 css/css-transforms	4735	5500	86.1	0	0
 css/css-ui	1003	1900	52.8	0	0
 css/css-backgrounds	4817	6107	78.9	0	0
-css/css-values	3611	7708	46.8	0	0
+css/css-values	3676	7834	46.9	0	0
 css/css-position	1166	1482	78.7	0	0
 css/css-display	332	549	60.5	0	0
 css/css-color	10472	11337	92.4	0	0
@@ -19,4 +19,4 @@ cssom	0	0	0.0	0	0
 domparsing	234	1294	18.1	0	0
 url	1	7	14.3	0	0
 encoding	360564	1121375	32.2	0	0
-TOTAL	477383	1270723	37.57	0	0
+TOTAL	477448	1270849	37.57	0	0

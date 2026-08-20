@@ -1212,6 +1212,11 @@
   - L3779 · The order is the fix
   - L3785 · ⚠ The inset rides ALONG, it is not re-derived — and it must be LIVE, not captured
   - L3800 · Proven red
+  - L3809 · documentElement.clientHeight was the height of the whole DOCUMENT (t1320)
+  - L3832 · Why a 7× clientHeight is a load-bearing lie, not a rounding error
+  - L3844 · The implementation
+  - L3862 · Measured
+  - L3873 · The gate
 
 ## THE FIDELITY INSTRUMENT — what it can and cannot see
 `docs/wiki/fidelity-instrument.md`
@@ -2314,4 +2319,4 @@
   - L231 · Both named mechanisms are subsystem work
 
 ---
-2221 sections across 22 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+2226 sections across 22 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.

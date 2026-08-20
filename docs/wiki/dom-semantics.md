@@ -3805,3 +3805,79 @@ checks, and they were deleted rather than landed.
 |---|---|
 | drop `force_reflow_if_stale()` in `force_frame_reflow` | `pre=300px` (the default; the frame never got a box) |
 | pass `0.0` insets instead of the live terms | `vw=204px` — the border box, caught by the earlier `frame-viewport` assertion |
+
+## `documentElement.clientHeight` was the height of the whole DOCUMENT (t1320)
+
+CSSOM-View gives the root element its own rule, and it is the only element that has one:
+
+> *"If the element is the root element and the document is not in quirks mode, or if the element is
+> the HTML body element and the document is in quirks mode … return the viewport width/height
+> excluding the size of a rendered scroll bar."*
+
+Every other element reports its padding box, which is what our fallback did **for everybody** — so
+the one element with a different rule got the general one and reported its own box. Measured against
+headless Chrome, viewport 800×800 over a 5,000px document:
+
+```text
+                                   Chrome      before
+    documentElement.clientWidth       800         784
+    documentElement.clientHeight      800        5800   ← the DOCUMENT height
+    100vw / 100vh                800 / 800   800 / 800  ← already right, which is what hid it
+```
+
+⭐ **`vw`/`vh` were correct the whole time**, resolved from the same `values::viewport_size()` this
+now reads. The CSS half of the viewport was right in every test that looked at it; only the CSSOM
+half was wrong, and nothing compared the two.
+
+### Why a 7× `clientHeight` is a load-bearing lie, not a rounding error
+
+`document.documentElement.clientHeight` is *the* "how tall is the viewport?" idiom on the web:
+
+- `scrollTop + clientHeight >= scrollHeight` is the infinite-scroll test. With `clientHeight` equal
+  to the document height it is **true on the first frame of every page** — the feed loads its next
+  page before the user has scrolled.
+- Lazy-image loaders use it to decide what is within a screen of the fold: **every image loads at
+  once.**
+- Virtualised lists divide by it to choose a row count: the count becomes **the whole list**.
+- Sticky/scroll-spy code compares positions against it and never matches.
+
+### The implementation
+
+The root-element arm lives at the end of `manuk_page::scroll_geometry_of`, beside the
+`overflow: auto|scroll|hidden` table, so `clientWidth`/`clientHeight`/`scrollWidth`/`scrollHeight`
+all come from one place. Three details are load-bearing:
+
+1. **The document element is POSITIONAL** — the first element child of the document node, not
+   `<html>` by name — the same definition `document.documentElement` uses, deliberately, so an
+   XML/SVG root gets the rule and the two definitions cannot drift.
+2. **Quirks mode moves the clause to `body`**, and in quirks the root element keeps reporting its own
+   box. That is what Chrome does.
+3. ⚠ **The root element has NO BOX in our tree.** `layout_document` roots the box tree at `<body>`
+   (`find_first("body")`, then `html`), so `root_box.find(<html>)` is `None` on every ordinary page.
+   The first draft fell back to the viewport there and made the document's scrolling area equal to
+   the viewport — *"this page does not scroll"*, the same lie in different clothes. The scrolling
+   area is taken from the root box's far **edge** (`x + width`, `y + height`), not its size, because
+   the body's own top margin is part of the document's height.
+
+### Measured
+
+`css/css-values/viewport-units-css2-001.html` **72/160 → 144/160**, on a fixed denominator. That test
+derives its own expectation from `document.documentElement.clientWidth`, so every `vw`/`vh`/`vmin`/
+`vmax` row in it was comparing a correct viewport unit against a wrong viewport reading — *the
+engine marking its own homework with the wrong answer key.*
+
+⚠ **Still ours:** `documentElement.getBoundingClientRect()` reports **784×5800** where Chrome reports
+**800×5821** — the `<html>` element has no box of its own, so the rect falls through to `<body>`'s
+(viewport minus the body's 8px margins). Separate defect, same root cause, not fixed here.
+
+### The gate
+
+`G_ROOT_CLIENT_BOX` (`engine/page/tests/g_root_client_box.rs`) asserts the root's client box equals
+`window.innerWidth`/`innerHeight` — **agreement between the engine's two answers to the same
+question**, rather than a literal, because a host may pick any viewport. It then asserts the field
+consequence directly: `scrollTop + clientHeight >= scrollHeight` must be **false** at the top of a
+5,000px document. Proven RED by deleting the root arm: `ch:5018 innerH:720 atEnd:true`.
+
+It is its own test binary: a `Page` owns a SpiderMonkey runtime, and two in one test process abort on
+teardown with *"There are outstanding JS engine handles"* — the same shared-runtime reuse the WPT
+runner reports as its `ACCUM` bucket.
