@@ -88114,3 +88114,76 @@ NEXT, ranked.
 (d) ⭐⭐ **The 25 unscored in-scope sites** — scorability 81.2% caps M1; split instrument from engine
     first (check #83).
 (e) ⭐ **BOX FRAGMENTATION** (t1326's (c)) — a decomposition session, not a tick.
+
+## Tick 1329 — the layout suite loaded the system font database 150 times, and both drafts of the gate had holes only the red proof found (2026-08-20)
+
+TICK SHAPE: wall-time fix + gate. Board re-run at the top of this tick: **unchanged**. Took t1328's
+own audit finding (b), which is the only kind of wall work the audit admits: *the same assertion for
+fewer seconds.*
+
+### THE MEASUREMENT THE AUDIT LEFT
+
+```text
+   T · crate tests                108s of a 154s wall   (70%)
+   manuk-layout                   51.3s of that T       (57%)
+   manuk-layout --test-threads=1  208.2s   vs   51.2s parallel   =  4.07x on 32 CORES
+   FontContext::new()             181.5ms · 175.7ms · 179.5ms
+```
+
+⭐ **A 4× speedup on 32 cores is a shared-resource tell, not a CPU limit.** `layout_html` — the helper
+nearly every layout test uses — built a **fresh `FontContext` per test**: ~178ms × ~150 callers is
+~27s of the serial suite, and under libtest's parallelism it is 150 simultaneous font-database loads.
+
+```text
+   manuk-layout, 185 tests
+     one context per test      51.2s
+     one context per THREAD    16.4s      3.1x
+```
+
+**~35 seconds off `T`, which is 70% of the wall.** 185 tests, all green, every assertion unchanged.
+
+`thread_local!` rather than a `static` because `FontContext` is full of `RefCell`/`Rc` and is not
+`Sync` — and that is not a workaround: 32 constructions instead of 150 is the whole win.
+
+⚠ Safe to share because nothing reachable from these helpers mutates it in a way a later test could
+read: `layout_html` never hands the context to the cascade, so no `@font-face` is ever registered into
+it, and the rest of its interior state is a pure function of the system font database. A test that
+needs a pristine context can still build one — this changes the helpers, not the option.
+
+### ⚠⚠⚠ BOTH DRAFTS OF THE GATE PASSED WHILE THE DEFECT WAS PRESENT
+
+`G_ONE_FONT_CONTEXT` scans this crate's source for per-test context constructions.
+
+```text
+   draft 1  truncated the file at the gate's own doc comment.
+            The gate sits ABOVE `layout_html`, so the scanned region held the thread-local
+            and NONE OF THE TESTS.                                        red proof: PASSED ✗
+   draft 2  cut the gate's text out of the middle, and still mis-counted,
+            because the doc comment quoted the exact binding form it searched for.
+                                                                           red proof: PASSED ✗
+   draft 3  needle assembled with concat!("= FontContext", "::new();"),
+            so it CANNOT APPEAR LITERALLY in the file being scanned.       red proof: FAILED ✓
+```
+
+⭐ **The fix is not a smarter exclusion — it is a needle the source cannot contain.** A scanner that
+reads its own source measures the ruler, and this is the **second self-scanning gate in two ticks** to
+prove it: `G_ONE_PRINTING_GATE` shipped at t1328 with a spare budget slot (it allowed three sites on
+the false reasoning that `println!(` contains `print!(`), and the red proof spent the slack and passed.
+
+⚠⚠ **THE STANDING RULE: a source-scanning gate must be RED-PROOFED, never reasoned about.** Three
+drafts across two ticks; every hole was invisible to inspection and obvious to one patch. I would have
+shipped two gates that could not catch the defect they were written for, and in both cases the code
+under them was correct — so nothing else would ever have noticed.
+
+NEXT, ranked.
+(a) ⭐⭐⭐ **THE JS-INJECTED SUBTREES on `crazyshop.pl`** (t1327's (a)) — `.bottom-html` (1200×880,
+    `display:grid`), `.small-modal__box` (1200×800) and four more are in Chrome and in **none** of the
+    served HTML. 135 boxes, 8.8% of that page's coverage. ⚠ They also shift every `nth-of-type` index
+    after them, so the count is an upper bound on the defect.
+(b) ⭐⭐ **THE SAME FONT-CONTEXT FIX FOR THE OTHER CRATES** — `shell/src` has 22 constructions across
+    seven files and `manuk-shell` is 25% of `T`; `engine/page`, `engine/paint` and `engine/text` all
+    carry the pattern. ⚠ Measure each first: a gate binary with ONE test pays the 178ms once and has
+    nothing to win.
+(c) ⭐⭐ **THE FORCED-REFLOW FLUSH** (t1324's (b)) — 40-line repro, dies in 5.8s.
+(d) ⭐⭐ **The 25 unscored in-scope sites** — scorability 81.2% caps M1; split instrument from engine
+    first (check #83).

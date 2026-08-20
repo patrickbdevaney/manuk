@@ -11,12 +11,12 @@
 
 | | value | over |
 |---|---|---|
-| ticks landed | **1015** | ticks 1–1328 |
-| median tick cycle | **30m** | 1014 intervals |
-| median, last 10 | **56m** | 10 intervals |
+| ticks landed | **1016** | ticks 1–1329 |
+| median tick cycle | **31m** | 1015 intervals |
+| median, last 10 | **58m** | 10 intervals |
 | fastest / slowest | 5s / 5.4d | |
-| **ticks per hour** | **1.04** | 973.1h elapsed |
-| median verify wall | **63s** | 954 ticks |
+| **ticks per hour** | **1.04** | 974.1h elapsed |
+| median verify wall | **63s** | 955 ticks |
 | wall trend | 39s → 17m — getting slower ⚠️ | first 3 vs last 3 |
 
 The **cycle** is the real unit: implement → debug → verify wall → land. The wall is only part of
@@ -31,7 +31,7 @@ it, and a wall that grows taxes every future tick, so it is tracked separately f
 * **✅ rows in the capability ledger**: 144 → **642**
 * **Bar 0 — oracle hangs**: 0 of 265 sites
 
-**476 of 1015 ticks** (47%) moved a
+**476 of 1016 ticks** (47%) moved a
 user-visible capability. The rest were instruments, infrastructure and corrections — and the
 ledger says the corrections were not overhead: three of its top three priorities were phantoms,
 and finding that out redirected everything after it.
@@ -90,8 +90,8 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 
 ## What a capability costs
 
-* **476** capability ticks, median cycle **30m**
-* median diff per tick: **+281 / −34** lines across 8 files
+* **476** capability ticks, median cycle **31m**
+* median diff per tick: **+282 / −34** lines across 8 files
 
 ## Every tick
 
@@ -1112,5 +1112,6 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 | **1326** | 2026-08-20 15:21 | 38m | measurement | 17m | +167/−34 | 501 | 81 | 56.0% · | the anchor's top mechanism is `column-count`, and it is gated on FRAGMENTATION, not on the |
 | **1327** | 2026-08-20 17:33 | 2.2h | capability | 17m | +511/−44 | 501 | 81 | 56.0% · | the AUTOMATIC table algorithm answers percentages in SOURCE ORDER, and the rule I landed o |
 | **1328** | 2026-08-20 18:08 | 34m | instrument-fidelity | 17m | +321/−38 | 501 | 81 | 56.0% · | the shell lane's RED was a gate PRINTING ON SUCCESS into another gate's input, and it cost |
+| **1329** | 2026-08-20 19:07 | 59m | wall-time | 17m | +319/−55 | 501 | 81 | 56.0% · | the layout suite loaded the system font database 150 times, and both drafts of the gate ha |
 
 *`·` after a WPT figure means **carried forward**, not measured this tick.*

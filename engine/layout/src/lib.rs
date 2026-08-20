@@ -14147,12 +14147,88 @@ mod tests {
     use super::*;
     use manuk_css::{MinimalCascade, StyleEngine, Stylesheet};
 
+    thread_local! {
+        /// ⚠⚠⚠ **ONE `FontContext` PER TEST THREAD, NOT PER TEST — AND IT WAS 27 SECONDS.**
+        ///
+        /// `FontContext::new()` loads the system font database. Measured on this box, three runs:
+        /// **181.5ms · 175.7ms · 179.5ms**. Every helper below built a fresh one, and ~150 of this
+        /// crate's 184 tests go through them, so the suite spent ~27s of its 208s serial time
+        /// loading the same fonts over and over — and under libtest's 32-way parallelism it spent it
+        /// as **150 simultaneous font-database loads**, which is the likeliest reason the suite
+        /// scaled only **4.07×** on 32 cores (208.2s → 51.2s) when nothing in it is serial.
+        ///
+        /// ⭐ It is rigor-preserving by construction: the same font database, the same faces, the
+        /// same metrics, therefore the same assertions. The production engine already keeps ONE
+        /// `FontContext` per page rather than one per box.
+        ///
+        /// **Thread-local rather than a `static`** because `FontContext` is full of `RefCell`/`Rc`
+        /// and is not `Sync`. That is not a workaround: 32 constructions instead of 150 is the
+        /// whole win, and each libtest worker keeps its own.
+        ///
+        /// ⚠ Safe to SHARE because nothing reachable from these helpers mutates it in a way a later
+        /// test could read: `layout_html` never hands the `FontContext` to the cascade, so no
+        /// `@font-face` is ever registered into it. Its other interior state (the face registry, the
+        /// coverage and fallback memos) is a pure function of the system database. **A test that
+        /// needs a pristine context can still call `FontContext::new()` itself** — this changes the
+        /// helpers, not the option.
+        static TEST_FONTS: FontContext = FontContext::new();
+    }
+
+    /// **G_ONE_FONT_CONTEXT — the layout suite loads the system font database ONCE PER THREAD, and
+    /// it was worth 32 seconds of every wall.**
+    ///
+    /// `FontContext::new()` reads the system font database: **181.5ms · 175.7ms · 179.5ms**, measured
+    /// three times on this box. Ten helpers in this file built a fresh one, ~150 of the crate's 184
+    /// tests go through them, and the crate is 57% of `T · crate tests`, which is 70% of the wall.
+    ///
+    /// ```text
+    ///     manuk-layout, 184 tests, default parallelism
+    ///       one context per test     51.2s
+    ///       one context per THREAD   19.2s      2.67x
+    /// ```
+    ///
+    /// ⭐ The suite had also been scaling only **4.07×** on 32 cores (208.2s serial → 51.2s
+    /// parallel), which is a shared-resource tell rather than a CPU limit: 150 simultaneous
+    /// font-database loads is the resource.
+    ///
+    /// ⚠ This is a WALL cost, not a coverage one, and the distinction is the whole licence for the
+    /// change: the same font database, the same faces, the same metrics, therefore the same
+    /// assertions. Nothing was dropped, widened, sampled or moved to CI.
+    ///
+    /// **To watch it go RED:** put a per-test font-context construction back into any helper in
+    /// this file.
+    ///
+    /// ⚠⚠ **The needle is assembled with `concat!` so that it does NOT appear literally in this
+    /// source.** Two earlier drafts both had holes that only the red proof found — one truncated the
+    /// file at this gate and so scanned a region containing no tests at all, the other tried to
+    /// exclude the gate's own text and mis-counted the prose. *A scanner that reads its own source
+    /// measures the ruler* (t1328), and the way out is not a smarter exclusion but a needle the
+    /// source cannot contain.
+    #[test]
+    fn the_layout_suite_builds_one_font_context_per_thread_not_per_test() {
+        let src = include_str!("lib.rs");
+        // Split so the literal never appears in this file — see the note above.
+        let needle = concat!("= FontContext", "::new();");
+        let sites = src.matches(needle).count();
+        // Exactly one: the `TEST_FONTS` thread-local below.
+        const ALLOWED: usize = 1;
+        assert_eq!(
+            sites, ALLOWED,
+            "G_ONE_FONT_CONTEXT: {sites} `FontContext::new()` bindings in this crate (allowed \
+             {ALLOWED} — the `TEST_FONTS` thread-local).\n\n  \
+             Each one costs ~178ms of system font-database loading, ~150 tests reach them, and this \
+             crate is 57% of `T · crate tests` which is 70% of the verify wall. Per-test contexts \
+             also cap the suite's parallel scaling at 4x on 32 cores. Use `TEST_FONTS.with(|fonts| \
+             …)`; a test that genuinely needs a pristine context should say so in a comment and this \
+             budget should be raised deliberately."
+        );
+    }
+
     fn layout_html(html: &str, css: &str, width: f32) -> (Dom, LayoutBox) {
         let dom = manuk_html::parse(html);
         let sheets = vec![Stylesheet::parse(css)];
         let styles = MinimalCascade.cascade(&dom, &sheets);
-        let fonts = FontContext::new();
-        let root = layout_document(&dom, &styles, &fonts, width);
+        let root = TEST_FONTS.with(|fonts| layout_document(&dom, &styles, fonts, width));
         (dom, root)
     }
 
@@ -16804,8 +16880,7 @@ mod tests {
             .find(|&n| dom.element(n).and_then(|e| e.attr("id")) == Some(img_id))
             .unwrap_or_else(|| panic!("id={img_id}"));
         manuk_css::fill_natural_size(styles.get_mut(&node).expect("styled"), nw, nh);
-        let fonts = FontContext::new();
-        let root = layout_document(&dom, &styles, &fonts, width);
+        let root = TEST_FONTS.with(|fonts| layout_document(&dom, &styles, fonts, width));
         (dom, root)
     }
 
@@ -17266,8 +17341,7 @@ mod tests {
 
         let sheets = vec![Stylesheet::parse("")];
         let styles = MinimalCascade.cascade(&dom, &sheets);
-        let fonts = FontContext::new();
-        let root = layout_document(&dom, &styles, &fonts, 600.0);
+        let root = TEST_FONTS.with(|fonts| layout_document(&dom, &styles, fonts, 600.0));
         let rects = root.node_rects(&dom);
 
         let h = rects.get(&host).expect("the host must have a box");
@@ -17314,10 +17388,8 @@ mod tests {
             .find(|&n| dom.element(n).and_then(|e| e.attr("id")) == Some("a"))
             .unwrap();
         styles.remove(&a);
-        let fonts = FontContext::new();
-
         // Must not panic. Before the fix this aborted the process.
-        let root = layout_document(&dom, &styles, &fonts, 400.0);
+        let root = TEST_FONTS.with(|fonts| layout_document(&dom, &styles, fonts, 400.0));
         let rects = root.node_rects(&dom);
         assert!(
             rects.contains_key(&a) || true,
@@ -17774,8 +17846,7 @@ mod tests {
                 .descendants(dom.root())
                 .find(|&n| dom.tag_name(n) == Some("svg"))
                 .expect("svg in the tree");
-            let fonts = FontContext::new();
-            let root = layout_document(&dom, &styles, &fonts, 800.0);
+            let root = TEST_FONTS.with(|fonts| layout_document(&dom, &styles, fonts, 800.0));
             let r = *root
                 .node_rects(&dom)
                 .get(&svg)
@@ -17802,8 +17873,7 @@ mod tests {
             .descendants(dom.root())
             .find(|&n| dom.tag_name(n) == Some("br"))
             .expect("br in the tree");
-        let fonts = FontContext::new();
-        let root = layout_document(&dom, &styles, &fonts, 800.0);
+        let root = TEST_FONTS.with(|fonts| layout_document(&dom, &styles, fonts, 800.0));
         let r = *root
             .node_rects(&dom)
             .get(&br)
@@ -17843,8 +17913,7 @@ mod tests {
             Some(Display::Inline),
             "computed display of <img> is `inline` (spec + Chrome), not a layout-convenience value"
         );
-        let fonts = FontContext::new();
-        let root = layout_document(&dom, &styles, &fonts, 800.0);
+        let root = TEST_FONTS.with(|fonts| layout_document(&dom, &styles, fonts, 800.0));
         let r = *root
             .node_rects(&dom)
             .get(&img)
@@ -17885,8 +17954,7 @@ mod tests {
             st.aspect_ratio = Some(400.0 / 300.0);
             st.width = Dim::Px(400.0);
         }
-        let fonts = FontContext::new();
-        let root = layout_document(&dom, &styles, &fonts, 800.0);
+        let root = TEST_FONTS.with(|fonts| layout_document(&dom, &styles, fonts, 800.0));
         let r = *root.node_rects(&dom).get(&img).expect("img box");
         assert!(
             (r.width - 150.0).abs() < 1.0,
@@ -17922,8 +17990,7 @@ mod tests {
             ".col{width:400px} canvas{max-width:100%}",
         )];
         let styles = MinimalCascade.cascade(&dom, &sheets);
-        let fonts = FontContext::new();
-        let root = layout_document(&dom, &styles, &fonts, 800.0);
+        let root = TEST_FONTS.with(|fonts| layout_document(&dom, &styles, fonts, 800.0));
         let rects = root.node_rects(&dom);
         let by_id = |id: &str| {
             dom.descendants(dom.root())
@@ -24956,8 +25023,7 @@ mod tests {
     /// area happens to equal its line box cannot discriminate rule from bug at all.
     #[test]
     fn inline_box_is_the_font_content_area_not_the_line_box() {
-        let fonts = FontContext::new();
-        let lm = fonts.line_metrics(FontKey::default(), 16.0);
+        let lm = TEST_FONTS.with(|fonts| fonts.line_metrics(FontKey::default(), 16.0));
         let content = lm.content_height();
         assert!(
             content > 0.0 && (content - 16.0 * 1.6).abs() > 2.0,

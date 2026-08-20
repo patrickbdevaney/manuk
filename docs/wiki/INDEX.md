@@ -2078,6 +2078,9 @@
   - L1096 · Where it IS true, and the repro is forty lines instead of seventy-five thousand
   - L1115 · What this reprices
   - L1123 · The gate
+  - L1135 · The layout test suite loaded the system font database 150 times — 32 seconds of every wall (t1329)
+  - L1159 · Why this is rigor-preserving and not a shortcut
+  - L1174 · ⚠⚠ The gate had TWO holes, and only the RED PROOF found either
 
 ## THE WIKI — what we durably KNOW, organised by subsystem
 `docs/wiki/README.md`
@@ -2343,4 +2346,4 @@
   - L231 · Both named mechanisms are subsystem work
 
 ---
-2250 sections across 22 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+2253 sections across 22 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.

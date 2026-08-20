@@ -2160,3 +2160,51 @@ The wall is gate-lean; the honest warm mark is **~190s**, and any mark banked wh
 the box rather than the wall. Four distinct wall/gate symptoms this session — `G_INTERACT`, `G3`,
 `G_RUNAWAY` and two slow walls — all resolve to the concurrent hygiene cron. The lever is cron scheduling
 versus the landing window, not gate scheduling. No `scripts/` file was touched.
+
+## Audit #51 — tick 1328 (2026-08-20)
+
+```text
+   TOTAL 154s
+   T · crate tests   108s  ██████████████████ 70%
+   G6                 16s  10%      B  14s  9%      G1  7s  5%      P  6s  4%      F  4s  3%
+   every gate binary   0s   0%
+```
+
+Timed individually, warm, on a quiet box:
+
+```text
+   manuk-layout   51.3s  (184 tests)   57% of T
+   manuk-shell    22.3s  ( 77 tests)   25% of T
+   the other five 18.0s  (295 tests)   20% of T   css 3.3 · paint 4.2 · dom 2.8 · net 3.3 · agent 4.4
+```
+
+### Q2 · PARALLELISM — T is serial while the gates above it are not
+
+`verify.sh` runs the seven crate suites strictly serially (`for c in …; do _crate_suite "$c"; done`)
+while the ~25 gate binaries are launched concurrently. Running T concurrently bounds it at
+`max ≈ 51s` instead of `Σ ≈ 92s` — **~40s off a 154s wall (26%)**.
+
+⚠ The serialisation is **partly** load-bearing: `manuk-shell` carries the timing gates. But t1318 gave
+`G_INTERACT` a ~250× margin (worst tab op 0.06ms against a 16ms bar) and `G_TAB_REAP` a structural 2ms
+bar, and the other **five** suites carry no clock at all. Harness-owned — recorded for the observer,
+not touched.
+
+### Q3 · CACHING — found, and it was ours to fix
+
+```text
+   manuk-layout --test-threads=1   208.2s   vs   51.2s parallel   =  4.07x on 32 CORES
+   FontContext::new()              181.5ms · 175.7ms · 179.5ms
+```
+
+⭐ A 4× speedup on 32 cores is a shared-resource tell. `layout_html` built a **fresh `FontContext` per
+test** — ~178ms × ~150 callers ≈ 27s of the serial suite, and 150 simultaneous font-database loads
+under parallelism. **Fixed at t1329** with one `thread_local!` context per test thread:
+`manuk-layout 51.2s → 16.4s (3.1×)`, 185 tests green, every assertion identical. Same fonts, same
+faces, same metrics — the audit's own "same assertion for fewer seconds".
+
+### Q1 · REDUNDANCY, Q4 · SCOPE
+
+Nothing found this round: the gate binaries measure 0s each in the section ledger (they are fully
+overlapped by the concurrent launch), and each already builds only its own crate's test binary.
+
+**Nothing was trimmed. No gate dropped, no floor widened, nothing sampled, nothing moved to CI.**

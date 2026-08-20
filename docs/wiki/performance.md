@@ -1131,3 +1131,60 @@ cascading, leaving the appended nodes unstyled. So the correctness half runs **f
 have 2,000 children and the 2,000th must carry its authored `rgb(1, 2, 3)`. Proven RED by interleaving
 forced reads, and the assert that fires is the *correctness* one, because at that amplification the
 page dies before its rate can be judged — which is the finding, not a gate defect.
+
+## The layout test suite loaded the system font database 150 times — 32 seconds of every wall (t1329)
+
+t1328's wall audit put `T · crate tests` at **108s of a 154s wall (70%)**, and `manuk-layout` at
+**51.3s of that T (57%)**. Two measurements explain it:
+
+```text
+    manuk-layout --test-threads=1   208.2s
+    manuk-layout (default, 32)       51.2s      4.07x on 32 cores
+    FontContext::new()              181.5ms · 175.7ms · 179.5ms
+```
+
+⭐ **A 4× speedup on 32 cores is a shared-resource tell, not a CPU limit.** `layout_html` — the helper
+nearly every layout test uses — built a **fresh `FontContext` per test**. At ~178ms × ~150 callers
+that is ~27s of the serial suite, and under libtest's parallelism it is **150 simultaneous
+font-database loads**.
+
+One `thread_local!` context per test thread:
+
+```text
+    manuk-layout, 185 tests, default parallelism
+      one context per test     51.2s
+      one context per THREAD   16.4s      3.1x
+```
+
+### Why this is rigor-preserving and not a shortcut
+
+The wall audit admits exactly one kind of optimisation: *the same assertion for fewer seconds*. This
+is that — the same font database, the same faces, the same metrics, therefore the same numbers in
+every assertion. Nothing was dropped, widened, sampled, or moved to CI. The production engine already
+keeps ONE `FontContext` per page rather than one per box.
+
+**Thread-local rather than a `static`** because `FontContext` is full of `RefCell`/`Rc` and is not
+`Sync`. That is not a workaround: 32 constructions instead of 150 is the whole win.
+
+⚠ Safe to share because nothing reachable from these helpers mutates it in a way a later test could
+read: `layout_html` never hands the context to the cascade, so no `@font-face` is ever registered into
+it, and the rest of its interior state (face registry, coverage and fallback memos) is a pure function
+of the system database.
+
+### ⚠⚠ The gate had TWO holes, and only the RED PROOF found either
+
+`G_ONE_FONT_CONTEXT` scans this crate's source for per-test context constructions. Both of its first
+two drafts passed while the defect was present:
+
+1. **Draft one truncated the file at the gate's own doc comment** — and since the gate sits *above*
+   `layout_html`, the scanned region held the thread-local and **none of the tests**.
+2. **Draft two cut the gate's text out of the middle** and still mis-counted, because the doc comment
+   quoted the exact binding form it was searching for.
+
+The fix is not a smarter exclusion: the needle is assembled with `concat!("= FontContext",
+"::new();")` so that **it cannot appear literally in the file being scanned**. A scanner that reads
+its own source measures the ruler — and this is the second self-scanning gate in two ticks to prove
+it (`G_ONE_PRINTING_GATE` at t1328 shipped with a spare budget slot that the red proof spent).
+
+⭐ **The standing rule: a source-scanning gate must be red-proofed, not reasoned about.** Both holes
+were invisible to inspection and obvious to one patch.

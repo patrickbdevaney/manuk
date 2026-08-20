@@ -7997,3 +7997,19 @@ Chrome gives **880 + 120**, i.e. the sidebar four times too wide and the content
 satisfied in **source order**, each capped by the min-content of everything after it, and only what is
 left goes to the other columns. `80% + 80%` is `800 + 200` here and `500 + 500` under
 `table-layout: fixed` — the same declarations, two answers, one of them wrong for any given table.
+
+## ⚠ NOT A CAPABILITY — t1329, recorded here because the ledger is the only channel the hook can read
+
+t1329 changed `engine/layout/src/lib.rs` and unlocks **no class of the web**. It is test-harness cost
+only: the layout suite built a fresh `FontContext` per test (~178ms of system font-database loading,
+~150 times), and now builds one per test thread. Same fonts, same faces, same metrics, therefore the
+same assertions on the same 185 tests — `manuk-layout` 51.2s → 16.4s, and the whole verify wall
+154s → 116s.
+
+⚠ The commit carries `[no-pattern]`, which is the sanctioned exemption, but the **pre-commit hook
+cannot see it**: `tick.sh` commits with `git commit -F <file>` and git has not written
+`.git/COMMIT_EDITMSG` by the time `pre-commit` runs, so the hook's `$MSG` is empty and the exemption
+never matches. That is a harness detail (observer-owned, untouched); the effect for an agent is that
+**`[no-pattern]` alone cannot land a tick that touches `engine/*/src/`** — the ledger must be touched
+too. This row is that touch, and it keeps the exemption visible in the place the hook's own text asks
+for rather than in a message nobody reads.
