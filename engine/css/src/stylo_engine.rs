@@ -964,7 +964,19 @@ pub fn cascade_via_stylo_sized(
         // the document clock is 0 nothing else can be running (see `crate::transition`'s guard).
         if crate::transition::may_be_running(&cv) {
             if let Some(before) = crate::transition::prev_style(node) {
-                let mixed = crate::transition::sample(&before, &cv);
+                // Memoised on `(before, after, clock)` — see `crate::transition::MEMO`. Without
+                // it the `transition-property: all` expansion is ~200 animated-value pairs per
+                // element per recalc, which WPT's own harness turns quadratic.
+                //
+                // ⚠ The memo can only HIT because of the `next_prev.insert(node, before)` two
+                // lines below: the same `Arc` is handed back every pass while the transition
+                // runs, so the memo's pointer test on `before` holds. Overwrite that and the
+                // memo silently degrades to a full sample on every recalc — and, worse, the
+                // transition itself collapses to its end state (see the note above).
+                //
+                // ⚠⚠ It is a COST reduction and NOT a determinism fix; that was measured at
+                // t1312 and the first version of this comment claimed otherwise.
+                let mixed = crate::transition::sample_memoized(node, &before, &cv);
                 if !mixed.is_empty() {
                     transitioning = true;
                     // The before-change style is what this element keeps remembering until the

@@ -86074,3 +86074,188 @@ NEXT, ranked.
     declarations, so every invalid declaration "parses".
 (e) ⭐⭐ `CSS.supports('font-variation-settings', '"test" 20')` answers **false** for a property the
     servo build really does have — a FALSE NO, costing 418 subtests in `css/css-fonts`.
+
+## Tick 1312 — a colour that is not legacy sRGB keeps its own function, and the space was thrown away at the `Rgba` boundary (2026-08-19)
+
+TICK SHAPE: capability. Board re-run at the top of this tick: **unchanged** (★ CSS-LAYOUT).
+`css/css-color` is a ★ row at 3,481 failing / 69.3%.
+
+FORECAST, before any code. Histogrammed `css/css-color` by file: **three files carry 2,585 of the
+3,481** — `color-computed-relative-color` (1,169), `color-computed-color-mix-function` (948),
+`color-computed-color-function` (468) — and every one fails the same way:
+
+```text
+   FAIL Property color value 'rgb(from rebeccapurple r g b)'
+        expected 0.4 +/- 0.01, expected 0.4 but got 102
+```
+
+⭐ **`102 = 0.4 × 255`, and that arithmetic IS the diagnosis.** CSS Color 4 splits serialization in
+two: a *legacy* sRGB colour (hex, named, `rgb()`, `hsl()`, `hwb()`) serializes as `rgb()`/`rgba()`
+with 0–255 integers; **everything else keeps its own function and 0–1 float channels** — `color()`,
+`lab()`, `lch()`, `oklab()`, `oklch()`, `color-mix()`, and every relative `rgb(from …)`. Every colour
+in this engine reached the CSSOM through `Rgba { r, g, b, a: u8 }`, so the colour SPACE was discarded
+at the `stylo_map` boundary and one `format!("rgb({}, {}, {})")` served them all.
+
+⚠ For a wide-gamut colour it is not a different spelling, it is a different colour:
+`color(display-p3 1 0 0)` is outside sRGB and has no `rgb()` form.
+
+PREDICTION (written into `g_modern_color_serialization` and run RED first): six modern rows go to
+`color(srgb 0.4 0.2 0.6)` / `color(srgb 0.5 0 0.5)` / `color(display-p3 0.1 0.2 0.3)` /
+`lab(50 20 30)` / `oklch(0.5 0.1 200)` / `color(srgb 0.4 0.2 0.6 / 0.5)`, and the four legacy
+controls do not move.
+
+RESULT — **the prediction met exactly on the first run, and the number is a +2,617 on a FIXED
+denominator.**
+
+```text
+   css/css-color        7856 / 11337  →  10473 / 11337     +2617     69.3% → 92.4%
+```
+
+The denominator is **11,337 in both runs**, so this needs no error-bar argument at all — unlike
+t1311's `css/css-grid`, where the pristine tree read 8340 and 8219 on two runs of the same binary.
+
+MECHANISM — **about fifteen lines, and every one of them borrows.** `ComputedStyle` gains
+`color_css: Option<String>`; `stylo_map::modern_color_css` fills it from Stylo's own
+`impl ToCss for AbsoluteColor` (`stylo-0.19.0/color/to_css.rs:74`), which is CSS Color 4
+§Serializing verbatim — the legacy branch, the `lab()`/`lch()`/`oklab()`/`oklch()` branch, the
+`color(<space> …)` branch for every predefined space, `none` components and the alpha rule.
+
+⭐⭐⭐ **The engine was COMPUTING that string on every cascade and discarding it.** This is the same
+shape as `getComputedStyle(el).transform` and `.top` before them: *expose the value the pipeline
+already has* rather than build a second one. Ladder option 1, no fork, nothing re-derived.
+
+⚠⚠ **The discriminator is Stylo's own `ColorFlags::IS_LEGACY_SRGB`, not a keyword list of ours, and
+the colour SPACE would have been the wrong test.** `hsl()` computes in `ColorSpace::Hsl` — which is
+not sRGB — and is nevertheless legacy, so a space-based test would have started reporting
+`color(srgb …)` for `hsl()`, i.e. would have broken a control while fixing the target. `n3` is that
+row and it is the reason the flag was chosen.
+
+⚠ **The legacy path is deliberately untouched**: `color_css` is `None` for a legacy colour, so every
+hex, named colour, `rgb()` and `hsl()` on the open web keeps its byte-for-byte answer, including the
+alpha serialization fitted against Chrome at t1205 — which a second implementation would have quietly
+re-derived.
+
+PROVEN RED: make `modern_color_css` return `None` unconditionally — all six `t*` rows collapse onto
+the 8-bit sRGB quantisation (`t1=rgb(102, 51, 153)`, `t3=rgb(15, 52, 79)`, `t4=rgb(161, 105, 69)`)
+while the four `n*` controls do not move.
+
+CONTROLS. Ten `manuk-page` gates that mention colour were run by hand — `g_alpha_serialization`,
+`g_oklch_color_mix`, `g_contrast_color`, `g_color_scheme`, `g_computed_style`, `g_cascade_origin`,
+`g_get_property_value`, `g_keyframe_interpolation`, `g_transition_interpolation`,
+`g_inline_style_serializes` — **10/10 green** (t1309's rule: `verify.sh` names ~19 gates while
+`engine/page/tests/` holds 494, so a green wall is not coverage).
+
+### THE SECOND CHANGE IN THIS TICK, and it is NOT the colour fix — the transition SAMPLE MEMO
+
+⚠ This diff also carries `transition::sample_memoized` + `MEMO`, and the journal entry above did not
+mention it. Recording it here rather than letting it ride: **an undocumented change in a documented
+tick is exactly the thing nobody re-checks.**
+
+WHAT. `sample` is a pure function of `(before, after, clock)`, and `transition-property: all` expands
+to every longhand — ~200 `AnimationValue::from_computed_values` pairs per element per recalc. WPT's
+`interpolation-testcommon.js` forces one full-document recalc per target while N targets accumulate,
+so the page pays `O(N² · 200)`. The memo keys on `(before` by POINTER, `after` by VALUE over the
+style structs, `clock)` and returns the previous declaration list on a hit.
+
+⚠⚠⚠ **THE CLAIM ITS FIRST COMMENT MADE IS FALSE, AND I MEASURED IT RATHER THAN SHIPPING IT.** That
+comment said the memo fixes the nondeterministic denominator (`grid-template-rows-interpolation.html`
+emitting 558/571/642/654 across four runs of one binary). **With the memo installed,
+`css/css-grid/animation` emitted 1841 then 1766 subtests on two runs of the one release binary.** The
+denominator still moves. The sampler was *a* cost in that page's wall-clock budget, not *the* cost,
+and the residual is unattributed. The comment now says that, including the counter-measurement — a
+memo cited later as "the reason `css/css-grid` is trustworthy now" would have been a lie with a
+docstring.
+
+⭐⭐⭐ **AND THE EXHAUSTIVE COMPARISON WAS NOT EXHAUSTIVE — `get_svg()` was missing.** `same_style`
+listed nineteen of the twenty style structs. A struct nobody compares is a struct whose change the
+transition never sees, so the memo would have returned a STALE sample and kept interpolating to the
+old endpoint: `transition: fill .2s` on an inline icon, the single most common SVG transition on the
+web. Not a missed optimisation — a wrong answer, and one that only appears when a hit occurs.
+
+⚠ Two of `properties.rs`'s generated `get_*` accessors are NOT style structs and reading the list
+naively adds them: `get_system()` reports whether a system font set the value, and
+`get_inset(PhysicalSide)` is a per-side longhand getter — `top`/`right`/`bottom`/`left` live in
+`Position`, which was already compared. I added `get_inset()` first and it did not compile, which is
+the cheap version of that lesson.
+
+### THE RATCHET REFUSED THIS TICK TWICE, AND THE MARK WAS WRONG BOTH TIMES — THREE AREAS TRUNCATE
+
+`verify.sh` read `css/css-backgrounds 4817 < 4891 — REGRESSED by 74`. I did not re-run and hope. I
+took the error bar the only way it can be taken: **the same release binary, three times, one after
+the other.**
+
+```text
+   run 1   4851 / 6141      failing 1290
+   run 2   4807 / 6097      failing 1290
+   run 3   4891 / 6181      failing 1290
+```
+
+⭐⭐⭐ **THE FAILING COUNT IS 1290 IN ALL THREE, AND ONLY THE DENOMINATOR MOVES.** Nothing failed
+differently — 84 *passing* subtests were simply never EMITTED. That is not a regression signature at
+all; a regression turns passes into failures and leaves the denominator alone. This turns passes into
+nothing.
+
+⚠ **`css/css-backgrounds/animations` is 5,129 of the area's 6,181 subtests across 33 files** — the
+`interpolation-testcommon.js` class, i.e. the same page shape that truncates in
+`css/css-grid/animation`. The document overruns its own wall-clock budget and is cut off at whatever
+point it had reached, so the area's score is a function of how busy the box was. `verify.sh` measures
+it while running the rest of `verify.sh`; the mark was banked on a quiet box. Three later runs on a
+quiet box gave **4891 three times in a row** — the mark exactly.
+
+The second refusal named `css/css-grid` (8056 < 8557) and `css/css-sizing` (4290 < 4320). Same
+treatment, same binary, three runs each:
+
+```text
+   css/css-grid       8206/14086   8274/14154   8460/14340      failing 5880 in ALL THREE
+   css/css-sizing     4304/ 5834   4320/ 5850   4288/ 5818      failing 1530 in ALL THREE
+```
+
+⭐⭐⭐ **THE FAILING COUNT IS EXACTLY INVARIANT IN ALL THREE AREAS — 1290, 5880, 1530 — AND THAT
+EXACTNESS IS THE WHOLE DIAGNOSIS.** If the truncation cut an arbitrary point in an arbitrary file it
+would take failures with it and the failing count would wobble too. It never does. What is dropped is
+a contiguous TAIL OF PASSES from a generated file: `interpolation-testcommon.js` emits a long run of
+near-identical subtests, the page runs out of the document's wall-clock budget partway down it, and
+everything after the cut is never reported at all. **A never-emitted pass is scored as neither a pass
+nor a fail — it is subtracted from the denominator**, which is why numerator and denominator move by
+the identical amount every time (grid: 8206→8460 is +254 and 14086→14340 is +254).
+
+⚠⚠ **THE MARK WAS SET AT THE TOP OF A BAND THAT IS AT LEAST 84 WIDE.** `css/css-backgrounds` sat at
+4087 for eight consecutive ticks and t1311 raised it to 4891 in one reading. A mark that is the
+MAXIMUM of a noisy area is a trap for every later tick: it can only be met by getting lucky, and it
+manufactures a REGRESSED line out of a tick that touched nothing in the area. Per the ratchet's own
+instruction — *"explain in the journal why the mark itself was wrong and lower it deliberately"* — the
+mark goes to **4807, the measured FLOOR over three same-binary runs**, and it is a floor rather than a
+best-ever. `css/css-grid` goes to **8056** and `css/css-sizing` to **4288** on the same argument and
+the same evidence. All three are minima-of-observations, and they are marked here as *not
+trustworthy numbers* — they are the lowest thing seen, not a bound anyone proved.
+
+⭐⭐ **THE GENERAL RULE, and it is the one t1311 and t1300 kept re-learning the expensive way: an area
+whose DENOMINATOR moves cannot carry a ratchet mark at its maximum.** Bank the floor of a measured
+band, or carry the claim on an area whose denominator is fixed — `css/css-color` is 11,337 in both
+runs of this tick, which is why its +2,617 needs no error-bar argument at all.
+
+📋 FOR THE OBSERVER (harness-owned, not mine to edit): `verify.sh` banks whatever it reads, so a lucky
+quiet-box maximum re-arms this trap on the next tick. **The cheap durable fix is visible in the table
+above — bank the FAILING count, which is exactly invariant, instead of the passing count, which is
+not.** Failing-count-must-not-rise is the same ratchet and it is immune to truncation. Failing that,
+bank the minimum of N runs, or mark the animation-heavy areas as banded. Noted here rather than
+touched.
+
+🔻 **NEXT TICK IS THE TRUNCATION ITSELF, and it is not a metric chore — it is capability.** Between
+254 (grid) and 84 (backgrounds) passing subtests per area are being *thrown away unreported* right
+now, and the same budget overrun on a real page is a document that stops running its scripts partway
+through. Fixing it converts three unresolvable areas into resolvable ones and banks the truncated
+passes at the same time.
+
+NEXT, ranked.
+(a) ⭐⭐⭐ **`background-color` and the border colours get the same treatment** — they still go through
+    `Rgba` alone, so `background-color: color-mix(…)` reports the quantised sRGB. The mechanism is
+    built; this is widening it from one property to the colour family, and it needs the `Option<String>`
+    per property rather than one on the style.
+(b) ⭐⭐⭐ Grid §9 self-alignment for abspos children inside `layout_abs` (carried from t1311 — the
+    missing half that made its routing arm a trade, and the unlock for a 1,343-subtest cluster).
+(c) ⭐⭐⭐ Resolve `InterpolateMatrix` / `AccumulateMatrix` (carried from t1310).
+(d) ⭐⭐ `test_font_family_parsing`: 530 failing in ONE file, 304 of them *"rule declaration shouldn't
+    parse"* — our CSSOM `cssText` echoes the source instead of re-serialising parsed declarations.
+(e) ⭐⭐ `CSS.supports('font-variation-settings', '"test" 20')` answers **false** for a property the
+    servo build really does have — a FALSE NO, 418 subtests in `css/css-fonts`.

@@ -4279,3 +4279,49 @@ Re-measured on the pre-tick binary, the same hour, the attributable total is **+
 differ by hundreds, so a tick may only difference against a baseline it took ITSELF, on the same
 binary, in the same hour.** And when six areas move, the row that proves it was the mechanism is the
 one that *should not have moved and did not*.
+
+## A COLOUR THAT IS NOT LEGACY sRGB KEEPS ITS OWN FUNCTION — and the engine was throwing the space away (t1312)
+
+CSS Color 4 splits colour serialization in two, and the split is not cosmetic:
+
+| kind | examples | serializes as |
+|---|---|---|
+| **legacy sRGB** | `#663399`, `rebeccapurple`, `rgb()`, `hsl()`, `hwb()` | `rgb(102, 51, 153)` — 0–255 **integers** |
+| **everything else** | `color()`, `lab()`, `lch()`, `oklab()`, `oklch()`, `color-mix()`, relative `rgb(from …)` | its own function — 0–1 **floats** |
+
+⚠⚠⚠ **Every colour in this engine reached the CSSOM through `Rgba { r, g, b, a: u8 }`**, so the
+colour SPACE was discarded at the `stylo_map` boundary and one `format!("rgb({}, {}, {})")` served
+them all. `color: rgb(from rebeccapurple r g b)` — the identity relative colour — read back as
+`rgb(102, 51, 153)` where every browser says `color(srgb 0.4 0.2 0.6)`. Same colour, wrong space,
+**off by a factor of 255 to anything that parses the numbers** — which is exactly how WPT reported it,
+1,169 times in one file: *"expected 0.4 but got 102"*.
+
+And for a wide-gamut colour it is not even the same colour: `color(display-p3 1 0 0)` is outside sRGB
+and has no `rgb()` spelling at all.
+
+### ⭐ The whole rule was already in the borrowed engine
+
+Stylo's `impl ToCss for AbsoluteColor` (`stylo-0.19.0/color/to_css.rs:74`) is CSS Color 4
+§Serializing verbatim — the legacy branch, the `lab()`/`lch()`/`oklab()`/`oklch()` branch, the
+`color(<space> …)` branch for every predefined space, `none` components, and the alpha rule. The
+engine was **computing that value on every cascade and discarding it**. One `Option<String>` on
+`ComputedStyle` publishes it. Ladder option 1, no fork, nothing re-derived.
+
+### ⚠ The discriminator is Stylo's FLAG, not our keyword list
+
+`ColorFlags::IS_LEGACY_SRGB` is set by the colour parser when the author wrote a hex, a named colour,
+`rgb()`, `hsl()` or `hwb()`, and it is the same flag the spec's serialization branches on — so the
+prediction cannot drift from the branch it predicts. **The colour SPACE would have been the wrong
+test**: `hsl()` computes in `ColorSpace::Hsl`, which is not sRGB, and yet is legacy. `g_modern_color_
+serialization`'s `n3` is that row.
+
+### ⚠ The legacy path is deliberately untouched
+
+`color_css` is `None` for a legacy colour, so every hex, named colour, `rgb()` and `hsl()` on the open
+web keeps the byte-for-byte answer it already had — including the alpha serialization fitted against
+Chrome at t1205, which a second implementation would have quietly re-derived.
+
+**Measured: `css/css-color` 7856 → 10473 on a denominator of 11,337 in both runs — +2,617, 69.3% →
+92.4%**, from about fifteen lines. Three files carried 2,585 of it
+(`color-computed-relative-color` 1,169, `color-computed-color-mix-function` 948,
+`color-computed-color-function` 468) and all three failed the same single way.

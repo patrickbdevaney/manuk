@@ -968,6 +968,10 @@
   - L4215 · ⭐⭐⭐ DISCRETENESS IS A PROPERTY OF THE VALUE PAIR, NOT ONLY OF THE PROPERTY ID
   - L4239 · Measured (same binary twice, same hour, css/css-transforms, denominator 5500 in both)
   - L4259 · ⚠⚠⚠ A 20-MINUTE SWEEP OVER A TREE THAT IS BEING EDITED IS NOT A BASELINE
+  - L4283 · A COLOUR THAT IS NOT LEGACY sRGB KEEPS ITS OWN FUNCTION — and the engine was throwing the space away (t1312)
+  - L4302 · ⭐ The whole rule was already in the borrowed engine
+  - L4310 · ⚠ The discriminator is Stylo's FLAG, not our keyword list
+  - L4318 · ⚠ The legacy path is deliberately untouched
 
 ## `<dialog>`, `popover`, and the top layer (ticks 194-195)
 `docs/wiki/dialog-and-top-layer.md`
@@ -2278,4 +2282,4 @@
   - L231 · Both named mechanisms are subsystem work
 
 ---
-2185 sections across 22 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+2189 sections across 22 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.

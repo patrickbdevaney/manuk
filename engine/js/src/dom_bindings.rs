@@ -3292,7 +3292,12 @@ fn computed_style_js(
           getPropertyValue:__P.getPropertyValue, \
           __n:{}, length:{}, \
           item:__P.item, getPropertyPriority:__P.getPropertyPriority}};{}return o;}})()",
-        q(&rgba_css(&cs.color)),
+        // ⚠ **A NON-LEGACY COLOUR KEEPS ITS OWN FUNCTION** — `color(display-p3 …)`, `lab()`,
+        // `oklch()`, `color-mix()` and every relative `rgb(from …)` serialize with 0–1 float
+        // channels and cannot be spelled `rgb()` at all. `ComputedStyle::color_css` carries Stylo's
+        // own CSS Color 4 serialization for exactly those; a legacy colour leaves it `None` and
+        // keeps `rgba_css`, which is what stops this from re-deriving the alpha rule t1205 fitted.
+        q(cs.color_css.as_deref().unwrap_or(&rgba_css(&cs.color))),
         q(&cs.background_color.map(|c| rgba_css(&c)).unwrap_or_else(|| "rgba(0, 0, 0, 0)".into())),
         q(&format!("{}px", cs.font_size)),
         q(&cs.font_weight.to_string()),

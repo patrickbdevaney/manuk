@@ -1097,6 +1097,26 @@ impl ContentPart {
 pub struct ComputedStyle {
     pub display: Display,
     pub color: Rgba,
+    /// **The computed `color` as CSS Color 4 says to SERIALIZE it — but only when `color` is not a
+    /// legacy sRGB colour.**
+    ///
+    /// ⚠⚠⚠ [`Self::color`] is an `Rgba { r, g, b, a: u8 }`, which is the right type for painting and
+    /// the wrong one for reporting. CSS Color 4 splits serialization in two: a *legacy* sRGB colour
+    /// (hex, named, `rgb()`, `hsl()`, `hwb()`) serializes as `rgb()`/`rgba()` with 0–255 integer
+    /// channels, and **everything else keeps its own function and its own 0–1 float channels** —
+    /// `color(display-p3 …)`, `lab()`, `oklch()`, `color-mix()`, and every relative `rgb(from …)`.
+    /// Quantising those to 8-bit sRGB is lossy for a wide-gamut colour and simply has no spelling:
+    /// `color(display-p3 1 0 0)` is outside sRGB entirely.
+    ///
+    /// So the space had to survive the cascade→style boundary for the CSSOM, and it does it as the
+    /// finished string rather than as a second colour type: the value is **borrowed whole** from
+    /// Stylo's `impl ToCss for AbsoluteColor`, which already implements every branch of the spec's
+    /// serialization including its alpha rule. Nothing here re-derives it.
+    ///
+    /// ⚠ `None` for a legacy colour, on purpose — that keeps every hex/named/`rgb()`/`hsl()` on the
+    /// open web on the byte-for-byte answer it already had, including the alpha serialization fitted
+    /// against Chrome at t1205, instead of routing them through a second implementation.
+    pub color_css: Option<String>,
     pub background_color: Option<Rgba>,
     /// `background-image` — a LIST of layers (url or gradient), painted back-to-front: index 0 is the
     /// TOPMOST layer. Painting only the colour and dropping this is why gradient heroes, washed cards
@@ -1662,6 +1682,7 @@ impl ComputedStyle {
         ComputedStyle {
             display: Display::Inline,
             color: Rgba::BLACK,
+            color_css: None,
             background_color: None,
             font_size: 16.0,
             font_weight: 400,

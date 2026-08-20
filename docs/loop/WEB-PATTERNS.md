@@ -7759,3 +7759,31 @@ stale, and `css/selectors` measures 4139 on both binaries):
 Transitions legs in `css/css-transforms` **594 → 85** and **594 → 85** — *exactly equal*, the signature
 of one sampler rather than two. `G_TRANSITION_INTERPOLATION` — 14 rows, five of them controls, proven
 RED against the pre-tick tree.
+
+## THE DESIGN TOKEN — `color-mix()`, `oklch()` and relative colour, read back by the framework that wrote it (t1312)
+
+**The class.** Modern design systems do not ship colour as hex any more. Tailwind v4, shadcn/ui, Radix,
+Material 3 and every "OKLCH palette" generator emit `oklch()` ramps and derive hover/disabled/ring
+states with `color-mix(in oklab, …)` and relative `rgb(from var(--brand) r g b / 0.4)`. Theme editors,
+contrast checkers, chart libraries and canvas code then **read those values back through
+`getComputedStyle`** and parse the numbers.
+
+⚠⚠⚠ **We answered every one of them in the wrong units.** Colours reached the CSSOM as
+`Rgba { r, g, b, a: u8 }`, so the colour space was gone and one `rgb(r, g, b)` formatter served them
+all: `rgb(from rebeccapurple r g b)` read back as `rgb(102, 51, 153)` where the spec — and every
+browser — says `color(srgb 0.4 0.2 0.6)`. **The numbers are off by a factor of 255**, so a caller that
+parses them gets 102 where it expects 0.4, and a wide-gamut `color(display-p3 1 0 0)` is not merely
+respelled but replaced: it is outside sRGB and has no `rgb()` form at all.
+
+⭐ **The engine already owned the right answer.** Stylo's `impl ToCss for AbsoluteColor` is CSS
+Color 4 §Serializing verbatim and runs on every cascade; the value was computed and thrown away at the
+`Rgba` boundary. Publishing it is one `Option<String>` on `ComputedStyle`, set only when the colour is
+NOT legacy sRGB — so every hex, named colour, `rgb()` and `hsl()` on the older web keeps the exact
+answer it had, alpha rule included.
+
+⚠ The discriminator is Stylo's own `IS_LEGACY_SRGB` flag rather than a colour-space test: `hsl()`
+computes in `ColorSpace::Hsl`, which is not sRGB, and is nevertheless legacy.
+
+**Measured:** `css/css-color` **7856 → 10473 (+2,617)** on a denominator of 11,337 in both runs,
+69.3% → 92.4%. `G_MODERN_COLOR_SERIALIZATION` — six modern rows, four legacy controls — RED by making
+`modern_color_css` return `None`.

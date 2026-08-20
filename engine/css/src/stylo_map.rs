@@ -23,6 +23,30 @@ use stylo::values::specified::box_::{
 use crate::{ComputedStyle, Dim, Display, Rgba, Sides, TextAlign};
 
 /// Convert a Stylo `AbsoluteColor` to our `Rgba` (via the sRGB color space).
+/// **The computed colour as CSS Color 4 says to write it — or `None` when the legacy `rgb()` form
+/// this engine already emits is the correct answer.**
+///
+/// ⭐ **The entire rule is BORROWED (`STATUS.md`'s ladder, option 1 — no fork).** Stylo's
+/// `impl ToCss for AbsoluteColor` is CSS Color 4 §Serializing verbatim: the legacy `rgb()`/`rgba()`
+/// branch with 0–255 integers, the `lab()`/`lch()`/`oklab()`/`oklch()` branch, the
+/// `color(<space> …)` branch for every predefined space, `none` components, and the spec's alpha
+/// serialization. The engine has been computing that value and discarding it at the `Rgba`
+/// boundary ever since colours were mapped at all.
+///
+/// ⚠ **The legacy test is Stylo's own, not a keyword list of ours.** `IS_LEGACY_SRGB` is the flag
+/// the colour parser sets when the author wrote a hex, a named colour, `rgb()`, `hsl()` or `hwb()`,
+/// and it is exactly the discriminator the spec's serialization branches on — so this cannot drift
+/// from the branch it is predicting. `Hsl`/`Hwb` carry the flag while still being in their own
+/// colour space, which is why the space alone would be the wrong test.
+fn modern_color_css(c: &AbsoluteColor) -> Option<String> {
+    use style_traits::ToCss;
+    use stylo::color::ColorFlags;
+    if c.flags.contains(ColorFlags::IS_LEGACY_SRGB) {
+        return None;
+    }
+    Some(c.to_css_string())
+}
+
 fn abs_to_rgba(c: &AbsoluteColor) -> Rgba {
     let s = c.to_color_space(ColorSpace::Srgb);
     let to = |v: f32| (v.clamp(0.0, 1.0) * 255.0).round() as u8;
@@ -505,6 +529,10 @@ pub fn to_computed_style(cv: &ComputedValues) -> ComputedStyle {
     // Color / background (currentColor resolved against the element's color).
     let current = cv.clone_color();
     s.color = abs_to_rgba(&current);
+    // …and, for a colour that is NOT legacy sRGB, the string CSS Color 4 says to report. See
+    // `ComputedStyle::color_css`: `Rgba` is the right type to paint with and the wrong one to
+    // answer `getComputedStyle` with.
+    s.color_css = modern_color_css(&current);
     // ⚠⚠⚠ **CSS 2.1 §12.4 — THE ELEMENT'S OWN COUNTER OPERATIONS, AND THEY LIVE HERE AND NOT WITH
     // `content`.** t1096 mapped `counter-reset`/`counter-increment` inside the PSEUDO mapper, which
     // early-returns unless the pseudo has `content` — so an ordinary element carrying

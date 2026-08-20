@@ -11,12 +11,12 @@
 
 | | value | over |
 |---|---|---|
-| ticks landed | **1000** | ticks 1–1310 |
-| median tick cycle | **30m** | 999 intervals |
-| median, last 10 | **80m** | 10 intervals |
+| ticks landed | **1001** | ticks 1–1312 |
+| median tick cycle | **30m** | 1000 intervals |
+| median, last 10 | **1.8h** | 10 intervals |
 | fastest / slowest | 5s / 5.4d | |
-| **ticks per hour** | **1.05** | 952.3h elapsed |
-| median verify wall | **63s** | 939 ticks |
+| **ticks per hour** | **1.05** | 955.9h elapsed |
+| median verify wall | **63s** | 940 ticks |
 | wall trend | 39s → 17m — getting slower ⚠️ | first 3 vs last 3 |
 
 The **cycle** is the real unit: implement → debug → verify wall → land. The wall is only part of
@@ -27,11 +27,11 @@ it, and a wall that grows taxes every future tick, so it is tracked separately f
 ### Near — the daily driver (doc / app / platform web)
 
 * **capabilities asserted** (`G_CAPABILITY`): 48 → **81**
-* **live gates**: 27 → **494**
+* **live gates**: 27 → **495**
 * **✅ rows in the capability ledger**: 144 → **642**
 * **Bar 0 — oracle hangs**: 0 of 265 sites
 
-**468 of 1000 ticks** (47%) moved a
+**469 of 1001 ticks** (47%) moved a
 user-visible capability. The rest were instruments, infrastructure and corrections — and the
 ledger says the corrections were not overhead: three of its top three priorities were phantoms,
 and finding that out redirected everything after it.
@@ -90,7 +90,7 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 
 ## What a capability costs
 
-* **468** capability ticks, median cycle **30m**
+* **469** capability ticks, median cycle **30m**
 * median diff per tick: **+278 / −34** lines across 8 files
 
 ## Every tick
@@ -1097,5 +1097,6 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 | **1308** | 2026-08-17 11:19 | 2.4h | capability | 17m | +369/−180 | 493 | 81 | 56.0% · | a PAUSED animation was treated as an ABSENT one, and it lost every animated property (2026 |
 | **1309** | 2026-08-19 20:24 | 2.4d | capability | 17m | +856/−64 | 494 | 81 | 56.0% · | `element.animate()` stops interpolating in JavaScript: the duplicate is DELETED and Stylo' |
 | **1310** | 2026-08-19 21:22 | 58m | capability | 17m | +209/−38 | 494 | 81 | 56.0% · | a CSS transition needs a MEMORY, and the cascade had none (2026-08-19) |
+| **1312** | 2026-08-20 00:57 | 3.6h | capability | 17m | +584/−44 | 495 | 81 | 56.0% · | a colour that is not legacy sRGB keeps its own function, and the space was thrown away at  |
 
 *`·` after a WPT figure means **carried forward**, not measured this tick.*

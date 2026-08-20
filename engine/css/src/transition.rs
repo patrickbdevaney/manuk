@@ -58,6 +58,38 @@ use stylo::values::animated::{Animate, Procedure};
 use stylo::values::generics::easing::BeforeFlag;
 
 thread_local! {
+    /// **THE SAMPLE MEMO — `(before, after, clock) → declarations`, one entry per element.**
+    ///
+    /// **WITHOUT IT [`sample`] IS QUADRATIC ON THE PAGE THAT EXERCISES IT MOST.**
+    /// `transition-property: all` expands to every longhand, so a single element costs ~200
+    /// `AnimationValue::from_computed_values` pairs — and WPT's `interpolation-testcommon.js`
+    /// forces one full-document style recalc per target while N targets accumulate, which is
+    /// `O(N² · 200)`. On `css/css-grid/animation/grid-template-rows-interpolation.html` the page
+    /// overran the document's own wall-clock budget and was cut off at a different point on every
+    /// run, emitting **558, 571, 642 and 654 subtests across four runs of the SAME binary**.
+    ///
+    /// ⚠⚠⚠ **THIS IS A COST REDUCTION AND IT IS NOT A DETERMINISM FIX — THAT WAS MEASURED, AND THE
+    /// FIRST DRAFT OF THIS COMMENT CLAIMED OTHERWISE.** With the memo installed,
+    /// `css/css-grid/animation` still emitted **1841 then 1766 subtests on two runs of the one
+    /// release binary** (t1312). So the sampler was *a* cost in that budget, not *the* cost, and
+    /// whatever else overruns it is still unattributed. Do not cite this memo as the reason a
+    /// `css/css-grid` reading is trustworthy: that area's denominator still moves, and the rule
+    /// from t1311 stands — difference only against a baseline you took yourself, on the same
+    /// binary, in the same hour, and prefer an area whose denominator does not move at all.
+    ///
+    /// [`sample`] is a pure function of `(before, after, clock)`, so it memoises exactly. `before`
+    /// is compared by POINTER (it is the very `Arc` [`PREV`] handed out, kept unchanged while the
+    /// transition runs) and `after` by VALUE across ALL TWENTY style structs — ~350 field compares
+    /// with no allocation, against ~400 animated-value constructions with plenty. A settled
+    /// transition therefore costs one comparison per recalc instead of one full sample.
+    ///
+    /// ⚠ The clock is part of the key and not an afterthought: the whole point of a transition is
+    /// that its value changes with time, so a memo that ignored the clock would freeze every
+    /// transition at the first frame the moment a clock exists.
+    #[allow(clippy::type_complexity)]
+    static MEMO: RefCell<HashMap<NodeId, (ServoArc<ComputedValues>, ServoArc<ComputedValues>, f64, Vec<PropertyDeclaration>)>> =
+        RefCell::new(HashMap::new());
+
     /// **The BEFORE-CHANGE style of every element the last cascade published**, which is the one
     /// endpoint of a transition that exists nowhere in the document.
     ///
@@ -82,8 +114,82 @@ pub fn prev_style(node: NodeId) -> Option<ServoArc<ComputedValues>> {
 }
 
 /// Install the table the pass just built. See [`PREV`] — replacement, not merge.
+///
+/// The sample memo is pruned to the same key set here, for the same reason and in the same instant:
+/// a node the document no longer contains must stop being remembered by BOTH tables, or the memo
+/// becomes the leak the `PREV` note was written to avoid.
 pub fn publish_pass(next: HashMap<NodeId, ServoArc<ComputedValues>>) {
+    MEMO.with(|m| m.borrow_mut().retain(|k, _| next.contains_key(k)));
     PREV.with(|p| *p.borrow_mut() = next);
+}
+
+/// Do these two styles agree on every longhand? **Twenty struct comparisons — every style struct
+/// `ComputedValues` has, and the exhaustiveness is the whole correctness argument**, not a tidiness
+/// preference. See [`MEMO`] for why this is worth doing instead of the animated-value pass it
+/// replaces.
+///
+/// ⚠⚠⚠ **A STRUCT LEFT OUT OF THIS LIST IS A STALE SAMPLE, NOT A MISSED OPTIMISATION.** The memo
+/// returns the PREVIOUS declaration list whenever this says *"same"*, so a struct nobody compares is
+/// a struct whose change the transition never sees: the target moves and the interpolation keeps
+/// running to the old endpoint. This function's first draft omitted `get_svg()`, which is
+/// fill/stroke/stroke-width — animatable, and the whole colour surface of an inline icon.
+///
+/// ⚠ **The list is derived from `properties.rs`'s generated `pub fn get_*(&self)` accessors, and
+/// two of those are NOT style structs**: `get_system()` reports whether a system font set the value,
+/// and `get_inset(PhysicalSide)` is a per-side longhand getter — `top`/`right`/`bottom`/`left` live
+/// in `Position`, which is already here. Re-derive this list whenever Stylo is bumped; a new struct
+/// is silent.
+///
+/// ⚠ **By VALUE, not by `Arc` pointer.** `before` and `after` come from two different cascade
+/// passes, so even a completely unchanged element gets freshly allocated style structs and pointer
+/// equality would report *"changed"* every single time — i.e. it would compile, run, and memoise
+/// nothing.
+fn same_style(a: &ComputedValues, b: &ComputedValues) -> bool {
+    a.get_background() == b.get_background()
+        && a.get_border() == b.get_border()
+        && a.get_box() == b.get_box()
+        && a.get_column() == b.get_column()
+        && a.get_counters() == b.get_counters()
+        && a.get_effects() == b.get_effects()
+        && a.get_font() == b.get_font()
+        && a.get_inherited_box() == b.get_inherited_box()
+        && a.get_inherited_table() == b.get_inherited_table()
+        && a.get_inherited_text() == b.get_inherited_text()
+        && a.get_inherited_ui() == b.get_inherited_ui()
+        && a.get_list() == b.get_list()
+        && a.get_margin() == b.get_margin()
+        && a.get_outline() == b.get_outline()
+        && a.get_padding() == b.get_padding()
+        && a.get_position() == b.get_position()
+        && a.get_table() == b.get_table()
+        && a.get_text() == b.get_text()
+        && a.get_ui() == b.get_ui()
+        // ⚠ `svg` — fill/stroke/stroke-width/stroke-dasharray, all animatable — was the one
+        // struct missing from the first draft of this list.
+        && a.get_svg() == b.get_svg()
+}
+
+/// [`sample`], memoised on its own inputs. See [`MEMO`].
+pub fn sample_memoized(
+    node: NodeId,
+    before: &ServoArc<ComputedValues>,
+    after: &ServoArc<ComputedValues>,
+) -> Vec<PropertyDeclaration> {
+    let now = crate::animation::time_ms();
+    let hit = MEMO.with(|m| {
+        m.borrow().get(&node).and_then(|(b, a, t, d)| {
+            (ServoArc::ptr_eq(b, before) && *t == now && same_style(a, after)).then(|| d.clone())
+        })
+    });
+    if let Some(d) = hit {
+        return d;
+    }
+    let out = sample(before, after);
+    MEMO.with(|m| {
+        m.borrow_mut()
+            .insert(node, (before.clone(), after.clone(), now, out.clone()))
+    });
+    out
 }
 
 /// Is there any transition worth looking at on this style? The cheap gate the caller pays on every
