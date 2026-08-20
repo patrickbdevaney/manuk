@@ -7869,3 +7869,23 @@ answered its content-suggestion question with the item's declared width — maki
 **Measured:** `css/css-flexbox` 2850 → 2868 and `css/css-sizing` 4290 → 4336 on fixed denominators.
 ⚠ That number badly understates it: +64 subtests is what WPT can see, while what changed is the layout
 primitive under most horizontal composition on the web.
+
+## THE HANDLE THAT OUTLIVED ITS NODE — `appendChild` panicked on a live commercial site (t1316)
+
+**The class.** Long-lived pages that build and tear down DOM repeatedly — admin panels, dashboards,
+SPA route changes, ad and analytics frames — keep JS element handles across mutations that free the
+underlying arena slot. Every framework does this; it is what a `ref` *is*.
+
+⚠⚠⚠ **`admin.munchbakery.com` called `appendChild` with a handle this arena no longer held, and the
+arena indexed it raw**: `index out of bounds: the len is 8 but the index is 337`. Contained at the
+`extern "C"` boundary — without which it aborts the process and every tab in it — but a caught panic
+is not a handled error: the insertion did not happen and the page silently lost a subtree.
+
+⭐⭐⭐ **And the crash was the mild half.** A stale handle into a slot that has since been REUSED passes
+any bounds check and **silently mutates a different node**. `Dom::is_alive` — bounds, liveness AND the
+generation the handle was minted at — was already correct in the same file; the mutators never asked
+it.
+
+⚠ Found by the real-site fidelity sweep, reproduced by **no** WPT test and by none of four hand-built
+fixtures (`DOMParser`, `createHTMLDocument`, iframe `contentDocument`, `document.open`). This is the
+argument for measuring against the live web in one bug.

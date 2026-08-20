@@ -3749,3 +3749,58 @@ Transitions-with-`all`, CSS Animations and Web Animations each fail the identica
 is not four bugs; it is one absent subsystem seen from four doors: **the engine has no animation
 timeline and applies end states only.** A 145-subtest gain that measures a 764-subtest hole is a better
 result than the 909 would have been, because it prices the hole.
+
+## THE ARENA'S MUTATORS NEVER ASKED WHETHER THE HANDLE WAS STILL VALID (t1316)
+
+```text
+   a DOM native PANICKED — CONTAINED   native="el_append_child"
+   index out of bounds: the len is 8 but the index is 337
+```
+
+Found by the t1316 real-site fidelity sweep on `admin.munchbakery.com` — a live commercial site, not
+a fixture. **This is what a real-page instrument is for**: no WPT test and no hand-written fixture in
+this repo produced it.
+
+### ⚠ A contained panic is not a handled error
+
+`dom_bindings` catches it because a panic cannot unwind out of `extern "C"` and would otherwise abort
+the process and **every tab in it**. But catching it does not make the operation succeed: the
+`appendChild` did not happen, so the page silently lost a subtree and carried on.
+
+### ⭐⭐ One file, two idioms
+
+Every READ path in `manuk_dom` already goes through `self.nodes.get(..)` or `is_alive` and answers
+`None`. Every MUTATION path — `append_child`, `insert_before`, `remove_child`, `detach` — indexed
+`self.nodes[..]` raw. The mutators are exactly the half script reaches with an arbitrary number.
+
+### ⭐⭐⭐ The out-of-bounds case is the MILD one
+
+The first fix was a bounds check. It stops the panic and **leaves the worse bug standing.** `NodeId`
+packs a slot index *and the generation it was minted at*:
+
+| handle | bounds check | what actually happens |
+|---|---|---|
+| index past the end | catches it | panic → contained → operation silently dropped |
+| **index of a REUSED slot** | **passes** | **silently mutates a DIFFERENT node** — no panic, no error, wrong DOM |
+
+`Dom::is_alive` tests bounds, liveness **and** generation. It has been correct in this file the whole
+time; the mutators simply never asked it. Borrowed, not re-derived — the bounds-only `holds()` was
+deleted before it landed.
+
+### ⚠⚠ The first gate was VACUOUS and was deleted
+
+It drove the four mutators from a JS fixture — stale handles, non-child reference nodes, re-appends
+after `innerHTML = ''` — and **passed with the fix disabled**, because every handle script can name in
+a document was allocated by that document's own arena. Four attempts at the live site's path
+(`DOMParser`, `createHTMLDocument`, an iframe's `contentDocument`, `document.open`) reproduced nothing.
+
+The defect is at the ARENA boundary, so `G_STALE_NODE_HANDLE` moved to `engine/dom/tests/`, where a
+dead handle can actually be constructed. It is proven RED **two ways**, and the second is the point:
+
+```text
+   no guard at all      → panics, "the len is 2 but the index is 337"
+   a BOUNDS-ONLY guard  → passes t1, then SILENTLY DETACHES THE WRONG NODE at t2
+```
+
+> **A gate that cannot fail is worse than no gate — and the only reason this one was caught is that
+> the mutation test was run before the write-up, not after.**

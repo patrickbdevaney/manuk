@@ -1716,6 +1716,11 @@
   - L3707 · ⚠⚠ THE PROTOTYPE CHAIN DOES NOT EXIST DURING THE PRELUDE, and the obvious fix proves it
   - L3722 · ⚠ The chain here is FLATTER than the spec's, and the second claim died to a measurement
   - L3736 · ⚠⚠ EXISTENCE IS NOT SUFFICIENCY — and here the shortfall names the next tick exactly
+  - L3753 · THE ARENA'S MUTATORS NEVER ASKED WHETHER THE HANDLE WAS STILL VALID (t1316)
+  - L3764 · ⚠ A contained panic is not a handled error
+  - L3770 · ⭐⭐ One file, two idioms
+  - L3776 · ⭐⭐⭐ The out-of-bounds case is the MILD one
+  - L3790 · ⚠⚠ The first gate was VACUOUS and was deleted
 
 ## Manuk Daily-Driver Usability Roadmap (synthesized, tick 138)
 `docs/wiki/lever-map.md`
@@ -2300,4 +2305,4 @@
   - L231 · Both named mechanisms are subsystem work
 
 ---
-2207 sections across 22 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+2212 sections across 22 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.

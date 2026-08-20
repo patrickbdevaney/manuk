@@ -1258,6 +1258,10 @@ impl Dom {
     /// elements. Removing a node that is *not* a child of `parent` is a no-op returning
     /// `false`, never a silent detach from somewhere else.
     pub fn remove_child(&mut self, parent: NodeId, child: NodeId) -> bool {
+        // See the note above: a stale handle is not a child of anything.
+        if !self.is_alive(parent) || !self.is_alive(child) {
+            return false;
+        }
         if self.nodes[child.index()].parent != Some(parent) {
             return false;
         }
@@ -1267,7 +1271,41 @@ impl Dom {
         true
     }
 
+    /// **THE MUTATORS BELOW ALL CHECK [`Self::is_alive`] FIRST, AND UNTIL t1316 NONE OF THEM DID.**
+    ///
+    /// ⚠⚠⚠ **A `NodeId` IS AN INDEX PLUS A GENERATION, AND SCRIPT CAN HAND US ONE THIS ARENA NO
+    /// LONGER HONOURS.** Every read path in this file already goes through `self.nodes.get(..)` or
+    /// `is_alive`; every MUTATION path indexed `self.nodes[..]` raw. One file, two idioms — and the
+    /// mutators are precisely the half script reaches with an arbitrary number:
+    ///
+    /// ```text
+    ///   a DOM native PANICKED — CONTAINED   native="el_append_child"
+    ///   index out of bounds: the len is 8 but the index is 337
+    /// ```
+    ///
+    /// Observed by the t1316 real-site fidelity sweep on `admin.munchbakery.com` — a live commercial
+    /// site, not a fixture. ⚠ The containment is the only reason that was a wrong answer rather than
+    /// a dead browser: `dom_bindings` catches it because a panic cannot unwind out of `extern "C"`
+    /// and would otherwise abort the process and **every tab in it**. A caught panic is not a handled
+    /// error — the `appendChild` simply did not happen and the page silently lost a subtree.
+    ///
+    /// ⭐⭐⭐ **AND THE OUT-OF-BOUNDS CASE IS THE MILD ONE.** A bare bounds check would have stopped
+    /// that panic and left the worse bug standing: a stale handle into a slot that has since been
+    /// REUSED passes any bounds test and **silently mutates a different node**. [`Self::is_alive`]
+    /// already tests bounds, liveness AND the generation the handle was minted at — it is the
+    /// arena's own answer to exactly this question, it has been correct the whole time, and the
+    /// mutators simply never asked it. Borrowed, not re-derived.
+    ///
+    /// The refusal is a no-op rather than a throw, matching the cycle backstop in
+    /// [`Self::append_child`] directly below: the arena refuses structurally impossible requests and
+    /// leaves the DOM-spec error to the JS layer, because these entry points are also reachable from
+    /// the parser and from Rust callers, where there is nobody to throw at.
     pub fn append_child(&mut self, parent: NodeId, child: NodeId) {
+        // A handle this arena no longer honours is not a node — see the note above. Checked FIRST,
+        // because `is_inclusive_ancestor` below walks parents and would index on the way.
+        if !self.is_alive(parent) || !self.is_alive(child) {
+            return;
+        }
         // **The arena's own backstop: never build a cycle.** A node inserted into its own descendant makes
         // `children()` walk forever — a HANG (Bar 0), not a wrong answer. The JS layer throws
         // `HierarchyRequestError` for this; the arena simply refuses, because it is reachable from the
@@ -1308,6 +1346,11 @@ impl Dom {
 
     /// Remove `child` from its parent, leaving it a detached root of its subtree.
     pub fn detach(&mut self, child: NodeId) {
+        // See the note above. `detach` is called by every other mutator, so this guard also covers
+        // the paths that reach it indirectly.
+        if !self.is_alive(child) {
+            return;
+        }
         let (parent, prev, next) = {
             let n = &self.nodes[child.index()];
             (n.parent, n.prev_sibling, n.next_sibling)
@@ -1367,6 +1410,10 @@ impl Dom {
 
     /// Insert `new_node` into `parent`'s child list immediately before `sibling`.
     pub fn insert_before(&mut self, parent: NodeId, new_node: NodeId, sibling: NodeId) {
+        // See the note above — checked before the `debug_assert` below, which indexes.
+        if !self.is_alive(parent) || !self.is_alive(new_node) || !self.is_alive(sibling) {
+            return;
+        }
         debug_assert_eq!(self.nodes[sibling.index()].parent, Some(parent));
         // Same rule as `append_child`: a fragment contributes its CHILDREN, in order, and does not
         // itself enter the tree. lit-html commits every template through exactly this call.

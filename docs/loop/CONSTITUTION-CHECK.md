@@ -10483,3 +10483,81 @@ repeat it a fifth time; that escalation stands and is not re-argued here.
    rows.
 
 **Next check due: tick 1315.**
+
+## Check #123 — tick 1315 (2026-08-20)
+
+**HORIZON: H0 — Pareto Web Parity.** Exit gate: ~83% WPT breadth across categories, oracle-verified
+across the four corpora, a daily-drivable shell, semantic-API coverage of every rendered construct.
+
+### Gate, or scoreboard?
+
+**Both, and the split is unusually clean this window — which is itself the finding.**
+
+| tick | what it moved |
+|---|---|
+| 1312 colour serialization | scoreboard (+2,617 `css/css-color`) — and a real CSSOM answer design systems read back |
+| 1313 transition sample memo | neither, honestly: a cost reduction whose stated determinism benefit was **measured and refuted** |
+| 1314 scrollbar box model | **gate** — shape, on a common idiom; +13 `css/css-overflow` badly understates it |
+| 1315 flex automatic minimum | **gate** — the layout primitive under most horizontal composition; +64 subtests badly understates it |
+| 1316 fidelity sweep + DOM arena | **gate** — the H0 gauge itself, re-measured after ~40 blind ticks |
+
+⭐ **Two of the last five ticks are cases where the WPT ledger CANNOT see the win.** t1315 fixed
+`flex-shrink` on the default value of the property and scored +64; t1314 fixed `scrollbar-width` and
+`clientWidth` and scored +13 net *after* first going −11. The constitution's own §VI.3 warns about the
+inverse — a big tail number that is not breadth — and this window is the mirror image: **real breadth
+that the scoreboard barely registers.** The corrective is the one the loop just applied, not a new
+rule: measure the RENDER corpus, and do not rank on WPT alone.
+
+### PART VI correction
+
+⭐⭐⭐ **VI.2's H0.1 row is now the loop's own top-ranked item, arrived at independently and from the
+other end.** That row was re-ranked at check #110 (tick 1161) from *deferred performance work* to
+**a named Bar 0 mechanism**: *"without incrementality every DOM mutation is O(document) … `Page::relayout`
+recascades only when the node count outgrew the style map … 75,000 `appendChild` calls, hence 75,000
+full cascades."* Independently, t1313 measured the same organ from the WPT side — every
+`getComputedStyle` re-cascades the whole document, which is why the interpolation harness is O(N²) and
+why `css/css-grid`, `css/css-sizing` and `css/css-backgrounds` truncate under their own script
+watchdog and cannot hold a stable ratchet mark. **Two instruments, two directions, one mechanism.**
+
+⚠ **VI.2's "M1 unmeasured" escalation (open since check #118, escalated at #121) is now PARTIALLY
+CLOSED — by measurement, not by argument.** t1316 ran the sweep the board has asked for since t684:
+
+```text
+   corpus-crux-trend.txt, 147 of 203 attempted (Bar-0 death mid-corpus)
+   85 scored · shape ≥ 75% = 36.5%
+   67 well-sampled (≥20 ids) · shape ≥ 75% = 44.8% · median 73.0%
+```
+
+⚠ It is a **fresh baseline on a named corpus, not a delta** — the 5.3% figure was the curated 265-site
+corpus, a different population. Nothing may be differenced against it except the next run of the same
+file. **The near-miss band is the actionable content**: 19 well-sampled sites at 60–75%, several on
+1,000+ id samples. Converting that band alone takes 44.8% → ~73%.
+
+### Is any invariant being bent?
+
+- **I2 (never patch deps)** — held, and priced three times this window rather than bent. t1314
+  enumerated the whole hole (138 gecko-gated longhands, 40% of the CSS longhand surface) and designed a
+  **supplement** rather than a fork; t1311's taffy index bug stays upstream.
+- **I3 (semantic model in lockstep)** — ⚠ watch. t1312 published `color_css` and t1314's own finding is
+  the counter-example that names the risk in both directions: `scrollbar-width` was **reported and not
+  applied**, `field-sizing` **applied and not reported**. A capability is not done until BOTH channels
+  answer, and `map-reconcile.sh` checks only that a gate exists.
+- **I4 (Pareto discipline)** — held. `css/css-values` was the #2 board row by mass and was **refused**
+  at t1314 because its mass is `calc-size()`/`if()`/`random()` drafts: WPT mass with no daily-driver
+  content. That is I4 working.
+
+### STEER
+
+1. ⭐⭐⭐ **INCREMENTAL STYLE INVALIDATION / RELAYOUT.** The constitution names it *"the single
+   highest-leverage architectural decision in the renderer"*, check #110 re-ranked it to Bar 0 with a
+   reproducing test (`css/selectors/invalidation/has-complexity.html`, still `CRASH`), and t1313
+   arrived at the same organ from the opposite direction. It is the one item where the gate, the Bar-0
+   ledger and the loop's own NEXT list agree. **This is the next tick.**
+2. ⭐⭐⭐ **The 60–75% near-miss band** from t1316's sweep — 19 sites, one band below the bar. Rank them
+   by the oracle's mechanism signature (`oracle::cluster` already computes it; `run_oracle_merge`
+   discards it before writing `CLUSTERS.md`). Nearly free, and it is the burndown's own method.
+3. ⭐⭐ **Finish the sweep** — 56 sites unmeasured because of the Bar-0 death at site 147.
+4. ⭐⭐ **The longhand supplement** (t1314's design), taken in daily-driver order. ⚠ Publish a property
+   only when something CONSUMES it — this window produced the counter-example in both directions.
+
+**Next check due: tick 1323.**

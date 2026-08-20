@@ -86633,3 +86633,110 @@ NEXT, ranked.
     a gate EXISTS, not that the capability is live in both channels.
 (e) ⭐⭐ `writing-mode` is 19% of the ★ board and that is a floor — `css/css-writing-modes` is not in
     the checkout at all.
+
+## Tick 1316 — the fidelity headline re-measured after 40 blind ticks, and the sweep that measured it found a DOM panic on a live site (2026-08-20)
+
+TICK SHAPE: measurement + capability. Board re-run at the top of this tick: **unchanged**
+(★ CSS-LAYOUT). This is the board's own CO-#1 immediate action — *"RUN A FRESH FULL SWEEP NOW …
+the loop is blind on its own headline (agent runs it; observer NEVER does)"* — and t1315's NEXT (a).
+
+### THE MEASUREMENT — a fresh baseline on a NAMED corpus, and it is NOT a delta
+
+`manuk-wpt fidelity --urls-file docs/bench/corpus-crux-trend.txt` (the 200-site representative CrUX
+trend corpus the owner named on 2026-07-30). ⚠ The harness script `scripts/fidelity-sweep.sh` still
+hardcodes `docs/bench/oracle-corpus.txt`; it is observer-owned so I did not touch it — the binary's
+own `--urls-file` is agent territory and takes any corpus.
+
+```text
+   attempted                147 of 203     ⚠ the run DIED mid-corpus — see Bar 0 below
+   produced a SHAPE score    85            (62 attempted and unscorable: bot walls, timeouts, fetch fails)
+   shape ≥ 75%               31 of 85  =  36.5%
+   mean 57.3%   median 69.0%
+
+   …restricted to sites with ≥20 scored ids (18 are low-sample, some on ONE id):
+   shape ≥ 75%               30 of 67  =  44.8%
+   mean 66.8%   median 73.0%
+```
+
+⚠⚠⚠ **THIS IS NOT "5.3% → 44.8%" AND MUST NOT BE READ AS ONE.** The 11/209 = 5.3% baseline was taken
+on the CURATED 265-site corpus; this is the CrUX trend corpus, a different population with a different
+difficulty mix, and the run is 72% complete. **A moving denominator is the tell** — the honest
+statement is *a fresh baseline of 44.8% on `corpus-crux-trend.txt`, well-sampled subset, partial run*,
+and the next sweep on the same file is the first thing that can legitimately be differenced against it.
+
+⭐ **THE NEAR-MISS BAND IS THE FINDING.** Nineteen well-sampled sites sit at **60–75%** — one band
+below the bar, several of them large samples (`fragrantica.com` 73.0% on 2,985 ids,
+`puentedemando.com` 73.4% on 1,131, `mobile.ir` 72.7% on 1,172, `mangaraw.ac` 71.0% on 1,153). That is
+the cheapest cohort on the board: converting the 60–75 band alone takes 44.8% to **73%**. The tail
+below 20% is a different and much smaller problem (`trivago.pl` 10.7% on 1,270 ids is the only large
+one).
+
+⚠ **Eleven of the 0.0% rows are scored on 1–5 ids** (`vk.com` 2, `haraj.com.sa` 1, `house.udn.com` 1).
+Those are not render failures, they are **unprobeable pages** — bot walls and consent gates that render
+almost nothing with an `[id]`. Counting them as zeroes is how a corpus-wide mean gets pessimistic in
+exactly the way the cert §3 exclusion exists to prevent, which is why both numbers are printed above.
+
+### ⚠ BAR 0 — the sweep died at site 147 of 203
+
+No panic message, no OOM in `dmesg`, process simply gone. That is the signature of the tracked mozjs
+heap-corruption SIGSEGV, whose own note says it *"needs ~10 sites of allocation churn"* and has killed
+mid-corpus runs before. It survived 147 sites this time. **Recorded, not re-diagnosed**: it is a
+fresh-ASAN-context job, and the loop can keep landing capability with it open. The consequence for
+this tick is only that the denominator above is 147 and not 203, and it is stated as such.
+
+### THE BUILD — the sweep found a live-site DOM panic, which is what a real-page instrument is FOR
+
+```text
+   a DOM native PANICKED — CONTAINED   native="el_append_child"
+   index out of bounds: the len is 8 but the index is 337
+```
+
+`admin.munchbakery.com`, a live commercial site. ⚠ The containment is the only reason this was a wrong
+answer rather than a dead browser — `dom_bindings` catches it because a panic cannot unwind out of
+`extern "C"` and would otherwise abort the process and **every tab in it**. And a caught panic is not
+a handled error: the `appendChild` did not happen, so the page silently lost a subtree.
+
+⭐⭐ **ONE FILE, TWO IDIOMS.** Every READ path in `manuk_dom` already goes through
+`self.nodes.get(..)` or `is_alive` and answers `None`. Every MUTATION path indexed `self.nodes[..]`
+raw — and the mutators are exactly the half script reaches with an arbitrary number.
+
+⭐⭐⭐ **AND THE OUT-OF-BOUNDS CASE IS THE MILD ONE.** My first fix was a bounds check, `holds()`. It
+stops the panic and **leaves the worse bug standing**: `NodeId` packs a slot index AND a generation, so
+a stale handle into a slot that has since been REUSED passes any bounds test and **silently mutates a
+different node** — no panic, no error, wrong DOM. `Dom::is_alive` already tests bounds, liveness and
+generation; it has been correct in this file the whole time and **the mutators simply never asked it**.
+Borrowed, not re-derived — `holds()` was deleted before it landed.
+
+PROVEN RED **two ways, and the second is the one that matters**:
+
+```text
+   no guard at all (the pre-tick tree)   → panics: "index out of bounds: the len is 2 but the index is 337"
+   a BOUNDS-ONLY guard (the weaker fix)  → passes t1, then SILENTLY DETACHES THE WRONG NODE at t2
+```
+
+⚠⚠ **THE FIRST VERSION OF THIS GATE WAS VACUOUS AND WAS DELETED.** It drove the four mutators from a
+JS fixture — stale handles, non-child reference nodes, re-appends after `innerHTML = ''` — and
+**passed with the fix disabled**, because every handle script can name in a document was allocated by
+that document's own arena. Four reproduction attempts at the live site's path (`DOMParser`,
+`createHTMLDocument`, an iframe's `contentDocument`, `document.open`) panicked on none of them. The
+defect is at the ARENA boundary, so the gate moved there, where a dead handle can actually be
+constructed. **A gate that cannot fail is worse than no gate**, and the only reason this one was
+caught is that the mutation test was run before the write-up.
+
+CONTROLS: `manuk-dom` 11/11, `manuk-css` 39/39, `manuk-layout` 182/182. The gate's own `n1` row is the
+negative half — after five refusals an ordinary `append_child` must still work, which a
+refuse-everything guard would fail.
+
+NEXT, ranked.
+(a) ⭐⭐⭐ **THE 60–75% NEAR-MISS BAND — 19 well-sampled sites, one band below the bar.** Converting it
+    alone takes the headline from 44.8% to ~73%. Histogram those nineteen by the oracle's mechanism
+    signature (`oracle::cluster` already computes `{displaced|mis-sized}:{width|height|y|x} ~Npx` and
+    `run_oracle_merge` discards it) — that is the ranked work list the burndown asks for and it is
+    nearly free.
+(b) ⭐⭐⭐ **BUILD THE LONGHAND SUPPLEMENT** (t1314's design) — `appearance`, `fill`/`stroke`,
+    `touch-action`, `scroll-behavior` first. ⚠ Publish a property only when something CONSUMES it.
+(c) ⭐⭐⭐ **INCREMENTAL STYLE INVALIDATION** — `getComputedStyle` re-cascades the whole document
+    (carried from t1313).
+(d) ⭐⭐ **Finish the sweep** — 56 sites of `corpus-crux-trend.txt` are unmeasured because of the
+    Bar-0 death. Re-running from `--start 147` would complete the baseline for the cost of one run.
+(e) ⭐⭐ Ask both questions of every `gated` capability (surface audit #73).
