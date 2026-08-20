@@ -1595,3 +1595,40 @@ instrument's own `base_flags` on an **overflowing** document and asserts its `cl
 green (both sides go to 1185), because the defect was never the policy — it was the policy applied to
 one side. Proven RED by deleting the `match_reference_scrollbar_policy()` call, which is exactly the
 state every sweep before t1319 ran in: `left: 1200.0, right: 1185.0`.
+
+## The per-site error bar is not a constant — it ranges from 0.0 to 18.0 points (t1322)
+
+The first complete 200-site sweep after the t1319 instrument repair threw up three apparent
+regressions. All three were false, and the sequence that refuted them is the method:
+
+```text
+   serennu.com        sweep(--jobs 2) 49.2   →   serial re-run 73.8   (= its previous value)
+   www.unoeste.br     five runs, same binary, same hour:
+                          66.9 · 84.5 · 84.9 · 73.1 · 82.7      SPREAD 18.0 pts on 441–445 ids
+   www.freesupertips  new 70.8  vs  OLD BINARY built and run in the same hour: 68.6
+                          → the new code is BETTER; the drop was against a STALE baseline
+```
+
+⭐ And the control that makes the number mean something: **`oilprice.com` re-ran at 66.1 / 66.1 — a
+spread of 0.0 on 654 ids.** The variance is a property of the SITE, not of the run or the machine.
+Some pages are deterministic to the pixel; some swing eighteen points with nothing changed.
+
+### What this changes
+
+1. **A per-site claim needs the site's own error bar first** — at least two serial runs before any
+   before/after is believed. A single reading on `unoeste.br` carries no information at all.
+2. **Rank the worklist from the STABLE end.** A fix verified on a ±18pt site cannot be priced; the
+   same fix on `oilprice.com` can.
+3. ⚠ **`--jobs 2` is still contended.** t771 established that `--jobs 8` costs hard sites their
+   scorability; this sweep shows `--jobs 2` costs a site 24 points of shape. A down-mover in a sweep
+   is a **suspect**, never a regression, until a same-hour serial run has agreed with it.
+4. ⚠ **And if it survives that, it still needs the OLD-BINARY control, same hour.** `freesupertips`
+   looked like a −6.8 against the previous sweep and was a +2.2 against the previous *code* — the
+   difference being five days of the live web moving underneath the measurement.
+
+### ⚠ The tracker's own printed delta had a poisoned baseline
+
+`scripts/fidelity-progress.sh` reported `IN-SCOPE PASS 18.7%→36.1% (+17.4 pts)`. Its comparator was
+`t1275`, which is the **contended `--jobs 8` sweep** (scored 54 of 200, against 108 here). The honest
+comparator is the last clean one, `t1268`: **34.6% → 36.1%, +1.5**. A trend line that includes a
+known-poisoned point will hand you its recovery as progress.

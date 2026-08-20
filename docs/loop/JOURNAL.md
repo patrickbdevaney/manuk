@@ -87360,3 +87360,91 @@ NEXT, ranked.
     that may share it. Cheap to check, and the check is the tick's first probe.
 (d) ⭐⭐ **`documentElement` HAS NO BOX** — t1320's (a), refused above as subsystem-sized. It needs a
     decomposition session, not a tick.
+
+## Tick 1322 — the first complete sweep under the repaired instrument, and the per-site error bar is not a constant (2026-08-20)
+
+TICK SHAPE: measurement. Board re-run at the top of this tick: **unchanged** (CO-#1 = the rendering
+gap). Took my own t1321 NEXT (a) — the clean full sweep, owed since t1319 repaired the instrument and
+by then four engine ticks deep. ⚠ **NO ENGINE SOURCE CHANGED THIS TICK**, and calling it anything else
+would be the failure check #123 exists to catch.
+
+### THE NUMBERS, IN THE TRACKER'S OWN FRAMING
+
+200/200 sites, `corpus-crux-trend.txt`, `--jobs 2`, on an otherwise quiet box. t1316's sweep died at
+site 147; this one finished.
+
+```text
+   M1 GATE (shape>=0.75 AND jarring-clean)   33/133 = 24.8%   target 95% = 127  →  NEED +94
+     ├─ shape >= 0.75                        48/133 = 36.1%
+     └─ jarring-clean (TOL2)                 52/133 = 39.1%
+   scorability                              108/133 = 81.2%   shape_mean 63.9%  cov_mean 86.9%
+   well-sampled (>=20 ids): 103 sites · 48 at >=0.75 = 46.6% · median 73.2%
+```
+
+### ⚠⚠ THE TRACKER'S OWN PRINTED DELTA HAS A POISONED BASELINE
+
+`scripts/fidelity-progress.sh` printed **`IN-SCOPE PASS 18.7%→36.1% (+17.4 pts)`**. Its comparator is
+`t1275` — **the contended `--jobs 8` sweep**, which scored 54 of 200 against 108 here. That +17.4 is
+the recovery from a known-poisoned point, not a gain. The honest comparator is the last clean sweep:
+
+```text
+                        t1252    t1268    t1322
+   in-scope shape        33.6     34.6     36.1      (+1.5 over t1268)
+   jarring-clean          —       38.3     39.1      (+0.8)
+   M1 gate                —       23.3     24.8      (+1.5)
+```
+
+⭐ **A trend line that keeps a known-poisoned point will hand you its recovery as progress**, and it
+will do it in the one number a human reads first. Three tick-sized wins would look identical to this.
+
+### ⭐⭐⭐ THREE APPARENT REGRESSIONS, ALL REFUTED, AND THE REFUTATIONS ARE THE FINDING
+
+```text
+   serennu.com        sweep(--jobs 2) 49.2   →  serial re-run 73.8   (= its t1316 value)
+   www.unoeste.br     five runs, same binary, same hour:
+                        66.9 · 84.5 · 84.9 · 73.1 · 82.7     SPREAD 18.0 pts on 441–445 ids
+   www.freesupertips  new 70.8  vs  OLD BINARY built and run the same hour: 68.6
+                        → the new code is BETTER; the "drop" was against a five-day-old baseline
+```
+
+And the control that makes those mean something: **`oilprice.com` re-ran at 66.1 / 66.1 — spread 0.0
+on 654 ids.**
+
+⭐ **THE PER-SITE ERROR BAR RANGES FROM 0.0 TO 18.0 POINTS AND IS A PROPERTY OF THE SITE.** Some pages
+are deterministic to the pixel; some swing eighteen points with nothing changed at all. That is not a
+machine-load effect — `oilprice` and `unoeste` were interleaved in the same loop.
+
+What it imposes, written into `PHASE0-RENDER-BURNDOWN.md` §12.3 and `docs/wiki/fidelity-instrument.md`:
+
+1. A per-site claim needs **the site's own error bar first** (≥2 serial runs). A single reading on
+   `unoeste.br` carries no information.
+2. **Rank the worklist from the STABLE end** — a fix verified on a ±18pt site cannot be priced.
+3. ⚠ **`--jobs 2` is still contended.** t771 proved `--jobs 8` costs hard sites their *scorability*;
+   this shows `--jobs 2` costs a site **24 points of shape**. A sweep down-mover is a SUSPECT.
+4. ⚠ And if it survives the serial re-run it still needs the **OLD-BINARY control, same hour** —
+   `freesupertips` was a −6.8 against the previous sweep and a **+2.2 against the previous code**.
+
+⚠ I nearly filed `unoeste.br` as a t1320 regression on the strength of ONE serial re-run that agreed
+with the sweep (66.9 after 73.9). The old-binary control said 84.7, the next two runs of the NEW code
+said 84.5 and 84.9, and the ratchet holds. **Two readings that agree are not a measurement when the
+spread is 18 points.**
+
+### THE BAND, RE-RANKED (§12.2)
+
+22 sites at 60–75%, **16,915 scored ids**; converting the band takes the well-sampled headline from
+46.6% to ~68%. `ticket.jfa.jp` (82.1%) and `mangaraw.ac` have left it — t1319's work.
+
+⭐ By the new stability test the best anchor in the band is **`oilprice.com`** — 654 ids, spread 0.0,
+66.5% — which is what §11's NEXT already guessed and can now justify rather than assert.
+
+NEXT, ranked.
+(a) ⭐⭐⭐ **`oilprice.com`, the stable anchor.** 654 ids, error bar 0.0, 66.5% shape, and t1317
+    measured it 653-of-654 misplaced with a SMALL first divergence — so the first wrong vertical gap
+    is near the top of the document and every reading of the fix will be trustworthy. Take the
+    `--shape-dump` and work the top mechanism.
+(b) ⭐⭐⭐ **VIEWPORT `overflow` PROPAGATION, both halves in one tick** (t1321's (b)) — narrow the ICB
+    from `body`'s propagated `overflow` AND stop `body` reserving for itself.
+(c) ⭐⭐ **THE 25 UNSCORED IN-SCOPE SITES** — render-fail 3 · shell-only 5 · thin-overlap 2 · timeout
+    8 · css-starved 1 · other 6. Scorability 81.2% is the cap on M1, and the tracker names these as
+    the throw-killer worklist.
+(d) ⭐⭐ **AUDIT THE OTHER WORST-CASE BARS** (t1318's (b)) — still open, still cheap.

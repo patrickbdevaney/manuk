@@ -531,3 +531,73 @@ must not be worked as one.
 
 > **A steer is a claim with a date, and both of these outlived their fact.** The cost of checking each
 > was one command; the cost of not checking was a tick spent implementing something that exists.
+
+## §12 — THE FIRST COMPLETE SWEEP UNDER THE REPAIRED INSTRUMENT (t1322, `corpus-crux-trend.txt`, 200/200)
+
+t1316's sweep died at site 147; this one finished all 200, and it is the first taken after t1319
+corrected the reference's scrollbar provisioning. Every absolute number in §8–§11 predates that
+repair and must not be diffed against these.
+
+### 12.1 The gate, in the tracker's own framing (`scripts/fidelity-progress.sh`)
+
+```text
+   M1 GATE (shape>=0.75 AND jarring-clean)   33/133 = 24.8%   target 95% = 127  →  NEED +94
+     ├─ shape >= 0.75                        48/133 = 36.1%
+     └─ jarring-clean (TOL2)                 52/133 = 39.1%
+   scorability                              108/133 = 81.2%   shape_mean 63.9%  cov_mean 86.9%
+   EXCLUDED (bot-wall/unreachable, watched)  67/200 = 34%
+```
+
+⚠ **The tracker's printed Δ is against `t1275`, which was the CONTENDED `--jobs 8` sweep** — so its
+`+17.4 pts` is an artifact of the baseline, not a gain. The honest comparator is the last clean
+sweep, `t1268`:
+
+```text
+                        t1252    t1268    t1322
+   in-scope shape        33.6     34.6     36.1
+   jarring-clean         32.4?    38.3     39.1
+   M1 gate               23.3?    23.3     24.8
+```
+
+### 12.2 The near-miss band, re-ranked on fresh data
+
+22 sites sit at 60–75% carrying **16,915 scored ids**. Converting the band alone takes the
+well-sampled headline from **46.6% to ~68%**.
+
+```text
+   www.fragrantica.com    73.3%  2980      probidas.lt            62.3%   650
+   www.repubblica.it      72.8%  2566      momon-ga.com           60.3%   572
+   www.crazyshop.pl       68.5%  1402      www.paypal.com         65.2%   534
+   www.razaoautomovel.com 70.7%  1195      www.freesupertips.com  70.8%   473
+   www.mobile.ir          70.0%  1179      www.ta3lemkonline.com  61.7%   459
+   www.hdnails.it         66.1%  1116      www.5movierulz.discount 68.8%  439
+   7info.ru               72.1%   820      pivaldi.restoplace.ws  74.6%   378
+   nysainfo.pl            68.2%   770      www.unoeste.br         73.9%   276
+   oilprice.com           66.5%   654      pasarbokep.com         71.7%   251
+```
+
+`ticket.jfa.jp` and `mangaraw.ac` have left the band (t1319 put `ticket.jfa.jp` at 82.1%).
+
+### 12.3 ⭐⭐⭐ THE PER-SITE ERROR BAR IS NOT A CONSTANT, AND THE WORKLIST MUST BE BUILT ON THAT
+
+Three sites in this sweep read as large regressions. All three were refuted, and the refutations took
+a same-hour old-binary control:
+
+```text
+   serennu.com        sweep 49.2   serial re-run 73.8   (= its t1316 value)   contention
+   www.unoeste.br     runs: 66.9 · 84.5 · 84.9 · 73.1 · 82.7   —  SPREAD 18.0 pts on 441–445 ids
+   www.freesupertips  new 70.8  vs  OLD BINARY, same hour 68.6  —  the new code is BETTER
+```
+
+⭐ **`oilprice.com` re-ran at 66.1 / 66.1 — a spread of ZERO on 654 ids.** So the instrument's
+per-site error bar ranges from **0.0 to 18.0 points**, and it is a property of the SITE, not of the
+run. A single reading on `unoeste.br` means nothing; a single reading on `oilprice.com` is solid.
+
+**The rule this imposes on every future tick in this document:** a per-site claim needs the site's own
+error bar measured first (≥2 serial runs), and the ranked worklist should be worked from the STABLE
+end. `oilprice.com` — 654 ids, spread 0.0, 66.5% — is the best anchor in the band by that test, which
+is what §11's own NEXT already guessed and can now justify.
+
+⚠ And the general rule the three refutations share: **a `--jobs 2` sweep is still a contended sweep**,
+and a down-mover in a sweep is a SUSPECT, not a regression, until a same-hour serial run and (if it
+survives that) an old-binary control have both been taken.

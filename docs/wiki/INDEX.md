@@ -1307,6 +1307,9 @@
   - L1562 · The fix: ONE constant decides it for BOTH engines
   - L1576 · ⚠ The cohort is smaller than the hypothesis, and the measurement said so
   - L1588 · The gate
+  - L1599 · The per-site error bar is not a constant — it ranges from 0.0 to 18.0 points (t1322)
+  - L1616 · What this changes
+  - L1629 · ⚠ The tracker's own printed delta had a poisoned baseline
 
 ## FRAMEWORKS — React, Svelte, Next, jQuery: what actually breaks
 `docs/wiki/frameworks.md`
@@ -2325,4 +2328,4 @@
   - L231 · Both named mechanisms are subsystem work
 
 ---
-2232 sections across 22 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+2235 sections across 22 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
