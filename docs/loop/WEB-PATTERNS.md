@@ -7980,3 +7980,20 @@ single width error laundering into the placement of an entire document.
 every box at the wrong x. It is invisible to MISSING_BOX work and to any coverage number.
 
 Fixed: SHAPE 66.5% → 86.4% on that page, with no other change.
+
+## PERCENTAGE COLUMNS IN A REAL `<table>` — the auto algorithm, which is the DEFAULT (t1327)
+
+**The class.** `table-layout` is `auto` unless an author says otherwise, so every `<table>` on the web
+— forum post lists, wiki infoboxes, price comparisons, admin grids, the `width="50%"` markup the
+document web is still full of — is laid out by the automatic algorithm. Percentage column widths are
+ordinary there in a way they are not in `table-layout: fixed`.
+
+⚠⚠ We resolved a percentage column into a max-content FLOOR and then let it grow with the table's
+surplus, which is not what a percentage means. Six of twelve Chrome-measured shapes were wrong, and
+the errors are the visible kind — a `100%` column beside a `300px` one came out **751 + 249** where
+Chrome gives **880 + 120**, i.e. the sidebar four times too wide and the content column short.
+
+⭐ The rule the automatic algorithm uses is not the one the fixed algorithm uses: percentages are
+satisfied in **source order**, each capped by the min-content of everything after it, and only what is
+left goes to the other columns. `80% + 80%` is `800 + 200` here and `500 + 500` under
+`table-layout: fixed` — the same declarations, two answers, one of them wrong for any given table.

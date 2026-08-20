@@ -10648,3 +10648,58 @@ algorithm, which is twenty lines.
 this engine can report and cannot apply is the defect t1314 recorded in both directions
 (`scrollbar-width` reported-not-applied, `field-sizing` applied-not-reported), and adding a third
 instance to buy a CSSOM number would be the same mistake with the invariant already named.
+
+## The AUTOMATIC table algorithm answers percentage columns in SOURCE ORDER — and `80% + 80%` proves the two algorithms cannot share code (t1327)
+
+`auto_col_widths` is written in terms of `col_min`/`col_max` and a surplus distributed by max-content.
+A percentage column does not belong in that model — it is not asking for *"this much content"*, it is
+asking for *"this fraction of the table"* — and `col_spec` collapsed it into a `col_max` floor that
+then GREW with the surplus. Six of twelve Chrome-measured cases came out wrong
+(`display: table; width: 1000px`, every cell holding the same 120px block so min-content is
+controlled and equal):
+
+```text
+    columns                 Chrome             before
+    100% + 300px            880 + 120          751 + 249
+    120% + 200px            880 + 120          828 + 172
+     50% + 300px            500 + 500          625 + 375
+     80% +  80%             800 + 200          500 + 500
+     25% +  25% + 300px     250 + 250 + 500    313 + 313 + 375
+    100% + 200px + auto     760 + 120 + 120    707 + 173 + 120
+```
+
+⭐⭐ **Under `table-layout: fixed`, `80% + 80%` is 500 + 500 — reduced proportionally. Under the
+AUTOMATIC algorithm it is 800 + 200 — the percentages are satisfied in SOURCE ORDER, the first taking
+its full 800 and the second what is left.** Same declarations, two algorithms, two answers. That row
+is the reason the two are separate functions and a "unification" refactor would break one of them.
+
+The rule:
+
+1. percentage columns in source order, each taking `pct × avail`, floored at its own min-content and
+   **capped by what is left once every LATER column has its min-content** — which is why
+   `100% + 300px` is 880 + 120 and not 1000 + 300: the neighbour's content still has to fit;
+2. everything else is distributed **exactly as before**, by the caller's own min/max algorithm over
+   the remaining space and columns.
+
+### ⚠⚠ Rule 2's first draft invented its own distribution, and the corpus caught it
+
+The draft gave the non-percentage columns `min-content + surplus in proportion to max-content`. It
+passed **all fourteen** measured rows — and it is not what the engine did before, so on the corpus it
+was a change nobody had measured. **A fixture agrees with a guess wherever the fixture does not
+vary.** The only safe thing to change is the part that was measured, so the percentage columns get
+their share and every other column keeps the answer it already had.
+
+### And the same tick corrected the rule it landed one tick earlier
+
+t1325's fixed-layout rule 4 gave the leftover to the percentage columns **equally**. Chrome gives it
+**proportionally**:
+
+```text
+    table-layout: fixed, 1000px       Chrome     t1325's rule
+      30% + 60%                       333 + 667   350 + 650
+      20% + 20% + 20%                 333 each    333 each     ← cannot tell them apart
+```
+
+⭐ **A rule derived only from symmetric cases is a coincidence with a formula.** Every percentage row
+in t1325's twelve-row fixture had equal percentages, so the gate it shipped with could not see the
+error. Both gates now carry `30% + 60%`.

@@ -519,6 +519,9 @@
   - L10565 · The rule, from twelve Chrome measurements on one 1000px table
   - L10601 · Measured
   - L10615 · column-count is gated on BOX FRAGMENTATION, not on the column algorithm (t1325 probe, refused)
+  - L10652 · The AUTOMATIC table algorithm answers percentage columns in SOURCE ORDER — and 80% + 80% proves the two algorithms cannot share code (t1327)
+  - L10684 · ⚠⚠ Rule 2's first draft invented its own distribution, and the corpus caught it
+  - L10692 · And the same tick corrected the rule it landed one tick earlier
 
 ## browser-capabilities.md
 `docs/wiki/browser-capabilities.md`
@@ -2336,4 +2339,4 @@
   - L231 · Both named mechanisms are subsystem work
 
 ---
-2243 sections across 22 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+2246 sections across 22 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.

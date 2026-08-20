@@ -8506,14 +8506,23 @@ impl Ctx<'_> {
         //    min-content loses to min-content (`width:5px` on a nowrap 96px word gives 96.3).
         //    Both are negative rows, and both are what separates this from "pin the column".
         let mut col_spec: Vec<Option<f32>> = vec![None; ncols];
+        // ⚠⚠⚠ **A PERCENTAGE COLUMN IS A DIFFERENT KIND OF CONSTRAINT FROM A LENGTH, AND
+        // `col_spec` COLLAPSES THE TWO IN ITS FIRST STATEMENT.** `resolve` turns `50%` into
+        // `0.5 × avail` and hands it to the same machinery as `width: 300px`, so a percentage
+        // column became a `col_max` floor that then GREW with the surplus — which is not what a
+        // percentage means and is not what Chrome does. Kept alongside so the pass below can tell
+        // them apart; see [`Self::percentage_col_widths`] for the six rows it costs.
+        let mut col_pct: Vec<Option<f32>> = vec![None; ncols];
         let resolve = |d: Dim| -> Option<f32> {
             match d {
                 Dim::Auto => None,
                 other => Some(other.resolve(avail, 0.0).max(0.0)),
             }
         };
+        let is_pct = |d: Dim| matches!(d, Dim::Percent(_) | Dim::Calc { .. });
         for (c, hint) in col_hints.iter().enumerate().take(ncols) {
             col_spec[c] = hint.and_then(|d| resolve(d));
+            col_pct[c] = hint.filter(|d| is_pct(*d)).and_then(|d| resolve(d));
         }
         // Only a cell that occupies its column ALONE constrains it — a spanning cell's width says
         // nothing about how the span divides (Chrome-measured: `colspan=2` + `width:300px` in a
@@ -8534,11 +8543,24 @@ impl Ctx<'_> {
                 w + frame
             };
             col_spec[p.col] = Some(col_spec[p.col].map_or(w, |e| e.max(w)));
+            if is_pct(self.style_of(p.cell).width) {
+                col_pct[p.col] = Some(col_pct[p.col].map_or(w, |e: f32| e.max(w)));
+            }
         }
         for c in 0..ncols {
             if let Some(w) = col_spec[c] {
                 col_max[c] = col_max[c].max(w).max(col_min[c]);
                 col_spec[c] = Some(col_max[c]);
+            }
+        }
+
+        // The percentage pass runs BEFORE the min/max distribution below, because it decides the
+        // answer outright for the columns it touches — see [`Self::percentage_col_widths`].
+        if table_has_width && col_pct.iter().any(|p| p.is_some()) {
+            if let Some(w) =
+                self.percentage_col_widths(&col_pct, &col_spec, &col_min, &col_max, avail)
+            {
+                return w;
             }
         }
 
@@ -8595,6 +8617,145 @@ impl Ctx<'_> {
         }
         // Overflow: columns take their min-content and the table exceeds avail.
         col_min
+    }
+
+    /// **AUTOMATIC table layout with PERCENTAGE columns (CSS 2.1 §17.5.2.2).**
+    ///
+    /// The automatic algorithm above is written in terms of `col_min`/`col_max` and a surplus
+    /// distributed in proportion to max-content. A percentage column does not belong in that model:
+    /// it is not asking for *"this much content"*, it is asking for *"this fraction of the table"*,
+    /// and `col_spec` collapsed it into a `col_max` floor that then grew with the surplus. Six of
+    /// twelve Chrome-measured cases came out wrong (`display: table; width: 1000px`, every cell
+    /// holding the same 120px block so min-content is controlled and equal):
+    ///
+    /// ```text
+    ///     columns                 Chrome             before
+    ///     100% + 300px            880 + 120          751 + 249
+    ///     120% + 200px            880 + 120          828 + 172
+    ///      50% + 300px            500 + 500          625 + 375
+    ///      80% +  80%             800 + 200          500 + 500
+    ///      25% +  25% + 300px     250 + 250 + 500    313 + 313 + 375
+    ///     100% + 200px + auto     760 + 120 + 120    707 + 173 + 120
+    ///      50% +  50% · 100%+auto · 300px+auto · 30%+auto · auto+auto   already right — CONTROLS
+    /// ```
+    ///
+    /// ⭐ **The rule those rows imply — and the ORDER matters, which is what `80% + 80%` proves.**
+    /// Under the FIXED algorithm two 80% columns are reduced proportionally to 500/500; under the
+    /// AUTOMATIC one Chrome satisfies them **in source order**: the first gets its full 800 and the
+    /// second gets the 200 that is left. Same declarations, two algorithms, two answers — so this
+    /// cannot share code with [`Self::fixed_col_widths`], and a fix that "unified" them would move
+    /// a row that is already right.
+    ///
+    /// 1. Walk the percentage columns in source order. Each takes `pct × avail`, floored at its own
+    ///    min-content and capped by what is left once every LATER column is given its min-content —
+    ///    which is why `100% + 300px` is 880 + 120 and not 1000 + 300: the neighbour's content
+    ///    still has to fit.
+    /// 2. Everything else starts at min-content and shares the remaining surplus in proportion to
+    ///    max-content — the same distribution the caller uses, so `50% + 300px` gives the second
+    ///    column **500** (all the leftover), not the 300 it asked for.
+    ///
+    /// Returns `None` when the percentages cannot be honoured at all (no room past the other
+    /// columns' min-contents), leaving the caller's ordinary min/max path to answer — that is the
+    /// over-constrained table, and the automatic algorithm's own answer for it is already correct.
+    fn percentage_col_widths(
+        &self,
+        col_pct: &[Option<f32>],
+        col_spec: &[Option<f32>],
+        col_min: &[f32],
+        col_max: &[f32],
+        avail: f32,
+    ) -> Option<Vec<f32>> {
+        let ncols = col_pct.len();
+        let mut out = vec![f32::NAN; ncols];
+        let mut used = 0.0f32;
+        // Rule 1: percentages in SOURCE ORDER, each capped by the min-content of what follows.
+        for c in 0..ncols {
+            let Some(want) = col_pct[c] else { continue };
+            let later_min: f32 = (c + 1..ncols)
+                .filter(|&j| out[j].is_nan())
+                .map(|j| col_min[j])
+                .sum();
+            let room = (avail - used - later_min).max(0.0);
+            let w = want.min(room).max(col_min[c]);
+            out[c] = w;
+            used += w;
+        }
+        if used > avail + 0.01 {
+            return None; // over-constrained; the ordinary min/max path is already right for it.
+        }
+        // Rule 2: **everything else is distributed EXACTLY as it was before this pass existed** —
+        // the caller's own min/max algorithm, run over the remaining space and the remaining
+        // columns.
+        //
+        // ⚠⚠ The first draft invented its own distribution here (`min-content + surplus in
+        // proportion to max-content`) and it passed all fourteen measured rows while REGRESSING
+        // `oilprice.com` from 86.4% to 85.0% — reproducibly, on a site whose measured error bar is
+        // 0.0. A fixture agrees with a guess wherever the fixture does not vary; the corpus does
+        // not. **The only safe thing to change is the part that was measured**, so the percentage
+        // columns get their share and every other column keeps the answer it already had.
+        let rest: Vec<usize> = (0..ncols).filter(|&c| out[c].is_nan()).collect();
+        if rest.is_empty() {
+            // Nothing else to hold the table open, so the percentages scale up to fill it — and
+            // PROPORTIONALLY, not equally. Chrome-measured: `30% + 60%` is **333 + 667** and
+            // `20% x 3` is 333 each. An equal split matches the second and not the first, which is
+            // the trap a symmetric-only fixture sets.
+            let remainder = (avail - used).max(0.0);
+            let pct_total: f32 = col_pct.iter().flatten().sum();
+            if remainder > 0.0 && pct_total > 0.0 {
+                for c in 0..ncols {
+                    if let Some(want) = col_pct[c] {
+                        out[c] += remainder * (want / pct_total);
+                    }
+                }
+            }
+            return Some(out);
+        }
+        let rest_avail = (avail - used).max(0.0);
+        let min_rest: f32 = rest.iter().map(|&c| col_min[c]).sum();
+        let max_rest: f32 = rest.iter().map(|&c| col_max[c]).sum();
+        if max_rest <= rest_avail {
+            // Roomy: surplus to the columns free to take it, in proportion to max-content — with
+            // every remaining column constrained, shared over all of them. Mirrors the caller.
+            let extra = rest_avail - max_rest;
+            let free_max: f32 = rest
+                .iter()
+                .filter(|&&c| col_spec[c].is_none())
+                .map(|&c| col_max[c])
+                .sum();
+            let nfree = rest.iter().filter(|&&c| col_spec[c].is_none()).count();
+            for &c in &rest {
+                out[c] = if nfree == 0 {
+                    if max_rest > 0.0 {
+                        col_max[c] + extra * (col_max[c] / max_rest)
+                    } else {
+                        col_max[c] + extra / rest.len() as f32
+                    }
+                } else if col_spec[c].is_some() {
+                    col_max[c]
+                } else if free_max > 0.0 {
+                    col_max[c] + extra * (col_max[c] / free_max)
+                } else {
+                    col_max[c] + extra / nfree as f32
+                };
+            }
+        } else if min_rest <= rest_avail {
+            // Between min and max: distribute the slack over (max - min).
+            let denom = max_rest - min_rest;
+            let extra = rest_avail - min_rest;
+            for &c in &rest {
+                out[c] = if denom > 0.0 {
+                    col_min[c] + extra * ((col_max[c] - col_min[c]) / denom)
+                } else {
+                    rest_avail / rest.len() as f32
+                };
+            }
+        } else {
+            // Overflow: min-content, and the table exceeds its own width.
+            for &c in &rest {
+                out[c] = col_min[c];
+            }
+        }
+        Some(out)
     }
 
     /// Fixed table layout (CSS2 §17.5.2.1): first-row cells' specified widths set the columns.
@@ -8697,20 +8858,21 @@ impl Ctx<'_> {
         };
 
         // Rule 4: no auto column and space still unassigned — lengths first, else percentages.
-        let (len_bonus, pct_bonus) = if autos == 0 && leftover > 0.0 {
+        //
+        // ⚠ **AND AMONG PERCENTAGE COLUMNS THE LEFTOVER IS PROPORTIONAL, NOT EQUAL.** An equal
+        // split is right for `30% + 30%` and wrong for `30% + 60%`, where Chrome gives **333 + 667**
+        // — the percentages scaled up to fill the table. Equal-percentage rows cannot tell the two
+        // apart, which is exactly why the first version of this rule passed its own twelve-row gate
+        // while being wrong: **a rule derived only from symmetric cases is a coincidence with a
+        // formula.**
+        let (len_bonus, pct_share) = if autos == 0 && leftover > 0.0 {
             let n_len = cols.iter().filter(|c| matches!(c, Col::Len(_))).count();
             if n_len > 0 {
                 (leftover / n_len as f32, 0.0)
+            } else if pct_raw > 0.0 {
+                (0.0, leftover / pct_raw)
             } else {
-                let n_pct = cols.iter().filter(|c| matches!(c, Col::Pct(_))).count();
-                (
-                    0.0,
-                    if n_pct > 0 {
-                        leftover / n_pct as f32
-                    } else {
-                        0.0
-                    },
-                )
+                (0.0, 0.0)
             }
         } else {
             (0.0, 0.0)
@@ -8720,7 +8882,9 @@ impl Ctx<'_> {
             .map(|c| match c {
                 Col::Auto => auto_each,
                 Col::Len(w) => w + len_bonus,
-                Col::Pct(w) => w * pct_scale + pct_bonus,
+                // `w * pct_scale` shrinks them when the percentages overflow; `w * pct_share` grows
+                // them in proportion when they under-fill. Only one is ever non-trivial.
+                Col::Pct(w) => w * pct_scale + w * pct_share,
             })
             .collect()
     }
@@ -18691,6 +18855,21 @@ mod tests {
             ("CONTROL 300px + auto", &["300px", "auto"], &[300.0, 700.0]),
             ("CONTROL 30% + auto", &["30%", "auto"], &[300.0, 700.0]),
             ("CONTROL auto + auto", &["auto", "auto"], &[500.0, 500.0]),
+            // ⚠⚠ ASYMMETRIC PERCENTAGES — added at t1327 because the first version of rule 4 split
+            // the leftover EQUALLY and passed every row above: `30% + 30%` cannot tell an equal
+            // split from a proportional one. Chrome gives 333 + 667, i.e. the percentages scaled up
+            // to fill the table. **A rule derived only from symmetric cases is a coincidence with a
+            // formula**, and these two rows are what turn it back into a rule.
+            (
+                "30% + 60%     (leftover PROPORTIONAL, not equal)",
+                &["30%", "60%"],
+                &[333.0, 667.0],
+            ),
+            (
+                "20% + 20% + 20%",
+                &["20%", "20%", "20%"],
+                &[333.0, 333.0, 333.0],
+            ),
         ];
         for (label, widths, expect) in cases {
             let cells: String = widths
@@ -18720,6 +18899,112 @@ mod tests {
                 expect.to_vec(),
                 "G_TABLE_FIXED_COLUMNS [{label}]: columns {widths:?} in a 1000px \
                  `table-layout: fixed` table. Chrome says {expect:?}."
+            );
+        }
+    }
+
+    /// **G_TABLE_AUTO_PERCENT_COLUMNS — the AUTOMATIC algorithm answers percentage columns
+    /// differently from the fixed one, and `80% + 80%` is the row that proves they cannot share
+    /// code.**
+    ///
+    /// `auto_col_widths` is written in terms of `col_min`/`col_max` and a surplus distributed by
+    /// max-content. A percentage column does not belong in that model — it is not asking for *"this
+    /// much content"*, it is asking for *"this fraction of the table"* — and `col_spec` collapsed it
+    /// into a `col_max` floor that then GREW with the surplus. Six of twelve Chrome-measured cases
+    /// came out wrong.
+    ///
+    /// ⭐ **Under `table-layout: fixed`, `80% + 80%` is 500 + 500 (reduced proportionally). Under
+    /// the AUTOMATIC algorithm it is 800 + 200 — Chrome satisfies the percentages in SOURCE ORDER,
+    /// giving the first its full 800 and the second what is left.** Same declarations, two
+    /// algorithms, two answers, which is why this is a separate gate and not a shared helper.
+    ///
+    /// Every cell holds the same 120px block, so min-content is controlled and equal — without that
+    /// the rows are not comparable to each other and the `100% + 300px` cap (880 + 120, the
+    /// neighbour's CONTENT still has to fit) cannot be read off at all.
+    ///
+    /// **To watch it go RED:** delete the `col_pct` capture (percentages collapse back into
+    /// `col_spec`), or the later-min-content cap in [`LayoutTree::percentage_col_widths`]
+    /// (`100% + 300px` becomes 1000 + 120 and overflows), or the proportional remainder
+    /// (`30% + 60%` becomes 300 + 700).
+    #[test]
+    fn an_automatic_table_satisfies_percentage_columns_in_source_order() {
+        // (label, column widths, Chrome's used widths) — `--headless`, one 1000px auto table each,
+        // every cell holding a 120px block.
+        let cases: &[(&str, &[&str], &[f32])] = &[
+            (
+                "100% + 300px  (capped by the neighbour's min-content)",
+                &["100%", "300px"],
+                &[880.0, 120.0],
+            ),
+            ("120% + 200px", &["120%", "200px"], &[880.0, 120.0]),
+            (
+                "50% + 300px   (leftover -> the non-percentage column)",
+                &["50%", "300px"],
+                &[500.0, 500.0],
+            ),
+            (
+                "80% + 80%     (SOURCE ORDER — fixed layout says 500+500)",
+                &["80%", "80%"],
+                &[800.0, 200.0],
+            ),
+            (
+                "25% + 25% + 300px",
+                &["25%", "25%", "300px"],
+                &[250.0, 250.0, 500.0],
+            ),
+            (
+                "100% + 200px + auto",
+                &["100%", "200px", "auto"],
+                &[760.0, 120.0, 120.0],
+            ),
+            (
+                "30% + 60%     (remainder PROPORTIONAL)",
+                &["30%", "60%"],
+                &[333.0, 667.0],
+            ),
+            (
+                "20% + 20% + 20%",
+                &["20%", "20%", "20%"],
+                &[333.0, 333.0, 333.0],
+            ),
+            // ── CONTROLS: right before this change, and a wrong rule moves them.
+            ("CONTROL 50% + 50%", &["50%", "50%"], &[500.0, 500.0]),
+            ("CONTROL 100% + auto", &["100%", "auto"], &[880.0, 120.0]),
+            ("CONTROL 300px + auto", &["300px", "auto"], &[300.0, 700.0]),
+            ("CONTROL 30% + auto", &["30%", "auto"], &[300.0, 700.0]),
+            ("CONTROL auto + auto", &["auto", "auto"], &[500.0, 500.0]),
+            ("CONTROL 30% + 30%", &["30%", "30%"], &[500.0, 500.0]),
+        ];
+        for (label, widths, expect) in cases {
+            let cells: String = widths
+                .iter()
+                .enumerate()
+                .map(|(i, w)| {
+                    format!("<div class=c id=k{i} style=\"width:{w}\"><div class=p></div></div>")
+                })
+                .collect();
+            let (dom, root) = layout_html(
+                &format!("<div class=t>{cells}</div>"),
+                ".t{display:table;width:1000px} .c{display:table-cell;vertical-align:top} \
+                 .p{width:120px;height:10px}",
+                1400.0,
+            );
+            let rects = root.node_rects(&dom);
+            let got: Vec<f32> = (0..widths.len())
+                .map(|i| {
+                    let id = format!("k{i}");
+                    let n = dom
+                        .descendants(dom.root())
+                        .find(|&n| dom.element(n).and_then(|e| e.attr("id")) == Some(id.as_str()))
+                        .unwrap_or_else(|| panic!("#{id} in [{label}]"));
+                    rects[&n].width.round()
+                })
+                .collect();
+            assert_eq!(
+                got,
+                expect.to_vec(),
+                "G_TABLE_AUTO_PERCENT_COLUMNS [{label}]: columns {widths:?} in a 1000px AUTOMATIC \
+                 table, every cell holding a 120px block. Chrome says {expect:?}."
             );
         }
     }

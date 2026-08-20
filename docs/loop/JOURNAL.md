@@ -87876,3 +87876,109 @@ NEXT, ranked.
 (c) ⭐⭐ **BOX FRAGMENTATION** as its own subsystem entry, which unlocks multicol AND `break-inside`
     AND paged output. Not a tick; needs a decomposition session, like the root-box item t1321 refused.
 (d) ⭐⭐ **THE FORCED-REFLOW FLUSH** (t1324's (b)) — 40-line repro, dies in 5.8s.
+
+## Tick 1327 — the AUTOMATIC table algorithm answers percentages in SOURCE ORDER, and the rule I landed one tick ago was a coincidence (2026-08-20)
+
+TICK SHAPE: capability fix + gate + a self-correction. Board re-run at the top of this tick:
+**unchanged**. Took t1326's NEXT (b) — the auto half of the table-column family, whose harness t1325
+had already written.
+
+### THE DIVERGENCE, SIX OF TWELVE ROWS
+
+`auto_col_widths` is written in `col_min`/`col_max` and a surplus distributed by max-content. A
+percentage column does not belong in that model — it is not asking for *"this much content"*, it is
+asking for *"this fraction of the table"* — and `col_spec` collapsed it into a `col_max` floor that
+then GREW with the surplus.
+
+```text
+   1000px auto table, every cell holding the same 120px block
+   columns                 Chrome             before
+   100% + 300px            880 + 120          751 + 249
+   120% + 200px            880 + 120          828 + 172
+    50% + 300px            500 + 500          625 + 375
+    80% +  80%             800 + 200          500 + 500
+    25% +  25% + 300px     250 + 250 + 500    313 + 313 + 375
+   100% + 200px + auto     760 + 120 + 120    707 + 173 + 120
+```
+
+⭐⭐ **`80% + 80%` is the row that proves the two algorithms cannot share code.** Under
+`table-layout: fixed` it is 500 + 500 — reduced proportionally. Under the AUTOMATIC one it is
+**800 + 200** — the percentages are satisfied in SOURCE ORDER, the first taking its full 800 and the
+second what is left. Same declarations, two algorithms, two answers, and a "unify the table code"
+refactor would silently break one of them.
+
+The rule: (1) percentage columns in source order, each `pct × avail`, floored at its own min-content
+and **capped by what is left once every LATER column has its min-content** — which is why
+`100% + 300px` is 880 + 120 and not 1000 + 300, the neighbour's CONTENT still has to fit; (2)
+everything else distributed exactly as before.
+
+### ⚠⚠ RULE 2's FIRST DRAFT INVENTED A DISTRIBUTION, PASSED ALL FOURTEEN ROWS, AND WAS WRONG
+
+The draft gave the non-percentage columns `min-content + surplus in proportion to max-content`. It
+passed every measured row. ⭐ **A fixture agrees with a guess wherever the fixture does not vary** —
+and the fixture varied the percentages, not the min/max spread of the other columns. The rewrite
+delegates them to the caller's own algorithm, so the only thing this tick changes is the part that
+was measured.
+
+### ⚠⚠⚠ AND THE RULE I LANDED ONE TICK AGO WAS A COINCIDENCE
+
+t1325's fixed-layout rule 4 handed the leftover to the percentage columns **equally**. Chrome hands
+it **proportionally**:
+
+```text
+   table-layout: fixed, 1000px      Chrome      t1325's rule
+     30% + 60%                      333 + 667    350 + 650      ✗
+     20% + 20% + 20%                333 each     333 each       ← cannot tell them apart
+```
+
+**Every percentage row in t1325's twelve-row fixture had EQUAL percentages**, so the gate it shipped
+with could not see the error. ⭐ *A rule derived only from symmetric cases is a coincidence with a
+formula*, and the fixture that proves a rule has to break its symmetry. Both gates now carry
+`30% + 60%` and `20% × 3`.
+
+⚠ This is a correction to a tick landed ninety minutes earlier, found only because the auto-layout
+work asked the same question a second time with a different table. The gate was green and the code
+was wrong.
+
+### ⚠⚠ A 1.4-POINT "REGRESSION" THAT WAS THE SITE, AND THE CONTROL THAT SAID SO
+
+`oilprice.com` read **86.4%** at t1325 (twice, spread 0.0) and **85.0%** here (twice). On an anchor
+chosen precisely because its error bar was zero, that is a regression signal and the ratchet's
+question. Isolated by switching each change off in turn, same hour, same site:
+
+```text
+   both changes ON                     85.0
+   auto percentage pass OFF            85.0
+   fixed rule-4 proportional OFF       85.0
+```
+
+⭐ **Neither change moves it. `oilprice.com` is a NEWS front page and its content rotates**, so
+t1322's per-site error bar — measured within one session — does **not** bound drift across hours. The
+rule gains a clause: *a within-session spread of 0.0 licenses a same-hour before/after and nothing
+else.* I nearly reverted a correct change on the strength of a number taken ninety minutes earlier.
+
+```text
+   28 columns across both algorithms (14 auto rows + 14 fixed rows)   ALL match Chrome
+   manuk-layout    184 green
+   css/css-sizing  4222/5737 vs the mark's 4225/5740 — FAILING FLAT at 1515, i.e. subtest churn,
+                   so the ledger row is left alone rather than recording noise as movement
+```
+
+### THE GATES
+
+`G_TABLE_AUTO_PERCENT_COLUMNS` — fourteen rows including six controls that were already right.
+**PROVEN RED** by disabling the `col_pct` pass: `100% + 300px` reverts to 751 + 249.
+`G_TABLE_FIXED_COLUMNS` gains the two asymmetric rows and is **PROVEN RED** by removing the
+proportional leftover: `30% + 30%` fails.
+
+NEXT, ranked.
+(a) ⭐⭐⭐ **THE JS-INJECTED SUBTREES on `crazyshop.pl`** — `.bottom-html` (1200×880, `display:grid`),
+    `.small-modal__box` (1200×800), two toasts and two more containers appear in Chrome and **none of
+    them are in the served HTML**: all six are created by script. 135 boxes, 8.8% of the page's
+    coverage. ⚠ And they also shift every `nth-of-type` index after them, so the count is an upper
+    bound on the defect, not a list of it.
+(b) ⭐⭐ **THE FORCED-REFLOW FLUSH** (t1324's (b)) — 40-line repro, dies in 5.8s.
+(c) ⭐⭐ **The 25 unscored in-scope sites** — scorability 81.2% caps M1; split instrument from engine
+    first (check #83).
+(d) ⭐ **BOX FRAGMENTATION** (t1326's (c)) — unlocks multicol, `break-inside` and paged output. A
+    decomposition session, not a tick.
