@@ -7787,3 +7787,29 @@ computes in `ColorSpace::Hsl`, which is not sRGB, and is nevertheless legacy.
 **Measured:** `css/css-color` **7856 → 10473 (+2,617)** on a denominator of 11,337 in both runs,
 69.3% → 92.4%. `G_MODERN_COLOR_SERIALIZATION` — six modern rows, four legacy controls — RED by making
 `modern_color_css` return `None`.
+
+## THE `transition-all` UTILITY — every Tailwind button billed the full animated-value pass on every recalc (t1313)
+
+**The class.** `transition-property: all` is what a design system reaches for by default: Tailwind's
+`transition-all`, the shadcn/ui button and input, every "smooth hover" a component library ships. It
+is on a large fraction of the elements of a modern page, and most of them are idle most of the time.
+
+⚠⚠⚠ **An idle one was not free — it was the most expensive element on the page.** `all` expands to
+every animatable longhand, and the sampler decided nothing was moving by CONSTRUCTING both animated
+values for each of them and comparing: ~400 allocating `AnimationValue::from_computed_values` calls
+per element per style recalc, to return the empty vector. Every recalc. Forever.
+
+⭐⭐⭐ **The memo added for that cost missed exactly this case.** It keys the before-change style by
+POINTER, and the cascade re-publishes a FRESH `Arc` for every element whose sample came back empty —
+so the idle elements, which are all of the mass, invalidated their own key on every pass. The running
+transitions, a handful, were the only things it cached.
+
+**The fix is a proof, not a heuristic:** if all twenty style structs compare equal then every
+longhand's computed value is equal, so the empty vector is provable without constructing anything.
+
+**Measured** on `css/css-backgrounds/animations/border-image-width-interpolation.html`, whose subtest
+count was not fixed because the 5s script watchdog cut it: **558/539/510/516 before, 558/516/558/558
+after**, wall time 5,050 ms (pinned at the cut) → 3,777–4,734 ms. ⚠ Not eliminated — the residual is
+that every `getComputedStyle` re-cascades the whole document. `G_TRANSITION_SAMPLE_COST` counts
+samples rather than milliseconds (0 vs 60, proven RED) because the synthetic timing probe moved its
+own untouched control arm by 54% between two runs of one binary.

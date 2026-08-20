@@ -4325,3 +4325,65 @@ Chrome at t1205, which a second implementation would have quietly re-derived.
 92.4%**, from about fifteen lines. Three files carried 2,585 of it
 (`color-computed-relative-color` 1,169, `color-computed-color-mix-function` 948,
 `color-computed-color-function` 468) and all three failed the same single way.
+
+## `transition: all` WAS BILLED TO EVERY ELEMENT ON EVERY CASCADE — and the memo built for it missed exactly that case (t1313)
+
+`transition-property: all` is not exotic. It is the Tailwind `transition-all` utility, the shadcn/ui
+button, and roughly every "smooth hover" a design system ships. It expands to **every animatable
+longhand**, and `transition::sample` decides whether any of them is moving by *constructing both
+animated values and comparing them*:
+
+```rust
+let (Some(a), Some(b)) = (
+    AnimationValue::from_computed_values(pid, before),
+    AnimationValue::from_computed_values(pid, after),
+) else { continue };
+if a == b { continue }          // ← the answer, after ~400 allocating constructions
+```
+
+⚠⚠⚠ **So an element that has not changed at all pays ~400 allocations per style recalc to re-derive
+the empty vector**, and it pays them again on the next recalc, and the next.
+
+### ⭐⭐⭐ The memo added for this cost is invalidated by the empty result itself
+
+t1312 added `MEMO`, keyed on `(before` by POINTER, `after` by value, `clock)`. The pointer is stable
+*while a transition is running* — `cascade_via_stylo_sized` re-inserts the very same `Arc` as the
+next pass's before-change style for a transitioning element. But look at the other branch:
+
+```rust
+if !transitioning { next_prev.insert(node, cv.clone()); }   // a FRESH Arc, every pass
+```
+
+**The elements whose sample came back EMPTY get a new `before` pointer on every single pass**, so
+their memo key never matches. The memo covered the running transitions — a handful — and structurally
+missed the idle ones, which are all of them. A cache that misses precisely where the mass is.
+
+### The fix is one comparison, and it is a proof rather than a heuristic
+
+If all twenty style structs compare equal then every longhand's computed value is equal, so every one
+of `sample`'s `a == b` tests would pass and the result is *provably* the empty vector. `same_style`
+reaches that in ~350 field compares with no allocation:
+
+```rust
+if same_style(before, after) { return Vec::new(); }
+```
+
+### ⚠ What it did NOT fix, measured rather than assumed
+
+`css/css-backgrounds/animations/border-image-width-interpolation.html` does not report a fixed number
+of subtests: the 5s script watchdog (`engine/js/src/watchdog.rs`, `DEFAULT_MAX_DRAIN_MS`) cuts it
+partway through, and it reported **558, 539, 510, 516 across four runs of one release binary** with
+its failing count invariant at 0 — a truncated tail of *passes*, subtracted from the denominator.
+After the fix, **three of four runs reach the full 558** and the file's wall time falls from a pinned
+~5,050 ms to 3,777–4,734 ms. It is not eliminated. The residual is that **every `getComputedStyle`
+re-cascades the whole document**, which makes the WPT interpolation harness O(N²) no matter how cheap
+the sampler gets, and that is a much larger fix.
+
+### ⭐ The gate COUNTS; it does not time
+
+The cost is invisible in every value the engine publishes, so the obvious gate is a wall-clock bound —
+and it is the wrong one. The synthetic probe that found this moved its own **untouched control arm by
+54%** between two runs of one binary. `transition::samples_taken()` is exact and machine-independent:
+`G_TRANSITION_SAMPLE_COST` asserts **0** samples for 60 unchanged `transition: all` elements (pre-fix:
+exactly 60) and **exactly `ROUNDS`** for the control page where one element really does change — the
+negative half, without which "stop sampling entirely" would pass.

@@ -86259,3 +86259,99 @@ NEXT, ranked.
     parse"* — our CSSOM `cssText` echoes the source instead of re-serialising parsed declarations.
 (e) ⭐⭐ `CSS.supports('font-variation-settings', '"test" 20')` answers **false** for a property the
     servo build really does have — a FALSE NO, 418 subtests in `css/css-fonts`.
+
+## Tick 1313 — the truncation was ONE FILE and a 5s watchdog, and `transition: all` was billed to every element on every cascade (2026-08-20)
+
+TICK SHAPE: performance + instrument fidelity. Board re-run at the top of this tick: **unchanged**
+(★ CSS-LAYOUT, `css/css-grid` #1). Carried directly from t1312's own NEXT item.
+
+FORECAST, before any code. t1312 established the signature: three areas whose FAILING count is exactly
+invariant while the denominator moves. That is truncation of passes, not regression. The open question
+was **where**, and the answer had to be a file, not an area.
+
+⭐⭐⭐ **THE APERTURE WAS THE DIRECTORY AND THE DEFECT WAS ONE FILE.** `--json` on
+`css/css-backgrounds/animations`, four runs, diffed per file:
+
+```text
+   border-image-width-interpolation.html   558/558 5041ms | 539/539 5096ms | 510/510 5082ms | 516/516 5103ms
+   …all 32 other files                     byte-identical across all four runs
+```
+
+**One file. `pass == total` every time — it is a 100%-passing file.** So the entire ±84 band of an
+83-row area, and the ratchet refusals it caused, came from one file reporting a different number of
+subtests each run. An area total could never have said that; only the per-file diff could.
+
+⭐⭐ **`ms` IS PINNED AT ~5,050 WHILE THE SUBTEST COUNT MOVES, AND THAT CONSTANT IS THE DIAGNOSIS.**
+Fixed time, variable output, is not a slow test — it is a CUT. `engine/js/src/watchdog.rs`'s
+`DEFAULT_MAX_DRAIN_MS = 5_000` terminates the script through SpiderMonkey's interrupt callback, and
+the file emits however many subtests it got through first. ⚠ The WPT runner reports `SLOW 0` and
+`harness OK` for it: our own 10s per-file timeout never fires, because the page's *internal* budget
+fires first. **A cut that reports OK is a silent cap** — the runner's honest-failure taxonomy has no
+row for "the page was terminated from inside".
+
+WHY 5 SECONDS BUYS SO LITTLE. Splitting the 33 files by kind:
+
+```text
+   *-interpolation.html    7.5 – 10.4 ms/subtest      (4 methods, TWO of them CSS transitions)
+   *-composition.html      1.8 –  2.6 ms/subtest      (2 methods, NO transitions)
+```
+
+Same harness, same shapes, same target counts — `border-image-width-composition` is 112 subtests in
+204 ms and `border-image-width-interpolation` is 558 in 5,041. **The 4–5× is the CSS-transition path.**
+
+⭐⭐⭐ **AND THE MEMO t1312 ADDED FOR EXACTLY THAT COST IS INVALIDATED BY ITS OWN EMPTY RESULT.**
+`MEMO` keys the before-change style by POINTER. That pointer is stable only while a transition is
+RUNNING — `cascade_via_stylo_sized` re-inserts the same `Arc` for a transitioning element. The other
+branch is `if !transitioning { next_prev.insert(node, cv.clone()) }`, **a fresh `Arc` every pass**. So
+every element that answers *"nothing is transitioning"* has its key invalidated on every single pass
+and pays the full ~400 `AnimationValue::from_computed_values` constructions again. The cache covered
+the handful and missed all of the mass. ⚠ This is the second time in two ticks that this memo's
+stated benefit did not survive being measured.
+
+THE FIX — one comparison, and it is a proof, not a heuristic. If all twenty style structs are equal
+then every longhand's computed value is equal, so every one of `sample`'s `a == b` tests passes and
+the empty vector is provable: `if same_style(before, after) { return Vec::new() }`.
+
+RESULT, on the real instrument rather than a synthetic one:
+
+```text
+   border-image-width-interpolation.html   BEFORE  558 | 539 | 510 | 516     ms 5041–5103 (pinned at the cut)
+                                           AFTER   558 | 516 | 558 | 558     ms 3777–4734
+```
+
+⚠ **NOT FIXED — RUN 6 STILL TRUNCATED AT 516, AND THE AREA TOTALS DID NOT MOVE OUT OF THEIR BANDS**
+(`css/css-backgrounds` 4849/4891/4891, `css/css-sizing` 4291/4290/4320, `css/css-grid` 8271/8251/8333
+over three runs each). Three of four runs now reach the ceiling instead of one of four, and that is
+the whole honest claim. **The residual is that every `getComputedStyle` re-cascades the WHOLE
+document**, which makes the WPT interpolation harness O(N²) however cheap the sampler becomes — the
+harness's own comment says it separated interpolate and measure *"to avoid O(n^2)"*, which only works
+against an engine with incremental style invalidation. That is the next fix and it is a large one.
+
+CONTROL: `css/css-transforms` reads **4735/5500 on both runs** — a fixed denominator, unmoved. An
+area that should not have changed and did not.
+
+⭐ **THE GATE COUNTS RATHER THAN TIMES, AND THAT DECISION WAS FORCED BY A MEASUREMENT.** The first
+probe was a synthetic timing fixture; between two runs of one binary its **untouched control arm
+moved 54%** (`none` at k=80: 1305 ms → 2011 ms). A wall-clock assertion on this box would be a coin
+flip wearing a threshold. `transition::samples_taken()` is an exact count:
+`G_TRANSITION_SAMPLE_COST` asserts **0** for 60 unchanged `transition: all` elements — proven RED at
+exactly **60**, one full sample per element — and **exactly ROUNDS** for the control page where one
+element genuinely changes each round, which is the half that stops "sample nothing" from passing.
+
+⚠ WHY THIS IS NOT THE NORTH STAR'S *"fast because we never ran the script"* TRAP: the work removed is
+provably work whose only possible output was the empty vector, and the control arm gates it. Nothing
+that was transitioning stops transitioning; `g_transition_interpolation` and `g_keyframe_interpolation`
+are both still green.
+
+NEXT, ranked.
+(a) ⭐⭐⭐ **INCREMENTAL STYLE INVALIDATION — `getComputedStyle` re-cascades the whole document.** It
+    is the residual above, it is why every interpolation file is O(N²), and it is paid by every real
+    page that reads layout in a loop. The largest perf lever on the board.
+(b) ⭐⭐⭐ **`background-color` and the border colours get t1312's colour treatment** — they still go
+    through `Rgba` alone, so `background-color: color-mix(…)` reports the quantised sRGB.
+(c) ⭐⭐⭐ Grid §9 self-alignment for abspos children inside `layout_abs` (carried from t1311 — the
+    unlock for a 1,343-subtest cluster).
+(d) ⭐⭐ A terminated script reports `harness OK` and `SLOW 0`. **A cut that reports OK is a silent
+    cap**; the runner should carry a `TERMINATED` row (`watchdog::fired()` already distinguishes it
+    from a page that threw) so this class is never again found by diffing four runs by hand.
+(e) ⭐⭐ Resolve `InterpolateMatrix` / `AccumulateMatrix` (carried from t1310).

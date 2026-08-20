@@ -169,12 +169,52 @@ fn same_style(a: &ComputedValues, b: &ComputedValues) -> bool {
         && a.get_svg() == b.get_svg()
 }
 
+/// **How many times [`sample`] has actually run its animated-value loop.**
+///
+/// ⚠ This exists to be READ, by `g_transition_sample_is_not_paid_by_every_element` — the cost this
+/// module's early-out and memo remove is invisible in any output the engine produces, so the only
+/// falsifiable statement about it is a COUNT. A wall-clock assertion would be the alternative and it
+/// is not one: the same synthetic probe that measured this fix moved its own untouched control arm
+/// by 54% between two runs of one binary. A count does not move.
+///
+/// One relaxed atomic increment on a path that constructs hundreds of allocating values.
+pub static SAMPLES: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+
+/// Read [`SAMPLES`].
+pub fn samples_taken() -> u64 {
+    SAMPLES.load(std::sync::atomic::Ordering::Relaxed)
+}
+
 /// [`sample`], memoised on its own inputs. See [`MEMO`].
 pub fn sample_memoized(
     node: NodeId,
     before: &ServoArc<ComputedValues>,
     after: &ServoArc<ComputedValues>,
 ) -> Vec<PropertyDeclaration> {
+    // ⭐⭐⭐ **AN ELEMENT WHOSE STYLE DID NOT CHANGE CANNOT BE TRANSITIONING, AND THIS IS THE ONLY
+    // CHECK THAT COSTS NOTHING TO MAKE.**
+    //
+    // [`sample`] already skips every property whose two animated values compare equal — but it
+    // discovers that by CONSTRUCTING both of them, and under `transition-property: all` it does so
+    // for every animatable longhand: ~400 `AnimationValue::from_computed_values` calls, each
+    // allocating, to conclude that nothing moved. If all twenty style structs are equal then every
+    // longhand's computed value is equal, so every one of those comparisons is `a == b` and the
+    // result is provably the empty vector. [`same_style`] reaches the same answer in ~350 field
+    // compares with no allocation at all.
+    //
+    // ⚠⚠⚠ **AND THE MEMO BELOW CANNOT COVER THIS CASE — IT IS THE CASE THE MEMO STRUCTURALLY
+    // MISSES.** The memo keys `before` by POINTER, and that pointer is only stable while a
+    // transition is actually running: `cascade_via_stylo_sized` re-publishes a FRESH `Arc` as the
+    // next pass's `before` for every element whose sample came back EMPTY. So the elements that
+    // most need memoising — the ones that answer "nothing is transitioning" over and over — are
+    // exactly the ones whose key is invalidated on every pass, and they paid the full ~400
+    // constructions on every cascade forever. Measured (debug build, 80 targets carrying
+    // `transition-property: all` with a negative delay, one `getComputedStyle` per target):
+    // **36.24 ms/target with `all` against 16.31 ms/target with no transition at all, and the gap
+    // GREW with the target count** — the signature of a per-cascade cost paid by every element.
+    if same_style(before, after) {
+        return Vec::new();
+    }
     let now = crate::animation::time_ms();
     let hit = MEMO.with(|m| {
         m.borrow().get(&node).and_then(|(b, a, t, d)| {
@@ -216,6 +256,7 @@ pub fn may_be_running(cv: &ComputedValues) -> bool {
 /// An empty result means **nothing is running**, and the caller uses that to decide whether the
 /// before-change value may be replaced — see the note in `g_transition_interpolation`.
 pub fn sample(before: &ComputedValues, after: &ComputedValues) -> Vec<PropertyDeclaration> {
+    SAMPLES.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
     let now = crate::animation::time_ms();
     let ui = after.get_ui();
     let mut out = Vec::new();

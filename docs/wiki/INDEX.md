@@ -972,6 +972,11 @@
   - L4302 · ⭐ The whole rule was already in the borrowed engine
   - L4310 · ⚠ The discriminator is Stylo's FLAG, not our keyword list
   - L4318 · ⚠ The legacy path is deliberately untouched
+  - L4329 · transition: all WAS BILLED TO EVERY ELEMENT ON EVERY CASCADE — and the memo built for it missed exactly that case (t1313)
+  - L4347 · ⭐⭐⭐ The memo added for this cost is invalidated by the empty result itself
+  - L4361 · The fix is one comparison, and it is a proof rather than a heuristic
+  - L4371 · ⚠ What it did NOT fix, measured rather than assumed
+  - L4382 · ⭐ The gate COUNTS; it does not time
 
 ## `<dialog>`, `popover`, and the top layer (ticks 194-195)
 `docs/wiki/dialog-and-top-layer.md`
@@ -2282,4 +2287,4 @@
   - L231 · Both named mechanisms are subsystem work
 
 ---
-2189 sections across 22 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+2194 sections across 22 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
