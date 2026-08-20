@@ -4062,3 +4062,52 @@ Web Animations shim **fast-forwards to the end state rather than tweening**. Two
 observer to rank: (1) land real interpolation — the shim is the shared blocker for all twelve areas,
 not a grid problem; or (2) treat an interpolation leg as unscored until the property's own
 `isSupported` leg is real, so the metric stops paying for absence.
+
+## A gate that PRINTS ON SUCCESS is writing into another gate's input (t1328)
+
+`verify.sh` runs the whole `manuk-shell` crate as ONE `cargo test -- --nocapture` and then parses
+that stdout **twice**: `G3 · affordance` greps for `test result: ok. N passed`, and `G_INTERACT`
+greps for `^  (open|switch|close)`. libtest runs tests in **parallel threads onto one unsynchronised
+fd**, so anything a second test prints interleaves with the first. Captured from a real wall run:
+
+```text
+    ....................  reap: worst focus 0.074ms (bar 2ms) · 30 pages queued …
+    .  open    median   0.044ms   worst   0.081ms   (one frame = 16ms)
+```
+
+⭐ `.  open` does not match `^  open`, and a write landing **mid-line** splits
+`test result: ok. 76 passed` into two pieces that match neither grep. **Both gates then fail while
+the suite is green** — and `T · crate tests`, which re-runs the same crate on its own, reports
+`manuk-shell: ok. 76 passed` in the very same wall.
+
+### Why it read as a mystery for eleven wall runs
+
+That signature is *"deterministic inside verify, unreproducible outside it"*, which is exactly how
+t1317 wrote it down after five failed walls — and it is true, because outside verify nothing parses
+the stdout. It is not flakiness: it is a **race whose loser is decided by thread scheduling**, so a
+re-run clears it often enough to look like noise and never often enough to land reliably. Four more
+wall runs went to it at t1327.
+
+⚠ And it was self-inflicted: `G_TAB_REAP` (t1318) printed one line on success. Before that,
+`G_INTERACT` was the only printer in the crate.
+
+### The fix, and the two halves it needs
+
+1. **`G_TAB_REAP` no longer prints.** Its numbers were already in its assertion messages, which is
+   where a number is actually read.
+2. **`G_INTERACT` emits a leading `\n`.** libtest's own progress dots share the fd, so even a single
+   printer has its FIRST line appended to a run of dots — `.......  open …`. Only the second and
+   third lines were carrying that gate. One newline puts all three at the start of their own line.
+
+### The gate on the gate
+
+`G_ONE_PRINTING_GATE` scans this file's test region and allows **two** print sites, both
+`G_INTERACT`'s. ⚠ Two details, each of which the red proof found rather than the reasoning:
+
+- **it must exclude its own text**, or it counts the macros quoted in its own assertion message (the
+  first draft reported seven sites, four of them its own — *a scanner that reads its own source
+  measures the ruler*);
+- **the budget must be exact.** The first draft allowed three, on the reasoning that `println!(`
+  also contains `print!(`. It does not — `print` + `ln!(` — so the budget carried a spare slot, and
+  the red-proof patch spent it and passed. **A gate with slack it cannot justify is a gate with a
+  hole**, and only running the red proof showed it.

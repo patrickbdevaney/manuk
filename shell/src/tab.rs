@@ -820,6 +820,20 @@ mod g_interact {
             closes.push(t.elapsed());
         }
 
+        // ⚠⚠ **THE LEADING NEWLINE IS LOad-BEARING, AND `verify.sh` IS WHY.** libtest writes its
+        // progress dots to the SAME stdout under `--nocapture`, so the first line printed here
+        // lands appended to them:
+        //
+        // ```text
+        //     ...........................................  open    median   0.041ms   worst …
+        //       switch  median   0.032ms …
+        // ```
+        //
+        // `G_INTERACT` greps `^  (open|switch|close)` — `...  open` does not match, and only the
+        // second and third lines were carrying that gate. One `\n` puts all three at the start of
+        // their own line. (The same fd is why this gate must be the ONLY one in the crate that
+        // prints on success — see `G_TAB_REAP`.)
+        print!("\n");
         for (name, v) in [("open", &opens), ("switch", &switches), ("close", &closes)] {
             println!(
                 "  {name:<7} median {:>7.3}ms   worst {:>7.3}ms   (one frame = 16ms)",
@@ -924,11 +938,31 @@ mod g_interact {
             .max_by_key(|(_, d)| *d)
             .map(|(n, d)| (*n, *d))
             .unwrap();
-        println!(
-            "  reap: worst {name} {:>7.3}ms (bar 2ms) · {queued} pages queued before close, {} after",
-            w.as_secs_f64() * 1000.0,
-            b.pending_reaps()
-        );
+        // ⚠⚠⚠ **THIS GATE USED TO `println!` ITS NUMBERS, AND THAT PRINT COST FIVE WALL RUNS.**
+        //
+        // `verify.sh` runs the whole `manuk-shell` suite as ONE `cargo test -- --nocapture`
+        // invocation and then PARSES its stdout for two other gates: `G3 · affordance` greps for
+        // `test result: ok. N passed`, and `G_INTERACT` greps for `^  (open|switch|close)`. libtest
+        // runs the tests in PARALLEL THREADS onto one unsynchronised fd, so a second printing test
+        // interleaves with the first — captured from a real wall run:
+        //
+        // ```text
+        //     ....................  reap: worst focus 0.074ms (bar 2ms) · 30 pages queued …
+        //     .  open    median   0.044ms   worst   0.081ms   (one frame = 16ms)
+        // ```
+        //
+        // ⭐ `.  open` does not match `^  open`, and a write that lands MID-LINE can split
+        // `test result: ok. 76 passed` into two pieces that match neither grep. Both gates then
+        // fail while the suite is green and `T · crate tests` reports `manuk-shell: ok. 76 passed`
+        // in the same run — the exact signature t1317 spent five wall runs and a full journal
+        // section on, and it arrived with THIS gate at t1318.
+        //
+        // ⚠ **The failure is not "flaky", it is a race whose loser is decided by scheduling**, so a
+        // re-run "fixes" it often enough to look like noise and never often enough to land. The
+        // numbers below are not lost: every one of them is in the assertion messages, which is
+        // where a number is actually read. **A gate that prints on SUCCESS is writing into another
+        // gate's input.**
+        let _ = (name, w, queued);
         assert!(
             w < bar,
             "the WORST {name} took {:.1}ms against a 2ms bar. A tab operation has started FREEING a \
@@ -1084,5 +1118,68 @@ mod g_runtime_count {
         // Keep the pins alive until after the measurement — dropping them earlier would
         // un-fragment the heap and hand the trim a win it did not have to earn.
         drop(pinned);
+    }
+}
+
+/// **G_ONE_PRINTING_GATE — the `manuk-shell` suite's stdout is another gate's INPUT, so exactly one
+/// test in it may print on success.**
+///
+/// `verify.sh` runs the whole crate as ONE `cargo test -- --nocapture` and then PARSES that stdout
+/// twice: `G3 · affordance` greps for `test result: ok. N passed`, and `G_INTERACT` greps for
+/// `^  (open|switch|close)`. libtest runs tests in **parallel threads onto one unsynchronised fd**,
+/// so a second printing test interleaves with the first. Captured from a real wall run:
+///
+/// ```text
+///     ....................  reap: worst focus 0.074ms (bar 2ms) · 30 pages queued …
+///     .  open    median   0.044ms   worst   0.081ms   (one frame = 16ms)
+/// ```
+///
+/// ⭐ `.  open` does not match `^  open`, and a write landing MID-LINE splits
+/// `test result: ok. 76 passed` into two pieces that match neither grep. **Both gates then fail
+/// while the suite is green**, and `T · crate tests` reports `manuk-shell: ok. 76 passed` in the
+/// very same run — which is why the signature reads as a mystery rather than as a race.
+///
+/// ⚠ It cost **five wall runs at t1317** (a whole journal section concluding *"DETERMINISTIC inside
+/// verify and UNREPRODUCIBLE outside it"*) and **four more at t1327**, and it arrived at t1318 with
+/// `G_TAB_REAP` — a gate I added, printing one line on success.
+///
+/// So the rule is mechanical rather than remembered: **at most one print site in this file's test
+/// region.** The numbers a gate wants to publish belong in its ASSERTION MESSAGES, which is where a
+/// number is read anyway; `G_TAB_REAP` carries all of its there.
+///
+/// **To watch it go RED:** add a `println!` to any test in this file.
+#[cfg(test)]
+mod g_one_printing_gate {
+    #[test]
+    fn only_one_test_in_this_crate_prints_on_success() {
+        let src = include_str!("tab.rs");
+        // The test region: everything from the first `#[cfg(test)]` to the end of the file. An
+        // approximation, and deliberately the conservative one — a print in NON-test code would be
+        // counted too, and non-test code has no business printing to the suite's stdout either.
+        let from = src.find("\n#[cfg(test)]").unwrap_or(0);
+        // ⚠ …and STOPPING before this gate's own text, which quotes the very macros it counts. The
+        // first draft reported SEVEN sites and four of them were in the assertion message below.
+        // A scanner that reads its own source has to exclude itself, or it measures the ruler.
+        let marker = "/// **G_ONE_PRINTING_GATE";
+        let to = src.find(marker).unwrap_or(src.len());
+        let region = &src[from..to.max(from)];
+        let sites = region.matches("println!(").count() + region.matches("print!(").count();
+        // `print!("\n")` + the one `println!` in G_INTERACT's report loop — TWO sites, both that
+        // gate's. ⚠ The first draft allowed THREE on the reasoning that `println!(` also contains
+        // `print!(`; it does not (`print` + `ln!(`), so the budget carried a spare slot and the
+        // RED-proof patch spent it and still passed. **A gate with slack it cannot justify is a
+        // gate with a hole**, and the only way that was found was by actually running the red
+        // proof rather than reasoning about it.
+        const ALLOWED: usize = 2;
+        assert!(
+            sites <= ALLOWED,
+            "G_ONE_PRINTING_GATE: {sites} print sites in this file's test region (allowed \
+             {ALLOWED}, all of them G_INTERACT's).\n\n  \
+             `verify.sh` parses this crate's stdout for TWO other gates and libtest interleaves \
+             parallel tests onto one unsynchronised fd — a second printing test corrupts \
+             `^  (open|switch|close)` and can split `test result: ok. N passed` in half. Both gates \
+             then fail on a green suite. That cost five wall runs at t1317 and four at t1327.\n\n  \
+             Put the number in your assertion message instead; that is where it is read."
+        );
     }
 }

@@ -87982,3 +87982,135 @@ NEXT, ranked.
     first (check #83).
 (d) ⭐ **BOX FRAGMENTATION** (t1326's (c)) — unlocks multicol, `break-inside` and paged output. A
     decomposition session, not a tick.
+
+## Tick 1328 — the shell lane's RED was a gate PRINTING ON SUCCESS into another gate's input, and it cost eleven wall runs (2026-08-20)
+
+TICK SHAPE: instrument-fidelity fix + gate. Board re-run at the top of this tick: **unchanged**. Not
+on the board's list — this is the harness-shaped RED that has blocked landings since t1317, diagnosed
+at last, and the defect is in `shell/`, which is browser code and mine.
+
+### THE CAPTURE, AND IT TOOK WATCHING THE PARALLEL LANE'S OWN FILE
+
+`verify.sh` runs the whole `manuk-shell` crate as ONE `cargo test -- --nocapture` into a temp file and
+parses that file **twice**: `G3 · affordance` for `test result: ok. N passed`, `G_INTERACT` for
+`^  (open|switch|close)`. A watcher on that temp file during a real wall run caught it:
+
+```text
+   ....................  reap: worst focus 0.074ms (bar 2ms) · 30 pages queued before close, 30 after
+   .  open    median   0.044ms   worst   0.081ms   (one frame = 16ms)
+```
+
+⭐⭐⭐ **libtest runs tests in PARALLEL THREADS onto one unsynchronised fd.** `.  open` does not match
+`^  open`, and a write landing MID-LINE splits `test result: ok. 76 passed` into two pieces that match
+neither grep. **Both gates fail while the suite is green** — and `T · crate tests`, re-running the
+same crate on its own, prints `manuk-shell: ok. 76 passed` in the very same wall.
+
+⚠ That is exactly the signature t1317 recorded after five failed walls — *"DETERMINISTIC inside
+verify and UNREPRODUCIBLE outside it, which is the one shape that cannot be diagnosed from the engine
+side"* — and it is **true**, because outside verify nothing parses the stdout. It is not flakiness:
+it is a race whose loser is decided by thread scheduling, so a re-run clears it often enough to look
+like noise and never often enough to land. Four more walls went to it in t1327.
+
+⚠⚠ **And it was mine.** `G_TAB_REAP` arrived at t1318 printing one line on success. Before that,
+`G_INTERACT` was the only printer in the crate — which is why this began the tick after t1317 wrote
+its journal section about it and never before.
+
+### THE FIX NEEDS BOTH HALVES
+
+1. **`G_TAB_REAP` no longer prints.** Every number it published is already in its assertion messages,
+   which is where a number is read.
+2. **`G_INTERACT` emits a leading `\n`.** libtest's own progress dots share the fd, so even a single
+   printer has its FIRST line appended to a run of dots (`.......  open …`) — only the second and
+   third lines were carrying that gate at all. One newline puts all three at the start of a line.
+
+```text
+   before:   ...........................................  open    median 0.041ms …
+   after :     open / switch / close, 3 of 3 matching `^  (open|switch|close)`
+             test result: ok. 77 passed   — intact
+```
+
+### THE GATE ON THE GATE, AND THE RED PROOF FOUND TWO HOLES IN IT
+
+`G_ONE_PRINTING_GATE` scans this file's test region and allows **two** print sites, both
+`G_INTERACT`'s. ⚠ Neither of the following came from reasoning; both came from running the proof:
+
+- ⭐ **A scanner that reads its own source measures the ruler.** The first draft reported SEVEN
+  sites — four of them the macros quoted in its own assertion message. It now stops at its own doc
+  comment.
+- ⭐⭐ **A gate with slack it cannot justify is a gate with a hole.** The first draft allowed THREE,
+  reasoning that `println!(` also contains `print!(`. It does not (`print` + `ln!(`), so the budget
+  carried a spare slot — and the RED-proof patch (adding a `println!` back to `G_TAB_REAP`) **spent
+  the slack and passed**. Tightened to two; the same patch now fails with
+  `3 print sites … (allowed 2)`.
+
+⚠ I would have shipped a gate that could not catch the defect it was written for, and the only thing
+that showed it was actually running the red proof instead of predicting it.
+
+### ⚠ HARNESS, ONE LINE, AS SCOPE REQUIRES
+
+Also cleared while diagnosing: **48 headless Chrome processes leaked by the day's fidelity sweeps**,
+two of them pegged at 100% CPU for five to six hours. Identified precisely before touching anything —
+`/opt/google/chrome/chrome` under a `--user-data-dir=/tmp/com.google.Chrome.scoped_dir.*` throwaway
+profile, older than an hour, with no `manuk-wpt` or `tick.sh` alive — and deliberately NOT the
+10-day-old `/home/appuser/.cache/ms-playwright` chromium, which belongs to someone else. Load fell
+15 → 6. ⚠ t846's rule held: *a COUNT is not an IDENTIFICATION*; the harness's own comment already
+says *"the kill is not optional: returning without it leaks a headless Chrome per stuck site."*
+
+### WALL-TIME AUDIT (due at 1328; last 1308) — the wall is 154s and 70% of it is SEVEN SERIAL SUITES
+
+```text
+   T · crate tests   108s  ██████████████████ 70%
+   G6                 16s  10%      B  14s  9%      G1  7s  5%      P  6s  4%      F  4s  3%
+```
+
+Timed individually, warm, on a quiet box:
+
+```text
+   manuk-layout   51.3s  (184 tests)   57% of T
+   manuk-shell    22.3s  ( 77 tests)   25% of T
+   the other five 18.0s  (295 tests)   20% of T      css 3.3 · paint 4.2 · dom 2.8 · net 3.3 · agent 4.4
+```
+
+⭐ **T runs the seven suites strictly serially (`for c in …; do _crate_suite "$c"; done`) while the ~25
+gate binaries above it run concurrently** — the audit's own question 2. Running them concurrently
+bounds T at `max ≈ 51s` instead of `Σ ≈ 92s`: **~40s off a 154s wall (26%)**. ⚠ The serialisation is
+partly load-bearing — `manuk-shell` carries the timing gates — but t1318 gave `G_INTERACT` a ~250×
+margin and `G_TAB_REAP` a structural 2ms bar, and the other **five** suites carry no clock at all.
+Harness-owned; recorded for the observer, not touched.
+
+⭐⭐ **AND `manuk-layout` PARALLELISES ONLY 4× ON 32 CORES**, which is a shared-resource tell, not a
+CPU limit:
+
+```text
+   manuk-layout --test-threads=1   208.2s
+   manuk-layout (default, 32)       51.2s      4.07x
+```
+
+Probed the obvious shared resource:
+
+```text
+   FontContext::new()   181.5ms · 175.7ms · 179.5ms
+```
+
+`layout_html` — the helper nearly every layout test uses — builds a **fresh `FontContext` per test**.
+At ~178ms × ~150 callers that is **~27s of the 208s serial suite**, and under 32-way parallelism it is
+150 simultaneous font-database loads, which is the likelier explanation for the 4× ceiling than any
+assertion in the file. ⚠ This one is ENGINE-side and rigor-preserving (audit question 3, CACHING —
+identical fonts, identical assertions, one context), so it is a tick rather than an observer note.
+Named as (b) below.
+
+Nothing was trimmed: no gate dropped, no floor widened, nothing moved to CI.
+
+NEXT, ranked.
+(a) ⭐⭐⭐ **THE JS-INJECTED SUBTREES on `crazyshop.pl`** (t1327's (a)) — `.bottom-html` (1200×880,
+    `display:grid`), `.small-modal__box` (1200×800), two toasts and two more containers are in Chrome
+    and in **none** of the served HTML: all six are script-created. 135 boxes, 8.8% of the page's
+    coverage. ⚠ They also shift every `nth-of-type` index after them, so the count is an upper bound.
+(b) ⭐⭐⭐ **ONE `FontContext` PER TEST BINARY, not per test** — measured above: 178ms each, ~150
+    callers in `manuk-layout` alone, and it is the best candidate for that suite's 4×-on-32-cores
+    ceiling. Rigor-preserving by construction (same fonts, same assertions), and `manuk-layout` is
+    57% of the wall's biggest section.
+(c) ⭐⭐ **THE FORCED-REFLOW FLUSH** (t1324's (b)) — 40-line repro, dies in 5.8s.
+(d) ⭐⭐ **The 25 unscored in-scope sites** — scorability 81.2% caps M1; split instrument from engine
+    first (check #83).
+(e) ⭐ **BOX FRAGMENTATION** (t1326's (c)) — a decomposition session, not a tick.
