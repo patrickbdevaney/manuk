@@ -2040,6 +2040,10 @@
   - L920 · The numbers, and the one this does NOT buy
   - L943 · The timeout bucket is FOUR causes, and probe COUNT is not probe COST (t1261)
   - L967 · Probe COUNT and probe COST are different bugs, and only division separates them
+  - L992 · A tab operation was FREEING a whole page on the UI thread, and the 16 ms tripwire could not see it (t1318)
+  - L1012 · The cause, and the probe that named it
+  - L1033 · The fix: discard is an UNLINK, the free is a FRAME LATER
+  - L1057 · The gate, and why a stopwatch would have been worse than nothing
 
 ## THE WIKI — what we durably KNOW, organised by subsystem
 `docs/wiki/README.md`
@@ -2305,4 +2309,4 @@
   - L231 · Both named mechanisms are subsystem work
 
 ---
-2212 sections across 22 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+2216 sections across 22 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.

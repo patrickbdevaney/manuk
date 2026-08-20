@@ -92,6 +92,28 @@ pub struct Browser {
     manager: TabManager,
     next_id: u64,
     active: Option<TabId>,
+    /// ⚠⚠⚠ **PAGES THAT ARE LOGICALLY GONE AND HAVE NOT BEEN FREED YET — AND THE REASON THIS
+    /// QUEUE EXISTS IS THAT FREEING ONE COSTS A FRAME.**
+    ///
+    /// A `Page` is a DOM arena, a `StyleMap`, a fragment tree and (with scripts) a JS context.
+    /// Dropping one is thousands of individual `free()` calls, and it was measured at
+    /// **2.8–6.3 ms** for a 300-item article — three to six times a 60 fps frame's whole budget.
+    /// Every tier decision that hibernates a tab used to pay that inline, on the UI thread, inside
+    /// the very operation the user had just performed: `G_INTERACT`'s 30-tab session measured
+    /// `open` at a **median of 4.7 ms** because opening the thirty-first tab evicts the seventh,
+    /// and evicting it freed a whole page before `open` returned. Under load the same operation
+    /// reached 22 ms and dropped the frame outright.
+    ///
+    /// So the eviction is split from the free. The tab's `Retained` flips to `Discarded`
+    /// immediately — it *is* hibernated the instant the policy says so, and every query reads that
+    /// — while the page itself moves here and is dropped by [`Browser::reap_pending`] after the
+    /// frame is on screen. **Nothing is skipped**: the same bytes are freed and the same
+    /// `malloc_trim` still runs, one frame later, off the path the user is waiting on.
+    reap: Vec<Box<Page>>,
+    /// A page has been freed since the last trim, so the allocator still owes the kernel its
+    /// pages. Kept separate from `reap` so a burst of evictions pays **one** trim rather than one
+    /// per tab (`malloc_trim` walks the free lists — see [`Browser::reap_pending`]).
+    trim_owed: bool,
 }
 
 impl Browser {
@@ -101,6 +123,8 @@ impl Browser {
             manager: TabManager::new(max_background),
             next_id: 0,
             active: None,
+            reap: Vec::new(),
+            trim_owed: false,
         }
     }
 
@@ -169,7 +193,13 @@ impl Browser {
     }
 
     /// Record a completed load: store the `Page` + its source and refresh accounting.
+    ///
+    /// A tab that already held a page is **navigating**, and the outgoing page is queued for
+    /// [`reap_pending`](Self::reap_pending) rather than freed here: the assignment below would
+    /// otherwise drop it inline, spending a frame's budget on the old document at the exact moment
+    /// the new one wants to paint.
     pub fn load(&mut self, id: TabId, page: Page, source: String) {
+        let outgoing = self.take_page(id);
         if let Some(t) = self.tabs.iter_mut().find(|t| t.id == id) {
             t.url = page.final_url.clone();
             t.title = page.title.clone();
@@ -180,6 +210,7 @@ impl Browser {
                 frozen: false,
             };
         }
+        self.queue_reap(outgoing);
         self.refresh_mem(id);
         self.apply_tiers();
     }
@@ -193,6 +224,10 @@ impl Browser {
     }
 
     pub fn close(&mut self, id: TabId) {
+        // Take the page out BEFORE the tab leaves the vec: `retain` would drop the `Tab`, and with
+        // it a live `Page`, inside the click that closed it. Same cost, same fix as `discard`.
+        let doomed = self.take_page(id);
+        self.queue_reap(doomed);
         self.tabs.retain(|t| t.id != id);
         self.manager.remove_tab(id);
         if self.active == Some(id) {
@@ -249,22 +284,88 @@ impl Browser {
     /// process still holds is hibernated in name only. Trimming after the drop returned
     /// **92%** of that same 1.3 GB. See [`manuk_compositor::mem::release_free_memory_to_os`].
     ///
-    /// The trim is deliberately here — on discard, the rare event — and not on freeze or on
-    /// every frame: it walks the allocator's free lists, so paying it per frame would trade
-    /// the memory win for jank, and paying it on freeze would hand back pages the still-live
-    /// page is about to fault straight back in.
+    /// ⚠ **AND THAT COMMENT NAMED THE WRONG HALF AS THE EXPENSIVE ONE.** It read: *"the trim is
+    /// deliberately here — on discard, the rare event — and not on every frame: it walks the
+    /// allocator's free lists, so paying it per frame would trade the memory win for jank."* The
+    /// jank was real and the attribution was not. Measured on the `G_INTERACT` document — 300
+    /// flex rows, ~1,800 nodes:
+    ///
+    /// ```text
+    ///     drop(Page)   2.827  3.654  6.255  4.053  ms
+    ///     malloc_trim  0.952  0.778  1.332  0.810  ms
+    /// ```
+    ///
+    /// The trim is the **cheap** half; the drop it was guarding is three to six times larger. A
+    /// comment that blames the smaller cost buys a guard against the wrong thing — and here it
+    /// bought the belief that discard was affordable inline, which is why `open` cost a median of
+    /// 4.7 ms in a 30-tab session and why one contended `focus` reached 22 ms.
+    ///
+    /// **Discard is now an unlink, not a free**, and *both* halves are deferred together to
+    /// [`reap_pending`](Self::reap_pending) — the trim still follows the drop, and still only
+    /// on discard, but neither lands on the operation the user is waiting for. It is *also*
+    /// still not on freeze: a frozen tab keeps its `Page`, and handing back pages it is about to
+    /// fault straight in was correct then and is correct now.
     fn discard(&mut self, id: TabId) {
-        let mut dropped = false;
-        if let Some(t) = self.tabs.iter_mut().find(|t| t.id == id) {
-            if matches!(t.retained, Retained::Live { .. }) {
-                t.retained = Retained::Discarded;
-                dropped = true;
-            }
+        let doomed = self.take_page(id);
+        self.queue_reap(doomed);
+        self.refresh_mem(id);
+    }
+
+    /// Take a tab's `Page` out, leaving the tab `Discarded`. The caller owns the box — and
+    /// therefore owns *when* it is freed, which is the whole point.
+    fn take_page(&mut self, id: TabId) -> Option<Box<Page>> {
+        let t = self.tabs.iter_mut().find(|t| t.id == id)?;
+        match std::mem::replace(&mut t.retained, Retained::Discarded) {
+            Retained::Live { page, .. } => Some(page),
+            Retained::Discarded => None,
         }
-        if dropped {
+    }
+
+    /// Queue a page for the off-frame free. A `None` (the tab held no page) queues nothing and,
+    /// crucially, owes no trim — an eviction that freed nothing must not make the next frame walk
+    /// the allocator's free lists for it.
+    fn queue_reap(&mut self, page: Option<Box<Page>>) {
+        if let Some(p) = page {
+            self.reap.push(p);
+        }
+    }
+
+    /// **Do ONE unit of the deferred free, and say whether more is owed.**
+    ///
+    /// Called by the host after a frame is on screen (`RedrawRequested`, past the present). One
+    /// unit is one `Page` dropped, or — once the queue is empty — the single
+    /// [`release_free_memory_to_os`](manuk_compositor::mem::release_free_memory_to_os) that hands
+    /// the freed pages back to the kernel. Bounded on purpose: draining twenty evicted tabs in one
+    /// callback would simply move the stall rather than remove it, so each frame pays for one and
+    /// asks for another.
+    ///
+    /// Returns `true` while work remains, so the host can request the next redraw. A host that
+    /// never calls this does not leak — `Browser` owns the queue and drops it — but it does hold
+    /// evicted pages resident, which is the thing hibernation exists to prevent, so
+    /// **`G_TAB_REAP` gates that the drain runs.**
+    pub fn reap_pending(&mut self) -> bool {
+        if let Some(page) = self.reap.pop() {
+            drop(page);
+            self.trim_owed = true;
+            return true;
+        }
+        if self.trim_owed {
+            self.trim_owed = false;
             manuk_compositor::mem::release_free_memory_to_os();
         }
-        self.refresh_mem(id);
+        false
+    }
+
+    /// Run the deferred free to completion. For hosts with no frame loop (session restore, tests,
+    /// headless drivers) — the interactive path uses [`reap_pending`](Self::reap_pending).
+    pub fn drain_reaps(&mut self) {
+        while self.reap_pending() {}
+    }
+
+    /// How many evicted pages are still holding memory. The witness `G_TAB_REAP` reads to prove
+    /// the deferral is a deferral and not a leak.
+    pub fn pending_reaps(&self) -> usize {
+        self.reap.len()
     }
 
     /// Wake a discarded tab by re-laying-out its retained source HTML. Returns whether
@@ -748,6 +849,105 @@ mod g_interact {
             last <= first * 4 + Duration::from_micros(300),
             "closing the LAST tabs ({last:?}) costs far more than closing the FIRST ({first:?}) — \
              the per-tab cost is growing with the number of tabs open"
+        );
+    }
+
+    /// **G_TAB_REAP — a tab operation must not FREE a page, and the page must still get freed.**
+    ///
+    /// The sibling gate above sets its tripwire at one frame, and for ~1,300 ticks the browser
+    /// passed it while doing the very thing it was written to forbid. The numbers say why: with 30
+    /// tabs and a 6-tab budget, `open` ran at a **median of 4.7 ms** and a contended `focus` at
+    /// **22 ms** — because every eviction freed a whole `Page` (DOM arena + `StyleMap` + fragment
+    /// tree, thousands of `free()` calls, measured at 2.8–6.3 ms) inside the operation. A 16 ms bar
+    /// cannot see a 4.7 ms defect; it can only be tripped by it once the machine is busy, which is
+    /// how this arrived as an undiagnosable intermittent RED rather than as a bug report.
+    ///
+    /// So the bar here is **2 ms**, and it is not a performance target — it is a *structural*
+    /// assertion. Nothing a tab operation legitimately does (push a `Tab`, walk 30 tier entries)
+    /// is within two orders of magnitude of it. Only freeing a page can cross it, so crossing it
+    /// means the deferral has been undone.
+    ///
+    /// ⚠ **AND A GATE THAT ONLY MEASURED THE CLOCK WOULD REWARD THE LEAK.** "Don't free the page"
+    /// is trivially satisfiable by never freeing it, which is the same memory bug hibernation
+    /// exists to fix, hidden behind a faster number. So the second half asserts the pages are
+    /// really queued (`pending_reaps() > 0` — deferred, not skipped) and that the drain really
+    /// empties (`drain_reaps()` → 0). Both halves must hold, or this is a stopwatch, not a gate.
+    #[test]
+    fn tab_operations_defer_the_page_free_and_the_drain_actually_frees_it() {
+        // Two orders of magnitude below a frame: only a page free can cross it.
+        let bar = Duration::from_millis(2);
+
+        let fonts = manuk_text::FontContext::new();
+        let mut html = String::from("<style>.c{display:flex}.i{flex:1;padding:8px}</style><body>");
+        for i in 0..300 {
+            html.push_str(&format!(
+                "<div class=c><div class=i><h3>Item {i}</h3><p>Some body text for item {i} \
+                 that wraps across a couple of lines like real prose does.</p></div></div>"
+            ));
+        }
+        html.push_str("</body>");
+
+        let mut b = Browser::new(6);
+        let mut ops: Vec<(&str, Duration)> = Vec::new();
+        let mut ids = Vec::new();
+        for i in 0..TABS {
+            let t = Instant::now();
+            let id = b.open(format!("https://example.com/{i}"));
+            ops.push(("open", t.elapsed()));
+            let page = Page::load(&html, &format!("https://example.com/{i}"), &fonts, 1200.0);
+            b.load(id, page, html.clone());
+            ids.push(id);
+        }
+        for &id in &ids {
+            let t = Instant::now();
+            b.focus(id);
+            ops.push(("focus", t.elapsed()));
+        }
+
+        // The queue must be non-empty BEFORE the closes: 30 tabs against a 6-tab budget means the
+        // policy has hibernated most of them, and every one of those pages is owed a free.
+        let queued = b.pending_reaps();
+        assert!(
+            queued > 0,
+            "30 tabs on a 6-tab budget evicted nothing — either the tier policy stopped hibernating \
+             or `discard` went back to freeing inline. Both make the timings below meaningless."
+        );
+
+        for &id in &ids {
+            let t = Instant::now();
+            b.close(id);
+            ops.push(("close", t.elapsed()));
+        }
+
+        let (name, w) = ops
+            .iter()
+            .max_by_key(|(_, d)| *d)
+            .map(|(n, d)| (*n, *d))
+            .unwrap();
+        println!(
+            "  reap: worst {name} {:>7.3}ms (bar 2ms) · {queued} pages queued before close, {} after",
+            w.as_secs_f64() * 1000.0,
+            b.pending_reaps()
+        );
+        assert!(
+            w < bar,
+            "the WORST {name} took {:.1}ms against a 2ms bar. A tab operation has started FREEING a \
+             page on the UI thread again: that is 3-6ms of `free()` storm inside the click, and it \
+             is invisible to the one-frame gate until the machine is busy.",
+            w.as_secs_f64() * 1000.0
+        );
+
+        // The other half: deferred, not skipped.
+        assert!(
+            b.pending_reaps() > 0,
+            "every page was freed somewhere else after all — the deferral is not being exercised"
+        );
+        b.drain_reaps();
+        assert_eq!(
+            b.pending_reaps(),
+            0,
+            "the drain did not empty the queue — an evicted tab whose page the process still holds \
+             is hibernated in name only, which is the exact defect `discard` exists to fix"
         );
     }
 }

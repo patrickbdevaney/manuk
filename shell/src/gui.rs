@@ -4393,6 +4393,19 @@ impl ApplicationHandler<NavEvent> for App {
                             );
                         }
                     }
+                    // ── THE DEFERRED PAGE FREE, PAID HERE AND NOWHERE ELSE.
+                    //
+                    // Evicting a tab unlinks its `Page`; freeing it costs 3–6 ms (see
+                    // `Browser::reap_pending`), so it happens *after* the present, one page per
+                    // frame, with the frame already on screen. `true` means more is owed, and the
+                    // redraw request is what keeps the drain moving on an otherwise idle browser
+                    // — without it an evicted tab would stay resident until the next input event,
+                    // which is hibernation in name only.
+                    if self.browser.reap_pending() {
+                        if let Some(w) = &self.window {
+                            w.request_redraw();
+                        }
+                    }
                     // §8 metric #4: `browse --frames N` renders N frames back-to-back,
                     // reports GPU-present stats, then exits — a headful measurement.
                     if let Some(n) = self.measure_frames {

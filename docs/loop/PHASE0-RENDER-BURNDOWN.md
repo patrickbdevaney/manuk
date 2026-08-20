@@ -456,3 +456,78 @@ zero.** This is the high-usage/low-magnitude case VI.3 and check #72 both named:
 by whether it crosses a per-site threshold, and most correct fixes do not cross one on most sites.
 Report *"+N attributable sites, count flat"*, never a percentage — and rank the next tick on the
 membership list, not on the headline.
+
+## §11 — THE NEAR-MISS BAND, RANKED BY MECHANISM (t1316 sweep, `corpus-crux-trend.txt`)
+
+The board has asked since t684 for the burndown to rank by PRIMITIVE rather than by tag. This is that
+list, derived from the t1316 sweep (147 of 203 attempted before the Bar-0 death; 85 scored).
+
+### 11.1 The bar, and the cheapest cohort
+
+```text
+   67 well-sampled sites (≥20 scored ids) · shape ≥ 75% = 30 = 44.8% · median 73.0%
+   19 of them sit at 60–75% — ONE BAND below the bar
+```
+
+⭐ **Converting the 60–75% band alone takes the headline from 44.8% to ~73%.** Several of those sites
+carry 1,000+ scored ids (`fragrantica` 2,985, `repubblica` 2,487, `crazyshop` 1,402,
+`razaoautomovel` 1,196, `mobile.ir` 1,172, `mangaraw` 1,153, `puentedemando` 1,131), so they are
+statistically solid, not lucky.
+
+### 11.2 ⭐⭐⭐ The mechanism is ONE axis, and it is not the one coverage work targets
+
+| signal | value across the band |
+|---|---|
+| first divergence on the **`dy`** axis | **16 of 16** sites that have one |
+| first divergence on `dx` / `dw` / `dh` | **0** |
+| median `dw`, median `dh` | **0 on 17 of 19 sites** |
+| boxes MISSING | 2.5% (6.6% including `agoda.com`, an 88.7% bot wall) |
+| boxes MISPLACED | **97–99%** on the large sites (`oilprice` 653/654, `fragrantica` 2,967/2,987) |
+
+**We draw essentially every box, at essentially the right size, in the wrong vertical place.** That is
+not a missing-box problem and it is not a sizing problem — the width and height arithmetic already
+agrees with Chrome on these pages. MISSING_BOX work cannot move this band.
+
+### 11.3 The band splits in two, and the split is the work order
+
+Comparing each site's FIRST divergence against its MEDIAN `dy` separates a shift from an accumulation:
+
+```text
+   ACCUMULATES  (median dy is 3.5–35× the first divergence)          8 sites
+      www.repubblica.it     -1313 → 4552   (2487 ids)
+      www.fragrantica.com     435 → 3908   (2985 ids)
+      www.paypal.com           88 → 3075   ( 534 ids)
+      www.razaoautomovel.com  303 → 3030   (1196 ids)
+      www.ta3lemkonline.com  -229 → 2945   ( 459 ids)
+      momon-ga.com           -390 → 1917   ( 572 ids)
+      www.puentedemando.com   139 → 1277   (1131 ids)
+      www.mobile.ir           -69 →  356   (1172 ids)
+
+   CONSTANT SHIFT (median ≈ first)                                   2 sites
+      mangaraw.ac             254 →  253   (1153 ids)
+      ticket.jfa.jp            71 →   35   ( 682 ids)
+
+   EARLY OUTLIER that does NOT propagate (median ≪ first)            6 sites
+```
+
+⭐⭐⭐ **THE ACCUMULATING EIGHT ARE THE TICK LIST, AND THEY CARRY THE BAND'S MASS** (10,536 of the
+band's ~16,800 scored ids). A dy that grows 35× down the document while every matched box keeps the
+right height means the error is in the vertical GAPS, not in the boxes: margins, line-box advance, or a
+box that occupies space we never account for. The right-size/wrong-place signature is the one
+`docs/wiki/box-layout.md` records for a coordinate-space fault (t1272), and *"a constant shift with
+correct sizes"* is a different bug from *"a growing shift with correct sizes"* — the two classes above
+must not be worked as one.
+
+### 11.4 ⚠ Two steers in this document's own governing files were STALE, and both were checked
+
+- **`CONSTITUTION.MD` PART VI.2 H0.1** cites `css/selectors/invalidation/has-complexity.html` as a
+  reproducing Bar-0 `CRASH`. It is now **7/7 PASSING** — t1161's `:has()` anchor memo closed it. ⚠ It
+  runs in **4,720ms against a 5,000ms script watchdog**, so it is one step from truncating instead, and
+  the underlying mechanism (every mutation costs a full re-cascade) is untouched.
+- **The lever board's CO-#1 item (2)**, *"MECHANISM ORACLE — NEARLY FREE: `run_oracle_merge` DISCARDS
+  the signature back to `geometry:<tag>`"*, is **already implemented**. `main.rs` calls
+  `manuk_wpt::oracle::signature_of(&d)` and carries a comment saying the key *"is no longer computed
+  here."*
+
+> **A steer is a claim with a date, and both of these outlived their fact.** The cost of checking each
+> was one command; the cost of not checking was a tick spent implementing something that exists.

@@ -988,3 +988,81 @@ the two remaining layout-bound sites are waiting on.
 > t1259 refuted its own predecessor's next tick with a three-minute grep and wrote *"one site is not a
 > corpus"* in the same entry that then generalised from one site. The check is cheap; the discipline
 > is remembering to run it on your OWN conclusion, not only the previous tick's.
+
+## A tab operation was FREEING a whole page on the UI thread, and the 16 ms tripwire could not see it (t1318)
+
+`G_INTERACT` has asserted since tick ~118 that opening, switching and closing a tab all stay under one
+frame. It passed for ~1,200 ticks. It was passing over a defect the whole time.
+
+The numbers that matter are not the worst case — they are the **median**:
+
+```text
+   open    median 4.676ms   worst 12.871ms      ← quiet machine
+   switch  median 0.032ms   worst  5.240ms
+   close   median 0.016ms   worst  0.395ms
+```
+
+A median of 4.7 ms for `Browser::open` — an operation whose entire job is to push a `Tab` onto a `Vec`
+and re-run a tier walk over 30 entries. **Every single open was doing something else**, and a bar set
+at 16 ms rewards that: 4.7 is comfortably under 16, so the gate reported green until the machine was
+busy enough to multiply it past a frame. That is how the defect arrived — not as a bug report, but as
+an *undiagnosable intermittent RED* inside `verify.sh`, five runs deep, that could not be reproduced
+outside it.
+
+### The cause, and the probe that named it
+
+`Browser::open` focuses the new tab, which re-runs `apply_tiers`, which hibernates the tab that fell
+out of the eviction budget, which called `discard`, which **dropped the whole `Page` inline**. A `Page`
+is a DOM arena, a `StyleMap`, a fragment tree and (with scripts) a JS context: dropping one is
+thousands of individual `free()` calls.
+
+⭐⭐⭐ **And `discard`'s own comment blamed the wrong half.** It read *"the trim is deliberately here …
+it walks the allocator's free lists, so paying it per frame would trade the memory win for jank"* — so
+the expensive thing was believed to be `malloc_trim`. One probe, four rounds, on the gate's own
+document (300 flex rows, ~1,800 nodes):
+
+```text
+   drop(Page)   2.827  3.654  6.255  4.053  ms
+   malloc_trim  0.952  0.778  1.332  0.810  ms
+```
+
+The trim is the **cheap** half. The drop the comment was standing next to is three to six times
+larger. A workaround's comment is a checkable claim, and this one had been guarding the wrong cost for
+~350 ticks.
+
+### The fix: discard is an UNLINK, the free is a FRAME LATER
+
+`Page` is `!Send` — it holds a SpiderMonkey context caching raw `*mut Dom` reflectors — so the free
+cannot go to a background thread. It goes to a **queue drained after the present**, which is what
+Chrome's "delete soon" task queue is:
+
+- `Browser::{discard, close, load}` take the `Box<Page>` out and push it to `Browser::reap`. The tab's
+  `Retained` flips to `Discarded` *immediately*, so every query still says the tab is hibernated the
+  instant the policy decides it is. Only the physical free moves.
+- `Browser::reap_pending()` does **one** unit — one page dropped, or, once the queue is empty, the
+  single `malloc_trim` the batch owes — and returns whether more is owed. Bounded on purpose:
+  draining twenty evicted tabs in one callback moves the stall rather than removing it.
+- `gui.rs`'s `RedrawRequested` calls it after `gpu.draw()`, and requests another redraw while work
+  remains, so an idle browser still finishes the drain.
+
+```text
+   open    median 4.676 → 0.037ms   worst 12.871 → 0.052ms     (126× / 247×)
+   switch  median 0.032 → 0.032ms   worst  5.240 → 0.062ms     (85× on the worst)
+```
+
+Nothing is skipped: the same bytes are freed and the same trim runs, one frame later, off the path the
+user is waiting on. `load` gets the same treatment for the *outgoing* page of a navigation, and
+`close` for the page of the tab being closed — three sites, one shape.
+
+### The gate, and why a stopwatch would have been worse than nothing
+
+`G_TAB_REAP` (`shell/src/tab.rs`) sets its bar at **2 ms** and says out loud that this is not a
+performance target but a *structural* assertion: nothing a tab operation legitimately does is within
+two orders of magnitude of 2 ms, so crossing it means the deferral has been undone.
+
+⚠ **A gate that only measured the clock would reward the leak.** "Don't free the page" is trivially
+satisfied by never freeing it — the same memory bug hibernation exists to fix, hidden behind a better
+number. So the gate has a second half: the pages must really be **queued** (`pending_reaps() > 0`,
+i.e. deferred and not skipped) and the drain must really **empty** (`drain_reaps()` → 0). Proven RED
+by restoring the inline free: `G_TAB_REAP` fails and its 16 ms sibling `G_INTERACT` still passes —
+which is the whole point of writing it.

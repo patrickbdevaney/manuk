@@ -86740,3 +86740,252 @@ NEXT, ranked.
 (d) ⭐⭐ **Finish the sweep** — 56 sites of `corpus-crux-trend.txt` are unmeasured because of the
     Bar-0 death. Re-running from `--start 147` would complete the baseline for the cost of one run.
 (e) ⭐⭐ Ask both questions of every `gated` capability (surface audit #73).
+
+## Tick 1317 — the near-miss band is ONE axis, and two of the loop's own steers had outlived their facts (2026-08-20)
+
+TICK SHAPE: measurement. Board re-run at the top of this tick: **unchanged** (★ CSS-LAYOUT). Taken
+from constitution check #123's steer, in order.
+
+### ⚠ STEER 1 WAS STALE, AND CHECKING IT COST ONE COMMAND
+
+Check #123 named incremental style invalidation as the next tick, on the strength of `CONSTITUTION.MD`
+PART VI.2's H0.1 row — which cites `css/selectors/invalidation/has-complexity.html` as a **reproducing
+Bar-0 CRASH** (*"75,000 `appendChild` calls, hence 75,000 full cascades"*).
+
+```text
+   css/selectors/invalidation    2324 / 2913 = 79.8%    HANG/CRASH 0
+   has-complexity.html              7 / 7     4720ms    harness OK
+```
+
+**It passes.** t1161's `:has()` anchor memo closed the crash and the row was never re-read. ⚠ The
+mechanism is NOT closed — 4,720ms against a 5,000ms script watchdog is one step from t1313's
+truncation class — but *"a named Bar 0 with a reproducing test"* is no longer true, and a subsystem-
+sized tick was about to be justified by it.
+
+### ⚠ STEER 2 WAS ALSO STALE
+
+The lever board's CO-#1 item (2) — *"MECHANISM ORACLE — NEARLY FREE: `oracle::cluster` ALREADY computes
+the `{displaced|mis-sized}:{width|height|y|x} ~Npx` signature; `run_oracle_merge` DISCARDS it back to
+`geometry:<tag>`"* — is **already implemented**. `main.rs` calls `manuk_wpt::oracle::signature_of(&d)`
+and carries a comment reading *"THE LEDGER'S KEY IS NO LONGER COMPUTED HERE. It used to be, and its
+geometry arm was the single line `format!("geometry: <{tag}>")`."*
+
+> ⭐⭐⭐ **A STEER IS A CLAIM WITH A DATE.** Two of the three highest-priority items handed to this tick
+> by the constitution and the board had outlived their facts, and each took one command to check. This
+> is the same class as t1273's exclusion-without-a-re-check and t1306's dead workaround comment, one
+> level up: **the documents that RANK the work rot exactly like the comments that describe it.**
+
+### THE MEASUREMENT — steer 3, and it is sharp
+
+Mined t1316's sweep for the 60–75% near-miss band (19 well-sampled sites, one band below the bar,
+several with 1,000+ scored ids). Ranked by mechanism rather than by tag:
+
+```text
+   first divergence on the dy axis        16 of 16 sites that have one
+   first divergence on dx / dw / dh        0
+   median dw, median dh                    0 on 17 of 19 sites
+   boxes MISSING                           2.5%   (6.6% incl. agoda.com, an 88.7% bot wall)
+   boxes MISPLACED                         97–99% on the large sites
+```
+
+⭐⭐⭐ **WE DRAW ESSENTIALLY EVERY BOX, AT ESSENTIALLY THE RIGHT SIZE, IN THE WRONG VERTICAL PLACE.**
+`oilprice.com` 653 of 654 paths misplaced; `fragrantica.com` 2,967 of 2,987. Not a missing-box problem
+and not a sizing problem — the width and height arithmetic already agrees with Chrome on these pages.
+**MISSING_BOX work cannot move this band**, which is what the board's original ordering would have
+spent the next several ticks on.
+
+⭐⭐ **AND THE BAND SPLITS IN TWO — comparing each site's FIRST divergence against its MEDIAN `dy`
+separates a shift from an accumulation, and they are different bugs:**
+
+```text
+   ACCUMULATES (median dy is 3.5–35× the first)   8 sites, 10,536 of the band's ~16,800 ids
+   CONSTANT SHIFT (median ≈ first)                2 sites
+   EARLY OUTLIER that does not propagate          6 sites
+```
+
+The accumulating eight carry the mass: `repubblica` −1313→4552, `fragrantica` 435→3908,
+`paypal` 88→3075, `razaoautomovel` 303→3030, `ta3lemkonline` −229→2945, `momon-ga` −390→1917,
+`puentedemando` 139→1277, `mobile.ir` −69→356. **A `dy` that grows 35× down the document while every
+matched box keeps the right height puts the error in the vertical GAPS, not in the boxes** — margins,
+line-box advance, or a box that occupies space we never account for.
+
+⚠ A constant shift with correct sizes is the coordinate-space fault t1272 recorded; a *growing* shift
+with correct sizes is not the same bug, and the two must not be worked as one. That distinction is the
+whole reason this list is ranked by (first vs median) rather than by shape.
+
+Written into `docs/loop/PHASE0-RENDER-BURNDOWN.md` §11 as the ranked work order, which is where the
+board asks for it.
+
+⚠ **NO ENGINE SOURCE CHANGED THIS TICK.** The two stale steers are corrections and the band ranking is
+a measurement; neither is a capability, and calling this tick anything else would be the "scoreboard,
+not gate" failure check #123 was written to catch. It buys the next several ticks a target that is
+named rather than assumed.
+
+NEXT, ranked.
+(a) ⭐⭐⭐ **THE ACCUMULATING EIGHT — take `oilprice.com` or `ticket.jfa.jp` first.** Both are ~99%
+    misplaced on 650+ ids with a SMALL first divergence (93px, 71px), so the first wrong gap is near
+    the top of the document and is findable by bisecting one page against Chrome. One primitive per
+    tick, verified on the anchor, exactly as §11.3 orders it.
+(b) ⭐⭐⭐ **INCREMENTAL STYLE INVALIDATION** — still the constitution's highest-leverage item and still
+    real (4,720ms against a 5,000ms watchdog), but it is subsystem-sized and its Bar-0 justification is
+    now retired. It needs to be entered with a scoped first step, not as "close the crash".
+(c) ⭐⭐⭐ **THE LONGHAND SUPPLEMENT** (t1314's design), in daily-driver order.
+(d) ⭐⭐ **Finish the sweep** — 56 sites unmeasured because of the Bar-0 death at site 147.
+
+### ⚠⚠⚠ HARNESS BLOCKER (observer) — verify's `shell` lane REDs 5/5 while the suite is GREEN 7/7
+
+Tick 1317 is complete on disk and **cannot land**. `scripts/verify.sh` fails at G3 (affordance) and
+`G_INTERACT` on FIVE consecutive runs. Both of those gates read ONE captured output, `_out shell`.
+Evidence gathered before concluding, because a RED must be believed until it is disproved:
+
+```text
+   verify.sh                                              RED  5 / 5
+   cargo test -q -p manuk-shell -- --nocapture  (verify's EXACT command, solo)   ok 75/75  × 3
+   …the same under 4 concurrent gate builds                                      ok 75/75
+   …the same under 12 concurrent gate builds                                     ok 75/75
+        open median 4.081ms  worst 8.679ms   (the gate's bar is one frame = 16ms)
+   …the same under 24 concurrent gate builds (verify's real fan-out)              ok 75/75
+        open median 4.440ms  worst 10.901ms  ·  switch worst 5.473ms
+```
+
+⚠ **My first reading — "contention" — was WRONG and is corrected here.** I read `uptime` *before*
+launching and saw 2.35; the receipt shows `load1: 10.60` and `8.62` *during* the runs, self-induced by
+tick.sh's own ~25 parallel gate launches. But raising the concurrency by hand to 12 jobs does **not**
+reproduce it, so load alone is not the mechanism either.
+
+⚠ **The engine is exonerated by control, not by assertion.** t1316's `is_alive` guard sits on
+`append_child`, which the parser calls per node, so a tab-open latency regression was the obvious
+suspect — and the 12-way run above measures `open` at 8.7ms against a 16ms bar. This tick changed **no
+engine source at all** (docs + one plan file), so a deterministic RED cannot be attributed to it.
+
+Both failing gates are exactly the two that PARSE `SHELL_OUT`; `_out` prints no `BUILD FAILED for gate
+shell`, and the suite's own `T · crate tests` line in the same run reads `manuk-shell: ok. 75 passed`.
+**The same suite passes in one lane of the run and fails in another.** Per scope, `scripts/` is
+observer-owned and I have not touched it. Five re-runs is well past the ~40min thrash the harness's own
+comments at `verify.sh:308` were written to prevent, so I stopped rather than take a sixth. ⚠ The
+failure is DETERMINISTIC inside verify and UNREPRODUCIBLE outside it at any concurrency I can create —
+which is the one shape that cannot be diagnosed from the engine side.
+
+**State left for the observer:** the working tree holds the finished tick 1317 — `JOURNAL.md`,
+`PHASE0-RENDER-BURNDOWN.md` §11, `STATUS.md`, and the commit message at `/tmp/tick1317.msg`. Nothing is
+half-applied; it lands as-is the moment the shell lane is green.
+
+## Tick 1318 — a tab operation was FREEING a whole page on the UI thread, and the gate written to catch that could not see it (2026-08-20)
+
+TICK SHAPE: capability/performance fix + gate. Board re-run at the top of this tick: **unchanged**
+(★ CSS-LAYOUT / the render gap). ⚠ This tick did not take a board lever, and the reason is that the
+board's levers could not be *landed*: `verify.sh` had been RED five consecutive runs and tick 1317 was
+sitting complete-but-unlandable on disk. The RED turned out to be a real browser defect, in `shell/`,
+on the ratchet's PERFORMANCE face. So the wall was not worked around — it was believed.
+
+### ⚠ THE PRIOR TICK'S DIAGNOSIS WAS "UNREPRODUCIBLE OUTSIDE VERIFY", AND THAT WAS AN ARTEFACT OF HOW IT WAS RE-RUN
+
+t1317 recorded the failure as deterministic inside `verify.sh` and unreproducible outside it at any
+concurrency — the one shape that cannot be diagnosed from the engine side. It reproduced on the first
+attempt here, and the difference was **one redirection**: every control run had sent the suite's
+output to a terminal or a pipe, while `verify.sh`'s `_launch` sends it to a *file* — and, far more to
+the point, ran it **while the wall's own ~25 gate builds were live**. Re-running under `nice`d hand-made
+load is not the same population as running inside the thing that generates the load.
+
+```text
+   cargo test -q -p manuk-shell -- --nocapture  >FILE  (during the wall)   FAILED
+        switch worst 22.216ms  ← the assert, at a 16ms bar
+   the same command, quiet box, x3                                        ok 75/75
+        switch worst 5.240 / 5.293 / 5.276ms
+```
+
+⭐⭐ **THE GATE WAS NOT FLAKY — IT WAS THIN-MARGIN, AND THE MEDIAN SAID SO ALL ALONG.**
+
+```text
+   open    median 4.676ms   worst 12.871ms
+   switch  median 0.032ms   worst  5.240ms
+   close   median 0.016ms   worst  0.395ms
+```
+
+`Browser::open` pushes a `Tab` onto a `Vec` and walks 30 tier entries. **A median of 4.7ms for that is
+not noise, it is work nobody asked for** — and a bar at 16ms cannot see it. The gate only ever tripped
+when contention multiplied the same 5ms past a frame, which is exactly why it arrived as an
+intermittent RED rather than a bug report. ⭐ A worst-case bar over a median that is two orders of
+magnitude off the floor is a tripwire nobody has calibrated.
+
+### ⭐⭐⭐ THE WORKAROUND'S COMMENT NAMED THE WRONG HALF AS THE EXPENSIVE ONE
+
+`open` → `focus` → `apply_tiers` → `discard`, and `discard` dropped the whole `Page` inline plus a
+`malloc_trim`. Its comment had guarded the trim for ~350 ticks: *"it walks the allocator's free lists,
+so paying it per frame would trade the memory win for jank."* **Probe before patch** — four rounds on
+the gate's own document (300 flex rows, ~1,800 nodes):
+
+```text
+   drop(Page)   2.827  3.654  6.255  4.053  ms
+   malloc_trim  0.952  0.778  1.332  0.810  ms
+```
+
+The trim is the CHEAP half; the drop it was standing next to is **3–6× larger** and no comment
+mentioned it. Had I patched the obvious suspect I would have removed 0.9ms of a 5.3ms defect and
+declared the gate fixed. (`docs/loop/CADENCE.md` class: *a workaround's COMMENT is a checkable claim
+that dies silently* — t1303-1308.)
+
+### THE FIX — DISCARD IS AN UNLINK; THE FREE IS A FRAME LATER
+
+`Page` is `!Send` (a SpiderMonkey context caching raw `*mut Dom` reflectors), so the free cannot go to
+a thread. It goes to a queue drained after the present — Chrome's "delete soon" shape:
+
+- `Browser::{discard, close, load}` take the `Box<Page>` out into `Browser::reap`. `Retained` flips to
+  `Discarded` **immediately**, so every query still reports the tab hibernated the instant the policy
+  says so; only the physical free moves. Three sites, one shape: eviction, the closed tab's page, and
+  the *outgoing* page of a navigation.
+- `Browser::reap_pending()` does ONE unit — one page dropped, or the single `malloc_trim` the batch
+  owes once the queue empties — and returns whether more is owed. Bounded: draining twenty evicted
+  tabs in one callback moves the stall rather than removing it.
+- `gui.rs` `RedrawRequested` calls it after `gpu.draw()` and requests another redraw while work
+  remains, so an idle browser still finishes the drain.
+
+```text
+   open    median 4.676 → 0.037ms    worst 12.871 → 0.052ms      126× / 247×
+   switch  median 0.032 → 0.032ms    worst  5.240 → 0.062ms      85× on the worst
+   close   median 0.016 → 0.016ms    worst  0.395 → 0.033ms
+   manuk-shell  76 passed / 0 failed
+```
+
+Nothing is skipped: the same bytes are freed and the same trim runs, one frame later, off the path the
+user is waiting on.
+
+### THE GATE — AND WHY A STOPWATCH WOULD HAVE BEEN WORSE THAN NOTHING
+
+`G_TAB_REAP` bars at **2ms** and says in its own doc that this is not a performance target but a
+STRUCTURAL assertion: nothing a tab operation legitimately does is within two orders of magnitude of
+2ms, so crossing it means the deferral has been undone.
+
+⚠ *"Don't free the page"* is trivially satisfied by **never freeing it** — the same memory bug
+hibernation exists to fix, hidden behind a better number. So the gate has a second half: the pages
+must really be QUEUED (`pending_reaps() > 0`) and the drain must really EMPTY (`drain_reaps()` → 0).
+
+**PROVEN RED** by restoring the inline free:
+
+```text
+   G_TAB_REAP   FAILED  (tab.rs:913 — nothing queued)      ← the new gate
+   G_INTERACT   ok      open median 4.303ms worst 6.401ms  ← the 16ms sibling, blind to it
+```
+
+That pair is the finding in one line: **the old gate passes over the defect the new gate was written
+for.**
+
+### ⚠ TICK 1317 RIDES IN THIS COMMIT, AND SAYING SO IS THE POINT
+
+t1317 (the near-miss band ranked by mechanism, `PHASE0-RENDER-BURNDOWN.md` §11, two stale steers
+corrected) is complete on disk and has been unlandable for six wall runs — blocked by *this* bug. It
+could not be landed first: stashing this fix restores the RED. So one commit carries both, and t1317's
+entry above stands unedited, including its *"NO ENGINE SOURCE CHANGED THIS TICK"* line, which remains
+true of its own work.
+
+NEXT, ranked.
+(a) ⭐⭐⭐ **THE ACCUMULATING EIGHT** (t1317 §11.3) — `oilprice.com` / `ticket.jfa.jp` first, both ~99%
+    misplaced on 650+ ids with a small FIRST divergence, so the first wrong vertical gap is near the
+    top of the document. `manuk-wpt fidelity --shape-dump N` is the instrument and it already exists —
+    t1317 §11.4 records that re-deriving it by hand is how t830 lost a probe.
+(b) ⭐⭐ **AUDIT THE OTHER WORST-CASE BARS THE SAME WAY.** This defect was visible in a printed median
+    for ~1,200 ticks and nobody read it. Any gate whose median sits two orders of magnitude under its
+    bar is either over-generous or hiding work — `G_LOAD_BUDGET`, `F1`/`F2` and `G_FIRST_PAINT` all
+    have that shape.
+(c) ⭐⭐⭐ **INCREMENTAL STYLE INVALIDATION** — unchanged from t1317: still the constitution's
+    highest-leverage item, still 4,720ms against a 5,000ms watchdog, still needs a scoped first step.
