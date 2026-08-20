@@ -10561,3 +10561,122 @@ file. **The near-miss band is the actionable content**: 19 well-sampled sites at
    only when something CONSUMES it — this window produced the counter-example in both directions.
 
 **Next check due: tick 1323.**
+
+## Check #124 — tick 1323 (2026-08-20)
+
+**Horizon: H0 — Pareto Web Parity.** Exit gate, all four binary:
+
+1. ~83% WPT subtest pass across categories.
+2. Differential-oracle-verified viability across the four usage-weighted corpora.
+3. The headful shell is daily-drivable by its own developer.
+4. Every rendered construct is queryable through the in-process semantic API.
+
+### Gate, or scoreboard? — the last 8 ticks (1316–1322)
+
+⭐ **Gate, and unusually so: three of the four exit-gate conditions moved, and the scoreboard barely
+did.**
+
+```text
+   #2 oracle-verified viability   M1 gate 23.3% → 24.8% (t1268 → t1322, same corpus, same denominator)
+                                  in-scope shape 34.6% → 36.1% · jarring-clean 38.3% → 39.1%
+   #3 shell daily-drivable        t1318: `Browser::open` median 4.676ms → 0.037ms; a tab switch
+                                  no longer frees a Page on the UI thread. That IS condition 3 —
+                                  "the browser feels laggy" is the report it answers.
+   #4 semantic API queryable      t1320: `documentElement.clientHeight` answered the DOCUMENT height.
+                                  An I3 defect exactly: the renderer knew the viewport, the semantic
+                                  channel published something else.
+   #1 WPT total                   +65, +27 — bookkeeping, as §VI.3 says it should be.
+```
+
+⚠ **And check #123's own steer was NOT taken.** It said of incremental style invalidation: *"This is
+the next tick."* Eight ticks passed and it was not started. The honest reason is in t1317's journal —
+its Bar-0 justification retired (`has-complexity.html` is 7/7 passing, at 4,720ms against a 5,000ms
+watchdog) — but that weakens the *urgency*, not the *rank*. ⭐ **The pattern is a subsystem being
+re-deferred by a loop whose unit is a tick**, and the corrective is not to re-issue the steer a third
+time: it is to name a SCOPED FIRST STEP that fits one tick. See STEER 1 below.
+
+### PART VI correction
+
+⭐⭐⭐ **VI.2's H0.1 row CONTAINED THE DIAGNOSIS FOR t1319 AND NOBODY ACTED ON IT FOR ~300 TICKS.**
+The row lists, among the box types that opt out of ordinary block sizing:
+
+> *"and **scroll containers** (an instrument question, not an engine one — our gutter model matches a
+> real Chrome while the reference renders with `--hide-scrollbars`)"*
+
+That parenthetical is t1319's finding, written down before t1319 existed. t1319 re-derived it from
+scratch — a `--shape-dump` on `ticket.jfa.jp`, the arithmetic 1185 × 0.9 = 1066.5, a two-flag Chrome
+probe — and then fixed it: one constant now sets the policy for BOTH engines, gated by
+`G_REFERENCE_VIEWPORT_MATCHES`, and `ticket.jfa.jp` moved 66.4% → 82.1%.
+
+⚠ **The governance defect is not that the diagnosis was wrong — it is that it carried no STATUS.** The
+same row names the mis-provisioned-reference class with **three subjects**: `--hide-scrollbars` (the
+gutter), `--window-size` (closed at t1016), and the interaction media features (closed at t1020). Two
+were fixed, one was not, and the prose distinguishes them nowhere. **A class with N subjects needs N
+statuses, or the closed ones camouflage the open one.** Corrected here:
+
+```text
+   MIS-PROVISIONED REFERENCE — subject ledger
+     --window-size (87px block axis)      CLOSED t1016   viewport_chrome_offset()
+     interaction media features           CLOSED t1020   POINTING_DEVICE blink-settings
+     --hide-scrollbars (15px inline axis) CLOSED t1319   chrome::REFERENCE_HIDES_SCROLLBARS
+                                                         + G_REFERENCE_VIEWPORT_MATCHES
+```
+
+⚠ And the class is **not** closed as a class — its whole point (check #93) is that a mis-provisioned
+reference *looks exactly like agreement*, so it is never found by ranking divergences. Three subjects
+found, each by tripping over it. The standing instruction remains: **ask a third party — the page or
+the spec — what the answer should be.**
+
+⭐⭐ **A NINTH failure mode for §VI.3's list, and it corrupts the loop's reading of a SINGLE SITE
+rather than of the slope.** Check #103 named the *population-changed* delta and stated that *"a solo
+re-run cannot see this: it measures today's population twice and agrees with itself."* t1322 found
+the case where a solo re-run **does not even agree with itself**:
+
+```text
+   www.unoeste.br   five runs · same binary · same hour · 441–445 ids throughout
+                    66.9 · 84.5 · 84.9 · 73.1 · 82.7        SPREAD 18.0 points
+   oilprice.com     two runs · 654 ids                       66.1 · 66.1   SPREAD 0.0
+```
+
+**The per-site error bar is a property of the SITE, not of the run or the machine**, and it ranges
+from 0.0 to 18.0 points. So VI.3's evidence rule gains a clause: rank on the M1 membership diff,
+attribute with a same-hour old-binary control — **and take a site's own error bar before believing
+any per-site number at all.** I nearly filed `unoeste.br` as a t1320 regression on ONE serial re-run
+that agreed with the sweep; the old-binary control (84.7) and two further runs of the new code (84.5,
+84.9) refuted it.
+
+### Is any invariant being bent?
+
+- **I4 (Pareto discipline)** — held, twice, and both refusals are recorded rather than silent. t1320
+  took `css/css-values`' histogram and refused the area's mass: `calc-size()` is **2,532 of its ~4,100
+  failures**, a Chrome-only `interpolate-size` draft. It took the 88-subtest `viewport-units` row
+  instead, which is the daily-driver one. And t1321 refused the *root-element-has-no-box* item as
+  subsystem-sized rather than starting it inside a tick.
+- **I3 (semantic model in lockstep)** — ⚠ still the invariant under most pressure, and t1320 is
+  another instance of check #123's own warning: `clientHeight` was a renderer fact the semantic
+  channel published wrongly. That is now **three** instances in two windows (`scrollbar-width`
+  reported-not-applied, `field-sizing` applied-not-reported, `clientHeight` computed-then-mis-published).
+  The class is real and `map-reconcile.sh` still only checks that a gate exists.
+- **I2 (never patch deps)** — held; nothing forked.
+- **I5 (the oracle is the discovery engine)** — ⭐ held, and it was decisive: t1319, t1320 and t1321
+  all descend from one `--shape-dump` on one band anchor. Three ticks off a single oracle reading.
+
+### STEER
+
+1. ⭐⭐⭐ **INCREMENTAL STYLE INVALIDATION — but as a SCOPED FIRST STEP, because "this is the next
+   tick" has now failed twice.** The constitution calls it *"the single highest-leverage architectural
+   decision in the renderer"* and it will not fit in a tick. The first step that does: **an
+   instrument** — count full cascades per DOM mutation and publish it beside `layout_ms`, so the O(document)
+   claim has a number on real pages instead of one WPT file. t1240 and t1258 both show that the
+   attribution instrument is what makes the subsequent ticks tractable.
+2. ⭐⭐⭐ **`oilprice.com` — the stable anchor.** 654 ids, measured error bar **0.0**, 66.5% shape,
+   653-of-654 misplaced with a small first divergence. After t1322 it is the only band site where a
+   fix can be priced honestly, which is worth more than its rank by mass.
+3. ⭐⭐ **The 25 unscored in-scope sites** (render-fail 3 · shell-only 5 · thin-overlap 2 · timeout 8 ·
+   css-starved 1 · other 6). Scorability 81.2% is the hard cap on the M1 gate. ⚠ Check #83's warning
+   still binds: most of the unscored are the INSTRUMENT's, not the engine's — split them before
+   spending engine ticks.
+4. ⭐⭐ **Ask both questions of every `gated` row** (audit #73's #1, carried unclosed) — I3 is the
+   invariant under pressure and this is the mechanical check for it.
+
+**Next check due: tick 1331.**

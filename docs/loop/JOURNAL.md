@@ -87448,3 +87448,116 @@ NEXT, ranked.
     8 · css-starved 1 · other 6. Scorability 81.2% is the cap on M1, and the tracker names these as
     the throw-killer worklist.
 (d) ⭐⭐ **AUDIT THE OTHER WORST-CASE BARS** (t1318's (b)) — still open, still cheap.
+
+## Tick 1323 — the audit tick: the constitution already contained t1319's diagnosis, and it carried no status (2026-08-20)
+
+TICK SHAPE: audit. Board re-run at the top of this tick: **unchanged**. All three cadences fell due at
+1323 — self-audit (last 1313), surface audit (last 1313), constitution check (last 1315) — and the
+hook blocks past them, so this is the tick they get.
+
+### SELF-AUDIT — one prescribed-but-not-executed item, and it is not mine
+
+```text
+   ✗ verify wall: 562s EXCEEDS the 300s target — Part 21.2 item 1 has regressed.
+```
+
+Everything else green: 49 process defects recorded each naming its closing MECHANISM, every gate
+declaring how to break it, the pattern ledger moving with the engine, journal complete. ⚠ The wall is
+harness and observer-owned; noted and not touched, per scope.
+
+### SURFACE AUDIT #74 — the map has CAUGHT UP to the world's list, which is the suspicious answer
+
+Fetched rather than recalled: the Interop 2026 README, the four vendor announcements, Baseline 2026
+and its monthly digests, and Ladybird's own June 2026 newsletter.
+
+⭐ **All 20 Interop 2026 focus areas and all 4 investigation efforts already have `CONSTELLATION.tsv`
+rows, every one with a status.** So do Baseline's 2026 additions (`ric`/`ic`, `lh`/`rlh`,
+`:active-view-transition`, `contrast-color()`, `zstd`). This instrument's own rule is that *an audit
+which finds nothing is a suspicious audit* — so the honest reading is not "the map is complete", it is
+**"the map is no longer behind the world's list, and this instrument has stopped being the binding
+one."** The binding gap is now STATUS, not COVERAGE: 46 capabilities still read `unknown`.
+
+⭐⭐ **AND ONE DEFERRAL WHOSE FACT MOVED.** `zstd` is on the constitution's SKIP-v1 list; Baseline moved
+it to *newly available* in **February 2026**. Re-checked from the tree instead of argued —
+`engine/net/src/lib.rs:1924` sends `Accept-Encoding: gzip, deflate, br`, so no origin can send zstd and
+the deferral **stands**, now with a line number instead of a memory. (t1273's rule: *an exclusion must
+carry a re-check or the reason outlives the fact*.) ⚠ The same line is a finding in a different frame:
+real Chrome sends `…, zstd`, and **bot-wall-403 is the largest unscored bucket in t1322 — 39 of 200
+sites**. That is the bot-wall track, explicitly out of engine scope; recorded so the next person has
+the header in front of them.
+
+⭐⭐⭐ **THE MOST USEFUL THING THE AUDIT FOUND IS NOT A CAPABILITY ROW.** Ladybird crossed **90% of all
+WPT subtests** in 2026 and its own newsletters still say complex web apps and modern CSS layouts show
+gaps and that daily-drive readiness *"would be generous"*. **An engine can be at 90% of WPT and not
+daily-drivable** — the independent empirical case for this loop's own decision that WPT is the LEDGER
+and M1 on the CrUX corpus is the GATE.
+
+### CONSTITUTION CHECK #124 — gate or scoreboard?
+
+⭐ **Gate, and unusually so: three of the four H0 exit-gate conditions moved in the last eight ticks,
+and the scoreboard barely did.**
+
+```text
+   #2 oracle-verified viability   M1 gate 23.3% → 24.8%  (t1268 → t1322, same corpus, same denominator)
+   #3 shell daily-drivable        t1318: Browser::open median 4.676ms → 0.037ms
+   #4 semantic API queryable      t1320: documentElement.clientHeight was the DOCUMENT height — an I3 defect
+   #1 WPT total                   +65, +27 — bookkeeping, as §VI.3 says it should be
+```
+
+### ⭐⭐⭐ THE FINDING: THE CONSTITUTION ALREADY CONTAINED t1319'S DIAGNOSIS
+
+`PART VI.2`'s H0.1 row has read, for ~300 ticks:
+
+> *"and **scroll containers** (an instrument question, not an engine one — our gutter model matches a
+> real Chrome while the reference renders with `--hide-scrollbars`)"*
+
+That is t1319's entire finding, written down before t1319 existed. t1319 re-derived it from scratch and
+fixed it. ⚠ **The governance defect is not the diagnosis — it is that the diagnosis carried no
+STATUS.** The same row names the mis-provisioned-reference class with **three** subjects and
+distinguishes their states nowhere:
+
+```text
+   --window-size (87px, block axis)       CLOSED t1016
+   interaction media features             CLOSED t1020
+   --hide-scrollbars (15px, inline axis)  OPEN for ~300 ticks → CLOSED t1319
+```
+
+⭐ **A class with N subjects needs N statuses, or the closed ones camouflage the open one.** Two thirds
+of that sentence had been fixed, so it read as a closed topic. `CONSTITUTION.MD` PART VI corrected in
+place with the subject ledger.
+
+### A NINTH FAILURE MODE FOR §VI.3, AND IT BREAKS A SINGLE-SITE READING RATHER THAN A SLOPE
+
+Check #103 named the population-changed delta and said *"a solo re-run cannot see this: it measures
+today's population twice and agrees with itself."* t1322 found the case where the solo re-run **does
+not agree with itself**: `www.unoeste.br`, five runs, one binary, one hour, 441–445 ids throughout —
+66.9 · 84.5 · 84.9 · 73.1 · 82.7, a spread of **18.0 points**; `oilprice.com`, 654 ids, **0.0**. The
+per-site error bar is a property of the SITE. VI.3's evidence rule gains a clause: **take a site's own
+error bar before believing any per-site number at all.**
+
+### INVARIANTS
+
+- **I4** held twice and both refusals are on the record: t1320 refused `css/css-values`' mass
+  (`calc-size()` is 2,532 of ~4,100 failures, a Chrome-only draft) and took the 88-subtest
+  `viewport-units` row instead; t1321 refused the root-element-has-no-box item as subsystem-sized.
+- **I3** ⚠ still the invariant under most pressure — `clientHeight` is the THIRD reported-vs-applied
+  instance in two windows, and `map-reconcile.sh` still only checks that a gate exists.
+- **I5** ⭐ decisive: t1319, t1320 and t1321 all descend from ONE `--shape-dump` on one band anchor.
+
+### ⚠ CHECK #123'S STEER WAS NOT TAKEN, AND RE-ISSUING IT WOULD BE THE THIRD TIME
+
+It said of incremental style invalidation *"This is the next tick."* Eight ticks passed. The honest
+reason is in t1317 — its Bar-0 justification retired (`has-complexity.html` is 7/7 passing) — but that
+weakens the urgency, not the rank. ⭐ **The pattern is a SUBSYSTEM being re-deferred by a loop whose
+unit is a TICK**, and the corrective is not a louder steer: it is a scoped first step that fits one.
+
+NEXT, ranked (this is check #124's steer).
+(a) ⭐⭐⭐ **INCREMENTAL INVALIDATION — THE INSTRUMENT FIRST.** Count full cascades per DOM mutation and
+    publish it beside `layout_ms`, so the O(document) claim has a number on real pages rather than one
+    WPT file. t1240 and t1258 both show the attribution instrument is what makes the following ticks
+    tractable.
+(b) ⭐⭐⭐ **`oilprice.com`** — 654 ids, measured error bar 0.0, 66.5% shape, 653-of-654 misplaced with a
+    small first divergence. After t1322 it is the only band site where a fix can be priced honestly.
+(c) ⭐⭐ **The 25 unscored in-scope sites** — scorability 81.2% is the hard cap on M1. ⚠ Check #83
+    still binds: split instrument from engine before spending engine ticks.
+(d) ⭐⭐ **Ask both questions (reported vs applied) of every `gated` row** — the mechanical check for I3.

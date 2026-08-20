@@ -6937,3 +6937,76 @@ shape a top-N histogram discards. The board was ranking inside a frame that coul
    is not in the WPT checkout at all. Another aperture gap, in the same family as audit #72's.
 4. Carried unclosed from #72: `svg` at 14.6% and its 39 `TH_TIMEOUT` files. From #71: the ECMAScript
    mega-row split. From #70: `CSS anchor positioning`'s contradictory pair.
+
+## Audit #74 — tick 1323 (2026-08-20)
+
+**Sources (searched, not remembered).**
+- <https://github.com/web-platform-tests/interop/blob/main/2026/README.md> — the authoritative Interop
+  2026 list, fetched rather than recalled.
+- <https://webkit.org/blog/17818/announcing-interop-2026/> · <https://web.dev/blog/interop-2026> ·
+  <https://www.igalia.com/news/interop-2026.html> · <https://hacks.mozilla.org/2026/02/launching-interop-2026/>
+- <https://web.dev/baseline/2026> and the monthly digests (Jan/Feb/Apr/May 2026).
+- <https://ladybird.org/newsletter/2026-06-30/> — the independent engine's own progress report.
+
+### The reconciliation, and it came back CLEAN — which is the suspicious answer
+
+All **20 Interop 2026 focus areas and all 4 investigation efforts** are already rows in
+`CONSTELLATION.tsv`, every one of them with a status:
+
+```text
+   container style queries missing · anchor positioning missing/unknown · attr() partial
+   contrast-color() gated · CSS zoom partial · custom highlights missing · dialogs+popovers (9 rows)
+   fetch uploads/ranges · IndexedDB gated · JSPI missing · media pseudo-classes partial
+   Navigation API gated · scoped custom element registries missing · scroll-driven animations missing
+   scroll snap gated · shape() missing · view transitions gated (cross-document partial)
+   web compat · WebRTC missing · WebTransport missing
+   investigations: a11y testing · JPEG XL missing · mobile testing · WebVTT gated
+```
+
+Baseline's 2026 newly-available additions land the same way: `ric`/`ic` units, `lh`/`rlh`,
+`:active-view-transition`, `contrast-color()` and `zstd` all have rows.
+
+⚠ **This instrument's own warning is that an audit which finds nothing is a suspicious audit**, and
+seventy-three audits of history say the map is never clean. So the honest reading is not *"the map is
+complete"* — it is **"the map is no longer behind the WORLD'S list, and this instrument has stopped
+being the binding one."** The gaps it now surfaces are all `missing`/`unknown` rows we already own.
+The next unknown-unknown will not come from Interop's list, because we have caught up to it.
+
+### What we had been wrong about — a DEFERRAL whose fact moved
+
+`zstd` sits on `CONSTITUTION.MD`'s explicit SKIP-v1 list. **Baseline moved it to "newly available" in
+February 2026**, which is exactly the shape of *"an exclusion must carry a re-check or the reason
+outlives the fact"* (t1273). Re-checked from the tree rather than argued:
+
+```text
+   engine/net/src/lib.rs:1924   Accept-Encoding: "gzip, deflate, br"
+```
+
+We do not advertise it, so no origin can send it, so the deferral is **still safe** — and advertising
+it without a decoder would be a live bug, not a feature. **The deferral stands, now with a date and a
+line number instead of a memory.**
+
+⚠ **But the same line is a finding in a different frame.** Real Chrome sends
+`gzip, deflate, br, zstd`. `Accept-Encoding` is therefore a Chrome-divergent request header, and
+**bot-wall-403 is the single largest unscored bucket in the t1322 sweep — 39 of 200 sites.** That is
+the bot-wall track, which the board puts explicitly OUT of engine scope and forbids fingerprint-matching
+on; recorded here so the next person who wonders why 39 sites 403 has the header set in front of them.
+
+### Is the frame still right?
+
+**Yes, and this audit sharpens why.** Ladybird crossed **90% of all WPT subtests** in 2026 and its own
+newsletters still say *"complex web apps and some modern CSS layouts show gaps"* and that daily-drive
+readiness *"would be generous"*. ⭐ **An engine can be at 90% of WPT and not daily-drivable** — which is
+the empirical case, from an independent engine, for the loop's own decision that WPT is the LEDGER and
+M1 on the CrUX corpus is the GATE. That is the most useful thing this audit found, and it is not a
+capability row.
+
+### RANKED, from this audit only
+
+1. ⭐⭐ **The map has caught up to the world's list; the binding gap is now STATUS, not COVERAGE.**
+   46 capabilities still read `unknown` (t1322's tracker: 546 of 592 measured). The cheap probes that
+   convert `unknown` → a verdict are worth more than another sweep of external sources.
+2. ⭐⭐ Carried unclosed from #73: ask BOTH questions (reported vs applied) of every `gated` row.
+   From #73: `writing-mode`/`css-writing-modes` absent from the WPT checkout. From #72: `svg` at
+   14.6%. From #71: the ECMAScript mega-row split. From #70: anchor positioning's contradictory pair
+   (`missing` in one row, `unknown` in another — still contradictory, still unresolved).
