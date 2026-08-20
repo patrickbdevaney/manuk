@@ -509,6 +509,12 @@
   - L10420 · ⭐ Why nobody had filed it: the workarounds are folklore and both already worked
   - L10427 · ⚠ Every input to taffy was correct, and that is what made it hard
   - L10440 · ⚠⚠ The fix has THREE terms and only the first comes from the spec
+  - L10466 · The initial containing block is not the window — html { overflow: scroll } and the 15px nobody subtracted (t1321)
+  - L10483 · Two stores, because they are two different lengths
+  - L10497 · It needs a second cascade, and it cannot not
+  - L10515 · What this deliberately does NOT do
+  - L10528 · Measured
+  - L10540 · The gate
 
 ## browser-capabilities.md
 `docs/wiki/browser-capabilities.md`
@@ -2319,4 +2325,4 @@
   - L231 · Both named mechanisms are subsystem work
 
 ---
-2226 sections across 22 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+2232 sections across 22 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.

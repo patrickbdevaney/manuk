@@ -65,6 +65,10 @@ fn the_root_elements_client_box_is_the_viewport_not_the_document() {
     // The root's client box IS the viewport — the same viewport `window.innerWidth/Height` reports.
     // Asserting the two AGREE rather than asserting a literal is deliberate: a host is free to pick
     // any viewport, and what must never happen is the engine answering the same question two ways.
+    // ⚠ The two are equal here because this document's root reserves NO scrollbar gutter. Where the
+    // root does (`html { overflow: scroll }`), the client box is the ICB and `innerWidth` stays the
+    // window — that split is `G_ROOT_SCROLLBAR_ICB`'s claim, and it is deliberately a different
+    // document rather than a branch in this one.
     let n = |k: &str| -> f64 {
         got.split(k)
             .nth(1)

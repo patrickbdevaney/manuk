@@ -52,7 +52,12 @@ fn cascade_styles(dom: &Dom, sheets: &[Stylesheet], viewport_width: f32) -> Styl
     manuk_css::values::set_viewport_width(viewport_width);
     #[cfg(feature = "stylo")]
     {
-        let (_, vh) = manuk_css::values::viewport_size();
+        // Stylo's `Device` is what resolves `vw`/`vh` and `@media` on that path, so it must be
+        // built from the ICB — the same reference the minimal path's `values::viewport()` uses.
+        // `set_viewport_width` above has just reset the ICB width to the window's; a narrower ICB
+        // arrives on the SECOND cascade, from `root_scrollbar_icb` below.
+        let (icb_w, vh) = manuk_css::values::icb_size();
+        let viewport_width = icb_w;
         // Stylo's DOM trait wall has provably-unreachable `unimplemented!()` paths; if a real
         // page trips one, don't crash the browser — fall back to MinimalCascade for that page.
         let cascaded = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
@@ -72,6 +77,58 @@ fn cascade_styles(dom: &Dom, sheets: &[Stylesheet], viewport_width: f32) -> Styl
     {
         MinimalCascade.cascade(dom, sheets)
     }
+}
+
+/// Re-cascade **without** resetting the ICB — the second pass of the root-scrollbar decision.
+///
+/// `cascade_styles` calls `set_viewport_width`, which deliberately resets the ICB to the window (a
+/// new width is a new page whose root `overflow` has not been read yet). Calling it again for the
+/// second pass would therefore throw away the narrowing that pass 1 just computed, and the two
+/// cascades would produce identical styles — a re-cascade that costs a cascade and changes nothing
+/// is the worst of both, and it would have been invisible: the numbers would simply have stayed
+/// wrong.
+fn cascade_styles_keeping_icb(dom: &Dom, sheets: &[Stylesheet]) -> StyleMap {
+    let (icb_w, _) = manuk_css::values::icb_size();
+    let saved = manuk_css::values::icb_size();
+    let styles = cascade_styles(dom, sheets, icb_w);
+    manuk_css::values::set_icb(saved.0, saved.1);
+    styles
+}
+
+/// **Does the ROOT ELEMENT reserve a scrollbar gutter, and if so what is the ICB?**
+///
+/// `Some((w, h))` only when the answer differs from the window — the caller uses that to decide
+/// whether a second cascade is owed at all.
+///
+/// Only the **deterministic** case (`overflow: scroll`, a scrollbar that is always there) is
+/// answered. CSS Values 4 is explicit about the other one: *"when the value of `overflow` on the
+/// root element is `auto`, any scroll bars are assumed not to exist"* — so `auto` is not residue
+/// here, it is the specified behaviour, and treating it as residue would be inventing a gap.
+///
+/// ⚠ **Only the ROOT ELEMENT, deliberately, and `overflow` PROPAGATION is not implemented here.**
+/// CSS Overflow §3.3 propagates the root's `overflow` to the viewport and, when the root is
+/// `visible`, propagates `body`'s instead — and the element it came from then uses `visible` for
+/// itself. We do neither: a `body { overflow-y: scroll }` page (`ticket.jfa.jp` is one) still
+/// reserves the gutter on `body`'s own box, which lands the 15px in almost the same place by a
+/// different route and is why the two have never visibly disagreed. Implementing propagation means
+/// implementing BOTH halves at once — narrow the ICB *and* stop `body` reserving for itself — or
+/// the gutter is counted twice and every such page loses 15px more. That is a tick of its own.
+fn root_scrollbar_icb(dom: &Dom, styles: &StyleMap, viewport_width: f32) -> Option<(f32, f32)> {
+    use manuk_css::Overflow;
+    let de = dom.children(dom.root()).find(|&c| dom.is_element(c))?;
+    let st = styles.get(&de)?;
+    let sb = manuk_layout::scrollbar_gutter(st.scrollbar_width);
+    let gy = (st.overflow_y == Overflow::Scroll)
+        .then_some(sb)
+        .unwrap_or(0.0);
+    let gx = (st.overflow_x == Overflow::Scroll)
+        .then_some(sb)
+        .unwrap_or(0.0);
+    if gx == 0.0 && gy == 0.0 {
+        return None;
+    }
+    let (_, vh) = manuk_css::values::viewport_size();
+    Some(((viewport_width - gy).max(0.0), (vh - gx).max(0.0)))
 }
 
 /// The `@container` re-pass: if any sheet uses container queries, re-cascade against the
@@ -195,6 +252,22 @@ fn restyle_and_layout(
     // enough for a human to see, so a normal pass costs two `Instant`s and no log line.
     let t_cascade = std::time::Instant::now();
     let mut styles = cascade_styles(dom, sheets, viewport_width);
+    // ⚠⚠⚠ **THE ROOT ELEMENT'S SCROLLBAR COMES OUT OF THE INITIAL CONTAINING BLOCK, AND THE ONLY
+    // WAY TO KNOW IT IS THERE IS TO HAVE CASCADED FIRST.**
+    //
+    // `html { overflow: scroll }` reserves a classic scrollbar unconditionally, and CSS Values 4
+    // resolves every viewport-percentage unit against the ICB — which the scrollbar is *outside*
+    // of. Chrome, 200x100 frame, `html { overflow: scroll }`: `100vw` is **185px** and
+    // `window.innerWidth` is still **200**. We answered 185 nowhere and 200 everywhere.
+    //
+    // It cannot be decided before the cascade — `overflow` is a cascaded property — so this is a
+    // second cascade, and it is bought only by the pages that ask for it: a page whose root element
+    // does not unconditionally scroll takes the `is_none()` early-out and pays one comparison. The
+    // `@container` re-pass below is the same shape and the same justification.
+    if let Some((icb_w, icb_h)) = root_scrollbar_icb(dom, &styles, viewport_width) {
+        manuk_css::values::set_icb(icb_w, icb_h);
+        styles = cascade_styles_keeping_icb(dom, sheets);
+    }
     let us_cascade = t_cascade.elapsed().as_micros() as u64;
     // **BETWEEN the cascade and the layout, every time.** See `apply_natural_sizes`: a decoded
     // image's intrinsic size is not in any stylesheet, so a cascade that rebuilds the style map
@@ -2412,7 +2485,11 @@ fn scroll_geometry_of(
     // floored at the viewport (a short document still scrolls zero, not negative). `scrollTop`/
     // `scrollLeft` stay 0 here, which is what the fallback already answered — the document scroll
     // offset is not part of this table, and pretending otherwise would be a new claim, not a fix.
-    let (vpw, vph) = manuk_css::values::viewport_size();
+    // ⚠ The ICB, not the window — and the subtraction is NOT repeated here. `values::icb_size()`
+    // has already had the root element's scrollbar taken out of it by `root_scrollbar_icb`, which
+    // is also what `vw`/`vh` and `@media` now read; doing the arithmetic a second time in this
+    // table would take 30px out of a page that reserves 15. **One narrowing, one owner.**
+    let (vpw, vph) = manuk_css::values::icb_size();
     // The document element is POSITIONAL — the first element child of the document node — not
     // `<html>` by name, so an XML/SVG document root gets the rule too. Same definition as
     // `document.documentElement`, deliberately: two definitions of the root element is how the two
@@ -2435,27 +2512,15 @@ fn scroll_geometry_of(
         // the far EDGE, not the size: the body's own top margin is part of the document's height.
         let b = root_box.find(h).unwrap_or(root_box);
         let (content_w, content_h) = (b.rect.x + b.rect.width, b.rect.y + b.rect.height);
-        // The scrollbar comes out of the viewport here for the same reason it comes out of an
-        // element's padding box above, and through the same function, so the two cannot disagree.
-        let sb = manuk_layout::scrollbar_gutter(manuk_css::ScrollbarWidth::Auto);
-        let root_st = styles.get(&h);
-        let gy = match root_st.map(|st| st.overflow_y) {
-            Some(Overflow::Scroll) => sb,
-            _ => 0.0,
-        };
-        let gx = match root_st.map(|st| st.overflow_x) {
-            Some(Overflow::Scroll) => sb,
-            _ => 0.0,
-        };
         m.insert(
             h,
             [
                 0.0,
                 0.0,
-                content_h.max(vph - gx),
-                content_w.max(vpw - gy),
-                (vph - gx).max(0.0),
-                (vpw - gy).max(0.0),
+                content_h.max(vph),
+                content_w.max(vpw),
+                vph.max(0.0),
+                vpw.max(0.0),
             ],
         );
     }

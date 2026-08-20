@@ -10462,3 +10462,85 @@ for a `width: min-content` flex box over 40px and 70px inline-blocks.
 (4693 and 5850). Controls `css/css-position` 1166, `css/css-display` 332, `css/css-overflow` 481,
 `css/css-transforms` 4735/5500 — all unmoved.** `G_FLEX_ITEM_AUTOMATIC_MINIMUM`, six rows, four of
 them controls, proven RED. `g_hscroll_carousel` — red on `main` since before t1314 — is green again.
+
+## The initial containing block is not the window — `html { overflow: scroll }` and the 15px nobody subtracted (t1321)
+
+CSS Values 4 §5.1.1 resolves every viewport-percentage unit against the **initial containing block**.
+CSS Overflow puts a classic scrollbar *inside* the window and *outside* the ICB. So on a page whose
+root element scrolls unconditionally, the two differ by the scrollbar's width — and they differ for
+`@media (width: …)` and `document.documentElement.clientWidth` too, which are the same question asked
+twice more. Chrome, in a 200×100 frame with `html { overflow: scroll }`:
+
+```text
+    100vw                          185px
+    documentElement.clientWidth    185
+    window.innerWidth              200      ← the WINDOW keeps its scrollbar
+```
+
+We answered **185 nowhere and 200 everywhere**: `css/css-values/viewport-units-scrollbars-compute.html`
+scored **0/34**.
+
+### Two stores, because they are two different lengths
+
+`manuk_css::values` now keeps the window's inner size and the ICB separately:
+
+```text
+    VP_W  / VP_H    the window's inner size      → window.innerWidth / innerHeight
+    ICB_W / ICB_H   the initial containing block → vw/vh/vmin/vmax/sv*/lv*/dv*,
+                                                   @media (width), documentElement.clientWidth,
+                                                   the ICB height a root `height: 100%` resolves against
+```
+
+`set_viewport` resets the ICB to the window, so a host that knows nothing about scrollbars gets the
+old behaviour exactly. Only the page pipeline narrows it, and only once it can.
+
+### It needs a second cascade, and it cannot not
+
+`overflow` is a cascaded property, so the root element's scrollbar cannot be known before the first
+cascade. `restyle_and_layout` therefore cascades, asks `root_scrollbar_icb`, and — **only if the
+answer is `Some`** — sets the ICB and cascades again. A page whose root does not unconditionally
+scroll pays one comparison. This is the same shape and the same justification as the `@container`
+re-pass beside it.
+
+⚠ **The trap in the second pass, which cost the first draft:** `cascade_styles` calls
+`set_viewport_width`, which *resets the ICB to the window*. Calling it directly for pass 2 would
+throw away the narrowing pass 1 had just computed — a re-cascade that costs a full cascade and
+changes nothing, and it would have been invisible, because the numbers would simply have stayed
+wrong. Hence `cascade_styles_keeping_icb`, which restores the ICB afterwards.
+
+⚠ **And the ICB must be narrowed in exactly one place.** The root-element arm of
+`scroll_geometry_of` (t1320) had been subtracting the gutter itself; once `icb_size()` already has it
+out, that subtraction is a *second* 15px. One narrowing, one owner.
+
+### What this deliberately does NOT do
+
+- **`overflow: auto`.** Not residue — the spec says so: *"when the value of `overflow` on the root
+  element is `auto`, any scroll bars are assumed not to exist."* Treating it as a gap would be
+  inventing one.
+- ⚠ **Viewport `overflow` PROPAGATION.** CSS Overflow §3.3 propagates the root's `overflow` to the
+  viewport and, when the root is `visible`, propagates `body`'s instead — the element it came from
+  then using `visible` for itself. We do neither. A `body { overflow-y: scroll }` page
+  (`ticket.jfa.jp` is one) still reserves the gutter on `body`'s own box, which lands the same 15px
+  in almost the same place by a different route, which is why the two have never visibly disagreed.
+  Implementing propagation means implementing **both halves at once** — narrow the ICB *and* stop
+  `body` reserving for itself — or the gutter is counted twice and every such page loses 15px more.
+
+### Measured
+
+```text
+    css/css-values/viewport-units-scrollbars-compute.html   0/34 → 26/34
+    css/css-values/viewport-units-gutter-003.html            0/1 → 1/1
+    css/css-values/viewport-units-css2-001.html          144/160 → 144/160  (no regression)
+    fidelity control: ticket.jfa.jp 82.1 → 82.1 · fragrantica 72.7 → 72.8
+```
+
+The 8 that remain in that file are a different mechanism — computed-value **serialization
+precision**: `1.84375px` expected, `1.85px` produced. Nothing to do with the ICB.
+
+### The gate
+
+`G_ROOT_SCROLLBAR_ICB` asserts all three of `100vw`, `documentElement.clientWidth` and
+`window.innerWidth` on one document, because the defect has two ways to be wrong. ⚠ A gate that only
+checked `100vw == 185` would be satisfied by narrowing *everything*, which breaks `innerWidth` — and
+`innerWidth` disagreeing with the window is a defect the boot prelude's own comment already warns
+about. Proven RED by disabling the second pass: `vw:800px cw:800 innerW:800`.

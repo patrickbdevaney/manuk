@@ -1406,7 +1406,7 @@ pub fn layout_document(
             // indefinite, so the whole chain fell back to content height and the shell never filled
             // the viewport. Read the height from the same viewport the parser resolves `vh` against
             // so a `height:100%` root and a `100vh` sibling can never disagree.
-            let icb_height = manuk_css::values::viewport_size().1;
+            let icb_height = manuk_css::values::icb_size().1;
             let mut floats = FloatContext::new(0.0, viewport_width);
             let mut root = ctx
                 .layout_block(

@@ -11,12 +11,12 @@
 
 | | value | over |
 |---|---|---|
-| ticks landed | **1007** | ticks 1–1320 |
-| median tick cycle | **30m** | 1006 intervals |
-| median, last 10 | **86m** | 10 intervals |
+| ticks landed | **1008** | ticks 1–1321 |
+| median tick cycle | **30m** | 1007 intervals |
+| median, last 10 | **72m** | 10 intervals |
 | fastest / slowest | 5s / 5.4d | |
-| **ticks per hour** | **1.04** | 965.0h elapsed |
-| median verify wall | **63s** | 946 ticks |
+| **ticks per hour** | **1.04** | 965.6h elapsed |
+| median verify wall | **63s** | 947 ticks |
 | wall trend | 39s → 17m — getting slower ⚠️ | first 3 vs last 3 |
 
 The **cycle** is the real unit: implement → debug → verify wall → land. The wall is only part of
@@ -27,11 +27,11 @@ it, and a wall that grows taxes every future tick, so it is tracked separately f
 ### Near — the daily driver (doc / app / platform web)
 
 * **capabilities asserted** (`G_CAPABILITY`): 48 → **81**
-* **live gates**: 27 → **499**
+* **live gates**: 27 → **500**
 * **✅ rows in the capability ledger**: 144 → **642**
 * **Bar 0 — oracle hangs**: 0 of 265 sites
 
-**473 of 1007 ticks** (47%) moved a
+**474 of 1008 ticks** (47%) moved a
 user-visible capability. The rest were instruments, infrastructure and corrections — and the
 ledger says the corrections were not overhead: three of its top three priorities were phantoms,
 and finding that out redirected everything after it.
@@ -90,7 +90,7 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 
 ## What a capability costs
 
-* **473** capability ticks, median cycle **30m**
+* **474** capability ticks, median cycle **30m**
 * median diff per tick: **+281 / −34** lines across 8 files
 
 ## Every tick
@@ -1104,5 +1104,6 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 | **1318** | 2026-08-20 08:08 | 84m | capability | 17m | +665/−45 | 498 | 81 | 56.0% · | a tab operation was FREEING a whole page on the UI thread, and the gate written to catch t |
 | **1319** | 2026-08-20 09:03 | 55m | instrument | 17m | +474/−38 | 498 | 81 | 56.0% · | the reference hid its scrollbars and the engine did not, and the 15px rode under every swe |
 | **1320** | 2026-08-20 10:04 | 61m | capability | 17m | +485/−43 | 499 | 81 | 56.0% · | `documentElement.clientHeight` was the height of the whole DOCUMENT, and that number is ho |
+| **1321** | 2026-08-20 10:40 | 36m | capability | 17m | +495/−57 | 500 | 81 | 56.0% · | the initial containing block is not the window, and `html { overflow: scroll }` is where t |
 
 *`·` after a WPT figure means **carried forward**, not measured this tick.*

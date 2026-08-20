@@ -7943,3 +7943,22 @@ everything, which reads as slow, not as wrong.
 `vw`/`vh` were correct the whole time, from the same viewport source, so the CSS half of every test
 passed and only the CSSOM half was wrong. `css/css-values/viewport-units-css2-001.html` — which
 derives its expectations from `documentElement.clientWidth` — went **72/160 → 144/160**.
+
+## `html { overflow: scroll }` — the layout-shift-prevention idiom, and the 15px that never left the viewport (t1321)
+
+**The class.** Reserving the scrollbar unconditionally on the root element is how a site stops its
+whole layout jumping 15px the moment content grows past one screen. On such a page the **initial
+containing block is 15px narrower than the window**, and every viewport-percentage unit, every
+`@media (width:…)` breakpoint and `document.documentElement.clientWidth` must read that narrower
+number — while `window.innerWidth` keeps the window, because the scrollbar is inside it.
+
+⚠⚠ We had one number where the web has two. `100vw` was the full window, so a `width: 100vw` hero
+overflowed its own page by exactly a scrollbar; a `@media (max-width: 785px)` breakpoint fired one
+step late; and the ICB height a root `height: 100%` resolves against was 15px too tall whenever the
+root reserved a horizontal gutter.
+
+Chrome, 200×100 frame, `html { overflow: scroll }`: `100vw` **185px**, `innerWidth` **200**.
+
+⭐ The `overflow: auto` case is NOT the same and is not a gap: CSS Values 4 says *"when the value of
+`overflow` on the root element is `auto`, any scroll bars are assumed not to exist."* The idiom this
+entry is about exists precisely because authors wanted the other behaviour and had to ask for it.

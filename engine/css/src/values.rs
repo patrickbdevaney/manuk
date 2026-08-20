@@ -21,16 +21,63 @@ use crate::Dim;
 static VP_W: AtomicU32 = AtomicU32::new(1280.0_f32.to_bits());
 static VP_H: AtomicU32 = AtomicU32::new(720.0_f32.to_bits());
 
-/// Set the viewport width and height (CSS px) for viewport-unit resolution.
+/// ⚠⚠⚠ **THE INITIAL CONTAINING BLOCK IS NOT THE WINDOW, AND CONFLATING THEM IS WHY
+/// `html { overflow: scroll }` RESOLVED `100vw` TO THE FULL WINDOW WIDTH.**
+///
+/// CSS Values 4 §5.1.1 resolves viewport-percentage units against the **initial containing block**,
+/// and CSS Overflow puts the classic scrollbar *inside* the window and *outside* the ICB. So on a
+/// page whose root element scrolls unconditionally, the two differ by the scrollbar's width —
+/// and they differ for `@media (width:…)` and `documentElement.clientWidth` too, which are the same
+/// question asked twice more. `window.innerWidth` is the one that keeps the WINDOW: Chrome, in a
+/// 200px frame with `html { overflow: scroll }`, answers `innerWidth` **200** and `100vw`
+/// **185px**.
+///
+/// Two stores, then, and the ICB one is what every *layout* question reads:
+///
+/// ```text
+///     VP_W  / VP_H   the window's inner size   -> window.innerWidth / innerHeight
+///     ICB_W / ICB_H  the initial containing block -> vw/vh/vmin/vmax/sv*/lv*/dv*,
+///                                                   @media (width), documentElement.clientWidth,
+///                                                   the ICB height a root `height: 100%` resolves against
+/// ```
+///
+/// [`set_viewport`] resets the ICB to the window, so a host that knows nothing about scrollbars gets
+/// today's behaviour exactly; only the page pipeline, which knows the root element's `overflow`
+/// **after** the first cascade, narrows it with [`set_icb`].
+static ICB_W: AtomicU32 = AtomicU32::new(1280.0_f32.to_bits());
+static ICB_H: AtomicU32 = AtomicU32::new(720.0_f32.to_bits());
+
+/// Set the viewport (window inner) size in CSS px. **Resets the ICB to match** — a new window is a
+/// new page whose root `overflow` has not been cascaded yet, and leaving a stale gutter reserved
+/// across a resize is how a 15px error becomes permanent.
 pub fn set_viewport(w: f32, h: f32) {
     VP_W.store(w.to_bits(), Ordering::Relaxed);
     VP_H.store(h.to_bits(), Ordering::Relaxed);
+    set_icb(w, h);
 }
 
 /// Set only the viewport width, preserving the last-known height. Cascade sites thread
 /// an authoritative width but not always a height, so they update width alone.
 pub fn set_viewport_width(w: f32) {
     VP_W.store(w.to_bits(), Ordering::Relaxed);
+    ICB_W.store(w.to_bits(), Ordering::Relaxed);
+}
+
+/// Narrow (or restore) the initial containing block — see [`ICB_W`]. Called by the page pipeline
+/// once it knows the root element's `overflow`.
+pub fn set_icb(w: f32, h: f32) {
+    ICB_W.store(w.to_bits(), Ordering::Relaxed);
+    ICB_H.store(h.to_bits(), Ordering::Relaxed);
+}
+
+/// The initial containing block `(width, height)` in CSS px — the reference for viewport units,
+/// `@media` sizes and the root element's client box. Equal to [`viewport_size`] unless the root
+/// element reserves a scrollbar gutter.
+pub fn icb_size() -> (f32, f32) {
+    (
+        f32::from_bits(ICB_W.load(Ordering::Relaxed)),
+        f32::from_bits(ICB_H.load(Ordering::Relaxed)),
+    )
 }
 
 /// The current viewport `(width, height)` in CSS px (see [`set_viewport`]). Public so the
@@ -42,8 +89,9 @@ pub fn viewport_size() -> (f32, f32) {
     )
 }
 
+/// What a viewport-percentage unit resolves against — the **ICB**, not the window. See [`ICB_W`].
 fn viewport() -> (f32, f32) {
-    viewport_size()
+    icb_size()
 }
 
 /// 8-bit RGBA color.

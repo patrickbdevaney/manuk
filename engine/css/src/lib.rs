@@ -3737,7 +3737,10 @@ fn is_css_ident(s: &str) -> bool {
 /// Returns `Unknown` — never `False` — for anything unrecognised or out of range, so that an
 /// enclosing `not` cannot turn our ignorance into a positive match.
 fn eval_feature(feature: &str) -> Mq {
-    let (vw, vh) = crate::values::viewport_size();
+    // ⚠ The ICB, not the window: `@media (width: 185px)` matches in a 200px frame whose root
+    // element reserves a scrollbar, and a breakpoint that disagrees with the `vw` beside it is the
+    // same defect `matchMedia` vs `@media` was. One source (`values::icb_size`) for both.
+    let (vw, vh) = crate::values::icb_size();
     // Range syntax (`width >= 600px`) is normalised to the `min-`/`max-` prefix form, which is
     // the one the rest of this function speaks. `<`/`>` map to the same comparison here: the
     // half-pixel difference between `<` and `<=` never decides a real breakpoint.

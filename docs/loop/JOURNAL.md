@@ -87258,3 +87258,105 @@ NEXT, ranked.
     each — the `overflow: auto`-and-actually-overflows reservation, which t1319 made invisible to the
     corpus sweep and which therefore has to be worked from WPT.
 (d) ⭐⭐ **AUDIT THE OTHER WORST-CASE BARS** (t1318's (b)) — still open.
+
+## Tick 1321 — the initial containing block is not the window, and `html { overflow: scroll }` is where the two come apart (2026-08-20)
+
+TICK SHAPE: capability fix + gate. Board re-run at the top of this tick: **unchanged** (CO-#1 = the
+rendering gap; ★ CSS-LAYOUT). Took t1320's NEXT (c) — the viewport-unit/scrollbar files the previous
+tick left named — after refusing (a) as subsystem-sized (see below).
+
+### ⚠ (a) WAS REFUSED, AND WRITING DOWN WHY IS THE POINT
+
+t1320's top NEXT was *"`documentElement.getBoundingClientRect()` is `<body>`'s box"* — real, and
+rooted in `layout_document` starting the box tree at `<body>` (`find_first("body")`, then `html`).
+Re-rooting at the document element moves every box on every page through one more nesting level and
+changes margin-collapsing at the root. ⭐ That is a SUBSYSTEM, and the board's own parked-lever note
+(grid, t156, *"2h+ across session windows without landing"*) is the record of what happens when one
+is entered as a tick. Named, ranked, and left for a dedicated decomposition.
+
+### THE MECHANISM, AND IT IS TWO LENGTHS WHERE WE HAD ONE
+
+CSS Values 4 §5.1.1 resolves viewport-percentage units against the **initial containing block**; CSS
+Overflow puts a classic scrollbar INSIDE the window and OUTSIDE the ICB. Chrome, 200×100 frame,
+`html { overflow: scroll }`:
+
+```text
+   100vw                          185px
+   documentElement.clientWidth    185
+   window.innerWidth              200      ← the WINDOW keeps its scrollbar
+```
+
+**We answered 185 nowhere and 200 everywhere.** `viewport-units-scrollbars-compute.html` was 0/34.
+
+⭐ `values` now keeps two stores — `VP_*` (the window: `innerWidth`/`innerHeight`) and `ICB_*` (the
+ICB: `vw`/`vh`/`sv*`/`lv*`/`dv*`, `@media (width)`, `documentElement.clientWidth`, and the ICB height
+a root `height: 100%` resolves against). `set_viewport` resets the ICB to the window, so a host that
+knows nothing about scrollbars behaves exactly as before.
+
+### IT NEEDS A SECOND CASCADE, AND THE FIRST DRAFT'S SECOND CASCADE DID NOTHING
+
+`overflow` is a cascaded property, so the root's scrollbar cannot be known before the first cascade.
+`restyle_and_layout` cascades, asks `root_scrollbar_icb`, and re-cascades **only if the answer is
+`Some`** — the `@container` re-pass beside it is the same shape and the same justification.
+
+⚠⚠ **`cascade_styles` calls `set_viewport_width`, which RESETS the ICB to the window.** So calling it
+again for pass 2 threw away the narrowing pass 1 had just computed: a re-cascade that costs a full
+cascade and changes nothing. ⭐ *It would have been invisible* — no crash, no slowdown anyone would
+notice, and the numbers simply stay wrong, which is the exact profile of a fix that ships and is
+believed. `cascade_styles_keeping_icb` restores the ICB around the call.
+
+⚠ **And the narrowing must have exactly ONE owner.** t1320's root arm of `scroll_geometry_of` was
+subtracting the gutter itself; once `icb_size()` already has it out, that subtraction is a *second*
+15px. Removed in the same tick that created the reason.
+
+```text
+   viewport-units-scrollbars-compute.html    0/34 → 26/34
+   viewport-units-gutter-003.html             0/1 → 1/1
+   viewport-units-css2-001.html           144/160 → 144/160   (no regression)
+   css/css-values area                  3676/7834 → 3703/7870
+   fidelity control: ticket.jfa.jp 82.1 → 82.1 · fragrantica 72.7 → 72.8
+```
+
+The 8 that remain in that file are a **different mechanism** and must not be read as this one's tail:
+computed-value SERIALIZATION PRECISION — `expected "1.84375px" but got "1.85px"`. The ICB is right;
+the printer rounds.
+
+### WHAT THIS DELIBERATELY DOES NOT DO
+
+- **`overflow: auto` is not residue — the spec says so.** *"When the value of `overflow` on the root
+  element is `auto`, any scroll bars are assumed not to exist."* ⭐ Filing it as a gap would be
+  inventing one, which is the mirror of t1320's `@import` refutation: **an absence has to be checked
+  against the spec as well as against the log.**
+- ⚠ **Viewport `overflow` PROPAGATION** (CSS Overflow §3.3 — the root's `overflow` goes to the
+  viewport; when the root is `visible`, `body`'s goes instead and `body` then uses `visible` for
+  itself). Not implemented, deliberately. `ticket.jfa.jp` sets `body { overflow-y: scroll }`, and we
+  reserve the gutter on `body`'s own box — landing the same 15px in almost the same place by a
+  different route, which is exactly why the two have never visibly disagreed. Implementing
+  propagation means implementing BOTH halves at once, or the gutter is counted twice and every such
+  page loses a further 15px.
+
+### THE GATE
+
+`G_ROOT_SCROLLBAR_ICB` asserts `100vw`, `documentElement.clientWidth` **and** `window.innerWidth` on
+one document, because the defect has two ways to be wrong. ⚠ A gate that only checked `100vw == 185`
+is satisfied by narrowing *everything* — which breaks `innerWidth`, and the boot prelude's own
+comment already says what that costs (*"it breaks every canvas/virtual-list/chart sized off it"*).
+Proven RED by disabling the second pass: `vw:800px cw:800 innerW:800` against a 785 bar.
+
+Its own test binary, for the reason t1320 recorded: two `Page`s in one test process abort on
+teardown with *"There are outstanding JS engine handles"*.
+
+NEXT, ranked.
+(a) ⭐⭐⭐ **A CLEAN FULL SWEEP** on `corpus-crux-trend.txt` — owed since t1319 repaired the fidelity
+    instrument, and now three ticks of engine change deep. Every absolute fidelity headline in
+    `FIDELITY-PROGRESS.tsv` and burndown §11 is pre-repair until it runs. This should be the next
+    tick unless something is on fire.
+(b) ⭐⭐⭐ **VIEWPORT `overflow` PROPAGATION, both halves in one tick** — narrow the ICB from
+    `body`'s propagated `overflow` AND stop `body` reserving for itself. It is what makes
+    `ticket.jfa.jp`'s class correct rather than coincidentally close, and it is the prerequisite for
+    ever trusting `body.getBoundingClientRect()` on such a page.
+(c) ⭐⭐ **COMPUTED-VALUE SERIALIZATION PRECISION** — `1.84375px` vs `1.85px`, 8 subtests in this one
+    file and a whole `assert_equals: expected "X" but got "X"` bar (1,123 subtests) in css-values
+    that may share it. Cheap to check, and the check is the tick's first probe.
+(d) ⭐⭐ **`documentElement` HAS NO BOX** — t1320's (a), refused above as subsystem-sized. It needs a
+    decomposition session, not a tick.
