@@ -1010,3 +1010,4 @@ tick	sha	epoch	iso	delta_s	shape	wall_s	files	added	deleted	gates	claims	wpt_pas
 1322	467ab48e	1787243549	2026-08-20T12:32:29-04:00	6736	measurement	997	10	435	33	500	81	3896	6960	0	642	0	the first complete sweep under the repaired instrument, and the per-site error bar is not a constant (2026-08-20)
 1323	72e01c7f	1787244075	2026-08-20T12:41:15-04:00	526	audit	997	7	342	36	500	81	3896	6960	0	642	0	the audit tick: the constitution already contained t1319's diagnosis, and it carried no status (2026-08-20)
 1324	0a193333	1787247513	2026-08-20T13:38:33-04:00	3438	instrument	997	9	362	35	501	81	3896	6960	0	642	0	the constitution's #1 item states a RATE, nothing had ever measured it, and it is 0.0005 not 1.0 (2026-08-20)
+1325	296b1d9c	1787251377	2026-08-20T14:42:57-04:00	3864	capability	997	9	443	46	501	81	3896	6960	0	642	0	a `width: 100%` table column took the whole table, and one width error misplaced 666 of 667 elements (2026-08-20)

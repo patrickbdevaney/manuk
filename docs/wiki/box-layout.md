@@ -10544,3 +10544,70 @@ precision**: `1.84375px` expected, `1.85px` produced. Nothing to do with the ICB
 checked `100vw == 185` would be satisfied by narrowing *everything*, which breaks `innerWidth` — and
 `innerWidth` disagreeing with the window is a defect the boot prelude's own comment already warns
 about. Proven RED by disabling the second pass: `vw:800px cw:800 innerW:800`.
+
+## `table-layout: fixed` — a `width: 100%` column beside a fixed sidebar took the whole table (t1325)
+
+`LayoutTree::fixed_col_widths` resolved every non-`auto` column width against the table width and
+stopped. So the classic pre-flexbox page shell — a content column declared `100%` next to a fixed
+sidebar — handed the first column the entire table and let the second overhang it.
+
+`oilprice.com` is built on exactly that:
+
+```css
+.tableGrid { display: table; width: 100%; table-layout: fixed }
+.tableGrid__column--homepageContent { width: 100% }
+.tableGrid__column--homepageSidebar { width: 312px; padding-left: 12px }
+```
+
+Its content column measured **1164px against Chrome's 852**, and every heading, paragraph and card
+inside it inherited the error: **666 of 667 elements misplaced on a page whose coverage is 99.9%.**
+
+### The rule, from twelve Chrome measurements on one 1000px table
+
+```text
+    columns                 Chrome            before
+    100% + 300px            700 + 300         1000 + 300   ← the page-shell shape
+    120% + 200px            800 + 200         1200 + 200
+     80% +  80%             500 + 500          800 + 800
+     50% + 300px            500 + 500          500 + 300
+     30% +  30%             500 + 500          300 + 300
+     25% +  25% + 300px     250 + 250 + 500    250 + 250 + 300
+    100% + 200px + auto     800 + 200 + 0     1000 + 200 + 0
+     50% +  50%             500 + 500         (already right)  CONTROL
+    100% + auto            1000 +   0         (already right)  CONTROL
+    300px + auto            300 + 700         (already right)  CONTROL
+     30% + auto             300 + 700         (already right)  CONTROL
+    auto  + auto            500 + 500         (already right)  CONTROL
+```
+
+Four rules, in order:
+
+1. a **length** column takes its length;
+2. a **percentage** column takes `pct × table width`, but all of them together are capped at what the
+   length columns left — scaled down proportionally when they exceed it;
+3. **auto** columns split whatever remains, equally;
+4. with **no auto column** and space still unassigned, the leftover goes to the LENGTH columns if
+   there are any (`50% + 300px` → 500 + **500**), and otherwise to the percentage columns
+   (`30% + 30%` → **500 + 500**). A fixed-layout table fills its own width.
+
+⭐ **Rule 4 is not derivable from the spec's prose.** CSS 2.1 §17.5.2.1 says only that the extra
+*"is distributed over the columns"* and does not say to whom. It took two measurements to see that
+Chrome prefers the length columns and falls back to the percentage ones.
+
+⚠ **Four of the twelve rows were already right, and they are the load-bearing part of the gate.** A
+rule that merely capped percentages would move `100% + auto` (which must stay `1000 + 0`); one that
+handed leftovers to percentages would move `50% + 300px` (which must be `500 + 500`).
+
+### Measured
+
+```text
+    oilprice.com          SHAPE 66.5% → 86.4%   (two runs, spread 0.0 — the corpus's most stable anchor)
+    www.fragrantica.com   SHAPE 73.3% → 74.3%
+    css/css-sizing        OLD binary, same hour 4133/5648 → NEW 4225/5740   (+92 pass, failing FLAT at 1515)
+    manuk-layout          183 tests green
+```
+
+⚠ The `css/css-sizing` row in `WPT-AREAS.tsv` read **4290/5820** and is not comparable to either — a
+different tree AND a different subtest population. The mark was re-based on the measured pair rather
+than inherited, which is `CONSTITUTION.MD` PART VI's own rule: *a banked number's harness is the tree
+that produced it.*

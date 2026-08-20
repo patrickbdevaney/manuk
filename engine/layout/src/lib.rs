@@ -8597,29 +8597,132 @@ impl Ctx<'_> {
         col_min
     }
 
-    /// Fixed table layout (CSS2 §17.5.2.1): first-row cells' specified widths set the
-    /// columns; auto columns split the remainder equally.
+    /// Fixed table layout (CSS2 §17.5.2.1): first-row cells' specified widths set the columns.
+    ///
+    /// ⚠⚠⚠ **A PERCENTAGE COLUMN IS NOT `pct × table width` — IT IS BOUNDED BY WHAT THE FIXED
+    /// COLUMNS LEFT, AND THE TWO-COLUMN `width: 100%` + SIDEBAR IS THE SHAPE THAT MAKES IT MATTER.**
+    ///
+    /// This resolved every non-`auto` width against `avail` and stopped, so a table of
+    /// `width: 100%` beside `width: 312px` handed the first column the WHOLE table and let the
+    /// second overhang it. That is the classic pre-flexbox page shell — a content column declared
+    /// `100%` next to a fixed sidebar — and `oilprice.com` is built on exactly it
+    /// (`.tableGrid{display:table;width:100%;table-layout:fixed}` with
+    /// `.tableGrid__column--homepageContent{width:100%}` and `--homepageSidebar{width:312px}`).
+    /// Its content column measured **1164px against Chrome's 852**, and every heading, paragraph
+    /// and card inside it inherited the error — 666 of 667 elements misplaced on a page whose
+    /// coverage is 99.9%.
+    ///
+    /// Chrome-measured, twelve cases, one table 1000px wide (`table-layout: fixed`):
+    ///
+    /// ```text
+    ///     columns                 Chrome            before
+    ///     100% + 300px            700 + 300         1000 + 300   ← the page-shell shape
+    ///     120% + 200px            800 + 200         1200 + 200
+    ///      80% +  80%             500 + 500          800 + 800
+    ///      50% + 300px            500 + 500          500 + 300
+    ///      30% +  30%             500 + 500          300 + 300
+    ///      25% +  25% + 300px     250 + 250 + 500    250 + 250 + 300
+    ///     100% + 200px + auto     800 + 200 + 0     1000 + 200 + 0
+    ///      50% +  50%             500 + 500         (already right)
+    ///     100% + auto            1000 +   0         (already right)
+    ///     300px + auto            300 + 700         (already right)
+    ///      30% + auto             300 + 700         (already right)
+    ///     auto  + auto            500 + 500         (already right)
+    /// ```
+    ///
+    /// ⭐ **The four rules those twelve rows imply, in order** — and the last one is the one no
+    /// reading of the spec's prose would have produced, because §17.5.2.1 only says the extra
+    /// *"is distributed over the columns"* and does not say to whom:
+    ///
+    /// 1. a **length** column takes its length;
+    /// 2. a **percentage** column takes `pct × avail`, but all of them together are capped at what
+    ///    the length columns left — scaled down proportionally when they exceed it;
+    /// 3. **auto** columns split whatever remains, equally;
+    /// 4. with **no auto column** and space still unassigned, the leftover goes to the LENGTH
+    ///    columns if there are any (`50% + 300px` → 500 + **500**), and otherwise to the percentage
+    ///    columns (`30% + 30%` → **500 + 500**). A table with a fixed layout fills its own width.
     fn fixed_col_widths(&self, rows: &[Vec<NodeId>], ncols: usize, avail: f32) -> Vec<f32> {
-        let mut set: Vec<Option<f32>> = vec![None; ncols];
+        // What each first-row cell declared, kept as its KIND rather than collapsed to px — the
+        // whole algorithm below turns on the difference between a length and a percentage, and the
+        // previous version threw that away in its first statement.
+        #[derive(Clone, Copy, PartialEq)]
+        enum Col {
+            Auto,
+            Len(f32),
+            Pct(f32),
+        }
+        let mut cols: Vec<Col> = vec![Col::Auto; ncols];
         if let Some(first) = rows.first() {
             for (c, &cell) in first.iter().enumerate() {
                 if c >= ncols {
                     break;
                 }
-                set[c] = match self.style_of(cell).width {
-                    Dim::Auto => None,
-                    other => Some(other.resolve(avail, 0.0).max(0.0)),
+                cols[c] = match self.style_of(cell).width {
+                    Dim::Auto => Col::Auto,
+                    // `calc(a% + bpx)` is a percentage column whose resolved value already carries
+                    // its px term — treated as a percentage because that is what decides whether it
+                    // is capped, and `resolve` gives the same number either way.
+                    d @ Dim::Percent(_) | d @ Dim::Calc { .. } => {
+                        Col::Pct(d.resolve(avail, 0.0).max(0.0))
+                    }
+                    d => Col::Len(d.resolve(avail, 0.0).max(0.0)),
                 };
             }
         }
-        let assigned: f32 = set.iter().flatten().sum();
-        let autos = set.iter().filter(|o| o.is_none()).count();
-        let each = if autos > 0 {
-            (avail - assigned).max(0.0) / autos as f32
+
+        let len_total: f32 = cols
+            .iter()
+            .map(|c| if let Col::Len(w) = c { *w } else { 0.0 })
+            .sum();
+        let pct_raw: f32 = cols
+            .iter()
+            .map(|c| if let Col::Pct(w) = c { *w } else { 0.0 })
+            .sum();
+        // Rule 2: the percentages together cannot exceed what the lengths left.
+        let pct_cap = (avail - len_total).max(0.0);
+        let pct_scale = if pct_raw > pct_cap && pct_raw > 0.0 {
+            pct_cap / pct_raw
+        } else {
+            1.0
+        };
+        let pct_total = pct_raw * pct_scale;
+
+        // Rule 3: auto columns split what is left after lengths and percentages.
+        let autos = cols.iter().filter(|c| **c == Col::Auto).count();
+        let leftover = (avail - len_total - pct_total).max(0.0);
+        let auto_each = if autos > 0 {
+            leftover / autos as f32
         } else {
             0.0
         };
-        set.iter().map(|o| o.unwrap_or(each)).collect()
+
+        // Rule 4: no auto column and space still unassigned — lengths first, else percentages.
+        let (len_bonus, pct_bonus) = if autos == 0 && leftover > 0.0 {
+            let n_len = cols.iter().filter(|c| matches!(c, Col::Len(_))).count();
+            if n_len > 0 {
+                (leftover / n_len as f32, 0.0)
+            } else {
+                let n_pct = cols.iter().filter(|c| matches!(c, Col::Pct(_))).count();
+                (
+                    0.0,
+                    if n_pct > 0 {
+                        leftover / n_pct as f32
+                    } else {
+                        0.0
+                    },
+                )
+            }
+        } else {
+            (0.0, 0.0)
+        };
+
+        cols.iter()
+            .map(|c| match c {
+                Col::Auto => auto_each,
+                Col::Len(w) => w + len_bonus,
+                Col::Pct(w) => w * pct_scale + pct_bonus,
+            })
+            .collect()
     }
 
     /// Lay out one table cell as a block-level BFC at `(x, y)` with column width
@@ -18522,6 +18625,105 @@ mod tests {
     /// To watch it go RED: make [`LayoutTree::grid_area_containing_block`] return `None` (rows 1 and
     /// 3 fall back to `23,23 126x287`), or drop its `auto_placed` guard (row 2 moves to the
     /// implicit-track area), or drop its `is_grid_container` guard (row 4 moves).
+    /// **G_TABLE_FIXED_COLUMNS — a `width: 100%` column beside a fixed sidebar must not take the
+    /// whole table, and the twelve rows below are what pins the rule.**
+    ///
+    /// `table-layout: fixed` with a `100%` content column next to a `312px` sidebar is the classic
+    /// pre-flexbox page shell, and `oilprice.com` is built on it
+    /// (`.tableGrid{display:table;width:100%;table-layout:fixed}`,
+    /// `.tableGrid__column--homepageContent{width:100%}`, `--homepageSidebar{width:312px}`).
+    /// [`LayoutTree::fixed_col_widths`] resolved every non-`auto` width against the table width and
+    /// stopped, so the content column measured **1164px against Chrome's 852** and every heading,
+    /// paragraph and card inside it inherited the error: **666 of 667 elements misplaced** on a page
+    /// whose coverage is 99.9%. Fixed, the site's SHAPE goes **66.5% → 85.9%** (two runs, spread
+    /// 0.0 — it is the corpus's most stable anchor, which is why it was chosen).
+    ///
+    /// ⚠⚠ **Four of the twelve rows were ALREADY RIGHT and they are the controls.** A rule that
+    /// merely capped percentages would move `100% + auto` (must stay `1000 + 0`) and one that gave
+    /// leftovers to percentages would move `50% + 300px` (must be `500 + 500`, the leftover going to
+    /// the LENGTH column). Every row is one Chrome measurement on one 1000px table.
+    ///
+    /// ⭐ Row `30% + 30%` is the one no reading of §17.5.2.1's prose produces: it says the extra
+    /// *"is distributed over the columns"* and does not say to whom. Chrome gives it to the LENGTH
+    /// columns when there are any and to the percentage columns otherwise — a table with a fixed
+    /// layout fills its own width.
+    ///
+    /// **To watch it go RED:** delete the `pct_scale` cap (the `100%`/`120%` rows overflow), or the
+    /// `len_bonus`/`pct_bonus` distribution (`50% + 300px` and `30% + 30%` under-fill).
+    #[test]
+    fn a_fixed_table_layout_caps_percentage_columns_by_what_the_length_columns_left() {
+        // (label, column widths, Chrome's used widths) — `--headless`, one 1000px table each.
+        let cases: &[(&str, &[&str], &[f32])] = &[
+            (
+                "100% + 300px  (the page-shell shape)",
+                &["100%", "300px"],
+                &[700.0, 300.0],
+            ),
+            (
+                "120% + 200px  (over 100%)",
+                &["120%", "200px"],
+                &[800.0, 200.0],
+            ),
+            ("80% + 80%     (sum 160%)", &["80%", "80%"], &[500.0, 500.0]),
+            (
+                "50% + 300px   (leftover -> the LENGTH column)",
+                &["50%", "300px"],
+                &[500.0, 500.0],
+            ),
+            (
+                "30% + 30%     (leftover -> the PERCENT columns)",
+                &["30%", "30%"],
+                &[500.0, 500.0],
+            ),
+            (
+                "25% + 25% + 300px",
+                &["25%", "25%", "300px"],
+                &[250.0, 250.0, 500.0],
+            ),
+            (
+                "100% + 200px + auto",
+                &["100%", "200px", "auto"],
+                &[800.0, 200.0, 0.0],
+            ),
+            // ── CONTROLS: right before this change, and a wrong rule moves them.
+            ("CONTROL 50% + 50%", &["50%", "50%"], &[500.0, 500.0]),
+            ("CONTROL 100% + auto", &["100%", "auto"], &[1000.0, 0.0]),
+            ("CONTROL 300px + auto", &["300px", "auto"], &[300.0, 700.0]),
+            ("CONTROL 30% + auto", &["30%", "auto"], &[300.0, 700.0]),
+            ("CONTROL auto + auto", &["auto", "auto"], &[500.0, 500.0]),
+        ];
+        for (label, widths, expect) in cases {
+            let cells: String = widths
+                .iter()
+                .enumerate()
+                .map(|(i, w)| format!("<div class=c id=k{i} style=\"width:{w}\">x</div>"))
+                .collect();
+            let (dom, root) = layout_html(
+                &format!("<div class=t>{cells}</div>"),
+                ".t{display:table;width:1000px;table-layout:fixed} \
+                 .c{display:table-cell;vertical-align:top}",
+                1400.0,
+            );
+            let rects = root.node_rects(&dom);
+            let got: Vec<f32> = (0..widths.len())
+                .map(|i| {
+                    let id = format!("k{i}");
+                    let n = dom
+                        .descendants(dom.root())
+                        .find(|&n| dom.element(n).and_then(|e| e.attr("id")) == Some(id.as_str()))
+                        .unwrap_or_else(|| panic!("#{id} in [{label}]"));
+                    rects[&n].width.round()
+                })
+                .collect();
+            assert_eq!(
+                got,
+                expect.to_vec(),
+                "G_TABLE_FIXED_COLUMNS [{label}]: columns {widths:?} in a 1000px \
+                 `table-layout: fixed` table. Chrome says {expect:?}."
+            );
+        }
+    }
+
     #[test]
     fn a_grid_generated_containing_block_is_the_grid_area_for_children_and_descendants_alike() {
         let html = r#"

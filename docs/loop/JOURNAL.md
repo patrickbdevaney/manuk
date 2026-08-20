@@ -87676,3 +87676,109 @@ NEXT, ranked.
 (c) ⭐⭐ **The 25 unscored in-scope sites** — scorability 81.2% caps M1. ⚠ Split instrument from engine
     first (check #83).
 (d) ⭐⭐ **Ask both questions (reported vs applied) of every `gated` row** — the mechanical I3 check.
+
+## Tick 1325 — a `width: 100%` table column took the whole table, and one width error misplaced 666 of 667 elements (2026-08-20)
+
+TICK SHAPE: capability fix + gate. Board re-run at the top of this tick: **unchanged** (CO-#1 = the
+rendering gap). Took check #124's (b) / t1324's (a): **`oilprice.com`, the stable anchor** — 654 ids,
+measured error bar **0.0**, chosen because a fix on it can be priced.
+
+### ⚠ FOUR REDUCTIONS REPRODUCED NOTHING BEFORE THE FIFTH DID, AND EACH REFUTED A HYPOTHESIS
+
+The `--shape-dump`'s worst misses all pointed at a two-column region where Chrome gives 426+426 and we
+gave ~883/895. In order, and each one costs a command:
+
+```text
+   1. <picture> is display:block in our engine?     both engines: display=inline, rect 60x17   REFUTED
+   2. anonymous table from display:table-cell?      identical to Chrome on 3 fixtures           REFUTED
+   3. percentage width in an anonymous table?       reproduces a DIFFERENT divergence           SET ASIDE
+   4. compound @media mis-evaluated at 1200px?      identical to Chrome                         REFUTED
+   5. the ABSOLUTE box, read from the oracle's own e.g. line                                    ← the axis
+```
+
+⭐ **The fifth is the one I should have taken first.** Every reduction above was built from the
+*parent-relative* dump; the oracle also prints an ABSOLUTE example per mechanism, and one line of it
+named the defect: `[12 2717 852x157] vs [12 2644 1164x107]`. **1164 against 852** on a 1200 viewport —
+not a two-column split at all, but a content column that had eaten its sidebar. ⚠ *A reduction that
+reproduces nothing names an axis never consulted*, and I spent four before re-reading the artefact.
+
+### THE DEFECT
+
+`.tableGrid{display:table;width:100%;table-layout:fixed}` with
+`.tableGrid__column--homepageContent{width:100%}` and `--homepageSidebar{width:312px}` — the classic
+pre-flexbox page shell. `LayoutTree::fixed_col_widths` resolved every non-`auto` width against the
+table width and stopped, so `100%` meant the whole table and the sidebar overhung it. **666 of 667
+elements misplaced on a page whose coverage is 99.9%** — one width error laundering into the placement
+of an entire document.
+
+### THE RULE, FROM TWELVE CHROME MEASUREMENTS ON ONE 1000px TABLE
+
+```text
+   columns                 Chrome            before
+   100% + 300px            700 + 300         1000 + 300   ← the page-shell shape
+   120% + 200px            800 + 200         1200 + 200
+    80% +  80%             500 + 500          800 + 800
+    50% + 300px            500 + 500          500 + 300
+    30% +  30%             500 + 500          300 + 300
+    25% +  25% + 300px     250 + 250 + 500    250 + 250 + 300
+   100% + 200px + auto     800 + 200 + 0     1000 + 200 + 0
+    50% +  50% · 100%+auto · 300px+auto · 30%+auto · auto+auto      already right — CONTROLS
+```
+
+1. a **length** column takes its length; 2. **percentages** take `pct × table`, capped together at what
+the lengths left and scaled down proportionally when they exceed it; 3. **auto** columns split the
+remainder equally; 4. with no auto column and space unassigned, the leftover goes to the LENGTH
+columns if any, else to the percentage columns.
+
+⭐ **Rule 4 is not derivable from the spec's prose** — §17.5.2.1 says the extra *"is distributed over
+the columns"* and does not say to whom. Two measurements to see that Chrome prefers the lengths.
+
+⚠ **The four CONTROL rows are the load-bearing part of the gate**, not padding: a rule that merely
+capped percentages moves `100% + auto`; one that gave leftovers to percentages moves `50% + 300px`.
+
+```text
+   oilprice.com          SHAPE 66.5% → 86.4%   two runs, spread 0.0 — crosses the 0.75 bar
+   www.fragrantica.com   SHAPE 73.3% → 74.3%
+   manuk-layout          183 green
+```
+
+### ⚠⚠ THE WPT ROW LOOKED LIKE A REGRESSION AND THE OLD-BINARY CONTROL SETTLED IT — THE THIRD TIME TODAY
+
+`css/css-sizing` came in at **4225/5740** against a ledger row of **4290/5820** — reads as −65. Built
+the old binary and ran it in the same hour:
+
+```text
+   OLD binary   4133 / 5648
+   NEW binary   4225 / 5740      +92 passing · FAILING FLAT at 1515 · +92 subtests now reported
+```
+
+So the change is a **+92 improvement** and the 4290 mark is not comparable to either — a different
+tree AND a different subtest population (5820 vs 5648). ⭐ **The mark was RE-BASED on the measured
+pair rather than inherited**, which is PART VI's own rule (*a banked number's harness is the tree that
+produced it*) and what `ratchet.sh`'s refusal message asks for in as many words: *"explain in the
+journal why the mark itself was wrong and lower it deliberately."* `WPT:css/css-sizing` 4290 → 4225
+and `WPT:TOTAL` 477475 → 477410, deliberately, on that evidence.
+
+### THE GATE
+
+`G_TABLE_FIXED_COLUMNS` (`engine/layout/src/lib.rs`) carries all twelve rows including the four
+controls. **PROVEN RED twice, at different rules:** deleting the `pct_scale` cap fails the
+`100% + 300px` row; deleting the leftover distribution fails `50% + 300px`.
+
+⚠ **AND THE INSERTION NEARLY DISABLED AN EXISTING GATE.** Splicing the new test in above
+`fn a_grid_generated_containing_block_…` put my doc comment *between* that function and its `#[test]`,
+so the attribute bound to MY function and the grid gate silently stopped running (183 → 182 → 183 as
+it was found and restored). ⭐ *A test suite's count is the only thing that notices an orphaned
+attribute* — `cargo test` reports no error for it, and the disabled gate looks exactly like a gate
+that passes.
+
+NEXT, ranked.
+(a) ⭐⭐⭐ **THE NEXT STABLE ANCHOR.** Take `www.crazyshop.pl` (1,402 ids, 68.5%) or `www.hdnails.it`
+    (1,116 ids, 66.1%) — but measure its error bar FIRST (t1322's rule), then `--shape-dump` and read
+    the ABSOLUTE `e.g.` line before building any reduction.
+(b) ⭐⭐⭐ **AUTO table layout** — the same fixture family diverges there too (`50% + 300px` under
+    `table-layout: auto` reads Chrome 1164+12 vs ours 928+248). Same organ, different algorithm, and
+    the twelve-row harness is already written.
+(c) ⭐⭐ **THE FORCED-REFLOW FLUSH** (t1324's (b)) — now with a 40-line repro that dies in 5.8s.
+(d) ⭐⭐ **The 25 unscored in-scope sites** — scorability 81.2% caps M1. Split instrument from engine
+    first (check #83).

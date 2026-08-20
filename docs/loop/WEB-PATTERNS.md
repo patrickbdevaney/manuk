@@ -7962,3 +7962,21 @@ Chrome, 200×100 frame, `html { overflow: scroll }`: `100vw` **185px**, `innerWi
 ⭐ The `overflow: auto` case is NOT the same and is not a gap: CSS Values 4 says *"when the value of
 `overflow` on the root element is `auto`, any scroll bars are assumed not to exist."* The idiom this
 entry is about exists precisely because authors wanted the other behaviour and had to ask for it.
+
+## THE PRE-FLEXBOX PAGE SHELL — `display: table` + a `width: 100%` content column and a fixed sidebar (t1325)
+
+**The class.** Before flexbox and grid were safe to use, a two-column page was built as a CSS table:
+a wrapper at `display: table; width: 100%; table-layout: fixed`, a content cell at `width: 100%` and a
+sidebar cell at a fixed pixel width. News sites, forums, university portals and dashboards are still
+full of it, usually under a class name like `.tableGrid`, `.row`, or `.layout`.
+
+⚠⚠ **We gave the `100%` column the WHOLE table.** Column widths were resolved against the table width
+one at a time, so `100%` meant the table and the sidebar simply overhung it. On `oilprice.com` the
+content column measured **1164px against Chrome's 852**, and everything inside inherited it: **666 of
+667 elements misplaced on a page whose coverage is 99.9%** — the purest example in the corpus of a
+single width error laundering into the placement of an entire document.
+
+⭐ The tell for this class is a page that is *fully covered and entirely misplaced*: every box drawn,
+every box at the wrong x. It is invisible to MISSING_BOX work and to any coverage number.
+
+Fixed: SHAPE 66.5% → 86.4% on that page, with no other change.
