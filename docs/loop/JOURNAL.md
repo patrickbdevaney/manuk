@@ -86989,3 +86989,136 @@ NEXT, ranked.
     have that shape.
 (c) ⭐⭐⭐ **INCREMENTAL STYLE INVALIDATION** — unchanged from t1317: still the constitution's
     highest-leverage item, still 4,720ms against a 5,000ms watchdog, still needs a scoped first step.
+
+## Tick 1319 — the reference hid its scrollbars and the engine did not, and the 15px rode under every sweep ever taken (2026-08-20)
+
+TICK SHAPE: instrument fidelity (the ratchet's third face) + gate. Board re-run at the top of this
+tick: **unchanged** (CO-#1 = the rendering gap; attack SHAPE/POSITION). Took t1318's NEXT (a) — the
+near-miss band's anchors — and the first anchor's first probe named the instrument.
+
+### THE PROBE, AND IT WAS ARITHMETIC RATHER THAN A GUESS
+
+`manuk-wpt fidelity --urls https://ticket.jfa.jp --shape-dump 40`, worst-first, parent-relative:
+
+```text
+   c[60 0 1080x296]   m[59 0 1067x560]    body/div(2)/div(1)/div(1)
+   c[ 0 0  660x5301]  m[ 0 0  647x5129]   body/div(2)/div(1)/div(3)/div(1)
+   c[720 0 360x5301]  m[707 0 360x5129]   body/div(2)/div(1)/div(3)/div(2)   ← 360 BOTH sides
+```
+
+A `width: 90%` container with `5%` margins. 1185 × 0.9 = 1066.5 → **1067**; 1185 × 0.05 = 59.25 →
+**59**. ⭐ **No viewport width but 1185 produces BOTH numbers**, and the fixed-width sibling (360)
+matches exactly — so the deficit is in the initial containing block and nowhere else. Chrome's ICB is
+1200. Ours is 1185. The difference is 15px, and `manuk_layout::SCROLLBAR_WIDTH` is 15.0.
+
+### ⭐⭐⭐ THE COMMENT ON THE FLAG NAMED THE DEFECT IT WAS ABOUT TO CAUSE
+
+`chrome::base_flags` has passed `--hide-scrollbars` to every headless capture since the instrument
+existed, under:
+
+> *"`--hide-scrollbars` matters: a visible scrollbar would shrink the layout viewport and shift every
+> box."*
+
+Every word of that is true. It shrinks the layout viewport of the **REFERENCE ONLY**. Measured, one
+document 5000px tall:
+
+```text
+   --hide-scrollbars     documentElement.clientWidth = 1200
+   (no flag)             documentElement.clientWidth = 1185   ← what our engine computes
+```
+
+**Our 15px is Blink's 15px to the pixel.** The engines agree; the instrument did not. ⚠ And the probe
+that exists to make the reference's viewport match ours — `viewport_chrome_offset`, which found the
+87px window-vs-viewport offset on the block axis — is blind to this **by construction**: its document
+is one line, it does not overflow, so there is no scrollbar to hide and it reports the inline offset
+as 0. ⭐ *A calibration probe that cannot provoke the condition it calibrates measures zero and reports
+agreement.*
+
+### THE FIX — ONE CONSTANT DECIDES IT FOR BOTH ENGINES
+
+`chrome::REFERENCE_HIDES_SCROLLBARS` now selects the Chrome flag AND, through
+`match_reference_scrollbar_policy()`, puts our engine in the same mode
+(`manuk_layout::set_scrollbars_hidden` — an overlay-scrollbar switch, which is exactly what
+`--hide-scrollbars` is in Chrome: a process-wide UA metric, not a CSS property). They cannot drift
+because there is only one of them. Applied at the entry of every command that compares against Chrome
+— `fidelity`, `parity`, `interact`, `render --chrome`. ⚠ **The WPT suite deliberately does not call
+it**: WPT's expectations are written for a classic 15px scrollbar, and `scrollbar_gutter`'s own doc
+table is measured against exactly that.
+
+```text
+   ticket.jfa.jp   SHAPE 66.4% → 82.1%   ·   parent-relative misses 216 → 115   ·   crosses the 0.75 bar
+                   (same binary, same day, only the flag differing)
+   ICB 1185 → 1200 · 90% container 1067 → 1080 · 5% margin 59 → 60 — all three now EXACT
+```
+
+**No engine layout code changed.** Confirmed at the source: `ticket.jfa.jp` ships `overflow-y:scroll`
+in `css/common.css`.
+
+### ⚠⚠ THE COHORT IS SMALLER THAN THE HYPOTHESIS, AND THE SWEEP REFUTED ME
+
+I expected a corpus-wide 15px deficit. It is not. Our engine reserves the viewport gutter **only for
+the deterministic `overflow-y: scroll`**; the `overflow: auto`-and-actually-overflows case is
+documented residue and reserves nothing. So only sites shipping that idiom moved. The band anchors,
+serial re-runs against t1316's rows:
+
+```text
+   ticket.jfa.jp          69.1 → 82.1   (+13.0, and +15.7 on the same-day control)
+   www.puentedemando.com  73.4 → 76.1   (+2.7 — WITHIN site drift, not claimed)
+   www.fragrantica.com    73.0 → 73.1
+   www.paypal.com         65.2 → 65.2
+   momon-ga.com           60.3 → 60.3
+   www.ta3lemkonline.com  61.7 → 61.7
+   www.razaoautomovel.com 70.8 → 70.8
+   mangaraw / repubblica / mobile.ir — timed out this run, unmeasured
+```
+
+⚠ `razaoautomovel` read **12.4%** in the `--jobs 2` run and **70.8%** run alone: t771's contention
+effect, not a regression, and it is why the serial number is the one above. ⭐ *A --jobs 2 sweep is
+still a contended sweep on a box that is doing anything else* — I re-ran the outlier alone before
+believing it, and the ratchet holds.
+
+⚠ The residue is now **unmeasurable by this instrument** — with scrollbars hidden the reference never
+reserves either. It needs its own WPT coverage and must not be read as absent because the sweep is
+quiet.
+
+### THE GATE
+
+`G_REFERENCE_VIEWPORT_MATCHES` launches the reference under the instrument's own `base_flags` on an
+**overflowing** document and asserts its `clientWidth` equals `vw − scrollbar_gutter(auto)`.
+
+⚠ It asserts **AGREEMENT, NOT A VALUE**. Proven twice:
+
+```text
+   delete match_reference_scrollbar_policy()   FAILED  left: 1200.0  right: 1185.0   ← every sweep before t1319
+   REFERENCE_HIDES_SCROLLBARS = false          ok      (both sides go to 1185)
+```
+
+The second proof is the load-bearing one: the defect was never the policy, it was the policy applied
+to one side.
+
+### ⚠ EVERY FIDELITY NUMBER BEFORE THIS TICK WAS TAKEN WITH THE OLD INSTRUMENT
+
+Per t1242 — *an instrument you repair invalidates its own earlier readings*. `FIDELITY-PROGRESS.tsv`,
+`PHASE0-RENDER-BURNDOWN.md` §11 and the t1316 rows are all pre-repair. The band ranking in §11 stays
+useful (it is ordered by mechanism, not by absolute shape), but any absolute headline needs a fresh
+sweep before it is quoted again.
+
+NEXT, ranked.
+(a) ⭐⭐⭐ **A CLEAN FULL SWEEP** on `corpus-crux-trend.txt`, serial or `--jobs 2` on a quiet box, to
+    re-baseline the headline under the repaired instrument. Everything else is priced against it.
+(b) ⭐⭐⭐ **THE CAROUSEL, and it is the top miss left on `ticket.jfa.jp`.** Chrome gives each slide
+    `480x216`; we give `1080x486` — the container's full width, at the image's own aspect ratio
+    (1080/486 = 480/216 = 2.222, so the `<img>` keeps its ratio and is simply not being capped).
+
+    ```text
+       chrome   x = 0   600  1200  1800  2400   each 480x216
+       manuk    x = 0  1080  2160  3240  4320   each 1080x486
+    ```
+
+    ⚠ They ARE side by side — the x values advance — so this is **not** a stacking bug: each slide is
+    2.25× too wide and the strip is 4.5× too long. The slide's width comes from somewhere we are not
+    reading (a `flex-basis`, a JS-set inline width, or a `max-width` on the image), and the first
+    question is which, not how to size it.
+(c) ⭐⭐ **THE `overflow: auto` VIEWPORT GUTTER** — the residue this tick just made invisible to the
+    sweep. It needs a WPT-side gate before it is worked, or it will be re-found the hard way.
+(d) ⭐⭐ **AUDIT THE OTHER WORST-CASE BARS** (t1318's (b)) — still open.

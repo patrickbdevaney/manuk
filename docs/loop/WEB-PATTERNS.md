@@ -7889,3 +7889,32 @@ it.
 ⚠ Found by the real-site fidelity sweep, reproduced by **no** WPT test and by none of four hand-built
 fixtures (`DOMParser`, `createHTMLDocument`, iframe `contentDocument`, `document.open`). This is the
 argument for measuring against the live web in one bug.
+
+## `overflow-y: scroll` ON THE VIEWPORT — the layout-shift-prevention idiom, measured against a reference that had no scrollbars (t1319)
+
+**The class.** `html { overflow-y: scroll }` is the standard recipe for *"never let the page jump 15px
+when content grows past one screen"* — a scrollbar reserved on every page whether or not it scrolls.
+Sites that ship it (`ticket.jfa.jp`, in `css/common.css`) hang their whole layout off the narrowed
+initial containing block: a `width: 90%` container is 90% of **1185**, not of 1200.
+
+⚠⚠⚠ **Our engine reserved that 15px correctly and the fidelity reference did not.** Every headless
+capture the instrument has ever taken passed Chrome `--hide-scrollbars`, which makes scrollbars
+zero-width; our engine was never told. So on this whole cohort we were measured 15px narrow at the
+ICB, and the deficit laundered down every percentage width:
+
+```text
+                   Chrome      Manuk (before)    Manuk (after)
+   ICB              1200        1185              1200
+   90% container    1080        1067              1080
+   5% margin          60          59                60
+```
+
+⭐ A narrower column re-wraps prose; each extra line pushes everything below it down. That is the
+*width launders into dy* accumulation the render burndown ranks its near-miss band by — and on this
+cohort it was the instrument's, not the engine's. `ticket.jfa.jp` SHAPE 66.4% → 82.1% with no engine
+layout change.
+
+⚠ **What is still ours:** the `overflow: auto`-and-actually-overflows case — the default, and far more
+common than the explicit idiom — reserves nothing in our engine and is documented residue. With the
+reference's scrollbars hidden it is now invisible to the sweep, so it needs WPT coverage rather than
+corpus coverage.

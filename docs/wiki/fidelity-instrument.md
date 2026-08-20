@@ -1512,3 +1512,86 @@ with the control binary still on disk.
 ⚠⚠ **The cost/benefit is not close.** ~10 minutes of build bought the difference between an unjustified
 revert and an unexamined regression. t799's rule stands: *only a same-hour old-binary run attributes
 cost*, and a per-site delta is a question until it has one.
+
+## The reference hid its scrollbars and the engine did not — a 15px inline deficit under every sweep ever taken (t1319)
+
+`chrome::base_flags` has passed `--hide-scrollbars` to every headless capture for the life of this
+instrument, under a comment that named the exact defect it was about to cause:
+
+> *"`--hide-scrollbars` matters: a visible scrollbar would shrink the layout viewport and shift every
+> box."*
+
+Every word true — and it shrinks the layout viewport of the **reference only**. Our engine reserves a
+classic 15px gutter, as a desktop browser does. Measured on this box, one document 5000px tall:
+
+```text
+   google-chrome --headless=new --window-size=1200,887
+      --hide-scrollbars     documentElement.clientWidth = 1200
+      (no flag)             documentElement.clientWidth = 1185   ← what our engine computes
+```
+
+⭐ **Our 15px is Blink's 15px to the pixel.** The two engines agree; the instrument did not. Nobody
+had ever asked them for the same number, because `viewport_chrome_offset` — the probe that exists to
+make the reference's viewport match ours — runs a **one-line, non-overflowing** document, which has no
+scrollbar to hide. It reported the inline offset as 0 and was blind to this by construction.
+
+### What it cost, on a site the burndown already names
+
+`ticket.jfa.jp` ships `overflow-y: scroll` in `css/common.css`. Its layout is a `width: 90%` container
+with `5%` margins:
+
+```text
+                    Chrome           Manuk (before)      Manuk (after)
+   ICB               1200             1185                1200
+   90% container     1080             1067                1080
+   5% margin           60               59                  60
+```
+
+1185 × 0.9 = 1066.5 → 1067, and 1185 × 0.05 = 59.25 → 59. No other viewport width produces both
+numbers, which is what made the diagnosis arithmetic rather than a guess. The narrower column re-wraps
+prose, each extra line pushes everything below it down, and the result is the *width launders into dy*
+accumulation `docs/loop/PHASE0-RENDER-BURNDOWN.md` §11 ranks its near-miss band by. Same binary, same
+day, only the flag differing:
+
+```text
+   ticket.jfa.jp   SHAPE 66.4% → 82.1%    parent-relative misses 216 → 115    (crosses the 0.75 bar)
+```
+
+**No engine layout code changed.**
+
+### The fix: ONE constant decides it for BOTH engines
+
+`chrome::REFERENCE_HIDES_SCROLLBARS` now selects the Chrome flag *and*, via
+`chrome::match_reference_scrollbar_policy()`, puts our engine in the matching mode
+(`manuk_layout::set_scrollbars_hidden`, an overlay-scrollbar switch that mirrors what
+`--hide-scrollbars` is in Chrome: a process-wide UA metric, not a CSS property). They cannot drift,
+because there is only one of them. Every command that compares against Chrome — `fidelity`, `parity`,
+`interact`, `render --chrome` — calls it at entry; **the WPT suite deliberately does not**, because
+WPT's expectations are written for a classic 15px scrollbar.
+
+It stays `true`: hiding scrollbars is the honest choice for a *comparison* — it removes the
+scrollbar's painted strip from the visual diff and takes a platform UA metric out of the geometry,
+leaving the layout math, which is what the instrument is for.
+
+### ⚠ The cohort is smaller than the hypothesis, and the measurement said so
+
+The obvious reading — *"a corpus-wide 15px deficit"* — is wrong, and the sweep refuted it. Our engine
+reserves the viewport gutter **only for the deterministic `overflow-y: scroll`**; the
+`overflow: auto`-and-actually-overflows case is documented residue and reserves nothing. So only sites
+that ship the `overflow-y: scroll` idiom were affected. Across the other band anchors
+(`fragrantica`, `paypal`, `momon-ga`, `ta3lemkonline`, `razaoautomovel`) SHAPE moved by ≤0.1 points.
+
+⚠ And that residue is now **unmeasurable by this instrument**, because with scrollbars hidden the
+reference never reserves either. It needs its own WPT coverage and must not be read as absent because
+the sweep is quiet.
+
+### The gate
+
+`G_REFERENCE_VIEWPORT_MATCHES` (`tests/wpt/src/chrome.rs`) launches the reference under the
+instrument's own `base_flags` on an **overflowing** document and asserts its `clientWidth` equals
+`vw − manuk_layout::scrollbar_gutter(auto)`.
+
+⚠ It asserts **agreement, not a value**: flipping `REFERENCE_HIDES_SCROLLBARS` to `false` keeps it
+green (both sides go to 1185), because the defect was never the policy — it was the policy applied to
+one side. Proven RED by deleting the `match_reference_scrollbar_policy()` call, which is exactly the
+state every sweep before t1319 ran in: `left: 1200.0, right: 1185.0`.

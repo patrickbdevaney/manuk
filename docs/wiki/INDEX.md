@@ -1291,6 +1291,11 @@
   - L1460 · A SCORABILITY regression is a ratchet question — chase it to an old-binary control, not to a shrug (t1268)
   - L1475 · The scorability −1 is the part that cannot be waved through
   - L1494 · The control, and what makes it a control
+  - L1516 · The reference hid its scrollbars and the engine did not — a 15px inline deficit under every sweep ever taken (t1319)
+  - L1538 · What it cost, on a site the burndown already names
+  - L1562 · The fix: ONE constant decides it for BOTH engines
+  - L1576 · ⚠ The cohort is smaller than the hypothesis, and the measurement said so
+  - L1588 · The gate
 
 ## FRAMEWORKS — React, Svelte, Next, jQuery: what actually breaks
 `docs/wiki/frameworks.md`
@@ -2309,4 +2314,4 @@
   - L231 · Both named mechanisms are subsystem work
 
 ---
-2216 sections across 22 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+2221 sections across 22 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.

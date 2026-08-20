@@ -1070,17 +1070,56 @@ document.getElementById('o').textContent='VP:'+document.documentElement.clientWi
 const POINTING_DEVICE: &str = "--blink-settings=primaryHoverType=2,availableHoverTypes=2,\
 primaryPointerType=4,availablePointerTypes=4";
 
-/// The flags every headless invocation shares. `--hide-scrollbars` matters: a visible
-/// scrollbar would shrink the layout viewport and shift every box.
+/// ⚠⚠⚠ **THE REFERENCE'S SCROLLBAR POLICY — AND FOR THE WHOLE PROJECT IT WAS APPLIED TO ONE
+/// ENGINE ONLY, WHICH IS WHY IT WAS A BUG AND NOT A SETTING.**
+///
+/// The comment this replaces read: *"`--hide-scrollbars` matters: a visible scrollbar would shrink
+/// the layout viewport and shift every box."* Every word of that is true, and it named the exact
+/// defect it went on to cause — because it shrinks the layout viewport of the **reference** only.
+/// Our engine reserves a classic 15px gutter, as a desktop browser does; the reference was told not
+/// to. Measured, on this box:
+///
+/// ```text
+///     google-chrome --headless=new --window-size=1200,887   (document 5000px tall)
+///        --hide-scrollbars     documentElement.clientWidth = 1200
+///        (no flag)             documentElement.clientWidth = 1185   ← what our engine computes
+/// ```
+///
+/// ⭐ **Our 15px is Blink's 15px to the pixel.** The engines agree; the instrument did not. On
+/// `ticket.jfa.jp` — one of the near-miss band's own anchors — that is a `width: 90%` container
+/// measured 1067 against 1080 and its `5%` margin at 59 against 60, on every element, which then
+/// re-wraps prose and pushes everything below it down. That is precisely the *width launders into
+/// dy* shape `docs/loop/PHASE0-RENDER-BURNDOWN.md` §11 ranks the band by, and it was the
+/// instrument's.
+///
+/// So the policy is now **one constant that decides it for BOTH engines**: it selects the Chrome
+/// flag below, and [`match_reference_scrollbar_policy`] puts our engine in the same mode. They
+/// cannot drift, because there is only one of them.
+///
+/// It stays `true` — hiding scrollbars is the honest choice for a *comparison*: it removes the
+/// scrollbar's own painted strip from the visual diff and takes a platform UA metric out of the
+/// geometry, leaving the layout math, which is what this instrument is for. ⚠ It does mean the
+/// `overflow: auto`-and-actually-overflows reservation (our engine's documented residue — it
+/// reserves only for the deterministic `overflow: scroll`) stays **unmeasured by this instrument**;
+/// that gap needs its own WPT coverage and must not be read as absent because the sweep is quiet.
+pub const REFERENCE_HIDES_SCROLLBARS: bool = true;
+
+/// Put OUR engine in the same scrollbar mode the reference is launched with. A host that captures
+/// against Chrome must call this before it lays anything out — see [`REFERENCE_HIDES_SCROLLBARS`]
+/// for what a mismatch costs.
+pub fn match_reference_scrollbar_policy() {
+    manuk_layout::set_scrollbars_hidden(REFERENCE_HIDES_SCROLLBARS);
+}
+
+/// The flags every headless invocation shares.
 fn base_flags(vw: u32, vh: u32) -> Vec<String> {
     // See `viewport_chrome_offset`: the requested LAYOUT viewport, expressed as the WINDOW size
     // that produces it.
     let (dw, dh) = viewport_chrome_offset();
     let (vw, vh) = (vw + dw, vh + dh);
-    vec![
+    let mut v = vec![
         "--headless=new".into(),
         "--disable-gpu".into(),
-        "--hide-scrollbars".into(),
         "--force-device-scale-factor=1".into(),
         "--no-sandbox".into(),
         "--disable-extensions".into(),
@@ -1088,7 +1127,11 @@ fn base_flags(vw: u32, vh: u32) -> Vec<String> {
         POINTING_DEVICE.into(),
         format!("--window-size={vw},{vh}"),
         "--virtual-time-budget=2000".into(),
-    ]
+    ];
+    if REFERENCE_HIDES_SCROLLBARS {
+        v.push("--hide-scrollbars".into());
+    }
+    v
 }
 
 /// Capture Chrome's box geometry for a local HTML file at the given viewport.
@@ -1639,5 +1682,85 @@ mod tests {
         // A malformed entry (a bare 4-tuple from a stale probe) is skipped, never mis-parsed as a Seen.
         let bad = r#"<html><body><pre id="__PARITY__">{"x:nth-of-type(1)":[1,2,3,4]}</pre></body></html>"#;
         assert!(parse_seen_probe_json(bad).unwrap().is_empty());
+    }
+
+    /// **G_REFERENCE_VIEWPORT_MATCHES — the two engines must lay out in the SAME viewport, and for
+    /// the whole life of this instrument they did not.**
+    ///
+    /// `base_flags` passes `--hide-scrollbars`, which makes the reference's scrollbars zero-width.
+    /// Our engine reserved a classic 15px gutter, as a desktop browser does. Nobody had ever asked
+    /// the two for the same number, so a **1.25% inline deficit** rode under every sweep: on
+    /// `ticket.jfa.jp` a `width: 90%` container measured 1067 against Chrome's 1080, its `5%`
+    /// margin 59 against 60, and the narrower column re-wrapped prose and pushed everything below
+    /// it down — the *width launders into dy* shape the near-miss band is ranked by. Correcting it
+    /// moved that one site's SHAPE from **66.4% to 82.1%** and its parent-relative misses from 216
+    /// to 115, with no engine layout change at all.
+    ///
+    /// ⚠ **The gate asserts AGREEMENT, not a value.** Flipping
+    /// [`REFERENCE_HIDES_SCROLLBARS`] to `false` must keep it green (both sides go to 1185): the
+    /// defect was never the policy, it was the policy applied to one side. **To watch it go RED:**
+    /// delete the [`match_reference_scrollbar_policy`] call below — that is exactly the state every
+    /// sweep before t1319 ran in.
+    ///
+    /// The document must OVERFLOW: a short one has no scrollbar to hide, which is why
+    /// `viewport_chrome_offset`'s own one-line probe measured this axis at zero and never saw it.
+    #[test]
+    fn the_reference_lays_out_in_the_same_viewport_our_engine_does() {
+        let Some(chrome) = chrome_bin() else {
+            eprintln!("skip: no Chrome/Chromium — reference viewport gate not run");
+            return;
+        };
+        match_reference_scrollbar_policy();
+
+        const VW: u32 = 1200;
+        const VH: u32 = 800;
+        let tmp = std::env::temp_dir().join("manuk-reference-viewport-gate.html");
+        // 5000px tall: the reference MUST want a vertical scrollbar, or there is nothing to hide.
+        let html = "<!doctype html><html><body style=\"margin:0\"><div style=\"height:5000px\">t</div>\
+<pre id=o></pre><script>document.getElementById('o').textContent='VP:'\
++document.documentElement.clientWidth+'x'+document.documentElement.clientHeight;</script></body></html>";
+        std::fs::write(&tmp, html).expect("write probe");
+
+        let out = Command::new(&chrome)
+            .args(base_flags(VW, VH))
+            .arg("--dump-dom")
+            .arg(format!("file://{}", tmp.display()))
+            .output()
+            .expect("run chrome");
+        let dom = String::from_utf8_lossy(&out.stdout);
+        let vp = dom
+            .split("VP:")
+            .nth(1)
+            .and_then(|r| r.split('<').next())
+            .map(str::trim)
+            .and_then(|r| r.split_once('x'))
+            .and_then(|(w, h)| Some((w.parse::<u32>().ok()?, h.parse::<u32>().ok()?)));
+        let Some((cw, ch)) = vp else {
+            // An unreadable probe is an unmeasured gate, and it must say so rather than pass.
+            panic!(
+                "the reference did not report a viewport — this gate measured NOTHING, which is not \
+                 the same as agreeing. dump was {} bytes",
+                dom.len()
+            );
+        };
+
+        // What OUR engine offers a `width:100%` child of the initial containing block at the same
+        // viewport: the requested width, less whatever gutter the UA metric reserves.
+        let ours_w = VW as f32 - manuk_layout::scrollbar_gutter(manuk_css::ScrollbarWidth::Auto);
+        assert_eq!(
+            cw as f32,
+            ours_w,
+            "the reference lays out at {cw}px of inline space and our engine at {ours_w}px. A \
+             {}px difference in the INITIAL CONTAINING BLOCK is charged to the engine on every \
+             percentage width, every text wrap and every `dy` beneath it, on every site in the \
+             corpus — see REFERENCE_HIDES_SCROLLBARS.",
+            (cw as f32 - ours_w).abs()
+        );
+        assert_eq!(
+            ch, VH,
+            "the reference's LAYOUT viewport is {ch}px tall, not the {VH}px it was asked for — \
+             `viewport_chrome_offset` is meant to convert the window size into exactly this and \
+             has stopped doing so"
+        );
     }
 }

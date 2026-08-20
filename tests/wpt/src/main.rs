@@ -359,6 +359,9 @@ fn run() {
 
 /// `manuk-wpt parity [--corpus DIR] [--out DIR] [--tol PX] [--width W] [--height H]`
 fn run_parity_cmd(args: &[String], fonts: &FontContext) {
+    // Same reason as the fidelity command: this one also scores our boxes against a
+    // `--hide-scrollbars` reference. See `chrome::REFERENCE_HIDES_SCROLLBARS`.
+    manuk_wpt::chrome::match_reference_scrollbar_policy();
     let corpus = flag(args, "--corpus")
         .map(PathBuf::from)
         .unwrap_or_else(default_corpus_dir);
@@ -397,6 +400,11 @@ fn run_parity_cmd(args: &[String], fonts: &FontContext) {
 /// Manuk draws). With `--chrome`, also writes `<out>.chrome.png` from headless Chrome for an
 /// eyeball comparison. Self-contained HTML only (no network); inline `<style>`/`<script>` run.
 fn run_render_cmd(args: &[String], fonts: &FontContext) {
+    // `--chrome` writes a side-by-side reference PNG; laying our side out in a different viewport
+    // than the reference's is exactly the eyeball-lie this policy exists to stop.
+    if args.iter().any(|a| a == "--chrome") {
+        manuk_wpt::chrome::match_reference_scrollbar_policy();
+    }
     use manuk_page::Page;
 
     let vw: u32 = flag(args, "--width")
@@ -475,6 +483,13 @@ fn run_render_cmd(args: &[String], fonts: &FontContext) {
 /// measure geometry; this measures what the user actually sees.
 fn run_fidelity_cmd(args: &[String], fonts: &FontContext) {
     use manuk_page::Page;
+
+    // **Both engines, one scrollbar policy.** The reference is launched with `--hide-scrollbars`;
+    // for the whole life of this instrument our engine was not told, and reserved 15px the
+    // reference did not — a 1.25% inline deficit that laundered into every percentage width, every
+    // text wrap and every `dy` below it. See `chrome::REFERENCE_HIDES_SCROLLBARS`. This must run
+    // BEFORE the first `Page::load` below, and it is a process-wide UA metric, so once is enough.
+    manuk_wpt::chrome::match_reference_scrollbar_policy();
 
     let vw: u32 = flag(args, "--width")
         .and_then(|s| s.parse().ok())
@@ -2427,6 +2442,9 @@ fn run_boxes_cmd(args: &[String], fonts: &manuk_text::FontContext) {
 /// Runs the SAME scripted interaction in Manuk and in Chromium, then compares the two resulting
 /// documents. Not the two implementations — the two OUTCOMES.
 fn run_interact_cmd(args: &[String], fonts: &manuk_text::FontContext) {
+    // This command diffs our boxes against Chrome's, so it inherits the reference's scrollbar
+    // policy like every other Chrome comparison. See `chrome::REFERENCE_HIDES_SCROLLBARS`.
+    manuk_wpt::chrome::match_reference_scrollbar_policy();
     use manuk_wpt::interact::{changed_boxes, InteractionResult, Step};
 
     let vw: u32 = flag(args, "--width")

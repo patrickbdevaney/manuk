@@ -81,11 +81,55 @@ const SCROLLBAR_WIDTH_THIN: f32 = 10.0;
 /// 15px out of the content width of exactly those elements, which then re-wraps their prose. That is
 /// the width-launders-into-dy shape the render burndown ranks on.
 pub fn scrollbar_gutter(sw: manuk_css::ScrollbarWidth) -> f32 {
+    if scrollbars_hidden() {
+        return 0.0;
+    }
     match sw {
         manuk_css::ScrollbarWidth::None => 0.0,
         manuk_css::ScrollbarWidth::Thin => SCROLLBAR_WIDTH_THIN,
         manuk_css::ScrollbarWidth::Auto => SCROLLBAR_WIDTH,
     }
+}
+
+/// ⚠⚠⚠ **THE HOST'S SCROLLBARS-TAKE-NO-SPACE MODE — CHROME'S `--hide-scrollbars`, AND THE REASON
+/// IT EXISTS HERE IS THAT THE FIDELITY REFERENCE HAS BEEN RUNNING WITH IT FOR THE WHOLE PROJECT.**
+///
+/// Overlay scrollbars are a real platform mode (macOS, GNOME, every touch device) in which a
+/// scrollbar is painted over the content and reserves no inline space. Chrome models it as a
+/// process-wide switch, not a CSS property, which is what `--hide-scrollbars` sets — and every
+/// headless capture the fidelity instrument has ever taken passed that flag.
+///
+/// Our engine did not have the switch, so it kept reserving 15px that the reference did not:
+///
+/// ```text
+///     google-chrome --headless=new --window-size=1200,887  (document 5000px tall)
+///        --hide-scrollbars     documentElement.clientWidth = 1200
+///        (no flag)             documentElement.clientWidth = 1185   ← what we compute
+/// ```
+///
+/// ⭐ **Our 15px is Blink's 15px to the pixel** — the engine and Chrome agree, and the entire
+/// divergence was one flag set on one side of the comparison. On `ticket.jfa.jp` that is a
+/// `width: 90%` container measured 1067 against Chrome's 1080 and a `5%` margin at 59 against 60,
+/// on every element on the page, feeding straight into the re-wrap → dy-accumulation shape the
+/// render burndown ranks its near-miss band by.
+///
+/// The switch lives here rather than in the fidelity crate because it is a **UA metric**, the same
+/// kind of thing `SCROLLBAR_WIDTH` is, and because `manuk_page`'s `clientWidth`/`clientHeight` must
+/// answer consistently with layout — one source, or the two drift apart exactly the way the engine
+/// and the reference just did.
+static SCROLLBARS_HIDDEN: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+
+/// Put the engine in overlay-scrollbar mode (see [`SCROLLBARS_HIDDEN`]). Set by a host that renders
+/// with scrollbars hidden — today, the fidelity instrument, which must match the flag it passes to
+/// the reference browser.
+pub fn set_scrollbars_hidden(hidden: bool) {
+    SCROLLBARS_HIDDEN.store(hidden, std::sync::atomic::Ordering::Relaxed);
+}
+
+/// Whether scrollbars take no space (see [`SCROLLBARS_HIDDEN`]). `false` — a classic, space-taking
+/// scrollbar — is the default and is what a desktop browser window does.
+pub fn scrollbars_hidden() -> bool {
+    SCROLLBARS_HIDDEN.load(std::sync::atomic::Ordering::Relaxed)
 }
 
 /// An axis-aligned rectangle in absolute document px.

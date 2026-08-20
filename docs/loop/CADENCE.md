@@ -11,12 +11,12 @@
 
 | | value | over |
 |---|---|---|
-| ticks landed | **1005** | ticks 1–1318 |
-| median tick cycle | **30m** | 1004 intervals |
+| ticks landed | **1006** | ticks 1–1319 |
+| median tick cycle | **30m** | 1005 intervals |
 | median, last 10 | **1.6h** | 10 intervals |
 | fastest / slowest | 5s / 5.4d | |
-| **ticks per hour** | **1.04** | 963.1h elapsed |
-| median verify wall | **63s** | 944 ticks |
+| **ticks per hour** | **1.04** | 964.0h elapsed |
+| median verify wall | **63s** | 945 ticks |
 | wall trend | 39s → 17m — getting slower ⚠️ | first 3 vs last 3 |
 
 The **cycle** is the real unit: implement → debug → verify wall → land. The wall is only part of
@@ -31,7 +31,7 @@ it, and a wall that grows taxes every future tick, so it is tracked separately f
 * **✅ rows in the capability ledger**: 144 → **642**
 * **Bar 0 — oracle hangs**: 0 of 265 sites
 
-**472 of 1005 ticks** (47%) moved a
+**472 of 1006 ticks** (47%) moved a
 user-visible capability. The rest were instruments, infrastructure and corrections — and the
 ledger says the corrections were not overhead: three of its top three priorities were phantoms,
 and finding that out redirected everything after it.
@@ -1102,5 +1102,6 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 | **1314** | 2026-08-20 04:14 | 51m | capability | 17m | +490/−43 | 498 | 81 | 56.0% · | 138 CSS longhands are structurally absent, and the scroll container's box model had three  |
 | **1315** | 2026-08-20 06:44 | 2.5h | capability | 17m | +448/−34 | 498 | 81 | 56.0% · | a flex item with a definite `width` could never shrink, and we answered taffy's question w |
 | **1318** | 2026-08-20 08:08 | 84m | capability | 17m | +665/−45 | 498 | 81 | 56.0% · | a tab operation was FREEING a whole page on the UI thread, and the gate written to catch t |
+| **1319** | 2026-08-20 09:03 | 55m | instrument | 17m | +474/−38 | 498 | 81 | 56.0% · | the reference hid its scrollbars and the engine did not, and the 15px rode under every swe |
 
 *`·` after a WPT figure means **carried forward**, not measured this tick.*
