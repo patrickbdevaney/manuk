@@ -156,7 +156,11 @@ done
 # rebuild this script exists to PREVENT. Re-measure so the purge only fires if we are STILL critical after
 # reclaiming. This matters more now the cron runs every 3min (more chances to catch a transient spike).
 pct=$(df /home | awk 'NR==2 {gsub(/%/,""); print $5}')
-if [ "${1:-}" = "--aggressive" ] || [ "$pct" -ge 95 ]; then
+# THRESHOLD 95->93 + cron */3->*/1 (observer 2026-08-21): a rebuild TRANSIENTLY DOUBLES the ~107G gate
+# binaries and overshot 91%->100% between 3-min hygiene runs, hitting ENOSPC. */1 cron shrinks the overshoot
+# window 3x; 93 (still ABOVE the 84-91% warm oscillation, so it does NOT thrash) fires ~6G-free earlier. The
+# permanent fix is a smaller gate-binary footprint (strip / fewer per-test bins) + freeing baseline slack.
+if [ "${1:-}" = "--aggressive" ] || [ "$pct" -ge 93 ]; then
   echo "  · target/debug — CRITICAL ${pct}% AFTER prune: full purge to avert ENOSPC (a cold rebuild follows)"
   rm -rf target/debug 2>/dev/null
 else
