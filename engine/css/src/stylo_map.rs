@@ -64,6 +64,32 @@ fn abs_to_rgba(c: &AbsoluteColor) -> Rgba {
 /// maps to `Dim::Calc { px: -10, pct: 50 }`. Percentages are stored 0–100 in `Dim`.
 fn lp_to_dim(lp: &LengthPercentage) -> Dim {
     use app_units::Au;
+    // ⚠⚠⚠ **THE PURE CASES ARE READ, NOT RECONSTRUCTED — AND THE RECONSTRUCTION LOST TWO THINGS.**
+    //
+    // The two-basis sampling below is exactly right for `calc()` and wrong for everything else,
+    // because `to_used_value` returns `Au` (1/60 px integers) and the decomposition then carries
+    // that quantisation into the VALUE:
+    //
+    // ```text
+    //     declared               Chrome        reconstructed
+    //     flex-basis: 0%         0%            0px           <- pct == 0 is indistinguishable
+    //                                                           from px == 0 by differencing
+    //     flex-basis: 16.6667%   16.6667%      16.666668%    <- Au quantisation, printed
+    // ```
+    //
+    // ⭐ The first is information LOSS, not a rounding error: a zero percentage and a zero length
+    // are the same used value at every basis, so no amount of sampling can tell them apart. It
+    // reaches script through `getComputedStyle` on every percentage-valued property this maps —
+    // width, height, margin, padding, inset, flex-basis.
+    //
+    // Stylo can simply be asked: `to_length()` and `to_percentage()` answer exactly for the two
+    // pure variants and `None` for `Calc`, which is the only case that needs the decomposition.
+    if let Some(l) = lp.to_length() {
+        return Dim::Px(l.px());
+    }
+    if let Some(p) = lp.to_percentage() {
+        return Dim::Percent(p.0 * 100.0);
+    }
     let at = |b: f32| lp.to_used_value(Au::from_f32_px(b)).to_f32_px();
     // Sample at two *large* bases: `to_used_value` applies Stylo's non-negative clamping
     // for widths/paddings, which would corrupt the decomposition near basis 0 (a value like

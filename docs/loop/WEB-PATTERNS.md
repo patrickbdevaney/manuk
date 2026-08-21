@@ -8060,3 +8060,20 @@ and now a shorthand applied and not reported. A capability is not done until BOT
 
 ⚠ Found by one of this project's own probes: a corpus diagnosis read `getComputedStyle(x).flex` to ask
 which pass had claimed a box, and the instrument's ordinary question came back `undefined`.
+
+## `flex-basis: 0%` — the flex idiom every framework emits, stored as `0px` (t1338)
+
+**The class.** `flex: 1` and `flex: 2` expand to a `0%` basis, and that is how essentially every
+component library, grid system and design token sizes a row of cards. The declaration is everywhere.
+
+⚠⚠ Our Stylo→`Dim` mapping reconstructed percentages by differencing `to_used_value` samples, and a
+**zero percentage is the same used value as a zero length at every basis** — so `0%` was stored as
+`0px`, irreversibly. Every `flex: N` on the web landed in our engine as a px basis, and script reading
+`getComputedStyle(el).flexBasis` got `0px` where Chrome says `0%`.
+
+⭐ The same reconstruction put `Au` quantisation (1/60px) into every other percentage:
+`flex-basis: 16.6667%` read back as `16.666668%`.
+
+⚠ It survived because `width`/`height`/`margin`/`padding` resolve to USED values (px), so their
+percentages never reach script — the defect lived only in the properties whose resolved value is the
+COMPUTED value, which almost nothing checks.

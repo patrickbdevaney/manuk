@@ -4486,3 +4486,43 @@ non-inherited semantics are exact and not an approximation. That was checked, no
 `scrollbar-width` computed correctly, reported correctly through `getComputedStyle`, and **ignored by
 layout** for as long as it has existed. A CSSOM answer with no consumer flips WPT subtests and changes
 nothing a user can see — which is the exact trade the North Star forbids.
+
+## A percentage reconstructed by differencing Au-quantised samples loses its identity at zero (t1338)
+
+`stylo_map::lp_to_dim` turned every `LengthPercentage` into our `Dim` by sampling `to_used_value` at
+two bases and differencing them. That is exactly right for `calc()` and wrong for everything else,
+because `to_used_value` returns `Au` — 1/60px integers — so the decomposition carries the quantisation
+into the VALUE:
+
+```text
+    declared               Chrome        reconstructed
+    flex-basis: 0%         0%            0px           ← pct==0 is indistinguishable from px==0
+    flex-basis: 16.6667%   16.6667%      16.666668%    ← Au quantisation, printed to script
+```
+
+⭐ **The first is information LOSS, not a rounding error.** A zero percentage and a zero length are
+the same used value at *every* basis, so no amount of sampling can tell them apart — the reconstruction
+is lossy by construction, and the loss lands on the one value where the two kinds coincide.
+
+Stylo can simply be asked. `to_length()` and `to_percentage()` answer exactly for the two pure
+variants and `None` for `Calc`, which is the only case that ever needed the decomposition:
+
+```rust
+if let Some(l) = lp.to_length()     { return Dim::Px(l.px()); }
+if let Some(p) = lp.to_percentage() { return Dim::Percent(p.0 * 100.0); }
+// …the two-basis decomposition, for calc() only
+```
+
+### ⚠ Why it survived 1,300 ticks
+
+`width`, `height`, `margin` and `padding` all have a **used value** as their resolved value, so
+`getComputedStyle` reports them in px and the percentage never reaches script. `flex-basis`'s resolved
+value is the **computed** value — a percentage stays a percentage — so it is one of the few properties
+that can see the defect at all. **The properties everyone checks report px, and the defect lived in
+the ones that do not.**
+
+It reached every percentage-valued property internally, though: the stored `Dim` was `Px(0.0)` where
+the author wrote `0%`, and a percentage basis is not a px basis in every context.
+
+Gated by `G_PERCENTAGE_SERIALIZATION` with a pure-length control row, red-proven by deleting the two
+early returns.

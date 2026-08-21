@@ -1008,6 +1008,8 @@
   - L4453 · Why this matters more than its WPT number
   - L4463 · ⚠ This has been refused three times as three different bugs
   - L4469 · The route, and it is a SUPPLEMENT rather than a fork
+  - L4490 · A percentage reconstructed by differencing Au-quantised samples loses its identity at zero (t1338)
+  - L4516 · ⚠ Why it survived 1,300 ticks
 
 ## `<dialog>`, `popover`, and the top layer (ticks 194-195)
 `docs/wiki/dialog-and-top-layer.md`
@@ -2360,4 +2362,4 @@
   - L231 · Both named mechanisms are subsystem work
 
 ---
-2267 sections across 22 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+2269 sections across 22 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.

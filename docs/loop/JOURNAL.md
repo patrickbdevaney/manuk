@@ -88918,3 +88918,68 @@ NEXT, ranked.
     is its own finding.
 (d) ⭐⭐ **THE WEBFONT INVESTIGATION** (t1334's (b)) — `hdnails.it`, `7info.ru`, `mobile.ir` as one
     question.
+
+## Tick 1338 — a percentage reconstructed by differencing Au-quantised samples loses its identity at zero (2026-08-20)
+
+TICK SHAPE: capability fix + gate. Board re-run at the top of this tick: **unchanged**. Took t1337's
+NEXT (a) — the two `flex-basis` serialization divergences that publishing the `flex` shorthand
+exposed. ⭐ Both turned out to be **one function**, and it serves every percentage-valued property in
+the engine.
+
+### THE FUNCTION
+
+`stylo_map::lp_to_dim` turned every `LengthPercentage` into our `Dim` by sampling `to_used_value` at
+two bases and differencing. Exactly right for `calc()`; wrong for everything else, because
+`to_used_value` returns `Au` — 1/60px integers — so the decomposition carries that quantisation into
+the value:
+
+```text
+   declared               Chrome        reconstructed
+   flex-basis: 0%         0%            0px           <- pct==0 is indistinguishable from px==0
+   flex-basis: 16.6667%   16.6667%      16.666668%    <- Au quantisation, printed to script
+   flex: 2                0%            0px           <- the same, through the shorthand's basis
+```
+
+⭐⭐⭐ **The first is information LOSS, not a rounding error.** A zero percentage and a zero length are
+the same used value at *every* basis, so no amount of sampling can tell them apart — the
+reconstruction is lossy by construction and the loss lands precisely where the two kinds coincide.
+
+Stylo can simply be asked: `to_length()` and `to_percentage()` answer exactly for the two pure
+variants and `None` for `Calc`, which is the only case that ever needed the decomposition.
+
+```text
+   after:  z[0%]  p[16.6667%]  s[0%]  l[40px]      (Chrome: identical)
+   manuk-css 39 ok · manuk-layout 185 ok · oilprice.com SHAPE 85.0% → 85.0%
+```
+
+### ⚠ WHY IT SURVIVED 1,300 TICKS, AND IT IS THE INTERESTING PART
+
+`width`, `height`, `margin` and `padding` all have a **used value** as their resolved value, so
+`getComputedStyle` reports them in px and the percentage never reaches script at all. `flex-basis`'s
+resolved value is the **computed** value — a percentage stays a percentage — so it is one of very few
+properties that can see this. ⭐ **The properties everyone checks report px, and the defect lived in
+the ones that do not.**
+
+It reached every percentage-valued property *internally*, though: the stored `Dim` was `Px(0.0)`
+where the author wrote `0%`, and a percentage basis is not a px basis in every context.
+
+### THE GATE
+
+`G_PERCENTAGE_SERIALIZATION` — four rows including a pure-length control (`40px`, which the exact path
+must leave alone). **PROVEN RED** by deleting the two early returns: `z[0px] p[16.666668%] s[0px]`.
+
+⚠ Two divergences in the same probe are NOT this defect and are left named: `width: 33.3333%` reads
+261.33px here against Chrome's 394.66px — both correct, different viewports (784 vs 1184 content
+width) — and `margin-left: calc(50% - 10px)` reads `calc(-10px + 50%)` here against Chrome's `582px`,
+which is margin's resolved value being the USED value. That one is a real defect of a different shape.
+
+NEXT, ranked.
+(a) ⭐⭐⭐ **MARGIN'S RESOLVED VALUE IS THE USED VALUE** — `calc(50% - 10px)` must read back as px, not
+    as the computed calc. Same probe, already Chrome-measured, and it is the CSSOM half of a property
+    every layout script reads.
+(b) ⭐⭐⭐ **ASK BOTH QUESTIONS OF EVERY `gated` ROW** — carried from check #124 and audit #73. t1337
+    found the fourth reported-vs-applied instance by accident and this tick found its consequence;
+    the class deserves a sweep rather than another accident.
+(c) ⭐⭐⭐ **REPUBBLICA'S OUT-OF-FLOW CHILD** (t1336's (a)) — still the biggest single layout lever
+    named; the local-file probe HANGS the WPT harness on a 390KB document, which is its own finding.
+(d) ⭐⭐ **THE WEBFONT INVESTIGATION** (t1334's (b)).

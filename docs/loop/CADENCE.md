@@ -11,12 +11,12 @@
 
 | | value | over |
 |---|---|---|
-| ticks landed | **1024** | ticks 1–1337 |
-| median tick cycle | **31m** | 1023 intervals |
-| median, last 10 | **34m** | 10 intervals |
+| ticks landed | **1025** | ticks 1–1338 |
+| median tick cycle | **30m** | 1024 intervals |
+| median, last 10 | **32m** | 10 intervals |
 | fastest / slowest | 5s / 5.4d | |
-| **ticks per hour** | **1.05** | 978.7h elapsed |
-| median verify wall | **64s** | 963 ticks |
+| **ticks per hour** | **1.05** | 979.2h elapsed |
+| median verify wall | **64s** | 964 ticks |
 | wall trend | 39s → 17m — getting slower ⚠️ | first 3 vs last 3 |
 
 The **cycle** is the real unit: implement → debug → verify wall → land. The wall is only part of
@@ -27,11 +27,11 @@ it, and a wall that grows taxes every future tick, so it is tracked separately f
 ### Near — the daily driver (doc / app / platform web)
 
 * **capabilities asserted** (`G_CAPABILITY`): 48 → **81**
-* **live gates**: 27 → **503**
+* **live gates**: 27 → **504**
 * **✅ rows in the capability ledger**: 144 → **642**
 * **Bar 0 — oracle hangs**: 0 of 265 sites
 
-**478 of 1024 ticks** (47%) moved a
+**479 of 1025 ticks** (47%) moved a
 user-visible capability. The rest were instruments, infrastructure and corrections — and the
 ledger says the corrections were not overhead: three of its top three priorities were phantoms,
 and finding that out redirected everything after it.
@@ -90,7 +90,7 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 
 ## What a capability costs
 
-* **478** capability ticks, median cycle **31m**
+* **479** capability ticks, median cycle **30m**
 * median diff per tick: **+281 / −34** lines across 8 files
 
 ## Every tick
@@ -1121,5 +1121,6 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 | **1335** | 2026-08-20 22:42 | 14m | measurement | 17m | +111/−32 | 502 | 81 | 56.0% · | repubblica's article cards are short by exactly the figure's height, and FIVE reductions f |
 | **1336** | 2026-08-20 23:16 | 34m | measurement | 17m | +129/−32 | 502 | 81 | 56.0% · | the article's box is ZERO tall and its child sits ABOVE it: the child is out of flow for u |
 | **1337** | 2026-08-20 23:46 | 30m | capability | 17m | +239/−34 | 503 | 81 | 56.0% · | `getComputedStyle(el).flex` was `undefined` while flex layout worked (2026-08-20) |
+| **1338** | 2026-08-21 00:13 | 27m | capability | 17m | +255/−34 | 504 | 81 | 56.0% · | a percentage reconstructed by differencing Au-quantised samples loses its identity at zero |
 
 *`·` after a WPT figure means **carried forward**, not measured this tick.*
