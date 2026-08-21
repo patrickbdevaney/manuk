@@ -1020,3 +1020,4 @@ tick	sha	epoch	iso	delta_s	shape	wall_s	files	added	deleted	gates	claims	wpt_pas
 1332	d69b1010	1787274491	2026-08-20T21:08:11-04:00	1760	refutation	997	9	451	162	502	81	3896	6960	0	642	0	check #125's own first steer was wrong, and the measurement that refused it took twenty minutes (2026-08-20)
 1333	335e4ede	1787275871	2026-08-20T21:31:11-04:00	1380	measurement	997	8	254	35	502	81	3896	6960	0	642	0	the band's next anchor is FONT-limited, and six identical rows are what say so (2026-08-20)
 1334	5fbfcb19	1787279270	2026-08-20T22:27:50-04:00	3399	measurement	997	6	171	33	502	81	3896	6960	0	642	0	a quarter of the band is FONT-limited, and the classifier was already being printed (2026-08-20)
+1335	7c980543	1787280139	2026-08-20T22:42:19-04:00	869	measurement	997	4	111	32	502	81	3896	6960	0	642	0	repubblica's article cards are short by exactly the figure's height, and FIVE reductions failed to reproduce it (2026-08-20)

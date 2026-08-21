@@ -88676,3 +88676,81 @@ NEXT, ranked.
 (c) ⭐⭐ **SPIDERMONKEY TEARDOWN** — blocks `manuk-js` from the wall, is the WPT runner's `ACCUM`
     bucket, forces one-`Page`-per-binary.
 (d) ⭐⭐ **The 25 unscored in-scope sites** — scorability 81.2% caps M1.
+
+## Tick 1335 — repubblica's article cards are short by exactly the figure's height, and FIVE reductions failed to reproduce it (2026-08-20)
+
+TICK SHAPE: measurement / negative result. Board re-run at the top of this tick: **unchanged**. Took
+t1334's NEXT (a) — a LAYOUT anchor chosen on the font-annotation evidence. ⚠ **NO ENGINE SOURCE
+CHANGED**; the deliverable is a narrowed cause and five axes eliminated.
+
+### THE ANCHOR AND ITS MECHANISM
+
+`www.repubblica.it`, 2,482 scored ids, **coverage 99.4%** (16 missing, all `<use>`), font annotations
+`{Eugenio Serif/16/154}` on BOTH sides of every example — layout-limited, as t1334 classified it.
+
+```text
+   47 hits · geometry/mis-sized: height ~128px (<article>)   median 168px
+     article.entry   Chrome [560 1973 189x234]   ours [119 1396 189x128]
+   body/main         Chrome 33,794 tall          ours 25,665      -8,129px over the page
+```
+
+⭐ Same width (189), height **234 vs 128**. Chrome's article is `display:flex` with two children:
+
+```text
+   figure.entry__media   189 x 106      <- an image box
+   div.entry__content    189 x 120
+```
+
+**234 − 128 = 106 = exactly the figure.** The figure contributes ZERO height in our engine, and the
+whole page's 8,129px deficit is ~47 of those.
+
+### ⚠⚠ FIVE REDUCTIONS, NONE OF THEM REPRODUCED IT
+
+The figure's content is `<gdwc-video-component>` (a custom element) wrapping an `<img width=640
+height=360>` — so the candidates were obvious and each was measured against Chrome:
+
+```text
+   1  <img width/height> + width:100%;height:auto, unloaded src, display:block   IDENTICAL
+   2  <img style="aspect-ratio:16/9">, unloaded src                              IDENTICAL
+   3  the same INLINE (no display:block), inside an inline <a>                   IDENTICAL
+   4  a CUSTOM ELEMENT wrapper (<gdwc-video-component>, <my-thing>) + <span>     IDENTICAL
+   5  custom element + img{max-width:100%;height:auto} — the real page's CSS     IDENTICAL
+```
+
+⭐ **So the cause is NOT: aspect-ratio box reservation for an unloaded image, nor inline-vs-block
+replaced layout, nor an inline `<a>` wrapper, nor an unknown/custom element, nor a scaled image inside
+one.** All five are Chrome-exact here, and that is the tick's deliverable — the same shape as PART
+VI's own t932 entry (*24 of 25 composed-width cases already Chrome-exact*), which is how that row
+narrowed from "layout breadth" to four named box types.
+
+⚠ *A reduction that reproduces nothing names an axis never consulted*, and after five the unconsulted
+axis is no longer a box type: it is something about the LIVE page the fixture does not carry — the
+`data-src` player bootstrapping, the `<source>`/`srcset` the real `<img>` may sit beside, or a
+stylesheet rule that only the live cascade applies.
+
+### ⭐ ONE GENUINE DIVERGENCE FOUND ON THE WAY, AND IT IS NOT THIS ONE
+
+Probe 4, where the image OVERFLOWS its container (no `max-width`):
+
+```text
+   <span>/<a>/<custom-element> wrapping a 640x360 img in a 189px box
+     Chrome  c1: 640x17     <- the INLINE box's own line-box height
+     ours    c1: 640x363    <- the union with its atomic-inline child
+```
+
+Per CSSOM-View an inline box's rect is the union of its **own** border boxes, and an inline box's
+border box is sized by `line-height`, not by the atomic inlines it contains. ⚠ It disappears the
+moment the image fits (probe 5 is identical on all six values), so it is confined to overflowing
+inline content — recorded, not fixed, because it is not what this anchor needs.
+
+NEXT, ranked.
+(a) ⭐⭐⭐ **REPUBBLICA'S FIGURE, from the LIVE page rather than a fixture.** Five box-type reductions
+    are eliminated; the next probe must ask the live DOM what our engine actually built under
+    `figure.entry__media` — children, computed display, and whether the `<img>` is in our tree at
+    all — rather than guess another fixture.
+(b) ⭐⭐⭐ **THE WEBFONT INVESTIGATION** (t1334's (b)) — `hdnails.it`, `7info.ru`, `mobile.ir` as ONE
+    question: which `@font-face` sources does Chrome load that we do not?
+(c) ⭐⭐ **THE INLINE BOX'S OWN RECT** — the 17-vs-363 divergence above, with the overflow case as its
+    fixture. Small, bounded, and it is the `getBoundingClientRect` every tooltip library reads.
+(d) ⭐⭐ **SPIDERMONKEY TEARDOWN** — blocks `manuk-js` from the wall, is the WPT runner's `ACCUM`
+    bucket, forces one-`Page`-per-binary.
