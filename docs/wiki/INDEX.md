@@ -1324,6 +1324,8 @@
   - L1629 · ⚠ The tracker's own printed delta had a poisoned baseline
   - L1636 · nth-of-type counts over ALL same-tag siblings, so one disagreed-about element takes a subtree out of the scored set (t1331)
   - L1658 · The fix, and its cost
+  - L1670 · The path key's counter and its comparison are COUPLED — the obvious fix collapses 26% of the paths (t1332)
+  - L1700 · G_PATH_KEY_CONTRACT — the "byte-identical contract" that had no checker
 
 ## FRAMEWORKS — React, Svelte, Next, jQuery: what actually breaks
 `docs/wiki/frameworks.md`
@@ -2354,4 +2356,4 @@
   - L231 · Both named mechanisms are subsystem work
 
 ---
-2261 sections across 22 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+2263 sections across 22 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.

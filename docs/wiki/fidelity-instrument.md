@@ -1666,3 +1666,56 @@ that found it.
 ⚠ It must be changed in **three places byte-identically** — the two probe scripts in `chrome.rs` and
 `path_of` in `main.rs` — which that file's own comment already warns about: *"A path built two
 different ways is two different keys, and the diff would then compare strangers."*
+
+## The path key's counter and its comparison are COUPLED — the obvious fix collapses 26% of the paths (t1332)
+
+t1331 measured that the sibling counter is sig-blind and that this costs real elements: on
+`www.crazyshop.pl`, whose `<body>` opens with two JS-injected `div.siiimpleToast` toasts, at least 103
+of the 135 "missing" boxes are elements we DO render, keyed differently. Check #125 made *"key
+`nth-of-type` by (tag, sig)"* its first steer.
+
+**It was tried, and the measurement refused it:**
+
+```text
+                           paths (oracle)   missing   SHAPE
+    sig-blind counter            1537          135     68.2%     ← today
+    sig-aware counter            1143           23     48.4%     ← 394 paths COLLAPSED
+    oilprice.com                  667            1     85.0%  →   416 / 0 / 50.5%
+```
+
+⭐ **`strip_sigs` removes every `.SIG` from BOTH sides' keys before the comparison** — deliberately, so
+a class the two engines disagree about does not unmatch an element. With a sig-AWARE counter,
+stripping then maps distinct siblings onto the SAME key and they overwrite each other. The missing
+count improves exactly as predicted and a quarter of the corpus's paths vanish with it.
+
+**So the counter and the comparison are coupled.** Match sig-blind and count sig-blind (today), or
+match with sigs and count with sigs (a different instrument, fragile to every class the engines
+disagree about — which is precisely what `strip_sigs` exists to absorb). ⚠ The middle is incoherent,
+and the middle is what a reading of the key alone suggests, which is why check #125's steer named it.
+
+The shift is still real. The choice between the two coherent instruments is a corpus experiment —
+how often does a class differ between engines, versus how often does an inserted sibling shift a
+subtree — and neither number exists yet.
+
+## `G_PATH_KEY_CONTRACT` — the "byte-identical contract" that had no checker
+
+`chrome.rs`'s own header calls the three implementations of the path key a **byte-identical
+contract**, warning that *"a path built two different ways is two different keys, and the diff would
+then compare strangers."* Nothing checked it.
+
+It now does: one fixture through Chrome's probe and through our own `path_of`, key sets compared.
+Red-proven from **both live sides** — dropping the sig-awareness from `path_of` or from
+`capture_seen_all_paths`'s probe makes the sets differ.
+
+⚠ Two things this made possible and one it did not:
+
+- `path_of`/`sig_of`/`strip_sigs` **moved from `main.rs` (the binary) into the library**, where the
+  gate can reach them. They had lived in the binary, so no library gate could compare our walker to
+  the reference's *without duplicating it* — which is the drift the contract exists to prevent.
+- ⚠ It exercises `capture_seen_all_paths`'s probe and **not `PROBE_ALL_PATHS_JS`**: there are two JS
+  copies and only one is under the contract.
+- ⚠⚠ **The wall does not run it.** `verify.sh`'s `T · crate tests` list is
+  `manuk-css manuk-layout manuk-paint manuk-dom manuk-net manuk-agent manuk-shell` — `manuk-wpt` is
+  invoked as a BINARY (parity, fidelity, hittest, bench) and its 107 unit tests never run, exactly as
+  `manuk-js`'s 21 never run (t1330). Two crates, ~128 tests, including every gate that guards the
+  fidelity instrument itself.

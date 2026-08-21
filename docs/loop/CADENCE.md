@@ -11,12 +11,12 @@
 
 | | value | over |
 |---|---|---|
-| ticks landed | **1018** | ticks 1–1331 |
-| median tick cycle | **31m** | 1017 intervals |
-| median, last 10 | **52m** | 10 intervals |
+| ticks landed | **1019** | ticks 1–1332 |
+| median tick cycle | **31m** | 1018 intervals |
+| median, last 10 | **46m** | 10 intervals |
 | fastest / slowest | 5s / 5.4d | |
-| **ticks per hour** | **1.04** | 975.6h elapsed |
-| median verify wall | **63s** | 957 ticks |
+| **ticks per hour** | **1.04** | 976.1h elapsed |
+| median verify wall | **63s** | 958 ticks |
 | wall trend | 39s → 17m — getting slower ⚠️ | first 3 vs last 3 |
 
 The **cycle** is the real unit: implement → debug → verify wall → land. The wall is only part of
@@ -31,7 +31,7 @@ it, and a wall that grows taxes every future tick, so it is tracked separately f
 * **✅ rows in the capability ledger**: 144 → **642**
 * **Bar 0 — oracle hangs**: 0 of 265 sites
 
-**477 of 1018 ticks** (47%) moved a
+**477 of 1019 ticks** (47%) moved a
 user-visible capability. The rest were instruments, infrastructure and corrections — and the
 ledger says the corrections were not overhead: three of its top three priorities were phantoms,
 and finding that out redirected everything after it.
@@ -1115,5 +1115,6 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 | **1329** | 2026-08-20 19:07 | 59m | wall-time | 17m | +319/−55 | 501 | 81 | 56.0% · | the layout suite loaded the system font database 150 times, and both drafts of the gate ha |
 | **1330** | 2026-08-20 19:54 | 48m | capability | 17m | +406/−37 | 502 | 81 | 56.0% · | a page that never settles paid the hang guard's full grace FOUR TIMES, and the flag that c |
 | **1331** | 2026-08-20 20:38 | 44m | correction | 17m | +295/−34 | 502 | 81 | 56.0% · | I published a false ABSENCE twice, because `grep` here skips non-UTF-8 files silently (202 |
+| **1332** | 2026-08-20 21:08 | 29m | refutation | 17m | +451/−162 | 502 | 81 | 56.0% · | check #125's own first steer was wrong, and the measurement that refused it took twenty mi |
 
 *`·` after a WPT figure means **carried forward**, not measured this tick.*

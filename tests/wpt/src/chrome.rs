@@ -298,6 +298,8 @@ pub fn oracle_probe(
   function pathOf(e){
     var p = [];
     while (e && e.nodeType === 1 && e.parentElement) {
+      // ⚠ The counter is sig-BLIND on purpose — see `path_of` in `oracle.rs`: `strip_sigs` removes
+      // the sig before comparison, so a sig-aware counter collapses distinct siblings onto one key.
       var t = e.tagName.toLowerCase(), i = 1, s = e;
       while ((s = s.previousElementSibling)) { if (s.tagName.toLowerCase() === t) i++; }
       p.unshift(t + sigOf(e) + ':nth-of-type(' + i + ')');
@@ -1682,6 +1684,104 @@ mod tests {
         // A malformed entry (a bare 4-tuple from a stale probe) is skipped, never mis-parsed as a Seen.
         let bad = r#"<html><body><pre id="__PARITY__">{"x:nth-of-type(1)":[1,2,3,4]}</pre></body></html>"#;
         assert!(parse_seen_probe_json(bad).unwrap().is_empty());
+    }
+
+    /// **G_PATH_KEY_CONTRACT — the THREE implementations of the path key must agree, and the
+    /// counter must not shift on a sibling one engine did not create.**
+    ///
+    /// The key is `tag.SIG:nth-of-type(n)/…`, and this file's own header calls the three copies —
+    /// the two probe scripts here and `path_of` in `main.rs` — a *"BYTE-IDENTICAL contract"* whose
+    /// violation means *"the diff would then compare strangers."* ⚠ **Nothing checked it.**
+    ///
+    /// And the counter had a defect the contract could not see, because all three copies shared it:
+    /// `n` counted among all same-TAG siblings and **ignored the sig**. So one `<div>` that only one
+    /// engine creates shifted every later `div:nth-of-type(n)`, and each shifted element keyed
+    /// differently and scored as MISSING. Measured on `www.crazyshop.pl`, whose `<body>` opens with
+    /// two JS-injected `div.siiimpleToast` toasts:
+    ///
+    /// ```text
+    ///     structural: oracle 1537 paths · ours 1505 paths · 135 "missing"
+    /// ```
+    ///
+    /// ⭐ 32 fewer paths and 135 unmatched, so at least **103 of the 135 are elements we DO render,
+    /// keyed differently** — 6.7% of that page's scorable set, spent as phantom MISSING_BOX work.
+    ///
+    /// ⚠⚠ **AND THE OBVIOUS FIX IS NOT AVAILABLE — t1332 tried it and measured the cost.** Making
+    /// the counter sig-aware takes `crazyshop`'s missing from 135 to 23 and its SHAPE from 68.2% to
+    /// **48.4%**, because `strip_sigs` removes every sig before the comparison (deliberately, so a
+    /// class the engines disagree about does not unmatch an element) and a sig-aware counter then
+    /// maps distinct siblings onto ONE key. 394 of 1,537 paths collapsed. The counter and the
+    /// comparison are coupled; see `oracle::path_of`.
+    ///
+    /// So what this gate defends is the CONTRACT, which had no checker at all: the same document
+    /// through Chrome's probe and through our own `path_of`, key sets compared. **To watch it go
+    /// RED:** add `&& sigOf(s) === g` to `PROBE_SEEN_JS`'s counter, or `&& sig_of(dom, sib) ==
+    /// my_sig` to `path_of` — one side then numbers `#shifted` differently and the sets differ.
+    ///
+    /// ⚠ It exercises `capture_seen_all_paths`'s probe, not `PROBE_ALL_PATHS_JS` — there are TWO JS
+    /// copies and only one is under this contract. Named rather than left to be discovered.
+    #[test]
+    fn the_path_key_is_the_same_in_chrome_and_in_our_own_walker() {
+        let Some(_) = chrome_bin() else {
+            eprintln!("skip: no Chrome/Chromium — path-key contract gate not run");
+            return;
+        };
+        // `b` and `c` share a tag with `a` but not its class, so a sig-blind counter numbers them
+        // 1,2,3 and a sig-aware one numbers `a` and `c` 1,2 with `b` at 1 of its own family.
+        let html = "<!doctype html><html><body>\
+<div class=\"toast\">t</div>\
+<div class=\"real\">r1</div>\
+<div class=\"real\" id=\"shifted\">r2</div>\
+<p>p</p></body></html>";
+        let tmp = std::env::temp_dir().join("manuk-path-key-contract.html");
+        std::fs::write(&tmp, html).expect("write fixture");
+        let chrome_paths =
+            match capture_seen_all_paths(&format!("file://{}", tmp.display()), 800, 600) {
+                Ok(m) => m,
+                Err(e) => {
+                    eprintln!("skip: reference capture failed ({e}) — contract gate not run");
+                    return;
+                }
+            };
+        // Our own walker over the same markup.
+        let dom = manuk_html::parse(html);
+        let ours: std::collections::BTreeSet<String> = dom
+            .descendants(dom.root())
+            .filter(|&n| dom.is_element(n))
+            .filter_map(|n| crate::oracle::path_of(&dom, n))
+            .collect();
+        let theirs: std::collections::BTreeSet<String> = chrome_paths.keys().cloned().collect();
+
+        // Chrome's probe walks the RENDERED tree and ours walks the parsed one, so `<head>`'s
+        // contents and the sentinel `<pre>` differ. Compare only the keys under `body`, which is
+        // what the fidelity scorer compares.
+        let body_of = |s: &std::collections::BTreeSet<String>| -> Vec<String> {
+            s.iter()
+                .filter(|k| k.starts_with("body") && !k.contains("__"))
+                .cloned()
+                .collect()
+        };
+        let (a, b) = (body_of(&ours), body_of(&theirs));
+        assert!(
+            !a.is_empty() && !b.is_empty(),
+            "G_PATH_KEY_CONTRACT: one side produced no body keys — ours {a:?}, chrome {b:?}"
+        );
+        assert_eq!(
+            a, b,
+            "G_PATH_KEY_CONTRACT: the two implementations of the path key DISAGREE.\n  \
+             ours:   {a:?}\n  chrome: {b:?}\n\n  \
+             A path built two different ways is two different keys, and every element under the \
+             first divergence is then compared against a stranger — it scores as MISSING while both \
+             engines rendered it."
+        );
+        // …and the shift itself, stated as a value rather than left to the set comparison: the
+        // `.real` sibling after the toast must be its family's SECOND, not the third `div`.
+        assert!(
+            a.iter().any(|k| k.contains(":nth-of-type(2)")),
+            "G_PATH_KEY_CONTRACT: no key numbers a sibling 2 — the fixture has two `.real` divs and \
+             the second must be `nth-of-type(2)` of its own (tag, sig) family, not 3 of all divs.\n  \
+             ours: {a:?}"
+        );
     }
 
     /// **G_REFERENCE_VIEWPORT_MATCHES — the two engines must lay out in the SAME viewport, and for

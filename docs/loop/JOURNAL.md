@@ -88373,3 +88373,101 @@ NEXT, ranked.
 (c) ⭐⭐ **The genuinely absent ~32 elements on `crazyshop.pl`** — the toasts and their subtrees, which
     ARE script-created. A much smaller and better-defined target than the 135 I filed twice.
 (d) ⭐⭐ **The 25 unscored in-scope sites** — scorability 81.2% caps M1.
+
+## Tick 1332 — check #125's own first steer was wrong, and the measurement that refused it took twenty minutes (2026-08-20)
+
+TICK SHAPE: refutation + an instrument contract that had no checker. Board re-run at the top of this
+tick: **unchanged**. Took check #125's STEER 1 — *"key `nth-of-type` by (tag, sig), then re-sweep"* —
+and the tick is the measurement that refused it.
+
+### THE STEER, AND WHY IT LOOKED RIGHT
+
+t1331 established that the sibling counter is sig-blind and that it costs real elements: on
+`www.crazyshop.pl`, whose `<body>` opens with two JS-injected `div.siiimpleToast` toasts, at least
+**103 of the 135 "missing" boxes are elements we DO render, keyed differently** — 6.7% of the page's
+scorable set, spent as phantom MISSING_BOX work. The fix seemed free: *the sig is already in the key
+and already decides matching, so counting by it adds no failure mode.*
+
+### ⚠⚠⚠ IT WAS TRIED, AND THE MEASUREMENT REFUSED IT
+
+```text
+                          paths (oracle)   missing   SHAPE
+   sig-blind counter           1537          135     68.2%     <- today
+   sig-aware counter           1143           23     48.4%     <- 394 paths COLLAPSED
+   oilprice.com                 667            1     85.0%  ->  416 / 0 / 50.5%
+```
+
+⭐ **`strip_sigs` removes every `.SIG` from BOTH sides' keys BEFORE the comparison** — deliberately, so
+a class the two engines disagree about does not unmatch an element. With a sig-AWARE counter,
+stripping maps distinct siblings onto the SAME key and they overwrite each other. **The missing count
+improves exactly as predicted and a quarter of the corpus's paths vanish with it.**
+
+⭐⭐ So the premise was false: the sig does NOT decide matching — it is stripped before matching. **The
+counter and the comparison are COUPLED.** Match sig-blind and count sig-blind (today), or match with
+sigs and count with sigs (a different instrument, fragile to every class the two engines disagree
+about, which is exactly what `strip_sigs` exists to absorb). The middle is incoherent, and the middle
+is what a reading of the key alone suggests — which is how it became a constitution-check steer.
+
+⚠ **The shift is still real.** The choice between the two coherent instruments is a corpus
+experiment — how often a class differs between engines versus how often an inserted sibling shifts a
+subtree — and neither number exists yet. Reverted to the byte-for-byte previous behaviour and
+verified: `crazyshop 1537/1505/135/68.2%`, `oilprice 654/0/85.0%`, identical.
+
+### WHAT THE ATTEMPT LEFT BEHIND, AND IT IS WORTH THE TICK ON ITS OWN
+
+⭐ **`G_PATH_KEY_CONTRACT` — the "byte-identical contract" that had no checker.** `chrome.rs`'s own
+header calls the three implementations of the path key exactly that, warning *"a path built two
+different ways is two different keys, and the diff would then compare strangers."* Nothing checked
+it. It now does: one fixture through Chrome's probe and through our own `path_of`, key sets compared.
+**Red-proven from BOTH live sides.**
+
+⭐ And it forced an architectural correction: `path_of`/`sig_of`/`strip_sigs` **lived in `main.rs`, the
+BINARY**, so no library gate could compare our walker against the reference's without duplicating it
+— which is the drift the contract exists to prevent. Moved into the library; one definition,
+reachable by both.
+
+⚠ Two limits, named rather than left to be discovered: the gate exercises
+`capture_seen_all_paths`'s probe and **not** `PROBE_ALL_PATHS_JS` (there are two JS copies, one is
+uncovered) — and:
+
+### ⚠⚠ THE WALL RUNS NEITHER `manuk-wpt`'S TESTS NOR `manuk-js`'S
+
+```text
+   verify.sh T list:  manuk-css manuk-layout manuk-paint manuk-dom manuk-net manuk-agent manuk-shell
+```
+
+`manuk-wpt` is invoked as a BINARY (parity, fidelity, hittest, bench) and its **107 unit tests never
+run** — including `G_REFERENCE_VIEWPORT_MATCHES` (t1319) and this new one, i.e. every gate that guards
+the fidelity instrument itself. `manuk-js`'s 21 never run either (t1330). **Two crates, ~128 tests,
+and the repo's own rule is that *a gate the wall does not execute is documentation*.** Harness-owned;
+reported, not touched. ⚠ `manuk-js` additionally SIGSEGVs at SpiderMonkey teardown, so it cannot
+simply be added; `manuk-wpt` appears to have no such blocker.
+
+### ⚠ HARNESS — the shell lane's RED, finally measured
+
+t1331 took **eight** wall runs. Polling the parallel lane's capture file once a second during one of
+them:
+
+```text
+   20:36:40   12377 bytes      ← warnings + progress dots
+   20:36:45   12415 bytes
+   …          12416 bytes      ← EIGHTEEN SECONDS, no `test result:` line
+   20:37:03   12830 bytes      ← the summary lands
+```
+
+⭐ `_out shell` returning anywhere in that 18-second window of a 27-second run yields a capture with
+**no verdict at all**: `AFF` empty, `GI` empty, `SHELL_FAILED` 0 — so `G3` and `G_INTERACT` fail while
+`G_TEARDOWN`/`G_RUNTIME_COUNT` pass vacuously and `T · crate tests` reports the same suite green in
+the same wall. So `wait "${_PARPID[shell]}"` is returning before the job completes. Observer-owned;
+this is the evidence, not a fix.
+
+NEXT, ranked.
+(a) ⭐⭐⭐ **A CAPABILITY WINDOW** (check #125's steer 3) — the last several ticks have been
+    instrument. The near-miss band's anchors, with the method that worked: error bar first,
+    `--shape-dump`, read the ABSOLUTE `e.g.` line, reduce, gate with controls.
+(b) ⭐⭐⭐ **SPIDERMONKEY TEARDOWN** — blocks `manuk-js` from the wall, is the WPT runner's `ACCUM`
+    bucket, and forces one-`Page`-per-binary.
+(c) ⭐⭐ **THE CORPUS EXPERIMENT the refutation names** — how often does a class differ between the
+    two engines? That number decides which of the two coherent path-key instruments is right, and it
+    is one sweep-side count rather than an engine change.
+(d) ⭐⭐ **The 25 unscored in-scope sites** — scorability 81.2% caps M1.

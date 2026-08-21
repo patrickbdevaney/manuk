@@ -43,6 +43,8 @@ fn file_url(path: &str) -> String {
 /// channel `getComputedStyle` does not have and `canvas.measureText` does.
 const FACE_PROBE: &str = "Hamburgefonstiv 0123";
 
+use manuk_wpt::oracle::{path_of, sig_of, strip_sigs};
+
 fn main() {
     run();
     // SpiderMonkey's atexit handler segfaults if the process exits with a live JSContext —
@@ -3113,135 +3115,6 @@ fn fnv(s: &str) -> u64 {
         h = h.wrapping_mul(0x100000001b3);
     }
     h
-}
-
-/// Selector-path keying — ONE Rust definition, shared by the differential oracle (`run_oracle_cmd`)
-/// AND the G1 fidelity probe (`run_fidelity_cmd`). `sig_of` is the class SIGNATURE: fnv1a-32 over the
-/// ASCII-lowercased SORTED deduped class list joined with '.'; a classless element emits the empty
-/// string. The hash runs over **UTF-16 code units** (`encode_utf16`) because that is what the JS
-/// `charCodeAt` yields — this mirrors `sigOf` in chrome.rs BYTE-IDENTICALLY, which is a precondition
-/// for the diff meaning anything (a signature computed two ways is two different keys).
-fn sig_of(dom: &manuk_dom::Dom, n: manuk_dom::NodeId) -> String {
-    let Some(cls) = dom.element(n).and_then(|e| e.attr("class")) else {
-        return String::new();
-    };
-    let mut toks: Vec<String> = cls
-        .split_ascii_whitespace()
-        .map(|t| t.to_ascii_lowercase())
-        .collect();
-    if toks.is_empty() {
-        return String::new();
-    }
-    toks.sort();
-    toks.dedup();
-    let joined = toks.join(".");
-    let mut h: u32 = 0x811c9dc5;
-    for u in joined.encode_utf16() {
-        h ^= u32::from(u);
-        h = h.wrapping_mul(0x0100_0193);
-    }
-    format!(".{h:08x}")
-}
-
-/// Strip every `.SIG` component from a keyed map — the class-signature ABLATION (`MANUK_G1_NO_SIG=1`).
-///
-/// A sig is exactly `.` + 8 lowercase hex digits, and it always sits immediately before
-/// `:nth-of-type(`, so the removal is unambiguous and needs no regex crate. Applied to BOTH sides
-/// identically, so the comparison stays a comparison; applied to `Seen` maps rather than at the
-/// producers, so Chromium's injected JS (a byte-identical contract with `sig_of`) is left untouched.
-///
-/// Collisions are possible in principle — two same-tag siblings differing only by class cannot happen,
-/// because `nth-of-type` already distinguishes same-tag siblings. Where a collision WOULD occur the later entry
-/// wins, which can only LOSE elements from each side, never invent matches; so a coverage number that
-/// rises under ablation is a real signal, not an artifact of the ablation.
-fn strip_sigs(
-    m: std::collections::HashMap<String, manuk_wpt::oracle::Seen>,
-) -> std::collections::HashMap<String, manuk_wpt::oracle::Seen> {
-    m.into_iter()
-        .map(|(k, v)| {
-            let mut out = String::with_capacity(k.len());
-            let mut rest = k.as_str();
-            while let Some(i) = rest.find(":nth-of-type(") {
-                let (head, tail) = rest.split_at(i);
-                // A sig, if present, is the final 9 bytes of `head`: `.` + 8 hex digits.
-                //
-                // ⚠⚠ **`is_char_boundary` is the guard, not a micro-optimisation.** A sig is nine
-                // ASCII bytes, so where one exists `len - 9` is always a char boundary — but a class
-                // name is arbitrary author text, and a page served with a broken charset produces
-                // keys full of multi-byte replacement characters. `swift.org` did exactly that, and
-                // `&head[head.len() - 9..]` landed inside a two-byte `'\u{fffd}'` and **panicked the
-                // whole sweep process**. The site was then recorded as `reason=crashed`, which reads
-                // as a browser Bar-0 event: *the instrument charged its own panic to the engine.*
-                let keep = match head.len().checked_sub(9) {
-                    Some(cut) if head.is_char_boundary(cut) => {
-                        let cand = &head[cut..];
-                        if cand.starts_with('.')
-                            && cand[1..]
-                                .bytes()
-                                .all(|b| b.is_ascii_hexdigit() && !b.is_ascii_uppercase())
-                        {
-                            &head[..cut]
-                        } else {
-                            head
-                        }
-                    }
-                    _ => head,
-                };
-                out.push_str(keep);
-                // Copy `:nth-of-type(N)` verbatim, then continue after it.
-                let close = tail.find(')').map(|c| c + 1).unwrap_or(tail.len());
-                out.push_str(&tail[..close]);
-                rest = &tail[close..];
-            }
-            out.push_str(rest);
-            (out, v)
-        })
-        .collect()
-}
-
-/// `tag.SIG:nth-of-type(N)/…` from the root — N 1-based over the element siblings that share this
-/// element's TAG — mirroring the JS `pathOf` in chrome.rs. An element whose parent is NOT an element
-/// (i.e. `<html>`, whose parent is the document) contributes NO component, because the JS
-/// `e.parentElement` is null there and its loop never runs for it. Emitting a root component on our
-/// side once shifted every key by one level and reported `<html>` MISSING on every site, with total
-/// confidence — so this asymmetry is load-bearing, not an oversight.
-///
-/// **N COUNTS SAME-TAG SIBLINGS, AND THAT IS THE WHOLE POINT (t784).** It used to count ALL element
-/// siblings — `:nth-child` — which makes the key an ABSOLUTE position: one element present in one
-/// document and not the other re-numbers every sibling after it *and every descendant key beneath
-/// them*. t783 measured the damage rather than assuming it: `a1.ro` has 685 of 685 elements identical
-/// under a tag-only key and matched **1 of 685** under the absolute index, and five more sites read
-/// 44–100% tag-overlap against 0.1–0.8% exact. Counting per-tag confines an inserted `<div>`'s blast
-/// radius to the `<div>` keys under its own parent.
-///
-/// ⚠ Identity is UNCHANGED: `(tag, N)` is still unique among a parent's children, so a path is still
-/// unique to an element. This weakens what a MISMATCH means, never what a MATCH means — a weaker key
-/// that could mint agreement between two unrelated trees would be the way this goes wrong, and
-/// `tree_alignment_separates_an_inserted_node_from_two_different_pages` is the gate that says it does
-/// not.
-fn path_of(dom: &manuk_dom::Dom, n: manuk_dom::NodeId) -> Option<String> {
-    let mut parts: Vec<String> = Vec::new();
-    let mut cur = n;
-    loop {
-        let Some(parent) = dom.parent(cur) else { break };
-        if !dom.is_element(parent) {
-            break;
-        }
-        let tag = dom.tag_name(cur)?;
-        let mut i = 1usize;
-        for sib in dom.children(parent) {
-            if sib == cur {
-                break;
-            }
-            if dom.is_element(sib) && dom.tag_name(sib) == Some(tag) {
-                i += 1;
-            }
-        }
-        parts.push(format!("{tag}{}:nth-of-type({i})", sig_of(dom, cur)));
-        cur = parent;
-    }
-    parts.reverse();
-    Some(parts.join("/"))
 }
 
 /// **The merge — where the crawl becomes the ledger.**
