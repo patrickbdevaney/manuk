@@ -62,6 +62,14 @@ fn is_white(p: (u8, u8, u8, u8)) -> bool {
 
 #[test]
 fn clip_path_basic_shapes_cut_the_pixels() {
+    // ⚠⚠ **MERGED INTO ONE `#[test]` DELIBERATELY (t1342) — DO NOT SPLIT THIS BACK OUT.**
+    //
+    // `libtest` spawns a thread per test, including at `--test-threads=1`, and SpiderMonkey allows
+    // exactly one JS thread per process: a second one silently runs no script, or SIGSEGVs outright
+    // if the first is still alive. Two `#[test]`s in a `Page`-building binary therefore means at most
+    // one of them was ever really checked. See `docs/wiki/js-engine.md` and
+    // `g_one_js_thread_per_process.rs`. Enforced by `G_ONE_PAGE_TEST_PER_BINARY`.
+    a_clip_path_applies_to_the_subtree_against_the_declaring_box();
     let fonts = FontContext::new();
     let page = manuk_page::Page::load(HTML, "https://clip.test/", &fonts, W as f32);
     let canvas = page.paint(&fonts, W, H);
@@ -134,7 +142,6 @@ fn clip_path_basic_shapes_cut_the_pixels() {
 /// it — exactly as an `overflow: hidden` ancestor's clip does not. That is a box-tree limitation
 /// shared by both, not a `clip-path` one, and it is the same shape in both cases: **a paint-time
 /// tree walk cannot see a box the layout pass re-parented.**
-#[test]
 fn a_clip_path_applies_to_the_subtree_against_the_declaring_box() {
     const NESTED: &str = r##"<!doctype html><html><head><style>
       body { margin: 0; background: #fff }

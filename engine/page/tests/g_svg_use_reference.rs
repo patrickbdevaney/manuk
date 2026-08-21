@@ -130,6 +130,14 @@ fn boxes(page: &manuk_page::Page, ids: &[&str]) -> String {
 /// **One test, on purpose** — see `g_defer`.
 #[test]
 fn a_use_reference_reports_the_geometry_of_what_it_references() {
+    // ⚠⚠ **MERGED INTO ONE `#[test]` DELIBERATELY (t1342) — DO NOT SPLIT THIS BACK OUT.**
+    //
+    // `libtest` spawns a thread per test, including at `--test-threads=1`, and SpiderMonkey allows
+    // exactly one JS thread per process: a second one silently runs no script, or SIGSEGVs outright
+    // if the first is still alive. Two `#[test]`s in a `Page`-building binary therefore means at most
+    // one of them was ever really checked. See `docs/wiki/js-engine.md` and
+    // `g_one_js_thread_per_process.rs`. Enforced by `G_ONE_PAGE_TEST_PER_BINARY`.
+    a_use_reference_actually_rasterises();
     let fonts = FontContext::new();
     let rt = tokio::runtime::Builder::new_multi_thread()
         .enable_all()
@@ -260,7 +268,6 @@ fn a_use_reference_reports_the_geometry_of_what_it_references() {
 ///
 /// RED-proven: drop the `external_use_defs` injection → `rgb(255,255,255)`, a blank square where
 /// the icon should be. That is what every sprite-shipped icon on the web painted as.
-#[test]
 fn a_use_reference_actually_rasterises() {
     let fonts = FontContext::new();
     let html = r##"<!doctype html><body style="margin:0">

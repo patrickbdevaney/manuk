@@ -50,6 +50,14 @@ fn page(fonts: &FontContext) -> manuk_page::Page {
 
 #[test]
 fn g_media_urls() {
+    // ⚠⚠ **MERGED INTO ONE `#[test]` DELIBERATELY (t1342) — DO NOT SPLIT THIS BACK OUT.**
+    //
+    // `libtest` spawns a thread per test, including at `--test-threads=1`, and SpiderMonkey allows
+    // exactly one JS thread per process: a second one silently runs no script, or SIGSEGVs outright
+    // if the first is still alive. Two `#[test]`s in a `Page`-building binary therefore means at most
+    // one of them was ever really checked. See `docs/wiki/js-engine.md` and
+    // `g_one_js_thread_per_process.rs`. Enforced by `G_ONE_PAGE_TEST_PER_BINARY`.
+    g_media_outcome_bridge();
     let fonts = FontContext::new();
     let p = page(&fonts);
     let wanted = p.pending_media_urls();
@@ -130,7 +138,6 @@ fn g_media_urls() {
 ///   and no real page ever hears a word — the two halves gated separately and never joined.
 /// - **A success CLEARS it.** RED, run: report only failures. Every element that recovered stays
 ///   permanently errored, which is the half a "report the error" bridge silently drops.
-#[test]
 fn g_media_outcome_bridge() {
     let fonts = FontContext::new();
     let mut p = manuk_page::Page::load(

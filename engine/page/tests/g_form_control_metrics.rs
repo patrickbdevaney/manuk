@@ -141,6 +141,15 @@ fn assert_h(page: &manuk_page::Page, sel: &str, want: f32, why: &str) {
 
 #[test]
 fn g_form_control_metrics() {
+    // ⚠⚠ **MERGED INTO ONE `#[test]` DELIBERATELY (t1342) — DO NOT SPLIT THIS BACK OUT.**
+    //
+    // `libtest` spawns a thread per test, including at `--test-threads=1`, and SpiderMonkey allows
+    // exactly one JS thread per process: a second one silently runs no script, or SIGSEGVs outright
+    // if the first is still alive. Two `#[test]`s in a `Page`-building binary therefore means at most
+    // one of them was ever really checked. See `docs/wiki/js-engine.md` and
+    // `g_one_js_thread_per_process.rs`. Enforced by `G_ONE_PAGE_TEST_PER_BINARY`.
+    g_control_line_height_is_normal();
+    g_form_control_box_sizing();
     let fonts = FontContext::new();
     let page = manuk_page::Page::load(HTML, "https://forms.test/", &fonts, 1200.0);
 
@@ -243,7 +252,6 @@ fn g_form_control_metrics() {
 /// against Chrome's 81 — the body's 1.7 walking back in — while `#lo` and `#ld` still pass. That
 /// split is what makes the pair of constraints worth asserting: a gate that only checked the
 /// textarea could not tell "we reset it on controls" from "we disabled line-height".
-#[test]
 fn g_control_line_height_is_normal() {
     let fonts = FontContext::new();
     let page = manuk_page::Page::load(LH_HTML, "https://forms.test/", &fonts, 1200.0);
@@ -325,7 +333,6 @@ fn g_control_line_height_is_normal() {
 ///
 /// To watch it go RED, drop the `box-sizing: border-box` rule from `stylo_engine.rs`: the button,
 /// submit and select rows read 70 and the three content-box controls stay green.
-#[test]
 fn g_form_control_box_sizing() {
     const BS_HTML: &str = r#"<!DOCTYPE html><html><head><style>
       body{margin:0;font:16px Arial}

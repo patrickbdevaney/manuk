@@ -89145,3 +89145,88 @@ does not even leave something to check.
 **NEXT.** (a) ⭐⭐⭐ Merge the twelve, then a source-scanning gate forbidding a second `#[test]` in a
 `Page`-building binary. (b) Re-attribute what the teardown steer was carrying: the `ACCUM` bucket and
 the 519 binaries have a different cause than the one that was assumed. (c) I3's mechanical debt.
+
+## t1342 — the twelve are merged, and the reason they were dangerous was measured to be wrong
+
+TICK SHAPE: instrument fidelity — a merge + an enforcing gate, and a CORRECTION to the previous
+tick's own blast-radius claim. Board re-run at the top of this tick: unchanged (2026-08-21 observer
+mandate, three tracks). Reached from t1341's ⭐⭐⭐ NEXT (a), which named both halves.
+
+t1341 closed with a ⭐⭐⭐ NEXT: *"merge the twelve, then a source-scanning gate forbidding a second
+`#[test]` in a `Page`-building binary."* Both landed. But the tick's finding is not the merge — it is
+that **the merge's own justification did not survive its falsifier**, and the falsifier cost four
+minutes.
+
+### The claim, and the probe that shrank it
+
+t1341 wrote that the twelve multi-test binaries "are also in the SIGSEGV regime, surviving on
+scheduling luck" — a live Bar-0 flake. The mechanism behind that (one JS thread per process; two
+alive at once segfault) was measured and is correct. The *population it endangers* was **inferred**.
+
+Two concurrent `Page`s, one variable changed:
+
+```text
+   two concurrent Pages, NO <script>       both threads fine; js_available=true on both
+   two concurrent Pages, WITH <script>     SIGSEGV (signal 11) before either test returns
+```
+
+⭐⭐ **THE TRIGGER IS `<script>`, NOT `Page`.** SpiderMonkey is initialised by a script *running* —
+not by `Page::load`, not by parsing, not by layout. Counting `<script>` per test across all twelve at
+their pre-merge revision:
+
+```text
+   g_silent_fail        [4, 0]      g_media_urls     [0, 1]      g_scroll_snap  [0, 1]
+   the other nine       all zero    max scripted tests in any one binary: 1
+```
+
+**Not one of the twelve was crashing, and not one was flaky.** They were one `<script>` away. The
+merge is still right — it makes the landmine unreachable rather than unlikely — but it bought a
+*latent* Bar-0 hazard, not a live one, and the journal said otherwise.
+
+⭐⭐⭐ **A MECHANISM THAT IS REAL DOES NOT MAKE THE BLAST RADIUS YOU ASSUMED FOR IT REAL.** This is
+the same shape as check #126's correction about steers, arriving one tick later and from the inside:
+t1341 stated the mechanism with a measurement and the blast radius with a sentence, in the same
+paragraph, in the same voice. Nothing in the write-up distinguished them. The check that separated
+them was `python3` over `git show HEAD:` — available at the time of writing, and cheaper than the
+sentence was to type.
+
+### What landed
+
+- **The twelve merged**, extras called as plain functions from the survivor's body, each with a
+  comment saying why it must not be split back out. `g_contain` (3 tests) is untouched: it builds no
+  `Page`.
+- **`G_ONE_PAGE_TEST_PER_BINARY`** — a source-scanning arm added to `g_one_js_thread_per_process.rs`.
+  It scans `engine/*/tests` + `tests/*/tests` (507 files, 495 naming `Page`) and fails naming the
+  file and its test count.
+  - ⭐ **It lives inside an existing gate's single `#[test]`, adding ZERO binaries.** A wall that is
+    link-bound at ~520 static mozjs binaries should not pay a fresh link to enforce a rule about not
+    paying fresh links. It also means the gate obeys itself.
+  - **It keys on `Page`, deliberately wider than the measured hazard.** Keying on `<script>` would
+    make the rule lapse the moment a script tag is deleted and bite a later author who never had
+    SpiderMonkey in mind. 495 of 506 files already obey the wider rule; it costs nothing.
+  - **Anti-vacuity arms run first** — ≥300 files scanned, ≥300 naming `Page`, and ≥1 file in the tree
+    with more than one test attribute, so a scanner whose needle stopped matching cannot pass by
+    finding nothing.
+
+**Proven RED** by putting `#[test]` back on
+`a_clip_path_applies_to_the_subtree_against_the_declaring_box`:
+
+```text
+   G_ONE_PAGE_TEST_PER_BINARY: 1 test binaries build a `Page` and hold more than one test attribute:
+       engine/page/tests/g_clip_path.rs — 2 tests
+```
+
+The over-scoped claim is corrected in `docs/wiki/js-engine.md` where it was written, not only here.
+
+⚠ HARNESS (observer, not acted on per scope). The first wall attempt for this tick went RED on an
+INSTRUMENT FAULT, not an engine verdict: `G_RUNAWAY` and `G_CONTAIN` both reported
+`error: failed to write .../target/debug/.fingerprint/manuk-page-<hash>/invoked.timestamp` — cargo's
+fingerprint directory deleted underneath a live build. `/home` was at 56%, so this is not ENOSPC; it
+is the documented wall-vs-hygiene-cron race, and the cron moved from `*/3` to `*/1` in `a708ab09`
+eleven minutes before the wall ran. `G_INTERACT` failed in the same run with no build marker, which
+is the shape of contention rather than a latency regression. Re-run warm.
+
+**NEXT.** (a) Re-attribute what the teardown steer was carrying: the `ACCUM` bucket and the
+519-binary link cost still have an unexamined cause. (b) Track A — `writing-mode` / logical geometry,
+the board's #1 structural hole (unimplemented; blocks three areas). (c) I3's mechanical debt, now
+carried through four checks.

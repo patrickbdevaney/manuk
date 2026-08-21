@@ -91,6 +91,14 @@ fn rect_of(page: &manuk_page::Page, sel: &str) -> manuk_layout::Rect {
 
 #[test]
 fn g_inline_box_is_its_own_content_area() {
+    // ⚠⚠ **MERGED INTO ONE `#[test]` DELIBERATELY (t1342) — DO NOT SPLIT THIS BACK OUT.**
+    //
+    // `libtest` spawns a thread per test, including at `--test-threads=1`, and SpiderMonkey allows
+    // exactly one JS thread per process: a second one silently runs no script, or SIGSEGVs outright
+    // if the first is still alive. Two `#[test]`s in a `Page`-building binary therefore means at most
+    // one of them was ever really checked. See `docs/wiki/js-engine.md` and
+    // `g_one_js_thread_per_process.rs`. Enforced by `G_ONE_PAGE_TEST_PER_BINARY`.
+    g_inline_box_click_point_is_the_inline_box();
     let fonts = FontContext::new();
     let page = manuk_page::Page::load(HTML, "https://inline.test/", &fonts, 1200.0);
 
@@ -179,7 +187,6 @@ fn g_inline_box_is_its_own_content_area() {
 ///
 /// Goes RED with either mutation above — and also if `build_tree_with_rects` ever stops reading
 /// `node_rects`, which is the coupling this gate is really pinning.
-#[test]
 fn g_inline_box_click_point_is_the_inline_box() {
     let fonts = FontContext::new();
     let page = manuk_page::Page::load(HTML, "https://inline.test/", &fonts, 1200.0);

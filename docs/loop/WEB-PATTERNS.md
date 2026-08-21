@@ -8100,3 +8100,17 @@ inventing one. What it unlocks is the ability to **trust** every other row in th
 built on a non-first thread runs no JavaScript and says nothing about it, so any gate asserting that
 some class of the web works could have been asserting it about a page where no script ever ran.
 `manuk_js::js_available()` is how a test tells "the script did nothing" from "the script never ran".
+
+## Not a web pattern — the harness pattern from t1341, now enforced, and its blast radius corrected
+
+t1342 merges the twelve gate binaries that had grown a second `#[test]` while building a `Page`, and
+adds `G_ONE_PAGE_TEST_PER_BINARY` so the rule holds without anyone remembering the mechanism. As with
+t1341 there is no user-visible web class behind it, and saying so beats inventing one.
+
+⭐⭐ What is worth carrying into the *web* rows: t1341 recorded that those twelve were a live
+crash-flake, and measurement says they were not. SpiderMonkey is initialised by a script **running** —
+not by `Page::load`, parsing or layout — so two concurrent `Page`s only SIGSEGV when both carry
+`<script>`, and every one of the twelve had at most one scripted test. The mechanism was measured; the
+population it endangered was inferred in the same paragraph and in the same voice. Every row in this
+ledger that says "this class of the web is affected" is the same kind of sentence, and a frequency
+claim is cheaper to check than to write.

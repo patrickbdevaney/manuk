@@ -43,6 +43,14 @@ document.getElementById('out').textContent = r.join(' ');
 
 #[test]
 fn color_scheme_reaches_cssom() {
+    // ⚠⚠ **MERGED INTO ONE `#[test]` DELIBERATELY (t1342) — DO NOT SPLIT THIS BACK OUT.**
+    //
+    // `libtest` spawns a thread per test, including at `--test-threads=1`, and SpiderMonkey allows
+    // exactly one JS thread per process: a second one silently runs no script, or SIGSEGVs outright
+    // if the first is still alive. Two `#[test]`s in a `Page`-building binary therefore means at most
+    // one of them was ever really checked. See `docs/wiki/js-engine.md` and
+    // `g_one_js_thread_per_process.rs`. Enforced by `G_ONE_PAGE_TEST_PER_BINARY`.
+    dark_color_scheme_paints_a_dark_canvas();
     let fonts = FontContext::new();
     let page = manuk_page::Page::load(HTML, "https://colorscheme.test/", &fonts, 800.0);
     let root = page.dom().root();
@@ -71,7 +79,6 @@ fn color_scheme_reaches_cssom() {
 const DARK: &str = r##"<!doctype html><html style="color-scheme: dark"><body style="margin:0"><p>short</p></body></html>"##;
 const PLAIN: &str = r##"<!doctype html><html><body style="margin:0"><p>short</p></body></html>"##;
 
-#[test]
 fn dark_color_scheme_paints_a_dark_canvas() {
     let fonts = FontContext::new();
 

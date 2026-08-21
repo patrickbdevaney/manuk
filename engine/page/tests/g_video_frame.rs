@@ -73,6 +73,14 @@ fn dominant(p: (u8, u8, u8), ch: char) -> bool {
 
 #[test]
 fn a_decoded_frame_paints_over_the_poster_in_the_video_box() {
+    // ⚠⚠ **MERGED INTO ONE `#[test]` DELIBERATELY (t1342) — DO NOT SPLIT THIS BACK OUT.**
+    //
+    // `libtest` spawns a thread per test, including at `--test-threads=1`, and SpiderMonkey allows
+    // exactly one JS thread per process: a second one silently runs no script, or SIGSEGVs outright
+    // if the first is still alive. Two `#[test]`s in a `Page`-building binary therefore means at most
+    // one of them was ever really checked. See `docs/wiki/js-engine.md` and
+    // `g_one_js_thread_per_process.rs`. Enforced by `G_ONE_PAGE_TEST_PER_BINARY`.
+    the_frame_does_not_resize_the_video_box();
     let fonts = FontContext::new();
     let (cw, chh) = (200u32, 120u32);
 
@@ -125,7 +133,6 @@ fn a_decoded_frame_paints_over_the_poster_in_the_video_box() {
     );
 }
 
-#[test]
 fn the_frame_does_not_resize_the_video_box() {
     // A `<video>`'s box comes from its attributes/CSS, never from the frame currently on screen —
     // otherwise the page reflows on the first frame, and again every time an adaptive stream changes

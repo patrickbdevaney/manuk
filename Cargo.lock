@@ -3151,7 +3151,7 @@ dependencies = [
 
 [[package]]
 name = "manuk-a11y"
-version = "0.1.0"
+version = "1.0.0"
 dependencies = [
  "manuk-dom",
  "manuk-html",
@@ -3159,7 +3159,7 @@ dependencies = [
 
 [[package]]
 name = "manuk-agent"
-version = "0.1.0"
+version = "1.0.0"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -3183,7 +3183,7 @@ dependencies = [
 
 [[package]]
 name = "manuk-bidi"
-version = "0.1.0"
+version = "1.0.0"
 dependencies = [
  "anyhow",
  "base64",
@@ -3199,7 +3199,7 @@ dependencies = [
 
 [[package]]
 name = "manuk-compositor"
-version = "0.1.0"
+version = "1.0.0"
 dependencies = [
  "libc",
  "manuk-layout",
@@ -3209,7 +3209,7 @@ dependencies = [
 
 [[package]]
 name = "manuk-css"
-version = "0.1.0"
+version = "1.0.0"
 dependencies = [
  "app_units",
  "cssparser 0.34.0",
@@ -3230,7 +3230,7 @@ dependencies = [
 
 [[package]]
 name = "manuk-demo"
-version = "0.1.0"
+version = "1.0.0"
 dependencies = [
  "console_error_panic_hook",
  "getrandom 0.2.17",
@@ -3248,14 +3248,14 @@ dependencies = [
 
 [[package]]
 name = "manuk-dom"
-version = "0.1.0"
+version = "1.0.0"
 dependencies = [
  "smallvec",
 ]
 
 [[package]]
 name = "manuk-html"
-version = "0.1.0"
+version = "1.0.0"
 dependencies = [
  "html5ever",
  "manuk-dom",
@@ -3266,7 +3266,7 @@ dependencies = [
 
 [[package]]
 name = "manuk-js"
-version = "0.1.0"
+version = "1.0.0"
 dependencies = [
  "getrandom 0.3.4",
  "manuk-a11y",
@@ -3287,7 +3287,7 @@ dependencies = [
 
 [[package]]
 name = "manuk-layout"
-version = "0.1.0"
+version = "1.0.0"
 dependencies = [
  "manuk-css",
  "manuk-dom",
@@ -3302,7 +3302,7 @@ dependencies = [
 
 [[package]]
 name = "manuk-media"
-version = "0.1.0"
+version = "1.0.0"
 dependencies = [
  "avif-parse",
  "matroska-demuxer",
@@ -3315,7 +3315,7 @@ dependencies = [
 
 [[package]]
 name = "manuk-net"
-version = "0.1.0"
+version = "1.0.0"
 dependencies = [
  "adblock",
  "anyhow",
@@ -3348,7 +3348,7 @@ dependencies = [
 
 [[package]]
 name = "manuk-page"
-version = "0.1.0"
+version = "1.0.0"
 dependencies = [
  "anyhow",
  "base64",
@@ -3377,7 +3377,7 @@ dependencies = [
 
 [[package]]
 name = "manuk-paint"
-version = "0.1.0"
+version = "1.0.0"
 dependencies = [
  "anyhow",
  "fontdue",
@@ -3392,7 +3392,7 @@ dependencies = [
 
 [[package]]
 name = "manuk-shell"
-version = "0.1.0"
+version = "1.0.0"
 dependencies = [
  "anyhow",
  "arboard",
@@ -3425,7 +3425,7 @@ dependencies = [
 
 [[package]]
 name = "manuk-store"
-version = "0.1.0"
+version = "1.0.0"
 dependencies = [
  "anyhow",
  "argon2",
@@ -3439,7 +3439,7 @@ dependencies = [
 
 [[package]]
 name = "manuk-text"
-version = "0.1.0"
+version = "1.0.0"
 dependencies = [
  "brotli-decompressor",
  "flate2",
@@ -3454,7 +3454,7 @@ dependencies = [
 
 [[package]]
 name = "manuk-wpt"
-version = "0.1.0"
+version = "1.0.0"
 dependencies = [
  "anyhow",
  "http-body-util",

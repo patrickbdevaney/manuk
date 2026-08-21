@@ -54,6 +54,14 @@ fn ids(page: &manuk_page::Page, sel: &str) -> manuk_dom::NodeId {
 
 #[test]
 fn g_scroll_snap() {
+    // ⚠⚠ **MERGED INTO ONE `#[test]` DELIBERATELY (t1342) — DO NOT SPLIT THIS BACK OUT.**
+    //
+    // `libtest` spawns a thread per test, including at `--test-threads=1`, and SpiderMonkey allows
+    // exactly one JS thread per process: a second one silently runs no script, or SIGSEGVs outright
+    // if the first is still alive. Two `#[test]`s in a `Page`-building binary therefore means at most
+    // one of them was ever really checked. See `docs/wiki/js-engine.md` and
+    // `g_one_js_thread_per_process.rs`. Enforced by `G_ONE_PAGE_TEST_PER_BINARY`.
+    g_scroll_snap_computed_style();
     let fonts = FontContext::new();
     let mut page = manuk_page::Page::load(HTML, "https://snap.test/", &fonts, 800.0);
     let rail = ids(&page, "#rail");
@@ -107,7 +115,6 @@ fn g_scroll_snap() {
 }
 
 /// The properties reach `getComputedStyle` — the feature-detect a carousel library runs.
-#[test]
 fn g_scroll_snap_computed_style() {
     let fonts = FontContext::new();
     let mut page = manuk_page::Page::load(

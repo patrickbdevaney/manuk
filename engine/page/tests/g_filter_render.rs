@@ -65,6 +65,14 @@ fn at(bytes: &[u8], x: u32, y: u32) -> (u8, u8, u8, u8) {
 
 #[test]
 fn css_filter_reaches_the_pixels() {
+    // ⚠⚠ **MERGED INTO ONE `#[test]` DELIBERATELY (t1342) — DO NOT SPLIT THIS BACK OUT.**
+    //
+    // `libtest` spawns a thread per test, including at `--test-threads=1`, and SpiderMonkey allows
+    // exactly one JS thread per process: a second one silently runs no script, or SIGSEGVs outright
+    // if the first is still alive. Two `#[test]`s in a `Page`-building binary therefore means at most
+    // one of them was ever really checked. See `docs/wiki/js-engine.md` and
+    // `g_one_js_thread_per_process.rs`. Enforced by `G_ONE_PAGE_TEST_PER_BINARY`.
+    a_filtered_group_stays_clipped_when_the_page_is_scrolled();
     let fonts = FontContext::new();
     let page = manuk_page::Page::load(HTML, "https://filter.test/", &fonts, W as f32);
     let canvas = page.paint(&fonts, W, H);
@@ -133,7 +141,6 @@ fn css_filter_reaches_the_pixels() {
 /// scroll, and it slides the clip clean off the element — and it is **invisible to every gate that
 /// renders at scroll 0**, which is what the rest of this file does. (It was written that way first
 /// and caught on re-read, not by a test; this is the test.)
-#[test]
 fn a_filtered_group_stays_clipped_when_the_page_is_scrolled() {
     let fonts = FontContext::new();
     let page = manuk_page::Page::load(HTML, "https://filter.test/", &fonts, W as f32);

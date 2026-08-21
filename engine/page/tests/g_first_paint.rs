@@ -67,6 +67,14 @@ fn serve(html: String) -> String {
 
 #[test]
 fn first_paint_does_not_wait_for_images() {
+    // ⚠⚠ **MERGED INTO ONE `#[test]` DELIBERATELY (t1342) — DO NOT SPLIT THIS BACK OUT.**
+    //
+    // `libtest` spawns a thread per test, including at `--test-threads=1`, and SpiderMonkey allows
+    // exactly one JS thread per process: a second one silently runs no script, or SIGSEGVs outright
+    // if the first is still alive. Two `#[test]`s in a `Page`-building binary therefore means at most
+    // one of them was ever really checked. See `docs/wiki/js-engine.md` and
+    // `g_one_js_thread_per_process.rs`. Enforced by `G_ONE_PAGE_TEST_PER_BINARY`.
+    an_inline_svg_paints_its_vectors();
     // **This gate's FIRST version was vacuous**, and the falsifier would have missed it because the
     // mutation I wrote did not compile (a compile error and a failing assertion are the same exit code
     // — the falsifier now refuses that). The vacuity: it called `Page::load`, which never fetched an
@@ -147,7 +155,6 @@ fn first_paint_does_not_wait_for_images() {
 /// through the SAME usvg/resvg path that decodes `<img src="*.svg">` (xmlns injected when the
 /// HTML parser dropped it). The assert is on PIXELS, not on the decode returning Some: a decoded
 /// image that never reaches the display list is the failure this gate exists to catch.
-#[test]
 fn an_inline_svg_paints_its_vectors() {
     let fonts = FontContext::new();
     let html = r##"<!doctype html><body style="margin:0">

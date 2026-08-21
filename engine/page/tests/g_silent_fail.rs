@@ -84,6 +84,14 @@ impl Capture {
 
 #[test]
 fn a_script_error_is_never_swallowed() {
+    // ⚠⚠ **MERGED INTO ONE `#[test]` DELIBERATELY (t1342) — DO NOT SPLIT THIS BACK OUT.**
+    //
+    // `libtest` spawns a thread per test, including at `--test-threads=1`, and SpiderMonkey allows
+    // exactly one JS thread per process: a second one silently runs no script, or SIGSEGVs outright
+    // if the first is still alive. Two `#[test]`s in a `Page`-building binary therefore means at most
+    // one of them was ever really checked. See `docs/wiki/js-engine.md` and
+    // `g_one_js_thread_per_process.rs`. Enforced by `G_ONE_PAGE_TEST_PER_BINARY`.
+    a_dead_subresource_is_never_swallowed();
     let (cap, _g) = capture();
     let fonts = FontContext::new();
 
@@ -235,7 +243,6 @@ fn a_script_error_is_never_swallowed() {
     println!("DEFERRED: {deferred}");
 }
 
-#[test]
 fn a_dead_subresource_is_never_swallowed() {
     let (cap, _g) = capture();
     let fonts = FontContext::new();

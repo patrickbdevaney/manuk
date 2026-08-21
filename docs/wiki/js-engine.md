@@ -3912,7 +3912,10 @@ pins the sequential regime and asserts that the predicate **agrees with the obse
 scripts silently did not run is otherwise indistinguishable from a page whose scripts ran and had no
 effect — and that ambiguity is exactly how a gate passes vacuously.
 
-### ⚠ Open exposure: twelve gate binaries hold more than one `#[test]` and build a `Page`
+### CLOSED (t1342): the twelve are merged, and the rule is now a gate — but the claim above was wrong
+
+The twelve binaries below are merged to one `#[test]` each; the extras are called as plain functions
+from the survivor's body.
 
 ```text
    3  engine/page/tests/g_form_control_metrics.rs      2  g_inline_box_geometry.rs
@@ -3923,7 +3926,35 @@ effect — and that ambiguity is exactly how a gate passes vacuously.
    2  engine/page/tests/g_scroll_snap.rs               2  g_media_urls.rs
 ```
 
-In each, at most one test has working JS, and because `libtest` runs them **concurrently** by default
-they are also in the SIGSEGV regime — a latent Bar-0 flake that survives only on scheduling luck. The
-repair is to **merge** each binary's tests into one, not to split them into more binaries (the wall is
-link-bound; see `docs/loop/WALL-AUDIT.md`). Tracked as the next tick.
+⭐⭐ **THE TRIGGER IS `<script>`, NOT `Page` — and that means "a latent Bar-0 flake surviving on
+scheduling luck", written one section up, was WRONG.** Two concurrent `Page`s, one variable changed:
+
+| two concurrent `Page`s | outcome |
+|---|---|
+| **no `<script>`** | both threads fine; `js_available()` is `true` on both |
+| **with `<script>`** | **SIGSEGV (signal 11)** before either test returns |
+
+SpiderMonkey is initialised by a script *running*, not by parsing or layout. Counting `<script>` per
+test across all twelve at their pre-merge revision, **every one had at most one scripted test** — so
+none of them was crashing, and none of them was even flaky. They were one `<script>` away from it.
+
+⚠ The correction matters more than the fix. The mechanism (one JS thread per process) was measured
+correctly at t1341; the *population it endangers* was inferred rather than measured, and inferring it
+cost nothing to check — the probe that settled it was two `#[test]`s and one `const`. **A mechanism
+that is real does not make the blast radius you assumed for it real.**
+
+### The rule, enforced
+
+`G_ONE_PAGE_TEST_PER_BINARY` — the second arm of `engine/page/tests/g_one_js_thread_per_process.rs`.
+Every integration-test binary naming `manuk_page::Page` must hold exactly one test attribute. It
+scans `engine/*/tests` and `tests/*/tests` and names the offending file and its count.
+
+- **It keys on `Page`, deliberately wider than the measured hazard.** Keying on `<script>` would let
+  the rule lapse whenever a script tag is deleted and bite a later author who was not thinking about
+  SpiderMonkey. 495 of 506 files already obey the wider rule, so it costs nothing.
+- **The repair is always MERGE, never split.** The wall is link-bound at ~520 static mozjs binaries
+  (`docs/loop/WALL-AUDIT.md`); a new gate binary is the most expensive thing a fix can cost. The arm
+  lives inside an existing gate's single test for exactly that reason.
+- **Anti-vacuity arms first**: the scan asserts it saw ≥300 files, that ≥300 name `Page`, and that at
+  least one file in the tree has more than one test attribute — otherwise a scanner that matches
+  nothing passes perfectly while asserting nothing.

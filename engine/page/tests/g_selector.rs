@@ -71,6 +71,14 @@ const HTML: &str = r#"<!doctype html><html><head><style>
 
 #[test]
 fn nested_rules_are_not_dropped_and_the_selectors_that_worked_still_work() {
+    // ⚠⚠ **MERGED INTO ONE `#[test]` DELIBERATELY (t1342) — DO NOT SPLIT THIS BACK OUT.**
+    //
+    // `libtest` spawns a thread per test, including at `--test-threads=1`, and SpiderMonkey allows
+    // exactly one JS thread per process: a second one silently runs no script, or SIGSEGVs outright
+    // if the first is still alive. Two `#[test]`s in a `Page`-building binary therefore means at most
+    // one of them was ever really checked. See `docs/wiki/js-engine.md` and
+    // `g_one_js_thread_per_process.rs`. Enforced by `G_ONE_PAGE_TEST_PER_BINARY`.
+    attribute_selector_case_flag_and_namespace();
     let fonts = FontContext::new();
     let page = manuk_page::Page::load(HTML, "https://sel.test/", &fonts, 800.0);
     let root = page.dom().root();
@@ -167,7 +175,6 @@ fn nested_rules_are_not_dropped_and_the_selectors_that_worked_still_work() {
 /// and discarded*, so `[foo='bar' i]` matched `foo="BAR"` case-**sensitively** and returned nothing —
 /// and a namespaced attribute name (`*|foo`) was carried into the match verbatim, matching no attribute.
 /// ~117 subtests hung off exactly these two mechanisms. Probe: `foo="BAR"` on a real element.
-#[test]
 fn attribute_selector_case_flag_and_namespace() {
     const H: &str = r#"<!doctype html><html><body>
         <div id="t" foo="BAR" baz="quux"></div>

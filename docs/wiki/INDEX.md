@@ -1771,7 +1771,8 @@
   - L3868 · ⭐⭐⭐ One JS thread per process — and libtest gives every #[test] its own thread (t1341)
   - L3888 · ⚠⚠⚠ Two regimes, and only one of them is quiet
   - L3908 · The contract, and how to ask
-  - L3915 · ⚠ Open exposure: twelve gate binaries hold more than one #[test] and build a Page
+  - L3915 · CLOSED (t1342): the twelve are merged, and the rule is now a gate — but the claim above was wrong
+  - L3946 · The rule, enforced
 
 ## Manuk Daily-Driver Usability Roadmap (synthesized, tick 138)
 `docs/wiki/lever-map.md`
@@ -2369,4 +2370,4 @@
   - L231 · Both named mechanisms are subsystem work
 
 ---
-2276 sections across 22 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+2277 sections across 22 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
