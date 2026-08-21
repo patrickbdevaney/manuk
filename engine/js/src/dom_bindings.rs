@@ -1137,8 +1137,15 @@ unsafe fn containing_block_size(
         None
     };
     match pos {
-        Position::Static => None,
-        Position::Relative => area(parent_element(node)?, true),
+        // ⭐ A normal-flow box's containing block is its nearest block-container ancestor's CONTENT
+        // box — the same area `Relative` wants, which is why the two arms share one expression. This
+        // arm answered `None` until t1340 for a reason that was true at the time: the only caller was
+        // the inset path, and `inset_needs_containing_block` returns `false` for a static element, so
+        // nothing could ever ask. A percentage MARGIN can, and does.
+        //
+        // ⚠ Adding it is behaviour-preserving for insets by that same fact: no inset call site can
+        // reach this arm, so the widening cannot move a `top`/`left` answer.
+        Position::Static | Position::Relative => area(parent_element(node)?, true),
         Position::Sticky => {
             // The SCROLLPORT: the nearest scroll container's content box. `overflow: hidden` counts
             // — it is a scroll container that the user cannot scroll, not the absence of one.
@@ -1751,6 +1758,26 @@ fn used_inset_css(
 /// two places, and the two would drift — the failure mode this file already carries three notes
 /// about. Being *wrong* in the other direction is the one that cannot happen: a `false` here means
 /// no inset has a percentage, so no call can need a basis.
+/// Whether reporting this element's **margins** needs the containing block walked.
+///
+/// Deliberately the same shape as [`inset_needs_containing_block`], and for the same reason: the
+/// walk is a tree walk on a hot call, so it must fire only for the elements that genuinely cannot be
+/// answered without it. A `margin: 40px` and a `margin: auto` both resolve without a basis.
+fn margin_needs_containing_block(cs: &manuk_css::ComputedStyle) -> bool {
+    use manuk_css::{Dim, Display};
+    if cs.display == Display::None || cs.display == Display::Contents {
+        return false;
+    }
+    [
+        &cs.margin.top,
+        &cs.margin.right,
+        &cs.margin.bottom,
+        &cs.margin.left,
+    ]
+    .iter()
+    .any(|d| matches!(d, Dim::Percent(_) | Dim::Calc { .. }))
+}
+
 fn inset_needs_containing_block(cs: &manuk_css::ComputedStyle) -> bool {
     use manuk_css::{Dim, Display, Position};
     if cs.position == Position::Static
@@ -3239,6 +3266,34 @@ fn computed_style_js(
     // longhands, matching the order `getPropertyValue` already answers them in.
     // Computed ONCE and shared by the three consumers below (the enumeration list, the object slots,
     // the dashed aliases). It builds ~60 strings and `getComputedStyle` is a hot, forced-reflow path.
+    // ⚠⚠ **A MARGIN'S RESOLVED VALUE IS THE USED VALUE, AND A PERCENTAGE NEVER REACHED PX.**
+    //
+    // CSSOM-View puts `margin-*` in the used-value bucket for an element that generates a box —
+    // `width`/`height` already go through `used_dim_css` for exactly that reason, and the four
+    // margins were still publishing what the cascade holds. Chrome-measured in a 1000px containing
+    // block: `calc(50% - 10px)` reads **`490px`**, where we answered `calc(-10px + 50%)`.
+    //
+    // ⭐ **A script reading a margin gets a STRING, and `parseFloat("calc(-10px + 50%)")` is `NaN`.**
+    // Every layout script that measures its own gutters — a masonry, a sticky-offset calculator, a
+    // carousel step — takes that path, so the failure is a silently wrong POSITION rather than a
+    // visible error. `"10%"` is worse still: `parseFloat` succeeds and yields `10`.
+    //
+    // All four sides resolve against the containing block's **inline** size (CSS 2.1 §8.3),
+    // block-axis pair included — the rule authors are most often surprised by, and the reason
+    // `top`/`bottom` read `c[2]` here and not `c[3]`.
+    //
+    // ⚠ `auto` is left alone and named as residue: its used value is a real number too (a centred
+    // 200px block in a 1000px parent reads `400px` in Chrome), but deriving it needs the used width
+    // and the sibling margin — a different computation from resolving a percentage, and a confident
+    // wrong number is worse here than an honest `auto` because `parseFloat` cannot tell them apart.
+    let margin_css = |d: &manuk_css::Dim| -> String {
+        match cb {
+            Some(c) if matches!(d, manuk_css::Dim::Percent(_) | manuk_css::Dim::Calc { .. }) => {
+                format!("{}px", d.resolve(c[2], 0.0))
+            }
+            _ => dim_css(d),
+        }
+    };
     let extra = extra_computed_props(cs, cb, rect, content_absent_is_none, tracks);
     let names_js = {
         const STD: &[&str] = COMPUTED_STD_NAMES;
@@ -3343,10 +3398,10 @@ fn computed_style_js(
         // `writing-mode` has no `ComputedStyle` field — every box is `horizontal-tb`.
         q(&used_dim_css(cs, rect, true).unwrap_or_else(|| dim_css(&cs.width))),
         q(&used_dim_css(cs, rect, false).unwrap_or_else(|| dim_css(&cs.height))),
-        q(&dim_css(&cs.margin.top)),
-        q(&dim_css(&cs.margin.right)),
-        q(&dim_css(&cs.margin.bottom)),
-        q(&dim_css(&cs.margin.left)),
+        q(&margin_css(&cs.margin.top)),
+        q(&margin_css(&cs.margin.right)),
+        q(&margin_css(&cs.margin.bottom)),
+        q(&margin_css(&cs.margin.left)),
         q(&dim_css(&cs.padding.top)),
         q(&dim_css(&cs.padding.right)),
         q(&dim_css(&cs.padding.bottom)),
@@ -3596,7 +3651,8 @@ unsafe fn window_get_computed_style(cx: *mut RawJSContext, argc: u32, vp: *mut V
             None
         } else {
             with_style_in(dom, n, |cs| {
-                inset_needs_containing_block(cs).then_some(cs.position)
+                (inset_needs_containing_block(cs) || margin_needs_containing_block(cs))
+                    .then_some(cs.position)
             })
             .flatten()
             .and_then(|pos| containing_block_size(dom, n, pos))

@@ -89031,3 +89031,58 @@ someone can run; #126's three steers each carry one.
 with `Static` on the fixture and compare to 1000px *before* writing the predicate. (b) SpiderMonkey
 teardown, per steer #1's falsifier — two `Page`s in one `#[test]` first. (c) I3's mechanical debt,
 now carried through three checks.
+
+## t1340 — the missing half was an arm that answered `None` because nobody could ask
+
+t1339 specified the margin used-value fix and reverted the code, because the four-line serialization
+change compiled and moved nothing. Check #126's steer #2 carried a falsifier — *"refuted if
+`containing_block_size` already returns the right basis for a `Position::Static` element"* — and it
+took one `sed -n` to answer:
+
+```rust
+    match pos {
+        Position::Static => None,
+        Position::Relative => area(parent_element(node)?, true),
+```
+
+⭐⭐⭐ **THE ARM ANSWERED `None` BECAUSE NO CALLER COULD EVER REACH IT, NOT BECAUSE THE ANSWER IS
+`None`.** The sole caller was the inset path, and `inset_needs_containing_block` returns `false` for a
+static element on its first line — so the arm was unreachable, and an unreachable arm's value is a
+claim nobody has ever checked. A normal-flow box's containing block is its nearest block-container
+ancestor's content box: exactly `Relative`'s expression, one line away. ⚠ That same unreachability is
+what makes adding it **behaviour-preserving for insets** — no inset call site can get here, so the
+widening cannot move a `top`/`left` answer. The falsifier resolved in the steer's favour and told me
+where the work was in one read.
+
+**Three parts, then:** `margin_needs_containing_block` (as narrow as the inset predicate — `40px` and
+`auto` must not pay), the `Static | Relative` arm, and `margin_css` at the four call sites resolving
+against `cb[2]` for all four sides.
+
+⭐ **The hot-path worry the original gate was written against does not apply to this case.** Its
+comment prices the cost as *"an abspos element with no positioned ancestor walks to the root"* — but
+that is the `Absolute | Fixed` arm. `Static`/`Relative` take the parent and stop, so a percentage
+margin costs one `parent_element` + one `layout_rect` + one `with_style`. The predicate stays narrow
+because narrowness is the discipline, not because this case was expensive. ⚠ **A GATE INHERITS ITS
+JUSTIFICATION FROM THE CASE IT WAS WRITTEN FOR, AND THE NEXT CASE THROUGH IT MAY NOT SHARE THE COST.**
+
+```text
+   declared (containing block 1000px)   Chrome    before    after
+   margin-left: calc(50% - 10px)        490px     calc(-10px + 50%)   490px
+   margin-top: 10%                      100px     10%                 100px
+   margin-right: 25%                    250px     25%                 250px
+   margin-left: 40px                     40px     40px                 40px    ← CONTROL
+   margin: auto, width 200px            400px     auto                auto    ← RESIDUE, asserted
+```
+
+`css/cssom` **2803/3507** on a same-hour old-binary control and **2803/3507** after — no regression;
+oilprice.com SHAPE 85.0%, unchanged. Gate `engine/page/tests/g_margin_used_value.rs`, proven RED by
+reverting **either** half alone — the serialization or the arm — which is the pair t1339 could not
+have distinguished.
+
+⚠ HARNESS (observer): t1339's commit landed locally but `push` failed — `ssh: Could not resolve
+hostname github.com: Temporary failure in name resolution`. Not acted on per scope.
+
+**NEXT.** (a) ⭐⭐⭐ SpiderMonkey teardown, per check #126 steer #1's falsifier: construct two `Page`s
+back-to-back in one `#[test]` FIRST, to separate mozjs runtime re-init from our drop order. (b) The
+capability window (steer #3) — check the class mix on two near-miss anchors before committing it.
+(c) I3's mechanical debt, now carried through three checks.

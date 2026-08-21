@@ -8084,3 +8084,11 @@ Measured t1339. Masonry layouts, sticky-offset calculators and carousel step siz
 path, and it is the reason `margin` must resolve to the USED value rather than the computed one:
 `parseFloat("calc(-10px + 50%)")` is `NaN`, and a `NaN` offset is a silently wrong position rather
 than a visible failure. See `docs/wiki/dom-semantics.md`.
+
+## `getComputedStyle(el).marginTop` on a BLOCK-axis percentage margin
+
+Measured t1340. `margin-top: 10%` in a 1000px-wide, 300px-tall containing block reads `100px` — the
+percentage resolves against the containing block's **inline** size, block axis included (CSS 2.1
+§8.3). A script that assumed the block axis uses the block size reads a number that is right only
+when the containing block happens to be square, which is why this is asserted explicitly in
+`g_margin_used_value.rs` rather than left implicit in the `margin-left` case.

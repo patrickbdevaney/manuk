@@ -3918,7 +3918,7 @@ The first is information loss (`Dim::Percent(0.0)` stored as `Px(0.0)`), and a p
 the same thing as a px basis in every context. The second is a float printed through a widening that
 Chrome's shortest-round-trip avoids.
 
-## `margin` resolves to the USED value, and a percentage margin never reached px (t1339, specified not fixed)
+## `margin` resolves to the USED value, and a percentage margin never reached px (t1339 specified, t1340 FIXED)
 
 CSSOM-View resolves `margin-*` to the **used** value for an element with a box — `width` and `height`
 already go through `used_dim_css` for exactly that reason. The four margins still publish the
@@ -3957,3 +3957,26 @@ positioned element's `position`. A wrong basis here is worse than a computed val
 ⚠ `auto` is a third case: its used value is a real number too (a centred block's `margin-left` reads
 `400px` above), but deriving it needs the used width and the sibling margin — a different computation
 from resolving a percentage.
+
+### t1340 — the three parts, and why the cost turned out to be nothing
+
+1. **`margin_needs_containing_block`**, deliberately the same shape as `inset_needs_containing_block`:
+   `display` generates a box, and at least one of the four margins is `Percent` or `Calc`. `40px` and
+   `auto` both resolve without a basis and must not pay.
+2. **A `Position::Static` arm on `containing_block_size`**, sharing `Relative`'s expression — a
+   normal-flow box's containing block is its nearest block-container ancestor's content box. ⭐ The
+   arm answered `None` only because no caller could ever reach it: the sole caller was the inset
+   path, and `inset_needs_containing_block` returns `false` for a static element. That same fact
+   makes the widening behaviour-preserving for insets — it cannot move a `top`/`left` answer.
+3. **`margin_css`** at the four call sites, resolving against `cb[2]` for all four sides.
+
+⭐ **The hot-path worry the original gate was written against does not apply here.** Its comment names
+the cost as *"an abspos element with no positioned ancestor walks to the root"* — but that walk is the
+`Absolute | Fixed` arm. `Static` and `Relative` take the **parent element** and stop, so a percentage
+margin costs one `parent_element` + one `layout_rect` + one `with_style`. The gate is still narrow
+because narrowness is the discipline, not because this case was expensive.
+
+**Measured after (containing block 1000px):** `a[490px] b[100px] c[250px] d[40px] e[auto]` against
+Chrome's `490px 100px 250px 40px 400px` — four exact, the control unchanged, `auto` the named residue.
+`css/cssom` 2803/3507 on a same-hour old-binary control and 2803/3507 after: no regression.
+Gate: `engine/page/tests/g_margin_used_value.rs`, proven RED by reverting **either** half alone.
