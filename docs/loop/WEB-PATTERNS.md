@@ -8041,3 +8041,22 @@ scripts, the round loop multiplies it again (`www.agoda.com`, t666: 17 drains, 4
 ⚠ And the later drains are **shortened, not skipped**: `DOMContentLoaded` and `load` still fire and
 their handlers still run. A page whose listeners never execute is a different and worse failure than
 a slow one.
+
+## `getComputedStyle(el).flex` WAS UNDEFINED WHILE FLEX LAYOUT WORKED (t1337)
+
+**The class.** Any script that measures or mirrors a flex layout — a resize observer recomputing
+columns, a virtualised list deciding row counts, a design-system component reading its own computed
+box, a devtools-style inspector — reads `getComputedStyle(el).flex`. Every browser returns a string;
+we returned **`undefined`**.
+
+The three longhands (`flexGrow`, `flexShrink`, `flexBasis`) had been published since flex landed. The
+shorthand **every author actually writes** had not, so the property the page declared was invisible to
+the page's own scripts while the layout it produced was correct.
+
+⭐ **This is the fourth instance of one class**: `scrollbar-width` reported and not applied,
+`field-sizing` applied and not reported, `documentElement.clientHeight` computed then mis-published,
+and now a shorthand applied and not reported. A capability is not done until BOTH channels answer, and
+`map-reconcile.sh` checks only that a gate exists.
+
+⚠ Found by one of this project's own probes: a corpus diagnosis read `getComputedStyle(x).flex` to ask
+which pass had claimed a box, and the instrument's ordinary question came back `undefined`.

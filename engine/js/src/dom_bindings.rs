@@ -2716,6 +2716,18 @@ const COMPUTED_STD_NAMES: &[&str] = &[
     "flex-grow",
     "flex-shrink",
     "flex-basis",
+    // ⚠⚠ **THE `flex` SHORTHAND — APPLIED FOR AS LONG AS FLEX HAS WORKED AND NEVER REPORTED.**
+    //
+    // The three longhands above have been published since flex landed; the shorthand every author
+    // actually WRITES was `undefined`. Chrome answers `0 1 auto`. This is the fourth instance of the
+    // reported-vs-applied class check #124 named as the invariant under most pressure (I3) —
+    // `scrollbar-width` reported-and-not-applied, `field-sizing` applied-and-not-reported,
+    // `documentElement.clientHeight` computed-then-mis-published, and now this.
+    //
+    // ⭐ Found by a PROBE OF THIS PROJECT'S OWN, reading `getComputedStyle(x).flex` on a corpus
+    // anchor to ask which pass had claimed a box. The instrument asked the engine an ordinary
+    // question and got `undefined`.
+    "flex",
     "row-gap",
     "column-gap",
     // The grid-container properties whose resolved value IS the computed value (t1269).
@@ -3212,6 +3224,7 @@ fn computed_style_js(
     // `flex-grow`/`flex-shrink` serialize as a bare number (`0`, `1`, `2.5`), never a unit.
     let flex_grow = cs.flex_grow.to_string();
     let flex_shrink = cs.flex_shrink.to_string();
+    let flex_shorthand = format!("{flex_grow} {flex_shrink} {}", dim_css(&cs.flex_basis));
     // Box-model longhands frameworks read to decide how to measure: `box-sizing` (is this a
     // border-box element?), and the min/max constraints. `min-*` resolves `auto` → "auto"; `max-*`
     // uses `Dim::Auto` to mean "unconstrained", whose CSS resolved value is **`none`**, not `auto`.
@@ -3284,7 +3297,7 @@ fn computed_style_js(
           justifySelf:{}, transformOrigin:{}, rotate:{}, scale:{}, translate:{}, \
           backgroundPosition:{}, tabSize:{}, \
           flexDirection:{}, flexWrap:{}, \
-          flexGrow:{}, flexShrink:{}, flexBasis:{}, rowGap:{}, columnGap:{}, \
+          flexGrow:{}, flexShrink:{}, flexBasis:{}, flex:{}, rowGap:{}, columnGap:{}, \
           boxSizing:{}, minWidth:{}, maxWidth:{}, minHeight:{}, maxHeight:{}, \
           scrollSnapType:{}, scrollSnapAlign:{}, \
           filter:{}, webkitFilter:{}, backdropFilter:{}, webkitBackdropFilter:{}, \
@@ -3364,6 +3377,9 @@ fn computed_style_js(
         q(&flex_grow),
         q(&flex_shrink),
         q(&dim_css(&cs.flex_basis)),
+        // `flex: <grow> <shrink> <basis>` — CSS Flexbox §7.1.1's serialization is all three, always,
+        // in that order. Chrome prints `0 1 auto` for the initial value rather than collapsing it.
+        q(&flex_shorthand),
         q(&dim_css(&cs.row_gap)),
         q(&dim_css(&cs.column_gap)),
         q(box_sizing),

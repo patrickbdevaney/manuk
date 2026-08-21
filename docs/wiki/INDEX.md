@@ -1235,6 +1235,8 @@
   - L3844 · The implementation
   - L3862 · Measured
   - L3873 · The gate
+  - L3885 · getComputedStyle(el).flex was undefined while flex layout worked (t1337)
+  - L3907 · It exposed two pre-existing flex-basis defects
 
 ## THE FIDELITY INSTRUMENT — what it can and cannot see
 `docs/wiki/fidelity-instrument.md`
@@ -2358,4 +2360,4 @@
   - L231 · Both named mechanisms are subsystem work
 
 ---
-2265 sections across 22 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+2267 sections across 22 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.

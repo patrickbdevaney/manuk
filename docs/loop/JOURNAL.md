@@ -88850,3 +88850,71 @@ NEXT, ranked.
     inline content.
 (d) ⭐⭐ **SPIDERMONKEY TEARDOWN** — blocks `manuk-js` from the wall, is the `ACCUM` bucket, forces
     one-`Page`-per-binary.
+
+## Tick 1337 — `getComputedStyle(el).flex` was `undefined` while flex layout worked (2026-08-20)
+
+TICK SHAPE: capability fix + gate. Board re-run at the top of this tick: **unchanged**. Reached from
+t1336's own narrowed question — *ask our engine for the three computed values on the article's child* —
+and the instrument's ordinary question came back `undefined`.
+
+⚠ **Correction to t1336's entry**: it says *"tick 1336 is COMPLETE ON DISK and cannot land"*. It
+landed, on the thirteenth attempt. The mechanism, the numbers and the refusal in that section are all
+accurate; only the framing was overtaken by the box quieting down.
+
+### THE FIND
+
+```text
+   getComputedStyle(article).flex     Chrome "0 1 auto"     ours  undefined
+   …display, position, cssFloat, float, flexBasis, flexGrow, height, overflow — ALL IDENTICAL
+```
+
+The three longhands have been published since flex landed. The **shorthand every author writes** had
+not, so the property the page declared was invisible to the page's own scripts while the layout it
+produced was correct. Chrome never collapses it — all three components, grow/shrink/basis, always
+(CSS Flexbox §7.1.1), even for the initial value.
+
+⭐ **The fourth instance of the reported-vs-applied class** check #124 named as I3, the invariant under
+most pressure: `scrollbar-width` reported-not-applied (t1314), `field-sizing` applied-not-reported
+(t1314), `documentElement.clientHeight` computed-then-mis-published (t1320), and now a shorthand
+applied-and-not-reported. `map-reconcile.sh` checks that a gate EXISTS, not that a capability answers
+in BOTH channels — so nothing was going to find this except asking.
+
+⚠ And the eight neighbouring properties in the same probe were byte-identical, which is what makes
+this a one-property finding rather than a suspicion about the computed-style surface.
+
+### THE GATE
+
+`G_FLEX_SHORTHAND_PUBLISHED` asserts all three components on three elements — `0 1 auto`,
+`0 1 40px`, `2 3 auto`, Chrome-measured — plus the negative half (`undefined` must not be what a
+reader gets). **PROVEN RED** by removing `"flex"` from `CS_PROPS`: `a[undefined] f[undefined]
+b[undefined]`.
+
+### ⚠⚠ AND IT EXPOSED TWO PRE-EXISTING `flex-basis` SERIALIZATION DEFECTS
+
+Publishing the shorthand made them visible, and checking `flexBasis` ALONE confirms they are not the
+shorthand's:
+
+```text
+   declared            Chrome        ours
+   flex-basis: 0%      0%            0px        <- a zero percentage collapses to px
+   flex-basis: 16.6667%  16.6667%    16.666668% <- f32 noise reaches the serialization
+   flex: 2             0%            0px        (same first defect, via the shorthand's basis)
+```
+
+⭐ The first is information loss at PARSE (`Dim::Percent(0.0)` is being stored as `Px(0.0)`), and a
+percentage basis is not the same thing as a px basis in every context. The second is a float printed
+through a widening that Chrome's shortest-round-trip avoids. Both are named rather than fixed here:
+they are `flex-basis`'s, they predate this tick, and the gate above deliberately uses `40px`/`auto`
+bases so it asserts the shorthand and not them.
+
+NEXT, ranked.
+(a) ⭐⭐⭐ **THE `flex-basis` SERIALIZATION PAIR above** — `0%` → `0px` is parse-level information
+    loss; the precision one is a printing bug. Both are small, both have Chrome numbers already
+    measured, and the first may affect layout wherever a percentage basis resolves differently.
+(b) ⭐⭐⭐ **ASK BOTH QUESTIONS OF EVERY `gated` ROW** — carried from check #124 and audit #73, now
+    with a FOURTH instance. This tick found its instance by accident; the class deserves a sweep.
+(c) ⭐⭐⭐ **REPUBBLICA'S OUT-OF-FLOW CHILD** (t1336's (a)) — the three computed values still need to
+    be read on the LIVE page; the local-file probe HANGS the WPT harness on a 390KB document, which
+    is its own finding.
+(d) ⭐⭐ **THE WEBFONT INVESTIGATION** (t1334's (b)) — `hdnails.it`, `7info.ru`, `mobile.ir` as one
+    question.

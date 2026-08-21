@@ -3881,3 +3881,39 @@ consequence directly: `scrollTop + clientHeight >= scrollHeight` must be **false
 It is its own test binary: a `Page` owns a SpiderMonkey runtime, and two in one test process abort on
 teardown with *"There are outstanding JS engine handles"* — the same shared-runtime reuse the WPT
 runner reports as its `ACCUM` bucket.
+
+## `getComputedStyle(el).flex` was `undefined` while flex layout worked (t1337)
+
+The three longhands — `flexGrow`, `flexShrink`, `flexBasis` — have been published since flex landed.
+The **shorthand every author actually writes** had not:
+
+```text
+   getComputedStyle(article).flex     Chrome "0 1 auto"     ours  undefined
+   …display, position, cssFloat, float, flexBasis, flexGrow, height, overflow — ALL IDENTICAL
+```
+
+Chrome never collapses it: all three components, grow/shrink/basis, always (CSS Flexbox §7.1.1), even
+for the initial value. So the property the page declared was invisible to the page's own scripts while
+the layout it produced was correct.
+
+⭐ **The fourth instance of the reported-vs-applied class** that check #124 named as I3, the invariant
+under most pressure — `scrollbar-width` reported-not-applied, `field-sizing` applied-not-reported,
+`documentElement.clientHeight` computed-then-mis-published, and now a shorthand applied-and-not-reported.
+`map-reconcile.sh` checks that a gate EXISTS, not that a capability answers in BOTH channels.
+
+⚠ The eight neighbouring properties in the same probe were byte-identical, which is what makes this a
+one-property finding rather than a suspicion about the whole surface.
+
+### It exposed two pre-existing `flex-basis` defects
+
+Checking `flexBasis` alone confirms these are not the shorthand's:
+
+```text
+   declared               Chrome      ours
+   flex-basis: 0%         0%          0px          ← a zero percentage collapses to px at PARSE
+   flex-basis: 16.6667%   16.6667%    16.666668%   ← f32 noise reaches the serialization
+```
+
+The first is information loss (`Dim::Percent(0.0)` stored as `Px(0.0)`), and a percentage basis is not
+the same thing as a px basis in every context. The second is a float printed through a widening that
+Chrome's shortest-round-trip avoids.
