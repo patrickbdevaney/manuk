@@ -88579,3 +88579,100 @@ NEXT, ranked.
 (c) ⭐⭐ **SPIDERMONKEY TEARDOWN** — blocks `manuk-js` from the wall, is the WPT runner's `ACCUM`
     bucket, forces one-`Page`-per-binary.
 (d) ⭐⭐ **The 25 unscored in-scope sites** — scorability 81.2% caps M1.
+
+## Tick 1334 — a quarter of the band is FONT-limited, and the classifier was already being printed (2026-08-20)
+
+TICK SHAPE: measurement / re-ranking. Board re-run at the top of this tick: **unchanged**. Took
+t1333's NEXT (a) and audit #75's #1 together. ⚠ **NO ENGINE SOURCE CHANGED**; the deliverable is a
+work order and a closed unknown.
+
+### THE CLASSIFIER WAS ALREADY IN THE OUTPUT
+
+The oracle prints, on every mechanism `e.g.` line, the font BOTH engines measured through canvas
+`measureText` — `{family/size/metric} vs {family/size/metric}`. t1151 built it to answer *"is this a
+different FACE or a different rule?"* ⭐ **Nothing has ever read it.** One serial run per site, count
+the examples where the two annotations differ:
+
+```text
+   site                     shape    ids    font-SAME  font-DIFF   class
+   www.fragrantica.com      72.3%   2976       20          0       LAYOUT
+   www.repubblica.it        73.0%   2467       20          0       LAYOUT
+   www.crazyshop.pl         68.2%   1402       13          0       LAYOUT
+   www.razaoautomovel.com   70.4%   1264       14          0       LAYOUT
+   www.mobile.ir            70.1%   1176        6         13       FONT
+   www.hdnails.it           62.1%   1076        0         17       FONT  (pure)
+   7info.ru                 70.7%    877        0          9       FONT  (pure)
+   nysainfo.pl              84.4%    969        3          1       LAYOUT — and it has LEFT the band
+```
+
+⭐⭐⭐ **Three of eight are FONT-limited, two of them purely — 3,129 of 12,207 ids, 26%.** And the
+band's LOWEST anchor (`hdnails.it`, 62.1%) is the purest font case, so the worst sites are
+disproportionately font rather than layout. §11's largest mechanism family is
+`geometry/mis-sized: width`, and at least a quarter of that mass is a FONT mass wearing a geometry
+label.
+
+Written into `PHASE0-RENDER-BURNDOWN.md` §13 as the work order: layout ticks go to `fragrantica`
+(2,976 ids) and `repubblica` (2,467), the two biggest and cleanest samples in the band; the
+font-limited three become ONE webfont-loading investigation rather than eight geometry ticks.
+
+⚠ `nysainfo.pl` reads 84.4% against 68.2% at t1322 — sites move, and a per-site number older than a
+few hours is a hypothesis (t1327).
+
+### ⚠⚠ AND AUDIT #75's OWN FINDING WAS HALF WRONG, ONE TICK LATER
+
+#75 added **JavaScript decorators** as `unknown` and ranked *"measure decorators"* first, calling it a
+parse-level capability that kills whole script files. Measured, both engines, same `eval`:
+
+```text
+   @d class B {}                        ours SyntaxError    chrome SyntaxError
+   class A { @d m(){} }                 ours SyntaxError    chrome SyntaxError
+   #private + static{} + for-await      ours OK             chrome OK          ← CONTROLS
+```
+
+⭐ **Chrome 145 does not have decorators either.** The controls are what make that readable: three
+other modern syntaxes in the same `eval` pass in both, so the SyntaxError is about decorators and not
+about the fixture.
+
+⚠⚠ **So Edge's "top developer needs" is a WISHLIST — what developers want browsers to ADD — and #75
+reconciled our map against it as though it were a list of what shipping browsers HAVE.** Those are
+different questions and only the second is a parity gap. The row is now `missing` with the
+measurement, so the next audit does not re-add it as unknown.
+
+⭐ Two audits, two corrections, one tick apart: #74 generalised from one source to "the world" (#75
+corrected it), and #75 mistook a wishlist for a capability list (this tick corrects it). **The surface
+audit's own instruction is to reconcile against what the world NAMES — and what the world names
+includes what it wishes for.**
+
+### ⚠⚠ HARNESS — the wall's contention is the wall's OWN `find`, over a 527,203-FILE directory
+
+This tick took seven wall runs, all failing on the shell lane's vacuous signature. Load never fell
+below ~12, and the top three CPU consumers throughout were:
+
+```text
+   find target/debug/deps -maxdepth 1 -type f -executable -name g_grid_implicit_tracks-* …
+   find target/debug/deps -maxdepth 1 -type f -executable -name g_prototype-* …
+   find target/debug/deps -maxdepth 1 -type f -executable -name g_create_document_validation-* …
+
+   $ ls target/debug/deps | wc -l
+   527203
+```
+
+⭐ **Every gate lookup scans half a million directory entries, ~65 times per wall, at ~104% CPU
+each.** That is not an external cron competing with the wall — *it is the wall*. And it compounds the
+`_out shell` race t1332 measured: the contention stretches the shell suite from 21.9s to 29.6s, which
+widens the ~18-second window in which the capture has no `test result:` line for `_out` to lose in.
+
+⚠ Two harness facts, one landing failure, both now numbered. `scripts/disk-hygiene.sh:118` prunes
+that directory with `-atime +1`, which means scanning all 527k entries to do it. Observer-owned;
+untouched; reported. (The wall audit's standing conclusion — *"the wall is DISK+LINK bound, 519 static
+mozjs gate binaries"* — is the same organ seen from the other side.)
+
+NEXT, ranked.
+(a) ⭐⭐⭐ **`fragrantica.com` or `repubblica.it` — a LAYOUT anchor, now chosen on evidence.** 2,976
+    and 2,467 ids, 20/0 font-clean, both at 72–73%. The biggest clean samples in the band.
+(b) ⭐⭐⭐ **THE WEBFONT INVESTIGATION** — `hdnails.it`, `7info.ru`, `mobile.ir` as one question, not
+    three: which `@font-face` sources does Chrome load that we do not? t1333 established our metrics
+    are Chrome-exact on system faces, so this is loading, not shaping.
+(c) ⭐⭐ **SPIDERMONKEY TEARDOWN** — blocks `manuk-js` from the wall, is the WPT runner's `ACCUM`
+    bucket, forces one-`Page`-per-binary.
+(d) ⭐⭐ **The 25 unscored in-scope sites** — scorability 81.2% caps M1.

@@ -601,3 +601,43 @@ is what §11's own NEXT already guessed and can now justify.
 ⚠ And the general rule the three refutations share: **a `--jobs 2` sweep is still a contended sweep**,
 and a down-mover in a sweep is a SUSPECT, not a regression, until a same-hour serial run and (if it
 survives that) an old-binary control have both been taken.
+
+## §13 — THE BAND SPLITS INTO FONT-LIMITED AND LAYOUT-LIMITED, AND THE CLASSIFIER WAS ALREADY BEING PRINTED (t1334)
+
+§11 ranks the near-miss band by mechanism, and its largest family is `geometry/mis-sized: width`. ⚠ At
+least a quarter of that mass is **not a geometry mass**. The oracle already prints, on every `e.g.`
+line, the font both engines measured through canvas `measureText` — `{family/size/metric} vs
+{family/size/metric}` — and **nothing reads it**.
+
+Reading it, one serial run per site:
+
+```text
+   site                     shape    ids    font-SAME  font-DIFF   class
+   www.fragrantica.com      72.3%   2976       20          0       LAYOUT
+   www.repubblica.it        73.0%   2467       20          0       LAYOUT
+   www.crazyshop.pl         68.2%   1402       13          0       LAYOUT
+   www.razaoautomovel.com   70.4%   1264       14          0       LAYOUT
+   www.mobile.ir            70.1%   1176        6         13       FONT
+   www.hdnails.it           62.1%   1076        0         17       FONT  (pure)
+   7info.ru                 70.7%    877        0          9       FONT  (pure)
+   nysainfo.pl              84.4%    969        3          1       LAYOUT — and it has LEFT the band
+```
+
+⭐⭐⭐ **Three of eight anchors are FONT-limited and two are pure** — zero examples where the two
+engines measured the same face. They carry **3,129 of the 12,207 ids sampled, 26%**. And the band's
+LOWEST-scoring anchor (`hdnails.it`, 62.1%) is the purest font case, so the worst sites are
+disproportionately font rather than layout.
+
+### What this changes about the work order
+
+- **A font-limited site cannot be moved by a layout tick**, and its histogram's top bar
+  (`geometry/mis-sized: width`) reads exactly like a layout lever. t1333's six-row control established
+  that our shaping and advance accumulation are Chrome-exact on every system family — so on these
+  sites the divergence is a webfont Chrome loaded and we did not, and the whole page's text is 20%
+  wide.
+- **Take the LAYOUT-limited anchors for layout ticks** (`fragrantica` 2,976 ids and `repubblica`
+  2,467 ids are the two biggest samples in the band and are 20/0 clean).
+- **Take the font-limited ones as ONE webfont-loading investigation**, not as eight geometry ticks.
+
+⚠ `nysainfo.pl` reads 84.4% here against 68.2% at the t1322 sweep. Sites move; the band's membership
+is a snapshot, and a per-site number older than a few hours is a hypothesis (t1327).
