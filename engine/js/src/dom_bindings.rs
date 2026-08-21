@@ -2293,6 +2293,10 @@ fn extra_computed_props(
             }
             .into(),
         ),
+        // `writing-mode` — the property that decides which physical axis `inline-size` is. It had
+        // no `ComputedStyle` field at all until the logical-geometry subsystem landed, so a page
+        // that set it read back `undefined` and every feature-detect for vertical text said no.
+        ("writing-mode", cs.writing_mode.as_css().into()),
         (
             "vertical-align",
             match cs.vertical_align {

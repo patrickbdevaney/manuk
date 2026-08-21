@@ -89230,3 +89230,181 @@ is the shape of contention rather than a latency regression. Re-run warm.
 519-binary link cost still have an unexamined cause. (b) Track A — `writing-mode` / logical geometry,
 the board's #1 structural hole (unimplemented; blocks three areas). (c) I3's mechanical debt, now
 carried through four checks.
+
+## t1343 — the axes were not wrong, they were the only ones representable
+
+TICK SHAPE: capability — a SUBSYSTEM, per the board's Track A #1 (`writing-mode` / logical geometry,
+"UNIMPLEMENTED — silently blocks thousands of grid failures across 3 areas; biggest single unlock").
+Board re-run at the top of this tick: unchanged (observer mandate 2026-08-21, three tracks). This is
+the first tick of that subsystem and it is scoped as one: computed value → layout → paint → gate.
+
+### The finding, and it arrived before any layout code was written
+
+`writing-mode` was carried in this repo as "unimplemented", on the `UNRENDERED_LONGHANDS` list with a
+Blink use counter beside it (8.3% of page loads). It was not unimplemented. It was **ungated**:
+
+```text
+   stylo/style/properties/longhands.toml
+     [writing-mode]  servo_pref = "layout.writing-mode.enabled"     ← default FALSE
+```
+
+Stylo's servo build **drops the declaration at parse time**, so `cv.writing_mode` was empty on every
+element of every page and `getComputedStyle(el).writingMode` answered `"horizontal-tb"` for a page
+that plainly set `vertical-rl`.
+
+⭐⭐⭐ **A PREF-GATED PROPERTY DOES NOT FAIL, IT DISAPPEARS — and the cascade's answer is a LEGAL
+VALUE.** Nothing throws, nothing is missing, and every instrument in this loop reads a plausible
+number. This is the third time the same shape has been found here (`layout.grid.enabled` at t371,
+`layout.unimplemented` at t576, this) and the three flips now sit in the same function, four lines
+apart. The general form is worth stating because it is a one-line check: **a property whose computed
+value equals its initial value on a page that SETS it is either unimplemented or ungated, and the
+two are one grep of `longhands.toml` apart.**
+
+⚠ **The blast radius is wider than the property, which is what makes it rank above its 8.3%.** Stylo
+maps every LOGICAL declaration — `inline-size`, `margin-block-start`, `inset-inline-end`, the whole
+vocabulary a modern stylesheet is authored in — onto a physical field *against the writing mode it
+computed*. An empty writing mode silently made `inline-size` mean `width` on every element of every
+page. That is correct while the page is horizontal and is the mechanism behind the `css-sizing`,
+`css-position` and `css-overflow` families t1276-1281 measured and parked.
+
+### The design: transpose the subtree, do not teach 26,000 lines a second vocabulary
+
+Two implementations. Thread a logical-axis concept through every sizing rule — the right long-term
+shape, and a change that touches all of `engine/layout`, i.e. trading a working engine for a hoped-for
+one. Or **run the existing horizontal engine in a transposed coordinate space and map the answers
+back**. The second is what landed (`engine/layout/src/writing_mode.rs`), and it works because the
+transposition is *total*: a box's `height` IS the inline size the engine calls `width`, `margin-top`
+IS the inline-start margin it calls `margin-left`, and a run's advance is the same number pointed
+down the page. CSS's own logical properties (`flex-direction`, `column-gap`, `justify-content`, the
+grid track lists) need **no** swap — the transposed engine's x axis *is* the inline axis, and
+swapping them would rotate them twice.
+
+⚠⚠⚠ **A page with no vertical writing mode must be BYTE-IDENTICAL, and it is by construction rather
+than by care:** `plan()` returns `None` unless some computed style actually carries a vertical mode,
+and `None` means the cascade's own `StyleMap` is used and not one line of the new code runs.
+
+### Two mechanisms that only a probe found
+
+**1. The available INLINE size needs a measure pass — the first attempt made a one-glyph box 720px
+tall.** An orthogonal container's available inline size is its own content HEIGHT; when that is
+`auto` it is indefinite and CSS Writing Modes §7.3 sizes it `fit-content` against the ICB's block
+size. Handing the fallback (the viewport height) straight to `layout_children` is wrong in the way a
+block always is — the child's transposed `width` is `auto`, so it FILLS, and the fill read back as
+the container's size gives 720 where Chrome gives 10. The fix already existed one axis over:
+`content_right_extent`, the function that knows to discard a filled block's slack.
+
+**2. ⭐⭐ AN ORTHOGONAL FLOW IS AN INDEPENDENT FORMATTING CONTEXT, and the guard has to go in BOTH
+hoists.** Without it the first child's transposed block-start margin escaped upward out of the box —
+into an axis it does not belong to — and `margin-block-start:10px` moved the child by nothing where
+Chrome moves it 10px left. `layout_block` folds the margin up and `layout_children` places the child
+flush; a predicate applied in one of them only spends the margin in one place and refunds it in the
+other. That is the `block_box_style` trap exactly, one rule with two implementations, and it is now
+the same expression in both.
+
+### The glyphs had to turn IN THE SAME TICK, because otherwise this is a trade
+
+With the boxes right and the glyphs still horizontal, a vertical run streams out of the side of its
+40px line strip and across whatever is beside it: a page rendered wrong in a *new* way, bought with a
+shape win. THE RATCHET refuses trades, so `rotate_glyph_cw` landed here rather than in a follow-up.
+
+⭐⭐ **The rotation is CLOCKWISE for `vertical-lr` too — measured with a screenshot, not derived.**
+The derivation says otherwise: `vertical-lr` stacks blocks rightwards, so its block-start edge is the
+LEFT one and the naive map is a reflection, which would mirror the glyphs. Chrome renders `ab` in
+`vertical-rl` and `vertical-lr` **identically**, both with the glyph tops pointing right. So the box
+map differs per mode and the glyph turn does not, and the run's baseline sits one ascent in from the
+RIGHT edge of its own strip in both.
+
+⭐⭐ **And the inline alignment is the CENTRAL baseline.** A 10px and a 40px monospace glyph on one
+vertical line share their em-box CENTRES (277.5 / 277.0), not a baseline — the second thing a
+derivation from the horizontal case gets wrong. Identical for a single-font run and therefore for
+almost every run; named as residue rather than approximated.
+
+### What landed
+
+- `manuk_css::WritingMode` on `ComputedStyle`, read from `cv.writing_mode` (Stylo's own resolved
+  bitflags, so `direction` and `text-orientation` compose the way Stylo says), inherited, and
+  layout-affecting in the change-detector.
+- `layout.writing-mode.enabled` flipped at all four cascade entry points.
+- `engine/layout/src/writing_mode.rs` — the transposed style map, the orthogonal-root set, the two
+  affine maps, and the inline-extent reader.
+- An orthogonal branch in `layout_block`, plus the independent-formatting-context guard in both
+  hoists.
+- `TextStyle::sideways` + `TextFragment::vertical` (fragments stay LOGICAL and carry the map;
+  `rect()` applies it so `getBoundingClientRect`, hit-testing and the a11y tree read physical
+  truth), and `rotate_glyph_cw` in paint.
+- `getComputedStyle(el).writingMode`, and `writing-mode` LEAVES `UNRENDERED_LONGHANDS` — so
+  `@supports (writing-mode: vertical-rl)` flips to an honest yes. `text-orientation` STAYS: `mixed`
+  is what this implements, `upright` is not, and the split is what stops the flip over-claiming.
+
+**Proven RED**, four mutations, each hitting a different arm:
+
+```text
+   plan() -> None                         a `vertical-rl` container holding one glyph is 20.00px tall
+                                          (the pre-tick state: every vertical row on its control)
+   VerticalRun::px drops the is_rl arm    vertical-lr's children at -20.00 / -40.00, not 0 / 20
+   glyph rotation off                     the vertical run's ink is 72x23 — WIDER than tall
+   paint never learns the coord swap      the same arm, 71x23
+```
+
+⚠ The paint arm scans the WHOLE canvas for a `#c00` run rather than a band around the box, and that
+is not fastidiousness: a glyph that never learned about the writing mode is not drawn slightly wrong,
+it is drawn somewhere ELSE. The first version scanned a band, and both paint mutations came back as
+"no ink at all" — a red that could not tell them apart. **An arm that cannot distinguish the failures
+it covers has one assertion's cost and no assertion's value.**
+
+### ⚠ A SECOND GATE WAS ALREADY RED, AND THIS TICK IS ONLY THE REASON IT WAS READ
+
+`G_COMPUTED_STYLE_PUBLISHES_THE_CASCADE` asserts a list of sixteen properties that must stay
+`undefined` — the honesty boundary that stops a "be helpful" edit from fabricating initial values.
+Publishing `writingMode` moves it off that list, correctly, and running the gate found it was
+ALREADY failing on `gridTemplateColumns`: a later tick began publishing the USED track sizes in px,
+which is the exact answer the gate's own header names as the reason the property was absent.
+
+⚠ It sat red and unread because **this gate is not one of the 19 the wall runs** — the failure mode
+its own t1223 paragraph predicted, in writing, one tick after that paragraph was written. The list is
+AUDITED rather than edited row by row (`grep '"<prop>",' dom_bindings.rs` over all sixteen; `contain`
+matches only as `ObjectFit::Contain` and is a false positive): exactly two have grown a CSSOM row,
+both leave, the other fourteen are still honestly absent.
+
+### ⚠⚠⚠ SEVEN MORE PAGE GATES ARE RED AT HEAD, AND ONLY THE OLD-BINARY CONTROL COULD SAY SO
+
+Running the whole `manuk-page` suite (501 test binaries) rather than the wall's 19 produced eight
+failures. Reverting every source file this tick touched and re-running the same eight — same hour,
+same machine, nothing else running — partitions them exactly:
+
+```text
+   RED AT HEAD (pre-existing, not this tick)      MINE
+     g_iframe_load_event      inline:2 addl:2       g_supports_honesty   wm:false -> wm:true
+     g_intrinsic_min_max      #wx_min 400 vs 48
+     g_structural_pseudos
+     g_ua_control_metrics
+     g_inline_image_size
+     g_is_where_selectors
+     g_replaced_ratio
+```
+
+The one that is mine is the honest-answer flip this tick is *supposed* to cause, and it is fixed by
+following the capability: `writing-mode` answers YES and `text-orientation: upright` — the half that
+did NOT land — carries the NO. ⚠ Its key had to be renamed `tor:` because `text-overflow` already
+owned the `to:` prefix and these are `contains` assertions; that is check #128's prefix trap, caught
+while writing the row rather than by it.
+
+⭐⭐ **THE FINDING IS THE SEVEN.** They are invisible to the loop's primary instrument because the
+wall runs 19 of ~500 gate binaries, and each of them is a banked capability now silently un-banked.
+`G_COMPUTED_STYLE_PUBLISHES_THE_CASCADE` predicted exactly this in its own comment two ticks ago and
+was itself the eighth. A ratchet whose teeth are not read is a ratchet on paper.
+
+⚠ **AND A METHOD ERROR WORTH MORE THAN THE TIME IT COST:** the first control was run while the suite
+was still going, so cargo rebuilt the tree underneath it and the suite reported the CONTROL's
+results as its own. An old-binary control is a second build of the same tree — **it cannot share the
+machine with the run it is controlling.** Both were re-run serially and the partition above is from
+the serial pair.
+
+**NEXT.** (a) The subsystem's second tick: run the fidelity sweep and the three WPT areas
+(`css-sizing/stretch`, `css-position`, `css-overflow`) that t1276-1281 measured as writing-mode-blocked,
+and price what this bought — the number is the point of Track A. (b) Nested orthogonal flow (a
+`horizontal-tb` element inside a vertical subtree) and the central baseline, both named residue here.
+(c) ⭐⭐⭐ THE SEVEN RED GATES ABOVE — one tick to triage them, and a way for the loop to see a gate
+go red without a human running 501 binaries by hand. This outranks (b): un-banked teeth are the one
+failure the ratchet cannot survive. (d) Carried from t1342: the `ACCUM` bucket and the 519-binary
+link cost still have an unexamined cause. (e) I3's mechanical debt, now carried through five checks.

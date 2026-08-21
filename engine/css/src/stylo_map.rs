@@ -569,6 +569,31 @@ pub fn to_computed_style(cv: &ComputedValues) -> ComputedStyle {
     // while every counter read 0. It was caught by the ACCESSIBILITY tree (t1098), which reads the
     // string rather than measuring it — the first instrument in the loop that could tell those two
     // renderings apart.
+    // ⚠⚠⚠ **`writing-mode`, AND IT IS THE ONE PROPERTY THAT CHANGES WHAT EVERY OTHER FIELD MEANS.**
+    //
+    // Stylo has already folded `writing-mode`, `direction` and `text-orientation` into a single
+    // resolved `WritingMode` bitflags on the computed values, and it uses that same value to map
+    // every LOGICAL declaration (`inline-size`, `margin-block-start`, `inset-inline-end`, …) onto a
+    // physical field. So the physical fields below are correct *given* this value — and were being
+    // read as though it were always `horizontal-tb`, which silently made `width` an inline size on
+    // a vertical box where it is a BLOCK size. Read it here rather than re-deriving it from the
+    // declaration, so `direction: rtl` and `text-orientation: sideways` compose the way Stylo says.
+    s.writing_mode = {
+        let wm = cv.writing_mode;
+        if !wm.is_vertical() {
+            crate::WritingMode::HorizontalTb
+        } else if wm.is_sideways() {
+            if wm.is_vertical_lr() {
+                crate::WritingMode::SidewaysLr
+            } else {
+                crate::WritingMode::SidewaysRl
+            }
+        } else if wm.is_vertical_lr() {
+            crate::WritingMode::VerticalLr
+        } else {
+            crate::WritingMode::VerticalRl
+        }
+    };
     s.counter_reset = counter_pairs(&cv.get_counters().clone_counter_reset());
     s.counter_increment = counter_pairs(&cv.get_counters().clone_counter_increment());
     let bg = cv.clone_background_color().resolve_to_absolute(&current);

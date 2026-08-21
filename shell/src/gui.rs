@@ -2037,6 +2037,8 @@ impl App {
             // Browser chrome (omnibox, tabs, menus) is LTR: it is the app's own UI, not page
             // content. A page's own direction is resolved from its cascade, not from here.
             rtl: false,
+            // …and horizontal, for the same reason: the chrome has no writing mode of its own.
+            sideways: false,
             decoration: Default::default(),
             font_key: FontKey {
                 family: FontFamily::SansSerif,
@@ -2300,6 +2302,8 @@ impl App {
             // Browser chrome (omnibox, tabs, menus) is LTR: it is the app's own UI, not page
             // content. A page's own direction is resolved from its cascade, not from here.
             rtl: false,
+            // …and horizontal, for the same reason: the chrome has no writing mode of its own.
+            sideways: false,
             decoration: Default::default(),
             font_key: FontKey {
                 family: FontFamily::SansSerif,

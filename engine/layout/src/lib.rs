@@ -43,8 +43,10 @@ use manuk_text::{FontContext, FontFamily, FontKey};
 
 pub mod flex;
 mod taffy_tree;
+mod writing_mode;
 
 pub use taffy_tree::GridTracks;
+pub use writing_mode::VerticalRun;
 
 /// Width (px) of a classic, space-taking scrollbar — the inline gutter an `overflow:scroll`
 /// container reserves for its vertical scrollbar. 15px is the long-standing default UA metric on
@@ -470,6 +472,15 @@ pub struct TextStyle {
     /// The paragraph's bidi **base direction** (`direction: rtl` / `dir="rtl"`), carried to paint
     /// because visual order is resolved at shaping time, not at layout time.
     pub rtl: bool,
+    /// **Draw this run's glyphs rotated 90° CLOCKWISE** — a run inside a vertical writing mode.
+    ///
+    /// `text-orientation: mixed` (the initial value) lays a sideways glyph on its side and the pen
+    /// advances DOWN the page; measured in Chrome, `vertical-rl` and `vertical-lr` rotate the same
+    /// way (only `sideways-lr` turns the other). Carried on the style rather than as a new display
+    /// item so every existing consumer of `DisplayItem::Text` keeps working: for a rotated run the
+    /// item's `x` is the pen's starting **y** and its `baseline` is the baseline's **x**, which is
+    /// what a ninety-degree rotation makes of those two words.
+    pub sideways: bool,
 }
 
 /// A positioned run of text produced by inline layout. `baseline` is the absolute
@@ -513,6 +524,16 @@ pub struct TextFragment {
     /// Height of this run's content area — `round(ascent) + round(descent)`, independent of
     /// `line-height`. See [`manuk_text::LineMetrics::content_height`].
     pub content_height: f32,
+    /// **Set only on a run inside a VERTICAL writing mode** — the affine map from this run's
+    /// logical coordinates back into page coordinates (`writing_mode::VerticalRun`).
+    ///
+    /// ⚠⚠ The fields above stay LOGICAL when this is `Some`: `x` is an offset along the inline
+    /// axis (which is now vertical on the page) and `width` is an advance along it. Re-pointing
+    /// `x` at a different axis depending on a sibling field is how one name comes to mean two
+    /// things; carrying the map instead keeps every existing reader correct-by-construction for
+    /// horizontal text and makes a vertical reader announce itself. [`Self::rect`] applies it, so
+    /// the DOM geometry every page measures is physical either way.
+    pub vertical: Option<VerticalRun>,
 }
 
 impl TextFragment {
@@ -532,12 +553,47 @@ impl TextFragment {
     /// half-leading is legitimately negative and this rect legitimately overflows upward. Chrome
     /// does the same; clamping it to zero was the other half of the bug.
     pub fn rect(&self) -> Rect {
-        Rect {
-            x: self.x,
-            y: self.baseline - self.content_ascent,
-            width: self.width,
-            height: self.content_height,
+        let (lx, ly, lw, lh) = (
+            self.x,
+            self.baseline - self.content_ascent,
+            self.width,
+            self.content_height,
+        );
+        // A VERTICAL run's own fields are logical (see [`Self::vertical`]) — the advance runs down
+        // the page and the content area across it, so the two extents trade places on the way out.
+        // Every consumer of this function asks a physical question (`getBoundingClientRect`,
+        // hit-testing, the a11y tree, the fidelity oracle), so it is answered physically here once
+        // rather than at each of them.
+        if let Some(v) = self.vertical {
+            return Rect {
+                x: v.px(ly, lh),
+                y: v.py(lx),
+                width: lh,
+                height: lw,
+            };
         }
+        Rect {
+            x: lx,
+            y: ly,
+            width: lw,
+            height: lh,
+        }
+    }
+
+    /// **Where a vertical run's glyphs are drawn**: the page-space x of its baseline (a VERTICAL
+    /// line in a vertical mode) and the page-space y its pen starts at.
+    ///
+    /// The ascent always extends towards **+x**, in both `vertical-rl` and `vertical-lr` — measured,
+    /// not assumed: Chrome renders `ab` with the glyph tops pointing right in both, because
+    /// `text-orientation: mixed` rotates a sideways glyph ninety degrees CLOCKWISE regardless of
+    /// which way the blocks stack (only `sideways-lr` rotates the other way). So the run's content
+    /// strip is located per mode and the baseline is placed one ascent in from its RIGHT edge in
+    /// both cases.
+    pub fn vertical_pen(&self) -> Option<(f32, f32)> {
+        let v = self.vertical?;
+        let strip_right =
+            v.px(self.baseline - self.content_ascent, self.content_height) + self.content_height;
+        Some((strip_right - self.content_ascent, v.py(self.x)))
     }
 
     /// **Is this run a direct continuation of `prev` — the SAME WORD, split by the line breaker?**
@@ -1242,6 +1298,10 @@ struct Ctx<'a> {
     /// [`Ctx::layout_flex_or_grid`]. Read out through [`grid_tracks`] after `layout_document`
     /// returns, the same way [`layout_phases`] is.
     grid_tracks: RefCell<HashMap<NodeId, GridTracks>>,
+    /// **The elements whose CHILDREN are laid out in a transposed coordinate space** — the
+    /// orthogonal roots of `writing_mode`. Empty (and the whole mechanism dormant) for any document
+    /// with no vertical writing mode, which is very nearly all of them.
+    wm_roots: HashMap<NodeId, manuk_css::WritingMode>,
 }
 
 /// Lay out a whole document into a fragment tree, given a viewport width in px.
@@ -1369,6 +1429,13 @@ pub fn layout_document(
     MEASURE_HITS.with(|c| c.set(0));
     PHASE_DEPTH.with(|d| d.set(0));
     let t_all = std::time::Instant::now();
+    // ⚠⚠⚠ **`writing-mode` IS A COORDINATE SYSTEM, AND IT IS RESOLVED HERE, ONCE, BEFORE LAYOUT
+    // RUNS.** A vertical subtree is laid out by the ordinary horizontal engine on TRANSPOSED
+    // styles and mapped back afterwards — see `writing_mode` for the measurement and the two maps.
+    // `plan` answers `None` for a document with no vertical mode, so the ordinary page keeps the
+    // cascade's own map, byte for byte, and pays one pass over the style values to prove it.
+    let wm_plan = writing_mode::plan(dom, styles);
+    let styles: &StyleMap = wm_plan.as_ref().map(|p| &p.styles).unwrap_or(styles);
     let ctx = Ctx {
         dom,
         styles,
@@ -1388,6 +1455,10 @@ pub fn layout_document(
         transform_matrix: RefCell::new(HashMap::new()),
         pre_transform_rect: RefCell::new(HashMap::new()),
         grid_tracks: RefCell::new(HashMap::new()),
+        wm_roots: wm_plan
+            .as_ref()
+            .map(|p| p.roots.clone())
+            .unwrap_or_default(),
     };
     let root_el = dom
         .find_first("body")
@@ -1939,6 +2010,7 @@ fn apply_text_overflow_ellipsis(
                     origin: f.origin,
                     content_ascent: f.content_ascent,
                     content_height: f.content_height,
+                    vertical: None,
                 });
             }
             break; // everything after this is clipped away
@@ -1959,6 +2031,7 @@ fn apply_text_overflow_ellipsis(
         node,
         content_ascent: ell_ca,
         content_height: ell_ch,
+        vertical: None,
     });
     *frags = out;
 }
@@ -2046,6 +2119,7 @@ fn apply_line_clamp(
                     origin: f.origin,
                     content_ascent: f.content_ascent,
                     content_height: f.content_height,
+                    vertical: None,
                 });
             }
             // Everything after this on line n starts past the cutoff — skipped by the loop.
@@ -2064,6 +2138,7 @@ fn apply_line_clamp(
         node,
         content_ascent: ell_ca,
         content_height: ell_ch,
+        vertical: None,
     });
     *frags = out;
     Some(drop_top - cy)
@@ -2170,6 +2245,9 @@ fn text_style(cs: &ComputedStyle, fonts: &FontContext) -> TextStyle {
         // time the only thing left is glyphs — visual order has to be decided while the style is
         // still in hand.
         rtl: cs.direction == manuk_css::Direction::Rtl,
+        // Set on the way into a vertical writing mode by `text_style_sideways`; a run reached
+        // through the ordinary path is horizontal.
+        sideways: false,
         decoration: cs.text_decoration,
         font_key: FontKey {
             // Resolve the CSS font-family list to a concrete face (installed or
@@ -4437,7 +4515,14 @@ impl Ctx<'_> {
         // content top by `layout_children` (which recomputes the same hoist). `effective_mt` is the
         // collapsed top margin this box contributes to its own parent, so it is what a grandparent
         // collapses against.
-        let hoist_top = if top_margin_collapses(self.dom, self.styles, node, &s, cw) {
+        // ⚠ **AN ORTHOGONAL FLOW IS AN INDEPENDENT FORMATTING CONTEXT** (CSS Writing Modes §7.3),
+        // so nothing collapses through it. Without this the first child's transposed block-start
+        // margin escaped upward — out of the box, into an axis it does not belong to — and
+        // `margin-block-start:10px` on a `vertical-rl` child moved the child by nothing at all
+        // instead of 10px left. Measured: dx 380 where Chrome reads 370.
+        let hoist_top = if !self.wm_roots.contains_key(&node)
+            && top_margin_collapses(self.dom, self.styles, node, &s, cw)
+        {
             self.leading_block_collapse_top(node, width)
         } else {
             0.0
@@ -4505,7 +4590,106 @@ impl Ctx<'_> {
         // A BFC root gets a fresh float context spanning its own content box; a plain
         // block shares its parent's so floats affect content across nested blocks.
         let mut own_bfc;
-        let (mut content, content_height) = if establishes_bfc(&s) {
+        // ⚠⚠⚠ **AN ORTHOGONAL FLOW: THIS BOX'S CHILDREN RUN DOWN THE PAGE, NOT ACROSS IT.**
+        //
+        // `writing-mode: vertical-rl` on this element makes its content's INLINE axis vertical, so
+        // the child list is laid out in a transposed space and mapped back (see `writing_mode`).
+        // The two numbers that change hands here are the ones the horizontal engine cannot name:
+        //
+        //   - the available INLINE size it is handed as `cw` is this box's **content height** — a
+        //     definite one if the page gave the box a height, and otherwise the initial containing
+        //     block's block size, which is what CSS Writing Modes §7.3 falls back to for an
+        //     indefinite orthogonal available size;
+        //   - the content height it reports back is the children's **inline extent**, not the block
+        //     extent `layout_children` returns. Chrome's `400x10` for a one-glyph child is exactly
+        //     that: 10px of glyph advance running down, inside a box 400px wide.
+        //
+        // The block axis is bounded by this box's own `inner_width`, which is why that is passed as
+        // the transposed run's definite "height".
+        // ⚠⚠⚠ **AN ORTHOGONAL FLOW: THIS BOX'S CHILDREN RUN DOWN THE PAGE, NOT ACROSS IT.**
+        //
+        // `writing-mode: vertical-rl` on this element makes its content's INLINE axis vertical, so
+        // the child list is laid out in a transposed space and mapped back (see `writing_mode`).
+        // Two numbers change hands here, and they are the ones a horizontal engine cannot name:
+        //
+        //   - the available INLINE size it is handed as `cw` is this box's **content height** — a
+        //     definite one when the page gave the box a height, otherwise the initial containing
+        //     block's block size, which is what CSS Writing Modes §7.3 falls back to for an
+        //     indefinite orthogonal available size;
+        //   - the content height reported back is the children's **inline extent**, not the block
+        //     extent `layout_children` returns. Chrome's `400x10` for a single-glyph child is
+        //     exactly that: 10px of glyph advance running down, inside a box 400px wide.
+        //
+        // The block axis is bounded by this box's own `inner_width`, which is why that is passed as
+        // the transposed run's definite "height" — a percentage block size inside the subtree
+        // resolves against it, and it is the extent the map folds the children back into.
+        let orthogonal = self.wm_roots.get(&node).copied();
+        let (mut content, content_height) = if let Some(wm) = orthogonal {
+            // **The available INLINE size, and it is the hard half of an orthogonal flow.**
+            //
+            // With a definite content height the answer is that height. With an `auto` one the
+            // available inline size is *indefinite*, and CSS Writing Modes §7.3 says to size the
+            // box as `fit-content` against the initial containing block's block size — so the
+            // subtree is measured unconstrained first and then clamped to the viewport height.
+            //
+            // ⚠ It has to be a real measure-then-lay-out, not one pass: a block child's transposed
+            // `width` is `auto`, so at the 1e6 probe width it FILLS, and reading the fill back as
+            // the container's size is how the first attempt made a one-glyph box 720px tall.
+            // `content_right_extent` is the function that already knows to discard that slack, and
+            // it is the same one `max_content_width_uncached` uses one axis over.
+            let avail_inline = match inner_definite_h {
+                Some(h) => h.max(0.0),
+                None => {
+                    let mut probe_fc = FloatContext::new(0.0, 1.0e6);
+                    let _probe = IntrinsicProbe::enter(self);
+                    let (probe, _) = self.layout_children(
+                        node,
+                        0.0,
+                        0.0,
+                        1.0e6,
+                        Some(inner_width),
+                        &mut probe_fc,
+                    );
+                    content_right_extent(
+                        &probe,
+                        self.fonts,
+                        0.0,
+                        &|n| self.px_right_insets(n),
+                        &|n| self.flex_container_max_content(n),
+                    )
+                    .min(manuk_css::values::viewport_size().1)
+                    .max(0.0)
+                }
+            };
+            let mut vertical_bfc = FloatContext::new(0.0, avail_inline);
+            let (mut c, _block_extent) = self.layout_children(
+                node,
+                0.0,
+                0.0,
+                avail_inline,
+                Some(inner_width),
+                &mut vertical_bfc,
+            );
+            let used_inline = writing_mode::inline_extent(&c);
+            let v = writing_mode::VerticalRun {
+                rl: wm.is_rl(),
+                bx: if wm.is_rl() {
+                    content_x + inner_width
+                } else {
+                    content_x
+                },
+                by: content_y,
+            };
+            match &mut c {
+                BoxContent::Block(children) => writing_mode::map_subtree(children, v),
+                BoxContent::Inline(frags) => {
+                    for f in frags.iter_mut() {
+                        writing_mode::mark_vertical(f, v);
+                    }
+                }
+            }
+            (c, used_inline)
+        } else if establishes_bfc(&s) {
             own_bfc = FloatContext::new(content_x, content_x + inner_width);
             let (c, h) = self.layout_children(
                 node,
@@ -5302,12 +5486,17 @@ impl Ctx<'_> {
         // leading margin has escaped upward (folded into the container's own top margin by
         // `layout_block`, which recomputes the identical hoist). Placing the first block `hoist_top`
         // higher lands it exactly at `cy`. `first_block` restricts the shift to that first block.
-        let hoist_top =
-            if top_margin_collapses(self.dom, self.styles, node, self.style_of(node), cw) {
-                self.leading_block_collapse_top(node, cw)
-            } else {
-                0.0
-            };
+        // The orthogonal-flow guard's other half — see `layout_block`. The two hoists must agree
+        // exactly (one folds the margin up, the other places the child flush), so the same
+        // predicate is applied in both places or the margin is spent in one and refunded in the
+        // other.
+        let hoist_top = if !self.wm_roots.contains_key(&node)
+            && top_margin_collapses(self.dom, self.styles, node, self.style_of(node), cw)
+        {
+            self.leading_block_collapse_top(node, cw)
+        } else {
+            0.0
+        };
         let mut first_block = true;
 
         for &k in &kids {
@@ -6210,6 +6399,7 @@ impl Ctx<'_> {
             origin: None,
             content_ascent: lm.ascent.round(),
             content_height: lm.content_height(),
+            vertical: None,
         })
     }
 
@@ -12336,6 +12526,7 @@ impl Ctx<'_> {
                             TextStyle {
                                 // A synthetic empty fragment — no text, so no order to get wrong.
                                 rtl: false,
+                                sideways: false,
                                 font_key: FontKey {
                                     family: FontFamily::SansSerif,
                                     bold: false,
@@ -12389,6 +12580,7 @@ impl Ctx<'_> {
                         None => (
                             TextStyle {
                                 rtl: false,
+                                sideways: false,
                                 font_key: FontKey {
                                     family: FontFamily::SansSerif,
                                     bold: false,
@@ -12705,6 +12897,7 @@ impl Ctx<'_> {
                             style: TextStyle {
                                 // A synthetic empty fragment — no text, so no order to get wrong.
                                 rtl: false,
+                                sideways: false,
                                 font_key: key,
                                 font_size: 16.0,
                                 color: Rgba::BLACK,
@@ -12776,6 +12969,7 @@ impl Ctx<'_> {
                             style: TextStyle {
                                 // A synthetic empty fragment — no text, so no order to get wrong.
                                 rtl: false,
+                                sideways: false,
                                 font_key: key,
                                 font_size: 16.0,
                                 color: Rgba::BLACK,
@@ -13200,6 +13394,7 @@ fn close_line(
                 origin: f.origin,
                 content_ascent: 0.0,
                 content_height: 0.0,
+                vertical: None,
             });
         }
         return y;
@@ -13528,6 +13723,7 @@ fn close_line(
                 origin: f.origin,
                 content_ascent: fa,
                 content_height: fa + fd,
+                vertical: None,
             });
         }
     }

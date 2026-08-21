@@ -62,7 +62,13 @@ const HTML: &str = r##"<!doctype html><html><head><style>
   R.push('vtn:' + s('view-transition-name: none'));
   R.push('op:'  + s('offset-path: none'));
   // ── The SECOND category (t591): parsed NATIVELY, behind no pref, still not rendered.
+  //    `writing-mode` LEFT this category at t1343 — it is rendered now, so its row asserts YES and
+  //    its unimplemented HALF (`text-orientation: upright`) carries the NO. Splitting the two is
+  //    what stops the flip from over-claiming: `mixed` is what the transposition implements.
   R.push('wm:' + s('writing-mode: vertical-rl'));
+  // ⚠ `tor:`, not `to:` — `text-overflow` already owns that prefix below, and these assertions are
+  //   `contains` checks: two keys sharing a prefix is how a row comes to pass against its neighbour.
+  R.push('tor:' + s('text-orientation: upright'));
   // ── The guard: the ones that are genuinely rendered must still answer yes.
   R.push('flt:'  + s('filter: blur(4px)'));
   R.push('clip:' + s('clip-path: circle(50%)'));
@@ -186,7 +192,22 @@ fn supports_answers_for_what_we_render_not_for_what_stylo_parses() {
              from the backdrop beneath them, which is exactly what that surface is. See \
              G_MIX_BLEND_MODE",
         ),
-        ("wm:false", "`writing-mode` — the same, and the axis the CJK story stops short of"),
+        (
+            "wm:true",
+            "`writing-mode` (8.3% of page loads) crossed at tick 1343 — the subtree is transposed \
+             and its glyphs are turned, so the honest answer FLIPPED, exactly as `filter`, \
+             `clip-path` and `mix-blend-mode` flipped before it. The gate follows the capability, \
+             never the reverse; keeping the old `false` here would be the inverse lie. See \
+             G_WRITING_MODE",
+        ),
+        (
+            "tor:false",
+            "…AND THE HALF THAT DID NOT CROSS, which is what keeps the row above from being a \
+             blanket yes. `text-orientation: mixed` is what t1343 implements — Latin glyphs turned \
+             sideways; `upright` (the ideographic setting, with an em-box advance) is not, so a \
+             page branching on it must still be told no. One capability, two answers, and the pair \
+             is the honest shape",
+        ),
         (
             "us:true",
             "THE GUARD, and it is why this cannot be fixed by simply not flipping the pref: \

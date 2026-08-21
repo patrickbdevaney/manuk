@@ -522,6 +522,13 @@
   - L10652 · The AUTOMATIC table algorithm answers percentage columns in SOURCE ORDER — and 80% + 80% proves the two algorithms cannot share code (t1327)
   - L10684 · ⚠⚠ Rule 2's first draft invented its own distribution, and the corpus caught it
   - L10692 · And the same tick corrected the rule it landed one tick earlier
+  - L10707 · Vertical writing modes — the axes are TRANSPOSED, not reinterpreted (t1343)
+  - L10714 · ⚠⚠⚠ The property was invisible because STYLO DROPPED IT AT PARSE TIME
+  - L10732 · The design: run the existing engine in a transposed space
+  - L10774 · ⚠⚠ The available INLINE size needs a measure pass, and the first attempt made a box 720px tall
+  - L10784 · ⚠⚠ An orthogonal flow is an INDEPENDENT formatting context
+  - L10793 · The glyphs have to TURN, or the tick is a trade
+  - L10809 · Named residue
 
 ## browser-capabilities.md
 `docs/wiki/browser-capabilities.md`
@@ -2370,4 +2377,4 @@
   - L231 · Both named mechanisms are subsystem work
 
 ---
-2277 sections across 22 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+2284 sections across 22 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.

@@ -8114,3 +8114,34 @@ not by `Page::load`, parsing or layout — so two concurrent `Page`s only SIGSEG
 population it endangered was inferred in the same paragraph and in the same voice. Every row in this
 ledger that says "this class of the web is affected" is the same kind of sentence, and a frequency
 claim is cheaper to check than to write.
+
+## `writing-mode: vertical-rl` — the rotated label, the CJK document, and the pref that hid both
+
+Measured t1343. **8.3% of page loads set `writing-mode` (+5.4% prefixed)** — Blink's own use counter,
+already in this repo's `UNRENDERED_LONGHANDS` table, which is why the property was on that list at
+all. What the number is made of, on the open web:
+
+- **the rotated label** — `writing-mode: vertical-rl` on a `<th>`, a chart axis title, a sidebar tab
+  or a badge, so a long word fits a narrow column. Latin text, one line, one font;
+- **the CJK document** — `html { writing-mode: vertical-rl }` on Japanese prose, novels and manga
+  readers, where the whole page is vertical;
+- **the sideways caption** — a vertical strip of text down the edge of a hero image.
+
+All three rendered at ninety degrees to where they belong, silently: `writing-mode` had no
+`ComputedStyle` field, so the boxes were laid out horizontally, in the right *place*, with the wrong
+*axes*. A page like that is not blank and does not throw — it looks like a layout bug in the site.
+
+⭐⭐⭐ **The check that would have found it is one line, and it is the class this ledger keeps
+re-learning: ASK THE COMPUTED VALUE.** `getComputedStyle(el).writingMode` answered `"horizontal-tb"`
+on a page that plainly set `vertical-rl`, because Stylo's servo build gates the property behind
+`layout.writing-mode.enabled` and **drops the declaration at parse time**. A pref-gated property does
+not fail — it disappears, and the cascade's answer is a legal value. Two properties before it
+(`display:grid`, `container-type`) were found the same way and are flipped on in the same function;
+the general form is *a property whose computed value equals its initial value on a page that sets it
+is either unimplemented or ungated, and the two are one grep apart.*
+
+⚠ The blast radius here is wider than the property, and that is the reason it ranks above its 8.3%:
+Stylo resolves every **logical** declaration — `inline-size`, `margin-block-start`, `inset-inline-end`,
+the whole vocabulary modern stylesheets are authored in — onto a physical field *against the writing
+mode it computed*. An empty writing mode therefore silently made `inline-size` mean `width` for every
+element on every page, which is correct only while the page is horizontal.

@@ -117,10 +117,23 @@ const HTML: &str = r##"<!doctype html><html><head><style>
   //    failure reproduced byte-identically at HEAD), and the fix is the whole list AUDITED against
   //    the cascade rather than the one row that fired: of the seventeen names, `tab_size` is the
   //    ONLY one that has grown a `ComputedStyle` field. The other sixteen are still honestly absent.
-  var absent = ['hyphens','touchAction','willChange','writingMode','containerType',
+  //
+  // ⚠⚠ **AND IT HAPPENED TWICE MORE, THE SECOND TIME UNREAD FOR SEVERAL TICKS (t1343).**
+  //    `gridTemplateColumns` left because a later tick began publishing the USED track sizes in px
+  //    — the very answer the header calls the reason it was absent, now actually computed rather
+  //    than faked from the author's list. `writingMode` left at t1343, when the property gained a
+  //    `ComputedStyle` field and a subtree transposition behind it. Both are the t1223 shape: the
+  //    ENGINE outgrew the guard, and the guard cannot notice on its own.
+  //
+  //    ⚠ The `gridTemplateColumns` half sat RED and unread — this gate is not one of the 19 the
+  //    wall runs — which is the failure mode the paragraph above predicted, one tick after writing
+  //    it down. The list is AUDITED again here rather than edited row by row: of the sixteen names,
+  //    exactly these two have grown a CSSOM row (`grep '"<prop>",' engine/js/src/dom_bindings.rs`;
+  //    `contain` matches only as `ObjectFit::Contain` and is a false positive). The other fourteen
+  //    are still honestly absent.
+  var absent = ['hyphens','touchAction','willChange','containerType',
                 'scrollBehavior','overscrollBehavior','caretColor','accentColor','isolation',
-                'contain','columnCount','breakInside','unicodeBidi','fontStretch',
-                'gridTemplateColumns'];
+                'contain','columnCount','breakInside','unicodeBidi','fontStretch'];
   var leaked = [];
   for (var i = 0; i < absent.length; i++) {
     if (getComputedStyle(document.getElementById('a'))[absent[i]] !== undefined) { leaked.push(absent[i]); }

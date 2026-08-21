@@ -570,6 +570,67 @@ pub enum Direction {
     Rtl,
 }
 
+/// `writing-mode` — **which way the INLINE axis runs**, and therefore which physical axis every
+/// box's "length" is measured along. Inherited.
+///
+/// ⚠⚠⚠ **THIS IS NOT A TEXT-RENDERING SWITCH, IT IS A COORDINATE SYSTEM.** In `horizontal-tb` the
+/// inline axis is horizontal and the block axis runs down, which is the only geometry this engine
+/// had ever modelled — every `width` was an inline size and every `height` was a block size, in one
+/// fixed pairing that nothing could vary. In a vertical mode the pairing **swaps**: the inline axis
+/// runs down the page, the block axis runs sideways, and a box's `width` is now its *block* size
+/// while its `height` is its *inline* size. Stylo already resolves the logical spellings
+/// (`inline-size`, `margin-block-start`, …) onto the physical ones against this value, so by the
+/// time a `ComputedStyle` exists the property is invisible in every field except this one — which
+/// is exactly why its absence was silent rather than loud.
+///
+/// Measured in Chrome, `<div style="width:400px;writing-mode:vertical-rl"><div>x</div></div>` at
+/// 16px/20px monospace — the container is 400 **wide by 10 tall**, and the child sits at
+/// `[380 0 20x10]`: 20px of *block* size (the line height) hugging the RIGHT edge, 10px of *inline*
+/// size (the glyph advance) running down. Laid out as `horizontal-tb` the same markup gives
+/// `[0 0 400x20]`. Nothing about that is a near miss.
+///
+/// `sideways-rl`/`sideways-lr` are parsed and treated as their `vertical-*` counterparts: they
+/// differ only in glyph orientation (all glyphs rotated, never upright), not in box geometry.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Default)]
+pub enum WritingMode {
+    /// The initial value — inline runs left-to-right (or right-to-left), blocks stack downwards.
+    #[default]
+    HorizontalTb,
+    /// Inline runs top-to-bottom, blocks stack **right to left** (Japanese/Chinese vertical text).
+    VerticalRl,
+    /// Inline runs top-to-bottom, blocks stack **left to right** (Mongolian).
+    VerticalLr,
+    /// `sideways-rl` — geometry as [`Self::VerticalRl`], glyphs always rotated.
+    SidewaysRl,
+    /// `sideways-lr` — geometry as [`Self::VerticalLr`], glyphs always rotated (upwards).
+    SidewaysLr,
+}
+
+impl WritingMode {
+    /// Is the inline axis VERTICAL — i.e. is this box's `width` a block size?
+    pub fn is_vertical(self) -> bool {
+        !matches!(self, WritingMode::HorizontalTb)
+    }
+
+    /// Do blocks stack towards the LEFT (`vertical-rl`/`sideways-rl`)? The block-start edge is then
+    /// the box's RIGHT edge, which is what makes the first child of a `vertical-rl` container sit
+    /// flush against the right side.
+    pub fn is_rl(self) -> bool {
+        matches!(self, WritingMode::VerticalRl | WritingMode::SidewaysRl)
+    }
+
+    /// The CSSOM serialization — what `getComputedStyle(el).writingMode` must answer.
+    pub fn as_css(self) -> &'static str {
+        match self {
+            WritingMode::HorizontalTb => "horizontal-tb",
+            WritingMode::VerticalRl => "vertical-rl",
+            WritingMode::VerticalLr => "vertical-lr",
+            WritingMode::SidewaysRl => "sideways-rl",
+            WritingMode::SidewaysLr => "sideways-lr",
+        }
+    }
+}
+
 /// `word-break` — where line breaks are allowed *within* a run. `break-all` lets a break fall
 /// between any two characters (common in CJK text and code listings); we honour it as "may break a
 /// word at any character to fit", the same char-level breaking `overflow-wrap:break-word` enables.
@@ -1244,6 +1305,11 @@ pub struct ComputedStyle {
     pub word_break: WordBreak,
     /// `direction` — the paragraph's bidi base direction (inherited).
     pub direction: Direction,
+    /// `writing-mode` — which physical axis the inline direction runs along (inherited). See
+    /// [`WritingMode`]: in a vertical mode `width` is a BLOCK size and `height` is an INLINE size,
+    /// and layout transposes the whole subtree rather than reinterpreting every field at its use
+    /// site.
+    pub writing_mode: WritingMode,
     /// `letter-spacing` — extra px added after each character (tracking). `0` = `normal`. Inherited.
     pub letter_spacing: f32,
     /// `word-spacing` — extra px added to each inter-word space. `0` = `normal`. Inherited.
@@ -1701,6 +1767,7 @@ impl ComputedStyle {
             overflow_wrap: OverflowWrap::Normal,
             word_break: WordBreak::Normal,
             direction: Direction::Ltr,
+            writing_mode: WritingMode::HorizontalTb,
             letter_spacing: 0.0,
             word_spacing: 0.0,
             tab_size: TabSize::default(),
@@ -1876,6 +1943,9 @@ impl ComputedStyle {
         s.overflow_wrap = parent.overflow_wrap;
         s.word_break = parent.word_break;
         s.direction = parent.direction;
+        // `writing-mode` is inherited — that is how `html { writing-mode: vertical-rl }` turns a
+        // whole Japanese document vertical without naming a single descendant.
+        s.writing_mode = parent.writing_mode;
         s.letter_spacing = parent.letter_spacing;
         s.word_spacing = parent.word_spacing;
         s.tab_size = parent.tab_size;
@@ -1993,6 +2063,9 @@ pub fn diff_style(old: &ComputedStyle, new: &ComputedStyle) -> RestyleDamage {
         || old.text_transform != new.text_transform
         || old.overflow_wrap != new.overflow_wrap
         || old.direction != new.direction
+        // `writing-mode` transposes the whole subtree's geometry — the largest reflow-forcing
+        // change there is.
+        || old.writing_mode != new.writing_mode
         || old.word_break != new.word_break
         || old.letter_spacing != new.letter_spacing
         || old.word_spacing != new.word_spacing

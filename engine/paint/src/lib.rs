@@ -190,6 +190,8 @@ pub fn caption_items(r: Rect, cues: &[CaptionCue]) -> Vec<DisplayItem> {
         word_spacing: 0.0,
         shadow: None,
         rtl: false,
+        // A video caption is drawn on the frame, never in a page's writing mode.
+        sideways: false,
     };
 
     // Every hard-wrapped line of every cue, tagged with the cue it came from. A two-line cue
@@ -764,15 +766,31 @@ impl DisplayList {
             }
             if let BoxContent::Inline(frags) = &b.content {
                 for f in frags {
+                    // ⚠ A run in a VERTICAL writing mode keeps logical fields on the fragment (see
+                    // `TextFragment::vertical`), so the two numbers the display list wants are asked
+                    // for by name: the pen's starting **y** and the baseline's **x**. They arrive in
+                    // the item's `x`/`baseline` slots because that is exactly what a ninety-degree
+                    // rotation makes of those two words, and `style.sideways` says which reading
+                    // applies. A horizontal run is untouched — `vertical_pen` is `None`.
+                    let (item_x, item_baseline) = match f.vertical_pen() {
+                        Some((baseline_x, pen_y)) => (pen_y, baseline_x),
+                        None => (f.x, f.baseline),
+                    };
                     items.push(DisplayItem::Text {
-                        x: f.x,
-                        baseline: f.baseline,
+                        x: item_x,
+                        baseline: item_baseline,
                         text: f.text.clone(),
                         style: f.style,
                     });
                     // `text-decoration`: a line ACROSS the run, not part of the glyphs.
+                    //
+                    // ⚠ Skipped for a SIDEWAYS run and named rather than approximated: a
+                    // `TextLine` is a horizontal strip by construction, so emitting one for a
+                    // rotated run draws a rule across the page through unrelated content. A missing
+                    // underline is a smaller wrong than a stripe over the article, and the fix is a
+                    // rotated line primitive rather than different numbers here.
                     let d = f.style.decoration;
-                    if d.any() && f.width > 0.0 {
+                    if d.any() && f.width > 0.0 && !f.style.sideways {
                         // `text-decoration-thickness` defaults to `auto` (font-derived); a length
                         // overrides it (Tailwind `decoration-2`, thick brand underlines).
                         let thickness = d
@@ -1463,6 +1481,21 @@ impl CpuPainter<'_> {
                     if bitmap.width == 0 || bitmap.height == 0 {
                         continue; // whitespace and zero-area glyphs
                     }
+                    // ⚠⚠ **A SIDEWAYS RUN: THE PEN RUNS DOWN THE PAGE AND EACH GLYPH LIES ON ITS
+                    // SIDE.** `origin_x` is the pen's starting **y** and `baseline` is the
+                    // baseline's **x** (see `TextStyle::sideways`), so the same two swash offsets
+                    // are applied to the axes a ninety-degree clockwise turn maps them onto:
+                    // `left` (pen→bitmap-left) walks DOWN, and `top` (baseline→bitmap-top, upward)
+                    // becomes a distance to the RIGHT — which is why the ascent ends up on the +x
+                    // side, exactly as Chrome renders both `vertical-rl` and `vertical-lr`.
+                    if style.sideways {
+                        let rotated = rotate_glyph_cw(&bitmap);
+                        let left =
+                            (baseline + off_y).round() as i32 + bitmap.top - rotated.width as i32;
+                        let top = pen_x.floor() as i32 + bitmap.left;
+                        blit_glyph(pixmap, &rotated, left, top, color, clip);
+                        continue;
+                    }
                     // swash placement: `left` = pen→bitmap-left, `top` = baseline→bitmap-top (up).
                     let left = pen_x.floor() as i32 + bitmap.left;
                     let top = (baseline + off_y).round() as i32 - bitmap.top;
@@ -1476,6 +1509,44 @@ impl CpuPainter<'_> {
             paint_run(pixmap, sh.dx, sh.dy, sh.color);
         }
         paint_run(pixmap, 0.0, 0.0, style.color);
+    }
+}
+
+/// **Turn a rasterized glyph ninety degrees CLOCKWISE**, for a run in a vertical writing mode.
+///
+/// `text-orientation: mixed` — the initial value, and the one every `writing-mode: vertical-*` page
+/// gets unless it says otherwise — lays a *sideways* (non-ideographic) glyph on its side. Measured
+/// in Chrome: `ab` in `vertical-rl` and in `vertical-lr` are rendered identically, both with the
+/// glyph tops pointing RIGHT, so the turn is clockwise in both and only `sideways-lr` differs.
+///
+/// Rotating the coverage bitmap rather than the destination is deliberate: `blit_coverage` and
+/// `blit_color_glyph` already handle clipping, tinting and the two pixel formats, and a second
+/// blitter that walks the source transposed would be a second implementation of both. The cost is
+/// one `width*height` copy per glyph, on the vanishingly small fraction of runs that are vertical.
+///
+/// `dst(dx, dy) = src(dy, h - 1 - dx)` — the standard CW map, applied per pixel for coverage and
+/// per RGBA quad for a colour glyph.
+fn rotate_glyph_cw(bmp: &manuk_text::GlyphBitmap) -> manuk_text::GlyphBitmap {
+    let (w, h) = (bmp.width as usize, bmp.height as usize);
+    let px = if bmp.is_color { 4 } else { 1 };
+    let mut out = vec![0u8; w * h * px];
+    // The rotated bitmap is `h` wide and `w` tall.
+    for dx in 0..h {
+        for dy in 0..w {
+            let sx = dy;
+            let sy = h - 1 - dx;
+            let si = (sy * w + sx) * px;
+            let di = (dy * h + dx) * px;
+            out[di..di + px].copy_from_slice(&bmp.coverage[si..si + px]);
+        }
+    }
+    manuk_text::GlyphBitmap {
+        left: bmp.left,
+        top: bmp.top,
+        width: bmp.height,
+        height: bmp.width,
+        coverage: out,
+        is_color: bmp.is_color,
     }
 }
 

@@ -10703,3 +10703,121 @@ t1325's fixed-layout rule 4 gave the leftover to the percentage columns **equall
 ⭐ **A rule derived only from symmetric cases is a coincidence with a formula.** Every percentage row
 in t1325's twelve-row fixture had equal percentages, so the gate it shipped with could not see the
 error. Both gates now carry `30% + 60%`.
+
+## Vertical writing modes — the axes are TRANSPOSED, not reinterpreted (t1343)
+
+`writing-mode` decides which physical axis the *inline* direction runs along, and therefore what
+every `width` and `height` in this engine means. Until t1343 the property had no `ComputedStyle`
+field at all, so `horizontal-tb` was not the default — it was the only representable state, and a
+page that asked for `vertical-rl` was laid out perfectly, at ninety degrees to where it belongs.
+
+### ⚠⚠⚠ The property was invisible because STYLO DROPPED IT AT PARSE TIME
+
+The first thing the fix needed was not a layout algorithm. `stylo/style/properties/longhands.toml`
+marks `writing-mode` with `servo_pref = "layout.writing-mode.enabled"`, **default false**, so the
+servo build discarded the declaration before it ever reached a computed value:
+
+```text
+   getComputedStyle(el).writingMode   on a page that sets vertical-rl   →  "horizontal-tb"
+```
+
+That is worse than an unimplemented property, because it also silently corrupted a feature that
+*was* implemented: Stylo maps every **logical** declaration (`inline-size`, `margin-block-start`,
+`inset-inline-end`) onto a physical field **against `cv.writing_mode`**. With the mode always empty,
+`inline-size` was always `width`. Same shape as `layout.grid.enabled` and `layout.unimplemented`
+before it, and found the same way — by a computed value reading the initial value on a page that
+plainly set something else. ⭐⭐⭐ **A PREF-GATED PROPERTY DOES NOT FAIL, IT DISAPPEARS**: nothing
+throws, nothing is missing, and the cascade's answer is a legal value.
+
+### The design: run the existing engine in a transposed space
+
+Two implementations were possible: thread a logical-axis concept through every sizing rule (touches
+all 26k lines of `engine/layout`), or **transpose the styles, run the horizontal engine unchanged,
+and map the fragments back**. The second is what `engine/layout/src/writing_mode.rs` does, and it
+works because the transposition is total:
+
+| in a vertical subtree | the horizontal engine calls it |
+|---|---|
+| `height` (inline size) | `width` |
+| `margin-top` (inline-start) | `margin-left` |
+| `margin-right` in `vertical-rl` (block-start) | `margin-top` |
+| a run's advance | a run's advance — the same number, pointed down |
+
+…and `flex-direction: row`, `grid-template-columns`, `column-gap` and `justify-content` need **no**
+swap at all: CSS already defines them against the inline/block axes, and the transposed engine's x
+axis *is* the inline axis. Swapping them would rotate them twice.
+
+Chrome-measured, `font:16px/20px monospace`, container `width:400px`, child rects parent-relative:
+
+```text
+   row                                    container    child(ren)
+   horizontal-tb, one block child  CTRL   400 x 20     [0 0 400x20]
+   vertical-rl,  one block child          400 x 10     [380 0 20x10]
+   vertical-rl,  two block children       400 x 10     [380 0 20x10] [360 0 20x10]
+   vertical-lr,  two block children       400 x 10     [0   0 20x10] [20  0 20x10]
+   vertical-rl,  child width:100px        400 x 10     [300 0 100x10]
+   vertical-rl,  child height:100px       400 x 100    [380 0 20x100]
+   vertical-rl,  child inline-size:100px  400 x 100    [380 0 20x100]
+   vertical-rl,  bare text "hello"        400 x 48
+   vertical-rl,  child margin-top:10px    400 x 20     [380 10 20x10]
+   vertical-rl,  margin-block-start:10px  400 x 10     [370 0 20x10]
+```
+
+The two maps, with the container's content box at `(cx, cy, cw)` and the subtree laid out at logical
+origin `(0,0)`:
+
+```text
+   vertical-rl   px = cx + cw - (ey + eh)     py = cy + ex     pw = eh   ph = ew
+   vertical-lr   px = cx + ey                 py = cy + ex     pw = eh   ph = ew
+```
+
+### ⚠⚠ The available INLINE size needs a measure pass, and the first attempt made a box 720px tall
+
+An orthogonal container's available inline size is its own **content height**. When that is `auto`
+it is *indefinite*, and CSS Writing Modes §7.3 sizes the box as `fit-content` against the initial
+containing block's block size. Handing the fallback (the viewport height) straight to
+`layout_children` is wrong in the way a block always is: the child's transposed `width` is `auto`, so
+it FILLS — a one-glyph box measured **720px** where Chrome reads 10. The fix is the pass that already
+exists one axis over: lay out at `1e6`, read `content_right_extent` (which knows to discard a filled
+block's slack), clamp to the viewport, then lay out for real.
+
+### ⚠⚠ An orthogonal flow is an INDEPENDENT formatting context
+
+Nothing collapses through it. Without that guard the first child's transposed **block-start** margin
+escaped upward out of the box — into an axis it does not belong to — and `margin-block-start:10px`
+moved the child by nothing where Chrome moves it 10px left. The guard is applied in **both**
+`layout_block` and `layout_children`, because the two hoists must agree exactly: one folds the margin
+up and the other places the child flush, and a predicate applied in one place only spends the margin
+in one and refunds it in the other. (That is the same trap `block_box_style` was created to close.)
+
+### The glyphs have to TURN, or the tick is a trade
+
+With the boxes right and the glyphs still horizontal, a vertical run streams out of the side of its
+line strip and across whatever is beside it — a page rendered wrong in a *new* way, bought with a
+shape win. THE RATCHET refuses that, so `rotate_glyph_cw` lands in the same tick.
+
+⭐⭐ **The rotation is CLOCKWISE for both `vertical-rl` AND `vertical-lr` — measured, not derived.**
+A screenshot of `ab` in each renders identically, glyph tops pointing RIGHT; only `sideways-lr`
+turns the other way. So the ascent always extends towards `+x`, and a run's baseline sits one ascent
+in from the **right** edge of its own block strip in both modes.
+
+⭐⭐ **And the inline alignment is the CENTRAL baseline, not the alphabetic one.** A 10px and a 40px
+monospace glyph on one vertical line share their em-box centres (277.5 / 277.0), not a baseline —
+which is why `vertical-rl` and `horizontal-tb` do not simply mirror each other for a mixed-size run.
+Identical for a single-font run, i.e. for almost every run; the asymmetry is named residue.
+
+### Named residue
+
+- an orthogonal flow **nested inside another one** (a `horizontal-tb` element inside `vertical-rl`)
+  stays transposed with its ancestor rather than switching back;
+- the central baseline above, for mixed-size runs;
+- **upright CJK** — `text-orientation: mixed` leaves ideographs upright with an em-box advance;
+  Latin (the CrUX use: rotated table headers, sidebar labels, badges) is exactly right;
+- `text-decoration` on a sideways run is **skipped rather than approximated**: `DisplayItem::TextLine`
+  is a horizontal strip by construction, and a rule drawn across the article is a bigger wrong than a
+  missing underline. `text-orientation` therefore stays in `UNRENDERED_LONGHANDS` while
+  `writing-mode` leaves it.
+
+Gate: `G_WRITING_MODE`. Four mutations proven RED — `plan` returning `None` (the pre-tick state, every
+vertical row collapsing onto its horizontal control), the `is_rl` branch collapsing the two
+directions, the glyph rotation off, and paint never learning the coordinate swap.

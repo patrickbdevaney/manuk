@@ -675,6 +675,15 @@ pub fn cascade_via_stylo_sized(
     // black/white companion through `resolve_to_absolute` (the accessible-theming idiom: pick the
     // legible text color for a dynamic background without JS).
     stylo_static_prefs::set_pref!("layout.css.contrast-color.enabled", true);
+    // ⚠⚠⚠ **`writing-mode` IS GATED TOO, AND ITS GATE IS WHY THE PROPERTY WAS INVISIBLE RATHER
+    // THAN UNIMPLEMENTED.** `longhands.toml` marks it `servo_pref = "layout.writing-mode.enabled"`,
+    // default FALSE, so the servo build dropped `writing-mode: vertical-rl` **at parse time**:
+    // every computed value said `horizontal-tb`, `cv.writing_mode` was empty, and Stylo therefore
+    // also mapped every LOGICAL declaration (`inline-size`, `margin-block-start`) onto the
+    // horizontal physical field. The engine was not missing a feature; it was being told the page
+    // had not asked for one. Same shape as `layout.grid.enabled` above, and found the same way —
+    // by the computed value reading the initial value on a page that plainly set it.
+    stylo_static_prefs::set_pref!("layout.writing-mode.enabled", true);
     // **The parser's verdict, read off the `Dom` it already handed us.** Everything below that used to
     // say `QuirksMode::NoQuirks` unconditionally now says `qm`. Stylo already implements the quirks
     // themselves (unitless lengths, case-insensitive id/class matching, the `<font size>` table) — this
@@ -3360,6 +3369,15 @@ pub fn serialize_declaration(property: &str, value: &str) -> Option<String> {
     stylo_static_prefs::set_pref!("layout.container-queries.enabled", true);
     stylo_static_prefs::set_pref!("layout.unimplemented", true);
     stylo_static_prefs::set_pref!("layout.css.contrast-color.enabled", true);
+    // ⚠⚠⚠ **`writing-mode` IS GATED TOO, AND ITS GATE IS WHY THE PROPERTY WAS INVISIBLE RATHER
+    // THAN UNIMPLEMENTED.** `longhands.toml` marks it `servo_pref = "layout.writing-mode.enabled"`,
+    // default FALSE, so the servo build dropped `writing-mode: vertical-rl` **at parse time**:
+    // every computed value said `horizontal-tb`, `cv.writing_mode` was empty, and Stylo therefore
+    // also mapped every LOGICAL declaration (`inline-size`, `margin-block-start`) onto the
+    // horizontal physical field. The engine was not missing a feature; it was being told the page
+    // had not asked for one. Same shape as `layout.grid.enabled` above, and found the same way —
+    // by the computed value reading the initial value on a page that plainly set it.
+    stylo_static_prefs::set_pref!("layout.writing-mode.enabled", true);
 
     let url = ::url::Url::parse("about:manuk").ok()?;
     let url_data = UrlExtraData(ServoArc::new(url));
@@ -3412,6 +3430,15 @@ pub fn expand_declaration(property: &str, value: &str) -> Vec<(String, String)> 
     stylo_static_prefs::set_pref!("layout.container-queries.enabled", true);
     stylo_static_prefs::set_pref!("layout.unimplemented", true);
     stylo_static_prefs::set_pref!("layout.css.contrast-color.enabled", true);
+    // ⚠⚠⚠ **`writing-mode` IS GATED TOO, AND ITS GATE IS WHY THE PROPERTY WAS INVISIBLE RATHER
+    // THAN UNIMPLEMENTED.** `longhands.toml` marks it `servo_pref = "layout.writing-mode.enabled"`,
+    // default FALSE, so the servo build dropped `writing-mode: vertical-rl` **at parse time**:
+    // every computed value said `horizontal-tb`, `cv.writing_mode` was empty, and Stylo therefore
+    // also mapped every LOGICAL declaration (`inline-size`, `margin-block-start`) onto the
+    // horizontal physical field. The engine was not missing a feature; it was being told the page
+    // had not asked for one. Same shape as `layout.grid.enabled` above, and found the same way —
+    // by the computed value reading the initial value on a page that plainly set it.
+    stylo_static_prefs::set_pref!("layout.writing-mode.enabled", true);
 
     let Ok(id) = stylo::properties::PropertyId::parse_enabled_for_all_content(property) else {
         return Vec::new();
@@ -3462,6 +3489,15 @@ pub fn supports_condition(condition: &str) -> bool {
     stylo_static_prefs::set_pref!("layout.container-queries.enabled", true);
     stylo_static_prefs::set_pref!("layout.unimplemented", true);
     stylo_static_prefs::set_pref!("layout.css.contrast-color.enabled", true);
+    // ⚠⚠⚠ **`writing-mode` IS GATED TOO, AND ITS GATE IS WHY THE PROPERTY WAS INVISIBLE RATHER
+    // THAN UNIMPLEMENTED.** `longhands.toml` marks it `servo_pref = "layout.writing-mode.enabled"`,
+    // default FALSE, so the servo build dropped `writing-mode: vertical-rl` **at parse time**:
+    // every computed value said `horizontal-tb`, `cv.writing_mode` was empty, and Stylo therefore
+    // also mapped every LOGICAL declaration (`inline-size`, `margin-block-start`) onto the
+    // horizontal physical field. The engine was not missing a feature; it was being told the page
+    // had not asked for one. Same shape as `layout.grid.enabled` above, and found the same way —
+    // by the computed value reading the initial value on a page that plainly set it.
+    stylo_static_prefs::set_pref!("layout.writing-mode.enabled", true);
 
     // `CSS.supports(cond)` takes a <supports-condition>, but every browser also accepts a bare
     // declaration (`CSS.supports('display: flex')`). Wrap only when the caller did not, and leave
@@ -3628,8 +3664,12 @@ const UNRENDERED_LONGHANDS: &[&str] = &[
     // narrower "no" than this list can express: `@supports (clip-path: circle(50%))` is now honestly
     // yes and `@supports (clip-path: path(...))` is honestly-yes-but-unrendered. Taking the yes is
     // the right trade — the basic shapes are what pages branch on.
+    // `writing-mode` LEFT THIS LIST at tick 1343 — a vertical mode now transposes the subtree and
+    // paints its glyphs sideways (`manuk_layout::writing_mode`, `G_WRITING_MODE`), so the honest
+    // answer flipped. `text-orientation` STAYS: `mixed` is what the transposition implements and
+    // `upright` (the ideographic setting) is not, so a page that branches on `text-orientation`
+    // would still be told yes about something it cannot have.
     "isolation",
-    "writing-mode",
     "text-orientation",
 ];
 
@@ -4027,7 +4067,12 @@ mod tests {
         // `mix-blend-mode` moved to the rendered set at t594.
         assert!(!supports_condition("isolation: isolate"));
         assert!(!supports_condition("text-justify: inter-word"));
-        assert!(!supports_condition("writing-mode: vertical-rl"));
+        // `writing-mode` LANDED at tick 1343 (the subtree transposes and the glyphs turn), so the
+        // honest answer flipped exactly as `container-type` and `filter` did before it — the gate
+        // follows the capability, never the reverse. Its unimplemented HALF keeps its `no` on the
+        // line below, which is what stops this flip from over-claiming.
+        assert!(supports_condition("writing-mode: vertical-rl"));
+        assert!(!supports_condition("text-orientation: upright"));
         // …and composition still resolves through Stylo for the remaining list too.
         assert!(supports_condition("not (isolation: isolate)"));
         assert!(!supports_condition(
