@@ -143,14 +143,36 @@ pub(crate) fn arm_teardown() {
     TEARDOWN.with(|_| {});
 }
 
-/// Set once `JS_ShutDown()` has run. `JSEngine::init()` may not be called again afterwards, so a late
-/// request for JS is answered with an honest error instead of a crash.
+/// ⚠⚠⚠ **THIS FLAG IS A LOAD-BEARING SAFETY NET, NOT A TIDINESS DETAIL — AND ITS FAILURE MODE IS
+/// SILENT (t1341).**
+///
+/// SpiderMonkey forbids re-`init()` after `JS_ShutDown()`, so a late request is answered with an
+/// error rather than a crash. What was not written down is what "late" means in practice: the first
+/// thread to *exit* runs `teardown()` and sets this, so **every thread after the first gets the
+/// error** — and the error is swallowed upstream, leaving a `Page` whose scripts never run and
+/// nothing announcing it.
+///
+/// ⚠ That silence is the only thing standing between the wall and a SIGSEGV. Measured directly: with
+/// this flag's shutdown suppressed so the engine stays alive and the handle valid, a **second thread
+/// constructing a `Page` while the first is still parked and holding its engine segfaults
+/// immediately.** The constraint is ONE JS THREAD PER PROCESS, and it is not our drop order — the
+/// steer that said it was is refuted. Removing the flag does not unblock a second thread; it converts
+/// a quiet dead engine into a crash.
+///
+/// Ask [`super::js_available`] before concluding that a script "ran and did nothing".
+///
+/// Set once `JS_ShutDown()` has run.
 static SHUT_DOWN: AtomicBool = AtomicBool::new(false);
 
 /// The published handle. A `Mutex<Option<_>>` rather than a `OnceLock` because it must be
 /// *clearable*: a cached handle is an outstanding handle, and the engine refuses to shut down while
 /// one exists.
 static ENGINE_HANDLE: OnceLock<std::sync::Mutex<Option<JSEngineHandle>>> = OnceLock::new();
+
+/// Whether this thread can still get a JS engine — false once any thread has torn it down.
+pub(crate) fn engine_available() -> bool {
+    !SHUT_DOWN.load(Ordering::SeqCst)
+}
 
 pub(crate) fn engine_handle() -> Result<JSEngineHandle, JsError> {
     if SHUT_DOWN.load(Ordering::SeqCst) {

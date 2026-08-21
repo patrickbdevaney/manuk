@@ -3864,3 +3864,66 @@ nobody noticed because `verify.sh`'s `T · crate tests` list does not include `m
 tests over what the constitution calls *"the largest unsafe surface in the codebase"*. The compile
 break is fixed (12 pass, 9 ignored); the crate still cannot join `T`, because the binary SIGSEGVs at
 SpiderMonkey teardown — the same shutdown fault the WPT runner reports as `ACCUM`.
+
+## ⭐⭐⭐ One JS thread per process — and `libtest` gives every `#[test]` its own thread (t1341)
+
+SpiderMonkey's engine is initialised once per process and `JS_ShutDown()` is terminal. `TeardownGuard`
+runs it when the thread that owns the engine exits — so **the first thread to finish tears JavaScript
+down for the whole process.** A `Page` built afterwards constructs successfully, parses fine, lays out
+fine, and its `<script>` elements do nothing. The error is produced and swallowed on the way out.
+
+```text
+   PAGE t1: js=ran  thread=ThreadId(2)
+   PAGE t2: js=x    thread=ThreadId(4)      <- second #[test], silently JS-dead
+   PAGE t3: js=x    thread=ThreadId(5)
+   PAGE t3-child-thread: js=x thread=ThreadId(6)
+```
+
+⭐ **`libtest` spawns a thread per test, including at `--test-threads=1`** — the run above IS the
+single-threaded run. So in any test binary with more than one test, **exactly one test gets working JS
+and the rest silently do not, and which one is thread-scheduling order.** That is the real reason the
+gate suite is one-`#[test]`-per-binary. It was a workaround for this; because nobody wrote down what
+it was working around, it reads as a style choice.
+
+### ⚠⚠⚠ Two regimes, and only one of them is quiet
+
+| | second JS thread | outcome |
+|---|---|---|
+| **sequential** | first thread has EXITED | quiet: scripts silently never run |
+| **concurrent** | first thread still ALIVE and holding its engine | **SIGSEGV** |
+
+The concurrent regime was measured directly: thread A parked on a channel, still owning its engine and
+with `ENGINE_HANDLE` valid, thread B constructing a `Page` → immediate `signal: 11`.
+
+⭐ **This refutes the standing steer.** The steer said the blocker is our drop order, and that fixing
+teardown would unblock `manuk-js`'s 21 tests, the WPT `ACCUM` bucket and the 519-binary link cost.
+The falsifier it carried — *"two `Page`s back-to-back in one `#[test]`"* — **passes**, and so does two
+`Page`s alive at once *on one thread*. The constraint is not the drop order and not one `Page` per
+process. It is **one JS thread per process**, and it lives below our teardown code.
+
+⚠⚠ **The silence is a load-bearing safety net.** Suppressing the shutdown so the engine survives its
+owner does not unblock later threads — it converts the quiet dead engine into the SIGSEGV above.
+`SHUT_DOWN` is what keeps the wall from crashing, not a tidiness detail.
+
+### The contract, and how to ask
+
+`manuk_js::js_available()` is the honest predicate, gated by `g_one_js_thread_per_process.rs`, which
+pins the sequential regime and asserts that the predicate **agrees with the observable**. A page whose
+scripts silently did not run is otherwise indistinguishable from a page whose scripts ran and had no
+effect — and that ambiguity is exactly how a gate passes vacuously.
+
+### ⚠ Open exposure: twelve gate binaries hold more than one `#[test]` and build a `Page`
+
+```text
+   3  engine/page/tests/g_form_control_metrics.rs      2  g_inline_box_geometry.rs
+   2  engine/page/tests/g_video_frame.rs               2  g_first_paint.rs
+   2  engine/page/tests/g_svg_use_reference.rs         2  g_filter_render.rs
+   2  engine/page/tests/g_silent_fail.rs               2  g_color_scheme.rs
+   2  engine/page/tests/g_selector.rs                  2  g_clip_path.rs
+   2  engine/page/tests/g_scroll_snap.rs               2  g_media_urls.rs
+```
+
+In each, at most one test has working JS, and because `libtest` runs them **concurrently** by default
+they are also in the SIGSEGV regime — a latent Bar-0 flake that survives only on scheduling luck. The
+repair is to **merge** each binary's tests into one, not to split them into more binaries (the wall is
+link-bound; see `docs/loop/WALL-AUDIT.md`). Tracked as the next tick.

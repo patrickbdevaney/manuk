@@ -8092,3 +8092,11 @@ percentage resolves against the containing block's **inline** size, block axis i
 §8.3). A script that assumed the block axis uses the block size reads a number that is right only
 when the containing block happens to be square, which is why this is asserted explicitly in
 `g_margin_used_value.rs` rather than left implicit in the `margin-left` case.
+
+## Not a web pattern — a HARNESS pattern that decides whether web patterns get measured at all
+
+t1341 is instrument work with no user-visible web class behind it, and saying so is more useful than
+inventing one. What it unlocks is the ability to **trust** every other row in this ledger: a `Page`
+built on a non-first thread runs no JavaScript and says nothing about it, so any gate asserting that
+some class of the web works could have been asserting it about a page where no script ever ran.
+`manuk_js::js_available()` is how a test tells "the script did nothing" from "the script never ran".

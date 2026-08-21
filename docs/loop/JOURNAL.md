@@ -89086,3 +89086,62 @@ hostname github.com: Temporary failure in name resolution`. Not acted on per sco
 back-to-back in one `#[test]` FIRST, to separate mozjs runtime re-init from our drop order. (b) The
 capability window (steer #3) — check the class mix on two near-miss anchors before committing it.
 (c) I3's mechanical debt, now carried through three checks.
+
+## t1341 — the steer's falsifier passed, and the real constraint was one thread below it
+
+Check #126 gave steer #1 (SpiderMonkey teardown) a falsifier: *"refuted if a second `Page` in one
+process still aborts after teardown is fixed — construct two back-to-back in one `#[test]` before
+touching anything."* It took four minutes and it **passed**: two `Page`s sequentially, and two alive
+at once, both work fine on one thread. So the steer's premise — that our drop order is the blocker —
+is refuted, and every downstream claim it carried (21 `manuk-js` tests, the WPT `ACCUM` bucket, the
+519-binary link cost) needs re-attribution.
+
+⭐⭐⭐ **THE CONSTRAINT IS ONE JS *THREAD* PER PROCESS, AND `libtest` GIVES EVERY `#[test]` ITS OWN
+THREAD — INCLUDING AT `--test-threads=1`.**
+
+```text
+   PAGE t1: js=ran  thread=ThreadId(2)
+   PAGE t2: js=x    thread=ThreadId(4)      <- second #[test], silently JS-dead
+   PAGE t3: js=x    thread=ThreadId(5)
+   PAGE t3-child-thread: js=x thread=ThreadId(6)
+```
+
+SpiderMonkey's engine initialises once per process and `JS_ShutDown()` is terminal; `TeardownGuard`
+runs it when the owning thread exits, so **the first thread to finish tears JS down for everyone**.
+The later `Page` constructs, parses and lays out fine, and its scripts do nothing. The error
+(`"SpiderMonkey has already been shut down in this process"`) is produced and swallowed.
+
+⚠⚠⚠ **THE SILENCE IS A LOAD-BEARING SAFETY NET, WHICH IS WHY IT SURVIVED.** The obvious repair — keep
+the engine alive so later threads can use it — was measured and it is not a repair: with shutdown
+suppressed, the engine parked and its handle valid, a second thread building a `Page` **SIGSEGVs
+immediately**. Two regimes, one quiet and one fatal:
+
+```text
+   second JS thread, first has EXITED      quiet: scripts silently never run
+   second JS thread, first still ALIVE     SIGSEGV
+```
+
+Removing the flag does not unblock anything; it converts the quiet regime into the fatal one.
+
+**Landed:** `manuk_js::js_available()` — the honest predicate — plus
+`g_one_js_thread_per_process.rs`, which pins the SEQUENTIAL regime and asserts that the predicate
+**agrees with the observable**. ⚠ It deliberately does not enter the concurrent regime: a gate that
+segfaults asserts nothing and takes the wall with it. Proven RED by making `js_available()` return
+`true` unconditionally.
+
+⚠ **OPEN EXPOSURE, next tick.** Twelve gate binaries hold 2–3 `#[test]`s and build a `Page`
+(`g_form_control_metrics` 3, then `g_video_frame`, `g_svg_use_reference`, `g_silent_fail`,
+`g_selector`, `g_scroll_snap`, `g_media_urls`, `g_inline_box_geometry`, `g_first_paint`,
+`g_filter_render`, `g_color_scheme`, `g_clip_path`). In each, at most one test has working JS — and
+because `libtest` runs them concurrently by default they are also in the SIGSEGV regime, surviving on
+scheduling luck. ⭐ The repair is to **MERGE** each binary's tests into one, not split them into more:
+the wall is link-bound, and splitting would add binaries to the 519 it already cannot afford.
+
+⭐ **A WORKAROUND NOBODY WROTE DOWN READS AS A STYLE CHOICE.** One-`#[test]`-per-binary was load-
+bearing and undocumented, so twelve binaries grew a second test anyway. Same shape as t1303's finding
+that a workaround's comment is a checkable claim — here the comment was simply absent, and absence
+does not even leave something to check.
+
+**NEXT.** (a) ⭐⭐⭐ Merge the twelve, then a source-scanning gate forbidding a second `#[test]` in a
+`Page`-building binary. (b) Re-attribute what the teardown steer was carrying: the `ACCUM` bucket and
+the 519 binaries have a different cause than the one that was assumed. (c) I3's mechanical debt.

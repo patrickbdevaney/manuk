@@ -260,6 +260,34 @@ pub fn publish_image_source(node: u64, width: u32, height: u32, rgba: &[u8]) {
     }
 }
 
+/// ⚠⚠⚠ **WHETHER JAVASCRIPT CAN RUN AT ALL IN THIS PROCESS RIGHT NOW — ASK BEFORE CONCLUDING THAT A
+/// SCRIPT "RAN AND DID NOTHING".**
+///
+/// SpiderMonkey's engine may be initialised once per process and `JS_ShutDown()` is terminal, so the
+/// **first thread to exit** tears it down for everyone. A `Page` built on any later thread is
+/// constructed successfully, parses fine, lays out fine — and its `<script>` elements never execute.
+/// The error is produced (`"SpiderMonkey has already been shut down in this process"`) and swallowed
+/// on the way out, so the observable is a page that simply looks like the script did nothing.
+///
+/// ⭐ **`libtest` spawns a thread per `#[test]`, INCLUDING at `--test-threads=1`.** So in any test
+/// binary with more than one test, exactly one test gets working JS and the rest silently do not —
+/// and *which* one is thread-scheduling order. That is the real reason gates are one-`#[test]`-per-
+/// binary; it was a workaround for this, never a style choice.
+///
+/// ⚠ It cannot be fixed by keeping the engine alive: measured at t1341, a second thread building a
+/// `Page` while the first is parked and still holding its engine **segfaults**. One JS thread per
+/// process is the constraint.
+pub fn js_available() -> bool {
+    #[cfg(feature = "_sm")]
+    {
+        spidermonkey::engine_available()
+    }
+    #[cfg(not(feature = "_sm"))]
+    {
+        false
+    }
+}
+
 pub fn shutdown() {
     #[cfg(feature = "_sm")]
     {
