@@ -11,12 +11,12 @@
 
 | | value | over |
 |---|---|---|
-| ticks landed | **1022** | ticks 1–1335 |
-| median tick cycle | **31m** | 1021 intervals |
-| median, last 10 | **41m** | 10 intervals |
+| ticks landed | **1023** | ticks 1–1336 |
+| median tick cycle | **31m** | 1022 intervals |
+| median, last 10 | **39m** | 10 intervals |
 | fastest / slowest | 5s / 5.4d | |
-| **ticks per hour** | **1.04** | 977.7h elapsed |
-| median verify wall | **64s** | 961 ticks |
+| **ticks per hour** | **1.04** | 978.2h elapsed |
+| median verify wall | **64s** | 962 ticks |
 | wall trend | 39s → 17m — getting slower ⚠️ | first 3 vs last 3 |
 
 The **cycle** is the real unit: implement → debug → verify wall → land. The wall is only part of
@@ -31,7 +31,7 @@ it, and a wall that grows taxes every future tick, so it is tracked separately f
 * **✅ rows in the capability ledger**: 144 → **642**
 * **Bar 0 — oracle hangs**: 0 of 265 sites
 
-**477 of 1022 ticks** (47%) moved a
+**477 of 1023 ticks** (47%) moved a
 user-visible capability. The rest were instruments, infrastructure and corrections — and the
 ledger says the corrections were not overhead: three of its top three priorities were phantoms,
 and finding that out redirected everything after it.
@@ -91,7 +91,7 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 ## What a capability costs
 
 * **477** capability ticks, median cycle **31m**
-* median diff per tick: **+282 / −34** lines across 8 files
+* median diff per tick: **+281 / −34** lines across 8 files
 
 ## Every tick
 
@@ -1119,5 +1119,6 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 | **1333** | 2026-08-20 21:31 | 23m | measurement | 17m | +254/−35 | 502 | 81 | 56.0% · | the band's next anchor is FONT-limited, and six identical rows are what say so (2026-08-20 |
 | **1334** | 2026-08-20 22:27 | 57m | measurement | 17m | +171/−33 | 502 | 81 | 56.0% · | a quarter of the band is FONT-limited, and the classifier was already being printed (2026- |
 | **1335** | 2026-08-20 22:42 | 14m | measurement | 17m | +111/−32 | 502 | 81 | 56.0% · | repubblica's article cards are short by exactly the figure's height, and FIVE reductions f |
+| **1336** | 2026-08-20 23:16 | 34m | measurement | 17m | +129/−32 | 502 | 81 | 56.0% · | the article's box is ZERO tall and its child sits ABOVE it: the child is out of flow for u |
 
 *`·` after a WPT figure means **carried forward**, not measured this tick.*

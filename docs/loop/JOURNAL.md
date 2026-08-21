@@ -88754,3 +88754,99 @@ NEXT, ranked.
     fixture. Small, bounded, and it is the `getBoundingClientRect` every tooltip library reads.
 (d) ⭐⭐ **SPIDERMONKEY TEARDOWN** — blocks `manuk-js` from the wall, is the WPT runner's `ACCUM`
     bucket, forces one-`Page`-per-binary.
+
+## Tick 1336 — the article's box is ZERO tall and its child sits ABOVE it: the child is out of flow for us and in flow for Chrome (2026-08-20)
+
+TICK SHAPE: measurement / mechanism named. Board re-run at the top of this tick: **unchanged**. Took
+t1335's NEXT (a) — *ask what our engine actually built, rather than guess another fixture.* ⚠ **NO
+ENGINE SOURCE CHANGED.**
+
+### THE ANSWER WAS IN THE SHAPE DUMP, AT A DEPTH t1335 DID NOT READ
+
+`--shape-dump 400` on `www.repubblica.it`, filtered to the article family:
+
+```text
+   article(1)          c[16 0 299x532]   m[16 0 299x0]      <- OUR ARTICLE IS ZERO TALL
+   article(1)/div(1)   c[0 303 299x229]  m[0 -199 299x199]  <- and its child is at y = -199
+   article(1)          c[8 0 229x406]    m[8 0 229x0]       (x3 more, same shape)
+   article(1)/div(1)   c[0 216 229x190]  m[0 -190 229x190]
+```
+
+⭐⭐⭐ **The child's parent-relative y is NEGATIVE, and its height is right** (199 against Chrome's
+229; 190 against 190). A flex container that merely failed to sum its items would place the child at
+y = 0. **A child ABOVE its parent's origin, with the parent collapsed to zero, is the signature of a
+child that is OUT OF FLOW for us** — the article contributes no height because nothing in flow is left
+in it, and the child keeps a position computed against a different containing block.
+
+That reframes the whole anchor: it is not a sizing bug, it is a **flow-participation** bug, and 47
+articles × ~170px is the page's 8,129px deficit.
+
+### ⚠ AND A SIXTH REDUCTION STILL DID NOT REPRODUCE IT
+
+```text
+   6  display:flex + flex-direction:column + position:relative, auto height,
+      two block children (106px + 120px)                                       IDENTICAL (299x258)
+      …and the row variant (138) and the no-position variant (258)             IDENTICAL
+```
+
+So basic column-flex height summation is Chrome-exact, which eliminates the reading the numbers first
+suggest (*"the flex container does not take its height from its items"*). ⭐ Six fixtures, six matches:
+the cause is not any box type this anchor's markup names — it is **which pass claims the child**, and
+that is not expressible in a static fixture built from the same tags.
+
+### THE NARROWED QUESTION, which is what the next tick starts from
+
+> **Why is `article.entry`'s child out of flow in our engine?** Chrome computes `article.entry` as
+> `display: flex; position: relative` and its two children as in-flow `figure` + `div`. Ours produces
+> a zero-height article whose child is placed above it. The candidates are now a mis-cascaded
+> `position`/`float` on the child, or an out-of-flow pass claiming a box the flex pass also laid out —
+> and PART VI's H0.1 row already names that second shape twice (t1119's abspos flex child that got a
+> SECOND box at the measuring coordinates, and t1120's first-write-wins `pre_transform_rect`).
+
+⚠ The cheapest next probe is not another fixture: it is our own computed `position`/`float`/`display`
+for that element on the LIVE page, against Chrome's — three values, one question, and the six fixtures
+say no static markup will get there.
+
+### ⚠⚠⚠ HARNESS BLOCKER — tick 1336 is COMPLETE ON DISK and cannot land
+
+Eleven wall runs, every one failing on the shell lane's vacuous signature (`G3 affordance` ✗ and
+`G_INTERACT` ✗ while `G_TEARDOWN`/`G_RUNTIME_COUNT` pass on `SHELL_FAILED -eq 0`, and `T · crate
+tests` reports `manuk-shell: ok. 77 passed` in the SAME run). The suite is clean run alone.
+
+The mechanism is measured (t1332): the lane's capture file holds warnings and progress dots but **no
+`test result:` line for ~18 seconds of a 27-second run**, and `_out shell` reading inside that window
+yields a verdict-less capture. What has changed since the ticks that landed is the box:
+
+```text
+   load 15 → 24 across the attempts, with NO tick.sh of mine running between them
+   5 × `find target/debug/deps -maxdepth 1 -name g_<gate>-*`   at ~104% CPU each
+   1 × python3 /tmp/pipeline_compare.py                        at 100%
+   ls target/debug/deps | wc -l  →  527,203
+```
+
+⚠ Those `find`s and that script are not mine — no `tick.sh`, `cargo` or `rustc` of mine was alive when
+they were sampled. The contention stretches the shell suite (21.9s → 29.6s measured), which widens the
+window the race loses in.
+
+⚠⚠ **I considered and REFUSED the one thing that would have narrowed it from my side**: dropping
+`G_TAB_REAP`'s fixture from 30 tabs to 12 would halve that gate's cost and every assertion would still
+hold — but a worst-case bar's power IS its sample count, and the wall audit's own rule forbids
+*sampling instead of covering*. **Weakening a gate to work around a harness race is the trade the
+ratchet exists to refuse.**
+
+**State for the observer / the next invocation:** the working tree holds the finished tick 1336 —
+`JOURNAL.md` (this entry) and `STATUS.md` — and the commit message is at `/tmp/tick1336.msg`. Nothing
+is half-applied; it lands as-is the moment the shell lane can be read. This is the same handoff t1317
+made to this session, and reading it is what led to t1328's fix.
+
+NEXT, ranked.
+(a) ⭐⭐⭐ **THE THREE COMPUTED VALUES on `article.entry`'s child, live, both engines** — `position`,
+    `float`, `display`. If they agree, the defect is in the out-of-flow PASS, which PART VI already
+    names as a repeat offender; if they differ, it is a cascade bug and the histogram was pointing at
+    the wrong subsystem entirely.
+(b) ⭐⭐⭐ **THE WEBFONT INVESTIGATION** (t1334's (b)) — `hdnails.it`, `7info.ru`, `mobile.ir` as ONE
+    question.
+(c) ⭐⭐ **THE INLINE BOX'S OWN RECT** (t1335's (c)) — Chrome 17, ours 363, confined to overflowing
+    inline content.
+(d) ⭐⭐ **SPIDERMONKEY TEARDOWN** — blocks `manuk-js` from the wall, is the `ACCUM` bucket, forces
+    one-`Page`-per-binary.
