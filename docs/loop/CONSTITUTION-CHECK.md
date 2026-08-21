@@ -10680,3 +10680,106 @@ that agreed with the sweep; the old-binary control (84.7) and two further runs o
    invariant under pressure and this is the mechanical check for it.
 
 **Next check due: tick 1331.**
+
+## Check #125 — tick 1331 (2026-08-20)
+
+**Horizon: H0 — Pareto Web Parity.** Exit gate unchanged: ~83% WPT across categories · oracle-verified
+viability on the four corpora · the headful shell daily-drivable · every rendered construct queryable
+through the semantic API.
+
+### Gate, or scoreboard? — ticks 1324–1331
+
+⭐ **Gate, and the biggest single-page movement of the arc.**
+
+```text
+   #2 oracle-verified viability   oilprice.com  SHAPE 66.5% → 86.4%  (t1325, crosses the 0.75 bar)
+                                  ticket.jfa.jp 66.4% → 82.1% (t1319) · fragrantica 73.3% → 74.3%
+   #3 shell daily-drivable        t1330: a page with a runaway timer loads 9.3s → 2.4s, every visit
+   #1 WPT ledger                  css/css-sizing +92 against a same-hour OLD-BINARY control
+   #4 semantic API                no movement this window
+```
+
+⚠ Three of the eight ticks were instrument or process (t1326's refusal, t1328, t1331's retraction) and
+one was wall time (t1329). That is a high ratio and it is worth naming rather than excusing: t1328
+removed the RED that had blocked landings since t1317, t1329 cut the wall 154s → 116s, and t1331
+retracted a claim two ticks had published. **All three bought landings the next tick spends** — but a
+window with this ratio twice running would be the loop maintaining itself instead of the browser.
+
+### PART VI correction — a NINTH inflation mode for §VI.3, and it is the tooling's
+
+§VI.3 lists eight ways the loop's own numbers have been inflated or deflated. Add the ninth, from
+t1331:
+
+> **THE FALSE ABSENCE FROM THE SHELL'S OWN TOOLING.** `grep` in this environment is a shell function
+> that execs `ugrep -I` — *ignore binary files* — so any file that is not valid UTF-8 is **skipped
+> entirely**: zero matches, exit 1, no warning. `www.crazyshop.pl` is `charset=iso-8859-2`, and the
+> grep that "proved" six containers were script-created had silently skipped a 167KB file.
+> `div.bottom-html` is in the served HTML at offset 159,265.
+
+⭐ **The corpus IS non-UTF-8 pages**, so this mode is aimed precisely at the evidence this project
+collects, and the repository's own ASCII source is immune — which is why 1,300 ticks never hit it. It
+belongs beside PART VI's existing rule that *an absence must be named and run before it is published*
+(check #51's `most likely` note): the path was run, and the tool lied about it.
+
+### PART VI correction — H0.1's TABLE residue is partly closed
+
+The row's list of box types that opt out of ordinary block sizing names **tables (t932 anonymous rows,
+t933 row-height distribution)**. Two of that family closed this window with Chrome-measured rules and
+gates: `table-layout: fixed` column widths (t1325, 12 rows + 4 controls) and the AUTOMATIC algorithm's
+percentage columns (t1327, 14 rows + 6 controls). ⭐ **The two algorithms answer `80% + 80%`
+differently — 500+500 fixed, 800+200 auto** — so they cannot share code, which is the kind of fact
+that only a fixture with controls produces.
+
+### ⚠⚠⚠ A PROCESS FINDING THAT OUTRANKS ANY OF THE CAPABILITY ONES
+
+**Three gates in three consecutive ticks shipped with holes that only the RED PROOF found**, and in
+every case the code under the gate was correct, so nothing else would ever have noticed:
+
+```text
+   t1328  G_ONE_PRINTING_GATE   allowed 3 print sites on the false reasoning that `println!(`
+                                contains `print!(`. The red patch spent the spare slot and PASSED.
+   t1329  G_ONE_FONT_CONTEXT    draft 1 truncated the file at the gate's own doc comment and so
+                                scanned a region containing NO TESTS; draft 2 mis-counted its own
+                                prose. Both red proofs PASSED.
+   t1330  (the counter)         a per-navigation macrotask counter read 20,000 whether the fix was
+                                in or out — the drains run on more than one thread. Deleted rather
+                                than shipped.
+```
+
+⭐ **A gate is a claim about a counterfactual, and a counterfactual cannot be inspected — only run.**
+The methodology already says a gate must be *"proven to go red"*; this window is the evidence that the
+proof is not a formality. It is now the step most likely to catch a wrong tick, and t1330's counter is
+the strongest case: it would have shipped an instrument that measured nothing, in a tick whose fix was
+real.
+
+### Is any invariant being bent?
+
+- **I4 (Pareto discipline)** — held three times, and every refusal is on the record with its
+  measurement: multicol refused at t1326 (Chrome fragments a child across a column break, so a
+  partition-only implementation is exact only when the item count divides evenly), the
+  root-element-has-no-box item refused at t1321, and the path-key change refused tonight because it
+  invalidates every banked sweep and the re-baseline is 2h.
+- **I5 (the oracle is the discovery engine)** — ⭐ decisive again: t1319, t1320, t1321, t1325, t1326
+  and t1327 all descend from `--shape-dump` on two band anchors.
+- **I3 (semantic model in lockstep)** — ⚠ no movement, and it remains the invariant under most
+  pressure (check #124's finding stands: three reported-vs-applied instances in two windows, and
+  `map-reconcile.sh` still only checks that a gate exists).
+- **I2** — held; nothing forked.
+
+### STEER
+
+1. ⭐⭐⭐ **KEY `nth-of-type` BY (TAG, SIG), THEN RE-SWEEP.** Worth ~6.7% of a page's scorable set on
+   any site with JS-injected chrome — which is most of the modern web — and it is currently spending
+   that as phantom MISSING_BOX work, the one class the burndown has established cannot move the band.
+   Three call sites, byte-identical, then a fresh baseline.
+2. ⭐⭐⭐ **SPIDERMONKEY TEARDOWN.** It blocks `manuk-js`'s 21 tests from the wall — over what H0.4
+   calls *"the largest unsafe surface in the codebase"* — it is the WPT runner's `ACCUM` bucket, and
+   it forces one-`Page`-per-binary, which is much of the 519-binary link cost the wall audit keeps
+   finding. Three problems, one organ.
+3. ⭐⭐ **A CAPABILITY WINDOW.** The last eight ticks were half instrument. The next eight should be
+   the near-miss band's anchors, taken with the method that worked: measure the site's error bar,
+   `--shape-dump`, read the ABSOLUTE `e.g.` line first, reduce, gate with controls.
+4. ⭐⭐ **I3's mechanical check** — carried unclosed from #124 and audit #73: ask BOTH questions
+   (reported vs applied) of every `gated` row.
+
+**Next check due: tick 1339.**

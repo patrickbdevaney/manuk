@@ -1632,3 +1632,37 @@ Some pages are deterministic to the pixel; some swing eighteen points with nothi
 `t1275`, which is the **contended `--jobs 8` sweep** (scored 54 of 200, against 108 here). The honest
 comparator is the last clean one, `t1268`: **34.6% → 36.1%, +1.5**. A trend line that includes a
 known-poisoned point will hand you its recovery as progress.
+
+## `nth-of-type` counts over ALL same-tag siblings, so one disagreed-about element takes a subtree out of the scored set (t1331)
+
+The fidelity probe keys every element by a selector path — `tag.SIG:nth-of-type(n)/…` — where `SIG` is
+an fnv hash of the element's sorted class list. ⚠⚠ **The `n` counts among ALL preceding siblings of the
+same TAG, ignoring the sig.** So one element that only one engine creates shifts every later sibling
+of that tag, and each shifted element's whole subtree keys differently and scores as MISSING.
+
+`www.crazyshop.pl` is the arithmetic:
+
+```text
+    Chrome's <body> children:  17, of which  div.siiimpleToast × 2  are JS-injected notification toasts
+    structural: oracle 1537 paths · ours 1505 paths · 135 "missing"
+```
+
+⭐ We have **32 fewer** paths and **135** are unmatched — so **at least 103 of the 135 are elements we
+DO render, keyed differently**. The two toasts sit at the very top of `<body>`, so every later
+`div:nth-of-type(n)` is off by two: `div.bottom-html`, Chrome's `div:nth-of-type(4)`, is our
+`div:nth-of-type(2)`, and its 880px subtree drops out of the scored set with it.
+
+That is **6.7% of this page's scorable elements**, and it presents as MISSING_BOX work — the one class
+the burndown has repeatedly established cannot move the near-miss band.
+
+### The fix, and its cost
+
+Count `nth-of-type` among siblings sharing the same **(tag, sig)** — the sig is already in the key and
+already decides matching, so this adds no new failure mode and removes the shift. ⚠ It changes the key
+space, so **every banked sweep becomes incomparable** (t1242: an instrument you repair invalidates its
+own earlier readings) and the corpus needs another re-baseline. Named rather than done in the tick
+that found it.
+
+⚠ It must be changed in **three places byte-identically** — the two probe scripts in `chrome.rs` and
+`path_of` in `main.rs` — which that file's own comment already warns about: *"A path built two
+different ways is two different keys, and the diff would then compare strangers."*

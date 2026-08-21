@@ -758,6 +758,7 @@
   - L4083 · Why it read as a mystery for eleven wall runs
   - L4094 · The fix, and the two halves it needs
   - L4102 · The gate on the gate
+  - L4115 · grep in this shell SKIPS any file that is not valid UTF-8, and reports it as no matches (t1331)
 
 ## CSS AND THE CASCADE — Stylo realities and quirks actually encountered
 `docs/wiki/css-cascade.md`
@@ -1321,6 +1322,8 @@
   - L1599 · The per-site error bar is not a constant — it ranges from 0.0 to 18.0 points (t1322)
   - L1616 · What this changes
   - L1629 · ⚠ The tracker's own printed delta had a poisoned baseline
+  - L1636 · nth-of-type counts over ALL same-tag siblings, so one disagreed-about element takes a subtree out of the scored set (t1331)
+  - L1658 · The fix, and its cost
 
 ## FRAMEWORKS — React, Svelte, Next, jQuery: what actually breaks
 `docs/wiki/frameworks.md`
@@ -2351,4 +2354,4 @@
   - L231 · Both named mechanisms are subsystem work
 
 ---
-2258 sections across 22 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+2261 sections across 22 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.

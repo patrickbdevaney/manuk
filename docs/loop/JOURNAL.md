@@ -88281,3 +88281,95 @@ NEXT, ranked.
 (b) ⭐⭐⭐ **THE JS-INJECTED SUBTREES on `crazyshop.pl`** (t1327's (a)) — 135 boxes, 8.8% coverage.
 (c) ⭐⭐ **ONE `FontContext` FOR THE OTHER CRATES** (t1329's (b)) — measure each first.
 (d) ⭐⭐ **The 25 unscored in-scope sites** — scorability 81.2% caps M1.
+
+## Tick 1331 — I published a false ABSENCE twice, because `grep` here skips non-UTF-8 files silently (2026-08-20)
+
+TICK SHAPE: correction + two instrument findings. Board re-run at the top of this tick: **unchanged**.
+⚠ **NO ENGINE SOURCE CHANGED.** This tick retracts a claim t1327 and t1328 both published and names
+the two mechanisms behind it.
+
+### ⚠⚠⚠ THE RETRACTION
+
+t1327's NEXT (a) and t1328's NEXT (a) both say of `www.crazyshop.pl` that `.bottom-html`,
+`.small-modal__box`, two toasts and two more containers *"are in Chrome and in NONE of the served
+HTML: all six are script-created."*
+
+**`div.bottom-html` is in the served HTML, at offset 159,265 of 167,052, server-rendered, right after
+`</main>`.** So is `small-modal` (in a later fetch). The evidence for the claim was:
+
+```text
+   grep -c "bottom-html" /tmp/cs.html      →   (nothing, exit 1)
+   grep -o "bottom-html" /tmp/cs.html | wc -l   →   0
+```
+
+### FINDING 1 — `grep` IN THIS SHELL IS `ugrep -I`, AND `-I` MEANS *SKIP BINARY FILES*
+
+```text
+   grep -c "bottom-html" /tmp/cs.html            0   (exit 1)   ← a shell FUNCTION → ugrep -I
+   command grep -c "bottom-html" /tmp/cs.html    1   (exit 0)   ← the real binary
+```
+
+`crazyshop.pl` is `charset=iso-8859-2`. A file that is not valid UTF-8 is classified **binary** and
+**skipped entirely** — zero matches, exit 1, no warning — which is byte-for-byte indistinguishable
+from *"the string is not in the file."*
+
+⭐⭐⭐ **For a browser project this is a false-ABSENCE generator aimed squarely at its own corpus.** The
+repository's own source is ASCII and unaffected; the trap fires only on the real-world bytes the
+project exists to read. Rule, recorded in `docs/wiki/conformance-and-oracles.md` and in memory: **any
+grep over FETCHED or CORPUS content uses `command grep`, or python.**
+
+⚠ And the general form, which this project has now collected four times: *an instrument that answers
+"absent" without distinguishing "I did not look" is not an instrument* — WPT's `SHORT` vs `CRASH`, the
+crate suite's INSTRUMENT-vs-RED split, `_out`'s BUILD-FAILED branch, and now this.
+
+### FINDING 2 — AND THE REAL MECHANISM IS THE PATH KEY, WHICH IS ARITHMETIC RATHER THAN INFERENCE
+
+With the fetch re-read correctly, the picture inverts. Our net stack received **167,639 bytes**
+containing `bottom-html` and `</html>` — the document is complete. And:
+
+```text
+   Chrome's <body> children:  17, of which  div.siiimpleToast × 2  ARE genuinely JS-injected
+   structural: oracle 1537 paths · ours 1505 paths · 135 "missing"
+```
+
+⭐ We have **32 fewer** paths and **135** are unmatched — so **at least 103 of the 135 are elements we
+DO render, keyed differently.** The probe keys by `tag.SIG:nth-of-type(n)`, and **`n` counts among all
+same-TAG siblings, ignoring the sig** — so two injected toasts at the top of `<body>` shift every later
+`div`: Chrome's `div:nth-of-type(4)` (`.bottom-html`, 1200×880) is our `div:nth-of-type(2)`, and its
+whole subtree leaves the scored set.
+
+**6.7% of that page's scorable elements, presenting as MISSING_BOX work** — the one class the burndown
+has repeatedly established cannot move the near-miss band. ⚠ t1327 flagged the count as an upper
+bound; it did not find the mechanism, and it attributed the cause to the wrong thing.
+
+### WHAT I AM NOT DOING, AND WHY
+
+The fix is to count `nth-of-type` among siblings sharing the same **(tag, sig)** — the sig is already
+in the key and already decides matching, so it adds no failure mode and removes the shift. ⚠ It
+changes the key space, so **every banked sweep becomes incomparable** (t1242) and the corpus needs
+another re-baseline — I re-baselined at t1322. And it must be changed in **three places
+byte-identically** (two probe scripts in `chrome.rs`, `path_of` in `main.rs`), which that file's own
+comment warns about: *"A path built two different ways is two different keys, and the diff would then
+compare strangers."* Named as the next tick with its cost stated rather than started at the end of a
+long session.
+
+### ⚠ HARNESS — one line, as scope requires
+
+This tick took **four wall runs**. Three failed with the shell lane's vacuous signature (`G3` ✗ and
+`G_INTERACT` ✗ while `G_TEARDOWN`/`G_RUNTIME_COUNT` pass on `SHELL_FAILED -eq 0`), and the suite is
+clean run alone: 77 passed, three lines matching `^  (open|switch|close)`, `test result: ok. 77
+passed` intact. ⚠ t1328's fix removed the INTERLEAVING cause; this is the other one, and
+`WALL-AUDIT.md`'s own closing line already names it — *"four distinct wall/gate symptoms this session
+— G_INTERACT, G3, G_RUNAWAY and two slow walls — all resolve to the concurrent hygiene cron."* Three
+`find` processes at 100–150% CPU were running throughout. Observer-owned; not touched.
+
+NEXT, ranked.
+(a) ⭐⭐⭐ **KEY `nth-of-type` BY (TAG, SIG)** — worth ~6.7% of a page's scorable set on any site with
+    JS-injected chrome, which is most of the modern web. Three call sites, byte-identical, then a
+    fresh sweep to re-baseline.
+(b) ⭐⭐⭐ **SPIDERMONKEY TEARDOWN** (t1330's (a)) — blocks `manuk-js`'s 21 tests from the wall, is the
+    WPT runner's `ACCUM` bucket, and forces one-`Page`-per-binary, which is much of the 519-binary
+    link cost the wall audit keeps finding.
+(c) ⭐⭐ **The genuinely absent ~32 elements on `crazyshop.pl`** — the toasts and their subtrees, which
+    ARE script-created. A much smaller and better-defined target than the 135 I filed twice.
+(d) ⭐⭐ **The 25 unscored in-scope sites** — scorability 81.2% caps M1.

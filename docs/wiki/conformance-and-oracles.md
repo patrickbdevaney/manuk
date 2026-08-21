@@ -4111,3 +4111,31 @@ wall runs went to it at t1327.
   also contains `print!(`. It does not — `print` + `ln!(` — so the budget carried a spare slot, and
   the red-proof patch spent it and passed. **A gate with slack it cannot justify is a gate with a
   hole**, and only running the red proof showed it.
+
+## `grep` in this shell SKIPS any file that is not valid UTF-8, and reports it as no matches (t1331)
+
+⚠⚠⚠ A published finding was wrong because of this, so it is written down as a mechanism rather than a
+note.
+
+`grep` here is a **shell function** that routes to `ugrep` with `-I` (*ignore binary files*). A file
+that is not valid UTF-8 — `Content-Type: text/html; charset=iso-8859-2`, Shift-JIS, Windows-1251,
+GB2312 — is classified as **binary and skipped entirely**: zero matches, exit 1, no warning. That is
+byte-for-byte indistinguishable from *"the string is not in the file."*
+
+```text
+    grep -c "bottom-html" /tmp/cs.html            0   (exit 1)     ← the shell function → ugrep -I
+    command grep -c "bottom-html" /tmp/cs.html    1   (exit 0)     ← the real binary
+```
+
+⭐ **For a browser project this is a false-ABSENCE generator aimed squarely at its own corpus.** t1327
+and t1328 both recorded that six containers on `www.crazyshop.pl` are script-created and in *"none of
+the served HTML"*. `div.bottom-html` is in the served HTML, at offset 159,265, plainly. The grep that
+"proved" otherwise had silently skipped a 167KB ISO-8859-2 file.
+
+**The rule: any grep over FETCHED or CORPUS content uses `command grep`, or python.** Repository
+source is ASCII/UTF-8 and unaffected — the trap is exclusively on the real-world bytes this project
+exists to read, which is the worst possible place for it.
+
+⚠ And the general form, which this project has now collected four times: *an instrument that answers
+"absent" without distinguishing "I did not look" is not an instrument.* WPT's `SHORT` vs `CRASH`, the
+crate suite's INSTRUMENT-vs-RED split, `_out`'s BUILD-FAILED branch, and now this.
