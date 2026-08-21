@@ -88471,3 +88471,111 @@ NEXT, ranked.
     two engines? That number decides which of the two coherent path-key instruments is right, and it
     is one sweep-side count rather than an engine change.
 (d) ⭐⭐ **The 25 unscored in-scope sites** — scorability 81.2% caps M1.
+
+## Tick 1333 — the band's next anchor is FONT-limited, and six identical rows are what say so (2026-08-20)
+
+TICK SHAPE: measurement / classification. Board re-run at the top of this tick: **unchanged**. Took
+check #125's steer 3 — *a capability window on the near-miss band's anchors* — with the method that
+worked: error bar first, `--shape-dump`, read the ABSOLUTE `e.g.` line before building any reduction.
+⚠ **NO ENGINE SOURCE CHANGED**: the tick's finding is that this anchor is not layout work.
+
+### THE ANCHOR
+
+```text
+   www.hdnails.it   60.5% · 62.2%   spread 1.7 on 1,076 ids
+```
+
+### THE MECHANISM, FROM THE ABSOLUTE LINE
+
+```text
+   102 hits · geometry/mis-sized: width ~8px (<span>)
+     span(1)/span(1)/span(2)/span(1)
+       Chrome  [166 650 61x21]  {Favorit Std/19/187}
+       ours    [169 393 74x19]  {Favorit Std/19/204}
+```
+
+Same family, same size, **advance 74 against 61 — 21% wide**. The next three bars are div heights at
+~256px and ~128px, which is what a 21% text-width error does to wrapping. ⭐ The `{family/size/metric}`
+annotation is measured through canvas `measureText` (t1151), so it reports the USED face rather than
+naming it — and the two engines' used faces differ while their computed `font-family` agrees.
+
+### ⚠ THE CONTROL, BECAUSE THE DIVERGENCE ALONE CANNOT TELL TWO STORIES APART
+
+*"Our text metrics are wrong"* and *"Chrome loaded a font we did not"* produce the same box. Six
+strings, one 19px line, both engines:
+
+```text
+   Helvetica, Arial, sans-serif     132     132
+   Arial                            132     132
+   'Times New Roman', serif       122.4   122.4
+   monospace                      194.5   194.5
+   sans-serif  (AVWiljMM 0123)    133.7   133.7
+   'Favorit Std', Helvetica       132     132       <- both FALL BACK identically
+```
+
+⭐⭐ **Six of six identical, to a tenth of a pixel, including the fallback row.** Our shaping, face
+selection and advance accumulation agree with Chrome on every system family. So the anchor's 102 hits
+are **a webfont Chrome has and we do not**, not a metric defect.
+
+### THE CLASSIFICATION IS THE DELIVERABLE
+
+`www.hdnails.it` is **font-limited, not layout-limited.** Sending layout ticks at it would be the
+burndown's own *"MISSING_BOX cannot move this band"* mistake in a different costume — and without the
+control, the histogram's top bar (`geometry/mis-sized: width`) reads exactly like a layout lever.
+
+⚠ **And it re-reads the band.** The burndown ranks by mechanism, and `geometry/mis-sized: width` is
+its largest family. This anchor says at least some of that mass is a FONT mass wearing a geometry
+label. The band should be split on the oracle's font annotation — which it already prints, on every
+example line, and which nothing reads — before more layout ticks are aimed at it.
+
+### SELF-AUDIT (due at 1333) — one prescribed-but-not-executed item, and it is not mine
+
+```text
+   ✗ verify wall: 417s EXCEEDS the 300s target — Part 21.2 item 1 has regressed.
+```
+
+⚠ Harness, observer-owned. ⚠ And the number is a CONTENDED reading: the same wall measured **116s**
+and **121s** at t1329 after the font-context fix, and 417s and 883s on runs that shared the box with
+the hygiene cron's three `find` processes. Everything else green.
+
+### SURFACE AUDIT #75 — ⚠⚠⚠ AUDIT #74 SAID THE MAP HAD CAUGHT UP TO THE WORLD'S LIST. IT HAD CAUGHT UP TO **ONE** LIST.
+
+#74 reconciled against Interop 2026 — all 20 focus areas and all 4 investigations already on the map —
+and concluded *"the map is no longer behind the world's list, and this instrument has stopped being
+the binding one."* Ten ticks later a **different** list finds gaps in one fetch:
+
+```text
+   Microsoft Edge "top developer needs" (25 features) vs CONSTELLATION.tsv
+     present: bidi 6 · webdriver 1 · scheduler 3 · postTask 1 · module-script 1 · trackVisibility 1
+              virtualkeyboard 1 · bluetooth 1 · field-sizing 11 · FedCM 1 · JPEG XL 2 · …
+     ABSENT:  JavaScript DECORATORS      (0 hits under any spelling)
+              <img sizes="auto">         (3 srcset rows, none covering the auto half)
+```
+
+⭐ **The instrument was not exhausted — the SOURCE was.** Interop's list is what four vendors agreed
+to *test*; Edge's is what developers said they *need*. Heavy overlap, different lists, and #74
+generalised from one to "the world". *An audit that finds nothing is a suspicious audit* was the right
+instinct and the wrong remedy: the answer is another source, not more thought about the same one.
+
+Both added as `unknown`. ⚠ **Decorators are a PARSE-level capability** — unlike a missing DOM method,
+a syntax the engine cannot parse kills the ENTIRE script file, so the failure mode is a blank
+component rather than a degraded one, and Lit/MobX/Angular/TypeScript all emit them. One `eval`
+answers it.
+
+⭐ And the other independent engine agrees with the loop's own frame: Servo's 2026 reports name
+real-world compatibility, media queries, SharedWorker, mp4 and DevTools as the current work at version
+0.1.0 — which, beside audit #74's Ladybird finding (**>90% of all WPT subtests and still not
+daily-drivable**), is two independent engines saying WPT is the ledger and real-site drivability is
+the gate.
+
+NEXT, ranked.
+(a) ⭐⭐⭐ **SPLIT THE BAND BY THE FONT ANNOTATION.** The oracle prints `{family/size/metric}` for both
+    engines on every `e.g.` line. A site whose divergent boxes carry *different metrics for the same
+    family* is font-limited; one whose boxes carry *identical* annotations is layout-limited. That is
+    a one-pass read of output the sweep already produces, and it re-ranks the whole worklist.
+(b) ⭐⭐⭐ **WHY THE WEBFONT IS MISSING on `hdnails.it`** — `@import`ed Google Fonts DO apply on this
+    page (Montserrat, Open Sans, logged), so the gap is specific: `Favorit` appears in neither the
+    HTML nor the main 186KB stylesheet, so the face is declared somewhere we are not looking.
+(c) ⭐⭐ **SPIDERMONKEY TEARDOWN** — blocks `manuk-js` from the wall, is the WPT runner's `ACCUM`
+    bucket, forces one-`Page`-per-binary.
+(d) ⭐⭐ **The 25 unscored in-scope sites** — scorability 81.2% caps M1.

@@ -7010,3 +7010,70 @@ capability row.
    From #73: `writing-mode`/`css-writing-modes` absent from the WPT checkout. From #72: `svg` at
    14.6%. From #71: the ECMAScript mega-row split. From #70: anchor positioning's contradictory pair
    (`missing` in one row, `unknown` in another — still contradictory, still unresolved).
+
+## Audit #75 — tick 1333 (2026-08-20)
+
+**Sources (searched, not remembered).**
+- <https://microsoftedge.github.io/TopDeveloperNeeds/> — Edge's *top developer needs* dashboard,
+  fetched. ⭐ **A list audit #74 never consulted.**
+- <https://web.dev/blog/interop-2026> · <https://2026.stateofcss.com/en-US>
+- <https://www.phoronix.com/news/Servo-January-2026> · <https://servo.org/> — the other independent
+  engine's 2026 reports.
+
+### ⚠⚠⚠ AUDIT #74 SAID THE MAP HAD CAUGHT UP TO THE WORLD'S LIST. IT HAD CAUGHT UP TO **ONE** LIST.
+
+#74 reconciled against Interop 2026 — all 20 focus areas and all 4 investigations already on the map —
+and concluded *"the map is no longer behind the world's list, and this instrument has stopped being
+the binding one."* One week later, a **different** list finds gaps:
+
+```text
+   Edge "top developer needs" (25 features)  →  reconciled against CONSTELLATION.tsv
+     on the map under some spelling:  bidi 6 · webdriver 1 · scheduler 3 · postTask 1
+                                      module-script 1 · trackVisibility 1 · virtualkeyboard 1
+                                      bluetooth 1 · field-sizing 11 · FedCM 1 · JPEG XL 2 · …
+     ABSENT:  JavaScript DECORATORS        (0 hits under any spelling)
+              <img sizes="auto">           (3 srcset rows, none covering the auto half)
+```
+
+⭐ **The instrument was not exhausted — the SOURCE was.** Interop's list is what four vendors agreed
+to *test*; Edge's is what developers said they *need*. They overlap heavily and they are not the same
+list, and #74's conclusion generalised from one to "the world". Recorded as the correction, because
+*"an audit that finds nothing is a suspicious audit"* was the right instinct and the wrong remedy: the
+answer is another source, not more thought about the same one.
+
+### What was ADDED (per this instrument's rule that a bigger, uglier map is a good tick)
+
+- **JavaScript decorators** — `unknown`. ⚠ A PARSE-level capability: unlike a missing DOM method, a
+  syntax the engine cannot parse kills the **entire script file**, so the failure mode is a blank
+  component rather than a degraded one. Lit, MobX, Angular and TypeScript's decorator output all emit
+  them, and modern build targets no longer transpile them away. Whether this SpiderMonkey build
+  accepts them is unmeasured — one `eval` answers it.
+- **`<img sizes="auto">`** — `unknown`. The map has three `srcset`/responsive-image rows and none
+  covers the auto half. ⚠ It interacts with `collect_subresources`'s own note that it resolves `sizes`
+  **before layout exists**: `auto` requires the laid-out box.
+
+### What the other independent engine says
+
+Servo's 2026 reports (January onward) name **real-world compatibility, media queries, SharedWorker,
+user scripts, mp4 compatibility and DevTools** as the current work, and it is at 0.1.0 as of April
+2026. ⭐ Combined with audit #74's Ladybird finding (**>90% of all WPT subtests and still not
+daily-drivable**), the two independent engines agree with this loop's own decision: *WPT is the ledger,
+real-site drivability is the gate.*
+
+### Is the frame still right?
+
+**Yes.** M1 render on the in-scope CrUX corpus stays the binding constraint. But #74's *"the binding
+gap is now STATUS, not COVERAGE"* is only half true: 46 capabilities read `unknown`, **and** the map
+still has holes that a source it had not read finds in one fetch.
+
+### RANKED, from this audit only
+
+1. ⭐⭐⭐ **MEASURE DECORATORS** — one `eval` of `@dec class X {}` says whether a whole class of modern
+   framework code parses at all. A parse-level unknown is the cheapest possible probe and the most
+   expensive possible gap.
+2. ⭐⭐ **RECONCILE AGAINST A THIRD SOURCE NEXT TIME** — State of CSS/HTML survey pain points, or the
+   `web-platform-dx/web-features` Baseline dataset. #74 and #75 together show that one source per
+   audit is one source too few.
+3. ⭐⭐ Carried unclosed: ask BOTH questions (reported vs applied) of every `gated` row (#73);
+   `writing-mode`/`css-writing-modes` absent from the WPT checkout (#73); `svg` at 14.6% (#72); the
+   ECMAScript mega-row split (#71); anchor positioning's contradictory pair (#70).

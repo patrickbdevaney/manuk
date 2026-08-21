@@ -3859,3 +3859,42 @@ Gated by `a_zero_font_size_measures_zero_and_not_the_fonts_design_units` (manuk-
 and 16px control rows that make the boundary *exactly* zero) and by the 96-cell layout battery
 `intrinsic_keywords_and_the_font_size_zero_inline_block_grid`. Both RED-proven by deleting the
 early return.
+
+## The band's next anchor is FONT-limited, not layout-limited — and a six-row control is what says so (t1333)
+
+`www.hdnails.it` sits at 60.5–62.2% SHAPE on 1,076 ids (its own error bar, two runs). Its top
+mechanism is **102 `<span>` widths off by ~8–13px**, and the oracle's absolute example carries the
+font annotation both engines measured:
+
+```text
+    span(1)/span(1)/span(2)/span(1)
+      Chrome  [166 650 61x21]  {Favorit Std/19/187}
+      ours    [169 393 74x19]  {Favorit Std/19/204}
+```
+
+Same family, same size, **different advance** — 74 against 61, 21% wide. That is the signature of a
+different USED FACE, not of different layout arithmetic, and the next three histogram bars (div
+heights at ~256px and ~128px) are what a 21% text-width error does to wrapping.
+
+### The control that turns a hypothesis into a classification
+
+⚠ *"Our text metrics are wrong"* and *"Chrome loaded a font we did not"* produce the same box, so the
+divergence alone cannot tell them apart. Six strings, one 19px line, measured in both engines:
+
+```text
+    Helvetica, Arial, sans-serif     132     132
+    Arial                            132     132
+    'Times New Roman', serif       122.4   122.4
+    monospace                      194.5   194.5
+    sans-serif  (AVWiljMM 0123)    133.7   133.7
+    'Favorit Std', Helvetica       132     132        ← both FALL BACK identically
+```
+
+⭐ **Six of six identical, including the fallback row.** Our shaping, our face selection and our
+advance accumulation agree with Chrome to a tenth of a pixel on every system family. So the anchor's
+102 hits are **a webfont Chrome has and we do not** — the family name comes from computed style (both
+say `Favorit Std`) while the face behind it differs.
+
+**The classification is the deliverable:** this anchor is not layout work. Sending layout ticks at it
+would be the burndown's own *"MISSING_BOX cannot move this band"* mistake in a different costume, and
+the six-row control is what makes that statement rather than a guess.
