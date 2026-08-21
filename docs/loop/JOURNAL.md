@@ -88983,3 +88983,51 @@ NEXT, ranked.
 (c) ⭐⭐⭐ **REPUBBLICA'S OUT-OF-FLOW CHILD** (t1336's (a)) — still the biggest single layout lever
     named; the local-file probe HANGS the WPT harness on a 390KB document, which is its own finding.
 (d) ⭐⭐ **THE WEBFONT INVESTIGATION** (t1334's (b)).
+
+## t1339 — a percentage margin never reached px, and the fix needs a basis the hot path refuses to compute
+
+**Chrome-measured, containing block 1000px:**
+
+```text
+   margin-left: calc(50% - 10px)           Chrome 490px      ours calc(-10px + 50%)
+   margin-top: 10%                         Chrome 100px      ours 10%
+   margin-right: 25%                       Chrome 250px      ours 25%
+   margin-left/right: auto, width 200px    Chrome 400px      ours auto
+   margin-left: 40px                       Chrome  40px      ours 40px        ← CONTROL, agrees
+```
+
+CSSOM-View resolves `margin-*` to the **used** value for an element with a box. `width` and `height`
+already go through `used_dim_css` for that reason; the four margins were still publishing the
+computed value. ⭐ A script reading a margin gets a STRING, and `parseFloat("calc(-10px + 50%)")` is
+`NaN` — every layout script that measures its own gutters takes that path, and a `NaN` is a silently
+wrong position rather than a visible failure.
+
+**Written, then reverted, because the serialization is not the hard part.** The four-line change
+compiled and moved nothing: `computed_style_js` receives `cb: Option<[f32; 4]>` and it was `None` for
+every element in the fixture. The call site computes `cb` only when `inset_needs_containing_block(cs)`
+— a positioned element with a percentage/`calc()` inset — and its own comment says why:
+
+> *"Gated, because `getComputedStyle` is a hot call and this is a tree walk. An abspos element with no
+> positioned ancestor walks to the root, and a page that polls computed style in a scroll handler
+> would pay that on every frame."*
+
+⚠⚠ **THE SERIALIZATION WAS THE VISIBLE HALF OF A TWO-HALF FIX, AND THE INVISIBLE HALF IS THE ONE WITH
+A COST.** Doing it properly needs (a) a `margin_needs_containing_block` predicate as narrow as the
+inset one, and (b) a containing-block size for a **static** element — its nearest block ancestor's
+content box, where `containing_block_size` is today only ever called with a *positioned* element's
+`position`. A wrong basis is worse than shipping the computed value, because `parseFloat` succeeds on
+it. Specified rather than approximated: `docs/wiki/dom-semantics.md`.
+
+⚠ `auto` is a third case and is named as residue: its used value is a real number too (400px above),
+but deriving it needs the used width and the sibling margin.
+
+**Constitution check #126** (due this tick) found that check #125's own ⭐⭐⭐ steer — key `nth-of-type`
+by `(tag, sig)` — was implemented and reverted at t1332, because the key it proposed reads a class
+list `strip_sigs` is designed to erase. ⭐⭐⭐ **A STEER IS A HYPOTHESIS AND THIS LOOP HAS BEEN WRITING
+THEM WITH THE CONFIDENCE OF FINDINGS.** From #126 on, every steer states its falsifier as a command
+someone can run; #126's three steers each carry one.
+
+**NEXT.** (a) ⭐⭐⭐ Margin's used value, per the falsifier in steer #2: call `containing_block_size`
+with `Static` on the fixture and compare to 1000px *before* writing the predicate. (b) SpiderMonkey
+teardown, per steer #1's falsifier — two `Page`s in one `#[test]` first. (c) I3's mechanical debt,
+now carried through three checks.

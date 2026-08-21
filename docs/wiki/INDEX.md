@@ -1239,6 +1239,8 @@
   - L3873 · The gate
   - L3885 · getComputedStyle(el).flex was undefined while flex layout worked (t1337)
   - L3907 · It exposed two pre-existing flex-basis defects
+  - L3921 · margin resolves to the USED value, and a percentage margin never reached px (t1339, specified not fixed)
+  - L3940 · ⚠ Why this is specified here rather than fixed
 
 ## THE FIDELITY INSTRUMENT — what it can and cannot see
 `docs/wiki/fidelity-instrument.md`
@@ -2362,4 +2364,4 @@
   - L231 · Both named mechanisms are subsystem work
 
 ---
-2269 sections across 22 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+2271 sections across 22 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.

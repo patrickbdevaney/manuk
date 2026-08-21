@@ -10783,3 +10783,64 @@ real.
    (reported vs applied) of every `gated` row.
 
 **Next check due: tick 1339.**
+
+---
+
+## Check #126 — tick 1339
+
+### ⭐⭐⭐ THE FINDING: check #125's OWN ⭐⭐⭐ STEER WAS MEASURED AND REFUSED SEVEN TICKS LATER
+
+Check #125's STEER #1 was *"KEY `nth-of-type` BY (TAG, SIG), THEN RE-SWEEP — worth ~6.7% of a page's
+scorable set."* At t1332 it was implemented, byte-identical, at all three call sites — and then
+**reverted**, because the sweep it was supposed to unlock showed the change is coupled to
+`strip_sigs`: keying by `(tag, sig)` makes the key depend on a class list that the stripper is
+designed to erase, so the two mechanisms cancel and the promised 6.7% does not arrive.
+
+⚠ **A STEER IS A HYPOTHESIS, AND THIS FILE HAS BEEN WRITING THEM WITH THE CONFIDENCE OF FINDINGS.**
+The number `~6.7%` was computed correctly from a real histogram; what was never checked is whether
+the mechanism that produces it survives contact with the mechanism beside it. Three checks in a row
+have opened with a ⭐⭐⭐ steer and none of them carried a falsifier.
+
+**The correction, applied from this check onward: every STEER states what would REFUTE it**, in the
+same sentence, in the vocabulary of a command someone can run. Not "worth ~6.7%" but "worth ~6.7%
+UNLESS `strip_sigs` already erases the signature the key would read — check by keying one call site
+and diffing the failing NAMES, not the totals." That falsifier is one grep and it was available at
+the time of writing.
+
+⭐ This is the same shape as t1300's finding about prerequisites and t1222's about refusals: a claim
+that steers work must be *checkable by the person it steers*, or the loop spends a tick discovering
+what the author could have stated.
+
+### INVARIANTS
+
+- **I5 (the oracle is the discovery engine)** — held, and it did the refuting: t1332's revert, t1326's
+  multicol refusal and t1339's margin specification are all the instrument declining to ratify a
+  plausible plan. That is the invariant working, not failing.
+- **I4 (Pareto discipline)** — held. t1339 is the fourth consecutive refusal on the record with its
+  measurement: the margin fix needs a containing block for a **static** element and a
+  `getComputedStyle` hot-path gate widened to match, and a wrong basis is worse than a computed value
+  because `parseFloat` succeeds on it.
+- **I3 (semantic model in lockstep)** — ⚠ **still no movement, third check running.** The mechanical
+  check (ask BOTH questions of every `gated` row) has now been carried unclosed from #124, #125 and
+  audit #73. It is no longer a steer; it is a debt, and the next check that cannot report it done
+  should say so in its opening line rather than its fourth bullet.
+- **I2, I1** — held; nothing forked, nothing traded against the ratchet.
+
+### STEER — each with its falsifier
+
+1. ⭐⭐⭐ **SPIDERMONKEY TEARDOWN.** Three problems, one organ: `manuk-js`'s 21 tests are off the wall,
+   it is the WPT runner's `ACCUM` bucket, and it forces one-`Page`-per-binary (much of the 519-binary
+   link cost). ⚠ *Refuted if* a second `Page` in one process still aborts after teardown is fixed —
+   i.e. the blocker is mozjs runtime re-init, not our drop order. Check by constructing two `Page`s
+   back-to-back in one `#[test]` before touching anything.
+2. ⭐⭐⭐ **MARGIN'S USED VALUE** (t1339, fully specified in `docs/wiki/dom-semantics.md`). Chrome
+   numbers banked, control row banked, mechanism located. ⚠ *Refuted if* `containing_block_size`
+   already returns the right basis for a `Position::Static` element — check by calling it with
+   `Static` on the fixture and comparing to `1000px` before writing the predicate.
+3. ⭐⭐ **A CAPABILITY WINDOW**, carried from #125 and still owed: the near-miss band's anchors, taken
+   with `--shape-dump` and the ABSOLUTE `e.g.` line. ⚠ *Refuted if* the band's anchors are all
+   MISSING_BOX — the one class the burndown has established cannot move the score. Check the class
+   mix on two anchors before committing the window.
+4. ⭐⭐ **I3's debt** — see above. Not a steer any more.
+
+**Next check due: tick 1347.**

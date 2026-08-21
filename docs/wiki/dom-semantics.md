@@ -3917,3 +3917,43 @@ Checking `flexBasis` alone confirms these are not the shorthand's:
 The first is information loss (`Dim::Percent(0.0)` stored as `Px(0.0)`), and a percentage basis is not
 the same thing as a px basis in every context. The second is a float printed through a widening that
 Chrome's shortest-round-trip avoids.
+
+## `margin` resolves to the USED value, and a percentage margin never reached px (t1339, specified not fixed)
+
+CSSOM-View resolves `margin-*` to the **used** value for an element with a box — `width` and `height`
+already go through `used_dim_css` for exactly that reason. The four margins still publish the
+**computed** value:
+
+```text
+   declared (containing block 1000px)      Chrome     ours
+   margin-left: calc(50% - 10px)           490px      calc(-10px + 50%)
+   margin-top: 10%                         100px      10%
+   margin-right: 25%                       250px      25%
+   margin-left: auto (centred, width:200)  400px      auto
+   margin-left: 40px                       40px       40px            ← CONTROL
+```
+
+⭐ **A script reading a margin gets a STRING, and `parseFloat("calc(-10px + 50%)")` is `NaN`.** Every
+layout script that measures its own gutters — a masonry, a sticky-offset calculator, a carousel step —
+takes that path, and a `NaN` is a silently wrong position rather than a visible failure.
+
+### ⚠ Why this is specified here rather than fixed
+
+The serialization change is four lines. The blocker is the **basis**: resolving a percentage margin
+needs the containing block, and `getComputedStyle`'s call site computes `cb` only when
+`inset_needs_containing_block(cs)` — a positioned element with a percentage/`calc()` inset. Its own
+comment says why:
+
+> *"Gated, because `getComputedStyle` is a hot call and this is a tree walk. An abspos element with no
+> positioned ancestor walks to the root, and a page that polls computed style in a scroll handler
+> would pay that on every frame."*
+
+So the fix needs two things this tick did not have room to do carefully: a `margin_needs_containing_block`
+predicate as narrow as the inset one, and a containing-block size for a **static** element (its
+nearest block ancestor's content box) — `containing_block_size` is currently only ever called with a
+positioned element's `position`. A wrong basis here is worse than a computed value, because
+`parseFloat` succeeds on it.
+
+⚠ `auto` is a third case: its used value is a real number too (a centred block's `margin-left` reads
+`400px` above), but deriving it needs the used width and the sibling margin — a different computation
+from resolving a percentage.

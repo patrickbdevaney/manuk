@@ -8077,3 +8077,10 @@ component library, grid system and design token sizes a row of cards. The declar
 ⚠ It survived because `width`/`height`/`margin`/`padding` resolve to USED values (px), so their
 percentages never reach script — the defect lived only in the properties whose resolved value is the
 COMPUTED value, which almost nothing checks.
+
+## A layout script reads its own gutters with `parseFloat(getComputedStyle(el).marginLeft)`
+
+Measured t1339. Masonry layouts, sticky-offset calculators and carousel step sizes all take this
+path, and it is the reason `margin` must resolve to the USED value rather than the computed one:
+`parseFloat("calc(-10px + 50%)")` is `NaN`, and a `NaN` offset is a silently wrong position rather
+than a visible failure. See `docs/wiki/dom-semantics.md`.
