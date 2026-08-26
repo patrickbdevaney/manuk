@@ -529,6 +529,7 @@
   - L10784 · ⚠⚠ An orthogonal flow is an INDEPENDENT formatting context
   - L10793 · The glyphs have to TURN, or the tick is a trade
   - L10809 · Named residue
+  - L10827 · An intrinsic keyword on min-width/max-width asks for the CONTENT size, not the contribution (t1344)
 
 ## browser-capabilities.md
 `docs/wiki/browser-capabilities.md`
@@ -2377,4 +2378,4 @@
   - L231 · Both named mechanisms are subsystem work
 
 ---
-2284 sections across 22 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+2285 sections across 22 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.

@@ -1221,6 +1221,10 @@ struct Ctx<'a> {
     /// them *intrinsic*. So both can be cached per node, and `shrink_to_fit` becomes a lookup and two
     /// comparisons instead of a subtree layout.
     max_content_cache: RefCell<HashMap<NodeId, f32>>,
+    /// The memo for [`Ctx::max_content_width_of_content`] — the max-content mirror of
+    /// [`Ctx::min_content_of_content_cache`], and a SECOND map for the same reason: above the
+    /// definite-width short-circuit the two rules answer different numbers for one node.
+    max_content_of_content_cache: RefCell<HashMap<NodeId, f32>>,
     /// Flex/grid items whose **used border-box width taffy has already decided**. Their own `width`
     /// style must NOT be resolved a second time — see the width resolution in `layout_block`.
     taffy_item_width: RefCell<HashMap<NodeId, f32>>,
@@ -1447,6 +1451,7 @@ pub fn layout_document(
         min_content_cache: RefCell::new(HashMap::new()),
         min_content_of_content_cache: RefCell::new(HashMap::new()),
         max_content_cache: RefCell::new(HashMap::new()),
+        max_content_of_content_cache: RefCell::new(HashMap::new()),
         taffy_item_width: RefCell::new(HashMap::new()),
         taffy_item_height: RefCell::new(HashMap::new()),
         static_pos: RefCell::new(HashMap::new()),
@@ -4325,10 +4330,36 @@ impl Ctx<'_> {
         // profile is identical and they return **content-box** widths — which is why the
         // `bs_extra_w` subtraction (a border-box conversion for a *specified* length) must not run
         // for them, exactly as it is skipped for a keyword `width`.
+        // ⚠⚠⚠ **THESE MEASURE THE CONTENT, NOT THE BOX — AND THE DIFFERENCE IS THE WHOLE
+        // DECLARATION.** `min_content_width`/`max_content_width` answer the box's *contribution*,
+        // which CSS Sizing §5.1 defines as the box's own definite `width` when it has one. Asking
+        // that question here makes `width:400px; max-width:min-content` resolve its own max to
+        // **400** — the constraint evaluates to the very width it was written to override, and the
+        // declaration is vacuous by construction. Chrome-measured, "hello there world"
+        // (min-content 48.17, max-content 163.77) in a 400px containing block:
+        //
+        // ```text
+        //                                              Chrome   before    after
+        //   width:400px; max-width:min-content          48.17     400      48.17
+        //   width:400px; max-width:max-content         163.77     400     163.77
+        //   width:400px; max-width:fit-content         163.77     400     163.77
+        //   width:10px;  min-width:max-content         163.77      10     163.77
+        //   width:10px;  min-width:min-content          48.17      10      48.17
+        //   width:10px;  min-width:fit-content         163.77      10     163.77
+        //   width:100%;  max-width:min-content          48.17     400      48.17
+        //   border-box; padding:0 10px;
+        //     width:400px; max-width:min-content        68.17     400      68.17
+        //   width:400px                        CTRL    400.00     400     400.00
+        //   width:400px; max-width:100px       CTRL    100.00     100     100.00
+        // ```
+        //
+        // The `width` KEYWORD arm above keeps the contribution functions on purpose: a keyword
+        // `width` collapses `s.width` to `Dim::Auto`, so there is no definite width for the
+        // short-circuit to return and the two families answer the same number there.
         let kw_w = |k: IntrinsicSize| match k {
-            IntrinsicSize::MinContent => self.min_content_width(node),
-            IntrinsicSize::MaxContent => self.max_content_width(node),
-            IntrinsicSize::FitContent => self.shrink_to_fit(node, (cw - extra).max(0.0)),
+            IntrinsicSize::MinContent => self.min_content_width_of_content(node),
+            IntrinsicSize::MaxContent => self.max_content_width_of_content(node),
+            IntrinsicSize::FitContent => self.shrink_to_fit_of_content(node, (cw - extra).max(0.0)),
         };
         // min-width / max-width clamp (max applied first, then min wins), converted to the
         // content box to match `width`.
@@ -6960,18 +6991,63 @@ impl Ctx<'_> {
         pref.min(avail.max(self.min_content_width(node))).max(0.0)
     }
 
+    /// Shrink-to-fit over the box's CONTENT, with the box's own definite `width` ignored — the
+    /// `fit-content` member of the `_of_content` family (see [`Self::max_content_width_of_content`]).
+    ///
+    /// ⚠ No `pref <= avail` short-circuit here: that optimisation is only sound because the plain
+    /// `shrink_to_fit` is on the hot path for every box on the page. This one runs solely for a
+    /// `min-width`/`max-width: fit-content` declaration, which is rare, and the algebra is clearer
+    /// written straight.
+    fn shrink_to_fit_of_content(&self, node: NodeId, avail: f32) -> f32 {
+        let pref = self.max_content_width_of_content(node);
+        pref.min(avail.max(self.min_content_width_of_content(node)))
+            .max(0.0)
+    }
+
     /// The **max-content** (preferred) width of `node`: how wide the box wants to be with no
     /// constraint at all. Memoized, and the memo is the whole point — see `max_content_cache`.
     fn max_content_width(&self, node: NodeId) -> f32 {
-        if let Some(&cached) = self.max_content_cache.borrow().get(&node) {
+        self.max_content_width_inner(node, true)
+    }
+
+    /// **The max-content width of the box's CONTENT, with the box's own definite `width` ignored** —
+    /// the max-content mirror of [`Self::min_content_width_of_content`], and needed for the same
+    /// reason that one is: a rule that answers the box's own declared width is *vacuous* wherever
+    /// the question was asked in order to CONSTRAIN that width.
+    ///
+    /// `min-width: max-content` on a box that also declares `width: 10px` is exactly that question.
+    /// CSS Sizing §5.1 makes a definite `width` the box's max-content *contribution* — which is the
+    /// right answer for a parent sizing itself around this box, and the wrong one here, because it
+    /// makes the declaration resolve to the very width it was written to override.
+    fn max_content_width_of_content(&self, node: NodeId) -> f32 {
+        self.max_content_width_inner(node, false)
+    }
+
+    /// The shared body. `own_definite_width_counts` selects which of the two rules above applies,
+    /// and each rule writes its OWN map — see [`Self::min_content_width_inner`] for why a shared
+    /// memo would hand a later query the other rule's answer.
+    fn max_content_width_inner(&self, node: NodeId, own_definite_width_counts: bool) -> f32 {
+        if own_definite_width_counts {
+            if let Some(&cached) = self.max_content_cache.borrow().get(&node) {
+                return cached;
+            }
+        } else if let Some(&cached) = self.max_content_of_content_cache.borrow().get(&node) {
             return cached;
         }
         let _phase = PhaseGuard::enter(Phase::MaxContent);
         // Ceil to the LayoutUnit grid, never round — see `taffy_tree::ceil_to_layout_unit`. An
         // intrinsic width that is a few thousandths of a pixel SHORT of what its own content needs
         // makes the box re-wrap the run it was measured from.
-        let pref = taffy_tree::ceil_to_layout_unit(self.max_content_width_uncached(node));
-        self.max_content_cache.borrow_mut().insert(node, pref);
+        let pref = taffy_tree::ceil_to_layout_unit(
+            self.max_content_width_uncached(node, own_definite_width_counts),
+        );
+        if own_definite_width_counts {
+            self.max_content_cache.borrow_mut().insert(node, pref);
+        } else {
+            self.max_content_of_content_cache
+                .borrow_mut()
+                .insert(node, pref);
+        }
         pref
     }
 
@@ -6988,7 +7064,7 @@ impl Ctx<'_> {
         })
     }
 
-    fn max_content_width_uncached(&self, node: NodeId) -> f32 {
+    fn max_content_width_uncached(&self, node: NodeId, own_definite_width_counts: bool) -> f32 {
         // ⚠⚠⚠ **A BOX WITH A DEFINITE `width` CONTRIBUTES EXACTLY THAT WIDTH — CONTENT GETS NO
         //    VOTE** (CSS Sizing §5.1: the intrinsic contributions of a box with a definite preferred
         //    size are that size). This function lays the subtree out and measures how far the
@@ -7017,8 +7093,10 @@ impl Ctx<'_> {
         //    every caller of this function consumes (`shrink_to_fit` hands it straight to
         //    `layout_children`), so a `border-box` width has its own padding and border removed —
         //    the same `bs_extra` term `layout_block` adds in the other direction.
-        if let Some(w) = self.definite_content_width(node) {
-            return w;
+        if own_definite_width_counts {
+            if let Some(w) = self.definite_content_width(node) {
+                return w;
+            }
         }
         // An anonymous flex/grid item is a text run; it is never a flex container, whatever the
         // cascade stored on the text node. Under the Stylo cascade a text node carries a CLONE of
@@ -9880,10 +9958,13 @@ impl Ctx<'_> {
         // entirely, so a `max-width` dialog or `min-width` tooltip took its unconstrained size.
         // Clamp BEFORE laying out children so they see the constrained width.
         // The abspos copy of the t930 intrinsic-keyword clamp; see `layout_block`.
+        // The abspos mirror of the block path's clamp — same rule, same reason: an intrinsic
+        // keyword on `min-width`/`max-width` asks for the CONTENT size, not the contribution. See
+        // the measured table beside the block-path `kw_w`.
         let kw_w = |k: IntrinsicSize| match k {
-            IntrinsicSize::MinContent => self.min_content_width(node),
-            IntrinsicSize::MaxContent => self.max_content_width(node),
-            IntrinsicSize::FitContent => self.shrink_to_fit(node, (cw - frame).max(0.0)),
+            IntrinsicSize::MinContent => self.min_content_width_of_content(node),
+            IntrinsicSize::MaxContent => self.max_content_width_of_content(node),
+            IntrinsicSize::FitContent => self.shrink_to_fit_of_content(node, (cw - frame).max(0.0)),
         };
         // The same stretch-fit the `Dim::Auto if s.width_stretch` arm resolves to, computed once.
         let stretch_fit_w =

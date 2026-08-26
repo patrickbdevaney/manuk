@@ -89408,3 +89408,120 @@ and price what this bought — the number is the point of Track A. (b) Nested or
 go red without a human running 501 binaries by hand. This outranks (b): un-banked teeth are the one
 failure the ratchet cannot survive. (d) Carried from t1342: the `ACCUM` bucket and the 519-binary
 link cost still have an unexamined cause. (e) I3's mechanical debt, now carried through five checks.
+
+## t1344 — the constraint resolved to the very width it was written to override
+
+TICK SHAPE: capability + ratchet repair. Board re-run at the top of this tick: unchanged (observer
+mandate 2026-08-21, three tracks; Track A #1 `writing-mode` closed its first tick at t1343). This
+tick is t1343's own NEXT item **(c)** — *"THE SEVEN RED GATES ABOVE — one tick to triage them… un-banked
+teeth are the one failure the ratchet cannot survive"* — and it took the triage further than triage,
+because the triage instrument turned out to be **headless Chrome, not reasoning**.
+
+### ⭐⭐⭐ THE FINDING: FOUR OF THE SEVEN RED GATES ARE THE ENGINE GETTING **MORE** CORRECT
+
+t1343 partitioned eight failing `manuk-page` binaries with an old-binary control and banked seven as
+"pre-existing, not this tick". That partition is right and it is **not an identification**. Running
+each fixture through `google-chrome --headless=new` — the same fixture, byte for byte, the values
+read with `getBoundingClientRect` — splits the seven again, and the second cut is the one that matters:
+
+```text
+   GATE                        our value        CHROME          verdict
+   g_intrinsic_min_max         wx_min 400       48.17           REAL — engine wrong
+   g_inline_image_size         grid 40x40       16x16           REAL — engine wrong
+   g_iframe_load_event         inline:2 addl:2  (fires once)    REAL — engine wrong
+   g_replaced_ratio            iw:400x400       400x400  ←      STALE GATE — CHROME AGREES WITH US
+   g_ua_control_metrics        input h=21       21       ←      STALE GATE — the residue CLOSED
+   g_is_where_selectors        (JS threw)       THREW: SyntaxError  ←  STALE GATE
+   g_structural_pseudos        (JS threw)       THREW: SyntaxError  ←  STALE GATE
+```
+
+`g_replaced_ratio` is the sharpest of the four. Its own message reasons, in prose, that *"an 800x400
+`<img>` under `max-width:100%` in a 400px column is 400x200 — the width attribute's ratio survives
+the clamp"*, cites CSS2.1 §10.4, and pins 400x200. **Chrome renders 400x400.** The gate was
+asserting a *derived* reference value, and a later tick that moved the engine ONTO Chrome's answer was
+recorded by that gate as a regression. This is `gate-asserts-a-reasoned-reference-value` (t1004-1007)
+arriving from the opposite direction: not a gate pinning the engine to a bug, but a gate **calling a
+fix a regression**. The `<canvas>` row in the very same fixture (`c:400x200`) is Chrome-correct and
+always was — so the fixture contains its own refutation and nobody read it as one.
+
+`g_is_where_selectors` / `g_structural_pseudos` are one mechanism, not two: both end their probe with
+`ids('.a :totally-unknown-pseudo(x)')` and both outputs simply STOP one key early. The selector does
+not "drop" any more — `throw_if_bad_selector` (a later, deliberate, spec-cited tick) throws
+`SyntaxError`, which is exactly what Chrome does, and the throw aborts the probe script mid-sentence.
+An expectation written as an ABSENT key is invisible when the mechanism that produces it starts
+throwing: the assertion did not fail loudly, the *whole rest of the probe* vanished.
+
+⭐⭐ **THE GENERAL SHAPE, and it is the counterweight to t1343's own headline.** t1343 said "the
+finding is the seven" — seven banked capabilities silently un-banked. The correction is that a red
+gate names a DIVERGENCE BETWEEN GATE AND ENGINE and says nothing about which of the two moved.
+Four of seven were the gate. **A COUNT OF RED GATES IS NOT A COUNT OF REGRESSIONS**, and the only
+instrument that can tell them apart is the oracle the project already owns.
+
+### THE ENGINE FIX — an intrinsic keyword on `min-width`/`max-width` was answering the box's own width
+
+Of the three real ones, `g_intrinsic_min_max` is fixed here. Its 14-row fixture against Chrome:
+**twelve rows matched exactly**, and the two that did not are one mechanism in two directions.
+
+```text
+                                             Chrome    before    after
+   width:400px; max-width:min-content         48.17      400      48.17
+   width:10px;  min-width:max-content        163.77       10     163.77
+   …12 other rows (keyword with width:auto)   exact     exact     exact
+```
+
+`min_content_width(node)` and `max_content_width(node)` answer a box's intrinsic **contribution**,
+which CSS Sizing §5.1 defines as the box's own definite `width` when it has one. That is the right
+answer for a parent sizing itself around the box. It is the wrong *question* when the caller is a
+`min-width`/`max-width` declaration written to OVERRIDE that width: the constraint resolves to the
+very number it exists to replace, and is **vacuous by construction** — `max-width:min-content` on a
+400px box computes its own max as 400.
+
+⚠ The repo already contained this exact reasoning, for the other half of the same problem.
+`min_content_width_of_content` exists, with a doc comment that says *"if the content size suggestion
+answers the item's own declared width, that `min` is vacuous"* — written for flex's automatic minimum
+size. The min-content half of the family was built and the constraint path never subscribed to it;
+the max-content half was never built at all. The fix completes the family:
+
+- `max_content_width_of_content` + `max_content_of_content_cache` (a SECOND map, per the discipline
+  the min side already documents: above the short-circuit the two rules answer different numbers).
+- `shrink_to_fit_of_content` — `fit-content` rides its own function, so a fix to the other two
+  keywords leaves it at 400. That is the third mutation below.
+- both `kw_w` closures (block path and abspos path) switch to the `_of_content` family. The `width`
+  KEYWORD arms deliberately do NOT: a keyword `width` collapses `s.width` to `Dim::Auto`, so there is
+  no definite width for the short-circuit to return and both families answer the same number there.
+
+**Proven RED**, three mutations, each reverting one keyword and each landing on a different arm:
+
+```text
+   MinContent -> contribution      `#wx_min` expected 48.171875, got 400
+   MaxContent -> contribution      `#wn_max` expected 163.76563, got 10
+   FitContent -> shrink_to_fit     `#wx_fit` expected 163.76563, got 400
+```
+
+The gate grew from 14 rows to 22. Eight new arms, every number headless-Chrome-measured, chosen to
+close the matrix the two original arms could not: all three keywords × both directions
+(`#wx_max` `#wx_fit` `#wn_min` `#wn_fit`), a PERCENTAGE width (`#pc_mx` — a fix keyed on `Dim::Px`
+alone leaves it at 400), the border-box conversion (`#bb_mx`, Chrome 68.17 = the CONTENT min-content
+plus its padding), and two new controls (`#ctl_w`, `#ctl_wm`) that catch a fix which made the content
+measurement unconditional. ⚠ `#wn_fit` and `#mn_fit` resolve `fit-content` to OPPOSITE ends
+(max-content in a 400px container, min-content in a 20px one) and so cannot both pass an
+implementation that aliases the keyword.
+
+### ⚠ HOW THESE TWO ARMS WERE LOST, WHICH IS THE PART THAT GENERALISES
+
+`#wx_min` and `#wn_max` were in this gate from the day it was written; they passed. They were
+un-banked by **two later fixes, both correct, neither touching this file**: the `.icon{width:24px}`
+tick taught `max_content_width_uncached` to short-circuit on a definite width, and the flex
+automatic-minimum-size tick added the `own_definite_width_counts` split to min-content. Each made a
+box's *contribution* right and, as a side effect, made its *constraint* vacuous. **A shared measure
+function has more than one caller asking more than one question, and a short-circuit added for one
+caller is a silent answer change for every other.** Neither tick could have seen it: this gate is not
+one of the 19 the wall runs.
+
+**NEXT.** (a) The two remaining REAL gates: `g_inline_image_size` — a replaced grid item with an
+intrinsic ratio is being STRETCHED to the grid area (40x40 against Chrome's 16x16; `justify-items:start`
+gives 16x16, which names `normal`→`stretch` as the mechanism), and `g_iframe_load_event` — `load`
+fires TWICE on an `<iframe>` (`inline:2 addl:2`), which nothing on the web does. (b) The four STALE
+gates re-pinned to their Chrome-measured values, each carrying the measurement so the next reader does
+not re-derive it. (c) t1343's residue: nested orthogonal flow and the central baseline. (d) The
+`ACCUM` bucket and the 519-binary link cost, carried from t1342. (e) I3's mechanical debt, six checks.

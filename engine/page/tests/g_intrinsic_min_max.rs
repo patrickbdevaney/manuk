@@ -102,6 +102,15 @@ html,body{margin:0;padding:0;font:16px/1.5 monospace}
 
 <div class="cb"><div id="ctl_mx" style="max-width:200px">hello there world</div></div>
 <div class="cb"><div id="ctl_mn" style="width:100px;min-width:300px">hello there world</div></div>
+
+<div class="cb"><div id="wx_max" style="width:400px;max-width:max-content">hello there world</div></div>
+<div class="cb"><div id="wx_fit" style="width:400px;max-width:fit-content">hello there world</div></div>
+<div class="cb"><div id="wn_min" style="width:10px;min-width:min-content">hello there world</div></div>
+<div class="cb"><div id="wn_fit" style="width:10px;min-width:fit-content">hello there world</div></div>
+<div class="cb"><div id="pc_mx" style="width:100%;max-width:min-content">hello there world</div></div>
+<div class="cb"><div id="bb_mx" style="box-sizing:border-box;padding:0 10px;width:400px;max-width:min-content">hello there world</div></div>
+<div class="cb"><div id="ctl_w" style="width:400px">hello there world</div></div>
+<div class="cb"><div id="ctl_wm" style="width:400px;max-width:100px">hello there world</div></div>
 </body></html>"##;
 
 fn rect_of(page: &manuk_page::Page, sel: &str) -> manuk_layout::Rect {
@@ -220,5 +229,63 @@ fn g_intrinsic_min_max() {
         "#ctl_mn",
         300.0,
         "a plain `min-width:300px` over `width:100px` is untouched.",
+    );
+    check(
+        "#ctl_w",
+        400.0,
+        "and a plain `width:400px` with NO min/max at all still measures 400 — the row that catches \
+         a fix which made the content measurement unconditional.",
+    );
+    check(
+        "#ctl_wm",
+        100.0,
+        "an explicit width against an explicit `max-width:100px` still clamps to the length.",
+    );
+
+    // ── ⚠⚠⚠ THE SIX ARMS THE `_of_content` SPLIT ADDED (t1340). `#wx_min` and `#wn_max` above were
+    //    banked, then SILENTLY UN-BANKED by two later capability fixes that taught
+    //    `min_content_width`/`max_content_width` to short-circuit on the box's own definite width —
+    //    correct for a box's intrinsic CONTRIBUTION, and the wrong question for a constraint written
+    //    to override that very width. Two arms could not say which keyword or which direction was
+    //    at fault; these six close the matrix, and every number is headless-Chrome-measured.
+    check(
+        "#wx_max",
+        maxc,
+        "`width:400px; max-width:max-content` — the max-content direction of the same rule. This is \
+         the arm the `.icon{width:24px}` max-content short-circuit un-banked.",
+    );
+    check(
+        "#wx_fit",
+        maxc,
+        "`width:400px; max-width:fit-content` — fit-content is the THIRD keyword and rides its own \
+         function (`shrink_to_fit`), so it needed its own `_of_content` sibling; a fix to the other \
+         two leaves this one at 400.",
+    );
+    check(
+        "#wn_min",
+        minc,
+        "`width:10px; min-width:min-content` — the floor direction with the min keyword. Together \
+         with `#wn_max` this proves the fix is not keyword-specific.",
+    );
+    check(
+        "#wn_fit",
+        maxc,
+        "`width:10px; min-width:fit-content` in a 400px container resolves to max-content, NOT \
+         min-content — the stretch-fit is the container, so the two fit-content rows (`#mn_fit` at \
+         20px) land on OPPOSITE ends and cannot both pass an aliased implementation.",
+    );
+    check(
+        "#pc_mx",
+        minc,
+        "a PERCENTAGE width loses to the keyword too — `width:100%` is definite against a definite \
+         containing block, so a fix keyed on `Dim::Px` alone would leave this at 400.",
+    );
+    check(
+        "#bb_mx",
+        minc + 20.0,
+        "⚠ `box-sizing:border-box; padding:0 10px` — Chrome gives 68.17, i.e. the keyword measures \
+         the CONTENT box (48.17) and the padding is added back on. A fix that ran the border-box \
+         `bs_extra_w` subtraction over the keyword's answer reads 28.17 here and 48.17 everywhere \
+         else.",
     );
 }

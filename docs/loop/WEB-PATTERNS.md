@@ -8145,3 +8145,35 @@ Stylo resolves every **logical** declaration — `inline-size`, `margin-block-st
 the whole vocabulary modern stylesheets are authored in — onto a physical field *against the writing
 mode it computed*. An empty writing mode therefore silently made `inline-size` mean `width` for every
 element on every page, which is correct only while the page is horizontal.
+
+---
+
+## t1344 — the constraint that resolves to the width it was written to override
+
+`max-width: min-content` and `min-width: max-content` are how a component says *"never wider than my
+longest word"* and *"never wrap this row"*. Both are ordinary in shipped CSS, and both worked here —
+**until the same box also declared a `width`**, which is the spelling every one of these patterns
+actually uses:
+
+- **the shrink-wrapped chip / tag / badge** — `width: 100%; max-width: min-content` on a filter pill
+  or a table cell, so a long token caps the box instead of stretching it;
+- **the do-not-wrap toolbar** — `width: 10px; min-width: max-content` (or any small/percentage base)
+  on a nav row, button group or breadcrumb bar that must keep its items on one line;
+- **the responsive card** — `width: 100%; max-width: fit-content` on a card or dropdown panel that
+  fills its column but never exceeds its own content.
+
+All three rendered at the DECLARED width: the constraint computed its own limit as the box's `width`
+and the declaration evaluated to a no-op. Nothing threw, nothing was dropped, and
+`getComputedStyle` reported exactly what the author wrote — the used value was the wrong one.
+
+⭐⭐⭐ **The class this ledger has not recorded before: A SHARED MEASURE FUNCTION IS ASKED MORE THAN
+ONE QUESTION, AND A SHORT-CIRCUIT ADDED FOR ONE CALLER SILENTLY ANSWERS FOR ALL OF THEM.**
+`min_content_width`/`max_content_width` answer a box's intrinsic *contribution*, which CSS Sizing
+§5.1 defines as the box's own definite `width`. Two earlier ticks — both correct, both about flex and
+icon sizing — taught them to short-circuit on that width. Neither touched the min/max clamp, and both
+made its question vacuous. The gate that covered it had been green for hundreds of ticks and is not
+one of the 19 the wall runs, so the loss was banked as *"nothing changed"*.
+
+⚠ The check that would have found it is **the CONTROL ARM, in the caller's own vocabulary**: an
+intrinsic keyword whose answer equals the box's own `width` has not been computed, it has been
+echoed. `width:400px; max-width:min-content` reading `400` is that echo, and it is one row.

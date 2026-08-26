@@ -10821,3 +10821,77 @@ Identical for a single-font run, i.e. for almost every run; the asymmetry is nam
 Gate: `G_WRITING_MODE`. Four mutations proven RED — `plan` returning `None` (the pre-tick state, every
 vertical row collapsing onto its horizontal control), the `is_rl` branch collapsing the two
 directions, the glyph rotation off, and paint never learning the coordinate swap.
+
+---
+
+## An intrinsic keyword on `min-width`/`max-width` asks for the CONTENT size, not the contribution (t1344)
+
+**Symptom.** `width:400px; max-width:min-content` rendered **400px**. The keyword parsed, the clamp
+ran, and the clamp's own limit came back as 400 — so the declaration resolved to the very width it
+was written to override, and vanished without an error. The mirror, `width:10px;
+min-width:max-content`, stayed at **10px**. Headless-Chrome-measured on `hello there world`
+(min-content 48.17, max-content 163.77) in a 400px containing block:
+
+```text
+                                             Chrome    before    after
+   width:400px; max-width:min-content         48.17      400      48.17
+   width:400px; max-width:max-content        163.77      400     163.77
+   width:400px; max-width:fit-content        163.77      400     163.77
+   width:10px;  min-width:min-content         48.17       10      48.17
+   width:10px;  min-width:max-content        163.77       10     163.77
+   width:10px;  min-width:fit-content        163.77       10     163.77
+   width:100%;  max-width:min-content         48.17      400      48.17
+   border-box; padding:0 10px;
+     width:400px; max-width:min-content       68.17      400      68.17
+   width:400px                        CTRL   400.00      400     400.00
+   width:400px; max-width:100px       CTRL   100.00      100     100.00
+```
+
+⚠ The keyword only failed **when the box also declared a width**. With `width:auto` every keyword on
+every min/max slot was already exact — twelve of the gate's fourteen rows. That is what kept it
+invisible: the ordinary spelling worked.
+
+**Cause — two questions, one function.** `min_content_width(node)` / `max_content_width(node)` answer
+a box's intrinsic **CONTRIBUTION**, and CSS Sizing §5.1 defines that as the box's own definite `width`
+when it has one. Both short-circuit on `definite_content_width(node)`:
+
+```rust
+if let Some(w) = self.definite_content_width(node) { return w; }   // 400
+```
+
+Correct for the caller those short-circuits were added for — a parent sizing itself around this box.
+Wrong for a `min-width`/`max-width` declaration, whose entire purpose is to constrain that width: it
+makes the constraint **vacuous by construction**.
+
+**Fix — the `_of_content` family, completed.** `min_content_width_of_content` already existed (built
+for flex's automatic minimum size, where the same vacuous-`min` argument had been made in its doc
+comment). The constraint path never subscribed to it, and the max-content half did not exist:
+
+| function | contribution (own `width` counts) | content (own `width` ignored) |
+|---|---|---|
+| min-content | `min_content_width` | `min_content_width_of_content` |
+| max-content | `max_content_width` | **`max_content_width_of_content`** *(new)* |
+| fit-content | `shrink_to_fit` | **`shrink_to_fit_of_content`** *(new)* |
+
+Each rule writes its **own memo map** — above the short-circuit the two answer different numbers for
+one node, and a shared map would serve whichever ran first. Both `kw_w` closures (the block path and
+the abspos path) switch to the content family.
+
+⚠ **The `width` KEYWORD arms deliberately keep the contribution functions.** A keyword `width`
+collapses `s.width` to `Dim::Auto`, so there is no definite width for the short-circuit to return and
+the two families answer the same number there. Switching them would be a no-op that reads as a rule.
+
+⚠ **The keyword's answer is a CONTENT width**, so the `bs_extra_w` border-box subtraction — which
+converts a *specified* border-box length — must not run over it. Chrome's 68.17 for
+`box-sizing:border-box; padding:0 10px; max-width:min-content` is 48.17 + 20: the content min-content
+with the padding added back on, not subtracted from.
+
+**How it was lost, and the general rule.** Both arms were banked when the gate was written and were
+un-banked by two later fixes, both correct, neither touching this file: the `.icon{width:24px}` tick
+added the max-content short-circuit, and the flex automatic-minimum-size tick added the min-content
+split. ⭐⭐ **A shared measure function has more than one caller asking more than one question. A
+short-circuit added for one caller is a silent answer change for every other** — and the second
+caller's gate said so, three ticks later, to nobody, because it is not one of the 19 the wall runs.
+
+**Gate.** `G_INTRINSIC_MIN_MAX`, 14 rows → 22. Proven red by three mutations, one per keyword:
+`MinContent` → `#wx_min` 400, `MaxContent` → `#wn_max` 10, `FitContent` → `#wx_fit` 400.
