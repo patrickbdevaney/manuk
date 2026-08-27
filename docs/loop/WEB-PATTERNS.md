@@ -8512,3 +8512,24 @@ TEXT, or better, assert a COLOUR on an element the rule now does (or no longer d
 ⚠⚠ And the arm only one shape can see: **hold the reference across the write.** Re-reading
 `sheet.cssRules[0]` hands back a rebuilt object whose state is already current, so a getter frozen at
 construction passes every re-reading row. `const r = sheet.cssRules[0]` is what real code holds.
+
+---
+
+## t1358 — the badge that sat on the sentence instead of under it
+
+`<p>Some text<div class="tooltip" style="position:absolute">…</div></p>` — an out-of-flow box with no
+insets, taking its place from flow. It is the "just put it where it would have been" idiom, and it is
+how a tooltip, a dropdown panel, a badge and a portal root are anchored without measuring anything.
+
+A BLOCK-level one belongs on the NEXT line; we put it at the end of the current one. The box is
+present, the right size, and one line too high — which reads as a CSS bug in the page.
+
+⭐⭐ **The class: A PROPERTY THE PLATFORM OVERWRITES BEFORE YOU CAN READ IT.** The rule keys on the
+display the element *would* have had; `position:absolute` blockifies, so by the time anything can ask,
+`getComputedStyle(el).display` is `block` for a `<div>`, a `<span>` and an `inline-block` alike. The
+information is not hidden — it is **gone**, and the only fix is to capture it before the overwrite.
+
+⚠ The check that finds this family is **THE PAIR THAT COMPUTES THE SAME**: find two elements whose
+computed value is identical and whose behaviour differs, and the discriminator is necessarily
+something upstream of the computed value. `<div style=position:absolute>` and
+`<span style=position:absolute>` both compute `display:block` and land in different places.

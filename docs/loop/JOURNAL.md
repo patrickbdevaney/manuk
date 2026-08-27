@@ -90847,3 +90847,77 @@ seven `find`s. This is the t1349 note getting worse, with numbers.
 pre-blockification display, then the vertical/RTL containing block — 156 subtests). (b) `css/cssom`'s
 remaining ~750, now that two of its four top files are done. (c) The three unmodelled font longhands
 (t1353). (d) The teardown Bar-0 (t1349). (e) I3's mechanical debt, now nine checks.
+
+## t1358 — a property the platform overwrites before you can read it
+
+TICK SHAPE: capability. Board re-run at the top of this tick and diffed against t1357's copy:
+**unchanged** except its own tally. `css/css-grid` 10,353 → **10,358 (+5)**.
+
+### THE BUG
+
+CSS 2.1 §10.6.4 places an out-of-flow box where *"a hypothetical box … if its `position` property had
+been `static`"* would have gone. `refine_inline_static_positions` reconstructs the furthest-along
+point INLINE flow reached — right for an inline-level box, wrong for a block, which does not go on
+the current line at all. Chrome-measured, an abspos after `XX` in a 400px block:
+
+```text
+                                                        Chrome   before   after
+   <div  style="position:absolute">                      @0,20    @19,0    @0,20
+   <span style="position:absolute">                      @19,0    @19,0    @19,0
+   <div  style="position:absolute;display:inline-block"> @19,0    @19,0    @19,0
+   <div  style="position:absolute">  (only child)        @0,0     @0,0     @0,0
+   <div  style="position:absolute">  (after a <p>)       @0,36    @0,36    @0,36
+```
+
+⭐⭐ **THE CLASS: A PROPERTY THE PLATFORM OVERWRITES BEFORE YOU CAN READ IT.** `position:absolute`
+BLOCKIFIES, so `getComputedStyle(el).display` is `block` for a `<div>`, a `<span>` and an
+`inline-block` alike — in Chrome and here. The information is not hidden, it is **gone**, and the
+only fix is to capture it before the overwrite. ⚠ The check that finds this family is *the pair that
+computes the same*: two elements with an identical computed value and different behaviour means the
+discriminator is upstream of the computed value.
+
+`ComputedStyle::display_in_flow` is that capture, and it is nearly free: the MinimalCascade **does not
+blockify**, so its `display` after the last declaration IS the specified one. Snapshot there, copied
+into the Stylo path exactly as `appearance` was at t1355 — same mechanism, same reason: *Stylo cannot
+answer it and the other cascade can.*
+
+⚠ The block-level branch **REUSES THE SEED'S X** rather than recomputing it. `layout_children` writes
+`(cx, cy)` before any refinement runs and that x is already right in the right coordinate space;
+deriving it again from line starts would be a second implementation of `cx`, and a wrong one under
+`text-align: center` where the LINE begins where the block does not. Only the y moves.
+
+### ⭐⭐⭐ AND AN EXISTING GATE WAS ASSERTING A VALUE CHROME DOES NOT PRODUCE — AGAIN
+
+The full suite went red on `G_STATIC_POS_AFTER_TEXT`, which had `after_text_block` inside the same
+loop as `after_text`, claiming both sit at the end of the text. Re-run on that gate's own fixture:
+
+```text
+   <b id=after_text>                              (30.1, 0)   ← inline-block, stays on the line
+   <b id=after_text_block style="display:block">  (0, 25)     ← a NEW LINE
+   <div style="position:absolute">                (0, 25)     ← the same, unprefixed
+```
+
+**Chrome agrees with the change, not with the gate.** The claim was generalised from its neighbour
+and never measured — and the file's own comment table gives `text "XX", abspos display:block → 50,0`
+as a "Chrome" value, where `50` is an **Ahem** width and that fixture is 25px monospace. It was
+carried over from a different fixture, which is visible in the numbers if anyone looks.
+
+⭐ This is the **fifth** gate this session found to be asserting a derived rather than measured
+reference value (t1344's four, now this). The rule the arc keeps re-earning: **a gate that pins a
+number must carry the command that produced it**, and a row added to an existing LOOP inherits its
+neighbour's claim without inheriting its evidence.
+
+### ⚠ +5, AND THE REASON IS NAMED
+
+The `getComputedStyle-insets-*` mass (156 subtests) is the OTHER half of the static position: an
+abspos whose CONTAINING BLOCK is vertical or RTL, where we read `top: -465px` against Chrome's
+`10px`. `display_in_flow` is the foundation that half needs and is not the whole of it. Reporting +5
+rather than the 156 the file suggests is t1348's rule, applied for the third time in advance.
+
+Full `manuk-page` suite: **509 of 509**; `manuk-layout`, `manuk-css` green; `css/cssom` and
+`css/css-position` re-run and unchanged.
+
+**NEXT.** (a) ⭐ The other half: an abspos inside a transposed subtree — its containing block and
+placement must be mapped by the `VerticalRun`, which `layout_abs` does only when the abspos is ITSELF
+an orthogonal root (t1347). That is the 156. (b) `css/cssom`'s remaining ~700 outside the insets
+files. (c) The three unmodelled font longhands (t1353). (d) The teardown Bar-0 (t1349). (e) I3's debt.

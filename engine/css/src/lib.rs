@@ -1408,6 +1408,25 @@ pub struct ComputedStyle {
     /// recovered from `MinimalCascade` and merged in `stylo_engine` — the same fence as
     /// `scrollbar-width` and `-webkit-line-clamp`.
     pub appearance: Appearance,
+    /// **The display this element would have had IN FLOW** — i.e. before out-of-flow blockification.
+    ///
+    /// ⚠⚠⚠ CSS 2.1 §10.6.4 defines an out-of-flow box's STATIC POSITION as where *"a hypothetical
+    /// box … if its `position` property had been `static`"* would have gone — and that hypothetical
+    /// box has the element's SPECIFIED display, not the blockified one. The distinction is not
+    /// academic; it is the whole answer. Chrome-measured, an absolutely positioned box placed after
+    /// inline text in a 400px block (`16px/20px monospace`):
+    ///
+    /// ```text
+    ///   <div  style="position:absolute">     @0,20    ← a new line: it is BLOCK-level in flow
+    ///   <span style="position:absolute">     @19,0    ← after the text: INLINE-level in flow
+    ///   <div  style="position:absolute;display:inline-block">   @19,0
+    /// ```
+    ///
+    /// ⚠ `display` itself cannot answer this: `position:absolute` BLOCKIFIES, so `getComputedStyle`
+    /// reports `block` for ALL THREE — measured, in Chrome and here. This field is the value before
+    /// that, which the MinimalCascade has naturally (it does not blockify) and Stylo's `clone_display`
+    /// does not.
+    pub display_in_flow: Display,
     /// `order` — a flex/grid item's VISUAL order among its siblings (initial `0`, may be negative).
     ///
     /// Only the visual order: the DOM, the accessibility tree and sequential focus keep source order,
@@ -1816,6 +1835,7 @@ impl ComputedStyle {
             scrollbar_color: ScrollbarColor::Auto,
             field_sizing_content: false,
             appearance: Appearance::None,
+            display_in_flow: Display::Inline,
             order: 0,
             line_height_normal: true,
             mask_image: None,
@@ -4966,6 +4986,12 @@ impl MinimalCascade {
                 for (_, _, d) in matched.iter().filter(|(_, _, d)| d.important) {
                     apply_declaration(&mut s, d, parent_fs);
                 }
+                // ⚠ **THE IN-FLOW DISPLAY IS SNAPSHOT HERE — after every declaration and before any
+                // out-of-flow blockification.** This cascade does not blockify, so `s.display` at
+                // this point IS the specified value; the field exists because the STYLO path's
+                // `clone_display` returns the blockified one and the static-position rule needs the
+                // other. See `ComputedStyle::display_in_flow`.
+                s.display_in_flow = s.display;
                 // `::before` / `::after` — generated content, cascaded against this element as its
                 // parent. Only a pseudo with `content` generates a box at all.
                 fn cascade_pseudo(

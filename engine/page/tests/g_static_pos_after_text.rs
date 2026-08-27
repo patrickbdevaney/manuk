@@ -115,16 +115,48 @@ fn preceding_bare_text_advances_an_out_of_flow_boxs_static_position() {
 
     let near = |got: f32, want: f32| (got - want).abs() < 1.5;
 
-    // ── THE DEFECT. Bare text before the box advances it, exactly as an element would.
-    for id in ["after_text", "after_text_block"] {
-        let (x, y) = rect(id);
+    // ── THE DEFECT. Bare text before the box advances it, exactly as an element would — for an
+    //    INLINE-LEVEL box.
+    {
+        let (x, y) = rect("after_text");
         assert!(
             near(x, two_chars) && near(y, 0.0),
-            "`{id}`: an out-of-flow box after bare text sits where flow had got to — \
-             ({two_chars}, 0), the end of that text. Got ({x}, {y}).\n  \
+            "`after_text`: an INLINE-level out-of-flow box after bare text sits where flow had got \
+             to — ({two_chars}, 0), the end of that text. Got ({x}, {y}).\n  \
              `TextFragment::node` is the deepest ELEMENT ancestor, so for bare text it is this \
              box's own PARENT, which is never in the set of its preceding SIBLINGS — every \
              bare-text fragment was skipped and the box stayed at the content-box origin."
+        );
+    }
+
+    // ── ⚠⚠⚠ **AND THE BLOCK-LEVEL ROW WAS ASSERTING A VALUE CHROME DOES NOT PRODUCE** (corrected
+    //    at t1358). It was in the loop above, claiming the same `({two_chars}, 0)` as its
+    //    inline-level neighbour — generalised from that neighbour, never measured. Re-run on THIS
+    //    fixture, `google-chrome --headless=new`, container-relative:
+    //
+    //    ```text
+    //      <b id=after_text>                          (30.1, 0)    ← inline-block, stays on the line
+    //      <b id=after_text_block style="display:block">  (0, 25)  ← a NEW LINE
+    //      <div style="position:absolute">            (0, 25)      ← the same, unprefixed
+    //    ```
+    //
+    //    CSS 2.1 §10.6.4 places an out-of-flow box where *"a hypothetical box … if its `position`
+    //    property had been `static`"* would go, and a BLOCK-level hypothetical box does not go on
+    //    the current line — it opens the next one. ⚠ `display` cannot distinguish these: an
+    //    out-of-flow box BLOCKIFIES, so all three rows above compute `block` in Chrome and here.
+    //    `ComputedStyle::display_in_flow` is the value before that.
+    //
+    //    ⚠ The comment table further up this file lists `text "XX", abspos display:block → 50,0`
+    //    as a Chrome value. It is not one: `50` is an Ahem width and this fixture is 25px
+    //    monospace, so that row was carried over from a different fixture and never re-measured.
+    {
+        let (x, y) = rect("after_text_block");
+        assert!(
+            near(x, 0.0) && near(y, line_h),
+            "`after_text_block`: a BLOCK-level out-of-flow box after bare text opens a NEW LINE — \
+             (0, {line_h}), not the end of the text. Got ({x}, {y}). Reading ({two_chars}, 0) is \
+             the inline-level answer applied to a block-level box, which is what this gate asserted \
+             until t1358 measured it."
         );
     }
 

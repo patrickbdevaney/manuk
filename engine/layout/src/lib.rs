@@ -3660,6 +3660,35 @@ impl Ctx<'_> {
             if !self.kid_is_out_of_flow(k) {
                 continue;
             }
+            // ── ⚠⚠⚠ **ONLY AN INLINE-LEVEL BOX IS REFINED ONTO THE LINE.** CSS 2.1 §10.6.4 puts an
+            //    out-of-flow box where *"a hypothetical box … if its `position` property had been
+            //    `static`"* would have gone — and a BLOCK-level hypothetical box does not go on the
+            //    current line at all, it opens a new one. This whole function reconstructs the
+            //    furthest-along point INLINE flow reached, which is the right answer for an inline
+            //    box and the wrong one for a block. Chrome-measured, an abspos after `XX` in a
+            //    400px block (`16px/20px monospace`), as an offset from the container:
+            //
+            //    ```text
+            //                                                      Chrome   before
+            //      <div  style="position:absolute">                 @0,20    @19,0   ✗
+            //      <span style="position:absolute">                 @19,0    @19,0   ✓
+            //      <div  style="position:absolute;display:inline-block">  @19,0  @19,0  ✓
+            //      <div  style="position:absolute">  (only child)   @0,0     @0,0    ✓
+            //      <div  style="position:absolute">  (after a <p>)  @0,36    @0,36   ✓
+            //    ```
+            //
+            //    ⚠ `display` CANNOT ANSWER THIS — `position:absolute` blockifies, so all three of
+            //    the first rows compute `block` in Chrome and here. `display_in_flow` is the value
+            //    before that, which is why it exists.
+            //
+            //    ⚠⚠ The fix is to SKIP, not to compute: leaving the block-level default alone is
+            //    already where a new line begins, which is why four of the five rows above were
+            //    right the whole time — every one of them either has no preceding INLINE content or
+            //    is genuinely inline-level.
+            let inline_level = matches!(
+                self.style_of(k).display_in_flow,
+                Display::Inline | Display::InlineBlock | Display::InlineFlex | Display::InlineGrid
+            );
             // Every node under an in-flow sibling that PRECEDES this one in source order. Anything
             // after it must not push it along, which is why this is a prefix and not the whole set.
             let mut before: HashSet<NodeId> = HashSet::new();
@@ -3833,6 +3862,43 @@ impl Ctx<'_> {
                 f_node.is_some_and(|n| before.contains(&n))
                     || f_origin.is_some_and(|n| before.contains(&n))
             };
+            // ── ⚠⚠⚠ **A BLOCK-LEVEL BOX DOES NOT GO ON THE LINE — IT OPENS THE NEXT ONE**, and
+            //    everything below reconstructs the furthest-along point INLINE flow reached. For a
+            //    block-level hypothetical box the x is the content-box origin the seed already
+            //    holds, and the only thing that moves is the y: down past the line boxes that
+            //    precede it.
+            //
+            //    ⚠ The SEED'S X IS REUSED RATHER THAN RECOMPUTED. `layout_children` writes
+            //    `(cx, cy)` — the content-box origin — before any of this runs, and that x is
+            //    already the right answer in the right coordinate space. Deriving it again here
+            //    from line starts would be a second implementation of `cx`, and a wrong one under
+            //    `text-align: center`, where the LINE begins where the block does not.
+            if !inline_level {
+                let mut bottom: Option<f32> = None;
+                let mut down = |b: f32| {
+                    if bottom.is_none_or(|cur| b > cur) {
+                        bottom = Some(b);
+                    }
+                };
+                for f in frags {
+                    if belongs(f.node, f.origin) {
+                        down(f.line_top + f.style.line_height);
+                    }
+                }
+                for b in atomics {
+                    if b.node.is_some_and(|n| before.contains(&n)) {
+                        down(b.rect.y + b.rect.height);
+                    }
+                }
+                if let Some(y) = bottom {
+                    let seed_x = self.static_pos.borrow().get(&k).map(|p| p.0);
+                    if let Some(x) = seed_x {
+                        self.static_pos.borrow_mut().insert(k, (x, y));
+                        self.static_pos_writes.set(self.static_pos_writes.get() + 1);
+                    }
+                }
+                continue;
+            }
             for f in frags {
                 if belongs(f.node, f.origin) {
                     take(f.line_top, f.x + f.width + trailing_margin(f.node));

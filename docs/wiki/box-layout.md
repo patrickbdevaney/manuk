@@ -11084,3 +11084,57 @@ moved on to their next failure. `grid-align-baseline-flex-002` reads `expected 4
 it read `got 743`: the fill is gone and a second mechanism, in the block sizing of a flex box inside a
 transposed subtree, is behind it. ⭐ **A failure-signature count is an upper bound on a fix's yield,
 never an estimate of it** — every masked assertion behind it is a separate mechanism until measured.
+
+---
+
+## A block-level out-of-flow box opens the next line — and `display` cannot tell you it is one (t1358)
+
+CSS 2.1 §10.6.4 places an out-of-flow box where *"a hypothetical box … if its `position` property had
+been `static`"* would have gone. `refine_inline_static_positions` reconstructs the furthest-along
+point INLINE flow reached — the right answer for an inline-level box and the wrong one for a block,
+which does not go on the current line at all. Chrome-measured, an abspos after `XX` in a 400px block
+(`16px/20px monospace`), as an offset from the container:
+
+```text
+                                                        Chrome   before
+   <div  style="position:absolute">                      @0,20    @19,0   ✗
+   <span style="position:absolute">                      @19,0    @19,0   ✓
+   <div  style="position:absolute;display:inline-block"> @19,0    @19,0   ✓
+   <div  style="position:absolute">  (only child)        @0,0     @0,0    ✓
+   <div  style="position:absolute">  (after a <p>)       @0,36    @0,36   ✓
+```
+
+⚠⚠⚠ **`display` CANNOT ANSWER THE QUESTION.** `position:absolute` BLOCKIFIES, so `getComputedStyle`
+reports `block` for all three of the first rows — in Chrome and here. The discriminator is the
+SPECIFIED display, and Stylo's `clone_display` has already lost it.
+
+**`ComputedStyle::display_in_flow`** is that value. It is nearly free: the MinimalCascade does not
+blockify, so its `display` after the last declaration IS the specified one — snapshot there, and
+copied into the Stylo path exactly as `appearance` is (t1355), for the same reason: *Stylo cannot
+answer it and the other cascade can.*
+
+⚠ **The block-level fix REUSES THE SEED'S X rather than recomputing it.** `layout_children` writes
+`(cx, cy)` — the content-box origin — before any refinement runs, and that x is already right in the
+right coordinate space. Deriving it again from line starts would be a second implementation of `cx`,
+and a wrong one under `text-align: center`, where the LINE begins where the block does not. Only the
+y moves: down past the line boxes that precede it.
+
+**⚠⚠⚠ AND AN EXISTING GATE WAS ASSERTING A VALUE CHROME DOES NOT PRODUCE.**
+`G_STATIC_POS_AFTER_TEXT` had `after_text_block` inside the same loop as `after_text`, claiming both
+sit at the end of the text. Re-run on that gate's own fixture:
+
+```text
+   <b id=after_text>                              (30.1, 0)   ← inline-block, stays on the line
+   <b id=after_text_block style="display:block">  (0, 25)     ← a NEW LINE
+   <div style="position:absolute">                (0, 25)     ← the same, unprefixed
+```
+
+The claim was generalised from its neighbour, never measured — and the file's own comment table gives
+`text "XX", abspos display:block → 50,0` as a "Chrome" value, where `50` is an **Ahem** width and
+that fixture is 25px monospace. It was carried over from a different fixture. The row is now its own
+assertion, with the measurement quoted and the §10.6.4 reason.
+
+**WPT.** `css/css-grid` 10,353 → **10,358** (+5). ⚠ Small, and the reason is named: the
+`getComputedStyle-insets-*` mass (156) is the OTHER half — an abspos whose containing block is
+vertical or RTL, where we read `top: -465px` against Chrome's `10px`. `display_in_flow` is the
+foundation that half needs; it is not the whole of it.

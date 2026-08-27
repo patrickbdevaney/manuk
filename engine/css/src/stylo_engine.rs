@@ -1080,6 +1080,10 @@ pub fn cascade_via_stylo_sized(
             // `appearance: none` — same gecko-only fence, and it must land before the hints for
             // the same reason: a `<select>`'s reserved arrow width is decided downstream of it.
             cs.appearance = m.appearance;
+            // ⚠ Stylo`s `clone_display` is BLOCKIFIED for an out-of-flow box; the MinimalCascade`s
+            // is not, and the static-position rule needs the un-blockified one. Copied for the
+            // same reason `appearance` is: Stylo cannot answer it and the other cascade can.
+            cs.display_in_flow = m.display_in_flow;
         }
         timed(&mut ph.hints_ns, || {
             apply_presentational_hints(dom, node, &mut cs)
