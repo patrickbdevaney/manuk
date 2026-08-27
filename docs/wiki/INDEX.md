@@ -1372,6 +1372,9 @@
   - L1658 · The fix, and its cost
   - L1670 · The path key's counter and its comparison are COUPLED — the obvious fix collapses 26% of the paths (t1332)
   - L1700 · G_PATH_KEY_CONTRACT — the "byte-identical contract" that had no checker
+  - L1723 · A divergence between two TYPEFACES is not a layout divergence (t1369)
+  - L1736 · The arbitration is the FONT FILE, not either engine
+  - L1759 · What changed, and what deliberately did not
 
 ## FRAMEWORKS — React, Svelte, Next, jQuery: what actually breaks
 `docs/wiki/frameworks.md`
@@ -2413,4 +2416,4 @@
   - L231 · Both named mechanisms are subsystem work
 
 ---
-2320 sections across 22 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+2323 sections across 22 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.

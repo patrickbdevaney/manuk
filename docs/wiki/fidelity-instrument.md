@@ -1719,3 +1719,60 @@ Red-proven from **both live sides** — dropping the sig-awareness from `path_of
   invoked as a BINARY (parity, fidelity, hittest, bench) and its 107 unit tests never run, exactly as
   `manuk-js`'s 21 never run (t1330). Two crates, ~128 tests, including every gate that guards the
   fidelity instrument itself.
+
+## A divergence between two TYPEFACES is not a layout divergence (t1369)
+
+The G1 ledger keys every geometry divergence by which dimension is wrong and how wrong
+(`oracle::signature_of`). That key answered *"what is a root cause?"* with the axis — and on
+`www.a11yproject.com`, the burndown's worst named anchor, it therefore reported that our **width
+computation** was the site's top five causes (44 of 132 divergences, `<a>` and `<li>`). It was not.
+Both sides already carry the used-face signature `{family/px/advance}` that t563 added for exactly
+this question, and they disagreed:
+
+```text
+  <a>  [494 4617 182×22] {anaheim/20/201}  vs  [487 4527 167×26] {anaheim/20/181}
+```
+
+### The arbitration is the FONT FILE, not either engine
+
+Neither renderer is the authority on what a face measures — the file is. `Anaheim-Regular.woff2`
+has `unitsPerEm` 2048; the twenty glyphs of the probe string `Hamburgefonstiv 0123` sum to 18540
+units (**181.055px at 20px**), and its `normal` line-height is **25.78px** from all three of its
+metrics tables (hhea, OS/2 typo, OS/2 win — they agree). Manuk reports 181 and 26.
+
+Chrome reports the same 181.06 × 26.00 **when it can fetch the font**, and keeps agreeing across
+every control: the bare `url()`, the `local(), url()` idiom the site actually uses, a `local()` that
+does not resolve, weights 400–900 against a 400-only face (no synthetic-bold gap), and local-face
+controls (`DejaVu Sans` 229.89/230, `sans-serif` 201.23/201).
+
+**201 is Chrome's own fallback sans-serif advance.** One oracle run reports `{anaheim/20/181}` for
+twelve elements and `{anaheim/20/201}` for eleven *on a single page load* — the reference
+disagreeing with itself, which no engine change can answer.
+
+⚠⚠⚠ **NEVER COMPARE FONT METRICS FROM A `file://` FIXTURE.** A cross-origin webfont is not fetched
+for a `file://` document, so Chrome silently renders the fallback: `anaheim` measured 184.61 there —
+byte-identical to `NoSuchFontXYZ`, to `serif`, and to `Liberation Serif`, with
+`document.fonts.check('20px anaheim')` returning **false**. Two readings of a real bug were
+manufactured that way before the control table caught it. Serve the fixture over a real HTTP origin
+(`python3 -m http.server`) and assert `document.fonts.check(...)` in the probe.
+
+### What changed, and what deliberately did not
+
+`signature_of` now checks the two `{...}` suffixes first: both present and DIFFERENT ⇒ the cause is
+keyed `font-resolution: <chrome> vs <ours>`. The cluster is still counted, ranked, and carries its
+median and instances — it is named for its cause, not hidden.
+
+```text
+  distinct causes   56 → 40      MEAN SHAPE   43.3% → 43.3%   ← unchanged, on purpose
+  top cause         geometry/mis-sized: width ~16px  →  font-resolution: …/201 vs …/181
+  top LAYOUT cause  (buried at #4)                   →  missing box: <path>   9 hits
+```
+
+**A reclassification that moved the score would be a trade.** Only the diagnosis was wrong; the
+anchor is still 43.3% and still failing. What changed is which defect the ledger sends the next tick
+to fix.
+
+Two guards, both mutation-proven: an **absent** signature must not compare unequal to a present one
+(`fontsuffix` emits absence rather than a fabricated `{/0}`, and a row that says nothing about its
+face stays a geometry cause), and the key must survive `div_to_jsonl` → `div_from_jsonl`, because
+the cause lives in the instance strings and a serialisation boundary is a semantic one (t743).

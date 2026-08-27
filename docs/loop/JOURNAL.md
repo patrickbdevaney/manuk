@@ -92177,3 +92177,113 @@ CANDIDATE mechanism before writing any code; `-webkit-baseline-middle` (1 occurr
 NOT it.
 
 WIKI: docs/wiki/css-cascade.md
+
+## t1369 — the worst anchor's top five root causes were the REFERENCE using a different typeface
+
+TICK SHAPE: instrument fidelity (the RATCHET's third face). Board re-run at the top of this tick:
+CO-#1 unchanged — the rendering gap, SHAPE/POSITION first, on the named anchor sites. This tick
+obeys t1368's own new rule and PRICES the candidate before building: I went to the worst named
+anchor, `www.a11yproject.com` (shape 43.3%, and t1367 moved it by exactly zero), and read its root
+causes instead of guessing a mechanism.
+
+### THE TOP FIVE CAUSES WERE ONE CAUSE, AND IT WAS NOT A LAYOUT BUG
+
+`--shape-dump` on the anchor ranks 56 causes over 132 divergences. The top five — **44 hits, `<a>`
+and `<li>` width** — read `geometry/mis-sized: width ~8/16/32px`, i.e. the ledger telling the loop
+*"your width computation is wrong."* Their instances carry the used-face signature t563 added for
+exactly this question:
+
+```text
+  <a>   [494 4617 182×22] {anaheim/20/201}   vs   [487 4527 167×26] {anaheim/20/181}
+  <li>  [264 4573 145×30] {anaheim/20/201}   vs   [251 4485 126×30] {anaheim/20/181}
+```
+
+Same declared family, same size, **different measured advance**. So the width follows the TYPEFACE.
+
+### ⭐⭐⭐ 181.055 IS WHAT THE FONT FILE ITSELF SAYS, AND WE ARE THE SIDE THAT SAYS IT
+
+Ground truth taken from `Anaheim-Regular.woff2` directly (fontTools in a throwaway venv, reading the
+font's own tables — not from either engine):
+
+```text
+  unitsPerEm                                     2048
+  Σ advances of "Hamburgefonstiv 0123"          18540 units  →  ×20/2048 = 181.055px
+  normal line-height, hhea / OS2-typo / OS2-win  25.78px from ALL THREE tables
+```
+
+**Our engine reports 181 and 26. That is the file.** And Chrome agrees — served over a real HTTP
+origin it reports **181.06 × 26.00**, to the hundredth of a pixel. Five controls, all measured:
+
+```text
+                                                        Chrome        ours
+  src: url(anaheim.woff2)                              181.06×26     181×26   ✓
+  src: local("Anaheim"), local(…), url(anaheim)        181.06×26     181×26   ✓  the site's own idiom
+  src: local("NoSuchFaceXYZ"), url(anaheim)            181.06×26     181×26   ✓  fall-through
+  font-weight 400/500/600/700/900 on a 400-only face   181.06 all    181 all  ✓  no synthetic-bold gap
+  DejaVu Sans 400 / 700          CONTROL, local face   229.89/258.05 230/258  ✓
+  sans-serif                     CONTROL, local face   201.23×23     201×23   ✓
+```
+
+⭐ **201 is Chrome's own FALLBACK sans-serif advance** — the third row of that control table. And the
+tell that settles it: **one oracle run reports `{anaheim/20/181}` for 12 elements and
+`{anaheim/20/201}` for 11 ON ONE PAGE LOAD**, plus a stray `/215`. The reference disagrees with
+itself within a single document, and no engine fix can answer that.
+
+⚠ Chrome only produces 184.61 (= its `serif`, = `NoSuchFontXYZ`, with `document.fonts.check` false)
+when it CANNOT fetch the font — which is what a `file://` fixture does to a cross-origin webfont, and
+what made my first two readings look like a 2%-narrow bug in us. **A font-metric comparison run from
+`file://` is not a comparison; it is a measurement of Chrome's fallback.**
+
+### THE FIX IS A NAME, NOT A NUMBER — AND THE SCORE DELIBERATELY DOES NOT MOVE
+
+`oracle::signature_of` now checks the two instances' `{family/px/advance}` suffixes first: when both
+are present and they DIFFER, the cause is keyed `font-resolution: <chrome> vs <ours>` instead of
+`geometry/mis-sized`. Nothing is hidden — the cluster is still counted, still ranked, still carries
+its median and its three instances. It is named for its cause.
+
+```text
+                                          before                    after
+  distinct causes / divergences           56 / 132                  40 / 132
+  #1 cause            geometry/mis-sized: width ~16px (<li>)   font-resolution: …/201 vs …/181 (<a>)
+  top LAYOUT cause    (buried at #4)                            missing box: <path>   9 hits
+  MEAN SHAPE                              43.3%                     43.3%   ← UNCHANGED, on purpose
+```
+
+⚠ **A RECLASSIFICATION THAT MOVED THE SCORE WOULD BE A TRADE, AND THIS ONE MUST NOT.** The shape
+number is the ratchet's; only the DIAGNOSIS was wrong. The anchor is still 43.3% and still failing —
+but the thing the ledger now puts at the top of the list, `missing box: <path>` (our SVG `<path>`
+boxes), is a real render gap, and the 44 hits above it were sending the next tick to fix a width
+computation that is already exact to the font file's own numbers.
+
+⚠ **`fontsuffix` EMITS ABSENCE, NOT `{/0}` — SO ABSENCE MUST NOT COMPARE UNEQUAL TO PRESENCE.** A
+row with no signature on one side says nothing about the face and stays a geometry cause; mutation
+N2 (treating a missing signature as `""`) relabels it and the gate catches that.
+
+⚠ Two existing tests broke and their FIXTURE was the reason, not their subject: `div()` carried
+`{Open Sans/13}` against `{Liberation Sans/13}` as meaningless filler, so every geometry-axis row it
+built now keyed as font-resolution. Both sides now name one face, with a comment saying why that is
+load-bearing. Their assertions (axis split, JSONL round trip) are untouched and both still fail if
+their real subject regresses.
+
+REGRESSION SWEEP: `manuk-wpt` lib **108 passed** (was 106 + the new one), `manuk-css` 39,
+`manuk-layout` 185. No engine source changed in this tick — the instrument was the bug.
+
+GATE `a_divergence_between_two_faces_is_not_a_geometry_cause` — RED under four mutations, each
+applied and read:
+
+- **N1** the classification removed (the pre-tick state) → the two-face row keys `geometry/mis-sized`
+- **N2** a missing signature treated as `""` → the half-row keys `font-resolution: … vs   (<a>)`
+- **N3** keyed on ANY signature rather than on two DIFFERING ones → the same-face row is relabelled
+- **N4** `font_sig` reading the FIRST brace instead of the last → `font-resolution: stale vs …`
+
+It also asserts the new key survives `div_to_jsonl` → `div_from_jsonl`, because the cause lives in
+the instance strings and t743's lesson is that a serialisation boundary is a semantic one: without
+that assertion the key could revert to `geometry/mis-sized` in `CLUSTERS.md` while every unit test
+still passed.
+
+NEXT — priced, not inherited. The anchor's top LAYOUT cause is now `missing box: <path>` (9 hits):
+we emit no box below an `<svg>`. `<path>` was already the third-ranked missing-box cluster
+corpus-wide at t684 (1658 hits / 34 sites), so this one is priced by the ledger itself rather than by
+a previous tick's closing note.
+
+WIKI: docs/wiki/fidelity-instrument.md

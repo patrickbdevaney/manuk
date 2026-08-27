@@ -172,6 +172,15 @@ fn fontsuffix(font: &str) -> String {
     }
 }
 
+/// The `{family/px/advance}` face signature out of a rendered instance string, without the braces.
+/// `None` when the instance carries no font — [`fontsuffix`] emits ABSENCE rather than a fabricated
+/// `{/0}`, and an absent signature must never compare unequal to a present one.
+fn font_sig(instance: &str) -> Option<&str> {
+    let open = instance.rfind('{')?;
+    let close = instance[open..].find('}')? + open;
+    Some(instance[open + 1..close].trim()).filter(|s| !s.is_empty())
+}
+
 /// Diff one page. `tol` is the geometry tolerance in px.
 pub fn diff_page(
     site: &str,
@@ -494,6 +503,36 @@ pub fn signature_of(d: &Divergence) -> String {
         // Geometry is bucketed by which dimension is wrong — a systematic width error and a
         // systematic vertical drift are different bugs with different causes.
         _ => {
+            // ── ⭐⭐⭐ **TWO DIFFERENT FACES DID NOT PRODUCE A LAYOUT DIVERGENCE.**
+            //
+            // Both sides already carry the USED FACE they measured (`{family/px/advance}`, the
+            // canvas-measured advance t563 added precisely so `[74x16] vs [76x18]` would be
+            // attributable). When those two signatures DISAGREE, the boxes were shaped by different
+            // fonts — and a width computed from a different font is not a sizing bug in the element.
+            // It was being labelled `geometry/mis-sized: width ~Npx` anyway, which is the ranking
+            // saying *"fix your width computation"* about text that is the wrong width because it is
+            // the wrong TYPEFACE.
+            //
+            // Measured, t1369, on `www.a11yproject.com` — the burndown's WORST anchor (shape 43.3%):
+            // the top FIVE root causes, 44 of 132 divergences and the whole of its shape deficit,
+            // are `<a>`/`<li>` width errors whose signatures read `{anaheim/20/201}` on the Chrome
+            // side and `{anaheim/20/181}` on ours. **181.055 is what the font file itself says** —
+            // `Anaheim-Regular.woff2`, upem 2048, the 20 glyphs of the probe string summing to 18540
+            // units, and a `normal` line-height of 25.78px from every one of its three metrics
+            // tables. Our 181/26 IS the file. Served over a real HTTP origin, Chrome agrees to the
+            // hundredth of a pixel (181.06/26.00) — including through the `local(), url()` idiom,
+            // across weights 400-900, and against a local-face control. 201 is Chrome's *fallback*
+            // sans-serif advance, and the same run reports `{anaheim/20/181}` for 12 elements and
+            // `{anaheim/20/201}` for 11 **on one page load**: the reference disagrees with ITSELF.
+            //
+            // So the cluster is kept, ranked and counted — nothing is hidden and no score moves —
+            // but it is named for what it is, so the burndown stops presenting font resolution as
+            // the top layout defect on the anchor it tells the loop to work next.
+            if let (Some(cf), Some(mf)) = (font_sig(&d.chrome), font_sig(&d.manuk)) {
+                if cf != mf {
+                    return format!("font-resolution: {cf} vs {mf}   (<{}>)", d.tag);
+                }
+            }
             let [_, _, dw, dh] = d.delta;
             // The dominant axis names WHICH dimension is wrong; its magnitude band names HOW wrong,
             // which is what separates a near-miss from a page-height collapse (see `mag_band`).
@@ -1409,6 +1448,96 @@ mod tests {
         }
     }
 
+    /// A geometry divergence between TWO DIFFERENT FACES is a font-resolution fact, not a sizing one.
+    ///
+    /// ⭐⭐⭐ **THIS IS THE ANCHOR THE BURNDOWN TELLS THE LOOP TO WORK NEXT, AND ITS TOP FIVE ROOT
+    /// CAUSES WERE THIS.** On `www.a11yproject.com` (shape 43.3%, the worst named anchor) the top
+    /// five causes — 44 of 132 divergences — read `geometry/mis-sized: width ~8/16/32px` on `<a>`
+    /// and `<li>`, i.e. *"our width computation is wrong"*. Their instances read
+    /// `{anaheim/20/201}` on the Chrome side and `{anaheim/20/181}` on ours: the same declared
+    /// family and size, measured through different FACES.
+    ///
+    /// **181.055 is what the font file itself says.** `Anaheim-Regular.woff2` has upem 2048; the 20
+    /// glyphs of the probe string `Hamburgefonstiv 0123` sum to 18540 units (18540 × 20 / 2048 =
+    /// 181.055), and its `normal` line-height is 25.78px from all three of its metrics tables. Our
+    /// engine reports 181 and 26. Served over a real HTTP origin, Chrome reports **181.06 and
+    /// 26.00** — to the hundredth of a pixel, and it keeps agreeing through the `local(), url()`
+    /// idiom, through a `local()` that does not resolve, and across weights 400–900. 201 is
+    /// Chrome's *fallback* sans-serif advance. The same oracle run reports `{anaheim/20/181}` for
+    /// twelve elements and `{anaheim/20/201}` for eleven **on one page load** — the reference
+    /// disagreeing with itself, which no engine fix can answer.
+    ///
+    /// Nothing is hidden: the cluster is still counted, still ranked, and no score moves (the
+    /// anchor's shape stayed at 43.3% across this change). It is named for its cause, so that
+    /// `missing box: <path>` — a real render gap — is what the ranking now puts at the top.
+    #[test]
+    fn a_divergence_between_two_faces_is_not_a_geometry_cause() {
+        let mut same = geom_div("a11y.example", "a", [0, 0, 17, 0]);
+        same.chrome = "[264 4573 145×30]  {anaheim/20/181}".into();
+        same.manuk = "[251 4485 126×30]  {anaheim/20/181}".into();
+        assert!(
+            signature_of(&same).starts_with("geometry/mis-sized"),
+            "one face on both sides: a width delta IS a sizing cause — got {}",
+            signature_of(&same)
+        );
+
+        let mut differ = geom_div("a11y.example", "a", [0, 0, 17, 0]);
+        differ.chrome = "[264 4573 145×30]  {anaheim/20/201}".into();
+        differ.manuk = "[251 4485 126×30]  {anaheim/20/181}".into();
+        assert_eq!(
+            signature_of(&differ),
+            "font-resolution: anaheim/20/201 vs anaheim/20/181   (<a>)",
+            "two faces: the width follows the TYPEFACE, and calling it a sizing bug sends the loop \
+             to fix a width computation that is already right"
+        );
+
+        // ⚠ **ABSENCE MUST NOT COMPARE UNEQUAL TO PRESENCE.** `fontsuffix` deliberately emits
+        // NOTHING rather than a fabricated `{/0}` when an instance carries no font, so a row with
+        // no signature on one side says nothing about the face and must stay a geometry cause.
+        // Without this the change would relabel every non-text divergence on the strength of a
+        // field that was never measured.
+        let mut half = geom_div("a11y.example", "a", [0, 0, 17, 0]);
+        half.chrome = "[264 4573 145×30]  {anaheim/20/201}".into();
+        half.manuk = "[251 4485 126×30]".into();
+        assert!(
+            signature_of(&half).starts_with("geometry/mis-sized"),
+            "a MISSING signature is not a different face — got {}",
+            signature_of(&half)
+        );
+
+        // A pure DISPLACEMENT with two faces is still font-resolution: the text's width is what
+        // moved its siblings, so the cause is the same one.
+        let mut disp = geom_div("a11y.example", "p", [0, 60, 0, 0]);
+        disp.chrome = "[0 494 358×75]  {anaheim/18/176}".into();
+        disp.manuk = "[0 434 358×75]  {anaheim/18/158}".into();
+        assert!(
+            signature_of(&disp).starts_with("font-resolution:"),
+            "got {}",
+            signature_of(&disp)
+        );
+
+        // ⚠⚠ **AND THE NEW KEY MUST SURVIVE THE SERIALISATION BOUNDARY** — t743's lesson, and the
+        // reason the mechanism key was destroyed before the merge could see it once already. The
+        // cause lives in the `{...}` suffix of the two instance strings, so if `div_to_jsonl` ever
+        // stopped carrying them this row would quietly revert to a `geometry/mis-sized` line in
+        // `docs/loop/CLUSTERS.md` while every unit test above still passed.
+        let line = div_to_jsonl(&differ, "news");
+        let (back, _) = div_from_jsonl(&line).expect("a face-carrying div line parses");
+        assert_eq!(
+            signature_of(&back),
+            signature_of(&differ),
+            "the face signature must survive `oracle --emit` → `oracle-merge`"
+        );
+
+        // And the clustering pools them: four divergences, three causes (the two faces merge).
+        let cl = cluster(&[same, differ, half, disp]);
+        assert_eq!(
+            cl.len(),
+            3,
+            "the two same-face rows share the geometry cause; the two-face rows are their own"
+        );
+    }
+
     /// **A cluster must retain THREE instances, because one cannot tell you whether it is homogeneous.**
     ///
     /// t554 left the ranking a real cause list and immediately hit the next limit: `mis-sized: width ~8px
@@ -2040,8 +2169,14 @@ mod tests {
             id: "body[0]/div.a1b2:nth-of-type(3)".into(),
             tag: tag.into(),
             kind: kind.into(),
+            // ⚠ **BOTH SIDES NAME THE SAME FACE, AND THAT IS LOAD-BEARING NOW.** These fixtures
+            // exist to test the geometry AXIS split and the JSONL round trip; they used to carry
+            // `{Open Sans/13}` against `{Liberation Sans/13}` as meaningless filler. Since t1369 a
+            // divergence whose two sides were shaped by DIFFERENT faces is keyed
+            // `font-resolution:` instead (see `signature_of`), so filler fonts that disagree would
+            // silently move every row here onto that key and stop testing the axis split at all.
             chrome: "[10 20 300×40]{Open Sans/13}".into(),
-            manuk: "[10 20 300×64]{Liberation Sans/13}".into(),
+            manuk: "[10 20 300×64]{Open Sans/13}".into(),
             delta,
         }
     }

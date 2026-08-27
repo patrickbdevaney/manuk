@@ -8882,3 +8882,13 @@ hypothesis about MECHANISM, never about LEVERAGE, and this ledger is where the t
 t1367's note was correct about every fact and wrong about what to do next; one `curl` loop and one
 regex over the corpus would have priced it before the tick, not after. The rule this adds to the
 ledger: *a pattern row must carry the corpus count that justifies it, taken BEFORE the tick.*
+
+## t1369 — [no-pattern] the instrument, not the engine
+
+No class of the web is unlocked by this tick and none is claimed: no engine source changed. What
+changed is which defect the fidelity ledger points the next tick at. The pattern-shaped lesson is
+about ranking rather than rendering, and it belongs here because it is what a pattern row is FOR:
+**a divergence whose two sides were shaped by different typefaces is priced as a layout bug by any
+ledger that keys on the axis, and it will out-rank every real one.** On the worst named anchor it
+was 44 of 132 divergences — the whole top of the list — while the real render gap (`<path>` boxes we
+never emit) sat at #4. Check the used-face signature before believing a width cluster.
