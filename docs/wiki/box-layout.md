@@ -11299,3 +11299,46 @@ under four separate mutations — one per clause.
 different mechanism: in a vertical `rtl` mode the inline-start edge is recorded without the deferred
 `-inline size` correction that `static_pos_rl` applies on the horizontal inline axis, so those boxes
 sit at 100 where Chrome puts them at 94. That is the next tooth, not this one.
+
+## A static position records an EDGE, and the deferred `-size` it owes is per AXIS
+
+Three ticks in a row found the same shape, in three different places. Flow walks past an out-of-flow
+box and records where it *would* have gone — but the box's used size does not exist yet, so what can
+be recorded is an EDGE, and whether the box grows away from that edge or back across it depends on
+which way the axis runs:
+
+| the axis | starts at | owes |
+| --- | --- | --- |
+| inline, `horizontal-tb` + `direction:rtl` | the content box's RIGHT edge | `-width` on `x` |
+| block, `vertical-rl` | the content box's RIGHT edge | `-width` on `x` |
+| inline, a vertical mode + `direction:rtl` | the content box's BOTTOM edge | `-height` on `y` |
+
+`position_absolutes` applies the correction the moment `layout_abs` returns a measured box, which is
+the first instant the size exists. The first two rows are the same physical correction and share
+`Layout::static_pos_rl`; the third is a different one and has its own set, `static_pos_up`.
+
+⚠⚠⚠ **They cannot share a set, and the reason is a coordinate change sitting between the write and
+the read.** The seed runs INSIDE the transposed subtree, where the inline axis is the engine's `x` —
+so `static_inline_start` writes its "this point is a far edge" flag into the `-width`-on-`x` set,
+which is correct for the space it is standing in. One line into `map_static_positions` that same `x`
+has become the physical `y`, and the flag now describes an axis it was never measured on. Worse, the
+same function then wrote that identical bit from `v.rl`, which answers the BLOCK axis's question.
+Two independent facts, one bit per node, and the second write won silently. Moving the seed's flag
+across at the same moment the coordinate moves is what makes both survive:
+
+```rust
+*p = (v.px(ey, 0.0), v.py(ex));
+if rl.remove(&n) { up.insert(n); } else { up.remove(&n); }   // inline: x became y
+if v.rl { rl.insert(n); }                                     // block: the physical x
+```
+
+A box in `vertical-rl` with `direction:rtl` owes BOTH — its recorded point is the bottom-right
+corner — which is the case that makes one shared bit impossible rather than merely fragile.
+
+⚠ Both corrections are guarded on the corresponding `*_static` flag, because a box with a real inset
+on that axis never consulted the point. The row that pins this is an inset-less box in an LTR
+vertical container: it must not move at all, and marking every mapped node instead of only the
+flagged ones pulls it 6px off the top of its container.
+
+`G_ABSPOS_IN_VERTICAL_CB` block 8 carries ten rows — four corrected, six controls spanning all three
+ticks' mechanisms — and goes red under four mutations.

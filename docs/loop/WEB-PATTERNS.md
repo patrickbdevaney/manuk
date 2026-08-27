@@ -8685,3 +8685,49 @@ rather than opening a new gate binary honoured a decision the file had already m
 controls beside the rows they control, and added nothing to the wall — the standing finding is that
 the wall is disk- and link-bound on 519 static gate binaries, so the cheapest ratchet tooth is one
 that needs no 520th. A NEXT block with measurements in it is an unclaimed gate, not a comment.
+
+## A FLAG IS A CLAIM ABOUT A COORDINATE — TRANSPOSE THE COORDINATE, TRANSPOSE THE CLAIM
+
+`static_inline_start` set a "this recorded point is the box's far edge, subtract its width from x"
+flag, and it set it correctly: it runs inside a transposed subtree where the engine's `x` really is
+the inline axis. One line later `map_static_positions` turned that `x` into the physical `y`, and
+the flag stayed where it was — a true statement now attached to the wrong number. Nothing was
+invalid, nothing threw; the claim had simply stopped being about the value it was filed under.
+
+Anywhere a coordinate is remapped, audit the SIDE TABLES keyed to it in the same breath. They do not
+move themselves, they carry no type that distinguishes an x-fact from a y-fact, and a stale one
+reads exactly like a correct one. The general question to ask at every mapping site is not "did I
+convert the numbers?" but "what else did I say about these numbers, and is it still true?"
+
+## ONE BIT CANNOT HOLD TWO FACTS, AND THE CASE THAT PROVES IT IS THE ONE WHERE BOTH ARE TRUE
+
+The same `HashSet<NodeId>` was answering two different questions — "does the block axis start at the
+right edge?" and "does the inline axis start at the far edge?" — because in every configuration
+anyone had tested, at most one of them was true, so a single bit was indistinguishable from two.
+`vertical-rl` + `direction:rtl` makes both true at once: the recorded point is the box's bottom-right
+corner and it owes a `-width` AND a `-height`. That configuration is not a harder version of the
+others, it is the only one that can DETECT the conflation.
+
+Worse than sharing was the unconditional write. One arm of the function wrote the bit from the seed,
+another wrote it from `v.rl` a few lines later with an `else` branch that cleared it — so the second
+fact did not merely coexist with the first, it ERASED it, every time, before any reader saw it. When
+a shared field is written from two places and one of the writes has an `else`, that write is
+authoritative and the other is decoration. Grep the writes before trusting the reads.
+
+The design smell that names it in advance: a boolean whose NAME describes a situation
+(`static_pos_rl`) rather than the ACTION it causes (`subtract the used width from x`). The
+action-named version cannot absorb a second meaning, because the second meaning has a different
+action and will not fit in the sentence.
+
+## A GATE EARNS ITS CONTROLS ACROSS TICKS — THAT IS THE ARGUMENT FOR EXTENDING ONE
+
+Three mutations of this tick's fix went red. Two were caught by rows the tick itself added; the
+third — applying the new correction to every mapped node instead of only the flagged ones — was
+caught by a control written three ticks earlier for a different mechanism, which simply asserts that
+an inset-less box in an LTR vertical container does not move. New rows prove a fix DOES something.
+Old rows are what prove it does not do it TOO WIDELY, and only a gate that accumulates has them.
+
+Opening a fresh gate file per tick gets the first property and loses the second, and here it would
+also have cost a 520th static gate binary on a wall that is already link-bound. Prefer extending the
+gate whose subject already contains the new rows' subject — and when a gate's own doc carries a NEXT
+block with measured numbers in it, that block is an unclaimed set of assertions, not a comment.

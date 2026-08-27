@@ -91355,3 +91355,180 @@ flag and the same application site; what is missing is the third seed condition.
 `/tmp/oc4.html`, table in `/tmp/t1362-gate-table.md`.
 
 WIKI: docs/wiki/box-layout.md
+
+## t1363 — two facts, one bit per node, and the second write won
+
+TICK SHAPE: capability. Board re-run at the top of this tick and diffed against t1362's copy: no
+material change beyond t1362's own `css-sizing` correction propagating into it (74.7% -> 76.8%).
+CO-#1 is still the rendering gap and CSS layout is still the main line.
+
+### THE BUG
+
+t1362's fixture left four values non-exact, and they were the tick's stated NEXT: in a vertical
+writing mode with `direction:rtl`, an out-of-flow box with no vertical inset sat at y=100 where
+Chrome puts it at 94 — off by exactly the box's 6px height, which is its INLINE size there.
+
+A static position is recorded as an EDGE, because flow walks past the box long before its used size
+exists, and the box may grow either away from that edge or back across it. Three ticks have now
+found the same shape:
+
+```text
+  t1360  block axis, vertical-rl                 starts at the RIGHT edge   owes -width on x
+  t1361  inline axis, horizontal-tb + rtl        starts at the RIGHT edge   owes -width on x
+  t1363  inline axis, a vertical mode + rtl      starts at the BOTTOM edge  owes -height on y
+```
+
+`Layout::static_pos_rl` is a `HashSet<NodeId>` — one bit per node — and it was being asked to carry
+the first two, which is fine because they are the SAME physical correction. The third is not.
+
+### ⭐⭐⭐ THE BIT WAS WRITTEN IN ONE COORDINATE SPACE AND READ IN ANOTHER
+
+This is why widening a predicate could not have fixed it. `static_inline_start` — the seed — runs
+INSIDE the transposed subtree, where the engine's `x` IS the inline axis. So in a vertical container
+with `direction:rtl` the seed did exactly the right thing: it saw an inline axis running backwards
+and set the `-width`-on-`x` flag, which is the correct statement about the space it was standing in.
+
+Then `map_static_positions` transposed the point:
+
+```rust
+*p = (v.px(ey, 0.0), v.py(ex));   // the seed's x is now the physical y
+```
+
+and the flag did not move with it. It still said "-width on x" about a value that had just become a
+y. **A flag is a claim about a coordinate, and transposing the coordinate without transposing the
+claim leaves a true statement attached to the wrong number.**
+
+And it was worse than stale, because the very next lines of that same function were:
+
+```rust
+if v.rl { rl.insert(n) } else { rl.remove(&n) }
+```
+
+— an UNCONDITIONAL write of the same bit, from `v.rl`, which answers the BLOCK axis's question. So
+the seed's inline-axis answer was not merely misapplied, it was ERASED, every time, before anything
+could read it. Two independent facts, one bit, second write wins, no diagnostic.
+
+⭐⭐ **THE CASE THAT PROVES ONE BIT CAN NEVER WORK IS THE ONE WHERE BOTH ARE TRUE.** `vertical-rl` +
+`direction:rtl` has its block axis starting at the right edge AND its inline axis starting at the
+bottom, so the recorded point is the box's bottom-RIGHT corner and it owes a `-width` AND a
+`-height`. No amount of care with a single bit expresses that. The fix is a second set,
+`static_pos_up`, and moving the seed's flag into it at the same instant the coordinate moves.
+
+### THE MEASUREMENT
+
+The same 24-row fixture t1362 built (`/tmp/oc4.html`, six containers x four out-of-flow children).
+t1362 left it 24/24 exact on the axis under test and 20/24 exact on both coordinates; this tick
+takes it to **24/24 exact on both**. The four rows that moved are `k4`/`k6` `.oh` and `.mh`, y=100 ->
+94; `.mh` is 300px wide and moves by 6, which is the row that says the size subtracted is the
+box's HEIGHT and not a reused `-width`.
+
+### ⚠⚠ THE FLAKY GRID FILE ALTERNATED, WHICH SETTLES IT
+
+t1362 recorded 42 subtests going FAIL -> pass in one file,
+`grid-lanes/animation/grid-template-columns-interpolation.html`, and declined to claim them. This
+tick's name diff against t1362's own binary shows the identical shape — 0 newly failing, 42 newly
+passing — in `grid-template-rows-interpolation.html`, the SIBLING file. A flake that lands on a
+different file each run is no longer a hypothesis about instability; it is instability. Neither tick
+claims those 42, and `css/css-grid` is FLAT BY NAME under both.
+
+The other three areas are flat by TOTAL on FIXED denominators, all three exactly reproducing the
+banked values: css-position 1166/1482, css-flexbox 3168/4693, css-sizing 4525/5892 (the last being
+t1362's correction, now confirmed a third time). So this tick is WPT-flat, for the aperture reason
+t1362 recorded: `css/css-writing-modes` is 1,177 files upstream and is in no metric row and no sweep
+area list, so the suite that exists to measure it cannot see it.
+
+GATE `G_ABSPOS_IN_VERTICAL_CB` block 8 (10 rows: 4 corrected, 6 controls spanning t1360/t1361/t1362),
+RED under:
+- **the `y_static && static_pos_up` translate deleted** (the pre-tick state) → `#oh4` at y=100
+- **`map_static_positions` left writing one bit** (seed flag not moved) → `#oh4` at y=100 again, and
+  this is the mutation that shows the two defects are indistinguishable from the outside
+- **`static_pos_up` marked unconditionally** instead of only where the seed flagged → caught not by
+  a new row but by `#c1`, a t1360-era control, at y=-6: a box pulled off the top of its container
+- **the `y_static` guard dropped** → boxes with a real `top` inset move off block 7's asserted 64
+
+⭐ The third mutation is the one worth keeping: it was caught by the OLDER control, not by any row
+this tick added. A gate that accumulates controls across ticks catches the over-application of each
+new fix with the rows the previous fix left behind, which is the whole argument for extending a gate
+rather than opening a new one beside it.
+
+NEXT — measured, reproducible, not done here:
+**`g_abspos_grid_item_vertical.rs` does not exist.** `g_abspos_in_vertical_cb.rs`'s own "how each
+assertion goes RED" section says the `parent_is_flex_or_grid` exclusion *"is asserted separately, in
+`g_abspos_grid_item_vertical.rs`"*, and `cargo test --test g_abspos_grid_item_vertical` answers `no
+test target named ...` in `manuk-page`. Either the gate lives under another name or the 38-subtest
+exclusion t1360 paid to find is carried by prose alone. That is a claim with no gate behind it,
+which is exactly what the map-honesty pass exists to catch — check for it under any name before
+writing a new one.
+
+### ⚠⚠⚠ FOR THE OBSERVER — ONE FLAKY MEMORY TEST, AND THE ONE PATH THAT MAY NOT RETRY IT
+
+t1363 lost three wall attempts to `manuk-shell`, and the failing test is named:
+
+```text
+  tab::g_runtime_count::discarding_a_tab_returns_memory_to_the_os_not_just_the_allocator
+```
+
+Reproduced directly on this tree at load ~11: three consecutive `cargo test -q -p manuk-shell` runs
+gave **ok 77 / FAILED 76+1 / ok 77** — one failure in three, always that test, never any other. It
+measures RSS actually returned to the OS after a tab is discarded, which is a property of the
+allocator's timing and the machine's memory pressure, not of the code under test. Nothing in this
+tick touches `manuk-shell`; the change is confined to `engine/layout`.
+
+⭐ **THE INTERESTING PART IS WHY RETRYING DOES NOT CLEAR IT.** `manuk-shell` is measured TWICE by
+`verify.sh`, by two paths with opposite policies:
+
+- **G3 / the shell-gate job** knows this suite carries timing gates and retries up to 3x, waiting
+  for load1 < 2.5 each time. On attempt 3 it worked exactly as designed: `✓ affordances (full shell
+  suite green): test result: ok. 77 passed`.
+- **`T · crate tests`** runs the same suite again through `_crate_suite`, whose stated policy is
+  that an explicit `test result: FAILED` is *"a real red. Never retried, never excused"* — only a
+  NO-VERDICT (OOM, signal, starved build) earns the settled re-measure.
+
+That policy is right in general and is exactly what stops a real regression being re-run away. But
+it means a test that false-REDs NON-DETERMINISTICALLY reaches the one path that cannot absorb it,
+and the same wall can print `✓ shell suite green` and `✗ manuk-shell tests FAILED` in one run — as
+attempt 3 did. With a ~1-in-3 failure rate every wall attempt is an independent coin flip, so the
+tick lands by persistence rather than by the box getting quieter.
+
+Load context: load1 has sat between 10 and 27 continuously this session, held up by the `*/1`
+hygiene cron piling up `find` processes (nine concurrent at one sample), so neither retry
+threshold — G3's 2.5 nor `_crate_suite`'s 1.5 — has been reachable at any point.
+
+⭐⭐⭐ **AND THE CONTROL SAYS IT IS NOT THIS TICK'S — IT IS WORSE ON HEAD.** The load explanation
+was getting comfortable, and then attempts 7 and 8 failed at load **2.94** and **4.11**, which it
+does not cover. That is the point at which "it's just contention" has to be tested rather than
+repeated: this tick ADDS AN ALLOCATION to the layout struct (`static_pos_up`, a second
+`HashSet<NodeId>`), and the failing test measures RSS RETURNED TO THE OS. Those two facts are close
+enough together that the ratchet requires the control, not an argument.
+
+Same box, same quarter hour, `cargo test -q -p manuk-shell` repeatedly:
+
+```text
+  this tick's tree   ok / ok / FAILED / ok                      1 of 4
+  HEAD (b5704e6d)    ok / ok / FAILED / ok / FAILED / FAILED    3 of 6
+```
+
+HEAD fails MORE OFTEN than the tree under test. The flake is pre-existing, it is not this tick's,
+and t1362 landed through the same coin flip an hour earlier. ⚠ Note also that the load figure in
+each `--- attempt N failed (load X) ---` line is measured BEFORE `tick.sh` starts; `verify.sh` then
+launches ~25 gate builds in parallel, so the load DURING the shell suite is self-induced by the wall
+and is not what that number reports. A recorded number that is taken at the wrong moment reads like
+a refutation of the right explanation.
+
+⚠⚠⚠ **AND RUNNING THAT CONTROL WAS A NEAR-MISS, BECAUSE THE LANDER WAS STILL ARMED.** The control
+needs `git checkout -- engine/layout/src/lib.rs`, and a DETACHED retry loop was running `tick.sh`
+against the same tree on its own schedule. For about ninety seconds the working tree held t1363's
+journal, wiki, gate and commit message on top of HEAD's layout code — and if an attempt had reached
+its commit step inside that window it would have landed t1363's MESSAGE describing a fix the diff
+did not contain. It did not happen; HEAD was verified still `b5704e6d` and the tree still carried
+all four `static_pos_up` references afterwards. It was luck, not design.
+
+**A detached lander makes the working tree a SHARED RESOURCE, and `git checkout` on a shared tree is
+a write.** The old-binary control and the auto-retry loop are both good ideas that this loop arrived
+at separately, and they are not safe to run at the same time on one checkout. Do the control BEFORE
+arming the lander, or do it on a copy.
+
+Recorded rather than touched: `scripts/verify.sh` is harness. The tick's own evidence stands —
+layout 185/185, the gate green, four mutations red — and the detached lander keeps retrying.
+
+WIKI: docs/wiki/box-layout.md

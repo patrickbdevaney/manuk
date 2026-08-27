@@ -1247,10 +1247,24 @@ struct Ctx<'a> {
     /// stayed in flow. Recorded as normal flow walks past it, because that is the only moment the
     /// information exists.
     static_pos: RefCell<HashMap<NodeId, (f32, f32)>>,
-    /// Nodes whose `static_pos` was mapped out of a `vertical-rl` subtree, and whose placed box
-    /// therefore has to be pulled one WIDTH left of it — see [`Self::map_static_positions`] for why
-    /// the correction cannot live at the mapping site. Empty for every horizontal page.
+    /// Nodes whose `static_pos` is the placed box's RIGHT edge, so the box has to be pulled one
+    /// WIDTH left of it — see [`Self::map_static_positions`] for why the correction cannot live at
+    /// the mapping site. Two unrelated situations put a node here, and they are the same correction
+    /// because they name the same physical edge: an inline axis running right-to-left in a
+    /// horizontal mode (`direction:rtl`, t1361), and the BLOCK axis of a `vertical-rl` subtree,
+    /// whose block-start is the right edge (t1360). Empty for every LTR horizontal page.
     static_pos_rl: RefCell<HashSet<NodeId>>,
+    /// The other axis's copy: nodes whose `static_pos` is the placed box's BOTTOM edge, so the box
+    /// has to be pulled one HEIGHT up from it.
+    ///
+    /// ⚠⚠⚠ **THIS EXISTS BECAUSE ONE SET CANNOT HOLD TWO CORRECTIONS, AND FOR ~2 TICKS IT WAS
+    /// ASKED TO.** In a vertical writing mode the INLINE axis is the physical vertical one, so
+    /// `direction:rtl` there means the static position is the box's bottom edge — a `-height` on
+    /// `y`, not a `-width` on `x`. The seed records its flag in the transposed space, where the
+    /// inline axis is `x`, so it landed in [`Self::static_pos_rl`]; and then
+    /// [`Self::map_static_positions`] overwrote that flag from `v.rl`, which answers the BLOCK
+    /// axis's question. Two different facts, one bit, and the second write won.
+    static_pos_up: RefCell<HashSet<NodeId>>,
     /// ⚠⚠⚠ **The provisional origin of an ATOMIC INLINE whose subtree recorded a static position.**
     ///
     /// A float and an `inline-block` are both laid out at a provisional `(0,0)` and TRANSLATED into
@@ -1460,6 +1474,7 @@ pub fn layout_document(
         taffy_item_height: RefCell::new(HashMap::new()),
         static_pos: RefCell::new(HashMap::new()),
         static_pos_rl: RefCell::new(HashSet::new()),
+        static_pos_up: RefCell::new(HashSet::new()),
         atomic_static_origin: RefCell::new(HashMap::new()),
         static_pos_writes: std::cell::Cell::new(0),
         transform_matrix: RefCell::new(HashMap::new()),
@@ -3665,14 +3680,28 @@ impl Ctx<'_> {
     fn map_static_positions(&self, root: NodeId, v: writing_mode::VerticalRun) {
         let mut sp = self.static_pos.borrow_mut();
         let mut rl = self.static_pos_rl.borrow_mut();
+        let mut up = self.static_pos_up.borrow_mut();
         for n in self.dom.descendants(root) {
             if let Some(p) = sp.get_mut(&n) {
                 let (ex, ey) = (p.0, p.1);
                 *p = (v.px(ey, 0.0), v.py(ex));
+                // ⚠⚠⚠ **THE POINT IS TRANSPOSED AND SO IS THE CORRECTION THAT IS OWED ON IT.**
+                // The seed ran inside this subtree, where the INLINE axis is the engine's `x`, so
+                // `static_inline_start` recorded its "this point is the box's far edge" flag in
+                // `static_pos_rl` — the `-width`-on-`x` set. One line of the map later that same
+                // `x` is the physical `y`. The flag has to move with the coordinate it describes,
+                // or it is answering about an axis it never measured.
+                if rl.remove(&n) {
+                    up.insert(n);
+                } else {
+                    up.remove(&n);
+                }
+                // …and `static_pos_rl` is now free to carry the question it is actually about here:
+                // the BLOCK axis, which is the physical `x` in a vertical mode and starts at the
+                // RIGHT edge in `vertical-rl`. Before, these two writes were one, so whichever
+                // fact was written second silently erased the other.
                 if v.rl {
                     rl.insert(n);
-                } else {
-                    rl.remove(&n);
                 }
             }
         }
@@ -9787,6 +9816,15 @@ impl Ctx<'_> {
             // `x_static` because a box with a real horizontal inset never used the point at all.
             if x_static && self.static_pos_rl.borrow().contains(&node) {
                 b.translate(-b.rect.width, 0.0);
+            }
+            // ⚠ The mirror, and it is a SEPARATE set rather than the same one because the two
+            // corrections are about different axes and a node can owe BOTH: in `vertical-rl` with
+            // `direction:rtl` the block axis starts at the right edge AND the inline axis starts at
+            // the bottom, so the recorded point is the box's bottom-RIGHT corner and it owes a
+            // `-width` and a `-height`. Guarded on `y_static` for the same reason as its twin — a
+            // box with a real vertical inset never consulted the point.
+            if y_static && self.static_pos_up.borrow().contains(&node) {
+                b.translate(0.0, -b.rect.height);
             }
             if let Some(m) = chain {
                 b.transform_affine(&m);

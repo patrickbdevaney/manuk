@@ -630,4 +630,132 @@ fn g_abspos_in_vertical_cb_is_physical() {
             k.height
         );
     }
+
+    // ── 8. THE CROSS-AXIS COORDINATE OF BLOCK 7 — a static position on the INLINE axis of a
+    //    vertical mode (t1363). Block 7 asserts the axis each row constrains; the OTHER coordinate
+    //    of those same boxes is where flow would have put them, and it is a different mechanism
+    //    with its own three-tick history:
+    //
+    //      t1360  the BLOCK axis of a `vertical-rl` subtree starts at the RIGHT edge
+    //      t1361  the INLINE axis of a `direction:rtl` horizontal block starts at the RIGHT edge
+    //      t1363  the INLINE axis of a vertical mode under `rtl` starts at the BOTTOM edge
+    //
+    //    All three record an EDGE, because the box's used size does not exist when flow walks past
+    //    it, and all three owe a deferred `-size` that `position_absolutes` applies once
+    //    `layout_abs` has measured the box. The first two are a `-width` on `x`; the third is a
+    //    `-height` on `y`, and that is why it needed a SECOND set rather than a wider predicate:
+    //    `Layout::static_pos_rl` is one bit per node, the seed wrote the inline-axis answer into it
+    //    inside the transposed space, and `map_static_positions` then overwrote that bit with the
+    //    BLOCK axis's answer. Two facts, one bit, second write wins.
+    //
+    //    Chrome, same six containers; `.oh`/`.mh` have no vertical inset, so their `y` is static:
+    //
+    //    ```text
+    //      k1 horizontal-tb ltr   oh y=0     CONTROL
+    //      k3 vertical-rl   ltr   oh y=0     CONTROL — a vertical mode alone changes nothing
+    //      k5 vertical-lr   ltr   oh y=0     CONTROL
+    //      k4 vertical-rl   rtl   oh y=94    100-6: the inline axis runs BOTTOM-TO-TOP
+    //      k6 vertical-lr   rtl   oh y=94    the block direction does not enter this answer
+    //      k4/k6            rtl   mh y=94    same, on a 300px-wide box — it is the HEIGHT subtracted
+    //    ```
+    //
+    //    ## How each assertion goes RED
+    //
+    //    - **Delete the `y_static && static_pos_up` translate in `position_absolutes`** (the
+    //      pre-tick state) — k4/k6 `.oh` and `.mh` sit at y=100, the recorded EDGE, exactly one box
+    //      height below Chrome.
+    //    - **Leave `map_static_positions` writing `static_pos_rl` from `v.rl` alone** (i.e. do not
+    //      move the seed's flag into `static_pos_up`) — same rows, same 100, because the bit that
+    //      said "this point is a far edge on the inline axis" was erased before anything read it.
+    //    - **Insert into `static_pos_up` unconditionally** instead of only when the seed set the
+    //      flag — the three LTR CONTROLS go to y=-6, a box pulled up off the top of its container.
+    //    - **Apply the `-height` without the `y_static` guard** — `#ov4`/`#ov6` have a real `top`
+    //      inset and must not consult the static position at all; they would move off block 7's
+    //      asserted 64.
+    const STATIC_CROSS_ROWS: &[(&str, &str, char, f32, &str)] = &[
+        (
+            "#k1",
+            "#oh1",
+            'y',
+            0.0,
+            "CONTROL: horizontal-tb ltr — the plainest static position there is",
+        ),
+        (
+            "#k3",
+            "#oh3",
+            'y',
+            0.0,
+            "CONTROL: `vertical-rl` alone does not move the INLINE axis's \
+             start; under ltr it still runs top-to-bottom",
+        ),
+        (
+            "#k5",
+            "#oh5",
+            'y',
+            0.0,
+            "CONTROL: and neither does `vertical-lr`",
+        ),
+        (
+            "#k4",
+            "#oh4",
+            'y',
+            94.0,
+            "vertical-rl + rtl runs the inline axis BOTTOM-TO-TOP, so the \
+             static position is the content box's bottom edge and the box grows upward: 100-6",
+        ),
+        (
+            "#k6",
+            "#oh6",
+            'y',
+            94.0,
+            "vertical-lr + rtl gives the same answer — the BLOCK direction \
+             is not part of the inline axis's question, which is what stops this being `v.rl`",
+        ),
+        (
+            "#k4",
+            "#mh4",
+            'y',
+            94.0,
+            "the same edge for a 300px-WIDE box: the size subtracted is the \
+             box's HEIGHT, so a `-width` correction reused here would be off by 294",
+        ),
+        ("#k6", "#mh6", 'y', 94.0, "and its `vertical-lr` mirror"),
+        (
+            "#k2",
+            "#ov2",
+            'x',
+            195.0,
+            "CONTROL (t1361): a `direction:rtl` HORIZONTAL block still \
+             seeds its inline axis at the right edge and still owes the `-width`",
+        ),
+        (
+            "#k3",
+            "#ov3",
+            'x',
+            195.0,
+            "CONTROL (t1360): the BLOCK axis of `vertical-rl` starts at the \
+             right edge — the correction this tick had to stop sharing a bit with",
+        ),
+        (
+            "#k5",
+            "#ov5",
+            'x',
+            0.0,
+            "CONTROL (t1360): `vertical-lr` stacks blocks rightward, so its \
+             block-start is the LEFT edge and no correction is owed at all",
+        ),
+    ];
+    for (cbsel, sel, axis, want, why) in STATIC_CROSS_ROWS {
+        let (c, k) = (r(cbsel), r(sel));
+        let got = if *axis == 'x' { k.x - c.x } else { k.y - c.y };
+        assert!(
+            (got - want).abs() < 1.01,
+            "G_ABSPOS_IN_VERTICAL_CB: {sel} in {cbsel} has {axis}={got:.2}; Chrome puts it at \
+             {want:.2}. {why}.\n\
+             A static position is recorded as the box's INLINE-START EDGE and owes a deferred \
+             `-size` once the box is measured. Which physical edge that is, and which size it \
+             owes, are two independent questions — the block axis's and the inline axis's — and \
+             they cannot share one bit per node."
+        );
+    }
 }
