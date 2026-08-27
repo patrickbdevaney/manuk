@@ -74,7 +74,10 @@ const VTT: &str = "WEBVTT - Example captions\n\
                    SIGN: the bottom of the frame is already busy\n\
                    \n\
                    00:00:08.000 --> 00:00:10.000 line:-1 vertical:rl\n\
-                   the last line, written vertically\n";
+                   the last line, written vertically\n\
+                   \n\
+                   00:00:10.000 --> 00:00:12.000\n\
+                   \u{7d20}\u{8c61} caf\u{e9}\n";
 
 const HTML: &str = r##"<!doctype html>
 <html><body>
@@ -95,6 +98,17 @@ const REPORT: &str = r##"
   var t = v.textTracks[0];
   var texts = [];
   for (var i = 0; i < t.cues.length; i++) { texts.push(t.cues[i].text); }
+  // ⚠⚠⚠ THE CUE TEXT'S CODE POINTS (t1352). A VTT file is UTF-8 by definition, and the parser hands
+  //    its cues across the JS boundary as a Rust `String`. That seam used `JS_NewStringCopyZ`, which
+  //    reads its input as LATIN-1 — so every non-ASCII caption arrived as its own UTF-8 bytes
+  //    widened one per character. Subtitles are the one surface on the web that is USUALLY not
+  //    ASCII, and mojibake there renders as text, so nothing throws and nothing is empty.
+  //    Reported as code points because a mojibake'd caption still LOOKS like a caption.
+  var lastCue = t.cues[t.cues.length - 1], cps = [];
+  if (lastCue) {
+    var lt = lastCue.text;
+    for (var k = 0; k < lt.length; k++) { cps.push(lt.charCodeAt(k)); }
+  }
 
   // The tick-257 timeline, driven by a track that came off the WIRE.
   var fires = 0, drawn = '';
@@ -110,6 +124,7 @@ const REPORT: &str = r##"
   var badTrack = bad.getElementsByTagName('track')[0];
 
   document.getElementById('out').textContent =
+    'cuecps=' + cps.join(',') + ' ' +
     'tracks=' + v.textTracks.length +
     ' cues=' + t.cues.length +
     ' mode=' + t.mode +
@@ -221,8 +236,22 @@ fn a_track_element_fetches_parses_and_becomes_a_live_caption_track() {
 
     // ── 2. Parsed by the REAL parser, and the track carries the element's attributes. ────────
     assert!(
-        got.contains("tracks=1") && got.contains("cues=5"),
-        "all five cues arrive as a single track; got: {got}"
+        got.contains("tracks=1") && got.contains("cues=6"),
+        "all SIX cues arrive as a single track; got: {got}"
+    );
+
+    // ── ⭐⭐⭐ THE CUE TEXT IS UTF-8, NOT LATIN-1 BYTES (t1352). A WebVTT file is UTF-8 by
+    //    definition and the parser hands its cues across the JS boundary as a Rust `String`; that
+    //    seam used `JS_NewStringCopyZ`, which reads its input as LATIN-1. Subtitles are the one
+    //    surface on the web that is USUALLY not ASCII — and mojibake there still renders as text,
+    //    so nothing throws, nothing is empty, and every caption in every language but English was
+    //    quietly wrong. `素象 café` = 32032,35937,32,99,97,102,233; the Latin-1 reading of the same
+    //    bytes is 231,180,160,232,177,161,32,99,97,102,195,169 — eleven characters where there are
+    //    seven, which is why LENGTH alone would also have caught it and why the code points are
+    //    reported rather than the string.
+    assert!(
+        got.contains("cuecps=32032,35937,32,99,97,102,233"),
+        "G_TRACK_SRC: the last cue's text must arrive as UTF-8 code points; got: {got}"
     );
     assert!(
         got.contains("label=English") && got.contains("lang=en") && got.contains("kind=captions"),

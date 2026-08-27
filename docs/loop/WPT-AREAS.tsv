@@ -5,13 +5,13 @@ css/selectors	4139	5560	74.4	0	0
 css/css-flexbox	2872	4693	61.2	0	0
 css/css-grid	10353	14687	70.5	0	0
 css/css-sizing	4399	5892	74.7	0	0
-css/css-fonts	3876	7552	51.3	0	0
+css/css-fonts	4045	7552	53.6	0	0
 css/css-text	2154	4515	47.7	0	0
 css/css-overflow	468	963	48.6	0	0
 css/css-transforms	4735	5500	86.1	0	0
 css/css-ui	1003	1900	52.8	0	0
 css/css-backgrounds	4817	6107	78.9	0	0
-css/css-values	3703	7870	47.1	0	0
+css/css-values	3767	8488	44.4	0	0
 css/css-position	1166	1482	78.7	0	0
 css/css-display	332	549	60.5	0	0
 css/css-color	10472	11337	92.4	0	0
@@ -19,4 +19,4 @@ cssom	0	0	0.0	0	0
 domparsing	342	1294	26.4	0	0
 url	1	7	14.3	0	0
 encoding	360564	1127437	32.0	0	0
-TOTAL	480015	1277771	37.57	0	0
+TOTAL	480248	1278389	37.57	0	0

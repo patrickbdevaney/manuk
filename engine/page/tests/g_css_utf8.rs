@@ -47,9 +47,30 @@ const HTML: &str = r#"<!doctype html><html><head><meta charset="UTF-8"><style>
 </style></head><body>
   <div id="f">f</div><div id="v">v</div><div id="a" data-x="café">a</div>
   <div id="b">b</div><div id="c">c</div><div id="d">d</div><div id="e">e</div>
+  <div id="cssom">-</div>
   <div id="out">-</div>
   <script>
     var R = [], g = getComputedStyle, $ = function (i) { return document.getElementById(i); };
+    // ── ⚠⚠⚠ THE RETURN DIRECTION, WHICH THIS GATE DID NOT ASK ABOUT FOR TWO HUNDRED TICKS (t1352).
+    //    Everything above measures the way IN — a stylesheet decoded before Stylo sees it. The way
+    //    OUT had the SAME defect at a different seam: `JS_NewStringCopyZ` reads its input as
+    //    Latin-1, one byte per character, and the CSSOM natives handed it a Rust UTF-8 `String`.
+    //    Reported as CODE POINTS, for the same reason every row above is.
+    (function () {
+      var C = [];
+      function cps(str) { var o = []; for (var i = 0; i < str.length; i++) { o.push(str.charCodeAt(i)); } return o.join(','); }
+      var d1 = document.createElement('div'); d1.style.fontFamily = '\u7d20\u8c61';
+      C.push('setget:' + cps(d1.style.fontFamily));
+      var d2 = document.createElement('div'); d2.style.setProperty('font-family', '\u00e9x');
+      C.push('getprop:' + cps(d2.style.getPropertyValue('font-family')));
+      var d3 = document.createElement('div'); d3.style.cssText = 'font-family:\u7d20';
+      C.push('csstext:' + cps(d3.style.fontFamily));
+      var d4 = document.createElement('div'); d4.style.fontFamily = 'simple';
+      C.push('ascii:' + d4.style.fontFamily);
+      var d5 = document.createElement('div'); d5.setAttribute('title', '\u7d20');
+      C.push('attr:' + cps(d5.getAttribute('title')));
+      $('cssom').textContent = C.join(' ');
+    })();
     // Report the >127 code points, not the rendered text: a mojibake'd string still *renders*
     // something, and eyeballing it is how this survived. The code points cannot be misread.
     function hi(s) {
@@ -127,6 +148,62 @@ fn stylesheets_are_decoded_as_utf8_not_widened_byte_by_byte() {
              The escape form (`esc:`) always worked, which is exactly why this hid — every CSS test \
              in this repo was written in ASCII, and a bug invisible to the whole alphabet your \
              tests use is not found by writing more of them."
+        );
+    }
+
+    // ── ⭐⭐⭐ THE RETURN DIRECTION (t1352). The same Latin-1 widening, at the other boundary, found
+    //    two hundred ticks after this file documented the mechanism in its own opening lines. It
+    //    said `out.push(b[i] as char)` was *"identity for ASCII; Latin-1 widening for everything
+    //    else"* — and nobody asked whether the way OUT did the same thing. It did:
+    //    `JS_NewStringCopyZ` reads its input as Latin-1 and SEVEN natives handed it Rust UTF-8.
+    //
+    //    ```text
+    //                                             expected            before
+    //      style.fontFamily = 素象                32032,35937   231,180,160,232,177,161
+    //      setProperty('font-family','éx')        233,120       195,169,120
+    //      cssText = 'font-family:素'             32032         231,180,160
+    //      style.fontFamily = 'simple'  CONTROL   simple        simple
+    //      setAttribute('title','素')   CONTROL   32032         32032
+    //    ```
+    let cssom = {
+        let n = manuk_css::query_selector_all(page.dom(), root, "#cssom")[0];
+        page.dom().text_content(n)
+    };
+    for (claim, why) in [
+        (
+            "setget:32032,35937",
+            "⭐ THE LOAD-BEARING ROW. `el.style.fontFamily = '素象'` must read back the SAME TWO code \
+             points. `231,180,160,232,177,161` is that string's UTF-8 BYTES widened one per \
+             character — mojibake, not loss, so nothing throws and the value is not empty: the CSSOM \
+             answers a string in the wrong alphabet, which renders as something and reads as working",
+        ),
+        (
+            "getprop:233,120",
+            "…and through `setProperty`/`getPropertyValue`, the other spelling of the same seam. \
+             `195,169,120` is `é` as its two UTF-8 bytes",
+        ),
+        (
+            "csstext:32032",
+            "…and through `cssText`, which reaches the seam via the CSS parser rather than the \
+             property setter. Three spellings, one boundary — a fix at a single call site passes one \
+             of these rows and fails the others",
+        ),
+        (
+            "ascii:simple",
+            "⚠ THE CONTROL, AND THE REASON THIS SURVIVED: ASCII through the same seam is IDENTITY, \
+             so every CSS test in this repo — all written in ASCII — passed straight over the \
+             defect. It is the same sentence the assertion above already carries, one boundary over",
+        ),
+        (
+            "attr:32032",
+            "⚠ THE SECOND CONTROL: the DOM seam was CORRECT all along, because it goes through \
+             `return_string`/`to_jsval`. Without this row, a fix that mangled both directions equally \
+             would look symmetric and pass",
+        ),
+    ] {
+        assert!(
+            cssom.contains(claim),
+            "G_CSS_UTF8: expected `{claim}`\n  got: {cssom}\n\n  {why}."
         );
     }
 }

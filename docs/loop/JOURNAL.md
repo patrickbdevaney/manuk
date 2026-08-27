@@ -90344,3 +90344,99 @@ sizing behind `grid-align-baseline-flex-002`, and the grid line-name serializati
 (d) ⚠ FOR THE OBSERVER: two of the board's top rows are now measured as spec-frontier
 (`css/css-values` 76% `calc-size`, `domparsing` 77% unshipped-API `tentative/`) — the ordering needs a
 scope column, or the loop will keep re-discovering this one area at a time. (e) I3's mechanical debt.
+
+## t1352 — the same mojibake this repo already gated, in the opposite direction, for two hundred ticks
+
+TICK SHAPE: capability — one wrong API at seven seams. Board re-run at the top of this tick and
+diffed against t1351's copy: **unchanged** except its own tally.
+**`css/css-fonts` 3,876 → 4,045 (+169, 51.3% → 53.6%)**, `css/css-values` +64 on a refreshed sweep.
+
+### HOW IT WAS FOUND — SURVEYING THE BIGGEST UN-SURVEYED CORE AREA
+
+t1350 and t1351 both ended with the same note: the board's `failing`-count ordering cannot tell a core
+area from a spec-frontier one. So this tick surveyed the largest area that had not been looked at —
+`css/css-fonts`, 3,676 failing at 51.3% — and its two biggest groups split exactly along that line:
+
+```text
+   1440  css-fonts/animations          'from' value should be supported   → frontier interpolation
+    781  css-fonts/parsing
+    530  test_font_family_parsing.html  ⭐ "font setter should parse serialized form to identical
+                                            serialization" — expected X, got X double-encoded
+```
+
+The 530 row's expected-vs-got is the whole diagnosis: the two strings are the same text at two
+different ENCODING LEVELS.
+
+### THE BUG: `JS_NewStringCopyZ` READS LATIN-1
+
+Measured as CODE POINTS, because a mojibake'd string still renders something:
+
+```text
+                                            expected       before        after
+   style.fontFamily = 素象  (U+7D20 U+8C61)  32032,35937   231,180,160,  32032,35937
+                                                           232,177,161
+   setProperty('font-family','éx')           233,120       195,169,120   233,120
+   cssText = 'font-family:素'                32032         231,180,160   32032
+   style.fontFamily = 'simple'    CONTROL    simple        simple        simple
+   setAttribute('title','素')     CONTROL    32032         32032         32032
+   textContent = '素'             CONTROL    32032         32032         32032
+```
+
+`231,180,160` is `E7 B4 A0` — the UTF-8 bytes of `素`, each widened into its own code point.
+`JS_NewStringCopyZ` interprets its input as **Latin-1**, one byte per character; a Rust `String` is
+UTF-8. **Eight seams used it and seven carry page text**: `host_css_serialize` (every `el.style.*`),
+`host_css_longhands` (every shorthand), **`parse_vtt` (every non-English subtitle on the web)**,
+`mse_demux`, `module_metadata_hook` (`import.meta.url`), `set_module_private_url`, and
+`cv_to_data_url` (base64, so correct by luck). The eighth is `str_empty`, which is genuinely empty.
+
+⚠ The DOM half of the same file never had it: attributes and `textContent` go through
+`return_string`, whose `to_jsval` uses `JS_NewStringCopyUTF8N`. **Two conversions sat side by side in
+one file and only one was right** — and the two CONTROL rows above are what prove that, which is why
+they are in the gate.
+
+The fix is one helper, `utf8_jsval`, with every page-text seam routed through it. ⚠ It also drops the
+`CString::new` round trip those sites needed, and with it a second defect: an interior NUL made
+`CString::new` FAIL and the seam silently returned `''` or `null` — a value replaced by a different
+value, the false-presence class this file is full of.
+
+### ⭐⭐⭐ THE FINDING: THE MECHANISM ALREADY HAD A GATE, POINTING THE OTHER WAY
+
+`G_CSS_UTF8` exists — and its opening lines are this exact defect:
+
+> *"every stylesheet in the engine was mojibake'd, by one character of Rust … `out.push(b[i] as char)`
+> — identity for ASCII; Latin-1 widening for everything else."*
+
+That gate documents the mechanism, the blast radius (`li::before { content: "–" }` on `255md.com`),
+and the reason it hid. **Nobody asked whether the way OUT did the same thing.** It did, in seven
+places, for about two hundred ticks. The new rows live in that same gate, because the two directions
+are one bug and a reader who finds either must see both.
+
+⚠⚠ **AND BOTH SURVIVED FOR THE REASON THAT GATE'S OWN CLOSING SENTENCE GIVES** — *"a bug invisible to
+the whole alphabet your tests use is not found by writing more of them."* Every CSS test in this repo
+is ASCII, and ASCII through this seam is identity. The sentence was right, it was written down, and
+it did not generalise itself. ⭐ **When a gate names a MECHANISM, ask it the mirror question**: this
+file says the way in was wrong — what does the way out do?
+
+**Proven RED**, three mutations:
+
+```text
+   revert `host_css_serialize` only     `setget:32032,35937`   (G_CSS_UTF8)
+   revert every CSS seam                same
+   revert the VTT/MSE seam              `cuecps=231,180,160,232,177,161,32,99,97,102,195,169`
+                                        — eleven characters where there are seven (G_TRACK_SRC)
+```
+
+⚠ The VTT arm did not exist at first: with the VTT seam reverted, `G_CSS_UTF8` stayed GREEN, because
+it only covers the CSS seams. `G_TRACK_SRC`'s fixture grew a `素象 café` cue that goes through the
+REAL `<track src>` parser, and the mutation went red. **Fourth tick in a row where the mutation pass
+found a gate hole** (t1345, t1348, t1350, now t1352) — and this one is a different shape: not a
+missing DIMENSION within one gate, but a seam covered by no gate at all while its sibling was.
+
+**Regression sweep.** Full `manuk-page` suite: **509 of 509**. `dom`, `html/dom` re-run and unchanged.
+
+**NEXT.** (a) `css-fonts/parsing`'s remaining ~251 and `test_font_feature_values_parsing` (274) —
+now that the encoding floor is right, these are real parsing gaps. (b) `css-fonts/animations` (1,440)
+is `'from' value should be supported`, i.e. frontier interpolation — survey before grinding, per this
+tick's own method. (c) The teardown Bar-0 (t1349's reproducer). (d) t1348's residues. (e) ⚠ FOR THE
+OBSERVER: a third area is now measured as spec-frontier-heavy (`css/css-fonts` animations); the
+board needs a scope column or the loop keeps re-deriving this one area at a time. (f) I3's debt.

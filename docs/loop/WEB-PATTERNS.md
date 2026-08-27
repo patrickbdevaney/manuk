@@ -8352,3 +8352,32 @@ Chrome's body ran inside a `setTimeout` callback, where `var` is local; the engi
 where `var` is global. ⚠ **When two engines disagree on one row out of six, suspect the two PROGRAMS
 before the two engines** — run both bodies in the same scope, and prefer inline lookups to cached
 locals whenever the name under test is also a name the page publishes.
+
+---
+
+## t1352 — every non-English string that came back OUT of the engine
+
+`el.style.fontFamily = '素象'`, a WebVTT caption in any language but English, an MSE track label,
+`import.meta.url` with a non-ASCII path. All of them crossed one seam on the way back to the page and
+all of them arrived as their own UTF-8 BYTES widened one per character.
+
+- **the CJK / accented font stack** — `el.style.fontFamily = '微软雅黑'` reads back as nine
+  characters of Latin-1 gibberish, so a script that saves and restores a font stack destroys it, and
+  `style.fontFamily !== ''` feature checks pass on a value that names no font;
+- **the subtitle track** — captions are the one surface on the web that is USUALLY not ASCII;
+- **the shorthand round trip** — `style.font = '16px 素象'` through `__cssLonghands`.
+
+⭐⭐⭐ **The class, and it is the sharpest one this ledger has: THE SAME DEFECT ALREADY HAD A GATE, IN
+THE OPPOSITE DIRECTION.** `G_CSS_UTF8` was written because the stylesheet PARSER walked bytes and did
+`b[i] as char` — *"identity for ASCII; Latin-1 widening for everything else"* — and it explains the
+mechanism, the blast radius and the reason it hid. Nobody asked whether the way OUT did the same
+thing. It did, in seven places, for about two hundred ticks.
+
+⚠ The check that finds this whole family is **THE ROUND TRIP, IN CODE POINTS**: write a non-ASCII
+value through an API, read it back, and compare `charCodeAt` — not the rendered string, which looks
+like text either way. And when a gate names a mechanism, ask it the mirror question: *"this file says
+the way IN was wrong — what does the way OUT do?"*
+
+⚠⚠ Both directions survived for the reason that gate's own last sentence gives: **a bug invisible to
+the whole alphabet your tests use is not found by writing more of them.** Every CSS test in this repo
+is ASCII, and ASCII through this seam is identity.

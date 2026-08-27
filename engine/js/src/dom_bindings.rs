@@ -4074,6 +4074,30 @@ unsafe fn eval_in_current_global(cx: *mut RawJSContext, script: &str) -> Option<
 }
 
 /// Set the native return value (`vp[0]`) to a JS string.
+/// **A JS string from Rust UTF-8 — the only correct way to make one at this boundary.**
+///
+/// ⚠⚠⚠ `JS_NewStringCopyZ` reads its input as **Latin-1**, one byte per character. A Rust `String`
+/// is UTF-8, so every non-ASCII character arrived in JS as its own UTF-8 BYTES widened to code
+/// points: `素象` (U+7D20 U+8C61) came back as `U+00E7 U+00B4 U+00A0 U+00E8 U+00B1 U+00A1`. Measured
+/// on `el.style.fontFamily`, and it is mojibake, not loss — the text is all there, in the wrong
+/// alphabet, so nothing throws and nothing is empty.
+///
+/// The DOM half of this file never had the bug because it goes through [`return_string`], whose
+/// `to_jsval` uses `JS_NewStringCopyUTF8N`. **Eight seams used the Latin-1 API and seven of them
+/// carry page text** — `el.style.*` and `getPropertyValue` (CSS values: `css/css-fonts`'s
+/// `test_font_family_parsing` is 530 subtests of exactly this), WebVTT cue text (every non-English
+/// subtitle on the web), MSE track metadata, `import.meta.url` and a module's private URL.
+///
+/// ⚠ It also drops the `CString` round trip those sites needed, and with it a second defect: a value
+/// containing an interior NUL made `CString::new` fail and the seam returned `''` or `null` — a
+/// value silently replaced by a different one, which is the false-presence class this file is full
+/// of. `to_jsval` carries a NUL through as the character it is.
+unsafe fn utf8_jsval(cx: *mut RawJSContext, s: &str) -> Value {
+    rooted!(in(cx) let mut out = UndefinedValue());
+    s.to_jsval(cx, out.handle_mut());
+    out.get()
+}
+
 unsafe fn return_string(cx: *mut RawJSContext, vp: *mut Value, s: &str) {
     rooted!(in(cx) let mut out = UndefinedValue());
     s.to_jsval(cx, out.handle_mut());
@@ -6558,18 +6582,7 @@ unsafe fn cv_to_data_url(cx: *mut RawJSContext, _argc: u32, vp: *mut Value) -> b
         .and_then(|(_, node)| crate::canvas::to_png(node.0))
         .map(|png| format!("data:image/png;base64,{}", b64(&png)))
         .unwrap_or_else(|| "data:,".to_string());
-    let cs = match std::ffi::CString::new(url) {
-        Ok(c) => c,
-        Err(_) => return true,
-    };
-    rooted!(in(cx) let mut out = UndefinedValue());
-    let s = mozjs::jsapi::JS_NewStringCopyZ(cx, cs.as_ptr());
-    if s.is_null() {
-        *vp = NullValue();
-        return true;
-    }
-    out.set(mozjs::jsval::StringValue(&*s));
-    *vp = out.get();
+    *vp = utf8_jsval(cx, &url);
     true
 }
 
@@ -6638,18 +6651,7 @@ unsafe fn mse_demux(cx: *mut RawJSContext, argc: u32, vp: *mut Value) -> bool {
         ),
     };
 
-    let cs = match std::ffi::CString::new(json) {
-        Ok(c) => c,
-        Err(_) => return true,
-    };
-    rooted!(in(cx) let mut out = UndefinedValue());
-    let js = mozjs::jsapi::JS_NewStringCopyZ(cx, cs.as_ptr());
-    if js.is_null() {
-        *vp = NullValue();
-        return true;
-    }
-    out.set(mozjs::jsval::StringValue(&*js));
-    *vp = out.get();
+    *vp = utf8_jsval(cx, &json);
     true
 }
 
@@ -6757,18 +6759,7 @@ unsafe fn parse_vtt(cx: *mut RawJSContext, argc: u32, vp: *mut Value) -> bool {
         ),
     };
 
-    let cs = match std::ffi::CString::new(json) {
-        Ok(c) => c,
-        Err(_) => return true,
-    };
-    rooted!(in(cx) let mut out = UndefinedValue());
-    let js = mozjs::jsapi::JS_NewStringCopyZ(cx, cs.as_ptr());
-    if js.is_null() {
-        *vp = NullValue();
-        return true;
-    }
-    out.set(mozjs::jsval::StringValue(&*js));
-    *vp = out.get();
+    *vp = utf8_jsval(cx, &json);
     true
 }
 
@@ -11440,16 +11431,7 @@ unsafe fn host_css_serialize(cx: *mut RawJSContext, argc: u32, vp: *mut Value) -
     let prop = arg_string(cx, vp, argc, 0).unwrap_or_default();
     let val = arg_string(cx, vp, argc, 1).unwrap_or_default();
     let out = serialize_decl(&prop, &val).unwrap_or_default();
-    let Ok(cs) = std::ffi::CString::new(out) else {
-        *vp = str_empty(cx);
-        return true;
-    };
-    let js = mozjs::jsapi::JS_NewStringCopyZ(cx, cs.as_ptr());
-    *vp = if js.is_null() {
-        str_empty(cx)
-    } else {
-        mozjs::jsval::StringValue(&*js)
-    };
+    *vp = utf8_jsval(cx, &out);
     true
 }
 
@@ -11471,16 +11453,7 @@ unsafe fn host_css_longhands(cx: *mut RawJSContext, argc: u32, vp: *mut Value) -
         .map(|(k, v)| (k, serde_json::Value::String(v)))
         .collect();
     let out = serde_json::Value::Object(map).to_string();
-    let Ok(cs) = std::ffi::CString::new(out) else {
-        *vp = str_empty(cx);
-        return true;
-    };
-    let js = mozjs::jsapi::JS_NewStringCopyZ(cx, cs.as_ptr());
-    *vp = if js.is_null() {
-        str_empty(cx)
-    } else {
-        mozjs::jsval::StringValue(&*js)
-    };
+    *vp = utf8_jsval(cx, &out);
     true
 }
 
@@ -15102,16 +15075,8 @@ unsafe fn run_module(cx: *mut RawJSContext, source: &str, node: Option<NodeId>) 
 /// hook (B2) sets the same private on every fetched module, each with its OWN resolved url — one
 /// mechanism, so the root module and a graph module cannot disagree about where their url comes from.
 unsafe fn set_module_private_url(cx: *mut RawJSContext, module: *mut JSObject, url: &str) {
-    let s = match std::ffi::CString::new(url) {
-        Ok(s) => s,
-        Err(_) => return, // an interior NUL in a URL — nothing to stash, leave the private undefined
-    };
-    rooted!(in(cx) let js_str = mozjs::jsapi::JS_NewStringCopyZ(cx, s.as_ptr()));
-    if js_str.get().is_null() {
-        return;
-    }
-    let val = mozjs::jsval::StringValue(&*js_str.get());
-    mozjs::jsapi::SetModulePrivate(module, &val);
+    rooted!(in(cx) let val = utf8_jsval(cx, url));
+    mozjs::jsapi::SetModulePrivate(module, &val.get());
 }
 
 /// ES-module resolve hook. Self-contained modules only for now: imports resolve to null,
@@ -15240,12 +15205,7 @@ unsafe extern "C" fn module_metadata_hook(
         }
     };
     rooted!(in(cx) let mut val = UndefinedValue());
-    let s = std::ffi::CString::new(url).unwrap_or_default();
-    let js_str = mozjs::jsapi::JS_NewStringCopyZ(cx, s.as_ptr());
-    if js_str.is_null() {
-        return false;
-    }
-    val.set(mozjs::jsval::StringValue(&*js_str));
+    val.set(utf8_jsval(cx, &url));
     let name = c"url";
     mozjs::jsapi::JS_DefineProperty(
         cx,

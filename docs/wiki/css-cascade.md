@@ -4526,3 +4526,64 @@ the author wrote `0%`, and a percentage basis is not a px basis in every context
 
 Gated by `G_PERCENTAGE_SERIALIZATION` with a pure-length control row, red-proven by deleting the two
 early returns.
+
+
+---
+
+## `JS_NewStringCopyZ` reads Latin-1: the SAME mojibake as t~950's stylesheet bug, at the other boundary (t1352)
+
+**Symptom.** `el.style.fontFamily = '素象'` read back as six characters, not two. Measured as code
+points, because a mojibake'd string still *renders* something:
+
+```text
+                                            expected       before
+   style.fontFamily = 素象  (U+7D20 U+8C61)  32032,35937   231,180,160,232,177,161
+   setProperty('font-family','éx')           233,120       195,169,120
+   cssText = 'font-family:素'                32032         231,180,160
+   style.fontFamily = 'simple'   CONTROL     simple        simple
+   setAttribute('title','素')    CONTROL     32032         32032
+```
+
+`231,180,160` is `E7 B4 A0` — the UTF-8 **bytes** of `素`, each widened into its own code point.
+
+**Cause, and it is one API.** `JS_NewStringCopyZ` interprets its input as **Latin-1**, one byte per
+character. A Rust `String` is UTF-8. **Eight seams used it and seven carry page text:**
+
+| native | what it returns | who reads it |
+|---|---|---|
+| `host_css_serialize` | a canonicalised CSS value | `el.style.*`, `setProperty`, `cssText` |
+| `host_css_longhands` | a shorthand's longhands, as JSON | every shorthand assignment |
+| `parse_vtt` | WebVTT cue text | **every non-English subtitle on the web** |
+| `mse_demux` | MSE track metadata | media players |
+| `module_metadata_hook` | `import.meta.url` | every ES module |
+| `set_module_private_url` | a module's private URL | the module loader |
+| `cv_to_data_url` | `canvas.toDataURL()` | (base64, ASCII — correct by luck) |
+| `str_empty` | `""` | — (genuinely empty; left alone) |
+
+⚠ The DOM half of the same file never had the bug: attributes and `textContent` go through
+`return_string`, whose `to_jsval` uses `JS_NewStringCopyUTF8N`. **Two conversions existed side by
+side and only one was right**, which is the "one rule, N implementations" class.
+
+**Fix.** One helper, `utf8_jsval`, and every page-text seam routed through it. ⚠ It also removes the
+`CString::new` round trip those sites needed, and with it a second defect: a value containing an
+interior NUL made `CString::new` fail and the seam silently returned `''` or `null` — a value
+replaced by a different value, which is the false-presence class again.
+
+⭐⭐⭐ **THE FINDING IS THAT `G_CSS_UTF8` ALREADY DESCRIBED THIS MECHANISM, IN ITS OPENING LINES,
+ABOUT THE OTHER DIRECTION.** That gate exists because `strip_comments` walked a stylesheet as bytes
+and did `out.push(b[i] as char)` — *"identity for ASCII; Latin-1 widening for everything else"* — and
+it documents the consequences at length. Nobody asked whether the way OUT did the same thing. It did,
+for about two hundred ticks, in seven places.
+
+⚠ The reason both survived is written in that gate's own closing sentence: *"a bug invisible to the
+whole alphabet your tests use is not found by writing more of them."* Every CSS test in this repo is
+ASCII, and ASCII through this seam is identity.
+
+**WPT.** `css/css-fonts` 3,876 → **4,045** (+169, 51.3% → 53.6%) — `test_font_family_parsing` alone is
+530 subtests of `font setter should parse serialized form to identical serialization` on non-ASCII
+family names. `css/css-values` +64 on a refreshed sweep.
+
+**Gates.** `G_CSS_UTF8` +5 rows (the return direction, with both controls); `G_TRACK_SRC` +1 (a
+non-ASCII cue through the real `<track src>` parser). Proven red by three mutations: revert
+`host_css_serialize` → `setget:32032,35937`; revert all CSS seams → same; revert the VTT/MSE seam →
+`cuecps=231,180,160,232,177,161,32,99,97,102,195,169`, eleven characters where there are seven.

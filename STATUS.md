@@ -22,7 +22,7 @@ ORACLE_HANGS:      0?   ← Bar 0, on OUR clock (manuk_ms > 30s). Outranks every
 ORACLE_UNATTRIB:   0   ← oracle process hit its watchdog. Whose time? UNKNOWN — never ours by default.
 PENDING_GATES:     G_SPAWN G_POOL_ISOLATION
 SINGLE_SITE_TICKS: 0                    (this audit window — a rising count is the drift signal)
-UPDATED:           2026-08-26
+UPDATED:           2026-08-27
 ```
 
 
