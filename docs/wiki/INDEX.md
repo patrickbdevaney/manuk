@@ -1024,6 +1024,7 @@
   - L4533 · JS_NewStringCopyZ reads Latin-1: the SAME mojibake as t~950's stylesheet bug, at the other boundary (t1352)
   - L4593 · The font shorthand's computed value (t1353)
   - L4641 · font-family's computed value is a SEQUENCE of identifiers, and this is where we leave Chrome (t1354)
+  - L4697 · appearance: the markup path rendered it and the CSSOM path threw it away (t1355)
 
 ## `<dialog>`, `popover`, and the top layer (ticks 194-195)
 `docs/wiki/dialog-and-top-layer.md`
@@ -2388,4 +2389,4 @@
   - L231 · Both named mechanisms are subsystem work
 
 ---
-2295 sections across 22 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+2296 sections across 22 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.

@@ -1023,4 +1023,4 @@ tick	sha	epoch	iso	delta_s	shape	wall_s	files	added	deleted	gates	claims	wpt_pas
 1335	7c980543	1787280139	2026-08-20T22:42:19-04:00	869	measurement	997	4	111	32	502	81	3896	6960	0	642	0	repubblica's article cards are short by exactly the figure's height, and FIVE reductions failed to reproduce it (2026-08-20)
 1336	75637aa9	1787282208	2026-08-20T23:16:48-04:00	2069	measurement	997	4	129	32	502	81	3896	6960	0	642	0	the article's box is ZERO tall and its child sits ABOVE it: the child is out of flow for us and in flow for Chrome (2026-08-20)
 1337	5a474f82	1787284004	2026-08-20T23:46:44-04:00	1796	capability	997	9	239	34	503	81	3896	6960	0	642	0	`getComputedStyle(el).flex` was `undefined` while flex layout worked (2026-08-20)
-1338	2bb738d4	1787808275	2026-08-27T01:24:35-04:00	524271	capability	997	10	332	35	507	81	3896	6960	0	642	0	a percentage reconstructed by differencing Au-quantised samples loses its identity at zero (2026-08-20)
+1338	31ee2883	1787810923	2026-08-27T02:08:43-04:00	526919	capability	997	12	550	50	507	81	3896	6960	0	642	0	a percentage reconstructed by differencing Au-quantised samples loses its identity at zero (2026-08-20)

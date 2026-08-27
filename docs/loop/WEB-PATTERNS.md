@@ -8432,3 +8432,26 @@ cost three subtests. **When the oracle and the metric disagree on a pure SERIALI
 no capability behind it, nothing a page can or cannot do — the metric wins**, and the divergence gets
 written into the function's own doc comment so the next reader who probes Chrome does not "fix" it
 back.
+
+---
+
+## t1355 — the custom dropdown that only worked from a stylesheet
+
+`appearance: none` on a `<select>` is how **every** custom dropdown on the web is built — it is the
+first line of every design system's select, combobox and multiselect. From a stylesheet or a `style=`
+attribute it worked. From `el.style.appearance = 'none'` it did nothing at all, and that is the path
+every CSS-in-JS runtime, every React `style={{}}` prop and every imperative theme switcher uses.
+
+⭐⭐⭐ **The class: A PROPERTY WITH TWO ENTRANCES, AND ONLY ONE OF THEM GUARDED BY A VALIDATOR.**
+The markup path parsed the declaration with this engine's own cascade. The CSSOM path validated it
+first — through Stylo, which does not have the property in its servo build — and dropped it. Both
+paths were "working"; they simply did not agree about what the engine can do, and the one that
+asked the wrong authority was the one scripts use.
+
+⚠ The check that finds this whole family is **THE SAME DECLARATION THROUGH BOTH DOORS**: set the
+property in markup, measure; set it through `el.style`, measure; the two numbers must be equal. Not
+"does the property read back" — `getPropertyValue` returning `''` looks like an unset property, which
+is exactly what an author would see if they had never written it.
+
+⚠⚠ And the second half: a value that reads back correctly is still not a value that DOES anything.
+The gate asserts the `<select>` NARROWS after the CSSOM write, not merely that the string round-trips.

@@ -7046,7 +7046,9 @@ impl Ctx<'_> {
         let reserve = (widest - shown).max(0.0);
         // A LIST BOX has no dropdown arrow — Chrome-measured: the same options give 59.36 as a list
         // box and 76.00 as a dropdown, a 16.6px strip that appears only when `rows == 1`.
-        if select_list_rows(self.dom, node).is_some() || self.style_of(node).appearance_none {
+        if select_list_rows(self.dom, node).is_some()
+            || self.style_of(node).appearance == manuk_css::Appearance::None
+        {
             return reserve;
         }
         reserve + 17.0

@@ -1079,7 +1079,7 @@ pub fn cascade_via_stylo_sized(
             cs.field_sizing_content = m.field_sizing_content;
             // `appearance: none` — same gecko-only fence, and it must land before the hints for
             // the same reason: a `<select>`'s reserved arrow width is decided downstream of it.
-            cs.appearance_none = m.appearance_none;
+            cs.appearance = m.appearance;
         }
         timed(&mut ph.hints_ns, || {
             apply_presentational_hints(dom, node, &mut cs)
@@ -3363,6 +3363,33 @@ pub fn serialize_declaration(property: &str, value: &str) -> Option<String> {
     if property.contains([':', ';', '{', '}']) || value.contains(['{', '}']) {
         return None;
     }
+    // ── ⚠⚠⚠ **`appearance` IS `engine="gecko"` IN STYLO'S SERVO BUILD, AND THIS ENGINE RENDERS IT
+    //    ANYWAY** — so Stylo declines the declaration below and the CSSOM silently dropped a
+    //    property the MARKUP path honours. Measured, a `<select>` with one `alpha` option:
+    //
+    //    ```text
+    //      <select>                                  56px
+    //      <select style="appearance:none">          39px   ← the dropdown-arrow reserve is dropped
+    //      <select style="-webkit-appearance:none">  39px
+    //      el.style.appearance = 'none'              56px   ← same declaration, NO effect
+    //    ```
+    //
+    //    `appearance:none` on a `<select>` is how every custom dropdown on the web is built, and
+    //    every CSS-in-JS runtime and inline-`style` framework sets it through exactly the path that
+    //    did nothing. The cascade already parses it (`manuk_css::appearance_from_keyword`, reached
+    //    from the MinimalCascade that `stylo_engine` copies `appearance` out of); this is the same
+    //    keyword set, so the two cannot disagree about which values are valid.
+    //
+    //    ⚠ The SPECIFIED value is echoed back, not the computed one — CSSOM's inline declaration
+    //    reports what the author wrote. `textfield` reads back as `textfield` even though it
+    //    COMPUTES to `auto` here, which is the correct split between the two surfaces.
+    if matches!(
+        property.to_ascii_lowercase().as_str(),
+        "appearance" | "-webkit-appearance"
+    ) {
+        let v = value.trim().to_ascii_lowercase();
+        return crate::appearance_from_keyword(&v).map(|_| v);
+    }
     // The same pref set `supports_condition` uses, for the same reason: a serializer configured
     // differently from the parser that cascades would normalise a property the cascade drops.
     stylo_static_prefs::set_pref!("layout.grid.enabled", true);
@@ -3503,6 +3530,30 @@ pub fn supports_condition(condition: &str) -> bool {
     // declaration (`CSS.supports('display: flex')`). Wrap only when the caller did not, and leave
     // compound conditions (`(a) and (b)`, `not (a)`) alone.
     let trimmed = condition.trim();
+    // ── ⚠⚠⚠ **`appearance` AGAIN, AND `CSS.supports` MUST DESCRIBE *THIS* ENGINE (t1180).** Stylo's
+    //    servo build has the property as `engine="gecko"` and would answer NO, while this engine
+    //    genuinely renders it — a `<select>` with `appearance:none` measures 39px against 56px. An
+    //    honest `no` for a capability we HAVE is the mirror of the false `yes` that rule was written
+    //    about, and it is what made `el.style.appearance = 'none'` a silent no-op: the setter
+    //    validates through here first.
+    //
+    //    ⚠ Bare declarations only. A COMPOUND condition mentioning `appearance` still falls through
+    //    to Stylo and answers `false` — narrower than the truth, and the direction this file
+    //    prefers when it cannot be exact.
+    {
+        let bare = trimmed
+            .strip_prefix('(')
+            .and_then(|t| t.strip_suffix(')'))
+            .unwrap_or(trimmed);
+        if let Some((prop, val)) = bare.split_once(':') {
+            if matches!(
+                prop.trim().to_ascii_lowercase().as_str(),
+                "appearance" | "-webkit-appearance"
+            ) {
+                return crate::appearance_from_keyword(val.trim()).is_some();
+            }
+        }
+    }
     let wrapped = if trimmed.starts_with('(') || trimmed.starts_with("not ") {
         trimmed.to_string()
     } else {

@@ -2699,6 +2699,12 @@ const COMPUTED_STD_NAMES: &[&str] = &[
     "font-style",
     "font-family",
     "font",
+    // ⚠ BOTH spellings, because both are real properties a page reads and the prefixed one is what
+    // the majority of shipped CSS writes. `alias_pairs_js` gives `-webkit-appearance` the
+    // `webkitAppearance` camel form; the uppercase `WebkitAppearance` that Chrome ALSO exposes is
+    // appended as a literal pair beside the generated table.
+    "appearance",
+    "-webkit-appearance",
     "line-height",
     "text-align",
     "display",
@@ -2990,6 +2996,16 @@ fn cs_proto_js() -> String {
             .chain(extra_names().iter().copied())
             .chain(COMPUTED_UNENUMERATED_NAMES.iter().copied()),
     ));
+    // ⚠ Chrome exposes the prefixed appearance under BOTH camel spellings and WPT asserts both;
+    // `alias_pairs_js` produces only the lowercase one (it strips the leading `-` before
+    // camel-casing, which is right for every other vendor property), so the uppercase pair is
+    // appended here as a literal.
+    // ⚠ The pair is [TARGET, SOURCE] and the loop reads the SOURCE: `v=o[a[i][1]]` then
+    // `o[a[i][0]]=v`. The generated table therefore already builds `-webkit-appearance` FROM
+    // `webkitAppearance`; what is missing is the uppercase spelling Chrome also exposes, whose
+    // source is that same camel name. Writing it the other way round reads an `undefined` and
+    // defines nothing — which is exactly what the first attempt did.
+    out.push_str(",[\"WebkitAppearance\",\"webkitAppearance\"]");
     out.push_str(
         "];globalThis.__csAlias=function(o,x){\
          var a=globalThis.__csAliasStd,i,v;\
@@ -3088,6 +3104,22 @@ fn computed_style_js(
     // titling-caps` and `font-size-adjust: 0.5` both make `getComputedStyle(el).font` `""`, not a
     // shortened form. Neither longhand is modelled here, so the case cannot arise yet; when either
     // lands, this is the rule it must bring with it.
+    // ── **`appearance`'s COMPUTED value, and it says only what this engine will actually DO.**
+    //
+    // Two values, because there are two behaviours: draw the platform control or do not. The
+    // SPECIFIED value is a different surface — `el.style.appearance` echoes `textfield` back
+    // unchanged — and this is the computed one, which is `auto` for every valid non-`none` keyword.
+    // WPT's `appearance-cssom-001` accepts exactly that for the compat set (`[value, "auto"]`).
+    //
+    // ⚠ It was `undefined`, and that ONE absence failed **300 subtests in one file** without ever
+    // being about `appearance`'s behaviour: the test reads `initial_appearance =
+    // getComputedStyle(button).appearance` once at the top and compares every invalid-value case
+    // against it, so an `undefined` reference turned every row into
+    // `assert_in_array("", [undefined])`.
+    let appearance_css = match cs.appearance {
+        manuk_css::Appearance::None => "none",
+        manuk_css::Appearance::Auto => "auto",
+    };
     let font_shorthand = {
         let mut parts: Vec<String> = Vec::new();
         if cs.italic {
@@ -3401,7 +3433,7 @@ fn computed_style_js(
     format!(
         "(function(){{var __P=globalThis.__csProto;var o={{\
           color:{}, backgroundColor:{}, fontSize:{}, fontWeight:{}, fontStyle:{}, \
-          fontFamily:{}, font:{}, lineHeight:{}, textAlign:{}, display:{}, position:{}, overflow:{}, overflowX:{}, overflowY:{}, \
+          fontFamily:{}, font:{}, appearance:{}, webkitAppearance:{}, lineHeight:{}, textAlign:{}, display:{}, position:{}, overflow:{}, overflowX:{}, overflowY:{}, \
           visibility:{}, whiteSpace:{}, pointerEvents:{}, userSelect:{}, webkitUserSelect:{}, colorScheme:{}, \
           scrollbarWidth:{}, scrollbarColor:{}, opacity:{}, \
           width:{}, height:{}, inlineSize:{}, blockSize:{}, marginTop:{}, marginRight:{}, marginBottom:{}, marginLeft:{}, \
@@ -3431,6 +3463,8 @@ fn computed_style_js(
         q(if cs.italic { "italic" } else { "normal" }),
         q(&family),
         q(&font_shorthand),
+        q(appearance_css),
+        q(appearance_css),
         q(&format!("{}px", cs.line_height)),
         q(text_align),
         q(display),
@@ -15630,6 +15664,21 @@ const CSSOM_PRELUDE: &str = r#"
     var g = globalThis;
     var dash = function (p) { return String(p).replace(/[A-Z]/g, function (m) { return '-' + m.toLowerCase(); }); };
     var camel = function (p) { return String(p).replace(/-([a-z])/g, function (_, c) { return c.toUpperCase(); }); };
+    // ⚠⚠⚠ **A VENDOR-PREFIXED IDL ATTRIBUTE HAS TWO SPELLINGS AND `dash` ONLY BUILT ONE.**
+    // CSSOM gives `-webkit-appearance` both `WebkitAppearance` and `webkitAppearance`, and every
+    // browser exposes both. `dash` turns a capital into `-` + lowercase, so `WebkitAppearance`
+    // arrives as `-webkit-appearance` (the leading capital supplies the dash) while
+    // `webkitAppearance` arrives as `webkit-appearance` — a property name that does not exist, so
+    // the read returned `''` and the write went nowhere.
+    //
+    // ⚠ STYLE ONLY. `dash` is shared with `dataset`, where `dataset.webkitFoo` really is
+    // `data-webkit-foo` and a leading dash would be wrong. The prefix list is the three that name
+    // real CSS properties; `o-` is left out because `overflowX`-shaped names would need a
+    // second rule to exclude and no `-o-` property is worth it.
+    var sdash = function (p) {
+        var d = dash(p);
+        return /^(webkit|moz|ms)-/.test(d) ? '-' + d : d;
+    };
 
     // ---- element.style ------------------------------------------------------------------
     // Memoised on the ELEMENT (a hidden expando), NOT in a global id-keyed map. The reflector cache
@@ -15801,16 +15850,16 @@ const CSSOM_PRELUDE: &str = r#"
         };
         var api = {
             setProperty: function (k, v, prio) {
-                var o = parse(); var d = dash(k); var val = stripImp(v);
+                var o = parse(); var d = sdash(k); var val = stripImp(v);
                 // An empty value is `removeProperty`, per CSSOM — not a declaration to validate.
                 if (val === '') { delete o[d]; write(o); return; }
                 if (!valid(d, val)) return;
                 if (prio && /important/i.test(String(prio))) val += ' !important';
                 o[d] = val; write(o);
             },
-            removeProperty: function (k) { var o = parse(); var d = dash(k); var old = o[d] || ''; delete o[d]; write(o); return stripImp(old); },
-            getPropertyValue: function (k) { return read(dash(k)); },
-            getPropertyPriority: function (k) { return hasImp(parse()[dash(k)] || '') ? 'important' : ''; },
+            removeProperty: function (k) { var o = parse(); var d = sdash(k); var old = o[d] || ''; delete o[d]; write(o); return stripImp(old); },
+            getPropertyValue: function (k) { return read(sdash(k)); },
+            getPropertyPriority: function (k) { return hasImp(parse()[sdash(k)] || '') ? 'important' : ''; },
             item: function (i) { var ks = Object.keys(parse()); return ks[i] === undefined ? '' : ks[i]; }
         };
         var p = new Proxy(api, {
@@ -15825,13 +15874,13 @@ const CSSOM_PRELUDE: &str = r#"
                 // A camelCase/dash read (`style.color`) returns the value WITHOUT its `!important`
                 // priority, and SERIALIZED — the IDL attribute and `getPropertyValue` are two
                 // spellings of one read and must not disagree, so both go through `read`.
-                return read(dash(prop));
+                return read(sdash(prop));
             },
             set: function (t, prop, v) {
                 if (prop === 'cssText') { el.setAttribute('style', String(v)); return true; }
                 if (typeof prop !== 'string') return true;
                 var o = parse();
-                var k = dash(prop);
+                var k = sdash(prop);
                 if (v === '' || v === null || v === undefined) { delete o[k]; write(o); return true; }
                 var s = String(v);
                 // ⚠ The IDL attribute path REJECTS a priority, while `setProperty(k, v, 'important')`
@@ -15865,7 +15914,7 @@ const CSSOM_PRELUDE: &str = r#"
             // candidate list behaves exactly as it did before rather than worse.
             has: function (t, prop) {
                 if (Object.prototype.hasOwnProperty.call(t, prop)) return true;
-                if (dash(prop) in parse()) return true;
+                if (sdash(prop) in parse()) return true;
                 if (typeof prop !== 'string') return false;
                 if (!g.__cssSupportedSet) {
                     var names = (typeof g.__cssSupportedProps === 'function')
@@ -15874,9 +15923,9 @@ const CSSOM_PRELUDE: &str = r#"
                     names.split(' ').forEach(function (n) { if (n) { set[n] = 1; } });
                     g.__cssSupportedSet = set;
                 }
-                return g.__cssSupportedSet[dash(prop)] === 1;
+                return g.__cssSupportedSet[sdash(prop)] === 1;
             },
-            deleteProperty: function (t, prop) { var o = parse(); delete o[dash(prop)]; write(o); return true; },
+            deleteProperty: function (t, prop) { var o = parse(); delete o[sdash(prop)]; write(o); return true; },
             ownKeys: function () { return Object.keys(parse()).map(camel); }
         });
         el.__styleView = p;

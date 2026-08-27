@@ -90591,3 +90591,90 @@ guard → `q6:["inherit"]`. Full `manuk-page` suite: **509 of 509**; `manuk-css`
 `font-computed.html` still fails on. (b) `test_font_family_parsing` is still 361: re-histogram it now
 that both the encoding and the serializer are right. (c) The teardown Bar-0 (t1349's reproducer).
 (d) t1348's residues. (e) I3's mechanical debt.
+
+## t1355 — the property with two entrances, and only one of them asked the right authority
+
+TICK SHAPE: capability. Board re-run at the top of this tick and diffed against t1354's copy:
+**unchanged** except its own tally. **`css/css-ui` 1,003 → 1,333 (+330, 52.8% → 70.2%)**,
+`css/css-transforms` +61, and `cssom` measured for the first time at **2,697/3,507**.
+**WPT TOTAL +3,088.**
+
+### HOW IT WAS FOUND — THE SURVEY METHOD, THIRD AREA
+
+After three ticks of diminishing returns inside `css/css-fonts` (+169, +45, +2), I stopped drilling
+and surveyed two unexamined core areas. `css/css-ui` had **326 failures in ONE file**,
+`appearance-cssom-001.html`, and 300 of those were two strings:
+
+```text
+   150  assert_in_array: getPropertyValue(appearance) value "" not in array [undefined]
+   150  assert_in_array: getPropertyValue(-webkit-appearance) value "" not in array [undefined]
+```
+
+⭐ `[undefined]` as an EXPECTED set is the tell: the test caches
+`initial_appearance = getComputedStyle(button).appearance` once at the top and compares every
+invalid-value row against it. **One absent computed value turned 300 rows into
+`assert_in_array("", [undefined])`** — a cascade that was never about `appearance`'s behaviour.
+
+### THE BUG: THE MARKUP PATH RENDERED IT AND THE CSSOM PATH THREW IT AWAY
+
+Measured on a `<select>` with one `alpha` option:
+
+```text
+   <select>                                   56px
+   <select style="appearance:none">           39px    ← the dropdown-arrow reserve is dropped
+   <select style="-webkit-appearance:none">   39px
+   el.style.appearance = 'none'               56px    ← THE SAME DECLARATION, NO EFFECT
+```
+
+⭐⭐⭐ **A PROPERTY WITH TWO ENTRANCES, AND ONLY ONE GUARDED BY A VALIDATOR.** The markup path parses
+`appearance` with this engine's own MinimalCascade (which `stylo_engine` copies the value out of).
+The CSSOM path validates first, through **Stylo — where `appearance` is `engine="gecko"` and absent
+from the servo build** — so `CSS.supports` answered NO and t1181's validating setter dropped a
+declaration the engine honours. ⚠ An honest NO for a capability we HAVE is the mirror of the false
+YES that rule was written about, and `appearance:none` on a `<select>` is how every custom dropdown
+on the web is built.
+
+Three seams, one property: `CSS.supports`/`serialize_declaration` (the validator), the computed value
+(absent), and `webkitAppearance` (lowercase w) — `dash()` maps a capital to `-` + lowercase, so
+`WebkitAppearance` supplies its own leading dash and the lowercase form produced `webkit-appearance`,
+a property that does not exist. ⚠ That third fix is scoped to STYLE and not to `dataset`, where
+`dataset.webkitFoo` really is `data-webkit-foo`.
+
+### THE MODEL: TWO VALUES, BECAUSE THIS ENGINE HAS TWO BEHAVIOURS
+
+`Appearance::{None, Auto}` — draw the platform control or do not. Every valid non-`none` keyword
+computes to `Auto`, which is exactly what `appearance-cssom-001` accepts for the compat set
+(`[value, "auto"]`). Invalid keywords are DROPPED.
+
+⚠ **`auto` is a UA RULE KEYED ON THE TAG, not an initial value** — Chrome-measured: `<button>`,
+`<input>`, `<select>`, `<textarea>` → `auto`; a `<div>` → `none`; a `<div>` with `appearance:auto` →
+`auto`. A constant passes the first row and fails the second, and both are gate rows.
+
+⚠⚠ **The two surfaces disagree ON PURPOSE.** `el.style.appearance` echoes the SPECIFIED value
+(`textfield` stays `textfield`); the COMPUTED value says what the engine will DO (`auto`). Collapsing
+them either way is a lie in one direction or the other.
+
+### ⚠ A GATE CORRECTED, NOT JUST EXTENDED
+
+`G_APPEARANCE_NONE`'s headline is *"what `appearance: none` is actually worth to THIS engine"* and its
+conclusion was **"a no-op here"** — measured on border, background and padding. It is not a no-op for
+WIDTH: a `<select>` under it stops reserving the dropdown arrow, 56px → 39px. The three original
+claims are all still true; the headline generalised from them. A new row measures the width and says
+so. ⭐ *A gate that measures three properties and concludes "no-op" has said something about three
+properties.*
+
+**Proven RED**, four mutations, four arms: drop the UA rule → `cDiv`/`cBtn`; `CSS.supports` declines
+again → `jsSet:[none]`; revert the vendor spelling → `inlineWk`; accept invalid keywords →
+`invalid:[]`. ⚠ The `inlineWk` row did not exist at first and the vendor-spelling mutation stayed
+GREEN — **the fifth tick running where the mutation pass found a gate hole** (t1345, t1348, t1350,
+t1352, now t1355). Full `manuk-page` suite: **509 of 509**; `dom`, `html/dom`, `css/css-values`,
+`css/css-fonts` re-run and unchanged.
+
+⚠ `cssom` was a banked-at-ZERO row in `WPT-AREAS.tsv` and is now measured at 2,697/3,507 — the
+aperture fix this loop has had to make five times before (t1176, t1273, t1350's `css-writing-modes`
+note). A row of zeros is not a measurement of zero.
+
+**NEXT.** (a) `css/css-ui`'s next mass: `animation/accent-color-interpolation` (204) is frontier;
+`parsing/interactivity-computed` (46) and `parsing/cursor-computed` (39) are real. (b) `cssom` at
+76.9% is newly visible and unsurveyed — 810 failures nobody has looked at. (c) The three unmodelled
+font longhands (t1353). (d) The teardown Bar-0 (t1349). (e) t1348's residues. (f) I3's debt.

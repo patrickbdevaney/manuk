@@ -4691,3 +4691,61 @@ against the control, two fixed**. Small, and the finding is the Chrome/spec spli
 
 **Gate.** `G_COMPUTED_STYLE` +6 rows. Proven red by three mutations: never quote → `q2`; require a
 SINGLE identifier (the Chrome rule) → `q1`; drop the CSS-wide-keyword guard → `q6`.
+
+---
+
+## `appearance`: the markup path rendered it and the CSSOM path threw it away (t1355)
+
+**Symptom, measured on a `<select>` with one `alpha` option:**
+
+```text
+   <select>                                   56px
+   <select style="appearance:none">           39px   ← the dropdown-arrow reserve is dropped
+   <select style="-webkit-appearance:none">   39px
+   el.style.appearance = 'none'               56px   ← THE SAME DECLARATION, NO EFFECT
+```
+
+`appearance:none` on a `<select>` is how every custom dropdown on the web is built, and every
+CSS-in-JS runtime and inline-`style` framework applies it through exactly the path that did nothing.
+
+**Cause — three seams, one property.**
+
+1. **`CSS.supports` said no.** `appearance` is `engine="gecko"` in Stylo's servo build, so
+   `supports_condition` answered false and `el.style`'s validating setter (t1181) dropped the
+   declaration. The markup path never asked Stylo: `appearance` is parsed by this engine's own
+   MinimalCascade, which `stylo_engine` then copies the value out of. ⚠ An honest NO for a
+   capability we HAVE is the mirror of the false YES that rule was written about.
+2. **The computed value was `undefined`** — it had no `ComputedStyle` representation beyond a
+   boolean `appearance_none`.
+3. **`webkitAppearance` (lowercase w) mapped to nothing.** `dash()` turns a capital into `-` +
+   lowercase, so `WebkitAppearance` supplies its own leading dash and `webkitAppearance` produced
+   `webkit-appearance`, a property that does not exist.
+
+**The model: two values, because this engine has two behaviours.** `Appearance::{None, Auto}` —
+draw the platform control or do not. Every valid non-`none` keyword (`textfield`, `button`, …)
+computes to `Auto`, which is what WPT's `appearance-cssom-001` accepts for the compat set
+(`[value, "auto"]`) and is the honest answer for an engine that does not draw a text field
+differently from a button. Invalid keywords are DROPPED.
+
+⚠ **`auto` is a UA RULE keyed on the tag, not an initial value.** Chrome-measured: `<button>`,
+`<input>`, `<select>`, `<textarea>` compute `auto`; a `<div>` computes `none`; a `<div>` with
+`appearance:auto` computes `auto`. A constant would pass the first row and fail the second.
+
+⚠⚠ **The two surfaces disagree on purpose.** `el.style.appearance` echoes the SPECIFIED value
+(`textfield` stays `textfield`); `getComputedStyle(el).appearance` says what the engine will DO
+(`auto`). Collapsing them either way is a lie in one direction or the other.
+
+**WPT.** `css/css-ui` 1,003 → **1,333 (+330, 52.8% → 70.2%)**, `css/css-transforms` +61 (the
+lowercase vendor-spelling fix reaches `-webkit-transform` too), and `cssom` measured for the first
+time at **2,697/3,507**. ⭐ 300 of the 330 came from ONE absent computed value:
+`appearance-cssom-001` caches `getComputedStyle(button).appearance` as its reference and compares
+every invalid-value row against it, so `undefined` turned each into
+`assert_in_array("", [undefined])` — **a cascade of 300 that was never about `appearance`'s
+behaviour.**
+
+**Gate.** `G_APPEARANCE_NONE`, +12 rows, and a CORRECTION: that gate's headline said `appearance:
+none` is "a no-op here", measured on border, background and padding. It is not a no-op for WIDTH,
+and a new row says so. *A gate that measures three properties and concludes "no-op" has said
+something about three properties.* Proven red by four mutations: drop the UA rule → `cDiv`/`cBtn`;
+`CSS.supports` declines again → `jsSet:[none]`; revert the vendor spelling → `inlineWk`; accept
+invalid keywords → `invalid:[]`.

@@ -717,6 +717,25 @@ pub enum JustifyContent {
     SpaceEvenly,
 }
 
+/// **`appearance` — whether this element is drawn as a NATIVE WIDGET.**
+///
+/// Two values, because this engine has exactly two behaviours: it draws the platform control or it
+/// does not. CSS UI 4 has a dozen more keywords (`textfield`, `menulist-button`, `button`, …); every
+/// one of them that is VALID computes to `Auto` here, which is what WPT's own
+/// `appearance-cssom-001` accepts for the compat set (`[value, "auto"]`) and is the honest answer
+/// for an engine that does not draw a text field differently from a button.
+///
+/// ⚠ The SPECIFIED value is preserved separately by the CSSOM (`el.style.appearance` echoes what the
+/// author wrote); this is the COMPUTED one, and it says only what the engine will actually do.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Appearance {
+    /// No native widget — the element is drawn from its own box, border and background alone.
+    None,
+    /// The platform control. The UA default for form controls; the initial value everywhere else
+    /// is `None`.
+    Auto,
+}
+
 /// `align-items` — cross-axis alignment of flex items.
 ///
 /// ⚠⚠⚠ **`Normal` IS NOT `Stretch`, AND THE TWO WERE ONE VARIANT.** They behave identically in
@@ -1388,7 +1407,7 @@ pub struct ComputedStyle {
     /// named `clone_appearance` found for `&style::properties::ComputedValues`*), so this is
     /// recovered from `MinimalCascade` and merged in `stylo_engine` — the same fence as
     /// `scrollbar-width` and `-webkit-line-clamp`.
-    pub appearance_none: bool,
+    pub appearance: Appearance,
     /// `order` — a flex/grid item's VISUAL order among its siblings (initial `0`, may be negative).
     ///
     /// Only the visual order: the DOM, the accessibility tree and sequential focus keep source order,
@@ -1796,7 +1815,7 @@ impl ComputedStyle {
             scrollbar_width: ScrollbarWidth::Auto,
             scrollbar_color: ScrollbarColor::Auto,
             field_sizing_content: false,
-            appearance_none: false,
+            appearance: Appearance::None,
             order: 0,
             line_height_normal: true,
             mask_image: None,
@@ -4996,6 +5015,13 @@ impl MinimalCascade {
 fn apply_ua_defaults(s: &mut ComputedStyle, el: &ElementData) {
     use Display::*;
     let tag = el.name.as_str();
+    // ⚠ **`appearance: auto` IS A UA RULE, NOT AN INITIAL VALUE.** A `<div>` computes `none` and a
+    // `<button>` computes `auto` — Chrome-measured on both — so the default is keyed on the tag.
+    // It is set BEFORE the author declarations are applied, which is what lets `appearance: none`
+    // on a control, and `appearance: auto` on a div, both take effect.
+    if tag_has_native_appearance(tag) {
+        s.appearance = Appearance::Auto;
+    }
     let (display, top_bottom_em, weight, scale): (Display, f32, u16, f32) = match tag {
         "html" | "body" | "div" | "section" | "article" | "header" | "footer" | "nav" | "main"
         | "aside" | "figure" | "figcaption" | "address" => (Block, 0.0, 400, 1.0),
@@ -6478,7 +6504,12 @@ fn apply_declaration(s: &mut ComputedStyle, d: &Declaration, parent_fs: f32) {
         // The `-webkit-` alias is not decoration — it is what the majority of shipped CSS writes,
         // usually in the same declaration block as the unprefixed one.
         "appearance" | "-webkit-appearance" => {
-            s.appearance_none = v.trim().eq_ignore_ascii_case("none");
+            // ⚠ An INVALID keyword leaves the property alone — CSS drops a declaration it cannot
+            // parse, and `appearance-cssom-001` asserts exactly that (`bogus-button` must read back
+            // as the empty string, not as itself). `None` from the mapper means "not a value".
+            if let Some(a) = appearance_from_keyword(v.trim()) {
+                s.appearance = a;
+            }
         }
         // `order` — kept in lockstep with the Stylo path (`clone_order`), because the two cascades
         // disagreeing on a property is how a `<source>` got 19px of height in one configuration and
@@ -9542,4 +9573,43 @@ pub fn serialize_font_family_list(names: &[String]) -> String {
         .map(|n| serialize_font_family_name(n))
         .collect::<Vec<_>>()
         .join(", ")
+}
+
+/// **One `appearance` keyword → what this engine will actually DO, or `None` if the value is
+/// invalid and the declaration must be dropped.**
+///
+/// CSS UI 4 splits the keywords three ways and this collapses two of them:
+///
+/// * `none` → [`Appearance::None`];
+/// * `auto`, `<compat-special>` (`textfield`, `menulist-button`) and `<compat-auto>` (`button`,
+///   `checkbox`, `listbox`, `menulist`, `meter`, `progress-bar`, `radio`, `searchfield`,
+///   `textarea`) → [`Appearance::Auto`], because this engine draws one native control or none —
+///   which is what WPT's `appearance-cssom-001` accepts for the compat set (`[value, "auto"]`);
+/// * anything else — and the list of legacy `-moz-`/`-webkit-` widget names is long — is INVALID,
+///   and an invalid declaration is dropped rather than coerced.
+///
+/// ⚠ The `<compat-special>` pair is the honest cost of the collapse: WPT expects those two to
+/// compute to THEMSELVES, and they compute to `auto` here. Two values, named rather than faked.
+pub fn appearance_from_keyword(v: &str) -> Option<Appearance> {
+    let k = v.trim().to_ascii_lowercase();
+    match k.as_str() {
+        "none" => Some(Appearance::None),
+        "auto" | "textfield" | "menulist-button" | "button" | "checkbox" | "listbox"
+        | "menulist" | "meter" | "progress-bar" | "radio" | "searchfield" | "textarea" => {
+            Some(Appearance::Auto)
+        }
+        _ => None,
+    }
+}
+
+/// The elements this engine draws a NATIVE CONTROL for — the UA sheet's `appearance: auto`.
+///
+/// ⚠ Chrome-measured: `<button>`, `<input>` (every type probed), `<select>` and `<textarea>` all
+/// compute `auto`; a `<div>` computes `none`. That asymmetry is the whole reason this is a
+/// tag-keyed default and not a global initial value.
+pub fn tag_has_native_appearance(tag: &str) -> bool {
+    matches!(
+        tag,
+        "button" | "input" | "select" | "textarea" | "meter" | "progress"
+    )
 }
