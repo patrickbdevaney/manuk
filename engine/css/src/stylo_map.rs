@@ -344,10 +344,21 @@ fn map_text_align(t: StyloTextAlign) -> TextAlign {
         // `start` text, so the whole Arabic/Hebrew/Persian web read left-aligned.
         StyloTextAlign::Start => TextAlign::Start,
         StyloTextAlign::End => TextAlign::End,
-        StyloTextAlign::Right | StyloTextAlign::MozRight => TextAlign::Right,
-        StyloTextAlign::Center | StyloTextAlign::MozCenter => TextAlign::Center,
+        StyloTextAlign::Right => TextAlign::Right,
+        StyloTextAlign::Center => TextAlign::Center,
         StyloTextAlign::Justify => TextAlign::Justify,
-        // Left / MozLeft → left.
+        // ⚠⚠⚠ **`-moz-center` IS NOT `center`, AND COLLAPSING THEM CENTRED THE TEXT OF EVERY TABLE
+        // ON A LEGACY PAGE.** These three are HTML's legacy alignment (`<center>`,
+        // `<div align=center>`, `<td align=right>`); Chrome spells them `-webkit-*` and Stylo
+        // `-moz-*`. They differ from the CSS keywords in exactly two ways, and both were lost here:
+        // a `<table>` RESETS them to `start` (Stylo's own `adjust_for_table_text_align`, which fires
+        // only if the value survives as `MozCenter`), and they align BLOCK children too. Mapped to
+        // `Center` at this line, `news.ycombinator.com`'s story titles — a table inside `<center>` —
+        // rendered centred in their cells where Chrome left-aligns them, 166px out of place.
+        StyloTextAlign::MozRight => TextAlign::MozRight,
+        StyloTextAlign::MozCenter => TextAlign::MozCenter,
+        StyloTextAlign::MozLeft => TextAlign::MozLeft,
+        // Left → left.
         _ => TextAlign::Left,
     }
 }

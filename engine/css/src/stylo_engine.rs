@@ -232,7 +232,15 @@ const UA_CSS: &str = r#"
 html, body, div, section, article, header, footer, nav, main, aside, figure,
 figcaption, address, p, blockquote, ul, ol, li, dd, dt, pre, hr, h1, h2, h3, h4, h5, h6,
 form, fieldset, table, caption, center, menu, dl { display: block; }
-center { text-align: center; }
+/* ⚠⚠⚠ **`-moz-center`, NOT `center` — the two are different properties that share a name.** Written
+   as `center` this rule INHERITS into every table cell inside a `<center>`, and Chrome's does not:
+   a `<table>` resets the legacy `-webkit-*`/`-moz-*` keywords back to `start` (Stylo's own
+   `adjust_for_table_text_align`, which is already compiled into our build and fires only on these
+   keywords). `news.ycombinator.com` is the case — its whole page is a `<table>` inside a `<center>`,
+   so every story title rendered centred in its cell at x=295 where Chrome left-aligns it at 129.
+   The legacy keywords also align BLOCK children, which is what makes `<center>` centre a table at
+   all; see `apply_legacy_block_align` below. */
+center { text-align: -moz-center; }
 /* ⚠⚠⚠ **THE `dir` ATTRIBUTE IS A CASCADE INPUT, AND THIS SHEET DID NOT HAVE IT.** `dir="rtl"` was
    implemented only in `MinimalCascade`'s presentational hints and then *recovered* onto the computed
    style after Stylo had already run (`cs.direction = m.direction`, below). That is enough for the
@@ -1337,6 +1345,7 @@ pub fn cascade_via_stylo_sized(
     // with its ancestors' so every box carries an *effective* opacity and paint needs no ancestor
     // context. Walk the flat tree (shadow content included) in preorder.
     fold_effective_opacity(dom, &mut map);
+    apply_legacy_block_align(dom, &mut map);
 
     // **Shadow trees.** The walk above is over the *node* tree, and a shadow root is deliberately
     // not a child of its host — so shadow content never got a style here. Layout walks the **flat**
@@ -1407,6 +1416,87 @@ fn fold_effective_opacity(dom: &Dom, map: &mut StyleMap) {
         }
     }
     walk(dom, dom.root(), 1.0, map);
+}
+
+/// ⭐ **HTML's LEGACY ALIGNMENT ALIGNS BLOCK-LEVEL CHILDREN, WHICH IS THE ONLY REASON `<center>`
+/// CENTRES A TABLE** — and it is the half of `-webkit-center` that CSS's own `text-align: center`
+/// does not have. Chrome (`LayoutBoxModelObject::ComputeMarginsForDirection`, "Case One") reads it
+/// off the CONTAINING BLOCK's computed `text-align`:
+///
+/// > *"if both margins are auto and the child is narrower … **or** neither margin is auto and the
+/// > container's `text-align` is `-webkit-center`, centre the box."*
+///
+/// Measured against headless Chrome at 1200px, a 50px block and a `width=100` table:
+///
+/// ```text
+///                                          Chrome x   before   after
+///   <center><div width:50px>                 575         8      575
+///   <center><table width=100>                550         ~      550   (the old <center> hack)
+///   <div align=center><div width:50px>       575         8      575
+///   <div align=center><table width=100>      550         8      550
+///   <div style="text-align:center"><div>       8         8        8   CONTROL — CSS `center`
+///                                                                     does NOT move a block
+/// ```
+///
+/// The CONTROL row is the one that makes this a legacy-keyword rule rather than a `text-align`
+/// rule: `g_anon_block_inherits`'s `#k2` asserts that a real `text-align: center` leaves its block
+/// child at x=0, and that assertion must keep holding — which it does, because
+/// [`TextAlign::legacy_block_align`] answers `None` for every CSS value.
+///
+/// ⚠ **Expressed as `margin: auto`, which is why it must run over the tree and not per element.**
+/// The condition lives on the PARENT's computed style, so this is the same shape as
+/// `fold_effective_opacity` above: a preorder walk with the parent's value in hand. Written as a
+/// per-element rule it would have had to re-derive the parent's alignment from the DOM, which is
+/// exactly the `<center>`-tag-sniffing hack this replaces (and which could only ever see one of
+/// the four ways HTML spells the legacy alignment).
+fn apply_legacy_block_align(dom: &Dom, map: &mut StyleMap) {
+    fn walk(dom: &Dom, node: NodeId, parent_align: Option<crate::TextAlign>, map: &mut StyleMap) {
+        let mut own = None;
+        if let Some(cs) = map.get_mut(&node) {
+            own = cs.text_align.legacy_block_align();
+            // A block-level, in-flow box is what the legacy alignment moves. A float, an
+            // absolutely-positioned box and an inline are all placed by other rules, and an
+            // author's own `auto` margin must not be overwritten with a physical one.
+            let in_flow = matches!(
+                cs.position,
+                crate::Position::Static | crate::Position::Relative
+            ) && cs.float == crate::Float::None;
+            let block_level = matches!(
+                cs.display,
+                crate::Display::Block
+                    | crate::Display::Table
+                    | crate::Display::Flex
+                    | crate::Display::Grid
+                    | crate::Display::FlowRoot
+            );
+            if in_flow && block_level {
+                match parent_align {
+                    Some(crate::TextAlign::Center) => {
+                        if cs.margin.left != crate::Dim::Auto && cs.margin.right != crate::Dim::Auto
+                        {
+                            cs.margin.left = crate::Dim::Auto;
+                            cs.margin.right = crate::Dim::Auto;
+                        }
+                    }
+                    // `-webkit-right` in an LTR container pushes the box to the END edge: one auto
+                    // margin, on the start side. (`-webkit-left` is the default placement and needs
+                    // no declaration at all — which is why it has no arm here rather than an empty
+                    // one that looks like an oversight.)
+                    Some(crate::TextAlign::Right) => {
+                        if cs.margin.left != crate::Dim::Auto && cs.margin.right != crate::Dim::Auto
+                        {
+                            cs.margin.left = crate::Dim::Auto;
+                        }
+                    }
+                    _ => {}
+                }
+            }
+        }
+        for k in dom.flat_children(node) {
+            walk(dom, k, own, map);
+        }
+    }
+    walk(dom, dom.root(), None, map);
 }
 
 /// Apply HTML presentational hints that Stylo's cascade doesn't see (our `TElement` wall
@@ -1494,15 +1584,19 @@ fn apply_presentational_hints(dom: &Dom, node: NodeId, s: &mut crate::ComputedSt
         // ⚠ The declaration now lives in `presentational_hint_block`, at hint ORIGIN, which is
         // what also makes it lose to an author's `border-spacing` — see the note there. Nothing is
         // written onto the computed style here any more.
-        // `align="center"` centres the table; `<center>` does the same thing to its table child
-        // (Chrome implements it as `text-align: -webkit-center`, which centres block children too).
+        // `table align="center"` centres the TABLE ITSELF — HTML maps it to `margin-inline: auto`,
+        // not to a `text-align`, which is why it survives the table's own reset of the legacy
+        // keywords. (Its `left`/`right` siblings map to `float` and are not implemented; see NEXT.)
+        //
+        // ⚠ **The `<center>` half of this test is GONE and must not come back.** It read the PARENT
+        // TAG — so it saw `<center><table>` and none of the other three ways HTML spells the same
+        // alignment (`<div align=center>`, `<p align=center>`, an inherited `-moz-center`), and it
+        // could only ever move a `<table>`, never the `<div>` beside it. It is now
+        // `apply_legacy_block_align`, driven by the parent's computed `text-align`, which is where
+        // Chrome reads it from.
         let centered = el
             .attr("align")
-            .is_some_and(|a| a.eq_ignore_ascii_case("center"))
-            || dom
-                .parent(node)
-                .and_then(|p| dom.tag_name(p))
-                .is_some_and(|t| t == "center");
+            .is_some_and(|a| a.eq_ignore_ascii_case("center"));
         if centered && s.margin.left == crate::Dim::Px(0.0) && s.margin.right == crate::Dim::Px(0.0)
         {
             s.margin.left = crate::Dim::Auto;
@@ -3089,6 +3183,77 @@ fn presentational_hint_block(
     url_data: &UrlExtraData,
 ) -> Option<PropertyDeclarationBlock> {
     let tag = el.dom.tag_name(node)?;
+    let e0 = el.dom.element(node)?;
+    let mut css = String::new();
+    // ── **HTML's `align` ATTRIBUTE → `text-align`, AND IT IS THREE DIFFERENT MAPPINGS.**
+    //
+    // Measured in headless Chrome (`getComputedStyle().textAlign`), not reasoned from the prose:
+    //
+    // ```text
+    //   <div align=center>   -webkit-center     <h1 align=center>      center
+    //   <div align=left>     -webkit-left       <section align=center> center
+    //   <div align=right>    -webkit-right      <li align=right>       right
+    //   <div align=justify>  justify            <fieldset align=right> right
+    //   <div align=middle>   -webkit-center     <legend align=right>   right
+    //   <p align=center>     -webkit-center     <blockquote align=right> right
+    //   <tbody align=right>  -webkit-right      <img align=right>      start   (float:right)
+    //   <tr align=center>    -webkit-center     <table align=right>    start   (float:right)
+    //   <td align=center>    -webkit-center     <iframe align=right>   start   (float:right)
+    //   <col align=right>    -webkit-right      <hr align=right>       start
+    //   <caption align=right> -webkit-center*   <input align=right>    start
+    //   <td align=justify>   justify            <marquee align=right>  start
+    // ```
+    //
+    // (*the caption row read `-webkit-center` because its `<table>` ancestor is not what it
+    // inherits from — it maps like the other table parts.)
+    //
+    // So there are exactly three families and the middle one is the whole point of this tick:
+    //
+    // 1. **The replaced/floating set** — `img`, `object`, `embed`, `iframe`, `table`, plus `hr`,
+    //    `input`, `marquee` — where `align` means FLOAT or vertical alignment and must NOT become a
+    //    `text-align`. Excluded here; the float half is a separate, named mapping (see NEXT).
+    // 2. **`div`, `p` and the table parts** (`caption`, `thead`, `tbody`, `tfoot`, `tr`, `td`,
+    //    `th`, `col`, `colgroup`) — the LEGACY keywords, which a `<table>` then resets and which
+    //    align block children. Blink spells this in `HTMLDivElement`/`HTMLParagraphElement`/
+    //    `HTMLTablePartElement::CollectStyleForPresentationAttribute`.
+    // 3. **Everything else** — the literal value, with `middle` folded to `center`
+    //    (`HTMLElement::CollectStyleForPresentationAttribute`). An unknown value (`char`, `absbottom`)
+    //    parses to nothing and the element simply inherits, which is what Chrome does with it.
+    //
+    // At hint ORIGIN, like every other mapping here, so an author's `text-align` still wins — the
+    // t1364/t1365 lesson about `cellspacing` and `cellpadding`, which were assigned onto the
+    // computed style and beat the author's own stylesheet.
+    if let Some(a) = e0.attr("align") {
+        const NO_TEXT_ALIGN: &[&str] = &[
+            "img", "object", "embed", "iframe", "applet", "table", "hr", "input", "marquee",
+        ];
+        const LEGACY: &[&str] = &[
+            "div", "p", "caption", "thead", "tbody", "tfoot", "tr", "td", "th", "col", "colgroup",
+        ];
+        let a = a.trim();
+        if !NO_TEXT_ALIGN.contains(&tag) {
+            let v = if LEGACY.contains(&tag) {
+                match a.to_ascii_lowercase().as_str() {
+                    "center" | "middle" => Some("-moz-center"),
+                    "left" => Some("-moz-left"),
+                    "right" => Some("-moz-right"),
+                    "justify" => Some("justify"),
+                    _ => None,
+                }
+            } else {
+                match a.to_ascii_lowercase().as_str() {
+                    "middle" | "center" => Some("center"),
+                    "left" => Some("left"),
+                    "right" => Some("right"),
+                    "justify" => Some("justify"),
+                    _ => None,
+                }
+            };
+            if let Some(v) = v {
+                css.push_str(&format!("text-align:{v};"));
+            }
+        }
+    }
     // The replaced set, plus the table/legacy set that `apply_presentational_hints` used to size
     // in a second post-cascade pass of its own (t1027). ONE producer, ONE origin: HTML maps
     // `width`/`height` on all of these to the dimension properties as a presentational hint.
@@ -3112,10 +3277,12 @@ fn presentational_hint_block(
             | "hr"
             | "pre"
     ) {
-        return None;
+        // ⚠ Not `return None` unconditionally any more: the `align` mapping above applies to tags
+        // that carry no dimension attributes at all (`div`, `p`, `tr`, `tbody`), and returning here
+        // would have thrown that declaration away for exactly the elements it exists for.
+        return finish_hint_block(css, url_data, el);
     }
-    let e = el.dom.element(node)?;
-    let mut css = String::new();
+    let e = e0;
     for prop in ["width", "height"] {
         let Some(dim) = e.attr(prop).and_then(crate::parse_dimension_attr_dim) else {
             continue;
@@ -3180,6 +3347,16 @@ fn presentational_hint_block(
             cur = el.dom.parent(p);
         }
     }
+    finish_hint_block(css, url_data, el)
+}
+
+/// Parse a collected hint string into a real declaration block at hint origin, or `None` when
+/// nothing was collected. One helper because `presentational_hint_block` now has two exits.
+fn finish_hint_block(
+    css: String,
+    url_data: &UrlExtraData,
+    el: &StyloElement<'_>,
+) -> Option<PropertyDeclarationBlock> {
     if css.is_empty() {
         return None;
     }

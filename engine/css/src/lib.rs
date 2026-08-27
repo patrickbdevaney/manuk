@@ -277,9 +277,50 @@ pub enum TextAlign {
     /// paragraph — the default for the entire Arabic/Hebrew/Persian web.
     Start,
     End,
+    /// `-webkit-left` / `-webkit-center` / `-webkit-right` (Stylo spells them `-moz-*`) — **HTML's
+    /// LEGACY alignment, which is a different property from CSS's even though it shares a name.**
+    ///
+    /// `<center>`, `<div align=center>` and `<td align=right>` do not compute to `text-align:
+    /// center`; they compute to these keywords, and the difference is observable in two places that
+    /// a plain `center` gets wrong:
+    ///
+    /// * **A `<table>` RESETS them to `start`** (Stylo's own `adjust_for_table_text_align`), so the
+    ///   cells of a table inside a `<center>` are left-aligned. Real `text-align: center` inherits
+    ///   into the cells and centres their text.
+    /// * **They align BLOCK-LEVEL children**, not just inline content — which is the entire reason
+    ///   `<center>` centres a table at all.
+    ///
+    /// For inline content they behave exactly like their physical twins; see [`TextAlign::inline`].
+    MozLeft,
+    MozCenter,
+    MozRight,
 }
 
 impl TextAlign {
+    /// The alignment a **line box** gets: the legacy `-moz-*` keywords behave exactly like their
+    /// physical twins for inline content, and only differ in what they do to block children and to
+    /// tables. Every layout site that positions text goes through here so the difference cannot be
+    /// forgotten at one of them.
+    pub fn inline(self) -> TextAlign {
+        match self {
+            TextAlign::MozLeft => TextAlign::Left,
+            TextAlign::MozCenter => TextAlign::Center,
+            TextAlign::MozRight => TextAlign::Right,
+            other => other,
+        }
+    }
+
+    /// `Some(physical)` when this is one of HTML's legacy alignment keywords — the ones that also
+    /// align a **block-level** child of the box that carries them. `None` for every CSS value.
+    pub fn legacy_block_align(self) -> Option<TextAlign> {
+        match self {
+            TextAlign::MozLeft => Some(TextAlign::Left),
+            TextAlign::MozCenter => Some(TextAlign::Center),
+            TextAlign::MozRight => Some(TextAlign::Right),
+            _ => None,
+        }
+    }
+
     /// Resolve a logical `start`/`end` to a physical `Left`/`Right` against `rtl`; physical values
     /// (and `Justify`) pass through unchanged. `start` is left in LTR and right in RTL.
     pub fn resolve_physical(self, rtl: bool) -> TextAlign {
@@ -5771,6 +5812,12 @@ fn apply_declaration(s: &mut ComputedStyle, d: &Declaration, parent_fs: f32) {
                 "justify" => TextAlign::Justify,
                 "start" => TextAlign::Start,
                 "end" => TextAlign::End,
+                // HTML's legacy keywords, in LOCKSTEP with the Stylo path (which gets them from
+                // `center { text-align: -moz-center }` in `UA_CSS` and from the `align` attribute
+                // hint). Both spellings, because a page may write either and Stylo accepts either.
+                "-moz-center" | "-webkit-center" => TextAlign::MozCenter,
+                "-moz-left" | "-webkit-left" => TextAlign::MozLeft,
+                "-moz-right" | "-webkit-right" => TextAlign::MozRight,
                 _ => TextAlign::Left,
             }
         }

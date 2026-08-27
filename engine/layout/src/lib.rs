@@ -14016,6 +14016,12 @@ fn close_line(
     // `reorder_line_bidi`.
     base_rtl: bool,
 ) -> f32 {
+    // HTML's legacy `-webkit-left/center/right` (from `<center>` and the `align` attribute) place a
+    // LINE exactly like their physical twins; they differ only in what they do to a block-level
+    // child and to a `<table>`, neither of which is decided here. Collapsing them once, at the one
+    // function that positions a line, is what keeps the `offset` match below from having to know
+    // about them — and from silently falling into its `_ => 0.0` arm if it did not.
+    let align = align.inline();
     // ── **A LINE BOX WITH NOTHING IN IT DOES NOT EXIST** (CSS 2.1 §9.4.2):
     //
     //    > *"Line boxes that contain no text, no preserved white space, no inline elements with

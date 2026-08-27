@@ -91889,3 +91889,141 @@ seen while dumping HN's masthead and NOT chased: our `span.pagetop` text starts 
 Chrome puts it at x=123 — a horizontal divergence in the same cell this tick fixed vertically.
 
 WIKI: docs/wiki/box-layout.md
+
+## t1367 — `<center>` is not `text-align: center`, and a `<table>` is the element that knows it
+
+TICK SHAPE: capability. Board re-run at the top of this tick: CO-#1 is unchanged — the rendering
+gap, SHAPE/POSITION first, on the named anchor sites, with `news.ycombinator.com` (0.72) at the top
+of the list. This tick was found by taking t1366's own closing note — *"our `span.pagetop` text
+starts at x=384 where Chrome puts it at x=123"* — and asking what a horizontal divergence inside a
+table cell could be.
+
+### THE DEFECT — one keyword in the UA sheet, and it cost every table-laid-out page its text
+
+`<center>`, `<div align=center>` and `<td align=right>` do **not** compute to `text-align: center` /
+`right`. They compute to `-webkit-center` / `-webkit-right` (Stylo spells them `-moz-*`), and those
+keywords differ from their CSS twins in exactly two ways:
+
+* **a `<table>` RESETS them to `start`** — so the cells of a table inside a `<center>` are
+  LEFT-aligned, while a real `text-align: center` inherits straight into them; and
+* **they align BLOCK-LEVEL children**, which is the only reason `<center>` centres a table at all.
+
+Our UA sheet said `center { text-align: center }` and `stylo_map::map_text_align` folded
+`MozCenter` into `Center`, so both differences were erased before anything downstream could act on
+them. `news.ycombinator.com`'s whole page is a `<table>` inside a `<center>`:
+
+```text
+   news.ycombinator.com, story #1                Chrome    before    after
+     the title text        "507 Mechanical…"      129.3      295      129
+     the subtext score     #score_49465169        129.3      306      129
+     the rank              span.rank              104.2      101      104   ← <td align=right>
+```
+
+Every story title on the front page sat 166px from where Chrome puts it.
+
+### ⭐ THE FIX IS TO STOP ERASING THE VALUE, NOT TO WRITE A RULE
+
+Stylo already contains the reset — `StyleAdjuster::adjust_for_table_text_align`, which is **not**
+`cfg(gecko)`-gated and is compiled into this build. It had never fired once, because nothing here
+ever produced a `-moz-*` value. Changing one keyword in `UA_CSS` switches it on, and because it
+mutates the computed style *before* children inherit, the whole subtree gets `start` for free.
+
+⚠⚠⚠ **THE PLAUSIBLE WHOLE FIX IS A UA RULE `table { text-align: start }`, AND IT WAS RUN AND IS
+WRONG.** Applied on top of the correct fix (mutation M2b), every subject row in the gate still
+passes and the control `#j1` goes from 295 to **0**: a declaration beats inheritance always, so an
+author's own `text-align: center` stops reaching table cells too. **A reset conditional on the
+inherited VALUE cannot be spelled as a selector** — which is why Blink and Stylo both put it in the
+style adjuster, and why the fix is a keyword rather than a rule.
+
+### THE SECOND HOLE: `align` HAD NO `text-align` MAPPING AT ALL, AND IT IS THREE MAPPINGS
+
+Measured with `getComputedStyle().textAlign` in headless Chrome, not read out of the prose:
+
+| family | elements | `align=center` gives |
+| --- | --- | --- |
+| legacy | `div`, `p`, `caption`, `thead`, `tbody`, `tfoot`, `tr`, `td`, `th`, `col`, `colgroup` | `-webkit-center` |
+| float | `img`, `object`, `embed`, `iframe`, `table`, `hr`, `input`, `marquee` | *nothing* — `align` means FLOAT here |
+| generic | everything else (`h1`–`h6`, `section`, `li`, `fieldset`, `legend`, `blockquote`) | plain `center` |
+
+⭐ **The row that separates family 1 from family 3 is the one that does not move.**
+`<h1 align=center><div style="width:50px"></div></h1>` puts the block child at x=0 in Chrome, at
+x=0 before this tick and at x=0 after. It is the ONLY assertion in the gate that catches the natural
+simplification *"all `align=center` is `-webkit-center`"* — under which **every other row still
+passes** and that one jumps to 575 (mutation M3, applied and read). Its mirror `#m7` is why the
+answer is not simply to drop `h1`: the same element must still centre its *inline* text.
+
+### THE THIRD HOLE: BLOCK ALIGNMENT WAS READING A PARENT TAG
+
+The old code centred a `<table>` when its parent's tag was literally `<center>`. That saw one of the
+four ways HTML spells the alignment and could only ever move a `<table>` — never the `<div>` beside
+it. `apply_legacy_block_align` is now a preorder walk (the same shape as `fold_effective_opacity`)
+carrying the parent's computed `text-align` down, expressing Chrome's `ComputeMarginsForDirection`
+"Case One" as `margin-inline: auto` on in-flow block-level children:
+
+```text
+                                          Chrome x   before   after
+  <center><div width:50px>                   575         8      575
+  <div align=center><div width:50px>         575         8      575
+  <div align=center><table width=100>        550         8      550
+  <div style="text-align:center"><div>         8         8        8   CONTROL
+```
+
+### THE RESULT — a SAME-HOUR OLD-BINARY CONTROL on the anchor corpus
+
+The fix stashed to `/tmp`, `git checkout`, rebuilt, swept; then restored, rebuilt, swept again:
+
+```text
+   site                       misplaced (old → new)     visual
+   news.ycombinator.com          391 →   1            87.8% → 93.2%
+   www.a11yproject.com           194 → 194            46.2% → 46.2%
+   en.wikipedia.org              805 → 828            82.7% → 82.7%
+   blog.rust-lang.org             25 →  25            72.2% → 72.2%
+   martinfowler.com              278 → 278            89.7% → 89.7%
+   whatwg.org                      8 →   8            68.9% → 68.9%
+   MEAN SHAPE                  79.1% → 80.8%     MEAN VISUAL 74.6% → 75.5%
+```
+
+**HN's misplaced elements: 391 → 1.**
+
+⚠ **THE WIKIPEDIA ROW LOOKS LIKE A REGRESSION AND IS NOT, AND THE CHECK THAT SAYS SO IS ONE GREP.**
+The sweep fetches LIVE, and `en.wikipedia.org/wiki/Main_Page` rotates its featured content between
+runs — so the two rows are not two measurements of one document. Falsified directly rather than
+argued: the snapshot contains **zero `align=` attributes and zero `<center>` elements**
+(`grep -c` on the response body), so this change cannot reach it, and running the SAME snapshot
+through the old and the new binary produces a **byte-identical** box dump. A site row from a live
+fetch is only comparable against itself when the document is pinned.
+
+### WPT — MEASURED, AND FLAT
+
+`css/CSS2/tables` reftests: **87 passed / 156 failed**, the same as t1366. Flat is the right result
+and the fourth tick running to say so: a conformance test DECLARES its alignment, and this defect
+lives exactly where nobody declares anything. ⚠ `html/rendering` — the WPT tree that tests these
+attribute mappings directly — is **not in the checkout** (`~/wpt/html/rendering` does not exist), so
+the one area that would score this tick cannot be read. Noted, not fixed: the checkout is data the
+observer owns, and t1176 recorded the same class of gap for `css/support/`.
+
+REGRESSION SWEEP: 13 gates green (`g_anon_block_inherits` — whose `#k2` is the control that a real
+`text-align: center` does NOT move a block child — `g_dir_attr_logical`, `g_static_pos_line_start`,
+`g_text_align_justify`, `g_text_indent_edges`, `g_click_point`, `g_selector_syntax_error`,
+`g_td_vertical_align_middle`, `g_table_row_height_distribution`, `g_table_caption`, `g_table_dom`,
+`g_table_border_spacing_ua_default`, `g_anonymous_table_row`), plus 243 `manuk-css`/`manuk-layout`
+unit tests.
+
+GATE `G_LEGACY_ALIGN_IS_NOT_TEXT_ALIGN_CENTER` — 16 rows, RED under five mutations, each applied to
+the engine, rebuilt and read:
+
+- **M1** `center { text-align: center }`, the original spelling → `#m1` 295.18, not 300
+- **M2** M1 plus a UA `table { text-align: start }`, the plausible whole fix → `#m1` 0
+- **M2b** that UA rule on top of the CORRECT fix → `#j1` **0**, not 295, with every subject row
+  still green — the mutation the gate exists for
+- **M3** `h1` added to the legacy list → `#m9` 575, not 0
+- **M4** `apply_legacy_block_align` not called → `#m1` 0
+- **M5** `map_text_align` folding `MozCenter` back into `Center` → `#m1` 0
+
+NEXT — measured, not done here: the FLOAT half of the same attribute. `<img align=right>` maps to
+`float: right; vertical-align: top` and `<table align=left|right>` to `float: left|right`; we
+implement neither, so `<div><img align=right><span>t</span></div>` puts the text at x=10 where
+Chrome puts it at 0. Blink's `HTMLElement::ApplyAlignmentAttributeToStyle` is the whole table and it
+is captured in the wiki. Left out of this gate rather than pinned at our wrong value.
+
+WIKI: docs/wiki/css-cascade.md

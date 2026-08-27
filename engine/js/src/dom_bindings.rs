@@ -3067,6 +3067,13 @@ fn computed_style_js(
         // computed-value strings should an unresolved value ever reach getComputedStyle.
         TextAlign::Start => "start",
         TextAlign::End => "end",
+        // HTML's legacy alignment keywords are their own computed values and Chrome reports them
+        // verbatim — `getComputedStyle(document.querySelector('center')).textAlign` is
+        // `"-webkit-center"`, not `"center"`. Serialised with the `-webkit-` spelling because that
+        // is the one the web (and every WPT reference) reads back; Stylo's internal name is `-moz-`.
+        TextAlign::MozLeft => "-webkit-left",
+        TextAlign::MozCenter => "-webkit-center",
+        TextAlign::MozRight => "-webkit-right",
     };
     // The computed `font-family` list. ⚠ NOT `join(", ")` — CSSOM serializes each name as an
     // IDENTIFIER when it can be and as a STRING when it cannot, and the names needing quotes are

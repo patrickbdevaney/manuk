@@ -4950,3 +4950,103 @@ hence the ancestor walk in `presentational_hint_block`.
 
 `G_TABLE_BORDER_SPACING_UA_DEFAULT` carries all of it — 15 rows added, including a `<th>` row that
 is the only one where the hint actually applies — and goes red under four mutations.
+
+## HTML's LEGACY ALIGNMENT IS A DIFFERENT PROPERTY THAT SHARES A NAME WITH `text-align` (t1367)
+
+`<center>`, `<div align=center>` and `<td align=right>` do not compute to `text-align: center` /
+`right`. They compute to **`-webkit-center` / `-webkit-right`** (Stylo spells them `-moz-*`), and
+those keywords differ from their CSS twins in exactly two ways:
+
+1. **A `<table>` RESETS them to `start`.** So the cells of a table inside a `<center>` are
+   left-aligned — while a real `text-align: center` inherits straight into them.
+2. **They align BLOCK-LEVEL children**, not just inline content. That is the entire reason
+   `<center>` centres a table at all.
+
+Our UA sheet said `center { text-align: center }` and `stylo_map::map_text_align` folded
+`MozCenter` into `Center`, so both differences were erased before anything downstream could act on
+them. Measured against headless Chrome on `news.ycombinator.com` — whose whole page is a `<table>`
+inside a `<center>`:
+
+```text
+   news.ycombinator.com, story #1              Chrome    before    after
+     the title text          "507 Mechanical…"  129.3      295      129
+     the subtext score span  #score_49465169    129.3      306      129
+     the rank                span.rank          104.2      101      104
+```
+
+Every story title on the front page was centred in its cell, 166px from where Chrome puts it.
+
+### The fix is to stop erasing the value, not to write a rule
+
+Stylo already contains the reset — `StyleAdjuster::adjust_for_table_text_align`, which is NOT
+`cfg(gecko)`-gated and is compiled into our build:
+
+```rust
+if self.style.get_box().clone_display() != Display::Table { return }
+match self.style.get_inherited_text().clone_text_align() {
+    TextAlign::MozLeft | TextAlign::MozCenter | TextAlign::MozRight => {},
+    _ => return,
+}
+self.style.mutate_inherited_text().set_text_align(TextAlign::Start)
+```
+
+It had never fired once, because nothing in the engine ever produced a `-moz-*` value. Changing one
+character of the UA sheet — `center { text-align: -moz-center }` — switches it on, and because it
+mutates the computed style *before* children inherit, the whole subtree gets `start` for free.
+
+⚠⚠⚠ **The plausible whole fix is a UA rule `table { text-align: start }`, and it was RUN and is
+WRONG.** It makes every subject row pass and silently breaks the control: a declaration beats
+inheritance always, so an author's own `text-align: center` stops reaching table cells too
+(`#j1` in `G_LEGACY_ALIGN_IS_NOT_TEXT_ALIGN_CENTER` goes from 295 to 0). **A reset that is
+conditional on the inherited VALUE cannot be spelled as a selector**; that is why the mechanism
+lives in the adjuster and not in a stylesheet, in Blink as much as in Stylo.
+
+### The `align` attribute is THREE mappings, and which one you get is the element
+
+There was no `align` → `text-align` mapping here at all. Chrome's is three families, measured with
+`getComputedStyle().textAlign` rather than read out of the prose:
+
+| family | elements | `align=center` gives |
+| --- | --- | --- |
+| legacy | `div`, `p`, `caption`, `thead`, `tbody`, `tfoot`, `tr`, `td`, `th`, `col`, `colgroup` | `-webkit-center` |
+| float | `img`, `object`, `embed`, `iframe`, `table`, `hr`, `input`, `marquee` | *nothing* — `align` here means `float`/`vertical-align` |
+| generic | everything else (`h1`–`h6`, `section`, `li`, `fieldset`, `legend`, `blockquote`, `span`) | plain `center` |
+
+`align=middle` folds to centre in both the legacy and generic families; `align=justify` and anything
+unrecognised fall through to the literal value, which then either parses or is dropped. Blink writes
+this as three `CollectStyleForPresentationAttribute` overrides — `HTMLDivElement`,
+`HTMLParagraphElement`, `HTMLTablePartElement` — layered over the `HTMLElement` base.
+
+⭐ **The row that separates family 1 from family 3 is the one that does not move.**
+`<h1 align=center><div style="width:50px"></div></h1>` puts the block child at x=0 in Chrome and at
+x=0 here, before and after. It is the only assertion in the gate that catches the natural
+simplification *"all `align=center` is `-webkit-center`"* — under which every other row still
+passes and that one jumps to 575.
+
+### Block-level alignment reads the CONTAINING BLOCK's computed value, not a parent TAG
+
+The old code centred a `<table>` when its parent's tag was literally `<center>`. That saw one of the
+four ways HTML spells the alignment and could only ever move a `<table>` — never the `<div>` beside
+it. `apply_legacy_block_align` (a preorder walk in `stylo_engine.rs`, the same shape as
+`fold_effective_opacity`) now carries the parent's computed `text-align` down and expresses Chrome's
+`ComputeMarginsForDirection` "Case One" as `margin-inline: auto` on in-flow block-level children:
+
+```text
+                                          Chrome x   before   after
+  <center><div width:50px>                   575         8      575
+  <center><table width=100>                  550       550      550
+  <div align=center><div width:50px>         575         8      575
+  <div align=center><table width=100>        550         8      550
+  <div style="text-align:center"><div>         8         8        8   CONTROL
+```
+
+The CONTROL is what keeps `g_anon_block_inherits`'s `#k2` green: `TextAlign::legacy_block_align()`
+answers `None` for every CSS value, so a real `text-align: center` still leaves its block child
+alone.
+
+⚠ **NEXT, measured and not built:** the FLOAT half of the same attribute. `<img align=right>` maps
+to `float: right; vertical-align: top` and `<table align=left|right>` to `float: left|right`; we
+implement neither, so `<div><img align=right><span>t</span></div>` puts the text at x=10 where
+Chrome puts it at 0. Blink's `HTMLElement::ApplyAlignmentAttributeToStyle` is the whole table
+(`absmiddle`→`middle`, `absbottom`→`bottom`, `left`/`right`→float + `top`, `middle`→
+`-webkit-baseline-middle`, `center`→`middle`, `bottom`→`baseline`, `texttop`→`text-top`).

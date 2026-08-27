@@ -8829,3 +8829,32 @@ made t1365's table rows jointly satisfied, so its first mutation stopped going r
 losing a tooth is an instrument-fidelity regression and the ratchet refuses it as a trade — the fix
 is to re-cut the tooth in the SAME tick, on a box the new rule does not cover (here, a flex item).
 **After a UA-default tick, re-run the mutations of every gate that touches the same element.**
+
+## HTML'S LEGACY ALIGNMENT IS A SEPARATE PROPERTY, AND THE WHOLE TABLE-LAID-OUT WEB READS IT
+
+Third tick running, the defect on the anchor site is one UA declaration — and this one was not
+missing, it was **spelled with the wrong keyword**. `center { text-align: center }` should be
+`center { text-align: -moz-center }` (Chrome: `-webkit-center`), and the difference is not cosmetic:
+the legacy keywords are **reset to `start` by a `<table>`** and they **align block-level children**.
+Plain `center` does neither.
+
+The class this unlocks is **every page laid out with `<center>`, `<div align=…>` or the `align`
+attribute on a table part** — which is the entire pre-CSS web plus everything descended from it:
+forum software, wikis, mailing-list archives, university and government pages, admin panels, HTML
+email rendered in a browser, and `news.ycombinator.com` itself, where every story title on the front
+page was centred in its cell 166px from where Chrome puts it. The second half of the same mechanism
+— the `align` attribute having *no* `text-align` mapping at all — was hitting every `<td align>` and
+`<tr align>` on the same pages.
+
+⚠ **The mapping is THREE families and the elements decide which.** `div`/`p`/table-parts get the
+legacy keywords; `img`/`table`/`object`/`embed`/`iframe`/`hr`/`input`/`marquee` get **none** (their
+`align` means FLOAT); everything else gets the literal value. Treating them as one — the obvious
+simplification — moves block children under `<h1 align=center>` that Chrome leaves alone, and every
+other row of the gate still passes while it does.
+
+⚠⚠ **The reset cannot be written as a selector, and the version that can is wrong.** A UA rule
+`table { text-align: start }` fixes every observable subject row and silently breaks the control: a
+declaration beats inheritance, so an author's own `text-align: center` stops reaching table cells
+too. A reset conditional on the inherited VALUE is why Blink and Stylo both put it in the style
+ADJUSTER — and Stylo's `adjust_for_table_text_align` was already compiled into this build, dead,
+waiting for a `-moz-*` value it had never been given.
