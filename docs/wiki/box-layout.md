@@ -11187,3 +11187,58 @@ subtests. An abspos *inside* a grid item is an ordinary descendant and does need
 Gate: `G_ABSPOS_IN_VERTICAL_CB` (`engine/page/tests/g_abspos_in_vertical_cb.rs`), 11 Chrome-measured
 rows across `vertical-rl`, `vertical-lr`, `direction:rtl`, physical insets, logical insets, the
 `inset` shorthand, static positions in both block directions, and a non-empty out-of-flow subtree.
+
+## The static position of an out-of-flow box, and which corner it is
+
+An absolutely- or fixed-positioned box with `auto` on both insets of an axis falls at its **static
+position** — CSS Position §3's *"where the box would have been if it were the first in-flow child"*.
+Manuk records it during flow, in `layout_block` (the pure-IFC branch and the block-child loop), and
+consumes it much later in `position_absolutes`, which installs it as the containing block's origin
+so that `layout_abs` resolves the box from there.
+
+⚠ **What is recorded is an INLINE-START corner, and the content-box origin `cx` is that corner only
+in LTR.** In an RTL containing block the inline axis runs right-to-left, so the box starts at the
+content box's RIGHT edge and grows leftward. `Layout::static_inline_start` returns the correct edge
+for the direction; because `layout_abs` always grows the box rightward from whatever origin it is
+given, an RTL edge is the box's *right* side and the box owes a `-width` translate.
+
+That translate cannot be applied where the position is recorded — the box's used width does not
+exist yet — so it is split:
+
+| step | where | what it knows |
+| --- | --- | --- |
+| record the inline-start EDGE | `layout_block` seeds, `static_inline_start` | the direction, the content box |
+| flag the node | `mark_static_rl` → `Layout::static_pos_rl` | that a `-width` is owed |
+| apply `-width` | `position_absolutes`, after `layout_abs` | the box's USED width |
+
+The same split serves `vertical-rl`, where the block axis runs leftward and `map_static_positions`
+sets the flag instead — one mechanism, reached from two directions.
+
+Chrome-measured, a `position:absolute` box in a 200px-wide `direction:rtl` container:
+
+| box | Chrome | what it pins |
+| --- | --- | --- |
+| 5x6, no insets | `195,0` | the edge is the content box's right edge |
+| 5x6, `left:0` | `0,0` | a REAL inset never consults the static position |
+| `width:auto` holding `hi` (19px) | `181,0` | the correction uses the box's USED width |
+| 5x6 in a `padding:7px` container | `202,7` | the CONTENT box, not the padding box |
+| the same markup in LTR | `0,0` | the LTR answer must not move |
+
+### The inline advance is measured from the other end too
+
+Once the line exists, `refine_inline_static_positions` replaces the seed with where flow actually
+got to. "Furthest along" is a DIRECTION, not a side: in LTR it is the rightmost fragment edge plus
+its trailing margin, in RTL the LEFTMOST edge minus it, and the collapsed space between the previous
+in-flow box and this one subtracts rather than adds. After `abc` (29px) in a 200px block Chrome puts
+an inline-level abspos at 29 in LTR and at 166 in RTL; a block-level one does not go on the line at
+all — it opens the next, keeping the inline-start edge (195) and dropping one line height.
+
+⚠ This refinement was **skipped entirely** under an RTL base direction for as long as the seed was
+wrong, which was defensible then and became the defect the moment the seed was fixed. See
+`G_ABSPOS_STATIC_RTL` for the 11 measured rows and the four mutations that turn them red.
+
+⚠ `MinimalCascade` — the cascade behind `manuk-layout`'s own unit tests — initialises `text_align`
+to the physical `Left` and never calls `TextAlign::resolve_physical`, which lives only on the Stylo
+path. `text-align: start` therefore never becomes `right` there and an RTL line is laid out flush
+LEFT. Unit tests in that crate must assert RELATIONS for RTL geometry; the literals belong in a
+`manuk-page` gate, which runs the real cascade.

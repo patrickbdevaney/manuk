@@ -3697,6 +3697,7 @@ impl Ctx<'_> {
         frags: &[TextFragment],
         atomics: &[LayoutBox],
         cw: f32,
+        rtl: bool,
     ) {
         if !kids.iter().any(|&k| self.kid_is_out_of_flow(k)) {
             return;
@@ -3767,21 +3768,35 @@ impl Ctx<'_> {
             if before.is_empty() {
                 // The start edge of the FIRST line box: the earliest `line_top`, and the leftmost
                 // x on it. That IS the static position of a box that precedes all in-flow content.
+                // ⚠ In RTL the line's START edge is its RIGHTMOST x, so `open` ranks the other
+                // way and is fed each fragment's far edge. The recorded value is still the
+                // inline-START edge, and `static_pos_rl` still owes it the `-width`.
                 let mut first: Option<(f32, f32)> = None;
-                let mut open = |top: f32, left: f32| {
+                let mut open = |top: f32, start: f32| {
                     let better = match first {
                         None => true,
-                        Some((t, l)) => top < t - 0.5 || ((top - t).abs() <= 0.5 && left < l),
+                        Some((t, l)) => {
+                            top < t - 0.5
+                                || ((top - t).abs() <= 0.5
+                                    && if rtl { start > l } else { start < l })
+                        }
                     };
                     if better {
-                        first = Some((top, left));
+                        first = Some((top, start));
                     }
                 };
                 for f in frags {
-                    open(f.line_top, f.x);
+                    open(f.line_top, if rtl { f.x + f.width } else { f.x });
                 }
                 for b in atomics {
-                    open(b.rect.y, b.rect.x);
+                    open(
+                        b.rect.y,
+                        if rtl {
+                            b.rect.x + b.rect.width
+                        } else {
+                            b.rect.x
+                        },
+                    );
                 }
                 // No in-flow content at all leaves the block-level default alone: there is no line
                 // box, so there is no line start to resolve against, and inventing one would be a
@@ -3792,16 +3807,20 @@ impl Ctx<'_> {
                 }
                 continue;
             }
-            // The furthest-along point flow reached: latest line first, then rightmost on it. A
-            // fragment that wrapped onto a later line is genuinely later, so `line_top` outranks `x`.
+            // The furthest-along point flow reached: latest line first, then furthest along the
+            // INLINE AXIS on it — rightmost in LTR, LEFTMOST in RTL. A fragment that wrapped onto a
+            // later line is genuinely later either way, so `line_top` outranks `x` in both.
             let mut best: Option<(f32, f32)> = None;
-            let mut take = |top: f32, right: f32| {
+            let mut take = |top: f32, end: f32| {
                 let better = match best {
                     None => true,
-                    Some((t, r)) => top > t + 0.5 || ((top - t).abs() <= 0.5 && right > r),
+                    Some((t, r)) => {
+                        top > t + 0.5
+                            || ((top - t).abs() <= 0.5 && if rtl { end < r } else { end > r })
+                    }
                 };
                 if better {
-                    best = Some((top, right));
+                    best = Some((top, end));
                 }
             };
             // ⚠⚠⚠ **THE STATIC POSITION IS THE MARGIN EDGE, NOT THE BORDER EDGE**, and this walk
@@ -3944,23 +3963,43 @@ impl Ctx<'_> {
                 }
                 continue;
             }
+            // ⚠ "Furthest along" is a direction, not a side. In RTL the inline axis runs
+            // right-to-left, so flow's furthest point on a line is its LEFTMOST edge and the
+            // trailing margin extends it further left rather than further right.
             for f in frags {
                 if belongs(f.node, f.origin) {
-                    take(f.line_top, f.x + f.width + trailing_margin(f.node));
+                    take(
+                        f.line_top,
+                        if rtl {
+                            f.x - trailing_margin(f.node)
+                        } else {
+                            f.x + f.width + trailing_margin(f.node)
+                        },
+                    );
                 }
             }
             for b in atomics {
                 if b.node.is_some_and(|n| before.contains(&n)) {
-                    take(b.rect.y, b.rect.x + b.rect.width + trailing_margin(b.node));
+                    take(
+                        b.rect.y,
+                        if rtl {
+                            b.rect.x - trailing_margin(b.node)
+                        } else {
+                            b.rect.x + b.rect.width + trailing_margin(b.node)
+                        },
+                    );
                 }
             }
-            if let Some((top, right)) = best {
+            if let Some((top, end)) = best {
                 let last_inflow = kids[..i]
                     .iter()
                     .rev()
                     .find(|&&p| !self.kid_is_out_of_flow(p));
-                let right = right + collapsed_space_before(k, last_inflow.copied());
-                self.static_pos.borrow_mut().insert(k, (right, top));
+                // The collapsed space between the previous in-flow box and this one advances ALONG
+                // the inline axis, so it subtracts in RTL.
+                let space = collapsed_space_before(k, last_inflow.copied());
+                let end = if rtl { end - space } else { end + space };
+                self.static_pos.borrow_mut().insert(k, (end, top));
                 self.static_pos_writes.set(self.static_pos_writes.get() + 1);
             }
         }
@@ -4017,6 +4056,43 @@ impl Ctx<'_> {
             0.0
         };
         (dx, dy)
+    }
+
+    /// The INLINE-START edge of `parent`'s content box, and whether a box seeded there will need
+    /// the `-width` correction recorded in [`Self::static_pos_rl`].
+    ///
+    /// ⚠⚠⚠ **A STATIC POSITION IS AN INLINE-START CORNER, AND `cx` IS ONLY THAT CORNER IN LTR.**
+    /// Both seed sites recorded the content-box ORIGIN, which is the content box's LEFT edge. In an
+    /// RTL containing block the inline axis runs right-to-left, so the would-be-in-flow box starts
+    /// at the content box's RIGHT edge and grows leftward from it. Chrome, a 5px-wide inset-less
+    /// `position:absolute` box in a 200px `direction:rtl` container: `x=195`; ours read `x=0`, and
+    /// read it for EVERY out-of-flow box on an RTL page — the whole inline axis was mirrored except
+    /// this one point.
+    ///
+    /// This returns the edge, not the box's corner, because the box's used width does not exist
+    /// yet — the same split t1360 hit for `vertical-rl`, and it reuses that machinery rather than
+    /// adding a second one. `position_absolutes` applies the `-width` once `layout_abs` has
+    /// measured the box.
+    ///
+    /// ⚠ `cx + cw` is the CONTENT box's right edge, not the padding box's. Chrome, the same box in
+    /// a `padding:7px` container whose border box is 214 wide: `x=202`, i.e. `(7+200) - 5`.
+    fn static_inline_start(&self, parent: NodeId, cx: f32, cw: f32) -> (f32, bool) {
+        if self.style_of(parent).direction == manuk_css::Direction::Rtl {
+            (cx + cw, true)
+        } else {
+            (cx, false)
+        }
+    }
+
+    /// Record — or clear — the `-width` correction for a static position seeded at an inline-start
+    /// edge. Clearing matters: `static_pos` is keyed by node across a whole layout and a stale
+    /// `true` would pull a correctly-seeded LTR box one width to the left.
+    fn mark_static_rl(&self, k: NodeId, rl: bool) {
+        if rl {
+            self.static_pos_rl.borrow_mut().insert(k);
+        } else {
+            self.static_pos_rl.borrow_mut().remove(&k);
+        }
     }
 
     fn parent_is_rtl(&self, node: NodeId) -> bool {
@@ -5600,10 +5676,12 @@ impl Ctx<'_> {
             // first thing in the parent. `refine_inline_static_positions` below replaces it with the
             // real inline advance once the line has been laid out; this is the seed, and the fallback
             // for anything that refinement cannot attribute.
+            let (sx, s_rl) = self.static_inline_start(node, cx, cw);
             for &k in &kids {
                 if self.kid_is_out_of_flow(k) {
-                    self.static_pos.borrow_mut().insert(k, (cx, cy));
+                    self.static_pos.borrow_mut().insert(k, (sx, cy));
                     self.static_pos_writes.set(self.static_pos_writes.get() + 1);
+                    self.mark_static_rl(k, s_rl);
                 }
             }
             let items = self.collect_inline_group(&flow_kids, cw, Some(node), pch);
@@ -5625,11 +5703,23 @@ impl Ctx<'_> {
             );
             // ── **CSS 2.1 §10.3.7 / §10.6.4 — THE STATIC POSITION INCLUDES THE INLINE ADVANCE.**
             //    Now that the line exists, replace the seed above with where flow actually got to.
-            //    Inert unless this block has an out-of-flow child, and skipped under an RTL base
-            //    direction (see the helper).
-            if bcs.direction != manuk_css::Direction::Rtl {
-                self.refine_inline_static_positions(&kids, &frags, &atomics, cw);
-            }
+            //    Inert unless this block has an out-of-flow child.
+            //
+            // ⚠⚠⚠ **THIS WAS SKIPPED ENTIRELY UNDER AN RTL BASE DIRECTION**, and the comment that
+            // said so was true only while the SEED was wrong: the helper measured the advance from
+            // the left, which is the wrong end of an RTL line, so refining made a bad answer worse
+            // and skipping was the lesser error. With the seed at the content box's RIGHT edge the
+            // helper can be told the direction instead, and the skip becomes the thing that is
+            // wrong — Chrome puts an inline-level abspos after `abc` in a 200px RTL block at
+            // x=166, i.e. one box-width left of where the text ends at 171; skipping left it at
+            // the seed, 195, as though no text preceded it at all.
+            self.refine_inline_static_positions(
+                &kids,
+                &frags,
+                &atomics,
+                cw,
+                bcs.direction == manuk_css::Direction::Rtl,
+            );
             // `text-overflow: ellipsis` truncates a clipped, non-wrapping single line with `…`. Only
             // fires on a box that clips (`overflow` ≠ visible) and doesn't wrap (`nowrap`/`pre`); a
             // line that fits is untouched, so nothing without a real overflow changes.
@@ -5824,10 +5914,12 @@ impl Ctx<'_> {
                 // every `position:absolute` element with no insets simply vanished: React portal
                 // roots, JS-positioned dropdowns and tooltips, and every `.sr-only` accessibility
                 // node on the web.
+                let (sx, s_rl) = self.static_inline_start(node, cx, cw);
                 self.static_pos
                     .borrow_mut()
-                    .insert(k, (cx, cur_y + prev_margin.max(0.0)));
+                    .insert(k, (sx, cur_y + prev_margin.max(0.0)));
                 self.static_pos_writes.set(self.static_pos_writes.get() + 1);
+                self.mark_static_rl(k, s_rl);
                 continue;
             } else if anon_tail.contains(&k) {
                 // A later member of a run whose anonymous table was already emitted at its head.
@@ -18233,7 +18325,7 @@ mod tests {
     ///   <span position:absolute>FIRST</span><span>Hello      0        0       0     ✓ control
     ///   …a WRAPPED first span, then <span position:absolute> 61        0      61    ✗→✓
     ///   the in-flow spans themselves                          0        0       0     ✓ control
-    ///   dir=rtl wrapper                                     334        0       0     ✓ INERT
+    ///   dir=rtl wrapper                                     334        0     335    ✗→✓
     /// ```
     ///
     /// Row 1 carries `margin:-1px`, so 35 is 36 less the margin — the margin is applied *after* the
@@ -18280,6 +18372,13 @@ mod tests {
                 .expect("id");
             rects[&n].x
         };
+        let w = |id: &str| {
+            let n = dom
+                .descendants(dom.root())
+                .find(|&n| dom.element(n).and_then(|e| e.attr("id")) == Some(id))
+                .expect("id");
+            rects[&n].width
+        };
         // `Hello` is 36px at 16px Arial, so every "after Hello" row is 36 (less any margin).
         let hello_end = x("s1")
             + rects[&dom
@@ -18308,10 +18407,27 @@ mod tests {
                 0.0,
                 "control: the in-flow span itself is untouched",
             ),
+            // ⚠⚠⚠ **THIS ROW USED TO PIN 0.0 WITH THE NOTE "the RTL guard is INERT ... closing
+            // that is separate work". IT IS CLOSED** — `refine_inline_static_positions` is now told
+            // the base direction instead of being skipped under it, and on a real page the box
+            // lands at 335 against Chrome's 335 (see `G_ABSPOS_STATIC_RTL`).
+            //
+            // ⚠ What is asserted here is a RELATION, not that 335, because THIS harness cannot
+            // produce it: `layout_html` runs `MinimalCascade`, whose `text_align` initial value is
+            // the physical `Left` and which never calls `TextAlign::resolve_physical` — that call
+            // exists only on the Stylo path (`stylo_engine.rs`). So `text-align: start` never
+            // becomes `right` here, an RTL line is laid out flush LEFT, and `Hello` sits at x=0
+            // where a browser puts it at 364. Asserting a literal would be pinning that harness gap.
+            //
+            // What IS true in both: the box starts one BOX WIDTH to the left of the inline-start
+            // edge of the content before it, because RTL inline flow runs right-to-left. Revert the
+            // refinement to its LTR reading and this lands at `hello_end` instead — the far side of
+            // the text, a full box width plus the text's own width away.
             (
                 "s13",
-                0.0,
-                "the RTL guard is INERT — Chrome puts this at 334 and closing that is separate work",
+                x("s12") - w("s13"),
+                "an RTL abspos starts one box-width left of the inline-start edge of what precedes \
+                 it (Chrome: 335 on a real page; this harness lays the RTL line flush left)",
             ),
         ] {
             assert!(

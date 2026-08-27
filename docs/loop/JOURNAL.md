@@ -91088,3 +91088,124 @@ pinned at 100% CPU (the `*/1` disk-hygiene cron) against load1 ~10-12; those two
 wall-clock gates and false-RED under that. Disk is fine (57G free on /home). Parked and retried.
 
 WIKI: docs/wiki/box-layout.md
+
+## t1361 — a static position is an INLINE-START corner, and `cx` is only that corner in LTR
+
+TICK SHAPE: capability. **WPT: ZERO measured subtests.** The three areas that could have moved —
+`css/css-position`, `css/css-grid`, `css/css-flexbox` — are flat, and `css/css-position` is flat by
+NAME as well as by total (0 new, 0 fixed), so nothing cancelled. The TOTAL in `WPT-AREAS.tsv` does
+move, +298, and NONE of it is this tick — see the corrections at the bottom.
+
+An absolutely-positioned box with `auto` on both inline insets sits at its STATIC POSITION (CSS
+Position §3, *"where the box would have been if it were in the flow"*). Both sites that record it —
+`layout_block`'s pure-IFC branch and its block-child loop — wrote `cx`, the content box's ORIGIN,
+and `position_absolutes` then installs that as the containing block's origin so `layout_abs` grows
+the box rightward from it. `cx` is the inline-START corner only in LTR. In an RTL containing block
+the inline axis runs right-to-left: the box starts at the content box's RIGHT edge and grows
+LEFTWARD. Chrome puts a 5px inset-less box in a 200px `direction:rtl` container at x=195; ours put
+it at x=0 — and put it there for EVERY out-of-flow box on EVERY RTL page. The whole inline axis was
+mirrored except this one point.
+
+Chrome-measured, containers `position:relative; width:200px; height:60px; font:16px/20px monospace`,
+boxes `position:absolute; width:5px; height:6px` unless stated, rects parent-relative:
+
+```
+  row  container                     box                        Chrome     ours (pre)
+  s1   ltr                           (bare)              CONTROL 0,0        0,0
+  s7   rtl                           left:0              CONTROL 0,0        0,0
+  s2   rtl                           (bare)                      195,0      0,0
+  s3   rtl, after a 30px block       (bare)                      195,10     0,10
+  s4   rtl                           top:5px                     195,5      0,5
+  s5   rtl                           width/height auto, "hi"     181,0 w19  0,0 w19
+  s8   rtl, padding:7px              (bare)                      202,7      7,7
+  v2   ltr, after inline text "abc"  display:inline      CONTROL 29,0       29,0
+  v1   rtl, after inline text "abc"  display:inline              166,0      195,0
+  v3   rtl, after inline text "abc"  display:block               195,20     195,0
+```
+
+All eleven now match Chrome exactly. The two controls are what stop the fix from becoming "mirror
+the axis whenever `direction` is rtl": `s1` is the same markup in LTR and must not move, and `s7`
+states a REAL inset in an RTL container, which resolves against the containing block's left edge in
+every direction and never consults the static position at all.
+
+⚠⚠⚠ **THE `-width` CORRECTION IS t1360'S, REUSED RATHER THAN REBUILT.** The seed can only record an
+EDGE — the box's used width does not exist yet — so `static_inline_start` returns the edge plus a
+flag, `mark_static_rl` records it, and `position_absolutes` applies the `-width` once `layout_abs`
+has measured the box. That is exactly the split t1360 built for `vertical-rl` one tick ago; the
+same defect showed up in a second direction because it is one mechanism, not two. `s5` is the row
+that forbids shortcuts: `width:auto` shrink-to-fits to 19px and the box lands at 200-19 = 181, so
+the correction cannot be a constant or a specified width. `s8` pins the edge to the CONTENT box
+(border box 214, content 7..207, so 207-5 = 202) rather than the padding box.
+
+⚠⚠⚠ **THE REFINEMENT WAS SKIPPED OUTRIGHT UNDER AN RTL BASE DIRECTION, AND THE COMMENT SAYING SO
+WAS TRUE ONLY WHILE THE SEED WAS WRONG.** `layout_block` guarded
+`refine_inline_static_positions` with `if bcs.direction != Rtl`. The helper measured the inline
+advance from the LEFT — the wrong end of an RTL line — so refining a correct seed would have made
+it worse, and skipping was the lesser error. Fix the seed and the skip becomes the thing that is
+wrong: `v1` sat at 195, the seed, as though no text preceded it, where Chrome puts it at 166. So the
+helper is now TOLD the direction (`take` ranks leftmost-wins, is fed `f.x - trailing_margin` instead
+of `f.x + f.width + trailing_margin`, the first-line `open` takes the line's RIGHT edge, and the
+collapsed space subtracts). **A guard that exists because a DIFFERENT value was wrong has to be
+re-examined the moment that value is fixed — it does not announce itself.**
+
+⚠⚠ **A UNIT TEST WAS PINNING THE WRONG ANSWER WITH A NOTE SAYING SO**, and it is the reason this
+tick was findable at all: `an_insetless_absolute_box_starts_after_the_inline_content_before_it`
+asserted `s13 == 0.0` with the message *"the RTL guard is INERT — Chrome puts this at 334 and
+closing that is separate work"*. Closed. On a real page the box now lands at 335 against Chrome's
+335.
+
+⚠⚠ **THAT TEST CANNOT ASSERT 335, AND THE REASON IS A CASCADE GAP, NOT A LAYOUT ONE.** It went red
+at `x=-29.94` and the engine looked broken; the same markup through `manuk-wpt boxes --fetch` gave
+335, exactly Chrome. `layout_html` runs `MinimalCascade`, whose `text_align` initial value is the
+PHYSICAL `Left` and which never calls `TextAlign::resolve_physical` — that call exists only in
+`stylo_engine.rs`. So `text-align: start` never becomes `right` there, an RTL line is laid out flush
+LEFT, and `Hello` sits at x=0 where a browser puts it at 364. The row now asserts a RELATION (one
+box width left of the inline-start edge of what precedes it) that holds in both harnesses, and the
+literals live in the page gate, which runs the real cascade. **A red gate measured against Chrome
+before it is diagnosed against the engine — the engine was right and the ruler was short.**
+
+GATE `G_ABSPOS_STATIC_RTL` (`engine/page/tests/g_abspos_static_rtl.rs`), 11 rows, RED under:
+- **`static_inline_start` returns `(cx, false)` always** (the pre-tick seed) → `s2` at 0,0
+- **the edge kept but `mark_static_rl` dropped** → `s2` at 200 (one width right of Chrome)
+- **the `if bcs.direction != Rtl` skip restored** → `v1` back at 195
+- **the LTR far edge fed to `take` in the RTL branch** → `v1` at 195
+
+⚠ **THE STALE-ROW TRAP: `css/css-flexbox` READ +296 AND NONE OF IT WAS MINE.** The banked row said
+2872 and the WIP measured 3168. The old-binary control — `cp` the WIP aside, `git checkout --`,
+rebuild release, re-run the SAME area — returned **3168 as well**, i.e. the banked row was simply
+old. `css/css-text` was the same at +2. A banked number is a measurement with a DATE on it, and a
+diff against a stale one is not an attribution. Both rows are corrected in `WPT-AREAS.tsv` as
+CORRECTIONS, not as gains; the TOTAL moves 483,559 -> 483,857 and this tick contributed none of it.
+
+⚠⚠⚠ **APERTURE: `css/CSS2` IS 810 HTML FILES ON DISK AND IS NOT IN THE METRIC AT ALL.** Measured
+here at **2,391/2,506 = 95.4%**, twice, consistently. It has no row in `WPT-AREAS.tsv` under any
+name, and the reason is upstream of that file: the area list lives in `scripts/wpt-sweep.sh`'s
+`AREAS=(…)`, which is HARNESS and observer-owned, so hand-adding a row would be erased by the next
+sweep. Recorded here for the observer rather than edited. Note this suite was actively ground in
+t1070–t1079 and t1137–t1138 and `CONSTITUTION-CHECK.md` describes it as "9,221 tests on disk", so
+the present 2,506 subtests also says the CHECKOUT is sparse — two different aperture questions, both
+outside what this agent may change.
+
+NEXT — measured, reproducible, not done here:
+**over-constrained insets are resolved in PHYSICAL axes, not the containing block's LOGICAL ones.**
+The side to drop is the inset-*-END side OF THAT AXIS, and which physical side that is depends on
+what the axis IS in the containing block. Chrome-measured, container 200x100, box 5x6, ten rows with
+six controls (fixture `/tmp/oc.html`, table in `/tmp/t1361-notes.md`):
+
+```
+  containing block   horizontal axis is   drop      vertical axis is    drop
+  horizontal-tb ltr  INLINE               right     BLOCK               bottom
+  horizontal-tb rtl  INLINE               left      BLOCK               bottom
+  vertical-rl        BLOCK                left      INLINE ltr/rtl      bottom/top
+  vertical-lr        BLOCK                right     INLINE ltr/rtl      bottom/top
+```
+
+Ours implements the first row and applies it in every mode. `direction` IS already read (the
+`horizontal-tb rtl` row is exact) — what is missing is that `direction` governs the INLINE axis,
+which in a vertical mode is the VERTICAL one, while the horizontal axis is governed by the BLOCK
+direction. Three wrong rows: `vertical-rl` + `left:20 right:40` (Chrome 155, ours 20);
+`vertical-rl rtl` + `top:10 bottom:30` (Chrome y=64, ours y=10); and the inline-axis STATIC position
+in `vertical-rl rtl` (Chrome y=94, ours y=0) — the last being this tick's mechanism in the one
+combination it does not yet cover.
+
+WIKI: docs/wiki/box-layout.md

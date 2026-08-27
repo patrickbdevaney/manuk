@@ -8598,3 +8598,47 @@ and ask what it thinks the value's ORIGIN is.
 ⚠ The exempt set is itself narrower than it first looks. Out-of-flow FLEX and GRID items are placed
 by machinery that already folds the transform in, so exempting them applies it twice — measured at
 38 subtests in `css/css-grid` against a totals line that read positive overall.
+
+## A GUARD THAT EXISTS BECAUSE A DIFFERENT VALUE WAS WRONG DOES NOT ANNOUNCE ITSELF (t1361)
+
+`refine_inline_static_positions` was called under `if bcs.direction != Rtl`, with a comment saying
+it was "skipped under an RTL base direction". That was a defensible decision when it was made: the
+helper measured the inline advance from the LEFT, which is the wrong end of an RTL line, so refining
+made the answer worse and skipping was the lesser error. Then a different tick fixed the SEED the
+helper refines — and the guard silently became the thing that was wrong, because its premise was
+never a statement about RTL at all. It was a statement about the helper.
+
+The recurring shape: a workaround is a claim about SOMETHING ELSE'S state, and that state changes
+without the workaround being told. It reads as a deliberate scope boundary forever after, because
+the comment describes WHAT it does (skip in RTL) rather than WHY it was safe (the helper measured
+from the wrong end). The same tick also found the mirror case — a unit test asserting a known-wrong
+literal with the note *"closing that is separate work"* — which is the honest version of the same
+thing and is what made the defect findable at all.
+
+Checks that follow: when you fix a value, grep for every guard that mentions the CONDITION that
+value was wrong under, not just the value's own name. Write a workaround's comment as the premise
+that makes it safe, so that premise can be re-checked. And prefer a test that pins a known-wrong
+value WITH the correct one in the message over silently not testing the case — the second form is
+invisible and the first is a work item.
+
+## A BANKED NUMBER IS A MEASUREMENT WITH A DATE, AND A DIFF AGAINST A STALE ONE IS NOT AN ATTRIBUTION
+
+`css/css-flexbox` read 2,872 banked and 3,168 with the change in the tree — an apparent +296 from a
+fix that had nothing to do with flexbox. The old-binary control (save the WIP, `git checkout --`,
+rebuild, re-run the SAME area) returned 3,168 as well: the row was simply old, and the tick's true
+contribution to it was zero. Running the control only when a number goes DOWN catches regressions
+and lets every stale row inflate a tick's credit.
+
+Corollary already recorded elsewhere and re-earned here: a flat TOTAL can hide equal gains and
+losses, so a flat area still needs its failing NAMES diffed before "no change" is a finding. In this
+tick `css/css-position` was flat by total AND 0-new/0-fixed by name, which is what makes "this tick
+buys no WPT subtests" an honest statement rather than an absence of measurement.
+
+## THE APERTURE IS PART OF THE INSTRUMENT, AND IT IS NOT ALWAYS YOURS TO WIDEN
+
+`css/CSS2` is 810 HTML files in the checkout, measures 2,391/2,506 = 95.4%, and has no row in the
+metric under any name. The list of measured areas lives in the sweep SCRIPT, not in the data file,
+so hand-adding a row would be erased by the next sweep — the fix belongs to whoever owns the
+harness. Diff the checkout against the metric's own area list periodically; when the gap turns out
+to live upstream of what you may change, RECORD it with its measured value rather than either
+editing across the boundary or dropping it.
