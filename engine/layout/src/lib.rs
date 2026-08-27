@@ -1247,6 +1247,10 @@ struct Ctx<'a> {
     /// stayed in flow. Recorded as normal flow walks past it, because that is the only moment the
     /// information exists.
     static_pos: RefCell<HashMap<NodeId, (f32, f32)>>,
+    /// Nodes whose `static_pos` was mapped out of a `vertical-rl` subtree, and whose placed box
+    /// therefore has to be pulled one WIDTH left of it — see [`Self::map_static_positions`] for why
+    /// the correction cannot live at the mapping site. Empty for every horizontal page.
+    static_pos_rl: RefCell<HashSet<NodeId>>,
     /// ⚠⚠⚠ **The provisional origin of an ATOMIC INLINE whose subtree recorded a static position.**
     ///
     /// A float and an `inline-block` are both laid out at a provisional `(0,0)` and TRANSLATED into
@@ -1455,6 +1459,7 @@ pub fn layout_document(
         taffy_item_width: RefCell::new(HashMap::new()),
         taffy_item_height: RefCell::new(HashMap::new()),
         static_pos: RefCell::new(HashMap::new()),
+        static_pos_rl: RefCell::new(HashSet::new()),
         atomic_static_origin: RefCell::new(HashMap::new()),
         static_pos_writes: std::cell::Cell::new(0),
         transform_matrix: RefCell::new(HashMap::new()),
@@ -3633,6 +3638,46 @@ impl Ctx<'_> {
         (x - ml, ((right - x).max(0.0)) + ml + mr)
     }
 
+    /// **Map every recorded STATIC POSITION under `root` out of the transposed space**, the
+    /// `static_pos` analogue of [`writing_mode::map_subtree`].
+    ///
+    /// ⚠⚠⚠ An out-of-flow box inside a vertical subtree is placed by `position_absolutes`, which
+    /// runs LONG after `map_subtree` has folded the in-flow children back into page coordinates —
+    /// so its static position, recorded while the subtree was being laid out transposed, was still
+    /// in engine order when `layout_abs` read it. Chrome-measured, a 5x6 abspos with only
+    /// `left: 20px` in a 300x200 `vertical-lr` container: `@20,0`; ours was `@20,-400`, the y being
+    /// an untransposed x.
+    ///
+    /// ⚠ The box's own extent is not known here, so this maps the POINT — `VerticalRun::px` with a
+    /// zero extent. That is the honest answer for a point, and it is NOT the whole answer, because
+    /// of what reads it: `position_absolutes` installs the static position as the containing
+    /// block's ORIGIN and `layout_abs` then grows the box rightward and downward from it, i.e. it
+    /// treats the point as a physical TOP-LEFT corner. In a `vertical-rl` subtree the block axis
+    /// runs leftward, so the point is the box's block-start edge — its physical RIGHT edge — and
+    /// the box belongs one width to the LEFT of it. The correction cannot be applied here (no
+    /// width yet); [`Self::static_pos_rl`] records which nodes need it and `position_absolutes`
+    /// applies it once `layout_abs` has returned a measured box.
+    ///
+    /// Chrome-measured, an inset-less 5x6 abspos after a `width:30px` in-flow block in a 200px
+    /// `vertical-rl` container: `@165,0`. Mapping the point alone gives `@170,0` — the block-start
+    /// edge, off by exactly the box's width. `vertical-lr` needs no correction (`@30,0` both ways),
+    /// which is why one direction can look completely correct while the other is wrong.
+    fn map_static_positions(&self, root: NodeId, v: writing_mode::VerticalRun) {
+        let mut sp = self.static_pos.borrow_mut();
+        let mut rl = self.static_pos_rl.borrow_mut();
+        for n in self.dom.descendants(root) {
+            if let Some(p) = sp.get_mut(&n) {
+                let (ex, ey) = (p.0, p.1);
+                *p = (v.px(ey, 0.0), v.py(ex));
+                if v.rl {
+                    rl.insert(n);
+                } else {
+                    rl.remove(&n);
+                }
+            }
+        }
+    }
+
     fn translate_static_positions(&self, root: NodeId, dx: f32, dy: f32) {
         if dx == 0.0 && dy == 0.0 {
             return;
@@ -4867,6 +4912,9 @@ impl Ctx<'_> {
                     }
                 }
             }
+            // ⚠ The static positions ride the SAME map — see `map_static_positions`. An out-of-flow
+            // descendant is placed later, by `position_absolutes`, so nothing else folds it back.
+            self.map_static_positions(node, v);
             (c, used_inline)
         } else if establishes_bfc(&s) {
             own_bfc = FloatContext::new(content_x, content_x + inner_width);
@@ -9580,6 +9628,13 @@ impl Ctx<'_> {
                 0.0
             };
             let mut b = self.layout_abs(node, cb, static_v_shift, static_h_shift);
+            // ⚠ The static position in a `vertical-rl` subtree is the box's block-START edge, which
+            // is physically its RIGHT one; `layout_abs` just grew the box rightward from it. Pull it
+            // back by the width it has now, which is the first moment that width exists. Guarded on
+            // `x_static` because a box with a real horizontal inset never used the point at all.
+            if x_static && self.static_pos_rl.borrow().contains(&node) {
+                b.translate(-b.rect.width, 0.0);
+            }
             if let Some(m) = chain {
                 b.transform_affine(&m);
             }

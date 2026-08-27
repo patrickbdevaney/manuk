@@ -90980,3 +90980,111 @@ re-invalidation after mutating an adopted sheet — three separate mechanisms, n
 `top:1px;left:2px` its axes come out TRANSPOSED (@6,7 against Chrome's @7,6) — the insets are being
 applied in the transposed space. (b) The remaining constructed-sheet mechanisms above. (c) The three
 unmodelled font longhands (t1353). (d) The teardown Bar-0 (t1349). (e) I3's debt.
+
+## t1360 — an out-of-flow box is EXEMPT from the transposition, not ABSENT from it
+
+TICK SHAPE: capability. WPT TOTAL 483,451 → 483,559 (+108, all in `cssom`).
+`css/css-grid` 10,358 → 10,358 and `css/css-position` 1,166 → 1,166 — both FLAT, and the grid
+row is flat only because of a control run described below.
+
+t1345 gave the engine vertical writing modes by TRANSPOSING a subtree: `writing_mode::plan` rewrites
+every descendant's physical geometry fields, the existing horizontal algorithm runs unchanged, and
+`map_subtree` rotates the result back. That is correct for everything in the vertical block flow. An
+absolutely-positioned box is not in it. Its insets resolve against a CONTAINING BLOCK whose rect is
+already physical (CSS Position §3), and CSS Writing Modes §7.2 makes `top`/`right`/`bottom`/`left`
+physical regardless of the box's own mode. Transposing such a box swaps its `width` with its
+`height` and permutes its inset sides, then lays it out against an already-physical containing
+block: **the rotation is applied to a box that was never rotated.** Chrome puts
+`top:10px; left:20px` at `20,10` in a `vertical-rl` container — exactly where a horizontal container
+would; ours put it at `10,20` and sized it `6x5` instead of `5x6`.
+
+Chrome-measured (`--headless=new --dump-dom`), containers `position:relative; width:200px;
+height:100px`, children `position:absolute; width:5px; height:6px`, rects parent-relative:
+
+```
+  container                        child                                    Chrome      ours (pre)
+  .cb  vertical-rl                 top:10px; left:20px                      20,10 5x6   10,20 6x5
+  .cb  vertical-rl                 top:10px; right:20px                     175,10      0,10
+  .cb  vertical-rl                 bottom:20px; left:20px                   20,74       20,0
+  .cb  vertical-rl                 inset:10px auto auto 20px                20,10       10,20
+  .cb  vertical-rl                 inset-block-start:10; inset-inline-s:20  185,20      —
+  .cb2 vertical-lr + rtl           top:10px; left:20px                      20,10       10,20
+  .cb2 vertical-lr + rtl           inset-block-start:10; inset-inline-s:20  10,74       —
+  .cb3 vertical-rl, after 30px flow  (all insets auto)                      165,0       -400ish
+  .cb4 vertical-lr, after 30px flow  (all insets auto)                      30,0        —
+  .cb  vertical-rl, #e1 40x50 abspos > .in 8x9 / .in2 12x9                  32,0 / 20,0 0,0 9x8
+```
+
+THE FIX is three parts, and each one is a different statement:
+
+1. `writing_mode::plan` — an out-of-flow node inside a transposed subtree is NOT transposed and
+   instead becomes a new ORTHOGONAL ROOT (`roots.insert(node, pm)`). Not "skipped": `writing-mode`
+   INHERITS, so its children are still in vertical flow and must be transposed and mapped back
+   through their own `VerticalRun`. Exempt, not absent — the last two rows of the table are the
+   difference, and an empty box cannot express it.
+2. `Layout::map_static_positions` — a box with `auto` insets falls at its STATIC position, which is
+   recorded during the transposed layout and so, unlike every inset, is in engine coordinates when
+   `layout_abs` reads it. `position_absolutes` runs long after `map_subtree`. Mapped through the
+   same `VerticalRun`.
+3. `Layout::static_pos_rl` + a `-width` translate in `position_absolutes` — see below.
+
+⚠⚠⚠ **THE COMMENT I WROTE ON (2) WAS A CHECKABLE CLAIM AND IT WAS FALSE.** It read: *"The box's
+own extent is not known here and is not needed: a static position is a POINT ... for a point that
+extent is zero — which is why this passes `0.0` rather than inventing a size."* Every clause about
+the POINT is true. The claim is still wrong, because of what READS the point: `position_absolutes`
+installs it as the containing block's origin and `layout_abs` grows the box rightward from it, i.e.
+it treats the point as a physical TOP-LEFT corner. In `vertical-rl` the block axis runs leftward, so
+the point is the box's block-start edge = its physical RIGHT edge, and the box belongs one width to
+the left. Ours read `170,0` where Chrome reads `165,0` — off by exactly the box's `width:5px`.
+`vertical-lr` needs no correction and was already right at `30,0`, so **one direction was completely
+correct while the other was silently off by a width.** The correction cannot live at the mapping
+site (no width yet), so `static_pos_rl` records which nodes need it and it is applied the moment
+`layout_abs` returns a measured box.
+
+⚠⚠⚠ **THE FIRST VERSION COST `css/css-grid` 38 SUBTESTS, AND THE TOTALS SAID +70 OVERALL.** The
+old-binary control (`cp` the WIP aside, `git checkout --`, rebuild release, re-run the SAME area,
+diff the failing NAMES) returned **38 new, 0 fixed**, all in
+`css/css-grid/alignment/grid-{row,column}-axis-alignment-positioned-items-*`, all reading
+`width expected 10 but got 60`. Those are out-of-flow GRID ITEMS: the flex/grid machinery already
+places them against a grid area or the container's content box, folding the transposition in, so
+re-rooting them applies it TWICE. `plan` now excludes an out-of-flow node whose PARENT is a flex or
+grid container, and the area went back to its banked 10,358 exactly. t1347's
+`orthogonal-positioned-grid-descendants` — an abspos *inside* a grid item rather than a grid item
+itself — is the shape that does need the re-rooting, and stayed green throughout.
+
+GATE `G_ABSPOS_IN_VERTICAL_CB` (`engine/page/tests/g_abspos_in_vertical_cb.rs`), 11 rows, RED under:
+- **always transpose** (drop the `out_of_flow` branch — the pre-tick state) → `#a1 is 6.00x5.00`
+- **`out_of_flow` true but no `roots.insert`** → `#e1a at 0.00,0.00 sized 9.00x8.00`
+- **delete the `map_static_positions` call** → `#c1 at 0` instead of 165
+- **drop the `static_pos_rl` `-width` translate** → `#c1 at 170` instead of 165
+- **remove the `parent_is_flex_or_grid` exclusion** → GREEN, by design: that exclusion is carried by
+  the upstream grid area, not by this gate, and the gate says so in the file.
+
+⚠ **THE MUTATION PASS FOUND TWO HOLES, SEVEN TICKS RUNNING, AND BOTH WERE A DIMENSION EVERY ROW
+SHARED.** Every child in the first fixture was EMPTY, so dropping `roots.insert` passed. Every child
+had an explicit inset, so `map_static_positions` was never exercised at all. Both were closed by
+adding rows measured from Chrome, not by weakening an assertion.
+
+⚠ **THE FIRST GATE RUN WAS ON THE WRONG CASCADE AND LOOKED LIKE THREE NEW BUGS.** `cargo test -p
+manuk-page` without `--features stylo,spidermonkey` runs `MinimalCascade`, which has no `inset`
+shorthand and no logical inset longhands — so `inset:`, `inset-block-start:` and `inset-inline-start:`
+all read `0,0` and looked like a large unimplemented-property finding. With the features they are all
+exactly Chrome. A page gate that reads any property outside `MinimalCascade`'s set is measuring the
+wrong engine, and it reports that as a missing FEATURE rather than as a missing FLAG.
+
+NEXT — measured, reproducible, not done here (a different mechanism):
+**over-constrained insets are resolved in PHYSICAL axes, not in the containing block's LOGICAL
+ones.** `inset:10px 20px 30px 40px` (both `left` and `right` given) in a 200px `vertical-rl`
+container: Chrome `175,10`, ours `40,10`. CSS 2.1 §10.3.7's "ignore `right` for ltr" is really
+"ignore the inset-INLINE-end side", and §10.6.4's block-axis rule ignores the block-END side; in
+`vertical-rl` the block axis runs right-to-left, so the ignored side is `left`, giving
+`200-20-5 = 175`. Ours ignores `right` unconditionally. The fixture is in this tick's gate file as
+the commented-out `#a5` row.
+
+HARNESS (observer-owned, not touched): the wall went RED five consecutive attempts on
+`affordance` / `G_INTERACT` / `G_RUNTIME_COUNT` / `manuk-shell tests`, while `cargo test -p
+manuk-shell --features stylo,spidermonkey` run standalone is CLEAN. Five `find` processes were
+pinned at 100% CPU (the `*/1` disk-hygiene cron) against load1 ~10-12; those two shell gates are
+wall-clock gates and false-RED under that. Disk is fine (57G free on /home). Parked and retried.
+
+WIKI: docs/wiki/box-layout.md

@@ -534,6 +534,7 @@
   - L10963 · An absolutely positioned orthogonal root — the half of writing-mode that never reached layout_abs (t1347)
   - L11032 · An in-flow orthogonal root's width:auto is an auto BLOCK size (t1348)
   - L11090 · A block-level out-of-flow box opens the next line — and display cannot tell you it is one (t1358)
+  - L11142 · Out-of-flow boxes inside a vertical writing mode
 
 ## browser-capabilities.md
 `docs/wiki/browser-capabilities.md`
@@ -2393,4 +2394,4 @@
   - L231 · Both named mechanisms are subsystem work
 
 ---
-2300 sections across 22 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+2301 sections across 22 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.

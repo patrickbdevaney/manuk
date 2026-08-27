@@ -8561,3 +8561,40 @@ NO JavaScript ran on any page at all** — every probe read `-`. `node --check` 
 prelude PASSES, because it is a runtime `ReferenceError` and not a syntax error. **A prelude failure
 is total and is indistinguishable from "this page has no script"**; the way out was bisecting the two
 added lines, not reading them.
+
+## A COORDINATE CHANGE HAS AN EXEMPT SET, AND "EXEMPT" IS NOT "ABSENT" (t1360)
+
+When a feature is implemented by transforming a whole subtree into a different coordinate space and
+transforming the result back — the shape `writing_mode::plan` + `map_subtree` uses for vertical
+writing modes — the first correct version is always wrong about its BOUNDARY. Some boxes in that
+subtree do not live in the new space: an absolutely-positioned box resolves against a containing
+block whose rect is already in the OUTER space, so transforming it applies the rotation to something
+that was never rotated. Its geometry comes out at ninety degrees and its far-edge insets
+(`right`, `bottom`) land on the wrong sides entirely.
+
+The pattern is that the exemption has THREE distinct statements in it, and shipping one of them
+silently satisfies a gate built for another:
+
+1. **the box itself is exempt** — its own margin box is laid out in the outer space;
+2. **its CONTENTS are not** — the property inherits, so the subtree under it is still in the inner
+   space and needs its own root and its own map back. A box with no children cannot distinguish
+   "exempt" from "skipped", and a fixture made entirely of empty boxes will pass both;
+3. **anything the inner layout recorded ON THE SIDE still needs mapping** — here the STATIC
+   POSITION, written during the transposed layout and read much later by a pass that runs after the
+   map has already happened.
+
+And the sting on (3): **a point mapped correctly can still be the wrong point, because the CONSUMER
+gives it a meaning the mapping did not.** A static position is a zero-extent point and mapping it
+with a zero extent is right; the consumer then treats it as a physical TOP-LEFT corner and grows the
+box away from it in the outer space's direction. In a right-to-left block axis the mapped point is
+the box's RIGHT edge, so the box lands one WIDTH off — and only in that one direction, so the
+left-to-right case reads perfectly correct while its mirror is quietly wrong.
+
+Checks that follow: for every subtree transform, enumerate what does NOT participate and give each
+exempt kind a NON-EMPTY fixture; run both directions of any axis, because a direction-independent
+error cancels in one of them; and when a value is mapped for a later consumer, read that consumer
+and ask what it thinks the value's ORIGIN is.
+
+⚠ The exempt set is itself narrower than it first looks. Out-of-flow FLEX and GRID items are placed
+by machinery that already folds the transform in, so exempting them applies it twice — measured at
+38 subtests in `css/css-grid` against a totals line that read positive overall.

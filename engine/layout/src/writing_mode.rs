@@ -126,8 +126,54 @@ pub(crate) fn plan(dom: &Dom, styles: &StyleMap) -> Option<WmPlan> {
             }
             // Already inside a transposed subtree: this node's own box is transposed, and so is
             // everything below it. (The nested-orthogonal case named in the module docs.)
+            //
+            // ⚠⚠⚠ **EXCEPT AN OUT-OF-FLOW BOX, WHOSE OWN GEOMETRY IS PHYSICAL.** `top`, `left`,
+            // `width` and `height` on an absolutely positioned box are PHYSICAL properties resolved
+            // against its containing block's padding box — and that containing block is the
+            // orthogonal root itself, whose own box is physical. Transposing the abspos and then
+            // never mapping it back (it is placed by `position_absolutes`, LONG after
+            // `map_subtree` has run over the in-flow children) left it transposed twice over.
+            // Chrome-measured, a 5x6 abspos in a 300x200 `vertical-lr` container:
+            //
+            // ```text
+            //                                  Chrome        before
+            //   top:10px; left:20px           @20,10 5x6    @10,20 6x5   ← position AND size swapped
+            //   top:10px                      @0,10         @10,-200
+            //   left:20px                     @20,0         @0,20
+            //   …the same, horizontal  CONTROL @20,10 5x6   @20,10 5x6   ✓
+            // ```
+            //
+            // ⭐ So it is not a transposed descendant — it is a NEW ORTHOGONAL ROOT: its own box is
+            // physical (its parent placed it with physical rules) and its CONTENT is still vertical,
+            // because `writing-mode` inherits. That is exactly the state `roots` already models, and
+            // `layout_abs` already knows how to lay one out (t1347). The fix is to classify it
+            // correctly rather than to add a second mechanism.
             Some(pm) => {
-                if let Some(s) = out.get_mut(&node) {
+                // ⚠⚠ **NOT AN OUT-OF-FLOW CHILD OF A FLEX OR GRID CONTAINER**, and that exclusion
+                // cost 38 subtests to find. Those are placed by the flex/grid machinery against a
+                // grid AREA or the container's content box — paths that already fold the
+                // transposition in — so re-rooting them applies it twice.
+                // `css/css-grid/alignment/grid-*-axis-alignment-positioned-items-*` went red with
+                // `width expected 10 but got 60` on the first version, which had no such guard;
+                // t1347's `orthogonal-positioned-grid-descendants` (an abspos inside a grid ITEM,
+                // not a grid item itself) is the shape that DOES need it, and stayed green.
+                let parent_is_flex_or_grid = dom.parent(node).is_some_and(|p| {
+                    matches!(
+                        styles.get(&p).map(|s| s.display),
+                        Some(manuk_css::Display::Flex)
+                            | Some(manuk_css::Display::Grid)
+                            | Some(manuk_css::Display::InlineFlex)
+                            | Some(manuk_css::Display::InlineGrid)
+                    )
+                });
+                let out_of_flow = !parent_is_flex_or_grid
+                    && matches!(
+                        styles.get(&node).map(|s| s.position),
+                        Some(manuk_css::Position::Absolute) | Some(manuk_css::Position::Fixed)
+                    );
+                if out_of_flow {
+                    roots.insert(node, pm);
+                } else if let Some(s) = out.get_mut(&node) {
                     transpose_in_place(s, pm);
                 }
                 Some(pm)

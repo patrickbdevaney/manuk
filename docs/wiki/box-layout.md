@@ -11138,3 +11138,52 @@ assertion, with the measurement quoted and the §10.6.4 reason.
 `getComputedStyle-insets-*` mass (156) is the OTHER half — an abspos whose containing block is
 vertical or RTL, where we read `top: -465px` against Chrome's `10px`. `display_in_flow` is the
 foundation that half needs; it is not the whole of it.
+
+## Out-of-flow boxes inside a vertical writing mode
+
+`writing-mode: vertical-rl` / `vertical-lr` are implemented by TRANSPOSING a subtree
+(`engine/layout/src/writing_mode.rs`): every descendant's physical geometry fields are swapped, the
+ordinary horizontal block/inline algorithm runs unchanged, and `map_subtree` rotates the resulting
+boxes back into page coordinates. An absolutely- or fixed-positioned box is **exempt** from that
+transposition, for a reason that is structural rather than a special case: it is not laid out
+against its parent's flow at all. CSS Position §3 resolves it against a CONTAINING BLOCK — the
+padding box of the nearest positioned ancestor — whose rect is *already physical*, and CSS Writing
+Modes §7.2 keeps `top`/`right`/`bottom`/`left` physical whatever mode the box is in. Transposing it
+would rotate a box that was never rotated.
+
+"Exempt" is not "skipped". `writing-mode` inherits, so the box's CONTENTS are still in vertical
+flow. It therefore becomes a new **orthogonal root** (`WmPlan::roots`): its own margin box is laid
+out in the containing block's physical axes, and its subtree is transposed and mapped back through
+its own `VerticalRun`. Chrome, `vertical-rl`, a 40×50 abspos holding two blocks of `width:8px` and
+`width:12px`: the children are 8 and 12 wide, stack LEFTWARD from the box's right edge (32, then
+20), and both sit at y=0.
+
+Three things move in that space and each needs its own map:
+
+| what | where it is written | how it comes back |
+| --- | --- | --- |
+| in-flow boxes and text runs | during the transposed layout | `writing_mode::map_subtree` |
+| the out-of-flow box's own rect | `layout_abs`, in physical axes | nothing to map — it never left |
+| the STATIC POSITION | during the transposed layout | `Layout::map_static_positions` |
+
+The static position is the one that is easy to miss, because it is recorded during flow but read by
+`position_absolutes`, which runs long after `map_subtree` has already folded everything else back.
+
+⚠ **Mapping the static position is necessary and not sufficient.** It is a zero-extent POINT and
+maps as one, but `position_absolutes` installs it as the containing block's ORIGIN and `layout_abs`
+then grows the box rightward and downward from it — i.e. the consumer reads it as a physical
+TOP-LEFT corner. In `vertical-rl` the block axis runs leftward, so the mapped point is the box's
+block-start edge, which is physically its RIGHT edge, and the box belongs one WIDTH to the left of
+it. `Layout::static_pos_rl` records the affected nodes and the correction is applied once
+`layout_abs` has returned a box with a measured width. `vertical-lr` needs no correction at all,
+which is why this failure mode shows up in exactly one of the two directions.
+
+⚠ **Out-of-flow FLEX and GRID items are excluded from the exemption.** The flex/grid machinery
+places them against a grid area or the container's content box and already accounts for the
+transposition, so re-rooting them applies it twice —
+`css/css-grid/alignment/grid-*-axis-alignment-positioned-items-*` measured the difference at 38
+subtests. An abspos *inside* a grid item is an ordinary descendant and does need the exemption.
+
+Gate: `G_ABSPOS_IN_VERTICAL_CB` (`engine/page/tests/g_abspos_in_vertical_cb.rs`), 11 Chrome-measured
+rows across `vertical-rl`, `vertical-lr`, `direction:rtl`, physical insets, logical insets, the
+`inset` shorthand, static positions in both block directions, and a non-empty out-of-flow subtree.
