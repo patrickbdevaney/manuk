@@ -91,6 +91,7 @@ const HTML: &str = r##"<!DOCTYPE html><html><head><style>
 <div class="cb"><div id="a2" class="ab" style="writing-mode:vertical-rl">hello<br>worldly</div></div>
 <div class="cb"><div id="ai" class="ab" style="writing-mode:vertical-rl;display:inline">hello</div></div>
 <div class="cb"><div id="iv" style="writing-mode:vertical-rl">hello</div></div>
+<div class="cb"><div id="ivm" style="writing-mode:vertical-rl;min-width:150px">hello</div></div>
 <div id="cssom">-</div>
 <script>
   var g = function (id) { return getComputedStyle(document.getElementById(id)).writingMode; };
@@ -364,7 +365,7 @@ fn g_writing_mode_transposes_the_subtree() {
 ///    #atb …with top:10px; bottom:20px                20.0x170.0   48.2x170.0  ✗
 ///    #a2  …two lines, `hello`/`worldly`              40.0x67.4    67.4x40.0   ✗
 ///    #ai  …display:inline (blockified)                20.0x48.2   48.2x20.0   ✗
-///    #iv  the same box IN FLOW           ⚠ RESIDUE    20.0x48.2  300.0x48.2   ✗ still
+///    #iv  the same box IN FLOW                       20.0x48.2  300.0x48.2   ✗ (closed t1348)
 /// ```
 fn abspos_rows(page: &manuk_page::Page) {
     let r = |sel: &str| rect_of(page, sel);
@@ -446,29 +447,55 @@ fn abspos_rows(page: &manuk_page::Page) {
         ai.height
     );
 
-    // ── ⚠⚠⚠ THE NAMED RESIDUE, pinned at OUR value with Chrome's beside it. An IN-FLOW orthogonal
-    //    root's physical width is its BLOCK axis, so `width:auto` must shrink-wrap to the content's
-    //    block extent (Chrome: 20.0) rather than fill the containing block (ours: 300.0). It is the
-    //    same swap this tick made in `layout_abs`, in the other layout path — and it is a bigger
-    //    change there, because `layout_block` computes its width long before the children and feeds
-    //    it to the margin, float and BFC rules on the way. Everything else about the in-flow
-    //    vertical box is already exact, including this row's HEIGHT.
+    // ── ⭐ THE IN-FLOW HALF, which was this gate's NAMED RESIDUE for exactly one tick (t1347 pinned
+    //    it at 300.0 with Chrome's 20.0 beside it; t1348 closed it). An orthogonal root's physical
+    //    width is its BLOCK axis, so `width:auto` hugs its content — the same rule that makes an
+    //    ordinary horizontal block's `height:auto` hug its lines. Filling instead is not a small
+    //    error: `vertical-rl` maps its children back from the box's RIGHT edge, so every child was
+    //    placed against a width the content never asked for.
     let iv = r("#iv");
     assert!(
         (iv.height - ah.width).abs() < 0.6,
         "G_WRITING_MODE: an in-flow vertical box's HEIGHT is its inline extent {:.1} — got {:.1}. \
-         This half has been right since t1343 and is the control for the residue below.",
+         This half has been right since t1343 and is the CONTROL for the width row below: if it \
+         moves, the width assertion is measuring a different box.",
         ah.width,
         iv.height
     );
     assert!(
-        iv.width > 100.0,
-        "G_WRITING_MODE: `#iv` reads {:.1} — a KNOWN DIVERGENCE pinned at its current value. \
-         Chrome gives 20.0: an in-flow orthogonal root's `width:auto` is an auto BLOCK size and \
-         shrink-wraps to the content, where we still fill the containing block. If this now reads \
-         ~20, that residue has been closed — update this assertion to `(iv.width - ah.height).abs() \
-         < 0.6` and delete this paragraph, do not delete the row.",
+        (iv.width - ah.height).abs() < 0.6,
+        "G_WRITING_MODE: an IN-FLOW vertical box's WIDTH is its BLOCK extent {:.1} — got {:.1}. \
+         Chrome gives 20.0 for one line box. Reading ~300 is the pre-t1348 state: `width:auto` \
+         filling the containing block, which is the horizontal rule applied to a vertical box.",
+        ah.height,
         iv.width
+    );
+    // ⚠ THE CONTROL THAT KEEPS THE FIX NARROW. An ordinary horizontal block still FILLS — that is
+    //    the arm a fix which simply shrink-wrapped every `auto` width would destroy, and it is the
+    //    whole of the rest of the web.
+    // ⚠⚠⚠ AND THE ROW THAT NAMES THE CLAMP, WHICH WAS MISSING FOR ONE MUTATION. The block extent
+    //    replaces a width that `min-width`/`max-width` had ALREADY clamped, so it has to be
+    //    re-clamped — and with the re-clamp mutated out the whole gate above stayed GREEN, because
+    //    every other row has no min/max at all. `min-width` stays PHYSICAL and so constrains the
+    //    BLOCK axis: an orthogonal root keeps its own physical style, only its descendants are
+    //    transposed. Chrome-measured: 150.0x48.2.
+    let ivm = r("#ivm");
+    assert!(
+        (ivm.width - 150.0).abs() < 0.6 && (ivm.height - ah.width).abs() < 0.6,
+        "G_WRITING_MODE: `min-width:150px` on an in-flow vertical box clamps its BLOCK axis to 150 \
+         while the inline axis stays {:.1} — got {:.1}x{:.1}. Chrome: 150.0x48.2. Reading ~20 wide \
+         means the block extent was written straight over a clamped width without re-clamping.",
+        ah.width,
+        ivm.width,
+        ivm.height
+    );
+
+    let h1w = r("#h1").width;
+    assert!(
+        (h1w - 400.0).abs() < 0.6,
+        "G_WRITING_MODE: CONTROL — an ordinary horizontal block still fills its 400px container, \
+         got {h1w:.1}. A fix that made the orthogonal-root shrink-wrap unconditional passes every \
+         vertical row above and takes the entire horizontal web with it."
     );
 }
 

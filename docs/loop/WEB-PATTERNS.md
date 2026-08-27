@@ -8254,3 +8254,27 @@ without `writing-mode` and assert that one is the exact transpose of the other. 
 numbers at all — it is calibrated by the engine's own font metrics — and it fails loudly for any
 axis-swap bug in any path. The three earlier `writing-mode` fixtures all used an EXPLICIT `width`,
 which is the same blindness one level up: a fixture that pins an axis cannot test it.
+
+---
+
+## t1348 — the rotated label whose box was the whole column
+
+`<div style="writing-mode:vertical-rl">` with an automatic width is the rotated table header, the
+sidebar tab, the chart axis title and the vertical caption down a hero image — the exact set this
+repo's own `writing_mode` module names as what the property is used for on the CrUX corpus. Every one
+of them had a box **as wide as its container** instead of as wide as its text:
+
+- the background and border painted across the whole column;
+- the hit area covered ground the label does not occupy;
+- and because `vertical-rl` maps its children back from the box's RIGHT edge, everything inside was
+  placed against a width the content never asked for.
+
+⭐⭐ **The class: A LOGICAL PROPERTY WEARING A PHYSICAL NAME.** In a vertical mode `width` is a BLOCK
+size, and an auto block size hugs its content — the same rule that makes an ordinary block's
+`height:auto` hug its lines. The engine applied the horizontal reading of the word `width` to a box
+that had asked to be vertical, which is not a bug in the vertical code so much as the absence of a
+question in the horizontal code.
+
+⚠ The check that would have found it is **the same box with and without the property**: an ordinary
+block fills, a vertical one hugs, and the two must NOT be the same number. Every earlier fixture for
+this property gave the box an EXPLICIT width — which pins the axis under test and cannot fail.

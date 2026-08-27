@@ -89880,3 +89880,102 @@ block axis. (b) `css-grid/grid-lanes` is now the #1 grid directory (1,248), and 
 file, `animation/flow-tolerance-interpolation.html` — an unshipped property, worth a refusal or a
 build, not a guess. (c) `css-grid/alignment` at 894 is the next real geometry mass. (d) The standing
 audit from t1346: gates asserting a REASONED reference value. (e) I3's mechanical debt.
+
+## t1348 — the other half of the transposition, and a −3 that only the old-binary control could see
+
+TICK SHAPE: capability — completes the orthogonal-root subsystem opened at t1343 and continued at
+t1347. Board re-run at the top of this tick and diffed against t1347's copy: **unchanged** except its
+own tally (`css/css-grid` 5,880 → 4,338 failing, 57.8% → 70.5%, from t1347). This closes the residue
+t1347 pinned in `G_WRITING_MODE` one tick after pinning it.
+
+### THE FIX
+
+An in-flow orthogonal root's physical `width:auto` FILLED its containing block. In a vertical writing
+mode `width` is a BLOCK size and an auto block size hugs its content — the same rule that makes an
+ordinary block's `height:auto` hug its lines. Chrome-measured, `16px/20px monospace`, `hello`:
+
+```text
+                                                        Chrome     before      after
+   writing-mode:vertical-rl                             20.0x48.2  300.0x48.2  20.0x48.2
+   …width:120px                          CONTROL       120.0x48.2  120.0x48.2 120.0x48.2
+   …height:80px                                         20.0x80.0  300.0x80.0  20.0x80.0
+   …two lines, `hello` / `worldly`                      40.0x67.4  300.0x67.4  40.0x67.4
+   …vertical-lr                                         20.0x48.2  300.0x48.2  20.0x48.2
+   …min-width:150px                                    150.0x48.2  300.0x48.2 150.0x48.2
+   …one child <div>                                     20.0x48.2  300.0x48.2  20.0x48.2
+   an ordinary horizontal block            CONTROL     300.0x20.0  300.0x20.0 300.0x20.0
+```
+
+All ten probe rows exact, including the sub-pixel advances and both controls. **Proven RED**, three
+mutations: remove the override → 300.0; drop the `wm_roots` guard → the horizontal CONTROL
+shrink-wraps to 20.0 and the gate's own ruler collapses; skip the min/max re-clamp → the
+`min-width:150px` row reads 20.0. ⚠ That third mutation **passed the gate as first written** — every
+other row has no min/max at all — and the row that refutes it was added afterwards. That is the
+second time in five ticks (t1345 was the first) that a mutation walked through a fixture whose rows
+all shared the same missing dimension.
+
+### ⭐⭐⭐ A −3 THAT ONLY THE OLD-BINARY CONTROL COULD SEE, AND THE PREDICATE THAT WOULD HAVE HALF-FIXED IT
+
+The first version scored `css/css-grid +4, css/css-flexbox +8` and **`css/css-sizing −3`**. A
+regression is never traded, so: save the WIP by `cp`, `git checkout --` the two files, rebuild
+release, re-run the SAME area with `--show-failures`, and diff the failing NAMES rather than the
+totals. Three new failures, **zero fixed**, all in one file:
+
+```text
+   css/css-sizing/intrinsic-size-fallback-replaced.html :: .test 5   <iframe class="test vertical">
+   css/css-sizing/intrinsic-size-fallback-replaced.html :: .test 6   <video  class="test vertical">
+   css/css-sizing/intrinsic-size-fallback-replaced.html :: .test 7   <svg    class="test vertical">
+```
+
+A REPLACED element has no children, so the probe returned a block extent of **zero** and the box
+vanished. Their size comes from an intrinsic size or the DEFAULT OBJECT SIZE, which is 300x150 and is
+PHYSICAL — the test's own `<meta name=assert>` says *"regardless of the writing-mode"*, and it is the
+only file in the area that asks.
+
+⚠⚠ **AND THE OBVIOUS GUARD WOULD HAVE FIXED TWO OF THE THREE AND LOOKED FINISHED.**
+`is_replaced_element` exists in this file and reads `img|canvas|video|svg` — it is scoped to §10.4's
+ratio transfer and omits the three tags that have a default object size but NO ratio. `<iframe>` is
+exactly the one of the three failures it does not cover. A predicate whose NAME matches the question
+is not the same as a predicate whose SET does; the guard matches the default-object-size arm's own
+list instead, plus `<img>`. After it, css/css-sizing is byte-identical to the control — zero new,
+zero fixed.
+
+### ⚠ THE PREDICTION WAS WRONG, AND THAT IS THE TICK'S OTHER FINDING
+
+I predicted ~144 subtests from counting the css-grid failures carrying this exact signature — an
+`offsetLeft` in the seven-hundreds where the test expects tens, because the children were mapped back
+from a filled right edge. The measured yield is **+12** (grid +4, flexbox +8, position and sizing
+flat).
+
+The fix applied and the signature moved: `grid-align-baseline-flex-002` now reads `expected 40 but
+got 185` where it read `got 743`. The fill is gone. The files did not flip because
+`check-layout-th` reports only the FIRST mismatch per element — behind the one I fixed sits a second
+mechanism, in the block sizing of a `display:flex` box inside a transposed subtree.
+
+⭐⭐ **A FAILURE-SIGNATURE COUNT IS AN UPPER BOUND ON A FIX'S YIELD, NEVER AN ESTIMATE OF IT.** Every
+assertion masked behind the one you can see is a separate mechanism until it is measured. The honest
+form of the t1347-style prediction is *"at most 144, of which this fix reaches the first assertion
+only"* — and t1347's +1,500 was right precisely because those fifteen files had **exactly two**
+distinct failure strings between them, i.e. nothing was hiding behind them.
+
+**Regression sweep.** Full `manuk-page` suite (not the wall's 19): **509 of 509 green**.
+`css/css-sizing` and `css/css-position` re-run and byte-identical to the control.
+
+### ⚠ FOR THE OBSERVER — `manuk-shell` FALSE-RED IN THE WALL, TWICE, HARNESS-SIDE
+
+`verify.sh` reported `✗ manuk-shell tests FAILED` on the landing attempt for BOTH t1347 and t1348.
+Run directly on the same tree, immediately after, `cargo test -p manuk-shell` is **77 passed, 0
+failed**, both times, and a plain re-run of `tick.sh` then goes green (t1347 landed on the second
+attempt; the wall's own gate time fell 314s → 47s, i.e. the second run was warm). Nothing in either
+tick touches `shell/`. Two occurrences is a pattern, not a flake: it costs a full extra wall each
+time. This is harness territory (`scripts/` is observer-owned), so it is a note and not a change —
+recorded here per the scope rule rather than debugged.
+
+**NEXT.** (a) The second mechanism behind `grid-align-baseline-flex-002` — a flex box's block sizing
+inside a transposed subtree, now the visible one at `got 185`. (b) `css-grid/grid-lanes` (1,248) is
+the #1 grid directory and 324 of it is `'from' value should be supported` on an unshipped property —
+a refusal or a build, not a guess. (c) `css-grid/parsing` (431): the line-name serialization emits
+each `[name]` one track early (`[a] 10px 1px [b]` for `10px [a] 1px 2px [b]`) — a bounded off-by-one,
+~30 subtests. (d) t1294's `minmax(auto, <smaller>)` refusal RE-CHECKED this tick against taffy's
+CHANGELOG at 0.12.1: still not fixed upstream, refusal stands, ~312 grid subtests parked. (e) The
+t1346 standing audit: gates asserting a REASONED reference value. (f) I3's mechanical debt.

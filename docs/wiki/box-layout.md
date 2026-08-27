@@ -11026,3 +11026,61 @@ no-`writing-mode` CONTROL rather than against Chrome's literals — so it is cal
 engine's own font metrics. Proven red by three mutations: no orthogonal branch → `48.2x20.0`; hand
 the block bound down unconditionally → `48.2x48.2`; report the block extent as the content height →
 `20.0x20.0`.
+
+---
+
+## An in-flow orthogonal root's `width:auto` is an auto BLOCK size (t1348)
+
+The other half of t1347, in the other layout path, and the residue that tick pinned. In a vertical
+writing mode `width` is a **block** size, and an auto block size is content-derived — the same rule
+that makes an ordinary horizontal block's `height:auto` hug its lines. `layout_block` filled the
+containing block instead. Chrome-measured, `16px/20px monospace`, `hello` = 48.2px of advance, in a
+300px containing block:
+
+```text
+                                                        Chrome     before
+   writing-mode:vertical-rl                             20.0x48.2  300.0x48.2
+   …width:120px                          CONTROL       120.0x48.2  120.0x48.2
+   …height:80px                                         20.0x80.0  300.0x80.0
+   …two lines, `hello` / `worldly`                      40.0x67.4  300.0x67.4
+   …vertical-lr                                         20.0x48.2  300.0x48.2
+   …min-width:150px                                    150.0x48.2  300.0x48.2
+   …one child <div>                                     20.0x48.2  300.0x48.2
+   an ordinary horizontal block            CONTROL     300.0x20.0  300.0x20.0
+```
+
+Filling is not a small error: `vertical-rl` maps its children back from the box's RIGHT edge, so
+every child was placed against a width the content never asked for.
+
+**Implementation.** A measure-then-lay-out probe, run between `own_definite_h` and `inner_width` —
+the only window where the box's content height is known and its width has not yet been consumed by
+the gutter, margin and float rules. `gutter_x` is hoisted above it (a pure function of `overflow-x`,
+so moving it changes nothing). The probe's block bound is `None` on purpose: handing the fill width
+down would let a percentage block size inside the subtree resolve against the number the probe exists
+to replace. The result is re-clamped by `min_w`/`max_w`, which had already run against the width
+being replaced.
+
+⚠⚠⚠ **NOT FOR A REPLACED ELEMENT, AND THIS COST THREE SUBTESTS TO LEARN.** An `<iframe>`, `<video>`
+or `<svg>` has no children, so the probe returns a block extent of ZERO and the box vanishes. Their
+size comes from an intrinsic size or the **default object size**, which is 300x150 and is PHYSICAL —
+`css/css-sizing/intrinsic-size-fallback-replaced` asserts 300x150 in both writing modes and says so
+in its own `<meta name=assert>`: *"regardless of the writing-mode"*.
+
+⚠ The guard is **not** `is_replaced_element`. That predicate is `img|canvas|video|svg`, scoped to
+§10.4's ratio transfer, and omits the three tags that have a default object size but no ratio —
+`iframe` being exactly the one the regression landed on. Reusing it would have fixed two of the three
+rows and looked finished. The guard matches the same set the default-object-size arm does, plus
+`<img>`.
+
+**Gate.** `G_WRITING_MODE`. Proven red by three mutations: remove the override → 300.0; drop the
+`wm_roots` guard → the horizontal control shrink-wraps to 20.0 and the ruler collapses; skip the
+min/max re-clamp → the `min-width:150px` row reads 20.0.
+
+**WPT, and the prediction was WRONG.** `css/css-grid` +4, `css/css-flexbox` +8, `css/css-position`
+and `css/css-sizing` flat: **+12**, against a predicted ~144. The prediction counted the 144 grid
+failures carrying this signature (`offsetLeft` in the seven-hundreds where the test expects tens), and
+`check-layout-th` reports only the FIRST mismatch per element — so those files did not flip, they
+moved on to their next failure. `grid-align-baseline-flex-002` reads `expected 40 but got 185` where
+it read `got 743`: the fill is gone and a second mechanism, in the block sizing of a flex box inside a
+transposed subtree, is behind it. ⭐ **A failure-signature count is an upper bound on a fix's yield,
+never an estimate of it** — every masked assertion behind it is a separate mechanism until measured.

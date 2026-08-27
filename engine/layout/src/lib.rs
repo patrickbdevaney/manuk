@@ -4589,6 +4589,93 @@ impl Ctx<'_> {
             None => specified_definite_h,
         };
 
+        // Hoisted above the width override below, which needs it: `gutter_x` is a pure function of
+        // `overflow-x` and `scrollbar-width` and depends on no size, so moving it earlier changes
+        // nothing. Its own explanation is at the block-axis reservation further down.
+        let gutter_x = if s.overflow_x == Overflow::Scroll {
+            scrollbar_gutter(s.scrollbar_width)
+        } else {
+            0.0
+        };
+
+        // ── ⚠⚠⚠ **AN IN-FLOW ORTHOGONAL ROOT'S PHYSICAL WIDTH IS ITS BLOCK AXIS, SO `width:auto`
+        //    HUGS ITS CONTENT INSTEAD OF FILLING.** t1347 fixed this in `layout_abs` and pinned the
+        //    in-flow half as a named residue in `G_WRITING_MODE`; this is that residue.
+        //
+        //    In a vertical writing mode `width` is a BLOCK size, and an auto block size is
+        //    content-derived — the same rule that makes an ordinary horizontal block's `height:auto`
+        //    hug its lines. Filling instead is not a small error: the box's background, border and
+        //    hit area span the whole column, and — because `vertical-rl` maps its children from the
+        //    box's RIGHT edge — every child is placed against a width the content never asked for.
+        //    Chrome-measured, `16px/20px monospace`, `hello` = 48.2px of advance:
+        //
+        //    ```text
+        //                                                    Chrome    before
+        //      <div style="writing-mode:vertical-rl">hello    20.0x48.2  300.0x48.2
+        //    ```
+        //
+        //    ⚠ It is a real measure-then-lay-out, and the probe's block bound is `None` on purpose:
+        //    handing the fill width down would let a percentage block size inside the subtree
+        //    resolve against the number this probe exists to replace.
+        //
+        //    ⚠ Re-clamped by `min_w`/`max_w`, which ran against the width being replaced.
+        //    `min-width`/`max-width` stay PHYSICAL and so constrain the block axis — an orthogonal
+        //    root keeps its own physical style, only its descendants are transposed, and that is
+        //    what Chrome does.
+        //
+        //    WPT: ~144 `css/css-grid` failures carry this signature — an `offsetLeft` in the
+        //    seven-hundreds where the test expects tens, because the children were mapped back from
+        //    a filled right edge (`grid-align-baseline-flex-002`: `expected 40 but got 743`).
+        //
+        //    ⚠⚠⚠ **AND NOT FOR A REPLACED ELEMENT, WHICH COST THREE SUBTESTS TO LEARN.** An
+        //    `<iframe>`/`<video>`/`<svg>` has no children to lay out, so the probe below returns a
+        //    block extent of ZERO and the box vanishes. Their size comes from an intrinsic size or,
+        //    failing that, the DEFAULT OBJECT SIZE — which is 300x150 and is PHYSICAL: WPT's
+        //    `css/css-sizing/intrinsic-size-fallback-replaced` asserts 300x150 in both writing modes
+        //    and says so in its own `<meta name=assert>` (*"regardless of the writing-mode"*). The
+        //    first version of this guard omitted the check and the old-binary control caught it as
+        //    `-3` on css/css-sizing: three NEW failures, zero fixed, all in that one file.
+        if self.wm_roots.contains_key(&node)
+            && matches!(s.width, Dim::Auto)
+            && !s.width_stretch
+            && !s.width_is_natural
+            && s.width_keyword.is_none()
+            && taffy_known.is_none()
+            && !matches!(
+                self.dom.tag_name(node),
+                // ⚠ NOT `is_replaced_element`, which is `img|canvas|video|svg` — it is scoped to
+                // §10.4's ratio transfer and omits the three that have a DEFAULT OBJECT SIZE but no
+                // ratio. `<iframe>` is precisely the one the regression above landed on, so
+                // reusing that predicate would have fixed two of the three files and looked done.
+                // This is the same set the default-object-size arm below matches, plus `<img>`.
+                Some("svg" | "canvas" | "video" | "iframe" | "object" | "embed" | "img")
+            )
+        {
+            let avail_inline = match own_definite_h {
+                Some(h) => (h - gutter_x).max(0.0),
+                None => {
+                    let mut probe_fc = FloatContext::new(0.0, 1.0e6);
+                    let _probe = IntrinsicProbe::enter(self);
+                    let (probe, _) =
+                        self.layout_children(node, 0.0, 0.0, 1.0e6, None, &mut probe_fc);
+                    content_right_extent(
+                        &probe,
+                        self.fonts,
+                        0.0,
+                        &|n| self.px_right_insets(n),
+                        &|n| self.flex_container_max_content(n),
+                    )
+                    .min(manuk_css::values::viewport_size().1)
+                    .max(0.0)
+                }
+            };
+            let mut probe_fc = FloatContext::new(0.0, avail_inline);
+            let _probe = IntrinsicProbe::enter(self);
+            let (_c, block_extent) =
+                self.layout_children(node, 0.0, 0.0, avail_inline, None, &mut probe_fc);
+            width = block_extent.max(0.0).min(max_w).max(min_w);
+        }
+
         // **Scrollbar-gutter reservation** (CSS Overflow 4 §3.2). A classic (non-overlay) vertical
         // scrollbar lives on the inline-end edge and eats inline space: `overflow-y:scroll` always
         // shows one, so the content box is narrower than the border box (`offsetWidth`) by the
@@ -4612,11 +4699,6 @@ impl Ctx<'_> {
         // reserve (and reserving would wrongly shrink a `height:100%` child's track). Like the inline
         // case, this narrows the space passed to children while leaving `border_box_h` — the box's own
         // `offsetHeight` — untouched; the reserved strip is where the scrollbar sits.
-        let gutter_x = if s.overflow_x == Overflow::Scroll {
-            scrollbar_gutter(s.scrollbar_width)
-        } else {
-            0.0
-        };
         let inner_definite_h = own_definite_h.map(|h| (h - gutter_x).max(0.0));
         // A BFC root gets a fresh float context spanning its own content box; a plain
         // block shares its parent's so floats affect content across nested blocks.
