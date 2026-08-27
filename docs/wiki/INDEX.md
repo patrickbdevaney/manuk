@@ -1591,6 +1591,7 @@
   - L3005 · An event-handler CONTENT ATTRIBUTE is the event-handler IDL PROPERTY (t1346)
   - L3059 · window.frames[i] and window.length — the indexed half of the frame tree (t1349)
   - L3132 · An <iframe src> has a browsing context from INSERTION, not from load (t1350)
+  - L3188 · Named access on Window: a child browsing context wins, and it answers with its WINDOW (t1351)
 
 ## JS ENGINE — SpiderMonkey/mozjs integration realities
 `docs/wiki/js-engine.md`
@@ -2384,4 +2385,4 @@
   - L231 · Both named mechanisms are subsystem work
 
 ---
-2291 sections across 22 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+2292 sections across 22 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.

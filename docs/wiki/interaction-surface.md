@@ -3182,3 +3182,50 @@ it is the instrument that would have caught the `Page::iframes` trap, and it did
 the `load`-count — plus a direct assertion that `pending_iframes()` STILL lists the frame. Proven red
 by three mutations: no provisional build → `cd=NULL nobody len=3 idx=none`; let it claim the frame →
 `pending=[]`; let it fire `load` → `srcLoads:1`.
+
+---
+
+## Named access on Window: a child browsing context wins, and it answers with its WINDOW (t1351)
+
+`window['two']` for `<iframe name="two">` returned the `<iframe>` **element**. HTML §7.3.3 puts child
+browsing contexts ahead of elements in Window's supported property names, and their value is the
+**WindowProxy** — so `frames['name'].postMessage(…)` and the `window.open(url, 'name')` round trip
+both addressed an element. Chrome-measured:
+
+```text
+   <iframe id=g name=two>   window['two']      -> WINDOW     (was ELEMENT)
+                            window['g']        -> ELEMENT    (unchanged)
+   <iframe name=h2>         window['h2']       -> WINDOW     (was ELEMENT)
+   <div id=dv>              window['dv']       -> ELEMENT    (unchanged)
+   <img name=imgname>       window['imgname']  -> ELEMENT    (unchanged)
+```
+
+⚠ **NAME only, never id.** A frame's id is not a browsing-context name, which is why one element
+answers with its window under one key and with itself under another. That asymmetry is a gate row.
+
+⚠⚠⚠ **AND THE PERFORMANCE CONSTRAINT, WHICH THE FIRST ATTEMPT BROKE.** The frame lookup costs a
+`querySelectorAll`, and `window.<id>` is the getter on the hot path of every loop written against a
+bare identifier — the quadratic trap that function's own header records (2,000 appends: 117ms in an
+empty document, **14,029ms** with 16,000 nodes). Running the scan unguarded on every access
+reintroduced exactly that, and `G_GET_ELEMENT_BY_ID_INDEX` went red on the first run.
+
+The fix decides at **PUBLISH** time, not at access time: `__publishNamed` already knows whether a name
+came from a frame's `name` attribute, so it captures that in the closure. A name that is not a frame
+name takes the byte-identical old path. **The expensive question is only asked where it can have a
+different answer.**
+
+⚠⚠⚠ **AND THE MEASUREMENT TRAP THAT COST MOST OF THIS TICK — THE PROBE MEASURED ITSELF.** The first
+comparison read `byName_h2:ELEMENT` and looked like a half-working fix. It was not: the probe cached
+the element as `var h2 = document.querySelector(…)` at TOP LEVEL, and **a top-level `var h2` IS
+`window.h2`** — it overwrote the accessor it was about to read. Five other rows in the same probe were
+inline lookups and were correct.
+
+The reason it was invisible for several rounds is sharper still: the Chrome probe and the Manuk probe
+**were not the same program.** Chrome's ran inside a `setTimeout` callback (function scope, so `var h2`
+was a local); Manuk's ran at top level. Re-running both inside an IIFE made all six rows agree. Every
+gate row here is an inline lookup with no `var`, and says so.
+
+**Gate.** `G_FRAME_WINDOW_SURFACE` — `byNameIsWindow`, `byIdIsElement`, `plainIdIsElement`. Proven red
+by three mutations: no browsing-context lookup → `byNameIsWindow:true`; match on id as well as name →
+`byIdIsElement:true`; drop the `isFrameName` guard → `G_GET_ELEMENT_BY_ID_INDEX` never finishes its
+loop.

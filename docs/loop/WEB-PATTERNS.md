@@ -8326,3 +8326,29 @@ chain over a kind, ask what falls off the end and whether the fall-through is a 
 oversight. The comment beside this one even warned *"a frame this pass claims but does not build
 would be skipped by BOTH passes"* — it was watching for a frame claimed and not built, and missed the
 frame neither claimed nor built.
+
+---
+
+## t1351 — the frame you addressed by name and got a DOM element instead
+
+`window.frames['checkout'].postMessage(…)`, `window.open(url, 'authWindow')` then
+`window['authWindow'].location`, `<a target="preview">` then `frames['preview'].document`. Naming a
+frame and reaching it by that name is the oldest cross-document idiom there is, and it is what every
+payment field, OAuth popup and `target=`-driven legacy app is built on. All of them got the
+`<iframe>` ELEMENT, which has no `postMessage`, no `location` and no `document`.
+
+⭐⭐ **The class: A LOOKUP THAT RETURNS THE RIGHT THING'S NEIGHBOUR.** The element and its window are
+one-to-one, so the answer was never *missing* — it was one hop short, and every `typeof` check, every
+truthiness check and every `in` test passed on it. Only an IDENTITY comparison against
+`iframe.contentWindow` could see it.
+
+⚠⚠⚠ **AND THE MEASUREMENT LESSON, WHICH COST MORE THAN THE FIX: A TOP-LEVEL `var x` IS `window.x`.**
+The probe cached elements as `var h2 = document.querySelector(…)` and then asserted on `window['h2']`
+— **measuring its own variable**, which had overwritten the accessor under test. It reported a
+half-working fix for several rounds.
+
+It stayed hidden because the Chrome probe and the engine probe were **not the same program**:
+Chrome's body ran inside a `setTimeout` callback, where `var` is local; the engine's ran at top level,
+where `var` is global. ⚠ **When two engines disagree on one row out of six, suspect the two PROGRAMS
+before the two engines** — run both bodies in the same scope, and prefer inline lookups to cached
+locals whenever the name under test is also a name the page publishes.

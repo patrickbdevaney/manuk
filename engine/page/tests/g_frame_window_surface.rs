@@ -127,8 +127,15 @@ const PROBE: &str = r#"
   p('idx1IsTheOther:' + (window[1] === document.getElementById('g').contentWindow));
   p('reachThrough:' + (window.frames[0].document === d));
   p('parentThrough:' + (window[0].parent === window));
-  // ⚠ NAMED access is measured here as a RESIDUE, not a claim — see `byNameIsElement` below.
-  p('byNameIsElement:' + (window['two'] === document.getElementById('g')));
+  // ⭐ NAMED access (t1351): a name matching a CHILD BROWSING CONTEXT resolves to its WINDOW and
+  //    outranks the element; a name matching only an element resolves to the ELEMENT.
+  //    ⚠⚠⚠ NO `var` HERE, AND THAT IS NOT STYLE. A top-level `var g = …` IS `window.g = …`, so a
+  //    probe that caches an element in a same-named variable overwrites the very accessor it is
+  //    about to read and then measures ITSELF. That is exactly how this row was first mis-measured
+  //    as a divergence — see the journal. Every lookup below is inline.
+  p('byNameIsWindow:' + (window['two'] === document.getElementById('g').contentWindow));
+  p('byIdIsElement:' + (window['g'] === document.getElementById('g')));
+  p('plainIdIsElement:' + (window['out'] === document.getElementById('out')));
   p('outOfRange:' + (typeof window[9]));
   p('selfLen:' + (self.length === window.length));
   // ⚠ THE ENUMERABILITY DIVERGENCE, PINNED AT OUR VALUE. Chrome's indices are ENUMERABLE own
@@ -235,20 +242,27 @@ const INDEXED_FRAME_CLAIMS: &[(&str, &str)] = &[
          because there was no `frames[0]` to ask",
     ),
     (
-        // ⚠⚠⚠ A NEWLY-FOUND RESIDUE, PINNED AT OUR WRONG VALUE, AND IT LOOKED LIKE A PASS.
-        // The first probe of this surface asked `typeof window['two']` and read `object`, which
-        // reads as "named access works". It does not: the object is the `<iframe>` ELEMENT.
-        // HTML's named access on the Window object says a name matching a CHILD BROWSING CONTEXT
-        // resolves to that context's WindowProxy, and it wins over the element — Chrome returns
-        // `g.contentWindow`, we return `g`. A wrong answer of the RIGHT TYPE, which is the class
-        // this repo keeps catching, and `typeof` is exactly the question that cannot see it.
-        // Fixing it means the frame-name registry outranking the element-name one, which is a
-        // different lookup from the index this tick added.
-        "byNameIsElement:true",
-        "⚠ KNOWN DIVERGENCE. `window['two']` for `<iframe name=two>` must be the frame's WINDOW \
-         (Chrome: `=== g.contentWindow`); ours is the ELEMENT. If this reads `false`, check that \
-         it became the WINDOW and not merely `undefined` — then assert \
-         `window['two'] === g.contentWindow` here instead",
+        // ⭐ CLOSED AT t1351. It was pinned here for one tick as `byNameIsElement:true`, found
+        // because the first probe asked `typeof window['two']` and read `object` — which reads as
+        // "named access works" and is a WRONG ANSWER OF THE RIGHT TYPE: the object was the
+        // `<iframe>` ELEMENT. HTML §7.3.3 puts child browsing contexts ahead of elements in the
+        // supported property names, and their value is the WindowProxy.
+        "byNameIsWindow:true",
+        "`window['two']` for `<iframe name=two>` is the frame's WINDOW, not the element — this is \
+         what makes `frames['name'].postMessage(…)` and the `window.open(url, 'name')` round trip \
+         work at all. `false` with the element means the browsing-context lookup was lost",
+    ),
+    (
+        "byIdIsElement:true",
+        "⚠⚠ AND THE ROW THAT KEEPS THE FIX NARROW: the SAME frame reached by its ID is the ELEMENT. \
+         Chrome-measured — a frame's id is not a browsing-context name, so `window['g']` is the \
+         `<iframe>` and `window['two']` is its window, on one element. A fix that returned the \
+         window for any name matching a frame passes the row above and fails this one",
+    ),
+    (
+        "plainIdIsElement:true",
+        "and a non-frame element by id is untouched — the control for the whole named-access \
+         surface, which every page depends on and which this change routes around",
     ),
     (
         "outOfRange:undefined",

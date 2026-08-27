@@ -20711,24 +20711,74 @@ const WINDOW_PRELUDE: &str = r#"
                     var added = 0;
                     for (var i = 0; i < els.length; i++) {
                         var e = els[i], names = [];
-                        if (e.id) { names.push(String(e.id)); }
+                        // ⚠ Each entry carries WHETHER IT IS A BROWSING-CONTEXT NAME, decided here
+                        // and not at access time. See the getter below: the frame lookup costs a
+                        // `querySelectorAll`, and `window.<id>` is on the hot path of every loop
+                        // written against a bare identifier — paying it on every access is the
+                        // quadratic defect the comment above this function already records, and
+                        // reintroducing it is what `G_GET_ELEMENT_BY_ID_INDEX` caught.
+                        if (e.id) { names.push([String(e.id), false]); }
                         var t = String(e.tagName || '').toLowerCase();
                         if (t === 'form' || t === 'img' || t === 'embed' || t === 'object'
                             || t === 'iframe' || t === 'frame') {
                             var nm2 = e.getAttribute && e.getAttribute('name');
-                            if (nm2) { names.push(String(nm2)); }
+                            if (nm2) { names.push([String(nm2), t === 'iframe' || t === 'frame']); }
                         }
                         for (var j = 0; j < names.length; j++) {
-                            var nm = names[j];
+                            var nm = names[j][0], isFrameName = names[j][1];
                             if (!nm || g.__namedGlobals[nm]) { continue; }
                             // A real Window property wins — see decision (1) above.
                             if (nm in g) { g.__namedGlobals[nm] = true; continue; }
                             g.__namedGlobals[nm] = true;
-                            (function (nm) {
+                            (function (nm, isFrameName) {
                                 try {
                                     Object.defineProperty(g, nm, {
                                         configurable: true, enumerable: false,
                                         get: function () {
+                                            // ⚠⚠⚠ **A CHILD BROWSING CONTEXT WINS, AND IT
+                                            // ANSWERS WITH ITS WINDOW, NOT ITS ELEMENT.** HTML §7.3.3
+                                            // puts child browsing contexts ahead of elements in the
+                                            // supported property names, and their value is the
+                                            // WindowProxy. `window['two']` for `<iframe name=two>`
+                                            // returned the `<iframe>` — a wrong answer of the RIGHT
+                                            // TYPE, which `typeof` cannot see, and which broke every
+                                            // `frames['name'].postMessage(…)` and
+                                            // `window.open(url, 'name')` round trip. Chrome-measured:
+                                            //
+                                            //   <iframe id=g name=two>  window['two'] -> WINDOW
+                                            //                           window['g']   -> ELEMENT
+                                            //   <iframe name=h2>        window['h2']  -> WINDOW
+                                            //   <div id=dv>             window['dv']  -> ELEMENT
+                                            //   <img name=imgname>      window['imgname'] -> ELEMENT
+                                            //
+                                            // ⚠ NAME only, never id — the two ELEMENT rows above are
+                                            // why this runs before `getElementById` and still leaves
+                                            // it reachable: a frame's id is not a browsing context
+                                            // name. ⚠ And only when the frame HAS a context;
+                                            // otherwise fall through, because the element is a better
+                                            // answer than `undefined`.
+                                            // ⚠⚠⚠ GUARDED ON `isFrameName`, WHICH IS THE WHOLE
+                                            // PERFORMANCE ARGUMENT. This branch costs a
+                                            // `querySelectorAll`, and `window.<id>` is called on
+                                            // every iteration of every loop written against a bare
+                                            // identifier — the quadratic trap this function's own
+                                            // header documents (2,000 appends: 117ms empty vs
+                                            // 14,029ms with 16,000 nodes). Running it unguarded
+                                            // reintroduced exactly that and
+                                            // `G_GET_ELEMENT_BY_ID_INDEX` went red, which is the
+                                            // gate doing its job on the first attempt at this fix.
+                                            // A name that is not a frame's `name` takes the
+                                            // byte-identical old path.
+                                            if (isFrameName) {
+                                                try {
+                                                    var fr = g.document.querySelectorAll('iframe[name],frame[name]');
+                                                    for (var fi = 0; fi < fr.length; fi++) {
+                                                        if (fr[fi].getAttribute('name') !== nm) { continue; }
+                                                        var w = fr[fi].contentWindow;
+                                                        if (w) { return w; }
+                                                    }
+                                                } catch (x) {}
+                                            }
                                             var el = g.document.getElementById(nm);
                                             if (el) { return el; }
                                             try {
@@ -20746,7 +20796,7 @@ const WINDOW_PRELUDE: &str = r#"
                                     });
                                     added++;
                                 } catch (x) {}
-                            })(nm);
+                            })(nm, isFrameName);
                         }
                     }
                     return added;

@@ -90240,3 +90240,107 @@ holes at about the rate it finds code holes.**
 refusal, not a guess. (c) The teardown Bar-0 (t1349's reproducer). (d) t1348's residues: the
 flex-in-transposed-subtree sizing behind `grid-align-baseline-flex-002`, and the grid line-name
 serialization off-by-one. (e) I3's mechanical debt.
+
+## t1351 — the probe measured itself, and a 730-subtest area is out of scope by the North Star
+
+TICK SHAPE: capability + a measured REFUSAL. Board re-run at the top of this tick and diffed against
+t1350's copy: **unchanged** except its own tally. `dom` 8162 → **8165** (+3).
+
+### THE CAPABILITY: A CHILD BROWSING CONTEXT WINS, AND ANSWERS WITH ITS WINDOW
+
+t1349 pinned this as a residue found by switching a probe from `typeof` to identity. `window['two']`
+for `<iframe name="two">` returned the `<iframe>` ELEMENT; HTML §7.3.3 puts child browsing contexts
+ahead of elements in Window's supported property names and makes their value the WindowProxy.
+Chrome-measured:
+
+```text
+   <iframe id=g name=two>   window['two']      WINDOW    was ELEMENT
+                            window['g']        ELEMENT   unchanged
+   <iframe name=h2>         window['h2']       WINDOW    was ELEMENT
+   <div id=dv>              window['dv']       ELEMENT   unchanged
+   <img name=imgname>       window['imgname']  ELEMENT   unchanged
+```
+
+⚠ NAME only, never id — one element answers with its window under one key and with itself under
+another, and that asymmetry is a gate row (`byIdIsElement`).
+
+### ⚠⚠⚠ THE FIRST ATTEMPT REINTRODUCED A QUADRATIC THE FILE'S OWN HEADER DOCUMENTS
+
+The frame lookup costs a `querySelectorAll`, and `window.<id>` is the getter on the hot path of every
+loop written against a bare identifier. `doc_get_by_id`'s header records exactly this trap — *"2,000
+appends cost 117ms in an empty document and 14,029ms with 16,000 nodes"* — and running the scan
+unguarded on every access brought it straight back. **`G_GET_ELEMENT_BY_ID_INDEX` went red on the
+first run of the full suite**, with `no 'loop:' in output` (the probe never finished).
+
+The fix decides at PUBLISH time rather than access time: `__publishNamed` already knows whether a
+name came from a frame's `name` attribute, so it captures that in the closure and a non-frame name
+takes the byte-identical old path. ⭐ **The expensive question is only asked where it can have a
+different answer** — and a perf gate that names its own number in its own header is what made a
+five-minute fix out of a defect that had already cost this project a tick once.
+
+### ⭐⭐⭐ THE FINDING: THE PROBE WAS MEASURING ITSELF
+
+For several rounds the comparison read `byName_h2:ELEMENT` against Chrome's `WINDOW` — one row out of
+six — and every attempt to explain it failed: the frame scan found the element, its `contentWindow`
+was live, `getElementById('h2')` was null, and the accessor was installed. The decisive reading was
+the property descriptor: **`h2` was a `value`, every other name was a `get`.**
+
+The probe cached the element as `var h2 = document.querySelector(…)` at TOP LEVEL, and **a top-level
+`var h2` IS `window.h2`** — it overwrote the accessor it was about to read. The other five rows used
+inline lookups and were correct all along.
+
+⚠⚠ **AND WHY IT SURVIVED: THE TWO PROBES WERE NOT THE SAME PROGRAM.** The Chrome body ran inside a
+`setTimeout` callback, where `var` is a local; the engine body ran at top level, where `var` is a
+global property. Re-running both inside an IIFE made all six rows agree exactly. This is
+`session-780-783`'s *"the INSTRUMENT was the bug — REPLICATE THE ARTEFACT"* in a new costume, and the
+general form is worth stating: **when two engines disagree on ONE row out of N, suspect the two
+PROGRAMS before the two engines.** Every gate row added here is an inline lookup and says why.
+
+### ⭐⭐ THE REFUSAL: `domparsing/tentative/` IS 730 SUBTESTS OF API CHROMIUM DOES NOT HAVE
+
+`domparsing` is 26.4% and its remaining 952 failures looked like a large core gap. 730 of them are in
+`tentative/`, and probing Chrome for the methods those files test:
+
+```text
+   Element.prototype.appendHTML             undefined      Document.parseHTML          undefined
+   Element.prototype.prependHTML            undefined      Document.parseHTMLUnsafe    function
+   Element.prototype.replaceChildrenHTML    undefined      Element.setHTMLUnsafe       function
+   Element.prototype.setHTML                undefined      Element.insertAdjacentHTML  function
+   Element.prototype.streamAfterHTML        undefined      ShadowRoot.setHTMLUnsafe    function
+   Element.prototype.streamBeforeHTML       undefined
+   Element.prototype.streamReplaceWithHTML  undefined
+```
+
+**Chromium ships none of the positional or streaming methods** — only the four already-shipped
+neighbours, which we have. The North Star makes Chromium the CEILING on capability: *"whatever a page
+can do in Chrome, it must be able to do here."* Building an API no browser ships and no site uses
+would EXCEED that ceiling on a proposal, which is WPT-score farming by definition.
+
+**REFUSED, and priced so it is a decision and not an evasion:**
+
+```text
+   positional-methods.html                        348   `object[method_name] is not a function`
+   stream-html-sanitizer.html                     192
+   stream-positional.html                          72
+   stream-insertion-logic.html                     52
+   stream-html-with-declarative-shadow-root.html   36
+   stream-html-sanitizer-safe.html                 30
+   ────────────────────────────────────────────────────
+                                                  730   of domparsing's 952 remaining
+```
+
+⚠ So `domparsing`'s real remaining surface is ~222, not 952, and its 26.4% is much closer to done than
+the number says. ⭐ **This is the same shape as t1350's survey finding about `css/css-values` (76%
+`calc-size`), and it is now two areas: the board's `failing`-count ordering cannot distinguish a core
+gap from a spec-frontier one, and both times the area LOOKED like the biggest lever on the board.**
+
+**Proven RED**, three mutations: no browsing-context lookup → `byNameIsWindow:true`; match on id as
+well as name → `byIdIsElement:true`; drop the `isFrameName` guard →
+`G_GET_ELEMENT_BY_ID_INDEX` never finishes its loop. Full `manuk-page` suite: **509 of 509**.
+
+**NEXT.** (a) `domparsing`'s remaining ~222 non-tentative failures, now that the area is priced.
+(b) The teardown Bar-0 (t1349's reproducer). (c) t1348's residues: the flex-in-transposed-subtree
+sizing behind `grid-align-baseline-flex-002`, and the grid line-name serialization off-by-one.
+(d) ⚠ FOR THE OBSERVER: two of the board's top rows are now measured as spec-frontier
+(`css/css-values` 76% `calc-size`, `domparsing` 77% unshipped-API `tentative/`) — the ordering needs a
+scope column, or the loop will keep re-discovering this one area at a time. (e) I3's mechanical debt.
