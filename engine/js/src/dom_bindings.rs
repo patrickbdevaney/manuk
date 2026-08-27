@@ -3052,8 +3052,11 @@ fn computed_style_js(
         TextAlign::Start => "start",
         TextAlign::End => "end",
     };
-    // The computed `font-family` list, joined (its first entry is the primary).
-    let family = cs.font_family.join(", ");
+    // The computed `font-family` list. ⚠ NOT `join(", ")` — CSSOM serializes each name as an
+    // IDENTIFIER when it can be and as a STRING when it cannot, and the names needing quotes are
+    // exactly the ones people write (`Times New Roman`, `Helvetica Neue`, `Segoe UI`). See
+    // `manuk_css::serialize_font_family_name` for the rule and the Chrome table.
+    let family = manuk_css::serialize_font_family_list(&cs.font_family);
     // ── ⚠⚠⚠ **THE `font` SHORTHAND'S COMPUTED VALUE, WHICH WAS ABSENT.**
     //
     // `getComputedStyle(el).font` was `undefined`, and that is not a cosmetic gap: it is how a page

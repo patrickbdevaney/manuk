@@ -8406,3 +8406,29 @@ one is the *composition*, and the composition is what the platform's most-used i
 shorthand, write the line real code writes (`ctx.font = …`, `el.style.cssText = …`,
 `getComputedStyle(el).background`) and see whether it produces a usable value — not whether the
 property enumerates.
+
+---
+
+## t1354 — the font name that came back as something else
+
+`getComputedStyle(el).fontFamily` returned every family name BARE, never quoted. For most names that
+is right and invisible; for the ones that need quotes it produces text that re-parses as a different
+value:
+
+- **`21st Century`** unquoted is not a family name at all — `21st` cannot start an identifier;
+- **`"inherit"`** unquoted is the CSS-wide keyword, so a font actually named `inherit` becomes an
+  instruction;
+- and anything a script round-trips — `el.style.fontFamily = getComputedStyle(other).fontFamily`,
+  the copy-a-computed-style idiom every theme switcher and canvas shim uses — carries the damage
+  into the document.
+
+⭐⭐ **The class: A SERIALIZER IS A PARSER'S INVERSE, AND ONLY SOME INPUTS PROVE IT.** Bare names are
+correct for `serif`, `myfont`, `Arial` — the overwhelming majority — so the defect is invisible on
+almost every page and total on the ones it touches.
+
+⚠⚠ And the check that decided it was **NOT** the oracle: headless Chrome quotes every multi-word
+family (`Times New Roman` → `"Times New Roman"`), the CSSOM spec and WPT do not, and following Chrome
+cost three subtests. **When the oracle and the metric disagree on a pure SERIALIZATION detail —
+no capability behind it, nothing a page can or cannot do — the metric wins**, and the divergence gets
+written into the function's own doc comment so the next reader who probes Chrome does not "fix" it
+back.

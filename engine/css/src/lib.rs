@@ -9454,3 +9454,92 @@ main:has(span) span { color: black }
         assert!(i[0].important);
     }
 }
+
+/// **Serialize one `font-family` name the way CSSOM does: as a SEQUENCE OF IDENTIFIERS when it can
+/// be, as a STRING when it cannot.**
+///
+/// The computed `font-family` was `cs.font_family.join(", ")` — the names, bare, never quoted, so a
+/// name that genuinely needs quotes (`21st Century`) came back as something that would re-parse as
+/// something else.
+///
+/// ⚠⚠⚠ **AND THE RULE IS A SEQUENCE, NOT A SINGLE IDENTIFIER — CHROME AND THE SPEC DISAGREE HERE,
+/// AND THIS FOLLOWS THE SPEC.** The first implementation quoted anything that was not ONE identifier,
+/// which is what headless Chrome does (`font-family: Times New Roman` → `"Times New Roman"`). It cost
+/// **three net subtests**, because WPT encodes the CSSOM rule instead:
+///
+/// ```text
+///   css/css-fonts/parsing/font-family-computed.html
+///     '"New Century Schoolbook", serif'  →  New Century Schoolbook, serif     UNQUOTED
+///     '"21st Century", fantasy'          →  "21st Century", fantasy           quoted
+/// ```
+///
+/// `New Century Schoolbook` is three valid identifiers, so it serializes as three identifiers even
+/// though it was WRITTEN as a string; `21st Century` cannot, because `21st` starts with a digit.
+/// The quoting in the SOURCE is not the question — the question is whether the NAME can be spelled
+/// as identifiers.
+///
+/// ⚠ This is one of the few places this engine deliberately does NOT match measured Chrome. Chrome
+/// quotes every multi-word family; the spec, and WPT, do not. It is a pure serialization detail with
+/// no capability behind it, so the ratchet's metric wins over the oracle — and it is written down
+/// here so the next reader who probes Chrome and finds a "divergence" does not "fix" it back.
+///
+/// ⚠ Non-ASCII is an ordinary identifier character (`素象` is unquoted), which is why this tests
+/// `>= U+0080` rather than an ASCII allow-list. A CSS-WIDE KEYWORD (`inherit`, `initial`, …) stays
+/// quoted whatever it looks like: unquoted it would not be a family name at all.
+///
+/// ⚠⚠ **Stylo already does this for the INLINE path** (`el.style.fontFamily` round-trips exactly,
+/// measured) — this exists because the COMPUTED path never went through Stylo's serializer, not
+/// because the rule was missing from the engine.
+pub fn serialize_font_family_name(name: &str) -> String {
+    let is_start = |c: char| c.is_ascii_alphabetic() || c == '_' || c >= '\u{80}';
+    let is_body = |c: char| is_start(c) || c.is_ascii_digit() || c == '-';
+    let is_ident = |part: &str| {
+        let mut chars = part.chars();
+        match chars.next() {
+            None => false,
+            Some(c0) => {
+                let head_ok = if c0 == '-' {
+                    matches!(chars.clone().next(), Some(c1) if is_start(c1) || c1 == '-')
+                } else {
+                    is_start(c0)
+                };
+                head_ok && part.chars().all(is_body)
+            }
+        }
+    };
+    // A CSS-wide keyword can never appear unquoted as a family name — it would be the keyword.
+    let is_css_wide = matches!(
+        name.to_ascii_lowercase().as_str(),
+        "inherit" | "initial" | "unset" | "revert" | "revert-layer" | "default"
+    );
+    // Every space-separated part must be an identifier.
+    //
+    // ⚠ That single condition also settles the spacing, and the redundant belt-and-braces check
+    // that was here first could not be made to go RED: `"a  b".split(' ')` yields `["a", "", "b"]`
+    // and the EMPTY part is not an identifier, so a doubled space is rejected by this line alone.
+    // The same for a leading or trailing space. An extra `join(" ") == name` guard looked like
+    // defence and was an unfalsifiable branch — a green that cannot go red measured nothing.
+    let seq_ok = !name.is_empty() && !is_css_wide && name.split(' ').all(is_ident);
+    if seq_ok {
+        return name.to_string();
+    }
+    // A CSS string: `"` and `\` are the only characters that must be escaped.
+    let escaped: String = name
+        .chars()
+        .flat_map(|c| match c {
+            '"' | '\\' => vec!['\\', c],
+            other => vec![other],
+        })
+        .collect();
+    format!("\"{escaped}\"")
+}
+
+/// The whole computed `font-family` list, each name serialized by
+/// [`serialize_font_family_name`], comma-separated as CSSOM asks.
+pub fn serialize_font_family_list(names: &[String]) -> String {
+    names
+        .iter()
+        .map(|n| serialize_font_family_name(n))
+        .collect::<Vec<_>>()
+        .join(", ")
+}

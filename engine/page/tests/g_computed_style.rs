@@ -19,6 +19,12 @@ const HTML: &str = r##"<!doctype html><html><body>
 <div id="f3" style="font-family:serif;font-size:16px;font-weight:bold"></div>
 <div id="f4" style="font-family:serif;font-size:16px;font-weight:400;line-height:normal"></div>
 <div id="f5" style="font-family:serif;font-size:16px;font-style:italic;font-weight:bold;line-height:2"></div>
+<div id="q1" style="font-family:'New Century Schoolbook', serif"></div>
+<div id="q2" style="font-family:'21st Century', fantasy"></div>
+<div id="q3" style="font-family:my-font"></div>
+<div id="q4" style="font-family:'素象'"></div>
+<div id="q5" style="font-family:'a  b'"></div>
+<div id="q6" style="font-family:'inherit'"></div>
 <script>
   var R = [], cs = function (id) { return getComputedStyle(document.getElementById(id)); };
   R.push('vis:' + cs('v').visibility);                       // "hidden"
@@ -38,6 +44,12 @@ const HTML: &str = r##"<!doctype html><html><body>
   R.push('font5:[' + cs('f5').font + ']');
   R.push('fontType:' + (typeof cs('f1').font));
   R.push('fontPV:[' + cs('f2').getPropertyValue('font') + ']');
+  // ── ⭐ FONT-FAMILY SERIALIZATION (t1354): a SEQUENCE of identifiers when it can be, a string
+  //    when it cannot. Every row is the CSSOM rule that WPT encodes — see the gate's claims for
+  //    where that deliberately parts company with measured Chrome.
+  'q1 q2 q3 q4 q5 q6'.split(' ').forEach(function (i) {
+    R.push(i + ':[' + cs(i).fontFamily + ']');
+  });
   document.getElementById('out').textContent = R.join(' ');
 </script></body></html>"##;
 
@@ -84,6 +96,38 @@ fn getcomputedstyle_exposes_visibility_whitespace_opacity() {
         (
             "fontType:string",
             "⚠ VACUITY GUARD: `undefined` stringifies into every row above as the literal text, so              `font1:[undefined]` would `contains`-match nothing and this row says why in one word",
+        ),
+        // ── ⭐⭐ FONT-FAMILY SERIALIZATION (t1354). CSSOM serializes a family name as a SEQUENCE OF
+        //    IDENTIFIERS when every space-separated part is one, and as a STRING otherwise. The
+        //    quoting in the SOURCE is not the question; whether the NAME can be spelled as
+        //    identifiers is.
+        (
+            "q1:[New Century Schoolbook, serif]",
+            "⚠⚠⚠ AND THIS IS ONE OF THE FEW PLACES THIS ENGINE DELIBERATELY DOES NOT MATCH MEASURED              CHROME. Headless Chrome returns `\"New Century Schoolbook\", serif` — it quotes every              multi-word family. WPT encodes the CSSOM rule and expects the identifiers back              UNQUOTED, and the first version of this fix followed Chrome and cost three net              subtests. It is a pure serialization detail with no capability behind it, so the metric              wins over the oracle. Written down so the next reader who probes Chrome and finds a              'divergence' does not fix it back",
+        ),
+        (
+            "q2:[\"21st Century\", fantasy]",
+            "…and the row that makes the rule a RULE rather than 'never quote': `21st` starts with              a digit, so it is not an identifier and the name must be a string. Unquoted it would              re-parse as something else entirely",
+        ),
+        (
+            "q3:[my-font]",
+            "a single valid identifier stays unquoted even though it was WRITTEN quoted — the              source's quoting is not the question",
+        ),
+        (
+            "q4:[素象]",
+            "non-ASCII is an ordinary identifier character, which is why the check is `>= U+0080`              and not an ASCII allow-list. Quoting this would be the Latin-1 reflex one layer up",
+        ),
+        (
+            "q5:[\"a  b\"]",
+            "⚠ TWO spaces. `split(' ')` yields an EMPTY middle part, and an empty string is not an \
+             identifier, so the one condition rejects it. Worth a row because the first \
+             implementation carried a SECOND, redundant guard for exactly this case and the mutation \
+             pass could not make that guard go red — a green that cannot go red measured nothing. \
+             The guard was deleted; this row is what covers the case now",
+        ),
+        (
+            "q6:[\"inherit\"]",
+            "a CSS-WIDE KEYWORD stays quoted whatever it looks like — unquoted it would not be a              family name at all, it would be `inherit`",
         ),
         (
             "fontPV:[16px / 24px serif]",

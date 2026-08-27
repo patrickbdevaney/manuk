@@ -4635,3 +4635,59 @@ estimate of it.*
 
 **Gate.** `G_COMPUTED_STYLE` +7 rows. Proven red by three mutations: join size and line-height with a
 space → `font2`; always emit the weight → `font1`; put the family first → `font1`.
+
+---
+
+## `font-family`'s computed value is a SEQUENCE of identifiers, and this is where we leave Chrome (t1354)
+
+The computed `font-family` was `cs.font_family.join(", ")` — the names, bare, never quoted. So a name
+that genuinely needs quotes came back as text that re-parses as something else: `21st Century` as
+three bare tokens is not a family name at all.
+
+**⚠⚠⚠ AND THE RULE IS A SEQUENCE, NOT A SINGLE IDENTIFIER — WHICH IS WHERE CHROME AND THE SPEC
+PART COMPANY.** The first implementation quoted anything that was not ONE identifier, which is
+exactly what headless Chrome does:
+
+```text
+   specified                    Chrome (measured)         CSSOM / WPT
+   Times New Roman              "Times New Roman"         Times New Roman
+   '"New Century Schoolbook"'   "New Century Schoolbook"  New Century Schoolbook
+   '"21st Century"'             "21st Century"            "21st Century"      ← agree
+```
+
+Following Chrome cost **three net WPT subtests**, caught by an old-binary control that diffed the
+failing NAMES:
+
+```text
+   NEW: font-family-computed  'New Century Schoolbook, serif'   expected unquoted, got quoted
+   NEW: font-computed × 4     the same name inside the `font` shorthand
+   FIXED: font-family-computed  '"21st Century", fantasy'
+```
+
+`New Century Schoolbook` is three valid identifiers, so it serializes AS identifiers even though it
+was written as a string; `21st Century` cannot, because `21st` starts with a digit. **The quoting in
+the source is not the question — whether the NAME can be spelled as identifiers is.**
+
+⭐ This is one of the few places this engine deliberately does not match measured Chrome. It is a pure
+serialization detail with no capability behind it, so the metric wins over the oracle — and it is
+written down in the function's own doc comment so the next reader who probes Chrome and finds a
+"divergence" does not fix it back.
+
+⚠ A CSS-WIDE KEYWORD (`inherit`, `initial`, `unset`, `revert`, `revert-layer`, `default`) stays
+quoted whatever it looks like: unquoted it would not be a family name at all.
+⚠ Non-ASCII is an ordinary identifier character (`素象` unquoted), so the test is `>= U+0080`, not an
+ASCII allow-list.
+⚠ Stylo already does this for the INLINE path (`el.style.fontFamily` round-trips exactly, measured);
+the COMPUTED path simply never went through a serializer.
+
+**⚠⚠ AND A BRANCH THAT COULD NOT GO RED WAS DELETED.** The first version carried a second guard —
+`name.split(' ').join(" ") == name` — to reject a doubled space. The mutation pass could not make it
+fail, because `"a  b".split(' ')` yields `["a", "", "b"]` and the EMPTY part is already not an
+identifier. It looked like defence and was an unfalsifiable branch. *A green that cannot go red
+measured nothing*; the guard is gone and the `q5` gate row covers the case.
+
+**WPT.** `css/css-fonts` 4,090 → **4,092**, and — the number that matters — **zero new failures
+against the control, two fixed**. Small, and the finding is the Chrome/spec split, not the +2.
+
+**Gate.** `G_COMPUTED_STYLE` +6 rows. Proven red by three mutations: never quote → `q2`; require a
+SINGLE identifier (the Chrome rule) → `q1`; drop the CSS-wide-keyword guard → `q6`.

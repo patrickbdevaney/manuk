@@ -90514,3 +90514,80 @@ Roman"`, `'my-font'` → `my-font` (unquoted despite being written quoted), `'�
 `test_font_family_parsing` is 361 subtests of exactly this. (b) The three unmodelled font longhands
 and the empty-string rule above. (c) The teardown Bar-0 (t1349's reproducer). (d) t1348's residues.
 (e) I3's mechanical debt.
+
+## t1354 — where the oracle and the metric disagree, and a branch that could not go red
+
+TICK SHAPE: capability. Board re-run at the top of this tick and diffed against t1353's copy:
+**unchanged** except its own tally. `css/css-fonts` 4,090 → **4,092**, and the number that matters:
+**zero new failures against an old-binary control, two fixed**.
+
+### THE BUG, AND THE FIRST FIX THAT WAS WRONG
+
+The computed `font-family` was `cs.font_family.join(", ")` — bare names, never quoted. `21st Century`
+unquoted is not a family name at all; `"inherit"` unquoted is a CSS-wide keyword.
+
+The first implementation quoted anything that was not ONE identifier, because that is what headless
+Chrome does, and I had measured it:
+
+```text
+   font-family: Times New Roman   →  Chrome: "Times New Roman"
+   font-family: 'my-font'         →  Chrome: my-font
+   font-family: '2cool'           →  Chrome: "2cool"
+```
+
+It scored **css/css-fonts −3**, and the ratchet refused it.
+
+### ⭐⭐⭐ THE OLD-BINARY CONTROL, AND THE FINDING: CHROME AND THE SPEC DISAGREE HERE
+
+Saved the WIP by `cp`, `git checkout --`, rebuilt release, re-ran the SAME area with
+`--show-failures`, diffed the failing NAMES:
+
+```text
+   NEW  ×5   font-family-computed  'New Century Schoolbook, serif'  expected UNQUOTED, got quoted
+             font-computed         the same name inside the `font` shorthand, ×4
+   FIXED ×2  font-family-computed  '"21st Century", fantasy'
+             inheritance.html      'Property font-family inherits'
+```
+
+WPT's own expectations name the rule:
+
+```text
+   test_computed_value('font-family', '"New Century Schoolbook", serif',
+                                       'New Century Schoolbook, serif')   ← UNQUOTED
+   test_computed_value('font-family', '"21st Century", fantasy')          ← unchanged, quoted
+   test_computed_value('font-family', '"inherit", "serif"')               ← unchanged, quoted
+```
+
+The rule is a **SEQUENCE** of identifiers, not one: `New Century Schoolbook` is three valid
+identifiers so it serializes as identifiers even though it was WRITTEN as a string; `21st Century`
+cannot, because `21st` starts with a digit. **The quoting in the source is not the question — whether
+the NAME can be spelled as identifiers is.** Chrome quotes every multi-word family and is simply not
+following CSSOM here.
+
+⭐ **SO THIS IS ONE OF THE FEW PLACES THE ENGINE DELIBERATELY DOES NOT MATCH MEASURED CHROME.** It is
+a pure serialization detail with no capability behind it — nothing a page can or cannot do turns on
+it — so the metric wins over the oracle. Written into the function's own doc comment, because the
+next reader will probe Chrome, find a "divergence", and fix it back otherwise. That is the general
+rule this tick adds: **when the oracle and the metric disagree on a SERIALIZATION detail with no
+capability behind it, the metric wins and the divergence is documented at the call site.**
+
+### ⚠⚠ AND A BRANCH THAT COULD NOT GO RED WAS DELETED
+
+The rewrite carried a second guard — `name.split(' ').join(" ") == name` — to reject a doubled space.
+The mutation pass **could not make it fail**: `"a  b".split(' ')` yields `["a", "", "b"]` and the
+EMPTY part is already not an identifier, so `all(is_ident)` rejects it alone. Leading and trailing
+spaces are the same. It looked like defence and was an unfalsifiable branch.
+
+⭐ *A green that cannot go red measured nothing* — the project's own rule, applied to my own code
+inside the same tick that wrote it. The guard is deleted and the `q5` gate row carries the case, with
+the reason it exists spelled out in its own message.
+
+**Proven RED**, three mutations, three arms: never quote → `q2:["21st Century", fantasy]`; require a
+SINGLE identifier (the Chrome rule) → `q1:[New Century Schoolbook, serif]`; drop the CSS-wide-keyword
+guard → `q6:["inherit"]`. Full `manuk-page` suite: **509 of 509**; `manuk-css` green.
+
+**NEXT.** (a) The three unmodelled font longhands (`font-stretch`, `font-variant-caps`, non-italic
+`font-style`) and the empty-string rule t1353 recorded — together they are most of what
+`font-computed.html` still fails on. (b) `test_font_family_parsing` is still 361: re-histogram it now
+that both the encoding and the serializer are right. (c) The teardown Bar-0 (t1349's reproducer).
+(d) t1348's residues. (e) I3's mechanical debt.

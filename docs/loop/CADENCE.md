@@ -14,8 +14,8 @@
 | ticks landed | **1025** | ticks 1–1338 |
 | median tick cycle | **31m** | 1024 intervals |
 | median, last 10 | **39m** | 10 intervals |
-| fastest / slowest | 5s / 6.0d | |
-| **ticks per hour** | **0.91** | 1123.7h elapsed |
+| fastest / slowest | 5s / 6.1d | |
+| **ticks per hour** | **0.91** | 1124.4h elapsed |
 | median verify wall | **64s** | 964 ticks |
 | wall trend | 39s → 17m — getting slower ⚠️ | first 3 vs last 3 |
 
@@ -1121,6 +1121,6 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 | **1335** | 2026-08-20 22:42 | 14m | measurement | 17m | +111/−32 | 502 | 81 | 56.0% · | repubblica's article cards are short by exactly the figure's height, and FIVE reductions f |
 | **1336** | 2026-08-20 23:16 | 34m | measurement | 17m | +129/−32 | 502 | 81 | 56.0% · | the article's box is ZERO tall and its child sits ABOVE it: the child is out of flow for u |
 | **1337** | 2026-08-20 23:46 | 30m | capability | 17m | +239/−34 | 503 | 81 | 56.0% · | `getComputedStyle(el).flex` was `undefined` while flex layout worked (2026-08-20) |
-| **1338** | 2026-08-27 00:45 | 6.0d | capability | 17m | +286/−34 | 507 | 81 | 56.0% · | a percentage reconstructed by differencing Au-quantised samples loses its identity at zero |
+| **1338** | 2026-08-27 01:24 | 6.1d | capability | 17m | +332/−35 | 507 | 81 | 56.0% · | a percentage reconstructed by differencing Au-quantised samples loses its identity at zero |
 
 *`·` after a WPT figure means **carried forward**, not measured this tick.*
