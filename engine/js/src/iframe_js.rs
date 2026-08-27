@@ -282,18 +282,33 @@ pub const IFRAME_JS: &str = r#"
     } catch (e) { return []; }
   }
   var __hwm = 0;
+  // ⚠⚠⚠ **AN EAGER FLOOR, AND IT IS NOT AN OPTIMISATION — IT IS THE FIX FOR THE COMMON SPELLING.**
+  // The design below extends the index range from `length`'s getter, which makes the LOOP idiom
+  // (`for (i=0;i<window.length;i++) frames[i]`) correct by construction. It leaves the DIRECT
+  // idiom broken: `frames[0].DOMParser` never reads `length`, so index 0 had never been defined and
+  // answered `undefined`. That is exactly how WPT's `domparsing/DOMParser-parseFromString-url*`
+  // reaches into its frame — 144 subtests, all dying on `frames[0] is undefined` — and it is how
+  // most real code addresses the FIRST frame, because a page that has one frame does not write a
+  // loop.
+  //
+  // So define a floor eagerly. Each is a live accessor over the same query, so an index below the
+  // floor with no frame behind it answers `undefined` — the honest answer — and one that gains a
+  // frame later answers it without any sync. Non-enumerable, so 32 unused names cost nothing
+  // observable: they are absent from `Object.keys(window)` and from every `for…in`.
+  var __FLOOR = 32;
+  function __defineIndex(i) {
+    Object.defineProperty(G, String(i), {
+      configurable: true,
+      enumerable: false,
+      get: function () { return __frameWins()[i]; }
+    });
+  }
+  while (__hwm < __FLOOR) { __defineIndex(__hwm); __hwm++; }
   G.__syncFrames = function () {
     var n = __frameWins().length;
-    while (__hwm < n) {
-      (function (i) {
-        Object.defineProperty(G, String(i), {
-          configurable: true,
-          enumerable: false,
-          get: function () { return __frameWins()[i]; }
-        });
-      })(__hwm);
-      __hwm++;
-    }
+    // Beyond the eager floor the high-water mark still grows — a page with more than 32 frames is
+    // rare, and this keeps the loop idiom correct for it without defining a name until it exists.
+    while (__hwm < n) { __defineIndex(__hwm); __hwm++; }
     return n;
   };
   Object.defineProperty(G, 'length', {

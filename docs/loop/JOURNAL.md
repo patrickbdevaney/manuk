@@ -90138,3 +90138,105 @@ take. (b) `window['name']` must resolve to the frame's WINDOW, not the element (
 OBSERVER: the board's `failing`-count ordering cannot distinguish a core area from a spec-frontier
 one — `css/css-values` is 76% `calc-size`. (e) t1348's residues: the flex-in-transposed-subtree
 sizing, `css-grid/grid-lanes`, the grid line-name serialization off-by-one. (f) I3's mechanical debt.
+
+## t1350 — a three-way classification with a fourth case, and the trap that would have broken the whole web
+
+TICK SHAPE: capability — the follow-on t1349 named, and the 144 subtests it did not take. Board
+re-run at the top of this tick and diffed against t1349's copy: **unchanged**.
+**`domparsing` 234 → 342 (+108, 18.1% → 26.4%)**, `dom` +1.
+
+### THE BUG
+
+`build_inline_frame_docs` makes a three-way classification — `srcdoc`, `src="about:blank"`, no `src`
+— and a frame with a REAL `src` is none of the three, so nothing was built for it. It read
+`contentDocument === null` until the fetch returned, and `typeof null === "object"`, so the guard
+every embed writes (`f.contentWindow ? f.contentWindow.document : f.contentDocument`) saw a document
+that was not there. Same absence one level up: no document ⇒ no child browsing context ⇒ invisible to
+`window.length` and `window.frames[i]`. Chrome-measured on a `src` that never resolves, plus one bare
+frame:
+
+```text
+                                     Chrome    before     after
+   s.contentDocument === null         false      true     false
+   window.length                          2         1         2
+   typeof window[1]                  object  undefined    object
+```
+
+⭐⭐ **THE CLASS: A THREE-WAY CLASSIFICATION WITH A FOURTH CASE.** The split was honest and heavily
+commented, and *"has something to FETCH"* was silently read as *"has nothing to BUILD"*. Those are
+different questions and the second has the same answer for all four kinds. ⚠ The comment beside it
+even warned *"a frame this pass claims but does not build would be skipped by BOTH passes"* — it was
+watching for a frame claimed-and-not-built and missed the frame **neither claimed nor built**.
+
+### ⚠⚠⚠ THE TRAP, FOUND BY READING RATHER THAN BY REGRESSION
+
+The obvious implementation — install the about:blank through the existing `render_iframe` — would
+have **stopped every `<iframe src>` on the web from loading**, and every assertion about the new
+document would still have passed. `render_iframe_with_type` does `self.iframes.insert(node, url)`,
+and `Page::iframes` IS the *"already rendered"* marker `pending_iframes` reads. A provisional frame
+entered there is a frame the fetch skips.
+
+So `provisional` withholds exactly two steps:
+
+- **no `iframes.insert`** — *"in `child_pages` but NOT in `iframes`"* is precisely the state *"has its
+  initial about:blank, has not navigated"*, and it is a real invariant: every other path enters both
+  maps together, so the pair encodes the state without a new field.
+- **no `fire_frame_load`** — Chrome fires no `load` for that document; the event belongs to the one
+  the `src` names. An early fire is worse than the silence: `<iframe onload>` is how every embed, ad
+  slot, payment frame and OAuth bridge decides it may start talking, and it would hand them an empty
+  document.
+
+The gate asserts the trap directly — `pending_iframes()` must STILL list the frame — because it is
+the one failure mode that leaves the rest of the file green.
+
+### ⚠ AND THE FIX WAS NOT THE FIX UNTIL A SECOND ONE LANDED
+
+With the browsing context installed, `domparsing` **did not move**. The engine half was right and
+t1349's JS half had a hole: its indices were created by `length`'s getter, which makes the LOOP
+idiom (`for (i=0;i<window.length;i++) frames[i]`) correct by construction and leaves the DIRECT one
+broken. `frames[0].DOMParser` never reads `length`, so index 0 had never been defined.
+
+That is exactly how the WPT files reach into their frame, and how most real code addresses the first
+frame — **a page with one frame does not write a loop.** Indices `0..31` are now defined eagerly as
+live accessors (non-enumerable, so 32 unused names are invisible to `Object.keys` and every `for…in`);
+the high-water mark still grows past the floor for the rare wider page.
+
+⭐ **A design that is correct for the idiom you had in mind is not correct.** t1349's own gate
+proved the loop idiom four ways and could not see that the commonest spelling of the same access was
+still broken, because every row of it read `length` first.
+
+### PRICING AND THE GUARD
+
+```text
+   domparsing      234 -> 342   (+108, 18.1% -> 26.4%)
+   dom            8161 -> 8162  (+1)
+   html/dom      56454 -> 56454 (=)
+   encoding     360564 -> 360564 (=)  ⚠ THE GUARD — see below
+```
+
+⚠⚠ **`encoding` IS THE INSTRUMENT THAT WOULD HAVE CAUGHT THE TRAP**, and it was run for that reason:
+767,003 subtests of *"load a document in a frame and read its text back"*. Its pass count is
+**identical** on a denominator that GREW (1,121,375 → 1,127,437), i.e. more files now emit subtests
+and none of them lost one. Had the provisional install claimed the frame, this number would have
+collapsed. Full `manuk-page` suite: **509 of 509**, no SIGSEGV.
+
+**Proven RED**, three mutations, three distinct arms:
+
+```text
+   no provisional build              `cd=NULL nobody len=3 idx=none`
+   let it claim the frame            `pending=[]`   (the catastrophe arm)
+   let it fire `load`                `srcLoads:1`
+```
+
+⚠ The third arm did not exist at first: with the fire-mutation applied, both frame gates stayed
+GREEN, because no fixture anywhere had a `src`-bearing frame with an `onload`. The row was added and
+the mutation went red. That is the third time in this arc that a mutation walked through a gate whose
+rows all shared a missing dimension (t1345, t1348, now t1350) — **the mutation pass is finding gate
+holes at about the rate it finds code holes.**
+
+**NEXT.** (a) `window['name']` must resolve to the frame's WINDOW, not the element (pinned t1349).
+(b) `domparsing` is still 26.4%: 730 of its remaining failures are `tentative/` streaming-parser API
+(`positional-methods` alone is 348, all `object[method_name] is not a function`) — a build or a
+refusal, not a guess. (c) The teardown Bar-0 (t1349's reproducer). (d) t1348's residues: the
+flex-in-transposed-subtree sizing behind `grid-align-baseline-flex-002`, and the grid line-name
+serialization off-by-one. (e) I3's mechanical debt.

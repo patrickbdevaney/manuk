@@ -45,9 +45,12 @@ const HTML: &str = r#"<!doctype html><html><body>
 <div id="nosrc-read">-</div>
 <div id="sync-read">-</div>
 <div id="parse-read">-</div>
+<div id="src-read">-</div>
+<div id="srcload-read">-</div>
 <iframe id="f-srcdoc" srcdoc="<html><body><p id='inner'>hello from srcdoc</p></body></html>"></iframe>
 <iframe id="f-blank" src="about:blank"></iframe>
 <iframe id="f-nosrc"></iframe>
+<iframe id="f-src" src="https://never.invalid/never-resolves" onload="window.__srcLoads=(window.__srcLoads||0)+1"></iframe>
 <script>
   // (5) THE MOMENT THE PAGE'S OWN CODE LOOKS. Every assertion below this one reads at `load`;
   // this one reads HERE, in the parse-time script, which is the only moment WPT's viewport-unit
@@ -79,6 +82,25 @@ const HTML: &str = r#"<!doctype html><html><body>
     document.getElementById('parse-read').textContent = r.join(' ');
   })();
 
+  // (6) ⭐ THE FOURTH KIND, WHICH WAS NOT A KIND (t1350): a frame that HAS a `src` and has not
+  //     navigated to it yet. HTML gives it a child browsing context at INSERTION, holding
+  //     `about:blank`, and swaps it when the `src` lands. Read at PARSE TIME, before any fetch could
+  //     possibly have returned — which is the only moment the distinction exists.
+  (function () {
+    var f = document.getElementById('f-src');
+    var d = f && f.contentDocument;
+    var bits = [];
+    bits.push('cd=' + (d === null ? 'NULL' : (d === undefined ? 'UNDEF' : 'doc')));
+    // ⚠ A WRITE, for the reason (2) gives: `typeof null === 'object'`, so a read-only check passes
+    //   on the very stub this gate exists to refuse.
+    if (d && d.body) { d.body.innerHTML = '<i class="pv">x</i>'; bits.push('wrote' + d.querySelectorAll('.pv').length); }
+    else { bits.push('nobody'); }
+    // …and it must COUNT as a child browsing context, which is the same fact one level up.
+    bits.push('len=' + window.length);
+    bits.push('idx=' + (window.frames[document.querySelectorAll('iframe').length - 1] ? 'obj' : 'none'));
+    document.getElementById('src-read').textContent = bits.join(' ');
+  })();
+
   // (4) THE RESIDUAL: append a frame and read it on the very next line.
   var dyn = document.createElement('iframe');
   document.body.appendChild(dyn);
@@ -104,6 +126,10 @@ const HTML: &str = r#"<!doctype html><html><body>
       });
     document.getElementById('nosrc-read').textContent =
       read('f-nosrc', function (d) { return d.body ? 'has-body' : 'no-body'; });
+    // ⚠ THE COUNT OF `load` EVENTS ON THE UNRESOLVED `src` FRAME. Its provisional about:blank must
+    //   fire NOTHING: Chrome's `load` for a `src`-bearing frame belongs to the document the `src`
+    //   names, and this `src` never resolves, so the honest answer is ZERO.
+    document.getElementById('srcload-read').textContent = 'srcLoads:' + (window.__srcLoads | 0);
   });
 </script>
 </body></html>"#;
@@ -138,8 +164,10 @@ fn a_frame_with_nothing_to_fetch_still_gets_a_document() {
     let nosrc = text(&page, "#nosrc-read");
     let sync = text(&page, "#sync-read");
     let parse = text(&page, "#parse-read");
+    let srcpre = text(&page, "#src-read");
     println!("INLINE-FRAME  srcdoc={srcdoc} blank={blank} nosrc={nosrc} sync={sync}");
     println!("INLINE-FRAME  parse-time={parse}");
+    println!("INLINE-FRAME  src-pre-nav={srcpre}");
 
     // (1) **`srcdoc` is a document, not an attribute.** RED: drop the `srcdoc` branch from
     // `load_inline_frames` → `no-doc`. This is the case the neighbouring comment claimed for ticks.
@@ -162,6 +190,61 @@ fn a_frame_with_nothing_to_fetch_still_gets_a_document() {
     assert_eq!(
         nosrc, "has-body",
         "an <iframe> with NO src must still be navigated to about:blank and get a document — got {nosrc:?}"
+    );
+
+    // (6) ⭐⭐ **THE FOURTH KIND (t1350): A FRAME THAT HAS A `src` AND HAS NOT NAVIGATED TO IT.**
+    //
+    // HTML gives an `<iframe>` a child browsing context at INSERTION, holding `about:blank`, and
+    // swaps it when the `src` lands. This engine built nothing until the fetch returned, so a
+    // parse-time script read `contentDocument === null` — and `typeof null === 'object'`, which is
+    // this file's own opening sentence, arriving in the one frame kind the fixture did not cover.
+    // Chrome-measured on a `src` that never resolves, one such frame beside one bare frame:
+    //
+    // ```text
+    //                                  Chrome    before
+    //   s.contentDocument === null      false      true
+    //   window.length                       2         1
+    //   typeof window[1]               object  undefined
+    // ```
+    //
+    // The WRITE is load-bearing for the reason (2) gives, and `len=4` is the same fact one level up:
+    // no document means no child browsing context, so the frame was invisible to `window.length`
+    // and `window.frames[i]` (t1349).
+    assert_eq!(
+        srcpre, "cd=doc wrote1 len=4 idx=obj",
+        "an <iframe src> must expose a live, WRITABLE about:blank at parse time and count as a child \
+         browsing context — got {srcpre:?}. `cd=NULL` is the pre-t1350 state; `nobody` is a stub \
+         that types like a document and is not one; `len=3` means it was built but not counted."
+    );
+
+    // ⚠⚠ **AND IT MUST ANNOUNCE NOTHING.** Chrome fires no `load` for the initial `about:blank` of a
+    // `src`-bearing frame; the event belongs to the document the `src` names, and this `src` never
+    // resolves. Firing it would be worse than the silence it replaced: `<iframe onload>` is how every
+    // embed, ad slot, payment frame and OAuth bridge decides it may start talking, and a frame that
+    // announces readiness before a byte has arrived hands them an empty document to talk to.
+    let srcload = text(&page, "#srcload-read");
+    assert_eq!(
+        srcload, "srcLoads:0",
+        "an <iframe src> whose src never resolves must fire `load` ZERO times — got {srcload:?}. \
+         `srcLoads:1` means the provisional about:blank announced itself."
+    );
+
+    // ⚠⚠⚠ **AND THE CONTROL THAT MAKES THE FIX SAFE, WHICH IS THE WHOLE RISK OF IT.** `Page::iframes`
+    // is the "already rendered" marker `pending_iframes` reads. If the provisional document had been
+    // entered there, the real fetch would SKIP the frame — every `<iframe src>` on the web would
+    // silently stop loading, and every assertion above would still pass, because they all read the
+    // about:blank this tick installs. So assert the frame is STILL PENDING A FETCH.
+    let pending: Vec<String> = page
+        .pending_iframes()
+        .into_iter()
+        .map(|(_, url, _, _)| url)
+        .collect();
+    assert!(
+        pending.iter().any(|u| u.contains("never.invalid")),
+        "G_INLINE_FRAME_DOCUMENT: `#f-src` must STILL be pending a fetch after its provisional \
+         about:blank was installed — got pending={pending:?}. An empty list here means the \
+         provisional document claimed the frame in `Page::iframes`, which is the one way this fix \
+         breaks the entire web while leaving every other assertion in this file green."
     );
 
     // (4) **THE RESIDUAL IS CLOSED, AND THIS ASSERTION IS NOW A CLAIM (t1299).**

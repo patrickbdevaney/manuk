@@ -8304,3 +8304,25 @@ between a survey and a measurement.
 ⚠ The check that finds this whole family is **IDENTITY, not TYPE**: never `typeof x`, always
 `x === <the specific object it is supposed to be>`. Every row of this tick's gate is written that way,
 and it is why the gate could report a capability landed AND a second gap found in the same pass.
+
+---
+
+## t1350 — the frame that existed but had no document
+
+`<iframe src="…">` plus a parse-time script is the shape of an OAuth bridge, a payment field, an
+analytics relay, an ad slot and a `postMessage` shim. Until the fetch returned, all of them read
+`contentDocument === null` — and `typeof null === 'object'`, so the guard every one of them writes,
+`f.contentWindow ? f.contentWindow.document : f.contentDocument`, saw a document that was not there
+and then threw on the next line.
+
+⭐⭐ **The class: A THREE-WAY CLASSIFICATION WITH A FOURTH CASE.** The code made an honest and
+carefully-commented split — `srcdoc`, `src="about:blank"`, no `src` — and a frame with a REAL `src`
+fell through all three, because "has something to fetch" was silently read as "has nothing to build".
+Those are different questions, and the second one has the same answer for all four kinds: HTML gives
+every `<iframe>` a child browsing context at INSERTION.
+
+⚠ The check that would have found it is **the CLASSIFIER'S OWN COMPLEMENT**: for any `if/else if`
+chain over a kind, ask what falls off the end and whether the fall-through is a decision or an
+oversight. The comment beside this one even warned *"a frame this pass claims but does not build
+would be skipped by BOTH passes"* — it was watching for a frame claimed and not built, and missed the
+frame neither claimed nor built.

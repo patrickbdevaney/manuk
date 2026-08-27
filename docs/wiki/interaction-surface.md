@@ -3126,3 +3126,59 @@ frame and a script-created one does not survive its own teardown. That is the Sp
 bug the constitution check carries as steer #1, and this is a sharper reproducer than the one it had.
 The gate asserts the live-getter design by the SHAPE of the property descriptor instead, which needs
 no second frame.
+
+---
+
+## An `<iframe src>` has a browsing context from INSERTION, not from load (t1350)
+
+**Symptom.** `<iframe src="…">` read `contentDocument === null` until the fetch returned — and
+`typeof null === "object"`, so `f.contentWindow ? … : f.contentDocument`, the line every embed
+writes, saw a document that was not there. The same absence one level up: a frame with no document is
+not a child browsing context, so it was invisible to `window.length` and `window.frames[i]` (t1349).
+Chrome-measured on a `src` that never resolves, beside one bare frame:
+
+```text
+                                     Chrome    before     after
+   s.contentDocument === null         false      true     false
+   window.length (1 src + 1 bare)         2         1         2
+   typeof window[1]                  object  undefined    object
+```
+
+**Fix.** `build_inline_frame_docs` made a three-way classification — `srcdoc`, `src="about:blank"`,
+no `src` — and a `src`-bearing frame was none of the three, so nothing was built for it. It is now a
+fourth kind, built EMPTY and marked `provisional`.
+
+⚠⚠⚠ **`provisional` withholds exactly two steps, and both are the difference between a fix and a
+catastrophe.**
+
+- **It must not enter `Page::iframes`.** That map is the *"already rendered"* marker
+  `pending_iframes` reads. Entering a frame whose `src` has not been fetched makes the fetch skip
+  it — **every `<iframe src>` on the web silently stops loading** — and every other assertion about
+  the provisional document still passes, because they all read the `about:blank` this change
+  installs. "In `child_pages` but NOT in `iframes`" is precisely the state *"has its initial
+  about:blank, has not navigated"*, and it is the invariant the `load`-firing loop reads.
+- **It must not fire `load`.** Chrome fires no `load` for the initial `about:blank` of a
+  `src`-bearing frame; the event belongs to the document the `src` names. Firing it is worse than
+  the silence it replaces — `<iframe onload>` is how every embed, ad slot, payment frame and OAuth
+  bridge decides it may start talking, and an early fire hands them an empty document to talk to.
+
+The same two withheld steps exist on the other installation path as `render_iframe_inner`'s
+`provisional` flag, for frames created after parse.
+
+**And a companion fix in `iframe_js`: an EAGER INDEX FLOOR.** t1349's indices were created by
+`length`'s getter, which makes the LOOP idiom correct and leaves the DIRECT one broken —
+`frames[0].DOMParser` never reads `length`, so index 0 had never been defined. That is exactly how
+WPT's `domparsing/DOMParser-parseFromString-url*` reaches into its frame, and how most real code
+addresses the first frame, because a page with one frame does not write a loop. Indices `0..31` are
+now defined eagerly as live accessors (non-enumerable, so 32 unused names are invisible to
+`Object.keys` and `for…in`); the high-water mark still grows past the floor.
+
+**WPT.** `domparsing` 234 → **342** (+108, 18.1% → 26.4%), `dom` +1. ⚠ **`encoding` re-run as the
+guard and it is CLEAN** — 360,564 passes, identical, on a denominator that GREW (1,121,375 →
+1,127,437). That suite is 767k subtests of *"load a document in a frame and read its text back"*, so
+it is the instrument that would have caught the `Page::iframes` trap, and it did not fire.
+
+**Gate.** `G_INLINE_FRAME_DOCUMENT`, +2 arms — the fourth frame kind (live, WRITABLE, counted) and
+the `load`-count — plus a direct assertion that `pending_iframes()` STILL lists the frame. Proven red
+by three mutations: no provisional build → `cd=NULL nobody len=3 idx=none`; let it claim the frame →
+`pending=[]`; let it fire `load` → `srcLoads:1`.

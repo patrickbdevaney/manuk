@@ -2993,6 +2993,13 @@ struct InlineFrame {
     /// The frame's own viewport — what makes `100vw`/`100vh` inside it resolve to the frame.
     width: f32,
     height: f32,
+    /// **This is the INITIAL `about:blank` of a frame that has not navigated yet**, built so a
+    /// parse-time script can read `contentDocument` and so the frame counts as a child browsing
+    /// context. It must NOT be entered in `Page::iframes` (that map is `pending_iframes`' "already
+    /// rendered" marker — claiming it would stop the `src` from ever being fetched) and must NOT
+    /// fire `load` (that event belongs to the document the `src` names). See
+    /// `render_iframe_inner`'s `provisional` for the same two withheld steps on the other path.
+    provisional: bool,
 }
 
 /// What the host needs to lay out ONE child document on demand — see [`frame_forced_reflow`].
@@ -3163,19 +3170,40 @@ fn build_inline_frame_docs(
     // The same three-way classification `load_inline_frames` makes, and it must stay the same three:
     // a frame this pass claims but does not build would be skipped by BOTH passes.
     // `srcdoc` beats `src` (HTML §4.8.5), including a `src` that points somewhere real.
-    let mut work: Vec<(manuk_dom::NodeId, String)> = Vec::new();
+    let mut work: Vec<(manuk_dom::NodeId, String, bool)> = Vec::new();
     for n in dom.flat_descendants(dom.root()) {
         if dom.tag_name(n) != Some("iframe") {
             continue;
         }
         let Some(el) = dom.element(n) else { continue };
         if let Some(doc) = el.attr("srcdoc") {
-            work.push((n, doc.to_string()));
+            work.push((n, doc.to_string(), false));
             continue;
         }
         let src = el.attr("src").unwrap_or("").trim();
         if src.is_empty() || src.eq_ignore_ascii_case("about:blank") {
-            work.push((n, String::new()));
+            work.push((n, String::new(), false));
+        } else if !src.starts_with("javascript:") {
+            // ⚠⚠⚠ **AND THE FOURTH KIND, WHICH WAS NOT A KIND: A FRAME THAT HAS NOT NAVIGATED YET.**
+            // HTML gives an `<iframe>` a child browsing context at INSERTION, holding `about:blank`,
+            // and swaps it when `src` lands. This pass built the three network-free kinds and left a
+            // `src`-bearing frame with NO DOCUMENT until the fetch returned — so a parse-time script
+            // read `contentDocument === null`, and `typeof null` is `"object"`, so the check every
+            // embed writes saw a document that was not there. It also under-counted the frame tree:
+            // no document means no child browsing context, so `window.length` and `window.frames[i]`
+            // skipped it (t1349). Chrome-measured, one `src` frame that never resolves plus one bare:
+            //
+            // ```text
+            //                                  Chrome    before
+            //   s.contentDocument === null       false      true
+            //   window.length                        2         1
+            //   typeof window[1]                object  undefined
+            // ```
+            //
+            // ⚠ Built EMPTY and marked provisional. The comment above — *"a frame this pass claims
+            // but does not build would be skipped by BOTH passes"* — is exactly why this is a build
+            // and not a `continue`, and why `provisional` is a flag rather than an omission.
+            work.push((n, String::new(), true));
         }
     }
     if work.is_empty() {
@@ -3183,7 +3211,7 @@ fn build_inline_frame_docs(
     }
     INLINE_FRAME_DEPTH.with(|d| d.set(d.get() + 1));
     let mut out = Vec::new();
-    for (node, html) in work {
+    for (node, html, provisional) in work {
         // The frame's own viewport width, so its media queries and layout see the frame — the
         // `300x150` fallback is the HTML default an unsized `<iframe>` gets, and it is what
         // `render_iframe_with_type` uses for a frame with no box.
@@ -3232,6 +3260,7 @@ fn build_inline_frame_docs(
             // two call sites end up disagreeing about the same frame (the "one rule, N
             // implementations" class).
             width: w as f32,
+            provisional,
         });
     }
     INLINE_FRAME_DEPTH.with(|d| d.set(d.get().saturating_sub(1)));
@@ -4524,6 +4553,47 @@ impl Page {
         content_type: Option<&str>,
         charset: Option<&str>,
     ) {
+        self.render_iframe_inner(node, html, url, fonts, depth, content_type, charset, false)
+    }
+
+    /// **The same, with two steps withheld — the INITIAL `about:blank` of a frame that has not
+    /// navigated yet.**
+    ///
+    /// ⚠⚠⚠ HTML gives an `<iframe>` a child browsing context the moment it is INSERTED, holding an
+    /// `about:blank` document, and replaces it when `src` lands. This engine only ever built the
+    /// document at load, so `<iframe src="…">` read `contentDocument === null` until the fetch
+    /// returned — and `typeof null` is `"object"`, so every `typeof`-shaped feature check saw a
+    /// document that was not there. Chrome-measured on a `src` that never resolves:
+    ///
+    /// ```text
+    ///                                      Chrome    before
+    ///   s.contentDocument === null          false      true
+    ///   window.length (1 src + 1 bare)          2         1
+    ///   typeof window[1]                   object  undefined
+    /// ```
+    ///
+    /// `provisional` withholds exactly two steps, and each is load-bearing:
+    ///
+    ///  * **`self.iframes.insert`** — that map IS the "already rendered" marker `pending_iframes`
+    ///    reads. Marking a provisional frame would make the real fetch skip it, i.e. every
+    ///    `<iframe src>` on the web would stop loading. This is the trap in the change and it is why
+    ///    the flag exists rather than a second call to the public method.
+    ///  * **`fire_frame_load`** — Chrome does NOT fire `load` for the initial `about:blank` of a
+    ///    `src`-bearing frame; the event belongs to the document the `src` names. (A frame with NO
+    ///    `src` is different: its about:blank IS its document, it fires once, and that path is
+    ///    unchanged because it does not come through here.)
+    #[allow(clippy::too_many_arguments)]
+    fn render_iframe_inner(
+        &mut self,
+        node: manuk_dom::NodeId,
+        html: &str,
+        url: &str,
+        fonts: &FontContext,
+        depth: u8,
+        content_type: Option<&str>,
+        charset: Option<&str>,
+        provisional: bool,
+    ) {
         // **Depth limit.** An iframe whose document contains an iframe is normal; a page that frames
         // itself is a fork bomb. Chromium's limit is far higher, but ours renders each level to a
         // bitmap, so the cost compounds and the returns do not.
@@ -4563,7 +4633,9 @@ impl Page {
             };
             self.images.insert(node, std::rc::Rc::new(img));
         }
-        self.iframes.insert(node, url.to_string());
+        if !provisional {
+            self.iframes.insert(node, url.to_string());
+        }
 
         // **Keep the document.** Everything above this line already existed; the child was built in full
         // and then thrown away, which is why `contentDocument` was `undefined` for eighty-three ticks.
@@ -4593,7 +4665,9 @@ impl Page {
         // post-step is how a pass silently does not run on the third. Both the fetched path
         // (`fetch_and_load_iframes`) and the network-free path (`load_inline_frames`: `srcdoc`,
         // `about:blank`, bare `<iframe>`) arrive here, and so does every direct caller.
-        self.fire_frame_load(node);
+        if !provisional {
+            self.fire_frame_load(node);
+        }
     }
 
     /// Tell the JS world which arena sits behind each `<iframe>`. Cheap, and it must run before any
@@ -4777,6 +4851,7 @@ impl Page {
     #[cfg(feature = "spidermonkey")]
     fn load_inline_frames(&mut self, fonts: &FontContext) {
         let mut work: Vec<(manuk_dom::NodeId, String)> = Vec::new();
+        let mut provisional: Vec<manuk_dom::NodeId> = Vec::new();
         for n in self.dom.flat_descendants(self.dom.root()) {
             if self.dom.tag_name(n) != Some("iframe") || self.iframes.contains_key(&n) {
                 continue;
@@ -4792,7 +4867,36 @@ impl Page {
             let src = el.attr("src").unwrap_or("").trim();
             if src.is_empty() || src.eq_ignore_ascii_case("about:blank") {
                 work.push((n, String::new()));
+            } else if !src.starts_with("javascript:") {
+                // ── ⚠⚠⚠ **A FRAME THAT HAS NOT NAVIGATED YET STILL HAS A DOCUMENT.** HTML gives an
+                //    `<iframe>` a child browsing context at INSERTION, holding `about:blank`, and
+                //    swaps it when `src` lands. We built nothing until the fetch returned, so
+                //    `contentDocument` was `null` for every `<iframe src>` on the page — and
+                //    `typeof null` is `"object"`, so the check every embed writes
+                //    (`f.contentWindow ? … : f.contentDocument`) saw a document that was not there.
+                //
+                //    It is not only a reflector gap: a frame with no document is not a child
+                //    browsing context, so `window.length` under-counted and `window.frames[i]` skipped
+                //    it (t1349). Chrome-measured, one `src` frame that never resolves plus one bare:
+                //
+                //    ```text
+                //                                      Chrome    before
+                //      s.contentDocument === null       false      true
+                //      window.length                        2         1
+                //      typeof window[1]                object  undefined
+                //    ```
+                //
+                //    ⚠ PROVISIONAL — see `render_iframe_inner`. The two withheld steps are the whole
+                //    safety argument: this must not mark the frame rendered (the real fetch would
+                //    skip it) and must not fire `load` (that event belongs to the `src` document).
+                if !self.child_pages.contains_key(&n) {
+                    provisional.push(n);
+                }
             }
+        }
+        for node in provisional {
+            let base = self.final_url.clone();
+            self.render_iframe_inner(node, "", &base, fonts, 0, None, None, true);
         }
         for (node, html) in work {
             // **The parent's URL, not `about:blank`.** A `srcdoc` document's base URL is the
@@ -7233,8 +7337,18 @@ impl Page {
                 if let Some(img) = f.image {
                     inline_images.insert(f.node, img);
                 }
+                let provisional = f.provisional;
                 pages.insert(f.node, f.page);
-                urls.insert(f.node, f.url);
+                // ⚠⚠⚠ **A PROVISIONAL FRAME GOES INTO `pages` AND NOT INTO `urls`, AND THAT
+                // ASYMMETRY IS THE WHOLE SAFETY ARGUMENT.** `urls` becomes `Page::iframes`, which is
+                // the "already rendered" marker `pending_iframes` reads — entering a frame whose
+                // `src` has not been fetched would make the fetch skip it, i.e. every `<iframe src>`
+                // on the web would silently stop loading. Being in `child_pages` but NOT in
+                // `iframes` is precisely the definition of "has its initial about:blank, has not
+                // navigated", and the `load`-firing loop below reads it that way.
+                if !provisional {
+                    urls.insert(f.node, f.url);
+                }
             }
             (pages, urls)
         };
@@ -7294,7 +7408,15 @@ impl Page {
             page.publish_iframe_docs(fonts);
             let nodes: Vec<manuk_dom::NodeId> = page.child_pages.keys().copied().collect();
             for n in nodes {
-                page.fire_frame_load(n);
+                // ⚠ **NOT for a frame that has only its initial `about:blank`.** Chrome fires no
+                // `load` for that document; the event belongs to the one the `src` names, and
+                // firing here would announce readiness before a single byte had arrived — which is
+                // worse than the silence it replaces, because `<iframe onload>` is how every embed,
+                // ad slot and payment frame decides it may start talking. "In `child_pages` but not
+                // in `iframes`" IS that state; see the installation loop above.
+                if page.iframes.contains_key(&n) {
+                    page.fire_frame_load(n);
+                }
             }
         }
         // ⚠ **A STICKY BOX CAN BE STUCK AT SCROLL 0.** `top: 0` on a box whose containing block
