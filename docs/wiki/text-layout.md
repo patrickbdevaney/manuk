@@ -3898,3 +3898,52 @@ say `Favorit Std`) while the face behind it differs.
 **The classification is the deliverable:** this anchor is not layout work. Sending layout ticks at it
 would be the burndown's own *"MISSING_BOX cannot move this band"* mistake in a different costume, and
 the six-row control is what makes that statement rather than a guess.
+
+## `letter-spacing` dropped every unit it did not know, and a dropped value read as `normal` (t1371)
+
+`letter-spacing` was one of the handful of properties `stylo_engine.rs` recovers from
+`MinimalCascade` after Stylo has run — "because Stylo's servo build exposes them as a
+`Spacing<Length>` we'd otherwise map by hand". The mapping is four lines. The cost of not writing
+them was **every font-relative unit**, because `MinimalCascade` resolves the length through
+`values::dimension_to_px`, which maps **`"em" | "rem"` to the same arm** and returns `None` for
+anything else — and for this property `None` means *zero spacing*, i.e. a declaration that vanishes
+without a trace and renders identically to `normal`.
+
+Chrome-measured, `font-size: 20px` monospace, `Hamburgefonstiv 0123` (20 chars), root 16px:
+
+```text
+                                 Chrome used   Chrome box   before   after
+  normal                            —             240.83     241      241   CTRL
+  2px                               2px           280.83     281      281   CTRL
+  -1px                             -1px           220.83     221      221   CTRL
+  .1em  (font-size longhand)        2px           280.83     281      281
+  .1em  (after a `font:` shorthand) 2px           280.83     273      281   KEY
+  .15ch                             1.80615px     276.95     241      277   KEY
+  .1rem (root 16px)                 1.6px         272.83     281      273   KEY
+  .1em at font-size 40px            4px           561.64     562      562
+```
+
+⭐ **Three different ways to get the BASIS wrong, and one fix answers all of them.** `ch` was a unit
+the resolver had never heard of. `rem` was a unit it had heard of and aliased to `em`, so it used
+the element's 20px where the root's 16px was meant — **the one row whose old value was too LARGE**,
+which is why *"we drop spacing"* was never the whole story. And `.1em` after a `font:` shorthand was
+the right unit against the wrong number: that cascade had not established the basis, so it resolved
+against the inherited 16px.
+
+The fix is to stop resolving it twice. `stylo_map` takes Stylo's own computed `LetterSpacing` — a
+`LengthPercentage` Stylo has already resolved against the correct bases, the same machinery whose
+`width: 40ch` and `max-width: 50ch` are Chrome-exact today.
+
+⚠⚠ **THIS IS THE FOURTH PROPERTY CAUGHT BEING RECOVERED FROM A CASCADE THAT COMPUTES IT IN A
+DIFFERENT CONTEXT** — t923 (`sup`'s `vertical-align`), t1366 (`<td>`'s), t1368 (`align`'s), now this.
+**A recovery is a second implementation, and a second implementation of a UNIT is a second answer.**
+Before adding a recovery, ask what CONTEXT the other cascade will compute the value in.
+
+**Named residue, measured and not fixed:** `ex` is now applied but on the wrong basis — `.2ex` at
+20px monospace is 2.2px in Chrome (the face's real x-height) and 2.0px here, because Stylo's servo
+build resolves `ex` as a flat `0.5em` with no font metrics wired. It was DROPPED before (241) and is
+281 now against Chrome's 284.83: strictly closer, still wrong, deliberately not asserted.
+**`word-spacing` is inert in LAYOUT** — its value now comes from Stylo alongside `letter-spacing`,
+but `word-spacing: 10px` on `a b c d` measures 114.30 in Chrome and 84 here, the same as `normal`.
+`manuk-layout` reads `style.word_spacing` and the advance never changes, so that gap is downstream
+of the cascade.

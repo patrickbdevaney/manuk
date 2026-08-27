@@ -2384,6 +2384,7 @@
   - L3788 · swash reads size(0) as FONT UNITS, and font-size: 0 is a RESET, not an edge case (tick 1160)
   - L3863 · The band's next anchor is FONT-limited, not layout-limited — and a six-row control is what says so (t1333)
   - L3879 · The control that turns a hypothesis into a classification
+  - L3902 · letter-spacing dropped every unit it did not know, and a dropped value read as normal (t1371)
 
 ## The wasm demo — running the engine inside someone else's browser
 `docs/wiki/wasm-demo.md`
@@ -2417,4 +2418,4 @@
   - L231 · Both named mechanisms are subsystem work
 
 ---
-2324 sections across 22 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+2325 sections across 22 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.

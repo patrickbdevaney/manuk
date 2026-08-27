@@ -8892,3 +8892,17 @@ about ranking rather than rendering, and it belongs here because it is what a pa
 ledger that keys on the axis, and it will out-rank every real one.** On the worst named anchor it
 was 44 of 132 divergences — the whole top of the list — while the real render gap (`<path>` boxes we
 never emit) sat at #4. Check the used-face signature before believing a width cluster.
+
+## t1371 — letter-spacing, and the class of page that spaces its type
+
+The class this unlocks is **every page that letter-spaces its display type** — the wide-tracked
+nav/eyebrow/badge/all-caps-heading idiom that has been house style for a decade, plus the `ch`-based
+sizing that goes with it (`letter-spacing:.15ch`, `max-width:50ch`). Before this tick `ch`, `ex` and
+`rem` all resolved to ZERO spacing, which renders identically to `normal` — so the divergence was a
+text run a few percent too narrow, with nothing anywhere to say a declaration had been dropped.
+
+Priced first, per t1368's rule: `letter-spacing` appears in **33 of 138** corpus documents (333
+declarations). The units that were broken are a subset — `em` after a `font:` shorthand, `ch` (16
+declarations), `rem`, and whatever the 120 `var(--…)` values resolve to — so the honest reading is
+that the property is common and the broken slice is real but partial. It did NOT move the
+`www.a11yproject.com` anchor (43.3% before and after), and that is reported rather than glossed.

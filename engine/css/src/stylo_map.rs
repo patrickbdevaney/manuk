@@ -679,6 +679,38 @@ pub fn to_computed_style(cv: &ComputedValues) -> ComputedStyle {
     // its `.length` — the inline-start indent applied to the first line box in layout.
     s.text_indent = lp_to_dim(&cv.clone_text_indent().length);
 
+    // ── ⭐⭐⭐ **`letter-spacing` FROM STYLO, BECAUSE STYLO IS WHERE THE UNIT IS RESOLVED.**
+    //
+    // These two were recovered from `MinimalCascade` (see the recovery block in `stylo_engine.rs`)
+    // for the stated reason that Stylo "exposes them as a `Spacing<Length>` we'd otherwise map by
+    // hand". That is four lines of mapping, and the cost of not writing them was every
+    // FONT-RELATIVE unit, because `MinimalCascade` resolves the length with
+    // `values::dimension_to_px`, which knows `px`/`em`/`rem` and nothing else. Measured against
+    // headless Chrome on `font-size:20px` monospace, "Hamburgefonstiv 0123":
+    //
+    // ```text
+    //   letter-spacing        Chrome used   Chrome box   before   after
+    //     2px                  2px             280.83     281      281   ← the unit that worked
+    //     .1em (longhand fs)   2px             280.83     281      281
+    //     .1em (after `font:`) 2px             280.83     273      281   ← basis was the INHERITED size
+    //     .15ch                1.80615px       276.95     241      277   ← dropped entirely
+    //     .2ex                 2.2px           284.83     241      285   ← dropped entirely
+    //     .1rem                1.6px           272.83     281      273   ← resolved against the ELEMENT
+    // ```
+    //
+    // ⭐ **`dimension_to_px` maps `"em" | "rem"` to the SAME arm**, so `rem` silently means `em`
+    // there, and an unknown unit returns `None` which this property reads as *zero spacing* — a
+    // dropped declaration that looks exactly like `normal`. Stylo already resolves all four against
+    // the right bases (its `width: 40ch` and `max-width: 50ch` are Chrome-exact today), so taking
+    // the computed value is both shorter and correct, and it cannot drift from the rest of the
+    // cascade the way a second resolver does.
+    //
+    // ⚠ This is the fourth property caught being recovered from a cascade that computes it against
+    // a different context (t923 `sup`, t1366 `<td>`, t1368 `align`). **A recovery is a second
+    // implementation, and a second implementation of a UNIT is a second answer.**
+    s.letter_spacing = lp_px(&cv.clone_letter_spacing().0);
+    s.word_spacing = lp_px(&cv.clone_word_spacing());
+
     // `pointer-events` — inherited; Stylo's servo build models only `auto`/`none`. `None` drops the
     // element out of hit-testing (`elementFromPoint`, click dispatch) so clicks reach what is behind it.
     s.pointer_events = match cv.clone_pointer_events() {
@@ -1594,5 +1626,19 @@ mod tests {
         assert_eq!(style.display, Display::Inline, "initial display is inline");
         assert_eq!(style.width, Dim::Auto, "initial width is auto");
         assert_eq!(style.margin.top, Dim::Px(0.0), "initial margin is 0");
+    }
+}
+
+/// A `LengthPercentage` Stylo has already resolved, as used px.
+///
+/// `letter-spacing`/`word-spacing` take no percentage, and `normal` computes to a zero length
+/// (`Spacing::Normal => GenericLetterSpacing(LengthPercentage::zero())` in stylo 0.19), so the
+/// non-`Px` arms cannot arise for these two and answering 0 for them is the initial value rather
+/// than a guess. Reuses `lp_to_dim` deliberately: it is the audited reader of this type, and a
+/// second one is how the unit bug this fixes got in.
+fn lp_px(lp: &LengthPercentage) -> f32 {
+    match lp_to_dim(lp) {
+        Dim::Px(v) => v,
+        _ => 0.0,
     }
 }

@@ -1308,11 +1308,16 @@ pub fn cascade_via_stylo_sized(
                 // does not surface it in a form we consume, so the shipping path would otherwise
                 // render every RTL paragraph LTR-ordered.
                 cs.direction = m.direction;
-                // `letter-spacing`/`word-spacing` recovered from MinimalCascade so the shipping path
-                // tracks uppercase nav/buttons/labels too (Stylo's servo build exposes them as a
-                // `Spacing<Length>` we'd otherwise map by hand).
-                cs.letter_spacing = m.letter_spacing;
-                cs.word_spacing = m.word_spacing;
+                // ⚠⚠⚠ **`letter-spacing`/`word-spacing` ARE NO LONGER RECOVERED HERE, AND MUST NOT
+                // BE RESTORED (t1371).** They were, "because Stylo's servo build exposes them as a
+                // `Spacing<Length>` we'd otherwise map by hand" — and the mapping is four lines
+                // (`stylo_map::lp_px`), while the cost of not writing them was every FONT-RELATIVE
+                // UNIT. `MinimalCascade` resolves the length through `values::dimension_to_px`,
+                // which maps `"em" | "rem"` to the SAME arm and returns `None` for `ch`/`ex` — and
+                // for these two properties `None` reads as ZERO SPACING, i.e. a dropped declaration
+                // that is indistinguishable from `normal`. Chrome-measured, 20px monospace:
+                // `.15ch` 241 → 277, `.2ex` 241 → 285, `.1rem` 281 → 273, and `.1em` after a
+                // `font:` shorthand 273 → 281.
                 // `tab-size` for the same reason: stylo 0.19's servo build carries it as a
                 // `NonNegative<LengthOrNumber>` we do not map, so without this recovery the shipping
                 // cascade would render every `<pre>` at the initial 8 regardless of what the page

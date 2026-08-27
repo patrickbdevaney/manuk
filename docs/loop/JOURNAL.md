@@ -92364,3 +92364,88 @@ measurable today). Inline `<svg>` itself is on 26% of pages with 2227 `<path>` e
 `<path>` thread above is the priced one.
 
 WIKI: docs/wiki/fidelity-instrument.md
+
+## t1371 — a unit `letter-spacing` did not know was not an error, it was `normal`
+
+TICK SHAPE: capability. Board re-run at the top of this tick: CO-#1 unchanged. Reached by following
+t1370's own priced thread — the anchor's remaining width divergence — down to a probe that varied
+ONE property at a time, which is what turned "our text is narrower" into a named unit bug.
+
+### THE DEFECT — a dropped declaration that renders exactly like the initial value
+
+`letter-spacing` was recovered from `MinimalCascade` after Stylo had run, "because Stylo's servo
+build exposes them as a `Spacing<Length>` we'd otherwise map by hand". The mapping is four lines.
+The cost of not writing them was every FONT-RELATIVE unit: `MinimalCascade` resolves the length
+through `values::dimension_to_px`, which maps **`"em" | "rem"` to the SAME arm** and returns `None`
+for anything else — and `None` becomes `0.0` here. **A unit we did not know produced a box byte-
+identical to `letter-spacing: normal`.** No error, no fallback, no trace.
+
+Chrome-measured, 20px monospace, `Hamburgefonstiv 0123` (20 chars), root 16px:
+
+```text
+                                 Chrome used   Chrome box   before   after
+  normal                            —             240.83     241      241   CTRL
+  2px                               2px           280.83     281      281   CTRL
+  -1px                             -1px           220.83     221      221   CTRL
+  .1em  (font-size longhand)        2px           280.83     281      281
+  .1em  (after a `font:` shorthand) 2px           280.83     273      281   KEY
+  .15ch                             1.80615px     276.95     241      277   KEY
+  .1rem (root 16px)                 1.6px         272.83     281      273   KEY
+  .1em at font-size 40px            4px           561.64     562      562
+```
+
+⭐ **THREE DIFFERENT WAYS TO GET THE BASIS WRONG, AND ONE FIX ANSWERS ALL THREE.** `ch` was a unit
+the resolver had never heard of. `rem` was a unit it had heard of and ALIASED TO `em`, so it used
+the element's 20px where the root's 16px was meant — **the one row whose old value was too LARGE**,
+which is why *"we drop letter-spacing"* was never the whole story and why a fix aimed only at the
+missing units would have left it wrong. `.1em` after a `font:` shorthand was the right unit against
+the wrong number: that cascade had not established the basis, so it resolved against the inherited
+16px.
+
+The fix is to stop resolving it twice. `stylo_map` takes Stylo's own computed `LetterSpacing` (a
+`LengthPercentage` Stylo has already resolved against the correct bases — the same machinery whose
+`width: 40ch` and `max-width: 50ch` are Chrome-exact today) and the recovery is deleted with a
+lockstep comment saying not to restore it.
+
+⚠⚠ **FOURTH PROPERTY CAUGHT IN THIS EXACT TRAP** — t923 (`sup`'s `vertical-align`), t1366 (`<td>`'s),
+t1368 (`align`'s), now this. **A recovery is a second implementation, and a second implementation of
+a UNIT is a second answer.** t1368 had to ADD to the recovery site (vertical-align genuinely has no
+Stylo accessor); this one DELETES from it (letter-spacing does). The question to ask before adding a
+recovery is not "can I map it?" but "what CONTEXT will the other cascade compute it in?"
+
+### WHAT THIS DID NOT DO, SAID PLAINLY
+
+`www.a11yproject.com` is **43.3% shape before and 43.3% after** — unchanged. The anchor's
+`letter-spacing: .15ch` rules are real and are now correct, and they were not what its width
+divergence was made of. Reported rather than glossed; a fix that is right and does not move the
+number is still right, and claiming otherwise is how a burndown starts lying.
+
+⚠ MEASURED, NOT FIXED, AND DELIBERATELY NOT ASSERTED: **`ex` is applied on the wrong basis** —
+`.2ex` at 20px monospace is 2.2px in Chrome (the face's real x-height) and 2.0px here, because
+Stylo's servo build resolves `ex` as a flat `0.5em` with no font metrics wired. Dropped before
+(241), 281 now against Chrome's 284.83: strictly closer, still wrong, and pinning 281 would be the
+wrong answer of the right type. **`word-spacing` is inert in LAYOUT** — its value now comes from
+Stylo too, but `word-spacing: 10px` on `a b c d` measures 114.30 in Chrome and 84 here, the same as
+`normal`; `manuk-layout` reads `style.word_spacing` (lib.rs ~13414) and the advance never changes,
+so that gap is downstream of the cascade and is a separate tick.
+
+PRICED FIRST, per t1368's rule: `letter-spacing` appears in **33 of 138** corpus documents, 333
+declarations — units `px` 88, `var(--…)` 120, `em` 39, `ch` 16, `inherit` 10. The broken slice is
+`em`-after-shorthand, `ch`, `rem` and whatever the `var()`s resolve to: real and partial, not the
+whole 333.
+
+REGRESSION SWEEP: 7 gates green (`g_text_align_justify`, `g_text_indent_edges`,
+`g_anon_block_inherits`, `g_legacy_align_is_not_text_align_center`, `g_align_attribute_is_a_float`,
+`g_td_vertical_align_middle`, `g_block_replaced_has_no_line_box`), plus `manuk-css` 39,
+`manuk-layout` 185, `manuk-paint` 22, `manuk-dom` 11.
+
+GATE `G_LETTER_SPACING_RESOLVES_ITS_UNIT` — 8 rows, RED under four mutations, each applied to the
+engine, rebuilt and read:
+
+- **Q1** both properties recovered from `MinimalCascade` again — the exact pre-tick state → `#emf`
+  272.83, not 280.83
+- **Q2** the mapped value replaced by `0.0` → `#px` 240.83, the `normal` number
+- **Q3** the sign dropped (`v.abs()`) → `#neg` 260.83, not 220.83 — the negative CONTROL bites
+- **Q4** `letter-spacing` read from the `word-spacing` slot, the copy-paste → `#px` 240.83
+
+WIKI: docs/wiki/text-layout.md
