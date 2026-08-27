@@ -11421,3 +11421,79 @@ declaration — the same shape as the missing `table { border-spacing: 2px }` of
 text vertically on every table-laid-out page, so it is a tick of its own and the gate deliberately
 does NOT assert today's `0`. The last row is a third, unrelated finding banked here rather than
 lost: a fixed inherited `line-height` must NOT be grown by a larger font's content area.
+
+## A DEFAULT `<td>` IS `vertical-align: middle`, AND THE RULE THAT SAYS SO IS ON THE ROW GROUP (t1366)
+
+Chrome's `<td>` computes `vertical-align: middle`; ours computed the initial `baseline`. So every
+default HTML table put every cell's content flush against the TOP of its row instead of centred in
+it — visible the moment two cells in a row differ in height, which is a logo beside a nav, a label
+beside a taller input, a thumbnail beside a title. `news.ycombinator.com`'s masthead text sits at
+y=12 in Chrome and sat at y=10 here.
+
+Blink's UA sheet is two lines and the second one is the one to get right:
+
+```css
+thead, tbody, tfoot { vertical-align: middle }
+tr, td, th          { vertical-align: inherit }
+```
+
+`vertical-align` is **not an inherited property**, so `inherit` is the only way the row group's
+value reaches a cell. `td, th { vertical-align: middle }` gives the same answer on a default table
+and the wrong one the moment an author writes the alignment on the `<tbody>` or the `<tr>` — which
+is how HTML has expressed table alignment since 1997 and is still all over legacy markup.
+
+Chrome-measured, 16px/20px monospace, a 40px block in one cell and one line of text in the other,
+`dy` = the text's offset from the top of the table:
+
+```text
+                                          computed va   Chrome dy   before   after
+  a plain <td>                               middle        10          0       10
+  …in a 60px row                             middle        20          0       20
+  a <th>                                     middle        10          0       10
+  a cell holding an INLINE 40px image        middle      12.5          0     12.5
+  <tbody style="vertical-align:top">         top            0          0        0
+  <tr style="vertical-align:bottom">         bottom        20          0       20
+  vertical-align written on the td   CTRL     as written   0/10       0/10     0/10
+  <div style="display:table-cell">   CTRL     baseline      25         25       25
+  news.ycombinator.com masthead text            —          12         10       12
+```
+
+### WHERE IT HAD TO GO, AND WHY NOT THE STYLO SHEET
+
+⚠⚠⚠ **The UA sheet in `stylo_engine.rs` is the WRONG file for this property and a rule written
+there is silently inert.** `vertical-align` has no computed longhand accessor in stylo 0.19 (it
+became a CSS-Inline-3 shorthand there), so `stylo_engine.rs` RECOVERS the property from
+MinimalCascade wholesale — whatever Stylo computes is overwritten a moment later. The rule therefore
+lives in `cascade_node` (`css/src/lib.rs`), which is also the only place that has the PARENT style
+`inherit` needs; `apply_ua_defaults` is per-element and has no tree, the same reason `<details>`'s
+closed-subtree rule sits beside it. A lockstep comment now stands in the Stylo sheet where the
+declarations "should" be, saying not to restore them.
+
+### THE RULE IS KEYED ON THE TAG, NOT ON `Display::TableCell`
+
+Chrome's is a UA *declaration* on `td`/`th`, so `div { display: table-cell }` keeps the initial
+`baseline` and its neighbour's text sits a full 25 down, not 12.5. ⚠ A `Display::TableCell` test
+written *where the fix lives* cannot catch this: at that point in `cascade_node` no author rule has
+run, so the div's display is still `Block` and the mistake is inert. The mutation that catches it
+has to be written where such a rule would naturally be put — a post-cascade pass on the final
+display, exactly where t1364 found `cellpadding`'s second implementation.
+
+### ⚠ THE TICK BLUNTED A BANKED GATE, AND THAT IS A TRADE UNLESS YOU RE-CUT THE TOOTH
+
+t1365 banked "a block-level replaced element is not a first line box" on rows shaped
+`<td><img display:block></td>` beside `<td>text</td>` — 40 in Chrome, 45 before that fix. Once a
+cell is `middle` it never asks for a baseline at all, so those rows became jointly satisfied and
+t1365's first mutation stopped going red **anywhere**. Capability bought by blunting an instrument
+is a trade and trades are refused, so `G_BLOCK_REPLACED_HAS_NO_LINE_BOX` gained three FLEX rows
+(`#u11`–`#u13`), which have no UA declaration to hide behind: `align-items: baseline` with 12px of
+`padding-bottom` on the item separates the two possible answers — the item's synthesised baseline is
+its bottom border edge (52) and the block image's own bottom margin edge is 40 — and Chrome puts
+that row at 57 with its text at dy=37. The mutation reads 52/20 again.
+
+### ⚠ MEASURED, NOT FIXED
+
+A baseline-aligned cell with **no in-flow line box** must report its BOTTOM MARGIN EDGE as its
+baseline (CSS 2.1 §17.5.4); we drop it out of the baseline group instead.
+`<div style="display:table-cell"><div 40px></div></div>` beside a text cell is **45** in Chrome and
+**40** here, and an explicit `vertical-align: baseline` on a real `<td>` reads the same 40 against
+Chrome's 45. It is invisible on a default `<td>` — which is now `middle` — and it is the next tick.

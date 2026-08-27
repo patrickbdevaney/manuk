@@ -542,6 +542,11 @@
   - L11346 · A REPLACED ELEMENT IS A LINE BOX ONLY WHILE IT IS INLINE-LEVEL (t1365)
   - L11378 · THE TWO CONSUMERS WANT OPPOSITE ANSWERS, AND ONE PREDICATE IS WRONG TWICE
   - L11403 · ⚠ MEASURED IN PASSING AND NOT FIXED: <td> DEFAULTS TO vertical-align: middle
+  - L11425 · A DEFAULT <td> IS vertical-align: middle, AND THE RULE THAT SAYS SO IS ON THE ROW GROUP (t1366)
+  - L11461 · WHERE IT HAD TO GO, AND WHY NOT THE STYLO SHEET
+  - L11472 · THE RULE IS KEYED ON THE TAG, NOT ON Display::TableCell
+  - L11481 · ⚠ THE TICK BLUNTED A BANKED GATE, AND THAT IS A TRADE UNLESS YOU RE-CUT THE TOOTH
+  - L11493 · ⚠ MEASURED, NOT FIXED
 
 ## browser-capabilities.md
 `docs/wiki/browser-capabilities.md`
@@ -2403,4 +2408,4 @@
   - L231 · Both named mechanisms are subsystem work
 
 ---
-2310 sections across 22 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+2315 sections across 22 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.

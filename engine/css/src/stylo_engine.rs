@@ -594,6 +594,14 @@ tbody { display: table-row-group; }
    it. */
 thead { display: table-header-group; }
 tfoot { display: table-footer-group; }
+/* ⚠⚠⚠ **CHROME'S `vertical-align` RULES FOR TABLES ARE DELIBERATELY *NOT* HERE (t1366).** Blink's
+   UA sheet carries `thead, tbody, tfoot { vertical-align: middle }` and
+   `tr, td, th { vertical-align: inherit }`, and a default `<td>` therefore CENTRES its content.
+   Writing them in this sheet would be INERT: `vertical-align` is one of the properties the recovery
+   block below (~line 1219) takes from MinimalCascade wholesale, because stylo 0.19 exposes no
+   computed longhand for it — so whatever Stylo computes here is overwritten. The rule lives in
+   `cascade_node` (css/src/lib.rs), which is also the only place with the PARENT that `inherit`
+   needs. This comment is the lockstep: do not "restore" the missing declarations here. */
 tr { display: table-row; }
 td, th { display: table-cell; padding: 1px; }
 caption { display: table-caption; }

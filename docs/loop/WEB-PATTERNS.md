@@ -8803,3 +8803,29 @@ in a row that contains no image at all.
 holding that same block image still hands §10.8.1 its bottom edge, so its `padding-bottom` hangs
 below the shared baseline. **A predicate with two callers is two rules until proven otherwise** —
 ask each caller what it would do with the box they disagree about, before sharing anything.
+
+## THE UA SHEET IS A CAPABILITY SURFACE, AND `<td>` CENTRES ITS CONTENT
+
+Two ticks running, the defect on the anchor site was one missing UA declaration: `border-spacing`
+(t908/t1364) and now `thead, tbody, tfoot { vertical-align: middle }` + `tr, td, th
+{ vertical-align: inherit }`. Neither is exotic; both are load-bearing on the whole legacy web,
+because a table-laid-out page declares almost nothing and inherits everything from the UA.
+
+The class this unlocks is **every page whose layout is a table and whose rows contain cells of
+unequal height** — a masthead with a logo beside its nav, a form label beside a taller input, a
+thumbnail beside a title, an icon beside a label. All of them had their text jammed to the top of
+the row. WPT is FLAT on it (`css/CSS2/tables`: 87 passed before, 87 after, measured with a same-hour
+old-binary control), for the same reason as t1364: a conformance test DECLARES its alignment, and
+the defect lives exactly where nobody declares anything.
+
+⚠ **The rule that reaches the cell is `inherit`, not the value.** `vertical-align` is not an
+inherited property, so `td, th { vertical-align: middle }` is right on a default table and wrong the
+moment an author writes the alignment on the `<tbody>` or the `<tr>` — the HTML4 idiom, still
+everywhere. Two spellings, one indistinguishable on the common case; the row that tells them apart
+is the only reason to write a gate at all.
+
+⚠⚠ **And a capability tick can blunt a gate it never touched.** Making `<td>` centre its content
+made t1365's table rows jointly satisfied, so its first mutation stopped going red anywhere. A gate
+losing a tooth is an instrument-fidelity regression and the ratchet refuses it as a trade — the fix
+is to re-cut the tooth in the SAME tick, on a box the new rule does not cover (here, a flex item).
+**After a UA-default tick, re-run the mutations of every gate that touches the same element.**

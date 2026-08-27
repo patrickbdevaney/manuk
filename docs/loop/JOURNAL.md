@@ -91781,3 +91781,111 @@ font's content area (a 32px cell beside a 16px one at `line-height:20px` reads 2
 Chrome).
 
 WIKI: docs/wiki/box-layout.md
+
+## t1366 — a default `<td>` CENTRES its content, and the rule that says so is on the ROW GROUP
+
+TICK SHAPE: capability. Board re-run at the top of this tick and diffed against t1365's copy: no
+change (the diff is tail lines the earlier capture truncated, not a steer). CO-#1 is still the
+rendering gap, SHAPE/POSITION first, on the named anchor sites. This is the defect t1365 measured in
+passing and refused to assert, exactly as its journal entry said it would be picked up.
+
+### THE DEFECT
+
+Chrome's `<td>` computes `vertical-align: middle`; ours computed the initial `baseline`. Every
+default HTML table therefore put every cell's content flush against the TOP of its row instead of
+centred in it — visible the moment two cells in a row differ in height, which is a logo beside a
+nav, a label beside a taller input, a thumbnail beside a title.
+
+Blink's UA sheet is two lines, and ⭐ **the second one is the whole tick**:
+
+```css
+thead, tbody, tfoot { vertical-align: middle }
+tr, td, th          { vertical-align: inherit }
+```
+
+`vertical-align` is NOT an inherited property, so `inherit` is the only way the row group's value
+reaches a cell. `td, th { vertical-align: middle }` gives the identical answer on a default table
+and the WRONG one the moment an author writes the alignment on the `<tbody>` or the `<tr>` — the
+HTML4 idiom, still everywhere in legacy markup. Two spellings, indistinguishable on the common case.
+
+### ⚠⚠⚠ THE UA SHEET WAS THE WRONG FILE, AND A RULE WRITTEN THERE WOULD HAVE BEEN SILENTLY INERT
+
+The obvious place is `stylo_engine.rs`'s UA sheet, beside `table { border-spacing: 2px }` — and it
+would have done nothing. `vertical-align` has no computed longhand accessor in stylo 0.19, so
+`stylo_engine.rs` RECOVERS the property from MinimalCascade wholesale (line ~1219); whatever Stylo
+computes is overwritten a moment later. The property's own recovery block says so and the t923 note
+in `apply_ua_defaults` says so again about `sup`/`sub` — two prior records of the same trap, both
+about this exact property.
+
+So the rule lives in `cascade_node` (`css/src/lib.rs`), which is also the ONLY place that has the
+parent style `inherit` needs — `apply_ua_defaults` is per-element and has no tree, the same reason
+`<details>`'s closed-subtree rule already sits there. A lockstep COMMENT now stands in the Stylo
+sheet where the declarations "should" be, telling the next reader not to restore them.
+
+### THE RESULT — Chrome-exact on all nine rows, plus the anchor site
+
+```text
+                                          computed va   Chrome dy   before   after
+  a plain <td>                               middle        10          0       10
+  …in a 60px row                             middle        20          0       20
+  a <th>                                     middle        10          0       10
+  a cell holding an INLINE 40px image        middle      12.5          0     12.5
+  <tbody style="vertical-align:top">   KEY   top            0          0        0
+  <tr style="vertical-align:bottom">   KEY   bottom        20          0       20
+  vertical-align written on the td    CTRL   as written   0/10       0/10     0/10
+  <div style="display:table-cell">    CTRL   baseline      25         25       25
+  news.ycombinator.com masthead text            —         12         10       12
+```
+
+The HN row is a same-hour old-binary control on the snapshot fixture (`/tmp/hn.html` with `--url`,
+so the external CSS resolves): our masthead nav text moved from y=10 to y=12, and Chrome's
+`span.pagetop` is at y=12.
+
+### ⭐ THE ROW THAT LOOKS LIKE A DECORATION AND IS THE ONLY ONE THAT MATTERS
+
+`<tbody style="vertical-align:top">` reads dy=0 before this tick and dy=0 after — a row that did not
+move, which by t1364's own lesson is the shape of a control that cannot lose. It is the opposite
+here: it is the ONLY row that goes red under the *plausible wrong fix* (`td, th { vertical-align:
+middle }`), where every other row above stays exactly right. Its mirror on the `<tr>` is the second.
+**A row's value is what it does under the mutation, not whether the tick moved it.**
+
+### ⚠⚠⚠ THIS TICK BLUNTED t1365's GATE, WHICH IS A TRADE — SO THE TOOTH WAS RE-CUT HERE
+
+t1365 banked "a block-level replaced element is not a first line box" on rows shaped
+`<td><img display:block></td>` beside `<td>text</td>`. **A cell that is centred never asks for a
+baseline at all**, so those rows became jointly satisfied and t1365's first mutation stopped going
+red ANYWHERE — verified by applying it, not assumed. Capability bought by blunting an instrument is
+a trade and the ratchet refuses trades, so `G_BLOCK_REPLACED_HAS_NO_LINE_BOX` gained three FLEX rows
+(`#u11`–`#u13`) on a box with no UA declaration to hide behind: `align-items: baseline` with 12px of
+`padding-bottom` on the item separates the two possible answers (synthesised bottom border edge 52
+vs the block image's bottom margin edge 40). Chrome 57 with its text at dy=37; the mutation reads
+52/20 again. **After a UA-default tick, re-run the mutations of every gate that touches the same
+element.**
+
+### WPT — MEASURED, AND FLAT
+
+`css/CSS2/tables` reftests: **87 passed / 156 failed before, 87 / 156 after**, taken with a
+same-hour old-binary control (the fix stashed, rebuilt, re-run). `css/CSS2/tables` testharness:
+84/84 both. Flat is the right result and the third tick running to say so: a conformance test
+DECLARES its alignment; this defect lives where nobody declares anything.
+
+GATE `G_TD_VERTICAL_ALIGN_MIDDLE` — 11 heights + 10 offsets, RED under three mutations, each applied
+and read:
+
+- **the rule deleted** → `#m1` dy=0, not 10
+- **`td, th { vertical-align: middle }`**, the plausible wrong spelling → `#m6` dy=10, not 0
+- **keyed on `Display::TableCell` in a post-cascade pass** → `#m6` dy=10 and `#k2` dy=12.5, not 25
+
+⚠ The third mutation had to be written in a post-cascade pass, not at the fix's own site: at that
+point in `cascade_node` no author rule has run, so a `<div style="display:table-cell">` still has
+`Display::Block` and keying on the display there is INERT. The first attempt at that mutation came
+back green and the reason is the finding.
+
+NEXT — measured, not done here: a baseline-aligned cell with **no in-flow line box** must report its
+BOTTOM MARGIN EDGE as its baseline (CSS 2.1 §17.5.4); we drop it out of the group instead.
+`<div style="display:table-cell"><div 40px></div></div>` beside a text cell is 45 in Chrome and 40
+here, and an explicit `vertical-align: baseline` on a real `<td>` reads the same 40 against 45. Also
+seen while dumping HN's masthead and NOT chased: our `span.pagetop` text starts at x=384 where
+Chrome puts it at x=123 — a horizontal divergence in the same cell this tick fixed vertically.
+
+WIKI: docs/wiki/box-layout.md

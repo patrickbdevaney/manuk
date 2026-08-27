@@ -57,6 +57,23 @@
 //! ⚠ `#u9`/`#u10` are insensitive by construction and are here to say so: a flex item with no
 //! baseline synthesises one from its border box, which for these items is the same 40 the image
 //! already reported. They pin that this tick moved flex by nothing.
+//!
+//! ⚠⚠⚠ **THE TOOTH WAS RE-CUT AT t1366, BECAUSE THAT TICK TOOK IT OUT.** t1366 gave `<td>`/`<th>`
+//! Chrome's UA `vertical-align: middle`, and a CENTRED cell never asks for a baseline — so every
+//! `<td>` row above (`#u1`, `#u5`) became jointly satisfied and the first mutation below stopped
+//! going red anywhere. A capability tick that silently blunts a banked gate is a TRADE, so t1366
+//! added `#u11`–`#u13`: the same question asked of a FLEX item, which has no UA declaration to hide
+//! behind. `#u11`'s item carries 12px of `padding-bottom`, which is what separates the two possible
+//! answers — the item's SYNTHESISED baseline is its bottom border edge (52), the block image's own
+//! bottom margin edge is 40 — and Chrome puts the row at 57 with its text at dy=37.
+//!
+//! ```text
+//!                                                        Chrome   mut-1   after
+//!   #u11 flex item pad-bottom:12 > <img block>    h         57      52      57
+//!        …its text sibling's dy                            37      20      37
+//!   #u12 …the image left INLINE                   CTRL      57      57      57
+//!   #u13 …a bare 40px <div>                       CTRL      57      57      57
+//! ```
 use manuk_text::FontContext;
 
 const HTML: &str = r##"<!DOCTYPE html><html><head><meta charset="utf-8"><style>
@@ -75,6 +92,9 @@ const HTML: &str = r##"<!DOCTYPE html><html><head><meta charset="utf-8"><style>
 <div id="u8" style="width:300px"><span id="s2" style="display:inline-block;padding-bottom:12px"><img class="im" src="x.gif"></span>text</div>
 <div id="u9" style="display:flex;align-items:baseline;width:300px"><div id="f1"><img class="im" src="x.gif" style="display:block"></div><div id="f2">text</div></div>
 <div id="u10" style="display:flex;align-items:baseline;width:300px"><div id="f3"><img class="im" src="x.gif"></div><div id="f4">text</div></div>
+<div id="u11" style="display:flex;align-items:baseline;width:300px"><div id="f5" style="padding-bottom:12px"><img class="im" src="x.gif" style="display:block"></div><div id="f6">text</div></div>
+<div id="u12" style="display:flex;align-items:baseline;width:300px"><div id="f7" style="padding-bottom:12px"><img class="im" src="x.gif"></div><div id="f8">text</div></div>
+<div id="u13" style="display:flex;align-items:baseline;width:300px"><div id="f9" style="padding-bottom:12px"><div style="width:30px;height:40px"></div></div><div id="f10">text</div></div>
 </body></html>
 "##;
 
@@ -176,4 +196,18 @@ fn g_block_replaced_has_no_line_box() {
     // Chrome-exact today (the heights), and this comment is the receipt for what is not.
     top_offset(&page, "#u9", "#f2", 25.0); // flex: baseline-aligned, and unmoved by this tick
     top_offset(&page, "#u10", "#f4", 25.0);
+
+    // ── ⚠⚠⚠ THE TOOTH, RE-CUT AT t1366. See this file's header: `#u1`/`#u5` stopped being able
+    //    to fail once `<td>` got its UA `vertical-align: middle`, because a cell that is centred
+    //    never asks for a baseline at all. These three rows ask the SAME question of a box that
+    //    has no UA declaration to hide behind — a FLEX item, where `align-items: baseline` makes
+    //    the first-line baseline load-bearing and 12px of `padding-bottom` separates the two
+    //    possible answers: the item's synthesised baseline is its bottom BORDER edge (52), while
+    //    the block image's own bottom margin edge is 40.
+    h(&page, "#u11", 57.0);
+    top_offset(&page, "#u11", "#f6", 37.0);
+    h(&page, "#u12", 57.0); // CTRL the image left INLINE — it IS a line box, baseline 25
+    top_offset(&page, "#u12", "#f8", 25.0);
+    h(&page, "#u13", 57.0); // CTRL a bare <div> — already had no baseline before this tick
+    top_offset(&page, "#u13", "#f10", 37.0);
 }

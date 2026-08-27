@@ -4945,6 +4945,49 @@ impl MinimalCascade {
                     s.display = Display::None;
                 }
 
+                // ⚠⚠⚠ **CHROME'S `<td>` COMPUTES `vertical-align: middle`, NOT `baseline`, AND THE
+                // RULE THAT SAYS SO IS ON THE ROW GROUP.** Blink's UA sheet is
+                //
+                // ```css
+                //   thead, tbody, tfoot { vertical-align: middle }
+                //   tr, td, th         { vertical-align: inherit }
+                // ```
+                //
+                // and the second line is doing real work: `vertical-align` is NOT an inherited
+                // property, so `inherit` is the only way the row group's value reaches a cell. A
+                // default HTML table therefore CENTRES every cell's content vertically and never
+                // forms a baseline group at all — which is the opposite of what an engine that
+                // leaves cells at the initial `baseline` does. Measured (16px/20px monospace, a
+                // 40px block beside a one-line text cell), `getComputedStyle(td).verticalAlign` and
+                // the text's offset from the top of the table:
+                //
+                // ```text
+                //                                          Chrome        before
+                //   a plain <td>                        middle  dy=10   baseline  dy=0
+                //   …in a 60px row                      middle  dy=20   baseline  dy=0
+                //   <tbody style="vertical-align:top">   top    dy=0     baseline  dy=0
+                //   <tr style="vertical-align:bottom">   bottom dy=20    baseline  dy=0
+                //   a <th>                              middle  dy=10   baseline  dy=0
+                //   <div style="display:table-cell">    baseline dy=25  baseline  dy=0
+                // ```
+                //
+                // The last row is why this is keyed on the TAG and not on `Display::TableCell`: the
+                // rule is a UA *declaration* on `td`/`th`, so a `div { display: table-cell }` keeps
+                // the initial `baseline` in Chrome. Matching on the computed display would have
+                // moved that div too, and been wrong.
+                //
+                // It lives HERE rather than in `apply_ua_defaults` for the same reason `<details>`
+                // above does: `inherit` needs the parent, and the per-element helper has no tree.
+                // And it must live in THIS cascade at all — not the Stylo sheet — because
+                // `vertical-align` is one of the properties `stylo_engine.rs` RECOVERS from
+                // MinimalCascade wholesale (stylo 0.19 exposes no computed longhand for it), so a
+                // rule written only in the Stylo UA sheet is overwritten by this map and inert.
+                match el.name.to_ascii_lowercase().as_str() {
+                    "thead" | "tbody" | "tfoot" => s.vertical_align = VerticalAlign::Middle,
+                    "tr" | "td" | "th" => s.vertical_align = parent_style.vertical_align,
+                    _ => {}
+                }
+
                 // Author rules, ordered by (specificity, source order). Only the rules the index
                 // says could possibly match this element are tested (EPOCH-1: this is the fix for
                 // the O(nodes × rules) cascade).
