@@ -90773,3 +90773,77 @@ quick one. **Measured, priced and NOT started**, rather than half-done.
 containing block (the `-465px` row is the 156). (b) `css/cssom`'s next mass:
 `CSSStyleRule-set-selectorText` (58, of which 27 are "setting selectorText does not re-match").
 (c) The three unmodelled font longhands (t1353). (d) The teardown Bar-0 (t1349). (e) I3's debt.
+
+## t1357 — a property that is a view, implemented as a value
+
+TICK SHAPE: capability. Board re-run at the top of this tick and diffed against t1356's copy:
+**unchanged** except its own tally. **`css/cssom` 2,741 → 2,758 (+17, 78.2% → 78.6%)**.
+
+### THE BUG
+
+`rule.selectorText` was a plain DATA property. Assigning to it updated the rule OBJECT and left the
+sheet — and therefore the styling — exactly as it was. Chrome-measured on `.x { color: rgb(1,2,3) }`
+with the rule re-pointed at `#b`:
+
+```text
+                      Chrome                     before      after
+   a (was .x)         rgb(1,2,3) → rgb(0,0,0)    unchanged   rgb(0,0,0)
+   b (now #b)         rgb(0,0,0) → rgb(1,2,3)    unchanged   rgb(1,2,3)
+   rule.cssText       '#b { … }'                 '.x { … }'  '#b { … }'
+   = ':gibberish'     ignored, stays '#b'        STUCK       ignored
+   = '123'            ignored, stays '#b'        STUCK       ignored
+```
+
+⭐⭐ **THE CLASS: A PROPERTY THAT IS A VIEW, IMPLEMENTED AS A VALUE.** The read looked right, the
+write looked accepted, and the object was self-consistent throughout — the only thing missing was the
+connection to the thing it describes. It is the same shape as t1355's `el.style.appearance` from the
+other direction: there the write was REJECTED, here it was ACCEPTED and went nowhere. Both look like
+a working API from inside the object.
+
+⚠ **AND AN INVALID SELECTOR STUCK**, so a page probing selector support by assigning and reading
+back was told YES for every string it tried. CSSOM says the setter parses and returns on failure.
+
+### ⭐ THE VALIDATOR IS THE ONE `querySelectorAll` ALREADY USES
+
+The setter answers "is this a selector?" with `document.querySelectorAll` in a try/catch. That is not
+a shortcut: that path throws `SyntaxError` for exactly the grammar this needs (t1344), so the two
+surfaces **cannot drift into disagreeing about which selectors this engine accepts**. Measured
+against Chrome on 15 selectors — including `svg|*.style1` (an UNDECLARED namespace prefix: invalid in
+both) and `*|*.style1` (valid in both) — **15 of 15 agree**.
+
+⚠⚠ **A DELIBERATE NON-MATCH THAT WAS NOT "FIXED", AND READING THE CODE IS WHAT STOPPED IT.** The
+15th, `p:not(`, Chrome rejects and we accept. That looked like a validator gap worth closing until
+`selector_syntax.rs` turned out to say why, with WPT's own corpus as the evidence: *"an unclosed
+block at end-of-input is NOT an error — CSS Syntax closes `[`, `(` and an open string at EOF, so
+`[align="center"` and `::slotted(foo` are VALID selectors, and rejecting them was this validator's
+first false positive."* ⭐ The third time this arc that a comment already held the answer (t1294's
+taffy refusal, t1354's Chrome-vs-spec, now this).
+
+**Proven RED**, three mutations: drop the sheet write → the read-back claim; drop the validation →
+the invalid-selector claim; freeze the getter at construction → **the HELD-reference claim, and only
+that one.**
+
+⚠ That third arm is the tick's fixture lesson. Re-reading `sheet.cssRules[0]` hands back a REBUILT
+object whose captured text is already current, so every re-reading row passes with a stale getter.
+Only `const r = sheet.cssRules[0]` — what every edit loop actually holds — can see it, and that row
+was added after the mutation walked through. **Sixth tick running where the mutation pass found a
+gate hole** (t1345, t1348, t1350, t1352, t1355, now t1357).
+
+⚠⚠ **AND I REPEATED A MISTAKE I HAD JUST WRITTEN DOWN.** t1356's entry ends with *"a shared fixture
+makes a new row able to invalidate an older one"* — and adding a `<style>` for this tick's rows moved
+the same `document.styleSheets` count claim a second time, 2/3 → 3/4. It is re-pinned with the rule
+stated in the assertion itself: **the claim is the +1 and the LIVENESS, never the absolute count.**
+
+### ⚠ FOR THE OBSERVER — THE BOX LOAD IS NOW A THROUGHPUT PROBLEM
+
+t1356 needed **five** `tick.sh` attempts. Load1 during them: 12.4, 19.8, 13.8, then 8.0 — it landed
+on the fifth, when it fell below ~8. Every attempt is a full wall. `ps` during the failures shows
+**seven concurrent `find` processes at ~100% CPU each**, all from the disk-hygiene cron (`*/1`), and
+none of mine. The two gates that fail are always the same pair, `affordance` and `G_INTERACT` — the
+UI-timing gates, which cannot pass while the wall's own ~25-binary parallel gate phase competes with
+seven `find`s. This is the t1349 note getting worse, with numbers.
+
+**NEXT.** (a) ⭐ The static position of a block-level abspos (t1356 priced it: needs the
+pre-blockification display, then the vertical/RTL containing block — 156 subtests). (b) `css/cssom`'s
+remaining ~750, now that two of its four top files are done. (c) The three unmodelled font longhands
+(t1353). (d) The teardown Bar-0 (t1349). (e) I3's mechanical debt, now nine checks.

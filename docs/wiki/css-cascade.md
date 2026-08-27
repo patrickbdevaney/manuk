@@ -4797,3 +4797,54 @@ with it, which is the defect's real severity); drop quote tracking → `stmtImpo
 constant at-rule type → the type claim; `selectorText` on every rule → the absent claim.
 ⚠ The existing `document.styleSheets` count claim moved 1→2 / 2→3 because this tick added a sheet
 to the shared fixture; the CLAIM is the +1 and the liveness, not the absolute count, and it now says so.
+
+---
+
+## `selectorText` is a live accessor, and assigning to it must reach the cascade (t1357)
+
+`rule.selectorText` was a plain DATA property. Assigning to it updated the rule OBJECT and left the
+sheet — and therefore the styling — exactly as it was. Chrome-measured on
+`.x { color: rgb(1,2,3) }` with the rule re-pointed at `#b`:
+
+```text
+                       Chrome                        before        after
+   a (was .x)          rgb(1,2,3) → rgb(0,0,0)       unchanged     rgb(0,0,0)
+   b (now #b)          rgb(0,0,0) → rgb(1,2,3)       unchanged     rgb(1,2,3)
+   rule.cssText        '#b { … }'                    '.x { … }'    '#b { … }'
+   = ':gibberish'      ignored, stays '#b'           STUCK         ignored
+   = '123'             ignored, stays '#b'           STUCK         ignored
+```
+
+Re-selecting a rule at runtime is how a theme switcher rescopes a component, how a CSS-in-JS runtime
+re-keys a generated class, and how every "edit this rule" panel works.
+
+**Three parts.**
+
+- **A `writeSel` closure**, the selector mirror of the existing `writeBlock`: it rewrites the rule's
+  prefix in the sheet text by INDEX and re-syncs, so a bound `cssRules` sees the change.
+- **A live GETTER**, re-reading the sheet like `cssText` does.
+- **⚠ AN INVALID SELECTOR IS IGNORED, NOT THROWN** (CSSOM: the setter parses and returns on
+  failure). `:gibberish` and `123` used to STICK, so a page probing selector support by assigning
+  and reading back was told YES for every string it tried.
+
+⭐ **The validity question is answered by `document.querySelectorAll` in a try/catch, and that is not
+a shortcut**: that path throws `SyntaxError` for exactly the grammar this needs (t1344), so the two
+surfaces cannot drift into disagreeing about which selectors this engine accepts. Measured against
+Chrome on 15 selectors — including `svg|*.style1` (an UNDECLARED namespace prefix: invalid in both)
+and `*|*.style1` (valid in both) — **15 of 15 agree**.
+
+⚠⚠ **A DELIBERATE NON-MATCH THAT WAS NOT "FIXED".** The 15th, `p:not(`, Chrome rejects and we accept.
+`selector_syntax.rs` says why, with WPT's own corpus as evidence: *"an unclosed block at end-of-input
+is not an error — CSS Syntax closes `[`, `(` and an open string at EOF, so `[align="center"` and
+`::slotted(foo` are VALID selectors, and rejecting them was this validator's first false positive."*
+Reading that comment is what stopped this tick from "fixing" a documented decision.
+
+**WPT.** `css/cssom` 2,741 → **2,758** (+17). The rest of `CSSStyleRule-set-selectorText` needs
+namespace-aware selector MATCHING, a different mechanism.
+
+**Gate.** `G_CSSOM_SHEET_BRIDGE`, +4 claims. Proven red by three mutations: drop the sheet write →
+the read-back claim; drop the validation → the invalid-selector claim; freeze the getter at
+construction → **the HELD-reference claim, and only that one.** ⚠ Re-reading `sheet.cssRules[0]`
+hands back a REBUILT object whose captured text is already current, so every other row passes with a
+stale getter; `const r = sheet.cssRules[0]` — what every edit loop actually holds — is the only shape
+that can see it.

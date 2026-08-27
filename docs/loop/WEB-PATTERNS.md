@@ -8485,3 +8485,30 @@ splitter works and says nothing about half the category.
 
 ⚠⚠ And the arm nothing else can see: `@import "a;b.css";` puts a `;` **inside a string** in a
 top-level prelude. Quote tracking is one line and it is invisible to every other row in the gate.
+
+---
+
+## t1357 — the rule you re-pointed and nothing moved
+
+`rule.selectorText = '.theme-dark .btn'` is how a runtime rescopes a rule it already owns:
+
+- **the theme switcher** that re-points a component's rule instead of inserting a second one;
+- **the CSS-in-JS runtime** re-keying a generated class after a hash change;
+- **the "edit this rule" panel** in every in-page style editor and design-token tool.
+
+The assignment updated the rule OBJECT and left the sheet untouched, so nothing on the page changed
+colour. And an INVALID selector STUCK — `rule.selectorText = ':gibberish'` read back as
+`:gibberish`, so a page probing selector support by assigning and reading back was told YES for
+every string it tried.
+
+⭐⭐ **The class: A PROPERTY THAT IS A VIEW, IMPLEMENTED AS A VALUE.** The read looked right, the
+write looked accepted, and the object was self-consistent the whole time — the only thing missing was
+the connection to the thing it describes. Same shape as `el.style.appearance` two ticks earlier, from
+the other direction: there the write was rejected, here it was accepted and went nowhere.
+
+⚠ The check is **THE THIRD PARTY**: never assert that the object agrees with itself. Assert the SHEET
+TEXT, or better, assert a COLOUR on an element the rule now does (or no longer does) match.
+
+⚠⚠ And the arm only one shape can see: **hold the reference across the write.** Re-reading
+`sheet.cssRules[0]` hands back a rebuilt object whose state is already current, so a getter frozen at
+construction passes every re-reading row. `const r = sheet.cssRules[0]` is what real code holds.

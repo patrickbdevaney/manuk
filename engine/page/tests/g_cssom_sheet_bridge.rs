@@ -43,6 +43,7 @@ const HTML: &str = r##"<!doctype html><html><head><style id="authored">#a { widt
 #c { width: 33px }</style>
 <style id="stmt">@namespace ns url(ns); @import "a;b.css"; ns|e#i { width: 77px } div { width: 88px }</style></head><body>
 <div id="a">x</div><div id="m">y</div><div id="c">z</div><div id="d">w</div>
+<div id="sela" class="selx">p</div><div id="selb">q</div>
 <script>
   function mark(id) { var d = document.createElement('div'); d.id = id; document.body.appendChild(d); }
   var authored = document.getElementById('authored');
@@ -72,6 +73,35 @@ const HTML: &str = r##"<!doctype html><html><head><style id="authored">#a { widt
   //   terminator. Without quote tracking the sheet splits there and rule 2's selector is garbage —
   //   and every other row above still passes, because they do not cross that string.
   mark('T__stmtImportWhole_' + (st ? (String(st.cssRules[1].cssText).indexOf('b.css') >= 0) : 'x'));
+
+  // ── ⭐⭐ 7. `selectorText` IS A LIVE ACCESSOR AND ASSIGNING TO IT MUST REACH THE CASCADE (t1356).
+  //    It was a plain data property: `rule.selectorText = '#b'` updated the rule OBJECT and left
+  //    the sheet — and the styling — untouched. Re-selecting a rule at runtime is how a theme
+  //    switcher rescopes a component and how a CSS-in-JS runtime re-keys a generated class.
+  var sel = document.createElement('style');
+  sel.textContent = '.selx { width: 61px }';
+  document.head.appendChild(sel);
+  mark('T__selassign_before_' + (sel.sheet.cssRules[0].selectorText === '.selx'));
+  sel.sheet.cssRules[0].selectorText = '#selb';
+  mark('T__selassign_read_' + (sel.sheet.cssRules[0].selectorText === '#selb'));
+  // ⚠ The SHEET TEXT, not just the object — the object agreeing with itself proves nothing.
+  mark('T__selassign_text_' + (sel.textContent.indexOf('#selb') === 0));
+  // ⚠⚠ AN INVALID SELECTOR IS IGNORED, NOT THROWN, and not APPLIED. Before this the assignment
+  //    stuck, so a page probing selector support by assigning and reading back was told YES for
+  //    every string it tried.
+  sel.sheet.cssRules[0].selectorText = ':gibberish';
+  mark('T__selassign_bad_' + (sel.sheet.cssRules[0].selectorText === '#selb'));
+  sel.sheet.cssRules[0].selectorText = '123';
+  mark('T__selassign_num_' + (sel.sheet.cssRules[0].selectorText === '#selb'));
+  // ⚠⚠⚠ A HELD REFERENCE, WHICH IS THE ONLY WAY TO SEE THE GETTER'S LIVENESS. Re-reading
+  //   `sheet.cssRules[0]` hands back a REBUILT object whose captured text is already current, so
+  //   every row above passes even with a stale getter. A caller that grabbed the rule BEFORE the
+  //   write — which is what `const r = sheet.cssRules[0]` does, and what every edit loop holds — is
+  //   the one that reads a value frozen at construction. Same discipline the `.style` member here
+  //   already follows: a bound rule keeps reading the LIVE sheet.
+  var held = sel.sheet.cssRules[0];
+  held.selectorText = '#sela';
+  mark('T__selassign_held_' + (held.selectorText === '#sela'));
 
   // 1. The surface exists at all, and the tag guard holds.
   mark('T__typeof_' + (typeof authored.sheet));
@@ -226,12 +256,13 @@ fn a_rule_inserted_through_the_sheet_reaches_the_cascade() {
          every responsive one, which is why the splitter tracks brace DEPTH.\n  marks: {marks:?}"
     );
     assert!(
-        has("T__docsheets_before_2") && has("T__docsheets_after_3"),
+        has("T__docsheets_before_3") && has("T__docsheets_after_4"),
         "`document.styleSheets` is not a LIVE list: it must report the authored sheets before the \
          injection and one MORE after it, with nothing invalidating a cache in between. It was \
-         `undefined`, so reading `.length` THREW rather than reporting a number. ⚠ The numbers are \
-         2 and 3 rather than 1 and 2 because t1356 added a second authored `<style>` to this \
-         fixture; the CLAIM is the +1 and the liveness, not the absolute count.\n  marks: {marks:?}"
+         `undefined`, so reading `.length` THREW rather than reporting a number. ⚠ The numbers move \
+         whenever this shared fixture gains a `<style>` (1/2 originally, 3/4 now); the CLAIM is the \
+         +1 and the LIVENESS, never the absolute count — and it has been re-pinned twice in one \
+         tick, which is what a shared fixture costs.\n  marks: {marks:?}"
     );
     // ── `media` — a LIVE view of the attribute, not a constant.
     assert!(
@@ -380,5 +411,46 @@ fn a_rule_inserted_through_the_sheet_reaches_the_cascade() {
          terminator. Without quote tracking the sheet splits there, `@import` loses its tail and \
          the rule after it gains garbage — and every other row above still passes, because none of \
          them crosses that string.\n  marks: {marks:?}"
+    );
+    // ── ⭐⭐ `selectorText` IS A LIVE ACCESSOR AND ASSIGNING TO IT REACHES THE CASCADE (t1356).
+    //    It was a plain data property, so `rule.selectorText = '#b'` updated the rule OBJECT and
+    //    left the sheet — and therefore the styling — exactly as it was. Chrome-measured on
+    //    `.x { color: rgb(1,2,3) }` with the rule re-pointed at `#b`:
+    //
+    //    ```text
+    //                     Chrome                       before
+    //      a (was .x)     rgb(1,2,3) -> rgb(0,0,0)     stayed rgb(1,2,3)
+    //      b (now #b)     rgb(0,0,0) -> rgb(1,2,3)     stayed rgb(0,0,0)
+    //      rule.cssText   '#t { … }'                   '.style0 { … }'
+    //    ```
+    assert!(
+        has("T__selassign_before_true") && has("T__selassign_read_true"),
+        "assigning `rule.selectorText` must be readable back — and the read must come from the \
+         SHEET, not from a value cached on the rule object.\n  marks: {marks:?}"
+    );
+    assert!(
+        has("T__selassign_text_true"),
+        "⭐ THE LOAD-BEARING ROW: the SHEET TEXT must carry the new selector. The rule object \
+         agreeing with itself proves nothing — this is what makes the assignment reach the cascade, \
+         which is the whole reason a theme switcher or a CSS-in-JS runtime re-selects a rule.\n  \
+         marks: {marks:?}"
+    );
+    assert!(
+        has("T__selassign_held_true"),
+        "⚠⚠ A HELD rule reference must read the LIVE sheet after its own write. Re-reading \
+         `sheet.cssRules[0]` hands back a REBUILT object whose captured text is already current, so \
+         every other row here passes with a getter frozen at construction — this is the only row \
+         that can see it, and `const r = sheet.cssRules[0]` is what every edit loop actually \
+         holds.\n  marks: {marks:?}"
+    );
+    assert!(
+        has("T__selassign_bad_true") && has("T__selassign_num_true"),
+        "⚠ AN INVALID SELECTOR IS IGNORED, NOT THROWN AND NOT APPLIED (CSSOM: the setter parses and \
+         returns on failure). `:gibberish` and `123` used to STICK, so a page probing selector \
+         support by assigning and reading back was told YES for every string it tried. ⚠ The \
+         validity question is answered by `document.querySelectorAll` in a try/catch — the same \
+         path t1344 taught to throw — so the two surfaces cannot drift into disagreeing about which \
+         selectors this engine accepts (measured against Chrome on 15 selectors, 15 agree).\n  \
+         marks: {marks:?}"
     );
 }

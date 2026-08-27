@@ -6415,7 +6415,7 @@ const PRELUDE: &str = r#"
             }
           });
         };
-        var __ruleOf = function (text, sheet, readText, writeBlock) {
+        var __ruleOf = function (text, sheet, readText, writeBlock, writeSel) {
           var i = text.indexOf('{');
           var isAt = text.charAt(0) === '@';
           // ⚠ **THE AT-RULE TYPE IS THE KEYWORD, NOT A CONSTANT.** Every at-rule answered `4`
@@ -6450,7 +6450,41 @@ const PRELUDE: &str = r#"
           // which is the false-presence trap this file refuses elsewhere: `'selectorText' in rule`
           // is how a script tells a style rule from an at-rule.
           if (!isAt) {
-            rule.selectorText = i < 0 ? '' : text.slice(0, i).trim();
+            // ── ⚠⚠⚠ **`selectorText` IS A LIVE ACCESSOR, AND ASSIGNING TO IT MUST REACH THE
+            //    CASCADE.** It was a plain data property: `rule.selectorText = '#t'` updated the
+            //    rule OBJECT and left the sheet text — and therefore the styling — exactly as it
+            //    was. Chrome-measured: after the assignment `rule.cssText` reads
+            //    `#t { color: rgb(255, 0, 255); }`; ours still read `.style0 { … }`.
+            //
+            //    Re-selecting a rule at runtime is how a theme switcher rescopes a component, how
+            //    a CSS-in-JS runtime re-keys a generated class, and how every "edit this rule"
+            //    devtool-style panel works.
+            //
+            //    ⚠ **AN INVALID SELECTOR IS IGNORED, NOT THROWN** (CSSOM: the setter parses and, on
+            //    failure, returns without changing anything). `rule.selectorText = ':gibberish'`
+            //    left `:gibberish` in place here — so a page that probes selector support by
+            //    assigning and reading back was told YES for every string it tried.
+            //
+            //    ⚠ The validity question is answered by `document.querySelectorAll` in a try/catch,
+            //    which is not a shortcut: that path throws `SyntaxError` for exactly the grammar
+            //    this needs (t1344), so the two surfaces cannot drift apart into disagreeing about
+            //    which selectors this engine accepts. Measured against Chrome on 15 selectors —
+            //    including `svg|*.style1` (an UNDECLARED namespace prefix: invalid in both) and
+            //    `*|*.style1` (valid in both) — 15 of 15 agree.
+            Object.defineProperty(rule, 'selectorText', {
+              configurable: true,
+              enumerable: true,
+              get: function () {
+                var cur = readText ? readText() : text;
+                var j = cur.indexOf('{');
+                return j < 0 ? '' : cur.slice(0, j).trim();
+              },
+              set: function (v) {
+                var sel = String(v);
+                try { document.querySelectorAll(sel); } catch (e) { return; }
+                if (writeSel) { writeSel(sel); }
+              }
+            });
           }
           // ⚠ Only a STYLE rule gets a `style`. `CSSMediaRule` has no declaration block, and handing
           // it an empty one would answer a question the spec says to answer with `undefined`.
@@ -6515,6 +6549,19 @@ const PRELUDE: &str = r#"
                     cur[idx] = t.slice(0, b + 1) + ' ' + block + ' }';
                     el.textContent = cur.join('\n');
                     __syncRules(sheetObj);   // a BOUND `cssRules` must see this without a re-read
+                  };
+                })(i), (function (idx) {
+                  // The SELECTOR half of the same write, and it did not exist: `selectorText` was a
+                  // plain data property, so assigning to it updated the rule OBJECT and left the
+                  // sheet — and therefore the cascade — untouched.
+                  return function (sel) {
+                    var cur = __splitRules(el.textContent == null ? '' : String(el.textContent));
+                    if (cur[idx] === undefined) { return; }
+                    var t = cur[idx], b = t.indexOf('{');
+                    if (b < 0) { return; }
+                    cur[idx] = sel + ' ' + t.slice(b);
+                    el.textContent = cur.join('\n');
+                    __syncRules(sheetObj);
                   };
                 })(i));
               }
