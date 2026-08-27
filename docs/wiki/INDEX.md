@@ -2385,6 +2385,7 @@
   - L3863 · The band's next anchor is FONT-limited, not layout-limited — and a six-row control is what says so (t1333)
   - L3879 · The control that turns a hypothesis into a classification
   - L3902 · letter-spacing dropped every unit it did not know, and a dropped value read as normal (t1371)
+  - L3951 · word-spacing and the path that has no separate space (t1372)
 
 ## The wasm demo — running the engine inside someone else's browser
 `docs/wiki/wasm-demo.md`
@@ -2418,4 +2419,4 @@
   - L231 · Both named mechanisms are subsystem work
 
 ---
-2325 sections across 22 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+2326 sections across 22 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.

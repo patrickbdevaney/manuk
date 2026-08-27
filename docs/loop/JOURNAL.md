@@ -92449,3 +92449,73 @@ engine, rebuilt and read:
 - **Q4** `letter-spacing` read from the `word-spacing` slot, the copy-paste → `#px` 240.83
 
 WIKI: docs/wiki/text-layout.md
+
+## t1372 — `word-spacing` worked everywhere except the content that preserves spacing on purpose
+
+TICK SHAPE: capability, and it CORRECTS A CLAIM t1371 put into a landed commit. Board re-run at the
+top of this tick: CO-#1 unchanged.
+
+### ⚠ FIRST, THE CORRECTION
+
+t1371's journal and commit message state that **"`word-spacing` is inert in LAYOUT"**. That is
+wrong. `word-spacing: 10px` on ordinary wrapping text measured **114.30 in Chrome and 114 here**
+before this tick — already exact. The claim came from a fixture that set `white-space: pre` on every
+row (to keep the advance measurable in an `inline-block`), so it only ever exercised the one path
+where the property WAS dropped. **A fixture that fixes one variable to make a measurement possible
+has also fixed it for the conclusion**, and the conclusion was drawn over the whole property.
+
+### THE REAL DEFECT — the path, not the property
+
+In the WRAPPING path an inline run never contains a space: the inter-word space is its own item and
+`space_before` pays `word_spacing` + `letter_spacing` for it. Under `white-space: pre` there is no
+such split — the preserved spaces travel INSIDE the run's text, so that arm never runs.
+
+⭐ **`letter-spacing` was never dropped there, which is exactly why this read as a `word-spacing`
+bug.** The run's width already pays `letter_spacing` once per CHARACTER and a space is a character,
+so the `pre` path looked half-correct: one of the two spacings survived it.
+
+```text
+   font: 20px/1.2 monospace, `a b c d`             Chrome   before   after
+     word-spacing:10px                              114.30    114     114   CTRL (already right)
+     white-space:pre; word-spacing:10px             114.30     84     114
+     white-space:pre; word-spacing:1ch              120.42     84     120
+     white-space:pre; 10px, U+00A0 separators       114.30     84     114
+     white-space:pre; 10px, U+2003 separators        84.30     84      84   ← NOT a separator
+     white-space:pre; 10px + letter-spacing:2px     128.30    104     128
+```
+
+The `1ch` row is t1371 arriving here for free: the unit resolves because the value now comes from
+Stylo. The fix adds a separator term to the run's own width, which is ZERO in the wrapping path (a
+run there holds no separator), so it cannot double-pay the case that already worked.
+
+### ⭐⭐ THE SEPARATOR SET IS MEASURED, AND THE OBVIOUS IMPLEMENTATION IS WRONG
+
+U+0020 SPACE and U+00A0 NO-BREAK SPACE each take the full spacing; **U+2003 EM SPACE does not**
+(84.30 in Chrome). CSS Text 3 lists more word-separator characters than Chrome charges, so
+*"charge the spacing for every whitespace character in the run"* — the implementation anyone would
+write — passes every other row in the gate and widens every em space and every tab on every `<pre>`
+on the web. That is mutation R2, applied and read.
+
+PRICED HONESTLY AND IT IS SMALL: `word-spacing` appears in **3 of 138** corpus documents (4
+declarations) and the broken case additionally needs `white-space: pre`. This tick was taken because
+it closes a wrong statement in a landed commit, not because the ledger ranked it.
+
+REGRESSION SWEEP: `manuk-layout` 185, `manuk-css` 39, `manuk-paint` 22, plus
+`g_letter_spacing_resolves_its_unit` (t1371's, which shares the run-width expression) green.
+
+GATE `G_WORD_SPACING_SURVIVES_PRESERVED_WHITESPACE` — 8 rows, RED under four mutations, each applied
+to the engine, rebuilt and read:
+
+- **R1** the separator term removed — the pre-tick state → `#pw` 84.30, not 114.30
+- **R2** *"charge every whitespace character"*, the obvious implementation → `#pem` 114.30, not
+  84.30, with every other row still green
+- **R3** U+00A0 dropped from the separator set → `#pnb` 84.30
+- **R4** separators counted as CHARACTERS (paid inside the per-character term) → `#w` 154.30 — the
+  WRAPPING control catching a double-pay
+
+⚠ HARNESS NOTE, not a complaint: a 30-site `fidelity --urls-file` sweep launched to rank causes
+across sites was still running at **45 minutes** and buffers its summary to stdout until the end, so
+it cannot inform a tick inside one. Future ledger-ranked picks should use a slice of ~8-10 sites, or
+read the per-site stderr as it streams.
+
+WIKI: docs/wiki/text-layout.md

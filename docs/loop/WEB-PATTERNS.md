@@ -8906,3 +8906,17 @@ declarations). The units that were broken are a subset — `em` after a `font:` 
 declarations), `rem`, and whatever the 120 `var(--…)` values resolve to — so the honest reading is
 that the property is common and the broken slice is real but partial. It did NOT move the
 `www.a11yproject.com` anchor (43.3% before and after), and that is reported rather than glossed.
+
+## t1372 — word-spacing in preserved whitespace
+
+The class this unlocks is **`<pre>`-formatted content that spaces its words on purpose**: code
+blocks, ASCII tables, terminal transcripts, log viewers, diff views, and the monospaced
+`white-space: pre` panels that documentation and developer tooling are built out of. `word-spacing`
+was applied on the wrapping path and dropped on the preserved one, so precisely the content whose
+horizontal spacing is load-bearing was the content that lost it.
+
+Priced honestly and it is SMALL: `word-spacing` appears in 3 of 138 corpus documents (4
+declarations), and the broken case additionally needs `white-space: pre`. This tick was taken
+because it CORRECTS A CLAIM t1371 put into a landed commit ("word-spacing is inert in LAYOUT"), and
+fixing the underlying defect is the cleanest way to close a wrong statement — not because the ledger
+ranked it. The ledger's own ranking is being taken separately.

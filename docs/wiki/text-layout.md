@@ -3947,3 +3947,39 @@ build resolves `ex` as a flat `0.5em` with no font metrics wired. It was DROPPED
 but `word-spacing: 10px` on `a b c d` measures 114.30 in Chrome and 84 here, the same as `normal`.
 `manuk-layout` reads `style.word_spacing` and the advance never changes, so that gap is downstream
 of the cascade.
+
+## `word-spacing` and the path that has no separate space (t1372)
+
+`word-spacing` worked everywhere except the content that preserves its spacing on purpose. In the
+WRAPPING path an inline run never contains a space — the inter-word space is its own item and
+`space_before` pays both spacings for it. Under `white-space: pre` there is no such split: the
+preserved spaces travel INSIDE the run's text, so that arm never runs and the property was dropped
+for code blocks, ASCII tables, terminal transcripts and `<pre>`-formatted logs.
+
+⭐ **`letter-spacing` was never dropped there, and that is why this read as a `word-spacing` bug.**
+The run's width already pays `letter_spacing` once per CHARACTER, and a space is a character, so the
+`pre` path looked half-correct — one of the two spacings survived it. **The defect was the PATH, not
+the property**; the fix adds a separator term to the run's own width, which is zero in the wrapping
+path (a run there holds no separator) and therefore cannot double-pay it.
+
+```text
+   font: 20px/1.2 monospace, `a b c d`             Chrome   before   after
+     word-spacing:10px                              114.30    114     114   CTRL (already right)
+     white-space:pre; word-spacing:10px             114.30     84     114
+     white-space:pre; word-spacing:1ch              120.42     84     120
+     white-space:pre; 10px, U+00A0 separators       114.30     84     114
+     white-space:pre; 10px, U+2003 separators        84.30     84      84   ← NOT a separator
+     white-space:pre; 10px + letter-spacing:2px     128.30    104     128
+```
+
+⚠⚠ **THE SEPARATOR SET IS MEASURED, NOT READ OFF THE SPEC.** U+0020 SPACE and U+00A0 NO-BREAK SPACE
+each take the full spacing; **U+2003 EM SPACE does not.** CSS Text 3 lists more word-separator
+characters than Chrome charges, and the obvious implementation — *"charge the spacing for every
+whitespace character in the run"* — passes every other row and widens every em space and every tab
+on every `<pre>` on the web.
+
+⚠ CORRECTING THE RECORD: t1371 stated that "`word-spacing` is inert in LAYOUT". That is wrong. Its
+fixture set `white-space: pre` on every row to keep the advance measurable, so it exercised only the
+one path where the property was dropped; `word-spacing: 10px` on ordinary wrapping text was already
+Chrome-exact at 114.30. **A fixture that fixes one variable to make a measurement possible has also
+fixed it for the conclusion.**

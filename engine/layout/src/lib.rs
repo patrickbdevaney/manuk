@@ -13394,7 +13394,35 @@ impl Ctx<'_> {
                     // offsets each glyph by the same running amount so measure and paint agree. Zero
                     // (the default) leaves the width byte-identical.
                     let word_w = self.fonts.measure(&text, key, size)
-                        + style.letter_spacing * text.chars().count() as f32;
+                        + style.letter_spacing * text.chars().count() as f32
+                        // ── **`word-spacing` INSIDE the run, which is the only place `pre` has.**
+                        //
+                        // In the WRAPPING path a run never contains a space — the inter-word space
+                        // is its own thing and `space_before` below pays both spacings for it. Under
+                        // `white-space: pre` there is no such split: the preserved spaces travel
+                        // INSIDE `text`, so that arm never runs and `word-spacing` was silently
+                        // dropped for exactly the content that preserves its spacing on purpose
+                        // (code blocks, ASCII tables, terminal transcripts, `<pre>`-formatted logs).
+                        // `letter-spacing` was never dropped there, because the line above pays it
+                        // per CHARACTER and a space is a character — which is why this looked like a
+                        // `word-spacing` bug rather than a `pre` bug.
+                        //
+                        // Chrome-measured, `word-spacing: 10px`, 20px monospace, `a b c d`:
+                        //
+                        // ```text
+                        //   white-space: normal   114.30   (we were already right here)
+                        //   white-space: pre      114.30   ours 84 — the same number as `normal`
+                        // ```
+                        //
+                        // ⚠ The separator set is MEASURED, not assumed: U+0020 and U+00A0 each take
+                        // the spacing (114.30 both), and U+2003 EM SPACE does NOT (84.30) — so this
+                        // counts the two CSS Text 3 word-separator characters Chrome honours and no
+                        // other whitespace. Counting "whitespace" instead would widen every em-space
+                        // and every tab.
+                        //
+                        // Adding it here cannot double-pay the wrapping path: a run there holds no
+                        // separator, so the count is zero and the width is byte-identical.
+                        + style.word_spacing * word_separators(&text) as f32;
                     // `word-spacing` widens each inter-word space — and so does `letter-spacing`.
                     //
                     // ⚠⚠ **THE SPACE IS A CHARACTER.** The line above adds `letter_spacing` once per
@@ -26948,4 +26976,16 @@ fn padding_box_of(r: Rect, s: &ComputedStyle) -> Rect {
         width: (r.width - s.border_width.left - s.border_width.right).max(0.0),
         height: (r.height - s.border_width.top - s.border_width.bottom).max(0.0),
     }
+}
+
+/// The CSS Text 3 WORD-SEPARATOR characters Chrome charges `word-spacing` for.
+///
+/// Measured rather than taken from the prose (`word-spacing: 10px`, 20px monospace, `a b c d`,
+/// `white-space: pre`): U+0020 SPACE and U+00A0 NO-BREAK SPACE each widen by the full 10px per
+/// occurrence (114.30), and U+2003 EM SPACE does not (84.30). The spec lists more separators than
+/// Chrome charges, and "any whitespace" would widen tabs and em-spaces that Chrome leaves alone.
+fn word_separators(text: &str) -> usize {
+    text.chars()
+        .filter(|c| *c == ' ' || *c == '\u{00A0}')
+        .count()
 }
