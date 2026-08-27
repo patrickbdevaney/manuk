@@ -3253,6 +3253,54 @@ fn presentational_hint_block(
                 css.push_str(&format!("text-align:{v};"));
             }
         }
+        // ── ⭐ **THE OTHER HALF OF `align` IS `float`, AND THE TAG IS NOT WHAT DECIDES IT.**
+        //
+        // Family 1 above is the set that must not become a `text-align`. It is NOT the set that
+        // floats, and reading it as one is the mistake this block exists to avoid — measured in
+        // headless Chrome (`getComputedStyle().float`), one element per row:
+        //
+        // ```text
+        //   img     align=left|right   float:left|right + vertical-align:top
+        //   object  align=left|right   float:left|right + vertical-align:top
+        //   embed   align=left|right   float:left|right + vertical-align:top
+        //   iframe  align=left|right   float:left|right + vertical-align:top
+        //   table   align=left|right   float:left|right   ONLY — no vertical-align
+        //   input   align=left|right   float:NONE          ← type=text
+        //   input   align=left|right   float:left|right + vertical-align:top   ← type=IMAGE
+        //   hr      align=left|right   float:NONE   applet  float:NONE
+        //   marquee align=left|right   float:NONE   video/canvas/svg/button/select/textarea NONE
+        // ```
+        //
+        // ⭐⭐ **`<input>` IS THE ROW THAT PROVES THE KEY IS NOT THE TAG.** The same element name
+        // floats or does not float depending on its `type`, because Blink reaches this mapping from
+        // `HTMLImageElement`/`HTMLObjectElement`/`HTMLEmbedElement`/`HTMLIFrameElement` and from
+        // `HTMLInputElement` **only in the image type's branch**. Every tag-keyed implementation —
+        // including the obvious one, "float everything in `NO_TEXT_ALIGN`" — passes every other row
+        // in this table and fails that one, and also invents floats on `hr`, `applet` and `marquee`,
+        // which the prose lists (ours included, until now) all claim are in the set.
+        //
+        // ⚠ **`vertical-align` IS NOT WRITTEN HERE, AND THAT IS NOT AN OVERSIGHT.** It is one of the
+        // properties this file RECOVERS from `MinimalCascade` wholesale after Stylo has run (stylo
+        // 0.19 exposes no computed longhand for it — see the recovery block above), so a declaration
+        // put in this hint block would be overwritten and inert. It is the same trap t923 hit with
+        // `sup` and t1366 hit with `<td>`. The alignment half lives in `apply_ua_defaults`, which is
+        // MinimalCascade's own hint site and runs *before* author rules, so it keeps the origin
+        // ordering a presentational hint is supposed to have.
+        let alignment_attr_element = matches!(tag, "img" | "object" | "embed" | "iframe")
+            || (tag == "input"
+                && e0
+                    .attr("type")
+                    .is_some_and(|t| t.trim().eq_ignore_ascii_case("image")));
+        if alignment_attr_element || tag == "table" {
+            match a.to_ascii_lowercase().as_str() {
+                "left" => css.push_str("float:left;"),
+                "right" => css.push_str("float:right;"),
+                // `align=center` on a `<table>` is `margin-inline: auto`, not a float, and it is
+                // applied further up; everything else in the attribute's vocabulary is the
+                // vertical-alignment half and has no `float` at all.
+                _ => {}
+            }
+        }
     }
     // The replaced set, plus the table/legacy set that `apply_presentational_hints` used to size
     // in a second post-cascade pass of its own (t1027). ONE producer, ONE origin: HTML maps

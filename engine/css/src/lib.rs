@@ -5345,6 +5345,74 @@ fn apply_ua_defaults(s: &mut ComputedStyle, el: &ElementData) {
         "sub" => s.vertical_align = VerticalAlign::Sub,
         _ => {}
     }
+    // ── **THE VERTICAL HALF OF HTML'S `align` ATTRIBUTE** (Blink's
+    // `HTMLElement::ApplyAlignmentAttributeToStyle`). The `float` half of the same mapping is a
+    // declaration in `stylo_engine::presentational_hint_block`; this half CANNOT be, because
+    // `vertical-align` is one of the properties `stylo_engine.rs` recovers from THIS cascade
+    // wholesale after Stylo runs, so a rule written over there is overwritten and inert (t923's
+    // `sup`, t1366's `<td>` — the third time). It sits in `apply_ua_defaults` because that runs
+    // BEFORE author rules, which is exactly the origin a presentational hint needs: it beats the UA
+    // sheet and loses to the page.
+    //
+    // Chrome-measured, `getComputedStyle().verticalAlign`, the same value on `img`, `object`,
+    // `embed`, `iframe` and `input type=image`:
+    //
+    // ```text
+    //   align=top        top                       align=absmiddle   middle
+    //   align=texttop    text-top                  align=absbottom   bottom
+    //   align=center     middle                    align=bottom      baseline  (i.e. nothing)
+    //   align=left|right top   (with the float)    align=baseline    baseline
+    //   align=middle     -webkit-baseline-middle   align=<anything else>  baseline
+    // ```
+    //
+    // ⭐ **`center` and `middle` are NOT synonyms here**, which is the one row nobody would guess:
+    // `center` is CSS `middle` (box centre against baseline + half the x-height) while `middle` is
+    // `-webkit-baseline-middle` (box centre against the baseline itself). `<table>` is absent from
+    // the whole table — it takes the `float` half of `align` and none of this one.
+    //
+    // ⚠ `align=middle` is DELIBERATELY NOT MAPPED. We have no `-webkit-baseline-middle`, and
+    // `VerticalAlign::Middle` is a different value — on the fixture Chrome puts the following text's
+    // baseline at the image's centre (y=207 against an image top of 202) and `Middle` would put it
+    // half an x-height lower. Answering `Middle` would be a wrong answer of the right type, and it
+    // would be banked as correct by any gate that then asserts it. Named, not guessed: it is the
+    // NEXT of this tick.
+    if matches!(tag, "img" | "object" | "embed" | "iframe")
+        || (tag == "input"
+            && el
+                .attr("type")
+                .is_some_and(|t| t.trim().eq_ignore_ascii_case("image")))
+    {
+        if let Some(a) = el.attr("align") {
+            match a.trim().to_ascii_lowercase().as_str() {
+                "top" | "left" | "right" => s.vertical_align = VerticalAlign::Top,
+                "texttop" => s.vertical_align = VerticalAlign::TextTop,
+                "absmiddle" | "center" => s.vertical_align = VerticalAlign::Middle,
+                "absbottom" => s.vertical_align = VerticalAlign::Bottom,
+                _ => {}
+            }
+        }
+    }
+    // The `float` half, in THIS cascade too. The shipping path takes `float` from Stylo (it is not
+    // in the recovery block), so this is the two-engines-in-lockstep rule rather than a second
+    // implementation of the shipping behaviour: a cascade that disagrees with its twin about
+    // whether an image is out of flow is the `<source>` bug again. `<table>` is here for the same
+    // reason it is in the Stylo hint block — it floats, and takes none of the alignment above.
+    if matches!(tag, "img" | "object" | "embed" | "iframe" | "table")
+        || (tag == "input"
+            && el
+                .attr("type")
+                .is_some_and(|t| t.trim().eq_ignore_ascii_case("image")))
+    {
+        match el
+            .attr("align")
+            .map(|a| a.trim().to_ascii_lowercase())
+            .as_deref()
+        {
+            Some("left") => s.float = Float::Left,
+            Some("right") => s.float = Float::Right,
+            _ => {}
+        }
+    }
     if scale != 1.0 {
         s.font_size *= scale;
         s.line_height = s.font_size * 1.2;

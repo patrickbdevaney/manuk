@@ -92027,3 +92027,153 @@ Chrome puts it at 0. Blink's `HTMLElement::ApplyAlignmentAttributeToStyle` is th
 is captured in the wiki. Left out of this gate rather than pinned at our wrong value.
 
 WIKI: docs/wiki/css-cascade.md
+
+## t1368 — `align` on an image is a FLOAT, and the tag is not what decides it
+
+TICK SHAPE: capability. Board re-run at the top of this tick: CO-#1 is unchanged — the rendering
+gap, SHAPE/POSITION first, on the named anchor sites. This tick is t1367's own measured NEXT: the
+FLOAT half of the same attribute, which t1367 named and deliberately left out of its gate rather
+than pin at our wrong value.
+
+HYPOTHESIS: `<img align=right>` maps to `float: right` (plus `vertical-align: top`), and we
+implement neither, so the image stays in the inline flow and every following word is displaced by
+the image's width. The mapping is Blink's `HTMLElement::ApplyAlignmentAttributeToStyle`, and the
+element set that uses it is NOT the tag list `presentational_hint_block` already excludes from
+`text-align`.
+
+⚠ HARNESS NOTE (observer): `scripts/verify.sh:56` — `_out()` calls `wait "${_PARPID[$key]}"`, but
+every caller invokes it as `X=$(_out key)`, i.e. inside a COMMAND SUBSTITUTION. A background job of
+the parent is not a child of that subshell, so `wait` returns instantly and the gate reads a
+PARTIAL file. Falsified in five lines: a `( sleep 3; echo DONE > f ) &` collected through
+`V=$(_out k)` returns `[]` at 0s. Observed live: `G3` printed its verdict at +31s while the shell
+suite's output file was not complete until +37s, so `G3` and `G_INTERACT` both false-RED with
+`SHELL_OUT` empty — and because `SHELL_FAILED` is then 0, the flaky-gate RETRY never runs, which is
+why it fails deterministically rather than flakily. Not fixed here (scripts/ are observer-owned).
+Worked around for this tick with `CARGO_BUILD_JOBS=1`, which serialises `_launch` so every file is
+complete before it is read; the wall went GREEN in 139s (vs 465s racing).
+
+### THE DEFECT — an image that says "align right" leaves the flow, and the text moves LEFT
+
+`<img align=right>` computes `float: right` (plus `vertical-align: top`). We implemented no part of
+it, so the image stayed inline and the following text sat one image-width in — and the *direction*
+of the error is the counter-intuitive part, because the text should move the OTHER way:
+
+```text
+  <div style="width:600px"><img align=right width=40><span>t</span></div>
+                                 Chrome     before     after
+    the image                     560          0        560
+    the following text              0         40          0
+    the container's height         40         44         40
+```
+
+### ⭐⭐ THE ELEMENT SET IS NOT A TAG SET, AND `<input>` IS THE ROW THAT PROVES IT
+
+Blink reaches the mapping through `HTMLElement::ApplyAlignmentAttributeToStyle`, called from
+`HTMLImageElement`/`HTMLObjectElement`/`HTMLEmbedElement`/`HTMLIFrameElement` and from
+`HTMLInputElement` **only in the `type=image` branch**. Measured, one element per row, with
+`getComputedStyle().float`:
+
+```text
+  img / object / embed / iframe   float:left|right + vertical-align:top
+  table                           float:left|right   ONLY
+  input type=IMAGE                float:left|right + vertical-align:top
+  input type=text                 NO FLOAT     ← the SAME TAG, one attribute apart
+  hr / applet / marquee           NO FLOAT
+  video / canvas / svg / button / select / textarea   NO FLOAT
+```
+
+**Our own prose said otherwise, and so does everyone's.** The list this engine already carried — the
+set excluded from the `text-align` mapping *because* "their `align` means FLOAT" —
+is `img object embed iframe applet table hr input marquee`. Three of those never float and `input`
+floats only sometimes, so it is the *exclusion* list wearing the float list's clothes. Mutation M2
+keys the float on it: **every subject row still passes** and `#f7` (`<input align=right>`) jumps to
+395.34.
+
+### THE SECOND SITE IS FORCED, AND IT IS THE THIRD TIME THIS TRAP HAS BEEN SPRUNG
+
+The `float` half is a declaration in `presentational_hint_block`, at hint origin. The
+`vertical-align` half **cannot be** — `vertical-align` is one of the properties `stylo_engine.rs`
+recovers from `MinimalCascade` wholesale after Stylo has run, so a rule written beside its twin is
+overwritten and inert. It lives in `apply_ua_defaults`, which runs BEFORE author rules: the same
+origin ordering, reached the only way this engine has. t923 hit this with `sup`, t1366 with `<td>`,
+and this is the third. M8 re-proves it: emitting `vertical-align` in the hint block leaves every
+`float` row green and every delta row back at its pre-tick value.
+
+```text
+   the following text's offset from the image's top      Chrome   before   after
+     align=top                                              0       25       0
+     align=texttop        (line-height 40, to separate)      0       30       0
+     align=top            (line-height 40, to separate)     10       30      10
+     align=absmiddle                                       9.5      25       9
+     align=absbottom                                        20      25      20
+     align=center                             ⭐            9.5      25       9
+     align=top + style="vertical-align:baseline"  CTRL       25      25      25
+     a plain <img>                                CTRL       25      25      25
+```
+
+⭐ `center` and `middle` are NOT synonyms: `center` is CSS `middle`, `middle` is
+`-webkit-baseline-middle`. ⚠ `align=middle` is DELIBERATELY unmapped — we have no
+`-webkit-baseline-middle` and `Middle` is half an x-height off, which would be a wrong answer of the
+right type banked as correct.
+
+### ⭐⭐⭐ THE RESULT THAT MATTERS IS THE FREQUENCY, AND IT PRICES THIS TICK AT ZERO
+
+137 pages of the representative CrUX corpus (`docs/bench/corpus-crux-trend.txt`, HEAD **and** TAIL,
+fetched live, read with Python because `grep` here is `ugrep -I` and skips non-UTF-8 silently) —
+**8 carry an `align=` attribute at all**, and the whole distribution is:
+
+```text
+  <td align=right>      30      <img align=absmiddle>   1
+  <div align=center>     5      <p align=justify>       1
+  <th align=right>       2      align=left|right on img/table/object/embed/iframe:   ZERO
+```
+
+**t1367 covered 38 of the 39 real occurrences; this tick's vertical half covers the 39th
+(`<img align=absmiddle>`, mapped exactly). The float half is extinct.** So this tick is correct,
+Chrome-exact on 20 rows and banked behind a 10-mutation gate — and it will not move the fidelity
+sweep, and I am not going to claim it will. The anchor sites carry no `align=` on an image either
+(checked: 6 anchors fetched, zero hits), so no old-binary control is run — there is nothing for it
+to measure.
+
+⚠ **THE LESSON IS NOT ABOUT `align`.** t1367's closing "NEXT, measured and not built" note was
+right about every fact and wrong about what to do next, and I took it as a work order. **A previous
+tick's NEXT note is a hypothesis about MECHANISM, never about LEVERAGE.** One `curl` loop and one
+regex — twenty minutes, run *before* the tick — would have priced it. The board's own rule already
+says this ("a fix MUST raise in-scope-pass on the next sweep or it is reverted/re-scoped"); what was
+missing is that the pricing has to happen at tick SELECTION, not at tick REVIEW. WEB-PATTERNS.md now
+carries the rule: a pattern row must carry the corpus count that justifies it, taken BEFORE the tick.
+
+WPT — MEASURED, AND FLAT, for the same reason as t1367: `css/CSS2/floats` reftests **25 passed / 48
+failed / 73 skipped**, unchanged, because a conformance test DECLARES `float` in CSS and this defect
+lives where nobody declares anything. `html/rendering` — the tree that tests these attribute
+mappings directly — is still not in the checkout.
+
+REGRESSION SWEEP: 14 gates green (`g_legacy_align_is_not_text_align_center`,
+`g_td_vertical_align_middle`, `g_block_replaced_has_no_line_box`, `g_anon_block_inherits`,
+`g_table_caption`, `g_table_dom`, `g_anonymous_table_row`, `g_table_row_height_distribution`,
+`g_table_border_spacing_ua_default`, `g_text_align_justify`, `g_dir_attr_logical`,
+`g_static_pos_line_start`, `g_text_indent_edges`, `g_selector_syntax_error`), plus 235
+`manuk-css`/`manuk-layout`/`manuk-dom` unit tests.
+
+GATE `G_ALIGN_ATTRIBUTE_IS_A_FLOAT` — 34 assertions, RED under TEN mutations, each applied to the
+engine, rebuilt and read:
+
+- **M1** the float half not emitted → `#f1` 0, not 560
+- **M2** the float set keyed on the existing `NO_TEXT_ALIGN` tag list, the natural simplification →
+  `#f7` **395.34**, with every subject row still green — the mutation the gate exists for
+- **M3** `table` dropped from the float set → `#f4` 0
+- **M4** `left` mapped to `float:right` → `#f2` 560, not 0
+- **M5** the attribute compared case-SENSITIVELY → `#f3` 0
+- **M6** `input` matched on the tag alone → `#f7` 395.34
+- **M7** the hint declared `!important` (any spelling that outranks the author) → `#c4` 560, not 0
+- **M8** `vertical-align` emitted in `presentational_hint_block` beside its twin → `#f10` delta 25
+- **M9** `center` folded into the `Top` arm → `#f14` delta 0, not 9.5
+- **M10** the vertical half assigned AFTER author rules → `#c5` delta 0, not 25
+
+NEXT — and this time PRICED FIRST, not inherited from this tick's note. The corpus says the live
+`align` mass is `<td align=right>` (30 of 39), which t1367 already covers, so `align` is DONE as a
+vein. The next tick must be chosen by re-running the frequency measurement over the corpus for a
+CANDIDATE mechanism before writing any code; `-webkit-baseline-middle` (1 occurrence) is explicitly
+NOT it.
+
+WIKI: docs/wiki/css-cascade.md

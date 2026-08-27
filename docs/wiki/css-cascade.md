@@ -5044,9 +5044,66 @@ The CONTROL is what keeps `g_anon_block_inherits`'s `#k2` green: `TextAlign::leg
 answers `None` for every CSS value, so a real `text-align: center` still leaves its block child
 alone.
 
-⚠ **NEXT, measured and not built:** the FLOAT half of the same attribute. `<img align=right>` maps
-to `float: right; vertical-align: top` and `<table align=left|right>` to `float: left|right`; we
-implement neither, so `<div><img align=right><span>t</span></div>` puts the text at x=10 where
-Chrome puts it at 0. Blink's `HTMLElement::ApplyAlignmentAttributeToStyle` is the whole table
-(`absmiddle`→`middle`, `absbottom`→`bottom`, `left`/`right`→float + `top`, `middle`→
-`-webkit-baseline-middle`, `center`→`middle`, `bottom`→`baseline`, `texttop`→`text-top`).
+### The FLOAT half of `align`, and why the element set is not a TAG set (t1368)
+
+`<img align=right>` does not align the image right; it computes `float: right`, and the text after
+it moves to the LEFT edge — the opposite direction from what the attribute's name suggests. Blink
+reaches this through `HTMLElement::ApplyAlignmentAttributeToStyle`, and **the set of elements that
+call it is not the set of tags that must be kept out of the `text-align` mapping.** Chrome-measured
+with `getComputedStyle().float`, one element per row:
+
+```text
+  img / object / embed / iframe   align=left|right   float + vertical-align:top
+  table                           align=left|right   float ONLY
+  input type=IMAGE                align=left|right   float + vertical-align:top
+  input type=text                 align=left|right   NO FLOAT      ← the same TAG
+  hr / applet / marquee           align=left|right   NO FLOAT
+  video / canvas / svg / button / select / textarea  NO FLOAT
+```
+
+The `NO_TEXT_ALIGN` list this engine already carried (`img object embed iframe applet table hr
+input marquee`) is the *exclusion* list and reads like the float list. Three of its members never
+float, and `input` floats only as `type=image` — so a tag-keyed implementation is wrong in both
+directions at once, and every fixture row except the `input` pair passes under it.
+
+The vertical half of the same call, identical on `img`/`object`/`embed`/`iframe`/`input type=image`:
+
+```text
+  top → top          absmiddle → middle    center → middle     left|right → top
+  texttop → text-top  absbottom → bottom    bottom → baseline   <unknown> → baseline
+  middle → -webkit-baseline-middle                    ← NOT the same as `center`
+```
+
+⭐ `center` and `middle` are **not** synonyms: `center` is CSS `middle` (box centre against the
+baseline plus half the x-height), `middle` is `-webkit-baseline-middle` (box centre against the
+baseline itself). Every other place HTML spells this attribute treats them as one word.
+
+**The two halves live in two files, and that is forced, not stylistic.** The `float` half is a
+declaration in `stylo_engine::presentational_hint_block`, at hint origin. The `vertical-align` half
+CANNOT be, because `vertical-align` is one of the properties `stylo_engine.rs` recovers from
+`MinimalCascade` wholesale after Stylo has run (stylo 0.19 exposes no computed longhand for it), so
+a rule written beside its twin is overwritten and inert. It lives in `apply_ua_defaults`, which runs
+BEFORE author rules — the same origin ordering, reached the only way this engine has. That is the
+third time this trap has been sprung: t923 (`sup`), t1366 (`<td>`), t1368 (`align`). **Before adding
+a `vertical-align` rule anywhere, check which cascade actually owns it.**
+
+⚠ **`align=middle` IS DELIBERATELY UNMAPPED.** We have no `-webkit-baseline-middle`;
+`VerticalAlign::Middle` is a different value (half an x-height lower), and answering it would be a
+wrong answer of the right type. It needs a new enum variant plus the four layout sites that switch
+on one (`engine/layout/src/lib.rs` 8463 / 14183 / 14328 / 14447).
+
+⭐⭐ **AND THE FREQUENCY SAYS DO NOT DO IT NEXT.** Measured over 137 pages of the representative
+CrUX corpus (`docs/bench/corpus-crux-trend.txt`, HEAD + TAIL, fetched live), only **8** carry an
+`align=` attribute at all, and the whole distribution is:
+
+```text
+  <td align=right>      30      <img align=absmiddle>   1
+  <div align=center>     5      <p align=justify>       1
+  <th align=right>       2      align=left|right on img/table/object/embed/iframe:  ZERO
+```
+
+So t1367's `text-align` half covered 38 of the 39 real occurrences and this tick's vertical half
+covers the 39th; **the float half, which t1367's own NEXT note named as the obvious continuation, is
+extinct on the modern web.** The lesson is not about `align`: *a previous tick's NEXT note is a
+hypothesis about leverage, and the corpus is the only thing that can price it.* Grep the corpus
+before building the thing the last tick pointed at.

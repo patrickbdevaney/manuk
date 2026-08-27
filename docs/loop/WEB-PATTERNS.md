@@ -8858,3 +8858,27 @@ declaration beats inheritance, so an author's own `text-align: center` stops rea
 too. A reset conditional on the inherited VALUE is why Blink and Stylo both put it in the style
 ADJUSTER — and Stylo's `adjust_for_table_text_align` was already compiled into this build, dead,
 waiting for a `-moz-*` value it had never been given.
+
+## t1368 — the FLOAT half of `align`, and a pattern ledger row that prices ITSELF at zero
+
+The class this unlocks is **the legacy image-beside-text idiom**: `<img align=left>` with a
+paragraph flowing around it — the pre-CSS way to do what `float` does, still the shape of wikis,
+mailing-list archives, README-rendered-as-HTML, HTML email and every page written before 2005 that
+nobody has touched since. Plus `<table align=right>` (the pull-quote/sidebar idiom) and
+`<input type=image align=right>` (the submit-button-in-a-toolbar idiom). Before this tick the image
+stayed in the inline flow, so the text sat one image-width in and the container was a descender too
+tall — and the *direction* of the error is counter-intuitive, because a right-floated image moves
+the text LEFT.
+
+⭐⭐ **AND THE HONEST PRICE OF THIS ROW IS ZERO, MEASURED.** 137 pages of the representative CrUX
+corpus were fetched live and read: **8** carry an `align=` attribute at all, and
+`align=left|right` on `img`/`table`/`object`/`embed`/`iframe` appears **zero** times. The whole
+distribution is `<td align=right>` ×30, `<div align=center>` ×5, `<th align=right>` ×2,
+`<img align=absmiddle>` ×1, `<p align=justify>` ×1 — so t1367 covered 38 of the 39 real
+occurrences and this tick's vertical half covers the 39th.
+
+That is the row worth keeping. **A previous tick's "NEXT, measured and not built" note is a
+hypothesis about MECHANISM, never about LEVERAGE, and this ledger is where the two get confused.**
+t1367's note was correct about every fact and wrong about what to do next; one `curl` loop and one
+regex over the corpus would have priced it before the tick, not after. The rule this adds to the
+ledger: *a pattern row must carry the corpus count that justifies it, taken BEFORE the tick.*
