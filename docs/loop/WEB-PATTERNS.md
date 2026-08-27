@@ -8642,3 +8642,46 @@ so hand-adding a row would be erased by the next sweep — the fix belongs to wh
 harness. Diff the checkout against the metric's own area list periodically; when the gap turns out
 to live upstream of what you may change, RECORD it with its measured value rather than either
 editing across the boundary or dropping it.
+
+## A PREDICATE EXACT ON EVERY ROW YOU HAVE IS STILL WRONG IF THOSE ROWS FIX A VARIABLE IT NEVER READS
+
+`parent_is_rtl` decided which inset an over-constrained absolutely positioned box drops, and it was
+exact on every row anyone had ever measured — because every one of them was `horizontal-tb`, where
+the horizontal axis IS the inline axis and `direction` really does decide. Add one row with
+`writing-mode: vertical-rl; direction: ltr` and the answer is 155 where the predicate can only say
+20: there the horizontal axis is the BLOCK axis, which `direction` does not govern at all. The
+mirror row, `vertical-lr; direction: rtl`, is one the predicate actively gets WRONG rather than
+merely cannot reach.
+
+The generalisable move is to take the SPEC'S OWN NOUNS literally. CSS 2.1 says *inline axis* and
+*block axis*; the engine had written *horizontal* and *vertical*, which is a faithful translation
+in exactly one writing mode. Whenever a rule is stated in logical terms and implemented in physical
+ones, the physical spelling is a fixed reading of a variable — and the cross-product that varies it
+is the fixture. Four separate clauses here were wrong in that one way, and one helper answering
+"which physical side is this axis's start?" fixed all four; four independent patches would have
+been four chances to spell the same assumption again.
+
+## RE-RUN THE SAME BINARY BEFORE ATTRIBUTING A DELTA TO A DIFFERENT ONE
+
+`css/css-grid` read 10,358/14,687 banked, 10,150/14,438 with the change in the tree, and the
+old-binary control reproduced the banked 10,358/14,687 exactly — twice. That is the strongest shape
+a regression can have: a stable baseline, confirmed by control, against a moved number. The cheapest
+check available refuted it — a SECOND run of the same new binary returned 10,247/14,534. The area's
+subtest EMISSION is nondeterministic, so the control was two samples of a distribution that happened
+to land on the same value, and the "regression" was a ±250 wobble.
+
+Two tells were visible before any of the rebuilds: the DENOMINATOR moved (14,687 → 14,438 — a real
+regression makes tests fail, not disappear), and the delta was not attributable to any mechanism the
+tick touched. The resolution is always the failing NAMES: 0 newly failing, 42 newly passing, all 42
+in one animation-interpolation file the change cannot reach. An old-binary control costs a rebuild
+and answers "is the baseline what we banked?"; re-running the new binary costs nothing and answers
+"is this number stable enough to have a delta at all?" — do the free one first.
+
+## PUT NEW ROWS IN THE GATE THAT ALREADY RESERVED THEM
+
+The defect this tick closed was already written down in `g_abspos_in_vertical_cb.rs` as a NEXT block
+with its Chrome numbers and the note *"recorded here rather than asserted"*. Adding the rows there
+rather than opening a new gate binary honoured a decision the file had already made, kept the
+controls beside the rows they control, and added nothing to the wall — the standing finding is that
+the wall is disk- and link-bound on 519 static gate binaries, so the cheapest ratchet tooth is one
+that needs no 520th. A NEXT block with measurements in it is an unclaimed gate, not a comment.

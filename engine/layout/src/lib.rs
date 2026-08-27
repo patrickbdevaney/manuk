@@ -4106,6 +4106,67 @@ impl Ctx<'_> {
         false
     }
 
+    /// **The containing block's two axes, resolved to physical sides — one answer, four clauses.**
+    ///
+    /// Returns `(h_is_inline, h_start_is_left, v_start_is_top)`.
+    ///
+    /// CSS 2.1 §10.3.7 and §10.6.4 are written about *the inline axis* and *the block axis*, and
+    /// this engine has read them as *the horizontal one* and *the vertical one* everywhere —
+    /// because until vertical writing modes existed the two readings could not be told apart. They
+    /// can be told apart now, and **four separate clauses in [`Self::layout_abs`] were wrong in the
+    /// same single way**: the over-constrained side on each axis, and the auto-margin
+    /// negative-free-space exception on each axis. One helper answers all four.
+    ///
+    /// ⚠⚠⚠ **`direction` DOES NOT DECIDE THE HORIZONTAL AXIS IN A VERTICAL MODE**, which is what
+    /// refutes the obvious fix of widening [`Self::parent_is_rtl`]. In a vertical mode the
+    /// horizontal axis is the BLOCK axis, so which end it starts at is decided by the writing mode
+    /// alone and `direction` is irrelevant to it. Chrome-measured, `left:20px; right:40px` on a 5px
+    /// box in a 200px containing block (the over-constrained inline/block equation):
+    ///
+    /// ```text
+    ///                          Chrome   before   what it says
+    ///   horizontal-tb ltr        20       20     CONTROL — drop `right`
+    ///   horizontal-tb rtl       155      155     CONTROL — drop `left` (banked t1058)
+    ///   vertical-rl   ltr       155       20     drop `left`, with direction:LTR
+    ///   vertical-rl   rtl       155      155     …and rtl gives the same answer
+    ///   vertical-lr   ltr        20       20     drop `right`
+    ///   vertical-lr   rtl        20      155     …and rtl gives the same answer
+    /// ```
+    ///
+    /// The `vertical-rl ltr` row is the one no amount of `direction` can produce, and the
+    /// `vertical-lr rtl` row is the one that goes WRONG under `parent_is_rtl` today.
+    ///
+    /// ⚠ **It reads the nearest ELEMENT ANCESTOR, not the containing block**, exactly as
+    /// [`Self::parent_is_rtl`] does. That is an approximation — an absolutely positioned box's
+    /// containing block is its nearest *positioned* ancestor — but `writing-mode` and `direction`
+    /// both INHERIT, so the two agree unless an intervening element restates one of them. Keeping
+    /// the same walk as the helper beside it is worth more than closing that gap unmeasured.
+    ///
+    /// ⚠ Reading these two properties off the style map is sound inside a transposed subtree:
+    /// `writing_mode::transpose_in_place` swaps the geometry fields only, and never touches
+    /// `writing_mode` or `direction` themselves.
+    fn cb_axes(&self, node: NodeId) -> (bool, bool, bool) {
+        let mut cur = self.dom.parent(node);
+        while let Some(a) = cur {
+            if self.dom.is_element(a) {
+                let s = self.style_of(a);
+                let ltr = s.direction != manuk_css::Direction::Rtl;
+                return if s.writing_mode.is_vertical() {
+                    // The horizontal axis is the BLOCK axis: `vertical-rl` stacks blocks
+                    // right-to-left, so its block-start is the RIGHT edge. The vertical axis is the
+                    // INLINE axis, and there `direction` applies as usual.
+                    (false, !s.writing_mode.is_rl(), ltr)
+                } else {
+                    // The horizontal axis is the INLINE axis; the vertical one is the block axis,
+                    // and blocks stack top-to-bottom in every horizontal mode this engine has.
+                    (true, ltr, true)
+                };
+            }
+            cur = self.dom.parent(a);
+        }
+        (true, true, true)
+    }
+
     /// Lay out a block box in a containing block of `cw` px. `y` is the border-bottom
     /// edge of the preceding in-flow sibling (or the container's content-top for the
     /// first child); `prev_margin` is that sibling's trailing collapsible margin (0
@@ -10498,19 +10559,35 @@ impl Ctx<'_> {
         //   CB rtl,  both auto, width 500 (free<0)  -100        0    <- the OTHER rtl clause
         //   CB ltr,  both auto, width 500 (free<0)     0        0    <- CONTROL
         // ```
-        let cb_rtl = self.parent_is_rtl(node);
+        //
+        // ⚠⚠⚠ **AND THE CLAUSE IS THE INLINE AXIS'S, NOT THE HORIZONTAL AXIS'S.** §10.3.7's
+        // negative-free-space exception belongs to the axis text runs along; §10.6.4 has NO such
+        // exception and always splits equally. Those are the same axis only in `horizontal-tb`.
+        // [`Self::cb_axes`] says which is which; measured, `left:0; right:0; width:300px;
+        // margin-inline:auto` in a 200px containing block (free = -100):
+        //
+        // ```text
+        //                          Chrome   before   what it says
+        //   horizontal-tb ltr          0        0     CONTROL — pin the inline-start (left) margin
+        //   horizontal-tb rtl       -100     -100     CONTROL — pin the inline-start (right) margin
+        //   vertical-rl   ltr        -50        0     EQUAL SPLIT: horizontal is the BLOCK axis here
+        //   vertical-rl   rtl        -50     -100     …and the exception must not fire on rtl either
+        //   vertical-lr   rtl        -50     -100
+        // ```
+        let (h_is_inline, h_start_is_left, v_start_is_top) = self.cb_axes(node);
         if let (Some(l), Some(r)) = (left, right) {
             if s.width != Dim::Auto {
                 let free = cw - l - r - border_box_w;
                 match (s.margin.left.is_auto(), s.margin.right.is_auto()) {
-                    (true, true) if free >= 0.0 => {
+                    // `!h_is_inline` is §10.6.4's block axis: equal values, no negative exception.
+                    (true, true) if free >= 0.0 || !h_is_inline => {
                         ml = free / 2.0;
                         mr = free / 2.0;
                     }
                     // Negative free space: *"set margin-left (rtl: margin-right) to zero and solve
                     // for the other"* — pin the START margin and overflow past the END edge, and
-                    // which edge is which is the containing block's `direction`.
-                    (true, true) if cb_rtl => {
+                    // which edge is the start is the containing block's INLINE direction.
+                    (true, true) if !h_start_is_left => {
                         ml = free;
                         mr = 0.0;
                     }
@@ -10549,9 +10626,40 @@ impl Ctx<'_> {
                     //
                     // Both directions were wrong, so this is not an RTL defect — it is an ordinary
                     // one that the RTL row happened to be standing next to.
-                    (true, true) => {
+                    //
+                    // ⚠⚠⚠ **…AND THAT IS TRUE ONLY WHILE THE VERTICAL AXIS *IS* THE BLOCK AXIS.**
+                    // In a vertical writing mode it is the INLINE axis and §10.3.7's exception
+                    // moves here, pinning the inline-start margin — which `direction` puts at the
+                    // TOP for `ltr` and the BOTTOM for `rtl`. Measured, `top:0; bottom:0;
+                    // height:300px; margin-block:auto` in a 100px containing block (free = -200):
+                    //
+                    // ```text
+                    //                          Chrome   before   what it says
+                    //   horizontal-tb ltr       -100     -100     CONTROL — equal split (block axis)
+                    //   horizontal-tb rtl       -100     -100     CONTROL — direction-FREE
+                    //   vertical-rl   ltr          0     -100     pin the inline-start (top) margin
+                    //   vertical-rl   rtl       -200     -100     pin the inline-start (bottom) one
+                    //   vertical-lr   rtl       -200     -100
+                    // ```
+                    //
+                    // The two `horizontal-tb` rows are why this arm keeps its shape: it is now the
+                    // BLOCK-axis arm rather than the vertical-axis one, and in a horizontal mode
+                    // those are the same thing.
+                    (true, true) if h_is_inline => {
                         mt = free / 2.0;
                         mb = free / 2.0;
+                    }
+                    (true, true) if free >= 0.0 => {
+                        mt = free / 2.0;
+                        mb = free / 2.0;
+                    }
+                    (true, true) if !v_start_is_top => {
+                        mt = free;
+                        mb = 0.0;
+                    }
+                    (true, true) => {
+                        mt = 0.0;
+                        mb = free;
                     }
                     // As the inline axis: only a start (top) auto margin repositions the box.
                     (true, false) => mt = free - mb,
@@ -10567,12 +10675,31 @@ impl Ctx<'_> {
         // §10.3.7's *"ignore the value for `left` (rtl) or `right` (ltr) and solve for it"*. Every
         // other branch here is direction-free; this is the one clause that is not, and the LTR half
         // of it is what "left wins" already encodes.
-        let ignore_left = cb_rtl
-            && left.is_some()
+        // ⚠⚠⚠ **AND §10.6.4 HAS THE RULE TOO — it was simply never written, because in
+        // `horizontal-tb` the block axis's END is the BOTTOM and "`top` wins" already encodes it.**
+        // Both axes drop their own END inset; the two clauses differ only in what names that side.
+        // Measured, `top:10px; bottom:30px` on a 6px box in a 100px-tall containing block:
+        //
+        // ```text
+        //                          Chrome   before   what it says
+        //   horizontal-tb ltr         10       10     CONTROL — drop `bottom` (block-end)
+        //   horizontal-tb rtl         10       10     CONTROL — direction-FREE on a block axis
+        //   vertical-rl   ltr         10       10     the inline axis runs top-to-bottom: drop `bottom`
+        //   vertical-rl   rtl         64       10     …and bottom-to-top under rtl: drop `top`
+        //   vertical-lr   rtl         64       10
+        // ```
+        let over_constrained_h = left.is_some()
             && right.is_some()
             && s.width != Dim::Auto
             && !s.margin.left.is_auto()
             && !s.margin.right.is_auto();
+        let over_constrained_v = top.is_some()
+            && bottom.is_some()
+            && s.height != Dim::Auto
+            && !s.margin.top.is_auto()
+            && !s.margin.bottom.is_auto();
+        let ignore_left = !h_start_is_left && over_constrained_h;
+        let ignore_top = !v_start_is_top && over_constrained_v;
         let bx = if let (true, Some(r)) = (ignore_left, right) {
             cb.x + cb.width - r - mr - border_box_w
         } else if let Some(l) = left {
@@ -10582,7 +10709,9 @@ impl Ctx<'_> {
         } else {
             cb.x + ml
         };
-        let by = if let Some(t) = top {
+        let by = if let (true, Some(b)) = (ignore_top, bottom) {
+            cb.y + cb.height - b - mb - border_box_h
+        } else if let Some(t) = top {
             cb.y + t + mt
         } else if let Some(b) = bottom {
             cb.y + cb.height - b - mb - border_box_h

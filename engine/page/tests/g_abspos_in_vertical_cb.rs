@@ -42,19 +42,22 @@
 //!   two sides get permuted into each other, so this pair is what separates "the box was rotated"
 //!   from "the box happened to be square".
 //! - **`a4` equals `a1`** — the `inset` shorthand is four physical sides, not a logical one.
-//! ## The row that is NOT here — over-constrained insets (t1360 NEXT)
+//! ## The row that WAS not here — over-constrained insets (t1360 NEXT, CLOSED t1362)
+//!
+//! ⭐ This block was written as a NEXT with its Chrome numbers already in it, and t1362 turned it
+//! into assertions — block 7 below, twenty-four rows covering the full writing-mode x direction
+//! cross-product on BOTH axes, plus the auto-margin clause that had the same defect. The prose
+//! below is kept because its reasoning is what block 7 asserts; only the `#a5` row itself is gone,
+//! superseded by `#oh3`/`#oh4`, which state the same thing with a control beside them.
 //!
 //! `#a5 { inset: 10px 20px 30px 40px }` in `.cb` states BOTH `left` and `right`, which is
-//! over-constrained. Chrome puts it at `175,10`; ours puts it at `40,10`. CSS 2.1 §10.3.7's
-//! *"ignore `right` for `ltr`"* is really *"ignore the inset-INLINE-end side"*, and §10.6.4's
-//! block-axis rule ignores the block-END side — in `vertical-rl` the block axis runs right-to-left,
-//! so the side to drop is `left` and the answer is `200-20-5 = 175`. Ours drops `right`
-//! unconditionally. That is a resolution-axis defect, a different mechanism from the exemption this
-//! gate carries, so the row is recorded here rather than asserted:
-//!
-//! ```text
-//!   .cb  vertical-rl   #a5  inset:10px 20px 30px 40px    Chrome a5@175,10 5x6    ours a5@40,10
-//! ```
+//! over-constrained. Chrome puts it at `175,10`; before t1362 ours put it at `40,10`. CSS 2.1
+//! §10.3.7's *"ignore `right` for `ltr`"* is really *"ignore the inset-INLINE-end side"*, and
+//! §10.6.4's block-axis rule ignores the block-END side — in `vertical-rl` the block axis runs
+//! right-to-left, so the side to drop is `left` and the answer is `200-20-5 = 175`. Ours dropped
+//! `right` unconditionally. That is a resolution-axis defect and a different mechanism from the
+//! exemption this gate was built for, which is why it lived here as a recorded row for two ticks
+//! before block 7 asserted it across the whole cross-product.
 //!
 //! - **`c1` and `d1` are the rows with NO insets**, where the box falls at its *static position* —
 //!   "where it would have been in the flow". That position is computed inside the transposed
@@ -113,6 +116,20 @@ const HTML: &str = r##"<!DOCTYPE html><html><head><style>
   #e1 { position: absolute; top: 10px; left: 20px; width: 40px; height: 50px }
   .in { width: 8px; height: 9px }
   .in2 { width: 12px; height: 9px }
+  /* ── t1362: the OVER-CONSTRAINED side and the AUTO-MARGIN exception are per-AXIS ── */
+  .ocb { position: relative; width: 200px; height: 100px }
+  .oh  { position: absolute; width: 5px; height: 6px; left: 20px; right: 40px }
+  .ov  { position: absolute; width: 5px; height: 6px; top: 10px; bottom: 30px }
+  .mh  { position: absolute; left: 0; right: 0; width: 300px; height: 6px;
+         margin-left: auto; margin-right: auto }
+  .mv  { position: absolute; top: 0; bottom: 0; height: 300px; width: 5px;
+         margin-top: auto; margin-bottom: auto }
+  .w_htb_ltr { writing-mode: horizontal-tb; direction: ltr }
+  .w_htb_rtl { writing-mode: horizontal-tb; direction: rtl }
+  .w_vrl_ltr { writing-mode: vertical-rl;   direction: ltr }
+  .w_vrl_rtl { writing-mode: vertical-rl;   direction: rtl }
+  .w_vlr_ltr { writing-mode: vertical-lr;   direction: ltr }
+  .w_vlr_rtl { writing-mode: vertical-lr;   direction: rtl }
 </style></head><body>
 <div class="cb" id="cb"><div id="a1"></div><div id="a2"></div><div id="a3"></div>
   <div id="a4"></div><div id="a7"></div></div>
@@ -121,6 +138,18 @@ const HTML: &str = r##"<!DOCTYPE html><html><head><style>
 <div class="cb4" id="cb4"><div class="flow"></div><div id="d1"></div></div>
 <div class="cb" id="cbe"><div id="e1"><div class="in" id="e1a"></div>
   <div class="in2" id="e1b"></div></div></div>
+<div class="ocb w_htb_ltr" id="k1"><div class="oh" id="oh1"></div><div class="ov" id="ov1"></div>
+  <div class="mh" id="mh1"></div><div class="mv" id="mv1"></div></div>
+<div class="ocb w_htb_rtl" id="k2"><div class="oh" id="oh2"></div><div class="ov" id="ov2"></div>
+  <div class="mh" id="mh2"></div><div class="mv" id="mv2"></div></div>
+<div class="ocb w_vrl_ltr" id="k3"><div class="oh" id="oh3"></div><div class="ov" id="ov3"></div>
+  <div class="mh" id="mh3"></div><div class="mv" id="mv3"></div></div>
+<div class="ocb w_vrl_rtl" id="k4"><div class="oh" id="oh4"></div><div class="ov" id="ov4"></div>
+  <div class="mh" id="mh4"></div><div class="mv" id="mv4"></div></div>
+<div class="ocb w_vlr_ltr" id="k5"><div class="oh" id="oh5"></div><div class="ov" id="ov5"></div>
+  <div class="mh" id="mh5"></div><div class="mv" id="mv5"></div></div>
+<div class="ocb w_vlr_rtl" id="k6"><div class="oh" id="oh6"></div><div class="ov" id="ov6"></div>
+  <div class="mh" id="mh6"></div><div class="mv" id="mv6"></div></div>
 </body></html>"##;
 
 fn rect_of(page: &manuk_page::Page, sel: &str) -> manuk_layout::Rect {
@@ -343,4 +372,262 @@ fn g_abspos_in_vertical_cb_is_physical() {
         e1b.x - e1.x,
         e1b.y - e1.y
     );
+
+    // ── 7. THE OVER-CONSTRAINED SIDE AND THE AUTO-MARGIN EXCEPTION ARE PER-AXIS (t1362).
+    //
+    //    CSS 2.1 §10.3.7 and §10.6.4 are written about the INLINE and BLOCK axes; this engine read
+    //    them as the HORIZONTAL and VERTICAL ones, which is the same statement only in
+    //    `horizontal-tb`. FOUR clauses were wrong in that one way. Twenty-four Chrome rows, six
+    //    containers `position:relative; width:200px; height:100px`, four out-of-flow children each:
+    //
+    //    ```text
+    //      .oh  left:20px; right:40px;  5x6            horizontal axis OVER-CONSTRAINED
+    //      .ov  top:10px; bottom:30px;  5x6            vertical axis OVER-CONSTRAINED
+    //      .mh  left:0; right:0; width:300px;  margin-inline:auto   (free = -100)
+    //      .mv  top:0; bottom:0; height:300px; margin-block:auto    (free = -200)
+    //
+    //      container            oh         ov          mh          mv
+    //      k1 horizontal-tb ltr  20,0       0,10        0,0         0,-100    CONTROL x4
+    //      k2 horizontal-tb rtl 155,0     195,10     -100,0       195,-100    CONTROL x4
+    //      k3 vertical-rl   ltr 155,0     195,10      -50,0       195,0
+    //      k4 vertical-rl   rtl 155,94    195,64      -50,94      195,-200
+    //      k5 vertical-lr   ltr  20,0       0,10      -50,0         0,0
+    //      k6 vertical-lr   rtl  20,94      0,64      -50,94        0,-200
+    //    ```
+    //
+    //    **Each row asserts only the axis UNDER TEST** — `x` for the horizontal-axis rows, `y` for
+    //    the vertical-axis ones. The cross-axis coordinate of each is a STATIC position and a
+    //    DIFFERENT mechanism, four of which are still wrong by exactly the box's inline size
+    //    (k4/k6 `.oh` and `.mh` are at y=100, the inline-start EDGE, where Chrome is at 94); those
+    //    are recorded in the journal rather than asserted here, because a row that mixes two
+    //    mechanisms attributes its failure to whichever one was touched last.
+    //
+    //    ## How each assertion goes RED
+    //
+    //    - **`ignore_left = self.parent_is_rtl(node) && …`** (the pre-tick state) — k3 `.oh` drops
+    //      to 20 and k6 `.oh` jumps to 155. k3 is the row no value of `direction` can produce: it
+    //      is `ltr` and the answer is still 155, because the horizontal axis there is the BLOCK
+    //      axis and `vertical-rl`'s block-end is the LEFT edge.
+    //    - **Delete `ignore_top`** (the pre-tick state — it never existed) and k4/k6 `.ov` go to
+    //      10, the `top` inset, instead of 64.
+    //    - **Drop the `|| !h_is_inline` guard on the horizontal auto-margin arm** and k3/k5 `.mh`
+    //      go to 0 and k4/k6 `.mh` to -100: §10.3.7's negative-free-space exception firing on what
+    //      is really the block axis.
+    //    - **Drop the `if h_is_inline` arm on the vertical auto-margin match** and k3/k5 `.mv` go
+    //      to -100 (an equal split) instead of 0, and k4/k6 `.mv` to -100 instead of -200.
+    //    - **Any mutation that reaches `horizontal-tb`** takes out one of the eight k1/k2 controls,
+    //      which are the entire pre-tick behaviour and must not move by a pixel.
+    const AXIS_ROWS: &[(&str, &str, char, f32, &str)] = &[
+        (
+            "#k1",
+            "#oh1",
+            'x',
+            20.0,
+            "CONTROL: horizontal-tb ltr drops `right`, so `left:20px` wins",
+        ),
+        (
+            "#k2",
+            "#oh2",
+            'x',
+            155.0,
+            "CONTROL: horizontal-tb rtl drops `left` — 200-40-5 (t1058)",
+        ),
+        (
+            "#k3",
+            "#oh3",
+            'x',
+            155.0,
+            "vertical-rl makes the horizontal axis the BLOCK axis, whose \
+             end is the LEFT edge — and `direction` here is LTR, so no widening of `parent_is_rtl` \
+             can produce this number",
+        ),
+        (
+            "#k4",
+            "#oh4",
+            'x',
+            155.0,
+            "the same block-axis answer under rtl: `direction` is \
+             IRRELEVANT to a block axis, so this row must equal k3's",
+        ),
+        (
+            "#k5",
+            "#oh5",
+            'x',
+            20.0,
+            "vertical-lr stacks blocks left-to-right, so the block-end is \
+             the RIGHT edge and `right:40px` is the side dropped",
+        ),
+        (
+            "#k6",
+            "#oh6",
+            'x',
+            20.0,
+            "vertical-lr under rtl must equal k5 — this is the row that \
+             goes to 155 under the pre-tick `parent_is_rtl` predicate",
+        ),
+        (
+            "#k1",
+            "#ov1",
+            'y',
+            10.0,
+            "CONTROL: the vertical axis is the block axis in horizontal-tb, \
+             so `bottom` is dropped",
+        ),
+        (
+            "#k2",
+            "#ov2",
+            'y',
+            10.0,
+            "CONTROL: and a block axis is direction-FREE, so rtl matches k1",
+        ),
+        (
+            "#k3",
+            "#ov3",
+            'y',
+            10.0,
+            "in vertical-rl the vertical axis is the INLINE axis; under ltr \
+             it runs top-to-bottom, so the end is still `bottom` and the answer is unchanged",
+        ),
+        (
+            "#k4",
+            "#ov4",
+            'y',
+            64.0,
+            "…and under rtl that inline axis runs BOTTOM-TO-TOP, so the end \
+             is `top`: 100-30-6. There is no `ignore_top` at all before this tick",
+        ),
+        (
+            "#k5",
+            "#ov5",
+            'y',
+            10.0,
+            "vertical-lr ltr: the inline axis still runs top-to-bottom",
+        ),
+        (
+            "#k6",
+            "#ov6",
+            'y',
+            64.0,
+            "vertical-lr rtl: `top` dropped, exactly as k4 — the block \
+             direction does not enter the inline axis's answer",
+        ),
+        (
+            "#k1",
+            "#mh1",
+            'x',
+            0.0,
+            "CONTROL: §10.3.7's negative-free-space exception pins the \
+             inline-START margin, which is the left one under ltr",
+        ),
+        (
+            "#k2",
+            "#mh2",
+            'x',
+            -100.0,
+            "CONTROL: …and the right one under rtl, so the box hangs off \
+             the left edge by the whole overflow",
+        ),
+        (
+            "#k3",
+            "#mh3",
+            'x',
+            -50.0,
+            "the horizontal axis is the BLOCK axis here and §10.6.4 has NO \
+             negative exception — the margins split equally however negative the free space is",
+        ),
+        (
+            "#k4",
+            "#mh4",
+            'x',
+            -50.0,
+            "and it stays an equal split under rtl: the exception must not \
+             fire on a block axis for any direction",
+        ),
+        (
+            "#k5",
+            "#mh5",
+            'x',
+            -50.0,
+            "vertical-lr: same block axis, same equal split",
+        ),
+        ("#k6", "#mh6", 'x', -50.0, "vertical-lr rtl: same again"),
+        (
+            "#k1",
+            "#mv1",
+            'y',
+            -100.0,
+            "CONTROL: the vertical axis is the block axis, so the equal \
+             split applies even though the free space is -200",
+        ),
+        (
+            "#k2",
+            "#mv2",
+            'y',
+            -100.0,
+            "CONTROL: direction-free, as every block-axis row is",
+        ),
+        (
+            "#k3",
+            "#mv3",
+            'y',
+            0.0,
+            "the vertical axis is the INLINE axis here, so the exception \
+             MOVES to it: the inline-start margin (top, under ltr) is pinned to zero and the box \
+             overflows downward. An equal split would put this at -100",
+        ),
+        (
+            "#k4",
+            "#mv4",
+            'y',
+            -200.0,
+            "…and under rtl the inline-start is the BOTTOM, so the whole \
+             overflow goes into `margin-top`",
+        ),
+        (
+            "#k5",
+            "#mv5",
+            'y',
+            0.0,
+            "vertical-lr ltr: inline-start is the top, as k3",
+        ),
+        (
+            "#k6",
+            "#mv6",
+            'y',
+            -200.0,
+            "vertical-lr rtl: inline-start is the bottom, as k4",
+        ),
+    ];
+    for (cbsel, sel, axis, want, why) in AXIS_ROWS {
+        let (c, k) = (r(cbsel), r(sel));
+        let got = if *axis == 'x' { k.x - c.x } else { k.y - c.y };
+        assert!(
+            (got - want).abs() < 1.01,
+            "G_ABSPOS_IN_VERTICAL_CB: {sel} in {cbsel} has {axis}={got:.2}; Chrome puts it at \
+             {want:.2}. {why}.\n\
+             An over-constrained axis drops its inset-*-END side and an auto-margin pair takes \
+             §10.3.7's negative-free-space exception ONLY on the INLINE axis — and WHICH physical \
+             axis is the inline one is the containing block's `writing-mode`, not an assumption \
+             that it is the horizontal one."
+        );
+    }
+    // The sizes are asserted separately from the positions: an abspos is never transposed, so a
+    // 6x5 (or 6x300) box here would mean the exemption itself broke and every offset above is
+    // being measured on a box of the wrong shape.
+    for (sel, w, h) in [
+        ("#oh4", 5.0, 6.0),
+        ("#ov4", 5.0, 6.0),
+        ("#mh4", 300.0, 6.0),
+        ("#mv4", 5.0, 300.0),
+    ] {
+        let k = r(sel);
+        assert!(
+            (k.width - w).abs() < 0.51 && (k.height - h).abs() < 0.51,
+            "G_ABSPOS_IN_VERTICAL_CB: {sel} is {:.2}x{:.2}, not {w}x{h}. `width` and `height` on an \
+             out-of-flow box are PHYSICAL whatever its containing block's writing mode; a \
+             transposed size here invalidates every t1362 offset above it.",
+            k.width,
+            k.height
+        );
+    }
 }

@@ -537,6 +537,7 @@
   - L11142 · Out-of-flow boxes inside a vertical writing mode
   - L11191 · The static position of an out-of-flow box, and which corner it is
   - L11227 · The inline advance is measured from the other end too
+  - L11246 · An over-constrained axis drops its END inset — and which axis is which is the WRITING MODE
 
 ## browser-capabilities.md
 `docs/wiki/browser-capabilities.md`
@@ -2396,4 +2397,4 @@
   - L231 · Both named mechanisms are subsystem work
 
 ---
-2303 sections across 22 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+2304 sections across 22 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.

@@ -11242,3 +11242,60 @@ to the physical `Left` and never calls `TextAlign::resolve_physical`, which live
 path. `text-align: start` therefore never becomes `right` there and an RTL line is laid out flush
 LEFT. Unit tests in that crate must assert RELATIONS for RTL geometry; the literals belong in a
 `manuk-page` gate, which runs the real cascade.
+
+## An over-constrained axis drops its END inset — and which axis is which is the WRITING MODE
+
+CSS 2.1 §10.3.7 and §10.6.4 solve the *inline* and the *block* equation for an absolutely
+positioned box. This engine read them as *the horizontal one* and *the vertical one*, which is the
+same statement **only in `horizontal-tb`** — and until vertical writing modes existed there was no
+way to tell the two readings apart. Four separate clauses were written against the wrong one:
+
+| clause | was | is |
+| --- | --- | --- |
+| over-constrained horizontal axis | drop `right`, flipped to `left` by `direction` | drop the horizontal axis's END side |
+| over-constrained vertical axis | *(did not exist — `top` always won)* | drop the vertical axis's END side |
+| auto margins, negative free space, horizontal | §10.3.7's exception: pin the start margin | the exception only if the horizontal axis is the INLINE one |
+| auto margins, negative free space, vertical | §10.6.4: always split equally | equal split only if the vertical axis is the BLOCK one |
+
+`Layout::cb_axes` answers all four at once, from the containing block's `writing-mode` and
+`direction`:
+
+```text
+  h_is_inline     = !wm.is_vertical()
+  h_start_is_left = if wm.is_vertical() { !wm.is_rl() } else { direction != rtl }
+  v_start_is_top  = if wm.is_vertical() { direction != rtl } else { true }
+```
+
+⚠⚠⚠ **`direction` does not decide the horizontal axis in a vertical mode**, which is what refutes
+the obvious fix of widening `parent_is_rtl`. In `vertical-rl` the horizontal axis is the BLOCK axis:
+its end is the left edge whatever `direction` says. Chrome, `left:20px; right:40px` on a 5px box in
+a 200px containing block:
+
+| containing block | Chrome | before |
+| --- | --- | --- |
+| `horizontal-tb` ltr | 20 | 20 |
+| `horizontal-tb` rtl | 155 | 155 |
+| `vertical-rl` ltr | **155** | 20 |
+| `vertical-rl` rtl | 155 | 155 |
+| `vertical-lr` ltr | 20 | 20 |
+| `vertical-lr` rtl | **20** | 155 |
+
+The `vertical-rl ltr` row is the one no value of `direction` can produce; the `vertical-lr rtl` row
+is the one `parent_is_rtl` actively got wrong. The mirror holds on the other axis: with
+`top:10px; bottom:30px` on a 6px box in a 100px-tall block, every `horizontal-tb` row is 10 (the
+block axis is direction-free) and every vertical-mode `rtl` row is 64, because there the vertical
+axis is the inline one and runs bottom-to-top.
+
+The auto-margin exception moves with the same boundary. `margin-inline:auto` with 100px of negative
+free space pins the inline-start margin in `horizontal-tb` (0 for ltr, -100 for rtl) but splits
+equally in every vertical mode (-50, `direction` irrelevant); `margin-block:auto` with 200px of
+negative free space splits equally in `horizontal-tb` (-100) and pins in every vertical mode (0 for
+ltr, -200 for rtl).
+
+`G_ABSPOS_IN_VERTICAL_CB` carries all 24 rows, eight of them `horizontal-tb` controls, and goes red
+under four separate mutations — one per clause.
+
+⚠ **Each row asserts only the axis under test.** The cross-axis coordinate is a static position, a
+different mechanism: in a vertical `rtl` mode the inline-start edge is recorded without the deferred
+`-inline size` correction that `static_pos_rl` applies on the horizontal inline axis, so those boxes
+sit at 100 where Chrome puts them at 94. That is the next tooth, not this one.

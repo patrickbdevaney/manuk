@@ -91209,3 +91209,149 @@ in `vertical-rl rtl` (Chrome y=94, ours y=0) — the last being this tick's mech
 combination it does not yet cover.
 
 WIKI: docs/wiki/box-layout.md
+
+## t1362 — an over-constrained axis drops its END inset, and which axis is which is the WRITING MODE
+
+TICK SHAPE: capability. Board re-run at the top of this tick and diffed against t1361's copy: no
+material change, CO-#1 is still the rendering gap and CSS layout is still the main line.
+
+### THE BUG — one assumption, FOUR clauses
+
+CSS 2.1 §10.3.7 solves the INLINE equation for an absolutely positioned box and §10.6.4 the BLOCK
+one. This engine has read those two words as "horizontal" and "vertical" everywhere, and that
+reading is correct — in `horizontal-tb`, where the two are the same statement and nothing can tell
+them apart. Vertical writing modes tell them apart, and when they did, **four separate clauses in
+`layout_abs` turned out to be wrong in the same single way**:
+
+- the over-constrained horizontal axis dropped `right`, flipped to `left` by `direction`
+- the over-constrained vertical axis had NO rule at all — `top` simply won, which is §10.6.4's
+  answer spelled as a fall-through rather than as a decision
+- the auto-margin negative-free-space exception (§10.3.7's *"set margin-left (rtl: margin-right) to
+  zero"*) sat on the horizontal branch
+- and §10.6.4's *"no such exception, split equally"* sat on the vertical one
+
+`Layout::cb_axes` now answers all four from the containing block's `writing-mode` and `direction`
+at once. It is one helper, not four fixes, because it was one assumption, not four bugs.
+
+### ⭐⭐⭐ THE OBVIOUS FIX IS REFUTED BY A ROW THAT IS `ltr`
+
+The tempting patch is to widen `parent_is_rtl` — it is right there, it already exists for §10.3.3,
+and it already gets `horizontal-tb rtl` exactly right. It is wrong, and one measured row says so
+before any code is written. Chrome, `left:20px; right:40px` on a 5px box in a 200px containing
+block:
+
+```text
+                       Chrome   before
+  horizontal-tb ltr      20       20     CONTROL
+  horizontal-tb rtl     155      155     CONTROL — banked t1058
+  vertical-rl   ltr     155       20     ← `direction` is LTR and the answer is still 155
+  vertical-rl   rtl     155      155
+  vertical-lr   ltr      20       20
+  vertical-lr   rtl      20      155     ← the row `parent_is_rtl` actively gets WRONG
+```
+
+`vertical-rl ltr = 155` cannot be produced by any function of `direction`, because in a vertical
+mode the horizontal axis is the BLOCK axis and `direction` does not govern a block axis at all.
+`vertical-lr rtl = 20` is the mirror: `direction` is `rtl` and the answer must NOT flip.
+**A predicate that is exact on every row you have is still the wrong predicate if the rows you have
+are all one value of a variable it never reads.**
+
+### THE MEASUREMENT — 24 rows, the full cross-product, taken on the GATE'S OWN MARKUP
+
+Six containers (3 writing modes x 2 directions), four out-of-flow children each: `.oh`
+(`left:20;right:40`), `.ov` (`top:10;bottom:30`), `.mh` (`margin-inline:auto`, free = -100), `.mv`
+(`margin-block:auto`, free = -200). Chrome, parent-relative:
+
+```text
+  container            oh          ov          mh          mv
+  k1 horizontal-tb ltr  20,0        0,10        0,0         0,-100    CONTROL x4
+  k2 horizontal-tb rtl 155,0      195,10     -100,0       195,-100    CONTROL x4
+  k3 vertical-rl   ltr 155,0      195,10      -50,0       195,0
+  k4 vertical-rl   rtl 155,94     195,64      -50,94      195,-200
+  k5 vertical-lr   ltr  20,0        0,10      -50,0         0,0
+  k6 vertical-lr   rtl  20,94       0,64      -50,94        0,-200
+```
+
+The three-boolean rule predicts all 24 before the patch exists. Ours was 8/8 exact on the
+`horizontal-tb` controls and wrong on 12 of the 16 vertical-mode rows; after, **24/24 exact on the
+axis under test**.
+
+⭐ The first two fixtures for this tick were written across two files and reasoned about together.
+The table above was then re-measured on the EXACT markup the gate would use, and that is the number
+that went into the assertions. It agreed — but the agreement is the point: a fixture that is not the
+gate's fixture is a second program, and this loop has been bitten by two programs disagreeing on one
+row before.
+
+### ⚠⚠⚠ `css/css-grid` READ -208 AND THE REGRESSION WAS NOT REAL — THE NAMES SAID SO
+
+The area totals, all taken within one hour: banked 10358/14687, this tick's binary 10150/14438,
+then 10247/14534 from the SAME binary on a second run. The old-binary control — `cp` the WIP aside,
+`git checkout --`, rebuild release, re-run — returned 10358/14687, reproducing the banked row
+exactly, twice. On totals alone that reads as a 208-subtest regression against a stable baseline,
+and under THE RATCHET a regression is reverted, not traded.
+
+It is not a regression. Diffing the failing NAMES:
+
+```text
+  newly FAILING under this tick:  0
+  no longer failing:             42   — all 42 in ONE file,
+                                        grid-lanes/animation/grid-template-columns-interpolation.html
+```
+
+Forty-two subtests in a single animation-interpolation file, which emits a variable number of
+subtests run to run — which is also what moves the DENOMINATOR by 249 and produces the ±100 swing
+between two runs of one binary. Zero names broke. The 42 are not attributable to this tick either;
+they are the same flake pointing the other way.
+
+⭐⭐ **A DENOMINATOR THAT MOVES IS NOT A DENOMINATOR, AND A CONTROL THAT REPRODUCES THE BANKED NUMBER
+TWICE CAN STILL BE MEASURING A COIN THAT LANDED THE SAME WAY TWICE.** The old binary agreeing with
+the bank looked like the strongest possible evidence that the baseline was solid and the delta was
+mine. It was two samples of a distribution, and the second run of the NEW binary — the cheapest
+check available, one that costs no rebuild — is what exposed it. Re-run the SAME binary before
+attributing a delta to a DIFFERENT one.
+
+### ⚠⚠ `css/css-sizing` READ +126 AND NONE OF IT WAS MINE EITHER
+
+Banked 4399/5892. This tick measured 4525/5892 — a clean gain on a FIXED denominator, which is
+exactly the shape a real fix makes. The old-binary control returned 4525 as well: the banked row was
+simply stale. Corrected in `WPT-AREAS.tsv` as a CORRECTION, not a gain. This is the second
+consecutive tick where a stale banked row impersonated a win (t1361: css-flexbox +296, css-text +2).
+**A banked number is a measurement with a DATE on it; the control is not optional even when the
+delta has the right shape.**
+
+### ⚠⚠⚠ APERTURE — `css/css-writing-modes` IS 1,177 FILES UPSTREAM AND IS IN NO METRIC AT ALL
+
+The suite that exists to measure exactly this tick is absent from the checkout (`~/wpt/css/` has no
+`css-writing-modes` directory) and absent from `WPT-AREAS.tsv`. So this tick is WPT-FLAT by name
+across all four areas that could plausibly have moved (css-position 1166 =, css-flexbox 3168 =,
+css-sizing 4525 =, css-grid 0 broken), and that flatness is a statement about the APERTURE, not
+about the fix. Both halves are outside what this agent may change — the area list lives in
+`scripts/wpt-sweep.sh` and the checkout is provisioned by `scripts/wpt-setup.sh`, both harness — so
+it is recorded here for the observer, as t1361 recorded `css/CSS2` (810 files, 95.4%, also in no
+row). That is now TWO suites known to be invisible to the primary metric.
+
+GATE `G_ABSPOS_IN_VERTICAL_CB` (extended, 24 new rows + 4 size rows), RED under:
+- **`ignore_left = self.parent_is_rtl(node) && …`** (the pre-tick predicate) → `#oh3` at 20, not 155
+- **`ignore_top` deleted** (the pre-tick state — it never existed) → `#ov4` at 10, not 64
+- **the `|| !h_is_inline` guard dropped from the horizontal auto-margin arm** → `#mh3` at -100, not -50
+- **the `if h_is_inline` arm dropped from the vertical auto-margin match** → `#mv3` at -100, not 0
+
+⭐ The rows went into the EXISTING gate binary rather than a new one. `g_abspos_in_vertical_cb.rs`
+already carried this exact defect as a NEXT block with its Chrome numbers and the note *"recorded
+here rather than asserted"* — so the file had already decided where these rows belong. It also costs
+the wall nothing: the standing wall finding is that 519 static mozjs gate binaries are what makes it
+disk- and link-bound, so a gate that needs no 520th binary is the cheaper ratchet tooth.
+
+NEXT — measured, reproducible, not done here:
+**the static INLINE position in a vertical `rtl` mode is recorded as the inline-start EDGE and never
+gets its `-inline size` correction.** Four rows of the fixture above say so and they are the only
+non-exact values left in it: `k4`/`k6` `.oh` and `.mh` sit at y=100 where Chrome puts them at 94,
+i.e. off by exactly the box's 6px height, which is its INLINE size in a vertical mode. t1360 built
+the deferred-correction mechanism (`Layout::static_pos_rl` records the node, `position_absolutes`
+applies the `-size` once `layout_abs` has measured the box) and t1361 widened it from "this subtree
+was transposed" to "the inline axis runs right-to-left". The one combination neither covers is the
+inline axis running BOTTOM-TO-TOP, which is `direction:rtl` inside a vertical mode. It is the same
+flag and the same application site; what is missing is the third seed condition. Fixture
+`/tmp/oc4.html`, table in `/tmp/t1362-gate-table.md`.
+
+WIKI: docs/wiki/box-layout.md
