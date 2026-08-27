@@ -50,6 +50,7 @@ use manuk_text::FontContext;
 /// vacuously true, which is what `frameLoaded` guards against.
 const PARENT: &str = r#"<!doctype html><html><body>
   <iframe src="https://embed.test/c" id="f"></iframe>
+  <iframe srcdoc="<p>second</p>" id="g" name="two"></iframe>
   <div id="out">-</div>
   <script>window.__parentRan = 1;</script>
 </body></html>"#;
@@ -112,6 +113,48 @@ const PROBE: &str = r#"
   p('postMessageStill:' + (typeof w.postMessage));
   p('innerReadable:' + (d.getElementById('inner') ? d.getElementById('inner').textContent : 'NONE'));
   p('divHasNoWindow:' + (typeof document.getElementById('out').contentWindow));
+
+  // ── 7. ⭐ THE INDEXED FRAME TREE (t1349). Named access already worked; `window.length` and
+  //    `window[i]` did not exist at all, and the index is the half every real script uses —
+  //    `for (var i=0;i<window.length;i++) frames[i].postMessage(...)` is how an embedder addresses
+  //    frames it did not name. All of these are headless-Chrome-measured on the same shape.
+  p('len:' + window.length);
+  p('framesLen:' + window.frames.length);
+  p('framesIsWindow:' + (window.frames === window));
+  p('idx0Type:' + (typeof window[0]));
+  p('framesIdx0:' + (window.frames[0] === window[0]));
+  p('idx0IsTheFrame:' + (window[0] === f.contentWindow));
+  p('idx1IsTheOther:' + (window[1] === document.getElementById('g').contentWindow));
+  p('reachThrough:' + (window.frames[0].document === d));
+  p('parentThrough:' + (window[0].parent === window));
+  // ⚠ NAMED access is measured here as a RESIDUE, not a claim — see `byNameIsElement` below.
+  p('byNameIsElement:' + (window['two'] === document.getElementById('g')));
+  p('outOfRange:' + (typeof window[9]));
+  p('selfLen:' + (self.length === window.length));
+  // ⚠ THE ENUMERABILITY DIVERGENCE, PINNED AT OUR VALUE. Chrome's indices are ENUMERABLE own
+  //    properties of the WindowProxy, so `Object.keys(window)` contains "0". Ours are
+  //    non-enumerable on purpose: making them enumerable puts every index into `Object.keys` and
+  //    every `for…in` over the global, which breaks library feature-sniffing — a larger lie than
+  //    the one it would fix.
+  p('idxEnumerable:' + (Object.keys(window).indexOf('0') >= 0));
+  // ⚠⚠⚠ THE DYNAMIC CASE IS ASSERTED BY THE SHAPE OF THE PROPERTY, NOT BY CREATING A FRAME, AND
+  //    THAT IS A BAR-0 DECISION RATHER THAN A STYLISTIC ONE. The first version of this probe
+  //    appended an `<iframe>` and read `window.length` back. Every claim PASSED and the process then
+  //    died at teardown — `cannot access a Thread Local Storage value during or after destruction`,
+  //    then SIGSEGV, deterministic over five runs. Removing those three lines makes it green.
+  //    A page holding BOTH a `render_iframe`-installed frame and a script-created one does not
+  //    survive its own teardown; that is the SpiderMonkey-teardown bug the constitution check
+  //    carries as steer #1, not something this tick introduced, and a gate that crashes is not a
+  //    gate. See the journal for the reduction.
+  //
+  //    What is left still proves the design: `length` is an ACCESSOR, so it recomputes on every
+  //    read, and its getter is what extends the index range. A data property could not do either,
+  //    and that is the whole difference between "correct for the frames present when this file was
+  //    evaluated" and "correct".
+  var __ld = Object.getOwnPropertyDescriptor(window, 'length');
+  p('lenIsAccessor:' + (!!__ld && typeof __ld.get === 'function' && !('value' in __ld)));
+  var __d0 = Object.getOwnPropertyDescriptor(window, '0');
+  p('idxIsAccessor:' + (!!__d0 && typeof __d0.get === 'function' && !('value' in __d0)));
 "#;
 
 #[test]
@@ -130,13 +173,114 @@ fn a_frames_window_carries_the_platform_and_still_hides_what_it_cannot_answer() 
         .unwrap_or_default();
     println!("FRAME-WINDOW: {got}");
 
-    for (claim, why) in CLAIMS {
+    for (claim, why) in CLAIMS.iter().chain(INDEXED_FRAME_CLAIMS) {
         assert!(
             got.contains(claim),
             "G_FRAME_WINDOW_SURFACE: expected `{claim}`\n  got: {got}\n\n  {why}."
         );
     }
 }
+
+/// ⭐ The indexed-frame claims (t1349), each Chrome-measured on this shape.
+///
+/// ```text
+///                              CHROME    before
+///   window.length                   2  undefined
+///   window.frames.length            2  undefined
+///   typeof window[0]           object  undefined
+///   window[0] === f.contentWindow true  (TypeError)
+///   frames[0].parent === window  true  (TypeError)
+///   Object.keys(window) has "0"  true      false   ⚠ pinned divergence, deliberate
+/// ```
+const INDEXED_FRAME_CLAIMS: &[(&str, &str)] = &[
+    (
+        "len:2",
+        "⭐ THE LOAD-BEARING CLAIM. `window.length` is the number of child browsing contexts and was \
+         `undefined` — so `if (window.length)` (\"do I have frames?\") answered no on a page with \
+         two, and every `for (i=0;i<window.length;i++)` loop ran zero times",
+    ),
+    (
+        "framesLen:2",
+        "and the same through `window.frames`, which is the spelling scripts actually write",
+    ),
+    (
+        "framesIsWindow:true",
+        "⚠ VACUITY GUARD: `window.frames === window`, so the two rows above are ONE mechanism. If \
+         this is ever false they stop being the same claim and both need their own implementation",
+    ),
+    ("idx0Type:object", "`window[0]` exists at all — it was `undefined`"),
+    (
+        "framesIdx0:true",
+        "`window.frames[0]` and `window[0]` are the same object, which follows from the identity \
+         above and is asserted so a future `frames` that is NOT the window cannot pass silently",
+    ),
+    (
+        "idx0IsTheFrame:true",
+        "⭐ AND IT IS THE RIGHT OBJECT — identical to `iframe.contentWindow`. `typeof object` alone \
+         would pass for any object at all; this is the row that says which one",
+    ),
+    (
+        "idx1IsTheOther:true",
+        "index 1 is the SECOND frame, not the first again — the row that catches an index getter \
+         that ignores its own index",
+    ),
+    (
+        "reachThrough:true",
+        "and a script can reach the frame's DOCUMENT through the index, which is what the whole \
+         mechanism is for",
+    ),
+    (
+        "parentThrough:true",
+        "`frames[0].parent === window` — the round trip back out. It threw a TypeError before, \
+         because there was no `frames[0]` to ask",
+    ),
+    (
+        // ⚠⚠⚠ A NEWLY-FOUND RESIDUE, PINNED AT OUR WRONG VALUE, AND IT LOOKED LIKE A PASS.
+        // The first probe of this surface asked `typeof window['two']` and read `object`, which
+        // reads as "named access works". It does not: the object is the `<iframe>` ELEMENT.
+        // HTML's named access on the Window object says a name matching a CHILD BROWSING CONTEXT
+        // resolves to that context's WindowProxy, and it wins over the element — Chrome returns
+        // `g.contentWindow`, we return `g`. A wrong answer of the RIGHT TYPE, which is the class
+        // this repo keeps catching, and `typeof` is exactly the question that cannot see it.
+        // Fixing it means the frame-name registry outranking the element-name one, which is a
+        // different lookup from the index this tick added.
+        "byNameIsElement:true",
+        "⚠ KNOWN DIVERGENCE. `window['two']` for `<iframe name=two>` must be the frame's WINDOW \
+         (Chrome: `=== g.contentWindow`); ours is the ELEMENT. If this reads `false`, check that \
+         it became the WINDOW and not merely `undefined` — then assert \
+         `window['two'] === g.contentWindow` here instead",
+    ),
+    (
+        "outOfRange:undefined",
+        "an index past the end is `undefined`, not a fabricated window — the honest answer, and the \
+         one a `for` loop's bound check relies on",
+    ),
+    ("selfLen:true", "`self.length` and `window.length` agree"),
+    (
+        "idxEnumerable:false",
+        "⚠ A DELIBERATE, PINNED DIVERGENCE. Chrome's frame indices are ENUMERABLE own properties of \
+         the WindowProxy so `Object.keys(window)` contains \"0\"; ours are non-enumerable, because \
+         making them enumerable puts every index into `Object.keys` and every `for…in` over the \
+         global — a larger lie than the one it fixes, and one that breaks library feature-sniffing \
+         rather than a frame walk. If this reads `true`, the trade was taken: say so here",
+    ),
+    (
+        "lenIsAccessor:true",
+        "⭐⭐ `window.length` is a GETTER, not a data property — so it recomputes on every read and \
+         a frame created by script after this file was evaluated is counted without any lifecycle \
+         pass. It is also what EXTENDS the index range, which makes the ordinary loop \
+         `for (i=0;i<window.length;i++) frames[i]` correct by construction: reading the bound is \
+         what creates the indices the loop is about to walk. A data property would freeze both at \
+         the count that existed when the prelude ran, and every static-markup row above would still \
+         pass",
+    ),
+    (
+        "idxIsAccessor:true",
+        "…and so is each index, over a LIVE query — so a frame that is removed makes its index read \
+         `undefined` rather than hand back a detached window. The pair of rows is the design; \
+         nothing else in this gate can tell a live getter from a snapshot",
+    ),
+];
 
 const CLAIMS: &[(&str, &str)] = &[
     (

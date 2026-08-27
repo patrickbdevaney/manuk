@@ -8278,3 +8278,29 @@ question in the horizontal code.
 ⚠ The check that would have found it is **the same box with and without the property**: an ordinary
 block fills, a vertical one hugs, and the two must NOT be the same number. Every earlier fixture for
 this property gave the box an EXPLICIT width — which pins the axis under test and cannot fail.
+
+---
+
+## t1349 — the frame you could only reach if you knew its name
+
+`window.frames[0]`, `window.length`, `top.frames[i]`. This is how an embedder talks to frames it did
+not name, and it is the whole of cross-frame messaging:
+
+- **the ad slot / analytics beacon** — `for (var i=0;i<window.length;i++) frames[i].postMessage(cmd,'*')`;
+- **the "am I framed, and do I frame anyone" check** — `if (window.length)`, which answered NO on a
+  page with two frames;
+- **the payment / OAuth hand-off** — `top.frames[0].location = redirectUrl`.
+
+All of them read `undefined`, because only NAMED access existed. A frame's name belongs to the
+frame's author; its index belongs to the page — and the page is who is doing the reaching.
+
+⭐⭐⭐ **The class, and it is one this ledger keeps meeting from new angles: `typeof` CANNOT SEE A
+WRONG ANSWER OF THE RIGHT TYPE.** The first probe of this surface asked `typeof window['two']` and
+read `object` — which reads as *"named access works"*. It does not. That object is the `<iframe>`
+ELEMENT, where the spec (and Chrome) give the frame's WINDOW. The probe that found it asked
+`window['two'] === g.contentWindow`, and the difference between the two probes is the difference
+between a survey and a measurement.
+
+⚠ The check that finds this whole family is **IDENTITY, not TYPE**: never `typeof x`, always
+`x === <the specific object it is supposed to be>`. Every row of this tick's gate is written that way,
+and it is why the gate could report a capability landed AND a second gap found in the same pass.

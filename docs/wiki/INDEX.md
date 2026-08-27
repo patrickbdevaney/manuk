@@ -1589,6 +1589,7 @@
   - L2961 · A mis-placed box is a SHAPE defect; it becomes an I3 defect only when the reported box and the hittable region come apart (t878)
   - L2973 · The finding that came out of building it
   - L3005 · An event-handler CONTENT ATTRIBUTE is the event-handler IDL PROPERTY (t1346)
+  - L3059 · window.frames[i] and window.length — the indexed half of the frame tree (t1349)
 
 ## JS ENGINE — SpiderMonkey/mozjs integration realities
 `docs/wiki/js-engine.md`
@@ -2382,4 +2383,4 @@
   - L231 · Both named mechanisms are subsystem work
 
 ---
-2289 sections across 22 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+2290 sections across 22 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.

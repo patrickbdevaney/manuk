@@ -89961,15 +89961,55 @@ distinct failure strings between them, i.e. nothing was hiding behind them.
 **Regression sweep.** Full `manuk-page` suite (not the wall's 19): **509 of 509 green**.
 `css/css-sizing` and `css/css-position` re-run and byte-identical to the control.
 
-### ⚠ FOR THE OBSERVER — `manuk-shell` FALSE-RED IN THE WALL, TWICE, HARNESS-SIDE
+### ⚠ FOR THE OBSERVER — `manuk-shell` FALSE-RED IN THE WALL, THREE TIMES, AND IT IS THE t118 RACE
 
-`verify.sh` reported `✗ manuk-shell tests FAILED` on the landing attempt for BOTH t1347 and t1348.
-Run directly on the same tree, immediately after, `cargo test -p manuk-shell` is **77 passed, 0
-failed**, both times, and a plain re-run of `tick.sh` then goes green (t1347 landed on the second
-attempt; the wall's own gate time fell 314s → 47s, i.e. the second run was warm). Nothing in either
-tick touches `shell/`. Two occurrences is a pattern, not a flake: it costs a full extra wall each
-time. This is harness territory (`scripts/` is observer-owned), so it is a note and not a change —
-recorded here per the scope rule rather than debugged.
+`verify.sh` reported `✗ manuk-shell tests FAILED` on the FIRST landing attempt for t1347, t1348 and
+t1349, and passed on the immediate re-run every time. Nothing in any of those ticks touches `shell/`.
+Three occurrences is a pattern, not a flake, and it costs a full extra wall each time.
+
+Reproduced to the exact invocation: `cargo test -q -p manuk-shell -- --nocapture` — verify.sh:114,
+character for character — is **77 passed, 0 failed** when run ALONE. It only REDs inside the wall,
+where `_launch` starts it concurrently with the other gates, and only on the COLD attempt (the
+re-run's gate time is 43-47s against the first attempt's 174-314s, i.e. it goes green exactly when
+everything is already built).
+
+That is the race `verify.sh`'s own comment at :88-96 describes and says the prewarm loop fixed — *"the
+isolated shell gates (G_RUNTIME_COUNT/G_INTERACT) intermittently false-RED under that [build-lock]
+race … the agent then re-runs the whole wall 3-4x to prove it was a race and not a regression — ~40
+min/tick of pure waste, and a flaky gate that teaches the loop to distrust a RED."* The prewarm is
+`cargo test --no-run … || true`, so a prewarm that has not finished (or that fails silently) leaves
+`_launch shell` racing the build again. The predicted failure mode is happening, verbatim, including
+the "distrust a RED" part.
+
+`scripts/` is observer-owned, so this is a note and not a change — recorded per the scope rule.
+
+### ⚠⚠ AND THE SECOND HALF OF THE SAME PROBLEM — `LAST_WALL_TIME` CANNOT RE-BANK ON THIS BOX
+
+Chasing the shell false-RED above, I pre-ran `verify.sh` to see the failure — which my own notes say
+never to do — and it cost this tick a landing cycle, in a way worth writing down because it is a
+STANDING condition and not my mistake alone.
+
+`STATUS.md` carries `LAST_WALL_TIME: 997s` against a 245s ceiling. It has carried it all session, and
+five ticks landed anyway, because `ratchet.sh` reports it as **ADVISORY** when the receipt measured a
+different tree: *"a green receipt, but it measured a different tree — this figure is not trusted and
+will NOT block."* Pre-running verify made the receipt match the tree, the staleness escape vanished,
+and the ratchet blocked on a number no run this session produced.
+
+The honest fix is one warm verify on a quiet box, and it **cannot be taken here**.
+`status-update.sh:44` refuses to bank a wall when the receipt's `load1 >= 3.0` (observer, tick 486 —
+correctly, since a contended gate phase balloons ~10x). The receipt this session banked reads:
+
+```text
+   result: green   seconds: 52   total_seconds: 55   disk_pct: 78   load1: 9.95
+```
+
+**52 seconds, green, on a healthy disk — and unbankable, because `load1` was 9.95.** Waiting it out
+does not work: load fell 8.28 → 4.30 → 3.99 → 4.66 over ~25 minutes and stopped there, because the
+disk-hygiene cron now runs `*/1` and each pass spawns three `find`s at ~100% CPU. On a box with a
+per-minute `find` cron, `load1 < 3.0` is close to unreachable, so the wall mark is **permanently
+un-re-bankable** and the loop is one accidental `verify.sh` away from a hard block, every tick.
+
+Both halves are harness-owned (`scripts/`, cron). Noted, not touched.
 
 **NEXT.** (a) The second mechanism behind `grid-align-baseline-flex-002` — a flex box's block sizing
 inside a transposed subtree, now the visible one at `got 185`. (b) `css-grid/grid-lanes` (1,248) is
@@ -89979,3 +90019,122 @@ each `[name]` one track early (`[a] 10px 1px [b]` for `10px [a] 1px 2px [b]`) �
 ~30 subtests. (d) t1294's `minmax(auto, <smaller>)` refusal RE-CHECKED this tick against taffy's
 CHANGELOG at 0.12.1: still not fixed upstream, refusal stands, ~312 grid subtests parked. (e) The
 t1346 standing audit: gates asserting a REASONED reference value. (f) I3's mechanical debt.
+
+## t1349 — the frame you could only reach if you knew its name, and a Bar-0 the gate could not carry
+
+TICK SHAPE: capability — `window.frames[i]` / `window.length`, the indexed half of the frame tree.
+Board re-run at the top of this tick and diffed against t1348's copy: **unchanged** except its own
+tally. ⚠ **WPT MOVEMENT: NONE, and none is claimed** — see the pricing section; this tick buys a
+capability and zero decimals, which is what the mandate asks for and is reported as such.
+
+### HOW THE TARGET WAS FOUND — A SURVEY THAT SAID "DO NOT GRIND THIS"
+
+The board's #2 starred row is `css/css-values` (4,167 failing, 47.1%). Dumped fresh, its 4,703
+failures are **3,219 in `calc-size/`** alone, and the rest is `if()`, `random()`, `attr()` all-types,
+`progress()`, `sibling-index()` — 2024/2025 spec-frontier features with essentially no web adoption.
+`css/css-text` (2,361) is the same shape one area over: its `text-transform` mass is 112 `math-auto`
+(MathML) and 58 `full-size-kana`, while the core `uppercase`/`lowercase`/`capitalize` rows pass.
+
+⭐ **That is a finding about the BOARD, not just about a tick.** Two of the largest ★CSS-LAYOUT rows
+are spec-frontier areas whose failures cannot move the daily-driver bar, and the raw
+`failing`-count ordering cannot see the difference. `css/css-values` at 47.1% reads like a core gap
+and is 76% one unshipped function.
+
+So the search moved to the most anomalous number on the board instead: **`domparsing` at 18.1%**.
+Its failures are 730 `tentative/` (streaming-parser API) and 144 in four
+`DOMParser-parseFromString-url*` files, all dying on ONE message:
+
+```text
+   TypeError: can't access property "DOMParser", frames[0] is undefined
+```
+
+### THE CAPABILITY
+
+`window.length` and `window[0]` did not exist. Named access did. Headless-Chrome-measured:
+
+```text
+                                 Chrome    before      after
+   typeof window.frames          object    object     object
+   window.frames.length               2  undefined         2
+   typeof window.frames[0]       object  undefined    object
+   typeof window[0]              object  undefined    object
+   window.length                      2  undefined         2
+   frames[0].parent === window     true  TypeError      true
+   frames[0].document…text          'a'  TypeError       'a'
+   window.frames === window        true      true       true
+```
+
+⚠ `window.frames === window` already held, so ONE mechanism serves both spellings. The indices are
+**accessors over a live query, and `length`'s getter extends the accessor range before answering** —
+which makes `for (i=0;i<window.length;i++) frames[i]` correct by construction, because reading the
+bound is what creates the indices the loop is about to walk. Intercepting an arbitrary index would
+otherwise mean making the global a `Proxy`, i.e. taxing every property read on every page.
+
+**Proven RED**, four mutations, four distinct arms: no `length` → `len:2`; no index accessors →
+`idx0Type:object`; the index getter ignoring its own index → `idx1IsTheOther:true`; `length` as a
+DATA property → `len:2` again, frozen at the zero frames that existed when the prelude ran (which is
+precisely the bug the accessor design exists to avoid, and every static-markup row still passes it).
+
+### ⭐⭐⭐ A SECOND GAP, FOUND BECAUSE THE FIRST PROBE LOOKED LIKE A PASS
+
+The first probe asked `typeof window['two']` and read `object` — *"named access works"*. It does not.
+That object is the `<iframe>` **ELEMENT**. HTML's named access on the Window object says a name
+matching a child browsing context resolves to that context's WindowProxy and OUTRANKS the element;
+Chrome returns `g.contentWindow`, we return `g`.
+
+**A wrong answer of the RIGHT TYPE, and `typeof` is exactly the question that cannot see it.** The
+probe that found it asks `window['two'] === g.contentWindow`. Every row of the new gate is written as
+an IDENTITY comparison for this reason — `idx0IsTheFrame`, `framesIdx0`, `idx1IsTheOther`,
+`reachThrough`, `parentThrough` — and that is why one pass could both land a capability and find a
+second gap. Pinned as `byNameIsElement:true` with Chrome's answer beside it.
+
+### ⚠⚠⚠ A BAR-0 CRASH THE GATE COULD NOT CARRY, WITH A SHARPER REPRODUCER THAN THE ONE ON RECORD
+
+The probe originally APPENDED an `<iframe>` and read `window.length` back. **Every claim passed** and
+the process then died at teardown:
+
+```text
+   cannot access a Thread Local Storage value during or after destruction: AccessError
+   fatal runtime error: thread local panicked on drop, aborting
+   process didn't exit successfully: … (signal: 11, SIGSEGV)
+```
+
+**Deterministic over five runs**; deleting those three lines makes it green. Reverting `iframe_js.rs`
+alone does NOT give a clean control (the gate then fails its `len:2` assertion before ever reaching
+the append), and two attempts at a smaller reduction were **vacuous** — their probes produced empty
+output, i.e. never ran, which is the "a probe that cannot fail measured nothing" trap and is recorded
+rather than presented as a negative result.
+
+What IS established: **a page holding both a `render_iframe`-installed frame and a script-created one
+does not survive its own teardown**, and the crash is at teardown, after every assertion has passed.
+That is the SpiderMonkey-teardown bug the constitution check carries as steer #1 — *"`manuk-js`'s 21
+tests are off the wall, it is the WPT runner's `ACCUM` bucket, and it forces one-`Page`-per-binary"* —
+and this is a sharper reproducer than the one it had. **A gate that crashes is not a gate**, so the
+dynamic claim is asserted by the SHAPE of the property descriptor instead (`lenIsAccessor`,
+`idxIsAccessor`), which proves the live-getter design and needs no second frame.
+
+### ⚠ PRICING: ZERO, AND WHY
+
+`domparsing` 234/1294, `dom` 8161/10503, `html/dom` 56454/59922 — all **unchanged**. The four
+`DOMParser-parseFromString-url*` files still report `frames[0] is undefined`. Their frame is
+`src=`-FETCHED, and under the WPT runner a fetched frame has no installed document when the test
+runs, so `contentWindow` is falsy and the frame is not counted.
+
+Per HTML an `<iframe>` has a child browsing context from the moment it is **INSERTED** — initially
+`about:blank` — so the count must include a frame whose `src` has not landed. t1346 established we
+DO give a bare `<iframe>` its initial `about:blank`; a `src`-bearing one apparently waits for the
+fetch. That is the follow-on and a different mechanism from the index this tick added.
+
+⭐ **A capability that moves no number is still a capability, and saying so is the point.** The
+alternative — reporting the 144 subtests this "should" have unlocked — is the failure-signature
+over-claim t1348 already caught once.
+
+**Regression sweep.** Full `manuk-page` suite: **509 of 509 green**, no SIGSEGV.
+
+**NEXT.** (a) ⭐ An `<iframe src=…>` must have a browsing context from INSERTION, not from load —
+that is what makes `frames[0]` non-`undefined` in WPT and is worth the 144 subtests this tick did not
+take. (b) `window['name']` must resolve to the frame's WINDOW, not the element (pinned this tick).
+(c) The teardown Bar-0 above, with the reproducer now in the gate's own comment. (d) ⚠ FOR THE
+OBSERVER: the board's `failing`-count ordering cannot distinguish a core area from a spec-frontier
+one — `css/css-values` is 76% `calc-size`. (e) t1348's residues: the flex-in-transposed-subtree
+sizing, `css-grid/grid-lanes`, the grid line-name serialization off-by-one. (f) I3's mechanical debt.

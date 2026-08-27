@@ -80,6 +80,7 @@
 /// Installed once per global, after the DOM bindings.
 pub const IFRAME_JS: &str = r#"
 (function () {
+  var G = globalThis;
   var EP = (typeof Element !== 'undefined' && Element.prototype) || null;
   if (!EP || !EP.__iframeDoc) return;
 
@@ -221,5 +222,84 @@ pub const IFRAME_JS: &str = r#"
       }
     });
   }
+
+  // ── ⚠⚠⚠ **`window.frames[0]` AND `window.length` — THE INDEXED HALF OF THE FRAME TREE.**
+  //
+  // Named access already worked (`window['one']` for `<iframe name=one>`), and INDEXED access did
+  // not exist at all: `window.frames.length` and `window[0]` were both `undefined`. That is the
+  // half every real script uses, because a frame's name is the embedder's business and its index is
+  // the embedder's own:
+  //
+  //   for (var i = 0; i < window.length; i++) { window.frames[i].postMessage(msg, '*'); }
+  //   if (window.length) { /* I have child frames */ }
+  //   top.frames[0].location = …
+  //
+  // Measured against headless Chrome on two named `<iframe srcdoc>`s:
+  //
+  // ```text
+  //                              Chrome    before
+  //   typeof window.frames       object    object   ✓
+  //   window.frames.length            2  undefined  ✗
+  //   typeof window.frames[0]    object  undefined  ✗
+  //   typeof window[0]           object  undefined  ✗
+  //   window.length                   2  undefined  ✗
+  //   frames[0].parent === window  true  TypeError  ✗
+  //   frames[0].document…text       'a'  TypeError  ✗
+  //   typeof window['one']       object    object   ✓  named access, already there
+  //   window.frames === window     true      true   ✓
+  // ```
+  //
+  // ⚠ `window.frames === window` already held, so ONE mechanism serves both spellings: defining the
+  // indices on the global is what makes `frames[0]` work.
+  //
+  // ⭐ **THE INDICES ARE ACCESSORS OVER A LIVE QUERY, AND `length` SYNCS THEM.** A frame added by
+  // script after this file ran must still be reachable, and there is no way to intercept an
+  // arbitrary index on the global without making the global a Proxy (which would tax every property
+  // read on every page). So each index is an accessor that re-reads the DOM when called — always
+  // live — and `length`'s getter EXTENDS the accessor range before answering. That makes the loop
+  // above correct by construction: reading `length` is what creates the indices it is about to be
+  // used to walk. The high-water mark only grows, so an index that once existed keeps answering
+  // (`undefined` once the frame is gone), which is what a stale reference should read.
+  //
+  // ⚠ NON-ENUMERABLE, and it is a deliberate small divergence: Chrome's are enumerable own
+  // properties of the WindowProxy. Making ours enumerable would put `"0"`, `"1"`, … into
+  // `Object.keys(window)` and every `for…in` over the global — a much larger lie than the one it
+  // fixes, and one that breaks library feature-sniffing rather than a frame walk.
+  //
+  // ⚠ Only frames with a live browsing context are counted: `contentWindow` is `undefined` for a
+  // frame whose document is not installed, and the spec counts child browsing contexts, not
+  // elements. A `<frame>` inside a `<frameset>` counts the same way, which is why both tags are
+  // queried.
+  function __frameWins() {
+    try {
+      var all = document.querySelectorAll('iframe, frame');
+      var out = [];
+      for (var i = 0; i < all.length; i++) {
+        var w = all[i].contentWindow;
+        if (w) { out.push(w); }
+      }
+      return out;
+    } catch (e) { return []; }
+  }
+  var __hwm = 0;
+  G.__syncFrames = function () {
+    var n = __frameWins().length;
+    while (__hwm < n) {
+      (function (i) {
+        Object.defineProperty(G, String(i), {
+          configurable: true,
+          enumerable: false,
+          get: function () { return __frameWins()[i]; }
+        });
+      })(__hwm);
+      __hwm++;
+    }
+    return n;
+  };
+  Object.defineProperty(G, 'length', {
+    configurable: true,
+    enumerable: false,
+    get: function () { return G.__syncFrames(); }
+  });
 })();
 "#;

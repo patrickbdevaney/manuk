@@ -3053,3 +3053,76 @@ listener is unreadable, unreplaceable and unremovable.
 
 **Gate.** `G_IFRAME_LOAD_EVENT`, whose `onloadProp:undefined` row had been pinned since t1167 as an
 explicitly named gap — the pin worked exactly as designed and this is the tick that came back to it.
+
+---
+
+## `window.frames[i]` and `window.length` — the indexed half of the frame tree (t1349)
+
+**Symptom.** `window.length` and `window[0]` were both `undefined` on a page with frames. Named
+access existed (`window['two']`), the index did not — and the index is the half every real script
+uses, because a frame's *name* is the embedder's business and its *index* is the page's own:
+
+```js
+for (var i = 0; i < window.length; i++) { window.frames[i].postMessage(msg, '*'); }
+if (window.length) { /* I have child frames */ }
+top.frames[0].location = …
+```
+
+Headless-Chrome-measured on two `<iframe>`s:
+
+```text
+                                 Chrome    before
+   typeof window.frames          object    object     ✓
+   window.frames.length               2  undefined    ✗
+   typeof window.frames[0]       object  undefined    ✗
+   typeof window[0]              object  undefined    ✗
+   window.length                      2  undefined    ✗
+   frames[0].parent === window     true  TypeError    ✗
+   frames[0].document…text          'a'  TypeError    ✗
+   window.frames === window        true      true     ✓
+```
+
+⚠ `window.frames === window` already held, so **one mechanism serves both spellings**: defining the
+indices on the global is what makes `frames[0]` work.
+
+**Implementation — accessors over a live query, and `length` syncs them.** A frame added by script
+after the prelude ran must still be reachable, and intercepting an arbitrary index on the global
+would mean making the global a `Proxy` — a tax on every property read on every page. So each index
+is an accessor that re-reads the DOM when called, and **`length`'s getter extends the accessor range
+before answering**. That makes the ordinary loop correct by construction: reading the bound is what
+creates the indices the loop is about to walk. The high-water mark only grows, so an index that once
+existed keeps answering — `undefined` once its frame is gone, which is what a stale reference should
+read.
+
+⚠ **NON-ENUMERABLE, a deliberate divergence.** Chrome's indices are enumerable own properties of the
+WindowProxy, so `Object.keys(window)` contains `"0"`. Making ours enumerable would put every index
+into `Object.keys` and every `for…in` over the global — a larger lie than the one it fixes, and one
+that breaks library feature-sniffing rather than a frame walk.
+
+**⚠⚠⚠ A NEWLY-FOUND RESIDUE THAT LOOKED LIKE A PASS.** The first probe asked
+`typeof window['two']` and read `object`, which reads as *"named access works"*. It does not: that
+object is the `<iframe>` **element**. HTML's named access on the Window object says a name matching a
+child browsing context resolves to that context's WindowProxy, and it outranks the element — Chrome
+returns `g.contentWindow`, we return `g`. **A wrong answer of the right type**, and `typeof` is
+exactly the question that cannot see it. Pinned in the gate as `byNameIsElement:true`.
+
+**⚠ WPT MOVEMENT: NONE, and none is claimed.** `domparsing`'s four
+`DOMParser-parseFromString-url*` files fail on literally this error (`frames[0] is undefined`, 36
+subtests each) and did **not** flip. Their frame is `src=`-fetched, and under the WPT runner a
+fetched frame has no installed document at the time the test runs, so `contentWindow` is falsy and
+the frame is not counted. Per HTML an `<iframe>` has a child browsing context from the moment it is
+INSERTED — initially `about:blank` — so the count should include a frame whose `src` has not landed
+yet. That is the follow-on, and it is a different mechanism from the index this section adds.
+
+**Gate.** `G_FRAME_WINDOW_SURFACE`, +14 claims. Proven red by four mutations: no `length` → `len:2`;
+no index accessors → `idx0Type:object`; index getter ignoring its own index → `idx1IsTheOther:true`;
+`length` as a data property → `len:2` (frozen at the zero frames present when the prelude ran).
+
+⚠⚠⚠ **AND A BAR-0 FINDING THE GATE CANNOT CARRY.** The probe originally APPENDED an `<iframe>` and
+read `window.length` back. Every claim passed and the process then died at teardown — `cannot access
+a Thread Local Storage value during or after destruction`, then SIGSEGV, **deterministic over five
+runs**; deleting those three lines makes it green. A page holding BOTH a `render_iframe`-installed
+frame and a script-created one does not survive its own teardown. That is the SpiderMonkey-teardown
+bug the constitution check carries as steer #1, and this is a sharper reproducer than the one it had.
+The gate asserts the live-getter design by the SHAPE of the property descriptor instead, which needs
+no second frame.
