@@ -147,7 +147,12 @@ fn map_justify(j: CssJustify) -> Option<JustifyContent> {
 
 fn map_align(a: CssAlign) -> AlignItems {
     match a {
-        CssAlign::Stretch => AlignItems::STRETCH,
+        // `normal` behaves as `stretch` in both formatting contexts for an ORDINARY box, which is
+        // every box taffy is asked about here. The one case where the two differ — a replaced grid
+        // item with an intrinsic size — cannot be expressed in taffy's per-item enum from the item's
+        // own style alone, so it is handled where the parent is known: see the grid-item pass in
+        // `add`. Collapsing them here keeps taffy's behaviour bit-identical to before this variant.
+        CssAlign::Normal | CssAlign::Stretch => AlignItems::STRETCH,
         CssAlign::FlexStart => AlignItems::FLEX_START,
         CssAlign::FlexEnd => AlignItems::FLEX_END,
         CssAlign::Center => AlignItems::CENTER,
@@ -946,6 +951,56 @@ impl<'m> TaffyDom<'m> {
         } else {
             Vec::new()
         };
+        // ── ⚠⚠⚠ **A REPLACED GRID ITEM WITH AN INTRINSIC SIZE DOES NOT STRETCH.** CSS Box
+        //    Alignment: `normal` behaves as `stretch` for a grid item, EXCEPT for a box with an
+        //    intrinsic size or ratio, where it behaves as `start`. Every avatar, logo, icon,
+        //    thumbnail and chart `<canvas>` sitting in a grid cell was being inflated to the cell —
+        //    Chrome-measured, a 16x16 `<img>` in a 40x40 grid:
+        //
+        //    ```text
+        //                                              Chrome    before
+        //      <img src=16x16>                          16x16     40x40   ✗
+        //      <canvas width=16 height=16>              16x16     40x40   ✗
+        //      align-items:normal      (explicit)       16x16     40x40   ✗
+        //      align-items:stretch     (explicit)       40x40     40x40   ✓  the keyword still wins
+        //      align-self:stretch      (on the item)    40x40     40x40   ✓
+        //      align-items:center                       16x16     16x16   ✓  never stretched anyway
+        //      plain <div>                              40x40     40x40   ✓  NOT replaced
+        //      <div style=aspect-ratio:1/1>             40x40     40x40   ✓  ratio alone is NOT enough
+        //      <img style=width:8px>                     8x8       8x8    ✓  a SPECIFIED size already won
+        //    ```
+        //
+        //    ⚠ The `aspect-ratio` row is the one that rules out the obvious predicate. A non-replaced
+        //    box with a declared ratio DOES stretch, so the test cannot be "has a ratio" — it is "has
+        //    an INTRINSIC size", which is exactly what `width_is_natural`/`height_is_natural` mark
+        //    (`manuk_css::fill_natural_size` is their one producer, for a decoded bitmap and for a
+        //    `<canvas>`'s dimension attributes alike).
+        //
+        //    ⚠ Applied HERE, not in `to_taffy_style`, for two reasons: the rule is GRID-only — a flex
+        //    item's cross axis stretches an image and Chrome agrees (a 16x16 `<img>` in a 40x40 flex
+        //    row is 40x40) — and `normal` is only distinguishable from `stretch` while the CONTAINER's
+        //    style is in hand. An item that declares its own `align-self`/`justify-self` is left
+        //    alone: the keyword outranks the default, which is the `align-self:stretch` row above.
+        if container
+            && matches!(cs.display, CssDisplay::Grid | CssDisplay::InlineGrid)
+            && (cs.align_items == CssAlign::Normal || cs.justify_items == CssAlign::Normal)
+        {
+            for &child in &children {
+                let cdom = self.nodes[usize::from(child)].dom;
+                let ccs = &styles[&cdom];
+                if !(ccs.width_is_natural || ccs.height_is_natural) {
+                    continue;
+                }
+                let n = &mut self.nodes[usize::from(child)];
+                if cs.align_items == CssAlign::Normal && ccs.align_self.is_none() {
+                    n.style.align_self = Some(AlignItems::START);
+                }
+                if cs.justify_items == CssAlign::Normal && ccs.justify_self.is_none() {
+                    n.style.justify_self = Some(AlignItems::START);
+                }
+            }
+        }
+
         // grid-template-areas: resolve each child's `grid-area: name` against this
         // container's named rects into explicit line placement. Our taffy path exposes no
         // ASCII-art areas API, so we pre-resolve names to lines here (the container has the

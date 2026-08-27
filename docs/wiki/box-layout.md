@@ -10895,3 +10895,65 @@ caller's gate said so, three ticks later, to nobody, because it is not one of th
 
 **Gate.** `G_INTRINSIC_MIN_MAX`, 14 rows → 22. Proven red by three mutations, one per keyword:
 `MinContent` → `#wx_min` 400, `MaxContent` → `#wn_max` 10, `FitContent` → `#wx_fit` 400.
+
+---
+
+## `normal` is not `stretch`: a replaced grid item does not inflate to its cell (t1345)
+
+**Symptom.** A 16x16 `<img>` in a `display:grid` cell of 40x40 rendered **40x40**. Every avatar,
+logo, icon, thumbnail and chart `<canvas>` placed in a grid cell was scaled up to the track, at the
+wrong aspect ratio whenever the track was not square. Headless-Chrome-measured on a 40x40 grid:
+
+```text
+                                                     Chrome    before
+   <img src=16x16>                                    16x16     40x40   ✗
+   <canvas width=16 height=16>                        16x16     40x40   ✗
+   align-items:normal     (explicit)                  16x16     40x40   ✗
+   align-items:stretch    (explicit)                  40x40     40x40   ✓  the keyword still wins
+   align-self:stretch     (on the item)               40x40     40x40   ✓
+   align-items:center                                 16x16     16x16   ✓
+   <div>x</div>                                       40x40     40x40   ✓  NOT replaced
+   <div style="aspect-ratio:1/1">x</div>              40x40     40x40   ✓  a ratio is NOT enough
+   <img style="width:8px">                              8x8       8x8   ✓  a SPECIFIED size already won
+   …the same <img> in a 40x40 FLEX row                40x40     40x40   ✓  grid-only rule
+```
+
+**Cause — two CSS values were one enum variant.** CSS Box Alignment: `normal` behaves as `stretch`
+for a grid item, **except** for a box with an intrinsic size, where it behaves as `start`. Our
+`AlignItems` had no `Normal`; the initial value *was* `Stretch`, `parse_item_alignment`'s catch-all
+returned `Stretch`, and Stylo's `NORMAL` (flag 1) and `STRETCH` (flag 11) both fell into one `_` arm.
+With one variant the question cannot be asked, so taffy was handed `STRETCH` for every grid container
+and every `auto`-sized item filled its cell.
+
+**Fix, in two halves.**
+
+1. `AlignItems::Normal` — the CSS initial value, parsed from the `normal` keyword and from Stylo's
+   flags `0`/`1`, with `11` now landing on `Stretch` alone. `map_align` collapses both to taffy's
+   `STRETCH`, so **taffy's behaviour is bit-identical to before**; the variant exists to be asked
+   about, not to change what is sent.
+2. A grid-item pass in `TaffyTree::add`, where the CONTAINER's style is in hand: for each child that
+   is a replaced element with an intrinsic size and does not declare its own `align-self`/
+   `justify-self`, set that axis to `START` — but only if the container's `align-items`/
+   `justify-items` is `Normal`.
+
+⚠ **Applied at the parent, not in `to_taffy_style`, and both reasons are load-bearing.** The rule is
+GRID-only — Chrome stretches the same image in a flex row, because the default cross-axis stretch
+fills the height and the ratio then carries the width — and `normal` is only distinguishable from
+`stretch` while the container's own style is readable.
+
+⚠⚠ **The predicate is "has an INTRINSIC size", not "has an aspect ratio".** A `<div>` with a declared
+`aspect-ratio:1/1` DOES stretch in Chrome. The mark is `width_is_natural`/`height_is_natural`, whose
+one producer (`manuk_css::fill_natural_size`) sets it for a decoded bitmap and for a `<canvas>`'s
+dimension attributes alike. ⭐ Written first as `aspect_ratio.is_none()`, that mutation **passed the
+whole gate** — six new Chrome-measured rows and not one of them could see it. The two `<div>` rows
+that refute it were added afterwards and cost one `Page::load` each.
+
+**Fallout, all corrections.** `getComputedStyle(el).alignItems` now reports `"normal"` for the initial
+value, which is what Chrome reports and what `G_COMPUTED_LOSSY_SEVEN` was re-pinned to. And the
+`("e","grid","150.0x100.0")` cell in `replaced_constraint_violation_table_per_formatting_context`
+**closed** — its comment blamed a missing ratio transfer in grid, and the transfer was there all
+along; the item was being stretched before the clamp was ever consulted.
+
+**Gate.** `G_INLINE_IMAGE_SIZE`, +8 rows. Proven red by four mutations: drop the pass → grid 40x40;
+drop the `Normal` guard → explicit `stretch` reads 16x16; `Normal`→`START` in `map_align` → the FLEX
+row reads 16x16; predicate on `aspect_ratio` → the `<div aspect-ratio>` row reads 16x16.

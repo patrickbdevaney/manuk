@@ -412,7 +412,12 @@ pub fn parse_item_alignment(input: &str, axis: AlignAxis) -> crate::AlignItems {
         "flex-start" | "start" | "self-start" => A::FlexStart,
         "left" if inline => A::FlexStart,
         "baseline" | "first baseline" | "last baseline" => A::Baseline,
-        _ => A::Stretch,
+        "stretch" => A::Stretch,
+        // ⚠ `normal` and every UNRECOGNISED value both land here, and that is deliberate: `normal`
+        // IS the initial value, so an unparsable declaration falling back to it is exactly the
+        // "declaration ignored" the cascade asks for. `stretch` gets its own arm above because it
+        // is the one keyword `normal` is NOT a synonym for — see `AlignItems::Normal`.
+        _ => A::Normal,
     }
 }
 

@@ -1085,12 +1085,17 @@ pub fn to_computed_style(cv: &ComputedValues) -> ComputedStyle {
         // stretch on this axis in both formatting contexts, so the mapping is exact rather than
         // approximate. Shares `map_cd` with its twin so a future value can only be added to both.
         s.align_content = map_cd(av(cv.clone_align_content().primary()));
+        // ⚠ `11` is Stylo's `STRETCH`; `1` is `NORMAL`, and `0` is `AUTO` (which reaches here only
+        // for `align-items`, where it computes to `normal`). Those two were one arm — and they are
+        // NOT synonyms: a replaced grid item with an intrinsic size aligns as `start` under
+        // `normal` and inflates to its cell under `stretch`. See `AlignItems::Normal`.
         let map_ai = |v: u8| match v {
             5 | 3 | 13 => crate::AlignItems::FlexEnd,
             6 => crate::AlignItems::Center,
             9 | 10 => crate::AlignItems::Baseline,
             4 | 2 | 12 => crate::AlignItems::FlexStart,
-            _ => crate::AlignItems::Stretch,
+            11 => crate::AlignItems::Stretch,
+            _ => crate::AlignItems::Normal,
         };
         s.align_items = map_ai(av(cv.clone_align_items().0));
         // `justify-items` — the INLINE-axis twin of `align-items`, and the default every grid item

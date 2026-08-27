@@ -188,7 +188,13 @@ const CLAIMS: &[(&str, &str)] = &[
     ),
     ("tabSize:4", "`tab-size: 4` computes to the bare number"),
     (
-        "alignItems:stretch",
+        // ⚠ WAS `alignItems:stretch`, RE-PINNED AT t1345 AND IT IS A CORRECTION, NOT A DRIFT.
+        // Chrome reports `normal` for the initial value of `align-items` (and of `justify-items`),
+        // and it reports `stretch` only when the author writes the keyword. The two were ONE
+        // variant in this cascade until a replaced grid item forced them apart — a 16x16 `<img>` in
+        // a 40x40 grid is 16x16 under `normal` and 40x40 under `stretch`. Verified on this exact
+        // page with headless Chrome: `getComputedStyle(div).alignItems === "normal"`.
+        "alignItems:normal",
         "THE RATCHET. The neighbours these were spliced in beside — a positional format template \
          where one misplaced value shifts every property after it",
     ),

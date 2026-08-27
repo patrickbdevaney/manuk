@@ -20580,8 +20580,13 @@ mod tests {
         // The cells where we still disagree with Chrome, each with the mechanism it belongs to. A
         // cell that leaves this list — in either direction — fails the test.
         let residue: &[(&str, &str, &str)] = &[
-            // grid does not transfer a `max-width` clamp back through the ratio (separate seam).
-            ("e", "grid", "150.0x100.0"),
+            // ⚠ `("e", "grid", "150.0x100.0")` LIVED HERE AND CLOSED AT t1345, and it closed from a
+            // fix that never touched the ratio transfer: the grid item was being STRETCHED to its
+            // cell before the clamp was ever consulted, so "grid does not transfer a `max-width`
+            // clamp back through the ratio" — the sentence this row carried — named the wrong seam.
+            // `normal` is not `stretch` for a replaced grid item, and once it stopped stretching the
+            // transfer that was allegedly missing turned out to be there.
+            //
             // grid's (Min,Min) arm picks the wrong axis to derive from (separate seam).
             ("f", "grid", "600.0x800.0"),
             // the abspos path's `box-sizing` deduction rounds the ratio transfer differently.
@@ -20638,7 +20643,7 @@ mod tests {
             got_set,
             want_set,
             "§10.4's constraint-violation table must match Chrome in every formatting context \
-             except the three NAMED residue cells. Divergences, with Chrome's answer:\n{}",
+             except the two NAMED residue cells. Divergences, with Chrome's answer:\n{}",
             diverged
                 .iter()
                 .map(|(id, m, got, want)| format!("  {id:>2} {m:<7} ours {got:<12} Chrome {want}"))

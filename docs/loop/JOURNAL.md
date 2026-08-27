@@ -89525,3 +89525,109 @@ fires TWICE on an `<iframe>` (`inline:2 addl:2`), which nothing on the web does.
 gates re-pinned to their Chrome-measured values, each carrying the measurement so the next reader does
 not re-derive it. (c) t1343's residue: nested orthogonal flow and the central baseline. (d) The
 `ACCUM` bucket and the 519-binary link cost, carried from t1342. (e) I3's mechanical debt, six checks.
+
+## t1345 — two CSS values that differ in one context were one enum variant
+
+TICK SHAPE: capability — a SUBSYSTEM seam (CSS Box Alignment × replaced elements), plus the second
+and third of t1344's remaining red gates. Board re-run at the top of this tick and diffed against the
+copy taken at t1344: **unchanged** (observer mandate 2026-08-21, three tracks; `css/css-grid` is the
+#1 row at 5,880 failing). This is t1344's NEXT item (a).
+
+### THE BUG: a 16x16 avatar in a 40x40 grid cell rendered 40x40
+
+`display:grid` + a small image is a comment thread, a contributor list, a dashboard, a pricing table
+and a chat roster. In all of them the picture was inflated to the whole cell, at whatever shape the
+track had. Headless-Chrome-measured on a 40x40 grid, and the table is the fix's whole specification:
+
+```text
+                                                     Chrome    before
+   <img src=16x16>                                    16x16     40x40   ✗
+   <canvas width=16 height=16>                        16x16     40x40   ✗
+   align-items:normal     (explicit)                  16x16     40x40   ✗
+   align-items:stretch    (explicit)                  40x40     40x40   ✓  the keyword still wins
+   align-self:stretch     (on the item)               40x40     40x40   ✓
+   align-items:center                                 16x16     16x16   ✓
+   <div>x</div>                                       40x40     40x40   ✓  NOT replaced
+   <div style="aspect-ratio:1/1">x</div>              40x40     40x40   ✓  a ratio is NOT enough
+   <img style="width:8px">                              8x8       8x8   ✓  a SPECIFIED size already won
+   …the same <img> in a 40x40 FLEX row                40x40     40x40   ✓  the rule is GRID-only
+```
+
+⭐⭐⭐ **THE CAUSE IS THAT THE QUESTION COULD NOT BE ASKED.** CSS Box Alignment says `normal` behaves
+as `stretch` for a grid item **except** for a box with an intrinsic size, where it behaves as `start`.
+Our `AlignItems` had no `Normal`: the initial value *was* `Stretch`, the parser's catch-all returned
+`Stretch`, and Stylo's `NORMAL` (flag 1) and `STRETCH` (flag 11) shared one `_` arm. The two behave
+identically in flexbox and identically in grid for every box that is not replaced — which is nearly
+every box — so the conflation read as a normalisation and survived hundreds of ticks. The single case
+where they differ is the one the component web puts in a grid cell.
+
+The fix is two halves, and the first one changes nothing on purpose: `AlignItems::Normal` exists to be
+ASKED about, and `map_align` still collapses it to taffy's `STRETCH`, so taffy's behaviour is
+bit-identical. The second half is a pass in `TaffyTree::add` — the only place the CONTAINER's style is
+in hand, which is required twice over: the rule is grid-only (Chrome stretches the same image in a
+flex row) and `normal` cannot be told from `stretch` by reading the item alone.
+
+⚠⚠ **THE PREDICATE IS "HAS AN INTRINSIC SIZE", NOT "HAS AN ASPECT RATIO", AND THE GATE COULD NOT SEE
+THE DIFFERENCE.** Written as `aspect_ratio.is_none()`, the mutation **passed the entire gate** — six
+new Chrome-measured rows and not one of them could distinguish it, because every replaced element in
+the fixture has both properties. The refuting row is a NON-replaced box: `<div style="aspect-ratio:1/1">`
+in a grid stretches in Chrome. Two `<div>` rows were added and the mutation went red. This is t1343's
+own lesson arriving one tick later: **an arm that cannot distinguish the failures it covers has one
+assertion's cost and no assertion's value.**
+
+**Proven RED**, four mutations, each on a different arm:
+
+```text
+   drop the grid-item pass entirely       the plain grid row reads 40x40
+   drop the `== Normal` guard             an EXPLICIT `align-items:stretch` reads 16x16
+   `Normal -> START` in map_align         the FLEX row reads 16x16   (the grid-only boundary)
+   predicate on `aspect_ratio`            `<div style="aspect-ratio:1/1">` reads 16x16
+```
+
+### ⚠ A SECOND PINNED RESIDUE CLOSED, AND ITS COMMENT NAMED THE WRONG SEAM
+
+`replaced_constraint_violation_table_per_formatting_context` carried three cells where we disagree
+with Chrome. `("e","grid","150.0x100.0")` is gone. Its comment read *"grid does not transfer a
+`max-width` clamp back through the ratio (separate seam)"* — and the transfer was there the whole
+time. The item was being STRETCHED to its cell before the clamp was ever consulted, so the symptom
+was attributed to the mechanism that runs *after* the one that was broken. ⭐ **A residue's stated
+cause is a hypothesis wearing a fact's clothes**; this one survived because nothing ever falsified it.
+
+`getComputedStyle(el).alignItems` also moves from `"stretch"` to `"normal"`, which is what Chrome
+reports for the initial value — verified on the page itself, not inferred. `G_COMPUTED_LOSSY_SEVEN`
+is re-pinned with the measurement in its comment.
+
+### THE THIRD RED GATE: `g_replaced_ratio` ASSERTED A NUMBER CHROME DOES NOT PRODUCE
+
+t1344 measured this and this tick rewrites it. The gate's `#i` row reasoned, in prose citing CSS2.1
+§10.4, that *"an 800x400 `<img>` under `max-width:100%` in a 400px column is 400x200"*. Chrome renders
+**400x400**. Six rows re-measured on the gate's own fixture, and our engine matches Chrome on all six.
+
+The asymmetry the gate had collapsed is real and is in HTML, not CSS:
+
+- **`<canvas width height>` are INTRINSIC dimensions.** CSS `width`/`height` stay `auto`, so a
+  `max-width` clamp IS a §10.4 constraint violation and the height follows: `c:400x200`.
+- **`<img width height>` are PRESENTATIONAL HINTS** onto the CSS `width`/`height` properties.
+  `height:400px` is a specified, definite height and there is no `auto` axis to transfer into:
+  `i:400x400`, and `max-width:200px` gives `n:200x400`, not 200x100.
+
+Two clamp widths against one unchanged height is a proportional transfer's clearest refutation, and
+`#s` — the same `<img>` with a real decoded 800x400 `src`, also 400x400 — is what stops `#i` being
+read as *"the attributes gave no ratio at all"*. Both rows are new.
+
+⚠ **A METHOD NOTE WORTH ITS TIME.** The two new `<div>` rows were first written as a SECOND `#[test]`
+in the same gate binary, and the pre-existing test then failed with `got: -` — its probe script had
+not run at all. Two `#[test]`s in one `manuk-page` binary means two threads constructing `Page`s, and
+SpiderMonkey does not survive it. This is the one-`Page`-per-binary constraint the constitution
+check's steer #1 names as the cause of the 519-binary link cost, met from the other side: it is not
+only a build-cost problem, it silently corrupts a gate that grows a second test.
+
+**NEXT.** (a) `g_iframe_load_event` — `load` fires TWICE on an `<iframe>` (`inline:2 addl:2`), the
+last of the three REAL red gates, and nothing on the web fires `load` twice. (b) `g_ua_control_metrics`
+and the two selector gates (`unknownStillDrops`), the last three STALE ones, each re-pinned with its
+Chrome measurement. (c) ⭐ THE STANDING ONE: 501 gate binaries, ~19 read by the wall. Four of seven
+red gates this arc were the GATE, not the engine — so the answer is not "run all 501 every tick", it
+is that a gate holding a DERIVED reference value is a liability the ratchet cannot audit. Every gate
+that pins a residue should carry the oracle command that produced it. (d) `<textarea>` as a grid item
+is 182x36 against Chrome's 40x40 — measured this tick, not fixed: it is a form control, not a replaced
+element, and it is the mirror of this bug. (e) I3's mechanical debt, six checks.

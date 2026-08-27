@@ -718,8 +718,19 @@ pub enum JustifyContent {
 }
 
 /// `align-items` — cross-axis alignment of flex items.
+///
+/// ⚠⚠⚠ **`Normal` IS NOT `Stretch`, AND THE TWO WERE ONE VARIANT.** They behave identically in
+/// flexbox and identically in grid *for ordinary boxes*, which is why conflating them survived —
+/// but a grid item that is a REPLACED element with an intrinsic size aligns as `start` under
+/// `normal` and stretches under an explicit `stretch`. Chrome-measured, a 16x16 `<img>` in a 40x40
+/// grid: `align-items:normal` → **16x16**, `align-items:stretch` → **40x40**. With one variant
+/// there is no way to ask the question, so every avatar, logo and icon in a grid cell was inflated
+/// to the cell. `normal` is also the value `getComputedStyle` must report for the initial value.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum AlignItems {
+    /// The CSS initial value. Behaves as `Stretch` everywhere except a replaced grid item with an
+    /// intrinsic size, where it behaves as `start` — see `taffy_tree`'s grid-item pass.
+    Normal,
     Stretch,
     FlexStart,
     FlexEnd,
@@ -1855,8 +1866,8 @@ impl ComputedStyle {
             box_sizing: BoxSizing::ContentBox,
             justify_content: JustifyContent::Normal,
             align_content: JustifyContent::Normal,
-            align_items: AlignItems::Stretch,
-            justify_items: AlignItems::Stretch,
+            align_items: AlignItems::Normal,
+            justify_items: AlignItems::Normal,
             flex_direction: FlexDirection::Row,
             flex_wrap: FlexWrap::NoWrap,
             row_gap: Dim::Px(0.0),
@@ -6223,6 +6234,7 @@ fn apply_declaration(s: &mut ComputedStyle, d: &Declaration, parent_fs: f32) {
                 "flex-start" | "start" | "left" => Some(AlignItems::FlexStart),
                 "baseline" => Some(AlignItems::Baseline),
                 "stretch" => Some(AlignItems::Stretch),
+                "normal" => Some(AlignItems::Normal),
                 _ => None,
             };
         }
@@ -6234,6 +6246,7 @@ fn apply_declaration(s: &mut ComputedStyle, d: &Declaration, parent_fs: f32) {
                 "flex-start" | "start" => Some(AlignItems::FlexStart),
                 "baseline" => Some(AlignItems::Baseline),
                 "stretch" => Some(AlignItems::Stretch),
+                "normal" => Some(AlignItems::Normal),
                 _ => None,
             };
         }
@@ -8186,12 +8199,18 @@ mod tests {
         let s = one("justify-content: space-between");
         assert_eq!(s.justify_content, JustifyContent::SpaceBetween);
         assert_eq!(s.align_content, JustifyContent::Normal);
+        // ⚠ The untouched twin reads `Normal`, NOT `Stretch` — that is the CSS initial value, and
+        // the two stopped being one variant at t1345 because a replaced grid item aligns as `start`
+        // under `normal` and inflates to its cell under an explicit `stretch`.
         let s = one("justify-items: center");
         assert_eq!(s.justify_items, AlignItems::Center);
-        assert_eq!(s.align_items, AlignItems::Stretch);
+        assert_eq!(s.align_items, AlignItems::Normal);
         let s = one("align-items: center");
         assert_eq!(s.align_items, AlignItems::Center);
-        assert_eq!(s.justify_items, AlignItems::Stretch);
+        assert_eq!(s.justify_items, AlignItems::Normal);
+        // …and the keyword still parses to its own variant, which is what makes the split testable.
+        assert_eq!(one("align-items: stretch").align_items, AlignItems::Stretch);
+        assert_eq!(one("align-items: normal").align_items, AlignItems::Normal);
 
         // `place-*` sets ALIGN first, then JUSTIFY; one token sets both.
         let s = one("place-content: center end");
@@ -8216,7 +8235,7 @@ mod tests {
             one("justify-items: right").justify_items,
             AlignItems::FlexEnd
         );
-        assert_eq!(one("align-items: right").align_items, AlignItems::Stretch);
+        assert_eq!(one("align-items: right").align_items, AlignItems::Normal);
 
         // `normal` and `stretch` both mean "stretch" on these axes and share one representation —
         // folding either into `flex-start` is what disabled CSS Grid §11.8 once already.

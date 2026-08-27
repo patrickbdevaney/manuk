@@ -3145,6 +3145,7 @@ fn computed_style_js(
         JustifyContent::SpaceEvenly => "space-evenly",
     };
     let ai_css = |a: AlignItems| match a {
+        AlignItems::Normal => "normal",
         AlignItems::Stretch => "stretch",
         AlignItems::FlexStart => "flex-start",
         AlignItems::FlexEnd => "flex-end",

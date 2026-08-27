@@ -8177,3 +8177,32 @@ one of the 19 the wall runs, so the loss was banked as *"nothing changed"*.
 ⚠ The check that would have found it is **the CONTROL ARM, in the caller's own vocabulary**: an
 intrinsic keyword whose answer equals the box's own `width` has not been computed, it has been
 echoed. `width:400px; max-width:min-content` reading `400` is that echo, and it is one row.
+
+---
+
+## t1345 — the avatar that filled its cell
+
+`display: grid` plus a small image is the layout of a comment thread, a contributor list, a
+dashboard, a pricing table and a chat roster. In every one of them the image was **inflated to the
+whole cell**, at whatever aspect ratio the track happened to have:
+
+- **the avatar grid** — `grid-template-columns: 32px 1fr` with an `<img>` in the first column, so a
+  16x16 or 48x48 portrait is drawn at the track's size and, when the row is taller than it is wide,
+  at the wrong shape;
+- **the logo / icon cell** — a `<canvas>` or an inline sprite in a `grid` toolbar or card header;
+- **the thumbnail rail** — a media grid where each cell holds one picture.
+
+Nothing threw and nothing was missing. The picture was there, in the right cell, at the wrong size —
+the failure mode that reads as *"the site's CSS is broken"* rather than *"the browser is"*.
+
+⭐⭐⭐ **The class: TWO CSS VALUES THAT DIFFER IN ONE CONTEXT WERE ONE ENUM VARIANT, SO THE QUESTION
+COULD NOT BE ASKED.** `align-items: normal` and `align-items: stretch` behave identically in flexbox
+and identically in grid for every box that is not replaced — which is nearly every box — so
+collapsing them looked like a normalisation and survived for hundreds of ticks. The single case where
+they differ is the one the whole component web puts in a grid cell.
+
+⚠ The check that would have found it is **the ORACLE ON THE INITIAL VALUE**:
+`getComputedStyle(el).alignItems` answered `"stretch"` where Chrome answers `"normal"`. A computed
+value that disagrees with Chrome on a property's *initial* value is not a reporting bug — it means
+the engine has no variant for the initial value, and therefore cannot distinguish it from whatever it
+was folded into.
