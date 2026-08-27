@@ -1586,6 +1586,7 @@
   - L2939 · Honest scope, and the residue that is a policy question
   - L2961 · A mis-placed box is a SHAPE defect; it becomes an I3 defect only when the reported box and the hittable region come apart (t878)
   - L2973 · The finding that came out of building it
+  - L3005 · An event-handler CONTENT ATTRIBUTE is the event-handler IDL PROPERTY (t1346)
 
 ## JS ENGINE — SpiderMonkey/mozjs integration realities
 `docs/wiki/js-engine.md`
@@ -2379,4 +2380,4 @@
   - L231 · Both named mechanisms are subsystem work
 
 ---
-2286 sections across 22 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+2287 sections across 22 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.

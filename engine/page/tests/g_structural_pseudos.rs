@@ -90,7 +90,16 @@ const HTML: &str = r##"<!doctype html><html><head><style>
     p('firstChildStill:' + ids('#p :first-child'));
     p('lastChildStill:' + ids('#p :last-child'));
     p('nthChildEven:' + ids('#p :nth-child(2n)'));
-    p('unknownStillDrops:' + ids('#p :totally-unknown-pseudo(x)'));
+    // ⚠⚠⚠ **t1346 — THIS PROBE USED TO END HERE, SILENTLY.** `ids()` calls `querySelectorAll`,
+    // which now THROWS `SyntaxError` on a genuinely invalid selector (the spec's answer, and
+    // Chrome's — measured on this fixture: `THREW:SyntaxError`). The throw aborted the script
+    // mid-sentence, so `#out` simply stopped one key early and the assertion for a MISSING key
+    // reported "expected `unknownStillDrops:0`" while the real fact was that the whole rest of the
+    // probe had vanished. An expectation written as an ABSENT value cannot tell "the value is wrong"
+    // from "nothing ran".
+    p('unknownThrows:' + (function () {
+      try { return 'no:' + ids('#p :totally-unknown-pseudo(x)'); } catch (e) { return e.name; }
+    })());
   </script>
 </body></html>"##;
 
@@ -204,7 +213,10 @@ const CLAIMS: &[(&str, &str)] = &[
          4th and 6th — and must not have acquired a type filter",
     ),
     (
-        "unknownStillDrops:0",
+        // ⚠⚠⚠ RE-PINNED AT t1346 — see the identical row in `g_is_where_selectors`. An invalid
+        // selector now throws `SyntaxError` (spec, and Chrome-measured on this fixture) instead of
+        // returning an empty list. Fail-closed either way; the throw is what feature detection reads.
+        "unknownThrows:SyntaxError",
         "THE RATCHET, and the mechanism itself: a genuinely unknown pseudo must STILL drop the \
          selector. This gate exists because five known ones were taking that arm",
     ),

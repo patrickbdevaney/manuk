@@ -135,22 +135,30 @@ fn g_ua_control_metrics() {
     // ── AND THE TWO KNOWN RESIDUES, asserted AT THEIR CURRENT WRONG VALUES so that a future fix has
     //    to come here and say what it changed. A residue nobody pinned is a residue nobody notices
     //    moving.
-    let i = r("#i");
-    assert!(
-        (i.width - 205.0).abs() < 1.1,
-        "G_UA_CONTROL_METRICS: a text <input> is {:.1} wide and Chrome gives exactly 205. Reading \
-         207 means the 2px border was applied to text fields as well — which corrects their height \
-         (19 -> 21) and BREAKS this width, because a text field's intrinsic width is a size-driven \
-         formula with its own intercept. Both have to move together or neither does.",
-        i.width
+    // ── ⭐⭐⭐ **THE RESIDUE THAT CLOSED, AND IT CLOSED WITHOUT THE TRADE THIS ROW PREDICTED.**
+    //    Both halves used to be pinned at their WRONG values: width 205 (right) with height 19
+    //    against Chrome's 21, and the comment warned that fixing the height by applying the 2px
+    //    border to text fields would push the width to 207 and break it — *"both have to move
+    //    together or neither does"*. A later tick moved the height to 21 and left the width at 205,
+    //    which is exactly Chrome, re-measured at t1346 on this fixture:
+    //
+    //    ```text
+    //      <input>            Chrome 205.0 x 21.0     ours 205.0 x 21.0
+    //    ```
+    //
+    //    ⚠ The pin did its job — it went RED the moment the number moved and forced a reader back
+    //    here — and the WARNING it carried was a hypothesis, not a finding: the width and the height
+    //    were NOT one mechanism. It is re-pinned as an ordinary Chrome-exact row rather than a
+    //    residue, so a future drift in either axis is a plain failure with no story attached.
+    want(
+        "#i",
+        205.0,
+        21.0,
+        "a text <input> is 205 x 21 in BOTH engines. This was a two-axis residue until t1346 and \
+         the axes turned out to be independent: reading 205 x 19 is the pre-fix height, reading \
+         207 x 21 is the trade the old comment predicted and nobody had to take.",
     );
-    assert!(
-        (i.height - 19.0).abs() < 1.1,
-        "G_UA_CONTROL_METRICS: a text <input> is {:.1} tall against Chrome's 21 — a KNOWN, NAMED \
-         residue pinned at its wrong value. If this reads 21, the trade above was taken; check the \
-         width assertion first.",
-        i.height
-    );
+
     let sm = r("#sm");
     assert!(
         (sm.height - 72.0).abs() < 1.1,

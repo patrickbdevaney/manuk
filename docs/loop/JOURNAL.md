@@ -89631,3 +89631,131 @@ is that a gate holding a DERIVED reference value is a liability the ratchet cann
 that pins a residue should carry the oracle command that produced it. (d) `<textarea>` as a grid item
 is 182x36 against Chrome's 40x40 — measured this tick, not fixed: it is a form control, not a replaced
 element, and it is the mirror of this bug. (e) I3's mechanical debt, six checks.
+
+## t1346 — the handler ran, and the property that is supposed to BE it read `undefined`
+
+TICK SHAPE: capability + the close of the seven-red-gate arc. Board re-run at the top of this tick and
+diffed against t1345's copy: **unchanged** (observer mandate 2026-08-21, three tracks). This is
+t1345's NEXT items (a) and (b), and it ends with **509 of 509 `manuk-page` gate binaries green**.
+
+### THE LAST "REAL" RED GATE WAS NOT REAL EITHER, AND ONE PROBE SAID SO
+
+`g_iframe_load_event` read `inline:2 addl:2` where it wanted 1, and the obvious diagnosis — *"`load`
+fires twice"* — is wrong. The test body installs each frame's document **twice**. Reading `#out`
+*between* the calls instead of after them:
+
+```text
+   after Page::load ONLY        contentDoc:true childText:false inline:1 addl:1
+   after render_iframe(a)       contentDoc:true childText:true  inline:2 addl:1
+   after render_iframe(b)       contentDoc:true childText:true  inline:2 addl:2
+```
+
+`Page::load` now gives a bare `<iframe>` its initial `about:blank` document — which Chrome does, and
+which fires `load` — and the body then installs a second one. Two installs, two events, each correct.
+⭐⭐ **A COUNT IS NOT AN IDENTIFICATION**, again, one tick after t1344 said it about red gates: `2`
+where `1` was expected reads as *fired twice* and was in fact *loaded twice*, and the reading that
+tells them apart is one probe placed between the two calls. The gate is re-staged over the two
+installs rather than asserting the total.
+
+⚠ **A METHOD TRAP INSIDE THE CHROME PROBE, worth more than the minute it cost.** The first
+Chrome run reported `inline:0` — no load at all — and that is an artefact of the FIXTURE, not of
+Chrome: the counter is initialised (`window.__inline = 0`) by the trailing `<script>`, and Chrome
+fires the initial `about:blank` load **during parsing, before that script runs**, so the reset erased
+the count. A second probe that logs from inside the handler shows `FIRE inline-noSrc` and
+`inlineSoFar:1` at the script. **A zero produced by a fixture that resets its own counter is
+indistinguishable from a zero produced by an engine that never fired** — and the first reading would
+have sent this tick into the loader.
+
+That trap also produced the one genuine divergence, now pinned in the gate at OUR value with Chrome's
+beside it: Chrome fires the initial load before the trailing script, so a listener registered by that
+script never sees it (`addl:0`); we fire after, so it does (`addl:1`).
+
+### THE CAPABILITY: THE CONTENT ATTRIBUTE **IS** THE IDL PROPERTY
+
+The `onloadProp:undefined` row has been pinned in that gate since t1167 as an explicitly named gap —
+*"update this assertion, do not delete it"* — and this is the tick that came back to it. Measured
+against Chrome:
+
+```text
+                                                   Chrome      before
+   <iframe onload="…">   typeof frame.onload      function     undefined
+   <img onload onerror>  typeof img.onerror       function     undefined
+   <div onclick="…">     typeof div.onclick       function     undefined
+   div.onclick = fn      (the SETTER)             function     function    ✓ already worked
+```
+
+`INLINE_HANDLERS_JS` compiled the attribute body and registered it with `addEventListener`. That
+satisfies *"it fires"* and nothing else — an anonymous listener is unreadable, unreplaceable and
+unremovable. So `var prev = el.onerror; el.onerror = wrap(prev)` — the chaining idiom every
+error-reporting snippet is built from — silently dropped the page's own handler, `el.onclick = null`
+did not disable a markup handler, and `if (el.onload)` answered no on a page that had just declared
+one. **Two of the three things the property is FOR were missing, and the third — the one anybody
+tests — worked.**
+
+The fix assigns the compiled function to `el['on' + type]`. Three constraints, each measured first,
+not reasoned:
+
+- **INSTEAD OF, never as well as.** This dispatcher already invokes `on<type>` beside the registered
+  listeners (`d.onclick = fn; d.click()` fires exactly once), so doing both would fire every inline
+  handler TWICE.
+- **No wrapper closure.** The dispatcher binds `this` to the element for a handler property — probed
+  through a BUBBLED event, where `this.id` is the listening element's id and not the target's. A
+  wrapper would only hide the function the page is entitled to read back.
+- **A `try`/`catch` fallback to `addEventListener`**, so a name the reflector will not take as a
+  property still FIRES. The RED mutation confirms the fallback works: with the assignment severed,
+  `inline:2 addl:2` still read correctly and only `onloadProp` went `undefined`.
+
+The property path was probed against Chrome before being trusted with the whole inline-handler
+surface — bubbling, replacement, `= null` removal and `typeof null === "object"` all match exactly.
+⚠ ONE ordering divergence, named and not fixed: Chrome runs the property in the position where it was
+FIRST assigned (`L1, P, L2`); we always run it first (`P, L1, L2`).
+
+### ⭐⭐⭐ 509 OF 509, AND THE SWEEP IS THE REAL RESULT
+
+The inline-handler change touches every page with an `on*` attribute, which is most of the corpus, so
+the whole `manuk-page` suite was run rather than the wall's 19. **506 of 509 green, and the three red
+were exactly the three already-diagnosed STALE gates** — zero regressions from the riskiest change in
+this arc. Those three were then re-pinned with their Chrome measurements and the suite re-run: **509
+of 509.**
+
+- `g_is_where_selectors` / `g_structural_pseudos` — one mechanism, not two. Both probes ended with
+  `ids(':totally-unknown-pseudo(x)')`, `querySelectorAll` now THROWS `SyntaxError` (spec, and
+  Chrome-measured: `THREW:SyntaxError`), and the throw aborted each script mid-sentence. ⚠ The claim
+  was written as an ABSENT key, so the assertion said *"expected `unknownStillDrops:0`"* while the
+  real fact was that the rest of the probe had vanished — **an expectation written as a missing value
+  cannot tell "the value is wrong" from "nothing ran"**. Both now assert the throw, which keeps the
+  original intent (an unrecognised pseudo fails CLOSED) and is strictly stronger, because try/catch
+  around a selector is how the web feature-detects selector support.
+- `g_ua_control_metrics` — the pinned `<input>` residue CLOSED, and it closed **without the trade its
+  own comment predicted**. The row warned that fixing the height (19→21) by applying the 2px border
+  to text fields would push the width to 207 and break it: *"both have to move together or neither
+  does."* The height moved to Chrome's 21 and the width stayed at Chrome's 205. ⭐ The pin did its
+  job — it went red the moment the number moved — and **the warning it carried was a hypothesis
+  wearing a finding's clothes**, the same shape as t1345's grid residue whose comment named the wrong
+  seam. It is re-pinned as an ordinary Chrome-exact row with no story attached.
+
+### THE ARC'S LEDGER, SINCE IT IS THE POINT
+
+```text
+   t1343  8 binaries red; old-binary control partitions 7 as "pre-existing"
+   t1344  measured against CHROME: 3 real, 4 stale.   FIX: intrinsic min/max clamp
+   t1345  FIX: replaced grid item does not stretch    +  g_replaced_ratio rewritten
+   t1346  FIX: content attribute IS the IDL property  +  the last 3 stale re-pinned
+   ----   509 / 509 manuk-page gate binaries green
+```
+
+⭐⭐⭐ **FOUR OF SEVEN WERE THE GATE, NOT THE ENGINE**, and every one of the four had been derived
+from the spec in prose rather than measured against the oracle this project already owns. t1343's
+headline — *"a ratchet whose teeth are not read is a ratchet on paper"* — is right, and its remedy is
+not "run all 501 every tick" (that took ~6 minutes and is affordable, but it is not the lesson). It
+is that **a gate asserting a reference value it derived instead of measured is a tooth that can turn
+backwards**: it goes red when the engine gets closer to Chrome, and the loop reads that as a
+regression it must revert. Every gate that pins a number should carry the command that produced it.
+
+**NEXT.** (a) ⭐ THE STANDING ONE: an audit pass over gates that assert a REASONED reference value —
+grep for §-citations and "Chrome gives" without a measurement beside them; four were found by
+accident this arc and there is no reason to think that is all of them. (b) The iframe `load` ORDERING
+residue: fire the initial `about:blank` load during parsing, before the next script, as Chrome does
+(`addl` 1→0). (c) An unset handler property reads `undefined` where Chrome reads `null`, and the
+handler-property ORDER (`P,L1,L2` vs `L1,P,L2`) — both measured this tick, both unfixed. (d)
+`<textarea>` as a grid item is 182x36 against Chrome's 40x40 (t1345). (e) I3's mechanical debt.

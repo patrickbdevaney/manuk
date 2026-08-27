@@ -101,11 +101,31 @@ pub const INLINE_HANDLERS_JS: &str = r#"
           var hf = compile(el, name);
           if (hf) {
             el[mark] = hf;
-            // Bind `this` to the element and forward `event`, then register where dispatch looks.
-            (function (element, handler) {
-              var listener = function (ev) { return handler.call(element, ev); };
-              try { element.addEventListener(type, listener); } catch (e) {}
-            })(el, hf);
+            // ⚠⚠⚠ **THE EVENT-HANDLER IDL ATTRIBUTE, NOT `addEventListener`.** The content attribute
+            // and the property are the SAME handler in HTML — `<div onclick="f()">` must make
+            // `typeof div.onclick === 'function'`, and assigning `div.onclick = g` must REPLACE the
+            // markup's handler rather than run alongside it. Registering the compiled body as an
+            // anonymous listener satisfied the first half (it fired) and silently failed the second:
+            // the property read `undefined`, so `var prev = el.onerror; el.onerror = wrap(prev)` —
+            // the chaining idiom every analytics and error-reporting snippet is built out of — lost
+            // the page's own handler, and `if (el.onload)` feature checks answered no.
+            //
+            // ⚠ It must be the property INSTEAD OF, never as well as: this engine's dispatcher already
+            // invokes `on<type>` beside the registered listeners (measured — `d.onclick = fn;
+            // d.click()` fires once), so doing both would fire an inline handler TWICE.
+            //
+            // ⚠ No wrapper closure. The dispatcher binds `this` to the element for a handler
+            // property (measured: `this.id` is the element's own id inside a bubbled handler), so
+            // wrapping would only hide the function the page is entitled to read back.
+            try { el['on' + type] = hf; } catch (e) {
+              // A name the reflector will not accept as a property must still FIRE. Falling back to
+              // a listener loses the reflection and keeps the behaviour, which is the right way round.
+              (function (element, handler) {
+                try {
+                  element.addEventListener(type, function (ev) { return handler.call(element, ev); });
+                } catch (e2) {}
+              })(el, hf);
+            }
           }
         }
       }

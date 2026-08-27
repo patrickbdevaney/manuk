@@ -2999,3 +2999,57 @@ inference with.
 
 The three positional clauses are kept as **standing guards** and are documented in the file as such:
 a guard that cannot be shown to go red is not evidence and must not be written up as any.
+
+---
+
+## An event-handler CONTENT ATTRIBUTE is the event-handler IDL PROPERTY (t1346)
+
+**Symptom.** `<div onclick="save()">` worked — the handler ran — and `typeof div.onclick` was
+`undefined`. Same for `<img onerror>`, `<iframe onload>`, `<body onsubmit>`: every inline handler on
+every page. Chrome-measured on the same markup:
+
+```text
+                                                   Chrome      before
+   <iframe onload="…">   typeof frame.onload      function     undefined
+   <img onload onerror>  typeof img.onerror       function     undefined
+   <div onclick="…">     typeof div.onclick       function     undefined
+   div.onclick = fn      (the SETTER)             function     function    ✓ already worked
+```
+
+**Why it is not cosmetic.** The two are the *same handler* in HTML, and half the platform's idioms
+read the property rather than call it:
+
+- `var prev = el.onerror; el.onerror = function (e) { report(e); if (prev) prev.call(this, e); }` —
+  the chaining idiom every analytics and error-reporting snippet is built from. With `prev`
+  `undefined`, the page's own handler is silently dropped;
+- `if (el.onload) { … }` / `el.onclick = null` to REMOVE a markup handler — the assignment created a
+  second handler beside the markup's one instead of replacing it;
+- any code that inspects, saves, or restores a handler.
+
+**Cause.** `INLINE_HANDLERS_JS` compiled the attribute body with `new Function('event', code)` and
+registered it with `addEventListener`. That satisfies "it fires" and nothing else: an anonymous
+listener is unreadable, unreplaceable and unremovable.
+
+**Fix.** Assign the compiled function to `el['on' + type]` instead. Three constraints, each measured:
+
+- ⚠ **INSTEAD OF, never as well as.** This engine's dispatcher already invokes `on<type>` beside the
+  registered listeners (`d.onclick = fn; d.click()` fires exactly once), so doing both would fire
+  every inline handler TWICE.
+- ⚠ **No wrapper closure.** The dispatcher binds `this` to the element for a handler property —
+  measured: inside a handler reached by BUBBLING, `this.id` is the listening element's id, not the
+  target's. A wrapper would only hide the function the page is entitled to read back.
+- ⚠ **A `try`/`catch` fallback to `addEventListener`.** If a name the reflector will not accept as a
+  property ever appears, the handler must still FIRE. Losing the reflection and keeping the behaviour
+  is the right way round, and the mutation that proves the fix red confirms it: with the assignment
+  severed, `inline:2 addl:2` still read correctly and only `onloadProp` went `undefined`.
+
+**Named residue, measured this tick, NOT fixed.**
+
+- An *unset* handler property reads `undefined`; Chrome reads `null` (`typeof window.onload` is
+  `"object"`). That is a resolve-hook over an open-ended name space, a different mechanism.
+- **Ordering.** Chrome runs the handler property in the position where it was FIRST assigned
+  (`addEventListener(L1); onclick = P; addEventListener(L2)` → `L1, P, L2`); we always run the
+  property first (`P, L1, L2`). Replacement, removal (`= null`) and bubbling all match Chrome exactly.
+
+**Gate.** `G_IFRAME_LOAD_EVENT`, whose `onloadProp:undefined` row had been pinned since t1167 as an
+explicitly named gap — the pin worked exactly as designed and this is the tick that came back to it.

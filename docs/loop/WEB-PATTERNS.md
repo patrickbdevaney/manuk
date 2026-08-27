@@ -8206,3 +8206,29 @@ they differ is the one the whole component web puts in a grid cell.
 value that disagrees with Chrome on a property's *initial* value is not a reporting bug — it means
 the engine has no variant for the initial value, and therefore cannot distinguish it from whatever it
 was folded into.
+
+---
+
+## t1346 — the handler that ran and could not be read
+
+`<img onerror="this.src=fallback">`, `<iframe onload="ready()">`, `<button onclick="save()">`,
+`<body onload="init()">`. All of them fired. And `typeof el.onerror` was `undefined`, so the half of
+the platform that READS a handler rather than calling it was quietly broken:
+
+- **the error-reporting chain** — `var prev = el.onerror; el.onerror = function (e) { report(e); if
+  (prev) prev.call(this, e); }`. Every analytics, Sentry-style and monitoring snippet is this shape.
+  With `prev` undefined, the page's OWN handler is dropped the moment the reporter installs itself;
+- **the handler swap** — `el.onclick = null` to disable a markup handler, or `el.onclick = mine` to
+  replace it. Assigning created a SECOND handler beside the markup's one instead of replacing it, so
+  the disabled button still fired;
+- **the feature check** — `if (el.onload)`, `if (window.onerror)`, answering no on a page that had
+  just declared one.
+
+⭐⭐⭐ **The class: A HALF-INSTALLED API IS INDISTINGUISHABLE FROM A WORKING ONE ALONG THE AXIS
+ANYBODY TESTS.** The handler fired, which is the observable everyone checks first, and it was
+registered as an anonymous `addEventListener` listener — unreadable, unreplaceable, unremovable. Two
+of the three things the property is FOR were missing and the third worked.
+
+⚠ The check that would have found it is **`typeof`, not a click**: after `<div onclick="…">`, ask
+`typeof div.onclick` and compare it to Chrome. One line, and it separates "the handler exists" from
+"the handler is where the spec says it is".

@@ -82,7 +82,16 @@ const HTML: &str = r##"<!doctype html><html><body>
     p('scoped:' + ids('.a :is(.b)'));
     p('plainStillWorks:' + ids('.a .c'));
     p('notStillWorks:' + ids('.a span:not(.b):not(.e):not(.f)'));
-    p('unknownStillDrops:' + ids('.a :totally-unknown-pseudo(x)'));
+    // ⚠⚠⚠ **t1346 — THIS PROBE USED TO END HERE, SILENTLY.** `ids()` calls `querySelectorAll`,
+    // which now THROWS `SyntaxError` on a genuinely invalid selector (the spec's answer, and
+    // Chrome's — measured on this fixture: `THREW:SyntaxError`). The throw aborted the script
+    // mid-sentence, so `#out` simply stopped one key early and the assertion for a MISSING key
+    // reported "expected `unknownStillDrops:0`" while the real fact was that the whole rest of the
+    // probe had vanished. An expectation written as an ABSENT value cannot tell "the value is wrong"
+    // from "nothing ran".
+    p('unknownThrows:' + (function () {
+      try { return 'no:' + ids('.a :totally-unknown-pseudo(x)'); } catch (e) { return e.name; }
+    })());
     p('whereZeroSpecificityNotOurJob:' + (typeof getComputedStyle(document.getElementById('b1')).color === 'string'));
 
     // ── 7. THE ROOT CAUSE, which is NOT about `:is()` at all: the top-level list split was
@@ -161,10 +170,21 @@ const CLAIMS: &[(&str, &str)] = &[
         "and `:not()`, the neighbouring arm this change sits beside, still matches",
     ),
     (
-        "unknownStillDrops:0",
-        "⚠ AND A GENUINELY UNKNOWN PSEUDO STILL DROPS THE SELECTOR — conservative, and deliberately \
-         unchanged. This tick added two pseudos; it did NOT loosen the rule that an unrecognised \
-         one fails closed rather than matching everything",
+        // ⚠⚠⚠ RE-PINNED AT t1346, AND IT IS A CORRECTION. This row read `unknownStillDrops:0` when
+        // an invalid selector returned an empty list. It now THROWS `SyntaxError`, which is what
+        // Selectors says and what Chrome does — measured on this exact selector:
+        // `document.querySelectorAll('.a :totally-unknown-pseudo(x)')` → `THREW:SyntaxError`.
+        //
+        // The INTENT is unchanged and is the reason the row survives rather than being deleted: an
+        // unrecognised pseudo must fail CLOSED, never match everything. A throw is fail-closed and
+        // is strictly more useful than silence, because try/catch around a selector is how the web
+        // feature-detects selector support — an engine that never throws answers "supported" for
+        // every selector it cannot match.
+        "unknownThrows:SyntaxError",
+        "an unrecognised pseudo fails CLOSED — it throws `SyntaxError` rather than matching \
+         everything. `no:0` means the selector was silently dropped to an empty list (the old \
+         behaviour, which lies to feature detection); `no:` with matches means it matched, which is \
+         the dangerous direction",
     ),
     (
         "hasComma:1:g",
