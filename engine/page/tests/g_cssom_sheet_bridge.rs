@@ -40,11 +40,38 @@ const DECL_WIDTH: i64 = 321;
 
 const HTML: &str = r##"<!doctype html><html><head><style id="authored">#a { width: 111px }
 @media screen { #m { width: 50px } }
-#c { width: 33px }</style></head><body>
+#c { width: 33px }</style>
+<style id="stmt">@namespace ns url(ns); @import "a;b.css"; ns|e#i { width: 77px } div { width: 88px }</style></head><body>
 <div id="a">x</div><div id="m">y</div><div id="c">z</div><div id="d">w</div>
 <script>
   function mark(id) { var d = document.createElement('div'); d.id = id; document.body.appendChild(d); }
   var authored = document.getElementById('authored');
+
+  // ── ⭐⭐ 6. A STATEMENT AT-RULE ENDS AT `;` (t1356), and until it did, its text was PREPENDED TO
+  //    THE NEXT RULE'S SELECTOR. `__splitRules` closed a rule only at brace-depth zero, so
+  //    `@namespace`/`@import`/`@charset`/`@layer a,b;` — none of which carry a block — merged into
+  //    whatever followed. Chrome-measured on this sheet:
+  //
+  //      cssRules.length              4      (was 2)
+  //      rules[0].type               10      CSSNamespaceRule (was 4, "CSSMediaRule")
+  //      rules[0].selectorText   absent      (was '' — a property that exists and says nothing)
+  //      rules[2].selectorText  'ns|e#i'     (was '@namespace ns url(ns); @import …; ns|e#i')
+  //
+  //    The damage is the SELECTOR, not the missing rule: any sheet with an `@import` had a first
+  //    style rule whose `selectorText` and `cssText` were both unusable.
+  var st = document.getElementById('stmt').sheet;
+  mark('T__stmtcount_' + (st ? st.cssRules.length : 'nosheet'));
+  mark('T__stmtT0_' + (st ? st.cssRules[0].type : 'x'));
+  mark('T__stmtT1_' + (st ? st.cssRules[1].type : 'x'));
+  // ⚠ ABSENT, not empty — `'selectorText' in rule` is how a script tells a style rule from an
+  //   at-rule, and `''` answers that question wrongly while looking like an answer.
+  mark('T__stmtSel0_' + (st ? typeof st.cssRules[0].selectorText : 'x'));
+  mark('T__stmtSel2_' + (st ? st.cssRules[2].selectorText.replace(/[^a-z]/g, '') : 'x'));
+  mark('T__stmtSel3_' + (st ? st.cssRules[3].selectorText : 'x'));
+  // ⚠ THE QUOTE ARM: `@import "a;b.css";`'s prelude contains a `;` INSIDE A STRING, which is not a
+  //   terminator. Without quote tracking the sheet splits there and rule 2's selector is garbage —
+  //   and every other row above still passes, because they do not cross that string.
+  mark('T__stmtImportWhole_' + (st ? (String(st.cssRules[1].cssText).indexOf('b.css') >= 0) : 'x'));
 
   // 1. The surface exists at all, and the tag guard holds.
   mark('T__typeof_' + (typeof authored.sheet));
@@ -199,10 +226,12 @@ fn a_rule_inserted_through_the_sheet_reaches_the_cascade() {
          every responsive one, which is why the splitter tracks brace DEPTH.\n  marks: {marks:?}"
     );
     assert!(
-        has("T__docsheets_before_1") && has("T__docsheets_after_2"),
-        "`document.styleSheets` is not a LIVE list: it must report the one authored sheet before the \
-         injection and BOTH after it, with nothing invalidating a cache in between. It was \
-         `undefined`, so reading `.length` THREW rather than reporting a number.\n  marks: {marks:?}"
+        has("T__docsheets_before_2") && has("T__docsheets_after_3"),
+        "`document.styleSheets` is not a LIVE list: it must report the authored sheets before the \
+         injection and one MORE after it, with nothing invalidating a cache in between. It was \
+         `undefined`, so reading `.length` THREW rather than reporting a number. ⚠ The numbers are \
+         2 and 3 rather than 1 and 2 because t1356 added a second authored `<style>` to this \
+         fixture; the CLAIM is the +1 and the liveness, not the absolute count.\n  marks: {marks:?}"
     );
     // ── `media` — a LIVE view of the attribute, not a constant.
     assert!(
@@ -304,5 +333,52 @@ fn a_rule_inserted_through_the_sheet_reaches_the_cascade() {
         Some(AUTHORED_WIDTH),
         "`#a` still has its authored width, which means the injected rule lost the cascade rather \
          than reaching it."
+    );
+    // ── ⭐⭐ A STATEMENT AT-RULE ENDS AT `;` (t1356), and until it did, its TEXT WAS PREPENDED TO
+    //    THE NEXT RULE'S SELECTOR. `__splitRules` closed a rule only at brace-depth zero, so
+    //    `@namespace`, `@import`, `@charset` and `@layer a, b;` — none of which carry a block —
+    //    merged into whatever followed them. Chrome-measured on this fixture's second sheet:
+    //
+    //    ```text
+    //                                Chrome        before
+    //      cssRules.length             4             2
+    //      rules[0].type              10             4      (claimed to be a CSSMediaRule)
+    //      typeof rules[0].selectorText  undefined   string  ('' — exists and says nothing)
+    //      rules[2].selectorText   'ns|e#i'          '@namespace ns url(ns); @import …; ns|e#i'
+    //    ```
+    //
+    //    ⭐ The damage is the SELECTOR, not the missing rule: ANY sheet with an `@import` — which
+    //    is most large sheets — had a first style rule whose `selectorText` and `cssText` were both
+    //    unusable, and `css/cssom/serialize-namespaced-type-selectors` is 60 subtests of it.
+    assert!(
+        has("T__stmtcount_4"),
+        "a sheet of `@namespace; @import; two style rules` must expose FOUR rules — a statement \
+         at-rule carries no block, so a splitter that only closes at `}}` merges it into the next \
+         rule.\n  marks: {marks:?}"
+    );
+    assert!(
+        has("T__stmtT0_10") && has("T__stmtT1_3"),
+        "the at-rule TYPE is its keyword, not a constant: `@namespace` is 10 (CSSNamespaceRule) and \
+         `@import` is 3. Every at-rule used to answer 4, so all of them claimed to be media \
+         rules — and `rule.type === 10` is how a script finds the namespace rule.\n  marks: {marks:?}"
+    );
+    assert!(
+        has("T__stmtSel0_undefined"),
+        "⚠ a `CSSNamespaceRule` has NO `selectorText` — Chrome answers `undefined`. `''` is a \
+         property that exists and says nothing, and `'selectorText' in rule` is how a script tells \
+         a style rule from an at-rule.\n  marks: {marks:?}"
+    );
+    assert!(
+        has("T__stmtSel2_nsei") && has("T__stmtSel3_div"),
+        "⭐ THE LOAD-BEARING ROW: the style rules' selectors must be CLEAN. `ns|e#i` (letters only: \
+         `nsei`) and `div` — not the at-rule text glued to the front of the first one.\n  \
+         marks: {marks:?}"
+    );
+    assert!(
+        has("T__stmtImportWhole_true"),
+        "⚠ THE QUOTE ARM: `@import \"a;b.css\";` has a `;` INSIDE A STRING, which is not a \
+         terminator. Without quote tracking the sheet splits there, `@import` loses its tail and \
+         the rule after it gains garbage — and every other row above still passes, because none of \
+         them crosses that string.\n  marks: {marks:?}"
     );
 }

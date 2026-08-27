@@ -90678,3 +90678,98 @@ note). A row of zeros is not a measurement of zero.
 `parsing/interactivity-computed` (46) and `parsing/cursor-computed` (39) are real. (b) `cssom` at
 76.9% is newly visible and unsurveyed — 810 failures nobody has looked at. (c) The three unmodelled
 font longhands (t1353). (d) The teardown Bar-0 (t1349). (e) t1348's residues. (f) I3's debt.
+
+## t1356 — a terminator only half the category uses
+
+TICK SHAPE: capability. Board re-run at the top of this tick and diffed against t1355's copy:
+**unchanged** except its own tally. **`css/cssom` 2,697 → 2,741 (+44, 76.9% → 78.2%)**.
+
+### THE TARGET, FROM THE AREA t1355 MADE VISIBLE
+
+`cssom` was a banked-at-ZERO row until t1355 measured it. Surveyed for the first time, its 810
+failures concentrate in four files, and `serialize-namespaced-type-selectors` is **60 of one shape**:
+
+```text
+   assert_equals: expected "ns|e#i" but got "@namespace ns url(ns);ns|e#i"
+```
+
+### THE BUG
+
+`__splitRules` closed a rule only when brace depth returned to zero. `@namespace`, `@import`,
+`@charset` and `@layer a, b;` carry **no block**, so each merged into whatever followed.
+Chrome-measured on `@namespace ns url(ns); @import "a;b.css"; ns|e#i { … } div { … }`:
+
+```text
+                                  Chrome        before        after
+   cssRules.length                  4             2             4
+   rules[0].type                   10             4            10
+   typeof rules[0].selectorText  undefined     string       undefined
+   rules[2].selectorText        'ns|e#i'    '@namespace …; ns|e#i'  'ns|e#i'
+```
+
+⭐⭐ **THE CLASS: A TERMINATOR THAT ONLY SOME MEMBERS OF A CATEGORY USE.** "An at-rule" is one word
+for two shapes — BLOCK (`@media`, `@supports`) and STATEMENT (`@import`, `@namespace`, `@charset`) —
+and a splitter written for the first silently swallows the second. ⭐ **The damage is the SELECTOR,
+not the missing rule**: any sheet with an `@import`, which is most large sheets, had a first style
+rule whose `selectorText` and `cssText` were both unusable. Every theme switcher, CSS-in-JS runtime,
+critical-CSS extractor and style deduplicator keys on `selectorText`.
+
+Three parts: `;` at depth 0 ends a statement at-rule (a stray top-level `;` is dropped, which is
+CSS's own error recovery); **quotes are tracked**, because `@import "a;b.css";` puts a `;` inside a
+top-level string; and the at-rule TYPE is its keyword rather than the constant `4` that made every
+at-rule claim to be a media rule.
+
+⚠ `selectorText` is now ABSENT on an at-rule rather than `''` — the same rule this bridge already
+follows for `style`. `'selectorText' in rule` is how a script tells a style rule from an at-rule.
+
+**Proven RED**, four mutations, four arms:
+
+```text
+   drop the `;` arm            the fixture's SCRIPT DIES OUTRIGHT — no probe marks at all
+   drop quote tracking         stmtImportWhole:false
+   a constant at-rule type     the type claim
+   selectorText on every rule  the absent claim
+```
+
+⚠ The first arm is blunt and worth reading as evidence rather than noise: with the fix removed, the
+merged rule takes the whole page's script down. That is the defect's real severity.
+
+⚠ **The QUOTE arm is the one nothing else can see** — no other row in the fixture crosses that
+string. It is one line of code and it needed its own row, which is the fixture discipline this arc
+keeps re-learning: for a construct with two terminators, put BOTH in the fixture.
+
+⚠ Adding a second authored `<style>` moved this gate's existing `document.styleSheets` claim from
+1→2 / 2→3. The CLAIM is the +1 and the liveness, not the absolute count, and it now says so — a
+shared fixture makes a new row able to invalidate an older one.
+
+**WPT: +44 of a possible 60**, and the rest is named: those rows need `ns|e` selectors to actually
+MATCH, which is namespace-aware selector matching and a different mechanism. Full `manuk-page` suite:
+**509 of 509**; `css/css-ui` and `dom` re-run and unchanged.
+
+### ⚠ MEASURED AND NOT TAKEN — THE STATIC POSITION OF A BLOCK-LEVEL ABSPOS
+
+While surveying `cssom` I measured the two `getComputedStyle-insets-*` files (156 failures) and found
+a second, bigger thing. **156 of their 161 failures name a writing mode or direction**, and the
+mechanism is the static position of an out-of-flow box:
+
+```text
+                                                     Chrome   ours
+   block abspos AFTER inline text                     @0,20   @19,0   ✗
+   block abspos, only child                           @0,0    @0,0    ✓
+   INLINE (<span>) abspos after text                  @19,0   @19,0   ✓
+   block abspos after a <p>                           @0,36   @0,36   ✓
+   display:inline-block abspos after text             @19,0   @19,0   ✓
+   abspos in a vertical-lr container    top/@         10px    -465px  ✗✗
+```
+
+CSS 2.1 §10.6.4 defines the static position by *"a hypothetical box … if its `position` property had
+been `static`"* — so the discriminator is the **SPECIFIED display**, not the blockified one. ⚠ It is
+not recoverable: `getComputedStyle` reports `block` for BOTH `<div style=position:absolute>` and
+`<span style=position:absolute>`, because abspos blockifies in the cascade. Fixing this needs the
+cascade to retain the pre-blockification display — a new field and a real subsystem tick, not a
+quick one. **Measured, priced and NOT started**, rather than half-done.
+
+**NEXT.** (a) ⭐ The static position above — the pre-blockification display, then the vertical/RTL
+containing block (the `-465px` row is the 156). (b) `css/cssom`'s next mass:
+`CSSStyleRule-set-selectorText` (58, of which 27 are "setting selectorText does not re-match").
+(c) The three unmodelled font longhands (t1353). (d) The teardown Bar-0 (t1349). (e) I3's debt.

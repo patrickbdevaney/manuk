@@ -4749,3 +4749,51 @@ and a new row says so. *A gate that measures three properties and concludes "no-
 something about three properties.* Proven red by four mutations: drop the UA rule → `cDiv`/`cBtn`;
 `CSS.supports` declines again → `jsSet:[none]`; revert the vendor spelling → `inlineWk`; accept
 invalid keywords → `invalid:[]`.
+
+---
+
+## A statement at-rule ends at `;`, and until it did its text was prepended to the next selector (t1356)
+
+`__splitRules` closed a rule only when brace depth returned to zero. `@namespace`, `@import`,
+`@charset` and `@layer a, b;` carry **no block**, so each merged into whatever followed it.
+Chrome-measured on `@namespace ns url(ns); @import "a;b.css"; ns|e#i { … } div { … }`:
+
+```text
+                                  Chrome        before
+   cssRules.length                  4             2
+   rules[0].type                   10             4    ← claimed to be a CSSMediaRule
+   typeof rules[0].selectorText  undefined     string  ← '' : exists and says nothing
+   rules[2].selectorText        'ns|e#i'       '@namespace ns url(ns); @import …; ns|e#i'
+```
+
+⭐ **The damage is the SELECTOR, not the missing rule.** Any sheet with an `@import` — which is most
+large sheets — had a first style rule whose `selectorText` and `cssText` were both unusable, and
+`css/cssom/serialize-namespaced-type-selectors` is 60 subtests of exactly that.
+
+**Three parts.**
+
+- **`;` at depth 0 ends a statement at-rule.** A stray top-level `;` is not a rule: it resets the
+  start and is dropped, which is CSS's own error recovery. Only text beginning with `@` is emitted.
+- **⚠ QUOTES ARE TRACKED**, because a statement at-rule's prelude is where a top-level string
+  legitimately lives — `@import "a;b.css";` — and a `;` inside it is not a terminator. Inside a
+  block the question does not arise (`content: ";"` is at depth > 0). It is a gate arm, and it is
+  the only one the other rows cannot see: nothing else in the fixture crosses that string.
+- **The at-rule TYPE is its keyword, not a constant.** Every at-rule answered `4` (`CSSMediaRule`),
+  so `@namespace`, `@import`, `@font-face` and `@supports` all claimed to be media rules — and
+  `rule.type === 10` is how a script finds the namespace rule.
+
+⚠ **`selectorText` is now ABSENT on an at-rule**, not `''` — the same rule this bridge already
+follows for `style` ("only a STYLE rule gets a declaration"). `'selectorText' in rule` is how a
+script tells a style rule from an at-rule, and `''` answers that question wrongly while looking like
+an answer.
+
+**WPT.** `css/cssom` 2,697 → **2,741** (+44, 76.9% → 78.2%). ⚠ +44 of a possible 60: the rest of that
+file needs `ns|e` selectors to actually MATCH, which is namespace-aware selector matching and a
+different mechanism.
+
+**Gate.** `G_CSSOM_SHEET_BRIDGE`, +5 claims and a second authored `<style>`. Proven red by four
+mutations: drop the `;` arm → the fixture's script dies outright (the merged rule takes the page
+with it, which is the defect's real severity); drop quote tracking → `stmtImportWhole:false`; a
+constant at-rule type → the type claim; `selectorText` on every rule → the absent claim.
+⚠ The existing `document.styleSheets` count claim moved 1→2 / 2→3 because this tick added a sheet
+to the shared fixture; the CLAIM is the +1 and the liveness, not the absolute count, and it now says so.

@@ -8455,3 +8455,33 @@ is exactly what an author would see if they had never written it.
 
 ⚠⚠ And the second half: a value that reads back correctly is still not a value that DOES anything.
 The gate asserts the `<select>` NARROWS after the CSSOM write, not merely that the string round-trips.
+
+---
+
+## t1356 — the `@import` that ate the next rule's selector
+
+Every large stylesheet opens with `@import`, and many XHTML/SVG-bearing ones with `@namespace`.
+Neither carries a block, and the CSSOM's rule splitter only ever ended a rule at `}` — so the
+at-rule's text was **prepended to the following rule's selector**:
+
+```text
+   rules[0].selectorText  ==  '@import "reset.css"; .btn'
+```
+
+- **the theme switcher / CSS-in-JS runtime** — walks `sheet.cssRules`, matches on `selectorText`,
+  and never finds `.btn`;
+- **the critical-CSS extractor and the style deduplicator** — both key on `selectorText`;
+- **`rule.type === 10`** — how a script finds the namespace rule — answered `4` for every at-rule, so
+  `@namespace`, `@import` and `@font-face` all claimed to be media rules.
+
+⭐⭐ **The class: A TERMINATOR THAT ONLY SOME MEMBERS OF A CATEGORY USE.** "An at-rule" is one word
+for two shapes — block (`@media`, `@supports`) and statement (`@import`, `@namespace`, `@charset`,
+`@layer a,b;`) — and a splitter written for the first silently swallows the second. The rule count
+being wrong is the visible half; the SELECTOR corruption is the half that breaks pages.
+
+⚠ The check is **the pair, not the member**: for any construct with two terminators, put BOTH in the
+fixture and assert the count AND the neighbour. A fixture with only `@media` in it proves the
+splitter works and says nothing about half the category.
+
+⚠⚠ And the arm nothing else can see: `@import "a;b.css";` puts a `;` **inside a string** in a
+top-level prelude. Quote tracking is one line and it is invisible to every other row in the gate.

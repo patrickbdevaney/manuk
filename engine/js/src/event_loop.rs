@@ -6213,10 +6213,41 @@ const PRELUDE: &str = r#"
       // is what it is today — not `null`, because for an applied linked sheet `null` would be a lie
       // that reads as honest (t663 refused exactly that trade).
       if (__HP && !Object.getOwnPropertyDescriptor(__HP, 'sheet')) {
+        // ── ⚠⚠⚠ **A STATEMENT AT-RULE ENDS AT `;`, AND THIS SPLIT ONLY EVER ENDED A RULE AT `}`.**
+        //
+        // `@namespace`, `@import`, `@charset` and `@layer a, b;` carry no block, so a splitter that
+        // only closes on brace-depth-zero MERGES them into the rule that follows. Measured on
+        // `@namespace ns url(ns); ns|e#i { color: red } div { color: blue }`:
+        //
+        // ```text
+        //                    Chrome                          before
+        //   cssRules.length  3                               2
+        //   rules[0]         CSSNamespaceRule (type 10)      the merged text, type 4
+        //   rules[1]         selectorText "ns|e#i"           selectorText
+        //                                                    "@namespace ns url(ns); ns|e#i"
+        // ```
+        //
+        // The damage is not the missing rule — it is that **the at-rule's text is prepended to the
+        // next rule's SELECTOR**, so a sheet with any `@import` or `@namespace` has a first style
+        // rule whose `selectorText` is unusable and whose `cssText` is wrong.
+        // `css/cssom/serialize-namespaced-type-selectors` is 60 subtests of exactly that.
+        //
+        // ⚠ QUOTES ARE TRACKED, because a statement at-rule's prelude is where a top-level string
+        // legitimately lives (`@import "a;b.css";`) and a `;` inside it is not a terminator. Inside
+        // a block the question does not arise — `content: ";"` is at depth > 0.
+        //
+        // ⚠ A stray top-level `;` is not a rule: it resets the start and is dropped, which is CSS's
+        // own error recovery. Only text beginning with `@` is emitted as a statement rule.
         var __splitRules = function (css) {
-          var out = [], depth = 0, start = 0;
+          var out = [], depth = 0, start = 0, q = 0;
           for (var i = 0; i < css.length; i++) {
             var ch = css[i];
+            if (q) {
+              if (ch === '\\') { i++; }
+              else if (ch === q) { q = 0; }
+              continue;
+            }
+            if (ch === '"' || ch === "'") { q = ch; continue; }
             if (ch === '{') { depth++; }
             else if (ch === '}') {
               depth--;
@@ -6225,6 +6256,10 @@ const PRELUDE: &str = r#"
                 if (t) { out.push(t); }
                 start = i + 1;
               }
+            } else if (ch === ';' && depth === 0) {
+              var st = css.slice(start, i + 1).trim();
+              if (st && st.charAt(0) === '@') { out.push(st); }
+              start = i + 1;
             }
           }
           var tail = css.slice(start).trim();
@@ -6383,13 +6418,40 @@ const PRELUDE: &str = r#"
         var __ruleOf = function (text, sheet, readText, writeBlock) {
           var i = text.indexOf('{');
           var isAt = text.charAt(0) === '@';
+          // ⚠ **THE AT-RULE TYPE IS THE KEYWORD, NOT A CONSTANT.** Every at-rule answered `4`
+          // (`CSSMediaRule`), so `@namespace`, `@import`, `@font-face` and `@supports` all claimed
+          // to be media rules — and `rule.type === 10` is how a script finds the namespace rule.
+          // The numbers are CSSOM's legacy `CSSRule` constants.
+          var AT_TYPES = {
+            'media': 4, 'import': 3, 'font-face': 5, 'page': 6, 'keyframes': 7,
+            'namespace': 10, 'supports': 12, 'counter-style': 11, 'layer': 4
+          };
+          var atType = 4;
+          if (isAt) {
+            var kw = /^@([-a-z]+)/i.exec(text);
+            if (kw) {
+              var got = AT_TYPES[kw[1].toLowerCase().replace(/^-\\w+-/, '')];
+              if (got) { atType = got; }
+            }
+          }
+          // ⚠ A STATEMENT at-rule has no selector at all — and `indexOf('{')` on
+          // `@namespace ns url(ns);` is -1, which already yields `''`. Spelled out because the
+          // previous version reached this line with the NEXT rule's text glued on, so the `-1`
+          // branch was never taken for the case it exists for.
           var rule = {
             get cssText() { return readText ? readText() : text; },
-            selectorText: i < 0 ? '' : text.slice(0, i).trim(),
-            type: isAt ? 4 : 1,
+            type: isAt ? atType : 1,
             parentStyleSheet: sheet,
             parentRule: null
           };
+          // ⚠ **ONLY A STYLE RULE GETS A `selectorText`** — the same rule the `style` member below
+          // already follows, and for the same reason. A `CSSNamespaceRule` has no selector, and
+          // Chrome answers `undefined`; answering `''` is a property that EXISTS and says nothing,
+          // which is the false-presence trap this file refuses elsewhere: `'selectorText' in rule`
+          // is how a script tells a style rule from an at-rule.
+          if (!isAt) {
+            rule.selectorText = i < 0 ? '' : text.slice(0, i).trim();
+          }
           // ⚠ Only a STYLE rule gets a `style`. `CSSMediaRule` has no declaration block, and handing
           // it an empty one would answer a question the spec says to answer with `undefined`.
           if (!isAt && readText) {
