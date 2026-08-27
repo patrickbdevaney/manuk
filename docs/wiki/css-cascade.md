@@ -4899,3 +4899,54 @@ mechanisms.
 **Gate.** `G_CSSOM_SHEET_BRIDGE`, +5 claims. Proven red by four mutations: no rebuild → the fixture's
 script dies; keep `@import` → the count; accept `@import` in `insertRule` → the throw claim;
 `rules` as a copy → the alias claim.
+
+## A presentational hint is a DECLARATION AT AN ORIGIN, and both halves of that sentence are load-bearing
+
+HTML's legacy attributes — `<img width>`, `<table cellspacing>`, `<table cellpadding>` — are not
+markup that sizes a box. CSS Cascade §6.4 makes them *declarations*, at an origin below every real
+author rule and above the UA sheet. Getting either half wrong produces a distinct, quiet bug, and
+this engine has now had both:
+
+| the mistake | what it looks like |
+| --- | --- |
+| assigned to the computed style *after* the cascade | the attribute beats author CSS, which nothing can outrank |
+| declared, but ranked *below the UA sheet* | the attribute silently loses to a UA declaration on the same property |
+
+`Layout`'s hint block (`presentational_hint_block` in `stylo_engine.rs`) emits CSS text; the cascade
+inserts it at `ORIGIN_PRES_HINT`, between user and author:
+
+```rust
+for (rank, .., block) in &winners { if *rank >= ORIGIN_PRES_HINT { break } ... }   // UA, user
+if let Some(block) = &hint_block { ... }                                           // the hint
+for (rank, .., block) in &winners { if *rank < ORIGIN_PRES_HINT { continue } ... } // author
+```
+
+⚠⚠⚠ **The hint used to be PREPENDED, and the comment there explained why that was safe: "our UA
+sheet declares no `width`/`height` on these seven tags … if one ever does, the UA value is the one a
+page cannot have asked for."** By the time anyone read it again the UA sheet had grown
+`table { border-spacing: 2px }`, so `<table cellspacing="0">` lost to it — the hint was emitted,
+ranked, and beaten. The safety argument was a claim about two lists that are edited independently,
+which is not a bound at all; the tick that adds a UA declaration is not the tick that thinks about
+hint ordering.
+
+### Writing a hint as a computed-style assignment loses the shorthand too
+
+`cellspacing` was written as `s.border_spacing = sp`, and `border-spacing` is stored as two fields
+because it takes two values. The vertical one was never assigned, so `cellspacing="0"` left 2px
+between every ROW while the columns it did set were exact — half-working, which is why it read as
+supported. As a declaration it is one `border-spacing:{n}px`, and a shorthand cannot forget its own
+second axis.
+
+Measured on `news.ycombinator.com`, whose every table carries `cellspacing="0"`: 6px per story (a
+story is three rows) over 30 stories put `#hnmain` at **1377px against Chrome's 1163**, with the
+table's WIDTH already exact. Fixing the hint takes it to 1173. That is the render burndown's #1
+family — a small per-element geometry error laundered into a `dy` cascade — reaching the page
+through the table path rather than through prose re-wrap.
+
+⚠ `cellpadding` was the same defect one function away, and worse: it beat an author's `padding` in
+both of its forms (a stylesheet rule AND an inline `style=`). It is declared on the TABLE and
+applies to the CELLS, so it is the one hint whose attribute is not on the element being cascaded —
+hence the ancestor walk in `presentational_hint_block`.
+
+`G_TABLE_BORDER_SPACING_UA_DEFAULT` carries all of it — 15 rows added, including a `<th>` row that
+is the only one where the hint actually applies — and goes red under four mutations.

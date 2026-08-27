@@ -1455,9 +1455,37 @@ fn apply_presentational_hints(dom: &Dom, node: NodeId, s: &mut crate::ComputedSt
     // do is beat a width the author wrote.
     // `<table cellspacing>` / `<table cellpadding>` — the separated-borders model's two knobs.
     if tag == "table" {
-        if let Some(sp) = el.attr("cellspacing").and_then(crate::parse_dimension_attr) {
-            s.border_spacing = sp;
-        }
+        // ⚠⚠⚠ **`cellspacing` IS THE SHORTHAND — IT SETS BOTH AXES, AND THIS SET ONE.**
+        // `border-spacing` is stored here as two fields because it takes two values, and the UA
+        // sheet's `table { border-spacing: 2px }` (line ~588) writes BOTH. This hint then wrote
+        // only the horizontal one, so `cellspacing="0"` — which every legacy table-based page in
+        // existence carries — left **2px of VERTICAL spacing between every row**, while the
+        // horizontal axis it did set came out exactly right. A table is many rows tall, so the
+        // error is per-row and it accumulates down the page.
+        //
+        // Chrome-measured, three rows of a 10px block, `cellspacing="0" cellpadding="0"`:
+        //
+        // ```text
+        //                                    Chrome        before
+        //   table height                     30            38      ← 2px × 4 gaps
+        //   row tops                         0, 10, 20     2, 14, 26
+        //   two cells in ONE row, width      40            40      ← the axis that WAS set
+        //   the same table via CSS
+        //     `border-spacing: 0`            30            30      ← CONTROL: the property works
+        // ```
+        //
+        // The CSS control is what makes this a hint bug rather than a table-layout bug, and the
+        // two-cells row is what makes it the FORGOTTEN AXIS rather than a dead code path — half of
+        // it was working, which is why it read as "cellspacing is supported".
+        //
+        // ⭐ On `news.ycombinator.com` this is 6px per story (a story is three rows) across 30
+        // stories: `#hnmain` measured 1377px tall against Chrome's 1163, with the WIDTH already
+        // exact. That is the render burndown's #1 family — a small per-element geometry error
+        // laundered into a `dy` cascade — arriving through the table path.
+        //
+        // ⚠ The declaration now lives in `presentational_hint_block`, at hint ORIGIN, which is
+        // what also makes it lose to an author's `border-spacing` — see the note there. Nothing is
+        // written onto the computed style here any more.
         // `align="center"` centres the table; `<center>` does the same thing to its table child
         // (Chrome implements it as `text-align: -webkit-center`, which centres block children too).
         let centered = el
@@ -1473,27 +1501,9 @@ fn apply_presentational_hints(dom: &Dom, node: NodeId, s: &mut crate::ComputedSt
             s.margin.right = crate::Dim::Auto;
         }
     }
-    // `cellpadding` lives on the table but pads the CELLS.
-    if matches!(tag, "td" | "th") {
-        let table_cellpadding = {
-            let mut cur = dom.parent(node);
-            let mut found = None;
-            while let Some(p) = cur {
-                if dom.tag_name(p) == Some("table") {
-                    found = dom
-                        .element(p)
-                        .and_then(|e| e.attr("cellpadding"))
-                        .and_then(crate::parse_dimension_attr);
-                    break;
-                }
-                cur = dom.parent(p);
-            }
-            found
-        };
-        if let Some(cp) = table_cellpadding {
-            s.padding = crate::Sides::all(crate::Dim::Px(cp));
-        }
-    }
+    // `cellpadding` lives on the table but pads the CELLS — and it, too, is a DECLARATION at hint
+    // origin now (`presentational_hint_block`), not a value assigned after the cascade has run.
+    // Assigning here beat an author's `padding` in both of its forms; see the note there.
     // A form control has an INTRINSIC size — the browser's, not the content's. A text field is
     // `size` characters wide (20 by default), and a checkbox is a 13px square. Sized from their
     // content instead, a text field collapses to the width of its value ("hi" → 12px) and a
@@ -3110,6 +3120,58 @@ fn presentational_hint_block(
             _ => {}
         }
     }
+    // ⚠⚠⚠ **`cellspacing` BELONGS HERE, FOR BOTH OF THE REASONS THIS FUNCTION EXISTS (t1364).**
+    // It used to be written straight onto the computed style in a post-cascade pass, and that pass
+    // got BOTH halves of the job wrong in the way a post-cascade pass always does:
+    //
+    //   * it set `border_spacing` and not `border_spacing_v`, because at that layer the shorthand
+    //     is two fields and nothing makes you write the second one. As a DECLARATION it is one
+    //     `border-spacing`, and the shorthand cannot forget its own vertical axis.
+    //   * it beat the author. `<table cellspacing="0" style="border-spacing:6px">` is 66px tall in
+    //     Chrome and was 48 here: a presentational hint is the LOWEST-priority author-origin
+    //     declaration, so it must lose to a real rule, and a value assigned after the cascade
+    //     cannot lose to anything.
+    //
+    // This is the same lesson, on the same function, as the `width`/`height` merge above — see the
+    // `<iframe width=200 height=100 style="height:auto">` note at the old call site. Third time.
+    if tag == "table" {
+        if let Some(sp) = e.attr("cellspacing").and_then(crate::parse_dimension_attr) {
+            css.push_str(&format!("border-spacing:{sp}px;"));
+        }
+    }
+    // ⚠⚠ **AND `cellpadding` IS THE SAME DEFECT ONE FUNCTION AWAY — the second implementation.**
+    // It lived in the same post-cascade pass and beat BOTH forms of author CSS, which is one worse
+    // than `cellspacing` managed. Chrome-measured, `cellpadding="4"` on a table whose cell also has
+    // a padding from elsewhere:
+    //
+    // ```text
+    //                                              Chrome   before
+    //   cellpadding="4" alone                        32       32     ← CONTROL: the hint applies
+    //   + a `.pad9 td { padding: 9px }` RULE          42       32
+    //   + an inline `style="padding:1px"`             26       32
+    // ```
+    //
+    // It is declared on the TABLE and applies to the CELLS, so unlike every other hint here the
+    // attribute is not on the element being cascaded — hence the walk. `border-spacing` is the
+    // table's own property and `padding` is the cell's; both are hints of the table, which is the
+    // only reason these two knobs read as one feature.
+    if matches!(tag, "td" | "th") {
+        let mut cur = el.dom.parent(node);
+        while let Some(p) = cur {
+            if el.dom.tag_name(p) == Some("table") {
+                if let Some(cp) = el
+                    .dom
+                    .element(p)
+                    .and_then(|t| t.attr("cellpadding"))
+                    .and_then(crate::parse_dimension_attr)
+                {
+                    css.push_str(&format!("padding:{cp}px;"));
+                }
+                break;
+            }
+            cur = el.dom.parent(p);
+        }
+    }
     if css.is_empty() {
         return None;
     }
@@ -3252,19 +3314,40 @@ fn cascade_one_element(
     // Collect the winning declarations in ASCENDING cascade priority. `merge_ascending` turns this
     // into the block shape `compute_for_declarations` actually contracts for — see its doc comment.
     let mut ascending: Vec<(&PropertyDeclaration, Importance)> = Vec::new();
-    // ⚠ The hint goes in FIRST, and its position in this vec IS its origin. `winners` is already
-    // sorted ascending and begins with the UA sheet, so prepending here places the hint below the
-    // UA sheet rather than between user and author. That is deliberate and it is the conservative
-    // direction: our UA sheet declares no `width`/`height` on these seven tags (it sets `display`
-    // and margins), so the two orderings are indistinguishable today, and if one ever does the UA
-    // value is the one a page cannot have asked for. `ORIGIN_PRES_HINT` names the intended rank for
-    // the day the UA sheet grows one.
+    // ⚠⚠⚠ **THE HINT IS INSERTED AT ITS RANK, AND UNTIL t1364 IT WAS PREPENDED — WHICH PUT IT
+    // BELOW THE UA SHEET.** The comment that used to stand here said so, and said why it was
+    // harmless: *"our UA sheet declares no `width`/`height` on these seven tags … if one ever does
+    // the UA value is the one a page cannot have asked for. `ORIGIN_PRES_HINT` names the intended
+    // rank for the day the UA sheet grows one."*
+    //
+    // ⭐ **That day had already arrived and nothing announced it.** The UA sheet declares
+    // `table { border-spacing: 2px }`, and the moment `cellspacing` became a hint declaration
+    // rather than a post-cascade assignment, the prepend made the UA's 2px beat it — so
+    // `<table cellspacing="0">` stayed 2px-spaced and the fix looked like it had done nothing.
+    // The bound the old comment relied on was "the hint list and the UA sheet share no property",
+    // which is a fact about two lists that are edited independently, i.e. not a bound at all.
+    //
+    // `winners` is sorted ascending by origin rank, so inserting at `ORIGIN_PRES_HINT` is a split
+    // rather than a re-sort: everything below the hint's origin first, the hint, then everything
+    // at or above it. This is CSS Cascade §6.4's placement — a presentational hint loses to every
+    // real author rule and wins over the UA sheet.
+    for (rank, _, _, _, block) in &winners {
+        if *rank >= ORIGIN_PRES_HINT {
+            break;
+        }
+        for (decl, importance) in block.read_with(guard).declaration_importance_iter() {
+            ascending.push((decl, importance));
+        }
+    }
     if let Some(block) = &hint_block {
         for (decl, importance) in block.declaration_importance_iter() {
             ascending.push((decl, importance));
         }
     }
-    for (_, _, _, _, block) in &winners {
+    for (rank, _, _, _, block) in &winners {
+        if *rank < ORIGIN_PRES_HINT {
+            continue;
+        }
         for (decl, importance) in block.read_with(guard).declaration_importance_iter() {
             ascending.push((decl, importance));
         }

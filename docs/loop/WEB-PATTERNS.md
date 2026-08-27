@@ -8731,3 +8731,56 @@ Opening a fresh gate file per tick gets the first property and loses the second,
 also have cost a 520th static gate binary on a wall that is already link-bound. Prefer extending the
 gate whose subject already contains the new rows' subject — and when a gate's own doc carries a NEXT
 block with measured numbers in it, that block is an unclaimed set of assertions, not a comment.
+
+## A DEFERRED FIX WITH A NAMED TRIGGER NEEDS SOMETHING THAT WATCHES THE TRIGGER
+
+`ORIGIN_PRES_HINT` was defined, correct, documented and UNUSED. The cascade prepended presentational
+hints below the UA sheet instead, under a comment that named the exact condition making that safe —
+*"our UA sheet declares no `width`/`height` on these seven tags … if one ever does, the UA value is
+the one a page cannot have asked for"* — and named the constant to switch to when it stopped being
+true. It had stopped being true: a later tick added `table { border-spacing: 2px }` to the UA sheet,
+which is a property the hint list also sets.
+
+Nothing detected that, and nothing could have, because **the condition spans two files that are
+edited by different ticks for different reasons**. The tick that adds a UA declaration is not
+thinking about presentational hints; the comment that would warn it lives somewhere it will not
+open. A conditional deferral written only in prose is a bet that the next person to invalidate it
+will happen to be reading it.
+
+If the trigger is checkable — here it is one grep, "does the UA sheet declare a property the hint
+list declares?" — make it a test row, not a sentence. If it is not checkable, the deferral is really
+a decision to be wrong later, and it should be priced that way.
+
+## A CONTROL THAT CANNOT LOSE IS DECORATION — RUN EVERY MUTATION YOU NAME
+
+The gate row written to prove "a presentational hint must lose to author CSS" used an inline
+`style=`. Inline styles are applied last in the cascade regardless of where the hint sits, so when
+the mutation it existed to catch was actually run — push the hint above every author rule — **the
+row stayed green.** Replacing it with an ordinary stylesheet rule made the same mutation fail
+immediately. The row had been read as a guard for as long as nobody executed the thing it guarded
+against.
+
+The sibling trap on the same tick: two rows asserting "the author's padding beats `cellpadding`" are
+jointly satisfied by DELETING `cellpadding` support altogether. A set of "X loses" rows cannot
+distinguish a correctly-ranked X from an absent one; it takes one row where nothing else declares
+the property and X therefore has to WIN.
+
+Both are the same discipline and it is cheap: for each mutation the gate's header claims, actually
+apply it and read WHICH rows go red. A row that never moves under any named mutation is not
+protecting anything.
+
+## START FROM THE PAGE, NOT THE HISTOGRAM — AND MATCH THE REFERENCE'S FLAGS FIRST
+
+This tick began by dumping one anchor site's box tree beside Chrome's, and the mechanism fell out of
+three numbers: the container's WIDTH was exact, its HEIGHT was +214, and the per-row pitch was +6.
+Width-exact-height-wrong immediately excludes the whole width→re-wrap family the burndown ranks
+first and points at a per-row constant, which is a table property. No histogram of failing subtests
+would have said that, and in fact WPT is entirely flat on the fix: the suite's table tests DECLARE
+their spacing, and the defect lived in the legacy attribute nobody writes a conformance test for.
+
+⚠ The first reading was wrong and the repo already knew why. Run without `--hide-scrollbars`, the
+reference reserved 15px we did not, and the page presented as a 12px WIDTH divergence — a far more
+interesting bug that does not exist. `SCROLLBARS_HIDDEN`'s doc comment describes that exact
+mismatch from the other direction. **Before believing a real-page divergence, check that both sides
+were run with the same UA metrics** — viewport, scrollbars, device pixel ratio, default fonts — and
+grep the engine for the one you are about to blame.

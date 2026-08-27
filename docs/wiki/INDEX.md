@@ -1034,6 +1034,8 @@
   - L4755 · A statement at-rule ends at ;, and until it did its text was prepended to the next selector (t1356)
   - L4803 · selectorText is a live accessor, and assigning to it must reach the cascade (t1357)
   - L4854 · A constructed stylesheet applied its styles and could not describe itself (t1359)
+  - L4903 · A presentational hint is a DECLARATION AT AN ORIGIN, and both halves of that sentence are load-bearing
+  - L4932 · Writing a hint as a computed-style assignment loses the shorthand too
 
 ## `<dialog>`, `popover`, and the top layer (ticks 194-195)
 `docs/wiki/dialog-and-top-layer.md`
@@ -2398,4 +2400,4 @@
   - L231 · Both named mechanisms are subsystem work
 
 ---
-2305 sections across 22 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+2307 sections across 22 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.

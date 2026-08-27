@@ -91532,3 +91532,153 @@ Recorded rather than touched: `scripts/verify.sh` is harness. The tick's own evi
 layout 185/185, the gate green, four mutations red — and the detached lander keeps retrying.
 
 WIKI: docs/wiki/box-layout.md
+
+## t1364 — a presentational hint is a declaration AT AN ORIGIN, and both halves were wrong
+
+TICK SHAPE: capability. Board re-run at the top of this tick and diffed against t1363's copy: no
+change. CO-#1 is the rendering gap, attacked on the anchor sites the board names — so this tick
+starts from a REAL PAGE rather than from a WPT histogram, which is what the mandate asks for.
+
+### THE METHOD — the anchor site named the mechanism in three measurements
+
+`news.ycombinator.com` (board anchor, shape 0.72), fetched to disk with its one stylesheet so both
+engines see identical bytes. `#hnmain`, the page's outer table:
+
+```text
+                     Chrome        ours
+  #hnmain            1006 x 1163   1006 x 1377     ← WIDTH exact, HEIGHT +214
+  story pitch        34px          40px            ← +6 per story, 30 stories
+```
+
+⚠⚠⚠ **THE FIRST READING WAS AN INSTRUMENT MISMATCH AND THE CODE SAID SO BEFORE I DID.** Run without
+`--hide-scrollbars`, Chrome put `#hnmain` at 994 against our 1006 — a 12px WIDTH error, which would
+have been a much more exciting finding. `Layout::SCROLLBARS_HIDDEN`'s doc comment describes exactly
+this, from the other side: *"our engine did not have the switch, so it kept reserving 15px that the
+reference did not … the entire divergence was one flag set on one side of the comparison."* Matching
+the flag made the width exact and left only the height. **A comment in this repo has now held the
+answer to a divergence four times this arc; reading it cost one minute and would have cost a tick.**
+
+### THE BUG — half of `cellspacing` was working, which is why it read as supported
+
+Every table on that page carries `cellspacing="0"`. The presentational hint for it was:
+
+```rust
+if let Some(sp) = el.attr("cellspacing").and_then(parse_dimension_attr) {
+    s.border_spacing = sp;          // and NOT border_spacing_v
+}
+```
+
+`border-spacing` is stored as two fields because it takes two values. The UA sheet's
+`table { border-spacing: 2px }` writes both; this hint overwrote one. So `cellspacing="0"` left
+**2px between every ROW** for ever, while the COLUMN axis it did set was exactly right. Isolated on
+a 3-row fixture: Chrome 30 tall, ours 38; two cells in one row, both 40 wide — the axis that was set
+is perfect, and `border-spacing: 0` via CSS was perfect too. ⭐ **That pair is what makes it a
+FORGOTTEN AXIS and not an unimplemented feature**, and it is the same shape this file names at
+`taffy_item_height`: *"the forgotten copy is never the main path, it is the other axis."*
+
+### ⭐⭐⭐ AND FIXING IT DID NOTHING, BECAUSE THE HINT WAS RANKED BELOW THE UA SHEET
+
+Writing both fields is not the fix — writing them AFTER the cascade is itself the defect, because a
+value assigned post-cascade cannot lose to anything. `<table cellspacing="0" style="border-spacing:
+6px">` is 66px in Chrome and was 48 here. So the declaration moved into
+`presentational_hint_block`, which is the existing one-producer-one-origin machinery t1026/t1027
+built for `width`/`height` after the same lesson twice.
+
+It still did nothing. `#u11` stayed at 28. The cascade inserted the hint like this:
+
+```rust
+if let Some(block) = &hint_block { ...push... }   // FIRST — i.e. below everything
+for (_, _, _, _, block) in &winners { ...push... }
+```
+
+and the comment above it explained why that was safe:
+
+> *"`winners` … begins with the UA sheet, so prepending here places the hint below the UA sheet …
+> That is deliberate and it is the conservative direction: **our UA sheet declares no `width`/
+> `height` on these seven tags**, so the two orderings are indistinguishable today, **and if one ever
+> does** the UA value is the one a page cannot have asked for. `ORIGIN_PRES_HINT` names the intended
+> rank for the day the UA sheet grows one."*
+
+**That day had already arrived and nothing announced it.** t908 added `table { border-spacing: 2px }`
+to the UA sheet. The safety argument was a claim about two lists — the hint's tag list and the UA
+sheet — that are edited by different ticks for different reasons, so it was never a bound; it was a
+coincidence with a comment attached. The hint now inserts at `ORIGIN_PRES_HINT` by splitting the
+already-sorted `winners`, which is CSS Cascade §6.4's placement.
+
+⭐ **A DEFERRED FIX WITH A NAMED TRIGGER IS ONLY AS GOOD AS SOMETHING THAT WATCHES THE TRIGGER.**
+`ORIGIN_PRES_HINT` existed, correct, unused, waiting for a condition nobody was checking. The
+condition was "does the UA sheet declare a property the hint list also declares?" — one grep, and
+nothing ran it, because the tick that adds a UA declaration has no reason to think about hints.
+
+### ⚠⚠ THE SECOND IMPLEMENTATION, ONE FUNCTION AWAY, AND WORSE
+
+`cellpadding` sat in the same post-cascade pass and beat author CSS in BOTH forms:
+
+```text
+                                              Chrome   before
+  cellpadding="4" alone                         32       32     ← CONTROL
+  + a `.pad9 td { padding: 9px }` RULE          42       32
+  + an inline `style="padding:1px"`             26       32
+```
+
+Both knobs are attributes of the TABLE, so they read as one feature; they are two implementations
+and only one of them was in this tick's line of sight. Moved to the same producer. `cellpadding` is
+the one hint whose attribute is not on the element being cascaded — it is declared on the table and
+applies to the cells — hence the ancestor walk.
+
+### ⚠⚠⚠ A CONTROL THAT CANNOT LOSE IS NOT A CONTROL — MY OWN GATE ALMOST SHIPPED ONE
+
+The row written to guard "a hint must lose to author CSS" was `<table cellspacing="0"
+style="border-spacing:6px">`. Running the mutation it exists to catch — push the hint ABOVE all
+author rules — **the gate stayed green.** An inline `style=` is appended last no matter where the
+hint sits, so that row can never fail for the reason it was written. `#u17` replaces it with an
+ordinary stylesheet rule (`.sp8 { border-spacing: 8px }`, Chrome 72), and the mutation now reports
+`#u17 … got 48`.
+
+The same trap was one row away on the other knob: `#u18` and `#u20` (a `td{padding:0}` rule and an
+inline style, both beating `cellpadding`) are jointly satisfied by DELETING `cellpadding` support.
+`#u19` is a `<th>` — unmatched by the fixture's `td` rule — and is the only row where the hint
+actually applies. **A pair of "the author wins" rows cannot tell a correctly-ranked hint from an
+absent one.** Run every mutation you name and watch which rows move; a control that stays green
+under its own mutation is decoration.
+
+### THE RESULT
+
+```text
+                                         Chrome    before    after
+  #hnmain (news.ycombinator.com)         1163      1377      1173
+  3-row cellspacing="0" table              30        38        30
+  cellpadding vs a stylesheet rule         42        32        42
+  cellpadding vs an inline style           26        32        26
+  cellspacing vs a stylesheet rule         72        48        72
+```
+
+⚠⚠ **WPT IS FLAT AND FOUR "GAINS" WERE STALE ROWS — THE THIRD TICK RUNNING.** css-backgrounds read
++74, selectors +17, css-overflow +13, css-values +6 against their banked rows. The old-binary
+control returned **identical numbers on all four**, so every one of them is a stale bank, not a
+gain; corrected in `WPT-AREAS.tsv` as CORRECTIONS (with css-color +1). css/CSS2 — the most
+table-heavy suite measured, 66 files — is flat BY NAME: 0 newly failing, 0 newly passing. Fifteen
+areas measured, none regressed.
+
+That flatness is the right result to expect and not a disappointment: WPT's table tests declare
+their CSS, and this defect lives exactly where nobody declares anything — the same shape t908's own
+gate header states about the UA default it added. **The page moved 204px; the suite cannot see it.**
+
+GATE `G_TABLE_BORDER_SPACING_UA_DEFAULT` (extended, 15 rows), RED under:
+- **the `cellspacing` hint deleted** → `#u11` at 28, not 24
+- **the hint PREPENDED** (the pre-tick cascade order, below the UA sheet) → `#u11` at 28 again — and
+  that these two mutations are indistinguishable at the assertion is the whole point of the tick
+- **the hint pushed ABOVE all author rules** → `#u17` at 48, not 72 (and `#u16` stays green, which
+  is why `#u17` had to be written)
+- **the post-cascade `cellpadding` assignment restored** → `#u18` at 32, not 24
+
+NEXT — measured, reproducible, not done here:
+**`#hnmain` is 1173 against Chrome's 1163 and the residual 10px is in the HEADER, not the stories.**
+The story pitch is now exactly 34, matching Chrome row for row, and `#bigbox` starts at 46 against
+Chrome's 42. The remaining error is one block: our header row is 32 tall where Chrome's is 24, and
+inside it the inner table's row is 24 where Chrome says 20 — a 20x20 `<img>` in a `<td>` whose line
+box we make 4px taller than the image. That is the inline-replaced/baseline strut question, not a
+table one. Fixture `/tmp/hn.html`, Chrome dump `/tmp/hn-chrome2.tsv` (taken WITH `--hide-scrollbars`
+— see above).
+
+WIKI: docs/wiki/css-cascade.md
