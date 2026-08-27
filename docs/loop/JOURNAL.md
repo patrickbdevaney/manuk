@@ -90921,3 +90921,62 @@ Full `manuk-page` suite: **509 of 509**; `manuk-layout`, `manuk-css` green; `css
 placement must be mapped by the `VerticalRun`, which `layout_abs` does only when the abspos is ITSELF
 an orthogonal root (t1347). That is the 156. (b) `css/cssom`'s remaining ~700 outside the insets
 files. (c) The three unmodelled font longhands (t1353). (d) The teardown Bar-0 (t1349). (e) I3's debt.
+
+## t1359 — two implementations of the same noun, and a prelude failure that looks like a page with no script
+
+TICK SHAPE: capability. Board re-run at the top of this tick and diffed against t1358's copy:
+**unchanged** except its own tally. `css/cssom` 2,758 → **2,760 (+2)**.
+
+### THE BUG
+
+`new CSSStyleSheet()` + `replaceSync(css)` + `adoptedStyleSheets` is THE web-component styling idiom,
+and the CASCADE half already worked — the element really did turn `rgb(9,8,7)`. `cssRules` stayed
+EMPTY. Chrome-measured on `'#t{…} @import "x.css"; div{…}'`:
+
+```text
+                            Chrome        before      after
+   cssRules.length             2             0          2      ← @import dropped
+   cssRules[0].selectorText   '#t'           —         '#t'
+   typeof cssRules[0].style  object      undefined    object
+   after insertRule            3             1          3
+   insertRule('@import …')  SyntaxError   accepted   SyntaxError
+   the APPLIED colour      rgb(9,8,7)   rgb(9,8,7)  rgb(9,8,7)  ← already worked
+```
+
+⭐⭐ **THE CLASS: TWO IMPLEMENTATIONS OF THE SAME NOUN.** A good `CSSRule` already existed for
+`<style>` sheets — live `selectorText` (t1357), working `.style` (t1302), correct at-rule types
+(t1356). The constructed sheet had a SECOND one, three fields wide, written when the constructor was
+stubbed and never revisited. The fix is to delete the second and call the first: `replaceSync` now
+builds its rules with the same `__ruleOf`/`__splitRules` the bridge uses, so a constructed rule
+inherits every capability the other one has earned — and the two cannot drift further apart.
+
+⚠ `@import` is REMOVED by `replace`/`replaceSync` (a constructed sheet cannot load one) and
+`insertRule` of one THROWS `SyntaxError`. Accepting it silently puts a rule in the list that will
+never load anything and the caller has no way to find out. ⚠ `sheet.rules` is the legacy alias and is
+the SAME array object, not a copy.
+
+### ⚠⚠ A PRELUDE FAILURE IS TOTAL, AND LOOKS EXACTLY LIKE "THIS PAGE HAS NO SCRIPT"
+
+Exposing the two builders was written as `g.__splitRules = …`, and `g` is not bound in that scope.
+The prelude threw at load, so **NO JavaScript ran on any page at all** — every probe, including ones
+that had nothing to do with stylesheets, read `-`.
+
+⚠ **`node --check` on the extracted prelude PASSES**, because it is a runtime `ReferenceError`, not a
+syntax error — so the obvious instrument said the file was fine. What found it was bisecting the two
+added lines out and watching a trivial `typeof CSSStyleSheet` probe come back to life. Worth
+recording as its own shape: **when every probe on every page reads empty, suspect the prelude before
+the feature**, and bisect rather than re-read.
+
+**Proven RED**, four mutations: no rebuild → the fixture's script dies; keep `@import` → the count
+claim; accept `@import` in `insertRule` → the throw claim; `rules` as a copy → the alias claim.
+Full `manuk-page` suite: **509 of 509**; `dom` and `html/dom` re-run and unchanged.
+
+⚠ **+2, and the rest of that file is named**: shadow-DOM adoption, `baseURL` validation, and
+re-invalidation after mutating an adopted sheet — three separate mechanisms, none of them this one.
+
+**NEXT.** (a) ⭐ The vertical/RTL abspos containing block — still the largest single named item at
+156 subtests, and t1358's `display_in_flow` is its foundation. Measured this session: an abspos in a
+`vertical-lr` container reads `top:-215px` against Chrome's `10px`, and with explicit
+`top:1px;left:2px` its axes come out TRANSPOSED (@6,7 against Chrome's @7,6) — the insets are being
+applied in the transposed space. (b) The remaining constructed-sheet mechanisms above. (c) The three
+unmodelled font longhands (t1353). (d) The teardown Bar-0 (t1349). (e) I3's debt.

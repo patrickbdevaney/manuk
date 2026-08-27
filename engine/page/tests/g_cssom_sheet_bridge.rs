@@ -103,6 +103,29 @@ const HTML: &str = r##"<!doctype html><html><head><style id="authored">#a { widt
   held.selectorText = '#sela';
   mark('T__selassign_held_' + (held.selectorText === '#sela'));
 
+  // ── ⭐⭐ 8. A CONSTRUCTED SHEET MUST BE ABLE TO DESCRIBE ITSELF (t1359). `new CSSStyleSheet()` +
+  //    `replaceSync()` + `adoptedStyleSheets` is THE web-component styling idiom, and the CASCADE
+  //    half already worked — the element really did change colour. `cssRules` stayed EMPTY, because
+  //    `replaceSync` only stashed the text and the shim's rules were `{cssText}` and nothing else.
+  //    Every consumer reads the sheet back: a design-token editor enumerates `cssRules` to patch
+  //    one, a theme runtime looks a rule up by `selectorText`.
+  var cs = new CSSStyleSheet();
+  cs.replaceSync('#csa { width: 71px } @import "x.css"; #csb { width: 72px }');
+  // ⚠ TWO, not three: `replace`/`replaceSync` DROP `@import` — they cannot load.
+  mark('T__ctor_rules_' + cs.cssRules.length);
+  mark('T__ctor_alias_' + (cs.rules === cs.cssRules));
+  // ⚠ Built by the SAME `__ruleOf` the `<style>` bridge uses, so a constructed rule has a live
+  //   `selectorText` and a working `.style` for free — the shim had neither.
+  mark('T__ctor_sel_' + (cs.cssRules[0].selectorText === '#csa'));
+  mark('T__ctor_style_' + (typeof cs.cssRules[0].style));
+  cs.insertRule('#csc { width: 73px }');
+  mark('T__ctor_insert_' + cs.cssRules.length);
+  // ⚠ An `@import` through `insertRule` THROWS — a silent accept puts a rule in the list that will
+  //   never load anything.
+  var ithrew = 'no';
+  try { cs.insertRule('@import "y.css";'); } catch (e) { ithrew = e.name; }
+  mark('T__ctor_importthrow_' + ithrew);
+
   // 1. The surface exists at all, and the tag guard holds.
   mark('T__typeof_' + (typeof authored.sheet));
   mark('T__identity_' + (authored.sheet === authored.sheet));
@@ -442,6 +465,41 @@ fn a_rule_inserted_through_the_sheet_reaches_the_cascade() {
          every other row here passes with a getter frozen at construction — this is the only row \
          that can see it, and `const r = sheet.cssRules[0]` is what every edit loop actually \
          holds.\n  marks: {marks:?}"
+    );
+    // ── ⭐⭐ A CONSTRUCTED SHEET DESCRIBES ITSELF (t1359). Chrome-measured on
+    //    `'#csa{…} @import "x.css"; #csb{…}'`:
+    //
+    //    ```text
+    //                              Chrome   before
+    //      cssRules.length            2       0     ← @import dropped, two style rules kept
+    //      cssRules[0].selectorText '#csa'    -     ← the shim's rules had no selectorText at all
+    //      after insertRule           3       1
+    //      insertRule('@import …')  SyntaxError    silently accepted
+    //      the APPLIED colour     rgb(9,8,7) rgb(9,8,7)  ← the half that already worked
+    //    ```
+    assert!(
+        has("T__ctor_rules_2") && has("T__ctor_insert_3"),
+        "⭐ `new CSSStyleSheet().replaceSync(css)` must POPULATE `cssRules` — it applied its styles \
+         and reported an empty rule list, which is a sheet that demonstrably works and cannot \
+         describe itself. TWO rules, not three: `replaceSync` DROPS `@import`.\n  marks: {marks:?}"
+    );
+    assert!(
+        has("T__ctor_sel_true") && has("T__ctor_style_object"),
+        "a constructed rule must carry a live `selectorText` and a working `.style` — it is built by \
+         the SAME `__ruleOf` the `<style>` bridge uses, and the shim it replaced had its own idea of \
+         a rule (`{{cssText}}` and nothing else). Two implementations of what a CSS rule is, is the \
+         drift this file pays for elsewhere.\n  marks: {marks:?}"
+    );
+    assert!(
+        has("T__ctor_alias_true"),
+        "`sheet.rules` is the legacy alias and must be the SAME array object, not a copy — a caller \
+         holding it across a mutation is holding the live list.\n  marks: {marks:?}"
+    );
+    assert!(
+        has("T__ctor_importthrow_SyntaxError"),
+        "⚠ `insertRule('@import …')` on a constructed sheet must THROW `SyntaxError`. Accepting it \
+         silently puts a rule in the list that will never load anything — the false-presence shape, \
+         and the caller has no way to find out.\n  marks: {marks:?}"
     );
     assert!(
         has("T__selassign_bad_true") && has("T__selassign_num_true"),

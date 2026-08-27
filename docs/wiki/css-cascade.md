@@ -4848,3 +4848,54 @@ construction → **the HELD-reference claim, and only that one.** ⚠ Re-reading
 hands back a REBUILT object whose captured text is already current, so every other row passes with a
 stale getter; `const r = sheet.cssRules[0]` — what every edit loop actually holds — is the only shape
 that can see it.
+
+---
+
+## A constructed stylesheet applied its styles and could not describe itself (t1359)
+
+`new CSSStyleSheet()` + `replaceSync(css)` + `document.adoptedStyleSheets = [s]` is THE
+web-component styling idiom. The CASCADE half already worked — the element really did turn
+`rgb(9,8,7)`. `cssRules` stayed EMPTY, because `replaceSync` only stashed the text and the shim's
+rules were `{cssText}` objects with no `selectorText` and no `style`. Chrome-measured on
+`'#t{…} @import "x.css"; div{…}'`:
+
+```text
+                            Chrome        before      after
+   cssRules.length             2             0          2      ← @import dropped
+   cssRules[0].selectorText   '#t'           —         '#t'
+   typeof cssRules[0].style  object      undefined    object
+   after insertRule            3             1          3
+   insertRule('@import …')  SyntaxError   accepted   SyntaxError
+   the APPLIED colour      rgb(9,8,7)   rgb(9,8,7)  rgb(9,8,7)  ← already worked
+```
+
+⭐ **Every consumer of a constructed sheet reads it back**: a design-token editor enumerates
+`cssRules` to patch one, a theme runtime looks a rule up by `selectorText`, a component library diffs
+its own sheet against the one it adopted. All of them saw an empty sheet that was demonstrably
+styling the page.
+
+**⚠ THE RULES ARE BUILT BY `__ruleOf`/`__splitRules` — the SAME pair the `<style>` bridge uses**, and
+that is the point of the change as much as the population is. The shim had its own idea of what a CSS
+rule is; two implementations of that would have drifted exactly as this file's other seams have. A
+constructed rule now gets a live `selectorText` (t1357) and a working `.style` (t1302) for free.
+
+⚠ `@import` is REMOVED by `replace`/`replaceSync` — a constructed sheet cannot load one — and
+`insertRule` of one THROWS `SyntaxError`. Accepting it silently puts a rule in the list that will
+never load anything, and the caller has no way to find out.
+
+⚠ `sheet.rules` is the legacy alias and is the SAME array object, not a copy: a caller holding it
+across a mutation is holding the live list.
+
+**⚠⚠ A METHOD NOTE.** Exposing the two builders was written as `g.__splitRules = …` — and `g` is not
+bound in that scope. The prelude threw at load, so **NO JavaScript ran on any page at all**, and the
+symptom was every probe reading `-`. `node --check` on the extracted prelude passes (it is a runtime
+`ReferenceError`, not a syntax error), so the check that found it was bisecting the two added lines
+out. A prelude failure is total and looks exactly like "the page has no script".
+
+**WPT.** `css/cssom` 2,758 → **2,760** (+2). ⚠ Small, and the rest of that file is named: shadow-DOM
+adoption, `baseURL` validation, and re-invalidation after mutating an adopted sheet — three separate
+mechanisms.
+
+**Gate.** `G_CSSOM_SHEET_BRIDGE`, +5 claims. Proven red by four mutations: no rebuild → the fixture's
+script dies; keep `@import` → the count; accept `@import` in `insertRule` → the throw claim;
+`rules` as a copy → the alias claim.

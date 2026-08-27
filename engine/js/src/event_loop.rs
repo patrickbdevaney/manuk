@@ -6415,6 +6415,12 @@ const PRELUDE: &str = r#"
             }
           });
         };
+        // ⚠ EXPOSED so the CONSTRUCTED-sheet path reuses these two rather than growing a second
+        //   rule model. `new CSSStyleSheet()` had a shim whose `cssRules` was a plain array of
+        //   `{cssText}` objects — no `selectorText`, no `style`, and `replaceSync` did not populate
+        //   it at all. Two implementations of "what a CSS rule is" is exactly the drift this file
+        //   keeps paying for elsewhere.
+        globalThis.__splitRules = __splitRules;
         var __ruleOf = function (text, sheet, readText, writeBlock, writeSel) {
           var i = text.indexOf('{');
           var isAt = text.charAt(0) === '@';
@@ -6500,6 +6506,8 @@ const PRELUDE: &str = r#"
           }
           return rule;
         };
+        globalThis.__ruleOf = __ruleOf;
+
         var __makeSheet = function (el) {
           // **ONE `CSSRuleList` per sheet — the SAME rule as `el.sheet === el.sheet` one level up,
           // which was reasoned about there and NOT applied here.** `cssRules` re-derived the list
@@ -7219,20 +7227,118 @@ const PRELUDE: &str = r#"
       }
 
       if (typeof globalThis.CSSStyleSheet === 'undefined') {
+        // ── ⚠⚠⚠ **A CONSTRUCTED SHEET APPLIED ITS STYLES AND COULD NOT DESCRIBE ITSELF.**
+        //
+        // `new CSSStyleSheet()` + `replaceSync(css)` + `document.adoptedStyleSheets = [s]` is THE
+        // web-component styling idiom, and the CASCADE half worked — the element really did turn
+        // `rgb(9,8,7)`. `cssRules` stayed EMPTY, because `replaceSync` only stashed the text.
+        // Chrome-measured on `'#t{…} @import "x.css"; div{…}'`:
+        //
+        // ```text
+        //                          Chrome   before
+        //   cssRules.length           2       0     ← @import dropped, two style rules kept
+        //   cssRules[0].selectorText '#t'     -     ← the shim's rules had no selectorText at all
+        //   after insertRule          3       1
+        //   insertRule('@import …')  SyntaxError   (silently accepted)
+        //   the applied colour     rgb(9,8,7)  rgb(9,8,7)   ← the half that already worked
+        // ```
+        //
+        // ⭐ Every consumer of a constructed sheet reads it back: a design-token editor enumerates
+        // `cssRules` to patch one, a theme runtime looks up a rule by `selectorText`, and a
+        // component library diffs its own sheet against the one it adopted. All of them saw an
+        // empty sheet that was demonstrably styling the page.
+        //
+        // ⚠ **THE RULES ARE BUILT BY `__ruleOf`/`__splitRules`, the SAME pair the `<style>` bridge
+        // uses.** The shim had its own idea of a rule (`{cssText}` and nothing else); two
+        // implementations of "what a CSS rule is" is the drift this file pays for elsewhere, and
+        // reusing the bridge is what gives a constructed rule a live `selectorText` and a working
+        // `.style` for free.
+        //
+        // ⚠ `@import` IS REMOVED, not kept: CSS-OM says a constructed sheet's `replace`/`replaceSync`
+        // drops `@import` rules (they cannot load), and `insertRule` of one THROWS `SyntaxError`.
+        // Accepting it silently is the false-presence shape — the rule is in the list and will never
+        // load anything.
+        var __dropImports = function (css) {
+          if (typeof globalThis.__splitRules !== 'function') { return String(css); }
+          var parts = globalThis.__splitRules(String(css)), keep = [];
+          for (var i = 0; i < parts.length; i++) {
+            if (!/^@import\b/i.test(parts[i])) { keep.push(parts[i]); }
+          }
+          return keep.join('\n');
+        };
+        var __rebuild = function (sheet) {
+          var out = [];
+          if (typeof globalThis.__splitRules === 'function' && typeof globalThis.__ruleOf === 'function') {
+            var parts = globalThis.__splitRules(sheet._text || '');
+            for (var i = 0; i < parts.length; i++) {
+              out.push(globalThis.__ruleOf(parts[i], sheet, (function (idx) {
+                return function () {
+                  var cur = globalThis.__splitRules(sheet._text || '');
+                  return cur[idx] === undefined ? '' : cur[idx];
+                };
+              })(i), (function (idx) {
+                return function (block) {
+                  var cur = globalThis.__splitRules(sheet._text || '');
+                  if (cur[idx] === undefined) { return; }
+                  var t = cur[idx], b = t.indexOf('{');
+                  if (b < 0) { return; }
+                  cur[idx] = t.slice(0, b + 1) + ' ' + block + ' }';
+                  sheet._text = cur.join('\n');
+                  __rebuild(sheet);
+                };
+              })(i), (function (idx) {
+                return function (sel) {
+                  var cur = globalThis.__splitRules(sheet._text || '');
+                  if (cur[idx] === undefined) { return; }
+                  var t = cur[idx], b = t.indexOf('{');
+                  if (b < 0) { return; }
+                  cur[idx] = sel + ' ' + t.slice(b);
+                  sheet._text = cur.join('\n');
+                  __rebuild(sheet);
+                };
+              })(i)));
+            }
+          }
+          sheet.cssRules.length = 0;
+          for (var k = 0; k < out.length; k++) { sheet.cssRules.push(out[k]); }
+        };
         globalThis.CSSStyleSheet = function CSSStyleSheet() {
           this.cssRules = [];
+          // ⚠ `rules` is the LEGACY ALIAS and must be the SAME array, not a copy — a caller that
+          //   holds `sheet.rules` across a mutation is holding the live list.
           this.rules = this.cssRules;
+          this._text = '';
         };
-        globalThis.CSSStyleSheet.prototype.replaceSync = function(text) { this._text = String(text); };
+        globalThis.CSSStyleSheet.prototype.replaceSync = function(text) {
+          this._text = __dropImports(text);
+          __rebuild(this);
+        };
         globalThis.CSSStyleSheet.prototype.replace = function(text) {
-          this._text = String(text);
+          this.replaceSync(text);
           return Promise.resolve(this);
         };
         globalThis.CSSStyleSheet.prototype.insertRule = function(rule, index) {
-          this.cssRules.splice(index === undefined ? this.cssRules.length : index, 0, { cssText: rule });
-          return index || 0;
+          var t = String(rule);
+          if (/^\s*@import\b/i.test(t)) {
+            // Not a silent drop: the spec makes this a SyntaxError, and a caller that gets no
+            // error believes its import will load.
+            var err = new Error("Failed to execute 'insertRule': @import rules are not allowed here.");
+            err.name = 'SyntaxError';
+            throw err;
+          }
+          var parts = (typeof globalThis.__splitRules === 'function') ? globalThis.__splitRules(this._text || '') : [];
+          var at = index === undefined ? parts.length : index;
+          parts.splice(at, 0, t);
+          this._text = parts.join('\n');
+          __rebuild(this);
+          return at;
         };
-        globalThis.CSSStyleSheet.prototype.deleteRule = function(i) { this.cssRules.splice(i, 1); };
+        globalThis.CSSStyleSheet.prototype.deleteRule = function(i) {
+          var parts = (typeof globalThis.__splitRules === 'function') ? globalThis.__splitRules(this._text || '') : [];
+          parts.splice(i, 1);
+          this._text = parts.join('\n');
+          __rebuild(this);
+        };
       }
       if (typeof document !== 'undefined' && !('adoptedStyleSheets' in document)) {
         try { document.adoptedStyleSheets = []; } catch (e) {}

@@ -8533,3 +8533,31 @@ information is not hidden — it is **gone**, and the only fix is to capture it 
 computed value is identical and whose behaviour differs, and the discriminator is necessarily
 something upstream of the computed value. `<div style=position:absolute>` and
 `<span style=position:absolute>` both compute `display:block` and land in different places.
+
+---
+
+## t1359 — the web-component sheet that styled the page and reported no rules
+
+`new CSSStyleSheet()`, `sheet.replaceSync(css)`, `shadowRoot.adoptedStyleSheets = [sheet]` is how
+every modern component library ships its styles — one sheet object, shared by every instance, no
+`<style>` tag per element. The styling worked. `sheet.cssRules` was `[]`.
+
+- **the design-token editor** enumerates `cssRules` to patch one declaration;
+- **the theme runtime** looks a rule up by `selectorText` to re-point or re-value it;
+- **the component library** diffs its own sheet against the one it adopted, to decide whether to
+  re-adopt.
+
+All three saw an empty sheet that was demonstrably styling the page.
+
+⭐⭐ **The class: TWO IMPLEMENTATIONS OF THE SAME NOUN.** A good `CSSRule` already existed for
+`<style>` sheets — live `selectorText`, working `.style`, correct at-rule types. The constructed
+sheet had a second one, three fields wide, written when the constructor was stubbed and never
+revisited. Reusing the first is what gives a constructed rule every capability the other one has
+earned, for free — and stops the two from drifting further apart.
+
+⚠⚠ And the method note, because it cost the tick more than the fix did: the two builders were
+exposed as `g.__splitRules = …` where `g` is not bound in that scope. **The prelude threw at load, so
+NO JavaScript ran on any page at all** — every probe read `-`. `node --check` on the extracted
+prelude PASSES, because it is a runtime `ReferenceError` and not a syntax error. **A prelude failure
+is total and is indistinguishable from "this page has no script"**; the way out was bisecting the two
+added lines, not reading them.

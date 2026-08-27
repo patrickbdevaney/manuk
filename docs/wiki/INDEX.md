@@ -1028,6 +1028,7 @@
   - L4697 · appearance: the markup path rendered it and the CSSOM path threw it away (t1355)
   - L4755 · A statement at-rule ends at ;, and until it did its text was prepended to the next selector (t1356)
   - L4803 · selectorText is a live accessor, and assigning to it must reach the cascade (t1357)
+  - L4854 · A constructed stylesheet applied its styles and could not describe itself (t1359)
 
 ## `<dialog>`, `popover`, and the top layer (ticks 194-195)
 `docs/wiki/dialog-and-top-layer.md`
@@ -2392,4 +2393,4 @@
   - L231 · Both named mechanisms are subsystem work
 
 ---
-2299 sections across 22 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+2300 sections across 22 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
