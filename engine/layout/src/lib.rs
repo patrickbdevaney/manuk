@@ -9953,6 +9953,17 @@ impl Ctx<'_> {
             },
             other => (other.resolve(cw, (cw - frame).max(0.0)) - bs_extra_w).max(0.0),
         };
+        // **Did the width come from the page, or from the content?** Everywhere else in this
+        // function the answer does not matter, because both produce a number before the children
+        // are laid out. It matters for an ORTHOGONAL ROOT, whose physical width is its BLOCK axis:
+        // a page-given width bounds the transposed subtree, and an `auto` one is only knowable
+        // AFTER it, as the children's block extent. The arms are named rather than re-derived so
+        // this stays in step if one of them changes.
+        let inline_width_is_definite = !matches!(s.width, Dim::Auto)
+            || s.width_stretch
+            || s.width_keyword.is_some()
+            || (left.is_some() && right.is_some())
+            || (definite_ch.is_some() && s.aspect_ratio.is_some_and(|r| r > 0.0));
         // `min-width` / `max-width` clamp (CSS2 §10.4) — as the in-flow block path: max applied
         // first, then min wins, both converted to the content box. An abspos box ignored these
         // entirely, so a `max-width` dialog or `min-width` tooltip took its unconstrained size.
@@ -9985,8 +9996,105 @@ impl Ctx<'_> {
         let mut content_w = content_w.min(max_w).max(min_w);
         // Lay out content at a provisional origin, then re-origin once placed.
         let mut inner = FloatContext::new(0.0, content_w);
-        let (content, ch) =
-            self.layout_children(node, 0.0, 0.0, content_w, definite_ch, &mut inner);
+        // ── ⚠⚠⚠ **AN ABSOLUTELY POSITIONED ORTHOGONAL ROOT — THE HALF OF `writing-mode` THAT NEVER
+        //    REACHED THIS FUNCTION.** t1343 taught `layout_block` to run a vertical subtree in a
+        //    transposed space and map it back; `layout_abs` places every `position:absolute` and
+        //    `position:fixed` box and knew nothing about it, so a vertical abspos was laid out
+        //    HORIZONTALLY — not wrong by a few pixels, wrong by ninety degrees, and silently,
+        //    because a rotated box is not malformed.
+        //
+        //    Chrome-measured, `writing-mode:vertical-lr`, 25px monospace, content `XX` (30px of
+        //    advance) in a 300x200 relative containing block:
+        //
+        //    ```text
+        //                                                  Chrome    before
+        //      position:absolute (all insets auto)          25x30     30x25   ✗ the axes themselves
+        //      …with left:10px; right:20px                 270x30    270x25   ✗ height only
+        //      …with top:10px; bottom:20px                  25x170     30x170 ✗ width only
+        //      …with inset:0                               300x200   300x200  ✓ both axes definite
+        //      …content `XX<br>YYY`, all auto               50x45      45x50   ✗ exactly transposed
+        //      the same box WITHOUT writing-mode  CONTROL   30x25      30x25   ✓
+        //    ```
+        //
+        //    The `inset:0` row is why this survived: the most-cited form of the pattern is the one
+        //    where both axes are definite and the transposition cannot be observed.
+        //
+        //    ⚠⚠ **THE TWO AXES SWAP ROLES, AND THE ORDER OF COMPUTATION SWAPS WITH THEM.** For an
+        //    ordinary box the width is known first and the height falls out of the children. Here
+        //    the box's physical HEIGHT is its inline axis — it is the available size the children
+        //    are laid out AGAINST — and its physical WIDTH is its block axis, which for `width:auto`
+        //    is only knowable AFTER them. So a definite height becomes an input and an auto width
+        //    becomes an output, which is the reverse of every other path in this file.
+        //
+        //    ⚠ Mapped at the PROVISIONAL (0,0) origin. `layout_abs` lays content out at zero and
+        //    translates it to the placed content origin at the end of this function, and the
+        //    transposition is an affine map in the same space — so it composes with that translate
+        //    rather than needing the placed origin, which is not known yet.
+        //
+        //    WPT: this is `css/css-grid/abspos/orthogonal-positioned-grid-descendants-001..015`,
+        //    fifteen files at 100 subtests each, every one of which failed on a single shape —
+        //    1,200 x `width expected 25 but got 50` and 300 x `height expected 50 but got 25`.
+        let orthogonal_root = self.wm_roots.get(&node).copied();
+        let (content, ch) = if let Some(wm) = orthogonal_root {
+            // The available INLINE size is this box's content HEIGHT. Definite when the page gave
+            // one (or both block insets did); otherwise CSS Writing Modes §7.3 sizes the box as
+            // fit-content against the initial containing block's block size — the same two-step
+            // (measure unconstrained, then clamp to the viewport) `layout_block` performs, and for
+            // the same reason: at the 1e6 probe size a transposed block child FILLS, so reading the
+            // fill back would make a one-glyph box the height of the probe.
+            let avail_inline = match definite_ch {
+                Some(h) => h.max(0.0),
+                None => {
+                    let mut probe_fc = FloatContext::new(0.0, 1.0e6);
+                    let _probe = IntrinsicProbe::enter(self);
+                    let (probe, _) =
+                        self.layout_children(node, 0.0, 0.0, 1.0e6, None, &mut probe_fc);
+                    content_right_extent(
+                        &probe,
+                        self.fonts,
+                        0.0,
+                        &|n| self.px_right_insets(n),
+                        &|n| self.flex_container_max_content(n),
+                    )
+                    .min(manuk_css::values::viewport_size().1)
+                    .max(0.0)
+                }
+            };
+            // The block bound is this box's content WIDTH — but only when the page actually gave
+            // one. Handing the shrink-to-fit guess down would make a percentage block size inside
+            // the subtree resolve against a number the content itself produced.
+            let block_bound = inline_width_is_definite.then_some(content_w);
+            let mut vertical_fc = FloatContext::new(0.0, avail_inline);
+            let (mut c, block_extent) =
+                self.layout_children(node, 0.0, 0.0, avail_inline, block_bound, &mut vertical_fc);
+            let used_inline = writing_mode::inline_extent(&c);
+            // An `auto` physical width is an auto BLOCK size: the children's block extent, then
+            // re-clamped, because the `min-width`/`max-width` clamp above ran against a width this
+            // branch has just replaced. `min-width`/`max-width` stay PHYSICAL here — an orthogonal
+            // root keeps its own physical style (only its descendants are transposed), so they
+            // constrain the block axis, which is what Chrome does.
+            if !inline_width_is_definite {
+                content_w = block_extent.max(0.0).min(max_w).max(min_w);
+            }
+            let v = writing_mode::VerticalRun {
+                rl: wm.is_rl(),
+                bx: if wm.is_rl() { content_w } else { 0.0 },
+                by: 0.0,
+            };
+            match &mut c {
+                BoxContent::Block(children) => writing_mode::map_subtree(children, v),
+                BoxContent::Inline(frags) => {
+                    for f in frags.iter_mut() {
+                        writing_mode::mark_vertical(f, v);
+                    }
+                }
+            }
+            // The content HEIGHT this hands back is the children's INLINE extent, not the block
+            // extent `layout_children` returns — the mirror of the swap above.
+            (c, used_inline)
+        } else {
+            self.layout_children(node, 0.0, 0.0, content_w, definite_ch, &mut inner)
+        };
         // ── **AN ABSOLUTELY POSITIONED REPLACED ELEMENT WAS ZERO PIXELS TALL. ALWAYS.**
         //
         // Height was `definite_ch` or the CONTENT height, and a replaced element has no children —

@@ -68,6 +68,8 @@ use manuk_text::FontContext;
 const HTML: &str = r##"<!DOCTYPE html><html><head><style>
  body{margin:0;font:16px/20px monospace}
  .c{width:400px}
+ .cb{position:relative;width:300px;height:200px}
+ .ab{position:absolute}
 </style></head><body>
 <div class="c" id="h1"><div class="k" id="h1k">x</div></div>
 <div class="c" id="h2"><div class="k" id="h2k1">x</div><div class="k" id="h2k2">y</div></div>
@@ -82,6 +84,13 @@ const HTML: &str = r##"<!DOCTYPE html><html><head><style>
 <div class="c" id="vm" style="writing-mode:vertical-rl"><div class="k" id="vmk" style="margin-top:10px">x</div></div>
 <div class="c" id="vb" style="writing-mode:vertical-rl"><div class="k" id="vbk" style="margin-block-start:10px">x</div></div>
 <div id="pv" style="writing-mode:vertical-rl;width:60px;height:200px;font:32px/40px monospace;background:#fff;color:#c00">IIII</div>
+<div class="cb"><div id="ah" class="ab">hello</div></div>
+<div class="cb"><div id="av" class="ab" style="writing-mode:vertical-rl">hello</div></div>
+<div class="cb"><div id="alr" class="ab" style="writing-mode:vertical-rl;left:10px;right:20px">hello</div></div>
+<div class="cb"><div id="atb" class="ab" style="writing-mode:vertical-rl;top:10px;bottom:20px">hello</div></div>
+<div class="cb"><div id="a2" class="ab" style="writing-mode:vertical-rl">hello<br>worldly</div></div>
+<div class="cb"><div id="ai" class="ab" style="writing-mode:vertical-rl;display:inline">hello</div></div>
+<div class="cb"><div id="iv" style="writing-mode:vertical-rl">hello</div></div>
 <div id="cssom">-</div>
 <script>
   var g = function (id) { return getComputedStyle(document.getElementById(id)).writingMode; };
@@ -338,6 +347,128 @@ fn g_writing_mode_transposes_the_subtree() {
         "G_WRITING_MODE: `getComputedStyle(el).writingMode` reads {got:?}. The property had no \
          `ComputedStyle` field at all before this tick, so the readback was empty and every \
          feature-detect for vertical text took its fallback path against an engine that now has it."
+    );
+    // ── ⭐ THE ABSPOS HALF (t1347). Kept in its own function for readability, called from THIS
+    //    test rather than added as a second `#[test]` — see the one-`Page`-per-binary note above.
+    abspos_rows(&page);
+}
+
+/// The abspos half of the transposition, and the eight rows are all headless-Chrome-measured on
+/// this fixture's own font (`16px/20px monospace`, `hello` = 48.2px of advance, `worldly` = 67.4).
+///
+/// ```text
+///                                                    CHROME     before t1347
+///    #ah  abspos, NO writing-mode          CONTROL   48.2x20.0    48.2x20.0   ✓
+///    #av  abspos, vertical-rl, all auto              20.0x48.2    48.2x20.0   ✗
+///    #alr …with left:10px; right:20px               270.0x48.2   270.0x20.0   ✗
+///    #atb …with top:10px; bottom:20px                20.0x170.0   48.2x170.0  ✗
+///    #a2  …two lines, `hello`/`worldly`              40.0x67.4    67.4x40.0   ✗
+///    #ai  …display:inline (blockified)                20.0x48.2   48.2x20.0   ✗
+///    #iv  the same box IN FLOW           ⚠ RESIDUE    20.0x48.2  300.0x48.2   ✗ still
+/// ```
+fn abspos_rows(page: &manuk_page::Page) {
+    let r = |sel: &str| rect_of(page, sel);
+    let (ah, av) = (r("#ah"), r("#av"));
+
+    // ── THE CONTROL, first. Without it every relation below is a statement about an engine that
+    //    might not lay out an ordinary abspos correctly either, and the diagnosis would go to
+    //    `writing-mode` when it belonged to `layout_abs`.
+    assert!(
+        ah.width > ah.height + 1.0,
+        "G_WRITING_MODE: CONTROL — an abspos with NO writing-mode must be WIDER than tall for a \
+         one-line `hello` ({:.1}x{:.1}). Nothing below is a test of a transposition if this fails.",
+        ah.width,
+        ah.height
+    );
+
+    // ⭐ THE CLAIM, written as an EXACT TRANSPOSITION of the control rather than against Chrome's
+    //    literals — so it is calibrated by this engine's own font metrics and stays true if the
+    //    fallback face changes. Chrome: the control is 48.2x20.0 and the vertical row is 20.0x48.2.
+    assert!(
+        (av.width - ah.height).abs() < 0.6 && (av.height - ah.width).abs() < 0.6,
+        "G_WRITING_MODE: an ABSOLUTELY POSITIONED vertical box must be the exact transpose of the \
+         same box without `writing-mode` — expected {:.1}x{:.1}, got {:.1}x{:.1}. `layout_abs` \
+         places every `position:absolute` and `position:fixed` box and knew nothing about the \
+         transposition until t1347, so a vertical abspos was laid out HORIZONTALLY: not wrong by a \
+         few pixels, wrong by ninety degrees, and silently, because a rotated box is not malformed.",
+        ah.height,
+        ah.width,
+        av.width,
+        av.height
+    );
+
+    // ── The two axes SEPARATELY, because either one alone can be right by accident when the other
+    //    is pinned by an inset — and those are the two arms the WPT files split on (1,200 failures
+    //    on `width`, 300 on `height`).
+    let alr = r("#alr");
+    assert!(
+        (alr.width - 270.0).abs() < 0.6 && (alr.height - ah.width).abs() < 0.6,
+        "G_WRITING_MODE: `left:10px; right:20px` pins the physical WIDTH at 270 (the offsets \
+         resolve in the CONTAINING BLOCK's mode, which is horizontal) while the HEIGHT is still the \
+         inline extent {:.1} — got {:.1}x{:.1}. This is the arm where the width is right by \
+         accident and only the height can see the bug.",
+        ah.width,
+        alr.width,
+        alr.height
+    );
+    let atb = r("#atb");
+    assert!(
+        (atb.width - ah.height).abs() < 0.6 && (atb.height - 170.0).abs() < 0.6,
+        "G_WRITING_MODE: `top:10px; bottom:20px` pins the HEIGHT at 170 while the WIDTH is the \
+         block extent {:.1} — got {:.1}x{:.1}. The mirror of the row above, one axis over.",
+        ah.height,
+        atb.width,
+        atb.height
+    );
+
+    // ── TWO LINES. One line cannot tell "the block extent" from "the line height", because they
+    //    are the same number; two makes the block axis a sum and the inline axis a MAX.
+    let a2 = r("#a2");
+    assert!(
+        (a2.width - 2.0 * ah.height).abs() < 0.6 && a2.height > ah.width + 1.0,
+        "G_WRITING_MODE: two lines in a vertical abspos are TWO line boxes wide ({:.1}) and as tall \
+         as the LONGER run — got {:.1}x{:.1}. Chrome: 40.0x67.4. A one-line fixture cannot \
+         distinguish the block extent from the line height; this row is why there are two.",
+        2.0 * ah.height,
+        a2.width,
+        a2.height
+    );
+
+    // ── A BLOCKIFIED INLINE, which is what the WPT files actually use (`.abspos{display:inline}`).
+    let ai = r("#ai");
+    assert!(
+        (ai.width - ah.height).abs() < 0.6 && (ai.height - ah.width).abs() < 0.6,
+        "G_WRITING_MODE: `display:inline` + `position:absolute` blockifies, and the blockified box \
+         transposes like any other — got {:.1}x{:.1}. This is the exact spelling of \
+         `css/css-grid/abspos/orthogonal-positioned-grid-descendants-*`, fifteen files at 100 \
+         subtests each.",
+        ai.width,
+        ai.height
+    );
+
+    // ── ⚠⚠⚠ THE NAMED RESIDUE, pinned at OUR value with Chrome's beside it. An IN-FLOW orthogonal
+    //    root's physical width is its BLOCK axis, so `width:auto` must shrink-wrap to the content's
+    //    block extent (Chrome: 20.0) rather than fill the containing block (ours: 300.0). It is the
+    //    same swap this tick made in `layout_abs`, in the other layout path — and it is a bigger
+    //    change there, because `layout_block` computes its width long before the children and feeds
+    //    it to the margin, float and BFC rules on the way. Everything else about the in-flow
+    //    vertical box is already exact, including this row's HEIGHT.
+    let iv = r("#iv");
+    assert!(
+        (iv.height - ah.width).abs() < 0.6,
+        "G_WRITING_MODE: an in-flow vertical box's HEIGHT is its inline extent {:.1} — got {:.1}. \
+         This half has been right since t1343 and is the control for the residue below.",
+        ah.width,
+        iv.height
+    );
+    assert!(
+        iv.width > 100.0,
+        "G_WRITING_MODE: `#iv` reads {:.1} — a KNOWN DIVERGENCE pinned at its current value. \
+         Chrome gives 20.0: an in-flow orthogonal root's `width:auto` is an auto BLOCK size and \
+         shrink-wraps to the content, where we still fill the containing block. If this now reads \
+         ~20, that residue has been closed — update this assertion to `(iv.width - ah.height).abs() \
+         < 0.6` and delete this paragraph, do not delete the row.",
+        iv.width
     );
 }
 

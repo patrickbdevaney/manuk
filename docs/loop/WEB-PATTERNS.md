@@ -8232,3 +8232,25 @@ of the three things the property is FOR were missing and the third worked.
 ⚠ The check that would have found it is **`typeof`, not a click**: after `<div onclick="…">`, ask
 `typeof div.onclick` and compare it to Chrome. One line, and it separates "the handler exists" from
 "the handler is where the spec says it is".
+
+---
+
+## t1347 — the overlay that was rotated ninety degrees, and the spelling that hid it
+
+`position: absolute` inside a `writing-mode: vertical-rl` element is the tooltip on a rotated chart
+axis, the badge on a vertical sidebar tab, the caption pinned down the edge of a hero image, and —
+in CJK layout — every dropdown, popover and floating label on the page. All of them were laid out
+**horizontally**: the right content, in the right place, at ninety degrees to where it belongs.
+
+⭐⭐⭐ **The class, and this ledger has now recorded it twice in four ticks: THE MOST-CITED SPELLING
+OF A PATTERN IS THE ONE WHERE THE BUG CANNOT BE OBSERVED.** `position:absolute; inset:0` — the
+overlay/modal/backdrop idiom, and the form of this pattern that appears in every tutorial — pins
+BOTH axes definitely. A box whose width and height are both given cannot reveal that the engine has
+them the wrong way round. Every variant that leaves one axis `auto` was wrong, and the one everybody
+writes was right.
+
+⚠ The check that would have found it is **the TRANSPOSE CONTROL**: lay the same box out with and
+without `writing-mode` and assert that one is the exact transpose of the other. It needs no reference
+numbers at all — it is calibrated by the engine's own font metrics — and it fails loudly for any
+axis-swap bug in any path. The three earlier `writing-mode` fixtures all used an EXPLICIT `width`,
+which is the same blindness one level up: a fixture that pins an axis cannot test it.

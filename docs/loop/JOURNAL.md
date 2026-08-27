@@ -89759,3 +89759,124 @@ residue: fire the initial `about:blank` load during parsing, before the next scr
 (`addl` 1→0). (c) An unset handler property reads `undefined` where Chrome reads `null`, and the
 handler-property ORDER (`P,L1,L2` vs `L1,P,L2`) — both measured this tick, both unfixed. (d)
 `<textarea>` as a grid item is 182x36 against Chrome's 40x40 (t1345). (e) I3's mechanical debt.
+
+## t1347 — the abspos path had never heard of `writing-mode`, and the spelling everybody writes hid it
+
+TICK SHAPE: capability — a SUBSYSTEM, board Track A #1 (`writing-mode` / logical geometry) crossed
+with #4 (abspos / containing block). Board re-run at the top of this tick and diffed against t1346's
+copy: **unchanged**. **`css/css-grid` 8,849 → 10,349 (+1,500 subtests, 60.3% → 70.5%)**, denominator
+unchanged, predicted before the run and confirmed exactly.
+
+### HOW THE TARGET WAS FOUND, WHICH IS MOST OF THE TICK'S VALUE
+
+The board's #1 row is `css/css-grid`. Rather than guess at it, the area was re-run with
+`--show-failures` and the 5,838 failing subtests histogrammed twice — **by MESSAGE and then by
+FILE**, because a message histogram alone is a suspect, not a defect:
+
+```text
+   BY MESSAGE                                           BY DIRECTORY
+   2388  width expected N but got N                     1673  css-grid/abspos
+    908  height expected N but got N                    1248  css-grid/grid-lanes
+    550  offsetLeft expected N but got N                 894  css-grid/alignment
+    387  expected "X" but got "X"                        700  css-grid/grid-items
+    324  'from' value should be supported                431  css-grid/parsing
+```
+
+The message histogram's top row — 2,388 geometry failures — is the shapeless "geometry mass" this
+loop has been told twice has no direction. The FILE histogram has a direction and it is unmissable:
+**1,500 of the 1,673 `abspos` failures are fifteen near-identical files** at exactly 100 each,
+`orthogonal-positioned-grid-descendants-001..015`. Across all fifteen there are exactly **two**
+distinct failure strings:
+
+```text
+   1200  assert_equals: width expected 25 but got 50
+    300  assert_equals: height expected 50 but got 25
+```
+
+25 and 50 are a swap of each other. One mechanism, and the histogram named it in one command.
+
+### THE BUG
+
+`.abspos { position:absolute; display:inline }` + `.orthogonal { writing-mode: vertical-lr }`.
+t1343 taught `layout_block` to run a vertical subtree in a transposed space and map it back;
+`layout_abs` — which places every `position:absolute` and `position:fixed` box on every page — knew
+nothing about it. A vertical abspos was laid out **horizontally**: not wrong by pixels, wrong by
+ninety degrees, and silently, because a rotated box is not malformed.
+
+Chrome-measured on a `16px/20px monospace` fixture (`hello` = 48.2px of advance), 300x200 CB:
+
+```text
+                                                   Chrome      before      after
+   abspos, NO writing-mode            CONTROL     48.2x20.0   48.2x20.0   48.2x20.0
+   abspos, vertical-rl, all auto                  20.0x48.2   48.2x20.0   20.0x48.2
+   …with left:10px; right:20px                   270.0x48.2  270.0x20.0  270.0x48.2
+   …with top:10px; bottom:20px                    20.0x170.0  48.2x170.0  20.0x170.0
+   …two lines, `hello` / `worldly`                40.0x67.4   67.4x40.0   40.0x67.4
+   …display:inline (blockified)                   20.0x48.2   48.2x20.0   20.0x48.2
+   …with inset:0                                 300.0x200.0 300.0x200.0 300.0x200.0
+```
+
+⭐⭐⭐ **THE `inset:0` ROW IS WHY THIS SURVIVED, AND IT IS THE TICK'S GENERAL LESSON.** The
+most-cited spelling of `position:absolute` — the overlay, the modal, the backdrop — pins BOTH axes
+definitely, and **a box whose width and height are both given cannot reveal that the engine has them
+the wrong way round.** Every variant leaving one axis `auto` was wrong; the one everybody writes was
+right. The three earlier `writing-mode` fixtures have the same blindness one level up: all of them
+used an EXPLICIT `width`, so the auto-width case was never asked.
+
+### THE MECHANISM: THE ORDER OF COMPUTATION SWAPS WITH THE AXES
+
+For an ordinary box `layout_abs` resolves the width first and the height falls out of the children.
+For an orthogonal root the box's physical HEIGHT is its INLINE axis — the available size the children
+are laid out *against* — and its physical WIDTH is its BLOCK axis, which for `width:auto` is only
+knowable *after* them. **A definite height becomes an input and an auto width becomes an output**,
+the reverse of every other path in the file. `inline_width_is_definite` names the arms that produced
+a width from the page rather than from the content: handing a shrink-to-fit guess down as the block
+bound would let a percentage block size inside the subtree resolve against a number the content
+itself produced.
+
+⚠ The §7.3 indefinite-inline fallback must be measure-then-lay-out, not one pass — at the 1e6 probe
+size a transposed block child FILLS. ⚠ The map is applied at the PROVISIONAL (0,0) origin, so it
+composes with the translate `layout_abs` already does at the end rather than needing a placed origin
+that does not exist yet. ⚠ `min-width`/`max-width` stay PHYSICAL and constrain the block axis, which
+is what Chrome does — an orthogonal root keeps its own physical style, only descendants are
+transposed.
+
+**Proven RED**, three mutations, three distinct wrong values:
+
+```text
+   no orthogonal branch in layout_abs        48.2x20.0   (the pre-tick state)
+   block bound handed down unconditionally   48.2x48.2   (the width never becomes an output)
+   report the BLOCK extent as content height 20.0x20.0   (the inline half reverts)
+```
+
+`G_WRITING_MODE` grew 7 rows. ⚠ Every claim is written as an **exact transposition of the
+no-`writing-mode` CONTROL**, not against Chrome's literals, so it is calibrated by this engine's own
+font metrics and survives a fallback-face change. The two axes are also asserted SEPARATELY, because
+an inset can pin one of them right by accident — which is exactly how the WPT files split, 1,200 on
+`width` and 300 on `height`.
+
+### ⚠ NAMED RESIDUE, MEASURED THIS TICK, NOT FIXED
+
+An **IN-FLOW** orthogonal root's `width:auto` still FILLS its containing block (300.0) where Chrome
+shrink-wraps to the content's block extent (20.0). Same swap, other layout path, and a bigger change
+there: `layout_block` resolves its width long before the children and feeds it to the margin, float
+and BFC rules on the way. Everything else about the in-flow vertical box is already exact, including
+that row's height. Pinned in the gate at our value with Chrome's beside it.
+
+### ⚠ FOR THE OBSERVER — AN APERTURE GAP, NOT AN ENGINE ONE
+
+`css/css-writing-modes` reports `FILES 0 subtests 0/0` because **the directory is not in the WPT
+checkout at all** (`ls $WPT_DIR/css/ | grep writing` is empty). That is the whole spec area for the
+subsystem this tick and t1343 built, and it is invisible to the primary metric — the same shape as
+t1176's missing `css/support/` and t1273's five unmeasured trees. The checkout is harness territory
+so this is a note, not a change.
+
+**Regression sweep.** The full `manuk-page` suite, not the wall's 19, because `layout_abs` is on
+every page: **509 of 509 green**. `css/css-position` (1166/1482) and `css/css-flexbox` (2864/4693)
+re-run and unchanged — the fix is inert where it should be.
+
+**NEXT.** (a) The in-flow residue above — `layout_block`'s orthogonal root sizing its own width on the
+block axis. (b) `css-grid/grid-lanes` is now the #1 grid directory (1,248), and 240 of those are one
+file, `animation/flow-tolerance-interpolation.html` — an unshipped property, worth a refusal or a
+build, not a guess. (c) `css-grid/alignment` at 894 is the next real geometry mass. (d) The standing
+audit from t1346: gates asserting a REASONED reference value. (e) I3's mechanical debt.

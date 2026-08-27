@@ -531,6 +531,7 @@
   - L10809 · Named residue
   - L10827 · An intrinsic keyword on min-width/max-width asks for the CONTENT size, not the contribution (t1344)
   - L10901 · normal is not stretch: a replaced grid item does not inflate to its cell (t1345)
+  - L10963 · An absolutely positioned orthogonal root — the half of writing-mode that never reached layout_abs (t1347)
 
 ## browser-capabilities.md
 `docs/wiki/browser-capabilities.md`
@@ -2380,4 +2381,4 @@
   - L231 · Both named mechanisms are subsystem work
 
 ---
-2287 sections across 22 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+2288 sections across 22 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.

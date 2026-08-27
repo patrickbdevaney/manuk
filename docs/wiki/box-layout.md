@@ -10957,3 +10957,72 @@ along; the item was being stretched before the clamp was ever consulted.
 **Gate.** `G_INLINE_IMAGE_SIZE`, +8 rows. Proven red by four mutations: drop the pass → grid 40x40;
 drop the `Normal` guard → explicit `stretch` reads 16x16; `Normal`→`START` in `map_align` → the FLEX
 row reads 16x16; predicate on `aspect_ratio` → the `<div aspect-ratio>` row reads 16x16.
+
+---
+
+## An absolutely positioned orthogonal root — the half of `writing-mode` that never reached `layout_abs` (t1347)
+
+**Symptom.** `position:absolute` + `writing-mode:vertical-rl` laid the box out **horizontally**. Not
+wrong by a few pixels — wrong by ninety degrees, and silently, because a rotated box is not
+malformed. t1343 taught `layout_block` to run a vertical subtree in a transposed space and map it
+back; `layout_abs` places every `position:absolute` and `position:fixed` box and knew nothing about
+it. Headless-Chrome-measured, `16px/20px monospace`, `hello` = 48.2px of advance, in a 300x200
+relative containing block:
+
+```text
+                                                   Chrome      before
+   abspos, NO writing-mode            CONTROL     48.2x20.0   48.2x20.0   ✓
+   abspos, vertical-rl, all insets auto           20.0x48.2   48.2x20.0   ✗ the axes themselves
+   …with left:10px; right:20px                   270.0x48.2  270.0x20.0   ✗ height only
+   …with top:10px; bottom:20px                    20.0x170.0  48.2x170.0  ✗ width only
+   …two lines, `hello` / `worldly`                40.0x67.4   67.4x40.0   ✗ exactly transposed
+   …display:inline (blockified)                   20.0x48.2   48.2x20.0   ✗
+   …with inset:0                                 300.0x200.0 300.0x200.0  ✓ both axes definite
+```
+
+⚠ **The `inset:0` row is why this survived.** The most-cited spelling of the pattern — the overlay,
+the modal, the backdrop — pins both axes definitely, so the transposition cannot be observed there.
+
+**The mechanism: the two axes swap roles, and the ORDER OF COMPUTATION swaps with them.** For an
+ordinary box `layout_abs` resolves the width first and the height falls out of the children. For an
+orthogonal root:
+
+- the box's physical **HEIGHT is its inline axis** — it is the available size the children are laid
+  out *against*, definite when the page (or both block insets) gave one, otherwise sized as
+  fit-content against the initial containing block's block size (CSS Writing Modes §7.3);
+- the box's physical **WIDTH is its block axis** — for `width:auto` it is only knowable *after* the
+  children, as their block extent.
+
+So a definite height becomes an INPUT and an auto width becomes an OUTPUT, which is the reverse of
+every other path in the file. `inline_width_is_definite` names the arms that produced a width from
+the page rather than from the content, because handing a shrink-to-fit *guess* down as the block
+bound would let a percentage block size inside the subtree resolve against a number the content
+itself produced.
+
+⚠ The §7.3 fallback must be a real measure-then-lay-out, not one pass: at the 1e6 probe size a
+transposed block child FILLS, so reading the fill back would make a one-glyph box the height of the
+probe. Same two-step, same reason, as `layout_block`'s.
+
+⚠ Mapped at the **PROVISIONAL (0,0) origin**. `layout_abs` lays content out at zero and translates it
+to the placed content origin at the end; the transposition is an affine map in the same space, so it
+composes with that translate rather than needing an origin that is not known yet.
+
+⚠ `min-width`/`max-width` stay **PHYSICAL** and so constrain the block axis. An orthogonal root keeps
+its own physical style — only its descendants are transposed — and that is what Chrome does.
+
+**WPT.** `css/css-grid` 8,849 → **10,349** (+1,500, 60.3% → 70.5%) on an unchanged denominator. The
+whole gain is `css/css-grid/abspos/orthogonal-positioned-grid-descendants-001..015`: fifteen files at
+100 subtests each, every failure one of two shapes — 1,200 × `width expected 25 but got 50` and
+300 × `height expected 50 but got 25`. Predicted before the run and confirmed exactly.
+
+**Named residue, measured, NOT fixed.** An IN-FLOW orthogonal root's `width:auto` still FILLS its
+containing block (300.0) where Chrome shrink-wraps to the content's block extent (20.0). Same swap,
+other layout path, and a bigger change there: `layout_block` computes its width long before the
+children and feeds it to the margin, float and BFC rules on the way. Everything else about the
+in-flow vertical box is already exact, including that row's height. Pinned in `G_WRITING_MODE`.
+
+**Gate.** `G_WRITING_MODE`, +7 rows, every claim written as an exact transposition of the
+no-`writing-mode` CONTROL rather than against Chrome's literals — so it is calibrated by this
+engine's own font metrics. Proven red by three mutations: no orthogonal branch → `48.2x20.0`; hand
+the block bound down unconditionally → `48.2x48.2`; report the block extent as the content height →
+`20.0x20.0`.
