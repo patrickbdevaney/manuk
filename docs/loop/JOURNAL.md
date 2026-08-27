@@ -90440,3 +90440,77 @@ is `'from' value should be supported`, i.e. frontier interpolation — survey be
 tick's own method. (c) The teardown Bar-0 (t1349's reproducer). (d) t1348's residues. (e) ⚠ FOR THE
 OBSERVER: a third area is now measured as spec-frontier-heavy (`css/css-fonts` animations); the
 board needs a scope column or the loop keeps re-deriving this one area at a time. (f) I3's debt.
+
+## t1353 — a shorthand is a property, and the canvas got the literal text `undefined`
+
+TICK SHAPE: capability. Board re-run at the top of this tick and diffed against t1352's copy:
+**unchanged** except its own tally. **`css/css-fonts` 4,045 → 4,090 (+45, 53.6% → 54.2%)**.
+
+### THE TARGET, FOUND BY THE METHOD THE LAST THREE TICKS ESTABLISHED
+
+Re-dumped `css/css-fonts` AFTER t1352 (the old dump was stale by 169 subtests) and split it by file:
+
+```text
+    500  animations/font-size-adjust-composition       ← frontier interpolation
+    406  animations/font-size-adjust-interpolation     ← frontier
+    361  test_font_family_parsing        (was 530 — t1352 took exactly its 169)
+    358  animations/font-variation-settings-interpolation
+    309  parsing/font-computed.html      ⭐ ALL 309 ONE ASSERTION
+```
+
+All 309 in `font-computed.html` are the same string: `assert_true: font doesn't seem to be supported
+in the computed style expected true got false`. One absent property, gating a whole file.
+
+### THE BUG
+
+`getComputedStyle(el).font` was `undefined`. ⭐ **`ctx.font = getComputedStyle(el).font`** is the
+one-liner every canvas text-measurement shim, chart library and autosizing input is built on — with
+`undefined` the canvas keeps its 10px sans-serif default and every measured width is wrong by a
+factor, silently. Chrome-measured on `font-family: serif`:
+
+```text
+   font-size:16px                          16px serif             was undefined
+   …line-height:1.5                        16px / 24px serif      was undefined
+   …font-weight:bold                       700 16px serif         was undefined
+   …font-weight:400; line-height:normal    16px serif             was undefined
+   …italic + bold + line-height:2          italic 700 16px / 32px serif
+```
+
+⚠ `<font-size>[ / <line-height>]` is ONE component — the slash binds to the size — so a serializer
+that joins five independent fields with a space puts it in the wrong place. That is a mutation.
+⚠ `bold` computes to the NUMBER `700`; an initial `400` and a `normal` line-height are OMITTED, not
+printed. Both are mutations too.
+
+**⚠ NAMED, NOT FAKED.** `font-stretch`, `font-variant-caps` and a non-`italic` `font-style`
+(`oblique 20deg`) have no `ComputedStyle` field here, so they are ABSENT from the shorthand rather
+than guessed at. **⚠⚠ And the rule a naive implementation gets wrong, written down because it cannot
+be implemented yet:** when a longhand the shorthand cannot represent holds a non-initial value, `font`
+serializes to the **EMPTY STRING**, not a shortened form — Chrome-measured on
+`font-variant-caps: titling-caps` and `font-size-adjust: 0.5`, both `""`.
+
+### ⭐⭐ THE CLASS: A SHORTHAND IS A PROPERTY
+
+Every longhand this composes was already present and correct — `fontSize`, `fontWeight`, `fontStyle`,
+`fontFamily`, `lineHeight` all answered. A survey of *"which computed properties are missing"* that
+walks the LONGHANDS finds nothing here, because the missing one is the composition — and the
+composition is what the platform's most-used idiom actually reads. The check that finds these is the
+API's own one-liner, not the property list.
+
+### ⚠ +45, NOT +309 — AND THAT WAS THE PREDICTION, NOT THE DISCOVERY
+
+The precondition was ONE assertion gating 309. Clearing it lets the file RUN; the individual value
+comparisons then pass or fail on their own merits, and most still fail on the three unmodelled
+longhands and on family quoting. ⭐ This is t1348's rule applied **in advance** — *a failure-signature
+count is an upper bound on a fix's yield, never an estimate of it* — rather than rediscovered after
+the fact, which is what that entry was written for.
+
+**Proven RED**, three mutations, three arms: join size and line-height with a space → `font2`; always
+emit the weight → `font1`; put the family first → `font1`. Full `manuk-page` suite: **509 of 509**.
+
+**NEXT.** (a) ⭐ FONT-FAMILY SERIALIZATION, measured this tick and not yet done: Chrome quotes a
+family name unless the WHOLE name is one valid CSS identifier — `Times New Roman` → `"Times New
+Roman"`, `'my-font'` → `my-font` (unquoted despite being written quoted), `'素象'` → `素象`,
+`'2cool'` → `"2cool"`. Ours never quotes. It feeds BOTH `font-family` and the `font` shorthand, and
+`test_font_family_parsing` is 361 subtests of exactly this. (b) The three unmodelled font longhands
+and the empty-string rule above. (c) The teardown Bar-0 (t1349's reproducer). (d) t1348's residues.
+(e) I3's mechanical debt.

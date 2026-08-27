@@ -2698,6 +2698,7 @@ const COMPUTED_STD_NAMES: &[&str] = &[
     "font-weight",
     "font-style",
     "font-family",
+    "font",
     "line-height",
     "text-align",
     "display",
@@ -3053,6 +3054,56 @@ fn computed_style_js(
     };
     // The computed `font-family` list, joined (its first entry is the primary).
     let family = cs.font_family.join(", ");
+    // ── ⚠⚠⚠ **THE `font` SHORTHAND'S COMPUTED VALUE, WHICH WAS ABSENT.**
+    //
+    // `getComputedStyle(el).font` was `undefined`, and that is not a cosmetic gap: it is how a page
+    // hands a font to a canvas (`ctx.font = getComputedStyle(el).font` is the one-liner every text
+    // measurement shim, chart library and autosizing input is built on), and WPT's whole
+    // `css/css-fonts/parsing/font-computed.html` — **309 subtests** — fails at its PRECONDITION,
+    // `assert_true: font doesn't seem to be supported in the computed style`, before comparing a
+    // single value.
+    //
+    // CSS Fonts §2.6 order, defaults omitted, Chrome-measured on `font-family: serif`:
+    //
+    // ```text
+    //   font-size:16px                          16px serif
+    //   …line-height:1.5                        16px / 24px serif     ← space-slash-space, USED px
+    //   …line-height:normal                     16px serif            ← omitted
+    //   …font-weight:bold                       700 16px serif        ← numeric, not `bold`
+    //   …font-weight:400                        16px serif            ← omitted
+    //   …font-family:'My Font',monospace        16px "My Font", monospace
+    // ```
+    //
+    // ⚠ **NAMED, NOT FAKED — the four longhands this engine does not model.** `font-stretch`,
+    // `font-variant-caps` and a non-`italic` `font-style` (`oblique 20deg`) have no `ComputedStyle`
+    // field, so they are absent from the shorthand rather than guessed at; Chrome prints
+    // `condensed 16px serif`, `small-caps 16px serif` and `oblique 20deg 16px serif` for them.
+    //
+    // ⚠⚠ And the rule a naive implementation gets WRONG, recorded here because we cannot yet
+    // implement it: when a longhand the shorthand CANNOT represent has a non-initial value, the
+    // shorthand serializes to the **EMPTY STRING**. Chrome-measured — `font-variant-caps:
+    // titling-caps` and `font-size-adjust: 0.5` both make `getComputedStyle(el).font` `""`, not a
+    // shortened form. Neither longhand is modelled here, so the case cannot arise yet; when either
+    // lands, this is the rule it must bring with it.
+    let font_shorthand = {
+        let mut parts: Vec<String> = Vec::new();
+        if cs.italic {
+            parts.push("italic".to_string());
+        }
+        // `bold` computes to `700`; the initial `400` is omitted entirely.
+        if cs.font_weight != 400 {
+            parts.push(cs.font_weight.to_string());
+        }
+        // `<font-size>[ / <line-height>]` is ONE component — the slash binds to the size, which is
+        // why it is pushed as a single part rather than three.
+        parts.push(if cs.line_height_normal {
+            format!("{}px", cs.font_size)
+        } else {
+            format!("{}px / {}px", cs.font_size, cs.line_height)
+        });
+        parts.push(family.clone());
+        parts.join(" ")
+    };
     // **`overflow` is two properties, and the axes are what scripts actually read.** A dropdown, a
     // modal or a virtualised list finds its scroll container by walking up the tree asking each
     // ancestor for `overflowY` — and that read returned `undefined` here, so the walk fell through to
@@ -3347,7 +3398,7 @@ fn computed_style_js(
     format!(
         "(function(){{var __P=globalThis.__csProto;var o={{\
           color:{}, backgroundColor:{}, fontSize:{}, fontWeight:{}, fontStyle:{}, \
-          fontFamily:{}, lineHeight:{}, textAlign:{}, display:{}, position:{}, overflow:{}, overflowX:{}, overflowY:{}, \
+          fontFamily:{}, font:{}, lineHeight:{}, textAlign:{}, display:{}, position:{}, overflow:{}, overflowX:{}, overflowY:{}, \
           visibility:{}, whiteSpace:{}, pointerEvents:{}, userSelect:{}, webkitUserSelect:{}, colorScheme:{}, \
           scrollbarWidth:{}, scrollbarColor:{}, opacity:{}, \
           width:{}, height:{}, inlineSize:{}, blockSize:{}, marginTop:{}, marginRight:{}, marginBottom:{}, marginLeft:{}, \
@@ -3376,6 +3427,7 @@ fn computed_style_js(
         q(&cs.font_weight.to_string()),
         q(if cs.italic { "italic" } else { "normal" }),
         q(&family),
+        q(&font_shorthand),
         q(&format!("{}px", cs.line_height)),
         q(text_align),
         q(display),

@@ -8381,3 +8381,28 @@ the way IN was wrong — what does the way OUT do?"*
 ⚠⚠ Both directions survived for the reason that gate's own last sentence gives: **a bug invisible to
 the whole alphabet your tests use is not found by writing more of them.** Every CSS test in this repo
 is ASCII, and ASCII through this seam is identity.
+
+---
+
+## t1353 — `ctx.font = getComputedStyle(el).font`
+
+That single line is how a page tells a canvas what font to measure text in, and it is the backbone of:
+
+- **every text-measurement shim** — autosizing inputs, truncation with an ellipsis, "does this fit on
+  one line", tab-strip overflow;
+- **every charting library's axis and legend labels**, which measure before they lay out;
+- **`canvas`-based editors and terminals**, which need the element's real font to size a cell.
+
+`getComputedStyle(el).font` was `undefined`, so `ctx.font` was set to the literal text `undefined`,
+the canvas silently kept its **10px sans-serif** default, and every measured width came back wrong —
+by a factor, not a pixel. Nothing threw. The text still measured *something*.
+
+⭐⭐ **The class: A SHORTHAND IS A PROPERTY.** Every longhand it is made of was already present and
+correct — `fontSize`, `fontWeight`, `fontStyle`, `fontFamily`, `lineHeight` all answered. A survey of
+"which computed properties are missing" that walks the longhands finds nothing, because the missing
+one is the *composition*, and the composition is what the platform's most-used idiom actually reads.
+
+⚠ The check that finds these is **the API'S OWN ONE-LINER, not the property list**: for each
+shorthand, write the line real code writes (`ctx.font = …`, `el.style.cssText = …`,
+`getComputedStyle(el).background`) and see whether it produces a usable value — not whether the
+property enumerates.

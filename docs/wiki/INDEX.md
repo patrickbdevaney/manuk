@@ -1022,6 +1022,7 @@
   - L4490 · A percentage reconstructed by differencing Au-quantised samples loses its identity at zero (t1338)
   - L4516 · ⚠ Why it survived 1,300 ticks
   - L4533 · JS_NewStringCopyZ reads Latin-1: the SAME mojibake as t~950's stylesheet bug, at the other boundary (t1352)
+  - L4593 · The font shorthand's computed value (t1353)
 
 ## `<dialog>`, `popover`, and the top layer (ticks 194-195)
 `docs/wiki/dialog-and-top-layer.md`
@@ -2386,4 +2387,4 @@
   - L231 · Both named mechanisms are subsystem work
 
 ---
-2293 sections across 22 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+2294 sections across 22 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.

@@ -4587,3 +4587,51 @@ family names. `css/css-values` +64 on a refreshed sweep.
 non-ASCII cue through the real `<track src>` parser). Proven red by three mutations: revert
 `host_css_serialize` → `setget:32032,35937`; revert all CSS seams → same; revert the VTT/MSE seam →
 `cuecps=231,180,160,232,177,161,32,99,97,102,195,169`, eleven characters where there are seven.
+
+---
+
+## The `font` shorthand's computed value (t1353)
+
+`getComputedStyle(el).font` was `undefined`. That is not cosmetic: `ctx.font =
+getComputedStyle(el).font` is the one-liner every canvas text-measurement shim, chart library and
+autosizing input is built on — and with `undefined` the canvas silently falls back to its 10px
+sans-serif default and every measured width is wrong. It is also WPT
+`css/css-fonts/parsing/font-computed.html`'s PRECONDITION: **309 subtests** that fail at
+`assert_true: font doesn't seem to be supported in the computed style`, before comparing a value.
+
+CSS Fonts §2.6 order, defaults omitted. Chrome-measured on `font-family: serif`:
+
+```text
+   font-size:16px                            16px serif
+   …line-height:1.5                          16px / 24px serif     ← space-slash-space, USED px
+   …line-height:normal                       16px serif            ← omitted
+   …font-weight:bold                         700 16px serif        ← NUMERIC, not the keyword
+   …font-weight:400                          16px serif            ← omitted
+   …font-style:italic + bold + lh:2          italic 700 16px / 32px serif
+   …font-family:'My Font',monospace          16px "My Font", monospace
+```
+
+⚠ `<font-size>[ / <line-height>]` is **one component** — the slash binds to the size. A serializer
+that joins five independent fields with a space puts it in the wrong place, which is one of the
+gate's mutations.
+
+**⚠ NAMED, NOT FAKED.** `font-stretch`, `font-variant-caps` and a non-`italic` `font-style`
+(`oblique 20deg`) have no `ComputedStyle` field in this engine, so they are ABSENT from the shorthand
+rather than guessed at. Chrome prints `condensed 16px serif`, `small-caps 16px serif` and
+`oblique 20deg 16px serif`.
+
+**⚠⚠ AND THE RULE A NAIVE IMPLEMENTATION GETS WRONG, recorded because it cannot be implemented yet:**
+when a longhand the shorthand CANNOT represent holds a non-initial value, `font` serializes to the
+**EMPTY STRING** — not a shortened form. Chrome-measured: `font-variant-caps: titling-caps` and
+`font-size-adjust: 0.5` both make `getComputedStyle(el).font` `""`. Neither longhand is modelled here,
+so the case cannot arise; when either lands, this is the rule it must bring with it.
+
+**WPT.** `css/css-fonts` 4,045 → **4,090** (+45, 53.6% → 54.2%). ⚠ **+45, not +309, and that was the
+prediction**: the precondition was one assertion gating 309, and clearing it lets the file RUN — the
+individual value comparisons then pass or fail on their own merits, and most still fail on the three
+unmodelled longhands and on family quoting. This is t1348's rule applied in advance rather than
+discovered afterwards: *a failure-signature count is an upper bound on a fix's yield, never an
+estimate of it.*
+
+**Gate.** `G_COMPUTED_STYLE` +7 rows. Proven red by three mutations: join size and line-height with a
+space → `font2`; always emit the weight → `font1`; put the family first → `font1`.
