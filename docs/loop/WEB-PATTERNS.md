@@ -8784,3 +8784,22 @@ interesting bug that does not exist. `SCROLLBARS_HIDDEN`'s doc comment describes
 mismatch from the other direction. **Before believing a real-page divergence, check that both sides
 were run with the same UA metrics** — viewport, scrollbars, device pixel ratio, default fonts — and
 grep the engine for the one you are about to blame.
+
+## THE CSS-RESET IDIOM IS A LAYOUT MODE, NOT A COSMETIC — `img { display: block }`
+
+`display: block` on a replaced element is what Tailwind's preflight and every `normalize.css`
+descendant ship, for one reason: an inline image sits on the text baseline and reserves the font's
+descender under it, so a bare `<img>` in a `<div>` leaves a few px of gap the author did not ask
+for. Setting it block removes the line box — which is exactly the thing an engine that classifies
+"is this a line box?" by TAG NAME cannot see.
+
+So the class of the web this unlocks is not "pages with block images". It is **every page built on a
+modern CSS reset, and every table-laid-out page whose masthead puts a logo in a `<td>`** — the two
+ends of the web, hit by the same one-line assumption. A `<td><img></td>` beside a `<td>text</td>`
+grew by the TEXT cell's descender, so the error surfaced one box away from the box that was wrong,
+in a row that contains no image at all.
+
+⚠ And the fix does not generalise to "a replaced element never has a baseline": an inline-block
+holding that same block image still hands §10.8.1 its bottom edge, so its `padding-bottom` hangs
+below the shared baseline. **A predicate with two callers is two rules until proven otherwise** —
+ask each caller what it would do with the box they disagree about, before sharing anything.

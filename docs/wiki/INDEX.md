@@ -539,6 +539,9 @@
   - L11227 · The inline advance is measured from the other end too
   - L11246 · An over-constrained axis drops its END inset — and which axis is which is the WRITING MODE
   - L11303 · A static position records an EDGE, and the deferred -size it owes is per AXIS
+  - L11346 · A REPLACED ELEMENT IS A LINE BOX ONLY WHILE IT IS INLINE-LEVEL (t1365)
+  - L11378 · THE TWO CONSUMERS WANT OPPOSITE ANSWERS, AND ONE PREDICATE IS WRONG TWICE
+  - L11403 · ⚠ MEASURED IN PASSING AND NOT FIXED: <td> DEFAULTS TO vertical-align: middle
 
 ## browser-capabilities.md
 `docs/wiki/browser-capabilities.md`
@@ -2400,4 +2403,4 @@
   - L231 · Both named mechanisms are subsystem work
 
 ---
-2307 sections across 22 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+2310 sections across 22 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.

@@ -11342,3 +11342,82 @@ flagged ones pulls it 6px off the top of its container.
 
 `G_ABSPOS_IN_VERTICAL_CB` block 8 carries ten rows — four corrected, six controls spanning all three
 ticks' mechanisms — and goes red under four mutations.
+
+## A REPLACED ELEMENT IS A LINE BOX ONLY WHILE IT IS INLINE-LEVEL (t1365)
+
+`kid_own_baseline` decided *"this box is a line box, take its bottom margin edge"* from the TAG NAME
+alone — `img`/`canvas`/`video`/`svg`/`object`/`embed`/`iframe`. `is_atomic_inline`'s own doc wrote
+the assumption underneath it down in one sentence: *"a replaced element's computed display is
+`inline` and it is atomic anyway."* `<img style="display:block">` falsifies it, and that spelling is
+not exotic — it is the CSS-reset idiom (`img { display: block }` in Tailwind's preflight and every
+`normalize.css` descendant, written precisely to kill the inline descender gap), and it is what
+`news.ycombinator.com`'s masthead logo carries.
+
+A **block-level** replaced element produces no line box at all. It is an ordinary in-flow block
+whose insides hold no line, so the §10.8.1 search must walk past it exactly as it already walks past
+a bare `<div>`.
+
+**The visible cost was a TABLE ROW, one level away from the box that was wrong.** CSS 2.1 §17.5.4
+baseline-aligns a row's cells; a cell that answered with its image's bottom edge joined the baseline
+group, and the row then had to grow by the *neighbouring text cell's* descender:
+
+```text
+                                                        Chrome    before    after
+  <td><img 30x40 display:block></td> + <td>text</td>       40        45        40
+  …the same image wrapped in an <a>                        40        45        40
+  …the image left INLINE                        CTRL       45        45        45
+  …a bare 40px <div> instead of the image       CTRL       40        40        40
+  news.ycombinator.com  #hnmain                          1163      1173      1169
+  news.ycombinator.com  #bigbox y                          42        46        42
+```
+
+The `<div>` control is what identifies it: the engine already knew a cell with no line box has no
+baseline, so the defect lived only in the box that is **both replaced and block** — an intersection
+a tag-name test cannot see.
+
+### THE TWO CONSUMERS WANT OPPOSITE ANSWERS, AND ONE PREDICATE IS WRONG TWICE
+
+Fixing it inside `kid_own_baseline` broke the other caller by the same 5px in the other direction.
+`first_line_baseline` and `last_line_baseline` are not two spellings of one question:
+
+* **FIRST line box** — what a table cell (§17.5.4) and a flex/grid item (Box Alignment §9) ask. A
+  block-level replaced element answers `None`: there is no line box here.
+* **§10.8.1, the inline-block's own question** — `last_line_baseline`, which synthesises. Blink's
+  `InlineBlockBaseline` recurses into block children and takes a replaced child's bottom edge at any
+  display, and an inline-block's `padding-bottom` is what makes the difference observable:
+
+```text
+                                                        Chrome   one-rule   split
+  <span inline-block pad-bottom:12><img block></span>t     52        57        52
+  …the same image left INLINE                   CTRL       57        57        57
+```
+
+That 12px of `padding-bottom` sits BELOW the shared baseline in Chrome, which is only possible if the
+block image still hands §10.8.1 its bottom edge. So the split is `kid_own_first_baseline`, a wrapper
+that declines for a block-level replaced element and otherwise defers to `kid_own_baseline`.
+
+`G_BLOCK_REPLACED_HAS_NO_LINE_BOX` carries 15 height rows plus 2 flex offsets and goes red under
+three mutations — the pre-tick shared rule (`#u1` reads 45), the one-rule collapse (`#u7` reads 57),
+and over-applying the exclusion to inline images (`#u10` reads 50).
+
+### ⚠ MEASURED IN PASSING AND NOT FIXED: `<td>` DEFAULTS TO `vertical-align: middle`
+
+Calibrating the gate's in-cell text positions turned up a larger, separate divergence.
+`getComputedStyle(td).verticalAlign` is **`middle`** in Chrome and **`baseline`** here: Blink's UA
+sheet declares `thead, tbody, tfoot { vertical-align: middle }` and `tr`/`td`/`th` inherit it, so a
+default HTML table centres each cell's content and never forms a baseline group at all.
+
+```text
+                                                    Chrome    here
+  the text inside a 40px row's text cell               10       0
+  the same in a 60px row                               20       0
+  `vertical-align:middle` written explicitly  CTRL     20      20
+  `vertical-align:top` written explicitly     CTRL      0       0
+  a 32px cell beside a 16px one, line-height:20px      20      26
+```
+
+The two explicit-value controls say every alignment MODE works; what is absent is one UA
+declaration — the same shape as the missing `table { border-spacing: 2px }` of t908/t1364. It moves
+text vertically on every table-laid-out page, so it is a tick of its own and the gate deliberately
+does NOT assert today's `0`. The last row is a third, unrelated finding banked here rather than
+lost: a fixed inherited `line-height` must NOT be grown by a larger font's content area.

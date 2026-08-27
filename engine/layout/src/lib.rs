@@ -14689,12 +14689,65 @@ fn first_line_baseline_of(c: &BoxContent, dom: &Dom, styles: &StyleMap) -> Optio
         // (baseline 16).
         BoxContent::Block(kids) => {
             kids.iter()
-                .find_map(|k| match kid_own_baseline(k, dom, styles) {
+                .find_map(|k| match kid_own_first_baseline(k, dom, styles) {
                     Some(b) => Some(b),
                     None => first_line_baseline(k, dom, styles),
                 })
         }
     }
+}
+
+/// **[`kid_own_baseline`] asked the FIRST-LINE-BOX question — the one a table cell and a flex item
+/// ask — where a BLOCK-LEVEL replaced element answers `None` instead of its bottom edge.**
+///
+/// ⚠⚠⚠ **THE TWO QUESTIONS DISAGREE ON EXACTLY ONE BOX, AND ANSWERING BOTH THE SAME WAY IS WRONG
+/// TWICE.** A replaced element is an atomic *inline* only while it is inline-level; at
+/// `display: block` it is an ordinary in-flow block that produces **no line box at all**.
+///
+/// * The FIRST-line-box question (CSS 2.1 §17.5.4 for a table cell, CSS Box Alignment §9 for a
+///   flex/grid item) must then answer *"there is no line box here"* — the cell simply does not join
+///   its row's baseline group, exactly as a cell holding a bare `<div>` already did not.
+/// * The §10.8.1 question an **inline-block** asks ([`last_line_baseline`]) must still answer with
+///   the bottom edge: Blink's `InlineBlockBaseline` recurses into block children and takes a
+///   replaced child's bottom edge whatever its display, and an inline-block's `padding-bottom` is
+///   what makes the two answers observably different.
+///
+/// Chrome-measured, `16px/20px` monospace, a 30×40 image (`display:block` unless noted):
+///
+/// ```text
+///                                                        Chrome   one-rule   split
+///   <td><img></td> beside <td>text</td>                     40        45       40
+///   …the image left INLINE                        CTRL      45        45       45
+///   …a bare 40px <div> instead of the image        CTRL      40        40       40
+///   <span inline-block padding-bottom:12><img></span>text   52        52       52
+///   …the image left INLINE                        CTRL      57        57       57
+///   news.ycombinator.com's #hnmain                        1163      1173     1169
+/// ```
+///
+/// The `one-rule` column is what a single shared predicate can do: fixing the cell breaks the
+/// inline-block (52 → 57) and fixing the inline-block leaves the cell at 45. The row that names the
+/// split is the fourth — its 12px of `padding-bottom` sits *below* the baseline in Chrome, which is
+/// only possible if the block image still hands its bottom edge to §10.8.1.
+fn kid_own_first_baseline(k: &LayoutBox, dom: &Dom, styles: &StyleMap) -> Option<f32> {
+    // A block-level replaced element is not a line box; hand it back to the caller's own recursion,
+    // which finds no line inside it either and lets the cell fall out of the baseline group.
+    if let Some(node) = k.node {
+        if is_replaced_tag(dom, node) && is_block_level(dom, styles, node) {
+            return None;
+        }
+    }
+    kid_own_baseline(k, dom, styles)
+}
+
+/// **Is `node` a REPLACED element by tag** — the set whose contents are never a line box.
+///
+/// One list, because [`kid_own_baseline`] and [`kid_own_first_baseline`] must not drift apart about
+/// which elements are replaced; they already disagree about `display`, which is enough.
+fn is_replaced_tag(dom: &Dom, node: NodeId) -> bool {
+    matches!(
+        dom.tag_name(node),
+        Some("img" | "canvas" | "video" | "svg" | "object" | "embed" | "iframe")
+    )
 }
 
 /// **The §10.8.1 baseline of `k` when `k` is an ATOMIC INLINE, in `k`'s parent's coordinate space —
@@ -14735,10 +14788,11 @@ fn kid_own_baseline(k: &LayoutBox, dom: &Dom, styles: &StyleMap) -> Option<f32> 
     // §10.8.1's two fallback clauses, applied to the KID ITSELF: a replaced element has no line
     // boxes by definition, and a non-`visible` `overflow` opts out of the search. Both were already
     // implemented one level up — this is the same rule asked of the right box.
-    let replaced = matches!(
-        dom.tag_name(node),
-        Some("img" | "canvas" | "video" | "svg" | "object" | "embed" | "iframe")
-    );
+    //
+    // ⚠ **`display` is deliberately NOT consulted here** — see [`kid_own_first_baseline`], which is
+    // the same rule asked of the FIRST line box, where a block-level replaced element must decline.
+    // §10.8.1 is the inline-block's own question and a replaced child answers it at any display.
+    let replaced = is_replaced_tag(dom, node);
     let scrolls = s.is_some_and(|s| {
         !matches!(s.overflow_x, Overflow::Visible) || !matches!(s.overflow_y, Overflow::Visible)
     });

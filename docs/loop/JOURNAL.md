@@ -91682,3 +91682,102 @@ table one. Fixture `/tmp/hn.html`, Chrome dump `/tmp/hn-chrome2.tsv` (taken WITH
 — see above).
 
 WIKI: docs/wiki/css-cascade.md
+
+## t1365 — a replaced element is a line box only while it is INLINE-LEVEL
+
+TICK SHAPE: capability. Board re-run at the top of this tick and diffed against t1364's copy: no
+change — CO-#1 is still the rendering gap, SHAPE/POSITION first, on the named anchor sites, and
+`news.ycombinator.com` is one of them. This tick resumes the WIP `t1364` left in the tree (the
+"NEXT" its own journal entry names, verbatim: *"our header row is 32 tall where Chrome's is 24 —
+that is the inline-replaced/baseline strut question, not a table one"*). The tree was inspected
+before resuming, the gate rebuilt from scratch, and every mutation the WIP's header CLAIMS was
+actually applied and read — two of the three were not what the header would have let me assume.
+
+### THE DEFECT
+
+`kid_own_baseline` decided *"this box is a line box, take its bottom margin edge"* from the TAG NAME
+alone — `img`/`canvas`/`video`/`svg`/`object`/`embed`/`iframe`. The assumption underneath it was
+written down, in `is_atomic_inline`'s own doc, as a single sentence: *"a replaced element's computed
+display is `inline` and it is atomic anyway."* `<img style="display:block">` falsifies it, and that
+spelling is not exotic — it is the CSS-reset idiom (`img { display: block }` ships in Tailwind's
+preflight and every `normalize.css` descendant, written precisely to kill the inline descender gap)
+and it is what HN's masthead logo carries.
+
+A **block-level** replaced element produces no line box at all. CSS 2.1 §17.5.4 baseline-aligns a
+table row's cells; a cell that answered with its image's bottom edge joined the baseline group, and
+the row then had to grow by the *neighbouring text cell's descender* — 5px on every `<td><img></td>`
+beside a `<td>text</td>`, which is the masthead of every table-laid-out page there is.
+
+### ⚠⚠⚠ ONE PREDICATE, TWO CONSUMERS, OPPOSITE ANSWERS — AND FIXING IT IN PLACE IS WRONG TWICE
+
+`first_line_baseline` and `last_line_baseline` are not two spellings of one question, and the box
+they disagree about is exactly this one:
+
+- the **FIRST-line-box** question — a table cell (§17.5.4), a flex/grid item (Box Alignment §9) —
+  must answer `None`: there is no line box here, and the cell simply does not join the group;
+- the **§10.8.1** question an *inline-block* asks must still answer with the bottom edge. Blink's
+  `InlineBlockBaseline` recurses into block children and takes a replaced child's bottom edge at any
+  display, and an inline-block's `padding-bottom` is what makes the two answers observably differ.
+
+```text
+                                                        Chrome   one-rule   split
+  <td><img display:block></td> beside <td>text</td>        40        40        40
+  <span inline-block pad-bottom:12><img block></span>t     52        57        52
+  …that image left INLINE                        CTRL      57        57        57
+```
+
+The middle row is the one that forced the split: 12px of `padding-bottom` sitting BELOW the shared
+baseline is only possible if the block image still hands §10.8.1 its bottom edge. So the fix is
+`kid_own_first_baseline`, a wrapper that declines for a block-level replaced element and otherwise
+defers, plus `is_replaced_tag` as the ONE list both must share — they already disagree about
+`display`, which is enough.
+
+### THE RESULT — measured on the LIVE page against a same-hour old-binary control
+
+```text
+                                     Chrome     before(control)   after
+  news.ycombinator.com  #bigbox y      42             46            42
+  news.ycombinator.com  #hnmain h    1163           1162          1158
+```
+
+`#bigbox`'s y is the honest row: it is now Chrome-EXACT. `#hnmain`'s height is a live page whose
+story set is not the one the Chrome dump was taken from, so only its **delta** is readable — it
+falls by the same 4px the header row lost, which is the whole of this fix and nothing else.
+
+⚠ The old-binary control was taken by REVERTING the fix and rebuilding in the same hour, on the same
+live fetch, not from a banked number.
+
+### WPT — NOT MEASURED, AND SAYING SO
+
+The suite's table tests declare their alignment; this defect lives in the default that nobody
+declares. t1364 (the sibling table tick) measured fifteen areas and read FLAT by name. I did not
+re-run them for a fix strictly narrower than that one, and this line is the receipt for that
+decision rather than a claim of flatness I did not measure.
+
+GATE `G_BLOCK_REPLACED_HAS_NO_LINE_BOX` — 15 height rows + 2 flex offsets, RED under all three
+mutations its header names, each one actually applied here:
+
+- **the split deleted** (the pre-tick shared predicate) → `#u1` reads 45, not 40
+- **the rule collapsed into one** (`kid_own_baseline` excludes block replaced too) → `#u7` reads 57,
+  not 52 — the inline-block breaking by the same 5px in the other direction
+- **the exclusion over-applied** to replaced elements at ANY display → `#u10` reads 50, not 45
+
+### ⚠ MEASURED IN PASSING, NOT FIXED, AND DELIBERATELY NOT ASSERTED
+
+Calibrating the gate's in-cell TEXT positions turned up a larger, separate divergence:
+`getComputedStyle(td).verticalAlign` is **`middle`** in Chrome and **`baseline`** here. Blink's UA
+sheet declares `thead, tbody, tfoot { vertical-align: middle }` and `tr`/`td`/`th` inherit it, so a
+default HTML table CENTRES each cell's content and never forms a baseline group at all. Two explicit
+`vertical-align` controls (`middle`, `top`) are already exact, so every alignment MODE works and
+what is absent is one UA declaration — the same shape as t908/t1364's missing `border-spacing`.
+
+The gate asserts only heights, and does NOT assert today's in-cell text offset of `0`, because doing
+so would PIN the engine to that bug. That is the next tick and it is a bigger one: it moves text
+vertically on every table-laid-out page.
+
+NEXT — measured, not done here: `<td>`'s UA `vertical-align: middle` (above). And a third finding
+banked in the wiki rather than lost: a fixed INHERITED `line-height` must not be grown by a larger
+font's content area (a 32px cell beside a 16px one at `line-height:20px` reads 26 here, 20 in
+Chrome).
+
+WIKI: docs/wiki/box-layout.md
