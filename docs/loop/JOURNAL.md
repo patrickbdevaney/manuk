@@ -92287,3 +92287,80 @@ corpus-wide at t684 (1658 hits / 34 sites), so this one is priced by the ledger 
 a previous tick's closing note.
 
 WIKI: docs/wiki/fidelity-instrument.md
+
+## t1370 — the family name is a LABEL; only the advance is a MEASUREMENT
+
+TICK SHAPE: instrument fidelity, and it is a CORRECTION OF THE PREVIOUS TICK. Board re-run at the
+top of this tick: CO-#1 unchanged. t1369's classification was over-broad and I found it by running
+the repaired instrument on the next page I had, which is what an instrument tick owes.
+
+### THE FALSE POSITIVE, AND IT WAS 43 OF THEM ON THE FIRST PAGE
+
+t1369 keys a geometry divergence as `font-resolution` when the two sides' `{family/px/advance}`
+signatures DIFFER. Run against a locally-served copy of the a11yproject DOM, that produced:
+
+```text
+   43 hits   font-resolution: Times New Roman/16/148 vs serif/16/148   (<div>, <img>, <a>, <p>, …)
+```
+
+**The same 148px advance at the same 16px size.** The two engines resolved one fallback and merely
+NAME it differently — the name is `getComputedStyle().fontFamily`'s first entry on the Chrome side
+and our computed family on ours, and `Times New Roman` against `serif` for the same used face is not
+a divergence. It hid six real causes (`geometry/mis-sized: height ~16px` ×6,
+`geometry/displaced: y` ×4/×3/×3) behind a font label — the exact failure t1369 was built to stop,
+committed by t1369 in the other direction.
+
+### THE FIX IS TO KEY ON THE MEASURED HALF
+
+`measured_face` takes the two trailing components — `(px, advance)` — and the comparison uses those.
+The message still prints both full signatures, because the name is useful to a reader even when it
+is not evidence.
+
+```text
+                                                          before          after
+  local copy  font-resolution clusters                     43 hits          0
+              …and the causes they were hiding             (hidden)   mis-sized height ×6,
+                                                                      displaced y ×4/×3/×3
+              MEAN SHAPE                                    79.8%        79.8%   ← unchanged
+  a11yproject.com (live)  anaheim/20/201 vs anaheim/20/181  classified   classified   ← kept
+              MEAN SHAPE                                    43.3%        43.3%   ← unchanged
+```
+
+⭐ **THE GENERAL RULE, and it is why one run found it:** *when a signature is part LABEL and part
+MEASUREMENT, key on the measured part.* A label is what an engine chose to CALL something and two
+engines may legitimately choose different words; a measurement is a claim about the world and they
+may not. The size half is load-bearing in the same way — mutation P2 drops it and two sizes of one
+face merge.
+
+GATE `a_divergence_between_two_faces_is_not_a_geometry_cause` (extended) — RED under three further
+mutations, each applied and read:
+
+- **P1 — the t1369 spelling, comparing whole signatures** → `font-resolution: Times New Roman/16/148
+  vs serif/16/148`, the exact false positive this tick removes
+- **P2 — comparing the ADVANCE only, dropping the SIZE** → a `/18/176` against `/20/176` pair stops
+  separating and keys `geometry/displaced`
+- **P3 — a malformed signature falling back to a value that matches anything** → `{serif}` with no
+  numeric components silently pairs with a well-formed signature
+
+Together with t1369's N1–N4 the row now has seven applied mutations, and it holds both directions:
+too little classification (N1) and too much (P1).
+
+REGRESSION SWEEP: `manuk-wpt` lib **108 passed**. No engine source changed.
+
+⚠ MEASURED, NOT FIXED, AND WORTH THE NEXT AGENT'S TIME. The anchor's top LAYOUT cause is still
+`missing box: <path>` (9 hits) and **it is not a missing capability**: served locally with ids
+injected, our engine produces all nine `<path>` boxes and every one matches Chrome
+(`svg_geometry::map_inline_svg` maps all four of a11yproject's SVGs exactly — 51×51, 180×19,
+1402×687, and the six-path illustration). The same page fetched LOCALLY scores **coverage 100.0%,
+missing 0**. So the nine missing boxes appear only on the LIVE fetch, which means the live leg — not
+the mapping — loses them. That is where to start, and it is an instrument question, not a layout one.
+
+⚠ Three candidate mechanisms were PRICED AND REFUSED this session rather than built, which is
+t1368's rule working: `align=left|right` float on img/table (**0** of 137 corpus pages),
+`src: local(…)` ordering (2 of 137, and both name faces whose local and web copies have identical
+metrics), and SVG `<text>` (**0** of 1838 inline SVGs and **0** of 60 referenced `.svg` files — so
+`usvg::Options::default()`'s empty fontdb, which does mean SVG text never renders, buys nothing
+measurable today). Inline `<svg>` itself is on 26% of pages with 2227 `<path>` elements, so the
+`<path>` thread above is the priced one.
+
+WIKI: docs/wiki/fidelity-instrument.md

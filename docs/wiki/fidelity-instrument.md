@@ -1772,6 +1772,25 @@ median and instances — it is named for its cause, not hidden.
 anchor is still 43.3% and still failing. What changed is which defect the ledger sends the next tick
 to fix.
 
+### ⚠ The family name is a LABEL; only the advance is a MEASUREMENT (t1370)
+
+t1369 compared whole signatures, and the very next page the instrument met produced **43 false
+positives**: divergences keyed `font-resolution: Times New Roman/16/148 vs serif/16/148` — the same
+148px advance at the same 16px size, differing only in what the two engines *call* the fallback they
+both resolved to. That name is `getComputedStyle().fontFamily`'s first entry, and two engines naming
+one generic fallback differently is not a divergence at all; it hid six real `geometry/mis-sized`
+and `geometry/displaced` causes behind a font label.
+
+The comparison is now the pair the probe actually MEASURES — `(px, advance)`, the two trailing
+components. `{anaheim/20/201}` vs `{anaheim/20/181}` still separates (same name, different advance),
+which is the case the classification exists for; `{Times New Roman/16/148}` vs `{serif/16/148}` no
+longer does. The SIZE half is load-bearing too: dropping it would merge two sizes of one face.
+
+⭐ **The general rule, and it is why this was found in one run:** *when a signature is part label and
+part measurement, key on the measured part.* A label is what an engine chose to call something and
+two engines may legitimately choose different words; a measurement is a claim about the world and
+they may not.
+
 Two guards, both mutation-proven: an **absent** signature must not compare unequal to a present one
 (`fontsuffix` emits absence rather than a fabricated `{/0}`, and a row that says nothing about its
 face stays a geometry cause), and the key must survive `div_to_jsonl` → `div_from_jsonl`, because

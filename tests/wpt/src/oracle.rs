@@ -181,6 +181,29 @@ fn font_sig(instance: &str) -> Option<&str> {
     Some(instance[open + 1..close].trim()).filter(|s| !s.is_empty())
 }
 
+/// The MEASURED half of a face signature — `(px, advance)` out of `family/px/advance`.
+///
+/// ⚠⚠⚠ **THE FAMILY NAME IS A LABEL; ONLY THE ADVANCE IS A MEASUREMENT.** t1369 compared whole
+/// signatures and over-classified on the first page it met afterwards: 43 divergences keyed
+/// `font-resolution: Times New Roman/16/148 vs serif/16/148` — **the same 148px advance at the same
+/// 16px size**, differing only in what the two engines CALL the face they both resolved to. That
+/// name comes from `getComputedStyle().fontFamily`'s first entry, and two engines naming one
+/// fallback differently (`Times New Roman` against `serif`) is not a divergence at all.
+///
+/// So the test is the pair the probe actually MEASURES. `{anaheim/20/201}` vs `{anaheim/20/181}`
+/// still separates — same name, 20px advances of 201 and 181 — which is the case the whole
+/// classification exists for.
+///
+/// A signature that does not carry the two trailing numeric components is unusable and compares as
+/// itself, so a malformed one can never silently match a well-formed one.
+fn measured_face(sig: &str) -> (&str, &str) {
+    let mut it = sig.rsplitn(3, '/');
+    match (it.next(), it.next()) {
+        (Some(adv), Some(px)) if !adv.is_empty() && !px.is_empty() => (px, adv),
+        _ => (sig, sig),
+    }
+}
+
 /// Diff one page. `tol` is the geometry tolerance in px.
 pub fn diff_page(
     site: &str,
@@ -529,7 +552,7 @@ pub fn signature_of(d: &Divergence) -> String {
             // but it is named for what it is, so the burndown stops presenting font resolution as
             // the top layout defect on the anchor it tells the loop to work next.
             if let (Some(cf), Some(mf)) = (font_sig(&d.chrome), font_sig(&d.manuk)) {
-                if cf != mf {
+                if measured_face(cf) != measured_face(mf) {
                     return format!("font-resolution: {cf} vs {mf}   (<{}>)", d.tag);
                 }
             }
@@ -1489,6 +1512,19 @@ mod tests {
             "font-resolution: anaheim/20/201 vs anaheim/20/181   (<a>)",
             "two faces: the width follows the TYPEFACE, and calling it a sizing bug sends the loop \
              to fix a width computation that is already right"
+        );
+
+        // ⭐⭐ **THE FAMILY NAME IS A LABEL AND ONLY THE ADVANCE IS A MEASUREMENT** — the row t1369
+        // shipped without, and the very next page it met produced 43 false positives. Two engines
+        // naming ONE resolved fallback differently (`Times New Roman` against `serif`) at the same
+        // size and the same measured advance have not used two faces; they have used two words.
+        let mut named = geom_div("local.example", "div", [0, 0, 0, 20]);
+        named.chrome = "[0 0 300×40]  {Times New Roman/16/148}".into();
+        named.manuk = "[0 0 300×60]  {serif/16/148}".into();
+        assert!(
+            signature_of(&named).starts_with("geometry/mis-sized"),
+            "the same advance at the same size is ONE face under two names — got {}",
+            signature_of(&named)
         );
 
         // ⚠ **ABSENCE MUST NOT COMPARE UNEQUAL TO PRESENCE.** `fontsuffix` deliberately emits

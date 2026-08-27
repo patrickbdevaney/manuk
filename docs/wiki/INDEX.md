@@ -1375,6 +1375,7 @@
   - L1723 · A divergence between two TYPEFACES is not a layout divergence (t1369)
   - L1736 · The arbitration is the FONT FILE, not either engine
   - L1759 · What changed, and what deliberately did not
+  - L1775 · ⚠ The family name is a LABEL; only the advance is a MEASUREMENT (t1370)
 
 ## FRAMEWORKS — React, Svelte, Next, jQuery: what actually breaks
 `docs/wiki/frameworks.md`
@@ -2416,4 +2417,4 @@
   - L231 · Both named mechanisms are subsystem work
 
 ---
-2323 sections across 22 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+2324 sections across 22 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
