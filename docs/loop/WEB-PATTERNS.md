@@ -9110,3 +9110,25 @@ that holds one — `800×31` where Chrome says `800×24`.
 ⚠ **A PIECEWISE WORD SUM IS NOT A WHOLE-STRING MEASURE**, and the difference is invisible in a
 monospace fixture. It cost this tick a full build cycle: right width, double height, on every real
 sponsor image, while the fixture read clean.
+
+## t1343 — a Latin font stack around CJK text is the DEFAULT on the Japanese/Chinese/Korean web
+
+**PATTERN: `font-family: sans-serif` (or `Helvetica, Arial, sans-serif`, or a Google-Font Latin
+stack) on a page whose content is CJK.** This is not an exotic authoring choice — it is what CMS
+themes, Tailwind, Bootstrap and every ported Western template ship, and the CJK glyphs arrive through
+per-glyph font fallback. Chrome sizes the line box from the face the glyphs actually came from; we
+sized it from the family's first face, so every such line was **18px where Chrome says 24** — a 25%
+shortfall repeated on every line and compounding down the document, because a line box is a `dy` term.
+
+⭐ **IT IS THE FACE, NOT THE SCRIPT, AND ONE CONTROL ROW IS THE ONLY THING THAT SAYS SO.** Latin text
+in `font-family: "Noto Sans CJK JP"` is **also** 24 in Chrome. A rule written as *"a CJK codepoint
+makes the line taller"* reproduces every other row in the battery and is wrong.
+
+⚠ **AN AUTHOR `line-height` IS THE LINE BOX AND A TALLER FALLBACK FACE MUST NOT GROW IT.**
+`line-height: 20px` on CJK is 20 and `line-height: 1` at 16px is 16 — the glyphs overflow (§10.8.1).
+Both rows were already exact and the unscoped first cut broke both.
+
+⚠ **A FROZEN DOCUMENT IS NOT A FROZEN PAGE.** `www.unoeste.br` read **81.0 / 74.6 / 74.6** across
+three runs of ONE binary: the `<base>` that makes the snapshot resolve its CSS also lets its images
+load live, and their natural sizes differ per run. Measure the per-site spread before believing any
+delta smaller than it — t1341's rule needed this second half.

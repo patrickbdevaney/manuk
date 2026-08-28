@@ -7077,3 +7077,77 @@ still has holes that a source it had not read finds in one fetch.
 3. ⭐⭐ Carried unclosed: ask BOTH questions (reported vs applied) of every `gated` row (#73);
    `writing-mode`/`css-writing-modes` absent from the WPT checkout (#73); `svg` at 14.6% (#72); the
    ECMAScript mega-row split (#71); anchor positioning's contradictory pair (#70).
+
+## Audit #76 — tick 1343 (2026-08-28)
+
+**Sources read (three, per #75's own ranked item 2 — one source per audit is one source too few):**
+
+- Interop 2026 focus + investigation areas — <https://github.com/web-platform-tests/interop/blob/main/2026/README.md>
+- Ladybird 2026 newsletters (an independent engine, asked what it had just had to BUILD) —
+  <https://ladybird.org/newsletter/2026-06-30/>, <https://ladybird.org/newsletter/2026-07-31/>
+- Baseline 2026 digests — <https://web.dev/baseline/2026> — and State of CSS 2026 pain points —
+  <https://2026.stateofcss.com/en-US/pain-points/>
+
+### RECONCILIATION — the breadth check came back CLEAN, and that is not the finding
+
+All **20 Interop 2026 focus areas** (container style queries, anchor positioning, `attr()`,
+`contrast-color()`, `zoom`, custom highlights, dialogs/popovers, fetch uploads+ranges, IndexedDB,
+JSPI, media pseudo-classes, Navigation API, scoped custom element registries, scroll-driven
+animations, scroll snap, `shape()`, view transitions, web compat, WebRTC, WebTransport) and all
+**4 investigation efforts** (accessibility testing, JPEG XL, mobile testing, WebVTT) already have
+rows. So do Baseline 2026's newly-available headliners (Trusted Types, `:active-view-transition`,
+Navigation API, `shape()`) and State of CSS 2026's most-avoided list (anchor positioning, view
+transitions, `if()`). The `decorators` and `<img sizes="auto">` rows #75 added are still `unknown`.
+
+**The map's BREADTH is current. Its HONESTY on a green row was not, and that is this audit's finding.**
+
+### ⚠⚠⚠ CORRECTED — a row that was GREEN on one primitive of two, for 1,100 ticks
+
+`doc | font fallback across scripts (CJK/emoji)` has read **`gated`** since tick 214, on
+`G_COMPLEX_SCRIPT`, receipt *"measured working (zero .notdef)"*. That gate is correct and stays: it
+measures **glyph COVERAGE** — no tofu. What it never measured is the **METRICS** the fallback face
+contributes, and tick 1343 measured that half and found it wrong since the engine began:
+`line-height: normal` was derived from the **primary** face alone, so every CJK line written in a
+Latin font stack — which is how the CJK web is authored — came out **18px at 16px/normal where Chrome
+says 24**. A 25% shortfall, repeated on every line, compounding down the document (frozen
+`cyoinatu-onna.com` SHAPE **56.8% → 91.6%** once fixed).
+
+This is the same class as **audit #48's bidi downgrade**: *a gate named for a SCRIPT covers one
+primitive of several*, and the neighbouring green is exactly what makes the missing half invisible.
+The row is renamed to say what it measures, and the metrics half is now **its own row carrying its
+own verdict** — because an aggregate row cannot go red or green.
+
+⭐ **THE GENERAL FORM, and it is the third time this instrument has hit it:** ask of every `gated`
+row not *"does it pass"* but ***"which primitive does its gate actually assert, and what are the
+others?"*** A capability named for a SCRIPT, a FORMAT or a FAMILY (bidi, SVG, font fallback) is an
+umbrella, and an umbrella cannot fail.
+
+### What was ADDED (a bigger, uglier map is a good tick)
+
+- **`doc | VERTICAL METRICS of a fallback face`** — now **`gated`**, split out of the row above and
+  carrying the t1343 gate and its four RED mutations.
+- **`css | an inline BOX's own content area (§10.6.1) when its text is drawn by a FALLBACK face`** —
+  `unknown`. The residue t1343 named rather than left loose: a different quantity from the line box,
+  with a different rounding rule, and it is what an agent reads to decide where to click.
+- **`app | hit-testing and caret placement INSIDE a ligature / grapheme cluster`** — `unknown`.
+  Found by asking the independent engine: Ladybird landed grapheme-cluster hit testing in 2026. The
+  map has shaping, bidi and complex-script rows and **not one row for the inverse mapping**
+  (pixel → character offset). Doubly weighted here, because the agentic surface actuates by position.
+
+### Is the frame still right?
+
+**Yes, and this audit sharpened it.** M1 render on the in-scope CrUX corpus stays the binding
+constraint — and t1343 is evidence the remaining gap is *concentrated in mechanisms the map already
+claims to have*, not in features nobody has heard of. The 20/20 Interop reconciliation says the
+same thing from the other side: we are not missing the world's list, we are missing HALVES of our own
+rows.
+
+### RANKED, from this audit only
+
+1. ⭐⭐⭐ **RE-ASK THE PRIMITIVE QUESTION OF EVERY `gated` UMBRELLA ROW** — bidi and SVG have already
+   been caught this way, font fallback makes three. A row whose capability is named for a script, a
+   format or a family should be presumed to be an umbrella until its gate's assertions are read.
+2. ⭐⭐ **PROBE the inline-box content area under fallback** — one Chrome fixture, and it is the
+   agentic surface's own quantity.
+3. ⭐ Carried unclosed from #75: measure DECORATORS (one `eval`); `<img sizes="auto">`;
+   and #73's `writing-mode`/`css-writing-modes` still absent from the WPT checkout.

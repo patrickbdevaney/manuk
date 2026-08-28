@@ -4021,3 +4021,57 @@ were already Chrome-exact, and the over-broad fix moves the mid-line row to 38.5
 failed, identical** to a same-hour old-binary control; the three named anchors unchanged (whatwg
 89.2%, martinfowler 79.7%, a11yproject 43.3%) — the shape metric is parent-relative with an 8px
 tolerance, and a 9.64px error on the elements that happen to open a line mostly does not cross it.
+
+## `line-height: normal` is the FONT's business — and *which* font is the RUN's business (t1343)
+
+The engine derived `normal` from the face's `ascent + descent + lineGap` since tick 269, which is
+right, and asked the **primary** face for it, which is only right for a run that never leaves that
+face. `resolve_face` falls back **per glyph**, so a run whose author family is `sans-serif` draws its
+CJK glyphs from a CJK face — and the line box was still DejaVu's.
+
+```text
+  content              family                line-height   Chrome   primary-only
+  "Latin only"         sans-serif            normal            18      18   ✓
+  "1980年代アイドル"     sans-serif            normal            24      18   ✗ 25% short
+  "1980年代アイドル"     serif                 normal            24      18   ✗
+  "1980年代アイドル"     "Noto Sans CJK JP"    normal            24      24   ✓
+  "Latin only"         "Noto Sans CJK JP"    normal            24      24   ✓ ⭐
+```
+
+⭐ The last row is the whole mechanism: **Latin text in a CJK face is 24 too.** It is not the script,
+it is the face the glyphs came from. Any rule keyed on the codepoint passes row 2 and fails row 5.
+
+### The union is over FINISHED line boxes, not over raw metrics
+
+`max(ascent) + max(descent) + max(line_gap)` gives **25**, one pixel high, because DejaVu's `lineGap`
+of 0.523 rounds to 1 and is contributed by a face that draws no glyph on the line. What composes is
+each face's own `normal` box with its half-leading already distributed (§10.8.1):
+
+```text
+  face                 a      d      gap    height   box asc   box desc
+  DejaVu Sans        14.48   3.39   0.52      18        14         4
+  Noto Sans CJK JP   18.56   4.61   0.00      24        19         5
+  union                                       24        19         5   ✓ Chrome (baseline 19 too)
+```
+
+### An author `line-height` is the line box, and a taller face must NOT grow it
+
+`line-height: 20px` on CJK is **20** in Chrome and `line-height: 1` at 16px is **16** — the glyphs
+overflow. Applying the union unscoped read 22 and 18 on those two rows, both of which were already
+exact. `TextStyle::line_height_normal` carries the keyword precisely so the fix can be scoped to it.
+
+### The Latin control arm is free, by construction
+
+`FontContext::line_metrics_for_text` returns the primary's `LineMetrics` **unchanged** when the run
+touches no other face, so a Latin page is byte-identical rather than merely close. An ASCII fast path
+(`str::is_ascii` plus one memoised per-face *covers-ASCII* bool) keeps an English page from paying
+even the per-character walk. ⚠ That bool is a real question, not a formality: an ICON font covers
+almost no ASCII, and `font-family: FontAwesome` on ASCII text genuinely falls back.
+
+**Measured:** frozen `cyoinatu-onna.com` SHAPE **56.8% → 91.6%** (1472 scored, absolute placement
+1.4% → 69.9%), `momon-ga.com` 60.3% → 63.8%; two Latin control sites byte-identical over 908 scored
+elements.
+
+⚠ **A FROZEN DOCUMENT IS NOT A FROZEN PAGE.** `www.unoeste.br` read 81.0 / 74.6 / 74.6 across three
+runs of one binary — its `<base>` points at the live origin, so images still load over the network
+and their natural sizes land differently per run. Measure the spread before believing a delta.

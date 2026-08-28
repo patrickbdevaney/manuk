@@ -2402,6 +2402,10 @@
   - L3902 · letter-spacing dropped every unit it did not know, and a dropped value read as normal (t1371)
   - L3951 · word-spacing and the path that has no separate space (t1372)
   - L3987 · A collapsed space does not open a line, and a zero-width fragment made "first" lie (t1376)
+  - L4025 · line-height: normal is the FONT's business — and *which* font is the RUN's business (t1343)
+  - L4044 · The union is over FINISHED line boxes, not over raw metrics
+  - L4057 · An author line-height is the line box, and a taller face must NOT grow it
+  - L4063 · The Latin control arm is free, by construction
 
 ## The wasm demo — running the engine inside someone else's browser
 `docs/wiki/wasm-demo.md`
@@ -2435,4 +2439,4 @@
   - L231 · Both named mechanisms are subsystem work
 
 ---
-2342 sections across 22 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+2346 sections across 22 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.

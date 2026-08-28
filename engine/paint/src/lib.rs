@@ -185,6 +185,8 @@ pub fn caption_items(r: Rect, cues: &[CaptionCue]) -> Vec<DisplayItem> {
             a: 255,
         },
         line_height,
+        // A caption's leading is a FIXED fraction of the frame, not a font's `normal`.
+        line_height_normal: false,
         decoration: manuk_css::TextDecoration::default(),
         letter_spacing: 0.0,
         word_spacing: 0.0,

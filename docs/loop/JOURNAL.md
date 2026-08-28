@@ -93295,3 +93295,158 @@ together, and price them the same way — on the elements where the two engines 
 where the construct exists.
 
 WIKI: docs/wiki/box-layout.md
+
+## Tick 1343 — every CJK line on the web is 25% short, because `line-height: normal` asked the wrong font (2026-08-28)
+
+TICK SHAPE: capability — CSS/layout text metrics, on the board's CO-#1 (SHAPE/POSITION on the
+near-bar cohort). Board re-run at the top of this tick; CO-#1 unchanged.
+
+`line-height: normal` is the FONT's business — the engine has known that since tick 269 and derives
+it from ascent + descent + lineGap rather than a 1.2 multiplier. What it never asked is **WHICH
+font**. `text_style` resolves `font-family` to one face *before a single character is in hand*, so it
+can only ever read the PRIMARY face's metrics. A run whose author family is `sans-serif` still draws
+its CJK glyphs from a CJK face, because `resolve_face` falls back per glyph — and so every Japanese,
+Chinese and Korean line on every page written with a Latin font stack came out at the LATIN face's
+height. **18px at 16px/normal where Chrome says 24.**
+
+### HOW IT WAS FOUND — the near-bar cohort, then the shape dump, then a nine-row fixture
+
+The board's ranking rule is MARGINAL M1 CROSSINGS off the per-site distances already banked, so the
+cohort came from `SWEEP-t1322-rows.tsv`: shape 0.55–0.75 with `shape_n >= 60`, 22 sites. Five were
+frozen (curl + `<base>`, served from localhost — t1341's rule) and shape-dumped. Two of them are
+Japanese, and both showed the same shape in the dump:
+
+```text
+  cyoinatu-onna.com   c[0 9900 272x20]  m[0 7936 272x16]   div:nth-of-type(497)
+                      c[0 9880 272x20]  m[0 7920 272x16]   div:nth-of-type(496)
+```
+
+Chrome stacks 500 one-line `<div>`s at 20px; we stack them at 16. 636 of that page's 1472 scored
+elements were misses and the top ~500 were that one signature, each 4px short and each pushing the
+next one up — a line box is a `dy` term, so it compounds down the whole document.
+
+⚠ **THE CONSTRUCT IS NOT THE MECHANISM, AND THE FIXTURE IS WHAT SEPARATED THEM.** *"CJK text is
+taller"* is the obvious reading and it is WRONG. Chrome-measured, 300px block, `line-height: normal`:
+
+```text
+  content                family                  Chrome   ours
+  "Latin only"           sans-serif                  18     18   ✓ control
+  "1980年代アイドル"       sans-serif                  24     18   <- the bug
+  "1980年代アイドル"       serif                       24     18
+  "1980年代アイドル"       "Noto Sans CJK JP"          24     24   ✓ named — no fallback taken
+  "Latin only"           "Noto Sans CJK JP"          24     24   ✓ ⭐ LATIN TEXT, ALSO 24
+```
+
+The last row settles it: it is not the SCRIPT, it is **the face the glyphs actually came from**. A
+rule keyed on "is this codepoint CJK" passes row 2 and fails row 5, and nothing else in the battery
+can tell the two rules apart.
+
+### A COMPONENT-WISE MAX OF RAW METRICS IS THE WRONG UNION, AND IT IS OFF BY EXACTLY ONE PIXEL
+
+The first cut took `max(ascent) + max(descent) + max(line_gap)` over the faces the run touches and
+read **25** where Chrome says 24. The extra pixel is DejaVu Sans's `lineGap` of 0.523 — rounded to 1
+and contributed by a face that draws not one glyph on the line.
+
+The unit that composes is not the raw metric, it is each face's own FINISHED line box, with its
+half-leading already distributed (CSS 2.1 §10.8.1):
+
+```text
+  face                 a      d      gap    height   halfLead   box asc   box desc
+  DejaVu Sans        14.48   3.39   0.52      18         0         14         4
+  Noto Sans CJK JP   18.56   4.61   0.00      24         0         19         5
+  union                                       24                   19         5   ✓ Chrome
+  (max of raw metrics)                        25                              ✗
+```
+
+19 is also Chrome's BASELINE for that line, measured with a 4px inline-block ruler: 19.00 for the CJK
+div and 14.00 for the Latin one, both exact after the fix.
+
+### THE SCOPE IS LOAD-BEARING — THE UNSCOPED VERSION BROKE TWO ROWS THAT WERE ALREADY EXACT
+
+Written first without the `line-height: normal` gate, the union also reached the explicit-leading
+path and regressed `line-height: 20px` on CJK from **20 to 22** and `line-height: 1` from **16 to
+18**. An author leading IS the line box; a taller face's glyphs are supposed to overflow it, not grow
+it. Both rows are now controls in the gate, because both went red.
+
+⭐ **THE CONTROL ARM IS FREE, BY CONSTRUCTION.** `line_metrics_for_text` returns the primary's
+`LineMetrics` *unchanged* — same object, same fractional ascent — when the run never crosses a face
+boundary. Every Latin page is therefore untouched by construction rather than by hope, and an
+ASCII fast path (`text.is_ascii()` + one memoised per-face "covers ASCII" bool) means an English
+page does not even pay the per-character walk.
+
+### THE RECEIPT — FROZEN pages, same-hour old binary, TWO CONTROL SITES, spread measured
+
+```text
+  site (frozen)                      BEFORE     AFTER    spread(3 runs)   scored
+  pivaldi.restoplace.ws  CONTROL     100.0%    100.0%     100.0 ×3          468
+  www.5movierulz.discount CONTROL     79.1%     79.1%      79.1 ×3          440
+  momon-ga.com           (JP)         60.3%     63.8%      63.8 ×3          572
+  cyoinatu-onna.com      (JP)         56.8%     91.6%      91.6/91.6/91.4  1472
+```
+
+`cyoinatu-onna.com` moves **+34.8 points**, and its absolute PLACEMENT goes 1.4% → 69.9%. The two
+Latin controls are byte-identical over 908 scored elements, which is the empirical half of the
+construction argument above.
+
+⚠ **ONE SITE WAS DROPPED FROM THE RECEIPT AND IT IS NAMED RATHER THAN QUIETLY OMITTED.**
+`www.unoeste.br` read 77.9% before and then **81.0 / 74.6 / 74.6** across three runs of the SAME
+binary — a ±6.4 spread, larger than any delta it could report. Freezing the DOCUMENT does not freeze
+the page: the `<base>` points at the live origin, so its images still load over the network and their
+natural sizes land differently per run. A frozen document is necessary and not sufficient.
+
+RESIDUE, NAMED: this fixes the line box of a text RUN. An inline BOX's own reported rect (its content
+area, §10.6.1) is still computed from its primary face alone — right for `getBoundingClientRect` on
+an `<a>` whose own font is the Latin one, unverified for the mixed case, and deliberately not touched
+here because it is a different quantity with a different rounding rule.
+
+GATE `a_cjk_line_in_a_latin_family_takes_the_fallback_faces_line_box_not_the_primarys` — 8 arms, 5 of
+them controls, every claim asserted as a DERIVATION (the fallback face's own line box, read from the
+font context) rather than as the literal 24, so it cannot be pinned to whichever faces this host
+resolves. RED under FOUR mutations, each applied to the engine, rebuilt and read: N1 revert the union
+→ 18; N2 component-wise max of raw metrics → 25; N3 drop the `normal` scope → `line-height:20px`
+reads 22; N4 union the ascent only → 23. Full layout suite 187/187, manuk-text 14/14.
+
+⚠⚠ **A FEATURE-GATED CALL SITE IS INVISIBLE TO THE DEFAULT BUILD, AND IT COST A WHOLE WALL.** Adding
+`line_height_normal` to `TextStyle` broke six literal constructions; `cargo check -p manuk-layout`,
+`cargo test -p manuk-layout` and the workspace build found four of them. The other two are inside
+`shell/src/gui.rs` behind `#[cfg(feature = "gui")]`, so nothing on the fast path ever compiled them,
+and the wall reported it 50 minutes later as **`manuk-shell: INSTRUMENT FAULT — no verdict on 4 runs
+incl 3 on a QUIET box. A REAL hang/OOM, not wall contention.`** It was neither a hang nor an OOM: the
+suite produced no verdict because it did not COMPILE. The lesson is not about this field — it is that
+"no verdict" from a gate is a claim about the RUN, and `cargo test -q -p <crate>` reads the real
+reason in seconds where the wall reads a symptom in an hour. `grep -rn "TextStyle {" --include=*.rs .`
+would have found all six before the first build.
+
+⚠ HARNESS NOTE, not a complaint: a background 200-site CrUX sweep launched at the top of this tick
+produced 90 of 200 rows (chunks segfaulting in SpiderMonkey teardown under 6-way concurrency beside a
+release build) and was in any case INVALID the moment I rebuilt `manuk-wpt` mid-run — half its rows
+measured a different binary from the other half. Discarded, not reported. A sweep and a build must
+not share a wall clock.
+
+### THE DUE AUDITS RAN IN THIS TICK, AND THE SURFACE AUDIT FOUND SOMETHING
+
+Self-audit (due at 1343) is clean but for one item: **the verify wall is 3659s against a 300s
+target**. That is Part 21.2 item 1 regressed, it is HARNESS territory (`scripts/` is observer-owned),
+and it is recorded here rather than acted on.
+
+Surface audit **#76** read three sources (Interop 2026's README, Ladybird's 2026 newsletters, Baseline
+2026 + State of CSS 2026 pain points — #75's own ranked item was *"reconcile against a third source
+next time"*). **All 20 Interop 2026 focus areas and all 4 investigation efforts already have rows**,
+as do Baseline 2026's headliners and State of CSS's most-avoided list. The map's BREADTH is current.
+
+⚠⚠⚠ **ITS HONESTY ON A GREEN ROW WAS NOT, AND THIS TICK IS THE PROOF.** `doc | font fallback across
+scripts (CJK/emoji)` has read `gated` since **tick 214** on `G_COMPLEX_SCRIPT`, receipt *"measured
+working (zero .notdef)"*. That gate measures **glyph COVERAGE** and is correct. It never measured the
+**METRICS** half — the thing this tick just found wrong on every CJK page for 1,100 ticks. Same class
+as audit #48's bidi downgrade, and audit #46's SVG split: **a gate named for a SCRIPT, a FORMAT or a
+FAMILY is an umbrella, and an umbrella cannot go red.** The row is renamed to say what it measures,
+the metrics half is now its own row with its own verdict, and #76's top-ranked item is to re-ask that
+question — *"which primitive does this gate actually assert, and what are the others?"* — of every
+`gated` umbrella row on the map.
+
+NEXT — the same near-bar cohort still holds `momon-ga.com` at 63.8% with a WRAP signature the dump
+names precisely: `x +753  c[763 0 231x336]  m[10 393 231x336]`, four identical 231px cards that
+Chrome fits on one 1004px row and we wrap after three. Same size, same container, different break —
+an inline/flex free-space term, and it is the next single mechanism on this anchor.
+
+WIKI: docs/wiki/text-layout.md

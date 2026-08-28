@@ -1027,3 +1027,4 @@ tick	sha	epoch	iso	delta_s	shape	wall_s	files	added	deleted	gates	claims	wpt_pas
 1339	1d0ffc1c	1787908938	2026-08-28T05:22:18-04:00	18848	capability	465	9	423	34	521	81	3896	6960	0	642	0	the page reserved a scrollbar and we handed the space back (2026-08-28)
 1340	a489849d	1787913566	2026-08-28T06:39:26-04:00	4628	capability	465	7	196	33	521	81	3896	6960	0	642	0	the ratio box knew its own height and never told its children (2026-08-28)
 1342	9723c27d	1787920712	2026-08-28T08:38:32-04:00	7146	capability	465	8	575	46	521	81	3896	6960	0	642	0	a broken image with alt text is a box full of text, and we drew a 16px icon (2026-08-28)
+1343	43c5ab9b	1787929648	2026-08-28T11:07:28-04:00	8936	capability	465	13	777	37	521	81	3896	6960	0	642	0	every CJK line on the web is 25% short, because `line-height: normal` asked the wrong font (2026-08-28)

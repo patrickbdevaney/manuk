@@ -85,6 +85,16 @@ pub struct LineMetrics {
     pub line_gap: f32,
 }
 
+/// One face's own `line-height: normal` box ASCENT — its rounded ascent plus the half-leading CSS
+/// 2.1 §10.8.1 hands to the font (`(normal_height − content_area) / 2`, floored the way the strut
+/// arithmetic in layout floors it). This is the quantity that UNIONS across the faces of a mixed
+/// run; the raw metrics do not (see [`FontContext::line_metrics_for_text`]).
+fn box_ascent(m: &LineMetrics) -> f32 {
+    let a = m.ascent.round();
+    let content = a + m.descent.round();
+    a + ((m.height() - content) / 2.0).floor()
+}
+
 impl LineMetrics {
     /// Total line box height for `line-height: normal` — **each of `ascent`, `descent` and `gap`
     /// ROUNDED TO A WHOLE PIXEL AND THEN SUMMED**, because that is the number Chrome lays out with.
@@ -238,9 +248,17 @@ pub struct FontContext {
     face_by_dbid: RefCell<HashMap<fontdb::ID, FaceId>>,
     /// `FontKey` → its primary [`FaceId`] (the resolved family/weight/style face).
     primary_of: RefCell<HashMap<FontKey, Option<FaceId>>>,
+    /// A fontdue face per interned [`FaceId`], so a FALLBACK face can be asked for its vertical
+    /// metrics through the same reader the primary uses. Built lazily; a face that fails to parse
+    /// memoises as `None` so it is not retried per line box.
+    face_fonts: RefCell<HashMap<FaceId, Option<Rc<fontdue::Font>>>>,
     /// Discovered fallback faces (lazy); per-`(face, char)` coverage memo.
     fallbacks: RefCell<Option<Vec<FaceId>>>,
     coverage: RefCell<HashMap<(FaceId, char), bool>>,
+    /// Per face: does it cover ALL of printable ASCII? One bool, memoised, so the ASCII fast path
+    /// in [`FontContext::line_metrics_for_text`] costs a single lookup rather than a per-character
+    /// walk of `coverage` on every text fragment of every Latin page.
+    ascii_coverage: RefCell<HashMap<FaceId, bool>>,
     /// Interned named font families (id ↔ lowercase name), for `FontFamily::Named`.
     family_names: RefCell<Vec<String>>,
     family_ids: RefCell<HashMap<String, u32>>,
@@ -495,8 +513,10 @@ impl FontContext {
             faces: RefCell::new(Vec::new()),
             face_by_dbid: RefCell::new(HashMap::new()),
             primary_of: RefCell::new(HashMap::new()),
+            face_fonts: RefCell::new(HashMap::new()),
             fallbacks: RefCell::new(None),
             coverage: RefCell::new(HashMap::new()),
+            ascii_coverage: RefCell::new(HashMap::new()),
             family_names: RefCell::new(Vec::new()),
             family_ids: RefCell::new(HashMap::new()),
             webfonts: RefCell::new(HashMap::new()),
@@ -1003,6 +1023,27 @@ impl FontContext {
         out
     }
 
+    /// Whether `face` covers EVERY printable ASCII codepoint (cached, one bool per face).
+    ///
+    /// This exists for one reason: [`line_metrics_for_text`] must walk a run's characters to find
+    /// the faces it draws from, and the overwhelming majority of runs on the web are ASCII in a
+    /// face that covers ASCII — a case where the answer is known in advance. `str::is_ascii` is a
+    /// word-at-a-time scan and this is one hash lookup, so an English page pays neither the
+    /// per-character `coverage` probe nor a second allocation.
+    ///
+    /// ⚠ It is a real question, not a formality: an ICON font is a face that covers almost no
+    /// ASCII, and `font-family: FontAwesome` on ASCII text genuinely falls back.
+    ///
+    /// [`line_metrics_for_text`]: FontContext::line_metrics_for_text
+    fn face_covers_ascii(&self, face: FaceId) -> bool {
+        if let Some(&hit) = self.ascii_coverage.borrow().get(&face) {
+            return hit;
+        }
+        let all = (0x20u8..=0x7e).all(|b| self.face_covers(face, b as char));
+        self.ascii_coverage.borrow_mut().insert(face, all);
+        all
+    }
+
     /// Whether `face` has a glyph for `ch` (cached).
     fn face_covers(&self, face: FaceId, ch: char) -> bool {
         if let Some(&hit) = self.coverage.borrow().get(&(face, ch)) {
@@ -1082,6 +1123,135 @@ impl FontContext {
         LineMetrics {
             ascent: size * 0.8,
             descent: size * 0.2,
+            line_gap: 0.0,
+        }
+    }
+
+    /// A fontdue face for an interned [`FaceId`] — the same construction [`load`] uses, so the
+    /// metrics read out of it are the SAME numbers the primary path reads. Cached per face.
+    ///
+    /// [`load`]: FontContext::load
+    fn face_font(&self, fid: FaceId) -> Option<Rc<fontdue::Font>> {
+        if let Some(hit) = self.face_fonts.borrow().get(&fid) {
+            return hit.clone();
+        }
+        let built = self.face(fid).and_then(|fd| {
+            let settings = fontdue::FontSettings {
+                collection_index: fd.index,
+                ..fontdue::FontSettings::default()
+            };
+            fontdue::Font::from_bytes(&fd.data[..], settings)
+                .ok()
+                .map(Rc::new)
+        });
+        self.face_fonts.borrow_mut().insert(fid, built.clone());
+        built
+    }
+
+    /// Vertical line metrics for `key` at `size` **as used by this actual RUN OF TEXT** — the
+    /// primary face's metrics UNIONED with those of every fallback face the run's characters
+    /// resolve to.
+    ///
+    /// ⚠⚠⚠ **THIS IS THE DIFFERENCE BETWEEN A CJK PAGE BEING THE RIGHT HEIGHT AND BEING 25% SHORT,
+    /// AND IT IS INVISIBLE IN EVERY LATIN FIXTURE.** `line-height: normal` is the FONT's business
+    /// (see [`LineMetrics::height`]) — but *which* font is the run's business, and a run whose
+    /// author family is `sans-serif` still draws its CJK glyphs from a CJK face, because
+    /// [`resolve_face`] falls back per glyph. Asking only the PRIMARY face gives DejaVu Sans's
+    /// metrics for a line made entirely of Noto Sans CJK glyphs.
+    ///
+    /// Chrome-measured, `font: 16px sans-serif`, `line-height: normal`, one line, 272px block:
+    ///
+    /// ```text
+    ///   content                     family                  Chrome   primary-only
+    ///   "Latin only text"           sans-serif                  18     18   ✓
+    ///   "1980年代アイドル・歌手 (65)"  sans-serif                  24     18   ✗ 6px SHORT
+    ///   "1980年代アイドル・歌手 (65)"  serif                       24     18   ✗
+    ///   "松田聖子"                    "Noto Sans CJK JP"          24     24   ✓ named, no fallback
+    ///   "Latin only text"           "Noto Sans CJK JP"          24     24   ✓ the FONT, not the script
+    /// ```
+    ///
+    /// The last two rows are the control that settles the mechanism: it is not "CJK text is taller",
+    /// it is "**the face the glyphs actually came from is taller**" — Latin text in a CJK face is 24
+    /// too. A rule keyed on the SCRIPT would pass the third row and fail the fifth.
+    ///
+    /// [`resolve_face`]: FontContext::resolve_face
+    pub fn line_metrics_for_text(&self, key: FontKey, size: f32, text: &str) -> LineMetrics {
+        let base = self.line_metrics(key, size);
+        let Some(primary) = self.primary_face(key) else {
+            return base;
+        };
+        // The fast path, and it is the one nearly every run on the web takes: ASCII text in a face
+        // that covers ASCII can never leave its primary, so there is nothing to union.
+        if text.is_ascii() && self.face_covers_ascii(primary) {
+            return base;
+        }
+        let pua = self.pua_face(key);
+        // Small and linear: a run draws from one or two faces in practice, and the loop stops
+        // growing the set as soon as every fallback face has been seen once.
+        let mut seen: Vec<FaceId> = Vec::new();
+        for ch in text.chars() {
+            // Whitespace and controls are laid out by the primary face (see `resolve_face`), so
+            // they can never introduce a face and are skipped before the coverage memo is touched.
+            if ch.is_whitespace() || ch.is_control() {
+                continue;
+            }
+            let f = self.resolve_face(ch, primary, pua);
+            if f != primary && !seen.contains(&f) {
+                seen.push(f);
+            }
+        }
+        // ⭐ **THE CONTROL ARM IS FREE, AND IT IS THE REASON THIS RETURNS EARLY RATHER THAN
+        // UNIONING WITH ITSELF.** A run drawn entirely by its own primary face takes this line and
+        // gets the BYTE-IDENTICAL `LineMetrics` the engine has always used — same fractional
+        // ascent, same descent, same baseline. Every Latin page on the corpus is therefore
+        // untouched by construction, not by hope, and the union arithmetic below only ever runs on
+        // a run that actually crossed a face boundary.
+        if seen.is_empty() {
+            return base;
+        }
+        // ⚠⚠⚠ **A COMPONENT-WISE MAX OF RAW METRICS IS THE WRONG UNION, AND IT IS OFF BY EXACTLY
+        // ONE PIXEL — WHICH IS THE HARDEST SIZE OF ERROR TO NOTICE.** Taking
+        // `max(ascent) + max(descent) + max(line_gap)` over the faces gave **25** for
+        // `16px sans-serif` CJK where Chrome says 24, because DejaVu Sans's `lineGap` of 0.523
+        // rounds to 1 and Noto Sans CJK's is 0 — a term contributed by a face that draws not one
+        // glyph on the line.
+        //
+        // The unit that composes is not the raw metric, it is each face's own FINISHED line box:
+        // its `normal` height with its own leading already distributed (CSS 2.1 §10.8.1 — the
+        // half-leading belongs to the font, and `A + halfLeading` / `D + halfLeading` are what the
+        // line box unions). Measured over the two faces at 16px:
+        //
+        // ```text
+        //   face                 a      d      gap    height   halfLead   box asc   box desc
+        //   DejaVu Sans        14.48   3.39   0.52      18         0         14         4
+        //   Noto Sans CJK JP   18.56   4.61   0.00      24         0         19         5
+        //   union                                       24                   19         5   ✓ Chrome
+        //   (component-wise max of raw metrics)          25                              ✗
+        // ```
+        let mut asc = box_ascent(&base);
+        let mut desc = base.height() - asc;
+        for f in seen {
+            let Some(font) = self.face_font(f) else {
+                continue;
+            };
+            let Some(m) = font.horizontal_line_metrics(size) else {
+                continue;
+            };
+            let fm = LineMetrics {
+                ascent: m.ascent,
+                descent: -m.descent, // fontdue descent is negative (below baseline)
+                line_gap: m.line_gap,
+            };
+            let a = box_ascent(&fm);
+            asc = asc.max(a);
+            desc = desc.max(fm.height() - a);
+        }
+        // `line_gap: 0` because the leading is already inside `asc`/`desc` — `height()` must not
+        // add it a second time, and the caller's `half_leading` arithmetic must find none left to
+        // distribute.
+        LineMetrics {
+            ascent: asc,
+            descent: desc,
             line_gap: 0.0,
         }
     }

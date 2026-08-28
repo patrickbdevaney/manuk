@@ -2051,6 +2051,9 @@ impl App {
             font_size: size,
             color,
             line_height: size + 3.0,
+            // Browser chrome sets its OWN leading, so it is never the font's `normal` and a
+            // fallback face drawn into a tab title must not change the strip's line box.
+            line_height_normal: false,
             letter_spacing: 0.0,
             word_spacing: 0.0,
             shadow: None,
@@ -2316,6 +2319,9 @@ impl App {
             font_size: size,
             color,
             line_height: size + 3.0,
+            // Browser chrome sets its OWN leading, so it is never the font's `normal` and a
+            // fallback face drawn into a tab title must not change the strip's line box.
+            line_height_normal: false,
             letter_spacing: 0.0,
             word_spacing: 0.0,
             shadow: None,

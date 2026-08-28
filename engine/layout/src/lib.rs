@@ -581,6 +581,11 @@ pub struct TextStyle {
     pub font_size: f32,
     pub color: Rgba,
     pub line_height: f32,
+    /// **`line-height` was the keyword `normal`** — so this run's line box is the FONT's business
+    /// and may still grow when the run's glyphs come from a taller FALLBACK face (see
+    /// `FontContext::line_metrics_for_text`). A `<length>`/`<number>` line-height is a fixed
+    /// leading and must NOT grow: that is the whole reason this is carried rather than inferred.
+    pub line_height_normal: bool,
     /// `text-decoration` — underline / overline / line-through. Carried on the *text* because that
     /// is what the line is drawn under, and because the decoration propagates from an ancestor
     /// block down to the inline fragments that actually paint.
@@ -2453,6 +2458,7 @@ fn text_style(cs: &ComputedStyle, fonts: &FontContext) -> TextStyle {
         font_size: cs.font_size,
         color: cs.color,
         line_height,
+        line_height_normal: cs.line_height_normal,
         letter_spacing: cs.letter_spacing,
         word_spacing: cs.word_spacing,
         shadow: cs.text_shadow,
@@ -13890,6 +13896,9 @@ impl Ctx<'_> {
                                 font_size: 16.0,
                                 color: Rgba::BLACK,
                                 line_height: height,
+                                // A synthetic fragment carries a FIXED height, never a font's
+                                // `normal` — there is no run of text for a fallback face to widen.
+                                line_height_normal: false,
                                 decoration: Default::default(),
                                 letter_spacing: 0.0,
                                 word_spacing: 0.0,
@@ -13944,6 +13953,9 @@ impl Ctx<'_> {
                                 font_size: 16.0,
                                 color: Rgba::BLACK,
                                 line_height: height,
+                                // A synthetic fragment carries a FIXED height, never a font's
+                                // `normal` — there is no run of text for a fallback face to widen.
+                                line_height_normal: false,
                                 decoration: Default::default(),
                                 letter_spacing: 0.0,
                                 word_spacing: 0.0,
@@ -14087,7 +14099,40 @@ impl Ctx<'_> {
                 } => {
                     let key = style.font_key;
                     let size = style.font_size;
-                    let lm = self.fonts.line_metrics(key, size);
+                    // ⚠⚠⚠ **THE RUN'S OWN FACES, NOT JUST THE FAMILY'S FIRST ONE.** `text_style`
+                    // derived `line-height: normal` before any text was in hand, so it could only
+                    // ask the PRIMARY face — and a run whose author family is `sans-serif` still
+                    // draws its CJK glyphs from a CJK face. Every Japanese/Chinese/Korean line on
+                    // every page written with a Latin `font-family` came out at the Latin face's
+                    // height (18px at 16px/normal where Chrome says 24), and because a line box is
+                    // a `dy` term the error COMPOUNDS down the whole document.
+                    //
+                    // The union is taken here, at the one point where the style and the TEXT are
+                    // both reachable. `line_height_normal` gates it: an author `line-height` is a
+                    // fixed leading and a taller face must NOT grow it (CSS 2.1 §10.8.1) — the
+                    // glyphs overflow the line box instead, which is what Chrome does.
+                    //
+                    // ⚠ **SCOPED TO THE `normal` ARM ON PURPOSE, AND THE SCOPE IS LOAD-BEARING —
+                    // IT WAS WRITTEN UNSCOPED FIRST AND THE UNSCOPED VERSION WENT RED.** Feeding
+                    // the union into the explicit-`line-height` arm too REGRESSED two
+                    // Chrome-measured rows that were already exact: `line-height:20px` on CJK read
+                    // **22** against Chrome's 20, and `line-height:1` read **18** against 16 —
+                    // because an author leading IS the line box (§10.8.1) and the taller face's
+                    // glyphs are supposed to overflow it, not grow it. The `else` arm below is
+                    // therefore the pre-existing call, byte for byte, and both rows stay exact.
+                    let (lm, style) = if style.line_height_normal {
+                        let lm = self.fonts.line_metrics_for_text(key, size, &text);
+                        let h = lm.height();
+                        (
+                            lm,
+                            TextStyle {
+                                line_height: if h > 0.0 { h } else { style.line_height },
+                                ..style
+                            },
+                        )
+                    } else {
+                        (self.fonts.line_metrics(key, size), style)
+                    };
                     // `letter-spacing` adds a fixed advance after each character (trailing included,
                     // matching Chrome), so a word's rendered width grows by `ls × char_count`; paint
                     // offsets each glyph by the same running amount so measure and paint agree. Zero
@@ -14282,6 +14327,9 @@ impl Ctx<'_> {
                                 font_size: 16.0,
                                 color: Rgba::BLACK,
                                 line_height: height,
+                                // A synthetic fragment carries a FIXED height, never a font's
+                                // `normal` — there is no run of text for a fallback face to widen.
+                                line_height_normal: false,
                                 decoration: Default::default(),
                                 letter_spacing: 0.0,
                                 word_spacing: 0.0,
@@ -14373,6 +14421,9 @@ impl Ctx<'_> {
                                 // visual point of the idiom). A text-less WRAPPER is the mirror
                                 // image: full leading, no rect at all.
                                 line_height: leading,
+                                // A synthetic spacer carries a FIXED leading, never a font's
+                                // `normal` — there is no run of text for a fallback face to widen.
+                                line_height_normal: false,
                                 decoration: Default::default(),
                                 letter_spacing: 0.0,
                                 word_spacing: 0.0,
@@ -26806,6 +26857,204 @@ mod tests {
     ///
     /// The static sibling is the control: it was already correct, so a test that only checked
     /// `max-content` in flow would pass while the abspos case stayed broken.
+
+    /// **A LINE OF JAPANESE IN A LATIN FAMILY IS THE CJK FACE'S LINE BOX, NOT DejaVu's.**
+    ///
+    /// `line-height: normal` is the font's business — but *which* font is the RUN's business, and
+    /// `text_style` resolves the family before a single character is in hand, so it could only ever
+    /// ask the PRIMARY face. Every CJK line on every page written with a Latin `font-family` (which
+    /// is nearly all of them — `font-family: sans-serif` / `Helvetica, Arial, sans-serif` is the
+    /// idiom, and the CJK glyphs arrive by per-glyph fallback) came out at the Latin face's height:
+    /// **18px at 16px/normal where Chrome says 24**. A line box is a `dy` term, so that 6px repeats
+    /// on every line and COMPOUNDS down the document — `cyoinatu-onna.com` scored SHAPE **56.8%**
+    /// with 500 consecutive one-line `<div>`s each 4px short and each pushing the next one up.
+    ///
+    /// CHROME-MEASURED (`google-chrome --headless --dump-dom`, `getBoundingClientRect`, 300px
+    /// block, `line-height: normal` unless stated). Every row here is asserted below as a
+    /// DERIVATION rather than as its literal number, so the gate cannot be pinned to whichever
+    /// faces this host resolves `sans-serif` and the CJK fallback to:
+    ///
+    /// ```text
+    ///   content              family                 line-height   Chrome   before
+    ///   "1980年代アイドル"      sans-serif              normal          24      18   <- the bug
+    ///   "Latin only"         sans-serif              normal          18      18   ✓ control
+    ///   "Latin control"      "Noto Sans CJK JP"      normal          24      24   ✓ the FACE…
+    ///   "1980年代アイドル"      "Noto Sans CJK JP"      normal          24      24   ✓ …not the script
+    ///   "Latin 日本語 mixed"   sans-serif              normal          24      18   <- one run, both
+    ///   "1980年代アイドル"      sans-serif              20px            20      20   ✓ control
+    ///   "1980年代アイドル"      sans-serif              1               16      16   ✓ control
+    ///   "1980年代アイドル"      sans-serif  32px        normal          46      36
+    ///   "1980年代アイドル"      sans-serif  12px        normal          17      14
+    /// ```
+    ///
+    /// The third and fourth rows are the control that settles the MECHANISM and they are why the
+    /// fix keys on the face and not on the codepoint: **Latin text in a CJK face is 24 too.** A
+    /// rule written as *"a CJK character makes the line taller"* passes row 1 and fails row 3, and
+    /// would have been indistinguishable here without it.
+    ///
+    /// The two explicit-`line-height` controls are the ones that caught the first cut. An author
+    /// leading IS the line box (CSS 2.1 §10.8.1) and a taller face's glyphs overflow it rather than
+    /// growing it; the unscoped version of this fix read **22** and **18** on those two rows, both
+    /// of which were already exact. They are in the gate because they went red.
+    #[test]
+    fn a_cjk_line_in_a_latin_family_takes_the_fallback_faces_line_box_not_the_primarys() {
+        // ── The gate must not be vacuous. Both faces have to genuinely exist on this host: the
+        // fallback list is `FALLBACK_FAMILIES` in engine/text and "Noto Sans CJK JP" is its CJK
+        // entry, which is also the family the named-family arms below ask for BY NAME. Without
+        // this, a box with no CJK font makes every row equal and the whole test passes by
+        // measuring one face against itself.
+        let have =
+            TEST_FONTS.with(|f| f.has_family("Noto Sans CJK JP") && f.has_family("DejaVu Sans"));
+        assert!(
+            have,
+            "PRECONDITION: this gate needs both a Latin primary (DejaVu Sans) and the CJK fallback \
+             face (Noto Sans CJK JP) installed — without two DIFFERENT faces every row below is \
+             the same number and the test cannot fail. Install fonts-noto-cjk + fonts-dejavu."
+        );
+
+        let cjk = "1980年代アイドル";
+        let html = format!(
+            r#"<div id="fallback">{cjk}</div>
+               <div id="latin">Latin only</div>
+               <div id="mixed">Latin {cjk} mixed</div>
+               <div id="authorpx">{cjk}</div>
+               <div id="authorunit">{cjk}</div>
+               <div id="big">{cjk}</div>"#
+        );
+        let css = "html,body{margin:0;padding:0} div{width:300px} \
+                   #fallback,#latin,#mixed,#authorpx,#authorunit{font-family:sans-serif;font-size:16px} \
+                   #authorpx{line-height:20px} \
+                   #authorunit{line-height:1} \
+                   #big{font-family:sans-serif;font-size:32px}";
+        // ⚠ The two NAMED-FAMILY arms are asserted against the FONT CONTEXT rather than through a
+        // stylesheet: these tests run on `MinimalCascade`, which does not apply a named
+        // `font-family` here, so a `#named{font-family:Noto Sans CJK JP}` div silently measures
+        // `sans-serif` and turns the strongest control in this gate into a tautology. Reading the
+        // face's own metrics names the source directly and cannot be faked that way.
+        let sans = FontKey {
+            family: FontFamily::SansSerif,
+            bold: false,
+            italic: false,
+            pua_family: None,
+        };
+        let cjk_key = TEST_FONTS.with(|f| FontKey {
+            family: f.resolve_family(&["Noto Sans CJK JP".to_string()]),
+            bold: false,
+            italic: false,
+            pua_family: None,
+        });
+        assert!(
+            cjk_key.family != FontFamily::SansSerif,
+            "PRECONDITION: `Noto Sans CJK JP` must resolve to a NAMED face — it fell back to the              generic, so every arm below would compare sans-serif against itself"
+        );
+        let face_h = |k: FontKey| TEST_FONTS.with(|f| f.line_metrics(k, 16.0).height());
+        let run_h =
+            |k: FontKey, t: &str| TEST_FONTS.with(|f| f.line_metrics_for_text(k, 16.0, t).height());
+        let (dom, root) = layout_html(&html, css, 800.0);
+        let rects = root.node_rects(&dom);
+        let h = |id: &str| {
+            let n = dom
+                .descendants(dom.root())
+                .find(|&n| dom.element(n).and_then(|e| e.attr("id")) == Some(id))
+                .expect("id");
+            rects[&n].height
+        };
+
+        // ── 1. THE DERIVATION. The line box of CJK text in a Latin family is the line box the SAME
+        // text gets when the CJK face is named outright — the fallback face's own `normal`, not the
+        // primary's. Asserted as an equality between two measured boxes, so it holds whatever those
+        // two faces actually are on this host.
+        assert!(
+            (h("fallback") - face_h(cjk_key)).abs() < 0.01,
+            "a CJK run in `font-family: sans-serif` must get the FALLBACK FACE's line box: the box \
+             is {} where that face's own `normal` line box is {}. (A value equal to the Latin \
+             control below means the primary face's metrics were used for glyphs it never drew.)",
+            h("fallback"),
+            face_h(cjk_key)
+        );
+
+        // ── 2. IT IS THE FACE, NOT THE SCRIPT. Latin text drawn in the CJK face is just as tall.
+        // Without this row a rule keyed on "is this codepoint CJK" would pass row 1.
+        assert!(
+            (run_h(cjk_key, "Latin only") - face_h(cjk_key)).abs() < 0.01
+                && run_h(cjk_key, "Latin only") > face_h(sans) + 0.5,
+            "the line box follows the FACE, not the script: LATIN text whose primary IS the CJK \
+             face measures {} — it must equal that face's own line box {} and stay taller than \
+             the Latin face's {}. (A rule keyed on 'is this codepoint CJK' passes the row above \
+             and fails here.)",
+            run_h(cjk_key, "Latin only"),
+            face_h(cjk_key),
+            face_h(sans)
+        );
+
+        // ── 3. THE FALSIFIER. The two faces must actually DIFFER, or rows 1-2 are tautologies.
+        // This is the assertion that goes red when the fix is reverted (the primary's 18 is
+        // strictly shorter than the fallback's 24).
+        assert!(
+            h("latin") < h("fallback") - 0.5 && run_h(sans, cjk) > face_h(sans) + 0.5,
+            "PRECONDITION/FALSIFIER: the Latin primary's line box ({}) must be STRICTLY shorter \
+             than the CJK fallback's ({}) — if they are equal this gate can no longer fail, and \
+             the reverted engine would pass it",
+            h("latin"),
+            h("fallback")
+        );
+
+        // ── 4. ONE RUN CONTAINING BOTH takes the taller of the two — the union, not the first
+        // character's face and not an average.
+        assert!(
+            (h("mixed") - h("fallback")).abs() < 0.01,
+            "a run mixing Latin and CJK takes the TALLER face's line box: got {} against the \
+             all-CJK {}",
+            h("mixed"),
+            h("fallback")
+        );
+
+        // ── 5-6. AN AUTHOR `line-height` IS THE LINE BOX AND A TALLER FACE MUST NOT GROW IT
+        // (§10.8.1 — the glyphs overflow instead). Both of these were already Chrome-exact and the
+        // first cut of this fix broke both; they are controls with teeth, not decoration.
+        assert!(
+            (h("authorpx") - 20.0).abs() < 0.01,
+            "`line-height: 20px` on CJK text is exactly 20 — an author leading is the line box and \
+             a taller fallback face overflows it rather than growing it; got {}",
+            h("authorpx")
+        );
+        assert!(
+            (h("authorunit") - 16.0).abs() < 0.01,
+            "`line-height: 1` at `font-size: 16px` is exactly 16 for CJK text too; got {}",
+            h("authorunit")
+        );
+
+        // ── 7. IT SCALES WITH THE FONT SIZE. A fix that added a constant would pass every row
+        // above and fail here: at 32px the same text is twice as tall.
+        assert!(
+            (h("big") - 2.0 * h("fallback")).abs() <= 2.0,
+            "the fallback face's line box scales with `font-size`: 32px gives {} where 16px gives \
+             {} (a CONSTANT correction would leave 32px at the primary's height)",
+            h("big"),
+            h("fallback")
+        );
+
+        // ── 8. THE LATIN CONTROL IS BYTE-IDENTICAL TO THE PRIMARY FACE'S OWN `normal` HEIGHT.
+        // `line_metrics_for_text` returns early — the SAME `LineMetrics` value — when a run never
+        // crosses a face boundary, so every Latin page on the corpus is untouched by construction.
+        // This asserts that construction rather than trusting it.
+        let primary = face_h(sans);
+        assert!(
+            (run_h(sans, "Latin only") - primary).abs() < 0.01,
+            "the run-aware reader must return the primary's OWN metrics untouched for a run that \
+             never crosses a face boundary: {} vs {}",
+            run_h(sans, "Latin only"),
+            primary
+        );
+        assert!(
+            (h("latin") - primary).abs() < 0.01,
+            "a run that never leaves its primary face must keep the primary's own `normal` line \
+             box exactly: box {} vs face metrics {}",
+            h("latin"),
+            primary
+        );
+    }
+
     #[test]
     fn abspos_intrinsic_width_keyword_sizes_to_content_not_the_anchor() {
         let html = r#"<div class="host"><div id="drop"><span id="label">a much longer label</span></div></div>
