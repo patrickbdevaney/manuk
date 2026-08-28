@@ -93214,3 +93214,84 @@ the input the burndown actually wants, and every previous corpus price in this s
 other way round.
 
 WIKI: docs/wiki/fidelity-instrument.md
+
+## Tick 1342 — a broken image with alt text is a box full of text, and we drew a 16px icon (2026-08-28)
+
+TICK SHAPE: capability — CSS/layout, on the board's CO-#1 (SHAPE/POSITION on the anchor sites).
+
+Board re-run at the top of this tick; CO-#1 unchanged (THE RENDERING GAP -> 95%, shape first,
+anchors named). This tick closes a gap the engine had ALREADY NAMED IN ITS OWN COMMENT since
+tick 689 — "an <img alt='text'> whose source failed. Chrome sizes that box to the ALT TEXT,
+which needs the text measurer here and is its own change" — and it is landed now because the
+shape-dump PRICED it rather than because the comment asked.
+
+THE PRICE, TAKEN ON THE GAP AND NOT ON THE CONSTRUCT (t1341's rule). On a FROZEN snapshot of
+www.a11yproject.com, `fidelity --shape-dump` named 18 of the page's 48 SHAPE misses as this one
+mechanism, and they were the six largest by magnitude: width +1168, +1108, +1065, +1061, +940,
++834 — every one of them our 16x16 against a Chrome box holding a sponsor ad's alt line.
+
+CHROME-MEASURED (800px body, font:16px/1.5 monospace, one advance = 9.6328px):
+
+    <img src=broken alt="Hello broken world">          189.39x24   16 + 18x9.6328 = 189.39
+    <img src=broken alt="Tiny">                         54.53x24   16 +  4x9.6328 =  54.53
+    <img src=broken alt="..."> at font-size:10px       124.38x16   16 + 18x6.0205 = 124.37
+    <img src=broken alt="   Hello   broken  world  ">  189.39x24   <- white space COLLAPSES
+    <img src=broken alt="...95 chars..."> in 200px div 200x144     <- 6 wrapped lines x 24
+    <img src=broken alt="..." style="display:block">    800x24     <- block-level FILLS
+    <img src=broken>                        (CONTROL)   16x16      <- the tick-689 arm, kept
+    <img src=broken alt="">                 (CONTROL)    0x0       <- RESIDUE, named below
+    <img src=/real.png alt="...">           (CONTROL)   40x25      <- natural size, untouched
+
+Three rows settle the model and none could be guessed:
+  1. THE 16 IS A CONSTANT, NOT A PROPORTION. (189.39-54.53)/(18-4) = 9.633, the monospace advance
+     exactly, leaving 16.00 on both rows — the broken-image icon, the same 16 the no-alt arm reserves.
+  2. IT IS ONE BOX, NOT A WRAPPED INLINE. getClientRects() on the 6-line case returns a SINGLE
+     200x144 rect, not six fragments — an atomic box that shrink-to-fits, which is why the narrow
+     case reads its container's 200 and the wide case reads its own 189.39.
+  3. A SPECIFIED WIDTH DOES NOT APPLY TO IT. style="width:300px" still measures 189.39 and
+     style="height:70px" still measures 24. The element has stopped being replaced.
+
+THE SIZE AND THE BASELINE ARE ONE FIX, AND EITHER ALONE IS WRONG. CSS 2.1 section 10.8.1 baselines
+a REPLACED element at its bottom margin edge, which the inline collector does for every <img>.
+Applied to a box that is no longer replaced, the parent's strut hangs its descent UNDER a box that
+already filled the line: Chrome's 800x24 read 800x31 with the size fix and no baseline fix. And the
+half-leading must use the ROUNDED, FLOORED arithmetic line_box uses for the strut — the raw metrics
+put the baseline 0.5px off and the line comes out 25 where Chrome says 24.
+
+A PIECEWISE WORD SUM IS NOT A WHOLE-STRING MEASURE, and the difference is invisible in a monospace
+fixture. The first cut summed measure(word) + measure(" ") per gap; on the real page every sponsor
+image came out the RIGHT WIDTH and TWICE THE RIGHT HEIGHT (448x36 against Chrome's 448x18) because
+the sum overshot max_content by a fraction of a pixel and wrapped a line that by construction fits.
+
+THE RECEIPT — FROZEN pages, same-hour old binary, TWO CONTROL SITES:
+
+    site (frozen)                      BEFORE     AFTER     scored   misses
+    news.ycombinator.com   CONTROL      96.2%     96.2%      771     29 -> 29   (identical)
+    www.a11yproject.com                 80.2%     87.6%      242     48 -> 30
+    blog.rust-lang.org     CONTROL      99.6%     99.6%     1684      6 ->  6   (identical)
+
+Freezing is load-bearing (t1341): both engines and both binaries see identical bytes, so a
+7-point delta is readable and the two controls are byte-identical rather than noisy.
+
+RESIDUE, ASSERTED RATHER THAN LEFT LOOSE, and the divergence is DELIBERATE. Chrome ignores an author
+width/height (attribute or CSS) on a broken alt image; we do not. Our decoder coverage is narrower
+than Chrome's, so "we failed to load it" is much weaker evidence than "the author said 800x400", and
+throwing an authored box away to chase parity would regress every page whose format we cannot decode.
+alt="" (Chrome 0x0) stays 16x16 for the same reason and because it is a SECOND mechanism — one
+mechanism per tick, or the price is unattributable.
+
+GATE `a_broken_img_with_alt_text_is_sized_to_that_text_not_to_the_16px_icon` — 5 CONTROLS, and its
+assertions are deliberately FONT-INDEPENDENT: it asserts the DERIVATION (icon + advance x chars, with
+the icon falling out of the 4-char/18-char pair at exactly 16) rather than 189.39, so it cannot be
+pinned to whichever face `monospace` resolves to on the box that runs it (t1367's trap one layer out).
+RED under FOUR mutations, each applied to the engine, rebuilt and read: N1 revert the sizing arm ->
+16 and 16, advance 0; N2 drop the alt baseline -> the line reads 31, not 24; N3 drop the shrink-to-fit
+clamp -> the narrow box is not 200; N4 raw half-leading -> 24.539, not 24. Full layout suite 186/186.
+
+NEXT — the same shape-dump cohort on a11yproject still holds a legend at `width +1108` (c 1152x18 vs
+our 44x17: a <legend> sized to its own text where Chrome stretches it) and a fieldset 32px too wide.
+Both are one <fieldset> mechanism and both are the top remaining misses on the anchor; take them
+together, and price them the same way — on the elements where the two engines DISAGREE, never on
+where the construct exists.
+
+WIKI: docs/wiki/box-layout.md

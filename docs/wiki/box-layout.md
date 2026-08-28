@@ -11790,3 +11790,85 @@ Gate: `G_ASPECT_RATIO_DEFINITE_HEIGHT` — 17 rows, 5 of them CONTROLS. RED unde
 applied to the engine, rebuilt and read: revert the binding (225 → 0); drop the `(None, …)` guard so
 the ratio overwrites an explicit height (100 → 225); apply the ratio inverted, `width * r` (225 →
 711).
+
+## A broken `<img alt="…">` is sized to its alt text, not to the 16×16 icon (t1342)
+
+Tick 689 gave a failed `<img>` Chrome's 16×16 placeholder and its own comment named the case it did
+not cover — *"an `<img alt="text">` whose source failed. Chrome sizes that box to the ALT TEXT, which
+needs the text measurer here and is its own change."* This is that change.
+
+**It was priced on the GAP, not on the construct** (t1341's rule). On a FROZEN snapshot of
+`www.a11yproject.com`, **18 of the page's 48 SHAPE misses were this one mechanism**, and they were the
+six largest by magnitude — `width +1168`, `+1108`, `+1065`, `+1061`, `+940`, `+834`, every one of them
+our `16×16` against a Chrome box holding a sponsor ad's alt line.
+
+Chrome-measured, `800px` body at `font:16px/1.5 monospace` (one advance = `9.6328px`):
+
+```text
+  <img src=broken alt="Hello broken world">          189.39×24    16 + 18×9.6328 = 189.39
+  <img src=broken alt="Tiny">                         54.53×24    16 +  4×9.6328 =  54.53
+  <img src=broken alt="…"> at font-size:10px         124.38×16    16 + 18×6.0205 = 124.37
+  <img src=broken alt="   Hello    broken   world "> 189.39×24    ← white space COLLAPSES
+  <img src=broken alt="…95 chars…"> in a 200px div   200×144      ← 6 wrapped lines × 24
+  <img src=broken alt="…" style="display:block">      800×24      ← block-level FILLS
+  <img src=broken>                       (CONTROL)     16×16      ← the tick-689 arm, kept
+  <img src=broken alt="">                (CONTROL)      0×0       ← RESIDUE, see below
+  <img src=/real.png alt="…">            (CONTROL)     40×25      ← natural size, untouched
+```
+
+Three rows settle the model and none of them could be guessed:
+
+1. **The `16` is a constant, not a proportion.** `(189.39 − 54.53) / (18 − 4) = 9.633` — the monospace
+   advance exactly — which leaves `16.00` on both rows. That is the broken-image icon, and it is the
+   same 16 the no-alt arm already reserves.
+2. **It is ONE box, not a wrapped inline.** `getClientRects()` on the 6-line case returns a single
+   `200×144` rect, not six line fragments. So it is an atomic box that shrink-to-fits
+   (`min(max-content, available)`) — which is why the narrow case reads its container's `200` and the
+   wide case reads its own `189.39`.
+3. **A specified width does not apply to it.** `style="width:300px"` still measures `189.39` and
+   `style="height:70px"` still measures `24`. Chrome is not sizing a replaced element here at all;
+   the element has stopped being replaced.
+
+### ⭐ THE SIZE AND THE BASELINE ARE ONE FIX, AND EITHER ALONE IS WRONG
+
+CSS 2.1 §10.8.1 baselines a *replaced* element at its bottom margin edge, and the inline collector
+does that for every `<img>`. Applied to a box that is no longer replaced, the parent's strut then
+hangs its own descent **under** a box that already filled the line: Chrome's `800×24` read **`800×31`**
+with the size fix and no baseline fix. The baseline is the last alt line's baseline, and it must be
+half-led with the **rounded, floored** arithmetic `line_box` uses for the strut — the raw metrics put
+it `0.5px` off and the line comes out **25 where Chrome says 24**, a 1px error that is invisible on one
+line and cumulative down a page full of them.
+
+### ⚠ A PIECEWISE WORD SUM IS NOT THE SAME NUMBER AS A WHOLE-STRING MEASURE
+
+The first cut broke lines by summing `measure(word)` plus a `measure(" ")` per gap. That equals
+`measure(whole line)` **only in a monospace face**, so the fixture agreed and the real web did not:
+every a11yproject sponsor image came out the RIGHT WIDTH and **twice the right height** — `448×36`
+against Chrome's `448×18` — because the piecewise sum overshot `max_content` by a fraction of a pixel
+and wrapped a line that by construction fits. Measuring the accumulated candidate string makes the two
+agree by construction.
+
+### The receipt — FROZEN pages, same-hour old binary, two CONTROL sites
+
+```text
+    site (frozen)                      BEFORE     AFTER     scored   misses
+    news.ycombinator.com   CONTROL      96.2%     96.2%     771      29 → 29   (identical)
+    www.a11yproject.com                 80.2%     87.6%     242      48 → 30
+    blog.rust-lang.org     CONTROL      99.6%     99.6%    1684       6 →  6   (identical)
+```
+
+⚠ **RESIDUE, ASSERTED RATHER THAN LEFT LOOSE, and the divergence is deliberate.** Chrome ignores an
+author `width`/`height` (attribute *or* CSS) on a broken alt image; we do not. That is not an oversight:
+**our decoder coverage is narrower than Chrome's**, so *"we failed to load it"* is much weaker evidence
+than *"the author said it is 800×400"*, and throwing an authored box away to chase parity would regress
+every page whose format we cannot decode. `alt=""` (Chrome `0×0`) stays `16×16` for the same reason and
+because it is a second mechanism — one mechanism per tick, or the price is unattributable (t1341).
+
+Gate: `a_broken_img_with_alt_text_is_sized_to_that_text_not_to_the_16px_icon` — **5 CONTROLS**, and its
+assertions are deliberately FONT-INDEPENDENT: it asserts the derivation (`icon + advance × chars`, with
+the icon falling out of the 4-char/18-char pair at exactly 16) rather than `189.39`, so it cannot be
+pinned to whichever face `monospace` resolves to on the box that runs it (t1367's trap, one layer out).
+RED under four mutations, each applied to the engine, rebuilt and read: **N1** revert the sizing arm →
+`16` and `16`, advance 0; **N2** drop the alt baseline → the line reads `31`, not `24`; **N3** drop the
+shrink-to-fit clamp → the narrow box is not `200`; **N4** raw half-leading instead of the strut's
+rounded+floored one → `24.539`, not `24`.

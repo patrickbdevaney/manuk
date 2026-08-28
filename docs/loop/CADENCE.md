@@ -11,12 +11,12 @@
 
 | | value | over |
 |---|---|---|
-| ticks landed | **1027** | ticks 1–1340 |
-| median tick cycle | **31m** | 1026 intervals |
-| median, last 10 | **39m** | 10 intervals |
+| ticks landed | **1028** | ticks 1–1342 |
+| median tick cycle | **31m** | 1027 intervals |
+| median, last 10 | **46m** | 10 intervals |
 | fastest / slowest | 5s / 7.0d | |
-| **ticks per hour** | **0.89** | 1153.6h elapsed |
-| median verify wall | **64s** | 966 ticks |
+| **ticks per hour** | **0.89** | 1155.6h elapsed |
+| median verify wall | **65s** | 967 ticks |
 | wall trend | 39s → 8m — getting slower ⚠️ | first 3 vs last 3 |
 
 The **cycle** is the real unit: implement → debug → verify wall → land. The wall is only part of
@@ -31,7 +31,7 @@ it, and a wall that grows taxes every future tick, so it is tracked separately f
 * **✅ rows in the capability ledger**: 144 → **642**
 * **Bar 0 — oracle hangs**: 0 of 265 sites
 
-**481 of 1027 ticks** (47%) moved a
+**482 of 1028 ticks** (47%) moved a
 user-visible capability. The rest were instruments, infrastructure and corrections — and the
 ledger says the corrections were not overhead: three of its top three priorities were phantoms,
 and finding that out redirected everything after it.
@@ -90,8 +90,8 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 
 ## What a capability costs
 
-* **481** capability ticks, median cycle **31m**
-* median diff per tick: **+281 / −34** lines across 8 files
+* **482** capability ticks, median cycle **31m**
+* median diff per tick: **+282 / −34** lines across 8 files
 
 ## Every tick
 
@@ -1124,5 +1124,6 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 | **1338** | 2026-08-28 00:08 | 7.0d | capability | 8m | +942/−38 | 519 | 81 | 56.0% · | a percentage reconstructed by differencing Au-quantised samples loses its identity at zero |
 | **1339** | 2026-08-28 05:22 | 5.2h | capability | 8m | +423/−34 | 521 | 81 | 56.0% · | the page reserved a scrollbar and we handed the space back (2026-08-28) |
 | **1340** | 2026-08-28 06:39 | 77m | capability | 8m | +196/−33 | 521 | 81 | 56.0% · | the ratio box knew its own height and never told its children (2026-08-28) |
+| **1342** | 2026-08-28 08:38 | 2.0h | capability | 8m | +575/−46 | 521 | 81 | 56.0% · | a broken image with alt text is a box full of text, and we drew a 16px icon (2026-08-28) |
 
 *`·` after a WPT figure means **carried forward**, not measured this tick.*

@@ -4374,6 +4374,174 @@ impl Ctx<'_> {
     /// an edge, `overflow:visible`, and no BFC collapses that edge's margin with its first/last
     /// in-flow block child (top via `collapse_through_top`; bottom via `collapse_through_bottom`).
     /// Adjacent-sibling collapsing is handled by `collapse_margins`.
+    ///
+    /// **A BROKEN `<img>` WITH ALT TEXT IS SIZED TO THAT TEXT, NOT TO THE 16×16 ICON (t1342).**
+    ///
+    /// Tick 689 gave a failed `<img>` Chrome's 16×16 placeholder and its own comment named the case
+    /// it did not cover — *"an `<img alt="text">` whose source failed. Chrome sizes that box to the
+    /// ALT TEXT, which needs the text measurer here and is its own change."* This is that change,
+    /// and the reason it is worth one is that the gap was **priced** rather than assumed: on a frozen
+    /// snapshot of `www.a11yproject.com`, **18 of the page's 48 SHAPE misses are this one mechanism**
+    /// and they are the six largest by magnitude — `width +1168`, `+1108`, `+1065`, `+1061`, `+940`,
+    /// `+834`, every one of them our `16×16` against a Chrome box holding a sponsor ad's alt line.
+    ///
+    /// Chrome-measured (`/tmp/froz1341/altfix2.html`, `800px` body, `font:16px/1.5 monospace`, so
+    /// one advance is `9.6328px`); every row here is a real reading, not a derivation:
+    ///
+    /// ```text
+    ///   <img src=broken alt="Hello broken world">          189.39×24    16 + 18×9.6328 = 189.39
+    ///   <img src=broken alt="Tiny">                         54.53×24    16 +  4×9.6328 =  54.53
+    ///   <img src=broken alt="…"> in font-size:10px         124.38×16    16 + 18×6.0205 = 124.37
+    ///   <img src=broken alt="   Hello    broken   world  "> 189.39×24   ← white space COLLAPSES
+    ///   <img src=broken alt="…95 chars…"> in a 200px div   200×144      ← 6 wrapped lines × 24
+    ///   <img src=broken alt="…" style="display:block">      800×24      ← block-level FILLS
+    ///   <img src=broken>                       (CONTROL)     16×16      ← the tick-689 arm, kept
+    ///   <img src=broken alt="">                (CONTROL)      0×0       ← RESIDUE, see below
+    ///   <img src=/real.png alt="…">            (CONTROL)     40×25      ← natural size, untouched
+    /// ```
+    ///
+    /// Three of those rows settle the model, and none of them could be guessed:
+    ///
+    /// 1. **The `16` is a constant, not a proportion.** `(189.39 − 54.53) / (18 − 4) = 9.633` — the
+    ///    monospace advance exactly — which leaves `16.00` on both rows. That is the broken-image
+    ///    icon Chrome draws before the text, and it is the same 16 the no-alt arm reserves.
+    /// 2. **It is ONE box, not a wrapped inline.** `getClientRects()` on the 6-line case returns a
+    ///    single `200×144` rect, not six line fragments — so this is an atomic box that shrink-to-fits
+    ///    (`min(max-content, available)`), which is why the narrow case reads exactly the container's
+    ///    `200` and the wide case reads its own `189.39`.
+    /// 3. **A specified width does NOT apply to it.** `style="width:300px"` still measures `189.39`
+    ///    and `style="height:70px"` still measures `24`. So Chrome is not sizing a replaced element
+    ///    at all here; the element has stopped being replaced.
+    ///
+    /// ⚠ **RESIDUE, ASSERTED RATHER THAN LEFT LOOSE — and the divergence is deliberate.** Chrome
+    /// ignores an author `width`/`height` (attribute *or* CSS) on a broken alt image; we do not,
+    /// because the guard above keeps requiring `s.width == Dim::Auto`. That is not an oversight: our
+    /// decoder coverage is narrower than Chrome's, so *"we failed to load it"* is much weaker evidence
+    /// than *"the author said it is 800×400"*, and throwing an authored box away to chase parity would
+    /// regress every page whose format we cannot decode. `alt=""` (Chrome: `0×0`) is left at `16×16`
+    /// for the same reason and because it is a second mechanism — one mechanism per tick, or the
+    /// price is unattributable (t1341).
+    ///
+    /// Returns `None` when there is no alt text to size to, which is what keeps the 16×16 arm intact.
+    ///
+    /// ⚠ **The predicate lives in `is_broken_img_placeholder` and NOT inline at the call site**,
+    /// because there are now TWO consumers — the sizing arm in `layout_block` and the inline
+    /// collector's baseline — and this file has recorded four times what a second copy of one rule
+    /// costs. A box that is alt-sized here but replaced-baselined there is 7px too tall on every
+    /// line that holds one, which is exactly what the first cut of this tick measured.
+    fn is_broken_img_placeholder(&self, node: NodeId, s: &ComputedStyle) -> bool {
+        self.dom.tag_name(node) == Some("img")
+            && !self.taffy_item_width.borrow().contains_key(&node)
+            && s.aspect_ratio.is_none()
+            && s.width == Dim::Auto
+            && !s.width_stretch
+            && s.width_keyword.is_none()
+    }
+
+    /// **Where a broken-alt image's baseline sits, measured down from its box top.**
+    ///
+    /// CSS 2.1 §10.8.1 puts a *replaced* element's baseline at its bottom margin edge, and that is
+    /// what the inline collector uses for every `<img>`. It is wrong for this box for the same
+    /// reason the specified width stopped applying: the element is **not replaced any more**, it is
+    /// a box with text in it, and its baseline is that text's LAST line baseline.
+    ///
+    /// Chrome-measured, `<div><img src=broken alt="Hello broken world"></div>` at `16px/1.5`: the
+    /// div is `800×24`, the same 24 as the image — no descender strip under it. Baselining at the
+    /// bottom edge instead gives `800×31`, because the parent's own strut then hangs its descent
+    /// below a box that already used the whole line.
+    fn broken_img_alt_baseline(&self, s: &ComputedStyle, box_height: f32) -> f32 {
+        let ts = text_style(s, self.fonts);
+        let lm = self.fonts.line_metrics(ts.font_key, ts.font_size);
+        // ⚠⚠⚠ **ROUNDED AND FLOORED, BECAUSE THE STRUT THIS HAS TO AGREE WITH IS.** `line_box`
+        // builds the strut as `round(ascent) + floor((lh − round(ascent) − round(descent)) / 2)`,
+        // and its own comment says why the split must stay identical: `above + below == lh` exactly,
+        // with no float dust. Half-leading this box with the RAW metrics and a plain `/2` puts its
+        // baseline at `17.5` against the strut's `17`, so the line takes `17.5` above and the
+        // strut's `7` below and comes out **25 where Chrome says 24** — measured, not reasoned: the
+        // first cut of this arm did exactly that and `div7`/`div11` both read `800×25`.
+        //
+        // One rule, one implementation — this is the same arithmetic as `half_leading` in
+        // `line_box`, and it is written here rather than shared only because that one is a local
+        // closure over a strut tuple this caller does not have.
+        let (a, d) = (lm.ascent.round(), lm.descent.round());
+        let half_leading = ((ts.line_height - a - d) / 2.0).floor();
+        // Last line: everything above it is whole line boxes, so only the final one's leading and
+        // ascent sit between this box's top and the baseline we report.
+        (box_height - ts.line_height + half_leading + a).max(0.0)
+    }
+
+    fn broken_img_alt_box(
+        &self,
+        node: NodeId,
+        s: &ComputedStyle,
+        avail: f32,
+    ) -> Option<(f32, f32)> {
+        let alt = self.dom.element(node).and_then(|e| e.attr("alt"))?;
+        // `alt` is TEXT, and text collapses. The `alt="   Hello    broken   world   "` row above
+        // measures identically to the tight spelling, so measuring the raw attribute would charge
+        // every run of spaces an advance Chrome never draws.
+        let text = alt.split_whitespace().collect::<Vec<_>>().join(" ");
+        if text.is_empty() {
+            return None;
+        }
+        let ts = text_style(s, self.fonts);
+        // `letter_spacing` rides on the measurement exactly as `native_widget_width` does it — the
+        // font measure does not know about it, and an author who set it means it here too.
+        let measure = |t: &str| {
+            self.fonts.measure(t, ts.font_key, ts.font_size)
+                + ts.letter_spacing * t.chars().count() as f32
+        };
+        /// The broken-image icon Chrome reserves before the alt text — the same 16 the no-alt arm
+        /// uses, and derived from the two-row measurement above rather than assumed.
+        const ICON: f32 = 16.0;
+        let max_content = ICON + measure(&text);
+        // Shrink-to-fit, unless the box is block-level — the `display:block` row fills its `800`
+        // container rather than hugging its `189.39` of text, and `img{display:block}` is in most
+        // of the modern web's CSS resets, so this arm is not an exotic one.
+        let block_level = matches!(
+            s.display,
+            Display::Block | Display::FlowRoot | Display::Flex | Display::Grid
+        );
+        let width = if block_level {
+            avail
+        } else {
+            max_content.min(avail.max(0.0))
+        };
+        // Greedy line breaking at word boundaries, with the icon occupying the head of the FIRST
+        // line — that indent is what puts the 6-line case at 6 and not 5.
+        //
+        // ⚠⚠⚠ **THE CANDIDATE LINE IS MEASURED AS ONE STRING, AND MEASURING IT WORD-BY-WORD IS A
+        // DIFFERENT NUMBER.** The first cut summed `measure(word)` plus a `measure(" ")` per gap,
+        // which is only equal to `measure(whole line)` in a monospace face — so the fixture agreed
+        // and the real web did not. On `www.a11yproject.com` every sponsor image came out the RIGHT
+        // WIDTH and **twice the right height**: `448×36` against Chrome's `448×18`, because the
+        // piecewise sum overshot `max_content` by a fraction of a pixel and wrapped a line that by
+        // construction fits. Measuring the accumulated string makes the two agree by construction:
+        // when `width == max_content` the last candidate measures exactly `measure(text)`, which is
+        // not greater than the width it was derived from.
+        let mut lines = 1usize;
+        let mut cur = String::new();
+        let mut indent = ICON;
+        for word in text.split(' ') {
+            let candidate = if cur.is_empty() {
+                word.to_string()
+            } else {
+                format!("{cur} {word}")
+            };
+            if !cur.is_empty() && indent + measure(&candidate) > width + 0.01 {
+                lines += 1;
+                indent = 0.0;
+                cur = word.to_string();
+            } else {
+                cur = candidate;
+            }
+        }
+        // `.max(ICON)`: the icon is 16 tall and sits on the line, so a small font does not shrink
+        // the box below it — the `font-size:10px` row is `16` where its line height is `15`.
+        let height = (lines as f32 * ts.line_height).max(ICON);
+        Some((width, height))
+    }
+
     #[allow(clippy::too_many_arguments)]
     fn layout_block(
         &self,
@@ -4733,18 +4901,17 @@ impl Ctx<'_> {
         // arm above, so an image that HAS loaded, or that carries author dimensions, or that has a
         // ratio to derive from, is untouched — all three already resolved before this line.
         //
-        // ⚠ NOT covered, and named rather than left to look handled: an `<img alt="text">` whose source
-        // failed. Chrome sizes that box to the ALT TEXT, which needs the text measurer here and is its
-        // own change. This arm is the no-alt case, which is what icon/logo/tracker images are.
-        let is_img = self.dom.tag_name(node) == Some("img");
-        let broken_img_placeholder = is_img
-            && taffy_known.is_none()
-            && s.aspect_ratio.is_none()
-            && s.width == Dim::Auto
-            && !s.width_stretch
-            && s.width_keyword.is_none();
+        // The `alt` half of that placeholder — see `broken_img_alt_box`, which supersedes the bare
+        // 16×16 whenever the failed image carries alt text. The no-alt case below is unchanged, and
+        // is what icon/logo/tracker images are.
+        let broken_img_placeholder = self.is_broken_img_placeholder(node, &s);
+        let broken_img_alt = if broken_img_placeholder {
+            self.broken_img_alt_box(node, &s, (cw - extra).max(0.0))
+        } else {
+            None
+        };
         if broken_img_placeholder {
-            width = 16.0;
+            width = broken_img_alt.map_or(16.0, |(w, _)| w);
         }
         // `box-sizing:border-box` — the specified width is the border box, so the content
         // width is that minus padding + border. (`auto` already resolves to content width.)
@@ -5363,9 +5530,10 @@ impl Ctx<'_> {
             content_height = 150.0;
         }
         // The height half of the broken-image placeholder — see the `broken_img_placeholder` comment
-        // above. 16 tall, Chrome-measured, and only when nothing definite was resolved for it.
+        // above. 16 tall, Chrome-measured, and only when nothing definite was resolved for it; with
+        // alt text it is the alt box's wrapped height instead (`broken_img_alt_box`).
         if broken_img_placeholder && own_definite_h.is_none() {
-            content_height = 16.0;
+            content_height = broken_img_alt.map_or(16.0, |(_, h)| h);
         }
         // Parent↔child BOTTOM margin collapse (CSS2 §8.3.1): an auto-height block with no bottom
         // border/padding, `overflow:visible`, not a BFC, collapses its bottom margin with its last
@@ -12980,6 +13148,20 @@ impl Ctx<'_> {
                             //    this centred line — a third rule, measured, and left to its own
                             //    tick rather than guessed at from this one.
                             .or_else(|| self.form_control_inner_baseline(node, &s, &r, cw))
+                    } else if self.is_broken_img_placeholder(node, &s)
+                        && self
+                            .dom
+                            .element(node)
+                            .and_then(|e| e.attr("alt"))
+                            .is_some_and(|a| !a.split_whitespace().collect::<String>().is_empty())
+                    {
+                        // **THE OTHER HALF OF `broken_img_alt_box`, AND EITHER ALONE IS WRONG.** The
+                        // sizing arm makes this box as tall as its alt text; §10.8.1's replaced rule
+                        // then baselines it at its BOTTOM edge, so the parent's strut hangs a
+                        // descender strip under a box that already filled the line — Chrome's
+                        // `800×24` read `800×31` with the size fix and no baseline fix. It is not
+                        // replaced any more, so it does not get the replaced baseline.
+                        Some(r.margin_top + self.broken_img_alt_baseline(&s, r.boxx.rect.height))
                     } else {
                         None
                     };
@@ -17564,6 +17746,163 @@ mod tests {
             "the box AFTER a broken <img> must be pushed down by the placeholder ({} vs img bottom              {}). A height that is right in isolation but does not displace its siblings fixes              nothing about the `dy` term that holds SHAPE at ~6%.",
             after.y,
             img.y + 16.0
+        );
+    }
+
+    /// **`G_BROKEN_IMG_ALT_BOX` — A BROKEN `<img alt="…">` IS SIZED TO ITS ALT TEXT (t1342).**
+    ///
+    /// The 16×16 gate above named the case it did not cover; this is that case. It is worth a gate
+    /// because it was **priced on the gap and not on the construct** (t1341's rule): on a frozen
+    /// snapshot of `www.a11yproject.com`, 18 of the page's 48 SHAPE misses were this one mechanism
+    /// and they were the six largest by magnitude — every sponsor ad reading our `16×16` against a
+    /// Chrome box holding a full line of alt text. Fixing it took the page from **48 misses / SHAPE
+    /// 80.2%** to **30 misses / SHAPE 87.6%**.
+    ///
+    /// ⚠⚠⚠ **THE ASSERTIONS ARE DELIBERATELY FONT-INDEPENDENT, AND THAT IS NOT LAZINESS.** The
+    /// Chrome rows this was built from are `189.39×24` and `54.53×24` at `16px/1.5 monospace`, and
+    /// pinning those numbers would pin the gate to whichever face `monospace` resolves to on the box
+    /// that runs it — t1367's trap, one layer out. So the gate asserts the DERIVATION instead, which
+    /// is the thing that actually identifies the mechanism:
+    ///
+    /// ```text
+    ///   (189.39 − 54.53) / (18 − 4) = 9.633  ← the advance, whatever the face
+    ///   189.39 − 18 × 9.633 = 16.00          ← the broken-image ICON, a constant, not a proportion
+    ///    54.53 −  4 × 9.633 = 16.00          ← and the same constant at the other end
+    /// ```
+    ///
+    /// A gate that only checked *"wider than 16"* would pass on any wrong-but-larger box. This one
+    /// fails unless the width is `icon + advance × characters` with the icon at exactly 16.
+    ///
+    /// **FIVE CONTROLS**, because every one of them is a way this could go wrong by being right:
+    /// no alt (the 16×16 arm must survive), `alt=""` (Chrome says `0×0`; we deliberately keep 16×16
+    /// — see `broken_img_alt_box`'s residue note), author `width`/`height` (deliberately kept, and
+    /// the reason is that our decoder coverage is narrower than Chrome's), a plain text line of the
+    /// same font (the alt box must not add a descender strip under it — the baseline half), and the
+    /// following sibling (a right height that does not displace what is under it fixes no `dy`).
+    #[test]
+    fn a_broken_img_with_alt_text_is_sized_to_that_text_not_to_the_16px_icon() {
+        // 4 and 18 characters, no spaces, so the two rows differ ONLY in character count and the
+        // advance falls out of the pair. `src` is a port nothing listens on: it cannot load here and
+        // it cannot load on the machine that runs this in a year either.
+        const BROKEN: &str = "http://127.0.0.1:1/never.png";
+        let html = format!(
+            r#"<div id="d4"><img id="i4" src="{BROKEN}" alt="Tiny"></div>
+               <div id="d18"><img id="i18" src="{BROKEN}" alt="HelloBrokenWorldXY"></div>
+               <div id="dws"><img id="iws" src="{BROKEN}" alt="   Hello    broken   world   "></div>
+               <div id="dtight"><img id="itight" src="{BROKEN}" alt="Hello broken world"></div>
+               <div id="dnarrow"><img id="inarrow" src="{BROKEN}" alt="A much longer alternative text that will have to wrap across several lines in a narrow container"></div>
+               <div id="dblock"><img id="iblock" src="{BROKEN}" alt="Tiny" style="display:block"></div>
+               <div id="dnoalt"><img id="inoalt" src="{BROKEN}"></div>
+               <div id="dempty"><img id="iempty" src="{BROKEN}" alt=""></div>
+               <div id="ddim"><img id="idim" src="{BROKEN}" alt="Tiny" width="120" height="70"></div>
+               <div id="dtext">Tiny</div>
+               <div id="dafter"></div>"#
+        );
+        let css = "*{font-family:monospace;font-size:16px;line-height:1.5;margin:0;padding:0} \
+                   #dnarrow{width:200px} #dafter{height:10px}";
+        let (dom, root) = layout_html(&html, css, 800.0);
+        let rects = root.node_rects(&dom);
+        let by_id = |id: &str| {
+            dom.descendants(dom.root())
+                .find(|&n| dom.element(n).and_then(|e| e.attr("id")) == Some(id))
+                .expect("id")
+        };
+        let r = |id: &str| rects[&by_id(id)];
+
+        // ── 1. THE WIDTH IS `icon + advance × chars`, AND THE ICON IS 16.
+        let (w4, w18) = (r("i4").width, r("i18").width);
+        let advance = (w18 - w4) / 14.0;
+        let icon = w4 - 4.0 * advance;
+        assert!(
+            advance > 0.0 && (icon - 16.0).abs() < 0.5,
+            "a broken <img alt> must be sized to `16 + advance × chars` (Chrome: 54.53 for 4 chars, \
+             189.39 for 18, giving advance 9.633 and icon 16.00) — got {w4} and {w18}, which imply \
+             advance {advance} and icon {icon}"
+        );
+        assert!(
+            (w18 - (icon + 18.0 * advance)).abs() < 0.5,
+            "the same rule has to hold at BOTH ends or the pair proves nothing — got {w18}"
+        );
+
+        // ── 2. WHITE SPACE IN `alt` COLLAPSES. Chrome measures the padded spelling at 189.39, the
+        //    same as the tight one; measuring the raw attribute charges every run of spaces.
+        assert!(
+            (r("iws").width - r("itight").width).abs() < 0.5,
+            "`alt` is text and text collapses: `\"   Hello    broken   world   \"` must measure the \
+             same as `\"Hello broken world\"` — got {} vs {}",
+            r("iws").width,
+            r("itight").width
+        );
+
+        // ── 3. SHRINK-TO-FIT AND WRAP. Chrome: 200×144 in a 200px container — the box takes the
+        //    container's width exactly (not its own 931 of max-content) and stacks whole lines.
+        let narrow = r("inarrow");
+        let line = r("dtext").height;
+        assert!(
+            (narrow.width - 200.0).abs() < 0.5,
+            "a broken-alt box wider than its container shrink-to-fits to the container (Chrome 200), \
+             got {}",
+            narrow.width
+        );
+        assert!(
+            narrow.height >= 3.0 * line && (narrow.height % line).abs() < 0.5,
+            "the wrapped box must be a whole number of line boxes and more than one (Chrome 144 = \
+             6 × 24) — got {} against a {line}px line",
+            narrow.height
+        );
+
+        // ── 4. THE BASELINE HALF: no descender strip under the box. Chrome's `<div>` around the alt
+        //    image is 24 tall, exactly a plain text line — baselining it at the bottom edge (§10.8.1's
+        //    RULE FOR REPLACED ELEMENTS, which this element is no longer) reads 31.
+        assert!(
+            (r("dtight").height - line).abs() < 0.5,
+            "a line holding a broken-alt image is exactly as tall as a line of the same text \
+             (Chrome 24 for both) — got {} against {line}. A bottom-edge baseline reads 31 here.",
+            r("dtight").height
+        );
+
+        // ── 5. `display:block` FILLS rather than hugs — Chrome 800, and `img{display:block}` is in
+        //    most of the modern web's CSS resets.
+        assert!(
+            (r("iblock").width - 800.0).abs() < 0.5,
+            "a block-level broken-alt image fills its container (Chrome 800), got {}",
+            r("iblock").width
+        );
+
+        // ── 6. THE FOLLOWING SIBLING MOVES. A height that is right in isolation and displaces
+        //    nothing fixes no `dy`, which is the whole reason this is being changed.
+        assert!(
+            r("dafter").y >= r("dtight").y + line,
+            "the box after a broken-alt image must be pushed down by it — {} vs {}",
+            r("dafter").y,
+            r("dtight").y + line
+        );
+
+        // ── CONTROLS ────────────────────────────────────────────────────────────────────────────
+        let noalt = r("inoalt");
+        assert!(
+            (noalt.width - 16.0).abs() < 0.5 && (noalt.height - 16.0).abs() < 0.5,
+            "CONTROL: no `alt` is still tick-689's 16×16 placeholder — got {}×{}",
+            noalt.width,
+            noalt.height
+        );
+        let empty = r("iempty");
+        assert!(
+            (empty.width - 16.0).abs() < 0.5 && (empty.height - 16.0).abs() < 0.5,
+            "CONTROL: `alt=\"\"` stays 16×16. ⚠ Chrome says 0×0 — a DELIBERATE residue, not a pass: \
+             it is a second mechanism and one mechanism per tick keeps the price attributable. \
+             got {}×{}",
+            empty.width,
+            empty.height
+        );
+        let dim = r("idim");
+        assert!(
+            (dim.width - 120.0).abs() < 0.5 && (dim.height - 70.0).abs() < 0.5,
+            "CONTROL: author dimensions still win. ⚠ Chrome ignores them here (189.39×24) — also a \
+             DELIBERATE divergence: our decoder coverage is narrower than Chrome's, so \"we failed to \
+             load it\" is weaker evidence than \"the author said 120×70\". got {}×{}",
+            dim.width,
+            dim.height
         );
     }
 

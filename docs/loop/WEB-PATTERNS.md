@@ -9088,3 +9088,25 @@ Chrome's `608x461` — a subtree collapsed to zero height, which looked exactly 
 tick would have had to revert for. Frozen, the same diff is **0 fixed and 0 broken**. All of it was
 the news page changing between two fetches. Freeze the page before scoring anything smaller than the
 site's own churn.
+
+## t1342 — a broken `<img>` is a TEXT box on the real web, and we were drawing an icon
+
+**PATTERN: `<img alt="…">` whose bytes never arrive.** Not a corner case — it is what every lazy,
+blocked, ad-filtered, cross-origin-refused, or undecodable image on the web renders as, and it is what
+`www.a11yproject.com`'s entire sponsor rail renders as. Chrome stops treating such an element as
+replaced and lays it out as a box holding a 16px broken-image icon followed by the alt text; we
+reserved a bare `16×16`.
+
+⭐ **THE PRICE WAS TAKEN ON THE GAP, WHICH IS THE ONLY KIND OF PRICE THAT SURVIVED t1341.** Not *"how
+many pages carry an `<img alt>`"* (all of them) but *"on how many scored elements do the two engines
+DISAGREE about one"*: `fidelity --shape-dump` on a frozen a11yproject named **18 of 48 misses** as this
+mechanism, and they were the six largest by magnitude. The fix moved that page **80.2% → 87.6% SHAPE**
+with two control sites byte-identical.
+
+⚠ **THE SIZE AND THE BASELINE ARE ONE PATTERN.** An element that stops being replaced also stops
+getting §10.8.1's replaced baseline. Fixing only the size leaves a descender strip under every line
+that holds one — `800×31` where Chrome says `800×24`.
+
+⚠ **A PIECEWISE WORD SUM IS NOT A WHOLE-STRING MEASURE**, and the difference is invisible in a
+monospace fixture. It cost this tick a full build cycle: right width, double height, on every real
+sponsor image, while the fixture read clean.

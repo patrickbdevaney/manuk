@@ -554,6 +554,10 @@
   - L11619 · ⭐⭐ The item's text is trimmed at BOTH EDGES, and skipping that shipped a regression
   - L11655 · scrollbar-gutter — the strip a page reserves and no scrollbar has to occupy (t1378)
   - L11729 · A ratio-derived height is DEFINITE, and the children never heard about it (t1379)
+  - L11794 · A broken <img alt="…"> is sized to its alt text, not to the 16×16 icon (t1342)
+  - L11832 · ⭐ THE SIZE AND THE BASELINE ARE ONE FIX, AND EITHER ALONE IS WRONG
+  - L11842 · ⚠ A PIECEWISE WORD SUM IS NOT THE SAME NUMBER AS A WHOLE-STRING MEASURE
+  - L11851 · The receipt — FROZEN pages, same-hour old binary, two CONTROL sites
 
 ## browser-capabilities.md
 `docs/wiki/browser-capabilities.md`
@@ -2431,4 +2435,4 @@
   - L231 · Both named mechanisms are subsystem work
 
 ---
-2338 sections across 22 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+2342 sections across 22 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
