@@ -11872,3 +11872,43 @@ RED under four mutations, each applied to the engine, rebuilt and read: **N1** r
 `16` and `16`, advance 0; **N2** drop the alt baseline → the line reads `31`, not `24`; **N3** drop the
 shrink-to-fit clamp → the narrow box is not `200`; **N4** raw half-leading instead of the strut's
 rounded+floored one → `24.539`, not `24`.
+
+## A PERCENTAGE IS AN INTEGER COUNT OF 1/64px, NOT AN `f32` (t1345)
+
+`width: 23%; margin: 0 1%` × 4 inside a `margin: 0 -1%` container is `4 × 25% = 100%` — an exact fit
+in real arithmetic and a hair OVER in binary. The line breaker has no tolerance, so the fourth card
+drops to its own row. Blink never sees it: every percentage becomes a `LayoutUnit` before anything
+consumes it. The rule now lives at `Dim::resolve`, the one seam every formatting context shares.
+
+```text
+                       raw f32        this rule      Chrome
+  container margin      -9.84         -9.828125     -9.828
+  container width     1003.68       1003.65625    1003.656
+  item width           230.8464      230.828125     230.828
+  item margin           10.0368       10.03125       10.031
+  item 2 x             260.95682     260.921875     260.922
+```
+
+It **composes**: the truncated container margin is what makes the container width, and that is the
+basis the item's own percentage truncates against — which is why quantising at one seam is enough.
+
+⚠ **TRUNCATION TOWARD ZERO, and neither sign alone proves it.** On the positive width `ceil` and
+`round` both give `230.84375`; on the negative margin `floor` gives `-9.84375`. Only truncation
+passes both rows.
+
+⚠ `taffy_tree::snap_row_item_percent_widths` (t817) is the same rule for FLEX rows and says in its
+own doc that it cannot reach the inline formatting context. It now has a general sibling; the flex
+one is left in place because it snaps taffy's own style tree before taffy runs.
+
+### ⚠⚠ AND THE MOTIVATING PAGE STILL WRAPS — TWO BUGS WERE STACKED
+
+```text
+  container                              Chrome            ours
+  width:1003.65625px (explicit)          4 across, h=40    4 across, h=40   ✓ fixed by the above
+  margin:0 -1% on a 984 parent           4 across, h=40    3 across, h=80   ✗ SECOND mechanism
+```
+
+Same used width in both engines. A block with **negative horizontal margins** is WIDER than its
+containing block, and its inline content is being laid out against the containing block's width
+rather than its own. Quantising first is what made this visible: before it, the raw-`f32` overflow
+explained the wrap on its own and the second bug was invisible behind it.

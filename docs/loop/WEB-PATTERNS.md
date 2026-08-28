@@ -9149,3 +9149,20 @@ low-shape/high-coverage row.
 ⚠ Four causes eliminated (base splice, `file://` origin, scripts, the CSS itself — 200 `text/css` to
 any UA). The remaining candidate is the request BURST from a head that large, which is a property of
 the PATTERN and not of trivago.
+
+## t1345 — `width:23%; margin:0 1%` is the pre-flexbox grid, and it is still everywhere
+
+**PATTERN: a four-across card grid built from percentage widths plus percentage margins**, inside a
+container that cancels the outer gutter with a negative percentage margin (`margin: 0 -1%`). It is
+the idiom every WordPress theme, every pre-2016 framework and every hand-rolled listing page uses,
+and it is written so the columns sum to EXACTLY 100%.
+
+⭐ **AN EXACT FIT IS A HAIR-TRIGGER ON A BARE `f32`**, and the failure is maximally visible: the
+fourth card drops to a row of its own, the grid reflows, and every box below moves. Chrome cannot hit
+it because a percentage there is an integer count of 1/64px. Quantising `Dim::resolve` the same way
+made all five of the fixture's measured numbers Chrome-exact and moved frozen `momon-ga.com`
+**63.8% → 69.2% SHAPE** with three control sites unchanged.
+
+⚠ **THE SUM BEING EXACTLY 100% IS THE POINT, NOT AN ACCIDENT** — authors write these grids to fill
+the row. So any sub-pixel excess anywhere in the chain lands on the wrap decision, which makes this
+class of bug produce a large, obvious visual break from an invisible cause.

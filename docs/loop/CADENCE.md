@@ -11,12 +11,12 @@
 
 | | value | over |
 |---|---|---|
-| ticks landed | **1029** | ticks 1–1343 |
-| median tick cycle | **31m** | 1028 intervals |
-| median, last 10 | **67m** | 10 intervals |
+| ticks landed | **1030** | ticks 1–1344 |
+| median tick cycle | **31m** | 1029 intervals |
+| median, last 10 | **89m** | 10 intervals |
 | fastest / slowest | 5s / 7.0d | |
-| **ticks per hour** | **0.89** | 1159.3h elapsed |
-| median verify wall | **65s** | 968 ticks |
+| **ticks per hour** | **0.89** | 1161.0h elapsed |
+| median verify wall | **65s** | 969 ticks |
 | wall trend | 39s → 8m — getting slower ⚠️ | first 3 vs last 3 |
 
 The **cycle** is the real unit: implement → debug → verify wall → land. The wall is only part of
@@ -31,7 +31,7 @@ it, and a wall that grows taxes every future tick, so it is tracked separately f
 * **✅ rows in the capability ledger**: 144 → **642**
 * **Bar 0 — oracle hangs**: 0 of 265 sites
 
-**483 of 1029 ticks** (47%) moved a
+**483 of 1030 ticks** (47%) moved a
 user-visible capability. The rest were instruments, infrastructure and corrections — and the
 ledger says the corrections were not overhead: three of its top three priorities were phantoms,
 and finding that out redirected everything after it.
@@ -1126,5 +1126,6 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 | **1340** | 2026-08-28 06:39 | 77m | capability | 8m | +196/−33 | 521 | 81 | 56.0% · | the ratio box knew its own height and never told its children (2026-08-28) |
 | **1342** | 2026-08-28 08:38 | 2.0h | capability | 8m | +575/−46 | 521 | 81 | 56.0% · | a broken image with alt text is a box full of text, and we drew a 16px icon (2026-08-28) |
 | **1343** | 2026-08-28 12:19 | 3.7h | capability | 8m | +536/−33 | 521 | 81 | 56.0% · | every CJK line on the web is 25% short, because `line-height: normal` asked the wrong font |
+| **1344** | 2026-08-28 14:01 | 1.7h | infrastructure | 8m | +350/−35 | 521 | 81 | 56.0% · | the corpus was blind for 21 ticks, and 4.1% of what it scores is the instrument (2026-08-2 |
 
 *`·` after a WPT figure means **carried forward**, not measured this tick.*

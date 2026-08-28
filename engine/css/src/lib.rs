@@ -54,14 +54,59 @@ pub enum IntrinsicSize {
     FitContent,
 }
 
+/// One `LayoutUnit` — Blink's layout grid, 1/64 px. Every length Blink stores is an integer count
+/// of these, which is why Chrome's used values are always exact multiples of `0.015625`.
+const LAYOUT_UNIT_PX: f32 = 64.0;
+
+/// Truncate `v` toward zero onto the `LayoutUnit` grid — see [`Dim::resolve`] for the measurement
+/// that establishes the direction.
+fn trunc_to_layout_unit(v: f32) -> f32 {
+    if v.is_finite() {
+        (v * LAYOUT_UNIT_PX).trunc() / LAYOUT_UNIT_PX
+    } else {
+        v
+    }
+}
+
 impl Dim {
     /// Resolve to px against a containing-block reference length. `Auto` -> `auto_px`.
+    ///
+    /// ⚠⚠⚠ **A PERCENTAGE IS TRUNCATED TO THE `LayoutUnit` GRID (1/64 px), AND THAT IS WHAT
+    /// DECIDES WHETHER A FOUR-ACROSS GRID IS FOUR ACROSS.** Blink resolves every percentage into a
+    /// `LayoutUnit` before anything consumes it, so the used value is always an exact multiple of
+    /// 1/64 px. On a bare `f32` the pre-flexbox grid idiom — `width: 23%; margin: 0 1%` inside a
+    /// `margin: 0 -1%` container, which is on an enormous number of sites — sums to *exactly* the
+    /// container width in real arithmetic and a hair OVER it in binary, so the line breaker takes a
+    /// break and the fourth card drops to its own row.
+    ///
+    /// **Chrome-measured, and every number below is reproduced exactly by this one rule**
+    /// (984px parent, `margin: 0 -1%` container, four `width:23%; margin:0 1%` inline-blocks):
+    ///
+    /// ```text
+    ///                        raw f32        this rule      Chrome
+    ///   container margin      -9.84         -9.828125     -9.828
+    ///   container width     1003.68       1003.65625    1003.656
+    ///   item width           230.8464      230.828125     230.828
+    ///   item margin           10.0368       10.03125       10.031
+    ///   item 2 x             260.95682     260.921875     260.922
+    ///   items on row 1           3             4             4
+    /// ```
+    ///
+    /// It **composes**, which is why quantising at this one seam is enough: the truncated container
+    /// margin is what makes the container width `1003.65625`, and that is the basis the item's own
+    /// percentage then truncates against.
+    ///
+    /// ⚠ **TOWARD ZERO, not `floor`** — and the negative margin is the row that separates them. A
+    /// `-1%` of 984 is `-9.84`; `floor` gives `-9.84375` and Chrome gives `-9.828125`, so the rule
+    /// is truncation, not rounding down. (Same family as `taffy_tree::snap_row_item_percent_widths`,
+    /// which fixed exactly this defect for FLEX rows at t817 and could not reach the inline
+    /// formatting context.)
     pub fn resolve(self, reference: f32, auto_px: f32) -> f32 {
         match self {
             Dim::Auto => auto_px,
             Dim::Px(v) => v,
-            Dim::Percent(p) => reference * p / 100.0,
-            Dim::Calc { px, pct } => px + reference * pct / 100.0,
+            Dim::Percent(p) => trunc_to_layout_unit(reference * p / 100.0),
+            Dim::Calc { px, pct } => px + trunc_to_layout_unit(reference * pct / 100.0),
         }
     }
     pub fn is_auto(self) -> bool {

@@ -558,6 +558,8 @@
   - L11832 · ⭐ THE SIZE AND THE BASELINE ARE ONE FIX, AND EITHER ALONE IS WRONG
   - L11842 · ⚠ A PIECEWISE WORD SUM IS NOT THE SAME NUMBER AS A WHOLE-STRING MEASURE
   - L11851 · The receipt — FROZEN pages, same-hour old binary, two CONTROL sites
+  - L11876 · A PERCENTAGE IS AN INTEGER COUNT OF 1/64px, NOT AN f32 (t1345)
+  - L11903 · ⚠⚠ AND THE MOTIVATING PAGE STILL WRAPS — TWO BUGS WERE STACKED
 
 ## browser-capabilities.md
 `docs/wiki/browser-capabilities.md`
@@ -2442,4 +2444,4 @@
   - L231 · Both named mechanisms are subsystem work
 
 ---
-2349 sections across 22 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+2351 sections across 22 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.

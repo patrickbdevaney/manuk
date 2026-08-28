@@ -27055,6 +27055,128 @@ mod tests {
         );
     }
 
+    /// **A PERCENTAGE RESOLVES ONTO BLINK'S 1/64px GRID, AND THAT IS WHAT DECIDES WHETHER A
+    /// FOUR-ACROSS GRID IS FOUR ACROSS.**
+    ///
+    /// The pre-flexbox grid idiom — `width: 23%; margin: 0 1%` inside a `margin: 0 -1%` container —
+    /// sums to *exactly* the container width in real arithmetic. On a bare `f32` it lands a hair
+    /// OVER, the line breaker has no tolerance, and the fourth card drops to a row of its own. Blink
+    /// never sees it: every percentage becomes a `LayoutUnit` before anything consumes it, so each
+    /// used value is an exact multiple of `0.015625` and the four fit with `0.09375px` to spare.
+    ///
+    /// `taffy_tree::snap_row_item_percent_widths` fixed exactly this defect for FLEX rows at t817
+    /// and says in its own doc that it cannot reach further; this is the same rule at the seam every
+    /// formatting context shares, `Dim::resolve`.
+    ///
+    /// CHROME-MEASURED (984px parent, `margin: 0 -1%` container, four `width:23%; margin:0 1%`
+    /// inline-blocks), and every one of these is reproduced exactly:
+    ///
+    /// ```text
+    ///                        raw f32        this rule      Chrome
+    ///   container margin      -9.84         -9.828125     -9.828
+    ///   container width     1003.68       1003.65625    1003.656
+    ///   item width           230.8464      230.828125     230.828
+    ///   item margin           10.0368       10.03125       10.031
+    ///   item 2 x             260.95682     260.921875     260.922
+    ///   item 4 x (explicit-width container)  —  762.703   762.703
+    /// ```
+    ///
+    /// ⚠ The direction is TRUNCATION TOWARD ZERO, and the NEGATIVE margin is the row that proves it:
+    /// `floor(-9.84)` on the grid is `-9.84375` and Chrome says `-9.828125`. On the positive width,
+    /// `ceil` and `round` both give `230.84375` and Chrome says `230.828125`. Neither row alone
+    /// discriminates all four rules; together they do, and both are asserted below.
+    #[test]
+    fn a_percentage_resolves_onto_the_layout_unit_grid_truncated_toward_zero() {
+        const LU: f32 = 64.0;
+        let on_grid = |v: f32| (v * LU).fract() == 0.0;
+
+        // ── 1. THE GRID PROPERTY, on a positive and a negative percentage. A raw `f32` product
+        // fails this outright, which is what makes the arm falsifiable.
+        let w = manuk_css::Dim::Percent(23.0).resolve(1003.65625, 0.0);
+        let m = manuk_css::Dim::Percent(-1.0).resolve(984.0, 0.0);
+        assert!(
+            on_grid(w) && on_grid(m),
+            "a percentage must resolve onto the 1/64px LayoutUnit grid: 23% of 1003.65625 gave {w} \
+             and -1% of 984 gave {m} (raw f32 gives 230.8464 and -9.84, neither on the grid)"
+        );
+
+        // ── 2. THE DIRECTION, pinned by BOTH signs. `ceil`/`round` fail the first row, `floor`
+        // fails the second; only truncation toward zero passes both.
+        assert!(
+            (w - 230.828_125).abs() < 1e-6,
+            "23% of 1003.65625 is Chrome's 230.828125 — got {w}. (ceil/round give 230.84375.)"
+        );
+        assert!(
+            (m + 9.828_125).abs() < 1e-6,
+            "-1% of 984 is Chrome's -9.828125 — got {m}. (floor gives -9.84375, which is why this \
+             rule is truncation toward zero and not rounding down.)"
+        );
+
+        // ── 3. AN AUTHORED LENGTH IS UNTOUCHED. The quantisation belongs to percentage RESOLUTION,
+        // not to lengths in general — a `Px` value is what the author wrote.
+        let px = manuk_css::Dim::Px(100.100_1).resolve(1000.0, 0.0);
+        assert!(
+            (px - 100.100_1).abs() < 1e-6,
+            "a `Px` length must pass through untouched, got {px}"
+        );
+
+        // ── 4. THE OBSERVABLE CONSEQUENCE, which is the whole point: four cards on ONE row.
+        // The container is given the used width the negative-margin form produces, spelled
+        // explicitly, so this arm tests the QUANTISATION and not the containing-block arithmetic.
+        let html = r#"<div class="c" id="n"><a>x</a>
+<a>x</a>
+<a>x</a>
+<a id="n4">x</a></div>"#;
+        let css = "html,body{margin:0;padding:0} \
+                   .c{font-size:0;width:1003.65625px} \
+                   .c a{display:inline-block;vertical-align:top;width:23%;margin:0 1%;height:40px}";
+        let (dom, root) = layout_html(html, css, 1200.0);
+        let rects = root.node_rects(&dom);
+        let by_id = |id: &str| {
+            dom.descendants(dom.root())
+                .find(|&n| dom.element(n).and_then(|e| e.attr("id")) == Some(id))
+                .expect("id")
+        };
+        let n = rects[&by_id("n")];
+        let n4 = rects[&by_id("n4")];
+        assert!(
+            (n.height - 40.0).abs() < 0.01,
+            "four `width:23%; margin:0 1%` inline-blocks fit on ONE row (Chrome: the container is \
+             40 tall) — got {} , which is two rows and the fourth card dropped",
+            n.height
+        );
+        assert!(
+            (n4.x - n.x - 762.703_125).abs() < 0.05,
+            "the fourth card sits at Chrome's x=762.703 within the container — got {}",
+            n4.x - n.x
+        );
+        assert!(
+            (n4.width - 230.828_125).abs() < 0.05,
+            "each card is Chrome's 230.828 wide — got {}",
+            n4.width
+        );
+
+        // ── 5. THE CONTROL WITH TEETH. One hundredth of a percent MORE than fits must still wrap.
+        // A "fix" that simply widened the line, or gave the breaker a slop tolerance, passes arm 4
+        // and fails here.
+        let css_over = "html,body{margin:0;padding:0} \
+                        .c{font-size:0;width:1003.65625px} \
+                        .c a{display:inline-block;vertical-align:top;width:23.01%;margin:0 1%;height:40px}";
+        let (dom2, root2) = layout_html(html, css_over, 1200.0);
+        let rects2 = root2.node_rects(&dom2);
+        let n_over = rects2[&dom2
+            .descendants(dom2.root())
+            .find(|&x| dom2.element(x).and_then(|e| e.attr("id")) == Some("n"))
+            .expect("id")];
+        assert!(
+            (n_over.height - 80.0).abs() < 0.01,
+            "CONTROL: at `width:23.01%` the four cards do NOT fit and the row must break (Chrome \
+             gives the container 80) — got {}. A tolerance in the line breaker passes the arm \
+             above and fails this one.",
+            n_over.height
+        );
+    }
+
     #[test]
     fn abspos_intrinsic_width_keyword_sizes_to_content_not_the_anchor() {
         let html = r#"<div class="host"><div id="drop"><span id="label">a much longer label</span></div></div>

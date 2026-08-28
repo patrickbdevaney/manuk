@@ -93540,3 +93540,91 @@ same sizes, Chrome fits four and we wrap after three) and `www.puentedemando.com
 (`c[0 186 1200x463]` vs `m[0 186 1200x20]`, and the whole page below shifts by the same 443).
 
 WIKI: docs/wiki/fidelity-instrument.md
+
+## Tick 1345 — a percentage is not an `f32`, and the four-across grid was three across (2026-08-28)
+
+TICK SHAPE: capability — CSS/layout, on the board's CO-#1 (SHAPE on the near-bar cohort, ranked off
+the sweep this loop banked one tick ago). Board re-run at the top of this tick; CO-#1 unchanged.
+
+The pre-flexbox grid idiom is `width: 23%; margin: 0 1%` inside a `margin: 0 -1%` container: four
+cards, `4 × 25% = 100%`, exactly. In real arithmetic it fits exactly; on a bare `f32` it lands a hair
+OVER, the line breaker has no tolerance, and **the fourth card drops to a row of its own.** Blink
+never sees it, because every percentage becomes a `LayoutUnit` — an integer count of 1/64px — before
+anything consumes it.
+
+`taffy_tree::snap_row_item_percent_widths` fixed exactly this defect for FLEX rows at t817, and says
+in its own doc that it cannot reach further. This is the same rule at the seam every formatting
+context shares: `Dim::resolve`, the one place a percentage becomes px.
+
+### THE RULE IS TRUNCATION TOWARD ZERO, AND ONE ROW OF THE FIXTURE PROVES EACH WRONG CANDIDATE
+
+CHROME-MEASURED, 984px parent, `margin: 0 -1%` container, four `width:23%; margin:0 1%`
+inline-blocks. Every number is reproduced exactly by this one rule, and it **composes** — the
+truncated container margin is what makes the container width, which is the basis the item's own
+percentage then truncates against:
+
+```text
+                       raw f32        this rule      Chrome
+  container margin      -9.84         -9.828125     -9.828
+  container width     1003.68       1003.65625    1003.656
+  item width           230.8464      230.828125     230.828
+  item margin           10.0368       10.03125       10.031
+  item 2 x             260.95682     260.921875     260.922
+```
+
+⚠ **NEITHER SIGN ALONE DISCRIMINATES THE FOUR CANDIDATE RULES.** On the positive width, `ceil` and
+`round` both give `230.84375` where Chrome says `230.828125`. On the NEGATIVE margin, `floor` gives
+`-9.84375` where Chrome says `-9.828125`. Only truncation toward zero passes both, and both rows are
+in the gate for exactly that reason.
+
+### ⚠⚠ THE FIXTURE THAT MOTIVATED THIS IS *STILL* WRONG, AND THE SECOND MECHANISM IS ISOLATED
+
+After the fix, every one of the five numbers above is Chrome-exact — and the four cards **still
+wrap**. A one-line control splits it:
+
+```text
+  container                              Chrome            ours
+  width:1003.65625px (explicit)          4 across, h=40    4 across, h=40   ✓ FIXED
+  margin:0 -1% on a 984 parent           4 across, h=40    3 across, h=80   ✗ SECOND BUG
+```
+
+Same used width — `1003.65625` in both engines, printed and asserted — and only the one built from
+NEGATIVE MARGINS breaks. So a block with negative horizontal margins lays its inline content against
+the wrong available width: it uses the containing block's width and not its own. That is a separate
+mechanism with its own fixture already written, and it is the next tick. **Two bugs were sitting on
+top of each other here, and quantising first is what made the second one visible** — before the fix
+they were indistinguishable, because the raw-`f32` overflow explained the wrap on its own.
+
+### THE RECEIPT — FROZEN pages, 3 runs each, THREE CONTROL SITES
+
+```text
+  site (frozen)                    BEFORE (3 runs)     AFTER (3 runs)
+  pivaldi.restoplace.ws  CONTROL   100.0 x3            100.0 x3            (identical)
+  www.5movierulz.discount CONTROL   79.1 x3             79.1 x3            (identical)
+  cyoinatu-onna.com      CONTROL   91.6/91.6/91.4      91.4/91.6/91.6      (inside its own spread)
+  momon-ga.com                      63.8 x3             69.2 x3            +5.4
+```
+
+`momon-ga.com` moves **+5.4 points with zero spread**, and it moves for percentage boxes elsewhere on
+the page rather than for the four-across grid that led here — which is still wrapping, per the
+section above. Three control sites are byte-identical over 908+1472 scored elements.
+
+⚠ The BEFORE column is the t1343 binary — the immediately preceding engine, since t1344 was a
+docs-only tick. Same frozen bytes on both sides; the only variable is the binary.
+
+GATE `a_percentage_resolves_onto_the_layout_unit_grid_truncated_toward_zero` — 5 arms: the grid
+property on both signs, the direction pinned by both signs, an authored `Px` untouched, the
+observable four-across row at Chrome's `x=762.703` and `w=230.828`, and a CONTROL at `width:23.01%`
+that must STILL wrap (a line-breaker tolerance passes the fourth arm and fails this one). RED under
+FOUR mutations, each applied to the engine, rebuilt and read: N1 revert the quantisation → 230.84094
+off-grid; N2 `round` → 230.84375; N3 `floor` → the negative margin reads −9.84375; N4 quantise `Px`
+too → an authored 100.1001 becomes 100.09375. Layout suite 188/188, manuk-css 41/41.
+
+⚠ SCOPE, stated because it is broad: this changes EVERY percentage in the engine by up to 1/64px,
+toward zero. That is the direction Chrome already quantises in, so it is a convergence rather than a
+trade — but it is the widest blast radius of any change this session and the wall is what judges it.
+
+NEXT — the negative-margin available width, with `pct3.html`'s two-arm fixture (explicit width vs
+`margin: 0 -1%`, same used width, one wraps) as its ready-made discriminator.
+
+WIKI: docs/wiki/box-layout.md
