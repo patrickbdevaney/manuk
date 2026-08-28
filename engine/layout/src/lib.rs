@@ -11656,6 +11656,87 @@ impl Ctx<'_> {
     /// the element itself for a nested inline's. Chrome bills the generated text to the element the
     /// pseudo hangs off (an `<li>` with a `::after` separator is wider by the separator), so the two
     /// callers pass different things and the rest is identical.
+
+    /// **A generated box with no TEXT is still a box, and it was worth zero pixels.**
+    ///
+    /// `::before`/`::after` enter the flow as `InlineItem::Word`, so their width is the width of
+    /// their TEXT — and `pseudo_content` refuses an empty string outright. But `content: ""` with a
+    /// `width` is the icon idiom half the design systems on the web are built out of:
+    ///
+    /// ```css
+    ///   a::before { content:""; display:inline-block; width:30px; margin:12px 20px 12px 8px }
+    /// ```
+    ///
+    /// Measured against Chrome (`inline-block`, 30x30, `margin: 0 20px 0 8px`, the owner's text
+    /// following): Chrome starts that text at **58** — 8 + 30 + 20 — and we started it at **0**,
+    /// because the box the author declared occupied nothing at all. On `whatwg.org` that is the
+    /// anchor's four remaining misplaced elements exactly (t1374's NEXT).
+    ///
+    /// ⚠ **THE TEST IS THE GENERATED BOX'S OWN `display`, NEVER THE PRESENCE OF A WIDTH.** A pseudo
+    /// with `content:""` and a width but NO `display` is an ordinary INLINE box, and `width`/
+    /// `height` do not apply to one — Chrome ignores them, and a fixture row holds us to it.
+    ///
+    /// ⚠⚠ **ONLY THE INLINE ADVANCE IS CLAIMED HERE; THE VERTICAL IS NAMED RESIDUE.** A correct
+    /// atomic inline is placed about the BASELINE (its bottom margin edge sits on it), which is
+    /// `InlineItem::Atomic` and a synthesised `LayoutBox`, not a spacer: Chrome makes that 30px
+    /// icon's line 34px tall and we still make it 19. Reporting a height here without the baseline
+    /// rule would move the line by the wrong amount, so this spacer claims NO height and contributes
+    /// NO leading — the line box is exactly as tall as it was before, and only the horizontal
+    /// advance changes. A partial answer, stated as one.
+    #[allow(clippy::too_many_arguments)]
+    fn push_generated_box_advance(
+        &self,
+        node: NodeId,
+        which: fn(&ComputedStyle) -> &Option<Box<ComputedStyle>>,
+        attr: Option<NodeId>,
+        out: &mut Vec<InlineItem>,
+        gap: &mut PendingGap,
+        first: &mut bool,
+        cw: f32,
+    ) {
+        let Some(st) = self.styles.get(&node) else {
+            return;
+        };
+        let Some(p) = which(st).as_ref() else {
+            return;
+        };
+        // No `content` declaration means no generated box at all — and a SUPPRESSED one generates
+        // nothing either, on exactly the rule `pseudo_content` and the painter already share.
+        // ⚠⚠ **ATOMIC INLINE-LEVEL ONLY, AND THE `display:block` ROW IS WHY.** A BLOCK-level
+        // generated box does not take an inline advance — it takes its own LINE, which
+        // `push_pseudo`'s `Break` arm already handles. Giving it a spacer instead put the owner's
+        // text 30px to the RIGHT of where Chrome puts it (Chrome: relx 0 on the next line; the
+        // first spelling of this fix: relx 30 on the same one). An ordinary INLINE box is excluded
+        // at the other end: `width`/`height` do not apply to one, and Chrome ignores them.
+        if p.content.is_none()
+            || generated_box_is_suppressed(p)
+            || !matches!(
+                p.display,
+                Display::InlineBlock | Display::InlineFlex | Display::InlineGrid
+            )
+        {
+            return;
+        }
+        let w = generated_box_inline_advance(p, cw);
+        if w <= 0.0 {
+            return;
+        }
+        out.push(InlineItem::Spacer {
+            width: w,
+            node: attr,
+            space_before: gap.space.clone(),
+            break_before: !*first && gap.brk,
+            report_height: 0.0,
+            report_ascent: None,
+            holds_line: false,
+            leading: 0.0,
+            metrics: None,
+        });
+        *first = false;
+        gap.space = None;
+        gap.brk = false;
+    }
+
     fn push_pseudo(
         &self,
         node: NodeId,
@@ -11668,6 +11749,9 @@ impl Ctx<'_> {
         cw: f32,
     ) {
         let Some((text, style, dx, block_level)) = self.pseudo_content(node, which, cw) else {
+            // ⚠ `pseudo_content` refuses an EMPTY string — and a sized generated box is still a box.
+            // See `push_generated_box_advance`.
+            self.push_generated_box_advance(node, which, attr, out, gap, first, cw);
             return;
         };
         // ⚠⚠⚠ **A BLOCK-LEVEL GENERATED BOX WHOSE CONTENT COLLAPSES TO NOTHING IS AN EMPTY BLOCK
@@ -26988,4 +27072,20 @@ fn word_separators(text: &str) -> usize {
     text.chars()
         .filter(|c| *c == ' ' || *c == '\u{00A0}')
         .count()
+}
+
+/// The INLINE ADVANCE a generated box occupies: its own width plus its horizontal margins.
+///
+/// `width` is the box's used width under its own `box-sizing`, which for the icon idiom
+/// (`box-sizing: border-box`, the near-universal reset) already includes padding and border — the
+/// same reading `Dim::Px` gets everywhere else. A percentage resolves against the containing
+/// block's width, and anything else (`auto`, the intrinsic keywords) contributes nothing here,
+/// because a generated box with no text and no definite width has no advance to claim.
+fn generated_box_inline_advance(p: &ComputedStyle, cw: f32) -> f32 {
+    let px = |d: Dim| match d {
+        Dim::Px(v) => v,
+        Dim::Percent(v) => cw * v / 100.0,
+        _ => 0.0,
+    };
+    px(p.width) + px(p.margin.left) + px(p.margin.right)
 }

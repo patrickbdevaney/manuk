@@ -11546,3 +11546,44 @@ control put the new binary at mid 47.82ms / large 313.83ms against the old 55.47
 `#links-with-explanations a` as `display:flex; justify-content:space-between` with
 `a > strong { margin-right:auto }`, so each link's description ran off the right edge of its own
 884px box. Shape **78.4% → 89.2%**, misplaced 8 → 4.
+
+## `content: ""` with a width is a BOX, not nothing (t1375)
+
+`::before`/`::after` enter the inline flow as `InlineItem::Word`, so their width is the width of
+their TEXT — and `pseudo_content` refuses an empty string outright, before any box could be made. So
+the icon idiom generated nothing at all:
+
+```css
+  a::before { content:""; display:inline-block; width:30px; margin:12px 20px 12px 8px }
+```
+
+Chrome-measured, `font: 16px monospace`, a 600px block whose `::before` is 30×30 with
+`margin: 0 20px 0 8px`; the column is the owner's `<span>` x relative to the owner:
+
+```text
+                                                Chrome   before   after
+  content:""  display:inline-block                58        0       58
+  content:none                        CTRL         0        0        0
+  content:""  display:block           CTRL         0        0        0
+  content:""  no display (inline)     CTRL         0        0        0
+  ::after content:""  inline-block    CTRL         0        0        0
+```
+
+⭐⭐ **The scope has two ends and both are measured.** *"Not `display:inline`"* passes three rows and
+**breaks the block one**: a BLOCK-level generated box takes its own LINE, not an inline advance
+(Chrome puts the owner's text at relx 0 on the next line; that spelling put it at 30 on the same
+one). The predicate is ATOMIC INLINE-LEVEL — `inline-block`, `inline-flex`, `inline-grid`. At the
+other end, a pseudo with `content:""` and a width but NO `display` is an ordinary inline box, and
+`width`/`height` do not apply to one.
+
+⚠ **Only the inline ADVANCE is claimed; the vertical is residue.** A correct atomic inline is placed
+about the BASELINE (its bottom margin edge sits on it), which is `InlineItem::Atomic` and a
+synthesised `LayoutBox`, not a spacer. Chrome makes that 30px icon's line **34px** tall and we still
+make it 19, so the spacer claims no height and contributes no leading: the line box is exactly as
+tall as before and only the horizontal advance changes. **A pseudo that HAS text still ignores its
+own width** (`content:"x"` + `inline-block; width:30px`: Chrome 58, ours 10) — the same missing
+atomic box from the other side.
+
+⚠ **A `::before` on a FLEX container is a flex ITEM, not an inline one**, and that path is
+untouched: `whatwg.org`'s four remaining misplaced elements are still there (89.2% before and
+after). This is the inline-flow half.

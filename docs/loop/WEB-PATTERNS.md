@@ -8939,3 +8939,16 @@ the correction is ours: detect after the first solve and re-solve the affected c
 version — suppress `justify-content` whenever an auto margin exists — trades two already-correct
 answers for five, because with NEGATIVE free space the auto margins resolve to zero and the
 alignment does apply.
+
+## t1375 — the icon-slot pseudo
+
+The class this unlocks is **the `::before` icon slot in inline flow** — `content:""` with a width, a
+height and a background, which is how a design system draws a bullet, chevron, badge dot, external-
+link arrow or status pip without an extra element. Before this tick the declared box occupied
+nothing, so the owner's own text started where the icon should have been.
+
+Priced first, per t1368's rule: `::before`/`::after` with a `content` declaration appear in 35 of 138
+corpus documents (1143 rules); the exact idiom this fixes — an EMPTY `content` with an
+inline-block/flex/grid display — is **7 of 138 documents, 15 rules**. Modest and real. It did NOT
+move `whatwg.org` (89.2% before and after): that page's `<a>` is a FLEX container, so its `::before`
+must become a flex ITEM, which is a different code path and still open.

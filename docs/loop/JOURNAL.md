@@ -92675,3 +92675,81 @@ remaining misplaced elements are exactly the four `<strong>`s at Chrome's 68 aga
 us at 10), so it is box generation rather than flex distribution.
 
 WIKI: docs/wiki/box-layout.md
+
+## t1375 — `content: ""` with a width is a BOX, and it was worth zero pixels
+
+TICK SHAPE: capability, taken from t1374's own NEXT — and it delivers HALF of what that note
+predicted, which is said plainly below. Board re-run at the top of this tick: CO-#1 unchanged.
+
+### THE DEFECT
+
+`::before`/`::after` enter the inline flow as `InlineItem::Word`, so their width is the width of
+their TEXT — and `pseudo_content` **refuses an empty string outright**, before any box could be
+made. So the icon idiom generated nothing at all, and the owner's own text started where the icon
+should have been:
+
+```css
+  a::before { content:""; display:inline-block; width:30px; margin:12px 20px 12px 8px }
+```
+
+```text
+   the owner's <span>, x relative to the owner    Chrome   before   after
+     content:""  display:inline-block               58        0       58
+     content:none                       CTRL         0        0        0
+     content:""  display:block          CTRL         0        0        0
+     content:""  no display (inline)    CTRL         0        0        0
+     ::after content:""  inline-block   CTRL         0        0        0
+     NO content declaration, sized      CTRL         0        0        0
+```
+
+### ⭐⭐ THE SCOPE HAS TWO ENDS AND THE FIRST SPELLING FELL OFF ONE OF THEM
+
+I shipped *"the generated box is not `display:inline`"* first. It passes `#e`, `#n`, `#noD` and
+**breaks `#blk`**: a BLOCK-level generated box does not take an inline advance, it takes its own
+LINE — Chrome puts the owner's text at relx 0 on the next line and that spelling put it at 30 on the
+same one, the icon's width leaking into a flow that never wanted it. Caught by running the fixture,
+not by reading the diff. The predicate is ATOMIC INLINE-LEVEL — `inline-block`, `inline-flex`,
+`inline-grid`. `#noD` holds the other end: with no `display` the generated box is an ordinary inline
+box, and `width`/`height` do not apply to one.
+
+### WHAT THIS DOES NOT DO, SAID PLAINLY
+
+- **It does not move `whatwg.org` — 89.2% before and after.** t1374 named that anchor's four
+  remaining misplaced elements as this defect. They are a `::before` on a **FLEX container**, which
+  must become a flex ITEM: a different code path from the inline flow, and still open. t1374's NEXT
+  was right about the mechanism and half right about the reach.
+- **Only the inline ADVANCE is claimed.** A correct atomic inline is placed about the BASELINE (its
+  bottom margin edge on it), which is `InlineItem::Atomic` plus a synthesised `LayoutBox`, not a
+  spacer. Chrome makes that 30px icon's line **34px** tall and we still make it 19, so the spacer
+  claims no height and contributes no leading — the line box is exactly as tall as before. Asserting
+  19 would pin a wrong answer and asserting 34 would fail, so neither is in the gate.
+- **A pseudo that HAS text still ignores its own width** — `content:"x"` with the same
+  `inline-block; width:30px` puts Chrome at 58 and us at 10. The same missing atomic box from the
+  other side, measured and not asserted.
+
+PRICED FIRST per t1368's rule: `::before`/`::after` with a `content` declaration appear in **35 of
+138** corpus documents (1143 rules); the exact idiom fixed — EMPTY `content` with an
+inline-block/flex/grid display — is **7 of 138 documents, 15 rules**. Modest and real.
+
+REGRESSION SWEEP: `css/CSS2/generated-content` **80 passed / 110 failed / 126 skipped, byte-identical
+to the baseline taken before the change** (those tests use text content, so they neither gain nor
+lose), `manuk-layout` 185, plus 5 page gates green (`g_auto_margin_steals_the_free_space`,
+`g_letter_spacing_resolves_its_unit`, `g_word_spacing_survives_preserved_whitespace`,
+`g_block_replaced_has_no_line_box`, `g_anon_block_inherits`).
+
+GATE `G_GENERATED_BOX_TAKES_ITS_ADVANCE` — 6 rows, RED under three mutations, each applied to the
+engine, rebuilt and read:
+
+- **U1** the path not taken — the pre-tick state → `#e` 0, not 58
+- **U2** the FIRST SPELLING, *"not `display:inline`"* → `#blk` 30, not 0 — the mutation I actually
+  shipped and this row caught
+- **U3** the horizontal MARGINS dropped from the advance → `#e` 30, not 58
+
+⚠ **U4 DOES NOT BITE, AND THE GATE SAYS SO RATHER THAN COUNTING IT.** Deleting the
+`content.is_none()` / `generated_box_is_suppressed` guard leaves the gate green, because the cascade
+never builds a pseudo `ComputedStyle` at all unless a `content` declaration matched — the guard is
+belt-and-braces against an invariant owned by a different crate. It is kept and recorded as
+NOT falsified here, because a mutation that does not bite is a hole in the gate, not a compliment to
+the code (t1374 said the same and fixed its hole; this one cannot be fixed from this file).
+
+WIKI: docs/wiki/box-layout.md
