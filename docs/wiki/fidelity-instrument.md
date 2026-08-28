@@ -1817,3 +1817,53 @@ Two guards, both mutation-proven: an **absent** signature must not compare unequ
 (`fontsuffix` emits absence rather than a fabricated `{/0}`, and a row that says nothing about its
 face stays a geometry cause), and the key must survive `div_to_jsonl` → `div_from_jsonl`, because
 the cause lives in the instance strings and a serialisation boundary is a semantic one (t743).
+
+## Freeze the page, and price the DIVERGENCE not the CONSTRUCT (t1380)
+
+Two method rules, both bought by watching t1379's numbers be wrong in opposite directions on the same
+afternoon.
+
+### 1. A LIVE PAGE IS NOT AN INSTRUMENT FOR ANYTHING SMALLER THAN ITS OWN CHURN
+
+`manuk-wpt fidelity --urls https://…` re-fetches. A news homepage changes between two fetches, and
+the scored denominator moves with it — `morikoshi.net` returns **1032 / 1039 / 1032** scored across
+three runs of the SAME binary. Any delta read across two such fetches is a reading of the news.
+
+How wrong it can look: diffed live-against-live, `www.alphanews.live` reported **52 elements fixed and
+62 broken**, including `m[30 130 608x0]` against Chrome's `608x461` — an entire subtree collapsed to
+zero height, indistinguishable from the regression that would force a revert. Frozen, the same diff is
+**0 fixed, 0 broken** and the two shape numbers agree to the digit.
+
+**The fix costs nothing.** Freeze the page and hand both engines the same bytes:
+
+```bash
+curl -sL -A 'Mozilla/5.0 …' https://site/ -o raw.html
+# insert <base href="https://site/"> right after <head> so subresources still resolve
+python3 -c "..."            # writes snap.html
+(cd /tmp/fx && python3 -m http.server 8791 &)
+manuk-wpt fidelity --urls 'http://127.0.0.1:8791/snap.html' --shape-dump 4000
+```
+
+Both the Chrome reference and our engine then read one immutable document, so the denominator is
+pinned and a 0.5-point delta becomes readable. ⚠ The `<base>` tag is load-bearing — without it the
+page's own relative CSS does not resolve and you measure an unstyled document (t1367's trap, one layer
+out).
+
+**Diff the MISS PATHS, not the counts.** `--shape-dump N` prints one line per miss ending in the
+element's selector path; `comm -23 old.paths new.paths` is *fixed* and `comm -13` is *broken*. A count
+that stays the same can hide N fixed and N broken; the path sets cannot.
+
+### 2. PRICE THE DIVERGENCE, NOT THE CONSTRUCT
+
+t1379 priced a layout fix by asking **Chrome** which pages CONTAIN the construct — boxes with a
+computed `aspect-ratio` whose child's height fills them — and got 14 of 117 sites, 12%, with 122
+instances on one page and 69 on another. The fix then changed **not one box** on either of those two.
+
+**Where a construct EXISTS says nothing about where OUR engine gets it WRONG.** Chrome having a
+ratio box with a filling child is compatible with our engine already sizing that box correctly (the
+ratio often arrives from an `<img>`'s natural size, which was always definite). A probe that runs
+only in the reference measures the WEB; a price has to measure the GAP.
+
+The honest form of the question is *"on how many pages do the two engines DISAGREE about this box"* —
+which the oracle already answers: it is a shape-dump miss whose delta has the mechanism's signature.
+Price from the diff, not from the reference.

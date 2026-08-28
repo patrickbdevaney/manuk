@@ -93139,3 +93139,78 @@ against a metric that cannot register a whole class of defect, and that is worth
 primitive. `manuk-wpt fidelity --shape-dump` already prints the scored set.
 
 WIKI: docs/wiki/box-layout.md
+
+## Tick 1341 — a live page is not an instrument, and a price is not a divergence (2026-08-28)
+
+TICK SHAPE: instrument fidelity — and it **CORRECTS TWO CLAIMS t1340 PUT INTO A LANDED COMMIT**, which
+is the one thing this loop is required to do before anything else. No engine change. Board re-run at
+the top of this tick and byte-identical to t1378's and t1379's (same md5): CO-#1 unchanged.
+
+t1340 landed the `aspect-ratio` definite-height fix with the headline *"it moves the corpus fidelity
+number by ZERO"* and the hypothesis *"shape is PARENT-RELATIVE, so a collapsed child inside an
+already-displaced parent is never in the scored set — the metric may be blind to this whole class."*
+It named that hypothesis as the NEXT. Measuring it is this tick, and **both halves were wrong.**
+
+### RETRACTION 1 — the fix does NOT move the number by zero
+
+Re-measured with both binaries pointed at a **FROZEN local snapshot** of each page (`curl` + a
+`<base>` tag, served from localhost, so both engines and both binaries see identical bytes). The old
+binary is the revert mutation, so it is the pre-t1340 engine exactly:
+
+```text
+    site (frozen)              OLD      NEW      n
+    www.alphanews.live        75.6%    75.6%    3852/3852   miss sets BYTE-IDENTICAL (0 fixed, 0 broken)
+    bhramarah.in              58.5%    58.5%    1387/1387
+    ru.restaurantguru.com     67.9%    68.4%     611/611    ← +0.5, real and attributable
+```
+
+So the fix is worth **+0.5 on one of three sites and 0 on the other two** — small, real, and nothing
+like the "zero" that was banked, nor like the **+0.152** the banked-row comparison had originally
+suggested.
+
+### RETRACTION 2 — the metric is NOT blind, and that guess was the dangerous one
+
+`www.alphanews.live` alone carries **385 height misses** in its scored set, and restaurantguru duly
+registered the gain. Shape sees collapsed boxes perfectly well. ⚠ Had this gone unmeasured, the named
+NEXT would have sent the loop to re-engineer a working instrument — the most expensive kind of wrong
+turn available here, and it was one tick from happening.
+
+### ⭐ THE REAL RULE: PRICE THE DIVERGENCE, NOT THE CONSTRUCT
+
+t1340's probe asked **CHROME** which pages CONTAIN the construct and found 122 instances on
+alphanews, 69 on bhramarah. The fix changes **not one box** on either. **Where a construct EXISTS says
+nothing about where OUR engine gets it WRONG** — Chrome having a ratio box with a filling child is
+entirely compatible with our engine already sizing it correctly, because the ratio usually arrives
+from an `<img>`'s natural size, which was always definite. A probe that runs only in the reference
+measures THE WEB; a price has to measure THE GAP. The 12% was a real number answering the wrong
+question.
+
+### ⚠⚠⚠ AND A LIVE PAGE CANNOT RESOLVE A SUB-POINT DELTA — IT NEARLY FORCED A FALSE REVERT
+
+Diffed live-fetch against live-fetch, alphanews reported **52 elements fixed and 62 broken**,
+including `m[30 130 608x0]` against Chrome's `608x461` — a subtree collapsed to zero height, which is
+precisely the failure mode t1340 set out to FIX appearing as a regression it would have had to revert
+for. Frozen, the same diff is **0 fixed, 0 broken**. Every bit of it was the news page changing
+between two fetches. `morikoshi.net` returns 1032/1039/1032 scored across three runs of the SAME
+binary — that is the size of the noise a live page brings.
+
+Freezing costs one `curl` and a `<base>` tag, and it pins the denominator so a 0.5-point delta becomes
+readable. ⚠ The `<base>` is load-bearing: without it the page's relative CSS does not resolve and you
+measure an unstyled document — t1367's trap one layer out. And **diff the MISS PATHS, not the counts**:
+`comm -23 old.paths new.paths` is *fixed*, `comm -13` is *broken*; an unchanged count can hide N
+fixed and N broken.
+
+### WHAT STANDS FROM t1340
+
+The engine change itself is unaffected and stays: `G_ASPECT_RATIO_DEFINITE_HEIGHT` is 17 Chrome-
+measured rows with 5 CONTROLS, RED under three mutations, and a `height:100%` inside a ratio box still
+went from **0** to Chrome-exact. Only the RECEIPTS and the hypothesis were wrong, and both are
+corrected here rather than left in the record.
+
+NEXT — re-price the aspect-ratio family the honest way: rank sites by shape-dump MISSES whose delta
+carries the mechanism's signature (our height 0 or our height equal to the child's own intrinsic
+ratio, inside a parent Chrome sized from a ratio), not by what Chrome's DOM contains. That ranking is
+the input the burndown actually wants, and every previous corpus price in this session was built the
+other way round.
+
+WIKI: docs/wiki/fidelity-instrument.md

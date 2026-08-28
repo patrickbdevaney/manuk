@@ -1384,6 +1384,9 @@
   - L1759 · What changed, and what deliberately did not
   - L1775 · ⚠ The family name is a LABEL; only the advance is a MEASUREMENT (t1370)
   - L1794 · ⚠ The advance is an INTEGER, so ±1 is the instrument (t1373)
+  - L1821 · Freeze the page, and price the DIVERGENCE not the CONSTRUCT (t1380)
+  - L1826 · 1. A LIVE PAGE IS NOT AN INSTRUMENT FOR ANYTHING SMALLER THAN ITS OWN CHURN
+  - L1856 · 2. PRICE THE DIVERGENCE, NOT THE CONSTRUCT
 
 ## FRAMEWORKS — React, Svelte, Next, jQuery: what actually breaks
 `docs/wiki/frameworks.md`
@@ -2428,4 +2431,4 @@
   - L231 · Both named mechanisms are subsystem work
 
 ---
-2335 sections across 22 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+2338 sections across 22 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.

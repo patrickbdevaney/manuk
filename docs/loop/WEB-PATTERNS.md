@@ -9054,3 +9054,37 @@ a construct on 12% of sites went from collapsing to zero to matching Chrome exac
 question is named, not papered over: why a construct this common moves SHAPE by nothing. The likely
 answer is that shape is PARENT-RELATIVE, so a collapsed child inside an already-displaced parent was
 never in the scored set — which would mean the metric cannot see this class of fix at all.
+
+## t1380 — a live page is not an instrument, and a price is not a divergence
+
+This tick lands no engine change. It **retracts two claims t1379 put into a landed commit** and
+replaces the method that produced them.
+
+**RETRACTION 1 — "the fix moves the fidelity number by ZERO" is wrong.** Measured again with both
+binaries pointed at a FROZEN local snapshot of each page (`curl` + a `<base>` tag, served from
+localhost, so both engines and both binaries see identical bytes):
+
+```text
+    site (frozen)              OLD      NEW      n
+    www.alphanews.live        75.6%    75.6%    3852/3852   miss sets BYTE-IDENTICAL (0 fixed, 0 broken)
+    bhramarah.in              58.5%    58.5%    1387/1387
+    ru.restaurantguru.com     67.9%    68.4%     611/611    ← +0.5, real and attributable
+```
+
+**RETRACTION 2 — "shape is PARENT-RELATIVE so the metric is blind to this class" is wrong, and it was
+the more interesting of the two guesses, which is exactly why it needed measuring.** The metric is not
+blind: alphanews alone has **385 height misses** in its scored set, and restaurantguru registered the
+gain. Chasing that hypothesis would have burned ticks re-engineering a working instrument.
+
+⭐ **THE REAL RULE, AND IT INVALIDATES THE PRICING METHOD, NOT THE METRIC: PRICE THE DIVERGENCE, NOT
+THE CONSTRUCT.** t1379's probe asked CHROME where the construct EXISTS — 122 instances on alphanews,
+69 on bhramarah — and both are byte-identical across the fix. **Where a construct exists says nothing
+about where OUR engine gets it wrong.** A 12% price bought a change that touches two of the three
+sites not at all. A price is only a price if it counts pages where the two engines DISAGREE.
+
+⚠⚠⚠ **AND A LIVE PAGE CANNOT RESOLVE A SUB-POINT DELTA.** Diffed live-fetch against live-fetch,
+alphanews read **52 elements fixed and 62 broken**, including a box at `m[30 130 608x0]` against
+Chrome's `608x461` — a subtree collapsed to zero height, which looked exactly like the regression this
+tick would have had to revert for. Frozen, the same diff is **0 fixed and 0 broken**. All of it was
+the news page changing between two fetches. Freeze the page before scoring anything smaller than the
+site's own churn.
