@@ -15,7 +15,7 @@
 | median tick cycle | **31m** | 1028 intervals |
 | median, last 10 | **67m** | 10 intervals |
 | fastest / slowest | 5s / 7.0d | |
-| **ticks per hour** | **0.89** | 1158.1h elapsed |
+| **ticks per hour** | **0.89** | 1159.3h elapsed |
 | median verify wall | **65s** | 968 ticks |
 | wall trend | 39s → 8m — getting slower ⚠️ | first 3 vs last 3 |
 
@@ -1125,6 +1125,6 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 | **1339** | 2026-08-28 05:22 | 5.2h | capability | 8m | +423/−34 | 521 | 81 | 56.0% · | the page reserved a scrollbar and we handed the space back (2026-08-28) |
 | **1340** | 2026-08-28 06:39 | 77m | capability | 8m | +196/−33 | 521 | 81 | 56.0% · | the ratio box knew its own height and never told its children (2026-08-28) |
 | **1342** | 2026-08-28 08:38 | 2.0h | capability | 8m | +575/−46 | 521 | 81 | 56.0% · | a broken image with alt text is a box full of text, and we drew a 16px icon (2026-08-28) |
-| **1343** | 2026-08-28 11:07 | 2.5h | capability | 8m | +777/−37 | 521 | 81 | 56.0% · | every CJK line on the web is 25% short, because `line-height: normal` asked the wrong font |
+| **1343** | 2026-08-28 12:19 | 3.7h | capability | 8m | +536/−33 | 521 | 81 | 56.0% · | every CJK line on the web is 25% short, because `line-height: normal` asked the wrong font |
 
 *`·` after a WPT figure means **carried forward**, not measured this tick.*

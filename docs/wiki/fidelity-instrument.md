@@ -1867,3 +1867,65 @@ only in the reference measures the WEB; a price has to measure the GAP.
 The honest form of the question is *"on how many pages do the two engines DISAGREE about this box"* —
 which the oracle already answers: it is a shape-dump miss whose delta has the mechanism's signature.
 Price from the diff, not from the reference.
+
+## A SITE WHOSE REFERENCE RENDERS UNSTYLED IS CHARGED TO THE ENGINE, AND IT IS 4.1% OF THE CORPUS (t1344)
+
+t858 recorded *"the one established instance is `trivago.be`: five `<link rel=stylesheet>`, **zero**
+loaded by the oracle — one site, named, not a rate."* On the CrUX corpus it is **five rows**
+(fr/be/pl/jp/de — one codebase, five locales), **4.1% of every scored row and 6,665 sampled ids**, all
+sitting at `shape 0.11` with `coverage 0.966`.
+
+⚠⚠⚠ **THAT PAIR IS INDISTINGUISHABLE FROM THE LAYOUT WORK THE BURNDOWN RANKS**: every box drawn,
+nearly every one in the wrong place. What separates them is already printed on every run and nothing
+read it:
+
+```text
+   365 hit(s)  display: inline → block                                  (<a>)   inline vs block
+   365 hit(s)  font-resolution: Times New Roman/16/148 vs -apple-system/16/172  (<li>)
+```
+
+`Times New Roman` + `display: inline` on 365 anchors is a document with **no CSS applied at all**;
+`-apple-system` + `block` is the page's own stylesheet, and that side is **ours**. ⭐ **When the
+reference is unstyled and we are not, the score is upside down** — the engine that is RIGHT takes the
+0.11. Read the `font-resolution` line before pricing any low-shape/high-coverage site.
+
+### Four causes eliminated, so the next probe is a bisect and not a guess
+
+```text
+   the oracle's exact document (curl + spliced <base>), file://        sheets=0
+   …the same, with EVERY <script> stripped                             sheets=0
+   …the same, served over http://127.0.0.1 (a real origin)             sheets=0
+   …the same, with --allow-file-access-from-files                      sheets=0
+   a ONE-LINK control on the SAME href, same base, same flags          sheets=1   <- loads fine
+```
+
+Not the `<base>` splice (`base.href` is exactly the origin, parent `HEAD`, all 7 links resolve to real
+absolute https URLs), not the `file://` origin, not scripts, not the CSS (**200 `text/css`, 36 KB** to
+any UA, with or without a `Referer`). Every link has `sheet === null` in a `<head>` of **103
+children**, while the identical fetch in isolation succeeds. NEXT: keep the 7 stylesheet links, delete
+the other ~96 head children; if they load, the cause is the request BURST.
+
+## THE SWEEP RUNNER MUST RE-SPAWN — `fidelity` EXITS ITS OWN PROCESS ON PURPOSE (t1344)
+
+After a per-site timeout the tool prints *"EXITING THIS PROCESS DELIBERATELY — the row above is on
+disk and **the parent re-spawns the remainder**"* and calls `exit`, skipping `JS_ShutDown()`. The
+SpiderMonkey teardown message and `exit 139` that follow are **not** a crash; the tool says so itself.
+
+⚠ A chunk runner that invokes `fidelity --urls-file <chunk>` **once** therefore stops at the first
+slow site in that chunk and looks like it finished. Two attempts returned **123/200** and **157/200**
+and both reported success. The runner must loop:
+
+```sh
+for attempt in $(seq 10); do
+  # remaining = chunk URLs whose host has no row yet in the --rows-out file
+  awk -F'\t' 'NR==FNR{if($0!~/^#/)done[$1]=1;next}
+              {u=$0;sub(/^https?:\/\//,"",u);sub(/\/.*$/,"",u); if(!(u in done)) print}' "$c.tsv" "$c" > "$c.todo"
+  [ -s "$c.todo" ] || break
+  ./target/release/manuk-wpt fidelity --urls-file "$c.todo" --rows-out "$c.tsv"
+done
+```
+
+⚠⚠ **A SWEEP AND A BUILD MUST NOT SHARE A WALL CLOCK.** The first attempt was invalid for a second,
+worse reason: `manuk-wpt` was rebuilt while it ran, so its later chunks measured a different binary
+from its earlier ones — an instrument that changes mid-reading, which is t1242's rule in its most
+literal form. `-P 4` also survives where `-P 8` sheds chunks.

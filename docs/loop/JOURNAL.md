@@ -93450,3 +93450,93 @@ Chrome fits on one 1004px row and we wrap after three. Same size, same container
 an inline/flex free-space term, and it is the next single mechanism on this anchor.
 
 WIKI: docs/wiki/text-layout.md
+
+## Tick 1344 — the corpus was blind for 21 ticks, and 4.1% of what it scores is the instrument (2026-08-28)
+
+TICK SHAPE: infrastructure — the board's own longest-standing unclaimed directive (*"BANK ONE clean
+sweep NOW, before the next fix"*), plus the fidelity instrument in `manuk-wpt`, which the board names
+as agent territory. Board re-run at the top of this tick; CO-#1 unchanged.
+
+The last complete sweep is `SWEEP-t1322` — **21 ticks and 8 days old**. Every render tick since has
+been priced on frozen anchors, which is the right per-tick instrument and says nothing about the
+corpus. `SWEEP-t1344-rows.tsv` is **200/200 rows**, one binary, no build sharing the clock.
+
+```text
+                          t1322      t1344          on the 120 scored in BOTH
+   scored                   124        122          mean shape  0.5780 -> 0.5938  (+0.0159)
+   shape >= 0.75             50         52          >= 0.75         47 -> 50      (+3)
+   mean shape (scored)    0.5872     0.5993
+```
+
+Not attributable to any single tick, and live-page churn is inside every per-site delta — said here
+because the temptation to attribute it is exactly what t1341 was written about.
+
+### ⚠⚠⚠ FIVE OF THE TWELVE DEEP-FAIL ROWS ARE ONE SITE, AND WE ARE THE ENGINE THAT IS RIGHT
+
+`shape < 0.25` with `n >= 60` is 12 sites; **five of them are trivago** (fr/be/pl/jp/de — one
+codebase, five CrUX locales), all at shape **0.11–0.12** with coverage **0.966**. Every box drawn,
+nearly every one in the wrong place: the exact signature this burndown ranks as layout work.
+
+It is not layout work. The oracle's own diagnostic lines have said so all along and nothing read them:
+
+```text
+   365 hit(s)  display: inline → block                                  (<a>)   inline vs block
+   365 hit(s)  font-resolution: Times New Roman/16/148 vs -apple-system/16/172  (<li>)
+```
+
+`Times New Roman` + `display:inline` on 365 anchors is a document with **NO CSS APPLIED**.
+`-apple-system` + `block` is trivago's own stylesheet — and that is **OURS**. ⭐ We render this site
+correctly, the REFERENCE does not, and the metric charges us 0.11 for it five times over — **4.1% of
+every scored row and 6,665 of the sampled ids.**
+
+**REPRODUCED OUTSIDE THE ORACLE, AND FOUR CAUSES ELIMINATED** (this is the part that makes it a
+finding rather than a suspicion):
+
+```text
+   the oracle's exact document (curl + spliced <base>), file://        sheets=0
+   …the same, with EVERY <script> stripped                             sheets=0
+   …the same, served over http://127.0.0.1 (a real origin)             sheets=0
+   …the same, with --allow-file-access-from-files                      sheets=0
+   a ONE-LINK control on the SAME href, same base, same flags          sheets=1   <- loads fine
+```
+
+Not the `<base>` splice (`base.href` is exactly the origin, its parent is `HEAD`, and all 7
+`link[rel=stylesheet]` resolve to real absolute https URLs), not the `file://` origin, not scripts,
+not the CSS — which answers **200 `text/css`, 36 KB** to any User-Agent with or without a `Referer`.
+All 7 links have `sheet === null`: the fetches FAILED, in a document whose `<head>` has **103
+children**, while the identical fetch in isolation succeeds.
+
+NEXT PROBE, named rather than guessed: bisect the head — keep the 7 stylesheet links, delete the
+other ~96 (preloads, preconnects, `data-next-head` metas). If they load, the cause is the request
+BURST, not the markup.
+
+### §13's FONT-LIMITED CLASSIFICATION MOVED — ON A FONT-METRICS TICK, WHICH IS THE FINDING
+
+§13 (t1334) named `hdnails.it`, `7info.ru`, `mobile.ir` FONT-limited, two of them *pure*, and
+prescribed *"take the font-limited ones as ONE webfont-loading investigation"*. This sweep:
+`hdnails.it` **0.661 → 0.792**, `mobile.ir` **0.700 → 0.812** — both have LEFT the band, and t1343
+(fallback-face line metrics) is the obvious candidate: `mobile.ir` is Persian, so its glyphs come from
+Noto Sans Arabic through exactly that path. ⭐ **The classifier was right that these were font
+problems and wrong about WHICH font problem** — it read *"different family measured"* and inferred *a
+webfont Chrome loaded and we did not*, when at least part of it was *the same text measured with the
+wrong face's metrics*. §13's webfont investigation is smaller than it looked and still open; re-price
+before building.
+
+### ⚠⚠ THE SWEEP RUNNER MUST RE-SPAWN, AND A NAIVE ONE SILENTLY RETURNS 123 OF 200
+
+`manuk-wpt fidelity` **exits its own process on purpose** after a per-site timeout — its log says so:
+*"EXITING THIS PROCESS DELIBERATELY — the row above is on disk and the parent re-spawns the
+remainder."* A chunk runner that invokes it ONCE per chunk therefore stops at the first slow site and
+reports success (`exit 139`, with the SpiderMonkey teardown message the tool itself labels as not a
+crash). My first two attempts returned 123/200 and 157/200 and both looked finished. The fix is a
+resume loop: recompute the chunk's remaining URLs from the rows already in its `--rows-out` file and
+re-invoke until none remain. ⚠ And the FIRST attempt was invalid for a second reason — I rebuilt
+`manuk-wpt` while it ran, so its later chunks measured a different binary from its earlier ones.
+**A sweep and a build must not share a wall clock.**
+
+NEXT — the near-bar band is 21 sites / 17,538 ids and re-ranked in §14.3. Two mechanisms are already
+dumped and Chrome-measured: `momon-ga.com`'s WRAP (four identical 231px cards in a 1004px container,
+same sizes, Chrome fits four and we wrap after three) and `www.puentedemando.com`'s COLLAPSED section
+(`c[0 186 1200x463]` vs `m[0 186 1200x20]`, and the whole page below shifts by the same 443).
+
+WIKI: docs/wiki/fidelity-instrument.md

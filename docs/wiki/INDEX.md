@@ -1391,6 +1391,9 @@
   - L1821 · Freeze the page, and price the DIVERGENCE not the CONSTRUCT (t1380)
   - L1826 · 1. A LIVE PAGE IS NOT AN INSTRUMENT FOR ANYTHING SMALLER THAN ITS OWN CHURN
   - L1856 · 2. PRICE THE DIVERGENCE, NOT THE CONSTRUCT
+  - L1871 · A SITE WHOSE REFERENCE RENDERS UNSTYLED IS CHARGED TO THE ENGINE, AND IT IS 4.1% OF THE CORPUS (t1344)
+  - L1892 · Four causes eliminated, so the next probe is a bisect and not a guess
+  - L1908 · THE SWEEP RUNNER MUST RE-SPAWN — fidelity EXITS ITS OWN PROCESS ON PURPOSE (t1344)
 
 ## FRAMEWORKS — React, Svelte, Next, jQuery: what actually breaks
 `docs/wiki/frameworks.md`
@@ -2439,4 +2442,4 @@
   - L231 · Both named mechanisms are subsystem work
 
 ---
-2346 sections across 22 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+2349 sections across 22 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.

@@ -9132,3 +9132,20 @@ Both rows were already exact and the unscoped first cut broke both.
 three runs of ONE binary: the `<base>` that makes the snapshot resolve its CSS also lets its images
 load live, and their natural sizes differ per run. Measure the per-site spread before believing any
 delta smaller than it — t1341's rule needed this second half.
+
+## t1344 — a Next.js head of ~100 preloads is a PATTERN, and it is what breaks the oracle's reference
+
+**PATTERN: a modern framework `<head>` carrying ~100 children** — 7 stylesheet links plus ~96
+preloads, preconnects and `data-next-head` metas. It is what Next.js, Nuxt and every SSR framework
+emit, and it is on a large and growing share of the corpus.
+
+⭐ **THE OBSERVATION IS ABOUT THE INSTRUMENT, AND IT INVERTS FIVE SCORES.** Re-hosted as the oracle's
+snapshot, trivago's 7 stylesheets all come back with `sheet === null` while the *identical* href in a
+one-link control loads fine — so the reference renders in `Times New Roman` with `display:inline` on
+365 anchors, and **our correctly-styled render is charged 0.11 shape** on five CrUX rows (4.1% of all
+scored rows). Read the oracle's own `font-resolution:` line before believing any
+low-shape/high-coverage row.
+
+⚠ Four causes eliminated (base splice, `file://` origin, scripts, the CSS itself — 200 `text/css` to
+any UA). The remaining candidate is the request BURST from a head that large, which is a property of
+the PATTERN and not of trivago.

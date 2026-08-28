@@ -641,3 +641,130 @@ disproportionately font rather than layout.
 
 ⚠ `nysainfo.pl` reads 84.4% here against 68.2% at the t1322 sweep. Sites move; the band's membership
 is a snapshot, and a per-site number older than a few hours is a hypothesis (t1327).
+
+## §14 — THE FIRST SWEEP AFTER 21 BLIND TICKS, AND 4.1% OF THE SCORED CORPUS IS THE INSTRUMENT (t1344)
+
+`SWEEP-t1344-rows.tsv`, `corpus-crux-trend.txt`, **200/200 rows**, one binary, no build sharing the
+clock. The previous complete sweep is `SWEEP-t1322` — **21 ticks and 8 days ago**, so nothing below is
+attributable to a single tick, and live-page churn is inside every per-site delta.
+
+```text
+                          t1322      t1344
+   rows                     200        200
+   scored                   124        122
+   shape >= 0.75             50         52
+   mean shape (scored)    0.5872     0.5993
+   ── on the 120 sites scored in BOTH ──
+   mean shape             0.5780     0.5938    (+0.0159)
+   shape >= 0.75              47         50    (+3)
+```
+
+Distribution of the 122 scored: `<0.25` **25** · `0.25–0.50` 12 · `0.50–0.75` 33 · `0.75–0.90` 30 ·
+`>=0.90` 22. Median **0.702**. The 78 unscored are `bot-wall-403` 35, `unreachable` 14,
+`timeout-150s` 8, `probe-blocked` 6, `http-404` 5, `bot-wall-200` 4, `empty-202` 3, `css-starved` 3.
+
+### 14.1 ⚠⚠⚠ FIVE OF THE TWELVE DEEP-FAIL ROWS ARE ONE SITE, AND THE REFERENCE IS UNSTYLED
+
+The deep-fail cohort (`shape < 0.25`, `n >= 60`) is 12 sites / 13,975 ids. **Five of them are
+trivago**, one codebase in five locales:
+
+```text
+   www.trivago.fr   0.116   cov 0.966   n 1350
+   www.trivago.be   0.120   cov 0.966   n 1348
+   www.trivago.pl   0.114   cov 0.966   n 1348
+   www.trivago.jp   0.119   cov 0.966   n 1339
+   www.trivago.de   0.113   cov 0.911   n 1280
+```
+
+Coverage **0.966** with shape **0.11** is the signature of *every box drawn, nearly every one in the
+wrong place* — which reads exactly like the layout work this document ranks. **It is not.** The
+oracle's own diagnostic lines say so, and they have been printed all along:
+
+```text
+   365 hit(s)  display: inline → block            (<a>)    inline vs block
+   365 hit(s)  font-resolution: Times New Roman/16/148  vs  -apple-system/16/172   (<li>)
+```
+
+`Times New Roman` and `display: inline` on 365 anchors is a document with **no CSS applied at all**.
+`-apple-system` and `block` is trivago's own stylesheet — **ours**. ⭐ **We are rendering this site
+correctly and the REFERENCE is not**, and the metric charges us 0.11 for it, five times.
+
+**Reproduced outside the oracle, and four candidate causes eliminated:**
+
+```text
+   the oracle's exact document (curl + spliced <base>), file://          sheets=0
+   …the same, with EVERY <script> stripped                              sheets=0
+   …the same, served over http://127.0.0.1 (a real origin)              sheets=0
+   …the same, with --allow-file-access-from-files                       sheets=0
+   a ONE-LINK control on the SAME href, same base, same flags           sheets=1   <-- loads fine
+```
+
+So it is **not** the `<base>` splice (`document.querySelector('base').href` is exactly
+`https://www.trivago.be/`, its parent is `HEAD`, and all 7 `link[rel=stylesheet]` resolve to the real
+absolute https URLs), **not** the `file://` origin, **not** scripts, and **not** the CSS — which
+answers `200 text/css`, 36 KB, to any User-Agent, with or without a `Referer`. Every one of the 7
+links has `sheet === null`: the fetches *failed*, in a document whose `<head>` has **103 children**,
+while the identical fetch in isolation succeeds.
+
+**NEXT PROBE, named:** bisect the head — keep the 7 stylesheet links and delete the other ~96 children
+(preloads, preconnects, `data-next-head` metas) — and if they then load, the cause is the request
+BURST (Akamai shedding ~100 concurrent requests that carry no page Referer), not the markup. Until it
+is known, **these five rows are not layout work**, and any burndown that ranks on them is ranking the
+instrument.
+
+### 14.2 §13's FONT-LIMITED CLASSIFICATION MOVED — ON A FONT-METRICS TICK, WHICH IS THE POINT
+
+§13 (t1334) split the near-miss band into LAYOUT-limited and FONT-limited and named `hdnails.it`,
+`7info.ru` and `mobile.ir` as FONT-limited, two of them *pure*. On this sweep:
+
+```text
+   www.hdnails.it   0.661 -> 0.792   (+0.130)
+   www.mobile.ir    0.700 -> 0.812   (+0.112)
+```
+
+Both have **left the band**, and t1343 — which fixed `line-height: normal` to union the metrics of the
+FALLBACK faces a run actually draws from — is the obvious candidate: `mobile.ir` is Persian, so its
+glyphs come from Noto Sans Arabic through exactly that path. ⭐ **The classifier was right that these
+were font problems and wrong about which font problem**: it read "different family measured" and
+inferred *a webfont Chrome loaded and we did not*; at least part of it was *the same text, measured
+with the wrong face's METRICS*. The webfont investigation (§13's own (b)) is therefore **smaller than
+it looked and still open** — re-price it before building.
+
+### 14.3 The re-ranked near-bar band (0.55–0.75, `n >= 60`) — 21 sites, 17,538 ids
+
+```text
+   www.alphanews.live       0.747  n 3858     <- +0.003 from the bar, and the largest sample
+   pivaldi.restoplace.ws    0.743  n  378     <- reads 1.000 FROZEN; this row is live churn
+   serennu.com              0.737  n   61
+   www.puentedemando.com    0.733  n 1136
+   7info.ru                 0.728  n  820
+   www.razaoautomovel.com   0.713  n 1295
+   pasarbokep.com           0.713  n  251
+   www.freesupertips.com    0.712  n  501
+   www.repubblica.it        0.706  n 2456
+   patrickmorin.com         0.697  n  142
+   nysainfo.pl              0.695  n  761
+   ru.restaurantguru.com    0.682  n  611
+   mydogcot.com             0.676  n  463
+   ticket.jfa.jp            0.665  n  218
+   www.crazyshop.pl         0.664  n 1402
+   www.paypal.com           0.647  n  534
+   www.ikea.com             0.643  n  648
+   momon-ga.com             0.638  n  572
+   www.ta3lemkonline.com    0.616  n  459
+   developers.google.com    0.608  n  340
+   www.netvasco.com.br      0.575  n  632
+```
+
+Two named mechanisms already dumped out of this band, both Chrome-measured:
+
+- **`momon-ga.com` — a WRAP.** `x +753  c[763 0 231x336]  m[10 393 231x336]`: four identical 231px
+  cards, one 1004px container, same sizes — Chrome fits four on the row, we wrap after three.
+- **`www.puentedemando.com` — a COLLAPSED section.** `height +443  c[0 186 1200x463]
+  m[0 186 1200x20]`, and the whole page below it shifts by the same 443. Its own top diagnostic is
+  `120 hit(s) font-resolution: Google Sans/16/168 vs Google Sans/16/162` — the SAME family name with a
+  6px-per-168 metric difference, which is a webfont *variant* question, not a fallback question.
+
+⚠ `pivaldi.restoplace.ws` reads **0.743 live and 1.000 frozen**. A per-site row is a draw from a
+distribution whose width is the site's own churn (t1341/t1343): rank on it, but re-measure frozen and
+with a 3-run spread before pricing anything against it.
