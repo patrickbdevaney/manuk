@@ -1791,6 +1791,28 @@ part measurement, key on the measured part.* A label is what an engine chose to 
 two engines may legitimately choose different words; a measurement is a claim about the world and
 they may not.
 
+### ⚠ The advance is an INTEGER, so ±1 is the instrument (t1373)
+
+t1370 fixed comparing the family NAME; the remaining half was comparing the measured advance
+EXACTLY. The probe reports `Math.round(ctx.measureText(PROBE).width)` on both sides, so two readings
+of ONE face legitimately differ by a pixel — and that pixel became a cause. On `www.naukri.com` the
+ledger keyed **`font-resolution: Inter/14/150 vs Inter/14/149`** over a divergence whose **median was
+1203px**. A 1203px displacement is not explained by a typeface the two engines agree about to within
+a rounding unit; the label was hiding a real geometry defect behind a font.
+
+The comparison now allows ±1 on the advance. It cannot hide a real face difference: two faces one
+pixel apart over the 20-character probe are sub-pixel PER CHARACTER, far below the 8px tolerance the
+diff already uses, so they could not be the cause of a divergence at all. The case the
+classification exists for is untouched — `anaheim/20/201` against `anaheim/20/181` is 20px apart.
+**The SIZE still matches exactly**: it is a declared value, not a measured one, so it carries no
+quantisation, and two sizes of one family are two different used faces.
+
+⭐ **The rule this completes:** *a threshold on a measured quantity must be at least the
+quantisation of the instrument that measured it.* t1369 keyed on a signature that was part label and
+part measurement; t1370 dropped the label; t1373 gives the measurement the tolerance its own
+rounding forces. Each pass narrowed the classification and each was found by running the instrument
+on one more page.
+
 Two guards, both mutation-proven: an **absent** signature must not compare unequal to a present one
 (`fontsuffix` emits absence rather than a fabricated `{/0}`, and a row that says nothing about its
 face stays a geometry cause), and the key must survive `div_to_jsonl` → `div_from_jsonl`, because

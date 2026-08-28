@@ -204,6 +204,39 @@ fn measured_face(sig: &str) -> (&str, &str) {
     }
 }
 
+/// Whether two face signatures name the SAME used face — same size, and an advance that differs by
+/// no more than the probe's own quantisation.
+///
+/// ⚠⚠⚠ **THE ADVANCE IS AN INTEGER, SO ±1 IS THE INSTRUMENT AND NOT A FACE.** The Chrome probe
+/// reports `Math.round(ctx.measureText(PROBE).width)` and our side rounds its own measurement the
+/// same way, so two readings of ONE face can legitimately differ by one pixel. Comparing the
+/// strings made that difference a CAUSE: on `www.naukri.com` the ledger keyed
+/// `font-resolution: Inter/14/150 vs Inter/14/149` — a one-pixel probe difference — over a
+/// divergence whose median was **1203px**, and a 1203px displacement is not explained by a
+/// typeface the two engines agree about to within a rounding unit.
+///
+/// A ±1 tolerance cannot hide a real face difference: two faces that differ by one pixel over the
+/// 20-character probe produce sub-pixel per-character error, far below the 8px geometry tolerance
+/// this diff already uses, so they could not be the cause of a divergence in the first place. The
+/// case the classification exists for is unaffected — `anaheim/20/201` against `anaheim/20/181` is
+/// 20px apart.
+///
+/// The SIZE must still match exactly: two sizes of one family are two different used faces, and the
+/// size is a declared value rather than a measured one, so it carries no quantisation.
+fn same_measured_face(a: &str, b: &str) -> bool {
+    let (apx, aadv) = measured_face(a);
+    let (bpx, badv) = measured_face(b);
+    if apx != bpx {
+        return false;
+    }
+    match (aadv.parse::<f32>(), badv.parse::<f32>()) {
+        (Ok(x), Ok(y)) => (x - y).abs() <= 1.0,
+        // A signature whose advance is not a number is compared as itself, so a malformed one can
+        // never silently match a well-formed one.
+        _ => aadv == badv,
+    }
+}
+
 /// Diff one page. `tol` is the geometry tolerance in px.
 pub fn diff_page(
     site: &str,
@@ -552,7 +585,7 @@ pub fn signature_of(d: &Divergence) -> String {
             // but it is named for what it is, so the burndown stops presenting font resolution as
             // the top layout defect on the anchor it tells the loop to work next.
             if let (Some(cf), Some(mf)) = (font_sig(&d.chrome), font_sig(&d.manuk)) {
-                if measured_face(cf) != measured_face(mf) {
+                if !same_measured_face(cf, mf) {
                     return format!("font-resolution: {cf} vs {mf}   (<{}>)", d.tag);
                 }
             }
@@ -1525,6 +1558,35 @@ mod tests {
             signature_of(&named).starts_with("geometry/mis-sized"),
             "the same advance at the same size is ONE face under two names — got {}",
             signature_of(&named)
+        );
+
+        // ⭐⭐⭐ **THE ADVANCE IS AN INTEGER, SO ±1 IS THE INSTRUMENT AND NOT A FACE.** The probe
+        // reports `Math.round(measureText(PROBE).width)` on both sides, so two readings of ONE face
+        // can differ by a pixel. Comparing them exactly made that a CAUSE: on `www.naukri.com` the
+        // ledger keyed `font-resolution: Inter/14/150 vs Inter/14/149` over a divergence whose
+        // MEDIAN WAS 1203px — and a 1203px displacement is not explained by a typeface the two
+        // engines agree about to within a rounding unit. Two faces one pixel apart over the
+        // 20-character probe are sub-pixel per character, far under this diff's 8px tolerance, so
+        // they could never be the cause of a divergence in the first place.
+        let mut rounding = geom_div("naukri.example", "div", [0, 1203, 0, 0]);
+        rounding.chrome = "[0 0 300×40]  {Inter/14/150}".into();
+        rounding.manuk = "[0 1203 300×40]  {Inter/14/149}".into();
+        assert!(
+            signature_of(&rounding).starts_with("geometry/"),
+            "a ONE-PIXEL probe difference is the instrument's own rounding, not a second face — \
+             got {}",
+            signature_of(&rounding)
+        );
+
+        // ⚠ **THE SIZE CARRIES NO QUANTISATION AND MUST STILL MATCH EXACTLY** — it is a declared
+        // value, not a measured one, and two sizes of one family are two different used faces.
+        let mut sized = geom_div("a11y.example", "p", [0, 60, 0, 0]);
+        sized.chrome = "[0 494 358×75]  {anaheim/18/176}".into();
+        sized.manuk = "[0 434 358×75]  {anaheim/20/176}".into();
+        assert!(
+            signature_of(&sized).starts_with("font-resolution:"),
+            "same advance, different SIZE, is two faces — got {}",
+            signature_of(&sized)
         );
 
         // ⚠ **ABSENCE MUST NOT COMPARE UNEQUAL TO PRESENCE.** `fontsuffix` deliberately emits

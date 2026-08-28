@@ -92519,3 +92519,69 @@ it cannot inform a tick inside one. Future ledger-ranked picks should use a slic
 read the per-site stderr as it streams.
 
 WIKI: docs/wiki/text-layout.md
+
+## t1373 — a threshold on a measured quantity must be at least the instrument's quantisation
+
+TICK SHAPE: instrument fidelity, third pass over the same classification and found the same way as
+the second — by running the repaired instrument on one more page. Board re-run at the top of this
+tick: CO-#1 unchanged.
+
+### THE DEFECT — a ONE-PIXEL probe difference outranking a 1203px displacement
+
+t1369 keyed a geometry divergence as `font-resolution` when the two `{family/px/advance}` signatures
+differed; t1370 stopped comparing the family NAME. The remaining half was comparing the measured
+ADVANCE **exactly**. The probe is
+`Math.round(ctx.measureText('Hamburgefonstiv 0123').width)` on both sides, so two readings of ONE
+face legitimately differ by a pixel — and on `www.naukri.com` that pixel became the cause:
+
+```text
+   2 hits   font-resolution: Inter/14/150 vs Inter/14/149   (<div>)   [median 1203px]
+   1 hit    font-resolution: Inter/14/150 vs Inter/14/149   (<body>)  [median 1257px]
+```
+
+**A 1203px displacement is not explained by a typeface the two engines agree about to within a
+rounding unit.** The label was hiding real geometry defects behind a font; with the tolerance in
+place those rows key as `geometry/` again and the site's ranking shows what it should.
+
+⭐ **THE RULE, and it is general:** *a threshold on a MEASURED quantity must be at least the
+QUANTISATION of the instrument that measured it.* The advance is rounded to whole pixels by
+construction, so ±1 is not tolerance-fudging — it is the smallest difference the instrument is
+capable of meaning. Comparing below your own resolution manufactures causes.
+
+⚠ The tolerance cannot hide a real face difference: two faces one pixel apart over the 20-character
+probe are SUB-PIXEL per character, far under the 8px geometry tolerance this diff already uses, so
+they could not be the cause of a divergence in the first place. The case the classification exists
+for is untouched — `anaheim/20/201` against `anaheim/20/181` is 20px apart. **The SIZE still matches
+exactly**: it is a declared value, not a measured one, carries no quantisation, and two sizes of one
+family are two different used faces.
+
+This is the third narrowing of one rule in three ticks (t1369 introduced it; t1370 dropped the
+label; t1373 gives the measurement its own resolution), and all three were found by pointing the
+instrument at one more page rather than by re-reading the code. An instrument tick's obligation is
+to RUN the thing afterwards.
+
+REGRESSION SWEEP: `manuk-wpt` lib **108 passed**. No engine source changed.
+
+GATE `a_divergence_between_two_faces_is_not_a_geometry_cause` (extended to 7 rows) — RED under three
+further mutations, each applied and read:
+
+- **S1** the t1370 spelling, an exact advance comparison → the `Inter/14/150 vs /149` row keys
+  `font-resolution` over a 1203px divergence — the exact defect this tick removes
+- **S2** the tolerance widened to 25px, past a real face difference → `anaheim/20/201 vs …/181`
+  stops separating
+- **S3** the SIZE ignored, comparing only the advance → `anaheim/18/176` vs `anaheim/20/176` stops
+  separating
+
+With N1–N4 and P1–P3 the row now carries **ten applied mutations** and holds in both directions and
+at both ends of the tolerance.
+
+⚠ MEASURED, NOT FIXED, AND THE BEST-PRICED THREAD I LEAVE OPEN. An 8-site slice of the CrUX head
+scored **1 of 8** — and the seven are `4× bot-wall-403, 2× unreachable, 1× render-failed`, i.e. six
+are out of scope per `DAILY-DRIVER-CERTIFICATION.md` §3 rather than engine failures. On the one
+scored site, `www.naukri.com` (coverage 28.1%), the top cause is **`unaligned key (we drew as many):
+<div>` — 32 of its 41 "missing" boxes**. That label is the oracle's own name for *an absence on a
+page where our map is NOT smaller*, i.e. a KEY-alignment artefact rather than a dropped box. So the
+board's "booted-but-thin" constraint may be substantially a keying question on this site, and
+`unaligned` is where to look before hunting for missing boxes.
+
+WIKI: docs/wiki/fidelity-instrument.md
