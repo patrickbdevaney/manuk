@@ -1030,3 +1030,4 @@ tick	sha	epoch	iso	delta_s	shape	wall_s	files	added	deleted	gates	claims	wpt_pas
 1343	a0de69a5	1787933991	2026-08-28T12:19:51-04:00	13279	capability	465	11	536	33	521	81	3896	6960	0	642	0	every CJK line on the web is 25% short, because `line-height: normal` asked the wrong font (2026-08-28)
 1344	7250e2a6	1787940100	2026-08-28T14:01:40-04:00	6109	infrastructure	465	9	350	35	521	81	3896	6960	0	642	0	the corpus was blind for 21 ticks, and 4.1% of what it scores is the instrument (2026-08-28)
 1345	20740a32	1787946600	2026-08-28T15:50:00-04:00	6500	capability	465	8	360	35	521	81	3896	6960	0	642	0	a percentage is not an `f32`, and the four-across grid was three across (2026-08-28)
+1346	c5d37e04	1787955927	2026-08-28T18:25:27-04:00	9327	capability	465	9	442	34	522	81	3896	6960	0	642	0	a negative margin makes a block wider than its parent, and its lines were still clipped to the parent (2026-08-28)

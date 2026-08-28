@@ -9181,3 +9181,17 @@ than box and its four-across grid wrapped after three.
 grid led to it, whose signature the fix demonstrably removes from the shape dump. Recorded as a
 pattern worth knowing and NOT as a scoring win; the construct is common, the divergence on this
 sample was not.
+
+## t1347 — `@import` is how a large slice of the web still delivers fonts and design systems
+
+**PATTERN: `@import url(...)` at the top of a stylesheet or inside a `<style>` block.** It is what
+Google Fonts' own "@import" tab tells you to paste, what every WordPress theme's `style.css` opens
+with, and how CSS architectures put a design system behind one entry point.
+
+⭐ **AN IMPORT THAT CARRIES FONTS LOOKS FIXED EVEN WHEN IT IS BROKEN.** Imported sheets reached the
+`@font-face` scan and never the cascade, so for 780 ticks every imported sheet delivered its fonts
+and not one of its rules — and no symptom pointed at the cascade, because the fonts arrived.
+
+⚠ Measured page-share on the CrUX sample: **2 of 73** pages carry an inline-`<style>` `@import`,
+**3 of 46** carry one inside an external sheet. Small shares — and on the pages that have one, the
+loss is a WHOLE stylesheet.

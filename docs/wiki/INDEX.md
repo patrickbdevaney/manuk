@@ -1063,6 +1063,7 @@
   - L5004 · The align attribute is THREE mappings, and which one you get is the element
   - L5026 · Block-level alignment reads the CONTAINING BLOCK's computed value, not a parent TAG
   - L5047 · The FLOAT half of align, and why the element set is not a TAG set (t1368)
+  - L5111 · AN @importED SHEET DELIVERED ITS FONTS AND NOT ONE OF ITS RULES (t1347)
 
 ## `<dialog>`, `popover`, and the top layer (ticks 194-195)
 `docs/wiki/dialog-and-top-layer.md`
@@ -2445,4 +2446,4 @@
   - L231 · Both named mechanisms are subsystem work
 
 ---
-2352 sections across 22 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+2353 sections across 22 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.

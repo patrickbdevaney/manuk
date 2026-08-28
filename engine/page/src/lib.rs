@@ -9101,7 +9101,44 @@ impl Page {
         fonts: &FontContext,
         viewport_width: f32,
     ) -> RestyleDamage {
-        let sources = collect_style_sources(&self.dom, &self.final_url);
+        let mut sources = collect_style_sources(&self.dom, &self.final_url);
+        // ⚠⚠⚠ **AN `@import`ED SHEET WAS DELIVERING ITS `@font-face`s AND NOT ONE OF ITS RULES.**
+        //
+        // t564 fetches imports and its own comment says *"the imported sheets must reach the CASCADE
+        // too"* — but it pushed them into `fetch_and_apply_stylesheets`'s LOCAL `sources` vec, and
+        // this function re-derives its sources FROM THE DOM. An imported sheet has no `<link>` node,
+        // so the cascade never saw it. Only the `@font-face` scan, which reads that local vec, did —
+        // which is exactly why the defect survived: a page whose import carries fonts LOOKED fixed.
+        //
+        // Measured on a local fixture whose imported sheet carries both halves: the `@font-face`
+        // arrived (Ahem measured its exact 100px) while `#r { width: 137px }` from the same file
+        // came out at the layout's own 8px.
+        //
+        // **PREPENDED, not appended.** An `@import` must precede every rule in its own sheet, so its
+        // rules lose ties to the importing sheet — front-insertion keeps an imported base/reset from
+        // overriding the page's own CSS, which is the direction that cannot break a working page.
+        // The precise position (immediately before the IMPORTING sheet) needs provenance `external`
+        // does not carry, and is named here as residue rather than approximated silently.
+        // ⚠ SORTED: `external` is a `HashMap`, so its key order varies run to run. Two imported
+        // sheets that set the same property would then cascade in a DIFFERENT ORDER on different
+        // runs — a nondeterministic render, which is worse than a wrong one because no gate can
+        // catch it reliably.
+        let mut imported_urls: Vec<&String> = external.keys().collect();
+        imported_urls.sort();
+        let imported: Vec<StyleSource> = imported_urls
+            .into_iter()
+            .filter(|url| {
+                !sources
+                    .iter()
+                    .any(|s| matches!(s, StyleSource::External(u, _) if u == *url))
+            })
+            .map(|url| StyleSource::External(url.clone(), None))
+            .collect();
+        if !imported.is_empty() {
+            let mut all = imported;
+            all.append(&mut sources);
+            sources = all;
+        }
 
         // **Do not re-cascade a document whose inputs have not changed.**
         //
@@ -9413,6 +9450,42 @@ impl Page {
         const IMPORT_DEPTH: usize = 3;
         for _ in 0..IMPORT_DEPTH {
             let mut want: Vec<(String, String)> = Vec::new(); // (import url, resolved)
+                                                              // ⚠⚠⚠ **AN `@import` INSIDE AN INLINE `<style>` WAS NEVER FETCHED, AND IT IS THE
+                                                              // SPELLING GOOGLE FONTS' OWN "@import" TAB TELLS YOU TO PASTE.** t564 wired this walk
+                                                              // over `external` — the `<link rel=stylesheet>` sheets — and stopped there, so an
+                                                              // import declared in a `<style>` block dropped the whole imported sheet: its rules, its
+                                                              // `@font-face`s, everything. The engine even said so and nothing read it — stylo's own
+                                                              // parser logs `Saw @import rule, but no way to trigger the load` once per occurrence.
+                                                              //
+                                                              // The A/B is one line of markup apart, `font-family:'M PLUS 1p'` at 14px, and the
+                                                              // external row is the CONTROL that proves the walk itself works:
+                                                              //
+                                                              // ```text
+                                                              //   where the @import lives          Chrome            before
+                                                              //   in an EXTERNAL sheet (<link>)    119.313 x 20      119 x 20   ✓ (t564)
+                                                              //   in an INLINE <style>             119.313 x 20      111 x 16   ✗
+                                                              // ```
+                                                              //
+                                                              // PRICED before building, on 73 CrUX corpus pages actually fetched: **2 carry one**
+                                                              // (2.7%), both Google Fonts, and one of them — `pasarbokep.com` — is in the near-bar
+                                                              // band the burndown ranks. A small share, and a TOTAL loss on the pages that have it.
+                                                              //
+                                                              // The base is the DOCUMENT's URL, which is what an inline sheet's relative URLs resolve
+                                                              // against (CSS Values §4.2) — the same rule the `@font-face` `src` scan below applies,
+                                                              // and for the same reason.
+            for src in &sources {
+                if let StyleSource::Inline(css, _) = src {
+                    for spec in Stylesheet::parse(css).imports() {
+                        let resolved = resolve_url(&self.final_url, &spec);
+                        if !external.contains_key(&resolved)
+                            && !self.failed_css.contains(&resolved)
+                            && !want.iter().any(|(_, r)| r == &resolved)
+                        {
+                            want.push((spec, resolved));
+                        }
+                    }
+                }
+            }
             for (sheet_url, css) in &external {
                 for spec in Stylesheet::parse(css).imports() {
                     let resolved = resolve_url(sheet_url, &spec);

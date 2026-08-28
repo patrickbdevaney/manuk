@@ -93712,3 +93712,92 @@ the previous one, **with Chrome's widths consistently 5-10% larger than ours** (
 insight, and the two engines are measuring the same Japanese text differently.
 
 WIKI: docs/wiki/box-layout.md
+
+## Tick 1347 — an `@import`ed stylesheet delivered its fonts and not one of its rules, for 780 ticks (2026-08-28)
+
+TICK SHAPE: capability — CSS delivery, on the board's CO-#1 (SHAPE). Board re-run at the top of this
+tick; CO-#1 unchanged. Found while chasing momon-ga's tag-cloud width gap: Chrome measured its
+Japanese anchors 5–11% wider than we did, and the page's theme CSS opens with
+`@import url("https://fonts.googleapis.com/css?family=M+PLUS+1p|Ubuntu")`.
+
+**TWO DEFECTS, ONE SUBSYSTEM, AND THE SECOND IS MUCH LARGER THAN THE FIRST.**
+
+### 1. An `@import` inside an inline `<style>` was never fetched
+
+t564 wired the import walk over the EXTERNAL sheets and stopped there. **The engine has been saying
+so on every load and nothing read it** — stylo's own parser logs `Saw @import rule, but no way to
+trigger the load`, once per occurrence, in plain ERROR. The A/B is one line of markup apart,
+`font-family:'M PLUS 1p'` at 14px, and the external row is the CONTROL that proves the walk worked:
+
+```text
+  where the @import lives          Chrome            before
+  in an EXTERNAL sheet (<link>)    119.313 x 20      119 x 20   ✓ (t564)
+  in an INLINE <style>             119.313 x 20      111 x 16   ✗
+```
+
+### 2. ⚠⚠⚠ AN IMPORTED SHEET NEVER REACHED THE CASCADE AT ALL — ONLY THE `@font-face` SCAN SAW IT
+
+t564's own comment says *"the imported sheets must reach the CASCADE too"* and pushes them into
+`fetch_and_apply_stylesheets`'s **local** `sources` vec. `apply_stylesheets` — the function that
+actually cascades — calls `collect_style_sources(&self.dom, …)` and **re-derives its sources FROM THE
+DOM**. An imported sheet has no `<link>` node, so it was invisible to the cascade. The only consumer
+of that local vec is the `@font-face` scan below it, which is exactly why the defect survived 780
+ticks: **an import that carried fonts LOOKED fixed**, and almost every import on the web carries
+fonts.
+
+Measured on a local fixture whose imported sheet carries both halves: the `@font-face` arrived (Ahem
+measured its exact 100px) while `#r { width: 137px }` from the same file came out at the layout's own
+**8px**.
+
+⭐ **A COMMENT THAT DESCRIBES AN INTENT IS NOT A TEST OF IT** — this is `session-1282-1284`'s rule
+("a workaround's COMMENT is a checkable claim that dies SILENTLY") in a new place, and the check that
+would have caught it is one assertion on a rule rather than on a font.
+
+### PREPENDED, NOT APPENDED, AND THAT IS A CHROME-MEASURED CLAIM
+
+An `@import` must precede every rule in its own sheet, so imported rules LOSE ties to the document's
+own. Chrome-measured: `#p{width:61px}` imported against `#p{width:29px}` in a later inline `<style>`,
+equal specificity → **29**. Appending gives 61 and passes every other arm of the gate. ⚠ The exact
+position (immediately before the IMPORTING sheet) needs provenance the `external` map does not carry;
+front-insertion is the direction that cannot break a working page, and the residue is named.
+
+⚠ The imported URLs are SORTED before insertion: `external` is a `HashMap`, and two imported sheets
+setting the same property would otherwise cascade in a different order run to run. That is a
+determinism hardening, not a claim the gate proves — with one imported sheet there is no order to
+vary, and the mutation that removes the sort passes. Said plainly rather than counted as a mutation.
+
+### THE PRICE — measured on the corpus BEFORE the gate was written, and it is a page-share not a score
+
+```text
+  an `@import` inside an inline <style>        2 of 73 fetched CrUX pages   2.7%
+  an `@import` inside an EXTERNAL sheet        3 of 46 sampled pages        6.5%
+```
+
+Both are Google Fonts on the inline side; the external side is `momon-ga.com`, `comix.to`,
+`celeb.gate.cc`. On the pages that have one, the loss was a WHOLE STYLESHEET's rules.
+
+⚠⚠ **AND THE FROZEN-SITE SCORES DID NOT MOVE** — `pasarbokep.com` 71.7 → 71.7, `momon-ga.com` 69.2 →
+69.2, four controls identical. The reason is specific and worth recording: `pasarbokep`'s import is
+`family=Open+Sans` and **Open Sans is installed on this box** (6 faces), so the webfont replaces a
+locally identical face; `momon-ga`'s imported sheets carry fonts whose faces were already resolving.
+The capability is real and demonstrated on a fixture; the SCORE it buys on this sample is zero, and
+that is stated rather than argued away. (`www.puentedemando.com` read 76.7/76.7/**43.3** across three
+runs of one binary and is not measurable frozen — dropped, and named.)
+
+GATE `an_at_import_inside_an_inline_style_block_is_fetched_and_applied` (`G_IMPORT_INLINE_STYLE`) —
+6 arms over one local origin serving three resources: the inline import's `@font-face` (Ahem's exact
+100px, which no fallback can reach); the inline import's ordinary rule (137px); the EXTERNAL import's
+ordinary rule (53px — the t564 path); a plain `<link>` control (91px); the cascade ORDER (29, not
+61); and the vacuity guard. RED under THREE mutations: N1 remove the inline-source scan → the inline
+import's font falls back to 57.78; N2 remove the cascade prepend → same, because the sheet reaches
+nothing; N3 append instead of prepend → the order arm reads 61.
+
+⚠ The inline and external imports deliberately use DIFFERENT URLs. With one shared URL, N1 passed —
+the external route fetched the same file and masked it. An unproven mutation is an unasserted claim.
+
+NEXT — a `;` INSIDE an `@import`'s `url()` truncates the prelude: `@import url("…css?family=M+PLUS+1p:400,700|Ubuntu:400;700&display=swap")`
+is cut at `Ubuntu:400;`, because `imports()` reads to the first `;` without tracking whether it is
+inside a `url()`. That is the exact URL momon-ga ships, it is the css2 API's own `family=X:wght@400;700`
+spelling, and it is a three-line fix in `Stylesheet::imports`.
+
+WIKI: docs/wiki/css-cascade.md

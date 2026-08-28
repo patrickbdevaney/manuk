@@ -5107,3 +5107,33 @@ covers the 39th; **the float half, which t1367's own NEXT note named as the obvi
 extinct on the modern web.** The lesson is not about `align`: *a previous tick's NEXT note is a
 hypothesis about leverage, and the corpus is the only thing that can price it.* Grep the corpus
 before building the thing the last tick pointed at.
+
+## AN `@import`ED SHEET DELIVERED ITS FONTS AND NOT ONE OF ITS RULES (t1347)
+
+Two defects, one subsystem:
+
+1. **An `@import` inside an inline `<style>` was never fetched.** t564 wired the walk over EXTERNAL
+   sheets only. ⭐ The engine said so on every load and nothing read it: stylo's parser logs
+   `Saw @import rule, but no way to trigger the load` in plain ERROR, once per occurrence.
+2. ⚠⚠⚠ **An imported sheet never reached the CASCADE.** t564's comment says *"the imported sheets
+   must reach the CASCADE too"* and pushes them into `fetch_and_apply_stylesheets`'s LOCAL vec;
+   `apply_stylesheets` re-derives its sources from the DOM, where an imported sheet has no `<link>`
+   node. The only consumer of that local vec is the `@font-face` scan — **which is why it survived
+   780 ticks: an import that carries fonts looks fixed**, and almost every import on the web does.
+
+```text
+  where the @import lives          Chrome            before
+  in an EXTERNAL sheet (<link>)    119.313 x 20      119 x 20   ✓ fonts only
+  in an INLINE <style>             119.313 x 20      111 x 16   ✗ nothing at all
+  an imported RULE (#r{width:137px})    137px            8px    ✗ both cases
+```
+
+⭐ **PREPEND, don't append** — an `@import` precedes every rule in its own sheet, so imported rules
+lose ties. Chrome-measured: imported `#p{width:61px}` vs a later inline `#p{width:29px}` → **29**.
+⚠ Sort the imported URLs: `external` is a `HashMap` and two imported sheets would otherwise cascade
+in a different order run to run.
+
+**PRICE (page-share, measured before building):** an inline-`<style>` `@import` on **2 of 73** fetched
+CrUX pages; an external-sheet `@import` on **3 of 46**. On those pages the loss was a whole
+stylesheet's rules. ⚠ Frozen SHAPE scores did not move on this sample, for a specific reason: both
+inline instances import Google Fonts families already installed on this box.
