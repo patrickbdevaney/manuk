@@ -5155,7 +5155,31 @@ impl Ctx<'_> {
         // reserve (and reserving would wrongly shrink a `height:100%` child's track). Like the inline
         // case, this narrows the space passed to children while leaving `border_box_h` — the box's own
         // `offsetHeight` — untouched; the reserved strip is where the scrollbar sits.
-        let inner_definite_h = own_definite_h.map(|h| (h - gutter_x).max(0.0));
+        //
+        // ⭐⭐⭐ **A RATIO-DERIVED HEIGHT IS A DEFINITE HEIGHT, AND A PERCENTAGE CHILD RESOLVED
+        // AGAINST NOTHING.** CSS Sizing 4: a definite width plus an `aspect-ratio` makes the block
+        // size definite, so a `height: 100%` child resolves against it. This function computed that
+        // height — `content_height` below is literally `width / r` — but only AFTER the children had
+        // been laid out, so the height offered to them was `None` and every percentage inside a
+        // ratio box collapsed. Chrome, `<div style="width:400px;aspect-ratio:16/9">`:
+        //
+        // ```text
+        //   child                                    chrome      was
+        //   height:100%                             400x225    400x0
+        //   height:50%                              400x113    400x0
+        //   <img style="width:100%;height:100%">    400x225    400x300  ← fell back to its OWN ratio
+        //   height:100% > height:50%   (nested)     400x113    400x0
+        // ```
+        //
+        // ⚠ It is a SEPARATE binding, not a shadow of `own_definite_h`: that value also feeds the
+        // ratio transfer below, whose `(None, Some(r))` arm is what computes this in the first
+        // place, and overwriting it would silently change which arm runs. The expression is copied
+        // from that arm deliberately so the two cannot answer differently.
+        let ratio_definite_h = match (own_definite_h, s.aspect_ratio) {
+            (None, Some(r)) if r > 0.0 => Some(width / r),
+            _ => own_definite_h,
+        };
+        let inner_definite_h = ratio_definite_h.map(|h| (h - gutter_x).max(0.0));
         // A BFC root gets a fresh float context spanning its own content box; a plain
         // block shares its parent's so floats affect content across nested blocks.
         let mut own_bfc;

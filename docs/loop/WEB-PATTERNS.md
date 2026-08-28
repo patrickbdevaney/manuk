@@ -9019,3 +9019,38 @@ not two.
 narrow the boxes (only the ICB, so `vw`/`@media`/`clientWidth` are right and the layout is not). It
 is left alone deliberately — the root element has no box in this tree *unless* the document has no
 `<body>`, and taking it here would reserve the strip twice in that case.
+
+## t1379 — the card whose picture had no height
+
+The class this unlocks is **the aspect-ratio media box**: `<div class="aspect-video w-full">` with an
+`h-full object-cover` image inside it, which is how essentially every card grid on the modern web
+puts a picture above a title. Tailwind ships `aspect-video`/`aspect-square`/`aspect-[x/y]` for exactly
+this. Inside such a box, **every percentage height resolved against nothing and collapsed to zero** —
+a `height:100%` overlay became 0 tall, and an `<img width:100%;height:100%>` fell back to its own
+intrinsic ratio and overflowed its parent instead.
+
+CSS Sizing 4 makes the box's block size DEFINITE (definite width + ratio), and `layout_block` already
+computed it — `content_height` is literally `width / r` — but only AFTER the children were laid out,
+so the height offered to them was `None`.
+
+Priced first, per t1368's rule: a Chrome probe asked each corpus page for boxes with a computed
+`aspect-ratio` other than `auto` whose child's height exactly fills them. **14 of 117 measured sites
+(12%)** carry the construct; 60 of 117 have ratio boxes at all. Biggest: alphanews.live 122,
+bhramarah.in 69, broshurko.bg 32, restaurantguru 17, pasarbokep 16, paypal 15, aftenbladet 15.
+
+⚠⚠⚠ **AND IT MOVES THE FIDELITY NUMBER BY ZERO.** A same-hour old-binary control on **seven** sites —
+the old binary built by applying the revert mutation, so it is the pre-tick engine exactly — reads
+alphanews 75.3→75.1, bhramarah 58.4→58.4, morikoshi 24.1→23.6, paypal 64.8→64.8, restaurantguru
+69.2→69.2, pasarbokep 72.0→72.1, and the CONTROL momon-ga 60.8→60.8 identical. The two apparent
+decreases sit inside sites whose own denominator wobbles run-to-run (morikoshi is 1032/1039/1032
+scored across three runs of the SAME binary), so they cannot resolve a half-point either way.
+
+⭐ **The control is what makes that honest.** Against the BANKED sweep row, restaurantguru reads
+0.540 → 0.692 and this tick would have claimed +0.152. The same-hour old binary says **69.2 on both**:
+the gain belongs to an earlier tick, not this one. A banked row from another day is not a control.
+
+It is landed anyway because it buys a CAPABILITY, not a decimal (the 2026-08-21 mandate's own test):
+a construct on 12% of sites went from collapsing to zero to matching Chrome exactly. ⚠ The open
+question is named, not papered over: why a construct this common moves SHAPE by nothing. The likely
+answer is that shape is PARENT-RELATIVE, so a collapsed child inside an already-displaced parent was
+never in the scored set — which would mean the metric cannot see this class of fix at all.

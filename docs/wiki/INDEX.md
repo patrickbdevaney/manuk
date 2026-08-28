@@ -553,6 +553,7 @@
   - L11603 · The mechanism: one item in the taffy tree with no DOM node
   - L11619 · ⭐⭐ The item's text is trimmed at BOTH EDGES, and skipping that shipped a regression
   - L11655 · scrollbar-gutter — the strip a page reserves and no scrollbar has to occupy (t1378)
+  - L11729 · A ratio-derived height is DEFINITE, and the children never heard about it (t1379)
 
 ## browser-capabilities.md
 `docs/wiki/browser-capabilities.md`
@@ -2427,4 +2428,4 @@
   - L231 · Both named mechanisms are subsystem work
 
 ---
-2334 sections across 22 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+2335 sections across 22 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.

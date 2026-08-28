@@ -11725,3 +11725,68 @@ Gate: `G_SCROLLBAR_GUTTER` — 13 rows, 6 of them CONTROLS. RED under five mutat
 the engine, rebuilt and read: drop the document narrowing (785 → 800); SUM instead of MAX (185 →
 170); count `clip` as a scroll container (200 → 185); hard-code 15px (790 → 785); accept `both-edges`
 alone (800/auto → 770/`stable both-edges`).
+
+## A ratio-derived height is DEFINITE, and the children never heard about it (t1379)
+
+CSS Sizing 4: a **definite width plus an `aspect-ratio` makes the block size definite**, so a
+percentage height inside resolves against it. `layout_block` computed that height — the ratio
+transfer is literally `content_height = width / r` — but only **after** `layout_children` had run,
+so the height offered to them (`inner_definite_h`, from `own_definite_h`) was `None`. Every
+percentage inside a ratio box therefore resolved against nothing.
+
+Chrome vs ours, `<div style="width:400px;aspect-ratio:16/9">` (measured, `--window-size=1200,800`):
+
+```text
+    child                                     chrome     was      now
+    width:100%; height:100%                  400x225   400x0    400x225
+    height:100%                              400x225   400x0    400x225
+    height:50%                               400x113   400x0    400x113
+    height:100% > height:50%   (nested)      400x113   400x0    400x113
+    <img style="width:100%;height:100%">     400x225   400x300  400x225
+
+    CONTROLS — these already worked and must not move
+    width:400px; height:225px      → height:100%          400x225
+    width:400px; ratio; height:100px → height:100%        400x100   ← the height WINS
+    height:225px; aspect-ratio:16/9 → height:100%         400x225   ← ratio runs the other way
+```
+
+⚠ **A REPLACED child fails DIFFERENTLY, and the pair is what identifies the cause.** A `<div>` with
+`height:100%` collapsed to **0**; an `<img>` came out **300** — its own intrinsic ratio — because a
+replaced element with no usable percentage falls back to its natural size rather than to zero. One
+cause, two signatures.
+
+The fix is one binding, and it is deliberately NOT a shadow of `own_definite_h`:
+
+```rust
+let ratio_definite_h = match (own_definite_h, s.aspect_ratio) {
+    (None, Some(r)) if r > 0.0 => Some(width / r),
+    _ => own_definite_h,
+};
+let inner_definite_h = ratio_definite_h.map(|h| (h - gutter_x).max(0.0));
+```
+
+`own_definite_h` also feeds the ratio transfer further down, whose `(None, Some(r))` arm is what
+computes this in the first place; shadowing it would silently change which arm runs there. The
+expression is copied from that arm so the two cannot answer differently. The `(None, …)` guard is
+what keeps `aspect-ratio` beside an explicit `height` from overwriting the height the page asked for
+— CONTROL row two, and mutation N2 proves it bites.
+
+⚠⚠⚠ **THIS FIX MOVES THE CORPUS FIDELITY NUMBER BY ZERO, AND THE CONTROL IS WHY WE KNOW.** The
+construct is on **14 of 117** measured corpus sites, yet a same-hour old-binary paired run over seven
+of them (old binary = the revert mutation, i.e. the pre-tick engine exactly) moves nothing:
+75.3→75.1, 58.4→58.4, 24.1→23.6, 64.8→64.8, 69.2→69.2, 72.0→72.1, control 60.8→60.8. Measured
+instead against the BANKED sweep row, restaurantguru would have read **0.540 → 0.692** and this tick
+would have claimed +0.152 that belongs to an earlier one. **A banked row from another day is not a
+control.** The open question — why a construct this common moves SHAPE by nothing — is most likely
+that shape is PARENT-RELATIVE, so a collapsed child inside an already-displaced parent was never in
+the scored set; if so the metric cannot see this class of fix, which is a fact about the INSTRUMENT.
+
+⚠ RESIDUE, ASSERTED RATHER THAN LEFT LOOSE: the `<img>` case's PARENT is **229** in Chrome and 225
+here — an inline replaced child sits on a line box that adds descender space below it. Different
+mechanism (inline layout); the gate asserts 225 so a future fix to it is a deliberate, visible change
+rather than silent drift.
+
+Gate: `G_ASPECT_RATIO_DEFINITE_HEIGHT` — 17 rows, 5 of them CONTROLS. RED under three mutations, each
+applied to the engine, rebuilt and read: revert the binding (225 → 0); drop the `(None, …)` guard so
+the ratio overwrites an explicit height (100 → 225); apply the ratio inverted, `width * r` (225 →
+711).

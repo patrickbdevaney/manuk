@@ -93056,3 +93056,86 @@ ratio ⇒ definite height) and we treat it as indefinite. That is the `aspect-*`
 idiom, which is the dominant modern card pattern.
 
 WIKI: docs/wiki/box-layout.md
+
+## Tick 1340 — the ratio box knew its own height and never told its children (2026-08-28)
+
+TICK SHAPE: capability — a construct that collapsed to ZERO now matches Chrome exactly, which is the
+2026-08-21 mandate's own test (*"ON-MANDATE ONLY IF IT BUYS A SUBSYSTEM OR A CAPABILITY, NEVER A
+DECIMAL"*). ⚠ It is landed KNOWING it buys no decimal — see RECEIPTS. Board re-run at the top of this
+tick and byte-identical to t1378's (same md5): CO-#1 unchanged, the rendering gap, SHAPE first.
+CLUSTER: not cited — `docs/loop/CLUSTERS.md` is still the stale 2026-07-22 tag-keyed ledger. This is
+t1378's own named NEXT, taken because the price was measured before the build.
+
+CSS Sizing 4: a definite width plus an `aspect-ratio` makes the block size DEFINITE, so a percentage
+height inside resolves against it. `layout_block` computed that height — the ratio transfer is
+literally `content_height = width / r` — but only AFTER `layout_children` ran, so the height offered
+to them was `None`. Every percentage inside a ratio box resolved against nothing.
+
+Chrome vs ours, `<div style="width:400px;aspect-ratio:16/9">`: a `height:100%` child was **400x0**
+against Chrome's 400x225; `height:50%` was 400x0 against 400x113; nested `height:100% > height:50%`
+was 0 and 0. ⚠ A REPLACED child fails DIFFERENTLY and the pair is the tell: `<img width:100%;
+height:100%>` came out **400x300** — its own intrinsic ratio — because a replaced element with no
+usable percentage falls back to its natural size rather than to zero. Full table in the wiki.
+
+### PRICED ON THE CORPUS BEFORE BUILDING
+
+A Chrome probe asked each `corpus-crux-trend.txt` page for boxes with a computed `aspect-ratio` other
+than `auto` whose child's height exactly fills them: **14 of 117 measured sites — 12%** — carry it,
+and 60 of 117 have ratio boxes at all. Biggest: alphanews.live 122, bhramarah.in 69, broshurko.bg 32,
+restaurantguru 17, pasarbokep 16, paypal 15, aftenbladet 15. That is ~6× t1378's price, and the
+failure mode is a box that VANISHES rather than a near-miss.
+
+### RECEIPTS — and the headline is that THERE IS NO GAIN
+
+⚠⚠⚠ **THE FIX MOVES THE CORPUS FIDELITY NUMBER BY ZERO.** Same-hour old-binary control over SEVEN
+sites, the old binary built by applying the revert mutation so it is the pre-tick engine exactly:
+
+```text
+    site                    OLD (same hour)      NEW        n
+    www.alphanews.live          75.3%          75.1%    3850/3851
+    bhramarah.in                58.4%          58.4%    1384/1385
+    morikoshi.net               24.1%          23.6%    1038/1032
+    www.paypal.com              64.8%          64.8%     534/534
+    ru.restaurantguru.com       69.2%          69.2%     611/611
+    pasarbokep.com              72.0%          72.1%     250/251
+    momon-ga.com  CONTROL       60.8%          60.8%     572/572   ← identical to the element
+```
+
+⭐ **AND THE CONTROL CAUGHT ME ABOUT TO BANK A GAIN THAT IS NOT MINE.** Measured against the BANKED
+`SWEEP-t1322` row, `ru.restaurantguru.com` reads **0.540 → 0.692** and I had the +0.152 written down.
+The same-hour old binary says **69.2% on BOTH**: that gain belongs to an earlier tick. **A banked row
+from another day is not a control** — this is t830's rule and it very nearly went unobeyed, on the
+one number that would have been the headline.
+
+⚠ The two apparent decreases cannot be resolved by the sites they are on. `morikoshi.net` alone reads
+**23.6 / 24.0 / 23.6 across three runs of the SAME binary**, with its denominator moving 1032↔1039 —
+so it cannot resolve a half-point in either direction, and calling it a regression OR clearing it
+would both be readings of the network. Recorded as unresolvable, exactly as t1377 dropped
+`martinfowler.com` rather than score it.
+
+- `manuk-layout` 185, `manuk-css` 39, `manuk-paint` 22, `manuk-dom` 11 — all identical to the marks.
+
+⭐ **WHY LAND A FIX THAT BUYS NO DECIMAL.** Because the mandate asks for capability and this is one: a
+construct on 12% of measured sites went from a box that disappears to Chrome-exact, on a 17-row
+fixture with 5 CONTROLS. The alternative reading — *"12% of sites carry it and SHAPE does not move"* —
+is a fact about the INSTRUMENT, and it is named rather than papered over: shape is PARENT-RELATIVE,
+so a collapsed child inside an already-displaced parent is very likely never in the scored set at
+all. ⭐ If that is right, the metric is BLIND to this whole class of fix, and finding out is worth
+more than this tick was. That is the named NEXT.
+
+GATE `G_ASPECT_RATIO_DEFINITE_HEIGHT` — 17 rows, **5 CONTROLS**. RED under three mutations, each
+applied to the engine, rebuilt and read: **N1** revert the binding → 400x0, not 400x225; **N2** drop
+the `(None, …)` guard so a ratio overwrites an explicit height → the CONTROL reads 225, not 100;
+**N3** apply the ratio inverted (`width * r`) → 711, not 225.
+
+⚠ RESIDUE, ASSERTED RATHER THAN LEFT LOOSE: the `<img>` case's PARENT is 229 in Chrome and 225 here —
+an inline replaced child sits on a line box that adds descender space. Different mechanism; the gate
+asserts 225 so a future inline fix is deliberate rather than drift.
+
+NEXT — **measure whether SHAPE can see a collapsed child at all.** Take one of the 14 priced sites,
+find a ratio box the fix changed, and ask whether that element is in the scored set. If parent-
+relative scoring is discarding exactly the elements these fixes repair, the burndown has been ranking
+against a metric that cannot register a whole class of defect, and that is worth more than any single
+primitive. `manuk-wpt fidelity --shape-dump` already prints the scored set.
+
+WIKI: docs/wiki/box-layout.md

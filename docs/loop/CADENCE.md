@@ -15,7 +15,7 @@
 | median tick cycle | **31m** | 1025 intervals |
 | median, last 10 | **39m** | 10 intervals |
 | fastest / slowest | 5s / 7.0d | |
-| **ticks per hour** | **0.89** | 1150.3h elapsed |
+| **ticks per hour** | **0.89** | 1152.3h elapsed |
 | median verify wall | **64s** | 965 ticks |
 | wall trend | 39s → 8m — getting slower ⚠️ | first 3 vs last 3 |
 
@@ -27,7 +27,7 @@ it, and a wall that grows taxes every future tick, so it is tracked separately f
 ### Near — the daily driver (doc / app / platform web)
 
 * **capabilities asserted** (`G_CAPABILITY`): 48 → **81**
-* **live gates**: 27 → **520**
+* **live gates**: 27 → **521**
 * **✅ rows in the capability ledger**: 144 → **642**
 * **Bar 0 — oracle hangs**: 0 of 265 sites
 
@@ -1122,6 +1122,6 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 | **1336** | 2026-08-20 23:16 | 34m | measurement | 17m | +129/−32 | 502 | 81 | 56.0% · | the article's box is ZERO tall and its child sits ABOVE it: the child is out of flow for u |
 | **1337** | 2026-08-20 23:46 | 30m | capability | 17m | +239/−34 | 503 | 81 | 56.0% · | `getComputedStyle(el).flex` was `undefined` while flex layout worked (2026-08-20) |
 | **1338** | 2026-08-28 00:08 | 7.0d | capability | 8m | +942/−38 | 519 | 81 | 56.0% · | a percentage reconstructed by differencing Au-quantised samples loses its identity at zero |
-| **1339** | 2026-08-28 03:24 | 3.3h | capability | 8m | +763/−61 | 520 | 81 | 56.0% · | the page reserved a scrollbar and we handed the space back (2026-08-28) |
+| **1339** | 2026-08-28 05:22 | 5.2h | capability | 8m | +423/−34 | 521 | 81 | 56.0% · | the page reserved a scrollbar and we handed the space back (2026-08-28) |
 
 *`·` after a WPT figure means **carried forward**, not measured this tick.*
