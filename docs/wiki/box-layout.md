@@ -11651,3 +11651,77 @@ bounded change, not as a geometry rule.
 Gate: `G_A_PSEUDO_ON_A_FLEX_CONTAINER_IS_AN_ITEM` (14 rows + a container-width row), RED under four
 mutations. `MANUK_TRACE_PSEUDO_ITEM=1` names every generated box promoted to an item — the instrument
 that found the clearfix.
+
+## `scrollbar-gutter` — the strip a page reserves and no scrollbar has to occupy (t1378)
+
+`scrollbar-gutter: stable` (CSS Overflow 3 §3.2) reserves a scrollbar's width out of a scroll
+container's CONTENT box whether or not a scrollbar is shown. It is the modern spelling of
+`html { overflow-y: scroll }` — the layout-shift-prevention idiom — and stylo 0.19 marks it
+`engine = "gecko"`, so the servo build never parses it and the declaration evaporated. Recovered
+from `MinimalCascade` and merged in `stylo_engine`, exactly as `scrollbar-width`/`scrollbar-color`
+are (`RECOVERED_LONGHANDS`).
+
+**The whole rule, measured against headless Chrome — every number below is Chrome's answer for that
+exact fixture, at an 800px viewport, and none is a derivation:**
+
+```text
+    ROOT (viewport 800)                              #a width   #a x   computed
+    html{scrollbar-gutter:stable}                        785      0    stable
+    html{...:stable both-edges}                          770     15    stable both-edges
+    html{...:stable; scrollbar-width:thin}               790      0    stable
+    html{...:stable; scrollbar-width:none}       CTRL    800      0    stable
+    (no declaration)                             CTRL    800      0    auto
+    html{scrollbar-gutter:both-edges}  INVALID   CTRL    800      0    auto
+
+    BOX (200x100)                                    child w   child x   clientWidth
+    overflow:auto    + stable                            185        0        185
+    overflow:hidden  + stable                            185        0        185
+    overflow:scroll  + stable                            185        0        185
+    overflow:visible + stable                    CTRL    200        0        200
+    overflow:clip    + stable                    CTRL    200        0        200
+    overflow:auto    + stable both-edges                 170       15        170
+    overflow:auto    (no declaration)            CTRL    200        0        200
+```
+
+Four things in that table could not have been reasoned out, and each is a CONTROL row:
+
+- **The two reasons are MAXed, never summed.** `overflow: scroll` + `stable` is one scrollbar and one
+  gutter — **185**, not 170. Summing them passes every other row.
+- **The reservation is a SCROLLBAR's width, not 15px.** `scrollbar-width: none` + `stable` reserves
+  **nothing**, because the thing being reserved for is zero wide. A hard-coded 15 fails only here.
+- **`hidden` is a scroll container and `clip` is not.** That is precisely why `clip` exists beside
+  `hidden` in CSS Overflow 3, and Chrome reserves for one and not the other.
+- **`both-edges` ALONE is invalid** — it modifies `stable`, it is not a value — so the declaration is
+  dropped and the computed value stays `auto`. Accepting it would be t1177's lie one property down.
+
+⚠⚠⚠ **A RESERVED GUTTER SURVIVES `--hide-scrollbars`; A SHOWN ONE DOES NOT.** This is the one
+asymmetry only a measurement gives, and it matters here because the fidelity oracle's Chrome
+reference has run with `--hide-scrollbars` for the whole project:
+
+```text
+    box                                        --hide-scrollbars      default
+    overflow: scroll                                     200            185
+    overflow: hidden; scrollbar-gutter: stable           185            185
+```
+
+So `manuk_layout::scrollbar_gutter` (which honours `scrollbars_hidden()`) answers the first row and
+must NOT answer the second. `scrollbar_width_px` is the un-suppressed half; `gutter_reservation`
+composes them and is the ONE function the layout gutter, the root ICB and `clientWidth` all call, so
+a fourth reason to reserve cannot split them again.
+
+⚠⚠⚠ **THE ROOT ELEMENT HAS NO BOX IN THIS TREE, so nothing else could charge the root's gutter.**
+`layout_document` roots the box tree at `<body>`, so a declaration on `html` never reaches a
+`layout_block`. `root_scrollbar_icb` had been narrowing the ICB — which is what `vw`, `@media` and
+`documentElement.clientWidth` read — while the boxes were laid out against the FULL viewport:
+**right in three channels and wrong in the only one that draws.** `root_document_gutter` is applied
+inside `layout_document` rather than at its ten call sites, so no caller can forget it.
+
+Receipts: `www.fragrantica.com` shape **0.699 → 0.828** (crosses the 0.75 bar; three paired runs on
+the new binary, 82.5–82.8). CONTROL `momon-ga.com`, which does not use the property: **224 of 572
+shape misses before and after — identical to the element.** `www.aftenbladet.no`, the other priced
+site, did NOT move (0.352) and is reported as not moving.
+
+Gate: `G_SCROLLBAR_GUTTER` — 13 rows, 6 of them CONTROLS. RED under five mutations, each applied to
+the engine, rebuilt and read: drop the document narrowing (785 → 800); SUM instead of MAX (185 →
+170); count `clip` as a scroll container (200 → 185); hard-code 15px (790 → 785); accept `both-edges`
+alone (800/auto → 770/`stable both-edges`).

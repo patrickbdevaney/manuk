@@ -8989,3 +8989,33 @@ last four misplaced elements, because that page's `<a>` is a flex container.
 ⚠ The same probe named the half this does NOT do: an **out-of-flow** generated box in a flex/grid
 container (`content:""; position:absolute`, the decorative-underline idiom) is still not painted.
 It needs the pseudo to become a real out-of-flow box with its own containing block.
+
+## t1378 — the page that reserved a scrollbar and got the space back
+
+The class this unlocks is **every page that refuses to jump sideways when its content grows past one
+screen**. The idiom is as old as the web — `html { overflow-y: scroll }`, force a scrollbar onto
+every page so the layout does not shift by a scrollbar's width the moment a second screenful
+appears — and `scrollbar-gutter: stable` is its modern spelling: reserve the same strip *without*
+forcing a scrollbar to exist. This engine did not know the property, so the reserved strip was handed
+back to the content and **every box on such a page was one scrollbar too wide**.
+
+That is not a 15px bug. It is the width-launders-into-dy shape `PHASE0-RENDER-BURNDOWN.md` §3 ranks
+FIRST: a container a few pixels too wide re-wraps its prose, the line count changes, and a whole-line
+height error cascades into every block below it. On `www.fragrantica.com` the root was 1200 against
+Chrome's 1185 and the error was still visible 2,988 elements later.
+
+Priced on the CrUX corpus before it was built, per t1368's rule, and priced by asking each page for
+the **computed** value rather than by grepping sheets: of the **97 of 200 sites that produced a
+number**, **2 set it on the root** — `www.fragrantica.com` and `www.aftenbladet.no`. A small price,
+named as one; it was taken because the property is a MISSING CAPABILITY rather than a decimal, and
+because one of the two sat 0.02 under the M1 bar.
+
+⚠ **One of the two priced sites moved and the other did not.** fragrantica **0.699 → 0.828** (three
+paired runs, band 82.5–82.8), crossing the 0.75 bar; aftenbladet stayed **0.352**, where other
+mechanisms dominate (structural 94.8%, 58 boxes missing, 235 extra). The honest read is one crossing,
+not two.
+
+⚠ The residue this does NOT do, named rather than implied: a root `overflow-y: scroll` still does not
+narrow the boxes (only the ICB, so `vw`/`@media`/`clientWidth` are right and the layout is not). It
+is left alone deliberately — the root element has no box in this tree *unless* the document has no
+`<body>`, and taking it here would reserve the strip twice in that case.

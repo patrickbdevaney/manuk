@@ -1303,6 +1303,10 @@ pub fn cascade_via_stylo_sized(
                 // CSSOM would otherwise report `undefined` for the scrollbar-theming a dark-mode page sets.
                 cs.scrollbar_width = m.scrollbar_width;
                 cs.scrollbar_color = m.scrollbar_color;
+                // `scrollbar-gutter` is the third of the same family and the only one of them that
+                // moves a BOX: `stable` narrows the content box of every scroll container (and of
+                // the viewport, via the root element) whether or not a scrollbar is shown.
+                cs.scrollbar_gutter = m.scrollbar_gutter;
                 cs.word_break = m.word_break;
                 // `direction` likewise: the bidi base level decides ORDER, and Stylo's servo build
                 // does not surface it in a form we consume, so the shipping path would otherwise
@@ -4093,6 +4097,9 @@ const RECOVERED_LONGHANDS: &[&str] = &[
     // gated: G_SCROLLBAR_THEME — both are `engine="gecko"` in stylo 0.19 (tick 469).
     "scrollbar-width",
     "scrollbar-color",
+    // gated: G_SCROLLBAR_GUTTER — same `engine="gecko"` family, and unlike its two siblings this
+    // one is RENDERED, not just reflected: the honest `@supports` answer changed with the layout.
+    "scrollbar-gutter",
     // gated: G_SCROLL_SNAP — recovered into the Stylo path like `text-overflow` (tick 266).
     "scroll-snap-type",
     "scroll-snap-align",
@@ -4136,6 +4143,21 @@ fn recovered_value_valid(prop: &str, value: &str) -> bool {
                     .iter()
                     .any(|k| toks[0].eq_ignore_ascii_case(k))
         }
+        // `auto | stable | stable both-edges`. `both-edges` is a MODIFIER, so alone it is invalid —
+        // `@supports (scrollbar-gutter: both-edges)` must answer no, or the allowlist trades one
+        // dishonest answer for another.
+        "scrollbar-gutter" => match toks.len() {
+            1 => ["auto", "stable"]
+                .iter()
+                .any(|k| toks[0].eq_ignore_ascii_case(k)),
+            2 => {
+                (toks[0].eq_ignore_ascii_case("stable")
+                    && toks[1].eq_ignore_ascii_case("both-edges"))
+                    || (toks[0].eq_ignore_ascii_case("both-edges")
+                        && toks[1].eq_ignore_ascii_case("stable"))
+            }
+            _ => false,
+        },
         // `auto`, or exactly TWO colours (thumb then track).
         "scrollbar-color" => {
             (toks.len() == 1 && toks[0].eq_ignore_ascii_case("auto"))

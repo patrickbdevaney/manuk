@@ -92948,3 +92948,111 @@ pseudo to become a real out-of-flow box with its own containing block — the sa
 callers rather than a second copy.
 
 WIKI: docs/wiki/box-layout.md
+
+## Tick 1339 — the page reserved a scrollbar and we handed the space back (2026-08-28)
+
+TICK SHAPE: capability — a CSS property the engine did not implement at all, which is the
+2026-08-21 mandate's own test (*"a tick is ON-MANDATE ONLY IF IT BUYS A SUBSYSTEM OR A CAPABILITY,
+NEVER A DECIMAL"*). Board re-run at the top of this tick: CO-#1 unchanged (the rendering gap, SHAPE
+first). CLUSTER: the width term of `geometry: <div>` (C01ca) — ⚠ cross-checked and the ledger is
+STALE (`docs/loop/CLUSTERS.md` is dated 2026-07-22 and still keyed by TAG, so it predates the
+mechanism-key merge that `main.rs` now performs). It is therefore NOT cited as evidence; the ranking
+this tick actually obeyed is the board's own rule — MARGINAL M1 CROSSINGS off the per-site distances
+in `SWEEP-t1322-rows.tsv` (⭐ regenerating CLUSTERS.md with the mechanism keys is a named, unclaimed
+lever).
+
+`scrollbar-gutter: stable` (CSS Overflow 3 §3.2) reserves a scrollbar's width out of a scroll
+container's content box whether or not a scrollbar is shown — the modern spelling of
+`html { overflow-y: scroll }`, the oldest layout-shift-prevention idiom on the web. stylo 0.19 marks
+the property `engine = "gecko"`, so the servo build we borrow never parses it and the declaration
+evaporated. Every box on such a page was one scrollbar too wide.
+
+### HOW IT WAS FOUND — from the shape dump, not from a spec list
+
+The board's rule is to rank by MARGINAL M1 CROSSINGS off the per-site distances already in
+`SWEEP-t1322-rows.tsv`, not by tag frequency. That names a **jarring-clean near-bar cohort** —
+22 sites at shape 0.60–0.75, each needing +0.01…+0.15. `manuk-wpt fidelity --shape-dump` on four of
+them put `www.fragrantica.com`'s `<body>` at Chrome **1185** against our **1200**, with the error
+still visible 2,988 elements later. Its sheet says only `html { scrollbar-gutter: stable }`.
+
+⚠ **A WRONG INTERMEDIATE CONCLUSION, AND WHAT ACTUALLY KILLED IT.** The captured page read as
+*"Tailwind does not apply in our engine at all"* — our root was 1184 wide where Chrome's was 853, and
+our `<img>` sat at its natural 640×335 with no `w-full` applied. I first blamed the FRAME (Chrome
+serving from `file://`, ours fetching over the network) and re-ran Chrome from the same `http://`
+origin. **That was not the explanation: Chrome returned identical numbers both ways** (`853x632`,
+`aspect-ratio: auto`), so the frame was never the Chrome-side difference. What settled it was a
+different experiment — serving fragrantica's real 811 KB `mfga-tailwind4.css` from localhost against
+a small fixture: our engine applies it correctly (`col-span-9` → 900, `w-full` → 300, both exactly
+Chrome). ⭐ `@layer`, `@supports` and `@property` were tested separately and all seven rows match
+Chrome, so Tailwind v4's wrapper is not the problem either. The residual 15px was the whole of it.
+The discrepancy on the *captured* page is unexplained and is NOT claimed as a finding here — it is
+almost certainly our live fetch of the real origin getting a different response than the snapshot.
+
+### PRICED ON THE CORPUS BEFORE BUILDING
+
+Per t1368's rule, and priced by asking each page for the **computed** value rather than grepping
+sheets: of **97 of 200** `corpus-crux-trend.txt` sites that produced a number, **2** set it on the
+root — fragrantica and aftenbladet. Small, and named as small. It was taken because it is a MISSING
+CAPABILITY rather than a decimal (the 2026-08-21 mandate's test), because one of the two sat 0.02
+under the M1 bar, and because the fix is bounded.
+
+⚠ 5 rows in the first count were FALSE POSITIVES — the extraction regex matched the probe's own
+`<script>` text in the dumped DOM, i.e. pages where the probe never ran. Re-counted honestly: 2.
+
+### THE MECHANISM, AND THE FOUR THINGS ONLY A MEASUREMENT GIVES
+
+Full Chrome table in `docs/wiki/box-layout.md`. The four that could not be reasoned out, each now a
+CONTROL row in the gate:
+
+- the two reasons to reserve are **MAXed, never summed** (`overflow:scroll` + `stable` = 185, not 170);
+- the reservation is **a scrollbar's width, not 15px** (`scrollbar-width:none` + `stable` reserves 0);
+- **`hidden` is a scroll container, `clip` is not** — which is why `clip` exists beside it;
+- **`both-edges` alone is INVALID** and the computed value stays `auto`.
+
+⚠⚠⚠ **A RESERVED GUTTER SURVIVES `--hide-scrollbars` AND A SHOWN ONE DOES NOT.** Chrome, one 200×100
+box: `overflow:scroll` → 200 hidden / 185 shown; `overflow:hidden; scrollbar-gutter:stable` → 185
+both. This matters because the fidelity oracle's reference has run with `--hide-scrollbars` for the
+whole project, so the obvious assumption would have made the fix invisible exactly where it is
+measured. `scrollbar_gutter()` keeps honouring the mode; `scrollbar_width_px()` is the un-suppressed
+half; `gutter_reservation()` composes them and is the ONE function the layout gutter, the root ICB
+and `clientWidth` all call.
+
+⚠⚠⚠ **THE ROOT ELEMENT HAS NO BOX IN THIS TREE, so nothing could charge the root's gutter.**
+`layout_document` roots the box tree at `<body>`, so a declaration on `html` never reaches a
+`layout_block`. `root_scrollbar_icb` had been narrowing the ICB — what `vw`, `@media` and
+`documentElement.clientWidth` read — while the boxes were laid out against the FULL viewport: right
+in three channels, wrong in the only one that draws. The narrowing now happens inside
+`layout_document`, not at its ten call sites.
+
+### RECEIPTS
+
+- `www.fragrantica.com` shape **0.699 → 0.828** — **crosses the 0.75 M1 bar**. Three runs on the new
+  binary band 82.5–82.8; the two pre-fix readings were 0.699 (this session) and 0.733 (banked
+  `SWEEP-t1322`). The movement is outside both bands.
+- ⭐ CONTROL `momon-ga.com`, which does not use the property: **224 of 572 shape misses before and
+  after — identical to the element**, so the gain is the mechanism and not the weather.
+- ⚠ **`www.aftenbladet.no`, the OTHER priced site, did NOT move** (0.352, unchanged). Other
+  mechanisms dominate it — structural 94.8%, 58 boxes missing, 235 extra paths. The honest read of
+  this tick is ONE crossing, not two.
+- `manuk-layout` 185, `manuk-css` 39, `manuk-paint` 22, `manuk-dom` 11 — all identical to the marks.
+
+GATE `G_SCROLLBAR_GUTTER` — 13 rows (6 root + 7 box), **6 of them CONTROLS**. RED under five
+mutations, each applied to the engine, rebuilt and read: **M1** drop the document narrowing → 800,
+not 785; **M2** SUM instead of MAX → 170, not 185; **M3** count `clip` as a scroll container → 185,
+not 200; **M4** hard-code 15px → 785, not 790; **M5** accept `both-edges` alone → 770/`stable
+both-edges`, not 800/`auto`.
+
+⚠ RESIDUE, NAMED: a root `overflow-y: scroll` still does not narrow the boxes (only the ICB). Left
+alone deliberately — the root has no box *unless* the document has no `<body>`, and taking it here
+would reserve the strip twice in that case. It costs the fidelity number nothing, because under the
+oracle's `--hide-scrollbars` a root `overflow: scroll` reserves zero anyway.
+
+NEXT — the same shape dumps priced the next lever and it is bigger than this one: a **percentage
+height does not resolve against a parent whose height came from `aspect-ratio`**. Chrome vs ours on
+`<div style="width:100%;aspect-ratio:16/9"><img style="width:100%;height:100%">`: the img is **480**
+in Chrome and **640** in ours — it ignores `height:100%` and falls back to its own intrinsic ratio,
+overflowing its parent by 160px. The parent's height IS definite per CSS Sizing 4 (definite width +
+ratio ⇒ definite height) and we treat it as indefinite. That is the `aspect-*` + `object-cover` card
+idiom, which is the dominant modern card pattern.
+
+WIKI: docs/wiki/box-layout.md

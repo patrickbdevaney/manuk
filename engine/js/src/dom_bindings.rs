@@ -2717,6 +2717,7 @@ const COMPUTED_STD_NAMES: &[&str] = &[
     "pointer-events",
     "scrollbar-width",
     "scrollbar-color",
+    "scrollbar-gutter",
     "opacity",
     "width",
     "height",
@@ -3207,6 +3208,14 @@ fn computed_style_js(
         manuk_css::ScrollbarWidth::Thin => "thin",
         manuk_css::ScrollbarWidth::None => "none",
     };
+    // `scrollbar-gutter` is the third of the family and the only one that moves a BOX, so the CSSOM
+    // answer and the layout must agree — a page that reads this back to compute its own padding is
+    // asking the same question `manuk_layout::gutter_reservation` answers.
+    let scrollbar_gutter = match cs.scrollbar_gutter {
+        manuk_css::ScrollbarGutter::Auto => "auto",
+        manuk_css::ScrollbarGutter::Stable => "stable",
+        manuk_css::ScrollbarGutter::StableBothEdges => "stable both-edges",
+    };
     let scrollbar_color = match cs.scrollbar_color {
         manuk_css::ScrollbarColor::Auto => "auto".to_string(),
         // Chrome serializes the pair as `<thumb> <track>`, each a resolved rgb()/rgba() colour.
@@ -3442,7 +3451,7 @@ fn computed_style_js(
           color:{}, backgroundColor:{}, fontSize:{}, fontWeight:{}, fontStyle:{}, \
           fontFamily:{}, font:{}, appearance:{}, webkitAppearance:{}, lineHeight:{}, textAlign:{}, display:{}, position:{}, overflow:{}, overflowX:{}, overflowY:{}, \
           visibility:{}, whiteSpace:{}, pointerEvents:{}, userSelect:{}, webkitUserSelect:{}, colorScheme:{}, \
-          scrollbarWidth:{}, scrollbarColor:{}, opacity:{}, \
+          scrollbarWidth:{}, scrollbarColor:{}, scrollbarGutter:{}, opacity:{}, \
           width:{}, height:{}, inlineSize:{}, blockSize:{}, marginTop:{}, marginRight:{}, marginBottom:{}, marginLeft:{}, \
           paddingTop:{}, paddingRight:{}, paddingBottom:{}, paddingLeft:{}, \
           top:{}, right:{}, bottom:{}, left:{}, zIndex:{}, transform:{}, \
@@ -3487,6 +3496,7 @@ fn computed_style_js(
         q(color_scheme),
         q(scrollbar_width),
         q(&scrollbar_color),
+        q(scrollbar_gutter),
         q(&opacity),
         // CSSOM: `width`/`height` resolve to the USED value once the element generates a box. The
         // specified value is the fallback for the cases `used_dim_css` refuses (display:none, a

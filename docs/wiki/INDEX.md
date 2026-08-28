@@ -552,6 +552,7 @@
   - L11591 · A ::before/::after on a FLEX or GRID container is an ITEM (t1377)
   - L11603 · The mechanism: one item in the taffy tree with no DOM node
   - L11619 · ⭐⭐ The item's text is trimmed at BOTH EDGES, and skipping that shipped a regression
+  - L11655 · scrollbar-gutter — the strip a page reserves and no scrollbar has to occupy (t1378)
 
 ## browser-capabilities.md
 `docs/wiki/browser-capabilities.md`
@@ -2426,4 +2427,4 @@
   - L231 · Both named mechanisms are subsystem work
 
 ---
-2333 sections across 22 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+2334 sections across 22 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.

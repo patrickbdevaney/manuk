@@ -114,16 +114,24 @@ fn cascade_styles_keeping_icb(dom: &Dom, sheets: &[Stylesheet]) -> StyleMap {
 /// implementing BOTH halves at once — narrow the ICB *and* stop `body` reserving for itself — or
 /// the gutter is counted twice and every such page loses 15px more. That is a tick of its own.
 fn root_scrollbar_icb(dom: &Dom, styles: &StyleMap, viewport_width: f32) -> Option<(f32, f32)> {
-    use manuk_css::Overflow;
     let de = dom.children(dom.root()).find(|&c| dom.is_element(c))?;
     let st = styles.get(&de)?;
-    let sb = manuk_layout::scrollbar_gutter(st.scrollbar_width);
-    let gy = (st.overflow_y == Overflow::Scroll)
-        .then_some(sb)
-        .unwrap_or(0.0);
-    let gx = (st.overflow_x == Overflow::Scroll)
-        .then_some(sb)
-        .unwrap_or(0.0);
+    // ⭐ `is_viewport: true` — the root's own `overflow` is the initial `visible`, which is not a
+    // scroll container, but CSS Overflow §3.3 propagates it to the VIEWPORT, which always is. So
+    // `html { scrollbar-gutter: stable }` reserves here even though the element itself scrolls
+    // nothing. That single declaration is what the corpus sites write.
+    let gy = manuk_layout::gutter_reservation(
+        st.overflow_y,
+        st.scrollbar_width,
+        st.scrollbar_gutter,
+        true,
+    );
+    let gx = manuk_layout::gutter_reservation(
+        st.overflow_x,
+        st.scrollbar_width,
+        st.scrollbar_gutter,
+        true,
+    );
     if gx == 0.0 && gy == 0.0 {
         return None;
     }
@@ -2396,17 +2404,21 @@ fn scroll_geometry_of(
         // ⚠ Only the deterministic `scroll` case, exactly as the layout gutter does — an
         // `overflow: auto` box that happens to overflow needs a second layout pass and is residue in
         // both places. The two must agree, so they call the same function.
-        let sb = manuk_layout::scrollbar_gutter(st.scrollbar_width);
-        let gy = if st.overflow_y == Overflow::Scroll {
-            sb
-        } else {
-            0.0
-        };
-        let gx = if st.overflow_x == Overflow::Scroll {
-            sb
-        } else {
-            0.0
-        };
+        // A reserved gutter is inside the padding box exactly as a shown one is, so `clientWidth`
+        // must subtract it too — the virtualised-list arithmetic above reads this number, and a
+        // `scrollbar-gutter: stable` pane would otherwise report one scrollbar too many pixels.
+        let gy = manuk_layout::gutter_reservation(
+            st.overflow_y,
+            st.scrollbar_width,
+            st.scrollbar_gutter,
+            false,
+        );
+        let gx = manuk_layout::gutter_reservation(
+            st.overflow_x,
+            st.scrollbar_width,
+            st.scrollbar_gutter,
+            false,
+        );
         let client_w = (b.rect.width - bw.left - bw.right - gy).max(0.0);
         let client_h = (b.rect.height - bw.top - bw.bottom - gx).max(0.0);
         // ⚠⚠⚠ **THE SCROLL CONTAINER'S OWN END PADDING IS PART OF THE SCROLLABLE OVERFLOW REGION,

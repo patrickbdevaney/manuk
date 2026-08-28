@@ -93,6 +93,129 @@ pub fn scrollbar_gutter(sw: manuk_css::ScrollbarWidth) -> f32 {
     }
 }
 
+/// **The scrollbar's own width, with the host's overlay mode NOT applied.**
+///
+/// The split from [`scrollbar_gutter`] is the whole of `scrollbar-gutter: stable`: a gutter that is
+/// only there when a scrollbar is painted must vanish with the scrollbar, and a gutter the page
+/// RESERVED must not. See [`manuk_css::ScrollbarGutter`] for the measured Chrome table that forces
+/// the two apart.
+fn scrollbar_width_px(sw: manuk_css::ScrollbarWidth) -> f32 {
+    match sw {
+        manuk_css::ScrollbarWidth::None => 0.0,
+        manuk_css::ScrollbarWidth::Thin => SCROLLBAR_WIDTH_THIN,
+        manuk_css::ScrollbarWidth::Auto => SCROLLBAR_WIDTH,
+    }
+}
+
+/// **Is this box a SCROLL CONTAINER?** — the question `scrollbar-gutter` is defined against.
+///
+/// `visible` is not one, and `clip` is deliberately not one either (CSS Overflow 3: `clip` clips
+/// without creating a scroll container, which is exactly why it exists beside `hidden`). `hidden`
+/// IS one — it scrolls programmatically — and Chrome duly reserves a stable gutter for it.
+pub fn is_scroll_container(o: manuk_css::Overflow) -> bool {
+    !matches!(o, manuk_css::Overflow::Visible | manuk_css::Overflow::Clip)
+}
+
+/// **How much inline space comes out of this box's CONTENT box for the scrollbar — the ONE answer.**
+///
+/// Three call sites need it and must never disagree: the layout gutter, the ICB narrowing for the
+/// root element, and `clientWidth`. They had drifted before over `scrollbar-width` (t469's note is
+/// still in [`scrollbar_gutter`]); this function exists so a fourth reason to reserve cannot split
+/// them again.
+///
+/// `is_viewport` is the root element's exception, and it is not a special case so much as the
+/// definition: CSS Overflow §3.3 propagates the root's `overflow` to the VIEWPORT, and the viewport
+/// is always a scroll container — so `html { scrollbar-gutter: stable }`, whose own `overflow` is
+/// the initial `visible`, still reserves. That single line is what the two priced corpus sites
+/// (fragrantica.com, aftenbladet.no) actually write.
+///
+/// The two reasons are MAXed, not summed: an `overflow: scroll` box that also says `stable` shows
+/// exactly one scrollbar and Chrome reserves exactly one gutter.
+pub fn gutter_reservation(
+    overflow: manuk_css::Overflow,
+    sw: manuk_css::ScrollbarWidth,
+    sg: manuk_css::ScrollbarGutter,
+    is_viewport: bool,
+) -> f32 {
+    // Reason 1 — a classic scrollbar is DEFINITELY there (`overflow: scroll`), so it takes space.
+    // Honours the host's overlay mode, because an overlay scrollbar takes none.
+    let shown = if overflow == manuk_css::Overflow::Scroll {
+        scrollbar_gutter(sw)
+    } else {
+        0.0
+    };
+    // Reason 2 — the page RESERVED the strip. Independent of whether a scrollbar is painted.
+    shown.max(stable_gutter(overflow, sw, sg, is_viewport))
+}
+
+/// Reason 2 alone — the `scrollbar-gutter` half, with no `overflow: scroll` term.
+///
+/// Split out because the DOCUMENT-level narrowing takes only this half. The other half (a root
+/// `overflow: scroll`, which does narrow the body in Chrome) is deliberately NOT taken there: the
+/// root element usually has no box of its own in this tree, but when a document has no `<body>` it
+/// does, and it would then reserve the same strip twice. That case is named residue, not a fix
+/// smuggled in beside this one — and it costs the fidelity number nothing, because the oracle's
+/// reference runs `--hide-scrollbars`, under which a root `overflow: scroll` reserves zero anyway.
+pub fn stable_gutter(
+    overflow: manuk_css::Overflow,
+    sw: manuk_css::ScrollbarWidth,
+    sg: manuk_css::ScrollbarGutter,
+    is_viewport: bool,
+) -> f32 {
+    if is_viewport || is_scroll_container(overflow) {
+        match sg {
+            manuk_css::ScrollbarGutter::Auto => 0.0,
+            manuk_css::ScrollbarGutter::Stable => scrollbar_width_px(sw),
+            manuk_css::ScrollbarGutter::StableBothEdges => 2.0 * scrollbar_width_px(sw),
+        }
+    } else {
+        0.0
+    }
+}
+
+/// **(total, inline-start) the ROOT ELEMENT reserves out of the viewport.**
+///
+/// ⚠⚠⚠ **THE ROOT ELEMENT HAS NO BOX IN THIS TREE, so nothing else can charge this.** `layout_document`
+/// roots the box tree at `<body>`, which means a declaration on `html` never reaches a `layout_block`
+/// and its gutter had nowhere to come from: `root_scrollbar_icb` narrowed the ICB — which is what
+/// `vw`, `@media` and `documentElement.clientWidth` read — and the boxes were laid out against the
+/// FULL viewport regardless. So `html { scrollbar-gutter: stable }` was right in three channels and
+/// wrong in the only one that draws. This is that narrowing, applied once, at the one place every
+/// caller of `layout_document` goes through.
+///
+/// The root element is POSITIONAL — the first element child of the document node — the same
+/// definition `document.documentElement` and `root_scrollbar_icb` use. Two definitions of the root
+/// is how the two drift apart.
+pub fn root_document_gutter(dom: &Dom, styles: &StyleMap) -> (f32, f32) {
+    let Some(de) = dom.children(dom.root()).find(|&c| dom.is_element(c)) else {
+        return (0.0, 0.0);
+    };
+    let Some(st) = styles.get(&de) else {
+        return (0.0, 0.0);
+    };
+    (
+        stable_gutter(st.overflow_y, st.scrollbar_width, st.scrollbar_gutter, true),
+        gutter_start_inset(st.overflow_y, st.scrollbar_width, st.scrollbar_gutter, true),
+    )
+}
+
+/// The inline-START half of a `stable both-edges` reservation — the content origin moves in by one
+/// scrollbar width so the content stays centred between the two gutters. Zero for every other value.
+pub fn gutter_start_inset(
+    overflow: manuk_css::Overflow,
+    sw: manuk_css::ScrollbarWidth,
+    sg: manuk_css::ScrollbarGutter,
+    is_viewport: bool,
+) -> f32 {
+    if (is_viewport || is_scroll_container(overflow))
+        && sg == manuk_css::ScrollbarGutter::StableBothEdges
+    {
+        scrollbar_width_px(sw)
+    } else {
+        0.0
+    }
+}
+
 /// ⚠⚠⚠ **THE HOST'S SCROLLBARS-TAKE-NO-SPACE MODE — CHROME'S `--hide-scrollbars`, AND THE REASON
 /// IT EXISTS HERE IS THAT THE FIDELITY REFERENCE HAS BEEN RUNNING WITH IT FOR THE WHOLE PROJECT.**
 ///
@@ -1540,13 +1663,21 @@ pub fn layout_document(
             // the viewport. Read the height from the same viewport the parser resolves `vh` against
             // so a `height:100%` root and a `100vh` sibling can never disagree.
             let icb_height = manuk_css::values::icb_size().1;
-            let mut floats = FloatContext::new(0.0, viewport_width);
+            // ⭐ **THE ROOT ELEMENT'S RESERVED GUTTER COMES OUT OF THE WIDTH EVERY BOX IS LAID OUT
+            // AGAINST.** `html { scrollbar-gutter: stable }` narrows the viewport for the whole
+            // document, and `stable both-edges` moves its origin in as well. It is applied HERE,
+            // inside `layout_document`, rather than at its ten call sites — one narrowing, one
+            // owner, and no caller can forget it. See [`root_document_gutter`].
+            let (root_gutter, root_gutter_start) = root_document_gutter(dom, styles);
+            let viewport_width = (viewport_width - root_gutter).max(0.0);
+            let mut floats =
+                FloatContext::new(root_gutter_start, root_gutter_start + viewport_width);
             let mut root = ctx
                 .layout_block(
                     el,
                     viewport_width,
                     Some(icb_height),
-                    0.0,
+                    root_gutter_start,
                     0.0,
                     0.0,
                     &mut floats,
@@ -5000,12 +5131,23 @@ impl Ctx<'_> {
         // needs a second layout pass and stays residue. The gutter narrows the CONTENT box passed to
         // children (and the BFC float band), leaving `width`/`border_box_w` — the box's own
         // offsetWidth — untouched.
-        let gutter = if s.overflow_y == Overflow::Scroll {
-            scrollbar_gutter(s.scrollbar_width).min(width)
-        } else {
-            0.0
-        };
+        //
+        // ⭐ **`scrollbar-gutter: stable` reserves the same strip with no scrollbar in sight** —
+        // the modern spelling of this idiom, and the one two of the priced corpus sites write. Both
+        // reasons resolve in [`gutter_reservation`], which the ICB and `clientWidth` also call.
+        let gutter = gutter_reservation(s.overflow_y, s.scrollbar_width, s.scrollbar_gutter, false)
+            .min(width);
         let inner_width = (width - gutter).max(0.0);
+        // `stable both-edges` keeps the content centred: half the reservation is on the inline-START
+        // edge, so the content ORIGIN moves in as well as the extent shrinking.
+        let gutter_start =
+            gutter_start_inset(s.overflow_y, s.scrollbar_width, s.scrollbar_gutter, false)
+                .min(gutter);
+        // Shadowed deliberately: every use BELOW this line is the CHILDREN's space (the float band,
+        // the orthogonal run's origin, `layout_children`), and every use above is this box's own
+        // border/padding geometry, which the gutter does not move. `gutter_start` is 0 for every
+        // value but `stable both-edges`, so this is inert on the common path.
+        let content_x = content_x + gutter_start;
         // **Block-axis mirror of the same gutter.** A classic horizontal scrollbar (`overflow-x:scroll`,
         // always present) lives on the block-end edge and eats block-axis space, so the content offered
         // to children is shorter than the box by the scrollbar's width — but ONLY when the box has a

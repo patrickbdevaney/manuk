@@ -242,6 +242,41 @@ pub enum ScrollbarWidth {
     None,
 }
 
+/// `scrollbar-gutter` (CSS Overflow 3 §3.2) — **space reserved for the scrollbar whether or not a
+/// scrollbar is there.** `stable` is the layout-shift-prevention idiom's modern spelling: the
+/// classic recipe was `html { overflow-y: scroll }` (always show a scrollbar, so the page does not
+/// jump 15px when content grows past one screen); `scrollbar-gutter: stable` reserves the same
+/// strip without forcing a scrollbar to appear.
+///
+/// ⚠⚠⚠ **IT IS NOT SUPPRESSED BY OVERLAY/HIDDEN SCROLLBARS, AND THE ORDINARY GUTTER IS.** That
+/// asymmetry is measured, not assumed — headless Chrome, one 200×100 box with a `width:100%` child,
+/// `--hide-scrollbars` on and off:
+///
+/// ```text
+///     box                                     --hide-scrollbars     default
+///     overflow:scroll                                   200            185
+///     overflow:hidden; scrollbar-gutter:stable          185            185
+///     overflow:clip;   scrollbar-gutter:stable          200            200
+/// ```
+///
+/// So the first row goes through [`manuk_layout::scrollbar_gutter`] (which honours the host's
+/// scrollbars-take-no-space mode) and the second must NOT — a reserved gutter is a promise about
+/// LAYOUT, and the fidelity oracle's reference runs with `--hide-scrollbars`. The third row is the
+/// spec's own line: `clip` is not a scroll container, so there is nothing to reserve a gutter for.
+///
+/// It is `engine="gecko"` in stylo 0.19 (absent from the servo build), so it is recovered from
+/// [`MinimalCascade`] exactly as `scrollbar-width`/`scrollbar-color` are.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Default)]
+pub enum ScrollbarGutter {
+    /// The initial value — the gutter exists only when a classic scrollbar is actually shown.
+    #[default]
+    Auto,
+    /// Reserve one scrollbar's width on the inline-END edge, always.
+    Stable,
+    /// Reserve one scrollbar's width on BOTH inline edges, so the content stays centred.
+    StableBothEdges,
+}
+
 /// `scrollbar-color` (CSS Scrollbars, Baseline 2024) — the thumb/track colours a page themes its
 /// scrollbars with (`scrollbar-color: #888 #222` on a dark UI). `auto` is the UA default. It is
 /// `engine="gecko"` in stylo 0.19 (absent from the servo build), so it is recovered from
@@ -1427,6 +1462,9 @@ pub struct ComputedStyle {
     /// `scrollbar-color` (inherited) — the computed thumb/track colours, resolved to absolute rgba
     /// so `getComputedStyle` reflects them. See [`ScrollbarColor`].
     pub scrollbar_color: ScrollbarColor,
+    /// `scrollbar-gutter` — whether this box reserves scrollbar space unconditionally.
+    /// See [`ScrollbarGutter`].
+    pub scrollbar_gutter: ScrollbarGutter,
     /// `field-sizing: content` (Baseline June 2026) — the form control sizes from its CONTENT,
     /// so the UA's fixed-size presentational hints (`<textarea cols>` above all) must stand down
     /// and let intrinsic sizing run. `false` = `fixed`, the initial value.
@@ -1874,6 +1912,7 @@ impl ComputedStyle {
             color_scheme: ColorScheme::Normal,
             scrollbar_width: ScrollbarWidth::Auto,
             scrollbar_color: ScrollbarColor::Auto,
+            scrollbar_gutter: ScrollbarGutter::Auto,
             field_sizing_content: false,
             appearance: Appearance::None,
             display_in_flow: Display::Inline,
@@ -6000,6 +6039,22 @@ fn apply_declaration(s: &mut ComputedStyle, d: &Declaration, parent_fs: f32) {
                 "none" => ScrollbarWidth::None,
                 "auto" => ScrollbarWidth::Auto,
                 // INVALID → drop the declaration (CSS 2.1 §4.2).
+                _ => return,
+            }
+        }
+        // `auto | stable | stable both-edges`. `both-edges` is only legal WITH `stable`, and the
+        // two orders are both written in the wild, so the pair is matched rather than positioned.
+        "scrollbar-gutter" => {
+            let t = v.trim().to_ascii_lowercase();
+            let toks: Vec<&str> = t.split_ascii_whitespace().collect();
+            s.scrollbar_gutter = match toks.as_slice() {
+                ["auto"] => ScrollbarGutter::Auto,
+                ["stable"] => ScrollbarGutter::Stable,
+                ["stable", "both-edges"] | ["both-edges", "stable"] => {
+                    ScrollbarGutter::StableBothEdges
+                }
+                // `both-edges` ALONE is invalid (CSS Overflow 3 §3.2) — it modifies `stable`, it is
+                // not a value. Dropping rather than accepting keeps `CSS.supports` honest.
                 _ => return,
             }
         }
