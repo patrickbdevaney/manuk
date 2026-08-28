@@ -92824,3 +92824,127 @@ with no DOM identity, which is a structural change to the taffy bridge rather th
 is `whatwg.org`'s four remaining misplaced elements.
 
 WIKI: docs/wiki/text-layout.md
+
+## t1377 — a `::before` on a flex container is an ITEM, and ours were never built
+
+TICK SHAPE: capability. Board re-run at the top of this tick: CO-#1 unchanged (CSS-LAYOUT ★ /
+the rendering gap, shape first). This is t1375's and t1376's named NEXT, taken because the price was
+measured before the build rather than assumed.
+
+### PRICED FIRST, ON THE CORPUS
+
+A Chrome probe over 40 CrUX-corpus sites (fetch → splice `<base>` + probe → `--headless=new
+--dump-dom`): of the **25 that produced a number**, **6 carry at least one generated box on a flex or
+grid container** — agoda 14, otomoto 14, repubblica 13, paypal 7, marktplaats 4. Not a corner case,
+and not a landslide either; a real, bounded mechanism worth one tick.
+
+### THE DEFECT
+
+Generated content boxes are boxes: an in-flow one whose parent is a flex or grid container **is an
+item of that container** (CSS Flexbox §4, Grid §6), blockified like any other. Ours were materialised
+only into the INLINE stream (`Ctx::push_pseudo`) — and a flex container never builds one. So the box
+was never generated at all and **every real item slid into the slot the pseudo should have
+occupied.** Chrome-measured, `display:flex; width:400px` over two 100px children with
+`::before{content:"XY";width:50px}`:
+
+```text
+                                    Chrome    before   after
+  first child  x                       50        0       50
+  second child x                      150      100      150
+  the same pseudo at display:block     50        0       50    ← blockified, not a second case
+  a GRID: first child x               100        0      100    ← the pseudo takes column 1
+```
+
+### ⭐ ONE ITEM IN THE TAFFY TREE WITH NO DOM NODE
+
+`taffy_tree::Pseudo` tags a `TNode`/`Placed` as standing for the owner's `::before`/`::after`; `dom`
+stays the OWNER's id, exactly as `push_pseudo` attributes a generated fragment to its owner.
+Inventing a synthetic `DomNodeId` would have put a box the DOM does not contain into every side table
+keyed by node — `static_pos`, `node_rects`, `taffy_item_width`. Four seams follow from that one
+decision, and each was a place the owner's style would otherwise have been read for the pseudo:
+`order`, `grid-area`, the grid `normal`→`start` replaced-item rule, and the measure callback (which
+grew a `pseudo` argument so a generated item is measured from `content`, not from the owner's
+children). `extract_placed_pseudo` builds the box with `node: None`.
+
+### ⭐⭐ THE FIRST CUT SHIPPED A REGRESSION AND ONLY THE OLD-BINARY CONTROL SAW IT
+
+`www.marktplaats.nl` shape **0.972840 → 0.971605**, deterministic, three paired runs each, n=810 both
+ways: exactly ONE element. Every WPT suite was byte-identical; the anchor was the only instrument
+that could see it. The element was a header `<ul>` 455px wide against Chrome's 450 — and a Chrome
+probe of that whole subtree reported **no generating pseudo anywhere in it**, which is what forced
+the question to the engine instead of the page. `MANUK_TRACE_PSEUDO_ITEM=1` (added in the same
+change, kept) named it in one line: `content:" "; display:table` — **Bootstrap's clearfix**.
+
+⭐ **A flex item is a BLOCK CONTAINER, so its text is trimmed at both edges** (CSS Text §4.1.1).
+`pseudo_content` deliberately KEEPS the outer spaces because in the inline stream they are the break
+opportunities either side of a `content: " | "` separator (t1108); here there is no neighbour to
+break against. The engine already carried this exact rule for the inline case — *"the space inside a
+block box collapses away exactly as it would in any block"* — and the new path did not share it. One
+rule, two implementations, for about ninety minutes.
+
+```text
+   x of the one child, container display:flex width:400px    Chrome   untrimmed
+     ::before{content:" "}                                     0.00      4.82
+     ::before{content:" "; display:table}   the clearfix       0.00      4.82
+     ::before{content:"  x  "}                                 9.64     28.91
+     ::before{content:" "; white-space:pre}          CTRL      9.64      9.64
+     ::before{content:" "; width:20px}               CTRL     20.00     20.00
+```
+
+The white-space test is `pseudo_content`'s own collapsing condition, so the two halves cannot drift.
+
+### RECEIPTS
+
+- `whatwg.org` shape **0.891892 → 1.000000** (n=37). The anchor is now exact.
+- `www.marktplaats.nl` **0.972840 → 0.972840** (n=810) — identical after the trim, three paired runs.
+- `www.a11yproject.com` **0.433180 → 0.433180** (n=217) — identical.
+- `www.repubblica.it` — inside its own noise band: one paired run identical to six decimals
+  (0.742664 both), the band on BOTH binaries is ±0.0023 over three runs.
+- ⚠ `martinfowler.com` was DROPPED as an instrument for this tick, not scored: the OLD binary alone
+  returned 0.7970 / 0.7758 / 0.6246 on three runs (and `ours 403 paths` against `330` on another),
+  so it cannot resolve a two-point delta. Saying "regression" or "no regression" from it would have
+  been a reading of the network.
+- `css/css-flexbox` **3167/4693 = 67.5%** — per-file JSON diff against a same-hour old binary:
+  **0 files differ.**
+
+  ⚠⚠ **THE RATCHET REFUSED THIS TICK ON `css/css-flexbox 3167 < 3168`, AND THE MARK IS WHAT WAS
+  WRONG.** `RATCHET.tsv` banked 3168 at 15:57 today, from the same commit this tick branches from.
+  **Four readings since 22:00 — two of them from a binary built from that same commit — all return
+  3167/4693**, and the decisive instrument is not the total at all: the per-file JSON diff between
+  the old binary and the new one shows **0 of 368 files differing**. Whatever produces 3168 on a
+  lucky run is not in this diff, and it is equally available to both binaries. The mark is lowered
+  to 3167 deliberately, on that evidence, exactly as the ratchet's own refusal message instructs —
+  this is t1344's shape again (four of seven red gates were the GATE, not the engine).
+- `css/css-grid` — per-file JSON diff: **4 files differ, all `*-interpolation.html`, pass and total
+  moving in lockstep** (a time-budget effect). Every other one of 643 files byte-identical.
+  ⚠ The AREA TOTAL cannot see this: two runs of the same binary gave 14594 and 14287 subtests, and
+  the old/new polarity FLIPPED between run pairs. The row is left alone rather than updated from a
+  noisy reading.
+- `css/CSS2/generated-content` **81 passed / 109 failed — identical** to the old binary.
+- `manuk-layout` 185, `manuk-css` 39, `manuk-paint` 22, `manuk-dom` 11.
+- The pseudo box PAINTS: its `background-color` samples exactly `#ffcccc` at three points inside its
+  border box in a headless render.
+
+GATE `G_A_PSEUDO_ON_A_FLEX_CONTAINER_IS_AN_ITEM` — 14 indent rows plus a container-width row for the
+`::after` half; 5 CONTROLS. RED under four mutations, each applied to the engine, rebuilt and read:
+
+- **M1** `generates_item` → `false` (the pre-tick engine) → `#c1` 0, not 50
+- **M2** drop the edge trim → `#c8` 9.63, not 0 — the marktplaats regression, reproduced
+- **M3** trim UNCONDITIONALLY → `#c13` 0, not 9.64 — the `white-space:pre` control catching it
+- **M4** read the OWNER's `order` for a pseudo item → `#c6` 19.27, not 0
+
+⚠ **A FIFTH MUTATION DOES NOT BITE AND IS RECORDED RATHER THAN COUNTED.** Deleting the out-of-flow
+term from `generates_item` leaves the gate GREEN: `to_taffy_style` already maps `position:absolute`
+to taffy's own `Position::Absolute`, so such a box takes no slot either way. The term buys something
+the gate cannot express — the box is not GENERATED, so an abspos pseudo does not reach
+`extract_placed_pseudo` and get painted at taffy's static position, a rendering path this tick did
+not measure against Chrome. Kept as the conservative half of a bounded change, named as one.
+
+NEXT — the same corpus probe that priced this one also priced the gap it leaves: an abspos generated
+box inside a flex/grid container is still not painted at all (`content:""; position:absolute` is the
+decorative-underline idiom; `taffy_tree::generates_item` excludes it deliberately). It needs the
+pseudo to become a real out-of-flow box with its own containing block — the same missing piece
+`pseudo_content`'s `dx` comment already names for the inline case, so it is ONE mechanism serving two
+callers rather than a second copy.
+
+WIKI: docs/wiki/box-layout.md

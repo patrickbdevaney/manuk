@@ -8967,3 +8967,25 @@ element that lands on a wrap, which every wrapping paragraph with markup in it c
 receipts are instead a WPT area (`css/CSS2/generated-content` 80 → 81, with `css/CSS2/text` held
 identical against a same-hour old-binary control) and a six-row Chrome-captured fixture whose two
 CONTROL rows refuse the over-broad version of the fix.
+
+## t1377 — the generated box inside a flex row
+
+The class this unlocks is **the icon/label/divider slot on a flex or grid container** — `::before`
+and `::after` on the element that lays its children out, which is how a design system puts a chevron
+before a nav item, a separator between breadcrumbs, a decorative bar above a card header, or a
+Bootstrap clearfix on a row. Before this tick that box was **not generated at all** on such a
+container (it existed only in the inline stream, which a flex container never builds), so every real
+item slid one slot earlier and the whole row was misplaced.
+
+Priced first, per t1368's rule, and priced on the CrUX corpus rather than on rule text: a Chrome
+probe asked each page *"which elements have `display:flex|grid` AND a `::before`/`::after` whose
+`content` is not `none`"*. Of the **25 of 40 sites that produced a number**, **6 have at least one** —
+agoda 14, otomoto 14, repubblica 13, paypal 7, marktplaats 4. That is ~24% of measurable sites
+carrying between 2 and 14 misplaced slots each.
+
+It closed `whatwg.org`, which t1375 named and could not reach: shape **0.892 → 1.000**, the anchor's
+last four misplaced elements, because that page's `<a>` is a flex container.
+
+⚠ The same probe named the half this does NOT do: an **out-of-flow** generated box in a flex/grid
+container (`content:""; position:absolute`, the decorative-underline idiom) is still not painted.
+It needs the pseudo to become a real out-of-flow box with its own containing block.

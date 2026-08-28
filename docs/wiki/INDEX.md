@@ -549,6 +549,9 @@
   - L11493 · ⚠ MEASURED, NOT FIXED
   - L11501 · An auto margin steals the free space, so justify-content has none left (t1374)
   - L11550 · content: "" with a width is a BOX, not nothing (t1375)
+  - L11591 · A ::before/::after on a FLEX or GRID container is an ITEM (t1377)
+  - L11603 · The mechanism: one item in the taffy tree with no DOM node
+  - L11619 · ⭐⭐ The item's text is trimmed at BOTH EDGES, and skipping that shipped a regression
 
 ## browser-capabilities.md
 `docs/wiki/browser-capabilities.md`
@@ -2423,4 +2426,4 @@
   - L231 · Both named mechanisms are subsystem work
 
 ---
-2330 sections across 22 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+2333 sections across 22 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.

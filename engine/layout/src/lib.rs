@@ -708,6 +708,43 @@ pub struct LayoutBox {
 }
 
 impl LayoutBox {
+    /// A box that is nothing but its rect — no paint, no node, no content.
+    ///
+    /// The honest degradation for a slot that must be filled by *something* so the geometry of its
+    /// siblings stands, when the style that would have painted it is unreachable.
+    pub fn empty_at(x: f32, y: f32, width: f32, height: f32) -> LayoutBox {
+        LayoutBox {
+            rect: Rect {
+                x,
+                y,
+                width,
+                height,
+            },
+            background: None,
+            border: None,
+            radius: 0.0,
+            shadows: Vec::new(),
+            filters: Vec::new(),
+            clip_path: None,
+            blend: manuk_css::BlendMode::Normal,
+            backdrop: Vec::new(),
+            hidden: false,
+            mask_image: None,
+            background_images: Vec::new(),
+            background_size: manuk_css::BackgroundSize::Auto,
+            background_position: manuk_css::BackgroundPosition::default(),
+            object_fit: manuk_css::ObjectFit::Fill,
+            object_position: manuk_css::ObjectPosition::default(),
+            background_repeat: manuk_css::BackgroundRepeat::Repeat,
+            outline: None,
+            marker: None,
+            opacity: 1.0,
+            node: None,
+            out_of_flow: false,
+            content: BoxContent::Block(Vec::new()),
+        }
+    }
+
     /// The union of every descendant box's extent, relative to this box's origin — i.e. **how tall and
     /// wide the content actually is**, which is what `scrollHeight`/`scrollWidth` report.
     ///
@@ -7496,13 +7533,19 @@ impl Ctx<'_> {
                 self.dom,
                 self.styles,
                 node,
-                |dn, known: taffy::Size<Option<f32>>, av: taffy::Size<taffy::AvailableSpace>| {
+                |dn,
+                 dps: Option<taffy_tree::Pseudo>,
+                 known: taffy::Size<Option<f32>>,
+                 av: taffy::Size<taffy::AvailableSpace>| {
                     let aw = known.width.or(match av.width {
                         taffy::AvailableSpace::Definite(w) => Some(w),
                         taffy::AvailableSpace::MinContent => Some(0.0),
                         taffy::AvailableSpace::MaxContent => None,
                     });
-                    let (w, h, _) = self.measure_intrinsic_baselined(dn, aw);
+                    let (w, h, _) = match dps {
+                        Some(ps) => self.measure_pseudo_item(dn, ps, aw),
+                        None => self.measure_intrinsic_baselined(dn, aw),
+                    };
                     (
                         taffy::Size {
                             width: known.width.unwrap_or(w),
@@ -7845,6 +7888,129 @@ impl Ctx<'_> {
         }
         self.measure_cache.borrow_mut().insert(key, result);
         result
+    }
+
+    /// **Lay out one GENERATED-CONTENT box's text into inline fragments at `(cx, cy)`.**
+    ///
+    /// One implementation for the two questions a flex/grid pseudo item asks — *"how wide do you
+    /// want to be"* (measure) and *"where does your text sit"* (extract) — because they are the
+    /// same layout and a second copy is how the `::after` half of `push_pseudo` was wrong for 1100
+    /// ticks (t1107). `None` when the pseudo generates no TEXT at all: `content: ""` with a `width`
+    /// is a box that is entirely its own frame, and it must not be mistaken for an absent one.
+    fn pseudo_inline_fragments(
+        &self,
+        node: NodeId,
+        which: fn(&ComputedStyle) -> &Option<Box<ComputedStyle>>,
+        p: &ComputedStyle,
+        cx: f32,
+        cy: f32,
+        cw: f32,
+    ) -> Option<(Vec<TextFragment>, f32)> {
+        let (text, style, dx, _block_level) = self.pseudo_content(node, which, cw)?;
+        // An out-of-flow pseudo never became an item (`taffy_tree::generates_item`), so `dx` cannot
+        // be `Some` here; the pattern says so rather than silently laying an abspos box in flow.
+        if dx.is_some() {
+            return None;
+        }
+        // ⚠⚠⚠ **A FLEX/GRID ITEM IS A BLOCK CONTAINER, SO ITS TEXT IS TRIMMED AT BOTH EDGES**
+        // (CSS Text §4.1.1 phase II: collapsible white space at the start or end of a line box is
+        // removed, and this box's content is exactly one line box). `pseudo_content` deliberately
+        // KEEPS the outer spaces, because in the INLINE stream they are the break opportunities
+        // either side of a `content: " | "` separator and their width is billed to the owner's rect
+        // (t1108) — here there is no neighbour to break against and no owner rect to bill.
+        //
+        // Not a corner case, and not a `display:table` rule: `content:" "` is **Bootstrap's
+        // clearfix**, sitting on flex containers all over the real web, and it was the whole of the
+        // regression this tick's first cut shipped — `marktplaats.nl`'s header nav came out 455px
+        // against Chrome's 450 because the clearfix's single space was billed as a 5px item.
+        // Chrome-measured, `display:flex` over one 9.64px child:
+        //
+        // ```text
+        //                                            Chrome    untrimmed
+        //   ::before{content:" "}                       0.00      4.82
+        //   ::before{content:" "; display:table}        0.00      4.82   ← the clearfix
+        //   ::before{content:"  x  "}                   9.64     28.91
+        //   ::before{content:" "; white-space:pre}      9.64      9.64   ← CONTROL, preserved
+        //   ::before{content:" "; width:20px}          20.00     20.00   ← CONTROL, its own width
+        // ```
+        //
+        // The white-space test is `pseudo_content`'s own, so the two halves of one rule cannot drift:
+        // the same values that make a run collapse are the ones that make the edges trimmable.
+        let text = if matches!(p.white_space, WhiteSpace::Pre | WhiteSpace::PreWrap) {
+            text
+        } else {
+            text.trim_matches(|c: char| is_css_white_space(c))
+                .to_string()
+        };
+        if text.is_empty() {
+            return None;
+        }
+        let items = vec![InlineItem::Word {
+            text,
+            style,
+            space_before: false,
+            break_before: false,
+            // Generated content is not in the DOM — no element and no text node to attribute the
+            // fragment to. Script must never be able to reach it (`node` is what element geometry
+            // is keyed by).
+            node: None,
+            origin: None,
+            // The generated string is ONE unbreakable word with its spaces baked in, exactly as
+            // `push_pseudo` emits it — see the `.hlist` comment there for why the width depends on
+            // it.
+            no_wrap: true,
+            break_word: false,
+        }];
+        let floats = FloatContext::new(cx, cx + cw.max(1.0));
+        let (frags, _atomics, h) = self.layout_inline(
+            items,
+            cx,
+            cy,
+            cw.max(0.0),
+            p.text_align,
+            0.0,
+            &floats,
+            Some(p),
+            p.direction == manuk_css::Direction::Rtl,
+        );
+        Some((frags, h))
+    }
+
+    /// **The CONTENT size of a `::before`/`::after` that is a FLEX or GRID ITEM**, plus its first
+    /// baseline — the [`Self::measure_intrinsic_baselined_mode`] of a box with no DOM node.
+    ///
+    /// Content size only: taffy owns the frame (`to_taffy_style` already carried the pseudo's
+    /// padding and border across), exactly as it does for every Manuk-measured leaf.
+    fn measure_pseudo_item(
+        &self,
+        node: NodeId,
+        ps: taffy_tree::Pseudo,
+        avail_width: Option<f32>,
+    ) -> (f32, f32, Option<f32>) {
+        let which = ps.which();
+        let Some(p) = self
+            .styles
+            .get(&node)
+            .and_then(|s| which(s).as_ref())
+            .map(|b| (**b).clone())
+        else {
+            return (0.0, 0.0, None);
+        };
+        let avail = avail_width.unwrap_or(1.0e6);
+        let _probe = IntrinsicProbe::enter(self);
+        let Some((frags, h)) = self.pseudo_inline_fragments(node, which, &p, 0.0, 0.0, avail)
+        else {
+            // No text: the box is worth exactly what its own `width`/`height` say, and taffy reads
+            // those off the style it already has. Reporting a content size here would ADD to them.
+            return (0.0, 0.0, None);
+        };
+        let w = frags
+            .iter()
+            .map(|f| f.x + f.width)
+            .fold(0.0f32, f32::max)
+            .min(avail);
+        let baseline = frags.first().map(|f| f.baseline);
+        (w, h, baseline)
     }
 
     /// Lay out a `display:table` box (CSS2 §17), separated-borders model. Sequence:
@@ -10168,7 +10334,10 @@ impl Ctx<'_> {
             cw,
             ch,
             node,
-            |dn, known: taffy::Size<Option<f32>>, avail: taffy::Size<taffy::AvailableSpace>| {
+            |dn,
+             dps: Option<taffy_tree::Pseudo>,
+             known: taffy::Size<Option<f32>>,
+             avail: taffy::Size<taffy::AvailableSpace>| {
                 let aw = known.width.or(match avail.width {
                     taffy::AvailableSpace::Definite(w) => Some(w),
                     taffy::AvailableSpace::MinContent => Some(0.0),
@@ -10185,8 +10354,10 @@ impl Ctx<'_> {
                 // 150. See `min_content_width_of_content`.
                 let content_suggestion = known.width.is_none()
                     && matches!(avail.width, taffy::AvailableSpace::MinContent);
-                let (w, h, base) =
-                    self.measure_intrinsic_baselined_mode(dn, aw, content_suggestion);
+                let (w, h, base) = match dps {
+                    Some(ps) => self.measure_pseudo_item(dn, ps, aw),
+                    None => self.measure_intrinsic_baselined_mode(dn, aw, content_suggestion),
+                };
                 (
                     taffy::Size {
                         width: known.width.unwrap_or(w),
@@ -11013,7 +11184,10 @@ impl Ctx<'_> {
             node,
             cw,
             container_h,
-            |dn, known: taffy::Size<Option<f32>>, avail: taffy::Size<taffy::AvailableSpace>| {
+            |dn,
+             dps: Option<taffy_tree::Pseudo>,
+             known: taffy::Size<Option<f32>>,
+             avail: taffy::Size<taffy::AvailableSpace>| {
                 // `MinContent` means "how narrow can you get?" — answering `None` here sent it
                 // through `measure_intrinsic`'s 1e6 default and returned the MAX-content width,
                 // which is the opposite answer. With shrink-to-fit floored at min-content, a zero
@@ -11076,8 +11250,10 @@ impl Ctx<'_> {
                 // could ever shrink**. See `min_content_width_of_content`.
                 let content_suggestion = known.width.is_none()
                     && matches!(avail.width, taffy::AvailableSpace::MinContent);
-                let (w, h, base) =
-                    self.measure_intrinsic_baselined_mode(dn, aw, content_suggestion);
+                let (w, h, base) = match dps {
+                    Some(ps) => self.measure_pseudo_item(dn, ps, aw),
+                    None => self.measure_intrinsic_baselined_mode(dn, aw, content_suggestion),
+                };
                 (
                     taffy::Size {
                         width: known.width.unwrap_or(w),
@@ -11234,6 +11410,13 @@ impl Ctx<'_> {
         abs_x: f32,
         abs_y: f32,
     ) -> bool {
+        // ⚠ A generated item's `dom` is its OWNER, so every test below would be asked about the
+        // wrong element — and an out-of-flow OWNER would register a static position for itself from
+        // inside its own content. A pseudo is never out of flow here anyway
+        // (`taffy_tree::generates_item` refuses one), so this is the guard that says so.
+        if p.pseudo.is_some() {
+            return false;
+        }
         if !self.kid_is_out_of_flow(p.dom) {
             return false;
         }
@@ -11334,6 +11517,87 @@ impl Ctx<'_> {
         }
     }
 
+    /// **Materialise a GENERATED-CONTENT flex/grid item into a real box** at the slot taffy gave it.
+    ///
+    /// The box has no DOM node — `node: None`, because generated content is not in the document and
+    /// element geometry keyed by node must not gain a second rect for the owner. Everything else is
+    /// read off the pseudo's own computed style: its background, its border, its text.
+    ///
+    /// ⚠ Its `content` is an INLINE formatting context of exactly one word. It cannot have children
+    /// (a pseudo has no subtree), so there is no block arm to write, and going through
+    /// `layout_block` — which the leaf arm below does — would lay out the OWNER's children a second
+    /// time, at the pseudo's slot.
+    fn extract_placed_pseudo(
+        &self,
+        p: &taffy_tree::Placed,
+        ps: taffy_tree::Pseudo,
+        abs_x: f32,
+        abs_y: f32,
+    ) -> (LayoutBox, f32) {
+        let which = ps.which();
+        let Some(style) = self
+            .styles
+            .get(&p.dom)
+            .and_then(|s| which(s).as_ref())
+            .map(|b| (**b).clone())
+        else {
+            // Unreachable: `taffy_tree::flex_items` only emits an item when the style is there. An
+            // empty box at the slot is the honest degradation if that ever stops being true.
+            return (
+                LayoutBox::empty_at(abs_x, abs_y, p.slot.width, p.slot.height),
+                p.slot.y + p.slot.height,
+            );
+        };
+        let cb = p.slot.width;
+        let left = style.border_width.left + style.padding.left.resolve(cb, 0.0);
+        let right = style.border_width.right + style.padding.right.resolve(cb, 0.0);
+        let top = style.border_width.top + style.padding.top.resolve(cb, 0.0);
+        let content_w = (p.slot.width - left - right).max(0.0);
+        let content = match self.pseudo_inline_fragments(
+            p.dom,
+            which,
+            &style,
+            abs_x + left,
+            abs_y + top,
+            content_w,
+        ) {
+            Some((frags, _)) => BoxContent::Inline(frags),
+            None => BoxContent::Block(Vec::new()),
+        };
+        let boxx = LayoutBox {
+            rect: Rect {
+                x: abs_x,
+                y: abs_y,
+                width: p.slot.width,
+                height: p.slot.height,
+            },
+            background: style.background_color,
+            border: border_of(&style),
+            radius: style.border_radius,
+            shadows: style.box_shadows.clone(),
+            filters: style.filter.clone(),
+            clip_path: style.clip_path.clone(),
+            blend: style.mix_blend_mode,
+            backdrop: style.backdrop_filter.clone(),
+            hidden: style.visibility != manuk_css::Visibility::Visible,
+            mask_image: style.mask_image.clone(),
+            background_images: style.background_images.clone(),
+            background_size: style.background_size,
+            background_position: style.background_position,
+            object_fit: style.object_fit,
+            object_position: style.object_position,
+            background_repeat: style.background_repeat,
+            outline: (style.outline_width > 0.0 && style.outline_color.a > 0)
+                .then_some((style.outline_width, style.outline_color)),
+            marker: None,
+            opacity: style.opacity,
+            node: None,
+            out_of_flow: false,
+            content,
+        };
+        (boxx, p.slot.y + p.slot.height)
+    }
+
     /// Turn a [`taffy_tree::Placed`] node into a `LayoutBox` at its taffy-assigned position
     /// (`base_x`/`base_y` is the parent's border-box origin). A **container** (flex/grid) is
     /// built directly from the unified tree's geometry, recursing into its already-placed
@@ -11344,6 +11608,9 @@ impl Ctx<'_> {
     fn extract_placed(&self, p: &taffy_tree::Placed, base_x: f32, base_y: f32) -> (LayoutBox, f32) {
         let abs_x = base_x + p.slot.x;
         let abs_y = base_y + p.slot.y;
+        if let Some(ps) = p.pseudo {
+            return self.extract_placed_pseudo(p, ps, abs_x, abs_y);
+        }
         if p.container {
             let children: Vec<LayoutBox> = p
                 .children

@@ -495,12 +495,53 @@ use taffy::{
     TraverseTree,
 };
 
+/// **Which GENERATED-CONTENT pseudo a taffy item stands for — the one item in this tree that has
+/// no DOM node of its own.**
+///
+/// ⚠⚠⚠ **A `::before`/`::after` on a FLEX or GRID container IS A FLEX/GRID ITEM** (CSS Flexbox §4,
+/// Grid §6 — generated content boxes are boxes, and every box that is an in-flow child of a
+/// flex/grid container is an item). Ours were materialised only into the INLINE stream
+/// (`Ctx::push_pseudo`), which a flex container never builds — so they vanished entirely, and every
+/// real item shifted into the slot the pseudo should have occupied.
+///
+/// The item carries the OWNER's `DomNodeId` plus this tag, exactly as `push_pseudo` attributes a
+/// generated fragment to its owner: a pseudo has no node, and inventing a synthetic `DomNodeId`
+/// would put a box the DOM does not contain into every side table keyed by node.
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub enum Pseudo {
+    Before,
+    After,
+}
+
+impl Pseudo {
+    /// The owner style's field this pseudo lives in — the same accessor shape `Ctx::push_pseudo`
+    /// and `Ctx::pseudo_content` take, so all three name the pseudo the same way.
+    pub fn which(self) -> fn(&ComputedStyle) -> &Option<Box<ComputedStyle>> {
+        match self {
+            Pseudo::Before => |s: &ComputedStyle| &s.before,
+            Pseudo::After => |s: &ComputedStyle| &s.after,
+        }
+    }
+
+    fn style_in(self, owner: &ComputedStyle) -> Option<&ComputedStyle> {
+        (self.which())(owner).as_deref()
+    }
+}
+
 /// A callback that content-measures a Manuk-leaf DOM node (block/inline/table/float) for
-/// the taffy tree — `(dom_node, known_dims, available_space) -> size`.
+/// the taffy tree — `(dom_node, pseudo, known_dims, available_space) -> size`.
 /// A Manuk-measured leaf's answer: its content size, and its FIRST-LINE BASELINE from that box's
 /// content-box top (`None` = it has no line box, and taffy's own bottom-edge fallback is correct).
-type MeasureFn<'m> =
-    dyn FnMut(DomNodeId, Size<Option<f32>>, Size<AvailableSpace>) -> (Size<f32>, Option<f32>) + 'm;
+///
+/// `pseudo` is `Some` only for a generated-content item, whose content is the owner's `::before` /
+/// `::after` rather than the owner's children — see [`Pseudo`].
+type MeasureFn<'m> = dyn FnMut(
+        DomNodeId,
+        Option<Pseudo>,
+        Size<Option<f32>>,
+        Size<AvailableSpace>,
+    ) -> (Size<f32>, Option<f32>)
+    + 'm;
 
 /// A node placed by the unified taffy tree: its DOM node, its taffy-assigned rectangle
 /// (`slot`, relative to its parent's border box), whether it is a flex/grid **container**
@@ -509,6 +550,9 @@ type MeasureFn<'m> =
 /// inline at the assigned rect).
 pub struct Placed {
     pub dom: DomNodeId,
+    /// `Some` for a GENERATED-CONTENT item — `dom` is then the pseudo's OWNER, not the box's own
+    /// element, because the box has none. See [`Pseudo`].
+    pub pseudo: Option<Pseudo>,
     pub slot: Slot,
     pub container: bool,
     pub children: Vec<Placed>,
@@ -539,6 +583,8 @@ pub struct GridTracks {
 
 struct TNode {
     dom: DomNodeId,
+    /// See [`Placed::pseudo`] — `Some` makes `dom` the OWNER of a generated box, not its element.
+    pseudo: Option<Pseudo>,
     style: Style,
     children: Vec<TId>,
     cache: Cache,
@@ -717,7 +763,7 @@ impl<'m> TaffyDom<'m> {
             root_padding: Rect::zero(),
             grid_tracks: Vec::new(),
         };
-        let root = tree.add(dom, styles, container);
+        let root = tree.add(dom, styles, container, None);
         // The container's own margin/padding/border/inset are applied by Manuk's block
         // layout around this subtree; the tree just positions children from the content
         // origin, so zero them on the root and pin it in flow.
@@ -809,6 +855,7 @@ impl<'m> TaffyDom<'m> {
         let mut probe = |width: AvailableSpace| -> f32 {
             measure(
                 node,
+                None,
                 Size {
                     width: None,
                     height: None,
@@ -898,7 +945,36 @@ impl<'m> TaffyDom<'m> {
         }
     }
 
-    fn add(&mut self, dom: &Dom, styles: &StyleMap, node: DomNodeId) -> TId {
+    fn add(
+        &mut self,
+        dom: &Dom,
+        styles: &StyleMap,
+        node: DomNodeId,
+        pseudo: Option<Pseudo>,
+    ) -> TId {
+        // ── **A GENERATED-CONTENT ITEM IS A LEAF WITH NO NODE OF ITS OWN.** Its style is the
+        //    pseudo's, never the owner's, and it has no children to recurse into: whatever is
+        //    inside it comes from `content`, which the measure callback and `extract_placed`
+        //    resolve. `map_display` blockifies it for free (everything that is not flex/grid
+        //    becomes a taffy `Block`), which is what Chrome does to a flex item anyway.
+        if let Some(ps) = pseudo {
+            let cs = ps
+                .style_in(&styles[&node])
+                .expect("flex_items only emits a pseudo item when its style exists");
+            let style = to_taffy_style(cs, &mut self.calc);
+            let id = self.nodes.len();
+            self.nodes.push(TNode {
+                dom: node,
+                pseudo: Some(ps),
+                style,
+                children: Vec::new(),
+                cache: Cache::new(),
+                memo: MeasureMemo::default(),
+                layout: Layout::new(),
+                container: false,
+            });
+            return TId::from(id);
+        }
         let cs = &styles[&node];
         let mut style = to_taffy_style(cs, &mut self.calc);
         let mut container = matches!(
@@ -946,7 +1022,7 @@ impl<'m> TaffyDom<'m> {
             // place.
             flex_items(dom, styles, node, 0)
                 .into_iter()
-                .map(|c| self.add(dom, styles, c))
+                .map(|(c, ps)| self.add(dom, styles, c, ps))
                 .collect()
         } else {
             Vec::new()
@@ -986,8 +1062,19 @@ impl<'m> TaffyDom<'m> {
             && (cs.align_items == CssAlign::Normal || cs.justify_items == CssAlign::Normal)
         {
             for &child in &children {
-                let cdom = self.nodes[usize::from(child)].dom;
-                let ccs = &styles[&cdom];
+                let (cdom, cps) = {
+                    let n = &self.nodes[usize::from(child)];
+                    (n.dom, n.pseudo)
+                };
+                // A generated item's own style, or the element's — never the OWNER's style stood in
+                // for a pseudo, which would read the container's `grid-area` onto its own `::before`.
+                let ccs = match cps {
+                    Some(ps) => match ps.style_in(&styles[&cdom]) {
+                        Some(s) => s,
+                        None => continue,
+                    },
+                    None => &styles[&cdom],
+                };
                 if !(ccs.width_is_natural || ccs.height_is_natural) {
                     continue;
                 }
@@ -1007,8 +1094,18 @@ impl<'m> TaffyDom<'m> {
         // rects; the child carries the area name).
         if container && !cs.grid_template_areas.is_empty() {
             for &child in &children {
-                let cdom = self.nodes[usize::from(child)].dom;
-                if let Some(name) = styles[&cdom].grid_area.clone() {
+                let (cdom, cps) = {
+                    let n = &self.nodes[usize::from(child)];
+                    (n.dom, n.pseudo)
+                };
+                let ccs = match cps {
+                    Some(ps) => match ps.style_in(&styles[&cdom]) {
+                        Some(s) => s,
+                        None => continue,
+                    },
+                    None => &styles[&cdom],
+                };
+                if let Some(name) = ccs.grid_area.clone() {
                     if let Some(r) = cs.grid_template_areas.iter().find(|a| a.name == name) {
                         let n = &mut self.nodes[usize::from(child)];
                         n.style.grid_row = Line {
@@ -1026,6 +1123,7 @@ impl<'m> TaffyDom<'m> {
         let id = self.nodes.len();
         self.nodes.push(TNode {
             dom: node,
+            pseudo: None,
             style,
             children,
             cache: Cache::new(),
@@ -1044,6 +1142,7 @@ impl<'m> TaffyDom<'m> {
         let l = n.layout;
         Placed {
             dom: n.dom,
+            pseudo: n.pseudo,
             slot: Slot {
                 x: l.location.x,
                 y: l.location.y,
@@ -1145,6 +1244,7 @@ impl<'m> TaffyDom<'m> {
             // Manuk-measured leaf: content-size via the callback into block/inline layout.
             let style = self.nodes[idx].style.clone();
             let dom_node = self.nodes[idx].dom;
+            let pseudo = self.nodes[idx].pseudo;
             let measure = &mut self.measure;
             let mut baseline: Option<f32> = None;
             let out = compute_leaf_layout(
@@ -1152,7 +1252,7 @@ impl<'m> TaffyDom<'m> {
                 &style,
                 |_, _| 0.0,
                 |known, avail| {
-                    let (size, b) = measure(dom_node, known, avail);
+                    let (size, b) = measure(dom_node, pseudo, known, avail);
                     baseline = b;
                     size
                 },
@@ -1202,11 +1302,30 @@ fn flex_items(
     styles: &StyleMap,
     node: manuk_dom::NodeId,
     depth: u32,
-) -> Vec<manuk_dom::NodeId> {
+) -> Vec<(manuk_dom::NodeId, Option<Pseudo>)> {
     if depth > 64 {
         return Vec::new();
     }
     let mut out = Vec::new();
+    // ⚠⚠⚠ **THE `::before` IS THE FIRST ITEM AND THE `::after` IS THE LAST** (CSS Flexbox §4 /
+    // Grid §6: a generated content box that is an in-flow child of a flex or grid container is an
+    // ITEM, blockified like any other). They are pushed at the two ends of the DOM children, before
+    // the `order` sort below, which is exactly document order — `push_pseudo` does the same thing
+    // to the inline stream and this is the formatting context it could never reach.
+    //
+    // Chrome-measured, `display:flex; width:400px` over two 100px children, `::before{content:"XY";
+    // width:50px}`:
+    //
+    // ```text
+    //                                   Chrome    before
+    //   first child  x                    50         0
+    //   second child x                   150       100
+    //   the same pseudo at display:block  50         0     ← blockified; not a separate case
+    //   a GRID: first child x            100         0     ← the pseudo takes column 1
+    // ```
+    if generates_item(styles, node, Pseudo::Before) {
+        out.push((node, Some(Pseudo::Before)));
+    }
     for c in dom.flat_children(node) {
         if !dom.is_element(c) {
             // **ANONYMOUS FLEX/GRID ITEMS** (Flexbox §4, Grid §6). Text sitting DIRECTLY inside a
@@ -1226,15 +1345,18 @@ fn flex_items(
             if matches!(dom.data(c), manuk_dom::NodeData::Text(t) if !t.trim().is_empty())
                 && styles.contains_key(&c)
             {
-                out.push(c);
+                out.push((c, None));
             }
             continue;
         }
         match styles.get(&c).map(|s| s.display) {
             None | Some(CssDisplay::None) => {}
             Some(CssDisplay::Contents) => out.extend(flex_items(dom, styles, c, depth + 1)),
-            Some(_) => out.push(c),
+            Some(_) => out.push((c, None)),
         }
+    }
+    if generates_item(styles, node, Pseudo::After) {
+        out.push((node, Some(Pseudo::After)));
     }
     // ── **`order` — THE ITEMS ARE LAID OUT IN ORDER-MODIFIED DOCUMENT ORDER** (Flexbox §5.4, Grid
     // §6.3). taffy has no `order` field, so the sort has to happen here, on the way in.
@@ -1252,13 +1374,70 @@ fn flex_items(
     //
     // The DOM, the accessibility tree and sequential focus are untouched: `order` is visual only, by
     // design, and reordering them here would turn a layout fix into an a11y regression.
-    if out
-        .iter()
-        .any(|n| styles.get(n).is_some_and(|s| s.order != 0))
-    {
-        out.sort_by_key(|n| styles.get(n).map(|s| s.order).unwrap_or(0));
+    let order_of = |(n, ps): &(manuk_dom::NodeId, Option<Pseudo>)| -> i32 {
+        let Some(owner) = styles.get(n) else {
+            return 0;
+        };
+        match ps {
+            // A generated box has its OWN `order`, and reading the owner's here would drag the
+            // pseudo along with whatever the container's own item order happens to be.
+            Some(p) => p.style_in(owner).map(|s| s.order).unwrap_or(0),
+            None => owner.order,
+        }
+    };
+    if out.iter().any(|it| order_of(it) != 0) {
+        out.sort_by_key(order_of);
     }
     out
+}
+
+/// **Does `node`'s `::before`/`::after` generate a FLEX or GRID ITEM?**
+///
+/// The same "is there a generated box at all" test `Ctx::push_pseudo` applies — a `content`
+/// declaration that is not suppressed — with one subtraction that is the whole reason this is a
+/// separate predicate: **an OUT-OF-FLOW pseudo is not an item.** `content:""; position:absolute` is
+/// the decorative-underline idiom every design system writes, and it must take no slot. Manuk's
+/// out-of-flow pass is keyed by DOM node and cannot see a pseudo, so such a box is not painted
+/// either way; what matters here is that it does not steal an item's place.
+///
+/// ⚠ `content: ""` with no width still counts, and Chrome agrees: an empty generated box is a
+/// zero-width flex item, and in a GRID it consumes a whole cell. Refusing it would put every
+/// following grid item one track early.
+///
+/// ⚠⚠ **THE OUT-OF-FLOW TERM IS NOT FALSIFIABLE BY GEOMETRY, AND THAT IS RECORDED RATHER THAN
+/// CLAIMED.** Removing it leaves `G_A_PSEUDO_ON_A_FLEX_CONTAINER_IS_AN_ITEM` green: `to_taffy_style`
+/// already maps `position:absolute` to taffy's own `Position::Absolute`, so such a box takes no slot
+/// either way. What the term actually buys is that the box is not GENERATED at all — without it an
+/// abspos pseudo would reach `Ctx::extract_placed_pseudo` and be PAINTED at taffy's static position,
+/// a rendering path this tick has not measured against Chrome. It is the conservative half of a
+/// bounded change, not a geometry rule.
+fn generates_item(styles: &StyleMap, node: DomNodeId, p: Pseudo) -> bool {
+    let gen = styles
+        .get(&node)
+        .and_then(|s| p.style_in(s))
+        .is_some_and(|ps| {
+            ps.content.is_some()
+                && !crate::generated_box_is_suppressed(ps)
+                && !crate::is_out_of_flow_positioned(ps)
+                && !crate::is_float(ps)
+        });
+    // `MANUK_TRACE_PSEUDO_ITEM=1` names every generated box this promotes to a flex/grid item —
+    // the instrument that found Bootstrap's clearfix on `marktplaats.nl` (`content:" ";
+    // display:table`) when a 5px width appeared in a header and nothing in the DOM explained it.
+    if gen && trace_pseudo_item() {
+        if let Some(ps) = styles.get(&node).and_then(|s| p.style_in(s)) {
+            eprintln!(
+                "[pseudo-item] node={node:?} {p:?} content={:?} display={:?} width={:?}",
+                ps.content, ps.display, ps.width
+            );
+        }
+    }
+    gen
+}
+
+fn trace_pseudo_item() -> bool {
+    static V: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
+    *V.get_or_init(|| std::env::var("MANUK_TRACE_PSEUDO_ITEM").is_ok())
 }
 
 impl TraversePartialTree for TaffyDom<'_> {
@@ -1534,7 +1713,12 @@ pub fn solve_subtree<'m>(
     container: DomNodeId,
     container_width: f32,
     container_height: Option<f32>,
-    measure: impl FnMut(DomNodeId, Size<Option<f32>>, Size<AvailableSpace>) -> (Size<f32>, Option<f32>)
+    measure: impl FnMut(
+            DomNodeId,
+            Option<Pseudo>,
+            Size<Option<f32>>,
+            Size<AvailableSpace>,
+        ) -> (Size<f32>, Option<f32>)
         + 'm,
 ) -> (Vec<Placed>, f32, Vec<(DomNodeId, GridTracks)>) {
     let (mut tree, root) = TaffyDom::build(dom, styles, container, Box::new(measure));
@@ -1827,7 +2011,12 @@ pub fn grid_area_containing_block<'m>(
     container_width: f32,
     content_h: f32,
     probe: DomNodeId,
-    measure: impl FnMut(DomNodeId, Size<Option<f32>>, Size<AvailableSpace>) -> (Size<f32>, Option<f32>)
+    measure: impl FnMut(
+            DomNodeId,
+            Option<Pseudo>,
+            Size<Option<f32>>,
+            Size<AvailableSpace>,
+        ) -> (Size<f32>, Option<f32>)
         + 'm,
 ) -> Option<Slot> {
     let (mut tree, root) = TaffyDom::build(dom, styles, container, Box::new(measure));
@@ -1853,6 +2042,7 @@ pub fn grid_area_containing_block<'m>(
         // The phantom stands in for the probe, so the measure callback it may reach is asked about
         // the same element the caller is positioning — never a synthetic node with no style.
         dom: probe,
+        pseudo: None,
         style: phantom,
         children: Vec::new(),
         cache: Cache::new(),
@@ -1907,7 +2097,12 @@ pub fn max_content_width<'m>(
     dom: &Dom,
     styles: &StyleMap,
     container: DomNodeId,
-    measure: impl FnMut(DomNodeId, Size<Option<f32>>, Size<AvailableSpace>) -> (Size<f32>, Option<f32>)
+    measure: impl FnMut(
+            DomNodeId,
+            Option<Pseudo>,
+            Size<Option<f32>>,
+            Size<AvailableSpace>,
+        ) -> (Size<f32>, Option<f32>)
         + 'm,
 ) -> f32 {
     let (mut tree, root) = TaffyDom::build(dom, styles, container, Box::new(measure));
@@ -1985,7 +2180,7 @@ mod tests {
         styles.insert(sidebar, cs);
 
         let (placed, _solved_h, _tracks) =
-            solve_subtree(&dom, &styles, container, 1000.0, None, |_n, _k, _a| {
+            solve_subtree(&dom, &styles, container, 1000.0, None, |_n, _p, _k, _a| {
                 (
                     Size {
                         width: 0.0,
@@ -2030,7 +2225,7 @@ mod tests {
 
         // Leaves measure to zero content (only grow matters here).
         let (placed, _solved_h, _tracks) =
-            solve_subtree(&dom, &styles, container, 300.0, None, |_n, _k, _a| {
+            solve_subtree(&dom, &styles, container, 300.0, None, |_n, _p, _k, _a| {
                 (
                     Size {
                         width: 0.0,
@@ -2097,7 +2292,7 @@ mod tests {
         }
 
         let (placed, _solved_h, _tracks) =
-            solve_subtree(&dom, &styles, container, 600.0, None, |_n, _k, _a| {
+            solve_subtree(&dom, &styles, container, 600.0, None, |_n, _p, _k, _a| {
                 (
                     Size {
                         width: 0.0,
@@ -2168,7 +2363,7 @@ mod tests {
 
         // Height `None` = the container's own height is indefinite, which is the whole point.
         let (placed, _solved_h, _tracks) =
-            solve_subtree(&dom, &styles, container, 600.0, None, |_n, _k, _a| {
+            solve_subtree(&dom, &styles, container, 600.0, None, |_n, _p, _k, _a| {
                 (
                     Size {
                         width: 0.0,

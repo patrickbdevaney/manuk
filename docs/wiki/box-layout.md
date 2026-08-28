@@ -11586,4 +11586,68 @@ atomic box from the other side.
 
 ⚠ **A `::before` on a FLEX container is a flex ITEM, not an inline one**, and that path is
 untouched: `whatwg.org`'s four remaining misplaced elements are still there (89.2% before and
-after). This is the inline-flow half.
+after). This is the inline-flow half. **The flex/grid half landed in t1377 — see below.**
+
+## A `::before`/`::after` on a FLEX or GRID container is an ITEM (t1377)
+
+⚠⚠⚠ **Generated content boxes are boxes, and an in-flow one whose parent is a flex or grid container
+is an ITEM of that container** (CSS Flexbox §4, Grid §6), blockified like any other. Ours were
+materialised **only** into the inline stream (`Ctx::push_pseudo`), and a flex container never builds
+one — so the box was never generated at all and every real item slid one slot earlier.
+
+**Priced before it was built.** Of 25 CrUX-corpus sites a Chrome probe could measure, **6 carry at
+least one generated box on a flex or grid container**: agoda 14, otomoto 14, repubblica 13, paypal 7,
+marktplaats 4. On `whatwg.org` it is the anchor's last four misplaced elements — shape
+**0.892 → 1.000**.
+
+### The mechanism: one item in the taffy tree with no DOM node
+
+`taffy_tree::Pseudo` tags a `TNode`/`Placed` as standing for the owner's `::before` or `::after`;
+`dom` stays the OWNER's id, exactly as `push_pseudo` attributes a generated fragment. Inventing a
+synthetic `DomNodeId` would have put a box the DOM does not contain into every side table keyed by
+node. Four seams follow from that one decision:
+
+- `flex_items` pushes the `::before` at the head and the `::after` at the tail of the DOM children,
+  **before** the `order` sort — which is document order.
+- `order`, `grid-area` and the grid `normal`→`start` replaced-item rule all read the **pseudo's own**
+  style. Reading the owner's would drag a container's own `grid-area` onto its `::before`.
+- The measure callback grew a `pseudo` argument, so a generated item is measured from `content`
+  rather than from the owner's children (`Ctx::measure_pseudo_item`).
+- `Ctx::extract_placed_pseudo` builds the box with `node: None` — generated content is not in the
+  document and must not gain element geometry.
+
+### ⭐⭐ The item's text is trimmed at BOTH EDGES, and skipping that shipped a regression
+
+A flex item is a **block container**, so collapsible white space at the start and end of its content
+is removed (CSS Text §4.1.1). `pseudo_content` deliberately KEEPS those outer spaces, because in the
+inline stream they are the break opportunities either side of a `content: " | "` separator and their
+width is billed to the owner's rect (t1108) — here there is no neighbour to break against.
+
+`content: " "` is **Bootstrap's clearfix**. It sits on flex containers all over the real web, and
+billing its single space as a 5px item made `marktplaats.nl`'s header nav **455px against Chrome's
+450** — caught by a same-hour old-binary control, not by the suites. Chrome-measured,
+`display:flex; width:400px` over one 9.64px child:
+
+```text
+                                                Chrome   untrimmed
+  ::before{content:" "}                           0.00      4.82
+  ::before{content:" "; display:table}            0.00      4.82   ← the clearfix
+  ::before{content:"  x  "}                       9.64     28.91
+  ::before{content:" "; white-space:pre}   CTRL   9.64      9.64   ← preserved
+  ::before{content:" "; width:20px}        CTRL  20.00     20.00   ← its own width
+```
+
+The white-space test is `pseudo_content`'s own collapsing condition, so the two halves of one rule
+cannot drift. The `pre` row is why the rule is not *"drop white-space-only generated content"*; the
+`width:20px` row is why it removes TEXT and never the box (t1375).
+
+⚠ **An OUT-OF-FLOW generated box is excluded, and that term is not falsifiable by geometry.**
+Removing it leaves the gate green — `to_taffy_style` already maps `position:absolute` to taffy's own
+`Position::Absolute`, so it takes no slot either way. What it buys is that the box is not generated
+at all, so an abspos pseudo does not reach `extract_placed_pseudo` and get painted at taffy's static
+position — a rendering path this tick did not measure. Recorded as the conservative half of a
+bounded change, not as a geometry rule.
+
+Gate: `G_A_PSEUDO_ON_A_FLEX_CONTAINER_IS_AN_ITEM` (14 rows + a container-width row), RED under four
+mutations. `MANUK_TRACE_PSEUDO_ITEM=1` names every generated box promoted to an item — the instrument
+that found the clearfix.
