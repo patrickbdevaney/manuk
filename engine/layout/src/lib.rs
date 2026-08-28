@@ -13893,9 +13893,39 @@ impl Ctx<'_> {
                 }
             }
             let x = place_x.unwrap_or_else(|| {
-                if cur.is_empty() {
+                // ── ⭐⭐⭐ **"AM I FIRST ON THIS LINE?" IS NOT `cur.is_empty()`, AND A ZERO-WIDTH
+                //    FRAGMENT MADE IT LIE.**
+                //
+                //    A collapsible space that ends a line is removed, so the item that opens the
+                //    next line starts at the line's own edge. That is what the `cur.is_empty()`
+                //    branch is for — but an inline element's opening EDGE is a zero-advance
+                //    `Spacer`, and it wraps to the new line BEFORE the word it belongs to. The word
+                //    then arrives with `cur.len() == 1`, concludes it is not first, and pays for the
+                //    space that had already been collapsed away.
+                //
+                //    Traced (`MANUK_INLINE_TRACE=1`) on `<p>xxx… <span>A</span>BBB</p>` at 600px:
+                //
+                //    ```text
+                //      ITEM adv=635.8 space=0.0 pen=0.0   cur=0  overflows=false   the long run
+                //      ITEM adv=0.0   space=0.0 pen=635.8 cur=1  overflows=true    the span's EDGE
+                //      ITEM adv=9.6   space=9.6 pen=0.0   cur=1  overflows=false   "A" — pays 9.6
+                //    ```
+                //
+                //    Chrome puts that span at **0** and we put it at **10** — one space width, on
+                //    every inline element that happens to open a continuation line, which in ordinary
+                //    prose is every other link. Measured: mid-line (`relx 48`) and end-of-line
+                //    (`relx 636`) were already exact, so the defect is only the line's first item.
+                //
+                //    The predicate is therefore *"has anything on this line taken any ADVANCE yet?"*
+                //    — zero-width fragments are edges and markers, not content, and they leave the
+                //    pen where it was.
+                if cur.iter().all(|f| f.width == 0.0) {
                     // First fragment on the line, at the line's own start — the indent is already in
-                    // `line_left` and must not be added a second time here.
+                    // `line_left` and must not be added a second time here. `0.0` rather than `pen`
+                    // deliberately: every fragment this branch can be looking at has zero width, so
+                    // the pen has not moved and the two are the same number — and a mutation that
+                    // swaps them cannot be made to bite, which is a reason to keep the simpler one
+                    // rather than a reason to claim it is gated.
                     0.0
                 } else {
                     if breakable {

@@ -2389,6 +2389,7 @@
   - L3879 · The control that turns a hypothesis into a classification
   - L3902 · letter-spacing dropped every unit it did not know, and a dropped value read as normal (t1371)
   - L3951 · word-spacing and the path that has no separate space (t1372)
+  - L3987 · A collapsed space does not open a line, and a zero-width fragment made "first" lie (t1376)
 
 ## The wasm demo — running the engine inside someone else's browser
 `docs/wiki/wasm-demo.md`
@@ -2422,4 +2423,4 @@
   - L231 · Both named mechanisms are subsystem work
 
 ---
-2329 sections across 22 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+2330 sections across 22 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.

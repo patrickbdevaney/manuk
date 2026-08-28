@@ -3983,3 +3983,41 @@ fixture set `white-space: pre` on every row to keep the advance measurable, so i
 one path where the property was dropped; `word-spacing: 10px` on ordinary wrapping text was already
 Chrome-exact at 114.30. **A fixture that fixes one variable to make a measurement possible has also
 fixed it for the conclusion.**
+
+## A collapsed space does not open a line, and a zero-width fragment made "first" lie (t1376)
+
+A collapsible space that ends a line is removed, so the item that opens the next line starts at the
+line's own edge. We charged that space again: **every inline element that happened to OPEN a
+continuation line began one space width (9.64px at 16px monospace) right of where Chrome puts it** —
+in ordinary prose, every other link.
+
+⭐⭐ The test for *"am I first on this line?"* was `cur.is_empty()`, and **an inline element's opening
+EDGE is a zero-advance `Spacer`**. That edge wraps to the new line BEFORE the word it belongs to, so
+the word arrives with `cur.len() == 1`, concludes it is not first, and pays for a space that had
+already been collapsed away. `MANUK_INLINE_TRACE=1` on `<p>xxx… <span>A</span>BBB</p>` at 600px:
+
+```text
+  ITEM adv=635.8 space=0.0 pen=0.0   cur=0  overflows=false   the long run, line 1
+  ITEM adv=0.0   space=0.0 pen=635.8 cur=1  overflows=true    the span's EDGE — wraps first
+  ITEM adv=9.6   space=9.6 pen=0.0   cur=1  overflows=false   "A" — and pays the 9.6
+```
+
+The predicate is now *"has anything on this line taken any ADVANCE yet?"* — a zero-width fragment is
+an edge or a marker, not content, and it leaves the pen where it was.
+
+```text
+   x relative to the paragraph                        Chrome    before   after
+     <span> OPENS the continuation line                 0.00      10       0
+     <span> mid-line ON the continuation line  CTRL    48.17      48      48
+     <span> at the END of line 1               CTRL   635.77     636     636
+     <a> / <b> opening it, long or short                0.00      10       0
+```
+
+⚠ The two CONTROLS are why this is not *"drop the space before every inline"*: an element mid-line on
+a continuation line keeps its space, and one that ends the previous line keeps its position. Both
+were already Chrome-exact, and the over-broad fix moves the mid-line row to 38.53.
+
+**Measured elsewhere:** `css/CSS2/generated-content` 80 → **81**; `css/CSS2/text` **262 passed / 92
+failed, identical** to a same-hour old-binary control; the three named anchors unchanged (whatwg
+89.2%, martinfowler 79.7%, a11yproject 43.3%) — the shape metric is parent-relative with an 8px
+tolerance, and a 9.64px error on the elements that happen to open a line mostly does not cross it.

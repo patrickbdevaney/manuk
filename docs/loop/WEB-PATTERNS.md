@@ -8952,3 +8952,18 @@ corpus documents (1143 rules); the exact idiom this fixes — an EMPTY `content`
 inline-block/flex/grid display — is **7 of 138 documents, 15 rules**. Modest and real. It did NOT
 move `whatwg.org` (89.2% before and after): that page's `<a>` is a FLEX container, so its `::before`
 must become a flex ITEM, which is a different code path and still open.
+
+## t1376 — the link that opens a wrapped line
+
+The class this unlocks is **prose with inline elements in it** — which is to say most text on the
+web. Any `<a>`, `<span>`, `<b>` or `<em>` that happened to fall at a line break started one space
+width to the right of where Chrome puts it, because the space that had been collapsed away at the
+end of the previous line was charged again at the start of the next. The error is small per element
+and everywhere: an article with fifty links has a few of them off by 9.64px, and which ones depends
+on the viewport width.
+
+No corpus count is quoted because the idiom is not a declaration to grep for — it is any inline
+element that lands on a wrap, which every wrapping paragraph with markup in it can produce. The
+receipts are instead a WPT area (`css/CSS2/generated-content` 80 → 81, with `css/CSS2/text` held
+identical against a same-hour old-binary control) and a six-row Chrome-captured fixture whose two
+CONTROL rows refuse the over-broad version of the fix.

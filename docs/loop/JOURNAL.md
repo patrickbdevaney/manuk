@@ -92753,3 +92753,74 @@ NOT falsified here, because a mutation that does not bite is a hole in the gate,
 the code (t1374 said the same and fixed its hole; this one cannot be fixed from this file).
 
 WIKI: docs/wiki/box-layout.md
+
+## t1376 — a collapsed space does not open a line, and a zero-width fragment made "first" lie
+
+TICK SHAPE: capability. Board re-run at the top of this tick: CO-#1 unchanged. Found while probing
+an unexplained 10px offset left over from t1374's inline-geometry fixtures — a number I had recorded
+and not chased.
+
+### THE DEFECT
+
+A collapsible space that ends a line is removed, so the item that opens the next line starts at the
+line's own edge. We charged it again: **every inline element that happened to OPEN a continuation
+line began one space width (9.64px at 16px monospace) to the right of where Chrome puts it.** In
+ordinary prose that is every other link, and which links are affected depends on the viewport width.
+
+### ⭐⭐ THE TEST FOR "FIRST ON THIS LINE" WAS `cur.is_empty()`
+
+An inline element's opening EDGE is a zero-advance `Spacer`, and it wraps to the new line BEFORE the
+word it belongs to. The word then arrives with `cur.len() == 1`, concludes it is not first, and pays
+for a space that had already been collapsed away. The engine's own tracer said so in three lines
+(`MANUK_INLINE_TRACE=1`, `<p>xxx… <span>A</span>BBB</p>` at 600px):
+
+```text
+  ITEM adv=635.8 space=0.0 pen=0.0   cur=0  overflows=false   the long run, line 1
+  ITEM adv=0.0   space=0.0 pen=635.8 cur=1  overflows=true    the span's EDGE — wraps first
+  ITEM adv=9.6   space=9.6 pen=0.0   cur=1  overflows=false   "A" — and pays the 9.6
+```
+
+⭐ **The bug is not in the space logic; it is in the word "first".** The predicate is now *"has
+anything on this line taken any ADVANCE yet?"* — a zero-width fragment is an edge or a marker, not
+content, and it leaves the pen where it was. One line.
+
+```text
+   x relative to the paragraph                        Chrome    before   after
+     <span> OPENS the continuation line       KEY       0.00      10       0
+     <span> mid-line ON the continuation line CTRL     48.17      48      48
+     <span> at the END of line 1              CTRL    635.77     636     636
+     <a>, <b>, and a SHORT <a> opening it     KEY       0.00      10       0
+```
+
+### RECEIPTS
+
+- `css/CSS2/generated-content` **80 → 81**.
+- `css/CSS2/text` **262 passed / 92 failed — IDENTICAL** to a same-hour old-binary control (stash,
+  rebuild, run, restore). I had no baseline for this area and could not have claimed "no regression"
+  without taking one.
+- `manuk-layout` 185, `manuk-css` 39, `manuk-paint` 22, `manuk-dom` 11; **10 page gates green**.
+- The three named anchors are UNCHANGED — whatwg 89.2%, martinfowler 79.7%, a11yproject 43.3%. The
+  shape metric is parent-relative with an 8px tolerance, and a 9.64px error on the subset of
+  elements that happen to open a line mostly does not cross it. Said plainly: this is a correctness
+  fix with a WPT receipt and no anchor movement.
+
+GATE `G_A_COLLAPSED_SPACE_DOES_NOT_OPEN_A_LINE` — 6 rows, RED under two mutations, each applied to
+the engine, rebuilt and read:
+
+- **V1** the pre-tick predicate `cur.is_empty()` → `#a` 9.63, not 0
+- **V2** *"drop the space before every inline"*, the over-broad fix → `#b` 38.53, not 48.17 — the
+  mid-line CONTROL catching it
+
+⚠ **A THIRD MUTATION COULD NOT BE MADE TO BITE, AND THE CODE WAS SIMPLIFIED RATHER THAN THE CLAIM
+INFLATED.** I first wrote the branch as `pen` instead of the original `0.0`; swapping them changes
+nothing, because every fragment the branch can be looking at has zero width, so the pen has not
+moved and the two are the same number. Rather than keep an unfalsifiable line, the branch is back to
+`0.0` and the tick's whole diff is the predicate.
+
+NEXT — unchanged and still the best-priced open thread: **a `::before` on a FLEX container must
+become a flex ITEM** (t1375 fixed the inline-flow half). Pseudos have no DOM node of their own —
+`push_pseudo` is called with the OWNER's id — so a flex item for one needs a synthetic taffy node
+with no DOM identity, which is a structural change to the taffy bridge rather than a local fix. It
+is `whatwg.org`'s four remaining misplaced elements.
+
+WIKI: docs/wiki/text-layout.md
