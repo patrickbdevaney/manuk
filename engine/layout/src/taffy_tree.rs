@@ -1577,6 +1577,61 @@ pub fn solve_subtree<'m>(
             },
         },
     );
+    // ── ⭐⭐⭐ **AN `auto` MARGIN STEALS THE FREE SPACE, SO `justify-content` HAS NONE LEFT TO
+    // DISTRIBUTE — AND TAFFY 0.12.1 DISTRIBUTES IT ANYWAY.**
+    //
+    // CSS Flexbox §8.1: *"If free space is distributed to auto margins, the alignment properties
+    // will have no effect in that dimension because the margins will have stolen all the free
+    // space."* `taffy::compute::flexbox::distribute_remaining_free_space` hands the free space to
+    // the auto margins and then calls `compute_alignment_offset(free_space, …)` with **the same,
+    // undiminished** `free_space` — so both consume it and every item after the auto margin is
+    // displaced by one whole free-space width.
+    //
+    // Measured against headless Chrome, a 600px row, two 39px items, `strong { margin-right:auto }`
+    // (positive free space in the left column, an overflowing 60px row in the right):
+    //
+    // ```text
+    //     justify-content    Chrome      before        Chrome (overflow)   before
+    //       flex-start       [0,561]     [0,561]  ✓      [0,39]            [0,39]  ✓
+    //       flex-end         [0,561]     [523,1084]      [-17,21]          [-17,21] ✓
+    //       center           [0,561]     [261,823]       [-9,30]           [-9,30]  ✓
+    //       space-between    [0,561]     [0,1084]        [0,39]            [0,39]   ✓
+    //       space-around     [0,561]     [131,954]       [0,39]            [0,39]   ✓
+    //       space-evenly     [0,561]     [174,910]       [0,39]            [0,39]   ✓
+    // ```
+    //
+    // ⭐ **The right column is why this cannot be fixed by dropping `justify-content` whenever an
+    // auto margin is present.** When free space is NEGATIVE the auto margins resolve to zero, the
+    // alignment DOES apply, and every one of those rows is already Chrome-exact — so an
+    // unconditional suppression would trade six correct answers for five. The predicate is the SIGN
+    // of the free space, and only a completed layout knows it.
+    //
+    // So: measure once, and re-solve only the containers that were actually mis-distributed. The
+    // correction sets `justify_content: None`, which is `FLEX_START`, whose alignment offset is 0
+    // for any free space — arithmetically identical to giving the justify step the zero free space
+    // the auto margins left it. Nothing else about the layout changes.
+    //
+    // ⚠ The second pass is not a general re-layout: it runs ONLY when a container in this subtree
+    // has both an auto main-axis margin and positive free space, and the caches must be reset with
+    // it or taffy answers from the first pass's numbers.
+    if clear_justify_stolen_by_auto_margins(&mut tree) {
+        for n in &mut tree.nodes {
+            n.cache = Cache::new();
+            n.memo = MeasureMemo::default();
+        }
+        compute_root_layout(
+            &mut tree,
+            root,
+            Size {
+                width: AvailableSpace::Definite(container_width),
+                height: match container_height {
+                    Some(h) => AvailableSpace::Definite(h),
+                    None if vertical_main => AvailableSpace::MaxContent,
+                    None => AvailableSpace::MinContent,
+                },
+            },
+        );
+    }
     let child_ids: Vec<TId> = tree.nodes[r].children.clone();
     let mut placed: Vec<Placed> = child_ids.iter().map(|&c| tree.placed(c)).collect();
     // `content_box_height`, not `size.height`, and **the two are equal here** — `build` zeroes the
@@ -2133,4 +2188,70 @@ mod tests {
             "one line means both items get the full cross size: {s0:?} {s1:?}"
         );
     }
+}
+
+/// Clear `justify-content` on every flex container in `tree` whose free space was already taken by
+/// an item's `auto` main-axis margin. Returns whether anything changed (i.e. whether the caller
+/// must re-solve).
+///
+/// See the call site for the measured Chrome table and for why the SIGN of the free space is the
+/// predicate rather than the mere presence of an auto margin.
+fn clear_justify_stolen_by_auto_margins(tree: &mut TaffyDom) -> bool {
+    let mut changed = false;
+    for i in 0..tree.nodes.len() {
+        let n = &tree.nodes[i];
+        if !matches!(n.style.display, taffy::Display::Flex) || n.style.justify_content.is_none() {
+            continue;
+        }
+        let row = matches!(
+            n.style.flex_direction,
+            FlexDirection::Row | FlexDirection::RowReverse
+        );
+        // Only a MAIN-axis auto margin steals main-axis free space; a cross-axis one is resolved by
+        // `resolve_cross_axis_auto_margins` and never touches this distribution.
+        let any_auto = n.children.iter().any(|&c| {
+            let m = &tree.nodes[usize::from(c)].style.margin;
+            if row {
+                m.left == LengthPercentageAuto::AUTO || m.right == LengthPercentageAuto::AUTO
+            } else {
+                m.top == LengthPercentageAuto::AUTO || m.bottom == LengthPercentageAuto::AUTO
+            }
+        });
+        if !any_auto {
+            continue;
+        }
+        // The free space taffy itself computed: the container's inner main size less the items'
+        // outer main sizes. Read from the FIRST pass's geometry, which is why this cannot run
+        // before a layout.
+        let inner = if row {
+            n.layout.size.width
+                - n.layout.padding.left
+                - n.layout.padding.right
+                - n.layout.border.left
+                - n.layout.border.right
+        } else {
+            n.layout.size.height
+                - n.layout.padding.top
+                - n.layout.padding.bottom
+                - n.layout.border.top
+                - n.layout.border.bottom
+        };
+        let used: f32 = n
+            .children
+            .iter()
+            .map(|&c| {
+                let l = &tree.nodes[usize::from(c)].layout;
+                if row {
+                    l.size.width
+                } else {
+                    l.size.height
+                }
+            })
+            .sum();
+        if inner - used > 0.0 {
+            tree.nodes[i].style.justify_content = None;
+            changed = true;
+        }
+    }
+    changed
 }

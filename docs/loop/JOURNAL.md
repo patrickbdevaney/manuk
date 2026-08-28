@@ -92585,3 +92585,93 @@ board's "booted-but-thin" constraint may be substantially a keying question on t
 `unaligned` is where to look before hunting for missing boxes.
 
 WIKI: docs/wiki/fidelity-instrument.md
+
+## t1374 — an `auto` margin steals the free space, and `justify-content` spent it again
+
+TICK SHAPE: capability, and the first tick this session to MOVE A NAMED ANCHOR. Board re-run at the
+top of this tick: CO-#1 unchanged — the rendering gap, SHAPE/POSITION first, on the named anchors.
+Reached by the board's own method: take an anchor, read its ranked causes with the now-repaired
+ledger (t1369/t1370/t1373), and follow the top one down to a fixture.
+
+### FROM AN ANCHOR TO A ONE-LINE ALGORITHM BUG, IN FOUR MEASUREMENTS
+
+`whatwg.org` (a named anchor) scored shape 78.4% with **coverage 100% and only 8 misplaced
+elements** — a page where every box exists and eight are in the wrong place is the cleanest kind of
+target. All 8 were inside `#links-with-explanations a`, same widths, wrong x. Its CSS:
+
+```css
+#links-with-explanations a { display:flex; justify-content:space-between; padding:0 10px; … }
+#links-with-explanations a > strong { margin-right: auto; }
+```
+
+CSS Flexbox §8.1: *"If free space is distributed to auto margins, the alignment properties will have
+no effect in that dimension because the margins will have stolen all the free space."*
+**taffy 0.12.1 spends it twice.** `compute::flexbox::distribute_remaining_free_space` gives the free
+space to the auto margins and then calls `compute_alignment_offset(free_space, …)` with the same,
+undiminished `free_space`. Every item after the auto margin is displaced by one whole free-space
+width — on whatwg, each link's description ran off the right edge of its own 884px box.
+
+```text
+                       600px row (free +522)           60px row (free −18)
+  justify-content    Chrome     before    after      Chrome    before   after
+    flex-start       [0,561]   [0,561]   [0,561]     [0,39]   [0,39]   [0,39]
+    flex-end         [0,561]  [523,1084] [0,561]     [-17,21] [-17,21] [-17,21]
+    center           [0,561]  [261,823]  [0,561]     [-9,30]  [-9,30]  [-9,30]
+    space-between    [0,561]  [0,1084]   [0,561]     [0,39]   [0,39]   [0,39]
+    space-around     [0,561]  [131,954]  [0,561]     [0,39]   [0,39]   [0,39]
+    space-evenly     [0,561]  [174,910]  [0,561]     [0,39]   [0,39]   [0,39]
+```
+
+### ⭐⭐ THE OBVIOUS FIX TRADES TWO CORRECT ANSWERS FOR FIVE
+
+*"Drop `justify-content` whenever an item has an auto margin"* passes all six rows on the left and
+**breaks `flex-end` and `center` on the right**: with NEGATIVE free space the auto margins resolve to
+zero and the alignment DOES apply, and those two cells were already Chrome-exact. **The predicate is
+the SIGN of the free space, and only a completed layout knows it.** So the correction is a second
+solve — detect the affected containers from the first pass's geometry, clear their
+`justify_content`, reset the caches, re-run `compute_root_layout` — not a style tweak. `None` is
+`FLEX_START`, whose offset is 0 for any free space: arithmetically identical to handing the justify
+step the zero free space the margins left it. Mutation T2 is that naive fix, applied and read.
+
+⚠ Only a MAIN-axis auto margin steals main-axis free space; a cross-axis one is resolved elsewhere
+and never touches this distribution (`margin-top:auto` in a row container leaves
+`justify-content:center` centring — Chrome `[261,300]`, and we match). Mutation T3 counts any side
+and was **inert until a cross-axis row was added to the fixture** — a mutation that does not bite is
+a hole in the gate, not a compliment to the code.
+
+### THE RESULT
+
+```text
+   whatwg.org        shape 78.4% → 89.2%      misplaced 8 → 4      coverage 100% (unchanged)
+```
+
+⚠ COST, MEASURED, with a same-hour old-binary control: the second solve runs only for a subtree that
+contains such a container, and detection is one O(nodes) scan. `docs/bench/mid.html` and
+`large.html` carry **zero** auto-margin declarations, so the floors never enter the second pass — new
+binary mid 47.82ms / large 313.83ms against the old 55.47 / 367.71, i.e. inside the run-to-run
+spread with the pass never firing.
+
+PRICED FIRST per t1368's rule: auto margins in **45 of 138** corpus documents (361 declarations),
+`justify-content: space-between` in 21, **both in the same document in 20 (14.5%)**.
+
+REGRESSION SWEEP: `manuk-layout` 185, `manuk-css` 39, `manuk-paint` 22, `manuk-dom` 11.
+
+GATE `G_AUTO_MARGIN_STEALS_THE_FREE_SPACE` — 13 rows, RED under four mutations, each applied to the
+engine, rebuilt and read:
+
+- **T1** the correction not called — the pre-tick state → `#w1` [522.94, 1084.41], not [0, 561]
+- **T2** the OBVIOUS fix, suppressing on the presence of an auto margin rather than the sign of the
+  free space → `#n1` [0, 38.53], not [-17, 21]
+- **T3** a CROSS-axis auto margin counted as stealing MAIN-axis free space → `#x0` [0, 38.53], not
+  [261, 300]
+- **T4** the caches not reset before the second solve → `#w1` unchanged at [522.94, 1084.41], i.e.
+  taffy answers from the first pass
+
+NEXT, and it is the anchor's own remaining 4: **a `::before` with `content:""` is not generated as a
+FLEX ITEM.** whatwg's links are flex rows whose icon is
+`a::before { content:""; width:30px; margin:12px 20px 12px 8px }` — 58px of flex item — and the four
+remaining misplaced elements are exactly the four `<strong>`s at Chrome's 68 against our 10. The same
+`::before` is also missing in BLOCK flow (a measured `display:block` control row put Chrome at 68 and
+us at 10), so it is box generation rather than flex distribution.
+
+WIKI: docs/wiki/box-layout.md

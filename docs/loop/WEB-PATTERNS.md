@@ -8920,3 +8920,22 @@ declarations), and the broken case additionally needs `white-space: pre`. This t
 because it CORRECTS A CLAIM t1371 put into a landed commit ("word-spacing is inert in LAYOUT"), and
 fixing the underlying defect is the cleanest way to close a wrong statement — not because the ledger
 ranked it. The ledger's own ranking is being taken separately.
+
+## t1374 — the push-it-to-the-right flex idiom
+
+The class this unlocks is **every flex row that pushes one item away from the others with an auto
+margin** — `justify-content: space-between` with `margin-left/right: auto` on a child is the standard
+recipe for navbars, toolbars, card headers, list rows with a trailing chevron or count, and the
+"label … value" row that component libraries emit by the thousand. Before this tick the item after
+the auto margin was displaced by one whole free-space width and could land outside its own
+container, so the further right an element sat in such a row, the more wrong it was.
+
+Priced first, per t1368's rule: auto margins appear in **45 of 138** corpus documents (361
+declarations), `justify-content: space-between` in 21, and **both idioms in the same document in 20
+(14.5%)**. It moved a named anchor: `whatwg.org` shape **78.4% → 89.2%**, misplaced 8 → 4.
+
+⚠ The bug is in taffy 0.12.1 (`distribute_remaining_free_space` spends one `free_space` twice), and
+the correction is ours: detect after the first solve and re-solve the affected containers. The naive
+version — suppress `justify-content` whenever an auto margin exists — trades two already-correct
+answers for five, because with NEGATIVE free space the auto margins resolve to zero and the
+alignment does apply.

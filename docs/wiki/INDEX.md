@@ -547,6 +547,7 @@
   - L11472 · THE RULE IS KEYED ON THE TAG, NOT ON Display::TableCell
   - L11481 · ⚠ THE TICK BLUNTED A BANKED GATE, AND THAT IS A TRADE UNLESS YOU RE-CUT THE TOOTH
   - L11493 · ⚠ MEASURED, NOT FIXED
+  - L11501 · An auto margin steals the free space, so justify-content has none left (t1374)
 
 ## browser-capabilities.md
 `docs/wiki/browser-capabilities.md`
@@ -2420,4 +2421,4 @@
   - L231 · Both named mechanisms are subsystem work
 
 ---
-2327 sections across 22 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+2328 sections across 22 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.

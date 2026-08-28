@@ -11497,3 +11497,52 @@ baseline (CSS 2.1 §17.5.4); we drop it out of the baseline group instead.
 `<div style="display:table-cell"><div 40px></div></div>` beside a text cell is **45** in Chrome and
 **40** here, and an explicit `vertical-align: baseline` on a real `<td>` reads the same 40 against
 Chrome's 45. It is invisible on a default `<td>` — which is now `middle` — and it is the next tick.
+
+## An `auto` margin steals the free space, so `justify-content` has none left (t1374)
+
+CSS Flexbox §8.1: *"If free space is distributed to auto margins, the alignment properties will have
+no effect in that dimension because the margins will have stolen all the free space."*
+**taffy 0.12.1 spends it twice.** `compute::flexbox::distribute_remaining_free_space` hands the free
+space to the auto margins and then calls `compute_alignment_offset(free_space, …)` with the same,
+undiminished `free_space` — so every item after an auto margin is displaced by one whole free-space
+width, and can land outside its own container.
+
+Chrome-measured: a `display:flex` row, `font: 16px monospace`, two 39px items
+(`<strong>AAAA</strong><p>BBBB</p>`), `strong { margin-right: auto }`. Left column a 600px row (free
+space **+522**), right column a 60px row (free space **−18**); cells are the two items' x relative
+to the row.
+
+```text
+                       600px row (free > 0)            60px row (free < 0)
+  justify-content    Chrome     before    after      Chrome    before   after
+    flex-start       [0,561]   [0,561]   [0,561]     [0,39]   [0,39]   [0,39]
+    flex-end         [0,561]  [523,1084] [0,561]     [-17,21] [-17,21] [-17,21]
+    center           [0,561]  [261,823]  [0,561]     [-9,30]  [-9,30]  [-9,30]
+    space-between    [0,561]  [0,1084]   [0,561]     [0,39]   [0,39]   [0,39]
+    space-around     [0,561]  [131,954]  [0,561]     [0,39]   [0,39]   [0,39]
+    space-evenly     [0,561]  [174,910]  [0,561]     [0,39]   [0,39]   [0,39]
+```
+
+⭐⭐ **THE RIGHT-HAND COLUMN IS WHY THE OBVIOUS FIX IS WRONG.** *"Drop `justify-content` whenever an
+item has an auto margin"* passes all six rows on the left and **breaks `flex-end` and `center` on the
+right**, where a NEGATIVE free space means the auto margins resolve to zero and the alignment does
+apply. Those two cells were already Chrome-exact. **The predicate is the SIGN of the free space, and
+only a completed layout knows it** — which is why the correction is a second solve
+(`clear_justify_stolen_by_auto_margins`, then reset the caches and re-run `compute_root_layout`)
+rather than a style tweak. Setting `justify_content: None` is `FLEX_START`, whose offset is 0 for any
+free space: arithmetically identical to giving the justify step the zero free space it should have
+had.
+
+⚠ **Only a MAIN-axis auto margin steals main-axis free space.** A cross-axis one is resolved by
+taffy's `resolve_cross_axis_auto_margins` and never touches this distribution — `margin-top: auto` in
+a ROW container leaves `justify-content: center` centring (Chrome `[261,300]`, and we match).
+
+⚠ **Cost, measured.** The second solve runs only for a subtree that actually contains such a
+container; detection is one O(nodes) scan. `docs/bench/mid.html` and `large.html` contain **zero**
+auto-margin declarations, so the perf floors never enter the second pass; a same-hour old-binary
+control put the new binary at mid 47.82ms / large 313.83ms against the old 55.47 / 367.71.
+
+**Where it showed:** `whatwg.org`, a named burndown anchor, styles every
+`#links-with-explanations a` as `display:flex; justify-content:space-between` with
+`a > strong { margin-right:auto }`, so each link's description ran off the right edge of its own
+884px box. Shape **78.4% → 89.2%**, misplaced 8 → 4.
