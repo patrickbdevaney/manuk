@@ -13832,8 +13832,40 @@ impl Ctx<'_> {
         // floats that leave no room.
         let open_band = |y: &mut f32, h: f32| -> (f32, f32) {
             loop {
-                let l = floats.left_offset(*y, h).max(cx);
-                let r = floats.right_offset(*y, h).min(cx + cw);
+                // ⚠⚠⚠ **THE LINE LIVES IN *THIS BOX'S* CONTENT BOX, NOT IN THE ENCLOSING FLOAT
+                // CONTEXT'S EDGES — AND A NEGATIVE HORIZONTAL MARGIN IS EXACTLY THE CASE WHERE THE
+                // TWO DIFFER.** `left_offset`/`right_offset` fold the context's own edges in as a
+                // floor, which is correct for every box that sits INSIDE its containing block and
+                // wrong for one that deliberately does not. `.row { margin: 0 -1% }` — the gutter
+                // cancel under every pre-flexbox grid — makes the block WIDER than its containing
+                // block, and the band was still being clipped to the containing block's content
+                // edges. So the four-across grid inside it had `1003.66px` of box and `993.83px` of
+                // line, and the fourth card wrapped.
+                //
+                // `FloatContext::{left,right}_float_edge` already exist for precisely this
+                // distinction — t792 added them because a float in a `margin:0 -15px` Bootstrap row
+                // has the same problem — and their doc says `left_offset`/`right_offset` are *"right
+                // for LINE content (it lives in this block)"*. That premise is what this corrects:
+                // line content lives in THIS block, whose content box may start outside the context.
+                //
+                // ⭐ **BYTE-IDENTICAL FOR EVERY BOX THAT FITS INSIDE ITS CONTAINING BLOCK**, which
+                // is the free control arm: there `cx >= ctx.left` and `cx + cw <= ctx.right`, so the
+                // old `max(ctx_left, float).max(cx)` and the new `float.max(cx)` are the same
+                // number, float or no float.
+                //
+                // Chrome-measured, 984px parent, `margin: 0 -1%` container, four
+                // `width:23%; margin:0 1%` inline-blocks — and the explicit-width row is the
+                // CONTROL that isolates it from the percentage quantisation landed at t1345:
+                //
+                // ```text
+                //   container spelling                     Chrome           before
+                //   width:1003.65625px (explicit)          4 across h=40    4 across h=40  ✓
+                //   margin:0 -1% on a 984 parent           4 across h=40    3 across h=80  ✗
+                // ```
+                let l = floats.left_float_edge(*y, h).map_or(cx, |x| x.max(cx));
+                let r = floats
+                    .right_float_edge(*y, h)
+                    .map_or(cx + cw, |x| x.min(cx + cw));
                 let w = (r - l).max(0.0);
                 if w > 0.0 {
                     return (l, w);
@@ -27174,6 +27206,171 @@ mod tests {
              gives the container 80) — got {}. A tolerance in the line breaker passes the arm \
              above and fails this one.",
             n_over.height
+        );
+    }
+
+    /// **A NEGATIVE HORIZONTAL MARGIN MAKES A BLOCK WIDER THAN ITS CONTAINING BLOCK, AND ITS LINES
+    /// WERE STILL BEING CLIPPED TO THE CONTAINING BLOCK'S EDGES.**
+    ///
+    /// `.row { margin: 0 -15px }` is the gutter cancel under every pre-flexbox grid — Bootstrap's,
+    /// and every framework that copied it — so the block's own content box legitimately starts
+    /// OUTSIDE its parent's. `open_band` built each line from `FloatContext::{left,right}_offset`,
+    /// which fold the context's own edges in as a floor. For a box that fits inside its containing
+    /// block those edges never bind and the clamp is invisible; for a negative-margin box they cut
+    /// the line down to the parent's width. A four-across grid then had `1003.66px` of box and
+    /// `993.83px` of line, and the fourth card wrapped.
+    ///
+    /// `FloatContext::{left,right}_float_edge` already exist for exactly this distinction — t792
+    /// added them because a FLOAT in a `margin:0 -15px` row has the same problem — and their doc
+    /// asserts `left_offset`/`right_offset` are *"right for LINE content (it lives in this block)"*.
+    /// That premise is what this corrects: line content lives in **this** block.
+    ///
+    /// CHROME-MEASURED (984px parent, four `width:23%; margin:0 1%` inline-blocks). The
+    /// explicit-width row is the CONTROL that isolates this from the percentage quantisation landed
+    /// one tick earlier — both containers have the SAME used width, and only the one built from
+    /// negative margins broke:
+    ///
+    /// ```text
+    ///   container spelling                     Chrome            before
+    ///   width:1003.65625px (explicit)          4 across, h=40    4 across, h=40   ✓
+    ///   margin:0 -1% on a 984 parent           4 across, h=40    3 across, h=80   ✗
+    /// ```
+    ///
+    /// ⭐ **BYTE-IDENTICAL FOR EVERY BOX THAT FITS INSIDE ITS CONTAINING BLOCK** — there
+    /// `cx >= ctx.left` and `cx + cw <= ctx.right`, so the old `max(ctx_left, float).max(cx)` and
+    /// the new `float.max(cx)` are the same number, float or no float. That is the free control arm,
+    /// and the float arms below assert it rather than assume it.
+    #[test]
+    fn a_negative_margin_block_lays_its_lines_in_its_own_content_box_not_its_parents() {
+        let grid_at = |extra: &str, w: &str| {
+            let html = r#"<div class="p"><div class="c" id="c"><a>x</a>
+<a>x</a>
+<a>x</a>
+<a id="c4">x</a></div></div>"#;
+            let css = format!(
+                "html,body{{margin:0;padding:0}} .p{{width:984px}} .c{{font-size:0;{extra}}} \
+                 .c a{{display:inline-block;vertical-align:top;width:{w};margin:0 1%;height:40px}}"
+            );
+            let (dom, root) = layout_html(html, &css, 1200.0);
+            let rects = root.node_rects(&dom);
+            let by = |id: &str| {
+                rects[&dom
+                    .descendants(dom.root())
+                    .find(|&n| dom.element(n).and_then(|e| e.attr("id")) == Some(id))
+                    .expect("id")]
+            };
+            (by("c"), by("c4"))
+        };
+
+        // ── 1. THE BUG. A `margin: 0 -1%` container fits all four cards on one row, exactly as
+        // Chrome does, and the fourth sits at the container's own x + 762.703.
+        let grid = |extra: &str| grid_at(extra, "23%");
+        let (c, c4) = grid("margin:0 -1%");
+        assert!(
+            (c.height - 40.0).abs() < 0.01,
+            "a `margin:0 -1%` container is ONE row tall (Chrome: 40) — got {}, which is the fourth \
+             card wrapped because the line was clipped to the parent's content edges",
+            c.height
+        );
+        assert!(
+            (c4.x - c.x - 762.703_125).abs() < 0.05,
+            "the fourth card sits at Chrome's x=762.703 within the container — got {}",
+            c4.x - c.x
+        );
+
+        // ── 1b. THE CONTROL WITH TEETH, on the negative-margin container itself: one hundredth of
+        // a percent MORE than fits must STILL wrap. Chrome-measured on the same fixture at
+        // `width:23.01%`: the container is **80** tall and the fourth card is at x=0.203 on row 2.
+        // Any change that merely WIDENED the band (rather than moving it onto this box's content
+        // box) passes arm 1 and fails here.
+        let (o, o4) = grid_at("margin:0 -1%", "23.01%");
+        assert!(
+            (o.height - 80.0).abs() < 0.01 && (o4.x - o.x - 10.031_25).abs() < 0.5,
+            "CONTROL: at `width:23.01%` the four cards do NOT fit even in the negative-margin \
+             container (Chrome: h=80, and the fourth card is back at the container's own content \
+             left + its 1% margin = 10.031) — got h={} x={}",
+            o.height,
+            o4.x - o.x
+        );
+
+        // ── 2. THE ISOLATING CONTROL. The SAME used width spelled as an explicit `width` was
+        // already correct before this change, and must stay so — it is what proves this tick is the
+        // negative margin and not the percentage arithmetic.
+        let (n, n4) = grid("width:1003.65625px");
+        assert!(
+            (n.height - 40.0).abs() < 0.01 && (n4.x - n.x - 762.703_125).abs() < 0.05,
+            "CONTROL: the explicit-width container was already Chrome-exact and must not move — \
+             got h={} x={}",
+            n.height,
+            n4.x - n.x
+        );
+
+        // ── 3. THE BOX'S OWN CONTENT LEFT, stated directly. The first card starts at the
+        // CONTAINER's content edge (which is outside the parent's), not at the parent's.
+        assert!(
+            c.x < -9.0,
+            "PRECONDITION: the negative-margin container must actually start outside its parent \
+             (Chrome: x=-9.828) — got {}",
+            c.x
+        );
+
+        // ── 4-5. FLOATS STILL EXCLUDE, on BOTH sides. This tick swapped which accessor the band
+        // reads, so the float path is the thing most at risk and is asserted, not assumed.
+        // Chrome-measured, 400px parent, 16px/20px monospace, a 100x30 float:
+        //   `margin:0 -20px` container + float:left  ->  the text starts at x=80 (the float's right
+        //   edge), NOT at the container's -20.
+        let float_case = |cls: &str, fl: &str| {
+            let html = format!(
+                r#"<div class="p"><div class="a" id="a"><div class="f" style="float:{fl}"></div><span id="t">X</span></div></div>"#
+            );
+            let css = format!(
+                "html,body{{margin:0;padding:0}} .p{{width:400px}} \
+                 .a{{{cls};font:16px/20px monospace}} .f{{width:100px;height:30px}}"
+            );
+            let (dom, root) = layout_html(&html, &css, 1200.0);
+            let rects = root.node_rects(&dom);
+            rects[&dom
+                .descendants(dom.root())
+                .find(|&n| dom.element(n).and_then(|e| e.attr("id")) == Some("t"))
+                .expect("id")]
+        };
+        let t_left = float_case("margin:0 -20px", "left");
+        assert!(
+            (t_left.x - 80.0).abs() < 0.5,
+            "a `float:left` inside a `margin:0 -20px` container still pushes the line to its right \
+             edge (Chrome: x=80) — got {}. If this reads -20 the float exclusion was dropped along \
+             with the containing-block clamp.",
+            t_left.x
+        );
+        let t_right = float_case("", "right");
+        assert!(
+            (t_right.x - 0.0).abs() < 0.5,
+            "CONTROL: a `float:right` in an ordinary container leaves the line at the content left \
+             (Chrome: x=0) — got {}",
+            t_right.x
+        );
+
+        // ── 6. THE FLOAT EDGE IS STILL CLAMPED TO THIS BOX'S CONTENT LEFT. A float lives in the
+        // nearest BFC, so a plain child block sees exclusions from a float that ends to the LEFT of
+        // its own content edge; the line must start at the box, not at the float. Chrome-measured,
+        // 400px parent, a 100px `float:left`, and a child with `margin-left:200px`: the text is at
+        // **x=200**, not the float's 100.
+        //
+        // ⚠ This arm exists because the mutation that DROPS the `.max(cx)` passed every other arm
+        // in this gate — an unproven mutation is an unasserted claim, and this is the assertion.
+        let html_clamp = r#"<div class="p"><div class="f"></div><div id="w" style="margin-left:200px"><span id="t">X</span></div></div>"#;
+        let css_clamp = "html,body{margin:0;padding:0} .p{width:400px;font:16px/20px monospace}                          .f{float:left;width:100px;height:30px}";
+        let (dom_c, root_c) = layout_html(html_clamp, css_clamp, 1200.0);
+        let rects_c = root_c.node_rects(&dom_c);
+        let tc = rects_c[&dom_c
+            .descendants(dom_c.root())
+            .find(|&n| dom_c.element(n).and_then(|e| e.attr("id")) == Some("t"))
+            .expect("id")];
+        assert!(
+            (tc.x - 200.0).abs() < 0.5,
+            "a line starts at its own box's content left even when a float in the shared BFC ends \
+             to the LEFT of it (Chrome: x=200, the float's right edge is 100) — got {}",
+            tc.x
         );
     }
 

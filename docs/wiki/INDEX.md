@@ -560,6 +560,7 @@
   - L11851 · The receipt — FROZEN pages, same-hour old binary, two CONTROL sites
   - L11876 · A PERCENTAGE IS AN INTEGER COUNT OF 1/64px, NOT AN f32 (t1345)
   - L11903 · ⚠⚠ AND THE MOTIVATING PAGE STILL WRAPS — TWO BUGS WERE STACKED
+  - L11916 · A LINE LIVES IN ITS OWN BLOCK'S CONTENT BOX, NOT IN THE ENCLOSING FLOAT CONTEXT'S EDGES (t1346)
 
 ## browser-capabilities.md
 `docs/wiki/browser-capabilities.md`
@@ -2444,4 +2445,4 @@
   - L231 · Both named mechanisms are subsystem work
 
 ---
-2351 sections across 22 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+2352 sections across 22 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.

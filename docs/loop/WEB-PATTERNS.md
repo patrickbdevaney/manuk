@@ -9166,3 +9166,18 @@ made all five of the fixture's measured numbers Chrome-exact and moved frozen `m
 ⚠ **THE SUM BEING EXACTLY 100% IS THE POINT, NOT AN ACCIDENT** — authors write these grids to fill
 the row. So any sub-pixel excess anywhere in the chain lands on the wrap decision, which makes this
 class of bug produce a large, obvious visual break from an invisible cause.
+
+## t1346 — the negative-margin gutter cancel (`.row { margin: 0 -15px }`)
+
+**PATTERN: a grid row that cancels its columns' outer gutter with a negative horizontal margin.**
+Bootstrap ships it, every framework that copied Bootstrap ships it, and every hand-rolled card grid
+since ~2012 ships it. The block it produces is deliberately WIDER than its containing block.
+
+⭐ **A BOX THAT EXTENDS OUTSIDE ITS PARENT BREAKS THE ASSUMPTION EVERY BAND CALCULATION MAKES.** Line
+content was being clipped to the containing block's content edges, so the row had ~10px less line
+than box and its four-across grid wrapped after three.
+
+⚠ **PRICED AT ZERO ON SEVEN FROZEN SITES**, against a same-hour old binary — including the site whose
+grid led to it, whose signature the fix demonstrably removes from the shape dump. Recorded as a
+pattern worth knowing and NOT as a scoring win; the construct is common, the divergence on this
+sample was not.

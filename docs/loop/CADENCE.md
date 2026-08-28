@@ -11,12 +11,12 @@
 
 | | value | over |
 |---|---|---|
-| ticks landed | **1030** | ticks 1–1344 |
-| median tick cycle | **31m** | 1029 intervals |
-| median, last 10 | **89m** | 10 intervals |
+| ticks landed | **1031** | ticks 1–1345 |
+| median tick cycle | **31m** | 1030 intervals |
+| median, last 10 | **1.8h** | 10 intervals |
 | fastest / slowest | 5s / 7.0d | |
-| **ticks per hour** | **0.89** | 1161.0h elapsed |
-| median verify wall | **65s** | 969 ticks |
+| **ticks per hour** | **0.89** | 1162.8h elapsed |
+| median verify wall | **66s** | 970 ticks |
 | wall trend | 39s → 8m — getting slower ⚠️ | first 3 vs last 3 |
 
 The **cycle** is the real unit: implement → debug → verify wall → land. The wall is only part of
@@ -31,7 +31,7 @@ it, and a wall that grows taxes every future tick, so it is tracked separately f
 * **✅ rows in the capability ledger**: 144 → **642**
 * **Bar 0 — oracle hangs**: 0 of 265 sites
 
-**483 of 1030 ticks** (47%) moved a
+**484 of 1031 ticks** (47%) moved a
 user-visible capability. The rest were instruments, infrastructure and corrections — and the
 ledger says the corrections were not overhead: three of its top three priorities were phantoms,
 and finding that out redirected everything after it.
@@ -90,7 +90,7 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 
 ## What a capability costs
 
-* **483** capability ticks, median cycle **31m**
+* **484** capability ticks, median cycle **31m**
 * median diff per tick: **+282 / −34** lines across 8 files
 
 ## Every tick
@@ -1127,5 +1127,6 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 | **1342** | 2026-08-28 08:38 | 2.0h | capability | 8m | +575/−46 | 521 | 81 | 56.0% · | a broken image with alt text is a box full of text, and we drew a 16px icon (2026-08-28) |
 | **1343** | 2026-08-28 12:19 | 3.7h | capability | 8m | +536/−33 | 521 | 81 | 56.0% · | every CJK line on the web is 25% short, because `line-height: normal` asked the wrong font |
 | **1344** | 2026-08-28 14:01 | 1.7h | infrastructure | 8m | +350/−35 | 521 | 81 | 56.0% · | the corpus was blind for 21 ticks, and 4.1% of what it scores is the instrument (2026-08-2 |
+| **1345** | 2026-08-28 15:50 | 1.8h | capability | 8m | +360/−35 | 521 | 81 | 56.0% · | a percentage is not an `f32`, and the four-across grid was three across (2026-08-28) |
 
 *`·` after a WPT figure means **carried forward**, not measured this tick.*

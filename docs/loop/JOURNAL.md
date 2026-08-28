@@ -93628,3 +93628,87 @@ NEXT — the negative-margin available width, with `pct3.html`'s two-arm fixture
 `margin: 0 -1%`, same used width, one wraps) as its ready-made discriminator.
 
 WIKI: docs/wiki/box-layout.md
+
+## Tick 1346 — a negative margin makes a block wider than its parent, and its lines were still clipped to the parent (2026-08-28)
+
+TICK SHAPE: capability — CSS/layout, on the board's CO-#1 (SHAPE). Board re-run at the top of this
+tick; CO-#1 unchanged. This is the second half of t1345, which found two bugs stacked on one fixture
+and could only see the second once the first was fixed.
+
+`.row { margin: 0 -15px }` is the gutter cancel under every pre-flexbox grid — Bootstrap's, and every
+framework that copied it — so the block's own content box legitimately starts OUTSIDE its parent's.
+`open_band` built every line from `FloatContext::{left,right}_offset`, which fold the context's own
+edges in as a floor. For a box that fits inside its containing block those edges never bind and the
+clamp is invisible; for a negative-margin box they cut the line down to the parent's width. The
+four-across grid then had **1003.66px of box and 993.83px of line**, and the fourth card wrapped.
+
+`FloatContext::{left,right}_float_edge` already existed for exactly this distinction — t792 added
+them because a FLOAT in a `margin:0 -15px` row has the same problem — and their doc asserts that
+`left_offset`/`right_offset` are *"right for LINE content (it lives in this block)"*. **That premise
+is what this tick corrects**: line content lives in THIS block, whose content box may start outside
+the context's edges.
+
+CHROME-MEASURED, 984px parent, four `width:23%; margin:0 1%` inline-blocks. The explicit-width row is
+the CONTROL that isolates this from t1345's percentage quantisation — both containers have the SAME
+used width, `1003.65625`, printed and asserted in both engines:
+
+```text
+  container spelling                     Chrome            before this tick
+  width:1003.65625px (explicit)          4 across, h=40    4 across, h=40   ✓ (t1345)
+  margin:0 -1% on a 984 parent           4 across, h=40    3 across, h=80   ✗
+```
+
+⭐ **BYTE-IDENTICAL FOR EVERY BOX THAT FITS INSIDE ITS CONTAINING BLOCK** — there `cx >= ctx.left`
+and `cx + cw <= ctx.right`, so the old `max(ctx_left, float).max(cx)` and the new `float.max(cx)` are
+the same number, float or no float. That is the free control arm, and the gate asserts it on both
+float sides rather than assuming it.
+
+### ⚠⚠⚠ THE PRICE IS ZERO ON EVERY SITE I CAN MEASURE, AND THAT IS THE HONEST HEADLINE
+
+A same-hour old binary was built specifically to price this (revert, rebuild, measure, restore):
+
+```text
+  site (frozen)                    BEFORE (old binary)   AFTER
+  www.alphanews.live                76.3 / 76.4          76.3      0
+  www.razaoautomovel.com            71.6 / 71.6          71.6      0
+  momon-ga.com                      69.2 / 69.2          69.2      0
+  pivaldi.restoplace.ws  CONTROL   100.0 x3             100.0 x3   0
+  www.5movierulz.discount CONTROL   79.1 x3              79.1 x3   0
+  cyoinatu-onna.com      CONTROL    91.6 x3              91.6 x3   0
+  serennu.com                       90.8 x3              90.8 x3   0
+```
+
+`momon-ga.com` is the site whose grid led here, and **its four-across signature IS gone** — the
+`x +753  c[763 0 231x336]  m[10 393 231x336]` rows are no longer in its shape dump — yet its score
+does not move, because t1345 had already pulled that page's misses from 227 to 176 and the remaining
+ones are a different mechanism. **A fix can be Chrome-exact, remove its own signature from the dump,
+and still be worth 0.0 points on the metric.** t1367-1374's rule is PRICE BEFORE BUILDING and I built
+first here; the price is recorded as measured rather than argued away.
+
+It is landed rather than reverted because it is a strict correctness gain on a primitive that is
+everywhere (`margin: 0 -Npx` gutter cancel), it costs nothing (7 frozen sites byte-identical, 189/189
+layout tests), and it removes a divergence that would otherwise be re-discovered as a surprise. But
+it does not get to be called a win, and the burndown should not count it as one.
+
+GATE `a_negative_margin_block_lays_its_lines_in_its_own_content_box_not_its_parents` — 7 arms, 5 of
+them CONTROLS: the negative-margin grid fits four at Chrome's `x=762.703`; the same grid at
+`width:23.01%` must STILL wrap (h=80, fourth card back at 10.031); the explicit-width container is
+unchanged; the container really does start outside its parent; a `float:left` inside a `margin:0
+-20px` container still pushes the line to `x=80`; a `float:right` in an ordinary container leaves the
+line at `x=0`; and a line starts at its OWN content left when a float in the shared BFC ends to the
+LEFT of it (Chrome `x=200` against the float's 100).
+
+⚠ **THAT LAST ARM EXISTS BECAUSE A MUTATION PASSED THE GATE.** Dropping the `.max(cx)` clamp on the
+float edge went GREEN through every other arm — an unproven mutation is an unasserted claim, so the
+arm was added and the mutation now goes red at `got 100`. RED under FOUR mutations in total: N1
+revert to the containing-block clamp → h=80; N2 drop the float exclusion entirely → the float row
+reads `x=-20`; N3 drop the `.max(cx)` clamp → `x=100`; N4 widen the right edge → the 23.01% control
+stops wrapping.
+
+NEXT — momon-ga's remaining 176 misses are a TAG-CLOUD signature the dump names precisely:
+`c[0 154 108x21]  m[820 108 103x21]`, inline `<a>`s that Chrome starts on a new line and we keep on
+the previous one, **with Chrome's widths consistently 5-10% larger than ours** (108/103, 94/89,
+141/129, 205/182). A width error that launders into a wrap, which is the burndown's own §CO-#1 key
+insight, and the two engines are measuring the same Japanese text differently.
+
+WIKI: docs/wiki/box-layout.md

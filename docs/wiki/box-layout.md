@@ -11912,3 +11912,30 @@ Same used width in both engines. A block with **negative horizontal margins** is
 containing block, and its inline content is being laid out against the containing block's width
 rather than its own. Quantising first is what made this visible: before it, the raw-`f32` overflow
 explained the wrap on its own and the second bug was invisible behind it.
+
+## A LINE LIVES IN ITS OWN BLOCK'S CONTENT BOX, NOT IN THE ENCLOSING FLOAT CONTEXT'S EDGES (t1346)
+
+`.row { margin: 0 -15px }` — the gutter cancel under every pre-flexbox grid — makes a block WIDER
+than its containing block. `open_band` built each line from `FloatContext::{left,right}_offset`,
+which fold the context's own edges in as a floor, so such a block had `1003.66px` of box and
+`993.83px` of line and its four-across grid wrapped after three.
+
+`FloatContext::{left,right}_float_edge` already existed for this distinction (t792, for placing a
+FLOAT in a negative-margin row) and their doc claimed `left_offset`/`right_offset` were *"right for
+LINE content (it lives in this block)"*. **That premise is the bug**: line content lives in THIS
+block, whose content box may start outside the context.
+
+```text
+  container spelling                     Chrome            before
+  width:1003.65625px (explicit)          4 across, h=40    4 across, h=40   ✓
+  margin:0 -1% on a 984 parent           4 across, h=40    3 across, h=80   ✗
+```
+
+Both containers have the same used width. ⭐ The change is byte-identical for every box that fits
+inside its containing block (`cx >= ctx.left` and `cx + cw <= ctx.right` make the old and new
+expressions the same number), which is the free control arm.
+
+⚠ **AND ITS PRICE WAS ZERO ON EVERY FROZEN SITE MEASURED** — seven of them, against a same-hour old
+binary. `momon-ga.com`'s four-across signature disappears from the shape dump and its score does not
+move, because the misses that remain are a different mechanism. A fix can be Chrome-exact, remove its
+own signature, and be worth 0.0 points: **the dump and the metric answer different questions.**
