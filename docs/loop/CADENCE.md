@@ -11,12 +11,12 @@
 
 | | value | over |
 |---|---|---|
-| ticks landed | **1051** | ticks 1–1368 |
-| median tick cycle | **31m** | 1050 intervals |
-| median, last 10 | **47m** | 10 intervals |
+| ticks landed | **1052** | ticks 1–1369 |
+| median tick cycle | **31m** | 1051 intervals |
+| median, last 10 | **49m** | 10 intervals |
 | fastest / slowest | 5s / 7.0d | |
-| **ticks per hour** | **0.88** | 1189.9h elapsed |
-| median verify wall | **67s** | 990 ticks |
+| **ticks per hour** | **0.88** | 1190.9h elapsed |
+| median verify wall | **67s** | 991 ticks |
 | wall trend | 39s → 8m — getting slower ⚠️ | first 3 vs last 3 |
 
 The **cycle** is the real unit: implement → debug → verify wall → land. The wall is only part of
@@ -31,7 +31,7 @@ it, and a wall that grows taxes every future tick, so it is tracked separately f
 * **✅ rows in the capability ledger**: 144 → **642**
 * **Bar 0 — oracle hangs**: 0 of 265 sites
 
-**492 of 1051 ticks** (47%) moved a
+**492 of 1052 ticks** (47%) moved a
 user-visible capability. The rest were instruments, infrastructure and corrections — and the
 ledger says the corrections were not overhead: three of its top three priorities were phantoms,
 and finding that out redirected everything after it.
@@ -1148,5 +1148,6 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 | **1366** | 2026-08-29 17:33 | 14m | capability-subsystem | 8m | +504/−33 | 522 | 81 | 56.0% · | activating a node is not clicking it (2026-08-29) |
 | **1367** | 2026-08-29 18:50 | 77m | capability-subsystem | 8m | +512/−33 | 522 | 81 | 56.0% · | the board's anchors were stale, and the outlier's mechanism was in its own stylesheet (202 |
 | **1368** | 2026-08-29 18:58 | 8m | instrument-fidelity | 8m | +214/−33 | 522 | 81 | 56.0% · | the wall-time audit, and a correction to something t1363 published (2026-08-29) |
+| **1369** | 2026-08-29 19:59 | 61m | capability-subsystem | 8m | +557/−39 | 522 | 81 | 56.0% · | one `content` declaration says two things, and we painted the wrong half (2026-08-29) |
 
 *`·` after a WPT figure means **carried forward**, not measured this tick.*

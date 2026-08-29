@@ -96349,3 +96349,103 @@ re-flow (t1364, Track A), and a11yproject's remaining width shortfall, now the b
 anchor at 49.3%.
 
 WIKI: docs/wiki/board-anchor-sites-remeasured.md
+
+## Tick 1369 — one `content` declaration says two things, and we painted the wrong half (2026-08-29)
+
+TICK SHAPE: capability-subsystem
+
+**Track B.** The named next item was check #128's STEER #1 — CSS `content` features for accname
+(`attr()`, `counter()` with alt text, the `/alt-text` syntax, ~18 rows). Opening it found a fourth
+instance of a pattern this project has now met four times.
+
+### ⭐⭐⭐ THE FOURTH PROPERTY FOUND SWITCHED OFF — AND THE FIRST ONE `longhands.toml` COULD NOT NAME
+
+CSS Content 3 lets one declaration carry both halves: everything before the `/` is **drawn**,
+everything after it is what a screen reader **announces**.
+
+```css
+::before { content: "★" / "" }             /* draw a star, announce nothing */
+::before { content: "" / counter(step) }   /* announce a step number that is not drawn */
+```
+
+Stylo parses the syntax, but the `/` arm of its **value parser** carries
+`static_prefs::pref!("layout.css.content.alt-text.enabled")`. With the pref off the whole declaration
+is an unexpected-token error, so the author's fallback line wins — and where there is none, the
+pseudo vanishes.
+
+t1358's rule was *"when a CSS feature looks absent, read `longhands.toml` for a `servo_pref` before
+concluding anything about layout."* **That rule could not have found this one** — it is not a
+property gate in a table, it is a `pref!` call site inside a parser. It generalises:
+
+> ⭐ **The gates are `static_prefs::pref!` call sites ANYWHERE in stylo, not just `servo_pref` rows
+> in `longhands.toml`.** A sweep of the crate finds **53**; this engine flips **six**.
+
+Priced on the corpus: `attr(` 14/39, `system-ui` 13/39, `color-mix(` 9/39, `@property` 5/39,
+`-webkit-fill-available` / `rgb(from` / `@starting-style` 3/39 each.
+
+### ⚠⚠ AND THE SWEEP'S SECOND RESULT IS THE ONE THAT KEEPS THE RULE HONEST
+
+Two of the highest-priced were measured against Chrome **before** being flipped, and both are
+**already correct with their prefs off**:
+
+```text
+  font-family: system-ui, "Hamburgefonstiv"     Chrome 131.61   ours 131.61
+  font-family: monospace  (control)             Chrome 144.50   ours 144.50
+  width: -webkit-fill-available in a 400px CB   Chrome 400.00   ours 400.00
+```
+
+> **An unflipped pref is not evidence that a feature is broken** — it is a place to look. A tick that
+> flipped all 47 on the strength of the sweep would have been changing 47 behaviours on the evidence
+> of one. **Only the row with a measured divergence was flipped.**
+
+### THE OTHER CASCADE DID NOT PARSE IT AT ALL
+
+`MinimalCascade` handed the whole value to `parse_content_parts`, so `"before" / "alt"` rendered as
+`beforealt`. Two cascades disagreeing about what a pseudo paints is the `<source>` bug this project
+keeps re-finding (t1361, t1364), so both are fixed and the gate runs on the one the wall can see.
+
+⚠ The split is at a `/` **outside a quoted string**: `content: "and/or" / "x"` has two, and taking
+the first renders `and` (77.06) instead of `and/or` (105.97).
+
+### THE RECEIPT
+
+```text
+  content: "before" / ""      Chrome 105.97   ours 48.17 → 105.97
+  content: "before" / "alt"   Chrome 105.97   ours 134.86 → 105.97
+  content: "and/or" / "x"     Chrome 105.97   ours 105.97 (already right; the split-quoting row)
+  content: "plain"            Chrome  96.34   CONTROL
+  no ::before                 Chrome  48.17   CONTROL
+  manuk-agent (lib+gates) 133/133 → 134/134  +1  ·  manuk-css / page / layout / a11y / paint / dom  CONTROL
+  accname   432/484  FLAT, deliberately — see below
+```
+
+⚠ **I PUT A NUMBER IN THE GATE THAT I HAD NOT MEASURED, AND THE GATE CAUGHT IT.** The `and/or` row
+was written as 154.1 from reasoning about character counts; measuring the exact fixture in Chrome
+gave **105.97**, and our engine already produced 105.96. The row survives — it is the only one that
+separates a quote-aware split from `v.split('/')` — but with the measured value. *A gate's expected
+values are measurements, and the moment one is derived instead of measured it is a guess wearing a
+number's clothes.*
+
+**PROVEN RED by two mutations, both predicted to the pixel.** N1 `split_content_alt` always returns
+`(v, None)` (the pre-tick behaviour) → e2 reads **134.86** = `beforealtlabel`. N2 split at the first
+`/` regardless of quoting → e3 reads **77.06** = `andlabel`.
+
+⚠ N3 — dropping the Stylo pref flip — is **not observable from this gate**, which runs on
+MinimalCascade (`manuk-agent` takes `manuk-page` with default features). Measured directly instead
+and recorded rather than dressed up: with the pref off, `content: "before" / ""` renders 48.17 on the
+Stylo path where Chrome renders 105.97. That asymmetry is surface audit #78's finding — **no wall
+runs a Stylo-path gate.**
+
+### ⚠ NAMED, MEASURED, NOT BUILT
+
+- **The alt text is not yet in the accessible NAME**, and `accname` is flat at 432/484 across this
+  change on purpose. This tick makes the two halves *separable*; threading the alt half into
+  `accessible_name` is the next tick — and t1365's own note applies, that a fourth fact through that
+  walk should become a context struct rather than a fourth parameter.
+- **White space at the pseudo/text boundary.** The WPT fixture writes `content: " before "` with
+  deliberate outer spaces and Chrome collapses them against the adjacent text: `" before " + "label"
+  + " after "` is **18** characters wide in Chrome (173.4) and **20** here (192.7). Exactly two
+  spaces, a separate mechanism, and it is what stands between this tick and the six
+  `fallback content` rows.
+
+WIKI: docs/wiki/content-alt-text.md

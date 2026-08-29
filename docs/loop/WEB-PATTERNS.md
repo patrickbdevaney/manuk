@@ -9502,3 +9502,23 @@ session the job count explains none of the spread, and the 372s→177s pair that
 a cold run against a warm re-run. Corrected in the journal. The substantive finding is that the
 receipt's `gate Ns · build Ns` split hides compilation the gates themselves trigger (178s to 1552s on
 one gate set, while the printed `build` ranged 1–60s).
+
+## `::before { content: "★" / "" }` — the decorative glyph that announced itself
+
+CSS Content 3 lets one `content` declaration carry both halves: everything before the `/` is DRAWN,
+everything after it is what a screen reader ANNOUNCES. `content: "★" / ""` means *draw a star,
+announce nothing*; `content: "" / counter(step)` means *announce a step number that is not drawn*.
+Painting the announced half is the exact opposite of the request, in both directions.
+
+⚠ The split is at a `/` OUTSIDE a quoted string — `content: "and/or" / "and or"` has two, and taking
+the first renders `and`.
+
+⭐ It was found switched off, not missing, and by a route t1358's rule could not reach: stylo gates
+the `/` arm on `static_prefs::pref!("layout.css.content.alt-text.enabled")` **inside the value
+parser**, not as a `servo_pref` row in `longhands.toml`. A sweep of the crate finds **53** such
+gates and this engine flips six.
+
+⚠⚠ And the honest half: two of the highest-priced unflipped prefs — `system-ui` (13/39 corpus sites)
+and `-webkit-fill-available` (3/39) — measured **Chrome-exact with their prefs off**. **An unflipped
+pref is not evidence that a feature is broken**; it is a place to look.
+(t1369 — `agent/tests` `the_content_alt_half_is_announced_not_painted`)

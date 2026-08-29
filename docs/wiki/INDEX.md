@@ -848,6 +848,16 @@
   - L4143 · CI WAS RED FOR SEVEN TICKS BEHIND A GREEN SIBLING, AND THE GATE WAS ONE APT PACKAGE FROM BEING MEASURED (t1351)
   - L4160 · ⭐⭐⭐ A PRECONDITION PANIC IS INDISTINGUISHABLE FROM AN ENGINE FAILURE, AND IT STOPS THE WHOLE STEP
 
+## `content: "drawn" / "announced"` — one declaration, two answers
+`docs/wiki/content-alt-text.md`
+
+  - L6 · The one-sentence mechanism
+  - L19 · ⭐⭐⭐ The fourth property found switched off — and the first one longhands.toml could not name
+  - L43 · ⚠⚠ And the sweep's second result, which keeps the rule honest
+  - L58 · The other cascade did not parse it at all
+  - L68 · Chrome-measured
+  - L78 · ⚠ NAMED, MEASURED, NOT BUILT
+
 ## CSS AND THE CASCADE — Stylo realities and quirks actually encountered
 `docs/wiki/css-cascade.md`
 
@@ -2577,4 +2587,4 @@
   - L231 · Both named mechanisms are subsystem work
 
 ---
-2440 sections across 33 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+2446 sections across 34 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.

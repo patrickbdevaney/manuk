@@ -707,6 +707,30 @@ pub fn cascade_via_stylo_sized(
     // page therefore got the same answer (`auto`) whichever spelling it used, which is what made
     // this read as "multicol is unimplemented" rather than "multicol is switched off".
     stylo_static_prefs::set_pref!("layout.columns.enabled", true);
+    // ⚠⚠⚠ **THE FOURTH PROPERTY FOUND SWITCHED OFF RATHER THAN MISSING — AND THE FIRST ONE
+    // `longhands.toml` COULD NOT HAVE TOLD US ABOUT.**
+    //
+    // `content: "before" / "alt-before"` — the CSS Content 3 alt-text syntax, where everything
+    // before the `/` is DRAWN and everything after it is what a screen reader ANNOUNCES. Stylo
+    // parses it, but the `/` arm carries
+    // `static_prefs::pref!("layout.css.content.alt-text.enabled")` **inside the parser**, so the
+    // whole declaration was an unexpected-token error and the author's fallback line won.
+    // Chrome-measured, `16px/24px monospace` in a 400px block:
+    //
+    // ```text
+    //   content: "before" / ""     Chrome renders "beforelabel" (106.0 wide)   ours "label" (48.2)
+    // ```
+    //
+    // ⭐ t1358's rule was *"when a CSS feature looks absent, read `longhands.toml` for a
+    // `servo_pref`"*. This one is not in `longhands.toml` at all — it is a `pref!` call site in the
+    // VALUE parser. **A sweep of the whole crate finds 53 such gates and this engine flips six.**
+    //
+    // ⚠ And the sweep's second result is the one that keeps the rule honest: of the other 47,
+    // `system-ui` (13/39 corpus sites) and `-webkit-fill-available` (3/39) were measured against
+    // Chrome and are **already correct** despite their prefs being off. **An unflipped pref is not
+    // evidence that a feature is broken** — it is a place to look. Only rows with a measured
+    // divergence are flipped here.
+    stylo_static_prefs::set_pref!("layout.css.content.alt-text.enabled", true);
     // **The parser's verdict, read off the `Dom` it already handed us.** Everything below that used to
     // say `QuirksMode::NoQuirks` unconditionally now says `qm`. Stylo already implements the quirks
     // themselves (unitless lengths, case-insensitive id/class matching, the `<font size>` table) — this
@@ -3082,7 +3106,27 @@ fn cascade_pseudo(
                     _ => out.push(crate::ContentPart::Text(t.to_string())),
                 }
             };
-            for it in items.items.iter() {
+            // ⭐⭐⭐ **`alt_start` SPLITS ONE DECLARATION INTO WHAT IS DRAWN AND WHAT IS
+            // ANNOUNCED, AND THIS LOOP USED TO WALK STRAIGHT PAST IT.** Stylo hands over
+            // `ContentItems { items, alt_start }` — a flat list plus the index where the text after
+            // the `/` begins (`alt_start == items.len()` means there was no `/`). Iterating the
+            // whole list PAINTS the accessible text onto the page, which is the exact opposite of
+            // what the author asked for: `::before { content: "★" / "" }` means *draw a star,
+            // announce nothing*, and `content: "" / counter(step)` means *announce a step number
+            // that is not drawn*.
+            //
+            // Chrome-measured, `16px/24px monospace` in a 400px block:
+            //
+            // ```text
+            //   content: " before " / " alt-before "  (+ ::after)   173.4 wide    ours 192.7
+            //   content: " before " / " start " attr(data-alt) " end "  115.6     ours 125.2
+            //   content: "before" / ""                              106.0         ours  48.2
+            // ```
+            //
+            // The last row is the one that shows it is not merely "a bit of extra text": an empty
+            // alt made the whole pseudo vanish.
+            let alt_start = items.alt_start.min(items.items.len());
+            for it in items.items[..alt_start].iter() {
                 match it {
                     ContentItem::String(sv) => push_text(&mut out, sv),
                     // `content: attr(name)` — the element's attribute value, or the EMPTY string
@@ -3109,13 +3153,49 @@ fn cascade_pseudo(
                     _ => {}
                 }
             }
-            out
+            // The ALT half, built by the same arms so the two cannot diverge in what they support.
+            // `None` means the declaration had no `/`; an EMPTY vec means the author wrote `/ ""`
+            // and must NOT fall back to the rendered text.
+            //
+            // ⚠ `alt_start == items.len()` is stylo's encoding of *"there was no `/`"*, so `None`
+            // and `Some(vec![])` are genuinely different answers here and the caller depends on it:
+            // `None` falls back to the rendered text for the name, `Some(vec![])` announces nothing.
+            let alt = (alt_start < items.items.len()).then(|| {
+                let mut a: Vec<crate::ContentPart> = Vec::new();
+                let mut push_alt = |out: &mut Vec<crate::ContentPart>, t: &str| {
+                    if t.is_empty() {
+                        return;
+                    }
+                    match out.last_mut() {
+                        Some(crate::ContentPart::Text(prev)) => prev.push_str(t),
+                        _ => out.push(crate::ContentPart::Text(t.to_string())),
+                    }
+                };
+                for it in items.items[alt_start..].iter() {
+                    match it {
+                        ContentItem::String(sv) => push_alt(&mut a, sv),
+                        ContentItem::Attr(at) => {
+                            if let Some(v) = el.attr(&at.attribute) {
+                                push_alt(&mut a, v);
+                            }
+                        }
+                        ContentItem::Counter(name, _style) => {
+                            a.push(crate::ContentPart::Counter(name.0.to_string()))
+                        }
+                        _ => {}
+                    }
+                }
+                a
+            });
+            (out, alt)
         }
         _ => return None,
     };
+    let (parts, alt) = parts;
     cs.counter_reset = counter_pairs(&cv.get_counters().clone_counter_reset());
     cs.counter_increment = counter_pairs(&cv.get_counters().clone_counter_increment());
     cs.content = Some(parts);
+    cs.content_alt = alt;
     Some(cs)
 }
 

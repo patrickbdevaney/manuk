@@ -1239,6 +1239,38 @@ pub enum GenericFamily {
 /// The tokenizer is deliberately small and string-aware: quotes may contain commas, parentheses and
 /// whitespace, so it cannot be a `split_whitespace`. Anything that is neither a quoted string nor a
 /// `counter(...)` is skipped — `attr()` is handled by the Stylo path, which has the element.
+/// Split a `content` value at the alt-text `/`, returning `(rendered, Some(alt))` — or
+/// `(whole, None)` when there is no delimiter.
+///
+/// ⚠ Only a `/` **outside a quoted string** counts. `content: "and/or" / "and or"` contains two,
+/// and treating the first as the marker renders `"and` and announces `or" / "and or"`.
+fn split_content_alt(v: &str) -> (&str, Option<&str>) {
+    let b = v.as_bytes();
+    let mut quote: Option<u8> = None;
+    let mut i = 0usize;
+    while i < b.len() {
+        let c = b[i];
+        match quote {
+            Some(q) => {
+                if c == b'\\' {
+                    i += 1; // an escaped character cannot close the string
+                } else if c == q {
+                    quote = None;
+                }
+            }
+            None => {
+                if c == b'"' || c == b'\'' {
+                    quote = Some(c);
+                } else if c == b'/' {
+                    return (v[..i].trim_end(), Some(v[i + 1..].trim_start()));
+                }
+            }
+        }
+        i += 1;
+    }
+    (v, None)
+}
+
 pub fn parse_content_parts(v: &str) -> Vec<ContentPart> {
     let mut out = Vec::new();
     let b: Vec<char> = v.chars().collect();
@@ -1420,6 +1452,23 @@ pub struct ComputedStyle {
     ///
     /// Use [`ComputedStyle::content_text`] where the counter-free text is what is wanted.
     pub content: Option<Vec<ContentPart>>,
+    /// ⭐⭐⭐ **THE `content` ALT-TEXT — `content: "before" / "alt-before"` — WHICH IS A SECOND,
+    /// SEPARATE STRING THE SAME DECLARATION CARRIES.**
+    ///
+    /// CSS Content 3 lets one `content` declaration say two things: what is **rendered**, and what
+    /// is **announced**. Everything before the `/` is drawn; everything after it is the accessible
+    /// text and is drawn by nothing. Stylo 0.19 parses it and hands over `ContentItems { items,
+    /// alt_start }` — one flat list with an index — and this engine iterated the whole list, so the
+    /// alt text was being **painted onto the page** and the accessible name never saw it.
+    ///
+    /// The idiom exists precisely for decorative pseudo-content: `::before { content: "★" / "" }`
+    /// draws a star and announces nothing, and `content: "" / counter(step)` announces a step number
+    /// that is not drawn. Rendering the announcement is the exact opposite of what the author asked
+    /// for, in both directions.
+    ///
+    /// `None` = the declaration had no `/`. An EMPTY vec is different and load-bearing: it means the
+    /// author wrote `/ ""`, i.e. *"announce nothing"*, which must not fall back to the rendered text.
+    pub content_alt: Option<Vec<ContentPart>>,
     /// `counter-reset: name [n]` — sets the counter to `n` (default 0) at this element.
     pub counter_reset: Vec<(String, i32)>,
     /// `counter-increment: name [n]` — adds `n` (default 1) at this element, AFTER any reset.
@@ -2022,6 +2071,7 @@ impl ComputedStyle {
             list_style_type: ListStyleType::Disc,
             list_style_inside: false,
             content: None,
+            content_alt: None,
             counter_reset: Vec::new(),
             counter_increment: Vec::new(),
             before: None,
@@ -7303,11 +7353,23 @@ fn apply_declaration(s: &mut ComputedStyle, d: &Declaration, parent_fs: f32) {
         }
         "content" => {
             let t = v.trim();
-            s.content = if t.eq_ignore_ascii_case("none") || t.eq_ignore_ascii_case("normal") {
-                None
+            if t.eq_ignore_ascii_case("none") || t.eq_ignore_ascii_case("normal") {
+                s.content = None;
+                s.content_alt = None;
             } else {
-                Some(parse_content_parts(t))
-            };
+                // ⭐ **THE `/` SPLITS ONE DECLARATION INTO WHAT IS DRAWN AND WHAT IS ANNOUNCED**
+                // (CSS Content 3). Stylo's parser gates this on
+                // `layout.css.content.alt-text.enabled`; this cascade is its twin and must agree, or
+                // a page's decorative pseudo is painted with its own screen-reader text on one path
+                // and not the other — the `<source>` bug this file's float half already names.
+                //
+                // ⚠ The split is on a `/` OUTSIDE any quoted string, because the delimiter is a
+                // perfectly ordinary character inside one: `content: "and/or" / "and or"` has two
+                // slashes and only the second is the marker.
+                let (render, alt) = split_content_alt(t);
+                s.content = Some(parse_content_parts(render));
+                s.content_alt = alt.map(parse_content_parts);
+            }
         }
         "counter-reset" => s.counter_reset = parse_counter_list(v, 0),
         "counter-increment" => s.counter_increment = parse_counter_list(v, 1),
