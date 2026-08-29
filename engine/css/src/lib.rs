@@ -3353,8 +3353,44 @@ impl Stylesheet {
             let mut j = i + pos + "@import".len();
             // `@import <url> [media];` — take everything up to the terminating `;` (or `{`, which means
             // this is not a well-formed import and the sheet's error recovery should skip it).
+            // ⚠⚠⚠ **A `;` INSIDE `url()` OR A QUOTED STRING DOES NOT END AN AT-RULE, AND GOOGLE
+            // FONTS' OWN URLS CONTAIN ONE.** This scan stopped at the first `;` anywhere, so
+            //
+            //   `@import url("…/css?family=M+PLUS+1p:400,700|Ubuntu:400;700&display=swap");`
+            //
+            // was cut at `Ubuntu:400;` — a truncated URL that fetches a DIFFERENT sheet (or 400s),
+            // and the page renders in the fallback face. That is the exact URL `momon-ga.com`
+            // ships, and `family=X:wght@400;700` is the css2 API's own spelling, so the shape is
+            // everywhere. Chrome loads it: measured, `font-family:'M PLUS 1p'` at 14px reads
+            // **119.313** there and **111** here (the fallback) with the semicolon in the URL, and
+            // **119** here once the same URL is written without one.
+            //
+            // CSS Syntax §5.4.3 consumes an at-rule's prelude as component values: a `;` is a
+            // terminator only at the TOP level, outside any block and outside a string. Tracking a
+            // quote state and a paren depth is the whole of it — `url(` is just a function token,
+            // so paren depth covers the unquoted form and the quote state covers `url("…")`.
             let start = j;
-            while j < b.len() && b[j] != b';' && b[j] != b'{' {
+            let mut quote: Option<u8> = None;
+            let mut depth: i32 = 0;
+            while j < b.len() {
+                let c = b[j];
+                match quote {
+                    // A backslash escapes the next byte inside a string, including a closing quote.
+                    Some(q) => {
+                        if c == b'\\' {
+                            j += 1;
+                        } else if c == q {
+                            quote = None;
+                        }
+                    }
+                    None => match c {
+                        b'"' | b'\'' => quote = Some(c),
+                        b'(' => depth += 1,
+                        b')' => depth = (depth - 1).max(0),
+                        b';' | b'{' if depth == 0 => break,
+                        _ => {}
+                    },
+                }
                 j += 1;
             }
             if j < b.len() && b[j] == b';' {
@@ -4197,9 +4233,48 @@ fn strip_comments(src: &str) -> String {
 fn skip_at_rule(src: &str, start: usize) -> usize {
     let b = src.as_bytes();
     let mut i = start;
+    // ⚠⚠⚠ **A `;` INSIDE `url()` OR A STRING IS NOT THE END OF THE AT-RULE, AND GETTING THAT WRONG
+    // DOES NOT LOSE THE AT-RULE — IT LOSES THE REST OF THE STYLESHEET.**
+    //
+    // `@import url("…/css2?family=Inter:wght@400;700&display=swap");` at the TOP of a sheet (which
+    // is where every Google-Fonts import lives) returned mid-URL. The parser then resumed inside the
+    // URL text, read `700&display=swap");` as a selector, and everything after it was mangled:
+    // measured on a five-import fixture, `body { color: red }` did not survive as a rule at all.
+    //
+    // CSS Syntax §5.4.2 consumes an at-rule by component values — `;` and `{` are terminators only
+    // at the TOP level, outside a string and outside any function. Same rule, and the same fix, as
+    // `Stylesheet::imports`; they are two scans because one answers *"where does this rule end"* and
+    // the other *"what URL did it name"*, and merging them is a wider change than the defect.
+    let mut quote: Option<u8> = None;
+    let mut paren: i32 = 0;
     // Skip to ';' (statement at-rule) or a balanced '{...}' (block at-rule).
     while i < b.len() {
+        if let Some(q) = quote {
+            // A backslash escapes the next byte inside a string, including a closing quote.
+            if b[i] == b'\\' {
+                i += 2;
+                continue;
+            }
+            if b[i] == q {
+                quote = None;
+            }
+            i += 1;
+            continue;
+        }
         match b[i] {
+            b'"' | b'\'' => {
+                quote = Some(b[i]);
+                i += 1;
+            }
+            b'(' => {
+                paren += 1;
+                i += 1;
+            }
+            b')' => {
+                paren = (paren - 1).max(0);
+                i += 1;
+            }
+            _ if paren > 0 => i += 1,
             b';' => return i + 1,
             b'{' => {
                 let mut depth = 0;
@@ -9594,6 +9669,121 @@ main:has(span) span { color: black }
         assert!(
             !sheet.rules.is_empty(),
             "the imports must not eat the rest of the sheet"
+        );
+    }
+
+    /// **A `;` INSIDE `url()` OR A QUOTED STRING DOES NOT END AN AT-RULE, AND GOOGLE FONTS' OWN URLS
+    /// CONTAIN ONE.**
+    ///
+    /// The prelude scan stopped at the first `;` anywhere after `@import`, so
+    ///
+    /// ```text
+    ///   @import url("…/css?family=M+PLUS+1p:400,700|Ubuntu:400;700&display=swap");
+    /// ```
+    ///
+    /// was cut at `Ubuntu:400;` — a truncated URL that fetches a DIFFERENT sheet or 404s, and the
+    /// page renders in the fallback face. That is the exact URL `momon-ga.com` ships, and
+    /// `family=X:wght@400;700` is the css2 API's own spelling, so the shape is everywhere.
+    ///
+    /// Chrome-measured on the same document, `font-family:'M PLUS 1p'` at 14px:
+    ///
+    /// ```text
+    ///   @import URL contains a `;`      Chrome 119.313 x 20     before 111 x 16     after 119 x 20
+    ///   the same URL without one        Chrome 119.313 x 20     before 119 x 20     unchanged ✓
+    /// ```
+    ///
+    /// CSS Syntax §5.4.3 consumes an at-rule's prelude as component values: `;` terminates only at
+    /// the TOP level, outside any block and outside a string. A quote state and a paren depth are
+    /// the whole of it — `url(` is a function token, so the depth covers the unquoted form and the
+    /// quote state covers `url("…")`.
+    #[test]
+    fn a_semicolon_inside_an_import_url_does_not_terminate_the_at_rule() {
+        let sheet = Stylesheet::parse(
+            r#"
+            @import url("https://fonts.googleapis.com/css2?family=Inter:wght@400;700&display=swap");
+            @import url(https://example.com/a.css?x=1;y=2);
+            @import 'partials/a;b.css';
+            @import url("has\"quote;still.css");
+            @import url(plain.css);
+            body { color: red }
+            "#,
+        );
+        let got = sheet.imports();
+        assert_eq!(
+            got,
+            vec![
+                "https://fonts.googleapis.com/css2?family=Inter:wght@400;700&display=swap"
+                    .to_string(),
+                "https://example.com/a.css?x=1;y=2".to_string(),
+                "partials/a;b.css".to_string(),
+                "has\\\"quote;still.css".to_string(),
+                "plain.css".to_string(),
+            ],
+            "a `;` inside url() (quoted OR unquoted) and inside a quoted string is part of the URL, \
+             not the at-rule's terminator. A truncated URL is worse than a missing one: it fetches \
+             a DIFFERENT resource and the failure looks like a font substitution, not a 404."
+        );
+
+        // ── ⭐ THE HALF THAT COSTS THE WHOLE STYLESHEET, and it is a different code path from
+        // `imports()` above. `skip_at_rule` decides where an at-rule ENDS; returning mid-URL makes
+        // the parser resume inside the URL text, read `700&display=swap");` as a selector, and
+        // mangle everything after it. A Google-Fonts import sits at the TOP of the sheet, so the
+        // blast radius is the entire file — not the one rule that was mis-parsed.
+        let one = Stylesheet::parse(
+            "@import url(\"https://fonts.googleapis.com/css2?family=Inter:wght@400;700\");\n\
+             body { color: red }",
+        );
+        assert!(
+            one.rules.iter().any(|r| !r.declarations.is_empty()),
+            "a `;` inside an @import URL must not cost the REST OF THE SHEET — the `body` rule \
+             after it parsed to {:?}. This is `skip_at_rule`, not `imports()`: it is where the \
+             at-rule ENDS, and ending mid-URL resumes the parser inside the URL text.",
+            one.rules
+        );
+
+        // ── CONTROL: the scan must still stop, or an unterminated import would swallow the sheet.
+        assert!(
+            !sheet.rules.is_empty(),
+            "the imports must not eat the rest of the sheet — `body {{ color: red }}` is still a rule"
+        );
+
+        // ── CONTROL: a BLOCK at-rule is still skipped as a balanced block, not at a `;` inside it.
+        // `@media` carries declarations with semicolons in every real sheet.
+        let blk = Stylesheet::parse(
+            "@media screen { a { color: red; background: blue } } p{color:green}",
+        );
+        assert!(
+            blk.rules.len() >= 2,
+            "CONTROL: a block at-rule with semicolons INSIDE it is still skipped as a balanced \
+             block, and the rule after it survives — got {:?}",
+            blk.rules.len()
+        );
+
+        // ── CONTROL: every ordinary authored form is unchanged. This is the same assertion
+        // `imports_are_extracted_in_every_authored_form` makes, restated here so a regression in the
+        // terminator logic cannot pass this test while breaking that one.
+        assert_eq!(
+            Stylesheet::parse(
+                "@import url(a.css); @import url(b.css) print; @import \"c.css\"; body{color:red}"
+            )
+            .imports(),
+            vec![
+                "a.css".to_string(),
+                "b.css".to_string(),
+                "c.css".to_string()
+            ],
+            "CONTROL: the plain forms, a media list after the url, and a bare string all still \
+             terminate at their own `;`"
+        );
+
+        // ── CONTROL: a malformed import whose prelude runs into a BLOCK is still skipped, and the
+        // block's own rules still parse. `{` is a terminator at depth 0 for exactly this reason.
+        let bad = Stylesheet::parse("@import url(x.css) body { color: red }");
+        assert!(
+            bad.imports().is_empty(),
+            "CONTROL: an `@import` prelude that runs into a `{{` is malformed and must be skipped, \
+             got {:?}",
+            bad.imports()
         );
     }
 

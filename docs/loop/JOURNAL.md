@@ -93801,3 +93801,112 @@ inside a `url()`. That is the exact URL momon-ga ships, it is the css2 API's own
 spelling, and it is a three-line fix in `Stylesheet::imports`.
 
 WIKI: docs/wiki/css-cascade.md
+
+## Tick 1348 — a `;` inside `url()` ended the at-rule, and it cost the rest of the stylesheet (2026-08-28)
+
+TICK SHAPE: capability — CSS parsing, on the board's CO-#1 (SHAPE). Board re-run at the top of this
+tick; CO-#1 unchanged. This is t1347's named NEXT, and it turned out to be much larger than the
+`@import` URL it was named for.
+
+`@import url("…/css?family=M+PLUS+1p:400,700|Ubuntu:400;700&display=swap");` is the exact line
+`momon-ga.com`'s theme CSS opens with, and `family=X:wght@400;700` is the css2 API's own spelling, so
+the shape is everywhere. Both of our at-rule scanners stopped at the first `;` after the at-keyword,
+wherever it was.
+
+### ⭐ THE SECOND SCANNER IS THE EXPENSIVE ONE, AND IT DOES NOT LOSE THE AT-RULE
+
+`Stylesheet::imports` losing a URL costs one imported sheet. **`skip_at_rule` deciding the rule ends
+mid-URL costs the REST OF THE FILE**: the parser resumes inside the URL text, reads
+`700&display=swap");` as a selector, and mangles everything after it. A Google-Fonts import sits at
+the TOP of a theme stylesheet, so the blast radius is the whole sheet — measured on a five-import
+fixture, `body { color: red }` did not survive as a rule at all.
+
+CSS Syntax §5.4.2/§5.4.3 consumes an at-rule by component values: `;` and `{` terminate only at the
+TOP level, outside a string and outside a function. A quote state and a paren depth are the whole
+fix, in both scanners. They stay two scans because one answers *"where does this rule end"* and the
+other *"what URL did it name"*, and merging them is a wider change than the defect.
+
+### THE RECEIPT — FROZEN pages, 3 runs each, FOUR CONTROL SITES
+
+```text
+  site (frozen)                    BEFORE (t1347)      AFTER (3 runs)
+  momon-ga.com                      69.2 x3            96.9 / 96.9 / 96.9    +27.7
+  pasarbokep.com                    71.7 x3            71.7 x3                 0
+  cyoinatu-onna.com   CONTROL       91.6 x3            90.7 / 91.6 / 91.6    (its own spread)
+  pivaldi.restoplace.ws CONTROL    100.0 x3           100.0 x3                 0
+  www.5movierulz.discount CONTROL   79.1 x3            79.1 x3                 0
+  serennu.com         CONTROL       90.8 x3            90.8 x3                 0
+  www.alphanews.live                76.3 / 76.4        76.3 / 76.4              0
+  www.razaoautomovel.com            71.6 x3            71.6 x3                  0
+```
+
+**`momon-ga.com` goes 69.2 → 96.9 with zero spread** — the single largest per-site move of this
+session, and the mechanism is exactly the one the gate names: its theme stylesheet's rules after the
+first `@import` were being mangled.
+
+⚠ It also crosses the 0.75 M1 bar, so this is a CROSSING and not just a band move. The other seven
+sites are flat, which is the point of the four controls.
+
+### RESIDUE, MEASURED RATHER THAN GUESSED — AND IT IS ABOUT OUR OWN HONEST USER-AGENT
+
+With the import now loading, `M PLUS 1p` CJK text reads **70x21** where Chrome says **70x20**. The
+cause is not the line box: Google Fonts serves a **UA-sniffed** stylesheet, and our honest
+`Manuk/1.0.0` UA gets a **single non-subsetted TTF of 58,628 bytes** whose `fc-query` charset is a
+small Latin range — no Japanese at all — while Chrome gets the `unicode-range`-split WOFF2 set
+including the Japanese subset. So our CJK glyphs fall back to Noto Sans CJK and take its line box
+(t1343's union, working correctly), and Chrome's come from M PLUS 1p. **Competitor mimicry is out of
+scope by policy (CLAUDE.md Axis F), so this is a named divergence and not a bug to fix by lying about
+who we are.**
+
+GATE `a_semicolon_inside_an_import_url_does_not_terminate_the_at_rule` — 6 arms: five authored forms
+whose URLs contain a `;` (css2 `wght@400;700`, an unquoted `url(...?x=1;y=2)`, a bare quoted string,
+an escaped quote inside a string, and a plain control); **the sheet-loss arm**, which is a different
+code path (`skip_at_rule`) and the expensive half; a control that every ordinary form still
+terminates; and a control that a BLOCK at-rule with semicolons inside it is still skipped as a
+balanced block. RED under THREE mutations: N1 revert `imports()` → 4 of 5 URLs lost; N2 revert
+`skip_at_rule` → the `body` rule parses to `[]`; N3 track parens but not quotes → the bare
+`'partials/a;b.css'` form is lost.
+
+### THE DUE CONSTITUTION CHECK RAN IN THIS TICK, AND ONE OF ITS STEERS DIED IN IT
+
+Check **#127** (due at 1347). Horizon H0, operative sub-gate M1 RENDER. Its finding: **three
+consecutive ticks priced at ZERO and the fourth was worth +27.7** — and the sequence only worked
+because the zero-priced ones landed (t1345's quantisation made t1346's second bug visible; t1347's
+cascade fix made t1348's parser bug reachable). ⭐ **A mechanism's price is not knowable from how
+general it looks**: `margin: 0 -15px` is the Bootstrap grid and bought nothing; a `;` inside one URL
+bought 27.7 points. The distinguishing property is how much of the page the failure DESTROYS.
+
+PART VI corrected: CSS delivery has been on VI's "done" list since t564 and was **two-thirds solved
+for 780 ticks** with no gate. It is gated now.
+
+⭐ And check #127's own STEER #3 — *"the `;`-terminator class is probably wider than `@import`;
+`parse_declarations` has the same shape of question"* — was **refuted inside the same check by its
+own falsifier**. `split_declarations` already carries a quote state, a paren depth and an escape
+flag and only breaks on `';' if depth == 0`, so `background: url("data:image/svg+xml;base64,…")` was
+never affected. That is #126's correction (*every steer states what would refute it*) paying for
+itself on its first outing: written as a steer, checked with one `sed`, closed in the same document.
+
+NEXT — with momon-ga at 96.9 the near-bar band's next-largest samples are `www.repubblica.it` (0.706,
+n=2456) and `www.crazyshop.pl` (0.664, n=1402), and §14.1's trivago finding is still unclosed: FIVE
+corpus rows where the ORACLE renders unstyled and we are charged 0.11. The named probe there is a
+head-bisect — keep the 7 stylesheet links, delete the other ~96 head children.
+
+WIKI: docs/wiki/css-cascade.md
+
+### THE DUE WALL-TIME AUDIT ALSO RAN IN THIS TICK, AND IT REPORTED ITS OWN INSTRUMENT
+
+Audit **#52** (due at 1348, last was #51 at 1328). Result: **nothing trimmed, and the reason is the
+ledger.** The wall reads `total_seconds: 3659` with `559s` attributed across all sections — **85%
+unattributed**. `verify.sh:157` already documents this failure mode from tick 235 (*"THE INVISIBLE
+363 SECONDS"*, 80% unattributed on a 452s wall); the invisible part has since grown **8.5× to 3100s**.
+
+⭐ **An audit whose instrument resolves 15% of what it audits must report the instrument, not a
+trim** — any saving fitted to those 559 seconds is aimed at the wrong 15%. The one independent
+measurement available corroborates LINK over COMPILE: `build_seconds: 101` against a 3659s wall,
+while `target/` holds **94.1 GB in 570 test/gate binaries >10 MB** (avg ~165 MB, statically linked
+mozjs) on a volume at 86%. Both levers — widening `head_`'s brackets around the concurrent gate
+launch, and collapsing 570 duplicated static mozjs images into one shared harness binary — live in
+`scripts/`, are **harness-owned, and were not touched**. Full record: `docs/loop/WALL-AUDIT.md` #52,
+with a falsifiable re-check at audit #53 (tick ~1368).
+
+WIKI: docs/wiki/css-cascade.md

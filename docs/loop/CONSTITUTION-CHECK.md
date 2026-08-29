@@ -10844,3 +10844,84 @@ what the author could have stated.
 4. ⭐⭐ **I3's debt** — see above. Not a steer any more.
 
 **Next check due: tick 1347.**
+
+## Check #127 — tick 1347
+
+**Horizon:** H0 — Pareto Web Parity. **Gate:** ~83% WPT across categories · oracle-verified across the
+four corpora · a daily-drivable shell · every rendered construct queryable through the semantic API.
+Under the 2026-07-29 owner directive the operative sub-gate is **M1 RENDER: shape ≥ 0.75 on ≥ 95% of
+the in-scope corpus**, now measured on `corpus-crux-trend.txt`.
+
+### GATE OR SCOREBOARD? — gate, and for once with a corpus-level number to say so
+
+Ticks 1340–1348 landed: a broken-`<img alt>` box, CJK fallback line metrics, a full 200/200 sweep, the
+`LayoutUnit` percentage grid, the negative-margin line band, the `@import` cascade, and the `;`-in-URL
+at-rule terminator. **Six of the eight are engine capability and every one carries a Chrome-measured
+fixture, a RED-proven gate and a frozen-page receipt with controls.** The sweep (§14) put the corpus
+at `mean shape 0.5938 / 52 of 122 scored ≥ 0.75`, up from `0.5780 / 47` at t1322.
+
+### ⭐⭐⭐ THE FINDING: THREE CONSECUTIVE TICKS PRICED AT ZERO, AND THE FOURTH WAS WORTH +27.7
+
+t1346 (negative-margin band) and t1347 (`@import` reaching the cascade) were each **Chrome-exact,
+gated, and worth 0.0 points on every frozen site measured** — t1346 against a purpose-built same-hour
+old binary across seven sites. t1348, from the same investigation, moved `momon-ga.com`
+**69.2 → 96.9** and crossed the M1 bar.
+
+The loop did the right thing (it priced each one and said zero out loud), but the pattern is the
+lesson: **a mechanism's price is not knowable from how general it looks.** `margin: 0 -15px` is the
+Bootstrap grid and bought nothing; a `;` inside one URL bought 27.7 points on one site. The
+distinguishing property is not generality, it is *how much of the page the failure destroys*. A wrong
+band clips one line; a truncated at-rule prelude mangles every rule after it.
+
+⚠ **AND THE SEQUENCE ONLY WORKED BECAUSE THE ZERO-PRICED TICKS LANDED.** t1345's quantisation is what
+made t1346's second bug visible, and t1347's cascade fix is what made t1348's parser bug reachable.
+A loop that reverted every zero-priced correctness fix would not have got to +27.7.
+
+### INVARIANTS
+
+- **I5 (the oracle is the discovery engine)** — held, and it produced the session's two best findings
+  from its own *diagnostic* lines rather than its scores: §14.1's trivago row (`font-resolution:
+  Times New Roman vs -apple-system`, `display: inline → block` on 365 anchors) proves **the REFERENCE
+  is unstyled and we are the engine that is right**, on 4.1% of all scored rows.
+- **I4 (Pareto discipline)** — held. Every tick priced its mechanism on the corpus, and three reported
+  zero rather than dressing the number up.
+- **I3 (semantic model in lockstep)** — ⚠ **fourth check running, and #126 said the next check that
+  cannot report it done should say so in its OPENING LINE.** It is not done. The mechanical check —
+  ask BOTH questions of every `gated` row — was partly discharged from a different direction at
+  surface audit #76, which found `font fallback across scripts` green on one primitive of two and
+  split it. That is the same question with a different instrument, and it is now #76's top-ranked
+  item. **Carried, with the audit as its owner.**
+- **I2, I1** — held; nothing forked, nothing traded against the ratchet.
+
+### PART VI CORRECTION
+
+`@import` delivery must come off the "done" list. VI's reconciliation has treated CSS delivery as
+solved since t564; t1347 and t1348 show it was **two-thirds solved for 780 ticks** — imported sheets
+reached the `@font-face` scan and never the cascade, and an at-rule prelude ended at the first `;`
+anywhere. Neither had a gate. The corrected reading: **CSS DELIVERY IS GATED NOW, and was previously
+asserted.**
+
+### STEER — each with its falsifier
+
+1. ⭐⭐⭐ **CLOSE §14.1's TRIVAGO ROW** — five corpus rows (4.1% of scored, 6,665 ids) where the ORACLE
+   renders unstyled and charges us 0.11. The probe is a HEAD BISECT: keep the 7 stylesheet links,
+   delete the other ~96 head children, and see whether `document.styleSheets.length` goes above 0.
+   ⚠ *Refuted if* the bisected document still reads `sheets=0` — then it is not the request burst and
+   the next suspect is the response to a `file://`-origin Referer, which a `curl -e file:///tmp/x`
+   settles in one command.
+2. ⭐⭐⭐ **THE NEAR-BAR BAND'S TWO BIGGEST SAMPLES**, `www.repubblica.it` (0.706, n=2456) and
+   `www.crazyshop.pl` (0.664, n=1402). ⚠ *Refuted if* their shape dumps are dominated by
+   `font-resolution:` lines rather than geometry — that is the §13 font class, which a layout tick
+   cannot move. Check the diagnostic lines BEFORE picking a mechanism; it is one run.
+3. ~~⭐⭐ **THE `;`-TERMINATOR CLASS IS PROBABLY WIDER THAN `@import`.**~~ **REFUTED, in this check,
+   by its own falsifier — which is the point of writing them.** The falsifier was *"refuted if
+   `parse_declarations` already tracks parens"*, and it does: `split_declarations` carries a `quote`
+   state, a `depth` counter and an escape flag, and only breaks on `';' if depth == 0`. So
+   `background: url("data:image/svg+xml;base64,…")` — the shape that would have made this the
+   session's biggest find, since a base64 data URI contains a `;` and modern CSS is full of them —
+   was never affected. The defect was confined to the two AT-RULE scanners, both now fixed.
+   ⭐ Written as a steer, checked in one `sed`, closed in the same check. #126's correction paying
+   for itself on its first outing.
+4. ⭐⭐ **I3's debt** — carried, owner is surface audit #76's ranked item 1.
+
+**Next check due: tick 1355.**

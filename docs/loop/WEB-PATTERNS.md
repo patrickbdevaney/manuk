@@ -9195,3 +9195,17 @@ and not one of its rules — and no symptom pointed at the cascade, because the 
 ⚠ Measured page-share on the CrUX sample: **2 of 73** pages carry an inline-`<style>` `@import`,
 **3 of 46** carry one inside an external sheet. Small shares — and on the pages that have one, the
 loss is a WHOLE stylesheet.
+
+## t1348 — `family=X:wght@400;700` puts a semicolon in a URL, and the web is full of it
+
+**PATTERN: a Google Fonts URL with a weight list.** The css2 API spells it `family=Inter:wght@400;700`
+and the v1 API spells multi-family requests `family=A:400,700|B:400;700` — both put a `;` inside the
+`url()` of an `@import` at the very top of a stylesheet.
+
+⭐ **THE COST IS NOT THE FONT, IT IS THE STYLESHEET.** An at-rule scanner that treats that `;` as the
+rule's terminator resumes parsing INSIDE the URL text and mangles everything after it. Since the
+import is the first line of the sheet, a theme's entire CSS can be lost — frozen `momon-ga.com` went
+**69.2% → 96.9% SHAPE** when this was fixed, crossing the M1 bar.
+
+⚠ And a truncated URL is worse than a missing one: it fetches a DIFFERENT resource, so the symptom
+looks like a font substitution rather than a 404.

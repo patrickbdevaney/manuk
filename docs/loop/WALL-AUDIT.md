@@ -2208,3 +2208,60 @@ Nothing found this round: the gate binaries measure 0s each in the section ledge
 overlapped by the concurrent launch), and each already builds only its own crate's test binary.
 
 **Nothing was trimmed. No gate dropped, no floor widened, nothing sampled, nothing moved to CI.**
+
+## Audit #52 — tick 1348 (2026-08-28)
+
+```text
+   TOTAL 3659s (61 min)      build 101s      disk 86% · 41G free · load1 8.52
+   P   275s  8%      T  153s  4%      B  101s  3%      G6 15s      G1 8s      F 4s
+   every other gate binary   0s
+   ────────────────────────────────────────────────────────────────────────────────
+   attributed      559s   15%
+   UNATTRIBUTED   3100s   85%   ← the finding
+```
+
+### THE FINDING — the section ledger has lost its resolution again, and worse than the first time
+
+`verify.sh:157` already names this failure mode: *"THE INVISIBLE 363 SECONDS — `head_` only records
+time BETWEEN section headers"*, written at tick 235 when `total_seconds=452` and the sections summed
+to 89s (**80% unattributed**). That was the diagnosis for a 5× wall regression that no section looked
+guilty of.
+
+At tick 1348 the same instrument reads **85% unattributed on a 61-minute wall**. The absolute
+invisible time has gone from 363s to **3100s — an 8.5× growth in the part of the wall the audit
+cannot see.** Every one of the ~30 gate binaries measures `0s`, which does not mean they are free; it
+means their cost is entirely outside the section brackets (the concurrent launch, and above all the
+**link**).
+
+### WHY Q1–Q4 CANNOT BE ANSWERED THIS ROUND, AND THAT IS ITSELF THE RESULT
+
+The audit protocol asks four rigor-preserving questions — redundancy, parallelism, caching, scope.
+**All four are unanswerable against a ledger that resolves 15% of the wall.** Any trim proposed from
+these numbers would be fitted to 559 seconds and aimed at the wrong 15%. ⭐ *An audit whose instrument
+cannot see 85% of what it audits must report the instrument, not a trim.*
+
+### THE ONE THING THE AUDIT COULD MEASURE INDEPENDENTLY — and it corroborates LINK, not COMPILE
+
+```text
+   target/                                     117 GB
+   570 test/gate binaries >10 MB each           94.1 GB   (avg ~165 MB — statically linked mozjs)
+   /home                                        86% full, 41 GB free
+```
+
+**94 GB of the 117 GB tree is gate binaries**, and the wall's own receipt says `build_seconds: 101`
+— i.e. compilation is 101s of a 3659s wall. The remaining time is not being spent compiling. This is
+consistent with the standing finding that *the wall is DISK+LINK bound, not compile-bound*: 570
+statically-linked mozjs binaries at ~165 MB apiece is ~94 GB of linker output written per cold wall,
+on a volume at 86% (the wall's own self-purge threshold is 95%).
+
+### NOTHING TRIMMED — AND THE LEVER IS HARNESS-OWNED
+
+No gate dropped, no floor widened, nothing sampled, nothing moved to CI. **No `scripts/` file was
+touched**, and none should be by the grind: the two levers this audit names — (1) extend `head_`'s
+brackets so the concurrent gate launch and link phase are inside a section, and (2) the 94 GB of
+duplicated static mozjs across 570 binaries (one shared harness binary, or `cargo-nextest`'s shared
+test binary, would collapse both the link time and the disk) — are both in `verify.sh`/`ramdisk.sh`
+and belong to the observer. **Recorded for the observer, not touched.**
+
+RE-CHECK: this audit is falsifiable — if `unattributed_seconds` is still ≥80% of `total_seconds` at
+audit #53 (tick ~1368), the ledger repair did not happen and the wall-time audit remains blind.

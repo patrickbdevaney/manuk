@@ -5137,3 +5137,27 @@ in a different order run to run.
 CrUX pages; an external-sheet `@import` on **3 of 46**. On those pages the loss was a whole
 stylesheet's rules. ⚠ Frozen SHAPE scores did not move on this sample, for a specific reason: both
 inline instances import Google Fonts families already installed on this box.
+
+## A `;` INSIDE `url()` ENDED THE AT-RULE — AND THE EXPENSIVE HALF IS NOT THE AT-RULE (t1348)
+
+`@import url("…/css?family=M+PLUS+1p:400,700|Ubuntu:400;700&display=swap");` — the line every
+Google-Fonts-using theme stylesheet opens with, and `family=X:wght@400;700` is the css2 API's own
+spelling. Both at-rule scanners stopped at the first `;` after the at-keyword.
+
+- `Stylesheet::imports` losing a URL costs **one imported sheet**.
+- ⭐ `skip_at_rule` ending mid-URL costs **the rest of the file**: the parser resumes inside the URL
+  text, reads `700&display=swap");` as a selector, and mangles everything after it. The import is at
+  the TOP of the sheet, so the blast radius is the whole thing.
+
+CSS Syntax §5.4.2/§5.4.3: `;` and `{` terminate an at-rule only at the TOP level, outside a string
+and outside a function. A quote state plus a paren depth is the whole fix, in both scanners.
+
+**Measured:** frozen `momon-ga.com` SHAPE **69.2% → 96.9%** (zero spread over three runs; it crosses
+the 0.75 M1 bar), four control sites unchanged.
+
+⚠ **RESIDUE — OUR HONEST USER-AGENT GETS A DIFFERENT FONT FILE.** With the import loading,
+`M PLUS 1p` CJK reads 70x21 against Chrome's 70x20: Google Fonts UA-sniffs, and `Manuk/1.0.0` gets a
+single non-subsetted **58,628-byte TTF whose charset is Latin only** (`fc-query`), while Chrome gets
+the `unicode-range`-split WOFF2 set with the Japanese subset. Our CJK therefore falls back to Noto
+Sans CJK and takes its metrics. Competitor mimicry is out of scope by policy — this is a named
+divergence, not a bug to fix by lying about who we are.
