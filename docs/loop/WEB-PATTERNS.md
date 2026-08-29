@@ -9423,3 +9423,19 @@ ratchet counts as its "an engine cannot become less measured" invariant are exec
 runner**, and that single mechanism explains three symptoms found separately in the three preceding
 ticks. Recorded here only so the ledger moves with the tick; the substance is in
 `docs/loop/SURFACE-AUDIT.md` (Audit #78) and `docs/loop/CONSTITUTION-CHECK.md` (Check #129).
+
+## `<p>Some text <img style="float:right"> more text</p>` — the float that doubles its paragraph's height
+
+A float written *after* text on the same line is the commonest float on the content web (the
+`alignright` image inside a paragraph). Placing it at the top of that line — CSS 2.1 §9.5 rule 6 — is
+only half the rule: **the inline content already laid onto that line has to be re-flowed around it.**
+Without that, the text keeps its original x positions, the float overlaps it, and the trailing text is
+pushed to a second line: a 400px block that Chrome renders 24 tall comes out **48**, and every box
+below it moves. A float written BEFORE the text is unaffected, which is why the defect survives a
+spot check.
+
+⚠ And the UA-sheet half of the same battery: `table { border-spacing: 2px }` is in Chrome's UA sheet,
+so a table with no author `border-spacing` puts its first cell at `[2, 2]` and is 4px taller and
+wider than its cells. A cascade missing that declaration renders every such table tight — and if it
+is the cascade a test harness uses, it mis-measures every table fixture written against it.
+(t1364 — `agent/tests` `vi2_named_residuals_match_chrome`)

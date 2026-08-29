@@ -95826,3 +95826,110 @@ measurement pass) are each one fixture and one Chrome run from a present-tense a
 that row's entries have just been shown false.
 
 WIKI: docs/wiki/table-structure-geometry.md
+
+## Tick 1364 — VI.2's residual gap, re-measured: nine correct, one UA-sheet drift, one real (2026-08-29)
+
+TICK SHAPE: capability-subsystem
+
+**Track A, executing this loop's own STEER #2 from Check #129** — *"re-measure VI.2's remaining named
+residuals before ranking against them"*, written after t1362 found three of that row's table entries
+false for ~427 ticks. One battery, eleven cases, one per category the constitution names.
+
+### THE RESULT — NINE CORRECT, ONE FIXED, ONE REAL
+
+```text
+   1  anonymous table row (<table><td> with no <tr>)      ✓    6  abspos under a scale(2) CB   ✓
+   2  anonymous table (bare display:table-row)            ✓    7  % height in an auto parent   ✓
+   3  inline box holding no text of its own (t934/935)    ✓    8  float shrink-to-fit width    ✓
+   4  self-collapsing box between margins (t1001)         ✓    9  clear:left past a float      ✓
+   5  float at the TOP of its line (t1002 §9.5)           ✓   10  inline-block + overflow      ✓
+  11  UA `table { border-spacing: 2px }`         [0 0] h=26 → [2 2] h=30      FIXED HERE
+  ──  a float that FOLLOWS text: the block's height     48 vs Chrome 24       OPEN, pinned
+```
+
+⚠ The HTML parser is not implicated: `<table><td>a</td></table>` gives `<table><tbody><tr><td>` in
+both engines. Rows 1-2 were the *anonymous-row* suspicion and it was wrong — what they caught was
+row 11.
+
+### ⚠⚠⚠ ROW 11 — A UA-SHEET TWIN DRIFT, AND MY OWN BATTERY WAS THE THING IT CONFOUNDED
+
+`stylo_engine.rs` gained `table { display: table; border-spacing: 2px }` at t908 **with a note saying
+it had been missing**. Its hand-maintained twin in `MinimalCascade` never did:
+
+```text
+                     cell offset in the table     table height
+  Chrome                    [2, 2]                     30
+  Stylo (shipping)          [2, 2]                     30
+  MinimalCascade            [0, 0]                     26
+```
+
+`engine/layout`'s 191 unit tests and everything under `agent/tests/` cascade through
+`MinimalCascade`, so **every table fixture on those harnesses has been measuring 4px short in both
+axes** unless it set `border-spacing` itself. The t923 rule gets a third instance: *a UA declaration
+lives in BOTH sheets or in NEITHER.*
+
+⭐⭐⭐ **AND IT WAS FOUND BY THE BATTERY CONFOUNDING ITSELF.** The first run was on `agent/tests`
+alone and reported the table rows as an engine defect. The identical fixture through
+`manuk-page --features stylo` returned Chrome's numbers. That is t1361's lesson turned on the
+*measurement*:
+
+> **Measure on the SHIPPING path, or say which cascade you measured.** A battery run on one harness
+> attributes that harness's cascade bugs to the engine, and they look exactly like layout bugs.
+
+⚠ A gate named `g_table_border_spacing_ua_default` was **green throughout** — it runs on the Stylo
+path, where the property was never missing. A gate can be correct, well-named, and blind to the same
+property on the other cascade.
+
+### ⚠ THE ONE REAL SHIPPING DIVERGENCE, PINNED NOT ATTEMPTED
+
+```text
+  <div style="width:400px">xxxx xxxx xxxx<div style="float:left;width:80px;height:20px"></div>yyyy</div>
+                                     Chrome        ours
+    the float's own rect            [0 0 80x20]  [0 0 80x20]   ✓  t1002 placed it correctly
+    the BLOCK's height                  24           48        ✗  we make a second line
+  CONTROL — float FIRST, then text:     24           24        ✓
+```
+
+t1002 fixed *where the float goes*. The remaining half is that **the inline content already flushed
+onto that line is not re-laid around it** — `layout_block`'s own comment says so: *"`place()` cannot
+see this for us … what is in the way here is the line's own already-placed inline content."* An
+`<img class="alignright">` inside a paragraph is exactly this shape, floats are on 60.4% of the
+declared corpus, and doubling a paragraph's height is a large `dy`. It is a **re-flow, not a
+placement tweak**, so it is the ranked next tick rather than something to attempt at the end of a
+battery.
+
+⭐ **How the known divergence is carried in the gate, because both alternatives are wrong.**
+Asserting Chrome's 24 lands a RED gate; asserting our 48 PINS THE BUG (the t1004 shape). So `c5`'s
+height is absent from the asserted set with the reasoning written down, the number lives in the
+header and the wiki, the float's *placement* half stays asserted so it cannot regress meanwhile, and
+the day the re-flow lands `(5, 24.0)` joins the list.
+
+⚠ `c8`'s height is asserted as **zero** — a blanket `height > 0` vacuity check called that a missing
+box on this gate's first run. A non-BFC block does not contain its float. Every wrapper height is now
+a Chrome-measured claim rather than a sanity threshold, which turns that row from an exception into a
+statement.
+
+### THE GATE
+
+`vi2_named_residuals_match_chrome` (`agent/tests/`, in the wall's crate list) — twelve element rows
+and ten wrapper heights, all Chrome-measured. **PROVEN RED by two mutations**: N1 remove the UA
+`border-spacing` this tick added → `c1` reads 26 where Chrome says 30; N2 set only the HORIZONTAL
+axis → the same row still fails on height, which is what makes both axes load-bearing rather than one
+assertion twice.
+
+### THE RECEIPT
+
+```text
+  manuk-agent  (lib + gates)   129/129 → 130/130   +1   +the new gate
+  manuk-css                                        0 failed   (the changed cascade)
+  manuk-layout                 191/191             CONTROL — all 191 on the changed cascade
+  manuk-page   (full suite)    0 failed            CONTROL
+  manuk-paint / manuk-dom / manuk-net              CONTROL
+```
+
+NEXT: the float re-flow is the ranked tick and it is now measured to the pixel with a control arm.
+Behind it, VI.2's row can be narrowed in the constitution: of the categories it names, this battery
+found nine already correct, so the residual it points at is **floats-and-`clear`**, not the five-way
+list it currently reads as.
+
+WIKI: docs/wiki/vi2-residual-layout-gap.md

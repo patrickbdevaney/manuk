@@ -5648,6 +5648,32 @@ fn apply_ua_defaults(s: &mut ComputedStyle, el: &ElementData) {
     if matches!(tag, "ul" | "ol") {
         s.padding.left = Dim::Px(40.0);
     }
+    // ── ⚠⚠⚠ **`table { border-spacing: 2px }` LIVES IN THE OTHER UA SHEET AND NOT IN THIS ONE.**
+    // `stylo_engine.rs` gained it at t908 with a note saying it had been missing; its twin here
+    // never did, and the two sheets have disagreed ever since. Measured on the SHIPPING path versus
+    // this one, a one-cell table with no author `border-spacing`:
+    //
+    // ```text
+    //                            cell offset in the table     table height
+    //   Chrome                          [2, 2]                     30
+    //   Stylo (shipping)                [2, 2]                     30
+    //   MinimalCascade                  [0, 0]                     26
+    // ```
+    //
+    // ⚠ **This is not only a rendering bug in the JS-less build — it silently mis-measured every
+    // table gate written against a `MinimalCascade` harness.** `engine/layout`'s unit tests and
+    // everything under `agent/tests/` cascade through here, so a table fixture measured 4px short
+    // in both axes unless it set `border-spacing` itself. It was found by running one battery on
+    // BOTH paths and getting different answers, which is the t1361 lesson applied to the
+    // measurement rather than to the engine.
+    //
+    // The next drift of this pair is cheaper to find than this one was: the two sheets are
+    // enumerable, and the rule ([[t923]] `sup`/`sub`) is that a UA declaration lives in BOTH or in
+    // NEITHER.
+    if tag == "table" {
+        s.border_spacing = 2.0;
+        s.border_spacing_v = 2.0;
+    }
     // UA default: table cells have 1px padding (Chrome/Firefox), which affects row heights.
     if matches!(tag, "td" | "th") {
         s.padding = Sides::all(Dim::Px(1.0));

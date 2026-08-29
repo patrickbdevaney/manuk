@@ -2503,6 +2503,15 @@
   - L4057 · An author line-height is the line box, and a taller face must NOT grow it
   - L4063 · The Latin control arm is free, by construction
 
+## CONSTITUTION VI.2's residual layout gap — re-measured, banked, and narrowed to one row
+`docs/wiki/vi2-residual-layout-gap.md`
+
+  - L6 · Why this exists
+  - L15 · The result: nine correct, one fixed, one real
+  - L37 · ⚠⚠⚠ Row 11 — a UA-sheet twin drift that mis-measured every table gate on one harness
+  - L67 · ⚠ NAMED, MEASURED, NOT BUILT — the one row that is a real shipping divergence
+  - L97 · ⭐ How a known divergence is handled in a gate
+
 ## The wasm demo — running the engine inside someone else's browser
 `docs/wiki/wasm-demo.md`
 
@@ -2535,4 +2544,4 @@
   - L231 · Both named mechanisms are subsystem work
 
 ---
-2418 sections across 28 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+2423 sections across 29 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
