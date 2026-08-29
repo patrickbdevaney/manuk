@@ -9493,3 +9493,12 @@ predicate, not a removal, and a "just stop collapsing" version breaks every ordi
 clear the 0.75 bar and three are at ~100%, while the loop was still ranking work against the recorded
 figures. **A steering list is a claim about the present tense, and nothing re-runs it.**
 (t1367 — `agent/tests` `a_flex_or_grid_items_child_margin_does_not_collapse_through_it`)
+
+## [no-pattern] t1368 — the wall-time audit, and a correction
+
+No web pattern this tick. The due wall-time audit found that a claim t1363 published — that
+`CARGO_BUILD_JOBS=1` is ~3× faster — does not survive its own data: across twelve walls in one
+session the job count explains none of the spread, and the 372s→177s pair that produced the claim was
+a cold run against a warm re-run. Corrected in the journal. The substantive finding is that the
+receipt's `gate Ns · build Ns` split hides compilation the gates themselves trigger (178s to 1552s on
+one gate set, while the printed `build` ranged 1–60s).

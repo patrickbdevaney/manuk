@@ -96257,3 +96257,95 @@ should be pointed at next. Behind it: the float re-flow (t1364) and CSS `content
 for accname (t1365).
 
 WIKI: docs/wiki/flex-grid-item-margin-collapse.md
+
+## Tick 1368 — the wall-time audit, and a correction to something t1363 published (2026-08-29)
+
+TICK SHAPE: instrument-fidelity
+
+The wall-time audit came due (every 20; last at 1348). It reports, it does not delete — and this one's
+main result is that **a claim this loop published five ticks ago does not survive its own data.**
+
+### AUDIT #52's RE-CHECK, ANSWERED FIRST — the prediction is FALSIFIED
+
+#52 (tick 1348) closed with a falsifier: *"if `unattributed_seconds` is still ≥80% of
+`total_seconds` at audit #53 (tick ~1368), the ledger repair did not happen and the wall-time audit
+remains blind."*
+
+```text
+  ══ WALL-TIME AUDIT @ tick 1367 — total 1308s ══
+     341s  P   parity vs headless Chrome        26%
+     102s  T   crate tests                       8%
+      60s  B   build (workspace)                 5%
+      17s  G6 · 10s G1 · 4s F · 2s F4 · rest ~0
+     ─────
+     536s  attributed        772s unattributed  =  59%
+```
+
+**59% < 80%, so the prediction does not hold** — the ledger resolved 15% at #52 and resolves 41%
+now. But more of the wall is still unattributed than attributed, so #52's governing sentence stands:
+*an audit whose instrument cannot see most of what it audits must report the instrument, not a
+trim.*
+
+### ⚠⚠⚠ THE CORRECTION — `CARGO_BUILD_JOBS=1` IS NOT FASTER, AND t1363 SAID IT WAS
+
+t1363 landed on the documented `_out()` workaround and its journal entry recorded *"the prescribed
+workaround (`CARGO_BUILD_JOBS=1`, which is also faster)"*, on the evidence of one pair: 372s then
+177s. Every wall in this session, sorted by the mem-guard's chosen job count:
+
+```text
+  JOBS=8    500   696   471   840   388
+  JOBS=1    178  1552  1340   219  1368
+```
+
+**The jobs count explains none of it.** 177s was a *warm re-run of a tree that had just been built*
+(`build 1s`), against a first attempt that was not. The variable is build warmth, and the two fast
+JOBS=1 runs (178s, 219s) are both immediate re-runs. That is the same confound this project's own
+rule exists for — *a control is a binary you rebuilt and ran in the same hour* — and it was made
+while writing an audit about instruments lying.
+
+⚠ The `_out()` multi-gate false-RED also occurred at **both** settings (t1363 at JOBS=8, t1365 at
+JOBS=1), so it is not jobs-dependent either. The workaround stands as a *retry*, not as a speed-up,
+and the entry is corrected rather than left to be re-derived.
+
+### ⭐ THE FINDING — THE RECEIPT'S DECOMPOSITION HIDES WHERE THE TIME GOES
+
+The same gate set, in one session, ran between **178s and 1552s** — while the `build Ns` the receipt
+prints ranged only 1–60s. So `gate 1308s · build 60s` reads as *"the gates are slow"* when most of
+that 1308 is **compilation the gates themselves trigger**: each `cargo test -p X --test Y` builds
+before it runs, and that cost lands inside the `gate` figure.
+
+Two rigor-preserving observations follow, both for the observer (`scripts/` is not the agent's):
+
+1. **The prewarm list is a subset of the crate-suite list.** `verify.sh` prewarms
+   `manuk-page --features stylo,spidermonkey`, `manuk-shell` and `manuk-dom` with `--no-run`, and
+   then `_crate_suite` runs **seven** crates — so `manuk-css`, `manuk-layout`, `manuk-paint`,
+   `manuk-net` and `manuk-agent` build *inside* the timed section, against the parallel gate launch
+   the prewarm exists to protect. Adding them is the same binaries and the same tests (rule 1/4:
+   redundancy and scope), not a coverage change.
+2. ⚠ **The agent's own instrument runs perturb P.** The parity section is
+   `cargo run -q -p manuk-wpt --release`, and this session ran `--release -p manuk-wpt` repeatedly
+   for the fidelity shape-dumps — same target directory, same fingerprints. A 341s P after a tick
+   that used the fidelity instrument is partly self-inflicted, and that is worth knowing before
+   reading P as bloat.
+
+### WHAT WAS NOT DONE, DELIBERATELY
+
+Nothing was trimmed. Every admissible optimisation above lives in `scripts/`, which is
+observer-owned, and the audit's own rule is that it reports rather than deletes. No gate was cut, no
+floor widened, and nothing was moved to CI — which the audit names explicitly as *"not a rigor
+launder."*
+
+### THE RECEIPT
+
+```text
+  wall-audit                    run; LAST_WALL_AUDIT 1348 → 1368
+  JOURNAL t1363's speed claim   CORRECTED (12 runs, both job counts)
+  git diff engine/              empty — an audit tick changes no engine code, by design
+```
+
+NEXT: the ranked capability items are unchanged and all three are measured — the CSS `content`
+ALT-TEXT syntax for accname (`content: "before" / "alt-before"`, 6+ rows, Track B), the float
+re-flow (t1364, Track A), and a11yproject's remaining width shortfall, now the board's only failing
+anchor at 49.3%.
+
+WIKI: docs/wiki/board-anchor-sites-remeasured.md

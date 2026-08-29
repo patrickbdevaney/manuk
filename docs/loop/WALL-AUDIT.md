@@ -2265,3 +2265,82 @@ and belong to the observer. **Recorded for the observer, not touched.**
 
 RE-CHECK: this audit is falsifiable — if `unattributed_seconds` is still ≥80% of `total_seconds` at
 audit #53 (tick ~1368), the ledger repair did not happen and the wall-time audit remains blind.
+
+---
+
+## Audit #53 — tick 1368 (2026-08-29)
+
+### AUDIT #52's RE-CHECK, ANSWERED — the prediction is FALSIFIED, and the instrument is still half blind
+
+#52 closed with: *"if `unattributed_seconds` is still ≥80% of `total_seconds` at audit #53 (tick
+~1368), the ledger repair did not happen and the wall-time audit remains blind."*
+
+```text
+  ══ WALL-TIME AUDIT @ tick 1367 — total 1308s ══
+     341s  P   parity vs headless Chrome        26%
+     102s  T   crate tests                       8%
+      60s  B   build (workspace)                 5%
+      17s  G6 · 10s G1 · 4s F · 2s F4 · the rest ~0
+     ─────
+     536s  attributed          772s unattributed  =  59%
+```
+
+**59% < 80%, so the prediction does not hold** — the ledger resolved 15% at #52 and resolves 41%
+now, so the repair partly happened. It is still the case that **more of the wall is unattributed than
+attributed**, so #52's governing sentence stands: *an audit whose instrument cannot see most of what
+it audits must report the instrument, not a trim.*
+
+### ⚠⚠⚠ AND THIS AUDIT'S OWN MAIN RESULT IS A CORRECTION TO A CLAIM THE LOOP PUBLISHED
+
+t1363's journal recorded *"the prescribed workaround (`CARGO_BUILD_JOBS=1`, which is also faster)"*,
+on one pair: 372s then 177s. Every wall in that session, by the mem-guard's chosen job count:
+
+```text
+  JOBS=8    500   696   471   840   388
+  JOBS=1    178  1552  1340   219  1368
+```
+
+**The job count explains none of the spread.** 177s was a *warm re-run of a tree that had just been
+built* (`build 1s`) against a first attempt that was not; both fast JOBS=1 runs (178s, 219s) are
+immediate re-runs. The variable is build warmth. That is precisely the confound this project's own
+rule exists for — *a control is a binary you rebuilt and ran in the same hour* — and the claim was
+made while writing an audit about instruments lying.
+
+⚠ The `_out()` multi-gate false-RED occurred at **both** settings (t1363 at JOBS=8, t1365 at JOBS=1),
+so it is not jobs-dependent either. The workaround stands as a **retry**, not a speed-up.
+
+### ⭐ WHERE THE TIME ACTUALLY GOES — the receipt's split hides it
+
+One gate set, one session, **178s to 1552s** — while the `build Ns` the receipt prints ranged only
+1–60s. So `gate 1308s · build 60s` reads as *"the gates are slow"* when most of that 1308 is
+**compilation the gates themselves trigger**: every `cargo test -p X --test Y` builds before it runs,
+and that lands inside the `gate` figure. This is the same organ #52 identified as LINK-bound, seen
+from the timing side rather than the disk side, and it is why the `build` column has never
+correlated with the total.
+
+### THE RIGOR-PRESERVING LEVERS — both harness-owned, neither taken
+
+1. **The prewarm list is a strict subset of the crate-suite list.** `verify.sh` prewarms
+   `manuk-page --features stylo,spidermonkey`, `manuk-shell` and `manuk-dom` with `--no-run`, and
+   `_crate_suite` then runs **seven** crates — so `manuk-css`, `manuk-layout`, `manuk-paint`,
+   `manuk-net` and `manuk-agent` build *inside* the timed section, racing the concurrent gate launch
+   the prewarm exists to protect against. Adding them is the same binaries and the same tests
+   (rule 1 redundancy / rule 4 scope), not a coverage change.
+2. ⚠ **The agent's own instrument runs perturb P.** Parity is
+   `cargo run -q -p manuk-wpt --release`, and this session ran `--release -p manuk-wpt` repeatedly
+   for the fidelity shape-dumps — same target directory, same fingerprints. A 341s P after a tick
+   that used the fidelity instrument is partly self-inflicted, which has to be known before reading
+   P as bloat. **This one is the agent's own doing and is worth stating plainly rather than filing
+   against the harness.**
+
+#52's two levers (extend `head_`'s brackets so the concurrent launch and link phase fall inside a
+section; collapse the duplicated static mozjs across the gate binaries) are unchanged and unaddressed.
+
+### NOTHING TRIMMED
+
+No gate dropped, no floor widened, nothing sampled, nothing moved to CI — which this protocol names
+explicitly as *"not a rigor launder."* No `scripts/` file was touched.
+
+RE-CHECK: falsifiable at audit #54 (tick ~1388) — if `unattributed_seconds` has not fallen below 50%
+of the total, lever 1 above was not taken and the section brackets are still the binding limit on
+what this audit can see.
