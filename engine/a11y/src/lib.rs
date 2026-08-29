@@ -120,6 +120,57 @@ pub enum Role {
     // Container / grouping widget roles — the structures those interactive widgets live in. An
     // agent that finds a `tab` needs the enclosing `tablist` to know the set; a `dialog` tells it
     // a modal is up and the page behind it is inert.
+    // ── ⭐ THE TEXT-LEVEL AND DOCUMENT-STRUCTURE ROLES ARIA 1.2/1.3 ADDED, AND THEY ARE NOT
+    // DECORATION. A screen reader announces emphasis, a deletion, a term's definition; an agent
+    // reading the tree needs `code` to know a run is a literal and `time` to know it is a date.
+    // Every one of these collapsed to `Generic`, which is the tree saying "a box" about a word the
+    // author marked up on purpose. `<del>`, `<ins>`, `<sub>`, `<sup>`, `<em>`, `<strong>`, `<code>`,
+    // `<dfn>`, `<time>`, `<mark>`, `<blockquote>`, `<figure>` and `<caption>` are ordinary HTML.
+    Blockquote,
+    Caption,
+    Code,
+    Definition,
+    Deletion,
+    Insertion,
+    Emphasis,
+    Strong,
+    Subscript,
+    Superscript,
+    Mark,
+    Suggestion,
+    Term,
+    Time,
+    Figure,
+    Note,
+    Application,
+    Math,
+
+    // Live regions past `alert`/`status` — a `log` and a `timer` announce differently.
+    Log,
+    Marquee,
+    Timer,
+
+    // ⚠ Grid structure the flat table roles COLLAPSED. `gridcell` is not `cell`: a grid is the
+    // interactive widget (a spreadsheet, a data grid), a table is static content, and an agent that
+    // cannot tell them apart cannot tell a document from an application.
+    Grid,
+    GridCell,
+    RowGroup,
+
+    Meter,
+    ScrollBar,
+    SearchBox,
+    // Likewise `menuitemcheckbox`/`menuitemradio`: a checkable menu item was announced as an
+    // ordinary one, so its whole point — that it has a state — was invisible in the role.
+    MenuItemCheckBox,
+    MenuItemRadio,
+
+    // ARIA 1.3 SCOPED LANDMARKS: a `<header>`/`<footer>` inside sectioning content is NOT the
+    // page's banner/contentinfo. Announcing every article's footer as THE page footer is worse
+    // than announcing none.
+    SectionHeader,
+    SectionFooter,
+
     Menu,
     MenuBar,
     TabList,
@@ -156,6 +207,10 @@ impl Role {
                 | Role::SpinButton
                 | Role::Tab
                 | Role::MenuItem
+                // Split out of `MenuItem`/`TextBox` — they were interactive before and must stay so.
+                | Role::MenuItemCheckBox
+                | Role::MenuItemRadio
+                | Role::SearchBox
                 | Role::Option
                 | Role::TreeItem
         )
@@ -172,11 +227,16 @@ impl Role {
                 | Role::Heading { .. }
                 | Role::ListItem
                 | Role::Cell
+                // Split out of `Cell`; ARIA lists `gridcell` as name-from-content too.
+                | Role::GridCell
                 | Role::ColumnHeader
                 | Role::RowHeader
                 | Role::Row
                 | Role::Tab
                 | Role::MenuItem
+                // Split out of `MenuItem`; ARIA gives both name-from-content, as menuitem has.
+                | Role::MenuItemCheckBox
+                | Role::MenuItemRadio
                 | Role::Option
                 | Role::Switch
                 | Role::TreeItem
@@ -236,6 +296,37 @@ impl Role {
             Role::Cell => "cell",
             Role::ColumnHeader => "columnheader",
             Role::RowHeader => "rowheader",
+            Role::Blockquote => "blockquote",
+            Role::Caption => "caption",
+            Role::Code => "code",
+            Role::Definition => "definition",
+            Role::Deletion => "deletion",
+            Role::Insertion => "insertion",
+            Role::Emphasis => "emphasis",
+            Role::Strong => "strong",
+            Role::Subscript => "subscript",
+            Role::Superscript => "superscript",
+            Role::Mark => "mark",
+            Role::Suggestion => "suggestion",
+            Role::Term => "term",
+            Role::Time => "time",
+            Role::Figure => "figure",
+            Role::Note => "note",
+            Role::Application => "application",
+            Role::Math => "math",
+            Role::Log => "log",
+            Role::Marquee => "marquee",
+            Role::Timer => "timer",
+            Role::Grid => "grid",
+            Role::GridCell => "gridcell",
+            Role::RowGroup => "rowgroup",
+            Role::Meter => "meter",
+            Role::ScrollBar => "scrollbar",
+            Role::SearchBox => "searchbox",
+            Role::MenuItemCheckBox => "menuitemcheckbox",
+            Role::MenuItemRadio => "menuitemradio",
+            Role::SectionHeader => "sectionheader",
+            Role::SectionFooter => "sectionfooter",
             Role::Generic => "generic",
         }
     }
@@ -252,8 +343,15 @@ impl Role {
     /// Role equality that ignores a heading's level, so `parse("heading")` matches an
     /// `<h1>`. Exact `Role` equality (`==`) still compares levels.
     pub fn matches(&self, other: &Role) -> bool {
+        // ⚠ **UN-COLLAPSING A ROLE MUST NOT BREAK THE CALLER THAT ASKED THE COARSE QUESTION.**
+        // `gridcell` and `menuitemcheckbox`/`menuitemradio` used to BE `cell` and `menuitem`, and
+        // `manuk-agent` targets by role name. Making them distinct is more correct in the tree and
+        // would silently stop matching here; the coarse token still matches the specific role.
         match (self, other) {
             (Role::Heading { .. }, Role::Heading { .. }) => true,
+            (Role::MenuItem, Role::MenuItemCheckBox | Role::MenuItemRadio)
+            | (Role::MenuItemCheckBox | Role::MenuItemRadio, Role::MenuItem) => true,
+            (Role::Cell, Role::GridCell) | (Role::GridCell, Role::Cell) => true,
             (a, b) => a == b,
         }
     }
@@ -285,9 +383,44 @@ impl Role {
             "spinbutton" => Role::SpinButton,
             "progressbar" => Role::ProgressBar,
             "tab" => Role::Tab,
-            // `menuitemcheckbox`/`menuitemradio` are checkable menu items; ground them as menu
-            // items (their checked/selected state still flows from `aria-checked` via `state_of`).
-            "menuitem" | "menuitemcheckbox" | "menuitemradio" => Role::MenuItem,
+            "menuitem" => Role::MenuItem,
+            // ⚠ These two used to ground onto `menuitem`. A collapse is invisible in a tree dump
+            // and wrong in the one place the role is read: `menuitemcheckbox` IS the announcement
+            // that the item carries a state. `Role::matches` keeps `parse("menuitem")` matching
+            // them, so nothing that asked the old question stops working.
+            "menuitemcheckbox" => Role::MenuItemCheckBox,
+            "menuitemradio" => Role::MenuItemRadio,
+            "blockquote" => Role::Blockquote,
+            "caption" => Role::Caption,
+            "code" => Role::Code,
+            "definition" => Role::Definition,
+            "deletion" => Role::Deletion,
+            "insertion" => Role::Insertion,
+            "emphasis" => Role::Emphasis,
+            "strong" => Role::Strong,
+            "subscript" => Role::Subscript,
+            "superscript" => Role::Superscript,
+            "mark" => Role::Mark,
+            "suggestion" => Role::Suggestion,
+            "term" => Role::Term,
+            "time" => Role::Time,
+            "figure" => Role::Figure,
+            "note" => Role::Note,
+            "application" => Role::Application,
+            "math" => Role::Math,
+            "log" => Role::Log,
+            "marquee" => Role::Marquee,
+            "timer" => Role::Timer,
+            "grid" => Role::Grid,
+            "gridcell" => Role::GridCell,
+            "rowgroup" => Role::RowGroup,
+            "meter" => Role::Meter,
+            "scrollbar" => Role::ScrollBar,
+            "searchbox" => Role::SearchBox,
+            "sectionheader" => Role::SectionHeader,
+            "sectionfooter" => Role::SectionFooter,
+            // `image` is the ARIA spelling and `img` the HTML one; both name the same role.
+            "image" | "img" => Role::Image,
             "option" => Role::Option,
             "treeitem" => Role::TreeItem,
             "menu" => Role::Menu,
@@ -739,6 +872,28 @@ fn is_non_rendered_tag(tag: &str) -> bool {
     )
 }
 
+/// Whether `node` has a **sectioning-content** ancestor — the test that decides whether a
+/// `<header>`/`<footer>` is the PAGE's banner/contentinfo landmark or a section's own header.
+///
+/// The scoping ancestors are HTML's sectioning content plus `<main>`: anything else (a `<div>`
+/// wrapper, the body) leaves the landmark scoped to the document, which is the whole point of a
+/// landmark.
+fn in_sectioning_content(dom: &Dom, node: NodeId) -> bool {
+    let mut cur = dom.parent(node);
+    while let Some(n) = cur {
+        if let Some(el) = dom.element(n) {
+            if matches!(
+                el.name.as_str(),
+                "article" | "aside" | "main" | "nav" | "section"
+            ) {
+                return true;
+            }
+        }
+        cur = dom.parent(n);
+    }
+    false
+}
+
 /// Whether this element (and its subtree) is excluded from the a11y tree.
 pub fn is_hidden(dom: &Dom, node: NodeId) -> bool {
     let Some(el) = dom.element(node) else {
@@ -775,10 +930,15 @@ pub fn role_of(dom: &Dom, node: NodeId) -> Option<Role> {
 
     if let Some(explicit) = el.attr("role") {
         // ARIA: the first *valid* token wins; invalid tokens fall through to implicit.
-        if let Some(r) = explicit
-            .split_ascii_whitespace()
-            .find_map(Role::from_aria_token)
-        {
+        // ⚠⚠⚠ **`Role::parse`, NOT `Role::from_aria_token` — THE CASE FOLD ALREADY EXISTED AND
+        // THIS ENTRANCE DID NOT USE IT.** `parse` is `from_aria_token(&tok.trim().to_ascii_lowercase())`
+        // and is what the AGENT calls; the `role="…"` attribute — the entrance the actual WEB uses —
+        // called the raw matcher, so `role="BUTTON"`, `role="Button"` and `role=" buTtOn"` matched
+        // nothing and the element silently fell through to its implicit role. ARIA role tokens are
+        // ASCII case-insensitive (ARIA in HTML §role attribute), and the fallback-token form
+        // `role="foo Link"` — an unknown token then a real one — is the documented way authors ship
+        // forward-compatible roles. 114 of 172 failing `wai-aria` subtests were nothing but this.
+        if let Some(r) = explicit.split_ascii_whitespace().find_map(Role::parse) {
             return Some(r);
         }
     }
@@ -801,9 +961,11 @@ pub fn role_of(dom: &Dom, node: NodeId) -> Option<Role> {
             "checkbox" => Role::CheckBox,
             "radio" => Role::Radio,
             "button" | "submit" | "reset" | "image" => Role::Button,
-            // HTML-AAM: `<input type=range>` is a `slider`, `type=number` a `spinbutton`.
+            // HTML-AAM: `<input type=range>` is a `slider`, `type=number` a `spinbutton`,
+            // `type=search` a `searchbox` (which is what tells an agent it is THE search field).
             "range" => Role::Slider,
             "number" => Role::SpinButton,
+            "search" => Role::SearchBox,
             // `hidden` is filtered by `is_hidden` before we get here.
             _ => Role::TextBox,
         },
@@ -831,6 +993,32 @@ pub fn role_of(dom: &Dom, node: NodeId) -> Option<Role> {
         // N4 — a `<slot>` is a rendering hole, not a semantic node: its assigned nodes
         // take its place in the flat tree, so it exposes no a11y node of its own.
         "slot" => return None,
+        // ── THE TEXT-LEVEL ELEMENTS, which are ordinary HTML and were all `generic`.
+        "blockquote" => Role::Blockquote,
+        "caption" => Role::Caption,
+        "code" => Role::Code,
+        "em" => Role::Emphasis,
+        "strong" => Role::Strong,
+        "sub" => Role::Subscript,
+        "sup" => Role::Superscript,
+        "mark" => Role::Mark,
+        "time" => Role::Time,
+        "figure" => Role::Figure,
+        "meter" => Role::Meter,
+        // HTML-AAM: `<ins>` is an insertion; BOTH `<del>` and `<s>` are deletions — `<s>` is
+        // "no longer accurate", which is the same announcement.
+        "ins" => Role::Insertion,
+        "del" | "s" => Role::Deletion,
+        // A definition list's parts: the term and what it means.
+        "dfn" | "dt" => Role::Term,
+        "dd" => Role::Definition,
+        // `<output>` is a live region — the whole point of the element is that it is announced
+        // when it changes.
+        "output" => Role::Status,
+        "optgroup" => Role::Group,
+        // `<dir>` is obsolete and still renders as a list, so it still IS one.
+        "dir" => Role::List,
+        "thead" | "tbody" | "tfoot" => Role::RowGroup,
         "ul" | "ol" => Role::List,
         "li" => Role::ListItem,
         "table" => Role::Table,
@@ -859,8 +1047,21 @@ pub fn role_of(dom: &Dom, node: NodeId) -> Option<Role> {
         // the vendors prioritised.
         "search" => Role::Search,
         "main" => Role::Main,
-        "header" => Role::Banner,
-        "footer" => Role::ContentInfo,
+        // ⚠⚠⚠ **A `<footer>` INSIDE AN `<article>` IS NOT THE PAGE'S FOOTER.** `banner` and
+        // `contentinfo` are LANDMARKS — a screen reader offers a jump list of them and an agent
+        // reads them as "the page's chrome". A blog index with thirty articles was publishing
+        // thirty `contentinfo` landmarks, which is worse than publishing none: the one real page
+        // footer is no longer findable. ARIA 1.3 (w3c/aria#1931) names the scoped ones
+        // `sectionheader`/`sectionfooter`; the landmark role survives only at the top level.
+        "header" | "footer" => {
+            let landmark = !in_sectioning_content(dom, node);
+            match (el.name.as_str(), landmark) {
+                ("header", true) => Role::Banner,
+                ("header", false) => Role::SectionHeader,
+                (_, true) => Role::ContentInfo,
+                (_, false) => Role::SectionFooter,
+            }
+        }
         "form" => Role::Form,
         "article" => Role::Article,
         // HTML-AAM: `<section>` is only a `region` when it has an accessible name.

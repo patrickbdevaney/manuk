@@ -1302,6 +1302,10 @@
   - L4015 · accname §4.3 STEP 2C — AN EMBEDDED CONTROL SPEAKS ITS VALUE, AND THE LABELLED ONE SPEAKS NOTHING
   - L4032 · CHROME-MEASURED, NOT REASONED — element.labels ANSWERS THE ASSOCIATION QUESTION DIRECTLY
   - L4046 · AND THE ID INDEX WAS ANSWERING THE WRONG "FIRST"
+  - L4053 · AN ARIA ROLE TOKEN IS ASCII CASE-INSENSITIVE, AND THE FOLD EXISTED IN THE ENTRANCE THE WEB DOES NOT USE (t1350)
+  - L4070 · ~30 TOKENS WERE ABSENT, AND ABSENT MEANS generic
+  - L4082 · A COLLAPSE READS AS A PLAUSIBLE NEIGHBOUR, WHICH IS WHY IT SURVIVES REVIEW
+  - L4090 · ⭐ AND ONE OF THEM IS A REAL-PAGE BUG: A <footer> INSIDE AN <article> IS NOT THE PAGE'S FOOTER
 
 ## THE FIDELITY INSTRUMENT — what it can and cannot see
 `docs/wiki/fidelity-instrument.md`
@@ -2452,4 +2456,4 @@
   - L231 · Both named mechanisms are subsystem work
 
 ---
-2359 sections across 22 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+2363 sections across 22 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.

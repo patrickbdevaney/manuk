@@ -11,12 +11,12 @@
 
 | | value | over |
 |---|---|---|
-| ticks landed | **1034** | ticks 1–1349 |
-| median tick cycle | **31m** | 1033 intervals |
-| median, last 10 | **2.3h** | 10 intervals |
+| ticks landed | **1035** | ticks 1–1350 |
+| median tick cycle | **31m** | 1034 intervals |
+| median, last 10 | **1.9h** | 10 intervals |
 | fastest / slowest | 5s / 7.0d | |
-| **ticks per hour** | **0.88** | 1172.0h elapsed |
-| median verify wall | **66s** | 973 ticks |
+| **ticks per hour** | **0.88** | 1173.1h elapsed |
+| median verify wall | **66s** | 974 ticks |
 | wall trend | 39s → 8m — getting slower ⚠️ | first 3 vs last 3 |
 
 The **cycle** is the real unit: implement → debug → verify wall → land. The wall is only part of
@@ -31,7 +31,7 @@ it, and a wall that grows taxes every future tick, so it is tracked separately f
 * **✅ rows in the capability ledger**: 144 → **642**
 * **Bar 0 — oracle hangs**: 0 of 265 sites
 
-**487 of 1034 ticks** (47%) moved a
+**488 of 1035 ticks** (47%) moved a
 user-visible capability. The rest were instruments, infrastructure and corrections — and the
 ledger says the corrections were not overhead: three of its top three priorities were phantoms,
 and finding that out redirected everything after it.
@@ -90,7 +90,7 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 
 ## What a capability costs
 
-* **487** capability ticks, median cycle **31m**
+* **488** capability ticks, median cycle **31m**
 * median diff per tick: **+282 / −34** lines across 8 files
 
 ## Every tick
@@ -1131,5 +1131,6 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 | **1346** | 2026-08-28 18:25 | 2.6h | capability | 8m | +442/−34 | 522 | 81 | 56.0% · | a negative margin makes a block wider than its parent, and its lines were still clipped to |
 | **1348** | 2026-08-29 00:13 | 5.8h | capability | 8m | +513/−36 | 522 | 81 | 56.0% · | a `;` inside `url()` ended the at-rule, and it cost the rest of the stylesheet (2026-08-28 |
 | **1349** | 2026-08-29 01:05 | 52m | capability | 8m | +753/−58 | 522 | 81 | 56.0% · | the `<label>` that wraps its control: the click path had the rule right, the NAME path had |
+| **1350** | 2026-08-29 02:09 | 65m | capability | 8m | +627/−43 | 522 | 81 | 56.0% · | an ARIA role token is ASCII case-insensitive, and the fold existed in the entrance the web |
 
 *`·` after a WPT figure means **carried forward**, not measured this tick.*

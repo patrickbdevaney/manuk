@@ -4049,3 +4049,55 @@ the user never sees.
 ID is X"*. `id_index` pushed children and popped LIFO, visiting the **last** match first, and
 `or_insert` kept that one. Invisible on any document without duplicate ids — which is to say,
 invisible except in exactly the case the rule exists for.
+
+## AN ARIA ROLE TOKEN IS ASCII CASE-INSENSITIVE, AND THE FOLD EXISTED IN THE ENTRANCE THE WEB DOES NOT USE (t1350)
+
+`Role::parse` is `from_aria_token(&tok.trim().to_ascii_lowercase())` and is what `manuk-agent`
+calls. `role_of` — the path a real `role="…"` **attribute** takes — called the raw matcher, so
+
+```html
+  <div role="BUTTON">      <div role="Button">      <div role=" buTtOn">
+```
+
+matched nothing and the element silently fell through to its implicit role. **114 of 172 failing
+`wai-aria` subtests were nothing but this.** It is t1353's *two entrances, one unguarded* with the
+sides swapped: here the guarded entrance was the one **we** built, and the unguarded one was the web's.
+
+It matters past conformance because of the **fallback-token form**, which is how authors ship
+forward-compatible roles: `role="foo Link"` — an unknown token, then a real one. First valid token
+wins, and validity is case-blind.
+
+### ~30 TOKENS WERE ABSENT, AND ABSENT MEANS `generic`
+
+`code`, `time`, `term`, `definition`, `deletion`, `insertion`, `emphasis`, `strong`, `subscript`,
+`superscript`, `mark`, `blockquote`, `caption`, `figure`, `meter`, `grid`, `rowgroup`, `searchbox`,
+`scrollbar`, `log`, `timer`, `marquee`, `math`, `note`, `application`, `suggestion`,
+`sectionheader`, `sectionfooter`. Their HTML spellings (`<em>`, `<strong>`, `<code>`, `<sub>`,
+`<sup>`, `<mark>`, `<time>`, `<del>`, `<s>`, `<ins>`, `<dfn>`, `<dd>`, `<blockquote>`, `<figure>`,
+`<meter>`, `<output>`, `<optgroup>`, `<dir>`, `thead`/`tbody`/`tfoot`) were missing too.
+
+**A tree that answers *"a box"* about a word the author marked up on purpose cannot be the agent's
+perception layer** — that is I3's own claim, not a conformance point.
+
+### A COLLAPSE READS AS A PLAUSIBLE NEIGHBOUR, WHICH IS WHY IT SURVIVES REVIEW
+
+`gridcell` was grounded on `cell` and `menuitemcheckbox`/`menuitemradio` on `menuitem`, with a
+comment saying so. But `menuitemcheckbox` **IS** the announcement that the item carries a state, and
+a grid is the interactive widget where a table is static content. ⚠ Un-collapsing them would have
+silently broken `manuk-agent`, which targets by role NAME — so `Role::matches` now lets the coarse
+token match the specific role. **A precision gain that drops a match is a regression.**
+
+### ⭐ AND ONE OF THEM IS A REAL-PAGE BUG: A `<footer>` INSIDE AN `<article>` IS NOT THE PAGE'S FOOTER
+
+`banner` and `contentinfo` are LANDMARKS — a screen reader offers a jump list of them and an agent
+reads them as the page's chrome. A blog index with thirty articles was publishing **thirty
+`contentinfo` landmarks**, which is worse than publishing none: the one real page footer is no
+longer findable. ARIA 1.3 (w3c/aria#1931) names the scoped ones `sectionheader`/`sectionfooter`; the
+landmark survives only when no `article`/`aside`/`main`/`nav`/`section` ancestor scopes it.
+
+```text
+  suite       BEFORE           AFTER            delta
+  wai-aria    238/434 54.8%    387/434 89.2%    +149
+  html-aam    253/335 75.5%    281/335 83.9%     +28
+  accname     380/484 78.5%    380/484 78.5%       0   CONTROL
+```

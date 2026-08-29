@@ -9217,3 +9217,16 @@ click target, which is why authors reach for it over `<label for>`. Both spellin
 control's accessible NAME, and every associated label concatenates in document order. Measured on
 WPT's `accname` suite the encapsulating form alone was **35 subtests**, 2.7x the next mechanism.
 (t1349 — `agent/tests/g_a11y_label.rs`)
+
+## `role="BUTTON"` / `role="foo Link"` — ARIA role tokens are ASCII case-insensitive, and the fallback form is normal
+
+Authors ship forward-compatible roles as a token LIST — an unknown token followed by a real one
+(`role="foo Link"`) — and nothing forces the token to be lowercase. Both spellings must resolve.
+Case-sensitive matching made the element fall through to its implicit role: 114 of 172 failing
+`wai-aria` subtests. (t1350 — `agent/tests/g_a11y_role_vocabulary.rs`)
+
+## `<footer>` inside an `<article>` is NOT the page footer
+
+`banner`/`contentinfo` are landmarks a screen reader and an agent use as a jump list. A blog index
+with thirty `<article><footer>` was publishing thirty `contentinfo` landmarks, so the one real page
+footer stopped being findable. ARIA 1.3 scopes them to `sectionheader`/`sectionfooter`. (t1350)

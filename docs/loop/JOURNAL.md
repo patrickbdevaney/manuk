@@ -94046,3 +94046,108 @@ landed on a second, warm run. `disk-hygiene.sh` alone was ~16 min of it with `/h
 live in `scripts/`; recorded for the observer, per PART VII.
 
 WIKI: docs/wiki/dom-semantics.md
+
+## Tick 1350 — an ARIA role token is ASCII case-insensitive, and the fold existed in the entrance the web does not use (2026-08-29)
+
+TICK SHAPE: capability — the accessibility tree (TRACK B), second consecutive. Board re-run at the
+top of this tick: unchanged. Target chosen by SURVEY, not by count — t1350's own rule from the
+memory index: rank the failing test NAMES before grinding a starred row.
+
+### THE SURVEY, AND IT SAID SOMETHING THE COUNT COULD NOT
+
+`wai-aria` was 238/434 = 54.8%, the lowest a11y row. Classifying all 172 failing subtests by the
+SUBJECT element's `role` attribute rather than by file:
+
+```text
+  114  (66.3%)  role token CASE                    role="foo Link", role=" buTtOn"
+   33  (19.2%)  token ABSENT from the vocabulary   sectionfooter, grid, rowgroup, code, time…
+   16  ( 9.3%)  token COLLAPSED onto a near role   gridcell -> cell, menuitemcheckbox -> menuitem
+    5  ( 2.9%)  no role attr (implicit mapping)
+    4  ( 2.3%)  role=none/presentation conflict resolution
+```
+
+⭐ **Two-thirds of the lowest row on the a11y board was ONE LINE.** A count says *"171 role failures,
+a long grind"*; the survey says *"one expression, then a vocabulary"*.
+
+### ⭐⭐⭐ THE CASE FOLD ALREADY EXISTED — IN THE ENTRANCE THE WEB DOES NOT USE
+
+`Role::parse` is `from_aria_token(&tok.trim().to_ascii_lowercase())`, and it is what `manuk-agent`
+calls. `role_of` — the path a real `role="…"` **attribute** takes — called the raw matcher, so
+`role="BUTTON"` matched nothing and the element fell through to its implicit role.
+
+> This is t1353's **two entrances, one unguarded** with the sides swapped: the guarded entrance was
+> the one WE built for ourselves, and the unguarded one was the WEB's. Which is the worse way round,
+> because our own tests all come in through our own door.
+
+It matters past conformance because of the **fallback-token form** — `role="foo Link"`, an unknown
+token then a real one — which is how authors ship forward-compatible roles. First valid token wins,
+and validity is case-blind.
+
+### ~30 ABSENT TOKENS, AND ABSENT MEANS `generic`
+
+`code`, `time`, `term`, `definition`, `deletion`, `insertion`, `emphasis`, `strong`, `subscript`,
+`superscript`, `mark`, `blockquote`, `caption`, `figure`, `meter`, `grid`, `rowgroup`, `searchbox`,
+`scrollbar`, `log`, `timer`, `marquee`, `math`, `note`, `application`, `suggestion`,
+`sectionheader`, `sectionfooter` — plus their HTML spellings (`<em>`, `<strong>`, `<code>`, `<sub>`,
+`<sup>`, `<mark>`, `<time>`, `<del>`, `<s>`, `<ins>`, `<dfn>`, `<dd>`, `<blockquote>`, `<figure>`,
+`<meter>`, `<output>`, `<optgroup>`, `<dir>`, `thead`/`tbody`/`tfoot`, `input[type=search]`).
+**A tree that answers "a box" about a word the author marked up on purpose cannot be the agent's
+perception layer** — I3's own claim, not a conformance point.
+
+### A COLLAPSE READS AS A PLAUSIBLE NEIGHBOUR, WHICH IS WHY IT SURVIVES REVIEW
+
+`gridcell` was grounded on `cell`, `menuitemcheckbox`/`menuitemradio` on `menuitem`, **with a comment
+saying so** — the t1303 shape, a workaround's comment as a claim that dies silently. But
+`menuitemcheckbox` IS the announcement that the item carries a state. ⚠ Un-collapsing would have
+silently broken `manuk-agent`, which targets by role NAME, so `Role::matches` now lets the coarse
+token match the specific role: **a precision gain that drops a match is a regression**, and that is a
+ratchet requirement, not politeness. Same reasoning threads `GridCell` into `name_from_content` and
+the two menu-item roles into `is_interactive` — they had those properties as `Cell`/`MenuItem`.
+
+### ⭐ AND ONE OF THEM IS A REAL-PAGE BUG, NOT A CONFORMANCE POINT
+
+A `<footer>` inside an `<article>` is **not the page's footer**. `banner`/`contentinfo` are
+LANDMARKS — a screen reader offers a jump list of them and an agent reads them as the page's chrome
+— so a blog index with thirty articles was publishing **thirty `contentinfo` landmarks**, which is
+worse than none: the one real page footer stops being findable. ARIA 1.3 (w3c/aria#1931) scopes them
+to `sectionheader`/`sectionfooter` when an `article`/`aside`/`main`/`nav`/`section` ancestor exists.
+
+### THE RECEIPT
+
+```text
+  suite       BEFORE            AFTER             delta
+  wai-aria    238/434  54.8%    387/434  89.2%    +149
+  html-aam    253/335  75.5%    281/335  83.9%     +28
+  accname     380/484  78.5%    380/484  78.5%       0   CONTROL
+  ──────────────────────────────────────────────────────
+  a11y TOTAL  871/1253 69.5%   1048/1253 83.6%    +177   HANG/CRASH 0
+```
+
+**AND THE SESSION'S TWO TRACK-B TICKS TOGETHER:** 819/1253 = 65.4% → **1048/1253 = 83.6%, +229
+subtests**, on a subsystem that had not had an engine tick since t1254 (2026-08-14) and was frozen
+at 63.8%. The board's Track-B bar is *">=90% node match"*; `wai-aria` is now **89.2%**.
+
+GATE `an_aria_role_token_is_case_insensitive_and_the_vocabulary_is_complete`
+(`agent/tests/g_a11y_role_vocabulary.rs`) — 8 arms: four case spellings of one token; the
+fallback-token form; 28 previously-absent tokens; the two un-collapsed roles; **the `Role::matches`
+compatibility arm**; 18 HTML implicit mappings; the `<footer>`/`<header>` landmark scoping with
+top-level CONTROLS for both; and controls that an unknown token still falls through and a plain
+`<div>` is still honestly `generic`. RED under THREE mutations: N1 restore `from_aria_token` in
+`role_of` → `role="BUTTON"` reads `generic`; N2 re-collapse the menu-item roles → `menuitem`;
+N3 make `in_sectioning_content` always false → a nav's footer reads `contentinfo`.
+
+PERF: none — a token match and a short ancestor walk on `<header>`/`<footer>` only.
+
+NEXT, ranked:
+1. `wai-aria`'s residue is now only **47**, and its top mechanism is the one the survey ranked last:
+   **`role=none`/`presentation` conflict resolution** — a presentational role is IGNORED on a
+   focusable element or one carrying a global ARIA attribute.
+2. `html-aam`'s 54 are **CONTEXT-dependent** roles, a genuinely different mechanism: an orphaned
+   `<li>` is not a `listitem`, a `<section>` whose `aria-labelledby` resolves to nothing is not a
+   `region`, a `<div>` inside a `<dl>` is a `group`, `<img alt="">` with an `aria-label` IS an image.
+3. accname's largest single file is `comp_name_from_content.html` at **31/79**.
+4. ⭐ **KILL THE SECOND AND THIRD COPIES of the label rule** (t1349's NEXT #1): the association is
+   implemented three times — `manuk_a11y` (new), `Page::labeled_control`, and the JS shim in
+   `collections_js.rs` — and they disagree on `output`/`progress` and `input[type=hidden]`.
+
+WIKI: docs/wiki/dom-semantics.md
