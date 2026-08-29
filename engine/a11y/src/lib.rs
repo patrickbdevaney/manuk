@@ -892,16 +892,20 @@ fn has_explicit_name(dom: &Dom, node: NodeId) -> bool {
 }
 
 /// Build an `id` → node index once, so `aria-labelledby` / `<label for>` are O(1).
+///
+/// ⚠ **DOCUMENT ORDER, and first-wins.** Both consumers are defined against *"the FIRST element in
+/// tree order whose ID is X"*. The walk this replaces pushed children and popped LIFO, so it
+/// visited the LAST matching element first and `or_insert` kept **that** one — the wrong node, on
+/// any document that repeats an id. It was invisible because a document with no duplicate ids
+/// cannot tell the two orders apart, and duplicate ids are exactly what this rule exists for.
 fn id_index(dom: &Dom) -> HashMap<String, NodeId> {
     let mut map = HashMap::new();
-    let mut stack = vec![dom.root()];
-    while let Some(n) = stack.pop() {
+    for n in document_order(dom, dom.root()) {
         if let Some(el) = dom.element(n) {
             if let Some(id) = el.id() {
                 map.entry(id.to_string()).or_insert(n);
             }
         }
-        stack.extend(dom.children(n));
     }
     map
 }
@@ -952,7 +956,7 @@ fn normalize(s: &str) -> String {
 pub type GeneratedText = HashMap<NodeId, (String, String)>;
 
 pub fn accessible_name(dom: &Dom, node: NodeId, role: &Role) -> String {
-    let index = id_index(dom);
+    let index = NameIndex::build(dom);
     accessible_name_with(dom, node, role, &index, &GeneratedText::new())
 }
 
@@ -960,7 +964,7 @@ fn accessible_name_with(
     dom: &Dom,
     node: NodeId,
     role: &Role,
-    index: &HashMap<String, NodeId>,
+    index: &NameIndex,
     generated: &GeneratedText,
 ) -> String {
     let Some(el) = dom.element(node) else {
@@ -971,7 +975,7 @@ fn accessible_name_with(
     if let Some(refs) = el.attr("aria-labelledby") {
         let text = refs
             .split_ascii_whitespace()
-            .filter_map(|id| index.get(id))
+            .filter_map(|id| index.ids.get(id))
             .map(|&n| normalize(&dom.text_content(n)))
             .filter(|s| !s.is_empty())
             .collect::<Vec<_>>()
@@ -1000,16 +1004,39 @@ fn accessible_name_with(
             }
         }
         "input" | "textarea" | "select" => {
-            // <label for="id">
-            if let Some(id) = el.id() {
-                if let Some(text) = find_label_for(dom, id) {
-                    if !text.is_empty() {
-                        return text;
+            // ⭐ EVERY `<label>` associated with this control, in DOCUMENT order — the `for=`
+            // spelling AND the encapsulating one — joined by a space, as HTML-AAM concatenates
+            // them. See [`LabelIndex`] for what each of those three words was costing.
+            let text = index
+                .labels
+                .get(&node)
+                .map(|ls| {
+                    ls.iter()
+                        .map(|&l| label_text(dom, l, node, generated))
+                        .filter(|s| !s.is_empty())
+                        .collect::<Vec<_>>()
+                        .join(" ")
+                })
+                .unwrap_or_default();
+            if !text.is_empty() {
+                return text;
+            }
+            if el.name == "input" {
+                // `<input type=image>` is a BUTTON whose face is a picture, so HTML-AAM names it by
+                // its `alt` — the same attribute `<img>` uses. It was reaching neither arm: the
+                // `alt` arm matches on the TAG (`img`/`area`) and this one only looked at `value`.
+                if el
+                    .attr("type")
+                    .is_some_and(|t| t.eq_ignore_ascii_case("image"))
+                {
+                    if let Some(alt) = el.attr("alt") {
+                        let alt = normalize(alt);
+                        if !alt.is_empty() {
+                            return alt;
+                        }
                     }
                 }
-            }
-            // Button-ish inputs are named by their `value`.
-            if el.name == "input" {
+                // Button-ish inputs are named by their `value`.
                 if matches!(role, Role::Button) {
                     if let Some(v) = el.attr("value") {
                         let v = normalize(v);
@@ -1024,6 +1051,26 @@ fn accessible_name_with(
                     if !p.is_empty() {
                         return p;
                     }
+                }
+            }
+        }
+        // A `<fieldset>` is named by its `<legend>` and a `<table>` by its `<caption>`. Same
+        // host-language labelling clause as `<label>`, pointing one level IN rather than one level
+        // OUT — and both are structures a form or a data page is built out of, so an unnamed one
+        // is a region the agent cannot say the name of.
+        "fieldset" | "table" => {
+            let want = if el.name == "fieldset" {
+                "legend"
+            } else {
+                "caption"
+            };
+            if let Some(c) = dom
+                .children(node)
+                .find(|&c| dom.element(c).is_some_and(|e| e.name == want))
+            {
+                let text = normalize(&dom.text_content(c));
+                if !text.is_empty() {
+                    return text;
                 }
             }
         }
@@ -1058,18 +1105,242 @@ fn accessible_name_with(
     String::new()
 }
 
-/// Text of the first `<label for="{id}">` in the document.
-fn find_label_for(dom: &Dom, id: &str) -> Option<String> {
-    let mut stack = vec![dom.root()];
-    while let Some(n) = stack.pop() {
-        if let Some(el) = dom.element(n) {
-            if el.name == "label" && el.attr("for") == Some(id) {
-                return Some(normalize(&dom.text_content(n)));
-            }
-        }
-        stack.extend(dom.children(n));
+/// **THE `<label>`s OF A CONTROL, IN DOCUMENT ORDER — AND THE SPELLING WE HAD WAS THE RARER ONE.**
+///
+/// HTML gives a form control two ways to acquire a label, and this engine implemented one of them:
+///
+/// ```html
+///   <label for="a">Remember me</label><input id="a" type="checkbox">   <- was found
+///   <label><input type="checkbox"> Remember me</label>                 <- WAS NOT FOUND
+/// ```
+///
+/// The second is the **encapsulating** (implicit) form, and it is the one authors reach for: it
+/// invents no `id`, and clicking the text toggles the control for free. Measured on WPT's own
+/// `accname` corpus — the one all four engines score themselves on in Interop's accessibility
+/// investigation — **35 subtests turned on nothing but this**, the single largest named mechanism
+/// in the suite's failures, plus 13 more in `comp_embedded_control` whose fixtures are *all*
+/// encapsulating labels.
+///
+/// ⚠⚠⚠ **IT IS NOT A CONFORMANCE POINT — IT IS THE AGENTIC SURFACE'S GROUND TRUTH.** CONSTITUTION
+/// I3 makes this tree a load-bearing subsystem, and `manuk-agent` resolves *"tick the Remember me
+/// box"* through exactly this name. A checkbox inside its own `<label>` had **no name at all**, so
+/// it was an anonymous, unaddressable box to the agent — on the commonest form idiom on the web.
+///
+/// Two further defects lived in the one-line scan this replaces, and both are fixed here:
+///
+/// * **it returned the LAST label, not the first.** `find_label_for` walked with `stack.pop()`
+///   after `stack.extend(children)` — reverse document order per level — and took the first match
+///   it happened to *visit*.
+/// * **it returned ONE label.** HTML-AAM concatenates **every** `<label>` associated with a
+///   control, in tree order: `<label for=x>a</label><label for=x>b</label>` names it `"a b"`.
+///
+/// Built once per tree (or once per [`accessible_name`] call) exactly as [`id_index`] is, so the
+/// per-control cost drops from **a whole-document walk each** to one hash lookup.
+type LabelIndex = HashMap<NodeId, Vec<NodeId>>;
+
+/// The two document-wide lookups an accessible name needs: `id` → node (for `aria-labelledby`) and
+/// control → its `<label>`s.
+///
+/// ⚠ **They travel TOGETHER on purpose.** t1097's lesson in this very file was that `Page` builds
+/// its AX tree through more than one entry point, and threading a new input into only one leaves
+/// the other silently unfixed while the diff looks complete. Bundling them makes *"did every
+/// caller get it"* a type error instead of a review.
+struct NameIndex {
+    ids: HashMap<String, NodeId>,
+    labels: LabelIndex,
+}
+
+impl NameIndex {
+    fn build(dom: &Dom) -> Self {
+        let ids = id_index(dom);
+        let labels = label_index(dom, &ids);
+        Self { ids, labels }
     }
-    None
+}
+
+/// A subtree in **document order**. [`id_index`]'s stack walk is reverse order per level, which is
+/// fine for a first-wins id map and useless for *"which label came first"*.
+fn document_order(dom: &Dom, root: NodeId) -> Vec<NodeId> {
+    let mut out = Vec::new();
+    let mut stack = vec![root];
+    while let Some(n) = stack.pop() {
+        out.push(n);
+        let kids: Vec<NodeId> = dom.children(n).collect();
+        stack.extend(kids.into_iter().rev());
+    }
+    out
+}
+
+/// HTML's **labelable** elements — the ones a `<label>` can be associated with. A `<label>` wrapped
+/// around anything else associates with nothing, which is why "first labelable descendant" has to
+/// check rather than take the first element it meets.
+fn is_labelable(dom: &Dom, node: NodeId) -> bool {
+    let Some(el) = dom.element(node) else {
+        return false;
+    };
+    match el.name.as_str() {
+        "button" | "meter" | "output" | "progress" | "select" | "textarea" => true,
+        // `<input type=hidden>` is the one input that is not labelable.
+        "input" => !el
+            .attr("type")
+            .is_some_and(|t| t.eq_ignore_ascii_case("hidden")),
+        _ => false,
+    }
+}
+
+/// Map every control to the `<label>`s that name it, in document order.
+///
+/// HTML: a `<label>`'s labeled control is the element its `for` names — **and `for` wins even when
+/// it resolves to nothing**, so `<label for="typo"><input></label>` labels the input in no engine.
+/// Without `for`, it is the label's **first labelable descendant**.
+fn label_index(dom: &Dom, ids: &HashMap<String, NodeId>) -> LabelIndex {
+    let mut out: LabelIndex = HashMap::new();
+    for n in document_order(dom, dom.root()) {
+        let Some(el) = dom.element(n) else { continue };
+        if el.name != "label" {
+            continue;
+        }
+        let control = match el.attr("for") {
+            Some(f) => ids.get(f).copied().filter(|&c| is_labelable(dom, c)),
+            None => document_order(dom, n)
+                .into_iter()
+                .find(|&d| d != n && is_labelable(dom, d)),
+        };
+        if let Some(c) = control {
+            out.entry(c).or_default().push(n);
+        }
+    }
+    out
+}
+
+/// The text a `<label>` contributes to `target`'s name — accname §4.3, and **two of its steps are
+/// what make this more than `text_content`**.
+///
+/// 1. **The labelled control contributes NOTHING to its own label.** `<label><input type=checkbox
+///    value="test">checkbox label</label>` is named *"checkbox label"*; folding the input's own
+///    value back in would name the control after itself.
+/// 2. ⭐ **A DIFFERENT control embedded in the label contributes its VALUE** (accname §4.3 step 2C).
+///    `<label><input type=checkbox> Flash the screen <input value="3"> times</label>` is
+///    *"Flash the screen 3 times"* — the number the user actually set is part of the sentence.
+///    Plain `text_content` gives *"Flash the screen times"*, which is a different instruction.
+fn label_text(dom: &Dom, label: NodeId, target: NodeId, generated: &GeneratedText) -> String {
+    let mut out = String::new();
+    label_text_walk(dom, label, target, generated, &mut out);
+    normalize(&out)
+}
+
+fn label_text_walk(
+    dom: &Dom,
+    n: NodeId,
+    target: NodeId,
+    generated: &GeneratedText,
+    out: &mut String,
+) {
+    // The control being named never names itself.
+    if n == target {
+        return;
+    }
+    if !dom.is_element(n) {
+        // A text node's `text_content` is its own data; a comment's is empty. Both correct here.
+        out.push_str(&dom.text_content(n));
+        return;
+    }
+    if is_hidden(dom, n) {
+        return;
+    }
+    // accname §4.3 step 2C — an embedded control speaks its VALUE, not its subtree.
+    if let Some(v) = embedded_control_value(dom, n) {
+        // Padded: the value is a word in a sentence, and the markup around it carries no space of
+        // its own (`…screen <input value="3"> times`). `normalize` collapses the surplus.
+        out.push(' ');
+        out.push_str(&v);
+        out.push(' ');
+        return;
+    }
+    let (b, a) = generated
+        .get(&n)
+        .map(|(b, a)| (b.as_str(), a.as_str()))
+        .unwrap_or(("", ""));
+    out.push_str(b);
+    for c in dom.children(n) {
+        label_text_walk(dom, c, target, generated, out);
+    }
+    out.push_str(a);
+}
+
+/// accname §4.3 step 2C: what a control **embedded in a label** contributes.
+///
+/// A widget in the middle of a label is not read out as its subtree — it is read out as its current
+/// VALUE, because that is what the sentence means. `None` means *"not one of these"*, and the
+/// ordinary text walk handles it: a `<span role=combobox>3</span>` needs no special case, because
+/// its content already **is** its value.
+fn embedded_control_value(dom: &Dom, n: NodeId) -> Option<String> {
+    let el = dom.element(n)?;
+    match role_of(dom, n)? {
+        Role::TextBox => match el.name.as_str() {
+            "input" => Some(normalize(el.attr("value").unwrap_or(""))),
+            "textarea" => Some(normalize(&dom.text_content(n))),
+            _ => None,
+        },
+        Role::ComboBox | Role::ListBox => {
+            if el.name == "input" {
+                return Some(normalize(el.attr("value").unwrap_or("")));
+            }
+            selected_option_text(dom, n)
+        }
+        // A range speaks the value its AUTHOR chose to speak: `aria-valuetext` exists precisely so
+        // `3` can be announced as "3 stars", and it outranks the raw number.
+        Role::Slider | Role::SpinButton => {
+            if let Some(t) = el.attr("aria-valuetext") {
+                return Some(normalize(t));
+            }
+            if let Some(v) = el.attr("aria-valuenow") {
+                return Some(normalize(v));
+            }
+            if el.name == "input" {
+                return Some(normalize(el.attr("value").unwrap_or("")));
+            }
+            None
+        }
+        _ => None,
+    }
+}
+
+/// The selected option of a `<select>` or an ARIA `listbox`.
+///
+/// ⚠ The two differ and the difference is observable: a `<select>` with nothing explicitly selected
+/// still **shows** its first option, so that is what it contributes; an ARIA listbox with no
+/// `aria-selected="true"` shows no selection and contributes nothing.
+fn selected_option_text(dom: &Dom, container: NodeId) -> Option<String> {
+    let mut first = None;
+    let mut selected = None;
+    for n in document_order(dom, container) {
+        if n == container {
+            continue;
+        }
+        let Some(el) = dom.element(n) else { continue };
+        let is_option = el.name == "option"
+            || el
+                .attr("role")
+                .is_some_and(|r| r.split_ascii_whitespace().any(|t| t == "option"));
+        if !is_option {
+            continue;
+        }
+        if first.is_none() {
+            first = Some(n);
+        }
+        if el.attr("selected").is_some()
+            || el
+                .attr("aria-selected")
+                .is_some_and(|v| v.eq_ignore_ascii_case("true"))
+        {
+            selected = Some(n);
+            break;
+        }
+    }
+    let native = dom.element(container).is_some_and(|e| e.name == "select");
+    let pick = selected.or(if native { first } else { None })?;
+    Some(normalize(&dom.text_content(pick)))
 }
 
 /// Build the accessibility tree for the document.
@@ -1160,7 +1431,7 @@ pub fn build_tree_generated(
     non_hittable: &HashSet<NodeId>,
     generated: &GeneratedText,
 ) -> A11yNode {
-    let index = id_index(dom);
+    let index = NameIndex::build(dom);
     let root = dom.root();
     let children = build_children(
         dom,
@@ -1262,7 +1533,7 @@ fn mark_focused(node: &mut A11yNode, focused: NodeId) {
 fn build_children(
     dom: &Dom,
     parent: NodeId,
-    index: &HashMap<String, NodeId>,
+    index: &NameIndex,
     rects: &HashMap<NodeId, Rect>,
     z_index: &ZIndex,
     invisible: &HashSet<NodeId>,

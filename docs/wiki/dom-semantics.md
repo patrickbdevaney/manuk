@@ -3980,3 +3980,72 @@ because narrowness is the discipline, not because this case was expensive.
 Chrome's `490px 100px 250px 40px 400px` — four exact, the control unchanged, `auto` the named residue.
 `css/cssom` 2803/3507 on a same-hour old-binary control and 2803/3507 after: no regression.
 Gate: `engine/page/tests/g_margin_used_value.rs`, proven RED by reverting **either** half alone.
+
+## THE LABEL THAT WRAPS ITS CONTROL — THE CLICK PATH HAD THE RULE RIGHT AND THE NAME PATH HAD A SECOND, WRONG COPY (t1349)
+
+HTML gives a form control two ways to acquire a label. `manuk-a11y`'s accessible-name computation
+implemented one of them:
+
+```html
+  <label for="a">Remember me</label><input id="a" type="checkbox">   <- found
+  <label><input type="checkbox"> Remember me</label>                 <- WAS NOT FOUND
+```
+
+The wrapping (implicit) form invents no `id` and makes the caption itself a click target, which is
+why it is the one authors reach for. Measured on WPT's `accname` suite — what all four engines score
+themselves on — **35 subtests turned on nothing but this**, the largest named mechanism in the
+suite's failures, and every fixture in `comp_embedded_control` (13 more) is built out of it.
+
+### ⭐⭐⭐ THE RULE WAS ALREADY IMPLEMENTED, CORRECTLY, IN ANOTHER CRATE — AND THE COPY THAT WAS RIGHT IS THE ONE A HUMAN NOTICES
+
+`Page::labeled_control` (`engine/page/src/lib.rs`, tick 434) does it exactly right: the `for=` target
+*if labelable*, a dangling `for` labelling **nothing**, otherwise the first labelable descendant. It
+drives click-forwarding and the `element.labels` / `label.control` DOM accessors, both gated.
+
+`manuk_a11y::find_label_for` was a **second implementation of the same rule** and it was wrong in
+three ways at once — no implicit form, one label instead of all of them, and reverse document order
+(it walked `stack.pop()` after `stack.extend(children)`, so *"the first `<label for=x>`"* was really
+the last one).
+
+> **The divergence survived because the two halves fail in opposite visibility.** Clicking the
+> caption toggled the checkbox — the click path was correct, so the page *felt* fine. The checkbox
+> simply had **no name**, which only a screen reader or an agent ever reads. A browser that forwards
+> the click and cannot say what it clicked is exactly the failure I3 exists to prevent.
+
+### accname §4.3 STEP 2C — AN EMBEDDED CONTROL SPEAKS ITS VALUE, AND THE LABELLED ONE SPEAKS NOTHING
+
+A label's text is not `text_content`. Two rules change the sentence:
+
+```html
+  <label><input type=checkbox> Flash the screen <input value="3"> times</label>
+```
+
+- the **labelled** control contributes nothing (otherwise its own `value` is folded into its name);
+- a **different** control inside the label contributes its **VALUE** — so the name is
+  *"Flash the screen 3 times"*, not *"Flash the screen times"*, which is a different instruction.
+
+Per widget: a textbox gives its value; a `<select>` or ARIA `listbox` its **selected** option (a
+`<select>` with no explicit selection still shows its first, an ARIA listbox shows none); a slider or
+spinbutton gives `aria-valuetext`, else `aria-valuenow`, else `value` — never its rendered text,
+because `aria-valuetext` exists precisely so `3` can be announced as *"3 stars"*.
+
+### CHROME-MEASURED, NOT REASONED — `element.labels` ANSWERS THE ASSOCIATION QUESTION DIRECTLY
+
+`labels` is a plain DOM accessor, so headless Chrome arbitrates the rule without any a11y plumbing:
+
+```text
+  <label for="typo"><input id=q> not my label</label>          Chrome  labels=[]
+  <label for=m>label 1</label><label for=m>label 2</label>…    Chrome  labels=["label 1","label 2"]
+  <label><input id=cb> Remember me</label>                     Chrome  labels=["Remember me"]
+```
+
+A **present-but-dangling `for` still wins**: it does not fall back to the wrapped control. That is
+the one rule an implementation is most tempted to "fix" into a fallback, and it would invent a name
+the user never sees.
+
+### AND THE ID INDEX WAS ANSWERING THE WRONG "FIRST"
+
+`aria-labelledby` and `<label for>` are both defined against *"the FIRST element in tree order whose
+ID is X"*. `id_index` pushed children and popped LIFO, visiting the **last** match first, and
+`or_insert` kept that one. Invisible on any document without duplicate ids — which is to say,
+invisible except in exactly the case the rule exists for.

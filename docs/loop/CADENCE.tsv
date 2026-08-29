@@ -1032,3 +1032,4 @@ tick	sha	epoch	iso	delta_s	shape	wall_s	files	added	deleted	gates	claims	wpt_pas
 1345	20740a32	1787946600	2026-08-28T15:50:00-04:00	6500	capability	465	8	360	35	521	81	3896	6960	0	642	0	a percentage is not an `f32`, and the four-across grid was three across (2026-08-28)
 1346	c5d37e04	1787955927	2026-08-28T18:25:27-04:00	9327	capability	465	9	442	34	522	81	3896	6960	0	642	0	a negative margin makes a block wider than its parent, and its lines were still clipped to the parent (2026-08-28)
 1348	70902242	1787976810	2026-08-29T00:13:30-04:00	20883	capability	465	10	513	36	522	81	3896	6960	0	642	0	a `;` inside `url()` ended the at-rule, and it cost the rest of the stylesheet (2026-08-28)
+1349	39a03120	1787979912	2026-08-29T01:05:12-04:00	3102	capability	465	9	753	58	522	81	3896	6960	0	642	0	the `<label>` that wraps its control: the click path had the rule right, the NAME path had a second, wrong copy (2026-08-29)

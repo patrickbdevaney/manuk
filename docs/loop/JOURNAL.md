@@ -93910,3 +93910,139 @@ launch, and collapsing 570 duplicated static mozjs images into one shared harnes
 with a falsifiable re-check at audit #53 (tick ~1368).
 
 WIKI: docs/wiki/css-cascade.md
+
+## Tick 1349 — the `<label>` that wraps its control: the click path had the rule right, the NAME path had a second, wrong copy (2026-08-29)
+
+TICK SHAPE: capability — the accessibility tree, **TRACK B**. Board re-run at the top of this tick,
+and it is why this is not another CSS tick: the observer's 2026-08-28 nudge says Track B has had
+**zero engine ticks since t1254** (frozen at 63.8% node match) while the last ~30 were all Track A,
+and the Phase-0 exit is a CONJUNCTION, so time-to-daily-driver is gated by the lagging leg.
+
+HTML gives a form control two ways to acquire a label. The accessible-name computation implemented
+one of them:
+
+```html
+  <label for="a">Remember me</label><input id="a" type="checkbox">   <- found
+  <label><input type="checkbox"> Remember me</label>                 <- WAS NOT FOUND
+```
+
+### ⭐⭐⭐ THE RULE WAS ALREADY IMPLEMENTED, CORRECTLY, IN ANOTHER CRATE
+
+`Page::labeled_control` (`engine/page/src/lib.rs:7919`, tick **434**) does it exactly right — the
+`for=` target *if labelable*, a dangling `for` labelling **nothing**, else the first labelable
+descendant — and it is gated twice (`g_label_click`, `g_label_association`). `manuk_a11y`'s
+`find_label_for` was a **second implementation of the same rule**, wrong in three ways at once: no
+implicit form, one label instead of all of them, and reverse document order (it walked `stack.pop()`
+after `stack.extend(children)`, so *"the first `<label for=x>`"* was really the last one).
+
+> ⭐⭐⭐ **THE DIVERGENCE SURVIVED 915 TICKS BECAUSE THE TWO HALVES FAIL IN OPPOSITE VISIBILITY.**
+> Clicking the caption toggled the checkbox — the click path was correct, so the page *felt* fine.
+> The checkbox simply had **no name**, which only a screen reader or an agent ever reads. This is
+> t720's *"one rule, N implementations"* with a new and nastier property: **the copy that is right
+> is the one a human notices, so the wrong one is invisible by construction.**
+
+That is I3 failing in the exact place I3 exists: `manuk-agent` resolves *"tick the Remember me box"*
+through this string, and an unnamed control is an unaddressable one.
+
+### THE PRICE WAS MEASURED BEFORE ANYTHING WAS BUILT, AND THE PREDICTION WAS EXACT
+
+Ranked from the failing test NAMES (`--show-failures`), not from the count:
+
+```text
+  label ENCAPSULATION              35   <- the top mechanism, by 2.7x
+  embedded control (all inside encapsulating labels)  13
+  multiple <label for>              1
+  input[type=image] alt             1
+  fieldset > legend                 1
+  table > caption                   1
+  ─────────────────────────────────────
+  predicted                        52
+```
+
+```text
+  suite       BEFORE            AFTER             delta
+  accname     328/484  67.8%    380/484  78.5%    +52   ← exactly the prediction
+  wai-aria    238/434  54.8%    238/434  54.8%      0   CONTROL
+  html-aam    253/335  75.5%    253/335  75.5%      0   CONTROL
+  ────────────────────────────────────────────────────
+  a11y TOTAL  819/1253 65.4%    871/1253 69.5%    +52   HANG/CRASH 0
+```
+
+Per file, and **not one row went down**: `comp_host_language_label.html` 49/88 → **88/88** (it left
+the failing-file list entirely); `comp_embedded_control.html` 13/29 → 26/29. The 3 it did not take
+are the `aria-labelledby`-points-at-a-CONTROL trio, deliberately out of scope (see NEXT).
+
+### accname §4.3 STEP 2C — AN EMBEDDED CONTROL SPEAKS ITS VALUE, AND THE LABELLED ONE SPEAKS NOTHING
+
+A label's text is not `text_content`, and the difference is a different instruction on screen:
+
+```html
+  <label><input type=checkbox> Flash the screen <input value="3"> times</label>
+```
+
+is *"Flash the screen 3 times"*, not *"Flash the screen times"*. Per widget: a textbox gives its
+value; a `<select>` or ARIA `listbox` its **selected** option (a `<select>` with no explicit
+selection still shows its first, an ARIA listbox shows none); a slider/spinbutton gives
+`aria-valuetext`, else `aria-valuenow`, else `value` — never its rendered text, because
+`aria-valuetext` exists precisely so `3` can be announced as *"3 stars"*.
+
+### ⭐ THE ARBITER WAS A PLAIN DOM ACCESSOR, NOT AN A11Y ROUND-TRIP
+
+The one rule an implementation is tempted to "improve" is a dangling `for`: fall back to the wrapped
+control and you invent a name the user never sees. `element.labels` answers the association question
+in ordinary JS, so **headless Chrome arbitrated it directly** — no CDP, no accessibility plumbing:
+
+```text
+  <label for="typo"><input id=q> not my label</label>          Chrome  labels=[]
+  <label for=m>label 1</label><label for=m>label 2</label>…    Chrome  labels=["label 1","label 2"]
+  <label><input id=cb> Remember me</label>                     Chrome  labels=["Remember me"]
+```
+
+**When a spec rule has a DOM-visible shadow, measure the shadow.** All three claims are Chrome-
+measured rather than reasoned, which is what t1004's *"a gate can PIN the engine to a bug"* asks for.
+
+### AND THE ID INDEX WAS ANSWERING THE WRONG "FIRST"
+
+`aria-labelledby` and `<label for>` are both defined against *"the FIRST element in tree order whose
+ID is X"*. `id_index` pushed children and popped LIFO — visiting the **last** match first — and
+`or_insert` kept that one. Invisible on any document without duplicate ids, which is to say
+invisible except in the case the rule exists for. Now a document-order walk.
+
+GATE `a_label_that_wraps_its_control_names_it` (`agent/tests/g_a11y_label.rs`) — 13 arms:
+encapsulation; the `for=` control; every label in document order; the embedded textbox value; the
+labelled control excluded from its own label; an embedded ARIA listbox's selected option;
+`aria-valuetext` over `aria-valuenow`; `<select>` encapsulation; a dangling `for` claiming nothing;
+`aria-label` still winning; `input[type=image]` alt; `fieldset>legend` + `table>caption`; and a
+control that a `<label>` around an unlabelable element labels nothing. RED under THREE mutations:
+N1 drop the implicit branch → `""`; N2 keep only the first label → `"textfield label 1"`;
+N3 drop `embedded_control_value` → `"Flash the screen times"`.
+
+⚠ **THE GATE LIVES IN `manuk-agent`, NOT `manuk-a11y`, AND THAT IS DELIBERATE.** `manuk-a11y` is not
+in `verify.sh`'s crate list, so a gate there is a number nobody re-reads; `manuk-agent` depends on it
+and **is** in the wall. It is also the honest home: this string is the agent's ground truth, not a
+conformance point. (The crate list lives in `scripts/`, which is observer-owned — named, not edited.)
+
+PERF: a strict improvement on the live path. `find_label_for` walked the **whole document per
+control**; the association is now one index built once per tree, exactly as `id_index` is, and the
+two travel together in one `NameIndex` struct so a future caller cannot get one without the other
+(t1097's two-entry-point trap, made a type error).
+
+NEXT, ranked:
+1. ⭐ **KILL THE SECOND COPY.** `manuk-page` already depends on `manuk-a11y`; make
+   `Page::labeled_control` delegate to it. Two existing gates (`g_label_click`,
+   `g_label_association`) already cover the click side, so the risk is bounded and the payoff is
+   that this class cannot recur. Note the two still disagree on one detail: page's LABELABLE list
+   omits `output`/`progress` and does not exclude `input[type=hidden]`.
+2. `aria-labelledby` pointing at a **control** must yield that control's accessible NAME, not its
+   `text_content` (3 subtests, and the fixture is a `<button>` naming itself from a checkbox).
+3. `comp_name_from_content.html` is now the largest single file at **31/79** — descendant
+   `aria-label`, block-level spacing, `text-transform`.
+4. `accname/name/shadowdom` is still **0/6**: the accessible name across a shadow boundary, i.e.
+   every web-component control.
+
+⚠ HARNESS, NOT TOUCHED: tick 1348's wall ran **3972s** (66 min) against `STATUS.md`'s banked 189s
+mark, and my own `timeout 5400` killed the first attempt at 90 min before it could land — the tick
+landed on a second, warm run. `disk-hygiene.sh` alone was ~16 min of it with `/home` at 92%. Both
+live in `scripts/`; recorded for the observer, per PART VII.
+
+WIKI: docs/wiki/dom-semantics.md

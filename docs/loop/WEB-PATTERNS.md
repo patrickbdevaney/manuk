@@ -9209,3 +9209,11 @@ import is the first line of the sheet, a theme's entire CSS can be lost — froz
 
 ⚠ And a truncated URL is worse than a missing one: it fetches a DIFFERENT resource, so the symptom
 looks like a font substitution rather than a 404.
+
+## `<label>` WRAPPING its control (implicit association) — the commonest form idiom on the web
+
+`<label><input type="checkbox"> Remember me</label>` needs no `id` and makes the caption itself a
+click target, which is why authors reach for it over `<label for>`. Both spellings must produce the
+control's accessible NAME, and every associated label concatenates in document order. Measured on
+WPT's `accname` suite the encapsulating form alone was **35 subtests**, 2.7x the next mechanism.
+(t1349 — `agent/tests/g_a11y_label.rs`)

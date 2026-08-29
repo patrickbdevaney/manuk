@@ -1297,6 +1297,11 @@
   - L3921 · margin resolves to the USED value, and a percentage margin never reached px (t1339 specified, t1340 FIXED)
   - L3940 · ⚠ Why this is specified here rather than fixed
   - L3961 · t1340 — the three parts, and why the cost turned out to be nothing
+  - L3984 · THE LABEL THAT WRAPS ITS CONTROL — THE CLICK PATH HAD THE RULE RIGHT AND THE NAME PATH HAD A SECOND, WRONG COPY (t1349)
+  - L3999 · ⭐⭐⭐ THE RULE WAS ALREADY IMPLEMENTED, CORRECTLY, IN ANOTHER CRATE — AND THE COPY THAT WAS RIGHT IS THE ONE A HUMAN NOTICES
+  - L4015 · accname §4.3 STEP 2C — AN EMBEDDED CONTROL SPEAKS ITS VALUE, AND THE LABELLED ONE SPEAKS NOTHING
+  - L4032 · CHROME-MEASURED, NOT REASONED — element.labels ANSWERS THE ASSOCIATION QUESTION DIRECTLY
+  - L4046 · AND THE ID INDEX WAS ANSWERING THE WRONG "FIRST"
 
 ## THE FIDELITY INSTRUMENT — what it can and cannot see
 `docs/wiki/fidelity-instrument.md`
@@ -2447,4 +2452,4 @@
   - L231 · Both named mechanisms are subsystem work
 
 ---
-2354 sections across 22 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+2359 sections across 22 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
