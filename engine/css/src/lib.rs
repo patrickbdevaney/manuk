@@ -1795,6 +1795,16 @@ pub struct ComputedStyle {
     /// exactly why it has to survive the cascade as a percentage rather than being resolved here.
     pub row_gap: Dim,
     pub column_gap: Dim,
+    /// ⚠⚠⚠ **`column-gap` IS TWO PROPERTIES SHARING ONE NAME, AND THEY DISAGREE ON `normal`.**
+    /// For a flex/grid container `normal` is **0**; for a MULTICOL container CSS Multicol §6 says
+    /// `normal` is **1em**. The field above cannot carry both, because by the time a `Dim` is stored
+    /// the keyword is gone — so the keyword is kept here instead of being resolved at parse time.
+    /// `true` while the value is still the initial `normal`; any author `column-gap` clears it.
+    pub column_gap_normal: bool,
+    /// `column-count: <integer>` — `None` is `auto`. CSS Multicol §3.
+    pub column_count: Option<u16>,
+    /// `column-width: <length>` in px — `None` is `auto`. CSS Multicol §2.
+    pub column_width: Option<f32>,
     /// `flex-grow` / `flex-shrink` (item).
     pub flex_grow: f32,
     pub flex_shrink: f32,
@@ -2071,6 +2081,9 @@ impl ComputedStyle {
             flex_wrap: FlexWrap::NoWrap,
             row_gap: Dim::Px(0.0),
             column_gap: Dim::Px(0.0),
+            column_gap_normal: true,
+            column_count: None,
+            column_width: None,
             flex_grow: 0.0,
             flex_shrink: 1.0,
             flex_basis: Dim::Auto,
@@ -6651,10 +6664,58 @@ fn apply_declaration(s: &mut ComputedStyle, d: &Declaration, parent_fs: f32) {
             }
         }
         "column-gap" => {
-            let d = values::parse_dim(v.trim(), s.font_size);
-            if !matches!(d, Dim::Auto) {
-                s.column_gap = d;
+            if v.trim().eq_ignore_ascii_case("normal") {
+                s.column_gap = Dim::Px(0.0);
+                s.column_gap_normal = true;
+            } else {
+                let d = values::parse_dim(v.trim(), s.font_size);
+                if !matches!(d, Dim::Auto) {
+                    s.column_gap = d;
+                    s.column_gap_normal = false;
+                }
             }
+        }
+        // ── **CSS MULTI-COLUMN (§2, §3, §7.1).** `column-count` and `column-width` are the two
+        // halves of one decision — how many columns, and how wide — and the used count is a
+        // FUNCTION OF BOTH plus the available width, which is why neither is resolved here.
+        "column-count" => {
+            s.column_count = match v.trim() {
+                x if x.eq_ignore_ascii_case("auto") => None,
+                x => x.parse::<u16>().ok().filter(|n| *n > 0).or(s.column_count),
+            };
+        }
+        "column-width" => {
+            s.column_width = match v.trim() {
+                x if x.eq_ignore_ascii_case("auto") => None,
+                x => match values::parse_dim(x, s.font_size) {
+                    Dim::Px(p) if p > 0.0 => Some(p),
+                    _ => s.column_width,
+                },
+            };
+        }
+        // The `columns` shorthand is `<'column-width'> || <'column-count'>` — order-free, and each
+        // omitted half resets to `auto`. A bare integer is the COUNT and a bare length is the WIDTH,
+        // so the two are told apart by what they parse as, not by position.
+        "columns" => {
+            let (mut n, mut w) = (None, None);
+            for tok in v.split_whitespace() {
+                if tok.eq_ignore_ascii_case("auto") {
+                    continue;
+                }
+                if let Ok(c) = tok.parse::<u16>() {
+                    if c > 0 {
+                        n = Some(c);
+                        continue;
+                    }
+                }
+                if let Dim::Px(p) = values::parse_dim(tok, s.font_size) {
+                    if p > 0.0 {
+                        w = Some(p);
+                    }
+                }
+            }
+            s.column_count = n;
+            s.column_width = w;
         }
         // `justify-self` — the INLINE-axis twin of `align-self` for a grid item. Same keyword set:
         // the flex spellings (`flex-start`/`flex-end`) are accepted alongside the logical ones

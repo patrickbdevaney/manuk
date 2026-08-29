@@ -3059,12 +3059,330 @@ fn overflow_establishes_bfc(o: Overflow) -> bool {
     !matches!(o, Overflow::Visible | Overflow::Clip)
 }
 
+/// ⚠⚠⚠ **CSS MULTI-COLUMN §7.1 — THE USED COLUMN COUNT IS A FUNCTION OF *BOTH* LONGHANDS AND THE
+/// AVAILABLE WIDTH, WHICH IS WHY NEITHER CAN BE RESOLVED IN THE CASCADE.**
+///
+/// `column-count` is a *maximum*, not a count: with `column-width` also given, the used count is
+/// however many columns of at least that width fit — capped by the count. That is the whole of the
+/// responsive multicol idiom (`columns: 100px 4` narrows to two columns in a phone-width container
+/// without a media query), and it is invisible to anything that reads one longhand alone.
+///
+/// Returns `(used_count, column_width, gap)` for a real multicol container, or `None` when the
+/// element is in ordinary flow — **including the used-count-of-one case**, which is the same layout
+/// as no columns at all and must not pay for a distribution pass. `columns: 1` is on the corpus
+/// (two of the ten sites that declare multicol use it, as a reset) and it is a no-op by design.
+///
+/// ⚠ **The gap is `1em`, not `0`.** `column-gap`'s initial value is `normal`, and `normal` means
+/// zero for a flex/grid container and **1em** for a multicol one (§6). The two share a property
+/// name and disagree on its initial value, so the keyword has to survive the cascade —
+/// `ComputedStyle::column_gap_normal` is that survival, and reading `column_gap` alone here would
+/// silently lay every unstyled multicol container out with its columns touching.
+fn multicol_used(s: &ComputedStyle, avail: f32) -> Option<(usize, f32, f32)> {
+    if s.column_count.is_none() && s.column_width.is_none() {
+        return None;
+    }
+    // ⚠ **`column-count` ON A FLEX OR GRID CONTAINER IS NOT MULTICOL.** Multicol §2 applies the
+    // properties to *block containers*; a flex/grid container's children are items, and Chrome lays
+    // them out as items whatever `column-count` says. The declaration is common by accident —
+    // `column-count` and `grid-template-columns` sit next to each other in a lot of stylesheets —
+    // so without this arm the commonest way to get it wrong is also the commonest way to write it.
+    if matches!(
+        s.display,
+        Display::Flex | Display::Grid | Display::InlineFlex | Display::InlineGrid
+    ) {
+        return None;
+    }
+    let gap = if s.column_gap_normal {
+        s.font_size
+    } else {
+        match s.column_gap {
+            Dim::Px(p) => p,
+            Dim::Percent(p) => avail * p / 100.0,
+            _ => 0.0,
+        }
+    }
+    .max(0.0);
+    let fit = |w: f32| {
+        if w + gap <= 0.0 {
+            1
+        } else {
+            (((avail + gap) / (w + gap)).floor() as i64).max(1) as usize
+        }
+    };
+    let n = match (s.column_count, s.column_width) {
+        (Some(c), None) => c as usize,
+        (None, Some(w)) => fit(w),
+        (Some(c), Some(w)) => fit(w).min(c as usize),
+        (None, None) => return None,
+    };
+    if n <= 1 || avail <= 0.0 {
+        return None;
+    }
+    let colw = ((avail - (n as f32 - 1.0) * gap) / n as f32).max(0.0);
+    Some((n, colw, gap))
+}
+
+/// ⚠⚠⚠ **COLUMN BALANCING IS A SEARCH FOR THE SHORTEST HEIGHT THAT STILL FITS, NOT A DIVISION BY
+/// N** — and the difference is a whole column of content.
+///
+/// The obvious implementation gives each column `total / n` and fills greedily. It is wrong the
+/// moment the units do not divide evenly: four 20px children in three columns want `26.67` each, no
+/// child fits twice, so every column takes ONE and the fourth child has nowhere to go. Chrome puts
+/// two in each of two columns and leaves the third empty (measured, `column-width:180px` on a 600px
+/// box: `c1 c2` at x=0, `c3 c4` at x=205, container height 40).
+///
+/// So: the candidate heights are exactly the unit bottom edges, and the answer is the SMALLEST one
+/// at which greedy packing needs no more than `n` columns. `total` is always a candidate, so the
+/// search terminates. `units` are `(top, bottom)` in content coordinates, in document order.
+///
+/// Returns, per unit, the column index it lands in — plus the used column height.
+fn balance_columns(units: &[(f32, f32)], n: usize) -> (Vec<usize>, f32) {
+    if units.is_empty() || n == 0 {
+        return (Vec::new(), 0.0);
+    }
+    // A unit taller than the whole budget still occupies a column on its own, so the candidate set
+    // must include every bottom edge — the tallest single unit is the floor on any answer.
+    let mut cands: Vec<f32> = units.iter().map(|u| u.1 - units[0].0).collect();
+    cands.sort_by(|a, b| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal));
+    cands.dedup();
+    const EPS: f32 = 0.01;
+    let pack = |h: f32| -> (Vec<usize>, f32) {
+        let mut col = 0usize;
+        let mut start = units[0].0;
+        let mut used: f32 = 0.0;
+        let mut asg = Vec::with_capacity(units.len());
+        for (i, &(top, bottom)) in units.iter().enumerate() {
+            // The first unit of a column always fits — otherwise nothing ever would.
+            if i > 0 && bottom - start > h + EPS {
+                col += 1;
+                start = top;
+            }
+            used = used.max(bottom - start);
+            asg.push(col);
+        }
+        (asg, used)
+    };
+    for &h in &cands {
+        let (asg, used) = pack(h);
+        if asg.last().copied().unwrap_or(0) < n {
+            return (asg, used);
+        }
+    }
+    pack(cands.last().copied().unwrap_or(0.0))
+}
+
+/// ⚠⚠⚠ **THE COLUMN PASS IS A RE-ORIGINING OF ALREADY-LAID-OUT CONTENT, AND THAT IS WHY IT IS
+/// CORRECT RATHER THAN A SECOND LAYOUT.**
+///
+/// The content arrives laid out once, in a single stack, at the COLUMN width — so every line break,
+/// every percentage, every shrink-to-fit inside it was already resolved against the containing
+/// block the spec says to use. All that is left is to cut that stack into `n` pieces and slide each
+/// piece right by one column step and up to the container's top. Nothing is measured twice, and no
+/// box changes size.
+///
+/// **The fragmentation unit is a whole child box, or a whole line box** — never a fraction of
+/// either. A single unit taller than the balanced height keeps its column to itself and the
+/// container grows to it; Chrome would SPLIT that box across the columns (`column-count:3` over one
+/// 200px child: Chrome reports it `600x67`, three 67px fragments), and that general box split is
+/// **not implemented**. `distributed` is how the caller is told so, because the honest answer when
+/// nothing could be cut is *"lay this out at the full width after all"* — see the caller.
+///
+/// ⚠⚠⚠ **THE ONE DESCENT THAT *IS* IMPLEMENTED IS THE ONE THE WEB ACTUALLY WRITES: A LONE WRAPPER.**
+/// `column-count` is almost never put on the box that holds the items — it is put on a `<div>` or a
+/// `<nav>` that holds a single `<ul>`, and the items are the `<li>`s one level down. Fragmenting
+/// only the direct children would find ONE unit, leave it alone, and render a three-column footer
+/// as one tall column — a change of nothing at all on the commonest idiom there is. So a SOLE
+/// in-flow child is descended through: its own children become the units, and the wrapper is
+/// re-sized to span every column, which is exactly the box Chrome reports for it (`<ul>` measured
+/// `600x60` across three 189px columns, not `189x180`).
+///
+/// ⚠⚠⚠ **A WRAPPER'S PADDING IS NOT REPEATED PER COLUMN — IT BELONGS TO THE FIRST AND LAST
+/// FRAGMENTS.** `<ul style="padding:10px 0">` in two columns puts its `padding-top` above the first
+/// item of column ONE only, and its `padding-bottom` below the last item of the LAST column; the
+/// second column's first item sits flush at the container's top. Chrome, measured: `li` at y=10 and
+/// 30 in column one, at y=**0** and 20 in column two, `<ul>` 50 tall — not 60. That is what
+/// `origin` (columns after the first start here) and `tail` (owed to the last column) carry; the
+/// naive reading, which starts every column at the wrapper's CONTENT top, is 10px wrong per column
+/// and grows the wrapper by the padding a second time.
+///
+/// ⚠ **An out-of-flow child is not a fragmentation unit.** It was removed from the flow before the
+/// stack was measured, its position belongs to its containing block, and folding it into a column
+/// would move a box the flow never placed. It is left exactly where it is.
+fn distribute_columns(
+    content: BoxContent,
+    total_h: f32,
+    origin: f32,
+    n: usize,
+    colw: f32,
+    gap: f32,
+    full_w: f32,
+    tail: f32,
+) -> (BoxContent, f32, bool) {
+    let step = colw + gap;
+    match content {
+        BoxContent::Block(mut kids) => {
+            let idx: Vec<usize> = (0..kids.len()).filter(|&i| !kids[i].out_of_flow).collect();
+            if idx.len() == 1 {
+                // ── THE LONE WRAPPER. Descend, then stretch it back across the columns.
+                let i = idx[0];
+                let r0 = kids[i].rect;
+                let inner = std::mem::replace(&mut kids[i].content, BoxContent::Block(Vec::new()));
+                let (Some(_it), Some(ib)) = inflow_extent(&inner) else {
+                    kids[i].content = inner;
+                    return (BoxContent::Block(kids), total_h, false);
+                };
+                // The wrapper's OWN border-box top is the origin, so its `padding-top` is simply the
+                // first thing in column one; its `padding-bottom` is the tail owed to the last.
+                let inset_bottom = ((r0.y + r0.height) - ib).max(0.0);
+                let (inner, used, did) = distribute_columns(
+                    inner,
+                    r0.height,
+                    r0.y,
+                    n,
+                    colw,
+                    gap,
+                    full_w,
+                    tail + inset_bottom,
+                );
+                kids[i].content = inner;
+                if !did {
+                    return (BoxContent::Block(kids), total_h, false);
+                }
+                kids[i].rect.width = full_w;
+                kids[i].rect.height = used.max(0.0);
+                let h = kids[i].rect.height + (r0.y - origin);
+                return (BoxContent::Block(kids), h, true);
+            }
+            if idx.len() < 2 {
+                return (BoxContent::Block(kids), total_h, false);
+            }
+            let units: Vec<(f32, f32)> = idx
+                .iter()
+                .map(|&i| {
+                    let r = kids[i].rect;
+                    (r.y - origin, r.y - origin + r.height.max(0.0))
+                })
+                .collect();
+            let (asg, _) = balance_columns(&units, n);
+            let (dys, used) = column_offsets(&units, &asg, tail);
+            if dys.iter().all(|d| *d == 0.0) && asg.iter().all(|c| *c == 0) {
+                return (BoxContent::Block(kids), total_h, false);
+            }
+            for (k, &i) in idx.iter().enumerate() {
+                kids[i].translate(asg[k] as f32 * step, dys[k]);
+            }
+            (BoxContent::Block(kids), used, true)
+        }
+        BoxContent::Inline(mut frags) => {
+            if frags.is_empty() {
+                return (BoxContent::Inline(frags), total_h, false);
+            }
+            // A line box is identified by its top edge: every fragment on one line shares it, and
+            // fragments arrive in line order. Grouping on the VALUE rather than counting fragments
+            // is what keeps a mixed-font line (several fragments, one line) a single unit.
+            let mut lines: Vec<(f32, f32, Vec<usize>)> = Vec::new();
+            for (i, f) in frags.iter().enumerate() {
+                let top = f.line_top;
+                let bottom = f.line_top + f.style.line_height.max(f.content_height);
+                match lines.last_mut() {
+                    Some(l) if (l.0 - top).abs() < 0.01 => {
+                        l.1 = l.1.max(bottom);
+                        l.2.push(i);
+                    }
+                    _ => lines.push((top, bottom, vec![i])),
+                }
+            }
+            if lines.len() < 2 {
+                return (BoxContent::Inline(frags), total_h, false);
+            }
+            let units: Vec<(f32, f32)> =
+                lines.iter().map(|l| (l.0 - origin, l.1 - origin)).collect();
+            let (asg, _) = balance_columns(&units, n);
+            let (dys, used) = column_offsets(&units, &asg, tail);
+            if asg.iter().all(|c| *c == 0) {
+                return (BoxContent::Inline(frags), total_h, false);
+            }
+            for (k, l) in lines.iter().enumerate() {
+                let dx = asg[k] as f32 * step;
+                let dy = dys[k];
+                for &i in &l.2 {
+                    frags[i].x += dx;
+                    frags[i].line_top += dy;
+                    frags[i].baseline += dy;
+                }
+            }
+            (BoxContent::Inline(frags), used, true)
+        }
+    }
+}
+
+/// Per-unit vertical shift and the used column height, given each unit's column.
+///
+/// **Column one does not move.** Everything above the first unit — a wrapper's `padding-top`, a
+/// first child's margin — is content of the first column and stays exactly where the flow put it;
+/// only the columns after it are pulled back up to `origin` (which is 0 in the units' own space).
+/// `tail` is the space owed BELOW the last column's last unit, and it is the reason a wrapper's
+/// `padding-bottom` grows the box once rather than once per column.
+fn column_offsets(units: &[(f32, f32)], asg: &[usize], tail: f32) -> (Vec<f32>, f32) {
+    let ncols = asg.iter().copied().max().unwrap_or(0) + 1;
+    let mut top: Vec<Option<f32>> = vec![None; ncols];
+    let mut bot: Vec<f32> = vec![0.0; ncols];
+    for (k, u) in units.iter().enumerate() {
+        let c = asg[k];
+        top[c].get_or_insert(u.0);
+        bot[c] = bot[c].max(u.1);
+    }
+    // Column one is anchored at 0 — the units' own origin — so the space above its first unit is
+    // kept; every later column starts there instead of where the single stack left it.
+    let start: Vec<f32> = (0..ncols)
+        .map(|c| if c == 0 { 0.0 } else { top[c].unwrap_or(0.0) })
+        .collect();
+    let dys = (0..units.len()).map(|k| -start[asg[k]]).collect();
+    let used = (0..ncols)
+        .map(|c| bot[c] - start[c] + if c + 1 == ncols { tail } else { 0.0 })
+        .fold(0.0f32, f32::max);
+    (dys, used.max(0.0))
+}
+
+/// The absolute top and bottom of whatever in-flow content a box holds — the reference the column
+/// pass measures a wrapper's own insets against, so that a `<ul>`'s padding survives the stretch.
+fn inflow_extent(c: &BoxContent) -> (Option<f32>, Option<f32>) {
+    match c {
+        BoxContent::Block(kids) => {
+            let mut t: Option<f32> = None;
+            let mut b: Option<f32> = None;
+            for k in kids.iter().filter(|k| !k.out_of_flow) {
+                t = Some(t.map_or(k.rect.y, |v: f32| v.min(k.rect.y)));
+                b = Some(b.map_or(k.rect.y + k.rect.height, |v: f32| {
+                    v.max(k.rect.y + k.rect.height)
+                }));
+            }
+            (t, b)
+        }
+        BoxContent::Inline(frags) => {
+            let mut t: Option<f32> = None;
+            let mut b: Option<f32> = None;
+            for f in frags {
+                t = Some(t.map_or(f.line_top, |v: f32| v.min(f.line_top)));
+                let fb = f.line_top + f.style.line_height.max(f.content_height);
+                b = Some(b.map_or(fb, |v: f32| v.max(fb)));
+            }
+            (t, b)
+        }
+    }
+}
+
 fn establishes_bfc(s: &ComputedStyle) -> bool {
     // `flow-root` exists for EXACTLY this: a block box whose only distinguishing property is that it
     // establishes a BFC, so it contains its floats without `overflow:hidden`'s clipping.
     s.display == Display::FlowRoot
         || is_float(s)
         || is_out_of_flow_positioned(s)
+        // A multicol container establishes an independent formatting context (Multicol §2), which
+        // is also what routes it through the ONE `layout_block` branch that owns its own
+        // `FloatContext` — the branch the column pass hooks.
+        || s.column_count.is_some()
+        || s.column_width.is_some()
         || overflow_establishes_bfc(s.overflow)
         || matches!(
             s.display,
@@ -5459,18 +5777,63 @@ impl Ctx<'_> {
             self.map_static_positions(node, v);
             (c, used_inline)
         } else if establishes_bfc(&s) {
-            own_bfc = FloatContext::new(content_x, content_x + inner_width);
+            // ⚠⚠⚠ **A MULTICOL CONTAINER LAYS ITS CONTENT OUT AT THE *COLUMN* WIDTH, NOT ITS OWN.**
+            // Everything downstream — line breaking, percentage resolution, shrink-to-fit — has to
+            // see the narrow width or the columns would be a re-arrangement of boxes measured
+            // against the wrong containing block, which is a different page.
+            let mc = multicol_used(&s, inner_width);
+            let lay_w = mc.map(|(_, w, _)| w).unwrap_or(inner_width);
+            own_bfc = FloatContext::new(content_x, content_x + lay_w);
             let (c, h) = self.layout_children(
                 node,
                 content_x,
                 content_y,
-                inner_width,
+                lay_w,
                 inner_definite_h,
                 &mut own_bfc,
             );
             // A BFC root grows to contain its floats (CSS2 §10.6.7 auto-height case).
             let float_h = (own_bfc.lowest_bottom() - content_y).max(0.0);
-            (c, h.max(float_h))
+            match mc {
+                Some((n, colw, gap)) => {
+                    let (c, used, did) = distribute_columns(
+                        c,
+                        h.max(float_h),
+                        content_y,
+                        n,
+                        colw,
+                        gap,
+                        inner_width,
+                        0.0,
+                    );
+                    if did {
+                        (c, used)
+                    } else {
+                        // ⚠⚠⚠ **NOTHING COULD BE CUT, SO THE COLUMN WIDTH WAS THE WRONG WIDTH TO
+                        // HAVE MEASURED AGAINST.** A multicol container whose content is one
+                        // unbreakable box gets no columns out of this pass — and leaving it laid
+                        // out at `colw` would report that box a third of its real width, which is
+                        // WORSE than the single-column answer this engine gave before columns
+                        // existed. Chrome splits the box; we cannot yet (see `distribute_columns`),
+                        // so the honest fallback is the full-width flow, which is exactly what the
+                        // page rendered yesterday. A second layout is affordable because it is
+                        // reached only when the first one found nothing to fragment.
+                        drop(c);
+                        own_bfc = FloatContext::new(content_x, content_x + inner_width);
+                        let (c, h) = self.layout_children(
+                            node,
+                            content_x,
+                            content_y,
+                            inner_width,
+                            inner_definite_h,
+                            &mut own_bfc,
+                        );
+                        let float_h = (own_bfc.lowest_bottom() - content_y).max(0.0);
+                        (c, h.max(float_h))
+                    }
+                }
+                None => (c, h.max(float_h)),
+            }
         } else {
             self.layout_children(
                 node,
@@ -21808,6 +22171,250 @@ mod tests {
         assert!(
             (below.y - 34.0).abs() < 1.0,
             "block drops below the inline line at Chrome's 34 (30px box + strut descent): {below:?}"
+        );
+    }
+
+    /// # G_MULTICOL — CSS Multi-Column §2/§3/§6/§7.1, arbitrated against headless Chrome
+    ///
+    /// **`column-count` was not unimplemented; it was SWITCHED OFF.** Both longhands carry
+    /// `servo_pref = "layout.columns.enabled"` in Stylo's `longhands.toml` (default false), so the
+    /// shipping cascade dropped `column-count: 3` at parse time and every page that asked for
+    /// columns got `auto` — the same answer a page that never asked for them gets. `columns: 3`
+    /// spelled it differently and died the same way, because the shorthand expands into the two
+    /// refused longhands. Priced on the CrUX corpus before building: **10 of 39 sampled sites**
+    /// declare real multicol, and a three-column footer rendered as one column is a whole-page `dy`
+    /// error, not a decimal.
+    ///
+    /// Every row below is **headless-Chrome-measured** on a 600px box at `16px/20px Arial`
+    /// (`column-gap: normal` = 1em = 16px, so three columns are `(600-32)/3 = 189.33` wide at
+    /// x = 0 / 205.33 / 410.67):
+    ///
+    /// ```text
+    ///   markup (in a 600px box)                          Chrome                     this gate
+    ///   9 <li> of 20px, column-count:3                    3+3+3, box h=60            rows 1-2
+    ///   6 <div> of 20px, column-count:3                   2+2+2, box h=40            row 3
+    ///   4 <div> of 20px, column-width:180px               2+2 (3 fit, 2 used), h=40  row 4
+    ///   4 <div> of 20px, columns:2; column-gap:40px       280px columns at 0/320     row 5
+    ///   <ul padding:10px 0> 4 li, column-count:2          li y=10,30 | 0,20; ul h=50 row 6
+    ///   3 <div>, column-count:1                           ordinary flow, 600 wide    row 7  NEG
+    ///   3 <div>, display:flex + column-count:3            flex items, NOT columns    row 8  NEG
+    /// ```
+    ///
+    /// ⚠ **Rows 7 and 8 are pinned NEGATIVE and they are the point.** `columns: 1` is a reset that
+    /// two of the ten corpus sites use, and `column-count` beside `grid-template-columns` in one
+    /// rule is a common accident — Multicol §2 applies these properties to *block containers*, so a
+    /// flex container ignores them. Both are cases where doing the new thing is the bug.
+    ///
+    /// ⚠⚠ **Row 8 is a CONTROL, not a proof, and saying otherwise would be the vacuous-gate shape.**
+    /// Deleting the flex/grid guard in `multicol_used` leaves this row GREEN — measured — because a
+    /// flex container is routed to taffy long before the block path the column pass hangs off, so
+    /// the guard never fires. It is kept as defence in depth against a future routing change, and
+    /// the row is kept because it pins the required behaviour; neither is evidence about the other.
+    /// Rows 1-2, 4, 6 and the Stylo-entrance gate are the ones proven red (five mutations).
+    ///
+    /// ⚠ **The balancing row (4) is why this is not `total / n`.** Four 20px children over three
+    /// columns want 26.67px each, no child fits twice, and the naive fill leaves the fourth child
+    /// nowhere to go. Chrome puts two in each of two columns and leaves the third empty. The
+    /// implementation searches the unit bottom edges for the SHORTEST height that packs into `n`.
+    #[test]
+    fn multicol_balances_columns_the_way_chrome_does() {
+        let css = "body{margin:0;font-size:16px;line-height:20px} \
+                   .c{width:600px} ul{margin:0;padding:0;list-style:none} li{height:20px} \
+                   div.k{height:20px}";
+        // `<tag>` or `<tag>.<class>`, nth in document order — the whole selector engine this gate
+        // needs, and keeping it here rather than reaching for one keeps the gate a LAYOUT gate.
+        let rect = |dom: &Dom, root: &LayoutBox, sel: &str, n: usize| -> Rect {
+            let rects = root.node_rects(dom);
+            let (tag, class) = match sel.split_once('.') {
+                Some((t, c)) => (t, Some(c)),
+                None => (sel, None),
+            };
+            let node = dom
+                .descendants(dom.root())
+                .filter(|&x| dom.tag_name(x) == Some(tag))
+                .filter(|&x| match class {
+                    None => true,
+                    Some(c) => dom
+                        .element(x)
+                        .and_then(|e| e.attr("class"))
+                        .is_some_and(|v| v.split_whitespace().any(|w| w == c)),
+                })
+                .nth(n)
+                .unwrap_or_else(|| panic!("no {sel} #{n}"));
+            *rects.get(&node).expect("rect")
+        };
+
+        // ── rows 1-2: the LONE WRAPPER. The `<ul>` is the container's only child, so the units are
+        // the `<li>`s one level down, and the wrapper stretches across all three columns.
+        let lis: String = (1..=9).map(|i| format!("<li>a{i}</li>")).collect();
+        let (dom, root) = layout_html(
+            &format!(r#"<body><div class="c" style="column-count:3"><ul>{lis}</ul></div></body>"#),
+            css,
+            1200.0,
+        );
+        for (i, (x, y)) in [
+            (0.0, 0.0),
+            (0.0, 20.0),
+            (0.0, 40.0),
+            (205.33, 0.0),
+            (205.33, 20.0),
+            (205.33, 40.0),
+            (410.67, 0.0),
+            (410.67, 20.0),
+            (410.67, 40.0),
+        ]
+        .into_iter()
+        .enumerate()
+        {
+            let r = rect(&dom, &root, "li", i);
+            assert!(
+                (r.x - x).abs() < 1.0 && (r.y - y).abs() < 1.0,
+                "li{} at [{} {}], Chrome [{x} {y}]",
+                i + 1,
+                r.x,
+                r.y
+            );
+        }
+        let ul = rect(&dom, &root, "ul", 0);
+        assert!(
+            (ul.width - 600.0).abs() < 1.0 && (ul.height - 60.0).abs() < 1.0,
+            "the wrapper spans every column: Chrome 600x60, got {}x{}",
+            ul.width,
+            ul.height
+        );
+
+        // ── row 3: direct block children, 6 over 3 columns.
+        let ds: String = (1..=6)
+            .map(|i| format!(r#"<div class="k">b{i}</div>"#))
+            .collect();
+        let (dom, root) = layout_html(
+            &format!(r#"<body><div class="c" style="column-count:3">{ds}</div></body>"#),
+            css,
+            1200.0,
+        );
+        for (i, (x, y)) in [
+            (0.0, 0.0),
+            (0.0, 20.0),
+            (205.33, 0.0),
+            (205.33, 20.0),
+            (410.67, 0.0),
+            (410.67, 20.0),
+        ]
+        .into_iter()
+        .enumerate()
+        {
+            let r = rect(&dom, &root, "div.k", i);
+            assert!(
+                (r.x - x).abs() < 1.0 && (r.y - y).abs() < 1.0,
+                "row3 child {} at [{} {}], Chrome [{x} {y}]",
+                i + 1,
+                r.x,
+                r.y
+            );
+        }
+
+        // ── row 4: `column-width` decides the COUNT, and balancing decides how many are used.
+        // Three 189px columns fit; only two are needed.
+        let ds: String = (1..=4)
+            .map(|i| format!(r#"<div class="k">c{i}</div>"#))
+            .collect();
+        let (dom, root) = layout_html(
+            &format!(r#"<body><div class="c" style="column-width:180px">{ds}</div></body>"#),
+            css,
+            1200.0,
+        );
+        for (i, (x, y)) in [(0.0, 0.0), (0.0, 20.0), (205.33, 0.0), (205.33, 20.0)]
+            .into_iter()
+            .enumerate()
+        {
+            let r = rect(&dom, &root, "div.k", i);
+            assert!(
+                (r.x - x).abs() < 1.0 && (r.y - y).abs() < 1.0,
+                "row4 child {} at [{} {}], Chrome [{x} {y}] — balancing, not total/n",
+                i + 1,
+                r.x,
+                r.y
+            );
+        }
+
+        // ── row 5: the `columns` shorthand plus an AUTHORED gap, which must beat the 1em default.
+        let (dom, root) = layout_html(
+            &format!(r#"<body><div class="c" style="columns:2;column-gap:40px">{ds}</div></body>"#),
+            css,
+            1200.0,
+        );
+        for (i, (x, w)) in [(0.0, 280.0), (0.0, 280.0), (320.0, 280.0), (320.0, 280.0)]
+            .into_iter()
+            .enumerate()
+        {
+            let r = rect(&dom, &root, "div.k", i);
+            assert!(
+                (r.x - x).abs() < 1.0 && (r.width - w).abs() < 1.0,
+                "row5 child {} at x={} w={}, Chrome x={x} w={w}",
+                i + 1,
+                r.x,
+                r.width
+            );
+        }
+
+        // ── row 6: a wrapper's padding is NOT repeated per column.
+        let lis: String = (1..=4).map(|i| format!("<li>p{i}</li>")).collect();
+        let (dom, root) = layout_html(
+            &format!(
+                r#"<body><div class="c" style="column-count:2"><ul style="padding:10px 0">{lis}</ul></div></body>"#
+            ),
+            css,
+            1200.0,
+        );
+        for (i, y) in [10.0, 30.0, 0.0, 20.0].into_iter().enumerate() {
+            let r = rect(&dom, &root, "li", i);
+            assert!(
+                (r.y - y).abs() < 1.0,
+                "row6 li{} at y={}, Chrome y={y} — padding-top belongs to column ONE only",
+                i + 1,
+                r.y
+            );
+        }
+        let ul = rect(&dom, &root, "ul", 0);
+        assert!(
+            (ul.height - 50.0).abs() < 1.0,
+            "row6 wrapper h={}, Chrome 50 — the padding counts ONCE, not once per column",
+            ul.height
+        );
+
+        // ── row 7 NEGATIVE: `columns: 1` is ordinary flow at the FULL width.
+        let ds: String = (1..=3)
+            .map(|i| format!(r#"<div class="k">n{i}</div>"#))
+            .collect();
+        let (dom, root) = layout_html(
+            &format!(r#"<body><div class="c" style="column-count:1">{ds}</div></body>"#),
+            css,
+            1200.0,
+        );
+        for (i, y) in [0.0, 20.0, 40.0].into_iter().enumerate() {
+            let r = rect(&dom, &root, "div.k", i);
+            assert!(
+                (r.x).abs() < 1.0 && (r.y - y).abs() < 1.0 && (r.width - 600.0).abs() < 1.0,
+                "row7 child {} at [{} {}] w={}, Chrome [0 {y}] w=600 — one column is NO columns",
+                i + 1,
+                r.x,
+                r.y,
+                r.width
+            );
+        }
+
+        // ── row 8 NEGATIVE: multicol does not apply to a flex container.
+        let (dom, root) = layout_html(
+            &format!(
+                r#"<body><div class="c" style="display:flex;column-count:3">{ds}</div></body>"#
+            ),
+            css,
+            1200.0,
+        );
+        let (a, b) = (rect(&dom, &root, "div.k", 0), rect(&dom, &root, "div.k", 1));
+        assert!(
+            (a.y - b.y).abs() < 1.0 && b.x > a.x,
+            "row8: flex items lay out in a ROW ({a:?} then {b:?}), `column-count` must not columnise them"
         );
     }
 

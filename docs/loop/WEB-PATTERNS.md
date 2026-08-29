@@ -9301,3 +9301,23 @@ the *content language*, not on the character — Chrome applies those rules for 
 A tailoring measured against one language looks universal and is not, and shipping it that way
 reddens every page in every other language while the WPT area total still climbs.
 (t1357 — `engine/layout` `line_break_tailors_the_cjk_classes_the_way_chrome_does`)
+
+## `<div class="footer-links" style="column-count:3"><ul>…20 links…</ul></div>` — the three-column footer that renders as one tall column
+
+Ten of thirty-nine sampled CrUX sites declare real multi-column layout, and it is almost never on
+the box that holds the items: it is on a wrapper around a single `<ul>`, with the `<li>`s one level
+down. That shape defeats any fragmentation that only looks at direct children — it finds ONE unit,
+leaves it alone, and the footer comes out three times too tall, moving every box below it.
+
+⚠ The property was not unimplemented, it was **switched off**: both multicol longhands are
+`servo_pref = "layout.columns.enabled"` in Stylo, default false, so the declaration was refused at
+*parse* time and the computed value read `auto` — indistinguishable from a page that never asked.
+The `columns` shorthand has no pref of its own, parses fine, and expands into the two refused
+longhands, so both spellings failed identically from two different places. Third property found this
+way after `layout.grid.enabled` and `layout.writing-mode.enabled`.
+
+⚠ `column-gap: normal` is **1em** for a multicol container and **0** for a flex/grid one — one
+property name, two readings, disagreeing on the initial value. Resolving the keyword during the
+cascade loses the disagreement, so the keyword itself has to survive it.
+(t1358 — `engine/layout` `multicol_balances_columns_the_way_chrome_does`,
+`engine/css` `multicol_longhands_survive_the_stylo_cascade`)

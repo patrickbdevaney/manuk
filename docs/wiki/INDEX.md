@@ -2018,6 +2018,16 @@
   - L1913 · The mutation that came back green
   - L1921 · The honest headline: the tests that aimed the tick cannot see the fix
 
+## CSS multi-column layout — and the pref that made it look unimplemented
+`docs/wiki/multi-column-layout.md`
+
+  - L7 · The finding: it was switched off, not missing
+  - L25 · Priced first, on the corpus
+  - L41 · The rules, as Chrome answers them
+  - L72 · How it is implemented
+  - L87 · What is NOT implemented, said out loud
+  - L99 · Receipts
+
 ## NETWORKING — how real sites actually load
 `docs/wiki/networking.md`
 
@@ -2484,4 +2494,4 @@
   - L231 · Both named mechanisms are subsystem work
 
 ---
-2387 sections across 23 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+2393 sections across 24 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.

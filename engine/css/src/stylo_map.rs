@@ -1173,7 +1173,29 @@ pub fn to_computed_style(cv: &ComputedValues) -> ComputedStyle {
                 GapVal::LengthPercentage(lp) => lp_to_dim(&lp.0),
             };
         s.row_gap = gap_dim(cv.clone_row_gap());
-        s.column_gap = gap_dim(cv.clone_column_gap());
+        let raw_col_gap = cv.clone_column_gap();
+        s.column_gap_normal = matches!(raw_col_gap, GapVal::Normal);
+        s.column_gap = gap_dim(raw_col_gap);
+    }
+
+    // ── **CSS MULTI-COLUMN — `column-count` / `column-width`.**
+    //
+    // ⚠ Both longhands are `servo_pref = "layout.columns.enabled"` in Stylo's `longhands.toml`, so
+    // without the pref set they are not even PARSED and every `column-count: 3` on the web is a
+    // dropped declaration on the shipping path. The pref is flipped beside `layout.grid.enabled`
+    // and `layout.writing-mode.enabled` in `stylo_engine::cascade_via_stylo`; this mapper is the
+    // half that carries the parsed value out, and neither half is any use alone.
+    {
+        use stylo::values::generics::column::ColumnCount as GenericColumnCount;
+        use stylo::values::generics::length::GenericLengthPercentageOrAuto as LenAuto;
+        s.column_count = match cv.clone_column_count() {
+            GenericColumnCount::Integer(n) => u16::try_from(n.0).ok().filter(|n| *n > 0),
+            GenericColumnCount::Auto => None,
+        };
+        s.column_width = match cv.clone_column_width() {
+            LenAuto::LengthPercentage(l) => Some(l.0.px()).filter(|p| *p > 0.0),
+            LenAuto::Auto => None,
+        };
     }
 
     // ── `will-change` / `contain` / `perspective` — a containing block for out-of-flow descendants

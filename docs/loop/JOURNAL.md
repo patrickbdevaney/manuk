@@ -94986,3 +94986,153 @@ and the file above says the shared discrete-keyword animation path is the mechan
 them at once.
 
 WIKI: docs/wiki/cjk-line-breaking.md
+
+## Tick 1358 — the property was not unimplemented, it was switched off (2026-08-29)
+
+TICK SHAPE: capability-subsystem
+
+**Track A, and the board's CO-#1 chose it: SHAPE, on the anchor sites.** The tick opened by
+measuring rather than guessing — a fidelity cohort of ten near-bar CrUX sites, then
+`--shape-dump` on the cleanest of them.
+
+### THE SURVEY, INCLUDING THE CANDIDATE IT REFUSED
+
+The dump on `serennu.com` named a real and cleanly reproducible divergence in four minutes: an
+inline `<span>` whose only content is `<br><br>` gets `0x16` from Chrome and `605x62` from us — a
+box wide enough to manufacture **28 false sibling overlaps**, which is a cert term. Minimal
+repro built, Chrome's rule pinned by `getClientRects()` (`[51 -1 0x16] [0 13 0x16]`, bbox = the
+second), the fix understood.
+
+⭐ **Then it was priced on the corpus and came back 0 of 59 pages, and was refused.** That is the
+t1367 rule doing its job: a defect that is real, understood and cheap is still not a tick if the
+corpus never writes it. The measurement is in `docs/wiki/multi-column-layout.md` so the next reader
+does not re-derive it.
+
+The same pass — 39 corpus sites, their pages plus up to six stylesheets each, grepped for CSS
+features and cross-checked against what this engine implements — priced everything else too.
+`-webkit-line-clamp` 17/39 (implemented), `object-fit` 24/39 (implemented), `aspect-ratio` 17/39
+(implemented), `:has()` 16/39 (implemented), `table-layout` 12/39 (implemented) — and one row that
+was not:
+
+    multicol (column-count / column-width / columns), count >= 2 ... 10 of 39 sites
+
+⚠ The first pass of that grep said 39/39, because `columns:` is a suffix of
+`grid-template-columns:`. A price that comes back at 100% is a broken regex, not a finding.
+
+### ⭐⭐⭐ THE FINDING — A PROPERTY THAT WAS REFUSED AT PARSE TIME READS EXACTLY LIKE ONE NOBODY SET
+
+`column-count` and `column-width` both carry `servo_pref = "layout.columns.enabled"` in Stylo's
+`longhands.toml`, default **false**. The shipping cascade therefore did not ignore `column-count: 3`
+— it **refused the declaration at parse time**, and the computed value came back `auto`. There is no
+observation that separates *"the engine dropped what the page asked for"* from *"the page asked for
+nothing"*, which is why this stood as "multicol is unimplemented" rather than "multicol is off".
+
+The `columns` shorthand hid it from a second direction: it has no pref of its own, so it parses —
+and then expands into the two longhands that were being refused. Both spellings produced the same
+nothing, from two different places, which is exactly the shape that survives a spot check.
+
+⚠ **This is the THIRD property found this way** — `layout.grid.enabled` (t371), then
+`layout.writing-mode.enabled` (t1276, which alone blocked three WPT areas), now this. The signature
+never varies: *the computed value reads the initial value on a page that plainly set it.* It is now
+a rule in `WEB-PATTERNS.md`: when a CSS feature looks absent, read `longhands.toml` for a
+`servo_pref` **before** concluding anything about layout.
+
+### THE THREE RULES CHROME ACTUALLY IMPLEMENTS, NONE OF WHICH IS THE OBVIOUS ONE
+
+1. **The used count is a function of BOTH longhands and the available width** (§7.1) — `column-count`
+   is a *maximum*. `column-width: 180px` in a 600px box yields three 189.33px columns of which
+   balancing uses **two**.
+2. **`column-gap: normal` is `1em` for multicol and `0` for flex/grid.** One property name, two
+   readings, disagreeing on the initial value — so the KEYWORD has to survive the cascade.
+   `column_gap_normal` is that survival; resolving it to a number at parse time loses the
+   disagreement silently, and every unstyled multicol container lays out with its columns touching.
+3. ⭐ **Balancing is a SEARCH, not a division by N.** Four 20px children over three columns want
+   26.67px each, no child fits twice, and the naive fill leaves the fourth child nowhere to go.
+   Chrome puts two in each of two columns and leaves the third empty. The rule that reproduces every
+   measured row: *the candidate heights are the unit bottom edges, and the answer is the smallest one
+   at which greedy packing needs no more than `n` columns.*
+
+Plus the one that decides whether any of it moves a real page: ⭐⭐ **`column-count` is almost never
+on the box that holds the items.** It is on a wrapper around a single `<ul>`. Fragmenting only the
+direct children finds ONE unit, leaves it alone, and renders the commonest idiom on the web as one
+tall column. A sole in-flow child is therefore descended through, and the wrapper stretched back
+across every column — which is exactly the box Chrome reports for it (`<ul>` `600x60`, not
+`189x180`). And a wrapper's padding is **not repeated per column**: `padding-top` belongs to the
+first fragment and `padding-bottom` to the last, so `<ul style="padding:10px 0">` over two columns is
+50 tall and its second column's first item sits at y=**0**, not y=10.
+
+### THE IMPLEMENTATION, AND WHAT IT REFUSES TO DO
+
+The column pass is a **re-origining of already-laid-out content**, not a second layout: the content
+is laid out once at the COLUMN width — so every line break and percentage resolved against the
+containing block the spec names — and the single stack is then cut into `n` pieces.
+
+⚠ **A block is never SPLIT across a column break, and the honest consequence is wired in rather than
+hidden.** Chrome fragments a box (`column-count:3` over one 200px child → three 67px fragments,
+`600x67`). When the pass finds nothing it can cut it reports so, and the caller **re-lays the content
+out at the full width** — because leaving it at the column width would report that box a third of its
+real width, which is *worse* than the answer the engine gave yesterday. That row is therefore exactly
+the pre-tick behaviour, a height error and nothing else. Without that fallback this tick would have
+been a trade.
+
+### THE GATES
+
+`multicol_balances_columns_the_way_chrome_does` (`engine/layout`, in the wall's crate list) — eight
+rows, all headless-Chrome-measured, **two pinned NEGATIVE** (`columns: 1` is a reset two of the ten
+corpus sites use; `column-count` on a flex container must not columnise it).
+
+`multicol_longhands_survive_the_stylo_cascade` (`engine/css`) — **the second entrance, and it is the
+one every real page comes through.** The layout gate runs on `MinimalCascade`; a layout that
+implements multicol perfectly against a cascade that drops the declaration renders nothing new. This
+is the t1355 shape and it now has a gate on both doors.
+
+**PROVEN RED by five mutations**, each with a different message. N1 delete the pref → the Stylo gate
+fails on `column-count` reading `None`. N2 balance by `total / n` → the `column-width` row's fourth
+child overflows. N4 start every column at the content top → the padding row's second column reads
+y=10 instead of 0. N5 remove the lone-wrapper descent → the nine-`<li>` rows collapse to one column.
+N6 add the tail to every column instead of the last → the wrapper measures 60 instead of 50.
+
+⚠ **N3 — deleting the flex/grid guard — left its row GREEN, and the gate says so.** A flex container
+is routed to taffy long before the block path this hangs off, so the guard never fires. The row is
+kept as a CONTROL (it pins the required behaviour against a future routing change) and the guard is
+kept as defence in depth, but neither is evidence about the other. Calling that row a proof would
+have been the vacuous-gate shape this project keeps catching.
+
+### THE RECEIPT
+
+```text
+  fidelity SHAPE (live, same-hour OLD-BINARY control)   before     after    delta
+  www.crazyshop.pl                                       66.4%     75.4%    +9.0   <- CROSSES 0.75
+  ru.restaurantguru.com                                  69.7%     73.6%    +3.9
+  www.repubblica.it        (mean of 2 interleaved runs)  75.2%     76.6%    +1.4
+  www.razaoautomovel.com                                 71.7%     71.8%    +0.1
+  developers.google.com                                  61.0%     61.0%     0.0   CONTROL
+  serennu / patrickmorin / ikea                           flat      flat     0.0   CONTROL
+  manuk-layout (lib)                                    190/190   191/191     +1   +the new gate
+  manuk-css   (lib+tests)                                 42/42     43/43     +1   +the new gate
+  manuk-paint / manuk-dom                                 22/22     11/11      0   CONTROL
+  cargo check --workspace --all-targets                            clean          CONTROL
+```
+
+⚠⚠ **ONE BEFORE/AFTER PAIR ON `repubblica.it` READ −5.0 AND IT WAS THE SITE, NOT THE CHANGE.** The
+element dump showed *Chrome itself* had rendered a different footer between the two runs — `996x667`
+at x=102 against `1200x1253` at x=0. Interleaving two runs of each binary within the same minutes
+turned the −5.0 into a +1.4. A live news homepage is not a frozen page, and a single pair is not a
+measurement on one; the t1343 three-run-spread rule applies to fidelity as well as to hangs. Had this
+been read as a regression the tick would have been reverted for nothing.
+
+⚠ **No WPT number exists for this**: `css/css-multicol` is not in the sparse WPT checkout (18 `css/*`
+directories present, none of them multicol). Same shape as the missing `css/support/` at t1176 —
+recorded here, not worked around, because the checkout is harness territory.
+
+PERF: the column pass runs only on a box that declares `column-count`/`column-width` — one `Option`
+check per block. The second layout is reached only when the first one found nothing to fragment.
+
+NEXT: **box fragmentation across a column break** is the named remainder and it is what closes the
+gap on the one row still divergent. Beyond that the same corpus-price pass named the next unbuilt
+rows honestly: `content-visibility` 8/39 (the board defers it), `@container` 5/39, `column-rule`/
+`column-span` unbuilt but unpriced. The pref lesson is the bigger lever — a sweep of
+`longhands.toml` for every `servo_pref` this engine has never flipped is one cheap probe away from
+naming the next three properties that are switched off rather than missing.
+
+WIKI: docs/wiki/multi-column-layout.md

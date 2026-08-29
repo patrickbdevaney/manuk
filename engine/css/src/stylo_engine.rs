@@ -700,6 +700,13 @@ pub fn cascade_via_stylo_sized(
     // had not asked for one. Same shape as `layout.grid.enabled` above, and found the same way —
     // by the computed value reading the initial value on a page that plainly set it.
     stylo_static_prefs::set_pref!("layout.writing-mode.enabled", true);
+    // ⚠⚠⚠ **`column-count` / `column-width` ARE GATED THE SAME WAY, AND THE SHORTHAND IS NOT.**
+    // Both longhands carry `servo_pref = "layout.columns.enabled"` (default FALSE), so the servo
+    // build dropped `column-count: 3` **at parse time** — while `columns: 3`, whose shorthand has no
+    // pref of its own, parsed and then expanded into two longhands that were themselves refused. A
+    // page therefore got the same answer (`auto`) whichever spelling it used, which is what made
+    // this read as "multicol is unimplemented" rather than "multicol is switched off".
+    stylo_static_prefs::set_pref!("layout.columns.enabled", true);
     // **The parser's verdict, read off the `Dom` it already handed us.** Everything below that used to
     // say `QuirksMode::NoQuirks` unconditionally now says `qm`. Stylo already implements the quirks
     // themselves (unitless lengths, case-insensitive id/class matching, the `<font size>` table) — this
@@ -4936,6 +4943,73 @@ mod tests {
             "the @supports block must apply — grid IS supported, so the sidebar is shown, not hidden"
         );
         assert_eq!(map[&side].width, crate::Dim::Px(200.0));
+    }
+
+    /// ⚠⚠⚠ **THE SECOND ENTRANCE — `column-count` REACHING THE *SHIPPING* CASCADE.**
+    ///
+    /// `MinimalCascade` parses these properties by hand and its own gate covers that door. This is
+    /// the other one, and it is the door every real page comes through. Both multicol longhands are
+    /// `servo_pref = "layout.columns.enabled"` in Stylo's `longhands.toml`, default FALSE — so
+    /// without the pref flip in `cascade_via_stylo` the declaration is refused **at parse time**
+    /// and the computed value is the initial `auto`, indistinguishable from a page that never asked
+    /// for columns. A layout that implements multicol perfectly against a cascade that drops the
+    /// declaration renders exactly nothing new, which is the t1353/t1355 shape: a mechanism wired
+    /// to one of two entrances, certified done by the gate that only knows the other one.
+    ///
+    /// The `columns` shorthand is asserted beside the longhands *because it has no pref of its
+    /// own*: it parses either way and then expands into two longhands that were being refused, so
+    /// it is the spelling most likely to look supported while doing nothing.
+    #[test]
+    fn multicol_longhands_survive_the_stylo_cascade() {
+        let mut dom = Dom::new();
+        let body = dom.create_element("body");
+        dom.append_child(dom.root(), body);
+        let mk = |dom: &mut Dom, cls: &str| {
+            let d = dom.create_element("div");
+            dom.set_attr(d, "class", cls);
+            dom.append_child(body, d);
+            d
+        };
+        let a = mk(&mut dom, "a");
+        let b = mk(&mut dom, "b");
+        let c = mk(&mut dom, "c");
+        let d = mk(&mut dom, "d");
+
+        let sheet = Stylesheet::parse(
+            ".a { column-count: 3 } \
+             .b { column-width: 180px } \
+             .c { columns: 100px 4; column-gap: 40px } \
+             .d { width: 100px }",
+        );
+        let m = cascade_via_stylo(&dom, std::slice::from_ref(&sheet), 1200.0, 800.0);
+
+        assert_eq!(
+            m[&a].column_count,
+            Some(3),
+            "`column-count: 3` must survive the SHIPPING cascade — if this is None the pref is off \
+             and every multicol page on the web renders as one column"
+        );
+        assert_eq!(m[&a].column_width, None, "`column-width` stays auto here");
+        assert_eq!(m[&b].column_width, Some(180.0));
+        assert_eq!(m[&b].column_count, None);
+        // The shorthand sets BOTH halves, and the authored gap must beat the 1em default.
+        assert_eq!(m[&c].column_count, Some(4));
+        assert_eq!(m[&c].column_width, Some(100.0));
+        assert_eq!(m[&c].column_gap, crate::Dim::Px(40.0));
+        assert!(
+            !m[&c].column_gap_normal,
+            "an authored `column-gap` clears the `normal` flag, or multicol would use 1em anyway"
+        );
+        // CONTROL: a box that never mentions columns is untouched, and its gap is still `normal` —
+        // which is 0 for the flex/grid reading of the same property and 1em for the multicol one.
+        assert_eq!(m[&d].column_count, None);
+        assert_eq!(m[&d].column_width, None);
+        assert!(
+            m[&d].column_gap_normal,
+            "`column-gap`'s initial value is the KEYWORD `normal`, and the keyword is what the two \
+             readings of this property disagree about — resolving it in the cascade loses the \
+             disagreement"
+        );
     }
 
     /// Responsive `@media`: a media block's rules apply only when its query matches the current
