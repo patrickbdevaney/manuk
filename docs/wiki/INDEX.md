@@ -2278,6 +2278,17 @@
   - L330 · The stub check caught its own author
   - L339 · What it bought, stated honestly
 
+## Table cell content geometry — the two things a cell forgot when its content made no line box
+`docs/wiki/table-cell-content-geometry.md`
+
+  - L7 · The one-sentence mechanism
+  - L14 · Half one — the synthesized baseline
+  - L31 · The three distinctions, none of which is guessable
+  - L50 · Half two — a cell is a BFC root, so it contains its floats
+  - L67 · The measured rows
+  - L89 · ⚠ How this was found, and the two instrument facts that came with it
+  - L127 · NAMED, MEASURED, NOT BUILT
+
 ## TEXT AND LAYOUT — fonts, shaping, measurement
 `docs/wiki/text-layout.md`
 
@@ -2504,4 +2515,4 @@
   - L231 · Both named mechanisms are subsystem work
 
 ---
-2399 sections across 25 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+2406 sections across 26 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.

@@ -1041,3 +1041,4 @@ tick	sha	epoch	iso	delta_s	shape	wall_s	files	added	deleted	gates	claims	wpt_pas
 1355	53346661	1787998943	2026-08-29T06:22:23-04:00	2359	capability	465	14	453	36	522	81	3896	6960	0	642	0	t1097 was fixed at one entrance, and the conformance suite only ever used the other (2026-08-29)
 1358	9cd07e79	1788015039	2026-08-29T10:50:39-04:00	16096	capability-subsystem	465	9	1069	10	522	81	3896	6960	0	642	0	the property was not unimplemented, it was switched off (2026-08-29)
 1359	2618a953	1788018190	2026-08-29T11:43:10-04:00	3151	capability-subsystem	465	11	799	44	522	81	3896	6960	0	642	0	the drive loop stopped at the first screenful, and said it had not (2026-08-29)
+1360	88f59dfd	1788022526	2026-08-29T12:55:26-04:00	4336	capability-subsystem	465	10	676	48	522	81	3896	6960	0	642	0	a cell with no line box is not a cell with nothing in it (2026-08-29)

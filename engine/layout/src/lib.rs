@@ -9074,7 +9074,7 @@ impl Ctx<'_> {
 
         // Lay out each placed cell; record its natural height. Single-row cells set their
         // row's height; rowspan cells' overflow is added to their last spanned row.
-        let mut laid: Vec<(usize, LayoutBox, f32, f32, f32)> = Vec::new();
+        let mut laid: Vec<(usize, LayoutBox, f32, f32, f32, f32)> = Vec::new();
         let mut row_h = vec![0.0f32; nrows.max(1)];
         // ── **AN RTL TABLE'S COLUMN AXIS RUNS RIGHT-TO-LEFT.** `direction` on the table box orders the
         // COLUMNS, not just the text inside them (CSS 2.1 §17.5.3: the column axis follows the inline
@@ -9098,7 +9098,7 @@ impl Ctx<'_> {
             } else {
                 cx0
             };
-            let (cbox, bh, natural_ch, frame_v) = self.layout_cell(
+            let (cbox, bh, natural_ch, frame_v, frame_top) = self.layout_cell(
                 p.cell,
                 cx,
                 0.0,
@@ -9108,7 +9108,7 @@ impl Ctx<'_> {
             if p.rowspan == 1 {
                 row_h[p.row] = row_h[p.row].max(bh);
             }
-            laid.push((pi, cbox, bh, natural_ch, frame_v));
+            laid.push((pi, cbox, bh, natural_ch, frame_v, frame_top));
         }
         // ── ⚠⚠⚠ **`vertical-align: baseline` IS THE INITIAL VALUE FOR A CELL, AND IT WAS
         //    APPROXIMATED AS `top`** — this function's own comment said so. The cells of a row align
@@ -9133,7 +9133,7 @@ impl Ctx<'_> {
         //    now exists rather than a second copy of it.
         let cell_baseline: Vec<Option<f32>> = laid
             .iter()
-            .map(|(pi, cbox, _, _, _)| {
+            .map(|(pi, cbox, _, natural_ch, _, frame_top)| {
                 let p = &placed[*pi];
                 // Only cells whose alignment IS baseline participate; `top`/`middle`/`bottom` are
                 // different rules and must not be dragged into this one. A cell with no line box at
@@ -9146,7 +9146,36 @@ impl Ctx<'_> {
                 {
                     return None;
                 }
+                // ⚠⚠⚠ **"NO LINE BOX" AND "NOTHING IN THE CELL" ARE TWO DIFFERENT ANSWERS, AND
+                // THIS RETURNED THE SECOND ONE FOR BOTH.** A cell whose content is a BLOCK — an
+                // icon `<div>`, a spacer, a `display:block` image — produces no line box, and the
+                // comment above used to say it therefore "does not join its row's baseline group".
+                // Chrome joins it: CSS 2.1 §17.5.4 synthesizes the baseline from the bottom edge of
+                // such a cell when it has no line box, and the whole row aligns to it.
+                //
+                // Chrome-measured, a 50px `<div>` cell beside a plain text cell, both
+                // `vertical-align: baseline` (`td { vertical-align: baseline }` is in four of the
+                // thirty-nine sampled CrUX sites' reset sheets):
+                //
+                // ```text
+                //   the label's content    Chrome y=35, ours y=2     (the row baseline is 50)
+                //   the ROW's height       Chrome 57,   ours 50      (+ the label's descent)
+                //   a SHORT 6px div        Chrome pushes the DIV down to 11; ours left it at 0
+                // ```
+                //
+                // ⚠ **It is the NATURAL content height, not the used one** — the same distinction
+                // the free-space calculation below already had to make, and for the same reason. A
+                // cell forced to `height: 200px` around a 50px div still has its baseline at 50:
+                // Chrome-measured, the neighbour's label lands at y=35, not y=185.
+                //
+                // ⚠ **A cell with NOTHING in it stays `None`, and that is the case the old comment
+                // was really describing.** Synthesizing `0` for it would make it demand
+                // `its own height + the row's whole baseline shift` and grow the row by that much;
+                // Chrome keeps such a row at its declared 50. An empty cell has no baseline to
+                // contribute and nothing to align, which is a different statement from "a cell
+                // with no line box".
                 first_line_baseline(cbox, self.dom, self.styles)
+                    .or_else(|| (*natural_ch > 0.0).then_some(frame_top + natural_ch))
             })
             .collect();
         let mut row_baseline = vec![0.0f32; nrows.max(1)];
@@ -9164,13 +9193,13 @@ impl Ctx<'_> {
             })
             .collect();
         // A shifted cell is that much taller: re-derive each single-row cell's demand.
-        for (i, (pi, _, bh, _, _)) in laid.iter().enumerate() {
+        for (i, (pi, _, bh, _, _, _)) in laid.iter().enumerate() {
             let p = &placed[*pi];
             if p.rowspan == 1 {
                 row_h[p.row] = row_h[p.row].max(bh + baseline_shift[i]);
             }
         }
-        for (pi, _, bh, _, _) in &laid {
+        for (pi, _, bh, _, _, _) in &laid {
             let p = &placed[*pi];
             if p.rowspan > 1 {
                 let last = (p.row + p.rowspan - 1).min(nrows.saturating_sub(1));
@@ -9303,7 +9332,7 @@ impl Ctx<'_> {
         }
         // Position each cell at its start row and stretch it over its spanned rows.
         let mut row_cells: Vec<Vec<LayoutBox>> = vec![Vec::new(); nrows.max(1)];
-        for (li, (pi, mut cbox, _, natural_ch, frame_v)) in laid.into_iter().enumerate() {
+        for (li, (pi, mut cbox, _, natural_ch, frame_v, _)) in laid.into_iter().enumerate() {
             let p = &placed[pi];
             let last = (p.row + p.rowspan - 1).min(nrows.saturating_sub(1));
             let dy = row_y[p.row] - cbox.rect.y;
@@ -10420,7 +10449,7 @@ impl Ctx<'_> {
         y: f32,
         col_w: f32,
         collapsed: Option<(f32, f32, f32, f32)>,
-    ) -> (LayoutBox, f32, f32, f32) {
+    ) -> (LayoutBox, f32, f32, f32, f32) {
         let s = self.style_of(cell).clone();
         let (pl, pr) = (
             s.padding.left.resolve(col_w, 0.0),
@@ -10443,6 +10472,18 @@ impl Ctx<'_> {
         let mut floats = FloatContext::new(content_x, content_x + content_w);
         let (content, ch) =
             self.layout_children(cell, content_x, content_y, content_w, None, &mut floats);
+        // ⚠⚠⚠ **A TABLE CELL IS A BFC ROOT, SO IT CONTAINS ITS FLOATS — AND THIS ASKED THE FLOAT
+        // CONTEXT NOTHING.** `layout_cell` builds a `FloatContext` for the cell (it must, or the
+        // cell's own text would not flow around its floats) and then took only `layout_children`'s
+        // in-flow height, which a float does not contribute to. A cell whose ONLY content is a
+        // float therefore collapsed to zero: Chrome-measured, `<td><div style="float:left;
+        // height:50px"></div></td>` is a **50px** cell in a 50px table and was a **0px** cell in a
+        // 0px table here — the whole row vanished.
+        //
+        // `layout_block` has answered this correctly for every other BFC root since floats were
+        // built (`own_bfc.lowest_bottom() - content_y`); this is the same line, at the one BFC root
+        // that was constructing the context and never querying it.
+        let ch = ch.max((floats.lowest_bottom() - content_y).max(0.0));
         let content_height = match s.height {
             Dim::Auto => ch,
             // The `box-sizing` half is the same rule the column widths take, on the other axis:
@@ -10502,6 +10543,7 @@ impl Ctx<'_> {
             border_box_h,
             ch,
             bt + pt + pb + bb,
+            bt + pt,
         )
     }
 

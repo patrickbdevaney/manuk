@@ -11,7 +11,8 @@
 //!   vertical-align:middle, 19px word in a 60px cell        [20]       [ 2]       [20]
 //!   vertical-align:bottom, same cell                       [38]       [ 2]       [38]
 //!  ── CONTROLS, none of which moved ──
-//!   vertical-align not declared (top / baseline)           [ 2]       [ 2]   unchanged
+//!   vertical-align not declared (UA middle, t1360)         [20]       [ 2]       [20]
+//!   vertical-align:baseline, single line (t1360)           [ 2]        --        [ 2]
 //!   the CELL BOX of a row sized by its tallest cell        [ 0]       [ 0]   unchanged
 //!   two `middle` cells in one row agree with each other    [20]       [ 2]       [20]
 //! ```
@@ -90,6 +91,7 @@ td{padding:0}
 <div class="w" id="c4"><table><tr><td style="height:50px">a</td><td id="a4">b</td></tr></table></div>
 <div class="w" id="c5"><table><tr><td style="height:60px;vertical-align:middle"><span>x</span></td><td style="height:60px;vertical-align:middle"><span id="a5">y</span></td></tr></table></div>
 <div class="w" id="c6"><table><tr><td style="height:60px;vertical-align:middle" id="a6"><span>x</span></td></tr></table></div>
+<div class="w" id="c7"><table><tr><td style="height:60px;vertical-align:baseline"><span id="a7">x</span></td></tr></table></div>
 </body></html>"##;
 
 fn rect_of(page: &manuk_page::Page, sel: &str) -> manuk_layout::Rect {
@@ -130,14 +132,38 @@ fn g_table_cell_valign() {
         dy("#a2", "#c2")
     );
 
-    // ── CONTROL A — no `vertical-align` declared. The CSS initial value for a cell is `baseline`,
-    //    approximated here as `top`, which is what it degrades to for a single-line row and what
-    //    this code already did. A fix that centred unconditionally fails here.
+    // ── ⚠⚠⚠ CONTROL A WAS WRONG, AND IT WAS WRONG IN THE DIRECTION THAT PINS A BUG. It asserted
+    //    y=2 on the reasoning that *"the CSS initial value for a cell is `baseline`, approximated
+    //    here as `top`"*. The CSS initial value is not what a `<td>` computes: Chrome's UA sheet is
+    //    `tbody { vertical-align: middle }` + `tr, td { vertical-align: inherit }`, so a plain cell
+    //    computes **middle**. Measured in headless Chrome on this exact fixture:
+    //
+    //    ```text
+    //      #a3   dy = 20        getComputedStyle(td).verticalAlign = "middle"
+    //            tbody = middle    tr = middle
+    //    ```
+    //
+    //    This row is a prose-derived value that was never measured, and because
+    //    `g_table_cell_valign` is not in `scripts/verify.sh`'s launch list it went red silently the
+    //    moment the engine became correct and stayed red behind green walls. The row now asserts
+    //    Chrome's answer.
     assert!(
-        near(dy("#a3", "#c3"), 2.0),
-        "G_TABLE_CELL_VALIGN: with no `vertical-align`, the content stays at the top of the cell — \
-         y=2 (half-leading), not {}.",
+        near(dy("#a3", "#c3"), 20.0),
+        "G_TABLE_CELL_VALIGN: a `<td>` with no `vertical-align` computes `middle` from the UA sheet \
+         (tbody:middle + tr/td:inherit), so the content is CENTRED at y=20, not {}.",
         dy("#a3", "#c3")
+    );
+
+    // ── CONTROL A2 — the row CONTROL A was reaching for, spelled so it means it. An EXPLICIT
+    //    `vertical-align: baseline` on a single-line cell degrades to `top`, and Chrome measures
+    //    y=2. This is what fails if a fix ever centres unconditionally — which is the check
+    //    CONTROL A was written to be and could not perform, because the value it asserted was the
+    //    same one an unconditional `top` produces.
+    assert!(
+        near(dy("#a7", "#c7"), 2.0),
+        "G_TABLE_CELL_VALIGN: an explicit `vertical-align:baseline` on a single-line cell aligns \
+         with the top — y=2 (half-leading), not {}.",
+        dy("#a7", "#c7")
     );
 
     // ── CONTROL B — a row whose height comes from its TALLEST cell, with no explicit height on the

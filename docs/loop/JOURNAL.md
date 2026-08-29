@@ -95309,3 +95309,142 @@ not yet in the driving surface. That wiring, on a real site, is the honest next 
 four-copy pref drift above is a named Track A remainder.
 
 WIKI: docs/wiki/agent-drive-below-the-fold.md
+
+## Tick 1360 — a cell with no line box is not a cell with nothing in it (2026-08-29)
+
+TICK SHAPE: capability-subsystem
+
+**Track A, and the previous tick handed it over.** t1359 ran `manuk-page` as a control arm and found
+`g_table_cell_valign` RED, bisected it to *before* t1358, and named it as this tick's candidate
+rather than swapping scope mid-tick. So this one starts from a measurement.
+
+### ⭐⭐⭐ FIRST, THE RED GATE WAS THE GATE — MEASURE BEFORE BELIEVING A RED
+
+The failing row asserted that a `<td>` with no `vertical-align` keeps its content at the top (y=2),
+reasoning in its own comment that *"the CSS initial value for a cell is `baseline`, approximated
+here as `top`"*. Headless Chrome, on that gate's exact fixture:
+
+```text
+  #a3   dy = 20      getComputedStyle(td).verticalAlign = "middle"
+                     tbody = middle      tr = middle
+```
+
+**The CSS initial value is not what a `<td>` computes.** Chrome's UA sheet is
+`tbody { vertical-align: middle }` + `tr, td { vertical-align: inherit }`, so a plain cell computes
+`middle`. The engine's 20 was Chrome's answer; the gate held a **prose-derived value that had never
+been measured**, and it went red the moment the engine became correct. This is t1344-1346 verbatim,
+and the rule earned another citation: *measure every red gate against headless Chrome first.*
+
+The row now asserts 20 — and the check it was *reaching* for got its own row, because CONTROL A
+could not perform it: an explicit `vertical-align: baseline` on a single-line cell degrades to top
+(Chrome y=2), which is the assertion that actually fails if anything ever centres unconditionally.
+The old row's value was indistinguishable from what an unconditional `top` produces.
+
+⚠⚠ **It went red SILENTLY because it is not in the wall**, and that is now measured rather than
+suspected: `scripts/verify.sh` runs `manuk-css manuk-layout manuk-paint manuk-dom manuk-net
+manuk-agent manuk-shell` as crate suites and launches `manuk-page` gates only by explicit name.
+`g_table_cell_valign` has no such line. Twenty-three days of green walls over a red gate. `scripts/`
+is observer-owned, so the fix is placement, not harness surgery — see below.
+
+### THE SURVEY — 13 CHROME ROWS BEFORE ONE LINE OF CODE
+
+With the gate corrected, the question became whether anything was actually broken. The engine was
+measured against Chrome on a widening battery, and it matched on **every** existing row — including
+text-vs-text baseline alignment across a row, which t933 already built. One shape diverged:
+
+```text
+  <td vertical-align:baseline><div style="height:50px"></div></td><td>label</td>
+      the label     Chrome y=35, ours y=2        the ROW    Chrome 57, ours 50
+```
+
+Priced before building: `td { vertical-align: baseline }` is in the reset sheet of **4 of 39**
+sampled CrUX sites, and an icon/spacer cell beside a label cell is the commonest legacy table row.
+
+### ⭐⭐⭐ THE FINDING — TWO DIFFERENT ANSWERS, ONE OF THEM RETURNED FOR BOTH
+
+t933 built baseline alignment for cells that have a first line box, and wrote down what it did with
+the rest:
+
+> *"A cell with no line box at all (an empty cell) has no baseline to contribute and does not join
+> the max."*
+
+The parenthesis is the bug. **"This cell has no line box" and "this cell has nothing in it" are two
+different answers.** A cell whose content is a block produces no line box, and Chrome joins it to
+the row's baseline group anyway, synthesizing the cell's baseline from the bottom edge of its
+content (CSS 2.1 §17.5.4). The empty cell really does stay out — it is a *different* case, and the
+comment attached a true statement to the wrong test.
+
+Three distinctions, each pinned by a row, none of them guessable:
+
+1. ⭐ **The NATURAL content height, not the used one.** A cell forced to `height: 200px` around a
+   50px block still has its baseline at 50 — the neighbour's label lands at 35, not 185. The *same*
+   distinction t933's own free-space calculation had to make, for the same reason.
+2. ⭐ **The bottom MARGIN edge.** A block with `margin-bottom: 25px` puts the row's baseline at 75,
+   which falls out of asking the cell's own BFC height rather than the last child's border box.
+3. ⭐ **The alignment moves BOTH ways.** A 6px block beside a text label belongs at y=11, not 0. A
+   fix that only pushes text down passes six rows and fails that one.
+
+### ⭐⭐⭐ AND THE SAME BLIND SPOT, ONE FUNCTION AWAY AND LARGER
+
+Chasing row 11 (a float-only cell) turned up the bigger half:
+
+```text
+  <td><div style="float:left;height:50px"></div></td>     Chrome 50x50 cell in a 50 table
+                                                          ours   0x0   cell in a 0 table
+```
+
+**A table cell is a BFC root, so it contains its floats.** `layout_cell` *builds* a `FloatContext`
+(it must, or the cell's own text would not flow around its floats) and then took only
+`layout_children`'s in-flow height, which a float does not contribute to. The whole row vanished.
+`layout_block` has answered this correctly for every other BFC root since floats were built
+(`own_bfc.lowest_bottom() - content_y`) — this is that same line, at the one BFC root that
+constructed the context and never queried it. One line, and the two halves compose: with the cell's
+height right, the float-only cell also gets the right synthesized baseline.
+
+### THE GATE, AND WHY A TABLE GATE LIVES IN `agent/tests/`
+
+`a_cell_without_a_line_box_still_has_a_height_and_a_baseline` (`agent/tests/`) — twelve rows, every
+number headless-Chrome-measured on the gate's exact fixture, with a vacuity pass over all twelve
+tables and **two pinned controls** (an `<img>` cell and a text-vs-text row: both reach the baseline
+through `first_line_baseline`, not the synthesis, and must not move) plus **one pinned NEGATIVE**
+(the empty cell, whose table must stay at its declared 50).
+
+It is in `agent/tests/` because that is where the wall already looks. `manuk-page` is not in the
+wall's crate list, and a gate under `engine/page/tests/` runs only if `verify.sh` names it — which
+is exactly the failure this tick opened on. Placement, not harness surgery.
+
+⚠ **A gate in `agent/tests/` runs on `MinimalCascade`, and that caught a second cascade
+disagreement.** The fixture was first written with `font: 16px/24px monospace` and the gate read a
+**54px** row where Chrome and the shipping Stylo pipeline both read 57 — the two cascades do not
+agree about the shorthand's `line-height`. The fixture now states the three longhands, because a
+table gate that can be reddened by a font shorthand is not a table gate. The disagreement itself is
+recorded as NAMED, MEASURED, NOT BUILT rather than worked around silently.
+
+**PROVEN RED by four mutations**, each with a different message. N1 drop the synthesis (the pre-tick
+code) → seven rows read label y=2 and four also read a short table. N2 synthesize unconditionally →
+the empty cell's table grows 50 → 67, which is the negative row doing its job. N3 synthesize from
+the USED height → row 6's label reads 61 instead of 48. N4 drop the float containment → row 12
+collapses to 0/0 and row 11's label falls back to y=2.
+
+### THE RECEIPT
+
+```text
+  manuk-page   (full suite)     FAILED (1) → 0 failed   ← green for the first time since 2026-08-06
+  manuk-agent  (lib + gates)     127/127 → 128/128  +1  +the new gate
+  manuk-layout                   191/191            CONTROL
+  manuk-css                        43/43            CONTROL
+  cargo check --workspace --all-targets   clean     CONTROL
+```
+
+PERF: one `f32::max` per cell for the float containment; the baseline synthesis runs only on the
+`.or_else` branch a cell reaches when it has no line box, which is where the previous code returned
+`None` and did no work either.
+
+NEXT: two rows are NAMED, MEASURED, NOT BUILT and each is a tick — the `font` shorthand's
+`line-height` disagreeing between the two cascades (57 vs 54 on a table row, and it will be wrong on
+every page that uses the shorthand, which is most of them), and line-box overflow for text larger
+than its line-height (Chrome -11, ours +1). The first is the bigger lever and has the t1358 shape:
+one declaration, two entrances, different answers. t933's three older table defects — rowspan
+row-height distribution, `<caption>`, `<thead>` ordering — remain measured and unbuilt.
+
+WIKI: docs/wiki/table-cell-content-geometry.md

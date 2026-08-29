@@ -9344,3 +9344,30 @@ sitting inside the match that removed it everywhere else.
 parked off to the side comes no closer for any `dy`, and reporting one sends an agent scrolling
 forever.
 (t1359 — `agent/tests` `an_agent_reaches_a_target_below_the_fold`)
+
+## `<td><div class="icon"></div></td><td>Label</td>` — the icon row that aligns to the wrong thing, and the float cell that vanishes
+
+`vertical-align: baseline` is the initial value for a table cell and `td { vertical-align: baseline }`
+is in the reset sheet of four of thirty-nine sampled CrUX sites, so a row's cells align their
+first-line baselines constantly. An icon/spacer cell holds a **block**, which makes no line box —
+and a cell with no line box was treated as a cell with nothing in it, so it contributed no baseline.
+Chrome synthesizes one from the bottom edge of the cell's content: the label belongs at y=35, not
+y=2, and the row is 57 tall, not 50. The row's shortfall then moves every box below the table.
+
+⚠ It is the **natural** content height, not the used one — a cell forced to `height: 200px` around a
+50px block still has its baseline at 50. And it is the bottom **margin** edge: a block with
+`margin-bottom: 25px` puts the row's baseline at 75.
+
+⚠ A cell with genuinely NOTHING in it must still stay out of the baseline group; synthesizing 0 for
+it makes it demand its own height plus the row's whole shift and grows a declared-50 row to 67.
+
+⚠⚠ **A table cell is a BFC root, so it contains its floats.** `<td><div style="float:left;
+height:50px"></div></td>` is a 50px cell in Chrome and measured **zero** here — the cell built a
+float context for its own text to flow around and never asked it how far down the floats went, so
+the whole row vanished.
+
+⚠ A plain `<td>` computes `vertical-align: middle`, not `baseline`: Chrome's UA sheet is
+`tbody { vertical-align: middle }` + `tr, td { vertical-align: inherit }`. A gate asserting the CSS
+*initial* value here is asserting something no `<td>` on the web ever has.
+(t1360 — `agent/tests` `a_cell_without_a_line_box_still_has_a_height_and_a_baseline`,
+`engine/page` `g_table_cell_valign`)
