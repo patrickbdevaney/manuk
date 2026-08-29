@@ -64,6 +64,51 @@ impl Rect {
             && self.y < other.bottom()
             && other.y < self.bottom()
     }
+
+    /// The overlapping region, or `None` when they do not overlap. The *visible* part of an
+    /// element is `bbox ∩ viewport`, and that — not the whole border box — is the only part of it
+    /// an agent can aim at: the centre of a box half-scrolled off the screen is off the screen.
+    pub fn intersection(&self, other: &Rect) -> Option<Rect> {
+        if !self.intersects(other) {
+            return None;
+        }
+        let x = self.x.max(other.x);
+        let y = self.y.max(other.y);
+        Some(Rect {
+            x,
+            y,
+            width: self.right().min(other.right()) - x,
+            height: self.bottom().min(other.bottom()) - y,
+        })
+    }
+}
+
+/// **Where a click aimed at a node will actually land** — the answer an agent needs *before* it
+/// acts, and the one nothing in this codebase used to ask.
+///
+/// ⭐⭐⭐ **A CLICK POINT IS A CLAIM ABOUT THE HIT-TEST, AND IT WAS NEVER CHECKED AGAINST IT.**
+/// Three separate entrances published `bbox.center()` as "where an agent should click this
+/// element" — [`A11yNode::to_viewport_lines`] (the coordinates the *model* is shown, whose own doc
+/// comment says "an agent can act on these directly"), `manuk_agent::targeting::resolve_target`,
+/// and `manuk_agent::grounding::ground_action` — and not one of them ran the point back through
+/// [`A11yNode::hit_test`]. On a page with a consent overlay (which is most of the web) the centre
+/// of the *Sign in* button belongs to the cookie banner: the agent resolves the right node with
+/// confidence `1.0`, clicks a coordinate that reaches the banner, the button's handler never runs,
+/// and **every observable channel reports success**. Perception and actuation were both built and
+/// nothing joined them.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub enum Landing {
+    /// A point that hit-tests back to the target **or to a descendant of it** — safe to click.
+    /// A descendant counts because events bubble: clicking the `<span>` inside a `<button>`
+    /// activates the button. An *ancestor* does not count — clicking the wrapping `<div>` does not.
+    Clear { point: (f32, f32) },
+    /// Something is on top of the target: no candidate point inside its visible box reaches it.
+    /// `by` is what intercepted the centre — the node an agent should deal with first (dismiss the
+    /// banner, close the modal) — and `point` is the centre, kept for reporting.
+    Obstructed { by: NodeId, point: (f32, f32) },
+    /// The target has no box, or no part of its box is inside the viewport. There is nothing to
+    /// aim at, and a coordinate would be a guess.
+    Unreachable,
 }
 
 /// The subset of ARIA roles we compute. `Generic` is the honest fallback for
@@ -759,15 +804,35 @@ impl A11yNode {
     /// `Rect { y: scroll_y, height: viewport_height, .. }`. Nodes with no geometry
     /// (`bbox == None`) are **omitted**, because an agent cannot act on them and
     /// listing them would imply it could.
+    ///
+    /// ⭐ **The point is [`Landing`]-verified, and that is the whole difference between an agent
+    /// that acts and one that thinks it acted.** This used to print `bbox.center()` unconditionally
+    /// — a coordinate the model was told to click, that on any page with a consent overlay reached
+    /// the overlay instead. Now the printed point is one that hit-tests back to the element, and an
+    /// element nothing can reach is printed `obstructed` rather than with a lie for a coordinate.
+    /// The obstructed node is still LISTED: an agent that can see the *Sign in* button is covered
+    /// can dismiss what covers it, and one that cannot see the button at all can only give up.
     pub fn to_viewport_lines(&self, viewport: Rect) -> Vec<String> {
-        self.interesting()
-            .filter_map(|n| {
-                let b = n.bbox?;
-                if !b.intersects(&viewport) {
-                    return None;
+        let nodes: Vec<&A11yNode> = self
+            .interesting()
+            .filter(|n| n.bbox.is_some_and(|b| b.intersects(&viewport)))
+            .collect();
+        nodes
+            .into_iter()
+            .map(|n| {
+                let line = Self::render(n);
+                match self.landing(n.node, Some(viewport)) {
+                    Landing::Clear { point: (x, y) } => format!("{line} @({x:.0},{y:.0})"),
+                    Landing::Obstructed { point: (x, y), .. } => {
+                        format!("{line} @({x:.0},{y:.0}) obstructed")
+                    }
+                    // Filtered above, so this is the `pointer-events: none` target: it is on
+                    // screen and it is not clickable anywhere. Say so rather than drop the row.
+                    Landing::Unreachable => {
+                        let (x, y) = n.bbox.map(|b| b.center()).unwrap_or((0.0, 0.0));
+                        format!("{line} @({x:.0},{y:.0}) obstructed")
+                    }
                 }
-                let (cx, cy) = b.center();
-                Some(format!("{} @({:.0},{:.0})", Self::render(n), cx, cy))
             })
             .collect()
     }
@@ -854,6 +919,103 @@ impl A11yNode {
             }
         }
         go(self, x, y)
+    }
+
+    /// **Verify a click point against the hit-test before an agent acts on it.** Called on the
+    /// tree ROOT (hit-testing is a whole-page question — an overlay is somewhere else in the tree
+    /// entirely), it returns where a click aimed at `target` actually lands. See [`Landing`].
+    ///
+    /// `viewport` clips the target to what is on screen, so the point is one a real pointer could
+    /// reach; pass `None` to aim at the whole border box (document-coordinate callers that do not
+    /// scroll).
+    ///
+    /// **The candidate ladder is deliberately short and ordered centre-first**, so a page with
+    /// nothing covering anything gets exactly the point it got before — this is a strictly added
+    /// check, not a new aiming policy. Only when the centre is intercepted does it try the four
+    /// quadrant centres and then four near-corner insets, which is what rescues the very common
+    /// half-covered case: a sticky header over the top of a link, a chat widget over one corner.
+    /// The centre costs ONE hit-test on the overwhelmingly common clear path.
+    pub fn landing(&self, target: NodeId, viewport: Option<Rect>) -> Landing {
+        let Some(node) = find_node(self, target) else {
+            return Landing::Unreachable;
+        };
+        let Some(bbox) = node.bbox else {
+            return Landing::Unreachable;
+        };
+        let aim = match viewport {
+            Some(v) => match bbox.intersection(&v) {
+                Some(r) => r,
+                None => return Landing::Unreachable,
+            },
+            None => bbox,
+        };
+        if aim.width <= 0.0 || aim.height <= 0.0 {
+            return Landing::Unreachable;
+        }
+
+        // A hit on the target itself or anywhere in its subtree activates the target. Collected
+        // ONCE — this runs per listed node in `to_viewport_lines`, so a per-candidate walk of the
+        // subtree would make an observation quadratic in the page.
+        let mut subtree = Vec::new();
+        collect_ids(node, &mut subtree);
+        let try_point = |p: (f32, f32)| {
+            self.hit_test(p.0, p.1)
+                .is_some_and(|h| subtree.contains(&h.node))
+        };
+
+        let centre = aim.center();
+        if try_point(centre) {
+            return Landing::Clear { point: centre };
+        }
+        // `hit_test` is half-open on the right/bottom edges, so a candidate must stay strictly
+        // inside; the insets are clamped for boxes only a pixel or two big.
+        let (ix, iy) = ((aim.width / 4.0).min(4.0), (aim.height / 4.0).min(4.0));
+        let (r, b) = (aim.right() - 0.5, aim.bottom() - 0.5);
+        let quad = |fx: f32, fy: f32| {
+            (
+                (aim.x + aim.width * fx).min(r),
+                (aim.y + aim.height * fy).min(b),
+            )
+        };
+        for p in [
+            quad(0.25, 0.25),
+            quad(0.75, 0.25),
+            quad(0.25, 0.75),
+            quad(0.75, 0.75),
+            (aim.x + ix, aim.y + iy),
+            ((r - ix).max(aim.x), aim.y + iy),
+            (aim.x + ix, (b - iy).max(aim.y)),
+            ((r - ix).max(aim.x), (b - iy).max(aim.y)),
+        ] {
+            if try_point(p) {
+                return Landing::Clear { point: p };
+            }
+        }
+        match self.hit_test(centre.0, centre.1) {
+            Some(h) => Landing::Obstructed {
+                by: h.node,
+                point: centre,
+            },
+            // Nothing at all is at the centre: the target's own box does not hit-test, which is
+            // `pointer-events: none` on the target itself. Not obstructed — unaimable.
+            None => Landing::Unreachable,
+        }
+    }
+}
+
+/// The node with this id, without allocating a flat view of the whole tree first.
+fn find_node(n: &A11yNode, id: NodeId) -> Option<&A11yNode> {
+    if n.node == id {
+        return Some(n);
+    }
+    n.children.iter().find_map(|c| find_node(c, id))
+}
+
+/// Every arena id in `n`'s subtree, `n` included.
+fn collect_ids(n: &A11yNode, out: &mut Vec<NodeId>) {
+    out.push(n.node);
+    for c in &n.children {
+        collect_ids(c, out);
     }
 }
 
@@ -2781,6 +2943,71 @@ mod tests {
     /// target — prices, "Sign\u{a0}up", "Add\u{a0}to\u{a0}cart", French punctuation.
     ///
     /// **To watch it go RED:** put `split_whitespace` back in `normalize`.
+    /// `landing` clips the target to the VIEWPORT before aiming, because the centre of a box
+    /// half-scrolled off the screen is off the screen. A coordinate no pointer can reach is not a
+    /// click point, and publishing one is the same class of lie as publishing an obstructed one.
+    #[test]
+    fn a_click_point_is_inside_the_part_of_the_target_that_is_on_screen() {
+        let target = A11yNode {
+            node: NodeId(2),
+            role: Role::Button,
+            name: "Tall".into(),
+            bbox: Some(Rect {
+                x: 0.0,
+                y: 0.0,
+                width: 100.0,
+                height: 1000.0,
+            }),
+            z: 0,
+            hittable: true,
+            state: Default::default(),
+            children: vec![],
+        };
+        let root = A11yNode {
+            node: NodeId(1),
+            role: Role::Document,
+            name: String::new(),
+            bbox: None,
+            z: 0,
+            hittable: true,
+            state: Default::default(),
+            children: vec![target],
+        };
+
+        // Scrolled to y=900: only the bottom 100px of the button is on screen, so the aimed point
+        // must be in 900..1000 — NOT the box centre at y=500, which is a screen away.
+        let vp = Rect {
+            x: 0.0,
+            y: 900.0,
+            width: 100.0,
+            height: 600.0,
+        };
+        let Landing::Clear { point } = root.landing(NodeId(2), Some(vp)) else {
+            panic!("the visible part of the button is reachable");
+        };
+        assert!(
+            (900.0..1000.0).contains(&point.1),
+            "aimed at {point:?}, which is not in the visible band 900..1000"
+        );
+
+        // Scrolled past it entirely: there is nothing to aim at, and a coordinate would be a guess.
+        let past = Rect {
+            x: 0.0,
+            y: 1200.0,
+            width: 100.0,
+            height: 600.0,
+        };
+        assert_eq!(root.landing(NodeId(2), Some(past)), Landing::Unreachable);
+
+        // With no viewport the whole border box is fair game, so the centre stands.
+        assert_eq!(
+            root.landing(NodeId(2), None),
+            Landing::Clear {
+                point: (50.0, 500.0)
+            }
+        );
+    }
+
     #[test]
     fn a_non_breaking_space_survives_name_normalisation() {
         // Collapsed: runs of ASCII whitespace become one space, and the ends are trimmed.
@@ -2893,7 +3120,10 @@ mod tests {
 
         let name = |n: NodeId, g: &GeneratedText| {
             let r = role_of(&dom, n).unwrap();
-            let index = id_index(&dom);
+            // t1355 widened this parameter from the bare id map to the full `NameIndex` (ids +
+            // labels) and left this caller behind, which broke the WHOLE crate's `cfg(test)` build
+            // — invisibly, because `manuk-a11y` is not in the wall's crate list.
+            let index = NameIndex::build(&dom);
             accessible_name_with(&dom, n, &r, &index, g)
         };
         assert_eq!(

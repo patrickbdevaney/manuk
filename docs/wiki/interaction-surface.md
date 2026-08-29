@@ -3229,3 +3229,103 @@ gate row here is an inline lookup with no `var`, and says so.
 by three mutations: no browsing-context lookup → `byNameIsWindow:true`; match on id as well as name →
 `byIdIsElement:true`; drop the `isFrameName` guard → `G_GET_ELEMENT_BY_ID_INDEX` never finishes its
 loop.
+
+## A click point is a claim about the hit-test, and nothing ever checked it (t1356)
+
+The drive loop is *perceive → act → observe*, and both ends were finished long before this. The
+accessibility tree gives an agent role, name, geometry and interaction state;
+`Page::dispatch_click_at` turns a document coordinate into a real event through an occlusion-aware,
+`pointer-events`-honouring hit-test. **Nothing joined them.**
+
+Three separate entrances published `bbox.center()` as *"where an agent should click this element"*:
+
+| entrance | who reads it |
+| --- | --- |
+| `A11yNode::to_viewport_lines` | **the model** — the `role "name" @(x,y)` lines in an `Observation` |
+| `targeting::resolve_target` → `Targeted.point` | the dual semantic+visual scorer |
+| `grounding::ground_action` → `Grounded::Ready.point` | the deterministic half of prompt→action |
+
+Not one of them ran the point back through `hit_test`. `Rect::center`'s own doc comment said
+*"Center point — where an agent should click this element"*, and it was never true on a page with
+anything on top of anything.
+
+### The probe, verbatim, on the commonest page on the web
+
+A `<button id=signin>` and a `position: fixed; z-index: 99` consent banner over it:
+
+```text
+GROUNDED     = Ready { node: NodeId(9), name: "Sign in", point: (140.0, 62.0), confidence: 1.0 }
+HIT AT POINT = Some((NodeId(12), Generic, ""))        ← the cookie banner
+dispatch_click_at(140,62) -> proceed = true
+#out                      -> "none"                   ← the button's handler never ran
+```
+
+⭐⭐⭐ **Right node, maximum confidence, wrong coordinate — and every observable channel reported
+success.** This is the failure mode that matters most for an agent: not that the action failed, but
+that **nothing anywhere could tell it had.** An agent cannot retry a failure it is told did not
+happen, and "the click did nothing" is indistinguishable from "the page did nothing".
+
+Note also which layer was *not* wrong. The scorer picked the right element with a perfect margin;
+the hit-test knew exactly what was on top; `dispatch_click_at` did precisely what it was asked.
+**Every component was correct and the composition was not** — the same shape as t1355's two
+entrances, one door further out.
+
+### `A11yNode::landing` — the verified point
+
+```rust
+pub enum Landing {
+    Clear      { point: (f32, f32) },              // hit-tests back to the target or a DESCENDANT
+    Obstructed { by: NodeId, point: (f32, f32) },  // something is on top; `by` is what to dismiss
+    Unreachable,                                   // no box, or no part of it on screen
+}
+```
+
+Three decisions carry the design:
+
+1. **A descendant counts; an ancestor does not.** Clicking the `<span>` inside a `<button>`
+   activates the button — events bubble — so a hit anywhere in the target's subtree is a hit on the
+   target. A hit on the wrapping `<div>` is not: it is the *neighbourhood*, not the thing.
+2. **Centre first, then a short ladder.** The candidate order is the centre, then the four quadrant
+   centres, then four near-corner insets. A page with nothing covering anything gets *byte-identical*
+   coordinates to before — this is an added check, not a new aiming policy — and the clear path costs
+   **one** hit-test. The ladder is what rescues the ordinary web: a sticky header over the top of a
+   link, a chat widget over one corner.
+3. **The target is clipped to the viewport first.** The centre of a box half-scrolled off the screen
+   is off the screen; a coordinate no pointer can reach is not a click point.
+
+### Obstruction is REPORTED, not refused
+
+`Grounded::Obstructed { node, name, by, point }` — and `to_viewport_lines` marks the row
+`… @(140,530) obstructed`. The covered element stays **listed**, deliberately: an agent that can see
+the *Sign in* button is covered by a banner can dismiss the banner and retry, while an agent that
+cannot see the button at all can only give up. And a caller holding a node handle may still activate
+the node directly — `Browser::click_by_name` resolves by name and calls `activate(node)`, bypassing
+coordinates entirely — so no capability that worked before works less well now.
+
+### Gate
+
+`G_AGENT_CLICK_LANDS_ON_ITS_TARGET` (`agent/tests/g_agent_click_lands_on_its_target.rs`) — one page,
+three arms: CLEAR (control: an unobstructed target still gets its exact box centre), RESCUED (a
+header over the top half; the point must move below it **and the checkbox must toggle**), OBSTRUCTED
+(honest refusal naming the covering node).
+
+⭐ **The observable is the accessibility tree itself**, which is what makes it the drive loop and not
+a unit test of a helper: the targets are checkboxes, so the agent reads role + name + geometry out of
+the tree, aims, clicks a *coordinate*, and reads `state.checked` back out of the **same** tree. No
+script on the page at all — so it holds in a build without SpiderMonkey, and green cannot be an
+artefact of the test poking the DOM itself.
+
+Proven red by three mutations: N1 `landing` returns the centre unverified (*the defect*) → the
+rescued point stays under the header; N2 obstruction detected but the ladder skipped → a reachable
+target reports `Obstructed`; N3 `to_viewport_lines` drops the marker → the model is shown a covered
+element as clickable.
+
+⚠ **N2's first form did not go red and had not run** — an empty `for p in []` loop simply falls
+through to the real ladder. The t1239 trap again: *a mutation that does not go red may not have
+applied.*
+
+⚠⚠ **`manuk-a11y`'s own `cfg(test)` build was broken at HEAD and nothing noticed.** t1355 widened
+`accessible_name_with`'s index parameter from the bare id map to the full `NameIndex` and left one
+test caller behind; the crate's 20 unit tests had not compiled since. They do not compile in the
+wall either, **because `manuk-a11y` is not in the wall's crate list** — a whole suite went dark
+between two ticks of the same subsystem. Fixed here; the crate is green at 21.

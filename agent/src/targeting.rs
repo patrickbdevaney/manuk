@@ -7,7 +7,7 @@
 //! against a small, intent-focused view of the page and picks targets robustly even when several
 //! elements share a label.
 
-use manuk_a11y::{A11yNode, Rect, Role};
+use manuk_a11y::{A11yNode, Landing, Rect, Role};
 use manuk_dom::NodeId;
 
 /// Common filler words that carry no targeting signal — dropped from task/intent keywords so
@@ -86,8 +86,14 @@ pub struct Targeted {
     pub node: NodeId,
     pub role: Role,
     pub name: String,
-    /// Where to click — the target's box center.
+    /// Where to click — a point **verified against the hit-test** ([`A11yNode::landing`]), not the
+    /// bare box centre. When `obstructed_by` is set no such point exists and this is the centre,
+    /// kept only so a caller can report *where* the interception happened.
     pub point: (f32, f32),
+    /// The node covering the target, when nothing inside the target's visible box reaches it.
+    /// `None` on the ordinary clear path. A caller that acts on `point` regardless will click
+    /// whatever this names — which is exactly the silent misfire this field exists to prevent.
+    pub obstructed_by: Option<NodeId>,
     /// Combined semantic+visual score of the winner (higher = better).
     pub score: f32,
     /// Margin of the winner over the runner-up, `0.0..=1.0`. Low = ambiguous (several equally
@@ -175,11 +181,20 @@ pub fn resolve_target(tree: &A11yNode, intent: &str, viewport: Rect) -> Option<T
         0.0
     };
     let bbox = best.bbox?;
+    // ⭐ The scorer picks WHICH element; the hit-test decides WHETHER a coordinate reaches it.
+    // Those are different questions and this used to answer only the first, publishing
+    // `bbox.center()` as the click point with no idea what was on top of it.
+    let (point, obstructed_by) = match tree.landing(best.node, Some(viewport)) {
+        Landing::Clear { point } => (point, None),
+        Landing::Obstructed { by, point } => (point, Some(by)),
+        Landing::Unreachable => (bbox.center(), None),
+    };
     Some(Targeted {
         node: best.node,
         role: best.role.clone(),
         name: best.name.clone(),
-        point: bbox.center(),
+        point,
+        obstructed_by,
         score: best_score,
         confidence,
     })

@@ -9274,3 +9274,14 @@ glyph that IS the label, an `::after` that states the side effect. accname §4.3
 the name; an agent told to avoid opening new tabs cannot know without it. ⚠ Both entry points to the
 name computation must carry the map, not just the tree builder.
 (t1355 — `agent/tests/g_a11y_generated_name_entry.rs`)
+
+## The consent banner over the button the agent was told to click
+
+Every page that carries a cookie/consent wall, a newsletter modal, a sticky header or a chat widget
+puts something on top of something the agent wants. The a11y tree's hit-test has known about
+stacking layers and `pointer-events` since t853; the *click point* handed to the model never asked
+it. So the model was shown `button "Sign in" @(140,62)` for a button that coordinate cannot reach,
+clicked it, and got a success back. A verified point either lands on the target (a sticky header
+over the top half is worked around) or the row is marked `obstructed` and the covering node is
+named — which is what lets an agent dismiss the banner and retry instead of looping on a click that
+silently did nothing. (t1356 — `agent/tests/g_agent_click_lands_on_its_target.rs`)

@@ -94710,3 +94710,132 @@ unbuilt. Recorded as its own row rather than absorbed into "Track B done". Full 
 `docs/loop/CONSTITUTION-CHECK.md` #128, with three steers, each carrying what would refute it.
 
 WIKI: docs/wiki/dom-semantics.md
+
+## Tick 1356 — the agent had perception and it had actuation, and nothing checked that the click reached what it saw (2026-08-29)
+
+TICK SHAPE: capability-mechanism
+
+**Track C, at last.** Six consecutive ticks bought Track B (a11y node match 63.8% → 90.3%, bar met),
+and constitution check #128's third steer said the next non-a11y tick should be Track C — the
+end-to-end DRIVE, still unassembled since the observer's 2026-08-28 balance nudge. The board's Track
+C gate: *"agent navigates → reads a11y tree → clicks a real button → the page responds → observes the
+result."*
+
+**HYPOTHESIS.** The fragments all exist — `Selector`/`resolve` (role+name → node), `resolve_target`
+(dual semantic+visual scorer), `ground_action`, `A11yNode::hit_test` (z-aware, `pointer-events`-aware
+since t853), `Page::dispatch_click_at` (routes into iframes). If the drive loop has never been
+assembled, the defect will be *between* them, not inside any of them.
+
+### THE PROBE, AND IT LANDED ON THE FIRST FIXTURE
+
+A `<button id=signin>` under a `position:fixed; z-index:99` consent banner — 12 lines:
+
+```text
+GROUNDED     = Ready { node: NodeId(9), name: "Sign in", point: (140.0, 62.0), confidence: 1.0 }
+HIT AT POINT = Some((NodeId(12), Generic, ""))        ← the cookie banner
+dispatch_click_at(140,62) -> proceed = true
+#out                      -> "none"                   ← the button's handler never ran
+```
+
+⭐⭐⭐ **A CLICK POINT IS A CLAIM ABOUT THE HIT-TEST, AND NOT ONE OF THE THREE ENTRANCES THAT
+PUBLISHED ONE EVER CHECKED IT.** `A11yNode::to_viewport_lines` (**the coordinates the model is
+shown** — its own doc comment says *"an agent can act on these directly"*),
+`targeting::resolve_target`, and `grounding::ground_action` all returned `bbox.center()`.
+`Rect::center`'s doc comment read *"Center point — where an agent should click this element"*, and on
+any page with a consent wall — which is most of the web — it was false.
+
+⭐⭐ **AND EVERY COMPONENT WAS CORRECT.** The scorer picked the right element with a perfect
+confidence margin; the hit-test knew exactly what was on top; `dispatch_click_at` did precisely what
+it was asked. **The composition was the bug** — the same shape as t1355's two entrances, one door
+further out, and I3's *"exposed through EVERY entrance"* now has a sibling: **a value published for
+an actor to ACT on must be verified against the mechanism that will EXECUTE it.**
+
+⭐⭐⭐ **THE COST IS NOT THAT THE ACTION FAILED, IT IS THAT NOTHING COULD TELL.** `proceed = true`,
+no error, no diagnostic, the same DOM afterwards. For an agent that is worse than a crash: *"the
+click did nothing"* is indistinguishable from *"the page did nothing"*, so a retry loop is the only
+strategy available, and it will click the banner forever.
+
+### THE FIX — `A11yNode::landing`, one rule behind all three doors
+
+```rust
+pub enum Landing {
+    Clear      { point: (f32, f32) },              // hit-tests back to the target or a DESCENDANT
+    Obstructed { by: NodeId, point: (f32, f32) },  // something is on top; `by` is what to dismiss
+    Unreachable,                                   // no box, or no part of it on screen
+}
+```
+
+- **A descendant counts, an ancestor does not.** Events bubble, so a hit anywhere in the target's
+  subtree activates the target — clicking the `<span>` inside a `<button>` is clicking the button.
+  A hit on the wrapping `<div>` is the neighbourhood, not the thing.
+- **Centre first, then a short ladder** (four quadrant centres, four near-corner insets). A page with
+  nothing covering anything gets *byte-identical* coordinates to before — this is an added check, not
+  a new aiming policy, and the gate's CONTROL arm asserts exactly that. The clear path costs ONE
+  hit-test. The ladder is what rescues the ordinary web: a sticky header over the top of a link.
+- **Clip to the viewport first** — the centre of a box half-scrolled off the screen is off the screen.
+- **Report, never refuse.** `Grounded::Obstructed` is new; `to_viewport_lines` marks the row
+  `obstructed` and keeps it LISTED. An agent that can see the *Sign in* button is covered can dismiss
+  the banner; one that cannot see the button at all can only give up. `Browser::click_by_name` still
+  resolves by name and activates the node directly, so nothing that worked before works less well.
+
+### THE GATE
+
+`G_AGENT_CLICK_LANDS_ON_ITS_TARGET` (`agent/tests/g_agent_click_lands_on_its_target.rs`) — one page,
+three arms. CLEAR (control: unobstructed target still gets its exact box centre and still fires),
+RESCUED (header over the top half — the point must move below it **and the checkbox must toggle**),
+OBSTRUCTED (refusal naming the covering node), plus the model-facing listing and the descendant rule.
+
+⭐ **THE OBSERVABLE IS THE ACCESSIBILITY TREE ITSELF**, which is what makes this the drive loop and
+not a unit test of a helper: the targets are checkboxes, so the agent reads role + name + geometry
+out of the tree, aims, clicks a **coordinate**, and reads `state.checked` back out of the **same**
+tree. Perceive → act → observe, closed. And no script on the page at all — so it holds in a build
+without SpiderMonkey, and a green result cannot be an artefact of the test poking the DOM itself.
+
+⚠ The first fixture used `onclick=` and read `none` on every arm — **`manuk-agent` builds
+`manuk-page` without the `spidermonkey` feature, so no page script runs at all.** Two arms would have
+been vacuously "not fired". Switching the observable to a UA default action (checkbox toggle) removed
+the dependency instead of adding a feature flag to the wall.
+
+**PROVEN RED by three mutations.** N1 `landing` returns the centre unverified (*the defect itself*) →
+the rescued point stays under the header. N2 obstruction detected but the ladder skipped → a
+reachable target reports `Obstructed`. N3 `to_viewport_lines` drops the marker → the model is shown a
+covered element as clickable.
+
+⚠ **N2's FIRST FORM DID NOT GO RED, AND HAD NOT RUN** — `for p in [] as [(f32,f32);0]` simply falls
+through to the real ladder underneath it. The t1239 trap for the second session running: *a mutation
+that does not go red may not have applied.* Rewritten as an early `return`, it went red at once.
+
+### ⚠⚠ AND A WHOLE UNIT SUITE HAD BEEN DARK FOR A TICK
+
+`cargo test -p manuk-a11y` did not COMPILE at HEAD: t1355 widened `accessible_name_with`'s index
+parameter from the bare id map to the full `NameIndex` and left one `cfg(test)` caller behind. Twenty
+unit tests — the hit-test tie-break rules among them, which this tick depends on — had not run since.
+**The wall never noticed because `manuk-a11y` is not in its crate list**, the same blind spot that hid
+the a11y suites from `WPT-AREAS.tsv` in #128. One-line fix; the crate is green at 21 (the new one
+covers viewport clipping).
+
+### THE RECEIPT
+
+```text
+  suite                        before      after      delta
+  manuk-a11y   (lib)          DOES NOT COMPILE  21/21   suite restored + 1
+  manuk-agent  (lib)           126/126    126/126        0   CONTROL
+  manuk-agent  (all gates)     green      green + 2      +2
+  manuk-page   a11y geometry   2/2        2/2            0   CONTROL (click-point format unchanged)
+  manuk-page / -js / demo      check      check          0   CONTROL
+```
+
+PERF: one hit-test per listed node in `to_viewport_lines`, on the clear path. The target's subtree ids
+are collected ONCE per call rather than per candidate point — a per-candidate walk would have made an
+observation quadratic in the page — and `find_node` replaces `iter().find()` so the lookup does not
+allocate a flat view of the whole tree first.
+
+NEXT: Track C's remaining leg is `type` and `scroll` actuation under the same rule — a text field
+under a sticky header has the same problem and `Browser::type_into` resolves by node, so the question
+is whether an obstructed field should still accept text (in a real browser it would not focus). And
+the reciprocal of this tick: `click_by_name` → `activate(node)` bypasses hit-testing entirely, so the
+agent can currently activate a control **no user could reach**. That is a divergence from Chrome in
+the direction of doing MORE, so it needs pricing before it is changed — refusing it outright would be
+a trade, and trades are refused.
+
+WIKI: docs/wiki/interaction-surface.md

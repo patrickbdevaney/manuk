@@ -34,6 +34,22 @@ pub enum Grounded {
         point: (f32, f32),
         confidence: f32,
     },
+    /// The target was resolved unambiguously and **something is on top of it** — no point inside
+    /// its visible box hit-tests back to it. Clicking `point` would activate `by`, not the target.
+    ///
+    /// ⭐ This is reported, not refused, and the distinction is the capability: an agent that
+    /// knows a consent banner covers the *Sign in* button can dismiss the banner and retry, while
+    /// an agent handed `Ready` with a confidence of `1.0` clicks the banner, sees nothing change,
+    /// and has no way to find out why. A caller that holds a node handle may still activate the
+    /// node directly (`Browser::click_by_name` does) — that path is unchanged.
+    Obstructed {
+        node: NodeId,
+        name: String,
+        /// What intercepted the click.
+        by: NodeId,
+        point: (f32, f32),
+        confidence: f32,
+    },
     /// A best target exists but its lead over the runner-up is below the threshold — the caller
     /// should disambiguate (ask, or narrow the intent) rather than act blindly.
     Ambiguous {
@@ -69,12 +85,23 @@ pub fn ground_action(
         return Grounded::Direct;
     };
     match resolve_target(tree, &intent, viewport) {
-        Some(t) if t.confidence >= min_confidence => Grounded::Ready {
-            node: t.node,
-            role: t.role,
-            name: t.name,
-            point: t.point,
-            confidence: t.confidence,
+        // Ambiguity is checked FIRST: "which element did you mean" outranks "can it be reached",
+        // because the obstruction answer is about a node that may not be the intended one.
+        Some(t) if t.confidence >= min_confidence => match t.obstructed_by {
+            Some(by) => Grounded::Obstructed {
+                node: t.node,
+                name: t.name,
+                by,
+                point: t.point,
+                confidence: t.confidence,
+            },
+            None => Grounded::Ready {
+                node: t.node,
+                role: t.role,
+                name: t.name,
+                point: t.point,
+                confidence: t.confidence,
+            },
         },
         Some(t) => Grounded::Ambiguous {
             node: t.node,
