@@ -3406,8 +3406,48 @@ fn establishes_bfc(s: &ComputedStyle) -> bool {
 /// out 9px too tall, displacing everything below it. `is_block_level` said "block"; the collapse
 /// predicates said "inline". One rule, two implementations.
 fn collapses_as_block(dom: &Dom, styles: &StyleMap, node: NodeId, s: &ComputedStyle) -> bool {
+    // ⚠⚠⚠ **A FLEX OR GRID *ITEM* ESTABLISHES AN INDEPENDENT FORMATTING CONTEXT, SO NOTHING
+    // COLLAPSES THROUGH IT** — CSS Flexbox §3 (*"the margins of a flex item do not collapse"*) and
+    // CSS Grid §6 for grid items. `establishes_bfc` cannot see this, because it reads the box's OWN
+    // computed style and an item is an ordinary `display: block` div: what makes it an item is its
+    // PARENT.
+    //
+    // The consequence is a whole-subtree `dy`, and it is the mechanism behind the worst anchor site
+    // on the board. `www.a11yproject.com`'s card is a grid container whose item wraps an image with
+    // `margin-top: 3rem`; at its `html { font-size: 20px }` that is **60px**, and the dump showed
+    // `y +60` on ten elements — the margin was collapsing out of the item and off the top of the
+    // card. Chrome-measured on the reduced fixture:
+    //
+    // ```text
+    //                                          first child dy    the wrapper
+    //   plain block chain (margin collapses)         0               80        CONTROL
+    //   the card is display:grid                    60              140        <- was 0 / 80
+    //   the card is display:flex                    60              140        <- was 0 / 80
+    //   margin-top in px, plain chain                0               80        CONTROL
+    // ```
+    //
+    // ⚠ The controls are the point: collapsing is CORRECT for an ordinary block chain and must stay.
+    // This is a narrowing of the predicate, not a removal of it.
+    if is_flex_or_grid_item(dom, styles, node) {
+        return false;
+    }
     s.display == Display::Block
         || (s.display == Display::Inline && is_block_level(dom, styles, node))
+}
+
+/// Is `node`'s **parent** a flex or grid container — i.e. is `node` an ITEM?
+///
+/// Asked of the parent, because that is the only place the answer lives: an item's own computed
+/// style is indistinguishable from any other block's.
+fn is_flex_or_grid_item(dom: &Dom, styles: &StyleMap, node: NodeId) -> bool {
+    dom.parent(node)
+        .and_then(|p| styles.get(&p))
+        .is_some_and(|ps| {
+            matches!(
+                ps.display,
+                Display::Flex | Display::Grid | Display::InlineFlex | Display::InlineGrid
+            )
+        })
 }
 
 /// **The characters CSS Text calls *document white space* — and NOT `char::is_whitespace`.**

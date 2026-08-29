@@ -9477,3 +9477,19 @@ an agent that knows what covers its target can dismiss it and retry.
 ⚠ "No geometry" is a third answer and must NOT be an error, or an element the layout failed to box
 becomes permanently unclickable for the agent.
 (t1366 — `agent/tests` `the_drive_path_scrolls_to_its_target_and_refuses_a_covered_one`)
+
+## `<div class="card" style="display:grid"><div><img style="margin-top:3rem"></div></div>` — the margin that fell out of the card
+
+A flex or grid **item** establishes an independent formatting context, so its children's margins do
+not collapse through it (CSS Flexbox §3, CSS Grid §6). A predicate that asks the box's own computed
+style cannot see this — **what makes a box an item is its PARENT**, and an item is an ordinary
+`display:block` div. Get it wrong and a first child's `margin-top` escapes out of the container and
+the whole subtree moves up by it: the card idiom above is 140 tall in Chrome and was 80.
+
+⚠ Collapsing is CORRECT for an ordinary block chain and must stay — the fix is a narrowing of the
+predicate, not a removal, and a "just stop collapsing" version breaks every ordinary page.
+
+⚠⚠ The board's ranked anchor sites had not been re-measured since 2026-07-29: five of the six now
+clear the 0.75 bar and three are at ~100%, while the loop was still ranking work against the recorded
+figures. **A steering list is a claim about the present tense, and nothing re-runs it.**
+(t1367 — `agent/tests` `a_flex_or_grid_items_child_margin_does_not_collapse_through_it`)

@@ -96149,3 +96149,111 @@ other tracks: the float re-flow (t1364) and CSS `content`/`attr()`/`counter()` f
 are the ranked A and B items.
 
 WIKI: docs/wiki/agent-drive-reachability.md
+
+## Tick 1367 — the board's anchors were stale, and the outlier's mechanism was in its own stylesheet (2026-08-29)
+
+TICK SHAPE: capability-subsystem
+
+**Track A.** The board's CO-#1 names six anchor sites to verify the ranked burndown against. This
+tick re-measured them before choosing work — and that turned out to be the tick.
+
+### ⭐⭐⭐ FINDING ONE — FIVE OF THE SIX ANCHORS ALREADY CLEAR THE BAR
+
+```text
+                          board says   today    delta    verdict
+  news.ycombinator.com       0.72       0.999   +0.28    DONE       (807 scored)
+  whatwg.org                 0.51       1.000   +0.49    DONE       (37)
+  blog.rust-lang.org         0.63       1.000   +0.37    DONE       (1684)
+  en.wikipedia.org           0.52       0.903   +0.38    clears 0.75 (5205)
+  martinfowler.com           0.58       0.799   +0.22    clears 0.75 (333)
+  www.a11yproject.com        0.44       0.433   -0.01    THE ONLY ONE STILL FAILING (217)
+```
+
+The board's figures are from **2026-07-29**. This is t1362's finding — *a "NOT BUILT" entry is a
+claim about the present tense, and nothing re-runs it* — applied to the **steering list itself**,
+which is strictly higher leverage: a stale backlog wastes a tick, **a stale ranking list mis-aims
+every tick that consults it.** It also explains this session's run of Track A ticks that kept
+measuring named defects and finding them already correct.
+
+⚠ `scripts/lever-board.sh` is observer-owned and was not touched; the table is handed over in
+`docs/wiki/board-anchor-sites-remeasured.md`.
+
+### AND IT REFRAMED THE OUTLIER
+
+a11yproject is not *one of six hard sites*, it is **the one that has not moved** — every other anchor
+gained 22–49 points while it gained −1. That makes its gap far likelier to be one or two specific
+mechanisms than general layout debt. Which is what the evidence then showed.
+
+### ⭐⭐⭐ FINDING TWO — FIVE REFUSED HYPOTHESES, THEN THE SITE'S OWN STYLESHEET
+
+```text
+  1  the fallback FACE differs        REFUTED  sans/serif/mono at 100px identical in both, 1.0000
+  2  we apply the webfont, Chrome     REFUTED  Chrome refuses the cross-origin @font-face from a
+     (CORS from file://) does not              null origin — and so do we
+  3  `rem` against a non-16px root    REFUTED  2rem/1rem/1.6rem/nested-em all Chrome-exact
+  4  line-box overflow                REFUTED  40px text in a 24px line: dy -11, Chrome-exact
+  5  `letter-spacing` (incl. `ch`)    REFUTED  eight rows, all Chrome-exact
+```
+
+The sixth came from **reading the site's stylesheet instead of guessing**:
+`.c-homepage-card__image { margin-top: 3rem }` with `html { font-size: 20px }` — `3rem` is **exactly
+the 60px** the dump had been printing on ten elements, and the card is a grid container.
+
+> ⭐ **A dump names a SITE; the site's stylesheet names the MECHANISM.** Four of the five refuted
+> hypotheses were guesses about the engine. The one that worked came from grepping the CSS the page
+> actually ships, for the number the dump was already printing.
+
+### THE MECHANISM
+
+CSS Flexbox §3 (*"the margins of a flex item do not collapse"*) and CSS Grid §6.
+**What makes a box an item is its PARENT**, so `top_margin_collapses` could not see it — it reads the
+box's own computed style, and an item is an ordinary `display: block` div. A first child's
+`margin-top` collapsed out through the item and off the top of the container, taking the whole
+subtree with it.
+
+```text
+                                             first child dy    the wrapper
+  plain block chain (margin collapses)             0               80      CONTROL
+  the container is display:grid                   60              140      <- was 0 / 80
+  the container is display:flex                   60              140      <- was 0 / 80
+  margin directly on a block's first child         0               80      CONTROL
+  the same margin, inline-styled, plain chain      0               80      CONTROL
+```
+
+### THE RECEIPT
+
+```text
+                      before   after    delta
+  a11yproject          43.3%   49.3%    +6.0    (absolute placement 10.6% -> 18.0%)
+  martinfowler         79.9%   89.8%    +9.9    (absolute placement 16.5% -> 74.5%)
+  wikipedia            90.3%   90.1%    -0.2    sample 5205->5207, inside the noise band
+  news.ycombinator     99.9%   99.9%     0.0    CONTROL
+  manuk-agent (lib+gates)  132/132 → 133/133  +1  +the new gate
+  manuk-layout 191/191 · manuk-page 0 failed · manuk-css / paint / dom   CONTROL
+```
+
+⚠ The wikipedia row is reported as **noise, not a regression**, because its element population moved
+(5205 → 5207) — the comparison check #104 ruled inadmissible on its own.
+
+### THE GATE
+
+`a_flex_or_grid_items_child_margin_does_not_collapse_through_it` (`agent/tests/`) — five rows, **three
+of them CONTROLS**, because collapsing is correct for an ordinary block chain and has to stay. This
+is a NARROWING of the predicate, not a removal.
+
+**PROVEN RED by two mutations, and the second is the interesting one.** N1 drop the
+`is_flex_or_grid_item` early return (the pre-tick code) → the grid and flex rows read dy=0 / 80. N2
+"just stop collapsing" — return false unconditionally → the grid and flex rows PASS and **all three
+controls fail**, which is what demonstrates the fix is a narrowing rather than a removal.
+
+⚠ The fixture uses `margin-top: 60px`, not `3rem`. The `rem` is what made the real site's number 60
+and it is in the story, but it is not the mechanism, and a gate that can be reddened by a font-size
+unit is not a margin-collapse gate.
+
+NEXT: a11yproject is at 49.3% and still the board's only failing anchor; its remaining signature is
+the systematic WIDTH shortfall in the footer/nav columns, which the five refutations above did not
+explain and which the same method — read the site's stylesheet for the number the dump prints —
+should be pointed at next. Behind it: the float re-flow (t1364) and CSS `content`/`attr()`/`counter()`
+for accname (t1365).
+
+WIKI: docs/wiki/flex-grid-item-margin-collapse.md

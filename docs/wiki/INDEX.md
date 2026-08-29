@@ -58,6 +58,13 @@
   - L303 · A frame is a bitmap, so its pixels need explicit refreshing (tick 232)
   - L331 · The agent's click point IS layout geometry, so a containing-block bug is an actuation bug (I3)
 
+## The board's ranked anchor sites, re-measured — five of six already clear the bar
+`docs/wiki/board-anchor-sites-remeasured.md`
+
+  - L5 · Why this matters more than the numbers
+  - L32 · What it changes about a11yproject
+  - L43 · ⚠ Scope
+
 ## BOX LAYOUT — taffy mapping realities and quirks (flex / grid / sizing)
 `docs/wiki/box-layout.md`
 
@@ -1461,6 +1468,13 @@
   - L1892 · Four causes eliminated, so the next probe is a bisect and not a guess
   - L1908 · THE SWEEP RUNNER MUST RE-SPAWN — fidelity EXITS ITS OWN PROCESS ON PURPOSE (t1344)
 
+## A flex or grid item establishes an independent formatting context
+`docs/wiki/flex-grid-item-margin-collapse.md`
+
+  - L6 · The one-sentence mechanism
+  - L30 · ⭐⭐⭐ How it was found — five refused hypotheses, then the site's own stylesheet
+  - L63 · The receipt
+
 ## FRAMEWORKS — React, Svelte, Next, jQuery: what actually breaks
 `docs/wiki/frameworks.md`
 
@@ -2563,4 +2577,4 @@
   - L231 · Both named mechanisms are subsystem work
 
 ---
-2434 sections across 31 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+2440 sections across 33 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.

@@ -1048,3 +1048,4 @@ tick	sha	epoch	iso	delta_s	shape	wall_s	files	added	deleted	gates	claims	wpt_pas
 1364	f6828b1c	1788031369	2026-08-29T15:22:49-04:00	2265	capability-subsystem	465	9	518	33	522	81	3896	6960	0	642	0	VI.2's residual gap, re-measured: nine correct, one UA-sheet drift, one real (2026-08-29)
 1365	0ca9785b	1788038341	2026-08-29T17:19:01-04:00	6972	capability-subsystem	465	14	651	53	522	81	3896	6960	0	642	0	the accessible name is a function of the computed style (2026-08-29)
 1366	8e3fe62f	1788039198	2026-08-29T17:33:18-04:00	857	capability-subsystem	465	9	504	33	522	81	3896	6960	0	642	0	activating a node is not clicking it (2026-08-29)
+1367	930fb881	1788043814	2026-08-29T18:50:14-04:00	4616	capability-subsystem	465	10	512	33	522	81	3896	6960	0	642	0	the board's anchors were stale, and the outlier's mechanism was in its own stylesheet (2026-08-29)
