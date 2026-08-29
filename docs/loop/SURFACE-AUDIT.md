@@ -7206,3 +7206,119 @@ finding, still not fixed: the area list lives in `scripts/`).
    external corpus as well as a gate, or the gate measures what was built.
 3. ⭐ Carried unclosed from #76: re-ask the primitive question of the remaining umbrella rows; probe
    the inline-box content area under fallback; measure DECORATORS; `<img sizes="auto">`.
+
+## Audit #78 — tick 1363 (2026-08-29)
+
+### ⚠⚠⚠ THE RATCHET'S "MEASURED-NESS" INVARIANT IS A FILE COUNT, AND 96% OF THE FILES NEVER RUN
+
+This audit asks the question the surface audit exists for — *am I even looking at the whole
+surface?* — about **the instrument that answers it**. The answer is the worst one this protocol has
+returned.
+
+`scripts/ratchet.sh:53`:
+
+```bash
+current_gates() { ls engine/page/tests/g_*.rs shell/tests/g_*.rs 2>/dev/null | wc -l; }
+```
+
+and its own comment, twenty lines above:
+
+> ```text
+> #   GATES       live G_* gates. An engine cannot become less measured.
+> ```
+
+Counted against what is actually executed:
+
+```text
+  gate files the ratchet counts                                  522
+    engine/page/tests/g_*.rs                                     521
+    shell/tests/g_*.rs                                             1   (runs — manuk-shell is a
+                                                                        crate suite in the wall)
+  engine/page gates the WALL launches (verify.sh `_launch`)        19
+  engine/page gates CI launches (.github/workflows/ci.yml)          6   (a subset of the 19)
+  ─────────────────────────────────────────────────────────────────────
+  executed by ANY automatic runner                                 20
+  NEVER executed by anything                                      502   =  96.2%
+```
+
+`manuk-page` is not in the wall's crate list (`manuk-css manuk-layout manuk-paint manuk-dom
+manuk-net manuk-agent manuk-shell`) and not in CI's, so a gate under `engine/page/tests/` runs **only
+if it is named in an explicit line** — and 19 are.
+
+> ⭐⭐⭐ **A GATE THAT NEVER RUNS CANNOT GO RED, SO A COUNT OF GATE FILES IS NOT A MEASURE OF HOW
+> MUCH IS MEASURED.** The ratchet's central capability invariant — *"an engine cannot become less
+> measured"* — is enforced against a number that would not move if all 502 were deleted of their
+> assertions and left as empty files.
+
+### THIS IS NOT A NEW SUSPICION — IT EXPLAINS THREE INDEPENDENT SYMPTOMS FROM THIS SESSION ALONE
+
+Each was found by tripping over it, in a different subsystem, and none of them was recognised as the
+same mechanism at the time:
+
+```text
+  t1360  g_table_cell_valign RED and drifting for 23 DAYS behind green walls
+         — landed 2026-08-06, never in a `_launch` line, never run since
+  t1361  manuk-css's ENTIRE stylo_engine test module cfg'd out of the wall
+         — `_crate_suite` runs bare `cargo test -q -p <crate>`, no features, so
+           `multicol_longhands_survive_the_stylo_cascade` (landed t1358 *specifically* as
+           "the second entrance, the door every real page comes through") has NEVER run in a wall
+  t1362  a new table gate had to be placed in `agent/tests/` rather than beside its siblings,
+         purely so that the wall would look at it
+```
+
+Three ticks, three subsystems, one cause. That is the promotion threshold this protocol uses.
+
+### AND THE SECOND HALF — NINE CRATES ARE NOT SUITES ANYWHERE
+
+The wall and CI run the same seven crates. The rest of the workspace has no automatic suite at all:
+
+```text
+  manuk-page 615 #[test]  ·  manuk-wpt 118  ·  manuk-media 38  ·  manuk-js 24
+  manuk-a11y  21          ·  manuk-html  18  ·  manuk-text  14  ·  manuk-compositor 8
+  manuk-bidi   0
+```
+
+⚠ `manuk-a11y` is the one to say out loud: **Track B's entire subsystem** — the agent's perception
+layer, six ticks of work in t1349-1355 — has 21 unit tests that no wall runs. t1359 had to put a
+`Landing`-enum gate in `agent/tests/` for exactly this reason, and t1350's memory note (*"a11y gates
+go in `agent/tests/` — `manuk-a11y` is NOT in the wall's crate list"*) is this same finding recorded
+as a workaround **eleven ticks before anyone measured its size**.
+
+⚠⚠ `cargo test --workspace` is documented in `ci.yml` as impossible (two SpiderMonkey contexts in one
+binary segfault), so "just run everything" is not the fix and this is not a case of nobody having
+thought about it. The gap is that the *selective* runner's coverage was never counted against the
+*invariant* that claims to protect it.
+
+### SCOPE — REPORTED, NOT FIXED, AND DELIBERATELY
+
+`scripts/verify.sh`, `scripts/ratchet.sh` and `.github/workflows/` are **observer-owned**. The agent
+does not edit them under any circumstances, including this one. The audit's job is to find and
+quantify, and the finding is handed over with its numbers rather than worked around a fourth time.
+
+⚠ The workaround the loop has been using — placing new gates in `agent/tests/` — is the right local
+call and the wrong global one: it makes each new gate real while leaving 502 old ones dark, and it
+quietly relocates table and a11y gates into the agent crate, where the next reader will not look for
+them.
+
+### #77's RANKED #1, EXECUTED
+
+*"Read every `G_*` gate's assertion count against the set its name claims — start with the plurals."*
+Attempted, and it collided with this finding: of the four plurals named (`G_A11Y_STATE`,
+`G_TEXT_TRACKS`, `G_DOC_COLLECTIONS`, `G_TABLE_DOM`), `G_DOC_COLLECTIONS` is one of the 19 the wall
+runs and the other three are among the 502 that never run. **Reading the assertion count of a gate
+that never executes ranks a sample of a sample.** Carried, behind this audit's #1.
+
+### RANKED, from this audit only
+
+1. ⭐⭐⭐ **COUNT WHAT EXECUTES, NOT WHAT EXISTS — and make the ratchet's `GATES` invariant read the
+   executed set.** 502 of 522 is not a backlog, it is the measurement of the measurement. Until it
+   moves, every "GATES 522 (mark 522)" line in every tick receipt overstates verified behaviour by
+   ~26×. **Observer action; the agent cannot take it.**
+2. ⭐⭐ **A WORKAROUND THAT IS APPLIED THREE TIMES IS A FINDING NOBODY MEASURED.** The `agent/tests/`
+   placement trick was in the memory notes at t1350 and used again at t1359, t1360 and t1362 before
+   this audit asked how big the thing it works around is. *When the same local fix is reached for a
+   third time, measure the population it is avoiding.*
+3. ⭐ **`manuk-a11y` has no automatic suite and it is a whole mandated Track.** Of the nine unrun
+   crates it is the one with a live mandate attached, and its 21 tests are the perception layer the
+   M2 drive demo reads.
+4. Carried from #77: the plural-gate assertion-count sweep, once the gates in question run.

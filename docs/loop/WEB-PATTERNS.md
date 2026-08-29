@@ -9415,3 +9415,11 @@ about the present tense, and nothing re-runs it.** These three sat in a gate's o
 `CONSTITUTION.MD` VI.2, for ~427 ticks after they were fixed. Re-measure a backlog before ranking
 work against it.
 (t1362 — `agent/tests` `rowspan_caption_and_thead_ordering_match_chrome`)
+
+## [no-pattern] t1363 — an audit tick: the gates that never run
+
+No web pattern this tick. The finding is about the instrument: **502 of the 522 gate files the
+ratchet counts as its "an engine cannot become less measured" invariant are executed by no automatic
+runner**, and that single mechanism explains three symptoms found separately in the three preceding
+ticks. Recorded here only so the ledger moves with the tick; the substance is in
+`docs/loop/SURFACE-AUDIT.md` (Audit #78) and `docs/loop/CONSTITUTION-CHECK.md` (Check #129).

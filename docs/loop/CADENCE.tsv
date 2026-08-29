@@ -1044,3 +1044,4 @@ tick	sha	epoch	iso	delta_s	shape	wall_s	files	added	deleted	gates	claims	wpt_pas
 1360	88f59dfd	1788022526	2026-08-29T12:55:26-04:00	4336	capability-subsystem	465	10	676	48	522	81	3896	6960	0	642	0	a cell with no line box is not a cell with nothing in it (2026-08-29)
 1361	02cd28bf	1788025957	2026-08-29T13:52:37-04:00	3431	capability-subsystem	465	9	713	37	522	81	3896	6960	0	642	0	the leading a `font-size` declaration threw away (2026-08-29)
 1362	d3d47026	1788028434	2026-08-29T14:33:54-04:00	2477	capability-subsystem	465	9	483	34	522	81	3896	6960	0	642	0	three behaviours that were built and never banked, and a backlog that was false for 427 ticks (2026-08-29)
+1363	633e83f5	1788029104	2026-08-29T14:45:04-04:00	670	instrument-fidelity	465	7	450	35	522	81	3896	6960	0	642	0	the invariant that guards "how much is measured" does not measure anything (2026-08-29)

@@ -95676,3 +95676,153 @@ entry needs re-ranking. The a11yproject width narrowing is the open anchor-site 
 doors closed on it.
 
 WIKI: docs/wiki/table-structure-geometry.md
+
+## Tick 1363 — the invariant that guards "how much is measured" does not measure anything (2026-08-29)
+
+TICK SHAPE: instrument-fidelity
+
+**Three audits came due at once** — self-audit (every 10, last 1353), surface audit (every 10, last
+1353), constitution check (every 8, last 1355). The hook blocks commits past them, so this tick is
+the audit tick. It found the largest instrument defect of the session, and it found it by asking the
+surface audit's own question about the instrument that answers it.
+
+### THE SELF-AUDIT — ONE FAILURE, AND IT IS HARNESS
+
+```text
+  ✗ verify wall: 372s EXCEEDS the 300s target — Part 21.2 item 1 has regressed
+  ✓ everything else (oracle frame 265 sites, SPA miner, 49 process defects, gate red-recipes,
+    journal continuity, pattern ledger 1195 rows, Part 22, Part 28 enforcement)
+```
+
+Part 21.2's named remedies are mold/lld, cargo-nextest, workspace-hack and gate scheduling — all
+`scripts/` and build configuration, all observer-owned. Recorded, not touched. The wall-time audit is
+due at 1368 and is the observer's instrument for exactly this.
+
+### ⚠⚠⚠ SURFACE AUDIT #78 — 502 OF 522 GATES NEVER RUN
+
+`scripts/ratchet.sh:53`:
+
+```bash
+current_gates() { ls engine/page/tests/g_*.rs shell/tests/g_*.rs 2>/dev/null | wc -l; }
+```
+
+with the comment, twenty lines above: *"GATES — live G_* gates. An engine cannot become less
+measured."* Counted against what executes:
+
+```text
+  gate files the ratchet counts                                  522
+    engine/page/tests/g_*.rs   521        shell/tests/g_*.rs       1   (runs — crate suite)
+  engine/page gates the WALL launches (`_launch` lines)            19
+  engine/page gates CI launches                                     6   (a subset of the 19)
+  ───────────────────────────────────────────────────────────────────
+  executed by ANY automatic runner                                 20
+  NEVER executed by anything                                      502  = 96.2%
+```
+
+> ⭐⭐⭐ **A GATE THAT NEVER RUNS CANNOT GO RED, SO A COUNT OF GATE FILES IS NOT A MEASURE OF HOW
+> MUCH IS MEASURED.** The invariant would not move if all 502 had their assertions deleted.
+
+**It is not a new suspicion — it is the single cause of three symptoms this session found
+separately, in three subsystems, none recognised as the same thing at the time:** t1360's
+`g_table_cell_valign` red for 23 days behind green walls; t1361's entire `stylo_engine` test module
+`#[cfg]`-ed out of the wall, including the gate t1358 landed *specifically* as "the second entrance,
+the door every real page comes through"; t1362 having to place a table gate in `agent/tests/` so the
+wall would look at it.
+
+And the second half: **nine crates are suites nowhere.** `manuk-page` 615 `#[test]`s, `manuk-wpt`
+118, `manuk-media` 38, `manuk-js` 24, `manuk-a11y` 21, `manuk-html` 18, `manuk-text` 14,
+`manuk-compositor` 8. ⚠ `manuk-a11y` is Track B's whole subsystem — the agent's perception layer, six
+ticks of t1349-1355 — and the memory note *"a11y gates go in `agent/tests/` — `manuk-a11y` is NOT in
+the wall's crate list"* is this finding **recorded as a workaround eleven ticks before anyone
+measured its size**.
+
+⭐⭐ **A WORKAROUND APPLIED THREE TIMES IS A FINDING NOBODY MEASURED.** The `agent/tests/` placement
+trick was used at t1359, t1360 and t1362 before this audit asked how big the thing it avoids is.
+
+⚠ `cargo test --workspace` is documented in `ci.yml` as impossible (two SpiderMonkey contexts in one
+binary segfault), so "just run everything" is not the fix and nobody was careless. The gap is that
+the *selective* runner's coverage was never counted against the *invariant* that claims to protect
+it.
+
+⚠ **SCOPE: `scripts/` and `.github/` are observer-owned and were not touched.** The audit's job is to
+find and quantify; the numbers are handed over. What the loop must stop doing is quoting `GATES 522`
+as a measure of verified behaviour, and treating the placement workaround as a solution — it makes
+each new gate real while leaving 502 dark and quietly relocates table and a11y gates into the agent
+crate, where the next reader will not look for them.
+
+⚠ #77's ranked #1 (*"read every plural gate's assertion count against the set its name claims"*) was
+attempted and collided with this finding: of its four named plurals, one is among the 19 that run and
+three are among the 502 that do not. Reading the assertion count of a gate that never executes ranks
+a sample of a sample. Carried.
+
+### CONSTITUTION CHECK #129 — AND A LEDGER ROW MOVES FROM `UNMEASURED`
+
+`CONSTITUTION-CHECK.md:5329` carried `t933 capability table row-height distribution UNMEASURED`, and
+`CONSTITUTION.MD` VI.2 lists t933 row-height distribution among the box types that opt out of
+ordinary block sizing — part of the named residual layout gap the loop ranks against. t1362 measured
+it: **all three of t933's entries are correct**, were built in the ~427 ticks since, and none had a
+gate until t1362 banked them.
+
+> ⭐⭐⭐ **A "NAMED, MEASURED, NOT BUILT" ENTRY IS A CLAIM ABOUT THE PRESENT TENSE, AND NOTHING
+> RE-RUNS IT.** VI.2 is the ranking instrument for the residual layout gap and it carried three false
+> entries for 427 ticks. Re-measure a backlog before ranking work against it — one fixture and one
+> Chrome run per entry.
+
+The check does not edit `CONSTITUTION.MD` (owner territory); it records the measurement so VI.2 can
+be re-ranked deliberately.
+
+⚠ **The check also declines to count t1361 as H0 breadth.** That bug was `MinimalCascade`-only —
+the shipping browser cascades through Stylo and was right on every row — so its user-visible value is
+the `--no-default-features` build and its real value was instrument fidelity. A legitimate ratchet
+face, not exit-gate progress, and the receipt makes it easy to overstate.
+
+**I3's #128 falsifier did not fire.** #128 sharpened I3 to *"exposed through EVERY entrance"* and set
+the test: *if the next two ticks touching the semantic model find only ONE consumer, this is
+over-generalised.* t1359 found **three** entrances publishing a click point, with the defect in the
+one branch t1356 left holding its pre-fix fallback. The sharpening stands.
+
+**I5 unchanged and still exit-gate condition 2**: the oracle has never finished a crawl.
+
+⚠ **I4 was applied as a REFUSAL three times this window** — t1358 refused a real, cheap, understood
+inline-`<br>` defect at 0/59 corpus pages; t1362 refused `zoom` (11/39 sites, every occurrence the
+`zoom:1` IE no-op) and closed `counter-increment` and `@container` as already built. Pricing before
+building is now routine rather than exhortation.
+
+### THE RECEIPT
+
+```text
+  SURFACE-AUDIT.md        + Audit #78     (502/522, nine crates, the three symptoms)
+  CONSTITUTION-CHECK.md   + Check #129    (VI.2 ledger row corrected; next due 1371)
+  self-audit              1 failure, harness-owned, recorded
+  git diff engine/        empty           an audit tick changes no engine code, by design
+```
+
+### ⚠ AND THE LANDING HIT THE FOURTH INSTANCE OF THE SAME CLASS, WHILE WRITING ABOUT IT
+
+The first wall attempt on this docs-only tick came back **RED on `G3 affordance` and `G_INTERACT`**
+— on a tree with an empty `git diff engine/`. The same wall run, twelve lines apart, printed:
+
+```text
+  ✗ affordance gate failed — a control may be dead, or another manuk-shell test regressed
+  ✓ teardown: manuk-shell suite green
+  ✗ G_INTERACT failed — a tab operation stalls the UI thread
+  ✓ manuk-shell: test result: ok. 77 passed
+```
+
+and `cargo test -q -p manuk-shell` standalone is **77/77**. That is the documented `_out()` defect —
+`wait` called inside `$(...)` never waits, so parallel gates read PARTIAL output files — and it is
+deterministic rather than a flake, because the retry path never fires either. Landed on the
+prescribed workaround (`CARGO_BUILD_JOBS=1`, which is also faster).
+
+⚠ It is worth saying where it sits: **a gate that reports RED on a tree it cannot possibly be
+measuring is the same failure as a gate that never runs** — in both cases the number in the receipt
+is not about the engine. This tick's audit counted the second kind; the first kind announced itself
+during the landing. `scripts/` is observer-owned; recorded, worked around, not touched.
+
+NEXT: the gate-execution gap is the highest-value item on the board and the agent cannot close it —
+it needs an observer. Behind it, STEER #2: VI.2's remaining named residuals (anonymous rows, inline
+composition, floats/`clear`, out-of-flow under a transformed containing block, the intrinsic
+measurement pass) are each one fixture and one Chrome run from a present-tense answer, and three of
+that row's entries have just been shown false.
+
+WIKI: docs/wiki/table-structure-geometry.md

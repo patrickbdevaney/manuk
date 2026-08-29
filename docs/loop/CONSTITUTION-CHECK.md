@@ -11018,3 +11018,143 @@ control and an `<img alt>` inside a button are the commonest form and button idi
 3. **Track B's bar is met (90.3% ≥ 90%); the exit is a CONJUNCTION**, so the next non-a11y tick
    should be Track C (the end-to-end DRIVE demo, still unassembled) rather than a seventh a11y tick.
    The observer's 2026-08-28 nudge asked for balance and this session has spent six ticks on one leg.
+
+---
+
+## Check #129 — tick 1363 (2026-08-29)
+
+**HORIZON: H0 — Pareto Web Parity.** Its exit gate, all binary:
+
+```text
+  1  ~83% WPT subtest pass rate across categories
+  2  differential-oracle-verified viability across all four usage-weighted corpora
+  3  the headful shell is daily-drivable by its own developer
+  4  EVERY RENDERED CONSTRUCT IS QUERYABLE THROUGH THE IN-PROCESS SEMANTIC API
+```
+
+### GATE OR SCOREBOARD? — THE HONEST ANSWER IS "NEITHER, FOR FIVE OF THE EIGHT"
+
+Ticks 1356–1362. Two moved a capability, one banked capabilities that already existed, and two were
+corrections to the instrument. Stated plainly rather than rounded up:
+
+```text
+  1358  multicol — a Stylo `servo_pref` refused both longhands at PARSE time    CAPABILITY
+  1359  the agent drive loop below the fold (Landing::OffScreen)                CAPABILITY
+  1360  table cell baseline synthesis + a cell contains its floats              CAPABILITY
+  1361  `font-size` threw away an inherited `line-height`; `font` unimplemented CASCADE PARITY
+  1362  three table behaviours BANKED that were already correct                 GATE ONLY
+```
+
+⚠ **1361 is honest about a limit that the tick's own receipt makes easy to overstate.** The bug was
+in `MinimalCascade` only; the shipping browser cascades through Stylo and was right on every row. So
+its user-visible value is confined to the `--no-default-features` build — and its *real* value was
+instrument fidelity, because `MinimalCascade` is the cascade every layout gate runs on. That is a
+legitimate ratchet face (Part: *capability, performance, instrument fidelity*), but it is not H0
+breadth and this check declines to count it as such.
+
+### ⚠⚠⚠ THE FINDING — THE INVARIANT THAT GUARDS "HOW MUCH IS MEASURED" DOES NOT MEASURE ANYTHING
+
+Surface audit #78, run this tick, is the more important half of this check and it bears directly on
+**Part 28 (enforcement is mechanical, not memory)**:
+
+```text
+  gate files `scripts/ratchet.sh` counts as GATES                 522
+  executed by the wall or CI                                       20
+  NEVER executed by any automatic runner                          502  = 96.2%
+```
+
+`current_gates()` is `ls engine/page/tests/g_*.rs shell/tests/g_*.rs | wc -l`, and its comment reads
+*"live G_* gates. An engine cannot become less measured."* A gate that never runs cannot go red, so
+that invariant would not move if all 502 files had their assertions deleted.
+
+⭐ **This is not a new suspicion; it is the cause of three symptoms this session found separately** —
+t1360's gate red for 23 days behind green walls, t1361's entire `stylo_engine` test module cfg'd out
+of the wall (including the t1358 gate landed *specifically* as "the door every real page comes
+through"), and t1362 having to place a table gate in `agent/tests/` so the wall would see it. One
+mechanism, three subsystems, three ticks.
+
+⚠ **`scripts/` is observer-owned and the agent does not edit it.** The finding is handed over with
+its numbers. What the loop can do — and did, three times — is place new gates where the wall looks;
+what it must stop doing is treating that workaround as a solution, because it makes each new gate
+real while leaving 502 old ones dark and relocates table and a11y gates into the agent crate.
+
+### VI.2 CORRECTED — A ROW MOVES FROM `UNMEASURED` TO MEASURED-AND-GATED
+
+`CONSTITUTION-CHECK.md:5329` carries `t933 capability table row-height distribution **UNMEASURED**`,
+and `CONSTITUTION.MD` VI.2's H0.1 row lists *"tables (t932 anonymous rows … t933 row-height
+distribution)"* among the box types that opt **out** of ordinary block sizing — i.e. as part of the
+named residual gap. t1362 re-measured it against headless Chrome:
+
+```text
+  ROWSPAN   rowspan=2 height:60px  ->  rows get 30 and 30 (NOT the 24/36 t933 recorded)   CORRECT
+  CAPTION   caption [0 0 39x24], first cell [0 24 39x24], table width 39                  CORRECT
+  THEAD     <tbody> written FIRST  ->  thead cell renders at y=0                          CORRECT
+```
+
+All three were built in the ~427 ticks since t933, by ticks that fixed them without crossing them
+off, and **none of the three had a gate** until t1362. They are now held by
+`rowspan_caption_and_thead_ordering_match_chrome`, proven red by the three pre-t933 rules.
+
+> ⭐⭐⭐ **A "NAMED, MEASURED, NOT BUILT" ENTRY IS A CLAIM ABOUT THE PRESENT TENSE, AND NOTHING
+> RE-RUNS IT.** VI.2 is the loop's ranking instrument for where the residual layout gap lives. It
+> carried three false entries for ~427 ticks. **Re-measure a backlog before ranking work against
+> it** — the cost of the check is one fixture and one Chrome run per entry.
+
+⚠ This check does **not** edit `CONSTITUTION.MD` — that is owner territory. It records the
+measurement so VI.2's table entry can be re-ranked deliberately, and marks the ledger row above as
+the concrete correction it now has.
+
+### THE ANCHOR SITE, AND FOUR REFUSALS WORTH BANKING
+
+CO-#1 says *"ranked burndown, one primitive per tick, verified on the anchor sites."* t1362 ran
+`--shape-dump` on the worst (`a11yproject.com`, shape 43.3%) and the dominant signature was **width,
+always in one direction** — our boxes narrower than Chrome's, with a `nav ol` 88 tall where Chrome
+wraps it to 176 *at the same width*. Four mechanisms proposed, four killed by direct measurement:
+the fallback face (identical to 4 decimals), the cross-origin webfont (both engines refuse it),
+`rem` against a non-16px root (Chrome-exact), and line-box overflow (Chrome-exact).
+
+⭐ **A fidelity dump names a SITE, and a site is not a mechanism.** Every one of those four died to a
+four-line fixture measured against Chrome directly, in minutes, without touching the sweep. The
+narrowing is real and still unattributed. *Refutable by:* if the next anchor-site tick finds the
+cause is one of the four above after all, this method note is wrong; the fixtures are in the wiki so
+that is cheap to check.
+
+### THE INVARIANTS
+
+**I3 — not bent, and t1359 is the shape #128 warned about, caught early.** #128 sharpened I3 to
+*"exposed through EVERY entrance the semantic API is read through"* and set a falsifier: *"if the
+next two ticks that touch the semantic model find only ONE consumer of the rule they change, this is
+over-generalised."* t1359 touched it and found **three** entrances publishing a click point
+(`to_viewport_lines`, `resolve_target`, `ground_action`), with the fix needed in the one branch
+t1356 had left holding the pre-fix fallback. The falsifier did not fire; the sharpening stands.
+
+**I5 — the oracle still has never finished a crawl** (`ORACLE_CRAWLED: 0 (PARTIAL)`). Unchanged, and
+still exit-gate condition 2. Not worked this window.
+
+**I1, I2, I4, I6, I7, I8: not bent.** All five capability ticks are core-engine, added no dependency
+outside the workspace, and are usage-weighted rather than tail — multicol priced at 10/39 corpus
+sites before building, `td { vertical-align: baseline }` at 4/39, tight `line-height` at 34/39.
+
+⚠ **I4's discipline was applied as a REFUSAL three times this window and that is worth recording**:
+t1358 refused an understood, cheap, reproducible inline-`<br>` defect because it priced at 0/59
+pages; t1362 refused `zoom` (11/39 sites, but every occurrence is the `zoom:1` IE no-op) and closed
+`counter-increment` and `@container` as already-implemented. Pricing before building is now routine
+rather than exhortation.
+
+### STEER
+
+1. ⭐⭐⭐ **The gate-execution gap is the highest-value item on the board and the agent cannot close
+   it.** Until an observer wires it, the loop should keep placing new gates where the wall looks and
+   should stop quoting `GATES 522` as a measure of verified behaviour. *Refutable by:* if the
+   observer's answer is that CI's 6 + the wall's 19 are the intended surface and the other 502 are
+   documentation, then the ratchet's `GATES` line should say so and this steer is void.
+2. ⭐⭐ **Re-measure VI.2's remaining named residuals before ranking against them.** Three of its
+   table entries were false for 427 ticks. The same row still names anonymous rows, inline
+   composition, floats/`clear`, out-of-flow under a transformed containing block, and the intrinsic
+   measurement pass — each is one fixture and one Chrome run away from a present-tense answer.
+3. ⭐ **Track B has no automatic suite at all.** `manuk-a11y`'s 21 tests are run by no wall and no CI
+   job, and the 2026-08-28 observer nudge names Track B as a lagging leg of a conjunction exit. Its
+   gates have been going into `agent/tests/` by hand since t1350.
+4. The a11yproject width narrowing is the open anchor-site question, with four doors closed on it.
+
+**Next check due: tick 1371.**
