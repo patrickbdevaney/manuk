@@ -9371,3 +9371,26 @@ the whole row vanished.
 *initial* value here is asserting something no `<td>` on the web ever has.
 (t1360 — `agent/tests` `a_cell_without_a_line_box_still_has_a_height_and_a_baseline`,
 `engine/page` `g_table_cell_valign`)
+
+## `body { line-height: 24px }` with `h1 { font-size: 40px }` — the leading a font-size declaration threw away
+
+`line-height` is inherited as a computed LENGTH: a child that changes its font size does not get a
+new line box, it gets the one its ancestor authored. A cascade that re-derives `line-height` from
+the font size whenever `font-size` is declared destroys that, and a px `line-height` with a
+differing font-size somewhere under it is most of the web — **34 of 39** sampled CrUX sites declare
+a `line-height` below 1.2, and `line-height: 1` alone appears 163 times.
+
+```text
+  <div style="line-height:24px"><div style="font-size:40px">A</div></div>   Chrome 24, ours 48
+```
+
+⚠ The naive fix is a different bug: `line-height: normal` is the FONT's own metric and must keep
+tracking the font, so a `normal` block whose font grows to 40px must get a *bigger* line box
+(Chrome 46). "Authored length or font metric?" is the only question that matters, and it has to be
+inherited beside the value.
+
+⚠ **`font: 16px/24px monospace` is a second entrance to the same property**, and an omitted
+`/line-height` means `normal` — NOT "keep what was inherited". The shorthand resets every longhand it
+can carry before applying the ones present, which a "set only what is named" implementation gets
+wrong on the commonest spelling (`font: 20px monospace`).
+(t1361 — `engine/css` `font_size_keeps_an_inherited_line_height_and_the_font_shorthand_sets_one`)

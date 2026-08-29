@@ -2028,6 +2028,15 @@
   - L1913 · The mutation that came back green
   - L1921 · The honest headline: the tests that aimed the tick cannot see the fix
 
+## `line-height` in the MinimalCascade — the property a `font-size` declaration threw away
+`docs/wiki/minimal-cascade-line-height.md`
+
+  - L7 · The one-sentence mechanism
+  - L13 · The defect
+  - L48 · The other entrance — the font shorthand was not implemented
+  - L86 · ⚠⚠⚠ Why a MinimalCascade-only bug is more than a rendering bug
+  - L101 · ⚠⚠ And the instrument finding that came with it
+
 ## CSS multi-column layout — and the pref that made it look unimplemented
 `docs/wiki/multi-column-layout.md`
 
@@ -2288,6 +2297,7 @@
   - L67 · The measured rows
   - L89 · ⚠ How this was found, and the two instrument facts that came with it
   - L127 · NAMED, MEASURED, NOT BUILT
+  - L141 · ⚠ CORRECTION (t1361) — one of the "NAMED, MEASURED, NOT BUILT" rows above named the wrong mechanism
 
 ## TEXT AND LAYOUT — fonts, shaping, measurement
 `docs/wiki/text-layout.md`
@@ -2515,4 +2525,4 @@
   - L231 · Both named mechanisms are subsystem work
 
 ---
-2406 sections across 26 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+2412 sections across 27 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.

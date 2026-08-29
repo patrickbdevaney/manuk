@@ -1042,3 +1042,4 @@ tick	sha	epoch	iso	delta_s	shape	wall_s	files	added	deleted	gates	claims	wpt_pas
 1358	9cd07e79	1788015039	2026-08-29T10:50:39-04:00	16096	capability-subsystem	465	9	1069	10	522	81	3896	6960	0	642	0	the property was not unimplemented, it was switched off (2026-08-29)
 1359	2618a953	1788018190	2026-08-29T11:43:10-04:00	3151	capability-subsystem	465	11	799	44	522	81	3896	6960	0	642	0	the drive loop stopped at the first screenful, and said it had not (2026-08-29)
 1360	88f59dfd	1788022526	2026-08-29T12:55:26-04:00	4336	capability-subsystem	465	10	676	48	522	81	3896	6960	0	642	0	a cell with no line box is not a cell with nothing in it (2026-08-29)
+1361	02cd28bf	1788025957	2026-08-29T13:52:37-04:00	3431	capability-subsystem	465	9	713	37	522	81	3896	6960	0	642	0	the leading a `font-size` declaration threw away (2026-08-29)

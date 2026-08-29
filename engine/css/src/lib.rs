@@ -5624,7 +5624,12 @@ fn apply_ua_defaults(s: &mut ComputedStyle, el: &ElementData) {
     }
     if scale != 1.0 {
         s.font_size *= scale;
-        s.line_height = s.font_size * 1.2;
+        // Same rule as the `font-size` property above, and for the same reason: an `<h1>` inside a
+        // `line-height: 24px` block keeps the authored 24. The UA sheet scales the FONT; it does
+        // not re-author the leading.
+        if s.line_height_normal {
+            s.line_height = s.font_size * 1.2;
+        }
     }
     if tag == "body" {
         s.margin = Sides::all(Dim::Px(8.0));
@@ -6046,7 +6051,32 @@ fn apply_declaration(s: &mut ComputedStyle, d: &Declaration, parent_fs: f32) {
         }
         "font-size" => {
             s.font_size = values::resolve_font_size(v, parent_fs).unwrap_or(s.font_size);
-            s.line_height = s.font_size * 1.2;
+            // ⚠⚠⚠ **`font-size` MUST NOT RE-DERIVE AN INHERITED `line-height`.** This line was
+            // unconditional, so `font-size: 40px` on a child of a `line-height: 24px` block threw
+            // the inherited 24 away and computed 48 from the new font — and a `line-height` in px
+            // with a differing font-size somewhere under it is most of the web.
+            //
+            // Chrome and the SHIPPING (Stylo) cascade agree; only this one disagreed:
+            //
+            // ```text
+            //   <div style="line-height:24px"><div style="font-size:40px">A</div></div>
+            //      Chrome 24      Stylo 24      MinimalCascade 48
+            // ```
+            //
+            // The `line_height_normal` flag already carries the only question that matters — *was
+            // a length authored, or is this the font's own metric?* — and it is inherited beside
+            // the value for exactly this reason. `normal` still re-derives per element, which is
+            // what makes a unitless `1.5` and a `normal` behave differently under a font-size
+            // change, and both are correct.
+            //
+            // ⚠ The two cascades disagreeing about a line box is not only a rendering bug: every
+            // gate written against a `MinimalCascade` harness (`engine/layout`'s unit tests,
+            // `agent/tests`) silently measures a different page from the shipping one. t1360's own
+            // gate read a 54px table row where Chrome and Stylo both read 57, and the confound had
+            // to be designed out of the fixture instead of fixed here.
+            if s.line_height_normal {
+                s.line_height = s.font_size * 1.2;
+            }
         }
         "font-weight" => {
             s.font_weight = match v {
@@ -6057,6 +6087,94 @@ fn apply_declaration(s: &mut ComputedStyle, d: &Declaration, parent_fs: f32) {
             }
         }
         "font-style" => s.italic = v == "italic" || v == "oblique",
+        // ⚠⚠⚠ **THE `font` SHORTHAND WAS NOT IMPLEMENTED HERE AT ALL — a declaration this cascade
+        // simply never saw.** `font: 16px/24px monospace` set nothing: the element kept the
+        // default size, the default family and the default leading, so a fixture written with the
+        // shorthand measured a different page from the shipping (Stylo) one. t1360's gate read a
+        // 54px table row where Chrome and Stylo both read 57, and the shorthand had to be spelled
+        // out as longhands in the fixture to get a comparable number.
+        //
+        // ⭐ **The shorthand RESETS every longhand it can carry, whether or not it names it** —
+        // which is the half that cannot be got by "parse what is there and leave the rest". Chrome
+        // -measured:
+        //
+        // ```text
+        //   font: 20px/30px monospace              20px  lh 30px    400  normal
+        //   font: italic bold 20px/30px monospace  20px  lh 30px    700  italic
+        //   font: 20px monospace                   20px  lh NORMAL  400  normal   <- lh reset
+        //   font: bold 20px/1.5 monospace          20px  lh 30px    700  normal
+        // ```
+        //
+        // The third row is the one that decides the design: an omitted `line-height` means
+        // `normal`, NOT "keep what was inherited". A shorthand that only sets what it mentions
+        // would leave the inherited 24 there and be wrong on the commonest spelling of all.
+        //
+        // ⚠ The system-font keywords (`caption`, `icon`, `menu`, `message-box`, `small-caption`,
+        // `status-bar`) are a different production entirely — they name a platform font rather than
+        // describing one — and are left untouched rather than mis-parsed as a size.
+        "font" => {
+            let raw = v.trim();
+            if matches!(
+                raw.to_ascii_lowercase().as_str(),
+                "caption" | "icon" | "menu" | "message-box" | "small-caption" | "status-bar"
+            ) {
+                return;
+            }
+            // The family list is everything after the size token, and the size token is the first
+            // one that parses as a length — which is also what separates it from the leading
+            // style/variant/weight keywords without needing to enumerate them exhaustively.
+            let Some((head, size_tok, family)) = split_font_shorthand(raw, s.font_size) else {
+                return;
+            };
+            let fam = parse_font_family(family);
+            if fam.is_empty() {
+                return;
+            }
+            // Reset FIRST: every longhand the shorthand can carry goes to its initial value, then
+            // the ones actually present are applied over it.
+            s.italic = false;
+            s.font_weight = 400;
+            for tok in head.split_whitespace() {
+                match tok.to_ascii_lowercase().as_str() {
+                    "italic" | "oblique" => s.italic = true,
+                    "bold" | "bolder" => s.font_weight = 700,
+                    "lighter" => s.font_weight = 300,
+                    "normal" | "small-caps" => {}
+                    n => {
+                        if let Ok(w) = n.parse::<u16>() {
+                            s.font_weight = w;
+                        }
+                    }
+                }
+            }
+            s.font_family = fam;
+            let (size, lh) = match size_tok.split_once('/') {
+                Some((a, b)) => (a, Some(b)),
+                None => (size_tok, None),
+            };
+            s.font_size = values::resolve_font_size(size, parent_fs).unwrap_or(s.font_size);
+            match lh {
+                // An omitted `line-height` is `normal`, not the inherited value — see the table.
+                None => {
+                    s.line_height_normal = true;
+                    s.line_height = s.font_size * 1.2;
+                }
+                Some(l) if l.trim().eq_ignore_ascii_case("normal") => {
+                    s.line_height_normal = true;
+                    s.line_height = s.font_size * 1.2;
+                }
+                Some(l) => {
+                    s.line_height_normal = false;
+                    s.line_height = l
+                        .trim()
+                        .parse::<f32>()
+                        .map(|n| n * s.font_size)
+                        .ok()
+                        .or_else(|| values::parse_length_px(l.trim(), s.font_size))
+                        .unwrap_or(s.font_size * 1.2);
+                }
+            }
+        }
         "font-family" => {
             let list = parse_font_family(v);
             if !list.is_empty() {
@@ -7351,6 +7469,35 @@ fn border_len(tok: &str, fs: f32) -> f32 {
 /// Parse a `font-family` value into the priority list of family names (lowercased,
 /// dequoted). Generic keywords are kept literally (e.g. `"sans-serif"`); named families
 /// are preserved so the text layer can resolve them to installed / `@font-face` faces.
+/// Split a `font` shorthand into `(leading keywords, "<size>[/<line-height>]", family list)`.
+///
+/// The size token is found rather than counted: it is the first whitespace-separated token whose
+/// leading part is a length or a font-size keyword, which is exactly what separates it from the
+/// `<font-style> || <font-variant> || <font-weight> || <font-stretch>` block in front of it without
+/// having to enumerate that block. Everything after it is the family list, which is why the family
+/// is returned as raw text for [`parse_font_family`] to split on commas — a family name may contain
+/// spaces (`"DejaVu Sans Mono"`).
+fn split_font_shorthand(raw: &str, cur_size: f32) -> Option<(&str, &str, &str)> {
+    let is_size = |t: &str| {
+        let head = t.split('/').next().unwrap_or(t);
+        values::resolve_font_size(head, cur_size).is_some()
+    };
+    let mut idx = 0usize;
+    for tok in raw.split_whitespace() {
+        // Byte offset of this token within `raw` — `split_whitespace` drops the positions.
+        let at = raw[idx..].find(tok)? + idx;
+        if is_size(tok) {
+            let family = raw[at + tok.len()..].trim();
+            if family.is_empty() {
+                return None;
+            }
+            return Some((raw[..at].trim(), tok, family));
+        }
+        idx = at + tok.len();
+    }
+    None
+}
+
 fn parse_font_family(v: &str) -> Vec<String> {
     v.split(',')
         .map(|raw| raw.trim().trim_matches(['"', '\'']).to_ascii_lowercase())
@@ -8553,6 +8700,232 @@ mod tests {
         let sheets = vec![Stylesheet::parse(css)];
         let map = MinimalCascade.cascade(&dom, &sheets);
         (dom, map)
+    }
+
+    /// # G_MINIMAL_CASCADE_LINE_HEIGHT — `font-size` was throwing away an INHERITED `line-height`, and `font` was not implemented at all
+    ///
+    /// ⭐⭐⭐ **TWO WAYS TO SET THE SAME THING, AND THIS CASCADE GOT BOTH WRONG — in opposite
+    /// directions.** `font-size` re-derived `line-height` from the new size unconditionally, so an
+    /// inherited `line-height: 24px` was destroyed by any descendant that changed its font size;
+    /// and the `font` shorthand had no arm in `apply_declaration` at all, so
+    /// `font: 16px/24px monospace` set *nothing* — size, family and leading all stayed at their
+    /// defaults.
+    ///
+    /// **The SHIPPING (Stylo) cascade is correct on every row below; only this one diverged**, and
+    /// that is what makes it more than a rendering bug. Every gate written against a
+    /// `MinimalCascade` harness — `engine/layout`'s unit tests, `agent/tests` — silently measures a
+    /// different page from the one the browser renders. t1360's table gate read a **54px** row
+    /// where Chrome and Stylo both read **57**, and the confound had to be designed out of the
+    /// fixture rather than fixed, because the cause was here.
+    ///
+    /// Priced on the corpus before building: **34 of 39** sampled CrUX sites declare a
+    /// `line-height` below 1.2 (`line-height: 1` alone appears 163 times), and **13 of 39** use the
+    /// `font` shorthand.
+    ///
+    /// ## Every row is headless-Chrome-measured (`getComputedStyle`, 16px/24px monospace context)
+    ///
+    /// ```text
+    ///                                            size   line-height   weight   style
+    ///   font: 20px/30px monospace                20px      30px         400    normal
+    ///   font: italic bold 20px/30px monospace    20px      30px         700    italic
+    ///   font: 20px monospace                     20px      NORMAL       400    normal
+    ///   font: bold 20px/1.5 monospace            20px      30px         700    normal
+    ///   font: 16px/1.5 monospace                 16px      24px         400    normal
+    ///   font-size: 40px   (inherits lh 24px)     40px      24px         400    normal
+    ///   font-size: 12px   (inherits lh 24px)     12px      24px         400    normal
+    ///   line-height: normal; font-size: 40px     40px      NORMAL       400    normal
+    /// ```
+    ///
+    /// ⭐ **Row 3 decides the design: an OMITTED `line-height` in the shorthand means `normal`, not
+    /// "keep what was inherited".** A shorthand that only sets what it mentions would leave the
+    /// inherited 24px in place and be wrong on the commonest spelling of all. The shorthand resets
+    /// every longhand it can carry before applying the ones present — which is also why the weight
+    /// and style columns are asserted here rather than left to a font gate — on rows that set a
+    /// weight BEFORE the shorthand, since the initial value and "reset to the initial value" are
+    /// otherwise the same number and the claim would be vacuous.
+    ///
+    /// ⚠ **PINNED NEGATIVE — `normal` must still re-derive per element.** The last row is the one
+    /// that fails if the fix is "never touch `line-height` in the `font-size` arm": a
+    /// `line-height: normal` block whose font grows to 40px must get a *bigger* line box, and
+    /// Chrome measures that box at 46. The flag is asserted rather than the number, because
+    /// `normal` is resolved from the real font metrics at layout time and the `font_size * 1.2`
+    /// stored here is only a placeholder for cascades that never reach a face.
+    ///
+    /// ## HOW THIS GOES RED — four mutations, four different messages
+    ///
+    /// ```text
+    ///   N1  drop the `line_height_normal` guard in the `font-size` arm (the defect)
+    ///         -> `font-size:40px` computes line-height 48 where Chrome says 24
+    ///   N2  omitted `/line-height` keeps the inherited value instead of resetting to `normal`
+    ///         -> `font:20px monospace` keeps 24px where Chrome says `normal`
+    ///   N3  the shorthand does not reset weight/style before applying what it names
+    ///         -> `font-weight:bold; font-style:italic; font:20px/30px` stays 700/italic
+    ///   N4  over-guard: never re-derive at all
+    ///         -> `line-height:normal; font-size:40px` keeps 19.2, so `normal` stops tracking
+    ///            the font — this is the mutation that a naive fix to N1 actually IS
+    /// ```
+    ///
+    /// ⚠ **A FIFTH MUTATION LEFT ITS ROW GREEN, AND THE GATE SAYS SO.** Deleting `menu` from the
+    /// system-font keyword list did not fail the `font:menu` row: `split_font_shorthand` already
+    /// returns `None` for a value containing no length token, so the value is refused one layer
+    /// down. The keyword list is **defence in depth** — it names the production explicitly so a
+    /// future system font whose name happens to contain a length-like token cannot be shredded —
+    /// and the row is kept as a CONTROL. Neither is evidence about the other, and calling that
+    /// mutation a proof would be the vacuous-gate shape this project keeps catching.
+    #[test]
+    fn font_size_keeps_an_inherited_line_height_and_the_font_shorthand_sets_one() {
+        // `p` inherits from `body`; the declaration under test goes on `p`.
+        let ctx = "body{font-family:monospace;font-size:16px;line-height:24px}";
+        let probe = |decl: &str| -> ComputedStyle {
+            let dom = build_dom();
+            let sheets = vec![Stylesheet::parse(&format!("{ctx} p{{{decl}}}"))];
+            let map = MinimalCascade.cascade(&dom, &sheets);
+            let p = dom
+                .descendants(dom.root())
+                .find(|&n| dom.tag_name(n) == Some("p"))
+                .expect("VACUOUS: the fixture has no <p>");
+            map[&p].clone()
+        };
+
+        // ── VACUITY. The context must actually reach the child, or every row below is asserting
+        // against a default that happens to match.
+        let base = probe("color:red");
+        assert_eq!(
+            (base.font_size, base.line_height, base.line_height_normal),
+            (16.0, 24.0, false),
+            "VACUOUS: the inherited 16px/24px context did not reach <p>, so nothing below is a test \
+             of what a declaration does to it"
+        );
+
+        // (declaration, size, line-height px, `normal`?, weight, italic)
+        let rows: &[(&str, f32, f32, bool, u16, bool)] = &[
+            ("font:20px/30px monospace", 20.0, 30.0, false, 400, false),
+            (
+                "font:italic bold 20px/30px monospace",
+                20.0,
+                30.0,
+                false,
+                700,
+                true,
+            ),
+            (
+                "font:bold 20px/1.5 monospace",
+                20.0,
+                30.0,
+                false,
+                700,
+                false,
+            ),
+            ("font:16px/1.5 monospace", 16.0, 24.0, false, 400, false),
+            // THE DEFECT: an inherited length must survive a font-size change.
+            ("font-size:40px", 40.0, 24.0, false, 400, false),
+            ("font-size:12px", 12.0, 24.0, false, 400, false),
+            (
+                "font-size:40px;line-height:24px",
+                40.0,
+                24.0,
+                false,
+                400,
+                false,
+            ),
+        ];
+        for (decl, size, lh, is_normal, weight, italic) in rows {
+            let c = probe(decl);
+            assert_eq!(
+                c.font_size, *size,
+                "G_MINIMAL_CASCADE_LINE_HEIGHT `{decl}`: font-size is {size}px in Chrome, got {}",
+                c.font_size
+            );
+            assert_eq!(
+                c.line_height_normal,
+                *is_normal,
+                "G_MINIMAL_CASCADE_LINE_HEIGHT `{decl}`: Chrome computes line-height {}, so the \
+                 `normal` flag must be {is_normal}; got {}",
+                if *is_normal { "normal" } else { "a length" },
+                c.line_height_normal
+            );
+            assert!(
+                (c.line_height - lh).abs() < 0.01,
+                "G_MINIMAL_CASCADE_LINE_HEIGHT `{decl}`: line-height is {lh}px in Chrome, got {}. \
+                 A `font-size` declaration must not re-derive an INHERITED length, and the `font` \
+                 shorthand must set one.",
+                c.line_height
+            );
+            assert_eq!(
+                (c.font_weight, c.italic),
+                (*weight, *italic),
+                "G_MINIMAL_CASCADE_LINE_HEIGHT `{decl}`: Chrome computes weight {weight} / italic \
+                 {italic}. The shorthand RESETS every longhand it can carry before applying the \
+                 ones present."
+            );
+            assert_eq!(
+                c.font_family,
+                vec!["monospace".to_string()],
+                "G_MINIMAL_CASCADE_LINE_HEIGHT `{decl}`: the family must survive the shorthand"
+            );
+        }
+
+        // ── THE RESET, MADE OBSERVABLE. Asserting weight/style on a row that never set them
+        //    proves nothing — the initial value and "reset to the initial value" are the same
+        //    number. These two rows put a `font-weight`/`font-style` on the SAME rule and vary only
+        //    the order, so the shorthand's reset is the whole difference. Chrome-measured:
+        //
+        //    ```text
+        //      font-weight:bold; font-style:italic; font:20px/30px monospace   -> 400 / normal
+        //      font:20px/30px monospace; font-weight:bold                      -> 700 / normal
+        //    ```
+        let c = probe("font-weight:bold;font-style:italic;font:20px/30px monospace");
+        assert_eq!(
+            (c.font_weight, c.italic),
+            (400, false),
+            "G_MINIMAL_CASCADE_LINE_HEIGHT: a later `font` shorthand RESETS the weight and style \
+             declared before it — Chrome computes 400/normal. A shorthand that sets only what it \
+             names leaves 700/italic here."
+        );
+        let c = probe("font:20px/30px monospace;font-weight:bold");
+        assert_eq!(
+            (c.font_weight, c.italic, c.font_size),
+            (700, false, 20.0),
+            "G_MINIMAL_CASCADE_LINE_HEIGHT: a `font-weight` AFTER the shorthand still wins — the \
+             reset must not be retroactive. This is the control for the row above."
+        );
+
+        // ── PINNED NEGATIVE 1 — an OMITTED line-height in the shorthand is `normal`, NOT the
+        //    inherited 24px. This is the row a "set only what is named" shorthand fails.
+        let c = probe("font:20px monospace");
+        assert_eq!(c.font_size, 20.0);
+        assert!(
+            c.line_height_normal,
+            "G_MINIMAL_CASCADE_LINE_HEIGHT `font:20px monospace`: Chrome computes line-height \
+             `normal` here — the shorthand RESETS it. Keeping the inherited 24px is the failure \
+             mode of a shorthand that only sets what it mentions."
+        );
+
+        // ── PINNED NEGATIVE 2 — `normal` must STILL re-derive from the font size. This is the row
+        //    that fails if the fix is "never touch line-height in the font-size arm". Chrome
+        //    measures the resulting line box at 46px for 40px monospace.
+        let c = probe("line-height:normal;font-size:40px");
+        assert!(
+            c.line_height_normal && c.line_height > 24.0,
+            "G_MINIMAL_CASCADE_LINE_HEIGHT `line-height:normal;font-size:40px`: `normal` is the \
+             FONT's own metric, so growing the font must grow the line box (Chrome: 46px). Got \
+             normal={} line_height={}",
+            c.line_height_normal,
+            c.line_height
+        );
+
+        // ── CONTROL — a system-font keyword names a platform font rather than describing one. It
+        //    is a different production and must not be mis-parsed as a size.
+        //    ⚠ Kept as a CONTROL, not claimed as a proof: deleting `menu` from the keyword list
+        //    leaves this row GREEN, because `split_font_shorthand` refuses a value with no length
+        //    token one layer down. See the mutation ledger in the doc comment.
+        let c = probe("font:menu");
+        assert_eq!(
+            (c.font_size, c.line_height, c.line_height_normal),
+            (16.0, 24.0, false),
+            "G_MINIMAL_CASCADE_LINE_HEIGHT `font:menu`: a system-font keyword must leave the \
+             inherited font alone, not be shredded for a length"
+        );
     }
 
     /// # An INVALID declaration is IGNORED — it must not overwrite the valid one before it

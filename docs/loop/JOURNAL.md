@@ -95448,3 +95448,132 @@ one declaration, two entrances, different answers. t933's three older table defe
 row-height distribution, `<caption>`, `<thead>` ordering — remain measured and unbuilt.
 
 WIKI: docs/wiki/table-cell-content-geometry.md
+
+## Tick 1361 — the leading a `font-size` declaration threw away (2026-08-29)
+
+TICK SHAPE: capability-subsystem
+
+**Track A.** t1360 left two rows NAMED, MEASURED, NOT BUILT. This tick started by re-measuring
+them — and the first thing it found was that one of them named the wrong mechanism.
+
+### ⚠⚠⚠ FIRST, A CORRECTION TO t1360, BECAUSE THE ROW WAS ATTRIBUTED TO THE FIXTURE'S HEADLINE
+
+t1360 recorded *"line-box overflow — 40px text in an inherited 24px line box: Chrome puts the glyph
+run at dy=-11, we put it at +1"*. Re-measured standalone, **line-box overflow is already correct**: a
+`<span style="font-size:40px;line-height:24px">` lands at dy -11 with a 46px box in a 33px line box,
+matching Chrome on all six rows of a fresh battery. The divergence was real; the cause was not the
+one named.
+
+Stripping the table off the fixture found it in two probes:
+
+```text
+  <div style="line-height:24px"><div style="font-size:40px">A</div></div>
+     Chrome 24      Stylo (shipping) 24      MinimalCascade 48
+```
+
+⭐ **The lesson, now a rule: a divergence measured through a composite fixture gets attributed to
+that fixture's headline mechanism unless you re-measure it with the headline removed.** The table
+gate was the instrument that surfaced this, so "table cell baseline" was the label it got — and the
+same number reproduces with no table on the page at all. The wiki page is corrected in place rather
+than left to be re-derived.
+
+### ⭐⭐⭐ THE FINDING — TWO WAYS TO SET ONE PROPERTY, WRONG IN OPPOSITE DIRECTIONS
+
+```rust
+"font-size" => {
+    s.font_size = values::resolve_font_size(v, parent_fs).unwrap_or(s.font_size);
+    s.line_height = s.font_size * 1.2;      // ← unconditional
+}
+```
+
+`line-height` is inherited as a computed **length**. A child that changes its font size does not get
+a new line box; it gets the one its ancestor authored. This line threw that away — and the *other*
+way to set the same property, the `font` shorthand, had **no arm in `apply_declaration` at all**, so
+`font: 16px/24px monospace` set nothing: size, family and leading all stayed at their defaults. The
+t1353/t1355 shape, with both doors wrong and in opposite directions.
+
+Priced on the corpus before building: **34 of 39** sampled CrUX sites declare a `line-height` below
+1.2 (`line-height: 1` alone appears 163 times) and **13 of 39** use the `font` shorthand.
+
+⚠ **The naive fix is a different bug and it has its own pinned row.** "Never touch `line-height` in
+the `font-size` arm" breaks `normal`: a `line-height: normal` block whose font grows to 40px must get
+a *bigger* line box (Chrome 46). `normal` is the font's own metric and must keep tracking the font;
+an authored length must not. That is exactly the question `line_height_normal` answers, and the flag
+already existed — its own comment says it is inherited beside the value for this reason. The same
+guard went on the UA font-scaling path: an `<h1>` inside a `line-height: 24px` block keeps the
+authored 24, because the UA sheet scales the FONT and does not re-author the leading.
+
+⭐ **For the shorthand, the row that decides the design is `font: 20px monospace`**: an omitted
+`/line-height` means `normal`, NOT "keep what was inherited". The shorthand resets every longhand it
+can carry before applying the ones present, and a "set only what is named" implementation is wrong on
+the commonest spelling of all.
+
+### WHY A MinimalCascade-ONLY BUG IS MORE THAN A RENDERING BUG
+
+The shipping browser cascades through Stylo and Stylo was right on every row. But **MinimalCascade is
+the cascade every layout gate runs on** — `engine/layout`'s 191 unit tests and everything under
+`agent/tests` take `manuk-page` with default features. A cascade that disagrees with its twin means
+those gates silently measure a different page from the one the browser renders, which is the rule the
+same file already states in its float half: *"a cascade that disagrees with its twin about whether an
+image is out of flow is the `<source>` bug again."*
+
+This was found the expensive way: t1360's gate read 54 where Chrome and Stylo both read 57, and the
+confound had to be designed out of that fixture so the tick could land.
+
+### THE GATE
+
+`font_size_keeps_an_inherited_line_height_and_the_font_shorthand_sets_one` (`engine/css`) — twelve
+declarations, every value headless-Chrome-measured through `getComputedStyle`, with a VACUITY assert
+that the inherited 16px/24px context actually reaches the child, and three pinned rows.
+
+**PROVEN RED by four mutations**, four different messages. N1 drop the guard (the defect) → 48 where
+Chrome says 24. N2 omitted `/line-height` keeps the inherited value → `font:20px monospace` keeps 24
+where Chrome says `normal`. N3 the shorthand does not reset → 700/italic survives it. N4 over-guard,
+never re-derive → `normal` stops tracking the font and keeps 19.2. **N4 is the mutation a naive fix
+to N1 actually IS**, which is why it is in the ledger.
+
+⚠ **A FIFTH MUTATION LEFT ITS ROW GREEN AND THE GATE SAYS SO.** Deleting `menu` from the system-font
+keyword list did not fail the `font:menu` row — `split_font_shorthand` refuses a value with no length
+token one layer down. The keyword list is defence in depth, the row is kept as a CONTROL, and neither
+is evidence about the other.
+
+⚠ The reset claim is only observable on a row that sets a weight BEFORE the shorthand: the initial
+value and "reset to the initial value" are the same number, so asserting 400 on a row that never set
+bold proves nothing. Two rows vary declaration order on one rule and Chrome arbitrates both.
+
+### ⚠⚠ THE INSTRUMENT FINDING — THIRD INSTANCE IN THREE TICKS
+
+`scripts/verify.sh` runs its crate suites as bare `cargo test -q -p <crate>`, **no features**. For
+`manuk-css` that `#[cfg(feature = "stylo")]`-s the entire `stylo_engine` test module out of the wall
+— including t1358's `multicol_longhands_survive_the_stylo_cascade`, landed three ticks ago precisely
+because it is *"the second entrance, the door every real page comes through."* **It has never run in
+a wall.**
+
+That follows t1360's `g_table_cell_valign` (red twenty-three days, not in the launch list) and
+t1360's own placement problem. Three instances, one class: *a gate is only a gate where the wall
+looks.* `scripts/` is observer-owned, so this is recorded and the gate placed in `manuk-css`'s
+default-feature test module rather than the wall being changed.
+
+### THE RECEIPT
+
+```text
+  manuk-css    (lib, default features)   43/43 → 44/44   +1   +the new gate
+  manuk-layout                         191/191           CONTROL — all 191 on the CHANGED cascade
+  manuk-agent                          128/128           CONTROL
+  manuk-page   (full suite)              0 failed        CONTROL
+  manuk-paint / manuk-dom / manuk-text / manuk-net        CONTROL
+  cargo check --workspace --all-targets   clean          CONTROL
+```
+
+The layout row is the load-bearing control: 191 tests run on the cascade this tick changed, and none
+of them had been calibrated against the bug.
+
+PERF: one bool test per `font-size` declaration; the shorthand arm runs only on `font`.
+
+NEXT: the `font` shorthand is now implemented for the four longhands MinimalCascade models
+(`size`, `line-height`, `weight`, `style`, `family`); `font-variant` and `font-stretch` are parsed
+past and not stored, which is honest for a cascade that has no field for them. The bigger named
+remainder is unchanged from t1360: t933's three table defects — rowspan row-height distribution,
+`<caption>`, `<thead>` ordering — each measured against Chrome and each its own tick.
+
+WIKI: docs/wiki/minimal-cascade-line-height.md

@@ -130,10 +130,38 @@ font shorthand is not a table gate.
   font shorthand line-height   `font: 16px/24px monospace` gives a 24px line box through Stylo
                                and something 3px shorter through MinimalCascade (57 vs 54 on a
                                table row). Two cascades, one declaration, different answers.
-  line-box overflow            40px text in an inherited 24px line box: Chrome puts the glyph run
-                               at dy=-11 (it overflows its line upward), we put it at +1.
+  [CORRECTED at t1360+1 — see below]
   float-only cell + rowspan    untested; the rowspan path takes a different height route.
 ```
 
 The three table defects t933 named — rowspan row-height distribution, `<caption>`, and `<thead>`
 ordering — are unchanged and still measured in `g_table_cell_valign`'s header.
+
+
+## ⚠ CORRECTION (t1361) — one of the "NAMED, MEASURED, NOT BUILT" rows above named the wrong mechanism
+
+The row recorded here as *"line-box overflow — 40px text in an inherited 24px line box: Chrome puts
+the glyph run at dy=-11, we put it at +1"* **attributed a real divergence to the wrong cause.**
+Measured on the standalone case, line-box overflow is already correct: a
+`<span style="font-size:40px;line-height:24px">` lands at dy **-11** with a 46px box in a 33px line
+box, matching Chrome on every row of a six-row battery.
+
+The actual cause was one level up, in the cascade, and it was not about overflow at all:
+
+```text
+  <div style="line-height:24px"><div style="font-size:40px">A</div></div>
+     Chrome 24      Stylo (shipping) 24      MinimalCascade 48
+```
+
+`MinimalCascade`'s `font-size` arm re-derived `line-height` from the new font size
+unconditionally, destroying the inherited length — so the 40px cell had a 48px line box rather than
+a 24px one, and every number downstream of it moved. It is fixed in t1361, together with the `font`
+shorthand (which that cascade did not implement at all), and both are gated at the cascade level
+where the bug is: `font_size_keeps_an_inherited_line_height_and_the_font_shorthand_sets_one`
+(`engine/css`).
+
+⭐ The lesson is the one this file already carries in a different form: **a divergence measured
+through a composite fixture is attributed to the fixture's headline mechanism unless you re-measure
+it standalone.** The table gate was the instrument that surfaced it, so "table cell baseline" was
+the label it got — and the same number reproduces with no table on the page at all. The first probe
+of the next tick should always be the divergence with the headline mechanism removed.
