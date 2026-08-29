@@ -9439,3 +9439,23 @@ so a table with no author `border-spacing` puts its first cell at `[2, 2]` and i
 wider than its cells. A cascade missing that declaration renders every such table tight — and if it
 is the cascade a test harness uses, it mis-measures every table fixture written against it.
 (t1364 — `agent/tests` `vi2_named_residuals_match_chrome`)
+
+## `<button><span>Save</span><span>changes</span></button>` with `span { display: block }` — the name a stylesheet changes
+
+The accessible name is computed from what is RENDERED, so two CSS facts change it and neither is in
+the markup. A child that is **not an inline box** contributes a space on each side of its text:
+`<button><span>one</span><span>two</span><span>three</span></button>` is `"onetwothree"` inline and
+`"one two three"` the moment the spans are `display:block`. And `text-transform` applies, because the
+name is the text a user is *read* — a heading styled `uppercase` is named `"CALL US"`.
+
+⚠ `inline-block` separates too: the rule is "not an inline box", and an inline-block is an ATOMIC
+inline. A predicate written as "is it block?" gets half the cases.
+
+⚠ `capitalize` upper-cases the first typographic letter of each word and leaves the rest as authored
+(`"Call us"` → `"Call Us"`, not `"Call US"`), and `text-transform` is INHERITED, so a partial style
+map must not read a missing entry as `none`.
+
+⚠⚠ The name walk has TWO entrances — the AX tree a live agent reads, and the bare `accessible_name`
+behind `test_driver.get_computed_label()`. A fact wired to one of them moves the conformance number
+by its full amount while the agent still reads the old name.
+(t1365 — `agent/tests` `the_accessible_name_reads_the_computed_style_through_both_entrances`)

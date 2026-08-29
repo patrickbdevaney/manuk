@@ -4,6 +4,16 @@
 > `docs/wiki/` is listed here. To retrieve a section by content, use
 > `scripts/wiki-lookup.sh <terms>` (precise keyword match, no semantic fuzz).
 
+## The accessible name is a function of the COMPUTED STYLE
+`docs/wiki/accessible-name-computed-style.md`
+
+  - L6 · The one-sentence mechanism
+  - L22 · The receipt
+  - L37 · The two rules, and the rows that decide them
+  - L52 · ⚠⚠⚠ Both entrances, asserted against each other
+  - L67 · How it is plumbed, and why that shape
+  - L85 · What is still open in accname
+
 ## The agent drive loop below the fold — a verified click point is verified *in one viewport*
 `docs/wiki/agent-drive-below-the-fold.md`
 
@@ -2544,4 +2554,4 @@
   - L231 · Both named mechanisms are subsystem work
 
 ---
-2423 sections across 29 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+2429 sections across 30 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.

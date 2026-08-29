@@ -1584,8 +1584,81 @@ fn normalize(s: &str) -> String {
 /// with**, so the announced number and the painted number cannot drift apart.
 pub type GeneratedText = HashMap<NodeId, (String, String)>;
 
+/// **The computed-style facts the NAME walk needs, per node** — the same shape as
+/// [`GeneratedText`] and threaded the same way, for the same reason.
+///
+/// ⭐⭐⭐ **THE ACCESSIBLE NAME IS A FUNCTION OF THE COMPUTED STYLE, NOT OF THE MARKUP**, and the
+/// accname spec says so in two places the DOM alone cannot answer:
+///
+/// * **§ "Computed Name from Content" appends a space around a child that is not inline.**
+///   `<button><span>one</span><span>two</span></button>` is `"onetwothree"` when the spans are
+///   inline and `"one two three"` the moment CSS makes them `display:block` — same markup, and the
+///   only difference is a stylesheet. Chrome-verified against `accname/name/comp_name_from_content`,
+///   which asserts both spellings side by side.
+/// * **`text-transform` applies**, because the name is the text a user is *read*: a heading styled
+///   `text-transform: uppercase` is named `"CALL US"`, not `"Call us"`.
+///
+/// Built ONCE by [`name_styles`] and passed in, rather than looked up per node, because this walk
+/// has **two entrances** — the tree builder and the bare `accessible_name` behind
+/// `test_driver.get_computed_label()` — and a fact wired to one of them is the shape this file has
+/// been caught by three times (t1097, t1350, t1355).
+pub type NameStyles = HashMap<NodeId, (manuk_css::Display, manuk_css::TextTransform)>;
+
+/// Extract [`NameStyles`] from a computed-style map. One builder, so the two entrances cannot drift.
+pub fn name_styles(dom: &Dom, styles: &HashMap<NodeId, manuk_css::ComputedStyle>) -> NameStyles {
+    dom.descendants(dom.root())
+        .filter_map(|n| styles.get(&n).map(|s| (n, (s.display, s.text_transform))))
+        .collect()
+}
+
+/// Does the node at `n` contribute a SPACE on each side of its text, per [`NameStyles`]?
+///
+/// Public so a caller that cannot name `manuk_css`'s types can still ask — which is what a gate in
+/// a crate that does not depend on `manuk-css` needs in order to assert its fixture is not vacuous.
+pub fn name_separates(styles: &NameStyles, n: NodeId) -> bool {
+    styles.get(&n).is_some_and(|&(d, _)| separates_name(d))
+}
+
+/// Does a child with this `display` contribute a SPACE on each side of its text?
+///
+/// ⚠ **`inline-block` DOES**, and that row is why this is not `display != Inline`-by-eye: the WPT
+/// fixture asserts `"one two three"` for `display:inline-block` spans as well as for `display:block`
+/// ones. The rule is *"not an inline box"*, and an inline-block is an atomic inline — it is not an
+/// inline box, it is a block box that participates in one.
+fn separates_name(d: manuk_css::Display) -> bool {
+    !matches!(d, manuk_css::Display::Inline | manuk_css::Display::None)
+}
+
+/// Apply `text-transform` to a name fragment. `capitalize` upper-cases the first typographic letter
+/// of each word and leaves the rest as authored, which is why it is not `to_uppercase` on word[0].
+fn transform_name(text: &str, t: manuk_css::TextTransform) -> String {
+    match t {
+        manuk_css::TextTransform::None => text.to_string(),
+        manuk_css::TextTransform::Uppercase => text.to_uppercase(),
+        manuk_css::TextTransform::Lowercase => text.to_lowercase(),
+        manuk_css::TextTransform::Capitalize => {
+            let mut out = String::with_capacity(text.len());
+            let mut at_word_start = true;
+            for c in text.chars() {
+                if c.is_alphanumeric() {
+                    if at_word_start {
+                        out.extend(c.to_uppercase());
+                    } else {
+                        out.push(c);
+                    }
+                    at_word_start = false;
+                } else {
+                    out.push(c);
+                    at_word_start = true;
+                }
+            }
+            out
+        }
+    }
+}
+
 pub fn accessible_name(dom: &Dom, node: NodeId, role: &Role) -> String {
-    accessible_name_generated(dom, node, role, &GeneratedText::new())
+    accessible_name_generated(dom, node, role, &GeneratedText::new(), &NameStyles::new())
 }
 
 /// [`accessible_name`] **with the rendered `::before` / `::after` text** — see [`GeneratedText`].
@@ -1605,9 +1678,10 @@ pub fn accessible_name_generated(
     node: NodeId,
     role: &Role,
     generated: &GeneratedText,
+    styles: &NameStyles,
 ) -> String {
     let index = NameIndex::build(dom);
-    accessible_name_with(dom, node, role, &index, generated)
+    accessible_name_with(dom, node, role, &index, generated, styles)
 }
 
 /// accname step 3 — the **host language's own** labelling mechanisms, factored out because
@@ -1620,6 +1694,7 @@ fn host_language_name(
     role: &Role,
     index: &NameIndex,
     generated: &GeneratedText,
+    styles: &NameStyles,
 ) -> String {
     let Some(el) = dom.element(node) else {
         return String::new();
@@ -1642,7 +1717,7 @@ fn host_language_name(
                 .get(&node)
                 .map(|ls| {
                     ls.iter()
-                        .map(|&l| content_text(dom, l, Some(node), index, generated))
+                        .map(|&l| content_text(dom, l, Some(node), index, generated, styles))
                         .filter(|s| !s.is_empty())
                         .collect::<Vec<_>>()
                         .join(" ")
@@ -1715,6 +1790,7 @@ fn accessible_name_with(
     role: &Role,
     index: &NameIndex,
     generated: &GeneratedText,
+    styles: &NameStyles,
 ) -> String {
     let Some(el) = dom.element(node) else {
         return String::new();
@@ -1722,12 +1798,12 @@ fn accessible_name_with(
 
     // 1 + 2. aria-labelledby (dereferenced one level), then aria-label — the SAME rule a
     // descendant obeys inside `content_walk`, so it is written once.
-    if let Some(name) = aria_name_of(dom, node, index, generated) {
+    if let Some(name) = aria_name_of(dom, node, index, generated, styles) {
         return name;
     }
 
     // 3. native host-language labelling — see `host_language_name`.
-    let host = host_language_name(dom, node, role, index, generated);
+    let host = host_language_name(dom, node, role, index, generated, styles);
     if !host.is_empty() {
         return host;
     }
@@ -1742,7 +1818,7 @@ fn accessible_name_with(
         // ⭐ THE SAME §4.3 WALK THE LABEL PATH USES. This was `text_content` + the root's own
         // pseudo text, which flattens away an `<img alt>` in the middle of a button and reads
         // straight through a descendant's `aria-label`.
-        let text = content_text(dom, node, None, index, generated);
+        let text = content_text(dom, node, None, index, generated, styles);
         if !text.is_empty() {
             return text;
         }
@@ -1903,13 +1979,14 @@ fn aria_name_of(
     node: NodeId,
     index: &NameIndex,
     generated: &GeneratedText,
+    styles: &NameStyles,
 ) -> Option<String> {
     let el = dom.element(node)?;
     if let Some(refs) = el.attr("aria-labelledby") {
         let text = refs
             .split_ascii_whitespace()
             .filter_map(|id| index.ids.get(id))
-            .map(|&n| referenced_name(dom, n, index, generated))
+            .map(|&n| referenced_name(dom, n, index, generated, styles))
             .filter(|t| !t.is_empty())
             .collect::<Vec<_>>()
             .join(" ");
@@ -1947,6 +2024,7 @@ fn referenced_name(
     node: NodeId,
     index: &NameIndex,
     generated: &GeneratedText,
+    styles: &NameStyles,
 ) -> String {
     let Some(el) = dom.element(node) else {
         // A referenced text node contributes its own data.
@@ -1962,7 +2040,7 @@ fn referenced_name(
     }
     // Step 2E — the host-language label, which is what makes a referenced CONTROL work.
     if let Some(role) = role_of(dom, node) {
-        let host = host_language_name(dom, node, &role, index, generated);
+        let host = host_language_name(dom, node, &role, index, generated, styles);
         if !host.is_empty() {
             return host;
         }
@@ -1971,7 +2049,7 @@ fn referenced_name(
     // applies only when the REFERENCED element is itself hidden (see `content_text_rooted`).
     let (display_none, vis) = inline_visibility(dom, node);
     let root_hidden = is_hidden(dom, node) || display_none || vis == Some(false);
-    content_text_rooted(dom, node, None, index, generated, root_hidden)
+    content_text_rooted(dom, node, None, index, generated, styles, root_hidden)
 }
 
 /// ⭐⭐⭐ **ONE WALK, TWO CALLERS — AND ONLY ONE OF THEM USED TO RECURSE.**
@@ -1999,8 +2077,9 @@ fn content_text(
     skip: Option<NodeId>,
     index: &NameIndex,
     generated: &GeneratedText,
+    styles: &NameStyles,
 ) -> String {
-    content_text_rooted(dom, root, skip, index, generated, false)
+    content_text_rooted(dom, root, skip, index, generated, styles, false)
 }
 
 /// ⚠⚠⚠ **A HIDDEN NODE THAT `aria-labelledby` POINTS AT CONTRIBUTES ITS WHOLE SUBTREE.**
@@ -2029,6 +2108,7 @@ fn content_text_rooted(
     skip: Option<NodeId>,
     index: &NameIndex,
     generated: &GeneratedText,
+    styles: &NameStyles,
     exempt_hidden: bool,
 ) -> String {
     let mut out = String::new();
@@ -2039,6 +2119,7 @@ fn content_text_rooted(
         skip,
         index,
         generated,
+        styles,
         true,
         exempt_hidden,
         &mut out,
@@ -2054,6 +2135,7 @@ fn content_walk(
     skip: Option<NodeId>,
     index: &NameIndex,
     generated: &GeneratedText,
+    styles: &NameStyles,
     visible: bool,
     exempt_hidden: bool,
     out: &mut String,
@@ -2066,8 +2148,21 @@ fn content_walk(
     let exempt = exempt_hidden;
     if !dom.is_element(n) {
         // A text node's `text_content` is its own data; a comment's is empty. Both correct here.
+        //
+        // ⭐ **`text-transform` APPLIES, BECAUSE THE NAME IS THE TEXT A USER IS READ.** A heading
+        // styled `text-transform: uppercase` is named `"CALL US"`, not `"Call us"` — the transform
+        // is not decoration, it changes the characters the rendering produces, and accname computes
+        // the name from what is rendered. Chrome-verified on all four keywords.
+        //
+        // ⚠ The transform is read from the text node's OWN entry when it has one (a text node
+        // clones its parent's computed style) and otherwise from the nearest element ancestor that
+        // does, because a `NameStyles` built from a partial style map must not silently drop the
+        // parent's transform.
         if visible {
-            out.push_str(&dom.text_content(n));
+            out.push_str(&transform_name(
+                &dom.text_content(n),
+                inherited_transform(dom, n, styles),
+            ));
         }
         return;
     }
@@ -2094,7 +2189,7 @@ fn content_walk(
         // §4.3 steps 2B/2D — a descendant that carries its OWN ARIA name contributes that name and
         // its subtree is NOT descended into. Overriding a name is the whole point of `aria-label`;
         // reading through it announces the text the author replaced.
-        if let Some(name) = aria_name_of(dom, n, index, generated) {
+        if let Some(name) = aria_name_of(dom, n, index, generated, styles) {
             if visible {
                 push_word(out, &name);
             }
@@ -2124,6 +2219,26 @@ fn content_walk(
         out.push_str(b);
     }
     for c in dom.children(n) {
+        // ⭐⭐⭐ **A CHILD THAT IS NOT AN INLINE BOX CONTRIBUTES A SPACE ON EACH SIDE OF ITS TEXT.**
+        // accname's "Computed Name from Content" appends a separator around a non-inline node, and
+        // it is the rule that makes the SAME MARKUP name two different things:
+        //
+        // ```text
+        //   <button><span>one</span><span>two</span><span>three</span></button>
+        //     spans inline               -> "onetwothree"
+        //     spans display:block        -> "one two three"
+        //     spans display:inline-block -> "one two three"
+        // ```
+        //
+        // Only a stylesheet separates those, which is why the name walk needs the computed style at
+        // all. ⚠ The `inline-block` row is the one that decides the predicate: it is an ATOMIC
+        // inline — not an inline box — so `display != Inline` is the rule, not "is it block".
+        let sep = styles
+            .get(&c)
+            .is_some_and(|&(d, _)| separates_name(d) && dom.is_element(c));
+        if sep && visible {
+            out.push(' ');
+        }
         content_walk(
             dom,
             c,
@@ -2131,10 +2246,14 @@ fn content_walk(
             skip,
             index,
             generated,
+            styles,
             visible,
             exempt_hidden,
             out,
         );
+        if sep && visible {
+            out.push(' ');
+        }
     }
     if visible {
         out.push_str(a);
@@ -2143,6 +2262,20 @@ fn content_walk(
 
 /// Append a contribution as its own WORD. The markup around a substituted value or name carries no
 /// space of its own (`…screen <input value="3"> times`), and `normalize` collapses the surplus.
+/// The `text-transform` that applies to `n`'s text — its own entry, else the nearest ancestor with
+/// one. `text-transform` is an inherited property, so a partial [`NameStyles`] must not read the
+/// absence of an entry as `none`.
+fn inherited_transform(dom: &Dom, n: NodeId, styles: &NameStyles) -> manuk_css::TextTransform {
+    let mut cur = Some(n);
+    while let Some(x) = cur {
+        if let Some(&(_, t)) = styles.get(&x) {
+            return t;
+        }
+        cur = dom.parent(x);
+    }
+    manuk_css::TextTransform::None
+}
+
 fn push_word(out: &mut String, s: &str) {
     out.push(' ');
     out.push_str(s);
@@ -2305,6 +2438,7 @@ pub fn build_tree_full(
         invisible,
         non_hittable,
         &GeneratedText::new(),
+        &NameStyles::new(),
     )
 }
 
@@ -2319,6 +2453,7 @@ pub fn build_tree_generated(
     invisible: &HashSet<NodeId>,
     non_hittable: &HashSet<NodeId>,
     generated: &GeneratedText,
+    styles: &NameStyles,
 ) -> A11yNode {
     let index = NameIndex::build(dom);
     let root = dom.root();
@@ -2331,6 +2466,7 @@ pub fn build_tree_generated(
         invisible,
         non_hittable,
         generated,
+        styles,
     );
     A11yNode {
         node: root,
@@ -2386,6 +2522,7 @@ pub fn build_tree_full_with_focus(
         invisible,
         non_hittable,
         &GeneratedText::new(),
+        &NameStyles::new(),
     )
 }
 
@@ -2402,8 +2539,17 @@ pub fn build_tree_generated_with_focus(
     invisible: &HashSet<NodeId>,
     non_hittable: &HashSet<NodeId>,
     generated: &GeneratedText,
+    styles: &NameStyles,
 ) -> A11yNode {
-    let mut tree = build_tree_generated(dom, rects, z_index, invisible, non_hittable, generated);
+    let mut tree = build_tree_generated(
+        dom,
+        rects,
+        z_index,
+        invisible,
+        non_hittable,
+        generated,
+        styles,
+    );
     if let Some(f) = focused {
         mark_focused(&mut tree, f);
     }
@@ -2428,6 +2574,7 @@ fn build_children(
     invisible: &HashSet<NodeId>,
     non_hittable: &HashSet<NodeId>,
     generated: &GeneratedText,
+    styles: &NameStyles,
 ) -> Vec<A11yNode> {
     let mut out = Vec::new();
     // N3/N4 — the FLAT tree: a shadow host exposes its shadow content, and a `<slot>`
@@ -2453,6 +2600,7 @@ fn build_children(
                 invisible,
                 non_hittable,
                 generated,
+                styles,
             ));
             continue;
         }
@@ -2468,12 +2616,13 @@ fn build_children(
                 invisible,
                 non_hittable,
                 generated,
+                styles,
             ));
             continue;
         }
         match role_of(dom, child) {
             Some(role) => {
-                let name = accessible_name_with(dom, child, &role, index, generated);
+                let name = accessible_name_with(dom, child, &role, index, generated, styles);
                 let state = state_of(dom, child, &role);
                 out.push(A11yNode {
                     node: child,
@@ -2493,6 +2642,7 @@ fn build_children(
                         invisible,
                         non_hittable,
                         generated,
+                        styles,
                     ),
                 });
             }
@@ -2506,6 +2656,7 @@ fn build_children(
                 invisible,
                 non_hittable,
                 generated,
+                styles,
             )),
         }
     }
@@ -3174,7 +3325,13 @@ mod tests {
             // labels) and left this caller behind, which broke the WHOLE crate's `cfg(test)` build
             // — invisibly, because `manuk-a11y` is not in the wall's crate list.
             let index = NameIndex::build(&dom);
-            accessible_name_with(&dom, n, &r, &index, g)
+            // t1365 widened it again, with `NameStyles`. This unit test has no style map, and an
+            // EMPTY one is the right argument rather than a constructed one: the rows below are
+            // about `::before`/`::after` ordering, and a `NameStyles` that separated their children
+            // would change the expected strings for a reason that has nothing to do with what they
+            // assert. Surface audit #78 measured why this caller keeps being left behind —
+            // `manuk-a11y` is a suite in no wall and no CI job.
+            accessible_name_with(&dom, n, &r, &index, g, &NameStyles::new())
         };
         assert_eq!(
             name(kids[0], &generated),

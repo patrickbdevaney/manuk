@@ -41,6 +41,10 @@ fn the_name_entry_point_carries_generated_content_not_an_empty_map() {
 
     // Exactly the composition `host_ax_role_name` performs.
     let generated = manuk_layout::generated_text(dom, page.styles_map());
+    // t1365 threaded the computed style into the same walk, for the same reason and through the
+    // same two entrances — a non-inline child separates the name with a space, and `text-transform`
+    // applies to it. `host_ax_role_name` composes both, so this gate does too.
+    let name_styles = manuk_a11y::name_styles(dom, page.styles_map());
 
     let probe = |id: &str| -> (String, String) {
         let n = dom
@@ -48,7 +52,7 @@ fn the_name_entry_point_carries_generated_content_not_an_empty_map() {
             .unwrap_or_else(|| panic!("VACUOUS: the fixture has no #{id}"));
         let role = role_of(dom, n).unwrap_or_else(|| panic!("VACUOUS: #{id} maps to no ARIA role"));
         (
-            accessible_name_generated(dom, n, &role, &generated),
+            accessible_name_generated(dom, n, &role, &generated, &name_styles),
             accessible_name(dom, n, &role),
         )
     };

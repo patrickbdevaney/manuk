@@ -8,6 +8,10 @@ description = "Accessibility / semantic tree over the arena DOM. Feeds screen re
 
 [dependencies]
 manuk-dom.workspace = true
+# ⚠ The NAME depends on the COMPUTED STYLE, and the accname spec says so: a block-level child
+# contributes a space separator, and `text-transform` applies to the name because the name is the
+# text a user is READ. No cycle — `manuk-css` does not depend on this crate.
+manuk-css.workspace = true
 
 [dev-dependencies]
 manuk-html.workspace = true

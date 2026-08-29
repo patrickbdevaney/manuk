@@ -95933,3 +95933,120 @@ found nine already correct, so the residual it points at is **floats-and-`clear`
 list it currently reads as.
 
 WIKI: docs/wiki/vi2-residual-layout-gap.md
+
+## Tick 1365 — the accessible name is a function of the computed style (2026-08-29)
+
+TICK SHAPE: capability-subsystem
+
+**Track B, and the board picked it.** The 2026-08-28 observer nudge says *"alternate A/B/C; do not
+let any track go >5 ticks dark"*, and Track B had not been touched since t1355 — **ten ticks**. This
+executes check #128's STEER #2 verbatim: *"thread the COMPUTED STYLE into `accessible_name` the way
+t1097 threaded `GeneratedText` — one job closes block-level name spacing, `text-transform`, and
+class-driven `display:none` (9 subtests)."*
+
+It is exactly nine.
+
+### THE SURVEY FIRST — 61 FAILING ROWS, GROUPED BEFORE ANY CODE
+
+```text
+  content 26 · label 16 · ::before 15 · counter 9 · ::after 9 · marker 8 · space 6 · display 6
+  attr( 3 · text-transform 3 · aria-owns 3 · slot 4 · shadow 2
+```
+
+Reading the 26 `content` rows named the group this tick could close without touching CSS `content`
+at all: six `(no space, display:block|inline-block)` and three `text-transform`. Exactly the nine the
+constitution check had estimated, and the rest are STEER #1's `attr()`/`counter()` work.
+
+### ⭐⭐⭐ THE FINDING — THE SAME MARKUP NAMES TWO DIFFERENT THINGS
+
+```html
+<button><span>one</span><span>two</span><span>three</span></button>
+```
+
+is `"onetwothree"` when the spans are inline and `"one two three"` the moment CSS makes them
+`display:block`. accname's *Computed Name from Content* appends a separator around a child that is
+not an inline box — **only a stylesheet separates those two names**, so a walk that reads the DOM
+alone cannot be right whatever else it gets correct. Same for `text-transform`: a heading styled
+`uppercase` is named `"CALL US"`, because the name is the text a user is *read*.
+
+Two rows decide the implementation and neither is guessable:
+
+- ⚠ **`inline-block` separates TOO.** The rule is *"not an inline box"* — an inline-block is an
+  **atomic inline**, a block box that participates in a line. `matches!(d, Display::Block)` passes
+  three of the six spacing rows and fails the other three (mutation N2).
+- ⚠ **`capitalize` leaves the rest of the word as authored**: `"Call us"` → `"Call Us"`, not
+  `"Call US"` (mutation N4). And `text-transform` is INHERITED, so a partial style map must not read
+  a missing entry as `none`.
+
+### ⚠⚠⚠ BOTH ENTRANCES, ASSERTED AGAINST EACH OTHER — I3 AS CHECK #128 SHARPENED IT
+
+The walk has two doors: the AX tree builder (what a live agent reads) and the bare `accessible_name`
+behind `test_driver.get_computed_label()` (what the conformance suite reads). This subsystem has
+been caught by that split **three times** — t1097, t1350, t1355. So every row of the gate asserts
+that **the two doors agree and that the agreed value is Chrome's**.
+
+**Mutation N5 is the one that makes that structure load-bearing**: thread the styles into the bare
+entrance only, and every `bare` assertion passes, every `AX TREE` assertion fails, and the message
+names the shape. A fix wired to one door would move the suite number by the full +9 and leave the
+agent reading the old name.
+
+### THE RECEIPT
+
+```text
+  accname   423/484 (87.4%)  →  432/484 (89.3%)   +9, ZERO newly failing
+    button/heading/link · display:block                                        ×3
+    button/heading/link · display:inline-block                                 ×3
+    heading · text-transform uppercase / lowercase / capitalize                ×3
+  wai-aria  399/434 (91.9%)  CONTROL — identical to check #128's number
+  html-aam  310/335 (92.5%)  CONTROL — identical to check #128's number
+  manuk-agent  130/130 → 131/131  +1  +the new gate
+  manuk-a11y    21/21   ·  manuk-page 0 failed  ·  manuk-layout / css / dom / paint  CONTROL
+```
+
+Measured by **diffing the failing name lists, not the totals** — the fixed set is exactly those nine
+and nothing else moved.
+
+**PROVEN RED by five mutations.** N1 `separates_name` always false → ⚠ trips the VACUITY assert
+rather than a row, because `name_separates` is the same predicate; that is stated in the ledger
+rather than dressed up, and N2 is the mutation that proves the RULE. N2 `matches!(d, Display::Block)`
+→ only `b_iblock` fails. N3 `transform_name` is the identity → the three transform rows. N4
+`capitalize` upper-cases whole words → `"CALL US"` for `"Call Us"`. N5 one entrance only → every
+tree row fails while every bare row passes.
+
+### ⚠ THE THIRD FACT THREADED ONE AT A TIME, AND THE THIRD CALLER LEFT BEHIND
+
+`NameStyles` is deliberately the same shape as `GeneratedText` — a map built once by
+`manuk_a11y::name_styles` and passed in, so the two entrances cannot drift. `manuk-a11y` gained a
+`manuk-css` dependency to name the two enums (no cycle).
+
+But this is the **third** fact threaded into this walk one parameter at a time, and each has left a
+caller behind. The one in `manuk-a11y`'s own unit test has now been left behind twice, and its
+comment already says why:
+
+> *"t1355 widened this parameter … and left this caller behind, which broke the WHOLE crate's
+> `cfg(test)` build — invisibly, because `manuk-a11y` is not in the wall's crate list."*
+
+That is surface audit #78's finding, written into the code ten ticks before the audit measured it.
+**A fourth fact should become a context struct rather than a fourth parameter** — the signature
+already carries an `#[allow(clippy::too_many_arguments)]`.
+
+### ⚠ THE LANDING, AND THE DISK
+
+The first wall attempt died differently from t1363's: `df` reported **4.0K free**, the harness's own
+disk hygiene purged `target/debug` mid-tick ("CRITICAL 100% AFTER prune: full purge to avert
+ENOSPC"), and the cold rebuild that followed raced the parallel gate launch into **eight** red gates
+at once — `js_conformance`, `affordance`, `G_ALLOC`, `G_LOAD`, `G_GLOBALS`, `G_VIEWPORT`,
+`G_DOM_IMPL`, `G_CONTAIN_NATIVE`.
+
+⚠ **That set includes gates this tick's diff really does touch** (`dom_bindings.rs`, `Page`), so it
+was checked rather than waved away: `g_globals` and `g_dom_impl` both pass **standalone** on the same
+tree. It is the known `_out()` partial-read defect at cold-build scale, not a regression. Landed on
+the warm re-run. `scripts/` is observer-owned; recorded, not touched.
+
+NEXT: 52 accname rows remain and the largest coherent group is check #128's STEER #1 — CSS `content`
+features (`attr()`, `counter()` with alt text, the `/alt-text` syntax), which `content` appears in 26
+failing names for. Then `::marker` (8), shadow DOM and slots (6), `aria-owns` (3). On the other
+tracks: Track C's float re-flow (t1364) and the a11yproject width narrowing remain the ranked Track A
+items.
+
+WIKI: docs/wiki/accessible-name-computed-style.md

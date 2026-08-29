@@ -11972,16 +11972,29 @@ unsafe fn host_ax_role_name(cx: *mut RawJSContext, argc: u32, vp: *mut Value) ->
     // is reachable ONLY from the WPT harness's injected shim (it is never installed on a real page,
     // see above), the documents are test-sized, and a cache would need an invalidation rule for a
     // path with no hot loop.
-    let generated = STYLES_PTR.with(|c| {
+    //
+    // ⚠⚠⚠ **AND THE COMPUTED STYLE ITSELF, FOR THE SAME REASON, THROUGH THE SAME POINTER.** The
+    // name is a function of the style in two more places the DOM cannot answer — a non-inline child
+    // contributes a SPACE separator, and `text-transform` applies to the name because the name is
+    // what a user is read. Both are built from `STYLES_PTR`, which is already borrowed here.
+    let (generated, name_styles) = STYLES_PTR.with(|c| {
         let p = c.get();
         if p.is_null() {
-            manuk_a11y::GeneratedText::new()
+            (
+                manuk_a11y::GeneratedText::new(),
+                manuk_a11y::NameStyles::new(),
+            )
         } else {
-            manuk_layout::generated_text(dom_ref, &*p)
+            (
+                manuk_layout::generated_text(dom_ref, &*p),
+                manuk_a11y::name_styles(dom_ref, &*p),
+            )
         }
     });
     let name = match &role {
-        Some(r) => manuk_a11y::accessible_name_generated(dom_ref, node, r, &generated),
+        Some(r) => {
+            manuk_a11y::accessible_name_generated(dom_ref, node, r, &generated, &name_styles)
+        }
         None => String::new(),
     };
     let js = format!(

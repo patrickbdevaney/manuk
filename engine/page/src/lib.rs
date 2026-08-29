@@ -9018,6 +9018,10 @@ impl Page {
             &self.invisible_nodes(),
             &self.non_hittable_nodes(),
             &manuk_layout::generated_text(&self.dom, &self.styles),
+            // ⚠ BOTH ENTRANCES. The bare `accessible_name` behind
+            // `test_driver.get_computed_label()` gets this from `STYLES_PTR`; these are the tree
+            // builder's copies, and they are the doors I3 requires to be walked together.
+            &manuk_a11y::name_styles(&self.dom, &self.styles),
         )
     }
 
@@ -9052,6 +9056,10 @@ impl Page {
             &self.invisible_nodes(),
             &self.non_hittable_nodes(),
             &manuk_layout::generated_text(&self.dom, &self.styles),
+            // ⚠ BOTH ENTRANCES. The bare `accessible_name` behind
+            // `test_driver.get_computed_label()` gets this from `STYLES_PTR`; these are the tree
+            // builder's copies, and they are the doors I3 requires to be walked together.
+            &manuk_a11y::name_styles(&self.dom, &self.styles),
         )
     }
 
