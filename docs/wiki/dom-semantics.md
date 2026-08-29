@@ -4101,3 +4101,48 @@ landmark survives only when no `article`/`aside`/`main`/`nav`/`section` ancestor
   html-aam    253/335 75.5%    281/335 83.9%     +28
   accname     380/484 78.5%    380/484 78.5%       0   CONTROL
 ```
+
+## A ROLE IS NOT A PROPERTY OF THE TAG ALONE — ANCESTOR, NAME, AND A CONFLICTING PRESENTATION (t1352)
+
+Once t1350 completed the role *vocabulary*, every remaining `html-aam`/`wai-aria` role failure was
+one shape: the role depends on something other than the element's own name.
+
+**ON AN ANCESTOR.** An `<aside>` inside an `<article>` is that article's aside, not the page's, so
+it is a landmark only when NAMED. ⚠ `<main>` scopes a `<header>`/`<footer>` but does **not** scope
+an `<aside>` — HTML-AAM says so element by element, and one shared ancestor list would silently
+break the other. An orphaned `<li>` owns no list: announcing *"list item, 1 of 1"* about a stray
+`<li>` states a fact the page does not contain.
+
+**ON HAVING A NAME.** `region`, `form` and `<section>` are LANDMARKS, and a landmark's whole purpose
+is to be an entry in a jump list — an unnamed one is a row that says nothing, so ARIA makes the role
+**inoperative** and the next fallback token takes effect. That is exactly why authors write the pair
+`role="region group"`. ⚠ And the name must **RESOLVE**: `aria-labelledby="typo"` was passing the old
+presence-only check, making a `<section>` a `region` that announces nothing.
+
+**ON A CONFLICTING PRESENTATIONAL ROLE.** `role="none"` is a *request*, and ARIA makes it inoperative
+when the element is focusable or carries a global ARIA attribute — because **a node the user can TAB
+to but that announces nothing is worse than one with a wrong name**. Conversely the required OWNED
+elements of a presentational element inherit the presentation, which is the only reason
+`role="none"` on a layout `<table>`/`<ul>` is useful at all. ⚠ A global attribute on the CHILD does
+NOT rescue it: the exception applies to the element carrying `role=none`, not to what it owns.
+
+### THE `<img>` THREE-WAY CONDITION, AND THE LAST ROW IS THE BIG ONE
+
+```text
+  alt="A cat"                          -> image      named by its alt
+  alt="" (or whitespace-only)          -> NO NODE    the author said "decorative"
+  alt="" + aria-label / title          -> image      an ARIA name OVERRIDES the empty alt
+  no alt, has src/srcset               -> image      a broken image is still an image
+  no alt, no src, no srcset, no name   -> NO NODE    there is nothing here to announce
+```
+
+The last row was the **largest single block of `html-aam` failures**: an `<img>` with no source and
+no name is not "an image that failed to load", it is nothing, and treating it as an image puts a
+phantom in the tree on every page that ships an empty placeholder.
+
+```text
+  suite       BEFORE            AFTER             delta
+  html-aam    281/335  83.9%    310/335  92.5%    +29
+  wai-aria    387/434  89.2%    399/434  91.9%    +12
+  accname     380/484  78.5%    380/484  78.5%      0   CONTROL
+```

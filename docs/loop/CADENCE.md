@@ -11,12 +11,12 @@
 
 | | value | over |
 |---|---|---|
-| ticks landed | **1036** | ticks 1–1351 |
-| median tick cycle | **31m** | 1035 intervals |
+| ticks landed | **1037** | ticks 1–1352 |
+| median tick cycle | **31m** | 1036 intervals |
 | median, last 10 | **1.8h** | 10 intervals |
 | fastest / slowest | 5s / 7.0d | |
-| **ticks per hour** | **0.88** | 1173.6h elapsed |
-| median verify wall | **66s** | 975 ticks |
+| **ticks per hour** | **0.88** | 1174.5h elapsed |
+| median verify wall | **66s** | 976 ticks |
 | wall trend | 39s → 8m — getting slower ⚠️ | first 3 vs last 3 |
 
 The **cycle** is the real unit: implement → debug → verify wall → land. The wall is only part of
@@ -31,7 +31,7 @@ it, and a wall that grows taxes every future tick, so it is tracked separately f
 * **✅ rows in the capability ledger**: 144 → **642**
 * **Bar 0 — oracle hangs**: 0 of 265 sites
 
-**488 of 1036 ticks** (47%) moved a
+**489 of 1037 ticks** (47%) moved a
 user-visible capability. The rest were instruments, infrastructure and corrections — and the
 ledger says the corrections were not overhead: three of its top three priorities were phantoms,
 and finding that out redirected everything after it.
@@ -90,7 +90,7 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 
 ## What a capability costs
 
-* **488** capability ticks, median cycle **31m**
+* **489** capability ticks, median cycle **31m**
 * median diff per tick: **+282 / −34** lines across 8 files
 
 ## Every tick
@@ -1133,5 +1133,6 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 | **1349** | 2026-08-29 01:05 | 52m | capability | 8m | +753/−58 | 522 | 81 | 56.0% · | the `<label>` that wraps its control: the click path had the rule right, the NAME path had |
 | **1350** | 2026-08-29 02:09 | 65m | capability | 8m | +627/−43 | 522 | 81 | 56.0% · | an ARIA role token is ASCII case-insensitive, and the fold existed in the entrance the web |
 | **1351** | 2026-08-29 02:42 | 32m | instrument | 8m | +171/−34 | 522 | 81 | 56.0% · | CI was red for seven ticks behind a green sibling, and the gate was one apt package from b |
+| **1352** | 2026-08-29 03:35 | 54m | capability | 8m | +632/−68 | 522 | 81 | 56.0% · | a role is not a property of the tag alone: ancestor, name, and a conflicting presentation  |
 
 *`·` after a WPT figure means **carried forward**, not measured this tick.*

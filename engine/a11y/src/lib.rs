@@ -879,14 +879,182 @@ fn is_non_rendered_tag(tag: &str) -> bool {
 /// wrapper, the body) leaves the landmark scoped to the document, which is the whole point of a
 /// landmark.
 fn in_sectioning_content(dom: &Dom, node: NodeId) -> bool {
+    scoped_by(dom, node, &["article", "aside", "main", "nav", "section"])
+}
+
+/// Whether any ancestor of `node` is one of `tags`.
+///
+/// ⚠ **THE TWO CALLERS PASS DIFFERENT LISTS AND THAT IS NOT AN OVERSIGHT.** `<header>`/`<footer>`
+/// are scoped by `<main>` as well as by sectioning content; an `<aside>` inside `<main>` is still
+/// the page's complementary content and stays a landmark. HTML-AAM says so element by element, and
+/// a single shared list would have silently broken one of them.
+fn scoped_by(dom: &Dom, node: NodeId, tags: &[&str]) -> bool {
     let mut cur = dom.parent(node);
     while let Some(n) = cur {
         if let Some(el) = dom.element(n) {
-            if matches!(
-                el.name.as_str(),
-                "article" | "aside" | "main" | "nav" | "section"
-            ) {
+            if tags.contains(&el.name.as_str()) {
                 return true;
+            }
+        }
+        cur = dom.parent(n);
+    }
+    false
+}
+
+/// Whether the element can take keyboard focus — one of the two triggers that make an authored
+/// `role="none"` be IGNORED.
+fn is_focusable(dom: &Dom, node: NodeId) -> bool {
+    let Some(el) = dom.element(node) else {
+        return false;
+    };
+    if el.attr("tabindex").is_some() {
+        return true;
+    }
+    match el.name.as_str() {
+        "a" | "area" => el.attr("href").is_some(),
+        "button" | "select" | "textarea" | "summary" | "iframe" => true,
+        "input" => !el
+            .attr("type")
+            .is_some_and(|t| t.eq_ignore_ascii_case("hidden")),
+        _ => el.attr("contenteditable").is_some(),
+    }
+}
+
+/// The ARIA **global** states and properties — the ones valid on every role, and therefore the ones
+/// whose presence proves the author meant the element to be in the tree. `aria-hidden` is
+/// deliberately absent: it REMOVES the node, so it cannot also be evidence for keeping it.
+const GLOBAL_ARIA: [&str; 21] = [
+    "aria-atomic",
+    "aria-busy",
+    "aria-controls",
+    "aria-current",
+    "aria-describedby",
+    "aria-description",
+    "aria-details",
+    "aria-disabled",
+    "aria-dropeffect",
+    "aria-errormessage",
+    "aria-flowto",
+    "aria-grabbed",
+    "aria-haspopup",
+    "aria-invalid",
+    "aria-keyshortcuts",
+    "aria-label",
+    "aria-labelledby",
+    "aria-live",
+    "aria-owns",
+    "aria-relevant",
+    "aria-roledescription",
+];
+
+fn has_global_aria_attribute(dom: &Dom, node: NodeId) -> bool {
+    let Some(el) = dom.element(node) else {
+        return false;
+    };
+    GLOBAL_ARIA
+        .iter()
+        .any(|a| el.attr(a).is_some_and(|v| !v.trim().is_empty()))
+}
+
+/// ⚠⚠⚠ **ARIA PRESENTATIONAL-ROLE CONFLICT RESOLUTION.** `role="none"` is the author saying *"this
+/// element is scaffolding, do not announce it"* — and the spec makes that request **inoperative**
+/// when the element is focusable or carries a global ARIA attribute. The reason is not pedantry: a
+/// user can still TAB to a focusable element, and a node the user reaches but that announces
+/// nothing is worse than one with a wrong name. The commonest real instance is a layout `<table
+/// role="none">` that somebody made focusable.
+fn presentational_role_is_ignored(dom: &Dom, node: NodeId) -> bool {
+    is_focusable(dom, node) || has_global_aria_attribute(dom, node)
+}
+
+/// Whether this element's own `role=` resolves to `none`/`presentation` **and is honoured**.
+fn explicit_presentational(dom: &Dom, node: NodeId) -> bool {
+    let Some(el) = dom.element(node) else {
+        return false;
+    };
+    let Some(role) = el.attr("role") else {
+        return false;
+    };
+    for tok in role.split_ascii_whitespace() {
+        let t = tok.trim().to_ascii_lowercase();
+        if t == "none" || t == "presentation" {
+            return !presentational_role_is_ignored(dom, node);
+        }
+        if Role::from_aria_token(&t).is_some() {
+            return false; // an earlier VALID token wins
+        }
+    }
+    false
+}
+
+/// Whether the element is named by an ATTRIBUTE rather than by its content — **and the reference
+/// actually resolves.**
+///
+/// ⚠ `aria-labelledby="typo"` is not a name. The old check asked only whether the attribute was
+/// present and non-blank, so a dangling reference made a `<section>` a `region` landmark with no
+/// name at all — an entry in the screen reader's landmark list that announces nothing.
+fn has_attribute_name(dom: &Dom, node: NodeId) -> bool {
+    let Some(el) = dom.element(node) else {
+        return false;
+    };
+    if el
+        .attr("aria-label")
+        .is_some_and(|v| !normalize(v).is_empty())
+    {
+        return true;
+    }
+    if let Some(refs) = el.attr("aria-labelledby") {
+        let text = refs
+            .split_ascii_whitespace()
+            .filter_map(|id| dom.get_element_by_id(dom.root(), id))
+            .map(|n| normalize(&dom.text_content(n)))
+            .filter(|t| !t.is_empty())
+            .collect::<Vec<_>>()
+            .join(" ");
+        if !text.is_empty() {
+            return true;
+        }
+    }
+    el.attr("title").is_some_and(|v| !normalize(v).is_empty())
+}
+
+/// ⭐ **AN `<img>`'S ROLE IS A THREE-WAY CONDITION, NOT A TAG LOOKUP.**
+///
+/// ```text
+///   alt="A cat"                          -> image      (named by its alt)
+///   alt="" (or whitespace)               -> NO NODE    the author said "decorative"
+///   alt="" + aria-label / title          -> image      an ARIA name OVERRIDES the empty alt
+///   no alt, has src/srcset               -> image      a broken image is still an image
+///   no alt, no src, no srcset, no name   -> NO NODE    there is nothing here to announce
+/// ```
+///
+/// The last row is the one that is easy to get wrong and it is the largest single block of
+/// `html-aam` failures: an `<img>` with no source and no name is not "an image that failed to
+/// load", it is nothing at all, and announcing it puts a phantom in the tree on every page that
+/// ships an empty placeholder.
+fn img_role(dom: &Dom, node: NodeId) -> Option<Role> {
+    let el = dom.element(node)?;
+    let alt = el.attr("alt");
+    if alt.is_some_and(|a| !normalize(a).is_empty()) {
+        return Some(Role::Image);
+    }
+    if has_attribute_name(dom, node) {
+        return Some(Role::Image);
+    }
+    if alt.is_some() {
+        return None; // an explicit (possibly whitespace-only) empty alt IS "decorative"
+    }
+    let sourced = el.attr("src").is_some_and(|v| !v.trim().is_empty())
+        || el.attr("srcset").is_some_and(|v| !v.trim().is_empty());
+    sourced.then_some(Role::Image)
+}
+
+/// Whether the nearest enclosing `<table>` is presentational, which makes this row/cell one too.
+fn scoped_by_presentational_table(dom: &Dom, node: NodeId) -> bool {
+    let mut cur = dom.parent(node);
+    while let Some(n) = cur {
+        if let Some(el) = dom.element(n) {
+            if el.name == "table" {
+                return explicit_presentational(dom, n);
             }
         }
         cur = dom.parent(n);
@@ -931,14 +1099,32 @@ pub fn role_of(dom: &Dom, node: NodeId) -> Option<Role> {
     if let Some(explicit) = el.attr("role") {
         // ARIA: the first *valid* token wins; invalid tokens fall through to implicit.
         // ⚠⚠⚠ **`Role::parse`, NOT `Role::from_aria_token` — THE CASE FOLD ALREADY EXISTED AND
-        // THIS ENTRANCE DID NOT USE IT.** `parse` is `from_aria_token(&tok.trim().to_ascii_lowercase())`
-        // and is what the AGENT calls; the `role="…"` attribute — the entrance the actual WEB uses —
-        // called the raw matcher, so `role="BUTTON"`, `role="Button"` and `role=" buTtOn"` matched
-        // nothing and the element silently fell through to its implicit role. ARIA role tokens are
-        // ASCII case-insensitive (ARIA in HTML §role attribute), and the fallback-token form
-        // `role="foo Link"` — an unknown token then a real one — is the documented way authors ship
-        // forward-compatible roles. 114 of 172 failing `wai-aria` subtests were nothing but this.
-        if let Some(r) = explicit.split_ascii_whitespace().find_map(Role::parse) {
+        // THIS ENTRANCE DID NOT USE IT** (t1350). `parse` is
+        // `from_aria_token(&tok.trim().to_ascii_lowercase())` and is what the AGENT calls; the
+        // `role="…"` attribute — the entrance the actual WEB uses — called the raw matcher, so
+        // `role="BUTTON"` matched nothing. The fallback-token form `role="foo Link"` — an unknown
+        // token then a real one — is the documented way authors ship forward-compatible roles, and
+        // it is why this is a LOOP over the tokens rather than a single lookup.
+        for tok in explicit.split_ascii_whitespace() {
+            let t = tok.trim().to_ascii_lowercase();
+            if t == "none" || t == "presentation" {
+                // Conflict resolution: an inoperative `role="none"` exposes the IMPLICIT role.
+                if presentational_role_is_ignored(dom, node) {
+                    break;
+                }
+                return Some(Role::Generic);
+            }
+            let Some(r) = Role::from_aria_token(&t) else {
+                continue; // an unknown token is skipped, not fatal — that is the fallback form
+            };
+            // ⚠⚠⚠ **`region` AND `form` ARE LANDMARKS ONLY WHEN NAMED, AND AN UNNAMED ONE FALLS
+            // THROUGH TO THE NEXT TOKEN.** A landmark's entire purpose is to be an entry in a jump
+            // list; an unnamed one is a row that says nothing, so ARIA makes the role inoperative
+            // rather than let it dilute the list. `role="region group"` on an unnamed element is a
+            // `group` — which is exactly why authors write the pair.
+            if matches!(r, Role::Region | Role::Form) && !has_attribute_name(dom, node) {
+                continue;
+            }
             return Some(r);
         }
     }
@@ -983,13 +1169,7 @@ pub fn role_of(dom: &Dom, node: NodeId) -> Option<Role> {
         "h4" => Role::Heading { level: 4 },
         "h5" => Role::Heading { level: 5 },
         "h6" => Role::Heading { level: 6 },
-        "img" => {
-            // HTML-AAM: `alt=""` is an explicit "decorative" signal → no node at all.
-            match el.attr("alt") {
-                Some("") => return None,
-                _ => Role::Image,
-            }
-        }
+        "img" => return img_role(dom, node),
         // N4 — a `<slot>` is a rendering hole, not a semantic node: its assigned nodes
         // take its place in the flat tree, so it exposes no a11y node of its own.
         "slot" => return None,
@@ -1020,8 +1200,28 @@ pub fn role_of(dom: &Dom, node: NodeId) -> Option<Role> {
         "dir" => Role::List,
         "thead" | "tbody" | "tfoot" => Role::RowGroup,
         "ul" | "ol" => Role::List,
-        "li" => Role::ListItem,
+        // ⚠ **AN ORPHANED `<li>` IS NOT A `listitem`.** `listitem` is defined by its owning list;
+        // an `<li>` with no list parent is a stray element, and announcing "list item, 1 of 1"
+        // about it is a fact the page does not contain. And a list whose own role is
+        // `presentation` makes its REQUIRED OWNED elements presentational too — that inheritance
+        // is the whole reason `role="none"` on a layout `<ul>` works at all.
+        "li" => match dom
+            .parent(node)
+            .and_then(|p| dom.element(p).map(|e| (p, e)))
+        {
+            Some((p, e)) if matches!(e.name.as_str(), "ul" | "ol" | "menu") => {
+                if explicit_presentational(dom, p) {
+                    return None;
+                }
+                Role::ListItem
+            }
+            _ => Role::Generic,
+        },
         "table" => Role::Table,
+        // Same required-owned inheritance as `<li>`: a layout `<table role="none">` must not leave
+        // its rows and cells behind as a skeleton of `row`/`cell` nodes.
+        "tr" | "td" if scoped_by_presentational_table(dom, node) => return None,
+        "th" if scoped_by_presentational_table(dom, node) => return None,
         "tr" => Role::Row,
         "td" => Role::Cell,
         "th" => {
@@ -1064,32 +1264,33 @@ pub fn role_of(dom: &Dom, node: NodeId) -> Option<Role> {
         }
         "form" => Role::Form,
         "article" => Role::Article,
-        // HTML-AAM: `<section>` is only a `region` when it has an accessible name.
+        // HTML-AAM: `<section>` is only a `region` when it has an accessible name — and
+        // `has_attribute_name` now RESOLVES `aria-labelledby` rather than trusting its presence.
         "section" => {
-            if has_explicit_name(dom, node) {
+            if has_attribute_name(dom, node) {
                 Role::Region
             } else {
                 Role::Generic
             }
         }
-        "aside" => Role::Complementary,
+        // ⚠ An `<aside>` nested in sectioning content is that SECTION's aside, not the page's, so
+        // it is a landmark only when it carries a name to distinguish it. ⚠⚠ `<main>` is NOT in
+        // this list though it IS in `<header>`/`<footer>`'s — an aside directly inside `<main>` is
+        // still the page's complementary content. HTML-AAM says so element by element.
+        "aside" => {
+            if scoped_by(dom, node, &["article", "aside", "nav", "section"])
+                && !has_attribute_name(dom, node)
+            {
+                Role::Generic
+            } else {
+                Role::Complementary
+            }
+        }
         "p" => Role::Paragraph,
         "hr" => Role::Separator,
         "html" => Role::Document,
         _ => Role::Generic,
     })
-}
-
-/// Whether an element carries a naming attribute (used by the `<section>` rule).
-fn has_explicit_name(dom: &Dom, node: NodeId) -> bool {
-    let Some(el) = dom.element(node) else {
-        return false;
-    };
-    el.attr("aria-label").is_some_and(|v| !v.trim().is_empty())
-        || el
-            .attr("aria-labelledby")
-            .is_some_and(|v| !v.trim().is_empty())
-        || el.attr("title").is_some_and(|v| !v.trim().is_empty())
 }
 
 /// Build an `id` → node index once, so `aria-labelledby` / `<label for>` are O(1).

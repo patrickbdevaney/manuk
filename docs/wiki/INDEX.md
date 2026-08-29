@@ -1308,6 +1308,8 @@
   - L4070 · ~30 TOKENS WERE ABSENT, AND ABSENT MEANS generic
   - L4082 · A COLLAPSE READS AS A PLAUSIBLE NEIGHBOUR, WHICH IS WHY IT SURVIVES REVIEW
   - L4090 · ⭐ AND ONE OF THEM IS A REAL-PAGE BUG: A <footer> INSIDE AN <article> IS NOT THE PAGE'S FOOTER
+  - L4105 · A ROLE IS NOT A PROPERTY OF THE TAG ALONE — ANCESTOR, NAME, AND A CONFLICTING PRESENTATION (t1352)
+  - L4129 · THE <img> THREE-WAY CONDITION, AND THE LAST ROW IS THE BIG ONE
 
 ## THE FIDELITY INSTRUMENT — what it can and cannot see
 `docs/wiki/fidelity-instrument.md`
@@ -2458,4 +2460,4 @@
   - L231 · Both named mechanisms are subsystem work
 
 ---
-2365 sections across 22 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+2367 sections across 22 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.

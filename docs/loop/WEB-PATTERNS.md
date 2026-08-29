@@ -9237,3 +9237,16 @@ footer stopped being findable. ARIA 1.3 scopes them to `sectionheader`/`sectionf
 cannot fail; it panics rather than pass vacuously, which is correct. On a bare runner that panic
 ended the whole `cargo test` step, so CI measured 2 of 7 crates for seven ticks while a green
 `release` sibling made the red invisible. Provision the data; do not soften the gate. (t1351)
+
+## `<img>` with no `alt`, no `src` and no name is NOT an image
+
+Empty placeholders (`<img>` waiting on a lazy-loader, an `<img>` whose `src` a script sets later)
+are everywhere. `alt=""` means decorative; an ARIA name overrides that; but no alt AND no source AND
+no name is nothing at all, and exposing it puts a phantom node in the tree on every such page.
+Largest single block of `html-aam` role failures. (t1352 — `agent/tests/g_a11y_conditional_role.rs`)
+
+## `role="none"` is a REQUEST, and it is inoperative on anything focusable
+
+Layout `<table role="none">` / `<ul role="none">` is a normal idiom, and its required owned elements
+inherit the presentation. But a focusable element, or one carrying a global ARIA attribute, keeps its
+role — a node the user can TAB to that announces nothing is worse than a wrongly-named one. (t1352)

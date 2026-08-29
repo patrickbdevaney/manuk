@@ -94233,3 +94233,106 @@ CONFLICT RESOLUTION; `html-aam`'s 54 are CONTEXT-dependent roles; accname's larg
 `comp_name_from_content.html` at 31/79.
 
 WIKI: docs/wiki/conformance-and-oracles.md
+
+## Tick 1352 — a role is not a property of the tag alone: ancestor, name, and a conflicting presentation (2026-08-29)
+
+TICK SHAPE: capability — the accessibility tree (TRACK B), third engine tick. Board re-run at the top
+of this tick: unchanged. CI read first, per t1351: tick 1350's run was still RED (the font fix had not
+landed yet), tick 1351's was queued — read again next tick.
+
+### THE SURVEY AGAIN, AND THIS TIME IT SAID "ONE THEME, NOT ONE LINE"
+
+After t1350 completed the role VOCABULARY, `wai-aria` had 47 failures left and `html-aam` 54.
+Classifying them the same way — by what the subject element is and what it is inside — every one of
+them was the same shape:
+
+```text
+  23   the <img> three-way condition            html-aam
+  13   HTML-AAM "minimum role" (autofocus/draggable on a generic)   ← REFUSED, see below
+   9   <aside> scoped by sectioning content, and NAMED
+   7   role=none / presentation conflict resolution + inheritance
+   6   name-conditional region / form / <section>
+   2   an orphaned <li>
+   ~5  one-offs (select[size], input[type=checkbox switch], th-in-row)
+```
+
+⭐ **The vocabulary was a LOOKUP; the residue is a set of CONDITIONS.** `role_of` took a tag and
+returned a role. That is the wrong shape for the last third of HTML-AAM, and the `<section>` arm —
+the one place the old code already asked *"does it have a name?"* — was the first instance of the
+pattern, written ad hoc. This tick generalises it.
+
+⚠ **REFUSED, WITH THE REASON:** the 13 `roles-minimum.tentative.html` rows (a `<div autofocus>` maps
+to `group`). The file is `.tentative`, it cites an unmerged PR (html-aam#454), and its own prose says
+the mapping is *"potentially ignored by browsers"*. That is a SPEC-FRONTIER row, not a core one —
+t1350's own lesson about failing-count order. Implementing it would pin the engine to a proposal.
+
+### THE THREE CONDITIONS
+
+**ON AN ANCESTOR.** ⚠⚠ `<main>` scopes a `<header>`/`<footer>` but does **NOT** scope an `<aside>` —
+an aside directly inside `<main>` is still the page's complementary content. HTML-AAM says so element
+by element, and one shared ancestor list would have silently broken the other, so `scoped_by` takes
+the list as an argument and both call sites name theirs.
+
+**ON HAVING A NAME.** A landmark's whole purpose is to be an entry in a jump list, so ARIA makes an
+unnamed `region`/`form` **inoperative** and lets the next fallback token take effect — which is
+exactly why authors write the pair `role="region group"`. ⚠ And the name must RESOLVE:
+`aria-labelledby="typo"` passed the old presence-only check, making a `<section>` a `region` that
+announces nothing.
+
+**ON A CONFLICTING PRESENTATIONAL ROLE.** `role="none"` is a *request*, inoperative when the element
+is focusable or carries a global ARIA attribute — **a node the user can TAB to but that announces
+nothing is worse than one with a wrong name**. Conversely the required OWNED elements of a
+presentational element inherit it, which is the only reason `role="none"` on a layout `<table>`/`<ul>`
+is useful at all. ⚠ A global attribute on the CHILD does not rescue it, and the WPT row that says so
+(`table[role=none] td[aria-describedby]`) is the one that would have been guessed wrong.
+
+### THE `<img>` THREE-WAY CONDITION, AND THE LAST ROW IS THE BIG ONE
+
+```text
+  alt="A cat"                          -> image      named by its alt
+  alt="" (or whitespace-only)          -> NO NODE    the author said "decorative"
+  alt="" + aria-label / title          -> image      an ARIA name OVERRIDES the empty alt
+  no alt, has src/srcset               -> image      a broken image is still an image
+  no alt, no src, no srcset, no name   -> NO NODE    there is nothing here to announce
+```
+
+The last row is the largest single block of `html-aam` failures. An `<img>` with no source and no
+name is **not** "an image that failed to load" — it is nothing, and treating it as an image puts a
+phantom node in the tree on **every page that ships an empty placeholder**, which is every page with
+a lazy-loader or a script-set `src`.
+
+### THE RECEIPT
+
+```text
+  suite       BEFORE            AFTER             delta
+  html-aam    281/335  83.9%    310/335  92.5%    +29
+  wai-aria    387/434  89.2%    399/434  91.9%    +12
+  accname     380/484  78.5%    380/484  78.5%      0   CONTROL
+  ──────────────────────────────────────────────────────
+  a11y TOTAL 1048/1253 83.6%   1089/1253 86.9%    +41   HANG/CRASH 0
+```
+
+⭐ **`wai-aria` (91.9%) AND `html-aam` (92.5%) ARE NOW BOTH PAST THE BOARD'S TRACK-B BAR** of *">=90%
+node match"*. `accname` at 78.5% is the remaining laggard and it is a NAME problem, not a role one.
+Across this session's four Track-B ticks the subsystem went **819/1253 = 65.4% → 1089/1253 = 86.9%,
++270 subtests**, from frozen-since-t1254.
+
+GATE `a_role_is_conditional_on_ancestor_name_and_conflicting_presentation`
+(`agent/tests/g_a11y_conditional_role.rs`) — 7 groups, 24 assertions: the six `<img>` rows; `<aside>`
+at top level / in `<main>` / in an `<article>` / named in an `<article>`; a dangling vs resolving
+`aria-labelledby` and a `title`; the unnamed-`region` fallback with its named CONTROL and the `form`
+sibling; `role=none` honoured / defeated by `tabindex` / defeated by a global attribute; required-
+owned inheritance for a table and a list with the child-global-attribute case and an ordinary-table
+CONTROL; and the orphaned `<li>` with its in-a-list CONTROL. RED under THREE mutations: N1 revert
+`img_role` → a sourceless `<img>` reads `image`; N2 drop the name condition → an unnamed
+`role="region group"` reads `region`; N3 make `presentational_role_is_ignored` always false → a
+focusable `role=none` heading reads `generic`.
+
+PERF: none — attribute reads and short ancestor walks, on `<img>`/`<aside>`/`<li>`/table parts only.
+
+NEXT: `accname` is now the only a11y row under 90%, and its largest single file is
+`comp_name_from_content.html` at **31/79** — descendant `aria-label`/`aria-labelledby` inside
+name-from-content, block-level spacing between children, and `text-transform`. After that,
+`accname/name/shadowdom` is still 0/6.
+
+WIKI: docs/wiki/dom-semantics.md
