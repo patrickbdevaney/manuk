@@ -95136,3 +95136,176 @@ rows honestly: `content-visibility` 8/39 (the board defers it), `@container` 5/3
 naming the next three properties that are switched off rather than missing.
 
 WIKI: docs/wiki/multi-column-layout.md
+
+## Tick 1359 — the drive loop stopped at the first screenful, and said it had not (2026-08-29)
+
+TICK SHAPE: capability-subsystem
+
+**Track C, and the board chose it.** The lever board's newest dated block is the 2026-08-28
+track-balance nudge (*"alternate A/B/C; do not let any track go >5 ticks dark … wire the Track C
+drive demo"*), and the t1355 constitution check's STEER #3 says the same thing from the other side
+(*"Track B's bar is met; the next non-a11y tick should be Track C"*). Two ticks of Track A had just
+landed. So: Track C.
+
+### THE SURVEY, AND WHAT IT REFUSED FIRST
+
+The tick opened on the t1358 remainder — sweep Stylo's `longhands.toml` for every `servo_pref` this
+engine has never flipped, since that pattern has now named three properties. Six prefs exist; the
+engine flips five. The residue was priced on the cached corpus CSS (39 sites) before anything was
+built:
+
+    zoom                11/39   ← but EVERY occurrence is `zoom:1`, the IE hasLayout no-op. REFUSED.
+    counter-increment    9/39   ← already implemented (t1095/t1096). CLOSED.
+    contain              7/39   ← mostly `layout paint`; one site uses size containment. Not a lever.
+    container-type       5/39   ← `@container` is implemented (`ContainerCondition::matches`). CLOSED.
+    font-variation-settings 5/39 ← `layout.variable_fonts.enabled` flipped NOWHERE. Real, small.
+    backdrop-filter     11/39   ← parses, is not rendered, and `G_SUPPORTS_HONESTY` already says so.
+
+⚠ **One structural finding kept from that sweep, unpriced and unfixed here:** the pref set is
+COPIED IN FOUR PLACES in `stylo_engine.rs` (the cascade, `supports_condition`, the CSSOM
+`normalize_declaration`, one serializer) and **they have already drifted** — only the cascade got
+`layout.columns.enabled` at t1358, and none of the four has `layout.variable_fonts.enabled`. The
+prefs are process-global so the cascade's flip masks the drift in practice, which is exactly why it
+survived. Written down rather than fixed, because a dedupe is a refactor and needs a capability
+payload to be a tick.
+
+Nothing there was worth a tick, so the survey moved to Track C's named remainder.
+
+### ⭐⭐⭐ THE FINDING — A FIX THAT ADDS A CHECK TO A `match` IS ONLY DONE WHEN EVERY ARM HAS BEEN ASKED WHAT IT NOW MEANS
+
+t1356 made a click point a checked claim: `A11yNode::landing` hit-tests the point back to the target
+before an agent is handed it, so a button under a consent banner grounds as `Obstructed`. `landing`
+has three outcomes. **The fix wired two of them.**
+
+```rust
+Landing::Clear      { point }     => (point, None),
+Landing::Obstructed { by, point } => (point, Some(by)),
+Landing::Unreachable              => (bbox.center(), None),   // ← the pre-fix code, preserved
+```
+
+`Unreachable` is what a target gets when no part of its box is inside the viewport — which is to say
+**everything below the fold, on every page on the web**. The tell, in hindsight, is a fallback
+expression *identical to the pre-fix code* sitting inside the match that removed it everywhere else.
+
+### WHY IT IS INVISIBLE RATHER THAN MERELY APPROXIMATE — THE SCROLL MOVES THE OBSTRUCTIONS
+
+A11y boxes and `dispatch_click_at` both work in DOCUMENT coordinates, so the naive reading is that
+an off-screen document coordinate is harmless. It is not. `Page::restick` re-bakes `position:sticky`
+into the box tree for the current scroll, so a sticky header's **document rect moves with the view**.
+
+> ⭐⭐⭐ **THE OBSTRUCTION MAP AT SCROLL 0 IS NOT THE OBSTRUCTION MAP AT THE SCROLL WHERE THE CLICK
+> HAPPENS**, and a below-the-fold target is BY DEFINITION clicked after a scroll.
+
+The probe, written before the patch, verbatim — a checkbox at y=1000 under a `position:sticky;top:0`
+header, viewport 0..700:
+
+```text
+  landing(target, viewport 0..700)  = Unreachable
+  ground_action                     = Ready { point: (140,1030), confidence: 1.0 }
+  ... the agent scrolls to y=1000, the only way a pointer reaches the target
+  the header's document rect re-sticks to y=1000..1070 — ON TOP OF THE TARGET
+  hit_test(140, 1030)               = the header
+  dispatch_click_at(140, 1030)      = proceed: true
+  state.checked                     = False
+```
+
+Right node, maximum confidence, wrong coordinate, `proceed = true`, and every observable channel
+reporting success. The t1356 signature, one branch over — and *scroll to the control, then click it*
+is not a corner case, it is how the web is driven.
+
+### THE FIX — A VARIANT THAT CARRIES NO POINT
+
+`Landing::OffScreen { dy }` splits out of `Unreachable`, and `Grounded::OffScreen { node, name, dy,
+confidence }` **publishes no coordinate at all.** That is the load-bearing choice: a caller cannot
+act on a point that does not exist, so it must scroll and re-ground — which re-runs the verification
+in the viewport the click will actually happen in. Re-grounding is not politeness, it is the
+correctness argument.
+
+Three decisions worth naming:
+
+1. **`dy` is a proposal, not a promise** — it aligns the target's top with the viewport top, the
+   alignment `Element.scrollIntoView()` defaults to. A caller that cannot scroll that far still gets
+   a truthful answer, because it re-grounds against where it landed, not against this number.
+2. ⚠ **A vertical scroll only helps a target already in the viewport's HORIZONTAL band.** A box
+   parked off to the side comes no closer for any `dy`, and reporting one sends an agent scrolling
+   the whole document and asking again forever. Pinned NEGATIVE.
+3. **"Where is it" is asked before "what is on top of it"** — an off-screen target has no
+   obstruction answer yet, because that map belongs to a scroll the caller has not reached.
+
+Narrowing `Unreachable` also converts a standing comment into a checked claim: `to_viewport_lines`
+filters to on-screen boxes and its `Unreachable` arm said *"filtered above, so this is the
+`pointer-events: none` target"*. That sentence is now enforced by the type.
+
+### THE GATE
+
+`an_agent_reaches_a_target_below_the_fold` (`agent/tests/`) — one page, five arms, driven end to end
+through `manuk_page::Page`: **perceive → scroll → perceive again → act → observe**, the observable
+being `state.checked` read back out of the SAME a11y tree the agent aimed with. No script on the
+page, so it holds without SpiderMonkey and a green result cannot be the test poking the DOM.
+
+- CONTROL — an on-screen target is unchanged: box centre, one round, toggles.
+- THE LOOP CLOSES — below the fold, 140px sticky header re-sticking over its centre. `OffScreen{dy}`
+  → scroll → re-ground → ladder rescues a point below the header → **it toggles**. A vacuity assert
+  pins that the header really moved, or a scroll-blind implementation would pass this arm.
+- ⭐ THE OLD WAY, ON AN IDENTICAL TARGET — aim at the bare box centre, scroll, click: it does NOT
+  toggle. The failure is demonstrated in the same run as the fix, so no later edit can satisfy the
+  other arms by renaming something.
+- HONEST REFUSAL AFTER THE SCROLL — off screen *and* covered: `OffScreen` first, `Obstructed`
+  second, naming the wall.
+- PINNED NEGATIVE — the horizontally-parked target is `Unreachable`, never `OffScreen`.
+
+**PROVEN RED by five mutations**, each with a different message. N1 the defect itself (`OffScreen`
+falling back to the box centre, unflagged) → arm 2 grounds `Ready` at scroll 0. N2 `landing` never
+reports `OffScreen` → same. N3 `dy = 0` → the proposed scroll does not bring the box into view. N4
+drop the horizontal-band guard → the aside target gets `OffScreen { dy: 300 }`. N5 ask obstruction
+before position → arm 2 fails.
+
+⚠ **A UNIT TEST WAS PINNING THE BUG'S OWN PREMISE.** `a_click_point_is_inside_the_part_of_the_target_that_is_on_screen`
+asserted `Unreachable` for *"scrolled past it entirely"*, with the comment *"there is nothing to aim
+at, and a coordinate would be a guess"* — the conflation, written down and gated. Corrected to
+`OffScreen { dy: -1200.0 }` (negative: an agent that scrolled too far is told to come back up) and
+given a genuine `Unreachable` row of its own. This is the t1344-1346 shape: a red gate that is the
+engine getting more correct.
+
+⚠ Reverting mutation N5 with `git checkout -- agent/src/grounding.rs` deleted the tick's own
+uncommitted edit to that file. The standing rule is `cp`, never `git checkout`, for a RED proof
+(t1267); it cost a re-apply and nothing else, but the rule earned its third citation.
+
+### THE RECEIPT
+
+```text
+  manuk-agent   (lib + gates)       126/126 → 127/127   +1   +the new gate
+  manuk-a11y    (lib)                 19/19 →   21/21   +2   +1 corrected row, +1 new negative
+  manuk-layout                      191/191            CONTROL
+  manuk-dom / manuk-paint             11/11, 22/22     CONTROL
+  cargo check --workspace --all-targets     clean       CONTROL
+```
+
+PERF: one extra rect comparison on the off-screen path, which previously did the same intersection
+test and threw the answer away. The on-screen path is byte-identical.
+
+### ⚠⚠⚠ A RED GATE FOUND ON THE WAY PAST, AND IT IS NOT IN THE WALL
+
+Running `manuk-page` as a control arm turned up `g_table_cell_valign` **FAILING**:
+
+    G_TABLE_CELL_VALIGN: with no `vertical-align`, the content stays at the top of the cell
+                         — y=2 (half-leading), not 20.
+
+It is not this tick and it is not the last one: bisected by restoring `engine/layout` +
+`engine/css` to 8c726725 (t1357) and re-running, it is **red there too**. The gate landed
+2026-08-06 (`fec6a4e3`, *"a table cell is STRETCHED to its row, and stretching a box does not move
+what is in it"*) and has been drifting ever since, because **`g_table_cell_valign` is not in
+`scripts/verify.sh`'s `_launch` list** — 27 gates are launched there and this is not one of them.
+Twenty-three days of green walls, over a red gate.
+
+That is the [[gates-not-in-the-wall]] shape with a measured instance attached, and the failure is a
+real one: a table cell's content is being vertically centred when nothing asked it to, which moves
+every row of every table on the page. Named here, not fixed here — swapping scope mid-tick would
+abandon a complete one — and it is the honest Track A candidate for the next tick.
+
+NEXT: `Grounded::OffScreen` has no production consumer yet — the shell/BiDi actuation loop still
+resolves targets without a scroll-and-retry step, so the capability is in the library and gated but
+not yet in the driving surface. That wiring, on a real site, is the honest next Track C tick. The
+four-copy pref drift above is a named Track A remainder.
+
+WIKI: docs/wiki/agent-drive-below-the-fold.md

@@ -50,6 +50,23 @@ pub enum Grounded {
         point: (f32, f32),
         confidence: f32,
     },
+    /// ⭐⭐⭐ **Resolved, and it is OFF THE SCREEN — scroll by `dy` and ground again.** Carries no
+    /// point, deliberately: a coordinate outside the viewport is one no pointer can occupy, and an
+    /// agent handed one clicks into the void and is told it succeeded.
+    ///
+    /// **Re-grounding after the scroll is not politeness, it is the correctness argument.** The
+    /// obstruction map is a function of the scroll position — a `position:sticky` header's
+    /// document rect moves with the view — so a point verified against the viewport the target was
+    /// *found* in says nothing about the viewport the click *happens* in. Scrolling to a
+    /// below-the-fold control is the ordinary way the web is driven, and it is exactly the motion
+    /// that slides a sticky header over the thing you scrolled to.
+    OffScreen {
+        node: NodeId,
+        name: String,
+        /// Signed scroll delta (positive = down) that brings the target into view.
+        dy: f32,
+        confidence: f32,
+    },
     /// A best target exists but its lead over the runner-up is below the threshold — the caller
     /// should disambiguate (ask, or narrow the intent) rather than act blindly.
     Ambiguous {
@@ -87,6 +104,17 @@ pub fn ground_action(
     match resolve_target(tree, &intent, viewport) {
         // Ambiguity is checked FIRST: "which element did you mean" outranks "can it be reached",
         // because the obstruction answer is about a node that may not be the intended one.
+        // "Where is it" is asked before "what is on top of it": a target the viewport does not
+        // contain has no obstruction answer yet, because the obstruction map belongs to a scroll
+        // position the caller has not reached.
+        Some(t) if t.confidence >= min_confidence && t.offscreen_dy.is_some() => {
+            Grounded::OffScreen {
+                node: t.node,
+                name: t.name,
+                dy: t.offscreen_dy.unwrap_or_default(),
+                confidence: t.confidence,
+            }
+        }
         Some(t) if t.confidence >= min_confidence => match t.obstructed_by {
             Some(by) => Grounded::Obstructed {
                 node: t.node,

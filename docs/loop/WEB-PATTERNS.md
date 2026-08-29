@@ -9321,3 +9321,26 @@ property name, two readings, disagreeing on the initial value. Resolving the key
 cascade loses the disagreement, so the keyword itself has to survive it.
 (t1358 — `engine/layout` `multicol_balances_columns_the_way_chrome_does`,
 `engine/css` `multicol_longhands_survive_the_stylo_cascade`)
+
+## `<header style="position:sticky;top:0">` + a control below the fold — the agent scrolls to it and clicks the header
+
+Every drivable page puts most of its controls below the fold, so an agent reaches them by scrolling.
+A sticky header's **document** rect moves with the scroll, so the header is at `y=0` while the agent
+is deciding where to click and at `y=<scroll>` — on top of the target it just scrolled to — when the
+click lands. Verifying a click point in the viewport where the target was *found* therefore says
+nothing about the viewport where the click *happens*.
+
+⚠ The off-screen case had been folded into `Landing::Unreachable` together with
+`pointer-events: none`, and the fallback published the bare box centre with no flag: everything
+below the fold grounded as `Ready { point: <off-screen coordinate>, confidence: 1.0 }`,
+`dispatch_click_at` returned `proceed = true`, and the handler never ran. Measured on a checkbox at
+y=1000 under a 70px sticky header, viewport 0..700.
+
+⭐ The shape to look for: **a fix that adds a check to a `match` is finished only when every arm has
+been asked what it now means.** The tell is a fallback expression *identical to the pre-fix code*
+sitting inside the match that removed it everywhere else.
+
+⚠ A vertical scroll only reaches a target already inside the viewport's horizontal band; a box
+parked off to the side comes no closer for any `dy`, and reporting one sends an agent scrolling
+forever.
+(t1359 — `agent/tests` `an_agent_reaches_a_target_below_the_fold`)

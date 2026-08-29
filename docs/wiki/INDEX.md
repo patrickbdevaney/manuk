@@ -4,6 +4,16 @@
 > `docs/wiki/` is listed here. To retrieve a section by content, use
 > `scripts/wiki-lookup.sh <terms>` (precise keyword match, no semantic fuzz).
 
+## The agent drive loop below the fold — a verified click point is verified *in one viewport*
+`docs/wiki/agent-drive-below-the-fold.md`
+
+  - L7 · The one-sentence mechanism
+  - L14 · What was there
+  - L40 · Why that is invisible rather than merely approximate
+  - L65 · The fix — a variant that carries no point
+  - L99 · The gate
+  - L122 · The rule this generalises to
+
 ## ARCHITECTURE — concurrency, process model, memory, and the REASONING
 `docs/wiki/architecture.md`
 
@@ -2494,4 +2504,4 @@
   - L231 · Both named mechanisms are subsystem work
 
 ---
-2393 sections across 24 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+2399 sections across 25 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.

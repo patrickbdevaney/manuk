@@ -106,8 +106,30 @@ pub enum Landing {
     /// `by` is what intercepted the centre — the node an agent should deal with first (dismiss the
     /// banner, close the modal) — and `point` is the centre, kept for reporting.
     Obstructed { by: NodeId, point: (f32, f32) },
-    /// The target has no box, or no part of its box is inside the viewport. There is nothing to
-    /// aim at, and a coordinate would be a guess.
+    /// ⭐⭐⭐ **THE TARGET IS OFF THE SCREEN — SCROLL BY `dy` FIRST, THEN ASK AGAIN.** Not a
+    /// refusal and not a point: a coordinate for a box the viewport does not contain is a
+    /// coordinate no pointer can be at, and publishing one is the same silent misfire
+    /// [`Landing::Obstructed`] exists to prevent, one branch over.
+    ///
+    /// **The obstruction map at scroll 0 is not the obstruction map at the scroll where the click
+    /// happens**, which is why this cannot be answered by aiming at the box centre and hoping.
+    /// A `position:sticky` header's *document* rect moves with the scroll: a checkbox at y=1000 is
+    /// unobstructed while the header sits at y=0, and is underneath it the moment the agent
+    /// scrolls far enough to see it. A below-the-fold target is **by definition** clicked after a
+    /// scroll, so the verification has to be re-run in the viewport the click will actually happen
+    /// in — which is what returning `dy` instead of a point forces the caller to do.
+    ///
+    /// `dy` is signed (positive = scroll down) and aligns the target's top edge with the top of
+    /// the viewport — the alignment `Element.scrollIntoView()` defaults to (`block: "start"`).
+    /// It is a *proposal*, not a promise: a caller that cannot scroll that far (the document ends
+    /// first) still gets a truthful answer, because it re-grounds against wherever it landed
+    /// rather than against this number.
+    OffScreen { dy: f32 },
+    /// The target has no box, or its box is on screen and **nothing inside it hit-tests back to
+    /// it at all** — `pointer-events: none` on the target itself. There is nothing to aim at, and
+    /// a coordinate would be a guess. A merely off-screen target is [`Landing::OffScreen`]; the
+    /// two used to share this variant, which is how a scroll-away target came to be published as
+    /// a click point with confidence `1.0`.
     Unreachable,
 }
 
@@ -826,9 +848,12 @@ impl A11yNode {
                     Landing::Obstructed { point: (x, y), .. } => {
                         format!("{line} @({x:.0},{y:.0}) obstructed")
                     }
-                    // Filtered above, so this is the `pointer-events: none` target: it is on
-                    // screen and it is not clickable anywhere. Say so rather than drop the row.
-                    Landing::Unreachable => {
+                    // The listing is filtered to boxes that intersect the viewport, so `OffScreen`
+                    // cannot arise here — and now that it is its own variant, that sentence is a
+                    // CHECKED claim rather than a comment: this arm is reached only by the
+                    // `pointer-events: none` target, on screen and not clickable anywhere. Say so
+                    // rather than drop the row.
+                    Landing::OffScreen { .. } | Landing::Unreachable => {
                         let (x, y) = n.bbox.map(|b| b.center()).unwrap_or((0.0, 0.0));
                         format!("{line} @({x:.0},{y:.0}) obstructed")
                     }
@@ -945,6 +970,12 @@ impl A11yNode {
         let aim = match viewport {
             Some(v) => match bbox.intersection(&v) {
                 Some(r) => r,
+                // Off screen. A vertical scroll fixes this **only if the target is already within
+                // the horizontal band** — a box parked off to the side comes no closer for any
+                // `dy`, and saying otherwise would send an agent scrolling forever.
+                None if bbox.x < v.right() && v.x < bbox.right() => {
+                    return Landing::OffScreen { dy: bbox.y - v.y }
+                }
                 None => return Landing::Unreachable,
             },
             None => bbox,
@@ -2990,14 +3021,33 @@ mod tests {
             "aimed at {point:?}, which is not in the visible band 900..1000"
         );
 
-        // Scrolled past it entirely: there is nothing to aim at, and a coordinate would be a guess.
+        // ⚠ **THIS ROW USED TO ASSERT `Unreachable`, AND THAT WAS THE BUG'S OWN PREMISE.**
+        // "Scrolled past it entirely" is not "there is nothing to aim at" — it is "you are looking
+        // at the wrong part of the document", and the answer an agent needs is the scroll that
+        // fixes it, not a refusal. Conflating the two is what let `resolve_target` hand back
+        // `Ready { point: <off-screen coordinate>, confidence: 1.0 }` for everything below the
+        // fold. `dy` is negative here because the target is ABOVE the viewport: an agent that
+        // scrolled too far is told to come back up.
         let past = Rect {
             x: 0.0,
             y: 1200.0,
             width: 100.0,
             height: 600.0,
         };
-        assert_eq!(root.landing(NodeId(2), Some(past)), Landing::Unreachable);
+        assert_eq!(
+            root.landing(NodeId(2), Some(past)),
+            Landing::OffScreen { dy: -1200.0 }
+        );
+
+        // `Unreachable` keeps a real row, and it is the one no scroll can fix: parked outside the
+        // viewport's HORIZONTAL band, where every `dy` is a lie.
+        let aside = Rect {
+            x: 400.0,
+            y: 0.0,
+            width: 100.0,
+            height: 600.0,
+        };
+        assert_eq!(root.landing(NodeId(2), Some(aside)), Landing::Unreachable);
 
         // With no viewport the whole border box is fair game, so the centre stands.
         assert_eq!(

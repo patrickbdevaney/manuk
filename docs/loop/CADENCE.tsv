@@ -1040,3 +1040,4 @@ tick	sha	epoch	iso	delta_s	shape	wall_s	files	added	deleted	gates	claims	wpt_pas
 1354	680cdb31	1787996584	2026-08-29T05:43:04-04:00	3750	capability	465	9	591	54	522	81	3896	6960	0	642	0	a referenced node contributes its NAME, not its text (2026-08-29)
 1355	53346661	1787998943	2026-08-29T06:22:23-04:00	2359	capability	465	14	453	36	522	81	3896	6960	0	642	0	t1097 was fixed at one entrance, and the conformance suite only ever used the other (2026-08-29)
 1358	9cd07e79	1788015039	2026-08-29T10:50:39-04:00	16096	capability-subsystem	465	9	1069	10	522	81	3896	6960	0	642	0	the property was not unimplemented, it was switched off (2026-08-29)
+1359	2618a953	1788018190	2026-08-29T11:43:10-04:00	3151	capability-subsystem	465	11	799	44	522	81	3896	6960	0	642	0	the drive loop stopped at the first screenful, and said it had not (2026-08-29)

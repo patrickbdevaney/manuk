@@ -11,12 +11,12 @@
 
 | | value | over |
 |---|---|---|
-| ticks landed | **1041** | ticks 1–1358 |
-| median tick cycle | **31m** | 1040 intervals |
-| median, last 10 | **64m** | 10 intervals |
+| ticks landed | **1042** | ticks 1–1359 |
+| median tick cycle | **31m** | 1041 intervals |
+| median, last 10 | **58m** | 10 intervals |
 | fastest / slowest | 5s / 7.0d | |
-| **ticks per hour** | **0.88** | 1181.8h elapsed |
-| median verify wall | **66s** | 980 ticks |
+| **ticks per hour** | **0.88** | 1182.7h elapsed |
+| median verify wall | **66s** | 981 ticks |
 | wall trend | 39s → 8m — getting slower ⚠️ | first 3 vs last 3 |
 
 The **cycle** is the real unit: implement → debug → verify wall → land. The wall is only part of
@@ -31,7 +31,7 @@ it, and a wall that grows taxes every future tick, so it is tracked separately f
 * **✅ rows in the capability ledger**: 144 → **642**
 * **Bar 0 — oracle hangs**: 0 of 265 sites
 
-**492 of 1041 ticks** (47%) moved a
+**492 of 1042 ticks** (47%) moved a
 user-visible capability. The rest were instruments, infrastructure and corrections — and the
 ledger says the corrections were not overhead: three of its top three priorities were phantoms,
 and finding that out redirected everything after it.
@@ -1138,5 +1138,6 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 | **1354** | 2026-08-29 05:43 | 62m | capability | 8m | +591/−54 | 522 | 81 | 56.0% · | a referenced node contributes its NAME, not its text (2026-08-29) |
 | **1355** | 2026-08-29 06:22 | 39m | capability | 8m | +453/−36 | 522 | 81 | 56.0% · | t1097 was fixed at one entrance, and the conformance suite only ever used the other (2026- |
 | **1358** | 2026-08-29 10:50 | 4.5h | capability-subsystem | 8m | +1069/−10 | 522 | 81 | 56.0% · | the property was not unimplemented, it was switched off (2026-08-29) |
+| **1359** | 2026-08-29 11:43 | 53m | capability-subsystem | 8m | +799/−44 | 522 | 81 | 56.0% · | the drive loop stopped at the first screenful, and said it had not (2026-08-29) |
 
 *`·` after a WPT figure means **carried forward**, not measured this tick.*

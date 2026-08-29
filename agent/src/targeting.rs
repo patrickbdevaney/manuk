@@ -94,6 +94,13 @@ pub struct Targeted {
     /// `None` on the ordinary clear path. A caller that acts on `point` regardless will click
     /// whatever this names — which is exactly the silent misfire this field exists to prevent.
     pub obstructed_by: Option<NodeId>,
+    /// The target is **outside the viewport**; scroll by this many px (positive = down) and
+    /// resolve again. `None` on the ordinary on-screen path.
+    ///
+    /// ⚠ While this is set, `point` is the bare box centre and is **not** a verified click point —
+    /// it is a coordinate the viewport does not contain. Nothing may act on it. `Grounded` turns
+    /// this into a variant that carries no point at all, which is the surface a caller should use.
+    pub offscreen_dy: Option<f32>,
     /// Combined semantic+visual score of the winner (higher = better).
     pub score: f32,
     /// Margin of the winner over the runner-up, `0.0..=1.0`. Low = ambiguous (several equally
@@ -184,10 +191,18 @@ pub fn resolve_target(tree: &A11yNode, intent: &str, viewport: Rect) -> Option<T
     // ⭐ The scorer picks WHICH element; the hit-test decides WHETHER a coordinate reaches it.
     // Those are different questions and this used to answer only the first, publishing
     // `bbox.center()` as the click point with no idea what was on top of it.
-    let (point, obstructed_by) = match tree.landing(best.node, Some(viewport)) {
-        Landing::Clear { point } => (point, None),
-        Landing::Obstructed { by, point } => (point, Some(by)),
-        Landing::Unreachable => (bbox.center(), None),
+    // ⚠⚠⚠ **THE OFF-SCREEN ARM USED TO FALL BACK TO `bbox.center()` WITH NO FLAG**, which handed
+    // `Ready { point, confidence: 1.0 }` back for a coordinate outside the viewport — the very
+    // misfire the hit-test check above was added to stop, surviving in the third arm of the match
+    // that added it. Measured: a checkbox at y=1000 under a `position:sticky` header, viewport
+    // 0..700 — `Ready { point: (140,1030), confidence: 1.0 }`; the agent scrolls to reach it, the
+    // header's document rect re-sticks to y=1000..1070 **on top of the target**, `dispatch_click_at`
+    // returns `proceed = true`, and the checkbox never toggles.
+    let (point, obstructed_by, offscreen_dy) = match tree.landing(best.node, Some(viewport)) {
+        Landing::Clear { point } => (point, None, None),
+        Landing::Obstructed { by, point } => (point, Some(by), None),
+        Landing::OffScreen { dy } => (bbox.center(), None, Some(dy)),
+        Landing::Unreachable => (bbox.center(), None, None),
     };
     Some(Targeted {
         node: best.node,
@@ -195,6 +210,7 @@ pub fn resolve_target(tree: &A11yNode, intent: &str, viewport: Rect) -> Option<T
         name: best.name.clone(),
         point,
         obstructed_by,
+        offscreen_dy,
         score: best_score,
         confidence,
     })
