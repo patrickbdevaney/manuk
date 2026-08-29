@@ -11,12 +11,12 @@
 
 | | value | over |
 |---|---|---|
-| ticks landed | **1044** | ticks 1–1361 |
-| median tick cycle | **31m** | 1043 intervals |
-| median, last 10 | **60m** | 10 intervals |
+| ticks landed | **1045** | ticks 1–1362 |
+| median tick cycle | **31m** | 1044 intervals |
+| median, last 10 | **56m** | 10 intervals |
 | fastest / slowest | 5s / 7.0d | |
-| **ticks per hour** | **0.88** | 1184.8h elapsed |
-| median verify wall | **66s** | 983 ticks |
+| **ticks per hour** | **0.88** | 1185.5h elapsed |
+| median verify wall | **66s** | 984 ticks |
 | wall trend | 39s → 8m — getting slower ⚠️ | first 3 vs last 3 |
 
 The **cycle** is the real unit: implement → debug → verify wall → land. The wall is only part of
@@ -31,7 +31,7 @@ it, and a wall that grows taxes every future tick, so it is tracked separately f
 * **✅ rows in the capability ledger**: 144 → **642**
 * **Bar 0 — oracle hangs**: 0 of 265 sites
 
-**492 of 1044 ticks** (47%) moved a
+**492 of 1045 ticks** (47%) moved a
 user-visible capability. The rest were instruments, infrastructure and corrections — and the
 ledger says the corrections were not overhead: three of its top three priorities were phantoms,
 and finding that out redirected everything after it.
@@ -1141,5 +1141,6 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 | **1359** | 2026-08-29 11:43 | 53m | capability-subsystem | 8m | +799/−44 | 522 | 81 | 56.0% · | the drive loop stopped at the first screenful, and said it had not (2026-08-29) |
 | **1360** | 2026-08-29 12:55 | 72m | capability-subsystem | 8m | +676/−48 | 522 | 81 | 56.0% · | a cell with no line box is not a cell with nothing in it (2026-08-29) |
 | **1361** | 2026-08-29 13:52 | 57m | capability-subsystem | 8m | +713/−37 | 522 | 81 | 56.0% · | the leading a `font-size` declaration threw away (2026-08-29) |
+| **1362** | 2026-08-29 14:33 | 41m | capability-subsystem | 8m | +483/−34 | 522 | 81 | 56.0% · | three behaviours that were built and never banked, and a backlog that was false for 427 ti |
 
 *`·` after a WPT figure means **carried forward**, not measured this tick.*

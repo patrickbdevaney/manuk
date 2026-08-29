@@ -9394,3 +9394,24 @@ inherited beside the value.
 can carry before applying the ones present, which a "set only what is named" implementation gets
 wrong on the commonest spelling (`font: 20px monospace`).
 (t1361 — `engine/css` `font_size_keeps_an_inherited_line_height_and_the_font_shorthand_sets_one`)
+
+## `<table><tbody>…</tbody><thead>…</thead></table>` — and two more table rules that were built and never banked
+
+Three table behaviours a real page depends on, each Chrome-measured and each previously carried as
+an open backlog item that had in fact been fixed:
+
+- **A `rowspan` cell's excess is shared by the rows it spans, PROPORTIONALLY to their natural
+  heights** — a 60px `rowspan=2` cell over two auto rows gives 30/30, not 24/36. Dumping it all on
+  the last row moves everything inside every other cell of those rows.
+- **`<caption>` does two things and they fail separately** — it reserves a band above the rows AND it
+  participates in the table's width. A caption that only did the first leaves the table sized by its
+  cells; one that only did the second leaves the first cell at y=0.
+- **A `<thead>` written AFTER a `<tbody>` still renders FIRST.** Source order is not render order,
+  and a template that appends rows to a `<tbody>` and then prepends a header emits exactly this
+  spelling — which is also the only spelling that can tell the two orders apart.
+
+⚠ The lesson is about the ledger, not the tables: **a "NAMED, MEASURED, NOT BUILT" entry is a claim
+about the present tense, and nothing re-runs it.** These three sat in a gate's own header, and in
+`CONSTITUTION.MD` VI.2, for ~427 ticks after they were fixed. Re-measure a backlog before ranking
+work against it.
+(t1362 — `agent/tests` `rowspan_caption_and_thead_ordering_match_chrome`)

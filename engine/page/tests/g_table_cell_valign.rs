@@ -43,7 +43,19 @@
 //! what this code already did — so the control row below is unchanged, and the approximation is
 //! named rather than silently shipped as an implementation.
 //!
-//! ## NAMED, MEASURED, NOT BUILT — three more table defects from the same battery
+//! ## ⚠⚠⚠ THE LIST BELOW IS RETRACTED — ALL THREE WERE BUILT, AND THIS HEADER KEPT CALLING THEM MISSING
+//!
+//! Re-measured against headless Chrome at t1362, **all three are correct**, and none of them had a
+//! gate. They are now banked by `rowspan_caption_and_thead_ordering_match_chrome` (`agent/tests/`),
+//! proven red by the three pre-t933 rules the entries themselves describe.
+//!
+//! ⚠ `CONSTITUTION.MD` VI.2 still lists *"t933 row-height distribution"* among the box types that
+//! opt out of ordinary block sizing, and `CONSTITUTION-CHECK.md` carries it as **UNMEASURED**. A
+//! backlog entry is a claim about the present tense; this one had been false for ~427 ticks because
+//! nothing ever re-ran it. The entries are kept below **as the historical measurement** — they are
+//! what the mutations in the new gate restore — rather than deleted, which would lose the numbers.
+//!
+//! ## NAMED, MEASURED, NOT BUILT (as of t933 — SUPERSEDED, see above)
 //!
 //! The sixteen-row table battery that found this found **five** divergences in **four** mechanisms.
 //! The other three are each their own tick and are recorded here so the next one starts from a

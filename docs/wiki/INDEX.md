@@ -2299,6 +2299,16 @@
   - L127 · NAMED, MEASURED, NOT BUILT
   - L141 · ⚠ CORRECTION (t1361) — one of the "NAMED, MEASURED, NOT BUILT" rows above named the wrong mechanism
 
+## Table structure geometry — rowspan, `<caption>`, `<thead>`, and a backlog that was false for 427 ticks
+`docs/wiki/table-structure-geometry.md`
+
+  - L6 · The one-sentence finding
+  - L12 · What the ledger said
+  - L29 · What re-measuring found
+  - L51 · Why the retraction is not the point — the banking is
+  - L65 · The three distinctions worth keeping
+  - L79 · ⚠ The anchor-site survey that led here, and the four hypotheses it REFUSED
+
 ## TEXT AND LAYOUT — fonts, shaping, measurement
 `docs/wiki/text-layout.md`
 
@@ -2525,4 +2535,4 @@
   - L231 · Both named mechanisms are subsystem work
 
 ---
-2412 sections across 27 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+2418 sections across 28 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.

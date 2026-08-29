@@ -95577,3 +95577,102 @@ remainder is unchanged from t1360: t933's three table defects — rowspan row-he
 `<caption>`, `<thead>` ordering — each measured against Chrome and each its own tick.
 
 WIKI: docs/wiki/minimal-cascade-line-height.md
+
+## Tick 1362 — three behaviours that were built and never banked, and a backlog that was false for 427 ticks (2026-08-29)
+
+TICK SHAPE: capability-subsystem
+
+**Track A, starting exactly where the board's CO-#1 points.** The board says *"RANKED BURNDOWN: ONE
+primitive per tick … verified on the anchor sites"*, so this tick opened by building the release
+`manuk-wpt` and running `fidelity --shape-dump` on the worst anchor, `www.a11yproject.com` (shape
+**43.3%**, coverage 96.0%, 123 of 217 elements missed).
+
+### THE SURVEY, AND THE FOUR HYPOTHESES IT REFUSED
+
+The dump's dominant signature is **width**, always in one direction — our boxes narrower than
+Chrome's (`+12` ×13, `+19` ×11, `+17` ×11, `+36` ×8) — with a `nav ol` that is **88** tall where
+Chrome wraps it to **176** at the *same width*. Same width, double height: Chrome's text wraps where
+ours does not, so **our text is systematically narrower on this page**. Four mechanisms were
+proposed. All four were killed by measurement:
+
+```text
+  1  the fallback FACE differs           REFUTED  sans-serif / serif / monospace at 100px measure
+                                                  755.92 / 698.05 / 903.08 in BOTH — ratio 1.0000
+  2  we apply the site's webfont,        REFUTED  Chrome refuses the cross-origin @font-face from a
+     Chrome (CORS from file://) does not          null origin — and so do we: both give 755.92
+  3  `rem` resolves against 16px, not    REFUTED  html{font-size:20px}: 2rem/1rem/1.6rem/nested-em
+     the root's declared 20px                     all Chrome-exact (302.38 / 151.19 / 241.89)
+  4  line-box overflow for text taller   REFUTED  a 40px span in a 24px line box lands at dy -11
+     than its line-height                         with a 46px box in a 33px line — Chrome-exact
+```
+
+⭐ **The method is worth more than the result: the dump names a SITE, and a site is not a
+mechanism.** Every hypothesis above died to a four-line fixture measured against Chrome directly, in
+minutes, without touching the sweep. The narrowing is real and still unexplained; it is written into
+the wiki so the next tick starts from four closed doors instead of re-opening them. Hypothesis 2 is
+worth keeping for a second reason — **we refuse the cross-origin font too**, so the instrument is
+NOT flattering or penalising us there, which was the thing most worth ruling out.
+
+With no mechanism in hand and the budget spent, the tick moved to the measured backlog rather than
+grinding a fifth guess.
+
+### ⭐⭐⭐ THE FINDING — A "NOT BUILT" ENTRY IS A CLAIM ABOUT THE PRESENT TENSE, AND NOTHING RE-RUNS IT
+
+t933 left three table defects NAMED, MEASURED, NOT BUILT in `g_table_cell_valign`'s header — rowspan
+row-height distribution, `<caption>`, `<thead>` ordering. Re-measured against headless Chrome,
+**all three are correct, to the pixel** — and **none of them has a gate**:
+
+```text
+ A  ROWSPAN   rowspan=2 height:60px  ->  spanning [0 0 10x60], rows 30 and 30 (NOT 24/36), table 60
+ B  CAPTION   caption [0 0 39x24], first cell [0 24 39x24], table width 39
+ C  THEAD     <tbody> written FIRST  ->  thead cell [0 0 39x24], tbody cell [0 24 39x24]
+```
+
+They were built somewhere in the ~427 ticks since, by ticks that fixed them without going back to
+cross off the list. ⚠ `CONSTITUTION.MD` VI.2 still carries *"t933 row-height distribution"* among
+the box types that opt out of ordinary block sizing, and `CONSTITUTION-CHECK.md:5329` lists it as
+**UNMEASURED**. Work gets ranked against those lists.
+
+### AND THE RETRACTION IS NOT THE POINT — THE BANKING IS
+
+Three real behaviours were one edit away from silently regressing, in a subsystem shown **twice in
+three ticks** to regress silently for weeks: t1360's `g_table_cell_valign` red for twenty-three days
+(not in the wall's launch list), t1361's `manuk-css` Stylo module `#[cfg]`-ed out of the wall
+entirely. Implemented-but-ungated is not banked, and under this project's own definition a ratchet
+tooth is the **gate**, not the code change.
+
+So this tick lands **no engine change and one gate** — deliberately.
+`rowspan_caption_and_thead_ordering_match_chrome` (`agent/tests/`, in the wall's crate list), with a
+vacuity pass over all three tables. **PROVEN RED by three mutations**, each the pre-t933 rule its own
+retracted entry describes:
+
+```text
+  N1  rowspan excess entirely to the LAST row   -> row-1 neighbour reads 10x24 (the t933 signature)
+  N2  <caption> collected as an empty list      -> the caption reserves no band and no width
+  N3  row groups ranked in SOURCE order         -> the thead cell reads y=24 instead of y=0
+```
+
+⭐ **Arm B is two claims in one fixture and they fail separately** — a caption that reserves its band
+but takes no part in the table's width leaves the table sized by its cells; one that widens the table
+but reserves no band leaves the first cell at y=0. t933's note called that one bug; it is two, and
+both are asserted.
+
+⚠ **Arm C's fixture writes `<tbody>` FIRST on purpose.** With `<thead>` first, source order and
+render order agree and the arm is vacuous — it would pass against an engine that had never heard of
+`<thead>`. The inverted spelling is also the one real templates emit.
+
+### THE RECEIPT
+
+```text
+  manuk-agent  (lib + gates)   128/128 → 129/129   +1   +the new gate
+  manuk-layout / manuk-css                          CONTROL — unchanged, no engine edit this tick
+  manuk-page   (full suite)     0 failed            CONTROL
+  git diff engine/                empty             the tick is a GATE, by design
+```
+
+NEXT: the constitution check is due at 1363 and this tick hands it a concrete correction — one row
+of `CONSTITUTION-CHECK.md`'s ledger moves from **UNMEASURED** to measured-and-gated, and VI.2's table
+entry needs re-ranking. The a11yproject width narrowing is the open anchor-site question with four
+doors closed on it.
+
+WIKI: docs/wiki/table-structure-geometry.md
