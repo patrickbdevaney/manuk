@@ -1373,26 +1373,10 @@ fn accessible_name_with(
         return String::new();
     };
 
-    // 1. aria-labelledby → concat the referenced elements' text, in order.
-    if let Some(refs) = el.attr("aria-labelledby") {
-        let text = refs
-            .split_ascii_whitespace()
-            .filter_map(|id| index.ids.get(id))
-            .map(|&n| normalize(&dom.text_content(n)))
-            .filter(|s| !s.is_empty())
-            .collect::<Vec<_>>()
-            .join(" ");
-        if !text.is_empty() {
-            return text;
-        }
-    }
-
-    // 2. aria-label
-    if let Some(label) = el.attr("aria-label") {
-        let label = normalize(label);
-        if !label.is_empty() {
-            return label;
-        }
+    // 1 + 2. aria-labelledby (dereferenced one level), then aria-label — the SAME rule a
+    // descendant obeys inside `content_walk`, so it is written once.
+    if let Some(name) = aria_name_of(dom, node, index) {
+        return name;
     }
 
     // 3. native host-language labelling
@@ -1414,7 +1398,7 @@ fn accessible_name_with(
                 .get(&node)
                 .map(|ls| {
                     ls.iter()
-                        .map(|&l| label_text(dom, l, node, generated))
+                        .map(|&l| content_text(dom, l, Some(node), index, generated))
                         .filter(|s| !s.is_empty())
                         .collect::<Vec<_>>()
                         .join(" ")
@@ -1486,17 +1470,31 @@ fn accessible_name_with(
         // "Save" until t1098, and where the pseudo carries the ONLY text — an
         // `a::after{content:" (opens in a new tab)"}`, a `counter(sec)` section number, an icon
         // glyph that IS the label — its absence was the whole name.
-        let (b, a) = generated
-            .get(&node)
-            .map(|(b, a)| (b.as_str(), a.as_str()))
-            .unwrap_or(("", ""));
-        let text = normalize(&format!("{b}{}{a}", dom.text_content(node)));
+        // ⭐ THE SAME §4.3 WALK THE LABEL PATH USES. This was `text_content` + the root's own
+        // pseudo text, which flattens away an `<img alt>` in the middle of a button and reads
+        // straight through a descendant's `aria-label`.
+        let text = content_text(dom, node, None, index, generated);
         if !text.is_empty() {
             return text;
         }
     }
 
     // 5. title fallback
+    //
+    // ⚠⚠⚠ **AN EXPLICIT EMPTY HOST-LANGUAGE LABEL IS AN ANSWER, NOT A MISSING ONE.** accname's
+    // `title` step is a LAST RESORT, and it is skipped when the host language already supplied a
+    // label that came out empty on purpose. `<img alt="" title="x">` is the exact case: `alt=""` is
+    // the author saying *"this picture says nothing"*, and a tooltip does not overrule that.
+    //
+    // ⚠ The two WPT suites look contradictory here and are not — they ask DIFFERENT questions.
+    // `html-aam` says the element still has the `image` ROLE (a tooltip keeps it in the tree);
+    // `accname` says its NAME is `""`. Conflating role-presence with name-presence is what made
+    // one fix break the other, and it cost 6 subtests to find out.
+    if matches!(el.name.as_str(), "img" | "area")
+        && el.attr("alt").is_some_and(|a| normalize(a).is_empty())
+    {
+        return String::new();
+    }
     if let Some(t) = el.attr("title") {
         let t = normalize(t);
         if !t.is_empty() {
@@ -1625,21 +1623,72 @@ fn label_index(dom: &Dom, ids: &HashMap<String, NodeId>) -> LabelIndex {
 ///    `<label><input type=checkbox> Flash the screen <input value="3"> times</label>` is
 ///    *"Flash the screen 3 times"* — the number the user actually set is part of the sentence.
 ///    Plain `text_content` gives *"Flash the screen times"*, which is a different instruction.
-fn label_text(dom: &Dom, label: NodeId, target: NodeId, generated: &GeneratedText) -> String {
+/// The ARIA name an element carries as an ATTRIBUTE — `aria-labelledby` dereferenced one level,
+/// else `aria-label`. accname §4.3 steps 2B and 2D.
+///
+/// ⚠ One level only, and that is a stated boundary rather than an accident: `aria-labelledby`
+/// chains are cycles waiting to happen, and the spec stops the recursion at the first hop for the
+/// same reason.
+fn aria_name_of(dom: &Dom, node: NodeId, index: &NameIndex) -> Option<String> {
+    let el = dom.element(node)?;
+    if let Some(refs) = el.attr("aria-labelledby") {
+        let text = refs
+            .split_ascii_whitespace()
+            .filter_map(|id| index.ids.get(id))
+            .map(|&n| normalize(&dom.text_content(n)))
+            .filter(|t| !t.is_empty())
+            .collect::<Vec<_>>()
+            .join(" ");
+        if !text.is_empty() {
+            return Some(text);
+        }
+    }
+    let label = normalize(el.attr("aria-label")?);
+    (!label.is_empty()).then_some(label)
+}
+
+/// ⭐⭐⭐ **ONE WALK, TWO CALLERS — AND ONLY ONE OF THEM USED TO RECURSE.**
+///
+/// accname §4.3 defines a single traversal, and this engine had it twice: `label_text` walked a
+/// `<label>` properly (skipping the labelled control, substituting an embedded control's value),
+/// while **name-from-content flattened its subtree with `dom.text_content()`**. A flatten cannot
+/// see what the spec puts in the middle of a name:
+///
+/// ```html
+///   <button><span>one</span> <img alt="two"> <span>three</span></button>   "one two three"
+///   <h3>heading <a aria-label="link aria-label">ignored</a> heading</h3>   "heading link aria-label heading"
+/// ```
+///
+/// `text_content` reads the first as *"one three"* — the picture in the middle of the button is
+/// silently dropped — and the second as *"heading ignored heading"*, announcing the very text the
+/// author overrode. Both are names an agent then cannot match on.
+///
+/// `skip` is the labelled control, which contributes nothing to its own label; `root` is the
+/// element being named, whose own `aria-label` was already consulted by the caller and must not be
+/// re-read here or every name would be its own attribute.
+fn content_text(
+    dom: &Dom,
+    root: NodeId,
+    skip: Option<NodeId>,
+    index: &NameIndex,
+    generated: &GeneratedText,
+) -> String {
     let mut out = String::new();
-    label_text_walk(dom, label, target, generated, &mut out);
+    content_walk(dom, root, root, skip, index, generated, &mut out);
     normalize(&out)
 }
 
-fn label_text_walk(
+fn content_walk(
     dom: &Dom,
     n: NodeId,
-    target: NodeId,
+    root: NodeId,
+    skip: Option<NodeId>,
+    index: &NameIndex,
     generated: &GeneratedText,
     out: &mut String,
 ) {
     // The control being named never names itself.
-    if n == target {
+    if Some(n) == skip {
         return;
     }
     if !dom.is_element(n) {
@@ -1650,24 +1699,52 @@ fn label_text_walk(
     if is_hidden(dom, n) {
         return;
     }
-    // accname §4.3 step 2C — an embedded control speaks its VALUE, not its subtree.
-    if let Some(v) = embedded_control_value(dom, n) {
-        // Padded: the value is a word in a sentence, and the markup around it carries no space of
-        // its own (`…screen <input value="3"> times`). `normalize` collapses the surplus.
-        out.push(' ');
-        out.push_str(&v);
-        out.push(' ');
-        return;
+    if n != root {
+        // §4.3 step 2C — an embedded control speaks its VALUE, not its subtree.
+        if let Some(v) = embedded_control_value(dom, n) {
+            push_word(out, &v);
+            return;
+        }
+        // §4.3 steps 2B/2D — a descendant that carries its OWN ARIA name contributes that name and
+        // its subtree is NOT descended into. Overriding a name is the whole point of `aria-label`;
+        // reading through it announces the text the author replaced.
+        if let Some(name) = aria_name_of(dom, n, index) {
+            push_word(out, &name);
+            return;
+        }
+        // Host-language: an `<img>`/`<area>` contributes its `alt` and nothing else. An `alt=""`
+        // contributes NOTHING — and either way we do not descend, because an image has no text.
+        if let Some(el) = dom.element(n) {
+            if matches!(el.name.as_str(), "img" | "area") {
+                if let Some(alt) = el.attr("alt") {
+                    let alt = normalize(alt);
+                    if !alt.is_empty() {
+                        push_word(out, &alt);
+                    }
+                }
+                return;
+            }
+        }
     }
+    // ⚠⚠⚠ accname §4.3 step 2F: `::before`/`::after` text is PART OF THE CONTENT, in that order
+    // around it (t1097) — and it applies at EVERY level of the walk, not only at the root.
     let (b, a) = generated
         .get(&n)
         .map(|(b, a)| (b.as_str(), a.as_str()))
         .unwrap_or(("", ""));
     out.push_str(b);
     for c in dom.children(n) {
-        label_text_walk(dom, c, target, generated, out);
+        content_walk(dom, c, root, skip, index, generated, out);
     }
     out.push_str(a);
+}
+
+/// Append a contribution as its own WORD. The markup around a substituted value or name carries no
+/// space of its own (`…screen <input value="3"> times`), and `normalize` collapses the surplus.
+fn push_word(out: &mut String, s: &str) {
+    out.push(' ');
+    out.push_str(s);
+    out.push(' ');
 }
 
 /// accname §4.3 step 2C: what a control **embedded in a label** contributes.
@@ -1688,7 +1765,15 @@ fn embedded_control_value(dom: &Dom, n: NodeId) -> Option<String> {
             if el.name == "input" {
                 return Some(normalize(el.attr("value").unwrap_or("")));
             }
-            selected_option_text(dom, n)
+            // ⚠ `.or_else(text)` and NOT `None`: step 2C outranks step 2D, so an ARIA-only
+            // `<span role=combobox aria-label="number of times">3</span>` must contribute **3**,
+            // not "number of times". Falling through to the ordinary walk used to give the same
+            // answer by accident; once a descendant's `aria-label` is honoured, the accident stops
+            // working and the control announces its NAME where the sentence wants its VALUE.
+            selected_option_text(dom, n).or_else(|| {
+                let t = normalize(&dom.text_content(n));
+                (!t.is_empty()).then_some(t)
+            })
         }
         // A range speaks the value its AUTHOR chose to speak: `aria-valuetext` exists precisely so
         // `3` can be announced as "3 stars", and it outranks the raw number.

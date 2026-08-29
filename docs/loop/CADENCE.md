@@ -11,12 +11,12 @@
 
 | | value | over |
 |---|---|---|
-| ticks landed | **1037** | ticks 1–1352 |
-| median tick cycle | **31m** | 1036 intervals |
-| median, last 10 | **1.8h** | 10 intervals |
+| ticks landed | **1038** | ticks 1–1353 |
+| median tick cycle | **31m** | 1037 intervals |
+| median, last 10 | **83m** | 10 intervals |
 | fastest / slowest | 5s / 7.0d | |
-| **ticks per hour** | **0.88** | 1174.5h elapsed |
-| median verify wall | **66s** | 976 ticks |
+| **ticks per hour** | **0.88** | 1175.6h elapsed |
+| median verify wall | **66s** | 977 ticks |
 | wall trend | 39s → 8m — getting slower ⚠️ | first 3 vs last 3 |
 
 The **cycle** is the real unit: implement → debug → verify wall → land. The wall is only part of
@@ -31,7 +31,7 @@ it, and a wall that grows taxes every future tick, so it is tracked separately f
 * **✅ rows in the capability ledger**: 144 → **642**
 * **Bar 0 — oracle hangs**: 0 of 265 sites
 
-**489 of 1037 ticks** (47%) moved a
+**490 of 1038 ticks** (47%) moved a
 user-visible capability. The rest were instruments, infrastructure and corrections — and the
 ledger says the corrections were not overhead: three of its top three priorities were phantoms,
 and finding that out redirected everything after it.
@@ -90,7 +90,7 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 
 ## What a capability costs
 
-* **489** capability ticks, median cycle **31m**
+* **490** capability ticks, median cycle **31m**
 * median diff per tick: **+282 / −34** lines across 8 files
 
 ## Every tick
@@ -1134,5 +1134,6 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 | **1350** | 2026-08-29 02:09 | 65m | capability | 8m | +627/−43 | 522 | 81 | 56.0% · | an ARIA role token is ASCII case-insensitive, and the fold existed in the entrance the web |
 | **1351** | 2026-08-29 02:42 | 32m | instrument | 8m | +171/−34 | 522 | 81 | 56.0% · | CI was red for seven ticks behind a green sibling, and the gate was one apt package from b |
 | **1352** | 2026-08-29 03:35 | 54m | capability | 8m | +632/−68 | 522 | 81 | 56.0% · | a role is not a property of the tag alone: ancestor, name, and a conflicting presentation  |
+| **1353** | 2026-08-29 04:40 | 65m | capability | 8m | +569/−77 | 522 | 81 | 56.0% · | one accname walk, two callers, and only one of them recursed (2026-08-29) |
 
 *`·` after a WPT figure means **carried forward**, not measured this tick.*

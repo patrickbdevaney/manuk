@@ -9250,3 +9250,11 @@ Largest single block of `html-aam` role failures. (t1352 — `agent/tests/g_a11y
 Layout `<table role="none">` / `<ul role="none">` is a normal idiom, and its required owned elements
 inherit the presentation. But a focusable element, or one carrying a global ARIA attribute, keeps its
 role — a node the user can TAB to that announces nothing is worse than a wrongly-named one. (t1352)
+
+## An `<img alt>` in the middle of a button is part of the button's name
+
+Icon-plus-text buttons are the commonest control on the modern web. accname walks the subtree and
+takes each child's contribution; `textContent` drops the image entirely, so `<span>one</span>
+<img alt="two"> <span>three</span>` is named "one three" — a string the agent cannot match the
+button on. Likewise a descendant's own `aria-label` overrides its text and must not be read through.
+(t1353 — `agent/tests/g_a11y_name_from_content.rs`)

@@ -94336,3 +94336,135 @@ name-from-content, block-level spacing between children, and `text-transform`. A
 `accname/name/shadowdom` is still 0/6.
 
 WIKI: docs/wiki/dom-semantics.md
+
+## Tick 1353 — one accname walk, two callers, and only one of them recursed (2026-08-29)
+
+TICK SHAPE: capability + governance — the accessibility tree (TRACK B), fourth engine tick, plus the
+SELF-AUDIT and SURFACE AUDIT that both came due at 1353. Board re-run at the top of this tick:
+unchanged.
+
+### ⭐ CI READ FIRST, AND t1351's RECEIPT IS IN
+
+```text
+  chore(ci): CI was red for seven ticks behind a green sibling   →  SUCCESS
+```
+
+The font packages were the whole of it. **An eight-commit red streak is closed** and the five crates
+CI had not been reaching since t1343 are measured again. That receipt exists because t1351 named its
+falsifiable check as *"the CI run on this commit, read at the start of the next tick"* — and this is
+that tick.
+
+### SELF-AUDIT (due at 1353) — one prescribed-but-not-executed item, and it is not mine
+
+```text
+   ✗ verify wall: 2383s EXCEEDS the 300s target — Part 21.2 item 1 has regressed.
+```
+
+61 of 62 checks green. ⚠ Harness, observer-owned, and the number is CONTENDED: this session measured
+the same wall at **3972s, 2922s, 2465s, 2423s and 1536s** on five consecutive runs of the same tree
+shape, the spread tracking whether a `disk-hygiene.sh` cron instance happened to be running
+alongside it. Reported, not acted on.
+
+### SURFACE AUDIT #77 — ⚠⚠⚠ THE FOURTH UMBRELLA, AND THIS TIME THE GATE'S NAME IS A PLURAL
+
+Executed #76's own ranked #1 (*"re-ask the primitive question of every gated umbrella row"*) against
+the subsystem this session had just measured. It returned a finding on the first row it read:
+
+```text
+  CONSTELLATION row 138
+    cross | a11y interactive roles (menu/tab/dialog/switch/slider/progressbar) | gated | G_A11Y_ROLES
+```
+
+`g_a11y_roles.rs` asserts **seven** role tokens — `dialog menu menuitem slider switch tab tablist` —
+all lowercase, all tokens the vocabulary already had. It was green on every tick of this session
+while `wai-aria` measured **54.8%**: 114 of 172 failures were tokens differing only in CASE, ~30
+tokens did not exist, three were collapsed onto neighbours.
+
+> ⭐⭐⭐ **THE GENERAL FORM SHARPENS: A PLURAL IS AN UMBRELLA.** #48 caught bidi, #72 SVG, #76 font
+> fallback — all named for a script, format or family. This one is named for none of those; it is
+> named for a **plural noun**. *A gate whose name is a plural asserts a SAMPLE and reads as a
+> POPULATION.* Read the assertion COUNT beside the size of the set the name claims; any ratio far
+> from 1 is an umbrella. That is a wider and cheaper test than "is it named for a script".
+
+⚠ And the second half is what made it invisible: **the sample was drawn from the tokens we had
+already implemented.** A gate written at the same moment as the feature tests the feature's own
+vocabulary, so **it cannot discover a missing word.** The escape is an EXTERNAL corpus — which is
+what `wai-aria`/`accname`/`html-aam` are, and they are still not rows in `WPT-AREAS.tsv` (audit
+#72's finding; the area list lives in `scripts/`). Row 138 now carries the real numbers and the two
+new gates. Full record: `docs/loop/SURFACE-AUDIT.md` #77.
+
+### THE CAPABILITY — A FLATTEN WHERE THE SPEC WANTS A WALK
+
+accname §4.3 defines **one** traversal. This engine had it twice: the `<label>` path walked properly
+(t1349), while name-from-content flattened its subtree with `dom.text_content()`.
+
+```html
+  <button><span>one</span> <img alt="two"> <span>three</span></button>
+  <h3>heading <a aria-label="link aria-label">ignored link text</a> heading</h3>
+```
+
+`text_content` reads the first as *"one three"* — **the picture in the middle of the button is
+silently dropped** — and the second as *"heading ignored heading"*, announcing the very text the
+author overrode. Both are names an agent then cannot match the element on, which is the entire
+purpose of the string. Now one function, two entry points: `content_text(root, skip)`.
+
+### ⚠⚠ THE TEST THAT PASSED BECAUSE TWO BUGS CANCELLED
+
+`<span role="combobox" aria-label="number of times">3</span>` in a label must contribute **3**
+(§4.3 step 2C, embedded control → VALUE, which outranks 2D's `aria-label`).
+`embedded_control_value` returned `None` for an ARIA-only combobox and the walk fell through to the
+text — **the right answer for the wrong reason.** The moment a descendant's `aria-label` was
+honoured, the accident stopped working and the control announced its NAME where the sentence wants
+its VALUE. Caught only because the failing-NAME lists were diffed rather than the totals: the run
+was **+15 / −3**, and a total of +12 would have hidden three ratchet violations.
+
+### ⚠⚠⚠ AND THE TWO SUITES LOOK CONTRADICTORY ON `<img alt="" title="x">` — THEY ASK DIFFERENT QUESTIONS
+
+```text
+  html-aam   the element still has the `image` ROLE     a tooltip keeps it in the tree
+  accname    its accessible NAME is ""                  alt="" is the author saying it says nothing
+```
+
+accname's `title` step is a LAST RESORT, skipped when the host language already supplied a label that
+came out empty **on purpose**. Answering both in one place cost 6 `html-aam` subtests before the
+split was found: role-presence is not name-presence.
+
+### THE RECEIPT
+
+```text
+  suite       BEFORE            AFTER             delta
+  accname     380/484  78.5%    395/484  81.6%    +15
+  wai-aria    399/434  91.9%    399/434  91.9%      0   CONTROL
+  html-aam    310/335  92.5%    310/335  92.5%      0   CONTROL
+  ──────────────────────────────────────────────────────
+  a11y TOTAL 1089/1253 86.9%   1104/1253 88.1%    +15   HANG/CRASH 0
+```
+
+**ZERO newly-failing subtests**, verified by `comm` on the sorted failing-name lists, not by the
+totals. This session's five Track-B ticks: **819/1253 = 65.4% → 1104/1253 = 88.1%, +285 subtests**,
+on a subsystem with no engine tick between t1254 and t1349.
+
+GATE `name_from_content_is_the_accname_walk_not_a_text_flatten`
+(`agent/tests/g_a11y_name_from_content.rs`) — 6 groups: a child `<img alt>` in place; a descendant
+`aria-label` and a descendant `aria-labelledby`; a decorative child image; the ROLE/NAME split on
+`<img alt="" title>` with its no-alt CONTROL; the 2C-outranks-2D combobox; and four CONTROLS
+including *"a generic `<div>` still has no name"* — because making the walk recursive must not hand
+one to every box on the page. RED under THREE mutations: N1 back to `text_content` → `"one three"`;
+N2 drop the descendant aria-name branch → `"heading ignored link text heading"`; N3 drop the
+empty-alt title guard → the image is named `"tip"`.
+
+PERF: none — the same subtree, visited once, with three attribute reads per element instead of a
+`text_content` concatenation.
+
+NEXT, ranked from the residue (92 in accname, and it is now the only a11y row under 90%):
+1. ⭐ **`aria-labelledby` DEREFERENCES WITH `text_content`, WHICH IS THE SAME DEFECT ONE LEVEL OUT**
+   — 50 of the 92 remaining rows carry `aria-labelledby` on the subject. The referenced node needs
+   the FULL name computation (a referenced CONTROL yields its own label; `display:none` descendants
+   are skipped), with a re-entry guard because `aria-labelledby="self"` is a real fixture.
+2. `::before`/`::after` `content` values we do not produce — `counter()` alt text, `attr()`,
+   the `/alt-text` syntax. Cross-subsystem: CSS `content`, not a11y.
+3. Block-level spacing between name-from-content children — needs the COMPUTED `display`, which
+   `accessible_name` does not receive. A threading job like t1097's `GeneratedText`, named not done.
+4. `accname/name/shadowdom` still 0/6.
+
+WIKI: docs/wiki/dom-semantics.md

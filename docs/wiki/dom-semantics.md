@@ -4146,3 +4146,50 @@ phantom in the tree on every page that ships an empty placeholder.
   wai-aria    387/434  89.2%    399/434  91.9%    +12
   accname     380/484  78.5%    380/484  78.5%      0   CONTROL
 ```
+
+## ONE accname WALK, TWO CALLERS, AND ONLY ONE OF THEM RECURSED (t1353)
+
+accname §4.3 defines a single traversal. This engine had it twice: the `<label>` path walked
+properly (skipping the labelled control, substituting an embedded control's value, honouring
+`::before`/`::after`), while **name-from-content flattened its subtree with `dom.text_content()`**.
+
+A flatten cannot see what the spec puts in the middle of a name:
+
+```html
+  <button><span>one</span> <img alt="two"> <span>three</span></button>
+  <h3>heading <a aria-label="link aria-label">ignored link text</a> heading</h3>
+```
+
+`text_content` reads the first as *"one three"* — the picture in the middle of the button is
+silently dropped — and the second as *"heading ignored heading"*, announcing the very text the
+author overrode. Both are names an agent then **cannot match the element on**, which is the whole
+purpose of the string.
+
+The fix is one function with two entry points: `content_text(root, skip)`, where `skip` is the
+labelled control for the label path and `None` for name-from-content. Descendant rules, in accname's
+order: **2C** an embedded control speaks its VALUE; **2D** a descendant carrying its own
+`aria-label`/`aria-labelledby` contributes THAT name and its subtree is not descended into; then
+`<img alt>`; then recurse.
+
+### ⚠⚠ §4.3 STEP 2C OUTRANKS 2D, AND THE OLD CODE PASSED THAT BY ACCIDENT
+
+`<span role="combobox" aria-label="number of times">3</span>` inside a label must contribute **3**.
+`embedded_control_value` returned `None` for an ARIA-only combobox and the walk fell through to the
+text — the right answer for the wrong reason. The moment a descendant's `aria-label` was honoured,
+the accident stopped working and the control announced its NAME where the sentence wants its VALUE.
+**A test that passes because two bugs cancel goes red when you fix one of them.**
+
+### ⚠⚠⚠ ROLE-PRESENCE AND NAME-PRESENCE ARE DIFFERENT QUESTIONS — `<img alt="" title="x">`
+
+The two suites look contradictory and are not:
+
+```text
+  html-aam   the element still has the `image` ROLE     a tooltip keeps it in the tree
+  accname    its accessible NAME is ""                  alt="" is the author saying it says nothing
+```
+
+accname's `title` step is a LAST RESORT and is skipped when the host language already supplied a
+label that came out empty **on purpose**. Answering both questions in one place — making `title`
+suppress the role, or letting it name an `alt=""` image — breaks the other suite; it cost 6 subtests
+to find out. `accname` 380/484 → 395/484 with `wai-aria` and `html-aam` unchanged and **zero**
+newly-failing subtests, verified by diffing the failing NAME lists rather than the totals.

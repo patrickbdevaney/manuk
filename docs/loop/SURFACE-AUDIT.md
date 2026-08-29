@@ -7151,3 +7151,58 @@ rows.
    agentic surface's own quantity.
 3. ⭐ Carried unclosed from #75: measure DECORATORS (one `eval`); `<img sizes="auto">`;
    and #73's `writing-mode`/`css-writing-modes` still absent from the WPT checkout.
+
+## Audit #77 — tick 1353 (2026-08-29)
+
+### ⚠⚠⚠ THE FOURTH UMBRELLA, AND THIS TIME THE GATE'S OWN NAME IS A PLURAL
+
+Audit #76's ranked #1 was *"RE-ASK THE PRIMITIVE QUESTION OF EVERY `gated` UMBRELLA ROW — a row whose
+capability is named for a script, a format or a family should be presumed an umbrella until its
+gate's assertions are read."* This audit executed that instruction against the subsystem this
+session had just measured, and it returned a finding on the first row it read.
+
+```text
+  CONSTELLATION row 138
+    cross | a11y interactive roles (menu/tab/dialog/switch/slider/progressbar) | gated | G_A11Y_ROLES
+```
+
+**`g_a11y_roles.rs` asserts SEVEN role tokens** — `dialog`, `menu`, `menuitem`, `slider`, `switch`,
+`tab`, `tablist` — every one of them lowercase, every one of them a token the vocabulary already had.
+It was green on every tick of this session. Meanwhile, measured on the spec's own suite:
+
+```text
+  wai-aria  238/434 = 54.8%     114 of 172 failures were role tokens differing only in CASE
+                                 ~30 tokens did not exist at all and resolved to `generic`
+                                 gridcell / menuitemcheckbox / menuitemradio were COLLAPSED
+```
+
+A row that says *"a11y interactive roles: gated"* while 45% of the roles suite fails is not a wrong
+row — it is a row asserting something narrower than it appears to. Fixed across t1350 and t1352:
+**wai-aria 54.8% → 91.9%, html-aam 75.5% → 92.5%.**
+
+### ⭐⭐⭐ THE GENERAL FORM SHARPENS: A PLURAL IS AN UMBRELLA
+
+#48 caught bidi, #72 caught SVG, #76 caught font fallback — all named for a **script, format or
+family**. This one is named for none of those. It is named for a **plural noun**: *roles*.
+
+> **A gate whose name is a plural asserts a SAMPLE and reads as a POPULATION.** `G_A11Y_ROLES`,
+> `G_A11Y_STATE`, `G_TEXT_TRACKS`, `G_DOC_COLLECTIONS` — the name promises the set and the body
+> checks a handful. That is a wider and cheaper test than "is it named for a script": read the
+> gate's assertion COUNT beside the size of the set its name claims, and any ratio far from 1 is an
+> umbrella.
+
+⚠ And the second half is the one that made it invisible: **the sample was drawn from the tokens we
+had already implemented.** A gate written at the same moment as the feature tests the feature's own
+vocabulary, so it cannot discover a missing word. The escape is an EXTERNAL corpus — which is exactly
+what `wai-aria`/`html-aam`/`accname` are, and they were not rows in `WPT-AREAS.tsv` (audit #72's
+finding, still not fixed: the area list lives in `scripts/`).
+
+### RANKED, from this audit only
+
+1. ⭐⭐⭐ **READ EVERY `G_*` GATE'S ASSERTION COUNT AGAINST THE SET ITS NAME CLAIMS.** Start with the
+   other plurals: `G_A11Y_STATE`, `G_TEXT_TRACKS`, `G_DOC_COLLECTIONS`, `G_TABLE_DOM`.
+2. ⭐⭐ **A GATE CANNOT DISCOVER A MISSING WORD IN ITS OWN VOCABULARY.** Every capability whose
+   surface is an enumerable SET (roles, states, properties, tokens, MIME types, units) needs an
+   external corpus as well as a gate, or the gate measures what was built.
+3. ⭐ Carried unclosed from #76: re-ask the primitive question of the remaining umbrella rows; probe
+   the inline-box content area under fallback; measure DECORATORS; `<img sizes="auto">`.

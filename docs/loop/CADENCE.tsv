@@ -1036,3 +1036,4 @@ tick	sha	epoch	iso	delta_s	shape	wall_s	files	added	deleted	gates	claims	wpt_pas
 1350	13f20f57	1787983787	2026-08-29T02:09:47-04:00	3875	capability	465	9	627	43	522	81	3896	6960	0	642	0	an ARIA role token is ASCII case-insensitive, and the fold existed in the entrance the web does not use (2026-08-29)
 1351	6b24b898	1787985726	2026-08-29T02:42:06-04:00	1939	instrument	465	8	171	34	522	81	3896	6960	0	642	0	CI was red for seven ticks behind a green sibling, and the gate was one apt package from being measured (2026-08-29)
 1352	ec20b848	1787988955	2026-08-29T03:35:55-04:00	3229	capability	465	9	632	68	522	81	3896	6960	0	642	0	a role is not a property of the tag alone: ancestor, name, and a conflicting presentation (2026-08-29)
+1353	083a84f4	1787992834	2026-08-29T04:40:34-04:00	3879	capability	465	11	569	77	522	81	3896	6960	0	642	0	one accname walk, two callers, and only one of them recursed (2026-08-29)
