@@ -6,7 +6,7 @@ css/css-flexbox	3167	4693	67.5	0	0
 css/css-grid	10358	14687	70.5	0	0
 css/css-sizing	4525	5892	76.8	0	0
 css/css-fonts	4092	7552	54.2	0	0
-css/css-text	2156	4515	47.8	0	0
+css/css-text	2900	4515	64.2	0	0
 css/css-overflow	481	963	49.9	0	0
 css/css-transforms	4796	5500	87.2	0	0
 css/css-ui	1333	1900	70.2	0	0
@@ -19,4 +19,4 @@ cssom	2868	3507	81.8	0	0
 domparsing	342	1294	26.4	0	0
 url	1	7	14.3	0	0
 encoding	360564	1127437	32.0	0	0
-TOTAL	483857	1281896	37.75	0	0
+TOTAL	484601	1281896	37.80	0	0

@@ -594,6 +594,17 @@
   - L272 · The release cadence — and the way it silently did nothing
   - L293 · A second cargo feature-config in one build step thrashes the whole cache
 
+## CJK line breaking — `line-break`, and why a correct library gives the wrong answer
+`docs/wiki/cjk-line-breaking.md`
+
+  - L3 · The one-sentence version
+  - L10 · What CJ is, and why it is most of the language
+  - L25 · The four values, measured
+  - L62 · The implementation shape: tailor the INPUT
+  - L79 · What is deferred, and on what
+  - L87 · The trap this belongs to
+  - L94 · See also
+
 ## CONFORMANCE AND ORACLES — how we MEASURE, and what each instrument cannot see
 `docs/wiki/conformance-and-oracles.md`
 
@@ -2473,4 +2484,4 @@
   - L231 · Both named mechanisms are subsystem work
 
 ---
-2380 sections across 22 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+2387 sections across 23 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.

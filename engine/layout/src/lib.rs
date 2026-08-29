@@ -12758,6 +12758,9 @@ impl Ctx<'_> {
                 // CSS Text §5.1 — see `break_segments`. Read here beside `break_word` so the two
                 // opposing tailorings of the same property are decided in one place.
                 let keep_all = cs.word_break == manuk_css::WordBreak::KeepAll;
+                // `line-break` rides beside it: the same §5 clause, and the same one place to read
+                // both tailorings of where a CJK line may break.
+                let line_break = cs.line_break;
                 let break_word = cs.word_break == manuk_css::WordBreak::BreakAll
                     || cs.overflow_wrap == manuk_css::OverflowWrap::Anywhere
                     || (cs.overflow_wrap == manuk_css::OverflowWrap::BreakWord
@@ -12815,6 +12818,7 @@ impl Ctx<'_> {
                                             false,
                                             break_word,
                                             keep_all,
+                                            line_break,
                                         );
                                     }
                                 }
@@ -12859,6 +12863,7 @@ impl Ctx<'_> {
                                         false,
                                         break_word,
                                         keep_all,
+                                        line_break,
                                     );
                                 }
                                 // `pre-line` collapses runs of spaces and still wraps, so the
@@ -12880,6 +12885,7 @@ impl Ctx<'_> {
                                 false,
                                 break_word,
                                 keep_all,
+                                line_break,
                             );
                         }
                     }
@@ -12931,6 +12937,7 @@ impl Ctx<'_> {
                                 no_wrap,
                                 break_word,
                                 keep_all,
+                                line_break,
                             );
                         }
                         // CSS Text §3: the opportunity belongs to the element that
@@ -12952,6 +12959,7 @@ impl Ctx<'_> {
                         no_wrap,
                         break_word,
                         keep_all,
+                        line_break,
                     );
                 }
             }
@@ -15724,10 +15732,19 @@ fn last_line_baseline(b: &LayoutBox, dom: &Dom, styles: &StyleMap) -> Option<f32
 /// no internal opportunity returns unchanged, so plain English words are byte-identical to
 /// the old whitespace-only split (the common case, and why the parity gate is unmoved).
 /// Zero-width breaking spaces (U+200B), which exist only to mark an opportunity, are dropped.
-fn break_segments(word: &str, keep_all: bool) -> Vec<String> {
+fn break_segments(word: &str, keep_all: bool, line_break: manuk_css::LineBreak) -> Vec<String> {
     let mut segs = Vec::new();
     let mut start = 0;
-    for (idx, _op) in unicode_linebreak::linebreaks(word) {
+    // ── **THE `line-break` TAILORING IS APPLIED BY REWRITING THE INPUT, NOT BY EDITING THE ANSWER.**
+    // See `line_break_probe`. `probe` is a parallel string in which every character this
+    // `line-break` value re-classes has been swapped for an ideograph; the crate's pair table then
+    // resolves the *context* (an open bracket still forbids a break after it, a close bracket still
+    // forbids one before it) instead of us second-guessing it per opportunity. `None` — the case for
+    // all ASCII and for CJK under `strict` — scans the original and allocates nothing.
+    let probe = line_break_probe(word, line_break);
+    let scan: &str = probe.as_ref().map_or(word, |p| p.text.as_str());
+    for (pidx, _op) in unicode_linebreak::linebreaks(scan) {
+        let idx = probe.as_ref().map_or(pidx, |p| p.to_original(pidx));
         // The final opportunity is the mandatory break at end-of-word — already handled by
         // the outer whitespace loop; only split at *interior* opportunities.
         if idx >= word.len() {
@@ -15811,6 +15828,139 @@ fn break_segments(word: &str, keep_all: bool) -> Vec<String> {
     segs
 }
 
+/// The tailored view of one word, and the map back from its byte offsets to the original's.
+///
+/// Both strings have the SAME character count (the rewrite is one char for one char) but not the
+/// same byte length — `°` is two UTF-8 bytes and the ideograph it is swapped for is three — so the
+/// map is kept per character rather than assumed to be the identity.
+struct LineBreakProbe {
+    text: String,
+    /// Byte offset of each character in `text`, plus a terminator at `text.len()`.
+    probe_starts: Vec<usize>,
+    /// Byte offset of the same character in the ORIGINAL word, plus a terminator.
+    orig_starts: Vec<usize>,
+}
+
+impl LineBreakProbe {
+    /// A break opportunity always falls on a character boundary, so this is an exact lookup and
+    /// never an interpolation.
+    fn to_original(&self, probe_idx: usize) -> usize {
+        match self.probe_starts.binary_search(&probe_idx) {
+            Ok(i) => self.orig_starts[i],
+            // Unreachable for a well-formed opportunity; degrade to the nearest boundary at or
+            // before it rather than panicking inside layout.
+            Err(i) => self.orig_starts[i.saturating_sub(1)],
+        }
+    }
+}
+
+/// The ideograph every re-classed character is rewritten to. Any character of class ID would do —
+/// what matters is that the pair table then answers "may a line begin here" for it the way CSS Text
+/// §5.2 says it must for the character it stands in for.
+const IDEOGRAPH_STAND_IN: char = '\u{4E00}';
+
+/// Japanese iteration marks (CSS Text §5.2, `loose`). Class NS, so untailored UAX #14 forbids a
+/// line from beginning with one, and Chrome allows it under `loose` **in every content language**,
+/// which is what puts this list on the near side of the boundary described below.
+const ITERATION_MARKS: &[char] = &[
+    '\u{3005}', '\u{303B}', '\u{309D}', '\u{309E}', '\u{30FD}', '\u{30FE}',
+];
+
+/// ⭐⭐ **AN ENGINE THAT NEVER IMPLEMENTED `line-break` WAS IN `strict` MODE ON EVERY JAPANESE PAGE
+/// — because UAX #14's UNTAILORED DEFAULT *IS* `strict`, and no library will tell you that.**
+///
+/// UAX #14 LB1 resolves CJ (Conditional Japanese Starter — the small kana `ぁぃぅっゃゅょ`, the
+/// prolonged sound mark `ー`, and the halfwidth katakana small letters) to NS, which forbids a line
+/// from *beginning* with one. That is the `strict` behaviour. CSS's initial value is `auto`, and
+/// Chrome resolves it the other way. Since `ー` and `っ` are among the commonest characters in
+/// Japanese, the untailored library answer moved a character down a line on a large fraction of the
+/// Japanese web — and every element below the paragraph inherited the difference as `dy`. The
+/// property was not "unsupported": it was silently pinned to the value pages ask for least.
+///
+/// **Every cell below was measured in headless Chrome** on WPT's own fixture markup
+/// (`文文文文文文<X>字<span>字</span>` in a 185px box at 30px/1em, against a `<br>`-forced
+/// reference) for all four values of the property **and four content languages**. `·` = no break
+/// before the character, `÷` = a line may begin with it; the four glyphs in a cell are
+/// `auto loose normal strict`:
+///
+/// ```text
+///   class / char                        lang=ja  lang=zh  lang=de  no lang
+///   CJ     ぁ っ ー ｧ ｰ                    ÷÷÷·     ÷÷÷·     ÷÷÷·     ÷÷÷·     <- IMPLEMENTED
+///   ITER   々 〻 ゝ ヽ                      ·÷··     ·÷··     ·÷··     ·÷··     <- IMPLEMENTED
+///   IN     ‥ … ⋯ ︙                        ····     ····     ····     ····     <- Chrome refuses
+///   PR-AFW ± € № ﹩ ＄ ￡ ￥ ￦             ÷÷÷÷     ÷÷÷÷     ÷÷÷÷     ÷÷÷÷     <- Chrome refuses
+///   CPM    ・ ： ； ･ ‼ ⁇ ⁈ ⁉ ！ ？           ·÷··     ·÷··     ····     ····     <- NEEDS lang
+///   PO-AFW ° ‰ ′ ℃ ﹪ ％ ￠               ·÷··     ·÷··     ····     ····     <- NEEDS lang
+///   HYPH   〜 ゠                           ·÷÷·     ÷÷÷·     ····     ····     <- NEEDS lang
+///   HYPH   ‐ –                            ·÷··     ·÷··     ····     ····     <- NEEDS lang
+///   ID     一                     CTRL     ÷÷÷÷     ÷÷÷÷     ÷÷÷÷     ÷÷÷÷
+///   CL     、 。 ）                CTRL     ····     ····     ····     ····
+///   OP     （                     CTRL     ÷÷÷÷     ÷÷÷÷     ÷÷÷÷     ÷÷÷÷
+///   PR-Na  $ +                    CTRL     ÷÷÷÷     ÷÷÷÷     ÷÷÷÷     ÷÷÷÷
+///   PO-Na  %                      CTRL     ····     ····     ····     ····
+/// ```
+///
+/// ⚠⭐ **THE TABLE HAS A VERTICAL SEAM IN IT, AND ONLY THE FOUR-LANGUAGE SWEEP SHOWS IT.** The first
+/// two tailorings are properties of the *character*; the four marked `NEEDS lang` are properties of
+/// the *content language*, and Chrome applies them only when the text is Japanese or Chinese. The
+/// first version of this function shipped all six, measured against `lang="ja"` alone, and turned
+/// six `other-lang`/`unknown-lang` WPT files from green to red while the AREA TOTAL still climbed
+/// +432 — a net gain hiding a regression, which is the whole reason the failing NAME lists get
+/// diffed and not the counts. This engine has no content-language resolution at all (`lang`
+/// inheritance, `:lang()`, `<meta http-equiv>`), so the four are **deferred as a unit** rather than
+/// approximated: an unconditional version is wrong for every German page that quotes a `％`.
+///
+/// ⚠ **Two more rows are Chrome REFUSING a rule CSS Text §5.2 states, and this engine refuses them
+/// with it.** `loose` is specified to allow a break before an inseparable character (`…`), and
+/// `normal`/`strict` to *forbid* one before a prefix with East Asian Width A/F/W (`±`, `€`). Chrome
+/// does neither, so WPT's `-in-loose` (5 subtests) and `-pr-{normal,strict}` (8 each) fail in
+/// Chrome too. Implementing them would buy ~52 subtests and put every Japanese paragraph containing
+/// `…` or `€` one character out of step with the browser the corpus is scored against. Capability
+/// matches Chrome; a structural divergence is a bug even when a spec sentence licenses it.
+///
+/// ⚠ **`auto` IS NOT `normal`** — the `HYPH 〜゠` row is the only place it shows, and it is on the
+/// deferred side, so the two values coincide in everything this function currently decides. They
+/// are still kept as distinct enum variants: aliasing them is exactly the shortcut the deferred
+/// work would then have to undo.
+fn line_break_probe(word: &str, lb: manuk_css::LineBreak) -> Option<LineBreakProbe> {
+    use manuk_css::LineBreak as LB;
+    // Every character these rules touch is non-ASCII, so a Latin word — the overwhelming majority
+    // of every page — leaves here without inspecting a single class.
+    if word.is_ascii() {
+        return None;
+    }
+    // `Anywhere` is CSS Text 4's char-level break, which reaches layout through `break_word`, not
+    // through this table; for the tailorable classes it behaves as the initial value.
+    let cj_is_ideograph = lb != LB::Strict;
+    let loose = lb == LB::Loose;
+
+    let reclassed = |c: char| -> bool {
+        use unicode_linebreak::BreakClass as BC;
+        (cj_is_ideograph
+            && unicode_linebreak::break_property(c as u32) == BC::ConditionalJapaneseStarter)
+            || (loose && ITERATION_MARKS.contains(&c))
+    };
+
+    if !word.chars().any(reclassed) {
+        return None;
+    }
+    let mut text = String::with_capacity(word.len());
+    let mut probe_starts = Vec::with_capacity(word.len() + 1);
+    let mut orig_starts = Vec::with_capacity(word.len() + 1);
+    for (i, c) in word.char_indices() {
+        probe_starts.push(text.len());
+        orig_starts.push(i);
+        text.push(if reclassed(c) { IDEOGRAPH_STAND_IN } else { c });
+    }
+    probe_starts.push(text.len());
+    orig_starts.push(word.len());
+    Some(LineBreakProbe {
+        text,
+        probe_starts,
+        orig_starts,
+    })
+}
+
 #[allow(clippy::too_many_arguments)]
 /// **What the inline collector is carrying across the gap between two items.**
 ///
@@ -15863,13 +16013,14 @@ fn push_word(
     no_wrap: bool,
     break_word: bool,
     keep_all: bool,
+    line_break: manuk_css::LineBreak,
 ) {
     let text = std::mem::take(buf);
     // `nowrap`/`pre` forbid breaks inside the run, so never split those.
     let segs = if no_wrap {
         vec![text]
     } else {
-        break_segments(&text, keep_all)
+        break_segments(&text, keep_all, line_break)
     };
     for (i, seg) in segs.into_iter().enumerate() {
         out.push(InlineItem::Word {
@@ -21590,13 +21741,28 @@ mod tests {
     /// ideograph; a zero-width space is a break point and is stripped from the output.
     #[test]
     fn break_segments_finds_intra_word_opportunities() {
-        assert_eq!(break_segments("plain", false), vec!["plain"]);
-        assert_eq!(break_segments("well-known", false), vec!["well-", "known"]);
-        assert_eq!(break_segments("a-b-c", false), vec!["a-", "b-", "c"]);
+        assert_eq!(
+            break_segments("plain", false, manuk_css::LineBreak::Auto),
+            vec!["plain"]
+        );
+        assert_eq!(
+            break_segments("well-known", false, manuk_css::LineBreak::Auto),
+            vec!["well-", "known"]
+        );
+        assert_eq!(
+            break_segments("a-b-c", false, manuk_css::LineBreak::Auto),
+            vec!["a-", "b-", "c"]
+        );
         // CJK: each ideograph is its own break segment.
-        assert_eq!(break_segments("日本語", false), vec!["日", "本", "語"]);
+        assert_eq!(
+            break_segments("日本語", false, manuk_css::LineBreak::Auto),
+            vec!["日", "本", "語"]
+        );
         // Zero-width space marks a break and is removed from the rendered text.
-        assert_eq!(break_segments("foo\u{200b}bar", false), vec!["foo", "bar"]);
+        assert_eq!(
+            break_segments("foo\u{200b}bar", false, manuk_css::LineBreak::Auto),
+            vec!["foo", "bar"]
+        );
     }
 
     /// `display:inline-block` flows atomically: sized boxes sit side by side on a line, and
@@ -27810,34 +27976,34 @@ mod tests {
         // ── THE RULE ITSELF, font-independent by construction: `break_segments` reads codepoints.
         //    Both characters around an opportunity must be letter units for it to be suppressed.
         assert_eq!(
-            break_segments("日本語", false),
+            break_segments("日本語", false, manuk_css::LineBreak::Auto),
             vec!["日", "本", "語"],
             "CONTROL: without `keep-all` an ideograph run breaks per ideograph (UAX #14 class ID)"
         );
         assert_eq!(
-            break_segments("日本語", true),
+            break_segments("日本語", true, manuk_css::LineBreak::Auto),
             vec!["日本語"],
             "`keep-all` suppresses the ID/ID opportunities — one segment"
         );
         assert_eq!(
-            break_segments("日本語text日本語", true),
+            break_segments("日本語text日本語", true, manuk_css::LineBreak::Auto),
             vec!["日本語text日本語"],
             "the CJK<->Latin boundary is a letter unit on BOTH sides (ID and AL), so `keep-all` \
              suppresses it too — this is the half that makes it a predicate on two characters"
         );
         assert_eq!(
-            break_segments("alpha-bravo", true),
+            break_segments("alpha-bravo", true, manuk_css::LineBreak::Auto),
             vec!["alpha-", "bravo"],
             "CONTROL: a hyphen is class BA/HY, NOT a letter unit — `keep-all` must still break here, \
              which is what makes this rule 'between letter units' and not 'never inside a word'"
         );
         assert_eq!(
-            break_segments("alpha\u{200b}bravo", true),
+            break_segments("alpha\u{200b}bravo", true, manuk_css::LineBreak::Auto),
             vec!["alpha", "bravo"],
             "CONTROL: a zero-width space is not a letter unit either"
         );
         assert_eq!(
-            break_segments("supercalifragilistic", true),
+            break_segments("supercalifragilistic", true, manuk_css::LineBreak::Auto),
             vec!["supercalifragilistic"],
             "CONTROL: an ordinary long Latin word has no interior opportunity with or without it"
         );
@@ -27917,6 +28083,211 @@ mod tests {
                 h(id)
             );
         }
+    }
+
+    /// ⭐⭐ **AN ENGINE THAT NEVER IMPLEMENTED `line-break` WAS IN `strict` MODE ON EVERY JAPANESE
+    /// PAGE — because UAX #14's UNTAILORED default IS `strict`, and no library will tell you that.**
+    ///
+    /// The table this asserts is `line_break_probe`'s doc comment, and every cell in it was
+    /// **measured in headless Chrome**, on WPT's own fixture markup, across four values of the
+    /// property and four content languages, before a line of the implementation was written.
+    ///
+    /// ⚠⭐ **THE ROWS THAT ARE PINNED *NEGATIVE* HERE ARE THE POINT OF THE GATE.** Three separate
+    /// groups of characters look like they belong with `CJ` and do not:
+    ///
+    /// * `IN` and `PR-AFW` — CSS Text §5.2 states a rule for each and **Chrome implements neither**,
+    ///   so WPT fails in Chrome too. Pinned as refusals: implementing the spec sentence there has to
+    ///   argue with a measurement rather than slip in.
+    /// * `CPM`, `PO-AFW` and the CJK hyphens — Chrome applies these **only when the content language
+    ///   is Japanese or Chinese**. The first version of this tick shipped them unconditionally,
+    ///   measured against `lang="ja"` alone, and turned six `other-lang`/`unknown-lang` WPT files
+    ///   red while the area TOTAL still climbed +432. They are pinned OFF until the engine can
+    ///   resolve a content language at all.
+    ///
+    /// RED, run four times: (1) return `None` from `line_break_probe` — every ÷ row under
+    /// auto/loose/normal collapses to `·`, i.e. the defect itself; (2) drop the `lb != Strict` guard
+    /// so CJ is always an ideograph — the `strict` column's CJ row goes `·` → `÷`; (3) re-class the
+    /// language-conditional groups unconditionally — the three `NEEDS lang` rows go red, which is
+    /// exactly the regression the WPT name-diff caught; (4) pass a constant `LineBreak::Auto` into
+    /// `push_word` instead of `cs.line_break` — the unit rows all still pass and the layout arm
+    /// fails, because a property parsed and read by nothing is the t1353 shape.
+    #[test]
+    fn line_break_tailors_the_cjk_classes_the_way_chrome_does() {
+        use manuk_css::LineBreak as LB;
+        // Does a line begin with `c` in `文文c字`? `break_segments` reads codepoints, so unlike a
+        // width measurement this cannot depend on which fonts the host happens to have.
+        let starts_a_line = |c: char, lb: LB| -> bool {
+            let word = format!("文文{c}字");
+            break_segments(&word, false, lb)
+                .iter()
+                .any(|seg| seg.starts_with(c))
+        };
+        let modes = [LB::Auto, LB::Loose, LB::Normal, LB::Strict];
+        let name = |lb: LB| match lb {
+            LB::Auto => "auto",
+            LB::Loose => "loose",
+            LB::Normal => "normal",
+            LB::Strict => "strict",
+            LB::Anywhere => "anywhere",
+        };
+        //                                                       auto  loose normal strict
+        let table: &[(&str, &[char], [bool; 4], &str)] = &[
+            (
+                "CJ (small kana)",
+                &['\u{3041}', '\u{3063}', '\u{30FC}', '\u{FF67}', '\u{FF70}'],
+                [true, true, true, false],
+                "THE FIX: UAX #14 resolves CJ to NS, CSS's `auto`/`normal`/`loose` treat it as an \
+                 ideograph. `strict` is the one value that agrees with the untailored library, and \
+                 it is the value the engine was stuck on. Chrome gives this row in all four \
+                 content languages",
+            ),
+            (
+                "iteration marks",
+                &['\u{3005}', '\u{303B}', '\u{309D}', '\u{30FD}'],
+                [false, true, false, false],
+                "only `loose` lets a line begin with 々 — and, unlike the centred punctuation \
+                 below, Chrome does it whatever the content language is",
+            ),
+            (
+                "REFUSED: inseparable",
+                &['\u{2026}', '\u{2025}'],
+                [false, false, false, false],
+                "CSS Text §5.2 says `loose` allows a break before an inseparable character and \
+                 CHROME DOES NOT, in any language. WPT's `-in-loose` fails in Chrome too. \
+                 Implementing the spec sentence would put every paragraph containing … one \
+                 character out of step with the browser this engine is measured against",
+            ),
+            (
+                "REFUSED: prefix, EAW A/F/W",
+                &['\u{00B1}', '\u{20AC}', '\u{FFE5}'],
+                [true, true, true, true],
+                "CSS Text §5.2 says `normal`/`strict` FORBID a line beginning with ± or €, and \
+                 CHROME ALLOWS IT in all four modes. WPT's `-pr-normal`/`-pr-strict` fail in \
+                 Chrome too. Same refusal, opposite direction",
+            ),
+            (
+                "NEEDS lang: centred punctuation",
+                &['\u{30FB}', '\u{FF01}', '\u{FF1F}', '\u{FF1A}'],
+                [false, false, false, false],
+                "Chrome lets `loose` begin a line with ・！？ ONLY when the content language is ja \
+                 or zh — `lang=de` and no-lang keep every mode at `·`. This engine has no content \
+                 language, so the rule is OFF rather than approximated. Turning it on \
+                 unconditionally reddens `other-lang`/`unknown-lang` in WPT, which is how it was \
+                 caught",
+            ),
+            (
+                "NEEDS lang: postfix, EAW A/F/W",
+                &['\u{00B0}', '\u{FF05}', '\u{2103}'],
+                [false, false, false, false],
+                "same seam as the row above: ja/zh only. ASCII `%` is class PO with East Asian \
+                 Width Na and stays `·` even in Japanese, so whoever implements this needs the \
+                 width filter AND the language",
+            ),
+            (
+                "NEEDS lang: CJK hyphens",
+                &['\u{301C}', '\u{30A0}', '\u{2010}', '\u{2013}'],
+                [false, false, false, false],
+                "ja/zh only — and the one place `auto` and `normal` DIFFER in Chrome (〜 begins a \
+                 line under `normal` and not under `auto`, in ja; in zh even `auto` allows it). \
+                 That is why the two values are kept as distinct variants rather than aliased",
+            ),
+            (
+                "CONTROL: ideograph",
+                &['\u{4E00}'],
+                [true, true, true, true],
+                "an ordinary ideograph starts a line in every mode — if THIS ever goes false the \
+                 probe has broken the mapping back to the original byte offsets",
+            ),
+            (
+                "CONTROL: close punctuation",
+                &['\u{3001}', '\u{FF09}'],
+                [false, false, false, false],
+                "、 and ） may never begin a line, in any mode. A tailoring that re-classed by \
+                 East Asian Width alone rather than by BREAK CLASS would move these",
+            ),
+            (
+                "CONTROL: open punctuation",
+                &['\u{FF08}'],
+                [true, true, true, true],
+                "（ always begins a line — the pair table's context, which is why the tailoring \
+                 rewrites the INPUT rather than editing the answer",
+            ),
+            (
+                "CONTROL: prefix, EAW Na",
+                &['\u{0024}', '\u{002B}'],
+                [true, true, true, true],
+                "ASCII `$`/`+` already start a line after an ideograph and nothing here may move \
+                 them",
+            ),
+        ];
+        for (label, chars, expected, why) in table {
+            for &c in *chars {
+                for (i, lb) in modes.iter().enumerate() {
+                    assert_eq!(
+                        starts_a_line(c, *lb),
+                        expected[i],
+                        "{label}: U+{:04X} `{c}` under `line-break: {}` — Chrome says a line {} \
+                         begin with it. {why}",
+                        c as u32,
+                        name(*lb),
+                        if expected[i] { "MAY" } else { "may NOT" }
+                    );
+                }
+            }
+        }
+
+        // ── AND THE PROPERTY HAS TO REACH LAYOUT. The rows above test `break_segments` directly and
+        //    would all pass with `line-break` parsed into a field nothing reads — the t1353 trap of a
+        //    property that works through one entrance and is dead at the other. This half is
+        //    font-independent by construction: the box is 1px wide, so every segment overflows onto
+        //    its own line and the height is the SEGMENT COUNT times the declared leading, whatever
+        //    the face's advances are.
+        let (dom, root) = layout_html(
+            "<body style='margin:0'>\
+               <div id=def>文っ文</div>\
+               <div id=strict style='line-break:strict'>文っ文</div>\
+               <div id=loose style='line-break:loose'>文々文</div>\
+               <div id=ctl>文文文</div>\
+             </body>",
+            "body{font-size:16px;line-height:20px;font-family:sans-serif} div{width:1px}",
+            1200.0,
+        );
+        let rects = root.node_rects(&dom);
+        let h = |id: &str| {
+            let n = dom
+                .descendants(dom.root())
+                .find(|&n| dom.element(n).and_then(|e| e.attr("id")) == Some(id))
+                .unwrap_or_else(|| panic!("no #{id}"));
+            rects[&n].height
+        };
+        assert!(
+            (h("ctl") - 60.0).abs() < 0.5,
+            "CONTROL: #ctl (three plain ideographs, 1px box) is h{} and must be three 20px lines — \
+             if this is not 60 the fixture is not measuring segment count and no row below means \
+             anything",
+            h("ctl")
+        );
+        assert!(
+            (h("def") - 60.0).abs() < 0.5,
+            "#def is h{} and must be 60: with no `line-break` declared the initial `auto` lets a \
+             line begin with っ, so 文/っ/文 is THREE segments. This is the row that moves on the \
+             real web, because no page declares the property",
+            h("def")
+        );
+        assert!(
+            (h("strict") - 40.0).abs() < 0.5,
+            "#strict is h{} and must be 40: `line-break: strict` keeps っ with the ideograph before \
+             it, so 文っ/文 is TWO segments. If this equals #def the declaration never reached \
+             `break_segments` — parsed, stored, and read by nothing",
+            h("strict")
+        );
+        assert!(
+            (h("loose") - 60.0).abs() < 0.5,
+            "#loose is h{} and must be 60: `line-break: loose` lets a line begin with the iteration \
+             mark 々, which `auto` does not. Two different non-initial values reaching layout is \
+             what separates a live property from one hard-coded to a single tailoring",
+            h("loose")
+        );
     }
 
     /// **A `<br>` is a BREAK, not an inline box on the line it ends — and it was BOTH.**

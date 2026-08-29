@@ -1308,6 +1308,11 @@ pub fn cascade_via_stylo_sized(
                 // the viewport, via the root element) whether or not a scrollbar is shown.
                 cs.scrollbar_gutter = m.scrollbar_gutter;
                 cs.word_break = m.word_break;
+                // `line-break` for the same reason as `word-break` beside it: stylo 0.19's servo
+                // build carries it as a keyword enum we do not consume, so without this recovery the
+                // shipping cascade renders every `line-break: strict` page as `normal` — and, worse,
+                // reports `undefined` for a property the CSSOM is asked for.
+                cs.line_break = m.line_break;
                 // `direction` likewise: the bidi base level decides ORDER, and Stylo's servo build
                 // does not surface it in a form we consume, so the shipping path would otherwise
                 // render every RTL paragraph LTR-ordered.

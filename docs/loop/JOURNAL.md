@@ -94839,3 +94839,150 @@ the direction of doing MORE, so it needs pricing before it is changed — refusi
 a trade, and trades are refused.
 
 WIKI: docs/wiki/interaction-surface.md
+
+## Tick 1357 — the library answered UAX #14's default, and UAX #14's default is `strict` (2026-08-29)
+
+TICK SHAPE: capability-mechanism
+
+**Track A, and the survey chose it.** `css/css-text` was the lowest-passing ★ CSS-LAYOUT row on the
+board (47.8%, 2,359 failing). Surveying its failing subtests by *directory* before touching anything:
+`i18n/` 532 · `animations/` 798 · `parsing/` 364 · rest 345. The `animations/` pile is bigger and is
+interpolation of text properties — a decimal, not a subsystem. The `i18n/` pile is one mechanism,
+and it is CJK line breaking, which is the shape of every Japanese and Chinese page on the corpus.
+
+### ⭐⭐ THE FINDING — A LIBRARY THAT ANSWERS THE STANDARD IS ANSWERING THE WRONG QUESTION
+
+`break_segments` asks `unicode-linebreak` where a run may break. The crate is correct: it implements
+UAX #14's **default** algorithm, whose LB1 resolves **CJ** (Conditional Japanese Starter — the small
+kana `ぁぃぅっゃゅょ`, the prolonged sound mark `ー`, the halfwidth katakana small letters) to **NS**,
+*a line may not begin with one*.
+
+**That is CSS's `line-break: strict`.** CSS's initial value is `auto`, which Chrome resolves the
+other way. So this engine was pinned to `strict` on every Japanese page it ever rendered — and `ー`
+and `っ` are among the commonest characters in the language. Every paragraph containing one wrapped a
+character earlier than Chrome, and every element below it inherited the difference as `dy`.
+
+The property was not *"unsupported"*. It was silently **fixed at the value pages ask for least**, by a
+dependency that was doing exactly what it says on the tin. `line-break` did not exist in
+`ComputedStyle` at all, so there was no field to notice was never written.
+
+### THE MECHANISM — TAILOR THE INPUT, NOT THE ANSWER
+
+`line_break_probe` builds a parallel string in which every character this `line-break` value
+re-classes is swapped for an ideograph (`一`), and runs the crate over *that*, mapping the byte
+offsets back. Both strings have the same CHARACTER count and not the same BYTE length (`°` is two
+UTF-8 bytes, `一` is three), so the map is kept per character rather than assumed to be the identity.
+
+Rewriting the input rather than post-filtering the opportunities is what keeps the **context** right:
+an open bracket still forbids a break after it, a close bracket still forbids one before it, `NU × ID`
+still holds. Editing the crate's answer per opportunity would have re-derived the pair table by hand.
+The probe returns `None` — no allocation, original string scanned — for anything ASCII and for any
+run with nothing to re-class, which is nearly every word on nearly every page.
+
+### ⚠⭐ THE TABLE HAS A VERTICAL SEAM IN IT, AND ONLY A FOUR-LANGUAGE SWEEP SHOWS IT
+
+Before writing a line, the whole tailorable surface was measured in headless Chrome on WPT's own
+fixture markup, for four values of the property × four content languages. `÷` = a line may begin
+with the character, cells are `auto loose normal strict`:
+
+```text
+  class / char                        lang=ja  lang=zh  lang=de  no lang
+  CJ     ぁ っ ー ｧ ｰ                    ÷÷÷·     ÷÷÷·     ÷÷÷·     ÷÷÷·     <- IMPLEMENTED
+  ITER   々 〻 ゝ ヽ                      ·÷··     ·÷··     ·÷··     ·÷··     <- IMPLEMENTED
+  IN     ‥ … ⋯ ︙                        ····     ····     ····     ····     <- Chrome refuses
+  PR-AFW ± € № ﹩ ＄ ￡ ￥ ￦             ÷÷÷÷     ÷÷÷÷     ÷÷÷÷     ÷÷÷÷     <- Chrome refuses
+  CPM    ・ ： ； ･ ‼ ⁇ ⁈ ⁉ ！ ？           ·÷··     ·÷··     ····     ····     <- NEEDS lang
+  PO-AFW ° ‰ ′ ℃ ﹪ ％ ￠               ·÷··     ·÷··     ····     ····     <- NEEDS lang
+  HYPH   〜 ゠                           ·÷÷·     ÷÷÷·     ····     ····     <- NEEDS lang
+  HYPH   ‐ –                            ·÷··     ·÷··     ····     ····     <- NEEDS lang
+  ID 一 · CL 、。） · OP （ · PR-Na $ + · PO-Na %          CTRL rows, unmoved
+```
+
+**The first version of this tick shipped all six tailorings.** It was measured against `lang="ja"`
+alone — WPT's `ja/` directory — and it turned six `other-lang`/`unknown-lang` files from green to red
+**while the area total still climbed +432**. A net gain hiding a regression is invisible to a total
+and obvious in a name diff, which is why the name lists get diffed and the counts do not. The four
+`NEEDS lang` groups are properties of the CONTENT LANGUAGE, not of the character; this engine has no
+content-language resolution at all (`lang` inheritance, `:lang()`, `<meta http-equiv>` — zero hits in
+`engine/{css,dom,layout}`), so they are **deferred as a unit rather than approximated**. An
+unconditional version is wrong for every German page that quotes a `％`.
+
+⚠ **Two more rows are Chrome REFUSING a rule CSS Text §5.2 states**, and this engine refuses them
+with it: `loose` is specified to allow a break before an inseparable character (`…`), and
+`normal`/`strict` to *forbid* one before a prefix with East Asian Width A/F/W (`±`, `€`). Chrome does
+neither, in any language, so `-in-loose` (5 subtests) and `-pr-{normal,strict}` (8 each) fail in
+Chrome too. Implementing the spec sentence buys ~52 subtests and puts every Japanese paragraph
+containing `…` or `€` one character out of step with the browser the corpus is scored against.
+Capability MATCHES Chrome; a structural divergence is a bug even when a spec sentence licenses it.
+
+⚠ **`auto` IS NOT `normal`.** The CJK-hyphen row is the only place it shows (`〜` begins a line under
+`normal` and not under `auto` in Japanese; in Chinese even `auto` allows it). That row is on the
+deferred side, so the two values coincide in everything the function currently decides — and they are
+still kept as distinct enum variants, because aliasing them is exactly the shortcut the deferred work
+would then have to undo.
+
+### THE GATE
+
+`line_break_tailors_the_cjk_classes_the_way_chrome_does` (`engine/layout`, in the wall's crate list).
+Eleven rows × four modes, asserted on `break_segments` — which reads codepoints, so unlike a width
+measurement it cannot depend on which fonts the host has. **The rows pinned NEGATIVE are the point:**
+the two Chrome refusals and the three `NEEDS lang` groups are asserted OFF, so re-adding either has
+to argue with a measurement rather than slip in.
+
+Plus a layout arm the unit rows cannot replace: a 1px-wide box makes the height the SEGMENT COUNT
+times the declared leading, font-independent by construction — `文っ文` is h60 by default and h40
+under `line-break: strict`, and `文々文` is h60 under `loose`. That half proves the declaration
+reaches `break_segments` at all, which is the t1353 shape (a property parsed, stored, and read by
+nothing).
+
+**PROVEN RED by four mutations**, each with a different message. N1 `line_break_probe` returns `None`
+(*the defect itself*) → every ÷ row under auto/loose/normal collapses. N2 drop the `lb != Strict`
+guard → the `strict` column's CJ row goes `·` → `÷`. N3 ship the language-conditional groups
+unconditionally → the three `NEEDS lang` rows go red, which is exactly the regression the WPT name
+diff caught. N4 pass a constant `LineBreak::Auto` into `push_word` → every unit row still passes and
+the layout arm fails.
+
+### THE RECEIPT
+
+```text
+  suite / area                       before      after     delta
+  WPT css/css-text/i18n            1024/1556  1456/1556    +432   65.8% -> 93.6%
+  WPT css/css-text                 2475/4515  2900/4515    +425   (by name diff; see below)
+  manuk-layout (lib)                 189/189    190/190      +1    +the new gate
+  manuk-css   (lib+tests)             42/42      42/42       0    CONTROL
+  cargo check --workspace --all-targets              clean       CONTROL
+```
+
+Every fixed file is a `-cj-loose` / `-cj-normal` / `-iteration-loose` in one of the four language
+directories, plus `parsing/line-break-computed.html` (+5) and one row of `inheritance.html`. **The
+remaining failing set is a strict SUBSET of the one this tick started from** — no file got worse,
+which is the form the ratchet is checked in.
+
+⚠ **ONE FILE LOOKS LIKE A LOSS AND IS A VACUOUS PASS BEING CASHED IN.**
+`animations/line-break-no-interpolation.html` was 42/42 and is now 28/42. It compares
+`getComputedStyle(el).getPropertyValue('line-break')` between an animated element and an expected
+one; before this tick the property did not exist, so **both sides returned `""` and all 42 subtests
+passed on `"" === ""`** — the t1270 shape. Now the property is real, and the honest answer is that
+discrete transitions/animations of a keyword property are not wired here. Its nearest sibling,
+`animations/hyphen-no-interpolation.html` on the long-supported `hyphens`, scores **0/126** on the
+identical test shape: 28/42 is the *better* end of the normal state for a real property, not a
+regression of a capability. Instrument fidelity up, capability unchanged.
+
+⚠ **The banked `WPT:css/css-text` mark was 2156 and this tick measured the pre-change state at 2475.**
+The +425 above is attributable by name diff; the remaining +319 was already in HEAD before this tick,
+so the banked row was stale by that much. `WPT-AREAS.tsv` is updated to the measured 2900 rather than
+to `2156 + 425`, and the discrepancy is recorded here rather than absorbed into this tick's credit.
+
+PERF: the probe's early-out is `word.is_ascii()`, so a Latin page never inspects a break class; a CJK
+run with nothing to re-class returns `None` after one pass and scans the original string. One extra
+allocation per word that actually contains a small kana under a non-`strict` value.
+
+NEXT: the four `NEEDS lang` groups are one tick behind **content-language resolution** — `lang`
+attribute inheritance down the tree, `:lang()`, `<meta http-equiv="content-language">` — which the
+engine does not have in any form and which `:lang()` selectors on real sites want anyway. That is the
+unlock for ~48 more i18n subtests AND for the `auto`/`normal` distinction. The other half of
+`css/css-text` is `animations/` (798 failing): `text-indent`, `tab-size` and `hyphens` interpolation,
+and the file above says the shared discrete-keyword animation path is the mechanism under several of
+them at once.
+
+WIKI: docs/wiki/cjk-line-breaking.md

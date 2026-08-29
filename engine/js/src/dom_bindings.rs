@@ -2277,6 +2277,17 @@ fn extra_computed_props(
             .into(),
         ),
         (
+            "line-break",
+            match cs.line_break {
+                LineBreak::Auto => "auto",
+                LineBreak::Loose => "loose",
+                LineBreak::Normal => "normal",
+                LineBreak::Strict => "strict",
+                LineBreak::Anywhere => "anywhere",
+            }
+            .into(),
+        ),
+        (
             "overflow-wrap",
             match cs.overflow_wrap {
                 OverflowWrap::Normal => "normal",

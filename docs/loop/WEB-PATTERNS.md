@@ -9285,3 +9285,19 @@ clicked it, and got a success back. A verified point either lands on the target 
 over the top half is worked around) or the row is marked `obstructed` and the covering node is
 named — which is what lets an agent dismiss the banner and retry instead of looping on a click that
 silently did nothing. (t1356 — `agent/tests/g_agent_click_lands_on_its_target.rs`)
+
+## `<p lang="ja">…っ…ー…</p>` — the paragraph a UAX #14 library wraps one character early
+
+Every Japanese page — a large fraction of the top-1000 by traffic — is written with small kana
+(`っ ゃ ゅ ょ`) and the prolonged sound mark `ー`. Unicode's *default* line-breaking algorithm
+classes them as non-starters, so a line may not begin with one; CSS's *initial* value says a line
+may. The two disagree, and the disagreement is silent: a conformant UAX #14 crate answers the
+standard's question correctly and CSS's question wrongly, on every page, with no field to notice was
+never written. The visible result is one character of shape error per affected line and a `dy` that
+every element below the paragraph inherits.
+
+⚠ The tailoring has a **language seam**: whether a line may begin with `・`, `％` or `〜` depends on
+the *content language*, not on the character — Chrome applies those rules for `lang=ja`/`zh` only.
+A tailoring measured against one language looks universal and is not, and shipping it that way
+reddens every page in every other language while the WPT area total still climbs.
+(t1357 — `engine/layout` `line_break_tailors_the_cjk_classes_the_way_chrome_does`)

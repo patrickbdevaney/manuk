@@ -766,6 +766,38 @@ pub enum WordBreak {
     KeepAll,
 }
 
+/// `line-break` — **how strict the line-breaking rules are for CJK text**, and the reason it is a
+/// separate property from `word-break` is that it does not decide *whether* a run may break at all;
+/// it decides which of UAX #14's *tailorable* classes count as a break opportunity.
+///
+/// The three real values move a small, spec-enumerated set of characters between "may start a line"
+/// and "may not" (CSS Text §5.2). The default `auto` is UA-defined and Chrome resolves it to
+/// `normal`, which is what makes this property matter to pages that never mention it: **`normal`
+/// treats a Conditional Japanese Starter (the small kana — ぁぃっゃゅょ, ー and the halfwidth
+/// katakana small letters) as an ideograph, so a line may begin with one.** UAX #14's *untailored*
+/// default resolves CJ to NS (non-starter) instead, i.e. the `strict` behaviour — so an engine that
+/// simply asks a UAX #14 library for its opportunities is silently in `strict` mode on every
+/// Japanese page it renders, and every line that would have ended before a small kana is one
+/// character short of Chrome's.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Default)]
+pub enum LineBreak {
+    /// UA-defined. Chrome (and this engine) resolve it exactly as [`LineBreak::Normal`].
+    #[default]
+    Auto,
+    /// The most permissive of the three: everything `normal` allows, plus a break before an
+    /// inseparable character, an iteration mark, a centred punctuation mark, and a postfix with an
+    /// East Asian Width of A/F/W.
+    Loose,
+    /// The common case, and what `auto` means here: a line may start with a small kana or a CJK
+    /// hyphen, but not with an inseparable character, an iteration mark or a prefix/postfix.
+    Normal,
+    /// UAX #14 untailored for these classes: a small kana and a CJK hyphen are non-starters too.
+    Strict,
+    /// CSS Text 4 — every typographic character unit is a soft wrap opportunity. Parsed and
+    /// preserved for the CSSOM; the char-level breaking itself is `overflow-wrap: anywhere`'s path.
+    Anywhere,
+}
+
 /// `tab-size` — **the distance between tab stops in a preserved-whitespace run**, and the reason it
 /// is an enum rather than a number is that CSS gives it two incompatible units.
 ///
@@ -1454,6 +1486,8 @@ pub struct ComputedStyle {
     pub overflow_wrap: OverflowWrap,
     /// `word-break` — char-level break control within a run (inherited).
     pub word_break: WordBreak,
+    /// `line-break` — how strict the CJK line-breaking tailorings are (inherited).
+    pub line_break: LineBreak,
     /// `direction` — the paragraph's bidi base direction (inherited).
     pub direction: Direction,
     /// `writing-mode` — which physical axis the inline direction runs along (inherited). See
@@ -1939,6 +1973,7 @@ impl ComputedStyle {
             text_transform: TextTransform::None,
             overflow_wrap: OverflowWrap::Normal,
             word_break: WordBreak::Normal,
+            line_break: LineBreak::Auto,
             direction: Direction::Ltr,
             writing_mode: WritingMode::HorizontalTb,
             letter_spacing: 0.0,
@@ -2117,6 +2152,7 @@ impl ComputedStyle {
         s.text_transform = parent.text_transform;
         s.overflow_wrap = parent.overflow_wrap;
         s.word_break = parent.word_break;
+        s.line_break = parent.line_break;
         s.direction = parent.direction;
         // `writing-mode` is inherited — that is how `html { writing-mode: vertical-rl }` turns a
         // whole Japanese document vertical without naming a single descendant.
@@ -2242,6 +2278,7 @@ pub fn diff_style(old: &ComputedStyle, new: &ComputedStyle) -> RestyleDamage {
         // change there is.
         || old.writing_mode != new.writing_mode
         || old.word_break != new.word_break
+        || old.line_break != new.line_break
         || old.letter_spacing != new.letter_spacing
         || old.word_spacing != new.word_spacing
         || old.tab_size != new.tab_size
@@ -6234,6 +6271,17 @@ fn apply_declaration(s: &mut ComputedStyle, d: &Declaration, parent_fs: f32) {
                 "break-all" => WordBreak::BreakAll,
                 "keep-all" => WordBreak::KeepAll,
                 "normal" => WordBreak::Normal,
+                // INVALID → drop the declaration (CSS 2.1 §4.2).
+                _ => return,
+            }
+        }
+        "line-break" => {
+            s.line_break = match v.trim().to_ascii_lowercase().as_str() {
+                "auto" => LineBreak::Auto,
+                "loose" => LineBreak::Loose,
+                "normal" => LineBreak::Normal,
+                "strict" => LineBreak::Strict,
+                "anywhere" => LineBreak::Anywhere,
                 // INVALID → drop the declaration (CSS 2.1 §4.2).
                 _ => return,
             }
