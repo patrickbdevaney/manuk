@@ -11,12 +11,12 @@
 
 | | value | over |
 |---|---|---|
-| ticks landed | **1039** | ticks 1–1354 |
-| median tick cycle | **31m** | 1038 intervals |
-| median, last 10 | **65m** | 10 intervals |
+| ticks landed | **1040** | ticks 1–1355 |
+| median tick cycle | **31m** | 1039 intervals |
+| median, last 10 | **64m** | 10 intervals |
 | fastest / slowest | 5s / 7.0d | |
-| **ticks per hour** | **0.88** | 1176.7h elapsed |
-| median verify wall | **66s** | 978 ticks |
+| **ticks per hour** | **0.88** | 1177.3h elapsed |
+| median verify wall | **66s** | 979 ticks |
 | wall trend | 39s → 8m — getting slower ⚠️ | first 3 vs last 3 |
 
 The **cycle** is the real unit: implement → debug → verify wall → land. The wall is only part of
@@ -31,7 +31,7 @@ it, and a wall that grows taxes every future tick, so it is tracked separately f
 * **✅ rows in the capability ledger**: 144 → **642**
 * **Bar 0 — oracle hangs**: 0 of 265 sites
 
-**491 of 1039 ticks** (47%) moved a
+**492 of 1040 ticks** (47%) moved a
 user-visible capability. The rest were instruments, infrastructure and corrections — and the
 ledger says the corrections were not overhead: three of its top three priorities were phantoms,
 and finding that out redirected everything after it.
@@ -90,8 +90,8 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 
 ## What a capability costs
 
-* **491** capability ticks, median cycle **31m**
-* median diff per tick: **+283 / −34** lines across 8 files
+* **492** capability ticks, median cycle **31m**
+* median diff per tick: **+284 / −34** lines across 8 files
 
 ## Every tick
 
@@ -1136,5 +1136,6 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 | **1352** | 2026-08-29 03:35 | 54m | capability | 8m | +632/−68 | 522 | 81 | 56.0% · | a role is not a property of the tag alone: ancestor, name, and a conflicting presentation  |
 | **1353** | 2026-08-29 04:40 | 65m | capability | 8m | +569/−77 | 522 | 81 | 56.0% · | one accname walk, two callers, and only one of them recursed (2026-08-29) |
 | **1354** | 2026-08-29 05:43 | 62m | capability | 8m | +591/−54 | 522 | 81 | 56.0% · | a referenced node contributes its NAME, not its text (2026-08-29) |
+| **1355** | 2026-08-29 06:22 | 39m | capability | 8m | +453/−36 | 522 | 81 | 56.0% · | t1097 was fixed at one entrance, and the conformance suite only ever used the other (2026- |
 
 *`·` after a WPT figure means **carried forward**, not measured this tick.*

@@ -1038,3 +1038,4 @@ tick	sha	epoch	iso	delta_s	shape	wall_s	files	added	deleted	gates	claims	wpt_pas
 1352	ec20b848	1787988955	2026-08-29T03:35:55-04:00	3229	capability	465	9	632	68	522	81	3896	6960	0	642	0	a role is not a property of the tag alone: ancestor, name, and a conflicting presentation (2026-08-29)
 1353	083a84f4	1787992834	2026-08-29T04:40:34-04:00	3879	capability	465	11	569	77	522	81	3896	6960	0	642	0	one accname walk, two callers, and only one of them recursed (2026-08-29)
 1354	680cdb31	1787996584	2026-08-29T05:43:04-04:00	3750	capability	465	9	591	54	522	81	3896	6960	0	642	0	a referenced node contributes its NAME, not its text (2026-08-29)
+1355	53346661	1787998943	2026-08-29T06:22:23-04:00	2359	capability	465	14	453	36	522	81	3896	6960	0	642	0	t1097 was fixed at one entrance, and the conformance suite only ever used the other (2026-08-29)

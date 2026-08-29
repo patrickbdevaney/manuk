@@ -49,6 +49,9 @@ manuk-text.workspace = true
 # crate puts it in every gate test binary that links manuk-page, which the wall ratchet refused.
 manuk-media = { workspace = true }
 manuk-css.workspace = true
+# The a11y name computation needs the rendered `::before`/`::after` text, and `generated_text` is a
+# pure function of (DOM, computed styles) that lives here. See `host_ax_role_name`.
+manuk-layout.workspace = true
 manuk-net.workspace = true
 serde_json.workspace = true
 manuk-html.workspace = true

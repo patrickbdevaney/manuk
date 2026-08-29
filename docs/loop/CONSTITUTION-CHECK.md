@@ -10925,3 +10925,96 @@ asserted.**
 4. ⭐⭐ **I3's debt** — carried, owner is surface audit #76's ranked item 1.
 
 **Next check due: tick 1355.**
+
+## Check #128 — tick 1355
+
+**HORIZON: H0 — Pareto Web Parity.** Its exit gate, all binary:
+
+```text
+  1  ~83% WPT subtest pass rate across categories
+  2  differential-oracle-verified viability across all four usage-weighted corpora
+  3  the headful shell is daily-drivable by its own developer
+  4  EVERY RENDERED CONSTRUCT IS QUERYABLE THROUGH THE IN-PROCESS SEMANTIC API
+```
+
+### GATE OR SCOREBOARD? — GATE, AND THE SCOREBOARD COULD NOT SEE IT
+
+The last 8 ticks (1348–1355) were 6 consecutive Track-B ticks on the accessibility tree. That is
+**exit-gate condition 4** and H0 scope item 7 — *"Semantic model + AX tree land in lockstep
+(Invariant I3)"* — measured against the three suites the spec authors wrote:
+
+```text
+                    t1348      t1355      delta
+  accname          328/484    423/484     +95
+  wai-aria         238/434    399/434    +161
+  html-aam         253/335    310/335     +57
+  ───────────────────────────────────────────────
+  TOTAL            819/1253  1132/1253   +313      65.4% → 90.3%
+```
+
+⚠⚠⚠ **AND THE PRIMARY PER-TICK METRIC READ ZERO FOR ALL SIX.** `WPT-AREAS.tsv` — the source of the
+monotonic WPT total the loop steers by — has no `accname`, `wai-aria` or `html-aam` row. Surface
+audit #72 found that at t1304, wrote *"a number taken once and not banked as a ROW is a number the
+loop forgets"*, added the rows — and they are **gone again**, because the area list lives in
+`scripts/wpt-sweep.sh` and the file is regenerated from it.
+
+> **This is the tick-84 failure mode with the sign flipped.** t84 banked +721,000 encoding subtests
+> the scoreboard loved and the gate did not care about. This session moved an EXIT-GATE CONDITION by
+> 25 points and the scoreboard recorded **+0**. A loop steering only by its primary metric would have
+> refused every one of these ticks. The check exists for exactly this, and the answer is: **the
+> constitution, not the histogram, is what made these ticks legal.**
+
+⚠ Harness-owned, named not fixed (PART VII): the three rows belong in the sweep's `AREAS` list.
+
+### PART I — IS ANY INVARIANT BEING BENT?
+
+**I3, and this is the check's real finding.** I3 says *"Every renderer subsystem lands with its
+semantic-model exposure **or it is not done**."* t1097 landed generated content's semantic exposure,
+gated it (`g_ax_generated_name`), journaled it and wrote it up. t1355 found it was exposed through
+**one of the two entrances** the semantic API is read through — the tree builder had it; the bare
+`accessible_name` behind `get_computed_label()` built an empty map. For **258 ticks** a mechanism the
+project certified as I3-complete was invisible to every instrument that scores I3.
+
+> ⭐⭐⭐ **I3 IS SHARPENED, NOT AMENDED: "exposed" MUST MEAN "EXPOSED THROUGH EVERY ENTRANCE THE
+> SEMANTIC API IS READ THROUGH."** The tree and the direct query are two doors onto one model, and a
+> subsystem wired to one of them is half-done in a way its own gate will certify as finished. The
+> shape recurred **three times in this session alone** (t1350 `role_of` vs `Role::parse`; t1353 the
+> label walk vs name-from-content; t1355 the tree vs the name entry), which is what promotes it from
+> an anecdote to a rule.
+>
+> **The falsifier:** if the next two ticks that touch the semantic model find only ONE consumer of
+> the rule they change, this is over-generalised from one bad week. Checked at #129.
+
+I1, I2, I4, I5, I6, I7, I8: not bent. The a11y work is core-engine (I1), added no dependency outside
+the workspace, and is explicitly usage-weighted rather than tail (I4 — a `<label>` wrapping its
+control and an `<img alt>` inside a button are the commonest form and button idioms on the web).
+
+### PART VI CORRECTED
+
+- **VI.2 gains an honest row:** the AX tree's role+name correctness is no longer *"unmeasured"* nor
+  *"63.8%"* — it is **90.3%** on the spec's own corpus, with the residue characterised: of 61
+  remaining `accname` rows, **18 need CSS `content` features** (`attr()`, `counter()` alt-text),
+  **9 need the computed style threaded into `accessible_name`**, 8 are `::marker`, 6 shadow DOM,
+  4 a tentative spec. ⭐ **The subsystem's own residue has stopped being about the subsystem.**
+- **AccessKit is still NOT adopted, and saying otherwise would be the drift this check hunts.** H0
+  item 7 names it as *"the natural integration point"*, and the board's Track B says *"adopt
+  AccessKit"*. What these six ticks bought is **tree CORRECTNESS**, which is the substance the
+  90% bar measures. What AccessKit would buy is a **platform bridge** — exposing that tree to real
+  screen readers through the OS a11y APIs — which is a different capability and remains unbuilt.
+  Recorded as its own row rather than absorbed into "Track B done".
+
+### STEER
+
+1. ⭐ **The next a11y tick is a CSS `content` tick, not an a11y tick** — `attr()`, `counter()` with
+   alt text, and the `/alt-text` syntax. 18 subtests, and it is the renderer half of I3's lockstep
+   requirement rather than the semantic half. *Refutable by:* if those 18 rows turn out to be blocked
+   on the a11y walk rather than on `content` value production, this steer is wrong; one fixture
+   settles it.
+2. ⭐ **Thread the COMPUTED STYLE into `accessible_name`** the way t1097 threaded `GeneratedText` —
+   one job closes block-level name spacing, `text-transform`, and class-driven `display:none`
+   (9 subtests) and removes t1354's named inline-`style` approximation. *Refutable by:* if the WPT
+   path cannot reach a style map, the job is bigger than stated — but `STYLES_PTR` is already in
+   scope at the binding, which is how t1355's map got there.
+3. **Track B's bar is met (90.3% ≥ 90%); the exit is a CONJUNCTION**, so the next non-a11y tick
+   should be Track C (the end-to-end DRIVE demo, still unassembled) rather than a seventh a11y tick.
+   The observer's 2026-08-28 nudge asked for balance and this session has spent six ticks on one leg.

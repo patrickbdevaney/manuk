@@ -9266,3 +9266,11 @@ hidden element plus `aria-labelledby`. accname exempts a *directly referenced* n
 check — and the exemption must cover its whole subtree, because a child of a `display:none` element
 is hidden BECAUSE its parent is. The counter-case is a VISIBLE reference containing a hidden
 fragment: that fragment contributes nothing. (t1354 — `agent/tests/g_a11y_labelledby_deref.rs`)
+
+## `a::after { content: " (opens in a new tab)" }` is the only text that says what the link does
+
+Icon buttons and link affordances are routinely authored entirely in generated content — a `::before`
+glyph that IS the label, an `::after` that states the side effect. accname §4.3 step 2F puts it in
+the name; an agent told to avoid opening new tabs cannot know without it. ⚠ Both entry points to the
+name computation must carry the map, not just the tree builder.
+(t1355 — `agent/tests/g_a11y_generated_name_entry.rs`)

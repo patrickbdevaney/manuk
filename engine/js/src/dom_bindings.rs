@@ -11949,8 +11949,28 @@ unsafe fn host_ax_role_name(cx: *mut RawJSContext, argc: u32, vp: *mut Value) ->
     // mapping into a passing test, which is the exact failure this measurement exists to find.
     let role = manuk_a11y::role_of(dom_ref, node);
     let role_str = role.as_ref().map(|r| r.as_str()).unwrap_or("");
+    // ⚠⚠⚠ **THE RENDERED `::before`/`::after` TEXT, WHICH THIS ENTRANCE USED TO DROP.** t1097 made
+    // generated content part of the accessible name and threaded it into the TREE builder; the bare
+    // `accessible_name` — the function behind `test_driver.get_computed_label()`, i.e. the only path
+    // the conformance suite and the agent's role/name probe take — built an EMPTY map. So a
+    // `button::before{content:"★ "}` was announced as "Save" here and "★ Save" in the tree, on a
+    // mechanism the project had already built and gated.
+    //
+    // `generated_text` is a pure function of (DOM, computed styles) and the styles are already
+    // borrowed here for `getComputedStyle`. Computing it per call is deliberate: this host function
+    // is reachable ONLY from the WPT harness's injected shim (it is never installed on a real page,
+    // see above), the documents are test-sized, and a cache would need an invalidation rule for a
+    // path with no hot loop.
+    let generated = STYLES_PTR.with(|c| {
+        let p = c.get();
+        if p.is_null() {
+            manuk_a11y::GeneratedText::new()
+        } else {
+            manuk_layout::generated_text(dom_ref, &*p)
+        }
+    });
     let name = match &role {
-        Some(r) => manuk_a11y::accessible_name(dom_ref, node, r),
+        Some(r) => manuk_a11y::accessible_name_generated(dom_ref, node, r, &generated),
         None => String::new(),
     };
     let js = format!(

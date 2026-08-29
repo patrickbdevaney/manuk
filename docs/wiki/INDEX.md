@@ -1316,6 +1316,8 @@
   - L4197 · aria-labelledby DEREFERENCED WITH text_content — THE SAME DEFECT ONE LEVEL FURTHER OUT (t1354)
   - L4214 · ⚠⚠⚠ THE HIDDEN-NODE EXEMPTION IS THE SUBTREE, NOT THE ONE NODE
   - L4235 · display:none PRUNES; visibility:hidden DOES NOT
+  - L4249 · t1097 WAS FIXED AT ONE ENTRANCE, AND THE CONFORMANCE SUITE ONLY EVER USED THE OTHER (t1355)
+  - L4267 · ⭐⭐⭐ THE TWO-ENTRANCE SHAPE, THREE TIMES IN ONE SESSION
 
 ## THE FIDELITY INSTRUMENT — what it can and cannot see
 `docs/wiki/fidelity-instrument.md`
@@ -2466,4 +2468,4 @@
   - L231 · Both named mechanisms are subsystem work
 
 ---
-2373 sections across 22 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+2375 sections across 22 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.

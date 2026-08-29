@@ -94580,3 +94580,133 @@ NEXT, ranked from the 73 remaining accname rows:
 4. `accname/name/shadowdom` still 0/6.
 
 WIKI: docs/wiki/dom-semantics.md
+
+## Tick 1355 — t1097 was fixed at one entrance, and the conformance suite only ever used the other (2026-08-29)
+
+TICK SHAPE: capability — the accessibility tree (TRACK B), sixth engine tick. Board re-run at the top
+of this tick: unchanged. CI read first: tick 1353's run is **green**, tick 1354's in progress.
+
+### PRICED BEFORE BUILDING, AND THE CLASSIFICATION NAMED THE MECHANISM
+
+The 73 remaining `accname` rows, classified from their names:
+
+```text
+  30 (41%)  ::before / ::after generated content
+   8         tooltip: title-vs-placeholder order
+   8         ::marker / list-item pseudo
+   6         shadow DOM / slot
+   6         block-level spacing   (needs the computed `display`)
+   5         other
+   4         name-from-heading     (tentative spec)
+   3         aria-owns
+   3         text-transform        (needs the computed style)
+```
+
+⭐ **41% in one bucket — and this project had already SHIPPED that mechanism.** t1097 built
+`manuk_layout::generated_text`, threaded it into the TREE builder, gated it as `g_ax_generated_name`
+and wrote it up in the wiki. One probe told the two possible causes apart:
+`<button class="simple-after">label</button>` with `.simple-after::after{content:" after"}` returned
+**`"label"`**, not `"label after"` — the pseudo text was absent, not mis-ordered.
+
+### ⭐⭐⭐ THE OTHER ENTRANCE BUILT AN EMPTY MAP
+
+`manuk_a11y::accessible_name` is the function behind `test_driver.get_computed_role/label()` — the
+*only* way the `accname`/`wai-aria`/`html-aam` suites and the agent's role+name probe can see a name.
+Its body was `accessible_name_with(dom, node, role, &index, &GeneratedText::new())`.
+
+```text
+  button::before{content:"★ "}    in the AX TREE          "★ Save"   correct since t1097
+                                  via get_computed_label  "Save"     wrong  since t1097
+```
+
+**A mechanism already built, gated AND journaled was invisible to the only instrument that scores
+it, for 258 ticks.**
+
+> ⭐⭐⭐ **THE TWO-ENTRANCE SHAPE, THREE TIMES IN ONE SESSION:** t1350 (`Role::parse` case-folded and
+> `role_of` — the door the WEB uses — called the raw matcher); t1353 (the `<label>` path walked and
+> name-from-content flattened); t1355 (the tree builder carried generated content and the name entry
+> point did not). **A fix belongs at the RULE; a rule reached through two doors needs both doors
+> WALKED, not one door tested.** And in all three the guarded door was the one this project built
+> for itself — which is the worse way round, because our own tests all come in through our own door.
+
+`generated_text` is a pure function of (DOM, computed styles), and `STYLES_PTR` — the borrowed style
+map behind `getComputedStyle` — is already in scope at the binding. So the wiring is: compute the map
+there, hand it to a new `accessible_name_generated`. ⚠ Computed PER CALL, deliberately: this host
+function is reachable **only** from the WPT harness's injected shim (it is never installed on a real
+page, and the binding's own comment says why), the documents are test-sized, and a cache would need
+an invalidation rule for a path with no hot loop.
+
+### THE RECEIPT
+
+```text
+  suite       BEFORE            AFTER             delta
+  accname     411/484  84.9%    423/484  87.4%    +12
+  wai-aria    399/434  91.9%    399/434  91.9%      0   CONTROL
+  html-aam    310/335  92.5%    310/335  92.5%      0   CONTROL
+  ──────────────────────────────────────────────────────
+  a11y TOTAL 1120/1253 89.4%   1132/1253 90.3%    +12   HANG/CRASH 0
+```
+
+⭐⭐⭐ **THE BOARD'S TRACK-B BAR IS `>=90% NODE MATCH`, AND THE AGGREGATE IS NOW 90.3%.** Seven ticks
+ago it was 63.8% and had not moved since t1254 (2026-08-14). This session's Track-B arc:
+**819/1253 = 65.4% → 1132/1253 = 90.3%, +313 subtests**, HANG/CRASH 0 throughout, zero newly-failing
+subtests on any tick (checked with `comm` on the failing-NAME lists, not on the totals).
+
+GATE `the_name_entry_point_carries_generated_content_not_an_empty_map`
+(`agent/tests/g_a11y_generated_name_entry.rs`) — composes what the binding composes: a real
+`Page`'s `styles_map()` → `manuk_layout::generated_text` → `accessible_name_generated`, on a
+`::before` glyph and an `::after` that states a link's side effect. ⭐ **Its load-bearing assertion
+is an `assert_ne!` between the generated and un-generated entry points** — the bug was not a wrong
+rule but a correct rule handed an EMPTY map by one of its two callers, and **no assertion on a single
+call can see a parameter that is being ignored.** Plus a VACUITY guard on the map being non-empty.
+RED under TWO mutations: N1 the entry point drops the map (*the defect itself*) → `"Save"`;
+N2 `generated_text` returns empty → the vacuity guard fires rather than the name assertion, which is
+what proves the guard is real.
+
+⚠ **AND ONE MUTATION DID NOT APPLY, WHICH IS THE t1239 TRAP.** N2's first form was
+`if !dom.root().0 == 0 { return … }` — in Rust that is *bitwise-not then compare*, always false, so
+the gate stayed green and the mutation looked like a passing test. **A mutation that does not go RED
+may simply not have run.** Rewritten as an unconditional early return, it went red immediately.
+
+⚠ The gate also caught its own fixture: `content: "\2605 "` is CSS for `★` with **no trailing
+space** — the space terminates the hex escape and is consumed. The literal `"★ "` is what was meant.
+
+PERF: none on any live path. `manuk-js` gains a `manuk-layout` dependency (no cycle: layout does not
+depend on js), and `manuk-agent` a dev-dependency on it so the gate can compose the real thing rather
+than restate one half of it.
+
+NEXT: the 61 remaining `accname` rows are now dominated by things that are **not a11y defects**:
+18 need `attr()` / `counter()` alt-text / the `/alt-text` syntax in CSS `content`; 9 need the
+COMPUTED style threaded into `accessible_name` (block-level spacing, `text-transform`, class-driven
+`display:none` — one threading job closes all three); 8 are `::marker`; 6 shadow DOM; 4 a tentative
+spec. **The next a11y tick is a CSS `content` tick**, and that is worth saying out loud: the
+subsystem's own residue has stopped being about the subsystem.
+
+### THE DUE CONSTITUTION CHECK RAN IN THIS TICK, AND IT SHARPENED AN INVARIANT
+
+Check **#128** (due at 1355). Horizon H0; exit-gate condition 4 is *"every rendered construct is
+queryable through the in-process semantic API"*, which is what these six Track-B ticks are.
+
+⚠⚠⚠ **GATE OR SCOREBOARD? — GATE, AND THE SCOREBOARD COULD NOT SEE IT.** The a11y suites are not
+rows in `WPT-AREAS.tsv`, so the monotonic WPT total — the loop's stated per-tick primary metric —
+read **+0 for all six ticks** while an exit-gate condition moved **65.4% → 90.3%**. That is the
+tick-84 failure mode with the sign flipped: t84 banked 721,000 subtests the scoreboard loved and the
+gate did not care about; this session moved the gate and the scoreboard recorded nothing. **A loop
+steering only by its primary metric would have refused every one of these ticks.** ⚠ Surface audit
+#72 added those rows at t1304 and they are gone again, because the area list lives in
+`scripts/wpt-sweep.sh` — harness-owned, named not fixed.
+
+⭐⭐⭐ **AND I3 IS SHARPENED BY THIS TICK'S OWN DEFECT.** I3 says *"every renderer subsystem lands
+with its semantic-model exposure OR IT IS NOT DONE."* t1097 landed generated content's exposure,
+gated it, journaled it — through **one of the two entrances the semantic API is read through**.
+**"Exposed" must mean "exposed through EVERY entrance."** The shape recurred three times in this
+session, which is what makes it a rule rather than an anecdote; the check states its own falsifier
+(if the next two semantic-model ticks find only ONE consumer, it is over-generalised).
+
+⚠ **AND PART VI IS CORRECTED HONESTLY: AccessKit is still NOT adopted.** These ticks bought tree
+CORRECTNESS, which is what the 90% bar measures. AccessKit would buy a PLATFORM BRIDGE — the tree
+exposed to real screen readers through the OS a11y APIs — which is a different capability and remains
+unbuilt. Recorded as its own row rather than absorbed into "Track B done". Full record:
+`docs/loop/CONSTITUTION-CHECK.md` #128, with three steers, each carrying what would refute it.
+
+WIKI: docs/wiki/dom-semantics.md

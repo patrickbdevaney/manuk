@@ -4245,3 +4245,42 @@ way t1097 threaded `GeneratedText`.
 ```text
   accname 395/484 → 411/484 · wai-aria and html-aam unchanged · zero newly-failing subtests
 ```
+
+## t1097 WAS FIXED AT ONE ENTRANCE, AND THE CONFORMANCE SUITE ONLY EVER USED THE OTHER (t1355)
+
+accname §4.3 step 2F folds `::before`/`::after` text into the accessible name. **t1097 built exactly
+that** — `manuk_layout::generated_text` produces the map, the TREE builder threads it, and
+`g_ax_generated_name` gates it — and the wiki section three screens up says so.
+
+**The other path built an EMPTY map.** `manuk_a11y::accessible_name` is the function behind
+`test_driver.get_computed_role/label()`, which is the *only* way the `accname` / `wai-aria` /
+`html-aam` suites and the agent's role+name probe can see a name. It called `GeneratedText::new()`.
+
+```text
+  button::before{content:"★ "}     in the AX TREE   "★ Save"      correct since t1097
+                                   via get_computed_label  "Save"  wrong since t1097
+```
+
+So a mechanism this project had already built, gated **and journaled** was invisible to the only
+instrument that scores it, for 258 ticks.
+
+### ⭐⭐⭐ THE TWO-ENTRANCE SHAPE, THREE TIMES IN ONE SESSION
+
+```text
+  t1350   `Role::parse` case-folded; `role_of` — the door the WEB uses — called the raw matcher
+  t1353   the <label> path WALKED the subtree; name-from-content FLATTENED it
+  t1355   the tree builder carried generated content; the name entry point built an empty map
+```
+
+> **A fix belongs at the RULE. A rule reached through two doors needs both doors WALKED, not one
+> door tested.** In all three the guarded door was the one this project built for itself and the
+> unguarded one was the web's — which is the worse way round, because our own tests all come in
+> through our own door.
+
+The gate for this composes what the binding composes — a real page's styles → the real generated map
+→ the public name entry — and its load-bearing assertion is an `assert_ne!`: **the map must CHANGE
+the answer.** No assertion on a single call can see a parameter that is being ignored.
+
+`accname` 411/484 → 423/484, controls unchanged, zero newly-failing. The 18 generated-content rows
+left need `attr()`, `counter()` alt-text and the `/alt-text` syntax in CSS `content` — a different
+subsystem.

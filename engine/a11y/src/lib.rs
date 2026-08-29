@@ -1392,8 +1392,29 @@ fn normalize(s: &str) -> String {
 pub type GeneratedText = HashMap<NodeId, (String, String)>;
 
 pub fn accessible_name(dom: &Dom, node: NodeId, role: &Role) -> String {
+    accessible_name_generated(dom, node, role, &GeneratedText::new())
+}
+
+/// [`accessible_name`] **with the rendered `::before` / `::after` text** — see [`GeneratedText`].
+///
+/// ⚠⚠⚠ **THIS EXISTS BECAUSE t1097 WAS FIXED AT ONE ENTRANCE AND THIS IS THE OTHER ONE.** t1097
+/// threaded generated content into the tree builder and gated it (`g_ax_generated_name`), which is
+/// the path a live page's AX tree takes. The path WPT and `test_driver.get_computed_label()` take is
+/// the bare [`accessible_name`], and it constructed an **EMPTY** map — so every
+/// `button::before{content:"★ "}` was absent from every name the conformance suite could see, on a
+/// mechanism the project had already built, gated and journaled.
+///
+/// The two-entrance shape has now appeared three times in one session (t1350's case fold, t1353's
+/// content walk, this): **a fix belongs at the rule, and a rule reached through two doors needs
+/// both doors walked, not one door tested.**
+pub fn accessible_name_generated(
+    dom: &Dom,
+    node: NodeId,
+    role: &Role,
+    generated: &GeneratedText,
+) -> String {
     let index = NameIndex::build(dom);
-    accessible_name_with(dom, node, role, &index, &GeneratedText::new())
+    accessible_name_with(dom, node, role, &index, generated)
 }
 
 /// accname step 3 — the **host language's own** labelling mechanisms, factored out because
