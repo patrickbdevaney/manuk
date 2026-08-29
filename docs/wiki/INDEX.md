@@ -24,6 +24,15 @@
   - L99 · The gate
   - L122 · The rule this generalises to
 
+## The agent's drive path — activating a node is not clicking it
+`docs/wiki/agent-drive-reachability.md`
+
+  - L6 · The one-sentence mechanism
+  - L12 · What was there
+  - L40 · The fix, and why only one of the two answers is an error
+  - L67 · The gate
+  - L88 · The new public surface, and why
+
 ## ARCHITECTURE — concurrency, process model, memory, and the REASONING
 `docs/wiki/architecture.md`
 
@@ -2554,4 +2563,4 @@
   - L231 · Both named mechanisms are subsystem work
 
 ---
-2429 sections across 30 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+2434 sections across 31 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.

@@ -96050,3 +96050,102 @@ tracks: Track C's float re-flow (t1364) and the a11yproject width narrowing rema
 items.
 
 WIKI: docs/wiki/accessible-name-computed-style.md
+
+## Tick 1366 — activating a node is not clicking it (2026-08-29)
+
+TICK SHAPE: capability-subsystem
+
+**Track C, and the board picked it**: the 2026-08-28 nudge's rule is *"do not let any track go >5
+ticks dark"*, and Track C had not been touched since t1359 — six ticks. The named remainder from
+that tick was *"`Grounded::OffScreen` has no production consumer yet — the capability is in the
+library and gated but not yet in the driving surface."* Looking for that consumer found something
+worse.
+
+### ⭐⭐⭐ THE FINDING — THE PRODUCTION DRIVE PATH NEVER HIT-TESTS AT ALL
+
+```rust
+pub async fn click_by_name(&mut self, role: &Role, name: &str) -> Result<Activation> {
+    let node = self.resolve(role, name)?;
+    self.activate(node).await          // ← never asks whether a pointer could reach it
+}
+```
+
+`activate` fires the element's activation behaviour **structurally** — follow the `href`, submit the
+form, flip the checkbox. This is the entry point behind `Action::ClickText`, the one an agent loop
+actually drives, so the agent succeeded in two places a user cannot click:
+
+* **below the fold**, with the viewport never moving — every screenshot and every later `observe()`
+  then showed a part of the page the agent had not acted on: **the perception channel and the
+  actuation channel describing different documents**;
+* **under a consent banner**, reporting `Navigated(..)` for a click that would have hit the banner —
+  and `to_viewport_lines` had been printing `obstructed` beside that very element since t1356. *The
+  drive path did not read its own warning.*
+
+⚠ t1356 built `landing`, t1359 gave it `OffScreen`, and **t1356's own doc recorded this hole rather
+than closing it**: *"A caller that holds a node handle may still activate the node directly
+(`Browser::click_by_name` does) — that path is unchanged."* The rule it violates has been in the
+wiki index since L62: *agent actions must go through the REAL hit-test, or agent testing is a
+privileged bypass.*
+
+### THE FIX — AND ONLY ONE OF THE TWO ANSWERS IS AN ERROR
+
+`click_by_name` now calls `reach(node, name)` first:
+
+```text
+  Clear                -> activate, viewport unmoved          (the common path is unchanged)
+  OffScreen { dy }     -> SCROLL by dy, then ask again        (the agent is driving a browser)
+  Obstructed { by }    -> error NAMING `by`                   (so it can dismiss and retry)
+  Unreachable          -> activate anyway                     (no geometry != unclickable)
+```
+
+⭐ **`OffScreen` is not a refusal, it is a scroll.** Going there is also what leaves the viewport
+showing what was acted on. It goes through `scroll_by`, so it is clamped to the page exactly as a
+user's would be, and the landing is re-asked **in the viewport the click now happens in** — which
+matters because a `position:sticky` header's document rect moves with the scroll (t1359). At most
+two passes, stopping early if the page cannot scroll further, so an unreachable target does not spin.
+
+⚠ **`Unreachable` is deliberately NOT an error.** It means no box, or on-screen `pointer-events:
+none`. An element the layout failed to box must not become permanently unclickable for the agent.
+
+### THE GATE
+
+`the_drive_path_scrolls_to_its_target_and_refuses_a_covered_one` (`agent/tests/`) — three arms on one
+2400px page, driven through the real `AgentBrowser`, with a vacuity pass (three boxed named controls,
+all unchecked, a banner on a higher layer, and the page starting at scroll 0).
+
+- CONTROL — an on-screen target toggles and the viewport does **not** move.
+- THE DRIVE REACHES BELOW THE FOLD — a target at y=1400 in a 600px viewport toggles **and**
+  `scroll_offset() > 600`. Both halves, because activating without scrolling passes the first.
+- HONEST REFUSAL — a covered target errors, and the message names what to dismiss.
+
+⚠ **The targets are checkboxes, not links, and that is not incidental**: `activate` on an `<a>`
+performs a real navigation, so a link fixture makes this a network test. The first version of this
+gate used links and failed on `fetching https://ex.test/near`.
+
+**PROVEN RED by two mutations.** N1 drop the `reach` call (the pre-tick behaviour) → the
+below-the-fold arm reads `scroll 0` *and* the covered arm returns `Ok(Toggled)` instead of an error;
+one call, both defects, which is what makes it the whole tick. N2 treat `OffScreen` as an error
+rather than a scroll → the below-the-fold arm fails where browser-like behaviour is to scroll and
+click. That is the mutation separating *"verify before acting"* from *"act like a browser"*.
+
+### THE RECEIPT
+
+```text
+  manuk-agent  (lib + gates)   131/131 → 132/132   +1   +the new gate, and no existing arm moved
+  manuk-shell                   77/77              CONTROL — it drives this API
+  manuk-a11y / manuk-layout / manuk-css            CONTROL
+```
+
+New public surface: `AgentBrowser::scroll_offset()`, the document `y` of the viewport's top edge.
+Exposed because the drive loop now MOVES it — without it, a click that succeeded structurally and a
+click a pointer could have made are indistinguishable from outside, and the gate's load-bearing
+assertion could not be written.
+
+NEXT: `Grounded::OffScreen`'s *library* consumer is still unwired — `ground_action`'s dual scorer
+(semantic + visual, with an ambiguity margin) is a better target chooser than
+`find_containing`'s first substring match, and `click_by_name` still uses the latter. That is the
+honest next Track C tick and it is now the only thing between the library and the drive loop. On the
+other tracks: the float re-flow (t1364) and CSS `content`/`attr()`/`counter()` for accname (t1365)
+are the ranked A and B items.
+
+WIKI: docs/wiki/agent-drive-reachability.md

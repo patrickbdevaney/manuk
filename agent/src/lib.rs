@@ -727,7 +727,87 @@ impl AgentBrowser {
         name: &str,
     ) -> Result<Activation> {
         let node = self.resolve(role, name)?;
+        self.reach(node, name)?;
         self.activate(node).await
+    }
+
+    /// ⭐⭐⭐ **MAKE THE TARGET REACHABLE BY A POINTER BEFORE ACTIVATING IT — the agent's own drive
+    /// path was the privileged bypass this project has a standing rule against.**
+    ///
+    /// `click_by_name` resolved a name to a `NodeId` and called [`Self::activate`], which fires the
+    /// element's activation behaviour **structurally** — follow the `href`, submit the form, flip
+    /// the checkbox. It never asked the question a real pointer has to answer: *can this be
+    /// clicked?* So the agent succeeded on
+    ///
+    /// * an element **below the fold**, without the viewport ever moving to it — every screenshot
+    ///   and every subsequent observation then showed a part of the page the agent had not acted
+    ///   on; and
+    /// * an element **under a consent banner**, which is most of the web, reporting `Navigated(..)`
+    ///   for a click no user could have made.
+    ///
+    /// t1356 built the verification ([`A11yNode::landing`]) and t1359 gave it the off-screen answer,
+    /// and t1356's own doc recorded the hole rather than closing it: *"A caller that holds a node
+    /// handle may still activate the node directly (`Browser::click_by_name` does) — that path is
+    /// unchanged."* This is that path.
+    ///
+    /// **`OffScreen` is not an error, it is a SCROLL.** The agent is driving a browser: the honest
+    /// response to *"the thing you named is 900px down"* is to scroll there, which is also what
+    /// leaves the viewport showing what was acted on. The scroll is applied through
+    /// [`Self::scroll_by`], so it is clamped to the page exactly as a user's would be, and the
+    /// landing is re-asked **in the viewport the click now happens in** — which matters because a
+    /// `position:sticky` header's document rect moves with the scroll (t1359).
+    ///
+    /// ⚠ **`Obstructed` IS refused, and that is the capability rather than a limitation.** An agent
+    /// told *"the Sign in button is under `<div id=consent>`"* can dismiss the banner and retry; an
+    /// agent handed a silent success clicks nothing, sees nothing change, and cannot find out why.
+    /// The error names the covering element.
+    fn reach(&mut self, node: manuk_dom::NodeId, name: &str) -> Result<()> {
+        for _ in 0..2 {
+            let viewport = manuk_a11y::Rect {
+                x: 0.0,
+                y: self.scroll_y,
+                width: self.width as f32,
+                height: self.height as f32,
+            };
+            match self.a11y_tree()?.landing(node, Some(viewport)) {
+                manuk_a11y::Landing::Clear { .. } => return Ok(()),
+                manuk_a11y::Landing::OffScreen { dy } => {
+                    let before = self.scroll_y;
+                    self.scroll_by(dy);
+                    // A page that cannot scroll any further is not going to reach it on a second
+                    // pass either; stop rather than spin.
+                    if (self.scroll_y - before).abs() < 0.5 {
+                        return Ok(());
+                    }
+                }
+                manuk_a11y::Landing::Obstructed { by, .. } => {
+                    let what = self
+                        .a11y_tree()
+                        .ok()
+                        .and_then(|t| {
+                            t.iter().find(|n| n.node == by).map(|n| {
+                                let nm = n.name.trim();
+                                if nm.is_empty() {
+                                    format!("{:?}", n.role)
+                                } else {
+                                    format!("{:?} {nm:?}", n.role)
+                                }
+                            })
+                        })
+                        .unwrap_or_else(|| format!("{by:?}"));
+                    anyhow::bail!(
+                        "{name:?} is covered by {what} — dismiss it and retry (a click here would \
+                         activate the cover, not the target)"
+                    );
+                }
+                // No box, or on screen and `pointer-events: none`. Nothing to aim at, and the
+                // structural activation is still the best available answer — this is deliberately
+                // NOT an error, so an element the layout gave no geometry does not become
+                // unclickable for the agent.
+                manuk_a11y::Landing::Unreachable => return Ok(()),
+            }
+        }
+        Ok(())
     }
 
     /// §4b — click at an absolute document coordinate (the coordinates
@@ -754,6 +834,16 @@ impl AgentBrowser {
         self.scroll_y = 0.0;
         self.scroll_by(target);
         Ok(())
+    }
+
+    /// **Where the viewport is** — the document `y` of its top edge.
+    ///
+    /// Exposed because the drive loop now MOVES it: `click_by_name` scrolls to a target that is
+    /// below the fold (see `reach`), so "did the browser actually go to the thing it clicked?" is a
+    /// question a caller — and a gate — has to be able to ask. Without it, a click that succeeds
+    /// structurally and a click that a pointer could have made are indistinguishable from outside.
+    pub fn scroll_offset(&self) -> f32 {
+        self.scroll_y
     }
 
     /// Scroll by `dy` px, clamped to the page.

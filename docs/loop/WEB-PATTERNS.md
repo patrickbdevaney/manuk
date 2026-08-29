@@ -9459,3 +9459,21 @@ map must not read a missing entry as `none`.
 behind `test_driver.get_computed_label()`. A fact wired to one of them moves the conformance number
 by its full amount while the agent still reads the old name.
 (t1365 — `agent/tests` `the_accessible_name_reads_the_computed_style_through_both_entrances`)
+
+## The "Accept cookies" wall over the button an agent was told to press
+
+An agent that resolves a control by accessible name and then fires its activation behaviour directly
+succeeds on two things a person cannot click: an element **below the fold** (the viewport never
+moves, so every screenshot afterwards shows a part of the page the agent did not act on) and an
+element **under a consent banner** (a reported success for a click that would have hit the banner).
+Both are the ordinary web — a consent wall is on most sites, and most controls are below the fold.
+
+⭐ The two answers are not symmetric. *Off screen* is not a refusal, it is a **scroll**: the agent is
+driving a browser, and going there is also what leaves the viewport showing what was acted on. The
+landing must then be re-asked in the NEW viewport, because a `position:sticky` header's document rect
+moves with the scroll. *Obstructed* IS a refusal, and naming the covering element is the capability —
+an agent that knows what covers its target can dismiss it and retry.
+
+⚠ "No geometry" is a third answer and must NOT be an error, or an element the layout failed to box
+becomes permanently unclickable for the agent.
+(t1366 — `agent/tests` `the_drive_path_scrolls_to_its_target_and_refuses_a_covered_one`)
