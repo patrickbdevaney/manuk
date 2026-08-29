@@ -798,6 +798,8 @@
   - L4094 · The fix, and the two halves it needs
   - L4102 · The gate on the gate
   - L4115 · grep in this shell SKIPS any file that is not valid UTF-8, and reports it as no matches (t1331)
+  - L4143 · CI WAS RED FOR SEVEN TICKS BEHIND A GREEN SIBLING, AND THE GATE WAS ONE APT PACKAGE FROM BEING MEASURED (t1351)
+  - L4160 · ⭐⭐⭐ A PRECONDITION PANIC IS INDISTINGUISHABLE FROM AN ENGINE FAILURE, AND IT STOPS THE WHOLE STEP
 
 ## CSS AND THE CASCADE — Stylo realities and quirks actually encountered
 `docs/wiki/css-cascade.md`
@@ -2456,4 +2458,4 @@
   - L231 · Both named mechanisms are subsystem work
 
 ---
-2363 sections across 22 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+2365 sections across 22 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.

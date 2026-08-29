@@ -62,7 +62,19 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y clang libclang-dev llvm-dev \
             libxkbcommon-dev libwayland-dev libxcb1-dev libx11-dev \
-            libasound2-dev pkg-config
+            libasound2-dev pkg-config \
+            fonts-dejavu-core fonts-noto-cjk
+          # ⚠⚠⚠ THE FONTS ARE A CORRECTNESS DEPENDENCY, NOT A COSMETIC ONE, AND LEAVING THEM OUT
+          # HELD THIS BADGE RED FOR SEVEN CONSECUTIVE TICKS. Text gates measure LINE BOXES, and a
+          # line box is a property of the FACE — so a gate that proves "a CJK line takes the
+          # fallback face's line box, not the primary's" needs two genuinely DIFFERENT faces on the
+          # host or every row it compares is the same number. `manuk-layout`'s
+          # `a_cjk_line_in_a_latin_family_takes_the_fallback_faces_line_box_not_the_primarys`
+          # refuses to run vacuously and says so in a PRECONDITION panic, which reads in CI exactly
+          # like an engine failure. `fonts-dejavu-core` is the Latin primary and `fonts-noto-cjk`
+          # provides `Noto Sans CJK JP`, which is `FALLBACK_FAMILIES`' CJK entry in engine/text.
+          # A gate whose precondition the runner cannot meet is UNMEASURED, and an unmeasured gate
+          # is not a passing one — install the dependency rather than softening the gate.
           # libasound2-dev (+pkg-config): the media/audio work added `cpal` under the shell `gui`
           # feature, which pulls `alsa-sys` on Linux — and alsa-sys' build script needs the ALSA dev
           # headers. Without them the default "shipping desktop" build fails at alsa-sys (exit 101),

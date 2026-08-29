@@ -4139,3 +4139,36 @@ exists to read, which is the worst possible place for it.
 ⚠ And the general form, which this project has now collected four times: *an instrument that answers
 "absent" without distinguishing "I did not look" is not an instrument.* WPT's `SHORT` vs `CRASH`, the
 crate suite's INSTRUMENT-vs-RED split, `_out`'s BUILD-FAILED branch, and now this.
+
+## CI WAS RED FOR SEVEN TICKS BEHIND A GREEN SIBLING, AND THE GATE WAS ONE APT PACKAGE FROM BEING MEASURED (t1351)
+
+Every push runs two workflows. `release` was **green** and `CI` was **red**, from the moment t1343
+landed its CJK line-box gate until t1350 — seven consecutive commits, none of which read it.
+
+The failure was not a regression. It was the gate's own **PRECONDITION**:
+
+```text
+  PRECONDITION: this gate needs both a Latin primary (DejaVu Sans) and the CJK fallback face
+  (Noto Sans CJK JP) installed — without two DIFFERENT faces every row below is the same number
+  and the test cannot fail. Install fonts-noto-cjk + fonts-dejavu.
+```
+
+The gate is right to refuse: a line box is a property of the **FACE**, so proving *"a CJK line takes
+the fallback face's line box, not the primary's"* needs two genuinely different faces on the host or
+every row it compares is the same number. On a bare GitHub runner neither font exists.
+
+### ⭐⭐⭐ A PRECONDITION PANIC IS INDISTINGUISHABLE FROM AN ENGINE FAILURE, AND IT STOPS THE WHOLE STEP
+
+`cargo test` exits non-zero and the step ends. CI runs **the wall's crate list in order** —
+`manuk-css manuk-layout manuk-paint manuk-dom manuk-net manuk-agent manuk-shell` — and `manuk-layout`
+is **second**. So for seven ticks CI measured **two crates of seven**, and the five it never reached
+were reported as neither pass nor fail. *An unmeasured gate is not a passing one*, and here the loop
+did not even know which ones were unmeasured.
+
+**The fix is to satisfy the precondition, not to soften the gate.** `fonts-dejavu-core` +
+`fonts-noto-cjk` in the CI apt step — the same step that already grew `libasound2-dev` for exactly
+this class of reason (`cpal` → `alsa-sys` needed headers, and its absence turned the badge red too).
+
+⚠ **THE ENVIRONMENT IS PART OF THE GATE.** A text gate has a FONT dependency as surely as a build has
+a header dependency, and the local box happening to have the fonts is what let it ship untested. Any
+gate whose correctness depends on installed data must have that data provisioned where it runs.

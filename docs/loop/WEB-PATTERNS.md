@@ -9230,3 +9230,10 @@ Case-sensitive matching made the element fall through to its implicit role: 114 
 `banner`/`contentinfo` are landmarks a screen reader and an agent use as a jump list. A blog index
 with thirty `<article><footer>` was publishing thirty `contentinfo` landmarks, so the one real page
 footer stopped being findable. ARIA 1.3 scopes them to `sectionheader`/`sectionfooter`. (t1350)
+
+## A gate's PRECONDITION is an environment dependency, and it reads in CI exactly like a failure
+
+`manuk-layout`'s CJK line-box gate needs `fonts-dejavu-core` + `fonts-noto-cjk` on the host or it
+cannot fail; it panics rather than pass vacuously, which is correct. On a bare runner that panic
+ended the whole `cargo test` step, so CI measured 2 of 7 crates for seven ticks while a green
+`release` sibling made the red invisible. Provision the data; do not soften the gate. (t1351)

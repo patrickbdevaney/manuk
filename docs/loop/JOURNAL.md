@@ -94151,3 +94151,85 @@ NEXT, ranked:
    `collections_js.rs` — and they disagree on `output`/`progress` and `input[type=hidden]`.
 
 WIKI: docs/wiki/dom-semantics.md
+
+## Tick 1351 — CI was red for seven ticks behind a green sibling, and the gate was one apt package from being measured (2026-08-29)
+
+TICK SHAPE: instrument — the RATCHET's third face, and it outranks the board for exactly one tick.
+Board re-run at the top of this tick: unchanged (Track B). This tick is not on it, and the reason is
+that a standing RED gate is a ratchet violation, which the constitution puts above capability.
+
+Found by doing what `tick.sh` prints after every landing and the loop had stopped doing: *"CI runs
+asynchronously — read it at the START of the next tick."*
+
+```text
+  2026-08-28 12:38  success   feat(layout): a broken image with alt text …
+  2026-08-28 15:07  FAILURE   feat(text): every CJK line on the web was 25% short   <- t1343, the gate lands
+  2026-08-28 16:20  FAILURE   chore(fidelity): the corpus was blind for 21 ticks
+  2026-08-28 18:01  FAILURE   feat(css): a percentage is not an f32
+  2026-08-28 19:50  FAILURE   fix(layout): a negative margin makes a block wider
+  2026-08-28 22:25  FAILURE   feat(css): an @import'ed stylesheet delivered its fonts
+  2026-08-29 04:13  FAILURE   fix(css): a `;` inside url() ended the at-rule        <- t1348 (mine)
+  2026-08-29 05:05  FAILURE   feat(a11y): the <label> that wraps its control        <- t1349 (mine)
+```
+
+**Seven consecutive commits, and the `release` workflow was GREEN on every one of them.** That is
+this project's own recorded failure mode — *CI red invisible behind a green sibling workflow* — and
+it recurred because nobody read the row.
+
+### THE FAILURE WAS NOT A REGRESSION. IT WAS THE GATE'S OWN PRECONDITION
+
+```text
+  PRECONDITION: this gate needs both a Latin primary (DejaVu Sans) and the CJK fallback face
+  (Noto Sans CJK JP) installed — without two DIFFERENT faces every row below is the same number
+  and the test cannot fail. Install fonts-noto-cjk + fonts-dejavu.
+```
+
+t1343's gate is **right to refuse**: a line box is a property of the FACE, so proving *"a CJK line
+takes the fallback face's line box, not the primary's"* needs two genuinely different faces on the
+host, or every row it compares is the same number and the gate passes vacuously. A bare GitHub
+runner has neither font. **The local box happened to have them, which is exactly what let it ship.**
+
+### ⭐⭐⭐ A PRECONDITION PANIC IS INDISTINGUISHABLE FROM AN ENGINE FAILURE — AND IT STOPS THE WHOLE STEP
+
+`cargo test` exits non-zero and the step ends there. CI runs **the wall's crate list, in order**:
+`manuk-css manuk-layout manuk-paint manuk-dom manuk-net manuk-agent manuk-shell` — and
+`manuk-layout` is **SECOND**.
+
+> ⭐⭐⭐ **SO FOR SEVEN TICKS CI MEASURED TWO CRATES OF SEVEN**, and the five it never reached were
+> reported as neither pass nor fail. The badge did not say *"a gate is red"*; it said *"five sevenths
+> of the crate suite is UNMEASURED"* — and an unmeasured gate is not a passing one. The loop did not
+> know which ones, because a step that dies does not report what it did not get to.
+
+**THE FIX IS TO SATISFY THE PRECONDITION, NOT TO SOFTEN THE GATE.** `fonts-dejavu-core` +
+`fonts-noto-cjk` in the CI apt step — the same step that already grew `libasound2-dev` for exactly
+this class of reason (`cpal` pulled `alsa-sys`, whose build script needs the ALSA headers, and its
+absence turned the badge red too, and that is recorded in the step's own comment). Making the gate
+skip when its fonts are missing would have turned a loud red into a silent hole.
+
+⚠ **THE ENVIRONMENT IS PART OF THE GATE.** A text gate has a FONT dependency as surely as a build has
+a header dependency. Any gate whose correctness depends on installed DATA must have that data
+provisioned wherever it runs, and the fact that this one is a font rather than a library is why it
+was never on anyone's dependency list.
+
+VERIFIED LOCALLY, because the receipt for this tick is asynchronous and I will not block on it:
+the two families resolve to exactly the packages added (`fc-list` → `dpkg -S`:
+`Noto Sans CJK JP` → `fonts-noto-cjk`, `DejaVu Sans` → `fonts-dejavu-core`), and the other CI leg the
+wall never covers — `cargo build --workspace --no-default-features`, the headless config — builds
+clean on this tree with both a11y ticks in it. The remaining five crates are green on the wall in the
+same shipping config CI uses.
+
+⚠ NO NEW ENGINE GATE, and that is honest rather than lazy: this tick changes no engine behaviour. Its
+falsifiable check is the CI run on this commit, read at the start of the next tick — which is the
+habit whose absence caused it.
+
+⚠ HARNESS, NOT TOUCHED, second report: tick 1350's wall ran under **load 43** because a
+`disk-hygiene.sh` CRON instance (flock `/tmp/manuk-hygiene.lock`) ran CONCURRENTLY with the wall's own
+call to the same script for ~17 minutes — the lock does not cover the in-wall invocation. The perf
+floors passed anyway. Also still standing: **four orphaned `--headless=new` Chrome processes with
+10–13h uptimes**. Both live in `scripts/`/cron; recorded for the observer per PART VII.
+
+NEXT: back to Track B. `wai-aria`'s residue is 47 and its top mechanism is `role=none`/`presentation`
+CONFLICT RESOLUTION; `html-aam`'s 54 are CONTEXT-dependent roles; accname's largest file is
+`comp_name_from_content.html` at 31/79.
+
+WIKI: docs/wiki/conformance-and-oracles.md
