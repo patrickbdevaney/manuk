@@ -1313,6 +1313,9 @@
   - L4150 · ONE accname WALK, TWO CALLERS, AND ONLY ONE OF THEM RECURSED (t1353)
   - L4174 · ⚠⚠ §4.3 STEP 2C OUTRANKS 2D, AND THE OLD CODE PASSED THAT BY ACCIDENT
   - L4182 · ⚠⚠⚠ ROLE-PRESENCE AND NAME-PRESENCE ARE DIFFERENT QUESTIONS — <img alt="" title="x">
+  - L4197 · aria-labelledby DEREFERENCED WITH text_content — THE SAME DEFECT ONE LEVEL FURTHER OUT (t1354)
+  - L4214 · ⚠⚠⚠ THE HIDDEN-NODE EXEMPTION IS THE SUBTREE, NOT THE ONE NODE
+  - L4235 · display:none PRUNES; visibility:hidden DOES NOT
 
 ## THE FIDELITY INSTRUMENT — what it can and cannot see
 `docs/wiki/fidelity-instrument.md`
@@ -2463,4 +2466,4 @@
   - L231 · Both named mechanisms are subsystem work
 
 ---
-2370 sections across 22 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+2373 sections across 22 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.

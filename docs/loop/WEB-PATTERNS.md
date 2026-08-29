@@ -9258,3 +9258,11 @@ takes each child's contribution; `textContent` drops the image entirely, so `<sp
 <img alt="two"> <span>three</span>` is named "one three" — a string the agent cannot match the
 button on. Likewise a descendant's own `aria-label` overrides its text and must not be read through.
 (t1353 — `agent/tests/g_a11y_name_from_content.rs`)
+
+## `<span id="lbl" hidden>` exists only to be pointed at
+
+Attaching a long accessible name to an icon button without printing it on the page is done with a
+hidden element plus `aria-labelledby`. accname exempts a *directly referenced* node from the hidden
+check — and the exemption must cover its whole subtree, because a child of a `display:none` element
+is hidden BECAUSE its parent is. The counter-case is a VISIBLE reference containing a hidden
+fragment: that fragment contributes nothing. (t1354 — `agent/tests/g_a11y_labelledby_deref.rs`)

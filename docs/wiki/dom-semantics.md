@@ -4193,3 +4193,55 @@ label that came out empty **on purpose**. Answering both questions in one place 
 suppress the role, or letting it name an `alt=""` image — breaks the other suite; it cost 6 subtests
 to find out. `accname` 380/484 → 395/484 with `wai-aria` and `html-aam` unchanged and **zero**
 newly-failing subtests, verified by diffing the failing NAME lists rather than the totals.
+
+## `aria-labelledby` DEREFERENCED WITH `text_content` — THE SAME DEFECT ONE LEVEL FURTHER OUT (t1354)
+
+```html
+  <button aria-labelledby="cb">Toggle</button>
+  <input type="checkbox" id="cb"><label for="cb">Checkbox Label Text</label>
+```
+
+A referenced **CONTROL has no text at all**, so the button was named *"Toggle"* — its own content —
+instead of *"Checkbox Label Text"*. accname §4.3 step 2B says a referenced node contributes its
+**NAME**: its own `aria-label`, then the host-language label (which is what makes a referenced
+control work at all), then name-from-content — the last one **allowed regardless of role**, because
+pointing at a plain `<span>` is precisely how authors name things.
+
+⚠ **ONE HOP, AND THE GUARD IS LOAD-BEARING.** `aria-labelledby="self otherid"` is a real authoring
+pattern (*"my own label, then that heading"*). The referenced computation must not re-enter
+`aria-labelledby` or it is an infinite regress.
+
+### ⚠⚠⚠ THE HIDDEN-NODE EXEMPTION IS THE SUBTREE, NOT THE ONE NODE
+
+accname §4.3 step 2A exempts a node *directly referenced* by `aria-labelledby` from the hidden
+check — a `<span id="lbl" hidden>Delete permanently</span>` exists **only** to be pointed at, and it
+is how a long name is attached to an icon button without printing it on the page.
+
+The exemption has to cover the whole subtree, and the reason is mechanical: if the referenced element
+is `display:none`, **its children are hidden because it is**, and nothing can tell a child's own
+`display:none` apart from the one it inherits. Pruning inside would make the reference contribute
+nothing and defeat the exemption entirely. WPT pins the pair:
+
+```html
+  <span id=span1 style="display:none"><span style="display:none">label</span></span>   -> "label"
+  <span id=span5><span style="visibility:hidden">label</span></span>                   -> ""
+```
+
+The second is a VISIBLE reference with a genuinely-hidden fragment inside it: it contributes nothing
+and the subject falls back to its own `aria-label`. **One boolean tells them apart, and getting it
+wrong costs one of the two either way** — the first attempt exempted only the root node and traded
+two of these for the other twelve.
+
+### `display:none` PRUNES; `visibility:hidden` DOES NOT
+
+`visibility` is the one hiding mechanism a descendant can UNDO, so it flows down the walk as a flag
+rather than ending it: `visibility:visible` inside a hidden ancestor **is** in the name.
+
+⚠ Read from the element's own **inline `style`** — a bounded, named approximation.
+`accessible_name` is handed a DOM and no computed styles (the WPT entry point holds nothing else),
+so a `display:none` applied by a CLASS is still missed. The fix is to thread the computed set in the
+way t1097 threaded `GeneratedText`.
+
+```text
+  accname 395/484 → 411/484 · wai-aria and html-aam unchanged · zero newly-failing subtests
+```

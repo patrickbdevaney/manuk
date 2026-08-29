@@ -94468,3 +94468,115 @@ NEXT, ranked from the residue (92 in accname, and it is now the only a11y row un
 4. `accname/name/shadowdom` still 0/6.
 
 WIKI: docs/wiki/dom-semantics.md
+
+## Tick 1354 — a referenced node contributes its NAME, not its text (2026-08-29)
+
+TICK SHAPE: capability — the accessibility tree (TRACK B), fifth engine tick. Board re-run at the top
+of this tick: unchanged. CI read first: tick 1352's run is **green**, tick 1353's in progress.
+This is t1353's own ranked NEXT #1, taken because it named a count (50 of 92 remaining accname rows
+carry `aria-labelledby` on the subject) rather than a hunch.
+
+### THE DEFECT IS t1353's, ONE LEVEL FURTHER OUT
+
+t1353 replaced a `text_content` flatten with the accname walk **for the subject**. The
+`aria-labelledby` DEREFERENCE was still a flatten:
+
+```html
+  <button aria-labelledby="cb">Toggle</button>
+  <input type="checkbox" id="cb"><label for="cb">Checkbox Label Text</label>
+```
+
+**A referenced CONTROL has no text at all**, so `text_content` returned `""`, the labelledby step
+produced nothing, and the button announced its own content — *"Toggle"*. §4.3 step 2B wants the
+referenced node's **NAME**: its own `aria-label`, then the host-language label (which is the whole
+reason a referenced control works), then name-from-content — that last one **allowed regardless of
+role**, because pointing at a plain `<span>` is precisely how authors name things.
+
+Extracting `host_language_name` for this is the third caller of the same rule and the one that
+proves the factoring was right: the `<label>` association t1349 built is what a referenced checkbox
+needs, and nothing else could reach it.
+
+⚠ **ONE HOP, AND THE GUARD IS LOAD-BEARING.** `aria-labelledby="self otherid"` is a real, tested
+authoring pattern (*"my own label, then that heading"*). The referenced computation must not
+re-enter `aria-labelledby`, or it is an infinite regress rather than a wrong answer.
+
+### ⭐⭐⭐ THE HIDDEN-NODE EXEMPTION IS THE SUBTREE, NOT THE ONE NODE — AND THE FIRST FIX GOT IT WRONG
+
+accname §4.3 step 2A exempts a node *directly referenced* by `aria-labelledby` from the hidden
+check. A `<span id="lbl" hidden>Delete permanently</span>` exists **only** to be pointed at; it is
+how a long name is attached to an icon button without printing it on the page.
+
+The first implementation exempted the referenced NODE and kept pruning inside it. That measured
+**409/484 with two rows newly red** — and the two it broke are the ones that state the rule:
+
+```html
+  <span id=span1 style="display:none"><span style="display:none">label</span></span>   -> "label"
+  <span id=span5><span style="visibility:hidden">label</span></span>                   -> ""
+```
+
+> **The exemption must cover the subtree, and the reason is mechanical: if the referenced element is
+> `display:none`, its children are hidden BECAUSE IT IS.** Nothing can tell a child's own
+> `display:none` apart from the one it inherits, so pruning inside makes the reference contribute
+> nothing and defeats the exemption entirely. The second case is a **visible** reference containing
+> a genuinely-separately-hidden fragment: it contributes nothing and the subject falls back to its
+> own `aria-label`.
+
+One boolean tells them apart and costs one of the two either way. It was found by diffing the
+failing NAME lists — t1353's own lesson, applied within the same tick, twice.
+
+### `display:none` PRUNES; `visibility:hidden` DOES NOT
+
+`visibility` is the one hiding mechanism a descendant can UNDO, so it flows down the walk as a flag
+rather than ending it: `visibility:visible` inside a hidden ancestor **is** in the name.
+
+⚠ **A BOUNDED, NAMED APPROXIMATION.** Both are read from the element's own **inline `style`**.
+`accessible_name` is handed a DOM and no computed styles — the WPT entry point `__axRoleName` holds
+nothing else — so **a `display:none` applied by a CLASS is still missed**. Inline is how hidden
+name-fragments are authored in practice and how every WPT fixture writes them; the real fix is
+threading the computed set the way t1097 threaded `GeneratedText`. Stated now rather than discovered
+later.
+
+### THE RECEIPT
+
+```text
+  suite       BEFORE            AFTER             delta
+  accname     395/484  81.6%    411/484  84.9%    +16
+  wai-aria    399/434  91.9%    399/434  91.9%      0   CONTROL
+  html-aam    310/335  92.5%    310/335  92.5%      0   CONTROL
+  ──────────────────────────────────────────────────────
+  a11y TOTAL 1104/1253 88.1%   1120/1253 89.4%    +16   HANG/CRASH 0
+```
+
+**ZERO newly-failing subtests**, and that is a checked claim: `comm -13` on the sorted failing-name
+lists, plus `g_ax_generated_name`, `g_a11y_roles`, `g_a11y_state`, `g_inert_a11y` and the whole
+`manuk-agent` suite re-run.
+
+⭐ **THE SESSION'S SIX TRACK-B TICKS: 819/1253 = 65.4% → 1120/1253 = 89.4%, +301 subtests**, on a
+subsystem that had no engine tick between t1254 (2026-08-14) and t1349. The board's Track-B bar is
+*">=90% node match"*; the aggregate is **0.6 points** short of it and `accname` is the only row
+below.
+
+GATE `aria_labelledby_dereferences_to_a_name_not_to_text_content`
+(`agent/tests/g_a11y_labelledby_deref.rs`) — 6 groups: a referenced control named by its `<label>`
+and by its own `aria-label`; the SELF-reference one-hop guard; a hidden reference contributing its
+whole subtree (inline `display:none` and the `hidden` attribute); **the counter-case** of a visible
+reference with a hidden fragment falling back; `visibility:visible` re-enabling inside a hidden
+ancestor; and four CONTROLS (plain reference, multiple references, dangling reference, no
+labelledby). RED under THREE mutations: N1 dereference with `text_content` → *"Toggle"*;
+N2 `exempt_hidden` forced false → the hidden reference contributes nothing; N3 forced true → the
+visible reference stops falling back. **N2 and N3 are the two halves of one boolean, which is what
+makes the pair a proof rather than a pair of tests.**
+
+PERF: none — the same subtree, and the dereference now visits the referenced node's subtree once
+instead of concatenating its text.
+
+NEXT, ranked from the 73 remaining accname rows:
+1. `::before`/`::after` `content` values the renderer does not produce — `counter()` alt text,
+   `attr()`, the `/alt-text` syntax. **Cross-subsystem: CSS `content`, not a11y**, and the largest
+   single block left.
+2. `comp_tooltip.html` 14/22 — the `title`-vs-`placeholder` ordering for text inputs.
+3. Block-level spacing between name-from-content children, and class-driven `display:none` — both
+   need the COMPUTED style threaded into `accessible_name`. One threading job closes both.
+4. `accname/name/shadowdom` still 0/6.
+
+WIKI: docs/wiki/dom-semantics.md

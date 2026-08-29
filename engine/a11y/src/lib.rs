@@ -1062,6 +1062,40 @@ fn scoped_by_presentational_table(dom: &Dom, node: NodeId) -> bool {
     false
 }
 
+/// The `display`/`visibility` an element declares in its own **inline `style` attribute**.
+///
+/// ⚠⚠ **A BOUNDED, NAMED APPROXIMATION.** The real answer is the computed style, and
+/// `accessible_name` is not given one — the WPT entry point (`__axRoleName`) holds a DOM and
+/// nothing else, and the tree builder's `invisible` set carries only `visibility`. What IS
+/// reachable from the DOM is the inline declaration, which is how hidden name-fragments are
+/// authored in practice (a `<span style="display:none">` holding text meant for a `labelledby`)
+/// and how every WPT fixture writes them. **A `display:none` applied by a CLASS is still missed** —
+/// stated here rather than discovered later, and the fix is to thread the computed set in the way
+/// t1097 threaded `GeneratedText`.
+fn inline_visibility(dom: &Dom, node: NodeId) -> (bool, Option<bool>) {
+    let Some(el) = dom.element(node) else {
+        return (false, None);
+    };
+    let Some(style) = el.attr("style") else {
+        return (false, None);
+    };
+    let s = style.to_ascii_lowercase();
+    let mut displayed_none = false;
+    let mut vis = None;
+    for decl in s.split(';') {
+        let Some((k, v)) = decl.split_once(':') else {
+            continue;
+        };
+        match (k.trim(), v.trim()) {
+            ("display", "none") => displayed_none = true,
+            ("visibility", "hidden" | "collapse") => vis = Some(false),
+            ("visibility", "visible") => vis = Some(true),
+            _ => {}
+        }
+    }
+    (displayed_none, vis)
+}
+
 /// Whether this element (and its subtree) is excluded from the a11y tree.
 pub fn is_hidden(dom: &Dom, node: NodeId) -> bool {
     let Some(el) = dom.element(node) else {
@@ -1362,7 +1396,11 @@ pub fn accessible_name(dom: &Dom, node: NodeId, role: &Role) -> String {
     accessible_name_with(dom, node, role, &index, &GeneratedText::new())
 }
 
-fn accessible_name_with(
+/// accname step 3 — the **host language's own** labelling mechanisms, factored out because
+/// `aria-labelledby` needs exactly this when it dereferences to a CONTROL: a referenced
+/// `<input type=checkbox>` is named by its `<label>`, and the caller that reads it has no other
+/// way to ask.
+fn host_language_name(
     dom: &Dom,
     node: NodeId,
     role: &Role,
@@ -1372,14 +1410,6 @@ fn accessible_name_with(
     let Some(el) = dom.element(node) else {
         return String::new();
     };
-
-    // 1 + 2. aria-labelledby (dereferenced one level), then aria-label — the SAME rule a
-    // descendant obeys inside `content_walk`, so it is written once.
-    if let Some(name) = aria_name_of(dom, node, index) {
-        return name;
-    }
-
-    // 3. native host-language labelling
     match el.name.as_str() {
         "img" | "area" => {
             if let Some(alt) = el.attr("alt") {
@@ -1461,6 +1491,31 @@ fn accessible_name_with(
             }
         }
         _ => {}
+    }
+    String::new()
+}
+
+fn accessible_name_with(
+    dom: &Dom,
+    node: NodeId,
+    role: &Role,
+    index: &NameIndex,
+    generated: &GeneratedText,
+) -> String {
+    let Some(el) = dom.element(node) else {
+        return String::new();
+    };
+
+    // 1 + 2. aria-labelledby (dereferenced one level), then aria-label — the SAME rule a
+    // descendant obeys inside `content_walk`, so it is written once.
+    if let Some(name) = aria_name_of(dom, node, index, generated) {
+        return name;
+    }
+
+    // 3. native host-language labelling — see `host_language_name`.
+    let host = host_language_name(dom, node, role, index, generated);
+    if !host.is_empty() {
+        return host;
     }
 
     // 4. name from content (only for roles that allow it)
@@ -1629,13 +1684,18 @@ fn label_index(dom: &Dom, ids: &HashMap<String, NodeId>) -> LabelIndex {
 /// ⚠ One level only, and that is a stated boundary rather than an accident: `aria-labelledby`
 /// chains are cycles waiting to happen, and the spec stops the recursion at the first hop for the
 /// same reason.
-fn aria_name_of(dom: &Dom, node: NodeId, index: &NameIndex) -> Option<String> {
+fn aria_name_of(
+    dom: &Dom,
+    node: NodeId,
+    index: &NameIndex,
+    generated: &GeneratedText,
+) -> Option<String> {
     let el = dom.element(node)?;
     if let Some(refs) = el.attr("aria-labelledby") {
         let text = refs
             .split_ascii_whitespace()
             .filter_map(|id| index.ids.get(id))
-            .map(|&n| normalize(&dom.text_content(n)))
+            .map(|&n| referenced_name(dom, n, index, generated))
             .filter(|t| !t.is_empty())
             .collect::<Vec<_>>()
             .join(" ");
@@ -1645,6 +1705,59 @@ fn aria_name_of(dom: &Dom, node: NodeId, index: &NameIndex) -> Option<String> {
     }
     let label = normalize(el.attr("aria-label")?);
     (!label.is_empty()).then_some(label)
+}
+
+/// ⭐⭐⭐ **A REFERENCED NODE CONTRIBUTES ITS NAME, NOT ITS TEXT — accname §4.3 step 2B.**
+///
+/// `aria-labelledby` was dereferenced with `dom.text_content()`, which is the t1353 defect one
+/// level further out and it fails in three separate ways:
+///
+/// ```html
+///   <button aria-labelledby="cb">Toggle</button>
+///   <input type=checkbox id=cb><label for=cb>Checkbox Label Text</label>
+/// ```
+///
+/// A referenced **CONTROL** has no text at all, so the button was named *"Toggle"* — its own
+/// content — instead of *"Checkbox Label Text"*. A referenced node with a `display:none` fragment
+/// inside it contributed that fragment. And a referenced node's own `aria-label` was ignored.
+///
+/// ⚠ **THE CYCLE GUARD IS THE WHOLE REASON THIS IS A SEPARATE FUNCTION.** `aria-labelledby="self"`
+/// is a real, tested authoring pattern (*"my own label, then that heading"*), so the referenced
+/// computation must NOT re-enter `aria-labelledby` — one hop, exactly as the spec says.
+///
+/// ⚠ And a referenced node is computed **as if name-from-content were allowed**, whatever its role:
+/// a `<span id=x>text</span>` is a `generic`, and pointing at it is precisely how authors name
+/// things.
+fn referenced_name(
+    dom: &Dom,
+    node: NodeId,
+    index: &NameIndex,
+    generated: &GeneratedText,
+) -> String {
+    let Some(el) = dom.element(node) else {
+        // A referenced text node contributes its own data.
+        return normalize(&dom.text_content(node));
+    };
+    // Step 2D — the referenced element's OWN aria-label. (2B is skipped: one hop.)
+    if let Some(l) = el
+        .attr("aria-label")
+        .map(normalize)
+        .filter(|l| !l.is_empty())
+    {
+        return l;
+    }
+    // Step 2E — the host-language label, which is what makes a referenced CONTROL work.
+    if let Some(role) = role_of(dom, node) {
+        let host = host_language_name(dom, node, &role, index, generated);
+        if !host.is_empty() {
+            return host;
+        }
+    }
+    // Step 2F — name from content, ALLOWED here regardless of role. The hidden-node exemption
+    // applies only when the REFERENCED element is itself hidden (see `content_text_rooted`).
+    let (display_none, vis) = inline_visibility(dom, node);
+    let root_hidden = is_hidden(dom, node) || display_none || vis == Some(false);
+    content_text_rooted(dom, node, None, index, generated, root_hidden)
 }
 
 /// ⭐⭐⭐ **ONE WALK, TWO CALLERS — AND ONLY ONE OF THEM USED TO RECURSE.**
@@ -1673,11 +1786,53 @@ fn content_text(
     index: &NameIndex,
     generated: &GeneratedText,
 ) -> String {
+    content_text_rooted(dom, root, skip, index, generated, false)
+}
+
+/// ⚠⚠⚠ **A HIDDEN NODE THAT `aria-labelledby` POINTS AT CONTRIBUTES ITS WHOLE SUBTREE.**
+///
+/// accname §4.3 step 2A: *"if the current node is hidden and is **not** directly referenced by
+/// `aria-labelledby`, return the empty string."* Authors rely on this constantly — a
+/// `<span id="lbl" hidden>Delete permanently</span>` exists **only** to be pointed at, and it is
+/// how you attach a long name to an icon button without printing it on the page.
+///
+/// ⚠ **THE EXEMPTION IS THE SUBTREE, NOT THE ONE NODE, AND THE REASON IS MECHANICAL:** if the
+/// referenced element is `display:none`, its children are hidden *because it is* — nothing can tell
+/// a child's own `display:none` apart from the one it inherits, so pruning inside would make the
+/// reference contribute nothing and defeat the exemption entirely. WPT tests exactly this pair:
+///
+/// ```html
+///   <span id=span1 style="display:none"><span style="display:none">label</span></span>   -> "label"
+///   <span id=span5><span style="visibility:hidden">label</span></span>                   -> ""
+/// ```
+///
+/// The first is a hidden reference (exempt throughout); the second is a VISIBLE reference with a
+/// hidden fragment inside it, which contributes nothing and falls back to the button's own
+/// `aria-label`. One boolean tells them apart, and getting it wrong costs one of the two either way.
+fn content_text_rooted(
+    dom: &Dom,
+    root: NodeId,
+    skip: Option<NodeId>,
+    index: &NameIndex,
+    generated: &GeneratedText,
+    exempt_hidden: bool,
+) -> String {
     let mut out = String::new();
-    content_walk(dom, root, root, skip, index, generated, &mut out);
+    content_walk(
+        dom,
+        root,
+        root,
+        skip,
+        index,
+        generated,
+        true,
+        exempt_hidden,
+        &mut out,
+    );
     normalize(&out)
 }
 
+#[allow(clippy::too_many_arguments)]
 fn content_walk(
     dom: &Dom,
     n: NodeId,
@@ -1685,31 +1840,50 @@ fn content_walk(
     skip: Option<NodeId>,
     index: &NameIndex,
     generated: &GeneratedText,
+    visible: bool,
+    exempt_hidden: bool,
     out: &mut String,
 ) {
     // The control being named never names itself.
     if Some(n) == skip {
         return;
     }
+    // Set once for the whole traversal, when the REFERENCED node is itself hidden.
+    let exempt = exempt_hidden;
     if !dom.is_element(n) {
         // A text node's `text_content` is its own data; a comment's is empty. Both correct here.
-        out.push_str(&dom.text_content(n));
+        if visible {
+            out.push_str(&dom.text_content(n));
+        }
         return;
     }
-    if is_hidden(dom, n) {
+    if !exempt && is_hidden(dom, n) {
         return;
     }
+    // ⚠⚠⚠ **`display:none` PRUNES; `visibility:hidden` DOES NOT.** `visibility` is the one hiding
+    // mechanism a descendant can UNDO — `visibility:visible` inside a hidden ancestor is shown, and
+    // is in the name — so it flows down as a flag rather than ending the walk. Getting this
+    // backwards either loses text the user can read or announces text they cannot.
+    let (display_none, vis) = inline_visibility(dom, n);
+    if display_none && !exempt {
+        return;
+    }
+    let visible = if exempt { true } else { vis.unwrap_or(visible) };
     if n != root {
         // §4.3 step 2C — an embedded control speaks its VALUE, not its subtree.
         if let Some(v) = embedded_control_value(dom, n) {
-            push_word(out, &v);
+            if visible {
+                push_word(out, &v);
+            }
             return;
         }
         // §4.3 steps 2B/2D — a descendant that carries its OWN ARIA name contributes that name and
         // its subtree is NOT descended into. Overriding a name is the whole point of `aria-label`;
         // reading through it announces the text the author replaced.
-        if let Some(name) = aria_name_of(dom, n, index) {
-            push_word(out, &name);
+        if let Some(name) = aria_name_of(dom, n, index, generated) {
+            if visible {
+                push_word(out, &name);
+            }
             return;
         }
         // Host-language: an `<img>`/`<area>` contributes its `alt` and nothing else. An `alt=""`
@@ -1718,7 +1892,7 @@ fn content_walk(
             if matches!(el.name.as_str(), "img" | "area") {
                 if let Some(alt) = el.attr("alt") {
                     let alt = normalize(alt);
-                    if !alt.is_empty() {
+                    if !alt.is_empty() && visible {
                         push_word(out, &alt);
                     }
                 }
@@ -1732,11 +1906,25 @@ fn content_walk(
         .get(&n)
         .map(|(b, a)| (b.as_str(), a.as_str()))
         .unwrap_or(("", ""));
-    out.push_str(b);
-    for c in dom.children(n) {
-        content_walk(dom, c, root, skip, index, generated, out);
+    if visible {
+        out.push_str(b);
     }
-    out.push_str(a);
+    for c in dom.children(n) {
+        content_walk(
+            dom,
+            c,
+            root,
+            skip,
+            index,
+            generated,
+            visible,
+            exempt_hidden,
+            out,
+        );
+    }
+    if visible {
+        out.push_str(a);
+    }
 }
 
 /// Append a contribution as its own WORD. The markup around a substituted value or name carries no
