@@ -7450,3 +7450,133 @@ job is to stop a future reader implementing it off a drift table.
 ⚠ The remaining LAYOUT drift from #79 is therefore **grid placement alone** (`grid-area` +
 `grid-template-areas`, 127 declarations) — closed at t1376 — and #79's ranked list item 2 is
 retired.
+
+## Audit #80 — tick 1383 (2026-08-30)
+
+### THE QUESTION — is the MAP still the right frame, measured against the world's own list?
+
+The protocol's step 1 is *"search the web, not from memory."* Done, against the two lists the
+platform itself maintains: **Interop 2026** (what the four engine vendors jointly agreed matters
+most) and **Baseline 2026** (what is considered safe to use today).
+
+Sources:
+- `https://github.com/web-platform-tests/interop/blob/main/2026/README.md` — the 20 focus areas and
+  4 investigation efforts, verbatim
+- `https://webkit.org/blog/17818/announcing-interop-2026/`, `https://web.dev/blog/interop-2026`,
+  `https://www.igalia.com/news/interop-2026.html`, `https://hacks.mozilla.org/2026/02/launching-interop-2026/`
+- `https://web.dev/baseline/2026` and the 2026 monthly digests
+
+### THE RECONCILIATION — and it is the first audit in a while that finds the MAP itself intact
+
+```text
+  Interop 2026 FOCUS AREAS (20)          on CONSTELLATION.tsv?
+    container style queries                    yes (missing)
+    CSS anchor positioning                     yes (missing + unknown, two rows)
+    CSS attr()                                 yes (partial)
+    CSS contrast-color()                       yes (gated)
+    CSS zoom                                   yes (partial)
+    custom highlights                          yes (missing)
+    dialogs and popovers                       yes (gated)
+    fetch uploads and ranges                   yes
+    IndexedDB                                  yes (gated)
+    JSPI for Wasm                              yes (missing)
+    media pseudo-classes                       yes (partial)
+    Navigation API                             yes (gated)
+    scoped custom element registries           yes (missing)
+    scroll-driven animations                   yes (missing)
+    scroll snap                                yes (gated)
+    CSS shape()                                yes (missing)
+    view transitions                           yes (gated)
+    web compat / WebRTC / WebTransport         yes
+  Interop 2026 INVESTIGATIONS (4)
+    accessibility testing · JPEG XL · mobile testing · WebVTT      all yes
+
+  Baseline 2026 NEWLY AVAILABLE, spot-checked
+    Trusted Types            yes (missing)
+    Content-Encoding: zstd   yes (missing)
+    :active-view-transition  yes (missing)
+    Navigation API           yes (gated)
+```
+
+**24 of 24 named areas are already on the map**, and the map is 598 rows against a status histogram
+of `343 gated · 147 missing · 49 unknown · 41 partial · 17 works`.
+
+> ⭐ **THE MAP'S BREADTH IS NOT THE PROBLEM ANY MORE; ITS VERDICTS ARE.** Six audits ago the finding
+> was always a missing row. This one could not produce one from either list the platform maintains.
+> The 49 `unknown` rows are now the frontier, and *"an audit that finds nothing is a suspicious
+> audit"* is answered below, twice, by looking at what the lists SAY rather than at whether we have
+> a row for it.
+
+### ⭐⭐⭐ FINDING 1 — THE WORLD JUST TOLD US THE A11Y-TREE INSTRUMENT DOES NOT EXIST
+
+Interop 2026 lists **"accessibility testing"** as an *investigation effort*, not a focus area — the
+four vendors' own words are that the work is *"to work toward generating consistent accessibility
+trees across browsers."* An investigation effort is the platform's way of saying **there is not yet
+a test suite that can decide this**.
+
+This loop hit that from the inside, twice, in the eight ticks before this audit and without knowing
+the list said so:
+
+```text
+  t1379  a name fragment hidden by a STYLESHEET was announced. WPT accname went 438/484 → 438/484,
+         UNCHANGED — every hidden-node fixture in the suite writes `style="display:none"` INLINE.
+  t1380  the a11y TREE contained every `display:none` subtree — a closed mobile menu is a second
+         copy of the whole header. No WPT test and no gate covered it.
+```
+
+> **A conformance suite can be blind in the same place the engine is, and Interop 2026 says so out
+> loud for this exact subsystem.** The consequence for this loop is a METHOD, not a backlog item:
+> **CDP `Accessibility.getFullAXTree` is the a11y oracle**, the way headless Chrome's rects are the
+> layout oracle. t1379 and t1380 both used it and both found real defects that no suite could have
+> ranked. It should be used deliberately, not reached for by accident.
+
+⚠ And the corollary for the ROADMAP: Track B's *"≥90% node match"* bar is measured against an
+instrument the platform itself says does not exist yet. That is not a reason to lower the bar — it is
+a reason to say which oracle the number came from, every time it is quoted.
+
+### ⭐⭐ FINDING 2 — A DEFERRAL WHOSE REASON EXPIRED, AND THE FAILURE MODE UNDER IT
+
+`Content-Encoding: zstd` is **Baseline 2026**. The board's v1 scope defers it (*"SKIP v1: HTTP/3/QUIC,
+zstd, coalescing, OCSP…"*), a decision taken when zstd was not Baseline. The loop's own rule from
+t1273 applies: **an exclusion must carry a re-check, or the reason outlives the fact.**
+
+Priced before proposing anything:
+
+```text
+  what we advertise    `Accept-Encoding: gzip, deflate, br`   (engine/net/src/lib.rs)
+  so a conforming server never sends zstd → NOTHING BREAKS TODAY
+  what happens if one does anyway:
+    wrap_decoder's `_ =>` arm hands an UNRECOGNISED coding to the parser AS IDENTITY
+```
+
+⚠⚠ **AND THE ARBITRATION FAILED, WHICH IS WHY NOTHING WAS BUILT.** The two candidate behaviours are
+both defensible — the Fetch Standard says unknown codings are not decoded (pass through), and Chrome
+fails the load for a coding it advertised — and deciding between them needs a server that emits the
+header. **This environment refuses to bind a listening socket** (`OSError: [Errno 98] Address already
+in use` on every port tried, including fresh ones), so headless Chrome could not be asked. Asserting
+either answer would bank a guess, so the row is recorded and left. *A refusal must cite the failing
+message; that is the message.*
+
+### WHAT WAS BUILT INSTEAD — the gap the second finding exposed on the way past
+
+The `Content-Encoding` dispatch — the one decision between a compressed HTTP body and the HTML parser
+— **had no gate the wall runs.** Its only test was `decodes_gzip`, `#[ignore]`d because it fetches
+httpbin. That is audit #79's ranked #1 in its purest form: *a rule whose only exercise needs an input
+the harness cannot build.* It can be built — `async-compression` ships the encoders under the same
+features as the decoders — and now is:
+`content_encoding_decodes_what_it_claims_and_refuses_what_it_cannot` (`engine/net`, in the wall's
+crate list). The unknown-coding row is the one it deliberately does not assert.
+
+### RANKED, from this audit only
+
+1. ⭐⭐⭐ **Use CDP `Accessibility.getFullAXTree` as the a11y oracle deliberately.** Interop 2026 says
+   no suite can decide a11y-tree correctness; two ticks that asked Chrome directly found two shipping
+   defects in eight ticks. Sweep the tree's remaining facts (role mapping, states, `<summary>`'s
+   `DisclosureTriangle` / name, which t1380's own control found) the same way.
+2. ⭐⭐ **The 49 `unknown` rows are the frontier now, not missing rows.** The map is complete against
+   both lists the platform maintains; what it cannot tell you is whether we have those capabilities.
+3. ⭐ **`Content-Encoding: zstd` needs an OWNER decision**, and it is a dependency question rather
+   than an engine one: the C `zstd-sys` (build cost + attack surface, which the media scope already
+   refused for ffmpeg) versus the pure-Rust `ruzstd`. Nothing breaks until we advertise it.
+4. Carried: the gate-execution gap (#78, 502 of 522), and #79's ranked #1 sweep, which has now
+   produced three findings in three ticks (t1379, t1380, this).

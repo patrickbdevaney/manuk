@@ -11,12 +11,12 @@
 
 | | value | over |
 |---|---|---|
-| ticks landed | **1064** | ticks 1–1381 |
-| median tick cycle | **31m** | 1063 intervals |
+| ticks landed | **1065** | ticks 1–1382 |
+| median tick cycle | **31m** | 1064 intervals |
 | median, last 10 | **50m** | 10 intervals |
 | fastest / slowest | 5s / 7.0d | |
-| **ticks per hour** | **0.88** | 1204.0h elapsed |
-| median verify wall | **67s** | 1003 ticks |
+| **ticks per hour** | **0.88** | 1205.0h elapsed |
+| median verify wall | **67s** | 1004 ticks |
 | wall trend | 39s → 8m — getting slower ⚠️ | first 3 vs last 3 |
 
 The **cycle** is the real unit: implement → debug → verify wall → land. The wall is only part of
@@ -31,7 +31,7 @@ it, and a wall that grows taxes every future tick, so it is tracked separately f
 * **✅ rows in the capability ledger**: 144 → **642**
 * **Bar 0 — oracle hangs**: 0 of 265 sites
 
-**492 of 1064 ticks** (46%) moved a
+**492 of 1065 ticks** (46%) moved a
 user-visible capability. The rest were instruments, infrastructure and corrections — and the
 ledger says the corrections were not overhead: three of its top three priorities were phantoms,
 and finding that out redirected everything after it.
@@ -1161,5 +1161,6 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 | **1379** | 2026-08-30 07:06 | 46m | capability-subsystem | 8m | +525/−33 | 522 | 81 | 56.0% · | a name fragment hidden by a STYLESHEET was announced (2026-08-30) |
 | **1380** | 2026-08-30 07:49 | 43m | capability-subsystem | 8m | +585/−40 | 522 | 81 | 56.0% · | the a11y tree contained every `display: none` subtree (2026-08-30) |
 | **1381** | 2026-08-30 09:06 | 76m | capability-subsystem | 8m | +556/−52 | 522 | 81 | 56.0% · | a trailing margin was outside the scrollable overflow region (2026-08-30) |
+| **1382** | 2026-08-30 10:05 | 60m | capability-subsystem | 8m | +502/−35 | 522 | 81 | 56.0% · | the alignment rectangle: a relpos box contributes BOTH positions (2026-08-30) |
 
 *`·` after a WPT figure means **carried forward**, not measured this tick.*

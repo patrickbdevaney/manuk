@@ -9739,3 +9739,22 @@ to the finished extent is right on the first row and off by a padding on the oth
 ⚠ The in-flow position is UNRECOVERABLE from a fragment tree that applies the offset by translating
 the box — it has to be recorded at the moment it is spent.
 (t1382 — `agent/tests` `a_relative_box_contributes_its_in_flow_position_too`)
+
+## `Content-Encoding: <anything>` — the one decision between the wire and the parser
+
+A compressed HTTP body reaches the HTML parser through exactly one `match` on the
+`Content-Encoding` header. Getting it wrong does not throw: it hands the parser bytes that are not
+HTML, which renders as a blank or half-built page **with no error anywhere** — the silent-fail class.
+
+⭐ The row that matters is not "gzip decodes" but **"bytes that are NOT gzip, labelled `gzip`,
+FAIL"**. A decoder that swallows the error and yields what it had produces a truncated document,
+and a truncated document looks like a slow network rather than a bug.
+
+⚠ An UNRECOGNISED coding is handed on as IDENTITY. `Content-Encoding: zstd` became Baseline in 2026;
+we advertise `gzip, deflate, br` and not zstd, so a conforming server never sends it — but the arm is
+reachable, and whether it should pass through (Fetch: unknown codings are not decoded) or fail the
+load (what Chrome does for a coding it advertised) is unresolved and deliberately unasserted.
+
+⚠ The whole dispatch had NO gate the wall runs: its only test fetched httpbin and was `#[ignore]`d.
+The encoders ship with the decoders, so the input a network test needed can be built in-process.
+(t1383 — `engine/net` `content_encoding_decodes_what_it_claims_and_refuses_what_it_cannot`)

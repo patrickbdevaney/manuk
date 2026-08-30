@@ -890,6 +890,15 @@
   - L30 · Chrome-measured
   - L45 · ⚠ What this does and does not buy
 
+## `Content-Encoding` — the one decision between the wire and the parser
+`docs/wiki/content-encoding-dispatch.md`
+
+  - L6 · Why it needed a gate at all
+  - L19 · The battery
+  - L37 · ⚠ The unknown-coding row, and why it is not asserted
+  - L63 · The dependency question, for an owner
+  - L69 · How it was proven red
+
 ## `counter-set`, and the counter properties a pseudo was never asked about
 `docs/wiki/counter-set-and-pseudo-counters.md`
 
@@ -2693,4 +2702,4 @@
   - L231 · Both named mechanisms are subsystem work
 
 ---
-2508 sections across 45 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+2513 sections across 46 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.

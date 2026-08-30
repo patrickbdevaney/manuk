@@ -97673,3 +97673,114 @@ positioned scroller (1200 in Chrome, 95 here). Behind those: the nested-propagat
 measured, and audit #79's remaining hand-built-input gates.
 
 WIKI: docs/wiki/scrollable-overflow-alignment-rect.md
+
+## Tick 1383 — the audits, and the map measured against the world's own list (2026-08-30)
+
+TICK SHAPE: instrument-fidelity
+
+Both audits were due (self-audit and surface audit, last run t1373). **Surface audit #80 is the first
+in a long while that could not find a missing row** — and the two findings it did produce are about
+what the world's lists SAY rather than about whether we have a row for it.
+
+### ⭐ THE MAP IS INTACT AGAINST BOTH LISTS THE PLATFORM MAINTAINS
+
+Reconciled `CONSTELLATION.tsv` (598 rows) against **Interop 2026** — the 20 focus areas and 4
+investigation efforts the four engine vendors jointly agreed on — and against **Baseline 2026**.
+**24 of 24 named areas are already on the map**, plus every Baseline row spot-checked (Trusted Types,
+`Content-Encoding: zstd`, `:active-view-transition`, Navigation API).
+
+> ⭐ **THE MAP'S BREADTH IS NOT THE PROBLEM ANY MORE; ITS VERDICTS ARE.**
+> `343 gated · 147 missing · 49 unknown · 41 partial · 17 works`. The 49 `unknown` rows are the
+> frontier now, not missing rows.
+
+### ⭐⭐⭐ FINDING 1 — THE WORLD JUST TOLD US THE A11Y-TREE INSTRUMENT DOES NOT EXIST
+
+Interop 2026 lists **accessibility testing as an INVESTIGATION effort**, not a focus area, with the
+vendors' own words: *"to work toward generating consistent accessibility trees across browsers."* An
+investigation effort is the platform saying **there is no suite that can decide this yet**.
+
+This loop hit that from the inside twice in the eight ticks before the audit, without knowing:
+
+```text
+  t1379  a name fragment hidden by a STYLESHEET was announced. WPT accname 438/484 → 438/484,
+         UNCHANGED — every hidden-node fixture in the suite writes `style="display:none"` INLINE.
+  t1380  the a11y TREE contained every `display:none` subtree. No WPT test and no gate covered it.
+```
+
+**The consequence is a METHOD, not a backlog item: CDP `Accessibility.getFullAXTree` is the a11y
+oracle**, the way headless Chrome's rects are the layout oracle. Both ticks used it and both found
+shipping defects no suite could have ranked. ⚠ And the corollary: Track B's *"≥90% node match"* bar
+is measured against an instrument the platform itself says does not exist — which is a reason to name
+the oracle every time the number is quoted, not to lower the bar.
+
+### ⭐⭐ FINDING 2 — A DEFERRAL WHOSE REASON EXPIRED, AND AN ARBITRATION THAT FAILED
+
+`Content-Encoding: zstd` is **Baseline 2026**; the board's v1 scope defers it, a decision taken when
+it was not. t1273's rule applies: *an exclusion must carry a re-check, or the reason outlives the
+fact.* Priced before proposing anything:
+
+```text
+  we advertise `Accept-Encoding: gzip, deflate, br`, so a conforming server never sends zstd
+    → NOTHING BREAKS TODAY
+  but `wrap_decoder`'s `_ =>` arm hands an UNRECOGNISED coding to the parser AS IDENTITY
+```
+
+⚠⚠ **AND THE ARBITRATION FAILED, WHICH IS WHY NOTHING WAS BUILT.** Both candidate behaviours are
+defensible — the Fetch Standard says unknown codings are not decoded, Chrome fails the load for a
+coding it advertised — and deciding needs a server that emits the header. **This environment refuses
+to bind a listening socket** (`OSError: [Errno 98] Address already in use` on every port tried,
+including fresh ones), so headless Chrome could not be asked. Asserting either answer banks a guess.
+*A refusal must cite the failing message; that is the message.*
+
+### WHAT WAS BUILT — the gap the second finding exposed on the way past
+
+**The `Content-Encoding` dispatch had no gate the wall runs.** Its only test was `decodes_gzip`,
+`#[ignore]`d because it fetches httpbin — audit #79's ranked #1 in its purest form: *a rule whose
+only exercise needs an input the harness cannot build.* It can be built: `async-compression` ships
+the ENCODERS under the same features as the decoders, so every row is produced in-process.
+
+```text
+                                                      asserted
+  gzip / br / deflate round-trip                         yes
+  None and "identity" pass through unchanged             yes
+  INVALID bytes labelled `gzip` ERROR, not garbage       yes   ← the row with a consequence
+  an UNKNOWN coding (zstd) passes through                NO    ← the failed arbitration
+```
+
+⭐ **The invalid-gzip row is the one with a consequence.** A decoder that swallowed the error and
+yielded what it had would hand a truncated document to the HTML parser, and a truncated document
+looks like a slow network rather than a bug.
+
+⚠ Vacuity: each encoder's output is asserted to DIFFER from the plain bytes, or all three round-trip
+rows would pass against a decoder that does nothing.
+
+### THE GATE
+
+`content_encoding_decodes_what_it_claims_and_refuses_what_it_cannot` (`engine/net`, in the wall's
+crate list). **PROVEN RED by two mutations**: N1 unwrap the `gzip` arm → the round-trip row AND the
+invalid-gzip row both fail, which is what says the decode and the refusal are one decision; N2 swap
+the `br` and `deflate` arms → exactly those two rows fail and gzip stays green, because the dispatch
+is by NAME and a mislabelled decoder is silently wrong on precisely two codings.
+
+### ⚠ THE SELF-AUDIT'S ONE FAILING ITEM IS HARNESS-OWNED
+
+`verify wall: 2231s EXCEEDS the 300s target`. That reading is t1382's COLD wall (it touched
+`engine/layout`); the four warm walls in this window were 266s, 340s, 465s and 611s. Wall time is
+observer territory (the wall audit is due t1388) and this loop does not edit `scripts/`. Recorded
+here and continuing, per the standing rule. Every other self-audit item is green.
+
+### THE RECEIPT
+
+```text
+  manuk-net  102/102 → 103/103   +1   +the new gate
+  manuk-agent / manuk-layout / manuk-css / manuk-a11y / manuk-paint / manuk-dom   CONTROL
+  SURFACE-AUDIT.md  #80 written · STATUS LAST_AUDIT_TICK 1373 → 1383
+```
+
+NEXT: audit #80's ranked #1 — sweep the a11y tree's remaining facts against CDP
+`getFullAXTree` deliberately (role mapping, states, and the `<summary>` →
+`DisclosureTriangle` / `"More"` gap t1380's own control found). Behind it: the nested
+scrollable-overflow propagation family (t1381), transforms and abspos in the alignment rectangle
+(t1382), and an owner decision on zstd's dependency.
+
+WIKI: docs/wiki/content-encoding-dispatch.md

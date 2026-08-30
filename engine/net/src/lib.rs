@@ -2467,6 +2467,128 @@ mod tests {
         assert_eq!(b.status, 200);
     }
 
+    /// ⚠⚠⚠ **THE `Content-Encoding` DISPATCH HAD NO GATE THE WALL RUNS.** The only test that
+    /// touched it was `decodes_gzip` below — `#[ignore]`d, because it fetches httpbin. So the one
+    /// decision that stands between a compressed HTTP body and the HTML parser was executed by
+    /// nothing, and the audit that found it (surface audit #80) was looking for exactly this shape:
+    /// a rule whose only exercise needs an input the harness cannot build.
+    ///
+    /// It can be built. `async-compression` ships the ENCODERS under the same features as the
+    /// decoders, so every row here is produced in-process with no network and no fixture file.
+    ///
+    /// ```text
+    ///                                                       asserted
+    ///   gzip                round-trips                        yes
+    ///   br                  round-trips                        yes
+    ///   deflate (zlib)      round-trips                        yes
+    ///   None                passes through unchanged           yes
+    ///   "identity"          passes through unchanged           yes
+    ///   INVALID bytes labelled `gzip`   ERRORS, not garbage     yes   ← the row that matters
+    ///   an UNKNOWN coding (`zstd`)      passes through          NO    ← see below
+    /// ```
+    ///
+    /// ⭐ **THE INVALID-GZIP ROW IS THE ONE WITH A CONSEQUENCE.** A decoder that swallowed the
+    /// error and yielded what it had would hand a truncated or corrupt document to the parser,
+    /// which renders as a half-page with no error anywhere — the silent-fail class this project
+    /// keeps catching. The `?` in `stream_body_decoded` is what makes it loud, and nothing asserted
+    /// that.
+    ///
+    /// ⚠ **THE UNKNOWN-CODING ROW IS DELIBERATELY NOT ASSERTED, AND THAT IS A REFUSAL WITH A
+    /// REASON.** `wrap_decoder`'s `_ =>` arm hands an unrecognised coding to the parser as
+    /// IDENTITY. `Content-Encoding: zstd` became Baseline in 2026 while this engine's v1 scope
+    /// defers zstd, so the arm is now reachable on the live web — and the two candidate behaviours
+    /// (pass through, per the Fetch Standard's "unknown codings are not decoded", vs fail the load,
+    /// which is what Chrome does for a coding it advertised) **could not be arbitrated here: this
+    /// environment refuses to bind a listening socket, so no local server could serve the header to
+    /// headless Chrome.** Asserting either answer would bank a guess. Recorded in
+    /// `docs/loop/SURFACE-AUDIT.md` #80 with the exact line, and left for a tick that can measure it.
+    ///
+    /// ⚠ We advertise `gzip, deflate, br` and NOT `zstd`, so a conforming server never sends it —
+    /// which is why this is an audit finding and not an outage.
+    #[tokio::test]
+    async fn content_encoding_decodes_what_it_claims_and_refuses_what_it_cannot() {
+        use async_compression::tokio::bufread as ac;
+        use tokio::io::AsyncReadExt;
+
+        const PLAIN: &[u8] =
+            b"<!doctype html><html><body><h1>hello, content-encoding</h1></body></html>";
+
+        async fn through(bytes: Vec<u8>, encoding: Option<&str>) -> std::io::Result<Vec<u8>> {
+            let reader = tokio::io::BufReader::new(std::io::Cursor::new(bytes));
+            let mut decoded = wrap_decoder(reader, encoding);
+            let mut out = Vec::new();
+            decoded.read_to_end(&mut out).await?;
+            Ok(out)
+        }
+        async fn encode<E, F>(make: F) -> Vec<u8>
+        where
+            E: tokio::io::AsyncRead + Unpin,
+            F: FnOnce(tokio::io::BufReader<std::io::Cursor<&'static [u8]>>) -> E,
+        {
+            let mut e = make(tokio::io::BufReader::new(std::io::Cursor::new(PLAIN)));
+            let mut out = Vec::new();
+            e.read_to_end(&mut out)
+                .await
+                .expect("encoding must succeed");
+            out
+        }
+
+        let gz = encode(ac::GzipEncoder::new).await;
+        let br = encode(ac::BrotliEncoder::new).await;
+        let zl = encode(ac::ZlibEncoder::new).await;
+
+        // ── VACUITY. Every compressed body must actually DIFFER from the plain one, or a decoder
+        //    that returned its input unchanged would pass all three round-trip rows.
+        for (name, bytes) in [("gzip", &gz), ("br", &br), ("deflate", &zl)] {
+            assert_ne!(
+                bytes.as_slice(),
+                PLAIN,
+                "VACUOUS: the {name} encoder produced the plain bytes, so its round-trip row would                  pass against a decoder that does nothing"
+            );
+        }
+
+        for (label, bytes) in [("gzip", gz), ("br", br), ("deflate", zl)] {
+            let got = through(bytes, Some(label)).await.expect("must decode");
+            assert_eq!(
+                got, PLAIN,
+                "G_CONTENT_ENCODING: a body labelled `{label}` must decode back to what was encoded"
+            );
+        }
+
+        // Identity, both spellings — the body is handed on untouched.
+        for enc in [None, Some("identity")] {
+            let got = through(PLAIN.to_vec(), enc)
+                .await
+                .expect("must pass through");
+            assert_eq!(
+                got, PLAIN,
+                "G_CONTENT_ENCODING: {enc:?} must pass the body through unchanged"
+            );
+        }
+
+        // ⭐ THE ROW WITH A CONSEQUENCE: bytes that are NOT gzip, labelled `gzip`. This must be an
+        //    ERROR and not a short read — a decoder that yielded what it had would hand a truncated
+        //    document to the HTML parser, which renders as a half-page with no error anywhere.
+        let err = through(PLAIN.to_vec(), Some("gzip")).await;
+        assert!(
+            err.is_err(),
+            "G_CONTENT_ENCODING: a body labelled `gzip` that is not gzip must FAIL the read, not              yield {} bytes of whatever it had — that is how corrupt HTML reaches the parser with              no error anywhere",
+            err.map(|v| v.len()).unwrap_or(0)
+        );
+    }
+
+    // ── HOW THIS GOES RED ──────────────────────────────────────────────────────────────────
+    //
+    // N1  `wrap_decoder`'s `Some("gzip")` arm returns the reader unwrapped
+    //       -> the gzip round-trip row fails (it reads back the compressed bytes), and the
+    //          invalid-gzip row ALSO fails because nothing errors any more. One mutation, both
+    //          halves, which is what says the decode and the refusal are the same decision.
+    // N2  swap the `br` and `deflate` arms
+    //       -> both of those rows fail and gzip stays green: the dispatch is by NAME, not by
+    //          sniffing, so a mislabelled decoder is silently wrong on exactly two codings.
+    // N3  make `read_to_end` errors into `Ok(partial)` at the call site
+    //       -> only the invalid-gzip row fails. That is the silent-fail this gate exists to refuse.
+
     #[tokio::test]
     #[ignore = "requires network access"]
     async fn decodes_gzip() {
