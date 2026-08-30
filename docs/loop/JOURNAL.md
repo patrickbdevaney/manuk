@@ -96949,3 +96949,69 @@ re-flow (VI.2's sole surviving residual, with t1374's side-table constraint atta
 audit #79's grid-placement and legacy-flex drift.
 
 WIKI: docs/wiki/agent-target-selection.md
+
+## Tick 1376 — `grid-area` placed nothing, and auto-placement hid it (2026-08-30)
+
+TICK SHAPE: capability-subsystem
+
+**Track A/B**, closing a priced row from this loop's own surface audit #79.
+
+### THE FINDING
+
+`MinimalCascade` parsed `grid-column` and `grid-row` and **not** `grid-area` — so a rule that placed
+an item with the combined shorthand placed nothing, and **the item fell back to auto-placement,
+which lands in the right cell often enough to hide the bug.** `grid-area` + `grid-template-areas`
+are declared **127 times** across 14 sampled CrUX stylesheets.
+
+⚠ The shipping (Stylo) path places both forms correctly — measured before building. So the value is
+the `--no-default-features` build **and** instrument fidelity: `engine/layout`'s 191 unit tests run
+on `MinimalCascade`, and one of them writes `style="grid-area:1/1"` on an intermediate box. That
+declaration did nothing and the box landed in cell 1/1 by auto-placement, so **that gate has been
+green for a different reason than it states.**
+
+### ⭐ THE ORDER IS ROW / COLUMN / ROW / COLUMN
+
+Not the row-then-column PAIRS the per-axis shorthands use — and a transposed read is **invisible on
+a symmetric fixture**, which is why the one-value row is in it:
+
+```text
+  grid-area: 2 / 2 / 3 / 3      [100 50 100x50]
+  grid-area: 2 / 2              [100 50 100x50]   omitted ENDS are auto — one cell
+  grid-area: 2                  [  0 50 100x50]   row-start only; transposed reads [100 0]
+  grid-area: 1 / 1 / 3 / 3      [  0  0 200x100]
+  grid-area: span 2 / span 2    [  0  0 200x100]
+```
+
+### ⚠ THE NAMED FORM IS DELIBERATELY NOT PARSED
+
+`grid-area: header` is **not representable**: `GridLine` is `Auto`/`Line`/`Span` with no ident, and
+the shipping path resolves names before this type is reached. The alternatives are *ignore it* and
+*silently turn it into `Auto` at some other cell* — and a name becoming a number places the item
+somewhere the author never asked for. The parser detects an ident and does nothing; the gate asserts
+that as a **pinned negative**, since an unparsed declaration auto-places into cell 1/1 and a
+mis-parse would not.
+
+### THE GATE
+
+`the_grid_area_shorthand_places_on_both_axes` (`agent/tests/`) — five asserted rows, one pinned
+negative, and a vacuity pass that every container really is a 200×100 grid.
+
+**PROVEN RED by two mutations.** N1 drop the arm → every item auto-places into cell 1/1 and the
+spanning rows read one cell. N2 read the values as row/row/col/col → the four-value row reads
+`[200 50 10x50]`. ⚠ **The ledger's first draft predicted the one-value row alone**, reasoning that
+the others are symmetric under transposition — true of the one- and two-value rows, false of the
+four-value ones. Corrected to what actually fired.
+
+### THE RECEIPT
+
+```text
+  manuk-agent  140/140 → 141/141   +1   +the new gate
+  manuk-css / manuk-layout / manuk-page / manuk-a11y / manuk-paint / manuk-dom   CONTROL
+```
+
+NEXT: audit #79's remaining priced row is legacy flex (`-webkit-box-flex` / `-ms-flex` /
+`-webkit-box-orient`, 186 declarations). Track A's float re-flow is still VI.2's sole surviving
+residual, with t1374's side-table constraint attached; Track C's is the end-to-end drive on a real
+site, now that resolution, reachability and actuation are joined.
+
+WIKI: docs/wiki/grid-area-shorthand.md

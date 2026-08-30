@@ -1551,6 +1551,14 @@
   - L28 · ⭐ The interior space is KEPT, and that is the whole difference
   - L45 · ⚠ It did not move the headline, and that is reported rather than buried
 
+## `grid-area` — the shorthand that placed nothing, and auto-placement that hid it
+`docs/wiki/grid-area-shorthand.md`
+
+  - L6 · The one-sentence mechanism
+  - L21 · ⭐ The order is row / column / row / column
+  - L40 · ⚠ The NAMED form is deliberately not parsed
+  - L50 · Proven red
+
 ## THE INTERACTION SURFACE — clicks, scroll, focus, and automation
 `docs/wiki/interaction-surface.md`
 
@@ -2632,4 +2640,4 @@
   - L231 · Both named mechanisms are subsystem work
 
 ---
-2471 sections across 39 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+2475 sections across 40 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.

@@ -11,12 +11,12 @@
 
 | | value | over |
 |---|---|---|
-| ticks landed | **1058** | ticks 1–1375 |
-| median tick cycle | **31m** | 1057 intervals |
+| ticks landed | **1059** | ticks 1–1376 |
+| median tick cycle | **31m** | 1058 intervals |
 | median, last 10 | **66m** | 10 intervals |
 | fastest / slowest | 5s / 7.0d | |
-| **ticks per hour** | **0.88** | 1198.1h elapsed |
-| median verify wall | **67s** | 997 ticks |
+| **ticks per hour** | **0.88** | 1198.8h elapsed |
+| median verify wall | **67s** | 998 ticks |
 | wall trend | 39s → 8m — getting slower ⚠️ | first 3 vs last 3 |
 
 The **cycle** is the real unit: implement → debug → verify wall → land. The wall is only part of
@@ -31,7 +31,7 @@ it, and a wall that grows taxes every future tick, so it is tracked separately f
 * **✅ rows in the capability ledger**: 144 → **642**
 * **Bar 0 — oracle hangs**: 0 of 265 sites
 
-**492 of 1058 ticks** (47%) moved a
+**492 of 1059 ticks** (46%) moved a
 user-visible capability. The rest were instruments, infrastructure and corrections — and the
 ledger says the corrections were not overhead: three of its top three priorities were phantoms,
 and finding that out redirected everything after it.
@@ -91,7 +91,7 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 ## What a capability costs
 
 * **492** capability ticks, median cycle **31m**
-* median diff per tick: **+286 / −34** lines across 8 files
+* median diff per tick: **+287 / −34** lines across 8 files
 
 ## Every tick
 
@@ -1155,5 +1155,6 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 | **1373** | 2026-08-30 01:29 | 51m | instrument-fidelity | 8m | +475/−36 | 522 | 81 | 56.0% · | the audits, and a class that had been tripped over four times, measured (2026-08-30) |
 | **1374** | 2026-08-30 02:48 | 80m | capability-subsystem | 8m | +506/−36 | 522 | 81 | 56.0% · | `counter-set`, and the counter properties a pseudo was never asked about (2026-08-30) |
 | **1375** | 2026-08-30 03:08 | 19m | capability-subsystem | 8m | +402/−35 | 522 | 81 | 56.0% · | the agent picked the first substring match, and the scorer had no caller (2026-08-30) |
+| **1376** | 2026-08-30 03:52 | 44m | capability-subsystem | 8m | +373/−33 | 522 | 81 | 56.0% · | `grid-area` placed nothing, and auto-placement hid it (2026-08-30) |
 
 *`·` after a WPT figure means **carried forward**, not measured this tick.*

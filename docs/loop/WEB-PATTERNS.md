@@ -9616,3 +9616,20 @@ winner look ambiguous.
 ⚠ Ambiguity is not obstruction. A covered target cannot be clicked at all, so acting is a lie and
 refusing is right; two similar buttons still have a most-likely one, so returning it beats erroring.
 (t1375 — `agent/tests` `the_drive_path_picks_the_exact_match_and_the_right_role`)
+
+## `.card { grid-area: 2 / 1 / 3 / 3 }` — the placement that auto-placement hides
+
+A cascade that parses `grid-column` and `grid-row` but not the combined `grid-area` places nothing —
+and the item then AUTO-PLACES, which lands in the right cell often enough that the bug survives a
+spot check. `grid-area` + `grid-template-areas` are declared 127 times across 14 sampled CrUX
+stylesheets.
+
+⭐ The order is **row / column / row / column**, not the row-then-column pairs the per-axis
+shorthands use. A transposed read is invisible on a symmetric fixture: test it with a ONE-value
+declaration (`grid-area: 2`), where the correct answer is row 2 / column auto and the transposed one
+is column 2 / row auto.
+
+⚠ The NAMED form (`grid-area: header`) needs a grid-line type with an ident. Without one, leave the
+declaration UNPARSED — a name silently becoming a line number places the item somewhere the author
+never asked for, which is worse than ignoring it.
+(t1376 — `agent/tests` `the_grid_area_shorthand_places_on_both_axes`)

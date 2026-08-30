@@ -7085,6 +7085,42 @@ fn apply_declaration(s: &mut ComputedStyle, d: &Declaration, parent_fs: f32) {
                 s.grid_auto_flow = f;
             }
         }
+        // ⭐ `grid-area: <row-start> / <col-start> / <row-end> / <col-end>` — the shorthand for BOTH
+        // axes at once, and the one authors reach for. `grid-column`/`grid-row` were parsed here and
+        // `grid-area` was not, so a rule that placed an item with it placed nothing and the item
+        // fell back to auto-placement — which lands in the right cell often enough to hide the bug.
+        //
+        // Chrome-measured in a 2x2 grid of 100x50 cells, the item's rect relative to the container:
+        //
+        // ```text
+        //   grid-area: 2 / 2 / 3 / 3      [100 50 100x50]
+        //   grid-area: 2 / 2              [100 50 100x50]   the omitted ends are auto (one cell)
+        //   grid-area: 2                  [  0 50 100x50]   row-start only; the column is auto
+        //   grid-area: 1 / 1 / 3 / 3      [  0  0 200x100]  spanning both cells on both axes
+        //   grid-area: span 2 / span 2    [  0  0 200x100]  `span` is a grid line like any other
+        // ```
+        //
+        // ⚠ The order is **row / column / row / column**, not the row-then-column PAIRS that
+        // `grid-row: a / b` and `grid-column: a / b` use. Reading it as two pairs puts the item in
+        // the transposed cell, which on a symmetric fixture is invisible — hence the asymmetric
+        // `grid-area: 2` row above, where a transposed read lands at [100 0] instead of [0 50].
+        //
+        // ⚠ The NAMED form (`grid-area: header`, resolved against `grid-template-areas`) is NOT
+        // representable here: `GridLine` has `Auto`/`Line`/`Span` and no ident, and the shipping
+        // path resolves names before this type is reached. Left unparsed rather than mis-parsed —
+        // a name is not a number and must not silently become `Auto` at a different cell.
+        "grid-area" => {
+            let parts: Vec<&str> = v.split('/').map(str::trim).collect();
+            let named = parts.first().is_some_and(|p| {
+                !p.is_empty() && p.chars().next().is_some_and(|c| c.is_alphabetic())
+            }) && !parts[0].eq_ignore_ascii_case("auto")
+                && !parts[0].to_ascii_lowercase().starts_with("span");
+            if !named {
+                let g = |i: usize| parts.get(i).map_or(GridLine::Auto, |x| parse_grid_line(x));
+                s.grid_row = (g(0), g(2));
+                s.grid_column = (g(1), g(3));
+            }
+        }
         "grid-column" => s.grid_column = parse_grid_line_shorthand(v),
         "grid-row" => s.grid_row = parse_grid_line_shorthand(v),
         "grid-column-start" => s.grid_column.0 = parse_grid_line(v),
