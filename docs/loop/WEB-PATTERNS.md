@@ -9800,3 +9800,22 @@ wrong, not whether). The obvious `!= "false"` test agrees on every real row and 
 out-of-vocabulary token, which ARIA makes the DEFAULT. Test the truthy set, and put a junk token in
 the fixture.
 (t1385 — `agent/tests` `a_toggle_button_and_a_rejected_field_report_their_state`)
+
+## `<input type="submit">` with no `value` — the nameless commonest button on the web
+
+The UA renders the word *Submit* on a valueless `<input type=submit>` and *Reset* on a valueless
+`type=reset`; HTML-AAM names them by that default. An engine that names button-ish inputs only by
+their `value` leaves the commonest submit button on the web **nameless**, so *"click Submit"*
+resolves to nothing — a form an agent can fill and cannot send.
+
+⚠ `type=button` gets NO default (the UA renders no label on it): three button types, two defaults.
+⚠ `value=""` SUPPRESSES the default — an explicit empty host-language label is an answer, not a
+missing one, and the attribute's PRESENCE is the discriminator.
+
+⭐ And the ORDER at the end of the chain: `<label>` → `aria-label` → **`title`** → `placeholder`. A
+placeholder is the hint that disappears the moment the user types; a title is the author's stated
+label. `<input placeholder="PH" title="TT">` is named **TT**.
+
+⚠ `<textarea placeholder>` names too — a rule written inside an `el.name == "input"` branch covers
+one of its two elements.
+(t1386 — `agent/tests` `the_name_chain_ends_in_the_right_order`)

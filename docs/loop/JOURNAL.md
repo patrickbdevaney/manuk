@@ -97965,3 +97965,99 @@ the tree's remaining structure facts. Behind it: the a11y-suite APERTURE row (ne
 abspos in the alignment rectangle (t1382), and an owner decision on zstd.
 
 WIKI: docs/wiki/ax-pressed-and-invalid.md
+
+## Tick 1386 — the end of the name chain, in the right order (2026-08-30)
+
+TICK SHAPE: capability-subsystem
+
+**Track B**, surface audit #80's ranked #1, third pass against CDP `Accessibility.getFullAXTree`.
+
+### ⭐⭐⭐ FOUR DEFECTS, ALL AT THE END OF THE CHAIN
+
+```text
+                                                  chrome    before    after
+  <input placeholder="PH" title="TT">             TT        PH        TT
+  <textarea placeholder="TA">                     TA        (none)    TA
+  <input type=submit>            (no value)       Submit    (none)    Submit
+  <input type=reset>             (no value)       Reset     (none)    Reset
+  <input type=submit value="">   CONTROL          (none)    (none)    (none)
+  <input type=button>            CONTROL          (none)    (none)    (none)
+  <table summary="TS">                            TS        (none)    TS
+```
+
+⭐⭐⭐ **`title` BEATS `placeholder`, AND WE HAD IT THE OTHER WAY ROUND.** HTML-AAM's input chain is
+`<label>` → `aria-label` → **`title`** → `placeholder`; ours applied `placeholder` inside step 3, so
+it came *ahead* of the step-5 tooltip. A placeholder is the hint that disappears the moment the user
+types; a `title` is the author's stated label. Announcing the transient one is not a tie-break.
+
+⭐⭐ **`<input type=submit>` WITH NO `value` IS THE COMMONEST SUBMIT BUTTON ON THE WEB, AND IT WAS
+NAMELESS.** The UA renders *Submit*; HTML-AAM names it that. Without it *"click Submit"* resolves to
+nothing — **a form an agent can fill and cannot send.**
+
+⭐ **`type=button` is the control that stops this being a blanket rule** (Chrome: no default label at
+all — three button types, two defaults), and **`value=""` SUPPRESSES the default**, which is the same
+rule this file already carries for `<img alt="">`: *an explicit empty host-language label is an
+answer, not a missing one.* The attribute's PRESENCE is the discriminator, not its content.
+
+⭐ **`<textarea placeholder>` was nameless because the rule lived inside an `el.name == "input"`
+branch.** One rule, two elements, and only one of them had it — the fifth instance in this file.
+
+### ⚠⚠ THE `<table summary>` ROW SHADOWED THE `<caption>` ARM, AND AN EXISTING GATE CAUGHT IT
+
+Written first as its own `"table" => …` match arm, it shadowed the `"fieldset" | "table"` arm below
+that reads `<caption>` — so **every captioned table went nameless** and `G_A11Y_LABEL`'s *"a
+`<table>` is named by its `<caption>`"* row went red on the first run.
+
+> **A new arm in a match on tag names is a SHADOWING hazard, and the tag that ALREADY has an arm is
+> the one you are about to break.**
+
+`summary` is a fallback BEHIND the caption, Chrome-measured across all four combinations: caption
+wins over summary, summary alone names, `aria-label` beats both.
+
+### ⭐⭐ THE RECEIPT — AND THIS IS THE SWEEP'S FIRST SUITE MOVEMENT
+
+```text
+  WPT accname   438/484 = 90.5%   ->   445/484 = 91.9%   (+7)
+```
+
+t1379, t1380, t1384 and t1385 all moved their suite by **zero**, because they were about mechanisms
+no suite exercises — audit #80's finding. This one moves it, because the name chain is exactly what
+`accname` tests. **Both outcomes are information:** a flat number after a real fix is a question
+about the suite's aperture; a moving one says the fix was inside it. Four flat and one moving, over
+five ticks, is the audit's claim measured rather than argued.
+
+### ⚠ MEASURED AND NOT BUILT
+
+```text
+  <div title="DT">content</div>     chrome: ""        ours: "DT"
+  <abbr title="Abbrev">AB</abbr>    chrome: "Abbrev"  ours: "Abbrev"   ✓
+```
+
+`title` is a name fallback only for elements HTML-AAM says so — on a plain `<div>` it is a
+DESCRIPTION, not a name. Narrowing it needs its own battery of which elements title-names (the
+`<abbr>` row shows the rule is not simply *"generic cannot be named"*), and getting that wrong
+DELETES names rather than adding them.
+
+### THE GATE
+
+`the_name_chain_ends_in_the_right_order` (`agent/tests/`, in the wall's crate list) — 19 rows, 13 of
+them controls, plus vacuity that the steps ABOVE these still win (a chain collapsed to "always take
+the last step" would satisfy every row). **PROVEN RED by three mutations**: N1 move `placeholder`
+back above `title` → only `n3`, with both single-source controls green, which says the defect was the
+ORDER and not either step; N2 drop the `value.is_none()` guard → only `n20`; N3 restore the shadowing
+`"table"` arm → `n30` and `n32` go nameless while `n31` passes.
+
+### THE RECEIPT
+
+```text
+  manuk-agent  149/149 → 150/150   +1   +the new gate
+  WPT accname  438/484 → 445/484   (+7)
+  manuk-a11y / manuk-page / manuk-layout / manuk-css / manuk-paint / manuk-dom   CONTROL
+```
+
+NEXT: `title`-as-name scoped to the elements HTML-AAM allows (measured above), `<summary>`'s empty
+NAME, and the a11y-suite APERTURE row (neither `wai-aria` nor `accname` is in `WPT-AREAS.tsv`).
+Behind those: the nested scrollable-overflow family (t1381), transforms and abspos in the alignment
+rectangle (t1382), and an owner decision on zstd.
+
+WIKI: docs/wiki/ax-name-fallback-chain.md

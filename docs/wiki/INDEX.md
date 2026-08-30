@@ -66,6 +66,15 @@
   - L303 · A frame is a bitmap, so its pixels need explicit refreshing (tick 232)
   - L331 · The agent's click point IS layout geometry, so a containing-block bug is an actuation bug (I3)
 
+## The end of the accessible-name chain, in the right order
+`docs/wiki/ax-name-fallback-chain.md`
+
+  - L7 · The four defects, and they are all "the end of the chain"
+  - L41 · ⚠ The <table summary> row shadowed the <caption> arm
+  - L59 · The receipt — and this is the sweep's first suite movement
+  - L70 · ⚠ Measured and not built
+  - L82 · How it was proven red
+
 ## `pressed` and `invalid` — the two states the tree did not have
 `docs/wiki/ax-pressed-and-invalid.md`
 
@@ -2718,4 +2727,4 @@
   - L231 · Both named mechanisms are subsystem work
 
 ---
-2521 sections across 48 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+2526 sections across 49 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.

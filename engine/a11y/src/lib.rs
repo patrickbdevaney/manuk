@@ -1993,12 +1993,31 @@ fn host_language_name(
                             return v;
                         }
                     }
-                }
-                // accname allows `placeholder` as a last-resort native label.
-                if let Some(p) = el.attr("placeholder") {
-                    let p = normalize(p);
-                    if !p.is_empty() {
-                        return p;
+                    // ── ⚠⚠⚠ **AND WHEN THERE IS NO `value`, THE UA SUPPLIES THE LABEL — WHICH IS
+                    //    THE ONE AN AGENT SEES ON THE BUTTON.** `<input type=submit>` renders the
+                    //    word *Submit* and `<input type=reset>` renders *Reset*; HTML-AAM names
+                    //    them by that default. Without it the commonest submit button on the web —
+                    //    the one whose author never wrote a `value` — is a **nameless button**, and
+                    //    *"click Submit"* resolves to nothing.
+                    //
+                    //    ⚠ `type=button` is deliberately NOT here and it is the control row:
+                    //    Chrome-measured, a valueless `<input type=button>` has **no name at all**,
+                    //    because the UA renders no default label on it. Three button types, two
+                    //    defaults — a blanket rule would invent a name for the third.
+                    //
+                    // ⚠⚠ **AND AN EXPLICIT `value=""` SUPPRESSES THE DEFAULT** — the same rule this
+                    //    file already carries for `<img alt="">`: *an explicit empty host-language
+                    //    label is an answer, not a missing one.* Chrome-measured:
+                    //    `<input type=submit value="">` has **no name**, where a submit input with
+                    //    no `value` attribute at all is named `Submit`. The attribute's PRESENCE is
+                    //    the discriminator, not its content, which is why this tests `is_none()`.
+                    if el.attr("value").is_none() {
+                        let ty = el.attr("type").unwrap_or("").to_ascii_lowercase();
+                        match ty.as_str() {
+                            "submit" => return "Submit".to_string(),
+                            "reset" => return "Reset".to_string(),
+                            _ => {}
+                        }
                     }
                 }
             }
@@ -2020,6 +2039,20 @@ fn host_language_name(
                 let text = normalize(&dom.text_content(c));
                 if !text.is_empty() {
                     return text;
+                }
+            }
+            // ⚠ `<table summary="…">` — the pre-ARIA spelling, still in HTML-AAM because a decade
+            // of pages use it, and it is a FALLBACK BEHIND the caption. Chrome-measured, all four
+            // combinations: `summary` alone names the table `TS`; a `<caption>` beside it wins with
+            // `CAP`; `aria-label` beats both. Putting it in its own `"table"` arm — which is what
+            // this first was — SHADOWS the caption arm below and makes every captioned table
+            // nameless, which is how the existing gate caught it.
+            if el.name == "table" {
+                if let Some(sm) = el.attr("summary") {
+                    let sm = normalize(sm);
+                    if !sm.is_empty() {
+                        return sm;
+                    }
                 }
             }
         }
@@ -2087,6 +2120,26 @@ fn accessible_name_with(
         let t = normalize(t);
         if !t.is_empty() {
             return t;
+        }
+    }
+
+    // 6. `placeholder`, and it is LAST — after the tooltip, not before it.
+    //
+    // ⚠⚠⚠ **THIS WAS INSIDE STEP 3 AND THEREFORE BEAT `title`, WHICH IS THE WRONG WAY ROUND.**
+    // HTML-AAM's input chain is `<label>` → `aria-label` → **`title`** → `placeholder`, and
+    // Chrome-measured on `<input placeholder="PH" title="TT">` the name is **`TT`**. A placeholder
+    // is the hint that disappears the moment the user types; a `title` is the author's stated
+    // label. Ordering them the other way announces the transient one.
+    //
+    // ⭐ And it applies to `<textarea>` as well as `<input>` — the old placement was inside an
+    // `el.name == "input"` branch, so `<textarea placeholder="…">` was **nameless**. One rule, two
+    // elements, and only one of them had it.
+    if matches!(el.name.as_str(), "input" | "textarea") {
+        if let Some(p) = el.attr("placeholder") {
+            let p = normalize(p);
+            if !p.is_empty() {
+                return p;
+            }
         }
     }
 
