@@ -1588,6 +1588,11 @@ pub fn generated_text(dom: &Dom, styles: &StyleMap) -> HashMap<NodeId, (String, 
                         let v = counters.get(&n).and_then(|c| c.get(name)).copied();
                         t.push_str(&v.unwrap_or(0).to_string());
                     }
+                    // ⚠ An UNRESOLVED `attr()` reaching layout means the cascade did not meet
+                    // its element — `cascade_node` turns these into `Text`. CSS 2.1 gives a missing
+                    // attribute the EMPTY string, so degrading to that is the honest fallback and
+                    // keeps a skipped resolution from printing `attr(...)` at the user.
+                    ContentPart::Attr(_) => {}
                 }
             }
             t
@@ -1636,6 +1641,11 @@ pub fn generated_alt_text(
                         let v = counters.get(&n).and_then(|c| c.get(name)).copied();
                         t.push_str(&v.unwrap_or(0).to_string());
                     }
+                    // ⚠ An UNRESOLVED `attr()` reaching layout means the cascade did not meet
+                    // its element — `cascade_node` turns these into `Text`. CSS 2.1 gives a missing
+                    // attribute the EMPTY string, so degrading to that is the honest fallback and
+                    // keeps a skipped resolution from printing `attr(...)` at the user.
+                    ContentPart::Attr(_) => {}
                 }
             }
             Some(t)
@@ -12675,6 +12685,10 @@ impl Ctx<'_> {
                     let n = self.counter_values(node, name).unwrap_or(0);
                     text.push_str(&n.to_string());
                 }
+                // ⚠ An UNRESOLVED `attr()` reaching layout means the cascade did not meet its
+                // element — `cascade_node` turns these into `Text`. CSS 2.1 gives a missing
+                // attribute the EMPTY string, so degrading to that is the honest fallback.
+                ContentPart::Attr(_) => {}
             }
         }
         if text.is_empty() || generated_box_is_suppressed(p) {

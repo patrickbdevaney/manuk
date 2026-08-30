@@ -1244,6 +1244,22 @@ pub enum GenericFamily {
 ///
 /// ⚠ Only a `/` **outside a quoted string** counts. `content: "and/or" / "and or"` contains two,
 /// and treating the first as the marker renders `"and` and announces `or" / "and or"`.
+/// Turn every unresolved [`ContentPart::Attr`] into [`ContentPart::Text`], reading `el`'s attributes.
+///
+/// ⚠ Adjacent text is NOT re-coalesced afterwards, and that is deliberate: the parts are
+/// concatenated by every consumer, so `"(" attr(href) ")"` renders identically whether it is one
+/// part or three, and re-coalescing would be a second implementation of the parser's own rule.
+fn resolve_content_attrs(parts: &mut Option<Vec<ContentPart>>, el: &ElementData) {
+    let Some(parts) = parts.as_mut() else { return };
+    for p in parts.iter_mut() {
+        if let ContentPart::Attr(name) = p {
+            // CSS 2.1 §12.2: a missing attribute contributes the EMPTY string, not nothing at all.
+            let v = el.attr(name).unwrap_or("").to_string();
+            *p = ContentPart::Text(v);
+        }
+    }
+}
+
 fn split_content_alt(v: &str) -> (&str, Option<&str>) {
     let b = v.as_bytes();
     let mut quote: Option<u8> = None;
@@ -1287,6 +1303,31 @@ pub fn parse_content_parts(v: &str) -> Vec<ContentPart> {
             }
             i += 1; // the closing quote
             out.push(ContentPart::Text(decode_css_escapes(&lit)));
+        } else if b[i..].starts_with(&['a', 't', 't', 'r', '(']) {
+            // `attr(name)` — the name only; a type/fallback argument (`attr(x type(<length>), 0px)`)
+            // is CSS Values 5 and is not modelled, so everything after the first `,` is dropped
+            // rather than folded into the attribute name.
+            let Some(open) = b[i..].iter().position(|&x| x == '(') else {
+                break;
+            };
+            let Some(close) = b[i..].iter().position(|&x| x == ')') else {
+                break;
+            };
+            if close <= open {
+                break;
+            }
+            let inner: String = b[i + open + 1..i + close].iter().collect();
+            let name = inner
+                .split(',')
+                .next()
+                .unwrap_or("")
+                .trim()
+                .trim_matches(['"', '\''])
+                .to_ascii_lowercase();
+            if !name.is_empty() {
+                out.push(ContentPart::Attr(name));
+            }
+            i += close + 1;
         } else if b[i..].starts_with(&['c', 'o', 'u', 'n', 't', 'e', 'r']) {
             // `counter(` or `counters(` — take the name, ignore a style/separator argument.
             let Some(open) = b[i..].iter().position(|&x| x == '(') else {
@@ -1356,6 +1397,20 @@ pub enum ContentPart {
     /// `counter(name)` / `counter(name, <list-style-type>)` — resolved by layout's document-order
     /// walk, never here.
     Counter(String),
+    /// ⚠ **`attr(name)` BEFORE it has met its element.**
+    ///
+    /// The doc on [`ContentPart::Text`] says an `attr()` *"CAN be resolved in the cascade — the
+    /// attribute is right there on the element"*, and on the Stylo path it is: the mapper has the
+    /// element and pushes the value as text. **`MinimalCascade` does not** — `apply_declaration`
+    /// takes a `&Declaration` and a parent font size, with no element in sight — so its
+    /// `content: attr(data-x)` silently produced nothing, on 14 of 39 sampled CrUX sites.
+    ///
+    /// So the term survives the value parser unresolved and is turned into [`ContentPart::Text`] in
+    /// `cascade_node`, one layer out, where the element IS in hand. **Nothing downstream should ever
+    /// see this variant**; the arms that match it exist so that a path which skipped the resolution
+    /// degrades to the empty string CSS 2.1 specifies for a missing attribute, rather than
+    /// panicking or printing `attr(...)` at the user.
+    Attr(String),
 }
 
 impl ContentPart {
@@ -1363,7 +1418,9 @@ impl ContentPart {
     pub fn as_text(&self) -> Option<&str> {
         match self {
             ContentPart::Text(t) => Some(t),
-            ContentPart::Counter(_) => None,
+            // Both are terms whose value someone else supplies — the counter by layout's
+            // document-order walk, the `attr()` by `cascade_node`, which has the element.
+            ContentPart::Counter(_) | ContentPart::Attr(_) => None,
         }
     }
 }
@@ -5335,11 +5392,37 @@ impl MinimalCascade {
                 // `clone_display` returns the blockified one and the static-position rule needs the
                 // other. See `ComputedStyle::display_in_flow`.
                 s.display_in_flow = s.display;
+                // ⭐⭐⭐ **`attr()` MEETS ITS ELEMENT HERE, BECAUSE THIS IS THE FIRST PLACE IT CAN.**
+                //
+                // `ContentPart::Text`'s own doc has always said an `attr()` *"CAN be resolved in the
+                // cascade — the attribute is right there on the element"*, and the Stylo mapper does
+                // exactly that. This cascade could not: `apply_declaration` takes a `&Declaration`
+                // and a parent font size, with no element in sight, so `content: attr(data-x)`
+                // silently produced nothing here while the shipping path rendered it — the twin
+                // drift this file's float half already warns about, for the third time in a week
+                // (t1361 `font-size`/`line-height`, t1364 `border-spacing`, now this).
+                //
+                // `attr(` prices at **14 of 39** sampled CrUX sites, the highest row in t1369's pref
+                // sweep. CSS 2.1: a missing attribute contributes the EMPTY string, which is why the
+                // miss is `String::new()` and not a dropped term — `a::after{content:" ("attr(href)")"}`
+                // still draws its parentheses on an `<a>` with no `href`.
+                resolve_content_attrs(&mut s.content, el);
+                resolve_content_attrs(&mut s.content_alt, el);
                 // `::before` / `::after` — generated content, cascaded against this element as its
                 // parent. Only a pseudo with `content` generates a box at all.
+                //
+                // ⚠⚠ **AND THE PSEUDO'S OWN `content` NEEDS THE SAME RESOLUTION, WHICH IS WHERE
+                // `attr()` ACTUALLY LIVES.** `a::after { content: " (" attr(href) ")" }` is the
+                // idiom — the `attr()` is almost never on the element's own `content`, it is on a
+                // pseudo's. Resolving only `s.content` above fixes the case nobody writes and
+                // leaves the one everybody does, which is the half-fix this comment exists to
+                // prevent a future reader from re-making. ⚠ The pseudo is cascaded against `el`,
+                // its ORIGINATING element, so `attr()` reads that element's attributes — a pseudo
+                // has none of its own.
                 fn cascade_pseudo(
                     base: &ComputedStyle,
                     mut decls: Vec<(u32, usize, &Declaration)>,
+                    el: &ElementData,
                 ) -> Option<Box<ComputedStyle>> {
                     if decls.is_empty() {
                         return None;
@@ -5349,12 +5432,14 @@ impl MinimalCascade {
                     for (_, _, d) in &decls {
                         apply_declaration(&mut ps, d, base.font_size);
                     }
+                    resolve_content_attrs(&mut ps.content, el);
+                    resolve_content_attrs(&mut ps.content_alt, el);
                     ps.content.as_ref()?;
                     Some(Box::new(ps))
                 }
                 let (pb, pa) = (
-                    cascade_pseudo(&s, pseudo_before),
-                    cascade_pseudo(&s, pseudo_after),
+                    cascade_pseudo(&s, pseudo_before, el),
+                    cascade_pseudo(&s, pseudo_after, el),
                 );
                 s.before = pb;
                 s.after = pa;

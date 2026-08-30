@@ -119,17 +119,15 @@ fn the_announced_half_of_content_is_the_name_through_both_entrances() {
         !alt.is_empty(),
         "VACUOUS: the alt map is empty, so nothing below tests the alt half"
     );
-    // `#b4` is not asserted (see the header) but it must still be REACHED, or the note about it is
-    // about a fixture row that does not exist.
-    {
-        let n4 = node_id(&page, "b4");
-        let name4 = tree_name(&tree, n4);
-        assert!(
-            name4.contains("label"),
-            "VACUOUS: #b4 produced no name at all ({name4:?}), so the NAMED-MEASURED-NOT-BUILT note \
-             in this module's header is not about anything"
-        );
-    }
+    // The `attr()` row must actually carry an attribute, or "it resolves attr()" is a claim about a
+    // term that was never in the fixture.
+    assert_eq!(
+        page.dom()
+            .element(node_id(&page, "b4"))
+            .and_then(|e| e.attr("data-alt")),
+        Some("MID"),
+        "VACUOUS: #b4 has no data-alt attribute, so its attr() row proves nothing"
+    );
 
     // (id, the name Chrome computes, what the row is for)
     let rows: &[(&str, &str, &str)] = &[
@@ -148,8 +146,15 @@ fn the_announced_half_of_content_is_the_name_through_both_entrances() {
             "label",
             "an EMPTY alt announces NOTHING and must not fall back to `star `",
         ),
-        // ⚠ `#b4` — `attr()` INSIDE the alt half — is measured below rather than asserted here, and
-        // the reason is worth stating: it works on the SHIPPING path and not on this one.
+        // ⭐ `#b4` — `attr()` INSIDE the alt half. Pinned as NAMED, MEASURED, NOT BUILT when this
+        // gate landed at t1371, because `MinimalCascade` had no element in hand when it parsed
+        // `content` and dropped the term. t1372 resolved it one layer out, in `cascade_node`, and
+        // the row joined the asserted set — which is what that pin was for.
+        (
+            "b4",
+            "start MID end label",
+            "the alt half resolves attr() the same way the drawn half does",
+        ),
     ];
 
     for (id, want, why) in rows {

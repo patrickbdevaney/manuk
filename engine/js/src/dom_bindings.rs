@@ -2138,6 +2138,10 @@ fn content_css(cs: &manuk_css::ComputedStyle, absent_is_none: bool) -> String {
         .map(|p| match p {
             manuk_css::ContentPart::Text(t) => css_string_literal(t),
             manuk_css::ContentPart::Counter(n) => format!("counter({n})"),
+            // Serialised back as written. An unresolved `attr()` only reaches here if the cascade
+            // never met the element, and echoing the author's own text is the least surprising
+            // answer for a CSSOM read.
+            manuk_css::ContentPart::Attr(n) => format!("attr({n})"),
         })
         .collect::<Vec<_>>()
         .join(" ")

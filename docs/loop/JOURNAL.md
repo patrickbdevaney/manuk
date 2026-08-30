@@ -96626,3 +96626,75 @@ rows are the ranked Track B items; the float re-flow is Track A's; and the gate-
 still the highest-value thing the agent cannot close.
 
 WIKI: docs/wiki/content-alt-text.md
+
+## Tick 1372 — `content: attr(href)` met its element on one cascade and not the other (2026-08-30)
+
+TICK SHAPE: capability-subsystem
+
+**Track B.** t1371 pinned this as NAMED, MEASURED, NOT BUILT one tick ago, with Chrome's number and
+the reason it was structural. This closes it — which is what a pin is for.
+
+### ⭐⭐⭐ THE CAUSE IS A SIGNATURE, NOT A MISSING FEATURE
+
+`ContentPart::Text`'s own doc has always said an `attr()` is *"already resolved against the element —
+the attribute is right there on the element"*, and on the Stylo path it is, by a mapper that holds
+the element. `MinimalCascade` could not: `apply_declaration` takes a `&Declaration` and a parent font
+size, **with no element in sight**. So `content: attr(data-x)` silently produced nothing there while
+the shipping path rendered it.
+
+`attr(` is on **14 of 39** sampled CrUX sites — the highest-priced row in t1369's pref sweep. The
+term now survives the value parser unresolved (`ContentPart::Attr`) and meets its element one layer
+out, in `cascade_node`.
+
+### ⚠ THE HALF-FIX THAT WOULD HAVE PASSED A LESSER GATE — AND I WROTE IT FIRST
+
+Resolving only the ELEMENT's own `content` fixes the case nobody writes. **`attr()` is almost never
+on an element's `content` — it is on a pseudo's**, and a pseudo is cascaded by `cascade_pseudo` into
+`s.before` / `s.after`, which are *separate* `ComputedStyle`s. My first version did exactly that, and
+t1371's `attr()` row stayed red until the pseudo path was resolved too. The pseudo resolves against
+its **originating** element, which is the only element in scope — a pseudo has no attributes.
+
+That mutation is now N2 in the gate, because the half-fix is the thing a future reader is most likely
+to re-make.
+
+### CHROME-MEASURED, AND THE NEGATIVE PAIR THAT DECIDES THE IMPLEMENTATION
+
+```text
+  <a href="/docs">link</a>  ::after { content: " (" attr(href) ")" }        115.59
+  <span data-x="VAL">x</span>  ::before { content: attr(data-x) }            38.55
+  <span>x</span>            ::before { content: attr(data-missing) }          9.64  NEGATIVE
+  <span>x</span>            ::before { content: "[" attr(data-missing) "]" }  28.91
+```
+
+⚠ **Rows 3 and 4 are CSS 2.1 §12.2 and they are why a miss is the EMPTY STRING rather than a dropped
+term.** Row 3 is one character — a missing attribute contributes nothing *visible*. Row 4 is three:
+**the literals around it still render.** An implementation that drops the declaration on a miss
+passes row 3 and fails row 4 — and `a::after{content:" ("attr(href)")"}` on an `<a>` with no `href`
+is exactly that case. Mutation N3.
+
+### THE RECEIPT — AND WHAT IT DOES *NOT* BUY
+
+```text
+  accname      438/484   FLAT — the Stylo path already resolved attr(), which is why t1371's three
+                         `mixing attr() and strings` rows passed on it
+  manuk-agent  136/136 → 137/137   +1   +the new gate, and t1371's pinned row joins its asserted set
+  manuk-css / manuk-a11y / manuk-layout / manuk-page / manuk-paint / manuk-dom      CONTROL
+```
+
+Like t1361 and t1364, this is a **`MinimalCascade`-only** divergence. Its user-visible value is the
+`--no-default-features` build; its larger value is instrument fidelity, because that is the cascade
+`engine/layout`'s 191 unit tests and everything under `agent/tests/` run on. Saying so is the point —
+the receipt is easy to read as a rendering win it is not.
+
+⭐ **That is the twin-drift class for the FOURTH time in a week** (t1361, t1364, t1369, this), and the
+four share a shape worth naming: **each was found by a gate placed on the harness with the WEAKER
+cascade.** None was visible from the Stylo path; none would have been found by measuring the shipping
+browser against Chrome. The gates that catch them live in `agent/tests/` — which is where they go
+anyway, because that is where the wall looks (audit #78).
+
+NEXT: `counter-set` for the remaining accname alt-counter rows is the Track B item; the float re-flow
+— now VI.2's *sole* surviving residual after t1364's battery — is Track A's and is a subsystem
+restructure rather than a line change; and the gate-execution gap is still the highest-value thing
+the agent cannot close.
+
+WIKI: docs/wiki/content-attr.md

@@ -862,6 +862,14 @@
   - L122 · ⭐⭐⭐ And the fourth fact became a context struct, because t1365 said it would
   - L135 · ⚠ NAMED, MEASURED, NOT BUILT — attr() in content on the other cascade
 
+## `content: attr(href)` — the term that met its element on one cascade and not the other
+`docs/wiki/content-attr.md`
+
+  - L6 · The one-sentence mechanism
+  - L20 · ⚠ The half-fix that would have passed a lesser gate
+  - L30 · Chrome-measured
+  - L45 · ⚠ What this does and does not buy
+
 ## CSS AND THE CASCADE — Stylo realities and quirks actually encountered
 `docs/wiki/css-cascade.md`
 
@@ -2598,4 +2606,4 @@
   - L231 · Both named mechanisms are subsystem work
 
 ---
-2453 sections across 35 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+2457 sections across 36 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.

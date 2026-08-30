@@ -9553,3 +9553,19 @@ request the empty alt was written to make.
 structural: an `attr()` in `content` is resolved AT PARSE TIME against the element, and a parser that
 is a free function has no element in hand. `attr(` prices at 14 of 39 corpus sites.
 (t1371 — `agent/tests` `the_announced_half_of_content_is_the_name_through_both_entrances`)
+
+## `a::after { content: " (" attr(href) ")" }` — the print-stylesheet idiom
+
+`attr()` in `content` is on 14 of 39 sampled CrUX sites and is almost never on an element's own
+`content` — it is on a **pseudo's**, which is cascaded into a separate `ComputedStyle`. A fix that
+resolves only the element's `content` fixes the case nobody writes.
+
+⚠ CSS 2.1 §12.2: a missing attribute contributes the **empty string**, not nothing at all — so
+`content: "[" attr(data-missing) "]"` still draws the brackets. An implementation that drops the
+whole declaration on a miss passes the bare-`attr()` case and fails the surrounded one, which is
+exactly `a::after{content:" ("attr(href)")"}` on an `<a>` with no `href`.
+
+⭐ The cause of the gap was a SIGNATURE, not a missing feature: an `attr()` is resolved against the
+element at cascade time, and a value parser that is a free function has no element in hand. Resolve
+it one layer out, where the element is.
+(t1372 — `agent/tests` `content_attr_meets_its_element`)
