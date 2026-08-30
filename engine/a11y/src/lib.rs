@@ -1289,6 +1289,43 @@ fn inline_visibility(dom: &Dom, node: NodeId) -> (bool, Option<bool>) {
     (displayed_none, vis)
 }
 
+/// **The `display` / `visibility` the name walk should obey — the COMPUTED pair when the caller has
+/// a style map, and [`inline_visibility`]'s DOM-only approximation when it does not.**
+///
+/// ⚠⚠⚠ **THE MAP WAS ALREADY IN THE CONTEXT AND THIS WALK NEVER ASKED IT.** t1365 threaded
+/// [`NameStyles`] in so that a non-inline child could contribute a separator and `text-transform`
+/// could reach the name. `display: none` was in that same map the whole time, and the prune below it
+/// went on reading the element's inline `style=` attribute — so a fragment hidden by a STYLESHEET
+/// RULE was announced. Chrome-measured (CDP `Accessibility.getFullAXTree`, `<button>Save <span
+/// class=h>SECRET</span></button>`):
+///
+/// ```text
+///                                                  chrome        before        after
+///   .h { display: none }        (stylesheet)       "Save"        "Save SECRET" "Save"
+///   style="display:none"        (inline)  CONTROL  "Save"        "Save"        "Save"
+///   .h { visibility: hidden }   (stylesheet)       "Save"        "Save SECRET" "Save"
+///   style="visibility:hidden"   (inline)  CONTROL  "Save"        "Save"        "Save"
+/// ```
+///
+/// ⚠ **AND NO CONFORMANCE TEST IN THE TREE COULD HAVE FOUND IT**: every hidden-node fixture in
+/// WPT's `accname/name/comp_labelledby_hidden_nodes.html` writes `style="display: none"` inline, and
+/// so did this engine's own gate's control row. A rule with two sources, where the weaker source is
+/// the one every test uses, is invisible to the whole suite.
+///
+/// ⭐ Returning `Some(_)` for the visibility of EVERY node in the map is not a detail: `visibility`
+/// is inherited and *undoable*, so the computed value already carries the ancestor's state and a
+/// `visibility: visible` child under a hidden parent resolves to visible on its own. The inline
+/// reader has to return `None` for "not declared here" and let the flag flow down.
+fn node_visibility(dom: &Dom, n: NodeId, styles: &NameStyles) -> (bool, Option<bool>) {
+    match styles.get(&n) {
+        Some(s) => (
+            s.display == manuk_css::Display::None,
+            Some(s.visibility == manuk_css::Visibility::Visible),
+        ),
+        None => inline_visibility(dom, n),
+    }
+}
+
 /// Whether this element (and its subtree) is excluded from the a11y tree.
 pub fn is_hidden(dom: &Dom, node: NodeId) -> bool {
     let Some(el) = dom.element(node) else {
@@ -1602,7 +1639,22 @@ pub type GeneratedText = HashMap<NodeId, (String, String)>;
 /// has **two entrances** — the tree builder and the bare `accessible_name` behind
 /// `test_driver.get_computed_label()` — and a fact wired to one of them is the shape this file has
 /// been caught by three times (t1097, t1350, t1355).
-pub type NameStyles = HashMap<NodeId, (manuk_css::Display, manuk_css::TextTransform)>;
+pub type NameStyles = HashMap<NodeId, NameStyle>;
+
+/// The three computed facts the name walk reads off a node.
+///
+/// ⭐ **A THIRD FACT MADE THIS A STRUCT, WHICH IS THE SAME CALL t1365 MADE ONE LEVEL UP.** It was a
+/// `(Display, TextTransform)` tuple; t1379 added `visibility`, and a three-element positional tuple
+/// destructured at five sites is exactly how the fourth reader gets the second field and nobody
+/// notices. Named fields also make the *absence* of a field legible: there is no `hidden` here,
+/// because "hidden" is not a style — it is a conclusion drawn from `display` and `visibility` plus
+/// the DOM's own `hidden` / `aria-hidden`, and that conclusion lives in [`node_visibility`].
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct NameStyle {
+    pub display: manuk_css::Display,
+    pub text_transform: manuk_css::TextTransform,
+    pub visibility: manuk_css::Visibility,
+}
 
 /// The ALT half of `content` per owner — `(::before, ::after)`, each `None` when that pseudo's
 /// declaration carried no `/`. See [`NameCtx`].
@@ -1669,7 +1721,18 @@ pub fn empty_name_ctx<'a>(
 /// Extract [`NameStyles`] from a computed-style map. One builder, so the two entrances cannot drift.
 pub fn name_styles(dom: &Dom, styles: &HashMap<NodeId, manuk_css::ComputedStyle>) -> NameStyles {
     dom.descendants(dom.root())
-        .filter_map(|n| styles.get(&n).map(|s| (n, (s.display, s.text_transform))))
+        .filter_map(|n| {
+            styles.get(&n).map(|s| {
+                (
+                    n,
+                    NameStyle {
+                        display: s.display,
+                        text_transform: s.text_transform,
+                        visibility: s.visibility,
+                    },
+                )
+            })
+        })
         .collect()
 }
 
@@ -1678,7 +1741,26 @@ pub fn name_styles(dom: &Dom, styles: &HashMap<NodeId, manuk_css::ComputedStyle>
 /// Public so a caller that cannot name `manuk_css`'s types can still ask — which is what a gate in
 /// a crate that does not depend on `manuk-css` needs in order to assert its fixture is not vacuous.
 pub fn name_separates(styles: &NameStyles, n: NodeId) -> bool {
-    styles.get(&n).is_some_and(|&(d, _)| separates_name(d))
+    styles.get(&n).is_some_and(|s| separates_name(s.display))
+}
+
+/// Does the node at `n` compute to `display: none`, per [`NameStyles`]? And does it compute to a
+/// hidden `visibility`?
+///
+/// Public for the same reason [`name_separates`] is: a gate in a crate that cannot name
+/// `manuk_css`'s types still has to be able to assert that its **stylesheet reached the cascade**,
+/// or a hidden-fragment row passes against an engine that never applied the rule at all.
+pub fn name_display_none(styles: &NameStyles, n: NodeId) -> bool {
+    styles
+        .get(&n)
+        .is_some_and(|s| s.display == manuk_css::Display::None)
+}
+
+/// See [`name_display_none`] — the `visibility` half.
+pub fn name_visibility_hidden(styles: &NameStyles, n: NodeId) -> bool {
+    styles
+        .get(&n)
+        .is_some_and(|s| s.visibility != manuk_css::Visibility::Visible)
 }
 
 /// Does a child with this `display` contribute a SPACE on each side of its text?
@@ -2103,7 +2185,7 @@ fn referenced_name(dom: &Dom, node: NodeId, index: &NameIndex, ctx: &NameCtx<'_>
     }
     // Step 2F — name from content, ALLOWED here regardless of role. The hidden-node exemption
     // applies only when the REFERENCED element is itself hidden (see `content_text_rooted`).
-    let (display_none, vis) = inline_visibility(dom, node);
+    let (display_none, vis) = node_visibility(dom, node, ctx.styles);
     let root_hidden = is_hidden(dom, node) || display_none || vis == Some(false);
     content_text_rooted(dom, node, None, index, ctx, root_hidden)
 }
@@ -2225,7 +2307,7 @@ fn content_walk(
     // mechanism a descendant can UNDO — `visibility:visible` inside a hidden ancestor is shown, and
     // is in the name — so it flows down as a flag rather than ending the walk. Getting this
     // backwards either loses text the user can read or announces text they cannot.
-    let (display_none, vis) = inline_visibility(dom, n);
+    let (display_none, vis) = node_visibility(dom, n, ctx.styles);
     if display_none && !exempt {
         return;
     }
@@ -2289,7 +2371,7 @@ fn content_walk(
         let sep = ctx
             .styles
             .get(&c)
-            .is_some_and(|&(d, _)| separates_name(d) && dom.is_element(c));
+            .is_some_and(|s| separates_name(s.display) && dom.is_element(c));
         if sep && visible {
             out.push(' ');
         }
@@ -2311,8 +2393,8 @@ fn content_walk(
 fn inherited_transform(dom: &Dom, n: NodeId, styles: &NameStyles) -> manuk_css::TextTransform {
     let mut cur = Some(n);
     while let Some(x) = cur {
-        if let Some(&(_, t)) = styles.get(&x) {
-            return t;
+        if let Some(s) = styles.get(&x) {
+            return s.text_transform;
         }
         cur = dom.parent(x);
     }

@@ -131,7 +131,14 @@ fn the_accessible_name_reads_the_computed_style_through_both_entrances() {
         ("t_upper", "CALL US", "text-transform applies to the name, because the name is what a user is READ"),
         ("t_lower", "call us", "…and every keyword, not just the loud one"),
         ("t_cap", "Call Us", "capitalize upper-cases the first letter of each word and LEAVES THE REST — not `Call US`"),
-        ("t_hidden", "Visible", "CONTROL — display:none still prunes, and threading style must not resurrect it"),
+        // ⚠ **THIS ROW'S SPELLING IS INLINE, AND THAT IS THE BLIND SPOT surface audit #79's ranked
+        //   #1 was about.** It reads `style="display:none"`, so it is a control for *the DOM reader*,
+        //   not for the prune as a rule — and for 14 ticks the STYLESHEET spelling of the same
+        //   declaration was announced. Every hidden-node fixture in WPT's own accname suite is
+        //   written inline too. The class spelling and the `visibility` half are
+        //   `G_AX_NAME_HIDDEN_BY_STYLESHEET` (t1379); this row stays exactly as it is, because a
+        //   control that is now understood is worth more than one that is quietly upgraded.
+        ("t_hidden", "Visible", "CONTROL — an INLINE display:none prunes, and threading style must not resurrect it"),
     ];
 
     for (id, want, why) in rows {

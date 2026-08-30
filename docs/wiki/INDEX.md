@@ -2145,6 +2145,16 @@
   - L87 · What is NOT implemented, said out loud
   - L99 · Receipts
 
+## A name fragment hidden by a CSS RULE — the prune that only read the `style=` attribute
+`docs/wiki/name-hidden-by-stylesheet.md`
+
+  - L7 · The defect
+  - L22 · ⭐⭐⭐ Why nothing in the tree could find it
+  - L41 · The fix — the map was already in the context
+  - L55 · The battery — Chrome via CDP Accessibility.getFullAXTree
+  - L92 · How it was proven red
+  - L100 · Related
+
 ## NETWORKING — how real sites actually load
 `docs/wiki/networking.md`
 
@@ -2651,4 +2661,4 @@
   - L231 · Both named mechanisms are subsystem work
 
 ---
-2482 sections across 41 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+2488 sections across 42 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.

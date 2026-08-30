@@ -11266,3 +11266,107 @@ is internal and cycle-free.
    sweep) and `counter-set` for the accname alt-counter rows are the two ranked Track B items.
 
 **Next check due: tick 1379.**
+
+---
+
+## Check #131 — tick 1379 (2026-08-30)
+
+**HORIZON: H0 — Pareto Web Parity.** Exit gate, all binary:
+
+```text
+  1  ~83% WPT subtest pass rate across categories
+  2  differential-oracle-verified viability across all four usage-weighted corpora
+  3  the headful shell is daily-drivable by its own developer
+  4  EVERY RENDERED CONSTRUCT IS QUERYABLE THROUGH THE IN-PROCESS SEMANTIC API
+```
+
+### GATE OR SCOREBOARD? — GATE, and the window closed two standing items
+
+Ticks 1372–1379:
+
+```text
+  1372  `content: attr(href)` met its element on one cascade and not the other   CAPABILITY
+  1373  the audits — surface #79, and a class tripped over four times, measured  INSTRUMENT
+  1374  `counter-set`, and the counter properties a pseudo was never asked about CAPABILITY
+  1375  the agent's drive path picked the first substring match                  CAPABILITY
+  1376  `grid-area` placed nothing, and auto-placement hid it                    CAPABILITY
+  1377  two rows of my own audit, priced properly and WITHDRAWN                  REFUSAL
+  1378  a float written into a line RE-FLOWS that line                           CAPABILITY
+  1379  a name fragment hidden by a STYLESHEET is not announced                  CAPABILITY
+```
+
+Six capability ticks, one instrument tick, **one refusal**. t1377 is the one worth naming: it
+measured two ranked rows off this loop's own audit and built neither, because `-ms-flex` is ignored
+by Chrome (implementing it would make us DIVERGE) and `-webkit-box-flex`'s 63 declarations collapse
+to one site that uses the orientation already implemented. *A declaration count is not a site count,
+and a site count is not a divergence.*
+
+### ⭐⭐⭐ THE WINDOW'S FINDING — A CONFORMANCE SUITE CAN BE BLIND IN THE SAME PLACE THE ENGINE IS
+
+t1379 fixed the accname hidden-node prune to read the COMPUTED `display`/`visibility` instead of the
+element's inline `style=` attribute. **WPT `accname` did not move: 438/484 = 90.5%, unchanged to the
+subtest.** It could not move — every hidden-node fixture in
+`accname/name/comp_labelledby_hidden_nodes.html` writes `style="display: none"` inline, and so did
+this engine's own gate's control row.
+
+> ⭐⭐⭐ **A RULE WITH TWO SOURCES, WHERE THE WEAKER SOURCE IS THE ONE EVERY TEST USES, IS INVISIBLE
+> TO THE WHOLE SUITE.** The web authors these in stylesheets; conformance fixtures author them
+> inline. A suite can therefore sit at 100% on a mechanism that is wrong on every real page.
+
+This is the sharpest form yet of a claim PART VI already makes — *capability% cannot see
+feature-present-but-site-broken* — and it extends it: **WPT% cannot see it either, when the fixture
+convention and the web's convention differ.** It also validates surface audit #79's ranked #1 (*a
+gate that constructs its own input cannot discover that the producer is broken*): that sweep is what
+aimed this tick, and it found a shipping defect rather than a gate defect.
+
+### PART VI CORRECTED
+
+- **VI.2's H0.1 residual list is now EMPTY.** t1364's battery found nine of eleven named residuals
+  already Chrome-exact, t1364 fixed the tenth (the UA `border-spacing` twin drift), and **t1378
+  closed the eleventh** — the float re-flow, which check #130's STEER #1 named as the one category
+  that survived measurement. The row needs a NEW SUBJECT rather than a narrowing; on the evidence of
+  this window the candidates are (a) the `MinimalCascade`/Stylo twin-drift class, which produced
+  t1372, t1373 and t1376 in eight ticks, and (b) the a11y name walk's remaining DOM-only readers.
+- **The `hidden` attribute is not a DOM-only fact.** The UA sheet carries `[hidden]{display:none}`,
+  so it is a computed `display:none` too. Recorded because t1379's gate asserted the opposite as a
+  vacuity check and the assert fired — the control was not the control it was written to be.
+
+### THE INVARIANTS
+
+**I3 — not bent, and it is what caught t1379.** #128 required *"exposed through EVERY entrance the
+semantic API is read through"*. t1379's gate asserts both doors on all ten rows, and the finding
+itself is I3's shape one level deeper: not *a fact wired to one entrance*, but **a fact wired to
+both entrances and read from the wrong SOURCE at both**. The map was in the context since t1365 and
+the prune below it never asked.
+
+⭐ And t1365's struct prediction paid out a second time: `NameStyles`' value was a
+`(Display, TextTransform)` tuple, t1379 needed `visibility`, and a three-element positional tuple
+destructured at five sites became the named `NameStyle`. The rule is holding at both levels — the
+context struct (t1371) and the per-node fact (t1379).
+
+**I4 — applied as a REFUSAL again, and this time on the loop's own ranking list.** t1377 refused two
+of its own audit's ranked rows on measurement. That is the second window running in which I4 showed
+up as *not building something the backlog said to build*.
+
+**I5 — unchanged, and now the longest-lived un-progressed exit condition by a wide margin.** The
+oracle has still never finished a crawl (`ORACLE_CRAWLED: 0 (PARTIAL)`). Not worked in this window,
+the last one, or the several before. Carried into a third check.
+
+**I1, I2, I6, I7, I8: not bent.** No new workspace dependency this window.
+
+### STEER
+
+1. ⭐⭐⭐ **Give VI.2's H0.1 row a new subject — it has been fully closed.** *Refutable by:* run
+   t1364's eleven-row battery again on the shipping path; if any row diverges, the list was too
+   narrow rather than exhausted.
+2. ⭐⭐⭐ **Finish surface audit #79's ranked #1 sweep — it is paying.** One gate examined (the a11y
+   name walk) produced one shipping defect and one mis-written control. The remaining hand-built-input
+   gates are the five `manuk_html::parse` a11y gates and `agent/tests`' hit-test/drive gates, and the
+   question to ask each is *what does its producer do that this input cannot express?*
+3. ⭐⭐ **When a fix does not move its suite, ask whether the SUITE can see it before assuming the
+   fix is small.** t1379's flat `accname` was a finding, not a disappointment; the same question is
+   owed to any tick whose area number stays put.
+4. ⭐ **The gate-execution gap (audit #78: 502 of 522 gate files run nowhere)** is unchanged and is
+   still the highest-value item the agent cannot close. **I5 still needs an owner decision.**
+
+**Next check due: tick 1387.**

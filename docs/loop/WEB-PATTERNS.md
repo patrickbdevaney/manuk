@@ -9667,3 +9667,24 @@ line does not break it either**, so rewinding only when the float joins fixes ha
 ⚠ Defer the run, never SPLIT it. `xxxx <float> yyyy` keeps exactly ONE space in Chrome; collecting
 the run in two pieces around the float makes each piece `first` again and drops it.
 (t1378 — `agent/tests` `a_float_reflows_the_line_it_joins`)
+
+## `.sr-only { display: none }` — the name fragment the web hides in a stylesheet
+
+An accessible-name prune that reads the element's inline `style=` attribute is right on every
+conformance fixture and wrong on every real page: WPT's `accname` hidden-node tests all write
+`style="display: none"` inline, and the web writes a CLASS. A `<button>Save <span class="h">SECRET</span></button>`
+with `.h{display:none}` was announced as **"Save SECRET"** — the agent reads a control by a name that
+contains text no user can see.
+
+⭐⭐⭐ **A RULE WITH TWO SOURCES, WHERE THE WEAKER SOURCE IS THE ONE EVERY TEST USES, IS INVISIBLE TO
+THE WHOLE SUITE.** The fix moved WPT `accname` by ZERO subtests (438/484 before and after) because
+the suite has no fixture in the spelling the web uses.
+
+⚠ `display:none` PRUNES and `visibility:hidden` does NOT — `visibility:visible` inside a hidden
+ancestor is announced. Reading the COMPUTED value gets the undo for free, because `visibility` is
+inherited and the cascade has already resolved it.
+
+⚠ The `hidden` attribute is not a DOM-only fact: the UA sheet carries `[hidden]{display:none}`, so it
+is a computed `display:none` as well. `aria-hidden` is the only spelling no stylesheet can express,
+which makes it the real control for a DOM reader.
+(t1379 — `agent/tests` `a_name_fragment_hidden_by_a_stylesheet_is_not_announced`)

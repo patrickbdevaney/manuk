@@ -97202,3 +97202,123 @@ gates that build their own input and ask what each is blind to), and Track C's e
 real site.
 
 WIKI: docs/wiki/float-line-reflow.md
+
+## Tick 1379 — a name fragment hidden by a STYLESHEET was announced (2026-08-30)
+
+TICK SHAPE: capability-subsystem
+
+**Track B**, aimed by surface audit #79's ranked #1 — *"a gate that constructs its own input cannot
+discover that the producer is broken; sweep the gates that build their input by hand and ask what
+each is blind to."* The first gate swept produced a **shipping defect**, not a gate defect. This tick
+also carries **constitution check #131** (due t1379).
+
+### ⭐⭐⭐ THE PRUNE READ THE `style=` ATTRIBUTE, AND THE WEB HIDES THINGS IN A CLASS
+
+accname §4.3 step 2A prunes a hidden node from the accessible name. The engine's prune called
+`inline_visibility`, which parses the element's own inline `style=` attribute and nothing else — its
+doc-comment named the gap (*"a `display:none` applied by a CLASS is still missed"*) and the gap was
+real. Chrome-measured through CDP `Accessibility.getFullAXTree`:
+
+```text
+  <style>.h { display: none }</style>
+  <button>Save <span class="h">SECRET</span></button>
+                            chrome      before          after
+    the button's name       "Save"      "Save SECRET"   "Save"
+```
+
+The agent reads a control by a name containing text no user can see. `.sr-only`/`.visually-hidden`
+toggles are authored in stylesheets on the real web.
+
+### ⭐⭐⭐ NOTHING IN THE TREE COULD HAVE FOUND IT, INCLUDING WPT
+
+```text
+  every hidden-node fixture in WPT accname/name/comp_labelledby_hidden_nodes.html
+                                                        style="display: none"   INLINE
+  G_AX_NAME_COMPUTED_STYLE's own `t_hidden` CONTROL row  style="display:none"   INLINE
+  the five a11y gates in agent/tests/ built on manuk_html::parse
+                                                        NO CASCADE AT ALL
+```
+
+> **A RULE WITH TWO SOURCES, WHERE THE WEAKER SOURCE IS THE ONE EVERY TEST USES, IS INVISIBLE TO THE
+> WHOLE SUITE.** The web authors these in stylesheets; conformance fixtures author them inline.
+
+⚠⚠ **AND THE RECEIPT SAYS SO: WPT `accname` IS 438/484 = 90.5% BEFORE AND AFTER, UNCHANGED TO THE
+SUBTEST.** That is the finding, not a disappointment — a flat area number after a real fix is a
+question about the SUITE'S APERTURE, and this one had an answer.
+
+### THE FIX — THE MAP WAS ALREADY IN THE CONTEXT
+
+t1365 threaded `NameStyles` (per-node computed `display` + `text-transform`) into the name walk so a
+non-inline child could contribute a separator. **`display: none` was in that same map the whole time
+and the prune never asked it.** `node_visibility` now prefers the computed pair and falls back to the
+inline reader when there is no style map (a `manuk_html::parse` fixture, a unit test).
+
+⭐ **`visibility` is inherited and UNDOABLE, and the computed value carries the undo for free.**
+`visibility:hidden` does not prune and `visibility:visible` inside it is announced; the inline reader
+had to return `None` for *"not declared here"* and flow a flag down by hand.
+
+⭐ **A THIRD FACT MADE `NameStyles`' VALUE A STRUCT** — t1365's own rule, one level down. A
+three-element positional tuple destructured at five sites is how the fourth reader gets the second
+field and nobody notices.
+
+### THE BATTERY — ten rows, Chrome via CDP
+
+```text
+                                                        chrome    before      after
+ b1  .h{display:none}            STYLESHEET             "Save"  "Save SECRET" "Save"
+ b2  style="display:none"        inline        CONTROL  "Save"  "Save"        "Save"
+ b3  .h{visibility:hidden}       STYLESHEET             "Save"  "Save SECRET" "Save"
+ b4  style="visibility:hidden"   inline        CONTROL  "Save"  "Save"        "Save"
+ b5  aria-labelledby → a display:none span (stylesheet) "foo bar"  same       same
+ b6  stylesheet none, child display:inline               "Save"  "Save SHOWN" "Save"
+ b7  the `hidden` ATTRIBUTE                             "Save"  "Save"        "Save"
+ b8  stylesheet visibility:hidden, child visible   "Save SHOWN"  "Save SHOWN" same
+ b9  aria-hidden                               CONTROL  "Save"  "Save"        "Save"
+b10  class none + inline display:inline        CONTROL  "Save SHOWN"   same    same
+```
+
+⭐ **`b6` and `b8` are the pair that make this ONE RULE and not two predicates.** `display:none`
+prunes through a `display:inline` child; `visibility:hidden` is undone by one.
+
+⭐ **`b5` was right for the WRONG REASON and is now asserted.** A hidden REFERENCE is exempt (its
+text is what the author pointed at) — and the engine could not see the span was hidden at all, so it
+walked it as visible and arrived at the same string. Two errors that cancel.
+
+⚠ **`b7` LOOKED LIKE THE DOM-READER CONTROL AND IS NOT — this gate's own vacuity assert caught it on
+the first run.** The UA sheet carries `[hidden]{display:none}`, so the attribute IS a computed
+`display:none`; b7 is a control for the two sources AGREEING. `b9` (`aria-hidden`, which no
+stylesheet can express) is the control for the DOM reader alone, and `b10` — a class saying `none`
+beaten by an inline `display:inline` — separates *reading the computed value* from *"either source
+says none"*, which is the wrong fix an implementer reaches for first.
+
+⚠ Chrome's CDP `name.value` for b3/b4/b9 is `"Save "` with a TRAILING SPACE; accname step 2 trims the
+total and `normalize` does, so the rows assert the trimmed string. Named rather than left as an
+unexplained mismatch with the dump it was measured from.
+
+### THE GATE
+
+`a_name_fragment_hidden_by_a_stylesheet_is_not_announced` (`agent/tests/`, in the wall's crate list)
+— ten rows, four vacuity asserts, **both doors on every row** (the bare name behind
+`test_driver.get_computed_label()` and the AX TREE a live agent reads). **PROVEN RED by three
+mutations**, each on exactly one predicted row: N1 read the inline attribute unconditionally →
+b1/b3/b6 fail with all four controls green (which identifies *which source is consulted*, not *the
+prune is broken*); N2 report `display` but always visible → only b3; N3 let `display:none` flow down
+as a flag → only b6.
+
+`G_AX_NAME_COMPUTED_STYLE`'s `t_hidden` row is left exactly as it was, with its blindness written
+into the file: a control that is now understood is worth more than one quietly upgraded.
+
+### THE RECEIPT
+
+```text
+  manuk-agent  143/143 → 144/144   +1   +the new gate
+  WPT accname  438/484 = 90.5%     FLAT — and the flatness is the finding (see above)
+  manuk-a11y / manuk-layout / manuk-css / manuk-dom / manuk-paint   CONTROL
+  CONSTITUTION-CHECK #131 written (due t1379); next due t1387
+```
+
+NEXT: check #131's STEER — VI.2's H0.1 row is fully closed and needs a NEW SUBJECT (the candidates
+are the `MinimalCascade`/Stylo twin-drift class and the a11y walk's remaining DOM-only readers); and
+audit #79's ranked #1 sweep is paying, so continue it across the other hand-built-input gates.
+
+WIKI: docs/wiki/name-hidden-by-stylesheet.md
