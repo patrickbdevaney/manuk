@@ -880,13 +880,69 @@ impl LayoutBox {
     /// wrong number and it renders the wrong slice of the data; return `undefined` and it renders `NaN`
     /// rows, which is to say none.
     pub fn content_extent(&self) -> (f32, f32) {
-        fn walk(b: &LayoutBox, ox: f32, oy: f32, w: &mut f32, h: &mut f32) {
-            *w = w.max(b.rect.x + b.rect.width - ox);
-            *h = h.max(b.rect.y + b.rect.height - oy);
+        self.content_extent_with_end_margins(&|_| (0.0, 0.0))
+    }
+
+    /// [`content_extent`], with each descendant's **END margins** (right and bottom) added to its
+    /// own contribution — which is what a scroll container's scrollable overflow region is made of.
+    ///
+    /// ⚠⚠⚠ **A TRAILING MARGIN WITH NOTHING AFTER IT IS INVISIBLE TO A UNION OF BORDER BOXES, AND
+    /// THAT IS THE COMMONEST SHAPE IN A SCROLLER.** `<div class=scroller><p>…</p><p style="margin
+    /// -bottom:2rem">…</p></div>` — the last paragraph's bottom margin is real space inside the
+    /// container (a scroll container establishes a BFC, so it does not collapse out), and every box
+    /// that follows one already accounted for it by sitting lower down. Nothing follows the LAST
+    /// one, so the union stopped at its border box and `scrollHeight` came out short by exactly the
+    /// margin. `scrollTop + clientHeight >= scrollHeight` is the "am I at the bottom" test every
+    /// infinite scroller runs, and a short `scrollHeight` makes it true too early.
+    ///
+    /// Measured, headless Chrome (`--hide-scrollbars`), a `width:100px; height:100px; padding:10px
+    /// 5px; overflow:scroll` container:
+    ///
+    /// ```text
+    ///                                                        chrome   before   after
+    ///   one 200px-tall child                       CONTROL     220      220      220
+    ///   …with margin-bottom: 50px                              270      220      270
+    ///   a 200px-WIDE child with margin-right: 50px  (scrollW)  260      210      260
+    ///   …with margin-bottom: -30px                             190      220      190
+    ///   a FLOATED child with margin-bottom: 50px               270      220      270
+    ///   an inline-block child with margin-bottom: 50px         270      220      270
+    ///   two children, margins 50 and 70                        340      270      340
+    ///   a child with margin-TOP: 50px              CONTROL     270      270      270
+    ///   a 0-height child AFTER the margin          CONTROL     270      270      270
+    /// ```
+    ///
+    /// ⭐ **The negative-margin row is what makes this an INFLATION and not a `max`.** `margin
+    /// -bottom: -30px` pulls the region IN — Chrome reports 190, not 220 — so the contribution is
+    /// `bottom + margin`, signed, and a `.max(bottom)` guard would silently keep the larger wrong
+    /// answer on every negative-margin card deck.
+    ///
+    /// ⭐ **The `margin-top` row is the control that says this is an END rule.** A start margin
+    /// already moved the box down the flow and is therefore in its border box's POSITION; adding it
+    /// again would double-count it, and the row reads 270 in both engines precisely because nothing
+    /// was added.
+    ///
+    /// ⚠ Percentage margins resolve against the CONTAINING BLOCK's width, and the caller here has
+    /// the scroll container's own content width rather than each descendant's containing block.
+    /// Named residue, exactly as the percentage-padding one already recorded in `scroll_geometry_of`.
+    pub fn content_extent_with_end_margins(
+        &self,
+        end_margin: &dyn Fn(NodeId) -> (f32, f32),
+    ) -> (f32, f32) {
+        fn walk(
+            b: &LayoutBox,
+            ox: f32,
+            oy: f32,
+            w: &mut f32,
+            h: &mut f32,
+            end_margin: &dyn Fn(NodeId) -> (f32, f32),
+        ) {
+            let (mr, mb) = b.node.map(end_margin).unwrap_or((0.0, 0.0));
+            *w = w.max(b.rect.x + b.rect.width + mr - ox);
+            *h = h.max(b.rect.y + b.rect.height + mb - oy);
             match &b.content {
                 BoxContent::Block(kids) => {
                     for k in kids {
-                        walk(k, ox, oy, w, h);
+                        walk(k, ox, oy, w, h, end_margin);
                     }
                 }
                 BoxContent::Inline(frags) => {
@@ -901,7 +957,7 @@ impl LayoutBox {
         match &self.content {
             BoxContent::Block(kids) => {
                 for k in kids {
-                    walk(k, self.rect.x, self.rect.y, &mut w, &mut h);
+                    walk(k, self.rect.x, self.rect.y, &mut w, &mut h, end_margin);
                 }
             }
             BoxContent::Inline(frags) => {

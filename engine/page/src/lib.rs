@@ -2441,7 +2441,23 @@ fn scroll_geometry_of(
         // ⚠ `resolve` against the box's own border-box width is exact for `px`/`calc()` padding and
         // an approximation for PERCENTAGE padding, whose correct reference is the containing block's
         // width — not available here. Named residue: percentage padding on a scroll container.
-        let (cw, ch) = b.content_extent();
+        // ⚠⚠⚠ **AND EACH DESCENDANT'S END MARGINS, WHICH A UNION OF BORDER BOXES CANNOT SEE.** A
+        // trailing `margin-bottom` on the LAST child is real space inside the container — a scroll
+        // container is a BFC, so it does not collapse out — and every box that follows one already
+        // accounted for it by sitting lower. Nothing follows the last one, so `scrollHeight` was
+        // short by exactly that margin. See `content_extent_with_end_margins` for the Chrome table,
+        // including the NEGATIVE-margin row that makes this a signed inflation rather than a `max`.
+        let (cw, ch) = b.content_extent_with_end_margins(&|n| {
+            styles
+                .get(&n)
+                .map(|s| {
+                    (
+                        s.margin.right.resolve(b.rect.width, 0.0),
+                        s.margin.bottom.resolve(b.rect.width, 0.0),
+                    )
+                })
+                .unwrap_or((0.0, 0.0))
+        });
         // `content_extent` measures from the BORDER-box origin; the scrollable overflow region is
         // measured in the PADDING box, so drop the start border and add the end padding.
         let cw = (cw - bw.left + st.padding.right.resolve(b.rect.width, 0.0)).max(0.0);

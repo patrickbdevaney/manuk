@@ -2387,6 +2387,16 @@
   - L27 · DON'T use it for
   - L31 · HOW
 
+## A trailing margin is inside the scrollable overflow region
+`docs/wiki/scrollable-overflow-end-margin.md`
+
+  - L7 · The defect
+  - L23 · The mechanism
+  - L34 · Found by SURVEYING the area, not grinding it
+  - L50 · The battery
+  - L88 · ⚠ Named, measured, not built — the other half of the 117
+  - L116 · How it was proven red
+
 ## STORAGE — the persistence layers a page can reach, and what each one really guarantees
 `docs/wiki/storage.md`
 
@@ -2673,4 +2683,4 @@
   - L231 · Both named mechanisms are subsystem work
 
 ---
-2496 sections across 43 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+2502 sections across 44 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.

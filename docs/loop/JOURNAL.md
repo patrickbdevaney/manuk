@@ -97438,3 +97438,132 @@ that this input cannot express?* Two named-and-measured rows are now outstanding
 UA sheet's `content-visibility` for closed `<details>`, and `<summary>`'s role and name.
 
 WIKI: docs/wiki/ax-tree-excludes-display-none.md
+
+## Tick 1381 — a trailing margin was outside the scrollable overflow region (2026-08-30)
+
+TICK SHAPE: capability-subsystem
+
+**Track A.** The board's lowest-pass ★ CSS-LAYOUT row, **surveyed before being ground**, and the one
+implementable mechanism with mass in it, built.
+
+### ⭐⭐⭐ SURVEY FIRST: HALF OF A "★ BUILD NOW" ROW IS A SPEC LEVEL NO ENGINE SHIPS
+
+`css/css-overflow` reads 49.9% on the board. Its 457 failing subtests decompose:
+
+```text
+  scrollHeight / scrollWidth wrong                                     117   ← the one to build
+  `scroll-marker*`, `scroll-buttons`, `scroll-target-group`,
+  `scroll-axis-lock`, `line-clamp` (the Overflow-4 shorthand),
+  `max-lines`, `continue` — properties of an UNSHIPPED spec level     ~150   FRONTIER, refused
+  `overflow-clip-margin`, `overflow-block/inline`, `block-ellipsis`    ~30
+  the rest (promise rejections, querySelector throws, serialization)  ~160
+```
+
+> **An area percentage is not a work item.** This is t1350-1352's lesson (css-values' 76%
+> `calc-size`) meeting a row the board marks *"CSS-LAYOUT — DAILY-DRIVER (build now)"*: the label is
+> about the DIRECTORY, and half the directory is a spec level no engine ships.
+
+### ⭐⭐⭐ THE DEFECT — A TRAILING MARGIN IS INVISIBLE TO A UNION OF BORDER BOXES
+
+```text
+  <div style="width:100px;height:100px;padding:10px 5px;overflow:scroll">
+    <div style="height:200px;margin-bottom:50px"></div>
+  </div>
+                          chrome   before   after
+    scrollHeight            270      220      270
+```
+
+`content_extent` unions the BORDER BOXES of the descendants. Every box that FOLLOWS a margin has
+already accounted for it by sitting lower down; **nothing follows the last one**, so the union stops
+at its border box. A scroll container is a BFC, so that margin does not collapse out — it is real
+space inside the container.
+
+`scrollTop + clientHeight >= scrollHeight` is the *"am I at the bottom"* test every infinite
+scroller, lazy-image loader and virtualised list runs, and a short `scrollHeight` makes it true too
+early. The fix is one closure so `manuk-layout` needs no style map and every other `content_extent`
+caller is byte-identical.
+
+### THE BATTERY — 14 rows, headless Chrome (`--hide-scrollbars`)
+
+```text
+                                                        chrome   before   after
+  c1  one 200px-tall child                    CONTROL     220      220      220
+  c2  …with margin-bottom: 50px                           270      220      270
+  c3  a 200px-WIDE child, margin-right: 50px  (scrollW)   260      210      260
+  c5  a 0-height sibling AFTER it              CONTROL    270      270      270
+  c6  a 200px-wide child, no margin  (scrollW) CONTROL    210      210      210
+  d3  a child with margin-TOP: 50px            CONTROL    270      270      270
+  d4  a child with margin-LEFT: 50px (scrollW) CONTROL    260      260      260
+  d6  a FLOATED child with margin-bottom: 50px            270      220      270
+  d7  …with margin-bottom: -30px                          190      220      190
+  d9  a 0-height child after the margined one  CONTROL    270      270      270
+  e3  a RELATIVE child (no offset), margin 50             270      220      270
+  e5  two children, margins 50 and 70                     340      270      340
+  e6  an inline-block child, margin-bottom 50             270      220      270
+  f1  an AUTO-height wrapper, inner margin 50             270      220      270
+```
+
+⭐⭐ **`d7` — the NEGATIVE margin — makes this an INFLATION and not a `max`.** Chrome reports 190,
+not 220. A `.max(bottom)` guard keeps the larger wrong answer on every negative-margin card deck, and
+it is exactly the mutation a reader adds to "be safe".
+
+⭐⭐ **`d3`/`d4` — the START margins — are the control that says this is an END rule.** A start margin
+already moved the box along the flow, so it is in the border box's POSITION; adding it again
+double-counts it. Both rows read the same number in both engines precisely because nothing was added.
+
+⭐ **`c5`/`d9` say the union was not simply broken.** A margin with a sibling AFTER it was always
+counted. **Only the LAST one was lost — which is why this was invisible to any fixture with a
+footer**, and why it survived a subsystem that already has a Chrome-measured end-padding rule.
+
+⚠ The `scrollWidth` rows are chosen so the content is WIDER than the client box: we reserve a
+scrollbar gutter and Chrome was measured with `--hide-scrollbars`, so a row whose content fits inside
+the client box reports that floor and compares two scrollbar policies, not two overflow regions.
+
+### ⚠ NAMED, MEASURED, NOT BUILT — the other half of the 117, and the honest regression note
+
+```text
+                                                            chrome   ours
+  a child at `position:relative; top:-1000px`, margin 50       270    105
+    (scrollable-overflow-padding.html 30 subtests +
+     scrollable-overflow-transform-unreachable-region.html 58)
+  a 200px child inside a `width:0;height:0` wrapper           120    220
+  …inside a `width:10px;height:0` wrapper                     210    220
+  …inside a `width:0;height:0; overflow:hidden` wrapper       120    220
+  an auto-height wrapper, inner margin-bottom: 50  CONTROL    270    270  ✓
+```
+
+The first is the **alignment rectangle** (Blink's *"inflow-bounds"*): a relatively-positioned box
+contributes its ORIGINAL in-flow position as well as its offset one, so `top:-1000px` does not shrink
+the scroller. It needs layout to record a pre-offset rect — a different mechanism, **88 WPT
+subtests**, and the ranked next tick.
+
+⚠⚠ **AND THE HONEST HALF: two nested rows MOVED, 220 → 270, against Chrome's 120.** They are the ones
+with a **zero-width intermediate wrapper** — Chrome propagates no scrollable overflow through one, we
+propagate all of it, and the margin this tick adds rides along on a contribution that should not have
+been there. Both were already wrong before this tick (220 vs 120); it is the pre-existing
+nested-propagation gap unmasked further, named here with its numbers rather than left to be found.
+The realistic nested shape is `f1` and it is Chrome-exact.
+
+### THE GATE
+
+`a_trailing_margin_is_inside_the_scrollable_overflow_region` (`agent/tests/`, in the wall's crate
+list) — 14 rows, 7 of them controls. **PROVEN RED by three mutations**: N1 ignore the closure (the
+pre-tick behaviour) → seven rows fail and every control stays green, which identifies the mechanism
+as the END margin and not the union; N2 clamp the inflation to non-negative → only `d7`; N3 inflate
+by the START margins too → `c5` reads 320, its second child's `margin-top` counted twice.
+
+### THE RECEIPT
+
+```text
+  manuk-agent  145/145 → 146/146   +1   +the new gate
+  WPT css/css-overflow  496 → 508   (+12)   docs/loop/WPT-AREAS.tsv refreshed (its row read a
+                                            stale 481; the honest pre-tick number is 496)
+  manuk-layout / manuk-page / manuk-css / manuk-a11y / manuk-paint / manuk-dom   CONTROL
+```
+
+NEXT: the **alignment rectangle** — a relatively-positioned box's in-flow position as a scrollable
+-overflow contribution, 88 WPT subtests, measured above with a control arm. Behind it, the
+nested-propagation family measured in the same pass, and the audit #79 sweep's remaining
+hand-built-input gates.
+
+WIKI: docs/wiki/scrollable-overflow-end-margin.md

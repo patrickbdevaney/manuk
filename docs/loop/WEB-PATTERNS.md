@@ -9706,3 +9706,19 @@ a descendant can UNDO it, so that one drops the node and keeps walking.
 not be clickable. ⚠ And it must NOT remove a collapsed `<select>`'s `<option>`s: Chrome exposes them,
 so a UA sheet that hid them would delete every dropdown from the agent's perception.
 (t1380 — `agent/tests` `a_display_none_subtree_is_not_in_the_a11y_tree`)
+
+## `<div class="scroller"><p>…</p><p style="margin-bottom:2rem">…</p></div>` — the last margin
+
+`scrollTop + clientHeight >= scrollHeight` is the *"am I at the bottom"* test every infinite
+scroller, lazy-image loader and virtualised list runs. A `scrollHeight` computed as the UNION OF
+BORDER BOXES is short by exactly the LAST child's `margin-bottom`, so the test fires early on every
+scroll container whose last child has one — which is most of them.
+
+⭐ A trailing margin with nothing after it is invisible to a union: every box that FOLLOWS a margin
+already accounted for it by sitting lower down, and nothing follows the last one. A scroll container
+is a BFC, so that margin does not collapse out — it is real space inside the container.
+
+⚠ It is an INFLATION, not a `max`: `margin-bottom: -30px` pulls the region IN (Chrome 190, not 220).
+⚠ It is an END rule: a `margin-top` is already in the box's POSITION, and adding it again
+double-counts it.
+(t1381 — `agent/tests` `a_trailing_margin_is_inside_the_scrollable_overflow_region`)

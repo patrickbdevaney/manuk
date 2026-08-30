@@ -11,12 +11,12 @@
 
 | | value | over |
 |---|---|---|
-| ticks landed | **1062** | ticks 1–1379 |
-| median tick cycle | **31m** | 1061 intervals |
-| median, last 10 | **61m** | 10 intervals |
+| ticks landed | **1063** | ticks 1–1380 |
+| median tick cycle | **31m** | 1062 intervals |
+| median, last 10 | **50m** | 10 intervals |
 | fastest / slowest | 5s / 7.0d | |
-| **ticks per hour** | **0.88** | 1202.1h elapsed |
-| median verify wall | **67s** | 1001 ticks |
+| **ticks per hour** | **0.88** | 1202.8h elapsed |
+| median verify wall | **67s** | 1002 ticks |
 | wall trend | 39s → 8m — getting slower ⚠️ | first 3 vs last 3 |
 
 The **cycle** is the real unit: implement → debug → verify wall → land. The wall is only part of
@@ -31,7 +31,7 @@ it, and a wall that grows taxes every future tick, so it is tracked separately f
 * **✅ rows in the capability ledger**: 144 → **642**
 * **Bar 0 — oracle hangs**: 0 of 265 sites
 
-**492 of 1062 ticks** (46%) moved a
+**492 of 1063 ticks** (46%) moved a
 user-visible capability. The rest were instruments, infrastructure and corrections — and the
 ledger says the corrections were not overhead: three of its top three priorities were phantoms,
 and finding that out redirected everything after it.
@@ -91,7 +91,7 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 ## What a capability costs
 
 * **492** capability ticks, median cycle **31m**
-* median diff per tick: **+288 / −34** lines across 8 files
+* median diff per tick: **+289 / −34** lines across 8 files
 
 ## Every tick
 
@@ -1159,5 +1159,6 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 | **1377** | 2026-08-30 05:30 | 1.6h | capability-subsystem | 8m | +635/−93 | 522 | 81 | 56.0% · | two rows of my own audit, priced properly and withdrawn (2026-08-30) |
 | **1378** | 2026-08-30 06:20 | 50m | capability-subsystem | 8m | +705/−43 | 522 | 81 | 56.0% · | a float written into a line RE-FLOWS that line, in both directions (2026-08-30) |
 | **1379** | 2026-08-30 07:06 | 46m | capability-subsystem | 8m | +525/−33 | 522 | 81 | 56.0% · | a name fragment hidden by a STYLESHEET was announced (2026-08-30) |
+| **1380** | 2026-08-30 07:49 | 43m | capability-subsystem | 8m | +585/−40 | 522 | 81 | 56.0% · | the a11y tree contained every `display: none` subtree (2026-08-30) |
 
 *`·` after a WPT figure means **carried forward**, not measured this tick.*
