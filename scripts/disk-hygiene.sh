@@ -15,11 +15,27 @@
 #
 # What is NEVER deleted: `target/release` (the gates and the banked builds come from it), the git
 # repo, `.env`, the profile store.
+#
+# ── SHARED-DISK RESERVE FOR ARCHIPELAGO (observer, 2026-08-30). This box also runs the `archipelago`
+# game-dev loop, and its PARALLEL LANES build binaries on the SAME two filesystems we do:
+#   · each lane's CARGO_TARGET_DIR defaults to /var/tmp/arch-target-<lane> — on ROOT `/` — at ~22G peak
+#     per lane (archipelago/scripts/lane.sh:62, loop-forever.sh:31: "one lane may have 22G; two may not").
+#   · its render pipeline builds `target-live` (~21G) on /home.
+# Everything above this line only ever measured and cleaned /home, so manuk's OWN root spill (leaked
+# headless-Chrome oracle profiles, axprof, pytest temp) accumulated on the exact filesystem archipelago's
+# lanes need — starving its parallel builds. The stanza at the BOTTOM of this script now reclaims manuk's
+# transient ROOT junk to hold root above ARCH_ROOT_RESERVE_G free for the lanes. It touches ONLY
+# manuk-owned paths; it never deletes anything under /var/tmp/archipelago-target, /var/tmp/arch-target-*,
+# ~/archipelago, or a `target-live` — those are archipelago's and are none of our business.
 set -uo pipefail
 cd "$(dirname "$0")/.."
 
 KEEP_BUILDS="${MANUK_BANK_KEEP:-6}"
 BANK="$HOME/manuk-builds"
+# How much free space to RELIGIOUSLY preserve for archipelago's parallel agents. Root is where its lanes
+# build by default (~22G/lane); 45G ≈ two coexisting lanes with slack. /home carries its ~21G target-live.
+ARCH_ROOT_RESERVE_G="${ARCH_ROOT_RESERVE_G:-45}"
+ARCH_HOME_RESERVE_G="${ARCH_HOME_RESERVE_G:-25}"
 
 before=$(df -h /home | awk 'NR==2 {print $4}')
 pct=$(df /home | awk 'NR==2 {gsub(/%/,""); print $5}')
@@ -181,3 +197,33 @@ find /tmp -maxdepth 1 -name 'manuk-*.html' -mtime +1 -delete 2>/dev/null
 
 after=$(df -h /home | awk 'NR==2 {print $4}')
 echo "▶ now $after free (was $before)"
+
+# ── ROOT RESERVE FOR ARCHIPELAGO'S PARALLEL LANES (observer, 2026-08-30). See the header. archipelago's
+# lanes build at /var/tmp/arch-target-<lane> on ROOT (~22G each). We only ADD to root via transient junk:
+# leaked headless-Chrome oracle profiles (/tmp/com.google.Chrome.scoped_dir.*), axprof, pytest temp. Hold
+# root above the reserve by reclaiming ONLY those manuk-owned paths — never any arch* / target-live path.
+root_free_g() { df --output=avail -BG / 2>/dev/null | tail -1 | tr -dc '0-9'; }
+RFREE=$(root_free_g)
+rbefore=$(df -h / | awk 'NR==2 {print $4}')
+rpct=$(df / | awk 'NR==2 {gsub(/%/,""); print $5}')
+echo "▶ root / is ${rpct}% full ($rbefore free) — reserve ≥${ARCH_ROOT_RESERVE_G}G for archipelago lanes"
+if [ -n "$RFREE" ] && [ "$RFREE" -lt "$ARCH_ROOT_RESERVE_G" ]; then
+  # 1) Leaked headless-Chrome oracle profile dirs, idle >60min. A LIVE sweep's chrome keeps writing its
+  #    profile, so mtime>60min means no chrome holds it — deleting a live one could break an oracle run.
+  n_chrome=$(find /tmp -maxdepth 1 -type d -name 'com.google.Chrome.scoped_dir.*' -mmin +60 2>/dev/null | wc -l)
+  [ "$n_chrome" -gt 0 ] && echo "  · $n_chrome leaked Chrome oracle profiles idle >60min (manuk WPT-oracle spill on root)"
+  find /tmp -maxdepth 1 -type d -name 'com.google.Chrome.scoped_dir.*' -mmin +60 -exec rm -rf {} + 2>/dev/null
+  # 2) manuk's profiling / pytest scratch, unread >1 day (never the working set of a live run).
+  find /tmp/axprof -mindepth 1 -mtime +1 -delete 2>/dev/null
+  find /tmp/pytest-of-patrickd -mindepth 1 -maxdepth 1 -mtime +1 -exec rm -rf {} + 2>/dev/null
+  RAFTER=$(root_free_g)
+  echo "▶ root now $(df -h / | awk 'NR==2 {print $4}') free (was $rbefore)"
+  # If we are STILL below the reserve after shedding all of manuk's own root junk, the remainder is
+  # archipelago's own build mass — which is NOT ours to touch. Say so, so the shortfall is legible.
+  if [ -n "$RAFTER" ] && [ "$RAFTER" -lt "$ARCH_ROOT_RESERVE_G" ]; then
+    echo "  ⚠ root still ${RAFTER}G < ${ARCH_ROOT_RESERVE_G}G reserve after clearing manuk's spill — the rest is"
+    echo "    archipelago's own /var/tmp/arch-target-* mass (its loop manages it; manuk will not delete it)."
+  fi
+else
+  echo "  · root has ≥${ARCH_ROOT_RESERVE_G}G free — archipelago's lanes have headroom; no manuk root junk reclaimed"
+fi
