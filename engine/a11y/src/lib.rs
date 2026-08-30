@@ -2705,6 +2705,31 @@ fn build_children(
         if is_hidden(dom, child) {
             continue;
         }
+        // ── ⚠⚠⚠ **`display: none` PRUNES THE SUBTREE, AND THIS TREE USED TO CONTAIN IT.** The
+        //    caller supplies `invisible` for `visibility`, and `is_hidden` above reads the DOM
+        //    (`hidden`, `aria-hidden`, `<input type=hidden>`, non-rendered tags) — **nothing asked
+        //    about `display`**, so a closed mobile menu, a `display:none` modal and a `<dialog>`
+        //    without `open` were all in the agent's a11y tree as fully-formed, addressable nodes.
+        //    Chrome-measured (CDP `Accessibility.getFullAXTree`): its tree contains none of them.
+        //
+        //    ⭐ **THE ASYMMETRY WITH `visibility` IS THE WHOLE RULE, AND IT IS WHY THIS CANNOT JOIN
+        //    THE `invisible` SET.** `visibility` INHERITS and is UNDOABLE, so that arm drops the
+        //    node and KEEPS WALKING (a `visibility: visible` descendant survives). `display` does
+        //    NOT inherit and cannot be undone: a child of a `display: none` box computes its own
+        //    ordinary `display`, so a per-node test would never fire on the child — the prune has to
+        //    happen at the ancestor by NOT DESCENDING. `continue` here is that.
+        //
+        //    ⭐ t1379 fixed the NAME walk to read the computed `display` and left this walk alone,
+        //    which produced the symptom that names the bug: `<button style="display:none">Hidden
+        //    inline</button>` was in the tree with an **EMPTY NAME**. A node whose name is correctly
+        //    computed as nothing is a node that should not be there.
+        //
+        //    `node_visibility` is t1379's resolver, reused: the computed `display` when the caller
+        //    has a style map, and the inline `style=` attribute when it does not — so `build_tree`
+        //    on a bare DOM behaves exactly as it did.
+        if node_visibility(dom, child, ctx.styles).0 {
+            continue;
+        }
         // `visibility:hidden` drops the NODE but **keeps walking**, because `visibility` is the one
         // hiding mechanism a descendant can undo: `visibility:visible` inside a hidden ancestor is
         // shown, and is in Chrome's accessibility tree. Pruning the subtree here would delete it.

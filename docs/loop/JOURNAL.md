@@ -97322,3 +97322,119 @@ are the `MinimalCascade`/Stylo twin-drift class and the a11y walk's remaining DO
 audit #79's ranked #1 sweep is paying, so continue it across the other hand-built-input gates.
 
 WIKI: docs/wiki/name-hidden-by-stylesheet.md
+
+## Tick 1380 — the a11y tree contained every `display: none` subtree (2026-08-30)
+
+TICK SHAPE: capability-subsystem
+
+**Track B/C.** The second finding of surface audit #79's ranked #1 sweep, and check #131's STEER #2
+said to keep going because the sweep was paying. It is: two ticks, two shipping defects.
+
+### ⭐⭐⭐ NOBODY ASKED ABOUT `display`
+
+```text
+  is_hidden(dom, child)   reads the DOM     `hidden`, `aria-hidden`, <input type=hidden>,
+                                            non-rendered tags
+  the `invisible` SET     from the caller   computed `visibility` ONLY
+  ────────────────────────────────────────────────────────────────────────────────────
+  `display: none`         asked by NOBODY
+```
+
+A closed mobile menu, a `display:none` modal and a `<dialog>` without `open` were all in the agent's
+accessibility tree as fully-formed, addressable nodes. Chrome's tree (CDP
+`Accessibility.getFullAXTree`) contains none of them.
+
+### ⭐⭐⭐ t1379 PRODUCED THE SYMPTOM THAT NAMES THIS BUG
+
+t1379 made the NAME walk read the computed `display` and left the TREE walk alone — so
+`<button style="display:none">Hidden</button>` sat in the tree **with an empty name**.
+
+> **A node whose name is correctly computed as nothing is a node that should not be there.**
+
+A half-fixed hiding rule is louder than an unfixed one. That is the argument for finishing a sweep
+rather than shipping its first finding and moving on, and it is worth carrying: the same shape will
+appear the next time a rule with several readers gets fixed at one reader.
+
+### ⭐ THE ASYMMETRY WITH `visibility` IS THE RULE
+
+`visibility` INHERITS and is UNDOABLE, so the tree drops the node and KEEPS WALKING (a
+`visibility:visible` descendant survives). `display` does neither: **a child of a `display:none` box
+computes its own ordinary `display`** — the link inside `<nav class=menu>` computes `inline`, not
+`none` — so a per-node test never fires on the child. The prune happens at the ancestor by not
+descending, which is why it cannot join the caller's per-node `invisible` set.
+
+The resolver is t1379's `node_visibility`, reused: the computed pair when the caller has a style map,
+the inline `style=` attribute when it does not, so `build_tree(dom)` on a bare DOM is unchanged.
+
+### THE BATTERY — Chrome via CDP
+
+```text
+                                                       chrome   before   after
+  <a> inside <nav class=menu>  .menu{display:none}      absent   PRESENT  absent
+  the same <a> in a visible <nav>            CONTROL    present  present  present
+  <button style="display:none">Hidden inline</button>   absent   PRESENT  absent
+  <button class=vis>          .vis{visibility:hidden}   absent   absent   absent
+  <button>Deep hidden</button> two levels inside .menu  absent   PRESENT  absent
+  <button style="visibility:visible"> inside .vis       present  present  present
+  <button>Normal</button>                    CONTROL    present  present  present
+  <button> inside a <dialog> with no `open`             absent   PRESENT  absent
+  <select> and its two <option>s             CONTROL    present  present  present
+```
+
+⭐⭐ **`Links == ["Sign in"]` — ONE, NOT TWO — is the sharpest row.** Both `<a>`s carry the same
+text, so only the COUNT separates a tree that pruned the closed menu from one that did not.
+
+⭐ **The `<option>` rows are the control against OVER-pruning.** A collapsed `<select>` shows no list
+and Chrome still exposes both options; a UA sheet that hid them the way it hides a closed `<dialog>`
+would have had this tick silently delete every dropdown from the agent's perception.
+
+### THE AGENT-VISIBLE PRICE — why this is capability and not tidiness
+
+The responsive web ships every navigation TWICE: a desktop header and a `display:none` drawer with
+the same link text. t1375 made the drive path **refuse** an ambiguous target rather than guess —
+correctly — so a phantom duplicate does not add noise, it **turns a resolvable click into a
+refusal**. The gate's last arm drives that: `Sign in` resolves, and to the visible one.
+
+### ⚠ NAMED, MEASURED, NOT BUILT — and the mechanism is the UA SHEET
+
+```text
+  <details><summary>More</summary><p id=p1>body</p></details>   (no `open`)
+                                      chrome                 ours
+    is <p id=p1> in the tree?         YES, with role `none`   NO (pruned here)
+```
+
+Chrome's UA sheet spells closed-`<details>` content as `content-visibility: hidden`, which keeps the
+element in the tree as an ignored node. Ours spells it `display: none`. **The divergence is in the UA
+sheet's spelling, not in the prune** — asserting it here would pin the prune to a different
+mechanism's bug. Recorded, not asserted; the day the UA sheet gains `content-visibility`, `p1` joins
+the list.
+
+⚠ **AND THE GATE'S OWN CONTROL FOUND A THIRD GAP.** The `<summary>` row was written as the control
+for *"a closed `<details>` is still exposed"* and it fired: our tree gives `<summary>` role `Generic`
+with an EMPTY NAME where Chrome says `DisclosureTriangle` / `"More"`. A role-mapping gap, not a
+hiding one — dropped from the asserted set rather than making this gate fail for a reason it is not
+about, and written down so it is a finding rather than a deletion.
+
+### THE GATE
+
+`a_display_none_subtree_is_not_in_the_a11y_tree` (`agent/tests/`, in the wall's crate list) — four
+role/name SET assertions plus the drive arm. Rows are whole name sets per role because
+`AgentBrowser` exposes the tree and no DOM handle, which is the agent's real view; set equality also
+rejects an EXTRA node, and the extra is the subject. **PROVEN RED by three mutations**, each on
+exactly one predicted row: N1 remove the prune → `["Sign in", "Sign in"]`; N2 drop the node but keep
+walking → the same, because the child's own `display` is not `none` (the asymmetry, isolated); N3
+prune on `visibility` here too → `Re-shown` disappears.
+
+### THE RECEIPT
+
+```text
+  manuk-agent  144/144 → 145/145   +1   +the new gate
+  manuk-a11y / manuk-layout / manuk-css / manuk-dom / manuk-paint / manuk-page   CONTROL
+```
+
+NEXT: the sweep continues — the remaining hand-built-input gates are the five `manuk_html::parse`
+a11y gates and the hit-test/drive gates, and the question to ask each is *what does its producer do
+that this input cannot express?* Two named-and-measured rows are now outstanding from this tick: the
+UA sheet's `content-visibility` for closed `<details>`, and `<summary>`'s role and name.
+
+WIKI: docs/wiki/ax-tree-excludes-display-none.md

@@ -1060,3 +1060,4 @@ tick	sha	epoch	iso	delta_s	shape	wall_s	files	added	deleted	gates	claims	wpt_pas
 1376	4c559683	1788076321	2026-08-30T03:52:01-04:00	2636	capability-subsystem	465	9	373	33	522	81	3896	6960	0	642	0	`grid-area` placed nothing, and auto-placement hid it (2026-08-30)
 1377	52074e67	1788082246	2026-08-30T05:30:46-04:00	5925	capability-subsystem	465	11	635	93	522	81	3896	6960	0	642	0	two rows of my own audit, priced properly and withdrawn (2026-08-30)
 1378	4b67bb31	1788085219	2026-08-30T06:20:19-04:00	2973	capability-subsystem	465	11	705	43	522	81	3896	6960	0	642	0	a float written into a line RE-FLOWS that line, in both directions (2026-08-30)
+1379	00f3d6cc	1788088009	2026-08-30T07:06:49-04:00	2790	capability-subsystem	465	9	525	33	522	81	3896	6960	0	642	0	a name fragment hidden by a STYLESHEET was announced (2026-08-30)

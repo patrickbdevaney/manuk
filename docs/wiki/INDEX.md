@@ -66,6 +66,18 @@
   - L303 · A frame is a bitmap, so its pixels need explicit refreshing (tick 232)
   - L331 · The agent's click point IS layout geometry, so a containing-block bug is an actuation bug (I3)
 
+## `display: none` in the agent's accessibility tree — the fact nobody asked for
+`docs/wiki/ax-tree-excludes-display-none.md`
+
+  - L8 · The defect
+  - L21 · ⭐⭐⭐ t1379 produced the symptom that names it
+  - L31 · ⭐ The asymmetry with visibility is the rule
+  - L44 · The battery — Chrome via CDP
+  - L71 · The agent-visible price
+  - L78 · ⚠ Named, measured, not built — and the mechanism is the UA SHEET
+  - L92 · ⚠ And one more gap the gate's own control found
+  - L100 · How it was proven red
+
 ## The board's ranked anchor sites, re-measured — five of six already clear the bar
 `docs/wiki/board-anchor-sites-remeasured.md`
 
@@ -2661,4 +2673,4 @@
   - L231 · Both named mechanisms are subsystem work
 
 ---
-2488 sections across 42 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+2496 sections across 43 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.

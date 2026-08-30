@@ -9688,3 +9688,21 @@ inherited and the cascade has already resolved it.
 is a computed `display:none` as well. `aria-hidden` is the only spelling no stylesheet can express,
 which makes it the real control for a DOM reader.
 (t1379 — `agent/tests` `a_name_fragment_hidden_by_a_stylesheet_is_not_announced`)
+
+## `<nav class="mobile-menu">` — the closed menu that was a second copy of the whole header
+
+The responsive web ships every navigation TWICE: a desktop header and a `display:none` mobile drawer
+with the same link text. An accessibility tree that never asks about `display` contains both, so the
+agent sees two `Sign in` links — and because the drive path correctly REFUSES an ambiguous target
+rather than guessing (t1375), **a phantom duplicate turns a resolvable click into a refusal**. It is
+not noise; it is a capability loss.
+
+⭐ `display:none` PRUNES A SUBTREE and cannot be tested per node: a child of a `display:none` box
+computes its own ordinary `display` (the link inside the hidden `<nav>` computes `inline`). The prune
+must happen at the ancestor by NOT DESCENDING. `visibility:hidden` is the opposite — it inherits and
+a descendant can UNDO it, so that one drops the node and keeps walking.
+
+⚠ The same rule removes a `<dialog>` without `open` (UA-hidden) — a modal that is not showing must
+not be clickable. ⚠ And it must NOT remove a collapsed `<select>`'s `<option>`s: Chrome exposes them,
+so a UA sheet that hid them would delete every dropdown from the agent's perception.
+(t1380 — `agent/tests` `a_display_none_subtree_is_not_in_the_a11y_tree`)
