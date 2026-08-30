@@ -9522,3 +9522,21 @@ gates and this engine flips six.
 and `-webkit-fill-available` (3/39) — measured **Chrome-exact with their prefs off**. **An unflipped
 pref is not evidence that a feature is broken**; it is a place to look.
 (t1369 — `agent/tests` `the_content_alt_half_is_announced_not_painted`)
+
+## `.crumb::after { content: " › " }` — the separator that made every breadcrumb bar too wide
+
+CSS Text 3 §4.1.3 removes a line's leading and trailing white space, and it does not care that the
+space came from `content`. An engine that emits generated content as one word with its spaces baked
+into the string draws those outer spaces: `::before " before " + "label" + ::after " after "` is 18
+characters wide in Chrome and 20 that way — one space too many at each end of every line that starts
+or ends with a pseudo.
+
+⭐ The fix is not "trim generated content" — the INTERIOR space must survive as the ordinary
+inter-word gap (Chrome keeps `before` + one space + `label`). Hand the EDGE spaces to the gap
+machinery, which already knows what a line edge is; trimming without re-emitting deletes the interior
+space too and reads a character short.
+
+⚠ Baking the spaces in was a deliberate earlier fix (a trailing collapsible space is billed into the
+preceding inline's rect), and that reasoning still holds for the spaces INSIDE the string. Only the
+edges move.
+(t1370 — `agent/tests` `a_pseudo_s_edge_space_is_a_gap_not_a_glyph`)

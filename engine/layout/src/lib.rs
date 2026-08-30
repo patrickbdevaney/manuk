@@ -12840,12 +12840,47 @@ impl Ctx<'_> {
         // Reading them off the string is what keeps the width exact AND the wrapping right.
         let lead_ws = text.starts_with(is_css_white_space);
         let trail_ws = text.chars().next_back().is_some_and(is_css_white_space);
+        // ⭐⭐⭐ **THE EDGE SPACES BECOME GAPS, NOT GLYPHS — WHICH IS HOW EVERY OTHER SPACE IN THIS
+        // ENGINE ALREADY WORKS, AND WHY ONLY GENERATED CONTENT HAD THIS BUG.**
+        //
+        // Ordinary text is split on white space into words plus `PendingGap`s, so a space at the
+        // start or end of a line is simply never drawn. Generated content took the other route —
+        // one unbreakable word with its spaces baked into the string — so `content: " before "`
+        // carried its outer spaces as WIDTH, and a line whose first or last item was a pseudo came
+        // out one space too wide at each end. Chrome-measured, `16px/24px monospace`:
+        //
+        // ```text
+        //   ::before " before " + "label" + ::after " after "   Chrome 173.41   ours 192.66
+        //   ::before " before " + "label"                       Chrome 115.61   ours 125.23
+        //   "label" + ::after " after "                          Chrome 105.97   ours 115.59
+        //   ::before "before" + "label" + ::after "after"        Chrome 154.14   ours 154.12  CTRL
+        // ```
+        //
+        // Exactly one space per edge, every time — CSS Text 3 §4.1.3 removes a line's leading and
+        // trailing white space, and it does not care that the space came from `content`.
+        //
+        // ⚠ **The INTERIOR space is kept, and that is the whole difference.** Chrome's 12 characters
+        // for row 2 are `before` + one space + `label`: the space BETWEEN the pseudo and the text
+        // survives as the ordinary inter-word gap, and only the one at the line edge goes. Trimming
+        // the word and handing the gap machinery the space reproduces both halves at once, because
+        // that machinery already knows what a line edge is.
+        //
+        // ⚠ t1107 baked these spaces in deliberately — *"the generated text is emitted as ONE
+        // unbreakable word with its spaces baked in, because Chrome bills a trailing collapsible
+        // space into the preceding inline's rect"* — and that reasoning still holds for the spaces
+        // INSIDE the string, which are untouched here. `lead_ws`/`trail_ws` were already being read
+        // off the string for their break opportunities; they now carry the space as well.
+        let text = if dx.is_none() {
+            text.trim_matches(is_css_white_space).to_string()
+        } else {
+            text
+        };
         out.push(match dx {
             Some(dx) => InlineItem::AbsPseudo { text, style, dx },
             None => InlineItem::Word {
                 text,
                 style,
-                space_before: !block_level && gap.space.is_some() && !*first,
+                space_before: !block_level && (gap.space.is_some() || lead_ws) && !*first,
                 break_before: !block_level && !*first && (gap.brk || lead_ws),
                 node: attr,
                 // `content:` is generated: there is no text node behind it.
@@ -12864,9 +12899,12 @@ impl Ctx<'_> {
         }
         if dx.is_none() {
             gap.clear();
-            // …and a trailing space in the generated text hands the NEXT item a break opportunity
-            // without handing it a space to measure: the space is already inside this word's width.
-            gap.brk = trail_ws;
+            // …and a trailing space in the generated text is now handed to the NEXT item as a real
+            // gap rather than left inside this word's width: it is a space that must be drawn
+            // between the pseudo and what follows, and dropped when nothing does.
+            if trail_ws {
+                gap.set(style, true);
+            }
         }
         *first = false;
     }

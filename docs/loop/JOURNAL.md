@@ -96449,3 +96449,84 @@ runs a Stylo-path gate.**
   `fallback content` rows.
 
 WIKI: docs/wiki/content-alt-text.md
+
+## Tick 1370 — a space at the edge of a line is not drawn, and `content`'s spaces were (2026-08-29)
+
+TICK SHAPE: capability-subsystem
+
+**Track A/B.** t1369 left this NAMED, MEASURED, NOT BUILT: *"white space at the pseudo/text
+boundary — `" before " + "label" + " after "` is 18 characters wide in Chrome and 20 here."* This is
+that, measured out to five rows.
+
+### ⭐⭐⭐ THE MECHANISM — AN EDGE SPACE IS A GAP, NOT A GLYPH
+
+CSS Text 3 §4.1.3 removes a line's leading and trailing white space, **and it does not care that the
+space came from `content`.** Ordinary text gets this for free here — it is split on white space into
+words plus `PendingGap`s, so a space at a line edge is simply never drawn. **Generated content took
+the other route**: t1107 emitted it as one unbreakable word with its spaces baked into the string, so
+`content: " before "` carried its outer spaces as WIDTH.
+
+```text
+                                                     Chrome    before    after
+  ::before " before " + "label" + ::after " after "  173.41   192.66   173.39
+  ::before " before " + "label"                      115.61   125.23   115.59
+  "label" + ::after " after "                        105.97   115.59   105.96
+  ::before "before" + "label" + ::after "after"      154.14   154.12   154.12   CONTROL
+  "label" with no pseudos at all                      48.17    48.16    48.16   CONTROL
+```
+
+Exactly one space per edge, every time.
+
+⭐ **The interior space is KEPT, and that is the whole difference.** Chrome's 12 characters for row 2
+are `before` + **one space** + `label`. So the fix is not *"trim generated content"* — it is **hand
+the edge spaces to the gap machinery**, which already knows what a line edge is. Trimming without
+re-emitting the gap deletes the interior space too.
+
+⚠ t1107 baked those spaces in **deliberately**, and its reasoning still holds for the spaces INSIDE
+the string, which are untouched. `lead_ws`/`trail_ws` were already read off the string for their
+break opportunities; they now carry the space as well. **The `.hlist` separator gate t1107 landed is
+green across this change and is the control that says so.**
+
+### ⚠ IT MOVED NO HEADLINE NUMBER, AND THAT IS REPORTED RATHER THAN BURIED
+
+```text
+                      before   after
+  a11yproject          49.3%   49.3%
+  martinfowler         89.8%   89.8%
+  news.ycombinator     99.9%   99.9%
+  accname            432/484  432/484
+```
+
+Three anchors unchanged to the decimal. The divergence is real, Chrome-measured and now gated — and
+those pages do not write `content` with outer spaces, so it buys them nothing. **A correctness fix
+that moves no number is still a correctness fix**; claiming otherwise, or quietly not measuring, is
+exactly what the fidelity rig's own history warns about. The six accname `fallback content` rows that
+led here still need the ALT half in the NAME (t1369's remainder), not the rendered width.
+
+### THE GATE
+
+`a_pseudo_s_edge_space_is_a_gap_not_a_glyph` (`agent/tests/`) — five rows, two of them CONTROLS
+(pseudo content with no outer spaces; no pseudos at all), plus a vacuity assert that the space-free
+pseudo row is actually wider than the bare span, so `content` is provably being materialised.
+
+**PROVEN RED by two mutations — and neither reproduces the pre-tick widths, which the ledger says out
+loud.** The fix is a PAIR (trim + re-emit) and each mutation removes one half: N1 (remove only the
+trim) reads **211.92** — the edge spaces are back in the word AND the gaps still add their own, so
+they are counted twice; N2 (trim but do not re-emit) reads **154.125**, collapsing to the same width
+as the space-free control because the interior spaces went too. The pre-tick numbers in the table
+come from the tree **before** the change, not from a mutation of the tree after it.
+
+### ⚠ A HOUSEKEEPING NOTE THAT COST TIME
+
+The harness's temp filesystem filled mid-tick (`ENOSPC`, 0MB free) and killed two commands' output.
+The cause was **this session's own scratch** — dozens of `/tmp/*.raw`, `/tmp/*.html` probe fixtures
+and a 16MB cached corpus-CSS tree. Cleaned; `/` had 45GB free throughout, so this was a quota on the
+task-output directory rather than a disk problem. Worth doing between ticks rather than when a
+command starts failing.
+
+NEXT: the ranked items are unchanged — thread `content`'s alt half into `accessible_name` (t1369's
+remainder, the six `fallback content` rows, and t1365's note that a fourth fact through that walk
+should become a context struct); the float re-flow (t1364); and a11yproject's width shortfall, still
+the board's only failing anchor at 49.3%.
+
+WIKI: docs/wiki/generated-content-edge-space.md

@@ -1515,6 +1515,13 @@
   - L363 · Two stages, two crates, ONE predicate
   - L372 · Transcribe the oracle; do not derive the expectation
 
+## A space at the edge of a line is not drawn — and `content`'s spaces were
+`docs/wiki/generated-content-edge-space.md`
+
+  - L6 · The one-sentence mechanism
+  - L28 · ⭐ The interior space is KEPT, and that is the whole difference
+  - L45 · ⚠ It did not move the headline, and that is reported rather than buried
+
 ## THE INTERACTION SURFACE — clicks, scroll, focus, and automation
 `docs/wiki/interaction-surface.md`
 
@@ -2587,4 +2594,4 @@
   - L231 · Both named mechanisms are subsystem work
 
 ---
-2446 sections across 34 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+2449 sections across 35 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
