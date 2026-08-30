@@ -1514,6 +1514,16 @@
   - L30 · ⭐⭐⭐ How it was found — five refused hypotheses, then the site's own stylesheet
   - L63 · The receipt
 
+## A float written into a line RE-FLOWS that line — in both directions
+`docs/wiki/float-line-reflow.md`
+
+  - L7 · The defect, in one fixture
+  - L25 · The mechanism — a committed flush freezes the line
+  - L42 · The fix — trial, discard, defer
+  - L72 · The battery
+  - L103 · How it was proven red
+  - L110 · Related
+
 ## FRAMEWORKS — React, Svelte, Next, jQuery: what actually breaks
 `docs/wiki/frameworks.md`
 
@@ -2606,8 +2616,8 @@
   - L6 · Why this exists
   - L15 · The result: nine correct, one fixed, one real
   - L37 · ⚠⚠⚠ Row 11 — a UA-sheet twin drift that mis-measured every table gate on one harness
-  - L67 · ⚠ NAMED, MEASURED, NOT BUILT — the one row that is a real shipping divergence
-  - L97 · ⭐ How a known divergence is handled in a gate
+  - L67 · ⭐ THE ONE ROW THAT WAS A REAL SHIPPING DIVERGENCE — BUILT AT t1378
+  - L100 · ⭐ How a known divergence is handled in a gate
 
 ## The wasm demo — running the engine inside someone else's browser
 `docs/wiki/wasm-demo.md`
@@ -2641,4 +2651,4 @@
   - L231 · Both named mechanisms are subsystem work
 
 ---
-2476 sections across 40 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+2482 sections across 41 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.

@@ -97083,3 +97083,122 @@ the other tracks, the float re-flow (VI.2's sole surviving residual, with t1374'
 constraint) and Track C's end-to-end drive on a real site.
 
 WIKI: docs/wiki/grid-area-shorthand.md
+
+## Tick 1378 — a float written into a line RE-FLOWS that line, in both directions (2026-08-30)
+
+TICK SHAPE: capability-subsystem
+
+**Track A**, and it is the item the constitution check, the lever board and the last four journal
+entries have all named: VI.2's **sole surviving residual**, pinned with a Chrome measurement at
+t1364 and a design constraint at t1374, built here.
+
+### ⭐⭐⭐ A COMMITTED FLUSH FREEZES THE LINE — AND IT FAILS IN BOTH DIRECTIONS AT ONCE
+
+```html
+<div style="width:400px">xxxx xxxx xxxx<div style="float:left;width:80px;height:20px"></div>yyyy</div>
+```
+
+```text
+                                 chrome      before     after
+  the float's own rect         [0 0 80x20]    same      same     (t1002 got this right)
+  the text BEFORE the float      x = 80       x = 0     x = 80
+  `yyyy`                      x=214.86 y=2    y = 26   x=214.86 y=2
+  the BLOCK's height               24           48        24
+```
+
+`layout_block`'s float arm **flushed the pending inline run and then placed the float**, because
+CSS 2.1 §9.5 rule 6 needs the top of the last line and the only way to know it is to lay the run out.
+Committing that flush costs the line twice over: the text *before* the float keeps the x positions it
+was handed when nothing was in the way, and the text *after* it has no open line to join.
+
+**The fix is to lay the run out as a TRIAL and throw the trial's boxes away.** The run keeps its
+nodes, `cur_y` does not advance, and the one real flush happens at the end with the float already in
+the `FloatContext` — so the whole run is line-broken once, around it. `layout_inline`'s `open_band`
+already consults the float edges; nothing in the line breaker changed.
+
+⚠⚠ **THE REWIND IS UNCONDITIONAL, AND `c2` IS THE ROW THAT PROVES IT.** The tempting version rewinds
+only when the float actually joins the line. A 380px float in a 400px block *cannot* join — Chrome
+drops it to `y=24` — and Chrome **still keeps `yyyy` on the first line**, block height 24. *A float
+that cannot join a line does not break it either.* The conditional design fixes `c1` and leaves `c2`
+at 48, i.e. exactly half the shape, which is the kind of half-fix that reads as a win on one fixture.
+
+⚠ **It does not re-create the t1113-1120 side-table leak**, which is the constraint t1374 attached to
+this design, and the reason is the WIDTH: an intrinsic probe poisons `pre_transform_rect` because it
+lays the subtree out at **1e6** and `or_insert` keeps the first writer. This trial runs at the same
+`cw`, the same `pch` and the same collect path as the committed pass, so every side-table write it
+makes is byte-identical to the one that follows. The `intrinsic_probe` flag is deliberately NOT
+raised — it changes `text_align` resolution, which would corrupt the used-width the trial measures.
+
+⭐ **THE OTHER ARM ALREADY DID THIS AND SAID SO.** The nested-inline float arm 180 lines below
+(`x<a><div style=float:left></div></a>y`, t1051) places its float **before** flushing, with a comment
+reading *"the whole run — including text that PRECEDES the float inside the same inline — must wrap
+around it. Chrome agrees."* One file, one mechanism, two arms, and only one of them had it.
+
+### THE BATTERY — ten shapes, all ten Chrome-exact after
+
+```text
+                                            wrapper h    float rect      the text
+ c1  text, then a float that FITS              24       [  0  0 80x20]  before → x=80
+ c2  text, then a 380px float that does NOT    24       [  0 24 380x20] stays at x=0, yyyy joins
+ c3  CONTROL — float FIRST, then text          24       [  0  0 80x20]  x=80
+ c4  text wrapping to TWO lines, then float    48       [  0 24 80x20]  line 1 untouched
+ c5  a <p> block, then a float, then text      48       [  0 24 80x20]  yyyy → x=80
+ c6  text<br>second, then a float              48       [  0 24 80x20]  `second` → x=80
+ c7  text, then a RIGHT float                  24       [320  0 80x20]  unmoved (it fits)
+ c8  text, then TWO floats                     24       [0 0] + [80 0]  x=160
+ c9  text, a 60px-tall float, wrapping text    48       [  0  0 80x60]  BOTH lines indented
+c10  `xxxx ` float ` yyyy` (spaces both sides) 24       [  0  0 80x20]  ONE space survives
+```
+
+⭐ **`c10` is the row that says the run must be DEFERRED, not SPLIT.** Chrome puts `yyyy` at
+`128.16 = 80 + 38.53 + 9.63` — one space between the two words even though a float sits between them
+in source order. The obvious alternative (collect the run in two pieces around the float) drops it:
+each piece is `first` again, so its leading white space is discarded. Deferring one collection keeps
+it, for free, and the two-piece design would have shipped glued-together words on every
+`<p>text <img class=alignright> text</p>` on the content web.
+
+⭐ **`c4` says only the LAST line re-flows** — line 1 of a two-line run is above the float's band and
+Chrome does not re-break it. Because bands are queried by `y`, that falls out rather than needing a
+rule.
+
+⚠ **THE BATTERY'S FIRST RUN MEASURED CHROME WRONG, AND THE FLOAT ITSELF IS WHY.** Case 3 read
+`float y=12` and `wrapper h=36` — because case 2's 380px float **overhangs its non-BFC parent** by
+12px and impinges on the next block. Every case is now isolated behind a `clear:both`. *A float
+fixture contaminates the fixture after it, and the contamination looks exactly like a placement bug.*
+
+### THE GATE
+
+`a_float_reflows_the_line_it_joins` (`agent/tests/g_float_line_reflow.rs`, in the wall's crate list) —
+10 wrapper heights, 11 float rects and 15 text-fragment positions, every number headless-Chrome
+-measured. **PROVEN RED by two mutations**: N1 restore the committed flush → `c1` reads 48, which is
+the defect exactly and the mutation a future reader most plausibly makes; N2 pass `None` for the
+rule-6 line hint → `c9` reads 24 instead of 48, so the placement half (t1002) and the re-flow half
+are asserted by the same gate and neither alone passes it.
+
+⚠ Fragments are selected by **OWNERSHIP** (`node`/`origin` inside the wrapper's subtree), not by a
+y-range — for the same reason the fixture needs the clearers: `c9`'s 60px float overhangs its 48px
+block, so a geometric filter pulls the next case's text into this one's list.
+
+⭐ **`G_VI2_RESIDUALS` PAID OUT ITS DEFERRAL.** t1364 refused to assert `c5`'s height in either
+direction — Chrome's 24 would have been a red gate, our 48 would have PINNED THE BUG — and wrote the
+promise that `(5, 24.0)` joins the list the day the re-flow lands. It is in the list now, and the
+gate went from 10 asserted wrapper heights to 11 with no other edit. *That is what makes a documented
+divergence a deferral with a receipt rather than an excuse.*
+
+### THE RECEIPT
+
+```text
+  manuk-agent  (lib + gates)   142/142 → 143/143   +1   +the new gate, +c5 in G_VI2_RESIDUALS
+  manuk-layout                 191/191             CONTROL — all 191 on the changed function
+  manuk-page   (full suite, --features stylo,spidermonkey)   0 failed   CONTROL
+  manuk-css / manuk-paint / manuk-dom / manuk-a11y / manuk-text            CONTROL
+  git diff engine/   one arm of `layout_block`
+```
+
+NEXT: **VI.2's residual list is now empty** — t1364's battery found nine of eleven already correct,
+t1364 fixed the tenth, and this closes the eleventh, so the constitution's H0.1 ranking row needs a
+new subject at check #130 (due t1379) rather than a narrowing. Behind it: audit #79's #1 (sweep the
+gates that build their own input and ask what each is blind to), and Track C's end-to-end drive on a
+real site.
+
+WIKI: docs/wiki/float-line-reflow.md

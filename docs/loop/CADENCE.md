@@ -13,9 +13,9 @@
 |---|---|---|
 | ticks landed | **1060** | ticks 1–1377 |
 | median tick cycle | **31m** | 1059 intervals |
-| median, last 10 | **56m** | 10 intervals |
+| median, last 10 | **66m** | 10 intervals |
 | fastest / slowest | 5s / 7.0d | |
-| **ticks per hour** | **0.88** | 1199.4h elapsed |
+| **ticks per hour** | **0.88** | 1200.5h elapsed |
 | median verify wall | **67s** | 999 ticks |
 | wall trend | 39s → 8m — getting slower ⚠️ | first 3 vs last 3 |
 
@@ -1156,6 +1156,6 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 | **1374** | 2026-08-30 02:48 | 80m | capability-subsystem | 8m | +506/−36 | 522 | 81 | 56.0% · | `counter-set`, and the counter properties a pseudo was never asked about (2026-08-30) |
 | **1375** | 2026-08-30 03:08 | 19m | capability-subsystem | 8m | +402/−35 | 522 | 81 | 56.0% · | the agent picked the first substring match, and the scorer had no caller (2026-08-30) |
 | **1376** | 2026-08-30 03:52 | 44m | capability-subsystem | 8m | +373/−33 | 522 | 81 | 56.0% · | `grid-area` placed nothing, and auto-placement hid it (2026-08-30) |
-| **1377** | 2026-08-30 04:27 | 35m | capability-subsystem | 8m | +313/−33 | 522 | 81 | 56.0% · | two rows of my own audit, priced properly and withdrawn (2026-08-30) |
+| **1377** | 2026-08-30 05:30 | 1.6h | capability-subsystem | 8m | +635/−93 | 522 | 81 | 56.0% · | two rows of my own audit, priced properly and withdrawn (2026-08-30) |
 
 *`·` after a WPT figure means **carried forward**, not measured this tick.*

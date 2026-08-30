@@ -64,22 +64,22 @@ the **measurement** rather than to the engine:
 the Stylo path, where the property was never missing. A gate can be correct, well-named, and blind to
 the same property on the other cascade.
 
-## ⚠ NAMED, MEASURED, NOT BUILT — the one row that is a real shipping divergence
+## ⭐ THE ONE ROW THAT WAS A REAL SHIPPING DIVERGENCE — BUILT AT t1378
 
 ```text
   A FLOAT THAT FOLLOWS INLINE TEXT DOES NOT RE-FLOW THE LINE IT JOINS
 
     <div style="width:400px">xxxx xxxx xxxx<div style="float:left;width:80px;height:20px">
     </div>yyyy</div>
-                                       Chrome        ours
-      the float's own rect            [0 0 80x20]  [0 0 80x20]   ✓  t1002 placed it correctly
-      the BLOCK's height                  24           48        ✗  we make a second line
+                                       Chrome       before    after
+      the float's own rect            [0 0 80x20]    same      same   (t1002)
+      the BLOCK's height                  24           48        24
 
     the same with a 380px float that cannot fit beside the text:
-      the float drops to y=24 in both [0 24 380x20] same         ✓
-      the BLOCK's height                  24           48        ✗
+      the float drops to y=24 in both [0 24 380x20]  same      same
+      the BLOCK's height                  24           48        24
 
-    CONTROL — float FIRST, then the text: 24 in both             ✓
+    CONTROL — float FIRST, then the text: 24 in all three
 ```
 
 t1002 fixed *where the float goes* (§9.5 rule 6 — the top of the line, not below the run). The
@@ -91,21 +91,26 @@ pushed to a second line. `layout_block`'s own comment names it exactly:
 > line's own already-placed inline content, which is not a float and is not in the context."*
 
 Doubling the height of any block whose paragraph contains a mid-text float is a large `dy`, and
-floats are on 60.4% of the declared corpus, so this is the ranked next tick. It is a **re-flow**, not
-a placement tweak, which is why it is pinned rather than attempted at the end of a battery.
+floats are on 60.4% of the declared corpus, which is why this was the ranked next tick rather than
+something to attempt at the end of a battery. **t1378 built it**: the float arm no longer commits
+that flush — it lays the run out as a trial, throws the trial's boxes away, places the float, and
+lets the single real flush at the end line-break the whole run around it. Full mechanism, the
+ten-shape Chrome battery and the two red mutations: `docs/wiki/float-line-reflow.md`.
 
 ## ⭐ How a known divergence is handled in a gate
 
-`c5`'s height is **absent from the asserted set on purpose**, and the reasoning is worth stating
-because both alternatives are wrong:
+`c5`'s height was **absent from the asserted set on purpose** until t1378, and the reasoning is worth
+stating because both alternatives were wrong:
 
 - asserting Chrome's 24 lands a **RED gate** — a gate is a ratchet tooth, not a wish list;
 - asserting our 48 **PINS THE BUG**, which is the t1004 shape this project has caught before (*a gate
   can pin the engine to a bug*).
 
-So the number lives in this file and in the gate's header, the row is not asserted, and the day the
-re-flow lands, `(5, 24.0)` joins the list. The float's *placement* half is still asserted, because
-that is the part that must not regress while the other half is outstanding.
+So the number lived in this file and in the gate's header, the row was not asserted, and the promise
+was that `(5, 24.0)` joins the list the day the re-flow lands. **t1378 landed it and the row is now
+asserted** — which is what makes this handling a deferral with a receipt rather than an excuse. The
+float's *placement* half stayed asserted throughout, because that is the part that must not regress
+while the other half is outstanding.
 
 ⚠ `c8`'s height is asserted as **zero**, which a blanket `height > 0` vacuity check called a missing
 box on this gate's first run. A block whose only child is a float, and which is not a BFC root, does

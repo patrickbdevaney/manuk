@@ -50,33 +50,36 @@
 //! numbers. That is t1361's lesson applied to the *measurement* rather than to the engine:
 //! **measure on the shipping path, or say which cascade you measured.**
 //!
-//! ## ⚠ NAMED, MEASURED, NOT BUILT — the one row that is a real shipping divergence
+//! ## ⭐ THE ONE ROW THAT WAS A REAL SHIPPING DIVERGENCE — BUILT, AND `c5` NOW ASSERTS 24
 //!
 //! ```text
 //!   A FLOAT THAT FOLLOWS INLINE TEXT DOES NOT RE-FLOW THE LINE IT JOINS
 //!
 //!     <div style="width:400px">xxxx xxxx xxxx<div style="float:left;width:80px;height:20px">
 //!     </div>yyyy</div>
-//!                                        Chrome   ours
-//!       the float's own rect             [0 0 80x20]  [0 0 80x20]   ✓ (t1002 placed it correctly)
-//!       the BLOCK's height                   24        48           ✗ we make a second line
+//!                                        Chrome    before    after
+//!       the float's own rect             [0 0 80x20]  same    same   (t1002 placed it correctly)
+//!       the BLOCK's height                   24        48       24
 //!
 //!     the same with a 380px float that cannot fit beside the text:
-//!       the float drops to y=24 in both  [0 24 380x20] same         ✓
-//!       the BLOCK's height                   24        48           ✗
+//!       the float drops to y=24 in both  [0 24 380x20] same    same
+//!       the BLOCK's height                   24        48       24
 //!
-//!     CONTROL — float FIRST, then the text: 24 in both               ✓
+//!     CONTROL — float FIRST, then the text: 24 in all three
 //! ```
 //!
 //! t1002 fixed *where the float goes* (§9.5 rule 6 — the top of the line, not below the run). The
-//! remaining half is that **the inline content already flushed onto that line is not re-laid around
-//! the float**, so the text keeps its original x positions, the float overlaps it, and the trailing
-//! text is pushed to a second line. `layout_block`'s own comment names this exactly: *"`place()`
-//! cannot see this for us: it scans bands of FLOATS, and what is in the way here is the line's own
-//! already-placed inline content."* Doubling the height of any block whose paragraph contains a
-//! mid-text float is a large `dy` and floats are on 60.4% of the declared corpus, so this is the
-//! ranked next tick — and it is a re-flow, not a placement tweak, which is why it is pinned rather
-//! than attempted at the end of a battery.
+//! remaining half was that the inline content already flushed onto that line was not re-laid around
+//! the float, so the text kept its original x positions and the trailing text was pushed to a second
+//! line. **`layout_block` no longer commits that flush**: the pending run is laid out as a trial to
+//! answer rule 6's question, the trial's boxes are discarded, and the one real flush happens at the
+//! end with the float already in the context — so the line re-flows in both directions. The full
+//! ten-shape battery, with the text positions this row cannot see, is `G_FLOAT_LINE_REFLOW`.
+//!
+//! ⚠ **`c5`'s height moved from unasserted to asserted here, and that is the whole point of how it
+//! was carried.** Asserting Chrome's 24 while we produced 48 would have been a red gate; asserting
+//! our 48 would have PINNED THE BUG (the t1004 shape). It was recorded in this header instead, with
+//! `(5, 24.0)` named as the row that would join the list the day the re-flow landed. It has.
 //!
 //! ⚠ This gate lives in `agent/tests/` for the reason surface audit #78 measured: 502 of the 522
 //! gate files the ratchet counts are executed by no automatic runner, because `manuk-page` is in
@@ -141,16 +144,17 @@ fn vi2_named_residuals_match_chrome() {
     // child is a float, and which is not a BFC root, does not contain it. A blanket `height > 0`
     // vacuity check called that a missing box on the first run of this gate; the row is now a claim
     // instead of an exception.
-    // ⚠ **`c5` IS ABSENT FROM THIS LIST ON PURPOSE, AND THAT IS THE HONEST HANDLING OF A KNOWN
-    // DIVERGENCE.** Chrome measures it 24; we produce 48 (the float-after-text re-flow named in this
-    // module's header). Asserting Chrome's 24 would land a RED gate; asserting our 48 would PIN THE
-    // BUG, which is the t1004 shape this project has caught before. So the number is recorded in the
-    // header, the row is not asserted, and the day the re-flow lands, `(5, 24.0)` joins this list.
-    let wrapper_h: [(usize, f32); 10] = [
+    // ⭐ **`c5` WAS ABSENT FROM THIS LIST ON PURPOSE UNTIL THE RE-FLOW LANDED.** Chrome measures it
+    // 24 and we produced 48 (the float-after-text re-flow named in this module's header). Asserting
+    // Chrome's 24 then would have landed a RED gate; asserting our 48 would have PINNED THE BUG,
+    // which is the t1004 shape this project has caught before. So the number lived in the header
+    // with a standing promise that `(5, 24.0)` joins this list the day the re-flow lands. It did.
+    let wrapper_h: [(usize, f32); 11] = [
         (1, 30.0),
         (2, 24.0),
         (3, 36.0),
         (4, 78.0),
+        (5, 24.0),
         (6, 50.0),
         (7, 24.0),
         (8, 0.0),
@@ -196,14 +200,10 @@ fn vi2_named_residuals_match_chrome() {
         );
     }
 
-    // ── PINNED NEGATIVE — the CONTROL half of the float divergence, which IS correct and must stay
-    //    correct: a float written BEFORE the text it shares a line with produces one line box.
-    //    The failing direction (a float AFTER text) is documented in the module header as NAMED,
-    //    MEASURED, NOT BUILT and is deliberately not asserted here — a gate that asserts a value we
-    //    do not produce is a red gate, not a record.
-    // The float-after-text row's PLACEMENT half (t1002) is already asserted above as `e5`, and it
-    // is the half that must not regress while the re-flow half is outstanding: the float's own rect
-    // is Chrome-exact even though the block it lives in is twice too tall.
+    // ── VACUITY for the row that was pinned and is now built: `c5` is asserted twice over — its
+    //    height above (24, the re-flow) and its float's own rect in the table above (`e5`, the
+    //    t1002 placement half). Both must hold at once, which is what makes the row a statement
+    //    about one line box rather than two independent numbers that could each be right alone.
     let c5 = rect(&page, "c5").height;
     assert!(
         c5 > 0.0 && rect(&page, "e5").width > 0.0,

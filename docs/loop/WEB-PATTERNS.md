@@ -9647,3 +9647,23 @@ the finding.
 ⚠ And a declaration count is not a site count: `-webkit-box-flex` also shows 63 declarations and is
 on ONE of 14 sites, which uses `-webkit-box-orient: vertical` — the orientation that works. Price by
 SITE before believing a raw count.
+
+## `<p>text <img class="alignright"> more text</p>` — the float that used to end its own line
+
+The most common float on the content web sits in the MIDDLE of a paragraph, and a block layout that
+COMMITS its pending inline run before placing the float breaks that line in both directions: the text
+before the float keeps the x positions it was given when nothing was in the way (so the float lands
+on top of it), and the text after the float has no open line to join, so the paragraph comes out one
+line-height too tall. Chrome re-flows the line. Floats appear on **60.4%** of the declared corpus.
+
+⭐ The fix is to lay the run out as a TRIAL — §9.5 rule 6 needs the last line's top, and the only way
+to know it is to lay the run out — then throw the trial's boxes away and let the ONE real flush
+happen later with the float already in the context.
+
+⚠ Rewind UNCONDITIONALLY. A 380px float in a 400px block cannot join the line, so Chrome drops it to
+the next band — and still keeps the trailing text on the first line. **A float that cannot join a
+line does not break it either**, so rewinding only when the float joins fixes half the shape.
+
+⚠ Defer the run, never SPLIT it. `xxxx <float> yyyy` keeps exactly ONE space in Chrome; collecting
+the run in two pieces around the float makes each piece `first` again and drops it.
+(t1378 — `agent/tests` `a_float_reflows_the_line_it_joins`)

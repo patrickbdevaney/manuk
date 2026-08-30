@@ -6797,19 +6797,66 @@ impl Ctx<'_> {
             // and be dropped from the flow it constitutes. See `kid_is_float`.
             if self.kid_is_float(k) {
                 // Floats attach at the current flow position without advancing it.
-                // Flush pending inline content first so it wraps around this float.
-                let before = boxes.len();
-                (cur_y, prev_margin) = self.flush_inline_run(
-                    &mut inline_run,
-                    &mut boxes,
-                    cx,
-                    cur_y,
-                    prev_margin,
-                    cw,
-                    floats,
-                    &run_bcs,
-                    pch,
-                );
+                //
+                // ── ⚠⚠⚠ **THE PENDING RUN IS LAID OUT AS A TRIAL AND THROWN AWAY, NOT FLUSHED —
+                //    BECAUSE A FLOAT DOES NOT END THE LINE IT IS WRITTEN INTO.** This arm used to
+                //    COMMIT the flush before placing the float, and that single decision is what
+                //    made every float-in-a-paragraph twice too tall: once the run is committed the
+                //    text before the float keeps the x positions it was given when nothing was in
+                //    the way, and the text *after* the float can only start a NEW run, i.e. a new
+                //    line. Chrome re-flows the whole line instead, in both directions.
+                //
+                //    ```text
+                //      <div style="width:400px">xxxx xxxx xxxx<div class=f></div>yyyy</div>
+                //                                   chrome    committed-flush   trial-flush
+                //        the float's own rect      [0 0 80x20]  [0 0 80x20]      [0 0 80x20]
+                //        the text before it          x=80         x=0             x=80
+                //        `yyyy`                    x=214.9 y=2   y=26            x=214.9 y=2
+                //        the BLOCK's height           24           48              24
+                //    ```
+                //
+                //    ⚠⚠ **AND THE REWIND IS UNCONDITIONAL, WHICH THE `doesn't fit` ROW IS WHAT
+                //    PROVES.** With a 380px float in the same 400px block Chrome drops the float to
+                //    y=24 — and still keeps `yyyy` on the FIRST line (x=134.86, y=2, block 24 tall).
+                //    A float that cannot join the line does not break it either. So rewinding only
+                //    when the float joins the line would have fixed one row and left the other.
+                //
+                //    The trial exists only to answer §9.5 rule 6's question — *where is the top of
+                //    the last line, and how much room is left on it* — which cannot be known
+                //    without laying the run out. Its boxes are dropped, `cur_y` / `prev_margin` are
+                //    NOT advanced, and `inline_run` keeps its nodes, so the run is laid out exactly
+                //    once for real, at the end, with this float already in the context.
+                //
+                //    ⚠ **IT DOES NOT RE-CREATE THE t1113-1120 SIDE-TABLE LEAK** (t1374's constraint
+                //    on this design), and the reason is the width: an intrinsic probe poisons
+                //    `pre_transform_rect` because it lays the subtree out at a **1e6** available
+                //    width and `or_insert` keeps the first writer. The trial runs at the SAME `cw`,
+                //    the same `pch` and the same collect path as the committed pass, so every
+                //    side-table write it makes is byte-identical to the one that follows it. The
+                //    probe flag is deliberately NOT raised: it changes `text_align` resolution
+                //    (see `Ctx::intrinsic_probe`), which would corrupt the used-width this trial
+                //    exists to measure.
+                //
+                //    ⚠ One inline layout per float-after-text, and none at all when the run is
+                //    empty (a float that follows a block child, or the first child) — that arm
+                //    keeps the old cost exactly.
+                let mut trial_boxes: Vec<LayoutBox> = Vec::new();
+                let (trial_y, trial_margin) = if inline_run.is_empty() {
+                    (cur_y, prev_margin)
+                } else {
+                    let mut trial_run = inline_run.clone();
+                    self.flush_inline_run(
+                        &mut trial_run,
+                        &mut trial_boxes,
+                        cx,
+                        cur_y,
+                        prev_margin,
+                        cw,
+                        floats,
+                        &run_bcs,
+                        pch,
+                    )
+                };
                 // ── ⚠⚠⚠ **A FLOAT THAT FOLLOWS INLINE TEXT BELONGS AT THE TOP OF THAT LINE BOX,
                 //    NOT BELOW IT.** CSS 2.1 §9.5 rule 6: *"the outer top of a floating box may not
                 //    be higher than the top of any line-box containing a box generated by an element
@@ -6848,7 +6895,7 @@ impl Ctx<'_> {
                 //    content, which is not a float and is not in the context. So the remaining space
                 //    is measured from the fragments themselves, and a float too wide for it starts
                 //    below the run exactly as it used to.
-                let last_line = boxes[before..].iter().find_map(|b| match &b.content {
+                let last_line = trial_boxes.iter().find_map(|b| match &b.content {
                     BoxContent::Inline(frags) if !frags.is_empty() => {
                         let top = frags
                             .iter()
@@ -6862,7 +6909,7 @@ impl Ctx<'_> {
                     }
                     _ => None,
                 });
-                let below_run = cur_y + prev_margin.max(0.0);
+                let below_run = trial_y + trial_margin.max(0.0);
                 // The DECISION is made inside `layout_float`, not here, because it needs the float's
                 // resolved MARGIN-BOX width — and that resolution is already a second, hand-rolled
                 // copy of `layout_block`'s (shrink-to-fit, `box-sizing`, aspect-ratio, min/max, each
