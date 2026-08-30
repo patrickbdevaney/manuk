@@ -1416,15 +1416,59 @@ pub fn role_of(dom: &Dom, node: NodeId) -> Option<Role> {
             "range" => Role::Slider,
             "number" => Role::SpinButton,
             "search" => Role::SearchBox,
-            // `hidden` is filtered by `is_hidden` before we get here.
+            // ── ⚠⚠⚠ **`<input type=file>` IS A BUTTON, AND CALLING IT A TEXT FIELD IS THE WORST
+            //    AVAILABLE WRONG ANSWER.** HTML-AAM maps it to `button`, Chrome agrees
+            //    (`role='button'`, name `"Choose File"`), and the difference is not cosmetic: the
+            //    role is how the agent ADDRESSES a control. As a `textbox` an upload control is
+            //    invisible to *"click Choose File"* and — much worse — `type_into` ACCEPTS it and
+            //    silently does nothing, because a file input has no text to type into. **A wrong
+            //    role that an actuator will act on is a lie the actuator cannot detect.**
+            "file" => Role::Button,
+            // ⚠ `<input type=color>` has **no corresponding ARIA role** in HTML-AAM; Chrome exposes
+            //    an internal `ColorWell`. `generic` is the honest ARIA answer and it keeps the node
+            //    in the tree and addressable by name — where `textbox` invited exactly the
+            //    `type_into` the file row above describes. Naming it `ColorWell` would adopt a
+            //    Chrome internal into a vocabulary that is otherwise ARIA's.
+            "color" => Role::Generic,
+            // ⚠ `hidden` is filtered by `is_hidden` before we get here.
+            //
+            // ⚠⚠ **`date` / `time` / `datetime-local` / `month` / `week` DELIBERATELY KEEP
+            //    `textbox`.** Chrome gives each an internal role (`Date`, `InputTime`, `DateTime`)
+            //    with no ARIA equivalent, and unlike a colour well these controls really do accept
+            //    typed text — so `textbox` is both the useful answer and a non-harmful one. Measured
+            //    and left, rather than folded into the `color` arm because the enum has a slot.
             _ => Role::TextBox,
         },
         "textarea" => Role::TextBox,
-        "select" => Role::ComboBox,
+        // ── ⚠⚠⚠ **A MULTI-SELECT IS A `listbox`, NOT A `combobox`.** HTML-AAM: a `<select>` with
+        //    `multiple`, or with `size` greater than 1, is a `listbox`; only the collapsed
+        //    single-line form is a `combobox`. Chrome-measured, all three spellings. The two are
+        //    different widgets to an agent — a combobox is opened and one option chosen, a listbox
+        //    is a visible list with a selection that may be plural — so *"select all three regions"*
+        //    against a `combobox` is a plan that cannot be executed.
+        "select" => {
+            let multiple = el.attr("multiple").is_some();
+            let sized = el
+                .attr("size")
+                .and_then(|v| v.trim().parse::<i64>().ok())
+                .is_some_and(|n| n > 1);
+            if multiple || sized {
+                Role::ListBox
+            } else {
+                Role::ComboBox
+            }
+        }
         // HTML-AAM implicit roles for the native widgets.
         "dialog" => Role::Dialog,
         "progress" => Role::ProgressBar,
         "option" => Role::Option,
+        // ── ⚠⚠ **FOUR ELEMENTS HTML-AAM MAPS TO `group`, ALL OF THEM READING `generic`.** A
+        //    `generic` node is a box with no meaning; a `group` is a named section of a form or a
+        //    document, and it is what an agent walks to find *"the Billing address fields"*.
+        //    `<fieldset>` is the one with corpus weight — every multi-section form on the web is
+        //    built out of it, and its name already came from `<legend>` correctly, so only the role
+        //    was wrong. Chrome-measured: all four are `group`.
+        "fieldset" | "details" | "address" | "hgroup" => Role::Group,
         // A `<menu>` is a list per HTML-AAM (the `type=context` menu role never shipped).
         "menu" => Role::List,
         "h1" => Role::Heading { level: 1 },

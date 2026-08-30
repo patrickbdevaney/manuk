@@ -9758,3 +9758,24 @@ load (what Chrome does for a coding it advertised) is unresolved and deliberatel
 ⚠ The whole dispatch had NO gate the wall runs: its only test fetched httpbin and was `#[ignore]`d.
 The encoders ship with the decoders, so the input a network test needed can be built in-process.
 (t1383 — `engine/net` `content_encoding_decodes_what_it_claims_and_refuses_what_it_cannot`)
+
+## `<input type="file">` and `<fieldset>` — a plausible role is a plan the agent cannot execute
+
+An implicit-role table that ends `_ => textbox` for `<input>` and `_ => generic` for elements does
+not fail loudly: it hands the agent a control it will ACT on. An upload input exposed as a `textbox`
+is invisible to *"click Choose File"*, and `type_into` ACCEPTS it and silently does nothing.
+
+> **A wrong role that an actuator will act on is a lie the actuator cannot detect.**
+
+⭐ HTML-AAM rows that a fall-through hides: `input[type=file]` → **button**; `<fieldset>`,
+`<details>`, `<address>`, `<hgroup>` → **group**; `<select multiple>` or `size > 1` → **listbox**,
+not combobox (a visible list with a possibly-plural selection is a different widget from a dropdown).
+
+⚠ `<fieldset>` is the one with corpus weight — every multi-section form is built out of it — and its
+NAME already came from `<legend>` correctly, so what shipped was a CORRECT NAME ON A MEANINGLESS
+ROLE, which reads as working in any name-based spot check.
+
+⚠ Do NOT adopt Chrome's internal role names (`DisclosureTriangle`, `ColorWell`, `Date`) into an ARIA
+vocabulary. Where HTML-AAM says "no corresponding role", `generic` is the honest answer — it keeps
+the node addressable by name without inviting an actuation that cannot work.
+(t1384 — `agent/tests` `implicit_roles_match_html_aam`)

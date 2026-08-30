@@ -97784,3 +97784,103 @@ scrollable-overflow propagation family (t1381), transforms and abspos in the ali
 (t1382), and an owner decision on zstd's dependency.
 
 WIKI: docs/wiki/content-encoding-dispatch.md
+
+## Tick 1384 — the implicit roles that fell through to a plausible default (2026-08-30)
+
+TICK SHAPE: capability-subsystem
+
+**Track B**, executing surface audit #80's ranked #1: *"use CDP `Accessibility.getFullAXTree` as the
+a11y oracle deliberately"* — because Interop 2026 lists accessibility testing as an INVESTIGATION
+effort, i.e. the four vendors' own position is that no suite can decide a11y-tree correctness. The
+sweep found seven rows in its first pass.
+
+### ⭐⭐⭐ A DEFAULT THAT ANSWERS PLAUSIBLY INSTEAD OF CORRECTLY
+
+`role_of`'s `<input>` dispatch ended `_ => Role::TextBox` and its element dispatch ends
+`_ => Role::Generic`. Both are reasonable-looking fallbacks, and **both produce an answer an agent
+will ACT on.**
+
+```text
+                           chrome (CDP)          before         after
+  <input type=file>        button                textbox        button
+  <input type=color>       ColorWell (internal)  textbox        generic
+  <select multiple>        listbox               combobox       listbox
+  <select size=4>          listbox               combobox       listbox
+  <fieldset>               group                 generic        group
+  <details>                group                 generic        group
+  <address>                group                 generic        group
+  <hgroup>                 group                 generic        group
+```
+
+⭐⭐⭐ **`<input type=file>` IS THE ROW WITH TEETH.** As a `textbox`, an upload control is invisible
+to *"click Choose File"* — and, much worse, `type_into` ACCEPTS it and silently does nothing,
+because a file input has no text to type into.
+
+> **A wrong role that an actuator will act on is a lie the actuator cannot detect.**
+
+Same family as t1380's phantom menu link: the perception layer hands the driver a plan that cannot
+execute. Two of the three a11y ticks in this window are that one sentence.
+
+⭐⭐ **`<select multiple>` and `<select size=4>` are two different widgets.** A combobox opens and one
+option is chosen; a listbox is a visible list whose selection may be plural. HTML-AAM makes
+`multiple` OR `size > 1` the discriminator — both asserted, because either alone passes against an
+implementation that read only the other — and `size=1` is asserted as the BOUNDARY, so the rule is
+`> 1` and not *"has a size attribute"*.
+
+⭐ **`<fieldset>` is the row with corpus weight.** Every multi-section form on the web is built out of
+it. Its NAME already came from `<legend>` correctly, so **what shipped was a correct name on a
+meaningless role** — which reads as working in any name-based spot check.
+
+### ⚠ MEASURED AND DELIBERATELY NOT CHANGED, AND ASSERTED AS SUCH
+
+```text
+  <input type=date/time/datetime-local/month/week>   chrome: Date / InputTime / DateTime
+                                                      ours:   textbox   (KEPT)
+```
+
+Chrome's roles here are internal with no ARIA equivalent, and unlike a colour well these controls
+really do accept typed text — so `textbox` is both useful and non-harmful. The five rows are asserted
+**as** `textbox` so the decision is a claim rather than an omission. ⚠ Likewise `<summary>`
+(`DisclosureTriangle`), `<figcaption>`, `<legend>`, `<dl>`, `<abbr>`, `<video>`, `<audio>`: adopting
+Chrome internals would put them into a vocabulary that is otherwise ARIA's.
+
+### ⚠⚠ THE SUITE IS BLIND TO THIS TOO — AUDIT #80's FINDING, THIRD INSTANCE
+
+```text
+  WPT wai-aria   399/434 = 91.9%  BEFORE   (measured by reverting the change and re-running)
+  WPT wai-aria   399/434 = 91.9%  AFTER    FLAT, to the subtest
+```
+
+`wai-aria/role/` tests **explicit `role="…"` attributes**; nothing in it exercises an IMPLICIT
+mapping. This is t1379's shape a third time — and the before-number was taken deliberately this time,
+by restoring `HEAD`'s file and re-running, rather than reported as an expectation.
+
+⚠ **APERTURE, NAMED NOT FIXED:** neither `wai-aria` (434 subtests) nor `accname` (484) has a row in
+`docs/loop/WPT-AREAS.tsv`, so the a11y suites are outside the primary metric entirely. Adding rows
+would move the monotonic total for aperture reasons in the middle of a capability tick, which is
+exactly the confusion t1273 warned about — so it is recorded here for its own tick.
+
+### THE GATE
+
+`implicit_roles_match_html_aam` (`agent/tests/`, in the wall's crate list) — 28 rows, 12 of them
+controls, asserted through `role_of` AND through the published a11y tree (a mapping wired to one
+entrance is the shape this file's neighbours have been caught by four times). **PROVEN RED by three
+mutations**: N1 delete the `file` arm → only `i_file`, and every date/time row stays green, which is
+what says the fall-through was wrong for ONE input type and kept for five; N2 `size.is_some()`
+instead of `> 1` → only the boundary row `s_size1`; N3 map only `<fieldset>` → the other three fail,
+because a partial fix looks identical to a complete one on the fixture that motivated it.
+
+### THE RECEIPT
+
+```text
+  manuk-agent  147/147 → 148/148   +1   +the new gate
+  WPT wai-aria  399/434 = 91.9%    FLAT before and after — and the flatness is the finding
+  manuk-a11y / manuk-page / manuk-layout / manuk-css / manuk-paint / manuk-dom   CONTROL
+```
+
+NEXT: the sweep continues where it is paying — `<summary>`'s empty NAME (Chrome `"More"`), the a11y
+STATES (`aria-checked`/`expanded`/`disabled` vs Chrome's), and the tree's remaining structure. Behind
+it: the a11y-suite aperture row above, the nested scrollable-overflow family (t1381), transforms and
+abspos in the alignment rectangle (t1382), and an owner decision on zstd.
+
+WIKI: docs/wiki/implicit-roles-html-aam.md

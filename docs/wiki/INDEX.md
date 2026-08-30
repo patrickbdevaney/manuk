@@ -1591,6 +1591,15 @@
   - L50 · Proven red
   - L63 · t1377 — the drift table's other two layout rows, priced and withdrawn
 
+## The implicit roles that were falling through to a plausible default
+`docs/wiki/implicit-roles-html-aam.md`
+
+  - L6 · Why CDP and not WPT
+  - L13 · The mechanism — a default that answers plausibly instead of correctly
+  - L50 · ⚠ Measured and deliberately not changed
+  - L67 · Both entrances
+  - L73 · How it was proven red
+
 ## THE INTERACTION SURFACE — clicks, scroll, focus, and automation
 `docs/wiki/interaction-surface.md`
 
@@ -2702,4 +2711,4 @@
   - L231 · Both named mechanisms are subsystem work
 
 ---
-2513 sections across 46 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+2518 sections across 47 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
