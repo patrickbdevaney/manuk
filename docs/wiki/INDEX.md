@@ -33,6 +33,14 @@
   - L67 · The gate
   - L88 · The new public surface, and why
 
+## The agent picked the first substring match — and the scorer built to do better had no caller
+`docs/wiki/agent-target-selection.md`
+
+  - L6 · The one-sentence mechanism
+  - L27 · ⚠ And the scorer never saw the ROLE either
+  - L38 · ⚠ A low-confidence winner is returned, not refused
+  - L48 · The gate
+
 ## ARCHITECTURE — concurrency, process model, memory, and the REASONING
 `docs/wiki/architecture.md`
 
@@ -2624,4 +2632,4 @@
   - L231 · Both named mechanisms are subsystem work
 
 ---
-2467 sections across 38 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+2471 sections across 39 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.

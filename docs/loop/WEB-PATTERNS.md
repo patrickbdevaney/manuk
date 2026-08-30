@@ -9601,3 +9601,18 @@ here and corrected by one Chrome measurement each: `reset a 0; set a 99; increme
 `getComputedStyle(el,'::before').content` returns the specified value. Read it as WIDTH, and pick
 values where a wrong answer changes the digit count.
 (t1374 — `agent/tests` `a_pseudo_s_counter_actions_run_and_counter_set_exists`)
+
+## "Sign in" vs "Sign in with Google" — the button an agent picks
+
+Resolving a control by *the first node whose accessible name contains the needle* picks whichever
+comes first in the DOM, so a page that offers "Sign in with Google" above "Sign in" hands an agent
+the wrong account. An exact-name bonus is what separates them, and the difference is not cosmetic:
+on a consent or checkout page the two buttons do different things.
+
+⚠ Scope the search by ROLE, and filter AFTER scoring: `type_into("Search")` must find the text field
+and not an earlier button of the same name, and a runner-up the role excludes must not make the
+winner look ambiguous.
+
+⚠ Ambiguity is not obstruction. A covered target cannot be clicked at all, so acting is a lie and
+refusing is right; two similar buttons still have a most-likely one, so returning it beats erroring.
+(t1375 — `agent/tests` `the_drive_path_picks_the_exact_match_and_the_right_role`)

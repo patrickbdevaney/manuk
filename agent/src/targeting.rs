@@ -169,9 +169,41 @@ fn visual_score(bbox: &Rect, viewport: &Rect) -> f32 {
 /// Returns the winner + its click point + a confidence margin over the runner-up. `None` if there
 /// is no viable candidate (no boxed node scoring > 0).
 pub fn resolve_target(tree: &A11yNode, intent: &str, viewport: Rect) -> Option<Targeted> {
+    resolve_target_scoped(tree, intent, None, viewport)
+}
+
+/// [`resolve_target`], restricted to nodes whose ROLE matches.
+///
+/// ⭐⭐⭐ **THE SCORER NEVER SAW THE ROLE, AND THE PRODUCTION PATH NEVER SAW THE SCORER.** Two halves
+/// of one gap: `Action::ClickText { role, name }` carries a role and `action_intent` dropped it, so
+/// *"type into the field called Search"* could score a BUTTON called Search; and
+/// `AgentBrowser::resolve` — the entry point behind every `click_by_name`, `type_into` and `submit` —
+/// never used the scorer at all. It called `find_containing`, which is *the first node in tree order
+/// whose name CONTAINS the needle*:
+///
+/// ```text
+///   a page with "Sign in with Google" before "Sign in"
+///     find_containing("Sign in")   -> "Sign in with Google"     the first substring hit
+///     the scorer                    -> "Sign in"                 EXACT_NAME_BONUS wins
+/// ```
+///
+/// An agent told to click *Sign in* clicking *Sign in with Google* is not a near miss — it is a
+/// different account, and on a consent page it can be a different consequence entirely.
+pub fn resolve_target_scoped(
+    tree: &A11yNode,
+    intent: &str,
+    role: Option<&Role>,
+    viewport: Rect,
+) -> Option<Targeted> {
     let kw = keywords(intent);
     let mut scored: Vec<(f32, &A11yNode)> = Vec::new();
     collect_scored(tree, &kw, &viewport, &mut scored);
+    // ⚠ Filtered AFTER scoring rather than inside `collect_scored`, so the CONFIDENCE margin is
+    // computed against the candidates that survive the role — a runner-up the role excludes is not
+    // competition and must not make the winner look ambiguous.
+    if let Some(r) = role {
+        scored.retain(|(_, n)| n.role.matches(r));
+    }
     if scored.is_empty() {
         return None;
     }

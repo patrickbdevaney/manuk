@@ -96874,3 +96874,78 @@ The float re-flow remains VI.2's sole surviving residual, and t1374 adds a desig
 the trial-flush approach must not write to the side tables, or it re-creates the t1113-1120 leak.
 
 WIKI: docs/wiki/counter-set-and-pseudo-counters.md
+
+## Tick 1375 — the agent picked the first substring match, and the scorer had no caller (2026-08-30)
+
+TICK SHAPE: capability-subsystem
+
+**Track C**, which the board's own rule made overdue: the 2026-08-28 nudge says *"do not let any
+track go >5 ticks dark"* and C had not been touched since t1366 — **eight ticks**. This closes its
+named remainder from that tick.
+
+### ⭐⭐⭐ THE FINDING — TWO HALVES OF ONE SYSTEM, BUILT AND NEVER JOINED
+
+`AgentBrowser::resolve` is the entry point behind every `click_by_name`, `type_into`,
+`resolve_handle` and `submit`. It called `A11yNode::find_containing` — *"the first node in tree order
+whose name CONTAINS the needle"*:
+
+```text
+  a page with "Sign in with Google" ABOVE "Sign in"
+    find_containing("Sign in")  ->  "Sign in with Google"    the first substring hit
+    the dual scorer             ->  "Sign in"                 the exact-name bonus wins
+```
+
+**An agent told to click *Sign in* clicking *Sign in with Google* is not a near miss — it is a
+different account**, and on a consent page a different consequence entirely.
+
+Meanwhile `targeting::resolve_target` — semantic score + visual salience, with an exact-name bonus
+and a confidence margin — had **no production consumer at all**: reachable only through
+`ground_action`, which nothing outside a test called. That is the t1356 shape one layer up. There,
+perception and actuation were both built and nothing ran the click point back through the hit-test;
+here, the scorer and the drive path were both built and nothing called one from the other.
+
+### ⚠ AND THE SCORER NEVER SAW THE ROLE EITHER
+
+`Action::ClickText { role, name }` carries a role and `action_intent` dropped it, so the scorer
+ranked by name and salience across every node on the page. `resolve` is always called *with* a role —
+`type_into` passes `Role::TextBox` — so scoring without it means *"type into the field called
+Search"* can score a BUTTON called Search.
+
+⚠ The role filter is applied **after** scoring, so the confidence margin is computed against the
+candidates that survive it: a runner-up the role excludes is not competition and must not make the
+winner look ambiguous.
+
+### ⚠ A LOW-CONFIDENCE WINNER IS RETURNED, NOT REFUSED
+
+Ambiguity has a best answer, and that is the difference from t1366's `Obstructed` where acting is a
+lie. Two similar buttons still have a most-likely one; refusing would turn every such page into an
+error where the previous behaviour at least picked something. `Grounded::Ambiguous` remains the
+surface for a caller that wants to disambiguate first. `find_containing` is kept as the fallback for
+an intent that reduces to no keywords, so nothing that resolved before stops resolving.
+
+### THE GATE
+
+`the_drive_path_picks_the_exact_match_and_the_right_role` (`agent/tests/`) — three arms.
+
+⚠ **The decoy is written FIRST in the fixture on purpose, and a vacuity assert checks it really is
+the first button in tree order**: with the exact match first, `find_containing` returns it too and
+ARM 1 proves nothing.
+
+**PROVEN RED by two mutations, each hitting a different arm.** N1 restore `find_containing` → ARM 1
+resolves `Sign in with Google`, and **ARM 2 stays green** because `find_containing` *does* filter by
+role — which is exactly why ARM 2 needed its own mutation. N2 drop the role filter → ARM 2 resolves
+the button instead of the field, ARM 1 green.
+
+### THE RECEIPT
+
+```text
+  manuk-agent  (lib + gates)  139/139 → 140/140   +1   +the new gate, no existing arm moved
+  manuk-a11y / manuk-shell / manuk-page                CONTROL — shell drives this API
+```
+
+NEXT: Track C's remaining named item is the end-to-end drive on a REAL site (the 2026-08-28 nudge's
+own words), now that resolution, reachability and actuation are all joined. Track A's is the float
+re-flow (VI.2's sole surviving residual, with t1374's side-table constraint attached); Track B's is
+audit #79's grid-placement and legacy-flex drift.
+
+WIKI: docs/wiki/agent-target-selection.md

@@ -557,8 +557,43 @@ impl AgentBrowser {
     /// Resolve a `role` + accessible `name` to a DOM node (substring, case-insensitive).
     fn resolve(&self, role: &manuk_a11y::Role, name: &str) -> Result<manuk_dom::NodeId> {
         let tree = self.a11y_tree()?;
-        tree.find_containing(role, name)
-            .map(|n| n.node)
+        // ⭐⭐⭐ **THE PRODUCTION PATH PICKED THE FIRST SUBSTRING MATCH IN TREE ORDER.**
+        // `find_containing` is exactly that, and it is what every `click_by_name`, `type_into` and
+        // `submit` resolved through:
+        //
+        // ```text
+        //   a page with "Sign in with Google" ABOVE "Sign in"
+        //     find_containing("Sign in")  -> "Sign in with Google"   the first substring hit
+        //     the dual scorer             -> "Sign in"                the exact-name bonus wins
+        // ```
+        //
+        // An agent told to click *Sign in* clicking *Sign in with Google* is not a near miss — it is
+        // a different account. Meanwhile `targeting::resolve_target` — semantic score + visual
+        // salience, with an exact-name bonus and a confidence margin — had **no production consumer
+        // at all**: it was reachable only through `ground_action`, which nothing outside a test
+        // called. Two halves of one system, built and never joined, which is the t1356 shape.
+        //
+        // ⚠ Scoped by ROLE, because `resolve` is called with one and the scorer never used it:
+        // `type_into("Search")` must find the TEXT FIELD called Search and not an earlier BUTTON of
+        // the same name.
+        //
+        // ⚠ A low-confidence winner is still returned rather than refused. Ambiguity here has a best
+        // answer — unlike t1366's `Obstructed`, where acting is a lie — and `Grounded::Ambiguous`
+        // remains the surface for a caller that wants to disambiguate before acting. Refusing here
+        // would turn every two-similar-buttons page into an error where the previous behaviour at
+        // least picked one.
+        let viewport = manuk_a11y::Rect {
+            x: 0.0,
+            y: self.scroll_y,
+            width: self.width as f32,
+            height: self.height as f32,
+        };
+        crate::targeting::resolve_target_scoped(&tree, name, Some(role), viewport)
+            .map(|t| t.node)
+            // The scorer needs a name to match on; `find_containing` is kept as the fallback for an
+            // intent that reduces to no keywords (punctuation, an empty string) so no caller that
+            // worked before stops working.
+            .or_else(|| tree.find_containing(role, name).map(|n| n.node))
             .with_context(|| format!("no {} named {name:?} on this page", role.as_str()))
     }
 
