@@ -1062,3 +1062,4 @@ tick	sha	epoch	iso	delta_s	shape	wall_s	files	added	deleted	gates	claims	wpt_pas
 1378	4b67bb31	1788085219	2026-08-30T06:20:19-04:00	2973	capability-subsystem	465	11	705	43	522	81	3896	6960	0	642	0	a float written into a line RE-FLOWS that line, in both directions (2026-08-30)
 1379	00f3d6cc	1788088009	2026-08-30T07:06:49-04:00	2790	capability-subsystem	465	9	525	33	522	81	3896	6960	0	642	0	a name fragment hidden by a STYLESHEET was announced (2026-08-30)
 1380	f6d6cf2f	1788090579	2026-08-30T07:49:39-04:00	2570	capability-subsystem	465	11	585	40	522	81	3896	6960	0	642	0	the a11y tree contained every `display: none` subtree (2026-08-30)
+1381	0facd511	1788095164	2026-08-30T09:06:04-04:00	4585	capability-subsystem	465	11	556	52	522	81	3896	6960	0	642	0	a trailing margin was outside the scrollable overflow region (2026-08-30)

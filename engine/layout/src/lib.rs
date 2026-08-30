@@ -320,6 +320,25 @@ impl Rect {
     }
 }
 
+/// What one box contributes to an enclosing scroll container's **scrollable overflow region**,
+/// beyond its own border box — see [`LayoutBox::scrollable_overflow_extent`].
+///
+/// ⭐ A STRUCT rather than a tuple because there are three facts and they are not interchangeable:
+/// two of them are lengths in the same units and the third is a position delta, so a positional
+/// `(f32, f32, (f32, f32))` is exactly the shape a later reader gets wrong silently.
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
+pub struct OverflowContribution {
+    /// The box's own END margins `(right, bottom)`. A trailing margin is real space inside a BFC
+    /// and is invisible to a union of border boxes, because nothing follows the last one.
+    pub end_margin: (f32, f32),
+    /// The **scroll container's** own end padding `(right, bottom)`, which inflates a descendant's
+    /// in-flow contribution — and, measured, does NOT inflate a relatively-offset one.
+    pub end_padding: (f32, f32),
+    /// The relative-positioning offset already applied to this box's rect, so the in-flow
+    /// ("alignment") rectangle can be recovered by subtracting it. `(0, 0)` for an ordinary box.
+    pub relative_offset: (f32, f32),
+}
+
 /// Sets [`Ctx::intrinsic_probe`] for the duration of an intrinsic measurement and restores whatever
 /// it was before — the probes NEST (a max-content measure lays out inner floats, which shrink-to-fit,
 /// which probe again), so a plain `set(false)` on the way out would leak the outer probe's state.
@@ -555,6 +574,28 @@ thread_local! {
     /// the START of every `layout_document`**, so a grid that stops being a grid stops having tracks
     /// rather than keeping the last ones it had.
     static GRID_TRACKS: RefCell<HashMap<NodeId, GridTracks>> = RefCell::new(HashMap::new());
+}
+
+thread_local! {
+    /// The **relative-positioning offset already applied** to each box's rect by the most recent
+    /// [`layout_document`] on this thread — i.e. what to SUBTRACT from a rect to recover the
+    /// position the box occupies in the flow.
+    ///
+    /// ⚠⚠⚠ **A SCROLL CONTAINER'S SCROLLABLE OVERFLOW REGION NEEDS BOTH POSITIONS**, and the
+    /// in-flow one is not recoverable from the fragment tree because `boxx.translate` overwrites it.
+    /// A relatively-positioned box contributes its *alignment rectangle* (its in-flow position —
+    /// Blink calls it "inflow-bounds") as well as its offset one, which is why a `top: -1000px`
+    /// child does not shrink the scroller it lives in.
+    ///
+    /// Same lifetime rule as [`GRID_TRACKS`]: overwritten wholesale at the end of every
+    /// `layout_document`, so a box that stops being relatively positioned stops having an offset.
+    static RELATIVE_OFFSETS: RefCell<HashMap<NodeId, (f32, f32)>> = RefCell::new(HashMap::new());
+}
+
+/// The relative-positioning offsets applied by the most recent [`layout_document`] on this thread —
+/// see [`RELATIVE_OFFSETS`]. Cloned for the same reason [`grid_tracks`] is.
+pub fn relative_offsets() -> HashMap<NodeId, (f32, f32)> {
+    RELATIVE_OFFSETS.with(|g| g.borrow().clone())
 }
 
 /// The used track sizes of every grid container in the most recent [`layout_document`] on this
@@ -880,7 +921,7 @@ impl LayoutBox {
     /// wrong number and it renders the wrong slice of the data; return `undefined` and it renders `NaN`
     /// rows, which is to say none.
     pub fn content_extent(&self) -> (f32, f32) {
-        self.content_extent_with_end_margins(&|_| (0.0, 0.0))
+        self.scrollable_overflow_extent(&|_| OverflowContribution::default())
     }
 
     /// [`content_extent`], with each descendant's **END margins** (right and bottom) added to its
@@ -924,9 +965,9 @@ impl LayoutBox {
     /// ⚠ Percentage margins resolve against the CONTAINING BLOCK's width, and the caller here has
     /// the scroll container's own content width rather than each descendant's containing block.
     /// Named residue, exactly as the percentage-padding one already recorded in `scroll_geometry_of`.
-    pub fn content_extent_with_end_margins(
+    pub fn scrollable_overflow_extent(
         &self,
-        end_margin: &dyn Fn(NodeId) -> (f32, f32),
+        contribution: &dyn Fn(NodeId) -> OverflowContribution,
     ) -> (f32, f32) {
         fn walk(
             b: &LayoutBox,
@@ -934,21 +975,56 @@ impl LayoutBox {
             oy: f32,
             w: &mut f32,
             h: &mut f32,
-            end_margin: &dyn Fn(NodeId) -> (f32, f32),
+            contribution: &dyn Fn(NodeId) -> OverflowContribution,
         ) {
-            let (mr, mb) = b.node.map(end_margin).unwrap_or((0.0, 0.0));
-            *w = w.max(b.rect.x + b.rect.width + mr - ox);
-            *h = h.max(b.rect.y + b.rect.height + mb - oy);
+            let c = b.node.map(contribution).unwrap_or_default();
+            let (right, bottom) = (
+                b.rect.x + b.rect.width + c.end_margin.0,
+                b.rect.y + b.rect.height + c.end_margin.1,
+            );
+            // ── ⚠⚠⚠ **THE ALIGNMENT RECTANGLE, AND IT IS THE ONE THE END PADDING BELONGS TO.**
+            //    A relatively-positioned box contributes BOTH positions to a scroll container's
+            //    region: the one it was painted at, and the one it occupies in the FLOW (Blink's
+            //    "inflow-bounds"). The in-flow one is the reason `top: -1000px` does not shrink
+            //    the scroller it lives in — and it is unrecoverable from the fragment tree, which
+            //    is why `RELATIVE_OFFSETS` records what was subtracted.
+            //
+            //    ⭐ **And only the IN-FLOW rectangle is inflated by the container's end padding.**
+            //    Chrome-measured, a `padding:10px 5px` scroller around a 200px-tall child:
+            //
+            //    ```text
+            //                                          chrome   before
+            //      no offset                  CONTROL    220      220     10 + 200 + 10
+            //      top:   50px                           260      270     10 +  50 + 200 + 0
+            //      top: 1000px                          1210     1220     10 +1000 + 200 + 0
+            //      top: -1000px                          220      105     the IN-FLOW rect, padded
+            //    ```
+            //
+            //    The `+10` in row 1 and its absence in rows 2 and 3 are the same padding, applied
+            //    to one rectangle and not the other — which is what makes this a per-contribution
+            //    rule rather than the single addition at the end of the extent that it used to be.
+            let (pr, pb) = c.end_padding;
+            if c.relative_offset == (0.0, 0.0) {
+                *w = w.max(right + pr - ox);
+                *h = h.max(bottom + pb - oy);
+            } else {
+                // The painted position, RAW…
+                *w = w.max(right - ox);
+                *h = h.max(bottom - oy);
+                // …and the in-flow position, PADDED.
+                *w = w.max(right - c.relative_offset.0 + pr - ox);
+                *h = h.max(bottom - c.relative_offset.1 + pb - oy);
+            }
             match &b.content {
                 BoxContent::Block(kids) => {
                     for k in kids {
-                        walk(k, ox, oy, w, h, end_margin);
+                        walk(k, ox, oy, w, h, contribution);
                     }
                 }
                 BoxContent::Inline(frags) => {
                     for f in frags {
-                        *w = w.max(f.x + f.width - ox);
-                        *h = h.max(f.baseline - oy);
+                        *w = w.max(f.x + f.width + pr - ox);
+                        *h = h.max(f.baseline + pb - oy);
                     }
                 }
             }
@@ -957,13 +1033,14 @@ impl LayoutBox {
         match &self.content {
             BoxContent::Block(kids) => {
                 for k in kids {
-                    walk(k, self.rect.x, self.rect.y, &mut w, &mut h, end_margin);
+                    walk(k, self.rect.x, self.rect.y, &mut w, &mut h, contribution);
                 }
             }
             BoxContent::Inline(frags) => {
+                let c = self.node.map(contribution).unwrap_or_default();
                 for f in frags {
-                    w = w.max(f.x + f.width - self.rect.x);
-                    h = h.max(f.baseline - self.rect.y);
+                    w = w.max(f.x + f.width + c.end_padding.0 - self.rect.x);
+                    h = h.max(f.baseline + c.end_padding.1 - self.rect.y);
                 }
             }
         }
@@ -1541,6 +1618,8 @@ struct Ctx<'a> {
     /// [`Ctx::layout_flex_or_grid`]. Read out through [`grid_tracks`] after `layout_document`
     /// returns, the same way [`layout_phases`] is.
     grid_tracks: RefCell<HashMap<NodeId, GridTracks>>,
+    /// Per-node relative-positioning offsets, published through [`relative_offsets`].
+    relative_offsets: RefCell<HashMap<NodeId, (f32, f32)>>,
     /// **The elements whose CHILDREN are laid out in a transposed coordinate space** — the
     /// orthogonal roots of `writing_mode`. Empty (and the whole mechanism dormant) for any document
     /// with no vertical writing mode, which is very nearly all of them.
@@ -1790,6 +1869,7 @@ pub fn layout_document(
         measure_cache: RefCell::new(HashMap::new()),
         counters: RefCell::new(None),
         intrinsic_probe: std::cell::Cell::new(false),
+        relative_offsets: RefCell::new(HashMap::new()),
         fallback_style: ComputedStyle::initial(),
         min_content_cache: RefCell::new(HashMap::new()),
         min_content_of_content_cache: RefCell::new(HashMap::new()),
@@ -1920,6 +2000,7 @@ pub fn layout_document(
     // same instant, because `getComputedStyle` answering last-layout's track sizes is the stale-read
     // class this engine keeps catching (t1120's poisoned `pre_transform_rect`, t1242's counter).
     GRID_TRACKS.with(|g| *g.borrow_mut() = ctx.grid_tracks.take());
+    RELATIVE_OFFSETS.with(|g| *g.borrow_mut() = ctx.relative_offsets.take());
     out
 }
 
@@ -6461,6 +6542,11 @@ impl Ctx<'_> {
             let cb_h = pch.unwrap_or(0.0);
             let (dx, dy) = self.relative_offset(node, &s, cw, cb_h);
             if dx != 0.0 || dy != 0.0 {
+                // Recorded BEFORE the translate, because after it the in-flow position is gone —
+                // see [`RELATIVE_OFFSETS`] for the scroll container that needs it back.
+                if !self.intrinsic_probe.get() {
+                    self.relative_offsets.borrow_mut().insert(node, (dx, dy));
+                }
                 boxx.translate(dx, dy);
                 // ⚠⚠⚠ **THE SUBTREE'S STATIC POSITIONS MOVE WITH IT, AND THEY WERE LEFT BEHIND.**
                 //
@@ -7678,6 +7764,9 @@ impl Ctx<'_> {
         if s.position == Position::Relative {
             let (dx, dy) = self.relative_offset(node, &s, cw, 0.0);
             if dx != 0.0 || dy != 0.0 {
+                if !self.intrinsic_probe.get() {
+                    self.relative_offsets.borrow_mut().insert(node, (dx, dy));
+                }
                 boxx.translate(dx, dy);
                 if static_moved {
                     self.translate_static_positions(node, dx, dy);

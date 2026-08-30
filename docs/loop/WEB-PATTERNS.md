@@ -9722,3 +9722,20 @@ is a BFC, so that margin does not collapse out — it is real space inside the c
 ⚠ It is an END rule: a `margin-top` is already in the box's POSITION, and adding it again
 double-counts it.
 (t1381 — `agent/tests` `a_trailing_margin_is_inside_the_scrollable_overflow_region`)
+
+## `position: relative; top: -1000px` inside a scroller — the box that must not vanish
+
+A scroll container's overflow region takes a relatively-positioned box's **alignment rectangle** —
+its position in the FLOW, before the offset — as well as the position it was painted at. Offscreen
+"visually hidden" idioms (`position:relative; top:-9999px`, off-canvas panels) therefore do NOT
+shrink the scroller they live in, and a `scrollHeight` computed only from painted rects loses the
+element entirely.
+
+⭐ Only the IN-FLOW rectangle is inflated by the container's own END PADDING; the offset rectangle is
+added raw. Chrome: a 200px child in a `padding:10px` scroller is `220` unoffset, `260` at
+`top:50px`, `1210` at `top:1000px` — the `+10` is there once and absent twice. A padding added once
+to the finished extent is right on the first row and off by a padding on the other two.
+
+⚠ The in-flow position is UNRECOVERABLE from a fragment tree that applies the offset by translating
+the box — it has to be recorded at the moment it is spent.
+(t1382 — `agent/tests` `a_relative_box_contributes_its_in_flow_position_too`)

@@ -2447,8 +2447,18 @@ fn scroll_geometry_of(
         // accounted for it by sitting lower. Nothing follows the last one, so `scrollHeight` was
         // short by exactly that margin. See `content_extent_with_end_margins` for the Chrome table,
         // including the NEGATIVE-margin row that makes this a signed inflation rather than a `max`.
-        let (cw, ch) = b.content_extent_with_end_margins(&|n| {
-            styles
+        // ⚠⚠⚠ **AND THE ALIGNMENT RECTANGLE OF EVERY RELATIVELY-POSITIONED DESCENDANT.** A relpos
+        // box contributes BOTH the position it was painted at and the one it occupies in the FLOW,
+        // so `top: -1000px` does not shrink the scroller — and only the in-flow rectangle is
+        // inflated by this container's own end padding. See `OverflowContribution` for the Chrome
+        // table; `relative_offsets()` is what makes the in-flow position recoverable at all.
+        let rel = manuk_layout::relative_offsets();
+        let end_padding = (
+            st.padding.right.resolve(b.rect.width, 0.0),
+            st.padding.bottom.resolve(b.rect.width, 0.0),
+        );
+        let (cw, ch) = b.scrollable_overflow_extent(&|n| manuk_layout::OverflowContribution {
+            end_margin: styles
                 .get(&n)
                 .map(|s| {
                     (
@@ -2456,12 +2466,16 @@ fn scroll_geometry_of(
                         s.margin.bottom.resolve(b.rect.width, 0.0),
                     )
                 })
-                .unwrap_or((0.0, 0.0))
+                .unwrap_or((0.0, 0.0)),
+            end_padding,
+            relative_offset: rel.get(&n).copied().unwrap_or((0.0, 0.0)),
         });
         // `content_extent` measures from the BORDER-box origin; the scrollable overflow region is
         // measured in the PADDING box, so drop the start border and add the end padding.
-        let cw = (cw - bw.left + st.padding.right.resolve(b.rect.width, 0.0)).max(0.0);
-        let ch = (ch - bw.top + st.padding.bottom.resolve(b.rect.width, 0.0)).max(0.0);
+        // The container's END padding is now applied PER CONTRIBUTION inside the extent (a
+        // relatively-offset rectangle does not get it), so only the start border is dropped here.
+        let cw = (cw - bw.left).max(0.0);
+        let ch = (ch - bw.top).max(0.0);
         let (sx, sy) = offsets.get(node).copied().unwrap_or((0.0, 0.0));
         // The extent is measured on the ALREADY-SCROLLED tree, so add the offset back: the content did
         // not get shorter because the user scrolled down it.

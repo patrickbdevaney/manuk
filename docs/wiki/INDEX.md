@@ -2387,6 +2387,16 @@
   - L27 · DON'T use it for
   - L31 · HOW
 
+## The alignment rectangle — a relatively-positioned box contributes BOTH positions
+`docs/wiki/scrollable-overflow-alignment-rect.md`
+
+  - L7 · Two rules that only look like one
+  - L36 · Why the in-flow position had to be recorded
+  - L50 · The battery
+  - L78 · The receipt, and the honest size of it
+  - L86 · How it was proven red
+  - L96 · Related
+
 ## A trailing margin is inside the scrollable overflow region
 `docs/wiki/scrollable-overflow-end-margin.md`
 
@@ -2683,4 +2693,4 @@
   - L231 · Both named mechanisms are subsystem work
 
 ---
-2502 sections across 44 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+2508 sections across 45 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.

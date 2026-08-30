@@ -97567,3 +97567,109 @@ nested-propagation family measured in the same pass, and the audit #79 sweep's r
 hand-built-input gates.
 
 WIKI: docs/wiki/scrollable-overflow-end-margin.md
+
+## Tick 1382 — the alignment rectangle: a relpos box contributes BOTH positions (2026-08-30)
+
+TICK SHAPE: capability-subsystem
+
+**Track A**, the residual t1381 named and priced at 88 WPT subtests, built.
+
+### ⭐⭐⭐ TWO RULES THAT ONLY LOOK LIKE ONE
+
+1. A relatively-positioned box contributes its **alignment rectangle** — the position it occupies in
+   the FLOW, before the offset — as well as the position it was painted at. That is why
+   `top: -1000px` does not shrink the scroller the box lives in.
+2. **Only the in-flow rectangle is inflated by the container's own END PADDING.** The offset
+   rectangle is added raw.
+
+```text
+  a 10x200 child in a `width:100px;height:100px;padding:10px 5px;overflow:scroll` container
+                                        chrome   before   after
+    no offset                 CONTROL     220      220      220     10 + 200 + 10
+    top:   50px                           260      270      260     10 +  50 + 200 + 0
+    top: 1000px                          1210     1220     1210     10 +1000 + 200 + 0
+    top: -1000px                          220      105      220     the IN-FLOW rect, padded
+```
+
+⭐⭐⭐ **THE `+10` IN ROW 1 AND ITS ABSENCE IN ROWS 2 AND 3 ARE THE SAME PADDING.** t1381 added the
+container's end padding ONCE, to the finished extent — so it landed on whichever rectangle happened
+to win. Rows 2 and 3 say it belongs to a **contribution**, not to the total, and they were wrong by
+exactly `padding-bottom` in a way that reads as a rounding error until the offset is made large.
+Finding rule 2 was not planned: it fell out of measuring rule 1's neighbours, which is what a battery
+with positive AND negative offsets is for.
+
+⭐ **Offscreen "visually hidden" idioms are the real-web shape** — `position:relative; top:-9999px`,
+off-canvas panels, pre-animation slide-in cards. A `scrollHeight` computed only from painted rects
+loses those elements entirely.
+
+### THE IN-FLOW POSITION HAD TO BE RECORDED, BECAUSE THE TREE FORGETS IT
+
+`layout_block` applies the offset with `boxx.translate(dx, dy)`, which **overwrites** the in-flow
+position. `manuk_layout::relative_offsets()` is a thread-local written at the two
+`Position::Relative` sites (the block path and the float path) and published wholesale at the end of
+`layout_document`, exactly as `grid_tracks()` is — so a box that stops being relatively positioned
+stops having an offset. Skipped inside an `intrinsic_probe`, the t1120 rule its neighbours carry.
+
+⭐ The three facts a box contributes (`end_margin`, `end_padding`, `relative_offset`) became the
+`OverflowContribution` **struct** rather than a positional triple: two are lengths in the same units
+and the third is a position delta, which is exactly the shape a later reader gets wrong silently.
+Third instance of the same call — t1365's `NameCtx`, t1379's `NameStyle`, this.
+
+### THE BATTERY
+
+```text
+                                                         chrome   before   after
+  g1  WPT's own shape: top:-1000px + margin-bottom:50      270      105      270
+  g2  …the inline axis: left:-1000px + margin-right:50     260       95      260   (scrollW)
+  h1  top: 1000px                                         1210     1220     1210
+  h2  top: -1000px                                         220      105      220
+  h3  left: 1000px                                        1205     1210     1205   (scrollW)
+  h4  top: 50px                                            260      270      260
+  c1  no offset                                CONTROL     220      220      220
+  c2  no offset, margin-bottom: 50px           CONTROL     270      270      270
+  c3  no offset, margin-right: 50px            CONTROL     260      260      260   (scrollW)
+  d7  no offset, margin-bottom: -30px          CONTROL     190      190      190
+  e5  no offset, two margined children         CONTROL     340      340      340
+  f1  no offset, nested margin                 CONTROL     270      270      270
+```
+
+⚠ `g1`/`g2` keep WPT's own spelling, down to the `width: 0`, so this gate and
+`scrollable-overflow-padding.html`'s 30 subtests test the same thing. `h1`–`h4` use a `10px` width
+because a zero-width box is a degenerate case in Blink's propagation (t1381 measured and named it)
+and the positive-offset rows must not be measured through it.
+
+⚠ **The six CONTROL rows are t1381's whole battery re-asserted here**, because moving the end padding
+from the finished extent into each contribution is exactly the kind of change that is right on the
+new rows and off-by-a-padding on the old ones.
+
+### THE GATE
+
+`a_relative_box_contributes_its_in_flow_position_too` (`agent/tests/`, in the wall's crate list) —
+12 rows, 6 of them t1381's controls, plus a vacuity assert that the offset was really RECORDED (and
+that an unoffset child has none, or the controls are not controls). **PROVEN RED by three
+mutations**: N1 `relative_offsets()` returns empty → the vacuity assert fires first, and honestly,
+because the recorder and the rule share a source; N2 drop the in-flow arm → g1/g2/h2 only; N3 pad
+BOTH rectangles (the pre-tick behaviour) → h1/h3/h4 only, each one end-padding too large.
+
+### THE RECEIPT, AND THE HONEST SIZE OF IT
+
+```text
+  manuk-agent  146/146 → 147/147   +1   +the new gate
+  WPT css/css-overflow  508 → 513   (+5)  — NOT the 88 the family was priced at
+  manuk-layout / manuk-page / manuk-css / manuk-a11y / manuk-paint / manuk-dom   CONTROL
+```
+
+⚠ **+5, against a residual priced at 88, and the reason is the fixture shape.** The two files are
+`checkLayout` batteries whose subtests each depend on several rules at once — writing modes,
+transforms, collapsed margins contributing to the alignment rectangle — so the offset rule alone
+flips only the rows that need nothing else. **The price was an upper bound and was labelled as a
+subtest count, not an estimate** (t1347's rule). The Chrome battery is what says the rule is right;
+the suite number says how much of those two files it was sufficient for.
+
+NEXT: the remaining rows of those two files are the OTHER contributors to the alignment rectangle —
+transforms (t1382's `h5` shape: `transform: translateY(-1000px)` reads 1220 against Chrome's 1210,
+and its pre-transform rect is already recorded in `pre_transform_rect`) and an abspos child in a
+positioned scroller (1200 in Chrome, 95 here). Behind those: the nested-propagation family t1381
+measured, and audit #79's remaining hand-built-input gates.
+
+WIKI: docs/wiki/scrollable-overflow-alignment-rect.md
