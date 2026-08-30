@@ -15,7 +15,7 @@
 | median tick cycle | **31m** | 1069 intervals |
 | median, last 10 | **61m** | 10 intervals |
 | fastest / slowest | 5s / 7.0d | |
-| **ticks per hour** | **0.88** | 1211.9h elapsed |
+| **ticks per hour** | **0.88** | 1213.9h elapsed |
 | median verify wall | **67s** | 1009 ticks |
 | wall trend | 39s → 8m — getting slower ⚠️ | first 3 vs last 3 |
 
@@ -27,7 +27,7 @@ it, and a wall that grows taxes every future tick, so it is tracked separately f
 ### Near — the daily driver (doc / app / platform web)
 
 * **capabilities asserted** (`G_CAPABILITY`): 48 → **81**
-* **live gates**: 27 → **523**
+* **live gates**: 27 → **524**
 * **✅ rows in the capability ledger**: 144 → **642**
 * **Bar 0 — oracle hangs**: 0 of 265 sites
 
@@ -1166,6 +1166,6 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 | **1384** | 2026-08-30 12:19 | 44m | capability-subsystem | 8m | +457/−33 | 522 | 81 | 56.0% · | the implicit roles that fell through to a plausible default (2026-08-30) |
 | **1385** | 2026-08-30 13:21 | 62m | capability-subsystem | 8m | +473/−39 | 522 | 81 | 56.0% · | `pressed` and `invalid`: the two states the tree did not have (2026-08-30) |
 | **1387** | 2026-08-30 15:36 | 2.3h | capability-subsystem | 8m | +424/−34 | 522 | 81 | 56.0% · | the landmark sweep, and the regression my own check hid (2026-08-30) |
-| **1389** | 2026-08-30 16:54 | 77m | capability-subsystem | 8m | +586/−40 | 523 | 81 | 56.0% · | the Bar 0 that asked for 85 GB (2026-08-30) |
+| **1389** | 2026-08-30 19:00 | 3.4h | capability-subsystem | 8m | +607/−45 | 524 | 81 | 56.0% · | the Bar 0 that asked for 85 GB (2026-08-30) |
 
 *`·` after a WPT figure means **carried forward**, not measured this tick.*

@@ -98403,3 +98403,96 @@ t1381's lesson, on the biggest thing the aperture revealed. Behind it: `title`-a
 HTML-AAM's element set (t1386), and the nested scrollable-overflow family (t1381).
 
 WIKI: docs/wiki/get-image-data-limits.md
+
+## Tick 1390 — what `input.value` MEANS, as opposed to what is stored (2026-08-30)
+
+TICK SHAPE: capability-subsystem
+
+The board's largest failing area, **surveyed before being ground** — and it is only on the board
+because t1388 opened the metric's aperture two ticks ago.
+
+### ⭐⭐ THE SURVEY, AND THE HISTOGRAM THAT NARROWED IT
+
+```text
+  html/semantics/forms/the-input-element        828 failing  (43.0%)   ← the largest
+    …of which "input.value should be '…' after change of state"   280   ← ONE mechanism, 34%
+  html/semantics/scripting-1/the-script-element 484
+  html/semantics/forms/textfieldselection       385
+  html/semantics/forms/constraints              338
+```
+
+> **An area percentage is not a work item; a message histogram is.** Two steps — rank the subtrees,
+> then histogram the biggest one's failure MESSAGES — turned 6,342 failing subtests into one named
+> algorithm.
+
+### ⭐⭐⭐ THE MECHANISM — AN `<input>` HAS TWO VALUES AND WE HAD ONE
+
+The CONTENT ATTRIBUTE keeps whatever was written; the API value is that string run through the
+**value sanitization algorithm** for the element's current `type`.
+
+⭐ **A paste from a spreadsheet carries a `\r`.** It came back out of `.value` with the carriage
+return still in it, was submitted with it, and compared unequal to the same text typed by hand — a
+bug that looks like a server problem from every angle except this one.
+
+```text
+  from "  foo\rbar  ":                            chrome        before      after
+    text/search/tel/password/hidden/checkbox/
+    radio/submit/image/reset/button               "  foobar  "  "  foo\rbar  "  ✓
+    url · email                                   "foobar"      "  foo\rbar  "  ✓
+    date/month/week/time/datetime-local · number  ""            "  foo\rbar  "  ✓
+    range                                         "50"          "  foo\rbar  "  ✓
+    color                                         "#000000"     "  foo\rbar  "  ✓
+
+    number  "50" → "50"      " 50 " → ""     ⚠ number does NOT trim
+    range   "200" → "100"    "-5" → "0"      ⚠ range CLAMPS to [min, max]
+    color   "#ABCDEF" → "#abcdef"            ⚠ and lowercases
+```
+
+⭐⭐ **`number` does not trim and `url`/`email` do — that pair is the whole shape of the algorithm.**
+It is not *"clean up the string"*; it is a per-type definition of what the string is allowed to BE.
+A single "trim and strip" implementation passes the text rows, the url rows and the email rows and is
+wrong on `number` — which is exactly mutation N2.
+
+⭐ **`range` is valid-or-DEFAULT and the default is the MIDPOINT.** An unset range reads `50`, which
+is why a slider drawn from `.value` before the user touches it has its thumb in the middle; `""`
+would put it nowhere.
+
+### ⚠ APPLIED ON READ, WITH ONE NAMED CONSEQUENCE
+
+Sanitising on READ keeps the content attribute intact, so `getAttribute("value")` returns what the
+author wrote while `.value` returns what the type means — **which is exactly the spec's split** — and
+a `type` change re-sanitises for free because the next read asks the new type. ⚠ The divergence is a
+MULTI-STEP type change: the spec's sanitiser is destructive, so `text → number → text` leaves `""` in
+Chrome where reading through the raw content gives the text back. Measured, named, not built — it
+needs a separate dirty-value store, a different mechanism from the algorithm.
+
+### THE GATE
+
+`the_api_value_is_the_sanitised_one` (`engine/page/tests/`) — 25 rows including both values of one
+element read in the same report (`attr_raw` = `"abc"`, `attr_api` = `""`), and a `type` change read
+twice. Vacuity: a valid number and a valid date must SURVIVE, or an implementation returning `""` for
+everything satisfies half the table. **PROVEN RED by three mutations**: N1 return the raw attribute →
+everything but the controls; N2 trim every type → the `strip_*` rows and `num_spaced`, with url/email
+still green; N3 range valid-or-empty → `range_junk`.
+
+⚠ It lives in `engine/page/tests/` because it needs SpiderMonkey, which the wall does not run (audit
+#78). Its wall-independent guard is the WPT `html/semantics` row — in the metric since t1388.
+
+### THE RECEIPT
+
+```text
+  WPT html/semantics/forms/the-input-element   624/1452 = 43.0%  →  866/1452 = 59.6%   (+242)
+  WPT html/semantics (whole area)             4922/11264 = 43.7% → 5183/11262 = 46.0%  (+261)
+  manuk-page   525 gate binaries, 0 FAILED (counted)
+  manuk-agent / manuk-a11y / manuk-layout / manuk-css / manuk-paint / manuk-dom   CONTROL
+```
+
+⭐ **Three ticks after the aperture opened it has returned +242, +261 and a closed Bar 0.** The
+instrument tick that looked like bookkeeping was the highest-leverage thing on the board.
+
+NEXT: the same survey's next rows — `forms/constraints` (338 failing; constraint validation, which
+reads the sanitised value this tick just gave it) and `forms/textfieldselection` (385). Behind them:
+`title`-as-name scoped to HTML-AAM's element set (t1386), and the nested scrollable-overflow family
+(t1381).
+
+WIKI: docs/wiki/input-value-sanitization.md

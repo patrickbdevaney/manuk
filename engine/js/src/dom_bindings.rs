@@ -7653,7 +7653,25 @@ unsafe fn el_get_value(cx: *mut RawJSContext, _argc: u32, vp: *mut Value) -> boo
                 return (*dom).text_content(n);
             }
             // `<input>` reads its `value` attribute; `<textarea>` reads its text content until dirtied.
-            text_control_value(dom, n)
+            // ⚠⚠⚠ **AND AN `<input>`'S API VALUE IS THE *SANITISED* ONE.** See
+            // `sanitize_input_value`: the content attribute keeps what the author or the script
+            // wrote, and `.value` is what the type says that means.
+            let raw = text_control_value(dom, n);
+            if (*dom)
+                .element(n)
+                .map(|e| e.name == "input")
+                .unwrap_or(false)
+            {
+                let el = (*dom).element(n);
+                let ty = el
+                    .and_then(|e| e.attr("type"))
+                    .unwrap_or("text")
+                    .to_ascii_lowercase();
+                let min = el.and_then(|e| e.attr("min")).map(str::to_owned);
+                let max = el.and_then(|e| e.attr("max")).map(str::to_owned);
+                return sanitize_input_value(&ty, &raw, min.as_deref(), max.as_deref());
+            }
+            raw
         })
         .unwrap_or_default();
     return_string(cx, vp, &v);
@@ -7898,6 +7916,152 @@ unsafe fn el_set_value(cx: *mut RawJSContext, argc: u32, vp: *mut Value) -> bool
     }
     *vp = UndefinedValue();
     true
+}
+
+/// **THE HTML VALUE SANITIZATION ALGORITHM — what `input.value` MEANS, as opposed to what is stored.**
+///
+/// An `<input>` has two values: the CONTENT ATTRIBUTE, which keeps whatever was written, and the API
+/// value, which is the content run through the sanitizer for the element's current `type`. We had
+/// only the first, so `.value` handed back the raw string and **a paste from a spreadsheet — which
+/// carries a `\r` — came out with the carriage return still in it**, was submitted with it, and
+/// compared unequal to the same text typed by hand.
+///
+/// Chrome-measured, every row (`--headless=new`), starting from `"  foo\rbar  "`:
+///
+/// ```text
+///   text · search · tel · password · hidden · checkbox · radio ·
+///   submit · image · reset · button      "  foobar  "   strip CR/LF only
+///   url · email                          "foobar"       strip CR/LF, then TRIM
+///   date · month · week · time ·
+///   datetime-local · number              ""             valid-or-empty
+///   range                                "50"           valid-or-default, then CLAMP
+///   color                                "#000000"      valid-or-black, LOWERCASED
+///
+///   number  "50" → "50"   " 50 " → ""      ⚠ number does NOT trim
+///   range   "200" → "100"   "-5" → "0"     ⚠ range CLAMPS to [min, max]
+///   color   "#ABCDEF" → "#abcdef"          ⚠ and lowercases
+///   date    "2020-01-02" → "2020-01-02"   "nope" → ""
+/// ```
+///
+/// ⭐⭐ **`number` does not trim and `url`/`email` do — that pair is the whole shape of the
+/// algorithm.** It is not "clean up the string"; it is a per-type definition of what the string is
+/// allowed to be, and the trimming types are the two whose values are conventionally pasted with
+/// surrounding space.
+///
+/// ⭐ **This is applied on READ, not on write, and that is a deliberate simplification with one
+/// named consequence.** Applying it on read keeps the content attribute intact — so `getAttribute
+/// ("value")` returns what the author wrote while `.value` returns what the type means, which is
+/// exactly the spec's split — and it makes a `type` change re-sanitise for free, because the next
+/// read asks the new type. ⚠ The divergence is a MULTI-STEP type change: the spec's sanitiser is
+/// destructive, so `text → number → text` leaves `""` in Chrome, where reading through the raw
+/// content gives the text back. Measured, named, not built: fixing it needs a separate dirty-value
+/// store, which is a different mechanism from the algorithm itself.
+fn sanitize_input_value(ty: &str, v: &str, min: Option<&str>, max: Option<&str>) -> String {
+    // Every type strips CR and LF first; the spec spells this out per-type and they all agree.
+    let stripped: String = v.chars().filter(|c| *c != '\r' && *c != '\n').collect();
+    let is_ws = |c: char| matches!(c, ' ' | '\t' | '\n' | '\r' | '\x0c');
+    let float_of = |s: &str| -> Option<f64> {
+        // The spec's "valid floating-point number" — deliberately NOT `str::parse`, which accepts
+        // leading/trailing space, `inf`, `nan` and `+`. Chrome reads `" 50 "` as invalid.
+        if s.is_empty() || s.starts_with(char::is_whitespace) || s.ends_with(char::is_whitespace) {
+            return None;
+        }
+        if s.chars()
+            .any(|c| !(c.is_ascii_digit() || matches!(c, '-' | '+' | '.' | 'e' | 'E')))
+        {
+            return None;
+        }
+        s.parse::<f64>().ok().filter(|f| f.is_finite())
+    };
+    match ty {
+        "url" | "email" => stripped.trim_matches(is_ws).to_string(),
+        "number" => float_of(&stripped)
+            .map(|_| stripped.clone())
+            .unwrap_or_default(),
+        "range" => {
+            let lo = min.and_then(float_of).unwrap_or(0.0);
+            let hi = max.and_then(float_of).unwrap_or(100.0);
+            // "valid-or-DEFAULT" — the default is the midpoint, which is why an unset range reads
+            // `50` and not `0`. A page that renders a slider from `.value` before the user touches
+            // it puts the thumb in the middle, and an empty string would put it nowhere.
+            let mid = if hi < lo { lo } else { lo + (hi - lo) / 2.0 };
+            let n = float_of(&stripped)
+                .unwrap_or(mid)
+                .clamp(lo.min(hi), hi.max(lo));
+            fmt_number(n)
+        }
+        "color" => {
+            let ok = stripped.len() == 7
+                && stripped.starts_with('#')
+                && stripped[1..].chars().all(|c| c.is_ascii_hexdigit());
+            if ok {
+                stripped.to_ascii_lowercase()
+            } else {
+                "#000000".to_string()
+            }
+        }
+        "date" | "month" | "week" | "time" | "datetime-local" => {
+            if is_valid_temporal(ty, &stripped) {
+                stripped
+            } else {
+                String::new()
+            }
+        }
+        // `file` has no value to sanitise here; everything else is CR/LF stripping only.
+        _ => stripped,
+    }
+}
+
+/// `50.0` → `"50"`, `50.5` → `"50.5"` — the spec's "best representation of the number as a floating
+/// -point number", which is what a slider's `.value` is compared against.
+fn fmt_number(n: f64) -> String {
+    if n.fract() == 0.0 && n.abs() < 1e15 {
+        format!("{}", n as i64)
+    } else {
+        format!("{n}")
+    }
+}
+
+/// The shape checks for the five temporal input types. Deliberately structural rather than a full
+/// calendar: the sanitizer's job is *"is this a valid string of this type"*, and every WPT row here
+/// is a shape failure (`"  foobar  "` is not a date by any reading).
+fn is_valid_temporal(ty: &str, v: &str) -> bool {
+    let digits = |s: &str, n: usize| s.len() == n && s.chars().all(|c| c.is_ascii_digit());
+    let ymd = |s: &str| {
+        let p: Vec<&str> = s.split('-').collect();
+        p.len() == 3
+            && p[0].len() >= 4
+            && p[0].chars().all(|c| c.is_ascii_digit())
+            && digits(p[1], 2)
+            && digits(p[2], 2)
+    };
+    let hm = |s: &str| {
+        let p: Vec<&str> = s.split(':').collect();
+        (p.len() == 2 || p.len() == 3) && digits(p[0], 2) && digits(p[1], 2)
+    };
+    match ty {
+        "date" => ymd(v),
+        "month" => {
+            let p: Vec<&str> = v.split('-').collect();
+            p.len() == 2
+                && p[0].len() >= 4
+                && p[0].chars().all(|c| c.is_ascii_digit())
+                && digits(p[1], 2)
+        }
+        "week" => {
+            let p: Vec<&str> = v.split("-W").collect();
+            p.len() == 2
+                && p[0].len() >= 4
+                && p[0].chars().all(|c| c.is_ascii_digit())
+                && digits(p[1], 2)
+        }
+        "time" => hm(v),
+        "datetime-local" => {
+            let p: Vec<&str> = v.split(['T', ' ']).collect();
+            p.len() == 2 && ymd(p[0]) && hm(p[1])
+        }
+        _ => false,
+    }
 }
 
 /// The current value of a text control — the ONE source of truth every value/selection path must read.

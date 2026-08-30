@@ -9886,3 +9886,28 @@ origin. `[EnforceRange]` throws instead.
 ⚠ Put the ceiling at the ALLOCATION as well as in the argument check: a host function that allocates
 on request must not depend on its only current caller staying its only caller.
 (t1389 — `engine/page/tests` `get_image_data_refuses_what_it_cannot_allocate_and_says_which_kind_of_wrong`)
+
+## `<input>` has TWO values, and `.value` is the sanitised one
+
+The content attribute keeps what was written; `.value` is that string run through the **value
+sanitization algorithm** for the element's current `type`. An engine that returns the raw attribute
+hands a page a `\r` from a spreadsheet paste — submitted with it, and unequal to the same text typed
+by hand, which looks like a server bug from every angle except this one.
+
+```text
+  from "  foo\rbar  ":
+    text/search/tel/password/hidden/checkbox/radio/submit/reset/button  "  foobar  "   strip CR/LF
+    url · email                                                        "foobar"       strip, then TRIM
+    date/month/week/time/datetime-local · number                       ""             valid-or-empty
+    range                                                              "50"           valid-or-DEFAULT, then CLAMP
+    color                                                              "#000000"      valid-or-black, LOWERCASED
+```
+
+⭐⭐ `number` does NOT trim (`" 50 "` → `""`) while `url`/`email` DO — that pair is the whole shape:
+it is a per-type definition of what the string may BE, not a cleanup. One "trim and strip" for
+everything passes the text, url and email rows and is wrong on `number`.
+⭐ `range` is valid-or-DEFAULT and the default is the MIDPOINT — an untouched slider reads `50`, so
+a thumb positioned from `.value` sits in the middle rather than nowhere.
+⚠ Sanitise on READ and `getAttribute("value")` still returns what the author wrote, which is the
+spec's own split — and a `type` change re-sanitises for free.
+(t1390 — `engine/page/tests` `the_api_value_is_the_sanitised_one`)

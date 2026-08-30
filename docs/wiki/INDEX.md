@@ -1626,6 +1626,16 @@
   - L67 · Both entrances
   - L73 · How it was proven red
 
+## What `input.value` MEANS, as opposed to what is stored
+`docs/wiki/input-value-sanitization.md`
+
+  - L8 · Found by surveying, not by grinding
+  - L23 · The mechanism
+  - L33 · The table, every row Chrome-measured, from "  foo\rbar  "
+  - L60 · ⚠ Applied on READ, with one named consequence
+  - L71 · The receipt
+  - L78 · How it was proven red
+
 ## THE INTERACTION SURFACE — clicks, scroll, focus, and automation
 `docs/wiki/interaction-surface.md`
 
@@ -2755,4 +2765,4 @@
   - L89 · The wall audit (due t1388)
 
 ---
-2542 sections across 52 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+2548 sections across 53 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
