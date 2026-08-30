@@ -98179,3 +98179,107 @@ Behind those: `title`-as-name scoped to HTML-AAM's element set (t1386), `<summar
 nested scrollable-overflow family (t1381), transforms and abspos in the alignment rectangle (t1382).
 
 WIKI: docs/wiki/landmark-roles.md
+
+## Tick 1388 — the metric's own aperture, and a Bar 0 behind it (2026-08-30)
+
+TICK SHAPE: instrument-fidelity
+
+Check #132's STEER #2, executed and then some — and it carries the **wall-time audit** (due t1388).
+
+### ⭐⭐⭐ "MEASURED" MEANT TWO DIFFERENT THINGS, AND THE WEAKER ONE REPORTED 100%
+
+`scripts/blindspot.sh` — the existing aperture instrument — calls a WPT tree **✓ measured** when it
+is CHECKED OUT. `docs/loop/WPT-AREAS.tsv`, the loop's PRIMARY per-tick metric, counts a tree when it
+has a ROW. **Nine trees were checked out, runnable, and had no row.**
+
+```text
+  tree              pass / total       pct     note
+  html/semantics    4922 / 11264      43.7%    the LARGEST failing area in the whole corpus
+  html/canvas        674 /  4514      14.9%    ⚠ and it carries a Bar 0 — below
+  css/CSS2          2095 /  2210      94.8%
+  html/browsers      221 /  1891      11.7%
+  mathml             289 /  2362      12.2%
+  svg                307 /  2108      14.6%
+  accname            445 /   484      91.9%    exit-gate condition 4
+  wai-aria           399 /   434      91.9%    exit-gate condition 4
+  html-aam           315 /   335      94.0%    exit-gate condition 4
+  ──────────────────────────────────────────
+  total             9667 / 25602               ~2% of the reachable denominator
+```
+
+⭐⭐⭐ **`html/semantics` IS NOW THE LARGEST FAILING AREA ON THE BOARD — AHEAD OF EVERY CSS ROW —
+AND IT WAS NOT ON THE BOARD AT ALL.** `html/dom` was one of `html`'s four checked-out subtrees and
+the only one with a row. Every ranking this loop has made for hundreds of ticks was made inside a
+frame that omitted the biggest thing in it.
+
+⚠ **THE DENOMINATOR TRAP, STATED RATHER THAN DISCOVERED LATER:** the board's headline moved
+**80.4% → 74.4%**. Nothing got worse. A number that FALLS when you open the aperture is the aperture
+working. (The monotonic TOTAL rose 484,601 → 494,536, which is the figure the ratchet reads.)
+
+The diff that finds it is two lines — list the checked-out directories, list the area rows,
+`comm -23` — and this is t1273 one level in: that tick found trees missing from the CHECKOUT.
+
+### ⚠⚠⚠ AND THE FIRST THING IT REVEALED IS A BAR 0
+
+```text
+  html/canvas/element/pixel-manipulation/2d.imageData.get.large.crash.html
+      CRASH (killed by a signal — Bar 0)
+```
+
+`ctx.getImageData(10, 0xffffffff, 2147483647, 10)`: the shim does `w = Math.max(1, w|0)` and hands
+`2147483647 × 10 × 4` bytes to `vec![0u8; …]` — **85 GB, and the process dies.** Reachable from any
+page for as long as the API has existed, invisible only because the tree it is tested in was outside
+the metric. Chrome's full error surface is measured in the wiki (TypeError for out-of-`long` args,
+RangeError above `w×h×4 > 2³¹−1`, IndexSizeError at 0, and a NORMALISED rect for negatives).
+
+**It is the next tick.** Bar 0 outranks every visual cluster from the moment it is rankable, and this
+is the tick that made it rankable.
+
+### ⚠ THE TOTAL ROW WAS 268 BEHIND ITS OWN TABLE, AND THAT DRIFT WAS MINE
+
+t1381 and t1382 each refreshed the `css/css-overflow` row after re-running the area (481 → 508 →
+513) and **neither updated `TOTAL`**. For four ticks the headline read 268 passes behind the rows it
+summarises.
+
+> **A DERIVED FIGURE THAT IS STORED RATHER THAN COMPUTED NEEDS A CHECK, AND "I WILL REMEMBER TO
+> UPDATE BOTH" IS NOT ONE.**
+
+### THE GATE
+
+`the_wpt_total_is_the_sum_of_its_rows` (`agent/tests/`, in the wall's crate list) — TOTAL equals the
+sum; every row's printed percentage is its own arithmetic (the board PRINTS that column, so a stale
+one mis-ranks a directory even when the sums are clean); no area appears twice (a duplicate
+double-counts a tree into a total the ratchet reads as monotonic). **PROVEN RED by three mutations**:
+N1 change a row's `pass` and not TOTAL — which is literally what t1381/t1382 did, twice, unnoticed;
+N2 change a `pct` alone → only the per-row check; N3 duplicate a row → the duplicate check fires
+before the sums, which would otherwise still agree with each other.
+
+### THE WALL-TIME AUDIT (due t1388)
+
+```text
+  total 221s   ·   T (crate tests) 100s = 45%   ·   G6 14s   ·   G1 8s   ·   P 5s   ·   F 4s
+```
+
+**The wall is 221s against a 300s target — UNDER it, and nothing was trimmed.** ⚠ That also corrects
+t1383's single failing self-audit item, which read **2231s**: the self-audit reads the LAST verify
+receipt and t1382's was a COLD rebuild (it touched `engine/layout`). Both are true of different runs;
+the target is met warm, and the cold case is rebuild cost rather than standing bloat. The admissible
+optimisations (`cargo-nextest`, shared runtimes) are all in `scripts/`, which is observer-owned.
+
+⚠ Reported, not fixed (observer-owned): `blindspot.sh` prints *"We measure 72829 of 72829 upstream
+test files (100.0%)"* on the same screen as a list of areas marked `✗ INVISIBLE`.
+
+### THE RECEIPT
+
+```text
+  manuk-agent  151/151 → 152/152   +1   +the new gate
+  WPT-AREAS.tsv  20 rows → 29; TOTAL 484601/1281896 → 494536/1307572  (APERTURE, not capability)
+  board headline 80.4% → 74.4%  — the denominator trap, and it is the instrument getting honest
+  STATUS LAST_WALL_AUDIT 1368 → 1388
+```
+
+NEXT: **the Bar 0** — `getImageData`'s argument surface and allocation guard, Chrome-measured above.
+Then `html/semantics` (6,342 failing, the new largest row) surveyed before it is ground, and the
+`title`-as-name narrowing (t1386).
+
+WIKI: docs/wiki/wpt-metric-aperture.md

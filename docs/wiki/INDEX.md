@@ -2735,5 +2735,14 @@
   - L217 · The newly-visible area, classified (t1220)
   - L231 · Both named mechanisms are subsystem work
 
+## The metric's aperture — nine checked-out trees the primary number never counted
+`docs/wiki/wpt-metric-aperture.md`
+
+  - L8 · ⭐⭐⭐ "Measured" meant two different things, and the weaker one reported 100%
+  - L20 · What was invisible
+  - L46 · ⚠⚠⚠ And the first thing it revealed is a Bar 0
+  - L76 · ⚠ And the TOTAL row was 268 behind its own table
+  - L89 · The wall audit (due t1388)
+
 ---
-2531 sections across 50 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+2536 sections across 51 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.

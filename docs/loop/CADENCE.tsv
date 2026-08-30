@@ -1067,4 +1067,4 @@ tick	sha	epoch	iso	delta_s	shape	wall_s	files	added	deleted	gates	claims	wpt_pas
 1383	ff9321a2	1788104120	2026-08-30T11:35:20-04:00	5379	instrument-fidelity	465	9	526	35	522	81	3896	6960	0	642	0	the audits, and the map measured against the world's own list (2026-08-30)
 1384	bd5b508b	1788106777	2026-08-30T12:19:37-04:00	2657	capability-subsystem	465	9	457	33	522	81	3896	6960	0	642	0	the implicit roles that fell through to a plausible default (2026-08-30)
 1385	06b7a25c	1788110484	2026-08-30T13:21:24-04:00	3707	capability-subsystem	465	9	473	39	522	81	3896	6960	0	642	0	`pressed` and `invalid`: the two states the tree did not have (2026-08-30)
-1387	413deef6	1788115297	2026-08-30T14:41:37-04:00	4813	capability-subsystem	465	10	686	35	522	81	3896	6960	0	642	0	the landmark sweep, and the regression my own check hid (2026-08-30)
+1387	bc886065	1788118617	2026-08-30T15:36:57-04:00	8133	capability-subsystem	465	9	424	34	522	81	3896	6960	0	642	0	the landmark sweep, and the regression my own check hid (2026-08-30)

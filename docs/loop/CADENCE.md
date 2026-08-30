@@ -15,7 +15,7 @@
 | median tick cycle | **31m** | 1068 intervals |
 | median, last 10 | **61m** | 10 intervals |
 | fastest / slowest | 5s / 7.0d | |
-| **ticks per hour** | **0.88** | 1209.6h elapsed |
+| **ticks per hour** | **0.88** | 1210.6h elapsed |
 | median verify wall | **67s** | 1008 ticks |
 | wall trend | 39s → 8m — getting slower ⚠️ | first 3 vs last 3 |
 
@@ -1165,6 +1165,6 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 | **1383** | 2026-08-30 11:35 | 90m | instrument-fidelity | 8m | +526/−35 | 522 | 81 | 56.0% · | the audits, and the map measured against the world's own list (2026-08-30) |
 | **1384** | 2026-08-30 12:19 | 44m | capability-subsystem | 8m | +457/−33 | 522 | 81 | 56.0% · | the implicit roles that fell through to a plausible default (2026-08-30) |
 | **1385** | 2026-08-30 13:21 | 62m | capability-subsystem | 8m | +473/−39 | 522 | 81 | 56.0% · | `pressed` and `invalid`: the two states the tree did not have (2026-08-30) |
-| **1387** | 2026-08-30 14:41 | 80m | capability-subsystem | 8m | +686/−35 | 522 | 81 | 56.0% · | the landmark sweep, and the regression my own check hid (2026-08-30) |
+| **1387** | 2026-08-30 15:36 | 2.3h | capability-subsystem | 8m | +424/−34 | 522 | 81 | 56.0% · | the landmark sweep, and the regression my own check hid (2026-08-30) |
 
 *`·` after a WPT figure means **carried forward**, not measured this tick.*

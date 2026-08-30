@@ -9851,3 +9851,17 @@ the wrong state. **A latent wrong answer surfaces when the node it lives on beco
 correctness fix can look like the thing that broke a gate when it is the thing that exposed it.
 (t1387 — `agent/tests` `a_landmark_is_a_landmark_only_when_the_spec_says_so`,
  `engine/page/tests` `a_disabled_control_neither_activates_nor_reports_itself_as_actionable`)
+
+## The metric's own aperture — "measured" meant two different things
+
+`blindspot.sh` calls a WPT tree **measured** when it is CHECKED OUT; `WPT-AREAS.tsv` counts a tree
+when it has a ROW. Nine trees were checked out, runnable, and had no row — 25,602 subtests, ~2% of
+the reachable denominator, including `html/semantics` (11,264 subtests, 43.7%), which is the LARGEST
+FAILING AREA IN THE WHOLE CORPUS and was not on the board at all.
+
+⭐ Two instruments, one word, two meanings — and the weaker meaning was the one printing 100%.
+⚠ THE DENOMINATOR TRAP: opening the aperture moved the headline 80.4% → 74.4%. Nothing got worse.
+A number that FALLS when you widen the frame is the frame working.
+⚠ A DERIVED FIGURE THAT IS STORED RATHER THAN COMPUTED NEEDS A CHECK: the `TOTAL` row sat 268 passes
+behind its own rows for four ticks because two ticks refreshed an area row and not the total.
+(t1388 — `agent/tests` `the_wpt_total_is_the_sum_of_its_rows`)
