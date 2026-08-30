@@ -1065,3 +1065,4 @@ tick	sha	epoch	iso	delta_s	shape	wall_s	files	added	deleted	gates	claims	wpt_pas
 1381	0facd511	1788095164	2026-08-30T09:06:04-04:00	4585	capability-subsystem	465	11	556	52	522	81	3896	6960	0	642	0	a trailing margin was outside the scrollable overflow region (2026-08-30)
 1382	07452fae	1788098741	2026-08-30T10:05:41-04:00	3577	capability-subsystem	465	9	502	35	522	81	3896	6960	0	642	0	the alignment rectangle: a relpos box contributes BOTH positions (2026-08-30)
 1383	ff9321a2	1788104120	2026-08-30T11:35:20-04:00	5379	instrument-fidelity	465	9	526	35	522	81	3896	6960	0	642	0	the audits, and the map measured against the world's own list (2026-08-30)
+1384	bd5b508b	1788106777	2026-08-30T12:19:37-04:00	2657	capability-subsystem	465	9	457	33	522	81	3896	6960	0	642	0	the implicit roles that fell through to a plausible default (2026-08-30)

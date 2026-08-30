@@ -66,6 +66,13 @@
   - L303 · A frame is a bitmap, so its pixels need explicit refreshing (tick 232)
   - L331 · The agent's click point IS layout geometry, so a containing-block bug is an actuation bug (I3)
 
+## `pressed` and `invalid` — the two states the tree did not have
+`docs/wiki/ax-pressed-and-invalid.md`
+
+  - L7 · ⭐⭐⭐ A11yState's own doc comment described the defect
+  - L23 · The battery
+  - L58 · How it was proven red
+
 ## `display: none` in the agent's accessibility tree — the fact nobody asked for
 `docs/wiki/ax-tree-excludes-display-none.md`
 
@@ -2711,4 +2718,4 @@
   - L231 · Both named mechanisms are subsystem work
 
 ---
-2518 sections across 47 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+2521 sections across 48 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.

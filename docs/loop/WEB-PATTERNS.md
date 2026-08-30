@@ -9779,3 +9779,24 @@ ROLE, which reads as working in any name-based spot check.
 vocabulary. Where HTML-AAM says "no corresponding role", `generic` is the honest answer — it keeps
 the node addressable by name without inviting an actuation that cannot work.
 (t1384 — `agent/tests` `implicit_roles_match_html_aam`)
+
+## `<button aria-pressed>` — the toggle that reads identically before and after
+
+`Follow`, `Bold`, `Mute`, a filter chip, a "show password" eye: they are BUTTONS with
+`aria-pressed`, not checkboxes, so an a11y state model that has `checked` and not `pressed` reports
+`button "Follow"` in both states. An agent that cannot observe the result of its own action either
+proceeds on faith or re-clicks and toggles the setting back off.
+
+⭐ `aria-pressed="mixed"` is a REAL authored value (a Bold button over a partly-bold selection), so
+the field is tri-state for the same reason `checked` is. And it needs its OWN vocabulary —
+`[checked]` on a `button` describes a control that is not there.
+
+⭐ `aria-invalid` is the twin of `required`: `required` says which field a form INSISTS on, `invalid`
+says which one a blocked submission is COMPLAINING about. Without it, an agent that submits and is
+refused knows only that the page did not navigate.
+
+⚠ `aria-invalid` is an ENUMERATION — `grammar` and `spelling` are TRUTHY (they say what kind of
+wrong, not whether). The obvious `!= "false"` test agrees on every real row and disagrees only on an
+out-of-vocabulary token, which ARIA makes the DEFAULT. Test the truthy set, and put a junk token in
+the fixture.
+(t1385 — `agent/tests` `a_toggle_button_and_a_rejected_field_report_their_state`)

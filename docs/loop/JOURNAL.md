@@ -97884,3 +97884,84 @@ it: the a11y-suite aperture row above, the nested scrollable-overflow family (t1
 abspos in the alignment rectangle (t1382), and an owner decision on zstd.
 
 WIKI: docs/wiki/implicit-roles-html-aam.md
+
+## Tick 1385 — `pressed` and `invalid`: the two states the tree did not have (2026-08-30)
+
+TICK SHAPE: capability-subsystem
+
+**Track B**, surface audit #80's ranked #1, second pass — sweeping the a11y tree against CDP
+`Accessibility.getFullAXTree`, which is the oracle because Interop 2026 lists accessibility testing
+as an INVESTIGATION effort and there is no suite to ask.
+
+### ⭐⭐⭐ `A11yState`'s OWN DOC COMMENT DESCRIBED THE DEFECT
+
+> *"Without it the tree says `checkbox "Remember me"` before a click and `checkbox "Remember me"`
+> after it — identical. An agent that cannot observe the result of its own action cannot verify it,
+> so it either proceeds on faith or re-clicks and toggles the setting back off."*
+
+That sentence was **still true of every toggle button on the web**. `Follow`, `Bold`, `Mute`, a
+filter chip, a "show password" eye — they are `<button aria-pressed>`, not checkboxes, so `checked`
+never applied and the tree read `button "Follow"` in both states. **The struct had eight fields and
+the ninth was the one its own rationale was about.**
+
+`aria-invalid` is the twin of a field that already existed: `required`'s doc says *"which field a
+blocked form submission is complaining about"*, and `invalid` is how the page ANSWERS that once the
+submission is refused. Without it an agent that submits, is rejected and re-reads the tree has one
+signal — the page did not navigate — and no way to find the field.
+
+### THE BATTERY — Chrome via CDP
+
+```text
+                                   chrome                    before        after
+  aria-pressed=true                pressed: 'true'           (no field)    pressed
+  aria-pressed=false               pressed: 'false'          (no field)    unpressed
+  aria-pressed=mixed               pressed: 'mixed'          (no field)    partially-pressed
+  a plain <button>       CONTROL   no `pressed` property     —             None
+  aria-pressed="yes"     CONTROL   no `pressed` property     —             None
+  aria-invalid=true                invalid: 'true'           (no field)    invalid
+  aria-invalid=spelling            invalid: 'true'           (no field)    invalid
+  aria-invalid=grammar             invalid: 'true'           (no field)    invalid
+  aria-invalid=false     CONTROL   invalid: 'false'          —             false
+  no aria-invalid        CONTROL   invalid: 'false'          —             false
+  aria-invalid=sortof    CONTROL   invalid: 'false'          —             false
+```
+
+⭐⭐ **`mixed` is a real authored value, not a defensive third case** — a `Bold` button over a
+partly-bold selection. Flattening it to `false` says the opposite of what the page means, which is
+the argument `Checked` already carries and the reason `pressed` reuses that tri-state.
+
+⭐⭐ **`aria-invalid` is an ENUMERATION and `grammar`/`spelling` are TRUTHY** — they say what KIND of
+wrong, not whether; Chrome reports `invalid: 'true'` for both, measured. The obvious rule
+`!= "false"` agrees on **five of six rows** and disagrees only on an out-of-vocabulary token, which
+ARIA's enumerated-value rule makes the default. `v_junk` is in the fixture for exactly that reason
+and it is the only row mutation N2 fails.
+
+⭐ **`pressed` renders as its own word** (`pressed` / `unpressed` / `partially-pressed`), not as
+`checked`: an agent reading `[checked]` on a `button` is being told about a control that is not
+there. The render rows are asserted separately from the values because they are separate claims.
+
+### THE GATE
+
+`a_toggle_button_and_a_rejected_field_report_their_state` (`agent/tests/`, in the wall's crate list)
+— 11 state rows, 6 render rows, both entrances (`state_of` and the published tree), plus vacuity on
+the three fields that already existed so a struct-wide regression cannot read as this gate passing on
+two new ones. **PROVEN RED by three mutations**: N1 delete the `pressed` arm → the three pressed rows
+and both tree rows, with `p_none`/`p_junk` green because *"not a toggle"* was already their answer;
+N2 `!= "false"` → only `v_junk`; N3 render `pressed` through `checked`'s words → the three render
+rows only.
+
+### THE RECEIPT
+
+```text
+  manuk-agent  148/148 → 149/149   +1   +the new gate
+  manuk-a11y / manuk-page / manuk-layout / manuk-css / manuk-paint / manuk-dom   CONTROL
+  cargo check --workspace   clean — `A11yState` gained two public fields and it is `Default`-built
+                            everywhere, so no caller needed changing
+```
+
+NEXT: the sweep is three-for-three and continues — `<summary>`'s empty NAME (Chrome `"More"`), and
+the tree's remaining structure facts. Behind it: the a11y-suite APERTURE row (neither `wai-aria` nor
+`accname` is in `WPT-AREAS.tsv`), the nested scrollable-overflow family (t1381), transforms and
+abspos in the alignment rectangle (t1382), and an owner decision on zstd.
+
+WIKI: docs/wiki/ax-pressed-and-invalid.md

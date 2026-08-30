@@ -581,6 +581,26 @@ pub struct A11yState {
     pub required: bool,
     /// `readonly` / `aria-readonly`.
     pub readonly: bool,
+    /// ⭐⭐⭐ **`aria-pressed` — A TOGGLE BUTTON'S ONLY OBSERVABLE STATE, and the field whose
+    /// absence this struct's own doc comment describes.** *"Without it the tree says
+    /// `checkbox "Remember me"` before a click and `checkbox "Remember me"` after it — identical."*
+    /// That sentence was true of every toggle button on the web: `Follow`, `Bold`, `Mute`, a filter
+    /// chip, a "show password" eye. They are `<button aria-pressed>`, not checkboxes, so `checked`
+    /// never applied and the tree read `button "Follow"` in both states.
+    ///
+    /// Tri-state for the same reason `checked` is: `aria-pressed="mixed"` is a real authored value
+    /// (a "bold" button over a mixed selection), and flattening it to `false` tells an agent the
+    /// opposite of what the page means.
+    pub pressed: Option<Checked>,
+    /// `aria-invalid` — **the field a blocked form submission is complaining about**, which is the
+    /// exact phrase [`A11yState::required`] already uses for its twin. An agent that submits a form,
+    /// is refused, and re-reads the tree needs one bit to know WHICH field to fix; without it the
+    /// only signal is that the page did not navigate.
+    ///
+    /// `aria-invalid` is an enumeration (`true` / `false` / `grammar` / `spelling`), and
+    /// Chrome-measured, `grammar` and `spelling` both report **`invalid: 'true'`** — they say what
+    /// KIND of wrong, not whether. So this is a `bool` and the three truthy spellings collapse.
+    pub invalid: bool,
     /// The element has DOM focus. Host-owned (the shell tracks it), so it is only populated by
     /// [`build_tree_with_focus`]; the plain builders leave it `false`.
     pub focused: bool,
@@ -623,6 +643,17 @@ impl A11yState {
         }
         if self.readonly {
             parts.push("readonly".into());
+        }
+        // ⚠ `pressed` renders as its own word rather than reusing `checked`'s, because an agent
+        // reading `[checked]` on a `button` would be reading about a checkbox that is not there.
+        match self.pressed {
+            Some(Checked::True) => parts.push("pressed".into()),
+            Some(Checked::False) => parts.push("unpressed".into()),
+            Some(Checked::Mixed) => parts.push("partially-pressed".into()),
+            None => {}
+        }
+        if self.invalid {
+            parts.push("invalid".into());
         }
         if self.focused {
             parts.push("focused".into());
@@ -689,6 +720,22 @@ pub fn state_of(dom: &Dom, node: NodeId, role: &Role) -> A11yState {
         _ => None,
     };
 
+    // ⭐ The same tri-state shape as `checked`, and deliberately NOT the same field: a toggle button
+    // is not a checkbox, and an agent told `[checked]` on a `button` is being told about a control
+    // that is not there. `aria-pressed` has no native HTML twin, so there is no attribute fallback.
+    let pressed = match attr("aria-pressed") {
+        Some("mixed") => Some(Checked::Mixed),
+        Some("true") => Some(Checked::True),
+        Some("false") => Some(Checked::False),
+        _ => None,
+    };
+
+    // ⚠ `aria-invalid` is an ENUMERATION, not a boolean: `grammar` and `spelling` are truthy and
+    // say what KIND of wrong. Chrome-measured — both report `invalid: 'true'` — so they collapse.
+    // Any other token (including a typo) is `false` per ARIA's enumerated-value rule, which is why
+    // this is a match on the truthy set rather than `!= "false"`.
+    let invalid = matches!(attr("aria-invalid"), Some("true" | "grammar" | "spelling"));
+
     let expanded = aria_bool("aria-expanded").or(if tag == "details" {
         Some(attr("open").is_some())
     } else {
@@ -728,6 +775,8 @@ pub fn state_of(dom: &Dom, node: NodeId, role: &Role) -> A11yState {
         disabled: inherits_disabled(dom, node) || aria_bool("aria-disabled") == Some(true),
         required: attr("required").is_some() || aria_bool("aria-required") == Some(true),
         readonly: attr("readonly").is_some() || aria_bool("aria-readonly") == Some(true),
+        pressed,
+        invalid,
         focused: false, // host-owned; filled in by `build_tree_with_focus`
         value,
     }
