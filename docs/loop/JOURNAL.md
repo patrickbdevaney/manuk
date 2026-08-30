@@ -96530,3 +96530,99 @@ should become a context struct); the float re-flow (t1364); and a11yproject's wi
 the board's only failing anchor at 49.3%.
 
 WIKI: docs/wiki/generated-content-edge-space.md
+
+## Tick 1371 — the announced half reaches the name, and the fourth fact became a struct (2026-08-30)
+
+TICK SHAPE: capability-subsystem
+
+**Track B, and the constitution check came due (every 8; last at 1363).** Both are in this tick.
+
+### THE CAPABILITY — t1369's REMAINDER, CLOSED
+
+t1369 made the two halves of `content: "drawn" / "announced"` *separable*: it stopped the announced
+half being painted, on both cascades. This is the other end — the announced half now **is** the name.
+
+```text
+  accname   432/484 (89.3%)  →  438/484 (90.5%)   +6, and ZERO newly failing
+    button/heading/link name from fallback content with ::before and ::after       ×3
+    button/heading/link name from fallback content mixing attr() and strings …     ×3
+```
+
+Confirmed by **diffing the failing name lists**: the `fallback content` rows are gone (count 0) and
+nothing else moved.
+
+⭐ **`Some("")` is a real answer, and that is the whole design.** `content: "★" / ""` means *draw a
+star, announce nothing*, so the choice is three-way, not `unwrap_or(rendered)` on a string:
+
+```text
+  no `/`     -> the name falls back to the RENDERED text
+  `/ "alt"`  -> the name is "alt"
+  `/ ""`     -> the name is EMPTY, and must NOT fall back
+```
+
+Collapsing the last two turns every *"decorative, do not announce"* pseudo back into an announced
+one — the exact request the author wrote the empty alt to make. That is mutation N2, and it fires on
+that row alone.
+
+### ⭐⭐⭐ AND THE FOURTH FACT BECAME A CONTEXT STRUCT, BECAUSE t1365 SAID IT WOULD
+
+Three facts had been threaded through the accessible-name walk one parameter at a time — t1097's
+`GeneratedText`, t1355's `NameIndex` widening, t1365's `NameStyles` — and **each one left a caller
+behind**, twice in the same unit test, invisibly, because `manuk-a11y` is a suite in no wall (surface
+audit #78). t1365's own note read: *"a fourth fact should become a context struct rather than a
+fourth parameter."*
+
+`NameCtx { generated, alt, styles }` replaces two parameters across eleven signatures. The win is not
+tidiness: **adding a fifth is now a one-line change to the struct and its two construction sites**,
+instead of an edit to twenty call sites where missing one compiles fine on every path but the one
+that matters. A prediction the loop wrote down and then met on schedule.
+
+### THE GATE
+
+`the_announced_half_of_content_is_the_name_through_both_entrances` (`agent/tests/`) — four fixture
+rows, three asserted, **both entrances asserted against each other** on every one. PROVEN RED by
+three mutations: N1 `pseudo_names` returns the rendered text always (the pre-tick behaviour) → `#b1`
+reads `"drawn label"`; N2 treat `Some("")` as absent → only `#b3` fails, reading `"star label"`; N3
+build the tree with an empty alt map while the bare entrance gets the real one → every `bare`
+assertion passes and every `AX TREE` assertion fails.
+
+### ⚠ NAMED, MEASURED, NOT BUILT — `attr()` in `content` on the OTHER cascade
+
+The fourth fixture row is `content: "x " / "start " attr(data-alt) " end "`. Chrome names it
+`"start MID end label"`; **the shipping (Stylo) path agrees** — which is precisely why the three
+`mixing attr()` rows are among the six this tick fixed. `MinimalCascade` gives `"start end label"`.
+
+The cause is structural, not an oversight: `ContentPart` has no `Attr` variant **by design** — its
+own doc says an `attr()` is *"already resolved against the element"* — and Stylo's mapper resolves
+it, while `parse_content_parts` is a free function with no element in hand. So the row is left in the
+fixture and **out of the asserted set**: asserting Chrome's answer lands a RED gate, asserting
+MinimalCascade's PINS THE BUG (the t1004 shape). A vacuity assert keeps the row alive so the note is
+about something that exists. `attr(` prices at **14 of 39** corpus sites — the highest row in t1369's
+pref sweep.
+
+### CONSTITUTION CHECK #130
+
+⭐⭐⭐ **The window's real finding is that THREE lists that rank work were stale, and one of them was
+the steering list**: t1362's gate header (3 entries false for ~427 ticks), t1367's board anchors
+(five of six already clear the bar), and VI.2's residual categories (narrowed to floats by t1364's
+battery). *A stale backlog wastes a tick; a stale ranking list mis-aims every tick that consults it.*
+
+VI.2 corrected: of its five named residual categories, t1364 measured all of them and nine of eleven
+probes came back Chrome-exact. **The residual it points at is `floats` — specifically the re-flow
+half.** I5 is unchanged and is now the longest-lived un-progressed exit condition; the check says so
+plainly rather than carrying it. Full entry in `CONSTITUTION-CHECK.md`; next due tick 1379.
+
+### THE RECEIPT
+
+```text
+  accname      432/484 → 438/484   +6, zero newly failing (verified by name diff)
+  manuk-agent  135/135 → 136/136   +1   +the new gate
+  manuk-a11y / manuk-page / manuk-layout / manuk-css / manuk-paint / manuk-dom   CONTROL
+  cargo check --workspace --all-targets   clean
+```
+
+NEXT: `attr()` in `content` on MinimalCascade (14/39) and `counter-set` for the remaining alt-counter
+rows are the ranked Track B items; the float re-flow is Track A's; and the gate-execution gap is
+still the highest-value thing the agent cannot close.
+
+WIKI: docs/wiki/content-alt-text.md

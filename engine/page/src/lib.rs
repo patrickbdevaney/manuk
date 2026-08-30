@@ -9017,11 +9017,16 @@ impl Page {
             &self.z_index_map(),
             &self.invisible_nodes(),
             &self.non_hittable_nodes(),
-            &manuk_layout::generated_text(&self.dom, &self.styles),
             // ⚠ BOTH ENTRANCES. The bare `accessible_name` behind
-            // `test_driver.get_computed_label()` gets this from `STYLES_PTR`; these are the tree
-            // builder's copies, and they are the doors I3 requires to be walked together.
-            &manuk_a11y::name_styles(&self.dom, &self.styles),
+            // `test_driver.get_computed_label()` builds the same context from `STYLES_PTR`; this is
+            // the tree builder's copy, and they are the doors I3 requires to be walked together.
+            // t1371 collapsed the three facts into `NameCtx` so a fourth cannot be added to one
+            // door and forgotten at the other.
+            &manuk_a11y::empty_name_ctx(
+                &manuk_layout::generated_text(&self.dom, &self.styles),
+                &manuk_layout::generated_alt_text(&self.dom, &self.styles),
+                &manuk_a11y::name_styles(&self.dom, &self.styles),
+            ),
         )
     }
 
@@ -9055,11 +9060,16 @@ impl Page {
             focused,
             &self.invisible_nodes(),
             &self.non_hittable_nodes(),
-            &manuk_layout::generated_text(&self.dom, &self.styles),
             // ⚠ BOTH ENTRANCES. The bare `accessible_name` behind
-            // `test_driver.get_computed_label()` gets this from `STYLES_PTR`; these are the tree
-            // builder's copies, and they are the doors I3 requires to be walked together.
-            &manuk_a11y::name_styles(&self.dom, &self.styles),
+            // `test_driver.get_computed_label()` builds the same context from `STYLES_PTR`; this is
+            // the tree builder's copy, and they are the doors I3 requires to be walked together.
+            // t1371 collapsed the three facts into `NameCtx` so a fourth cannot be added to one
+            // door and forgotten at the other.
+            &manuk_a11y::empty_name_ctx(
+                &manuk_layout::generated_text(&self.dom, &self.styles),
+                &manuk_layout::generated_alt_text(&self.dom, &self.styles),
+                &manuk_a11y::name_styles(&self.dom, &self.styles),
+            ),
         )
     }
 

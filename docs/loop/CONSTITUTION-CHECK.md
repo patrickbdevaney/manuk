@@ -11158,3 +11158,111 @@ rather than exhortation.
 4. The a11yproject width narrowing is the open anchor-site question, with four doors closed on it.
 
 **Next check due: tick 1371.**
+
+---
+
+## Check #130 — tick 1371 (2026-08-30)
+
+**HORIZON: H0 — Pareto Web Parity.** Exit gate, all binary:
+
+```text
+  1  ~83% WPT subtest pass rate across categories
+  2  differential-oracle-verified viability across all four usage-weighted corpora
+  3  the headful shell is daily-drivable by its own developer
+  4  EVERY RENDERED CONSTRUCT IS QUERYABLE THROUGH THE IN-PROCESS SEMANTIC API
+```
+
+### GATE OR SCOREBOARD? — GATE, and the window's shape is worth naming
+
+Ticks 1364–1371. Eight ticks, and the honest split:
+
+```text
+  1364  VI.2's residual battery; UA `border-spacing` twin drift                 CAPABILITY + LEDGER
+  1365  the accessible name is a function of the computed style (+9 accname)    CAPABILITY
+  1366  the agent's drive path never hit-tested                                 CAPABILITY
+  1367  a flex/grid item is an independent FC (a11yproject +6, fowler +9.9)     CAPABILITY
+  1368  the wall-time audit, and a correction to t1363                          INSTRUMENT
+  1369  `content`'s alt half was painted, not announced                         CAPABILITY
+  1370  a line-edge space from `content` is a gap, not a glyph                   CAPABILITY
+  1371  the alt half reaches the NAME (+6 accname); NameCtx                     CAPABILITY
+```
+
+Seven of eight bought a capability. **Two bought one and moved no headline number, and both said
+so** — t1370's edge-space fix left three anchors and `accname` unchanged to the decimal, and t1364's
+`border-spacing` fix was `MinimalCascade`-only. Reporting that is the point: the alternative is a
+receipt that reads like progress because the reader assumes a number moved.
+
+### ⭐⭐⭐ THE WINDOW'S REAL FINDING — THREE STALE LISTS, AND ONE OF THEM WAS THE STEERING LIST
+
+```text
+  t1362  a gate's own "NAMED, MEASURED, NOT BUILT" list      3 entries, false for ~427 ticks
+  t1367  the BOARD's ranked anchor sites                     5 of 6 already clear the bar
+  t1371  (this check) VI.2's residual categories             narrowed to floats by t1364's battery
+```
+
+> ⭐⭐⭐ **A LIST THAT RANKS WORK IS A CLAIM ABOUT THE PRESENT TENSE, AND NOTHING RE-RUNS IT.** A
+> stale backlog wastes a tick. **A stale ranking list mis-aims every tick that consults it** — and
+> t1367 measured that the board's own anchors read 0.999 / 1.000 / 1.000 / 0.903 / 0.799 / 0.433
+> against recorded figures of 0.72 / 0.51 / 0.63 / 0.52 / 0.58 / 0.44.
+
+This also explains a run of Track A ticks in this window that kept measuring a named defect and
+finding it already correct. The cost was not wasted work — each produced a gate on behaviour that had
+been unbanked — but the *aim* was coming from a 2026-07-29 snapshot.
+
+⚠ `scripts/lever-board.sh` is observer-owned. The measurements are in
+`docs/wiki/board-anchor-sites-remeasured.md`; the list itself has not been edited.
+
+### PART VI CORRECTED
+
+- **VI.2's H0.1 row names five residual categories. t1364 measured all of them.** Nine of eleven
+  probes came back Chrome-exact — anonymous table rows, anonymous tables, inline boxes with no text
+  of their own, self-collapsing margins, float placement at a line's top, abspos under a transformed
+  containing block, percentage height in an auto parent, float shrink-to-fit, `clear`, inline-block
+  baseline with `overflow`. **The residual VI.2 points at is `floats`, specifically the re-flow half:
+  a float that FOLLOWS inline text is placed correctly but the line it joins is not re-laid around
+  it, so a 400px block Chrome renders 24 tall comes out 48.** One category, one mechanism, measured
+  with a control arm. VI.2 should be re-ranked to say so.
+- **t933's three table entries are retracted** (t1362), and `CONSTITUTION-CHECK.md:5329`'s
+  `t933 … UNMEASURED` row now has a measurement: all three correct, all three gated.
+
+### THE INVARIANTS
+
+**I3 — not bent, and its own sharpening keeps paying.** #128 required *"exposed through EVERY
+entrance the semantic API is read through"*. This window threaded three more facts through that walk
+and **every one of them was wired to both doors and asserted against itself** (t1365 `NameStyles`,
+t1371 the `content` alt half), with a mutation in each gate that wires only one door and watches the
+tree arm fail while the bare arm passes.
+
+⭐ And t1365's own prediction came true on schedule: *"a fourth fact should become a context struct
+rather than a fourth parameter."* t1371 is the fourth fact and it did. The justification is not
+tidiness — three facts had each **left a caller behind**, twice in the same unit test, invisibly,
+because `manuk-a11y` is a suite in no wall.
+
+**I4 — applied as a REFUSAL repeatedly, which is the discipline working.** t1369 swept 53 stylo
+pref gates, priced them, and flipped **one** — because `system-ui` (13/39 sites) and
+`-webkit-fill-available` (3/39) measured Chrome-exact with their prefs off. *An unflipped pref is not
+evidence that a feature is broken.* A tick that flipped all 47 would have changed 47 behaviours on
+the evidence of one.
+
+**I5 — unchanged, and it is exit-gate condition 2.** The oracle has still never finished a crawl
+(`ORACLE_CRAWLED: 0 (PARTIAL)`). Not worked in this window or the last. This is now the longest-lived
+un-progressed exit condition and it should be said plainly rather than carried.
+
+**I1, I2, I6, I7, I8: not bent.** The one new workspace dependency (`manuk-a11y` → `manuk-css`, t1365)
+is internal and cycle-free.
+
+### STEER
+
+1. ⭐⭐⭐ **Re-rank VI.2 to the one category that survived measurement — the float re-flow** — and
+   treat the other four as banked. *Refutable by:* if a fixture from any of the four produces a
+   Chrome divergence, t1364's battery was too narrow; it is eleven rows and could be.
+2. ⭐⭐ **The gate-execution gap (audit #78: 502 of 522 gate files run nowhere) is still the highest
+   -value item the agent cannot close.** It has now caused a fourth symptom: t1369's Stylo-path pref
+   flip could not be gated where the wall looks, and was verified by direct measurement instead.
+3. ⭐ **I5 needs an owner decision.** One clean differential-oracle crawl is a binary exit condition
+   that has not moved in this window or the previous several, and the loop has no instrument-side
+   lever left that it owns.
+4. `attr()` in `content` on `MinimalCascade` (14/39 corpus sites, the highest row in t1369's price
+   sweep) and `counter-set` for the accname alt-counter rows are the two ranked Track B items.
+
+**Next check due: tick 1379.**

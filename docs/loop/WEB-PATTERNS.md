@@ -9540,3 +9540,16 @@ space too and reads a character short.
 preceding inline's rect), and that reasoning still holds for the spaces INSIDE the string. Only the
 edges move.
 (t1370 — `agent/tests` `a_pseudo_s_edge_space_is_a_gap_not_a_glyph`)
+
+## `::before { content: "★" / "" }` — and the accessible name that must stay empty
+
+CSS Content 3's alt half is what a pseudo ANNOUNCES. Wiring it into the accessible name is a
+THREE-WAY choice, not a fallback: no `/` means the name uses the rendered text; `/ "alt"` means the
+name is `alt`; and `/ ""` means the name is EMPTY and must not fall back. Treating `Some("")` as
+absent turns every "decorative, do not announce" pseudo back into an announced one — the exact
+request the empty alt was written to make.
+
+⚠ `attr()` inside the alt half works on the Stylo path and not on MinimalCascade, and the cause is
+structural: an `attr()` in `content` is resolved AT PARSE TIME against the element, and a parser that
+is a free function has no element in hand. `attr(` prices at 14 of 39 corpus sites.
+(t1371 — `agent/tests` `the_announced_half_of_content_is_the_name_through_both_entrances`)

@@ -857,6 +857,10 @@
   - L58 · The other cascade did not parse it at all
   - L68 · Chrome-measured
   - L78 · ⚠ NAMED, MEASURED, NOT BUILT
+  - L95 · t1371 — the announced half reaches the NAME
+  - L109 · ⭐ Some("") is a real answer, and that is the whole design
+  - L122 · ⭐⭐⭐ And the fourth fact became a context struct, because t1365 said it would
+  - L135 · ⚠ NAMED, MEASURED, NOT BUILT — attr() in content on the other cascade
 
 ## CSS AND THE CASCADE — Stylo realities and quirks actually encountered
 `docs/wiki/css-cascade.md`
@@ -2594,4 +2598,4 @@
   - L231 · Both named mechanisms are subsystem work
 
 ---
-2449 sections across 35 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+2453 sections across 35 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.

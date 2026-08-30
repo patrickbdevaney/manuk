@@ -89,3 +89,63 @@ taking the first renders `and` (77.06 wide) instead of `and/or` (105.97) — tha
   `manuk-page` with default features, so this gate runs on `MinimalCascade`; the pref flip was
   verified by direct measurement instead. That asymmetry is surface audit #78's finding — no wall
   runs a Stylo-path gate — and it is recorded rather than worked around.
+
+---
+
+## t1371 — the announced half reaches the NAME
+
+t1369 (above) made the two halves *separable*. This is the other end: the announced half now **is**
+the accessible name.
+
+```text
+  accname   432/484 (89.3%)  →  438/484 (90.5%)   +6, and ZERO newly failing
+    button/heading/link name from fallback content with ::before and ::after       ×3
+    button/heading/link name from fallback content mixing attr() and strings …     ×3
+```
+
+Verified by diffing the failing **name lists**: the `fallback content` rows are gone and nothing else
+moved.
+
+### ⭐ `Some("")` is a real answer, and that is the whole design
+
+```text
+  no `/` in the declaration   ->  the name falls back to the RENDERED text
+  `/ "alt"`                   ->  the name is "alt"
+  `/ ""`                      ->  the name is EMPTY — and must NOT fall back
+```
+
+`content: "★" / ""` means *draw a star, announce nothing*. Collapsing the last two cases — by storing
+only non-empty alt strings, say — silently turns every decorative pseudo back into an announced one,
+which is the exact request the empty alt was written to make. It is a three-way choice, not
+`unwrap_or(rendered)` on a string, and the gate's N2 mutation fires on that row alone.
+
+### ⭐⭐⭐ And the fourth fact became a context struct, because t1365 said it would
+
+Three facts had been threaded through the accessible-name walk one parameter at a time — t1097's
+`GeneratedText`, t1355's `NameIndex` widening, t1365's `NameStyles` — and **each one left a caller
+behind**, twice in the same unit test, invisibly, because `manuk-a11y` is a suite in no wall (surface
+audit #78). t1365's own note read: *"a fourth fact should become a context struct rather than a
+fourth parameter — the signature already carries an `#[allow(clippy::too_many_arguments)]`."*
+
+`NameCtx { generated, alt, styles }` replaces two parameters across eleven signatures. The win is not
+tidiness: **adding a fifth is now a one-line change to the struct and its two construction sites**,
+instead of an edit to twenty call sites where missing one compiles fine on every path but the one
+that matters. A prediction the loop wrote down and then met on schedule.
+
+### ⚠ NAMED, MEASURED, NOT BUILT — `attr()` in `content` on the other cascade
+
+`content: "x " / "start " attr(data-alt) " end "` is named `"start MID end label"` by Chrome, and
+**the shipping (Stylo) path agrees** — which is precisely why the three `mixing attr()` rows are among
+the six fixed here. `MinimalCascade` gives `"start end label"`.
+
+The cause is structural rather than an oversight: `ContentPart` has no `Attr` variant **by design** —
+its own doc says an `attr()` is *"already resolved against the element (that one CAN be resolved in
+the cascade — the attribute is right there on the element)"* — and Stylo's mapper does resolve it,
+while `parse_content_parts` is a free function with no element in hand. Closing it means threading
+the element into that parser or giving `ContentPart` a term layout resolves: a design decision, not a
+line change.
+
+The row is therefore left in the gate's fixture and **out of the asserted set** — asserting Chrome's
+answer lands a RED gate, asserting MinimalCascade's pins the bug — with a vacuity assert keeping it
+alive so the note is about something that exists. `attr(` prices at **14 of 39** corpus sites, the
+highest row in t1369's pref sweep, so this is a ranked item rather than a curiosity.

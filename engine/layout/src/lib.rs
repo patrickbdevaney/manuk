@@ -1600,6 +1600,54 @@ pub fn generated_text(dom: &Dom, styles: &StyleMap) -> HashMap<NodeId, (String, 
     out
 }
 
+/// **The ALT half of `content` — what a pseudo ANNOUNCES rather than what it draws.**
+///
+/// The sibling of [`generated_text`], reading `content_alt` where that reads `content`, and
+/// resolving counters through the same document-order snapshot so `content: "" / counter(step)`
+/// announces the step number.
+///
+/// ⚠ **`None` and `Some("")` are different answers and the accessible-name walk depends on it.**
+/// A declaration with no `/` produces no entry at all, and the name falls back to the rendered
+/// text; `content: "★" / ""` produces `Some("")`, which means *announce nothing* and must NOT fall
+/// back. Collapsing the two — by storing only non-empty strings, say — silently turns every
+/// "decorative, do not announce" pseudo back into an announced one, which is the exact request the
+/// author wrote the empty alt to make.
+pub fn generated_alt_text(
+    dom: &Dom,
+    styles: &StyleMap,
+) -> HashMap<NodeId, (Option<String>, Option<String>)> {
+    let counters = counter_snapshots(dom, styles);
+    let mut out = HashMap::new();
+    for n in dom.descendants(dom.root()) {
+        let Some(st) = styles.get(&n) else {
+            continue;
+        };
+        let render = |p: &Option<Box<ComputedStyle>>| -> Option<String> {
+            let p = p.as_ref()?;
+            if generated_box_is_suppressed(p) {
+                return None;
+            }
+            let parts = p.content_alt.as_ref()?;
+            let mut t = String::new();
+            for part in parts {
+                match part {
+                    ContentPart::Text(s) => t.push_str(s),
+                    ContentPart::Counter(name) => {
+                        let v = counters.get(&n).and_then(|c| c.get(name)).copied();
+                        t.push_str(&v.unwrap_or(0).to_string());
+                    }
+                }
+            }
+            Some(t)
+        };
+        let (b, a) = (render(&st.before), render(&st.after));
+        if b.is_some() || a.is_some() {
+            out.insert(n, (b, a));
+        }
+    }
+    out
+}
+
 pub fn layout_document(
     dom: &Dom,
     styles: &StyleMap,

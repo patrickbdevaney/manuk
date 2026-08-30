@@ -47,7 +47,9 @@
 //!
 //! PROVEN RED by four mutations — see the module tail.
 
-use manuk_a11y::{accessible_name_generated, name_styles, role_of, A11yNode};
+use manuk_a11y::{
+    accessible_name_generated, empty_name_ctx, name_styles, role_of, A11yNode, GeneratedAlt,
+};
 use manuk_text::FontContext;
 
 /// The WPT fixture's shape, reduced to the rows that need a computed style. `.block`/`.iblock` are
@@ -136,9 +138,13 @@ fn the_accessible_name_reads_the_computed_style_through_both_entrances() {
         let n = node_id(&page, id);
         let role = role_of(dom, n).unwrap_or_else(|| panic!("VACUOUS: #{id} maps to no ARIA role"));
         let generated = manuk_layout::generated_text(dom, page.styles_map());
+        let alt = manuk_layout::generated_alt_text(dom, page.styles_map());
+        // t1371 collapsed these three facts into `NameCtx`, so this composition is now the same one
+        // line at both entrances instead of an argument list that can drift between them.
+        let ctx = empty_name_ctx(&generated, &alt, &styles);
 
         // DOOR 1 — the bare name, behind `test_driver.get_computed_label()`.
-        let bare = accessible_name_generated(dom, n, &role, &generated, &styles);
+        let bare = accessible_name_generated(dom, n, &role, &ctx);
         // DOOR 2 — the AX tree, which a live page's agent reads.
         let via_tree = tree_name(&tree, n);
 

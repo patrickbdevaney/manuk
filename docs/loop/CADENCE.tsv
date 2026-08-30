@@ -1052,3 +1052,4 @@ tick	sha	epoch	iso	delta_s	shape	wall_s	files	added	deleted	gates	claims	wpt_pas
 1368	79447ff7	1788044284	2026-08-29T18:58:04-04:00	470	instrument-fidelity	465	6	214	33	522	81	3896	6960	0	642	0	the wall-time audit, and a correction to something t1363 published (2026-08-29)
 1369	f39134f9	1788047963	2026-08-29T19:59:23-04:00	3679	capability-subsystem	465	10	557	39	522	81	3896	6960	0	642	0	one `content` declaration says two things, and we painted the wrong half (2026-08-29)
 1370	fff976e5	1788052246	2026-08-29T21:10:46-04:00	4283	capability-subsystem	465	9	343	38	522	81	3896	6960	0	642	0	a space at the edge of a line is not drawn, and `content`'s spaces were (2026-08-29)
+1371	2907d2b4	1788059530	2026-08-29T23:12:10-04:00	7284	capability-subsystem	465	15	710	107	522	81	3896	6960	0	642	0	the announced half reaches the name, and the fourth fact became a struct (2026-08-30)
