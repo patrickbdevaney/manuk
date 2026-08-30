@@ -56,3 +56,29 @@ mis-parse into `Line(0)` or a span would not.
   ⚠ The ledger's first draft predicted the one-value row alone, on the reasoning that the others are
   symmetric — true of the one- and two-value rows, **false of the four-value ones**. Corrected to
   what actually fired.
+
+
+---
+
+## t1377 — the drift table's other two layout rows, priced and withdrawn
+
+Surface audit #79 ranked `MinimalCascade`'s missing properties by **declaration count** and called
+three of them layout drift. `grid-area` (above) was real. The other two were not:
+
+```text
+  -ms-flex          63 declarations   CHROME IGNORES IT. Two children with `-ms-flex: 1` and `2`
+                                      in a 300px flex row are 10px each — their content width.
+                                      Implementing it would make this engine DIVERGE.
+  -webkit-box-flex  63 declarations   ONE of 14 sites declares it, and that site also declares
+                                      `-webkit-box-orient: vertical` — the case that IS implemented.
+                                      Corpus-wide: vertical 40, horizontal 19.
+```
+
+> ⭐⭐⭐ **A declaration count is not a site count, and a site count is not a divergence.** #79 had
+> already re-sorted its table by *what a property does* after finding `transition` (447 declarations,
+> inert) at the top. This is the other half: price by SITE, then check whether the browser honours
+> the property at all.
+
+Both behaviours are banked by `g_legacy_webkit_box` (`agent/tests/`), the `-ms-flex` row as a
+**pinned negative** whose only job is to stop a future reader implementing it off a drift table —
+proven red by adding the `flex_grow` arm, which makes the children read 103 and 197.

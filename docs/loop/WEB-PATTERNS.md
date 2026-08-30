@@ -9633,3 +9633,17 @@ is column 2 / row auto.
 declaration UNPARSED — a name silently becoming a line number places the item somewhere the author
 never asked for, which is worse than ignoring it.
 (t1376 — `agent/tests` `the_grid_area_shorthand_places_on_both_axes`)
+
+## `-ms-flex: 1` — 63 declarations of a property whose correct implementation is nothing
+
+`-ms-flex` is IE's spelling and no shipping engine honours it: two children with `-ms-flex: 1` and
+`-ms-flex: 2` in a 300px flex row are their content width in Chrome, not a grown share. A drift table
+that ranks by declaration count puts it near the top; implementing it would make an engine DIVERGE.
+
+⭐ **A property the corpus declares is not evidence the browser honours it** — the same shape as "an
+unflipped pref is not evidence a feature is broken". A count is a place to look; the measurement is
+the finding.
+
+⚠ And a declaration count is not a site count: `-webkit-box-flex` also shows 63 declarations and is
+on ONE of 14 sites, which uses `-webkit-box-orient: vertical` — the orientation that works. Price by
+SITE before believing a raw count.

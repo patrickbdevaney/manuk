@@ -97015,3 +97015,71 @@ residual, with t1374's side-table constraint attached; Track C's is the end-to-e
 site, now that resolution, reachability and actuation are joined.
 
 WIKI: docs/wiki/grid-area-shorthand.md
+
+## Tick 1377 — two rows of my own audit, priced properly and withdrawn (2026-08-30)
+
+TICK SHAPE: capability-subsystem
+
+**Track A/B.** Surface audit #79's last two "REAL LAYOUT" rows. Both were withdrawn by measurement,
+and the behaviour they were about was banked instead.
+
+### ⭐⭐⭐ `-ms-flex` — CHROME IGNORES IT, SO IMPLEMENTING IT WOULD MAKE US DIVERGE
+
+Two children with `-ms-flex: 1` and `-ms-flex: 2` in a 300px flex container are **10px each** in
+Chrome — their content width. `-ms-flex` is IE's spelling and no shipping engine honours it. Sixty
+-three declarations of a property whose correct implementation is *do nothing*, and our engine
+already does nothing.
+
+> **A property the corpus declares is not evidence the browser honours it.** Same shape as t1369's
+> *"an unflipped pref is not evidence that a feature is broken"*: a count is a place to look, and the
+> measurement is the finding.
+
+### ⭐⭐ `-webkit-box-flex` — 63 DECLARATIONS, AND ONE SITE
+
+`display: -webkit-box` with `orient: horizontal` laying children in a row is **deliberately not
+implemented**, and `engine/css/src/lib.rs` says why: *"the dominant idiom is text-only or `orient:
+vertical`."* #79's declaration count looked like evidence against that. Priced properly:
+
+```text
+  sites declaring -webkit-box-flex at all                1 of 14
+  …which also declare -webkit-box-orient: vertical       1        (the IMPLEMENTED case)
+  corpus-wide orient      vertical 40 · horizontal 19 · initial 1
+```
+
+**The deferral's reason holds.** Sixty-three declarations collapse to one site, and that site uses
+the orientation that works. The row is withdrawn rather than built — and `-webkit-box-orient:
+vertical` was measured correct on the shipping path in the same pass.
+
+⚠ **A DECLARATION COUNT IS NOT A SITE COUNT, AND A SITE COUNT IS NOT A DIVERGENCE.** Audit #79
+already learned half of this — it re-sorted its table by *what a property does* after finding
+`transition` (447 declarations, inert) at the top. This is the other half, and it took two more
+measurements. The audit is corrected in place.
+
+### WHAT IS BANKED
+
+`g_legacy_webkit_box` (`agent/tests/`) — the two behaviours those rows were about, both correct and
+both previously ungated, with a vacuity assert that the flex row really is a row.
+
+**PROVEN RED** by adding an `"-ms-flex" => s.flex_grow = …` arm — the exact mistake a future reader
+of a drift table would make: the children read 103 and 197 instead of 10 and 10. **That row's only
+job is to refuse that**, and it is the only gate in the tree that would catch it.
+
+⚠ There is **no mutation for the horizontal `-webkit-box` row**, and the module says so: it is not
+implemented and deliberately is not being implemented, so asserting Chrome's answer would land a RED
+gate and asserting ours would pin a bug.
+
+### THE RECEIPT
+
+```text
+  manuk-agent  141/141 → 142/142   +1   +the new gate
+  manuk-css                             CONTROL
+  SURFACE-AUDIT.md   #79's drift table corrected in place; its ranked item 2 retired
+  git diff engine/   empty — the tick withdraws two proposals and banks two behaviours
+```
+
+NEXT: with #79's layout rows resolved (grid at t1376, these two withdrawn here), the ranked items are
+audit #79's #1 — sweep the gates that build their own input and ask what each is blind to — and, on
+the other tracks, the float re-flow (VI.2's sole surviving residual, with t1374's side-table
+constraint) and Track C's end-to-end drive on a real site.
+
+WIKI: docs/wiki/grid-area-shorthand.md

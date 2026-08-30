@@ -7421,3 +7421,32 @@ Fixed and gated this tick (`g_pointer_events_cascade`, `agent/tests/`).
 3. ⭐ **Sort a drift table by what the property DOES, not by how often it is declared.** The largest
    count in this one is inert; the one that mattered was ninth.
 4. Carried from #78: the gate-execution gap (502 of 522) and the plural-gate assertion-count sweep.
+
+### ⚠⚠ CORRECTION to #79's drift table (added at t1377, from measurement)
+
+Two rows of the table above were labelled **REAL LAYOUT** on their declaration counts. Both are
+withdrawn:
+
+```text
+  -ms-flex          63 declarations   CHROME IGNORES IT — two children with `-ms-flex: 1` and `2`
+                                      in a 300px flex row are 10px each, their content width.
+                                      Implementing it would make this engine DIVERGE.
+  -webkit-box-flex  63 declarations   ONE of 14 sites declares it, and that site also declares
+                                      `-webkit-box-orient: vertical` — the case that IS implemented.
+                                      Corpus-wide: vertical 40, horizontal 19. The existing
+                                      deferral's stated reason ("the dominant idiom is text-only or
+                                      orient: vertical") HOLDS.
+```
+
+> ⭐⭐⭐ **A DECLARATION COUNT IS NOT A SITE COUNT, AND A SITE COUNT IS NOT A DIVERGENCE.** #79
+> already learned half of this when it re-sorted by *what a property does* after finding
+> `transition` at the top. This is the other half, and it took two more measurements: sort by what
+> the property does, **then price it by SITE, then check whether the browser honours it at all.**
+
+The behaviours those rows were about are correct and were ungated; both are now banked by
+`g_legacy_webkit_box` (`agent/tests/`), with the `-ms-flex` row as a **pinned negative** whose only
+job is to stop a future reader implementing it off a drift table.
+
+⚠ The remaining LAYOUT drift from #79 is therefore **grid placement alone** (`grid-area` +
+`grid-template-areas`, 127 declarations) — closed at t1376 — and #79's ranked list item 2 is
+retired.

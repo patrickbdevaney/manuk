@@ -1558,6 +1558,7 @@
   - L21 · ⭐ The order is row / column / row / column
   - L40 · ⚠ The NAMED form is deliberately not parsed
   - L50 · Proven red
+  - L63 · t1377 — the drift table's other two layout rows, priced and withdrawn
 
 ## THE INTERACTION SURFACE — clicks, scroll, focus, and automation
 `docs/wiki/interaction-surface.md`
@@ -2640,4 +2641,4 @@
   - L231 · Both named mechanisms are subsystem work
 
 ---
-2475 sections across 40 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+2476 sections across 40 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
