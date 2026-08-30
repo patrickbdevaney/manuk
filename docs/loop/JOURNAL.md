@@ -98283,3 +98283,123 @@ Then `html/semantics` (6,342 failing, the new largest row) surveyed before it is
 `title`-as-name narrowing (t1386).
 
 WIKI: docs/wiki/wpt-metric-aperture.md
+
+## Tick 1389 — the Bar 0 that asked for 85 GB (2026-08-30)
+
+TICK SHAPE: capability-subsystem
+
+t1388 opened the metric's aperture and the first thing it revealed was a crash. Bar 0 outranks every
+visual cluster, so this is the very next tick.
+
+### ⚠⚠⚠ THE CRASH
+
+```text
+  html/canvas/element/pixel-manipulation/2d.imageData.get.large.crash.html
+      CRASH (killed by a signal — Bar 0)
+```
+
+`ctx.getImageData(10, 0xffffffff, 2147483647, 10)`. The shim did `w = Math.max(1, w|0)` and handed
+`2147483647 × 10 × 4` bytes to a `vec![0u8; …]` — **85 GB, and the process died.** Reachable from any
+page for as long as this API has existed; invisible only because `html/canvas` was outside the
+primary metric until one tick ago.
+
+### THE ERROR SURFACE, ALL OF IT CHROME-MEASURED
+
+```text
+  getImageData(10, 0xffffffff, 2147483647, 10)   TypeError    outside the 'long' value range
+  getImageData(0, 0, 1e10, 1) / NaN / Infinity   TypeError
+  getImageData(0, 0, 2147483648, 1)              TypeError    one past int32
+  getImageData(0, 0, 2147483647, 10)             RangeError   Out of memory at ImageData creation
+  getImageData(0, 0, 32768, 32768)               RangeError   4.295e9 bytes
+  getImageData(0, 0, 23000, 23000)               OK           2.116e9 bytes  ← the boundary
+  getImageData(0, 0, 0, 10)                      DOMException "The source width is 0"
+  getImageData(0, 0, -5, 10)                     OK  w=5 h=10  the rect NORMALISES
+  getImageData(5, 5, -5, -5)                     OK  w=5 h=5
+```
+
+**The ceiling is `w × h × 4 ≤ 2³¹−1` bytes**, PLACED by the pair 23000² (allowed) / 32768² (refused)
+rather than guessed at.
+
+⭐⭐ **THE NEGATIVE ROW IS THE ONE THAT STOPS THIS BEING A CLAMP.** `Math.max(1, …)` turned `-5` into
+`1`; the spec NORMALISES the rectangle, so `-5` is a five-pixel-wide read starting five pixels to the
+LEFT. **A clamp silently returns the wrong pixels where a normalisation returns the right ones** —
+and a guard written only to stop the crash is naturally a clamp. Mutation N2 is exactly that guard,
+and it passes **eleven of thirteen rows**.
+
+⭐⭐ **THREE DIFFERENT FAILURE KINDS IN ONE FUNCTION**, and a feature-detecting library branches on
+all three. Collapsing them into one "invalid argument" throw passes any test that only checks *that*
+it throws — which is what mutation N3 does, and it keeps every TypeError row green.
+
+⚠ `0xffffffff` shows why `v|0` is the wrong conversion: it WRAPS to `-1`, a legal `long` that would
+have been silently accepted as a negative origin. `[EnforceRange]` throws instead.
+
+### THE GUARD LIVES TWICE, ON PURPOSE
+
+The shim applies `[EnforceRange]` and the ceiling; `cv_get_image_data` applies the ceiling AGAIN and
+answers `null`, which the shim turns into Chrome's `RangeError`. **A host function that will allocate
+`w × h × 4` bytes on request must not depend on its only current caller staying its only caller.**
+
+### THE GATE
+
+`get_image_data_refuses_what_it_cannot_allocate_and_says_which_kind_of_wrong`
+(`engine/page/tests/`) — thirteen rows, two vacuity checks on the happy path. **PROVEN RED by two
+mutations**: N2 clamp instead of normalise → `negw`/`negboth` only; N3 one `TypeError` for everything
+→ the DOMException and RangeError rows only. ⚠ N1 (restore the old shim) is the crash itself: **the
+gate does not fail, it disappears with the process** — which is what a Bar 0 looks like from outside
+and why the WPT runner counts `HANG/CRASH` separately from `FAIL`.
+
+⚠ The wall does not run `engine/page/tests/` (audit #78). Its wall-independent guard is the WPT
+`html/canvas` row, which became part of the primary metric at t1388 — **one tick before this fix** —
+and which reports `HANG/CRASH` on its own summary line. The aperture tick paid for itself in one tick.
+
+### THE RECEIPT
+
+```text
+  WPT html/canvas/element/pixel-manipulation   48/70 = 68.6%  HANG/CRASH 1 (Bar 0)
+                                            → 58/71 = 81.7%  HANG/CRASH 0
+  WPT html/canvas (whole area)                674/4514 → 682/4515   HANG/CRASH 1 → 0
+  manuk-page   525 gate binaries, 0 FAILED (counted)
+  manuk-agent / manuk-a11y / manuk-layout / manuk-css / manuk-paint / manuk-dom   CONTROL
+```
+
+⭐ The denominator moves 4514 → 4515 because the crashing file now REPORTS its subtest. **A crash
+scores zero out of ZERO** (t1266's rule), so closing one adds to both sides.
+
+### ⚠ NAMED, MEASURED, NOT BUILT
+
+The host marshals pixel bytes into a JS **Array**, one `JS_SetElement` per byte. Chrome allows a
+2.1e9-byte read; ours would take that path element by element. The ceiling here is Chrome's so the
+ERROR SURFACE matches, but a large-but-legal read is slow in a way Chrome's is not. The fix is a
+typed-array construction on the host side — a separate mechanism, recorded rather than folded into a
+Bar-0 fix.
+
+### ⚠⚠ AND THE WALL AUDIT t1388 CLAIMED TO HAVE RECORDED WAS NOT RECORDED
+
+This tick's first landing attempt was refused by the preflight: *"wall-time audit overdue."* t1388
+ran the audit and wrote its findings in the JOURNAL, then set `LAST_WALL_AUDIT` by hand in
+`STATUS.md` — **which is a GENERATED file.** `status-update.sh` derives that field from the newest
+`## Audit #N — tick M` header in `docs/loop/WALL-AUDIT.md` and rewrites `STATUS.md` wholesale, so the
+hand-edit was overwritten the moment the tick landed.
+
+> **A GENERATED FILE'S FIELD IS SET BY WRITING THE THING IT IS GENERATED FROM.** `STATUS.md` says so
+> in its own header — *"this file is GENERATED, not hand-written"* — and the loop wrote to it anyway.
+
+Audit **#54** is now in `WALL-AUDIT.md` where it belongs, and it carries a finding of its own:
+
+```text
+  total 237s   ·   T 108s = 46%   ·   attributed 150s   ·   UNATTRIBUTED 87s = 37%
+```
+
+⭐⭐⭐ **#53's FALSIFIABLE RE-CHECK WAS SATISFIED BY THE WRONG THING.** It said *"if unattributed has
+not fallen below 50%, lever 1 was not taken."* Unattributed IS 37% — **and lever 1 was not taken**:
+`verify.sh`'s prewarm list is still a strict subset of the seven-crate suite, so five crates still
+build inside the timed `T` section. The unattributed fraction depends on how WARM the cache is (#53
+measured a 1552s run, #54 a 237s one), not only on where the brackets are. *A re-check whose
+condition can be satisfied by something other than the thing it tests for is not a re-check* — #54's
+replacement checks the CAUSE directly with a `grep`, which no cache can satisfy.
+
+NEXT: `html/semantics` (6,342 failing, the board's new largest row) SURVEYED before it is ground —
+t1381's lesson, on the biggest thing the aperture revealed. Behind it: `title`-as-name scoped to
+HTML-AAM's element set (t1386), and the nested scrollable-overflow family (t1381).
+
+WIKI: docs/wiki/get-image-data-limits.md

@@ -6662,6 +6662,19 @@ unsafe fn cv_get_image_data(cx: *mut RawJSContext, argc: u32, vp: *mut Value) ->
     let y = f(cx, vp, argc, 1) as i32;
     let w = f(cx, vp, argc, 2).max(0.0) as u32;
     let h = f(cx, vp, argc, 3).max(0.0) as u32;
+    // ⚠⚠⚠ **BAR 0, AND THE GUARD IS HERE AS WELL AS IN THE SHIM ON PURPOSE.** The JS side applies
+    // WebIDL's `[EnforceRange]` and this ceiling before calling; this is the second wall, because a
+    // host function that will allocate `w * h * 4` bytes on request must not depend on its only
+    // current caller staying its only caller. `getImageData(10, 0xffffffff, 2147483647, 10)` asked
+    // for **85 GB** and the process was killed by a signal — a crash loses every tab, so the
+    // refusal belongs at the allocation, not merely upstream of it.
+    //
+    // The ceiling is Chrome's, measured: `w * h * 4` must fit in an int32 count of bytes.
+    // `null` is the refusal; the shim turns it into the `RangeError` Chrome throws.
+    if (w as u64) * (h as u64) * 4 > i32::MAX as u64 {
+        *vp = NullValue();
+        return true;
+    }
     let bytes = crate::canvas::get_image_data(node.0, x, y, w, h);
 
     rooted!(in(cx) let arr = NewArrayObject1(&mut wrap_cx(cx), bytes.len()));

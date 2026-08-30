@@ -1068,3 +1068,4 @@ tick	sha	epoch	iso	delta_s	shape	wall_s	files	added	deleted	gates	claims	wpt_pas
 1384	bd5b508b	1788106777	2026-08-30T12:19:37-04:00	2657	capability-subsystem	465	9	457	33	522	81	3896	6960	0	642	0	the implicit roles that fell through to a plausible default (2026-08-30)
 1385	06b7a25c	1788110484	2026-08-30T13:21:24-04:00	3707	capability-subsystem	465	9	473	39	522	81	3896	6960	0	642	0	`pressed` and `invalid`: the two states the tree did not have (2026-08-30)
 1387	bc886065	1788118617	2026-08-30T15:36:57-04:00	8133	capability-subsystem	465	9	424	34	522	81	3896	6960	0	642	0	the landmark sweep, and the regression my own check hid (2026-08-30)
+1389	f83a7ae1	1788123257	2026-08-30T16:54:17-04:00	4640	capability-subsystem	465	12	586	40	523	81	3896	6960	0	642	0	the Bar 0 that asked for 85 GB (2026-08-30)

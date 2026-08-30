@@ -1598,6 +1598,16 @@
   - L28 · ⭐ The interior space is KEPT, and that is the whole difference
   - L45 · ⚠ It did not move the headline, and that is reported rather than buried
 
+## `getImageData` asked for 85 GB — the Bar 0 the aperture found
+`docs/wiki/get-image-data-limits.md`
+
+  - L7 · The crash
+  - L20 · The error surface, all of it Chrome-measured
+  - L53 · The guard lives twice, on purpose
+  - L60 · The receipt
+  - L70 · ⚠ The wall does not run this gate
+  - L77 · ⚠ Named, measured, not built
+
 ## `grid-area` — the shorthand that placed nothing, and auto-placement that hid it
 `docs/wiki/grid-area-shorthand.md`
 
@@ -2745,4 +2755,4 @@
   - L89 · The wall audit (due t1388)
 
 ---
-2536 sections across 51 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+2542 sections across 52 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.

@@ -11,12 +11,12 @@
 
 | | value | over |
 |---|---|---|
-| ticks landed | **1069** | ticks 1–1387 |
-| median tick cycle | **31m** | 1068 intervals |
+| ticks landed | **1070** | ticks 1–1389 |
+| median tick cycle | **31m** | 1069 intervals |
 | median, last 10 | **61m** | 10 intervals |
 | fastest / slowest | 5s / 7.0d | |
-| **ticks per hour** | **0.88** | 1210.6h elapsed |
-| median verify wall | **67s** | 1008 ticks |
+| **ticks per hour** | **0.88** | 1211.9h elapsed |
+| median verify wall | **67s** | 1009 ticks |
 | wall trend | 39s → 8m — getting slower ⚠️ | first 3 vs last 3 |
 
 The **cycle** is the real unit: implement → debug → verify wall → land. The wall is only part of
@@ -27,11 +27,11 @@ it, and a wall that grows taxes every future tick, so it is tracked separately f
 ### Near — the daily driver (doc / app / platform web)
 
 * **capabilities asserted** (`G_CAPABILITY`): 48 → **81**
-* **live gates**: 27 → **522**
+* **live gates**: 27 → **523**
 * **✅ rows in the capability ledger**: 144 → **642**
 * **Bar 0 — oracle hangs**: 0 of 265 sites
 
-**492 of 1069 ticks** (46%) moved a
+**492 of 1070 ticks** (46%) moved a
 user-visible capability. The rest were instruments, infrastructure and corrections — and the
 ledger says the corrections were not overhead: three of its top three priorities were phantoms,
 and finding that out redirected everything after it.
@@ -1166,5 +1166,6 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 | **1384** | 2026-08-30 12:19 | 44m | capability-subsystem | 8m | +457/−33 | 522 | 81 | 56.0% · | the implicit roles that fell through to a plausible default (2026-08-30) |
 | **1385** | 2026-08-30 13:21 | 62m | capability-subsystem | 8m | +473/−39 | 522 | 81 | 56.0% · | `pressed` and `invalid`: the two states the tree did not have (2026-08-30) |
 | **1387** | 2026-08-30 15:36 | 2.3h | capability-subsystem | 8m | +424/−34 | 522 | 81 | 56.0% · | the landmark sweep, and the regression my own check hid (2026-08-30) |
+| **1389** | 2026-08-30 16:54 | 77m | capability-subsystem | 8m | +586/−40 | 523 | 81 | 56.0% · | the Bar 0 that asked for 85 GB (2026-08-30) |
 
 *`·` after a WPT figure means **carried forward**, not measured this tick.*

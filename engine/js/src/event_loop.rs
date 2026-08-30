@@ -1793,15 +1793,85 @@ const PRELUDE: &str = r#"
           };
 
           // ── Pixels. Real ones.
+          //
+          // ⚠⚠⚠ **BAR 0: `w = Math.max(1, w|0)` HANDED 85 GB TO A `vec![0u8; …]` AND KILLED THE
+          //    PROCESS.** `getImageData(10, 0xffffffff, 2147483647, 10)` is a real WPT test
+          //    (`2d.imageData.get.large.crash.html`) and it was reachable from any page for as long
+          //    as this API has existed — invisible only because `html/canvas` was outside the
+          //    primary metric until t1388. A crash loses every tab, so it outranks everything.
+          //
+          //    The four arguments are WebIDL `[EnforceRange] long`, and the whole error surface is
+          //    Chrome-measured (`--headless=new`):
+          //
+          //      getImageData(10, 0xffffffff, 2147483647, 10)  TypeError   outside the long range
+          //      getImageData(0, 0, 1e10, 1) / NaN / Infinity  TypeError
+          //      getImageData(0, 0, 2147483647, 10)            RangeError  out of memory
+          //      getImageData(0, 0, 23000, 23000)              OK          2.116e9 bytes
+          //      getImageData(0, 0, 32768, 32768)              RangeError  4.295e9 bytes
+          //      getImageData(0, 0, 0, 10)                     DOMException  "source width is 0"
+          //      getImageData(0, 0, -5, 10)                    OK  w=5 h=10   the rect NORMALISES
+          //      getImageData(5, 5, -5, -5)                    OK  w=5 h=5
+          //
+          //    ⭐ **The negative row is the one that stops this being a clamp.** `Math.max(1, …)`
+          //    turned `-5` into `1`; the spec normalises the rectangle, so `-5` is a FIVE-pixel-wide
+          //    read starting five pixels to the LEFT. A clamp silently returns the wrong pixels
+          //    where a normalisation returns the right ones.
+          //
+          //    ⭐ **The zero row is a DOMException, not a TypeError and not an empty ImageData.**
+          //    Three different failure kinds in one function, and a caller that branches on the
+          //    exception type — which is what a feature-detecting library does — sees all three.
+          var __cvLong = function(v, what){
+            // WebIDL `[EnforceRange] long`: non-finite or outside int32 is a TypeError, and the
+            // value is truncated toward zero rather than wrapped. `v|0` WRAPS, which is what made
+            // 0xffffffff read as -1 instead of throwing.
+            v = Number(v);
+            if (!isFinite(v)) {
+              throw new TypeError("Failed to execute 'getImageData': " + what +
+                                  " is not a finite number");
+            }
+            v = v < 0 ? Math.ceil(v) : Math.floor(v);
+            if (v < -2147483648 || v > 2147483647) {
+              throw new TypeError("Failed to execute 'getImageData': " + what +
+                                  " is outside the 'long' value range");
+            }
+            return v;
+          };
+          // The ImageData allocation ceiling, Chrome-measured: `w * h * 4` must fit in an int32
+          // count of bytes. 23000x23000 (2.116e9) is allowed; 32768x32768 (4.295e9) is not.
+          var __cvFitsImageData = function(w, h){ return w * h * 4 <= 2147483647; };
           ctx.getImageData = function(x, y, w, h){
-            w = Math.max(1, w|0); h = Math.max(1, h|0);
-            var raw = el.__cvGetImageData(x|0, y|0, w, h) || [];
-            return new globalThis.ImageData(new Uint8ClampedArray(raw), w, h);
+            x = __cvLong(x, 'x'); y = __cvLong(y, 'y');
+            w = __cvLong(w, 'sw'); h = __cvLong(h, 'sh');
+            if (w === 0) { throw new DOMException('The source width is 0.', 'IndexSizeError'); }
+            if (h === 0) { throw new DOMException('The source height is 0.', 'IndexSizeError'); }
+            // Normalise, do not clamp: a negative extent moves the origin and flips the rectangle.
+            if (w < 0) { x += w; w = -w; }
+            if (h < 0) { y += h; h = -h; }
+            if (!__cvFitsImageData(w, h)) {
+              throw new RangeError("Failed to execute 'getImageData': " +
+                                   'Out of memory at ImageData creation');
+            }
+            var raw = el.__cvGetImageData(x, y, w, h);
+            if (raw === null) {
+              // The host refused the allocation. It applies the SAME ceiling as the guard above, so
+              // reaching this means the two disagreed — and the honest answer is the host's.
+              throw new RangeError("Failed to execute 'getImageData': " +
+                                   'Out of memory at ImageData creation');
+            }
+            return new globalThis.ImageData(new Uint8ClampedArray(raw || []), w, h);
           };
           ctx.createImageData = function(w, h){
             // createImageData(w, h) — or createImageData(existingImageData), copying its dimensions.
             if (w && typeof w === 'object') { h = w.height; w = w.width; }
-            w = Math.max(1, w|0); h = Math.max(1, h|0);
+            w = __cvLong(w, 'sw'); h = __cvLong(h, 'sh');
+            if (w === 0) { throw new DOMException('The source width is 0.', 'IndexSizeError'); }
+            if (h === 0) { throw new DOMException('The source height is 0.', 'IndexSizeError'); }
+            if (w < 0) { w = -w; }
+            if (h < 0) { h = -h; }
+            if (!__cvFitsImageData(w, h)) {
+              throw new RangeError("Failed to execute 'createImageData': " +
+                                   'Out of memory at ImageData creation');
+            }
             return new globalThis.ImageData(w, h);
           };
           // putImageData — a raw pixel REPLACE (no transform, globalAlpha or compositing, per spec).

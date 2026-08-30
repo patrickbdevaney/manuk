@@ -9865,3 +9865,24 @@ A number that FALLS when you widen the frame is the frame working.
 ⚠ A DERIVED FIGURE THAT IS STORED RATHER THAN COMPUTED NEEDS A CHECK: the `TOTAL` row sat 268 passes
 behind its own rows for four ticks because two ticks refreshed an area row and not the total.
 (t1388 — `agent/tests` `the_wpt_total_is_the_sum_of_its_rows`)
+
+## `ctx.getImageData(x, y, hugeW, h)` — the API that will allocate whatever it is asked for
+
+`getImageData` takes four WebIDL `[EnforceRange] long`s and then allocates `w × h × 4` bytes. An
+implementation that converts with `w|0` and clamps with `Math.max(1, …)` will happily be asked for
+**85 GB** and be killed by the OOM killer — a crash that loses every tab, from a single line of page
+script.
+
+⭐ THREE different failure kinds, and a feature-detecting library branches on all three:
+`TypeError` (argument outside `long`, or non-finite), `RangeError` (`w × h × 4 > 2³¹−1` — Chrome
+allows 23000², refuses 32768²), `DOMException`/`IndexSizeError` (a zero extent).
+
+⭐⭐ NORMALISE, DO NOT CLAMP: `getImageData(0, 0, -5, 10)` is a FIVE-pixel-wide read starting five
+pixels to the LEFT, not a one-pixel read. A clamp returns the wrong pixels where a normalisation
+returns the right ones — and a guard written only to stop the crash is naturally a clamp.
+
+⚠ `v|0` WRAPS: `0xffffffff` becomes `-1`, a legal `long` that is silently accepted as a negative
+origin. `[EnforceRange]` throws instead.
+⚠ Put the ceiling at the ALLOCATION as well as in the argument check: a host function that allocates
+on request must not depend on its only current caller staying its only caller.
+(t1389 — `engine/page/tests` `get_image_data_refuses_what_it_cannot_allocate_and_says_which_kind_of_wrong`)

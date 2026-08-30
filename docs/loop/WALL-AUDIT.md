@@ -2344,3 +2344,70 @@ explicitly as *"not a rigor launder."* No `scripts/` file was touched.
 RE-CHECK: falsifiable at audit #54 (tick ~1388) — if `unattributed_seconds` has not fallen below 50%
 of the total, lever 1 above was not taken and the section brackets are still the binding limit on
 what this audit can see.
+
+---
+
+## Audit #54 — tick 1388 (2026-08-30)
+
+```text
+  ══ WALL-TIME AUDIT @ tick 1388 — total 237s ══
+     108s  T   46%      15s  G6   6%      11s  G1   5%      7s  P   3%
+       4s  F    2%       3s  F4   1%       2s  B   1%
+     ── attributed 150s · UNATTRIBUTED 87s = 37% ──
+```
+
+**The wall is 237s against the 300s target — UNDER it, and nothing was trimmed.**
+
+### ⚠⚠⚠ #53's RE-CHECK WAS SATISFIED, AND IT WAS SATISFIED BY THE WRONG THING
+
+Audit #53 closed with a falsifiable re-check:
+
+> *"falsifiable at audit #54 (tick ~1388) — if `unattributed_seconds` has not fallen below 50% of the
+> total, lever 1 above was not taken and the section brackets are still the binding limit."*
+
+Unattributed **is** 37%, below the 50% line. **And lever 1 was not taken.** `verify.sh`'s prewarm
+list is still exactly `manuk-page --features stylo,spidermonkey`, `manuk-shell`, `manuk-dom`, while
+`_crate_suite` still runs seven crates — so `manuk-css`, `manuk-layout`, `manuk-paint`, `manuk-net`
+and `manuk-agent` still build *inside* the timed `T` section, which is why `T` is 46% of the wall.
+
+> ⭐⭐⭐ **A RE-CHECK WHOSE CONDITION CAN BE SATISFIED BY SOMETHING OTHER THAN THE THING IT TESTS FOR
+> IS NOT A RE-CHECK.** The unattributed fraction depends on how WARM the build cache is, not only on
+> where the section brackets are: #53 measured a 1552s run, #54 measures a 237s one. The prediction
+> was about the harness and the measurement was about the cache.
+>
+> The correct form is to check the CAUSE directly — *is the prewarm list a superset of the crate
+> suite?* — which is one `grep` and cannot be satisfied by a warm target directory.
+
+### ⚠ AND THE SELF-AUDIT READ 2231s FOR THE SAME WALL
+
+`scripts/self-audit.sh` at t1383 reported *"verify wall: 2231s EXCEEDS the 300s target — Part 21.2
+item 1 has regressed."* It reads the LAST verify receipt, and t1382's was a COLD rebuild (that tick
+touched `engine/layout`). Both numbers are true of different runs. **The target is met on a warm wall
+and the cold case is rebuild cost, not standing bloat** — the two must not be compared to one
+threshold without saying which run produced them.
+
+### THE RIGOR-PRESERVING LEVERS — unchanged, and still harness-owned
+
+1. **Extend the prewarm list to the full crate-suite list.** Same binaries, same tests, built once
+   instead of raced (rule 1 redundancy / rule 4 scope). Carried from #53, not taken.
+2. `cargo-nextest` for the `T` section — shares the test binary and parallelises harder than
+   `cargo test`. The self-audit already names it.
+3. #52's two levers (extend `head_`'s brackets so the concurrent launch and link phase fall inside a
+   section; collapse the duplicated static mozjs across the gate binaries) are unchanged.
+
+### NOTHING TRIMMED
+
+No gate dropped, no floor widened, nothing sampled, nothing moved to CI. No `scripts/` file touched —
+every admissible lever above is in `scripts/`, which is observer-owned.
+
+### ⚠ AND A MARKER THE AGENT GOT WRONG
+
+t1388's journal claimed *"STATUS LAST_WALL_AUDIT 1368 → 1388"*. It does not work that way:
+`status-update.sh` DERIVES that field from the newest `## Audit #N — tick M` header **in this file**
+and regenerates `STATUS.md` wholesale, so the hand-edit was overwritten and the next tick's preflight
+correctly refused with *"wall-time audit overdue."* **A generated file's field is set by writing the
+thing it is generated FROM.**
+
+RE-CHECK: falsifiable at audit #55 (tick ~1408) — `grep` the prewarm list in `verify.sh` against the
+`_crate_suite` loop. If the prewarm list is still a strict subset, lever 1 has still not been taken,
+**regardless of what the section percentages say.**
