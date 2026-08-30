@@ -2302,6 +2302,15 @@
   - L1159 · Why this is rigor-preserving and not a shortcut
   - L1174 · ⚠⚠ The gate had TWO holes, and only the RED PROOF found either
 
+## `pointer-events` — inert on the cascade every agent gate runs on
+`docs/wiki/pointer-events-cascade-drift.md`
+
+  - L5 · The one-sentence mechanism
+  - L19 · ⭐⭐⭐ It lands squarely on the week's own work
+  - L36 · How it was found — the drift measured instead of tripped over a fifth time
+  - L55 · The remaining layout drift, priced
+  - L65 · The gate
+
 ## THE WIKI — what we durably KNOW, organised by subsystem
 `docs/wiki/README.md`
 
@@ -2606,4 +2615,4 @@
   - L231 · Both named mechanisms are subsystem work
 
 ---
-2457 sections across 36 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+2462 sections across 37 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.

@@ -11,12 +11,12 @@
 
 | | value | over |
 |---|---|---|
-| ticks landed | **1055** | ticks 1–1372 |
-| median tick cycle | **31m** | 1054 intervals |
+| ticks landed | **1056** | ticks 1–1373 |
+| median tick cycle | **31m** | 1055 intervals |
 | median, last 10 | **66m** | 10 intervals |
 | fastest / slowest | 5s / 7.0d | |
-| **ticks per hour** | **0.88** | 1195.6h elapsed |
-| median verify wall | **67s** | 994 ticks |
+| **ticks per hour** | **0.88** | 1196.4h elapsed |
+| median verify wall | **67s** | 995 ticks |
 | wall trend | 39s → 8m — getting slower ⚠️ | first 3 vs last 3 |
 
 The **cycle** is the real unit: implement → debug → verify wall → land. The wall is only part of
@@ -31,7 +31,7 @@ it, and a wall that grows taxes every future tick, so it is tracked separately f
 * **✅ rows in the capability ledger**: 144 → **642**
 * **Bar 0 — oracle hangs**: 0 of 265 sites
 
-**492 of 1055 ticks** (47%) moved a
+**492 of 1056 ticks** (47%) moved a
 user-visible capability. The rest were instruments, infrastructure and corrections — and the
 ledger says the corrections were not overhead: three of its top three priorities were phantoms,
 and finding that out redirected everything after it.
@@ -91,7 +91,7 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 ## What a capability costs
 
 * **492** capability ticks, median cycle **31m**
-* median diff per tick: **+285 / −34** lines across 8 files
+* median diff per tick: **+286 / −34** lines across 8 files
 
 ## Every tick
 
@@ -1152,5 +1152,6 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 | **1370** | 2026-08-29 21:10 | 71m | capability-subsystem | 8m | +343/−38 | 522 | 81 | 56.0% · | a space at the edge of a line is not drawn, and `content`'s spaces were (2026-08-29) |
 | **1371** | 2026-08-29 23:12 | 2.0h | capability-subsystem | 8m | +710/−107 | 522 | 81 | 56.0% · | the announced half reaches the name, and the fourth fact became a struct (2026-08-30) |
 | **1372** | 2026-08-30 00:38 | 87m | capability-subsystem | 8m | +455/−50 | 522 | 81 | 56.0% · | `content: attr(href)` met its element on one cascade and not the other (2026-08-30) |
+| **1373** | 2026-08-30 01:29 | 51m | instrument-fidelity | 8m | +475/−36 | 522 | 81 | 56.0% · | the audits, and a class that had been tripped over four times, measured (2026-08-30) |
 
 *`·` after a WPT figure means **carried forward**, not measured this tick.*

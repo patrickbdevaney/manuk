@@ -7322,3 +7322,102 @@ that never executes ranks a sample of a sample.** Carried, behind this audit's #
    crates it is the one with a live mandate attached, and its 21 tests are the perception layer the
    M2 drive demo reads.
 4. Carried from #77: the plural-gate assertion-count sweep, once the gates in question run.
+
+## Audit #79 — tick 1373 (2026-08-30)
+
+### THE QUESTION — a class that has been TRIPPED OVER four times in one week, measured
+
+`MinimalCascade` and the Stylo cascade are hand-maintained twins, and `engine/css/src/lib.rs`'s own
+float half already names the rule: *"a cascade that disagrees with its twin about whether an image is
+out of flow is the `<source>` bug again."* In one week the loop hit that disagreement **four times,
+each by accident**:
+
+```text
+  t1361  `font-size` clobbered an INHERITED `line-height`; the `font` shorthand unimplemented
+  t1364  `table { border-spacing: 2px }` in one UA sheet and not its twin
+  t1369  the `content` `/ alt-text` syntax parsed by one cascade only
+  t1372  `attr()` in `content` — resolved by Stylo's mapper, dropped by the other parser
+```
+
+Four accidents is the promotion threshold. This audit asks the surface-audit question about the pair:
+**how big is the drift?**
+
+### METHOD, AND THE FALSE START THAT PROVES THE PROTOCOL'S OWN WARNING
+
+14 corpus stylesheets fetched from `docs/bench/corpus-crux-trend.txt` (2.5 MB of real CSS), every
+declared property counted, and every property name checked against `MinimalCascade`'s source.
+
+⚠⚠ **THE FIRST EXTRACTION WAS WRONG, AND IT WAS WRONG IN THE CONFIDENT DIRECTION.** A regex over
+`"prop" =>` match arms reported `overflow` (419 declarations), `filter` and `border-bottom` as
+unhandled. All three ARE handled — in multi-name arms (`"overflow" | "overflow-x" | "overflow-y" =>`)
+the regex could not see. This file's own standing note reads:
+
+> *"**grep the artefact, infer the engine** — has now produced a wrong number three times in
+> `SURFACE-AUDIT.md`. Rank there, not in the arithmetic."*
+
+It had just produced a fourth, inside the audit whose job is to catch exactly that. The ranking was
+redone against **every quoted string in the file** — which errs toward calling a property *handled*,
+so the surviving list understates rather than overstates — and the top row was then **measured on
+both cascades** rather than published from a grep.
+
+### THE RANKED DRIFT — corpus declarations, properties absent from `MinimalCascade`'s source
+
+```text
+    447  transition                 } animation properties: the static state is the right static
+    130  animation                  } answer, so these are not layout drift
+     73  transition-duration
+     68  transition-property
+     60  transition-timing-function
+    429  cursor                     } no layout or hit-test effect
+    146  pointer-events             <-- ⭐ HIT-TESTING. See below.
+    135  fill                       } SVG paint
+     92  border-top-right-radius    } paint only (4 corners, ~333 declarations between them)
+     77  grid-area                  } REAL LAYOUT — grid placement
+     50  grid-template-areas        }
+     63  -webkit-box-flex           } REAL LAYOUT — legacy flex, 186 declarations between them
+     63  -ms-flex                   }
+     60  -webkit-box-orient         }
+     89  syntax / 89 inherits       } `@property` descriptors, not properties
+     47  font-display               } an `@font-face` descriptor
+     44  user-select                } behaviour
+```
+
+⭐ **Sorting by *what the property does* rather than by count is the whole value of the table.** The
+largest number in it (`transition`, 447) is not drift that matters — an unparsed transition renders
+the static state, which is the correct static answer. The one that matters is nine ranks down.
+
+### ⭐⭐⭐ THE FINDING — `pointer-events` WAS INERT ON THE CASCADE EVERY AGENT GATE RUNS ON
+
+`ComputedStyle::pointer_events` exists, Stylo's mapper sets it, and `Page::non_hittable_nodes` reads
+it to build the a11y tree's `hittable` flag. `MinimalCascade` never parsed the property. Measured on
+one fixture — an overlay with `pointer-events: none` over a button:
+
+```text
+  non-hittable nodes in the a11y tree     Stylo 1     MinimalCascade 0
+```
+
+**And it lands squarely on this week's own work.** t1359 DEFINED `Landing::Unreachable` as *"on
+screen and `pointer-events: none`"*; t1366 made the agent's drive path refuse an obstructed target.
+Both are gated in `agent/tests` — **on the cascade where the property did nothing** — so the one arm
+of `landing` that distinguishes *unaimable* from *off screen* was untestable there.
+
+⚠ `manuk-a11y`'s own unit test `hit_test_passes_through_a_pointer_events_none_overlay` does not catch
+it either: **it builds the tree by hand**, setting `hittable` directly. *A gate that constructs its
+own input cannot discover that the producer of that input is broken.* That is a sharper form of audit
+#77's *"a gate cannot discover a missing word in its own vocabulary."*
+
+Fixed and gated this tick (`g_pointer_events_cascade`, `agent/tests/`).
+
+### RANKED, from this audit only
+
+1. ⭐⭐⭐ **A GATE THAT CONSTRUCTS ITS OWN INPUT CANNOT DISCOVER THAT THE PRODUCER IS BROKEN.** Sweep
+   the gates that build an `A11yNode`/`LayoutBox` by hand rather than through a page load, and ask
+   what each is therefore blind to. `hit_test_passes_through_a_pointer_events_none_overlay` was blind
+   to the entire cascade.
+2. ⭐⭐ **The remaining LAYOUT drift is grid placement and legacy flex** — `grid-area` +
+   `grid-template-areas` (127 declarations) and `-webkit-box-flex` / `-ms-flex` /
+   `-webkit-box-orient` (186). Unlike `transition` and `cursor`, an unparsed `grid-area` puts a box
+   in the wrong cell. Each is a candidate tick with a price attached.
+3. ⭐ **Sort a drift table by what the property DOES, not by how often it is declared.** The largest
+   count in this one is inert; the one that mattered was ninth.
+4. Carried from #78: the gate-execution gap (502 of 522) and the plural-gate assertion-count sweep.

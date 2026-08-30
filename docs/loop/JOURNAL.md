@@ -96697,4 +96697,90 @@ NEXT: `counter-set` for the remaining accname alt-counter rows is the Track B it
 restructure rather than a line change; and the gate-execution gap is still the highest-value thing
 the agent cannot close.
 
-WIKI: docs/wiki/content-attr.md
+WIKI: docs/wiki/pointer-events-cascade-drift.md
+
+## Tick 1373 — the audits, and a class that had been tripped over four times, measured (2026-08-30)
+
+TICK SHAPE: instrument-fidelity
+
+Self-audit and surface audit both came due (every 10; last at 1363).
+
+### THE SELF-AUDIT — the same single failure, and it is harness
+
+`✗ verify wall: 832s EXCEEDS the 300s target` (Part 21.2). Its named remedies are all `scripts/` and
+build configuration, and wall audit #53 (t1368) examined it one tick ago: the wall total is dominated
+by **build warmth**, and the receipt's `gate Ns · build Ns` split hides compilation the gates
+themselves trigger. Nothing new to add; recorded, not touched.
+
+### ⭐⭐⭐ SURFACE AUDIT #79 — FOUR ACCIDENTS IS THE PROMOTION THRESHOLD
+
+`MinimalCascade` and the Stylo cascade are hand-maintained twins, and in one week the loop hit their
+disagreement **four times, each by accident**: t1361 (`font-size` clobbering an inherited
+`line-height`), t1364 (`border-spacing` in one UA sheet), t1369 (the `content` alt syntax), t1372
+(`attr()`). So the audit asked how big the class is instead of waiting for a fifth.
+
+14 corpus stylesheets (2.5 MB of real CSS), every declared property counted, every name checked
+against `MinimalCascade`'s source.
+
+⚠⚠ **AND THE FIRST EXTRACTION WAS WRONG, IN THE CONFIDENT DIRECTION.** A regex over `"prop" =>` arms
+reported `overflow` (419 declarations), `filter` and `border-bottom` as unhandled. All three ARE
+handled, in multi-name arms the regex could not see. `SURFACE-AUDIT.md`'s own standing note says
+*"grep the artefact, infer the engine — has now produced a wrong number three times"* — and it had
+just produced a fourth, **inside the audit whose job is to catch exactly that.** Redone against every
+quoted string in the file (erring toward "handled", so the list understates), and the top row then
+**measured on both cascades** rather than published from a grep.
+
+⭐ **Sorting the drift by what a property DOES, not by how often it is declared, is the whole value
+of the table.** The largest count in it is `transition` at 447 — and an unparsed transition renders
+the static state, which is the correct static answer. The one that mattered was ninth.
+
+### ⭐⭐⭐ THE FINDING — `pointer-events` WAS INERT ON THE CASCADE EVERY AGENT GATE RUNS ON
+
+```text
+  an overlay with `pointer-events: none` over a button:
+  non-hittable nodes in the a11y tree     Stylo 1     MinimalCascade 0
+```
+
+The field exists, Stylo's mapper sets it, `Page::non_hittable_nodes` reads it to build the a11y
+tree's `hittable`. `MinimalCascade` never parsed the property — 146 declarations across the 14
+sampled stylesheets.
+
+**And it lands squarely on this week's own work.** t1359 DEFINED `Landing::Unreachable` as *"on
+screen and `pointer-events: none`"*; t1366 made the drive path refuse an obstructed target. Both are
+gated in `agent/tests` — **on the cascade where the property did nothing** — so the one arm of
+`landing` that distinguishes *unaimable* from *off screen* was untestable there.
+
+⚠ `manuk-a11y`'s own `hit_test_passes_through_a_pointer_events_none_overlay` does not catch it
+either: **it builds the tree by hand**, setting `hittable` directly. *A gate that constructs its own
+input cannot discover that the producer of that input is broken* — a sharper form of #77's *"a gate
+cannot discover a missing word in its own vocabulary."*
+
+### THE GATE
+
+`g_pointer_events_cascade` (`agent/tests/`) — three arms and a vacuity assert that both overlays are
+on a higher layer. ARM 1 counts non-hittable nodes (exactly one). ARM 2 the click passes THROUGH to
+the button beneath. ARM 3 CONTROL — an ordinary overlay still intercepts, without which the gate
+passes against an engine that ignores overlays entirely.
+
+**PROVEN RED by two mutations.** N1 drop the arm (the pre-tick behaviour) → 0 non-hittable, and the
+click hits the overlay. N2 invert the sense → ⚠ **ARM 1 fires first, not ARM 3 as the ledger
+predicted**: inverting makes every element whose `pointer-events` is not `none` non-hittable, so the
+count goes far above 1. The ledger now says which arm actually fired rather than the one predicted
+when the gate was written.
+
+### THE RECEIPT
+
+```text
+  manuk-agent  137/137 → 138/138   +1   +the new gate
+  manuk-css / manuk-a11y / manuk-layout / manuk-page / manuk-paint / manuk-dom   CONTROL
+  SURFACE-AUDIT.md  + Audit #79     (the drift table, the false start, the finding)
+  self-audit        1 failure, harness-owned, unchanged from t1368's examination
+```
+
+NEXT: audit #79's own ranked list — (1) sweep the gates that build an `A11yNode`/`LayoutBox` **by
+hand** and ask what each is therefore blind to; (2) the remaining LAYOUT drift is grid placement
+(`grid-area` + `grid-template-areas`, 127 declarations) and legacy flex (`-webkit-box-flex` /
+`-ms-flex` / `-webkit-box-orient`, 186), each a candidate tick with a price attached. The float
+re-flow remains VI.2's sole surviving residual.
+
+WIKI: docs/wiki/pointer-events-cascade-drift.md

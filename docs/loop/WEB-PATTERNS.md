@@ -9569,3 +9569,18 @@ exactly `a::after{content:" ("attr(href)")"}` on an `<a>` with no `href`.
 element at cascade time, and a value parser that is a free function has no element in hand. Resolve
 it one layer out, where the element is.
 (t1372 — `agent/tests` `content_attr_meets_its_element`)
+
+## `.overlay { pointer-events: none }` — the decorative layer a click must pass through
+
+`pointer-events: none` is declared 146 times across 14 sampled CrUX stylesheets, and it is what
+decides whether a click reaches the control under a decorative overlay. A cascade that does not parse
+it makes every such overlay solid — and if that is the cascade a test harness uses, every hit-test
+gate written against it is blind to the property.
+
+⚠ Inverting the sense is worse than dropping it: every element whose `pointer-events` is NOT `none`
+becomes untouchable. A gate that only checks "the click passed through" catches the first and not the
+second; counting the non-hittable nodes catches both.
+
+⭐ A gate that BUILDS ITS OWN INPUT cannot discover that the producer of that input is broken — an
+a11y hit-test test that constructs its tree by hand tests the traversal and never the cascade.
+(t1373 — `agent/tests` `g_pointer_events_cascade`)

@@ -7216,6 +7216,37 @@ fn apply_declaration(s: &mut ComputedStyle, d: &Declaration, parent_fs: f32) {
         "box-shadow" => s.box_shadows = parse_box_shadows(v, s.font_size),
         "text-shadow" => s.text_shadow = parse_text_shadow(v, s.font_size),
         "filter" | "-webkit-filter" => s.filter = parse_filters(v, s.font_size),
+        // ⚠⚠⚠ **`pointer-events` WAS SET BY ONE CASCADE AND NOT THE OTHER, AND IT IS WHAT DECIDES
+        // WHETHER AN AGENT'S CLICK PASSES THROUGH AN OVERLAY.**
+        //
+        // The field exists, Stylo's mapper sets it (`stylo_map.rs`), and `Page::non_hittable_nodes`
+        // reads it to build the a11y tree's `hittable` flag — but this cascade never parsed the
+        // property, so on the harness `engine/layout`'s unit tests and every `agent/tests` gate run
+        // on, `pointer-events: none` was INERT. Measured on the same fixture, an overlay with
+        // `pointer-events: none` over a target:
+        //
+        // ```text
+        //   non-hittable nodes in the a11y tree     Stylo 1     MinimalCascade 0
+        // ```
+        //
+        // ⭐ That lands squarely on this week's own work: t1359's `Landing::Unreachable` is DEFINED
+        // as *"on screen and `pointer-events: none`"*, and t1366 made the agent's drive path refuse
+        // an obstructed target. Both are gated in `agent/tests` — on the cascade where the property
+        // did nothing. Found by surface audit #79 measuring the twin-cascade drift instead of
+        // tripping over it a fifth time; `pointer-events` is declared **146 times** across 14
+        // sampled CrUX stylesheets.
+        //
+        // ⚠ The other values (`visiblePainted`, `stroke`, `fill`, `all`, …) are SVG-only hit-testing
+        // modes and all mean "hittable" for HTML content, which is exactly what Stylo's mapper does
+        // with its `_ => Auto` arm. Spelling them out here would be a second implementation of a
+        // rule that has one.
+        "pointer-events" => {
+            s.pointer_events = if v.trim().eq_ignore_ascii_case("none") {
+                PointerEvents::None
+            } else {
+                PointerEvents::Auto
+            }
+        }
         "backdrop-filter" | "-webkit-backdrop-filter" => {
             s.backdrop_filter = parse_filters(v, s.font_size)
         }
