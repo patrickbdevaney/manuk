@@ -9819,3 +9819,35 @@ label. `<input placeholder="PH" title="TT">` is named **TT**.
 ⚠ `<textarea placeholder>` names too — a rule written inside an `el.name == "input"` branch covers
 one of its two elements.
 (t1386 — `agent/tests` `the_name_chain_ends_in_the_right_order`)
+
+## `<form>` with no accessible name — the jump list that lists everything
+
+ARIA makes `form` and `region` landmarks **only when named**, and the reason is the list they appear
+in: a landmark list is a JUMP LIST, so an unnamed entry is a row that says nothing. An engine that
+maps `<form>` unconditionally puts the newsletter box, the search field and the login into it, and
+*"go to the form"* becomes ambiguous exactly when there is more than one — the case the list exists
+for. A drive path that correctly refuses ambiguity then converts the pollution into a REFUSAL.
+
+⚠ `name="n"` on a form is its SUBMISSION name, not an accessible one — Chrome reports `generic`. The
+three spellings that DO promote it are `aria-label`, `title` and a RESOLVING `aria-labelledby`.
+
+⭐ A `<header>` inside a `<div>` is still the page's `banner` (a `<div>` is not sectioning content);
+inside an `<article>` it is a scoped `sectionheader` and must NOT be in the landmark list.
+(t1387 — `agent/tests` `a_landmark_is_a_landmark_only_when_the_spec_says_so`)
+
+## `<fieldset disabled>` — the propagator that is not itself disabled
+
+The native `disabled` attribute belongs to the LISTED FORM ELEMENTS. A `<fieldset disabled>` carries
+it to disable a whole step of a form and is **not itself disabled**: Chrome reports it as a `group`
+with no `disabled` property, and reports `disabled` only on the controls inside.
+
+⚠ `aria-disabled` is NOT scoped this way — `<div role=button aria-disabled=true>` reports `disabled`
+on any element, because the author said so explicitly. Native attribute: controls only. ARIA
+attribute: anything.
+
+⭐ A latent wrong answer here was INVISIBLE while `<fieldset>` mapped to a nameless `generic` (such
+nodes are not printed in an observation line at all). Giving it its correct `group` role PUBLISHED
+the wrong state. **A latent wrong answer surfaces when the node it lives on becomes visible** — so a
+correctness fix can look like the thing that broke a gate when it is the thing that exposed it.
+(t1387 — `agent/tests` `a_landmark_is_a_landmark_only_when_the_spec_says_so`,
+ `engine/page/tests` `a_disabled_control_neither_activates_nor_reports_itself_as_actionable`)

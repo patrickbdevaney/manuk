@@ -674,6 +674,30 @@ impl A11yState {
 /// Whether `node` is disabled by its own attribute or by an ancestor `<fieldset disabled>`.
 /// Only a `<fieldset>` propagates disabledness; a disabled `<div>` means nothing.
 fn inherits_disabled(dom: &Dom, node: NodeId) -> bool {
+    // ── ⚠⚠⚠ **A `<fieldset disabled>` DISABLES ITS CONTROLS AND IS NOT ITSELF DISABLED.** The
+    //    native `disabled` attribute belongs to the *listed form elements*; `<fieldset>` carries it
+    //    as a PROPAGATOR. Chrome-measured (CDP `Accessibility.getFullAXTree`):
+    //
+    //    ```text
+    //      <fieldset disabled>            role=group     NO `disabled` property
+    //        <input type=checkbox>        role=checkbox  disabled: True
+    //    ```
+    //
+    //    ⚠⚠ **THIS WAS INVISIBLE UNTIL t1384 GAVE `<fieldset>` A ROLE.** As a `generic` with no
+    //    name the node was not printed in the observation lines at all, so a `disabled` it should
+    //    never have had could not be seen. Promoting it to `group` — which is correct — published
+    //    the wrong state, and `g_disabled_inert` (which counts the `disabled` lines) went red.
+    //    *A latent wrong answer surfaces when the node it lives on becomes visible.*
+    //
+    //    ⚠ `aria-disabled` is NOT scoped this way and must not be: `<div role=button
+    //    aria-disabled=true>` reports `disabled` in Chrome on any element, because the author said
+    //    so explicitly. Only the NATIVE attribute belongs to controls. See `state_of`.
+    if !matches!(
+        dom.element(node).map(|e| e.name.as_str()),
+        Some("input" | "select" | "textarea" | "button" | "option" | "optgroup")
+    ) {
+        return false;
+    }
     let mut cur = Some(node);
     while let Some(n) = cur {
         if let Some(e) = dom.element(n) {
@@ -1619,7 +1643,29 @@ pub fn role_of(dom: &Dom, node: NodeId) -> Option<Role> {
                 (_, false) => Role::SectionFooter,
             }
         }
-        "form" => Role::Form,
+        // ── ⚠⚠⚠ **`<form>` IS A LANDMARK ONLY WHEN NAMED, AND THE RULE WAS WRITTEN DOWN NEXT
+        //    DOOR.** The `<section>` arm below carries the identical clause, and `role_of`'s
+        //    EXPLICIT-role path six hundred lines up carries it for exactly these two roles:
+        //    `matches!(r, Role::Region | Role::Form) && !has_attribute_name(…)`. So `role="form"`
+        //    was guarded and `<form>` was not — **the same rule, guarded at one entrance of one
+        //    function and unguarded at the other.**
+        //
+        //    Chrome-measured: `<form>` plain is `generic`; with `aria-label`, `title` or a
+        //    resolving `aria-labelledby` it is `form`. ⚠ A `name="…"` attribute does NOT count
+        //    (Chrome: `generic`) — it is the form's SUBMISSION name, not an accessible one, and it
+        //    is the row that stops "has any nameish attribute" from being the rule.
+        //
+        //    ⭐ Why it matters to an agent rather than to a spec: a landmark list is a JUMP LIST.
+        //    Every `<form>` on a page — the newsletter box, the search field, the login — would
+        //    appear in it, and *"go to the form"* becomes ambiguous exactly when there is more than
+        //    one, which is the case the list exists for.
+        "form" => {
+            if has_attribute_name(dom, node) {
+                Role::Form
+            } else {
+                Role::Generic
+            }
+        }
         "article" => Role::Article,
         // HTML-AAM: `<section>` is only a `region` when it has an accessible name — and
         // `has_attribute_name` now RESOLVES `aria-labelledby` rather than trusting its presence.

@@ -98061,3 +98061,121 @@ Behind those: the nested scrollable-overflow family (t1381), transforms and absp
 rectangle (t1382), and an owner decision on zstd.
 
 WIKI: docs/wiki/ax-name-fallback-chain.md
+
+## Tick 1387 — the landmark sweep, and the regression my own check hid (2026-08-30)
+
+TICK SHAPE: capability-subsystem
+
+**Track B**, surface audit #80's ranked #1, fourth pass — and it carries **constitution check #132**
+(due t1387).
+
+### ⭐⭐⭐ `<form>` IS A LANDMARK ONLY WHEN NAMED, AND THE RULE WAS WRITTEN DOWN NEXT DOOR
+
+```text
+                                       chrome     before    after
+  <form>                       plain   generic    form      generic
+  <form aria-label="FL">               form       form      form
+  <form title="FT">                    form       form      form
+  <form aria-labelledby=…>             form       form      form
+  <form name="n">              CONTROL generic    form      generic
+  <div role=form>              CONTROL generic    generic   generic
+  <div role=form aria-label>   CONTROL form       form      form
+```
+
+The `<section>` arm **three lines below** carries the identical clause, and `role_of`'s
+explicit-role path in the same function carries it for exactly these two roles:
+`matches!(r, Role::Region | Role::Form) && !has_attribute_name(…)`.
+
+> **The same rule, guarded at one entrance of one function and unguarded at the other** — and the
+> guarded entrance is `role="form"`, which almost nobody writes, while the unguarded one is
+> `<form>`, which is on nearly every page.
+
+⭐ A landmark list is a **JUMP LIST**: every `<form>` — the newsletter box, the search field, the
+login — was in it, so *"go to the form"* was ambiguous exactly when there is more than one, which is
+the case the list exists for. t1375 made the drive path REFUSE ambiguity, so this converted into a
+refusal rather than a wrong click, the same conversion t1380's phantom menu link made.
+
+⭐ **`name="n"` is the row that stops "has any nameish attribute" from being the rule** — a form's
+`name` is its submission name. And **nineteen other landmark rows were already correct and are now
+banked**, including the pair that is the sharpest: a `<header>` inside a `<div>` is still the page's
+`banner` (a `<div>` is not sectioning content), and the same element inside an `<article>` is a
+scoped `sectionheader` that must NOT be in the list.
+
+### ⚠⚠⚠ THE REGRESSION t1384 LANDED, AND WHY THREE TICKS RAN ON TOP OF IT
+
+`g_disabled_inert` (`engine/page/tests/`) has been RED since t1384. Two mechanisms let it through:
+
+**1. The engine defect, and t1384 did not cause it — it EXPOSED it.** Chrome-measured:
+
+```text
+  <fieldset disabled>          role=group, NO `disabled` property
+    <input type=checkbox>      disabled: True
+```
+
+The native `disabled` attribute belongs to the *listed form elements*; `<fieldset>` carries it as a
+PROPAGATOR. Ours reported it on the fieldset too — and **as a nameless `generic` that node was never
+printed in an observation line, so the wrong state could not be seen.** t1384 promoted `<fieldset>`
+to `group`, which is correct, and the promotion PUBLISHED the wrong state.
+
+> ⭐⭐ **A LATENT WRONG ANSWER SURFACES WHEN THE NODE IT LIVES ON BECOMES VISIBLE** — so a
+> correctness fix can look like the thing that broke a gate when it is the thing that exposed it.
+
+⚠ `aria-disabled` is deliberately NOT scoped this way: `<div role=button aria-disabled=true>` reports
+`disabled` in Chrome on any element, because the author said so. Native attribute: controls only.
+
+**2. THE CHECK THAT HID IT WAS MINE.** `engine/page/tests/` is not in the wall's crate list (audit
+#78: 502 of 522 gate files run nowhere), so `verify.sh` never ran it. The manual per-tick run DID —
+and the command was:
+
+```sh
+cargo test -q -p manuk-page … | grep -E "^test result" | grep -v "0 failed" | head -5
+echo "page done (empty=green)"
+```
+
+The `echo` runs **unconditionally**. The saved output of t1384's and t1385's runs both read:
+
+```text
+  test result: FAILED. 0 passed; 1 failed; …
+  page done (empty=green)
+```
+
+The failure was printed, and directly under it a hard-coded reassurance. I read the reassurance.
+
+> ⭐⭐⭐ **A CHECK THAT PRINTS ITS SUCCESS MESSAGE UNCONDITIONALLY IS NOT A CHECK.** The eye lands on
+> the last line. This tick's run instead counts the result lines and prints the counts, so the SHAPE
+> of the output carries the verdict and there is no sentence to read instead of the data. It is the
+> same class as t1004's *"a gate can pin the engine to a bug"*, one level out: **an instrument can
+> pin the OPERATOR to a belief.**
+
+### THE GATE
+
+`a_landmark_is_a_landmark_only_when_the_spec_says_so` (`agent/tests/`, in the wall's crate list) — 20
+role rows (14 of them controls), the three disabled-scope rows, and the tree's form-landmark NAME SET
+(asserted as the set, not a count, so an extra entry says which one it is). **PROVEN RED by four
+mutations**, each on its predicted rows: N1 restore `"form" => Role::Form` → `f_plain`/`f_name` and
+six form landmarks instead of four; N2 guard on `aria-label` alone → `f_title`; N3 let a `<div>` count
+as sectioning content → only `l_div_header`; N3b unscope the native `disabled` → only `d_fs`.
+
+⚠ The `<fieldset disabled>` half is asserted **in both places**: here, and in `g_disabled_inert`,
+which is the gate that caught it and which the wall still does not run.
+
+### THE RECEIPT
+
+```text
+  manuk-agent  150/150 → 151/151   +1   +the new gate
+  manuk-page   RED → GREEN   (156 gate binaries, 0 FAILED — counted, not asserted by an echo)
+  WPT wai-aria 399/434  FLAT     ·  WPT accname 445/484  FLAT
+  manuk-a11y / manuk-layout / manuk-css / manuk-paint / manuk-dom   CONTROL
+  CONSTITUTION-CHECK #132 written (due t1387); next due t1395
+```
+
+⚠ Both a11y suites FLAT again — the fifth and sixth instances of audit #80's finding in eight ticks.
+`wai-aria/role/` tests explicit `role=` attributes; nothing in it exercises `<form>`'s implicit
+mapping.
+
+NEXT: check #132's STEER — give VI.2's H0.1 row its new subject (the SEMANTIC layer, with CDP named
+as the oracle), and add `wai-aria` + `accname` rows to `WPT-AREAS.tsv` as a dedicated APERTURE tick.
+Behind those: `title`-as-name scoped to HTML-AAM's element set (t1386), `<summary>`'s empty name, the
+nested scrollable-overflow family (t1381), transforms and abspos in the alignment rectangle (t1382).
+
+WIKI: docs/wiki/landmark-roles.md

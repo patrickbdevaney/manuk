@@ -2035,6 +2035,15 @@
   - L3915 · CLOSED (t1342): the twelve are merged, and the rule is now a gate — but the claim above was wrong
   - L3946 · The rule, enforced
 
+## The landmark map, swept — and the one row that was wrong
+`docs/wiki/landmark-roles.md`
+
+  - L7 · ⭐⭐⭐ <form> is a landmark only when named, and the rule was written down next door
+  - L40 · The nineteen that were already right, and are now banked
+  - L60 · ⚠⚠ And a latent wrong answer that t1384 made visible
+  - L80 · ⚠⚠⚠ How it stayed hidden for three ticks — and it was not the wall
+  - L99 · How it was proven red
+
 ## Manuk Daily-Driver Usability Roadmap (synthesized, tick 138)
 `docs/wiki/lever-map.md`
 
@@ -2727,4 +2736,4 @@
   - L231 · Both named mechanisms are subsystem work
 
 ---
-2526 sections across 49 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+2531 sections across 50 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.

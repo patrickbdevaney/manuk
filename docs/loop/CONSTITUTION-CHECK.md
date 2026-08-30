@@ -11370,3 +11370,110 @@ the last one, or the several before. Carried into a third check.
    still the highest-value item the agent cannot close. **I5 still needs an owner decision.**
 
 **Next check due: tick 1387.**
+
+---
+
+## Check #132 — tick 1387 (2026-08-30)
+
+**HORIZON: H0 — Pareto Web Parity.** Exit gate, all binary:
+
+```text
+  1  ~83% WPT subtest pass rate across categories
+  2  differential-oracle-verified viability across all four usage-weighted corpora
+  3  the headful shell is daily-drivable by its own developer
+  4  EVERY RENDERED CONSTRUCT IS QUERYABLE THROUGH THE IN-PROCESS SEMANTIC API
+```
+
+### GATE OR SCOREBOARD? — GATE, and the window has one shape
+
+Ticks 1380–1387:
+
+```text
+  1380  the a11y tree contained every `display:none` subtree            CAPABILITY  (Track B/C)
+  1381  a trailing margin was outside the scrollable overflow region    CAPABILITY  (Track A)
+  1382  the alignment rectangle — a relpos box contributes BOTH         CAPABILITY  (Track A)
+  1383  the audits; the map vs Interop 2026 + Baseline 2026             INSTRUMENT
+  1384  the implicit roles that fell through to a plausible default     CAPABILITY  (Track B)
+  1385  `pressed` and `invalid` — two states the tree did not have      CAPABILITY  (Track B)
+  1386  the end of the name chain, in the right order                   CAPABILITY  (Track B)
+  1387  the landmark map swept; `<form>` is a landmark only when named  CAPABILITY  (Track B)
+```
+
+Seven capability ticks, one audit tick. **Five of the eight are Track B**, which is the correction
+the 2026-08-28 board nudge asked for after ~30 consecutive Track A ticks — and it was not a schedule
+decision: audit #80 produced a ranked #1 that has now paid out four times running.
+
+### ⭐⭐⭐ THE WINDOW'S FINDING — A SUITE'S SILENCE IS A MEASUREMENT, AND WE MEASURED IT FIVE TIMES
+
+```text
+  tick   subsystem                          the suite that should have seen it     moved
+  1379   name hidden by a STYLESHEET        accname                                0
+  1380   `display:none` subtrees in tree    (no suite exists)                       —
+  1384   implicit roles (HTML-AAM)          wai-aria   399/434 before AND after      0
+  1385   `pressed` / `invalid` states       (no suite exists)                       —
+  1386   the name chain's last steps        accname    438/484 → 445/484           +7
+```
+
+Interop 2026 lists **accessibility testing as an INVESTIGATION effort** — the four vendors' own
+position is that no suite can decide a11y-tree correctness. This window measured what that means
+from the inside: four real, Chrome-confirmed defects whose suites moved by ZERO, and one whose suite
+moved because it happened to be inside the aperture.
+
+> ⭐⭐⭐ **A FLAT AREA NUMBER AFTER A REAL FIX IS A QUESTION ABOUT THE SUITE'S APERTURE, NOT ABOUT
+> THE FIX.** And the question has an answer that can be looked up: WPT's hidden-node fixtures are
+> all `style="display:none"` inline, and `wai-aria/role/` tests EXPLICIT `role=` attributes only.
+
+⚠ The before-numbers were taken **deliberately** (restore `HEAD`'s file, re-run, restore) rather than
+reported as expectations. That is the difference between this and a claim.
+
+### PART VI CORRECTED
+
+- **VI.2's residual list is EMPTY and stayed empty.** t1378 closed the last one (the float re-flow);
+  nothing in this window re-opened it. Check #131's STEER #1 asked for a NEW SUBJECT for the H0.1
+  row, and this window supplies the candidate with evidence: **the SEMANTIC layer, measured against
+  CDP rather than against a suite.** Six defects in five ticks, all Chrome-confirmed, none rankable
+  by any instrument the constitution currently names.
+- **I3's "queryable through the semantic API" is exit-gate condition 4, and it has no oracle in the
+  constitution.** The document assumes a suite. There is not one. `Accessibility.getFullAXTree` is
+  what this loop actually used, and it should be named where VI names the oracles.
+
+### THE INVARIANTS
+
+**I3 — not bent, and it did most of the work this window.** Every a11y tick asserted BOTH entrances
+(the bare `role_of`/`state_of`/`accessible_name` and the published tree), and t1385's new fields went
+through the same walk. t1387's finding is I3's shape at the smallest scale yet: **the same rule,
+guarded at one entrance of one function and unguarded at the other**, where the guarded entrance
+(`role="form"`) is the rare spelling and the unguarded one (`<form>`) is on nearly every page.
+
+**I4 — applied as REFUSALS twice.** t1383 refused to change `wrap_decoder`'s unknown-coding arm
+because the arbitration failed (the sandbox will not bind a listening socket, so Chrome could not be
+asked), and t1386 refused to narrow `title`-as-name because getting it wrong DELETES names. Both
+recorded with the failing message and the measurement, not with an intention.
+
+**I5 — unchanged. Third check in a row.** `ORACLE_CRAWLED: 0 (PARTIAL)`. It is exit-gate condition 2
+and the loop owns no lever for it.
+
+**I1, I2, I6, I7, I8: not bent.** No new workspace dependency. `A11yState` gained two public fields
+and is `Default`-built everywhere, so no caller changed.
+
+### ⚠ APERTURE — THE A11Y SUITES ARE OUTSIDE THE PRIMARY METRIC
+
+Neither `wai-aria` (434 subtests) nor `accname` (484) has a row in `docs/loop/WPT-AREAS.tsv`, so five
+of this window's eight ticks moved a number the board cannot see. Adding rows moves the monotonic
+total for APERTURE reasons and must be its own tick (t1273's shape), which is why it was recorded
+rather than done in the middle of a capability tick.
+
+### STEER
+
+1. ⭐⭐⭐ **Give VI.2's H0.1 row its new subject: the SEMANTIC layer, with CDP as the named oracle.**
+   The evidence is six Chrome-confirmed defects in five ticks on a surface no suite ranks.
+   *Refutable by:* if the next three CDP sweeps come back clean, the surface is done and the row
+   should point elsewhere.
+2. ⭐⭐ **Add `wai-aria` and `accname` rows to `WPT-AREAS.tsv` as a dedicated aperture tick**, and say
+   in the journal that the total moved for aperture and not for capability.
+3. ⭐ **Name the a11y oracle in PART VI.** Exit condition 4 is measured by an instrument the
+   constitution does not mention, and Interop 2026 says no suite exists to replace it.
+4. Carried: I5 needs an owner decision; the gate-execution gap (#78, 502 of 522); an owner decision
+   on zstd's dependency (t1383).
+
+**Next check due: tick 1395.**
