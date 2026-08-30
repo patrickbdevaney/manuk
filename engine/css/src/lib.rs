@@ -1530,6 +1530,20 @@ pub struct ComputedStyle {
     pub counter_reset: Vec<(String, i32)>,
     /// `counter-increment: name [n]` — adds `n` (default 1) at this element, AFTER any reset.
     pub counter_increment: Vec<(String, i32)>,
+    /// ⭐ `counter-set: name [n]` — CSS Lists 3's third counter action, and the one that is NOT a
+    /// synonym for either of the other two.
+    ///
+    /// The three run **reset → increment → SET** (CSS Lists 3), which is measured rather than
+    /// recalled: Chrome renders `counter-reset: a 0; counter-set: a 99; counter-increment: a 1` as
+    /// **99**, not 100. `counter-set` on a counter that does not yet exist **creates** it — also
+    /// measured, `counter-set: b 99` with no reset renders 99 and not 0. The difference from
+    /// `counter-reset` is about SCOPING (reset opens a new nested counter), not about whether the
+    /// value lands.
+    ///
+    /// It was unimplemented on BOTH cascades, and the accname suite is where that shows: nine
+    /// `alt counter` subtests use `counter-set: cnt 5051` with `content: "" / counter(cnt)` — a
+    /// number announced but not drawn — so the value came out 0 and every one of them failed.
+    pub counter_set: Vec<(String, i32)>,
     /// The computed style of this element's `::before` / `::after` pseudo-elements, when they have
     /// `content`. Generated content is not in the DOM (script must never see it), so it rides on
     /// the element's style and is materialised as inline items at layout time.
@@ -2131,6 +2145,7 @@ impl ComputedStyle {
             content_alt: None,
             counter_reset: Vec::new(),
             counter_increment: Vec::new(),
+            counter_set: Vec::new(),
             before: None,
             after: None,
             first_letter: None,
@@ -7489,6 +7504,9 @@ fn apply_declaration(s: &mut ComputedStyle, d: &Declaration, parent_fs: f32) {
         }
         "counter-reset" => s.counter_reset = parse_counter_list(v, 0),
         "counter-increment" => s.counter_increment = parse_counter_list(v, 1),
+        // ⚠ The DEFAULT is 0, as it is for `counter-reset` and unlike `counter-increment`'s 1:
+        // `counter-set: c` means "set c to 0", not "set c to 1".
+        "counter-set" => s.counter_set = parse_counter_list(v, 0),
         "list-style-type" => s.list_style_type = parse_list_style_type(v),
         "list-style-position" => s.list_style_inside = v.trim().eq_ignore_ascii_case("inside"),
         "list-style" => {

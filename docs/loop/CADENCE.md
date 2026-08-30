@@ -11,12 +11,12 @@
 
 | | value | over |
 |---|---|---|
-| ticks landed | **1056** | ticks 1–1373 |
-| median tick cycle | **31m** | 1055 intervals |
-| median, last 10 | **66m** | 10 intervals |
+| ticks landed | **1057** | ticks 1–1374 |
+| median tick cycle | **31m** | 1056 intervals |
+| median, last 10 | **74m** | 10 intervals |
 | fastest / slowest | 5s / 7.0d | |
-| **ticks per hour** | **0.88** | 1196.4h elapsed |
-| median verify wall | **67s** | 995 ticks |
+| **ticks per hour** | **0.88** | 1197.8h elapsed |
+| median verify wall | **67s** | 996 ticks |
 | wall trend | 39s → 8m — getting slower ⚠️ | first 3 vs last 3 |
 
 The **cycle** is the real unit: implement → debug → verify wall → land. The wall is only part of
@@ -31,7 +31,7 @@ it, and a wall that grows taxes every future tick, so it is tracked separately f
 * **✅ rows in the capability ledger**: 144 → **642**
 * **Bar 0 — oracle hangs**: 0 of 265 sites
 
-**492 of 1056 ticks** (47%) moved a
+**492 of 1057 ticks** (47%) moved a
 user-visible capability. The rest were instruments, infrastructure and corrections — and the
 ledger says the corrections were not overhead: three of its top three priorities were phantoms,
 and finding that out redirected everything after it.
@@ -1153,5 +1153,6 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 | **1371** | 2026-08-29 23:12 | 2.0h | capability-subsystem | 8m | +710/−107 | 522 | 81 | 56.0% · | the announced half reaches the name, and the fourth fact became a struct (2026-08-30) |
 | **1372** | 2026-08-30 00:38 | 87m | capability-subsystem | 8m | +455/−50 | 522 | 81 | 56.0% · | `content: attr(href)` met its element on one cascade and not the other (2026-08-30) |
 | **1373** | 2026-08-30 01:29 | 51m | instrument-fidelity | 8m | +475/−36 | 522 | 81 | 56.0% · | the audits, and a class that had been tripped over four times, measured (2026-08-30) |
+| **1374** | 2026-08-30 02:48 | 80m | capability-subsystem | 8m | +506/−36 | 522 | 81 | 56.0% · | `counter-set`, and the counter properties a pseudo was never asked about (2026-08-30) |
 
 *`·` after a WPT figure means **carried forward**, not measured this tick.*

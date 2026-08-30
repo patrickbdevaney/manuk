@@ -870,6 +870,15 @@
   - L30 · Chrome-measured
   - L45 · ⚠ What this does and does not buy
 
+## `counter-set`, and the counter properties a pseudo was never asked about
+`docs/wiki/counter-set-and-pseudo-counters.md`
+
+  - L6 · Two defects in the same walk, both in the construct authors actually write
+  - L16 · ⚠ A third shape in the "why is this property missing" family
+  - L32 · ⭐⭐⭐ Two spec claims written from memory, both measured wrong
+  - L57 · Reading a counter when the engine will not show you one
+  - L77 · ⚠ NAMED, MEASURED, NOT BUILT — the nine accname rows this did NOT fix
+
 ## CSS AND THE CASCADE — Stylo realities and quirks actually encountered
 `docs/wiki/css-cascade.md`
 
@@ -2615,4 +2624,4 @@
   - L231 · Both named mechanisms are subsystem work
 
 ---
-2462 sections across 37 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+2467 sections across 38 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.

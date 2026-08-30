@@ -1536,10 +1536,56 @@ pub fn counter_snapshots(dom: &Dom, styles: &StyleMap) -> HashMap<NodeId, HashMa
         for (nm, v) in &st.counter_increment {
             *live.entry(nm.clone()).or_insert(0) += *v;
         }
+        // ⭐⭐⭐ **`counter-set` RUNS LAST, AND BOTH HALVES OF THAT SENTENCE WERE WRITTEN FROM
+        // MEMORY AND MEASURED WRONG.**
+        //
+        // The order is **reset → increment → SET** (CSS Lists 3), not the reset→set→increment this
+        // comment first claimed. Chrome-measured, `counter-reset: a 0; counter-set: a 99;
+        // counter-increment: a 1` on one element, `::before{content:counter(a)}`:
+        //
+        // ```text
+        //   the rendered pseudo is TWO digits wide (99), not three (100)
+        // ```
+        //
+        // Under reset→set→increment it would be 100. The measurement is what caught it; the prose
+        // in the first draft of this block asserted the wrong order with a worked example.
+        //
+        // ⚠ And `counter-set` on a counter that does NOT yet exist **creates** it — measured the
+        // same way: `counter-set: b 99` with no reset anywhere renders two digits, not `0`. The
+        // first draft guarded with `if let Some(slot)` on the reasoning that *"reset CREATES, set
+        // only ASSIGNS"*, which is a real distinction in the spec's SCOPING rules and not one about
+        // whether a value lands. For this flat live map, it is an insert.
+        for (nm, v) in &st.counter_set {
+            live.insert(nm.clone(), *v);
+        }
+        // ⭐⭐⭐ **A PSEUDO'S OWN COUNTER ACTIONS WERE IGNORED ENTIRELY, AND THAT IS WHERE AUTHORS
+        // PUT THEM.** This walk read `counter-reset`/`-set`/`-increment` from the ELEMENT only, so
+        // `li::before { counter-increment: item; content: counter(item) }` — the numbered-list
+        // idiom, and the shape the WPT `alt counter` subtests use — stepped nothing and announced
+        // zero. The pseudo's actions run in the same spec order, on the same live map, immediately
+        // before its own `counter()` terms are resolved.
+        //
+        // ⚠ `::before` first, then `::after`, because that is document order: a `::before` that
+        // increments is visible to its own content AND to the `::after`'s.
+        for pseudo in [&st.before, &st.after].into_iter().flatten() {
+            for (nm, v) in &pseudo.counter_reset {
+                live.insert(nm.clone(), *v);
+            }
+            for (nm, v) in &pseudo.counter_increment {
+                *live.entry(nm.clone()).or_insert(0) += *v;
+            }
+            for (nm, v) in &pseudo.counter_set {
+                live.insert(nm.clone(), *v);
+            }
+        }
+        // A pseudo's counter TERM can now live in either half of `content` — the drawn one or the
+        // announced one (t1369/t1371) — so a snapshot is wanted if EITHER names a counter. Reading
+        // only `content` here is what made `content: "" / counter(cnt)` announce zero.
         let wants = [&st.before, &st.after].into_iter().flatten().any(|p| {
-            p.content
-                .as_ref()
-                .is_some_and(|parts| parts.iter().any(|c| matches!(c, ContentPart::Counter(_))))
+            [p.content.as_ref(), p.content_alt.as_ref()]
+                .into_iter()
+                .flatten()
+                .any(|parts| parts.iter().any(|c| matches!(c, ContentPart::Counter(_))))
         });
         if wants {
             out.insert(n, live.clone());

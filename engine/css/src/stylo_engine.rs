@@ -1131,6 +1131,16 @@ pub fn cascade_via_stylo_sized(
             // is not, and the static-position rule needs the un-blockified one. Copied for the
             // same reason `appearance` is: Stylo cannot answer it and the other cascade can.
             cs.display_in_flow = m.display_in_flow;
+            // ⭐ `counter-set` is `engine = "gecko"` in `longhands.toml` — it does **not exist** in
+            // stylo's servo build, so there is no `clone_counter_set()` to call and no pref that
+            // brings one back. Same fence as `appearance` above, and the same answer: the other
+            // cascade can parse it, so recover it from there.
+            //
+            // ⚠ This is a THIRD shape in the "why is this property missing" family, and the three
+            // are distinguished by where the gate lives: a `servo_pref` row in `longhands.toml`
+            // (t1358 multicol), a `static_prefs::pref!` call inside a value parser (t1369 the
+            // `content` alt syntax), and `engine = "gecko"` — which no flag reaches at all.
+            cs.counter_set = m.counter_set.clone();
         }
         timed(&mut ph.hints_ns, || {
             apply_presentational_hints(dom, node, &mut cs)
@@ -1163,6 +1173,22 @@ pub fn cascade_via_stylo_sized(
                     Pe::After,
                 )
                 .map(Box::new);
+                // ⚠⚠ **AND THE PSEUDOS NEED `counter-set` RECOVERED TOO, WHICH IS WHERE AUTHORS
+                // ACTUALLY WRITE IT.** `li::before { counter-set: item 5; content: counter(item) }`
+                // is the shape; recovering the property only onto the ELEMENT fixes the case nobody
+                // writes — the same half-fix t1372 made with `attr()` one tick earlier, in the same
+                // file, for the same reason. Stylo cannot answer this one at all (`engine = "gecko"`
+                // in `longhands.toml`), so the value comes from the other cascade's pseudo.
+                if let Some(m) = minimal.get(&node) {
+                    for (dst, src) in [
+                        (cs.before.as_mut(), m.before.as_ref()),
+                        (cs.after.as_mut(), m.after.as_ref()),
+                    ] {
+                        if let (Some(d), Some(sm)) = (dst, src) {
+                            d.counter_set = sm.counter_set.clone();
+                        }
+                    }
+                }
                 // `::first-letter` — NOT generated content: it re-styles the first typographic
                 // letter of the element's first line, and the range it covers is only knowable
                 // once the inline items exist, so the style is carried and layout resolves the
@@ -3194,6 +3220,9 @@ fn cascade_pseudo(
     let (parts, alt) = parts;
     cs.counter_reset = counter_pairs(&cv.get_counters().clone_counter_reset());
     cs.counter_increment = counter_pairs(&cv.get_counters().clone_counter_increment());
+    // `counter-set` — the third action, and NOT a synonym for either other one: `reset` creates a
+    // counter, `set` assigns to one that already exists. Both cascades were missing it.
+
     cs.content = Some(parts);
     cs.content_alt = alt;
     Some(cs)

@@ -9584,3 +9584,20 @@ second; counting the non-hittable nodes catches both.
 ⭐ A gate that BUILDS ITS OWN INPUT cannot discover that the producer of that input is broken — an
 a11y hit-test test that constructs its tree by hand tests the traversal and never the cascade.
 (t1373 — `agent/tests` `g_pointer_events_cascade`)
+
+## `li::before { counter-increment: item; content: counter(item) "." }` — the numbered list
+
+Counter actions are written on the PSEUDO, not the element — that is the whole idiom. A counter walk
+that reads `counter-reset`/`-increment` from the element only makes every list item render the same
+number, and the failure is invisible on a short list because "1." and "0." are the same width. **A
+twelve-item list is the cheapest discriminator: the digit count changes at 10.**
+
+⚠ `counter-set` is CSS Lists 3's third action, it runs **LAST** (reset → increment → set), and it
+**creates** a counter that does not exist. Both of those were written from memory the other way round
+here and corrected by one Chrome measurement each: `reset a 0; set a 99; increment a 1` renders
+**99**, not 100.
+
+⚠ Chrome does not expose a pseudo's resolved text to script — `innerText` omits generated content and
+`getComputedStyle(el,'::before').content` returns the specified value. Read it as WIDTH, and pick
+values where a wrong answer changes the digit count.
+(t1374 — `agent/tests` `a_pseudo_s_counter_actions_run_and_counter_set_exists`)

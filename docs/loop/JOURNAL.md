@@ -96784,3 +96784,93 @@ hand** and ask what each is therefore blind to; (2) the remaining LAYOUT drift i
 re-flow remains VI.2's sole surviving residual.
 
 WIKI: docs/wiki/pointer-events-cascade-drift.md
+
+## Tick 1374 — `counter-set`, and the counter properties a pseudo was never asked about (2026-08-30)
+
+TICK SHAPE: capability-subsystem
+
+**Track B.** Aimed at the nine accname `alt counter` rows. It did not get them — and what it found
+on the way is worth more.
+
+### TWO DEFECTS IN THE SAME WALK, BOTH IN THE CONSTRUCT AUTHORS ACTUALLY WRITE
+
+```css
+li::before { counter-increment: item; content: counter(item) "." }   /* the numbered list */
+```
+
+`counter_snapshots` read `counter-reset` / `counter-increment` from the **ELEMENT only**, so a
+pseudo's own counter actions were ignored entirely and every item rendered the same number. And
+`counter-set` — CSS Lists 3's third action — was not implemented on either cascade.
+
+⚠ **A THIRD SHAPE in the "why is this property missing" family.** `counter-set` is
+`engine = "gecko"` in `longhands.toml`: it does not exist in the servo build, so there is no
+`clone_counter_set()` and **no pref that brings one back**. Recovered from `MinimalCascade` the way
+`appearance` and `field-sizing` are — onto the element **and onto its pseudos**, because the pseudo
+is where it is written. (Element-only is the half-fix t1372 made with `attr()` one tick earlier, in
+the same file.) The family is now three, by where the gate lives: a `servo_pref` row (t1358), a
+`static_prefs::pref!` inside a value parser (t1369), and `engine = "gecko"` — which no flag reaches.
+
+### ⭐⭐⭐ TWO SPEC CLAIMS WRITTEN FROM MEMORY, BOTH MEASURED WRONG
+
+The first draft of this code asserted, in prose, with a worked example: *"the three run reset, then
+set, then increment … ends at 6"*, and *"`counter-set` assigns to a counter that already exists and
+does nothing if it does not."* Both false, and one Chrome measurement each settled it:
+
+```text
+  counter-reset: a 0; counter-set: a 99; counter-increment: a 1   TWO digits (99), not three (100)
+  counter-set: b 99  with no reset anywhere                       TWO digits (99), not one (0)
+```
+
+The order is **reset → increment → SET**, and `counter-set` **creates** a counter that does not
+exist; the reset/set distinction is about SCOPING, not about whether the value lands.
+
+> ⭐ **A spec sentence recalled is a hypothesis; the fixture is the test.** Both wrong claims were
+> already written into a doc comment **with a worked example** before either was measured — and the
+> worked example is what made them checkable at all.
+
+### READING A COUNTER WHEN THE ENGINE WILL NOT SHOW YOU ONE
+
+Chrome does not expose a pseudo's *resolved* text to script: `innerText` omits generated content and
+`getComputedStyle(el,'::before').content` returns the specified value, `counter(x)` and all. So a
+rendered counter is read as the element's **width** in a `max-content` box, and every row is chosen
+so a wrong answer changes the **digit count**.
+
+⚠ An earlier version of the fixture used single-digit values and **every wrong answer was the same
+width as the right one**. The digit boundary at 10 is why the list has twelve items.
+
+### THE GATE
+
+`a_pseudo_s_counter_actions_run_and_counter_set_exists` (`agent/tests/`). **PROVEN RED by three
+mutations.** N1 drop the pseudo counter loop → items 10-12 read 28.9 instead of 38.55. N2 move
+`counter-set` before `counter-increment` → `o1` reads 38.53 (100, not 99). N3 guard the set with
+`if let Some(slot)` → `o2` reads 19.27 (the counter never created).
+
+⚠ **N2's first attempt left the gate GREEN and the ledger says so**: it *added* a set loop before the
+increment instead of *moving* it, so the later loop still won. A mutation that duplicates rather than
+relocates tests nothing, and it read as a vacuous row until the mutation itself was fixed.
+
+### ⚠ NAMED, MEASURED, NOT BUILT — the nine rows this did NOT fix
+
+`accname` is **flat at 438/484**, deliberately reported. The nine `alt counter` subtests use
+`content: "" / counter(cnt)`, and **stylo 0.19's value parser accepts `counter()` only before the alt
+marker** (`"counter" if alt_start.is_none() =>`), so the whole declaration is an unexpected-token
+error and the pseudo does not exist at all. Verified by narrowing: `content: "" / "y"` works,
+`content: counter(cnt)` works, `content: "" / counter(cnt)` produces **no pseudo**. A limit of the
+vendored dependency, not of this engine; closing it means recovering a pseudo's whole `content` from
+`MinimalCascade` when stylo produced none — much larger than recovering one property onto an existing
+pseudo.
+
+### THE RECEIPT
+
+```text
+  manuk-agent  138/138 → 139/139   +1   +the new gate
+  accname      438/484  FLAT — blocked by stylo's parser, narrowed and named
+  manuk-css / manuk-a11y / manuk-layout / manuk-page / manuk-paint / manuk-dom   CONTROL
+```
+
+NEXT: audit #79's ranked list is unchanged — sweep the gates that build their own input; the layout
+drift in grid placement (`grid-area` + `grid-template-areas`, 127 declarations) and legacy flex (186).
+The float re-flow remains VI.2's sole surviving residual, and t1374 adds a design constraint for it:
+the trial-flush approach must not write to the side tables, or it re-creates the t1113-1120 leak.
+
+WIKI: docs/wiki/counter-set-and-pseudo-counters.md
