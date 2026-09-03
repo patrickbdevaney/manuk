@@ -99831,3 +99831,237 @@ needs a layout round-trip, not a parse fix). The parse leg is now 696/795 and it
 `manuk-css`, not here.
 
 WIKI: docs/wiki/sizes-tokenizer.md
+
+## Tick 1402 — the engine knew what a click does, and the agent had its own opinion (2026-09-03)
+
+TICK SHAPE: capability-mechanism
+CLASS: every form, every consent box, every docs accordion, every icon button — the agent's ACT half
+
+Track C, and the board's own balance rule picked it: the five ticks since t1396 were all Track A
+(images, events, scripting), Track B closed its 90% bar at t1396, and the end-to-end DRIVE had gone
+darkest. So the question was *"what can the agent not do?"*, asked of `AgentBrowser::activate` — the
+production entry point behind `BrowserAction::Click`, `ClickHandle` and `click_by_name`.
+
+### ⭐⭐⭐ IT WAS A SECOND, WRONG IMPLEMENTATION OF A RULE THE ENGINE ALREADY HAD RIGHT
+
+`manuk-page`'s `Page::dispatch_click` **is** the click's activation behaviour, built and
+Chrome-arbitrated over many ticks: `<label>` forwarding, the *pre-click* activation steps (so a
+handler reading `this.checked` sees the new value), radio-group exclusivity, a disabled control
+refusing, a submit queued as *requested* so the page's own validator runs first, the
+`<summary>`/`<details>` disclosure with `name` accordion exclusivity,
+`mousedown`/`mouseup`/`click`/`input`/`change`, and the cancelled-activation undo.
+
+**`manuk-agent` called none of it.** It re-derived the rule from a twenty-line `match` on the tag
+name. `command grep -rn dispatch_click agent/src/` returned exactly one hit, in a comment.
+
+Headless Chrome 145.0.7632.116, `element.click()` on each construct, state dumped from one document:
+
+```text
+  d1.open after click on summary            = true      we: Inert — the section never opens
+  cb1.checked after label[for] click        = true      we: Inert
+  cb2.checked after wrapping-label click    = true      we: Inert
+  after click rb: ra/rb/rc checked          = f/t/f     we: t/t/f   ← TWO radios checked
+  after SECOND click rb                     = f/t/f     we: f/f/f   ← radios do not untoggle
+  disabled checkbox checked after click     = false     we: true
+  form submitted by disabled button         = false     we: submitted
+  click <span> inside <button> submits form = true      we: nothing
+  click <span> inside <a href> navigates    = #dest     we: nothing
+  <button> outside any form                 = nothing   we: Err("NoForm")
+  select.value after <option> click         = 1         we: agree — left alone
+```
+
+⚠⚠ **AND NOT ONE OF THEM FAILED LOUDLY.** `Toggled(true)` came back for a *disabled* checkbox, so
+an agent reads its own success out of a form the server will reject. `Inert` came back for the
+disclosure, which is indistinguishable from *"this page has nothing to open"*. Both are ordinary
+markup: on 36 CrUX-sampled pages, `<button>` is on 12 sites, `disabled` on 8, `<label>` on 6,
+`<details>`/`<summary>` on 3 (51 hits).
+
+> ⭐⭐⭐ **WHEN A RULE HAS TWO IMPLEMENTATIONS, THE TESTS OF EACH ARE EVIDENCE ABOUT THAT ONE ONLY.**
+> The engine's dispatcher has `g_label_click`, `g_details`, `g_submit_click`, `g_click_activation`.
+> The agent has `g_agent_drive_reaches_its_target` (reachability) and
+> `g_agent_click_lands_on_its_target` (aim). **Nothing anywhere asserted that the two
+> implementations AGREED**, and a divergence that answers `Toggled(true)` instead of throwing is
+> invisible to every instrument either half owns. Same shape as t720's *"one rule, N
+> implementations"* and t1355's *"two entrances, one unguarded"* — one door further out, a whole
+> subsystem wide.
+
+### THE FIX — one implementation, and the host keeps only what is genuinely the host's
+
+`activate` dispatches through `Page::dispatch_click` and then **observes**. What stays is the part
+that belongs to the embedder rather than to the document: following a link (the dispatcher
+deliberately does not navigate — it returns whether the default action survived `preventDefault()`,
+which is how an SPA router cancels), performing a queued submission by draining
+`Page::take_form_submits()` (the same channel a script's `form.requestSubmit()` arrives on, so both
+now go through one path), and reporting.
+
+⭐ **`Activation` is now MEASURED, not asserted.** `Toggled(bool)` is reported only when the
+checkedness actually **changed**, so a disabled control and a second click on a selected radio are
+`Inert`. *"I clicked a checkbox"* and *"a checkbox changed"* are different claims and only the
+second is checkable from outside — which is what makes the disabled arm falsifiable at all. New
+`Activation::Disclosed(bool)` for the `<details>`.
+
+### ⭐⭐ AND THE SAME RULE, THREE TIMES: THE ACTIVATION BEHAVIOUR IS THE NEAREST ANCESTOR'S
+
+A click lands on whatever is under the pointer — the `<span>`, the `<b>`, the `<svg>` chevron —
+essentially never on the control's own box. `Page::summary_details_target` already walked up for
+exactly this reason and **said so in its own doc comment**. Its two siblings did not:
+
+```text
+  summary_details_target   walks up  ✅   (and documented WHY)
+  labeled_control          exact match on the clicked node   ->  now walks up
+  submit_target            exact match on the clicked node   ->  now walks up
+```
+
+⚠ **Each walk needs its OWN termination rule, and they are not the same rule.**
+`labeled_control` stops at a **labelable** element, because otherwise `<label><input></label>`
+clicked on the input travels up to the label and forwards back to itself forever — the control being
+the *nearer* ancestor is both the right answer and the termination condition. `submit_target` stops
+at a **non-submitting** `button`/`input` and at the `form`, because walking past a
+`<button type=button>` inside a form would find that form through some *other* submit button and
+submit it: a page that said "do not submit" would submit.
+
+⭐ **And once the walk exists, `submit_target` must return the SUBMITTER, not the clicked node.** Two
+things depend on it: the recorded name/value (`<button name=action value=delete>` beside
+`value=save` is how many forms say what the user asked for), and disabledness — `is_disabled`
+propagates only through a `<fieldset>`, so a `<span>` inside `<button disabled>` is **not** disabled,
+and asking the hit node made every disabled icon-button live again.
+
+### ⚠⚠ TWO MUTATIONS WERE GREEN ON THE FIRST GATE, AND THE REASON IS REUSABLE
+
+M2 (`submit_target` without the walk) and M3 (disabledness asked of the hit node) both stayed green.
+They had *applied* — verified by diff, per the t1239 rule — and the arms were **vacuous**: they
+resolved their target by NAME, and the inner `<span>` of `<button><span>Send it</span></button>` is
+`Generic ""` in the a11y tree. **It has no name to resolve by**, so `find(|n| n.name.contains(…))`
+returned `None` and the arm silently fell back to the `<button>` itself, testing the exact-match path
+the mutation restored.
+
+> ⚠ **An arm that resolves its target by NAME cannot test descendant-markup behaviour, because the
+> descendant has no name.** Rewritten to aim at a point DERIVED from perceived geometry
+> (`inner_point`), with a `hit_role_at` vacuity assertion proving the point really lands on a
+> `Generic` inside the control. Both mutations then went red. The green mutation was the only thing
+> that said so.
+
+### ⚠⚠⚠ RESIDUE #1, AND IT IS A BAR-0-CLASS AGENT DEFECT: `resolve_handle` RETURNS THE WRONG ELEMENT
+
+Found because the gate's radio arm selected Radio C when told "Radio B".
+`targeting::keywords` drops tokens shorter than two characters (`agent/src/targeting.rs:24`), so the
+distinguishing token vanishes and all three radios score **identically**:
+
+```text
+  INTENT "Radio A" -> "Radio C"   score 0.73571503
+  INTENT "Radio B" -> "Radio C"   score 0.73571503
+  INTENT "Radio C" -> "Radio C"   score 0.73571503
+  INTENT "Sign in" -> "Sign in"   "Sign up" -> "Sign up"   "Delete" -> "Delete"   (>=2 chars: fine)
+```
+
+**An exact, complete, unambiguous name match does not win**, and the tie falls to tree order. So an
+agent told *"select Option A"* selects Option C. Single-character tokens are pagination (`Page 2`),
+wizard steps (`Step 1`), sizes (`S`/`M`/`L`), seat and option letters. Same family as t1389's *"the
+drive path picked the first substring match"* — **and it survived that fix.** The gate resolves
+through the tree's own `node` handle so THIS tick measures activation behaviour and not the scorer.
+**That is the next tick.**
+
+### ⚠ RESIDUE #2 — `<summary>` AND `<label>` ARE `Generic ""` IN OUR A11Y TREE
+
+The `<details>` is `Group` with `expanded`, correctly. The **control that operates it** has no role
+and no name, so the disclosure is drivable only by COORDINATE — which is what ARM 1 does, and it is
+a real published path (`to_viewport_lines`), but it is not perception. Chrome exposes `<summary>` as
+`DisclosureTriangle`. Arbitrating that needs the CDP `getPartialAXTree` oracle, so it is its own
+tick rather than a guess made here. This is check #132's I3 bend one layer out: the capability is
+complete on every channel a human uses and thin on the one this project exists to serve.
+
+### ⚠ RESIDUE #3 — `<input type=reset>` DOES NOT RESET
+
+Chrome restores each control's default value (`tf1.value after reset click = orig`); we do nothing.
+Priced at **0 of 36** CrUX-sampled pages. Measured, named, not built.
+
+### ⚠ AND WHAT THIS TICK DOES NOT CLAIM
+
+`dispatch_click` also fires `mousedown`/`mouseup`/`click`/`input`/`change` and honours
+`preventDefault()`. The agent inherits all of it *by construction* — but **`manuk-agent` builds
+`manuk-page` without the `spidermonkey` feature and has no way to enable one** (`agent/Cargo.toml`
+declares no features), so no page script runs in an agent build at all. Every arm asserted is pure
+UA activation behaviour on a page with no `<script>`. Recorded, not claimed; the opt-in features are
+their own tick.
+
+### THE GATE
+
+`G_AGENT_ACTIVATION_BEHAVIOUR` (`agent/tests/g_agent_activation_behaviour.rs`) — nine arms plus
+controls, driven through the real `AgentBrowser`, **observed through the accessibility tree**
+(`state.checked`, `state.expanded`, and the observation text the model actually reads). Perceive →
+act → observe, closed, with no script on any fixture — so a green result cannot be an artefact of
+the test poking the DOM.
+
+**PROVEN RED by six mutations.** M1 `activate` does not call `dispatch_click` at all (*the defect's
+core*) → both tests, six arms · M2 `submit_target` exact-match only → ARM 9 · M3 disabledness asked
+of the hit node → ARM 6b · M4 `labeled_control` exact-match only → ARM 3 red **while ARM 2 stays
+green**, which is exactly the shape that hid this bug (the bare-text label worked, the wrapped-span
+one did not) · M5 radio-group exclusivity removed → ARM 4, reproducing the old signature
+`(True, True, False)` · M6 `Toggled` reported unconditionally → ARM 4b.
+
+### THE RECEIPT — and ⚠⚠ TWO PRE-EXISTING RED GATES FOUND WHILE CHECKING THE RATCHET
+
+```text
+  G_AGENT_ACTIVATION_BEHAVIOUR   ok (9 arms, 2 test fns)   RED under all 6 mutations
+  manuk-agent, whole crate       126 + 41 gate binaries    ALL ok
+  the click path's page gates, run with --features stylo,spidermonkey:
+    g_click_activation ok · g_label_click ok · g_label_association ok · g_submit_click ok ·
+    g_details ok · g_details_accordion ok · g_form ok · g_form_owner ok · g_form_elements ok ·
+    g_user_activation ok · g_iframe_click ok · g_toggle_event_details_dialog ok · g_click_point ok
+  Bar 0: no hang, no crash, no panic in any arm
+```
+
+⚠⚠ **`g_details_beforetoggle` and `g_details_open_idl` are RED — and they are red on the CLEAN
+TREE.** Measured the only way that settles it: `git checkout --` both edited files, re-ran both
+gates, both still FAILED, restored. So this is **not this tick's regression** and the ratchet holds.
+
+But they are t1400's own gates, landed two ticks ago, and **neither is in `verify.sh`'s `_launch`
+list nor CI's loop** — so nothing has executed them since the tick that wrote them. Both fail on the
+**IDL** path, which is precisely the half t1400's WEB-PATTERNS entry claims it unified:
+
+```text
+  g_details_beforetoggle:  `el.open = true` fired "t:a t:b"  — two `toggle`s, NO `beforetoggle`
+  g_details_open_idl:      setting #b.open  fired "log: |"   — no toggle at all from the setter
+```
+
+This is constitution-check #78's gate-execution gap (502 of 522) with a concrete cost attached: a
+capability was recorded as banked behind a proven-red gate, and the gate went red in the next two
+ticks with nothing to notice. **Named here as the next tick**, ahead of the scorer residue above,
+because a red gate outranks a new capability.
+
+### ⚠⚠⚠ HARNESS, NOT MINE TO FIX — THE WALL CANNOT COMPLETE ON THIS BOX RIGHT NOW
+
+Recorded per the scope rule (`scripts/` and the cron are observer-owned) and left alone. Three
+distinct conditions, all measured, none of them an engine verdict:
+
+1. **ENOSPC FAKED NINE RED GATES.** Attempt 1 finished with `js`, `shell`/`G3`, `ga`, `gg`, `gau`,
+   `gsn`, `gdoc`, `gsl`, `gd` and `G_INTERACT` failed — and every one printed
+   `BUILD FAILED for gate X — this is NOT a verdict about the engine:` followed by
+   `couldn't create a temp dir: No space left on device`. `/home` went 38G free → **0** during the
+   gate-link phase (`target/debug` alone is 148G: the 534 static mozjs gate binaries).
+   **Zero engine failures in the whole run.** Parity 72/72, every crate suite green, both perf
+   floors green.
+2. **`verify.sh` HAS NO TIMEOUTS** (`grep -n timeout scripts/verify.sh` → nothing), so when the
+   `manuk` (shell) test binary blocked — 45 min elapsed, **1 CPU tick in 20s**, 66 threads parked in
+   `futex_do_wait` — the wall could not end. Killing that one process let the wall's own retry run,
+   and it came back `manuk-shell: ok. 77 passed (instrument fault cleared on a settled re-measure —
+   a busy box, not a red gate)`, exactly as the harness predicted.
+3. **THE DISK-HYGIENE CRON PURGED THE LIVE BUILD.** Attempt 2 (warm, `CARGO_BUILD_JOBS=1`) had
+   linked **487 of 534** gate binaries over 150 minutes when the cron logged
+   `target/debug — CRITICAL 93% AFTER prune: full purge to avert ENOSPC (a cold rebuild follows)`
+   and deleted all of it. That is the race the hygiene log's own comment says *"cost us tick 235"*,
+   firing again — its `build is LIVE` guard restricts the STEM prune to old duplicates, but the
+   CRITICAL full-purge arm has no such guard.
+
+⭐ **The arithmetic underneath is structural, and it is why this is not a bad-luck day:** a complete
+`target/debug` is ~150G, `/home` is 297G with ~120G held by everything else, and the purge fires at
+93% used (≈21G free). A full manuk debug build therefore lands *inside* the purge's trigger band,
+so the wall races its own janitor to the finish — with archipelago building on the same spindle.
+
+**THE TICK'S OWN EVIDENCE DOES NOT DEPEND ON THE WALL**, which is why it is written up rather than
+discarded: the new gate green + **six** mutations red, all 41 `manuk-agent` gate binaries + 126 unit
+tests green, and the 15 at-risk click-path page gates run individually under
+`--features stylo,spidermonkey` — 13 green, and the 2 red proven PRE-EXISTING by
+`git checkout --` + re-run + restore.
+
+WIKI: docs/wiki/agent-activation-behaviour.md

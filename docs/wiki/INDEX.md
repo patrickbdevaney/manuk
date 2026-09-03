@@ -14,6 +14,18 @@
   - L67 · How it is plumbed, and why that shape
   - L85 · What is still open in accname
 
+## The agent's click was a second, wrong implementation of the click's activation behaviour
+`docs/wiki/agent-activation-behaviour.md`
+
+  - L3 · The one-sentence mechanism
+  - L10 · Why this class of bug is invisible from inside either half
+  - L26 · What Chrome says, and what we said
+  - L52 · The fix — one implementation, and the host keeps only what is genuinely the host's
+  - L77 · And the same rule, three times: a click's activation behaviour belongs to the nearest ANCESTOR
+  - L106 · What this tick did NOT prove, and why
+  - L116 · Two defects measured here and left open
+  - L143 · The gate
+
 ## The agent drive loop below the fold — a verified click point is verified *in one viewport*
 `docs/wiki/agent-drive-below-the-fold.md`
 
@@ -2859,4 +2871,4 @@
   - L89 · The wall audit (due t1388)
 
 ---
-2610 sections across 61 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+2618 sections across 62 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.

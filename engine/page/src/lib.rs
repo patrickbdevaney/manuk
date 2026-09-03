@@ -7789,11 +7789,18 @@ impl Page {
         // "Click Sign in" is the single most common thing an agent is asked to do, and until now
         // `element.click()` on a submit button fired an event and stopped. Queued as a *requested*
         // submit so the `submit` handler runs first and the page can validate or cancel.
-        if proceed && !self.is_disabled(node) {
-            if let Some(form) = self.submit_target(node) {
-                // Record WHICH button submitted: `<button name="action" value="delete">` next to
-                // `value="save"` is how many forms say what the user asked for.
-                self.pending_submits.borrow_mut().push((form, Some(node)));
+        if proceed {
+            // The SUBMITTER, not the hit node — see `submit_target`: with the ancestor walk the
+            // click can land on a `<span>` inside the button, and both the disabledness question
+            // and the recorded name/value belong to the button.
+            if let Some((form, submitter)) = self.submit_target(node) {
+                if !self.is_disabled(submitter) {
+                    // Record WHICH button submitted: `<button name="action" value="delete">` next
+                    // to `value="save"` is how many forms say what the user asked for.
+                    self.pending_submits
+                        .borrow_mut()
+                        .push((form, Some(submitter)));
+                }
             }
         }
         // ── A <summary> CLICK TOGGLES ITS <details>. ────────────────────────────────────────
@@ -8017,7 +8024,12 @@ impl Page {
     /// Only a summary that is a **child of** a details toggles it (the spec's requirement), and
     /// only the FIRST such summary is the disclosure's label — a second `<summary>` is ordinary
     /// content and must not toggle anything.
-    fn summary_details_target(&self, node: manuk_dom::NodeId) -> Option<manuk_dom::NodeId> {
+    /// **`pub` because the AGENT reports what it operated.** `manuk-agent`'s `activate` routes every
+    /// click through [`Page::dispatch_click`] (t1402) and then has to say *which* thing changed —
+    /// `Activation::Disclosed(open)` needs the `<details>` this click's summary belongs to. Asking
+    /// this function is not a second copy of the rule; re-deriving "is this a disclosure" in the
+    /// agent would be.
+    pub fn summary_details_target(&self, node: manuk_dom::NodeId) -> Option<manuk_dom::NodeId> {
         let mut cur = Some(node);
         while let Some(n) = cur {
             if self.dom.element(n).is_some_and(|e| e.name == "summary") {
@@ -8041,12 +8053,36 @@ impl Page {
         None
     }
 
-    fn labeled_control(&self, node: manuk_dom::NodeId) -> Option<manuk_dom::NodeId> {
-        let el = self.dom.element(node)?;
-        if el.name != "label" {
-            return None;
-        }
+    /// The control a click on `node` forwards to, if `node` is inside a `<label>`.
+    ///
+    /// ⭐ **THE WALK UPWARD IS THE SAME LOAD-BEARING PART AS
+    /// [`summary_details_target`](Self::summary_details_target)'s, and this function did not have
+    /// it.** A click lands on whatever is under the pointer, which on a real page is the `<span>`,
+    /// the `<b>` or the icon inside the label — essentially never on the label box itself.
+    /// `<label><span>Remember me</span><input type=checkbox></label>` is ordinary markup, and
+    /// matching only an exact hit left it inert while the identical page with a bare text child
+    /// worked, which is the shape of bug that hides behind a passing fixture.
+    ///
+    /// ⚠ **The walk STOPS at a labelable element, and that is what stops the forwarding
+    /// recursing.** For `<label><input></label>` a click on the `<input>` must operate the input,
+    /// not travel up to the label and be forwarded back to itself. The control is the nearer
+    /// ancestor, so meeting it first is both the correct answer and the termination condition.
+    ///
+    /// `pub` for the same reason as `summary_details_target`: the agent has to report which control
+    /// its click actually operated, and asking is not copying.
+    pub fn labeled_control(&self, node: manuk_dom::NodeId) -> Option<manuk_dom::NodeId> {
         const LABELABLE: [&str; 5] = ["input", "select", "textarea", "button", "meter"];
+        let mut cur = Some(node);
+        let label = loop {
+            let n = cur?;
+            match self.dom.element(n) {
+                // The control itself (or an inner control) — nothing to forward.
+                Some(e) if LABELABLE.contains(&e.name.as_str()) => return None,
+                Some(e) if e.name == "label" => break n,
+                _ => cur = self.dom.parent(n),
+            }
+        };
+        let el = self.dom.element(label)?;
         if let Some(id) = el.attr("for") {
             let want = id.to_string();
             for n in self.dom.descendants(self.dom.root()) {
@@ -8060,43 +8096,75 @@ impl Page {
             // descendant, because the author said which control they meant.
             return None;
         }
-        self.dom.descendants(node).find(|n| {
+        self.dom.descendants(label).find(|n| {
             self.dom
                 .element(*n)
                 .is_some_and(|e| LABELABLE.contains(&e.name.as_str()))
         })
     }
 
-    /// The form a click on `node` submits, if `node` is a submit button.
+    /// The form a click on `node` submits, and **the submitter that submits it**, if a submit
+    /// button is at or above `node`.
     ///
     /// `<button>`'s default type IS submit — a bare `<button>` inside a form submits it, which is a
     /// classic source of "why did my page reload". `type=button` and `type=reset` do not submit.
     /// Association is the ancestor `<form>`, or an explicit `form="id"` (which lets a button live
     /// outside the form it submits).
-    fn submit_target(&self, node: manuk_dom::NodeId) -> Option<manuk_dom::NodeId> {
-        let el = self.dom.element(node)?;
-        let ty = el.attr("type").unwrap_or("").to_ascii_lowercase();
-        let submits = match el.name.as_str() {
-            // A bare <button> defaults to type=submit.
-            "button" => ty.is_empty() || ty == "submit",
-            "input" => ty == "submit" || ty == "image",
-            _ => false,
+    ///
+    /// ⭐ **THE WALK UPWARD, third instance of the one rule: a click's activation behaviour belongs
+    /// to the nearest ANCESTOR that has one.** `<button><span>Sign in</span></button>` is how a
+    /// button with an icon or a translated label is written, and a click lands on the `<span>`.
+    /// Matching only the exact hit meant that button did not submit — Chrome-measured, `bsp.click()`
+    /// on `<form><button><span id=bsp>Send it</span></button></form>` fires the form's `submit`
+    /// handler, and we fired nothing.
+    ///
+    /// ⚠ **AND THE SUBMITTER IS NOW RETURNED, not assumed to be the clicked node.** The caller
+    /// records *which* button submitted (`<button name=action value=delete>` beside
+    /// `value=save` is how many forms say what the user asked for) and checks disabledness. With
+    /// the walk in place the clicked node can be the `<span>`, and `is_disabled` on a `<span>`
+    /// inside `<button disabled>` is `false` — so passing the hit node would have made every
+    /// disabled icon-button live and recorded the wrong submitter's name/value.
+    pub fn submit_target(
+        &self,
+        node: manuk_dom::NodeId,
+    ) -> Option<(manuk_dom::NodeId, manuk_dom::NodeId)> {
+        let mut cur = Some(node);
+        let button = loop {
+            let n = cur?;
+            if let Some(e) = self.dom.element(n) {
+                let ty = e.attr("type").unwrap_or("").to_ascii_lowercase();
+                let submits = match e.name.as_str() {
+                    // A bare <button> defaults to type=submit.
+                    "button" => ty.is_empty() || ty == "submit",
+                    "input" => ty == "submit" || ty == "image",
+                    _ => false,
+                };
+                if submits {
+                    break n;
+                }
+                // A NON-submitting button still ENDS the walk. `<button type=button><span>` inside
+                // a form must not submit, and continuing past it would find the enclosing form
+                // through some outer submit button instead.
+                if e.name == "button" || e.name == "input" || e.name == "form" {
+                    return None;
+                }
+            }
+            cur = self.dom.parent(n);
         };
-        if !submits {
-            return None;
-        }
+        let el = self.dom.element(button)?;
         if let Some(id) = el.attr("form") {
             let want = id.to_string();
-            return self.dom.descendants(self.dom.root()).find(|n| {
+            let form = self.dom.descendants(self.dom.root()).find(|n| {
                 self.dom
                     .element(*n)
                     .is_some_and(|e| e.name == "form" && e.attr("id") == Some(want.as_str()))
-            });
+            })?;
+            return Some((form, button));
         }
-        let mut cur = self.dom.parent(node);
+        let mut cur = self.dom.parent(button);
         while let Some(n) = cur {
             if self.dom.element(n).is_some_and(|e| e.name == "form") {
-                return Some(n);
+                return Some((n, button));
             }
             cur = self.dom.parent(n);
         }

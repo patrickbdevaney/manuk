@@ -10316,3 +10316,45 @@ one line to override it: the `select` event (t1394), the popover `ToggleEvent` (
 ⭐ Four call sites is evidence, not a hunch: the seam wants an explicit TRUSTED argument rather than an
 inference from the shape of the call. Recorded rather than flipped, because the default is correct for
 page-initiated `dispatchEvent` — which is exactly why it needs an argument instead of an inference.
+
+## ⚠⚠⚠ TWO IMPLEMENTATIONS OF ONE RULE — AND THE TESTS OF EACH ARE EVIDENCE ABOUT THAT ONE ONLY
+
+`Page::dispatch_click` is the click's activation behaviour, gated four ways (`g_label_click`,
+`g_details`, `g_submit_click`, `g_click_activation`). `AgentBrowser::activate` re-derived the whole
+rule from a `match` on the tag name and had its own two gates (reachability, aim). **Nothing
+asserted that the two AGREED**, and Chrome disagreed with the agent's copy on ten constructs at
+once — the disclosure widget, `<label>` forwarding, radio-group exclusivity, disabled controls,
+inner-markup clicks. Every divergence answered `Toggled(true)` or `Inert` rather than throwing, so
+no instrument either half owned could see it.
+
+⭐⭐⭐ The fix is a DELETION: route the consumer through the engine's dispatcher and keep only what
+is genuinely the host's (fetching a link, performing a queued submission, reporting). A gate on the
+CONSUMER'S path, driven end-to-end, is the only thing that catches this class.
+(t1402 — `g_agent_activation_behaviour`; same family as t720 "one rule, N implementations" and
+t1027 "two copies of one fix")
+
+## ⚠⚠ A CLICK'S ACTIVATION BEHAVIOUR BELONGS TO THE NEAREST ANCESTOR THAT HAS ONE
+
+A pointer lands on the `<span>`, the `<b>` or the icon inside a control — essentially never on the
+control's own box. `<button><span>Sign in</span></button>` and
+`<label><span>Remember me</span><input></label>` are ordinary markup.
+`Page::summary_details_target` walked up and **documented why**; `labeled_control` and
+`submit_target` matched the clicked node exactly, so both constructs were inert.
+
+⭐⭐ Each walk needs its OWN terminator and they differ: `labeled_control` stops at a **labelable**
+element (or the forwarding recurses into itself), `submit_target` stops at a **non-submitting**
+button/input/form (or `<button type=button>` inside a form submits it anyway). And once the walk
+exists the query must return **the resolved control, not the hit node** — `is_disabled` propagates
+only through `<fieldset>`, so a `<span>` inside `<button disabled>` is not disabled, and asking the
+hit node makes every disabled icon-button live again. (t1402)
+
+## ⚠⚠ AN ARM THAT RESOLVES ITS TARGET BY NAME CANNOT TEST DESCENDANT-MARKUP BEHAVIOUR
+
+Two of six mutations came back GREEN on the first version of t1402's gate. They had applied (diff
+verified). The inner `<span>` of `<button><span>Send it</span></button>` is `Generic ""` in the a11y
+tree — **it has no name to resolve by** — so `find(|n| n.name.contains(…))` returned `None` and the
+arm silently fell back to the `<button>` itself, i.e. to the exact-match path the mutation restored.
+
+⭐ Aim at a point DERIVED from perceived geometry, and assert what the hit-test says is there. The
+green mutation was the only thing that reported the vacuity. (t1402; the t1239 rule's mirror — there
+a mutation had not applied, here it had and the ARM was hollow)

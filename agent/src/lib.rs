@@ -201,7 +201,15 @@ pub enum Activation {
     /// Submitted the enclosing form, navigating to this absolute URL.
     Submitted(String),
     /// Toggled a checkbox/radio; the bool is its new checked state.
+    ///
+    /// ⚠ Reported only when the checkedness actually **changed**. A click on a *disabled* control,
+    /// or a second click on an already-selected radio, is [`Activation::Inert`] — the agent must
+    /// not read "I ticked it" out of a page it did not change.
     Toggled(bool),
+    /// Opened or closed a `<details>` disclosure by clicking its `<summary>`; the bool is the new
+    /// `open` state. The web's standard "show more" — every docs FAQ and folded diff — and it
+    /// carries no script, so `Inert` was both wrong and unfalsifiable from the outside.
+    Disclosed(bool),
     /// The element carries no activation behavior (e.g. a heading).
     Inert,
 }
@@ -684,75 +692,137 @@ impl AgentBrowser {
     }
 
     async fn submit_form_at(&mut self, anchor: manuk_dom::NodeId) -> Result<Activation> {
+        let form = {
+            let page = self.page.as_ref().context("no page loaded")?;
+            forms::owning_form(page.dom(), anchor)
+                .ok_or_else(|| anyhow!("{}", forms::SubmitError::NoForm))?
+        };
+        self.submit_form(form).await
+    }
+
+    /// Navigate to the URL a `<form>` serialises to. The one place the agent turns a submission
+    /// into a navigation, whether the caller asked for it ([`Self::submit`]) or the engine's own
+    /// activation behaviour queued it (a click on a submit button).
+    async fn submit_form(&mut self, form: manuk_dom::NodeId) -> Result<Activation> {
         let url = {
             let page = self.page.as_ref().context("no page loaded")?;
-            let form = forms::owning_form(page.dom(), anchor)
-                .ok_or_else(|| anyhow!("{}", forms::SubmitError::NoForm))?;
             forms::submission_url(page.dom(), form, &page.final_url).map_err(|e| anyhow!("{e}"))?
         };
         self.navigate(&url).await?;
         Ok(Activation::Submitted(url))
     }
 
-    /// §4b — activate a DOM node the way a click would: follow a link, submit a form,
-    /// or toggle a checkbox/radio. Anything else is [`Activation::Inert`].
+    /// §4b — activate a DOM node the way a click would.
+    ///
+    /// ⭐⭐⭐ **THIS WAS A SECOND, WRONG IMPLEMENTATION OF A RULE THE ENGINE ALREADY HAD RIGHT.**
+    /// `manuk-page`'s [`Page::dispatch_click`] is the click's activation behaviour, built and
+    /// Chrome-arbitrated over many ticks: it forwards a `<label>` to its control, runs the
+    /// *pre-click* activation steps so a handler reading `this.checked` sees the new value, honours
+    /// radio-group exclusivity, refuses a disabled control, queues a submit as *requested* so the
+    /// page's `submit` validator runs first, toggles a `<summary>`'s `<details>` (with `name`
+    /// accordion exclusivity), fires `mousedown`/`mouseup`/`click`/`input`/`change`, undoes the
+    /// activation if a listener calls `preventDefault()`, and re-lays-out what changed.
+    ///
+    /// The agent — the consumer this whole project exists to serve — used **none of it.** It
+    /// re-derived the rule from a `match` on the tag name, in twenty lines, and got five things
+    /// wrong that Chrome was asked about directly:
+    ///
+    /// | click | Chrome | agent (before) |
+    /// |---|---|---|
+    /// | `<summary>` of a closed `<details>` | opens it | `Inert` — the FAQ can never be opened |
+    /// | `<label for=cb>` | ticks `cb` | `Inert` — and the label is the visible target on most forms |
+    /// | second radio in a group | selects it, deselects the first | **both** end up checked |
+    /// | same radio twice | stays checked | unchecks it; radios do not do that |
+    /// | `disabled` checkbox / submit button | nothing | ticks it / submits the form |
+    ///
+    /// ⚠ **AND NONE OF THOSE FAILED LOUDLY.** `Toggled(true)` came back for a disabled box, so an
+    /// agent reads its own success out of a form the server will reject; `Inert` came back for the
+    /// disclosure, which is indistinguishable from "this page has nothing to open".
+    ///
+    /// So there is now **one** implementation and the agent calls it. What stays here is the part
+    /// that genuinely belongs to the host rather than the document:
+    ///
+    /// * **Following a link.** `dispatch_click` deliberately does not navigate — it returns whether
+    ///   the default action survived `preventDefault()`, and fetching is the embedder's job. The
+    ///   `href` is taken from the nearest `<a>`/`<area>` **ancestor**, because a click lands on the
+    ///   `<span>` inside the link (Chrome-measured: `sp.click()` inside `<a href="#dest">`
+    ///   navigates).
+    /// * **Performing a queued submission**, by draining `take_form_submits` — which is also how
+    ///   the engine hands a *script's* `form.requestSubmit()` to its host, so the agent now honours
+    ///   both through one path.
+    /// * **Reporting.** [`Activation`] is *observed*, never assumed: the checkedness and the
+    ///   `open` flag are read back out of the DOM after the dispatch, so "nothing changed" is
+    ///   reported as `Inert` rather than as a success.
     pub async fn activate(&mut self, node: manuk_dom::NodeId) -> Result<Activation> {
-        enum Kind {
-            Link(String),
-            Submit,
-            Toggle,
-            Inert,
-        }
-        let kind = {
+        // Everything the outcome is measured against, read BEFORE the click — a handler can move
+        // or replace any of it. `operated` is what a click on `node` actually works: a `<label>`
+        // forwards to its control, and both queries are the ENGINE's, not copies of them.
+        let (href, operated, details, was_checked) = {
             let page = self.page.as_ref().context("no page loaded")?;
             let dom = page.dom();
-            let tag = dom.tag_name(node).unwrap_or("").to_string();
-            let el = dom.element(node);
-            let ty = el
-                .and_then(|e| e.attr("type"))
-                .unwrap_or("")
-                .to_ascii_lowercase();
-            match tag.as_str() {
-                "a" | "area" => match el.and_then(|e| e.attr("href")) {
-                    Some(h) => Kind::Link(h.to_string()),
-                    None => Kind::Inert,
-                },
-                // A <button> with no type (or type=submit) submits; type=button/reset does not.
-                "button" if ty.is_empty() || ty == "submit" => Kind::Submit,
-                "input" if matches!(ty.as_str(), "submit" | "image") => Kind::Submit,
-                "input" if matches!(ty.as_str(), "checkbox" | "radio") => Kind::Toggle,
-                _ => Kind::Inert,
+            let operated = page.labeled_control(node).unwrap_or(node);
+            // The nearest link ancestor — the activation behaviour belongs to the `<a>`, not to
+            // the `<span>` the pointer happened to be over.
+            let mut href = None;
+            let mut cur = Some(node);
+            while let Some(n) = cur {
+                if let Some(e) = dom.element(n) {
+                    if matches!(e.name.as_str(), "a" | "area") {
+                        href = e.attr("href").map(str::to_string);
+                        break;
+                    }
+                }
+                cur = dom.parent(n);
             }
+            let checked = dom.element(operated).map(|e| e.attr("checked").is_some());
+            (href, operated, page.summary_details_target(node), checked)
         };
 
-        match kind {
-            Kind::Link(href) => {
-                let page = self.page.as_ref().expect("page exists");
+        let proceed = {
+            let page = self.page.as_mut().expect("checked above");
+            page.dispatch_click(node, &self.fonts, self.width as f32)
+        };
+
+        // A submission the engine's activation behaviour queued, as *requested* — the `submit`
+        // handler has already had its chance to validate or cancel by the time it lands here.
+        let queued = {
+            let page = self.page.as_ref().expect("checked above");
+            page.take_form_submits().1.into_iter().next()
+        };
+        if let Some((form, _submitter)) = queued {
+            return self.submit_form(form).await;
+        }
+
+        if proceed {
+            if let Some(h) = href {
+                let page = self.page.as_ref().expect("checked above");
                 let abs = url::Url::parse(&page.final_url)
                     .ok()
-                    .and_then(|b| b.join(&href).ok())
+                    .and_then(|b| b.join(&h).ok())
                     .map(|u| u.to_string())
-                    .unwrap_or(href);
+                    .unwrap_or(h);
                 self.navigate(&abs).await?;
-                Ok(Activation::Navigated(abs))
+                return Ok(Activation::Navigated(abs));
             }
-            Kind::Submit => self.submit_form_at(node).await,
-            Kind::Toggle => {
-                let page = self.page.as_mut().expect("page exists");
-                let was = page
-                    .dom()
-                    .element(node)
-                    .is_some_and(|e| e.attr("checked").is_some());
-                if was {
-                    page.dom_mut().remove_attr(node, "checked");
-                } else {
-                    page.dom_mut().set_attr(node, "checked", "");
-                }
-                page.relayout(&self.fonts, self.width as f32);
-                Ok(Activation::Toggled(!was))
-            }
-            Kind::Inert => Ok(Activation::Inert),
         }
+
+        // OBSERVE the outcome; do not restate the intent.
+        let page = self.page.as_ref().expect("checked above");
+        if let Some(d) = details {
+            let open = page
+                .dom()
+                .element(d)
+                .is_some_and(|e| e.attr("open").is_some());
+            return Ok(Activation::Disclosed(open));
+        }
+        let now = page
+            .dom()
+            .element(operated)
+            .map(|e| e.attr("checked").is_some());
+        if now.is_some() && now != was_checked {
+            return Ok(Activation::Toggled(now.unwrap_or(false)));
+        }
+        Ok(Activation::Inert)
     }
 
     /// §4b — click the element with this role + accessible name.
