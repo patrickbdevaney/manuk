@@ -2552,8 +2552,12 @@
   - L99 · 5. An inverted range collapses onto its END — but a single-edge setter wins instead
   - L118 · 6. The selection store is per-document, and forgetting that is invisible
   - L137 · 7. selectionDirection: an invalid keyword RESETS, it does not stick
-  - L153 · Not built yet — the select event
-  - L160 · Gates
+  - L153 · 8. The select event — queued, uncoalesced, and owned by the API
+  - L169 · The two silent rows are the ones that place the trigger
+  - L180 · It is not coalesced, and the suite reads as though it were
+  - L189 · ⚠⚠ The probe was the bug before the engine was
+  - L199 · Not built yet — the residue
+  - L206 · Gates
 
 ## TEXT AND LAYOUT — fonts, shaping, measurement
 `docs/wiki/text-layout.md`
@@ -2799,4 +2803,4 @@
   - L89 · The wall audit (due t1388)
 
 ---
-2570 sections across 56 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+2574 sections across 56 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.

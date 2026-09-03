@@ -10038,3 +10038,45 @@ oracle diff shows a divergence on a page where we are MORE correct, not less.
 ⭐⭐⭐ Chromium is the **CEILING** on capability, not the floor, so this divergence is correct — and it
 is exactly the kind a later diff-chasing tick "fixes" backwards. Pin it, with the Chrome measurement
 beside it, so the reversal has to argue with an assertion instead of with a memory. (t1393)
+
+## The `select` event — the trigger is the API, not the value
+
+Fires for `setSelectionRange` / `select()` / `selectionStart=` / `selectionEnd=` /
+`selectionDirection=` / `setRangeText`. **Queued, never synchronous** (a count read right after the
+call is 0), **bubbles**, **not cancelable**, `isTrusted`, and fires on **disconnected** elements.
+
+⭐⭐⭐ **Two SILENT rows place the trigger, and both are writes that DO change the selection:**
+
+```text
+  el.value = "zzzzzzzz"                      moves the caret to the end  ->  fires NOTHING
+  setRangeText('QQ',1,3,'preserve') from (1,3)  rewrites the value       ->  fires NOTHING
+```
+
+So it is not "the selection differs" — it is "the page used the selection API". Firing from the shared
+clamp every selection write goes through is the obvious implementation and it is WRONG, because the
+value setter goes through that clamp too.
+
+⭐⭐ **IT IS NOT COALESCED, and WPT reads as though it were.** Its "must fire select only once" case
+calls the SAME action twice, so the second is a no-change — the test checks the change DETECTOR. Two
+DIFFERENT changes in one task fire TWO events. **A test named for a COUNT does not tell you which
+mechanism produces the count**, and the wrong reading here builds a suppression flag that silently
+swallows the second of two real changes.
+
+⚠ A promise waiting on an event that never arrives does not FAIL, it HANGS: this one missing event was
+`select-event.html` at 0/270 **plus** four unrelated files sitting in TH_TIMEOUT. When an area shows
+async timeouts, look for an event nobody dispatches before looking for a slow path.
+(t1394 — `engine/page/tests` `the_select_event_is_queued_uncoalesced_and_owned_by_the_selection_api`)
+
+## ⚠⚠⚠ A multi-case ASYNC probe measures its own scheduler as much as the engine's
+
+A page running every select-event case in sequence returned ZERO for everything after the first —
+including rows the spec suite says must fire. `requestAnimationFrame` never fires under `--dump-dom`
+with virtual time; nested `setTimeout`s reported all-zero too. Three probe shapes were discarded.
+
+⭐⭐⭐ **ONE CASE PER PAGE LOAD.** Listener attached at parse time, action immediately, a single timeout
+to report. Everything then came back clean and stable, and matched the engine exactly. Had the first
+shape been trusted, the "rules" banked would have been the harness's timing — every one of them wrong,
+and every one of them gated. (t1394; the t780 lesson arriving BEFORE the engine work rather than after)
+
+⭐ Corollary: when "fires nothing" is the claim, the probe needs a CONTROL ARM in the same page — an
+absence is only readable as a difference. (t1394 — `r_ctrlSsrOnly` beside `r_rangeTextAddsNothing`)

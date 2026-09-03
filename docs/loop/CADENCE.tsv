@@ -1072,3 +1072,4 @@ tick	sha	epoch	iso	delta_s	shape	wall_s	files	added	deleted	gates	claims	wpt_pas
 1391	1614b79e	1788408196	2026-09-03T00:03:16-04:00	277393	capability-subsystem	465	10	516	53	525	81	3896	6960	0	642	0	`validity` describes the VALUE; `willValidate` says who acts on it (2026-08-30)
 1392	a47f5b37	1788411564	2026-09-03T00:59:24-04:00	3368	capability-subsystem	465	13	1014	101	526	81	3896	6960	0	642	0	the caret's resting place, and a side table that never forgot the last document (2026-09-03)
 1393	b91d1236	1788414039	2026-09-03T01:40:39-04:00	2475	audit	465	10	713	83	527	81	3896	6960	0	642	0	the audits, and a ranked finding that expired because nothing executed it (2026-09-03)
+1394	8ae3f38c	1788417085	2026-09-03T02:31:25-04:00	3046	capability-subsystem	465	10	525	61	528	81	3896	6960	0	642	0	the `select` event: queued, uncoalesced, and owned by the API rather than by the value (2026-09-03)

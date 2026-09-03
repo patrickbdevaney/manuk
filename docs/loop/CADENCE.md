@@ -11,12 +11,12 @@
 
 | | value | over |
 |---|---|---|
-| ticks landed | **1073** | ticks 1–1393 |
-| median tick cycle | **32m** | 1072 intervals |
-| median, last 10 | **69m** | 10 intervals |
+| ticks landed | **1074** | ticks 1–1394 |
+| median tick cycle | **32m** | 1073 intervals |
+| median, last 10 | **61m** | 10 intervals |
 | fastest / slowest | 5s / 7.0d | |
-| **ticks per hour** | **0.83** | 1292.6h elapsed |
-| median verify wall | **67s** | 1012 ticks |
+| **ticks per hour** | **0.83** | 1293.5h elapsed |
+| median verify wall | **67s** | 1013 ticks |
 | wall trend | 39s → 8m — getting slower ⚠️ | first 3 vs last 3 |
 
 The **cycle** is the real unit: implement → debug → verify wall → land. The wall is only part of
@@ -27,11 +27,11 @@ it, and a wall that grows taxes every future tick, so it is tracked separately f
 ### Near — the daily driver (doc / app / platform web)
 
 * **capabilities asserted** (`G_CAPABILITY`): 48 → **81**
-* **live gates**: 27 → **527**
+* **live gates**: 27 → **528**
 * **✅ rows in the capability ledger**: 144 → **642**
 * **Bar 0 — oracle hangs**: 0 of 265 sites
 
-**492 of 1073 ticks** (46%) moved a
+**492 of 1074 ticks** (46%) moved a
 user-visible capability. The rest were instruments, infrastructure and corrections — and the
 ledger says the corrections were not overhead: three of its top three priorities were phantoms,
 and finding that out redirected everything after it.
@@ -1170,5 +1170,6 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 | **1391** | 2026-09-03 00:03 | 3.2d | capability-subsystem | 8m | +516/−53 | 525 | 81 | 56.0% · | `validity` describes the VALUE; `willValidate` says who acts on it (2026-08-30) |
 | **1392** | 2026-09-03 00:59 | 56m | capability-subsystem | 8m | +1014/−101 | 526 | 81 | 56.0% · | the caret's resting place, and a side table that never forgot the last document (2026-09-0 |
 | **1393** | 2026-09-03 01:40 | 41m | audit | 8m | +713/−83 | 527 | 81 | 56.0% · | the audits, and a ranked finding that expired because nothing executed it (2026-09-03) |
+| **1394** | 2026-09-03 02:31 | 51m | capability-subsystem | 8m | +525/−61 | 528 | 81 | 56.0% · | the `select` event: queued, uncoalesced, and owned by the API rather than by the value (20 |
 
 *`·` after a WPT figure means **carried forward**, not measured this tick.*

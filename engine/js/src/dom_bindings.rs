@@ -8303,13 +8303,49 @@ unsafe fn el_get_selection_direction(cx: *mut RawJSContext, _argc: u32, vp: *mut
 /// single-edge setters pre-drag the edge they are NOT setting before calling in. This is the second
 /// instance of the same defect in this file this tick — see `setRangeText`'s `preserve` arm, where one
 /// closure likewise answered for two edges that ask different questions.
-unsafe fn store_selection(dom: *mut Dom, node: NodeId, start: u32, end: u32, dir: u8) {
+unsafe fn store_selection(dom: *mut Dom, node: NodeId, start: u32, end: u32, dir: u8) -> bool {
     let len = text_value_len(dom, node);
     let e = end.min(len);
     let s = start.min(len).min(e);
+    let key = (dom as usize, node);
     TEXT_SELECTION.with(|m| {
-        m.borrow_mut().insert((dom as usize, node), (s, e, dir));
-    });
+        let mut m = m.borrow_mut();
+        // The DEFAULT is `(0, 0, none)`, so a first write of `(0, 0, none)` is correctly NOT a change
+        // — which is what makes `setSelectionRange(0, 0)` on an untouched field fire nothing.
+        let before = m.get(&key).copied().unwrap_or((0, 0, 0));
+        m.insert(key, (s, e, dir));
+        before != (s, e, dir)
+    })
+}
+
+/// Store a selection **through the selection API**, and queue the `select` event if it changed.
+///
+/// ⭐⭐⭐ **THE EVENT BELONGS TO THE API ENTRY POINTS, NOT TO THE CLAMP THEY SHARE — and putting it
+/// in the obvious place would have been wrong.** `store_selection` is also called by
+/// [`el_set_value`], which moves the caret to the end of the new value; Chrome-measured, **that does
+/// NOT fire `select`**, even though the selection demonstrably changed:
+///
+/// ```text
+///   i.setSelectionRange(1,3)                       -> 1 select event
+///   i.setSelectionRange(1,3); i.value = "zzzzzzzz" -> 1   (still ONE — the write is silent)
+///   i.setSelectionRange(1,3); i.selectionDirection = "backward" -> 2
+/// ```
+///
+/// So the trigger is *"the page used the selection API"*, not *"the selection value differs"*. This is
+/// the third time in this arc that a helper shared by callers asking different questions has been the
+/// defect (t1392: `setRangeText`'s `preserve` closure, and the inverted-range clamp) — here it was
+/// caught before it was written, by measuring the value setter separately.
+unsafe fn store_selection_and_fire(
+    cx: *mut RawJSContext,
+    dom: *mut Dom,
+    node: NodeId,
+    start: u32,
+    end: u32,
+    dir: u8,
+) {
+    if store_selection(dom, node, start, end, dir) {
+        let _ = eval_in_current_global(cx, &format!("__queueSelectEvent({})", node.0));
+    }
 }
 
 /// `input.selectionStart = n` / `input.selectionEnd = n` setters — set one edge, keep the other
@@ -8323,7 +8359,7 @@ unsafe fn el_set_selection_start(cx: *mut RawJSContext, argc: u32, vp: *mut Valu
         let (_, end, dir) = TEXT_SELECTION
             .with(|s| s.borrow().get(&(dom as usize, node)).copied())
             .unwrap_or((0, 0, 0));
-        store_selection(dom, node, n, end.max(n), dir);
+        store_selection_and_fire(cx, dom, node, n, end.max(n), dir);
     }
     *vp = UndefinedValue();
     true
@@ -8347,7 +8383,7 @@ unsafe fn el_set_selection_end(cx: *mut RawJSContext, argc: u32, vp: *mut Value)
         //    stayed GREEN — the clamp was already doing the work, so the line was decoration
         //    asserting a rule it did not implement. An inert guard is worse than no guard: it makes
         //    the asymmetry look handled at both ends when only one end needs handling.
-        store_selection(dom, node, start, n, dir);
+        store_selection_and_fire(cx, dom, node, start, n, dir);
     }
     *vp = UndefinedValue();
     true
@@ -8388,7 +8424,7 @@ unsafe fn el_set_selection_direction(cx: *mut RawJSContext, argc: u32, vp: *mut 
             // Every other string — including `undefined` and a misspelling — is `none`.
             _ => 0,
         };
-        store_selection(dom, node, cur.0, cur.1, dir);
+        store_selection_and_fire(cx, dom, node, cur.0, cur.1, dir);
     }
     *vp = UndefinedValue();
     true
@@ -8408,7 +8444,7 @@ unsafe fn el_set_selection_range(cx: *mut RawJSContext, argc: u32, vp: *mut Valu
             Some("backward") => 2,
             _ => 0,
         };
-        store_selection(dom, node, start, end, dir);
+        store_selection_and_fire(cx, dom, node, start, end, dir);
     }
     *vp = UndefinedValue();
     true
@@ -8422,11 +8458,11 @@ unsafe fn el_set_selection_range(cx: *mut RawJSContext, argc: u32, vp: *mut Valu
 /// because "select the contents" is meaningful for a `type=number` spinner even though "put the cursor
 /// at offset 3" is not. A copy-button that calls `select()` on whatever field it was handed must not
 /// blow up, and the whole point of separating these two questions is that it does not.
-unsafe fn el_select(_cx: *mut RawJSContext, _argc: u32, vp: *mut Value) -> bool {
+unsafe fn el_select(cx: *mut RawJSContext, _argc: u32, vp: *mut Value) -> bool {
     if let Some((dom, node)) = this_node(vp) {
         if selection_applies(dom, node) {
             let len = text_value_len(dom, node);
-            store_selection(dom, node, 0, len, 0);
+            store_selection_and_fire(cx, dom, node, 0, len, 0);
         }
     }
     *vp = UndefinedValue();
@@ -8505,7 +8541,10 @@ unsafe fn el_set_range_text(cx: *mut RawJSContext, argc: u32, vp: *mut Value) ->
                 (shift(sel_s, start), shift(sel_e, new_end))
             }
         };
-        store_selection(dom, node, ns, ne, 0);
+        // ⭐ `setRangeText` can change the VALUE and leave the SELECTION alone — Chrome-measured,
+        //    `setRangeText('QQ', 1, 3, 'preserve')` from selection (1,3) rewrites the text and fires
+        //    NOTHING. The trigger is the selection, not the edit.
+        store_selection_and_fire(cx, dom, node, ns, ne, 0);
     }
     *vp = UndefinedValue();
     true
@@ -16681,6 +16720,46 @@ const LISTENER_PRELUDE: &str = r#"
                 globalThis.__removeEventListener(nid, type, fn, o.capture);
             });
         }
+    };
+    // **THE `select` EVENT — QUEUED, NEVER SYNCHRONOUS, AND ONLY WHEN THE SELECTION CHANGED.**
+    //
+    // Chrome-measured, every row, each in its own page load (a multi-case page gave wrong answers —
+    // the probe was the bug before the engine was):
+    //
+    // ```text
+    //   setSelectionRange / select() / selectionStart= / selectionEnd= /
+    //   selectionDirection= / setRangeText          -> fires, bubbles, NOT cancelable, isTrusted
+    //   count read SYNCHRONOUSLY right after the call            -> 0   it is a queued task
+    //   the same call twice (second changes nothing)             -> 1
+    //   two DIFFERENT changes in one task                        -> 2   NOT coalesced
+    //   on a DISCONNECTED element                                -> 1
+    //   `el.value = ...` (moves the caret, silently)             -> 0
+    // ```
+    //
+    // ⚠ **It is NOT coalesced.** WPT's *"must fire select only once"* case calls the SAME action
+    // twice, so the second one is a no-change — that test is checking the change detector, not a
+    // coalescing flag, and reading it as coalescing would have built a queue-suppression flag that
+    // swallows the second of two real changes.
+    //
+    // ⚠ An event OBJECT has to be supplied rather than a bare type string, because `__dispatchEvent`
+    // defaults a string-dispatched event to `cancelable: true` and `select` is not cancelable. But
+    // supplying an object is exactly what makes it infer `isTrusted: false` (its rule is *"was an
+    // object supplied"*), so trust has to be re-asserted explicitly — the engine synthesised this, and
+    // WPT asserts `isTrusted`.
+    //
+    // ⚠ Measured, not assumed: the explicit `cancelable: false` in the `new Event` call is INERT — the
+    // Event constructor already defaults it to false, and a mutation removing it stays GREEN. It is
+    // load-bearing only on the `catch` fallback below, where a plain object literal reaches
+    // `__dispatchEvent`'s `=== undefined` default. Kept on both arms so the two paths cannot drift,
+    // and labelled so nobody reads the first one as the thing holding the rule up.
+    globalThis.__queueSelectEvent = function(nid) {
+        __enqueue(function() {
+            var ev;
+            try { ev = new Event('select', { bubbles: true, cancelable: false }); }
+            catch (e) { ev = { type: 'select', bubbles: true, cancelable: false }; }
+            ev.isTrusted = true;
+            __dispatchEvent(nid, ev);
+        }, 0);
     };
     globalThis.__removeEventListener = function(nid, type, fn, capture) {
         var o = __normOpts(capture);

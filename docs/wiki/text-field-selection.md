@@ -150,12 +150,58 @@ Only assigning it after an explicit `'backward'` separates them. The setter is a
 has no directionless selection); Gecko and this engine report `"none"`. WPT asserts only
 `assert_in_array(dir, ["forward", "none"])`, plus that assigning `"none"` gives the initial value back.
 
-## Not built yet — the `select` event
+## 8. The `select` event — queued, uncoalesced, and owned by the API
 
-Measured at tick 1392, deliberately left for its own tick. `select` fires **asynchronously** (never
-synchronously from the setter), **bubbles**, is **not cancelable**, is `isTrusted`, fires on
-**disconnected** nodes, and fires **only if the selection actually changed** — coalesced to at most one
-queued task, so two identical changes in a row produce one event. `select-event.html` is the suite.
+*Built at tick 1394. Every row below was measured in its own page load; see the warning at the end of
+this section for why that mattered.*
+
+| | |
+|---|---|
+| `setSelectionRange` · `select()` · `selectionStart=` · `selectionEnd=` · `selectionDirection=` · `setRangeText` | fires |
+| the event | **bubbles**, is **not cancelable**, is `isTrusted`, `type: "select"` |
+| count read **synchronously** after the call | `0` — it is a queued task |
+| the same call twice (second changes nothing) | `1` |
+| two **different** changes in one task | **`2`** — not coalesced |
+| on a **disconnected** element | `1` |
+| `el.value = "…"` — moves the caret | **`0`** |
+| `setRangeText` that rewrites the value but not the range | **`0`** |
+
+### The two silent rows are the ones that place the trigger
+
+`el.value =` demonstrably moves the caret and fires nothing. A `setRangeText(…, 'preserve')` that
+leaves the range where it was demonstrably rewrites the text and fires nothing.
+
+⭐⭐⭐ So the event is **not** *"the selection differs"* — it is *"the page used the selection API"*.
+The obvious implementation, firing from the shared clamp every selection write goes through, gets the
+first of those wrong, because the value setter goes through that clamp too. It is the **third**
+instance in this subsystem of a helper shared by callers asking different questions (see §4 and §5) —
+and the only one caught before it was written, by measuring the value setter as its own case.
+
+### It is not coalesced, and the suite reads as though it were
+
+WPT's *"must fire select only once"* case calls the **same action twice**, so the second is a
+no-change: that test is checking the change detector, not a coalescing flag.
+
+⭐⭐ **A test named for a count does not tell you which mechanism produces the count.** "Fires only
+once" is satisfied by a change detector and by a coalescing flag alike — and the coalescing flag would
+silently swallow the second of two genuine changes, which is precisely what a rich-text editor does.
+
+### ⚠⚠ The probe was the bug before the engine was
+
+A page running all the cases in sequence returned **zero for everything after the first**, including
+rows the suite says must fire. `requestAnimationFrame`-based waits never fire under `--dump-dom` with
+virtual time; nested `setTimeout`s reported all-zero as well.
+
+What worked was to stop making the page cleverer: **one case per page load**, the listener attached at
+parse time, a single timeout to report. Three probe shapes were discarded — and had the first been
+trusted, the rules banked would have been the harness's scheduling, every one of them wrong.
+
+## Not built yet — the residue
+
+WebIDL `ToUint32` argument conversion — `setSelectionRange(true, 1)` must convert `true` to `1`, and
+`"3"` to `3`; the argument helper returns `None` for booleans and strings, and it has 18 callers, so it
+wants its own gate. And `setRangeText`'s argument validation: `IndexSizeError` when start > end, and a
+`TypeError` with no arguments at all.
 
 ## Gates
 

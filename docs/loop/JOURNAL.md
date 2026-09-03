@@ -98913,3 +98913,120 @@ hat. Also still open: the `select` event (270 subtests, measured at t1392), and 
 argument conversion.
 
 WIKI: docs/wiki/capability-map-measurement.md
+
+## Tick 1394 — the `select` event: queued, uncoalesced, and owned by the API rather than by the value (2026-09-03)
+
+TICK SHAPE: capability-subsystem
+
+t1392 built the selection STATE and deliberately left the notification for its own tick, having
+measured it: `select-event.html` was **0 of 270** — 70% of the area's remaining failures in one file —
+and four more files sat in `TH_TIMEOUT`, because **a promise waiting on an event that never arrives
+does not fail, it hangs.**
+
+### ⚠⚠⚠ AND THE PROBE WAS THE BUG, BEFORE THE ENGINE WAS
+
+The first measurement page ran all the cases in sequence and returned **zero for everything after the
+first** — including rows WPT says must fire. Two more shapes were tried (rAF-based waits, which never
+fire under `--dump-dom` + virtual time; then nested `setTimeout`s, which reported all-zero again).
+
+The answer was to stop making the page cleverer: **one case per page load**, listener attached at
+parse time, one 300 ms timeout to report. Every row then came back clean and stable.
+
+> ⭐⭐⭐ **A multi-case async probe measures its own scheduler as much as the engine's.** t780's *"the
+> instrument was the bug — REPLICATE THE ARTEFACT"*, arriving BEFORE the engine work instead of after
+> it. Three probe shapes were discarded; had the first been trusted, the "rules" banked would have
+> been the harness's timing, and every one of them wrong.
+
+### THE RULES, EACH IN ITS OWN PAGE LOAD, CHROME-MEASURED
+
+```text
+  setSelectionRange · select() · selectionStart= · selectionEnd= ·
+  selectionDirection= · setRangeText        -> fires · bubbles · NOT cancelable · isTrusted
+  the count read SYNCHRONOUSLY after the call            -> 0    it is a QUEUED task
+  the same call twice (the second changes nothing)       -> 1    a change DETECTOR
+  two DIFFERENT changes in one task                      -> 2    NOT coalesced
+  on a DISCONNECTED element                              -> 1
+  `el.value = "..."`  (moves the caret, silently)        -> 0
+  setRangeText that rewrites the VALUE but not the range -> 0
+```
+
+### ⭐⭐⭐ THE TWO SILENT ROWS ARE THE ONES THAT PLACE THE TRIGGER
+
+`el.value =` demonstrably moves the caret and fires nothing. `setRangeText(…, 'preserve')` from a
+selection it does not disturb demonstrably rewrites the text and fires nothing.
+
+So the event is not *"the selection differs"*. It is **"the page used the selection API"** — and the
+obvious implementation, firing from the shared `store_selection` clamp, gets the first of those wrong,
+because the value setter calls that clamp too.
+
+⭐⭐ **This is the THIRD time in this arc that a helper shared by callers asking different questions
+was the defect** — t1392's `setRangeText` `preserve` closure, t1392's inverted-range clamp, and now
+this. The difference is that this one was caught **before it was written**, by measuring the value
+setter as its own case instead of assuming it belonged with the others. The mutation that moves the
+firing into the clamp is N3, and it goes red.
+
+### ⚠⚠ AND WPT READS AS THOUGH IT WERE COALESCED. IT IS NOT.
+
+`select-event.html`'s *"must fire select only once"* case calls the **same action twice** — so the
+second one is a no-change, and the test is checking the change detector. t1392's journal recorded this
+as *"coalesced to at most one queued task"*; that was a misreading, corrected here by measurement:
+two DIFFERENT changes in one task fire **two** events.
+
+> ⭐⭐ **A test named for a COUNT does not tell you which mechanism produces the count.** "Fires only
+> once" is satisfied by a change detector and by a coalescing flag alike — and building the coalescing
+> flag would have swallowed the second of two genuine changes, silently, in exactly the case a
+> rich-text editor hits.
+
+### THE GATE
+
+`the_select_event_is_queued_uncoalesced_and_owned_by_the_selection_api`
+(`engine/page/tests/g_select_event.rs`) — **22 rows, and headless Chrome agrees with this engine on
+every one of them, exactly.** Two rows carry an explicit CONTROL arm, because *"fires nothing"* is
+only readable as a difference.
+
+PROVEN RED by five mutations: N1 fire synchronously → `b_afterTask`; N2 fire on every write →
+`n_sameTwice`; N3 fire from the shared clamp → `h_select`; N5 drop the explicit `isTrusted` →
+`e_isTrusted`.
+
+⚠ **N4 stayed GREEN, and it was right to.** The explicit `cancelable: false` in the `new Event` call
+is INERT — the constructor already defaults it to false. It is load-bearing only on the `catch`
+fallback, where a plain object literal meets `__dispatchEvent`'s `=== undefined` default. The comment
+said the first one was holding the rule up; it now says which arm actually does. Second inert claim
+found by a green mutation in three ticks — *a mutation that does not bite is a finding about the code,
+not a weak gate.*
+
+### ⚠ ONE PROBE SETUP OF MY OWN WAS WRONG, AND THE GATE CAUGHT IT
+
+Two rows failed on first run — `p_noChangeAtAll` and `r_rangeTextNoSelChange` — and both were my
+expectations, not the engine. The helper that builds a test input assigns `.value`, which **moves the
+caret to the end** (t1392's own rule), so `setSelectionRange(0,0)` on it IS a change. The Chrome cases
+I had measured used a *parsed* `<input value=…>`, whose caret is still at the resting 0. The gate now
+uses a pristine markup-valued element for that row and says why in a comment.
+
+### THE RECEIPT
+
+```text
+  WPT html/semantics/forms/textfieldselection  217/587 = 37.0%  ->  529/587 = 90.1%   (+312)
+      select-event.html                          0/270          ->  241/270
+      TH_TIMEOUT                                     4          ->      0   ← the hangs were this
+  WPT html/semantics (whole area)             5369/11266 = 47.7% -> 5681/11256 = 50.5% (+312)
+  WPT TOTAL (monotonic)                       494991 = 37.86%  ->  495303 = 37.88%
+  Bar 0: HANG/CRASH 0
+  manuk-css 41 · manuk-layout 191 · manuk-paint 22 · manuk-dom 11 · manuk-agent 126 ·
+  manuk-net 98    ALL CONTROL
+```
+
+⚠ The area denominator moved 11266 → 11256 (−10): subtests that previously never reported now
+complete and fold differently. **The count (+312) is the honest number, not the percentage** — an area
+row is a moving denominator (t1163).
+
+⭐ Across t1392+t1394 the selection subsystem went **202/587 → 529/587**, and `html/semantics` —
+the board's #1 failing row — went 5314 → 5681 in four ticks.
+
+NEXT: the residual 58 in this area is WebIDL `ToUint32` argument conversion
+(`setSelectionRange(true, 1)` must convert `true` → 1; `arg_u32` returns `None` for booleans and
+strings and has 18 callers, so it wants its own gate) and `setRangeText`'s `IndexSizeError` /
+`TypeError` argument validation. Behind that: `scripting-1/the-script-element` (484), and the 11
+remaining constellation unknowns from t1393, which are all layout/text/a11y.
+
+WIKI: docs/wiki/text-field-selection.md
