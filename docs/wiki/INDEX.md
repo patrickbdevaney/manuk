@@ -666,6 +666,18 @@
   - L272 · The release cadence — and the way it silently did nothing
   - L293 · A second cargo feature-config in one build step thrashes the whole cache
 
+## Measuring the capability map — why `unknown` is the only status that rots
+`docs/wiki/capability-map-measurement.md`
+
+  - L10 · The failure this page exists to record
+  - L27 · The instrument
+  - L42 · Ask both entrances
+  - L57 · Presence is not sufficiency
+  - L66 · What one sweep produced
+  - L81 · A row goes stale by being *worked on*
+  - L90 · The row where the engine is ahead of its own oracle
+  - L108 · What is left, and why a probe cannot close it
+
 ## CJK line breaking — `line-break`, and why a correct library gives the wrong answer
 `docs/wiki/cjk-line-breaking.md`
 
@@ -2787,4 +2799,4 @@
   - L89 · The wall audit (due t1388)
 
 ---
-2562 sections across 55 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+2570 sections across 56 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.

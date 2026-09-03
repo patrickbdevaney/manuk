@@ -10004,3 +10004,37 @@ already did the work, and the mutation removing the line did not go red. It was 
 guard is worse than no guard — it makes an asymmetry look handled at both ends when only one end needs
 handling.** A green mutation is not a weak gate by default; sometimes it is a redundant line of code,
 and the two are worth telling apart. (t1392 — `el_set_selection_end`)
+
+## ⚠⚠⚠ A ranked finding with no mechanism expires — `unknown` is the only status that rots
+
+A surface audit correctly identified 49 `unknown` capability rows as "the frontier now, not missing
+rows", ranked it #2, and wrote it down. **Ten ticks later the count was still exactly 49.** The
+ratchet displayed the `MEASURED` number on every one of those ticks and it stayed flat.
+
+⭐⭐⭐ **A metric nobody is obliged to move is not a mechanism — it is prose in numeric form.** An audit
+conclusion should name the FILE that will enforce it. The fix was one page of 58 observable questions,
+run through this engine AND headless Chrome, every answer pinned: unknown 49 → 11 in a single tick.
+
+⭐⭐ **PIN THE ABSENCES, not just the capabilities.** A gate asserting `caret-color` computes to
+`undefined` looks pointless until you notice it is what makes the absence *maintainable*: the day
+somebody implements it the gate goes red, and the map is updated in the same tick as the engine. A red
+row in a measure-and-pin gate is not necessarily a regression — it may be a capability that just
+ARRIVED, and the failure message has to say so, or the next agent will "fix" it by loosening the claim.
+
+⭐⭐ **A ROW GOES STALE BY BEING WORKED ON.** `accname` sat at `unknown` while EIGHT ticks measured it
+(WPT 91.9%). The rot a map audit checks for is not only "the world moved"; it is equally "we moved and
+did not write it down" — and on the map those two are indistinguishable.
+
+⭐ A cheap probe stays honest by declining the question it did not ask: `ClipboardEvent` being a global
+does not mean `copy` fires, so that row is `partial`, not `works`. EXISTENCE ≠ SUFFICIENCY.
+(t1393 — `engine/page/tests` `the_capability_map_unknowns_have_a_measured_verdict`)
+
+## ⚠⚠ Where the engine EXCEEDS its own oracle, record it IN A GATE
+
+`contrast-color()` — Baseline 2026 — computes here and is *unsupported in Chrome*: white text on a
+black backdrop where Chrome drops the declaration as invalid and keeps the previous `red`. So the
+oracle diff shows a divergence on a page where we are MORE correct, not less.
+
+⭐⭐⭐ Chromium is the **CEILING** on capability, not the floor, so this divergence is correct — and it
+is exactly the kind a later diff-chasing tick "fixes" backwards. Pin it, with the Chrome measurement
+beside it, so the reversal has to argue with an assertion instead of with a memory. (t1393)

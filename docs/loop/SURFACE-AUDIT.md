@@ -7580,3 +7580,104 @@ crate list). The unknown-coding row is the one it deliberately does not assert.
    refused for ffmpeg) versus the pure-Rust `ruzstd`. Nothing breaks until we advertise it.
 4. Carried: the gate-execution gap (#78, 502 of 522), and #79's ranked #1 sweep, which has now
    produced three findings in three ticks (t1379, t1380, this).
+
+## Audit #81 — tick 1393 (2026-09-03)
+
+### SOURCES
+
+* `https://github.com/web-platform-tests/interop/blob/main/2026/README.md` — fetched via `gh api`
+  (the GitHub HTML view returned HTTP 500 to a plain fetch; the contents API did not).
+  The authoritative list: **20 focus areas + 4 investigation efforts.**
+* `https://web.dev/blog/interop-2026`, `https://webkit.org/blog/17818/announcing-interop-2026/`,
+  `https://hacks.mozilla.org/2026/02/launching-interop-2026/` — the three vendor announcements.
+
+### RECONCILIATION — the map is COMPLETE, and that was the problem
+
+Every one of the 24 Interop 2026 names has a row in `docs/loop/CONSTELLATION.tsv`:
+
+```text
+  container style queries · anchor positioning · attr() · contrast-color() · zoom ·
+  custom highlights · dialogs+popovers · fetch uploads/ranges · IndexedDB · JSPI ·
+  media pseudo-classes · Navigation API · scoped custom element registries ·
+  scroll-driven animations · scroll snap · shape() · view transitions · web compat ·
+  WebRTC · WebTransport        + accessibility testing · JPEG XL · mobile testing · WebVTT
+```
+
+**Nothing to ADD. Zero phantoms.** The last three audits have said a version of this, and audit #80
+(t1383) drew the right conclusion and ranked it #2: *"the 49 `unknown` rows are the frontier now, not
+missing rows. The map is complete against both lists the platform maintains; what it cannot tell you
+is whether we have those capabilities."*
+
+### ⭐⭐⭐ WHAT WE HAD BEEN WRONG ABOUT — the ranked finding that did not move
+
+Ten ticks after #80 named it, the count was **still exactly 49.** Not 48.
+
+That is the specific failure this instrument exists to catch, turned on itself: **the audit had
+correctly identified the frontier and then had no mechanism, so the finding decayed into prose.** The
+ratchet's `MEASURED` invariant is supposed to punish exactly this — it counts capabilities *with a
+verdict* — and it did register `548 of 597`, but a number that only ever goes up when somebody
+volunteers is not a mechanism either.
+
+So this audit did not produce another ranked list. It produced **the instrument**:
+`engine/page/tests/g_constellation_unknowns.rs` — one page, **58 observable questions**, run through
+this engine AND headless Chrome, every answer pinned as an assertion.
+
+```text
+  unknown  49  ->  11          works 17 -> 24 · partial 41 -> 44 · missing 147 -> 175
+```
+
+**37 rows moved off `unknown` in one tick**, each with a receipt naming the measurement rather than a
+judgement. The 11 that remain are the honest residue: they are layout, text-shaping and a11y
+questions (table anonymous-cell wrapping, inline baselines, scroll anchoring, caret placement inside a
+grapheme cluster) that a presence probe cannot answer — they need a fixture and an oracle, not a
+`typeof`.
+
+### ⭐⭐ AND ONE ROW WAS STALE IN THE OTHER DIRECTION
+
+`accessible NAME computation (accname)` was carried as `unknown` **while eight ticks measured it** —
+t1349-1350 (+229), t1379, t1384, t1386 — and WPT `accname` sits at 91.9%. Nobody edited the map.
+
+> ⭐⭐⭐ **A ROW GOES STALE BY BEING WORKED ON.** The rot the map is checked for is not only "the world
+> moved"; it is also "we moved and did not write it down". A capability the loop spent eight ticks on
+> was, on the map, indistinguishable from one nobody had ever looked at. Corrected to `partial` with
+> the gate names and the reason the last 8% is open.
+
+### ⭐⭐ WHERE WE ARE AHEAD OF THE ORACLE, AND WHY THAT MUST BE RECORDED
+
+`contrast-color()` is the only row of 58 where **we say supported and Chrome says not**:
+
+```text
+                                 manuk            Chrome
+  CSS.supports(contrast-color)   true             false
+  color on a WHITE backdrop      rgb(0,0,0)       rgb(0,0,0)     (Chrome: initial, by accident)
+  color on a BLACK backdrop      rgb(255,255,255) rgb(0,0,0)     ⭐ we compute it; Chrome drops it
+  overriding an earlier red      rgb(0,0,0)       rgb(255,0,0)   Chrome keeps red — invalid decl
+```
+
+We implement a Baseline-2026 Interop focus area that Chrome does not. ⚠⚠ **The resulting oracle
+divergence is CORRECT and must not be "fixed"** — the North Star says Chromium is the CEILING on
+capability, not the floor. It is pinned in the gate precisely so a future diff cannot quietly reverse
+it into a "bug".
+
+### RANKED, from this audit only
+
+1. ⭐⭐⭐ **A finding without a mechanism is a finding that expires.** #80's #2 was correct, specific
+   and ranked, and moved nothing in ten ticks because nothing executed it. Every future audit
+   conclusion should name the file that will enforce it — this one names
+   `g_constellation_unknowns.rs`. *Refutable by:* if the unknown count rises again without that gate
+   going red, the mechanism is not the one it claims to be.
+2. ⭐⭐ **The 11 remaining unknowns are the real frontier, and they are all LAYOUT/TEXT/A11Y** —
+   anonymous table-cell wrapping, a cell's `min-width` vs its column's intrinsics, inline-level
+   flex/grid baselines, scroll anchoring, an inline box's content area under a FALLBACK face, caret
+   placement inside a grapheme cluster. Every one needs a fixture and headless Chrome, which is the
+   method the loop already has. They are also, notably, the CO-#1 rendering gap wearing a different
+   hat.
+3. ⭐ **175 `missing` rows is now the honest headline, up from 147** — and the rise is *good*. Nine of
+   the newly-measured absences are the stylo `engine="gecko"` family (`column-rule-*`,
+   `text-decoration-thickness`, `image-orientation`, `text-emphasis-style`, `paint-order`,
+   `box-decoration-break`): **one build-configuration decision, one shared cause, six map rows.** That
+   is a single lever, not six.
+4. Carried, unchanged and OUT OF THIS AGENT'S SCOPE: the verify wall at 1074s against a 300s target
+   (self-audit's only open item; harness-owned per the loop's scope rule — recorded, not touched).
+5. Carried from #80: `Content-Encoding: zstd` still needs an OWNER dependency decision; the
+   gate-execution gap (#78).

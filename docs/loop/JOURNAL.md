@@ -98795,3 +98795,121 @@ strings, and it has 18 callers, so it wants its own gate), and `setRangeText`'s 
 `TypeError` argument validation.
 
 WIKI: docs/wiki/text-field-selection.md
+
+## Tick 1393 — the audits, and a ranked finding that expired because nothing executed it (2026-09-03)
+
+TICK SHAPE: audit
+
+Both audits came due at this tick (last: 1383). The self-audit passes with **one** open item, and the
+surface audit produced the sharpest finding of the three it has run.
+
+### THE SELF-AUDIT — one open item, and it is not mine
+
+```text
+  ✗ verify wall: 1074s EXCEEDS the 300s target — Part 21.2 item 1 has regressed.
+```
+
+Everything else green: 49 process defects recorded with mechanisms, the pattern ledger moving with
+the engine, gate-break declarations present, the cadence enforced by the hook rather than by memory.
+
+⚠ The single failing item is **harness-owned** (`scripts/verify.sh`, gate scheduling, build tooling)
+and this agent's scope rule forbids touching it. Recorded here and in the audit log; the observer owns
+it. *A refusal has to name what it is refusing, and this is it.*
+
+### ⭐⭐⭐ THE SURFACE AUDIT — the map was COMPLETE, and that was the problem
+
+Fetched the authoritative Interop 2026 list (`web-platform-tests/interop`, via `gh api` — the GitHub
+HTML view returns 500 to a plain fetch). All **24** names — 20 focus areas + 4 investigations —
+already have a row in `CONSTELLATION.tsv`. **Nothing to add. Zero phantoms.**
+
+Audit #80 (t1383) had already seen this and ranked the consequence #2: *"the 49 `unknown` rows are the
+frontier now, not missing rows."* Correct, specific, ranked.
+
+**Ten ticks later the count was still exactly 49. Not 48.**
+
+> ⭐⭐⭐ **A FINDING WITHOUT A MECHANISM IS A FINDING THAT EXPIRES.** The audit had identified the
+> frontier precisely and then decayed into prose, because nothing executed it. The ratchet's
+> `MEASURED` invariant is built to punish exactly this and it *did* display `548 of 597` every tick —
+> but a number that only moves when somebody volunteers is not a mechanism either. **A ranked list is
+> not a lever; the next audit conclusion should name the FILE that will enforce it.**
+
+So this audit did not produce another ranked list. It produced the instrument.
+
+### THE INSTRUMENT
+
+`the_capability_map_unknowns_have_a_measured_verdict`
+(`engine/page/tests/g_constellation_unknowns.rs`) — one page, **58 observable questions**, run through
+THIS engine and through headless Chrome, every answer pinned.
+
+```text
+  unknown  49  ->  11        works 17 -> 24 · partial 41 -> 44 · missing 147 -> 175
+```
+
+**37 rows moved off `unknown` in one tick**, each carrying a receipt that names the measurement rather
+than a judgement. It is a **measure-and-pin** gate, not a conformance gate: most rows assert what we
+do NOT have. Pinning an absence is the point — the day somebody implements `caret-color`, this gate
+goes red and the map is updated *with* it, instead of rotting for ten ticks the way it just did.
+
+⭐ Both entrances asked, per t1353: `CSS.supports` AND `getComputedStyle`. They disagree — `if()`,
+`shape()` and `::scroll-marker` are absent from supports while the `column-rule-*` family is absent
+from both — and a property can answer one and not the other.
+
+⚠ Honest about the limit: for `clipboard events` and `MODULE service workers` the probe measured only
+that the global EXISTS, which does not answer whether `copy` fires or whether `{type:'module'}` is
+honoured. Those went to `partial`, not `works`. **EXISTENCE ≠ SUFFICIENCY** (t1196) — the probe is
+cheap precisely because it does not pretend otherwise.
+
+PROVEN RED by an ENGINE mutation, not a self-referential one: making `queryCommandSupported` return
+`true` unconditionally goes red on `queryCommandSupported-undo`.
+
+### ⭐⭐ A ROW GOES STALE BY BEING WORKED ON
+
+`accessible NAME computation (accname)` was carried as `unknown` **while eight ticks measured it** —
+t1349-1350 (+229), t1379, t1384, t1386 — with WPT `accname` at 91.9%.
+
+> ⭐⭐⭐ The rot this instrument checks for is not only *"the world moved"*. It is also **"we moved and
+> did not write it down"** — and on the map, a capability the loop had spent eight ticks on was
+> indistinguishable from one nobody had ever looked at. Corrected to `partial` with the gate names and
+> the reason the last 8% is open (t1386's refused `title` narrowing).
+
+### ⭐⭐ THE ONE ROW WHERE WE ARE AHEAD OF THE ORACLE
+
+```text
+                                 manuk             Chrome
+  CSS.supports(contrast-color)   true              false
+  color on a WHITE backdrop      rgb(0,0,0)        rgb(0,0,0)      (Chrome: initial, by accident)
+  color on a BLACK backdrop      rgb(255,255,255)  rgb(0,0,0)      ⭐ we compute it, Chrome drops it
+  overriding an earlier red      rgb(0,0,0)        rgb(255,0,0)    Chrome keeps red — invalid decl
+```
+
+We implement a Baseline-2026 Interop focus area Chrome does not. ⚠⚠ **The oracle divergence this
+creates is CORRECT and must not be "fixed"** — the North Star makes Chromium the CEILING on
+capability, not the floor. Pinned in the gate so a future diff cannot quietly reverse it into a bug
+report, which is the t1004 "a gate can PIN the engine to a bug" hazard running backwards.
+
+### ⭐ AND THE NEW `missing` COUNT IS A LEVER, NOT A LIST
+
+175 `missing`, up from 147 — and the rise is *good*, because `unknown` was never a claim anybody could
+be held to. Nine of the newly-measured absences are one family: the stylo `engine="gecko"` properties
+(`column-rule-color/style/width`, `text-decoration-thickness`, `image-orientation`,
+`text-emphasis-style`, `paint-order`, `box-decoration-break`). **One build-configuration decision, one
+shared cause, six map rows** — a single lever wearing six hats.
+
+### THE RECEIPT
+
+```text
+  CONSTELLATION unknown  49 -> 11     (37 rows measured, 2 corrected)
+  manuk-page   gate binaries, 0 FAILED   ·   58 pinned rows, PROVEN RED by engine mutation
+  self-audit   1 open item (verify wall 1074s vs 300s — HARNESS, out of scope)
+  surface audit #81 recorded · LAST_AUDIT_TICK / LAST_SURFACE_AUDIT -> 1393
+  no engine behaviour changed this tick — the gate MEASURES, it does not fix
+```
+
+NEXT: the 11 remaining unknowns are all LAYOUT/TEXT/A11Y (anonymous table-cell wrapping, a cell's
+`min-width` vs its column's intrinsics, inline-level flex/grid baselines, scroll anchoring, an inline
+box's content area under a FALLBACK face, caret placement inside a grapheme cluster) — they need a
+fixture and headless Chrome, not a `typeof`, and they are the CO-#1 rendering gap wearing a different
+hat. Also still open: the `select` event (270 subtests, measured at t1392), and WebIDL `ToUint32`
+argument conversion.
+
+WIKI: docs/wiki/capability-map-measurement.md
