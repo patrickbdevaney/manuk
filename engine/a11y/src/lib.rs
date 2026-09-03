@@ -1864,6 +1864,10 @@ pub type NameStyles = HashMap<NodeId, NameStyle>;
 /// the DOM's own `hidden` / `aria-hidden`, and that conclusion lives in [`node_visibility`].
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct NameStyle {
+    /// Any border on any side — the one signal in [`table_is_data`] that markup cannot answer.
+    /// A `<table>` whose CELLS are bordered is a data table even with no `<th>` and no `<caption>`
+    /// (Chrome-measured), because a border is what an author draws around DATA.
+    pub has_border: bool,
     pub display: manuk_css::Display,
     pub text_transform: manuk_css::TextTransform,
     pub visibility: manuk_css::Visibility,
@@ -1942,6 +1946,10 @@ pub fn name_styles(dom: &Dom, styles: &HashMap<NodeId, manuk_css::ComputedStyle>
                         display: s.display,
                         text_transform: s.text_transform,
                         visibility: s.visibility,
+                        has_border: s.border_width.top > 0.0
+                            || s.border_width.right > 0.0
+                            || s.border_width.bottom > 0.0
+                            || s.border_width.left > 0.0,
                     },
                 )
             })
@@ -2226,6 +2234,112 @@ fn row_is_inside_a_grid(dom: &Dom, node: NodeId) -> bool {
         cur = dom.parent(p);
     }
     false
+}
+
+/// **A `<table>` USED FOR LAYOUT IS NOT A TABLE, AND ANNOUNCING IT AS ONE IS THE OLDEST a11y
+/// ANTI-PATTERN THERE IS.**
+///
+/// Chrome does not expose a header-less, border-less `<table>` with the table roles at all — it
+/// demotes the whole thing to `LayoutTable`/`LayoutTableRow`/`LayoutTableCell`, which no assistive
+/// technology reads as tabular. We announced every one of them as `table` / `row` / `cell`, so a
+/// page laid out on tables — news.ycombinator.com is built entirely this way, and the CrUX tail is
+/// full of them — told the agent it had found data.
+///
+/// The signals, every row headless-Chrome-measured (`/tmp/t1404/lt.html`, `lt2.html`):
+///
+/// ```text
+///   DATA                                            LAYOUT
+///   role=table | grid | treegrid                    (nothing at all)
+///   a <caption>                                     a <tbody> and nothing else  ⚠ every table has one
+///   a <th>                                          aria-label alone            ⚠ names it, does not type it
+///   summary=                                        headers= on a <td>
+///   <thead> or <tfoot>                              width:100%
+///   <colgroup> / <col>                              border="1" on a 1x1 table
+///   border= attribute (2x2 measured)
+///   CELLS WITH A CSS BORDER                         cells with none
+/// ```
+///
+/// ⚠ **The scan STOPS at a nested `<table>`.** Layout tables nest — HN nests them three deep — and a
+/// data table inside a layout table must not make its container data, nor the other way round.
+fn table_is_data(dom: &Dom, table: NodeId, styles: &NameStyles) -> bool {
+    let attr_border = dom.element(table).is_some_and(|el| {
+        el.attr("border")
+            .is_some_and(|v| !v.trim().is_empty() && v.trim() != "0")
+    });
+    if let Some(el) = dom.element(table) {
+        if let Some(r) = el.attr("role").and_then(Role::parse) {
+            // An explicit role settles it in both directions: `role=presentation` reaches this
+            // through `role_of` returning `None` long before here.
+            return matches!(r, Role::Table | Role::Grid | Role::TreeGrid);
+        }
+        if el.attr("summary").is_some_and(|v| !v.trim().is_empty()) {
+            return true;
+        }
+    }
+    // One walk, stopping at any nested `<table>`: the markup signals, whether any cell is bordered,
+    // and how many cells there are — because ⭐ **A BORDER ONLY COUNTS ON A TABLE WITH MORE THAN ONE
+    // CELL.** Chrome-measured on all four spellings: `border=1` on 1x1 is LAYOUT, on 1x2 and 2x1 it
+    // is DATA, and a CSS border on a 1x1 is LAYOUT too. A single cell is not a table of anything.
+    let mut cells = 0usize;
+    let mut rows = 0usize;
+    let mut css_border = false;
+    let mut stack: Vec<NodeId> = dom.children(table).collect();
+    while let Some(n) = stack.pop() {
+        let Some(el) = dom.element(n) else { continue };
+        match el.name.as_str() {
+            "caption" | "th" | "thead" | "tfoot" | "colgroup" | "col" => return true,
+            // ⚠ the nested-table stop. Not `continue`-with-descent: a nested table's own headers
+            // belong to IT.
+            "table" => continue,
+            "tr" => rows += 1,
+            "td" => {
+                cells += 1;
+                css_border |= styles.get(&n).is_some_and(|s| s.has_border);
+            }
+            _ => {}
+        }
+        stack.extend(dom.children(n));
+    }
+    // ⭐ **SIZE IS ITSELF A SIGNAL, AND THE THRESHOLD IS EXACTLY 20 ROWS.** Chrome-measured by
+    // bisection on borderless, header-less tables of 2 / 4 / 10 / 19 / 20 / 21 / 25 rows: the first
+    // four are `LayoutTable` and the last three are `table`. Nobody lays a page out in twenty rows —
+    // and this is the row that matters most in practice, because it is what makes
+    // `blog.rust-lang.org`'s 403-row post archive (no `<th>`, no `<caption>`, no border) a data
+    // table. Without it the demotion eats 1,211 real nodes from that one page.
+    rows >= 20 || (cells > 1 && (attr_border || css_border))
+}
+
+/// The nearest `<table>` at or above `node`, or `None` for the ARIA spellings on plain elements —
+/// a `<div role=row>` has no `<table>` and keeps its role untouched.
+fn nearest_table(dom: &Dom, node: NodeId) -> Option<NodeId> {
+    let mut cur = Some(node);
+    while let Some(n) = cur {
+        if dom.element(n).is_some_and(|e| e.name == "table") {
+            return Some(n);
+        }
+        cur = dom.parent(n);
+    }
+    None
+}
+
+/// Drop the table roles of a LAYOUT table, so the node is reparented exactly as a `role=presentation`
+/// element is. `Grid`/`GridCell` are never demoted: a grid is declared, never inferred.
+fn demote_layout_table(dom: &Dom, node: NodeId, role: Role, styles: &NameStyles) -> Option<Role> {
+    if !matches!(
+        role,
+        Role::Table
+            | Role::Row
+            | Role::RowGroup
+            | Role::Cell
+            | Role::ColumnHeader
+            | Role::RowHeader
+    ) {
+        return Some(role);
+    }
+    match nearest_table(dom, node) {
+        Some(t) if !table_is_data(dom, t, styles) => None,
+        _ => Some(role),
+    }
 }
 
 fn accessible_name_with(
@@ -3075,7 +3189,7 @@ fn build_children(
             ));
             continue;
         }
-        match role_of(dom, child) {
+        match role_of(dom, child).and_then(|r| demote_layout_table(dom, child, r, ctx.styles)) {
             Some(role) => {
                 let name = accessible_name_with(dom, child, &role, index, ctx);
                 let state = state_of(dom, child, &role);

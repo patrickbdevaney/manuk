@@ -2121,6 +2121,15 @@
   - L80 · ⚠⚠⚠ How it stayed hidden for three ticks — and it was not the wall
   - L99 · How it was proven red
 
+## A layout table is not a table — and the metric that measured it could not agree with itself
+`docs/wiki/layout-table-is-not-a-table.md`
+
+  - L7 · The rule, every row measured
+  - L30 · ⭐⭐⭐ The fixture suite proved the rule I wrote; the corpus found the rule I did not
+  - L46 · ⚠ The price, recorded because it was taken in the wrong order
+  - L53 · ⭐⭐⭐ The instrument half: a real-site metric needs a self-agreement control
+  - L69 · ⭐⭐ And a multiset match over Chrome's nodes is RECALL only
+
 ## Manuk Daily-Driver Usability Roadmap (synthesized, tick 138)
 `docs/wiki/lever-map.md`
 
@@ -2884,4 +2893,4 @@
   - L89 · The wall audit (due t1388)
 
 ---
-2627 sections across 63 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+2632 sections across 64 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.

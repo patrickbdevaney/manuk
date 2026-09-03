@@ -10424,3 +10424,33 @@ read 91.9% on WPT `wai-aria` and **75.0%** on six real pages — both honest, no
 site match 75.0% → 97.0%; WPT unchanged except `wai-aria` +1. (t1404 —
 `g_a11y_name_from_content_context`; t1351 "a plural asserts a sample and reads as a population", one
 level up)
+
+## ⚠⚠ A `<table>` USED FOR LAYOUT MUST NOT BE ANNOUNCED AS A TABLE
+
+Chrome demotes a header-less, border-less, small `<table>` out of the table roles entirely
+(`LayoutTable`/`LayoutTableRow`/`LayoutTableCell` — nothing an AT reads as tabular). We announced every
+one as `table`/`row`/`cell`, so a page laid out on tables told the agent it had found data. The data
+signals, all Chrome-measured: an explicit `role`, a `<caption>`, a `<th>`, `summary=`, `<thead>`/
+`<tfoot>`, `<colgroup>`/`<col>`, **>= 20 rows**, or a border (attribute OR CSS) on a table with more
+than one cell. NOT signals: a `<tbody>`, `aria-label`, `headers=`, `width:100%`.
+
+⚠ Priced at **1 layout table across 52 CrUX pages (1.9%)** — recorded because the pricing was done
+AFTER building, which is the wrong order. A correctness tick, not a corpus-moving one.
+
+⭐⭐⭐ **A FIXTURE SUITE CAN ONLY FALSIFY THE RULE YOU WROTE.** Eighteen Chrome-measured fixture rows
+passed while the rule was still missing its size term; one corpus page (blog.rust-lang.org's 403-row
+post archive, no header, no border) fell from 99.9% to 27.6% node match and named it. The corpus is
+not a slower fixture — it is the only instrument that finds a MISSING clause. (t1405 —
+`g_a11y_layout_table_is_not_a_table`)
+
+## ⚠⚠⚠ A REAL-SITE METRIC NEEDS A SELF-AGREEMENT CONTROL, OR IT SCORES THE PAGE CHANGING
+
+t1404's real-site a11y node match read `news.ycombinator.com` at 86.7%. Running the oracle against
+ITSELF — Chrome vs Chrome, same page, two fetches — gives **85.3%**: we were scoring above Chrome's
+agreement with itself, because a live feed changes between the two fetches (`'201 comments'` vs
+`'219 comments'`, `'1 hour ago'` vs `'5 hours ago'`). danluu.com's control is 100.0%.
+
+⭐⭐ And a `(role, name)` multiset match over the ORACLE'S nodes is RECALL only — it cannot see a node
+the engine invents. martinfowler.com reads **97.3% recall and 67.7% precision** (138 extra nodes).
+Quote the control row and the precision beside any real-site number. (t1405; t1159 "the CONTROL row",
+arriving on an instrument's first day instead of its fiftieth)

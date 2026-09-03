@@ -100399,3 +100399,110 @@ and the other is not."* Fixed to 495924, whole `manuk-agent` suite green (44 bin
 ⭐ Named because it is the exact counterpart of check #133's I8 finding one tick earlier: **a derived
 number needs a gate that recomputes it, or it rots silently.** Here one existed and it worked on the
 first refresh after the rule was written down.
+
+## Tick 1405 — a layout table is not a table, and the metric that said so could not agree with itself (2026-09-03)
+
+TICK SHAPE: capability-mechanism
+CLASS: every page laid out on `<table>` — the legacy tail — plus the honesty of the real-site a11y
+metric t1404 stood up one tick earlier
+
+Worked the top of t1404's own ranked remainder. Two things came back, and the second is the larger.
+
+### THE CAPABILITY — Chrome demotes a layout table out of the table roles, and we announced every one
+
+A header-less, border-less, small `<table>` is exposed by Chrome as
+`LayoutTable`/`LayoutTableRow`/`LayoutTableCell`, which no assistive technology reads as tabular. We
+announced all of them as `table`/`row`/`cell`, so a page laid out on tables told the agent it had
+found data — the oldest accessibility anti-pattern there is. Every row headless-Chrome-measured:
+
+```text
+  DATA                                        LAYOUT
+  role=table | grid | treegrid                nothing at all
+  a <caption>                                 a <tbody> and nothing else  ⚠ every table has one
+  a <th>                                      aria-label alone  ⚠ names it, does not type it
+  summary=                                    headers= on a <td>
+  <thead> or <tfoot>                          width:100%
+  <colgroup> / <col>                          role=presentation, even WITH a <th>
+  >= 20 rows                                  <= 19 rows
+  a border (attr or CSS) AND >1 cell          a border on a 1x1 table  ⚠ BOTH spellings
+```
+
+### ⭐⭐⭐ THE FIXTURE SET PROVED THE RULE I WROTE; THE CORPUS FOUND THE RULE I DID NOT
+
+The first version had every markup signal above and no size rule, and it passed all eighteen fixture
+rows. Then the corpus:
+
+```text
+  blog.rust-lang.org node match   99.9%  ->  27.6%      (1,211 real nodes eaten)
+  news.ycombinator.com            89.7%  ->  39.7%
+```
+
+`blog.rust-lang.org`'s post archive is **one `<table>` with 403 rows and 806 cells**, no `<th>`, no
+`<caption>`, no border — and Chrome calls it data. Bisecting Chrome on borderless header-less tables
+of 2 / 4 / 10 / 19 / 20 / 21 / 25 rows found the reason exactly: **the threshold is twenty.** Nobody
+lays a page out in twenty rows.
+
+> ⭐⭐⭐ **A FIXTURE SUITE CAN ONLY FALSIFY THE RULE YOU WROTE.** Eighteen Chrome-measured rows, all
+> green, and the rule was still missing a term that a single corpus page exposed in one number. The
+> corpus is not a slower fixture — it is the only instrument that can find a MISSING clause.
+
+### ⚠⚠ AND IT WAS PRICED AFTER BUILDING, WHICH IS THE WRONG ORDER
+
+52 freshly-fetched CrUX corpus pages carry **6 `<table>`s between them, of which exactly 1 is a layout
+table** — 1.9% of pages. t1367's rule is *price the mechanism on the corpus BEFORE building*, and this
+tick did it after. Recorded rather than buried: **this is a correctness tick with a Chrome-arbitrated
+rule, not a corpus-moving one.** It lands because the code is written, gated and proven red under
+seven mutations, and because announcing a layout grid as a data table is a defect whether or not the
+head of the corpus contains one — not because the number moved.
+
+### ⭐⭐⭐ THE INSTRUMENT HALF — THE NEW METRIC COULD NOT AGREE WITH ITSELF
+
+While reading the residual, `news.ycombinator.com`'s misses turned out to be `'201 comments'` vs
+`'219 comments'` and `'1 hour ago'` vs `'5 hours ago'`. **The page changed between the two fetches.**
+So the control that should have existed on day one was run — **Chrome against Chrome, same page, two
+fetches**:
+
+```text
+  news.ycombinator.com   chrome vs chrome   85.3%     <- and WE scored 86.7% against it
+  danluu.com             chrome vs chrome  100.0%
+```
+
+⭐⭐⭐ **A REAL-SITE METRIC WITHOUT A SELF-AGREEMENT CONTROL CANNOT TELL AN ENGINE DEFECT FROM A PAGE
+THAT CHANGED.** On a live feed we were scoring ABOVE Chrome's agreement with itself — that page's
+number is noise, not a reading, and t1404's 97.0% aggregate is therefore a **LOWER BOUND**. The
+control row is t1159's lesson arriving on an instrument's first day instead of its fiftieth.
+
+### ⭐⭐ AND THE MATCH SCORED ONLY CHROME'S NODES, SO OUR EXTRAS WERE INVISIBLE
+
+A `(role, name)` multiset match over Chrome's nodes is RECALL. It cannot see a node we invent — and
+announcing a layout table adds a whole spurious subtree. Measured for the first time here:
+
+```text
+  page                 our nodes   EXTRA vs chrome   precision
+  danluu.com                 414                 0      100.0%
+  blog.rust-lang.org        1678                 7       99.6%
+  whatwg.org                  32                 1       96.9%
+  a11yproject.com            173                28       83.8%
+  martinfowler.com           427               138       67.7%   <- invisible to the headline
+  AGGREGATE                 3277               302       90.8%
+```
+
+**martinfowler.com reads 97.3% on recall and 67.7% on precision.** Both are true; only one was being
+reported. Named here and left as the next tick's measurement, because a metric change and a capability
+change in one tick cannot be told apart afterwards.
+
+### THE RECEIPT
+
+```text
+  G_A11Y_LAYOUT_TABLE_IS_NOT_A_TABLE  ok (25 rows, 1 test fn)  RED under all 7 mutations
+    L1 no demotion at all          L2 threshold 2      L3 threshold 100 (eats the archive)
+    L4 a border with no cell rule  L5 no nested-table stop      L6 <tbody> as a data signal
+    L7 the ARIA spellings demoted too
+  manuk-agent, whole crate           45 binaries                                    ALL ok
+  WPT accname 445/484 (=) · wai-aria 400/434 (=) · html-aam 315/335 (=) · HANG/CRASH 0
+  six-page real-site node match: 97.5% -> 96.7% on the same matcher, the whole delta inside
+    news.ycombinator's drift band (chrome-vs-chrome 85.3% there) — the five stable pages are UNCHANGED
+  Bar 0: no hang, no crash, no panic
+```
+
+WIKI: docs/wiki/layout-table-is-not-a-table.md
