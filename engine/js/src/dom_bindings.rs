@@ -909,6 +909,7 @@ pub unsafe fn set_frame_create_hook(f: unsafe extern "C" fn(*mut Dom, NodeId) ->
 pub fn clear_document_side_tables() {
     FRAME_CREATE_TRIED.with(|c| c.borrow_mut().clear());
     TEXT_SELECTION.with(|c| c.borrow_mut().clear());
+    SCRIPT_CREATED_BY_SCRIPT.with(|c| c.borrow_mut().clear());
 }
 
 /// **A frame the script created must have a document on the very NEXT LINE.**
@@ -4581,6 +4582,102 @@ unsafe fn new_reflector(cx: *mut RawJSContext, dom: *mut Dom, node: NodeId) -> *
 /// the target + added/removed nodes have reflectors (so `__nodes[id]` resolves in JS), then calls
 /// `__recordMutation`. A no-op if `MutationObserver` was never touched (the pending machinery
 /// still exists, so it just queues cheaply).
+/// **Run a `<script>` the page just connected to the document — synchronously, once.**
+///
+/// ⚠⚠⚠ **A `<script>` element inserted by script NEVER EXECUTED IN THIS ENGINE.** Every "should run"
+/// row of `scripting-1`'s type matrix failed and every "should not run" row passed, which is the
+/// signature of a path that runs *nothing*: 193 distinct failing type values, none of them a false
+/// positive. And the population is not exotic — `document.createElement('script')` + `appendChild`
+/// is how **every** analytics tag, ad tag, A/B framework, payment SDK and lazily-loaded widget on the
+/// web boots. A loader that injects the real application script did nothing at all, silently.
+///
+/// Chrome-measured, each rule in its own probe:
+///
+/// ```text
+///   appendChild into the document        runs SYNCHRONOUSLY (the count is true on the next line)
+///   appended to a DETACHED parent        does NOT run …
+///   …then connecting that parent         …runs THEN — the trigger is BECOMING CONNECTED
+///   re-appending an already-run script   does NOT run again
+///   setting .textContent after insert    runs
+///   innerHTML                            does NOT run
+/// ```
+///
+/// ⭐ **The trigger is connectedness, not `appendChild`** — which is why this hangs off
+/// `record_mutation` rather than off the insertion natives. There are nine of those
+/// (`appendChild`, `insertBefore`, `replaceChild`, `append`, `prepend`, `before`, `after`,
+/// `replaceWith`, `insertAdjacentElement`) and a tenth would be added without anyone remembering
+/// this rule. `record_mutation` is the choke point every one of them already calls, because
+/// MutationObserver has to be complete by construction — so the observer's answer to *"what just got
+/// connected"* and this one cannot drift apart.
+unsafe fn run_connected_scripts(cx: *mut RawJSContext, dom: *mut Dom) {
+    // ── ⚠⚠⚠ **ITERATE THE SMALL SET, NOT THE INSERTED SUBTREE — THIS WAS A BAR 0.**
+    //
+    // The first version walked the mutation's `added` list and every descendant of it, asking each
+    // node whether it was a script. That is O(nodes inserted) on EVERY childList mutation, and
+    // `tabular-data/processing-model-1/span-limits.html` inserts **65,532 `<tr><td>` rows in one
+    // `innerHTML +=`**. The area went from `HANG/CRASH 0` to `HANG/CRASH 1` — a capability bought
+    // with a hang, which the ratchet refuses.
+    //
+    // The loop is INVERTED: the set of script-created `<script>` elements that have not yet run is
+    // at most a handful and is usually EMPTY, so the cost per mutation is O(pending scripts) and has
+    // nothing to do with how much was inserted. A script leaves the set once it runs, so the set
+    // stays small by construction.
+    //
+    // ⭐ It also gets the semantics right for free: the trigger is *becoming connected*, so
+    // re-checking every pending script after any mutation is exactly the right question — a script
+    // connected because its detached PARENT was appended is found without having to notice that.
+    let pending: Vec<NodeId> = SCRIPT_CREATED_BY_SCRIPT.with(|m| {
+        m.borrow()
+            .iter()
+            .filter(|(arena, _)| *arena == dom as usize)
+            .map(|(_, n)| *n)
+            .collect()
+    });
+    for n in pending {
+        let key = (dom as usize, n);
+        if (*dom).tag_name(n) != Some("script") {
+            continue;
+        }
+        if !is_connected(dom, n) {
+            continue;
+        }
+        let Some(el) = (*dom).element(n) else {
+            continue;
+        };
+        // `src` is the EXTERNAL half and is not this tick's subject: it needs a fetch, so the host
+        // drain owns it (`Page::drain_injected_scripts`). A module likewise defers.
+        if el.attr("src").is_some() {
+            continue;
+        }
+        let ty = el.attr("type");
+        if ty.is_some_and(|t| t.trim().eq_ignore_ascii_case("module")) {
+            continue;
+        }
+        if !script_type_is_classic_js(ty) {
+            continue;
+        }
+        let src = (*dom).text_content(n);
+        if src.trim().is_empty() {
+            // An empty script still counts as having run — re-filling it later must not re-run it,
+            // and Chrome agrees (`textContent` set after insertion runs ONCE).
+            continue;
+        }
+        // ⭐ **REMOVAL FROM THE PENDING SET *IS* HTML'S "ALREADY STARTED" FLAG** — one fact, one
+        // place. A separate `SCRIPT_ALREADY_RAN` set was written first and a mutation deleting its
+        // check stayed GREEN: once a script leaves the pending set it can never be reconsidered, so
+        // the second table asserted a rule it did not implement. Deleted rather than kept as
+        // belt-and-braces, because an inert guard makes a rule look enforced in two places when it
+        // is enforced in one. (Third inert guard found by a green mutation in this arc.)
+        //
+        // It is also what keeps the loop above O(1) in practice: the set only ever holds scripts
+        // created but not yet connected.
+        SCRIPT_CREATED_BY_SCRIPT.with(|m| {
+            m.borrow_mut().remove(&key);
+        });
+        let _ = eval_in_current_global(cx, &src);
+    }
+}
+
 unsafe fn record_mutation(
     cx: *mut RawJSContext,
     dom: *mut Dom,
@@ -4591,6 +4688,11 @@ unsafe fn record_mutation(
     added: &[NodeId],
     removed: &[NodeId],
 ) {
+    // ⚠ BEFORE the observer records, so a MutationObserver callback and the script it observes run
+    // in the order Chrome has: the script is already executed when the observer is notified.
+    if kind == "childList" && !added.is_empty() {
+        run_connected_scripts(cx, dom);
+    }
     // Reflect every node the record references so JS can resolve the ids back to node objects.
     let _ = new_reflector(cx, dom, target);
     for &n in added.iter().chain(removed.iter()) {
@@ -5652,6 +5754,14 @@ unsafe fn doc_create_element(cx: *mut RawJSContext, argc: u32, vp: *mut Value) -
         );
     }
     let node = (*dom).create_element(tag);
+    // **The one marking site.** A `<script>` the page's own script built is allowed to execute when
+    // it is inserted; anything a PARSER built (the document, `innerHTML`, `DOMParser`, a `<template>`)
+    // is not, and gets no mark. See `SCRIPT_CREATED_BY_SCRIPT` for why the flag is positive.
+    if (*dom).element(node).is_some_and(|e| e.name == "script") {
+        SCRIPT_CREATED_BY_SCRIPT.with(|m| {
+            m.borrow_mut().insert((dom as usize, node));
+        });
+    }
     *vp = ObjectValue(new_reflector(cx, dom, node));
     true
 }
@@ -16139,6 +16249,58 @@ fn publish_named_globals(runtime: &mut Runtime, global: mozjs::rust::HandleObjec
 ///
 /// The spec is simple and this follows it: a classic `<script>` with neither `defer` nor `async` blocks;
 /// everything else does not.
+/// **The `<script type>` values that make it a CLASSIC script — one predicate, both callers.**
+///
+/// HTML *prepare the script element* step 8: the type is a classic script if it is empty/absent, or —
+/// after stripping leading and trailing ASCII whitespace — an ASCII case-insensitive match for a
+/// JavaScript MIME type **essence**. Chrome-measured, `document.createElement('script')` at each:
+///
+/// ```text
+///   (absent) · "" · text/javascript · application/javascript · application/ecmascript ·
+///   text/ecmascript · application/x-javascript · text/x-javascript · text/livescript ·
+///   text/jscript · text/javascript1.0 … 1.5 · "  text/javascript  " · "TEXT/JAVASCRIPT"   RUN
+///
+///   text/plain · application/json · text/babel · "javascript" (no subtype)                DO NOT
+///   text/javascript;charset=utf-8                                                         DO NOT
+/// ```
+///
+/// ⭐⭐ **`text/javascript;charset=utf-8` does NOT run, and that row is what makes this an ESSENCE
+/// match rather than a prefix test.** The essence is the type/subtype with every parameter removed;
+/// a `type` attribute carrying one is simply not on the list. Writing this as `starts_with` would
+/// pass every row above and be wrong about exactly the one authors get wrong.
+///
+/// ⚠ This replaces two hand-written lists of TWO entries each (`text/javascript` and
+/// `application/javascript`) — the twelve legacy aliases are not decoration: they are what a decade
+/// of shipped pages actually wrote, and a script that does not run is a blank page.
+pub(crate) fn script_type_is_classic_js(ty: Option<&str>) -> bool {
+    let t = ty.unwrap_or("").trim();
+    if t.is_empty() {
+        return true;
+    }
+    const CLASSIC: [&str; 18] = [
+        "application/ecmascript",
+        "application/javascript",
+        "application/x-ecmascript",
+        "application/x-javascript",
+        "text/ecmascript",
+        "text/javascript",
+        "text/javascript1.0",
+        "text/javascript1.1",
+        "text/javascript1.2",
+        "text/javascript1.3",
+        "text/javascript1.4",
+        "text/javascript1.5",
+        "text/jscript",
+        "text/livescript",
+        "text/x-ecmascript",
+        "text/x-javascript",
+        // Not JavaScript MIME types, but HTML lists them as legacy JS type keywords.
+        "text/javascript1.6",
+        "text/javascript1.7",
+    ];
+    CLASSIC.iter().any(|c| t.eq_ignore_ascii_case(c))
+}
+
 fn collect_inline_scripts(dom: &Dom) -> Vec<(NodeId, String, bool, bool)> {
     let mut out = Vec::new();
     for n in dom.descendants(dom.root()) {
@@ -16162,10 +16324,10 @@ fn collect_inline_scripts(dom: &Dom) -> Vec<(NodeId, String, bool, bool)> {
             if crate::script_is_nomodule_classic(el.attr("type"), el.attr("nomodule").is_some()) {
                 continue;
             }
-            let is_js = ty.is_empty()
-                || ty.eq_ignore_ascii_case("text/javascript")
-                || ty.eq_ignore_ascii_case("application/javascript")
-                || is_module;
+            // ONE predicate (see `script_type_is_classic_js`) — this call site used to carry its own
+            // two-entry list, so a parser-inserted `<script type="application/ecmascript">` was
+            // dropped on the floor exactly like a script-inserted one.
+            let is_js = script_type_is_classic_js(el.attr("type")) || is_module;
             if !is_js {
                 continue;
             }
@@ -22098,6 +22260,24 @@ thread_local! {
     /// volume slider actually performs — the attribute path (tick 352) never sees it.
     static PENDING_MEDIA_PROPS: std::cell::RefCell<Vec<(u64, String, f64)>> =
         const { std::cell::RefCell::new(Vec::new()) };
+    /// **Script elements THIS PAGE'S SCRIPT created**, and are therefore allowed to execute when
+    /// they are inserted into the document.
+    ///
+    /// ⚠⚠⚠ **THIS IS A POSITIVE FLAG ON PURPOSE, AND THE DIRECTION IS THE SAFETY ARGUMENT.** The
+    /// spec expresses the same rule negatively — the HTML *fragment parsing* algorithm marks script
+    /// elements "already started" so they never run — which would mean marking at all SEVEN
+    /// `manuk_html::set_inner_html` call sites in this file. The two designs fail in opposite
+    /// directions: **a missed mark in the negative design makes `innerHTML` EXECUTE A SCRIPT**, which
+    /// is the one thing `innerHTML` must never do and a load-bearing web-security invariant; a missed
+    /// case in this positive design merely leaves a script not running. The fail-safe direction wins,
+    /// and it needs one marking site instead of seven that a future call site can silently skip.
+    ///
+    /// ⚠ Known gap, Chrome-measured and named rather than discovered: `cloneNode` of a
+    /// parser-created `<script>` DOES run in Chrome and does not here — a clone is not "already
+    /// started". (`<template>` content is `false` in Chrome even when cloned, so that half agrees.)
+    static SCRIPT_CREATED_BY_SCRIPT: std::cell::RefCell<
+        std::collections::HashSet<(usize, NodeId)>,
+    > = std::cell::RefCell::new(std::collections::HashSet::new());
     /// Text-control selection state per `<input>`/`<textarea>`: `(start, end, direction)` in UTF-16
     /// code units, `direction` 0=none 1=forward 2=backward. `setSelectionRange`/`select` write it,
     /// `selectionStart`/`selectionEnd`/`selectionDirection` read it. A form/editor reads these to know

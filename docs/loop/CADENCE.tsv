@@ -1075,3 +1075,4 @@ tick	sha	epoch	iso	delta_s	shape	wall_s	files	added	deleted	gates	claims	wpt_pas
 1394	8ae3f38c	1788417085	2026-09-03T02:31:25-04:00	3046	capability-subsystem	465	10	525	61	528	81	3896	6960	0	642	0	the `select` event: queued, uncoalesced, and owned by the API rather than by the value (2026-09-03)
 1395	70557480	1788420754	2026-09-03T03:32:34-04:00	3669	capability-subsystem	465	14	652	56	529	81	3896	6960	0	642	0	a state that existed and could not be asked about (2026-09-03)
 1396	bdcc6098	1788423041	2026-09-03T04:10:41-04:00	2287	capability-subsystem	465	9	490	45	529	81	3896	6960	0	642	0	the popover's other half, and the entrance that disagrees with the tree (2026-09-03)
+1397	253cba27	1788427922	2026-09-03T05:32:02-04:00	4881	capability-subsystem	465	10	701	49	530	81	3896	6960	0	642	0	a `<script>` inserted by script never ran, and the fix was a Bar 0 first (2026-09-03)

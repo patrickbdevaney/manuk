@@ -99266,3 +99266,135 @@ the same class has now bitten twice. Behind it: `popoverTargetElement` reflectio
 invoker (27 subtests), and the queued-and-coalesced `toggle` event measured at t1395.
 
 WIKI: docs/wiki/popover-observable-state.md
+
+## Tick 1397 — a `<script>` inserted by script never ran, and the fix was a Bar 0 first (2026-09-03)
+
+TICK SHAPE: capability-subsystem
+
+### ⚠⚠⚠ THE TEST NAMES SAID "MIME TABLE". THEY WERE WRONG.
+
+`scripting-1` was 657/1823 with **399 failures sharing one assertion message**, and the failing test
+names read like a legacy-MIME list: *"Script should run with `type="text/livescript"`"*,
+`text/jscript`, `application/ecmascript`… The obvious tick was a lookup table.
+
+The number that stopped it was the **shape** of the set: 193 distinct failing type values, **every one
+a "should run", and not one "should not run"**. A missing table entry produces failures in both
+directions as the list drifts. A path that runs *nothing* produces exactly this: all the positives
+fail, all the negatives pass vacuously.
+
+> ⭐⭐⭐ **A SIGNATURE HISTOGRAM NAMES THE TESTS; ONLY A PROBE NAMES THE MECHANISM.** Reading the test
+> file settled it in one line — every one of them does `document.createElement('script')`, sets
+> `textContent`, appends, and asserts **synchronously**. The MIME type is their parameter space, not
+> their subject. Had the histogram been trusted, the tick would have been a correct table added to a
+> path that never executes.
+
+### ⭐⭐⭐ THE MECHANISM: A SCRIPT-INSERTED `<script>` NEVER EXECUTED, AT ALL
+
+```text
+                                        chrome    before    after
+  appendChild into the document         true      FALSE     true    (synchronously)
+  appended to a DETACHED parent         false     false     false
+  …then connecting that parent          true      FALSE     true    ← the trigger is CONNECTEDNESS
+  re-appending an already-run script    false     false     false
+  .textContent set after insertion      true      FALSE     true
+  innerHTML                             false     false     false
+  text/javascript;charset=utf-8         false     false     false   ← an ESSENCE match
+```
+
+**The population is every script loader on the web.** `document.createElement('script')` +
+`appendChild` is how analytics tags, ad tags, A/B frameworks, payment SDKs and lazily-loaded widgets
+boot. A page whose loader injects the real application script did **nothing at all, silently** — which
+is the shape of the board's long-standing *"booted but thin"* cohort.
+
+### ⭐⭐ THE HOOK GOES AT THE CHOKE POINT, NOT ON THE METHOD
+
+The trigger is *becoming connected*, not `appendChild`. There are **nine** insertion natives
+(`appendChild`, `insertBefore`, `replaceChild`, `append`, `prepend`, `before`, `after`,
+`replaceWith`, `insertAdjacentElement`) and a tenth would be added without anyone remembering this
+rule. So it hangs off `record_mutation` — the one call site every insertion already makes, because
+MutationObserver has to be complete **by construction**. The observer's answer to *"what just got
+connected"* and this one cannot drift apart.
+
+### ⚠⚠⚠ AND THE FIRST IMPLEMENTATION WAS A BAR 0
+
+```text
+  html/semantics   HANG/CRASH 0  ->  HANG/CRASH 1
+  html/semantics/tabular-data/processing-model-1/span-limits.html   HANG
+```
+
+It walked the mutation's `added` list and every descendant, asking each node whether it was a script —
+O(nodes inserted) on **every** childList mutation. `span-limits.html` inserts **65,532 `<tr><td>` rows
+in a single `innerHTML +=`**.
+
+> ⭐⭐⭐ **ITERATE THE SMALL SET, NOT THE LARGE ONE.** The loop was inverted: walk the set of
+> script-created `<script>` elements that have not yet run — usually empty, always a handful — instead
+> of the inserted subtree. Cost per mutation became O(pending scripts) and independent of how much was
+> inserted, and `HANG/CRASH` went back to 0 **with the subtest count going UP**. A capability bought
+> with a hang is refused; that is not a judgement call.
+
+⭐ The inversion also got the semantics right for free: re-checking every pending script after any
+mutation IS the "did anything become connected" question, so a script connected because its **detached
+parent** was appended is found without having to notice that specifically.
+
+### ⚠⚠ THE ELIGIBILITY FLAG IS POSITIVE ON PURPOSE, AND THE DIRECTION IS THE ARGUMENT
+
+The spec states the rule negatively — HTML's *fragment parsing* algorithm marks script elements
+"already started" so they never run — which here would mean marking at all **seven**
+`manuk_html::set_inner_html` call sites. The two designs fail in opposite directions:
+
+* a missed mark in the negative design makes **`innerHTML` EXECUTE A SCRIPT** — the one thing
+  `innerHTML` must never do, and a load-bearing web-security invariant;
+* a missed case in the positive design merely leaves a script not running.
+
+**Fail-safe wins**, and it needs one marking site instead of seven that a future caller can silently
+skip. ⚠ Known gap, measured and named rather than discovered later: `cloneNode` of a parser-created
+`<script>` runs in Chrome and does not here. (`<template>` content is `false` in Chrome even when
+cloned, so that half agrees.)
+
+### ⚠ AND A THIRD INERT GUARD, FOUND THE SAME WAY
+
+A separate `SCRIPT_ALREADY_RAN` set was written first; the mutation deleting its check stayed
+**GREEN**. Removing a script from the pending set when it runs already IS HTML's "already started"
+flag — one fact, one place — so the second table asserted a rule it did not implement. **Deleted, not
+kept as belt-and-braces**: an inert guard makes a rule look enforced in two places when it is enforced
+in one. Third instance in this arc (t1392's `start.min(n)`, t1395's `cancelable: false`).
+
+### ⭐ ONE PREDICATE, BOTH CALLERS
+
+`collect_inline_scripts` carried its own two-entry list (`text/javascript`, `application/javascript`),
+so a **parser-inserted** `<script type="application/ecmascript">` was dropped on the floor exactly
+like a script-inserted one. Both paths now call `script_type_is_classic_js`. ⭐⭐
+`text/javascript;charset=utf-8` does **not** run, and that row is what makes it an ESSENCE match
+rather than a prefix test — `starts_with` passes every other row and is wrong about the one authors
+actually get wrong.
+
+### THE GATE
+
+`a_script_element_inserted_by_script_runs_on_becoming_connected_exactly_once`
+(`engine/page/tests/g_dynamic_script_insertion.rs`) — **17 rows, and headless Chrome agrees with this
+engine on every one exactly.** PROVEN RED by five mutations: N1 hook removed → `a_syncOnAppend`;
+N2 eligibility ignored (innerHTML would run) → `a_syncOnAppend`; N3′ pending-set removal dropped →
+`b_detachedParent`; N4 connectedness not required → `b_detachedParent`; N5 type gate as a prefix test
+→ `o_withParameter`.
+
+### THE RECEIPT
+
+```text
+  WPT html/semantics/scripting-1   657/1823 = 36.0%  ->  1090/1958 = 55.7%   (+433)
+  WPT html/semantics (whole area)  5752/11261 = 51.1% -> 6185/11391 = 54.3%  (+433)
+  WPT dom                          8166 -> 8170        (blast radius: record_mutation is a hot path)
+  WPT TOTAL (monotonic)            495375 = 37.89%  ->  495812 = 37.91%
+  Bar 0: HANG/CRASH 0   ← was 1 mid-tick; see above
+  manuk-css 41 · manuk-layout 191 · manuk-paint 22 · manuk-dom 11 · manuk-agent 126 ·
+  manuk-net 98 · manuk-a11y 21    ALL CONTROL
+```
+
+⚠ Denominators moved (`scripting-1` 1823 → 1958, `html/semantics` 11261 → 11391): subtests inside
+scripts that never ran now register. **The COUNT (+433) is the honest number, not the percentage.**
+
+NEXT: the EXTERNAL half — a script-inserted `<script src>` needs a fetch, so it is the host drain's
+(`Page::drain_injected_scripts`) and is not synchronous. Then dynamic `type="module"` (deferred), and
+`cloneNode` eligibility. Behind those: `html/semantics/embedded-content` (1516 failing) and the
+`get_computed_role` entrance from t1396.
+
+WIKI: docs/wiki/dynamic-script-insertion.md

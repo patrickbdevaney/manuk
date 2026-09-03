@@ -1462,6 +1462,18 @@
   - L4249 · t1097 WAS FIXED AT ONE ENTRANCE, AND THE CONFORMANCE SUITE ONLY EVER USED THE OTHER (t1355)
   - L4267 · ⭐⭐⭐ THE TWO-ENTRANCE SHAPE, THREE TIMES IN ONE SESSION
 
+## A `<script>` inserted by script — the path that ran nothing
+`docs/wiki/dynamic-script-insertion.md`
+
+  - L9 · The finding that nearly went the wrong way
+  - L30 · The rules, each Chrome-measured in its own probe
+  - L44 · Hook the choke point, not the method
+  - L54 · ⚠⚠⚠ The first implementation was a Bar 0
+  - L75 · The eligibility flag is positive, and the direction is the argument
+  - L92 · One predicate, both callers
+  - L102 · The third inert guard in one arc
+  - L111 · Not built yet
+
 ## THE FIDELITY INSTRUMENT — what it can and cannot see
 `docs/wiki/fidelity-instrument.md`
 
@@ -2817,4 +2829,4 @@
   - L89 · The wall audit (due t1388)
 
 ---
-2584 sections across 57 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+2592 sections across 58 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.

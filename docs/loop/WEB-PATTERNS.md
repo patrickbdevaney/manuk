@@ -10173,3 +10173,44 @@ number by **+0**, because the entrance the suite reads disagrees with the engine
 it.** A loop that only lands ticks the scoreboard can see will, over a window, optimise the channel
 the scoreboard measures — which is exactly what the constitution check found across the five ticks
 before this one. (t1396; constitution check #132)
+
+## ⚠⚠⚠ A `<script>` inserted by script never ran — and the test NAMES pointed at the wrong fix
+
+399 failures shared one assertion and the test names read like a legacy-MIME list
+(`text/livescript`, `text/jscript`, `application/ecmascript`), so the obvious tick was a lookup table.
+
+⭐⭐⭐ **The SHAPE of the failing set said otherwise: 193 distinct type values, every one a "should
+run", NOT ONE "should not run".** A missing table entry fails in BOTH directions as the list drifts; a
+path that runs NOTHING fails exactly like this — all positives fail, all negatives pass vacuously.
+**A signature histogram names the TESTS; only a probe names the MECHANISM.**
+
+The real rule: `document.createElement('script')` + `appendChild` runs the script SYNCHRONOUSLY, and
+the trigger is BECOMING CONNECTED (a detached parent runs its scripts when the parent is connected).
+That population is every analytics tag, ad tag, A/B framework and payment SDK on the web.
+
+⭐⭐ **Hook the CHOKE POINT, not the method.** Nine insertion natives can connect a node; the hook goes
+on the mutation-record call they all already make, because MutationObserver must be complete BY
+CONSTRUCTION — so the two answers to "what just got connected" cannot drift.
+(t1397 — `a_script_element_inserted_by_script_runs_on_becoming_connected_exactly_once`)
+
+## ⚠⚠⚠ ITERATE THE SMALL SET, NOT THE LARGE ONE — the same tick's Bar 0
+
+The first hook walked the mutation's added list and every descendant asking "is this a script" —
+O(nodes inserted) on EVERY childList mutation. One WPT page inserts **65,532 rows in a single
+`innerHTML +=`** and the area went `HANG/CRASH 0` → `HANG/CRASH 1`.
+
+⭐⭐⭐ Inverting the loop — walk the handful of pending script elements, not the inserted subtree —
+made the cost O(pending) and independent of the insertion size; the hang cleared and the subtest count
+went UP. **A capability bought with a hang is refused, and the fix is usually which set you iterate.**
+(t1397)
+
+## Choose the FAIL-SAFE direction when a spec rule can be expressed two ways
+
+HTML says it negatively: fragment parsing marks scripts "already started" so they never run. That
+needs a mark at all SEVEN fragment-parse call sites — and **a missed one makes `innerHTML` EXECUTE A
+SCRIPT**, a load-bearing security invariant. The positive form (only script-CREATED scripts are
+eligible) needs ONE marking site, and a missed case merely leaves a script not running.
+
+⭐⭐ **The designs are not equivalent because their FAILURE MODES are not.** Pick the direction whose
+mistakes are inert, and name the residue: `cloneNode` of a parser-created script runs in Chrome and
+does not here. (t1397)
