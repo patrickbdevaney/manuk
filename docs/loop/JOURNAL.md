@@ -100506,3 +100506,112 @@ change in one tick cannot be told apart afterwards.
 ```
 
 WIKI: docs/wiki/layout-table-is-not-a-table.md
+
+## Tick 1406 — sixty-one ticks of real work moved the render headline by ONE SITE (2026-09-03)
+
+TICK SHAPE: measurement-and-mechanism
+CLASS: the loop's own steering — plus one throw-class killer the sweep named
+
+The board's CO-#1 block says it in its own words: *"RUN A FRESH FULL SWEEP NOW — the loop is blind on
+its own headline (agent runs it; observer NEVER does)."* The last fidelity sweep was **t1344, six days
+and sixty-one ticks ago**, against a cadence rule of *"don't let it grow far past ~6 unmeasured"*. So
+it was run: `manuk-wpt fidelity --urls-file docs/bench/corpus-crux-trend.txt --jobs 2` — the CLEAN
+`--jobs 2` form, which is the only bankable one (t771: `--jobs 8` costs hard sites their scorability
+to wall-clock timeout).
+
+### ⭐⭐⭐ THE NUMBER, AND IT IS THE FINDING
+
+```text
+                              t1344 (Aug 28)     t1406 (Sep 3)     Δ over 61 ticks
+  sites                                 200               200
+  scored                                106               105              -1
+  shape >= 0.75                    50 (25.0%)        51 (25.5%)          +1 SITE
+  h-overflow clean                 76 (38.0%)        78 (39.0%)          +2
+  overlap clean                    64 (32.0%)        63 (31.5%)          -1
+  reading-order clean              53 (26.5%)        53 (26.5%)           0
+  dead-target clean                99 (49.5%)        97 (48.5%)          -2
+  UNSCORED                               94                95              +1
+```
+
+**Sixty-one ticks. One site.** And those were not decimal-grinding ticks — they were subsystems:
+forms, text selection, popovers, dynamic scripts, `<img>` lifecycle, `srcset`/`sizes`, the toggle
+event, the agent's activation behaviour, the a11y tree twice. Every one of them real, gated, and
+Chrome-arbitrated.
+
+> ⭐⭐⭐ **THE RENDER HEADLINE ONLY MOVES WHEN TRACK A MOVES, AND TRACK A HAS BEEN DARK.** The
+> observer's 2026-08-21 mandate predicted an asymptote for the *per-assert decimal grind*; this is a
+> different and sharper reading of the same instrument — **subsystem ticks on the OTHER tracks do not
+> move this number at all.** They are not wasted (they moved WPT +9k, the a11y tree 75%→97%, and two
+> Bar-0-class defects), but the loop cannot keep quoting the render bar as its Phase-0 headline while
+> spending its ticks somewhere else. Either Track A gets the ticks, or the headline stops being the
+> headline. That is an OWNER-level choice and it is named here rather than decided.
+
+### THE UNSCORED 95 — where the ceiling actually is
+
+```text
+  35  bot-wall-403      EXCLUDED per cert §3 (identity, not rendering — and out of scope by owner rule)
+  16  unreachable        network/origin
+   9  timeout-150s       OURS
+   6  probe-blocked
+   6  tree-divergence    the two engines built different documents (oracle snapshot vs live)
+   4  http-404 · 4 render-failed (OURS) · 3 bot-wall-200 · 3 shell-only (OURS)
+   3  oracle-module-shell · 2 css-starved (OURS) · 2 empty-202 · 1 crashed (OURS)
+```
+
+**~19 of the 95 are our own engine** (timeout ×9, render-failed ×4, shell-only ×3, css-starved ×2,
+crashed ×1). At 105 scored that is the single largest available lever on the certificate, exactly as
+the board's *SCORABILITY FIRST* order says.
+
+### THE THROW HISTOGRAM — and why most of it is NOT a missing API
+
+```text
+  19  TypeError: can't access property "call", d is undefined        webpack: a module never loaded
+  15  ReferenceError: $ is not defined                               jQuery never ran
+  13  TypeError: can't access property "replace" of null
+   9  ReferenceError: jQuery is not defined
+   6  TypeError: Invalid URL:
+   5  TypeError: super.getAttribute is not a function
+   5  TypeError: setting getter-only property "form"
+   5  SyntaxError: expected expression, got '<'                      ⭐ WE RAN AN HTML DOCUMENT AS JS
+```
+
+⚠ **A signature histogram names the TESTS, not the mechanism** (t1391). `$ is not defined` and
+`d is undefined` are not missing APIs — they are one upstream failure, *a script that should have
+loaded did not*, wearing 24 different page-internal symbol names. And `expected expression, got '<'`
+says we fed an **HTML error page to the JS parser**, which is a fetch/routing bug and the strongest
+single lead in the table. Both are named for the next tick with a PROBE, not fixed from the histogram.
+
+### ⭐⭐ THE ONE THAT WAS A MISSING API — AND IT WAS PRICED FIRST THIS TIME
+
+`neutypechic.com` (the sweep's one `crashed` row):
+
+```text
+  TypeError: can't access property "replace", document.domain is undefined
+```
+
+`document.domain` was **absent**. A missing property that pages read as a STRING is a throw-class
+killer rather than a missing feature: `undefined.replace` ends the script, and everything it was going
+to render never happens. Chrome-measured on a live origin through CDP `Runtime.evaluate`:
+
+```text
+  https://danluu.com/   {"type":"string","value":"danluu.com","inDoc":true,"replace":"danluu.com"}
+```
+
+**Priced BEFORE building** (t1367's rule, and t1405 got the order wrong): `document.domain` appears on
+**2 of 52** freshly-fetched CrUX pages — 3.8%, small, and the cost is nine lines of prelude. The value
+is the origin HOST (`location.hostname`). ⚠ The SETTER is a deliberate no-op that keeps the getter
+honest: the legacy `document.domain = 'x'` widening is a same-origin-policy RELAXATION this engine
+does not implement, so the value is remembered — which is what the compatibility idiom reads back —
+and no security consequence follows. Named rather than half-built in silence.
+
+### THE RECEIPT
+
+```text
+  G_DOCUMENT_DOMAIN  ok  RED under all 3 mutations
+    D1 the property undefined (the pre-fix engine)   D2 the ORIGIN instead of the HOST
+    D3 the setter dropped (the legacy round-trip breaks)
+  docs/loop/SWEEP-t1406-rows.tsv  200 rows, --jobs 2, banked
+  Bar 0: no hang, no crash, no panic
+```
+
+WIKI: docs/wiki/document-domain.md

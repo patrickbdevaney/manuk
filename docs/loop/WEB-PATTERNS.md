@@ -10454,3 +10454,34 @@ agreement with itself, because a live feed changes between the two fetches (`'20
 the engine invents. martinfowler.com reads **97.3% recall and 67.7% precision** (138 extra nodes).
 Quote the control row and the precision beside any real-site number. (t1405; t1159 "the CONTROL row",
 arriving on an instrument's first day instead of its fiftieth)
+
+## ⚠⚠ `document.domain.replace(...)` — LEGACY ANALYTICS AND AD CODE, AND THE PROPERTY WAS ABSENT
+
+`document.domain` (the document's origin HOST) was not implemented, so a page doing
+`document.domain.replace(...)` got `TypeError: can't access property "replace", document.domain is
+undefined` and **the whole module died with it**. Found by the t1406 corpus sweep on
+`neutypechic.com`; Chrome-measured via CDP on a live origin
+(`{"type":"string","value":"danluu.com","inDoc":true}`). Priced BEFORE building: 2 of 52 freshly
+fetched CrUX pages (3.8%).
+
+⭐⭐ **A MISSING PROPERTY THAT PAGES READ AS A STRING IS A THROW-CLASS KILLER, NOT A MISSING
+FEATURE.** `undefined.replace` ends the script and everything it was going to render never happens —
+which is why a site that does not boot is the M1 *ceiling* rather than a point on it. ⚠ The SETTER is
+a deliberate no-op: the legacy `document.domain = 'x'` same-origin-policy RELAXATION is not
+implemented, the value is merely remembered (which is what the compatibility idiom reads back), and
+that non-claim is written down rather than half-built. (t1406 — `g_document_domain`)
+
+## ⚠⚠⚠ SIXTY-ONE TICKS OF SUBSYSTEM WORK MOVED THE RENDER HEADLINE BY ONE SITE
+
+The t1406 corpus sweep against t1344's: shape >= 0.75 on **50 -> 51 of 200 sites** (25.0% -> 25.5%),
+h-overflow +2, overlap -1, reading-order 0, dead-target -2, unscored 94 -> 95. The ticks in between
+were forms, text selection, popovers, dynamic scripts, the `<img>` lifecycle, `srcset`/`sizes`, the
+toggle event, the agent's activation behaviour and the a11y tree twice — all real, all gated, all
+Chrome-arbitrated, and they moved WPT +9k and the real-site a11y tree 75% -> 97%.
+
+⭐⭐⭐ **THE RENDER HEADLINE ONLY MOVES WHEN TRACK A (LAYOUT) MOVES, AND TRACK A HAS BEEN DARK.** Not
+an argument that the other work was wasted — an argument that the loop cannot keep quoting the render
+bar as its Phase-0 headline while spending its ticks elsewhere. ~19 of the 95 unscored sites are our
+own engine (timeout x9, render-failed x4, shell-only x3, css-starved x2, crashed x1) and are the
+largest available lever on the certificate. (t1406; the sweep cadence rule says "don't let it grow far
+past ~6 unmeasured" and it had grown to 61)

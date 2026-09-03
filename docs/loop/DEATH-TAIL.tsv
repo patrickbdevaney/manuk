@@ -51,3 +51,4 @@ from_tick	to_tick	dticks	from_m1cnt	to_m1cnt	m1_crossings	m1_cross_per_tick	from
 1268	1275	7	31	20	-11	-1.571	107	54	-7.571	crux
 1275	1322	47	20	33	+13	+0.277	54	108	+1.149	crux
 1322	1344	22	33	39	+6	+0.273	108	106	-0.091	crux
+1344	1406	62	39	37	-2	-0.032	106	105	-0.016	crux

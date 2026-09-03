@@ -1238,6 +1238,13 @@
   - L135 · Known gaps, deliberately not in this tick
   - L149 · An unrelated bug this tick surfaced
 
+## `document.domain` — a missing property that pages read as a string is a THROW, not a gap
+`docs/wiki/document-domain.md`
+
+  - L25 · The setter is a deliberate no-op, and that is said out loud
+  - L32 · Priced before building
+  - L38 · The histogram it came out of, and why the rest of that histogram is not a worklist
+
 ## DOM SEMANTICS — spec behaviour, mutation, and tree edge cases
 `docs/wiki/dom-semantics.md`
 
@@ -2893,4 +2900,4 @@
   - L89 · The wall audit (due t1388)
 
 ---
-2632 sections across 64 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+2635 sections across 65 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.

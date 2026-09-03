@@ -7521,6 +7521,38 @@ const PRELUDE: &str = r#"
         }
       } catch (e) {}
 
+      // ── `document.domain` — ABSENT, AND ITS ABSENCE IS A THROW RATHER THAN A GAP.
+      //
+      // Found by the t1406 sweep, not by a spec list: `neutypechic.com`'s bundle does
+      // `document.domain.replace(...)` and got
+      // `TypeError: can't access property "replace", document.domain is undefined`, which took the
+      // whole module with it. ⭐ **A MISSING PROPERTY THAT PAGES READ AS A STRING IS A THROW-CLASS
+      // KILLER, not a missing feature** — `undefined.replace` ends the script, and everything that
+      // script was going to render never happens.
+      //
+      // The value is the document's origin HOST (HTML §document.domain: the registrable-domain-ish
+      // host of the origin), which is exactly `location.hostname`. The SETTER is deliberately a
+      // NO-OP that keeps the getter honest: the legacy `document.domain = 'example.com'` widening is
+      // a same-origin-policy relaxation this engine does not implement, and pretending to honour it
+      // would be worse than ignoring it — a page that sets it and then reads it back gets the value
+      // it set, which is what the compatibility idiom checks, while the SECURITY behaviour it asks
+      // for is simply not granted. Named here rather than silently half-built.
+      //
+      // Priced before building (t1367's rule): `document.domain` appears on 2 of 52 freshly-fetched
+      // CrUX corpus pages (3.8%). Small, and the cost is nine lines.
+      try {
+        if (typeof document.domain === 'undefined') {
+          Object.defineProperty(document, 'domain', {
+            configurable: true,
+            get: function () {
+              if (typeof this.__domain === 'string') { return this.__domain; }
+              try { return (globalThis.location && location.hostname) || ''; } catch (e) { return ''; }
+            },
+            set: function (v) { this.__domain = String(v); }
+          });
+        }
+      } catch (e) {}
+
       // `CSS.escape` / `CSS.supports` — feature detection, and the correct way to build a selector.
       //
       // `supports` used to be `return true`, which is the worst available answer. Progressive
