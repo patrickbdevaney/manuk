@@ -11555,3 +11555,113 @@ human uses and absent on the one this project exists to serve.
    target (self-audit #81's only open item, harness-owned), and `Content-Encoding: zstd`.
 
 **Next check due: tick 1403.**
+
+## Check #133 — tick 1403 (2026-09-03)
+
+**HORIZON: H0.** **GATE** (PART II, four binary conditions): ~83% WPT across categories,
+oracle-verified across the four corpora, a daily-drivable shell, and **semantic-API coverage of every
+rendered construct.** PART VII's v1 has shipped; the loop is on the observer's three-track retarget
+(A = layout/port, B = a11y, C = the M2 drive).
+
+### ⭐ FIRST: CHECK #132'S STEER WAS EXECUTED, BY THE VERY NEXT TICK
+
+Check #132 named I3 as bent — five capability ticks in a row landing the DOM and CSS halves and never
+the semantic one, Track B dark for eight ticks — and steered: *"the next tick is the popover's
+SEMANTIC half."* **Tick 1396 is `the popover's other half, and the entrance that disagrees with the
+tree`.** The steer's own refutation clause (`get_computed_role` on a shown popover returns `group`)
+was met.
+
+That is worth recording precisely because check #131's steer did NOT fire and check #132 had to say
+so. A check that produces a mechanism the next tick executes is the instrument working; a check that
+produces a conclusion is the instrument decorating. **Two checks, two different outcomes, and the
+difference was whether the steer named a FILE.**
+
+### GATE OR SCOREBOARD? — gate, on conditions 3 and 4, and deliberately not on 1
+
+The eight ticks since #132 (1396–1403) split cleanly:
+
+```text
+  1396  popover a11y mapping        Track B   condition 4  (the semantic half #132 demanded)
+  1397  script-inserted <script>    Track A   condition 1  (+433) AND a Bar 0 first
+  1398  <img> naturalWidth/complete Track A   condition 4  (numbers the engine had and never published)
+  1399  <img> load event            Track A   condition 1
+  1400  toggle: details + dialog    Track A   condition 1
+  1401  sizes as a GRAMMAR          Track A   condition 1
+  1402  agent activation behaviour  Track C   conditions 3+4, WPT delta ZERO
+  1403  details click toggle        Track A   conditions 3+4, WPT delta ZERO
+```
+
+**Two of the last two ticks moved no WPT at all, on purpose**, and both are exit-gate work: t1402
+unified the agent's click on the engine's, t1403 unified the click's `toggle` on the script path's.
+Under the pre-retarget rule those would have looked like wasted ticks. Under PART II's four binary
+conditions they are conditions 3 and 4 directly. `orient`'s usage-weighted north star (§VI.3) holds —
+`<details>` accordions, `<label>` forwarding and disabled controls are every FAQ, every consent box,
+every docs site; no big-but-tail number crept back.
+
+**Track balance:** A ×6, B ×1 (t1396), C ×1 (t1402). The observer's rule is *no track dark >5 ticks*;
+B and C each fired once inside the window, so the rule held — but only just, and only because #132
+forced it.
+
+### ⚠⚠⚠ THE BEND THIS WINDOW EXPOSES IS I8/INSTRUMENT-FIDELITY, AND THE RATCHET CANNOT SEE IT
+
+t1403's own evidence: **`g_details_beforetoggle` and `g_details_open_idl` were RED for three ticks
+and nothing noticed.** They are not in `verify.sh`'s `_launch` list, so the wall never ran them; CI
+does not loop them either. This is the gate-execution gap check #78 recorded (502 of 522) — now with
+a measured cost rather than a number.
+
+And the reason it is invisible is structural:
+
+```text
+  the ratchet marks   GATES  534   (mark 534)      <- a count of gate FILES
+  what actually holds        a gate that is EXECUTED and GREEN
+```
+
+⭐⭐⭐ **A COUNT OF GATES IS NOT A COUNT OF EXECUTED GATES, AND THE RATCHET MARKS THE FIRST.** A gate
+can rot to red while the invariant it is supposed to protect reads perfectly green, indefinitely,
+because the number the ratchet compares never changes. That is the same shape as check #132's finding
+one level down — *an invariant with no instrument loses to one with a scoreboard* — except here the
+scoreboard exists and is measuring the wrong noun.
+
+Worse in one specific way: **two of the three `<details>` gates CONTRADICTED each other** —
+`g_details_beforetoggle` (t470) required a `beforetoggle` that `g_toggle_event_details_dialog` (t1400)
+asserts does not exist, both Chrome-arbitrated at their own time, both sitting in the tree. Nothing
+compares gates to each other, so the pair coexisted silently until the engine moved.
+
+### PART VI CORRECTIONS
+
+* **VI.1's I3 row — the bend #132 named is CLOSED for popover and, better, t1402 used the a11y tree as
+  its INSTRUMENT** (`G_AGENT_ACTIVATION_BEHAVIOUR` observes through `state.checked`/`state.expanded`,
+  not through the DOM). The semantic layer moved from *"the half we skip"* to *"the channel we
+  measure with"*, which is the durable version of the fix.
+* **VI.2's H0.7 (AccessKit) — unchanged, not started. FIFTH check in a row.** t1396 moved a11y
+  mappings; the AccessKit tree itself has still not been stood up.
+* **I5 — unchanged. `ORACLE_CRAWLED: 0 (PARTIAL)`. SIXTH check in a row**, and exit-gate condition 2
+  depends on it while the loop owns no lever for it. Repeating this a seventh time is not a check, it
+  is a habit: it needs an OWNER decision to keep it as a gate condition or drop it.
+* **New for VI.1 — the gate-execution gap belongs in the reconciliation, not only in the audits.**
+  I8's honesty invariant is enforced by gates; a gate that is never executed enforces nothing. Named
+  above with its measured cost.
+
+### THE INVARIANTS
+
+**I3 — HELD this window** (#132's bend closed at t1396, and t1402 measured through the semantic
+channel). **I4 (Pareto) — held.** **I2 — held**: nothing patched; the fix routed through the stack's
+own `__queueToggleById`. **I8 — BENT, and named above**: two gates red for three ticks with the
+ratchet green, and two gates in mutual contradiction. **I1, I6, I7 — not bent.**
+
+### STEER
+
+1. ⭐⭐⭐ **The next tick that is not mid-subsystem should be Track B's AccessKit tree** — fifth check
+   carrying it, and the observer's 2026-08-28 nudge calls it *"the fastest greenfield win"*. B has had
+   one tick in eight. *Refutable by:* an `AccessKit`-shaped tree built from DOM+ARIA+computed roles
+   with a node-match number against Chrome.
+2. ⭐⭐ **Ask the observer for a ratchet mark on EXECUTED gates, not gate files.** This agent does not
+   edit `scripts/`, and the mark is a harness change. One number — *gates that ran green in the last
+   wall* — would have caught t1400's two reds at t1401 instead of t1403. Until it exists, a tick that
+   lands a gate should run its NEIGHBOURS, which is what t1402 and t1403 both did by hand.
+3. ⭐ **Carried, and overdue an owner decision rather than a seventh mention:** I5's `ORACLE_CRAWLED: 0`
+   (six checks), AccessKit (five checks), the verify wall at **2491s** vs a 300s target (self-audit
+   #82's only open item, harness-owned, and worse than #132's 1074s because this window paid two cold
+   rebuilds after the hygiene cron's full purge), and `Content-Encoding: zstd`.
+
+**Next check due: tick 1411.**

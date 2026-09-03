@@ -10358,3 +10358,49 @@ arm silently fell back to the `<button>` itself, i.e. to the exact-match path th
 ⭐ Aim at a point DERIVED from perceived geometry, and assert what the hit-test says is there. The
 green mutation was the only thing that reported the vacuity. (t1402; the t1239 rule's mirror — there
 a mutation had not applied, here it had and the ARM was hollow)
+
+## ⚠⚠⚠ A CHOKE POINT IS ONLY AS GOOD AS THE ENUMERATION OF WHO GOES THROUGH IT
+
+t1400 unified `<details>`' `toggle` on the `open` **attribute**, covering both SCRIPT spellings
+(`el.open = true`, `setAttribute('open','')`) with one hook in `dom_bindings::queue_open_toggle`.
+Complete — for the question it asked. The **third** entrance is a `<summary>` CLICK, which runs the
+UA's activation behaviour in `Page::dispatch_click`, flips the attribute on the **Rust `Dom`** and
+never enters a JS binding at all. It kept its own hand-written dispatches, frozen at the pre-t1400
+shape: a spurious `beforetoggle` on both elements, a plain `Event` with `oldState`/`newState`
+`undefined`, delivered synchronously, and the accordion peer's event BEFORE the clicked panel's
+(Chrome: the clicked panel first). Four silent divergences on the path a human actually uses.
+
+⭐⭐⭐ **When you find a choke point, ask which callers CANNOT reach it.** For a Rust-side engine with
+a JS-side hook, that set is never empty — the browser's own actuation is not script. Enumerating
+"how does SCRIPT change this?" answers a smaller question than "what changes this?".
+(t1403 — `g_details_click_toggle_event`; t1400 built the choke point, t1353 "two entrances, one
+unguarded", t1402 the agent's own copy of the click rule)
+
+## ⚠⚠ WHEN TWO GATES CONTRADICT EACH OTHER, NEITHER ONE IS EVIDENCE
+
+`g_details_beforetoggle` (t470) required a `beforetoggle` before every `<details>` `toggle`.
+`g_toggle_event_details_dialog` (t1400) asserts `<details>` fires **none** — Chrome-measured. Both
+sat in the tree; nothing compares gates to each other, so the pair simply coexisted until the engine
+moved and the older one went red. WPT's `the-details-element/toggleEvent.html` contains the string
+`beforetoggle` **zero** times across eleven cases, which settles it: the older gate was pinning the
+engine to a bug it invented.
+
+⭐ Both of this tick's red gates were the GATE, not the engine — the second (`g_details_open_idl`)
+held a SYNCHRONOUS expectation of an event that had correctly become QUEUED. **Measure a red gate
+against Chrome before touching the engine**, and do not assume the newer gate wins: check the spec
+corpus. (t1403; t1344 "four of seven red gates were the gate", t1004 "a gate can PIN the engine to a
+bug")
+
+## ⚠⚠ A NON-BUBBLING EVENT STILL RUNS THE CAPTURE PHASE — WHICH IS HOW YOU OBSERVE AN ELEMENT NOBODY HOLDS
+
+The queued-toggle choke point resolves its element through the JS reflector map, so *"does a
+`<details>` the page never touched still get its `toggle`?"* is a real question — and `toggle` does
+not bubble, so listening for one appears to require resolving the element first, which answers the
+question by asking it. It does not: a non-bubbling event still runs the **capture** phase down to its
+target, so `document.addEventListener('toggle', fn, true)` hears a panel nobody holds.
+Chrome-measured, and it is what let a reflector-priming line be proven INERT and deleted rather than
+kept as an unfalsifiable guard.
+
+⭐ **When an observation seems to require the very handle whose absence you are testing, look for the
+phase that runs before the handle is needed.** (t1403 — `g_details_click_toggle_event` ARM 8; the
+green-mutation rule of t1402 pointed at the code rather than the arm this time)

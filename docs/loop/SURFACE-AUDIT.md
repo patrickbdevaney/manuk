@@ -7681,3 +7681,104 @@ it into a "bug".
    (self-audit's only open item; harness-owned per the loop's scope rule — recorded, not touched).
 5. Carried from #80: `Content-Encoding: zstd` still needs an OWNER dependency decision; the
    gate-execution gap (#78).
+
+## Audit #82 — tick 1403 (2026-09-03)
+
+**Sources searched, not recalled:**
+
+* Interop 2026 focus areas — https://github.com/web-platform-tests/interop/blob/main/2026/README.md
+  (also https://web.dev/blog/interop-2026, https://webkit.org/blog/17818/announcing-interop-2026/,
+  https://hacks.mozilla.org/2026/02/launching-interop-2026/, https://www.igalia.com/news/interop-2026.html)
+* Baseline 2026 — https://web.dev/baseline/2026 and the monthly digests (Jan / Mar / May 2026)
+* Ladybird — https://ladybird.org/newsletter/2026-06-30/ and https://ladybird.org/newsletter/2026-07-31/
+
+### THE RECONCILIATION — all 24 Interop-2026 rows, checked ONE AT A TIME against the map
+
+Interop 2026 is **20 focus areas + 4 investigation efforts**, fifteen of the twenty new this year.
+Every one of the 24 was grepped against `docs/loop/CONSTELLATION.tsv` individually rather than
+eyeballed as a group:
+
+```text
+  container style queries 1 · anchor positioning 2 · attr() 4 · contrast-color() 3 · css zoom 1 ·
+  custom highlights 1 · dialogs 11 / popovers 9 · fetch uploads 1 / ranges 1 · IndexedDB 5 ·
+  JSPI 1 · media pseudo-classes 1 · Navigation API 1 · scoped custom element registries 1 ·
+  scroll-driven animations 3 · scroll snap 2 · shape() 8 · view transitions 3 · WebRTC 3 ·
+  WebTransport 1 · a11y testing (inv) · JPEG XL 2 (inv) · mobile testing (inv) · WebVTT 1 (inv)
+```
+
+**Zero rows to ADD.** The same for the 2026 Baseline additions the digests name — Trusted Types,
+`:active-view-transition`, container style queries for custom properties, the Navigation API — all
+already on the map. ⚠ *An audit that finds nothing is a suspicious audit*, so the negative is stated
+with its reason rather than as a pass: audit #81 was **ten ticks ago**, it is the audit that absorbed
+Interop 2026, and ten ticks is a short window for the platform to move. The finding is **"the map did
+not rot in ten ticks"**, which is a weaker claim than "the map is complete" and is the only one this
+audit earns.
+
+### ⭐⭐ WHAT DID COME BACK — AN EXTERNAL SCALE CALIBRATION, WHICH THE MAP HAS NEVER HAD
+
+The map is a list of capabilities. It has no row for *"how big is the remaining work, in someone
+else's units"* — and the only honest answer to that comes from another independent engine walking the
+same road. Ladybird publishes its WPT subtest count monthly:
+
+```text
+  2026-01   1,991,061 passes
+  2026-06   2,075,546 -> 2,078,912   (+3,366 in the month)
+  2026-07   2,078,912 -> 2,079,020   (+108   in the month)   <- a 31x deceleration in one month
+  manuk     WPT TOTAL   495,923      (our harness, our checkout — NOT the same denominator)
+```
+
+Two things, and the second is the one that matters:
+
+1. **The counts are NOT comparable** — different runner, different checkout, different subtest
+   accounting — and writing them side by side is exactly the mistake this file exists to catch. What
+   IS comparable is the **shape of the curve**: an independent engine's WPT gain fell 31x in a single
+   month at ~2.08M. That is the same asymptote the observer's 2026-08-21 mandate measured here
+   (3.3 -> 1.1 -> 0.5 pts/day) and used to retire the M1 decimal-grind. ⭐ **Two independent engines
+   hitting a per-assert asymptote is evidence about the METHOD, not about either engine.** It is the
+   strongest outside confirmation the retarget has had, and it arrived from a source the loop does
+   not otherwise read.
+2. **An architectural note worth its own row:** Ladybird replaced its
+   `ClipFrame`/`PushStackingContext`/`PopStackingContext` scheme with an **`AccumulatedVisualContext`
+   tree that pre-computes accumulated transforms, clips, scroll offsets and effects**. That is
+   precisely the subsystem behind RENDER+INTERACT step 8 here (*"positioned + real z-index stacking +
+   sticky in `getBoundingClientRect`"*), and the board's own Track A rule is **port whole algorithms,
+   do not reverse-engineer per-assertion**. Ladybird is not our stack (C++, not Taffy+Stylo), so it is
+   a DESIGN reference rather than a source to port from — recorded as such, not as a lever.
+
+### THE 11 UNKNOWNS — unchanged in count, and the composition is the finding
+
+```text
+  doc  cross-<svg> url(#id) for fill/stroke/clip-path/mask/filter
+  doc  font-family: math / MathML rendering
+  css  inline-level flex/grid container baseline (from the child's first line box)
+  css  scroll anchoring
+  css  a CELL's min-width reaching its column's intrinsics without CONSTRAINING it (CSS 2.1 §17.5.2.2)
+  css  non-cell content wrapped in an ANONYMOUS TABLE-CELL (CSS 2.1 §17.2.1)
+  css  CSS 2.1 §8 margin/padding — the ~280-failure margin-padding-clear cluster
+  css  an inline BOX's own content area (§10.6.1) under a FALLBACK face
+  js   scroll-event / animation-event ORDERING (Interop 2026 web-compat)
+  app  React Float resource bookkeeping ("currentResources" was expected to exist)
+  app  hit-testing and caret placement INSIDE a ligature / grapheme cluster
+```
+
+Eight of eleven are LAYOUT/TEXT — the same read as audit #81, and it has not moved because the last
+ten ticks were events/images/agent work. Status histogram: **343 gated · 175 missing · 44 partial ·
+24 works · 11 unknown** (598 rows).
+
+### RANKED, from this audit only
+
+1. ⭐⭐⭐ **The Ladybird curve is the first OUTSIDE evidence for the 2026-08-21 retarget**, and it says
+   the per-assert asymptote is a property of the method rather than of this engine. *Refutable by:* an
+   engine sustaining >1% monthly WPT growth past ~2M subtests under per-assert fixing.
+2. ⭐⭐ **The map has no SCALE row and should acquire one.** Every capability row answers *"do we have
+   it?"*; nothing answers *"how far to done, in units someone else also reports?"*. The Ladybird
+   monthly count is the only such series the loop can read for free.
+3. ⭐ **Zero additions in ten ticks is a real reading, not a skipped audit** — recorded with its
+   method (24 individual greps, listed above) so the next auditor can tell the difference.
+4. Carried, unchanged and OUT OF THIS AGENT'S SCOPE: the verify wall at **2491s** against a 300s
+   target — the self-audit's ONLY open item, and worse than #81's 1074s because this window included
+   two cold rebuilds after the hygiene cron's full purge. Harness-owned per the loop's scope rule:
+   recorded, not touched.
+5. Carried from #80/#81: `Content-Encoding: zstd` still needs an OWNER dependency decision; the
+   gate-execution gap (#78) — and t1403 is a direct instance of it, two gates having gone red
+   unnoticed because neither is in `verify.sh`'s `_launch` list.

@@ -7814,14 +7814,21 @@ impl Page {
         // how a page implements its own animated disclosure.
         if proceed {
             if let Some(details) = self.summary_details_target(node) {
+                // Every `open` state change this activation causes, in the order it caused them:
+                // `(node, is_open_now)`. COLLECTED rather than dispatched inline, because the events
+                // they owe are QUEUED and must arrive in this order — see the single dispatch at the
+                // end of the block.
+                let mut toggled: Vec<(manuk_dom::NodeId, bool)> = Vec::new();
                 let open = self
                     .dom
                     .element(details)
                     .is_some_and(|e| e.attr("open").is_some());
                 if open {
                     self.dom.remove_attr(details, "open");
+                    toggled.push((details, false));
                 } else {
                     self.dom.set_attr(details, "open", "");
+                    toggled.push((details, true));
                     // **EXCLUSIVE ACCORDION (`<details name>`).** A named group holds at most one
                     // open panel: opening this one closes every OTHER open `<details>` that shares
                     // its non-empty `name`. This is the platform FAQ/docs accordion (Baseline 2024)
@@ -7849,43 +7856,72 @@ impl Page {
                             .collect();
                         for peer in peers {
                             self.dom.remove_attr(peer, "open");
-                            // The spec fires `beforetoggle` then `toggle` on each panel exclusivity
-                            // auto-closes, so a lazy-loaded section learns it was collapsed. Both are
-                            // stateless here (matching this engine's `toggle`) and `beforetoggle` is
-                            // non-cancelable for `<details>` — its use is the fire-before-render hook.
-                            if let Some(ctx) = self.js.as_ref() {
-                                for ev in ["beforetoggle", "toggle"] {
-                                    if let Err(e) = manuk_js::dispatch_event(
-                                        ctx,
-                                        &mut self.dom,
-                                        peer,
-                                        ev,
-                                        &rects,
-                                        &self.styles,
-                                    ) {
-                                        tracing::warn!("accordion {ev} dispatch: {e}");
-                                    }
-                                }
-                            }
+                            // The auto-closed peer owes its own `toggle`, so a lazy-loaded section
+                            // learns it was collapsed. Recorded AFTER the panel the user clicked,
+                            // which is the order Chrome delivers the pair in.
+                            toggled.push((peer, false));
                         }
                     }
                 }
-                // `beforetoggle` then `toggle` — the two events the spec fires when the disclosure
-                // state changes. A page listens for `beforetoggle` to prepare (lazy-load) BEFORE the
-                // panel renders (relayout happens after this dispatch) and `toggle` to react after.
-                // Dispatched after the attribute changes, so a handler reading `details.open` sees the
-                // new state; `beforetoggle` is non-cancelable for `<details>` (unlike popover's).
+                // ── ONE CHANNEL FOR THE `toggle`, AND IT IS THE QUEUED ONE. ─────────────────
+                //
+                // ⭐⭐⭐ **The summary click is the THIRD entrance to `open`, and it is the one the
+                // choke point cannot see.** t1400 hooked the `open` ATTRIBUTE in
+                // `dom_bindings::queue_open_toggle`, which covers both SCRIPT spellings
+                // (`el.open = true` and `setAttribute('open','')`) with one implementation — but this
+                // is the UA's own activation behaviour, and it flips the attribute on the Rust `Dom`
+                // directly, never entering a JS binding. So it kept a SECOND, hand-written pair of
+                // dispatches, and that second copy stayed pre-t1400. Headless Chrome 145.0.7632.116
+                // on a `name="faq"` group:
+                //
+                // ```text
+                //                          chrome                         here, before
+                //   beforetoggle           NEITHER element gets one        BOTH — spurious
+                //   the event              trusted ToggleEvent, states     plain Event, no states
+                //   delivery               QUEUED                          SYNCHRONOUS
+                //   order                  clicked panel, then the peer    the peer, then the panel
+                // ```
+                //
+                // All five silent. A handler reading `e.newState` — the idiomatic way to branch on
+                // which way a panel went — read `undefined` on the click path and the right string on
+                // the script path, in the same page, for the same element. `G_DETAILS_CLICK_TOGGLE_EVENT`.
+                //
+                // ⚠ `__queueToggleById` resolves its element through `__nodes`, and the per-element
+                // `dispatch_event` this replaces reflected its target for free — so a line
+                // materialising every `<details>` first was written here, and then DELETED: the
+                // mutation that removes it is GREEN on both constructions the gate can build. At load
+                // `__nodes` already holds every `<details>` and every `<summary>` in the parsed
+                // document (measured), and an `innerHTML`-inserted pair is reflected too. Rather than
+                // keep an inert guard, ARM 8 of `G_DETAILS_CLICK_TOGGLE_EVENT` drives an untouched
+                // `<details name>` group through a document-level CAPTURE listener — `toggle` does not
+                // bubble, but a non-bubbling event still runs the capture phase down to its target —
+                // so the property the line was buying is CHECKED rather than defended.
+                //
+                // `eval_in_page` runs the event loop's drain when the script returns, which is where
+                // the queued `toggle` tasks actually fire.
                 if let Some(ctx) = self.js.as_ref() {
-                    for ev in ["beforetoggle", "toggle"] {
-                        if let Err(e) = manuk_js::dispatch_event(
+                    if !toggled.is_empty() {
+                        let mut js = String::new();
+                        for (n, now_open) in &toggled {
+                            let (old, new) = if *now_open {
+                                ("closed", "open")
+                            } else {
+                                ("open", "closed")
+                            };
+                            js.push_str(&format!(
+                                "try {{ __queueToggleById({}, '{old}', '{new}'); }} catch (e) {{}}",
+                                n.0
+                            ));
+                        }
+                        if let Err(e) = manuk_js::eval_in_page(
                             ctx,
                             &mut self.dom,
-                            details,
-                            ev,
+                            &js,
                             &rects,
                             &self.styles,
+                            None,
                         ) {
-                            tracing::warn!("{ev} dispatch: {e}");
+                            tracing::warn!("details toggle queue: {e}");
                         }
                     }
                 }

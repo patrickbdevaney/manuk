@@ -2820,6 +2820,10 @@
   - L31 · Two entrances, and only one of them was hooked
   - L51 · ⚠⚠ isTrusted has now been overridden four times
   - L69 · Pricing note — what was refused to get here
+  - L87 · The THIRD entrance — the one a human uses, and the one the choke point cannot see (t1403)
+  - L130 · The guard that deleted itself, and the arm that replaced it
+  - L148 · The arm that was measured and removed rather than shipped
+  - L163 · The two gates that were red, and had different owners
 
 ## CONSTITUTION VI.2's residual layout gap — re-measured, banked, and narrowed to one row
 `docs/wiki/vi2-residual-layout-gap.md`
@@ -2871,4 +2875,4 @@
   - L89 · The wall audit (due t1388)
 
 ---
-2618 sections across 62 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+2622 sections across 62 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.

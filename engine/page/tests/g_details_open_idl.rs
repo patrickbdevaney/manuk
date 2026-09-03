@@ -35,11 +35,18 @@ fn setting_details_open_from_script_fires_toggle_and_enforces_the_group() {
     // Drive #b OPEN purely from script — no click anywhere — then record every observable effect into a
     // single string: which details carry `open`, and what the toggle log holds.
     page.eval_for_test(
-        "var A = document.getElementById('a'), B = document.getElementById('b'), \
-             S = document.getElementById('solo'); \
+        "var A = document.getElementById('a'), B = document.getElementById('b'); \
          B.open = true;                       /* open the second panel of the faq group from script */ \
-         var afterB = 'aOpen:' + A.hasAttribute('open') + ' bOpen:' + B.hasAttribute('open') \
-                    + ' log:' + window.__log.join(''); \
+         window.__afterB = 'aOpen:' + A.hasAttribute('open') + ' bOpen:' + B.hasAttribute('open');",
+    );
+    // ⚠ **THE LOG IS READ IN A SECOND ROUND, AND THAT IS THE POINT.** t1400 measured `toggle` against
+    // headless Chrome and found it QUEUED — a synchronous read straight after `B.open = true` sees an
+    // empty log in Chrome too (`g_toggle_event_details_dialog` arm `a_syncAfterIdlSet:[]`). The task
+    // runs on the event-loop drain at the end of the eval above, so the assertion below is about
+    // whether the event EVER arrives, not about whether it arrives inline.
+    page.eval_for_test(
+        "var B = document.getElementById('b'), S = document.getElementById('solo'); \
+         var afterB = window.__afterB + ' log:' + window.__log.join(''); \
          window.__log.length = 0; \
          S.open = true;                       /* an UNNAMED details — not part of any group */ \
          var afterS = 'bStill:' + B.hasAttribute('open') + ' sOpen:' + S.hasAttribute('open'); \

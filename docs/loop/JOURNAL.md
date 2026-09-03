@@ -100065,3 +100065,182 @@ tests green, and the 15 at-risk click-path page gates run individually under
 `git checkout --` + re-run + restore.
 
 WIKI: docs/wiki/agent-activation-behaviour.md
+
+## Tick 1403 — the choke point could not see the door a human uses (2026-09-03)
+
+TICK SHAPE: capability-mechanism
+CLASS: every FAQ accordion, every GitHub folded diff, every MDN collapsible section — the
+disclosure widget the browser is the entire implementation of
+
+Named as the next tick by t1402's own receipt: `g_details_beforetoggle` and `g_details_open_idl`
+were RED on the clean tree, and a red gate outranks a new capability. The first thing this tick did
+was ask **whose** bug it was — and the answer was one of each.
+
+### ⭐⭐⭐ THE SUMMARY CLICK IS THE **THIRD** ENTRANCE TO `open`, AND IT IS THE ONE THE CHOKE POINT CANNOT REACH
+
+t1400 measured `<details>`' `toggle` against headless Chrome and found it wrong three ways at once —
+it must be QUEUED, it must be a real `ToggleEvent` carrying `oldState`/`newState`, and `<details>`
+fires **no `beforetoggle` at all**. It fixed that at the one place both **script** spellings funnel
+through: the `open` **attribute**, hooked in `dom_bindings::queue_open_toggle`, so `el.open = true`
+and `setAttribute('open','')` reach one implementation. Its own wiki page records the lesson: *"when
+N surfaces can cause one state change, hook what they funnel through, not the N of them."*
+
+**But the way a person opens a disclosure is neither of those spellings.** A `<summary>` click runs
+the UA's activation behaviour in `Page::dispatch_click`, which flips the attribute on the **Rust
+`Dom`** directly and never enters a JS binding — so it never reaches the choke point. It carried its
+own hand-written pair of dispatches, and that second copy stayed frozen at the pre-t1400 shape.
+
+Headless Chrome 145.0.7632.116, one fixture, four phases (`/tmp/detarms.html`):
+
+```text
+  LOAD  {T:a:closed>open:ToggleEvent:true}
+  OPEN  {T:b:closed>open:ToggleEvent:true  T:a:open>closed:ToggleEvent:true}
+  CLOSE {T:b:open>closed:ToggleEvent:true}
+  SOLO  {T:c:closed>open:ToggleEvent:true}
+```
+
+```text
+                       chrome                          here, before
+  beforetoggle         NEITHER element gets one        BOTH — spurious
+  the event            trusted ToggleEvent + states    plain Event, states UNDEFINED
+  delivery             QUEUED                          SYNCHRONOUS
+  order                clicked panel, then the peer    the peer, then the panel
+```
+
+⚠⚠ **All four are silent.** `e.newState` — the idiomatic way to branch on which way a panel went —
+read `undefined` on the click path and the correct string on the script path, **in the same page,
+for the same element**. And the spurious `beforetoggle` is not a harmless extra: a component that
+listens for it in order to veto (the `[popover]` idiom, where the event *is* cancelable) would
+believe it had a veto on an element whose spec has no cancel point.
+
+> ⭐⭐⭐ **"HOOK WHAT THEY FUNNEL THROUGH" IS ONLY AS GOOD AS THE ENUMERATION OF WHAT *THEY* ARE.**
+> t1400 enumerated the entrances by asking *"how does SCRIPT change this?"* and got a complete answer
+> to **that** question. The UA's own actuation is not script — it is the one entrance the browser
+> itself owns. **When you find a choke point, ask which callers CANNOT reach it**; for a Rust-side
+> engine with a JS-side choke point that set is never empty. Same family as t1402 one layer out
+> (there the *agent* had a second copy of the click rule; here the *engine* has a second copy of the
+> toggle rule) and t1353's "two entrances, one unguarded".
+
+### AND ONE OF THE TWO RED GATES WAS THE GATE
+
+The two reds had **different owners**, which is why they had to be arbitrated separately rather than
+fixed together:
+
+* **`g_details_beforetoggle` (t470) asserted a behaviour Chrome does not have.** It required
+  `beforetoggle` before every `toggle` on both `<details>` paths — and it **contradicted**
+  `g_toggle_event_details_dialog`, landed at t1400 three ticks ago, which asserts the opposite from a
+  Chrome measurement. WPT's own `html/semantics/interactive-elements/the-details-element/
+  toggleEvent.html` contains the string `beforetoggle` **zero** times across all eleven cases.
+  The gate is the bug; it is replaced (not merely deleted) by `g_details_click_toggle_event`, which
+  asserts the same click path against the measurement above.
+* **`g_details_open_idl` (t468) held a synchronous expectation of a now-QUEUED event.** It read
+  `window.__log` in the same `eval` that wrote `B.open = true`. In Chrome that read is empty too —
+  it is `g_toggle_event_details_dialog`'s own `a_syncAfterIdlSet:[]` arm. The engine got more
+  correct and the gate held the old timing; the log is now read in a second round.
+
+⭐ Four of seven red gates were the GATE at t1344; two of two here. **Measure a red gate against
+Chrome before you touch the engine** — and when two gates contradict, the newer Chrome-arbitrated one
+is not automatically right either; it happened to be, and the WPT file settled it.
+
+### THE FIX — one channel, and the order is part of the answer
+
+`Page::dispatch_click` now COLLECTS every `open` state change the activation causes as
+`(node, is_open_now)`, in the order it caused them — the clicked panel first, then any `<details name>`
+sibling the accordion closed — and queues them through the same `__queueToggleById` the attribute
+hook uses, in one `eval_in_page` whose end-of-script drain is where the queued tasks fire. The two
+hand-written `beforetoggle`/`toggle` dispatch loops are **deleted**, so there is one implementation
+again.
+
+### ⭐⭐ THE LINE I WROTE TO BUY A GUARANTEE — DELETED BY ITS OWN GREEN MUTATION
+
+`__queueToggleById` resolves its element through `__nodes`, and the per-element `dispatch_event` it
+replaces reflected its target for free. So the first version primed the map with one
+`document.getElementsByTagName('details')`. **The mutation that deletes that line came back GREEN**,
+which per t1402's rule is a report about the ARM or about the CODE, and here it was the code: at load
+`__nodes` already holds every `<details>` and every `<summary>` in the parsed document —
+
+```text
+  AT-LOAD __nodes = 0:?# 2:HTML# 4:BODY# 6:DETAILS#a 7:SUMMARY#sa 12:DETAILS#b 13:SUMMARY#sb
+                    18:DETAILS#c 19:SUMMARY#sc 24:DETAILS#p 25:SUMMARY#sp 30:DETAILS#q 31:SUMMARY#sq …
+```
+
+— #p and #q among them, and **no script in the fixture ever names either.** A second construction (an
+`innerHTML`-inserted pair) was reflected too. So the line was an INERT GUARD, and the honest move is
+not to keep it with a comment: it is to **delete it and put the property it was defending under a
+live arm**. That is ARM 8.
+
+⭐ **ARM 8 is the arm that looked impossible to write.** `toggle` does not bubble, so "does an
+untouched `<details>` still get its event?" seems to need you to resolve the element first — which
+answers the question by asking it. It does not: a **non-bubbling event still runs the CAPTURE phase
+down to its target**, so `document.addEventListener('toggle', fn, true)` hears a panel nobody holds.
+Chrome-measured on a two-panel `name="grp"` group no script touches: `CAP:q:closed>open
+CAP:p:open>closed`; we now match byte for byte. **When an observation seems to require the very
+handle whose absence you are testing, look for the phase that runs before the handle is needed.**
+
+### ⚠ AND AN ARM THAT WAS WRITTEN, MEASURED, AND REMOVED RATHER THAN SHIPPED
+
+ARM 9 was going to be the same test one construction further out: a `<details name>` group built by
+`innerHTML` and never held. It passed. Then Chrome was asked, and Chrome said
+
+```text
+  ours    CAP:s:closed>open  CAP:r:open>closed
+  chrome  CAP:s:closed>open  CAP:r:closed>closed
+```
+
+because **Chrome queues a `toggle` at INSERTION for a `<details open>`** — from the parser at load
+(the `LOAD` row above) and from an `innerHTML` write — and that pending event COALESCES with the
+accordion's later close, keeping the FIRST `oldState`. The arm was asserting *our* value, and a green
+arm asserting our own divergence is how a gate pins the engine to a bug (t1004). It was **removed**,
+and the insertion toggle is named here as the next candidate rather than smuggled in as a gate.
+
+**Named non-claim, measured and left:** we fire no `toggle` when a `<details open>` is inserted, by
+the parser or by `innerHTML`. Two independent witnesses above. Out of scope for this tick.
+
+### THE RECEIPT
+
+```text
+  G_DETAILS_CLICK_TOGGLE_EVENT   ok (8 arms, 1 test fn)   RED under all 5 mutations
+    M1 the click path queues nothing            -> every arm      M2 a beforetoggle restored -> ARM 3
+    M3 the peer queued FIRST (the old order)    -> ARM 4          M4 the peer queued at all  -> ARM 2
+    M5 the states asserted `closed>open` rather than measured     -> ARMs 2 and 5
+  g_details_open_idl             ok  (was RED on the clean tree)
+  g_toggle_event_details_dialog  ok  (unchanged — the script path is untouched)
+  g_details · g_details_accordion · g_popover · g_toggle_event_and_popover_open · g_click_activation ·
+  g_label_click · g_label_association · g_submit_click · g_form · g_user_activation · g_iframe_click ·
+  g_click_point · g_contenteditable_typing                                                        ok
+  manuk-agent g_agent_activation_behaviour (t1402, drives this exact path)                        ok
+  cargo check -p manuk-page --no-default-features (the JS-less build)                             ok
+  Bar 0: no hang, no crash, no panic
+```
+
+The measured logs, beside Chrome's, every row identical:
+
+```text
+  open    T:b:closed>open:ToggleEvent:true  T:a:open>closed:ToggleEvent:true
+  close   T:b:open>closed:ToggleEvent:true
+  solo    T:c:closed>open:ToggleEvent:true
+  capture CAP:q:closed>open  CAP:p:open>closed
+```
+
+WIKI: docs/wiki/toggle-event.md
+
+### THE THREE CADENCE INSTRUMENTS, ALL DUE AT THIS TICK
+
+* **Self-audit** (due every 10, last 1393) — run. **One open item, and it is not mine:** the verify
+  wall at **2491s** against a 300s target. Harness-owned per the loop's scope rule (`scripts/` is the
+  observer's); the two cold rebuilds this window paid came from the hygiene cron's full purge racing
+  a live `target/debug`. Recorded, not touched.
+* **Surface audit #82** (due every 10, last 1393) — run against the live web, not memory. All **20
+  Interop-2026 focus areas + 4 investigation efforts** were grepped against `CONSTELLATION.tsv`
+  ONE AT A TIME: **zero rows to add**, and the negative is recorded with its method so the next
+  auditor can tell it from a skipped audit. What *did* come back is an **external scale calibration
+  the map has never had**: Ladybird's published WPT gain fell **3,366 → 108 subtests in one month**
+  at ~2.08M. ⭐ Two independent engines hitting a per-assert asymptote is evidence about the METHOD,
+  and it is the strongest outside confirmation the observer's 2026-08-21 retarget has had.
+* **Constitution check #133** (due every 8, last 1395) — run. #132's steer **fired at the very next
+  tick** (t1396, the popover's semantic half), so I3 is held. The bend this window exposes is **I8**:
+  ⭐⭐⭐ *the ratchet marks a count of gate FILES (`GATES 534`), not a count of gates that EXECUTED* —
+  which is exactly how this tick's two gates stayed red for three ticks under a green ratchet, and
+  how a CONTRADICTING PAIR of gates coexisted since t1400. Asked of the observer: a ratchet mark on
+  executed gates. Until then, a tick that lands a gate runs its NEIGHBOURS by hand, which is what
+  t1402 and t1403 both did.

@@ -1561,6 +1561,21 @@ pub fn load_document(
     Ok((PageContext, 0))
 }
 
+/// JS-less build: there is no script to evaluate, so a caller's queued work simply does not exist.
+/// `Ok(())` keeps every call site compiling unchanged — the same contract `dispatch_event`'s stub
+/// below keeps by always permitting the default action.
+#[cfg(not(feature = "_sm"))]
+pub fn eval_in_page(
+    _ctx: &PageContext,
+    _dom: &mut manuk_dom::Dom,
+    _src: &str,
+    _layout: &std::collections::HashMap<manuk_dom::NodeId, [f32; 4]>,
+    _styles: &std::collections::HashMap<manuk_dom::NodeId, manuk_css::ComputedStyle>,
+    _script_node: Option<manuk_dom::NodeId>,
+) -> Result<(), JsError> {
+    Ok(())
+}
+
 #[cfg(not(feature = "_sm"))]
 pub fn dispatch_event(
     _ctx: &PageContext,
