@@ -54,6 +54,58 @@ On `HTMLElement.prototype`, tag-guarded, like every cross-cutting member in this
 rows are the **guard** (a `<div>` must answer `undefined`), because a property defined on the shared
 prototype answers for every element unless it is told not to.
 
+## The `load` event (tick 1399) — and the regression that was the engine becoming honest
+
+`<img>` fired no `load` and no `error`, **ever** — not even for a parser-inserted image that decoded
+successfully. Every registration form was affected: an inline `onload="…"` attribute, a script-assigned
+`img.onload`, and `addEventListener('load', …)` alike.
+
+**Nothing fails loudly when this is missing; things WAIT.** Every lazy loader, gallery, carousel,
+`loadImage()` promise and placeholder-swap component is parked on this event.
+
+⭐ **`event.target` read inside the handler and read after dispatch are two different questions.** A
+first draft stored the event and compared `e.target` in a later timeout: Chrome answered `false` and
+this engine `true` — which reads like a target bug and is not one. Chrome clears the event's target
+once dispatch finishes. Take the row while the handler is running, and both agree.
+
+### Then the area went −1
+
+```text
+  embedded-content   1522 -> 1521            three runs, same number: not noise
+  NEWLY FAILING   lazy image far from viewport must not load  (×2 shapes)
+  NEWLY PASSING   lazy image near viewport must load
+```
+
+The total said `−1`. **Only the name diff said `+1 / −2`, and only that could say why.**
+
+> ⭐⭐⭐ The image worklist fetches every `<img>` eagerly, `loading="lazy"` included, and always has.
+> That was invisible while nothing fired: those tests assert `onload` is *never* called, and no
+> `onload` was ever called for any image at all — **they were passing vacuously.** Publishing the
+> event did not break them; it stopped hiding a pre-existing defect from them.
+
+The ratchet refuses the trade however flattering the explanation, so the observable was corrected:
+a lazy image far from its scroll root has not loaded, so it does not say it has.
+
+### The fix needed four clauses, and no single instrument could see them all
+
+| clause | found by |
+|---|---|
+| vertical distance from the viewport | `…-in-scroller-far` (a `10000vh` spacer) |
+| **horizontal** distance | `…-in-scroller-horizontal-far` |
+| every **clipping ancestor** | the negative-margin `overflow: hidden` case |
+| `data:` URLs are **never** deferred | the gate, against Chrome |
+
+⭐⭐ The third is the conceptual one: **distance from the viewport is not the question the spec asks.**
+Lazy loading is defined against the *lazy load root* — the nearest scrollable ancestor — and an element
+can sit comfortably inside the window while being nowhere near the box that would ever scroll it in.
+
+⭐ The fourth is the mirror error, and the gate caught what WPT could not: Chrome fires `load` for a
+`data:` image even 10000vh below its scroller, because `loading="lazy"` defers a **fetch** and a
+`data:` URL has nothing to fetch. Without it the engine would have been **more eager than Chrome on
+network images and less eager on inline ones — wrong in both directions from one missing clause.**
+The WPT files use server URLs and could never have found it; the gate has no server and could never
+have found the other three. **Each instrument saw exactly what the other was blind to.**
+
 ## What this moved, and what it did not
 
 ```text

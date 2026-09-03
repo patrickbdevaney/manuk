@@ -10244,3 +10244,34 @@ falsy, so an empty string there failed whole groups and the directory once read 
 the row match the oracle costs 795 subtests. The only thing standing between a future diff-chasing
 tick and that regression is a paragraph at the getter saying so. **A deliberate divergence needs its
 price written down, not just its reason.** (t1398)
+
+## ⚠⚠⚠ A regression that is the ENGINE BECOMING HONEST is still a regression
+
+Publishing the `<img>` `load` event took an area from 1522 to 1521. Three runs gave the same number,
+so not noise — and **the total could not say why; the failing-NAME diff could: +1 / −2.**
+
+The two new failures were `loading="lazy"` tests asserting `onload` is NEVER called. The engine had
+always fetched lazy images eagerly; those tests were passing **VACUOUSLY**, because no `onload` had
+ever fired for any image at all. Publishing the event did not break them — it stopped hiding a
+pre-existing defect from them.
+
+⭐⭐⭐ **The ratchet refuses the trade however flattering the explanation.** The observable was
+corrected (a lazy image far from its scroll root does not claim to have loaded) rather than the
+regression being argued away. **A vacuous pass is a debt that comes due the moment the surface it
+depended on starts working.**
+
+⭐⭐ And "far from the viewport" was the WRONG QUESTION: lazy loading is defined against the *lazy load
+root* — the nearest SCROLLABLE ANCESTOR — so an element can sit comfortably inside the window and be
+nowhere near the box that would ever scroll it into view. Three clauses, each found by one more red
+test: vertical distance, HORIZONTAL distance, then every clipping ancestor. (t1399)
+
+## ⭐ Two instruments, each blind to what the other sees
+
+`loading="lazy"` does NOT defer a `data:` URL — the attribute defers a FETCH and a data URL has
+nothing to fetch. Chrome fires `load` for one parked 10000vh below its scroller.
+
+⚠ **WPT could never have found this** (its lazy tests use server URLs) and **the gate could never have
+found the distance clauses** (it has no server). Without the data-URL clause the engine would have
+been MORE eager than Chrome on network images and LESS eager on inline ones — wrong in both directions
+from one missing case. **When a rule has two populations, check that both instruments can reach
+theirs.** (t1399)

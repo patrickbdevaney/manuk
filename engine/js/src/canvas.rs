@@ -506,6 +506,24 @@ thread_local! {
     /// Stored premultiplied, because that is what tiny-skia composites and converting once at publish
     /// beats converting on every frame of an animation loop.
     static SOURCES: RefCell<HashMap<u64, Pixmap>> = RefCell::new(HashMap::new());
+    /// `<img>` nodes whose bitmap became available since the last drain — the queue behind the
+    /// `load` event. See [`take_pending_image_loads`].
+    static PENDING_IMG_LOAD: RefCell<Vec<u64>> = const { RefCell::new(Vec::new()) };
+}
+
+/// **Drain the `<img>` nodes whose pixels just arrived — the `load` event's queue.**
+///
+/// ⚠⚠⚠ **`<img>` FIRED NO `load` AND NO `error`, EVER.** The decode worked — `complete` and
+/// `naturalWidth` report it correctly since t1398 — and the page was simply never told. Every lazy
+/// loader (`img.src = img.dataset.src` then `onload`), every gallery, every carousel and every
+/// `loadImage()` promise waits on that event, and each of them waited forever, with nothing thrown
+/// and nothing logged.
+///
+/// The queue lives here rather than in the host because [`publish_source`] is the one place that
+/// knows a bitmap is NEW: it is called every script round and is idempotent, so "was this already
+/// published" is a question only it can answer cheaply.
+pub fn take_pending_image_loads() -> Vec<u64> {
+    PENDING_IMG_LOAD.with(|q| std::mem::take(&mut *q.borrow_mut()))
 }
 
 /// Publish a decoded image so scripts can `drawImage` it. Idempotent: re-publishing the same node at the
@@ -533,7 +551,10 @@ pub fn publish_source(node: u64, w: u32, h: u32, rgba: &[u8]) {
             // too-bright halo, and it looks like a blending bug rather than a colour-space one.
             *dst = tiny_skia::ColorU8::from_rgba(src[0], src[1], src[2], src[3]).premultiply();
         }
+        // NEW pixels for this node — queue its `load`. Inside the `if let None`/size-changed branch
+        // on purpose: re-publishing the same bitmap every script round must not re-fire the event.
         m.insert(node, px);
+        PENDING_IMG_LOAD.with(|q| q.borrow_mut().push(node));
     });
 }
 

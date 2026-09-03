@@ -246,6 +246,20 @@ pub fn canvas_bitmaps() -> Vec<(u64, u32, u32, Vec<u8>)> {
     }
 }
 
+/// Drain the `<img>` nodes whose pixels arrived since the last call — see
+/// [`canvas::take_pending_image_loads`]. Empty without the JS feature, which is correct: no scripts,
+/// nobody to notify.
+pub fn take_pending_image_loads() -> Vec<u64> {
+    #[cfg(feature = "_sm")]
+    {
+        canvas::take_pending_image_loads()
+    }
+    #[cfg(not(feature = "_sm"))]
+    {
+        Vec::new()
+    }
+}
+
 /// **The mirror of [`canvas_bitmaps`]** — hand a decoded image *in*, so `ctx.drawImage(img, …)` has
 /// something to draw. Keyed by the `<img>` element's `NodeId`, non-premultiplied RGBA8.
 ///

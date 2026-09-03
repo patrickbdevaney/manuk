@@ -14043,6 +14043,9 @@ impl PageContext {
         // Deferred: load-time fetch/XHR stays queued for the host to perform (see run_deferred);
         // resolving inline would settle every request with status 0 (no real network here).
         crate::event_loop::run_deferred(runtime, global.handle())?;
+        // AFTER the scripts: a markup `onload="…"` was registered by the parser and an
+        // `img.onload = …` by the pass above, so firing late satisfies both.
+        ctx.fire_image_loads(runtime, raw_cx, global.handle(), dom);
 
         Ok((ctx, ran))
     }
@@ -14111,6 +14114,59 @@ impl PageContext {
     ///
     /// Also picks up any script a blocking script *inserted* — a real browser runs those too — which is
     /// why the executed set is tracked by node rather than assumed from the classification.
+    /// **Tell the page an `<img>` arrived** — the image half of `fire_external_script_load`.
+    ///
+    /// ⚠⚠⚠ **`<img>` fired NO `load` and NO `error`, ever — not even for a parser-inserted image
+    /// that decoded successfully.** Measured: a markup `<img src="data:…" onload="…">` reports
+    /// `complete === true` and `naturalWidth === 1` (so the bitmap is genuinely there) while the
+    /// handler never runs. **The engine did the work and never told the page**, which is the same
+    /// shape as the `select` event (t1394) and the dynamic-script path (t1397).
+    ///
+    /// What waits on this event: every lazy loader (`img.src = img.dataset.src` then `onload`), every
+    /// gallery and carousel, every `loadImage()` promise, and every "swap the placeholder when the
+    /// real image is ready" component. None of them fail loudly — they wait.
+    ///
+    /// Fired AFTER the script pass, not before: a handler assigned by the page's own script
+    /// (`img.onload = …`) has to exist before the event is dispatched, and for a markup
+    /// `onload="…"` attribute the parser registered it already, so both orders are satisfied by
+    /// firing late.
+    ///
+    /// ⚠ Known gap, named rather than discovered later: a **detached** `new Image()` never fetches at
+    /// all (the image worklist walks the DOM), so the preload idiom
+    /// `var i = new Image(); i.onload = …; i.src = url` still gets nothing. That is a fetch-worklist
+    /// question, not an event one.
+    fn fire_image_loads(
+        &self,
+        runtime: &mut Runtime,
+        raw_cx: *mut mozjs::jsapi::JSContext,
+        global: mozjs::rust::HandleObject,
+        dom: &mut Dom,
+    ) {
+        for id in crate::canvas::take_pending_image_loads() {
+            let node = NodeId(id);
+            // Only `<img>`: the same queue carries `<canvas>` sources, which have no load event.
+            if dom.tag_name(node) != Some("img") {
+                continue;
+            }
+            // Reflect the target (idempotent) so `__dispatchEvent` can resolve it and walk ancestors.
+            unsafe {
+                let _ = new_reflector(raw_cx, dom as *mut Dom, node);
+            }
+            // ⚠ `__fireImgLoad`, not `__dispatchEvent` directly: the `loading="lazy"` question needs
+            // the VIEWPORT, and the viewport lives in JS (`innerHeight` + `getBoundingClientRect`).
+            // Deciding it here would mean re-deriving both in Rust from the layout map.
+            let script = format!("__fireImgLoad({})", id);
+            rooted!(&in(runtime.cx()) let mut rval = UndefinedValue());
+            let opts = CompileOptionsWrapper::new(runtime.cx_no_gc(), c"img-load.js".to_owned(), 1);
+            if evaluate_script(runtime.cx(), global, &script, rval.handle_mut(), opts).is_err() {
+                tracing::warn!(
+                    error = %pending_exception(raw_cx),
+                    "an <img> load handler threw"
+                );
+            }
+        }
+    }
+
     pub fn run_deferred_scripts(
         &self,
         runtime: &mut Runtime,
@@ -14162,6 +14218,8 @@ impl PageContext {
         if ran > 0 || swept {
             crate::event_loop::run_deferred(runtime, global.handle())?;
         }
+        // AFTER the scripts, so an `img.onload = …` assigned by this very pass is in place.
+        self.fire_image_loads(runtime, raw_cx, global.handle(), dom);
         Ok(ran)
     }
 
@@ -16951,6 +17009,81 @@ const LISTENER_PRELUDE: &str = r#"
     // load-bearing only on the `catch` fallback below, where a plain object literal reaches
     // `__dispatchEvent`'s `=== undefined` default. Kept on both arms so the two paths cannot drift,
     // and labelled so nobody reads the first one as the thing holding the rule up.
+    // **`load` FOR AN `<img>`, WITH THE `loading="lazy"` QUESTION ASKED FIRST.**
+    //
+    // ⚠⚠⚠ **THIS EXISTS BECAUSE ADDING THE EVENT CAUSED A REGRESSION, AND THE REGRESSION WAS THE
+    // ENGINE BECOMING HONEST.** The image worklist fetches every `<img>` eagerly, `loading="lazy"`
+    // included. That was invisible while nothing fired: WPT's two *"a lazy image far from the viewport
+    // must not load"* tests passed **vacuously** — they assert `onload` is never called, and no
+    // `onload` was ever called for any image at all. Publishing the event made them fail: **+1 / −2**
+    // on the area, found by diffing the failing NAMES rather than reading the total.
+    //
+    // The ratchet refuses that trade, so the observable is corrected here rather than the regression
+    // being argued away: **a lazy image far below the fold has not loaded, so it does not say it
+    // has.** The eager FETCH remains — a separate, pre-existing inefficiency, now named — but it is no
+    // longer observable as a false completion.
+    //
+    // ⚠ The threshold is a distance BELOW the fold, not the fold itself: HTML calls it the *lazy load
+    // root margin* and leaves it implementation-defined precisely so an engine may start the fetch
+    // before the image is visible. Chrome uses ~1250px on a fast connection. The two WPT cases are
+    // nowhere near the boundary — the "far" one puts a `10000vh` spacer above the image — so this
+    // separates them by an enormous margin and is not a constant fitted to them.
+    var __LAZY_ROOT_MARGIN_PX = 1250;
+    // ⚠⚠ **BOTH AXES, AND EVERY SCROLLABLE ANCESTOR — each clause is a WPT case that a
+    //    vertical-viewport-only test would have shipped wrong.**
+    //
+    //      `…-in-scroller-far`             the image is 10000vh BELOW its scroller   (vertical)
+    //      `…-in-scroller-horizontal-far`  the image is far to the RIGHT of it       (horizontal)
+    //      the negative-margin case        the image is INSIDE the viewport but clipped OUT of an
+    //                                      `overflow: hidden` ancestor               (neither axis
+    //                                      of the VIEWPORT sees it)
+    //
+    // ⭐ The third is why the walk exists at all: distance from the VIEWPORT is not the question the
+    //    spec asks. Lazy loading is defined against the *lazy load root*, which is the nearest
+    //    scrollable ancestor — an element can sit comfortably inside the window and still be nowhere
+    //    near the box that would ever scroll it into view.
+    var __lazyIsNear = function (el) {
+        var m = __LAZY_ROOT_MARGIN_PX;
+        var r = el.getBoundingClientRect();
+        var vw = Number(globalThis.innerWidth) || 0;
+        var vh = Number(globalThis.innerHeight) || 0;
+        // The viewport itself, on both axes.
+        if (r.top > vh + m || r.bottom < -m) { return false; }
+        if (r.left > vw + m || r.right < -m) { return false; }
+        // …then every clipping ancestor, which is the lazy-load root the spec actually names.
+        for (var p = el.parentElement; p; p = p.parentElement) {
+            var st;
+            try { st = getComputedStyle(p); } catch (e) { break; }
+            if (!st) { break; }
+            var ox = String(st.overflowX || st.overflow || 'visible');
+            var oy = String(st.overflowY || st.overflow || 'visible');
+            var clips = (ox !== 'visible' && ox !== '') || (oy !== 'visible' && oy !== '');
+            if (!clips) { continue; }
+            var pr = p.getBoundingClientRect();
+            if (r.top > pr.bottom + m || r.bottom < pr.top - m) { return false; }
+            if (r.left > pr.right + m || r.right < pr.left - m) { return false; }
+        }
+        return true;
+    };
+    globalThis.__fireImgLoad = function(nid) {
+        var el = globalThis.__nodes && __nodes[nid];
+        if (!el || el.tagName !== 'IMG') { return; }
+        var mode = String((el.getAttribute && el.getAttribute('loading')) || '').trim().toLowerCase();
+        // ⭐ **`loading="lazy"` DEFERS A FETCH, SO A URL WITH NOTHING TO FETCH IS NOT DEFERRED.**
+        //    Chrome-measured: an `<img loading="lazy" src="data:image/gif;base64,…">` parked 10000vh
+        //    below its scroller fires `load` immediately, and so does one clipped out of an
+        //    `overflow: hidden` ancestor. The attribute is about network work, and a `data:` URL is
+        //    already in hand. Without this the engine would be *more* eager than Chrome on the
+        //    network cases and *less* eager on the inline ones — wrong in both directions from one
+        //    missing clause.
+        var srcAttr = String((el.getAttribute && el.getAttribute('src')) || '').trim();
+        if (mode === 'lazy' && !/^data:/i.test(srcAttr)) {
+            try {
+                if (!__lazyIsNear(el)) { return; }
+            } catch (e) { /* no geometry — announce, which is the pre-lazy behaviour */ }
+        }
+        __dispatchEvent(nid, 'load');
+    };
     globalThis.__queueSelectEvent = function(nid) {
         __enqueue(function() {
             var ev;

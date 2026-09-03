@@ -1657,7 +1657,10 @@
   - L34 · A failed image reads complete === false here, true in Chrome
   - L40 · currentSrc returns the selected URL immediately; Chrome returns "" until load
   - L50 · Where these members live
-  - L57 · What this moved, and what it did not
+  - L57 · The load event (tick 1399) — and the regression that was the engine becoming honest
+  - L71 · Then the area went −1
+  - L89 · The fix needed four clauses, and no single instrument could see them all
+  - L109 · What this moved, and what it did not
 
 ## The implicit roles that were falling through to a plausible default
 `docs/wiki/implicit-roles-html-aam.md`
@@ -2839,4 +2842,4 @@
   - L89 · The wall audit (due t1388)
 
 ---
-2598 sections across 59 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+2601 sections across 59 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.

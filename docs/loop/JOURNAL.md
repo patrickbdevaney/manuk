@@ -99491,3 +99491,115 @@ lazy-loading library does. `image-maps/…/hash-name-reference.html` is 162 fail
 (`usemap` → `<map name>` resolution).
 
 WIKI: docs/wiki/img-loading-state.md
+
+## Tick 1399 — `<img>` fired no `load`, ever — and adding it caused a regression that was the engine becoming honest (2026-09-03)
+
+TICK SHAPE: capability-subsystem
+
+### ⭐⭐⭐ THE ENGINE DID THE WORK AND NEVER TOLD THE PAGE
+
+Measured before anything was built: a markup `<img src="data:…" onload="…">` reports
+`complete === true` and `naturalWidth === 1` — the bitmap is genuinely decoded, and t1398's accessors
+report it correctly — **while the handler never runs.**
+
+```text
+                                          chrome    before    after
+  markup <img onload="…">                 load      NONE      load
+  img.onload = … assigned by script       load      NONE      load
+  img.addEventListener('load', …)         load      NONE      load
+  a <div> listening for 'load'            none      none      none
+  how many times it fires                 1         0         1
+```
+
+**Nothing fails loudly when this is missing; things WAIT.** Every lazy loader, gallery, carousel,
+`loadImage()` promise and placeholder-swap component is parked on this event. It is the third tick in
+this arc on the same shape — the `select` event (t1394) and the dynamic-script path (t1397) were both
+"a completion signal that did not exist".
+
+⭐ **`event.target` read INSIDE the handler and read AFTER dispatch are two different questions.** A
+first draft stored the event and compared `e.target` in a later timeout: Chrome answered `false` and
+this engine `true`, which reads like a target bug and is not one — Chrome clears the target once
+dispatch finishes. The row that means something is taken while the handler runs, and there both agree.
+
+### ⚠⚠⚠ THEN THE AREA WENT −1, AND THE DIFF SAID WHY
+
+```text
+  embedded-content   1522  ->  1521          net −1
+  NEWLY FAILING   Test that lazy-loaded images do not load when far from viewport.
+                  A loading=lazy image pulled into an `overflow: hidden` area by a negative margin…
+  NEWLY PASSING   Test that lazy-loaded images load when near viewport.
+```
+
+Three runs gave 1521 every time, so it was not noise — and **the totals could not have told me
+this; the NAME DIFF could.** +1/−2.
+
+> ⭐⭐⭐ **THE REGRESSION WAS THE ENGINE BECOMING HONEST.** The image worklist fetches every `<img>`
+> eagerly, `loading="lazy"` included, and always has. That was invisible while nothing fired: those
+> two tests assert `onload` is *never* called, and no `onload` was ever called for any image at all —
+> **they were passing vacuously.** Publishing the event did not break them; it stopped hiding a
+> pre-existing defect from them.
+
+The ratchet refuses the trade regardless of how flattering the explanation is, so the observable was
+corrected rather than argued away: **a lazy image far from its scroll root has not loaded, so it does
+not say it has.**
+
+### ⭐⭐ AND THE FIX NEEDED THREE CLAUSES, EACH FOUND BY ONE MORE RED TEST
+
+```text
+  1. vertical distance from the viewport      …-in-scroller-far           (10000vh spacer)
+  2. HORIZONTAL distance                      …-in-scroller-horizontal-far
+  3. every CLIPPING ANCESTOR                  the negative-margin case
+```
+
+Clause 1 alone left the horizontal variant red. Clause 3 is the one that matters conceptually:
+**distance from the VIEWPORT is not the question the spec asks.** Lazy loading is defined against the
+*lazy load root* — the nearest scrollable ancestor — and an element can sit comfortably inside the
+window while being nowhere near the box that would ever scroll it into view.
+
+### ⭐ …AND A FOURTH CLAUSE THE GATE FOUND, IN THE OTHER DIRECTION
+
+Writing the gate against `data:` URLs exposed the mirror error: **Chrome fires `load` for a `data:`
+image even 10000vh below its scroller.** `loading="lazy"` defers a *fetch*, and a `data:` URL has
+nothing to fetch.
+
+⚠ Without that clause the engine would have been **more eager than Chrome on network images and less
+eager on inline ones — wrong in both directions from one missing test.** The WPT files could not have
+found it (they use server URLs); the gate could not have found the other three (it has no server).
+**Each instrument saw exactly what the other was blind to.**
+
+### THE GATE
+
+`an_img_tells_the_page_when_its_pixels_arrive` (`engine/page/tests/g_img_load_event.rs`) — 11 rows,
+headless Chrome agrees on every one. PROVEN RED by: N1 nothing queued when a bitmap arrives →
+`a_inlineAttrHandler`; N4 queued on every publish rather than on a NEW bitmap → `e_firesOnce`;
+both dispatch call sites removed → `a_inlineAttrHandler`.
+
+⚠ **Recorded honestly, because two mutations stayed GREEN.** Removing *either* dispatch call site
+alone leaves the gate green — each suffices for this fixture — and both are kept because the initial
+and deferred passes are invoked separately by the host, so a page may get only one. The `<img>` tag
+guard in the dispatcher is likewise not exercised: the queue is fed by a publish path that skips
+`<canvas>` **one crate away**, so the guard is defensive against a feeder change rather than dead
+logic. Unlike this arc's three deleted inert guards, its enforcement is not local.
+
+### THE RECEIPT
+
+```text
+  WPT html/semantics/embedded-content  1522/3005 = 50.6%  ->  1523/3005 = 50.7%
+      NEWLY FAILING vs the pre-tick tree: NONE   ← the ratchet, checked by NAME diff, not by total
+  WPT html/semantics (whole area)      6217/11381 -> 6218/11393
+  WPT TOTAL (monotonic)                495844 -> 495845 = 37.92%
+  Bar 0: HANG/CRASH 0
+  manuk-css 41 · manuk-layout 191 · manuk-paint 22 · manuk-dom 11 · manuk-agent 126 ·
+  manuk-net 98 · manuk-a11y 21    ALL CONTROL
+```
+
+⚠ **+1 net for a whole event surface, and the reason is the same as t1396's zero:** the suite's image
+tests need real bytes over the test server, and its lazy tests were passing vacuously. The capability
+is on every page that ships an image; the number can only see the corner that needs no image data.
+
+NEXT in this vein: a **script-set `src` does not re-fetch** — the image worklist runs once per
+navigation and walks the DOM — so `img.src = img.dataset.src` and the `new Image()` preload idiom
+still get nothing. That is a fetch-worklist question, not an event one, and it is the other half of
+lazy loading (we fetch eagerly; we should fetch when near).
+
+WIKI: docs/wiki/img-loading-state.md
