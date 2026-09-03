@@ -10404,3 +10404,23 @@ kept as an unfalsifiable guard.
 ⭐ **When an observation seems to require the very handle whose absence you are testing, look for the
 phase that runs before the handle is needed.** (t1403 — `g_details_click_toggle_event` ARM 8; the
 green-mutation rule of t1402 pointed at the code rather than the arm this time)
+
+## ⚠⚠⚠ A `<li>` IS NOT ANNOUNCED AS ITS SENTENCE, AND A TABLE ROW IS NOT ANNOUNCED AS ITS ROW
+
+Every navigation list, every article index, every data table. `Role::name_from_content()` listed
+`ListItem` and `Row`, so a `<li>` wrapping a link was named with the whole sentence rather than with
+the link inside it, and each `<tr>` was named with its entire row of text. On six CrUX-corpus pages
+that was **721 of 766 missed a11y nodes — 94% of the real-site error — from one expression**
+(462 `row`, 259 `listitem`). Chrome names both `""`.
+
+⭐⭐ **And `row` is not simply wrong: it takes its name from content INSIDE A GRID and not inside a
+table** (`treegrid` counts, `rowgroup` is transparent, a native `<table role=grid>` counts, a static
+table nested in a grid does NOT — all Chrome-measured). A grid is the interactive widget and a table
+is static content, which is the distinction `Role::Grid` was split out of `Role::Table` to preserve,
+and this is the first rule that consumes it. A predicate on the ROLE ALONE cannot say it.
+
+⭐⭐⭐ **A NUMBER IS ONLY AS GOOD AS THE CORPUS IT WAS TAKEN ON, AND A BAR INHERITS THAT.** The tree
+read 91.9% on WPT `wai-aria` and **75.0%** on six real pages — both honest, not the same claim. Real
+site match 75.0% → 97.0%; WPT unchanged except `wai-aria` +1. (t1404 —
+`g_a11y_name_from_content_context`; t1351 "a plural asserts a sample and reads as a population", one
+level up)

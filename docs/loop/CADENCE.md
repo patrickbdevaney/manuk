@@ -11,12 +11,12 @@
 
 | | value | over |
 |---|---|---|
-| ticks landed | **1082** | ticks 1–1403 |
-| median tick cycle | **32m** | 1081 intervals |
+| ticks landed | **1083** | ticks 1–1404 |
+| median tick cycle | **32m** | 1082 intervals |
 | median, last 10 | **60m** | 10 intervals |
 | fastest / slowest | 5s / 7.0d | |
-| **ticks per hour** | **0.83** | 1306.9h elapsed |
-| median verify wall | **67s** | 1021 ticks |
+| **ticks per hour** | **0.83** | 1307.9h elapsed |
+| median verify wall | **67s** | 1022 ticks |
 | wall trend | 39s → 8m — getting slower ⚠️ | first 3 vs last 3 |
 
 The **cycle** is the real unit: implement → debug → verify wall → land. The wall is only part of
@@ -31,7 +31,7 @@ it, and a wall that grows taxes every future tick, so it is tracked separately f
 * **✅ rows in the capability ledger**: 144 → **642**
 * **Bar 0 — oracle hangs**: 0 of 265 sites
 
-**492 of 1082 ticks** (45%) moved a
+**492 of 1083 ticks** (45%) moved a
 user-visible capability. The rest were instruments, infrastructure and corrections — and the
 ledger says the corrections were not overhead: three of its top three priorities were phantoms,
 and finding that out redirected everything after it.
@@ -91,7 +91,7 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 ## What a capability costs
 
 * **492** capability ticks, median cycle **32m**
-* median diff per tick: **+292 / −34** lines across 8 files
+* median diff per tick: **+293 / −34** lines across 8 files
 
 ## Every tick
 
@@ -1179,5 +1179,6 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 | **1400** | 2026-09-03 10:53 | 2.9h | capability-subsystem | 8m | +538/−58 | 534 | 81 | 56.0% · | the same event, three elements, and only one fired it (2026-09-03) |
 | **1402** | 2026-09-03 15:01 | 4.1h | capability-mechanism | 8m | +1212/−119 | 534 | 81 | 56.0% · | the engine knew what a click does, and the agent had its own opinion (2026-09-03) |
 | **1403** | 2026-09-03 15:59 | 58m | capability-mechanism | 8m | +865/−168 | 534 | 81 | 56.0% · | the choke point could not see the door a human uses (2026-09-03) |
+| **1404** | 2026-09-03 16:59 | 60m | capability-subsystem | 8m | +733/−48 | 534 | 81 | 56.0% · | the a11y tree had never met a real website, and 94% of what it got wrong was one expressio |
 
 *`·` after a WPT figure means **carried forward**, not measured this tick.*

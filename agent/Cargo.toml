@@ -24,6 +24,10 @@ path = "src/bin/agent-local-suite.rs"
 name = "ag5-latency"
 path = "src/bin/ag5-latency.rs"
 
+[[bin]]
+name = "a11y-dump"
+path = "src/bin/a11y-dump.rs"
+
 [dependencies]
 manuk-page.workspace = true
 manuk-a11y.workspace = true

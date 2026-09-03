@@ -100244,3 +100244,158 @@ WIKI: docs/wiki/toggle-event.md
   how a CONTRADICTING PAIR of gates coexisted since t1400. Asked of the observer: a ratchet mark on
   executed gates. Until then, a tick that lands a gate runs its NEIGHBOURS by hand, which is what
   t1402 and t1403 both did.
+
+## Tick 1404 — the a11y tree had never met a real website, and 94% of what it got wrong was one expression (2026-09-03)
+
+TICK SHAPE: capability-subsystem
+CLASS: every list, every data table, every grid — the agent's PERCEPTION half, on the corpus
+`docs/loop/V1-SCOPE.md` actually names
+
+**Chosen by constitution check #133**, written one tick earlier: *"the next tick that is not
+mid-subsystem should be Track B"* — fifth check carrying it, one Track-B tick in the last eight.
+
+### ⭐⭐⭐ THE BAR WAS QUOTED FROM A CORPUS THAT CANNOT DECIDE IT
+
+Track B's `>=90% node match` reads green: WPT `wai-aria` 91.9%, `html-aam` 94.0%, `accname` 91.9%.
+Constitution check #131 had already recorded why that is a **different claim** — Interop 2026 lists
+accessibility testing as an *investigation effort*, which is the platform saying *no suite can decide
+this yet* — and t1379/t1380 both found shipping defects that moved those rows by **zero**. And
+`docs/loop/V1-SCOPE.md`'s completion bar for the agentic surface is not the suite at all: *"drives the
+same top-N sites a human daily-drives, **measured vs the same real-site corpus**"*.
+
+**Nothing had ever taken that measurement.** So it was taken — `a11y-dump <url>` (new, `agent/src/bin/`)
+against CDP `Accessibility.getFullAXTree`, six pages, matched as a `(role, name)` multiset with
+Chrome's `StaticText`/`InlineTextBox`/`ListMarker`/`LabelText` and both sides' unnamed `generic`
+containers dropped SYMMETRICALLY (counting them scores a modelling difference, in both directions):
+
+```text
+  page                    chrome nodes   node match
+  danluu.com                       414        51.2%
+  a11yproject.com                  162        67.9%
+  blog.rust-lang.org              1673        74.9%
+  news.ycombinator.com             490        84.5%
+  whatwg.org                        32        90.6%
+  martinfowler.com                 297        95.6%
+  AGGREGATE                       3068        75.0%   <- against a bar quoted as ">=90%"
+```
+
+⭐⭐⭐ **A NUMBER IS ONLY AS GOOD AS THE CORPUS IT WAS TAKEN ON, AND A BAR INHERITS THAT.** 91.9% and
+75.0% are both honest and they are not the same claim. Same shape as t1351's *"a gate whose NAME IS A
+PLURAL asserts a SAMPLE and reads as a POPULATION"*, one level up: here the SUITE was the sample and
+"the a11y tree" was the population.
+
+### ⭐⭐⭐ AND 94% OF THE ERROR WAS ONE EXPRESSION
+
+```text
+  721 of 766 missed nodes:   462 x ('row', '')      259 x ('listitem', '')
+```
+
+`Role::name_from_content()` listed `ListItem` and `Row`. Chrome names both `""`. So every `<li>` was
+announced as its whole sentence instead of as the link inside it, every table row as its entire row of
+text — a data table read as a wall of duplicated prose, and **an agent matching on the accessible name
+got the row rather than the cell it wanted.** This is the t1349 lever exactly: *SURVEY the failing set
+by the subject before grinding* — 66% of the lowest a11y row was one expression then, 94% now.
+
+### ⭐⭐ BUT `row` IS NOT SIMPLY WRONG — ITS ANSWER DEPENDS ON WHERE THE ROW IS
+
+Headless Chrome 145.0.7632.116, one fixture per row, every arm of the gate taken from it:
+
+```text
+  <div role=table><div role=row><div role=cell>X          row  name=""              static structure
+  <div role=grid><div role=row><div role=gridcell>X       row  name="X"             ⭐ FROM CONTENT
+  <div role=treegrid><div role=row><div role=gridcell>    row  name="TG-CELL"       also
+  <div role=grid><div role=rowgroup><div role=row>        row  name="RG-CELL"       rowgroup TRANSPARENT
+  <table role=grid><tbody><tr><td>NATIVE-GRID-CELL        row  name="NATIVE-GRID-CELL"  native counts
+  <div role=grid><div role=table><div role=row>           row  name=""              ⭐ the NEAREST wins
+  <div role=grid><div role=row aria-label=RowLabel>       row  name="RowLabel"      aria still wins
+  <ul><li aria-label=ItemLabel>ItemText                   listitem  name="ItemLabel"
+  <ul><li><a href>InnerLink</a>                           listitem  name=""; the LINK carries it
+```
+
+> ⭐⭐⭐ **A GRID IS THE INTERACTIVE WIDGET AND A TABLE IS STATIC CONTENT** — the distinction
+> `Role::Grid` was split out of `Role::Table` to preserve, and this is the FIRST rule that consumes
+> it. A predicate on the role alone cannot express it, so the name computation now asks
+> `takes_name_from_content(dom, node, role)`, which walks to the **nearest declared container**.
+
+⚠ **`treegrid` was ABSENT from the role vocabulary** — `role="treegrid"` fell through to the element's
+implicit role and a data grid announced itself as a `<div>`. The rule is not expressible without it,
+so it was added; that alone is the `wai-aria` +1.
+
+### ⭐ THE ARM A GREEN MUTATION ASKED FOR — THIRD TICK RUNNING
+
+Deleting the `Table` STOP from the ancestor walk left every arm green, because none of them nested a
+static table inside a grid. Chrome does, and answers `""`. **A mutation that does not go red is a
+report about the gate**, and it has now paid three ticks in a row: t1402 a hollow arm, t1403 an inert
+guard, t1404 a missing arm.
+
+### THE RESULT, AND THE RANKED REMAINDER
+
+```text
+  page                    before    after            WPT:  accname   445/484  (=)
+  danluu.com               51.2%   100.0%                  wai-aria  400/434  (+1, the treegrid role)
+  blog.rust-lang.org       74.9%    99.9%                  html-aam  315/335  (=)
+  a11yproject.com          67.9%    89.5%                  HANG/CRASH 0 in all three
+  martinfowler.com         95.6%    97.3%
+  whatwg.org               90.6%    96.9%
+  news.ycombinator.com     84.5%    86.7%
+  AGGREGATE                75.0%    97.0%
+```
+
+93 misses remain. ⚠⚠ **THE FIRST RANKING OF THEM WAS WRONG, AND A PROBE SAID SO BEFORE IT SHIPPED.**
+The 35 largest were names differing only in CASE (`'SKIP TO CONTENT.'` vs `'Skip to content.'`), which
+reads exactly like `text-transform` not reaching the accessible name — and `engine/a11y/Cargo.toml`'s
+own comment claims it does, so the "checkable claim that died silently" story wrote itself. **It was
+false.** One fixture through the same `a11y-dump` path, against Chrome:
+
+```text
+                                                    chrome                          manuk
+  <a class=up>Skip to content.</a>                  'SKIP TO CONTENT.'              IDENTICAL
+  <a><span class=up>inner span up</span></a>        'INNER SPAN UP'                 IDENTICAL
+  <h2> with text-transform:uppercase                 'A11Y STANDS FOR ACCESSIBILITY' IDENTICAL
+  <a class=cap>how do i get started?</a>            'How Do I Get Started?'         IDENTICAL
+  <a>plain link</a>                        CONTROL  'plain link'                    IDENTICAL
+```
+
+⭐⭐⭐ **A SIGNATURE NAMES THE TESTS; ONLY A PROBE NAMES THE MECHANISM** (t1391's rule, and it just
+saved a whole tick from being spent on working code). All 35 are on ONE page, and since the a11y name
+path is provably correct the cause is upstream: **a11yproject's `text-transform` is not reaching those
+elements at all**, which is a CASCADE/stylesheet question that must also be visible in the RENDERING.
+Reclassified out of the a11y worklist. The honest remainder:
+
+```text
+  27   a `cell`'s concatenated text            HN's cells — separator/whitespace inside the name
+  16   the LayoutTable* family                 chrome DEMOTES a header-less layout table OUT of the
+                                               table roles entirely (LayoutTable/Row/Cell); we keep
+                                               table/row/cell. General — every layout-table page.
+   5   the ROOT's name is the document TITLE   'The Rust Programming Language Blog' vs ''
+   4   role `Abbr` (<abbr>)                    absent from the vocabulary
+  35   [RECLASSIFIED, not a11y] a11yproject's text-transform never reaches its links/headings
+```
+
+### THE RECEIPT
+
+```text
+  G_A11Y_NAME_FROM_CONTENT_CONTEXT   ok (30 rows, 1 test fn)   RED under all 6 mutations
+    A1 listitem back in the flat list      A2 row from content everywhere
+    A3 row never from content              A4 rowgroup not transparent
+    A5 treegrid not a grid                 A6 a static table no longer STOPS the walk (the missing arm)
+  g_a11y_conditional_role · g_a11y_generated_name_entry · g_a11y_labelledby_deref · g_a11y_label ·
+  g_a11y_name_from_content · g_a11y_role_vocabulary · g_ax_tree_excludes_display_none ·
+  g_agent_activation_behaviour                                                                  ok
+  WPT accname 445/484 (=) · wai-aria 400/434 (+1) · html-aam 315/335 (=) · HANG/CRASH 0
+  Bar 0: no hang, no crash, no panic
+```
+
+WIKI: docs/wiki/name-from-content-depends-on-context.md
+
+### ⚠ THE WALL WENT RED ON THIS TICK'S OWN BOOKKEEPING, AND THAT IS THE GATE WORKING
+
+`manuk-agent tests FAILED` on the first attempt, and it was not the a11y change: refreshing the
+`wai-aria` row 399 → 400 in `docs/loop/WPT-AREAS.tsv` left the stored `TOTAL` at 495923 while its rows
+summed to 495924. `G_WPT_AREAS_TOTAL` recomputes the sum and refuses the mismatch — *"the loop's
+PRIMARY metric; a stored derived figure that nothing recomputes drifts every time one row is refreshed
+and the other is not."* Fixed to 495924, whole `manuk-agent` suite green (44 binaries).
+
+⭐ Named because it is the exact counterpart of check #133's I8 finding one tick earlier: **a derived
+number needs a gate that recomputes it, or it rots silently.** Here one existed and it worked on the
+first refresh after the rule was written down.

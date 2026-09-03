@@ -1081,3 +1081,4 @@ tick	sha	epoch	iso	delta_s	shape	wall_s	files	added	deleted	gates	claims	wpt_pas
 1400	65f38f63	1788447231	2026-09-03T10:53:51-04:00	10611	capability-subsystem	465	11	538	58	534	81	3896	6960	0	642	0	the same event, three elements, and only one fired it (2026-09-03)
 1402	378ef1a4	1788462080	2026-09-03T15:01:20-04:00	14849	capability-mechanism	465	10	1212	119	534	81	3896	6960	0	642	0	the engine knew what a click does, and the agent had its own opinion (2026-09-03)
 1403	ef7f27ff	1788465586	2026-09-03T15:59:46-04:00	3506	capability-mechanism	465	14	865	168	534	81	3896	6960	0	642	0	the choke point could not see the door a human uses (2026-09-03)
+1404	dd045c8e	1788469165	2026-09-03T16:59:25-04:00	3579	capability-subsystem	465	12	733	48	534	81	3896	6960	0	642	0	the a11y tree had never met a real website, and 94% of what it got wrong was one expression (2026-09-03)

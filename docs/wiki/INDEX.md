@@ -2277,6 +2277,15 @@
   - L87 · What is NOT implemented, said out loud
   - L99 · Receipts
 
+## Name-from-content, and the one role whose answer depends on where it is
+`docs/wiki/name-from-content-depends-on-context.md`
+
+  - L8 · First: the tree had never been measured against a real site
+  - L33 · 721 of the 766 missed nodes — 94% — were one expression
+  - L45 · ⭐⭐ But row is not simply wrong — its answer depends on where the row is
+  - L76 · The arm a GREEN mutation asked for
+  - L83 · The ranked remainder — and the first ranking of it was WRONG
+
 ## A name fragment hidden by a CSS RULE — the prune that only read the `style=` attribute
 `docs/wiki/name-hidden-by-stylesheet.md`
 
@@ -2875,4 +2884,4 @@
   - L89 · The wall audit (due t1388)
 
 ---
-2622 sections across 62 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+2627 sections across 63 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.

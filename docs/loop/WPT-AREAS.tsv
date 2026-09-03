@@ -20,7 +20,7 @@ domparsing	342	1294	26.4	0	0
 url	1	7	14.3	0	0
 encoding	360564	1127437	32.0	0	0
 accname	445	484	91.9	0	0
-wai-aria	399	434	91.9	0	0
+wai-aria	400	434	92.2	0	0
 html-aam	315	335	94.0	0	0
 mathml	289	2362	12.2	0	0
 svg	307	2108	14.6	0	0
@@ -28,4 +28,4 @@ css/CSS2	2095	2210	94.8	0	0
 html/browsers	221	1891	11.7	0	0
 html/semantics	6296	11394	55.3	0	0
 html/canvas	682	4515	15.1	0	0
-TOTAL	495923	1307703	37.92	0	0
+TOTAL	495924	1307703	37.92	0	0

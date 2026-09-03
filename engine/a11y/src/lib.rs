@@ -223,6 +223,11 @@ pub enum Role {
     Grid,
     GridCell,
     RowGroup,
+    // ⚠ `treegrid` was ABSENT from the vocabulary, so `role="treegrid"` fell through to the
+    // element's implicit role — a `<div>` announced as `generic`. It is needed here for a second
+    // reason: a `row` takes its name from its contents inside a grid OR a treegrid and nowhere
+    // else, so the rule cannot be written without the role existing. Chrome-measured.
+    TreeGrid,
 
     Meter,
     ScrollBar,
@@ -286,19 +291,27 @@ impl Role {
     /// Roles whose accessible name is computed **from their subtree text**
     /// (accname "name from content"). Others must get a name from an explicit
     /// attribute, or have none.
+    ///
+    /// ⚠⚠⚠ **`listitem` AND `row` USED TO BE IN THIS LIST, AND BETWEEN THEM THEY WERE 94% OF THE
+    /// A11Y TREE'S REAL-SITE ERROR** (721 of 766 missed nodes across six corpus pages: 462 `row`,
+    /// 259 `listitem`). Headless Chrome names both `""` — a `<li>` wrapping a link is announced as
+    /// the link, not as the sentence, and a table row is structure rather than a label.
+    ///
+    /// ⚠ **`row` is not simply absent from the list — its answer DEPENDS ON WHERE THE ROW IS**, and
+    /// a method on the role alone cannot say so. See [`takes_name_from_content`], which is what the
+    /// name computation actually calls; this predicate answers for the context-free roles and gives
+    /// `row` its commonest answer (a static table).
     pub fn name_from_content(&self) -> bool {
         matches!(
             self,
             Role::Link
                 | Role::Button
                 | Role::Heading { .. }
-                | Role::ListItem
                 | Role::Cell
                 // Split out of `Cell`; ARIA lists `gridcell` as name-from-content too.
                 | Role::GridCell
                 | Role::ColumnHeader
                 | Role::RowHeader
-                | Role::Row
                 | Role::Tab
                 | Role::MenuItem
                 // Split out of `MenuItem`; ARIA gives both name-from-content, as menuitem has.
@@ -385,6 +398,7 @@ impl Role {
             Role::Marquee => "marquee",
             Role::Timer => "timer",
             Role::Grid => "grid",
+            Role::TreeGrid => "treegrid",
             Role::GridCell => "gridcell",
             Role::RowGroup => "rowgroup",
             Role::Meter => "meter",
@@ -481,6 +495,7 @@ impl Role {
             "grid" => Role::Grid,
             "gridcell" => Role::GridCell,
             "rowgroup" => Role::RowGroup,
+            "treegrid" => Role::TreeGrid,
             "meter" => Role::Meter,
             "scrollbar" => Role::ScrollBar,
             "searchbox" => Role::SearchBox,
@@ -2166,6 +2181,53 @@ fn host_language_name(
     String::new()
 }
 
+/// **accname §4.3 step 2F, asked WITH the node's context — because for one role the answer depends
+/// on where the node is.**
+///
+/// Headless Chrome 145.0.7632.116, one fixture per row:
+///
+/// ```text
+///   <ul><li>Alpha</li>                                   listitem  name=""      never from content
+///   <ul><li aria-label=ItemLabel>ItemText                listitem  name="ItemLabel"   aria still wins
+///   <ul><li><a href>InnerLink</a></li>                   listitem  name=""      the LINK carries it
+///   <table><tr><th>h<td>c                                row       name=""      static structure
+///   <div role=table><div role=row><div role=cell>        row       name=""
+///   <div role=grid><div role=row><div role=gridcell>X    row       name="X"     ⭐ FROM CONTENT
+///   <div role=treegrid><div role=row><div role=gridcell> row       name="TG-CELL"     also
+///   <div role=grid><div role=rowgroup><div role=row>     row       name="RG-CELL"  rowgroup is TRANSPARENT
+///   <table role=grid><tbody><tr><td>NATIVE-GRID-CELL     row       name="NATIVE-GRID-CELL"  native counts
+/// ```
+///
+/// ⭐⭐ **A grid is the interactive widget and a table is static content**, which is the distinction
+/// `Role::Grid` was split from `Role::Table` to preserve — and this is the first rule that consumes
+/// it. A row in a spreadsheet is a thing a user selects and is announced by what it holds; a row in
+/// a page's data table is structure, and announcing its whole text turns every table into a wall of
+/// duplicated sentences.
+fn takes_name_from_content(dom: &Dom, node: NodeId, role: &Role) -> bool {
+    if matches!(role, Role::Row) {
+        return row_is_inside_a_grid(dom, node);
+    }
+    role.name_from_content()
+}
+
+/// The nearest ancestor that is a table-ish CONTAINER, with `rowgroup` (`<tbody>`, `<thead>`,
+/// `role="rowgroup"`) transparent because it is a grouping level rather than a container kind.
+/// Anything else — a `<div>` wrapper, a custom element — is transparent too, so the walk finds the
+/// container the author actually declared. A `Table`/`Tree` STOPS it: a static table nested inside a
+/// grid is still a static table.
+fn row_is_inside_a_grid(dom: &Dom, node: NodeId) -> bool {
+    let mut cur = dom.parent(node);
+    while let Some(p) = cur {
+        match role_of(dom, p) {
+            Some(Role::Grid) | Some(Role::TreeGrid) => return true,
+            Some(Role::Table) | Some(Role::Tree) => return false,
+            _ => {}
+        }
+        cur = dom.parent(p);
+    }
+    false
+}
+
 fn accessible_name_with(
     dom: &Dom,
     node: NodeId,
@@ -2189,8 +2251,8 @@ fn accessible_name_with(
         return host;
     }
 
-    // 4. name from content (only for roles that allow it)
-    if role.name_from_content() {
+    // 4. name from content (only for roles that allow it, IN THIS POSITION)
+    if takes_name_from_content(dom, node, role) {
         // ⚠⚠⚠ accname §4.3 step 2F: the `::before` and `::after` text is PART OF THE CONTENT, in
         // that order around it. `button::before{content:"★ "}` is announced "★ Save"; ours said
         // "Save" until t1098, and where the pseudo carries the ONLY text — an
