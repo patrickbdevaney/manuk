@@ -99030,3 +99030,125 @@ strings and has 18 callers, so it wants its own gate) and `setRangeText`'s `Inde
 remaining constellation unknowns from t1393, which are all layout/text/a11y.
 
 WIKI: docs/wiki/text-field-selection.md
+
+## Tick 1395 — a state that existed and could not be asked about (2026-09-03)
+
+TICK SHAPE: capability-subsystem
+
+`html/semantics/popovers` sat at **9 of 153 = 5.9%** — an Interop 2026 focus area and the backbone of
+every modern menu, tooltip and dropdown. The survey said the subsystem was not missing; it was
+**half-installed**.
+
+### ⭐⭐⭐ THE POPOVER WORKED. THREE OF THE FOUR WAYS TO OBSERVE IT DID NOT.
+
+A probe of the whole surface, run through this engine and Chrome side by side:
+
+```text
+                          manuk        Chrome
+  showPopover()           function     function      ✓ it opens
+  display when open       block        block         ✓ it paints
+  beforetoggle/toggle     fires        fires         ✓ with the right oldState/newState
+  ─────────────────────────────────────────────────
+  :popover-open           NEVER MATCHES  true        ⭐⭐⭐ the state was real and unaskable
+  ToggleEvent             absent       present       38 subtests: `ToggleEvent is not defined`
+  ev.constructor.name     ""           "ToggleEvent"
+  popoverTargetElement    undefined    element       (left for the next tick)
+```
+
+⭐⭐⭐ **`showPopover()` writes `data-manuk-popover-open` and the UA sheet keys `display` off that
+attribute — so the popover opened and painted CORRECTLY while the selector for its state was never
+wired.** The state existed, was load-bearing for paint, and could not be asked about. Every
+`el.matches(':popover-open')` and every `#menu:popover-open { … }` rule on the web read `false`.
+
+> ⭐⭐ **A capability implemented through a PRIVATE marker is finished when the PUBLIC name for that
+> marker resolves — not when the marker works.** The internal attribute made the feature look done to
+> every instrument that renders it and to none that queries it.
+
+### ⚠⚠ AND IT HAD TO BE TAUGHT TO BOTH MATCHERS
+
+`:popover-open` was wired into the minimal selector engine (behind `element.matches()` /
+`querySelectorAll`) **and** into the Stylo one (behind the live cascade). The gate asks through both
+doors on the same element in the same state, and the two mutations that remove one arm each go red on
+**different rows** — `s_openMatches` and `u_openCascade`. One rule, two implementations, the twin
+drift this codebase keeps finding (t720, t1353, t1387).
+
+### THE INTERFACE HYGIENE THE 38 SUBTESTS ACTUALLY WANTED
+
+`ToggleEvent` is now a real interface — and three of its four requirements turned out to be **general
+rules the engine was breaking for every event**, Chrome-measured on four constructors:
+
+```text
+  new Event() / new CustomEvent() / new MouseEvent() / new ToggleEvent()   ALL TypeError
+  e.type = 'y' · e.bubbles = false · e.detail = 9                          ALL IGNORED (readonly)
+  Event.name · Object.prototype.toString.call(e)     "ToggleEvent" · "[object ToggleEvent]"
+```
+
+⚠ **`arguments.length`, not `type === undefined`.** `new ToggleEvent(undefined)` is a legal call whose
+type is the string `"undefined"`, and WPT asserts both halves in the same file — the two are
+indistinguishable by value and only distinguishable by arity.
+
+⚠⚠ **The readonly fix is deliberately scoped, with a named divergence.** WebIDL declares EVERY event
+attribute readonly, but `__dispatchEvent` writes `type`, `target`, `currentTarget`, `eventPhase`,
+`bubbles` and `isTrusted` on the event as it propagates — a real engine keeps those in internal slots
+behind prototype getters, ours are own data properties, and freezing them would freeze the dispatcher
+out. So the per-interface EXTRAS are locked (`oldState`, `newState`, `source`, `detail`) and the base
+fields are not. **The divergence is stated where the code is, rather than discovered later as a bug.**
+
+### THE GATE
+
+`popover_open_is_askable_through_both_doors_and_toggle_is_a_real_event_interface`
+(`engine/page/tests/g_toggle_event_and_popover_open.rs`) — **27 rows, and headless Chrome agrees with
+this engine on every one of them exactly.** PROVEN RED by six mutations, each on its predicted row:
+N1 minimal matcher → `s_openMatches`; N2 Stylo matcher → `u_openCascade`; N3 `ToggleEvent`
+unregistered → `a_isGlobal`; N4 required-type throw → `f_toggleNoArgs`; N5 readonly reverted →
+`n_oldReadonly`; N6 constructor name → `d_ctorName`.
+
+### ⭐ MEASURED AND DELIBERATELY NOT BUILT — the mirror of t1394
+
+Chrome's `toggle` event is **queued and COALESCED**: show → hide → show fires three synchronous
+`beforetoggle`s and exactly **one** `toggle`, carrying the net `closed > open`. Ours fires one `toggle`
+per transition, synchronously.
+
+⭐⭐ **That is the exact opposite of the `select` event landed one tick ago, which is queued and NOT
+coalesced.** Two notifications in two adjacent subsystems, both async, with opposite batching rules —
+which is precisely why neither can be inferred from the other, and why t1394's misreading of WPT
+("coalesced") had to be corrected by measurement. Recorded, not built.
+
+### THE CONSTITUTION CHECK (due this tick) — and it found the shape of this whole arc
+
+Check #132 is in `docs/loop/CONSTITUTION-CHECK.md`. Its finding, from this tick's own suite:
+
+```text
+  popover-minimum-role.html   assert_equals: role starts as none, expected "none" but got "generic"
+```
+
+⭐⭐⭐ **I3 — the semantic model lands in LOCKSTEP with the capability — is being bent, and this window
+is the clearest case the loop has produced.** Five capability ticks (t1390–t1395) landed the DOM and
+CSS halves of their subsystems and **not one touched the semantic half**; Track B has been dark eight
+ticks against a standing rule of five. After this tick a popover opens, paints, matches
+`:popover-open` and fires a real `ToggleEvent` — **and the agent's perception layer still cannot tell
+it from an ordinary `<div>`** (HTML-AAM maps a visible `[popover]` to `group`; we say `generic`).
+
+> **The bend is invisible per-tick and obvious per-window.** Each tick was individually defensible.
+> Across eight, the shape is that **the loop has been optimising the channel WPT scores** — and the
+> a11y tree has no suite. *An invariant with no instrument loses to one with a scoreboard.*
+
+### THE RECEIPT
+
+```text
+  WPT html/semantics/popovers      9/153 = 5.9%   ->   62/153 = 40.5%   (+53)
+  WPT html/semantics (whole area)  5681/11256 = 50.5% -> 5752/11261 = 51.1% (+71)
+  WPT dom (blast radius of the engine-wide event changes)  8165 -> 8166   NO REGRESSION
+  WPT TOTAL (monotonic)            495303 = 37.88%  ->  495375 = 37.89%
+  Bar 0: HANG/CRASH 0
+  manuk-css 41 · manuk-layout 191 · manuk-paint 22 · manuk-dom 11 · manuk-agent 126 ·
+  manuk-net 98    ALL CONTROL
+  constitution check #132 recorded · LAST_CONSTITUTION_CHECK -> 1395
+```
+
+NEXT — **and the constitution check, not the histogram, chooses it**: the popover's SEMANTIC half.
+HTML-AAM's `group` role for a visible `[popover]`, and the popover visible in the a11y tree with its
+state. Behind it: `popoverTargetElement`/`popoverTargetAction` reflection and the declarative invoker
+(27 subtests), and the queued-and-coalesced `toggle` event measured above.
+
+WIKI: docs/wiki/popover-observable-state.md

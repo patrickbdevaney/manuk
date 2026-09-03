@@ -2452,6 +2452,18 @@
   - L55 · The remaining layout drift, priced
   - L65 · The gate
 
+## The popover's observable state — a capability that worked and could not be asked about
+`docs/wiki/popover-observable-state.md`
+
+  - L19 · 1. A private marker is not a public name
+  - L32 · 2. One rule, two matchers
+  - L43 · 3. ToggleEvent, and three general rules hiding inside one interface
+  - L55 · arguments.length, not type === undefined
+  - L61 · The readonly fix is scoped, and the divergence is stated
+  - L72 · 4. toggle is coalesced — and select, one tick earlier, is not
+  - L85 · 5. What this cost, and what the constitution check said about it
+  - L108 · Not built yet
+
 ## THE WIKI — what we durably KNOW, organised by subsystem
 `docs/wiki/README.md`
 
@@ -2803,4 +2815,4 @@
   - L89 · The wall audit (due t1388)
 
 ---
-2574 sections across 56 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+2582 sections across 57 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.

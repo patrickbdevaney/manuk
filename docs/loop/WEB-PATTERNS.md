@@ -10080,3 +10080,51 @@ and every one of them gated. (t1394; the t780 lesson arriving BEFORE the engine 
 
 ⭐ Corollary: when "fires nothing" is the claim, the probe needs a CONTROL ARM in the same page — an
 absence is only readable as a difference. (t1394 — `r_ctrlSsrOnly` beside `r_rangeTextAddsNothing`)
+
+## ⚠⚠⚠ A capability implemented through a PRIVATE marker, whose PUBLIC name was never wired
+
+`[popover]` opened, painted and fired its events correctly — because `showPopover()` writes an
+internal attribute and the UA sheet keys `display` off THAT. Meanwhile `:popover-open` matched
+nothing, in either selector engine. **The state was real, load-bearing for paint, and unaskable**, so
+every `el.matches(':popover-open')` and every `#menu:popover-open { … }` rule on the web read false.
+
+⭐⭐ **A capability built on a private marker is finished when the PUBLIC name for that marker
+resolves — not when the marker works.** The internal attribute makes the feature look done to every
+instrument that RENDERS the page and to none that QUERIES it, which is why it survived at 5.9% without
+looking broken.
+
+⚠ And it had to be taught to BOTH matchers — the minimal engine behind `matches()`/`querySelectorAll`
+and the Stylo one behind the live cascade. The two mutations that remove one arm each go red on
+DIFFERENT gate rows. (t1395 — `popover_open_is_askable_through_both_doors_and_toggle_is_a_real_event_interface`)
+
+## One interface's test file, three GENERAL rules the engine broke for every event
+
+`ToggleEvent is not defined` was 38 subtests, but most of what that file wanted was not about popovers:
+
+```text
+  new Event() · new CustomEvent() · new MouseEvent() · new ToggleEvent()   ALL TypeError
+  e.type='y' · e.bubbles=false · e.detail=9                                ALL IGNORED (readonly)
+  Ctor.name · Object.prototype.toString.call(e)     "ToggleEvent" · "[object ToggleEvent]"
+```
+
+⭐ **`arguments.length`, NOT `type === undefined`**: `new Event(undefined)` is a legal call whose type
+is the STRING "undefined", and the suite asserts both halves in one file. Arity is the only
+discriminator.
+
+⚠⚠ **Scope a readonly fix to what the dispatcher does not write, and SAY SO.** WebIDL makes every
+event attribute readonly, but the dispatcher must set `type`/`target`/`currentTarget`/`eventPhase`/
+`bubbles`/`isTrusted` as the event propagates — a real engine hides those in internal slots behind
+prototype getters. Locking the per-interface EXTRAS and leaving the base fields writable is the
+correct bounded fix; writing the reason at the code turns a future bug report into a documented limit.
+(t1395)
+
+## Two async notifications, adjacent subsystems, OPPOSITE batching
+
+```text
+  select   (t1394)   queued · NOT coalesced   two different changes in one task -> TWO events
+  toggle   (t1395)   queued · COALESCED       show/hide/show -> ONE event, net closed>open
+```
+
+⭐⭐ Neither can be inferred from the other, and both look like "it fires once" from a badly-shaped
+probe. **Measure the batching rule of every async notification separately**, with two DIFFERENT changes
+in one task — a repeat of the SAME change tests the change-detector, not the batching. (t1394/t1395)

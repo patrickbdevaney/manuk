@@ -11477,3 +11477,81 @@ rather than done in the middle of a capability tick.
    on zstd's dependency (t1383).
 
 **Next check due: tick 1395.**
+
+## Check #132 — tick 1395 (2026-09-03)
+
+**HORIZON: H0.** **GATE** (PART II, four binary conditions): ~83% WPT across categories,
+oracle-verified across the four corpora, a daily-drivable shell, and **semantic-API coverage of every
+rendered construct**. PART VII's v1 has shipped; the loop is on the observer's three-track retarget
+(A = layout/port, B = a11y, C = the M2 drive).
+
+### GATE OR SCOREBOARD? — gate, on condition 1; and condition 4 is where the answer gets uncomfortable
+
+The eight ticks since check #131 (1388–1395) moved `html/semantics` **4922 → 5752** and did it in the
+usage-weighted way VI.3 demands: forms (every login, checkout and search box), the text-selection API
+(every input mask and autocomplete), popovers (every modern menu, tooltip and dropdown). None of it is
+tail. t1389 closed a Bar 0; t1393 moved the ratchet's `MEASURED` invariant 548 → 586 in one tick.
+
+So condition 1 moved, and `orient`'s north star was obeyed — no big-but-tail number crept back.
+
+### ⚠⚠⚠ I3 IS BEING BENT, AND THIS WINDOW IS THE CLEAREST CASE THE LOOP HAS PRODUCED
+
+**I3 says the semantic model lands in LOCKSTEP with the capability.** Five capability ticks in this
+window — t1390 value sanitisation, t1391 constraint validation, t1392 selection state, t1394 the
+`select` event, t1395 popover state — landed the **DOM and CSS halves** of their subsystems. **Not one
+of them touched the semantic half.** Track B has now been dark for **eight ticks** (last engine tick
+t1387), against the observer's own standing rule of five.
+
+And it is not an abstraction. This tick's own suite says so, in one line:
+
+```text
+  popover-minimum-role.html   assert_equals: role starts as none, expected "none" but got "generic"
+```
+
+HTML-AAM §att-popover: a **visible** `[popover]` with no implicit role maps to **`group`**; an
+invisible one is **`none`**. We report `generic` for both. So after this tick a popover opens, paints,
+matches `:popover-open`, and announces itself with a real `ToggleEvent` — and **the agent's perception
+layer still cannot tell it from an ordinary `<div>`.** The capability is complete on every channel a
+human uses and absent on the one this project exists to serve.
+
+> ⭐⭐⭐ **The bend is invisible per-tick and obvious per-window.** Each of the five ticks was
+> individually defensible — each shipped a whole subsystem, gated and Chrome-arbitrated. It is only
+> across eight that the shape appears: **the loop has been optimising the channel that WPT scores.**
+> WPT counts DOM and CSS assertions; the a11y tree has no suite (check #131 recorded exactly this, and
+> named CDP as the oracle). **An invariant with no instrument loses to one with a scoreboard**, every
+> time, and neither the ratchet nor the lever board can see it happening.
+
+### PART VI CORRECTIONS
+
+* **VI.1's I3 row is still right and now under-served.** It says the a11y tree is *"already
+  load-bearing"* and feeds `manuk-agent`'s observation channel. That makes the eight-tick gap a
+  regression in the loop's ATTENTION, not in the code — and VI.1 has no way to say so. Recorded here.
+* **VI.2's H0.7 (AccessKit) — unchanged, not started.** Fourth check in a row.
+* **I5 — unchanged. `ORACLE_CRAWLED: 0 (PARTIAL)`.** Fifth check in a row; exit-gate condition 2, and
+  the loop owns no lever for it. This needs an owner decision or it should stop being carried as a
+  gate condition.
+* **VI.3's aperture discipline was honoured this window and paid**: t1388 opened the metric's own
+  aperture, and t1393 measured 37 capability rows that had been carried as `unknown` for ten ticks.
+
+### THE INVARIANTS
+
+**I3 — BENT, and named above.** **I4 (Pareto) — held**: every tick this window was high-usage breadth.
+**I2 — held**: no dependency patched; `ToggleEvent` and `:popover-open` were built on the stack's own
+`defEvent` and `NonTSPseudoClass::PopoverOpen`. **I1, I6, I7, I8 — not bent.**
+
+### STEER
+
+1. ⭐⭐⭐ **The next tick is the popover's SEMANTIC half, and I3 is the reason, not the subtest count.**
+   HTML-AAM's `group` mapping for a visible `[popover]`, and the popover visible in the a11y tree with
+   its state. It closes the subsystem this tick opened *on the channel the project exists to serve*.
+   *Refutable by:* if `get_computed_role` on a shown popover returns `group` and the tree exposes it,
+   the bend is closed for this subsystem.
+2. ⭐⭐ **Make the I3 bend VISIBLE, or it will recur.** The loop has a ratchet mark for `MEASURED`
+   capabilities and none for *"capability ticks since the semantic layer last moved"*. A one-line
+   counter would have flagged this at tick 5 instead of tick 8. Proposed to the observer as a
+   harness change (this agent does not edit `scripts/`).
+3. ⭐ **Carried, and now due an owner decision rather than another mention:** I5's
+   `ORACLE_CRAWLED: 0` (five checks), AccessKit (four checks), the verify wall at 1074s vs a 300s
+   target (self-audit #81's only open item, harness-owned), and `Content-Encoding: zstd`.
+
+**Next check due: tick 1403.**

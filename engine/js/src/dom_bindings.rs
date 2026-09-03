@@ -18481,6 +18481,18 @@ const WINDOW_PRELUDE: &str = r#"
             eventDefaults[name] = merged;
             var hasView = ('view' in merged);
             g[name] = function (type, init) {
+                // **THE TYPE ARGUMENT IS REQUIRED, ON EVERY EVENT CONSTRUCTOR.** Chrome-measured on
+                // four of them — `new Event()`, `new CustomEvent()`, `new MouseEvent()`,
+                // `new ToggleEvent()` — all `TypeError`. It goes here rather than in one interface
+                // because it is a WebIDL rule about required arguments, not a fact about any event.
+                //
+                // ⚠ `arguments.length`, NOT `type === undefined`: `new Event(undefined)` is a legal
+                // call whose type is the STRING `"undefined"`, and the two are indistinguishable by
+                // value. WPT asserts both halves in the same file.
+                if (arguments.length < 1) {
+                    throw new TypeError(
+                        "Failed to construct '" + name + "': 1 argument required, but only 0 present.");
+                }
                 init = init || {};
                 this.type = String(type);
                 this.bubbles = !!init.bubbles;
@@ -18502,8 +18514,27 @@ const WINDOW_PRELUDE: &str = r#"
                 if (hasView && init.view != null && typeof init.view !== 'object') {
                     throw new TypeError("Failed to construct '" + name + "': member view is not a Window");
                 }
+                // **AN INTERFACE'S OWN ATTRIBUTES ARE READONLY** — WebIDL declares every event
+                // attribute `readonly`, and Chrome-measured they are: writing `e.detail`, `e.oldState`
+                // or `e.newState` does nothing at all. We handed out plain writable data properties,
+                // so a page could rewrite an event's payload mid-dispatch and every later listener saw
+                // the forgery. `assert_readonly` is 4 of `toggleevent-interface.html`'s rows.
+                //
+                // ⚠ **The BASE fields (`type`, `target`, `currentTarget`, `eventPhase`, `bubbles`,
+                // `isTrusted`, `defaultPrevented`) stay writable, and that is a KNOWN divergence with
+                // a named reason:** `__dispatchEvent` sets them on the event as it propagates. A real
+                // engine keeps them in internal slots behind prototype getters; ours are own data
+                // properties, so freezing them would freeze the dispatcher out. Only the per-interface
+                // extras — which the dispatcher never touches — can be locked without that cost.
                 for (var k in merged) {
-                    this[k] = (init[k] !== undefined) ? init[k] : merged[k];
+                    var v = (init[k] !== undefined) ? init[k] : merged[k];
+                    try {
+                        Object.defineProperty(this, k, {
+                            value: v, writable: false, enumerable: true, configurable: true,
+                        });
+                    } catch (e) {
+                        this[k] = v;
+                    }
                 }
                 this.preventDefault = function () { if (this.cancelable) this.defaultPrevented = true; };
                 this.stopPropagation = function () { this._stop = true; };
@@ -18584,6 +18615,19 @@ const WINDOW_PRELUDE: &str = r#"
                     return p;
                 };
             };
+            // **THE CONSTRUCTOR'S OWN NAME, and the brand `Object.prototype.toString` reads.**
+            // `g[name] = function (...)` produces an ANONYMOUS function, so `ev.constructor.name` was
+            // `""` and `String(ev)` was `[object Object]` for every event in the engine. Both are
+            // observable, and both are what a framework uses to tell one event interface from another
+            // when `instanceof` is unavailable (across realms, or through a proxy).
+            try {
+                Object.defineProperty(g[name], 'name', { value: name, configurable: true });
+            } catch (e) {}
+            try {
+                Object.defineProperty(g[name].prototype, Symbol.toStringTag, {
+                    value: name, configurable: true,
+                });
+            } catch (e) {}
             // The interface hierarchy `instanceof` walks: WheelEvent → MouseEvent → UIEvent → Event.
             if (parent && g[parent] && g[parent].prototype) {
                 try { Object.setPrototypeOf(g[name].prototype, g[parent].prototype); } catch (e) {}
@@ -18595,6 +18639,13 @@ const WINDOW_PRELUDE: &str = r#"
         defEvent('Event', {});
         defEvent('UIEvent', { view: null, detail: 0 }, 'Event');
         defEvent('CustomEvent', { detail: null }, 'Event');
+        // `ToggleEvent` — `<dialog>` and `[popover]` announce their state change with it, and it is the
+        // interface every popover/menu/tooltip framework switches on. `oldState`/`newState` are
+        // `"open"`/`"closed"`; `source` (Baseline 2024) is the INVOKER that caused the toggle — the
+        // `<button popovertarget>`, or the `{source}` option, or `null` for a bare `showPopover()`.
+        // Absent, `ToggleEvent is not defined` was 38 subtests in one file, and the popover events we
+        // did fire were plain `Event`s wearing two extra properties.
+        defEvent('ToggleEvent', { oldState: '', newState: '', source: null }, 'Event');
         // The Event phase constants (`Event.AT_TARGET` …). `e.eventPhase === Event.AT_TARGET` is the
         // canonical dispatch-phase check; absent, it silently compares to `undefined`. On the constructor
         // and the prototype (instances inherit them).

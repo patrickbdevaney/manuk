@@ -7139,15 +7139,27 @@ const PRELUDE: &str = r#"
         // notification after the fact. Both carry oldState/newState, which is what handlers switch on.
         var __popToggleEvent = function(el, name, oldState, newState, cancelable, source) {
           var ev;
-          try { ev = new Event(name, { bubbles: false, cancelable: !!cancelable }); }
-          catch (e) { return true; }
-          ev.oldState = oldState;
-          ev.newState = newState;
-          // `ToggleEvent.source` (Baseline 2024): the invoker element that caused the toggle — the
-          // `<button popovertarget>` for a declarative open, the `{source}` option for the
-          // imperative one, `null` for a bare `showPopover()`. A menu framework reads it to position
-          // and focus relative to the button that opened the popover.
-          ev.source = source || null;
+          // A real `ToggleEvent`, not an `Event` wearing two extra properties: `e instanceof
+          // ToggleEvent` is how a framework tells a popover's toggle from any other `toggle`, and
+          // `oldState`/`newState` are READONLY on it, so they have to arrive through the init dict
+          // rather than be assigned afterwards.
+          try {
+            ev = new ToggleEvent(name, {
+              bubbles: false,
+              cancelable: !!cancelable,
+              oldState: oldState,
+              newState: newState,
+              source: source || null,
+            });
+          } catch (e) {
+            try { ev = new Event(name, { bubbles: false, cancelable: !!cancelable }); }
+            catch (e2) { return true; }
+            ev.oldState = oldState;
+            ev.newState = newState;
+          }
+          // `source` now arrives through the init dict above (it is readonly on a ToggleEvent); this
+          // only has to cover the plain-Event fallback path.
+          if (ev.source === undefined) { try { ev.source = source || null; } catch (e) {} }
           try { return el.dispatchEvent(ev); } catch (e) { return true; }
         };
         // The invoker travels as `showPopover({source})` / `hidePopover({source})`; a bare call or a

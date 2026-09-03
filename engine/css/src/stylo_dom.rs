@@ -360,6 +360,12 @@ mod selector_impl {
                 // attribute OR an ancestor `<fieldset disabled>` (bulk-disable) — so the cascade
                 // agrees with querySelector and the focus path. Was own-attribute-only, which left a
                 // fieldset-disabled control un-greyed by `input:disabled { … }`.
+                // ⚠ **THE SAME RULE, IN THE SECOND MATCHER.** `:popover-open` had to be taught to
+                // BOTH selector engines — the minimal one behind `element.matches()`/`querySelector`
+                // and this Stylo one behind the live cascade. A stylesheet rule and a script asking
+                // the same question through different doors is the twin-drift this codebase keeps
+                // finding; the gate asserts both entrances.
+                P::PopoverOpen => has("data-manuk-popover-open"),
                 P::Disabled => crate::is_disabled_control(self.dom, self.node),
                 P::Enabled => {
                     is_form_control(tag) && !crate::is_disabled_control(self.dom, self.node)

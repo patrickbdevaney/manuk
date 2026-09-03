@@ -2496,6 +2496,11 @@ enum Pseudo {
     Checked,
     Disabled,
     Enabled,
+    /// `:popover-open` — an open `[popover]`. The engine already HAD this state; it just had no
+    /// selector. `showPopover()` sets `data-manuk-popover-open` and the UA sheet keys `display` off
+    /// that attribute, so a popover opened and painted correctly while `el.matches(':popover-open')`
+    /// answered `false` — the state was real and unaskable.
+    PopoverOpen,
     Required,
     /// `:read-only` / `:read-write` — the mutability pseudo-classes. An `<input>`/`<textarea>` WITHOUT
     /// a `readonly` attribute is `:read-write`; everything else (a readonly control, and every
@@ -2897,6 +2902,9 @@ fn pseudo_matches(p: &Pseudo, dom: &Dom, node: NodeId) -> bool {
             dom.is_element(c) || matches!(dom.data(c), NodeData::Text(t) if !t.trim().is_empty())
         }),
         Pseudo::Checked => el.attr("checked").is_some() || el.attr("selected").is_some(),
+        // The open-popover state, read from the attribute `showPopover()` writes — the same source
+        // the UA sheet's `display` rule uses, so the selector and the paint cannot disagree.
+        Pseudo::PopoverOpen => el.attr("data-manuk-popover-open").is_some(),
         Pseudo::Disabled => is_disabled_control(dom, node),
         Pseudo::Open => el.attr("open").is_some(),
         Pseudo::Enabled => {
@@ -4820,6 +4828,7 @@ fn parse_pseudo(name: &str, arg: Option<&str>) -> Option<Pseudo> {
         "root" => Pseudo::Root,
         "empty" => Pseudo::Empty,
         "checked" => Pseudo::Checked,
+        "popover-open" => Pseudo::PopoverOpen,
         "disabled" => Pseudo::Disabled,
         "open" => Pseudo::Open,
         "enabled" => Pseudo::Enabled,
