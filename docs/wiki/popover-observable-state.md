@@ -105,9 +105,56 @@ still cannot tell it from an ordinary `<div>`.**
 > the shape is that the loop optimised the channel WPT scores. The a11y tree has no suite.
 > **An invariant with no instrument loses to one with a scoreboard.**
 
+## 6. The semantic half — `group`, and the pair that names the rule
+
+*Landed tick 1396, chosen by constitution check #132 rather than by the histogram.*
+
+HTML-AAM raises a **visible** `[popover]` to `group` — but only when the element has **no role mapping
+of its own**. Every row measured through CDP `Accessibility.getPartialAXTree`:
+
+| element (forced visible) | Chrome |
+|---|---|
+| `<div popover>` **closed** | `none` (node ignored) |
+| `<div popover>` | **`group`** |
+| `<span popover>` | **`group`** |
+| `<section popover>` unnamed | `generic` |
+| `<section popover>` named | `region` |
+| `<button popover>` | `button` |
+| `<nav popover>` | `navigation` |
+| `role="none"` | `none` (ignored) |
+| `role="alert"` | `alert` |
+| `+ visibility: hidden` | `none` (ignored) |
+
+⭐⭐ **`<div>` and an unnamed `<section>` both compute to `generic` without the attribute, and the
+popover raises only one of them.** A rule written against the *computed* role would have raised both.
+The discriminator is *does HTML-AAM map this tag at all* — `<section>` has a mapping
+(region-when-named, generic otherwise), `<div>` and `<span>` have none.
+
+⭐⭐⭐ **So the rule belongs in the role function's DEFAULT ARM, which IS the set of unmapped tags
+rather than a list of them.** Anywhere else needs a hand-maintained tag list that drifts the first
+time a tag gains a mapping. The arm cannot drift: it is defined as *everything with no arm*.
+
+### ⚠⚠⚠ And the suite still reads `generic`, because a second entrance disagrees with the tree
+
+The a11y **tree** is already right: a closed popover is not in it, and an open one is, as a `group`.
+But `host_ax_role_name` — the seam behind `test_driver.get_computed_role`, which is how the entire
+`accname` / `wai-aria` / `html-aam` surface (457 tests) asks — **calls the role function directly and
+bypasses the tree.** So it reports a role for a node the tree excludes.
+
+That function's own doc comment already records this exact class happening once before (generated
+`::before` content reached the tree and not this entrance, so a button was announced `"Save"` here and
+`"★ Save"` there). **One rule, two entrances, and the weaker one is what the conformance suite reads.**
+
+It is deliberately not patched at that entrance, because a closed popover is unexposed for the same
+reason every `display: none` element is: the value is wrong in **all** such elements, so it is the
+shared path, not a special case. Fixing it there would encode the wrong shape.
+
+> ⭐ This is why the popover role fix scored **zero** WPT subtests while being real, gated and
+> Chrome-arbitrated — which is constitution check #132's claim demonstrated instead of argued.
+
 ## Not built yet
 
-* the popover's **a11y half** — the `group` role mapping and the popover's presence in the tree (this
-  is the next tick, chosen by the constitution check rather than by the histogram);
+* the `get_computed_role` entrance answering from the TREE, so an excluded node reports `none` for
+  every reason a node is excluded (§6) — the shared path for 457 conformance tests;
 * `popoverTargetElement` / `popoverTargetAction` reflection and the declarative invoker (27 subtests);
 * the queued-and-coalesced `toggle` event described in §4.

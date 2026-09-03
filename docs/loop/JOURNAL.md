@@ -99152,3 +99152,117 @@ state. Behind it: `popoverTargetElement`/`popoverTargetAction` reflection and th
 (27 subtests), and the queued-and-coalesced `toggle` event measured above.
 
 WIKI: docs/wiki/popover-observable-state.md
+
+## Tick 1396 — the popover's other half, and the entrance that disagrees with the tree (2026-09-03)
+
+TICK SHAPE: capability-subsystem
+
+**Chosen by constitution check #132, not by the histogram.** t1395 landed the popover's observable
+state and moved `html/semantics/popovers` 9 → 62. The same suite then said what it had not done, and
+the check made that the window's finding: **I3 — the semantic model lands in LOCKSTEP with the
+capability — had been bent for five consecutive ticks.**
+
+### ⭐⭐⭐ THE RULE, AND THE PAIR THAT NAMES IT
+
+HTML-AAM raises a **visible** `[popover]` to `group` — but only when the element has **no role mapping
+of its own**. Every row headless-Chrome-measured through CDP `Accessibility.getPartialAXTree`:
+
+```text
+                                            chrome            before      after
+  <div popover>            closed           none (ignored)    generic     Generic
+  <div popover>            visible          GROUP             generic     Group
+  <span popover>           visible          GROUP             generic     Group
+  <section popover>        visible          GENERIC           generic     Generic
+  <section popover>        visible + named  region            region      Region
+  <button popover>         visible          button            button      Button
+  <nav popover>            visible          navigation        navigation  Navigation
+  <div popover role=none>  visible          none (ignored)    generic     Generic
+  <div popover role=alert> visible          alert             alert       Alert
+  <div popover> + visibility:hidden         none (ignored)    generic     Generic
+```
+
+⭐⭐ **`<div>` and an unnamed `<section>` BOTH compute to `generic` without the attribute, and the
+popover raises only one of them.** A rule written against the *computed* role would have raised both
+and been wrong about `<section>`. The discriminator is **does HTML-AAM map this tag at all** —
+`<section>` has a mapping (region-when-named, generic otherwise); `<div>` and `<span>` have none.
+
+⭐⭐⭐ **So the rule lives in `role_of`'s DEFAULT ARM, which IS the set of unmapped tags rather than a
+list of them.** Anywhere else would need a hand-maintained tag list that drifts the first time a tag
+gains a mapping; the arm cannot drift, because it is defined as "everything with no arm".
+
+### ⚠ AND THE WPT NUMBER DID NOT MOVE — WHICH IS THE CHECK'S CLAIM, PROVEN
+
+```text
+  html/semantics/popovers   62/153  ->  62/153   (+0)
+```
+
+`popover-minimum-role.html` still fails, and its failing row is the CLOSED popover: Chrome ignores
+that node entirely and `get_computed_role` answers `"none"`; we answer `"generic"`.
+
+The tree is **already right** — a probe confirms the closed popover is NOT in our a11y tree and the
+open one is, with role `Group`. The disagreement is in the *other entrance*:
+
+> ⚠⚠⚠ **`host_ax_role_name` — the seam behind `test_driver.get_computed_role` — calls `role_of`
+> DIRECTLY, bypassing the tree.** So it reports a role for a node the tree excludes. **That function's
+> own doc comment already records this exact class happening once before** (t1097: generated content
+> reached the tree and not this entrance, so a button was announced `"Save"` here and `"★ Save"`
+> there). One rule, two entrances, and the weaker one is what the conformance suite reads.
+
+Deliberately **not** fixed here, and the reason is a rule this loop has: a closed popover is unexposed
+because it is `display: none`, and **every** `display: none` element is unexposed. Special-casing
+popovers at that entrance would fix the row and encode the wrong shape — the value is wrong in ALL
+such elements, so it is the SHARED PATH, not a special case (t1303). The entrance needs the tree's
+own answer, which needs a style map it cannot currently reach. That is its own tick.
+
+⭐ **This is constitution check #132's claim demonstrated rather than argued.** The capability is real,
+CDP-arbitrated and gated; the scoreboard moved by zero. *An invariant with no instrument loses to one
+with a scoreboard* — and here the instrument exists, disagrees with the engine's own tree, and the
+suite reads the losing side.
+
+### THE GATE
+
+`a_visible_popover_with_no_role_mapping_of_its_own_is_a_group`
+(`agent/tests/g_ax_popover_minimum_role.rs`) — 13 rows including **two controls** (the same `<div>`
+and the same unnamed `<section>` without the attribute), because the `<section>` row is only readable
+as *the mapping winning* if the control shows it was `generic` all along. PROVEN RED by four
+mutations: N1 the arm removed → `#p_open`; N2 the rendered-check dropped → `#p_closed`; N3 the
+open-state marker ignored → `#p_open`; N4 `visibility:hidden` no longer un-renders → `#p_invis`.
+
+⚠ **The CDP oracle is now a reusable script** (`/tmp` only — `scripts/` is observer-owned): Chrome
+launched with `--remote-debugging-port`, a ~40-line stdlib WebSocket client, then
+`Runtime.evaluate` → `DOM.requestNode` → `Accessibility.getPartialAXTree`. `DOM.querySelector`
+returns `nodeId: 0` on a `file://` page and `--dump-accessibility-tree` hangs; the evaluate-then-
+request path is the one that works. Check #131 named CDP the a11y oracle; this is it, running.
+
+### ⚠ MEASURED AND DELIBERATELY NOT CHANGED
+
+```text
+  <div popover hidden style="display:block">   chrome: GROUP     ours: excluded from the tree
+```
+
+Chrome renders it — an inline `display:block` beats the UA sheet's `[hidden] { display: none }` — so
+it is a `group`. `is_hidden()` treats the `hidden` ATTRIBUTE as an unconditional exclusion. That is a
+real divergence **about `hidden`**, not about popovers, with its own callers; folding it in here would
+make this tick's claim untestable.
+
+### THE RECEIPT
+
+```text
+  WPT html/semantics/popovers   62/153 = 40.5%  ->  62/153  (+0 — see above, and it is the finding)
+  WPT wai-aria 399/434 = 91.9% · accname 445/484 = 91.9% · html-aam 315/335 = 94.0%   ALL FLAT
+  a11y role rule: 13 rows CDP-arbitrated, PROVEN RED four ways
+  manuk-a11y 21 · manuk-agent 126 · manuk-css 41 · manuk-layout 191 · manuk-paint 22 ·
+  manuk-dom 11 · manuk-net 98    ALL CONTROL
+  Bar 0: HANG/CRASH 0
+```
+
+⭐ **Track B is no longer dark**: first a11y engine tick since t1387, closing the eight-tick gap the
+check named.
+
+NEXT: the entrance defect above — `host_ax_role_name` must answer from the TREE, so an excluded node
+reports `none` for every reason a node is excluded, not just this one. It is worth its own tick
+because it is the shared path for the whole `accname`/`wai-aria`/`html-aam` surface (457 tests) and
+the same class has now bitten twice. Behind it: `popoverTargetElement` reflection and the declarative
+invoker (27 subtests), and the queued-and-coalesced `toggle` event measured at t1395.
+
+WIKI: docs/wiki/popover-observable-state.md

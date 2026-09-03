@@ -2462,7 +2462,9 @@
   - L61 · The readonly fix is scoped, and the divergence is stated
   - L72 · 4. toggle is coalesced — and select, one tick earlier, is not
   - L85 · 5. What this cost, and what the constitution check said about it
-  - L108 · Not built yet
+  - L108 · 6. The semantic half — group, and the pair that names the rule
+  - L137 · ⚠⚠⚠ And the suite still reads generic, because a second entrance disagrees with the tree
+  - L155 · Not built yet
 
 ## THE WIKI — what we durably KNOW, organised by subsystem
 `docs/wiki/README.md`
@@ -2815,4 +2817,4 @@
   - L89 · The wall audit (due t1388)
 
 ---
-2582 sections across 57 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+2584 sections across 57 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.

@@ -10128,3 +10128,48 @@ correct bounded fix; writing the reason at the code turns a future bug report in
 ⭐⭐ Neither can be inferred from the other, and both look like "it fires once" from a badly-shaped
 probe. **Measure the batching rule of every async notification separately**, with two DIFFERENT changes
 in one task — a repeat of the SAME change tests the change-detector, not the batching. (t1394/t1395)
+
+## The `[popover]` minimum role — and why it belongs in the DEFAULT ARM
+
+HTML-AAM raises a VISIBLE `[popover]` to `group`, but only when the element has NO role mapping of its
+own. Chrome-measured, forced visible:
+
+```text
+  <div popover> -> group      <span popover> -> group      <section popover> -> generic
+  <button popover> -> button  <nav popover> -> navigation  <section popover> named -> region
+```
+
+⭐⭐ **`<div>` and an UNNAMED `<section>` both compute to `generic` without the attribute, and only the
+`<div>` is raised.** A rule written against the COMPUTED role raises both and is wrong about one. The
+discriminator is *does the spec map this tag at all*, not *what does it come out as*.
+
+⭐⭐⭐ **So the rule goes in the role function's DEFAULT ARM, which IS the set of unmapped tags rather
+than a list of them.** Any other placement needs a hand-maintained tag list that drifts the first time
+a tag gains a mapping; the arm is defined as "everything with no arm" and cannot.
+(t1396 — `agent/tests` `a_visible_popover_with_no_role_mapping_of_its_own_is_a_group`)
+
+## ⚠⚠⚠ The a11y TREE and the CONFORMANCE ENTRANCE are two doors, and the suite reads the weaker one
+
+The tree correctly excluded a closed popover; `host_ax_role_name` — the seam behind
+`test_driver.get_computed_role`, which is how the whole `accname`/`wai-aria`/`html-aam` surface (457
+tests) asks — calls the role function DIRECTLY and bypasses the tree. So it reports a role for a node
+the tree does not contain, and the suite reads `generic` where Chrome says `none`.
+
+⭐ **That function's own doc comment already recorded this class happening once before** (generated
+`::before` content reached the tree and not this entrance). A rule with two entrances where the
+conformance suite reads the un-fixed one is invisible to the whole suite — twice, in the same
+function, years apart in tick numbers.
+
+⭐⭐ And the fix belongs on the SHARED PATH: a closed popover is unexposed because it is `display:none`,
+and EVERY `display:none` element is. Patching the popover case at that entrance would score the row
+and encode the wrong shape — wrong in ALL is the shared path, wrong in ONE is the special case. (t1396)
+
+## A capability tick that scores ZERO and is still the right tick
+
+The popover role rule is real, CDP-arbitrated, gated and proven red four ways — and moved the WPT
+number by **+0**, because the entrance the suite reads disagrees with the engine's own tree.
+
+⭐⭐⭐ **Record the zero and the reason, in the receipt, rather than reaching for a row that would move
+it.** A loop that only lands ticks the scoreboard can see will, over a window, optimise the channel
+the scoreboard measures — which is exactly what the constitution check found across the five ticks
+before this one. (t1396; constitution check #132)

@@ -1430,6 +1430,41 @@ pub fn is_hidden(dom: &Dom, node: NodeId) -> bool {
 /// The element's role: an explicit `role="…"` token if valid, else the HTML-AAM
 /// implicit role for its tag. `None` means "expose no node" (e.g. `<img alt="">`,
 /// which HTML-AAM maps to `presentation`).
+/// **Is a `[popover]` element actually being RENDERED?** — the question HTML-AAM's popover mapping
+/// turns on, answered from the DOM alone.
+///
+/// Two sources, and the first is the authoritative one for the ordinary path: `showPopover()` writes
+/// `data-manuk-popover-open`, and the UA sheet keys the popover's `display` off exactly that
+/// attribute — so the engine's own open-state marker IS the rendered-state answer. The second is an
+/// author overriding the UA rule with a `display` of their own, which wins over it.
+///
+/// ⚠⚠ **AND THE LIMIT IS THE t1365 CLASS, STATED RATHER THAN DISCOVERED LATER: the inline arm reads
+/// the `style=` ATTRIBUTE, so a popover forced visible by a STYLESHEET RULE is missed.** `role_of`
+/// takes a `&Dom` and no style map — a signature with a dozen callers — while the name walk one
+/// screen up takes `NameStyles` and reads the COMPUTED pair. That is the same rule with two sources
+/// where the weaker source is the one the conformance suite happens to use: WPT's own
+/// `popover-minimum-role.html` writes `popover.style = 'display:block'`, which is inline, so the
+/// suite cannot see this gap either. Recorded here so the next reader does not have to rediscover it.
+fn popover_is_rendered(dom: &Dom, node: NodeId) -> bool {
+    let Some(el) = dom.element(node) else {
+        return false;
+    };
+    let (inline_none, inline_vis) = inline_visibility(dom, node);
+    // `visibility: hidden` removes it from the tree whatever the display says — Chrome-measured:
+    // `style="display:block; visibility:hidden"` on an open popover is IGNORED, role `none`.
+    if inline_vis == Some(false) {
+        return false;
+    }
+    if el.attr("data-manuk-popover-open").is_some() {
+        return true;
+    }
+    // An inline `display` that is not `none` beats the UA sheet's `[popover] { display: none }`.
+    !inline_none
+        && el
+            .attr("style")
+            .is_some_and(|st| st.to_ascii_lowercase().contains("display"))
+}
+
 pub fn role_of(dom: &Dom, node: NodeId) -> Option<Role> {
     let el = dom.element(node)?;
 
@@ -1692,6 +1727,30 @@ pub fn role_of(dom: &Dom, node: NodeId) -> Option<Role> {
         "p" => Role::Paragraph,
         "hr" => Role::Separator,
         "html" => Role::Document,
+        // ── ⭐⭐⭐ **THE `[popover]` MINIMUM ROLE — AND THIS ARM IS THE RULE'S OWN DEFINITION.**
+        //
+        // HTML-AAM raises a VISIBLE `[popover]` to `group`, but only when the element has **no role
+        // mapping of its own** — and "no mapping" is precisely the set of elements that fall through
+        // to this default arm. Putting the rule anywhere else would need a list; putting it HERE
+        // makes the arm the list.
+        //
+        // ⭐⭐ It takes a PAIR to see that, and the pair is the whole finding. Chrome-measured, both
+        // forced visible:
+        //
+        // ```text
+        //   <div popover>      -> group        <span popover>    -> group
+        //   <section popover>  -> generic      …and named        -> region
+        //   <button popover>   -> button       <nav popover>     -> navigation
+        // ```
+        //
+        // **`<div>` and an unnamed `<section>` BOTH compute to `generic` without the attribute**, so
+        // a rule written against the computed role would have raised both and been wrong about one.
+        // `<section>` HAS a mapping (region-when-named, generic otherwise); `<div>` and `<span>` have
+        // none. The distinction is *does HTML-AAM map this tag*, not *what does it come out as*.
+        //
+        // ⚠ An explicit `role=` already returned above, so `role="none"` and `role="alert"` both win
+        // over this — Chrome agrees on both.
+        _ if el.attr("popover").is_some() && popover_is_rendered(dom, node) => Role::Group,
         _ => Role::Generic,
     })
 }
