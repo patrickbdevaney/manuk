@@ -99398,3 +99398,96 @@ NEXT: the EXTERNAL half — a script-inserted `<script src>` needs a fetch, so i
 `get_computed_role` entrance from t1396.
 
 WIKI: docs/wiki/dynamic-script-insertion.md
+
+## Tick 1398 — the `<img>` numbers the engine already had and never published (2026-09-03)
+
+TICK SHAPE: capability-subsystem
+
+`html/semantics/embedded-content` is the board's largest remaining row (1516 failing). Ranked by file,
+three of the top entries were **entirely zero** — `img.complete.html` 0/19, `image-decode.html` 0/15,
+plus the `decode/` family — and they are one surface.
+
+### ⭐⭐ A PUBLICATION, NOT A COMPUTATION
+
+`img.complete`, `naturalWidth`, `naturalHeight` and `decode()` were all `undefined`. The numbers
+**existed the whole time**: `Page::publish_image_sources` hands every decoded bitmap to the JS side so
+`ctx.drawImage(img, …)` has pixels, and `canvas::source_size` has read the width and height out of
+that table since it was written. Nothing exposed either to the page.
+
+```text
+                                 chrome    before      after
+  <img> no src      complete     true      undefined   true
+  <img src="">      complete     true      undefined   true
+  new Image()       complete     true      undefined   true
+  i.src='missing'   complete     false     undefined   false   ← the fetch has not settled
+  naturalWidth / naturalHeight   0         undefined   0
+  decode()                       Promise   TypeError   Promise (rejects EncodingError)
+  sizes                          string    undefined   string, and WRITABLE
+```
+
+**What each one costs when it is `undefined`:** `complete` is THE check every lazy-loader, lightbox,
+carousel and preloader makes. `naturalWidth` is how every gallery computes an aspect ratio — and
+`undefined` makes that `NaN`, so the layout collapses rather than erroring. And `decode()` returning
+`undefined` is the worst of the three: **`await img.decode()` then succeeds instantly on an image that
+has not loaded**, so the placeholder swaps out to nothing. A missing method that throws is louder than
+one that returns a falsy success.
+
+### ⚠⚠ TWO DIVERGENCES, BOTH DELIBERATE, BOTH RECORDED WHERE THE CODE IS
+
+**1. A FAILED image reads `complete === false` here and `true` in Chrome.** Chrome's rule is *the
+fetch settled*, successfully or not; the only signal this engine publishes is the DECODED bitmap, so
+success is recorded and failure is not. Closing it needs a failure set beside the source map — a
+different mechanism, not a different accessor.
+
+**2. `currentSrc` returns the selected URL immediately; Chrome returns `""` until the image loads.**
+
+> ⚠⚠⚠ **DO NOT "CORRECT" THIS ONE, and that is why it is written down twice.** The getter deliberately
+> publishes the candidate `select_image_url` chose. WPT's `the-img-element/sizes` files read
+> `expect = referenceImg.currentSrc` once per paragraph and `assert_unreached` every sibling when it
+> is falsy — so an empty string there failed whole groups and the directory once read **0 of 795**.
+> An edit that makes this row agree with Chrome costs 795 subtests. **It is the t1004 hazard running
+> backwards: here the correct-LOOKING change is the regression**, and the only thing standing between
+> a future tick and it is this paragraph.
+
+⚠ These members live on `HTMLElement.prototype`, tag-guarded, like every cross-cutting member in this
+engine — so `'complete' in HTMLImageElement.prototype` is `false` while `img.complete` is right. The
+gate asserts VALUES, not descriptor locations, because the interface model is the engine's and not
+this tick's subject.
+
+### THE GATE
+
+`an_img_publishes_the_loading_state_the_engine_already_knows`
+(`engine/page/tests/g_img_loading_state.rs`) — **14 rows, and headless Chrome agrees with this engine
+on every one exactly**, including the `EncodingError` rejection name. Two rows are the GUARD (a `<div>`
+must answer `undefined`), because a cross-cutting property defined on `HTMLElement.prototype` answers
+for every element unless it is told not to. PROVEN RED by six mutations, each on its predicted row:
+N1 `complete` removed → `a_noSrcComplete`; N2 no-source no longer complete → `a_noSrcComplete`;
+N3 `naturalWidth` falls back to `undefined` → `e_naturalWidth`; N4 `decode()` returns `undefined` →
+`a_noSrcComplete`; N5 the `sizes` setter stops reaching the attribute →
+`l_sizesWriteReachesAttribute`; N6 the IMG guard removed → `m_divComplete`.
+
+### THE RECEIPT
+
+```text
+  WPT html/semantics/embedded-content   1489/3005 = 49.6%  ->  1522/3005 = 50.6%   (+33)
+      img.complete.html    0/19 -> 10/19   ·   decode/image-decode.html   0/15 -> 7/15
+      decode/…quick-attach 0/9  ->  5/9    ·   decode/…picture           0/8  -> 4/8
+  WPT html/semantics (whole area)  6185/11391 = 54.3% -> 6217/11381 = 54.6%   (+32)
+  WPT TOTAL (monotonic)            495812 = 37.91%  ->  495844 = 37.92%
+  Bar 0: HANG/CRASH 0
+  manuk-css 41 · manuk-layout 191 · manuk-paint 22 · manuk-dom 11 · manuk-agent 126 ·
+  manuk-net 98 · manuk-a11y 21    ALL CONTROL
+```
+
+⚠ **+33 is a modest number for a whole IDL surface, and the reason is worth stating rather than
+hiding:** most of the remaining `complete`/`decode` rows need an image to actually LOAD over the test
+server, and the ones that flipped are the ones answerable without a byte of image data. The capability
+is real for every page that ships images; the suite can only score the half that does not need them.
+
+NEXT in this area, ranked and measured: `sizes-auto.html` is still **0/74** — `sizes="auto"` is a
+layout-dependent sizing algorithm, not an IDL gap, so the reflection landed here does not touch it.
+`relevant-mutations.html` (34/113) is `<img>` reacting to attribute changes, which is what every
+lazy-loading library does. `image-maps/…/hash-name-reference.html` is 162 failing in ONE file
+(`usemap` → `<map name>` resolution).
+
+WIKI: docs/wiki/img-loading-state.md

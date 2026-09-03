@@ -1649,6 +1649,16 @@
   - L50 · Proven red
   - L63 · t1377 — the drift table's other two layout rows, priced and withdrawn
 
+## The `<img>` loading state — numbers the engine had and never published
+`docs/wiki/img-loading-state.md`
+
+  - L21 · What each one costs when it is undefined
+  - L32 · ⚠⚠ Two deliberate divergences
+  - L34 · A failed image reads complete === false here, true in Chrome
+  - L40 · currentSrc returns the selected URL immediately; Chrome returns "" until load
+  - L50 · Where these members live
+  - L57 · What this moved, and what it did not
+
 ## The implicit roles that were falling through to a plausible default
 `docs/wiki/implicit-roles-html-aam.md`
 
@@ -2829,4 +2839,4 @@
   - L89 · The wall audit (due t1388)
 
 ---
-2592 sections across 58 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+2598 sections across 59 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.

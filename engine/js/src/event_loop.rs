@@ -6159,6 +6159,105 @@ const PRELUDE: &str = r#"
           }
         });
       }
+      // ── **THE `<img>` LOADING-STATE IDL — `complete`, `naturalWidth`, `naturalHeight`, `decode()`,
+      //    `sizes`.** All of them were `undefined`, and they are what a page reads to find out whether
+      //    an image is ready. `img.complete` is THE check every lazy-loader, lightbox, carousel and
+      //    preloader makes; `naturalWidth` is how every gallery computes an aspect ratio; `decode()`
+      //    is what React/Next image components await before swapping a placeholder out.
+      //
+      //    The numbers existed the whole time — the engine hands every decoded bitmap to the JS side
+      //    so `ctx.drawImage(img, …)` has pixels — and nothing published them. `__imgNatural` is that
+      //    table, read through the ELEMENT so an `<img>` in an iframe cannot collide with the
+      //    parent's node of the same id.
+      //
+      //    Chrome-measured:
+      //
+      //    ```text
+      //      <img> with no src / src=""      complete true · naturalWidth 0 · currentSrc ""
+      //      new Image()                     complete true
+      //      i.src = 'missing.png' (sync)    complete FALSE — the fetch has not settled
+      //      decode()                        returns a Promise
+      //      sizes                           a string (attribute reflection)
+      //    ```
+      //
+      //    ⚠⚠ **ONE NAMED DIVERGENCE, measured rather than discovered later:** an image whose fetch
+      //    FAILED reads `complete === true` in Chrome (the fetch settled, unsuccessfully) and `false`
+      //    here, because the only signal this engine publishes is the DECODED bitmap — success is
+      //    recorded and failure is not. Closing it needs a failure set beside the source map, which is
+      //    a different mechanism from the accessors below.
+      var __imgDecoded = function (el) {
+        if (!el || el.tagName !== 'IMG') { return null; }
+        if (typeof globalThis.__imgNatural !== 'function') { return null; }
+        try { return globalThis.__imgNatural(el); } catch (e) { return null; }
+      };
+      // "No source at all" is `complete` by definition — there is nothing to wait for. It is the
+      // state a freshly-constructed `new Image()` is in, and a loader that polls `complete` before
+      // assigning `src` depends on it being TRUE.
+      var __imgHasNoSource = function (el) {
+        var src = el.getAttribute && el.getAttribute('src');
+        var set = el.getAttribute && el.getAttribute('srcset');
+        return (!src || !src.trim()) && (!set || !set.trim());
+      };
+      if (__HP && !Object.getOwnPropertyDescriptor(__HP, 'complete')) {
+        Object.defineProperty(__HP, 'complete', {
+          configurable: true,
+          get: function () {
+            if (!this || this.tagName !== 'IMG') { return undefined; }
+            if (__imgHasNoSource(this)) { return true; }
+            return !!__imgDecoded(this);
+          }
+        });
+      }
+      if (__HP && !Object.getOwnPropertyDescriptor(__HP, 'naturalWidth')) {
+        Object.defineProperty(__HP, 'naturalWidth', {
+          configurable: true,
+          get: function () {
+            if (!this || this.tagName !== 'IMG') { return undefined; }
+            var n = __imgDecoded(this);
+            return n ? n[0] : 0;   // 0 when unavailable — Chrome's answer, not `undefined`
+          }
+        });
+      }
+      if (__HP && !Object.getOwnPropertyDescriptor(__HP, 'naturalHeight')) {
+        Object.defineProperty(__HP, 'naturalHeight', {
+          configurable: true,
+          get: function () {
+            if (!this || this.tagName !== 'IMG') { return undefined; }
+            var n = __imgDecoded(this);
+            return n ? n[1] : 0;
+          }
+        });
+      }
+      // `decode()` — resolve once the bitmap is usable, reject with `EncodingError` when it is not.
+      // ⚠ A PROMISE, always: the whole point of the API is that callers `await` it, and a method that
+      // returns `undefined` makes `await img.decode()` succeed instantly on an image that has not
+      // loaded — which is worse than not having it, because the placeholder swaps to nothing.
+      if (__HP && typeof __HP.decode !== 'function') {
+        __HP.decode = function () {
+          var self = this;
+          if (!self || self.tagName !== 'IMG') {
+            return Promise.reject(new TypeError('decode() is only defined on an <img>'));
+          }
+          if (__imgDecoded(self)) { return Promise.resolve(); }
+          return Promise.reject(new DOMException('The source image cannot be decoded.', 'EncodingError'));
+        };
+      }
+      // `sizes` — a plain string reflection of the content attribute, and it was `undefined`. The
+      // responsive-image code that WRITES it (`img.sizes = '100vw'`) was writing to a dead property.
+      if (__HP && !Object.getOwnPropertyDescriptor(__HP, 'sizes')) {
+        Object.defineProperty(__HP, 'sizes', {
+          configurable: true,
+          get: function () {
+            if (!this || (this.tagName !== 'IMG' && this.tagName !== 'SOURCE')) { return undefined; }
+            var v = this.getAttribute('sizes');
+            return v == null ? '' : v;
+          },
+          set: function (v) {
+            if (!this || (this.tagName !== 'IMG' && this.tagName !== 'SOURCE')) { return; }
+            this.setAttribute('sizes', String(v));
+          }
+        });
+      }
       // `<textarea>.textLength` — the read-only code-unit length of the control's value, the number a
       // "120 / 280 characters" counter reads on every keystroke. It was undefined (a counter reading it
       // got `undefined`, then rendered "undefined / 280" or NaN'd its maths). It is exactly `value.length`

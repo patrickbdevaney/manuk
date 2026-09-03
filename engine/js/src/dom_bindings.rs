@@ -12520,6 +12520,35 @@ unsafe fn host_selected_src(cx: *mut RawJSContext, argc: u32, vp: *mut Value) ->
     true
 }
 
+/// `__imgNatural(imgElement)` → `[naturalWidth, naturalHeight]` if this `<img>`'s bitmap has been
+/// decoded, or `null` if it has not.
+///
+/// The engine has known both numbers all along — `Page::publish_image_sources` hands every decoded
+/// bitmap to the JS side so `ctx.drawImage(img, …)` has pixels — and **nothing exposed them to the
+/// page.** `naturalWidth`, `naturalHeight` and `complete` were all `undefined`, which is what every
+/// lazy-loader, lightbox, carousel and preloader on the web reads to decide whether an image is ready.
+///
+/// ⚠⚠ **It takes the ELEMENT, not a bare `nodeId`, for the same reason `__selectedSrc` does**: a
+/// `NodeId` is only meaningful inside its own arena, and an `<img>` inside an `<iframe>` would
+/// otherwise collide with the parent's node of the same number. The reflector's own `SLOT_DOM` names
+/// the arena.
+unsafe fn host_img_natural(cx: *mut RawJSContext, argc: u32, vp: *mut Value) -> bool {
+    *vp = NullValue();
+    let Some(obj) = arg_object(vp, argc, 0) else {
+        return true;
+    };
+    let Some((_dom, node)) = node_and_dom(obj) else {
+        return true;
+    };
+    let Some((w, h)) = crate::canvas::source_size(node.0) else {
+        return true;
+    };
+    if let Some(v) = eval_in_current_global(cx, &format!("[{w},{h}]")) {
+        *vp = v;
+    }
+    true
+}
+
 /// `__axRoleName(nodeId)` → `[computedRole, accessibleName]` from the **in-process accessibility
 /// tree**, or `null`.
 ///
@@ -13603,6 +13632,14 @@ pub unsafe fn install(
         global.handle(),
         c"__selectedSrc".as_ptr(),
         host_fn!(host_selected_src),
+        1,
+        0,
+    );
+    JS_DefineFunction(
+        &mut wrap_cx(cx),
+        global.handle(),
+        c"__imgNatural".as_ptr(),
+        host_fn!(host_img_natural),
         1,
         0,
     );

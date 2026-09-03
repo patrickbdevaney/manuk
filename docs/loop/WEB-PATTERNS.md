@@ -10214,3 +10214,33 @@ eligible) needs ONE marking site, and a missed case merely leaves a script not r
 ⭐⭐ **The designs are not equivalent because their FAILURE MODES are not.** Pick the direction whose
 mistakes are inert, and name the residue: `cloneNode` of a parser-created script runs in Chrome and
 does not here. (t1397)
+
+## The `<img>` loading state — a PUBLICATION, not a computation
+
+`img.complete`, `naturalWidth`, `naturalHeight` and `decode()` were all `undefined` while the engine
+had the numbers the whole time: it hands every decoded bitmap to the JS side so `drawImage` has
+pixels, and a helper has read the width/height out of that table since it was written.
+
+⭐⭐ **When a whole IDL surface reads `undefined`, ask what the engine ALREADY KNOWS before building
+anything.** The tick was a getter over an existing table.
+
+⭐ **`naturalWidth` must be `0`, not `undefined`** — every gallery divides by it, and `undefined`
+yields `NaN`, so the layout collapses silently instead of erroring.
+⭐⭐ **`decode()` returning `undefined` is worse than not having it**: `await img.decode()` then
+succeeds INSTANTLY on an image that has not loaded, and the placeholder swaps out to nothing. A
+missing method that throws is louder than one that returns a falsy success.
+⚠ A cross-cutting property defined on the shared `HTMLElement.prototype` answers for EVERY element
+unless tag-guarded — so the gate needs GUARD rows (a `<div>` must read `undefined`), not just value
+rows. (t1398 — `an_img_publishes_the_loading_state_the_engine_already_knows`)
+
+## ⚠⚠⚠ When the CORRECT-LOOKING change is the regression, write the reason at the code
+
+`<img>.currentSrc` returns the selected candidate immediately here; Chrome returns `""` until the
+image loads. The divergence is deliberate: WPT's `the-img-element/sizes` files read
+`expect = referenceImg.currentSrc` once per paragraph and `assert_unreached` every sibling when it is
+falsy, so an empty string there failed whole groups and the directory once read **0 of 795**.
+
+⭐⭐⭐ This is the "a gate can PIN the engine to a bug" hazard RUNNING BACKWARDS — the edit that makes
+the row match the oracle costs 795 subtests. The only thing standing between a future diff-chasing
+tick and that regression is a paragraph at the getter saying so. **A deliberate divergence needs its
+price written down, not just its reason.** (t1398)
