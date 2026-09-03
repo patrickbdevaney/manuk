@@ -852,12 +852,12 @@ pub fn set_frame_styles_one(_dom_addr: usize, _styles_addr: usize) {}
 /// Forget which elements the on-demand builder has already been asked about. Keyed
 /// `(arena, NodeId)`, so a reused arena address must not inherit the last document's answers.
 #[cfg(feature = "_sm")]
-pub fn clear_frame_create_tried() {
-    dom_bindings::clear_frame_create_tried();
+pub fn clear_document_side_tables() {
+    dom_bindings::clear_document_side_tables();
 }
 
 #[cfg(not(feature = "_sm"))]
-pub fn clear_frame_create_tried() {}
+pub fn clear_document_side_tables() {}
 
 /// An arena is legal to resolve reflectors against.
 #[cfg(feature = "_sm")]

@@ -1070,3 +1070,4 @@ tick	sha	epoch	iso	delta_s	shape	wall_s	files	added	deleted	gates	claims	wpt_pas
 1387	bc886065	1788118617	2026-08-30T15:36:57-04:00	8133	capability-subsystem	465	9	424	34	522	81	3896	6960	0	642	0	the landmark sweep, and the regression my own check hid (2026-08-30)
 1389	63235f6b	1788130803	2026-08-30T19:00:03-04:00	12186	capability-subsystem	465	10	607	45	524	81	3896	6960	0	642	0	the Bar 0 that asked for 85 GB (2026-08-30)
 1391	1614b79e	1788408196	2026-09-03T00:03:16-04:00	277393	capability-subsystem	465	10	516	53	525	81	3896	6960	0	642	0	`validity` describes the VALUE; `willValidate` says who acts on it (2026-08-30)
+1392	a47f5b37	1788411564	2026-09-03T00:59:24-04:00	3368	capability-subsystem	465	13	1014	101	526	81	3896	6960	0	642	0	the caret's resting place, and a side table that never forgot the last document (2026-09-03)

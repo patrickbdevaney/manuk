@@ -98599,3 +98599,199 @@ NEXT: the survey's remaining rows — `forms/textfieldselection` (385) and
 (t1386), and the nested scrollable-overflow family (t1381).
 
 WIKI: docs/wiki/constraint-validation.md
+
+## Tick 1392 — the caret's resting place, and a side table that never forgot the last document (2026-09-03)
+
+TICK SHAPE: capability-subsystem
+
+The third row of t1390's survey: `html/semantics/forms/textfieldselection` — the API behind every
+input mask, every `@mention` autocomplete, every "select all on focus" copy-button, and the agent's
+own future synthesized typing. Six defects, every row headless-Chrome-measured.
+
+### ⭐⭐⭐ 1. ONE NUMBER ANSWERING TWO QUESTIONS, TWICE
+
+`selectionStart` returned `0` for **every element on the page** — a `<div>`, a `type=number`, a
+`type=date` — and **the length of the value** for the fields it did apply to. Both describe a cursor
+that is not there, and each breaks a different caller.
+
+```text
+  el.selectionStart !== null    is how a mask/caret library asks "IS THIS A TEXT FIELD"
+                                we said 0, never null → YES for a spinner, a date, an email
+  el.selectionStart on a fresh
+  <input value="abcdef">        Chrome 0 — we said 6
+```
+
+⭐⭐ **The 6 is a real number in the wrong place.** It is where the caret sits *after a script assigns
+`.value`* — a consequence of the write, published as the state of an untouched field.
+
+```text
+  text · search · tel · url · password · <textarea>    APPLIES
+  aninvalidtype  (and a missing `type` attribute)      APPLIES   ← falls back to Text
+  email · number · date · month · week · time ·
+  datetime-local · range · color · checkbox · radio ·
+  file · hidden · submit · image · reset · button      null
+```
+
+⭐⭐ **`email` is the row that stops this being a guess.** It is a text field in every visual sense, so
+an "is it texty?" predicate lets it in; the spec keeps it out because `<input type=email multiple>`
+holds a LIST, and a list has no single cursor. **The applicable set is a spec enumeration, not a
+category judgement** — which is also why an unknown keyword, falling back to Text, is IN.
+
+### 2. THE SETTERS THROW — EXCEPT THE ONE THAT DOESN'T
+
+All five setters throw `InvalidStateError` off the applicable set. **`select()` never throws** —
+Chrome-measured, `numberInput.select()` returns cleanly while `numberInput.setSelectionRange(0,1)`
+throws on the same element. Same shape as t1391's `checkValidity()`-is-true-for-a-barred-element:
+**the family splits on which QUESTION is asked, not on which element it is asked about.**
+
+### ⭐⭐⭐ 3. THE VALUE WRITE IS A CHANGE DETECTOR, AND ONE ROW CANNOT SHOW THAT
+
+```text
+  "abcdef", sel(1,3), el.value = "zzzzzzzzzz"  ->  10,10   changed
+  "abcdef", sel(2,5), el.value = "ab"          ->   2,2    changed, clamped
+  "abcdef", sel(2,4), el.value = "abcdef"      ->   2,4    UNCHANGED — the caret is KEPT
+```
+
+The third row names the rule. Without it this reads as "assigning `.value` moves the caret to the
+end" — a write hook. With it, a **change detector** — and that is why a controlled React/Vue input,
+which re-assigns the field its current value on *every keystroke*, does not slam the caret to the end
+of the line on each character typed.
+
+### ⭐⭐ 4. TWO EDGES, TWO QUESTIONS, ONE SHARED CLOSURE
+
+`setRangeText`'s `preserve` mode ran both selection edges through one `adj()`. The spec's clauses look
+symmetric and are not: an edge PAST the replaced range moves by the length delta (both edges), but an
+edge landing INSIDE it collapses to the range's **start** for `selectionStart` and to its **new end**
+for `selectionEnd`. On `"abcdefgh"`, replacing `[2,5)`:
+
+```text
+  sel(3,3)  setRangeText("Z",2,5)     ->  2,3      we gave 2,2
+  sel(3,4)  setRangeText("Z",2,5)     ->  2,3      we gave 2,2
+  sel(0,3)  setRangeText("Z",2,5)     ->  0,3      we gave 0,2
+  sel(4,4)  setRangeText("ZZZZ",2,5)  ->  2,6      we gave 2,2
+  sel(2,5) · sel(3,7)                 ->  AGREED   ← both on a boundary
+```
+
+⚠ **The two rows that agreed are exactly the ones a test gets written from.** `x >= end` and `x > end`
+differ only in the middle, so the existing `setRangeText` gate — every case on a boundary — could not
+see it. Symptom: a caret *inside* the text being replaced comes back collapsed, which is the
+autocomplete case exactly.
+
+### ⭐⭐ 5. AND THE SAME DEFECT AGAIN, IN THE CLAMP ITSELF
+
+`store_selection` resolved an inverted range by dragging `end` UP to `start`. The spec says the
+opposite for `setSelectionRange`, and the two single-edge setters want a third thing:
+
+```text
+  setSelectionRange(2, 1)   ->  1,1     the END wins        we gave 2,2
+  setSelectionRange(5, 0)   ->  0,0     the END wins        we gave 5,5
+  el.selectionStart = 5     ->  5,5     from (1,3) — START wins, end dragged UP
+  el.selectionEnd   = 1     ->  1,1     from (2,4) — END wins, start dragged DOWN
+```
+
+⭐ **The rule is not "the smaller edge wins" — it is "the edge you just SET wins, and the other is
+dragged to it".** That is a different question per caller, and one shared clamp answered it once.
+**Twice in one file in one tick**, this same class: a helper with three callers asking two questions.
+
+### ⭐⭐⭐ 6. A SIDE TABLE THAT NEVER FORGOT THE LAST DOCUMENT — AND THE ONLY WITNESS WAS ABSURD
+
+`selection-not-application-textarea.html` fails on its FIRST assertion:
+
+```text
+  document.createElement("textarea")     brand new · empty · DETACHED
+  el.selectionStart                      expected 0, got 6
+```
+
+A freshly created element cannot have a selection. **The only way to read one is to read somebody
+else's.** `TEXT_SELECTION` was a `HashMap<NodeId, _>` keyed by the bare node id, and *nothing ever
+cleared it* — so a `NodeId` reused by the NEXT document inherited the PREVIOUS document's cursor.
+
+⚠⚠ Its neighbour in the same `thread_local!` block, `FRAME_CREATE_TRIED`, is keyed `(arena, NodeId)`
+**and** cleared on document install, carrying a comment that spells the rule out and cites t1273.
+**One rule, two side tables, and only one had learned it** — the twin-drift class this loop keeps
+finding (t1387's `disabled`, t1391's `<fieldset disabled>`). The clear now lives in a function named
+for the class (`clear_document_side_tables`) rather than for one table, so the next such table has an
+obvious home.
+
+⭐ **This is why the applicability fix scored +2 and the tick scored +15.** The gate for §1–§4 runs in
+ONE fresh page, where a cross-document leak cannot appear; only the suite, which reuses the runtime
+across files, could see it. **A single-document gate is structurally blind to a per-document leak.**
+
+### ⚠⚠ 7. AND ONE EXISTING GATE WAS HOLDING THE ENGINE TO THE BUG
+
+`g_textarea_value.rs` asserted `taLen:6` — `selectionStart` on a *pristine* textarea — with a comment
+reasoning it out: *"default caret at end == value length (6), not 0"*. Chrome says `0`; so does WPT's
+`defaultSelection.html`.
+
+> ⭐⭐⭐ **A GATE THAT ARGUES FOR ITS EXPECTED VALUE IN PROSE IS THE ONE TO RE-MEASURE FIRST.** The
+> reasoning is what makes it look settled, and it was written by the same mind that wrote the bug.
+> Fourth instance of this class (t1004, t1344-1346, t1391's near-miss).
+
+Corrected against the measurement, with `taSelAfterSet:"3-3"` added beside it so the fact the old
+claim was reaching for is still asserted **where it actually holds**. `spliceSel` was computed by that
+gate and never asserted; it is a real claim now.
+
+### ⚠ 8. A MUTATION THAT STAYED GREEN, AND WAS RIGHT TO
+
+`el_set_selection_end` was first written with a `start.min(n)` pre-drag for symmetry with its sibling.
+The mutation removing it stayed **GREEN** — the clamp was already doing the work, so the line was
+decoration asserting a rule it did not implement. It was removed. The real asymmetry is the opposite
+one and IS load-bearing: `el_set_selection_start` must raise the end *against* the collapse
+(`end.max(n)`), and removing THAT goes red on `ad_setStartOverEnd`.
+
+> ⭐⭐ **An inert guard is worse than no guard** — it makes an asymmetry look handled at both ends when
+> only one end needs handling. The green mutation is what exposed it.
+
+### THE GATE
+
+`selection_api_applies_to_five_types_and_the_caret_rests_at_zero`
+(`engine/page/tests/g_selection_applicability.rs`) — **31 rows**, every one headless-Chrome-measured,
+teeth on read-back values AND on thrown exception NAMES so a stub that throws the wrong error fails.
+**PROVEN RED by eight mutations**, each on its predicted row: N1 applicability removed →
+`g_seventeenNull`; N2 default back to value length → `a_inputDefault`; N3 value-write as a hook →
+`q_valueSameKept`; N4 one closure for both edges → `u_caretInside`; N5 direction setter unregistered →
+`r_dirBackward`; N6 `select()` throws → `m_selectNoThrow`; N7 collapse direction reverted →
+`aa_ssrInverted`; N8′ `selectionStart` stops raising the end → `ad_setStartOverEnd`.
+
+⚠ One row diverges from Chrome ON PURPOSE: `selectionDirection` defaults to `"none"` here and
+`"forward"` in Chrome. WPT arbitrates it explicitly — `assert_in_array(dir, ["forward","none"])` —
+because Chrome's platform has no directionless selection and Gecko's does.
+
+⭐ **An invalid direction keyword RESETS to the default rather than sticking, and it took a PAIR to
+tell those apart.** Assigning `'sideways'` to a selection already at the default reads back the
+default — consistent with either rule. The row that names it assigns `'sideways'` *after* an explicit
+`'backward'`: Chrome returns its default, not `backward`. The first probe was ambiguous and the gate
+was drafted wrong from it; the second measurement corrected both.
+
+### THE RECEIPT
+
+```text
+  WPT html/semantics/forms/textfieldselection  202/587 = 34.4%  ->  217/587 = 37.0%   (+15)
+  WPT html/semantics (whole area)             5314/11263 = 47.2% -> 5369/11266 = 47.7% (+55)
+  WPT TOTAL (monotonic)                       494936 = 37.85%  ->  494991 = 37.86%
+  manuk-page   gate binaries, 0 FAILED   ·   Bar 0: HANG/CRASH 0
+  manuk-css 41 · manuk-layout 191 · manuk-paint 22 · manuk-dom 11 · manuk-agent 126 · manuk-net 98
+                                                                                     ALL CONTROL
+```
+
+⚠ **`select-event.html` is 0/270 — 70% of this area's remaining failures in ONE file**, and it is a
+different mechanism (event scheduling), so it is deliberately NOT in this tick. Measured and ready:
+the `select` event fires **asynchronously**, **bubbles**, is **not cancelable**, is `isTrusted`, fires
+on **disconnected** nodes, and fires **only if the selection actually changed**, coalesced to at most
+one queued task. That is tick 1393.
+
+⚠ INSTRUMENT (noted, not chased): the runner does not pass `<meta name=variant>` query strings, so
+`selection-not-application.html` degenerates to `nonApplicableTypes = [""]` and reports its rows as
+`input[type=]`. Eight of its subtests are unreachable for that reason, not for an engine reason.
+
+⚠ HARNESS (observer's, not touched): a `tick.sh` from a session that crashed **three days ago** was
+still alive, hung in `cargo test -p manuk-shell`, landing t1391 from `/tmp/ax/msgD.txt`. Killed by
+pgid before this session's wall. That hang — not the tick — is why t1391's work sat complete but
+unlanded in the working tree.
+
+NEXT: the `select` event (§ above, 270 subtests). Behind it: WebIDL `ToUint32` argument conversion
+(`setSelectionRange(true, 1)` must convert `true` → 1; `arg_u32` returns `None` for booleans and
+strings, and it has 18 callers, so it wants its own gate), and `setRangeText`'s `IndexSizeError` /
+`TypeError` argument validation.
+
+WIKI: docs/wiki/text-field-selection.md

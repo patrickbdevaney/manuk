@@ -9943,3 +9943,64 @@ and the ratchet's own `gates: N` mark counts FILES, so the count is unchanged an
 The only tell is one character of `git status`: a new file prints `??`, an overwritten one prints ` M`.
 LOOK AT THE TARGET BEFORE OVERWRITING. (t1391 — `g_constraint_validation.rs`, restored, and the new
 assertions moved to the sibling `g_validity_vs_will_validate.rs`.)
+
+## The text-field selection API — three pairs, and none of them readable from one row
+
+`selectionStart`/`selectionEnd`/`selectionDirection`/`setSelectionRange`/`setRangeText`/`select()`.
+
+⭐⭐⭐ **It applies to `<textarea>` and to `<input>` in Text/Search/Telephone/URL/Password state, and
+to NOTHING else** — elsewhere the getters are `null` and the setters throw `InvalidStateError`.
+`el.selectionStart !== null` is how a mask/caret library asks *"is this a text field"*; answering `0`
+makes that YES for a spinner, a date picker and an email field.
+
+```text
+  email is EXCLUDED          <input type=email multiple> holds a LIST — no single cursor
+  an UNKNOWN type keyword    falls back to Text, so the API APPLIES to it
+  select()                   NEVER throws, alone in the family
+```
+
+⭐⭐ **The caret RESTS at 0. The value's LENGTH is where it sits AFTER a `.value` write** — a
+consequence published as a state. And the write is a **change detector**, not a hook:
+
+```text
+  "abcdef" sel(2,4), el.value = "abcdef"   ->  2,4 KEPT   ← the row that names the rule
+```
+
+Without that row it reads as "assigning `.value` moves the caret to the end"; with it, it is why a
+controlled React/Vue input (re-assigning its current value on EVERY keystroke) does not slam the
+caret to the end of the line on each character.
+
+⭐⭐ **`setRangeText`'s `preserve` mode, and the inverted-range clamp, are the SAME defect: a shared
+helper answering for callers who ask different questions.** An edge inside the replaced span collapses
+to the range's `start` for `selectionStart` and to its `new end` for `selectionEnd`; an inverted
+`setSelectionRange` collapses onto its END while `selectionStart = n` drags the end UP. ⚠ In both, the
+rows that AGREE are the ones on a boundary — which is where test cases get written from.
+
+⭐ An invalid `selectionDirection` keyword RESETS to the default; assigning it to a selection already
+at the default cannot tell you that. (t1392 — `engine/page/tests`
+`selection_api_applies_to_five_types_and_the_caret_rests_at_zero`)
+
+## ⚠⚠⚠ A per-node side table keyed by bare `NodeId`, and never cleared
+
+`document.createElement("textarea")` reported `selectionStart === 6`. A freshly created element cannot
+have a selection, so **the only way to read one is to read somebody else's**: the store was keyed by
+node id alone and nothing cleared it, so a `NodeId` reused by the NEXT document inherited the
+PREVIOUS document's cursor.
+
+The engine already had the rule one field away in the same `thread_local!` block — per-document side
+tables are keyed `(arena, NodeId)` and cleared on document install — and the newer table never joined.
+**Ask every side table what CLEARS it, not just what writes it.**
+
+⭐ **A single-document gate is structurally blind to a per-document leak.** The applicability and caret
+fixes were fully gated and green in a fresh page and scored +2; only the suite, which reuses the
+runtime across files, could see the leak — which was the other +13. When a table is keyed by node
+identity, the test that finds the bug has to load TWO documents. (t1392 — `TEXT_SELECTION`,
+`clear_document_side_tables`)
+
+## ⚠ An INERT guard, found by a mutation that stayed green
+
+A pre-drag written "for symmetry" with a sibling setter turned out to be decoration: the shared clamp
+already did the work, and the mutation removing the line did not go red. It was removed. **An inert
+guard is worse than no guard — it makes an asymmetry look handled at both ends when only one end needs
+handling.** A green mutation is not a weak gate by default; sometimes it is a redundant line of code,
+and the two are worth telling apart. (t1392 — `el_set_selection_end`)

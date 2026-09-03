@@ -2529,6 +2529,20 @@
   - L65 · The three distinctions worth keeping
   - L79 · ⚠ The anchor-site survey that led here, and the four hypotheses it REFUSED
 
+## The text-field selection API — applicability, the resting caret, and the change detector
+`docs/wiki/text-field-selection.md`
+
+  - L11 · 1. It applies to five input types and a <textarea>, and to nothing else
+  - L32 · Why null and not 0 matters
+  - L38 · 2. The setters throw InvalidStateError — except select(), which never throws
+  - L55 · 3. The caret RESTS at 0; a .value write is what moves it — *if the value changed*
+  - L77 · 4. setRangeText's preserve mode asks a different question of each edge
+  - L99 · 5. An inverted range collapses onto its END — but a single-edge setter wins instead
+  - L118 · 6. The selection store is per-document, and forgetting that is invisible
+  - L137 · 7. selectionDirection: an invalid keyword RESETS, it does not stick
+  - L153 · Not built yet — the select event
+  - L160 · Gates
+
 ## TEXT AND LAYOUT — fonts, shaping, measurement
 `docs/wiki/text-layout.md`
 
@@ -2773,4 +2787,4 @@
   - L89 · The wall audit (due t1388)
 
 ---
-2552 sections across 54 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+2562 sections across 55 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.

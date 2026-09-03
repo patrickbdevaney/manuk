@@ -7174,7 +7174,7 @@ impl Page {
         // reused arena address would otherwise inherit the previous document's answers — the
         // `(arena, NodeId)` rule from t1273, which is only safe if somebody clears it.
         #[cfg(feature = "spidermonkey")]
-        manuk_js::clear_frame_create_tried();
+        manuk_js::clear_document_side_tables();
         // Box the DOM up front so its address is stable for the persistent JS context's raw
         // reflector pointers, then style + lay out once and run the document's inline scripts
         // against that layout snapshot (so `getBoundingClientRect` works), letting them mutate

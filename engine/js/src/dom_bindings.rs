@@ -898,11 +898,17 @@ pub unsafe fn set_frame_create_hook(f: unsafe extern "C" fn(*mut Dom, NodeId) ->
     FRAME_CREATE_HOOK.with(|c| c.set(Some(f)));
 }
 
-/// Forget the "already asked" set — called when a new document is installed, because the keys are
-/// `(arena, NodeId)` and a *reused* arena address would otherwise inherit the previous document's
-/// answers (the `(arena, NodeId)` keying rule from t1273).
-pub fn clear_frame_create_tried() {
+/// **Forget every `(arena, NodeId)`-keyed side table — called when a new document is installed.**
+///
+/// A *reused* arena address would otherwise let the new document inherit the previous one's answers
+/// (the `(arena, NodeId)` keying rule from t1273, which is only safe if somebody clears it).
+///
+/// ⚠ This was named `clear_frame_create_tried` and cleared exactly one table, so the rule read as a
+/// fact about frames rather than about per-document state — and `TEXT_SELECTION`, added later, never
+/// joined. It is named for the CLASS now so the next such table has an obvious home.
+pub fn clear_document_side_tables() {
     FRAME_CREATE_TRIED.with(|c| c.borrow_mut().clear());
+    TEXT_SELECTION.with(|c| c.borrow_mut().clear());
 }
 
 /// **A frame the script created must have a document on the very NEXT LINE.**
@@ -4983,7 +4989,7 @@ unsafe fn define_members(
             prop,
             c"selectionDirection",
             el_get_selection_direction,
-            None
+            Some(el_set_selection_direction)
         );
         def_guarded!(def, c"setSelectionRange", el_set_selection_range, 2);
         def_guarded!(def, c"select", el_select, 0);
@@ -7911,7 +7917,34 @@ unsafe fn el_set_value(cx: *mut RawJSContext, argc: u32, vp: *mut Value) -> bool
             (*dom).append_child(node, text);
             record_mutation(cx, dom, "childList", node, None, None, &[text], &kids);
         } else {
+            // ⭐⭐⭐ **ASSIGNING `.value` MOVES THE CURSOR TO THE END — BUT ONLY IF THE VALUE ACTUALLY
+            //    CHANGED.** This is the other half of the `selectionStart` default (see
+            //    [`el_get_selection_start`]): the caret rests at 0 until something writes the field,
+            //    and a write puts it at the end of what was written.
+            //
+            //    Chrome-measured, and it is a PAIR that names the rule — the same-string assignment is
+            //    what proves this is a change DETECTOR and not a write hook:
+            //
+            //      value "abcdef", sel(1,3), el.value = "zzzzzzzzzz"  ->  10,10   (changed)
+            //      value "abcdef", sel(2,5), el.value = "ab"          ->   2,2    (changed, clamped)
+            //      value "abcdef", sel(2,4), el.value = "abcdef"      ->   2,4    (UNCHANGED — kept)
+            //
+            //    A form that re-renders by re-assigning every field its current value — which is what a
+            //    controlled React/Vue input does on EVERY KEYSTROKE — would otherwise slam the caret to
+            //    the end of the field on each character typed. That is the single most reported bug in
+            //    every hand-rolled controlled-input implementation, and the same-value clause is the
+            //    reason it does not happen in a browser.
+            //
+            //    ⚠ The direction is deliberately NOT reset: Chrome keeps it across the assignment.
+            let changed = text_control_value(dom, node) != v;
             (*dom).set_attr(node, "value", v);
+            if changed {
+                let len = text_value_len(dom, node);
+                let dir = TEXT_SELECTION
+                    .with(|s| s.borrow().get(&(dom as usize, node)).map(|t| t.2))
+                    .unwrap_or(0);
+                store_selection(dom, node, len, len, dir);
+            }
         }
     }
     *vp = UndefinedValue();
@@ -8095,34 +8128,146 @@ unsafe fn text_value_len(dom: *mut Dom, node: NodeId) -> u32 {
     text_control_value(dom, node).encode_utf16().count() as u32
 }
 
-/// `input.selectionStart` / `input.selectionEnd` getter — the stored selection offset, or the end of
-/// the value (the cursor-at-end default) when nothing has set a selection yet.
+/// Every `<input>` `type` keyword the HTML spec defines. Used ONLY to answer *"is this keyword one the
+/// spec knows"* — an `<input>` whose `type` is not on this list is in the **Text** state, which is why
+/// the list has to be complete rather than just the interesting entries.
+const INPUT_TYPE_KEYWORDS: [&str; 22] = [
+    "hidden",
+    "text",
+    "search",
+    "tel",
+    "url",
+    "email",
+    "password",
+    "date",
+    "month",
+    "week",
+    "time",
+    "datetime-local",
+    "number",
+    "range",
+    "color",
+    "checkbox",
+    "radio",
+    "file",
+    "submit",
+    "image",
+    "reset",
+    "button",
+];
+
+/// **DOES THE TEXT-CONTROL SELECTION API APPLY TO THIS ELEMENT AT ALL?**
+///
+/// `selectionStart` / `selectionEnd` / `selectionDirection` / `setSelectionRange` / `setRangeText` are
+/// defined for a `<textarea>` and for an `<input>` in **Text, Search, Telephone, URL or Password**
+/// state — and for nothing else. Everywhere else the getters are `null` and the setters throw
+/// `InvalidStateError`. We answered `0` and never threw, so **every feature detection of the form
+/// `if (el.selectionStart !== null)` came back TRUE on a `type=number`, a `type=date` and a
+/// `type=email`** — and the mask/autocomplete/caret library behind it then computed a cursor position
+/// for a control that has no cursor.
+///
+/// Chrome-measured, `document.createElement('input')` at each type:
+///
+/// ```text
+///   text · search · tel · url · password · <textarea>   selectionStart 0      APPLIES
+///   aninvalidtype   (and a missing `type` attribute)    selectionStart 0      APPLIES
+///   email · number · date · month · week · time ·
+///   datetime-local · range · color · checkbox · radio ·
+///   file · hidden · submit · image · reset · button     selectionStart null   DOES NOT
+/// ```
+///
+/// ⭐⭐ **`email` is not on the applicable list, and that is the row that stops this being a guess.**
+/// It is a text field in every visual sense, so an "is it texty?" predicate lets it in; the spec keeps
+/// it out because `<input type=email multiple>` holds a LIST, and a list has no single cursor. The
+/// applicable set is a spec enumeration, not a category judgement.
+///
+/// ⭐⭐ **An unrecognised `type` keyword falls back to Text, so the API APPLIES to it.** That is why
+/// this cannot be a membership test against the five alone — `<input type="aninvalidtype">` *is* a
+/// text field, and WPT asserts exactly that (`selection-not-application.html` lists `"aninvalidtype"`
+/// and a missing `type` beside the five real ones). The predicate is therefore *"resolve the keyword
+/// first, then ask"*, which is what the `INPUT_TYPE_KEYWORDS` fallback arm below expresses.
+unsafe fn selection_applies(dom: *mut Dom, node: NodeId) -> bool {
+    let el = match (*dom).element(node) {
+        Some(e) => e,
+        None => return false,
+    };
+    if el.name == "textarea" {
+        return true;
+    }
+    if el.name != "input" {
+        return false;
+    }
+    let ty = el
+        .attr("type")
+        .unwrap_or("text")
+        .trim()
+        .to_ascii_lowercase();
+    matches!(ty.as_str(), "text" | "search" | "tel" | "url" | "password")
+        || !INPUT_TYPE_KEYWORDS.contains(&ty.as_str())
+}
+
+/// The `InvalidStateError` every non-applicable selection setter raises, named once so the five call
+/// sites cannot drift apart.
+unsafe fn throw_selection_does_not_apply(cx: *mut RawJSContext, what: &str) -> bool {
+    throw_dom(
+        cx,
+        "InvalidStateError",
+        &format!("{what} does not apply to this element's input type"),
+    )
+}
+
+/// `input.selectionStart` / `input.selectionEnd` getter — the stored selection offset, or **0** when
+/// nothing has moved the cursor yet, or `null` when the API does not apply (see [`selection_applies`]).
+///
+/// ⭐⭐⭐ **THE DEFAULT IS 0, NOT THE END OF THE VALUE — the resting place and the post-write place
+/// were the same number here, and they are different facts.** This defaulted to `text_value_len`,
+/// which is what the cursor reads *after a script assigns `.value`* — true, but it is a consequence of
+/// the assignment (see [`el_set_value`]), not the state of a field nobody has touched. Chrome-measured:
+/// a parsed `<input value="foo">` and a parsed `<textarea>foo</textarea>` both report
+/// `selectionStart === 0`; it is only `el.value = "foo"` that moves the caret to 3. Publishing the
+/// second as the first meant **a freshly-rendered form reported a cursor sitting at the end of text
+/// the user had never typed**, so "select the word under the caret" and every mask that reads
+/// `selectionStart` on `focus` started from the wrong end of the field.
 unsafe fn el_get_selection_start(_cx: *mut RawJSContext, _argc: u32, vp: *mut Value) -> bool {
-    let v = this_node(vp)
-        .map(|(dom, n)| {
-            TEXT_SELECTION
-                .with(|s| s.borrow().get(&n).map(|t| t.0))
-                .unwrap_or_else(|| text_value_len(dom, n))
-        })
-        .unwrap_or(0);
-    *vp = Int32Value(v as i32);
+    match this_node(vp) {
+        Some((dom, n)) if selection_applies(dom, n) => {
+            let v = TEXT_SELECTION
+                .with(|s| s.borrow().get(&(dom as usize, n)).map(|t| t.0))
+                .unwrap_or(0);
+            *vp = Int32Value(v as i32);
+        }
+        _ => *vp = NullValue(),
+    }
     true
 }
 unsafe fn el_get_selection_end(_cx: *mut RawJSContext, _argc: u32, vp: *mut Value) -> bool {
-    let v = this_node(vp)
-        .map(|(dom, n)| {
-            TEXT_SELECTION
-                .with(|s| s.borrow().get(&n).map(|t| t.1))
-                .unwrap_or_else(|| text_value_len(dom, n))
-        })
-        .unwrap_or(0);
-    *vp = Int32Value(v as i32);
+    match this_node(vp) {
+        Some((dom, n)) if selection_applies(dom, n) => {
+            let v = TEXT_SELECTION
+                .with(|s| s.borrow().get(&(dom as usize, n)).map(|t| t.1))
+                .unwrap_or(0);
+            *vp = Int32Value(v as i32);
+        }
+        _ => *vp = NullValue(),
+    }
     true
 }
-/// `input.selectionDirection` getter — `"none"` | `"forward"` | `"backward"`.
+/// `input.selectionDirection` getter — `"none"` | `"forward"` | `"backward"`, or `null` when the API
+/// does not apply. WPT accepts either `"none"` or `"forward"` as the initial direction (Chrome reports
+/// `"forward"`, Gecko `"none"`), and requires only that assigning `"none"` gives the initial one back —
+/// which it does here, because the initial one IS `"none"`.
 unsafe fn el_get_selection_direction(cx: *mut RawJSContext, _argc: u32, vp: *mut Value) -> bool {
+    let applies = this_node(vp)
+        .map(|(dom, n)| selection_applies(dom, n))
+        .unwrap_or(false);
+    if !applies {
+        *vp = NullValue();
+        return true;
+    }
     let dir = this_node(vp)
-        .and_then(|(_, n)| TEXT_SELECTION.with(|s| s.borrow().get(&n).map(|t| t.2)))
+        .and_then(|(dom, n)| {
+            TEXT_SELECTION.with(|s| s.borrow().get(&(dom as usize, n)).map(|t| t.2))
+        })
         .unwrap_or(0);
     let s = match dir {
         1 => "forward",
@@ -8133,13 +8278,37 @@ unsafe fn el_get_selection_direction(cx: *mut RawJSContext, _argc: u32, vp: *mut
     true
 }
 
-/// Store a clamped selection `(start, end, dir)` for `node` (both offsets ≤ value length, start ≤ end).
+/// Store a clamped selection `(start, end, dir)` for `node` — both offsets ≤ the value length, and
+/// **an inverted range collapses onto its END**.
+///
+/// ⭐⭐ **THE COLLAPSE DIRECTION IS THE WHOLE POINT, AND THIS HELPER HAD IT BACKWARDS FOR ONE OF ITS
+/// THREE CALLERS.** It resolved `end < start` by dragging `end` UP to `start` (`end.max(s)`); the spec
+/// says the opposite for `setSelectionRange` — *"if end is less than or equal to start then the start
+/// of the selection and the end of the selection must both be placed immediately before the character
+/// with offset END"*.
+///
+/// Chrome-measured, on `"abcdef"`:
+///
+/// ```text
+///   setSelectionRange(2, 1)   ->  1,1     the END wins    we gave 2,2
+///   setSelectionRange(5, 0)   ->  0,0     the END wins    we gave 5,5
+///   setSelectionRange(7, 1)   ->  1,1     start clamps to 6, then collapses onto end
+///   el.selectionStart = 5     ->  5,5     from (1,3): the START wins, end dragged UP
+///   el.selectionEnd   = 1     ->  1,1     from (2,4): the END wins, start dragged DOWN
+/// ```
+///
+/// ⚠ **The rule is not "the smaller one wins" — it is "the edge you just SET wins, and the other is
+/// dragged to it".** That is a different question per caller, and one shared clamp cannot answer it:
+/// `store_selection` now owns only the `setSelectionRange` resolution (collapse onto END), and the two
+/// single-edge setters pre-drag the edge they are NOT setting before calling in. This is the second
+/// instance of the same defect in this file this tick — see `setRangeText`'s `preserve` arm, where one
+/// closure likewise answered for two edges that ask different questions.
 unsafe fn store_selection(dom: *mut Dom, node: NodeId, start: u32, end: u32, dir: u8) {
     let len = text_value_len(dom, node);
-    let s = start.min(len);
-    let e = end.min(len).max(s);
+    let e = end.min(len);
+    let s = start.min(len).min(e);
     TEXT_SELECTION.with(|m| {
-        m.borrow_mut().insert(node, (s, e, dir));
+        m.borrow_mut().insert((dom as usize, node), (s, e, dir));
     });
 }
 
@@ -8147,10 +8316,13 @@ unsafe fn store_selection(dom: *mut Dom, node: NodeId, start: u32, end: u32, dir
 /// (clamping start ≤ end, both ≤ value length), as the spec requires.
 unsafe fn el_set_selection_start(cx: *mut RawJSContext, argc: u32, vp: *mut Value) -> bool {
     if let Some((dom, node)) = this_node(vp) {
+        if !selection_applies(dom, node) {
+            return throw_selection_does_not_apply(cx, "selectionStart");
+        }
         let n = arg_u32(cx, vp, argc, 0).unwrap_or(0);
         let (_, end, dir) = TEXT_SELECTION
-            .with(|s| s.borrow().get(&node).copied())
-            .unwrap_or((0, text_value_len(dom, node), 0));
+            .with(|s| s.borrow().get(&(dom as usize, node)).copied())
+            .unwrap_or((0, 0, 0));
         store_selection(dom, node, n, end.max(n), dir);
     }
     *vp = UndefinedValue();
@@ -8158,11 +8330,65 @@ unsafe fn el_set_selection_start(cx: *mut RawJSContext, argc: u32, vp: *mut Valu
 }
 unsafe fn el_set_selection_end(cx: *mut RawJSContext, argc: u32, vp: *mut Value) -> bool {
     if let Some((dom, node)) = this_node(vp) {
+        if !selection_applies(dom, node) {
+            return throw_selection_does_not_apply(cx, "selectionEnd");
+        }
         let n = arg_u32(cx, vp, argc, 0).unwrap_or(0);
         let (start, _, dir) = TEXT_SELECTION
-            .with(|s| s.borrow().get(&node).copied())
+            .with(|s| s.borrow().get(&(dom as usize, node)).copied())
             .unwrap_or((0, 0, 0));
+        // ⭐ **NOTHING TO PRE-DRAG HERE, AND THE ASYMMETRY IS THE FINDING.** `store_selection`
+        //    collapses an inverted range onto its END, which is exactly what setting `selectionEnd`
+        //    below the start requires — so this call passes the raw pair. Its sibling
+        //    `el_set_selection_start` CANNOT: it needs the end to move UP, against the collapse, so it
+        //    raises the end itself (`end.max(n)`) before calling in.
+        //
+        //    ⚠ A first attempt wrote `start.min(n)` here for symmetry. The mutation that removed it
+        //    stayed GREEN — the clamp was already doing the work, so the line was decoration
+        //    asserting a rule it did not implement. An inert guard is worse than no guard: it makes
+        //    the asymmetry look handled at both ends when only one end needs handling.
         store_selection(dom, node, start, n, dir);
+    }
+    *vp = UndefinedValue();
+    true
+}
+
+/// `input.selectionDirection = "forward" | "backward" | "none"` setter — **which end of the range the
+/// user's next shift+arrow extends from.**
+///
+/// ⚠ There was no setter at all: the property was registered read-only, so the assignment was a
+/// SILENT no-op rather than an error, and a rich-text/caret library that set the direction and read it
+/// back got its own previous value with total confidence.
+///
+/// ⭐ **An unrecognised keyword RESETS the direction to the default — it does not leave it alone**, and
+/// it took a PAIR of measurements to tell those two apart. Assigning `'sideways'` to a selection that
+/// was already at the default reads back the default, which is equally consistent with either rule;
+/// the row that names it is assigning `'sideways'` to a selection explicitly set `'backward'` first:
+///
+/// ```text
+///   el.selectionDirection = 'backward'   ->  "backward"
+///   el.selectionDirection = 'sideways'   ->  "forward"    Chrome's default — NOT "backward"
+/// ```
+///
+/// So the setter is a three-way map with a total fallback, exactly as the spec writes it: `backward`
+/// and `forward` map to themselves and **everything else maps to `none`**. (Chrome renders `none` as
+/// `"forward"` because its platform has no directionless selection; WPT accepts either, asserting only
+/// `assert_in_array(dir, ["forward", "none"])` plus that assigning `"none"` returns the initial value.)
+unsafe fn el_set_selection_direction(cx: *mut RawJSContext, argc: u32, vp: *mut Value) -> bool {
+    if let Some((dom, node)) = this_node(vp) {
+        if !selection_applies(dom, node) {
+            return throw_selection_does_not_apply(cx, "selectionDirection");
+        }
+        let cur = TEXT_SELECTION
+            .with(|s| s.borrow().get(&(dom as usize, node)).copied())
+            .unwrap_or((0, 0, 0));
+        let dir = match arg_string(cx, vp, argc, 0).as_deref() {
+            Some("forward") => 1,
+            Some("backward") => 2,
+            // Every other string — including `undefined` and a misspelling — is `none`.
+            _ => 0,
+        };
+        store_selection(dom, node, cur.0, cur.1, dir);
     }
     *vp = UndefinedValue();
     true
@@ -8172,6 +8398,9 @@ unsafe fn el_set_selection_end(cx: *mut RawJSContext, argc: u32, vp: *mut Value)
 /// or selects a range (place the caret, select-a-word, highlight found text).
 unsafe fn el_set_selection_range(cx: *mut RawJSContext, argc: u32, vp: *mut Value) -> bool {
     if let Some((dom, node)) = this_node(vp) {
+        if !selection_applies(dom, node) {
+            return throw_selection_does_not_apply(cx, "setSelectionRange");
+        }
         let start = arg_u32(cx, vp, argc, 0).unwrap_or(0);
         let end = arg_u32(cx, vp, argc, 1).unwrap_or(0);
         let dir = match arg_string(cx, vp, argc, 2).as_deref() {
@@ -8186,10 +8415,19 @@ unsafe fn el_set_selection_range(cx: *mut RawJSContext, argc: u32, vp: *mut Valu
 }
 
 /// `input.select()` — select the ENTIRE value (what "select all on focus" and copy-buttons do).
+///
+/// ⭐ **`select()` is the ONE member of this family that does not throw when the API does not apply**
+/// — Chrome-measured, `numberInput.select()` returns cleanly while `numberInput.setSelectionRange(0,1)`
+/// throws `InvalidStateError` on the same element. The spec defines `select()` on every form control,
+/// because "select the contents" is meaningful for a `type=number` spinner even though "put the cursor
+/// at offset 3" is not. A copy-button that calls `select()` on whatever field it was handed must not
+/// blow up, and the whole point of separating these two questions is that it does not.
 unsafe fn el_select(_cx: *mut RawJSContext, _argc: u32, vp: *mut Value) -> bool {
     if let Some((dom, node)) = this_node(vp) {
-        let len = text_value_len(dom, node);
-        store_selection(dom, node, 0, len, 0);
+        if selection_applies(dom, node) {
+            let len = text_value_len(dom, node);
+            store_selection(dom, node, 0, len, 0);
+        }
     }
     *vp = UndefinedValue();
     true
@@ -8201,14 +8439,17 @@ unsafe fn el_select(_cx: *mut RawJSContext, _argc: u32, vp: *mut Value) -> bool 
 /// default `preserve`) decides where the selection lands after. Reuses the tick-302 selection store.
 unsafe fn el_set_range_text(cx: *mut RawJSContext, argc: u32, vp: *mut Value) -> bool {
     if let Some((dom, node)) = this_node(vp) {
+        if !selection_applies(dom, node) {
+            return throw_selection_does_not_apply(cx, "setRangeText");
+        }
         let repl = arg_string(cx, vp, argc, 0).unwrap_or_default();
         let value = text_control_value(dom, node);
         let units: Vec<u16> = value.encode_utf16().collect();
         let len = units.len() as u32;
         // Default range is the current selection (or the caret at end if none set).
         let (sel_s, sel_e) = TEXT_SELECTION
-            .with(|m| m.borrow().get(&node).map(|t| (t.0, t.1)))
-            .unwrap_or((len, len));
+            .with(|m| m.borrow().get(&(dom as usize, node)).map(|t| (t.0, t.1)))
+            .unwrap_or((0, 0));
         let start = arg_u32(cx, vp, argc, 1).unwrap_or(sel_s).min(len);
         let end = arg_u32(cx, vp, argc, 2)
             .unwrap_or(sel_e)
@@ -8229,18 +8470,39 @@ unsafe fn el_set_range_text(cx: *mut RawJSContext, argc: u32, vp: *mut Value) ->
             Some("start") => (start, start),
             Some("end") => (new_end, new_end),
             _ => {
-                // `preserve`: keep the old selection, shifted by the length delta.
+                // ⭐⭐ **`preserve` ASKS A DIFFERENT QUESTION OF EACH EDGE, and one shared closure
+                //    answered both with the first one's answer.** The spec's two clauses look
+                //    symmetric and are not: an edge PAST the replaced range moves by the length delta
+                //    (both edges), but an edge that lands INSIDE the replaced range collapses to the
+                //    range's START for `selectionStart` and to its NEW END for `selectionEnd`.
+                //
+                //    Chrome-measured on `"abcdefgh"`, replacing [2,5):
+                //
+                //      sel(3,3)  setRangeText("Z",2,5)     -> 2,3      we gave 2,2
+                //      sel(3,4)  setRangeText("Z",2,5)     -> 2,3      we gave 2,2
+                //      sel(0,3)  setRangeText("Z",2,5)     -> 0,3      we gave 0,2
+                //      sel(4,4)  setRangeText("ZZZZ",2,5)  -> 2,6      we gave 2,2
+                //
+                //    Every divergence is a selection edge strictly inside the replaced span, and the
+                //    old closure always collapsed it to `start` — so **a caret sitting inside the text
+                //    being replaced came back COLLAPSED instead of wrapping the insertion**, which is
+                //    precisely the mention/autocomplete case: type over your own suggestion and the
+                //    widget loses the range it needs to replace next.
+                //
+                //    ⚠ The rows that AGREE are the ones where the edge is exactly ON the boundary
+                //    (`sel(2,5)`, `sel(3,7)`) — `x >= end` and `x > end` differ only in the middle, so
+                //    a test written from a boundary example could never have caught it.
                 let delta = repl_units.len() as i64 - (end as i64 - start as i64);
-                let adj = |x: u32| -> u32 {
-                    if x <= start {
-                        x
-                    } else if x >= end {
+                let shift = |x: u32, inside: u32| -> u32 {
+                    if x > end {
                         (x as i64 + delta).max(0) as u32
+                    } else if x > start {
+                        inside
                     } else {
-                        start
+                        x
                     }
                 };
-                (adj(sel_s), adj(sel_e))
+                (shift(sel_s, start), shift(sel_e, new_end))
             }
         };
         store_selection(dom, node, ns, ne, 0);
@@ -21710,8 +21972,20 @@ thread_local! {
     /// code units, `direction` 0=none 1=forward 2=backward. `setSelectionRange`/`select` write it,
     /// `selectionStart`/`selectionEnd`/`selectionDirection` read it. A form/editor reads these to know
     /// where the cursor is (input masks, "select all on focus", replace-selected-text).
-    static TEXT_SELECTION: std::cell::RefCell<std::collections::HashMap<NodeId, (u32, u32, u8)>> =
-        std::cell::RefCell::new(std::collections::HashMap::new());
+    ///
+    /// ⚠⚠⚠ **KEYED `(arena, NodeId)` AND CLEARED WHEN A DOCUMENT IS INSTALLED — the t1273 rule, which
+    /// this table did not follow for 1,090 ticks.** It was a bare `HashMap<NodeId, _>` that nothing ever
+    /// cleared, so a `NodeId` reused by the NEXT document inherited the PREVIOUS document's cursor. The
+    /// symptom is unmistakable once you know it: `document.createElement("textarea")` — brand new,
+    /// empty, detached — reported `selectionStart === 6`. A freshly created element cannot have a
+    /// selection, and the only way to read one is to read somebody else's.
+    ///
+    /// Its neighbour `FRAME_CREATE_TRIED` carries the rule and the comment explaining it. **One rule,
+    /// two side tables, and only one of them had learned it** — which is why the clear now lives in a
+    /// function named for the whole class rather than for one table.
+    static TEXT_SELECTION: std::cell::RefCell<
+        std::collections::HashMap<(usize, NodeId), (u32, u32, u8)>,
+    > = std::cell::RefCell::new(std::collections::HashMap::new());
 }
 
 /// Allocate the next process-unique window id (host side, for ordinary tabs).
