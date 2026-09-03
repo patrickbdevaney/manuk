@@ -7127,13 +7127,91 @@ const PRELUDE: &str = r#"
       // Rust side (top-layer stacking in `Page::z_index_map`) has to see the flag and a JS-side property
       // is invisible to it. Non-modal `show()` deliberately does NOT set it: only a modal dialog joins
       // the top layer, so a `show()`n dialog stays in flow where the spec puts it.
+      // ── **`toggle` FOR `<details>` AND `<dialog>` — QUEUED, COALESCED, AND A REAL `ToggleEvent`.**
+      //
+      // t1395 built the `ToggleEvent` interface for `[popover]` and t1395's own journal recorded that
+      // Chrome's `toggle` is queued and COALESCED — *"measured, not built"*. This is the other two
+      // elements, and they were wrong in three different ways at once:
+      //
+      // ```text
+      //                          chrome                          before
+      //   <details>.open = true  toggle, QUEUED, ToggleEvent      beforetoggle + toggle, SYNCHRONOUS,
+      //                          oldState/newState set            plain Event, states UNDEFINED
+      //   <dialog>.showModal()   beforetoggle + toggle            NOTHING AT ALL
+      //   open/close/open in
+      //   one task               ONE toggle                       three
+      // ```
+      //
+      // ⭐⭐ **`<details>` fires NO `beforetoggle`, and we fired one.** Chrome-measured: a `<details>`
+      // emits `toggle` only, while `[popover]` and `<dialog>` emit both. A spurious cancel-shaped
+      // event on an element whose spec has no cancel point is not a harmless extra — a component that
+      // listens for `beforetoggle` to veto (the popover idiom) would think it had a veto here.
+      //
+      // ⭐ **COALESCED, which is the opposite of the `select` event one tick earlier** (t1394: two
+      // different changes in one task fire TWO events). Two async notifications in adjacent
+      // subsystems with opposite batching rules — neither inferable from the other.
+      var __togglePending = null;   // WeakMap-free: a small list, and a page has few open panels.
+      var __queueToggle = function(el, oldState, newState) {
+        if (!__togglePending) { __togglePending = []; }
+        for (var i = 0; i < __togglePending.length; i++) {
+          if (__togglePending[i].el === el) {
+            // Already queued: keep the ORIGINAL oldState and take the LATEST newState, so a
+            // flip-flop within one task collapses to the single transition the page actually made.
+            __togglePending[i].newState = newState;
+            return;
+          }
+        }
+        var entry = { el: el, oldState: oldState, newState: newState };
+        __togglePending.push(entry);
+        __enqueue(function() {
+          var idx = __togglePending.indexOf(entry);
+          if (idx >= 0) { __togglePending.splice(idx, 1); }
+          var ev;
+          try {
+            ev = new ToggleEvent('toggle', {
+              bubbles: false, cancelable: false,
+              oldState: entry.oldState, newState: entry.newState,
+            });
+          } catch (e) {
+            try { ev = new Event('toggle', { bubbles: false, cancelable: false }); } catch (e2) { return; }
+          }
+          // ⚠⚠ **THE ENGINE SYNTHESISED THIS, SO IT IS TRUSTED — and every dispatch seam in this file
+          //    infers the opposite.** `isTrusted` is derived from *"was an event OBJECT supplied"*,
+          //    and an object has to be supplied here to carry `oldState`/`newState`. WPT asserts it
+          //    (`assert_true: event is trusted`), and it is the FOURTH place this exact inference has
+          //    had to be overridden — the `select` event (t1394), the popover `ToggleEvent` (t1395),
+          //    the `<img>` `load` (t1399) and now this. **A default that is wrong for every engine-
+          //    synthesised event is a default pointing the wrong way.**
+          try { ev.isTrusted = true; } catch (e) {}
+          try { el.dispatchEvent(ev); } catch (e) {}
+        }, 0);
+      };
+      globalThis.__queueToggle = __queueToggle;
+      // The by-node-id entrance, for the Rust attribute choke point (`queue_open_toggle`).
+      globalThis.__queueToggleById = function(nid, oldState, newState) {
+        var el = globalThis.__nodes && __nodes[nid];
+        if (el) { __queueToggle(el, oldState, newState); }
+      };
+      // `beforetoggle` is SYNCHRONOUS and belongs to `<dialog>`/`[popover]` only — see the note above.
+      var __fireBeforeToggle = function(el, oldState, newState) {
+        var ev;
+        try {
+          ev = new ToggleEvent('beforetoggle', {
+            bubbles: false, cancelable: true, oldState: oldState, newState: newState,
+          });
+        } catch (e) { return true; }
+        try { ev.isTrusted = true; } catch (e) {}
+        try { return el.dispatchEvent(ev); } catch (e) { return true; }
+      };
       if (__HP && typeof __HP.showModal === 'undefined') {
         var __isDialog = function(el) { return !!el && el.tagName === 'DIALOG'; };
         // The open modals, innermost last — a stack, because a dialog may open a dialog.
         var __modalStack = [];
         __HP.show = function() {
           if (!__isDialog(this) || this.hasAttribute('open')) { return; }
+          if (__fireBeforeToggle(this, 'closed', 'open') === false) { return; }
           this.setAttribute('open', '');
+          __queueToggle(this, 'closed', 'open');
         };
         __HP.showModal = function() {
           if (!__isDialog(this)) { return; }
@@ -7144,8 +7222,10 @@ const PRELUDE: &str = r#"
             e.name = 'InvalidStateError';
             throw e;
           }
+          if (__fireBeforeToggle(this, 'closed', 'open') === false) { return; }
           this.setAttribute('open', '');
           this.setAttribute('data-manuk-modal', '');
+          __queueToggle(this, 'closed', 'open');
           __modalStack.push(this);
           // A modal dialog is a close-request target from the moment it opens, and it takes its place
           // in the SHARED stack — above whatever was open before it, below whatever opens after.
@@ -7158,8 +7238,10 @@ const PRELUDE: &str = r#"
         __HP.close = function(rv) {
           if (!__isDialog(this) || !this.hasAttribute('open')) { return; }
           if (rv !== undefined) { this.returnValue = rv; }
+          __fireBeforeToggle(this, 'open', 'closed');
           this.removeAttribute('open');
           this.removeAttribute('data-manuk-modal');
+          __queueToggle(this, 'open', 'closed');
           var i = __modalStack.indexOf(this);
           if (i >= 0) { __modalStack.splice(i, 1); }
           // `close` is the event the calling code waits on to read `returnValue`. Not cancelable:

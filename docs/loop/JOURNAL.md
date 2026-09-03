@@ -99603,3 +99603,110 @@ still get nothing. That is a fetch-worklist question, not an event one, and it i
 lazy loading (we fetch eagerly; we should fetch when near).
 
 WIKI: docs/wiki/img-loading-state.md
+
+## Tick 1400 — the same event, three elements, and only one fired it (2026-09-03)
+
+TICK SHAPE: capability-subsystem
+
+### ⭐⭐⭐ THE TICK I DID NOT DO, AND WHY — PRICED ON REAL PAGES FIRST
+
+The plan after t1399 was the fetch half: a script-set `src` does not re-fetch, so
+`img.src = img.dataset.src` never appears. **Priced on 36 freshly-fetched corpus pages before
+building**, and the price refuted the plan:
+
+```text
+  1,002 <img> across 18 image-bearing corpus pages
+    data-src style                118  (11.8%)
+    data-src AND NO src             0  ( 0.0%)   ← would render nothing without a re-fetch
+    loading=lazy                  528  (52.7%)
+```
+
+**Every `data-src` image on every page also carried a real `src`.** The re-fetch would swap a
+placeholder for a sharper file — not make a missing image appear. Priced at ~0 for coverage, and
+refused. The same sweep priced the alternatives:
+
+```text
+  createElement("script")  56% of pages   ← what t1397 fixed; the pricing validates it
+  <picture> 14% · srcset-w 11% · <details> 8% · <dialog> 6% · <template> 6%
+  usemap / <map>  0%   ← 162 WPT subtests in ONE file, and ZERO corpus weight
+```
+
+⚠ **Image maps were the biggest single failing file in `embedded-content` (162) and are refused on
+0% corpus weight** — VI.3's Pareto discipline, applied with a number instead of an intuition.
+
+### THE TICK: `toggle` FOR `<details>` AND `<dialog>`
+
+t1395 built the `ToggleEvent` interface for `[popover]` and its journal recorded that Chrome's
+`toggle` is queued and COALESCED — *"measured, not built"*. Here are the other two elements, wrong in
+four ways at once:
+
+```text
+                          chrome                           before
+  <details>.open = true   toggle, QUEUED, ToggleEvent,     beforetoggle AND toggle, SYNCHRONOUS,
+                          states set, isTrusted            plain Event, both states UNDEFINED
+  <dialog>.showModal()    beforetoggle + toggle            NOTHING AT ALL
+  open/close in one task  ONE toggle, `closed > closed`    two
+```
+
+⭐⭐ **`<details>` fires NO `beforetoggle`, and we fired one.** `[popover]` and `<dialog>` emit both; a
+`<details>` emits `toggle` only. A spurious cancel-shaped event on an element whose spec has no cancel
+point is not a harmless extra — a component listening for `beforetoggle` to veto would believe it had
+a veto here.
+
+⭐ **COALESCED, which is the opposite of the `select` event six ticks ago.** t1394 measured that two
+different selection changes in one task fire TWO events; two `open` changes fire ONE, carrying the
+FIRST transition's `oldState` and the LAST one's `newState`. Two async notifications in adjacent
+subsystems with opposite batching rules — and the coalescing rule was confirmed by a WPT test NAME
+before the gate could check it (*"should fire only one toggle event … with oldState: closed and
+newState: closed"*).
+
+### ⭐⭐⭐ TWO ENTRANCES, AND THE FIRST FIX FOUND ONLY ONE
+
+The first implementation hooked the IDL reflection setter. Every probe passed. `toggleEvent.html`
+moved by **one**, because all eleven of its cases write `setAttribute('open','')`.
+
+The choke point is the ATTRIBUTE: `reflect_js`'s boolean setter is literally
+`if (v) el.setAttribute(a,''); else el.removeAttribute(a)`. Hooking there covers both spellings with
+ONE implementation — and the exclusive-accordion sibling, which removes the attribute directly, gets
+its `toggle` for free. **Both duplicate dispatches were then deleted.** It is t1397's `record_mutation`
+lesson in a second place: *when N surfaces cause one state change, hook what they funnel through.*
+
+### ⚠⚠ AND `isTrusted` HAD TO BE OVERRIDDEN FOR THE FOURTH TIME
+
+`assert_true: event is trusted expected true got false` was the last thing between this and the file.
+`__dispatchEvent` infers `isTrusted` from *"was an event OBJECT supplied"*, and an object must be
+supplied to carry `oldState`/`newState`. That inference has now been overridden for the `select` event
+(t1394), the popover `ToggleEvent` (t1395), the `<img>` `load` (t1399) and this.
+
+> ⭐⭐ **A default that is wrong for every engine-synthesised event is a default pointing the wrong
+> way.** Four call sites have now paid one line each to correct it. The seam wants an explicit
+> "trusted" argument rather than an inference from the shape of the call — recorded here rather than
+> changed under this tick, because flipping it touches every page-initiated `dispatchEvent` too.
+
+### THE GATE
+
+`details_and_dialog_queue_a_real_toggle_event_through_one_choke_point`
+(`engine/page/tests/g_toggle_event_details_dialog.rs`) — 8 rows, **headless Chrome agrees on every one
+exactly**, including the coalesced `closed>closed`. PROVEN RED by six mutations: N1 choke point
+removed → `c_detailsEvents`; N2 synchronous → `c_detailsEvents`; N3 no coalescing →
+`g_coalescedToOne`; N4 `isTrusted` defaulted → `e_detailsTrusted`; N5 dialog's `beforetoggle` removed
+→ `b_dialogSyncHasBeforetoggle`; N6 a plain `Event` → `c_detailsEvents`.
+
+### THE RECEIPT
+
+```text
+  WPT html/semantics/interactive-elements  55/234 = 23.5%  ->  69/234 = 29.5%   (+14)
+      dialog/toggle-events.html   1/12 -> 7/12   ·   details/toggleEvent.html  1/11 -> …
+  WPT html/semantics (whole area)  6218/11393 = 54.6% -> 6232/11392 = 54.7%
+  WPT TOTAL (monotonic)            495845 -> 495859 = 37.92%
+  Bar 0: HANG/CRASH 0
+  manuk-css 41 · manuk-layout 191 · manuk-paint 22 · manuk-dom 11 · manuk-agent 126 ·
+  manuk-net 98 · manuk-a11y 21    ALL CONTROL
+```
+
+NEXT, and the corpus pricing above names it: `<picture>` (14% of pages) and `srcset` with `w`
+descriptors (11%) are the responsive-image family, against `sizes-auto.html` at 0/74 and 84 failing
+`parse-a-sizes-attribute-*` subtests. **Not** image maps (0% corpus, 162 subtests) and **not** the
+image re-fetch (0% of images render nothing without it).
+
+WIKI: docs/wiki/toggle-event.md

@@ -2792,6 +2792,14 @@
   - L4057 · An author line-height is the line box, and a taller face must NOT grow it
   - L4063 · The Latin control arm is free, by construction
 
+## The `toggle` event — one interface, three elements, opposite batching to its neighbour
+`docs/wiki/toggle-event.md`
+
+  - L16 · It is queued, and it is COALESCED
+  - L31 · Two entrances, and only one of them was hooked
+  - L51 · ⚠⚠ isTrusted has now been overridden four times
+  - L69 · Pricing note — what was refused to get here
+
 ## CONSTITUTION VI.2's residual layout gap — re-measured, banked, and narrowed to one row
 `docs/wiki/vi2-residual-layout-gap.md`
 
@@ -2842,4 +2850,4 @@
   - L89 · The wall audit (due t1388)
 
 ---
-2601 sections across 59 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+2605 sections across 60 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.

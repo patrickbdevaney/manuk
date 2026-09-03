@@ -11,12 +11,12 @@
 
 | | value | over |
 |---|---|---|
-| ticks landed | **1079** | ticks 1–1399 |
-| median tick cycle | **32m** | 1078 intervals |
+| ticks landed | **1080** | ticks 1–1400 |
+| median tick cycle | **32m** | 1079 intervals |
 | median, last 10 | **59m** | 10 intervals |
 | fastest / slowest | 5s / 7.0d | |
-| **ticks per hour** | **0.83** | 1298.9h elapsed |
-| median verify wall | **67s** | 1018 ticks |
+| **ticks per hour** | **0.83** | 1300.0h elapsed |
+| median verify wall | **67s** | 1019 ticks |
 | wall trend | 39s → 8m — getting slower ⚠️ | first 3 vs last 3 |
 
 The **cycle** is the real unit: implement → debug → verify wall → land. The wall is only part of
@@ -27,11 +27,11 @@ it, and a wall that grows taxes every future tick, so it is tracked separately f
 ### Near — the daily driver (doc / app / platform web)
 
 * **capabilities asserted** (`G_CAPABILITY`): 48 → **81**
-* **live gates**: 27 → **532**
+* **live gates**: 27 → **533**
 * **✅ rows in the capability ledger**: 144 → **642**
 * **Bar 0 — oracle hangs**: 0 of 265 sites
 
-**492 of 1079 ticks** (46%) moved a
+**492 of 1080 ticks** (46%) moved a
 user-visible capability. The rest were instruments, infrastructure and corrections — and the
 ledger says the corrections were not overhead: three of its top three priorities were phantoms,
 and finding that out redirected everything after it.
@@ -91,7 +91,7 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 ## What a capability costs
 
 * **492** capability ticks, median cycle **32m**
-* median diff per tick: **+291 / −34** lines across 8 files
+* median diff per tick: **+292 / −34** lines across 8 files
 
 ## Every tick
 
@@ -1176,5 +1176,6 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 | **1397** | 2026-09-03 05:32 | 81m | capability-subsystem | 8m | +701/−49 | 530 | 81 | 56.0% · | a `<script>` inserted by script never ran, and the fix was a Bar 0 first (2026-09-03) |
 | **1398** | 2026-09-03 06:27 | 55m | capability-subsystem | 8m | +529/−44 | 531 | 81 | 56.0% · | the `<img>` numbers the engine already had and never published (2026-09-03) |
 | **1399** | 2026-09-03 07:57 | 90m | capability-subsystem | 8m | +540/−45 | 532 | 81 | 56.0% · | `<img>` fired no `load`, ever — and adding it caused a regression that was the engine beco |
+| **1400** | 2026-09-03 09:03 | 67m | capability-subsystem | 8m | +569/−51 | 533 | 81 | 56.0% · | the same event, three elements, and only one fired it (2026-09-03) |
 
 *`·` after a WPT figure means **carried forward**, not measured this tick.*

@@ -10275,3 +10275,44 @@ found the distance clauses** (it has no server). Without the data-URL clause the
 been MORE eager than Chrome on network images and LESS eager on inline ones — wrong in both directions
 from one missing case. **When a rule has two populations, check that both instruments can reach
 theirs.** (t1399)
+
+## `toggle` — one interface, three elements, and OPPOSITE batching to its neighbour
+
+```text
+                 beforetoggle              toggle
+  [popover]      yes, sync, CANCELABLE     yes, queued, COALESCED
+  <dialog>       yes, sync                 yes, queued, COALESCED
+  <details>      NO                        yes, queued, COALESCED
+```
+
+⭐⭐ **`<details>` has NO `beforetoggle`, and firing one is not a harmless extra** — a component that
+listens for it to VETO (the popover idiom, where it IS cancelable) would believe it had a veto on an
+element whose spec has no cancel point.
+
+⭐ **Coalescing keeps the FIRST oldState and the LAST newState**, so open-then-close in one task is one
+event reading `closed > closed`. That is the exact OPPOSITE of the `select` event (t1394), which is
+queued and NOT coalesced. Two async notifications in adjacent subsystems with opposite batching rules;
+neither is inferable from the other, and both look like "it fires once" from a bad probe.
+(t1400 — `details_and_dialog_queue_a_real_toggle_event_through_one_choke_point`)
+
+## ⚠⚠⚠ TWO ENTRANCES: `el.open = true` and `el.setAttribute('open','')`
+
+A first implementation hooked the IDL reflection setter. Every hand-written probe passed, and the WPT
+file moved by ONE — because all eleven of its cases write the ATTRIBUTE form.
+
+⭐⭐⭐ The boolean IDL setter is literally `if (v) el.setAttribute(a,''); else el.removeAttribute(a)`, so
+the ATTRIBUTE is the choke point both doors funnel through. Hooking there covered both spellings with
+one implementation, gave the exclusive-accordion sibling its event for free, and let TWO duplicate
+dispatches be deleted. **When N surfaces cause one state change, hook what they funnel through.**
+(t1400; same lesson as hanging the dynamic-script hook off the mutation record, t1397)
+
+## ⚠⚠ A DEFAULT THAT IS WRONG FOR EVERY ENGINE-SYNTHESISED EVENT IS POINTING THE WRONG WAY
+
+`isTrusted` is inferred from "was an event OBJECT supplied" — and an object must be supplied whenever
+the event carries payload (`oldState`, `detail`, …). Four engine-synthesised events have now each paid
+one line to override it: the `select` event (t1394), the popover `ToggleEvent` (t1395), the `<img>`
+`load` (t1399), `<details>`/`<dialog>` `toggle` (t1400).
+
+⭐ Four call sites is evidence, not a hunch: the seam wants an explicit TRUSTED argument rather than an
+inference from the shape of the call. Recorded rather than flipped, because the default is correct for
+page-initiated `dispatchEvent` — which is exactly why it needs an argument instead of an inference.

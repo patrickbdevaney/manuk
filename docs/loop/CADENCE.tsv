@@ -1078,3 +1078,4 @@ tick	sha	epoch	iso	delta_s	shape	wall_s	files	added	deleted	gates	claims	wpt_pas
 1397	253cba27	1788427922	2026-09-03T05:32:02-04:00	4881	capability-subsystem	465	10	701	49	530	81	3896	6960	0	642	0	a `<script>` inserted by script never ran, and the fix was a Bar 0 first (2026-09-03)
 1398	6e1f855a	1788431231	2026-09-03T06:27:11-04:00	3309	capability-subsystem	465	11	529	44	531	81	3896	6960	0	642	0	the `<img>` numbers the engine already had and never published (2026-09-03)
 1399	525217cc	1788436620	2026-09-03T07:57:00-04:00	5389	capability-subsystem	465	12	540	45	532	81	3896	6960	0	642	0	`<img>` fired no `load`, ever — and adding it caused a regression that was the engine becoming honest (2026-09-03)
+1400	d97b2961	1788440619	2026-09-03T09:03:39-04:00	3999	capability-subsystem	465	12	569	51	533	81	3896	6960	0	642	0	the same event, three elements, and only one fired it (2026-09-03)

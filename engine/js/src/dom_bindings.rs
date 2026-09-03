@@ -5826,6 +5826,52 @@ unsafe fn el_set_attribute(cx: *mut RawJSContext, argc: u32, vp: *mut Value) -> 
 unsafe fn el_set_attribute_exact(cx: *mut RawJSContext, argc: u32, vp: *mut Value) -> bool {
     set_attribute_impl(cx, argc, vp, false)
 }
+/// **`toggle` FOR AN `open` ATTRIBUTE CHANGE — at the ONE choke point both doors go through.**
+///
+/// ⚠⚠⚠ **TWO ENTRANCES, AND ONLY THE IDL ONE FIRED.** `details.open = true` and
+/// `details.setAttribute('open','')` are the same state change, and WPT's `toggleEvent.html` writes
+/// it the second way for every one of its eleven cases — so a first implementation that hooked the
+/// IDL reflection setter passed a hand-written probe and moved that file by ONE.
+///
+/// The choke point is the attribute, not the property: `reflect_js`'s boolean setter is literally
+/// `if (v) el.setAttribute(a, ''); else el.removeAttribute(a)`, so hooking here covers both spellings
+/// with one implementation — and the exclusive-accordion sibling, which removes the attribute
+/// directly, gets its own `toggle` for free instead of needing a second hand-written dispatch.
+///
+/// ⭐ It is the [`record_mutation`] lesson from t1397 in a second place: when N surfaces can cause one
+/// state change, hook the thing they all funnel through, not the N of them.
+unsafe fn queue_open_toggle(
+    cx: *mut RawJSContext,
+    dom: *mut Dom,
+    node: NodeId,
+    attr: &str,
+    was_open: bool,
+) {
+    if !attr.eq_ignore_ascii_case("open") {
+        return;
+    }
+    match (*dom).tag_name(node) {
+        Some("details") | Some("dialog") => {}
+        _ => return,
+    }
+    let is_open = (*dom)
+        .element(node)
+        .map(|e| e.attr("open").is_some())
+        .unwrap_or(false);
+    if is_open == was_open {
+        return;
+    }
+    let (old, new) = if is_open {
+        ("closed", "open")
+    } else {
+        ("open", "closed")
+    };
+    let _ = eval_in_current_global(
+        cx,
+        &format!("__queueToggleById({}, '{old}', '{new}')", node.0),
+    );
+}
+
 unsafe fn set_attribute_impl(
     cx: *mut RawJSContext,
     argc: u32,
@@ -5856,7 +5902,12 @@ unsafe fn set_attribute_impl(
             &[],
             &[],
         );
-        (*dom).set_attr(node, name, value);
+        let was_open = (*dom)
+            .element(node)
+            .map(|e| e.attr("open").is_some())
+            .unwrap_or(false);
+        (*dom).set_attr(node, name.clone(), value);
+        queue_open_toggle(cx, dom, node, &name, was_open);
     }
     *vp = UndefinedValue();
     true
@@ -8994,7 +9045,12 @@ unsafe fn remove_attribute_impl(
                 &[],
                 &[],
             );
+            let was_open = (*dom)
+                .element(node)
+                .map(|e| e.attr("open").is_some())
+                .unwrap_or(false);
             (*dom).remove_attr(node, &name);
+            queue_open_toggle(cx, dom, node, &name, was_open);
         }
     }
     *vp = UndefinedValue();

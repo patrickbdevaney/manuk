@@ -368,17 +368,19 @@ pub const REFLECT_JS: &str = r#"
                   for (var j = 0; j < all.length; j++) {
                     var sib = all[j];
                     if (sib !== this && sib.getAttribute('name') === nm && sib.hasAttribute('open')) {
+                      // ⭐ `removeAttribute` IS the toggle: the attribute choke point
+                      // (`queue_open_toggle`) queues the sibling's `toggle` for free, so the explicit
+                      // dispatch that used to live here is gone rather than duplicated.
                       sib.removeAttribute('open');
-                      // `beforetoggle` then `toggle` — same pair the summary-click path fires, so a
-                      // lazy-load hook fires before the panel renders. Non-cancelable for <details>.
-                      try { sib.dispatchEvent(new Event('beforetoggle', { bubbles: false, cancelable: false })); } catch (e) {}
-                      try { sib.dispatchEvent(new Event('toggle', { bubbles: false, cancelable: false })); } catch (e) {}
                     }
                   }
                 }
               }
-              try { this.dispatchEvent(new Event('beforetoggle', { bubbles: false, cancelable: false })); } catch (e) {}
-              try { this.dispatchEvent(new Event('toggle', { bubbles: false, cancelable: false })); } catch (e) {}
+              // ⭐⭐ **NOTHING TO DISPATCH HERE.** `set()` writes the boolean through
+              // `setAttribute`/`removeAttribute`, and the attribute choke point (`queue_open_toggle`)
+              // fires the `toggle` — so `details.open = true` and `details.setAttribute('open','')`
+              // reach ONE implementation instead of two that can drift. This block keeps only what is
+              // genuinely IDL-shaped: the exclusive-accordion sweep above.
             }
           }
         }
