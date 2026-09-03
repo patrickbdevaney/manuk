@@ -884,6 +884,14 @@
   - L4143 · CI WAS RED FOR SEVEN TICKS BEHIND A GREEN SIBLING, AND THE GATE WAS ONE APT PACKAGE FROM BEING MEASURED (t1351)
   - L4160 · ⭐⭐⭐ A PRECONDITION PANIC IS INDISTINGUISHABLE FROM AN ENGINE FAILURE, AND IT STOPS THE WHOLE STEP
 
+## `validity` describes the VALUE; `willValidate` says whether anyone will act on it
+`docs/wiki/constraint-validation.md`
+
+  - L7 · ⭐⭐⭐ The central defect — one early return conflating two questions
+  - L23 · The six rules, every row Chrome-measured
+  - L62 · The receipt
+  - L73 · How it was proven red
+
 ## `content: "drawn" / "announced"` — one declaration, two answers
 `docs/wiki/content-alt-text.md`
 
@@ -2765,4 +2773,4 @@
   - L89 · The wall audit (due t1388)
 
 ---
-2548 sections across 53 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+2552 sections across 54 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.

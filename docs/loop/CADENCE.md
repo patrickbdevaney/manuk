@@ -11,12 +11,12 @@
 
 | | value | over |
 |---|---|---|
-| ticks landed | **1070** | ticks 1–1389 |
-| median tick cycle | **31m** | 1069 intervals |
-| median, last 10 | **61m** | 10 intervals |
+| ticks landed | **1071** | ticks 1–1391 |
+| median tick cycle | **31m** | 1070 intervals |
+| median, last 10 | **69m** | 10 intervals |
 | fastest / slowest | 5s / 7.0d | |
-| **ticks per hour** | **0.88** | 1213.9h elapsed |
-| median verify wall | **67s** | 1009 ticks |
+| **ticks per hour** | **0.83** | 1291.0h elapsed |
+| median verify wall | **67s** | 1010 ticks |
 | wall trend | 39s → 8m — getting slower ⚠️ | first 3 vs last 3 |
 
 The **cycle** is the real unit: implement → debug → verify wall → land. The wall is only part of
@@ -27,11 +27,11 @@ it, and a wall that grows taxes every future tick, so it is tracked separately f
 ### Near — the daily driver (doc / app / platform web)
 
 * **capabilities asserted** (`G_CAPABILITY`): 48 → **81**
-* **live gates**: 27 → **524**
+* **live gates**: 27 → **525**
 * **✅ rows in the capability ledger**: 144 → **642**
 * **Bar 0 — oracle hangs**: 0 of 265 sites
 
-**492 of 1070 ticks** (46%) moved a
+**492 of 1071 ticks** (46%) moved a
 user-visible capability. The rest were instruments, infrastructure and corrections — and the
 ledger says the corrections were not overhead: three of its top three priorities were phantoms,
 and finding that out redirected everything after it.
@@ -1167,5 +1167,6 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 | **1385** | 2026-08-30 13:21 | 62m | capability-subsystem | 8m | +473/−39 | 522 | 81 | 56.0% · | `pressed` and `invalid`: the two states the tree did not have (2026-08-30) |
 | **1387** | 2026-08-30 15:36 | 2.3h | capability-subsystem | 8m | +424/−34 | 522 | 81 | 56.0% · | the landmark sweep, and the regression my own check hid (2026-08-30) |
 | **1389** | 2026-08-30 19:00 | 3.4h | capability-subsystem | 8m | +607/−45 | 524 | 81 | 56.0% · | the Bar 0 that asked for 85 GB (2026-08-30) |
+| **1391** | 2026-09-03 00:03 | 3.2d | capability-subsystem | 8m | +516/−53 | 525 | 81 | 56.0% · | `validity` describes the VALUE; `willValidate` says who acts on it (2026-08-30) |
 
 *`·` after a WPT figure means **carried forward**, not measured this tick.*

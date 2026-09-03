@@ -98496,3 +98496,106 @@ reads the sanitised value this tick just gave it) and `forms/textfieldselection`
 (t1381).
 
 WIKI: docs/wiki/input-value-sanitization.md
+
+## Tick 1391 — `validity` describes the VALUE; `willValidate` says who acts on it (2026-08-30)
+
+TICK SHAPE: capability-subsystem
+
+The second row of t1390's survey: `html/semantics/forms/constraints`, and it is the API every
+validation library on the web reads — native UI, React Hook Form, Formik, VeeValidate.
+
+### ⭐⭐⭐ ONE EARLY RETURN CONFLATING TWO QUESTIONS
+
+`__computeValidity` returned an **all-false** `ValidityState` for any element barred from constraint
+validation. Chrome-measured, a DISABLED `pattern="[a-z]+"` input holding `"123"`:
+
+```text
+  willValidate      false      it is barred — nothing will act on it
+  patternMismatch   TRUE       the VALUE is still wrong, and the object still says so
+  valid             false
+  checkValidity()   true       the method asks "will this block submission", not "is this good"
+```
+
+**All four at once**, and a library reads exactly that combination to decide whether to draw its own
+message. `validity` describes the VALUE; `willValidate` says whether anything will act on it.
+
+### THE SIX RULES, EVERY ROW CHROME-MEASURED
+
+```text
+ 1  the flags are computed even when BARRED                    disabled+pattern → pm TRUE
+ 2  …EXCEPT valueMissing, which needs the element to be MUTABLE
+                      <fieldset disabled> required empty  → vm FALSE, valid TRUE
+                      readonly required empty             → vm FALSE
+                      inside <datalist>, required empty   → vm TRUE  (barred but MUTABLE)
+ 3  checkValidity() is TRUE for a barred element, whatever `valid` says
+ 4  tooLong / tooShort need the DIRTY VALUE flag — only the USER sets it
+ 5  `pattern` applies to six types only (text search url tel email password)
+ 6  min/max apply to the TEMPORAL types too, compared LEXICOGRAPHICALLY
+```
+
+⭐⭐ **Rule 2 is the row that proves rule 1 is about the OBJECT and not the element.** Two disabled
+controls DISAGREE: the pattern-mismatching one is `valid: false`, the merely required-and-empty one
+is `valid: true`. That is only possible if the mutability clause lives on `valueMissing` — which is
+where the spec puts it — rather than on the whole computation. **One row would have looked like "a
+disabled element has no validity"; the pair is what names the rule.**
+
+⭐ **Rule 4 is about who TYPED, not about how long the string is.** `maxlength` does not make a value
+invalid; it stops the USER typing past it. Chrome reports `tooLong: false` for
+`<input maxlength=2 value="abcdef">` **and still false after `el.value = 'xyzxyz'`**. There is no
+user typing in this engine yet, so both flags are currently unreachable — *and that is the correct
+answer, not a missing feature.*
+
+⭐ **Rule 6 compares lexicographically on purpose**: the five temporal formats are fixed-width and
+zero-padded, so string order IS chronological order. `parseFloat` on a date gives the YEAR, so a
+month-early value compares by year and a `type=time` value does not compare at all.
+
+⚠ **`disabled` INHERITS from an ancestor `<fieldset disabled>` and `el.disabled` does not reflect
+it.** Same HTML rule, same shape, as the a11y `disabled` state at t1387 — **one rule, two subsystems,
+each having to learn it separately**, which is the twin-drift class this loop keeps finding.
+
+### ⚠⚠⚠ AND THE GATE WAS VERY NEARLY WRITTEN OVER AN EXISTING ONE
+
+The new gate was first written to `engine/page/tests/g_constraint_validation.rs` — **a file that
+already existed** (tick 161, eleven claims that the validity API exists and computes the common
+cases). `cat >` truncated it. The only thing that surfaced it was `git status` printing ` M` where a
+new file prints `??`.
+
+> ⭐⭐⭐ **LOOK AT THE TARGET BEFORE OVERWRITING IT.** A gate file is a ratchet tooth; silently
+> replacing one *removes* assertions while the count of gate files stays the same, so the ratchet's
+> own "gates: N" mark cannot see it. The tell is one character of `git status` output.
+
+The original is restored untouched and this tick's gate is its SIBLING,
+`g_validity_vs_will_validate.rs`: the old one asserts the API EXISTS and computes; the new one
+asserts the two questions it answers are SEPARATE. Both run, and both are green.
+
+### THE GATE
+
+`validity_describes_the_value_and_will_validate_says_who_acts_on_it`
+(`engine/page/tests/g_validity_vs_will_validate.rs`) — 14
+element rows, each asserted as its WHOLE flag vector so a row cannot pass on one flag. **PROVEN RED
+by four mutations**, each on its predicted rows: N1 restore the barred early return → `a` and `k`;
+N2 drop the mutability clause → `l` and `m`, with `a` green; N3 no dirty flag → `b` and
+`b_scriptset`; N4 disable the temporal arm → the four temporal rows.
+
+⚠ Two of this tick's own runs reported `manuk-page` RED while the gate still had a typo'd claim
+string (`k:will=true` where Chrome says `false`). The counts were read, the failure was located, and
+the run repeated — which is the t1387 lesson applied: **read the counts, not a message.**
+
+### THE RECEIPT
+
+```text
+  WPT html/semantics/forms/constraints  600/915 = 65.6%  →  785/915 = 85.8%   (+185)
+  WPT html/semantics (whole area)      5183/11262 = 46.0% → 5314/11263 = 47.2% (+131)
+  manuk-page   527 gate binaries, 0 FAILED (counted)  — 526 + the restored original + the sibling
+  manuk-agent / manuk-a11y / manuk-layout / manuk-css / manuk-paint / manuk-dom   CONTROL
+```
+
+⭐ **Together with t1390's sanitiser, `constraints` has gone 577 → 785 (+208) in two ticks** — the
+validity algorithm reads the SANITISED value, so fixing the value first made the validity fix land
+against the right input. Four ticks after the aperture opened, `html/semantics` is 4922 → 5314.
+
+NEXT: the survey's remaining rows — `forms/textfieldselection` (385) and
+`scripting-1/the-script-element` (484). Behind them: `title`-as-name scoped to HTML-AAM's element set
+(t1386), and the nested scrollable-overflow family (t1381).
+
+WIKI: docs/wiki/constraint-validation.md

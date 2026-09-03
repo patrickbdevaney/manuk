@@ -6758,9 +6758,44 @@ const PRELUDE: &str = r#"
         // A "barred from constraint validation" element never validates (spec §form-control-infrastructure).
         var __barredType = { hidden: 1, submit: 1, reset: 1, button: 1, image: 1 };
         var __numericType = { number: 1, range: 1 };
+        // `pattern` applies to SIX input types and to no others — Chrome-measured: a
+        // `type=number` (or `checkbox`) carrying a `pattern` attribute reports
+        // `patternMismatch === false` no matter what its value is. Applying it everywhere makes a
+        // numeric field permanently invalid because of an attribute the spec says it must ignore.
+        var __patternType = { text: 1, search: 1, url: 1, tel: 1, email: 1, password: 1 };
+        // `min`/`max` are NOT numeric-only. The five temporal types carry them too, and their
+        // formats are fixed-width and zero-padded (`YYYY-MM-DD`, `YYYY-MM`, `YYYY-Www`, `HH:MM`,
+        // `YYYY-MM-DDTHH:MM`), so a LEXICOGRAPHIC comparison is the correct one — which is why this
+        // is a set membership test and not a `parseFloat`.
+        var __rangeTemporal = { date: 1, month: 1, week: 1, time: 1, 'datetime-local': 1 };
+        // ⚠ `disabled` INHERITS from an ancestor `<fieldset disabled>` and the IDL attribute does
+        // not reflect that — `el.disabled` is the element's OWN attribute. Disabling a whole step of
+        // a form with one fieldset is the idiomatic way to do it, so reading only the control's own
+        // attribute leaves every control in that step validating.
+        var __isDisabled = function(el) {
+          if (el.disabled) { return true; }
+          for (var p = el.parentElement; p; p = p.parentElement) {
+            if (p.tagName === 'FIELDSET' && p.disabled) { return true; }
+          }
+          return false;
+        };
+        // "Mutable" — not disabled and not readonly. It is NOT the same question as `willValidate`,
+        // and conflating them is the defect this tick is mostly about: see `__computeValidity`.
+        var __isMutable = function(el) { return !__isDisabled(el) && !el.readOnly; };
+        var __inDatalist = function(el) {
+          for (var p = el.parentElement; p; p = p.parentElement) {
+            if (p.tagName === 'DATALIST') { return true; }
+          }
+          return false;
+        };
         var __willValidate = function(el) {
           if (!__isFormControl(el)) { return false; }
-          if (el.disabled || el.readOnly) { return false; }
+          if (__isDisabled(el) || el.readOnly) { return false; }
+          // ⚠ A control inside a `<datalist>` is a SUGGESTION, not an input — it is barred from
+          // constraint validation even though it is perfectly mutable. Chrome-measured: such an
+          // element reports `willValidate === false` and `validity.valueMissing === true` at the
+          // same time, which is only possible because the two questions are separate.
+          if (__inDatalist(el)) { return false; }
           if (el.tagName === 'INPUT' && __barredType[String(el.type || 'text').toLowerCase()]) { return false; }
           return true;
         };
@@ -6772,28 +6807,54 @@ const PRELUDE: &str = r#"
             tooLong: false, tooShort: false, rangeUnderflow: false, rangeOverflow: false,
             stepMismatch: false, badInput: false, customError: false, valid: true
           };
-          if (!__willValidate(el)) { v.customError = !!el.__customValidity; v.valid = !v.customError; return v; }
+          // ── ⚠⚠⚠ **THE FLAGS ARE COMPUTED EVEN WHEN THE ELEMENT IS BARRED, AND ONLY
+          //    `willValidate` / `checkValidity` CHANGE.** This early-returned an all-false object
+          //    for any barred control, which is a different claim from the one the spec makes:
+          //    `validity` is a description of the VALUE, `willValidate` is a statement about whether
+          //    anyone will act on it. Chrome-measured — a DISABLED `pattern="[a-z]+"` input holding
+          //    `"123"` reports `willValidate: false`, `patternMismatch: TRUE`, `valid: false`, and
+          //    `checkValidity(): true`. All four at once, and a native-validation library reads
+          //    exactly that combination to decide whether to show its own message.
+          if (!__isFormControl(el)) { v.customError = !!el.__customValidity; v.valid = !v.customError; return v; }
           var val = el.value == null ? '' : String(el.value);
           var type = String(el.type || 'text').toLowerCase();
-          if (el.required && val === '') { v.valueMissing = true; }
+          // ⚠ `valueMissing` is the ONE flag with a mutability clause — the spec says *"required,
+          //    MUTABLE, and its value is the empty string"*. Chrome-measured, and it is what makes
+          //    a `<fieldset disabled>` control read `valid: true` while a disabled control with a
+          //    pattern mismatch reads `valid: false`. The two disabled rows differ, and that is the
+          //    evidence the clause is on this flag and not on the object.
+          if (el.required && val === '' && __isMutable(el)) { v.valueMissing = true; }
           if (val !== '') {
             if (type === 'email' && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(val)) { v.typeMismatch = true; }
             if (type === 'url') { try { new URL(val); } catch (e) { v.typeMismatch = true; } }
             var pat = el.pattern;
-            if (pat != null && pat !== '') {
+            if (pat != null && pat !== '' && (el.tagName !== 'INPUT' || __patternType[type])) {
               try { if (!(new RegExp('^(?:' + pat + ')$', 'u')).test(val)) { v.patternMismatch = true; } }
               catch (e) { /* an invalid pattern does not constrain (spec) */ }
             }
-            var maxL = el.maxLength;
-            if (typeof maxL === 'number' && maxL >= 0 && val.length > maxL) { v.tooLong = true; }
-            var minL = el.minLength;
-            if (typeof minL === 'number' && minL >= 0 && val.length < minL) { v.tooShort = true; }
+            // ⚠⚠ **`tooLong` / `tooShort` NEED THE DIRTY VALUE FLAG, WHICH ONLY THE USER SETS.**
+            //    `maxlength` does not make a value invalid — it stops the USER typing past it. A
+            //    value that arrived from the markup or from a script is over-length and VALID.
+            //    Chrome-measured both ways: `<input maxlength=2 value="abcdef">` reports
+            //    `tooLong: false`, and it is STILL false after `el.value = 'xyzxyz'`. There is no
+            //    user typing in this engine yet, so both flags are unreachable — and that is the
+            //    correct answer, not a missing feature.
+            if (el.__valueDirtyByUser) {
+              var maxL = el.maxLength;
+              if (typeof maxL === 'number' && maxL >= 0 && val.length > maxL) { v.tooLong = true; }
+              var minL = el.minLength;
+              if (typeof minL === 'number' && minL >= 0 && val.length < minL) { v.tooShort = true; }
+            }
             if (__numericType[type]) {
               var num = parseFloat(val);
               if (!isNaN(num)) {
                 if (el.min !== '' && el.min != null && num < parseFloat(el.min)) { v.rangeUnderflow = true; }
                 if (el.max !== '' && el.max != null && num > parseFloat(el.max)) { v.rangeOverflow = true; }
               }
+            } else if (__rangeTemporal[type]) {
+              // Fixed-width, zero-padded formats compare lexicographically — see `__rangeTemporal`.
+              if (el.min !== '' && el.min != null && val < el.min) { v.rangeUnderflow = true; }
+              if (el.max !== '' && el.max != null && val > el.max) { v.rangeOverflow = true; }
             }
           }
           if (el.__customValidity) { v.customError = true; }
@@ -6819,6 +6880,9 @@ const PRELUDE: &str = r#"
           }
           return v.valid;
         };
+        // ⚠ A BARRED element's `checkValidity()` is TRUE even when its `validity.valid` is false —
+        //    the method asks *"will this block submission"*, not *"is this value good"*. That is
+        //    the same separation `__computeValidity` now makes, seen from the other side.
         __HP.checkValidity = function() {
           if (this.tagName === 'FORM') {
             var ok = true, ctrls = this.querySelectorAll('input,select,textarea');

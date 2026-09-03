@@ -9911,3 +9911,35 @@ a thumb positioned from `.value` sits in the middle rather than nowhere.
 ⚠ Sanitise on READ and `getAttribute("value")` still returns what the author wrote, which is the
 spec's own split — and a `type` change re-sanitises for free.
 (t1390 — `engine/page/tests` `the_api_value_is_the_sanitised_one`)
+
+## `el.validity` vs `el.willValidate` — two questions, and an early return that answered one
+
+`validity` describes the VALUE; `willValidate` says whether anything will act on it. An engine that
+returns an all-false `ValidityState` for a barred control collapses them, and every validation
+library — native UI, React Hook Form, Formik, VeeValidate — reads the combination:
+
+```text
+  a DISABLED pattern-mismatching input, Chrome:
+    willValidate false · patternMismatch TRUE · valid false · checkValidity() TRUE
+```
+
+⭐⭐ `valueMissing` is the ONE flag with a mutability clause ("required, MUTABLE, and empty"), which
+is why two disabled controls disagree: a pattern-mismatching one is `valid: false` and a
+required-and-empty one is `valid: true`. That pair is the evidence the clause is on the FLAG.
+⭐ `tooLong`/`tooShort` need the DIRTY VALUE flag — `maxlength` stops the USER typing, it does not
+invalidate an authored or script-set value (Chrome: false both ways).
+⭐ `pattern` applies to six types only (text search url tel email password) — on a `type=number` it
+is IGNORED, and applying it everywhere makes a numeric field permanently invalid.
+⭐ `min`/`max` apply to the five TEMPORAL types, compared LEXICOGRAPHICALLY: their formats are
+fixed-width and zero-padded, so string order is chronological order. `parseFloat` on a date gives
+the year.
+⚠ `disabled` INHERITS from an ancestor `<fieldset disabled>` and `el.disabled` does not reflect it.
+(t1391 — `engine/page/tests` `validity_describes_the_value_and_will_validate_says_who_acts_on_it`)
+
+## ⚠ `cat >` on a gate file you did not look at first
+
+A gate file is a ratchet tooth. Writing a NEW gate to a path that already holds one truncates it —
+and the ratchet's own `gates: N` mark counts FILES, so the count is unchanged and nothing goes red.
+The only tell is one character of `git status`: a new file prints `??`, an overwritten one prints ` M`.
+LOOK AT THE TARGET BEFORE OVERWRITING. (t1391 — `g_constraint_validation.rs`, restored, and the new
+assertions moved to the sibling `g_validity_vs_will_validate.rs`.)
