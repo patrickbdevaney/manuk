@@ -1394,6 +1394,9 @@ fn sizes_slot_width(sizes: Option<&str>, viewport_width: f32) -> f32 {
     let Some(sizes) = sizes else {
         return viewport_width;
     };
+    // Comments are removed by the tokenizer before the grammar sees anything (see
+    // `strip_css_comments`), so this happens FIRST and everything below parses comment-free text.
+    let sizes = &strip_css_comments(sizes);
     for entry in split_top_level_commas(sizes) {
         let entry = entry.trim();
         if entry.is_empty() {
@@ -1434,7 +1437,21 @@ fn split_top_level_commas(s: &str) -> Vec<&str> {
     let b = s.as_bytes();
     let mut out = Vec::new();
     let (mut depth, mut start) = (0i32, 0usize);
+    // ⚠⚠ **A BACKSLASH-ESCAPED BRACKET IS AN IDENT CHARACTER, NOT AN OPENER.** `sizes='\\(,1px'`
+    // is one escaped `(` followed by a TOP-LEVEL comma, so it is two entries and the second is
+    // `1px`. Counting the escaped `(` as depth swallowed the comma, made it one entry, and turned a
+    // 1px slot into the viewport width — a different bitmap fetched, silently. WPT writes five
+    // spellings of this (`\\(`, `\\{`, `\\[`, `x\\(`, `1\\p\\x`).
+    let mut skip_next = false;
     for i in 0..b.len() {
+        if skip_next {
+            skip_next = false;
+            continue;
+        }
+        if b[i] == b'\\' {
+            skip_next = true;
+            continue;
+        }
         match b[i] {
             b'(' | b'[' | b'{' => depth += 1,
             b')' | b']' | b'}' => depth -= 1,
@@ -1449,13 +1466,79 @@ fn split_top_level_commas(s: &str) -> Vec<&str> {
     out
 }
 
+/// **Strip CSS comments from a `sizes` attribute.**
+///
+/// ⚠ `/* … */` is removed by the CSS TOKENIZER, before any grammar sees the text — so
+/// `sizes="/* */1px/* */"` is exactly `sizes="1px"`, and ` /**/ /**/ 1px /**/ /**/ ` is too. Nothing
+/// downstream can recognise a comment, because by the time a real parser reaches the grammar there
+/// are none left. WPT writes both spellings.
+fn strip_css_comments(s: &str) -> String {
+    let b = s.as_bytes();
+    let mut out = String::with_capacity(s.len());
+    let mut i = 0usize;
+    while i < b.len() {
+        if b[i] == b'\\' && i + 1 < b.len() {
+            // An escape carries its next byte through untouched — `\/` is not a comment opener.
+            out.push(b[i] as char);
+            out.push(b[i + 1] as char);
+            i += 2;
+            continue;
+        }
+        if b[i] == b'/' && i + 1 < b.len() && b[i + 1] == b'*' {
+            // Unterminated is fine: EOF ends the comment, which is the tokenizer's own rule.
+            let mut j = i + 2;
+            while j + 1 < b.len() && !(b[j] == b'*' && b[j + 1] == b'/') {
+                j += 1;
+            }
+            i = if j + 1 < b.len() { j + 2 } else { b.len() };
+            // A comment is a token boundary, not nothing: `1px/* */2px` must not become `1px2px`.
+            out.push(' ');
+            continue;
+        }
+        out.push(b[i] as char);
+        i += 1;
+    }
+    out
+}
+
 /// Split `<media-condition>? <source-size-value>` into its two halves.
 ///
-/// Returns `None` when the entry has unbalanced brackets — an unclosed `(` makes the whole
-/// `<source-size>` a parse error, and guessing at the author's intent is how `x(x(),1px` would
-/// otherwise resolve to a real width.
+/// Never `None` for an unbalanced entry: an unclosed `(` is closed by EOF per the CSS tokenizer's
+/// own consume-a-function rule, so `min(1px, 200vw` splits exactly as `min(1px, 200vw)` does. The
+/// balance therefore has to be measured BEFORE the right-to-left walk — see the note inside.
 fn split_trailing_component(entry: &str) -> Option<(&str, &str)> {
     let b = entry.as_bytes();
+    // ⚠⚠⚠ **THE BALANCE HAS TO BE CHECKED BEFORE THE RIGHT-TO-LEFT WALK, NOT DURING IT.**
+    // The walk stops at the first top-level whitespace it crosses — and for `min(1px, 200vw` it
+    // crosses the space after the comma **before it has seen the `(` at all**, because the `(` is to
+    // its LEFT. So it split into a condition `min(1px,` and a value `200vw`, the bogus condition
+    // failed to match, and the entry was discarded: a 1px slot became the viewport width and a
+    // different bitmap was fetched, silently.
+    //
+    // ⭐ `calc(1px` passed the same code, which is what made this look fixed: with no whitespace
+    // there is nothing for the walk to stop at, so it reached the `(` and recovered. **The bug only
+    // shows when the unclosed function contains a space** — which is every multi-argument one.
+    let mut open = 0i32;
+    let mut last_top_ws: Option<usize> = None;
+    for (i, &c) in b.iter().enumerate() {
+        match c {
+            b'(' | b'[' | b'{' => open += 1,
+            b')' | b']' | b'}' => open -= 1,
+            // Only whitespace OUTSIDE every bracket separates the condition from the value; the
+            // space in `min(1px, 200vw` is inside the function and separates nothing.
+            c if c.is_ascii_whitespace() && open == 0 => last_top_ws = Some(i),
+            _ => {}
+        }
+    }
+    if open > 0 {
+        // Unclosed: EOF closes the function, so the VALUE runs to the end of the entry. What comes
+        // before the last top-level space is still the media condition — `(min-width:0) min(1px,
+        // 200vw` has both, and swallowing the condition into the value loses the entry entirely.
+        return Some(match last_top_ws {
+            Some(i) => (&entry[..i], entry[i..].trim()),
+            None => ("", entry.trim()),
+        });
+    }
     let mut depth = 0i32;
     // Walk right-to-left; the value begins at the first top-level whitespace we cross.
     let mut split_at = 0usize;
@@ -1463,9 +1546,16 @@ fn split_trailing_component(entry: &str) -> Option<(&str, &str)> {
         match b[i] {
             b')' | b']' | b'}' => depth += 1,
             b'(' | b'[' | b'{' => {
+                // An unmatched opener CANNOT reach here: the `open > 0` pre-walk above already
+                // took every one of them, which is the whole reason it has to run first. What is
+                // left is net-extra CLOSERS (`)1px`, `)(`), and for those `None` is the right
+                // answer — an EOF-closed block is still not a `<length>` when the imbalance is on
+                // the other side. ⚠ Written first as a `Some` recovery here too, and MUTATION N4
+                // proved that arm INERT: replacing it with `None` left all 20 gate rows and all 696
+                // WPT subtests unchanged, so it was a second copy of a rule with no reachable input.
                 depth -= 1;
                 if depth < 0 {
-                    return None; // an unclosed opener — the entry is a parse error
+                    return None;
                 }
             }
             c if c.is_ascii_whitespace() && depth == 0 => {
@@ -1475,6 +1565,8 @@ fn split_trailing_component(entry: &str) -> Option<(&str, &str)> {
             _ => {}
         }
     }
+    // Likewise: with `open > 0` already handled, a nonzero depth here is extra closers, not an
+    // unclosed function. Also proven inert by N4.
     if depth != 0 {
         return None;
     }
@@ -1496,10 +1588,13 @@ fn resolve_size_value(v: &str, vw: f32) -> Option<f32> {
     let lower = v.to_ascii_lowercase();
     for (name, n) in [("calc(", 4usize), ("min(", 3), ("max(", 3), ("clamp(", 5)] {
         if let Some(rest) = lower.strip_prefix(name) {
-            if !rest.ends_with(')') {
-                return None; // `min(1px, 200vw` — unclosed, and a parse error rather than a guess
-            }
-            let inner = &v[n + 1..v.len() - 1];
+            // EOF closes the function (see `split_trailing_component`): `min(1px, 200vw` resolves
+            // exactly as `min(1px, 200vw)` does, which is what WPT asserts for ten literal cases.
+            let inner = if rest.ends_with(')') {
+                &v[n + 1..v.len() - 1]
+            } else {
+                &v[n + 1..]
+            };
             let args: Vec<f32> = split_top_level_commas(inner)
                 .iter()
                 .map(|a| resolve_size_value(a, vw))

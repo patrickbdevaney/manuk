@@ -56,6 +56,8 @@ const HTML: &str = r##"<!doctype html><html><head></head><body>
  <img id="comma" srcset="/s/a.png 1w, /s/b.png 900w" sizes="min(1px, 100px), 100vw">
 
  <!-- ── PARSE ERRORS. Each must fall back to 100vw (the large slot), never to a guess. -->
+ <!-- ⚠ `unclosed` is NOT one of them, and this row said it was until t1401: EOF closes an open
+      function, so this is `min(1px, 100px)` = 1px = the SMALL slot. Chrome agrees. -->
  <img id="unclosed" srcset="/s/a.png 1w, /s/b.png 900w" sizes="min(1px, 100px">
  <img id="junk"     srcset="/s/a.png 1w, /s/b.png 900w" sizes="foo bar">
  <img id="bare"     srcset="/s/a.png 1w, /s/b.png 900w" sizes="1">
@@ -120,13 +122,20 @@ fn sizes_resolves_the_first_matching_source_size_not_the_last() {
     // RED, run 2 — drop the unit table back to `px`/`vw`: `em`, `rem`, `pt`, `cm` and `vmin`
     // become `b.png`, because an unrecognised unit fell through to the viewport width.
     //
-    // RED, run 3 — remove the math-function arm: `calc`, `min`, `max`, `clamp` and `comma` become
-    // `b.png`. (`unclosed` does NOT move — an unclosed function is a parse error under BOTH, and
-    // that is the row that says the fallback is reached deliberately rather than by accident.)
+    // RED, run 3 — remove the math-function arm: `calc`, `min`, `max`, `clamp`, `comma` AND
+    // `unclosed` become `b.png`.
+    //
+    // ⚠⚠⚠ **`unclosed` USED TO PIN `b.png`, AND THE ENGINE WAS RIGHT TO BREAK IT (t1401).** The
+    // row was written from prose — *"an unclosed `(` makes the whole `<source-size>` a parse
+    // error"* — and headless Chrome answers `a.png`: `min(1px, 100px` resolves **exactly as its
+    // closed form does**. The CSS tokenizer's consume-a-function step says the same thing —
+    // reaching EOF ends the function, flags a parse error, and *returns the block anyway*. All 22
+    // rows here now agree with Chrome byte-for-byte; before t1401 this was the only one that did
+    // not. See `g_sizes_tokenizer_recovery` for the mechanism and the other two spellings.
     assert_eq!(
         got,
         "first=a.png skip=b.png order=a.png em=a.png rem=a.png pt=a.png cm=a.png zero=a.png \
-         vmin=a.png calc=a.png min=a.png max=a.png clamp=a.png comma=a.png unclosed=b.png \
+         vmin=a.png calc=a.png min=a.png max=a.png clamp=a.png comma=a.png unclosed=a.png \
          junk=b.png bare=b.png pct=b.png neg=a.png n1=b.png n2=a.png n3=plain.png",
         "`sizes` is a list whose FIRST matching `<source-size>` wins. `first` is the core claim and \
          the real web's idiom — `(max-width:600px) 100vw, 50vw` means *full width on a phone*, and \
@@ -138,7 +147,9 @@ fn sizes_resolves_the_first_matching_source_size_not_the_last() {
          shortest-suffix-first table matches `in` inside it and turns 0.1vmin into 96 pixels. \
          `clamp` CORRECTED ITS AUTHOR — `clamp(1px, -50px, 100px)` is 1px, the clamping happens \
          before the sign is judged. `comma` proves the list split is math-function-aware. The \
-         parse-error rows must reach the 100vw FALLBACK rather than a guess, and `neg` proves a \
+         parse-error rows `junk`/`bare`/`pct` must reach the 100vw FALLBACK rather than a guess — \
+         `unclosed` is NOT one of them, EOF closes the function so it resolves as `min(1px, 100px)` \
+         does, which is Chrome's answer. `neg` proves a \
          negative value is an invalid entry to skip, not a slot of zero. CONTROLS: `n1` has no \
          `sizes`, `n2` is an `x`-descriptor list where `sizes` is meaningless, `n3` makes no \
          selection at all"

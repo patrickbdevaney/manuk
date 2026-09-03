@@ -15,7 +15,7 @@
 | median tick cycle | **32m** | 1079 intervals |
 | median, last 10 | **59m** | 10 intervals |
 | fastest / slowest | 5s / 7.0d | |
-| **ticks per hour** | **0.83** | 1300.0h elapsed |
+| **ticks per hour** | **0.83** | 1301.8h elapsed |
 | median verify wall | **67s** | 1019 ticks |
 | wall trend | 39s → 8m — getting slower ⚠️ | first 3 vs last 3 |
 
@@ -27,7 +27,7 @@ it, and a wall that grows taxes every future tick, so it is tracked separately f
 ### Near — the daily driver (doc / app / platform web)
 
 * **capabilities asserted** (`G_CAPABILITY`): 48 → **81**
-* **live gates**: 27 → **533**
+* **live gates**: 27 → **534**
 * **✅ rows in the capability ledger**: 144 → **642**
 * **Bar 0 — oracle hangs**: 0 of 265 sites
 
@@ -1176,6 +1176,6 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 | **1397** | 2026-09-03 05:32 | 81m | capability-subsystem | 8m | +701/−49 | 530 | 81 | 56.0% · | a `<script>` inserted by script never ran, and the fix was a Bar 0 first (2026-09-03) |
 | **1398** | 2026-09-03 06:27 | 55m | capability-subsystem | 8m | +529/−44 | 531 | 81 | 56.0% · | the `<img>` numbers the engine already had and never published (2026-09-03) |
 | **1399** | 2026-09-03 07:57 | 90m | capability-subsystem | 8m | +540/−45 | 532 | 81 | 56.0% · | `<img>` fired no `load`, ever — and adding it caused a regression that was the engine beco |
-| **1400** | 2026-09-03 09:03 | 67m | capability-subsystem | 8m | +569/−51 | 533 | 81 | 56.0% · | the same event, three elements, and only one fired it (2026-09-03) |
+| **1400** | 2026-09-03 10:53 | 2.9h | capability-subsystem | 8m | +538/−58 | 534 | 81 | 56.0% · | the same event, three elements, and only one fired it (2026-09-03) |
 
 *`·` after a WPT figure means **carried forward**, not measured this tick.*

@@ -2529,6 +2529,15 @@
   - L88 · ⚠ Named, measured, not built — the other half of the 117
   - L116 · How it was proven red
 
+## `sizes` — the three tokenizer rules that run before the grammar
+`docs/wiki/sizes-tokenizer.md`
+
+  - L6 · The shape of the bug
+  - L23 · 1. EOF closes an open block — it is not a parse error
+  - L53 · 2. A comment is a token BOUNDARY, not nothing
+  - L63 · 3. An escaped bracket is an ident character
+  - L76 · How the expectations were arbitrated
+
 ## STORAGE — the persistence layers a page can reach, and what each one really guarantees
 `docs/wiki/storage.md`
 
@@ -2850,4 +2859,4 @@
   - L89 · The wall audit (due t1388)
 
 ---
-2605 sections across 60 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+2610 sections across 61 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.

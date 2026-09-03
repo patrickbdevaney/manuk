@@ -99710,3 +99710,124 @@ descriptors (11%) are the responsive-image family, against `sizes-auto.html` at 
 image re-fetch (0% of images render nothing without it).
 
 WIKI: docs/wiki/toggle-event.md
+
+## Tick 1401 — `sizes` was a grammar over bytes, and three tokenizer rules had already run (2026-09-03)
+
+TICK SHAPE: pattern-class
+CLASS: responsive images (`<img srcset>`/`sizes`/`<picture>` — WordPress, every CMS, every image CDN)
+
+t1275 built HTML's *"parse a sizes attribute"* — first-match ordering, the full length-unit table,
+`calc()`/`min()`/`max()`/`clamp()` — directly on the attribute's **characters**. The algorithm is
+defined over a **CSS token stream**, and that difference is invisible in every `sizes` a human
+writes by hand and decisive in three constructs WPT writes ~20 times each:
+
+```text
+  sizes=…                     chrome   before   the tokenizer rule that had already run
+  "/* */1px/* */"              1px     100vw    comments are REMOVED before the grammar
+  "\(,1px"                     1px     100vw    an ESCAPED bracket is an ident character
+  "min(1px, 200vw"             1px     100vw    EOF CLOSES an open function
+```
+
+Every failure in the class has the same shape and it is **silent**: the entry is discarded, the
+slot collapses to the `100vw` default, and **a different bitmap is fetched** — on a narrow viewport
+the *larger* one, which is the exact inversion responsive images exist to prevent. Nothing throws
+and no box moves; only the bytes on the wire change.
+
+### ⭐⭐⭐ THE GATE WAS HOLDING THE ENGINE TO A BUG, AND THE VALUE CAME FROM PROSE
+
+`sizes_slot_width` returned `None` for an unclosed function and **reasoned it out in a comment**:
+*"an unclosed `(` makes the whole `<source-size>` a parse error"*. `G_SIZES_FIRST_MATCH` then pinned
+that conclusion as a row — `unclosed=b.png` — with an assertion message explaining that the
+parse-error rows "must reach the 100vw FALLBACK rather than a guess".
+
+CSS's *consume a function* step says the opposite: reaching EOF ends the function, flags a parse
+error, **and returns the block anyway**. Headless Chrome answers `a.png`. So I ran the sibling
+gate's whole 22-row fixture through Chrome before touching either file, and it agreed on **21 of
+22** — the one row it disagreed with was the one derived from prose rather than measured. That row
+is corrected under this tick and every expectation in the new gate is Chrome's own `currentSrc`.
+
+> ⭐ **A reasoned comment is the most durable way to install a wrong reference value**, because the
+> reasoning survives the review the value would not have. Four ticks ago (t1344-1346) four of seven
+> red gates turned out to be the engine getting *more* correct and the gate holding a prose value;
+> this is the same failure with the gate and the engine written by the same hand, one tick apart.
+
+### ⭐ AND THE BUG HID BEHIND THE SPELLING THAT HAS NO SPACE
+
+`calc(1px` passed the whole time, which is what made the area look finished.
+`split_trailing_component` splits `<media-condition>? <source-size-value>` by walking
+**right-to-left** and stopping at the first top-level whitespace it crosses:
+
+- `calc(1px` — no whitespace at all, so the walk runs to the `(`, sees `depth < 0`, recovers.
+- `min(1px, 200vw` — it crosses the space after the comma **before it has seen the `(`**, because
+  the `(` is to its left. It split into a condition `min(1px,` and a value `200vw`, the bogus
+  condition failed to match, and the entry vanished.
+
+So the fix is not a new recovery arm, it is an **ORDERING**: measure the bracket balance in a
+left-to-right pre-pass, and only then run the right-to-left walk. **The bug exists only when the
+unclosed function contains a space** — which is every multi-argument one.
+
+### ⚠ A GREEN MUTATION FOUND BOTH IN-WALK RECOVERY ARMS INERT
+
+Mutation N4 restored `return None` to both in-walk `depth`-imbalance arms and the gate stayed
+**green** — all 20 rows and all 696 WPT subtests unchanged. The pre-pass had already taken every
+unmatched-*opener* input, so those arms were a second copy of a rule with no reachable input left.
+What still reaches them is extra **closers** (`1px)`, `)(`), and for those `None` is the correct
+answer — an EOF-closed block is not a `<length>` when the imbalance is on the other side. They ship
+as `None`: two dead branches removed rather than shipped behind a comment claiming a RED they
+cannot produce.
+
+### ⚠⚠ A COMMENT IS A TOKEN BOUNDARY, NOT NOTHING
+
+Stripping `/* … */` to the empty string is the obvious implementation and it is wrong: `1/**/px`
+would become `1px`, and Chrome answers `100vw`, because `1` and `px` are two tokens with a comment
+between them. The strip emits a **space**. `c_boundary` is the row that can tell the two
+implementations apart, and mutation N2 (strip to nothing) flips it *and* `c_between`.
+
+### THE GATE
+
+`sizes_applies_the_css_tokenizer_before_the_source_size_grammar`
+(`engine/page/tests/g_sizes_tokenizer_recovery.rs`) — **20 rows, every one headless Chrome's own
+`currentSrc` at 800px**, with a NEGATIVE control per mechanism because "recover from a malformed
+attribute" is one edit away from "never reject anything": `c_boundary` (a comment separates tokens),
+`e_none` (an *un*escaped `(` really does swallow the comma), `u_cond_skip` (the media condition is
+still parsed, and can still fail, on the recovery path).
+
+PROVEN RED by five mutations — N1 no comment strip → 5 rows · N2 strip to nothing → `c_boundary` +
+`c_between` · N3 no escape skip → 4 rows, `e_none` correctly unmoved · N5 no pre-walk balance →
+`u_space`/`u_cond`/`u_nested`/`u_clamp` flip while **`u_nospace` stays green**, which is the
+hiding-spelling claim reproduced as a mutation · N6 resolver rejects unclosed → all 6 unclosed rows.
+And GREEN on N4, recorded above.
+
+### ⚠ RESIDUE, MEASURED NOT BUILT
+
+`1\p\x` — an escape inside the **unit** — still falls back where Chrome resolves it as `1px`. The
+escape handling makes a backslash transparent to *depth counting*; it does not **unescape** for the
+value resolver. Left out of the gate rather than asserted at a wrong value, and it is the next thing
+in this function.
+
+### THE RECEIPT
+
+```text
+  WPT the-img-element/sizes    632/795 = 79.5%  ->  696/795 = 87.5%   (+64)
+  WPT html/semantics (area)   6232/11392 = 54.7% -> 6296/11394 = 55.3%  (+64, denominator +2)
+  WPT TOTAL (monotonic)        495859 -> 495923 = 37.92%
+  Bar 0: HANG/CRASH 0 (both legs, and across all 1794 html/semantics files)
+  G_SIZES_TOKENIZER_RECOVERY ok · G_SIZES_FIRST_MATCH ok (one row corrected) ·
+  G_SRCSET_SELECTION ok · G_IMG_CURRENT_SRC ok    ALL CONTROL
+```
+
+⚠ HARNESS (observer, not mine to fix): the per-tick `manuk-page` gates landed since ~t1275 —
+`g_sizes_first_match`, `g_srcset_selection`, `g_img_load_event`, `g_img_current_src`,
+`g_toggle_event_details_dialog` and now `g_sizes_tokenizer_recovery` — are in neither `verify.sh`'s
+explicit `_launch` list nor CI's `for g in …` loop. The wall's `cargo test --no-run -p manuk-page`
+prewarm still *compiles* them, so a broken gate file REDs the build, but none of them is *run* by
+the wall. Noted and continuing; a gate that only the authoring tick ever runs is a ratchet tooth
+that cannot hold.
+
+NEXT: `sizes-auto.html` is 0/74 in this same directory and is a different mechanism entirely
+(`sizes="auto"` + `loading="lazy"`, which resolves against the element's own *used* width and so
+needs a layout round-trip, not a parse fix). The parse leg is now 696/795 and its remainder is
+`<media-condition>` GRAMMAR — `or`, general-enclosed, unknown features — which lives in
+`manuk-css`, not here.
+
+WIKI: docs/wiki/sizes-tokenizer.md
